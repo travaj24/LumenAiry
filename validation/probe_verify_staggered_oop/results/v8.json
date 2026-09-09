@@ -1,0 +1,87 @@
+{
+ "root": "C:\\tmp\\lum_aniso",
+ "lumenairy": "C:\\tmp\\lum_aniso\\lumenairy\\__init__.py",
+ "cases": [
+  {
+   "fixture": "uniform_slab",
+   "mount": "normal",
+   "rotplus_vs_negate_bit_identical": true,
+   "rotplus_vs_negate_dR": 0.0,
+   "rotplus_vs_negate_dJones": 0.0,
+   "shipped_vs_rotplus_dR": 8.881784197001252e-16,
+   "shipped_vs_rotplus_dJones": 8.383166740393754e-15
+  },
+  {
+   "fixture": "uniform_slab",
+   "mount": "oblique25",
+   "rotplus_vs_negate_bit_identical": true,
+   "rotplus_vs_negate_dR": 0.0,
+   "rotplus_vs_negate_dJones": 0.0,
+   "shipped_vs_rotplus_dR": 0.0009408228231527205,
+   "shipped_vs_rotplus_dJones": 0.028245578749290245
+  },
+  {
+   "fixture": "uniform_slab",
+   "mount": "conical25_40",
+   "rotplus_vs_negate_bit_identical": true,
+   "rotplus_vs_negate_dR": 0.0,
+   "rotplus_vs_negate_dJones": 0.0,
+   "shipped_vs_rotplus_dR": 0.00018500161782193658,
+   "shipped_vs_rotplus_dJones": 0.00751277877686361
+  },
+  {
+   "fixture": "chiral_stripe",
+   "mount": "normal",
+   "rotplus_vs_negate_bit_identical": true,
+   "rotplus_vs_negate_dR": 0.0,
+   "rotplus_vs_negate_dJones": 0.0,
+   "shipped_vs_rotplus_dR": 0.00045954404362326395,
+   "shipped_vs_rotplus_dJones": 0.00098822174139668
+  },
+  {
+   "fixture": "chiral_stripe",
+   "mount": "oblique25",
+   "rotplus_vs_negate_bit_identical": true,
+   "rotplus_vs_negate_dR": 0.0,
+   "rotplus_vs_negate_dJones": 0.0,
+   "shipped_vs_rotplus_dR": 0.0011604489059719586,
+   "shipped_vs_rotplus_dJones": 0.014133682272796048
+  },
+  {
+   "fixture": "chiral_stripe",
+   "mount": "conical25_40",
+   "rotplus_vs_negate_bit_identical": true,
+   "rotplus_vs_negate_dR": 0.0,
+   "rotplus_vs_negate_dJones": 0.0,
+   "shipped_vs_rotplus_dR": 0.0007397092258896801,
+   "shipped_vs_rotplus_dJones": 0.00867594583518702
+  },
+  {
+   "fixture": "chiral_2d_cell",
+   "mount": "normal",
+   "rotplus_vs_negate_bit_identical": true,
+   "rotplus_vs_negate_dR": 0.0,
+   "rotplus_vs_negate_dJones": 0.0,
+   "shipped_vs_rotplus_dR": 0.0023071897350055853,
+   "shipped_vs_rotplus_dJones": 0.011009918366597132
+  },
+  {
+   "fixture": "chiral_2d_cell",
+   "mount": "oblique25",
+   "rotplus_vs_negate_bit_identical": true,
+   "rotplus_vs_negate_dR": 0.0,
+   "rotplus_vs_negate_dJones": 0.0,
+   "shipped_vs_rotplus_dR": 0.0026743641696999228,
+   "shipped_vs_rotplus_dJones": 0.016706442668007488
+  },
+  {
+   "fixture": "chiral_2d_cell",
+   "mount": "conical25_40",
+   "rotplus_vs_negate_bit_identical": true,
+   "rotplus_vs_negate_dR": 0.0,
+   "rotplus_vs_negate_dJones": 0.0,
+   "shipped_vs_rotplus_dR": 0.0037067101424650556,
+   "shipped_vs_rotplus_dJones": 0.014650724187246814
+  }
+ ]
+}

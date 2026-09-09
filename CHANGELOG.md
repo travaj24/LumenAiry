@@ -2,6 +2,179 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Added -- OUT-OF-PLANE ANISOTROPY for the PURE (no-floor) staggered 2-D PMM
+
+`docs/PMM_ROADMAP.md` Phase C is now COMPLETE.  A tilted-director liquid
+crystal -- `e_xz`/`e_yz`/`e_zx`/`e_zy` != 0 -- can be solved by the no-floor
+2-D engine; it was previously the one tensor class only the FMM-floored hybrid
+`pmm_jones_2d` could take.
+
+* `pmm_jones_2d_staggered` and `PMM2DStackPure` accept a FULL `(3, 3)` cell.
+  An out-of-plane tile routes to a NEW first-order staggered generator on
+  `[E1; E2; G1; G2]` (dimension `4 q^2`, `Granet2DTransverseE._assemble_oop` +
+  `_region_modes_oop`), because out-of-plane coupling breaks Granet's Eq. 16 --
+  `div D = 0` no longer slaves `E_z` algebraically -- so the second-order
+  `2 q^2` pencil does not exist there.  `H_3` is eliminated STRONGLY (the curl
+  of a transverse E lands exactly in `Vw`), `E_3` WEAKLY through the
+  longitudinal curl-H row tested in `V3`, with the `e33`-Schur applied
+  POINTWISE per cell.  The de Rham placement, the staggered basis, the union
+  grid, the once-only far field and the no-floor property are all unchanged.
+* Forward and backward modes of such a layer are genuinely distinct (the
+  in-plane `[W; -V] <-> -lam` symmetry is broken), so a stack containing ANY
+  out-of-plane layer runs the GENERALIZED S-matrix cascade throughout, with
+  in-plane / uniform layers and the isotropic half-spaces entering as
+  `[[W, W], [V, -V]]`.  `retain_internal` / `layer_absorption` were generalized
+  to distinct forward/backward sets and reduce to the previous expressions term
+  for term for a symmetric region.
+* The forward/backward split is `rcwa._core._select_forward_flux` fed the
+  CHOLESKY-WHITENED blocks, so its harmonic sums ARE the Gram-weighted modal
+  flux; its DEEP-DECAY override is what classifies the polynomial basis's
+  unresolved harmonics, whose ~1e-14 relative flux has random sign.  Measured:
+  the split is exactly `2q^2 / 2q^2` in every configuration and the maximum
+  forward growth factor is exactly `1.0000e+00` at depths to 3 wavelengths.
+* DISPATCH, not a rewrite: the test is the hybrid's RELATIVE `1e-12 * scale`
+  off-plane floor, so a physically in-plane cell built by rotating a diagonal
+  tensor (whose xz/yz slots carry ~1e-17 float noise) stays on the in-plane
+  path and returns BYTE-IDENTICAL R/T/Jones.  `e33 == 0` still raises on both
+  branches.
+* Validation (docs/audits/BUILD_PMM2D_STAGGERED_OOP_2026_09_09.md): uniform
+  out-of-plane slabs match the exact Berreman 4x4 to 2.1e-14 in R, 1.3e-13 in T
+  and 8.5e-14 in the complex Jones at normal, oblique AND conical incidence,
+  for lossless, LOSSY (whose 1.1e-01 absorption deficit is reproduced to the
+  same 1e-14) and NON-RECIPROCAL (`e13 = conj(e31)`, Hermitian) tensors, with
+  the diffraction-order leakage at 1e-26; the assembled generator reproduces
+  the exact quartic roots of `det(k k^T - |k|^2 I + eps) = 0` to 1.5e-14; a
+  y-uniform out-of-plane stripe matches `rcwa_jones_1d_segments` and
+  `pmm_jones_1d` per order to 1.6e-05 against their own 3.2e-06 mutual spread
+  (the module's documented dielectric-corner cap, not an out-of-plane defect),
+  with y-momentum conserved to 1e-27; a `(3,3)` cell with a RE-ENTRANT corner
+  sits at the two 2-D Fourier oracles' own mutual spread; a uniform
+  out-of-plane MULTILAYER matches the Berreman multilayer to 7.5e-15; one
+  0.4-wavelength layer equals two 0.2-wavelength layers to 8.9e-16; and the
+  lossy `layer_absorption` budget closes 9.1e-04 -> 2.1e-07 over M = 5..8.
+  Dropping, negating or TRANSPOSING the out-of-plane block moves the Berreman
+  residual by 11 decades, so every new term is load-bearing.
+* NO-FLOOR, two-sided: the result moves 2.6e-15 (normal) / 3.9e-09 (conical)
+  when the far-field order count goes 3 -> 8, while the hybrid's two rigorous
+  `E_z` elimination rules differ from EACH OTHER by 7.7e-04 on the same cell.
+* Cost: 1.33 - 2.03x the in-plane region solve in wall time (the dimension
+  doubles, but the pencil is Cholesky-whitened to a standard eig while the
+  in-plane path pays a QZ) and ~3.0x its peak working set.
+* Gauge note for maintainers: `Basis1D`'s `tau = exp(-i alpha0 p)` makes the
+  basis run as `exp(-i alpha0 x)` while the far-field kernel and the `eps_cell`
+  indexing run the other way; the composition is a 180-degree rotation about z
+  that in-plane tensor components are INVARIANT under (hence invisible until
+  now) and out-of-plane ones are not.  `twod_staggered._OOP_ROT_SIGN`
+  compensates it once, in the assembly, and is gated two-sided.
+* Still out of scope: anisotropic HALF-SPACES, SLANT x out-of-plane,
+  non-square grids and the JAX twin.
+
+### Added -- IN-PLANE ANISOTROPY for the PURE (no-floor) staggered 2-D PMM
+
+`docs/PMM_ROADMAP.md` Phase C, in-plane half.  The staggered 2-D solver
+(Granet, J. Opt. Soc. Am. A 40, 652 (2023)) shipped as the ISOTROPIC
+REDUCTION of the paper's general equations; it now implements the general
+BLOCK-FORM tensor `[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]`.
+
+* New `pmm_jones_2d_staggered(...)` -- the no-floor mirror of `pmm_jones_2d`:
+  a `(Nx, Ny, 3, 3)` (or scalar `(Nx, Ny)`, promoted to `e*I`) cell, both
+  incident polarizations, returning `(orders, R(2,N), T(2,N), jones(2,2))`
+  with the order-0 REFLECTION Jones in the PUBLIC `exp(-i w t)` gauge (this
+  module has no conjugation bridge anywhere, unlike the hybrid).
+* `PMM2DStackPure.add_layer` accepts `eps=(3,3)` (uniform anisotropic) and
+  `eps_cell=(Nx,Ny,3,3)` (patterned anisotropic); `retain_internal` /
+  `layer_absorption` keep working on tensor layers (the flux form is the
+  eps-free block Gram).
+* What the assembly gained: the two MIXED `[eps_t]` masses of Appendix-A
+  Eq. 40 (`<V1|e12|V2>`, `<V2|e21|V1>` -- krons of the UNLIKE-set 1-D
+  masses), the `e33`-weighted `Meps33` (Eq. 41), and the SECOND term in each
+  `K_zt` column (Eq. 44 -- `K_zt` is the divergence of `D_t = eps_t E_t`, so
+  column 1 pairs `d2` with `e21` and column 2 pairs `d1` with `e12`).  The
+  Eq. 25 H-partner inherits the two mixed blocks.  The eigenproblem stays
+  second-order at `2q^2`, so the `[W;-V] <-> -lam` symmetry, the square
+  Redheffer cascade and the once-only far field are untouched -- as is the
+  no-floor property (measured: order-0 R/T move by 3.9e-15 when `n_orders`
+  goes 4 -> 8, against 9.7e-3 for the FMM-floored hybrid).
+* SCALAR input runs the shipped isotropic assembly BIT FOR BIT (a dispatch,
+  not a rewrite): `Lmat`, `Rmat`, `Stt`, `Schur` and `Et_blocks` are exactly
+  equal between the scalar arm and the tensor `e*I` arm, and so are the
+  returned R/T.
+* Validation (docs/audits/BUILD_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md):
+  uniform in-plane tensor slabs (rotated uniaxial AND gyrotropic) match the
+  exact Berreman 4x4 to 9.3e-14 in R, T and the complex Jones at normal,
+  oblique and conical incidence; a y-uniform anisotropic stripe matches the
+  1-D `pmm_jones_1d` / `rcwa_jones_1d` per order to 4.3e-6 at M=8; a 2-D
+  anisotropic cell agrees with `pmm_jones_2d` and `rcwa_jones_2d` inside
+  their Fourier floor (<= 5.8e-4); a uniform-tensor multilayer matches the
+  Berreman multilayer to 4.2e-14 at conical incidence; the lossy-tensor
+  absorption budget closes to 8.2e-8.  Zeroing any ONE of the three new terms
+  (the Eq. 40 mixed masses, the Eq. 44 second `K_zt` term, the Eq. 25 `Lhh`
+  mixed blocks) moves the Berreman residual by 11-12 decades, so none of them
+  is dead code.
+* PUBLISHED ORACLE: all SIX reflected diffraction efficiencies of Li,
+  J. Opt. A **5**, 345 (2003), Example 1 / Table 1 -- the gyrotropic crossed
+  grating Granet 2023 re-uses as his Fig. 4 -- are reproduced to a maximum
+  deviation of **8.7e-5** at M=8 (M=7: 1.8e-4), inside the oracle's own
+  4-digit precision.  Interchanging the two tensors reproduces Li's published
+  SECOND row instead (1.8e-4) and misses the first by 1.3e-2, so the
+  `e12`/`e21` placement and the sign convention are pinned two-sided against
+  a published, labelled pair -- the observable no energy check can see.  Li's
+  values are already `exp(-i w t)`, so his tensors are used AS PRINTED; the
+  reading is documented in
+  `docs/audits/VERIFY_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md` (Granet's
+  restatement of the same geometry mislabels Li's substrate INDEX
+  `n = 1 + i5` as a permittivity and calls the tabulated REFLECTED orders
+  transmitted, which is why the paper's own text is not directly usable).
+* OUT-OF-PLANE tensors (`e_xz`/`e_yz`/`e_zx`/`e_zy` above a RELATIVE
+  `1e-12 * scale` floor, shared with the hybrid so a rotated-diagonal tensor's
+  ~1e-17 float noise is not mistaken for coupling) raise `NotImplementedError`
+  naming `pmm_jones_2d`: out-of-plane coupling breaks the paper's Eq. 16
+  (`div D = 0` no longer slaves `E_z`), so it is not a second-order problem in
+  this basis.  Anisotropic HALF-SPACES remain out of scope.
+* New lossless-closure tripwire on `PMM2DStackPure.solve`: when every layer
+  permittivity is real or HERMITIAN (gyrotropic included) and both half-spaces
+  are lossless, `|sum R + sum T - 1| > 5e-2` warns.  A non-Hermitian tensor is
+  silent -- `R + T < 1` is physical there and no unity is claimed.
+* Cost: `Lmat` stays `2q^2 x 2q^2` and the eig is unchanged; the tensor path
+  retains two extra `q^2 x q^2` mixed-mass blocks (+11.1% of the retained
+  operator bytes at (3,3)/M=8, 53.4 -> 59.4 MiB), and a full (3,3)/M=8 solve
+  measured 403.8 MiB peak against the scalar 401.1 MiB.  No new dead
+  operators (audit P3-37 holds: `Curl`/`Kzt`/`Ktz`/`Meps33` stay locals).
+
+### Added -- BOR: diagonal cylindrical anisotropy, an SEM radial basis, and its JAX twin
+
+Three changes that landed after 5.42.1 and had no changelog entry:
+
+* `BORStack.add_layer` accepts the DIAGONAL CYLINDRICAL tensor
+  `diag(eps_rr, eps_phiphi, eps_zz)` via `eps_tensor_profile=` (callable
+  `r -> (N, 3)`) or `eps_tensor=` (uniform 3-tuple) -- exactly the class a
+  body of revolution can represent (an off-diagonal `eps_r,phi` is not
+  azimuthally invariant, couples the `m` harmonics, and is rejected by the
+  physics rather than merely unimplemented).  Each component enters its own
+  existing role, so isotropic input is byte-identical to the previous scalar
+  path.  Validated against the analytic uniaxial dispersion at `m = 0` (TM0
+  extraordinary to 7.7e-15; an adversarial slot swap misses by 53-61%).
+  Anisotropic layers are NumPy-only.
+* `BORStack(basis="sem", degree=)`: div-conforming radial spectral elements --
+  `(E_phi, E_z)` in a C0 nodal GLL space of degree `p`, `E_r` discontinuous
+  per element at degree `p-1`, elements aligned to the ring walls so `eps` is
+  exact per element and no inverse rule is needed.  Per-layer meshes with
+  cross-tested Galerkin mortar interfaces, `add_layer(segments=)`, hp-grading
+  with a wavelength-resolution cap (DPW=8), a radial PML, an unreduced-QZ
+  fallback at exact longitudinal resonances, `layer_absorption` /
+  `retain_internal`, and far-field Fourier-Bessel on non-uniform quadrature
+  grids.  Fiber-dispersion oracle to 1e-11 (the finite-difference basis floors
+  at 1e-4..1e-2), no spurious interlopers for `m <= 4`, `p <= 16`, and ~2
+  orders of magnitude cheaper than FD at fixed accuracy.
+* JAX twin of the SEM basis: `BORStack(basis="sem")` is differentiable in the
+  segment `eps` (scalar or the `(rr, pp, zz)` triple), a uniform `eps=`, and
+  layer thickness.  Because the mesh topology is value-dependent on this basis,
+  a traced `eps` needs `BORStack(n_mesh_cap=)`, a concrete upper bound on
+  `|n|`.  Forward parity vs the NumPy SEM 6e-15..7e-14; gradients vs central
+  finite differences 4e-10..7e-7.
+
 ## [5.42.1] — 2026-08-24
 
 ### Fixed -- `lumenairy[jax]` is resolvable again on every supported Python

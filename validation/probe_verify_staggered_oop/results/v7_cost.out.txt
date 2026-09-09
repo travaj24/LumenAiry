@@ -1,0 +1,9 @@
+[time] (2,2) M=8  dim 392 -> 784  ratio_min=1.744 ratio_median=1.744
+[time] (3,3) M=8  dim 882 -> 1764  ratio_min=1.328 ratio_median=1.322
+[time] (3,3) M=6  dim 450 -> 900  ratio_min=1.600 ratio_median=1.604
+[mem]  (2,2) M=8  28.3 MB -> 85.7 MB  ratio=3.022
+[mem]  (3,3) M=8  142.7 MB -> 433.4 MB  ratio=3.036
+[mem]  (3,3) M=6  37.3 MB -> 112.9 MB  ratio=3.026
+DONE
+
+[exited with code 0]

@@ -1,0 +1,43 @@
+[normal] rcwa n_orders=5 1.1s
+[normal] rcwa n_orders=7 2.0s
+[normal] rcwa n_orders=9 7.1s
+[normal] hybrid laurent 112.2s
+[normal] hybrid li 113.6s
+[normal] ORACLE rcwa-5 vs rcwa(9): dR=2.072e-04 dT=3.949e-03 dJ=7.362e-04
+[normal] ORACLE rcwa-7 vs rcwa(9): dR=8.921e-05 dT=1.124e-03 dJ=3.144e-04
+[normal] ORACLE hyb-laurent vs rcwa(9): dR=2.144e-04 dT=2.218e-03 dJ=6.999e-04
+[normal] ORACLE hyb-li vs rcwa(9): dR=2.769e-04 dT=3.190e-03 dJ=9.212e-04
+[normal] staggered rot=-1 M=5 dR=4.535e-04 dT=3.156e-03 dJ=1.475e-03 |R+T-1|=4.55e-05 self_move=None (1.0s)
+[normal] staggered rot=-1 M=6 dR=3.457e-04 dT=2.774e-03 dJ=1.122e-03 |R+T-1|=8.54e-06 self_move=0.0005159044834577159 (3.1s)
+[normal] staggered rot=-1 M=7 dR=3.421e-04 dT=2.791e-03 dJ=1.110e-03 |R+T-1|=4.23e-07 self_move=2.2835957394357065e-05 (8.3s)
+[normal] staggered rot=+1 M=6 dR=2.353e-03 dT=2.216e-02 dJ=1.019e-02 |R+T-1|=5.03e-06 self_move=None (3.1s)
+[normal] NO-FLOOR staggered n_orders 3->8 moves 5.551e-16 (Jones 8.356e-17); hybrid's two E_z rules differ by 1.098e-03
+[oblique25] rcwa n_orders=5 0.4s
+[oblique25] rcwa n_orders=7 2.0s
+[oblique25] rcwa n_orders=9 7.1s
+[oblique25] hybrid laurent 113.0s
+[oblique25] hybrid li 113.7s
+[oblique25] ORACLE rcwa-5 vs rcwa(9): dR=1.251e-04 dT=3.358e-03 dJ=4.360e-04
+[oblique25] ORACLE rcwa-7 vs rcwa(9): dR=6.312e-05 dT=1.201e-03 dJ=3.450e-04
+[oblique25] ORACLE hyb-laurent vs rcwa(9): dR=7.615e-05 dT=1.887e-03 dJ=8.533e-04
+[oblique25] ORACLE hyb-li vs rcwa(9): dR=5.941e-05 dT=3.163e-03 dJ=6.644e-04
+[oblique25] staggered rot=-1 M=5 dR=2.112e-04 dT=2.674e-03 dJ=1.478e-03 |R+T-1|=3.70e-05 self_move=None (1.0s)
+[oblique25] staggered rot=-1 M=6 dR=1.681e-04 dT=2.104e-03 dJ=1.511e-03 |R+T-1|=5.88e-06 self_move=0.0014210075471207534 (3.1s)
+[oblique25] staggered rot=-1 M=7 dR=1.489e-04 dT=2.131e-03 dJ=1.462e-03 |R+T-1|=1.90e-08 self_move=0.00015073894801848065 (8.4s)
+[oblique25] staggered rot=+1 M=6 dR=2.499e-03 dT=3.246e-02 dJ=1.646e-02 |R+T-1|=7.01e-06 self_move=None (3.1s)
+[oblique25] NO-FLOOR staggered n_orders 3->8 moves 1.873e-07 (Jones 8.058e-08); hybrid's two E_z rules differ by 1.275e-03
+[conical25_40] rcwa n_orders=5 0.4s
+[conical25_40] rcwa n_orders=7 2.1s
+[conical25_40] rcwa n_orders=9 7.3s
+[conical25_40] hybrid laurent 112.2s
+[conical25_40] hybrid li 114.0s
+[conical25_40] ORACLE rcwa-5 vs rcwa(9): dR=1.065e-04 dT=3.676e-03 dJ=3.078e-04
+[conical25_40] ORACLE rcwa-7 vs rcwa(9): dR=6.772e-05 dT=1.253e-03 dJ=2.414e-04
+[conical25_40] ORACLE hyb-laurent vs rcwa(9): dR=9.107e-05 dT=2.183e-03 dJ=5.238e-04
+[conical25_40] ORACLE hyb-li vs rcwa(9): dR=6.104e-05 dT=3.200e-03 dJ=5.448e-04
+[conical25_40] staggered rot=-1 M=5 dR=1.618e-04 dT=2.696e-03 dJ=1.139e-03 |R+T-1|=8.04e-05 self_move=None (1.0s)
+[conical25_40] staggered rot=-1 M=6 dR=1.354e-04 dT=2.788e-03 dJ=8.887e-04 |R+T-1|=2.02e-06 self_move=0.00019445960387771966 (3.1s)
+[conical25_40] staggered rot=-1 M=7 dR=1.341e-04 dT=2.798e-03 dJ=8.763e-04 |R+T-1|=7.17e-08 self_move=4.2692924300813395e-05 (8.5s)
+[conical25_40] staggered rot=+1 M=6 dR=3.851e-03 dT=5.313e-02 dJ=1.432e-02 |R+T-1|=2.19e-06 self_move=None (3.1s)
+[conical25_40] NO-FLOOR staggered n_orders 3->8 moves 4.467e-08 (Jones 1.972e-08); hybrid's two E_z rules differ by 1.017e-03
+DONE

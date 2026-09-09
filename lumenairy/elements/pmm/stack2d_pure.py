@@ -34,7 +34,18 @@ Scope
 -----
 Any mix of UNIFORM and PATTERNED layers -- including DIRECT
 patterned<->patterned (A|B) interfaces -- with axis-aligned rectangular
-patterns and ISOTROPIC scalar permittivity on one shared square grid.
+patterns, on one shared square grid, carrying either ISOTROPIC scalar
+permittivity or an IN-PLANE (Granet BLOCK-FORM) permittivity TENSOR:
+``add_layer(eps=(3,3))`` for a uniform anisotropic layer and
+``add_layer(eps_cell=(Nx,Ny,3,3))`` for a patterned one (see
+:mod:`lumenairy.elements.pmm.twod_staggered`, "Anisotropy").  OUT-OF-PLANE
+tensors (``e_xz``/``e_yz``/``e_zx``/``e_zy`` -- a tilted-director liquid
+crystal) are supported: such a layer takes the first-order ``4 q^2`` staggered
+generator, whose forward and backward modes are distinct, and a stack
+containing ANY out-of-plane layer runs the GENERALIZED S-matrix cascade
+throughout (uniform and in-plane layers and the half-spaces entering as
+``[[W, W], [V, -V]]``).  ``retain_internal`` / :meth:`layer_absorption` work
+on that path too.  The half-spaces stay isotropic.
 (The historical 'A|B blows up energy' defect that once limited this class to a
 single patterned layer was NOT an interface/mode-sorting problem: it was the
 far-field projection-kernel order MIRROR in ``_stag_fourier_projection`` --
@@ -48,12 +59,12 @@ Li 2003 J. Opt. A 5:345; *Gratings: Theory and Numeric Applications* ch. 13,
 2014, 13.2.3.3 -- is what makes the 2nd-order ``(W, +/-V, +/-lam)`` cascade
 sound as-is.)
 Tapered (z-staircase) helpers remain hybrid-only: use :class:`PMM2DStackHybrid`.
-Full anisotropic tensors and out-of-plane coupling are staged extensions (the
-staggered assembly already carries the div-D ``E_z`` Schur term).
-Uniform layers route through the shared eps-free geometric eig
+Uniform SCALAR layers route through the shared eps-free geometric eig
 (:func:`~lumenairy.elements.pmm.twod_staggered._homog_region_modes`) -- all
 uniform regions share the SAME eigenvectors, so a uniform<->uniform interface is
-``a = W0^-1 W0 = I`` (perfectly conditioned) and costs no eig.
+``a = W0^-1 W0 = I`` (perfectly conditioned) and costs no eig.  A uniform
+TENSOR layer cannot: its div(D)=0 Schur term is not eps-free, so it takes its
+own region eig (deduped by bytes, like a patterned cell).
 
 Caveats (inherited from :func:`pmm_efficiency_2d_staggered`)
 -----------------------------------------------------------
@@ -76,7 +87,12 @@ import warnings
 
 import numpy as np
 
-from ..rcwa._core import _project_efficiency  # shared flux-projection (S1-9/S1-10)
+from ..rcwa._core import (  # shared flux projection + the generalized cascade
+    _interface_smatrix_general,
+    _modes_to_M,
+    _project_efficiency,
+    _propagation_smatrix_general,
+)
 from ._core import (
     PerOrderAmplitudesMixin,
     _guarded_lstsq,
@@ -90,12 +106,102 @@ from .twod_staggered import (
     _far_projector_2d,
     _homog_geom_cache,
     _homog_region_modes,
+    _modes_as_general,
     _pmm2d_order_kz,
     _pmm2d_project_orders,
     _region_modes,
+    _region_modes_oop,
+    _tile_needs_oop,
+    _validate_stag_cell,
 )
 
 __all__ = ["PMM2DStackPure"]
+
+#: Lossless-closure tripwire window for the pure staggered cascade.  DERIVED
+#: 2026-09-09 by MEASUREMENT over 40 lossless SCALAR configurations of this
+#: engine -- every fixture the shipped staggered suites exercise plus a
+#: deliberately adverse set (build doc
+#: docs/audits/BUILD_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md, table T11;
+#: probe validation/probe_pmm2d_staggered_aniso/p11_tol_derivation.py).
+#: The WORST |sum R + sum T - 1| measured there is 9.01e-03 -- a UNIFORM layer
+#: at theta = 0.25 and M = 6, i.e. exactly the degree-limited oblique-uniform
+#: regime this module's docstring already warns about.  Every shipped-suite
+#: fixture is at or below 1.63e-03.  This 5e-2 window therefore sits 5.5x
+#: above the worst adverse configuration and ~31x above every shipped one,
+#: while an under-resolved tensor solve at the minimum modal count M=3 leaves
+#: it by 1.8x (9.1e-02 measured) -- a deterministic discretization number
+#: whose cross-build spread is ~1e-6, so the decision is not near a knife
+#: edge even though the ratio is modest.  It is the same value as the hybrid's
+#: ``twod._PASSIVE_TOL_2D`` (5e-2), arrived at independently, which keeps the
+#: two 2-D engines' closure contracts comparable.
+_STAG_CLOSURE_TOL = 5.0e-2
+
+
+def _tensor_is_hermitian(t):
+    """True if every ``(3, 3)`` tensor in ``t`` is Hermitian, i.e. LOSSLESS.
+
+    RELATIVE floor (``1e-12 * scale``), the same shape as
+    :func:`~lumenairy.elements.pmm.twod_jones._tile_is_offplane` and for the
+    same reason: a physically lossless tensor built by ROTATING a real diagonal
+    one (``R @ diag @ R.T``) computes its ``(0,1)`` and ``(1,0)`` entries by
+    different dot products, so exact ``t == t^H`` is not float-attainable,
+    while a genuine anti-Hermitian (absorbing) part is O(kappa * n) -- decades
+    above roundoff."""
+    t = np.asarray(t, dtype=_C)
+    dev = float(np.max(np.abs(t - np.conj(np.swapaxes(t, -1, -2)))))
+    scale = max(float(np.max(np.abs(t))), 1.0)
+    return dev <= 1e-12 * scale
+
+
+def _stack_is_lossless(layers, eps_sup, eps_sub):
+    """True when the whole pure-staggered stack is PROVABLY lossless: real
+    half-spaces (exactly, as they come from real indices) and every layer
+    either exactly-real scalar or Hermitian tensor.  Mirrors the predicate of
+    :func:`~lumenairy.elements.pmm.twod._warn_lossless_energy_2d`, extended to
+    the tensor case (a Hermitian permittivity absorbs nothing)."""
+    for e in (eps_sup, eps_sub):
+        if np.imag(np.asarray(e, dtype=_C)) != 0.0:
+            return False
+    for L in layers:
+        if L["kind"] == "uniform":
+            if np.imag(L["eps"]) != 0.0:
+                return False
+        elif L["kind"] == "uniform_tensor":
+            if not _tensor_is_hermitian(L["eps33"]):
+                return False
+        elif L["eps_cell"].ndim == 4:
+            if not _tensor_is_hermitian(L["eps_cell"]):
+                return False
+        elif np.any(np.imag(L["eps_cell"]) != 0.0):
+            return False
+    return True
+
+
+def _warn_stag_closure(R_eff, T_eff, layers, eps_sup, eps_sub):
+    """Lossless-closure tripwire for the PURE staggered cascade -- the no-floor
+    sibling of :func:`~lumenairy.elements.pmm.twod._warn_lossless_energy_2d`
+    and of ``PMMStack._warn_stack_energy``.
+
+    When the stack is provably lossless (Hermitian tensors INCLUDED --
+    gyrotropic ``e12 = -e21 = i b`` is lossless), ``sum R + sum T = 1`` is
+    EXACT, so the gate is TWO-SIDED about 1.0: a deficit is as much a defect as
+    an excess (the 2026-08-17 lesson from the hybrid).  A NON-Hermitian tensor
+    is silent -- ``R + T < 1`` is then physical and no unity claim exists to
+    violate.  WARNS, never raises: a working solve stays byte-unchanged."""
+    if not _stack_is_lossless(layers, eps_sup, eps_sub):
+        return
+    for row, (Rr, Tr) in enumerate(zip(np.atleast_2d(R_eff),
+                                       np.atleast_2d(T_eff))):
+        tot = float(np.real(np.sum(Rr)) + np.real(np.sum(Tr)))
+        if abs(tot - 1.0) > _STAG_CLOSURE_TOL:
+            warnings.warn(
+                f"PMM2DStackPure.solve: lossless energy closure violated for "
+                f"incident E_{'xy'[row]} (sum R+T = {tot:.4g}, off by "
+                f"{tot - 1.0:+.3g}; every permittivity in this stack is real "
+                f"or Hermitian, so R+T = 1 is exact).  The staggered basis is "
+                f"under-resolved or the solve sits inside a Rayleigh cutoff: "
+                f"raise n_modes (M), or detune the wavelength / use "
+                f"PMM2DStackHybrid near a cutoff.", stacklevel=3)
 
 
 class PMM2DStackPure(PerOrderAmplitudesMixin):
@@ -141,10 +247,26 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
     # ------------------------------------------------------------------ build
     def add_layer(self, thickness, *, eps=None, eps_cell=None):
-        """Append a layer.  Pass exactly ONE of ``eps`` (uniform isotropic) or
-        ``eps_cell`` (a SQUARE ``(Nx, Ny)`` scalar permittivity grid, walls on
-        the segment boundaries).  All patterned layers must share one common
-        ``(Nx, Ny)`` grid (union-grid constraint)."""
+        """Append a layer.  Pass exactly ONE of ``eps`` or ``eps_cell``.
+
+        ``eps`` is a UNIFORM layer: a scalar (isotropic) or a ``(3, 3)``
+        BLOCK-FORM permittivity tensor (in-plane anisotropic --
+        ``[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]``, PUBLIC ``Im > 0`` for
+        loss).  A uniform TENSOR layer is NOT eps-free-separable (its div(D)=0
+        Schur term mixes e11/e21), so it costs its own region eig on the common
+        grid instead of riding the shared geometric eig -- deduped by bytes,
+        exactly like a patterned cell.
+
+        ``eps_cell`` is a PATTERNED layer: a SQUARE ``(Nx, Ny)`` scalar grid, or
+        a ``(Nx, Ny, 3, 3)`` block-form tensor grid (walls on the segment
+        boundaries).  All patterned layers must share one common ``(Nx, Ny)``
+        grid (union-grid constraint).
+
+        OUT-OF-PLANE tensor coupling (``e_xz``/``e_yz``/``e_zx``/``e_zy``
+        above a RELATIVE ``1e-12`` floor) routes that layer to the first-order
+        ``4 q^2`` staggered generator and puts the WHOLE stack on the
+        generalized cascade; ``e33 == 0`` raises (both ``E_z`` eliminations
+        divide by it)."""
         self._modal = None      # geometry change supersedes retained amplitudes
         self._internal = None
         if (eps is None) == (eps_cell is None):
@@ -155,27 +277,30 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         if not t > 0:
             raise ValueError("PMM2DStackPure.add_layer: thickness must be > 0.")
         if eps is not None:
-            self._layers.append(dict(kind="uniform", thickness=t,
-                                     eps=_C(eps)))
+            e = np.asarray(eps, dtype=_C)
+            if e.ndim == 0:
+                self._layers.append(dict(kind="uniform", thickness=t,
+                                         eps=_C(eps)))
+                return self
+            if e.shape != (3, 3):
+                raise ValueError(
+                    f"PMM2DStackPure.add_layer: a uniform eps must be a scalar "
+                    f"or a (3, 3) block-form tensor, got shape {e.shape}.  A "
+                    f"PATTERNED tensor layer goes through eps_cell "
+                    f"((Nx, Ny, 3, 3)).")
+            _tile_needs_oop("PMM2DStackPure.add_layer", e[None, None])
+            self._layers.append(dict(kind="uniform_tensor", thickness=t,
+                                     eps33=e))
             return self
-        cell = np.asarray(eps_cell, dtype=_C)
-        if cell.ndim != 2:
-            raise ValueError(
-                f"PMM2DStackPure.add_layer: eps_cell must be a 2-D (Nx, Ny) "
-                f"array, got shape {cell.shape}.")
-        if cell.shape[0] != cell.shape[1]:
-            raise ValueError(
-                f"PMM2DStackPure.add_layer: eps_cell must be SQUARE (Nx == Ny; "
-                f"the staggered tensor-product basis requires "
-                f"Nx*(M-1) == Ny*(M-1)), got {cell.shape}.  Pad the uniform axis "
-                f"into equal segments (e.g. tile a (2, 1) cell to (2, 2)).")
+        cell = _validate_stag_cell("PMM2DStackPure.add_layer", eps_cell)
+        grid = cell.shape[:2]
         if self._grid is None:
-            self._grid = cell.shape
-        elif cell.shape != self._grid:
+            self._grid = grid
+        elif grid != self._grid:
             raise ValueError(
                 f"PMM2DStackPure.add_layer: all patterned layers must share ONE "
                 f"common (Nx, Ny) grid (the union-grid constraint of the pure "
-                f"staggered cascade); got {cell.shape} after {self._grid}.  "
+                f"staggered cascade); got {grid} after {self._grid}.  "
                 f"Re-express every pattern on a common grid, or use "
                 f"PMM2DStackHybrid (no union-grid constraint).")
         self._layers.append(dict(kind="patterned", thickness=t, eps_cell=cell))
@@ -237,8 +362,21 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         _ky0n = nre0 * np.sin(theta) * np.sin(phi)
         _require_propagating_incidence("PMM2DStackPure.solve", np.conj(eps_sup),
                                        _kx0n ** 2 + _ky0n ** 2)
+        # Wood-anomaly nudge.  TENSOR layers contribute their DIAGONALS' real
+        # parts (the `_pmm_jones_2d_at` rule: a grazing LAYER mode is what
+        # crashes the interface S-matrix, and an anisotropic layer has several
+        # principal indices).  SCALAR layers are deliberately left out, exactly
+        # as the shipped scalar cascade and `pmm_efficiency_2d_staggered` leave
+        # them out -- adding them would move every shipped scalar result.
+        _eps_gr = [eps_sup, eps_sub]
+        for _L in self._layers:
+            if _L["kind"] == "uniform_tensor":
+                _eps_gr += list(np.diag(_L["eps33"]))
+            elif _L["kind"] == "patterned" and _L["eps_cell"].ndim == 4:
+                _eps_gr += list(_L["eps_cell"][..., [0, 1, 2],
+                                              [0, 1, 2]].ravel())
         wl = _grazing_safe_wavelength(wl, _kx0n, _ky0n, _mx, _my, px, py,
-                                      [eps_sup, eps_sub])
+                                      _eps_gr)
         _kt2 = ((_kx0n + _mx * (wl / px)) ** 2 + (_ky0n + _my * (wl / py)) ** 2)
         _gap = min(float(np.min(np.abs(float(np.real(e)) - _kt2)))
                    for e in (eps_sup, eps_sub))
@@ -270,39 +408,82 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         Wsup, Vsup, _ls = _homog_region_modes(geom, eps_sup)
         Wsub, Vsub, _lb = _homog_region_modes(geom, eps_sub)
 
-        # Per-layer modes: uniform -> shared geom (cheap); patterned -> its own
-        # staggered eig, deduped across byte-identical cells (a DBR eigs each
-        # distinct layer once).
+        # Per-layer modes: uniform SCALAR -> shared geom (cheap); patterned or
+        # tensor -> its own staggered eig, deduped across byte-identical cells
+        # (a DBR eigs each distinct layer once).  A layer whose tensor carries
+        # OUT-OF-PLANE coupling routes through the first-order 4 q^2 generator
+        # and returns DISTINCT forward/backward sets; every entry is stored in
+        # the 6-tuple form so one cascade serves both kinds.
         modes = []
         eig_cache = {}
+        any_oop = False
         for L in self._layers:
             if L["kind"] == "uniform":
                 W, V, lam = _homog_region_modes(geom, L["eps"])
+                six = _modes_as_general(W, V, lam)
             else:
-                key = L["eps_cell"].tobytes()
+                if L["kind"] == "uniform_tensor":
+                    # A uniform TENSOR region is NOT eps-free-separable (its
+                    # div(D)=0 Schur term mixes e11/e21 while Meps33 carries
+                    # e33 alone), so it cannot ride the shared geometric eig --
+                    # it is assembled as a constant cell on the common grid and
+                    # takes a full region eig, deduped like a patterned cell.
+                    cell = np.ascontiguousarray(
+                        np.broadcast_to(L["eps33"], (Nx, Ny, 3, 3)))
+                else:
+                    cell = L["eps_cell"]
+                key = (cell.shape, cell.tobytes())
                 cached = eig_cache.get(key)
                 if cached is None:
-                    sol = Granet2DTransverseE(px, py, Nx, Ny, M, L["eps_cell"],
+                    sol = Granet2DTransverseE(px, py, Nx, Ny, M, cell,
                                               alpha0x=a0x, alpha0y=a0y, k0=k0)
-                    Wl, Vl, lam_l, _g2 = _region_modes(sol)
-                    cached = (Wl, Vl, lam_l)
+                    if sol.offplane:
+                        cached = _region_modes_oop(sol)
+                    else:
+                        Wl, Vl, lam_l, _g2 = _region_modes(sol)
+                        cached = _modes_as_general(Wl, Vl, lam_l)
                     eig_cache[key] = cached
-                W, V, lam = cached
-            modes.append((W, V, lam, L["thickness"]))
+                six = cached
+                any_oop = any_oop or (len(cell.shape) == 4
+                                      and _tile_needs_oop(
+                                          "PMM2DStackPure.solve", cell))
+            modes.append(six + (L["thickness"],))
 
         # SQUARE Redheffer cascade: sup | (interface, propagate)* | sub.  The
         # interface list is precomputed (same matrices, same star sequence --
         # bit-identical to the inline build) so retain_internal can reuse it
         # for the bracketing partial cascades.
         nlay = len(modes)
-        ifc = [_interface_smatrix(Wsup, Vsup, modes[0][0], modes[0][1])]
-        for i in range(1, nlay):
-            ifc.append(_interface_smatrix(modes[i - 1][0], modes[i - 1][1],
-                                          modes[i][0], modes[i][1]))
-        ifc.append(_interface_smatrix(modes[-1][0], modes[-1][1], Wsub, Vsub))
+        if any_oop:
+            # GENERALIZED cascade: an out-of-plane layer breaks the in-plane
+            # ``[W; -V] <-> -lam`` symmetry, so forward and backward modes are
+            # genuinely distinct and every region -- half-spaces, uniform and
+            # in-plane layers included -- enters through the full field-mode
+            # matrix ``[[Wf, Wb], [Vf, Vb]]``.  The isotropic half-spaces are
+            # ``[[W, W], [V, -V]]``; measured against the shipped SQUARE
+            # interface on an isotropic pair, the two agree to 7.7e-14 (S11) /
+            # 8.1e-14 (S21) at normal and 1.0e-13 / 9.3e-14 at conical, so the
+            # mixed route costs nothing in accuracy.
+            Msup = _modes_to_M(Wsup, Vsup, Wsup, -Vsup)
+            Msub = _modes_to_M(Wsub, Vsub, Wsub, -Vsub)
+            Mlay = [_modes_to_M(m[0], m[1], m[3], m[4]) for m in modes]
+            ifc = [_interface_smatrix_general(Msup, Mlay[0])]
+            for i in range(1, nlay):
+                ifc.append(_interface_smatrix_general(Mlay[i - 1], Mlay[i]))
+            ifc.append(_interface_smatrix_general(Mlay[-1], Msub))
+            prop = [_propagation_smatrix_general(m[2], m[5], k0 * m[6])
+                    for m in modes]
+        else:
+            ifc = [_interface_smatrix(Wsup, Vsup, modes[0][0], modes[0][1])]
+            for i in range(1, nlay):
+                ifc.append(_interface_smatrix(modes[i - 1][0], modes[i - 1][1],
+                                              modes[i][0], modes[i][1]))
+            ifc.append(_interface_smatrix(modes[-1][0], modes[-1][1],
+                                          Wsub, Vsub))
+            prop = [_propagation_smatrix(m[2], k0 * m[6]) for m in modes]
         S = ifc[0]
-        for i, (W, V, lam, t) in enumerate(modes):
-            S = _redheffer_star(S, _propagation_smatrix(lam, k0 * t))
+        for i in range(nlay):
+            S = _redheffer_star(S, prop[i])
             S = _redheffer_star(S, ifc[i + 1])
         S11, _S12, S21, _S22 = S
         if retain_internal:
@@ -313,14 +494,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             S_above[0] = ifc[0]
             for i in range(1, nlay):
                 S_above[i] = _redheffer_star(
-                    _redheffer_star(S_above[i - 1], _propagation_smatrix(
-                        modes[i - 1][2], k0 * modes[i - 1][3])), ifc[i])
+                    _redheffer_star(S_above[i - 1], prop[i - 1]), ifc[i])
             S_below_bot = [None] * nlay
             S_below_bot[nlay - 1] = ifc[nlay]
             for i in range(nlay - 2, -1, -1):
                 S_below_bot[i] = _redheffer_star(
-                    _redheffer_star(ifc[i + 1], _propagation_smatrix(
-                        modes[i + 1][2], k0 * modes[i + 1][3])),
+                    _redheffer_star(ifc[i + 1], prop[i + 1]),
                     S_below_bot[i + 1])
 
         # FORWARD-only far-field Fourier->Rayleigh projection (once).
@@ -380,9 +559,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         if retain_internal:
             self._internal = dict(
                 modes=modes, S_above=S_above, S_below_bot=S_below_bot,
-                G=G_gram, qq=qq, k0=k0,
+                G=G_gram, qq=qq, k0=k0, any_oop=any_oop,
                 cinc=np.stack(cinc_cols, axis=1),
                 R_tot=R_eff.sum(axis=1), T_tot=T_eff.sum(axis=1))
+        _warn_stag_closure(R_eff, T_eff, self._layers, eps_sup, eps_sub)
         if not jones:
             return orders2d, R_eff, T_eff
         return orders2d, R_eff, T_eff, jmat
@@ -395,16 +575,21 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         d = self._internal
         out = []
         k0 = d["k0"]
-        for i, (_W, _V, lam, t) in enumerate(d["modes"]):
+        for i, m in enumerate(d["modes"]):
+            lam_f, lam_b, t = m[2], m[5], m[6]
             Sa = d["S_above"][i]
             Sb = d["S_below_bot"][i]
-            X = np.exp(-lam * k0 * t)
-            n = lam.shape[0]
+            # forward decay top -> bottom, backward decay bottom -> top.  For a
+            # SYMMETRIC region lam_b = -lam_f and both reduce to the single
+            # exp(-lam k0 t) the shipped in-plane path used.
+            Xf = np.exp(-lam_f * k0 * t)
+            Xb = np.exp(lam_b * k0 * t)
+            n = lam_f.shape[0]
             A22, A21 = Sa[3], Sa[2]
             B11 = Sb[0]
-            M = np.eye(n, dtype=_C) - (A22 * X[None, :]) @ (B11 * X[None, :])
+            M = np.eye(n, dtype=_C) - (A22 * Xb[None, :]) @ (B11 * Xf[None, :])
             c_fwd = np.linalg.solve(M, A21 @ d["cinc"])
-            c_bwd = B11 @ (X[:, None] * c_fwd)
+            c_bwd = B11 @ (Xf[:, None] * c_fwd)
             out.append((c_fwd, c_bwd))
         return out
 
@@ -424,14 +609,16 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         ``-i``).  Only ratios enter :meth:`layer_absorption`, so the overall
         scale cancels."""
         d = self._internal
-        _W, _V, lam, t = d["modes"][i]
-        W, V = _W, _V
+        Wf, Vf, lam_f, Wb, Vb, lam_b, t = d["modes"][i]
         c_fwd, c_bwd = amps[i]
         k0, qq = d["k0"], d["qq"]
-        P = np.exp(-lam * k0 * (z_frac * t))[:, None]
-        Q = np.exp(-lam * k0 * ((1.0 - z_frac) * t))[:, None]
-        E = W @ (P * c_fwd) + W @ (Q * c_bwd)
-        H = V @ (P * c_fwd) - V @ (Q * c_bwd)
+        # ``c_fwd`` is referenced to the layer TOP and ``c_bwd`` to its BOTTOM.
+        # For a SYMMETRIC region (Wb = Wf, Vb = -Vf, lam_b = -lam_f) this is
+        # the shipped expression term for term.
+        P = np.exp(-lam_f * k0 * (z_frac * t))[:, None]
+        Q = np.exp(lam_b * k0 * ((1.0 - z_frac) * t))[:, None]
+        E = Wf @ (P * c_fwd) + Wb @ (Q * c_bwd)
+        H = Vf @ (P * c_fwd) + Vb @ (Q * c_bwd)
         G = d["G"]
         G1, G2 = G[:qq, :qq], G[qq:, qq:]
         val = (np.sum(np.conj(H[qq:]) * (G1 @ E[:qq]), axis=0)

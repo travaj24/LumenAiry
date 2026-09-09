@@ -1,0 +1,32 @@
+# tail of regress_staggered.log (2026-09-09, C:/tmp/lum_aniso, OMP=OPENBLAS=MKL=1)
+
+    _o, R, T, _J = P.pmm_jones_2d(PER, PER, cell, 1.5, 1.0, DEPTH, WL,
+
+tests/unit/test_niche_audit_w7_pmm.py::test_w7_even_parity_fold_reproduces_the_full_solve[(1.5+0j)-0.0-False]
+tests/unit/test_niche_audit_w7_pmm.py::test_w7_even_parity_fold_reproduces_the_full_solve[(1.5+0j)-0.0-False]
+  C:\tmp\lum_aniso\tests\unit\test_niche_audit_w7_pmm.py:877: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = -1.105e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.
+    _o, R, T, J = P.pmm_jones_2d(PER, PER, cell, n_sub, 1.0, DEPTH, WL,
+
+tests/unit/test_niche_audit_w7_pmm.py::test_w7_even_parity_fold_reproduces_the_full_solve[(1.5+0.3j)-0.0-False]
+tests/unit/test_niche_audit_w7_pmm.py::test_w7_even_parity_fold_reproduces_the_full_solve[(1.5+0.3j)-0.0-False]
+  C:\tmp\lum_aniso\tests\unit\test_niche_audit_w7_pmm.py:877: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.187e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.
+    _o, R, T, J = P.pmm_jones_2d(PER, PER, cell, n_sub, 1.0, DEPTH, WL,
+
+tests/unit/test_niche_audit_w7_pmm.py::test_w7_even_parity_fold_reproduces_the_full_solve[(1.5+0j)-0.3-False]
+tests/unit/test_niche_audit_w7_pmm.py::test_w7_even_parity_fold_reproduces_the_full_solve[(1.5+0j)-0.3-False]
+  C:\tmp\lum_aniso\tests\unit\test_niche_audit_w7_pmm.py:877: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = -1.091e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.
+    _o, R, T, J = P.pmm_jones_2d(PER, PER, cell, n_sub, 1.0, DEPTH, WL,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================ slowest 10 durations =============================
+111.23s call     tests/unit/test_pmm2d_lossless_closure_two_sided.py::test_solver_warning_matches_the_predicate_on_every_arm
+32.10s call     tests/unit/test_v5_12_0_pmm2d_staggered.py::test_matches_rcwa
+25.46s call     tests/unit/test_pmm2d_staggered_oop.py::test_g5_no_fourier_floor_two_sided
+25.34s call     tests/unit/test_v5_21_pmm2d_staggered_oblique.py::test_stack_pure_multilayer_ab_vs_1d
+16.52s call     tests/unit/test_v5_21_pmm2d_staggered_oblique.py::test_staggered_per_order_orientation_vs_1d[0.2]
+15.72s call     tests/unit/test_v5_21_pmm2d_staggered_oblique.py::test_staggered_per_order_orientation_vs_1d[0.0]
+10.31s call     tests/unit/test_pmm2d_staggered_anisotropic.py::test_g5_three_engines_agree_on_a_2d_anisotropic_cell
+9.96s call     tests/unit/test_pmm2d_staggered_oop.py::test_g8b_uniform_oop_multilayer_matches_berreman_multilayer
+9.61s call     tests/unit/test_niche_audit_w7_pmm.py::test_w7_fe_concrete_wavelength_gradients_stay_exact
+9.54s call     tests/unit/test_niche_audit_w7_pmm.py::test_w7_fe_concrete_wavelength_jit_matches_unjitted
+361 passed, 35 warnings in 483.45s (0:08:03)

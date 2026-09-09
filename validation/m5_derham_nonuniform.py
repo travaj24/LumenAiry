@@ -141,12 +141,14 @@ class Granet2DTransverseENU(Granet2DTransverseE):
             raise ValueError("square-grid requirement Nx*(M-1) == Ny*(M-1)")
         self._assemble()
 
-    def _eps_weighted(self, refx_pair, refy_pair):
+    def _eps_weighted(self, refx_pair, refy_pair, wmap=None):
+        # ``wmap`` mirrors the library signature (the tensor assembly passes
+        # one permittivity COMPONENT map per block); None = self.eps_cell.
         bx, refx, sLx, sRx = refx_pair
         by, refy, sLy, sRy = refy_pair
         Gx = _global_pair_segmat_nu(bx, refx, sLx, sRx)
         Gy = _global_pair_segmat_nu(by, refy, sLy, sRy)
-        eps = self.eps_cell
+        eps = self.eps_cell if wmap is None else wmap
         out = np.zeros((Gy.shape[1] * Gx.shape[1],
                         Gy.shape[2] * Gx.shape[2]), dtype=_C)
         for sx in range(bx.N):
@@ -154,7 +156,7 @@ class Granet2DTransverseENU(Granet2DTransverseE):
             out += np.kron(Wy, Gx[sx])
         return out
 
-    def _eps_dir(self, bx, lx, opx, rx, by, ly, opy, ry):
+    def _eps_dir(self, bx, lx, opx, rx, by, ly, opy, ry, wmap=None):
         def segmat(basis, lset, op, rset):
             sL = getattr(basis, lset)
             sR = getattr(basis, rset)
@@ -172,10 +174,11 @@ class Granet2DTransverseENU(Granet2DTransverseE):
             return np.einsum("s,isa,jsa->sij", sc, np.conj(Lt), RR)
         Gx = segmat(bx, lx, opx, rx)
         Gy = segmat(by, ly, opy, ry)
+        eps = self.eps_cell if wmap is None else wmap
         out = np.zeros((Gy.shape[1] * Gx.shape[1],
                         Gy.shape[2] * Gx.shape[2]), dtype=_C)
         for sx in range(bx.N):
-            Wy = np.einsum("y,yij->ij", self.eps_cell[sx, :], Gy)
+            Wy = np.einsum("y,yij->ij", eps[sx, :], Gy)
             out += np.kron(Wy, Gx[sx])
         return out
 

@@ -1,0 +1,46 @@
+[pure_single_oop normal] gauge=-1j (shipped)    dR=1.547e-15 dT=8.660e-15 dJ=1.519e-14 R+T=1.000000000
+[pure_single_oop normal] gauge=+1j              dR=1.575e-15 dT=6.106e-15 dJ=3.905e-02 R+T=1.000000000
+[pure_single_oop normal] gauge=+1               dR=2.395e+00 dT=1.429e+00 dJ=1.344e+00 R+T=3.692409265
+[pure_single_oop normal] gauge=-1               dR=1.178e+01 dT=1.608e+01 dJ=3.506e+00 R+T=11.937235084
+[pure_single_oop normal] gauge=-2j (scale x2)   dR=4.131e-01 dT=4.131e-01 dJ=4.750e-01 R+T=1.000000000
+[pure_single_oop oblique25] gauge=-1j (shipped)    dR=3.343e-10 dT=2.522e-09 dJ=8.525e-10 R+T=1.000000001
+[pure_single_oop oblique25] gauge=+1j              dR=9.130e-04 dT=9.130e-04 dJ=4.301e-02 R+T=1.000000003
+[pure_single_oop oblique25] gauge=+1               dR=1.430e+00 dT=6.155e-01 dJ=9.735e-01 R+T=2.793372961
+[pure_single_oop oblique25] gauge=-1               dR=3.097e+00 dT=5.493e+00 dJ=1.959e+00 R+T=4.854565048
+[pure_single_oop oblique25] gauge=-2j (scale x2)   dR=3.740e-01 dT=3.740e-01 dJ=4.355e-01 R+T=1.000000001
+[pure_single_oop conical25_40] gauge=-1j (shipped)    dR=1.100e-11 dT=8.252e-11 dJ=6.993e-11 R+T=1.000000000
+[pure_single_oop conical25_40] gauge=+1j              dR=2.811e-04 dT=2.811e-04 dJ=4.378e-02 R+T=1.000000000
+[pure_single_oop conical25_40] gauge=+1               dR=1.565e+00 dT=7.846e-01 dJ=1.033e+00 R+T=2.759695673
+[pure_single_oop conical25_40] gauge=-1               dR=3.050e+00 dT=5.001e+00 dJ=1.884e+00 R+T=4.881022289
+[pure_single_oop conical25_40] gauge=-2j (scale x2)   dR=3.706e-01 dT=3.706e-01 dJ=4.460e-01 R+T=1.000000000
+[pure_oop_two_layers normal] gauge=-1j (shipped)    dR=2.554e-15 dT=1.499e-14 dJ=8.765e-15 R+T=0.891649211
+[pure_oop_two_layers normal] gauge=+1j              dR=2.202e-02 dT=2.622e-01 dJ=1.177e-01 R+T=1.127385373
+[pure_oop_two_layers normal] gauge=+1               dR=3.761e+00 dT=3.016e+00 dJ=1.702e+00 R+T=7.667849966
+[pure_oop_two_layers normal] gauge=-1               dR=9.388e+01 dT=9.521e+01 dJ=8.419e+00 R+T=189.986362016
+[pure_oop_two_layers normal] gauge=-2j (scale x2)   dR=4.354e-01 dT=3.921e-01 dJ=4.623e-01 R+T=0.934958122
+[pure_oop_two_layers oblique25] gauge=-1j (shipped)    dR=4.653e-10 dT=2.432e-09 dJ=1.241e-09 R+T=0.881493980
+[pure_oop_two_layers oblique25] gauge=+1j              dR=3.060e-02 dT=2.772e-01 dJ=1.301e-01 R+T=1.129825649
+[pure_oop_two_layers oblique25] gauge=+1               dR=2.301e+00 dT=1.770e+00 dJ=1.327e+00 R+T=4.952828309
+[pure_oop_two_layers oblique25] gauge=-1               dR=1.863e+01 dT=2.096e+01 dJ=4.233e+00 R+T=40.466147669
+[pure_oop_two_layers oblique25] gauge=-2j (scale x2)   dR=3.991e-01 dT=3.591e-01 dJ=4.577e-01 R+T=0.921542542
+[pure_oop_two_layers conical25_40] gauge=-1j (shipped)    dR=1.814e-11 dT=8.140e-11 dJ=6.445e-11 R+T=0.883451355
+[pure_oop_two_layers conical25_40] gauge=+1j              dR=2.514e-02 dT=2.742e-01 dJ=1.334e-01 R+T=1.129546758
+[pure_oop_two_layers conical25_40] gauge=+1               dR=2.280e+00 dT=1.688e+00 dJ=1.269e+00 R+T=4.849927672
+[pure_oop_two_layers conical25_40] gauge=-1               dR=1.884e+01 dT=2.136e+01 dJ=4.256e+00 R+T=41.083773261
+[pure_oop_two_layers conical25_40] gauge=-2j (scale x2)   dR=4.076e-01 dT=3.663e-01 dJ=4.470e-01 R+T=0.924749757
+[mixed_oop_inplane_iso normal] gauge=-1j (shipped)    dR=4.677e-15 dT=2.442e-14 dJ=1.031e-14 R+T=1.000000000
+[mixed_oop_inplane_iso normal] gauge=+1j              dR=2.545e-02 dT=2.545e-02 dJ=8.454e-02 R+T=1.000000000
+[mixed_oop_inplane_iso normal] gauge=+1               dR=2.701e-02 dT=4.404e-01 dJ=5.221e-01 R+T=1.463942356
+[mixed_oop_inplane_iso normal] gauge=-1               dR=3.766e-01 dT=7.545e-02 dJ=4.123e-01 R+T=1.452043001
+[mixed_oop_inplane_iso normal] gauge=-2j (scale x2)   dR=1.514e-01 dT=1.514e-01 dJ=2.735e-01 R+T=1.000000000
+[mixed_oop_inplane_iso oblique25] gauge=-1j (shipped)    dR=6.474e-10 dT=3.711e-09 dJ=1.600e-09 R+T=1.000000002
+[mixed_oop_inplane_iso oblique25] gauge=+1j              dR=3.717e-02 dT=3.717e-02 dJ=1.102e-01 R+T=1.000000002
+[mixed_oop_inplane_iso oblique25] gauge=+1               dR=1.425e-01 dT=5.818e-01 dJ=6.486e-01 R+T=1.724265934
+[mixed_oop_inplane_iso oblique25] gauge=-1               dR=5.246e-01 dT=1.934e-01 dJ=5.347e-01 R+T=1.718023471
+[mixed_oop_inplane_iso oblique25] gauge=-2j (scale x2)   dR=1.853e-01 dT=1.853e-01 dJ=3.215e-01 R+T=1.000000002
+[mixed_oop_inplane_iso conical25_40] gauge=-1j (shipped)    dR=2.474e-11 dT=1.468e-10 dJ=9.454e-11 R+T=1.000000000
+[mixed_oop_inplane_iso conical25_40] gauge=+1j              dR=3.058e-02 dT=3.058e-02 dJ=1.140e-01 R+T=1.000000000
+[mixed_oop_inplane_iso conical25_40] gauge=+1               dR=1.177e-01 dT=6.378e-01 dJ=6.694e-01 R+T=1.755503724
+[mixed_oop_inplane_iso conical25_40] gauge=-1               dR=5.384e-01 dT=1.681e-01 dJ=5.313e-01 R+T=1.706476131
+[mixed_oop_inplane_iso conical25_40] gauge=-2j (scale x2)   dR=1.927e-01 dT=1.927e-01 dJ=3.189e-01 R+T=1.000000000
+[exited with code 1]

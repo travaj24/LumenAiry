@@ -16,7 +16,7 @@ Legend: ✅ shipped · 🔄 in flight · ⬜ planned · ❌ open/known-hard ·
 | **1-D vertical** | ✅ `pmm_efficiency_1d` | ✅ `pmm_efficiency_1d_segments` | ✅ `pmm_jones_1d` | ✅ `pmm_jones_1d_segments` |
 | **1-D slanted** (normal inc.) | ✅ `pmm_efficiency_1d_slanted` | 🔄 (= diagonal case of below) | 🔄 `wiiihr0hl` | 🔄 `wiiihr0hl` |
 | **1-D oblique + slant** | ❌ cross-term unresolved | ❌ | ❌ | ❌ |
-| **2-D vertical** (rect pillars) | ✅ `pmm_efficiency_2d` (FMM-floored) + ✅ `pmm_efficiency_2d_staggered` (no-floor) | ✅ (via `eps_cell` grid; staggered) | ⬜ planned | ⬜ planned |
+| **2-D vertical** (rect pillars) | ✅ `pmm_efficiency_2d` (FMM-floored) + ✅ `pmm_efficiency_2d_staggered` (no-floor) | ✅ (via `eps_cell` grid; staggered) | ✅ `pmm_jones_2d` (FMM-floored, incl. out-of-plane) + ✅ `pmm_jones_2d_staggered` (no-floor, FULL (3,3) incl. out-of-plane) | ✅ (via the `eps_cell` tensor grid, both engines) |
 | **2-D slanted** | ⬜ planned (moderate) | ⬜ | ⬜ | ⬜ |
 | **2-D curved** (cylinder/ellipse) | ⬜ planned (hard) | ⬜ | ⬜ | ⬜ |
 
@@ -73,13 +73,50 @@ ceiling on hard Gibbs cases). Informs whether to prioritize the 2-D builds.
 Cheap; must run on a quiet CPU (no concurrent workflows).
 
 ### Phase C — 2-D anisotropic (general tensor operator) — **the foundation**
-Generalize the 2-D staggered eigensolver from the isotropic reduction
-(`R=−I`, `[ε_t]=ε·I`) to the **full transverse tensor** (Granet 2023 general
-Eqs.23-24 / Appendix A). `eps_cell` → `(Nx,Ny,3,3)` tensor per segment.
-**Reuses unchanged:** the staggered basis, square S-matrix, far field,
-spurious-free structure. **Difficulty:** moderate (operator-assembly
-generalization). **Why first:** see §6 — it's the same machinery slant/curved
-needs. In-plane (block-form) first; full out-of-plane is a harder follow-on.
+**COMPLETE 2026-09-09** — in-plane (Stage A) *and* out-of-plane (Stage B).
+
+**IN-PLANE (block-form): SHIPPED 2026-09-09** (Stage A;
+`docs/audits/BUILD_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md`). The 2-D
+staggered eigensolver now carries the paper's general BLOCK-FORM transverse
+tensor `[[e11,e12,0],[e21,e22,0],[0,0,e33]]` — the shipped isotropic solver
+(`R=−I`, `[ε_t]=ε·I`) was its reduction, and a scalar `eps_cell` still runs that
+reduction **bit for bit**. `eps_cell` → `(Nx,Ny,3,3)` per segment through the
+new `pmm_jones_2d_staggered`, plus `PMM2DStackPure.add_layer(eps=(3,3) |
+eps_cell=(Nx,Ny,3,3))`. What was added: Appendix-A Eq.40's two MIXED
+`[ε_t]` masses, Eq.41's `ε³³`-weighted `Meps33`, Eq.44's second `K_zt` term
+per column, and the same two mixed blocks in the Eq.25 H-partner.
+**Reused unchanged, as predicted:** the staggered basis, the `2q²` second-order
+pencil, the `[W;−V]↔−λ` symmetry, the square S-matrix, the far field, the
+spurious-free structure — and the no-floor property (order-0 R/T move 3.9e-15
+over `n_orders` 4→8 vs 9.7e-3 for the hybrid). Gyrotropic (Hermitian,
+lossless) media included. Half-spaces stay isotropic.
+
+**OUT-OF-PLANE: SHIPPED 2026-09-09** (Stage B;
+`docs/audits/BUILD_PMM2D_STAGGERED_OOP_2026_09_09.md`, on the prototype verdict
+in `docs/audits/EXPERIMENT_PMM2D_STAGGERED_OOP_2026_09_09.md`).
+`e_xz/e_yz/e_zx/e_zy` breaks the paper's Eq.16 (`div D = 0` no longer slaves
+`E_3` algebraically), so it is not a second-order problem in this basis; an
+out-of-plane cell instead routes to the **first-order staggered generator on
+`[E1; E2; G1; G2]`** (`4q²`, candidate (a) of the prototype: `H_3` eliminated
+STRONGLY into `Vw`, `E_3` WEAKLY through the longitudinal curl-H row tested in
+`V3`, with a POINTWISE `e³³`-Schur).  Forward and backward modes are genuinely
+distinct, so those layers cascade through the GENERALIZED S-matrix, with
+in-plane/uniform regions and the isotropic half-spaces entering as
+`[[W,W],[V,−V]]`.  Dispatch is the hybrid's RELATIVE `1e-12` off-plane floor, so
+a rotated-diagonal tensor's float noise stays BIT-IDENTICAL to the in-plane
+path.  **Cost 1.33–2.03×** the in-plane region solve (the dimension doubles but
+the pencil is Cholesky-whitened to a standard eig while the in-plane path pays
+a QZ) and ~3.0× its peak working set.  Validated to `1e-14` against Berreman on
+uniform slabs (lossless / lossy / NON-RECIPROCAL, normal / oblique / conical),
+to the two 1-D engines' own spread per order on a stripe, and to the two 2-D
+Fourier oracles' own mutual spread on a re-entrant-corner cell — with the
+no-floor property intact (`2.6e-15` movement over `n_orders` 3→8).
+`retain_internal` / `layer_absorption` work on that path (budget closes
+`9.1e-04 → 2.1e-07` over M=5…8).
+*Not integrated:* the normal-incidence parity-times-sign involution accelerator
+(a `2q²` eig instead of `4q²`), measured to HOLD on the staggered generator
+(`2.6e-15`) and to FAIL on an off-centre pillar (`0.36–0.73`) — documented
+future work, gated the same verify-then-use way `_generator_block_eig` is.
 *(2-D multi-region is already supported via the `eps_cell` grid — only needs a
 multi-region test.)*
 
@@ -121,8 +158,24 @@ Bugs / physics / adversarial sweep (explicitly requested earlier; long-pending).
   speed win** — its win there is accuracy *quality* (no floor, exact sidewalls,
   position invariance, pinning the value RCWA converges toward). The genuine
   *speed* win lives in slant/curved (Phases D/E).
-- **Full out-of-plane anisotropy** (2-D non-block tensor, magneto-optic / tilted
-  director) — breaks Granet's block-form assumption; harder than in-plane.
+- **Out-of-plane 2-D cells with a RE-ENTRANT corner have no converged
+  reference.** Full out-of-plane anisotropy SHIPPED 2026-09-09 (Phase C above)
+  and is machine-exact on uniform, straight-walled and convex cells. On a
+  `(3,3)` L-shaped feature the no-floor result sits AT the two Fourier oracles'
+  own mutual spread (`≈ 5e-5` on R per order), but neither oracle is converged
+  there — the hybrid's two rigorous `E_z` rules disagree with each other by
+  `7.7e-04` — and both route their tensor layer through the same
+  `rcwa._core._layer_eigenmodes_tensor`, so their agreement is not independent.
+  A high-order `rcwa_jones_2d` ladder taken to a standstill, or a
+  staircase-refined staggered cell, would settle it.
+- **The staggered gauge carries a 180-degree rotation.** `Basis1D`'s
+  `tau = exp(−i α₀ p)` makes the basis run as `exp(−i α₀ x)` while the far-field
+  kernel and the `eps_cell` indexing run the other way; in-plane operators are
+  invariant under the composition and out-of-plane ones are not, so
+  `twod_staggered._OOP_ROT_SIGN` compensates it in the assembly (measured
+  two-sided: 9–11 decades). The clean end state is to flip `tau` and the
+  projection kernel together and delete the constant — a change that moves the
+  in-plane path's bytes, so it needs its own commit and re-validation.
 - **No-floor 2-D for arbitrary curved boundaries without the transfinite map** —
   rounding/rasterizing a curve in a Cartesian basis does *not* restore spectral
   convergence (verified); needs Phase E or a 2-D ASR coordinate stretch.
@@ -161,7 +214,7 @@ That's why Phase C is the linchpin and is sequenced before D/E.
 | Vertical / axis-aligned, many-layer stacks, dispersion sweeps, inverse-design (autodiff) | **RCWA** (`rcwa_efficiency_2d` / `RCWAStack`) | Mature, FFT-fast, JAX-differentiable; parity-or-better on vertical |
 | 2-D vertical, need exact energy / no-floor / position-invariance / pinned value on hard Gibbs cases | **`pmm_efficiency_2d_staggered`** | No Fourier floor; accuracy ceiling (to be quantified by Phase B) |
 | 1-D / 2-D **slanted or tapered** sidewalls | **PMM slant** (1-D shipped; 2-D = Phase D) | Staircase avoidance → genuine speed win; the device regime |
-| Anisotropic / tunable-LC / Jones | **`pmm_jones_1d`** (1-D); 2-D = Phase C | Full tensor → Jones |
+| Anisotropic / tunable-LC / Jones | **`pmm_jones_1d`** (1-D); **`pmm_jones_2d_staggered`** (2-D, FULL (3,3) incl. out-of-plane, no floor) or **`pmm_jones_2d`** (2-D, FMM-floored) | Full tensor → Jones |
 | Curved (cylinder/ellipse) pillars, spectral accuracy | **PMM curved** (Phase E) | Transfinite map removes the Gibbs floor |
 
 RCWA stays the **workhorse**; PMM is the **specialist** for slant/taper/curved,

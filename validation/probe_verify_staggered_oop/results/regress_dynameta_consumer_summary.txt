@@ -1,0 +1,16 @@
+# tail of regress_dynameta_consumer.log (2026-09-09, C:/tmp/lum_aniso, OMP=OPENBLAS=MKL=1)
+
+............                                                             [100%]
+============================ slowest 12 durations =============================
+289.61s call     tests/unit/test_audit_dynameta_consumer_api_2.py::test_b2_pure_amplitudes_vs_rcwa_conical
+211.57s call     tests/unit/test_audit_dynameta_consumer_api_2.py::test_c3_pure_lossless_zero_and_contract
+140.74s call     tests/unit/test_audit_dynameta_consumer_api_2.py::test_c3_pure_absorption_budget_and_hybrid_crossgate
+106.04s call     tests/unit/test_audit_dynameta_consumer_api_2.py::test_b2_evanescent_kz_public_branch_and_contract
+8.77s call     tests/unit/test_audit_dynameta_consumer_api_2.py::test_b2_hybrid_amplitudes_vs_rcwa_conical
+8.74s call     tests/unit/test_audit_dynameta_consumer_api_2.py::test_d1_traced_uniform_eps_and_source
+2.45s call     tests/unit/test_audit_dynameta_consumer_api_2.py::test_c1_bor_absorption_budget_and_split
+1.35s call     tests/unit/test_audit_dynameta_consumer_api_2.py::test_c1_bor_pinned_gauge_fabry_perot_phase
+0.67s call     tests/unit/test_audit_dynameta_consumer_api_2.py::test_c1_bor_pinned_gauge_fresnel_phase
+
+(3 durations < 0.005s hidden.  Use -vv to show these durations.)
+12 passed in 770.09s (0:12:50)

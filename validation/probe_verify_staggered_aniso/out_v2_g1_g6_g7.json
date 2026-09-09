@@ -1,0 +1,114 @@
+{
+ "g1": {
+  "cellA_22_M7": {
+   "Lmat_maxdiff": 0.0,
+   "Lmat_bitequal": true,
+   "Rmat_maxdiff": 0.0,
+   "Rmat_bitequal": true,
+   "Stt_maxdiff": 0.0,
+   "Stt_bitequal": true,
+   "Schur_maxdiff": 0.0,
+   "Schur_bitequal": true,
+   "Et0_bitequal": true,
+   "Et1_bitequal": true,
+   "scalar_Et_offdiag_is_None": true,
+   "tensor_offdiag_exact_zero": true,
+   "dead_attrs_absent": true
+  },
+  "cellB_33_M5": {
+   "Lmat_maxdiff": 0.0,
+   "Lmat_bitequal": true,
+   "Rmat_maxdiff": 0.0,
+   "Rmat_bitequal": true,
+   "Stt_maxdiff": 0.0,
+   "Stt_bitequal": true,
+   "Schur_maxdiff": 0.0,
+   "Schur_bitequal": true,
+   "Et0_bitequal": true,
+   "Et1_bitequal": true,
+   "scalar_Et_offdiag_is_None": true,
+   "tensor_offdiag_exact_zero": true,
+   "dead_attrs_absent": true
+  },
+  "public_tm_vs_tensor_eyeI": {
+   "maxdR": 0.0,
+   "maxdT": 0.0,
+   "bitequal_R": true,
+   "bitequal_T": true,
+   "scalarmap_vs_tensor_bitequal": true,
+   "closure": [
+    1.0000016710042228,
+    1.0000002323921298
+   ]
+  },
+  "_wall_s": 2.83
+ },
+ "g6": {
+  "lc_M6": {
+   "tot": [
+    1.00001518834046,
+    1.0000116188438843
+   ],
+   "dev": 1.5188340459992844e-05
+  },
+  "lc_M8": {
+   "tot": [
+    1.0000000389650174,
+    1.0000000305903307
+   ],
+   "dev": 3.896501743483327e-08
+  },
+  "gyro_M6": {
+   "tot": [
+    1.0000145105034568,
+    1.00001451050347
+   ],
+   "dev": 1.4510503469900016e-05
+  },
+  "gyro_M8": {
+   "tot": [
+    1.000000034426783,
+    1.0000000344266176
+   ],
+   "dev": 3.4426782979934956e-08
+  },
+  "lossy_M6": {
+   "tot": [
+    0.6461644083812902,
+    0.6681998739261724
+   ],
+   "deficit": 0.3318001260738276
+  },
+  "lossy_M8": {
+   "tot": [
+    0.6454137846880462,
+    0.6676291425244192
+   ],
+   "deficit": 0.3323708574755808
+  },
+  "_wall_s": 5.42
+ },
+ "g7": {
+  "transpose_lc": {
+   "perorder": 1.0963452368173421e-14,
+   "jones": 1.4956090053283572e-14
+  },
+  "swapped_control_lc": {
+   "perorder": 1.0963452368173421e-14,
+   "jones": 1.4956090053283572e-14
+  },
+  "transpose_gyro": {
+   "perorder": 1.73749903353837e-14,
+   "jones": 1.1073008455073772e-14
+  },
+  "swapped_control_gyro": {
+   "perorder": 0.011871950270577821,
+   "jones": 0.06686060009059189
+  },
+  "ymirror_lc": {
+   "perorder": 6.314393452555578e-15,
+   "jones": 1.0307936506975767e-14
+  },
+  "_wall_s": 2.45
+ }
+}

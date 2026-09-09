@@ -1,0 +1,69 @@
+{
+ "root": "C:\\tmp\\lum_aniso",
+ "lumenairy": "C:\\tmp\\lum_aniso\\lumenairy\\__init__.py",
+ "OPENBLAS_NUM_THREADS": "1",
+ "timing": [
+  {
+   "grid": 2,
+   "M": 8,
+   "reps": 5,
+   "dim_inplane": 392,
+   "dim_oop": 784,
+   "t_inplane_min": 0.6244118999966304,
+   "t_oop_min": 1.0889576000045054,
+   "t_inplane_median": 0.6276856000040425,
+   "t_oop_median": 1.0944906000004266,
+   "ratio_min": 1.7439731690097224,
+   "ratio_median": 1.7436923835649214
+  },
+  {
+   "grid": 3,
+   "M": 8,
+   "reps": 3,
+   "dim_inplane": 882,
+   "dim_oop": 1764,
+   "t_inplane_min": 6.843974600000365,
+   "t_oop_min": 9.088730900002702,
+   "t_inplane_median": 6.88465709999582,
+   "t_oop_median": 9.099966400004632,
+   "ratio_min": 1.3279901564804488,
+   "ratio_median": 1.321774820130135
+  },
+  {
+   "grid": 3,
+   "M": 6,
+   "reps": 5,
+   "dim_inplane": 450,
+   "dim_oop": 900,
+   "t_inplane_min": 0.9646083000043291,
+   "t_oop_min": 1.5435791999989306,
+   "t_inplane_median": 0.9652276999986498,
+   "t_oop_median": 1.5483304000008502,
+   "ratio_min": 1.6002134752437887,
+   "ratio_median": 1.6041089579205157
+  }
+ ],
+ "memory": [
+  {
+   "grid": 2,
+   "M": 8,
+   "peak_inplane_MB": 28.342479705810547,
+   "peak_oop_MB": 85.65514945983887,
+   "peak_ratio": 3.022147333222877
+  },
+  {
+   "grid": 3,
+   "M": 8,
+   "peak_inplane_MB": 142.73719596862793,
+   "peak_oop_MB": 433.40723991394043,
+   "peak_ratio": 3.0364001266299123
+  },
+  {
+   "grid": 3,
+   "M": 6,
+   "peak_inplane_MB": 37.29829216003418,
+   "peak_oop_MB": 112.86234855651855,
+   "peak_ratio": 3.0259387768283044
+  }
+ ]
+}

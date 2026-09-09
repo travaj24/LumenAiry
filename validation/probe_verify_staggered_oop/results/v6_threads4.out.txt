@@ -1,0 +1,30 @@
+[G1] in-plane uniaxial pillar th=0.000 dR=1.030e-14 dJ=1.295e-14 spec=1.563e-12
+[G1] in-plane uniaxial pillar th=0.436 dR=3.123e-14 dJ=3.874e-14 spec=7.248e-13
+[G1] gyrotropic pillar th=0.000 dR=1.707e-14 dJ=2.094e-14 spec=8.793e-13
+[G1] gyrotropic pillar th=0.436 dR=2.437e-14 dJ=3.557e-14 spec=1.129e-12
+[G3] worst dR/dT/dJones over 9 combos = 3.099e-14 / 2.215e-13 / 7.952e-14; worst leak 2.19e-26
+[G3 ladder] M5/M6/M8 = 5.415e-09 / 1.921e-11 / 6.674e-14
+[G4] normal dR=1.875e-05 dT=1.352e-04 dJ=1.042e-04 yleak=1.17e-26
+[G4] oblique25 dR=8.803e-06 dT=1.414e-04 dJ=9.514e-05 yleak=7.11e-27
+[G5] dR=8.165e-05 dT=1.577e-03 dJ=2.072e-03 | no-floor staggered 2.442e-15 vs hybrid 6.242e-03 | vs hybrid dR=1.203e-04 dT=1.140e-03
+[G6] th=0.000 closure=[1.687538997430238e-14, 8.204548151979907e-14, 3.171907181354072e-13] split=288/288 growth=1.000000e+00 minRe(lam_f)=-3.959e-15 maxRe(lam_b)=8.757e-15
+[G6] th=0.436 closure=[5.3290705182007514e-14, 3.2862601528904634e-14, 2.1538326677728037e-14] split=288/288 growth=1.000000e+00 minRe(lam_f)=-7.585e-15 maxRe(lam_b)=8.850e-15
+[G7] drop       dR=1.039e-03 dJ=3.224e-03
+[G7] negate     dR=1.677e-03 dJ=4.490e-03
+[G7] transpose  dR=1.671e-03 dJ=4.491e-03
+[G7 rot] good=1.202e-12 bad=4.490e-03 ratio=3.736e+09 normal_gap dR=1.069e-15 dJ=3.115e-15
+[G8a] th=0.000 per_order=2.220e-16 dJ=2.000e-16
+[G8a] th=0.349 per_order=9.992e-16 dJ=5.226e-16
+[G8b] th=0.436 M=4 dR=3.915e-07 dJ=1.119e-06
+[G8b] th=0.436 M=5 dR=2.221e-09 dJ=6.356e-09
+[G8b] th=0.436 M=6 dR=7.989e-12 dJ=2.285e-11
+[G8b] th=0.436 M=7 dR=2.084e-14 dJ=5.834e-14
+[G8b] th=0.436 M=8 dR=1.962e-14 dJ=5.031e-14
+[G8b] th=0.436 M=4 dR=4.465e-08 dJ=1.617e-07
+[G8b] th=0.436 M=5 dR=1.390e-10 dJ=5.869e-10
+[G8b] th=0.436 M=6 dR=2.934e-13 dJ=1.250e-12
+[G8b] th=0.436 M=7 dR=1.446e-14 dJ=4.507e-14
+[G8b] th=0.436 M=8 dR=1.701e-14 dJ=5.348e-14
+[G8c] res=[0.0009227812201079641, 4.175565713537138e-06] ratio=4.525e-03 deficits=[0.027512829458727017, 0.027688432428600196]
+[G8c lossless] maxA=2.070e-14 closure=7.293e-05
+DONE

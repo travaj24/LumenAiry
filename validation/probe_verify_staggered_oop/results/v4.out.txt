@@ -1,0 +1,35 @@
+[T5 normal] ORACLE SPREAD dR=1.437e-06 dT=2.915e-06 dJ=4.202e-06
+  M=5 dim=  256 dR=1.085e-04 dT=4.305e-04 dJ=3.145e-04 yleak=3.0e-29/9.9e-29 |R+T-1|=1.24e-04
+  M=6 dim=  400 dR=2.882e-05 dT=1.664e-04 dJ=7.772e-05 yleak=1.6e-27/7.0e-28 |R+T-1|=1.40e-05
+  M=7 dim=  576 dR=9.166e-07 dT=3.806e-05 dJ=1.143e-05 yleak=1.9e-27/2.0e-27 |R+T-1|=8.63e-07
+  M=8 dim=  784 dR=7.533e-07 dT=1.204e-05 dJ=2.802e-06 yleak=3.1e-26/1.4e-26 |R+T-1|=2.71e-08
+[T5 oblique25] ORACLE SPREAD dR=2.329e-06 dT=2.157e-06 dJ=9.439e-06
+  M=5 dim=  256 dR=1.720e-04 dT=1.120e-03 dJ=1.197e-03 yleak=1.1e-28/4.9e-29 |R+T-1|=2.13e-04
+  M=6 dim=  400 dR=1.382e-04 dT=1.245e-04 dJ=7.788e-04 yleak=1.1e-27/3.7e-28 |R+T-1|=1.02e-04
+  M=7 dim=  576 dR=4.044e-05 dT=4.760e-05 dJ=2.312e-04 yleak=1.6e-27/2.1e-27 |R+T-1|=3.62e-06
+  M=8 dim=  784 dR=8.619e-06 dT=9.547e-06 dJ=5.177e-05 yleak=1.6e-26/6.2e-27 |R+T-1|=6.75e-07
+[T7 uniform_hermitian normal] split=[288, 288] raw_fwd=288 (rebalanced=False)  closure 1.42e-14/2.95e-14/8.82e-14  max_fwd_growth=1.0000e+00  max_bwd_growth=1.0000e+00
+[T7 uniform_hermitian conical25_40] split=[288, 288] raw_fwd=288 (rebalanced=False)  closure 3.44e-11/1.70e-11/2.73e-11  max_fwd_growth=1.0000e+00  max_bwd_growth=1.0000e+00
+[T7 pillar_hermitian normal] split=[288, 288] raw_fwd=288 (rebalanced=False)  closure 2.63e-08/4.47e-06/7.65e-06  max_fwd_growth=1.0000e+00  max_bwd_growth=1.0000e+00
+[T7 pillar_hermitian conical25_40] split=[288, 288] raw_fwd=288 (rebalanced=False)  closure 3.98e-06/2.15e-05/2.45e-05  max_fwd_growth=1.0000e+00  max_bwd_growth=1.0000e+00
+[T7 pillar_lossy normal] split=[288, 288] raw_fwd=288 (rebalanced=False)  closure 4.19e-02/1.43e-01/3.55e-01  max_fwd_growth=9.0381e-01  max_bwd_growth=9.0381e-01
+[T7 pillar_lossy conical25_40] split=[288, 288] raw_fwd=288 (rebalanced=False)  closure 4.39e-02/1.52e-01/3.67e-01  max_fwd_growth=8.9027e-01  max_bwd_growth=8.9348e-01
+[T8a normal] 1x0.4 vs 2x0.2  dR=1.041e-16 dT=2.168e-17 dJ=4.677e-16
+[T8a conical20_35] 1x0.4 vs 2x0.2  dR=5.551e-17 dT=4.441e-16 dJ=5.978e-16
+[T8b oblique25] M=5 dR=2.627e-07 dT=1.554e-06 dJ=7.688e-07
+[T8b oblique25] M=6 dR=3.073e-09 dT=1.665e-08 dJ=7.890e-09
+[T8b oblique25] M=7 dR=2.562e-11 dT=1.337e-10 dJ=6.494e-11
+[T8b oblique25] M=8 dR=1.170e-13 dT=7.200e-13 dJ=3.252e-13
+[T8b conical25_40] M=5 dR=1.551e-08 dT=9.141e-08 dJ=8.130e-08
+[T8b conical25_40] M=6 dR=1.310e-10 dT=5.327e-10 dJ=5.819e-10
+[T8b conical25_40] M=7 dR=4.690e-13 dT=2.536e-12 dJ=2.978e-12
+[T8b conical25_40] M=8 dR=5.565e-14 dT=4.752e-14 dJ=1.125e-13
+[T8c lossless_mixed] M=5 |R+T-1|=3.91e-08 budget_dev=3.913e-08/1.342e-07 A0=-0.000000 max|A_lossless|=2.99e-15
+[T8c lossless_mixed] M=6 |R+T-1|=3.63e-12 budget_dev=3.646e-12/4.060e-11 A0=0.000000 max|A_lossless|=8.41e-15
+[T8c lossless_mixed] M=7 |R+T-1|=3.66e-13 budget_dev=3.821e-13/4.062e-13 A0=0.000000 max|A_lossless|=9.34e-15
+[T8c lossless_mixed] M=8 |R+T-1|=2.18e-14 budget_dev=2.194e-14/2.557e-15 A0=-0.000000 max|A_lossless|=1.31e-14
+[T8c lossy_oop_plus_inplane] M=5 |R+T-1|=5.13e-02 budget_dev=7.181e-05/1.980e-07 A0=0.051410 max|A_lossless|=2.62e-15
+[T8c lossy_oop_plus_inplane] M=6 |R+T-1|=5.15e-02 budget_dev=1.815e-07/1.168e-07 A0=0.051471 max|A_lossless|=9.49e-15
+[T8c lossy_oop_plus_inplane] M=7 |R+T-1|=5.15e-02 budget_dev=9.216e-09/3.121e-08 A0=0.051506 max|A_lossless|=8.97e-15
+[T8c lossy_oop_plus_inplane] M=8 |R+T-1|=5.15e-02 budget_dev=3.813e-10/1.460e-09 A0=0.051509 max|A_lossless|=1.08e-14
+DONE

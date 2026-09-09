@@ -1,0 +1,10 @@
+[uniform_slab normal] rot(+1) vs negate-OOP: bit_identical=True dR=0.000e+00 dJ=0.000e+00 | shipped vs rot(+1) dR=8.882e-16 dJ=8.383e-15
+[uniform_slab oblique25] rot(+1) vs negate-OOP: bit_identical=True dR=0.000e+00 dJ=0.000e+00 | shipped vs rot(+1) dR=9.408e-04 dJ=2.825e-02
+[uniform_slab conical25_40] rot(+1) vs negate-OOP: bit_identical=True dR=0.000e+00 dJ=0.000e+00 | shipped vs rot(+1) dR=1.850e-04 dJ=7.513e-03
+[chiral_stripe normal] rot(+1) vs negate-OOP: bit_identical=True dR=0.000e+00 dJ=0.000e+00 | shipped vs rot(+1) dR=4.595e-04 dJ=9.882e-04
+[chiral_stripe oblique25] rot(+1) vs negate-OOP: bit_identical=True dR=0.000e+00 dJ=0.000e+00 | shipped vs rot(+1) dR=1.160e-03 dJ=1.413e-02
+[chiral_stripe conical25_40] rot(+1) vs negate-OOP: bit_identical=True dR=0.000e+00 dJ=0.000e+00 | shipped vs rot(+1) dR=7.397e-04 dJ=8.676e-03
+[chiral_2d_cell normal] rot(+1) vs negate-OOP: bit_identical=True dR=0.000e+00 dJ=0.000e+00 | shipped vs rot(+1) dR=2.307e-03 dJ=1.101e-02
+[chiral_2d_cell oblique25] rot(+1) vs negate-OOP: bit_identical=True dR=0.000e+00 dJ=0.000e+00 | shipped vs rot(+1) dR=2.674e-03 dJ=1.671e-02
+[chiral_2d_cell conical25_40] rot(+1) vs negate-OOP: bit_identical=True dR=0.000e+00 dJ=0.000e+00 | shipped vs rot(+1) dR=3.707e-03 dJ=1.465e-02
+DONE

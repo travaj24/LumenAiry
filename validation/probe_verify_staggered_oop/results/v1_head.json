@@ -1,0 +1,147 @@
+{
+ "root": "C:\\tmp\\lum_aniso",
+ "lumenairy": "C:\\tmp\\lum_aniso\\lumenairy\\__init__.py",
+ "version": "5.42.1",
+ "has_tensor_entry": true,
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "fixtures": {
+  "s1_22_te_normal": {
+   "orders": "6da240d455a94db8",
+   "R": "524b5a6424c1642b",
+   "T": "93b84eaf08a4e4cf",
+   "sumR": 0.2303468080766423,
+   "sumT": 0.7697108319473576
+  },
+  "s2_33_tm_oblique": {
+   "orders": "6da240d455a94db8",
+   "R": "77c7552a9552def2",
+   "T": "925e6d7ca2981000",
+   "sumR": 0.08798744890481952,
+   "sumT": 0.9117663088333525
+  },
+  "s3_22_lossy_conical": {
+   "orders": "6da240d455a94db8",
+   "R": "a86633ec739a8042",
+   "T": "1b9b434d15aaa572",
+   "sumR": 0.11275392405061355,
+   "sumT": 0.6761364350016374
+  },
+  "s4_22_te_conical": {
+   "orders": "330be98e0b281f7e",
+   "R": "65d4d254d072e9b8",
+   "T": "166297f3b09690ad",
+   "sumR": 0.16546250665158485,
+   "sumT": 0.8345881388821306
+  },
+  "s5_stack_scalar_jones": {
+   "R": "a2cc5727ecdd5290",
+   "T": "7df9c505f2eb74d8",
+   "jones": "773f66f504cd733c",
+   "sumRT": [
+    0.9997329480619113,
+    0.9990369871736693
+   ]
+  },
+  "sop_22_M6": {
+   "Lmat": "823a4ab5a6faafa6",
+   "Rmat": "843e0bbc1012fa2c",
+   "Stt": "3e6405708a9c6c07",
+   "Schur": "109f559b864bcfd1",
+   "Et0": "e98dfc7e07e8e505",
+   "Et1": "e64bceefc4a90108",
+   "lam_sorted": "8a1ab1b9deee1400",
+   "W": "7d6d6d6227d4df88",
+   "V": "434cc830982d8bdd"
+  },
+  "sop_33_M5": {
+   "Lmat": "0b094f884641e6b6",
+   "Rmat": "427923531679b8e8",
+   "Stt": "8fba1cf1e5e4b210",
+   "Schur": "13fc4f41f9ccdb82",
+   "Et0": "9b864c5a60610dbe",
+   "Et1": "bcfe15a00d1f2140",
+   "lam_sorted": "e6a54ebb9dd084c9",
+   "W": "ac2545c8535fccfa",
+   "V": "186da772d6545e47"
+  },
+  "sop_lossy_M6": {
+   "Lmat": "49e3a9dd5085545c",
+   "Rmat": "f444fef455380649",
+   "Stt": "246304b911f7d2a9",
+   "Schur": "05ef57c4a45dd812",
+   "Et0": "ef38c167f747ef33",
+   "Et1": "07f3db2faff58241",
+   "lam_sorted": "e4c34e95baf9bb70",
+   "W": "7e8099b09cdba916",
+   "V": "e77969563f295477"
+  },
+  "t1_lc_pillar_normal": {
+   "orders": "6da240d455a94db8",
+   "R": "48477f324f99472f",
+   "T": "7b5ac1f361d7c804",
+   "jones": "89b88cf2b37a4a77",
+   "sumR": 0.07377941624297225,
+   "sumT": 1.926221252330996
+  },
+  "t2_gyro_33_oblique": {
+   "orders": "6da240d455a94db8",
+   "R": "545442f13ac27506",
+   "T": "2074e734194ba4d8",
+   "jones": "7434ba9e744d1cf1",
+   "sumR": 0.08566140868028244,
+   "sumT": 1.8262900843958803
+  },
+  "t3_uniform_lc_conical": {
+   "orders": "6da240d455a94db8",
+   "R": "ea380898deee2a00",
+   "T": "c17650f548dc77eb",
+   "jones": "be0fb3ff9021e015",
+   "sumR": 0.06562097787282697,
+   "sumT": 1.9343790221271893
+  },
+  "t4_lc_pillar_conical": {
+   "orders": "330be98e0b281f7e",
+   "R": "5f7d860beb8ed523",
+   "T": "6669dc70f5d28f6b",
+   "jones": "e5146c446ffb9925",
+   "sumR": 0.0873966533129407,
+   "sumT": 1.9126036807048252
+  },
+  "t5_mixed_stack_jones": {
+   "R": "d05c0afa63a9c429",
+   "T": "43081445891c90ae",
+   "jones": "1d878ef492b2c3d0",
+   "sumRT": [
+    1.000000029052142,
+    0.9999997341602289
+   ]
+  },
+  "top_lc_22_M6": {
+   "Lmat": "3c37a78efeacf3c5",
+   "Rmat": "843e0bbc1012fa2c",
+   "Stt": "3e6405708a9c6c07",
+   "Schur": "79057541084bf358",
+   "Et0": "874402472eba8568",
+   "Et1": "0cabdf5fdded9122",
+   "Etoff0": "af71b952945404a0",
+   "Etoff1": "38965f0237187e18",
+   "lam_sorted": "28b2c17f0795e88b",
+   "W": "8ffc00afaa3c2ec1",
+   "V": "aa9ea1871c2373f5"
+  },
+  "top_gyro_33_M5": {
+   "Lmat": "61e139caa492f593",
+   "Rmat": "427923531679b8e8",
+   "Stt": "8fba1cf1e5e4b210",
+   "Schur": "2c9916f8062a97b4",
+   "Et0": "9cb0cee96238fc86",
+   "Et1": "06eb71cfad04d4a3",
+   "Etoff0": "ba3a3367115b2115",
+   "Etoff1": "f3c99afe2daba56e",
+   "lam_sorted": "50fa632a98279dd3",
+   "W": "2c1bb912cb4782d1",
+   "V": "d553887f2cc07128"
+  }
+ }
+}

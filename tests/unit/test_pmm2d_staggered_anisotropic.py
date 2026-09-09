@@ -1,0 +1,1204 @@
+"""Stage A -- IN-PLANE (block-form) anisotropic permittivity for the PURE
+(no-floor) staggered 2-D PMM: ``pmm_jones_2d_staggered`` and the tensor
+``PMM2DStackPure``.
+
+Gates G1-G10 of ``docs/audits/PLAN_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md``.
+EVERY bar below is DERIVED from a measurement made during this build on
+2026-09-09 (Windows 11, py3.14, numpy 2.x, OMP=1); the measurement and its
+table row in ``docs/audits/BUILD_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md``
+are cited in each assertion's comment.  Nothing here pins a cross-build value:
+the comparisons are two-arm, same-build, and the oracle-referenced bars carry
+decades of gap on both sides.
+
+Formulation: Granet, J. Opt. Soc. Am. A 40, 652 (2023), Eqs. 23-25 with the
+general block-form ``[eps_t]`` (Appendix A Eqs. 40, 41, 44).  The paper uses
+``exp(+i w t)``; this module is PUBLIC ``exp(-i w t)`` end to end, so every
+tensor quoted from the paper is CONJUGATED here.
+"""
+import os
+
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
+import warnings  # noqa: E402
+
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
+
+from lumenairy.elements.berreman import berreman_jones_1d  # noqa: E402
+from lumenairy.elements.pmm import (  # noqa: E402
+    PMM2DStackPure,
+    pmm_jones_1d,
+    pmm_jones_2d,
+)
+from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
+    Granet2DTransverseE,
+    _homog_geom_cache,
+    pmm_efficiency_2d_staggered,
+    pmm_jones_2d_staggered,
+)
+from lumenairy.elements.rcwa import rcwa_jones_2d  # noqa: E402
+from lumenairy.elements.rcwa._core import uniaxial_tensor  # noqa: E402
+
+# --------------------------------------------------------------------------- #
+# fixtures (grids <= (3,3), M <= 8 -- the plan's test-cost rule)
+# --------------------------------------------------------------------------- #
+_WL = 0.55e-6
+_P = 0.70e-6
+_DEP = 0.28e-6
+#: rotated in-plane uniaxial director: REAL-SYMMETRIC off-diagonal (e12 = e21)
+_LC = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=0.55)
+_LC_M = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=-0.55)
+#: GYROTROPIC (Hermitian, lossless): e12 = -e21 = +0.5i in the PUBLIC gauge
+_GYRO = np.array([[2.25, 0.5j, 0.0], [-0.5j, 2.25, 0.0], [0.0, 0.0, 2.0]],
+                 dtype=complex)
+_ISO = 4.0 * np.eye(3, dtype=complex)
+
+
+def _cell(host, pillar, n=2):
+    """``(n, n, 3, 3)`` cell: ``pillar`` in segment (0, 0), ``host`` elsewhere."""
+    c = np.empty((n, n, 3, 3), dtype=complex)
+    c[:] = host
+    c[0, 0] = pillar
+    return c
+
+
+def _uniform(t33, n=2):
+    c = np.empty((n, n, 3, 3), dtype=complex)
+    c[:] = t33
+    return c
+
+
+def _promote(scalar_map):
+    t = np.zeros(np.shape(scalar_map) + (3, 3), dtype=complex)
+    for i in range(3):
+        t[..., i, i] = scalar_map
+    return t
+
+
+def _idx(orders):
+    return {(int(a), int(b)): i for i, (a, b) in enumerate(np.asarray(orders))}
+
+
+# =========================================================================== #
+# G1 -- REDUCTION: a scalar cell and the tensor ``e * I`` cell are the SAME
+#       discretization, BIT FOR BIT (two arms, one build).
+# =========================================================================== #
+def test_g1_scalar_and_tensor_eye_operators_are_bit_identical():
+    """The tensor dispatch must not perturb the shipped isotropic assembly.
+
+    MEASURED 2026-09-09 (build doc table T1): every retained operator agrees
+    EXACTLY (max|diff| = 0.0, identical sha256) between the scalar arm and the
+    ``e * I`` tensor arm at (2,2)/M=6, oblique Bloch phases.  This is the
+    strongest available statement -- stronger than the plan's fallback
+    "rel. diff ~1e-14" -- and it is a decision (identity), not a reading.
+    """
+    cell = np.array([[6.25, 1.0], [1.0, 2.25]], dtype=complex)
+    kw = dict(alpha0x=0.31, alpha0y=-0.17, k0=2 * np.pi / 0.62)
+    a = Granet2DTransverseE(1.1, 1.1, 2, 2, 6, cell, **kw)
+    b = Granet2DTransverseE(1.1, 1.1, 2, 2, 6, _promote(cell), **kw)
+    for name in ("Lmat", "Rmat", "Stt", "Schur"):
+        assert np.array_equal(getattr(a, name), getattr(b, name)), name
+    for k in (0, 1):
+        assert np.array_equal(a.Et_blocks[k], b.Et_blocks[k]), k
+    # the scalar path retains NOTHING extra (audit P3-37); the tensor path
+    # retains exactly the two Eq.40 mixed masses, which are EXACTLY zero here.
+    assert a.Et_offdiag is None
+    assert b.Et_offdiag is not None
+    for blk in b.Et_offdiag:
+        assert np.array_equal(blk, np.zeros_like(blk))
+    for dead in ("Curl", "Kzt", "Ktz", "G3", "Meps33"):
+        assert not hasattr(a, dead) and not hasattr(b, dead), dead
+
+
+def test_g1_public_entries_agree_on_a_scalar_cell():
+    """The scalar entry (``polarization='tm'`` = incident ``E_x`` at normal
+    incidence) and the tensor Jones entry on the promoted ``e * I`` cell.
+
+    MEASURED 2026-09-09 (build doc T1): max|dR| = max|dT| = 0.0 -- the two
+    entries take bit-identical arithmetic routes on this input.  The bar is
+    therefore exact equality; a regression that merely perturbs the tensor
+    dispatch by 1 ULP fails it, which is the point.
+    """
+    cell = np.array([[6.25, 1.0], [1.0, 2.25]], dtype=complex)
+    g = dict(period_x=0.8e-6, period_y=0.8e-6, depth=0.3e-6,
+             wavelength=0.633e-6, n_substrate=1.5, n_superstrate=1.0)
+    o1, R1, T1 = pmm_efficiency_2d_staggered(eps_cell=cell, degree=6,
+                                             n_orders=3, polarization="tm",
+                                             **g)
+    o2, R2, T2, _J = pmm_jones_2d_staggered(eps_cell=_promote(cell), degree=6,
+                                            n_orders=3, **g)
+    assert np.array_equal(o1, o2)
+    assert np.array_equal(R1, R2[0])
+    assert np.array_equal(T1, T2[0])
+    # ... and a SCALAR (Nx, Ny) map handed to the tensor entry is promoted
+    # internally to the same thing.
+    _o3, R3, _T3, _J3 = pmm_jones_2d_staggered(eps_cell=cell, degree=6,
+                                               n_orders=3, **g)
+    assert np.array_equal(R3[0], R2[0])
+
+
+# =========================================================================== #
+# G2 -- PUBLISHED ORACLE.  Li, J. Opt. A 5, 345 (2003), Example 1 (p. 352) and
+# Table 1 (p. 353) -- the ORIGINAL of the grating Granet 2023 re-uses as his
+# Fig. 4 / Tables 2-3 second example ("The FMM values come from an in-house
+# code and correspond perfectly with those reported by Li [1]").
+#
+# READING (verification 2026-09-09, VERIFY doc section G2; Granet's own
+# statement of this geometry carries two transcription errors that made it
+# irreproducible, and Li states it unambiguously):
+#
+#   d1 = 2.4 lam0 (x), d2 = 1.4 lam0 (y), h = lam0, w1/d1 = w2/d2 = 0.5,
+#   n^(+1) = 1.0, n^(-1) = 1.0 + i5.0        <-- a refractive INDEX, so the
+#                                                substrate permittivity is
+#                                                n^2 = -24 + 10i
+#   eps_a = 2.25(xx+yy) + i0.5(xy - yx) + 2 zz      (the surround)
+#   eps_b = 2.25(xx+yy) - i0.5(xy - yx) + 2 zz      (the PILLAR, Li fig. 3)
+#   theta = phi = 0, incident polarization in the Oxz plane (E along x),
+#   and Li's Table 1 lists the REFLECTED orders (his fig. 3 caption:
+#   "Convergence of the REFLECTED (0,0) order efficiency for the grating in
+#   example 1", converging on the tabulated 0.2980; and the listed order set
+#   -- columns m = 0, +1, +2, rows n = -1, 0, +1 -- is exactly the propagating
+#   set of the VACUUM superstrate at these periods).
+#
+# Granet's running text instead says "deposited on a lossy medium with a
+# complex relative PERMITTIVITY eps_r = 1 - i5" (his exp(+iwt) conjugate of
+# Li's INDEX, relabelled as a permittivity) and calls Tables 2/3 the
+# "transmitted" efficiencies.  Under either of those two readings the values
+# are not reproducible by any engine; under Li's they are.  Li's numbers are
+# already in the PUBLIC exp(-i w t) convention (his substrate index has
+# Im n > 0 for loss), so the tensors are used AS PRINTED -- no conjugation.
+#
+# Li's Table 1, first row of each cell (m = x order, n = y order), with space-
+# reversal symmetry (m, n) -> (-m, -n).  Granet's Table 2 quotes four of these
+# with one axis mirrored in his labelling: his (1,1) 0.0268 / (-1,1) 0.0139 /
+# (0,-1) 0.0620 / (0,0) 0.2979 are Li's (1,-1) / (1,1) / (0,-1) / (0,0).
+# =========================================================================== #
+_LAM = 1.0e-6
+#: the PILLAR (Li's eps_b), PUBLIC convention, as printed
+_LI_B = np.array([[2.25, -0.5j, 0.0], [0.5j, 2.25, 0.0], [0.0, 0.0, 2.0]],
+                 dtype=complex)
+_LI_A = np.conj(_LI_B)                     # the surround (Li's eps_a)
+_LI_NSUB = 1.0 + 5.0j                      # Li's n^(-1), an INDEX
+#: Li 2003 table 1, REFLECTED efficiencies, first row of each cell.
+_LI_TABLE1 = {(0, 0): 0.2980, (1, 0): 0.1195, (2, 0): 0.0222,
+              (0, -1): 0.0619, (1, -1): 0.0269, (1, 1): 0.0137}
+#: Li's SECOND row -- "the same except the signs of the cross terms of the
+#: permittivity tensors are reversed, i.e. eps_a and eps_b are interchanged".
+_LI_TABLE1_ROW2 = {**_LI_TABLE1, (1, -1): 0.0137, (1, 1): 0.0269}
+
+
+def _li_cell(pillar, host, n=2):
+    """w1/d1 = w2/d2 = 0.5 fill; position in the cell is immaterial (the
+    staggered basis is position-invariant -- G3's multi-segment gate and the
+    build's centred-(4,4) probe both measure it)."""
+    c = np.empty((n, n, 3, 3), dtype=complex)
+    c[:] = host
+    c[:n // 2, :n // 2] = pillar
+    return c
+
+
+def _li_reflected(pillar, host, M):
+    o, R, _T, _J = pmm_jones_2d_staggered(
+        2.4 * _LAM, 1.4 * _LAM, _li_cell(pillar, host), _LI_NSUB, 1.0, _LAM,
+        _LAM, degree=M, n_orders=4)
+    i = _idx(o)
+    return R[0], i
+
+
+def _li_maxdev(R0, i, table):
+    return max(abs(float(R0[i[(m, n)]]) - v) for (m, n), v in table.items())
+
+
+def test_g2_li2003_table1_reflected_orders():
+    """The six published REFLECTED efficiencies of Li's Example 1, at M = 8.
+
+    MEASURED 2026-09-09 (VERIFY doc G2), incident E_x, (2,2) cell:
+
+        order      Li 2003     this build (M=8)
+        (0, 0)     0.2980        0.297932
+        (1, 0)     0.1195        0.119539
+        (2, 0)     0.0222        0.022239
+        (0,-1)     0.0619        0.061987
+        (1,-1)     0.0269        0.026826
+        (1, 1)     0.0137        0.013709
+
+    max deviation 8.74e-05 (M=7: 1.79e-04; M=6: 3.24e-04; the independent
+    hybrid ``pmm_jones_2d`` at degree 11 / n_orders 13: 3.02e-04).
+
+    Bar 5e-04 = the ORACLE's own floor, not this build's residual: Li tabulates
+    four decimals (+/- 5e-05 of rounding alone) at truncation order 23, and his
+    fig. 7 shows the (0,0) order still spanning 0.2980..0.2988 across the three
+    Fourier representations of eps at that truncation.  5.7x over the measured
+    deviation and 26x under the 1.32e-02 that the WRONG cross-term sign
+    produces (the companion test below), so the gate has a gap on both sides.
+    """
+    R0, i = _li_reflected(_LI_B, _LI_A, 8)
+    assert _li_maxdev(R0, i, _LI_TABLE1) < 5e-4, {
+        k: float(R0[i[k]]) for k in _LI_TABLE1}
+    # space-reversal symmetry of the published set, exactly (measured 5e-15)
+    for (m, n) in _LI_TABLE1:
+        assert abs(float(R0[i[(m, n)]]) - float(R0[i[(-m, -n)]])) < 1e-9
+
+
+def test_g2_li2003_cross_term_sign_is_the_discriminator():
+    """THE gyrotropic sign gate, now two-sided against a PUBLISHED pair of
+    rows.  Li's Table 1 gives two rows per order: the grating as defined, and
+    "the same except the signs of the cross terms of the permittivity tensors
+    are reversed, i.e. eps_a and eps_b are interchanged".  The swap moves ONLY
+    the (1,-1)/(1,1) pair (0.0269 <-> 0.0137) and leaves the other four
+    published orders alone -- exactly the observable no energy check can see.
+
+    MEASURED 2026-09-09 (VERIFY doc G2), M = 7: the interchanged cell matches
+    Li's SECOND row to 1.79e-04 and misses his FIRST row by 1.32e-02.  Bars
+    5e-04 (as above) and 1e-03 -- the latter 13x under the measured miss and
+    2.7x over the matching arm's bar, so a cell whose cross terms were placed
+    with the wrong sign cannot satisfy both.  This is also the gate that pins
+    the convention bridge: Li is already PUBLIC exp(-i w t), so a build that
+    conjugated his tensors (as Granet's exp(+i w t) text invites) lands on the
+    second row instead of the first.
+    """
+    R0, i = _li_reflected(_LI_A, _LI_B, 7)          # eps_a <-> eps_b
+    assert _li_maxdev(R0, i, _LI_TABLE1_ROW2) < 5e-4
+    assert _li_maxdev(R0, i, _LI_TABLE1) > 1e-3
+
+
+def test_g2_control_no_gyrotropy_no_asymmetry():
+    """CONTROL: the same half-filled cell with REAL, non-gyrotropic tensors
+    has no cross terms to sign, so R(1,-1) == R(1,1) exactly.
+
+    MEASURED 2026-09-09: |R(1,-1) - R(1,1)| = 3.21e-15 for an isotropic
+    pillar in an isotropic host -- 12 decades under the 1.31e-02 gyrotropic
+    splitting of the arm above.  Bar 1e-9.
+    """
+    R0, i = _li_reflected(_ISO, 2.25 * np.eye(3, dtype=complex), 7)
+    assert abs(float(R0[i[(1, -1)]]) - float(R0[i[(1, 1)]])) < 1e-9
+
+
+# =========================================================================== #
+# G3 -- UNIFORM in-plane tensor slab vs the EXACT Berreman 4x4 oracle.
+# =========================================================================== #
+_G3 = dict(period=0.40e-6, wl=1.0e-6, dep=0.55e-6, nsub=1.5, nsup=1.0)
+
+
+def _g3_residual(t33, nseg, M, theta, phi):
+    _o, R, T, J = pmm_jones_2d_staggered(
+        _G3["period"], _G3["period"], _uniform(t33, nseg), _G3["nsub"],
+        _G3["nsup"], _G3["dep"], _G3["wl"], degree=M, n_orders=2, theta=theta,
+        phi=phi)
+    Rb, Tb, jr, _jt = berreman_jones_1d([(t33, _G3["dep"])], _G3["nsub"],
+                                        _G3["nsup"], _G3["wl"], angle=theta,
+                                        phi=phi)
+    return max(float(np.max(np.abs(R.sum(axis=1) - Rb))),
+               float(np.max(np.abs(T.sum(axis=1) - Tb))),
+               float(np.max(np.abs(J - jr))))
+
+
+@pytest.mark.parametrize("name,t33", [("lc", _LC), ("gyro", _GYRO)])
+@pytest.mark.parametrize("theta,phi", [(0.0, 0.0),
+                                       (25 * np.pi / 180, 0.0),
+                                       (25 * np.pi / 180, 40 * np.pi / 180)])
+def test_g3_uniform_tensor_slab_matches_berreman(name, t33, theta, phi):
+    """A UNIFORM in-plane tensor region is smooth, so the staggered basis
+    converges SPECTRALLY to the analytic Berreman 4x4 answer -- R, T AND the
+    complex Jones, in the PUBLIC gauge with NO conjugation anywhere.
+
+    MEASURED 2026-09-09 at M=7, (2,2) grid (build doc T3): the worst residual
+    over the six (tensor, incidence) combinations is 9.33e-14 (R, T and Jones
+    together; the six values are 9.33e-14 / 4.08e-14 / 5.24e-14 for the LC
+    tensor and 6.54e-14 / 1.67e-14 / 5.88e-14 for the gyrotropic one).  Bar =
+    1e2 x that, rounded to 1e-11: 107x above the worst measured value and
+    decades below any physics-level error.
+    """
+    assert _g3_residual(t33, 2, 7, theta, phi) < 1e-11
+
+
+def test_g3_convergence_is_two_sided_in_M():
+    """TWO-SIDED: not merely "small at M=7" -- the M=5 -> M=7 residual must
+    DROP, which is what makes the M=7 number a convergence statement rather
+    than a coincidence.
+
+    MEASURED 2026-09-09 (build doc T3), gyrotropic slab at theta=25 deg,
+    phi=0, (2,2) grid: 9.711e-11 (M=5) -> 1.665e-14 (M=7), a factor 5.8e3.
+    Bar 10x, ~580x of headroom.  (The NORMAL-incidence configurations are
+    already at roundoff by M=5, so the claim is made where the ladder is
+    resolvable.)
+    """
+    r5 = _g3_residual(_GYRO, 2, 5, 25 * np.pi / 180, 0.0)
+    r7 = _g3_residual(_GYRO, 2, 7, 25 * np.pi / 180, 0.0)
+    assert r7 < r5 / 10.0, (r5, r7)
+
+
+def test_g3_multisegment_grid_gives_the_same_uniform_answer():
+    """The uniform tensor answer must not depend on how many segments the
+    (physically uniform) cell is cut into -- the tensor assembly's per-segment
+    weighting is exact.
+
+    MEASURED 2026-09-09 (build doc T3): (3,3)/M=7 conical residual 7.11e-14
+    vs (2,2)/M=7 5.24e-14 -- the same roundoff plateau.  Bar 1e-11 as above.
+    """
+    assert _g3_residual(_LC, 3, 7, 25 * np.pi / 180, 40 * np.pi / 180) < 1e-11
+
+
+# --------------------------------------------------------------------------- #
+# G3 companion -- FAIL-BEFORE: each NEW term must be LOAD-BEARING.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("term", ["mass", "kzt", "lhh"])
+def test_g3_each_new_tensor_term_is_load_bearing(term, monkeypatch):
+    """Right-conclusion-wrong-mechanism guard.  Each of the three things the
+    tensor path adds is zeroed IN TURN (at the class / module level, no source
+    edit) and the G3 Berreman residual is re-measured.  A term that is not
+    load-bearing would leave that residual at its 1e-14 reference.
+
+    MEASURED 2026-09-09 (build doc T3b), (2,2) grid, M=7, conical
+    theta=25 deg / phi=40 deg, residual over R, T and the complex Jones:
+
+        arm                              LC slab      gyrotropic slab
+        all terms present (reference)    5.240e-14    5.884e-14
+        Eq.40 mixed masses  -> 0         4.101e-02    7.749e-02
+        Eq.44 second K_zt term -> 0      5.697e-03    4.058e-02
+        Eq.25 Lhh mixed blocks -> 0      1.049e-01    1.613e-01
+
+    Bar 1e-4 on the broken arm: 1.7 decades under the smallest measured break
+    (5.70e-03) and 10 decades over the reference -- so the assertion cannot be
+    satisfied by round-off drift in either direction.
+    """
+    import lumenairy.elements.pmm.stack2d_pure as SP
+    from lumenairy.elements.pmm import twod_staggered as TS
+
+    ew, ed, rm = (TS.Granet2DTransverseE._eps_weighted,
+                  TS.Granet2DTransverseE._eps_dir, TS._region_modes)
+
+    def no_mixed_mass(self, refx_pair, refy_pair, wmap=None):
+        out = ew(self, refx_pair, refy_pair, wmap)
+        # the Eq.40 MIXED blocks are the only ones whose 1-D set pairs differ
+        return np.zeros_like(out) if refx_pair[2] is not refx_pair[3] else out
+
+    def no_second_kzt(self, bx, lx, opx, rx, by, ly, opy, ry, wmap=None):
+        out = ed(self, bx, lx, opx, rx, by, ly, opy, ry, wmap)
+        # the second Eq.44 term per column carries the derivative on the OTHER
+        # axis than the shipped isotropic one
+        if (opx, rx, opy, ry) in (("m", "B", "dL", "Btilde"),
+                                  ("dL", "Btilde", "m", "B")):
+            return np.zeros_like(out)
+        return out
+
+    def no_lhh_mixed(solver):
+        saved, solver.Et_offdiag = solver.Et_offdiag, None
+        try:
+            return rm(solver)
+        finally:
+            solver.Et_offdiag = saved
+
+    if term == "mass":
+        monkeypatch.setattr(TS.Granet2DTransverseE, "_eps_weighted",
+                            no_mixed_mass)
+    elif term == "kzt":
+        monkeypatch.setattr(TS.Granet2DTransverseE, "_eps_dir", no_second_kzt)
+    else:
+        monkeypatch.setattr(TS, "_region_modes", no_lhh_mixed)
+        # stack2d_pure imported the name by value
+        monkeypatch.setattr(SP, "_region_modes", no_lhh_mixed)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        broken = max(_g3_residual(t33, 2, 7, 25 * np.pi / 180,
+                                  40 * np.pi / 180)
+                     for t33 in (_LC, _GYRO))
+    assert broken > 1e-4, (term, broken)
+
+
+def test_g3_jones_gauge_and_row_column_convention_are_load_bearing():
+    """FAIL-BEFORE for the two Jones properties that EVERY efficiency gate in
+    this file is blind to: the PUBLIC (unconjugated) gauge, and the documented
+    row/column contract (columns = incident ``E_x`` / ``E_y``, rows = reflected
+    ``E_x`` / ``E_y``).  ``|J|^2`` is invariant under both a conjugation and a
+    transpose, so no ``R``/``T`` comparison can see either.
+
+    The transpose is invisible even to a Jones comparison on a RECIPROCAL
+    cell: the rotated LC tensor gives ``J01 = J10`` (measured ``J01/J10 =
+    1 - 1.9e-13 i`` at normal incidence), so ``J.T`` IS ``J`` there.  The
+    GYROTROPIC tensor gives ``J01 = -J10`` at normal incidence (measured
+    ``-1 + 1.0e-13 i``; at 25 deg the ratio is -0.8214, still far from +1),
+    which is what makes it the discriminator -- the same reason G7 needs it.
+
+    MEASURED 2026-09-09 (VERIFY doc task 3), uniform slab vs
+    ``berreman_jones_1d`` (whose contract states "columns = incident lab
+    [Ex; Ey]"), complex residual ``max |J - jr|`` at M = 7:
+
+        arm                       normal        theta = 25 deg
+        as returned  (gyro)      4.56e-14          1.43e-14
+        CONJUGATED   (gyro)      1.47e-01          1.77e-01
+        TRANSPOSED   (gyro)      1.50e-01          1.61e-01
+        TRANSPOSED   (LC)        4.49e-14  <-- a no-op, exactly
+
+    Bars: matched < 1e-11 (G3's bar), broken > 1e-2 -- 1.2 decades under the
+    smallest measured gyrotropic break and 9 decades over the matched arm.
+    """
+    for theta in (0.0, 25 * np.pi / 180):
+        _o, _R, _T, J = pmm_jones_2d_staggered(
+            _G3["period"], _G3["period"], _uniform(_GYRO, 2), _G3["nsub"],
+            _G3["nsup"], _G3["dep"], _G3["wl"], degree=7, n_orders=2,
+            theta=theta)
+        _Rb, _Tb, jr, _jt = berreman_jones_1d(
+            [(_GYRO, _G3["dep"])], _G3["nsub"], _G3["nsup"], _G3["wl"],
+            angle=theta)
+        assert np.max(np.abs(J - jr)) < 1e-11
+        assert np.max(np.abs(np.conj(J) - jr)) > 1e-2      # no conj bridge
+        assert np.max(np.abs(J.T - jr)) > 1e-2             # columns = incident
+        if theta == 0.0:                        # why gyro, and not LC:
+            assert abs(J[0, 1] / J[1, 0] + 1.0) < 1e-9     # J01 = -J10
+    # ... and the record of the blind spot itself: on the reciprocal LC cell
+    # the transpose is a no-op, so an LC-only control would assert nothing.
+    _o, _R, _T, Jlc = pmm_jones_2d_staggered(
+        _G3["period"], _G3["period"], _uniform(_LC, 2), _G3["nsub"],
+        _G3["nsup"], _G3["dep"], _G3["wl"], degree=7, n_orders=2)
+    assert np.max(np.abs(Jlc.T - Jlc)) < 1e-11
+
+
+# =========================================================================== #
+# G4 -- 1-D REDUCTION: a y-uniform anisotropic stripe grating against the two
+#       independent 1-D engines, PER ORDER, both polarizations, plus Jones.
+# =========================================================================== #
+_G4_P, _G4_WL, _G4_DEP = 0.90e-6, 0.55e-6, 0.30e-6
+_G4_RIDGE = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=0.55)
+_G4_GROOVE = 2.10 * np.eye(3, dtype=complex)
+
+
+def _g4_stripe():
+    c = np.empty((2, 2, 3, 3), dtype=complex)
+    c[:] = _G4_GROOVE
+    c[0, :] = _G4_RIDGE
+    return c
+
+
+@pytest.fixture(scope="module")
+def g4_oracle():
+    return pmm_jones_1d(_G4_P, _G4_RIDGE, _G4_GROOVE, 1.5, 1.0, _G4_DEP, 0.5,
+                        _G4_WL, angle=0.22, degree=16, stabilize=False)
+
+
+def _g4_residual(M, oracle):
+    o1, R1, T1, J1 = oracle
+    o, R, T, J = pmm_jones_2d_staggered(_G4_P, _G4_P, _g4_stripe(), 1.5, 1.0,
+                                        _G4_DEP, _G4_WL, degree=M, n_orders=3,
+                                        theta=0.22, phi=0.0)
+    sel = np.asarray(o)[:, 1] == 0
+    two = {int(m): i for i, m in zip(np.arange(len(o))[sel],
+                                     np.asarray(o)[sel, 0])}
+    one = {int(m): i for i, m in enumerate(np.asarray(o1).ravel())}
+    common = [m for m in one if m in two]
+    dRT = max(max(abs(R[r][two[m]] - R1[r][one[m]]),
+                  abs(T[r][two[m]] - T1[r][one[m]]))
+              for m in common for r in (0, 1))
+    forb = float(max(np.max(np.abs(R[:, ~sel])), np.max(np.abs(T[:, ~sel]))))
+    return dRT, float(np.max(np.abs(J - J1))), forb
+
+
+def test_g4_stripe_grating_matches_the_1d_engines(g4_oracle):
+    """A y-uniform anisotropic stripe has NO corner in the 2-D field, so the
+    staggered solve converges cleanly onto the exact 1-D PMM.
+
+    MEASURED 2026-09-09 (build doc T4), theta = 0.22 rad, ladder over M:
+
+        M     per-order max|dR|,|dT|     max|dJones|
+        5           2.180e-03             1.025e-03
+        6           2.411e-04             1.196e-04
+        7           2.598e-05             2.874e-05
+        8           4.306e-06             9.088e-06
+
+    The residual is DETERMINISTIC discretization error (strictly monotone down
+    the ladder), not build noise, so the bar is 3x the M=8 value: 1.3e-05 on
+    R/T and 2.7e-05 on the Jones.  The two 1-D oracles (pmm_jones_1d degree 16
+    and rcwa_jones_1d with 81 orders) agree with EACH OTHER to 5.22e-07 on R/T
+    and 1.51e-06 on the Jones, i.e. 25x / 18x under the bar, so the oracle's
+    own floor is not what is being measured.
+
+    A 3x bar is under a decade, so "deterministic, not build noise" was
+    MEASURED (2026-09-09 verification, VERIFY doc): switching the BLAS kernel
+    path via OPENBLAS_NUM_THREADS 1 -> 4 moves this residual by a relative
+    2.1e-09 (R/T) and 2.3e-09 (Jones), so the 3x sits ~9 decades above the
+    last-bit envelope.  What the bar IS sensitive to is the FIXTURE: the same
+    gate on an independently chosen stripe (period 1.10 um, wl 0.63 um,
+    theta 0.35, a different LC tensor) converges to 6.96e-05 at M=8, 16x
+    larger -- so this number must be re-derived, not re-used, if the fixture
+    ever changes.
+    """
+    dRT, dJ, _forb = _g4_residual(8, g4_oracle)
+    assert dRT < 1.3e-5, dRT
+    assert dJ < 2.7e-5, dJ
+
+
+def test_g4_convergence_ladder_is_monotone(g4_oracle):
+    """TWO-SIDED companion to the bar above: the residual must FALL down the
+    ladder (measured 2.180e-03 -> 4.306e-06 from M=5 to M=8, a factor 506).
+    Bar: a drop of at least 10x between the ladder's ends, i.e. 50x of
+    headroom.
+    """
+    d5 = _g4_residual(5, g4_oracle)[0]
+    d8 = _g4_residual(8, g4_oracle)[0]
+    assert d8 < d5 / 10.0, (d5, d8)
+
+
+def test_g4_y_momentum_is_conserved(g4_oracle):
+    """A y-uniform cell cannot scatter into ``n != 0``: those orders are
+    forbidden by transverse-momentum conservation, and the staggered tensor
+    assembly must not leak into them.
+
+    MEASURED 2026-09-09 (build doc T4): max efficiency over all n != 0 orders
+    = 4.86e-27 at M=8, moving only over 6.73e-29 .. 4.86e-27 down the whole M
+    ladder -- i.e. a round-off floor, not a convergent quantity.  Bar 1e-20: 6
+    decades above the measurement and 17 decades below the smallest physically
+    meaningful order here (~1e-3).
+    """
+    assert _g4_residual(8, g4_oracle)[2] < 1e-20
+
+
+# =========================================================================== #
+# G5 -- THREE ENGINES on a genuinely 2-D anisotropic cell + the NO-FLOOR
+#       property, two-sided.
+# =========================================================================== #
+def _g5_cell(up=1, reverse=False):
+    n = 2 * up
+    c = np.empty((n, n, 3, 3), dtype=complex)
+    host, pill = (_ISO, _LC) if reverse else (_LC, _ISO)
+    c[:] = host
+    c[:up, :up] = pill
+    return c
+
+
+def _order0(o, A):
+    i = int(np.where((np.asarray(o)[:, 0] == 0)
+                     & (np.asarray(o)[:, 1] == 0))[0][0])
+    return np.array([float(A[0][i]), float(A[1][i])])
+
+
+def test_g5_three_engines_agree_on_a_2d_anisotropic_cell():
+    """The no-floor staggered tensor solver, the FMM-floored hybrid PMM
+    (``pmm_jones_2d``) and ``rcwa_jones_2d`` -- three independent
+    discretizations of the same physics -- on an isotropic pillar in a
+    rotated-uniaxial LC host.
+
+    MEASURED 2026-09-09 (build doc T5), order-0 R and T, both polarizations:
+    hybrid(degree 11, n_orders 13) vs staggered(M=7) 1.2e-04 (R) / 9.3e-05
+    (T); rcwa(n_orders 13) vs staggered 1.1e-04 (R) / 5.8e-04 (T).  Bar
+    5e-03 = ~8x the largest measured pairwise spread, and it is the FOURIER
+    engines' own floor that sets it (the staggered arm closes energy to
+    2.5e-08 while the hybrid closes to 2.9e-04 and both Fourier arms still
+    move with n_orders).
+
+    That 8x is under a decade, and the reason is structural: the bar measures
+    the ORACLES' truncation floor, which is fixture-dependent.  On an
+    independently chosen cell (period 0.62 um, wl 0.50 um, depth 0.31 um,
+    n_sub 1.45, a different LC tensor and pillar) the same three engines
+    spread to 4.82e-03 -- 8x more, and only 1.04x inside this bar (2026-09-09
+    verification, VERIFY doc G5).  So 5e-03 is calibrated to THIS fixture and
+    is not a general cross-engine tolerance: if the fixture changes, re-derive
+    it.  Against the last-bit envelope the bar is safe -- both Fourier arms
+    are unchanged to 1e-12 relative between OPENBLAS_NUM_THREADS 1 and 4.
+    """
+    c = _g5_cell()
+    o, R, T, _J = pmm_jones_2d_staggered(_P, _P, c, 1.5, 1.0, _DEP, _WL,
+                                         degree=7, n_orders=5)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        oh, Rh, Th, _Jh = pmm_jones_2d(_P, _P, c, 1.5, 1.0, _DEP, _WL,
+                                       degree=11, n_orders=13)
+    orc, Rr, Tr, _Jr = rcwa_jones_2d(_P, _P, _g5_cell(32), 1.5, 1.0, _DEP,
+                                     _WL, n_orders_x=13, n_orders_y=13)
+    base = (_order0(o, R), _order0(o, T))
+    for tag, (oo, RR, TT) in (("hybrid", (oh, Rh, Th)),
+                              ("rcwa", (orc, Rr, Tr))):
+        assert np.max(np.abs(_order0(oo, RR) - base[0])) < 5e-3, tag
+        assert np.max(np.abs(_order0(oo, TT) - base[1])) < 5e-3, tag
+
+
+def test_g5_no_fourier_floor_two_sided():
+    """THE defining property of the pure engine, carried into the tensor path:
+    the answer does not move with ``n_orders`` (the Rayleigh set is a
+    once-only FORWARD far-field projection, not a solve basis), whereas the
+    hybrid -- which projects the layer into a truncated Fourier basis BEFORE
+    the eigensolve -- does.
+
+    MEASURED 2026-09-09 (build doc T5), n_orders 4 -> 8 at fixed resolution,
+    order-0 R and T on the LC-host cell: staggered 3.89e-15, hybrid 9.69e-03
+    -- a ratio of 2.5e12.  Bars: staggered < 1e-10 (5 decades of headroom over
+    the measurement, and above the float64 reassociation limit of the
+    different-length reductions the two n_orders perform); hybrid > 1e-4 (2
+    decades under its measured motion).  Both sides asserted: "no floor" is
+    only a claim if the floored engine is shown to be floored.
+    """
+    c = _g5_cell()
+    stag, hyb = {}, {}
+    for nor in (4, 8):
+        o, R, T, _J = pmm_jones_2d_staggered(_P, _P, c, 1.5, 1.0, _DEP, _WL,
+                                             degree=7, n_orders=nor)
+        stag[nor] = np.concatenate([_order0(o, R), _order0(o, T)])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            oh, Rh, Th, _Jh = pmm_jones_2d(_P, _P, c, 1.5, 1.0, _DEP, _WL,
+                                           degree=9, n_orders=nor)
+        hyb[nor] = np.concatenate([_order0(oh, Rh), _order0(oh, Th)])
+    assert np.max(np.abs(stag[4] - stag[8])) < 1e-10
+    assert np.max(np.abs(hyb[4] - hyb[8])) > 1e-4
+
+
+def test_g5_order0_reflected_power_rebuilds_from_the_jones():
+    """The Jones and the efficiencies must be the SAME answer: the order-0
+    reflected power rebuilt from ``jones`` has to equal ``R[:, (0,0)]``.
+
+    At oblique incidence this is a real cross-check rather than a tautology,
+    because the reconstruction needs the LONGITUDINAL components that the
+    ``2x2`` Jones does not carry.  The Jones columns are the response to a
+    UNIT TRANSVERSE incident field, and a plane wave with transverse part
+    ``e`` also carries ``E_z`` fixed by ``k . E = 0``, so
+
+        R00[col] = (|Ex|^2 + |Ey|^2 + |(kx Ex + ky Ey)/kz|^2)
+                   / (1 + |k_t . e_col / kz|^2)
+
+    with ``k_t`` the (normalized) transverse incident wavevector in the
+    vacuum superstrate.  The normalization is DIFFERENT for column 0 (``kx``)
+    and column 1 (``ky``), which makes the identity a second, independent
+    column-convention discriminator -- one that works even on the reciprocal
+    LC cell whose Jones is symmetric, where ``J`` vs ``J.T`` is blind.
+
+    MEASURED 2026-09-09 (VERIFY doc task 3), LC host + isotropic pillar:
+
+        incidence                 residual      same identity with J.T
+        theta = 0                 1.39e-17            5.48e-16
+        theta = 0.55, phi = 1.30  0.00e+00            3.77e-04
+
+    Bars: residual < 1e-12 (5 decades over the measurement, room for the
+    reassociation of a different summation order) and the transposed arm
+    > 1e-05 (37x under its measurement, 7 decades over the matched one).
+    """
+    def rebuild(J, kx, ky, kz):
+        out = []
+        for col in (0, 1):
+            ex, ey = J[0, col], J[1, col]
+            ez = (kx * ex + ky * ey) / kz          # k_r = (kx, ky, -kz)
+            inc = [1.0, 0.0] if col == 0 else [0.0, 1.0]
+            ez_i = (kx * inc[0] + ky * inc[1]) / kz
+            out.append(float((abs(ex) ** 2 + abs(ey) ** 2 + abs(ez) ** 2)
+                             / (1.0 + abs(ez_i) ** 2)))
+        return np.array(out)
+
+    for theta, phi in ((0.0, 0.0), (0.55, 1.30)):
+        o, R, _T, J = pmm_jones_2d_staggered(_P, _P, _cell(_LC, _ISO), 1.5,
+                                             1.0, _DEP, _WL, degree=7,
+                                             n_orders=4, theta=theta, phi=phi)
+        eng = _order0(o, R)
+        kx = np.sin(theta) * np.cos(phi)
+        ky = np.sin(theta) * np.sin(phi)
+        kz = np.sqrt(1.0 - kx ** 2 - ky ** 2)
+        assert np.max(np.abs(rebuild(J, kx, ky, kz) - eng)) < 1e-12
+        if theta:                     # at normal incidence the two are equal
+            assert np.max(np.abs(rebuild(J.T, kx, ky, kz) - eng)) > 1e-5
+
+
+# =========================================================================== #
+# G6 -- ENERGY CLOSURE, two-sided (Hermitian closes; non-Hermitian absorbs).
+# =========================================================================== #
+@pytest.mark.parametrize("name,host", [("lc", _LC), ("gyro", _GYRO)])
+def test_g6_hermitian_tensor_cell_closes(name, host):
+    """A HERMITIAN permittivity absorbs nothing -- including the GYROTROPIC
+    tensor, whose ``e12 = -e21 = i b`` is anti-symmetric but Hermitian.
+
+    MEASURED 2026-09-09 (build doc T6) at M=8, (2,2) grid, both incident
+    polarizations: |sum R + sum T - 1| = 6.3e-09 (LC host) and 3.9e-08
+    (gyrotropic host).  Bar = 1e2 x the worse of those, rounded to 1e-05:
+    decades above the measurement and decades below the ~1e-3 scale at which
+    the corner-capped modal error of this cell class shows up at low M.
+    """
+    _o, R, T, _J = pmm_jones_2d_staggered(_P, _P, _cell(host, _ISO), 1.5, 1.0,
+                                          _DEP, _WL, degree=8, n_orders=4)
+    tot = R.sum(axis=1) + T.sum(axis=1)
+    assert np.max(np.abs(tot - 1.0)) < 1e-5, tot
+
+
+def test_g6_closure_improves_with_M_and_a_lossy_cell_absorbs():
+    """TWO-SIDED.  (a) the closure must FALL with M (measured 1.17e-05 at M=6
+    -> 3.93e-08 at M=8 for the gyrotropic cell, a factor 298; bar 10x).  (b) a
+    NON-Hermitian (absorbing) cell must close BELOW 1 by a real margin, and no
+    unity is ever claimed for it: measured 1 - (R+T) = 0.2270 / 0.2445 for the
+    two polarizations at M=8; bar 0.05, ~4.5x under the measurement and
+    decades above the 1e-8 closure of the lossless arm.
+    """
+    kw = dict(period_x=_P, period_y=_P, n_substrate=1.5, n_superstrate=1.0,
+              depth=_DEP, wavelength=_WL, n_orders=4)
+    dev = {}
+    for M in (6, 8):
+        _o, R, T, _J = pmm_jones_2d_staggered(eps_cell=_cell(_GYRO, _ISO),
+                                              degree=M, **kw)
+        dev[M] = float(np.max(np.abs(R.sum(axis=1) + T.sum(axis=1) - 1.0)))
+    assert dev[8] < dev[6] / 10.0, dev
+    lossy = _cell(_LC, _ISO + 0.8j * np.eye(3))
+    _o, R, T, _J = pmm_jones_2d_staggered(eps_cell=lossy, degree=8, **kw)
+    tot = R.sum(axis=1) + T.sum(axis=1)
+    assert np.max(tot) < 1.0 - 0.05, tot
+
+
+# =========================================================================== #
+# G7 -- DISCRETE SYMMETRIES.  These are EXACT symmetries of the
+#       discretization, and they are what a swapped e12/e21 placement breaks.
+# =========================================================================== #
+_S3 = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]], dtype=float)
+_S2 = np.array([[0, 1], [1, 0]], dtype=float)
+_M2 = np.diag([1.0, -1.0])
+_G7 = dict(n_substrate=1.5, n_superstrate=1.0, depth=_DEP, wavelength=_WL,
+           degree=6, n_orders=3)
+
+
+def _transpose_cell(A):
+    B = np.empty_like(A)
+    for i in range(A.shape[0]):
+        for j in range(A.shape[1]):
+            B[i, j] = _S3 @ A[j, i] @ _S3
+    return B
+
+
+def _transpose_residual(A, B):
+    """max |R_B[pol][(m,n)] - R_A[1-pol][(n,m)]| for the x<->y transposed pair
+    (periods swapped with the cell), and the Jones residual."""
+    oA, RA, TA, JA = pmm_jones_2d_staggered(_P, 1.3 * _P, A, **_G7)
+    oB, RB, TB, JB = pmm_jones_2d_staggered(1.3 * _P, _P, B, **_G7)
+    ia, ib = _idx(oA), _idx(oB)
+    dev = max(max(abs(RB[r][ib[(m, n)]] - RA[1 - r][ia[(n, m)]]),
+                  abs(TB[r][ib[(m, n)]] - TA[1 - r][ia[(n, m)]]))
+              for (m, n) in ib if (n, m) in ia for r in (0, 1))
+    return dev, float(np.max(np.abs(JB - _S2 @ JA @ _S2)))
+
+
+def test_g7_xy_transpose_symmetry():
+    """Transposing the cell about x = y (swap the grid axes, the periods, AND
+    e11<->e22, e12<->e21) must map order (m,n) -> (n,m) and swap the Jones
+    rows and columns -- exactly, on a symmetric discretization.
+
+    MEASURED 2026-09-09 (build doc T7), LC host + isotropic pillar at M=6:
+    per-order residual 2.07e-14, Jones residual 1.07e-14.  Bar = 1e2 x the
+    larger, rounded up to 1e-11: 480x over the measurement, and 8 decades
+    under the 3.64e-03 that the swapped-block control below produces.
+    """
+    A = _cell(_LC, _ISO)
+    dev, dJ = _transpose_residual(A, _transpose_cell(A))
+    assert dev < 1e-11 and dJ < 1e-11, (dev, dJ)
+
+
+def test_g7_mixed_block_placement_control_gyrotropic():
+    """THE placement control.  Interchanging ``e12`` and ``e21`` in ONE arm
+    must BREAK the transpose symmetry -- and it does, but only for a tensor
+    whose off-diagonal is NOT symmetric.  The rotated LC has e12 = e21 (the
+    swap is a no-op there, measured 6.6e-15, which is why it cannot be the
+    control); the GYROTROPIC tensor has e12 = -e21 and is the discriminator.
+
+    MEASURED 2026-09-09 (build doc T7) at M=6: correct placement 1.30e-14,
+    swapped placement 3.64e-03 (its Jones residual 8.14e-02) -- 11 decades
+    apart.  Bars: correct < 1e-11 (as above), swapped > 1e-7 (4.6 decades
+    under the measured break, 4 decades over the correct arm) -- a two-sided,
+    fail-before demonstration.  The same swap on the LC cell measures
+    2.55e-14, i.e. no break at all, which is why the gyrotropic tensor is the
+    discriminator.
+    """
+    A = _cell(_GYRO, _ISO)
+    B = _transpose_cell(A)
+    ok, _ = _transpose_residual(A, B)
+    Aw = A.copy()
+    Aw[..., 0, 1], Aw[..., 1, 0] = A[..., 1, 0].copy(), A[..., 0, 1].copy()
+    bad, _ = _transpose_residual(Aw, B)
+    assert ok < 1e-11, ok
+    assert bad > 1e-7, bad
+
+
+def test_g7_y_mirror_symmetry():
+    """Mirroring the cell in y (and the director azimuth phi -> -phi, i.e.
+    e12 -> -e12, e21 -> -e21) must map order (m,n) -> (m,-n) and flip the sign
+    of the OFF-DIAGONAL Jones entries.
+
+    MEASURED 2026-09-09 (build doc T7) at M=6: per-order residual 2.85e-15,
+    Jones residual 1.16e-14.  Bar 1e-11, as for the transpose.
+    """
+    C = _cell(_LC, _ISO)
+    Mm = np.diag([1.0, -1.0, 1.0])
+    D = np.empty_like(C)
+    for i in range(C.shape[0]):
+        for j in range(C.shape[1]):
+            D[i, j] = Mm @ C[i, C.shape[1] - 1 - j] @ Mm
+    oC, RC, _TC, JC = pmm_jones_2d_staggered(_P, _P, C, **_G7)
+    oD, RD, _TD, JD = pmm_jones_2d_staggered(_P, _P, D, **_G7)
+    ic, idd = _idx(oC), _idx(oD)
+    dev = max(abs(RD[r][idd[(m, n)]] - RC[r][ic[(m, -n)]])
+              for (m, n) in idd if (m, -n) in ic for r in (0, 1))
+    assert dev < 1e-11, dev
+    assert np.max(np.abs(JD - _M2 @ JC @ _M2)) < 1e-11
+
+
+# =========================================================================== #
+# G8 -- THE STACK: tensor layers in PMM2DStackPure.
+# =========================================================================== #
+def test_g8a_split_tensor_layer_equals_the_single_layer():
+    """Cascading one tensor layer as TWO half-thickness layers must reproduce
+    the single layer: the interface between them is the identity match, so
+    this exercises the Redheffer cascade on tensor modes without changing the
+    physics.
+
+    MEASURED 2026-09-09 (build doc T8), conical incidence theta=0.15,
+    phi=0.4, M=6: max|dR| 2.36e-16, max|dT| 3.33e-16, max|dJones| 8.74e-16 --
+    i.e. round-off.  Bar 1e-12: ~3 decades over the measurement (room for the
+    reassociation a different cascade order legitimately produces) and decades
+    under any physical difference.
+    """
+    c = _cell(_LC, _ISO)
+    st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.5, n_modes=6,
+                        n_orders=3)
+    st.add_layer(_DEP, eps_cell=c).add_layer(_DEP, eps_cell=c)
+    st.set_source(_WL, theta=0.15, phi=0.4)
+    _o2, R2, T2, J2 = st.solve()
+    _o1, R1, T1, J1 = pmm_jones_2d_staggered(_P, _P, c, 1.5, 1.0, 2 * _DEP,
+                                             _WL, degree=6, n_orders=3,
+                                             theta=0.15, phi=0.4)
+    assert np.max(np.abs(R2 - R1)) < 1e-12
+    assert np.max(np.abs(T2 - T1)) < 1e-12
+    assert np.max(np.abs(J2 - J1)) < 1e-12
+
+
+def _g8b_residual(M):
+    layers = [(_LC, 0.21e-6), (_GYRO, 0.13e-6), (_LC_M, 0.17e-6)]
+    stk = PMM2DStackPure(0.4e-6, 0.4e-6, n_superstrate=1.0, n_substrate=1.5,
+                         n_modes=M, n_orders=2)
+    for t33, th in layers:
+        stk.add_layer(th, eps=t33)
+    stk.set_source(1.0e-6, theta=25 * np.pi / 180, phi=40 * np.pi / 180)
+    _o, R, T, J = stk.solve()
+    Rb, Tb, jr, _jt = berreman_jones_1d(layers, 1.5, 1.0, 1.0e-6,
+                                        angle=25 * np.pi / 180,
+                                        phi=40 * np.pi / 180)
+    return max(float(np.max(np.abs(R.sum(axis=1) - Rb))),
+               float(np.max(np.abs(T.sum(axis=1) - Tb))),
+               float(np.max(np.abs(J - jr))))
+
+
+def test_g8b_uniform_tensor_multilayer_matches_berreman():
+    """Three UNIFORM anisotropic layers (LC / gyrotropic / mirrored LC) at
+    conical incidence against the exact Berreman multilayer.  Each uniform
+    TENSOR region takes its own region eig (it is not eps-free-separable, so
+    it cannot ride the shared geometric eig), and the cascade must still be
+    exact.
+
+    MEASURED 2026-09-09, the full ladder (build doc T8 gives M=5 and M=7;
+    the ends were added by the 2026-09-09 verification):
+
+        M          3          4          5          6          7
+        residual 5.55e-05   3.78e-09   2.40e-12   2.09e-14   4.21e-14
+
+    Bars: < 1e-11 at M=7 (238x over the measurement) and a >= 1e5 span from
+    M=3 to M=7 (measured 1.32e9, so 4 decades of headroom), which is what
+    makes the M=7 number a convergence statement rather than a plateau.
+
+    The ladder deliberately reads from M=3 rather than M=5.  The M=6 residual
+    (2.09e-14) is already BELOW the M=7 one: the roundoff plateau is reached
+    by M=6, so an M=5 -> M=7 ratio is a plateau-referencing quantity -- it
+    measured 57x against a 10x bar here (5.7x of headroom) and moved 10% just
+    between OPENBLAS_NUM_THREADS 1 and 4, while the M=3 residual is a genuine
+    discretization number that was BIT-IDENTICAL across that same change.
+    """
+    r3, r7 = _g8b_residual(3), _g8b_residual(7)
+    assert r7 < 1e-11, r7
+    assert r3 > 1e5 * r7, (r3, r7)
+
+
+def test_g9_absorption_budget_closes_for_a_lossy_tensor_stack():
+    """``retain_internal`` + ``layer_absorption`` on a stack containing a
+    PATTERNED lossy tensor layer and a UNIFORM gyrotropic layer.  The flux
+    form is the eps-FREE block Gram, so it must keep working for tensor modes
+    -- verified, not assumed.
+
+    MEASURED 2026-09-09 (build doc T9), conical theta=0.12 phi=0.3, ladder in
+    M:
+
+        M      |sum A - (1 - R - T)|      A(lossy layer)     max|A(lossless)|
+        6      2.155e-05 / 1.290e-06     0.254416/0.291326      5.80e-15
+        7      3.982e-07 / 1.067e-06     0.254468/0.291394      6.22e-15
+        8      8.205e-08 / 1.670e-08     0.254447/0.291294      5.59e-14
+
+    Bar at M=8 = 1e2 x the worse of the two polarizations (8.2e-08), rounded
+    to 1e-05: this is a CROSS-MACHINERY closure -- internal block-Gram flux
+    against the Rayleigh far field -- so it tracks the MODAL error, not
+    round-off, and the 1e2 factor is what keeps it off the convergence knife
+    edge.  It sits ~4 decades under the 0.254 absorption it audits.  The M=6
+    -> M=8 drop (263x) is asserted too, so the number is a convergence
+    statement rather than a plateau.
+    """
+    def _run(M):
+        st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.5,
+                            n_modes=M, n_orders=3)
+        st.add_layer(0.12e-6, eps_cell=_cell(_LC, _ISO))
+        st.add_layer(_DEP, eps_cell=_cell(_LC, _ISO + 0.8j * np.eye(3)))
+        st.add_layer(0.09e-6, eps=_GYRO)
+        st.set_source(_WL, theta=0.12, phi=0.3)
+        _o, R, T, _J = st.solve(retain_internal=True)
+        A = st.layer_absorption()
+        dev = max(abs(float(A[:, c].sum())
+                      - float(1.0 - R[c].sum() - T[c].sum())) for c in (0, 1))
+        return A, dev
+
+    A8, dev8 = _run(8)
+    _A6, dev6 = _run(6)
+    assert A8.shape == (3, 2)
+    assert dev8 < 1e-5, dev8
+    assert dev8 < dev6 / 10.0, (dev6, dev8)
+    assert A8[1].min() > 0.05          # the lossy layer carries it ...
+    assert np.max(np.abs(A8[[0, 2]])) < 1e-9   # ... the lossless ones do not
+
+
+# =========================================================================== #
+# G10 -- GUARDS.  Every message must name the alternative.
+# =========================================================================== #
+def _oop_cell(stray):
+    c = _cell(_LC, _ISO)
+    c[0, 0, 0, 2] = stray
+    c[0, 0, 2, 0] = stray
+    return c
+
+
+def test_g10_out_of_plane_tensor_now_routes_to_the_generator():
+    """SUPERSEDED BY STAGE B (2026-09-09).  This gate used to assert that an
+    OUT-OF-PLANE cell raises ``NotImplementedError`` naming the hybrid; the
+    ``4 q^2`` first-order staggered generator now handles it, so the SAME
+    inputs must SOLVE, must be routed to the generator (``offplane`` True,
+    dimension ``4 q^2`` rather than ``2 q^2``), and must conserve energy on a
+    Hermitian tensor.  The out-of-plane gates themselves live in
+    ``tests/unit/test_pmm2d_staggered_oop.py``; what is asserted here is only
+    that the Stage-A REFUSAL is gone and the dispatch fires.
+
+    MEASURED 2026-09-09 (build doc T7): the (2,2) out-of-plane cell below
+    closes to 3.3e-08 at M=5; bar 1e-4, decades above the discretization at
+    this deliberately cheap degree and decades below any cascade failure."""
+    cell = _oop_cell(0.4)
+    k0 = 2.0 * np.pi / _WL
+    sol = Granet2DTransverseE(_P, _P, 2, 2, 5, cell, k0=k0)
+    assert sol.offplane is True
+    assert sol.dimtot == 4 * sol.q ** 2
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _o, R, T, J = pmm_jones_2d_staggered(_P, _P, cell, 1.5, 1.0, _DEP,
+                                             _WL, degree=5, n_orders=2)
+    assert np.all(np.isfinite(R)) and np.all(np.isfinite(T))
+    assert np.all(np.isfinite(J))
+    assert float(np.max(np.abs(R.sum(axis=1) + T.sum(axis=1) - 1))) < 1e-4
+    # the stack builder accepts it too, patterned AND uniform (a genuinely
+    # tilted director, theta = 0.6 rad off z)
+    PMM2DStackPure(_P, _P).add_layer(_DEP, eps_cell=cell)
+    PMM2DStackPure(_P, _P).add_layer(_DEP, eps=uniaxial_tensor(1.5, 1.8, 0.6))
+
+
+def test_g10_offplane_test_is_relative_not_strict():
+    """A physically IN-PLANE cell built by ROTATING a diagonal tensor carries
+    float noise in the xz/yz slots (``uniaxial_tensor(no, ne, pi/2, phi)`` has
+    ``cos(pi/2) = 6.1e-17``), so a strict ``> 0`` test would send every real LC
+    cell down the 1.3-2.0x costlier out-of-plane generator (and, before Stage
+    B, would have refused it outright).  The floor is RELATIVE (1e-12 * tensor
+    scale), shared verbatim with the hybrid's ``_tile_is_offplane``.
+
+    MEASURED 2026-09-09 (build doc T10 / T4): the largest off-plane entry of
+    ``uniaxial_tensor(1.5, 1.8, pi/2, 0.55)`` is 5.17e-17 against a tensor
+    scale of 2.970, i.e. a floor of 2.97e-12 -- 4.8 decades of margin -- so the
+    cell stays IN-PLANE; a 1e-16 injected stray likewise stays in-plane and
+    gives BYTE-IDENTICAL R/T (the two-arm form of "no additional work"), while
+    a 1e-3 one routes to the generator.
+
+    RESTATED 2026-09-09 by the Stage-B verification (probe
+    ``validation/probe_verify_staggered_oop/v3_dispersion_and_berreman.py``,
+    section D).  The previous form asserted ``0.0 < off``, i.e. that the
+    rotation's residue is EXACTLY non-zero on the running build -- an
+    S5-adjacent reading of a per-build float, flagged in
+    ``docs/audits/VERIFY_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md`` item 24.
+    Only the UPPER side is a property of the dispatch, so only the upper side
+    is asserted; the "a strict ``> 0`` test would misroute a real LC cell" half
+    is now ENGINEERED through the public API instead of read off the build --
+    a stray at 1e-3 of the floor DERIVED from this build's own measured tensor
+    scale must stay in-plane and stay byte-identical.  MEASURED on the
+    engineered ladder: strays at 1e-16, 1e-14 and 1e-12 (relative) all leave
+    ``offplane`` False and R/T/Jones byte-equal, 1e-11 sets it True, and
+    crossing the floor moves R by only 1.5e-13 -- the two branches agree
+    ACROSS the dispatch boundary, so nothing hinges on which side a marginal
+    cell lands.
+    """
+    off = np.abs(_LC[[0, 1, 2, 2], [2, 2, 0, 1]]).max()
+    floor = 1e-12 * float(np.abs(_LC).max())
+    assert off < floor, (off, floor)      # the residue is UNDER the floor
+    _o, R, T, _J = pmm_jones_2d_staggered(_P, _P, _cell(_LC, _ISO), 1.5, 1.0,
+                                          _DEP, _WL, degree=5, n_orders=2)
+    assert np.isfinite(R.sum() + T.sum())
+    # ENGINEERED sub-floor stray, sized from THIS build's measured floor: it
+    # must stay in-plane and change nothing.  (This is the arm that would fail
+    # if the test were strict-``> 0`` rather than relative.)
+    eng = _oop_cell(1e-3 * floor)
+    assert Granet2DTransverseE(_P, _P, 2, 2, 5, eng,
+                               k0=2.0 * np.pi / _WL).offplane is False
+    _o3, R3, T3, _J3 = pmm_jones_2d_staggered(_P, _P, eng, 1.5, 1.0, _DEP,
+                                              _WL, degree=5, n_orders=2)
+    assert R.tobytes() == R3.tobytes() and T.tobytes() == T3.tobytes()
+    k0 = 2.0 * np.pi / _WL
+    assert Granet2DTransverseE(_P, _P, 2, 2, 5, _oop_cell(1e-16),
+                               k0=k0).offplane is False
+    assert Granet2DTransverseE(_P, _P, 2, 2, 5, _oop_cell(1e-3),
+                               k0=k0).offplane is True
+    _o2, R2, T2, _J2 = pmm_jones_2d_staggered(_P, _P, _oop_cell(1e-16), 1.5,
+                                              1.0, _DEP, _WL, degree=5,
+                                              n_orders=2)
+    assert R.tobytes() == R2.tobytes() and T.tobytes() == T2.tobytes()
+
+
+def test_g10_zero_ezz_and_bad_shapes_raise():
+    bad = _cell(_LC, _ISO)
+    bad[0, 0, 2, 2] = 0.0
+    with pytest.raises(ValueError, match="e_zz"):
+        pmm_jones_2d_staggered(_P, _P, bad, 1.5, 1.0, _DEP, _WL, degree=5)
+    with pytest.raises(ValueError, match=r"Nx, Ny, 3, 3"):
+        pmm_jones_2d_staggered(_P, _P, np.ones((2, 2, 2, 2), complex), 1.5,
+                               1.0, _DEP, _WL, degree=5)
+    with pytest.raises(ValueError, match="eps_cell must be SQUARE"):
+        pmm_jones_2d_staggered(_P, _P, _cell(_LC, _ISO)[:1], 1.5, 1.0, _DEP,
+                               _WL, degree=5)
+    with pytest.raises(ValueError, match=r"scalar or a \(3, 3\)"):
+        PMM2DStackPure(_P, _P).add_layer(_DEP, eps=np.ones((2, 2)))
+
+
+def test_g10_scalar_entry_refuses_a_tensor_cell_and_names_the_jones_entry():
+    with pytest.raises(ValueError, match="pmm_jones_2d_staggered") as exc:
+        pmm_efficiency_2d_staggered(_P, _P, _cell(_LC, _ISO), 1.5, 1.0, _DEP,
+                                    _WL, degree=5)
+    assert "pmm_efficiency_2d_staggered" in str(exc.value)
+
+
+def test_g10_shared_geometric_eig_refuses_a_tensor_assembly():
+    """``_homog_geom_cache``'s eps-free split needs Meps33 = eps*G3 and
+    Kzt = eps*Kzt0 to cancel; for a tensor they do not, so it must RAISE
+    rather than hand back a silently-wrong geometric basis.  An OUT-OF-PLANE
+    assembly has no second-order operators at all, so it must raise too."""
+    sol = Granet2DTransverseE(_P, _P, 2, 2, 4, _uniform(_LC),
+                              k0=2 * np.pi / _WL)
+    with pytest.raises(ValueError, match="uniform SCALAR"):
+        _homog_geom_cache(sol)
+
+
+# =========================================================================== #
+# The lossless-closure tripwire (library item 2.1.5).
+# =========================================================================== #
+def test_tripwire_silent_on_a_well_resolved_hermitian_tensor_stack():
+    """It must NOT fire on a converged lossless tensor solve.
+
+    MEASURED 2026-09-09 (build doc T6/T11): the closure of this configuration
+    is 6.3e-09, i.e. 7 decades inside the 5e-02 window.
+    """
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        pmm_jones_2d_staggered(_P, _P, _cell(_LC, _ISO), 1.5, 1.0, _DEP, _WL,
+                               degree=8, n_orders=4)
+    assert not any("closure violated" in str(w.message) for w in rec)
+
+
+def test_tripwire_silent_on_a_non_hermitian_tensor():
+    """A NON-Hermitian (absorbing) tensor legitimately gives R+T < 1, so no
+    unity is claimed and the tripwire must stay silent -- this is what makes
+    the guard non-tautological (measured deficit 0.227, far outside the
+    window, yet silent).
+    """
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        _o, R, T, _J = pmm_jones_2d_staggered(
+            _P, _P, _cell(_LC, _ISO + 0.8j * np.eye(3)), 1.5, 1.0, _DEP, _WL,
+            degree=8, n_orders=4)
+    assert not any("closure violated" in str(w.message) for w in rec)
+    assert float(R[0].sum() + T[0].sum()) < 0.95      # it really does absorb
+
+
+def test_tripwire_fires_on_an_engineered_lossless_violation(monkeypatch):
+    """FAIL-BEFORE with a gap on BOTH sides, CONSTRUCTED rather than hoped for.
+
+    The staggered basis degrades GRACEFULLY, so under-resolution alone cannot
+    put this guard decisively outside its window: the strongest violation
+    available from the physics is 9.08e-02 at the minimum modal count M=3 on a
+    high-contrast cell -- only 1.82x outside the 5e-02 tolerance (the ladder
+    is the companion test below).  The violating state is therefore ENGINEERED:
+    ``_region_modes`` is monkeypatched to return ``lam * (1 + 0.1j)``, i.e. an
+    artificial imaginary part on every propagation constant of the patterned
+    layer.  That is the class of defect the guard exists to catch (a wrong
+    branch / mis-signed ``Im gamma``), and it leaves every permittivity in the
+    stack exactly Hermitian, so the guard's own losslessness predicate still
+    says ``R + T = 1`` is exact.
+
+    MEASURED 2026-09-09 (VERIFY doc, tripwire audit), gyrotropic host with an
+    ``eps = 4`` pillar at M=8, ``|sum R + sum T - 1|`` vs the 5e-02 window:
+
+        injection s      0     1e-4    1e-3    3e-3    1e-2    3e-2    0.1
+        deviation     3.9e-08 1.9e-03 1.8e-02 5.3e-02 1.5e-01 3.4e-01 6.6e-01
+        fires            no     no      no     yes     yes     yes     yes
+
+    The asserted broken arm (s = 0.1) sits 13.1x OUTSIDE the window; the
+    silent arm is the SAME cell at the SAME M with s = 0 and sits 1.3e6x
+    INSIDE it -- 1.1 decades above and 6.1 decades below, so the pair brackets
+    the tolerance over 7 decades without pinning its value.  Both deviations
+    are bit-identical between ``OPENBLAS_NUM_THREADS`` 1 and 4 (measured), so
+    neither side sits on a build-dependent edge.
+    """
+    import lumenairy.elements.pmm.stack2d_pure as SP
+
+    cell = _cell(_GYRO, _ISO)
+    kw = dict(period_x=_P, period_y=_P, n_substrate=1.5, n_superstrate=1.0,
+              depth=_DEP, wavelength=_WL, degree=8, n_orders=4)
+    # SILENT arm: nothing broken, same cell, same resolution.
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        _o, R0, T0, _J0 = pmm_jones_2d_staggered(eps_cell=cell, **kw)
+    assert not any("closure violated" in str(w.message) for w in rec)
+    assert abs(float(R0[0].sum() + T0[0].sum()) - 1.0) < 1e-5
+
+    # BROKEN arm: a non-unitary layer dispersion, permittivities untouched.
+    _rm = SP._region_modes
+
+    def broken(solver):
+        W, V, lam, g2 = _rm(solver)
+        return W, V, lam * (1.0 + 0.1j), g2
+
+    monkeypatch.setattr(SP, "_region_modes", broken)
+    with pytest.warns(UserWarning, match="closure violated"):
+        _o, R, T, _J = pmm_jones_2d_staggered(eps_cell=cell, **kw)
+    assert abs(float(R[0].sum() + T[0].sum()) - 1.0) > 2e-1
+
+
+def test_tripwire_underresolved_closure_ladder():
+    """The PHYSICAL companion to the engineered fail-before: what
+    under-resolution alone does to the closure of a lossless high-contrast
+    gyrotropic cell.  This is the record that motivates the guard (and the
+    record that its 5e-02 window was derived against), stated as a ladder so
+    that no bar sits at the 1.82x window crossing.
+
+    MEASURED 2026-09-09 (build doc T11, re-measured by the 2026-09-09
+    verification over eps_pillar = 4 / 16 / 36 / 100 / 400 / 1600 at
+    M = 3, 4, 5, 8 -- the maximum over that whole sweep is the 9.08e-02 below,
+    so the basis really does saturate rather than blow up):
+
+        eps_pillar    M=3        M=4        M=5        M=8
+          4.0      4.77e-02   2.46e-04   1.16e-04   3.93e-08
+        100.0      9.08e-02   2.53e-04   3.88e-04   1.51e-07
+        400.0      7.70e-02   1.54e-03   4.56e-04   1.67e-08
+
+    Bars: M=3 closure > 1e-02 (9.1x under the measurement), M=8 closure <
+    1e-05 (66x over it), and a span of at least 1e4 between them (measured
+    6.0e5, 60x of headroom).  The M=3 value is bit-identical between
+    OPENBLAS_NUM_THREADS 1 and 4, so it is a deterministic discretization
+    number, not build noise.
+    """
+    hot = _cell(_GYRO, 100.0 * np.eye(3, dtype=complex))
+    kw = dict(period_x=_P, period_y=_P, n_substrate=1.5, n_superstrate=1.0,
+              depth=_DEP, wavelength=_WL, n_orders=4)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _o, R3, T3, _J3 = pmm_jones_2d_staggered(eps_cell=hot, degree=3, **kw)
+    _o, R8, T8, _J8 = pmm_jones_2d_staggered(eps_cell=hot, degree=8, **kw)
+    d3 = abs(float(R3[0].sum() + T3[0].sum()) - 1.0)
+    d8 = abs(float(R8[0].sum() + T8[0].sum()) - 1.0)
+    assert d3 > 1e-2, d3
+    assert d8 < 1e-5, d8
+    assert d3 > 1e4 * d8, (d3, d8)
