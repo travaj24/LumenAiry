@@ -30,6 +30,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import importlib.util as _importlib_util
+import os as _os
 from typing import Any, Optional, cast
 
 import numpy as np
@@ -48,7 +49,14 @@ import numpy as np
 # preserves the public API used by ~60+ callers across the package.
 
 CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
-JAX_AVAILABLE = _importlib_util.find_spec('jax') is not None
+# LUMENAIRY_DISABLE_JAX=1 forces the JAX path off even when jax is
+# INSTALLED: find_spec alone cannot detect an install whose native DLLs are
+# blocked (seen 2026-09-01: a Windows Application Control policy blocked
+# jaxlib's cpu_feature_guard on a worker box -- the lazy import then died
+# mid-initialization and every later touch of the half-imported module
+# raised "partially initialized module 'jax'").
+JAX_AVAILABLE = (_importlib_util.find_spec('jax') is not None
+                 and not _os.environ.get('LUMENAIRY_DISABLE_JAX'))
 
 # Cached lazy module references.  Populated on first access.
 _cp = None
