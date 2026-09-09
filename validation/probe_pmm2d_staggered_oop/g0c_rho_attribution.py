@@ -8,25 +8,39 @@ TEST: feed the probe the rho-ROTATED cell and compare PER ORDER against both
 Fourier oracles.  If the 2.2e-03 collapses, the open item is a convention, not
 a corner.
 """
-import os, sys, warnings
+import os
+import sys
+import warnings
+
 for _v in ("OMP_NUM_THREADS","OPENBLAS_NUM_THREADS","MKL_NUM_THREADS"):
     os.environ.setdefault(_v,"1")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import numpy as np, probe_common as pc
-from lumenairy.elements.rcwa import rcwa_jones_2d
-from lumenairy.elements.pmm import pmm_jones_2d
+import numpy as np
+import probe_common as pc
 
-WL=1.0; PX=PY=1.2; DEP=0.4; NSUB,NSUP=1.5,1.0
-er = pc.uniaxial(1.5,1.7,35.0,azim_deg=25.0); eg=np.eye(3,dtype=complex)
+from lumenairy.elements.pmm import pmm_jones_2d
+from lumenairy.elements.rcwa import rcwa_jones_2d
+
+WL=1.0
+PX=PY=1.2
+DEP=0.4
+NSUB,NSUP=1.5,1.0
+er = pc.uniaxial(1.5,1.7,35.0,azim_deg=25.0)
+eg=np.eye(3,dtype=complex)
 def L(): 
-    e=np.zeros((3,3,3,3),dtype=complex); e[:,:]=eg
-    for i,j in ((0,0),(1,0),(0,1)): e[i,j]=er
+    e=np.zeros((3,3,3,3),dtype=complex)
+    e[:,:]=eg
+    for i, j in ((0, 0), (1, 0), (0, 1)):
+        e[i, j] = er
     return e
 def rho(e):                       # eps'[s] = eps[N-1-s] on both axes
     return np.ascontiguousarray(e[::-1, ::-1])
 def rho_tensor(e):                # 180-deg rotation about z of every tensor
     o=np.array(e,dtype=complex)
-    o[...,0,2]*=-1; o[...,1,2]*=-1; o[...,2,0]*=-1; o[...,2,1]*=-1
+    o[...,0,2]*=-1
+    o[...,1,2]*=-1
+    o[...,2,0]*=-1
+    o[...,2,1]*=-1
     return o
 def upsample(ec,n): return np.repeat(np.repeat(np.asarray(ec),n,axis=0),n,axis=1)
 def cmp(tag,o_s,R_s,T_s,J_s,o_r,R_r,T_r,J_r):
@@ -34,7 +48,8 @@ def cmp(tag,o_s,R_s,T_s,J_s,o_r,R_r,T_r,J_r):
     dR=dT=0.
     for i,r in enumerate(np.asarray(o_s)):
         j=idx.get(tuple(int(v) for v in r))
-        if j is None: continue
+        if j is None:
+            continue
         dR=max(dR,float(np.max(np.abs(np.asarray(R_s)[:,i]-np.asarray(R_r)[:,j]))))
         dT=max(dT,float(np.max(np.abs(np.asarray(T_s)[:,i]-np.asarray(T_r)[:,j]))))
     dJ=float(np.max(np.abs(np.asarray(J_s)-np.asarray(J_r))))
