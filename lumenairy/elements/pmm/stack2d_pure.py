@@ -408,9 +408,6 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         Wsup, Vsup, _ls = _homog_region_modes(geom, eps_sup)
         Wsub, Vsub, _lb = _homog_region_modes(geom, eps_sub)
 
-        # Per-layer modes: uniform -> shared geom (cheap); patterned -> its own
-        # staggered eig, deduped across byte-identical cells (a DBR eigs each
-        # distinct layer once).
         # Per-layer modes: uniform SCALAR -> shared geom (cheap); patterned or
         # tensor -> its own staggered eig, deduped across byte-identical cells
         # (a DBR eigs each distinct layer once).  A layer whose tensor carries

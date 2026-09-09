@@ -178,12 +178,19 @@ _OOP_ROT_SIGN = -1.0
 #: Constant relating the out-of-plane generator's magnetic state ``G = i Z0 H``
 #: to the Eq.-25 tangential-H partner ``[H1; H2]`` that :func:`_region_modes`
 #: and :func:`_homog_region_modes` build for the in-plane regions and the
-#: half-spaces.  It cancels in a pure out-of-plane stack and does NOT cancel in
-#: a MIXED one, so it is applied in :func:`_region_modes_oop`.  DERIVED
-#: 2026-09-09 (build doc table T4): the in-plane-reduction gate drives the
-#: out-of-plane path on a cell whose cross terms are exactly zero and compares
-#: R/T/Jones against the Stage-A path; with -1j the two agree at ~1e-15, with
-#: +1j / +/-1 they disagree at O(1).
+#: half-spaces; applied in :func:`_region_modes_oop`.  It does NOT cancel
+#: anywhere -- not even in a single uniform out-of-plane slab between
+#: isotropic half-spaces, because the half-space partners are built by
+#: :func:`_homog_region_modes` in the Eq.-25 gauge and the interface match
+#: compares the two directly.  MEASURED 2026-09-09 (verify doc
+#: docs/audits/VERIFY_PMM2D_STAGGERED_OOP_2026_09_09.md): a uniform
+#: out-of-plane slab vs ``berreman_jones_1d`` reads dJones 1.5e-14 with -1j,
+#: 3.9e-02 with +1j, and O(1) with +/-1 (R+T = 3.69 / 11.94 -- the pure
+#: lossless-trap shape: on every +/-i arm R+T stays exactly 1).  Two gates
+#: hold it: that Berreman comparison and the in-plane-reduction gate (build
+#: doc table T4: cross terms exactly zero, shipped 3e-14 vs wrong gauge
+#: 2.2e-02..3.0e+02).  (An earlier note here claimed the constant cancels in
+#: a pure out-of-plane stack; that was refuted by the measurement above.)
 _OOP_H_GAUGE = -1j
 
 
@@ -1192,16 +1199,29 @@ def _region_modes_oop(solver: Granet2DTransverseE):
        L2 g1; L1 g2]`` with ``Ggram1 = L1^H L1``, ``Ggram2 = L2^H L2``, so its
        plain harmonic sums reproduce the Gram-weighted modal flux
        ``Sz = Im(e1^H Ggram1 g2 - e2^H Ggram2 g1)`` EXACTLY -- the PMM_ROADMAP
-       C-FLUX rule.  A split that does not come out exactly ``2 q^2 / 2 q^2``
-       raises rather than cascading a rank-deficient set.
+       C-FLUX rule.  The ``2 q^2 / 2 q^2`` count is pinned by a ``RuntimeError`` that the
+       selector's unconditional rebalance makes unreachable (see the note
+       at the end of this docstring).
 
     3. **The H gauge.**  The generator state carries ``G = i Z0 H`` while the
        Eq.-25 partner :func:`_region_modes` builds for the in-plane regions and
        the half-spaces is ``[H1; H2]`` itself, so the two differ by ONE global
-       constant.  It cancels in a pure out-of-plane stack and does NOT cancel
-       in a mixed one, so it is applied here (:data:`_OOP_H_GAUGE`) and gated by
-       the in-plane-reduction test, which drives the out-of-plane path on a cell
-       whose cross terms are exactly zero and compares against the Stage-A path.
+       constant (:data:`_OOP_H_GAUGE`).  It does not cancel in ANY stack --
+       the isotropic half-spaces always enter in the Eq.-25 gauge -- so it is
+       applied here and gated twice: a uniform out-of-plane slab against
+       ``berreman_jones_1d`` (dJones 1.5e-14 vs 3.9e-02 for the conjugate
+       gauge; see the constant's note) and the in-plane-reduction test, which
+       drives this path on a cell whose cross terms are exactly zero and
+       compares against the Stage-A path.
+
+    On the ``2 q^2 / 2 q^2`` check below: :func:`_select_forward_flux`
+    rebalances to EXACTLY ``2N`` unconditionally (its defensive tail ranks
+    every mode by a signed forwardness score), so a misclassified mode is
+    silently REBALANCED, never raised.  The ``RuntimeError`` is therefore a
+    contract pin on that selector's behaviour, unreachable while it holds
+    (verified 2026-09-09: 16 stressors -- a lossy metal in an out-of-plane
+    host, an on-cutoff walk, high contrast at M=8, 60-degree incidence -- all
+    split ``2 q^2 / 2 q^2`` BEFORE the rebalance, ``min Re(lam_f) >= -1.5e-14``).
     """
     if not solver.offplane:
         raise ValueError(
