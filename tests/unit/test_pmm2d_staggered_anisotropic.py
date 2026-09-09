@@ -960,49 +960,66 @@ def _oop_cell(stray):
     return c
 
 
-#: the message must NAME THE ALTERNATIVE, not merely mention the entry's own
-#: (prefix) name -- ``pmm_jones_2d`` is a substring of
-#: ``pmm_jones_2d_staggered``, so a bare ``match="pmm_jones_2d"`` would pass on
-#: the prefix alone and assert nothing.
-_NAMES_HYBRID = r"Use pmm_jones_2d \(the hybrid"
+def test_g10_out_of_plane_tensor_now_routes_to_the_generator():
+    """SUPERSEDED BY STAGE B (2026-09-09).  This gate used to assert that an
+    OUT-OF-PLANE cell raises ``NotImplementedError`` naming the hybrid; the
+    ``4 q^2`` first-order staggered generator now handles it, so the SAME
+    inputs must SOLVE, must be routed to the generator (``offplane`` True,
+    dimension ``4 q^2`` rather than ``2 q^2``), and must conserve energy on a
+    Hermitian tensor.  The out-of-plane gates themselves live in
+    ``tests/unit/test_pmm2d_staggered_oop.py``; what is asserted here is only
+    that the Stage-A REFUSAL is gone and the dispatch fires.
 
-
-def test_g10_out_of_plane_tensor_raises_and_names_the_hybrid():
-    with pytest.raises(NotImplementedError, match=_NAMES_HYBRID) as exc:
-        pmm_jones_2d_staggered(_P, _P, _oop_cell(0.4), 1.5, 1.0, _DEP, _WL,
-                               degree=5)
-    assert "OUT-OF-PLANE" in str(exc.value)
-    with pytest.raises(NotImplementedError, match=_NAMES_HYBRID):
-        PMM2DStackPure(_P, _P).add_layer(_DEP, eps_cell=_oop_cell(0.4))
-    # a genuinely tilted director (theta = 0.6 rad off z) is out of plane too
-    with pytest.raises(NotImplementedError, match=_NAMES_HYBRID):
-        PMM2DStackPure(_P, _P).add_layer(_DEP,
-                                         eps=uniaxial_tensor(1.5, 1.8, 0.6))
+    MEASURED 2026-09-09 (build doc T7): the (2,2) out-of-plane cell below
+    closes to 3.3e-08 at M=5; bar 1e-4, decades above the discretization at
+    this deliberately cheap degree and decades below any cascade failure."""
+    cell = _oop_cell(0.4)
+    k0 = 2.0 * np.pi / _WL
+    sol = Granet2DTransverseE(_P, _P, 2, 2, 5, cell, k0=k0)
+    assert sol.offplane is True
+    assert sol.dimtot == 4 * sol.q ** 2
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _o, R, T, J = pmm_jones_2d_staggered(_P, _P, cell, 1.5, 1.0, _DEP,
+                                             _WL, degree=5, n_orders=2)
+    assert np.all(np.isfinite(R)) and np.all(np.isfinite(T))
+    assert np.all(np.isfinite(J))
+    assert float(np.max(np.abs(R.sum(axis=1) + T.sum(axis=1) - 1))) < 1e-4
+    # the stack builder accepts it too, patterned AND uniform (a genuinely
+    # tilted director, theta = 0.6 rad off z)
+    PMM2DStackPure(_P, _P).add_layer(_DEP, eps_cell=cell)
+    PMM2DStackPure(_P, _P).add_layer(_DEP, eps=uniaxial_tensor(1.5, 1.8, 0.6))
 
 
 def test_g10_offplane_test_is_relative_not_strict():
     """A physically IN-PLANE cell built by ROTATING a diagonal tensor carries
     float noise in the xz/yz slots (``uniaxial_tensor(no, ne, pi/2, phi)`` has
-    ``cos(pi/2) = 6.1e-17``), so a strict ``> 0`` test would refuse every real
-    LC cell.  The floor is RELATIVE (1e-12 * tensor scale), shared verbatim
-    with the hybrid's ``_tile_is_offplane``.
+    ``cos(pi/2) = 6.1e-17``), so a strict ``> 0`` test would send every real LC
+    cell down the 1.3-2.0x costlier out-of-plane generator (and, before Stage
+    B, would have refused it outright).  The floor is RELATIVE (1e-12 * tensor
+    scale), shared verbatim with the hybrid's ``_tile_is_offplane``.
 
-    MEASURED 2026-09-09 (build doc T10): the largest off-plane entry of
+    MEASURED 2026-09-09 (build doc T10 / T4): the largest off-plane entry of
     ``uniaxial_tensor(1.5, 1.8, pi/2, 0.55)`` is 5.17e-17 against a tensor
-    scale of 2.970, i.e. a floor of 2.97e-12 -- 4.8 decades of margin -- so
-    the cell solves; a 1e-16 injected stray is likewise accepted and a 1e-3
-    one is refused.
+    scale of 2.970, i.e. a floor of 2.97e-12 -- 4.8 decades of margin -- so the
+    cell stays IN-PLANE; a 1e-16 injected stray likewise stays in-plane and
+    gives BYTE-IDENTICAL R/T (the two-arm form of "no additional work"), while
+    a 1e-3 one routes to the generator.
     """
     off = np.abs(_LC[[0, 1, 2, 2], [2, 2, 0, 1]]).max()
     assert 0.0 < off < 1e-12 * np.abs(_LC).max()      # genuinely nonzero noise
     _o, R, T, _J = pmm_jones_2d_staggered(_P, _P, _cell(_LC, _ISO), 1.5, 1.0,
                                           _DEP, _WL, degree=5, n_orders=2)
     assert np.isfinite(R.sum() + T.sum())
-    pmm_jones_2d_staggered(_P, _P, _oop_cell(1e-16), 1.5, 1.0, _DEP, _WL,
-                           degree=5, n_orders=2)
-    with pytest.raises(NotImplementedError):
-        pmm_jones_2d_staggered(_P, _P, _oop_cell(1e-3), 1.5, 1.0, _DEP, _WL,
-                               degree=5, n_orders=2)
+    k0 = 2.0 * np.pi / _WL
+    assert Granet2DTransverseE(_P, _P, 2, 2, 5, _oop_cell(1e-16),
+                               k0=k0).offplane is False
+    assert Granet2DTransverseE(_P, _P, 2, 2, 5, _oop_cell(1e-3),
+                               k0=k0).offplane is True
+    _o2, R2, T2, _J2 = pmm_jones_2d_staggered(_P, _P, _oop_cell(1e-16), 1.5,
+                                              1.0, _DEP, _WL, degree=5,
+                                              n_orders=2)
+    assert R.tobytes() == R2.tobytes() and T.tobytes() == T2.tobytes()
 
 
 def test_g10_zero_ezz_and_bad_shapes_raise():
@@ -1030,7 +1047,8 @@ def test_g10_scalar_entry_refuses_a_tensor_cell_and_names_the_jones_entry():
 def test_g10_shared_geometric_eig_refuses_a_tensor_assembly():
     """``_homog_geom_cache``'s eps-free split needs Meps33 = eps*G3 and
     Kzt = eps*Kzt0 to cancel; for a tensor they do not, so it must RAISE
-    rather than hand back a silently-wrong geometric basis."""
+    rather than hand back a silently-wrong geometric basis.  An OUT-OF-PLANE
+    assembly has no second-order operators at all, so it must raise too."""
     sol = Granet2DTransverseE(_P, _P, 2, 2, 4, _uniform(_LC),
                               k0=2 * np.pi / _WL)
     with pytest.raises(ValueError, match="uniform SCALAR"):
