@@ -1,0 +1,854 @@
+{
+ "lumenairy": "C:\\tmp\\lum_oopfast\\lumenairy\\__init__.py",
+ "version": "5.43.0",
+ "B0": [
+  {
+   "Nx": 2,
+   "M": 5,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 8.112398847555089e-17,
+   "mass_b": 8.112398847555089e-17,
+   "deriv_odd": 1.3877787807814442e-16
+  },
+  {
+   "Nx": 2,
+   "M": 6,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 1.6042290667695075e-16,
+   "mass_b": 1.6042290667695075e-16,
+   "deriv_odd": 6.588493719039979e-17
+  },
+  {
+   "Nx": 2,
+   "M": 7,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 8.021145333847526e-17,
+   "mass_b": 8.021145333847526e-17,
+   "deriv_odd": 1.1102230246251523e-16
+  },
+  {
+   "Nx": 2,
+   "M": 8,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 8.02114533384752e-17,
+   "mass_b": 8.02114533384752e-17,
+   "deriv_odd": 1.0331540248298866e-16
+  },
+  {
+   "Nx": 3,
+   "M": 5,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 8.112398847555089e-17,
+   "mass_b": 8.112398847555089e-17,
+   "deriv_odd": 1.3877787807814442e-16
+  },
+  {
+   "Nx": 3,
+   "M": 6,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 1.8047577001156958e-16,
+   "mass_b": 1.8047577001156958e-16,
+   "deriv_odd": 6.588493719039979e-17
+  },
+  {
+   "Nx": 3,
+   "M": 7,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 1.2031718000771288e-16,
+   "mass_b": 1.2031718000771288e-16,
+   "deriv_odd": 1.1102230246251523e-16
+  },
+  {
+   "Nx": 3,
+   "M": 8,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 1.203171800077128e-16,
+   "mass_b": 1.203171800077128e-16,
+   "deriv_odd": 1.0331540248298866e-16
+  },
+  {
+   "Nx": 4,
+   "M": 5,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 8.112398847555089e-17,
+   "mass_b": 8.112398847555089e-17,
+   "deriv_odd": 1.3877787807814442e-16
+  },
+  {
+   "Nx": 4,
+   "M": 6,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 1.6042290667695075e-16,
+   "mass_b": 1.6042290667695075e-16,
+   "deriv_odd": 6.588493719039979e-17
+  },
+  {
+   "Nx": 4,
+   "M": 7,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 8.021145333847526e-17,
+   "mass_b": 8.021145333847526e-17,
+   "deriv_odd": 1.1102230246251523e-16
+  },
+  {
+   "Nx": 4,
+   "M": 8,
+   "J2t": 0.0,
+   "J2b": 0.0,
+   "mass_t": 8.02114533384752e-17,
+   "mass_b": 8.02114533384752e-17,
+   "deriv_odd": 1.0331540248298866e-16
+  }
+ ],
+ "B2": [
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 2,
+   "M": 5,
+   "mount": "normal",
+   "dA": 5.837330329166149e-16,
+   "dB": 8.112398847555089e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 2,
+   "M": 5,
+   "mount": "normal",
+   "dA": 5.837330329166149e-16,
+   "dB": 8.112398847555089e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 2,
+   "M": 5,
+   "mount": "normal",
+   "dA": 5.936634483437806e-16,
+   "dB": 8.112398847555089e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 2,
+   "M": 5,
+   "mount": "normal",
+   "dA": 5.822820407743144e-16,
+   "dB": 8.112398847555089e-17,
+   "engaged": true
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 2,
+   "M": 6,
+   "mount": "normal",
+   "dA": 2.3063816432406405e-15,
+   "dB": 1.7385364302391424e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 2,
+   "M": 6,
+   "mount": "normal",
+   "dA": 2.3129458158607283e-15,
+   "dB": 1.7385364302391424e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 2,
+   "M": 6,
+   "mount": "normal",
+   "dA": 2.3522934455414544e-15,
+   "dB": 1.7385364302391424e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 2,
+   "M": 6,
+   "mount": "normal",
+   "dA": 2.3076421617736237e-15,
+   "dB": 1.7385364302391424e-16,
+   "engaged": true
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 2,
+   "M": 7,
+   "mount": "normal",
+   "dA": 1.3275208166062476e-15,
+   "dB": 5.795121434130461e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 2,
+   "M": 7,
+   "mount": "normal",
+   "dA": 1.875882129728165e-15,
+   "dB": 5.795121434130461e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 2,
+   "M": 7,
+   "mount": "normal",
+   "dA": 1.9077944706308708e-15,
+   "dB": 5.795121434130461e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 2,
+   "M": 7,
+   "mount": "normal",
+   "dA": 1.9382794593301728e-15,
+   "dB": 5.795121434130461e-17,
+   "engaged": true
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 2,
+   "M": 8,
+   "mount": "normal",
+   "dA": 3.0131844983676497e-15,
+   "dB": 1.1590242868260902e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 2,
+   "M": 8,
+   "mount": "normal",
+   "dA": 3.0131844983676497e-15,
+   "dB": 1.1590242868260902e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 2,
+   "M": 8,
+   "mount": "normal",
+   "dA": 3.064444526591594e-15,
+   "dB": 1.1590242868260902e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 2,
+   "M": 8,
+   "mount": "normal",
+   "dA": 3.1135521153175338e-15,
+   "dB": 1.1590242868260902e-16,
+   "engaged": true
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 3,
+   "M": 5,
+   "mount": "normal",
+   "dA": 1.5862952409924614e-15,
+   "dB": 8.112398847555089e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 3,
+   "M": 5,
+   "mount": "normal",
+   "dA": 2.499688150023572e-15,
+   "dB": 8.112398847555089e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 3,
+   "M": 5,
+   "mount": "normal",
+   "dA": 2.499688150023572e-15,
+   "dB": 8.112398847555089e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 3,
+   "M": 5,
+   "mount": "normal",
+   "dA": 2.42002681661969e-15,
+   "dB": 8.112398847555089e-17,
+   "engaged": true
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 3,
+   "M": 6,
+   "mount": "normal",
+   "dA": 4.123097838686877e-15,
+   "dB": 1.9558534840190355e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 3,
+   "M": 6,
+   "mount": "normal",
+   "dA": 4.277220166149246e-15,
+   "dB": 1.9558534840190355e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 3,
+   "M": 6,
+   "mount": "normal",
+   "dA": 4.277220166149246e-15,
+   "dB": 1.9558534840190355e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 3,
+   "M": 6,
+   "mount": "normal",
+   "dA": 3.703458278915677e-15,
+   "dB": 1.9558534840190355e-16,
+   "engaged": true
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 3,
+   "M": 7,
+   "mount": "normal",
+   "dA": 2.566823993182286e-15,
+   "dB": 9.779267420095152e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 3,
+   "M": 7,
+   "mount": "normal",
+   "dA": 5.810864252513079e-15,
+   "dB": 9.779267420095152e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 3,
+   "M": 7,
+   "mount": "normal",
+   "dA": 5.810864252513079e-15,
+   "dB": 9.779267420095152e-17,
+   "engaged": true
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 3,
+   "M": 7,
+   "mount": "normal",
+   "dA": 8.327297085607212e-15,
+   "dB": 9.779267420095152e-17,
+   "engaged": true
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 3,
+   "M": 8,
+   "mount": "normal",
+   "dA": 4.788649778191388e-15,
+   "dB": 1.3039023226793516e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 3,
+   "M": 8,
+   "mount": "normal",
+   "dA": 1.1450722402210163e-14,
+   "dB": 1.3039023226793516e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 3,
+   "M": 8,
+   "mount": "normal",
+   "dA": 1.1450722402210163e-14,
+   "dB": 1.3039023226793516e-16,
+   "engaged": true
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 3,
+   "M": 8,
+   "mount": "normal",
+   "dA": 1.4814389059895016e-14,
+   "dB": 1.3039023226793516e-16,
+   "engaged": true
+  },
+  {
+   "cell": "OFF-CENTRE pillar",
+   "Nx": 2,
+   "M": 6,
+   "mount": "normal",
+   "dA": 0.6948242133394762,
+   "dB": 1.7385364302391424e-16,
+   "engaged": false
+  },
+  {
+   "cell": "parity-BREAKING tensor",
+   "Nx": 2,
+   "M": 6,
+   "mount": "normal",
+   "dA": 0.06168912525629805,
+   "dB": 1.7385364302391424e-16,
+   "engaged": false
+  },
+  {
+   "cell": "uniform, OBLIQUE 25",
+   "Nx": 2,
+   "M": 6,
+   "mount": "oblique",
+   "dA": null,
+   "dB": null,
+   "engaged": false
+  },
+  {
+   "cell": "uniform, CONICAL 25/40",
+   "Nx": 2,
+   "M": 6,
+   "mount": "conical",
+   "dA": null,
+   "dB": null,
+   "engaged": false
+  },
+  {
+   "cell": "OFF-CENTRE pillar",
+   "Nx": 3,
+   "M": 6,
+   "mount": "normal",
+   "dA": 0.5768317010177365,
+   "dB": 1.9558534840190355e-16,
+   "engaged": false
+  },
+  {
+   "cell": "parity-BREAKING tensor",
+   "Nx": 3,
+   "M": 6,
+   "mount": "normal",
+   "dA": 0.2889940754821111,
+   "dB": 1.9558534840190355e-16,
+   "engaged": false
+  },
+  {
+   "cell": "uniform, OBLIQUE 25",
+   "Nx": 3,
+   "M": 6,
+   "mount": "oblique",
+   "dA": null,
+   "dB": null,
+   "engaged": false
+  },
+  {
+   "cell": "uniform, CONICAL 25/40",
+   "Nx": 3,
+   "M": 6,
+   "mount": "conical",
+   "dA": null,
+   "dB": null,
+   "engaged": false
+  }
+ ],
+ "B2_envelope": {
+  "carrying": [
+   5.822820407743144e-16,
+   1.4814389059895016e-14
+  ],
+  "carryingB": [
+   5.795121434130461e-17,
+   1.9558534840190355e-16
+  ],
+  "violating": [
+   0.06168912525629805,
+   0.6948242133394762
+  ]
+ },
+ "B1": [
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 2,
+   "M": 5,
+   "dR": 1.949829186997931e-15,
+   "dT": 1.9984014443252818e-14,
+   "dJones": 4.175029305636037e-15,
+   "d_eigset": 2.95339595796912e-13,
+   "gam_ratio": 0.09451234513120184
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 2,
+   "M": 5,
+   "dR": 2.8796409701215e-16,
+   "dT": 1.0103029524088925e-14,
+   "dJones": 4.004987763513992e-15,
+   "d_eigset": 1.5099464128171017e-13,
+   "gam_ratio": 0.03309504140338382
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 2,
+   "M": 5,
+   "dR": 1.2685165418080402e-16,
+   "dT": 1.3655743202889425e-14,
+   "dJones": 2.666856247884725e-15,
+   "d_eigset": 1.3298131604892626e-13,
+   "gam_ratio": 0.025991423845999086
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 2,
+   "M": 5,
+   "dR": 3.608224830031759e-16,
+   "dT": 7.66053886991358e-15,
+   "dJones": 2.141241923243813e-15,
+   "d_eigset": 1.7142574352277337e-13,
+   "gam_ratio": 0.04534433535201318
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 2,
+   "M": 6,
+   "dR": 6.869504964868156e-16,
+   "dT": 1.887379141862766e-14,
+   "dJones": 2.0474191408338124e-15,
+   "d_eigset": 7.360744525183169e-13,
+   "gam_ratio": 0.057143907904551164
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 2,
+   "M": 6,
+   "dR": 5.828670879282072e-16,
+   "dT": 1.5654144647214707e-14,
+   "dJones": 3.877276265585395e-15,
+   "d_eigset": 7.416990976508107e-13,
+   "gam_ratio": 0.019385798590144426
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 2,
+   "M": 6,
+   "dR": 2.321060010856968e-15,
+   "dT": 3.197442310920451e-14,
+   "dJones": 8.495158895061902e-15,
+   "d_eigset": 5.662533923573132e-13,
+   "gam_ratio": 0.0148416050132023
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 2,
+   "M": 6,
+   "dR": 6.869504964868156e-16,
+   "dT": 4.6629367034256575e-15,
+   "dJones": 4.866209487761882e-15,
+   "d_eigset": 9.740051895598896e-13,
+   "gam_ratio": 0.03115139509303388
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 2,
+   "M": 7,
+   "dR": 6.175615574477433e-16,
+   "dT": 1.5765166949677223e-14,
+   "dJones": 4.687530026013648e-15,
+   "d_eigset": 1.417532801575438e-12,
+   "gam_ratio": 0.04142971032246903
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 2,
+   "M": 7,
+   "dR": 1.3634926521177704e-15,
+   "dT": 3.708144902248023e-14,
+   "dJones": 7.37081779887894e-15,
+   "d_eigset": 1.9744654321697935e-12,
+   "gam_ratio": 0.01563216260107861
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 2,
+   "M": 7,
+   "dR": 2.2273849431542203e-15,
+   "dT": 1.865174681370263e-14,
+   "dJones": 1.1908178646505765e-14,
+   "d_eigset": 6.945683008785566e-12,
+   "gam_ratio": 0.004104787263580453
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 2,
+   "M": 7,
+   "dR": 1.9671764217576992e-15,
+   "dT": 2.3314683517128287e-14,
+   "dJones": 1.597061615383615e-14,
+   "d_eigset": 1.6962037972904961e-12,
+   "gam_ratio": 0.023670997236724195
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 3,
+   "M": 5,
+   "dR": 4.871103520542874e-15,
+   "dT": 8.881784197001252e-15,
+   "dJones": 1.1091124765568894e-14,
+   "d_eigset": 3.101953569905381e-13,
+   "gam_ratio": 0.05231020368203185
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 3,
+   "M": 5,
+   "dR": 2.14064876935538e-15,
+   "dT": 1.942890293094024e-14,
+   "dJones": 1.2777971828772341e-14,
+   "d_eigset": 3.678663734752948e-13,
+   "gam_ratio": 0.016961968424350743
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 3,
+   "M": 5,
+   "dR": 1.294103713078698e-15,
+   "dT": 1.021405182655144e-14,
+   "dJones": 1.3942243131953605e-14,
+   "d_eigset": 3.554948587917538e-13,
+   "gam_ratio": 0.016076021293891456
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 3,
+   "M": 5,
+   "dR": 7.641456911677835e-16,
+   "dT": 8.326672684688674e-15,
+   "dJones": 7.581502924700524e-15,
+   "d_eigset": 3.082255409588507e-13,
+   "gam_ratio": 0.020970719233403056
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 3,
+   "M": 6,
+   "dR": 4.53109771925142e-15,
+   "dT": 4.984901380566953e-14,
+   "dJones": 1.1132485965423786e-14,
+   "d_eigset": 2.5197814303953263e-12,
+   "gam_ratio": 0.03945185289313692
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 3,
+   "M": 6,
+   "dR": 1.2663481374630692e-15,
+   "dT": 2.7755575615628914e-14,
+   "dJones": 7.764842410055592e-15,
+   "d_eigset": 1.9380053518541123e-12,
+   "gam_ratio": 0.015273105095346115
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 3,
+   "M": 6,
+   "dR": 1.6289053439422219e-15,
+   "dT": 4.2521541843143495e-14,
+   "dJones": 1.1988388290785022e-14,
+   "d_eigset": 1.941567806633156e-12,
+   "gam_ratio": 0.014743008276175642
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 3,
+   "M": 6,
+   "dR": 2.1892210266827306e-15,
+   "dT": 6.619704784327496e-15,
+   "dJones": 9.970174039133895e-15,
+   "d_eigset": 1.843918921743504e-12,
+   "gam_ratio": 0.017502625513903313
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 3,
+   "M": 7,
+   "dR": 2.9837243786801082e-15,
+   "dT": 7.527312106958561e-14,
+   "dJones": 8.518163562678969e-15,
+   "d_eigset": 1.83511122759002e-12,
+   "gam_ratio": 0.027369679757785505
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 3,
+   "M": 7,
+   "dR": 3.5006719745211967e-15,
+   "dT": 2.6423307986078726e-14,
+   "dJones": 2.118450963928975e-14,
+   "d_eigset": 3.561603724259484e-12,
+   "gam_ratio": 0.010756239752315138
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 3,
+   "M": 7,
+   "dR": 2.2013640910145682e-15,
+   "dT": 1.6486811915683575e-13,
+   "dJones": 2.1113486469731434e-14,
+   "d_eigset": 3.295320015198478e-12,
+   "gam_ratio": 0.010371264468437775
+  },
+  {
+   "cell": "centro LOSSY",
+   "Nx": 3,
+   "M": 7,
+   "dR": 4.701100619897147e-15,
+   "dT": 6.52811138479592e-14,
+   "dJones": 2.6142468398874567e-14,
+   "d_eigset": 4.180252768957886e-12,
+   "gam_ratio": 0.012312129818598317
+  }
+ ],
+ "B1_worst": {
+  "dR": 4.871103520542874e-15,
+  "dT": 1.6486811915683575e-13,
+  "dJones": 2.6142468398874567e-14,
+  "d_eigset": 6.945683008785566e-12,
+  "gam_lo": 0.004104787263580453,
+  "gam_hi": 0.09451234513120184
+ },
+ "B3": [
+  {
+   "case": "OFF-CENTRE pillar",
+   "Nx": 2,
+   "M": 6,
+   "mount": "normal",
+   "sha_on": "5ea862fb24f5796a",
+   "sha_off": "5ea862fb24f5796a",
+   "identical": true,
+   "dA": 0.6948242133394762,
+   "engaged": false
+  },
+  {
+   "case": "OFF-CENTRE pillar",
+   "Nx": 3,
+   "M": 6,
+   "mount": "normal",
+   "sha_on": "3fbe1cd4cb0c27bd",
+   "sha_off": "3fbe1cd4cb0c27bd",
+   "identical": true,
+   "dA": 0.5768317010177365,
+   "engaged": false
+  },
+  {
+   "case": "parity-BREAKING tensor",
+   "Nx": 2,
+   "M": 6,
+   "mount": "normal",
+   "sha_on": "56c5bae0e71fc0b6",
+   "sha_off": "56c5bae0e71fc0b6",
+   "identical": true,
+   "dA": 0.06168912525629805,
+   "engaged": false
+  },
+  {
+   "case": "parity-BREAKING tensor",
+   "Nx": 3,
+   "M": 6,
+   "mount": "normal",
+   "sha_on": "507c26aab6be8014",
+   "sha_off": "507c26aab6be8014",
+   "identical": true,
+   "dA": 0.2889940754821111,
+   "engaged": false
+  },
+  {
+   "case": "uniform, OBLIQUE 25",
+   "Nx": 2,
+   "M": 6,
+   "mount": "oblique",
+   "sha_on": "03441a6110e44860",
+   "sha_off": "03441a6110e44860",
+   "identical": true,
+   "dA": null,
+   "engaged": false
+  },
+  {
+   "case": "centro pillar, CONICAL 25/40",
+   "Nx": 3,
+   "M": 6,
+   "mount": "conical",
+   "sha_on": "d2795d6395a64383",
+   "sha_off": "d2795d6395a64383",
+   "identical": true,
+   "dA": null,
+   "engaged": false
+  }
+ ],
+ "B5": [
+  {
+   "case": "OFF-CENTRE pillar",
+   "Nx": 2,
+   "M": 6,
+   "dA": 0.6948242133394762,
+   "forced": true,
+   "d_eigset": 0.4315039236595299
+  },
+  {
+   "case": "OFF-CENTRE pillar",
+   "Nx": 3,
+   "M": 6,
+   "dA": 0.5768317010177365,
+   "forced": true,
+   "d_eigset": 0.2534139673450717
+  },
+  {
+   "case": "parity-BREAKING tensor",
+   "Nx": 2,
+   "M": 6,
+   "dA": 0.06168912525629805,
+   "forced": true,
+   "d_eigset": 0.05066802273326111
+  },
+  {
+   "case": "parity-BREAKING tensor",
+   "Nx": 3,
+   "M": 6,
+   "dA": 0.2889940754821111,
+   "forced": true,
+   "d_eigset": 0.12396999298962896
+  },
+  {
+   "case": "uniform, OBLIQUE 25",
+   "Nx": 2,
+   "M": 6,
+   "gauge": null
+  },
+  {
+   "case": "centro pillar, CONICAL 25/40",
+   "Nx": 3,
+   "M": 6,
+   "gauge": null
+  }
+ ]
+}
