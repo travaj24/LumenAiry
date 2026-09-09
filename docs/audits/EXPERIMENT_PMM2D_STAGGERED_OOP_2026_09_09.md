@@ -20,7 +20,7 @@ python started and asserted `lumenairy.__file__` --
 
 | candidate | dimension | eig | verdict |
 |---|---|---|---|
-| **(a)** first-order staggered generator on `[E1; E2; G1; G2]` | `4 q^2` | Cholesky-whitened standard eig | **GO** |
+| **(a)** first-order staggered generator on `[E1; E2; G1; G2]` | `4 q^2` | Cholesky-whitened standard eig | **GO, with one measured open item** |
 | **(d)** quadratic E-form keeping `div(D) = 0`, linearized | `6 q^2` | QZ (singular leading coefficient) | **PARTIAL -- correct but strictly dominated** |
 
 The two are the SAME discretization: candidate (d)'s spectrum is candidate
@@ -65,6 +65,21 @@ carries only 4 of its 18 harmonics per axis to 1e-8 (S5 T1b).  The gate was
 re-derived per harmonic with an M-ladder, which is sharper, and the census was
 re-run against the DISCRETE channel wavenumbers so that "unresolved harmonic"
 and "spurious mode" stop being conflated.
+
+**The one open item, measured and localized (S9.2 / S9.3).**  On a `(3,3)`
+cell whose feature has a RE-ENTRANT 270-degree corner, the prototype departs
+from both 2-D oracles by **2.2e-03** on `sum R`, while the IN-PLANE control on
+the SAME cell -- the shipped discretization, same walls, same corner -- agrees
+at **3.5e-05**.  On a CONVEX feature the two arms are indistinguishable
+(1.80e-04 vs 1.89e-04).  So the effect is attributable to the out-of-plane
+coupling AND to the re-entrant corner, jointly, and to nothing else: every
+uniform (M2, 1e-15), straight-walled (M4, 2.7e-06) and convex (M5, 4e-05)
+regime is clean.  Which arm is RIGHT is not settled here -- both Fourier
+oracles share `rcwa._core._layer_eigenmodes_tensor`, so their mutual agreement
+is not independent about the out-of-plane blocks, and neither is converged on
+that cell.  A converged reference on a re-entrant-corner out-of-plane cell is
+the first thing the integration must produce, and the M9 control is the shape
+of that gate.
 
 **One physics degeneracy will trap the integration's tests if it is not
 written down.**  The dispersion relation is invariant under `eps -> eps^T`, so
@@ -773,6 +788,108 @@ Eleven and six decades of contrast: the staggered result does not depend on the
 far-field order count, and the hybrid's does.  This is the property the pure
 solver exists for, and the out-of-plane path keeps it.
 
+### M8 -- a (3,3) grid with a RE-ENTRANT corner
+
+`m8_nx3_grid.py`.  Same physics, but the feature is an L of three
+tilted-uniaxial pixels in a `(3,3)` cell -- non-centro-symmetric AND carrying a
+RE-ENTRANT 270-degree corner, where the field singularity is far stronger than
+at the convex corners of the M5 pillar.  This is the hardest cell in the whole
+probe, and it is hard for EVERY engine:
+
+| incidence | rcwa(7) abs(R+T-1) | hybrid(11) abs(R+T-1) | ORACLE SPREAD rcwa(7) vs hyb(11) | staggered (a) M=6 vs hyb / vs rcwa | staggered own abs(R+T-1) | fwd/bwd |
+|---|---|---|---|---|---|---|
+| normal | 3.6e-14 | **2.45e-03** | 2.32e-03 over R AND T (1.65e-04 on R alone, M9) | 2.20e-03 / 2.33e-03 | **1.32e-07** | 450/450 |
+| conical 20/35 | 5.9e-14 | **2.05e-03** | 1.80e-03 over R AND T | 1.04e-03 / 1.29e-03 | **6.09e-09** | 450/450 |
+
+Read this honestly.  The staggered arm departs from both oracles by
+1 - 2.2e-03 here, an order of magnitude above the 1.65e-04 the two oracles
+agree with each other to on `R`.  Its own energy closure is 4 - 6 decades
+better than the hybrid's (which violates its lossless closure by 2.4e-03 on
+this cell even with `stabilize=True`), but energy closure does not prove
+per-order correctness -- the lossless-trap rule -- so nothing here arbitrates
+which arm is right.  **This is the one place in the whole probe where the
+prototype does not sit at or below the oracles' spread, and M9 attributes it.**
+Candidates (a) and (d) agree with each other to the printed digits in every
+row, so whatever it is, it is in the shared assembly, not in either
+formulation.
+
+### POSITION INVARIANCE -- exact
+
+Cyclically shifting the L inside the cell must leave the totals unchanged (a
+property of the shipped basis; the tensor blocks must not break it):
+
+| incidence | shift (0,0) | (1,0) | (1,2) | (2,2) |
+|---|---|---|---|---|
+| normal, sum R = 0.03766911 / 0.03864194 | 0 | **2.34e-14** | **3.84e-14** | **5.13e-14** |
+| conical, sum R = 0.02543442 / 0.02988967 | 0 | **6.11e-15** | **4.45e-14** | **3.13e-14** |
+
+The out-of-plane blocks preserve position invariance exactly.  A mis-placed
+`A13` / `A31` (or a `K13` / `K23` on the wrong axis) would break this, because
+the mixed masses that carry them are the ones whose stencils move with the
+feature.
+
+### M9 -- attributing the (3,3) disagreement
+
+`m9_corner_control.py`.  The control is simple: run the SAME cells with the
+out-of-plane entries ZEROED, so the staggered arm becomes the SHIPPED in-plane
+discretization (probe candidate `eform`, proved bit-identical to
+`Granet2DTransverseE` in M0.3 / M3 T3) and the oracles run their in-plane
+paths.  If the disagreement survives, it is the CORNER.  A CONVEX single-pixel
+feature on the same `(3,3)` grid is the second arm.  All rows are `sum R`,
+normal incidence, and the spread column is `max abs(rcwa(7) - hybrid(11))` on
+`R` alone.
+
+| cell | tensor | oracle spread | staggered M=6 vs hybrid(11) | vs rcwa(7) | staggered own abs(R+T-1) |
+|---|---|---|---|---|---|
+| CONVEX single pixel | out-of-plane | 1.34e-04 | **1.80e-04** | 3.14e-04 | 2.63e-08 |
+| CONVEX single pixel | IN-PLANE control | 1.39e-04 | **1.89e-04** | 3.27e-04 | 2.68e-08 |
+| L, RE-ENTRANT corner | out-of-plane | 1.65e-04 | **2.20e-03** | 2.33e-03 | 1.32e-07 |
+| L, RE-ENTRANT corner | IN-PLANE control | 1.91e-04 | **3.47e-05** | 2.25e-04 | 1.26e-07 |
+
+**The attribution is clean, and it is a NEGATIVE.**
+
+* On a CONVEX feature the out-of-plane arm and the in-plane arm behave
+  IDENTICALLY (1.80e-04 vs 1.89e-04 against the hybrid; 3.14e-04 vs 3.27e-04
+  against rcwa).  The out-of-plane terms cost nothing there -- consistent with
+  M5's convex pillar (4e-05) and M4's straight-walled stripe (2.7e-06).
+* On the RE-ENTRANT corner the in-plane arm agrees at **3.47e-05** while the
+  out-of-plane arm departs by **2.20e-03** -- a factor of **63** attributable
+  to the out-of-plane coupling AND to that corner alone.
+
+**What is NOT settled: which arm is right.**  Two things forbid concluding
+that the prototype is the wrong one:
+
+1. `rcwa_jones_2d` and `pmm_jones_2d` both route their tensor layer through
+   `rcwa._core._layer_eigenmodes_tensor`, so their mutual agreement at 1.65e-04
+   is NOT independent evidence about the out-of-plane blocks -- precisely the
+   circular-oracle structure `AUDIT_OOP_GENERATOR_FACTOR_I_2026_07_14` records;
+2. neither Fourier arm is converged on this cell: rcwa's own 5 -> 7 movement is
+   1.17e-04 (out-of-plane) and 1.07e-04 (in-plane), and a re-entrant corner is
+   the slowest-converging feature there is for a Fourier basis, while the
+   hybrid violates its lossless closure by 2.4e-03 on the same cell.
+
+Meanwhile the staggered arm's own M-ladder moves only 3e-05 from M = 4 to
+M = 6 and its energy closure reaches 1.3e-07, so it is internally converged --
+which, by the lossless-trap rule, still proves nothing about per-order
+correctness.
+
+**Mechanism, hypothesised and NOT yet measured.**  At a re-entrant corner the
+field singularity is strongest, and with `e31, e32 != 0` the continuity of
+`D_z = e31 Ex + e32 Ey + e33 Ez` couples the x-discontinuous `E1` and the
+y-discontinuous `E2` into the CONTINUOUS `E3` at the corner node -- a
+constraint the staggered Li placement (designed for the in-plane case, where
+`E3`'s continuity involves `E3` alone) does not represent exactly there.  The
+same argument predicts no effect at a convex corner, where only one wall meets
+the reentrancy, and that is what the table shows.
+
+**This is the one open item the integration must carry as a gate**: a
+converged reference on a re-entrant-corner out-of-plane cell (a high-order
+`rcwa_jones_2d` ladder, or a staircase-refined staggered cell) to decide which
+arm is right, and -- if the prototype is the one in error -- a corner
+treatment.  It does not block the four gating measurements (M1, M2, M4, M6),
+and it does not touch the uniform, straight-walled or convex regimes, which is
+where a tilted-LC device cell actually lives.
+
 ---
 
 ## S10.  M6 -- cascade stability and energy closure
@@ -924,10 +1041,15 @@ measurement.*
 | **M6 cascade** | closure must be small AND not drift with depth; growth factor must not exceed 1 | closure **1e-13** (uniform) / **2.7e-06 at M=7** (corner pillar) at 0.25, 1 AND 3 wavelengths; growth **1.0000e+00** everywhere; split exactly 2q^2/2q^2 in every row | identical |
 | **spurious census** | empty, or bounded and priced | **BENIGN**: everything off-branch is deep-evanescent (`min Re(lam) 5.75`, i.e. 10x the `_select_forward_flux` deep-decay bar) and flux-null at **2.1e-14** relative | **PRICED**: additionally `q^2` modes at `q = 0` carrying up to **1.6e-01** relative flux, which are neither flux-null nor decay-classified and MUST be removed by an explicit `abs(q)` filter before the split |
 | **M3 in-plane reduction** (not a gate, but the plan asks) | equivalent vs merely convergent | **EQUIVALENT** (1e-11 spectra, 1e-15 observables) | **EQUIVALENT, and BIT-IDENTICAL at the operator level** |
+| **M9 corner attribution** (not a gate; found by this probe) | the in-plane arm on the SAME cell | **FAILS on a RE-ENTRANT corner**: 2.20e-03 vs the in-plane control's 3.47e-05 on the same cell (63x); CLEAN on a convex feature (1.80e-04 vs 1.89e-04) | identical to (a) -- it is in the shared assembly, not the formulation |
 
-**Candidate (a): GO.**  Every gate passes with 10 to 12 decades between the
-measurement and its negative control, and the census is benign under
-machinery the library already ships.
+**Candidate (a): GO, with one measured open item.**  All four gating
+measurements pass with 10 to 12 decades between the measurement and their
+negative controls, and the census is benign under machinery the library
+already ships.  The open item is S9.3's re-entrant-corner discrepancy
+(2.2e-03 against 3.5e-05 for the in-plane control on the same cell), which
+falls outside the four gates but must be resolved -- and gated -- before the
+route is taken to production; the M9 control is that gate's shape.
 
 **Candidate (d): PARTIAL.**  It passes the same four gates with the same
 numbers -- M1 T2b shows it IS candidate (a)'s spectrum plus a null space -- so
@@ -1009,7 +1131,9 @@ can be replaced by one `2 q^2` eig with
 the same verify-then-use way.
 
 **Gates the integration should carry** (all measured here, so their bars are
-derived): M1 T3 sign arbitration; M2 against `berreman_jones_1d` for a
+derived): **M9's corner control FIRST** -- an out-of-plane cell with a
+re-entrant corner against a CONVERGED reference, with the in-plane arm on the
+same cell as the two-sided half; then M1 T3 sign arbitration; M2 against `berreman_jones_1d` for a
 uniform OOP layer at normal / oblique / conical, INCLUDING a non-reciprocal
 tensor and a director azimuth different from the incidence azimuth (S6); M3's
 bit-identity reduction to the scalar path; M4's per-order agreement with

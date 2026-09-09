@@ -25,17 +25,19 @@ python validation/probe_pmm2d_staggered_oop/m5_pillar_2d.py
 python validation/probe_pmm2d_staggered_oop/m6_cascade.py
 python validation/probe_pmm2d_staggered_oop/m7_cost.py
 python validation/probe_pmm2d_staggered_oop/m8_nx3_grid.py
+python validation/probe_pmm2d_staggered_oop/m9_corner_control.py
 ```
 
 or all of them:
 
 ```bash
-bash validation/probe_pmm2d_staggered_oop/run_all.sh m0 m1 m2 m3 m4 m5 m6 m7 m8
+bash validation/probe_pmm2d_staggered_oop/run_all.sh m0 m1 m2 m3 m4 m5 m6 m7 m8 m9
 ```
 
 Logs land in `validation/probe_pmm2d_staggered_oop/logs/`, JSON summaries in
 `validation/probe_pmm2d_staggered_oop/results/`.  Total wall time on
-tesla-ryzen (single-threaded): ~25 min, the M1 and M5 ladders dominating.
+tesla-ryzen (single-threaded): ~90 min, the M2, M5 and M8 ladders
+dominating (the 2-D Fourier oracles at high truncation are most of it).
 
 ## Files
 
@@ -51,6 +53,7 @@ tesla-ryzen (single-threaded): ~25 min, the M1 and M5 ladders dominating.
 | `m6_cascade.py` | M6: cascade stability on a depth ladder (0.25 / 1 / 3 wavelengths) + energy closure |
 | `m7_cost.py` | M7: dimension and eig wall time vs the in-plane path; the normal-incidence anti-commuting-involution structure |
 | `m8_nx3_grid.py` | M8: a (3,3) grid with a non-centro-symmetric OOP feature vs both 2-D oracles, plus position invariance |
+| `m9_corner_control.py` | M9: attributing M8's disagreement -- the same cells with the OOP entries zeroed (so the staggered arm is the SHIPPED in-plane discretization), and a convex feature as the second arm |
 | `run_all.sh` | driver |
 
 ## Mount
