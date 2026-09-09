@@ -55,6 +55,9 @@ CELLS["oop_uniaxial_pillar"] = c2
 c3 = np.full((2, 2), 1.0 + 0j)
 c3[0, 0] = 12.0
 CELLS["high_contrast_eps12"] = c3
+c4 = np.full((2, 2), 1.0 + 0j)
+c4[0, 0] = 4.0 + 0.6j            # PUBLIC convention Im(eps) > 0 = loss
+CELLS["lossy_pillar"] = c4
 
 
 def census(cell, slant, M, kx0, ky0):
@@ -107,7 +110,7 @@ res["T5a_census"] = rows
 
 print("\nT5b  CASCADE vs DEPTH (lossless)")
 rows = []
-for cname in ("scalar_pillar_eps4", "oop_uniaxial_pillar"):
+for cname in ("scalar_pillar_eps4", "oop_uniaxial_pillar", "lossy_pillar"):
     cell = CELLS[cname]
     for sname, sl in (("vertical", (0.0, 0.0)), ("x36.9", (0.75, 0.0)),
                       ("diag45", (1.0, 1.0))):
@@ -169,6 +172,36 @@ for cname in ("scalar_pillar_eps4", "oop_uniaxial_pillar"):
             print(f"  {cname:22s} {sname:8s} {mount:12s} dR {row['dR']:.2e} "
                   f"dT {row['dT']:.2e} dJr {row['dJr']:.2e}")
 res["T5c_split"] = rows
+
+print("\nT5d  NO-FLOOR: does the far-field order count move a SLANTED answer?")
+rows = []
+for cname in ("scalar_pillar_eps4", "oop_uniaxial_pillar"):
+    cell = CELLS[cname]
+    for sname, sl in (("x36.9", (0.75, 0.0)), ("diag45", (1.0, 1.0))):
+        for mount, (th, ph) in (("normal", (0.0, 0.0)),
+                                ("conical20_35", (np.deg2rad(20),
+                                                  np.deg2rad(35)))):
+            base = None
+            row = {"cell": cname, "slant": sname, "mount": mount}
+            for no in (3, 5, 8):
+                o, R, T, Jr, _Jt, _i = solve_slant_stack(
+                    PX, PY, [{"thickness": 0.5, "cell": cell, "slant": sl}],
+                    NSUP, NSUB, WL, M=5, n_orders=no, theta=th, phi=ph)
+                idx = {(int(m), int(n)): i for i, (m, n) in enumerate(o)}
+                v = {k: (float(R[0, idx[k]]), float(T[0, idx[k]]))
+                     for k in ((0, 0), (1, 0), (0, 1), (-1, 0))}
+                if base is None:
+                    base, jbase = v, Jr
+                else:
+                    row[f"move_n{no}"] = max(
+                        max(abs(a - b) for a, b in zip(v[k], base[k]))
+                        for k in v)
+                    row[f"dJ_n{no}"] = float(np.max(np.abs(Jr - jbase)))
+            rows.append(row)
+            print(f"  {cname:22s} {sname:8s} {mount:12s} "
+                  f"n_orders 3->5 {row['move_n5']:.2e} (dJ {row['dJ_n5']:.1e})"
+                  f"  3->8 {row['move_n8']:.2e} (dJ {row['dJ_n8']:.1e})")
+res["T5d_no_floor"] = rows
 
 res["wall_s"] = time.time() - t00
 with open(os.path.join(OUT, "m5_census_cascade.json"), "w") as f:

@@ -121,27 +121,28 @@ for M in (5, 6, 7):
           f"-> {tsl / tv:.2f}x")
 res["T6b_end_to_end"] = rows
 
-print("\nT6c  staircase equivalence (from M4)")
+print("\nT6c  staircase equivalence (read back from M4b)")
 try:
-    m4 = json.load(open(os.path.join(OUT, "m4_pillar.json")))
+    m4b = json.load(open(os.path.join(OUT, "m4b_staircase_ladder.json")))
     eq = {}
-    for key, blk in m4.items():
-        if not isinstance(blk, dict) or "metric_N8_M5" not in blk:
+    for key, blk in m4b.items():
+        if not isinstance(blk, dict) or "metric" not in blk:
             continue
-        met_t = blk["metric_N8_M5"]["t_s"]
-        stair = {k: v for k, v in blk.items()
-                 if k.startswith("stair_") and isinstance(v, dict)}
-        eq[key] = {"metric_t_s": met_t,
-                   "stair": {k: {"vs_metric": v["vs_metric"], "t_s": v["t_s"],
-                                 "cost_ratio": v["t_s"] / met_t}
-                             for k, v in stair.items()}}
+        met_t = blk["metric"]["t_s"]
+        eq[key] = {"metric_t_s": met_t, "h": blk["h"], "stair": {}}
+        for k, v in blk.items():
+            if not k.startswith("n") or not isinstance(v, dict):
+                continue
+            eq[key]["stair"][k] = {"vs_metric": v["vs_metric"],
+                                   "t_s": v["t_s"],
+                                   "cost_ratio": v["t_s"] / met_t}
         print(f"  {key}: metric {met_t:.1f}s; " + "; ".join(
-            f"{k} {v['vs_metric']:.2e} @ {v['t_s'] / met_t:.2f}x"
+            f"{k} {v['vs_metric']:.2e} @ {v['cost_ratio']:.2f}x"
             for k, v in eq[key]["stair"].items()))
     res["T6c_staircase"] = eq
 except FileNotFoundError:
-    res["T6c_staircase"] = "m4_pillar.json not present -- run m4 first"
-    print("  (m4_pillar.json not present)")
+    res["T6c_staircase"] = "m4b_staircase_ladder.json not present -- run it first"
+    print("  (m4b_staircase_ladder.json not present)")
 
 res["wall_s"] = time.time() - t00
 with open(os.path.join(OUT, "m6_cost.json"), "w") as f:

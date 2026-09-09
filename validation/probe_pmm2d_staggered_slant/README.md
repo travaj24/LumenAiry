@@ -34,10 +34,15 @@ cd /c/tmp/lum_slantp && PYTHONPATH=/c/tmp/lum_slantp \
 | `m3d_tm_deep_ladder.py` | M3d -- TM/TE M-ladder to M = 10, slant 0 vs 35 deg | S4.3 |
 | `m4_pillar.py` | M4 -- a genuinely 2-D slanted pillar: prototype vs the hybrid slant metric vs a PURE z-staircase | S4.4 |
 | `m5_census_cascade.py` | M5 -- spurious census, cascade closure vs depth, layer-split identity | S4.5 |
-| `m6_cost.py` | M6 -- per-region and end-to-end cost; the staircase-equivalence arithmetic (reads `results/m4_pillar.json`) | S4.6 |
+| `m4a_timing_probe.py` | M4a -- sizing probe: one region solve on the union grid | S4.6 |
+| `m4b_staircase_ladder.py` | M4b -- the pure staircase on two union grids; the uniform-grid constraint | S4.4 |
+| `m6_cost.py` | M6 -- per-region and end-to-end cost; the staircase-equivalence arithmetic (reads `results/m4b_staircase_ladder.json`) | S4.6 |
+| `m4c_hybrid_ladder.py` | M4c -- does the hybrid converge TOWARD the prototype as its Fourier truncation is lifted? | S4.4 |
 | `m7_slant_x_aniso.py` | M7 -- slant x anisotropy, incl. the slant x OUT-OF-PLANE combination the hybrid refuses | S4.7 |
 
-Order matters only for `m6_cost.py`, which reads `results/m4_pillar.json`.
+`run_rest.sh` runs `m4b`, `m5`, `m7`, `m6` in that order (it waits for `m4` to
+land its JSON first).  Order matters only for `m6_cost.py`, which reads
+`results/m4b_staircase_ladder.json`.
 
 JSON outputs land in `results/`.  Every number quoted in the verdict document
 comes from one of these files.

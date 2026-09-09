@@ -166,7 +166,7 @@ for mount, (th, ph) in (("normal", (0.0, 0.0)),
             st = PMM2DStackHybrid(PX2, PY2, n_superstrate=NSUP,
                                   n_substrate=NSUB, degree=9, n_orders=no,
                                   symmetry=False)
-            st.add_layer(DEPTH2, eps_tensor_cell=cell_pillar(48, INPL_LC),
+            st.add_layer(DEPTH2, eps_tensor_cell=cell_pillar(24, INPL_LC),
                          slant=(sgn * TX, 0.0))
             st.set_source(WL, theta=th, phi=ph)
             out = st.solve()
