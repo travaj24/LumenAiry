@@ -37,7 +37,7 @@ default holds with decades to spare on every arm:
 | (3) the parity operator itself | **PASS** | `J^2 - I` = **0.0 EXACTLY** (12 (Nx, M) combinations); eps-free masses parity-invariant to **8.0e-17 .. 1.8e-16**; the derivative bracket parity-ODD to **6.6e-17 .. 1.4e-16** |
 | (4) speed, interleaved | **PASS** | region solve **3.3 - 4.2x**; whole solve **1.49 - 1.55x** single-layer, **1.80 - 1.87x** on a three-layer stack |
 | (5) fail-before | **PASS** | with the runtime verification disarmed the shipped entry point is wrong by **1.5e-03 .. 2.2e-01**, i.e. 7 to 12 decades above the accepted agreement |
-| (6) existing suites | **PASS** | 11 files, **224 passed** (76 + 148) |
+| (6) existing suites | **PASS** | 20 files, **1181 passed** (76 + 148 + 957) -- including every other consumer of `PMM2DStackPure` / `pmm_jones_2d_staggered`, which is the arm that proves the DEFAULT change moves nothing |
 
 One honest difference from the Fourier twin: that one produced eigenpairs
 *better* than the dense `zgeev` it replaced.  This one does not -- the
@@ -342,6 +342,10 @@ PYTHONPATH=/c/tmp/lum_oopfast OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
 | **`tests/unit/test_pmm2d_staggered_oop_block_eig.py`** (new) | **36 passed** | **101 - 117 s** (three runs) |
 | `tests/unit/test_pmm2d_staggered_oop.py` + `test_pmm2d_staggered_anisotropic.py` | 76 passed | 161 s |
 | `test_v5_12_0_pmm2d_staggered.py`, `test_v5_21_pmm2d_staggered_oblique.py`, `test_staggered.py`, `test_audit_p1_staggered_guard.py`, `test_p2c_pmm2d_stack_cascade.py`, `test_p2t_pmm2d_tree_cascade.py`, `test_pmm2d_lossless_closure_two_sided.py`, `test_audit_s1_3_pmm2d_lossless_tripwire.py`, `test_v5_14_0_pmm2d_stack.py` | 148 passed | 468 s |
+| every OTHER consumer of `PMM2DStackPure` / `pmm_jones_2d_staggered` (`test_audit_dynameta_consumer_api_2.py`, `test_audit_w3_entry_validation.py`, `test_audit_w6_pmm_rcwa.py`, `test_niche_audit_w7_pmm.py`, `test_v5_11_0_pmm2d.py`, `test_v5_12_0_pmm2d_loss.py`, `test_v5_14_0_pmm2d_cell.py`, `test_v5_14_0_pmm_audit_fixes.py`, `test_public_api.py`) -- the arm that proves the DEFAULT change moves nothing | **957 passed** | 1743 s |
+| `tests/unit/test_pmm2d_staggered_oop_corner_convergence.py` (from the reference study, same branch) | 1 passed | 20 s |
+
+**1218 tests green across 22 files** with the reduction on by default (1181 pre-existing plus the 37 new).
 
 Slowest tests in the new file: `test_forcing_..._wrong_by_decades[(3,3)]`
 14.7 s, `test_reduction_matches_the_dense_path_on_R_T_and_jones[(3,3)]`

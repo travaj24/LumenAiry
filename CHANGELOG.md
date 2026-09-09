@@ -27,6 +27,19 @@ refusal -- oblique or conical incidence, an off-centre or unmirrored cell, a
 parity-breaking tensor, and every in-plane or scalar layer -- runs the dense
 path BIT-FOR-BIT (sha256-identical to `symmetry=False`).
 
+### Documented -- a converged-reference study for the two bounded OUT-OF-PLANE 2-D cases
+
+`docs/audits/EXPERIMENT_PMM2D_STAGGERED_OOP_REFERENCE_2026_09_10.md` closes out
+open item 1 of the out-of-plane build as far as the current engine suite can:
+four fixture x mount cases, three truncation ladders each, every ladder fitted
+and Richardson-extrapolated with an uncertainty derived from its own residual.
+The bound TIGHTENS (per-order `dR` on the chiral conical cell falls from
+`1.341e-04` to `1.099e-04` against rcwa and `5.93e-05` against the nearest
+Fourier arm) and all three Fourier ladders are measured moving TOWARD the
+staggered limit, but no Fourier arm converges, so it stays a BOUND.  One test
+(`tests/unit/test_pmm2d_staggered_oop_corner_convergence.py`) and no library
+change.
+
 ### Added -- BOR SEM basis, JAX twin and mortar/PML (pre-5.43 work, previously unlogged)
 
 * `BORStack(basis="sem")` -- a spectral-element radial basis for the
