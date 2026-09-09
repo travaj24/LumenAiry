@@ -34,26 +34,49 @@ Why this over the FMM-floored hybrid
   boundaries (Eq. 26), so ``eps`` is exact per element (no Gibbs); the total
   efficiencies are invariant to the pillar's position in the cell.
 
-Anisotropy (Stage A, in-plane)
-------------------------------
+Anisotropy -- FULL ``(3, 3)`` tensors, in-plane AND out-of-plane
+----------------------------------------------------------------
 ``eps_cell`` may be a scalar ``(Nx, Ny)`` map (the isotropic solver
 :func:`pmm_efficiency_2d_staggered`, unchanged bit-for-bit) OR a ``(Nx, Ny,
-3, 3)`` BLOCK-FORM tensor map (Granet Eq. 7, ``[[e11, e12, 0], [e21, e22, 0],
-[0, 0, e33]]``) driven through :func:`pmm_jones_2d_staggered`.  In-plane
-anisotropy is the paper's GENERAL case, of which the shipped isotropic solver
-was the reduction: it keeps the SAME ``2 q^2`` second-order eigenproblem, the
-same ``[W; -V] <-> -lam`` symmetry, the same square Redheffer cascade and the
-same far field.  What it adds is the two MIXED ``[eps_t]`` masses (Eq. 40),
-the ``e33``-weighted ``Meps33`` (Eq. 41) and the second term in each ``K_zt``
-column (Eq. 44, the divergence of ``D_t = eps_t E_t``); the Eq. 25 H-partner
-picks up the same two mixed blocks.  Rotated-uniaxial (liquid-crystal) and
-GYROTROPIC (``e12 = -e21 = i b``, Hermitian, lossless) media are both in
-scope.  OUT-OF-PLANE coupling (``e_xz``/``e_yz``/``e_zx``/``e_zy``) breaks
-Eq. 16 -- ``div D = 0`` no longer slaves ``E3`` algebraically -- so it is
-NOT a second-order problem here and raises ``NotImplementedError`` pointing at
-the out-of-plane-capable hybrid
-:func:`~lumenairy.elements.pmm.pmm_jones_2d`.  The two HALF-SPACES stay
-isotropic (the Rayleigh match is scalar), as in the hybrid.
+3, 3)`` tensor map driven through :func:`pmm_jones_2d_staggered`.  Two
+formulations sit behind one entry, dispatched on the cell itself:
+
+* **IN-PLANE (block-form, Granet Eq. 7** ``[[e11, e12, 0], [e21, e22, 0],
+  [0, 0, e33]]`` **).**  The paper's GENERAL case, of which the shipped
+  isotropic solver was the reduction: the SAME ``2 q^2`` second-order
+  eigenproblem, the same ``[W; -V] <-> -lam`` symmetry, the same square
+  Redheffer cascade and the same far field.  What it adds is the two MIXED
+  ``[eps_t]`` masses (Eq. 40), the ``e33``-weighted ``Meps33`` (Eq. 41) and
+  the second term in each ``K_zt`` column (Eq. 44, the divergence of
+  ``D_t = eps_t E_t``); the Eq. 25 H-partner picks up the same two mixed
+  blocks.  Rotated-uniaxial (liquid-crystal) and GYROTROPIC
+  (``e12 = -e21 = i b``, Hermitian, lossless) media are both in scope.
+* **OUT-OF-PLANE (``e_xz``/``e_yz``/``e_zx``/``e_zy`` above a RELATIVE
+  ``1e-12`` floor)** -- a tilted-director liquid crystal.  This breaks the
+  paper's Eq. 16 (``div D = 0`` no longer slaves ``E3`` algebraically: ``E3``
+  appears under ``d_t`` through ``e13``/``e23`` while ``gamma`` multiplies
+  ``e31``/``e32``), so it is not a second-order problem.  It routes instead to
+  the FIRST-ORDER staggered generator on ``[E1; E2; G1; G2]``
+  (:meth:`Granet2DTransverseE._assemble_oop`, dimension ``4 q^2``), whose
+  forward and backward modes are genuinely distinct
+  (:func:`_region_modes_oop`) and which therefore cascades through the
+  GENERALIZED S-matrix.  The de Rham placement, the far field, the union grid
+  and the ``layer_absorption`` budget all carry over unchanged.  COST:
+  1.3-2.0x the in-plane region solve in wall time and ~3x its peak working
+  set at equal ``M`` (measured; the dimension doubles but the pencil is
+  Cholesky-whitened to a standard eig while the in-plane path pays a QZ).
+
+Both routes keep the ISOTROPIC half-spaces (the Rayleigh match is scalar), as
+the hybrid does, and a cell whose out-of-plane entries are float noise stays
+BIT-IDENTICAL to the in-plane path (the dispatch floor is relative).
+
+ACCURACY NOTE for out-of-plane cells with a RE-ENTRANT (270-degree) corner:
+the uniform, straight-walled and convex regimes are machine-exact to
+oracle-limited, and a (3, 3) L-shaped feature -- the hardest cell measured --
+lands at the two Fourier oracles' OWN mutual spread (build doc
+``BUILD_PMM2D_STAGGERED_OOP_2026_09_09.md`` T6), but neither Fourier arm is
+converged there, so no engine in the suite currently pins that regime better
+than ~1e-4 on ``R`` per order.
 
 Scope / limitations
 -------------------
@@ -71,13 +94,15 @@ Scope / limitations
   (vacuum / homogeneous) converges spectrally.
 * Single layer per entry (cascade with
   :class:`~lumenairy.elements.pmm.PMM2DStackPure`); scalar TE/TM through
-  :func:`pmm_efficiency_2d_staggered`, in-plane tensors through
-  :func:`pmm_jones_2d_staggered`; NumPy/SciPy dense generalized eig (not
+  :func:`pmm_efficiency_2d_staggered`, full ``(3, 3)`` tensors through
+  :func:`pmm_jones_2d_staggered`; NumPy/SciPy dense eig (not
   JAX-differentiable).
 * A UNIFORM TENSOR region is NOT eps-free-separable (``K_zt`` mixes e11/e21
   while ``Meps33`` carries e33 alone), so it takes a full region eig like a
   patterned cell -- the shared geometric eig :func:`_homog_geom_cache` is
   scalar-only and raises on a tensor assembly.
+* ANISOTROPIC HALF-SPACES, SLANTED out-of-plane layers and the JAX twin stay
+  out of scope.
 
 Conventions match the rest of the library: PUBLIC ``exp(-i w t)`` (``n = n + i
 kappa``, ``Im eps > 0`` for loss), forward ``exp(+i kz z)``, ``Im(kz) >= 0``.
@@ -94,6 +119,12 @@ Equations implemented (Granet 2023, verified against the paper):
   Eq.34    :  staggered tensor expansion E1=B(x)Btilde, E2=Btilde(x)B,
               E3=Btilde(x)Btilde
   Eq.39-44 :  Appendix-A bra-ket matrix elements (real inner product INT x* y).
+
+Out-of-plane (Stage B) -- the first-order generator that replaces Eq. 23-25
+when ``e13/e23/e31/e32 != 0``; derivation, spurious census and the GO verdict
+in ``docs/audits/EXPERIMENT_PMM2D_STAGGERED_OOP_2026_09_09.md`` (candidate
+(a)), integration measurements in
+``docs/audits/BUILD_PMM2D_STAGGERED_OOP_2026_09_09.md``.
 """
 from __future__ import annotations
 
@@ -102,7 +133,10 @@ import scipy.linalg as sla
 from numpy.polynomial.legendre import leggauss
 
 from ..rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
-from ..rcwa._core import _project_efficiency  # shared flux-projection (S1-9/S1-10)
+from ..rcwa._core import (  # shared flux projection + the OOP mode selector
+    _project_efficiency,
+    _select_forward_flux,
+)
 
 # UNCHANGED S-matrix algebra from the shipped 1-D PMM -- every region's modal
 # matrix W is square (same staggered dimension), so these are plain square
@@ -124,37 +158,54 @@ __all__ = ["pmm_efficiency_2d_staggered", "pmm_jones_2d_staggered"]
 
 _C = np.complex128
 
+#: Sign applied to the OUT-OF-PLANE tensor entries (``e13, e23, e31, e32``) in
+#: :meth:`Granet2DTransverseE._assemble_oop`.  It is the 180-degree rotation
+#: about ``z`` that the shipped gauge carries: the ``Basis1D`` glue
+#: ``tau = exp(-i alpha0 p)`` makes the basis run as ``exp(-i alpha0 x)``
+#: (MEASURED, ``validation/probe_pmm2d_staggered_oop/g0f_basis_phase_slope.py``)
+#: while the far-field kernel and the ``eps_cell`` indexing run the other way.
+#: In-plane operators are invariant under that rotation -- which is exactly why
+#: it was unobservable for the isotropic and Stage-A paths -- and it is a pure
+#: SIGN on the out-of-plane block, so it is applied once, in the assembly.
+#: DERIVED BY MEASUREMENT 2026-09-09 (build doc
+#: docs/audits/BUILD_PMM2D_STAGGERED_OOP_2026_09_09.md, tables T2/T3): with
+#: -1.0 a uniform out-of-plane slab reproduces ``berreman_jones_1d`` to ~1e-15
+#: at oblique and conical incidence; with +1.0 the same solve sits at ~1e-03.
+#: It is a module constant so a test can walk BOTH arms of that two-sided
+#: claim through the shipped code rather than re-deriving it.
+_OOP_ROT_SIGN = -1.0
 
-def _require_block_form(fn_name, tile33):
-    """Stage-A tensor gate: the cell must be Granet BLOCK-FORM (Eq. 7), i.e.
-    in-plane ``[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]`` with ``e33 != 0``.
+#: Constant relating the out-of-plane generator's magnetic state ``G = i Z0 H``
+#: to the Eq.-25 tangential-H partner ``[H1; H2]`` that :func:`_region_modes`
+#: and :func:`_homog_region_modes` build for the in-plane regions and the
+#: half-spaces.  It cancels in a pure out-of-plane stack and does NOT cancel in
+#: a MIXED one, so it is applied in :func:`_region_modes_oop`.  DERIVED
+#: 2026-09-09 (build doc table T4): the in-plane-reduction gate drives the
+#: out-of-plane path on a cell whose cross terms are exactly zero and compares
+#: R/T/Jones against the Stage-A path; with -1j the two agree at ~1e-15, with
+#: +1j / +/-1 they disagree at O(1).
+_OOP_H_GAUGE = -1j
 
-    OUT-OF-PLANE coupling (``e_xz/e_yz/e_zx/e_zy``) breaks Eq. 16: ``div D = 0``
-    no longer slaves ``E3`` algebraically (``E3`` appears under ``d_t`` through
-    ``e13/e23`` while ``gamma`` multiplies ``e31/e32``), so the problem is no
-    longer the second-order pencil this module solves.  It raises
-    ``NotImplementedError`` naming the out-of-plane-capable hybrid
-    :func:`~lumenairy.elements.pmm.pmm_jones_2d`.
+
+def _tile_needs_oop(fn_name, tile33):
+    """Dispatch gate for a ``(..., 3, 3)`` tensor cell: ``True`` when the cell
+    carries OUT-OF-PLANE coupling and must run the first-order ``4 q^2``
+    generator (Stage B), ``False`` when it is Granet BLOCK-FORM (Eq. 7,
+    ``[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]``) and stays on the
+    second-order ``2 q^2`` pencil.  Raises when ``e33 == 0`` either way (both
+    eliminations divide by it).
 
     The out-of-plane test is RELATIVE (``1e-12 * scale``), shared verbatim with
     the hybrid via :func:`~lumenairy.elements.pmm.twod_jones._tile_is_offplane`:
     a physically in-plane cell built by ROTATING a diagonal tensor carries
     ~1e-16 float noise in the xz/yz/zx/zy slots (``uniaxial_tensor(no, ne,
-    pi/2, phi)`` has ``cos(pi/2) = 6.1e-17``), and a strict ``> 0`` would
-    refuse it."""
+    pi/2, phi)`` has ``cos(pi/2) = 6.1e-17``), and a strict ``> 0`` would send
+    every real liquid-crystal cell down the 1.7-2.4x costlier generator instead
+    of the bit-identical in-plane path.
+    """
     tile33 = np.asarray(tile33, dtype=_C)
-    if _tile_is_offplane(tile33):
-        off = np.abs(tile33[..., [0, 1, 2, 2], [2, 2, 0, 1]])
-        raise NotImplementedError(
-            f"{fn_name}: OUT-OF-PLANE tensor coupling (e_xz/e_yz/e_zx/e_zy; "
-            f"largest off-plane entry {float(np.max(off)):.3g}) is not "
-            f"implemented in the PURE (no-floor) staggered 2-D PMM -- Stage A "
-            f"is the Granet 2023 BLOCK-FORM in-plane tensor "
-            f"[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]], for which the "
-            f"div(D)=0 elimination keeps the second-order eigenproblem.  Use "
-            f"pmm_jones_2d (the hybrid 2-D PMM), which supports the full (3, 3) "
-            f"tensor including out-of-plane coupling.")
     _require_nonzero_ezz(fn_name, tile33)
+    return bool(_tile_is_offplane(tile33))
 
 
 def _validate_stag_cell(fn_name, eps_cell):
@@ -163,14 +214,16 @@ def _validate_stag_cell(fn_name, eps_cell):
     :meth:`~lumenairy.elements.pmm.PMM2DStackPure.add_layer`), so each names
     ITSELF in its message while enforcing one contract.  A ``(Nx, Ny)`` SCALAR
     map is returned unchanged (it stays on the isotropic assembly); a
-    ``(Nx, Ny, 3, 3)`` cell is gated by :func:`_require_block_form`."""
+    ``(Nx, Ny, 3, 3)`` cell is gated by :func:`_tile_needs_oop`, which
+    raises on ``e33 == 0`` and otherwise selects the in-plane or the
+    out-of-plane assembly."""
     cell = np.asarray(eps_cell, dtype=_C)
     if cell.ndim == 4:
         if cell.shape[2:] != (3, 3):
             raise ValueError(
                 f"{fn_name}: a tensor eps_cell must be (Nx, Ny, 3, 3), got "
                 f"shape {cell.shape}.")
-        _require_block_form(fn_name, cell)
+        _tile_needs_oop(fn_name, cell)
     elif cell.ndim != 2:
         raise ValueError(
             f"{fn_name}: eps_cell must be a 2-D (Nx, Ny) scalar grid or a "
@@ -460,7 +513,7 @@ class Granet2DTransverseE:
                 :meth:`_assemble`.  Scalar input runs the shipped isotropic
                 assembly BIT-FOR-BIT (a dispatch, not a rewrite); the caller is
                 responsible for the out-of-plane / e33 gate
-                (:func:`_require_block_form`).
+                (:func:`_tile_needs_oop`).
     alpha0x, alpha0y : Bloch wavenumbers (units 1/lambda) -> tau_x, tau_y
     k0        : 2*pi / wavelength (numerically 2*pi if coords in wavelengths)
     """
@@ -483,7 +536,17 @@ class Granet2DTransverseE:
                 f"{self.eps_cell.shape}.")
         self.q = self.bx.dim                              # = Nx*(M-1)
         assert self.bx.dim == self.by.dim, "use square (Nx*(M-1)==Ny*(M-1))"
-        self._assemble()
+        # OUT-OF-PLANE dispatch (Stage B).  The test is the RELATIVE floor the
+        # hybrid uses (:func:`_tile_needs_oop`), so a cell whose xz/yz/zx/zy
+        # entries are float noise stays BIT-IDENTICAL to the in-plane path --
+        # the dispatch is the Stage-A ``NotImplementedError`` guard turned into
+        # a branch, at exactly the same floor.
+        self.offplane = (self.eps_cell.ndim == 4
+                         and _tile_is_offplane(self.eps_cell))
+        if self.offplane:
+            self._assemble_oop()
+        else:
+            self._assemble()
 
     # --- per-axis 1-D ingredient matrices between set pairs (no eps) ---------
     def _axis_mats(self):
@@ -729,6 +792,153 @@ class Granet2DTransverseE:
         self.Schur = Schur
         self.dimtot = 2 * qq
 
+    # --- OUT-OF-PLANE: the first-order staggered generator (Stage B) ---------
+    def _assemble_oop(self):
+        """Build the FIRST-ORDER staggered generator pencil ``A x = q B x`` on
+        ``x = [E1; E2; G1; G2]`` (dimension ``4 q^2``) for a cell carrying
+        OUT-OF-PLANE coupling (``e13``/``e23``/``e31``/``e32``).
+
+        Formulation: ``docs/audits/EXPERIMENT_PMM2D_STAGGERED_OOP_2026_09_09.md``
+        S2, candidate (a) -- the GO route.  Out-of-plane coupling breaks
+        Granet's Eq. 16 (``div D = 0`` no longer slaves ``E3`` algebraically:
+        ``E3`` appears under ``d_t`` through ``e13``/``e23`` while ``gamma``
+        multiplies ``e31``/``e32``), so the second-order ``2 q^2`` pencil this
+        class solves for a block-form cell does not exist here.  The de Rham
+        placement is UNCHANGED (``E1`` in ``V1``, ``E2`` in ``V2``, ``E3`` in
+        ``V3``, ``G1`` in ``V2``, ``G2`` in ``V1``, ``G3`` in ``Vw``), and the
+        two longitudinal unknowns are eliminated in the two ways that placement
+        makes exact::
+
+            G3 = Gw^-1 (CwE2 E2 - CwE1 E1)
+                 STRONG -- the curl of a transverse E lands exactly in Vw
+            E3 = A33^-1 (P23^H G1 - P13^H G2 - A31 E1 - A32 E2)
+                 WEAK -- the longitudinal curl-H row tested in V3 with the
+                 derivative moved onto the continuous V3 test (the
+                 :meth:`_eps_dir` ``"dL"`` device)
+
+        leaving four rows, each tested in its own space, against
+        ``B = blkdiag(Ggram1, Ggram2, Ggram2, Ggram1)``::
+
+            q Ggram1 e1 = -i Ggram1 g2 - i P13 e3
+            q Ggram2 e2 = +i Ggram2 g1 - i P23 e3
+            q Ggram2 g1 = -i [A21 e1 + A22 e2 + A23 e3 - CwE2^H g3]
+            q Ggram1 g2 = +i [A11 e1 + A12 e2 + A13 e3 + CwE1^H g3]
+
+        Every ``i`` comes from ``D_3 = i q`` and nothing else; the transverse
+        derivative blocks are plain Galerkin brackets carrying no explicit
+        ``i``.  ``G = i Z0 H`` is the normalized magnetic field that makes
+        Maxwell real-coefficient (``D x E = G``, ``D x G = eps E``) -- the same
+        state the 1-D ``_build_generator_metric`` uses and the one
+        ``rcwa._core._select_forward_flux`` reads.  ``A33`` is invertible
+        exactly when ``e33 != 0`` (:func:`_tile_needs_oop` enforces it), and the
+        ``e33``-Schur is POINTWISE per cell -- never a product of separately
+        discretized factors, the ordering the 1-D ``gen2`` prototype got wrong.
+
+        THE ROTATION GAUGE (:data:`_OOP_ROT_SIGN`).  The shipped ``Basis1D``
+        glue is ``tau = exp(-i alpha0 p)``, so the basis carries
+        ``exp(-i alpha0 x)`` -- MEASURED, not asserted:
+        ``validation/probe_pmm2d_staggered_oop/g0f_basis_phase_slope.py`` fits
+        the reconstructed order-m field's phase slope at -2.65539 against
+        ``alpha0`` = +2.65539 (and order +/-1 at -(alpha0 +/- G) likewise) --
+        while the far-field kernel and the ``eps_cell`` indexing run the other
+        way.  The composition is a 180-degree rotation about ``z`` of the whole
+        solve.  It is INVISIBLE to every in-plane operator (``e11, e12, e21,
+        e22, e33`` are invariant under that rotation, which is why the
+        isotropic and Stage-A paths never had to know about it), and it is
+        exactly a SIGN on the out-of-plane block -- so the assembly applies it
+        once, here.
+
+        The discrete identity behind that equivalence: negating the four
+        single-derivative blocks (``P13, P23, CwE1, CwE2``) AND the four
+        out-of-plane entries leaves the pencil above invariant term for term
+        (``e3`` and ``g3`` both flip sign, and every row then picks up two
+        flips), so "the basis' transverse derivative runs backwards" and "the
+        tensor is rotated by 180 degrees about z" are the SAME statement.  Both
+        directions are measured in
+        ``docs/audits/BUILD_PMM2D_STAGGERED_OOP_2026_09_09.md``: with the
+        rotation a uniform out-of-plane slab reproduces ``berreman_jones_1d`` to
+        ~1e-15 at conical incidence; with ``_OOP_ROT_SIGN`` flipped to +1 the
+        same solve sits at ~1e-03, the size of the prototype's own
+        negate-the-out-of-plane-block negative control.
+        """
+        bx, by = self.bx, self.by
+        k0 = self.k0
+        self._axis_mats()
+        qq = self.q * self.q
+        e = self.eps_cell
+        rot = _OOP_ROT_SIGN
+        e11, e12, e13 = e[..., 0, 0], e[..., 0, 1], rot * e[..., 0, 2]
+        e21, e22, e23 = e[..., 1, 0], e[..., 1, 1], rot * e[..., 1, 2]
+        e31, e32 = rot * e[..., 2, 0], rot * e[..., 2, 1]
+        e33 = e[..., 2, 2]
+
+        # ----- eps-free geometry: block Grams + the mimetic derivatives -----
+        Mtt_x, Mtt_y = self.Mtt_x, self.Mtt_y
+        Mbb_x, Mbb_y = self.Mbb_x, self.Mbb_y
+        dbt_x = bx.mixed(bx.B, bx.Btilde) / k0        # <B | d til>_x
+        dbt_y = by.mixed(by.B, by.Btilde) / k0
+        Ggram1 = np.kron(Mtt_y, Mbb_x)                # <V1|V1>
+        Ggram2 = np.kron(Mbb_y, Mtt_x)                # <V2|V2>
+        Gw = np.kron(Mbb_y, Mbb_x)                    # <Vw|Vw>
+        CwE1 = np.kron(dbt_y, Mbb_x)                  # <Vw| D2 |V1>
+        CwE2 = np.kron(Mbb_y, dbt_x)                  # <Vw| D1 |V2>
+        P13 = np.kron(Mtt_y, dbt_x)                   # <V1| D1 |V3>
+        P23 = np.kron(dbt_y, Mtt_x)                   # <V2| D2 |V3>
+
+        # ----- the NINE eps-weighted component masses: Appendix-A Eq. 40/41
+        #       (A11/A22 shipped, A12/A21 Stage A) plus the FOUR NEW
+        #       out-of-plane blocks A13/A23/A31/A32.  Same kron assembly, one
+        #       component map each -- no new basis code.
+        ew = self._eps_weighted
+        xB, xT = bx.B, bx.Btilde
+        yB, yT = by.B, by.Btilde
+        mx, my = bx.m_ref, by.m_ref
+        A11 = ew((bx, mx, xB, xB), (by, my, yT, yT), e11)
+        A12 = ew((bx, mx, xB, xT), (by, my, yT, yB), e12)
+        A13 = ew((bx, mx, xB, xT), (by, my, yT, yT), e13)
+        A21 = ew((bx, mx, xT, xB), (by, my, yB, yT), e21)
+        A22 = ew((bx, mx, xT, xT), (by, my, yB, yB), e22)
+        A23 = ew((bx, mx, xT, xT), (by, my, yB, yT), e23)
+        A31 = ew((bx, mx, xT, xB), (by, my, yT, yT), e31)
+        A32 = ew((bx, mx, xT, xT), (by, my, yT, yB), e32)
+        A33 = ew((bx, mx, xT, xT), (by, my, yT, yT), e33)
+
+        # ----- eliminate E3 (weak, in V3) and G3 (strong, in Vw) ------------
+        Z = np.zeros((qq, qq), dtype=_C)
+        E3S = np.linalg.solve(
+            A33, np.concatenate([-A31, -A32, P23.conj().T, -P13.conj().T],
+                                axis=1))
+        G3S = np.linalg.solve(Gw, np.concatenate([-CwE1, CwE2, Z, Z], axis=1))
+
+        row0 = (-1j * np.concatenate([Z, Z, Z, Ggram1], axis=1)
+                - 1j * (P13 @ E3S))
+        row1 = (1j * np.concatenate([Z, Z, Ggram2, Z], axis=1)
+                - 1j * (P23 @ E3S))
+        row2 = (-1j * np.concatenate([A21, A22, Z, Z], axis=1)
+                - 1j * (A23 @ E3S) + 1j * (CwE2.conj().T @ G3S))
+        row3 = (1j * np.concatenate([A11, A12, Z, Z], axis=1)
+                + 1j * (A13 @ E3S) + 1j * (CwE1.conj().T @ G3S))
+        Bgen = np.zeros((4 * qq, 4 * qq), dtype=_C)
+        Bgen[:qq, :qq] = Ggram1
+        Bgen[qq:2 * qq, qq:2 * qq] = Ggram2
+        Bgen[2 * qq:3 * qq, 2 * qq:3 * qq] = Ggram2
+        Bgen[3 * qq:, 3 * qq:] = Ggram1
+
+        # Only the pencil is retained (audit P3-37): the fifteen assembly
+        # blocks above die with this frame, exactly as Curl/Kzt/Ktz/Meps33 do
+        # on the in-plane path.  The second-order operators do not EXIST for an
+        # out-of-plane cell, so they are None rather than stale -- every
+        # consumer dispatches on ``self.offplane``.
+        self.Agen = np.concatenate([row0, row1, row2, row3], axis=0)
+        self.Bgen = Bgen
+        self.Rmat = None
+        self.Lmat = None
+        self.Et_blocks = None
+        self.Et_offdiag = None
+        self.Stt = None
+        self.Schur = None
+        self.dimtot = 4 * qq
+
     # --- eps-weighted directed (deriv) 2-D operator into V3 ------------------
     def _eps_dir(self, bx, lx, opx, rx, by, ly, opy, ry, wmap=None):
         """Assemble  sum_{sx,sy} eps[sx,sy] * kron(Gy, Gx)  where Gx is the
@@ -900,6 +1110,12 @@ def _region_modes(solver: Granet2DTransverseE):
         lam  : z-decay constants  sqrt(-g2)  (forward Im>=0)
         g2   : eigenvalues (gamma/k0)^2
     """
+    if solver.offplane:
+        raise ValueError(
+            "_region_modes: this solver assembled the OUT-OF-PLANE "
+            "(first-order, 4 q^2) generator, which has no second-order pencil "
+            "and DISTINCT forward/backward modes -- call _region_modes_oop, "
+            "whose 6-tuple feeds the generalized S-matrix cascade.")
     L = solver.Lmat
     G = -solver.Rmat                  # block field Gram (Hermitian PD)
     g2, W = sla.eig(L, G)
@@ -941,6 +1157,102 @@ def _region_modes(solver: Granet2DTransverseE):
     return W, V, lam, g2
 
 
+def _region_modes_oop(solver: Granet2DTransverseE):
+    """Forward AND backward modes of an OUT-OF-PLANE region, as the 6-tuple
+    ``(Wf, Vf, lam_f, Wb, Vb, lam_b)`` -- the shape
+    ``rcwa._core._layer_eigenmodes_tensor`` returns on its generator branch and
+    the shape the GENERALIZED S-matrix cascade
+    (:func:`~lumenairy.elements.rcwa._core._interface_smatrix_general`) consumes.
+
+    ``W`` holds ``[E1; E2]`` coefficients and ``V`` the tangential-H partner in
+    the SAME coefficient bases the in-plane :func:`_region_modes` uses (``H1``
+    in ``V2``, ``H2`` in ``V1``), so a MIXED cascade -- isotropic half-spaces,
+    in-plane layers and out-of-plane layers in one stack -- is a square modal
+    match at every interface, with no re-projection anywhere.
+
+    Three things are load-bearing and each is measured, not assumed:
+
+    1. **The eig.**  ``B = blkdiag(Ggram1, Ggram2, Ggram2, Ggram1)`` is
+       Hermitian positive definite (it is a block Gram), so the pencil is
+       Cholesky-WHITENED to a standard eig rather than handed to a QZ.  That is
+       why the ``4 q^2`` out-of-plane path costs only 1.7-2.4x the ``2 q^2``
+       in-plane path, which pays ``scipy.linalg.eig(L, G)``.
+
+    2. **The forward/backward split MUST be flux-based with the deep-decay
+       override.**  The out-of-plane generator breaks the in-plane
+       ``[W; -V] <-> -lam`` symmetry, so the two half-spectra are genuinely
+       distinct and a bare ``Re(gam)`` split will not do: the off-branch modes
+       (unresolved harmonics of a polynomial basis) carry ~1e-14 RELATIVE flux
+       of RANDOM SIGN, and one growing mode classified forward blows the
+       cascade up by ``exp(+|Re gam| k0 L)``.  Those modes are deeply
+       evanescent (``Re(lam) >= 5.75`` measured on the prototype, ten times
+       :func:`~lumenairy.elements.rcwa._core._select_forward_flux`'s
+       ``|Re gam| > 0.5`` bar), which is exactly what that override classifies.
+       The selector is fed the CHOLESKY-WHITENED blocks ``[L1 e1; L2 e2;
+       L2 g1; L1 g2]`` with ``Ggram1 = L1^H L1``, ``Ggram2 = L2^H L2``, so its
+       plain harmonic sums reproduce the Gram-weighted modal flux
+       ``Sz = Im(e1^H Ggram1 g2 - e2^H Ggram2 g1)`` EXACTLY -- the PMM_ROADMAP
+       C-FLUX rule.  A split that does not come out exactly ``2 q^2 / 2 q^2``
+       raises rather than cascading a rank-deficient set.
+
+    3. **The H gauge.**  The generator state carries ``G = i Z0 H`` while the
+       Eq.-25 partner :func:`_region_modes` builds for the in-plane regions and
+       the half-spaces is ``[H1; H2]`` itself, so the two differ by ONE global
+       constant.  It cancels in a pure out-of-plane stack and does NOT cancel
+       in a mixed one, so it is applied here (:data:`_OOP_H_GAUGE`) and gated by
+       the in-plane-reduction test, which drives the out-of-plane path on a cell
+       whose cross terms are exactly zero and compares against the Stage-A path.
+    """
+    if not solver.offplane:
+        raise ValueError(
+            "_region_modes_oop: this solver assembled the IN-PLANE (second-"
+            "order) pencil -- call _region_modes.  The dispatch is "
+            "Granet2DTransverseE.offplane.")
+    Amat, Bmat = solver.Agen, solver.Bgen
+    qq = solver.q * solver.q
+    Lc = np.linalg.cholesky(Bmat)                 # Bmat HPD (block Gram)
+    Ah = sla.solve_triangular(Lc, Amat, lower=True)
+    Ah = sla.solve_triangular(Lc, Ah.conj().T, lower=True).conj().T
+    qv, Y = np.linalg.eig(Ah)
+    X = sla.solve_triangular(Lc.conj().T, Y, lower=False)
+    W = X[:2 * qq, :]                              # [E1; E2]
+    Gst = X[2 * qq:, :]                            # [G1; G2] = i Z0 [H1; H2]
+    # flux split on the whitened blocks (see 2. above)
+    L1 = np.linalg.cholesky(Bmat[:qq, :qq]).conj().T
+    L2 = np.linalg.cholesky(Bmat[qq:2 * qq, qq:2 * qq]).conj().T
+    Vfull = np.concatenate([L1 @ W[:qq], L2 @ W[qq:],
+                            L2 @ Gst[:qq], L1 @ Gst[qq:]], axis=0)
+    nrm = np.linalg.norm(Vfull, axis=0)
+    Vfull = Vfull / np.where(nrm == 0.0, 1.0, nrm)[None, :]
+    lam = -1j * qv                                 # forward exp(-lam k0 z)
+    fidx = np.asarray(_select_forward_flux(lam, Vfull, qq))
+    bidx = np.array(sorted(set(range(qv.size)) - set(fidx.tolist())), dtype=int)
+    if fidx.size != 2 * qq or bidx.size != 2 * qq:
+        raise RuntimeError(
+            f"_region_modes_oop: the flux selector split the {4 * qq} "
+            f"out-of-plane modes {fidx.size}/{bidx.size} instead of "
+            f"{2 * qq}/{2 * qq}.  A cascade built on an unbalanced set is "
+            f"rank-deficient; raise n_modes (M) or move off the Rayleigh "
+            f"cutoff (a |gamma| -> 0 mode is what defeats the split).")
+    V = _OOP_H_GAUGE * Gst
+    return (W[:, fidx], V[:, fidx], lam[fidx],
+            W[:, bidx], V[:, bidx], lam[bidx])
+
+
+def _modes_as_general(W, V, lam):
+    """Express a SYMMETRIC (in-plane / isotropic) region's modes in the
+    generalized 6-tuple form ``(W, V, lam, W, -V, -lam)``.
+
+    The in-plane pencil has the exact symmetry ``[W; -V] <-> -lam``, so the
+    backward set is the forward one with ``V`` and ``lam`` negated; writing it
+    out is what lets a stack that contains ONE out-of-plane layer run the
+    generalized cascade throughout.  Measured cost: the generalized interface
+    reproduces the shipped square :func:`_interface_smatrix` to 7.7e-14 (S11) /
+    8.1e-14 (S21) on an isotropic pair at normal incidence and 1.0e-13 /
+    9.3e-14 at conical, so a mixed stack pays nothing in accuracy for it."""
+    return W, V, lam, W, -V, -lam
+
+
 def _homog_geom_cache(solver: Granet2DTransverseE):
     """Pre-solve the eps-FREE geometric eig shared by EVERY homogeneous region.
 
@@ -969,7 +1281,7 @@ def _homog_geom_cache(solver: Granet2DTransverseE):
     ``(3, 3)`` uniform layer).  A tensor assembly here RAISES rather than
     silently returning a wrong geometric basis.
     """
-    if solver.eps_cell.ndim == 4:
+    if solver.eps_cell.ndim == 4 or solver.offplane:
         raise ValueError(
             "_homog_geom_cache: the shared eps-free geometric eig is defined "
             "for a uniform SCALAR region only -- a uniform TENSOR region's "
@@ -1304,10 +1616,11 @@ def pmm_jones_2d_staggered(
     theta: float = 0.0,
     phi: float = 0.0,
 ):
-    """Rigorous 2-D crossed grating with an IN-PLANE ANISOTROPIC (block-form
-    tensor) cell, by the canonical NO-FLOOR staggered PMM -- the anisotropic
-    entry of :func:`pmm_efficiency_2d_staggered` and the no-floor mirror of the
-    FMM-floored hybrid :func:`~lumenairy.elements.pmm.pmm_jones_2d`.
+    """Rigorous 2-D crossed grating with a FULL ``(3, 3)`` ANISOTROPIC cell --
+    in-plane OR out-of-plane -- by the canonical NO-FLOOR staggered PMM: the
+    anisotropic entry of :func:`pmm_efficiency_2d_staggered` and the no-floor
+    mirror of the FMM-floored hybrid
+    :func:`~lumenairy.elements.pmm.pmm_jones_2d`.
 
     Both incident polarizations are driven, so the return is the
     :func:`~lumenairy.elements.pmm.pmm_jones_2d` /
@@ -1321,13 +1634,16 @@ def pmm_jones_2d_staggered(
     eps_cell : (Nx, Ny, 3, 3) or (Nx, Ny) array_like of complex
         Per-segment permittivity over one unit cell (PUBLIC convention
         ``Im(eps) > 0`` for loss).  A ``(Nx, Ny)`` SCALAR map is promoted to
-        ``e * I`` per cell.  Tensors must be Granet BLOCK-FORM (Eq. 7):
-        ``[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]`` with ``e33 != 0``.
-        OUT-OF-PLANE coupling (``e_xz``/``e_yz``/``e_zx``/``e_zy`` above a
-        relative ``1e-12`` floor) raises ``NotImplementedError`` -- use
-        :func:`~lumenairy.elements.pmm.pmm_jones_2d`, whose ``4Nf`` generator
-        handles it.  The grid MUST be SQUARE (``Nx == Ny``) and the walls are
-        the segment boundaries (exact ``eps`` per element, Eq. 26).
+        ``e * I`` per cell.  A Granet BLOCK-FORM tensor (Eq. 7,
+        ``[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]``) runs the ``2 q^2``
+        second-order pencil; OUT-OF-PLANE coupling
+        (``e_xz``/``e_yz``/``e_zx``/``e_zy`` above a RELATIVE ``1e-12`` floor
+        -- a tilted-director liquid crystal) routes to the ``4 q^2``
+        first-order staggered generator and the generalized cascade, at
+        1.3-2.0x the region-solve time.  ``e33 != 0`` is required either way
+        (both eliminations divide by it).  The grid MUST be SQUARE
+        (``Nx == Ny``) and the walls are the segment boundaries (exact ``eps``
+        per element, Eq. 26).
     n_substrate, n_superstrate : complex
         Half-space refractive indices.  The half-spaces are ISOTROPIC (the
         Rayleigh match is scalar); an anisotropic half-space is out of scope.
@@ -1365,14 +1681,22 @@ def pmm_jones_2d_staggered(
     general block-form ``[eps_t]`` (Appendix A Eqs. 40, 41, 44).  In-plane
     anisotropy keeps the SAME ``2q^2`` second-order eigenproblem, the same
     ``[W; -V] <-> -lam`` symmetry and the same square Redheffer cascade as the
-    isotropic solver, so it inherits the whole no-floor architecture (and the
-    corner cap, the near-cutoff caveat, and the union-grid rule).  The paper
-    uses ``exp(+i w t)``; a tensor quoted from it must be CONJUGATED before it
-    is passed here.
+    isotropic solver; an OUT-OF-PLANE cell keeps the same basis, de Rham
+    placement, far field and union grid but takes the ``4 q^2`` first-order
+    generator (:meth:`Granet2DTransverseE._assemble_oop`) and the GENERALIZED
+    S-matrix cascade, because ``div D = 0`` no longer slaves ``E3``.  Either
+    way the whole no-floor architecture is inherited -- and so are the corner
+    cap, the near-cutoff caveat and the union-grid rule.  The paper uses
+    ``exp(+i w t)``; a tensor quoted from it must be CONJUGATED before it is
+    passed here.
 
     A GYROTROPIC cell (``e12 = -e21 = i b``, Hermitian) is lossless and fully
     supported; its ``+/-`` order asymmetry is the observable that a sign error
-    in ``e12``/``e21`` would break (energy checks cannot see it).
+    in ``e12``/``e21`` would break (energy checks cannot see it).  Likewise a
+    NON-RECIPROCAL out-of-plane tensor (``e13 = conj(e31)``, Hermitian, still
+    lossless): the dispersion relation is invariant under ``eps -> eps^T``, so
+    only the FIELDS -- not any energy or eigenvalue check -- can see an
+    ``e13``/``e31`` swap.
     """
     from .stack2d_pure import PMM2DStackPure  # (cycle-free: lazy)
     # Validate HERE so the message names this entry, then hand the checked cell

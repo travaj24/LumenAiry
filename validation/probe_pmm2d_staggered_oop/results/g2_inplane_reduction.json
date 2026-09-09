@@ -1,0 +1,91 @@
+{
+ "in-plane uniaxial pillar|normal|M5": {
+  "dR": 3.747002708109903e-15,
+  "dT": 1.5765166949677223e-14,
+  "dJ": 8.482132971516367e-15
+ },
+ "in-plane uniaxial pillar|normal|M6": {
+  "dR": 3.7470027081099033e-14,
+  "dT": 1.0769163338864018e-14,
+  "dJ": 4.494402518524445e-14
+ },
+ "in-plane uniaxial pillar|conical 20/35|M5": {
+  "dR": 4.690692279041286e-15,
+  "dT": 4.6629367034256575e-15,
+  "dJ": 9.591750280495123e-15
+ },
+ "in-plane uniaxial pillar|conical 20/35|M6": {
+  "dR": 3.319566843629218e-14,
+  "dT": 2.5091040356528538e-14,
+  "dJ": 4.106012488621262e-14
+ },
+ "gyrotropic pillar|normal|M5": {
+  "dR": 3.774758283725532e-15,
+  "dT": 4.687222832089333e-15,
+  "dJ": 7.119917175532507e-15
+ },
+ "gyrotropic pillar|normal|M6": {
+  "dR": 2.0122792321330962e-14,
+  "dT": 4.5852210917018965e-14,
+  "dJ": 2.477370639835949e-14
+ },
+ "gyrotropic pillar|conical 20/35|M5": {
+  "dR": 2.525757381022231e-15,
+  "dT": 8.215650382226158e-15,
+  "dJ": 6.3422422641278416e-15
+ },
+ "gyrotropic pillar|conical 20/35|M6": {
+  "dR": 2.1260770921571748e-14,
+  "dT": 2.1649348980190553e-14,
+  "dJ": 2.702849528936706e-14
+ },
+ "lossy diagonal pillar|normal|M5": {
+  "dR": 8.132383655379272e-15,
+  "dT": 1.7985612998927536e-14,
+  "dJ": 1.1001331263314575e-14
+ },
+ "lossy diagonal pillar|normal|M6": {
+  "dR": 3.166911177743259e-14,
+  "dT": 6.061817714453355e-14,
+  "dJ": 3.991248878299446e-14
+ },
+ "lossy diagonal pillar|conical 20/35|M5": {
+  "dR": 1.1046719095020308e-14,
+  "dT": 1.2101430968414206e-14,
+  "dJ": 1.5826909704641347e-14
+ },
+ "lossy diagonal pillar|conical 20/35|M6": {
+  "dR": 1.3183898417423734e-14,
+  "dT": 1.7430501486614958e-14,
+  "dJ": 1.749231708349554e-14
+ },
+ "uniform in-plane uniaxial|normal|M5": {
+  "dR": 3.2335245592207684e-15,
+  "dT": 1.2989609388114332e-14,
+  "dJ": 4.9938443772189615e-15
+ },
+ "uniform in-plane uniaxial|normal|M6": {
+  "dR": 2.245426067304379e-14,
+  "dT": 2.930988785010413e-14,
+  "dJ": 3.615381939569778e-14
+ },
+ "uniform in-plane uniaxial|conical 20/35|M5": {
+  "dR": 2.0816681711721685e-15,
+  "dT": 1.709743457922741e-14,
+  "dJ": 5.529214405067232e-15
+ },
+ "uniform in-plane uniaxial|conical 20/35|M6": {
+  "dR": 6.7584826624056404e-15,
+  "dT": 9.992007221626409e-15,
+  "dJ": 1.2699806189968596e-14
+ },
+ "spectra|in-plane uniaxial pillar|normal": 1.3837847112186377e-12,
+ "spectra|in-plane uniaxial pillar|oblique": 1.1212131168009882e-12,
+ "spectra|gyrotropic pillar|normal": 7.822228643744223e-13,
+ "spectra|gyrotropic pillar|oblique": 7.029423036326613e-13,
+ "floor": {
+  "stray_offplane": false,
+  "bit_identical": true,
+  "big_offplane": true
+ }
+}
