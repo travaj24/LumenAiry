@@ -1,0 +1,8 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+
+=== GATE (c3) -- arbitrary walls, y-uniform: EXACT 1-D oracle ===
+  1-D oracle deg12-vs-deg14 self-gap 4.87e-08
+  pure NU 3x3 arbitrary walls  M=4 (q= 9)  err vs EXACT 1-D  4.48e-02  closure  3.2e-03     0.2s
+  pure NU 3x3 arbitrary walls  M=5 (q=12)  err vs EXACT 1-D  2.36e-02  closure  3.6e-05     0.8s
+  pure NU 3x3 arbitrary walls  M=6 (q=15)  err vs EXACT 1-D  3.14e-03  closure  1.4e-05     3.1s
+  pure NU 3x3 arbitrary walls  M=7 (q=18)  err vs EXACT 1-D  2.67e-03  closure  5.4e-08    10.5s

@@ -1,0 +1,7 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+
+===== scalar pillar pair =====
+-- union-grid REFERENCE ladder (N=6, the common refinement) --
+  union M=3 (q=12, eig   288)  R(0,0)=0.002640980  gap vs prev    --     closure  5.6e-04      2.2s
+  union M=4 (q=18, eig   648)  R(0,0)=0.004992238  gap vs prev 2.12e-01  closure  1.3e-05     14.6s
+  union M=5 (q=24, eig  1152)  R(0,0)=0.005324533  gap vs prev 2.75e-02  closure  1.5e-07     86.0s

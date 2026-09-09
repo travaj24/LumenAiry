@@ -1,0 +1,124 @@
+build A: {'tag': 'win', 'python': '3.14.6', 'numpy': '2.4.4', 'scipy': '1.17.1', 'platform': 'Windows-11-10.0.26200-SP0', 'blas': 'scipy-openblas'}
+build B: {'tag': 'wsl', 'python': '3.12.3', 'numpy': '2.4.6', 'scipy': '1.17.1', 'platform': 'Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39', 'blas': 'scipy-openblas'}
+
+--- [A] M1 conforming identity (relative to max(R,T) / max|J|) ---
+M1 stripe|stripe  M=5 th=0.00   dR                    3.2551e-15  3.6797e-15   spread 1.15e-01
+M1 stripe|stripe  M=5 th=0.00   dT                    5.6611e-15  2.5475e-15   spread 5.50e-01
+M1 stripe|stripe  M=5 th=0.00   dJ                    5.4031e-15  7.4641e-15   spread 2.76e-01
+M1 stripe|stripe  M=5 th=0.20   dR                    1.2732e-15  6.5074e-15   spread 8.04e-01
+M1 stripe|stripe  M=5 th=0.20   dT                    1.1459e-14  7.1439e-15   spread 3.77e-01
+M1 stripe|stripe  M=5 th=0.20   dJ                    4.9749e-15  8.3195e-15   spread 4.02e-01
+M1 stripe|pillar  M=6 th=0.20   dR                    1.4140e-13  6.8667e-14   spread 5.14e-01
+M1 stripe|pillar  M=6 th=0.20   dT                    1.6677e-13  1.0711e-13   spread 3.58e-01
+M1 stripe|pillar  M=6 th=0.20   dJ                    2.3132e-13  8.8327e-14   spread 6.18e-01
+M1 pillar|pillar  M=6 conical   dR                    8.7536e-15  1.1218e-14   spread 2.20e-01
+M1 pillar|pillar  M=6 conical   dT                    2.9179e-14  4.0202e-14   spread 2.74e-01
+M1 pillar|pillar  M=6 conical   dJ                    5.9510e-14  8.5075e-14   spread 3.00e-01
+M1 3-layer + unif M=5 th=0.15   dR                    9.9959e-15  9.7085e-15   spread 2.88e-02
+M1 3-layer + unif M=5 th=0.15   dT                    2.2483e-14  2.6954e-14   spread 1.66e-01
+M1 3-layer + unif M=5 th=0.15   dJ                    3.9165e-14  4.1447e-14   spread 5.51e-02
+M1 WORST over the 5 stacks                            2.3132e-13  1.0711e-13   spread 5.37e-01
+
+--- [B] isolated mortar vs analytic Fresnel ---
+Fresnel th=0.00 M=5 (2,2)        |dR|                 2.7721e-30  3.2336e-30   spread 1.43e-01
+Fresnel th=0.00 M=5 (2,2)        closure              2.2204e-16  1.1102e-15   spread 8.00e-01
+Fresnel th=0.00 M=5 (2,3)        |dR|                 1.7106e-28  1.9739e-28   spread 1.33e-01
+Fresnel th=0.00 M=5 (2,3)        closure              1.5987e-14  7.9936e-15   spread 5.00e-01
+Fresnel th=0.00 M=5 (3,4)        |dR|                 1.6995e-28  4.7176e-29   spread 7.22e-01
+Fresnel th=0.00 M=5 (3,4)        closure              2.3981e-14  8.4377e-15   spread 6.48e-01
+Fresnel th=0.00 M=7 (2,2)        |dR|                 1.5797e-28  2.1332e-29   spread 8.65e-01
+Fresnel th=0.00 M=7 (2,2)        closure              2.2204e-16  1.3323e-15   spread 8.33e-01
+Fresnel th=0.00 M=7 (2,3)        |dR|                 7.5332e-27  6.3795e-27   spread 1.53e-01
+Fresnel th=0.00 M=7 (2,3)        closure              8.7486e-14  5.7288e-14   spread 3.45e-01
+Fresnel th=0.00 M=7 (3,4)        |dR|                 6.5610e-27  5.7390e-27   spread 1.25e-01
+Fresnel th=0.00 M=7 (3,4)        closure              2.7534e-14  4.8850e-15   spread 8.23e-01
+Fresnel th=0.20 M=5 (2,2)        |dR|                 2.6541e-11  2.6541e-11   spread 1.15e-06
+Fresnel th=0.20 M=5 (2,2)        closure              1.2434e-10  1.2434e-10   spread 3.93e-05
+Fresnel th=0.20 M=5 (2,3)        |dR|                 1.8653e-11  1.8653e-11   spread 1.73e-05
+Fresnel th=0.20 M=5 (2,3)        closure              3.6549e-10  3.6549e-10   spread 3.34e-06
+Fresnel th=0.20 M=5 (3,4)        |dR|                 7.0715e-13  7.0708e-13   spread 9.81e-05
+Fresnel th=0.20 M=5 (3,4)        closure              1.4577e-11  1.4577e-11   spread 5.33e-05
+Fresnel th=0.20 M=7 (2,2)        |dR|                 8.7495e-17  8.2399e-18   spread 9.06e-01
+Fresnel th=0.20 M=7 (2,2)        closure              3.8858e-15  3.3307e-16   spread 9.14e-01
+Fresnel th=0.20 M=7 (2,3)        |dR|                 4.6642e-16  4.1026e-16   spread 1.20e-01
+Fresnel th=0.20 M=7 (2,3)        closure              3.3196e-14  2.3093e-14   spread 3.04e-01
+Fresnel th=0.20 M=7 (3,4)        |dR|                 2.7170e-16  3.5009e-16   spread 2.24e-01
+Fresnel th=0.20 M=7 (3,4)        closure              5.1514e-14  5.9175e-14   spread 1.29e-01
+
+--- [C] M4 vs the exact 1-D oracle ---
+oracle deg12-vs-deg14 self-gap                        2.9240e-08  2.9240e-08   spread 4.37e-08
+M4 mortar M=5       err                               3.9479e-01  3.9479e-01   spread 2.19e-14
+M4 mortar M=5       mirror                            3.9479e-01  3.9479e-01   spread 2.19e-14
+M4 mortar M=5       closure                           4.2901e-04  4.2901e-04   spread 1.29e-11
+M4 mortar M=7       err                               2.9903e-02  2.9903e-02   spread 3.16e-14
+M4 mortar M=7       mirror                            1.4079e-01  1.4079e-01   spread 3.15e-15
+M4 mortar M=7       closure                           7.6696e-07  7.6696e-07   spread 2.90e-10
+M4 mortar M=9       err                               1.7344e-03  1.7344e-03   spread 2.28e-11
+M4 mortar M=9       mirror                            1.1252e-01  1.1252e-01   spread 3.67e-13
+M4 mortar M=9       closure                           4.0107e-09  4.0109e-09   spread 5.18e-05
+M4 union6 M=4       err                               7.0128e-03  7.0128e-03   spread 5.34e-09
+M4 union6 M=4       mirror                            1.1189e-01  1.1189e-01   spread 1.95e-10
+M4 union6 M=4       closure                           9.7955e-06  9.7954e-06   spread 1.27e-05
+
+--- [D] M4c equal-DOF ---
+equal-DOF q=18 err_union                              7.0128e-03  7.0128e-03   spread 5.34e-09
+equal-DOF q=18 err_mortar                             9.1716e-04  9.1716e-04   spread 1.22e-10
+equal-DOF q=18 clo_union                              6.2693e-05  6.2693e-05   spread 5.39e-08
+equal-DOF q=18 clo_mortar                             3.6594e-07  3.6594e-07   spread 2.14e-07
+equal-DOF q=18 ratio                                  1.3078e-01  1.3078e-01   spread 5.22e-09
+equal-DOF q=24 err_union                              5.5647e-04  5.5647e-04   spread 3.36e-11
+equal-DOF q=24 err_mortar                             7.5803e-05  7.5803e-05   spread 4.99e-09
+equal-DOF q=24 clo_union                              2.0768e-07  2.0768e-07   spread 2.35e-08
+equal-DOF q=24 clo_mortar                             2.8516e-10  2.8584e-10   spread 2.35e-03
+equal-DOF q=24 ratio                                  1.3622e-01  1.3622e-01   spread 4.96e-09
+
+--- [E] OOP twin vs berreman_jones_1d ---
+OOP th=0 M=5 (2,2)         dJones                     2.3387e-14  1.7505e-14   spread 2.52e-01
+OOP th=0 M=5 (2,2)         closure                    1.6098e-14  3.9968e-14   spread 5.97e-01
+OOP th=0 M=5 (2,3)         dJones                     1.4863e-13  1.1087e-13   spread 2.54e-01
+OOP th=0 M=5 (2,3)         closure                    2.4425e-14  4.0190e-14   spread 3.92e-01
+OOP th=0 M=7 (2,2)         dJones                     8.6200e-14  1.0024e-13   spread 1.40e-01
+OOP th=0 M=7 (2,2)         closure                    2.2427e-14  1.4433e-13   spread 8.45e-01
+OOP th=0 M=7 (2,3)         dJones                     1.5728e-13  3.4689e-13   spread 5.47e-01
+OOP th=0 M=7 (2,3)         closure                    1.0614e-13  1.1036e-13   spread 3.82e-02
+OOP th=25 M=5 (2,2)        dJones                     2.7275e-09  2.7275e-09   spread 1.37e-06
+OOP th=25 M=5 (2,2)        closure                    6.2077e-10  6.2075e-10   spread 2.79e-05
+OOP th=25 M=5 (2,3)        dJones                     4.0963e-08  4.0963e-08   spread 2.14e-06
+OOP th=25 M=5 (2,3)        closure                    1.8517e-08  1.8517e-08   spread 1.75e-06
+OOP th=25 M=7 (2,2)        dJones                     1.3681e-13  7.6882e-14   spread 4.38e-01
+OOP th=25 M=7 (2,2)        closure                    1.5654e-14  3.3862e-14   spread 5.38e-01
+OOP th=25 M=7 (2,3)        dJones                     2.1757e-13  1.9270e-13   spread 1.14e-01
+OOP th=25 M=7 (2,3)        closure                    1.1680e-13  1.2679e-13   spread 7.88e-02
+
+--- [F] conditioning extremes ---
+rcond M3 pillar (2,3) M=4                             4.5729e-05  4.5729e-05   spread 4.87e-11
+rcond M3 pillar (2,3) M=5                             1.4789e-05  1.4789e-05   spread 3.89e-15
+rcond M3 pillar (2,6) M=4                             1.2831e-05  1.2831e-05   spread 1.86e-14
+rcond M3 pillar (2,6) M=5                             2.8969e-06  2.8969e-06   spread 3.67e-13
+rcond M4 stripe (2,3) M=4                             2.0097e-05  2.0100e-05   spread 1.45e-04
+rcond M4 stripe (2,3) M=5                             3.2979e-05  3.2981e-05   spread 5.92e-05
+rcond M6 taper (2,3,6) M=4                            3.2672e-05  3.2672e-05   spread 2.08e-11
+rcond M6 taper (2,3,6) M=5                            1.0866e-05  1.0866e-05   spread 2.65e-15
+rcond site mortar E-row (MassE_B W_B)         min     2.8969e-06  2.8969e-06   spread 3.67e-13
+rcond site mortar E-row (MassE_B W_B)         max     1.0133e-04  1.0133e-04   spread 1.47e-15
+rcond site mortar H-row (MassH_A V_A)         min     2.3330e-05  2.3330e-05   spread 1.82e-13
+rcond site mortar H-row (MassH_A V_A)         max     3.8774e-04  3.8774e-04   spread 6.79e-11
+rcond site mortar interface (I + BA)          min     6.4808e-04  6.4808e-04   spread 3.07e-13
+rcond site mortar interface (I + BA)          max     1.8503e-02  1.8503e-02   spread 7.78e-13
+
+=== the 12 LARGEST cross-build spreads ===
+  9.14e-01  Fresnel th=0.20 M=7 (2,2)        closure   (3.8858e-15 vs 3.3307e-16)
+  9.06e-01  Fresnel th=0.20 M=7 (2,2)        |dR|   (8.7495e-17 vs 8.2399e-18)
+  8.65e-01  Fresnel th=0.00 M=7 (2,2)        |dR|   (1.5797e-28 vs 2.1332e-29)
+  8.45e-01  OOP th=0 M=7 (2,2)         closure   (2.2427e-14 vs 1.4433e-13)
+  8.33e-01  Fresnel th=0.00 M=7 (2,2)        closure   (2.2204e-16 vs 1.3323e-15)
+  8.23e-01  Fresnel th=0.00 M=7 (3,4)        closure   (2.7534e-14 vs 4.8850e-15)
+  8.04e-01  M1 stripe|stripe  M=5 th=0.20   dR   (1.2732e-15 vs 6.5074e-15)
+  8.00e-01  Fresnel th=0.00 M=5 (2,2)        closure   (2.2204e-16 vs 1.1102e-15)
+  7.22e-01  Fresnel th=0.00 M=5 (3,4)        |dR|   (1.6995e-28 vs 4.7176e-29)
+  6.48e-01  Fresnel th=0.00 M=5 (3,4)        closure   (2.3981e-14 vs 8.4377e-15)
+  6.18e-01  M1 stripe|pillar  M=6 th=0.20   dJ   (2.3132e-13 vs 8.8327e-14)
+  5.97e-01  OOP th=0 M=5 (2,2)         closure   (1.6098e-14 vs 3.9968e-14)
+
+quantities compared: 93; spread > 10%: 42; spread > 1%: 46; spread == 0 (bit-identical): 0
+wrote f1_compare.json
