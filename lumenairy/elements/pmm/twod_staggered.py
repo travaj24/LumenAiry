@@ -34,6 +34,27 @@ Why this over the FMM-floored hybrid
   boundaries (Eq. 26), so ``eps`` is exact per element (no Gibbs); the total
   efficiencies are invariant to the pillar's position in the cell.
 
+Anisotropy (Stage A, in-plane)
+------------------------------
+``eps_cell`` may be a scalar ``(Nx, Ny)`` map (the isotropic solver
+:func:`pmm_efficiency_2d_staggered`, unchanged bit-for-bit) OR a ``(Nx, Ny,
+3, 3)`` BLOCK-FORM tensor map (Granet Eq. 7, ``[[e11, e12, 0], [e21, e22, 0],
+[0, 0, e33]]``) driven through :func:`pmm_jones_2d_staggered`.  In-plane
+anisotropy is the paper's GENERAL case, of which the shipped isotropic solver
+was the reduction: it keeps the SAME ``2 q^2`` second-order eigenproblem, the
+same ``[W; -V] <-> -lam`` symmetry, the same square Redheffer cascade and the
+same far field.  What it adds is the two MIXED ``[eps_t]`` masses (Eq. 40),
+the ``e33``-weighted ``Meps33`` (Eq. 41) and the second term in each ``K_zt``
+column (Eq. 44, the divergence of ``D_t = eps_t E_t``); the Eq. 25 H-partner
+picks up the same two mixed blocks.  Rotated-uniaxial (liquid-crystal) and
+GYROTROPIC (``e12 = -e21 = i b``, Hermitian, lossless) media are both in
+scope.  OUT-OF-PLANE coupling (``e_xz``/``e_yz``/``e_zx``/``e_zy``) breaks
+Eq. 16 -- ``div D = 0`` no longer slaves ``E3`` algebraically -- so it is
+NOT a second-order problem here and raises ``NotImplementedError`` pointing at
+the out-of-plane-capable hybrid
+:func:`~lumenairy.elements.pmm.pmm_jones_2d`.  The two HALF-SPACES stay
+isotropic (the Rayleigh match is scalar), as in the hybrid.
+
 Scope / limitations
 -------------------
 * **Axis-aligned RECTANGULAR pillars only** -- the walls must coincide with the
@@ -48,8 +69,15 @@ Scope / limitations
   accuracy QUALITY (no-floor, exact sidewalls, position invariance, pinning the
   value RCWA converges toward), not raw per-DOF speed.  A smooth-field region
   (vacuum / homogeneous) converges spectrally.
-* Single layer, isotropic scalar TE/TM, NumPy/SciPy dense generalized eig (not
+* Single layer per entry (cascade with
+  :class:`~lumenairy.elements.pmm.PMM2DStackPure`); scalar TE/TM through
+  :func:`pmm_efficiency_2d_staggered`, in-plane tensors through
+  :func:`pmm_jones_2d_staggered`; NumPy/SciPy dense generalized eig (not
   JAX-differentiable).
+* A UNIFORM TENSOR region is NOT eps-free-separable (``K_zt`` mixes e11/e21
+  while ``Meps33`` carries e33 alone), so it takes a full region eig like a
+  patterned cell -- the shared geometric eig :func:`_homog_geom_cache` is
+  scalar-only and raises on a tensor assembly.
 
 Conventions match the rest of the library: PUBLIC ``exp(-i w t)`` (``n = n + i
 kappa``, ``Im eps > 0`` for loss), forward ``exp(+i kz z)``, ``Im(kz) >= 0``.
@@ -59,7 +87,8 @@ Equations implemented (Granet 2023, verified against the paper):
   Eq.23-24 :  -gamma^2 R [E1;E2] = L [E1;E2];  R = C[chi_t]C (nonmagnetic
               chi_t=I -> R=C@C=-I);  L = k^2[eps_t] + S_tt - K_tz(eps33)^-1 K_zt
   Eq.20-22 :  S_tt = [d2;-d1] chi33 [d2,-d1];  K_tz = C[d2;-d1];
-              K_zt = [d1 eps, d2 eps] (isotropic)
+              K_zt = [d1 e11 + d2 e21, d2 e22 + d1 e12]  (isotropic
+              reduction: [d1 eps, d2 eps])
   Eq.16-18 :  E3 slaved by div(D)=0 (the Schur term)
   Eq.30-33 :  modified Legendre Ltilde_m; continuity hats; Bloch periodic hat
   Eq.34    :  staggered tensor expansion E1=B(x)Btilde, E2=Btilde(x)B,
@@ -86,9 +115,73 @@ from ._core import (
     _redheffer_star,
 )
 
-__all__ = ["pmm_efficiency_2d_staggered"]
+# Tensor-entry guards shared with the hybrid 2-D Jones solver (the RELATIVE
+# out-of-plane floor + the e_zz != 0 precondition are one contract across the
+# two engines -- reused, not copied, so the floor cannot drift apart).
+from .twod_jones import _require_nonzero_ezz, _tile_is_offplane
+
+__all__ = ["pmm_efficiency_2d_staggered", "pmm_jones_2d_staggered"]
 
 _C = np.complex128
+
+
+def _require_block_form(fn_name, tile33):
+    """Stage-A tensor gate: the cell must be Granet BLOCK-FORM (Eq. 7), i.e.
+    in-plane ``[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]`` with ``e33 != 0``.
+
+    OUT-OF-PLANE coupling (``e_xz/e_yz/e_zx/e_zy``) breaks Eq. 16: ``div D = 0``
+    no longer slaves ``E3`` algebraically (``E3`` appears under ``d_t`` through
+    ``e13/e23`` while ``gamma`` multiplies ``e31/e32``), so the problem is no
+    longer the second-order pencil this module solves.  It raises
+    ``NotImplementedError`` naming the out-of-plane-capable hybrid
+    :func:`~lumenairy.elements.pmm.pmm_jones_2d`.
+
+    The out-of-plane test is RELATIVE (``1e-12 * scale``), shared verbatim with
+    the hybrid via :func:`~lumenairy.elements.pmm.twod_jones._tile_is_offplane`:
+    a physically in-plane cell built by ROTATING a diagonal tensor carries
+    ~1e-16 float noise in the xz/yz/zx/zy slots (``uniaxial_tensor(no, ne,
+    pi/2, phi)`` has ``cos(pi/2) = 6.1e-17``), and a strict ``> 0`` would
+    refuse it."""
+    tile33 = np.asarray(tile33, dtype=_C)
+    if _tile_is_offplane(tile33):
+        off = np.abs(tile33[..., [0, 1, 2, 2], [2, 2, 0, 1]])
+        raise NotImplementedError(
+            f"{fn_name}: OUT-OF-PLANE tensor coupling (e_xz/e_yz/e_zx/e_zy; "
+            f"largest off-plane entry {float(np.max(off)):.3g}) is not "
+            f"implemented in the PURE (no-floor) staggered 2-D PMM -- Stage A "
+            f"is the Granet 2023 BLOCK-FORM in-plane tensor "
+            f"[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]], for which the "
+            f"div(D)=0 elimination keeps the second-order eigenproblem.  Use "
+            f"pmm_jones_2d (the hybrid 2-D PMM), which supports the full (3, 3) "
+            f"tensor including out-of-plane coupling.")
+    _require_nonzero_ezz(fn_name, tile33)
+
+
+def _validate_stag_cell(fn_name, eps_cell):
+    """Shape + SQUARE-grid + block-form validation shared by every anisotropic
+    staggered entry (:func:`pmm_jones_2d_staggered` and
+    :meth:`~lumenairy.elements.pmm.PMM2DStackPure.add_layer`), so each names
+    ITSELF in its message while enforcing one contract.  A ``(Nx, Ny)`` SCALAR
+    map is returned unchanged (it stays on the isotropic assembly); a
+    ``(Nx, Ny, 3, 3)`` cell is gated by :func:`_require_block_form`."""
+    cell = np.asarray(eps_cell, dtype=_C)
+    if cell.ndim == 4:
+        if cell.shape[2:] != (3, 3):
+            raise ValueError(
+                f"{fn_name}: a tensor eps_cell must be (Nx, Ny, 3, 3), got "
+                f"shape {cell.shape}.")
+        _require_block_form(fn_name, cell)
+    elif cell.ndim != 2:
+        raise ValueError(
+            f"{fn_name}: eps_cell must be a 2-D (Nx, Ny) scalar grid or a "
+            f"(Nx, Ny, 3, 3) block-form tensor grid, got shape {cell.shape}.")
+    if cell.shape[0] != cell.shape[1]:
+        raise ValueError(
+            f"{fn_name}: eps_cell must be SQUARE (Nx == Ny; the staggered "
+            f"tensor-product basis requires Nx*(M-1) == Ny*(M-1)), got "
+            f"{cell.shape}.  Pad the uniform axis into equal segments (e.g. "
+            f"tile a (2, 1) cell to (2, 2)).")
+    return cell
 
 
 # === 1-D modified-Legendre staggered basis + 2-D transverse-E eigensolver ===
@@ -361,7 +454,13 @@ class Granet2DTransverseE:
     px, py    : period (units of wavelength)
     Nx, Ny    : segments per axis (walls on eps steps)
     M         : modified-Legendre functions per segment per axis (degree knob)
-    eps_cell  : (Nx, Ny) array of constant eps per segment-cell
+    eps_cell  : (Nx, Ny) array of constant SCALAR eps per segment-cell, OR
+                (Nx, Ny, 3, 3) BLOCK-FORM permittivity tensors (Granet Eq. 7,
+                ``[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]``) -- see
+                :meth:`_assemble`.  Scalar input runs the shipped isotropic
+                assembly BIT-FOR-BIT (a dispatch, not a rewrite); the caller is
+                responsible for the out-of-plane / e33 gate
+                (:func:`_require_block_form`).
     alpha0x, alpha0y : Bloch wavenumbers (units 1/lambda) -> tau_x, tau_y
     k0        : 2*pi / wavelength (numerically 2*pi if coords in wavelengths)
     """
@@ -375,7 +474,13 @@ class Granet2DTransverseE:
         tauy = np.exp(-1j * alpha0y * py)
         self.bx = Basis1D(px, Nx, M, taux)
         self.by = Basis1D(py, Ny, M, tauy)
-        self.eps_cell = np.asarray(eps_cell, dtype=_C)   # (Nx, Ny)
+        self.eps_cell = np.asarray(eps_cell, dtype=_C)   # (Nx,Ny) or (Nx,Ny,3,3)
+        if self.eps_cell.ndim not in (2, 4) or (
+                self.eps_cell.ndim == 4 and self.eps_cell.shape[2:] != (3, 3)):
+            raise ValueError(
+                f"Granet2DTransverseE: eps_cell must be (Nx, Ny) scalar or "
+                f"(Nx, Ny, 3, 3) block-form tensor, got shape "
+                f"{self.eps_cell.shape}.")
         self.q = self.bx.dim                              # = Nx*(M-1)
         assert self.bx.dim == self.by.dim, "use square (Nx*(M-1)==Ny*(M-1))"
         self._assemble()
@@ -397,16 +502,22 @@ class Granet2DTransverseE:
         self.Ctt_y = by.mixed(by.Btilde, by.Btilde)
 
     # --- eps-weighted per-axis-pair segment tensors (for 2-D eps assembly) ---
-    def _eps_weighted(self, refx_pair, refy_pair):
+    def _eps_weighted(self, refx_pair, refy_pair, wmap=None):
         """Assemble a 2-D eps-weighted Galerkin matrix:
           sum_{sx,sy} eps[sx,sy] * kron( Gy[sy], Gx[sx] )
         where Gx = per-segment x-matrix between the x set-pair, Gy similarly.
-        refx_pair = (basis_x, refmat_x, setLx, setRx); same for y."""
+        refx_pair = (basis_x, refmat_x, setLx, setRx); same for y.
+
+        ``wmap`` is the per-cell scalar weight map ``(Nx, Ny)``; ``None`` (the
+        isotropic default) uses ``self.eps_cell``.  The TENSOR assembly passes
+        one COMPONENT map (e11 / e12 / e21 / e22 / e33) per block, so the
+        arithmetic is identical to the scalar path when that component IS
+        ``eps_cell`` (the G1 bit-identity reduction)."""
         bx, refx, sLx, sRx = refx_pair
         by, refy, sLy, sRy = refy_pair
         Gx = _global_pair_segmat(bx, refx, sLx, sRx)      # (Nx, dLx, dRx)
         Gy = _global_pair_segmat(by, refy, sLy, sRy)      # (Ny, dLy, dRy)
-        eps = self.eps_cell                               # (Nx, Ny)
+        eps = self.eps_cell if wmap is None else wmap     # (Nx, Ny)
         dLx, dRx = Gx.shape[1], Gx.shape[2]
         dLy, dRy = Gy.shape[1], Gy.shape[2]
         out = np.zeros((dLy * dLx, dRy * dRx), dtype=_C)
@@ -417,11 +528,47 @@ class Granet2DTransverseE:
         return out
 
     def _assemble(self):
+        """Build R (Eq. 24) and L = k^2[eps_t] + S_tt - K_tz eps33^-1 K_zt.
+
+        ISOTROPIC (scalar ``(Nx, Ny)`` eps_cell) and BLOCK-FORM ANISOTROPIC
+        ((Nx, Ny, 3, 3)) share ONE body: the component maps ``e11/e12/e21/
+        e22/e33`` are ``None`` for the scalar case, which makes every
+        eps-weighted call fall back to ``self.eps_cell`` -- so the scalar
+        arithmetic is EXACTLY the shipped isotropic assembly (gate G1 pins
+        the bit identity against the tensor ``e*I`` arm).
+
+        The anisotropic terms (Granet 2023 Appendix A, conjugated into the
+        module's PUBLIC ``exp(-i w t)`` convention -- the operators carry no
+        explicit ``i``, so the bridge is exactly "use the public eps"):
+
+        * Eq. 40 -- FOUR ``[eps_t]`` blocks.  ``e11`` in V1xV1 and ``e22`` in
+          V2xV2 as before, PLUS the MIXED masses ``<V1| e12 |V2>`` and
+          ``<V2| e21 |V1>`` (kron of the UNLIKE-set 1-D masses).
+        * Eq. 41 -- ``Meps33`` weighted by ``e33`` (not the scalar eps).
+        * Eq. 42/43 -- ``S_tt`` and ``K_tz`` unchanged (chi_t = I, chi33 = 1):
+          pure geometry.
+        * Eq. 44 -- ``K_zt`` gains a SECOND term per column: it is the
+          divergence of ``D_t = eps_t E_t``, so column 1 pairs ``d2`` with
+          ``e21`` and column 2 pairs ``d1`` with ``e12``.
+        * Eq. 25 -- the H-partner ``Lhh = k^2[eps_t] + S_tt`` inherits the two
+          mixed blocks; :func:`_region_modes` folds them in from
+          ``self.Et_offdiag``.
+        """
         bx, by = self.bx, self.by
         k0 = self.k0
         self._axis_mats()
         q = self.q
         qq = q * q
+        # component maps: None -> the eps-weighted helpers use self.eps_cell
+        tensor = self.eps_cell.ndim == 4
+        if tensor:
+            e11 = self.eps_cell[..., 0, 0]
+            e12 = self.eps_cell[..., 0, 1]
+            e21 = self.eps_cell[..., 1, 0]
+            e22 = self.eps_cell[..., 1, 1]
+            e33 = self.eps_cell[..., 2, 2]
+        else:
+            e11 = e12 = e21 = e22 = e33 = None
 
         # ----- per-axis 1-D primitive matrices (real inner product) -----
         # Mass (no deriv) between set pairs:
@@ -447,10 +594,22 @@ class Granet2DTransverseE:
         # --- [eps_t] : eps-weighted component masses (k^2[eps]/k0^2 = [eps]) ---
         Et_11 = self._eps_weighted(
             (bx, bx.m_ref, bx.B, bx.B),
-            (by, by.m_ref, by.Btilde, by.Btilde))   # E1 space, V1
+            (by, by.m_ref, by.Btilde, by.Btilde), e11)   # E1 space, V1
         Et_22 = self._eps_weighted(
             (bx, bx.m_ref, bx.Btilde, bx.Btilde),
-            (by, by.m_ref, by.B, by.B))             # E2 space, V2
+            (by, by.m_ref, by.B, by.B), e22)             # E2 space, V2
+        # Eq.40 MIXED masses (tensor only): <V1| e12 |V2> and <V2| e21 |V1>.
+        # V1 = B(x1) (x) Btilde(x2), V2 = Btilde(x1) (x) B(x2), so each mixed
+        # block is a kron of the two UNLIKE-set 1-D masses -- <B|Btil>_x with
+        # <Btil|B>_y for the (1,2) block, and the transposed pairing for (2,1).
+        Et_12 = Et_21 = None
+        if tensor:
+            Et_12 = self._eps_weighted(
+                (bx, bx.m_ref, bx.B, bx.Btilde),
+                (by, by.m_ref, by.Btilde, by.B), e12)    # V1 test, V2 trial
+            Et_21 = self._eps_weighted(
+                (bx, bx.m_ref, bx.Btilde, bx.B),
+                (by, by.m_ref, by.B, by.Btilde), e21)    # V2 test, V1 trial
 
         # --- DIRECTED DERIVATIVE OPERATORS into the V3 (Btil x Btil) space ---
         # We discretize the STRONG symbol exactly as in the analytic check:
@@ -509,7 +668,7 @@ class Granet2DTransverseE:
         # eps33 mass in V3 (Eq.41): <V3| eps | V3>
         Meps33 = self._eps_weighted(
             (bx, bx.m_ref, bx.Btilde, bx.Btilde),
-            (by, by.m_ref, by.Btilde, by.Btilde))
+            (by, by.m_ref, by.Btilde, by.Btilde), e33)
 
         # K_zt = [d1 eps, d2 eps] (V3 <- [E1;E2]).  This is the divergence of the
         # D-field d(eps E).  The CONSISTENT (mimetic) discretization is the eps-
@@ -524,9 +683,21 @@ class Granet2DTransverseE:
         #   (deriv-on-LEFT, i.e. on the V3 test) -- realized by _eps_dir with the
         #   derivative on the TEST set Btilde of the x-axis.
         Kzt_E1 = -self._eps_dir(bx, "Btilde", "dL", "B",
-                                by, "Btilde", "m", "Btilde") / k0   # <V3|d1(eps)|V1>
+                                by, "Btilde", "m", "Btilde",
+                                wmap=e11) / k0             # <V3|d1(e11 .)|V1>
         Kzt_E2 = -self._eps_dir(bx, "Btilde", "m", "Btilde",
-                                by, "Btilde", "dL", "B") / k0       # <V3|d2(eps)|V2>
+                                by, "Btilde", "dL", "B",
+                                wmap=e22) / k0             # <V3|d2(e22 .)|V2>
+        if tensor:
+            # Eq.44 second terms: div(D_t) also picks up d2(e21 E1) in column 1
+            # and d1(e12 E2) in column 2.  The derivative again sits on the V3
+            # TEST function ("dL"), now on the OTHER axis than the shipped term.
+            Kzt_E1 = Kzt_E1 - self._eps_dir(
+                bx, "Btilde", "m", "B",
+                by, "Btilde", "dL", "Btilde", wmap=e21) / k0   # <V3|d2(e21 .)|V1>
+            Kzt_E2 = Kzt_E2 - self._eps_dir(
+                bx, "Btilde", "dL", "Btilde",
+                by, "Btilde", "m", "B", wmap=e12) / k0         # <V3|d1(e12 .)|V2>
         Kzt = np.concatenate([Kzt_E1, Kzt_E2], axis=1)     # (q^2, 2q^2)
 
         # Schur term  K_tz @ Meps33^{-1} @ K_zt  (eps33^-1 = solve vs Meps33).
@@ -536,6 +707,9 @@ class Granet2DTransverseE:
         Lmat = np.zeros((2 * qq, 2 * qq), dtype=_C)
         Lmat[:qq, :qq] = Et_11
         Lmat[qq:, qq:] = Et_22
+        if tensor:
+            Lmat[:qq, qq:] = Et_12
+            Lmat[qq:, :qq] = Et_21
         Lmat += Stt
         Lmat -= Schur
 
@@ -547,16 +721,24 @@ class Granet2DTransverseE:
         self.Rmat = Rmat
         self.Lmat = Lmat
         self.Et_blocks = (Et_11, Et_22)
+        # Eq.40 mixed masses, needed ONLY by the Eq.25 H-partner recovery
+        # (Lhh).  None on the scalar path -> the isotropic solver retains not
+        # one byte more than before (audit P3-37).
+        self.Et_offdiag = (Et_12, Et_21) if tensor else None
         self.Stt = Stt
         self.Schur = Schur
         self.dimtot = 2 * qq
 
     # --- eps-weighted directed (deriv) 2-D operator into V3 ------------------
-    def _eps_dir(self, bx, lx, opx, rx, by, ly, opy, ry):
+    def _eps_dir(self, bx, lx, opx, rx, by, ly, opy, ry, wmap=None):
         """Assemble  sum_{sx,sy} eps[sx,sy] * kron(Gy, Gx)  where Gx is the
         per-segment x-matrix between sets (lx-test, rx-trial) with op opx in
         {'m'(mass), 'd'(deriv-on-trial)}, similarly Gy.  Realizes the eps-
-        weighted <V3 | d_k (eps .) | Vt> matrix exactly (walls on cell bnds)."""
+        weighted <V3 | d_k (eps .) | Vt> matrix exactly (walls on cell bnds).
+
+        ``wmap`` is the per-cell weight map; ``None`` uses ``self.eps_cell``
+        (the isotropic default).  The tensor K_zt columns (Eq. 44) pass one
+        component map per term."""
         def segmat(basis, lset, op, rset):
             sL = getattr(basis, lset)
             sR = getattr(basis, rset)
@@ -575,10 +757,11 @@ class Granet2DTransverseE:
             return scale * np.einsum("isa,jsa->sij", np.conj(Lt), RR)
         Gx = segmat(bx, lx, opx, rx)
         Gy = segmat(by, ly, opy, ry)
+        eps = self.eps_cell if wmap is None else wmap
         out = np.zeros((Gy.shape[1] * Gx.shape[1],
                         Gy.shape[2] * Gx.shape[2]), dtype=_C)
         for sx in range(bx.N):
-            Wy = np.einsum("y,yij->ij", self.eps_cell[sx, :], Gy)
+            Wy = np.einsum("y,yij->ij", eps[sx, :], Gy)
             out += np.kron(Wy, Gx[sx])
         return out
 
@@ -733,11 +916,18 @@ def _region_modes(solver: Granet2DTransverseE):
     # H recovery (Eq.25):  gamma C [H1;H2] = Lhh [E1;E2]
     #   Lhh = Et + Stt  (the L WITHOUT the div(D)=0 Schur term).
     #   [H1;H2] = (1/gamma) C^{-1} Lhh [E]  = (k0/(gamma/k0)) (-C) G^{-1} Lhh [E].
+    # For a BLOCK-FORM TENSOR cell [eps_t] carries the Eq.40 MIXED blocks too,
+    # so Lhh is full 2x2-block (H1 still lives in V2 and H2 in V1, so the
+    # interface match stays a SQUARE modal match -- the cascade is untouched).
     Et11, Et22 = solver.Et_blocks
     qq = solver.q * solver.q
     Lhh = np.zeros_like(L)
     Lhh[:qq, :qq] = Et11
     Lhh[qq:, qq:] = Et22
+    if solver.Et_offdiag is not None:
+        Et12, Et21 = solver.Et_offdiag
+        Lhh[:qq, qq:] = Et12
+        Lhh[qq:, :qq] = Et21
     Lhh = Lhh + solver.Stt
     # block C^{-1} = -C = [[0,-1],[1,0]] acting on the 2-block coeff vector:
     #   (-C) [a;b] = [-b; a]  (a = top block, b = bottom block).
@@ -770,7 +960,21 @@ def _homog_geom_cache(solver: Granet2DTransverseE):
     single shared one -- 3 region eigs -> 2, the dominant cost (the eig is ~97% of a
     region solve).  ``solver`` must be a HOMOGENEOUS assembly (uniform ``eps_cell``)
     so its ``Stt``/``Schur``/``Rmat`` are the geometric operators.
+
+    SCALAR ONLY.  The eps-free split needs ``Meps33 = eps*G3`` and
+    ``Kzt = eps*Kzt0`` to cancel; for a TENSOR cell ``Kzt`` mixes e11/e21 (and
+    e22/e12) while ``Meps33`` carries e33 alone, so ``Schur`` is NOT tensor-free
+    and a uniform anisotropic region takes its own :func:`_region_modes` eig
+    (that is what :class:`~lumenairy.elements.pmm.PMM2DStackPure` does with a
+    ``(3, 3)`` uniform layer).  A tensor assembly here RAISES rather than
+    silently returning a wrong geometric basis.
     """
+    if solver.eps_cell.ndim == 4:
+        raise ValueError(
+            "_homog_geom_cache: the shared eps-free geometric eig is defined "
+            "for a uniform SCALAR region only -- a uniform TENSOR region's "
+            "div(D)=0 Schur term is not eps-free (K_zt mixes e11/e21 while "
+            "Meps33 carries e33), so it needs its own _region_modes eig.")
     G = -solver.Rmat                       # block field Gram (Hermitian PD)
     Stt = solver.Stt
     L0_geom = Stt - solver.Schur           # = Lmat - eps*G, manifestly eps-free
@@ -917,6 +1121,17 @@ def pmm_efficiency_2d_staggered(
         raise ValueError("pmm_efficiency_2d_staggered: degree (modified-Legendre "
                          "count M) must be >= 3.")
     eps_cell = np.asarray(eps_cell, dtype=_C)
+    if eps_cell.ndim == 4:
+        # ANISOTROPIC entry point separation (mirrors the scalar
+        # pmm_efficiency_2d_cell vs tensor pmm_jones_2d split): this entry is
+        # scalar-only and returns SINGLE-polarization efficiencies, which a
+        # tensor cell does not admit (the two incident polarizations mix).
+        raise ValueError(
+            f"pmm_efficiency_2d_staggered: eps_cell must be a 2-D (Nx, Ny) "
+            f"SCALAR array; got a (Nx, Ny, 3, 3) tensor cell of shape "
+            f"{eps_cell.shape}.  Use pmm_jones_2d_staggered (the anisotropic "
+            f"no-floor entry: it drives BOTH incident polarizations and "
+            f"returns (orders, R, T, jones)).")
     if eps_cell.ndim != 2:
         raise ValueError(
             f"pmm_efficiency_2d_staggered: eps_cell must be a 2-D (Nx, Ny) "
@@ -1068,3 +1283,108 @@ def pmm_efficiency_2d_staggered(
     # cross-suite return shape: unpacks as (orders, R, T); .dof = 2*q^2 (the modal
     # eigenproblem dimension).  Was a bare 4-tuple (orders, R, T, dof) pre-v5.12.
     return Efficiency2D(orders2d, R, T, 2 * qq)
+
+
+# =========================================================================== #
+# ANISOTROPIC (block-form tensor) Jones entry -- the no-floor mirror of
+# pmm_jones_2d.
+# =========================================================================== #
+def pmm_jones_2d_staggered(
+    period_x: float,
+    period_y: float,
+    eps_cell,
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    wavelength: float,
+    *,
+    degree: int = 8,
+    n_modes: int | None = None,
+    n_orders: int = 7,
+    theta: float = 0.0,
+    phi: float = 0.0,
+):
+    """Rigorous 2-D crossed grating with an IN-PLANE ANISOTROPIC (block-form
+    tensor) cell, by the canonical NO-FLOOR staggered PMM -- the anisotropic
+    entry of :func:`pmm_efficiency_2d_staggered` and the no-floor mirror of the
+    FMM-floored hybrid :func:`~lumenairy.elements.pmm.pmm_jones_2d`.
+
+    Both incident polarizations are driven, so the return is the
+    :func:`~lumenairy.elements.pmm.pmm_jones_2d` /
+    :meth:`~lumenairy.elements.pmm.PMM2DStackPure.solve` /
+    :func:`~lumenairy.elements.rcwa.rcwa_jones_2d` shape.
+
+    Parameters
+    ----------
+    period_x, period_y : float
+        Unit-cell periods (metres).
+    eps_cell : (Nx, Ny, 3, 3) or (Nx, Ny) array_like of complex
+        Per-segment permittivity over one unit cell (PUBLIC convention
+        ``Im(eps) > 0`` for loss).  A ``(Nx, Ny)`` SCALAR map is promoted to
+        ``e * I`` per cell.  Tensors must be Granet BLOCK-FORM (Eq. 7):
+        ``[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]`` with ``e33 != 0``.
+        OUT-OF-PLANE coupling (``e_xz``/``e_yz``/``e_zx``/``e_zy`` above a
+        relative ``1e-12`` floor) raises ``NotImplementedError`` -- use
+        :func:`~lumenairy.elements.pmm.pmm_jones_2d`, whose ``4Nf`` generator
+        handles it.  The grid MUST be SQUARE (``Nx == Ny``) and the walls are
+        the segment boundaries (exact ``eps`` per element, Eq. 26).
+    n_substrate, n_superstrate : complex
+        Half-space refractive indices.  The half-spaces are ISOTROPIC (the
+        Rayleigh match is scalar); an anisotropic half-space is out of scope.
+    depth, wavelength : float
+        Layer thickness / vacuum wavelength (metres).
+    degree : int, optional
+        Modified-Legendre function count ``M`` per segment per axis (the modal
+        convergence knob).  Default 8.  ``n_modes`` is the clearer alias.
+    n_modes : int, optional
+        Alias for ``degree``; overrides it when given.
+    n_orders : int, optional
+        Half-width of the retained Rayleigh order set for the once-only forward
+        far-field projection.  The result is n_orders-INDEPENDENT (no Fourier
+        floor) as long as it covers the propagating orders.  Default 7.
+    theta, phi : float, optional
+        Conical incidence polar / azimuth angles (radians).
+
+    Returns
+    -------
+    orders : (Nfo, 2) int ndarray
+        Retained ``(m, n)`` diffraction-order pairs.
+    R_eff, T_eff : (2, Nfo) float ndarray
+        Reflected / transmitted efficiency per order; row 0 = incident ``E_x``,
+        row 1 = incident ``E_y``.
+    jones_reflection : (2, 2) complex ndarray
+        Zeroth-order REFLECTION Jones in the lab ``(x, y)`` basis, PUBLIC
+        ``exp(-i w t)``, columns = response to incident ``E_x`` / ``E_y``.
+        Unlike :func:`~lumenairy.elements.pmm.pmm_jones_2d` (which solves in an
+        internal conjugated gauge and conjugates back), this cascade is PUBLIC
+        end to end -- there is NO conjugation bridge anywhere in this module.
+
+    Notes
+    -----
+    Formulation: Granet, J. Opt. Soc. Am. A 40, 652 (2023), Eqs. 23-25 with the
+    general block-form ``[eps_t]`` (Appendix A Eqs. 40, 41, 44).  In-plane
+    anisotropy keeps the SAME ``2q^2`` second-order eigenproblem, the same
+    ``[W; -V] <-> -lam`` symmetry and the same square Redheffer cascade as the
+    isotropic solver, so it inherits the whole no-floor architecture (and the
+    corner cap, the near-cutoff caveat, and the union-grid rule).  The paper
+    uses ``exp(+i w t)``; a tensor quoted from it must be CONJUGATED before it
+    is passed here.
+
+    A GYROTROPIC cell (``e12 = -e21 = i b``, Hermitian) is lossless and fully
+    supported; its ``+/-`` order asymmetry is the observable that a sign error
+    in ``e12``/``e21`` would break (energy checks cannot see it).
+    """
+    from .stack2d_pure import PMM2DStackPure  # (cycle-free: lazy)
+    # Validate HERE so the message names this entry, then hand the checked cell
+    # to the single-layer pure cascade (one implementation of the physics).
+    cell = _validate_stag_cell("pmm_jones_2d_staggered", eps_cell)
+    M = int(degree if n_modes is None else n_modes)
+    if M < 3:
+        raise ValueError("pmm_jones_2d_staggered: degree / n_modes (the "
+                         "modified-Legendre count M) must be >= 3.")
+    stack = PMM2DStackPure(period_x, period_y, n_superstrate=n_superstrate,
+                           n_substrate=n_substrate, n_modes=M,
+                           n_orders=int(n_orders))
+    stack.add_layer(float(depth), eps_cell=cell)
+    stack.set_source(float(wavelength), theta=float(theta), phi=float(phi))
+    return stack.solve(jones=True)

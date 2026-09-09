@@ -6,7 +6,8 @@ Split into submodules for readability (the public API is unchanged):
 public 1-D entry points), ``stack`` (PMMStack), ``twod`` (the hybrid 2-D PMM,
 ``pmm_efficiency_2d`` / ``pmm_efficiency_2d_cell``), ``twod_jones`` (the
 anisotropic 2-D Jones solver ``pmm_jones_2d``), ``twod_staggered`` (the
-no-floor staggered 2-D PMM, ``pmm_efficiency_2d_staggered``).  Re-exported so
+no-floor staggered 2-D PMM, ``pmm_efficiency_2d_staggered`` /
+``pmm_jones_2d_staggered``).  Re-exported so
 ``lumenairy.elements.pmm.<name>`` resolves for every public name AND the
 test-imported / monkeypatched privates (the slant dispatch spies these)."""
 from ._core import *
@@ -31,7 +32,7 @@ __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_jax",
            "pmm_graded_segments",
            "grating_convergence_class", "classify_from_grating",
            "pmm_efficiency_2d", "pmm_efficiency_2d_cell", "pmm_jones_2d",
-           "pmm_efficiency_2d_staggered",
+           "pmm_efficiency_2d_staggered", "pmm_jones_2d_staggered",
            "PMM2DStack", "PMM2DStackHybrid", "PMM2DStack_hybrid",
            "PMM2DStackPure",
            "PreparedPMM2D", "prepare_pmm_2d", "prepare_pmm_2d_cell",
