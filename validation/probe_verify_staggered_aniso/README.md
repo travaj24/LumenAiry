@@ -27,6 +27,7 @@ cd /c/tmp/lum_aniso && PYTHONPATH=/c/tmp/lum_aniso OMP_NUM_THREADS=1 \
 | `v5_tripwire.py` | the lossless-closure tripwire: the (eps_pillar, M) sweep behind its 1.82x fail-before margin, plus two ENGINEERED breaks (a rescaled modal `V`, and a non-unitary `lam`) | 40 s |
 | `v6_doc_numbers.py` | re-runs the BUILD DOC's own tables T3-T9 on the build's own fixtures, by importing the shipped test module's helpers ("right conclusion, wrong numbers" check) | 60 s |
 | `v7_thread_spread.py <tag>` | every bar quantity in the test file, measured at `OPENBLAS_NUM_THREADS` 1 and then 4 -- a real (partial) probe of the last-bit envelope TESTING_STANDARDS rule 5 asks for.  Run twice with different caps and diff | 25 s x2 |
+| `v8_wood_anomaly_path_split.py` | reproducer for the scalar/tensor Wood-anomaly `eps`-list split (build doc open item 6): a scalar cell and its `e*I` promotion differ by 4.59e-08 when an order sits on a LAYER's own Rayleigh cutoff, and are bit-identical otherwise | 3 s |
 
 `out_*.json` are the recorded readings of the 2026-09-09 run on
 tesla-ryzen (Windows 11, CPython 3.14.6, NumPy 2.4.4, scipy-openblas
