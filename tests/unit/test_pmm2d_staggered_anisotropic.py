@@ -513,6 +513,16 @@ def test_g4_stripe_grating_matches_the_1d_engines(g4_oracle):
     and rcwa_jones_1d with 81 orders) agree with EACH OTHER to 5.22e-07 on R/T
     and 1.51e-06 on the Jones, i.e. 25x / 18x under the bar, so the oracle's
     own floor is not what is being measured.
+
+    A 3x bar is under a decade, so "deterministic, not build noise" was
+    MEASURED (2026-09-09 verification, VERIFY doc): switching the BLAS kernel
+    path via OPENBLAS_NUM_THREADS 1 -> 4 moves this residual by a relative
+    2.1e-09 (R/T) and 2.3e-09 (Jones), so the 3x sits ~9 decades above the
+    last-bit envelope.  What the bar IS sensitive to is the FIXTURE: the same
+    gate on an independently chosen stripe (period 1.10 um, wl 0.63 um,
+    theta 0.35, a different LC tensor) converges to 6.96e-05 at M=8, 16x
+    larger -- so this number must be re-derived, not re-used, if the fixture
+    ever changes.
     """
     dRT, dJ, _forb = _g4_residual(8, g4_oracle)
     assert dRT < 1.3e-5, dRT
@@ -576,6 +586,16 @@ def test_g5_three_engines_agree_on_a_2d_anisotropic_cell():
     engines' own floor that sets it (the staggered arm closes energy to
     2.5e-08 while the hybrid closes to 2.9e-04 and both Fourier arms still
     move with n_orders).
+
+    That 8x is under a decade, and the reason is structural: the bar measures
+    the ORACLES' truncation floor, which is fixture-dependent.  On an
+    independently chosen cell (period 0.62 um, wl 0.50 um, depth 0.31 um,
+    n_sub 1.45, a different LC tensor and pillar) the same three engines
+    spread to 4.82e-03 -- 8x more, and only 1.04x inside this bar (2026-09-09
+    verification, VERIFY doc G5).  So 5e-03 is calibrated to THIS fixture and
+    is not a general cross-engine tolerance: if the fixture changes, re-derive
+    it.  Against the last-bit envelope the bar is safe -- both Fourier arms
+    are unchanged to 1e-12 relative between OPENBLAS_NUM_THREADS 1 and 4.
     """
     c = _g5_cell()
     o, R, T, _J = pmm_jones_2d_staggered(_P, _P, c, 1.5, 1.0, _DEP, _WL,
