@@ -701,7 +701,7 @@ two-file run; no test above 26 s; grids `(2,2)` and `(3,3)`, `M <= 8`).
 | `a3b920a` | `v8` -- the measured identity `rot = +1` == negate the out-of-plane block (bit-identical on nine fixture x mount combinations) |
 | `8798383` | a correction to this verification's OWN comment: the G3 ladder's M=8 four-thread reading is 6.67e-14, not the 4.72e-14 first written.  Caught by re-deriving the envelope table rather than re-reading the comment |
 | `32db73c` | `results/v6_envelope_1_vs_4.txt` -- the 60-quantity cross-kernel envelope the durability table's envelope column is read from |
-| (this file) | the verification report |
+| `507d76a` | this report, plus every probe's console output and the two pytest tails kept as tracked `.txt` (the repo `.gitignore` excludes `*.log`) |
 
 **No library file was touched.  No merge, push, tag or version bump.**  The
 temporary worktree `C:/tmp/lum_aniso_pre` created for task 1 was removed with
