@@ -7284,6 +7284,7 @@
     "tests/unit/test_pmm2d_staggered_oop_block_eig.py::test_scalar_and_in_plane_cells_are_untouched_by_the_keyword": 1.317,
     "tests/unit/test_pmm2d_staggered_oop_block_eig.py::test_structure_bar_has_a_gap_on_both_sides_measured_through_the_gate": 1.882,
     "tests/unit/test_pmm2d_staggered_oop_block_eig.py::test_symmetry_keyword_is_validated_and_recorded": 0.001,
+    "tests/unit/test_pmm2d_staggered_oop_corner_convergence.py::test_staggered_oop_corner_ladder_steps_shrink_and_start_above_the_floor": 19.474,
     "tests/unit/test_pmm_m2_window_contract.py::test_conforming_and_untapered_stacks_are_immune_to_both_knobs": 0.08439140021800995,
     "tests/unit/test_pmm_m2_window_contract.py::test_halfwidth_2_moves_the_answer_only_inside_the_mortar_band": 7.266861600102857,
     "tests/unit/test_pmm_m2_window_contract.py::test_min_feature_bounds_pairs_not_the_minimum_cell_width": 0.0006141997873783112,
