@@ -1,0 +1,88 @@
+{
+ "root": "C:\\tmp\\lum_aniso",
+ "lumenairy": "C:\\tmp\\lum_aniso\\lumenairy\\__init__.py",
+ "version": "5.42.1",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "fixtures": {
+  "f1_pillar_22_te_normal": {
+   "orders": "6da240d455a94db8",
+   "R": "eb2f34c10c2f1064",
+   "T": "2bcee02d409b77bb",
+   "sumR": 0.11460120879702795,
+   "sumT": 0.885400466896066,
+   "R0": 0.0913934100895915
+  },
+  "f1_pillar_22_tm_normal": {
+   "orders": "6da240d455a94db8",
+   "R": "a243ef290a2565d6",
+   "T": "847905e78965cde3",
+   "sumR": 0.11460120879703058,
+   "sumT": 0.8854004668960492,
+   "R0": 0.09139341008959673
+  },
+  "f2_two_pillar_33_te": {
+   "orders": "6da240d455a94db8",
+   "R": "36f446df320afa1a",
+   "T": "3cebe93fe2cabc0b",
+   "sumR": 0.07234406819552247,
+   "sumT": 0.9276392464921797,
+   "R0": 0.06188286939803887
+  },
+  "f3_pillar_22_conical": {
+   "orders": "6da240d455a94db8",
+   "R": "79a6a31574c160f1",
+   "T": "1bd5697fa67773a3",
+   "sumR": 0.11594586454926592,
+   "sumT": 0.8826278112024988,
+   "R0": 0.07721013522722177
+  },
+  "f4_lossy_22_tm_oblique": {
+   "orders": "6da240d455a94db8",
+   "R": "ed5fdd1153b60e05",
+   "T": "64723e85c4b9003e",
+   "sumR": 0.10638759286375293,
+   "sumT": 0.5439052539475118,
+   "R0": 0.08586734540546014
+  },
+  "op_pillar_22_M6": {
+   "Lmat": "674b3ce872ca3e1f",
+   "Rmat": "95330a5328a4f2aa",
+   "Stt": "8c7fafec3a854d69",
+   "Schur": "b2fb481d61447040",
+   "Et_blocks0": "17f0c6e0018e82a6",
+   "Et_blocks1": "1f247e6f94a68fa2",
+   "lam_sorted_hash": "7d3ee1055d5b12b8",
+   "lam_absmax": 6.65210076044014
+  },
+  "op_two_33_M5": {
+   "Lmat": "1be7da942b70bb3c",
+   "Rmat": "e601dcab557497e0",
+   "Stt": "4a528b6c01360917",
+   "Schur": "d40d1b13bd9cc05b",
+   "Et_blocks0": "665c4da06b7024a0",
+   "Et_blocks1": "0a04dda580850eba",
+   "lam_sorted_hash": "4796fd1c3cdf60e9",
+   "lam_absmax": 6.34762675566862
+  },
+  "op_lossy_22_M6": {
+   "Lmat": "5391cc1253438c0b",
+   "Rmat": "4b629bbcdb48e3db",
+   "Stt": "af9a05bf9a624ebe",
+   "Schur": "303310d7e8255226",
+   "Et_blocks0": "5d4d65842bddbc12",
+   "Et_blocks1": "b2d7fbab1f9bfe9d",
+   "lam_sorted_hash": "02a934e55eb8afff",
+   "lam_absmax": 6.654285316858026
+  },
+  "f5_stack_scalar_jones": {
+   "R": "867ec3a3284040a9",
+   "T": "9add0848cedb2c2b",
+   "jones": "7908f3c3c117df8e",
+   "sumRT": [
+    0.9993316491245817,
+    1.0006965940969919
+   ]
+  }
+ }
+}
