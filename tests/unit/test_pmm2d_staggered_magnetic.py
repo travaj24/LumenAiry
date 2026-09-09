@@ -968,6 +968,45 @@ def test_api_uniform_and_patterned_mu_combinations_agree():
     assert Rc.shape == Ra.shape
 
 
+def test_api_magnetic_layer_in_a_generalized_cascade():
+    """A MAGNETIC layer must also work in a stack that contains an
+    OUT-OF-PLANE layer, i.e. on the GENERALIZED S-matrix cascade: a magnetic
+    region is still a symmetric second-order one, so it enters as
+    ``[[W, W], [V, -V]]`` through ``_modes_as_general`` exactly as an in-plane
+    tensor layer does.  The claim is that the two routes COMPOSE, and it is
+    checked the only way a mixed stack can be: the lossless closure.
+
+    MEASURED 2026-09-10 (build doc, Section 5): tilted-director out-of-plane
+    layer over a uniform-eps MAGNETIC layer, theta 0.2 / phi 0.4 --
+    |sum R + sum T - 1| = 7.955e-03 (M=4), 1.057e-03 (M=5), 1.749e-05 (M=6),
+    3.081e-06 (M=7).  Bar: 1e-4 at M=7 (32x over the measurement) plus the
+    two-sided companion, a drop of at least 50x from M=4 (measured 2582x).
+    Both layers are lossless (a real uniform mu and a rotated-real eps), so
+    the tripwire also gets to be silent here.
+    """
+    oop = uniaxial_tensor(1.5, 1.8, 0.6, phi=0.3)      # tilted -> out-of-plane
+    ec = _uni(oop)
+    ec[0, 0] = 4.0 * _EYE
+
+    def dev(M):
+        st = PMM2DStackPure(_P, _P, n_modes=M, n_orders=3)
+        st.add_layer(0.20e-6, eps_cell=ec)
+        st.add_layer(0.20e-6, eps=4.0, mu_cell=_uni(1.6 * _EYE))
+        st.set_source(_WL, theta=0.2, phi=0.4)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            o, R, T, J = st.solve()
+        fired = [x for x in w if "energy closure" in str(x.message)]
+        return (max(abs(float(R[r].sum() + T[r].sum()) - 1.0) for r in (0, 1)),
+                len(fired))
+
+    d4, _f4 = dev(4)
+    d7, f7 = dev(7)
+    assert d7 < 1e-4, d7
+    assert d7 < d4 / 50.0, (d4, d7)
+    assert f7 == 0, d7
+
+
 def test_api_two_identical_magnetic_layers_share_one_eig(monkeypatch):
     """A magnetic layer cannot ride the shared eps-free geometric eig, so it
     is deduped by ``(eps bytes, mu bytes)`` like a patterned cell: two

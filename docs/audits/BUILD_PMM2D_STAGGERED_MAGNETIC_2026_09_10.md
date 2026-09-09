@@ -463,7 +463,7 @@ patterned LC2/1.6 mu; three repeats:
 
 ## 4. Test suite
 
-`tests/unit/test_pmm2d_staggered_magnetic.py` -- **31 tests, 75-101 s**
+`tests/unit/test_pmm2d_staggered_magnetic.py` -- **32 tests, 74-101 s**
 single-threaded, slowest test 9.5 s (limits: file < 3 min, test < 40 s, grids
 <= (3,3), M <= 8).  Every bar cites the table above and is derived from a
 measurement made in this build; no cross-build value is pinned anywhere.
@@ -479,7 +479,7 @@ measurement made in this build; no cross-build value is pinned anywhere.
 | G9 | `test_g9_absorption_budget_closes_for_a_magnetic_layer` |
 | fail-before | `test_failbefore_the_r_vs_gram_separation_is_load_bearing`, `test_failbefore_each_chi_weight_is_load_bearing` (x2), `test_failbefore_the_mixed_chi_blocks_are_load_bearing` |
 | G7 | `test_g7_out_of_plane_mu_raises`, `test_g7_mu_with_an_out_of_plane_eps_raises`, `test_g7_magnetic_half_space_raises`, `test_g7_shape_and_singularity_guards`, `test_g7_homog_geom_cache_refuses_a_magnetic_region`, `test_g7_float_noise_in_m13_does_not_trip_the_block_form_guard` |
-| API | `test_api_uniform_and_patterned_mu_combinations_agree`, `test_api_two_identical_magnetic_layers_share_one_eig` |
+| API | `test_api_uniform_and_patterned_mu_combinations_agree`, `test_api_magnetic_layer_in_a_generalized_cascade` (table M10), `test_api_two_identical_magnetic_layers_share_one_eig` |
 
 Regression suites re-run green in the worktree (they are what pins "the
 nonmagnetic path did not move" and "the tripwire does not fire on any existing
@@ -489,6 +489,26 @@ fixture"): see Section 6 of the final report.
 `ruff check validation/probe_pmm2d_staggered_magnetic/` -- clean.
 
 ---
+
+### M10 -- a MAGNETIC layer in a GENERALIZED (mixed) cascade
+
+A magnetic region is still a SYMMETRIC second-order one, so in a stack that
+also contains an out-of-plane layer it enters the generalized S-matrix as
+`[[W, W], [V, -V]]` through `_modes_as_general`, exactly as an in-plane tensor
+layer does.  That the two routes COMPOSE is checked by the only observable a
+mixed stack offers -- the lossless closure.  Tilted-director out-of-plane layer
+(0.20 um) over a uniform-eps MAGNETIC layer (0.20 um, `mu = 1.6 I`),
+theta 0.2 / phi 0.4:
+
+| M | \|sum R + sum T - 1\| | solve wall time |
+|---|---|---|
+| 4 | 7.955e-03 | 0.93 s |
+| 5 | 1.057e-03 | 0.20 s |
+| 6 | 1.749e-05 | 0.62 s |
+| 7 | 3.081e-06 | 1.70 s |
+
+Bar 1e-4 at M=7 (32x) plus a drop of at least 50x from M=4 (measured 2582x).
+No blow-up, and the tripwire stays silent (both layers are lossless).
 
 ## 5. Scope / open items
 
