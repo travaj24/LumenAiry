@@ -408,6 +408,54 @@ def test_g3_each_new_tensor_term_is_load_bearing(term, monkeypatch):
     assert broken > 1e-4, (term, broken)
 
 
+def test_g3_jones_gauge_and_row_column_convention_are_load_bearing():
+    """FAIL-BEFORE for the two Jones properties that EVERY efficiency gate in
+    this file is blind to: the PUBLIC (unconjugated) gauge, and the documented
+    row/column contract (columns = incident ``E_x`` / ``E_y``, rows = reflected
+    ``E_x`` / ``E_y``).  ``|J|^2`` is invariant under both a conjugation and a
+    transpose, so no ``R``/``T`` comparison can see either.
+
+    The transpose is invisible even to a Jones comparison on a RECIPROCAL
+    cell: the rotated LC tensor gives ``J01 = J10`` (measured ``J01/J10 =
+    1 - 1.9e-13 i`` at normal incidence), so ``J.T`` IS ``J`` there.  The
+    GYROTROPIC tensor gives ``J01 = -J10`` at normal incidence (measured
+    ``-1 + 1.0e-13 i``; at 25 deg the ratio is -0.8214, still far from +1),
+    which is what makes it the discriminator -- the same reason G7 needs it.
+
+    MEASURED 2026-09-09 (VERIFY doc task 3), uniform slab vs
+    ``berreman_jones_1d`` (whose contract states "columns = incident lab
+    [Ex; Ey]"), complex residual ``max |J - jr|`` at M = 7:
+
+        arm                       normal        theta = 25 deg
+        as returned  (gyro)      4.56e-14          1.43e-14
+        CONJUGATED   (gyro)      1.47e-01          1.77e-01
+        TRANSPOSED   (gyro)      1.50e-01          1.61e-01
+        TRANSPOSED   (LC)        4.49e-14  <-- a no-op, exactly
+
+    Bars: matched < 1e-11 (G3's bar), broken > 1e-2 -- 1.2 decades under the
+    smallest measured gyrotropic break and 9 decades over the matched arm.
+    """
+    for theta in (0.0, 25 * np.pi / 180):
+        _o, _R, _T, J = pmm_jones_2d_staggered(
+            _G3["period"], _G3["period"], _uniform(_GYRO, 2), _G3["nsub"],
+            _G3["nsup"], _G3["dep"], _G3["wl"], degree=7, n_orders=2,
+            theta=theta)
+        _Rb, _Tb, jr, _jt = berreman_jones_1d(
+            [(_GYRO, _G3["dep"])], _G3["nsub"], _G3["nsup"], _G3["wl"],
+            angle=theta)
+        assert np.max(np.abs(J - jr)) < 1e-11
+        assert np.max(np.abs(np.conj(J) - jr)) > 1e-2      # no conj bridge
+        assert np.max(np.abs(J.T - jr)) > 1e-2             # columns = incident
+        if theta == 0.0:                        # why gyro, and not LC:
+            assert abs(J[0, 1] / J[1, 0] + 1.0) < 1e-9     # J01 = -J10
+    # ... and the record of the blind spot itself: on the reciprocal LC cell
+    # the transpose is a no-op, so an LC-only control would assert nothing.
+    _o, _R, _T, Jlc = pmm_jones_2d_staggered(
+        _G3["period"], _G3["period"], _uniform(_LC, 2), _G3["nsub"],
+        _G3["nsup"], _G3["dep"], _G3["wl"], degree=7, n_orders=2)
+    assert np.max(np.abs(Jlc.T - Jlc)) < 1e-11
+
+
 # =========================================================================== #
 # G4 -- 1-D REDUCTION: a y-uniform anisotropic stripe grating against the two
 #       independent 1-D engines, PER ORDER, both polarizations, plus Jones.
@@ -573,6 +621,59 @@ def test_g5_no_fourier_floor_two_sided():
         hyb[nor] = np.concatenate([_order0(oh, Rh), _order0(oh, Th)])
     assert np.max(np.abs(stag[4] - stag[8])) < 1e-10
     assert np.max(np.abs(hyb[4] - hyb[8])) > 1e-4
+
+
+def test_g5_order0_reflected_power_rebuilds_from_the_jones():
+    """The Jones and the efficiencies must be the SAME answer: the order-0
+    reflected power rebuilt from ``jones`` has to equal ``R[:, (0,0)]``.
+
+    At oblique incidence this is a real cross-check rather than a tautology,
+    because the reconstruction needs the LONGITUDINAL components that the
+    ``2x2`` Jones does not carry.  The Jones columns are the response to a
+    UNIT TRANSVERSE incident field, and a plane wave with transverse part
+    ``e`` also carries ``E_z`` fixed by ``k . E = 0``, so
+
+        R00[col] = (|Ex|^2 + |Ey|^2 + |(kx Ex + ky Ey)/kz|^2)
+                   / (1 + |k_t . e_col / kz|^2)
+
+    with ``k_t`` the (normalized) transverse incident wavevector in the
+    vacuum superstrate.  The normalization is DIFFERENT for column 0 (``kx``)
+    and column 1 (``ky``), which makes the identity a second, independent
+    column-convention discriminator -- one that works even on the reciprocal
+    LC cell whose Jones is symmetric, where ``J`` vs ``J.T`` is blind.
+
+    MEASURED 2026-09-09 (VERIFY doc task 3), LC host + isotropic pillar:
+
+        incidence                 residual      same identity with J.T
+        theta = 0                 1.39e-17            5.48e-16
+        theta = 0.55, phi = 1.30  0.00e+00            3.77e-04
+
+    Bars: residual < 1e-12 (5 decades over the measurement, room for the
+    reassociation of a different summation order) and the transposed arm
+    > 1e-05 (37x under its measurement, 7 decades over the matched one).
+    """
+    def rebuild(J, kx, ky, kz):
+        out = []
+        for col in (0, 1):
+            ex, ey = J[0, col], J[1, col]
+            ez = (kx * ex + ky * ey) / kz          # k_r = (kx, ky, -kz)
+            inc = [1.0, 0.0] if col == 0 else [0.0, 1.0]
+            ez_i = (kx * inc[0] + ky * inc[1]) / kz
+            out.append(float((abs(ex) ** 2 + abs(ey) ** 2 + abs(ez) ** 2)
+                             / (1.0 + abs(ez_i) ** 2)))
+        return np.array(out)
+
+    for theta, phi in ((0.0, 0.0), (0.55, 1.30)):
+        o, R, _T, J = pmm_jones_2d_staggered(_P, _P, _cell(_LC, _ISO), 1.5,
+                                             1.0, _DEP, _WL, degree=7,
+                                             n_orders=4, theta=theta, phi=phi)
+        eng = _order0(o, R)
+        kx = np.sin(theta) * np.cos(phi)
+        ky = np.sin(theta) * np.sin(phi)
+        kz = np.sqrt(1.0 - kx ** 2 - ky ** 2)
+        assert np.max(np.abs(rebuild(J, kx, ky, kz) - eng)) < 1e-12
+        if theta:                     # at normal incidence the two are equal
+            assert np.max(np.abs(rebuild(J.T, kx, ky, kz) - eng)) > 1e-5
 
 
 # =========================================================================== #
