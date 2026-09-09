@@ -378,9 +378,10 @@ def test_g3_berreman_convergence_is_two_sided_in_m():
     test's own ladder -- ``max(dR_sum, dJones)`` at M = 5, 6, 8 -- and the M=5
     entry the previous comment carried (2.0e-08) does not reproduce: the ladder
     is 5.41e-09 -> 1.92e-11 -> 4.77e-14 at OPENBLAS_NUM_THREADS=1 and
-    5.41e-09 -> 1.92e-11 -> 4.72e-14 at 4 (the M=6 entry matches the build's
-    table exactly; the M=8 entry is a roundoff plateau).  The x0.5 bars keep
-    141x and 400x of margin on those numbers."""
+    5.42e-09 -> 1.92e-11 -> 6.67e-14 at 4 (the M=6 entry matches the build's
+    table exactly; the M=8 entry is a roundoff plateau and moves 29% between
+    the two kernels, which is why the ladder claims a x0.5 DROP and not a
+    value).  The x0.5 bars keep 141x and 144x of margin on those numbers."""
     theta, phi = np.deg2rad(25.0), 0.0
     Rb, _Tb, Jrb, _Jt = berreman_jones_1d([(_OOP, _DEPU)], _NSUB, _NSUP, _WL,
                                           angle=theta, phi=phi)
