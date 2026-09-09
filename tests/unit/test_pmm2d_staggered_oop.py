@@ -182,17 +182,33 @@ def test_g1_oop_generator_reduces_to_the_inplane_path(name, host, pillar,
     """With the cross terms EXACTLY zero the 4 q^2 generator must reproduce the
     Stage-A 2 q^2 path -- driven on the SAME cell, dispatch forced.
 
-    This is also what pins ``_OOP_H_GAUGE``, the constant relating the
-    generator's ``G = i Z0 H`` state to the Eq.-25 partner the ISOTROPIC
-    half-spaces carry: a wrong value cancels inside a pure out-of-plane stack
-    and does NOT cancel here, so this comparison is its only gate.
+    This is also one of the gates on ``_OOP_H_GAUGE``, the constant relating
+    the generator's ``G = i Z0 H`` state to the Eq.-25 partner the ISOTROPIC
+    half-spaces carry.
+
+    CORRECTED 2026-09-09 by the Stage-B verification (probe
+    ``validation/probe_verify_staggered_oop/v2c_hgauge.py``).  This docstring
+    used to say a wrong value "cancels inside a pure out-of-plane stack", so
+    that this reduction was "its only gate".  It does NOT cancel: driven
+    against ``berreman_jones_1d`` on a PURE single uniform out-of-plane layer
+    between isotropic half-spaces, ``_OOP_H_GAUGE = -1j`` gives dJones 1.5e-14
+    (normal) / 8.5e-10 (oblique 25) / 7.0e-11 (conical 25/40) while ``+1j``
+    gives 3.9e-02 / 4.3e-02 / 4.4e-02 and ``+1`` / ``-1`` give O(1) with
+    ``R + T`` = 3.69 / 11.94.  So ``test_g3_uniform_oop_slab_matches_berreman``
+    gates it as hard as this test does -- and note that ``+1j`` leaves R and T
+    of that single layer matching Berreman to 1.6e-15 at NORMAL incidence, so
+    only the JONES sees it there (the lossless trap: ``R + T`` stays exactly 1
+    on every arm of that sweep).  What this test adds is the MIXED-formulation
+    comparison: the same cell down both branches.
 
     MEASURED 2026-09-09 (build doc T4, probe g2_inplane_reduction.py) over four
     cells x two mounts x M in {5, 6}: the worst R/T/Jones difference is
-    4.49e-14 and the worst spectral distance 1.38e-12.  Bars 5e-12 and 1.5e-10
-    (x1e2), which sit ~4 decades under the smallest thing the reduction could
-    plausibly break -- the O(1e-8) movement an M-step of the discretization
-    itself produces on these cells."""
+    4.49e-14 and the worst spectral distance 1.38e-12.  RE-MEASURED on the four
+    parametrized combinations below: worst 2.70e-14 and 1.59e-12.  Bars 5e-12
+    and 1.5e-10 -- 185x and 94x over the re-measurement, and ~4 decades under
+    the smallest thing the reduction could plausibly break (the O(1e-8)
+    movement an M-step of the discretization itself produces on these cells).
+    Wrong-gauge arms on the SAME comparison measure 2.6e-02 .. 9.8e+01."""
     ec = _cell(host, pillar)
     orig = _force_oop(False)
     try:
@@ -355,7 +371,16 @@ def test_g3_berreman_convergence_is_two_sided_in_m():
     dR 2.38e-13 (M=6) -> 2.06e-14 (M=8); oblique 25, lossless: 7.93e-12 ->
     7.97e-15, three decades over two degrees.  The claim asserted is the DROP
     (with a x0.5 margin so a build's last bits cannot flip it) plus the M=8
-    value under 1e-11."""
+    value under 1e-11.
+
+    RE-MEASURED 2026-09-09 by the Stage-B verification (probe
+    ``validation/probe_verify_staggered_oop/v6_durability_margins.py``) on THIS
+    test's own ladder -- ``max(dR_sum, dJones)`` at M = 5, 6, 8 -- and the M=5
+    entry the previous comment carried (2.0e-08) does not reproduce: the ladder
+    is 5.41e-09 -> 1.92e-11 -> 4.77e-14 at OPENBLAS_NUM_THREADS=1 and
+    5.41e-09 -> 1.92e-11 -> 4.72e-14 at 4 (the M=6 entry matches the build's
+    table exactly; the M=8 entry is a roundoff plateau).  The x0.5 bars keep
+    141x and 400x of margin on those numbers."""
     theta, phi = np.deg2rad(25.0), 0.0
     Rb, _Tb, Jrb, _Jt = berreman_jones_1d([(_OOP, _DEPU)], _NSUB, _NSUP, _WL,
                                           angle=theta, phi=phi)
@@ -390,7 +415,22 @@ def test_g4_oop_stripe_matches_the_1d_engines_per_order(mount, theta):
     the module's documented corner cap and NOT an out-of-plane defect (the
     same cell with the cross terms zeroed caps the same way).  Bar 3x the
     measured M=8 residual: 5e-04 on R/T/Jones -- deterministic discretization
-    error, whose cross-build spread is ~1e-12."""
+    error, whose cross-build spread is ~1e-12.
+
+    MARGIN RE-MEASURED 2026-09-09 by the Stage-B verification (probe
+    ``validation/probe_verify_staggered_oop/v6_durability_margins.py``).  The
+    T5 numbers quoted above were taken against a 41-order oracle; THIS test
+    runs ``rcwa_jones_1d_segments(n_orders=31)``, against which the M=8
+    residual is dR 1.87e-05 / dT 1.35e-04 / dJones 1.04e-04 (normal) and
+    8.80e-06 / 1.41e-04 / 9.51e-05 (oblique).  So the real margin on the 5e-04
+    bar is 3.7x, not 4.8x -- under a decade, an S1/S4 shape.  MEASURED
+    ENVELOPE: every one of those six numbers moves by less than 1.8e-09
+    RELATIVE between OPENBLAS_NUM_THREADS 1 and 4, so 3.7x is ~8 decades above
+    the last-bit spread and the bar is safe against a build; what it is NOT
+    safe against is an intentional change to the basis, which is the gate
+    working.  The residual is strongly FIXTURE-dependent: the same comparison
+    on a dielectric-groove stripe (eps 2.0 instead of air) gives dT 1.20e-05 at
+    M=8, 11x smaller (probe v4_stripe_cascade_stacks.py, T5)."""
     ridge, groove = _OOP, _ISO
     ec = np.zeros((2, 2, 3, 3), dtype=complex)
     ec[0, :] = ridge
@@ -464,7 +504,21 @@ def test_g5_2d_reentrant_corner_cell_matches_the_fourier_oracles():
     energy closure falls to 5.7e-10.  Bar 4e-04 on R -- 5x the measurement and
     5x the oracle spread, and 1.5 decades under the 4.5e-03 the WRONG
     orientation convention produced on this same cell (the prototype's open
-    item, probe g0c)."""
+    item, probe g0c).
+
+    MARGINS RE-MEASURED 2026-09-09 by the Stage-B verification (probe
+    ``validation/probe_verify_staggered_oop/v6_durability_margins.py``) against
+    THIS test's own oracle (``rcwa_jones_2d`` at ``n_orders`` 7, not the T6
+    table's 9): dR 8.17e-05, dT 1.58e-03, dJones 2.07e-03.  So the three bars
+    carry 4.9x, 2.5x and 1.93x -- the Jones bar is the tightest thing in this
+    file.  MEASURED ENVELOPE: all three move by less than 4e-11 RELATIVE
+    between OPENBLAS_NUM_THREADS 1 and 4, so even 1.93x is nine decades above
+    the last-bit spread.  The quantity is the FOURIER ORACLE's truncation error
+    -- which is why the bar cannot simply be tightened, neither oracle being
+    converged on a re-entrant corner -- and it is fixture-sensitive: an
+    air-background chiral 2-D out-of-plane cell puts the same comparison at
+    dR 3.4e-04 (probe v2b_gauge_chiral_2d.py).  If a future change moves this
+    bar, RE-DERIVE it from a fresh oracle ladder rather than loosening it."""
     ec = _lcell(_OOP)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -549,6 +603,24 @@ def test_g6_hermitian_oop_closes_at_three_depths_and_does_not_grow():
         assert lam_f.size == 2 * q and lam_b.size == 2 * q
         grow = float(np.max(np.exp(-np.real(lam_f) * k0 * 3.0 * _WL)))
         assert grow <= 1.0 + 1e-12, grow
+        # ADDED 2026-09-09 by the Stage-B verification: the count assertion
+        # above cannot fail.  ``_region_modes_oop`` raises unless the split is
+        # exactly 2q^2 / 2q^2, and ``_select_forward_flux`` REBALANCES to
+        # exactly 2N unconditionally (its "defensive rebalance" branch returns
+        # ``np.where(fwd_fixed)[0]`` with 2N True), so neither the raise nor
+        # this assertion is reachable.  What IS falsifiable is the PHYSICAL
+        # content of the split: in a passive region every forward mode decays
+        # (``Re(lam_f) >= 0``) and every backward mode decays upward
+        # (``Re(lam_b) <= 0``).  MEASURED here: min Re(lam_f) = -1.51e-14 /
+        # -6.68e-15 and max Re(lam_b) = +1.34e-14 / +2.11e-14 at
+        # OPENBLAS_NUM_THREADS=1, -3.96e-15 / -7.58e-15 and +8.76e-15 /
+        # +8.85e-15 at 4 -- i.e. zero to roundoff.  Bar 1e-10, four decades
+        # above that and decades below the O(1) a misclassified propagating
+        # mode would show (probe v6_durability_margins.py / v5_break_attempts.py,
+        # where the same quantity is +1.9e-03 .. +3.2e-03 on a lossy-metal
+        # cell -- strictly positive, as a passive medium requires).
+        assert float(np.min(np.real(lam_f))) > -1e-10, np.min(np.real(lam_f))
+        assert float(np.max(np.real(lam_b))) < 1e-10, np.max(np.real(lam_b))
 
 
 def test_g6_lossy_oop_closes_below_one_and_absorbs_monotonically():
@@ -617,7 +689,26 @@ def test_g7_rotation_gauge_is_two_sided():
     non-reciprocal tensor: at conical 25/40 the shipped -1 gives dR 2.38e-13
     and the flipped +1 gives 1.68e-03; at normal both give ~1e-14.  This drives
     the flipped sign through the SHIPPED code rather than re-deriving it, so
-    the negative arm is a property of the build under test."""
+    the negative arm is a property of the build under test.
+
+    MARGINS RE-MEASURED 2026-09-09 by the Stage-B verification (probe
+    ``validation/probe_verify_staggered_oop/v6_durability_margins.py``).  The
+    2.38e-13 quoted above is the dR alone; the quantity the ``good < 1e-11``
+    bar actually reads is ``max(dR, dJones)`` = 1.195e-12, so that bar carries
+    8.4x, not 42x.  Its measured envelope is 5.7e-03 RELATIVE between
+    OPENBLAS_NUM_THREADS 1 and 4 (1.1948e-12 vs 1.2017e-12), i.e. ~3 decades of
+    true margin; ``bad`` = 4.4895e-03 carries 45x over its 1e-4 bar and moves
+    3e-13 relative; the normal-incidence agreement is 1.3e-15 against a 1e-11
+    bar.
+
+    SCOPE OF THE NORMAL-INCIDENCE HALF (measured, probe
+    ``v2a_gauge_chiral_1d.py``): the flip is invisible at normal incidence only
+    because a UNIFORM cell is its own 180-degree image.  On a CHIRAL cell it is
+    visible at normal incidence too -- a 3-segment out-of-plane stripe moves
+    dR 4.50e-04 / dJones 9.68e-04 under the flip at theta = 0, and a chiral 2-D
+    cell moves dR 2.35e-03.  So the claim asserted here is "invisible on a
+    rho-SYMMETRIC cell at normal incidence", not "invisible at normal
+    incidence"."""
     theta, phi = _CONICAL
     Rb, _Tb, Jrb, _Jt = berreman_jones_1d([(_NONREC, _DEPU)], _NSUB, _NSUP,
                                           _WL, angle=theta, phi=phi)
@@ -685,22 +776,42 @@ def test_g8b_uniform_oop_multilayer_matches_berreman_multilayer():
 
     MEASURED 2026-09-09 (build doc T8b): dR 8.26e-12 (M=6) -> 7.47e-15 (M=8) at
     oblique 25 and 3.06e-13 -> 1.25e-14 at conical 25/40, with dJones
-    2.34e-11 -> 3.10e-14 and 1.25e-12 -> 6.50e-14.  Bar 1e-11 at M=8."""
+    2.34e-11 -> 3.10e-14 and 1.25e-12 -> 6.50e-14.  Bar 1e-11 at M=8.
+
+    LADDER ADDED 2026-09-09 by the Stage-B verification: the docstring called
+    the claim "two-sided in M" while the test ran only M=8, so the two-sided
+    half was stated and not asserted.  MEASURED on this fixture (probe
+    ``validation/probe_verify_staggered_oop/v6_durability_margins.py``, both
+    thread counts): dR 3.91e-07 (M=4) -> 2.35e-14 (M=8) at oblique 25 and
+    4.47e-08 -> 1.14e-14 at conical, i.e. spans of 1.7e7 and 3.9e6.  The bars
+    are the M=4 residual above 1e-9 (45x under the smaller measurement, so the
+    coarse end is a real signal and not noise -- it moves < 3e-08 relative
+    between BLAS kernels) and the span above 1e4 (170x .. 390x of margin).  The
+    M=7 -> M=8 step is NOT asserted: both sit on the roundoff plateau, where
+    the value moves by 47% and 67% between kernels."""
     layers = [(_OOP, 0.30e-6), (_NONREC, 0.22e-6), (_OOP_LOSSY, 0.17e-6)]
     for theta, phi in ((np.deg2rad(25.0), 0.0), _CONICAL):
         Rb, Tb, Jrb, _Jt = berreman_jones_1d(layers, _NSUB, _NSUP, _WL,
                                              angle=theta, phi=phi)
-        st = PMM2DStackPure(_PU, _PU, n_superstrate=_NSUP, n_substrate=_NSUB,
-                            n_modes=8, n_orders=3)
-        for t33, d in layers:
-            st.add_layer(d, eps=t33)
-        st.set_source(_WL, theta=theta, phi=phi)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            _o, R, T, J = st.solve(jones=True)
-        assert float(np.max(np.abs(R.sum(axis=1) - Rb))) < 1e-11
-        assert float(np.max(np.abs(T.sum(axis=1) - Tb))) < 1e-11
-        assert float(np.max(np.abs(J - Jrb))) < 1e-11
+        res = {}
+        for M in (4, 8):
+            st = PMM2DStackPure(_PU, _PU, n_superstrate=_NSUP,
+                                n_substrate=_NSUB, n_modes=M, n_orders=3)
+            for t33, d in layers:
+                st.add_layer(d, eps=t33)
+            st.set_source(_WL, theta=theta, phi=phi)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                _o, R, T, J = st.solve(jones=True)
+            res[M] = max(float(np.max(np.abs(R.sum(axis=1) - Rb))),
+                         float(np.max(np.abs(T.sum(axis=1) - Tb))),
+                         float(np.max(np.abs(J - Jrb))))
+            if M == 8:
+                assert float(np.max(np.abs(R.sum(axis=1) - Rb))) < 1e-11
+                assert float(np.max(np.abs(T.sum(axis=1) - Tb))) < 1e-11
+                assert float(np.max(np.abs(J - Jrb))) < 1e-11
+        assert res[4] > 1e-9, res           # the coarse end is a real signal
+        assert res[4] > 1e4 * res[8], res   # and it CONVERGES
 
 
 def test_g8c_layer_absorption_closes_on_a_mixed_oop_stack():

@@ -1005,12 +1005,39 @@ def test_g10_offplane_test_is_relative_not_strict():
     cell stays IN-PLANE; a 1e-16 injected stray likewise stays in-plane and
     gives BYTE-IDENTICAL R/T (the two-arm form of "no additional work"), while
     a 1e-3 one routes to the generator.
+
+    RESTATED 2026-09-09 by the Stage-B verification (probe
+    ``validation/probe_verify_staggered_oop/v3_dispersion_and_berreman.py``,
+    section D).  The previous form asserted ``0.0 < off``, i.e. that the
+    rotation's residue is EXACTLY non-zero on the running build -- an
+    S5-adjacent reading of a per-build float, flagged in
+    ``docs/audits/VERIFY_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md`` item 24.
+    Only the UPPER side is a property of the dispatch, so only the upper side
+    is asserted; the "a strict ``> 0`` test would misroute a real LC cell" half
+    is now ENGINEERED through the public API instead of read off the build --
+    a stray at 1e-3 of the floor DERIVED from this build's own measured tensor
+    scale must stay in-plane and stay byte-identical.  MEASURED on the
+    engineered ladder: strays at 1e-16, 1e-14 and 1e-12 (relative) all leave
+    ``offplane`` False and R/T/Jones byte-equal, 1e-11 sets it True, and
+    crossing the floor moves R by only 1.5e-13 -- the two branches agree
+    ACROSS the dispatch boundary, so nothing hinges on which side a marginal
+    cell lands.
     """
     off = np.abs(_LC[[0, 1, 2, 2], [2, 2, 0, 1]]).max()
-    assert 0.0 < off < 1e-12 * np.abs(_LC).max()      # genuinely nonzero noise
+    floor = 1e-12 * float(np.abs(_LC).max())
+    assert off < floor, (off, floor)      # the residue is UNDER the floor
     _o, R, T, _J = pmm_jones_2d_staggered(_P, _P, _cell(_LC, _ISO), 1.5, 1.0,
                                           _DEP, _WL, degree=5, n_orders=2)
     assert np.isfinite(R.sum() + T.sum())
+    # ENGINEERED sub-floor stray, sized from THIS build's measured floor: it
+    # must stay in-plane and change nothing.  (This is the arm that would fail
+    # if the test were strict-``> 0`` rather than relative.)
+    eng = _oop_cell(1e-3 * floor)
+    assert Granet2DTransverseE(_P, _P, 2, 2, 5, eng,
+                               k0=2.0 * np.pi / _WL).offplane is False
+    _o3, R3, T3, _J3 = pmm_jones_2d_staggered(_P, _P, eng, 1.5, 1.0, _DEP,
+                                              _WL, degree=5, n_orders=2)
+    assert R.tobytes() == R3.tobytes() and T.tobytes() == T3.tobytes()
     k0 = 2.0 * np.pi / _WL
     assert Granet2DTransverseE(_P, _P, 2, 2, 5, _oop_cell(1e-16),
                                k0=k0).offplane is False
