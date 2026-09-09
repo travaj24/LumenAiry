@@ -230,7 +230,7 @@ def test_g2_li2003_table1_reflected_orders():
     four decimals (+/- 5e-05 of rounding alone) at truncation order 23, and his
     fig. 7 shows the (0,0) order still spanning 0.2980..0.2988 across the three
     Fourier representations of eps at that truncation.  5.7x over the measured
-    deviation and 2.4 decades under the 1.32e-02 that the WRONG cross-term sign
+    deviation and 26x under the 1.32e-02 that the WRONG cross-term sign
     produces (the companion test below), so the gate has a gap on both sides.
     """
     R0, i = _li_reflected(_LI_B, _LI_A, 8)
