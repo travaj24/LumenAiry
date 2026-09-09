@@ -1,0 +1,438 @@
+{
+ "root": "C:\\tmp\\lum_aniso",
+ "lumenairy": "C:\\tmp\\lum_aniso\\lumenairy\\__init__.py",
+ "cases": [
+  {
+   "case": "B1_metal_in_oop_lc_normal",
+   "M": 7,
+   "split": [
+    288,
+    288
+   ],
+   "expected": 288,
+   "raw_fwd_before_rebalance": 288,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": 0.0019264412369108255,
+   "max_Re_lam_b": -0.0019264412369124058,
+   "max_abs_lam": 11.512526823934527,
+   "max_fwd_growth": 0.9941602531866973,
+   "max_bwd_growth": 0.9941602531866925,
+   "sumRT": [
+    0.9186051567405003,
+    0.9214159141947016
+   ],
+   "finite": true,
+   "maxR": 0.13751498284755792,
+   "maxT": 0.38517565690104993,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": []
+  },
+  {
+   "case": "B1_metal_in_oop_lc_oblique60",
+   "M": 7,
+   "split": [
+    288,
+    288
+   ],
+   "expected": 288,
+   "raw_fwd_before_rebalance": 288,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": 0.0022854804399376973,
+   "max_Re_lam_b": -0.0018823614013451118,
+   "max_abs_lam": 11.955625765663816,
+   "max_fwd_growth": 0.9930756504622067,
+   "max_bwd_growth": 0.9942934932702384,
+   "sumRT": [
+    0.8379801522133277,
+    0.8987726844858175
+   ],
+   "finite": true,
+   "maxR": 0.39488535107248524,
+   "maxT": 0.35591242497837533,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": []
+  },
+  {
+   "case": "B1_metal_in_oop_lc_conical60_40",
+   "M": 7,
+   "split": [
+    288,
+    288
+   ],
+   "expected": 288,
+   "raw_fwd_before_rebalance": 288,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": 0.0031781475782670446,
+   "max_Re_lam_b": -0.0038449053588538646,
+   "max_abs_lam": 11.595845634911946,
+   "max_fwd_growth": 0.9903841644640916,
+   "max_bwd_growth": 0.9883785793092595,
+   "sumRT": [
+    0.8258834696165374,
+    0.8132293029823682
+   ],
+   "finite": true,
+   "maxR": 0.077795632225382,
+   "maxT": 0.20733039662157393,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": []
+  },
+  {
+   "case": "B1_metal_in_oop_lc_deep_3lam",
+   "M": 7,
+   "split": [
+    288,
+    288
+   ],
+   "expected": 288,
+   "raw_fwd_before_rebalance": 288,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": 0.0022854804399376973,
+   "max_Re_lam_b": -0.0018823614013451118,
+   "max_abs_lam": 11.955625765663816,
+   "max_fwd_growth": 0.9578344811461843,
+   "max_bwd_growth": 0.9651404188192138,
+   "sumRT": [
+    0.630866925821756,
+    0.7565891252248428
+   ],
+   "finite": true,
+   "maxR": 0.31274721238960107,
+   "maxT": 0.15813970600544489,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": []
+  },
+  {
+   "case": "B2_cutoff_gap0.003",
+   "M": 6,
+   "split": [
+    200,
+    200
+   ],
+   "expected": 200,
+   "raw_fwd_before_rebalance": 200,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -3.8512785247949403e-14,
+   "max_Re_lam_b": 2.491673114037897e-14,
+   "max_abs_lam": 18.161830630026433,
+   "max_fwd_growth": 1.0000000000000462,
+   "max_bwd_growth": 1.00000000000003,
+   "sumRT": [
+    0.999998685796729,
+    0.9999992199670471
+   ],
+   "finite": true,
+   "maxR": 0.014927215263831502,
+   "maxT": 0.7799423037806046,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [],
+   "closure": 1.3142032709856366e-06
+  },
+  {
+   "case": "B2_cutoff_gap0.001",
+   "M": 6,
+   "split": [
+    200,
+    200
+   ],
+   "expected": 200,
+   "raw_fwd_before_rebalance": 200,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -2.844322423259227e-14,
+   "max_Re_lam_b": 7.742316762089015e-15,
+   "max_abs_lam": 18.186505724080227,
+   "max_fwd_growth": 1.000000000000034,
+   "max_bwd_growth": 1.0000000000000093,
+   "sumRT": [
+    0.9999959186807342,
+    0.9999970332486251
+   ],
+   "finite": true,
+   "maxR": 0.026156666999283266,
+   "maxT": 0.8484480301486401,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [],
+   "closure": 4.081319265769601e-06
+  },
+  {
+   "case": "B2_cutoff_gap0.0003",
+   "M": 6,
+   "split": [
+    200,
+    200
+   ],
+   "expected": 200,
+   "raw_fwd_before_rebalance": 200,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -1.7673973035202334e-14,
+   "max_Re_lam_b": 2.6864097186629848e-14,
+   "max_abs_lam": 18.195141885713337,
+   "max_fwd_growth": 1.000000000000021,
+   "max_bwd_growth": 1.0000000000000322,
+   "sumRT": [
+    0.9999908574570942,
+    0.999992988146148
+   ],
+   "finite": true,
+   "maxR": 0.035750346387290334,
+   "maxT": 0.8973761852306595,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [],
+   "closure": 9.142542905848927e-06
+  },
+  {
+   "case": "B2_cutoff_gap0.0001",
+   "M": 6,
+   "split": [
+    200,
+    200
+   ],
+   "expected": 200,
+   "raw_fwd_before_rebalance": 200,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -2.8131929294752944e-14,
+   "max_Re_lam_b": 1.3681074974777075e-14,
+   "max_abs_lam": 18.197609348936194,
+   "max_fwd_growth": 1.0000000000000338,
+   "max_bwd_growth": 1.0000000000000164,
+   "sumRT": [
+    0.9999837032759709,
+    0.9999870842237093
+   ],
+   "finite": true,
+   "maxR": 0.041600852422069,
+   "maxT": 0.9238819117733361,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [],
+   "closure": 1.6296724029141174e-05
+  },
+  {
+   "case": "B2_cutoff_gap3e-05",
+   "M": 6,
+   "split": [
+    200,
+    200
+   ],
+   "expected": 200,
+   "raw_fwd_before_rebalance": 200,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -2.1327812624553584e-14,
+   "max_Re_lam_b": 3.2278620734240856e-14,
+   "max_abs_lam": 18.19847295985674,
+   "max_fwd_growth": 1.0000000000000255,
+   "max_bwd_growth": 1.0000000000000386,
+   "sumRT": [
+    0.9999772909098741,
+    0.9999801783572693
+   ],
+   "finite": true,
+   "maxR": 0.045575788658073955,
+   "maxT": 0.9408440115861856,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [
+    "PMM2DStackPure.solve: a diffraction order is within 9e-05 (kt^2 units) of a Rayleigh cutof"
+   ],
+   "closure": 2.2709090125916376e-05
+  },
+  {
+   "case": "B2_cutoff_gap0",
+   "M": 6,
+   "split": [
+    200,
+    200
+   ],
+   "expected": 200,
+   "raw_fwd_before_rebalance": 200,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -2.1111935495887835e-14,
+   "max_Re_lam_b": 1.2098257578455847e-14,
+   "max_abs_lam": 18.198843078627156,
+   "max_fwd_growth": 1.0000000000000253,
+   "max_bwd_growth": 1.0000000000000144,
+   "sumRT": [
+    1.000000000002387,
+    1.0000000000091087
+   ],
+   "finite": true,
+   "maxR": 0.05087278371973313,
+   "maxT": 0.9615805717029728,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [
+    "PMM2DStackPure.solve: a diffraction order is within 4.5e-07 (kt^2 units) of a Rayleigh cut"
+   ],
+   "closure": 9.108713783234634e-12
+  },
+  {
+   "case": "B3_high_contrast_M8_normal",
+   "M": 8,
+   "split": [
+    392,
+    392
+   ],
+   "expected": 392,
+   "raw_fwd_before_rebalance": 392,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -1.0766637239189108e-14,
+   "max_Re_lam_b": 7.549516567451064e-15,
+   "max_abs_lam": 12.931274765622145,
+   "max_fwd_growth": 1.0000000000000326,
+   "max_bwd_growth": 1.0000000000000229,
+   "sumRT": [
+    0.9999172079383656,
+    0.999890994045085
+   ],
+   "finite": true,
+   "maxR": 0.16243875397284332,
+   "maxT": 0.38710073198314854,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [],
+   "closure": 0.00010900595491503129
+  },
+  {
+   "case": "B3_high_contrast_M8_oblique60",
+   "M": 8,
+   "split": [
+    392,
+    392
+   ],
+   "expected": 392,
+   "raw_fwd_before_rebalance": 392,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -1.3558918616626064e-14,
+   "max_Re_lam_b": 1.5708151538479207e-14,
+   "max_abs_lam": 12.504429841856595,
+   "max_fwd_growth": 1.0000000000000413,
+   "max_bwd_growth": 1.0000000000000477,
+   "sumRT": [
+    0.9960179091737136,
+    1.0001871510732794
+   ],
+   "finite": true,
+   "maxR": 0.27287357805040874,
+   "maxT": 0.2905802360543575,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [],
+   "closure": 0.003982090826286422
+  },
+  {
+   "case": "B3_high_contrast_33_M8_conical",
+   "M": 8,
+   "split": [
+    882,
+    882
+   ],
+   "expected": 882,
+   "raw_fwd_before_rebalance": 882,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -9.36080035413461e-15,
+   "max_Re_lam_b": 2.1483825766191327e-14,
+   "max_abs_lam": 18.862871502898834,
+   "max_fwd_growth": 1.0000000000000284,
+   "max_bwd_growth": 1.0000000000000653,
+   "sumRT": [
+    0.9999999124668791,
+    0.999999813226701
+   ],
+   "finite": true,
+   "maxR": 0.06442777764285605,
+   "maxT": 0.5848006280704603,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [],
+   "closure": 1.8677329904903672e-07
+  },
+  {
+   "case": "B4_oblique60_depth0.25lam",
+   "M": 7,
+   "split": [
+    288,
+    288
+   ],
+   "expected": 288,
+   "raw_fwd_before_rebalance": 288,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -8.215650382226158e-15,
+   "max_Re_lam_b": 6.534015450122834e-15,
+   "max_abs_lam": 9.788185739123584,
+   "max_fwd_growth": 1.0000000000000129,
+   "max_bwd_growth": 1.0000000000000102,
+   "sumRT": [
+    1.0000060591632598,
+    0.9999968804819159
+   ],
+   "finite": true,
+   "maxR": 0.18274665753019062,
+   "maxT": 0.9982132841660274,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [],
+   "closure": 6.059163259797273e-06
+  },
+  {
+   "case": "B4_oblique60_depth1.0lam",
+   "M": 7,
+   "split": [
+    288,
+    288
+   ],
+   "expected": 288,
+   "raw_fwd_before_rebalance": 288,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -8.215650382226158e-15,
+   "max_Re_lam_b": 6.534015450122834e-15,
+   "max_abs_lam": 9.788185739123584,
+   "max_fwd_growth": 1.0000000000000515,
+   "max_bwd_growth": 1.000000000000041,
+   "sumRT": [
+    1.0000060591813507,
+    0.9999870651995314
+   ],
+   "finite": true,
+   "maxR": 0.1820815627826617,
+   "maxT": 0.998212293092365,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [],
+   "closure": 1.2934800468600294e-05
+  },
+  {
+   "case": "B4_oblique60_depth3.0lam",
+   "M": 7,
+   "split": [
+    288,
+    288
+   ],
+   "expected": 288,
+   "raw_fwd_before_rebalance": 288,
+   "rebalance_engaged": false,
+   "min_Re_lam_f": -8.215650382226158e-15,
+   "max_Re_lam_b": 6.534015450122834e-15,
+   "max_abs_lam": 9.788185739123584,
+   "max_fwd_growth": 1.0000000000001548,
+   "max_bwd_growth": 1.0000000000001232,
+   "sumRT": [
+    1.0000060586957407,
+    0.9999942101097433
+   ],
+   "finite": true,
+   "maxR": 0.176345462791198,
+   "maxT": 0.9982031097122784,
+   "minR": 0.0,
+   "minT": 0.0,
+   "warnings": [],
+   "closure": 6.058695740662756e-06
+  }
+ ]
+}

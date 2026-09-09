@@ -1,0 +1,80 @@
+{
+ "root": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy",
+ "lumenairy": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy\\lumenairy\\__init__.py",
+ "version": "5.42.1",
+ "has_tensor_entry": false,
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "fixtures": {
+  "s1_22_te_normal": {
+   "orders": "6da240d455a94db8",
+   "R": "524b5a6424c1642b",
+   "T": "93b84eaf08a4e4cf",
+   "sumR": 0.2303468080766423,
+   "sumT": 0.7697108319473576
+  },
+  "s2_33_tm_oblique": {
+   "orders": "6da240d455a94db8",
+   "R": "77c7552a9552def2",
+   "T": "925e6d7ca2981000",
+   "sumR": 0.08798744890481952,
+   "sumT": 0.9117663088333525
+  },
+  "s3_22_lossy_conical": {
+   "orders": "6da240d455a94db8",
+   "R": "a86633ec739a8042",
+   "T": "1b9b434d15aaa572",
+   "sumR": 0.11275392405061355,
+   "sumT": 0.6761364350016374
+  },
+  "s4_22_te_conical": {
+   "orders": "330be98e0b281f7e",
+   "R": "65d4d254d072e9b8",
+   "T": "166297f3b09690ad",
+   "sumR": 0.16546250665158485,
+   "sumT": 0.8345881388821306
+  },
+  "s5_stack_scalar_jones": {
+   "R": "a2cc5727ecdd5290",
+   "T": "7df9c505f2eb74d8",
+   "jones": "773f66f504cd733c",
+   "sumRT": [
+    0.9997329480619113,
+    0.9990369871736693
+   ]
+  },
+  "sop_22_M6": {
+   "Lmat": "823a4ab5a6faafa6",
+   "Rmat": "843e0bbc1012fa2c",
+   "Stt": "3e6405708a9c6c07",
+   "Schur": "109f559b864bcfd1",
+   "Et0": "e98dfc7e07e8e505",
+   "Et1": "e64bceefc4a90108",
+   "lam_sorted": "8a1ab1b9deee1400",
+   "W": "7d6d6d6227d4df88",
+   "V": "434cc830982d8bdd"
+  },
+  "sop_33_M5": {
+   "Lmat": "0b094f884641e6b6",
+   "Rmat": "427923531679b8e8",
+   "Stt": "8fba1cf1e5e4b210",
+   "Schur": "13fc4f41f9ccdb82",
+   "Et0": "9b864c5a60610dbe",
+   "Et1": "bcfe15a00d1f2140",
+   "lam_sorted": "e6a54ebb9dd084c9",
+   "W": "ac2545c8535fccfa",
+   "V": "186da772d6545e47"
+  },
+  "sop_lossy_M6": {
+   "Lmat": "49e3a9dd5085545c",
+   "Rmat": "f444fef455380649",
+   "Stt": "246304b911f7d2a9",
+   "Schur": "05ef57c4a45dd812",
+   "Et0": "ef38c167f747ef33",
+   "Et1": "07f3db2faff58241",
+   "lam_sorted": "e4c34e95baf9bb70",
+   "W": "7e8099b09cdba916",
+   "V": "e77969563f295477"
+  }
+ }
+}
