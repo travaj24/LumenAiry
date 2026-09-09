@@ -626,6 +626,20 @@ defect against a stated contract):
    this build (previously neither 2-D staggered entry included layer eps) and
    the promotion claim should say "away from a layer cutoff".
 
+   *CLOSED 2026-09-10* (branch `fix/wood-list-fffnv`, Task G of
+   `docs/audits/FIX_WOOD_LIST_AND_FFFNV_2026_09_10.md`).  The rule was unified
+   the other way round -- the SCALAR sites now list the layer permittivities
+   too, which is the more robust convention because the staggered solver
+   degrades like `~1/sqrt(distance)` near a cut-off INSIDE the layer as well.
+   "Unifying would move shipped scalar results" turned out to be false: the
+   guard only fires inside `|eps - kt^2| <= 1e-9` (~1.2e-10 relative in
+   wavelength), so 11 scalar and tensor fixtures -- single-layer, stack,
+   oblique, conical, lossy, tensor control -- are BIT-IDENTICAL to `fb3fd93`,
+   nudged wavelengths included, and the cut-off warning is unchanged.  The
+   three rows above become 0.0 / 0.0 / 0.0, and G1's promotion claim is
+   unconditional again (no "away from a layer cutoff" caveat).  Tests:
+   `tests/unit/test_pmm2d_staggered_wood_list.py`.
+
 ---
 
 ## 10. Changes committed on this branch by the verification

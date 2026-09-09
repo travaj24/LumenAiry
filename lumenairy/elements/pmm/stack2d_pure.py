@@ -113,6 +113,7 @@ from .twod_staggered import (
     _region_modes_oop,
     _tile_needs_oop,
     _validate_stag_cell,
+    _wood_eps_reals,
 )
 
 __all__ = ["PMM2DStackPure"]
@@ -362,21 +363,29 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         _ky0n = nre0 * np.sin(theta) * np.sin(phi)
         _require_propagating_incidence("PMM2DStackPure.solve", np.conj(eps_sup),
                                        _kx0n ** 2 + _ky0n ** 2)
-        # Wood-anomaly nudge.  TENSOR layers contribute their DIAGONALS' real
-        # parts (the `_pmm_jones_2d_at` rule: a grazing LAYER mode is what
-        # crashes the interface S-matrix, and an anisotropic layer has several
-        # principal indices).  SCALAR layers are deliberately left out, exactly
-        # as the shipped scalar cascade and `pmm_efficiency_2d_staggered` leave
-        # them out -- adding them would move every shipped scalar result.
-        _eps_gr = [eps_sup, eps_sub]
+        # Wood-anomaly nudge.  EVERY region contributes its real
+        # permittivities -- both half-spaces, every scalar layer (uniform or
+        # patterned, each distinct cell value) and every TENSOR layer's
+        # principal DIAGONALS: a grazing LAYER mode is what crashes the
+        # interface S-matrix, and an anisotropic layer has several principal
+        # indices.  ONE rule for both paths (2026-09-10): until then SCALAR
+        # layers were left out here and in `pmm_efficiency_2d_staggered`, so a
+        # scalar cell and its `e * I` promotion -- the same discretization
+        # everywhere else -- took different nudges on a LAYER cut-off and
+        # differed there by a measured 4.59e-08.  Off an EXACT coincidence
+        # nothing moves: the guard's trigger band is |eps - kt^2| <= 1e-9.
+        _eps_src = [eps_sup, eps_sub]
         for _L in self._layers:
-            if _L["kind"] == "uniform_tensor":
-                _eps_gr += list(np.diag(_L["eps33"]))
-            elif _L["kind"] == "patterned" and _L["eps_cell"].ndim == 4:
-                _eps_gr += list(_L["eps_cell"][..., [0, 1, 2],
-                                              [0, 1, 2]].ravel())
+            if _L["kind"] == "uniform":
+                _eps_src.append(_L["eps"])
+            elif _L["kind"] == "uniform_tensor":
+                _eps_src.append(np.diag(_L["eps33"]))
+            elif _L["eps_cell"].ndim == 4:
+                _eps_src.append(_L["eps_cell"][..., [0, 1, 2], [0, 1, 2]])
+            else:
+                _eps_src.append(_L["eps_cell"])
         wl = _grazing_safe_wavelength(wl, _kx0n, _ky0n, _mx, _my, px, py,
-                                      _eps_gr)
+                                      _wood_eps_reals(*_eps_src))
         _kt2 = ((_kx0n + _mx * (wl / px)) ** 2 + (_ky0n + _my * (wl / py)) ** 2)
         _gap = min(float(np.min(np.abs(float(np.real(e)) - _kt2)))
                    for e in (eps_sup, eps_sub))

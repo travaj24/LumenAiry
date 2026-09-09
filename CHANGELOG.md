@@ -2,6 +2,42 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Fixed -- ONE Wood-anomaly permittivity list for the pure staggered 2-D PMM
+
+`_grazing_safe_wavelength` nudges the wavelength off an EXACT Rayleigh
+coincidence in any medium on its list.  The TENSOR path of the pure staggered
+2-D PMM listed the layer tensors' diagonals; the SCALAR path
+(`pmm_efficiency_2d_staggered`, and a scalar layer of `PMM2DStackPure.solve`)
+listed only the two half-spaces.  A scalar `(Nx, Ny)` cell and its `e * I`
+promotion -- the same discretization everywhere else -- therefore took
+DIFFERENT nudges, and gave different answers, when a diffraction order sat
+exactly on a LAYER's own Rayleigh cut-off (measured 4.591e-08 on the
+verification report's reproducer, 7.561e-09 on a patterned cell, 4.977e-08 on
+a uniform scalar layer).
+
+Both paths now list the real parts of EVERY region's permittivity: the two
+half-spaces, every distinct scalar cell value, every uniform scalar layer, and
+every tensor's principal diagonal.  Listing the layer is the more robust
+convention on its own merits -- the staggered solver degrades like
+`~1/sqrt(distance)` near a cut-off INSIDE a layer exactly as it does near a
+half-space one, and an exactly grazing layer mode is what crashes the interface
+S-matrix.
+
+* NOTHING moves off an exact coincidence.  The guard's trigger band is
+  `|eps - kt^2| <= 1e-9`, a relative wavelength window of ~1.2e-10 around the
+  cut-off; R/T and the nudged wavelength were confirmed BIT-IDENTICAL to 5.43.0
+  across 11 scalar and tensor fixtures (single-layer, stack, oblique, conical,
+  lossy, tensor control) on one build.
+* The cut-off WARNING is unchanged: it still keys on the half-spaces, which are
+  the media whose orders a caller sees in the far field.
+* Side effect: the nudge list is now DEDUPLICATED (`_wood_eps_reals`).  The
+  guard evaluates a Python-level `min` per candidate wavelength, so a fine
+  tensor cell used to push `3*Nx*Ny` entries through it -- 46.9 ms per call at
+  64x64, now 0.02 ms, at an identical wavelength.
+* `tests/unit/test_pmm2d_staggered_wood_list.py` (18 tests).
+
 ## [5.43.0] — 2026-09-09
 
 ### Changed -- deprecation horizon slipped 5.44 -> 5.46 (fourth deliberate one-line slip)

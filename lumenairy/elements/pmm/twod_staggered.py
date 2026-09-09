@@ -244,6 +244,32 @@ def _validate_stag_cell(fn_name, eps_cell):
     return cell
 
 
+def _wood_eps_reals(*eps_arrays):
+    """The DISTINCT real permittivities a Rayleigh cut-off can sit on, for the
+    Wood-anomaly nudge list of :func:`~lumenairy.elements.rcwa._core._grazing_safe_wavelength`.
+
+    ONE rule for both staggered paths (scalar and tensor, 2026-09-10).  The
+    nudge exists because the staggered solver degrades like
+    ``~1/sqrt(cut-off distance)`` and an EXACT grazing mode crashes the
+    interface S-matrix -- and that is true of a cut-off inside a LAYER, not
+    just in a half-space, so every region's permittivity belongs on the list.
+    Callers pass already-scalar quantities: half-space ``eps``, a scalar
+    ``(Nx, Ny)`` cell, or a tensor's principal DIAGONAL (the off-diagonals are
+    not cut-offs) -- this helper never sniffs a shape, because a scalar
+    ``(3, 3)`` cell is a legal 3x3 segmentation grid.
+
+    Deduplication is numerically inert -- ``_grazing_safe_wavelength`` takes a
+    MIN over the list -- and it is what keeps the list O(materials) instead of
+    O(Nx*Ny*3) on a fine cell, where the min is evaluated per candidate
+    wavelength in a Python loop.
+    """
+    if not eps_arrays:
+        return []
+    vals = np.concatenate([np.real(np.asarray(a, dtype=_C)).ravel()
+                           for a in eps_arrays])
+    return [float(v) for v in np.unique(vals)]
+
+
 # === 1-D modified-Legendre staggered basis + 2-D transverse-E eigensolver ===
 # (Granet 2023 Eqs.30-34 / 23-24; faithful no-shortcuts staggered basis)
 def _legendre_value_deriv(maxdeg, u):
@@ -1512,8 +1538,19 @@ def pmm_efficiency_2d_staggered(
     _require_propagating_incidence("pmm_efficiency_2d_staggered",
                                    np.conj(eps_sup),
                                    _kx0n ** 2 + _ky0n ** 2)
+    # The nudge list carries the LAYER's permittivities as well as the two
+    # half-spaces' (unified with the tensor path 2026-09-10; before that this
+    # scalar entry listed only the half-spaces, so a scalar cell and its
+    # ``e * I`` promotion through pmm_jones_2d_staggered took DIFFERENT nudges
+    # -- and therefore different answers, by a measured 4.59e-08 -- when an
+    # order sat exactly on a layer's own cut-off).  A cut-off INSIDE the layer
+    # degrades this solver just as a half-space one does, so listing it is the
+    # more robust convention, and it moves nothing off an EXACT coincidence:
+    # the guard's trigger band is |eps - kt^2| <= 1e-9, i.e. a relative
+    # wavelength window of ~1.2e-10 around the cut-off.
     wl = _grazing_safe_wavelength(float(wavelength), _kx0n, _ky0n, _mx, _my,
-                                  period_x, period_y, [eps_sup, eps_sub])
+                                  period_x, period_y,
+                                  _wood_eps_reals(eps_sup, eps_sub, eps_cell))
     _kt2 = ((_kx0n + _mx * (wl / period_x)) ** 2
             + (_ky0n + _my * (wl / period_y)) ** 2)
     _gap = min(float(np.min(np.abs(float(np.real(e)) - _kt2)))
