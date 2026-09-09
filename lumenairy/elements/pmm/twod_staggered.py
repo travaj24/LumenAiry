@@ -244,6 +244,99 @@ def _validate_stag_cell(fn_name, eps_cell):
     return cell
 
 
+def _require_inplane_mu(fn_name, tile33):
+    """Block-form gate for a ``(..., 3, 3)`` PERMEABILITY tile (Granet Eq. 6,
+    ``[[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]``).
+
+    Magnetic anisotropy is IN-PLANE only in this engine: the paper's
+    ``R = C[chi_t]C`` / ``K_tz = C[chi_t][d2;-d1]`` / ``S_tt(chi33)`` route
+    generalizes the SECOND-ORDER pencil, while the out-of-plane FIRST-ORDER
+    generator (:meth:`Granet2DTransverseE._assemble_oop`) carries no ``mu``
+    blocks at all (its ``G3``/``E3`` eliminations assume ``mu = 1``).  So an
+    out-of-plane ``mu`` raises, at the SAME RELATIVE ``1e-12 * scale`` floor
+    the permittivity uses (:func:`~lumenairy.elements.pmm.twod_jones._tile_is_offplane`):
+    a physically in-plane tensor built by ROTATING a diagonal one carries
+    ~1e-16 float noise in the xz/yz/zx/zy slots and must NOT be rejected.
+
+    ``m33 != 0`` (``chi33 = 1/m33`` enters ``S_tt``) and an INVERTIBLE ``[mu_t]``
+    (``chi_t = [mu_t]^-1``, the 2x2 inverse taken pointwise per cell) are the
+    two preconditions; both are checked relative to the tile scale."""
+    tile33 = np.asarray(tile33, dtype=_C)
+    if float(np.min(np.abs(tile33[..., 2, 2]))) < 1e-300:
+        raise ValueError(
+            f"{fn_name}: m_zz must be nonzero in every region (chi33 = 1/m33 "
+            f"weights the S_tt curl-curl operator).")
+    if _tile_is_offplane(tile33):
+        raise NotImplementedError(
+            f"{fn_name}: OUT-OF-PLANE permeability (m_xz / m_yz / m_zx / "
+            f"m_zy above the relative 1e-12 floor) is not implemented -- the "
+            f"magnetic route generalizes the SECOND-ORDER (2 q^2) block-form "
+            f"pencil (Granet Eq. 6: [[m11, m12, 0], [m21, m22, 0], "
+            f"[0, 0, m33]]), and the out-of-plane first-order generator has "
+            f"no mu blocks.  Pass a BLOCK-FORM mu.")
+    det = (tile33[..., 0, 0] * tile33[..., 1, 1]
+           - tile33[..., 0, 1] * tile33[..., 1, 0])
+    scale = max(float(np.max(np.abs(tile33))), 1.0)
+    if float(np.min(np.abs(det))) <= 1e-14 * scale ** 2:
+        raise ValueError(
+            f"{fn_name}: the transverse block [mu_t] = [[m11, m12], "
+            f"[m21, m22]] is SINGULAR in at least one cell "
+            f"(min |det| = {float(np.min(np.abs(det))):.3g} vs the relative "
+            f"floor {1e-14 * scale ** 2:.3g}); chi_t = [mu_t]^-1 does not "
+            f"exist there.")
+
+
+def _validate_stag_mu(fn_name, mu_cell):
+    """Shape + SQUARE-grid + block-form validation for a PERMEABILITY cell,
+    the mirror of :func:`_validate_stag_cell`.  Accepts a ``(Nx, Ny)`` SCALAR
+    map (isotropic magnetic: ``chi_t = (1/mu) I``, ``chi33 = 1/mu``) or a
+    ``(Nx, Ny, 3, 3)`` BLOCK-FORM tensor map, and returns it as complex."""
+    cell = np.asarray(mu_cell, dtype=_C)
+    if cell.ndim == 4:
+        if cell.shape[2:] != (3, 3):
+            raise ValueError(
+                f"{fn_name}: a tensor mu_cell must be (Nx, Ny, 3, 3), got "
+                f"shape {cell.shape}.")
+        _require_inplane_mu(fn_name, cell)
+    elif cell.ndim == 2:
+        if float(np.min(np.abs(cell))) < 1e-300:
+            raise ValueError(
+                f"{fn_name}: a scalar mu_cell must be nonzero in every cell "
+                f"(chi = 1/mu).")
+    else:
+        raise ValueError(
+            f"{fn_name}: mu_cell must be a 2-D (Nx, Ny) scalar grid or a "
+            f"(Nx, Ny, 3, 3) block-form tensor grid, got shape {cell.shape}.")
+    if cell.shape[0] != cell.shape[1]:
+        raise ValueError(
+            f"{fn_name}: mu_cell must be SQUARE (Nx == Ny; the staggered "
+            f"tensor-product basis requires Nx*(M-1) == Ny*(M-1)), got "
+            f"{cell.shape}.")
+    return cell
+
+
+def _require_nonmagnetic_halfspace(fn_name, mu_sup, mu_sub):
+    """The half-spaces of this engine are NONMAGNETIC (mu = 1) and isotropic.
+
+    The Rayleigh far field normalises each order's power with the ELECTRIC
+    flux factor ``Re(kz)`` and reconstructs ``E_z`` from ``k . E = 0``; a
+    magnetic half-space changes the wave impedance ``Z = sqrt(mu/eps)``, hence
+    both the flux normalisation and the incident-amplitude overlap.  Rather
+    than silently returning efficiencies normalised for vacuum, raise."""
+    for name, val in (("mu_superstrate", mu_sup), ("mu_substrate", mu_sub)):
+        if val is None:
+            continue
+        v = np.asarray(val, dtype=_C)
+        if v.ndim == 0 and v == 1.0:
+            continue
+        raise NotImplementedError(
+            f"{fn_name}: {name}={val!r} -- MAGNETIC HALF-SPACES are not "
+            f"implemented.  The half-spaces are nonmagnetic and isotropic "
+            f"(mu = 1): the Rayleigh flux normalisation and the incident "
+            f"overlap both assume the vacuum wave impedance.  A magnetic "
+            f"medium must be a LAYER (add_layer(..., mu=...) / mu_cell=).")
+
+
 # === 1-D modified-Legendre staggered basis + 2-D transverse-E eigensolver ===
 # (Granet 2023 Eqs.30-34 / 23-24; faithful no-shortcuts staggered basis)
 def _legendre_value_deriv(maxdeg, u):
@@ -526,7 +619,7 @@ class Granet2DTransverseE:
     """
 
     def __init__(self, px, py, Nx, Ny, M, eps_cell,
-                 alpha0x=0.0, alpha0y=0.0, k0=2.0 * np.pi):
+                 alpha0x=0.0, alpha0y=0.0, k0=2.0 * np.pi, mu_cell=None):
         self.k0 = float(k0)
         self.alpha0x = float(alpha0x)
         self.alpha0y = float(alpha0y)
@@ -550,6 +643,42 @@ class Granet2DTransverseE:
         # a branch, at exactly the same floor.
         self.offplane = (self.eps_cell.ndim == 4
                          and _tile_is_offplane(self.eps_cell))
+        # MAGNETIC dispatch (chi_t = [mu_t]^-1 != I).  ``mu_cell=None`` -- the
+        # nonmagnetic default -- leaves every operator below untouched, so the
+        # shipped isotropic and Stage-A tensor paths stay BIT-IDENTICAL (gate
+        # G1); a mu present routes the SAME second-order pencil through the
+        # paper's general R / K_tz / S_tt weights (Eqs. 24, 21, 20).
+        self.mu_cell = None
+        self.magnetic = False
+        self.Ggram_blocks = None
+        if mu_cell is not None:
+            mu = np.asarray(mu_cell, dtype=_C)
+            if mu.ndim not in (2, 4) or (mu.ndim == 4
+                                         and mu.shape[2:] != (3, 3)):
+                raise ValueError(
+                    f"Granet2DTransverseE: mu_cell must be (Nx, Ny) scalar or "
+                    f"(Nx, Ny, 3, 3) block-form tensor, got shape {mu.shape}.")
+            if mu.shape[:2] != self.eps_cell.shape[:2]:
+                raise ValueError(
+                    f"Granet2DTransverseE: mu_cell grid {mu.shape[:2]} must "
+                    f"match the eps_cell grid {self.eps_cell.shape[:2]}.")
+            if mu.ndim == 4:
+                _require_inplane_mu("Granet2DTransverseE", mu)
+            elif float(np.min(np.abs(mu))) < 1e-300:
+                raise ValueError(
+                    "Granet2DTransverseE: a scalar mu_cell must be nonzero in "
+                    "every cell (chi = 1/mu).")
+            if self.offplane:
+                raise NotImplementedError(
+                    "Granet2DTransverseE: mu_cell together with an "
+                    "OUT-OF-PLANE eps_cell (e_xz / e_yz / e_zx / e_zy above "
+                    "the relative 1e-12 floor) is not implemented -- the "
+                    "out-of-plane FIRST-ORDER generator carries no "
+                    "permeability blocks (it eliminates G3 assuming mu = 1).  "
+                    "Magnetic anisotropy is available on the IN-PLANE "
+                    "(block-form) second-order pencil only.")
+            self.mu_cell = mu
+            self.magnetic = True
         if self.offplane:
             self._assemble_oop()
         else:
@@ -597,6 +726,27 @@ class Granet2DTransverseE:
             out += np.kron(Wy, Gx[sx])
         return out
 
+    def _chi_maps(self):
+        """Per-cell inverse-permeability maps ``(chi11, chi12, chi21, chi22,
+        chi33)`` -- Granet Eqs. 11-12 -- or ``None`` when nonmagnetic.
+
+        ``[chi_t] = [mu_t]^-1`` is the POINTWISE 2x2 inverse (exact for the
+        piecewise-constant cells this basis is built on: the walls are element
+        boundaries, so inverting per cell and discretizing commute) and
+        ``chi33 = 1/m33``.  A SCALAR ``mu`` gives ``chi_t = (1/mu) I``."""
+        mu = self.mu_cell
+        if mu is None:
+            return None
+        if mu.ndim == 2:
+            inv = 1.0 / mu
+            zero = np.zeros_like(inv)
+            return inv, zero, zero, inv, inv
+        m11, m12 = mu[..., 0, 0], mu[..., 0, 1]
+        m21, m22 = mu[..., 1, 0], mu[..., 1, 1]
+        det = m11 * m22 - m12 * m21
+        return (m22 / det, -m12 / det, -m21 / det, m11 / det,
+                1.0 / mu[..., 2, 2])
+
     def _assemble(self):
         """Build R (Eq. 24) and L = k^2[eps_t] + S_tt - K_tz eps33^-1 K_zt.
 
@@ -639,6 +789,12 @@ class Granet2DTransverseE:
             e33 = self.eps_cell[..., 2, 2]
         else:
             e11 = e12 = e21 = e22 = e33 = None
+        # MAGNETIC (chi_t = [mu_t]^-1 != I).  None on the nonmagnetic path, and
+        # every branch below is skipped -> the shipped arithmetic, unchanged.
+        chi = self._chi_maps()
+        magnetic = chi is not None
+        if magnetic:
+            chi11, chi12, chi21, chi22, chi33 = chi
 
         # ----- per-axis 1-D primitive matrices (real inner product) -----
         # Mass (no deriv) between set pairs:
@@ -657,8 +813,40 @@ class Granet2DTransverseE:
         G1 = np.kron(Mtt_y, Mbb_x)                  # <V1|V1>, V1=B(x1)til(x2)
         G2 = np.kron(Mbb_y, Mtt_x)                  # <V2|V2>, V2=til(x1)B(x2)
         Rmat = np.zeros((2 * qq, 2 * qq), dtype=_C)
-        Rmat[:qq, :qq] = -G1
-        Rmat[qq:, qq:] = -G2
+        if magnetic:
+            # Eq. 24 / Appendix-A Eq. 39: R = C[chi_t]C with C = [[0,1],[-1,0]],
+            # i.e. R = [[-chi22, chi21], [chi12, -chi11]] -- the C-rotation
+            # SWAPS the transverse indices (R11 carries chi22, R22 chi11) and
+            # the two MIXED blocks (chi21 in V1 x V2, chi12 in V2 x V1) are
+            # kron'd from the UNLIKE-set 1-D masses exactly like the Eq. 40
+            # eps12 / eps21 blocks.  For a Hermitian positive-definite [mu_t]
+            # this R is Hermitian NEGATIVE definite, so G = -R stays the
+            # Hermitian PD right-hand matrix of the pencil (chi_t = I gives
+            # back -blockdiag(G1, G2) to ~1e-16 -- summation order only).
+            Rmat[:qq, :qq] = -self._eps_weighted(
+                (bx, bx.m_ref, bx.B, bx.B),
+                (by, by.m_ref, by.Btilde, by.Btilde), chi22)
+            Rmat[:qq, qq:] = self._eps_weighted(
+                (bx, bx.m_ref, bx.B, bx.Btilde),
+                (by, by.m_ref, by.Btilde, by.B), chi21)
+            Rmat[qq:, :qq] = self._eps_weighted(
+                (bx, bx.m_ref, bx.Btilde, bx.B),
+                (by, by.m_ref, by.B, by.Btilde), chi12)
+            Rmat[qq:, qq:] = -self._eps_weighted(
+                (bx, bx.m_ref, bx.Btilde, bx.Btilde),
+                (by, by.m_ref, by.B, by.B), chi11)
+            # THE PLAIN BLOCK GRAM, kept SEPARATELY.  On the nonmagnetic path
+            # -R IS blockdiag(G1, G2) and the shipped code uses the one object
+            # for both roles; with chi_t != I they are DIFFERENT operators.
+            # The Eq.-25 H recovery (gamma C [H1;H2] = [k^2 eps_t + S_tt] E)
+            # carries NO chi_t, so it must project with THIS Gram, not with
+            # the pencil's R (see :func:`_region_modes`).  Stored as the two
+            # q^2 diagonal blocks (the off-diagonal blocks are zero), so the
+            # magnetic path retains q^2 x 2, not 4 q^2.
+            self.Ggram_blocks = (G1, G2)
+        else:
+            Rmat[:qq, :qq] = -G1
+            Rmat[qq:, qq:] = -G2
 
         # ============ L = [eps_t] + S_tt - K_tz eps33^-1 K_zt  (/k0^2) ========
         # --- [eps_t] : eps-weighted component masses (k^2[eps]/k0^2 = [eps]) ---
@@ -713,7 +901,21 @@ class Granet2DTransverseE:
         Curl = np.concatenate([Cw_E1, -Cw_E2], axis=1)     # (q^2, 2q^2)
         Gw_inv = np.linalg.inv(Gw)
         # IBP: <t,[d2;-d1] w> = -<Curl(t), w>  -> S_tt = -Curl^dag Gw^{-1} Curl.
-        Stt = -Curl.conj().T @ Gw_inv @ Curl        # (2q^2,2q^2), neg-semidef
+        #
+        # Eq. 20/42 with chi33 != 1.  ``Curl`` is the WEAK matrix <Vw | curl E>,
+        # so ``Gw^-1 Curl`` are the EXACT Vw coefficients of curl E (the de Rham
+        # property puts curl E in Vw strongly).  The bilinear form is then
+        # -<curl v, chi33 curl E> = -(Gw^-1 Curl v)^dag Gw_chi (Gw^-1 Curl E),
+        # i.e. the middle operator Gw^-1 -> Gw^-1 Gw_chi Gw^-1 with
+        # Gw_chi = <Vw| chi33 |Vw>.  chi33 = 1 gives Gw_chi = Gw and the middle
+        # collapses back to Gw^-1 -- the expression below is then the shipped
+        # matmul chain object-for-object (bit-identical, gate G1).
+        Sw = Gw_inv
+        if magnetic:
+            Gw_chi = self._eps_weighted((bx, bx.m_ref, bx.B, bx.B),
+                                        (by, by.m_ref, by.B, by.B), chi33)
+            Sw = Gw_inv @ Gw_chi @ Gw_inv
+        Stt = -Curl.conj().T @ Sw @ Curl            # (2q^2,2q^2), neg-semidef
 
         # === K_tz eps33^-1 K_zt : the div(D)=0 Schur term (Eq.16-18) ===
         # MIMETIC GRADIENT (the dual de Rham map).  K_tz = C[chi_t][d2;-d1] acts
@@ -731,9 +933,28 @@ class Granet2DTransverseE:
         # Build the eps-free mimetic gradient blocks (V1<-V3, V2<-V3):
         #   <t1 | -d1 V3> : t1 in V1=B(x1)Btil(x2), V3=Btil(x1)Btil(x2)
         #     x1: <B | d Btil> = dbt_x ; x2: <Btil|Btil> = Mtt_y
-        Grad1 = -np.kron(Mtt_y, dbt_x)              # V1 <- V3   (=<t1|-d1 V3>)
-        Grad2 = -np.kron(dbt_y, Mtt_x)              # V2 <- V3   (=<t2|-d2 V3>)
-        Ktz = np.concatenate([Grad1, Grad2], axis=0)       # (2q^2, q^2)
+        if not magnetic:
+            Grad1 = -np.kron(Mtt_y, dbt_x)          # V1 <- V3   (=<t1|-d1 V3>)
+            Grad2 = -np.kron(dbt_y, Mtt_x)          # V2 <- V3   (=<t2|-d2 V3>)
+            Ktz = np.concatenate([Grad1, Grad2], axis=0)   # (2q^2, q^2)
+        else:
+            # Eq. 21 / Appendix-A Eq. 43: K_tz = C[chi_t][d2; -d1], i.e.
+            #   row 1 (tested in V1) = -chi22 d1 + chi21 d2
+            #   row 2 (tested in V2) = -chi11 d2 + chi12 d1
+            # -- the same C-rotation index swap as R (row 1 carries chi22 /
+            # chi21, row 2 chi11 / chi12), and chi_t = I reproduces Grad1 /
+            # Grad2 above exactly (to summation order).  The derivative sits on
+            # the V3 TRIAL function ("d"), as the eps-free gradient has it.
+            Ktz = np.concatenate([
+                (-self._eps_dir(bx, "B", "d", "Btilde",
+                                by, "Btilde", "m", "Btilde", wmap=chi22)
+                 + self._eps_dir(bx, "B", "m", "Btilde",
+                                 by, "Btilde", "d", "Btilde", wmap=chi21)) / k0,
+                (-self._eps_dir(bx, "Btilde", "m", "Btilde",
+                                by, "B", "d", "Btilde", wmap=chi11)
+                 + self._eps_dir(bx, "Btilde", "d", "Btilde",
+                                 by, "B", "m", "Btilde", wmap=chi12)) / k0,
+            ], axis=0)
 
         # eps33 mass in V3 (Eq.41): <V3| eps | V3>
         Meps33 = self._eps_weighted(
@@ -1124,7 +1345,12 @@ def _region_modes(solver: Granet2DTransverseE):
             "and DISTINCT forward/backward modes -- call _region_modes_oop, "
             "whose 6-tuple feeds the generalized S-matrix cascade.")
     L = solver.Lmat
-    G = -solver.Rmat                  # block field Gram (Hermitian PD)
+    # The pencil's right-hand matrix is -R = -C[chi_t]C (Hermitian PD).  For a
+    # NONMAGNETIC region chi_t = I, so -R IS the block field Gram
+    # blockdiag(G1, G2) and the one object serves both roles below; for a
+    # MAGNETIC region the two are DIFFERENT operators and the Gram is carried
+    # separately on ``solver.Ggram_blocks`` (see the H recovery below).
+    G = -solver.Rmat
     g2, W = sla.eig(L, G)
     # q = kz/k0 = gamma/k0 = sqrt(g2).  FORWARD branch chosen ROBUSTLY (the
     # naive _sqrt_decay flips degenerate real-g2 pairs inconsistently on QZ
@@ -1154,8 +1380,25 @@ def _region_modes(solver: Granet2DTransverseE):
     Lhh = Lhh + solver.Stt
     # block C^{-1} = -C = [[0,-1],[1,0]] acting on the 2-block coeff vector:
     #   (-C) [a;b] = [-b; a]  (a = top block, b = bottom block).
-    Ginv = np.linalg.inv(G)
-    Dual = Ginv @ (Lhh @ W)          # G^{-1} Lhh W  (back to coefficients)
+    #
+    # THE R-vs-GRAM SEPARATION.  Eq. 25 is a WEAK statement tested in V1 / V2:
+    # <v, gamma C [H1;H2]> = <v, (k^2[eps_t] + S_tt)[E1;E2]>, and its left side
+    # is gamma times the PLAIN block Gram blockdiag(G1, G2) applied to the
+    # C-rotated H coefficients -- NO chi_t appears in Eq. 25 (only chi33, which
+    # is already inside S_tt).  On the nonmagnetic path -R is that Gram, so the
+    # shipped single inverse is right; on the magnetic path -R = -C[chi_t]C is
+    # a DIFFERENT operator and using it here would silently apply [chi_t]^-1 to
+    # every H partner (an interface-match error invisible to the eigenvalues
+    # and to any energy check that renormalises).  Solve blockwise against the
+    # two retained Gram blocks instead.
+    if solver.Ggram_blocks is None:
+        Ginv = np.linalg.inv(G)
+        Dual = Ginv @ (Lhh @ W)      # G^{-1} Lhh W  (back to coefficients)
+    else:
+        G1g, G2g = solver.Ggram_blocks
+        LW = Lhh @ W
+        Dual = np.concatenate([np.linalg.solve(G1g, LW[:qq, :]),
+                               np.linalg.solve(G2g, LW[qq:, :])], axis=0)
     top = Dual[:qq, :]
     bot = Dual[qq:, :]
     rot = np.concatenate([-bot, top], axis=0)     # (-C) Dual
@@ -1301,12 +1544,14 @@ def _homog_geom_cache(solver: Granet2DTransverseE):
     ``(3, 3)`` uniform layer).  A tensor assembly here RAISES rather than
     silently returning a wrong geometric basis.
     """
-    if solver.eps_cell.ndim == 4 or solver.offplane:
+    if solver.eps_cell.ndim == 4 or solver.offplane or solver.magnetic:
         raise ValueError(
             "_homog_geom_cache: the shared eps-free geometric eig is defined "
-            "for a uniform SCALAR region only -- a uniform TENSOR region's "
-            "div(D)=0 Schur term is not eps-free (K_zt mixes e11/e21 while "
-            "Meps33 carries e33), so it needs its own _region_modes eig.")
+            "for a uniform SCALAR NONMAGNETIC region only -- a uniform TENSOR "
+            "region's div(D)=0 Schur term is not eps-free (K_zt mixes e11/e21 "
+            "while Meps33 carries e33), and a MAGNETIC region's L0_geom is not "
+            "geometric at all (chi_t and chi33 weight R, K_tz and S_tt), so "
+            "either needs its own _region_modes eig.")
     G = -solver.Rmat                       # block field Gram (Hermitian PD)
     Stt = solver.Stt
     L0_geom = Stt - solver.Schur           # = Lmat - eps*G, manifestly eps-free
@@ -1630,11 +1875,14 @@ def pmm_jones_2d_staggered(
     depth: float,
     wavelength: float,
     *,
+    mu_cell=None,
     degree: int = 8,
     n_modes: int | None = None,
     n_orders: int = 7,
     theta: float = 0.0,
     phi: float = 0.0,
+    mu_superstrate=None,
+    mu_substrate=None,
 ):
     """Rigorous 2-D crossed grating with a FULL ``(3, 3)`` ANISOTROPIC cell --
     in-plane OR out-of-plane -- by the canonical NO-FLOOR staggered PMM: the
@@ -1665,10 +1913,25 @@ def pmm_jones_2d_staggered(
         (``Nx == Ny``) and the walls are the segment boundaries (exact ``eps``
         per element, Eq. 26).
     n_substrate, n_superstrate : complex
-        Half-space refractive indices.  The half-spaces are ISOTROPIC (the
-        Rayleigh match is scalar); an anisotropic half-space is out of scope.
+        Half-space refractive indices.  The half-spaces are ISOTROPIC and
+        NONMAGNETIC (the Rayleigh match is scalar and the flux normalisation
+        assumes the vacuum wave impedance); an anisotropic or magnetic
+        half-space is out of scope (``mu_superstrate`` / ``mu_substrate``
+        exist only to RAISE on one).
     depth, wavelength : float
         Layer thickness / vacuum wavelength (metres).
+    mu_cell : (Nx, Ny, 3, 3) or (Nx, Ny) array_like of complex, optional
+        Per-segment RELATIVE PERMEABILITY over the same unit cell (default
+        ``None`` = nonmagnetic, ``mu = 1``, which leaves every operator and
+        every result BIT-IDENTICAL to the nonmagnetic path).  A ``(Nx, Ny)``
+        scalar map is the isotropic magnetic case; a ``(Nx, Ny, 3, 3)`` map
+        must be BLOCK-FORM (Granet Eq. 6, ``[[m11, m12, 0], [m21, m22, 0],
+        [0, 0, m33]]``) with ``m33 != 0`` and an invertible ``[mu_t]``.  The
+        paper's ``chi_t = [mu_t]^-1`` then weights ``R = C[chi_t]C`` (Eq. 24),
+        ``K_tz = C[chi_t][d2; -d1]`` (Eq. 21) and -- through ``chi33`` --
+        ``S_tt`` (Eq. 20), on the SAME ``2 q^2`` second-order pencil.
+        OUT-OF-PLANE ``mu``, and ``mu`` together with an out-of-plane
+        ``eps_cell``, raise ``NotImplementedError``.
     degree : int, optional
         Modified-Legendre function count ``M`` per segment per axis (the modal
         convergence knob).  Default 8.  ``n_modes`` is the clearer alias.
@@ -1722,6 +1985,20 @@ def pmm_jones_2d_staggered(
     # Validate HERE so the message names this entry, then hand the checked cell
     # to the single-layer pure cascade (one implementation of the physics).
     cell = _validate_stag_cell("pmm_jones_2d_staggered", eps_cell)
+    _require_nonmagnetic_halfspace("pmm_jones_2d_staggered", mu_superstrate,
+                                   mu_substrate)
+    mu = None
+    if mu_cell is not None:
+        mu = _validate_stag_mu("pmm_jones_2d_staggered", mu_cell)
+        if mu.shape[:2] != cell.shape[:2]:
+            raise ValueError(
+                f"pmm_jones_2d_staggered: mu_cell grid {mu.shape[:2]} must "
+                f"match the eps_cell grid {cell.shape[:2]}.")
+        if cell.ndim == 4 and _tile_needs_oop("pmm_jones_2d_staggered", cell):
+            raise NotImplementedError(
+                "pmm_jones_2d_staggered: mu_cell together with an "
+                "OUT-OF-PLANE eps_cell is not implemented -- the out-of-plane "
+                "first-order generator carries no permeability blocks.")
     M = int(degree if n_modes is None else n_modes)
     if M < 3:
         raise ValueError("pmm_jones_2d_staggered: degree / n_modes (the "
@@ -1729,6 +2006,9 @@ def pmm_jones_2d_staggered(
     stack = PMM2DStackPure(period_x, period_y, n_superstrate=n_superstrate,
                            n_substrate=n_substrate, n_modes=M,
                            n_orders=int(n_orders))
-    stack.add_layer(float(depth), eps_cell=cell)
+    if mu is None:
+        stack.add_layer(float(depth), eps_cell=cell)
+    else:
+        stack.add_layer(float(depth), eps_cell=cell, mu_cell=mu)
     stack.set_source(float(wavelength), theta=float(theta), phi=float(phi))
     return stack.solve(jones=True)
