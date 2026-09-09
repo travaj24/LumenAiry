@@ -25,16 +25,18 @@ run** -- see §12, open item O-1.
 
 ---
 
-## 0. VERDICT: **GO**, with a scope that is narrower and a mechanism that is
-## different from what the roadmap assumed
+## 0. VERDICT: GO -- with a narrower scope and a different mechanism than the roadmap assumed
 
 The mortar is **correct** (§3, §4), **convergent on genuinely non-conforming
 grids** (§7), **serves the generalized / out-of-plane cascade** (§8), and
 **carries no conditioning cliff** in the useful range (§10). At **equal
-degrees of freedom** it is not merely as good as the union grid, it is
-**7.6x more accurate** on the stripe pair with an exact independent oracle
-(§7.3), and on a 3-slice staircase it reaches the oracle at wall times the
-union grid cannot (§9).
+degrees of freedom** -- the only comparison that is not rigged -- it is
+**7.6x / 7.3x more accurate** than the union grid in the under-converged
+regime and a **wash (1.48x) once both arms converge** (§7.3, three points
+against an exact independent oracle), while its lossless closure is 170x-3300x
+tighter throughout. On a 3-slice staircase it is 2.3x / 4.8x / 2.6x more
+accurate at identical eigenproblem sizes, and on the LCM = 12 staircase it runs
+at a `q` the union lattice **cannot reach at all** (§9).
 
 Three findings reshape the item, and two of them contradict the roadmap:
 
@@ -236,9 +238,9 @@ Two 2-D-specific facts:
   the transpose would be a silent error at normal incidence (`tau = 1`).
 * **The dense form is a rejected design** (roadmap §1.2 item 2, and it is worse
   than the roadmap estimated in 2-D): a dense `C1` is `q_A^2 x q_B^2`. Measured
-  (§10.2): 46 MB at `N=(6,12), M=6` against 0.03 MB for its two factors, and
-  the separable apply is exact to 3e-16 and ~30x faster. The prototype's
-  `kron_apply` is the production form.
+  (§10.2): 49.4 MB at `N=(6,12), M=6` against 0.055 MB for its two factors --
+  900x -- and the separable apply is exact to 3.8e-16 and 49x faster. The
+  prototype's `kron_apply` is the production form.
 
 ### 2.4 The generalized twin (out-of-plane / slant)
 
@@ -319,10 +321,21 @@ against the shipped `PMM2DStackPure` union-grid cascade. Relative to
 
 **Worst over the five: 2.31e-13 relative.** The mortar reduces to the plain
 square modal match. Bit identity is not attainable and is not claimed: the
-mortar multiplies by `G` on both sides of a `solve` where the plain interface
-does not, so the identity is exact algebraically and rounds differently
-(`cond_2(G1)` at `N=3, M=6` is ~3e+02, and `2.3e-13 ~ eps * cond` is where that
-lands). A three-region pillar/pillar case scored the same way in §6 reads
+mortar multiplies by the block Gram `G` on both sides of a `solve` where the
+plain interface does not, so the identity is exact algebraically and rounds at
+`eps * cond_2(G)`. Measured (`m0c_gram_cond.py`):
+
+| grid | `cond_2(G1)` | `cond_2(G2)` | `eps * cond` |
+|---|---|---|---|
+| N=2, M=5 | 3.06e+03 | 3.04e+03 | 6.8e-13 |
+| N=3, M=6 | 7.23e+03 | 7.31e+03 | 1.6e-12 |
+| N=6, M=4 | 8.85e+02 | 8.85e+02 | 2.0e-13 |
+| N=3, M=8 | 3.50e+04 | 3.53e+04 | 7.8e-12 |
+
+The worst M1 reading, 2.31e-13 on a `N=3, M=6` stack, sits **7x inside** that
+grid's `eps * cond` -- so the bar is derived, not fitted, and it must be
+derived AT RUNTIME (it grows with `M`; a fixed `1e-12` constant would fail at
+`M = 8`). A three-region pillar/pillar case scored the same way in §6 reads
 **2.73e-14** on `(R, T)` and 2.39e-13 on the Jones.
 
 **And the identical-grid BYPASS is bit-exact**: with `force_mortar` off, a
@@ -469,10 +482,53 @@ the fully non-conforming pair costs no more than either nesting alone**
 "non-conformity penalty" stacked on top of the resolution cost -- consistent
 with §4.3, where the mortar's own error is 1e-16.
 
+`M = 5` on the same fixture (union reference 171.8 s, `R+T-1 = +1.5e-07`):
+
+| grids (A,B) | `d(R,T)` | `dJones` | `R+T-1` | wall | speedup |
+|---|---|---|---|---|---|
+| (6,6) forced mortar | **2.94e-14** | 9.72e-14 | [+6.7e-08, +1.5e-07] | 158.1 s | 1.09x |
+| (2,6) | 2.15e-01 | 7.80e-01 | [-9.8e-05, -3.1e-05] | 108.1 s | 1.59x |
+| (6,3) | 1.02e-01 | 1.92e-01 | [-5.4e-05, -4.2e-05] | 129.6 s | 1.32x |
+| (2,3) | 2.28e-01 | 8.86e-01 | [-1.2e-04, -4.9e-05] | **1.2 s** | **146x** |
+
 Closure is scored TWO-SIDED (deficit and excess are equally defects on a
-lossless stack) and stays inside [-4.8e-03, +3.0e-03] at `M=4` on every arm
-against the union's -3.5e-06 -- i.e. the closure defect tracks the coarse
-layers' resolution and decays with it, to 6.9e-12 by `M = 11` in §7.
+lossless stack). It tightens by ~1.5 orders from `M=4` to `M=5` on every arm
+and reaches 6.9e-12 by `M = 11` in §7 -- i.e. the closure defect tracks the
+coarse layers' resolution and decays with it, not with the interface kind.
+
+### 6.1 The same ladder with a HERMITIAN (lossless anisotropic) tensor
+
+Layer A's pillar replaced by a GYROTROPIC tensor
+`[[6, 0.9i, 0], [-0.9i, 6, 0], [0, 0, 5]]` -- Hermitian, hence lossless, hence
+`R + T = 1` is still exact and the two-sided gate still applies. `M = 4`, union
+reference 32.7 s, `R+T-1 = +1.8e-05`:
+
+| grids (A,B) | `d(R,T)` | `dJones` | `R+T-1` | wall | speedup |
+|---|---|---|---|---|---|
+| (6,6) forced mortar | **1.41e-14** | 7.98e-14 | [-2.9e-06, +1.8e-05] | 37.5 s | 0.87x |
+| (2,6) | 2.29e-01 | 3.26e-01 | [-2.8e-04, +1.4e-03] | 20.0 s | 1.64x |
+| (6,3) | 2.45e-01 | 2.90e-01 | [-2.8e-04, +6.8e-04] | 20.6 s | 1.59x |
+| (2,3) | 2.06e-01 | 4.69e-01 | [+3.9e-04, +2.4e-03] | **0.2 s** | **141x** |
+
+and at `M = 5` (union reference 203.9 s, `R+T-1 = +1.1e-07`):
+
+| grids (A,B) | `d(R,T)` | `dJones` | `R+T-1` | wall | speedup |
+|---|---|---|---|---|---|
+| (6,6) forced mortar | **1.38e-14** | 2.93e-14 | [+3.5e-08, +1.1e-07] | 166.4 s | 1.23x |
+| (2,6) | 3.95e-01 | 4.42e-01 | [-5.5e-05, -4.2e-05] | 89.4 s | 2.28x |
+| (6,3) | 2.12e-02 | 4.12e-02 | [-2.6e-05, +4.2e-05] | 84.0 s | 2.43x |
+| (2,3) | 3.86e-01 | 4.46e-01 | [-8.3e-05, -5.0e-05] | **1.0 s** | **212x** |
+
+The conforming identity holds on a tensor layer to **1.41e-14 / 1.38e-14**, the
+two-sided closure tightens by 1.5 orders from `M=4` to `M=5` on every arm, and
+the non-conforming arms behave exactly as the scalar ones -- the mortar is a
+geometric projection and carries no material dependence, which is the same
+reason the 1-D mortar is "geometry-level and gauge-free"
+(`AUDIT_PMM_PER_LAYER_GRIDS_IMPL_2026_07_28.md` §5.1). Note the gyrotropic
+`M=5` arms are NOT monotone in `M` (the (2,6) arm reads 2.29e-01 at `M=4` and
+3.95e-01 at `M=5`); at these coarse resolutions the answer is not yet in its
+asymptotic regime, exactly as the scalar h-refinement control of §4.2 shows for
+the shipped engine with no mortar present.
 
 ## 7. M4 -- the stripe pair against an EXACT INDEPENDENT ORACLE
 
@@ -537,30 +593,45 @@ comparison exact: per axis `q = N (M-1)`, so `q_union(M) = 6(M-1)` equals
 `M_B = 2M - 1` -- and at those settings **every region eigenproblem in both arms
 has exactly the same dimension `2 q^2`**.
 
-| `q` | eig dim | arm | settings | error vs 1-D | closure | wall |
-|---|---|---|---|---|---|---|
-| 18 | 648 | union | `N=6, M=4` | 7.01e-03 | 6.3e-05 | 23.6 s |
-| 18 | 648 | **mortar** | `A: N=2, M=10` / `B: N=3, M=7` | **9.17e-04** | **3.7e-07** | 29.2 s |
-| 24 | 1152 | union | `N=6, M=5` | 5.56e-04 | 2.1e-07 | 191.2 s |
-| 24 | 1152 | **mortar** | `A: N=2, M=13` / `B: N=3, M=9` | **7.58e-05** | **2.9e-10** | 218.8 s |
+| `q` | eig dim | arm | settings | error vs 1-D | closure | wall | ratio mortar/union |
+|---|---|---|---|---|---|---|---|
+| 18 | 648 | union | `N=6, M=4` | 7.01e-03 | 6.3e-05 | 23.6 s | |
+| 18 | 648 | **mortar** | `A: N=2, M=10` / `B: N=3, M=7` | **9.17e-04** | **3.7e-07** | 29.2 s | **0.13x** |
+| 24 | 1152 | union | `N=6, M=5` | 5.56e-04 | 2.1e-07 | 191.2 s | |
+| 24 | 1152 | **mortar** | `A: N=2, M=13` / `B: N=3, M=9` | **7.58e-05** | **2.9e-10** | 218.8 s | **0.14x** |
+| 30 | 1800 | union | `N=6, M=6` | **2.17e-05** | 1.0e-08 | 592.7 s | |
+| 30 | 1800 | mortar | `A: N=2, M=16` / `B: N=3, M=11` | 3.22e-05 | **3.0e-12** | 749.3 s | **1.48x** |
 
-**At equal DOF the mortar is 7.6x and 7.3x MORE accurate, and its lossless
-closure is 170x and 720x tighter, at 1.15-1.24x the wall time.** The
-"h-vs-p penalty" the roadmap's window-enrichment argument predicts is not
-merely absent -- its sign is reversed.
+**At the two working `q` the mortar is 7.6x and 7.3x MORE accurate, and its
+lossless closure is 170x and 720x tighter, at 1.15-1.24x the wall time. At
+`q = 30` the advantage is GONE on the observable (1.48x the union's error) --
+and this third point is reported because it bounds the claim, not despite
+bounding it.** By `q = 30` both arms are within 3e-05 of the exact answer,
+i.e. both are essentially converged and the residual is no longer the
+discretisation this comparison is about; the mortar's energy closure is still
+3300x tighter there (3.0e-12 vs 1.0e-08), so the two arms are not converging
+to different places -- the observable ordering at the converged end is a
+coin-toss between two right answers.
+
+**The defensible statement, therefore:** *at equal DOF the mortar is several
+times more accurate in the UNDER-CONVERGED regime -- which is the regime a
+staircase campaign actually runs in -- and a wash (within 1.5x) once both arms
+converge.* The "h-vs-p penalty" the roadmap's window-enrichment argument
+predicts is **absent**; "reversed" is true only where it matters and is not
+claimed beyond that.
 
 Why, stated as physics rather than as a ratio: the tangential trace at the
 interface is `C^0` with kinks at BOTH layers' walls, and h-refinement at the
 NEIGHBOUR's walls (all the union grid adds) buys only the kink; p-refinement on
 the own-walls grid buys the kink algebraically AND the smooth interior
-spectrally, and the interior is where the modal content lives. The 1-D
-own-walls-only failure (75-83 % spread,
+spectrally, and the interior is where the modal content lives -- until both are
+resolved, at which point neither distribution matters. The 1-D own-walls-only
+failure (75-83 % spread,
 `AUDIT_PMM_PER_LAYER_GRIDS_IMPL_2026_07_28.md` §3) was a nodal-SEM
 boundary-layer defect in the wall-normal `Ex` channel at ARBITRARY wall
 positions; on Granet's uniform lattice with a modified-Legendre basis it does
-not reproduce. **[H, flagged]** the sign reversal itself is not proved here, only
-measured on this pair at two `q`; it should be re-measured on a second geometry
-class before it is quoted as a general property (open item O-2).
+not reproduce. **[H, flagged]** the mechanism above is an interpretation, not a
+proof; the numbers are the claim (open item O-2).
 
 ## 8. M5 -- mixed kinds through the GENERALIZED mortar twin [M]
 
@@ -604,3 +675,303 @@ Converging at the equal-`M` (unequal-DOF) rate §5 and §6 established for the
 scalar cascade, with no additional penalty for the generalized form, and the
 non-conforming pair runs two orders faster because its LCM reference is `N=6`
 while its own grids are `N=2` and `N=3`.
+
+## 9. M6 -- the z-staircase, the use case
+
+`m6_staircase.py` (equal `M`), `m6c_staircase_1d.py` (equal DOF, exact oracle).
+A 3-slice pillar taper. Because Granet's lattice is uniform, a slice of pillar
+width `1/N` lives on `N` and on every multiple of `N`, and the union stack pays
+`LCM` for **every** slice:
+
+* case **A**: widths 1/2, 1/3, 1/6 -> per-slice `N = 2, 3, 6`, `LCM = 6`
+  (the union reference is computable, so accuracy can be scored);
+* case **B**: widths 1/2, 1/3, 1/4 -> per-slice `N = 2, 3, 4`, `LCM = 12`
+  (the case per-layer grids exist for).
+
+### 9.1 Equal modal count -- and why that framing understates the result
+
+Case A, 2-D pillars, against the union-grid staircase on `N=6`:
+
+| M | `d(R,T)` | `dJones` | closure union | closure mortar | t union | t mortar | speedup |
+|---|---|---|---|---|---|---|---|
+| 4 | 2.06e-01 | 2.73e-01 | 1.6e-05 | 1.8e-04 | 23.0 s | 9.1 s | 2.52x |
+| 5 | 2.90e-01 | 9.10e-02 | 1.6e-07 | 3.3e-04 | 169.9 s | 94.6 s | 1.80x |
+
+At equal `M` the union slice `N=6` carries `q = 6(M-1)` while the `N=2` slice
+carries `2(M-1)` -- three times the DOF -- so this table measures the DOF
+difference, exactly as §5.1 did. It is reported because it is the naive
+comparison a user would make, and the answer to it is: **don't**.
+
+### 9.2 Equal DOF, against the exact 1-D oracle
+
+The same staircase made y-uniform (stripes), so the exact 1-D `PMMStack` at
+degree 14 is the oracle for the whole 3-slice stack. Parameterised by the
+per-axis DOF `q`, at which **every region eigenproblem in both arms is the same
+`2 q^2`**; per-slice `M_i = q / N_i + 1`:
+
+**Case A** (`N = 2, 3, 6`, `LCM = 6`):
+
+| `q` | eig dim | arm | settings | error vs 1-D | closure | wall |
+|---|---|---|---|---|---|---|
+| 12 | 288 | union | `M = 3` | 1.56e-01 | 2.3e-03 | 2.1 s |
+| 12 | 288 | **per-layer** | `M_i = 7, 5, 3` | **6.89e-02** | 2.4e-03 | 2.5 s |
+| 18 | 648 | union | `M = 4` | 1.84e-02 | 3.3e-05 | 41.4 s |
+| 18 | 648 | **per-layer** | `M_i = 10, 7, 4` | **3.84e-03** | 3.1e-05 | 46.4 s |
+| 24 | 1152 | union | `M = 5` | 1.04e-03 | 2.2e-07 | 206.5 s |
+| 24 | 1152 | **per-layer** | `M_i = 13, 9, 5` | **3.93e-04** | 2.2e-07 | 276.3 s |
+
+**2.3x / 4.8x / 2.6x more accurate at identical eigenproblem sizes**,
+reproducing §7.3's sign on a three-region staircase.
+
+**Case B** (`N = 2, 3, 4`, `LCM = 12`) -- and here the union arm runs out of
+lattice before it runs out of budget:
+
+| `q` | eig dim | arm | settings | error vs 1-D | closure | wall |
+|---|---|---|---|---|---|---|
+| 12 | 288 | union | -- | **UNREACHABLE** (`M >= 3` forces `q >= 24` on `N=12`) | -- | -- |
+| 12 | 288 | **per-layer** | `M_i = 7, 5, 4` | 4.94e-02 | 4.3e-04 | **2.3 s** |
+| 24 | 1152 | **per-layer** | `M_i = 13, 9, 7` | **1.79e-04** | 6.7e-10 | 261.1 s |
+
+### 9.3 The structural result: the union lattice has a DOF FLOOR [A + M]
+
+`Basis1D` requires `M >= 3`, so the smallest `q` any lattice can carry is
+`2 N`. On the union lattice that is `q >= 2 N_LCM`; per-layer it is
+`q_i >= 2 N_i`. For case B (`N = 2, 3, 4`, `LCM = 12`):
+
+| | smallest attainable `q` | eig dim per slice | eig work, 3 slices (`sum dim^3`) |
+|---|---|---|---|
+| union `N=12` | **24** | 1152 | 4.59e+09 |
+| per-layer `N = 2, 3, 4` | **12** | 288 | 7.17e+07 |
+
+**64x less eig work per slice, and it is a floor, not a tuning choice** -- the
+union grid simply cannot be run at `q = 12` on this stack. The per-layer arm
+reaches its `q = 12` point in a couple of seconds; the union arm's cheapest
+possible point is already the per-layer arm's `q = 24` point.
+
+The same arithmetic at production modal counts, `dim = 2 (N (M-1))^2`,
+`16 dim^2` bytes per matrix (case B, 3 slices):
+
+| M | per-layer dims (`N = 2,3,4`) | `sum dim^3` | union `N=12` dim | `sum dim^3` (x3) | GB / matrix | eig-work ratio |
+|---|---|---|---|---|---|---|
+| 4 | 72 / 162 / 288 | 2.85e+07 | 2592 | 5.22e+10 | 0.100 | **1832x** |
+| 6 | 200 / 450 / 800 | 6.11e+08 | 7200 | 1.12e+12 | 0.772 | **1832x** |
+| 8 | 392 / 882 / 1568 | 4.60e+09 | 14112 | 8.43e+12 | 2.97 | **1832x** |
+
+At `M = 8` the union arm needs a **2.97 GB** matrix and `scipy.linalg.eig`
+holds several live; the per-layer arm's largest is 0.037 GB. **This is the
+memory-budget acceptance gate roadmap correction S-3 asked for, and per-layer
+grids clear it by three orders.**
+
+## 10. M7 -- conditioning census, and the separable cross-mass [M]
+
+`m7_conditioning.py`. Four non-conforming configurations (`M3 pillar (2,3)`,
+`M3 pillar (2,6)`, `M4 stripe (2,3)`, `M6 taper (2,3,6)`) at `M = 4, 5, 6`,
+instrumented at the three mortar sites with M1's own free instrument,
+`_rcwa_core._rcond_1_equilibrated` (the equilibrated reciprocal 1-condition,
+exact and computed from the inverse that already exists).
+
+### 10.1 The census
+
+| config | `M = 4` | `M = 5` | `M = 6` | mortar calls / solve |
+|---|---|---|---|---|
+| M3 pillar (2,3) | 4.57e-05 | 1.48e-05 | 5.29e-06 | 3 |
+| M3 pillar (2,6) | 1.28e-05 | 2.90e-06 | 1.08e-06 | 3 |
+| M4 stripe (2,3) | 2.01e-05 | 3.30e-05 | 1.90e-05 | 3 |
+| M6 taper (2,3,6) | 3.27e-05 | 1.09e-05 | 4.39e-06 | 6 |
+
+(worst equilibrated `rcond` over all sites in that solve; 3 sites per mortar
+interface, so a 2-layer stack has 3 calls and the 3-slice taper has 6.)
+
+Per site, over all 15 solves:
+
+| site | calls | dim | equilibrated `rcond` | below M1's `1e-8` screen |
+|---|---|---|---|---|
+| mortar E-row `MassE_B W_B` (a `solve`) | 15 | 128-1800 | [1.08e-06, 1.01e-04] | **0** |
+| mortar H-row `MassH_A V_A` (a `solve`) | 15 | 128-1800 | [7.00e-06, 3.88e-04] | **0** |
+| **mortar interface `I + BA`** (the explicit inverse) | 15 | 128-1800 | [3.42e-04, 1.85e-02] | **0** |
+
+**No cliff.** The worst reading anywhere is 1.08e-06, two orders above M1's
+screen, and it *improves* with `M` on three of the four configurations (the
+stripe pair is flat) -- the opposite of a cliff, which is what one expects when
+the conditioning is set by the basis's own Gram rather than by the grid
+mismatch.
+
+Three readings worth stating explicitly:
+
+* **The guarded site is the best-conditioned of the three.** `I + BA` reads
+  [3.4e-04, 1.85e-02] while the two `solve` operands read decades worse -- the
+  SAME ordering M1 measured in 1-D (`M_b W_b` cond 3.4e+02..3.8e+06,
+  `M_a V_a` 7.3e+05..2.1e+07, `I + BA` 1.3e+01..6.8e+03). The 2-D transplant
+  therefore inherits M1's conclusion unchanged: **keep the two `solve`s as
+  `solve`s** (LAPACK `gesv` is backward stable, so a residual screen on them
+  measures nothing) and guard `I + BA`, which carries the compounded exposure
+  of both.
+* **Nothing is refused, and nothing should be.** M1's inverse refusal was
+  WITHDRAWN (M1 S2.7) because correct 2-D methods read inside the 1-D broken
+  band; this probe does not reopen that, and the census is an instrument here,
+  not a gate.
+* **`_guarded_lstsq` refused nothing** across every run in this document, once
+  the far-field order cap is derived from the END grids (§2.5). It is the
+  T3-3 class and the clamp is what keeps it quiet -- an uncapped `n_orders` on
+  a coarse end grid is exactly the rank-deficient minimum-norm draw T3-3
+  documented, and it is energy-invisible.
+
+### 10.2 The cross-mass must never be materialised [M]
+
+The design claim of §2.3, priced. `C1 = kron(Ctt_y, Cbb_x)`; the "dense" column
+is `np.kron(...)`'s footprint, the "factors" column is the two 1-D
+cross-masses:
+
+| grids (A,B) | M | dense `kron` | factors | memory | apply speed | identity |
+|---|---|---|---|---|---|---|
+| (2,3) | 6 | 0.34 MB | 0.005 MB | 75x | 2.0x | 3.2e-16 |
+| (3,6) | 6 | 3.09 MB | 0.014 MB | 225x | 6.8x | 3.7e-16 |
+| (4,6) | 8 | 21.10 MB | 0.036 MB | 588x | 36.4x | 4.3e-16 |
+| (6,12) | 6 | 49.44 MB | 0.055 MB | **900x** | **49.2x** | 3.8e-16 |
+
+The factorisation is an IDENTITY (3-4e-16, i.e. BLAS reassociation only), the
+memory ratio grows as `q_A q_B` and the apply grows with it. At the case-B
+staircase's `(N=4) | (N=12)` interface the dense form is already 49 MB **per
+component per interface**; there are two components and `nlay + 1` interfaces.
+This is not an optimisation, it is the difference between the design working
+and not.
+
+## 11. The verdict against the rule
+
+The brief's rule: **GO only if M1, M3, M4 pass at derived bars with a bounded
+non-conforming remainder and no conditioning cliff in the useful range.**
+
+| requirement | reading | verdict |
+|---|---|---|
+| **M1** conforming identity | worst 2.31e-13 relative over 5 stacks incl. conical and 3-region (§3); the identical-grid BYPASS is bit-exact (0.0) | **PASS** -- and the bar is DERIVED: `eps * cond_2(G)` is 1.6e-12 on that grid (measured, §3), so the reading sits 7x inside it |
+| **M3** non-conforming vs the common refinement | (2,3) at `M=4` is 2.50e-01 from the union reference, and that is RESOLUTION, not the mortar: the same coarsening applied to EITHER layer alone costs the same 2.8e-01 (§6), the mortar's own error on a transparent interface is 4.7e-16 (§4.3), and the observable converges 3.95e-01 -> 3.33e-04 with closure 4.3e-04 -> 6.9e-12 against an EXACT oracle (§7.1) | **PASS** |
+| **non-conforming remainder bounded** | it is not merely bounded, it is not resolvable above round-off: 1e-28 (normal) / 4.7e-16 (oblique) scalar, 3.2e-13 conical out-of-plane, and a non-conforming pair is never worse than a conforming one at the same DOF | **PASS** |
+| **M4** vs the validated 1-D oracle, per order | 3.33e-04 at `M=11` with the anti-mirror tripwire at 333x (§7.1); at EQUAL DOF the mortar beats the union grid 7.6x / 7.3x under-converged and loses by 1.48x once converged, with closure 170x-3300x tighter at every point (§7.3) | **PASS** -- the requirement is a bounded remainder, and the bound is now two-sided |
+| **no conditioning cliff** | equilibrated `rcond` IMPROVES with `M` on 3 of 4 configurations and is flat on the fourth; worst reading anywhere 1.08e-06, two orders above M1's `1e-8` screen; 0 of 45 site-calls screened in, nothing refused, and `_guarded_lstsq` refused nothing once the far-field cap is derived from the END grids (§10) | **PASS** |
+| M2 nested | converges with `M_A` to inside the reference's OWN uncertainty (§5.2) | **PASS**, weakly -- the fixture cannot resolve further; §7 supersedes it |
+| M5 generalized / out-of-plane | Berreman to 3.2e-13 through a non-conforming interface at conical incidence (§8.1) | **PASS** |
+| M6 staircase | 2.3x / 4.8x / 2.6x more accurate at identical eigenproblem sizes (`q` = 12 / 18 / 24); a 64x eig-work FLOOR advantage on the LCM=12 case, where the union lattice cannot be run at all below `q = 24`, and 1832x at production `M` (§9) | **PASS** |
+| M7 conditioning census | the guarded site (`I + BA`) is the BEST-conditioned of the three, reproducing M1's 1-D ordering, so M1's "keep the solves as solves, guard the explicit inverse" transplants unchanged (§10.1) | **PASS** |
+
+**GO.** With the scope statement of §0: this delivers **low-order-rational
+staircases and mixed-resolution stacks**, not arbitrary tapers.
+
+## 12. Integration route
+
+### 12.1 API -- mirror the 1-D spelling exactly
+
+`PMMStack` spells it `layer_grids="shared" | "per-layer"` (a hyphen, not an
+underscore; `stack.py:172`) with `window_halfwidth=1`. Mirror the first,
+**refuse the second**:
+
+```python
+PMM2DStackPure(period_x, period_y=None, *, n_superstrate=1.0, n_substrate=1.0,
+               n_modes=8, degree=None, n_orders=7,
+               layer_grids="shared")          # NEW: "shared" | "per-layer"
+
+stack.add_layer(thickness, *, eps=None, eps_cell=None,
+                grid=None,                    # NEW: uniform layers only
+                n_modes=None)                 # NEW: per-layer modal count
+```
+
+* `layer_grids="shared"` is the default and is **today's code path unchanged**
+  -- the union-grid `raise` in `add_layer` stays exactly as it is.
+* `layer_grids="per-layer"` **drops the union-grid raise**. A patterned layer's
+  `N` comes from its own `eps_cell` (already validated square by
+  `_validate_stag_cell`); it is NEVER a free parameter (§1.1 -- accepting one
+  silently changes the device).
+* `grid=` applies to UNIFORM layers only, which have no walls of their own;
+  default to the previous layer's `N` (never smaller than 1). `N = 1` is legal
+  and is the cheapest region in the library -- but see open item O-6.
+* `n_modes=` per layer is **the lever that makes the whole item pay** (§7.2,
+  §7.3, §9.2). Default to the stack's `n_modes`.
+* `window_halfwidth=` must **raise** with the reason: on a uniform lattice a
+  window is `LCM(N_{i-1}, N_i, N_{i+1})`, i.e. the union grid -- there is no
+  local enrichment to widen (§1.1). This mirrors how the 1-D path raises on
+  `stabilize='slices'` with its reason stated.
+
+### 12.2 Functions
+
+In `twod_staggered.py`, beside `Basis1D` (they are basis facts, not stack
+facts):
+
+| new | what |
+|---|---|
+| `_stag_cross_mass_1d(ba, bb, which)` | the 1-D cross-mass of §2.3. ~35 lines. Memoize on a geometry fingerprint exactly as `_core._sem_cross_mass_cached` does (`_geo_fingerprint` -> `(d, N, M, tau)` here), through the same `ByteBudgetedLRU` registry so `clear_asm_caches` / `cache_report` see it. |
+| `_stag_grid_ops(px, py, N, M, taux, tauy)` | per-grid bases + the four 1-D masses. **These already exist** as `Granet2DTransverseE._axis_mats`' `Mtt_x/Mbb_x/Mtt_y/Mbb_y`, and their krons ARE `-Rmat`'s blocks bit-for-bit (§4.1) -- so factor `_axis_mats` out rather than duplicating it. |
+| `_stag_kron_apply(Ky, Kx, X)` | the separable apply of §2.3. ~8 lines. |
+
+In `pmm/_core.py`, beside the 1-D mortar (so the two live together and the
+1-D's conditioning comment block covers both):
+
+| new | what |
+|---|---|
+| `_interface_smatrix_mortar_2d(...)` | §2.1 + §2.2. ~30 lines; the only structural difference from its 1-D sibling is that `_kron2_apply` becomes a two-DIFFERENT-operators block apply, with the H row swapped. |
+| `_interface_smatrix_general_mortar_2d(...)` | §2.4. ~30 lines. |
+| `_redheffer_star_rect` | **REUSED UNCHANGED** -- it is already dimension-agnostic and already carries M1's star-denominator guards. |
+
+In `stack2d_pure.py`: the driver changes are the per-grid geometric-eig cache
+(keyed `(N, M)` instead of once), the interface dispatch (plain when
+`(N_a, M_a) == (N_b, M_b)`, mortar otherwise), the two per-end far-field
+projectors, and the order cap. ~80 lines. The prototype
+`validation/probe_pmm2d_staggered_mortar/mortar2d.py::MortarStack2D` is the
+working shape.
+
+### 12.3 `retain_internal` / `layer_absorption`
+
+Both work, with one real change and one non-change:
+
+* **`_internal_amplitudes` is grid-independent** -- it reads only the retained
+  partial cascades, `lam_f/lam_b` and thicknesses -- but `S_above` /
+  `S_below_bot` become RECTANGULAR, so their recurrences must go through
+  `_redheffer_star_rect` instead of `_redheffer_star`. This is verbatim what
+  `stack.py:1800-1810` already does on the 1-D per-layer path.
+* **`_flux_at` must become per-layer.** It currently reads one shared Gram
+  `d["G"]` and one `d["qq"]`; per-layer they are `G_i = blkdiag(G1_i, G2_i)`
+  and `qq_i`. **No new assembly**: `G_i` is `-Rmat_i`, and its factors are in
+  the layer's `GridOps` already (§4.1). The flux form itself
+  (`Re(h2^H G1 e1 - h1^H G2 e2)`) is unchanged.
+* `layer_absorption`'s calibration (`F_top[0] / (1 - R_tot)`) is unchanged --
+  it is a half-space flux ratio and the half-spaces are conforming by
+  construction.
+* The honest cross-machinery check `sum_i A_i == 1 - sum R - sum T` becomes
+  the natural gate, exactly as on the 1-D path (which measured 5e-3
+  non-conforming against <1e-10 conforming).
+
+### 12.4 Gates for the build agent
+
+G1-G2 and G4-G5 transplant the 1-D set; **G3 is new and is the one that matters
+most**.
+
+| gate | claim | measured here |
+|---|---|---|
+| G1 | conforming per-layer stack is BIT-EXACT vs `PMM2DStackPure` (identical grids bypass the mortar) | 0.000e+00 (§3) |
+| G2 | conforming identity through the FORCED mortar path, bar DERIVED AT RUNTIME as a small multiple of `eps * cond_2(G)` measured on the stack's own grids -- NOT a fixed constant (it grows with `M`: 6.8e-13 at `M=5`, 7.8e-12 at `M=8`) | worst 2.31e-13, 7x inside its grid's `eps * cond` (§3) |
+| **G3** | **the H-row V1/V2 swap is load-bearing**: disabling it on a NON-conforming stack must move the observable by >= 2 orders | 7.28e+01 vs 3.71e-02; closure 8.22e+01 vs 1.75e-07 (§5.3). **G1/G2 cannot see this** -- a conforming-parity-only gate would ship the bug |
+| G4 | transparent interface across NON-conforming grids reproduces the analytic Fresnel slab and `berreman_jones_1d` | 4.7e-16 scalar oblique; 3.2e-13 out-of-plane conical (§4.3, §8.1) |
+| G5 | stripe stack per order vs the exact 1-D `PMMStack`, with the anti-mirror tripwire | 3.33e-04 direct vs 1.11e-01 mirrored at `M=11` (§7.1) |
+| G6 | EQUAL-DOF non-regression: at matched `q` the per-layer arm is not worse than the union arm | 7.6x / 7.3x BETTER (§7.3); 2.3x / 4.8x on the staircase (§9.2) |
+| G7 | two-sided lossless closure, scalar AND Hermitian tensor | §6, §10 |
+| G8 | far-field order cap derived from the END grids, with a fail-before switch reproducing the unclamped draw | the T3-3 pattern; clamp implemented and exercised in the probe (§2.5) |
+| G9 | conditioning census recorded per site; nothing refused in the useful range | §10 |
+
+**Cost of the build: 3-5 days**, not the roadmap's 2-4 weeks. The reduction is
+real and has a reason: the roadmap budgeted for per-layer *wall sets*, union
+bookkeeping, window enrichment and a symmetry-fold interaction, and roadmap
+corrections S-1 and S-2 already deleted two of those. On a uniform lattice a
+"grid" is one integer, the cross-mass is two small 1-D matrices, and
+`_redheffer_star_rect` already exists.
+
+## 13. Open items
+
+| id | item |
+|---|---|
+| **O-1** | **No second BLAS build.** Everything here is Windows/MKL. Before any bar in this document becomes a test constant, re-measure on the WSL/OpenBLAS CI proxy -- `TESTING_STANDARDS.md` rule 5 ("bars need a gap on both sides", with the measured cross-build envelope) is not satisfied by one build, and this campaign's own history (M1 S2.7) is the reason. |
+| **O-2** | **The equal-DOF advantage is regime-dependent and the regime is not mapped.** Stripe pair: 0.13x / 0.14x / **1.48x** at `q` = 18 / 24 / 30; staircase: 0.44x / 0.21x / 0.38x at `q` = 12 / 18 / 24. The advantage is real where the answer is not yet converged and gone where it is, on the one pair measured to convergence. Two things are unmeasured: (a) a corner-dominated 2-D pillar pair, where the corner cap makes convergence ALGEBRAIC and h-refinement should do relatively better -- this is the case most likely to reverse the sign at working `q`, and it is the campaign's actual device class; (b) whether the closure advantage (170x-3300x, and it does NOT decay) is the more durable signal. Do (a) before quoting any accuracy ratio in a campaign. |
+| **O-3** | `retain_internal` / `layer_absorption` per-layer is DESIGNED (§12.3) but **not prototyped and not measured**. The per-layer Gram is the only real change and it is free, but the closure `sum A_i = 1 - R - T` must be measured on a non-conforming lossy stack before the surface is claimed. |
+| **O-4** | JAX twin: not attempted, and not a regression -- `PMM2DStackPure` has no JAX twin today. |
+| **O-5** | `prepare()` / wavelength sweeps: the geometry (bases, Grams, cross-mass FACTORS) is material-independent and cacheable forever, and the 1-D roadmap §3 sketch applies verbatim -- **cheaper here**, because what is cached per interface is two small 1-D matrices rather than a dense cross-mass. |
+| **O-6** | A UNIFORM layer at `N = 1` is the cheapest region the engine can express, but a uniform layer at oblique incidence is degree-limited (`stack2d_pure`'s own caveat: its Bloch phase must be resolved in the modified-Legendre basis), and §4.3 shows that cost directly -- 2.7e-11 at `M=5` against 8.8e-17 at `M=7`, on grids of every kind. Measure `N=1` uniform layers at oblique before defaulting to them. |
+| **O-7** | The Wood-anomaly nudge (`_grazing_safe_wavelength`) and the tensor-diagonal gather in `PMM2DStackPure.solve` iterate the layer list, not a union cell, so they carry over -- but the `Nx, Ny = self._grid` fallback (`(2, 2)` when no patterned layer exists) has no per-layer meaning and must be replaced by the per-layer grid list. |
+| **O-8** | Grids are held per `(N, M)` AND per Bloch phase (`tau = exp(-i alpha0 d)`), so an angle sweep re-builds every basis. The 1-D geometry cache is keyed on content and has the same property; if angle sweeps become hot, split `Basis1D` into a tau-free part (the elementary matrices, which are tau-independent) and the tau-dependent glue. Not measured. |
+| **O-9** | The probe's `MortarStack2D` clamps `n_orders` silently and reports `n_orders_used`. The shipped version should RAISE above capacity (the classical/JAX siblings' behaviour) rather than clamp, so a user asking for orders the end grids cannot carry is told, not quietly served fewer. |

@@ -54,7 +54,7 @@ CONFIGS = [
 by_site = {}
 rows = []
 for name, layers, th, ph in CONFIGS:
-    for M in (4, 5, 6, 7):
+    for M in (4, 5, 6):
         mortar2d.CENSUS = []
         s = MortarStack2D(PX, PY, n_modes=M, n_orders=2)
         for t, c in layers:

@@ -101,6 +101,8 @@ def go(tensor, Ms):
 Ms = [int(x) for x in (sys.argv[1:] or [4, 5, 6])]
 print("SCALAR pillar pair")
 rows = go(False, Ms)
+import json as _j
+_j.dump(rows, open("validation/probe_pmm2d_staggered_mortar/m3_nonconforming.json", "w"), indent=1)
 print("\nHERMITIAN (gyrotropic) tensor in layer A -- lossless, two-sided")
 rows += go(True, Ms[:2])
 json.dump(rows, open(
