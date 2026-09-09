@@ -487,6 +487,13 @@ and all eleven files together -- the nine above plus both anisotropic ones --
    rule, that still proves nothing about per-order correctness.  What WOULD
    settle it: a high-order `rcwa_jones_2d` ladder taken far enough to stop
    moving, or a staircase-refined staggered cell.
+   **UPDATE 2026-09-10** -- taken up in
+   `docs/audits/EXPERIMENT_PMM2D_STAGGERED_OOP_REFERENCE_2026_09_10.md`: all
+   four ladders extended and Richardson-extrapolated.  The bound TIGHTENS (the
+   staggered arm now sits inside the Fourier arms' own mutual spread per
+   order) and all three Fourier ladders are measured moving TOWARD the
+   staggered limit -- but no Fourier arm converges, so the statement stays a
+   BOUND rather than a confirmation.
 2. **The rotation gauge is a compensation, not a fix.**  `_OOP_ROT_SIGN`
    cancels a 180-degree rotation that the shipped basis, far-field kernel and
    `eps_cell` indexing carry between them.  It is measured, gated two-sided and
@@ -502,6 +509,10 @@ and all eleven files together -- the nine above plus both anisotropic ones --
    incidence is available; it needs the same verify-then-use gate
    `_generator_block_eig` already applies, plus a staggered parity map.  Left
    as documented future work rather than shipped unvalidated.
+   **CLOSED 2026-09-10** -- shipped as `symmetry` (default on) on
+   `pmm_jones_2d_staggered` / `PMM2DStackPure`;
+   `docs/audits/BUILD_PMM2D_STAGGERED_OOP_BLOCK_EIG_2026_09_10.md` carries the
+   parity map, the gate table and the measured 1.49-1.87x.
 4. **Anisotropic HALF-SPACES** remain out of scope (the Rayleigh match is
    scalar), as in the hybrid.
 5. **SLANT x out-of-plane** stays refused, as in `_layer_eigenmodes_tensor`.

@@ -105,6 +105,7 @@ from ..rcwa._core import (  # shared flux projection + the generalized cascade
     _modes_to_M,
     _project_efficiency,
     _propagation_smatrix_general,
+    _symmetry_on,
 )
 from ._core import (
     PerOrderAmplitudesMixin,
@@ -277,11 +278,22 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         Half-width of the retained Rayleigh order set for the once-only forward
         far-field projection.  The result is independent of this (no floor) as
         long as it covers the propagating orders.  Default 7.
+    symmetry : {'auto', True, False}, optional
+        Opt into the PARITY-sign block reduction of the OUT-OF-PLANE region
+        solve (``lumenairy.elements.pmm.twod_staggered._stag_block_eig``): one
+        ``2 q^2`` eig instead of the ``4 q^2`` one, measured 1.5-1.9x on the
+        whole out-of-plane solve.  It applies ONLY to out-of-plane layers at
+        NORMAL incidence whose ASSEMBLED pencil carries the structure (a cell
+        that is its own parity image on a mirror-symmetric wall layout); every
+        other case -- oblique incidence, an off-centre or unmirrored cell, a
+        parity-breaking tensor, and every in-plane or scalar layer -- runs the
+        dense path BIT-FOR-BIT, which is what ``symmetry=False`` forces
+        everywhere.  Default ``'auto'`` (equivalent to ``True``).
     """
 
     def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
                  n_substrate=1.0, n_modes=8, degree=None, n_orders=7,
-                 mu_superstrate=None, mu_substrate=None):
+                 mu_superstrate=None, mu_substrate=None, symmetry="auto"):
         # The half-spaces are NONMAGNETIC (mu = 1) and isotropic: the Rayleigh
         # far field normalises with the vacuum wave impedance.  Accepting the
         # keyword and RAISING is the loud form of that restriction (a silently
@@ -300,6 +312,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 ">= 3.")
         self.M = M
         self.n_orders = int(n_orders)
+        # Parity-sign block reduction for OUT-OF-PLANE region solves.  'auto'
+        # and True both REQUEST it; the request is honoured only where the
+        # structure is verified on the assembled pencil (normal incidence, a
+        # cell that is its own parity image) and falls back to the dense
+        # 4 q^2 eig bit-for-bit otherwise.  False forces the dense path.
+        self.symmetry = _symmetry_on(symmetry)
         self._layers = []          # dicts: kind, thickness, eps | eps_cell
         self._grid = None          # common (Nx, Ny) set by the first patterned layer
         self._src = None
@@ -615,7 +633,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                                               alpha0x=a0x, alpha0y=a0y, k0=k0,
                                               mu_cell=mcell)
                     if sol.offplane:
-                        cached = _region_modes_oop(sol)
+                        cached = _region_modes_oop(sol,
+                                                   symmetry=self.symmetry)
                     else:
                         Wl, Vl, lam_l, _g2 = _region_modes(sol)
                         cached = _modes_as_general(Wl, Vl, lam_l)

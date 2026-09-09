@@ -1,0 +1,242 @@
+{
+ "lumenairy": "C:\\tmp\\lum_oopfast\\lumenairy\\__init__.py",
+ "version": "5.43.0",
+ "B6": [
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 2,
+   "M": 5,
+   "dim": 256,
+   "dense": 1.5771294892648727e-15,
+   "factored": 4.491650339849329e-16,
+   "ratio": 0.2847990840589104,
+   "fwd_off": 128,
+   "fwd_on": 128
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 2,
+   "M": 5,
+   "dim": 256,
+   "dense": 1.3933519261761682e-15,
+   "factored": 1.1339700523919676e-15,
+   "ratio": 0.8138432445448059,
+   "fwd_off": 128,
+   "fwd_on": 128
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 2,
+   "M": 5,
+   "dim": 256,
+   "dense": 2.3339422713386782e-15,
+   "factored": 1.3346037122386673e-15,
+   "ratio": 0.5718237887148679,
+   "fwd_off": 128,
+   "fwd_on": 128
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 2,
+   "M": 6,
+   "dim": 400,
+   "dense": 1.1316759074595157e-15,
+   "factored": 5.797544145007533e-16,
+   "ratio": 0.5122972139631711,
+   "fwd_off": 200,
+   "fwd_on": 200
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 2,
+   "M": 6,
+   "dim": 400,
+   "dense": 1.4715814548744588e-15,
+   "factored": 1.801195700901386e-15,
+   "ratio": 1.2239864092708663,
+   "fwd_off": 200,
+   "fwd_on": 200
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 2,
+   "M": 6,
+   "dim": 400,
+   "dense": 2.3716398240665922e-15,
+   "factored": 3.6567471017286804e-15,
+   "ratio": 1.541864436842921,
+   "fwd_off": 200,
+   "fwd_on": 200
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 2,
+   "M": 7,
+   "dim": 576,
+   "dense": 1.4916219333515984e-15,
+   "factored": 8.070777677918195e-16,
+   "ratio": 0.5410739475909668,
+   "fwd_off": 288,
+   "fwd_on": 288
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 2,
+   "M": 7,
+   "dim": 576,
+   "dense": 2.6481737969944805e-15,
+   "factored": 2.8531591205654876e-15,
+   "ratio": 1.077406295539837,
+   "fwd_off": 288,
+   "fwd_on": 288
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 2,
+   "M": 7,
+   "dim": 576,
+   "dense": 2.698187752217474e-15,
+   "factored": 1.943249719733129e-14,
+   "ratio": 7.202055224422733,
+   "fwd_off": 288,
+   "fwd_on": 288
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 3,
+   "M": 5,
+   "dim": 576,
+   "dense": 1.8815609126585587e-15,
+   "factored": 1.480062790543719e-15,
+   "ratio": 0.7866143373761196,
+   "fwd_off": 288,
+   "fwd_on": 288
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 3,
+   "M": 5,
+   "dim": 576,
+   "dense": 2.8327904496019186e-15,
+   "factored": 6.552500045416657e-15,
+   "ratio": 2.3130902768813892,
+   "fwd_off": 288,
+   "fwd_on": 288
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 3,
+   "M": 5,
+   "dim": 576,
+   "dense": 3.266779713767174e-15,
+   "factored": 7.99259763266169e-15,
+   "ratio": 2.4466288923549158,
+   "fwd_off": 288,
+   "fwd_on": 288
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 3,
+   "M": 6,
+   "dim": 900,
+   "dense": 1.731341264724719e-15,
+   "factored": 2.642142311169415e-15,
+   "ratio": 1.5260667350809733,
+   "fwd_off": 450,
+   "fwd_on": 450
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 3,
+   "M": 6,
+   "dim": 900,
+   "dense": 4.624616117912144e-15,
+   "factored": 1.646696325956103e-14,
+   "ratio": 3.5607200337733764,
+   "fwd_off": 450,
+   "fwd_on": 450
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 3,
+   "M": 6,
+   "dim": 900,
+   "dense": 4.001545021868983e-15,
+   "factored": 2.0459305881287128e-14,
+   "ratio": 5.112851603436738,
+   "fwd_off": 450,
+   "fwd_on": 450
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "Nx": 3,
+   "M": 7,
+   "dim": 1296,
+   "dense": 3.4850114695300984e-15,
+   "factored": 6.726299720662698e-15,
+   "ratio": 1.9300653037935738,
+   "fwd_off": 648,
+   "fwd_on": 648
+  },
+  {
+   "cell": "centro pillar",
+   "Nx": 3,
+   "M": 7,
+   "dim": 1296,
+   "dense": 5.074076688391645e-15,
+   "factored": 2.0850751727907988e-14,
+   "ratio": 4.109270121125653,
+   "fwd_off": 648,
+   "fwd_on": 648
+  },
+  {
+   "cell": "centro NON-RECIPROCAL",
+   "Nx": 3,
+   "M": 7,
+   "dim": 1296,
+   "dense": 5.2686479519008216e-15,
+   "factored": 2.1052696333885962e-14,
+   "ratio": 3.9958441949590835,
+   "fwd_off": 648,
+   "fwd_on": 648
+  }
+ ],
+ "B5b": [
+  {
+   "case": "OFF-CENTRE pillar",
+   "Nx": 2,
+   "M": 6,
+   "dA": 0.6948242133394762,
+   "dR": 0.00944372656752272,
+   "dT": 0.22242200212944307,
+   "dJones": 0.0632036490123111
+  },
+  {
+   "case": "OFF-CENTRE pillar",
+   "Nx": 3,
+   "M": 6,
+   "dA": 0.5768317010177365,
+   "dR": 0.002890199264957382,
+   "dT": 0.10597880221472855,
+   "dJones": 0.04417616177750438
+  },
+  {
+   "case": "parity-BREAKING tensor",
+   "Nx": 2,
+   "M": 6,
+   "dA": 0.06168912525629805,
+   "dR": 0.0021075517881609038,
+   "dT": 0.007392022415352528,
+   "dJones": 0.007432981378629523
+  },
+  {
+   "case": "parity-BREAKING tensor",
+   "Nx": 3,
+   "M": 6,
+   "dA": 0.2889940754821111,
+   "dR": 0.0014600018860159714,
+   "dT": 0.017079501867895752,
+   "dJones": 0.009718683998379486
+  }
+ ]
+}
