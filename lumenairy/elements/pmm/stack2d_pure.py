@@ -525,6 +525,19 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 _eps_src.append(_L["eps"])
             elif _L["kind"] == "uniform_tensor":
                 _eps_src.append(np.diag(_L["eps33"]))
+            elif _L["kind"] == "magnetic":
+                # merge repair 2026-09-10: the magnetic layer record carries
+                # ``eps`` (scalar / (3,3) uniform / (Nx,Ny) / (Nx,Ny,3,3)),
+                # not ``eps_cell``.  Permittivity only for now -- a magnetic
+                # cut-off sits at Re(eps*mu); the eps*mu products are the
+                # documented follow-up (BUILD_PMM2D_STAGGERED_MAGNETIC open 3).
+                _e = np.asarray(_L["eps"], dtype=_C)
+                if _L["eps_uniform"]:
+                    _eps_src.append(np.diag(_e) if _e.ndim == 2 else _e)
+                elif _e.ndim == 4:
+                    _eps_src.append(_e[..., [0, 1, 2], [0, 1, 2]])
+                else:
+                    _eps_src.append(_e)
             elif _L["eps_cell"].ndim == 4:
                 _eps_src.append(_L["eps_cell"][..., [0, 1, 2], [0, 1, 2]])
             else:
