@@ -1,0 +1,14 @@
+{
+ "bloch_ratio_err": 0.0,
+ "mu0_err": 1.1886047701636926e-12,
+ "phase_slope": 1.2339999997965094,
+ "phase_slope_err": 2.034905577374957e-10,
+ "exact_root_iso_err": 2.3260856133080575e-08,
+ "exact_root_uniax_err": 2.3260856133080575e-08,
+ "eform_L_rel_normal": 5.858570666675709e-15,
+ "eform_G_rel_normal": 0.0,
+ "eform_L_rel_oblique": 5.860240483369272e-15,
+ "eform_G_rel_oblique": 4.766709726476516e-17,
+ "hpartner_ratio": -2.0245415376717745e-15,
+ "hpartner_spread": 6.495044938536435e-12
+}
