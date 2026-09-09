@@ -468,6 +468,9 @@ Regression suites re-run green on the integrated build:
 |---|---|
 | `test_v5_12_0_pmm2d_staggered.py`, `test_v5_21_pmm2d_staggered_oblique.py`, `test_staggered.py`, `test_audit_p1_staggered_guard.py`, `test_p2c_pmm2d_stack_cascade.py`, `test_p2t_pmm2d_tree_cascade.py`, `test_pmm2d_lossless_closure_two_sided.py`, `test_audit_s1_3_pmm2d_lossless_tripwire.py`, `test_v5_14_0_pmm2d_stack.py` | 148 passed, 306.2 s |
 
+and all eleven files together -- the nine above plus both anisotropic ones --
+**220 passed in 440.8 s**.
+
 `ruff check lumenairy/ tests/` clean.
 
 ---

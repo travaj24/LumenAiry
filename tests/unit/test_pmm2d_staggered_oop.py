@@ -292,6 +292,12 @@ def test_g2_uniform_slab_dispersion_and_sum_of_roots(name, t33):
         wrong = _exact_kz_roots(t33, -kx0, -ky0)
         d_wrong = float(np.max(np.min(np.abs(wrong[:, None] - spec[None, :]),
                                       axis=1)))
+        # TRANSPOSE-BLINDNESS, stated as a claim rather than left implicit:
+        # det(k k^T - |k|^2 I + eps) is invariant under eps -> eps^T, so NO
+        # dispersion (or energy) measurement can see an e13 <-> e31 swap.  That
+        # is why G7's transpose control is measured against Berreman's FIELDS.
+        assert abs(np.sum(roots) - np.sum(_exact_kz_roots(np.asarray(t33).T,
+                                                          kx0, ky0))) < 1e-12
         if theta != 0.0:
             # the out-of-plane coupling makes the +/- k_t configurations
             # genuinely different: 9.2e-02 measured, 9 decades above the bar
@@ -498,6 +504,15 @@ def test_g5_no_fourier_floor_two_sided():
     hyb_moved = max(_per_order(h7[0], h7[1], h7[2], h9[0], h9[1], h9[2]))
     assert hyb_moved > 1e-5, hyb_moved
     assert hyb_moved > 1e4 * moved, (moved, hyb_moved)
+    # and, on the way past: the staggered result agrees with the HYBRID (the
+    # second 2-D oracle, an independent Fourier engine) within the bar G5
+    # derives from the oracles' own spread -- so the corner-cell claim does not
+    # rest on rcwa_jones_2d alone.  MEASURED 4.84e-05 (hybrid vs rcwa on R,
+    # build doc T6); this arm runs the hybrid at a cheaper truncation whose own
+    # drift is 7.7e-04, hence the 4e-03 bar here rather than G5's 4e-04.
+    dR_h, dT_h = _per_order(a[0], a[1], a[2], h9[0], h9[1], h9[2])
+    assert dR_h < 4e-3, dR_h
+    assert dT_h < 4e-2, dT_h
 
 
 # --------------------------------------------------------------------------- #
