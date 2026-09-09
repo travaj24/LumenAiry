@@ -4,6 +4,32 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed -- a MAGNETIC layer's Wood-anomaly cut-offs sit at `Re(eps*mu)`
+
+`PMM2DStackPure.solve` listed a magnetic layer's PERMITTIVITY on the
+`_grazing_safe_wavelength` nudge list.  A layer mode goes grazing where its own
+longitudinal wavenumber vanishes, i.e. at `kt^2 = Re(eps mu)` -- the layer
+index is `sqrt(eps mu)` -- so a magnetic layer sitting exactly on its own
+cut-off was never nudged.  The branch now contributes the per-cell,
+per-component PRODUCT of the eps and mu principal diagonals
+(`_wood_cutoff_products`).
+
+* NOTHING nonmagnetic moves.  `mu = 1` multiplies by exactly `1.0`, so the
+  product IS the permittivity bit for bit; R/T/Jones were confirmed
+  BIT-IDENTICAL across 15 fixtures spanning both scalar entries, both tensor
+  entries, the uniform / patterned / uniform-tensor stack branches, a magnetic
+  layer with `mu = 1` in all four spellings, and three magnetic layers off any
+  cut-off.
+* Measured on a layer with `eps = 4.0`, `mu = 2.25` at `wl = px sqrt(eps mu)`
+  (where `eps`, `mu` and both half-spaces are each ~1-2 away from every
+  `kt^2`): the solve at the cut-off is now BIT-IDENTICAL to the solve at the
+  nudged wavelength (it was off by 7.712e-09 before), and the same layer with
+  `mu = 1` is correctly left alone.
+* The componentwise product is a heuristic for an anisotropic pair, and
+  over-listing is numerically inert off an EXACT coincidence (the guard's
+  trigger band is `|eps - kt^2| <= 1e-9`).
+* `tests/unit/test_pmm2d_staggered_magnetic.py` G10 (3 tests).
+
 ### Fixed -- ONE Wood-anomaly permittivity list for the pure staggered 2-D PMM
 
 `_grazing_safe_wavelength` nudges the wavelength off an EXACT Rayleigh
