@@ -2,6 +2,97 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Added -- IN-PLANE ANISOTROPY for the PURE (no-floor) staggered 2-D PMM
+
+`docs/PMM_ROADMAP.md` Phase C, in-plane half.  The staggered 2-D solver
+(Granet, J. Opt. Soc. Am. A 40, 652 (2023)) shipped as the ISOTROPIC
+REDUCTION of the paper's general equations; it now implements the general
+BLOCK-FORM tensor `[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]`.
+
+* New `pmm_jones_2d_staggered(...)` -- the no-floor mirror of `pmm_jones_2d`:
+  a `(Nx, Ny, 3, 3)` (or scalar `(Nx, Ny)`, promoted to `e*I`) cell, both
+  incident polarizations, returning `(orders, R(2,N), T(2,N), jones(2,2))`
+  with the order-0 REFLECTION Jones in the PUBLIC `exp(-i w t)` gauge (this
+  module has no conjugation bridge anywhere, unlike the hybrid).
+* `PMM2DStackPure.add_layer` accepts `eps=(3,3)` (uniform anisotropic) and
+  `eps_cell=(Nx,Ny,3,3)` (patterned anisotropic); `retain_internal` /
+  `layer_absorption` keep working on tensor layers (the flux form is the
+  eps-free block Gram).
+* What the assembly gained: the two MIXED `[eps_t]` masses of Appendix-A
+  Eq. 40 (`<V1|e12|V2>`, `<V2|e21|V1>` -- krons of the UNLIKE-set 1-D
+  masses), the `e33`-weighted `Meps33` (Eq. 41), and the SECOND term in each
+  `K_zt` column (Eq. 44 -- `K_zt` is the divergence of `D_t = eps_t E_t`, so
+  column 1 pairs `d2` with `e21` and column 2 pairs `d1` with `e12`).  The
+  Eq. 25 H-partner inherits the two mixed blocks.  The eigenproblem stays
+  second-order at `2q^2`, so the `[W;-V] <-> -lam` symmetry, the square
+  Redheffer cascade and the once-only far field are untouched -- as is the
+  no-floor property (measured: order-0 R/T move by 3.9e-15 when `n_orders`
+  goes 4 -> 8, against 9.7e-3 for the FMM-floored hybrid).
+* SCALAR input runs the shipped isotropic assembly BIT FOR BIT (a dispatch,
+  not a rewrite): `Lmat`, `Rmat`, `Stt`, `Schur` and `Et_blocks` are exactly
+  equal between the scalar arm and the tensor `e*I` arm, and so are the
+  returned R/T.
+* Validation (docs/audits/BUILD_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md):
+  uniform in-plane tensor slabs (rotated uniaxial AND gyrotropic) match the
+  exact Berreman 4x4 to 6.5e-14 in R, T and the complex Jones at normal,
+  oblique and conical incidence; a y-uniform anisotropic stripe matches the
+  1-D `pmm_jones_1d` / `rcwa_jones_1d` per order to 4.3e-6 at M=8; a 2-D
+  anisotropic cell agrees with `pmm_jones_2d` and `rcwa_jones_2d` inside
+  their Fourier floor (<= 5.8e-4); a uniform-tensor multilayer matches the
+  Berreman multilayer to 1.1e-14; the lossy-tensor absorption budget closes
+  to 5.9e-6.  A gyrotropic cell's +/- order asymmetry (the observable no
+  energy check can see) has the sign Granet's Table 2 reports, and REVERSES
+  if the paper's `exp(+i w t)` tensor is used without conjugation.
+* OUT-OF-PLANE tensors (`e_xz`/`e_yz`/`e_zx`/`e_zy` above a RELATIVE
+  `1e-12 * scale` floor, shared with the hybrid so a rotated-diagonal tensor's
+  ~1e-17 float noise is not mistaken for coupling) raise `NotImplementedError`
+  naming `pmm_jones_2d`: out-of-plane coupling breaks the paper's Eq. 16
+  (`div D = 0` no longer slaves `E_z`), so it is not a second-order problem in
+  this basis.  Anisotropic HALF-SPACES remain out of scope.
+* New lossless-closure tripwire on `PMM2DStackPure.solve`: when every layer
+  permittivity is real or HERMITIAN (gyrotropic included) and both half-spaces
+  are lossless, `|sum R + sum T - 1| > 5e-2` warns.  A non-Hermitian tensor is
+  silent -- `R + T < 1` is physical there and no unity is claimed.
+* Cost: `Lmat` stays `2q^2 x 2q^2` and the eig is unchanged; the tensor path
+  retains two extra `q^2 x q^2` mixed-mass blocks (+11.1% of the retained
+  operator bytes at (3,3)/M=8, 53.4 -> 59.4 MiB), and a full (3,3)/M=8 solve
+  measured 403.8 MiB peak against the scalar 401.1 MiB.  No new dead
+  operators (audit P3-37 holds: `Curl`/`Kzt`/`Ktz`/`Meps33` stay locals).
+
+### Added -- BOR: diagonal cylindrical anisotropy, an SEM radial basis, and its JAX twin
+
+Three changes that landed after 5.42.1 and had no changelog entry:
+
+* `BORStack.add_layer` accepts the DIAGONAL CYLINDRICAL tensor
+  `diag(eps_rr, eps_phiphi, eps_zz)` via `eps_tensor_profile=` (callable
+  `r -> (N, 3)`) or `eps_tensor=` (uniform 3-tuple) -- exactly the class a
+  body of revolution can represent (an off-diagonal `eps_r,phi` is not
+  azimuthally invariant, couples the `m` harmonics, and is rejected by the
+  physics rather than merely unimplemented).  Each component enters its own
+  existing role, so isotropic input is byte-identical to the previous scalar
+  path.  Validated against the analytic uniaxial dispersion at `m = 0` (TM0
+  extraordinary to 7.7e-15; an adversarial slot swap misses by 53-61%).
+  Anisotropic layers are NumPy-only.
+* `BORStack(basis="sem", degree=)`: div-conforming radial spectral elements --
+  `(E_phi, E_z)` in a C0 nodal GLL space of degree `p`, `E_r` discontinuous
+  per element at degree `p-1`, elements aligned to the ring walls so `eps` is
+  exact per element and no inverse rule is needed.  Per-layer meshes with
+  cross-tested Galerkin mortar interfaces, `add_layer(segments=)`, hp-grading
+  with a wavelength-resolution cap (DPW=8), a radial PML, an unreduced-QZ
+  fallback at exact longitudinal resonances, `layer_absorption` /
+  `retain_internal`, and far-field Fourier-Bessel on non-uniform quadrature
+  grids.  Fiber-dispersion oracle to 1e-11 (the finite-difference basis floors
+  at 1e-4..1e-2), no spurious interlopers for `m <= 4`, `p <= 16`, and ~2
+  orders of magnitude cheaper than FD at fixed accuracy.
+* JAX twin of the SEM basis: `BORStack(basis="sem")` is differentiable in the
+  segment `eps` (scalar or the `(rr, pp, zz)` triple), a uniform `eps=`, and
+  layer thickness.  Because the mesh topology is value-dependent on this basis,
+  a traced `eps` needs `BORStack(n_mesh_cap=)`, a concrete upper bound on
+  `|n|`.  Forward parity vs the NumPy SEM 6e-15..7e-14; gradients vs central
+  finite differences 4e-10..7e-7.
+
 ## [5.42.1] — 2026-08-24
 
 ### Fixed -- `lumenairy[jax]` is resolvable again on every supported Python

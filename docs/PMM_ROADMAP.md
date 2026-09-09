@@ -73,13 +73,29 @@ ceiling on hard Gibbs cases). Informs whether to prioritize the 2-D builds.
 Cheap; must run on a quiet CPU (no concurrent workflows).
 
 ### Phase C — 2-D anisotropic (general tensor operator) — **the foundation**
-Generalize the 2-D staggered eigensolver from the isotropic reduction
-(`R=−I`, `[ε_t]=ε·I`) to the **full transverse tensor** (Granet 2023 general
-Eqs.23-24 / Appendix A). `eps_cell` → `(Nx,Ny,3,3)` tensor per segment.
-**Reuses unchanged:** the staggered basis, square S-matrix, far field,
-spurious-free structure. **Difficulty:** moderate (operator-assembly
-generalization). **Why first:** see §6 — it's the same machinery slant/curved
-needs. In-plane (block-form) first; full out-of-plane is a harder follow-on.
+**IN-PLANE (block-form): SHIPPED 2026-09-09** (Stage A;
+`docs/audits/BUILD_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md`). The 2-D
+staggered eigensolver now carries the paper's general BLOCK-FORM transverse
+tensor `[[e11,e12,0],[e21,e22,0],[0,0,e33]]` — the shipped isotropic solver
+(`R=−I`, `[ε_t]=ε·I`) was its reduction, and a scalar `eps_cell` still runs that
+reduction **bit for bit**. `eps_cell` → `(Nx,Ny,3,3)` per segment through the
+new `pmm_jones_2d_staggered`, plus `PMM2DStackPure.add_layer(eps=(3,3) |
+eps_cell=(Nx,Ny,3,3))`. What was added: Appendix-A Eq.40's two MIXED
+`[ε_t]` masses, Eq.41's `ε³³`-weighted `Meps33`, Eq.44's second `K_zt` term
+per column, and the same two mixed blocks in the Eq.25 H-partner.
+**Reused unchanged, as predicted:** the staggered basis, the `2q²` second-order
+pencil, the `[W;−V]↔−λ` symmetry, the square S-matrix, the far field, the
+spurious-free structure — and the no-floor property (order-0 R/T move 3.9e-15
+over `n_orders` 4→8 vs 9.7e-3 for the hybrid). Gyrotropic (Hermitian,
+lossless) media included. Half-spaces stay isotropic.
+
+**OUT-OF-PLANE: NOT shipped, prototype-gated.** `e_xz/e_yz/e_zx/e_zy` breaks
+the paper's Eq.16 (`div D = 0` no longer slaves `E_3` algebraically), so it is
+no longer a second-order problem in this basis; the entries raise
+`NotImplementedError` naming the out-of-plane-capable hybrid `pmm_jones_2d`.
+Stage B of the plan prototypes two candidate formulations (a `4q²` first-order
+staggered generator and a `6q²` linearized quadratic that keeps Granet's
+`div(D)=0` slaving) for a measured GO/NO-GO.
 *(2-D multi-region is already supported via the `eps_cell` grid — only needs a
 multi-region test.)*
 
@@ -122,7 +138,12 @@ Bugs / physics / adversarial sweep (explicitly requested earlier; long-pending).
   position invariance, pinning the value RCWA converges toward). The genuine
   *speed* win lives in slant/curved (Phases D/E).
 - **Full out-of-plane anisotropy** (2-D non-block tensor, magneto-optic / tilted
-  director) — breaks Granet's block-form assumption; harder than in-plane.
+  director) — breaks Granet's block-form assumption; harder than in-plane. The
+  IN-PLANE half shipped 2026-09-09 (Phase C above); out-of-plane is
+  prototype-gated (Stage B of
+  `docs/audits/PLAN_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md`), and until it
+  lands the out-of-plane-capable route is the FMM-floored hybrid
+  `pmm_jones_2d` (`4Nf` generator).
 - **No-floor 2-D for arbitrary curved boundaries without the transfinite map** —
   rounding/rasterizing a curve in a Cartesian basis does *not* restore spectral
   convergence (verified); needs Phase E or a 2-D ASR coordinate stretch.
