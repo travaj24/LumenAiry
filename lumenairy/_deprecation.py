@@ -145,7 +145,11 @@ __all__ = [
 # time: the gating matrix runs pre-version-bump and structurally
 # cannot see horizon collisions (the v5.36.0 tag paid for that
 # lesson).  Recorded in the CHANGELOG's 5.40.0 block.
-NEXT_REMOVAL_VERSION = '5.44'
+# v5.43.0: fourth proactive one-line slip (v5.32.0 / v5.36.1 / v5.40.0
+# precedents) -- 5.43.0 ships one minor below the horizon with both
+# registries still empty tombstones; slipped now so the NEXT release
+# cannot collide at tag-verify.  Recorded in the CHANGELOG's 5.43.0 block.
+NEXT_REMOVAL_VERSION = '5.46'
 
 #: Re-scheduled horizons: ``{version as written at the shim call site:
 #: live removal version}``.  Keys are the ORIGINAL (now shipped) schedule

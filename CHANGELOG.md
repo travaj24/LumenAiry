@@ -2,7 +2,14 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.43.0] — 2026-09-09
+
+### Changed -- deprecation horizon slipped 5.44 -> 5.46 (fourth deliberate one-line slip)
+
+`lumenairy._deprecation.NEXT_REMOVAL_VERSION` advanced from `'5.44'` to `'5.46'`
+in this release commit, PROACTIVELY (the v5.40.0 pattern): both registries are
+still empty tombstones, so nothing is actually deferred, and the gating matrix
+runs pre-version-bump so it structurally cannot see a horizon collision.
 
 ### Added -- OUT-OF-PLANE ANISOTROPY for the PURE (no-floor) staggered 2-D PMM
 
