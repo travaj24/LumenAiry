@@ -38,4 +38,5 @@ PYTHONPATH=/c/tmp/lum_aniso OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
 | `v6_durability_margins.py` | every bar of `tests/unit/test_pmm2d_staggered_oop.py` re-measured on the TEST FILE's own fixtures, so the durability table's margins are measurements.  Run twice, `OPENBLAS_NUM_THREADS` 1 and 4, for a cross-kernel envelope |
 | `v7_cost.py` | the T10 cost claims: INTERLEAVED in-plane vs out-of-plane region-solve timings (ratios only) and `tracemalloc` peak allocation.  Run alone |
 
+| `v8_rot_equals_negate.py` | the identity behind the rotation gauge, measured: `solve(cell, rot=+1)` vs `solve(negate_oop(cell), rot=-1)` on three shapes x three mounts.  BIT-IDENTICAL in all nine, so `_OOP_ROT_SIGN` IS the negate-out-of-plane control |
 `results/` holds the JSON and the logs each run printed.
