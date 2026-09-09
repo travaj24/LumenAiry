@@ -29,10 +29,10 @@ Every gate passes, each two-sided:
 | **M1b** | the frame-anchor phase is real, analytic and unique | **PASS, two-sided** -- `exp(-i alpha_m . t d)` collapses the transmission Jones from `1.0e-01..6.2e-01` to `<= 9.3e-08`; the `+i` arm is 2x WORSE than no correction |
 | **M2** | sheared-frame dispersion == exact quartic roots | **PASS** -- `1.3e-14 .. 3.6e-14` on the physical arm; the three wrong gauge/shift arms sit at `1.3e-02 .. 1.3e-01`; **dropping the six blocks** gives `8.6e-04..4.8e-02` and **dropping the congruence** `8.6e-04..3.8e-02` -- both halves of the formulation are load-bearing and each is measured |
 | **M3** | y-uniform slanted stripe == the validated 1-D slant oracle, per order | **PASS** -- slant sign pinned uniquely (`t = -tan(phi)`: `1.2e-03` vs `4.2e-01`); TE `2.1e-07` at M=8 at slant 0/10/20/35, TM tracks (in fact beats) the vertical control at every M |
-| **M4** | a genuinely 2-D slanted pillar, three ways | **PASS** -- see S4.4 |
-| **M5** | census + cascade | **PASS** -- see S4.5 |
-| **M6** | cost | see S4.6 |
-| **M7** | slant x anisotropy | **PASS**, and it CLOSES a coverage gap -- see S4.7 |
+| **M4** | a genuinely 2-D slanted pillar, three ways | **PASS** -- the INDEPENDENT hybrid agrees to `5.4e-03` (normal) with its OWN truncation step at `4.4e-03`, and walks toward the prototype monotonically at conical (`5.28e-02 -> 1.70e-02` over `n_orders` 5..11); the corrected-direction pure staircase converges `1.40e-01 -> 4.71e-02 -> 2.72e-02 -> 1.48e-02`; the prototype is grid- and degree-invariant to `2.1e-04 .. 6.1e-04` across four `(Nx, M)` settings |
+| **M5** | census + cascade + no-floor | **PASS** -- split exactly `2q^2/2q^2` in all 20 census rows to slant 60 deg (scalar, out-of-plane, `eps`=12, lossy); forward growth exactly `1.0000e+00` on every lossless row; one layer == two half-layers to `1.3e-15`; `n_orders` 3->8 moves the answer `2e-16` (normal) / `3e-06` (conical) |
+| **M6** | cost | **the slant is FREE**: `0.86x .. 1.07x` the vertical OUT-OF-PLANE region solve it has to use anyway; `1.37x .. 1.41x` end to end vs a vertical scalar solve |
+| **M7** | slant x anisotropy | **PASS**, and it CLOSES a coverage gap -- slant x OUT-OF-PLANE matches `pmm_jones_1d_slanted` at `1.7e-05 .. 2.8e-05` per order while `PMM2DStackHybrid` raises `NotImplementedError` on that combination (measured, S4.7) |
 
 **The formulation choice is the finding.**  The 1-D library carries the slant as
 a lab-Cartesian **convection** (`d_z -> i q - t . grad` on the four diagonal
@@ -53,10 +53,11 @@ second-order-operator problem: a good pure-E operator whose reconstructed
 magnetic partner `V = QW/lambda` drifted `1.0 -> 0.54 -> -0.18` over 0-60 deg.
 Here `H` is part of the state -- the generator is first order on
 `[E1; E2; G1; G2]` -- so there is nothing to reconstruct.  Measured, not
-assumed: M2's uniform-slab dispersion is exact to `1e-14` at 45 deg slant (a
-wrong partner cannot produce the right four roots), M5's cascade closes to
-`1e-13` at three wavelengths with a forward growth factor of exactly `1.0`, and
-M5's split is exactly `2q^2 / 2q^2` at every slant up to 60 deg.
+assumed: M2's uniform-slab dispersion is exact to `1.3e-14` at 35 deg slant and
+conical incidence (a wrong partner cannot produce the right four roots), M5's
+forward growth factor is exactly `1.0000e+00` at three wavelengths with closure
+that does not grow with depth, and M5's forward/backward split is exactly
+`2q^2 / 2q^2` in all 20 census rows at slants to 60 degrees.
 
 ---
 
@@ -623,3 +624,596 @@ touch it.  TE is spectral on both arms, within a factor of five of each other.
 
 **M3 PASSES:** the slanted arm tracks the vertical control everywhere the
 oracles can resolve it, and the sign is pinned two-sided.
+
+### 4.4  M4 -- a genuinely 2-D SLANTED PILLAR, three ways
+
+`m4_pillar.py`, `m4a_timing_probe.py`, `m4b_staircase_ladder.py`,
+`m4c_hybrid_ladder.py`, `m4d_arbiter_xslant.py`.
+Pillar `[0.3, 0.6] x [0.3, 0.6]` (a quarter-period
+square) in `px = py = 1.2 lam`, `eps` 4 / 1, `depth = 0.8 lam`, `n_sub = 1.5`,
+`wl = 1`.  The pillar translates by `t . depth = 0.6` = HALF a period over the
+layer -- a steep case, chosen because every staircase wall then lands on the
+uniform `Nx = Ny = 8` grid.  Comparison is per order on `(0,0)`, `(+-1, 0)`,
+`(0, +-1)`, `(+-1, +-1)`, both incident polarizations, on R and T.
+
+**[M] (a) The prototype metric layer -- one solve, and it is GRID-INVARIANT.**
+The same physical layer solved on two different union grids and two modal
+counts:
+
+| block | `Nx=4, M=5` | `Nx=4, M=6` | `Nx=8, M=3` | `Nx=8, M=4` (reference) |
+|---|---|---|---|---|
+| normal, diagonal slant -- self-move vs the reference | 1.82e-04 | 1.40e-04 | 5.23e-04 | -- |
+| normal -- cost / closure | 8.1 s / 5.6e-08 | 28.4 s / 4.8e-10 | 7.0 s / 1.6e-05 | 98.2 s / 1.2e-07 |
+| conical 20/35, x slant -- self-move | 4.43e-04 | 3.13e-04 | 5.38e-03 | -- |
+| conical -- cost / closure | 8.8 s / 9.0e-06 | 38.6 s / 2.2e-07 | 9.2 s / 7.1e-04 | 133.9 s / 5.5e-06 |
+
+The `Nx = 4` and `Nx = 8` grids describe the SAME pillar (the extra walls are
+redundant), so the `1.4e-04 .. 4.4e-04` spread is the solver's own
+discretization, not a slant artifact -- and it is what the reference row below
+is worth.
+
+**[M] (b) The shipped HYBRID slant metric -- an INDEPENDENT formulation, and the
+sign, two-sided.**  `PMM2DStackHybrid.add_layer(slant=...)`: a Fourier basis, a
+tensor fold, and a lab-Cartesian convection on its 4N generator -- nothing in
+common with the prototype except the physics.  Distance to the prototype's
+`Nx=8, M=4` reference:
+
+| block | `t_hybrid = +t_probe` | `t_hybrid = -t_probe` |
+|---|---|---|
+| normal, diagonal, `n_orders = 5` | 1.811e-01 | **1.196e-02** |
+| normal, diagonal, `n_orders = 7` | 1.761e-01 | **5.436e-03** |
+| conical 20/35, x, `n_orders = 5` | 3.189e-01 | **5.270e-02** |
+| conical 20/35, x, `n_orders = 7` | 3.190e-01 | **4.230e-02** |
+
+**The hybrid's public `slant` is the NEGATIVE of the prototype's internal `t`**
+(S6.1) -- and the wrong sign does not merely sit further away, it does not
+IMPROVE with `n_orders` (1.811e-01 -> 1.761e-01, 3.189e-01 -> 3.190e-01) while
+the right one does (1.196e-02 -> 5.436e-03).  That is the two-sidedness: a
+truncation ladder separates a discretization gap from a wrong structure.
+
+**[M] (c) A z-STAIRCASE from the PURE solver itself -- and the DIRECTION arm
+that had to be added.**
+
+The first pass built the staircase marching the pillar in `+x` while the
+prototype's internal `t` marches it in `-x` (S6.1), and it did not converge:
+`2.415e-01 / 1.649e-01 / 1.685e-01` at `n = 1 / 2 / 4` on the normal-diagonal
+block, `2.599e-01 / 2.942e-01 / 3.070e-01` at conical -- i.e. WORSE than not
+slanting at all past `n = 1`.  That is a probe-side error, not a formulation
+one, and it is exactly what a two-sided scan is for, so the staircase's marching
+direction is now a SCANNED arm (`m4b_staircase_ladder.py`; the first pass is
+retained as `results/m4b_v1_wrongwalk.json`).  With the direction scanned, on
+the M4b geometry (same pillar, `t = (0.75, 0)`, `Nx = Ny = 8`, `M = 3`,
+reference = the metric layer on the SAME grid so the discretization is
+common-mode):
+
+| mount | direction | n=1 | n=2 | n=4 |
+|---|---|---|---|---|
+| normal | **WITH the slant** | 1.399e-01 | **4.670e-02** | **2.076e-02** |
+| normal | AGAINST | 1.399e-01 | 2.064e-01 | 2.068e-01 |
+| conical 20/35 | **WITH the slant** | 2.616e-01 | **2.055e-01** | **8.058e-02** |
+| conical 20/35 | AGAINST | 2.616e-01 | 2.888e-01 | 3.016e-01 |
+
+**The correct direction converges toward the metric layer** (3.0x then 2.2x at
+normal; 3.2x over the ladder at conical), and the wrong one gets monotonically
+worse -- which is the roadmap's A5 gate, passed, plus a third independent
+pinning of the slant sign.  At `n = 1` both directions coincide, because the
+`n = 1` "staircase" is just the VERTICAL pillar: `m4d` measures a vertical
+pillar at **1.396e-01** from the slanted answer, which is the `n = 1` entry to
+three digits.
+
+**[M] The `M = 4` CONTROL** (on M4's own normal/diagonal block, wrong-direction
+arm) rules out an `M = 3` artifact completely -- every rung reproduces its
+`M = 3` value to four digits, at 5-10x the cost:
+
+| n | `M = 3` | `M = 4` | `M = 3` cost | `M = 4` cost |
+|---|---|---|---|---|
+| 1 | 2.415e-01 | **2.415e-01** | 8.8 s | 104.8 s |
+| 2 | 1.649e-01 | **1.649e-01** | 13.6 s | 146.2 s |
+| 4 | 1.685e-01 | **1.685e-01** | 22.3 s | 213.3 s |
+
+So the staircase is fully converged in the modal count; what moves it is the
+geometry alone.
+
+Two incidental confirmations fall out.  MIDPOINT and LEADING-EDGE sampling give
+IDENTICAL efficiencies at every `n` where both are admissible (`2.415e-01` and
+`1.649e-01` in both columns of M4) -- the two differ by a RIGID lateral
+translation of the whole stack, and the pure staggered solver's position
+invariance makes that a no-op.  And closure is excellent throughout
+(`8.3e-05 .. 9.1e-04`) on BOTH direction arms, including the one that is
+`2.1e-01` wrong: **the lossless trap, reproduced on this cascade.**  Energy is
+reported here as context and is never a pass criterion.
+
+**[M] Why the ladder stops at n = 4, and why that is the finding.**  `Basis1D`'s
+segments are a `linspace`, so every slice must place its walls on ONE uniform
+union grid of spacing `h = px / Nx`.  Two consequences:
+
+1. the admissible slice counts are exactly the DIVISORS of `S / h` (`S` = the
+   total lateral walk).  Here `S = px/2 = 4h`, so `n in {1, 2, 4}` and nothing
+   else -- the ladder is fixed by the geometry and the grid, not chosen;
+2. the smallest non-zero per-slice lateral STEP is `h` itself.  At `Nx = 8` that
+   is `0.15`, i.e. **half the pillar width**.  A staircase of this pillar can
+   therefore never have a step finer than half the feature until the union grid
+   is refined -- and refining it costs `(Nx (M-1))^6` in the region eig.
+
+`m4a_timing_probe.py` prices that: one region solve, `px = py = 1.2`, same cell.
+
+| grid | in-plane `2q^2` (QZ) | slanted `4q^2` (whitened) |
+|---|---|---|
+| `Nx=4, M=5` (`q^2 = 256`) | 512, **3.51 s** | 1024, **4.78 s** |
+| `Nx=4, M=6` (`q^2 = 400`) | 800, **13.55 s** | 1600, **13.74 s** |
+| `Nx=8, M=3` (`q^2 = 256`) | 512, **3.34 s** | 1024, **3.76 s** |
+| `Nx=8, M=4` (`q^2 = 576`) | 1152, **52.73 s** | 2304, **40.05 s** |
+
+Note the last row: the SLANTED `4q^2` solve is *faster* than the vertical
+in-plane `2q^2` one at the same `q`, because the slanted pencil is
+Cholesky-whitened to a standard eig while the in-plane path pays a QZ.  Doubling
+`Nx` from 4 to 8 at fixed `M` multiplies the region solve by ~8x per axis pair;
+that is the price of every extra staircase rung.
+
+**[M] (d) M4c -- does the hybrid WALK TOWARD the prototype as its truncation is
+lifted?**  The hybrid has a Fourier floor the pure solver does not, so the
+question that matters is direction.  Reference: the prototype metric layer at
+`Nx = 4, M = 6` (its distance to the `Nx = 8, M = 4` rung is `1.4e-04` /
+`3.1e-04`, two to three decades below the hybrid's own step, so it is a fixed
+target on this scale).
+
+| mount | n_orders | vs prototype | the hybrid's OWN step | cost |
+|---|---|---|---|---|
+| normal, diagonal | 5 | 1.205e-02 | -- | 0.4 s |
+| normal, diagonal | 7 | 5.534e-03 | 6.631e-03 | 2.3 s |
+| normal, diagonal | 9 | 7.228e-03 | 3.073e-03 | 8.5 s |
+| normal, diagonal | 11 | **5.391e-03** | 4.426e-03 | 25.8 s |
+| conical 20/35, x | 5 | 5.278e-02 | -- | 0.5 s |
+| conical 20/35, x | 7 | 4.198e-02 | 1.568e-02 | 2.4 s |
+| conical 20/35, x | 9 | 2.261e-02 | 2.770e-02 | 9.1 s |
+| conical 20/35, x | 11 | **1.700e-02** | 5.606e-03 | 27.4 s |
+
+At NORMAL incidence the gap to the prototype (`5.4e-03`) is the SAME SIZE as the
+hybrid's own `n_orders` step (`4.4e-03`) -- i.e. the two engines agree to within
+the hybrid's own convergence, which is the strongest statement this comparison
+can make.  At CONICAL the hybrid is still walking: `5.28e-02 -> 1.70e-02`
+monotonically as `n_orders` goes 5 -> 11, moving TOWARD the prototype by a
+factor of 3.1, with its own step still `5.6e-03`.  Neither row shows the
+prototype sitting outside where the hybrid is heading.
+
+**[M] (e) M4d -- THE ARBITER, on the x-slant / normal-incidence cell where the
+first-pass staircase plateaued.**  Same geometry as M4b, three questions at once:
+
+*Is the prototype itself converged?*  Its self-move across FOUR grids and modal
+counts, against `Nx = 8, M = 4`:
+
+| `Nx=4, M=5` | `Nx=4, M=6` | `Nx=8, M=3` | `Nx=12, M=3` |
+|---|---|---|---|
+| 3.07e-04 | 2.10e-04 | 6.12e-04 | 2.70e-04 |
+
+Grid- and degree-invariant to `~3e-04`, i.e. two to three decades below
+everything it is being compared against.
+
+*Does the INDEPENDENT hybrid walk toward it?*  Yes, monotonically:
+
+| n_orders | vs prototype | the hybrid's OWN step | cost |
+|---|---|---|---|
+| 5 | 1.656e-02 | -- | 0.4 s |
+| 7 | 1.541e-02 | 1.176e-02 | 2.4 s |
+| 9 | 9.058e-03 | 1.203e-02 | 8.8 s |
+| 11 | **5.891e-03** | 7.569e-03 | 26.9 s |
+
+The gap closes 2.8x over the ladder and ends BELOW the hybrid's own step
+(`5.9e-03` vs `7.6e-03`) -- the two engines agree to within the hybrid's own
+convergence.  (The hybrid raises its own energy warning, `max R+T = 1.01`, at
+`n_orders >= 9` on this steep cell; recorded, not used.)
+
+*And what is the slant worth at all?*  A VERTICAL pillar sits **1.396e-01** from
+the slanted answer -- so on this cell the slant is a `1.4e-01` effect, the
+correct-direction staircase reaches `2.1e-02` at `n = 4`, and the two engines
+that solve the slanted layer directly agree at `5.9e-03`.
+
+**[M] (f) M4b -- the staircase's CONVERGENCE RATE, and what a rung costs.**
+Same cell, `t = (0.75, 0)`, normal incidence, LEADING-EDGE sampling marching
+WITH the slant, on two union grids.  Reference is the metric layer on the SAME
+grid, so the discretization is common-mode and the number is the staircase's
+geometric error alone.
+
+| grid (`h`) | n | per-slice step | vs metric | cost vs the metric layer |
+|---|---|---|---|---|
+| `Nx=8` (`h = 0.150`) | 1 | 2.00 widths | 1.399e-01 | 0.83x |
+| `Nx=8` | 2 | 1.00 | 4.670e-02 | 1.24x |
+| `Nx=8` | 4 | 0.50 | **2.076e-02** | 2.44x |
+| `Nx=12` (`h = 0.100`) | 1 | 2.00 | 1.397e-01 | 1.13x |
+| `Nx=12` | 2 | 1.00 | 4.707e-02 | 1.44x |
+| `Nx=12` | 3 | 0.67 | 2.716e-02 | 1.82x |
+| `Nx=12` | 6 | 0.33 | **1.478e-02** | 3.22x |
+
+Two things this settles.  First, **the error is set by the per-slice STEP, not
+by the union grid**: at a matched step of 1.00 widths the two grids read
+`4.670e-02` and `4.707e-02`, and the ladder falls as `~1/n` on both.  Second,
+**the union grid is what caps the ladder**: a step of `1/3` of the pillar width
+needs `Nx = 12` and 6 slices, costs `3.22x` one slanted solve, and still sits
+`1.5e-02` away -- while the INDEPENDENT hybrid sits `5.9e-03` away (S4.4(e)).
+Halving the step again means `n = 12` on `Nx = 24`, i.e. a region eig `(24/12)^6
+= 64x` larger per layer, twelve times over.
+
+**That is the honest form of the speed win.**  Not "one solve replaces N
+slices" at a fixed price, but: the staircase's cost to reach a given accuracy
+grows with BOTH the slice count and the union grid it forces, and in the pure
+staggered solver the two are locked together.
+
+### 4.5  M5 -- SPURIOUS CENSUS, CASCADE STABILITY, and the NO-FLOOR property
+
+`m5_census_cascade.py`.  The 1-D convection route's known cost is an
+"advection spurious" sea whose `|Re q|` grows with slant, and the roadmap's
+V-partner wall showed up as an energy blow-up.  Both are census questions, and
+both are asked here against the SAME cell at slant 0 -- the shipped
+out-of-plane generator's own census is the control.
+
+**[M] T5a -- CENSUS.**  `px = py = 1.2 lam`, conical 20/35, `M = 6`, `(2,2)`
+grid, `dim = 4q^2 = 400`.  "above-band" counts modes with `|q| > 3 sqrt(max eps)`
+-- the polynomial basis's own unresolved harmonics, which exist at slant 0 too.
+
+| cell | slant | split (want 200/200) | `min Re(lam_f)` | `max abs(q)` | above-band |
+|---|---|---|---|---|---|
+| scalar pillar `eps` 4 | vertical | **200/200** | -5.3e-15 | 9.63 | 98 (24.5%) |
+| scalar pillar | x 20 deg | **200/200** | -3.6e-15 | 9.73 | 102 (25.5%) |
+| scalar pillar | x 45 deg | **200/200** | -6.5e-15 | 11.23 | 128 (32.0%) |
+| scalar pillar | diag 45 deg | **200/200** | -5.2e-15 | 13.24 | 160 (40.0%) |
+| scalar pillar | x 60 deg | **200/200** | -2.4e-15 | 14.20 | 186 (46.5%) |
+| out-of-plane uniaxial pillar | vertical | **200/200** | -9.0e-15 | 9.56 | 144 (36.0%) |
+| out-of-plane uniaxial pillar | x 60 deg | **200/200** | -3.3e-15 | 14.10 | 222 (55.5%) |
+| high contrast `eps` 12 | vertical | **200/200** | -3.7e-15 | 9.56 | 0 |
+| high contrast `eps` 12 | x 60 deg | **200/200** | -6.7e-15 | 13.41 | 34 (8.5%) |
+| LOSSY pillar `4 + 0.6i` | vertical | **200/200** | **+4.9e-02** | 9.63 | 96 (24.0%) |
+| LOSSY pillar | x 60 deg | **200/200** | **+3.3e-02** | 14.22 | 185 (46.2%) |
+
+Three readings:
+
+* the forward/backward split is **exactly `2q^2 / 2q^2` in all 20 rows**, BEFORE
+  the selector's defensive rebalance, at slants up to 60 degrees, on a high-
+  contrast cell and on a lossy one -- the contract `_region_modes_oop` pins;
+* `min Re(lam_f)` is `>= -2.3e-14` on every lossless row (no growing mode
+  classified forward) and strictly POSITIVE on every lossy row (forward modes
+  decay), which is the sign a broken magnetic partner would break;
+* `max abs(q)` grows from `9.6` to `14.2` between slant 0 and 60 degrees --
+  a factor of `1.48`, i.e. `sec(60 deg) = 2` bounded, and NOT the `~210` a
+  from-scratch convection form produces in 1-D.  The above-band population is
+  the polynomial basis's own unresolved harmonics (24.5% ALREADY at slant 0),
+  growing with the same `sec` factor; the flux selector absorbs them, which is
+  what the exact split says.
+
+**[M] T5b -- CASCADE vs DEPTH.**  `M = 5`, depths 0.25 / 1 / 3 wavelengths;
+`max fwd growth` is `max exp(-Re(lam_f) k0 L)` at 3 wavelengths (any value above
+1 means a growing mode was classified forward).
+
+| cell | slant | mount | 0.25 lam | 1 lam | 3 lam | max fwd growth |
+|---|---|---|---|---|---|---|
+| scalar pillar | vertical | normal | 1.70e-04 | 2.07e-04 | 2.83e-04 | **1.0000e+00** |
+| scalar pillar | vertical | conical 20/35 | 1.63e-03 | 7.54e-03 | 1.48e-02 | **1.0000e+00** |
+| scalar pillar | x 36.9 deg | conical 20/35 | 2.12e-03 | 3.92e-03 | 4.53e-03 | **1.0000e+00** |
+| scalar pillar | diag 45 deg | normal | 4.05e-05 | 2.12e-04 | 7.59e-05 | **1.0000e+00** |
+| scalar pillar | diag 45 deg | conical 20/35 | 1.44e-03 | 8.40e-04 | 5.76e-04 | **1.0000e+00** |
+| out-of-plane pillar | x 36.9 deg | normal | 6.03e-05 | 1.73e-04 | 3.87e-04 | **1.0000e+00** |
+| out-of-plane pillar | diag 45 deg | conical 20/35 | 1.82e-04 | 6.89e-04 | 7.35e-04 | **1.0000e+00** |
+| LOSSY pillar | x 36.9 deg | normal | 0.134 | 0.639 | 0.937 | 3.18e-01 |
+| LOSSY pillar | diag 45 deg | conical 20/35 | 0.167 | 0.589 | 0.869 | 4.79e-01 |
+
+Forward growth is **exactly `1.0000e+00`** on every lossless row and strictly
+below 1 on every lossy one.  Closure does NOT grow with depth on the slanted
+rows -- and note the sharpest comparison in the table: the VERTICAL cell at
+conical incidence degrades `1.63e-03 -> 1.48e-02` over the depth ladder while
+the SLANTED cell on the same geometry improves, `2.12e-03 -> 4.53e-03`.  The
+lossy rows' absorption rises monotonically and stays in `[0, 1]`.
+
+**[M] T5c -- LAYER SPLIT.**  One slanted layer of depth `d` versus two stacked
+slanted layers of `d/2` at the same slant (the same cell in both, which is the
+correct construction: the identity interface match carries the frame offset,
+S1.5):
+
+| cell | slant | mount | dR | dT | dJones |
+|---|---|---|---|---|---|
+| scalar pillar | x 36.9 deg | normal | 2.57e-16 | 5.55e-16 | 6.02e-16 |
+| scalar pillar | diag 45 deg | conical 20/35 | 1.95e-16 | 5.55e-16 | 1.26e-15 |
+| out-of-plane pillar | x 36.9 deg | conical 20/35 | 5.90e-17 | 9.99e-16 | 6.32e-16 |
+| out-of-plane pillar | diag 45 deg | normal | 1.46e-16 | 4.72e-16 | 7.08e-16 |
+
+Worst over all 8 rows: **1.28e-15**.  Machine precision -- so the propagator,
+the internal interface and the frame anchor compose exactly, which is the
+strongest single check on S1.5's interface argument.
+
+**[M] T5d -- the NO-FLOOR property survives the slant.**  Movement of the
+per-order result and the reflection Jones when the far-field order half-width
+goes `3 -> 5 -> 8`:
+
+| cell | slant | mount | move 3->5 | move 3->8 |
+|---|---|---|---|---|
+| scalar pillar | x 36.9 deg | normal | 2.78e-16 | 3.89e-16 |
+| scalar pillar | diag 45 deg | normal | 6.11e-16 | 1.17e-15 |
+| out-of-plane pillar | x 36.9 deg | normal | 8.88e-16 | 1.94e-16 |
+| scalar pillar | x 36.9 deg | conical 20/35 | 1.81e-06 | 2.45e-06 |
+| scalar pillar | diag 45 deg | conical 20/35 | 3.33e-06 | 4.87e-06 |
+| out-of-plane pillar | diag 45 deg | conical 20/35 | 2.29e-06 | 2.58e-06 |
+
+Machine precision at normal incidence; `~3e-06` at conical.  **[H]** the conical
+residue is very likely the `_grazing_safe_wavelength` nudge, which is a function
+of the ORDER SET and so changes slightly with `n_orders` -- it is absent at
+normal incidence, where no order is near a cutoff.  Either way it is three
+decades below the Fourier hybrid's own `E_z`-rule spread (`7.7e-04`), so the
+no-floor property is intact.
+
+**M5 PASSES on every arm.**
+
+### 4.6  M6 -- COST
+
+`m6_cost.py` (plus `m4a_timing_probe.py`, S4.4).
+
+**[M] T6a -- per-region assembly + eig**, `Nx = Ny = 2`, conical Bloch shift,
+median of 2-5 repeats:
+
+| M | `q^2` | in-plane `2q^2` (QZ) | vertical OOP `4q^2` | SLANTED `4q^2` | slant / OOP | slant / in-plane |
+|---|---|---|---|---|---|---|
+| 4 | 36 | 8.9 ms | 31.6 ms | 27.3 ms | **0.86x** | 3.15x |
+| 5 | 64 | 41.4 ms | 92.1 ms | 92.8 ms | **1.01x** | 2.01x |
+| 6 | 100 | 126.0 ms | 242.1 ms | 227.9 ms | **0.94x** | 1.80x |
+| 7 | 144 | 339.6 ms | 690.6 ms | 742.2 ms | **1.07x** | 2.18x |
+
+**The slant itself is FREE.**  Against the vertical out-of-plane path -- which
+is where a slanted cell has to live anyway, because its covariant tensor has
+out-of-plane entries -- the congruence and the six blocks cost `0.86x .. 1.07x`.
+The `1.8x .. 3.2x` against the in-plane `2q^2` path is the price of needing the
+first-order generator at all, and it is the SHIPPED Stage-B number (`1.33-2.03x`
+measured there), not something the slant adds.
+
+And at larger `q` the slanted solve is outright FASTER than the vertical
+in-plane one, because it is a Cholesky-whitened standard eig while the in-plane
+path pays a QZ -- `m4a` at `Nx = 8, M = 4`: in-plane `2q^2 = 1152` takes
+**52.73 s**, slanted `4q^2 = 2304` takes **40.05 s**.
+
+**[M] T6b -- end-to-end single-layer solve** (scalar pillar, conical 20/35,
+`n_orders = 3`), slanted vs vertical:
+
+| M | vertical | slanted | ratio |
+|---|---|---|---|
+| 5 | 0.128 s | 0.181 s | **1.41x** |
+| 6 | 0.327 s | 0.448 s | **1.37x** |
+| 7 | 0.918 s | 1.280 s | **1.39x** |
+
+**[M] T6c -- the staircase arithmetic.**  See S4.4: on the M4b geometry the
+staircase's ladder is fixed by the union grid, its per-slice lateral step cannot
+go below one grid cell, and a rung costs `0.8x .. 2.9x` a slanted solve.  The
+practical statement is not "one slanted solve replaces N slices" but the
+stronger one: **at the slice counts a given union grid admits, there may be no
+rung that reaches the slanted answer at all** -- refining the step means
+refining `Nx`, which multiplies the region eig by `(Nx (M-1))^6`.
+
+### 4.7  M7 -- SLANT x ANISOTROPY, and a coverage gap this CLOSES
+
+`m7_slant_x_aniso.py`, `m7b_hybrid_oop_slant.py`, `m7c_hybrid_stripe_anomaly.py`.
+The covariant congruence `eps -> A^-1 eps A^-T` is tensor-agnostic, so slant x
+anisotropy is not a separate feature in this formulation -- it is the same line
+of code.  That matters because the shipped 2-D engines do not cover it.
+
+**[M] T7a/T7b -- the COVERAGE GAP is real, and it raises at SOLVE, not at
+`add_layer`.**  `PMM2DStackHybrid.add_layer(eps_tensor_cell=..., slant=...)`
+ACCEPTS an out-of-plane tensor; the refusal comes later, from
+
+```
+NotImplementedError: _layer_eigenmodes_tensor: a SLANTED layer with OUT-OF-PLANE
+coupling (eps_xz/yz/zx/zy) is not supported.  The 2-D slant metric is validated
+for IN-PLANE tensors only ...
+```
+
+So the restriction is genuine (the method's docstring is right about the
+outcome) but is enforced one call later than the docstring reads -- worth a
+line in the build's own validation.  **No 2-D engine in the suite covers slant x
+out-of-plane today.**
+
+*(An incidental note, resolved: `m7b`'s in-plane arm reported a `TypeError` --
+that was the PROBE's own result unpacking, not the library.  `m7c` drives all
+four `{y-uniform stripe, pillar} x {slant, no slant}` in-plane tensor
+configurations through `PMM2DStackHybrid.solve()` and all four succeed.)*
+
+**[M] T7b -- the prototype DOES cover it, validated against the 1-D engine that
+also does.**  A y-uniform SLANTED OUT-OF-PLANE stripe (ridge =
+`uniaxial(1.5, 1.7, tilt 35 deg, azim 25 deg)`, groove = air, `px = 0.75 lam`,
+`depth = 0.30 lam`, duty 0.5) against `pmm_jones_1d_slanted` at degree 30,
+per order over `m = -2..2`, both incident polarizations:
+
+| phi | mount | M | incident Ex | incident Ey | oracle's own drift | y-leak | closure |
+|---|---|---|---|---|---|---|---|
+| 0 | normal | 8 | 2.68e-05 | 1.23e-06 | 3.1e-06 | **0.0** | 4.97e-10 |
+| 20 | normal | 8 | 2.71e-05 | 1.75e-06 | 5.5e-06 | **0.0** | 9.11e-10 |
+| 35 | normal | 8 | **1.66e-05** | 1.96e-06 | 6.8e-06 | **0.0** | 2.30e-09 |
+| 0 | oblique 25 | 8 | 1.91e-05 | 9.35e-07 | 3.3e-06 | **0.0** | 4.10e-11 |
+| 20 | oblique 25 | 8 | 2.75e-05 | 3.79e-07 | 1.4e-05 | **0.0** | 2.04e-11 |
+| 35 | oblique 25 | 8 | **2.76e-05** | 6.93e-07 | 2.1e-05 | **0.0** | 8.56e-11 |
+
+The slanted rows are as good as the vertical (`phi = 0`) row -- in fact slightly
+better at 35 degrees normal -- the `Ey` channel is AT the oracle's own drift,
+y-momentum is conserved EXACTLY (`0.0`, not merely small), and closure reaches
+`1e-10`.  `m7b` reproduces the `phi = 35`, oblique-25 row independently at
+`Ex 2.76e-05 / Ey 6.93e-07`.
+
+**[M] T7c -- a genuinely 2-D slanted IN-PLANE tensor pillar vs the hybrid.**
+`px = py = 1.2 lam`, quarter-period pillar of `uniaxial(1.5, 1.7, tilt 90 deg,
+azim 25 deg)`, `depth = 0.8 lam`, `t = 0.75`:
+
+| mount | prototype self-move M5->M6 | hybrid `+t`, n=5 / n=7 | hybrid `-t`, n=5 / n=7 |
+|---|---|---|---|
+| normal | 1.39e-04 | 4.78e-02 / 4.48e-02 | **1.04e-02 / 4.24e-03** |
+| conical 20/35 | 9.56e-05 | 5.40e-02 / 4.85e-02 | **7.84e-03 / 3.57e-03** |
+
+The sign is pinned a third time, on a TENSOR cell; the right arm halves with the
+hybrid's truncation while the wrong arm does not move; and the prototype's own
+`(M)` self-move is two decades below the gap, so the residual is the hybrid's
+Fourier floor.  **M7 PASSES**, and the slant x out-of-plane combination becomes
+available for the first time in a 2-D engine.
+
+---
+
+## 5.  What this does NOT cover
+
+* **TAPER.**  A shear is a tilted axis with a CONSTANT cross-section.  No shear
+  absorbs a dilation -- measured at `1.00x` in
+  `BUILD_PMM2D_SLANT_METRIC_2026_08_16` M5, on the one-wall taper carrying the
+  maximum shear content a taper can have.  The taper's `sqrt(g)` is
+  z-dependent, which brings back the dilation generator, a non-normal
+  `q -> -conj(q)` pencil with no valid mode selector, and a distorted far field.
+  None of that arises here, and none of it is solved here.
+* **Mixed slants between PATTERNED layers** (S1.5): the frame offset between two
+  differently-sheared patterned regions is a real lateral translation of one
+  nodal grid relative to the other.  Exact only when the offset is a whole
+  number of grid cells; otherwise it needs an interpolation the pure basis does
+  not have.  Homogeneous / uniform neighbours are unaffected (the offset is a
+  gauge).  **The build must refuse this**, loudly.
+* **Curved walls** -- Phase E, unchanged by this work.
+* **`retain_internal` / `layer_absorption` below a slanted layer** were not
+  measured.  The frame-anchor phase is a per-order far-field correction here;
+  an internal-field probe evaluated at a plane inside or below a sheared layer
+  is in the frame, not the lab, and needs the same treatment.  The first build
+  should either carry it through `_flux_at` or refuse `retain_internal` on a
+  slanted stack.
+
+---
+
+## 6.  THE INTEGRATION ROUTE
+
+Everything below is a change to two files.  No new module, no new basis
+function, no new cascade, no new far field.
+
+### 6.1  `lumenairy/elements/pmm/twod_staggered.py`
+
+**(1) `Granet2DTransverseE.__init__(..., slant=(0.0, 0.0))`.**
+
+```
+  # a sheared cell is an OUT-OF-PLANE cell in the frame, always
+  if slant != (0.0, 0.0):
+      cell33 = promote_scalar_to_tensor(eps_cell)       # (Nx,Ny) -> (Nx,Ny,3,3)
+      rot    = _OOP_ROT_SIGN
+      cell33 = flip_offplane(cell33, rot)               # e13,e23,e31,e32 *= rot
+      tx, ty = rot * slant[0], rot * slant[1]           # t rotates WITH them
+      self.eps_cell = cov_congruence(cell33, tx, ty)    # A^-1 eps A^-T
+      self.offplane = True
+  else:  # unchanged dispatch, byte for byte
+```
+
+The rot-on-`t` is not cosmetic: `eps^{lm}(R eps R, -t) = R eps^{lm}(eps, t) R`
+is what makes the two consistent (S1.4(c)), and M2's `a-` arms measure the
+failure of getting it wrong (`1.3e-02 .. 1.3e-01`).
+
+**(2) `_assemble_oop` gains one guarded block.**  Six `np.kron`s and four
+row additions, exactly as in `slant_lib.SlantSolver._assemble_slant`:
+
+| new per-axis matrix | call |
+|---|---|
+| `Mtb_x`, `Mtb_y` | `b.mass(b.Btilde, b.B)` |
+| `Mbt_x`, `Mbt_y` | `b.mass(b.B, b.Btilde)` |
+| `dtb_x`, `dtb_y` | `-(dbt).conj().T` -- the integration-by-parts identity the assembly already uses for `CwE1`/`CwE2`; the ELEMENTWISE `b.mixed(b.Btilde, b.B)` would silently drop the jump deltas and is NOT the same matrix |
+| `Ctt_x`, `Ctt_y` | already in `_axis_mats` |
+
+`if tx == 0 and ty == 0` skips the whole block, which is what makes the slant-0
+path bit-identical (G0a: 0 differing bytes).
+
+**(3) `_region_modes_oop`: UNCHANGED.**  The retained state is the covariant
+tangential state = the lab-Cartesian tangential state, so the Cholesky
+whitening, the flux-based split with the deep-decay override, `_OOP_H_GAUGE`,
+and the `2q^2 / 2q^2` contract all keep their meanings.  M5 measures each.
+
+**(4) `pmm_efficiency_2d_staggered` / `pmm_jones_2d_staggered`: add `slant=` and
+forward.**  Match `PMM2DStackHybrid.add_layer`'s signature exactly
+(`(t_x, t_y)` or a bare scalar `t_x`, a TANGENT, cross-section at the layer's
+TOP) so a caller can move a cell between the two 2-D engines without a
+convention change.
+
+**THE SIGN, measured twice and stated as a relation.**  The prototype's internal
+`t` (the `t` of `x = u + t w` in S1.1) satisfies
+
+```
+    t_probe   =  - t_hybrid_public        (M4, 5.4e-03 vs 1.8e-01 / 3.2e-01)
+    t_probe   =  - tan(slant_angle_1D)    (M3, 1.2e-03 vs 4.2e-01)
+    => t_hybrid_public = tan(slant_angle_1D)     -- the hybrid and the 1-D
+       scalar entry already share ONE public convention.
+```
+
+So the build takes the PUBLIC `slant` and passes `-slant` into the congruence
+and the six blocks, and the three engines then agree.  Which way a positive
+`slant` physically tilts the wall is a library convention this campaign did not
+independently re-derive -- M3 and M4 pin the RELATION, which is what an
+implementation needs, and each pins it against an engine validated elsewhere.
+
+### 6.2  `lumenairy/elements/pmm/stack2d_pure.py`
+
+**(5) `PMM2DStackPure.add_layer(..., slant=None)`.**  A slanted layer sets
+`any_oop = True` (already the flag that promotes the stack to the GENERALIZED
+cascade -- no cascade work at all), and the `eig_cache` key must include the
+slant.
+
+**(6) THE FRAME-ANCHOR PHASE -- the one genuinely new line of physics.**
+In `solve`, after `kxv`/`kyv` are built:
+
+```
+  shx = sum(L["slant"][0] * L["thickness"] for L in self._layers)
+  shy = sum(L["slant"][1] * L["thickness"] for L in self._layers)
+  tphase = exp(-1j * k0 * (kxv * shx + kyv * shy))
+  tx_ord *= tphase ;  ty_ord *= tphase          # TRANSMITTED only
+```
+
+`S11` and the reflection Jones need NOTHING (S1.5).  Omitting it leaves R, T and
+the reflection Jones exactly right and the transmission Jones wrong by up to
+`6.2e-01` -- a silent-wrong of the worst class, so its gate (M1b, both signs on
+a uniform null at oblique) is not optional.
+
+**(7) REFUSALS, all raising with the reason:**
+* a slanted PATTERNED layer whose neighbour is a PATTERNED layer with a
+  DIFFERENT slant (a VERTICAL patterned layer included) -- S1.5;
+* dispersive (callable) and traced (JAX) layers -- mirror the hybrid;
+* `retain_internal` on a slanted stack, unless `_flux_at` is taught the frame
+  (S5).
+
+**(8) [H] The Wood-anomaly nudge list.**  `solve` feeds `_grazing_safe_wavelength`
+the tensor layers' diagonals.  A slanted SCALAR layer's covariant diagonal is
+`eps (1 + t_x^2)` etc., so its modal spectrum reaches higher than `eps`; whether
+it should be added to `_eps_gr` is NOT settled by this campaign and the build
+should measure it (a slanted cell walked onto a Rayleigh cutoff).
+
+### 6.3  Gates for the build (every one of them measured here)
+
+| gate | assertion | measured here |
+|---|---|---|
+| B1 | `slant = 0` is BYTE-IDENTICAL to the pre-slant library (pencil AND end-to-end) | G0a / G0b |
+| B2 | uniform layer + any slant is a no-op, M-ladder to machine precision | M1 / M1c |
+| B3 | the frame-anchor phase, BOTH signs, on the transmission Jones at oblique | M1b |
+| B4 | sheared-frame dispersion == `exact_kz_roots + t.alpha`, PLUS the two ablations (drop the six blocks / drop the congruence) | M2 |
+| B5 | y-uniform stripe == `pmm_efficiency_1d_slanted` per order, both pols, normal + oblique, slant 10/20/35 -- and the SIGN arm | M3 |
+| B6 | slant x OUT-OF-PLANE stripe == `pmm_jones_1d_slanted` per order | M7 |
+| B7 | census: split exactly `2q^2/2q^2`, `min Re(lam_f) >= 0`, no band-exceeding mode carrying flux | M5 |
+| B8 | closure does not grow with depth (0.25 / 1 / 3 lam) and `max fwd growth == 1.0` | M5 |
+| B9 | one layer of depth `d` == two of `d/2` at the same slant | M5 |
+| B10 | NO-FLOOR survives: the answer does not move with `n_orders` | M5 |
+| B11 | the mixed-slant refusal fires | (new) |
+
+B4 and B5 are the ones that cannot be replaced by an energy check: the lossless
+trap is the named hazard for slant work, and M4's own numbers show a staircase
+that conserves energy while sitting decades from the truth.
+
+### 6.4  Cost of the build
+
+| piece | size | risk |
+|---|---|---|
+| the congruence + the six blocks in `_assemble_oop` | ~40 lines | LOW -- every bracket already exists; `slant = 0` is bit-identical, which is a byte-level regression gate |
+| `slant=` through `add_layer` / the two entries + cache key | ~30 lines | LOW -- `any_oop` already promotes the cascade |
+| the frame-anchor phase in `solve` | ~6 lines | MEDIUM -- silent-wrong if omitted or mis-signed; gate B3 is mandatory |
+| the refusals | ~25 lines | LOW |
+| gates B1-B11 as tests | the eleven above | MEDIUM -- B4/B5/B6 need the oracles this probe already drives |
+
+No new module, no new basis function, no cascade change, no far-field change.
+
+---
+
+## 7.  Follow-ups this campaign did NOT do
+
+* `docs/PMM_ROADMAP.md` Phase D is left untouched (parallel agents are working
+  in other worktrees); the build should update Section 1's capability matrix
+  row "2-D slanted" and Section 4's Phase D entry, and record that the
+  "3.4x vs FMM" figure is an S-matrix-size ratio (S1.0), not a wall clock.
+* The Wood-anomaly `_eps_gr` question (S6.2 item 8).
+* `retain_internal` / `layer_absorption` under a slanted layer (S5).
+* A second BUILD for the numbers here, per `TESTING_STANDARDS.md` rule 5,
+  before any of them becomes a test bar.

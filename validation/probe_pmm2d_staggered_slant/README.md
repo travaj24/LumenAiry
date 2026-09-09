@@ -39,6 +39,7 @@ cd /c/tmp/lum_slantp && PYTHONPATH=/c/tmp/lum_slantp \
 | `m6_cost.py` | M6 -- per-region and end-to-end cost; the staircase-equivalence arithmetic (reads `results/m4b_staircase_ladder.json`) | S4.6 |
 | `m4c_hybrid_ladder.py` | M4c -- does the hybrid converge TOWARD the prototype as its Fourier truncation is lifted? | S4.4 |
 | `m4d_arbiter_xslant.py` | M4d -- the ARBITER for M4b's staircase plateau: hybrid ladder + prototype self-convergence on the same cell | S4.4 |
+| `m7c_hybrid_stripe_anomaly.py` | M7c -- disambiguates M7b's TypeError: all four hybrid in-plane tensor configurations solve fine (the error was probe-side) | S4.7 |
 | `m7b_hybrid_oop_slant.py` | M7b -- does the hybrid actually refuse slant x out-of-plane, at add_layer or at solve? | S4.7 |
 | `m7_slant_x_aniso.py` | M7 -- slant x anisotropy, incl. the slant x OUT-OF-PLANE combination the hybrid refuses | S4.7 |
 
