@@ -218,9 +218,16 @@ def test_the_layer_cutoff_nudge_is_consequential():
     the rule is a real decision and not a cosmetic one.
 
     Bar DERIVED from the run: ``1e3 * max|R| * eps_machine`` -- a thousand ULP
-    of the largest reflectance the same solve produces (2.6e-12 here).  The
-    signal measured 2026-09-10 (Win py3.14 / np2.4.4, OpenBLAS 1 thread) is
-    7.6e-09, i.e. ~2.9e3x above that floor; the comparison wavelength is
+    of the largest reflectance the same solve produces.  MEASURED 2026-09-10
+    (Win py3.14 / np2.4.4, OpenBLAS 1 thread): ``max|R|`` = 0.0115166, so the
+    floor is 2.5572e-15 and the asserted bar (100x it) is 2.5572e-13; the
+    signal is 7.6369e-09, i.e. 2.99e6x the floor and 2.99e4x the bar.
+    (Corrected 2026-09-10 by
+    ``docs/audits/VERIFY_WOOD_LIST_AND_FFFNV_2026_09_10.md`` section 5.1: this
+    paragraph read "2.6e-12 here" and "~2.9e3x", both a factor of 1e3 off the
+    floor the code actually computes.  The signal, the bar and the assertion
+    were and are correct -- only these two numbers were wrong.)  The
+    comparison wavelength is
     ``WL_CUT*(1 - 1e-9)``, which the guard leaves alone (its trigger band is
     ``|eps - kt^2| <= 1e-9``, ~1.2e-10 in relative wavelength), so this is the
     un-nudged answer the half-spaces-only rule used to return.
