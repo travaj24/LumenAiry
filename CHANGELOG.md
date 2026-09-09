@@ -45,9 +45,21 @@ BLOCK-FORM tensor `[[e11, e12, 0], [e21, e22, 0], [0, 0, e33]]`.
   absorption budget closes to 8.2e-8.  Zeroing any ONE of the three new terms
   (the Eq. 40 mixed masses, the Eq. 44 second `K_zt` term, the Eq. 25 `Lhh`
   mixed blocks) moves the Berreman residual by 11-12 decades, so none of them
-  is dead code.  A gyrotropic cell's +/- order asymmetry (the observable no
-  energy check can see) has the sign Granet's Table 2 reports, and REVERSES
-  if the paper's `exp(+i w t)` tensor is used without conjugation.
+  is dead code.
+* PUBLISHED ORACLE: all SIX reflected diffraction efficiencies of Li,
+  J. Opt. A **5**, 345 (2003), Example 1 / Table 1 -- the gyrotropic crossed
+  grating Granet 2023 re-uses as his Fig. 4 -- are reproduced to a maximum
+  deviation of **8.7e-5** at M=8 (M=7: 1.8e-4), inside the oracle's own
+  4-digit precision.  Interchanging the two tensors reproduces Li's published
+  SECOND row instead (1.8e-4) and misses the first by 1.3e-2, so the
+  `e12`/`e21` placement and the sign convention are pinned two-sided against
+  a published, labelled pair -- the observable no energy check can see.  Li's
+  values are already `exp(-i w t)`, so his tensors are used AS PRINTED; the
+  reading is documented in
+  `docs/audits/VERIFY_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md` (Granet's
+  restatement of the same geometry mislabels Li's substrate INDEX
+  `n = 1 + i5` as a permittivity and calls the tabulated REFLECTED orders
+  transmitted, which is why the paper's own text is not directly usable).
 * OUT-OF-PLANE tensors (`e_xz`/`e_yz`/`e_zx`/`e_zy` above a RELATIVE
   `1e-12 * scale` floor, shared with the hybrid so a rotated-diagonal tensor's
   ~1e-17 float noise is not mistaken for coupling) raise `NotImplementedError`

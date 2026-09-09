@@ -129,6 +129,37 @@ assigned exact zeros where `np.zeros` already put them.
 
 ### T2 -- G2 published oracle (Granet Table 2 / Fig. 4)
 
+> **CORRECTED 2026-09-09 by the independent verification** --
+> `docs/audits/VERIFY_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md` section 4.
+> **This section's VERDICT ("the absolute Table-2 values are NOT reproduced")
+> is WRONG, and so is the conclusion drawn from the gyrotropic-sign arm.**
+> Everything below is left as written -- the measurements are all
+> reproducible -- but read the correction first:
+>
+> * Granet's second example is Li, *J. Opt. A* **5**, 345 (2003), Example 1
+>   (his own text says the FMM values "correspond perfectly with those
+>   reported by Li"), and Granet's restatement of it carries two
+>   transcription errors this build followed: `1 - i5` is Li's refractive
+>   **INDEX** `n^(-1) = 1 + i5` (so `eps_sub = -24 + 10i`), and Li's Table 1
+>   lists the **REFLECTED** orders, not the transmitted ones (Li's Fig. 3
+>   caption, and the tabulated order set is exactly the vacuum superstrate's
+>   propagating set).  Under Li's reading this build reproduces all SIX
+>   published efficiencies to **8.74e-05** at M=8 -- inside the plan's 5e-4
+>   bar.  The efficiency-definition sweep below is moot: the oracle is a
+>   reflected set into vacuum.
+> * Li's values are already PUBLIC `exp(-i w t)`, so his tensors are used
+>   **unconjugated**.  The "gyrotropic sign discriminator" table below
+>   compares OUR `(1,1)`/`(-1,1)` against GRANET's labels, which are mirrored
+>   on one axis relative to Li's -- his `(1,1) = 0.0268` is Li's `(1,-1)`.
+>   The build's conjugation and that label mirror cancel, so the arm does not
+>   establish the bridge it claims to.  The `e12`/`e21` placement IS right
+>   (T7's swapped-block control, and now Li's two published rows both ways),
+>   but by a different argument.
+> * Open item 1 of section 5 ("G2 is not closed") is therefore CLOSED, with
+>   nothing tuned: Li's fill fractions are the stated 0.5/0.5 and were never
+>   varied.  The G2 tests were rewritten accordingly (commit `d87fee4`).
+
+
 Geometry read from the paper: `d_x = 2.4 lam`, `d_y = 1.4 lam` (the text's
 "d_y = 2.4, d_y = 1.4" is a typo), `w_x = 0.5 d_x`, `w_y = 0.5 d_y`,
 `h = lam`, vacuum cover, substrate `eps = 1 - 5i` (paper) -> `1 + 5i` (ours),
@@ -577,7 +608,13 @@ gets no unity claim at all.  It WARNS, never raises.
 
 ## 5. Open / not done
 
-1. **G2 is not closed.**  The published Table-2 magnitudes are not reproduced
+1. **G2 is not closed.**  *(CORRECTED 2026-09-09: it IS closed -- see
+   the correction banner on T2 and
+   `docs/audits/VERIFY_PMM2D_STAGGERED_ANISOTROPIC_2026_09_09.md`
+   section 4.  The reading was Li 2003 example 1, whose substrate is a
+   refractive INDEX and whose table lists the REFLECTED orders; all six
+   published values reproduce to 8.74e-05 at M=8, nothing tuned.  The
+   speculation below about fill fractions and normalization is void.)*  The published Table-2 magnitudes are not reproduced
    under any of the readings swept (T2).  The most likely remaining
    explanations, none of which this build can settle from the paper alone:
    the paper's Fig. 4 fill fractions may not be the 0.5/0.5 the text states
