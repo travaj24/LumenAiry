@@ -46,6 +46,19 @@ containing ANY out-of-plane layer runs the GENERALIZED S-matrix cascade
 throughout (uniform and in-plane layers and the half-spaces entering as
 ``[[W, W], [V, -V]]``).  ``retain_internal`` / :meth:`layer_absorption` work
 on that path too.  The half-spaces stay isotropic.
+
+A layer may also be MAGNETIC: ``add_layer(..., mu=scalar | (3,3))`` or
+``add_layer(..., mu_cell=(Nx,Ny) | (Nx,Ny,3,3))`` gives it a BLOCK-FORM
+relative permeability, which enters the SAME second-order pencil through
+Granet's ``chi_t = [mu_t]^-1`` weights (see
+:mod:`lumenairy.elements.pmm.twod_staggered`, "MAGNETIC media").  Any
+combination with the ``eps`` side is allowed -- a uniform eps with a patterned
+mu included -- and the uniform side is broadcast onto the union grid.  A
+magnetic layer takes its own region eig (it cannot ride the shared eps-free
+geometric one), deduped by ``(eps bytes, mu bytes)``.  Out-of-plane mu, mu with
+an out-of-plane eps, and MAGNETIC HALF-SPACES (``mu_superstrate`` /
+``mu_substrate``, which exist only to raise) are out of scope.  Losslessness --
+the closure tripwire's precondition -- means Hermitian eps AND Hermitian mu.
 (The historical 'A|B blows up energy' defect that once limited this class to a
 single patterned layer was NOT an interface/mode-sorting problem: it was the
 far-field projection-kernel order MIRROR in ``_stag_fourier_projection`` --
@@ -111,8 +124,11 @@ from .twod_staggered import (
     _pmm2d_project_orders,
     _region_modes,
     _region_modes_oop,
+    _require_inplane_mu,
+    _require_nonmagnetic_halfspace,
     _tile_needs_oop,
     _validate_stag_cell,
+    _validate_stag_mu,
     _wood_eps_reals,
 )
 
@@ -136,6 +152,34 @@ __all__ = ["PMM2DStackPure"]
 #: ``twod._PASSIVE_TOL_2D`` (5e-2), arrived at independently, which keeps the
 #: two 2-D engines' closure contracts comparable.
 _STAG_CLOSURE_TOL = 5.0e-2
+
+
+def _as_layer_cell(spec, uniform, Nx, Ny):
+    """A layer's ``eps`` / ``mu`` specification as a ``(Nx, Ny[, 3, 3])`` CELL
+    on the stack's union grid.
+
+    ``uniform`` distinguishes a ``(3, 3)`` UNIFORM tensor from a ``(3, 3)``
+    scalar GRID -- the two are shape-identical, so the flag (set by
+    :meth:`PMM2DStackPure.add_layer` from which keyword the caller used) is
+    what disambiguates them.  A uniform spec is broadcast to a constant cell,
+    which is what a magnetic or tensor region needs anyway: it takes its own
+    region eig rather than riding the shared eps-free geometric one."""
+    spec = np.asarray(spec, dtype=_C)
+    if not uniform:
+        return spec
+    if spec.ndim == 0:
+        return np.full((Nx, Ny), spec, dtype=_C)
+    return np.ascontiguousarray(np.broadcast_to(spec, (Nx, Ny, 3, 3)))
+
+
+def _spec_is_lossless(spec, uniform):
+    """True when a layer's ``eps`` / ``mu`` specification absorbs nothing:
+    exactly real if scalar, Hermitian if a ``(3, 3)`` tensor (per cell)."""
+    spec = np.asarray(spec, dtype=_C)
+    tensor = spec.ndim == 4 or (uniform and spec.ndim == 2)
+    if tensor:
+        return _tensor_is_hermitian(spec)
+    return not bool(np.any(np.imag(spec) != 0.0))
 
 
 def _tensor_is_hermitian(t):
@@ -169,6 +213,14 @@ def _stack_is_lossless(layers, eps_sup, eps_sub):
                 return False
         elif L["kind"] == "uniform_tensor":
             if not _tensor_is_hermitian(L["eps33"]):
+                return False
+        elif L["kind"] == "magnetic":
+            # A HERMITIAN permeability absorbs nothing either: losslessness of
+            # a magnetic medium is "eps Hermitian AND mu Hermitian" (the
+            # Poynting theorem's dissipation term carries both anti-Hermitian
+            # parts).  A real scalar mu != 1 is the isotropic case of that.
+            if not (_spec_is_lossless(L["eps"], L["eps_uniform"])
+                    and _spec_is_lossless(L["mu"], L["mu_uniform"])):
                 return False
         elif L["eps_cell"].ndim == 4:
             if not _tensor_is_hermitian(L["eps_cell"]):
@@ -228,7 +280,15 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
     """
 
     def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
-                 n_substrate=1.0, n_modes=8, degree=None, n_orders=7):
+                 n_substrate=1.0, n_modes=8, degree=None, n_orders=7,
+                 mu_superstrate=None, mu_substrate=None):
+        # The half-spaces are NONMAGNETIC (mu = 1) and isotropic: the Rayleigh
+        # far field normalises with the vacuum wave impedance.  Accepting the
+        # keyword and RAISING is the loud form of that restriction (a silently
+        # ignored mu would return efficiencies normalised for the wrong
+        # medium).
+        _require_nonmagnetic_halfspace("PMM2DStackPure", mu_superstrate,
+                                       mu_substrate)
         self.period_x = float(period_x)
         self.period_y = float(period_x if period_y is None else period_y)
         self.n_sup = complex(n_superstrate)
@@ -247,8 +307,10 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         self._internal = None      # partial cascades for layer_absorption (C3)
 
     # ------------------------------------------------------------------ build
-    def add_layer(self, thickness, *, eps=None, eps_cell=None):
-        """Append a layer.  Pass exactly ONE of ``eps`` or ``eps_cell``.
+    def add_layer(self, thickness, *, eps=None, eps_cell=None, mu=None,
+                  mu_cell=None):
+        """Append a layer.  Pass exactly ONE of ``eps`` or ``eps_cell``, and
+        at most one of ``mu`` (uniform) or ``mu_cell`` (patterned).
 
         ``eps`` is a UNIFORM layer: a scalar (isotropic) or a ``(3, 3)``
         BLOCK-FORM permittivity tensor (in-plane anisotropic --
@@ -267,7 +329,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         above a RELATIVE ``1e-12`` floor) routes that layer to the first-order
         ``4 q^2`` staggered generator and puts the WHOLE stack on the
         generalized cascade; ``e33 == 0`` raises (both ``E_z`` eliminations
-        divide by it)."""
+        divide by it).
+
+        ``mu`` / ``mu_cell`` make the layer MAGNETIC (Granet's ``chi_t =
+        [mu_t]^-1`` weights): a scalar, a ``(3, 3)`` BLOCK-FORM tensor
+        (``[[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]``), a ``(Nx, Ny)``
+        scalar grid or a ``(Nx, Ny, 3, 3)`` tensor grid.  Any combination with
+        the ``eps`` side is allowed (uniform eps + patterned mu included; the
+        uniform side is broadcast onto the union grid).  A magnetic layer takes
+        its own region eig -- it cannot ride the shared eps-free geometric one
+        -- and is deduped by ``(eps bytes, mu bytes)``.  OUT-OF-PLANE mu, and
+        mu together with an out-of-plane eps, raise ``NotImplementedError``
+        (the first-order generator has no permeability blocks)."""
         self._modal = None      # geometry change supersedes retained amplitudes
         self._internal = None
         if (eps is None) == (eps_cell is None):
@@ -277,6 +350,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         t = float(thickness)
         if not t > 0:
             raise ValueError("PMM2DStackPure.add_layer: thickness must be > 0.")
+        if mu is not None or mu_cell is not None:
+            return self._add_magnetic_layer(t, eps, eps_cell, mu, mu_cell)
         if eps is not None:
             e = np.asarray(eps, dtype=_C)
             if e.ndim == 0:
@@ -305,6 +380,76 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 f"Re-express every pattern on a common grid, or use "
                 f"PMM2DStackHybrid (no union-grid constraint).")
         self._layers.append(dict(kind="patterned", thickness=t, eps_cell=cell))
+        return self
+
+    def _add_magnetic_layer(self, t, eps, eps_cell, mu, mu_cell):
+        """The ``mu`` / ``mu_cell`` branch of :meth:`add_layer` (kept apart so
+        the NONMAGNETIC code path above is untouched, byte for byte).
+
+        Stores ONE layer record carrying both specifications plus the two
+        ``uniform`` flags that disambiguate a ``(3, 3)`` UNIFORM tensor from a
+        ``(3, 3)`` scalar GRID; :meth:`solve` broadcasts each onto the union
+        grid and hands the pair to :class:`Granet2DTransverseE`."""
+        if mu is not None and mu_cell is not None:
+            raise ValueError(
+                "PMM2DStackPure.add_layer: pass at most ONE of mu (uniform) "
+                "or mu_cell (patterned).")
+        fn = "PMM2DStackPure.add_layer"
+        oop_msg = (
+            "{0}: a MAGNETIC layer with an OUT-OF-PLANE eps is not "
+            "implemented -- the out-of-plane first-order generator carries no "
+            "permeability blocks.  Use a BLOCK-FORM eps with mu, or drop mu."
+        ).format(fn)
+        if eps is not None:
+            e = np.asarray(eps, dtype=_C)
+            if e.ndim == 0:
+                eps_spec, eps_uni = _C(eps), True
+            elif e.shape == (3, 3):
+                if _tile_needs_oop(fn, e[None, None]):
+                    raise NotImplementedError(oop_msg)
+                eps_spec, eps_uni = e, True
+            else:
+                raise ValueError(
+                    f"{fn}: a uniform eps must be a scalar or a (3, 3) "
+                    f"block-form tensor, got shape {e.shape}.")
+        else:
+            eps_spec = _validate_stag_cell(fn, eps_cell)
+            if eps_spec.ndim == 4 and _tile_needs_oop(fn, eps_spec):
+                raise NotImplementedError(oop_msg)
+            eps_uni = False
+        if mu is not None:
+            m = np.asarray(mu, dtype=_C)
+            if m.ndim == 0:
+                if m == 0:
+                    raise ValueError(f"{fn}: a uniform scalar mu must be "
+                                     f"nonzero (chi = 1/mu).")
+                mu_spec, mu_uni = _C(mu), True
+            elif m.shape == (3, 3):
+                _require_inplane_mu(fn, m[None, None])
+                mu_spec, mu_uni = m, True
+            else:
+                raise ValueError(
+                    f"{fn}: a uniform mu must be a scalar or a (3, 3) "
+                    f"block-form tensor, got shape {m.shape}.  A PATTERNED "
+                    f"magnetic layer goes through mu_cell.")
+        else:
+            mu_spec = _validate_stag_mu(fn, mu_cell)
+            mu_uni = False
+        # union grid: any PATTERNED side (eps_cell or mu_cell) registers it
+        for spec, uni in ((eps_spec, eps_uni), (mu_spec, mu_uni)):
+            if uni:
+                continue
+            grid = tuple(np.shape(spec)[:2])
+            if self._grid is None:
+                self._grid = grid
+            elif grid != self._grid:
+                raise ValueError(
+                    f"{fn}: all patterned layers must share ONE common "
+                    f"(Nx, Ny) grid (the union-grid constraint of the pure "
+                    f"staggered cascade); got {grid} after {self._grid}.")
+        self._layers.append(dict(kind="magnetic", thickness=t, eps=eps_spec,
+                                 eps_uniform=eps_uni, mu=mu_spec,
+                                 mu_uniform=mu_uni))
         return self
 
     def set_source(self, wavelength, *, theta=0.0, phi=0.0):
@@ -431,6 +576,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 W, V, lam = _homog_region_modes(geom, L["eps"])
                 six = _modes_as_general(W, V, lam)
             else:
+                mcell = None
                 if L["kind"] == "uniform_tensor":
                     # A uniform TENSOR region is NOT eps-free-separable (its
                     # div(D)=0 Schur term mixes e11/e21 while Meps33 carries
@@ -439,13 +585,22 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     # takes a full region eig, deduped like a patterned cell.
                     cell = np.ascontiguousarray(
                         np.broadcast_to(L["eps33"], (Nx, Ny, 3, 3)))
+                elif L["kind"] == "magnetic":
+                    # A MAGNETIC region is not eps-free-separable either (chi_t
+                    # and chi33 weight R, K_tz and S_tt), so it too takes its
+                    # own region eig on the union grid -- deduped on BOTH cells.
+                    cell = _as_layer_cell(L["eps"], L["eps_uniform"], Nx, Ny)
+                    mcell = _as_layer_cell(L["mu"], L["mu_uniform"], Nx, Ny)
                 else:
                     cell = L["eps_cell"]
-                key = (cell.shape, cell.tobytes())
+                key = ((cell.shape, cell.tobytes()) if mcell is None else
+                       (cell.shape, cell.tobytes(), mcell.shape,
+                        mcell.tobytes()))
                 cached = eig_cache.get(key)
                 if cached is None:
                     sol = Granet2DTransverseE(px, py, Nx, Ny, M, cell,
-                                              alpha0x=a0x, alpha0y=a0y, k0=k0)
+                                              alpha0x=a0x, alpha0y=a0y, k0=k0,
+                                              mu_cell=mcell)
                     if sol.offplane:
                         cached = _region_modes_oop(sol)
                     else:
