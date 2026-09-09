@@ -240,6 +240,27 @@ placement or a conjugation slip shows), both have `e33 != e11`, and conical
 incidence exercises the Bloch phases on both axes.  The Jones agrees WITHOUT
 any conjugation, confirming the PUBLIC-gauge claim end to end.
 
+### T3b -- G3 companion: each NEW term is LOAD-BEARING (fail-before)
+
+Probe `p18_fail_before.py`.  Same G3 residual (R, T and the complex Jones vs
+`berreman_jones_1d`), `(2,2)` grid, `M = 7`, conical `theta = 25 deg`,
+`phi = 40 deg`, with ONE new contribution zeroed at a time (class/module-level
+monkeypatch, no source edit).
+
+| arm | LC slab | gyrotropic slab |
+|---|---|---|
+| ALL TERMS PRESENT (reference) | 5.240e-14 | 5.884e-14 |
+| Eq. 40 MIXED masses -> 0 | **4.101e-02** | **7.749e-02** |
+| Eq. 44 SECOND `K_zt` term -> 0 | **5.697e-03** | **4.058e-02** |
+| Eq. 25 `Lhh` mixed blocks -> 0 | **1.049e-01** | **1.613e-01** |
+
+Every new term moves the tightest oracle in this build by 11-12 decades, so
+none of them is dead code and G3's 1e-14 is not an accident of a
+partially-correct operator.  This is the "right conclusion, wrong mechanism"
+guard the testing standards call the most dangerous shape; it is a test
+(`test_g3_each_new_tensor_term_is_load_bearing`), bar 1e-4 -- 1.7 decades
+under the smallest measured break and 10 decades over the reference.
+
 ### T4 -- G4 1-D reduction (y-uniform anisotropic stripe)
 
 Probe `p8` / `p14`.  Period 0.90 um, depth 0.30 um, wl 0.55 um, duty 0.5,
@@ -487,9 +508,9 @@ dimension is unchanged, which is why the tensor solve is not slower.
 
 ## 3. Tests run
 
-New file: `tests/unit/test_pmm2d_staggered_anisotropic.py` -- 34 tests
-(G1 x2, G2 x2, G3 x8 [6 parametrized + 2], G4 x3, G5 x2, G6 x3
-[2 parametrized + 1], G7 x3, G8 x2, G9 x1, G10 x5, tripwire x3).
+New file: `tests/unit/test_pmm2d_staggered_anisotropic.py` -- 37 tests
+(G1 x2, G2 x2, G3 x8 [6 parametrized + 2] + 3 fail-before, G4 x3, G5 x2,
+G6 x3 [2 parametrized + 1], G7 x3, G8 x2, G9 x1, G10 x5, tripwire x3).
 
 Measured durations of the slowest tests in the new file (`--durations`,
 single-threaded): 10.53 s `g5_three_engines`, 7.12 s `g3_multisegment`,

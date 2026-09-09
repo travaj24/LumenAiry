@@ -31,4 +31,5 @@ can never silently measure an installed wheel.
 | `p12_cost.py` | T12 | wall time, `tracemalloc` peak and the retained-operator inventory, scalar vs tensor at `(3,3)`/M=8 |
 | `p13_tripwire.py`, `p13b_tripwire.py`, `p13c_tripwire.py` | T11 | the search for an engineered LOSSLESS closure violation (contrast ladder, period/depth sweep, near-Rayleigh-cutoff route) |
 | `p14_test_numbers.py` | T2-T4, T7, T8, T10 | recomputes exactly the quantities the test file's bars cite, by importing the test module's own helpers -- so the doc and the assertions cannot drift |
+| `p18_fail_before.py` | T3b | ADVERSARIAL: zeroes each NEW term in turn (Eq.40 mixed masses, the Eq.44 second `K_zt` term, the Eq.25 `Lhh` mixed blocks) and re-measures the Berreman residual -- proof that none of them is dead code |
 | `p15_g8a_g9.py`, `p16_g9_ladder.py`, `p17_mirror.py` | T8, T9, T7 | the stack / absorption / mirror numbers at the test file's exact parameters |

@@ -268,6 +268,74 @@ def test_g3_multisegment_grid_gives_the_same_uniform_answer():
     assert _g3_residual(_LC, 3, 7, 25 * np.pi / 180, 40 * np.pi / 180) < 1e-11
 
 
+# --------------------------------------------------------------------------- #
+# G3 companion -- FAIL-BEFORE: each NEW term must be LOAD-BEARING.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("term", ["mass", "kzt", "lhh"])
+def test_g3_each_new_tensor_term_is_load_bearing(term, monkeypatch):
+    """Right-conclusion-wrong-mechanism guard.  Each of the three things the
+    tensor path adds is zeroed IN TURN (at the class / module level, no source
+    edit) and the G3 Berreman residual is re-measured.  A term that is not
+    load-bearing would leave that residual at its 1e-14 reference.
+
+    MEASURED 2026-09-09 (build doc T3b), (2,2) grid, M=7, conical
+    theta=25 deg / phi=40 deg, residual over R, T and the complex Jones:
+
+        arm                              LC slab      gyrotropic slab
+        all terms present (reference)    5.240e-14    5.884e-14
+        Eq.40 mixed masses  -> 0         4.101e-02    7.749e-02
+        Eq.44 second K_zt term -> 0      5.697e-03    4.058e-02
+        Eq.25 Lhh mixed blocks -> 0      1.049e-01    1.613e-01
+
+    Bar 1e-4 on the broken arm: 1.7 decades under the smallest measured break
+    (5.70e-03) and 10 decades over the reference -- so the assertion cannot be
+    satisfied by round-off drift in either direction.
+    """
+    import lumenairy.elements.pmm.stack2d_pure as SP
+    from lumenairy.elements.pmm import twod_staggered as TS
+
+    ew, ed, rm = (TS.Granet2DTransverseE._eps_weighted,
+                  TS.Granet2DTransverseE._eps_dir, TS._region_modes)
+
+    def no_mixed_mass(self, refx_pair, refy_pair, wmap=None):
+        out = ew(self, refx_pair, refy_pair, wmap)
+        # the Eq.40 MIXED blocks are the only ones whose 1-D set pairs differ
+        return np.zeros_like(out) if refx_pair[2] is not refx_pair[3] else out
+
+    def no_second_kzt(self, bx, lx, opx, rx, by, ly, opy, ry, wmap=None):
+        out = ed(self, bx, lx, opx, rx, by, ly, opy, ry, wmap)
+        # the second Eq.44 term per column carries the derivative on the OTHER
+        # axis than the shipped isotropic one
+        if (opx, rx, opy, ry) in (("m", "B", "dL", "Btilde"),
+                                  ("dL", "Btilde", "m", "B")):
+            return np.zeros_like(out)
+        return out
+
+    def no_lhh_mixed(solver):
+        saved, solver.Et_offdiag = solver.Et_offdiag, None
+        try:
+            return rm(solver)
+        finally:
+            solver.Et_offdiag = saved
+
+    if term == "mass":
+        monkeypatch.setattr(TS.Granet2DTransverseE, "_eps_weighted",
+                            no_mixed_mass)
+    elif term == "kzt":
+        monkeypatch.setattr(TS.Granet2DTransverseE, "_eps_dir", no_second_kzt)
+    else:
+        monkeypatch.setattr(TS, "_region_modes", no_lhh_mixed)
+        # stack2d_pure imported the name by value
+        monkeypatch.setattr(SP, "_region_modes", no_lhh_mixed)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        broken = max(_g3_residual(t33, 2, 7, 25 * np.pi / 180,
+                                  40 * np.pi / 180)
+                     for t33 in (_LC, _GYRO))
+    assert broken > 1e-4, (term, broken)
+
+
 # =========================================================================== #
 # G4 -- 1-D REDUCTION: a y-uniform anisotropic stripe grating against the two
 #       independent 1-D engines, PER ORDER, both polarizations, plus Jones.
