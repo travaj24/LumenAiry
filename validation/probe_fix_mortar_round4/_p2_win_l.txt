@@ -1,0 +1,6 @@
+  oracle self-gap (12 -> 14) = 1.491151e-05
+  M=5 e_ord=8.333039e-02 e_band=1.342166e-01 ratio=1.6107 (8.8 s)
+  M=6 e_ord=2.262084e-02 e_band=3.507489e-02 ratio=1.5506 (43.3 s)
+  M=7 e_ord=5.225545e-03 e_band=8.558415e-03 ratio=1.6378 (120.9 s)
+  M=8 e_ord=4.678401e-04 e_band=2.252256e-03 ratio=4.8142 (326.8 s)
+wrote C:\tmp\lum_mortar4\validation\probe_fix_mortar_round4\p2_durability_win_ladder.json

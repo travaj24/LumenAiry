@@ -1,0 +1,49 @@
+{
+ "l": {
+  "rows": [
+   {
+    "M": 5,
+    "e_band": 0.1342165525362185,
+    "e_ord": 0.08333038587138167,
+    "ratio": 1.6106555985877509,
+    "seconds_band": 4.36,
+    "seconds_ord": 3.17,
+    "warn_band": 1,
+    "warn_ord": 0
+   },
+   {
+    "M": 6,
+    "band_fall": 3.8265703452474633,
+    "e_band": 0.035074894860593175,
+    "e_ord": 0.02262084403372494,
+    "ord_fall": 3.6837876494416455,
+    "ord_step": 0.06070954183765673,
+    "ratio": 1.5505564163875032,
+    "seconds_band": 24.16,
+    "seconds_ord": 24.41,
+    "warn_band": 1,
+    "warn_ord": 0
+   },
+   {
+    "M": 7,
+    "band_fall": 4.098293177343339,
+    "e_band": 0.008558415257965996,
+    "e_ord": 0.005225545068673218,
+    "ord_fall": 4.328896552693678,
+    "ord_step": 0.017395298965051723,
+    "ratio": 1.6378033574474564,
+    "seconds_band": 60.72,
+    "seconds_ord": 60.38,
+    "warn_band": 1,
+    "warn_ord": 0
+   }
+  ],
+  "self_gap": 1.4911507085352271e-05
+ },
+ "l_seconds": 178.1,
+ "lumenairy": "/mnt/c/tmp/lum_mortar4/lumenairy/__init__.py",
+ "numpy": "2.4.6",
+ "python": "3.12.3",
+ "tag": "wsl_ladder",
+ "version": "5.44.0"
+}

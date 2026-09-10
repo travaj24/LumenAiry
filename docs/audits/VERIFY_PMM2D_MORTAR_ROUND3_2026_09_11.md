@@ -498,6 +498,16 @@ and `validation/probe_verify_mortar_round3/v1_mechanism.py` rows
 **Remedy** one word in three places: "whenever EXACTLY ONE side of the
 interface is an in-plane region promoted".
 
+> **CLOSED 2026-09-11 by ROUND 4**
+> (`docs/audits/FIX_PMM2D_MORTAR_ROUND4_2026_09_11.md` S3).  The wording is
+> corrected in the constant, in `_guarded_mortar_solve`'s docstring, in the
+> site comment and in the refusal MESSAGE, and in the round-3 fix doc and the
+> CHANGELOG as dated CORRECTION notes.  The population behind it was re-made
+> over 33 operands on both builds: one-promoted spread 1.3735e-08 ..
+> 2.6587e-07, both-promoted 0.4442 .. 0.6218, neither-promoted 0.3777 ..
+> 0.9902.  This gate's own `max(f_both.on) < 0.95` bar, which S14 flags, is
+> re-derived there as a SPREAD comparison.
+
 ### DEFECT 2 (P3, false positive) -- the band warning names an axis that carries no mortar
 
 **Where** `lumenairy/elements/pmm/twod_staggered.py::_warn_stag_sliver_band`
@@ -550,6 +560,17 @@ only over grids whose x wall arrays are not all equal, and likewise for y.
 `_stag_band_narrowest` already walks `(("x", g.bx), ("y", g.by))`, so the fix
 is to pass it two booleans instead of one, derived where `_solve_per_layer`
 already computes `len({g.key() for g in gof}) > 1`.
+
+> **CLOSED 2026-09-11 by ROUND 4**
+> (`docs/audits/FIX_PMM2D_MORTAR_ROUND4_2026_09_11.md` S4), by exactly that
+> remedy: `_stag_mortared_axes(grids, force)` returns the `(x, y)` pair and
+> `_stag_band_narrowest(grids, axes)` searches only live axes.  Measured
+> two-sidedly against round 3's own rule, run in the SAME interpreter: 801
+> leaves compared on each build, **0 answer-hash differences, 0 other
+> differences, 23 warning differences**, every one of them this false positive
+> stopping or the correct axis being named.  The reproducer named above is
+> RE-PINNED to the fixed behaviour and renamed
+> `test_the_band_warning_does_not_fire_on_an_axis_that_carries_no_mortar`.
 
 ### NOT DEFECTS -- three candidates raised and refuted
 
@@ -1037,6 +1058,17 @@ literal: the only fixed numbers are the library's own constants, the geometry,
 the band widths (inputs), and the two SAMPLE-scoped bars called out above.
 The one measured reading recorded in the file (`R00` at `M` = 7) is in a
 comment and is explicitly not asserted, as the fix says.
+
+> **CLOSED 2026-09-11 by ROUND 4**
+> (`docs/audits/FIX_PMM2D_MORTAR_ROUND4_2026_09_11.md` S5).  Both bars below
+> are restated family-scoped.  `max(ctrl.on) < 0.95` becomes a SPREAD
+> comparison (`min(on)/max(on)`, re-measured on BOTH sides each run) with 3.6
+> decades / 1.5e+04x / 3.8x of margin over a 33-operand population; the
+> `M` = 6 ratio bar becomes a two-rung assertion with the ordinary arm's
+> convergence VERIFIED from the ladder itself (`e_ord(6) < 0.5 e_ord(5)`,
+> measured 0.271).  The census's 3x is recorded at its real 1.67x in
+> `_STAG_SLIVER_BAND_FRAC`'s comment and gated at 1.25x over the wider
+> 47-geometry census.
 
 **Two observations for the next round, neither ship-blocking.**
 

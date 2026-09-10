@@ -9,8 +9,12 @@ Fix doc: ``docs/audits/FIX_PMM2D_MORTAR_ROUND3_2026_09_11.md``.
     :func:`~lumenairy.elements.pmm._core._interface_smatrix_general_mortar_2d`
     -- the ``4 qq x 4 qq`` block solve an OUT-OF-PLANE tensor or a SLANTED
     per-layer layer takes.  THAT SITE'S OPERAND IS RANK-DEFICIENT BY
-    CONSTRUCTION whenever one side is an in-plane region promoted to the
-    6-tuple general form, so ordinary mixed in-plane / out-of-plane stacks were
+    CONSTRUCTION whenever EXACTLY ONE side is an in-plane region promoted to
+    the 6-tuple general form (ROUND 4 CORRECTION, 2026-09-11: round 3 wrote
+    "whenever one side", read as "either side"; with BOTH sides promoted the
+    operand is healthy -- see
+    ``tests/unit/test_fix_pmm2d_mortar_round4.py``), so ordinary mixed
+    in-plane / out-of-plane stacks were
     REFUSED from ``n_modes`` = 5 up -- including an out-of-plane layer next to
     a plain uniform spacer.  Fixed by giving that site its OWN decision, on the
     RESIDUAL (:data:`~lumenairy.elements.pmm._core._MORTAR_RESID_REFUSE`),
@@ -224,6 +228,20 @@ def _svd_facts(A, B, ma):
         n=n)
 
 
+def _spread(f):
+    """``min(on_a, on_b) / max(on_a, on_b)`` -- how far the near-null right
+    singular vector is SHARED between the two block columns.  1.0 = perfectly
+    shared, 0.0 = entirely on one side.
+
+    ROUND 4 (2026-09-11).  This replaces a fixed 0.95 on the control's
+    ``max(on)``, which was SAMPLE-scoped: it left 0.015 of slack against a
+    legitimate neighbouring control (an out-of-plane tensor that is in-plane to
+    1e-9 reads 0.935).  The spread is scale-free and is re-measured on BOTH
+    sides of every comparison that uses it."""
+    lo, hi = min(f["on_a"], f["on_b"]), max(f["on_a"], f["on_b"])
+    return lo / hi if hi > 0 else 1.0
+
+
 def _round2_module():
     """The ROUND-2 gate file's geometry battery, loaded BY PATH.
 
@@ -275,6 +293,11 @@ def test_the_generalized_operand_is_rank_deficient_on_the_promoted_side():
         ``s_min/s_max`` = 2.888e-03 and the near-null vector is SPREAD --
         0.643 / 0.766 -- i.e. not localised at all;
       * the residual of the mixed answer is 8.13e-15 (WIN) / 8.71e-15 (WSL).
+
+    ROUND 4 (2026-09-11) restates the CONTROL's bar family-scoped, on the
+    SPREAD ``min(on) / max(on)`` rather than on a fixed 0.95: see
+    :func:`_spread`, and ``docs/audits/FIX_PMM2D_MORTAR_ROUND4_2026_09_11.md``
+    for the 33-operand population it is derived from.
     """
     with _CaptureGeneralized() as cap:
         _solve(_mixed("pattern", 4))
@@ -298,7 +321,28 @@ def test_the_generalized_operand_is_rank_deficient_on_the_promoted_side():
     # side and 0.18 on the other.
     assert max(mixed["on_a"], mixed["on_b"]) > 0.95, mixed
     assert min(mixed["on_a"], mixed["on_b"]) < 0.05, mixed
-    assert max(ctrl["on_a"], ctrl["on_b"]) < 0.95, ctrl
+    # (2b) the CONTROL must not localise -- and that is now asserted on the
+    # SPREAD, ``min(on) / max(on)``, against the MIXED operand's own spread
+    # rather than against a fixed 0.95.  ROUND 4 (2026-09-11, S14 of
+    # ``docs/audits/VERIFY_PMM2D_MORTAR_ROUND3_2026_09_11.md``): the round-3
+    # form ``max(ctrl.on) < 0.95`` is SAMPLE-scoped -- it carries 0.12 on this
+    # fixture but only **0.015** on a legitimate neighbouring one (an
+    # out-of-plane tensor that is in-plane to 1e-9 reads 0.935), so a control
+    # fixture nobody would call defective can fail it.  The spread is
+    # scale-free and both sides of the comparison are re-measured every run.
+    # MEASURED over 33 operands on both builds
+    # (``validation/probe_fix_mortar_round4/p2_durability_{win,wsl}.json``):
+    # 21 one-promoted operands read 1.37e-08 .. 2.66e-07, the 9
+    # neither-promoted controls 0.378 .. 0.990 and the 3 both-promoted ones
+    # 0.444 .. 0.622 -- SIX decades of separation, and the worst control sits
+    # 3.8x over the 0.1 floor below.  On THIS gate's own two fixtures the
+    # readings are 5.4975e-08 (mixed) and 8.3922e-01 (control), so the three
+    # bars carry 4.3 decades, 1.5e+04x and 8.4x of measured margin.
+    s_mixed = _spread(mixed)
+    s_ctrl = _spread(ctrl)
+    assert s_mixed < 1e-3, (s_mixed, mixed)
+    assert s_ctrl > 1e3 * s_mixed, (s_ctrl, s_mixed)
+    assert s_ctrl > 0.1, (s_ctrl, ctrl)
     # (3) the system is CONSISTENT anyway: the answer's residual is ordinary
     # backward stability (8.1e-15 / 8.7e-15 measured), 8 decades under the
     # shipped bar, while a CONDITION estimate says the operand has no digits.
@@ -646,13 +690,24 @@ def test_no_ordinary_geometry_the_library_builds_lands_in_the_band():
     """The FALSE-POSITIVE census, re-run on the running build.
 
     The band's upper edge is a DERIVED bar and this is the constraint that
-    binds it: the narrowest segment ANY ordinary per-layer geometry the library
-    builds asks for must stay clear of it.  MEASURED 2026-09-11 over every
-    geometry class the round-2 battery constructs (single wall, duty-1/3,
-    conforming, non-conforming, differing axes, nested refinement, both taper
-    builders at 4..64 slices): the worst is **1.0937e-01**, which is 3.6x above
-    the 3e-2 edge.  Asserted at 3x, i.e. with the measured margin stated and
-    1.2x of slack over the assertion."""
+    binds it: the narrowest segment ordinary per-layer geometries ask for must
+    stay clear of it.  MEASURED 2026-09-11 over every geometry class the
+    ROUND-2 BATTERY constructs (single wall, duty-1/3, conforming,
+    non-conforming, differing axes, nested refinement, both taper builders at
+    4..64 slices): the worst is **1.0937e-01**, which is 3.6x above the 3e-2
+    edge.  Asserted at 3x, i.e. with the measured margin stated and 1.2x of
+    slack over the assertion.
+
+    **SCOPE, corrected 2026-09-11 (ROUND 4; VERIFY round 3 S11.1 / S14).**  The
+    3.6x is a property of THIS BATTERY, not of the library: the battery
+    contains no high-duty pillar and no fine uniform lattice.  Over a wider
+    47-geometry census the narrowest ORDINARY geometry is **5.0000e-02, a
+    duty-0.9 pillar**, which is only **1.67x** above the edge, and a 16-cell
+    uniform lattice is 2.08x.  0 ordinary geometries still land in the band on
+    either build, so the edge stands -- but the family claim belongs to
+    ``tests/unit/test_fix_pmm2d_mortar_round4.py::
+    test_no_ordinary_geometry_lands_in_the_band_on_a_mortared_axis``, which
+    runs the wider census at 1.25x, not to this battery-scoped 3x."""
     r2 = _round2_module()
     _narrowest, battery = r2._narrowest, r2._shipped_geometry_battery()
     edge = _ts._STAG_SLIVER_BAND_FRAC
@@ -664,6 +719,10 @@ def test_no_ordinary_geometry_the_library_builds_lands_in_the_band():
     closing = {k for k in battery if k.startswith("closing_taper")}
     ordinary = {k: v for k, v in battery.items() if k not in closing}
     worst = min(_narrowest(st) for st in ordinary.values())
+    # BATTERY-scoped (see the docstring's ROUND-4 correction): 3x holds over
+    # the round-2 battery, whose worst is 1.0937e-01.  The FAMILY claim is
+    # gated at 1.25x over the wider census in
+    # tests/unit/test_fix_pmm2d_mortar_round4.py.
     assert worst > 3.0 * edge, (worst, edge,
                                 {k: _narrowest(v) for k, v in ordinary.items()})
     # and the same census, driven through solve() on the two ORDINARY classes
@@ -729,6 +788,31 @@ def test_the_band_the_warning_names_carries_a_measurable_cost():
     grid, so the GATE runs the ``M`` = 6 rung and asserts the DECISION -- the
     band costs accuracy, by more than the oracle can be wrong -- while the
     full ladder lives in the probe.
+
+    **ROUND 4 (2026-09-11), S14 of the round-3 verification.**  The ratio at a
+    SINGLE modal rung is fixture-sensitive by construction: it is contaminated
+    whenever the ORDINARY arm has not converged, and the verification's own
+    independent fixture reads 1.30 at 3e-3 and **0.18** at 1.5e-1 for exactly
+    that reason.  So the gate no longer takes its decision on one rung it
+    assumes is clean.  It runs ``M`` = 5 AND 6, VERIFIES from the ladder itself
+    that the ordinary arm is still falling (so the baseline is a measurement
+    and not a floor), and requires the ratio at BOTH rungs.  RE-MEASURED here
+    2026-09-11 on both builds
+    (``validation/probe_fix_mortar_round4/p2_durability_*.json``):
+
+    ====  ==========  ==========  =====
+    ``M``  err(3e-01)  err(3e-03)  ratio
+    ====  ==========  ==========  =====
+    5     8.3330e-02  1.3422e-01  1.611
+    6     2.2621e-02  3.5075e-02  1.551
+    7     5.2255e-03  8.5584e-03  1.638
+    ====  ==========  ==========  =====
+
+    The ordinary arm falls 3.68x from ``M`` = 5 to 6 and 4.33x from 6 to 7, so
+    it is converging on this fixture at every rung the gate can afford; ``M``
+    = 7 is 121 s a rung and stays in the probe.  Adding the ``M`` = 5 rung
+    takes this gate from 30 s to **54 s** -- paid on purpose, because the bar
+    it protects was the thinnest in the file.
     """
     from lumenairy.elements.pmm import PMMStack  # noqa: PLC0415
     per, wl, th = 0.93, 0.66, 0.19
@@ -781,12 +865,24 @@ def test_the_band_the_warning_names_carries_a_measurable_cost():
                         abs(float(T[1, sel]) - float(T14[1, j])))
         return worst
 
-    e_ord = _err(3.0e-1)                    # an ORDINARY partition
-    e_band = _err(3.0e-3)                   # inside the band the warning names
-    # the oracle must be far better than the difference being claimed
-    assert self_gap < 0.05 * abs(e_band - e_ord), (self_gap, e_ord, e_band)
-    # the DECISION: the band costs accuracy on a device that cannot depend on
-    # the wall separation.  MEASURED ratio 1.55 at M = 6 (4.81 at M = 8);
-    # asserted at 1.15, i.e. with 1.35x of margin on a quantity whose
-    # cross-build spread is a discretisation round-off.
-    assert e_band > 1.15 * e_ord, (e_band, e_ord, self_gap)
+    ladder = {M: (_err(3.0e-1, M), _err(3.0e-3, M)) for M in (5, 6)}
+    e_ord, e_band = ladder[6]               # ORDINARY partition / in the band
+    # (1) the oracle must be far better than the difference being claimed.
+    # MEASURED self-gap 1.4912e-05 against a 1.2454e-02 difference = 840x;
+    # asserted at 20x.
+    assert self_gap < 0.05 * abs(e_band - e_ord), (self_gap, ladder)
+    # (2) PRECONDITION, taken from the ladder rather than assumed: the ORDINARY
+    # arm must still be FALLING with the modal count, or the baseline is a
+    # floor and the ratio below is contaminated -- which is exactly how the
+    # verification's independent fixture produced a ratio of 0.18 at M = 6.
+    # MEASURED 2.2621e-02 / 8.3330e-02 = 0.271 (a 3.68x fall); asserted at
+    # 0.5, i.e. 1.84x of margin.
+    assert ladder[6][0] < 0.5 * ladder[5][0], ladder
+    # (3) the DECISION, at BOTH rungs the gate can afford: the band costs
+    # accuracy on a device that cannot depend on the wall separation.
+    # MEASURED ratios 1.611 (M = 5) and 1.551 (M = 6) on both builds -- and
+    # 1.638 at M = 7 and 4.81 at M = 8 in the probe, which the gate does not
+    # run.  Asserted at 1.15, i.e. with 1.35x of margin on the WORST rung, of a
+    # quantity whose cross-build spread is a discretisation round-off.
+    for M, (eo, eb) in sorted(ladder.items()):
+        assert eb > 1.15 * eo, (M, eb, eo, self_gap, ladder)

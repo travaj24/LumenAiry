@@ -1,0 +1,218 @@
+=== round3 part a ===
+round3 part a: 41.83 s
+=== round3 part b ===
+round3 part b: 18.26 s
+=== round3 part c ===
+round3 part c: 1.45 s
+=== round3 part d ===
+  census uniform_lattice_N1         narrowest=1.0000e+00 
+  census uniform_lattice_N2         narrowest=5.0000e-01 
+  census uniform_lattice_N3         narrowest=3.3333e-01 
+  census uniform_lattice_N4         narrowest=2.5000e-01 
+  census uniform_lattice_N6         narrowest=1.6667e-01 
+  census uniform_lattice_N8         narrowest=1.2500e-01 
+  census uniform_lattice_N12        narrowest=8.3333e-02 
+  census uniform_lattice_N16        narrowest=6.2500e-02 
+  census duty_0.100                 narrowest=1.0000e-01 
+  census duty_0.200                 narrowest=2.0000e-01 
+  census duty_0.333                 narrowest=3.3333e-01 
+  census duty_0.500                 narrowest=2.5000e-01 
+  census duty_0.700                 narrowest=1.5000e-01 
+  census duty_0.900                 narrowest=5.0000e-02 
+  census nested_refinement          narrowest=1.2500e-01 
+  census two_pillars                narrowest=1.0000e-01 
+  census taper_straight_4           narrowest=2.5625e-01 
+  census taper_closing_4            narrowest=6.2500e-02 
+  census taper_straight_8           narrowest=2.5312e-01 
+  census taper_closing_8            narrowest=3.1250e-02 
+  census taper_straight_16          narrowest=2.5156e-01 
+  census taper_closing_16           narrowest=1.5625e-02 IN BAND
+  census taper_straight_32          narrowest=2.5078e-01 
+  census taper_closing_32           narrowest=7.8125e-03 IN BAND
+  census taper_straight_64          narrowest=2.5039e-01 
+  census taper_closing_64           narrowest=3.9062e-03 IN BAND
+  census taper_straight_128         narrowest=2.5020e-01 
+  census taper_closing_128          narrowest=1.9531e-03 IN BAND
+  census tapered_pillars_4          narrowest=1.4750e-01 
+  census tapered_pillars_8          narrowest=1.4375e-01 
+  census tapered_pillars_16         narrowest=1.4187e-01 
+  census tapered_pillars_32         narrowest=1.4094e-01 
+  r2:axes_differ               narrowest=2.1000e-01 mortared=1.0000e+00 live=(False, False) eig=162
+  r2:closing_taper_n32         narrowest=8.0094e-03 mortared=8.0094e-03 live=(True, True) eig=162
+  r2:closing_taper_n64         narrowest=4.1047e-03 mortared=4.1047e-03 live=(True, True) eig=162
+  r2:closing_taper_n8          narrowest=3.1438e-02 mortared=3.1438e-02 live=(True, True) eig=162
+  r2:conforming                narrowest=2.3710e-01 mortared=1.0000e+00 live=(False, False) eig=162
+  r2:duty_third                narrowest=3.3333e-01 mortared=1.0000e+00 live=(False, False) eig=162
+  r2:nested                    narrowest=1.2500e-01 mortared=1.2500e-01 live=(True, True) eig=450
+  r2:non_conforming            narrowest=2.3710e-01 mortared=2.3710e-01 live=(True, True) eig=162
+  r2:single_wall               narrowest=4.0000e-01 mortared=1.0000e+00 live=(False, False) eig=72
+  r2:taper_n16                 narrowest=1.9056e-01 mortared=1.9056e-01 live=(True, True) eig=162
+  r2:taper_n32                 narrowest=1.8893e-01 mortared=1.8893e-01 live=(True, True) eig=162
+  r2:taper_n4                  narrowest=2.0035e-01 mortared=2.0035e-01 live=(True, True) eig=162
+  r2:taper_n64                 narrowest=1.8812e-01 mortared=1.8812e-01 live=(True, True) eig=162
+  r2:taper_n8                  narrowest=1.9382e-01 mortared=1.9382e-01 live=(True, True) eig=162
+  r2:tapered_pillars           narrowest=1.7333e-01 mortared=1.7333e-01 live=(True, True) eig=162
+  v3:uniform_lattice_N1        narrowest=1.0000e+00 mortared=1.0000e+00 live=(False, False) eig=18
+  v3:uniform_lattice_N2        narrowest=5.0000e-01 mortared=5.0000e-01 live=(True, True) eig=72
+  v3:uniform_lattice_N3        narrowest=3.3333e-01 mortared=3.3333e-01 live=(True, True) eig=162
+  v3:uniform_lattice_N4        narrowest=2.5000e-01 mortared=2.5000e-01 live=(True, True) eig=288
+  v3:uniform_lattice_N6        narrowest=1.6667e-01 mortared=1.6667e-01 live=(True, True) eig=648
+  v3:uniform_lattice_N8        narrowest=1.2500e-01 mortared=1.2500e-01 live=(True, True) eig=1152
+  v3:uniform_lattice_N12       narrowest=8.3333e-02 mortared=8.3333e-02 live=(True, True) eig=2592
+  v3:uniform_lattice_N16       narrowest=6.2500e-02 mortared=6.2500e-02 live=(True, True) eig=4608
+  v3:duty_0.100                narrowest=1.0000e-01 mortared=1.0000e-01 live=(True, True) eig=162
+  v3:duty_0.200                narrowest=2.0000e-01 mortared=2.0000e-01 live=(True, True) eig=162
+  v3:duty_0.333                narrowest=3.3333e-01 mortared=3.3333e-01 live=(True, True) eig=162
+  v3:duty_0.500                narrowest=2.5000e-01 mortared=2.5000e-01 live=(True, True) eig=162
+  v3:duty_0.700                narrowest=1.5000e-01 mortared=1.5000e-01 live=(True, True) eig=162
+  v3:duty_0.900                narrowest=5.0000e-02 mortared=5.0000e-02 live=(True, True) eig=162
+  v3:nested_refinement         narrowest=1.2500e-01 mortared=1.2500e-01 live=(True, True) eig=450
+  v3:two_pillars               narrowest=1.0000e-01 mortared=1.0000e-01 live=(True, True) eig=450
+  v3:taper_straight_4          narrowest=2.5625e-01 mortared=2.5625e-01 live=(True, True) eig=162
+  v3:taper_closing_4           narrowest=6.2500e-02 mortared=6.2500e-02 live=(True, True) eig=162
+  v3:taper_straight_8          narrowest=2.5312e-01 mortared=2.5312e-01 live=(True, True) eig=162
+  v3:taper_closing_8           narrowest=3.1250e-02 mortared=3.1250e-02 live=(True, True) eig=162
+  v3:taper_straight_16         narrowest=2.5156e-01 mortared=2.5156e-01 live=(True, True) eig=162
+  v3:taper_closing_16          narrowest=1.5625e-02 mortared=1.5625e-02 live=(True, True) eig=162
+  v3:taper_straight_32         narrowest=2.5078e-01 mortared=2.5078e-01 live=(True, True) eig=162
+  v3:taper_closing_32          narrowest=7.8125e-03 mortared=7.8125e-03 live=(True, True) eig=162
+  v3:taper_straight_64         narrowest=2.5039e-01 mortared=2.5039e-01 live=(True, True) eig=162
+  v3:taper_closing_64          narrowest=3.9062e-03 mortared=3.9062e-03 live=(True, True) eig=162
+  v3:taper_straight_128        narrowest=2.5020e-01 mortared=2.5020e-01 live=(True, True) eig=162
+  v3:taper_closing_128         narrowest=1.9531e-03 mortared=1.9531e-03 live=(True, True) eig=162
+  v3:tapered_pillars_4         narrowest=1.4750e-01 mortared=1.4750e-01 live=(True, True) eig=450
+  v3:tapered_pillars_8         narrowest=1.4375e-01 mortared=1.4375e-01 live=(True, True) eig=450
+  v3:tapered_pillars_16        narrowest=1.4187e-01 mortared=1.4187e-01 live=(True, True) eig=450
+  v3:tapered_pillars_32        narrowest=1.4094e-01 mortared=1.4094e-01 live=(True, True) eig=450
+  SOLVED v3:duty_0.900              warn=0 0.423 s
+  SOLVED v3:two_pillars             warn=0 13.233 s
+  SOLVED v3:duty_0.100              warn=0 0.445 s
+  SOLVED r2:nested                  warn=0 46.137 s
+  SOLVED v3:uniform_lattice_N8      warn=0 197.402 s
+  SOLVED v3:nested_refinement       warn=0 13.96 s
+  SOLVED v3:tapered_pillars_8       warn=0 45.458 s
+  SOLVED v3:tapered_pillars_4       warn=0 29.522 s
+round3 part d: 347.89 s
+=== round4 part a ===
+round4 part a: 44.24 s
+=== round4 part b ===
+round4 part b: 18.27 s
+=== round4 part c ===
+round4 part c: 1.78 s
+=== round4 part d ===
+  census uniform_lattice_N1         narrowest=1.0000e+00 
+  census uniform_lattice_N2         narrowest=5.0000e-01 
+  census uniform_lattice_N3         narrowest=3.3333e-01 
+  census uniform_lattice_N4         narrowest=2.5000e-01 
+  census uniform_lattice_N6         narrowest=1.6667e-01 
+  census uniform_lattice_N8         narrowest=1.2500e-01 
+  census uniform_lattice_N12        narrowest=8.3333e-02 
+  census uniform_lattice_N16        narrowest=6.2500e-02 
+  census duty_0.100                 narrowest=1.0000e-01 
+  census duty_0.200                 narrowest=2.0000e-01 
+  census duty_0.333                 narrowest=3.3333e-01 
+  census duty_0.500                 narrowest=2.5000e-01 
+  census duty_0.700                 narrowest=1.5000e-01 
+  census duty_0.900                 narrowest=5.0000e-02 
+  census nested_refinement          narrowest=1.2500e-01 
+  census two_pillars                narrowest=1.0000e-01 
+  census taper_straight_4           narrowest=2.5625e-01 
+  census taper_closing_4            narrowest=6.2500e-02 
+  census taper_straight_8           narrowest=2.5312e-01 
+  census taper_closing_8            narrowest=3.1250e-02 
+  census taper_straight_16          narrowest=2.5156e-01 
+  census taper_closing_16           narrowest=1.5625e-02 IN BAND
+  census taper_straight_32          narrowest=2.5078e-01 
+  census taper_closing_32           narrowest=7.8125e-03 IN BAND
+  census taper_straight_64          narrowest=2.5039e-01 
+  census taper_closing_64           narrowest=3.9062e-03 IN BAND
+  census taper_straight_128         narrowest=2.5020e-01 
+  census taper_closing_128          narrowest=1.9531e-03 IN BAND
+  census tapered_pillars_4          narrowest=1.4750e-01 
+  census tapered_pillars_8          narrowest=1.4375e-01 
+  census tapered_pillars_16         narrowest=1.4187e-01 
+  census tapered_pillars_32         narrowest=1.4094e-01 
+  r2:axes_differ               narrowest=2.1000e-01 mortared=1.0000e+00 live=(False, False) eig=162
+  r2:closing_taper_n32         narrowest=8.0094e-03 mortared=8.0094e-03 live=(True, True) eig=162
+  r2:closing_taper_n64         narrowest=4.1047e-03 mortared=4.1047e-03 live=(True, True) eig=162
+  r2:closing_taper_n8          narrowest=3.1438e-02 mortared=3.1438e-02 live=(True, True) eig=162
+  r2:conforming                narrowest=2.3710e-01 mortared=1.0000e+00 live=(False, False) eig=162
+  r2:duty_third                narrowest=3.3333e-01 mortared=1.0000e+00 live=(False, False) eig=162
+  r2:nested                    narrowest=1.2500e-01 mortared=1.2500e-01 live=(True, True) eig=450
+  r2:non_conforming            narrowest=2.3710e-01 mortared=2.3710e-01 live=(True, True) eig=162
+  r2:single_wall               narrowest=4.0000e-01 mortared=1.0000e+00 live=(False, False) eig=72
+  r2:taper_n16                 narrowest=1.9056e-01 mortared=1.9056e-01 live=(True, True) eig=162
+  r2:taper_n32                 narrowest=1.8893e-01 mortared=1.8893e-01 live=(True, True) eig=162
+  r2:taper_n4                  narrowest=2.0035e-01 mortared=2.0035e-01 live=(True, True) eig=162
+  r2:taper_n64                 narrowest=1.8812e-01 mortared=1.8812e-01 live=(True, True) eig=162
+  r2:taper_n8                  narrowest=1.9382e-01 mortared=1.9382e-01 live=(True, True) eig=162
+  r2:tapered_pillars           narrowest=1.7333e-01 mortared=1.7333e-01 live=(True, True) eig=162
+  v3:uniform_lattice_N1        narrowest=1.0000e+00 mortared=1.0000e+00 live=(False, False) eig=18
+  v3:uniform_lattice_N2        narrowest=5.0000e-01 mortared=5.0000e-01 live=(True, True) eig=72
+  v3:uniform_lattice_N3        narrowest=3.3333e-01 mortared=3.3333e-01 live=(True, True) eig=162
+  v3:uniform_lattice_N4        narrowest=2.5000e-01 mortared=2.5000e-01 live=(True, True) eig=288
+  v3:uniform_lattice_N6        narrowest=1.6667e-01 mortared=1.6667e-01 live=(True, True) eig=648
+  v3:uniform_lattice_N8        narrowest=1.2500e-01 mortared=1.2500e-01 live=(True, True) eig=1152
+  v3:uniform_lattice_N12       narrowest=8.3333e-02 mortared=8.3333e-02 live=(True, True) eig=2592
+  v3:uniform_lattice_N16       narrowest=6.2500e-02 mortared=6.2500e-02 live=(True, True) eig=4608
+  v3:duty_0.100                narrowest=1.0000e-01 mortared=1.0000e-01 live=(True, True) eig=162
+  v3:duty_0.200                narrowest=2.0000e-01 mortared=2.0000e-01 live=(True, True) eig=162
+  v3:duty_0.333                narrowest=3.3333e-01 mortared=3.3333e-01 live=(True, True) eig=162
+  v3:duty_0.500                narrowest=2.5000e-01 mortared=2.5000e-01 live=(True, True) eig=162
+  v3:duty_0.700                narrowest=1.5000e-01 mortared=1.5000e-01 live=(True, True) eig=162
+  v3:duty_0.900                narrowest=5.0000e-02 mortared=5.0000e-02 live=(True, True) eig=162
+  v3:nested_refinement         narrowest=1.2500e-01 mortared=1.2500e-01 live=(True, True) eig=450
+  v3:two_pillars               narrowest=1.0000e-01 mortared=1.0000e-01 live=(True, True) eig=450
+  v3:taper_straight_4          narrowest=2.5625e-01 mortared=2.5625e-01 live=(True, True) eig=162
+  v3:taper_closing_4           narrowest=6.2500e-02 mortared=6.2500e-02 live=(True, True) eig=162
+  v3:taper_straight_8          narrowest=2.5312e-01 mortared=2.5312e-01 live=(True, True) eig=162
+  v3:taper_closing_8           narrowest=3.1250e-02 mortared=3.1250e-02 live=(True, True) eig=162
+  v3:taper_straight_16         narrowest=2.5156e-01 mortared=2.5156e-01 live=(True, True) eig=162
+  v3:taper_closing_16          narrowest=1.5625e-02 mortared=1.5625e-02 live=(True, True) eig=162
+  v3:taper_straight_32         narrowest=2.5078e-01 mortared=2.5078e-01 live=(True, True) eig=162
+  v3:taper_closing_32          narrowest=7.8125e-03 mortared=7.8125e-03 live=(True, True) eig=162
+  v3:taper_straight_64         narrowest=2.5039e-01 mortared=2.5039e-01 live=(True, True) eig=162
+  v3:taper_closing_64          narrowest=3.9062e-03 mortared=3.9062e-03 live=(True, True) eig=162
+  v3:taper_straight_128        narrowest=2.5020e-01 mortared=2.5020e-01 live=(True, True) eig=162
+  v3:taper_closing_128         narrowest=1.9531e-03 mortared=1.9531e-03 live=(True, True) eig=162
+  v3:tapered_pillars_4         narrowest=1.4750e-01 mortared=1.4750e-01 live=(True, True) eig=450
+  v3:tapered_pillars_8         narrowest=1.4375e-01 mortared=1.4375e-01 live=(True, True) eig=450
+  v3:tapered_pillars_16        narrowest=1.4187e-01 mortared=1.4187e-01 live=(True, True) eig=450
+  v3:tapered_pillars_32        narrowest=1.4094e-01 mortared=1.4094e-01 live=(True, True) eig=450
+  SOLVED v3:duty_0.900              warn=0 0.528 s
+  SOLVED v3:two_pillars             warn=0 14.807 s
+  SOLVED v3:duty_0.100              warn=0 0.505 s
+  SOLVED r2:nested                  warn=0 46.668 s
+  SOLVED v3:uniform_lattice_N8      warn=0 207.098 s
+  SOLVED v3:nested_refinement       warn=0 14.058 s
+  SOLVED v3:tapered_pillars_8       warn=0 49.749 s
+  SOLVED v3:tapered_pillars_4       warn=0 30.12 s
+round4 part d: 364.85 s
+wrote C:\tmp\lum_mortar4\validation\probe_fix_mortar_round4\p1_axis_band_win.json
+leaves compared           : 801
+ANSWER HASH differences   : 0
+warning differences       : 23
+other differences         : 0
+  WARN .a.M4_xconf0[4].axes[0]: y -> <missing>
+  WARN .a.M4_xconf0[4].n_warn: 1 -> 0
+  WARN .a.M4_xconf0[4].widths[0]: 0.01 -> <missing>
+  WARN .a.M4_xconf0[5].axes[0]: y -> <missing>
+  WARN .a.M4_xconf0[5].n_warn: 1 -> 0
+  WARN .a.M4_xconf0[5].widths[0]: 0.003 -> <missing>
+  WARN .a.M4_xconf0[6].axes[0]: y -> <missing>
+  WARN .a.M4_xconf0[6].n_warn: 1 -> 0
+  WARN .a.M4_xconf0[6].widths[0]: 0.0012 -> <missing>
+  WARN .a.M5_xconf0[4].axes[0]: y -> <missing>
+  WARN .a.M5_xconf0[4].n_warn: 1 -> 0
+  WARN .a.M5_xconf0[4].widths[0]: 0.01 -> <missing>
+  WARN .a.M5_xconf0[5].axes[0]: y -> <missing>
+  WARN .a.M5_xconf0[5].n_warn: 1 -> 0
+  WARN .a.M5_xconf0[5].widths[0]: 0.003 -> <missing>
+  WARN .a.M5_xconf0[6].axes[0]: y -> <missing>
+  WARN .a.M5_xconf0[6].n_warn: 1 -> 0
+  WARN .a.M5_xconf0[6].widths[0]: 0.0012 -> <missing>
+  WARN .c.x_mortared_y_conforming.axes[0]: y -> x
+  WARN .c.x_mortared_y_conforming.widths[0]: 0.003 -> 0.009
+  WARN .c.x_ordinary_y_conforming.axes[0]: y -> <missing>
+  WARN .c.x_ordinary_y_conforming.n_warn: 1 -> 0
+  WARN .c.x_ordinary_y_conforming.widths[0]: 0.003 -> <missing>

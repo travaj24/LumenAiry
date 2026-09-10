@@ -1,0 +1,85 @@
+........................................................................ [ 19%]
+........................................................................ [ 38%]
+........................................................................ [ 57%]
+........................................................................ [ 76%]
+........................................................................ [ 95%]
+..................                                                       [100%]
+============================== warnings summary ===============================
+tests/unit/test_pmm2d_slant_metric.py::test_slant_zero_is_byte_identical_to_the_vertical_path
+tests/unit/test_pmm2d_slant_metric.py::test_slant_along_an_invariant_axis_is_a_noop[0.2]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +3.059e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_along_an_invariant_axis_is_a_noop[0.0]
+tests/unit/test_pmm2d_slant_metric.py::test_slant_at_normal_incidence_is_not_silently_folded
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.110e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_along_an_invariant_axis_is_a_noop[0.0]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.306e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_along_an_invariant_axis_is_a_noop[0.2]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +4.512e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[10.0-0.0]
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[20.0-0.0]
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[35.0-0.0]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +3.162e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[10.0-0.0]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +3.227e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[10.0-0.2]
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[20.0-0.2]
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[35.0-0.2]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +4.091e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[10.0-0.2]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +4.921e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[20.0-0.0]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +3.414e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[20.0-0.2]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +5.672e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[35.0-0.0]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +3.838e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_matches_the_shipped_1d_slant_solver[35.0-0.2]
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +6.423e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_at_normal_incidence_is_not_silently_folded
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.655e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_slant_with_out_of_plane_tensor_refuses
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +3.300e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_pmm2d_slant_metric.py::test_staircase_converges_toward_the_single_slanted_layer
+  C:\tmp\lum_mortar4\tests\unit\test_pmm2d_slant_metric.py:61: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +7.610e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return pmm_jones_2d(P, P, cell, NSUB, NSUP, D, WL, theta=theta, phi=phi,
+
+tests/unit/test_fix_pmm2d_mortar_round2.py::test_the_mortars_own_algebra_is_exact_at_every_wall_separation
+  C:\tmp\lum_mortar4\lumenairy\elements\pmm\stack2d_pure.py:1341: UserWarning: PMM2DStackPure.solve: layer 1's element grid has a segment 1.000e-02 of the period wide on the x axis (walls [0.    0.594 0.606 1.2  ]).  That is ABOVE the 1e-03 minimum this basis contracts for, so the solve proceeds -- but it is inside the MEASURED degradation band 1e-03 .. 3e-02, where the per-segment 1/J_n stiffness puts spurious modal wavenumbers into the L2 MORTAR that couples this layer to neighbours on other grids.  MEASURED cost on a device that cannot depend on the wall separation at all: about 4-5x the error of the same device on an ordinary partition, and it is a FLOOR -- raising n_modes does NOT remove it, and the n_modes ladder FLATTENS here, so a convergence study will read the floor as convergence.  The lossless closure stays pinned, so no energy tripwire can see this.
+    REMEDIES.  (1) MERGE the two walls if the feature is finer than the device needs; (2) carry the fine feature on the SHARED lattice (PMM2DStackPure(..., layer_grids='shared') with an N that resolves it), where every cell is period/N and no mortar forms; (3) put the NEIGHBOURS on this layer's wall array too -- a CONFORMING per-layer stack takes the plain square modal match and no mortar at all; (4) use PMM2DStackHybrid, which is Fourier-projected and has no element grid; (5) on a TAPER, lower n_slices.  To silence this warning after reading the measurement, set lumenairy.elements.pmm.twod_staggered.PMM2D_STAG_SLIVER_BAND_WARN = False.
+    return self._solve_per_layer(jones=jones,
+
+tests/unit/test_fix_pmm2d_mortar_round2.py::test_the_mortar_rcond_bar_has_decades_of_gap_on_both_sides
+tests/unit/test_fix_pmm2d_mortar_round2.py::test_a_singular_mortar_operator_is_refused_by_name_not_by_LinAlgError
+  C:\tmp\lum_mortar4\lumenairy\elements\pmm\twod_staggered.py:2589: RuntimeWarning: invalid value encountered in multiply
+    q = _forward_branch_flip(q)       # shared scalar-vertical selector (S1-8)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+378 passed, 24 warnings in 2395.07s (0:39:55)

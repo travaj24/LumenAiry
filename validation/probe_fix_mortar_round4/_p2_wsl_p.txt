@@ -1,0 +1,60 @@
+  mix_spacer                       M=4 -> one_promoted: on 0.000/1.000 spread 5.665e-08 s_ratio 1.409e-11
+  mix_spacer                       M=5 -> one_promoted: on 0.000/1.000 spread 1.468e-08 s_ratio 3.679e-13
+  mix_spacer                       M=6 -> one_promoted: on 0.000/1.000 spread 1.374e-08 s_ratio 4.309e-14
+  mix_pattern                      M=4 -> one_promoted: on 0.000/1.000 spread 7.291e-08 s_ratio 1.356e-10
+  mix_pattern                      M=5 -> one_promoted: on 0.000/1.000 spread 5.452e-08 s_ratio 8.371e-12
+  mix_pattern                      M=6 -> one_promoted: on 0.000/1.000 spread 2.245e-08 s_ratio 2.068e-12
+  mix_magnetic                     M=4 -> one_promoted: on 0.000/1.000 spread 3.667e-08 s_ratio 7.826e-11
+  mix_magnetic                     M=5 -> one_promoted: on 0.000/1.000 spread 4.674e-08 s_ratio 7.411e-12
+  mix_magnetic                     M=6 -> one_promoted: on 0.000/1.000 spread 2.572e-08 s_ratio 1.647e-12
+  mix_slant_inplane                M=4 -> one_promoted: on 0.000/1.000 spread 2.539e-07 s_ratio 4.779e-11
+  mix_slant_inplane                M=5 -> one_promoted: on 0.000/1.000 spread 1.074e-07 s_ratio 4.265e-11
+  mix_slant_inplane                M=6 -> one_promoted: on 0.000/1.000 spread 1.171e-07 s_ratio 1.970e-11
+  adv_strong_oop_next_to_inplane   M=4 -> one_promoted: on 0.000/1.000 spread 1.217e-07 s_ratio 1.486e-10
+  adv_strong_oop_next_to_inplane   M=5 -> one_promoted: on 0.000/1.000 spread 3.992e-08 s_ratio 4.966e-12
+  adv_strong_oop_next_to_inplane   M=6 -> one_promoted: on 0.000/1.000 spread 1.284e-07 s_ratio 2.587e-12
+  adv_tiny_slant_inplane           M=4 -> one_promoted: on 0.000/1.000 spread 2.659e-07 s_ratio 4.260e-11
+  adv_tiny_slant_inplane           M=5 -> one_promoted: on 0.000/1.000 spread 9.357e-08 s_ratio 4.396e-11
+  adv_tiny_slant_inplane           M=6 -> one_promoted: on 0.000/1.000 spread 9.415e-08 s_ratio 2.017e-11
+  both_promoted                    M=4 -> one_promoted: on 0.000/1.000 spread 7.291e-08 s_ratio 1.356e-10; both_promoted: on 0.884/0.468 spread 5.295e-01 s_ratio 2.631e-05
+  both_promoted                    M=5 -> one_promoted: on 0.000/1.000 spread 5.452e-08 s_ratio 8.371e-12; both_promoted: on 0.914/0.406 spread 4.442e-01 s_ratio 2.416e-08
+  both_promoted                    M=6 -> one_promoted: on 0.000/1.000 spread 2.245e-08 s_ratio 2.068e-12; both_promoted: on 0.849/0.528 spread 6.218e-01 s_ratio 4.295e-07
+  ctrl_oop_both                    M=4 -> neither_promoted: on 0.829/0.559 spread 6.745e-01 s_ratio 8.105e-04
+  ctrl_oop_both                    M=5 -> neither_promoted: on 0.777/0.630 spread 8.106e-01 s_ratio 8.254e-05
+  ctrl_oop_both                    M=6 -> neither_promoted: on 0.759/0.651 spread 8.569e-01 s_ratio 2.630e-05
+  ctrl_slant_both                  M=4 -> neither_promoted: on 0.786/0.618 spread 7.866e-01 s_ratio 5.221e-04
+  ctrl_slant_both                  M=5 -> neither_promoted: on 0.704/0.711 spread 9.902e-01 s_ratio 5.782e-05
+  ctrl_slant_both                  M=6 -> neither_promoted: on 0.742/0.671 spread 9.045e-01 s_ratio 1.496e-05
+  adv_near_inplane_oop             M=4 -> neither_promoted: on 0.571/0.821 spread 6.954e-01 s_ratio 6.806e-04
+  adv_near_inplane_oop             M=5 -> neither_promoted: on 0.353/0.935 spread 3.777e-01 s_ratio 4.773e-05
+  adv_near_inplane_oop             M=6 -> neither_promoted: on 0.730/0.683 spread 9.350e-01 s_ratio 2.563e-05
+wrote /mnt/c/tmp/lum_mortar4/validation/probe_fix_mortar_round4/p2_durability_wsl.json
+{
+ "both_promoted": {
+  "max_on_max": 0.9139043433417897,
+  "max_on_min": 0.8492051798049478,
+  "n_operands": 3,
+  "s_ratio_max": 2.630976519650499e-05,
+  "s_ratio_min": 2.4160538137808213e-08,
+  "spread_max": 0.6218320867017137,
+  "spread_min": 0.4441707894118361
+ },
+ "neither_promoted": {
+  "max_on_max": 0.935482647515456,
+  "max_on_min": 0.7105644335746978,
+  "n_operands": 9,
+  "s_ratio_max": 0.0008105302183813291,
+  "s_ratio_min": 1.495523491263477e-05,
+  "spread_max": 0.9902439593548467,
+  "spread_min": 0.3777436510843393
+ },
+ "one_promoted": {
+  "max_on_max": 1.0000000000000009,
+  "max_on_min": 0.9999999999999651,
+  "n_operands": 21,
+  "s_ratio_max": 1.4855779095883605e-10,
+  "s_ratio_min": 4.3089166884009364e-14,
+  "spread_max": 2.6587250404664225e-07,
+  "spread_min": 1.3735016350954874e-08
+ }
+}

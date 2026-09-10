@@ -5130,9 +5130,13 @@ _MORTAR_RCOND_REFUSE = 1e-12
 #: estimate.  ROUND 3, 2026-09-11.
 #:
 #: WHY THIS SITE NEEDS ITS OWN INSTRUMENT.  Its operand is RANK-DEFICIENT BY
-#: CONSTRUCTION whenever one side of the interface is an IN-PLANE region
-#: promoted to the 6-tuple general form by
-#: :func:`~lumenairy.elements.pmm.twod_staggered._modes_as_general`.  MEASURED
+#: CONSTRUCTION whenever EXACTLY ONE side of the interface is an IN-PLANE
+#: region promoted to the 6-tuple general form by
+#: :func:`~lumenairy.elements.pmm.twod_staggered._modes_as_general` -- an
+#: ASYMMETRIC interface.  (ROUND 4 CORRECTION, 2026-09-11: this paragraph said
+#: "whenever ONE side ... is promoted", which a reader takes as "either side".
+#: With BOTH sides promoted the operand is HEALTHY -- see the correction at the
+#: end of this docstring.)  MEASURED
 #: (``validation/probe_fix_mortar_round3/r1_mechanism.py``) on a two-layer
 #: stack with ONE out-of-plane patterned layer and ONE ordinary in-plane
 #: neighbour, ``M`` = 4 / 5 / 6 / 7: the smallest singular value falls to
@@ -5209,6 +5213,25 @@ _MORTAR_RCOND_REFUSE = 1e-12
 #: what makes an unlucky probe unable to refuse a good solve.  Probe and exact
 #: agree within **1.6x on all 51 real operands measured**
 #: (``r3_residual_screen.py``, ``r4_cost.py``).
+#:
+#: **CORRECTION, ROUND 4 (2026-09-11, DEFECT 1 of**
+#: ``docs/audits/VERIFY_PMM2D_MORTAR_ROUND3_2026_09_11.md`` **S8).**  The
+#: mechanism needs the interface to be ASYMMETRIC -- EXACTLY ONE promoted side
+#: -- not merely to have a promoted side.  With BOTH sides promoted (two
+#: in-plane layers on different grids, an out-of-plane or slanted layer
+#: ELSEWHERE in the stack putting the whole cascade on this form) the operand
+#: is HEALTHY.  MEASURED on the verification's own three-layer fixture at
+#: ``M`` = 4 / 5 / 6: ``s_min/s_max`` 2.631e-05 / 2.416e-08 / 4.295e-07 with
+#: near-null participation 0.884/0.468, 0.914/0.406 and 0.849/0.528, against
+#: the ASYMMETRIC interface of the SAME solve at 1.356e-10 / 8.371e-12 /
+#: 2.068e-12 and 0.000 / 1.000 -- five decades apart, and the both-promoted
+#: reading is within 1.5 decades of the both-out-of-plane control (8.105e-04).
+#: Nothing SHIPPED changes: the residual screen accepts all three classes and
+#: the healthy population above already contained a both-promoted interface.
+#: What changes is the prediction a later reader would make from the wording,
+#: which was wrong by five decades.  Gates:
+#: ``test_a_generalized_mortar_with_both_sides_promoted_is_not_rank_deficient``
+#: and ``test_the_promoted_side_bar_is_scoped_to_the_asymmetric_interface``.
 _MORTAR_RESID_REFUSE = 1e-6
 
 #: Census hook for the guarded mortar solves.  When set to a list, every call
@@ -5307,8 +5330,9 @@ def _guarded_mortar_solve(A, B, site, ga=None, gb=None, hint=None,
       population 2.6e-07 .. 3.8e-04, 5.4 decades clear.
     * ``'residual'`` (the GENERALIZED site) refuses on the relative residual
       ``||A X - B|| / ||B||`` against :data:`_MORTAR_RESID_REFUSE`.  That
-      site's operand is RANK-DEFICIENT BY CONSTRUCTION on any interface with a
-      promoted in-plane side, so its healthy ``rcond`` runs 1.26e-14 ..
+      site's operand is RANK-DEFICIENT BY CONSTRUCTION on an ASYMMETRIC
+      interface -- EXACTLY ONE promoted in-plane side; with BOTH sides promoted
+      it is healthy (ROUND 4) -- so its healthy ``rcond`` runs 1.26e-14 ..
       1.52e-04 and CROSSES both the in-plane bar and the sliver population --
       ROUND 3 / DEFECT V1.  The residual separates the two things that matter
       there (consistent-but-rank-deficient, which is ordinary, from singular or
@@ -5393,7 +5417,7 @@ def _guarded_mortar_solve(A, B, site, ga=None, gb=None, hint=None,
             f"against a "
             f"{_MORTAR_RESID_REFUSE:.0e} bar, i.e. the right-hand side does "
             f"not lie in the operator's range.  This site's operand is "
-            f"RANK-DEFICIENT BY CONSTRUCTION whenever one side of the "
+            f"RANK-DEFICIENT BY CONSTRUCTION whenever EXACTLY ONE side of the "
             f"interface is an in-plane region promoted to the generalized "
             f"6-tuple form, so a CONDITION number says nothing here (its "
             f"healthy population reaches 1.3e-14, measured over 28 ordinary "
@@ -5729,11 +5753,13 @@ def _interface_smatrix_general_mortar_2d(six_a, six_b, ga, gb, cr, kron_apply):
     B = np.block([[E3, E4], [H3, H4]])
     # ROUND 3 / DEFECT V1: this site takes its decision on the RESIDUAL, not on
     # a condition estimate.  Its operand is RANK-DEFICIENT BY CONSTRUCTION when
-    # either side is an in-plane region promoted by ``_modes_as_general``
-    # (measured: 100 % of the near-null right singular vector lies in the
-    # promoted side's block column), while the system stays CONSISTENT -- so
-    # ``rcond`` refused ordinary mixed in-plane / out-of-plane stacks from
-    # ``n_modes`` = 5 up.  See :data:`_MORTAR_RESID_REFUSE`.
+    # EXACTLY ONE side is an in-plane region promoted by ``_modes_as_general``
+    # -- an ASYMMETRIC interface (measured: 100 % of the near-null right
+    # singular vector lies in the promoted side's block column), while the
+    # system stays CONSISTENT -- so ``rcond`` refused ordinary mixed in-plane /
+    # out-of-plane stacks from ``n_modes`` = 5 up.  With BOTH sides promoted
+    # the operand is HEALTHY (ROUND 4, 2026-09-11); see
+    # :data:`_MORTAR_RESID_REFUSE`.
     X = _guarded_mortar_solve(
         A, B, "pmm2d staggered GENERALIZED mortar interface", ga, gb,
         screen="residual")

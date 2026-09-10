@@ -858,7 +858,31 @@ PMM2D_STAG_SLIVER_BAND_WARN = True
 #: identified as walking toward the contract: a taper whose tip CLOSES, whose
 #: narrowest sampled width is ``~ w_bottom / (2 n_slices)`` -- measured
 #: 8.0094e-03 at 32 slices and 4.1047e-03 at 64.  That is the intent, not a
-#: false positive.
+#: false positive.  It enters the band from **NINE** slices, not sixteen:
+#: 8 slices is 3.1250e-02, only 1.04x OUTSIDE the edge (ROUND 4).
+#:
+#: **THE CENSUS MARGIN IS SAMPLE-SCOPED, AND IT IS 1.67x, NOT 3.6x**
+#: (ROUND 4, 2026-09-11; VERIFY round 3 S11.1).  The "3.6x below the narrowest
+#: ordinary geometry" above is a property of the ROUND-2 BATTERY, which
+#: contains no high-duty pillar and no fine uniform lattice.  Over the wider
+#: census -- that battery beside the round-3 verification's own 32 geometries,
+#: 47 in all -- the narrowest ORDINARY geometry is **5.0000e-02 -- a
+#: duty-0.9 pillar, i.e. a 5 %-wide trench either side, an entirely ordinary
+#: photonic feature -- which is 1.67x above this edge**, and a 16-cell uniform
+#: lattice is 6.2500e-02 = 2.08x.  A 94 %-duty pillar would sit ON the edge.
+#: The census still lands 0 ordinary geometries in the band on both builds, so
+#: the edge stands; what does NOT stand is reading 3.6x as a property of the
+#: library.
+#:
+#: **AND "NO WARNING" IS NOT "NO DEGRADATION"** (ROUND 4; VERIFY round 3 S11).
+#: Because the CENSUS is the binding constraint, the edge sits well inside the
+#: degradation rather than at its start: on the VERIFY audit's independent
+#: fixture the error has already grown **13.5x** (``M`` = 7) / **22.9x**
+#: (``M`` = 8) by the time a segment reaches this edge, and grows only a
+#: further **1.24x** from there to the width contract -- about 92 % of the
+#: damage, on a log scale between 3e-1 and 1e-3, happens SILENTLY above the
+#: edge.  The warning marks where the census says ordinary geometries stop, not
+#: where the floor starts.
 #:
 #: The band's LOWER edge is :data:`_STAG_MIN_SEG_FRAC` itself: below it the
 #: stack is REFUSED, so the warning would never be read.  Both edges carry the
@@ -912,13 +936,44 @@ def _raise_stag_sliver(xb, w, d, frac, M):
         f"spurious spectrum grows as M (M + 1).")
 
 
-def _stag_band_narrowest(grids):
+def _stag_mortared_axes(grids, force=False):
+    """Which AXES of a per-layer stack actually carry a cross-grid projection.
+
+    ROUND 4 (2026-09-11, DEFECT 2 of
+    ``docs/audits/VERIFY_PMM2D_MORTAR_ROUND3_2026_09_11.md`` S8).  Conformity
+    is per AXIS, not per stack.  :meth:`StagGridOps.key` is the PAIR
+    ``(fingerprint(bx), fingerprint(by))``, so the x axis carries a mortar iff
+    the stack shows more than one x fingerprint -- and if it does, some
+    ADJACENT pair of layers differs on x, because a sequence whose entries are
+    not all equal has two neighbours that are not equal.  When they do NOT
+    differ the cross-mass on that axis is the layer's own mass matrix and the
+    projection is the identity to round-off, so nothing on that axis is
+    projected across grids and nothing is degraded.
+
+    ``force`` is the ``force_mortar`` test instrument: it drives the mortar
+    algebra even where the grids coincide, so it makes BOTH axes live.
+    """
+    if force:
+        return (True, True)
+    keys = [g.key() for g in grids]
+    return (len({k[0] for k in keys}) > 1, len({k[1] for k in keys}) > 1)
+
+
+def _stag_band_narrowest(grids, axes=(True, True)):
     """Narrowest segment over a list of :class:`StagGridOps`, as a fraction of
     that axis's period, with the grid and axis that owns it.  Costs no solve --
-    it reads the wall arrays the grids already hold."""
+    it reads the wall arrays the grids already hold.
+
+    ``axes`` is the ``(x, y)`` pair :func:`_stag_mortared_axes` returns: an
+    axis on which every layer carries the SAME wall array is skipped, because
+    the band this scores is a property of the CROSS-GRID projection and there
+    is none on such an axis (ROUND 4).  ``(True, True)`` reproduces the
+    round-3 reading exactly.  Returns ``(1.0, None)`` when no axis is live."""
     worst, where = 1.0, None
     for gi, g in enumerate(grids):
-        for ax, b in (("x", g.bx), ("y", g.by)):
+        for ax, b, live in (("x", g.bx, axes[0]), ("y", g.by, axes[1])):
+            if not live:
+                continue
             if b.uniform:
                 f = 1.0 / float(b.N)
             else:
@@ -928,22 +983,47 @@ def _stag_band_narrowest(grids):
     return worst, where
 
 
-def _warn_stag_sliver_band(grids, mortared, fn="PMM2DStackPure.solve"):
+def _warn_stag_sliver_band(grids, mortared_axes, fn="PMM2DStackPure.solve"):
     """ROUND-3 band warning: a per-layer segment ACCEPTED by the width contract
     but measurably degraded by its own narrowness (VERIFY round 2, S5.4).
 
-    ``grids`` are the per-layer :class:`StagGridOps`; ``mortared`` says whether
-    this stack actually builds a CROSS-GRID interface.  It does not warn when
-    it does not: on a stack whose layers all share ONE grid every interface is
-    the plain square modal match, and such a stack is MEASURED
+    ``grids`` are the per-layer :class:`StagGridOps`; ``mortared_axes`` is the
+    ``(x, y)`` pair from :func:`_stag_mortared_axes`, saying PER AXIS whether
+    this stack builds a CROSS-GRID projection on it.  It does not warn about an
+    axis that carries none: on a stack whose layers all share ONE grid every
+    interface is the plain square modal match, and such a stack is MEASURED
     ``delta``-independent to ~1e-04 over three decades of wall separation
     against the mortared arm's 5.9x -- warning there would be the same false
     positive as DEFECT V2.
 
+    ROUND 4 (2026-09-11) makes that test PER AXIS.  Round 3 asked it of the
+    STACK and then scanned BOTH axes of every grid, so a stack whose layers
+    differ on x and share the y wall array EXACTLY warned about a narrow y
+    segment.  MEASURED on a device that cannot depend on the y wall separation:
+    the answer at a band-width y segment divided by the answer on an ordinary
+    (3e-1) one is 1.000000000000 to twelve places, and over the whole
+    2.5-decade ladder of that width the answer moves by at most 8.5e-13 (WIN) /
+    1.3e-13 (WSL).  The claimed cost is absent to round-off, not merely small.
+    See ``docs/audits/FIX_PMM2D_MORTAR_ROUND4_2026_09_11.md``.
+
+    WHAT "NO WARNING" DOES AND DOES NOT MEAN.  The band's upper edge is set by
+    the FALSE-POSITIVE census (:data:`_STAG_SLIVER_BAND_FRAC`), not by where
+    the degradation starts: on the verification's independent fixture the error
+    has already grown **13.5x** (``M`` = 7) / **22.9x** (``M`` = 8) by the time
+    a segment reaches that edge, and grows only a further **1.24x** from there
+    to the width contract.  The warning marks where the census says ordinary
+    geometries stop, NOT where the floor starts, so "no warning" must not be
+    read as "no degradation" -- a narrow-but-silent segment still costs
+    accuracy, and a convergence study in ``n_modes`` will not reveal it.
+
     WARNS, never raises, and returns whether it warned."""
-    if not (PMM2D_STAG_SLIVER_BAND_WARN and mortared):
+    if isinstance(mortared_axes, bool):      # historical scalar form
+        mortared_axes = (mortared_axes, mortared_axes)
+    if not (PMM2D_STAG_SLIVER_BAND_WARN and any(mortared_axes)):
         return False
-    frac, where = _stag_band_narrowest(grids)
+    frac, where = _stag_band_narrowest(grids, mortared_axes)
+    if where is None:
+        return False
     # BOTH edges carry the SAME 1e-9 RELATIVE slack the width contract does,
     # and for the same reason: a caller who asks for EXACTLY an edge computes
     # it in floating point and lands either side of it (measured:

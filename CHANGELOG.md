@@ -613,8 +613,10 @@ two corrections to the two bullets above.**
   ordinary mixed in-plane / out-of-plane per-layer stacks from `n_modes` = 5
   up -- including an out-of-plane patterned layer next to a plain UNIFORM
   SPACER, the commonest configuration there is.  That site's operand is
-  RANK-DEFICIENT BY CONSTRUCTION whenever either side is an in-plane region
-  promoted to the generalized 6-tuple form (measured: **100 % of the near-null
+  RANK-DEFICIENT BY CONSTRUCTION whenever **EXACTLY ONE** side is an in-plane
+  region promoted to the generalized 6-tuple form -- an ASYMMETRIC interface;
+  with BOTH sides promoted it is healthy, see ROUND 4 below (measured: **100 %
+  of the near-null
   right singular vector lies in the promoted side's block column**, at every
   `M`, on both builds, against no localisation at all on the both-out-of-plane
   and both-slanted controls), while the system stays CONSISTENT -- so its
@@ -646,6 +648,53 @@ two corrections to the two bullets above.**
   fully CONFORMING per-layer stack never warns -- it builds no mortar, and is
   measured `delta`-insensitive.  Switch
   `twod_staggered.PMM2D_STAG_SLIVER_BAND_WARN`.
+
+**ROUND 4 (2026-09-11, `docs/audits/FIX_PMM2D_MORTAR_ROUND4_2026_09_11.md`),
+closing the round-3 verification's two P3 defects and its two durability
+flags.  No shipped ANSWER moves: every hash on the round-4 battery is
+identical across the change, on both builds.**
+
+* **The mechanism above needs an ASYMMETRIC interface -- EXACTLY ONE promoted
+  side -- not merely a promoted side.**  Round 3 wrote "whenever either side is
+  an in-plane region promoted", and that over-states it by five decades.  With
+  BOTH sides promoted (two in-plane layers on different grids, the out-of-plane
+  or slanted layer ELSEWHERE in the stack) the operand is HEALTHY: `s_min/s_max`
+  **2.631e-05 / 2.416e-08 / 4.295e-07** at `M` = 4/5/6 with near-null
+  participation 0.884/0.468, against the ASYMMETRIC interface of the SAME solve
+  at 1.356e-10 / 8.371e-12 / 2.068e-12 and 0.000 / 1.000 -- and within 1.5
+  decades of the both-out-of-plane control.  Nothing shipped behaves
+  differently (the residual screen accepts all three classes); the wording is
+  corrected in the constant, in the site comment and in the refusal message a
+  user reads.
+* **The degradation-band warning is now conditioned PER AXIS.**  Round 3 asked
+  whether the STACK builds a cross-grid interface and then scanned BOTH axes of
+  every grid, so a stack whose layers differ on `x` and share the `y` wall
+  array EXACTLY warned about a narrow `y` segment -- on which the mortar is the
+  identity and nothing is projected across grids.  MEASURED on a device that
+  cannot depend on the `y` wall separation: the answer at a band-width `y`
+  segment divided by the answer on an ordinary (3e-1) one is
+  **1.000000000000 to twelve places**, and over the whole 2.5-decade ladder of
+  that width the answer moves by at most **8.5e-13** (WIN) / 1.3e-13 (WSL) --
+  the cost the message claimed is absent to round-off, not merely small.  An axis
+  now counts only when adjacent layers' wall arrays on it actually differ.
+  Two-sided: the false positive stops, every warning that fired for a real
+  reason (the closing taper from 9 slices, the round-2 `delta` sweep) fires
+  identically, a stack narrow on BOTH axes with only `x` mortared now names
+  `x`, and the ordinary census stays at 0 warnings.
+* **"No warning" is NOT "no degradation".**  The band's upper edge is set by
+  the FALSE-POSITIVE census, not by where the accuracy loss begins: on the
+  verification's independent fixture the error has already grown **13.5x**
+  (`M` = 7) / **22.9x** (`M` = 8) by the time a segment reaches that edge
+  (3e-2), and grows only a further **1.24x** from there to the width contract.
+  The warning marks where the census says ordinary geometries stop, not where
+  the floor starts.
+* **And the census margin is SAMPLE-scoped: 1.67x, not 3.6x.**  Over a wider
+  census -- the round-2 battery beside the verification's own 32 geometries,
+  47 in all -- the narrowest ORDINARY geometry is **5.0000e-02, a
+  duty-0.9 pillar**, which is 1.67x above the 3e-2 edge; a 16-cell uniform
+  lattice is 2.08x.  The "3.6x" is a property of the round-2 battery.  Zero
+  ordinary geometries still land in the band on either build, so the edge
+  stands -- but a 94 %-duty pillar would sit on it.
 
 ### Fixed -- `PMM2DStackHybrid`'s TRANSMITTED amplitudes on a SLANTED PATTERNED layer were FRAME-referenced (silent-wrong)
 

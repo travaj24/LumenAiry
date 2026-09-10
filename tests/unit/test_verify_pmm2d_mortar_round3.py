@@ -10,11 +10,15 @@ Four gates, and only where a gap was found:
 * **G1** RESTATES the round-3 mechanism.  The operand is rank-deficient when
   EXACTLY ONE side of the interface is a promoted in-plane region, not
   "whenever either side is" -- with BOTH sides promoted it is as healthy as
-  the both-out-of-plane control, measured.
-* **G2** PINS A KNOWN LIMITATION: the band warning names an axis on which no
-  mortar forms.  **If the library is later taught to condition the warning per
-  axis, this test fails, and that failure is the gate working -- re-pin it
-  against the improvement, do not relax it.**
+  the both-out-of-plane control, measured.  (ROUND 4 shipped the restatement
+  into the library's own wording, and re-derived this gate's participation bar
+  family-scoped, on the SPREAD ``min(on)/max(on)``.)
+* **G2** pinned a KNOWN LIMITATION -- the band warning named an axis on which
+  no mortar forms -- and said that a per-axis conditioning would fail it and
+  must be re-pinned rather than relaxed.  **ROUND 4 (2026-09-11) shipped that
+  conditioning, and this gate is RE-PINNED to the fixed behaviour**: the
+  non-mortared axis is now silent, the answer is unchanged, and the CONTRAST
+  arm still warns on the axis that does carry a mortar.
 * **G3** puts the false-positive census's margin back in scope: ORDINARY
   geometries the library builds sit closer to the band's upper edge than the
   round-3 gate's own battery does.
@@ -147,9 +151,15 @@ def _facts(A, ma):
     block columns."""
     s, Vh = np.linalg.svd(A)[1:]
     v = Vh[-1].conj()
-    return {"s_ratio": float(s[-1] / s[0]),
-            "on_a": float(np.linalg.norm(v[:ma])),
-            "on_b": float(np.linalg.norm(v[ma:]))}
+    na = float(np.linalg.norm(v[:ma]))
+    nb = float(np.linalg.norm(v[ma:]))
+    lo, hi = min(na, nb), max(na, nb)
+    return {"s_ratio": float(s[-1] / s[0]), "on_a": na, "on_b": nb,
+            # ROUND 4 (2026-09-11): the scale-free DECISION quantity, "is the
+            # near-null direction SHARED between the two block columns".  It
+            # replaces a fixed 0.95 on ``max(on)``, which was SAMPLE-scoped --
+            # a legitimate control (a tensor in-plane to 1e-9) reads 0.935.
+            "spread": (lo / hi if hi > 0 else 1.0)}
 
 
 def _solved(st):
@@ -244,10 +254,18 @@ def test_a_generalized_mortar_with_both_sides_promoted_is_not_rank_deficient():
     assert min(f_one["on_a"], f_one["on_b"]) < 0.05, f_one
     assert f_one["s_ratio"] < 1e-4 * f_nei["s_ratio"], (f_one, f_nei)
 
-    # (2) BOTH promoted does NOT.  The DECISION is "not localised" -- measured
-    # 0.884, i.e. 0.066 of slack under the same 0.95 the round-3 gate uses on
-    # the other side of this comparison.
-    assert max(f_both["on_a"], f_both["on_b"]) < 0.95, f_both
+    # (2) BOTH promoted does NOT.  The DECISION is "the near-null direction is
+    # SHARED", taken on the SPREAD against the one-promoted operand's own
+    # spread rather than on a fixed 0.95 (ROUND 4, 2026-09-11, S14: the 0.95
+    # form leaves 0.066 here and only 0.015 on a legitimate neighbouring
+    # control).  MEASURED over 33 operands on both builds: 21 one-promoted
+    # read 1.37e-08 .. 2.66e-07, 3 both-promoted 0.444 .. 0.622 and 9
+    # neither-promoted 0.378 .. 0.990 -- six decades of separation, and the
+    # worst legitimate reading sits 3.8x over the 0.1 floor.
+    assert f_one["spread"] < 1e-3, f_one
+    assert f_both["spread"] > 1e3 * f_one["spread"], (f_both, f_one)
+    assert f_both["spread"] > 0.1, f_both
+    assert f_nei["spread"] > 0.1, f_nei
     # (3) and it is decades AWAY from the one-promoted operand rather than
     # beside it.  MEASURED 2.63e-05 vs 1.36e-10 = 5.3 decades; asserted at 3.
     assert f_both["s_ratio"] > 1e3 * f_one["s_ratio"], (f_both, f_one)
@@ -257,29 +275,39 @@ def test_a_generalized_mortar_with_both_sides_promoted_is_not_rank_deficient():
 
 
 # ==========================================================================
-# G2 -- KNOWN LIMITATION: the band warning names a non-mortared axis
+# G2 -- the band warning does NOT name a non-mortared axis (RE-PINNED, R4)
 # ==========================================================================
-def test_the_band_warning_fires_on_an_axis_that_carries_no_mortar():
-    """PINS A KNOWN LIMITATION (VERIFY DEFECT 2, P3).
+def test_the_band_warning_does_not_fire_on_an_axis_that_carries_no_mortar():
+    """VERIFY DEFECT 2 (P3), **RE-PINNED TO THE FIXED BEHAVIOUR 2026-09-11**.
 
-    :func:`~lumenairy.elements.pmm.twod_staggered._warn_stag_sliver_band` is
-    conditioned on the STACK building a cross-grid interface somewhere, but
-    :func:`_stag_band_narrowest` then scans BOTH axes of every grid.  A stack
+    :func:`~lumenairy.elements.pmm.twod_staggered._warn_stag_sliver_band` was
+    conditioned on the STACK building a cross-grid interface somewhere, while
+    :func:`_stag_band_narrowest` scanned BOTH axes of every grid.  A stack
     whose layers differ on x and share the y wall array EXACTLY therefore
-    warns about a narrow y segment -- while the y mortar is the IDENTITY, so
+    warned about a narrow y segment -- while the y mortar is the IDENTITY, so
     nothing on that axis is projected across grids and nothing is degraded.
 
     MEASURED 2026-09-11 on the fixture below, whose permittivity is UNIFORM in
     both layers, so the y walls carry no feature and the DEVICE cannot depend
     on their separation: ``R00`` = 0.247088457739 at a y width of 3e-1, 1e-1,
     5e-2, 3e-2, 1e-2, 3e-3 and 1.2e-3 -- a total movement of **4.2e-13** over
-    2.5 decades, i.e. round-off -- while the warning fires from 1e-2 down and
-    names "the y axis" and a cost of "about 4-5x"
+    2.5 decades, i.e. round-off -- while the warning fired from 1e-2 down and
+    named "the y axis" and a cost of "about 4-5x"
     (``validation/probe_verify_mortar_round3/v5_falsepos_win_fp2.json``).
 
-    **If the library is later taught to condition the band warning per AXIS,
-    this test fails, and that failure is the gate working -- re-pin it against
-    the improvement, do not relax it.**
+    **RE-PINNING PARAGRAPH (ROUND 4, 2026-09-11).**  This test was written to
+    PIN the defect and to fail the moment the library was taught to condition
+    the warning per AXIS.  It did, and the behaviour is now the fixed one:
+    round 4 passes ``_warn_stag_sliver_band`` a PER-AXIS ``(x, y)`` pair from
+    :func:`~lumenairy.elements.pmm.twod_staggered._stag_mortared_axes`, so the
+    narrowest-segment search is restricted to axes on which adjacent layers'
+    wall arrays actually differ.  The assertions below are re-pinned to that,
+    NOT relaxed: the stack that used to warn about y must now be SILENT, its
+    answer must be unchanged, and the CONTRAST arm -- the same width on the
+    axis the two layers disagree on -- must still warn, naming x.  The
+    two-sided evidence, including the answer's bit-identity across the change,
+    is in ``docs/audits/FIX_PMM2D_MORTAR_ROUND4_2026_09_11.md`` and gated by
+    ``tests/unit/test_fix_pmm2d_mortar_round4.py``.
     """
     P, wl, th = 1.07, 0.79, 0.31
     yc = 0.585
@@ -299,15 +327,15 @@ def test_the_band_warning_fires_on_an_axis_that_carries_no_mortar():
     edge = _ts._STAG_SLIVER_BAND_FRAC
     inside = _solved(_stack(0.3 * edge))    # 9e-3: comfortably in the band
 
-    # the warning FIRES, and it names the axis that carries no mortar
+    # RE-PINNED: the y axis carries no mortar, so NEITHER rung warns.  (Round
+    # 3 read ``len(inside["band"]) == 1`` here, naming " y axis".)
     assert wide["band"] == [], wide["band"]
-    assert len(inside["band"]) == 1, inside["band"]
-    assert " y axis" in str(inside["band"][0].message)
+    assert inside["band"] == [], [str(w.message) for w in inside["band"]]
 
-    # and there is nothing on that axis for it to be about.  The DECISION is
+    # and there was nothing on that axis for it to be about.  The DECISION is
     # "the answer does not move": measured 4.2e-13 relative over the whole
     # ladder, asserted at 1e-9 -- three decades of slack over the measurement
-    # and nine under the "about 4-5x" the message claims.
+    # and nine under the "about 4-5x" the message used to claim.
     rel = abs(inside["R00"] - wide["R00"]) / abs(wide["R00"])
     assert rel < 1e-9, (rel, wide["R00"], inside["R00"])
     assert inside["closure"] < 1e-6, inside["closure"]

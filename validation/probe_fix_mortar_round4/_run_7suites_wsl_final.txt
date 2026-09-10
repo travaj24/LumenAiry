@@ -1,0 +1,15 @@
+........................................................................ [ 79%]
+...................                                                      [100%]
+=============================== warnings summary ===============================
+tests/unit/test_fix_pmm2d_mortar_round2.py::test_the_mortars_own_algebra_is_exact_at_every_wall_separation
+  /mnt/c/tmp/lum_mortar4/lumenairy/elements/pmm/stack2d_pure.py:1341: UserWarning: PMM2DStackPure.solve: layer 1's element grid has a segment 1.000e-02 of the period wide on the x axis (walls [0.    0.594 0.606 1.2  ]).  That is ABOVE the 1e-03 minimum this basis contracts for, so the solve proceeds -- but it is inside the MEASURED degradation band 1e-03 .. 3e-02, where the per-segment 1/J_n stiffness puts spurious modal wavenumbers into the L2 MORTAR that couples this layer to neighbours on other grids.  MEASURED cost on a device that cannot depend on the wall separation at all: about 4-5x the error of the same device on an ordinary partition, and it is a FLOOR -- raising n_modes does NOT remove it, and the n_modes ladder FLATTENS here, so a convergence study will read the floor as convergence.  The lossless closure stays pinned, so no energy tripwire can see this.
+    REMEDIES.  (1) MERGE the two walls if the feature is finer than the device needs; (2) carry the fine feature on the SHARED lattice (PMM2DStackPure(..., layer_grids='shared') with an N that resolves it), where every cell is period/N and no mortar forms; (3) put the NEIGHBOURS on this layer's wall array too -- a CONFORMING per-layer stack takes the plain square modal match and no mortar at all; (4) use PMM2DStackHybrid, which is Fourier-projected and has no element grid; (5) on a TAPER, lower n_slices.  To silence this warning after reading the measurement, set lumenairy.elements.pmm.twod_staggered.PMM2D_STAG_SLIVER_BAND_WARN = False.
+    return self._solve_per_layer(jones=jones,
+
+tests/unit/test_fix_pmm2d_mortar_round2.py::test_the_mortar_rcond_bar_has_decades_of_gap_on_both_sides
+tests/unit/test_fix_pmm2d_mortar_round2.py::test_a_singular_mortar_operator_is_refused_by_name_not_by_LinAlgError
+  /mnt/c/tmp/lum_mortar4/lumenairy/elements/pmm/twod_staggered.py:2590: RuntimeWarning: invalid value encountered in multiply
+    lam = -1j * q                     # forward propagator exp(-lam k0 z) decays
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+91 passed, 3 warnings in 844.52s (0:14:04)

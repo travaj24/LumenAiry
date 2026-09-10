@@ -211,6 +211,7 @@ from .twod_staggered import (
     _require_inplane_mu,
     _require_nonmagnetic_halfspace,
     _stag_kron_apply,
+    _stag_mortared_axes,
     _tile_needs_oop,
     _validate_stag_cell,
     _validate_stag_mu,
@@ -1707,8 +1708,11 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         # on the stack actually building a cross-grid interface -- a fully
         # CONFORMING per-layer stack takes the plain square match everywhere
         # and is measured delta-independent, so it must not warn.
-        _warn_stag_sliver_band(
-            gof, force_mortar or len({g.key() for g in gof}) > 1)
+        # ROUND 4 (VERIFY round 3, DEFECT 2): that test is PER AXIS.  Round 3
+        # asked it of the STACK and then scanned both axes, so layers differing
+        # on x while sharing the y wall array warned about a narrow y segment
+        # on which the mortar is the identity.
+        _warn_stag_sliver_band(gof, _stag_mortared_axes(gof, force_mortar))
         # HALF-SPACES ride the grid of the layer they TOUCH -- the 1-D
         # convention, and more strongly motivated here: both end interfaces
         # become PLAIN square matches, so no mortar ever sits where the far

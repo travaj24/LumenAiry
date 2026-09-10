@@ -31,12 +31,30 @@ is labelled as theirs and stands beside mine.
 | bit-identity | the round-2 verifier's 30-fixture / 165-hash battery, before vs after | **165 / 165 identical, 0 warning-set differences** |
 
 **The one-sentence result.**  The generalized mortar's operand is
-rank-deficient BY CONSTRUCTION whenever either side of the interface is an
-in-plane region promoted to the 6-tuple general form, and the system is
-CONSISTENT anyway -- so a condition estimate, which is a worst-case over all
-right-hand sides, was measuring a property the answer does not have, while the
-residual, which is a property of the answer, separates the two things that
-actually matter there by twelve decades.
+rank-deficient BY CONSTRUCTION whenever ~~either side~~ **EXACTLY ONE side** of
+the interface is an in-plane region promoted to the 6-tuple general form, and
+the system is CONSISTENT anyway -- so a condition estimate, which is a
+worst-case over all right-hand sides, was measuring a property the answer does
+not have, while the residual, which is a property of the answer, separates the
+two things that actually matter there by twelve decades.
+
+> **CORRECTION, 2026-09-11 (ROUND 4, DEFECT 1 of
+> `VERIFY_PMM2D_MORTAR_ROUND3_2026_09_11.md` S8).**  "Whenever EITHER side is
+> promoted" over-states the mechanism by five decades.  The near-null space
+> needs the interface to be **ASYMMETRIC** -- EXACTLY ONE promoted side.  With
+> BOTH sides promoted (two in-plane layers on different grids, an out-of-plane
+> or slanted layer ELSEWHERE in the stack putting the whole cascade on this
+> form) the operand is HEALTHY: `s_min/s_max` **2.631e-05 / 2.416e-08 /
+> 4.295e-07** at `M` = 4/5/6 with near-null participation 0.884/0.468,
+> 0.914/0.406 and 0.849/0.528, against the ASYMMETRIC interface of the SAME
+> solve at 1.356e-10 / 8.371e-12 / 2.068e-12 and 0.000 / 1.000 -- and within
+> 1.5 decades of the both-out-of-plane control.  Re-measured over 33 operands
+> on both builds in `docs/audits/FIX_PMM2D_MORTAR_ROUND4_2026_09_11.md` S3.
+> **Every measured table in this document stands unchanged**: its own healthy
+> population already contained a both-promoted middle interface, the residual
+> screen accepts all three classes, and nothing shipped behaves differently.
+> What is corrected is the WORDING, here, in the constant, in the site comment
+> and in the refusal message a user reads.
 
 ---
 
@@ -149,6 +167,15 @@ exception is the spacer at `M` = 7, rank 1293 of 1296).  "Rank-deficient by
 construction" is therefore shorthand for "carries a singular value 10 to 13
 decades below the largest, by construction" -- which is what defeats a
 condition estimate.
+
+> **CORRECTION, 2026-09-11 (ROUND 4).**  "The deficiency is a property of the
+> PROMOTION" is right only for an ASYMMETRIC interface -- EXACTLY ONE promoted
+> side, which is the only kind this table contains.  Every fixture above has
+> `promoted a / b` = `no / yes`; a SYMMETRIC interface (`yes / yes`) is
+> HEALTHY, and reads `s_min/s_max` 2.631e-05 at `M` = 4 with the near-null
+> vector SPREAD 0.884 / 0.468, i.e. on the controls' side of this table's
+> divide.  See `FIX_PMM2D_MORTAR_ROUND4_2026_09_11.md` S3 for the 33-operand
+> population, on both builds.  The measured rows above are unchanged.
 
 ### 3.2 The system is CONSISTENT, and that closes the mechanism quantitatively
 
@@ -388,6 +415,20 @@ tells the reader how to silence it.
 **It is conditioned on the stack actually building a mortar.**  A fully
 CONFORMING per-layer stack takes the plain square modal match at every
 interface; warning there would be the same false positive as DEFECT V2.
+
+> **CORRECTION, 2026-09-11 (ROUND 4, DEFECT 2 of
+> `VERIFY_PMM2D_MORTAR_ROUND3_2026_09_11.md` S8).**  That condition is asked of
+> the STACK while `_stag_band_narrowest` then scans BOTH axes, so a stack whose
+> layers differ on x and share the y wall array EXACTLY warned about a narrow y
+> segment -- on which the mortar is the identity.  Conformity is per AXIS, and
+> round 4 makes the test per axis: the signature above is now
+> `_warn_stag_sliver_band(grids, mortared_axes, fn=...)`, fed by
+> `_stag_mortared_axes(gof, force_mortar)`.  MEASURED on a device that cannot
+> depend on the y wall separation: the band/ordinary answer ratio is
+> 1.000000000000 to twelve places, and over the whole 2.5-decade ladder of that
+> width the answer moves by at most 8.5e-13 (WIN) / 1.3e-13 (WSL).  Every warning this document's census fires for a real reason fires
+> identically, and no answer moves a bit.  See
+> `FIX_PMM2D_MORTAR_ROUND4_2026_09_11.md` S4.
 Measured with the contract lifted (`r6_v2_conforming.py`): such a stack's
 answer moves by **1.100e-04 / 2.505e-04 / 2.384e-06** at `M` = 4 / 5 / 6
 between `delta` = 1e-4 and 1e-6, and that movement scales like `delta` (the
