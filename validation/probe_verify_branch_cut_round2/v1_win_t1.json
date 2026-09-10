@@ -1,0 +1,403 @@
+{
+ "ast": {
+  "definitions": [
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 1284,
+    "args": [
+     "x",
+     "xp",
+     "band"
+    ]
+   }
+  ],
+  "call_sites": [
+   {
+    "file": "lumenairy/elements/_berreman_jax.py",
+    "line": 396,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/berreman.py",
+    "line": 594,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/pmm/_jax_stack2d.py",
+    "line": 192,
+    "n_args": 2,
+    "second_arg": "jnp"
+   },
+   {
+    "file": "lumenairy/elements/pmm/_jax_stack2d.py",
+    "line": 210,
+    "n_args": 2,
+    "second_arg": "jnp"
+   },
+   {
+    "file": "lumenairy/elements/pmm/_jax_twod.py",
+    "line": 402,
+    "n_args": 2,
+    "second_arg": "jnp"
+   },
+   {
+    "file": "lumenairy/elements/pmm/_jax_twod.py",
+    "line": 374,
+    "n_args": 2,
+    "second_arg": "jnp"
+   },
+   {
+    "file": "lumenairy/elements/pmm/_jax_twod_jones.py",
+    "line": 208,
+    "n_args": 2,
+    "second_arg": "jnp"
+   },
+   {
+    "file": "lumenairy/elements/pmm/twod.py",
+    "line": 668,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/pmm/twod.py",
+    "line": 755,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/pmm/twod.py",
+    "line": 778,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 2360,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 2618,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 3870,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 3882,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 2480,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 2553,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 2570,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 2462,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/oned.py",
+    "line": 639,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/oned.py",
+    "line": 640,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/oned.py",
+    "line": 645,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/oned.py",
+    "line": 656,
+    "n_args": 1,
+    "second_arg": null
+   },
+   {
+    "file": "lumenairy/elements/rcwa/stack.py",
+    "line": 2608,
+    "n_args": 1,
+    "second_arg": null
+   }
+  ],
+  "importers": [
+   {
+    "file": "lumenairy/elements/_berreman_jax.py",
+    "line": 374,
+    "from": "rcwa._core"
+   },
+   {
+    "file": "lumenairy/elements/berreman.py",
+    "line": 51,
+    "from": "rcwa._core"
+   },
+   {
+    "file": "lumenairy/elements/pmm/_jax_stack2d.py",
+    "line": 112,
+    "from": "rcwa._core"
+   },
+   {
+    "file": "lumenairy/elements/pmm/_jax_twod.py",
+    "line": 333,
+    "from": "rcwa._core"
+   },
+   {
+    "file": "lumenairy/elements/pmm/_jax_twod_jones.py",
+    "line": 97,
+    "from": "rcwa._core"
+   },
+   {
+    "file": "lumenairy/elements/pmm/twod.py",
+    "line": 85,
+    "from": "rcwa._core"
+   },
+   {
+    "file": "lumenairy/elements/rcwa/oned.py",
+    "line": 16,
+    "from": "_core"
+   },
+   {
+    "file": "lumenairy/elements/rcwa/stack.py",
+    "line": 18,
+    "from": "_core"
+   }
+  ],
+  "exact_zero_pins": [
+   {
+    "file": "lumenairy/elements/eme/_jax_modes.py",
+    "line": 164,
+    "src": "np.asarray(eps_xy).imag != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/pmm/_core.py",
+    "line": 2080,
+    "src": "float(np.imag(_C(eps_sup))) != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/pmm/stack.py",
+    "line": 595,
+    "src": "float(np.imag(n_sup)) != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/pmm/stack2d_pure.py",
+    "line": 391,
+    "src": "np.imag(np.asarray(e, dtype=_C)) != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/pmm/stack2d_pure.py",
+    "line": 395,
+    "src": "np.imag(L['eps']) != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/pmm/stack2d_pure.py",
+    "line": 325,
+    "src": "np.imag(spec) != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/pmm/stack2d_pure.py",
+    "line": 411,
+    "src": "np.imag(L['eps_cell']) != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/pmm/twod.py",
+    "line": 177,
+    "src": "np.imag(np.asarray(e, dtype=_C)) != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 1065,
+    "src": "float(np.imag(complex(eps_sup))) != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 1067,
+    "src": "float(np.imag(complex(eps_sub))) != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/rcwa/_core.py",
+    "line": 1071,
+    "src": "float(np.max(np.abs(np.imag(arr)))) != 0.0"
+   },
+   {
+    "file": "lumenairy/elements/rcwa/oned.py",
+    "line": 742,
+    "src": "float(np.imag(complex(v))) == 0.0"
+   }
+  ]
+ },
+ "bit_identity": {
+  "sizes": [
+   {
+    "size": 1,
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+   },
+   {
+    "size": 2,
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+   },
+   {
+    "size": 3,
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+   },
+   {
+    "size": 7,
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+   },
+   {
+    "size": 64,
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+   },
+   {
+    "size": 243,
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+   },
+   {
+    "size": 1024,
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+   },
+   {
+    "size": 4037,
+    "bit_identical": true,
+    "max_abs_diff": 0.0
+   }
+  ],
+  "dominated": {
+   "dom_1e4": {
+    "n": 32,
+    "bit_identical": true,
+    "n_conjugated": 19,
+    "max_abs_diff": 0.0
+   },
+   "dom_1e8": {
+    "n": 32,
+    "bit_identical": true,
+    "n_conjugated": 11,
+    "max_abs_diff": 0.0
+   },
+   "dom_1e12": {
+    "n": 32,
+    "bit_identical": true,
+    "n_conjugated": 17,
+    "max_abs_diff": 0.0
+   },
+   "subunit": {
+    "n": 4,
+    "bit_identical": true,
+    "n_conjugated": 2,
+    "max_abs_diff": 0.0
+   }
+  },
+  "n_values": 4037,
+  "min_Re": 0.0,
+  "n_negative_Re": 0
+ },
+ "scale_contamination": {
+  "n_conjugated_clean": 14,
+  "rows": {
+   "clean": {
+    "scale": 2.9605367668466456,
+    "n_conjugated_of_the_24_clean_modes": 14
+   },
+   "plus_nan": {
+    "scale": "nan",
+    "n_conjugated_of_the_24_clean_modes": 0
+   },
+   "plus_inf": {
+    "scale": "inf",
+    "n_conjugated_of_the_24_clean_modes": 14
+   },
+   "plus_1e300": {
+    "scale": 1e+150,
+    "n_conjugated_of_the_24_clean_modes": 14
+   },
+   "plus_huge_denormal_imag": {
+    "scale": "inf",
+    "n_conjugated_of_the_24_clean_modes": 14
+   }
+  }
+ },
+ "jax_body": {
+  "available": true,
+  "jax_version": "0.11.0",
+  "n_values": 4015,
+  "jit_explicit_jnp_vs_numpy_max_rel": 2.8434231211904164e-16,
+  "jit_autodetect_matches_explicit_bitwise": true,
+  "n_branch_disagreements_jax_vs_numpy": 0,
+  "n_conjugated_numpy": 961,
+  "grad_explicit_jnp": 851406297.1649544,
+  "grad_autodetect": 851406297.1649544
+ },
+ "jax_twins": {
+  "available": true,
+  "jax_version": "0.11.0",
+  "pmm_efficiency_2d_cell": {
+   "max_abs_dR": 1.2576745200831851e-17,
+   "max_abs_dT": 1.3322676295501878e-15,
+   "closure_numpy": 1.021405182655144e-14,
+   "closure_jax": 1.1546319456101628e-14
+  },
+  "pmm_jones_2d": {
+   "max_abs_dR": 7.719519468096792e-17,
+   "max_abs_dT": 1.2656542480726785e-14,
+   "closure_numpy": 2.0872192862952943e-14,
+   "closure_jax": 2.4424906541753444e-14
+  },
+  "PMM2DStackHybrid": {
+   "error": "AttributeError(\"'tuple' object has no attribute 'R'\")"
+  },
+  "grad_dRdscale": -0.006314087369544095
+ },
+ "_stamp": {
+  "lumenairy_file": "C:\\tmp\\lum_vbc2\\lumenairy\\__init__.py",
+  "tree": "C:\\tmp\\lum_vbc2",
+  "arm": "post",
+  "n_sqrt_decay_definitions": 1,
+  "sqrt_decay_sites": [
+   "lumenairy/elements/rcwa/_core.py"
+  ],
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ }
+}

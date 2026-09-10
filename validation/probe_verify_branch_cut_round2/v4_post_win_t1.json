@@ -1,0 +1,305 @@
+{
+ "pop1_rcwa_ordinary": {
+  "label": "RCWA ordinary",
+  "n_eig_arrays": 55,
+  "n_acted_on_population": 668,
+  "min_abs_lam2": 0.001909437757659736,
+  "arraymax_noise_max": 4.544192454359413e-16,
+  "arraymax_signal_min": 0.034234700684083255,
+  "permode_noise_max": 6.904047479945444e-15,
+  "permode_signal_min": 0.9267944898982807,
+  "worst_conjugated": {
+   "rho": 6.904047479945444e-15,
+   "abs_r": 0.6944125001253288,
+   "abs_im_r": 0.6944125001253288,
+   "abs_lam2": 0.48220872033030987,
+   "lossless_fixture": true
+  },
+  "closest_noise_to_bar": {
+   "ratio": 4.544192454359413e-16,
+   "bar": 1e-08,
+   "ratio_over_bar": 4.5441924543594134e-08,
+   "abs_lam2": 0.48220872033030987,
+   "abs_r": 0.6944125001253288
+  },
+  "closest_signal_to_bar": {
+   "ratio": 0.034234700684083255,
+   "bar": 1e-08,
+   "bar_over_ratio": 2.9210128320617393e-07,
+   "abs_lam2": 0.12628438809313022,
+   "abs_r": 0.355365147549855,
+   "lossless_fixture": true
+  },
+  "n_noise": 93,
+  "n_signal": 575,
+  "n_complex_modes_of_a_lossless_cell": 0,
+  "LOOSE_arraymax_noise_max": 4.544192454359413e-16,
+  "LOOSE_permode_noise_max": 6.904047479945444e-15,
+  "arraymax_gap_decades": 13.877009818948729,
+  "arraymax_decades_above_noise": 7.342543283789914,
+  "arraymax_decades_below_signal": 6.534466535158814,
+  "permode_gap_decades": 14.127879673688781,
+  "permode_decades_above_noise": 6.160896230588414,
+  "permode_decades_below_signal": 7.966983443100367,
+  "errors": [
+   "aniso_0.0: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'. Did you mean 'n_orders_x'?",
+   "aniso_conical_0.0: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'. Did you mean 'n_orders_x'?",
+   "aniso_0.3: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'. Did you mean 'n_orders_x'?",
+   "aniso_conical_0.3: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'. Did you mean 'n_orders_x'?",
+   "aniso_1.1: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'. Did you mean 'n_orders_x'?",
+   "aniso_conical_1.1: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'. Did you mean 'n_orders_x'?"
+  ],
+  "n_fixtures": 61
+ },
+ "pop2_hybrid_pmm": {
+  "label": "hybrid PMM",
+  "n_eig_arrays": 24,
+  "n_acted_on_population": 1818,
+  "min_abs_lam2": 0.03851323866828669,
+  "arraymax_noise_max": 1.148154215031558e-15,
+  "arraymax_signal_min": 1.0035537394682528e-07,
+  "permode_noise_max": 4.522752506798865e-15,
+  "permode_signal_min": 2.83776209097303e-07,
+  "worst_conjugated": {
+   "rho": 4.522752506798865e-15,
+   "abs_r": 0.9621043873141993,
+   "abs_im_r": 0.9621043873141993,
+   "abs_lam2": 0.925644852089231,
+   "lossless_fixture": true
+  },
+  "closest_noise_to_bar": {
+   "ratio": 1.148154215031558e-15,
+   "bar": 1e-08,
+   "ratio_over_bar": 1.1481542150315579e-07,
+   "abs_lam2": 0.925644852089231,
+   "abs_r": 0.9621043873141993
+  },
+  "closest_signal_to_bar": {
+   "ratio": 1.0035537394682528e-07,
+   "bar": 1e-08,
+   "bar_over_ratio": 0.099645884487448,
+   "abs_lam2": 1.796300078069345,
+   "abs_r": 1.3402611977033974,
+   "lossless_fixture": true
+  },
+  "n_noise": 112,
+  "n_signal": 1706,
+  "n_complex_modes_of_a_lossless_cell": 50,
+  "LOOSE_arraymax_noise_max": 0.00030917626207455816,
+  "LOOSE_permode_noise_max": 0.001150915585926571,
+  "arraymax_gap_decades": 7.94154040904736,
+  "arraymax_decades_above_noise": 6.9399997754927885,
+  "arraymax_decades_below_signal": 1.0015406335545716,
+  "permode_gap_decades": 7.797573159751244,
+  "permode_decades_above_noise": 6.344597176983773,
+  "permode_decades_below_signal": 1.4529759827674713,
+  "errors": [],
+  "n_fixtures": 24
+ },
+ "cutoff_mounts": [
+  {
+   "name": "cut_te_M9_d0.4",
+   "n_ridge": 2.59670979509289,
+   "pol": "te",
+   "M": 9,
+   "duty": 0.4,
+   "min_abs_lam2": 4.344414398827171e-16
+  },
+  {
+   "name": "cut_te_M9_d0.5",
+   "n_ridge": 3.3965684611437523,
+   "pol": "te",
+   "M": 9,
+   "duty": 0.5,
+   "min_abs_lam2": 4.018489499204473e-16
+  },
+  {
+   "name": "cut_te_M9_d0.62",
+   "n_ridge": 2.69675817627416,
+   "pol": "te",
+   "M": 9,
+   "duty": 0.62,
+   "min_abs_lam2": 4.0439932789410933e-16
+  },
+  {
+   "name": "cut_te_M11_d0.4",
+   "n_ridge": 2.5946415610363123,
+   "pol": "te",
+   "M": 11,
+   "duty": 0.4,
+   "min_abs_lam2": 1.8488600914603344e-15
+  },
+  {
+   "name": "cut_te_M11_d0.5",
+   "n_ridge": 3.391267369957905,
+   "pol": "te",
+   "M": 11,
+   "duty": 0.5,
+   "min_abs_lam2": 4.2802672379451485e-16
+  },
+  {
+   "name": "cut_te_M11_d0.62",
+   "n_ridge": 2.6957380046991677,
+   "pol": "te",
+   "M": 11,
+   "duty": 0.62,
+   "min_abs_lam2": 1.1969956991697834e-15
+  },
+  {
+   "name": "cut_te_M15_d0.4",
+   "n_ridge": 2.5931045969721,
+   "pol": "te",
+   "M": 15,
+   "duty": 0.4,
+   "min_abs_lam2": 3.1721911239154816e-16
+  },
+  {
+   "name": "cut_te_M15_d0.5",
+   "n_ridge": 3.3888314353928295,
+   "pol": "te",
+   "M": 15,
+   "duty": 0.5,
+   "min_abs_lam2": 1.7487744580541442e-15
+  },
+  {
+   "name": "cut_te_M15_d0.62",
+   "n_ridge": 2.6944316408426743,
+   "pol": "te",
+   "M": 15,
+   "duty": 0.62,
+   "min_abs_lam2": 6.17967049909595e-15
+  },
+  {
+   "name": "cut_tm_M9_d0.4",
+   "n_ridge": 2.5967097950928912,
+   "pol": "tm",
+   "M": 9,
+   "duty": 0.4,
+   "min_abs_lam2": 9.136309065567315e-16
+  },
+  {
+   "name": "cut_tm_M9_d0.5",
+   "n_ridge": 3.3965684611437523,
+   "pol": "tm",
+   "M": 9,
+   "duty": 0.5,
+   "min_abs_lam2": 1.2119943951600364e-15
+  },
+  {
+   "name": "cut_tm_M9_d0.62",
+   "n_ridge": 2.69675817627416,
+   "pol": "tm",
+   "M": 9,
+   "duty": 0.62,
+   "min_abs_lam2": 1.1196967697223395e-15
+  },
+  {
+   "name": "cut_tm_M11_d0.4",
+   "n_ridge": 2.5946415610363123,
+   "pol": "tm",
+   "M": 11,
+   "duty": 0.4,
+   "min_abs_lam2": 7.702375925142983e-16
+  },
+  {
+   "name": "cut_tm_M11_d0.5",
+   "n_ridge": 3.391267369957901,
+   "pol": "tm",
+   "M": 11,
+   "duty": 0.5,
+   "min_abs_lam2": 2.175874142963435e-15
+  },
+  {
+   "name": "cut_tm_M11_d0.62",
+   "n_ridge": 2.6957380046991677,
+   "pol": "tm",
+   "M": 11,
+   "duty": 0.62,
+   "min_abs_lam2": 7.835197183683982e-16
+  },
+  {
+   "name": "cut_tm_M15_d0.4",
+   "n_ridge": 2.5931045969720996,
+   "pol": "tm",
+   "M": 15,
+   "duty": 0.4,
+   "min_abs_lam2": 5.785887940511154e-16
+  },
+  {
+   "name": "cut_tm_M15_d0.5",
+   "n_ridge": 3.3888314353928295,
+   "pol": "tm",
+   "M": 15,
+   "duty": 0.5,
+   "min_abs_lam2": 6.1708346192474804e-15
+  },
+  {
+   "name": "cut_tm_M15_d0.62",
+   "n_ridge": 2.6944316408426756,
+   "pol": "tm",
+   "M": 15,
+   "duty": 0.62,
+   "min_abs_lam2": 2.138391090069801e-15
+  }
+ ],
+ "pop3_rcwa_cutoff": {
+  "label": "RCWA layer cutoff",
+  "n_eig_arrays": 162,
+  "n_acted_on_population": 1998,
+  "min_abs_lam2": 3.1721911239154816e-16,
+  "arraymax_noise_max": 3.919497019719765e-09,
+  "arraymax_signal_min": 1.9954414116128795e-09,
+  "permode_noise_max": 0.263032992444779,
+  "permode_signal_min": 0.13391180631189675,
+  "worst_conjugated": {
+   "rho": 0.997555876452524,
+   "abs_r": 4.6646266120274144e-08,
+   "abs_im_r": 3.25932697839653e-09,
+   "abs_lam2": 2.175874142963435e-15,
+   "lossless_fixture": true
+  },
+  "closest_noise_to_bar": {
+   "ratio": 3.919497019719765e-09,
+   "bar": 1e-08,
+   "ratio_over_bar": 0.3919497019719765,
+   "abs_lam2": 1.2119943951600364e-15,
+   "abs_r": 3.4813709873554654e-08
+  },
+  "closest_signal_to_bar": {
+   "ratio": 1.9954414116128795e-09,
+   "bar": 1e-08,
+   "bar_over_ratio": 5.011422506219904,
+   "abs_lam2": 3.1721911239154816e-16,
+   "abs_r": 1.78106460408248e-08,
+   "lossless_fixture": true
+  },
+  "n_noise": 601,
+  "n_signal": 1397,
+  "n_complex_modes_of_a_lossless_cell": 0,
+  "LOOSE_arraymax_noise_max": 3.919497019719765e-09,
+  "LOOSE_permode_noise_max": 0.263032992444779,
+  "arraymax_gap_decades": -0.29319135762078047,
+  "arraymax_decades_above_noise": 0.40676966144272414,
+  "arraymax_decades_below_signal": -0.6999610190635047,
+  "permode_gap_decades": -0.29319135762078047,
+  "permode_decades_above_noise": -7.4200102258207865,
+  "permode_decades_below_signal": 7.126818868200006,
+  "errors": [],
+  "n_fixtures": 162
+ },
+ "_stamp": {
+  "lumenairy_file": "C:\\tmp\\lum_vbc2\\lumenairy\\__init__.py",
+  "tree": "C:\\tmp\\lum_vbc2",
+  "arm": "post",
+  "n_sqrt_decay_definitions": 1,
+  "sqrt_decay_sites": [
+   "lumenairy/elements/rcwa/_core.py"
+  ],
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ }
+}

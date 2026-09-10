@@ -1,0 +1,305 @@
+{
+ "pop1_rcwa_ordinary": {
+  "label": "RCWA ordinary",
+  "n_eig_arrays": 55,
+  "n_acted_on_population": 691,
+  "min_abs_lam2": 0.0019094377576663849,
+  "arraymax_noise_max": 3.380184898796272e-16,
+  "arraymax_signal_min": 0.034234700684083255,
+  "permode_noise_max": 5.135556485926608e-15,
+  "permode_signal_min": 0.9267944898982908,
+  "worst_conjugated": {
+   "rho": 5.135556485926608e-15,
+   "abs_r": 0.6944125001253229,
+   "abs_im_r": 0.6944125001253229,
+   "abs_lam2": 0.48220872033030154,
+   "lossless_fixture": true
+  },
+  "closest_noise_to_bar": {
+   "ratio": 3.380184898796272e-16,
+   "bar": 1e-08,
+   "ratio_over_bar": 3.380184898796272e-08,
+   "abs_lam2": 0.48220872033030154,
+   "abs_r": 0.6944125001253229
+  },
+  "closest_signal_to_bar": {
+   "ratio": 0.034234700684083255,
+   "bar": 1e-08,
+   "bar_over_ratio": 2.9210128320617393e-07,
+   "abs_lam2": 0.12628438809313022,
+   "abs_r": 0.355365147549855,
+   "lossless_fixture": true
+  },
+  "n_noise": 104,
+  "n_signal": 587,
+  "n_complex_modes_of_a_lossless_cell": 0,
+  "LOOSE_arraymax_noise_max": 3.380184898796272e-16,
+  "LOOSE_permode_noise_max": 5.135556485926608e-15,
+  "arraymax_gap_decades": 14.005526077978603,
+  "arraymax_decades_above_noise": 7.471059542819789,
+  "arraymax_decades_below_signal": 6.534466535158814,
+  "permode_gap_decades": 14.256395932718657,
+  "permode_decades_above_noise": 6.289412489618286,
+  "permode_decades_below_signal": 7.966983443100371,
+  "errors": [
+   "aniso_0.0: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'",
+   "aniso_conical_0.0: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'",
+   "aniso_0.3: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'",
+   "aniso_conical_0.3: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'",
+   "aniso_1.1: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'",
+   "aniso_conical_1.1: TypeError: rcwa_jones_2d() got an unexpected keyword argument 'n_orders'"
+  ],
+  "n_fixtures": 61
+ },
+ "pop2_hybrid_pmm": {
+  "label": "hybrid PMM",
+  "n_eig_arrays": 24,
+  "n_acted_on_population": 1711,
+  "min_abs_lam2": 0.0385132386682866,
+  "arraymax_noise_max": 1.1741628677781317e-15,
+  "arraymax_signal_min": 1.0035537394905591e-07,
+  "permode_noise_max": 4.625204510082036e-15,
+  "permode_signal_min": 2.8377620910361106e-07,
+  "worst_conjugated": {
+   "rho": 4.625204510082036e-15,
+   "abs_r": 0.962104387314204,
+   "abs_im_r": 0.962104387314204,
+   "abs_lam2": 0.9256448520892399,
+   "lossless_fixture": true
+  },
+  "closest_noise_to_bar": {
+   "ratio": 1.1741628677781317e-15,
+   "bar": 1e-08,
+   "ratio_over_bar": 1.1741628677781317e-07,
+   "abs_lam2": 0.9256448520892399,
+   "abs_r": 0.962104387314204
+  },
+  "closest_signal_to_bar": {
+   "ratio": 1.0035537394905591e-07,
+   "bar": 1e-08,
+   "bar_over_ratio": 0.09964588448523314,
+   "abs_lam2": 1.7963000780693383,
+   "abs_r": 1.340261197703395,
+   "lossless_fixture": true
+  },
+  "n_noise": 89,
+  "n_signal": 1622,
+  "n_complex_modes_of_a_lossless_cell": 50,
+  "LOOSE_arraymax_noise_max": 0.00030917626207451957,
+  "LOOSE_permode_noise_max": 0.0011509155859264239,
+  "arraymax_gap_decades": 7.931812291617324,
+  "arraymax_decades_above_noise": 6.930271658053099,
+  "arraymax_decades_below_signal": 1.0015406335642247,
+  "permode_gap_decades": 7.78784504232121,
+  "permode_decades_above_noise": 6.334869059544085,
+  "permode_decades_below_signal": 1.4529759827771251,
+  "errors": [],
+  "n_fixtures": 24
+ },
+ "cutoff_mounts": [
+  {
+   "name": "cut_te_M9_d0.4",
+   "n_ridge": 2.5967097950928912,
+   "pol": "te",
+   "M": 9,
+   "duty": 0.4,
+   "min_abs_lam2": 5.962623942029894e-16
+  },
+  {
+   "name": "cut_te_M9_d0.5",
+   "n_ridge": 3.3965684611437523,
+   "pol": "te",
+   "M": 9,
+   "duty": 0.5,
+   "min_abs_lam2": 4.018489499204473e-16
+  },
+  {
+   "name": "cut_te_M9_d0.62",
+   "n_ridge": 2.696758176274159,
+   "pol": "te",
+   "M": 9,
+   "duty": 0.62,
+   "min_abs_lam2": 5.263993330023755e-15
+  },
+  {
+   "name": "cut_te_M11_d0.4",
+   "n_ridge": 2.5946415610363123,
+   "pol": "te",
+   "M": 11,
+   "duty": 0.4,
+   "min_abs_lam2": 2.1255228580980025e-15
+  },
+  {
+   "name": "cut_te_M11_d0.5",
+   "n_ridge": 3.391267369957905,
+   "pol": "te",
+   "M": 11,
+   "duty": 0.5,
+   "min_abs_lam2": 4.2802672379451485e-16
+  },
+  {
+   "name": "cut_te_M11_d0.62",
+   "n_ridge": 2.6957380046991677,
+   "pol": "te",
+   "M": 11,
+   "duty": 0.62,
+   "min_abs_lam2": 4.659694911328571e-16
+  },
+  {
+   "name": "cut_te_M15_d0.4",
+   "n_ridge": 2.593104596972097,
+   "pol": "te",
+   "M": 15,
+   "duty": 0.4,
+   "min_abs_lam2": 1.6758178977033637e-15
+  },
+  {
+   "name": "cut_te_M15_d0.5",
+   "n_ridge": 3.3888314353928295,
+   "pol": "te",
+   "M": 15,
+   "duty": 0.5,
+   "min_abs_lam2": 1.7487744580541442e-15
+  },
+  {
+   "name": "cut_te_M15_d0.62",
+   "n_ridge": 2.6944316408426756,
+   "pol": "te",
+   "M": 15,
+   "duty": 0.62,
+   "min_abs_lam2": 1.2461703885213108e-15
+  },
+  {
+   "name": "cut_tm_M9_d0.4",
+   "n_ridge": 2.5967097950928912,
+   "pol": "tm",
+   "M": 9,
+   "duty": 0.4,
+   "min_abs_lam2": 1.3986950381404804e-15
+  },
+  {
+   "name": "cut_tm_M9_d0.5",
+   "n_ridge": 3.3965684611437523,
+   "pol": "tm",
+   "M": 9,
+   "duty": 0.5,
+   "min_abs_lam2": 1.2119943951600364e-15
+  },
+  {
+   "name": "cut_tm_M9_d0.62",
+   "n_ridge": 2.696758176274159,
+   "pol": "tm",
+   "M": 9,
+   "duty": 0.62,
+   "min_abs_lam2": 1.1842916374779423e-15
+  },
+  {
+   "name": "cut_tm_M11_d0.4",
+   "n_ridge": 2.5946415610363123,
+   "pol": "tm",
+   "M": 11,
+   "duty": 0.4,
+   "min_abs_lam2": 1.9987220763103803e-15
+  },
+  {
+   "name": "cut_tm_M11_d0.5",
+   "n_ridge": 3.391267369957901,
+   "pol": "tm",
+   "M": 11,
+   "duty": 0.5,
+   "min_abs_lam2": 2.175874142963435e-15
+  },
+  {
+   "name": "cut_tm_M11_d0.62",
+   "n_ridge": 2.6957380046991664,
+   "pol": "tm",
+   "M": 11,
+   "duty": 0.62,
+   "min_abs_lam2": 2.4526953897277635e-15
+  },
+  {
+   "name": "cut_tm_M15_d0.4",
+   "n_ridge": 2.5931045969720996,
+   "pol": "tm",
+   "M": 15,
+   "duty": 0.4,
+   "min_abs_lam2": 2.7178005390161433e-15
+  },
+  {
+   "name": "cut_tm_M15_d0.5",
+   "n_ridge": 3.3888314353928295,
+   "pol": "tm",
+   "M": 15,
+   "duty": 0.5,
+   "min_abs_lam2": 6.1708346192474804e-15
+  },
+  {
+   "name": "cut_tm_M15_d0.62",
+   "n_ridge": 2.6944316408426765,
+   "pol": "tm",
+   "M": 15,
+   "duty": 0.62,
+   "min_abs_lam2": 1.9869373181103208e-15
+  }
+ ],
+ "pop3_rcwa_cutoff": {
+  "label": "RCWA layer cutoff",
+  "n_eig_arrays": 162,
+  "n_acted_on_population": 1998,
+  "min_abs_lam2": 4.018489499204473e-16,
+  "arraymax_noise_max": 3.919497019719765e-09,
+  "arraymax_signal_min": 4.024372761270657e-09,
+  "permode_noise_max": 0.263032992444779,
+  "permode_signal_min": 0.27007108432141697,
+  "worst_conjugated": {
+   "rho": 0.9999280795909844,
+   "abs_r": 4.093675485066402e-08,
+   "abs_im_r": 4.909606389852412e-10,
+   "abs_lam2": 1.6758178977033637e-15,
+   "lossless_fixture": true
+  },
+  "closest_noise_to_bar": {
+   "ratio": 3.919497019719765e-09,
+   "bar": 1e-08,
+   "ratio_over_bar": 0.3919497019719765,
+   "abs_lam2": 1.2119943951600364e-15,
+   "abs_r": 3.4813709873554654e-08
+  },
+  "closest_signal_to_bar": {
+   "ratio": 4.024372761270657e-09,
+   "bar": 1e-08,
+   "bar_over_ratio": 2.4848592794974085,
+   "abs_lam2": 1.2461703885213108e-15,
+   "abs_r": 3.5301138629246943e-08,
+   "lossless_fixture": true
+  },
+  "n_noise": 598,
+  "n_signal": 1400,
+  "n_complex_modes_of_a_lossless_cell": 0,
+  "LOOSE_arraymax_noise_max": 3.919497019719765e-09,
+  "LOOSE_permode_noise_max": 0.263032992444779,
+  "arraymax_gap_decades": 0.011467862284124226,
+  "arraymax_decades_above_noise": 0.40676966144272414,
+  "arraymax_decades_below_signal": -0.3953017991586,
+  "permode_gap_decades": 0.011467862284124226,
+  "permode_decades_above_noise": -7.4200102258207865,
+  "permode_decades_below_signal": 7.431478088104911,
+  "errors": [],
+  "n_fixtures": 162
+ },
+ "_stamp": {
+  "lumenairy_file": "/mnt/c/tmp/lum_vbc2/lumenairy/__init__.py",
+  "tree": "/mnt/c/tmp/lum_vbc2",
+  "arm": "post",
+  "n_sqrt_decay_definitions": 1,
+  "sqrt_decay_sites": [
+   "lumenairy/elements/rcwa/_core.py"
+  ],
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ }
+}
