@@ -1,0 +1,365 @@
+{
+ "meta": {
+  "lumenairy": "C:\\tmp\\lum_vsliver\\lumenairy\\__init__.py",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "bar_b": 0.01,
+  "bar_a": 100.0
+ },
+ "d": [
+  {
+   "ns": 2,
+   "min_feature": "default",
+   "screen_default": null,
+   "ladder": [
+    {
+     "degree": 6,
+     "R0": 0.1109997816156638,
+     "closure": 6.669063079556281e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 8,
+     "R0": 0.11072286621735072,
+     "closure": 3.455589370204848e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 10,
+     "R0": 0.11064252428002565,
+     "closure": 9.405912493321011e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 12,
+     "R0": 0.11061274094173776,
+     "closure": 2.233139251295313e-08,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 14,
+     "R0": 0.11059951462209766,
+     "closure": 5.563969063260288e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 16,
+     "R0": 0.1105927773890556,
+     "closure": 2.1604797395546882e-08,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 18,
+     "R0": 0.1105889967870457,
+     "closure": 2.3929306536274453e-08,
+     "refused": false,
+     "warned": false
+    }
+   ],
+   "R0_spread": 0.00041078482861810206,
+   "max_closure": 2.3929306536274453e-08,
+   "any_refused": false
+  },
+  {
+   "ns": 2,
+   "min_feature": "0.5nm",
+   "screen_default": null,
+   "ladder": [
+    {
+     "degree": 6,
+     "R0": 0.11087970673263728,
+     "closure": 5.996425578302933e-11,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 8,
+     "R0": 0.11060685914752674,
+     "closure": 5.590483631578991e-11,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 10,
+     "R0": 0.1105281095461492,
+     "closure": 4.3950620920441e-11,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 12,
+     "R0": 0.11049898762875981,
+     "closure": 2.8870283941273556e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 14,
+     "R0": 0.11048605717258828,
+     "closure": 2.6461577373737555e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 16,
+     "R0": 0.11047947526840125,
+     "closure": 1.6935064461875982e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 18,
+     "R0": 0.11047576408678844,
+     "closure": 6.197726776235868e-10,
+     "refused": false,
+     "warned": false
+    }
+   ],
+   "R0_spread": 0.0004039426458488371,
+   "max_closure": 6.197726776235868e-10,
+   "any_refused": false
+  },
+  {
+   "ns": 3,
+   "min_feature": "default",
+   "screen_default": null,
+   "ladder": [
+    {
+     "degree": 6,
+     "R0": 0.111438642764542,
+     "closure": 4.714155732443714e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 8,
+     "R0": 0.11117864057262476,
+     "closure": 3.8748315667191946e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 10,
+     "R0": 0.11110209651117926,
+     "closure": 6.496407856104724e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 12,
+     "R0": 0.11107334125969702,
+     "closure": 9.850775750663843e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 14,
+     "R0": 0.11106044554008129,
+     "closure": 7.804043189452159e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 16,
+     "R0": 0.11105384294719017,
+     "closure": 5.3246769216031e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 18,
+     "R0": 0.11105012070908428,
+     "closure": 2.588468772657393e-08,
+     "refused": false,
+     "warned": false
+    }
+   ],
+   "R0_spread": 0.000388522055457724,
+   "max_closure": 2.588468772657393e-08,
+   "any_refused": false
+  },
+  {
+   "ns": 3,
+   "min_feature": "0.5nm",
+   "screen_default": null,
+   "ladder": [
+    {
+     "degree": 6,
+     "R0": 0.111438642764542,
+     "closure": 4.714155732443714e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 8,
+     "R0": 0.11117864057262476,
+     "closure": 3.8748315667191946e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 10,
+     "R0": 0.11110209651117926,
+     "closure": 6.496407856104724e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 12,
+     "R0": 0.11107334125969702,
+     "closure": 9.850775750663843e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 14,
+     "R0": 0.11106044554008129,
+     "closure": 7.804043189452159e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 16,
+     "R0": 0.11105384294719017,
+     "closure": 5.3246769216031e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 18,
+     "R0": 0.11105012070908428,
+     "closure": 2.588468772657393e-08,
+     "refused": false,
+     "warned": false
+    }
+   ],
+   "R0_spread": 0.000388522055457724,
+   "max_closure": 2.588468772657393e-08,
+   "any_refused": false
+  },
+  {
+   "ns": 6,
+   "min_feature": "default",
+   "screen_default": null,
+   "ladder": [
+    {
+     "degree": 6,
+     "R0": 0.11197586985854302,
+     "closure": 1.993338605288386e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 8,
+     "R0": 0.11172664528952772,
+     "closure": 2.7767352861474137e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 10,
+     "R0": 0.11165298097092366,
+     "closure": 1.9679996743349193e-08,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 12,
+     "R0": 0.1116253323574865,
+     "closure": 1.0812196249432304e-08,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 14,
+     "R0": 0.11161295640947888,
+     "closure": 4.721073532110154e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 16,
+     "R0": 0.11160672319513697,
+     "closure": 8.504145998511348e-08,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 18,
+     "R0": 0.11160308035566525,
+     "closure": 1.8483135910685178e-08,
+     "refused": false,
+     "warned": false
+    }
+   ],
+   "R0_spread": 0.0003727895028777656,
+   "max_closure": 8.504145998511348e-08,
+   "any_refused": false
+  },
+  {
+   "ns": 6,
+   "min_feature": "0.5nm",
+   "screen_default": null,
+   "ladder": [
+    {
+     "degree": 6,
+     "R0": 0.11183246076100074,
+     "closure": 2.657289943641672e-10,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 8,
+     "R0": 0.11158805249757807,
+     "closure": 1.925266057689612e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 10,
+     "R0": 0.11151614637905308,
+     "closure": 3.909525148060311e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 12,
+     "R0": 0.11148916511962931,
+     "closure": 4.214902538102194e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 14,
+     "R0": 0.11147711581679924,
+     "closure": 5.609779085702371e-09,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 16,
+     "R0": 0.11147096232009637,
+     "closure": 1.527608073370601e-08,
+     "refused": false,
+     "warned": false
+    },
+    {
+     "degree": 18,
+     "R0": 0.11146751692118956,
+     "closure": 1.459799281455787e-08,
+     "refused": false,
+     "warned": false
+    }
+   ],
+   "R0_spread": 0.0003649438398111854,
+   "max_closure": 1.527608073370601e-08,
+   "any_refused": false
+  }
+ ]
+}
