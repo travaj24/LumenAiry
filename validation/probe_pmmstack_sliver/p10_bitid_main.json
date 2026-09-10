@@ -1,0 +1,22 @@
+{
+ "f01_one_layer_normal": "9f717fd86bf47882c80cb0ada1c83b5ff6a3b0cba478e4f9b4d6ae251c20da43",
+ "f02_one_layer_oblique": "91e0bb8f26e4896da3007360dea27df382824b5bc13562570e241f5960ea7fed",
+ "f03_two_layer_tensor_oblique": "f6269d727bd5b99e2a543f603904fbbf10983f6567b97ad571cea74118279477",
+ "f04_bragg_abab": "72383692ec5fe4a2d0391eb7e821ed1bd74b0360581a58b77ce894ac348702f0",
+ "f05_taper_5_slices": "7f8e20f82a9900e3d02e318b143622299c9a59ec683b4ed71df9b414512bc94c",
+ "f06_taper_8_slices_oblique": "89b722d339aa67573321325e8a3be837075a98b1b227c75f6c54d15e29f1f765",
+ "f07_taper_snap_active": "45b93a1d98ea8d03cd39997d9012c928916d1d30d4af541995d01b949b62b1aa",
+ "f08_per_layer_halfwidth1": "23c5026fab8039ce8c058262e1ce3377cea065affca6e29d5411502459bec7bd",
+ "f09_per_layer_halfwidth2": "a703a4a2004ec4846820b6fc78ae3abe5af41314487e502e9a22293e0a9b989d",
+ "f10_conical": "bc33996940ac4734211b54157262a017f863389d1c01490be230facf46b9e963",
+ "f11_slanted": "4688112bb782d8423fce47834c6e24a03661e01d3fee9ab6df6e3e2a4abe0fa4",
+ "f12_out_of_plane_tensor": "210c46f88aa33e04c5d2afdc20ca46dc0ffdbca3e86c93dca15b0bfca93a70c2",
+ "f13_lossy_layer": "ccccc08e9c3eb2ab009daca2ce7bf45e9305a381ec1ad702bab063bf2d2e643f",
+ "f14_solve_vs_wavelength": "b14f96672464f9c94adac2f1b60bc6121af01ef059d0a4c414006f2921ce9993",
+ "f15_prepare": "47072c1e71ae2bc74b70000c20af680f6867f86ec73ffe5bb3238adfe324f28c",
+ "f16_stabilize_slices": "eaf7cc240e0d1fa6a62182d7b57fc1acfee5ae7592b428776516600ff0d80bfa",
+ "f17_internal_field": "620dc9aeecdf1ce58f73ca33599d6c8537d9117c46267b253e0d45420cf09454",
+ "f18_layer_absorption": "c863f00f60896e6a22568131e1c5eca1e02dce5a133ad26b9e2b4df127f261ad",
+ "_lumenairy": "D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy/lumenairy/__init__.py",
+ "_version": "5.44.0"
+}

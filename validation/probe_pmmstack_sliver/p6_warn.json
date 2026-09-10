@@ -1,0 +1,260 @@
+[
+ {
+  "tag": "default",
+  "degree": 12,
+  "delta": 0.001,
+  "err": 0.0011277266435457678,
+  "total": 1.000000000874647,
+  "warnings": []
+ },
+ {
+  "tag": "default",
+  "degree": 12,
+  "delta": 0.0003,
+  "err": 0.0003437225885086215,
+  "total": 0.9999999874946961,
+  "warnings": []
+ },
+ {
+  "tag": "default",
+  "degree": 12,
+  "delta": 0.0001,
+  "err": 0.00011503197876461257,
+  "total": 1.0000003151075552,
+  "warnings": []
+ },
+ {
+  "tag": "default",
+  "degree": 12,
+  "delta": 5e-05,
+  "err": 5.709287912747385e-05,
+  "total": 0.9999997703596712,
+  "warnings": []
+ },
+ {
+  "tag": "default",
+  "degree": 12,
+  "delta": 3e-05,
+  "err": 0.4786776625238641,
+  "total": 2.172592731317066,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 2.17 > 1)"
+  ]
+ },
+ {
+  "tag": "default",
+  "degree": 12,
+  "delta": 1e-05,
+  "err": 0.930360611264898,
+  "total": 3.612561698690123,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 3.61 > 1)",
+   "_pmm_union_grid: snapped 1 pair(s) of NEAR-COINCIDENT cross-"
+  ]
+ },
+ {
+  "tag": "default",
+  "degree": 12,
+  "delta": 5.544e-06,
+  "err": 6.395023525451737e-06,
+  "total": 0.9999999999999996,
+  "warnings": [
+   "_pmm_union_grid: snapped 2 pair(s) of NEAR-COINCIDENT cross-"
+  ]
+ },
+ {
+  "tag": "default",
+  "degree": 14,
+  "delta": 0.001,
+  "err": 0.001127715318645972,
+  "total": 0.9999999982947856,
+  "warnings": []
+ },
+ {
+  "tag": "default",
+  "degree": 14,
+  "delta": 0.0003,
+  "err": 0.0003437321979404828,
+  "total": 1.000000010593081,
+  "warnings": []
+ },
+ {
+  "tag": "default",
+  "degree": 14,
+  "delta": 0.0001,
+  "err": 0.478942686018064,
+  "total": 2.172979352145415,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 2.17 > 1)"
+  ]
+ },
+ {
+  "tag": "default",
+  "degree": 14,
+  "delta": 5e-05,
+  "err": 0.9302992974240125,
+  "total": 3.6126204568874294,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 3.61 > 1)"
+  ]
+ },
+ {
+  "tag": "default",
+  "degree": 14,
+  "delta": 3e-05,
+  "err": 8.618115072804983,
+  "total": 23.422521189191187,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 23.4 > 1)"
+  ]
+ },
+ {
+  "tag": "default",
+  "degree": 14,
+  "delta": 1e-05,
+  "err": 0.9304787932827936,
+  "total": 3.6128533117879793,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 3.61 > 1)",
+   "_pmm_union_grid: snapped 1 pair(s) of NEAR-COINCIDENT cross-"
+  ]
+ },
+ {
+  "tag": "default",
+  "degree": 14,
+  "delta": 5.544e-06,
+  "err": 6.395019615135222e-06,
+  "total": 0.9999999999999938,
+  "warnings": [
+   "_pmm_union_grid: snapped 2 pair(s) of NEAR-COINCIDENT cross-"
+  ]
+ },
+ {
+  "tag": "snap-off",
+  "degree": 12,
+  "delta": 0.001,
+  "err": 0.0011277266435457678,
+  "total": 1.000000000874647,
+  "warnings": []
+ },
+ {
+  "tag": "snap-off",
+  "degree": 12,
+  "delta": 0.0003,
+  "err": 0.0003437225885086215,
+  "total": 0.9999999874946961,
+  "warnings": []
+ },
+ {
+  "tag": "snap-off",
+  "degree": 12,
+  "delta": 0.0001,
+  "err": 0.00011503197876461257,
+  "total": 1.0000003151075552,
+  "warnings": []
+ },
+ {
+  "tag": "snap-off",
+  "degree": 12,
+  "delta": 5e-05,
+  "err": 5.709287912747385e-05,
+  "total": 0.9999997703596712,
+  "warnings": []
+ },
+ {
+  "tag": "snap-off",
+  "degree": 12,
+  "delta": 3e-05,
+  "err": 0.4786776625238641,
+  "total": 2.172592731317066,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 2.17 > 1)"
+  ]
+ },
+ {
+  "tag": "snap-off",
+  "degree": 12,
+  "delta": 1e-05,
+  "err": 0.9300058447846794,
+  "total": 3.610966851917713,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 3.61 > 1)"
+  ]
+ },
+ {
+  "tag": "snap-off",
+  "degree": 12,
+  "delta": 5.544e-06,
+  "err": 8.584569754823828,
+  "total": 23.327549144290522,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 23.3 > 1)"
+  ]
+ },
+ {
+  "tag": "snap-off",
+  "degree": 14,
+  "delta": 0.001,
+  "err": 0.001127715318645972,
+  "total": 0.9999999982947856,
+  "warnings": []
+ },
+ {
+  "tag": "snap-off",
+  "degree": 14,
+  "delta": 0.0003,
+  "err": 0.0003437321979404828,
+  "total": 1.000000010593081,
+  "warnings": []
+ },
+ {
+  "tag": "snap-off",
+  "degree": 14,
+  "delta": 0.0001,
+  "err": 0.478942686018064,
+  "total": 2.172979352145415,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 2.17 > 1)"
+  ]
+ },
+ {
+  "tag": "snap-off",
+  "degree": 14,
+  "delta": 5e-05,
+  "err": 0.9302992974240125,
+  "total": 3.6126204568874294,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 3.61 > 1)"
+  ]
+ },
+ {
+  "tag": "snap-off",
+  "degree": 14,
+  "delta": 3e-05,
+  "err": 8.618115072804983,
+  "total": 23.422521189191187,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 23.4 > 1)"
+  ]
+ },
+ {
+  "tag": "snap-off",
+  "degree": 14,
+  "delta": 1e-05,
+  "err": 0.4790076119632812,
+  "total": 2.1730333688913754,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 2.17 > 1)"
+  ]
+ },
+ {
+  "tag": "snap-off",
+  "degree": 14,
+  "delta": 5.544e-06,
+  "err": 0.9284245994455795,
+  "total": 3.601836116779195,
+  "warnings": [
+   "PMMStack.solve: energy not conserved (max R+T = 3.6 > 1)"
+  ]
+ }
+]

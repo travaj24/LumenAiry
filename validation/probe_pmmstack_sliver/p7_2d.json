@@ -1,0 +1,41 @@
+{
+ "pure_grid_N12": {
+  "n_cells": 12,
+  "w_min": 0.08333333333333333,
+  "w_max": 0.08333333333333333,
+  "aspect": 1.0,
+  "finest_expressible_wall_offset": 0.08333333333333333
+ },
+ "pure_grid_N24": {
+  "n_cells": 24,
+  "w_min": 0.041666666666666664,
+  "w_max": 0.041666666666666664,
+  "aspect": 1.0,
+  "finest_expressible_wall_offset": 0.041666666666666664
+ },
+ "pure_grid_N64": {
+  "n_cells": 64,
+  "w_min": 0.015625,
+  "w_max": 0.015625,
+  "aspect": 1.0,
+  "finest_expressible_wall_offset": 0.015625
+ },
+ "pure_grid_N256": {
+  "n_cells": 256,
+  "w_min": 0.00390625,
+  "w_max": 0.00390625,
+  "aspect": 1.0,
+  "finest_expressible_wall_offset": 0.00390625
+ },
+ "hybrid": {
+  "M": [
+   7,
+   9
+  ],
+  "total": [
+   1.031273991824729,
+   1.0311520778990404
+  ],
+  "self_gap": 0.011035628562330556
+ }
+}
