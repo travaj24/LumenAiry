@@ -1,0 +1,58 @@
+{
+ "_stamp": {
+  "arm": "pre",
+  "cut_band_rel": null,
+  "lumenairy_file": "/mnt/c/tmp/lum_vrcwa_pre/lumenairy/__init__.py",
+  "node": "TeslaRyzen",
+  "numpy": "2.4.6",
+  "platform": "Linux",
+  "python": "3.12.3",
+  "sqrt_decay_has_conj": false,
+  "sqrt_decay_has_exact_pin": true,
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "all_deterministic": true,
+ "deterministic_in_process": {
+  "RT_even": true,
+  "RT_full": true,
+  "closure_even": true,
+  "closure_full": true,
+  "dJ": true,
+  "dR": true,
+  "dR_offcoinc": true
+ },
+ "openblas_num_threads": "1",
+ "repeats": [
+  {
+   "RT_even": 2.004951872724738,
+   "RT_full": 1.999148449931623,
+   "closure_even": 0.00495187272473796,
+   "closure_full": -0.000851550068377005,
+   "dJ": 0.04356730611523984,
+   "dR": 0.016250719220965208,
+   "dR_offcoinc": 7.0915495697931874e-15
+  },
+  {
+   "RT_even": 2.004951872724738,
+   "RT_full": 1.999148449931623,
+   "closure_even": 0.00495187272473796,
+   "closure_full": -0.000851550068377005,
+   "dJ": 0.04356730611523984,
+   "dR": 0.016250719220965208,
+   "dR_offcoinc": 7.0915495697931874e-15
+  },
+  {
+   "RT_even": 2.004951872724738,
+   "RT_full": 1.999148449931623,
+   "closure_even": 0.00495187272473796,
+   "closure_full": -0.000851550068377005,
+   "dJ": 0.04356730611523984,
+   "dR": 0.016250719220965208,
+   "dR_offcoinc": 7.0915495697931874e-15
+  }
+ ]
+}

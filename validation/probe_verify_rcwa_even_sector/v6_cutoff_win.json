@@ -1,0 +1,571 @@
+{
+ "_stamp": {
+  "arm": "post",
+  "cut_band_rel": 1e-08,
+  "lumenairy_file": "C:\\tmp\\lum_vrcwa\\lumenairy\\__init__.py",
+  "node": "Tesla_Ryzen",
+  "numpy": "2.4.4",
+  "platform": "Windows",
+  "python": "3.14.6",
+  "sqrt_decay_has_conj": true,
+  "sqrt_decay_has_exact_pin": false,
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "n_severity_drops": 0,
+ "rows": [
+  {
+   "min_abs_lam2": 0.011825219989857689,
+   "period": 6.526666666666666e-07,
+   "pol": "te",
+   "post": {
+    "closure": 3.552713678800501e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 5.995204332975845e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 0.0037243644310498455,
+   "period": 6.518888888888889e-07,
+   "pol": "te",
+   "post": {
+    "closure": -4.0190073491430667e-14,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": -4.0190073491430667e-14,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 0.0004878078610750638,
+   "period": 6.514855967078189e-07,
+   "pol": "te",
+   "post": {
+    "closure": 6.661338147750939e-13,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 6.674660824046441e-13,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 4.751609496151349e-05,
+   "period": 6.515368084133517e-07,
+   "pol": "te",
+   "post": {
+    "closure": -6.055156376305604e-13,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 7.771561172376096e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 7.4889546451252104e-06,
+   "period": 6.515315457902899e-07,
+   "pol": "te",
+   "post": {
+    "closure": 5.277334125253219e-11,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 5.276357128991549e-11,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 9.148882696435271e-07,
+   "period": 6.515323498217762e-07,
+   "pol": "te",
+   "post": {
+    "closure": 1.771163216091054e-10,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 2.1839796637834752e-10,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 2.2839510852786092e-08,
+   "period": 6.515322644755233e-07,
+   "pol": "te",
+   "post": {
+    "closure": -3.88818188756801e-09,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": -2.018764821976049e-09,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 3.6577916940769358e-09,
+   "period": 6.515322619404077e-07,
+   "pol": "te",
+   "post": {
+    "closure": 1.2677947847095083e-07,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 1.2677995320231616e-07,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 2.847460116855276e-10,
+   "period": 6.515322622631221e-07,
+   "pol": "te",
+   "post": {
+    "closure": 5.748811537920062e-08,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 5.748898423973969e-08,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 1.1388664189219425e-11,
+   "period": 6.515322622914536e-07,
+   "pol": "te",
+   "post": {
+    "closure": 2.5122938804633677e-05,
+    "error": null,
+    "first_warning": "rcwa_efficiency_1d: lossless energy closure violated (sum R+T - 1 = +2.512e-05, structure is provably lossless): the truncation is numerically unstable here and",
+    "verdict": "WARNED",
+    "warnings": [
+     "_EnergyWarning"
+    ]
+   },
+   "pre": {
+    "closure": 2.8049219375825274e-05,
+    "error": null,
+    "first_warning": "rcwa_efficiency_1d: lossless energy closure violated (sum R+T - 1 = +2.805e-05, structure is provably lossless): the truncation is numerically unstable here and",
+    "verdict": "WARNED",
+    "warnings": [
+     "_EnergyWarning"
+    ]
+   }
+  },
+  {
+   "min_abs_lam2": 4.5107551440126935e-12,
+   "period": 6.51532262290796e-07,
+   "pol": "te",
+   "post": {
+    "closure": -5.2177102980666135e-05,
+    "error": null,
+    "first_warning": "rcwa_efficiency_1d: lossless energy closure violated (sum R+T - 1 = -5.218e-05, structure is provably lossless): the truncation is numerically unstable here and",
+    "verdict": "WARNED",
+    "warnings": [
+     "_EnergyWarning"
+    ]
+   },
+   "pre": {
+    "closure": -5.217710248761609e-05,
+    "error": null,
+    "first_warning": "rcwa_efficiency_1d: lossless energy closure violated (sum R+T - 1 = -5.218e-05, structure is provably lossless): the truncation is numerically unstable here and",
+    "verdict": "WARNED",
+    "warnings": [
+     "_EnergyWarning"
+    ]
+   }
+  },
+  {
+   "min_abs_lam2": 2.4610683352744753e-13,
+   "period": 6.515322622903893e-07,
+   "pol": "te",
+   "post": {
+    "closure": -7.416377610336422e-05,
+    "error": null,
+    "first_warning": "rcwa_efficiency_1d: lossless energy closure violated (sum R+T - 1 = -7.416e-05, structure is provably lossless): the truncation is numerically unstable here and",
+    "verdict": "WARNED",
+    "warnings": [
+     "_EnergyWarning"
+    ]
+   },
+   "pre": {
+    "closure": 0.00015145412549344428,
+    "error": null,
+    "first_warning": "rcwa_efficiency_1d: lossless energy closure violated (sum R+T - 1 = +1.515e-04, structure is provably lossless): the truncation is numerically unstable here and",
+    "verdict": "WARNED",
+    "warnings": [
+     "_EnergyWarning"
+    ]
+   }
+  },
+  {
+   "min_abs_lam2": 7.50024639847083e-14,
+   "period": 6.515322622903722e-07,
+   "pol": "te",
+   "post": {
+    "closure": 0.0005891435930842626,
+    "error": null,
+    "first_warning": "rcwa_efficiency_1d: lossless energy closure violated (sum R+T - 1 = +5.891e-04, structure is provably lossless): the truncation is numerically unstable here and",
+    "verdict": "WARNED",
+    "warnings": [
+     "_EnergyWarning"
+    ]
+   },
+   "pre": {
+    "closure": 0.0011801068208630028,
+    "error": null,
+    "first_warning": "rcwa_efficiency_1d: lossless energy closure violated (sum R+T - 1 = +1.180e-03, structure is provably lossless): the truncation is numerically unstable here and",
+    "verdict": "WARNED",
+    "warnings": [
+     "_EnergyWarning"
+    ]
+   }
+  },
+  {
+   "min_abs_lam2": 4.495011899824897e-15,
+   "period": 6.515322622903642e-07,
+   "pol": "te",
+   "post": {
+    "closure": 0.04251866360429979,
+    "error": null,
+    "first_warning": "rcwa_efficiency_1d: lossless energy closure violated (sum R+T - 1 = +4.252e-02, structure is provably lossless): the truncation is numerically unstable here and",
+    "verdict": "WARNED",
+    "warnings": [
+     "_EnergyWarning"
+    ]
+   },
+   "pre": {
+    "closure": null,
+    "error": "_EnergyError",
+    "first_warning": null,
+    "verdict": "RAISED",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 0.010749461231807228,
+   "period": 6.526666666666666e-07,
+   "pol": "tm",
+   "post": {
+    "closure": -2.6645352591003757e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": -1.1102230246251565e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 0.0033860558932128654,
+   "period": 6.518888888888889e-07,
+   "pol": "tm",
+   "post": {
+    "closure": -1.4432899320127035e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 1.5543122344752192e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 0.00044353128973948836,
+   "period": 6.514855967078189e-07,
+   "pol": "tm",
+   "post": {
+    "closure": 4.440892098500626e-16,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 4.440892098500626e-16,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 4.3202805621460294e-05,
+   "period": 6.515368084133517e-07,
+   "pol": "tm",
+   "post": {
+    "closure": -2.55351295663786e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 8.881784197001252e-16,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 6.809149162120008e-06,
+   "period": 6.515315457902899e-07,
+   "pol": "tm",
+   "post": {
+    "closure": -3.4416913763379853e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": -1.5543122344752192e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 8.318396920634629e-07,
+   "period": 6.515323498217762e-07,
+   "pol": "tm",
+   "post": {
+    "closure": 2.220446049250313e-16,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 0.0,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 2.0766276118728778e-08,
+   "period": 6.515322644755233e-07,
+   "pol": "tm",
+   "post": {
+    "closure": -1.1102230246251565e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": -1.1102230246251565e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 3.3257613862508395e-09,
+   "period": 6.515322619404077e-07,
+   "pol": "tm",
+   "post": {
+    "closure": -8.881784197001252e-16,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 1.3322676295501878e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 2.5890159111713e-10,
+   "period": 6.515322622631221e-07,
+   "pol": "tm",
+   "post": {
+    "closure": 1.9984014443252818e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 1.7763568394002505e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 1.0344856241726264e-11,
+   "period": 6.515322622914536e-07,
+   "pol": "tm",
+   "post": {
+    "closure": -2.220446049250313e-16,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 1.3322676295501878e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 4.0941408901947665e-12,
+   "period": 6.51532262290796e-07,
+   "pol": "tm",
+   "post": {
+    "closure": 2.220446049250313e-16,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 8.881784197001252e-16,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 2.2224060718756262e-13,
+   "period": 6.515322622903893e-07,
+   "pol": "tm",
+   "post": {
+    "closure": 0.0,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": 1.3322676295501878e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 5.978502845830346e-14,
+   "period": 6.515322622903722e-07,
+   "pol": "tm",
+   "post": {
+    "closure": -1.4432899320127035e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": -7.105427357601002e-15,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  },
+  {
+   "min_abs_lam2": 9.210649628713896e-15,
+   "period": 6.515322622903665e-07,
+   "pol": "tm",
+   "post": {
+    "closure": -1.1102230246251565e-16,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   },
+   "pre": {
+    "closure": -1.1102230246251565e-16,
+    "error": null,
+    "first_warning": null,
+    "verdict": "SILENT",
+    "warnings": []
+   }
+  }
+ ]
+}
