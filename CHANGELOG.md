@@ -4,6 +4,84 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added -- a NATIVE constant-shear SLANT for the PURE staggered 2-D PMM (roadmap Phase D)
+
+`pmm_jones_2d_staggered(..., slant=(t_x, t_y))` and
+`PMM2DStackPure.add_layer(..., slant=(t_x, t_y))` make a layer ONE EXACT
+SLANTED region instead of a z-staircase: the whole cross-section translates
+laterally by `t * thickness` from the layer's TOP face to its bottom, `eps_cell`
+being the cross-section at the top.  `t` is a TANGENT
+(`t_x = tan(wall_tilt_x)`), the SAME public convention
+`PMM2DStackHybrid.add_layer` and the 1-D `slant_angle` entries already use, so a
+layer moves between the three engines unchanged.  `None` / `0` is a plain
+vertical layer and stays BIT-IDENTICAL to the pre-slant library.
+
+This completes Phase D on BOTH 2-D engines, and it CLOSES A COVERAGE GAP: slant
+x OUT-OF-PLANE anisotropy (a tilted-director liquid crystal in a slanted
+grating) is now available for the first time in a 2-D engine -- the covariant
+congruence is tensor-agnostic, so it is the same line of code, while
+`PMM2DStackHybrid` raises `NotImplementedError` on that combination.
+
+* **The formulation is the COVARIANT sheared frame** (Granet, JOSA A 34:975
+  (2017) Eq. 5; Edee & Granet, JOSA A 41:1803 (2024) Eq. 15), NOT the
+  lab-Cartesian convection the 1-D path carries.  Across a slanted wall the
+  continuous combination is `t . E_t + E_z`, not `E_z`, so the covariant
+  components have exactly the vertical continuity structure in the frame and
+  the shipped staggered de Rham placement is conformal for them at any slant;
+  the Cartesian form would additionally need `<B | d/dx | B>`, the derivative
+  of the DISCONTINUOUS staggered set, whose element-wise Galerkin form silently
+  drops the jump deltas.
+* **The whole shear is two things**: a POINTWISE congruence
+  `eps -> A^-1 eps A^-T` on the cell tensor, and SIX extra Galerkin blocks on
+  the shipped first-order out-of-plane generator, each a Kronecker product of
+  per-axis matrices the basis already supplies.  `det J = 1` keeps the rest
+  untouched (`mu^33 = 1` exactly, so the strong `G3` elimination survives;
+  `eps^33 = eps_zz`, so the pointwise `e33`-Schur survives), and the retained
+  state is the COVARIANT tangential state, which equals the lab-Cartesian one
+  -- so `_region_modes_oop`, the flux split, the H gauge, the generalized
+  cascade and the far-field projector are unchanged.  A slanted cell always
+  takes the `4 q^2` generator: its covariant tensor has out-of-plane entries
+  even when the cell is scalar.
+* **The frame-anchor phase** is the one new piece of physics.  Each slanted
+  region is solved in a frame anchored at its own TOP face, so the transmitted
+  amplitudes carry one unimodular phase per order, `exp(-i alpha_m . t d)`.
+  R, T and the REFLECTION Jones are exact without it -- which is exactly why
+  omitting it is a silent-wrong: measured on a uniform null at 25 deg
+  incidence, the shipped arm sits at 1e-07..2.6e-05 while the conjugate arm
+  sits at 2.9e-01..1.3e+00, TWICE as wrong as no correction at all.
+* **The PARITY-sign block accelerator now refuses a slanted cell.**  Measured
+  during this build, and it refutes the assumption the work started from: the
+  structural residual does NOT catch a shear (2.3e-15 against a 1e-10 bar --
+  `R` is a 180-degree ROTATION about z, which carries the covariant tensor and
+  the slant vector consistently), so the explicit refusal in
+  `_stag_parity_gauge` is the only gate there is.  `symmetry='auto'` on a
+  slanted cell is bit-identical to `symmetry=False`.
+* **Cost:** the slant is FREE against the vertical OUT-OF-PLANE region solve it
+  has to use anyway (0.87x .. 1.07x across M = 4..7); 1.9x .. 3.0x against the
+  `2 q^2` in-plane pencil is the shipped price of the first-order generator,
+  not something the slant adds.  End to end, 1.47x .. 1.55x a vertical scalar
+  solve.
+* **REFUSALS**, all raising with the reason: MIXED slants between PATTERNED
+  layers (a vertical patterned layer counts as slant 0); a mix of vertical and
+  slanted layers ABOVE a patterned layer (the accumulated frame offset would
+  silently displace the pattern); `slant` with `mu` / `mu_cell` (the
+  first-order generator has no permeability blocks); `retain_internal=True` on
+  a slanted stack (`_flux_at` evaluates in the sheared frame); and
+  `pmm_efficiency_2d_staggered`, whose single-polarization efficiencies are not
+  well-posed for a cell that is out-of-plane in the frame -- it accepts the
+  keyword only to raise and point at `pmm_jones_2d_staggered`.
+* **A shear is NOT a taper.**  No shear absorbs a dilation; a shrinking
+  cross-section still needs a z-staircase.
+* The Wood-anomaly nudge list takes a slanted layer's LAB permittivities,
+  unchanged -- measured, the lab value is the coincidence that drives the
+  slanted layer toward a null mode (min |q| = 7.7e-03) while the covariant
+  diagonal `eps (1 + t^2)` is not a cut-off there at all (min |q| = 1.20).
+* `tests/unit/test_pmm2d_staggered_slant.py` gates B1-B11 (68 tests), every bar
+  derived from measurements on TWO builds.  Docs:
+  `docs/audits/EXPERIMENT_PMM2D_STAGGERED_SLANT_2026_09_10.md` (formulation and
+  the GO decision) and `docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md`
+  (the build, both builds' tables, and the open items).
+
 ### Fixed -- a MAGNETIC layer's Wood-anomaly cut-offs sit at `Re(eps*mu)`
 
 `PMM2DStackPure.solve` listed a magnetic layer's PERMITTIVITY on the

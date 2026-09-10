@@ -134,9 +134,9 @@ than ~1e-4 on ``R`` per order.
 Scope / limitations
 -------------------
 * **Axis-aligned RECTANGULAR pillars only** -- the walls must coincide with the
-  segment boundaries of the ``(Nx, Ny)`` ``eps_cell`` grid (Eq. 26).  Curved /
-  slanted boundaries need Granet's transfinite curved-quad mapping (not
-  implemented).
+  segment boundaries of the ``(Nx, Ny)`` ``eps_cell`` grid (Eq. 26).  CURVED
+  boundaries need Granet's transfinite curved-quad mapping (not implemented).
+  A constant TILT of the walls IS supported: see SLANT below.
 * **Corner-capped.**  A right-angle dielectric pillar has field singularities at
   its four corners, so the bound-mode (and hence efficiency) convergence is
   ALGEBRAIC, not spectral -- monotone with NO floor, but at-best RCWA-parity
@@ -154,8 +154,54 @@ Scope / limitations
   while ``Meps33`` carries e33 alone), so it takes a full region eig like a
   patterned cell -- the shared geometric eig :func:`_homog_geom_cache` is
   scalar-only and raises on a tensor assembly.
-* ANISOTROPIC HALF-SPACES, SLANTED out-of-plane layers and the JAX twin stay
-  out of scope.
+* ANISOTROPIC HALF-SPACES and the JAX twin stay out of scope.
+
+SLANT (roadmap Phase D, 2026-09-10)
+-----------------------------------
+``slant=(t_x, t_y)`` on :func:`pmm_jones_2d_staggered` and on
+:meth:`~lumenairy.elements.pmm.PMM2DStackPure.add_layer` makes a layer ONE
+EXACT SLANTED region instead of a z-staircase: the whole cross-section
+translates laterally by ``t * depth`` from the layer's TOP face to its bottom,
+``eps_cell`` being the cross-section at the top.  ``t`` is a TANGENT
+(``t_x = tan(wall_tilt_x)``) -- the SAME public convention as
+:meth:`~lumenairy.elements.pmm.PMM2DStackHybrid.add_layer` and the 1-D
+``slant_angle`` entries, so a layer moves between the engines unchanged --
+and ``0`` / ``None`` is BIT-IDENTICAL to the pre-slant library.
+
+It is EXACT at any slant magnitude and costs ONE eigensolve for the whole
+layer.  In the sheared frame (``u = x - t_x w``, ``v = y - t_y w``, ``w = z``)
+``det J = 1``, so ``sqrt(g) = 1``, ``mu^33 = 1`` and ``eps^33 = eps_zz``; the
+shear is then exactly a POINTWISE congruence ``eps -> A^-1 eps A^-T`` on the
+cell tensor plus SIX extra Galerkin blocks on the first-order out-of-plane
+generator (:meth:`Granet2DTransverseE._assemble_oop`).  The COVARIANT field
+components are used, not the lab-Cartesian ones with a chain-rule convection:
+across a slanted wall the continuous combination is ``t . E_t + E_z``, not
+``E_z``, so the covariant components have exactly the vertical continuity
+structure in the frame and the shipped staggered de Rham placement is conformal
+for them at any slant.  A slanted cell therefore always runs the ``4 q^2``
+generator and the generalized cascade -- its covariant tensor has out-of-plane
+entries even when the cell is scalar -- and slant x ANISOTROPY (including
+out-of-plane) is the same line of code, a combination no other 2-D engine in
+this suite covers.
+
+The one piece of bookkeeping a shear adds is the FRAME-ANCHOR PHASE: the frame
+is anchored at each slanted layer's TOP, so the transmitted amplitudes carry
+one unimodular phase per order, ``exp(-i alpha_m . t d)``.  R, T and the
+REFLECTION Jones are exact without it.
+
+A SHEAR IS NOT A TAPER.  A shear is a tilted axis with a CONSTANT
+cross-section; no shear absorbs a dilation (a taper's ``sqrt(g)`` is
+z-dependent, which brings back a dilation generator, a non-normal pencil with
+no valid mode selector and a distorted far field).  A shrinking cross-section
+still needs a z-staircase.
+
+Out of scope for the slant, all raising: MIXED slants between PATTERNED layers,
+a mix of vertical and slanted layers ABOVE a pattern, ``mu`` together with a
+slant, ``retain_internal`` on a slanted stack, and
+:func:`pmm_efficiency_2d_staggered` (single-polarization efficiencies are not
+well-posed for a cell that is out-of-plane in the frame).  Derivation and every
+measured number: ``docs/audits/EXPERIMENT_PMM2D_STAGGERED_SLANT_2026_09_10.md``
+and ``docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md``.
 
 Conventions match the rest of the library: PUBLIC ``exp(-i w t)`` (``n = n + i
 kappa``, ``Im eps > 0`` for loss), forward ``exp(+i kz z)``, ``Im(kz) >= 0``.
@@ -189,8 +235,10 @@ from numpy.polynomial.legendre import leggauss
 
 from ..rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
 from ..rcwa._core import (  # shared flux projection + the OOP mode selector
+    _norm_slant_pair,
     _project_efficiency,
     _select_forward_flux,
+    _slant_is_zero,
 )
 
 # UNCHANGED S-matrix algebra from the shipped 1-D PMM -- every region's modal
@@ -350,6 +398,69 @@ def _wood_eps_reals(*eps_arrays):
     vals = np.concatenate([np.real(np.asarray(a, dtype=_C)).ravel()
                            for a in eps_arrays])
     return [float(v) for v in np.unique(vals)]
+
+
+def _slant_congruence(eps33, tx, ty):
+    """The pointwise COVARIANT congruence ``eps^{lm} = A^-1 eps_lab A^-T`` of a
+    constant x-z / y-z SHEAR, applied to the trailing ``(3, 3)`` axes.
+
+    With the frame anchored at the layer TOP (the shipped 1-D / hybrid
+    convention -- ``u = x - t_x w``, ``v = y - t_y w``, ``w = z``)::
+
+        A = d(x, y, z) / d(u, v, w) = [[1, 0, t_x], [0, 1, t_y], [0, 0, 1]]
+
+    ``A`` is unit upper-triangular, so ``det A = 1`` EXACTLY at any slant and
+    ``sqrt(g) = 1``: the mass matrices are untouched, there is no dilation
+    generator, and ``eps^{33} = eps_zz`` is UNCHANGED by the congruence -- which
+    is what lets :meth:`Granet2DTransverseE._assemble_oop` keep its pointwise
+    ``e33``-Schur and its strong ``G3`` elimination verbatim.  ``mu^{lm} =
+    g^{lm}`` is likewise never assembled: the derivation
+    (``docs/audits/EXPERIMENT_PMM2D_STAGGERED_SLANT_2026_09_10.md`` S1.3) shows
+    its whole content is the two ``t G^3`` terms in the E rows -- where ``G^3``
+    is already eliminated strongly -- and the ``t_x G_1 + t_y G_2`` inside
+    ``G_3cov`` in the G rows, i.e. the six extra Galerkin blocks.
+
+    An ISOTROPIC slanted cell becomes an OUT-OF-PLANE tensor cell in the frame
+    (``eps^{13} = -t_x eps``), which is why a slant always takes the
+    first-order ``4 q^2`` generator and never the ``2 q^2`` in-plane pencil.
+
+    ``tx = ty = 0`` returns the input unchanged bit-for-bit (``A = I``).
+    """
+    e = np.asarray(eps33, dtype=_C)
+    if tx == 0.0 and ty == 0.0:
+        return e
+    Ai = np.array([[1.0, 0.0, -tx], [0.0, 1.0, -ty], [0.0, 0.0, 1.0]],
+                  dtype=_C)
+    return np.einsum("mp,...pq,nq->...mn", Ai, e, Ai)
+
+
+def _slant_rot_gauge(eps33, tx, ty):
+    """``(eps_cov, t_x_rot, t_y_rot)`` -- the congruence taken in the ROTATED
+    gauge :data:`_OOP_ROT_SIGN` runs the out-of-plane assembly in.
+
+    That constant is a 180-degree rotation about ``z`` between the basis and the
+    ``eps_cell`` / far-field indexing.  Under it the four out-of-plane tensor
+    entries flip sign AND so does the slant vector, and the two are consistent:
+    ``eps^{lm}(R eps R, -t) = R eps^{lm}(eps, t) R``.  So BOTH flips are applied
+    once, here, and :meth:`Granet2DTransverseE._assemble_oop` then builds in the
+    rotated gauge with ``rot = 1`` (it must not apply the rotation twice).
+
+    Getting the ``t`` half wrong is not silent, and the gap is measured on two
+    builds: the sheared-frame dispersion gate reads ``3.53e-02 .. 1.13e-01`` on
+    the un-rotated (``a-``) arms against ``1.4e-14 .. 6.2e-14`` on the physical
+    one (``docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md`` table B4a;
+    ``tests/unit/test_pmm2d_staggered_slant.py`` walks both).
+    """
+    e = np.array(eps33, dtype=_C, copy=True)
+    rot = _OOP_ROT_SIGN
+    e[..., 0, 2] *= rot
+    e[..., 1, 2] *= rot
+    e[..., 2, 0] *= rot
+    e[..., 2, 1] *= rot
+    txr, tyr = rot * float(tx), rot * float(ty)
+    return _slant_congruence(e, txr, tyr), txr, tyr
+
+
 def _require_inplane_mu(fn_name, tile33):
     """Block-form gate for a ``(..., 3, 3)`` PERMEABILITY tile (Granet Eq. 6,
     ``[[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]``).
@@ -722,10 +833,28 @@ class Granet2DTransverseE:
                 (:func:`_tile_needs_oop`).
     alpha0x, alpha0y : Bloch wavenumbers (units 1/lambda) -> tau_x, tau_y
     k0        : 2*pi / wavelength (numerically 2*pi if coords in wavelengths)
+    mu_cell   : (Nx, Ny) or (Nx, Ny, 3, 3) BLOCK-FORM relative permeability, or
+                ``None`` (nonmagnetic; every operator stays BIT-IDENTICAL).
+    slant     : ``(t_x, t_y)`` TANGENT pair (or a bare scalar ``t_x``), or
+                ``None``/``0`` for a vertical cell.  A constant x-z / y-z SHEAR:
+                the cell translates laterally by ``t * depth`` from the layer's
+                TOP face to its bottom, ``eps_cell`` being the cross-section at
+                the TOP.  Same PUBLIC convention as
+                :meth:`~lumenairy.elements.pmm.PMM2DStackHybrid.add_layer` and
+                the 1-D ``slant_angle`` entries (``t = tan(wall_tilt)``), so a
+                cell moves between the engines unchanged.  Realized as the
+                POINTWISE covariant congruence :func:`_slant_congruence` plus
+                six extra Galerkin blocks in :meth:`_assemble_oop`; a slanted
+                cell ALWAYS takes the first-order out-of-plane generator (its
+                covariant tensor has out-of-plane entries).  ``slant = 0`` is
+                BIT-IDENTICAL to no slant.  A shear is NOT a taper -- no shear
+                absorbs a dilation; a tapered feature still needs a
+                z-staircase.
     """
 
     def __init__(self, px, py, Nx, Ny, M, eps_cell,
-                 alpha0x=0.0, alpha0y=0.0, k0=2.0 * np.pi, mu_cell=None):
+                 alpha0x=0.0, alpha0y=0.0, k0=2.0 * np.pi, mu_cell=None,
+                 slant=None):
         self.k0 = float(k0)
         self.alpha0x = float(alpha0x)
         self.alpha0y = float(alpha0y)
@@ -742,13 +871,54 @@ class Granet2DTransverseE:
                 f"{self.eps_cell.shape}.")
         self.q = self.bx.dim                              # = Nx*(M-1)
         assert self.bx.dim == self.by.dim, "use square (Nx*(M-1)==Ny*(M-1))"
+        # SLANT (constant x-z / y-z SHEAR; roadmap Phase D, build doc
+        # docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md).  ``slant``
+        # is the PUBLIC (t_x, t_y) TANGENT pair of
+        # ``PMM2DStackHybrid.add_layer`` -- the lateral walk per unit depth,
+        # cross-section taken at the layer's TOP -- normalised by the SAME
+        # helper both 2-D engines and the 1-D entries use, so a scalar
+        # ``slant=0.0`` and ``slant=None`` are one (vertical, byte-identical)
+        # path.  The INTERNAL shear of the frame ``x = u + t w`` is the
+        # NEGATIVE of it, pinned FOUR ways in the build doc's tables, each
+        # against an independently validated engine: B5 against
+        # ``pmm_efficiency_1d_slanted`` per order (1.22e-03 vs 4.15e-01), M4b
+        # against the hybrid slant metric (1.23e-02 vs 2.79e-01, and only the
+        # right arm improves with truncation), M4c against a pure-solver
+        # z-staircase (converges only marching WITH the slant), and B4a
+        # against the EXACT quartic roots (1.4e-14 vs 3.5e-02).  The rotation
+        # gauge flips it once more (:func:`_slant_rot_gauge`).
+        self.slant = _norm_slant_pair(slant, "Granet2DTransverseE")
+        self.slanted = not _slant_is_zero(self.slant)
+        self._slant_rot = (0.0, 0.0)
+        self._eps_pre_rotated = False
+        self.eps_lab = None
+        if self.slanted:
+            if mu_cell is not None:
+                raise NotImplementedError(
+                    "Granet2DTransverseE: slant= together with mu_cell is not "
+                    "implemented -- a sheared cell runs the OUT-OF-PLANE "
+                    "first-order generator, which carries no permeability "
+                    "blocks (it eliminates G3 assuming mu = 1).  The shear's "
+                    "OWN magnetic anisotropy mu^{lm} = g^{lm} is absorbed "
+                    "analytically by the six slant blocks; a MATERIAL mu is "
+                    "not.")
+            cell33 = self.eps_cell
+            if cell33.ndim == 2:            # scalar map -> isotropic tensor
+                cell33 = cell33[..., None, None] * np.eye(3, dtype=_C)
+            _require_nonzero_ezz("Granet2DTransverseE", cell33)
+            # A sheared cell IS an out-of-plane cell in the frame, ALWAYS.
+            self.eps_lab = cell33               # the cell the CALLER passed
+            self.eps_cell, txr, tyr = _slant_rot_gauge(
+                cell33, -self.slant[0], -self.slant[1])
+            self._slant_rot = (txr, tyr)
+            self._eps_pre_rotated = True    # _assemble_oop must not re-rotate
         # OUT-OF-PLANE dispatch (Stage B).  The test is the RELATIVE floor the
         # hybrid uses (:func:`_tile_needs_oop`), so a cell whose xz/yz/zx/zy
         # entries are float noise stays BIT-IDENTICAL to the in-plane path --
         # the dispatch is the Stage-A ``NotImplementedError`` guard turned into
         # a branch, at exactly the same floor.
-        self.offplane = (self.eps_cell.ndim == 4
-                         and _tile_is_offplane(self.eps_cell))
+        self.offplane = self.slanted or (self.eps_cell.ndim == 4
+                                         and _tile_is_offplane(self.eps_cell))
         # MAGNETIC dispatch (chi_t = [mu_t]^-1 != I).  ``mu_cell=None`` -- the
         # nonmagnetic default -- leaves every operator below untouched, so the
         # shipped isotropic and Stage-A tensor paths stay BIT-IDENTICAL (gate
@@ -1194,13 +1364,35 @@ class Granet2DTransverseE:
         ~1e-15 at conical incidence; with ``_OOP_ROT_SIGN`` flipped to +1 the
         same solve sits at ~1e-03, the size of the prototype's own
         negate-the-out-of-plane-block negative control.
+
+        THE SLANT (roadmap Phase D, 2026-09-10).  A constant x-z / y-z shear
+        adds exactly two things to the pencil below and NOTHING else: the
+        POINTWISE congruence ``eps -> A^-1 eps A^-T`` (applied in ``__init__``,
+        :func:`_slant_congruence`) and SIX extra Galerkin blocks at the end of
+        this method, guarded by ``t != 0``.  ``det A = 1`` is what keeps the
+        rest untouched -- ``mu^{33} = g^{33} = 1`` exactly, so the STRONG
+        ``G3`` elimination survives, and ``eps^{33} = eps_zz`` is unchanged by
+        the congruence, so the POINTWISE ``e33``-Schur survives.  The retained
+        state ``[E_1; E_2; G_1; G_2]`` is the COVARIANT tangential state, which
+        EQUALS the lab-Cartesian one (a shear alters only the NORMAL
+        component), so :func:`_region_modes_oop`, the flux split, the H gauge,
+        the generalized cascade and the far-field projector all keep their
+        meanings verbatim.  Derivation and every measured number:
+        ``docs/audits/EXPERIMENT_PMM2D_STAGGERED_SLANT_2026_09_10.md`` S1 and
+        ``docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md``.
         """
         bx, by = self.bx, self.by
         k0 = self.k0
         self._axis_mats()
         qq = self.q * self.q
         e = self.eps_cell
-        rot = _OOP_ROT_SIGN
+        # A SLANTED cell arrives already in the rotated gauge -- ``__init__``
+        # folded _OOP_ROT_SIGN into BOTH the out-of-plane entries and the slant
+        # vector before taking the congruence (:func:`_slant_rot_gauge`), which
+        # is the only way the two stay consistent.  Applying it a second time
+        # here would undo it.
+        rot = 1.0 if self._eps_pre_rotated else _OOP_ROT_SIGN
+        tx, ty = self._slant_rot
         e11, e12, e13 = e[..., 0, 0], e[..., 0, 1], rot * e[..., 0, 2]
         e21, e22, e23 = e[..., 1, 0], e[..., 1, 1], rot * e[..., 1, 2]
         e31, e32 = rot * e[..., 2, 0], rot * e[..., 2, 1]
@@ -1252,6 +1444,55 @@ class Granet2DTransverseE:
                 - 1j * (A23 @ E3S) + 1j * (CwE2.conj().T @ G3S))
         row3 = (1j * np.concatenate([A11, A12, Z, Z], axis=1)
                 + 1j * (A13 @ E3S) + 1j * (CwE1.conj().T @ G3S))
+
+        # ----- THE SIX SLANT BLOCKS (roadmap Phase D) -----------------------
+        # Guarded: a VERTICAL cell never enters here, which is what makes
+        # ``slant = 0`` BIT-IDENTICAL to the pre-slant assembly (gate B1).
+        #
+        # In the sheared frame Maxwell is the vertical system with exactly two
+        # rigid substitutions (EXPERIMENT doc S1.3):
+        #
+        #   (2) q E1 = -i G2 - i D1 E3 + i t_y G^3           [V1]
+        #   (1) q E2 = +i G1 - i D2 E3 - i t_x G^3           [V2]
+        #   (5) q G1 = -i (eps E)_2 - i D1 (G^3 + t_x G1 + t_y G2)   [V2]
+        #   (4) q G2 = +i (eps E)_1 - i D2 (G^3 + t_x G1 + t_y G2)   [V1]
+        #
+        # i.e. the two E rows pick up ``t G^3`` (and ``G^3`` is ALREADY the
+        # strongly eliminated ``G3S``, so this is one cross mass times it), and
+        # the two G rows carry the COVARIANT ``G_3cov = G^3 + t.G_t`` under the
+        # existing single-derivative bracket.  Every matrix below is a
+        # Kronecker product of per-axis matrices the basis already supplies --
+        # no new basis code, no new quadrature.
+        #
+        # ``dtb = -(dbt)^H`` is the SAME integration-by-parts identity the
+        # shipped assembly uses for CwE1/CwE2, and it is the distributionally
+        # exact ``<Btilde | d B>`` -- deltas included.  The ELEMENT-WISE
+        # ``b.mixed(b.Btilde, b.B)`` (i.e. ``self.Ctb_*``) is NOT the same
+        # matrix: it silently drops the jump deltas of the discontinuous set.
+        if tx != 0.0 or ty != 0.0:
+            Mtb_x = bx.mass(bx.Btilde, bx.B)          # <til|B>_x
+            Mtb_y = by.mass(by.Btilde, by.B)
+            Mbt_x = bx.mass(bx.B, bx.Btilde)          # <B|til>_x
+            Mbt_y = by.mass(by.B, by.Btilde)
+            dtb_x = -dbt_x.conj().T                   # <til| D1 |B>_x
+            dtb_y = -dbt_y.conj().T
+            ctt_x = self.Ctt_x / k0                   # <til| D1 |til>_x
+            ctt_y = self.Ctt_y / k0
+            MwV1 = np.kron(Mtb_y, Mbb_x)              # <V1|Vw>
+            MwV2 = np.kron(Mbb_y, Mtb_x)              # <V2|Vw>
+            D1_22 = np.kron(Mbb_y, ctt_x)             # <V2| D1 |V2>
+            D1_21 = np.kron(Mbt_y, dtb_x)             # <V2| D1 |V1>
+            D2_11 = np.kron(ctt_y, Mbb_x)             # <V1| D2 |V1>
+            D2_12 = np.kron(dtb_y, Mbt_x)             # <V1| D2 |V2>
+            # E rows: +i t_y G^3 (row0, tested in V1) / -i t_x G^3 (row1, V2)
+            row0 = row0 + 1j * ty * (MwV1 @ G3S)
+            row1 = row1 - 1j * tx * (MwV2 @ G3S)
+            # G rows: the t.G_t half of G_3cov under the D-bracket
+            row2 = row2 - 1j * np.concatenate(
+                [Z, Z, tx * D1_22, ty * D1_21], axis=1)
+            row3 = row3 - 1j * np.concatenate(
+                [Z, Z, tx * D2_12, ty * D2_11], axis=1)
+
         Bgen = np.zeros((4 * qq, 4 * qq), dtype=_C)
         Bgen[:qq, :qq] = Ggram1
         Bgen[qq:2 * qq, qq:2 * qq] = Ggram2
@@ -1599,14 +1840,46 @@ def _stag_parity_gauge(solver: Granet2DTransverseE):
     factor works alone -- the parity alone is broken by the derivative blocks
     and the sign alone by the eps blocks, exactly as in the Fourier case.
 
-    Necessary conditions only, and both are free of the assembly: NORMAL
-    incidence (``tau = 1`` on both axes, else the hats do not permute) and
-    matching per-axis dimensions.  Everything else -- a cell whose eps grid is
-    not its own parity image, a wall layout that is not mirror-symmetric, a
-    tensor that breaks the symmetry -- is decided by :func:`_stag_block_eig` on
-    the ASSEMBLED pencil, which is where the condition actually lives.
+    Necessary conditions only, and all three are free of the assembly: NORMAL
+    incidence (``tau = 1`` on both axes, else the hats do not permute), a
+    VERTICAL cell (a SHEAR is refused here BY CONSTRUCTION -- measured, the
+    structural residual does NOT catch it, so this is the only gate there is;
+    see the comment on that check), and matching per-axis dimensions.
+    Everything else -- a cell whose eps grid is not its own parity image, a wall
+    layout that is not mirror-symmetric, a tensor that breaks the symmetry -- is
+    decided by :func:`_stag_block_eig` on the ASSEMBLED pencil, which is where
+    the condition actually lives.
     """
     if solver.alpha0x != 0.0 or solver.alpha0y != 0.0:
+        return None
+    # A SLANTED cell is refused HERE, unconditionally -- and the reason is
+    # MEASURED, not assumed (build doc
+    # docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md table B11a).
+    #
+    # The expectation going in was that a shear breaks the symmetry and
+    # :func:`_stag_block_eig`'s structural residual would catch it.  IT DOES
+    # NOT.  ``R`` here is a 180-degree ROTATION about z (both axes flip), not a
+    # mirror, and a rotation carries the sheared cell's covariant tensor AND
+    # its slant vector consistently -- so on a centro-symmetric slanted cell at
+    # normal incidence ``max|R A R + A| / max|A|`` reads 1.3e-15 .. 2.3e-15,
+    # FIVE DECADES BELOW :data:`_STAG_BLOCK_TOL`, i.e. the structural gate
+    # ACCEPTS.  (Forced onto that pencil the reduction also reproduces the dense
+    # spectrum to 1.0e-12 and satisfies the original pencil to 2.8e-14, so no
+    # wrong answer is known here -- see the build doc's open item.)
+    #
+    # The refusal is therefore the ONLY thing standing between a slanted cell
+    # and this accelerator, and it is deliberate: the shear is a new geometry
+    # whose forward/backward split, gauge and reconstruction have been
+    # validated ONLY on the dense branch, and the precedent for not letting a
+    # slanted answer ride on a tolerance is the hybrid's NORMAL-INCIDENCE
+    # SILENT-WRONG -- its even-parity fold was eligible at normal incidence,
+    # bypassed the convection entirely, and returned the VERTICAL answer with
+    # energy conserved and nothing warned
+    # (docs/audits/BUILD_PMM2D_SLANT_METRIC_2026_08_16.md S8: wrong by 2.5e-01
+    # at 35 degrees, while every OBLIQUE test passed with the bug present).
+    # Re-enabling the reduction for slanted cells is a follow-up that needs its
+    # own two-sided gate, not a tolerance.
+    if not _slant_is_zero(getattr(solver, "slant", None)):
         return None
     px = _stag_parity_1d(solver.bx)
     py = _stag_parity_1d(solver.by)
@@ -1842,10 +2115,10 @@ def _region_modes_oop(solver: Granet2DTransverseE, *, symmetry=False):
     (:func:`_stag_block_eig`) -- ONE ``2 q^2`` eig instead of the ``4 q^2``
     one, measured 1.5-1.9x on the whole out-of-plane solve.  It is a pure
     accelerator: the structure is verified on the ASSEMBLED pencil every call
-    and any failure (oblique incidence, an off-centre or unmirrored cell, a
-    tensor whose component grid is not its own parity image) falls back to the
-    dense branch below, which is then executed BIT-FOR-BIT as if the keyword
-    had never been passed.
+    and any failure (oblique incidence, a SLANTED cell, an off-centre or
+    unmirrored cell, a tensor whose component grid is not its own parity image)
+    falls back to the dense branch below, which is then executed BIT-FOR-BIT as
+    if the keyword had never been passed.
     """
     if not solver.offplane:
         raise ValueError(
@@ -1997,6 +2270,7 @@ def pmm_efficiency_2d_staggered(
     polarization: str = "te",
     theta: float = 0.0,
     phi: float = 0.0,
+    slant=None,
 ) -> Efficiency2D:
     """Rigorous diffraction efficiencies of a 2-D crossed grating of axis-aligned
     rectangular pillars by the canonical no-floor Polynomial Modal Method (Granet
@@ -2046,6 +2320,15 @@ def pmm_efficiency_2d_staggered(
         Incident polarization.  Default ``'te'``.
     theta, phi : float, optional
         Incidence polar / azimuthal angles (radians).  Default normal incidence.
+    slant : (t_x, t_y) or float, optional
+        Accepted only as ``None`` / ``0`` (vertical).  A nonzero slant RAISES:
+        a sheared scalar cell is an OUT-OF-PLANE tensor cell in the frame
+        (``eps^{13} = -t_x eps``), so the two incident polarizations mix and a
+        SINGLE-polarization efficiency is not what this entry would be
+        returning -- the same reason it already refuses a ``(Nx, Ny, 3, 3)``
+        cell.  Use :func:`pmm_jones_2d_staggered`, which drives both
+        polarizations.  The keyword exists to raise rather than to be silently
+        dropped by a branch that never reads it.
 
     Returns
     -------
@@ -2072,6 +2355,17 @@ def pmm_efficiency_2d_staggered(
     DOF on vertical pillars, the win being accuracy quality (no floor, exact
     sidewalls, position invariance).  NumPy/SciPy dense generalized eig.
     """
+    if not _slant_is_zero(_norm_slant_pair(
+            slant, "pmm_efficiency_2d_staggered")):
+        raise NotImplementedError(
+            f"pmm_efficiency_2d_staggered: slant={slant!r} -- a SLANTED cell "
+            f"is an OUT-OF-PLANE tensor cell in the sheared frame "
+            f"(eps^13 = -t_x eps), so the two incident polarizations MIX and "
+            f"this entry's single-polarization efficiencies are not "
+            f"well-posed -- exactly the reason it already refuses a "
+            f"(Nx, Ny, 3, 3) cell.  Use pmm_jones_2d_staggered(..., "
+            f"slant=...), which drives BOTH polarizations and returns "
+            f"(orders, R, T, jones).")
     pol = polarization.lower()
     if pol not in ("te", "tm"):
         raise ValueError(
@@ -2285,6 +2579,7 @@ def pmm_jones_2d_staggered(
     mu_superstrate=None,
     mu_substrate=None,
     symmetry="auto",
+    slant=None,
 ):
     """Rigorous 2-D crossed grating with a FULL ``(3, 3)`` ANISOTROPIC cell --
     in-plane OR out-of-plane -- by the canonical NO-FLOOR staggered PMM: the
@@ -2355,7 +2650,25 @@ def pmm_jones_2d_staggered(
         or conical incidence, an off-centre or unmirrored cell, a
         parity-breaking tensor, and every in-plane or scalar cell -- runs the
         dense path BIT-FOR-BIT, which is what ``symmetry=False`` forces
-        everywhere.  Default ``'auto'`` (equivalent to ``True``).
+        everywhere.  A SLANTED cell is refused outright (a shear breaks the
+        mirror symmetry), so ``symmetry='auto'`` on a slanted cell is
+        bit-identical to ``symmetry=False``.  Default ``'auto'`` (equivalent to
+        ``True``).
+    slant : (t_x, t_y) or float, optional
+        Constant x-z / y-z SHEAR of the layer: the whole cross-section
+        translates laterally by ``(t_x, t_y) * depth`` from the layer's TOP
+        face to its bottom, and ``eps_cell`` is the cross-section at the TOP.
+        ``t`` is a TANGENT (``t_x = tan(wall_tilt_x)``) -- the SAME public
+        convention as :meth:`~lumenairy.elements.pmm.PMM2DStackHybrid.add_layer`
+        and the 1-D ``slant_angle`` entries, so a cell moves between the
+        engines unchanged.  ``None`` / ``0`` (the default) is a vertical layer
+        and stays BIT-IDENTICAL to the pre-slant library.  Exact at any slant
+        magnitude and ONE eigensolve for the whole layer (``det J = 1``), but a
+        slanted cell always takes the ``4 q^2`` first-order generator and the
+        generalized cascade -- its covariant tensor has out-of-plane entries
+        even when the cell is scalar.  Refused together with ``mu_cell``.  A
+        shear is NOT a taper: a shrinking cross-section still needs a
+        z-staircase.
 
     Returns
     -------
@@ -2420,8 +2733,8 @@ def pmm_jones_2d_staggered(
                            n_substrate=n_substrate, n_modes=M,
                            n_orders=int(n_orders), symmetry=symmetry)
     if mu is None:
-        stack.add_layer(float(depth), eps_cell=cell)
+        stack.add_layer(float(depth), eps_cell=cell, slant=slant)
     else:
-        stack.add_layer(float(depth), eps_cell=cell, mu_cell=mu)
+        stack.add_layer(float(depth), eps_cell=cell, mu_cell=mu, slant=slant)
     stack.set_source(float(wavelength), theta=float(theta), phi=float(phi))
     return stack.solve(jones=True)

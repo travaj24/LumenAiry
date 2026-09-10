@@ -71,7 +71,25 @@ the real-eigenvalue up/down split is non-critical for internal layers --
 Li 2003 J. Opt. A 5:345; *Gratings: Theory and Numeric Applications* ch. 13,
 2014, 13.2.3.3 -- is what makes the 2nd-order ``(W, +/-V, +/-lam)`` cascade
 sound as-is.)
-Tapered (z-staircase) helpers remain hybrid-only: use :class:`PMM2DStackHybrid`.
+A layer may also be SLANTED: ``add_layer(..., slant=(t_x, t_y))`` makes it ONE
+EXACT slanted region rather than a z-staircase -- the whole cross-section
+translates by ``t * thickness`` from the layer's TOP face to its bottom, ``t``
+being a TANGENT in the same PUBLIC convention as
+:class:`PMM2DStackHybrid` and the 1-D ``slant_angle`` entries.  It is exact at
+any slant magnitude and costs ONE eigensolve (``det J = 1``: the sheared
+frame's metric is z-invariant), and it promotes the whole stack to the
+generalized cascade, as an out-of-plane layer does -- a sheared cell IS an
+out-of-plane cell in the frame.  Slant on a UNIFORM layer is accepted and is a
+physical no-op.  The bookkeeping a shear adds is ONE unimodular phase per order
+on the TRANSMITTED amplitudes (the frame anchor); R and the reflection Jones
+need nothing.  Out of scope, all raising: MIXED slants between PATTERNED
+layers, a mix of vertical and slanted layers ABOVE a pattern, ``mu`` with a
+slant, and ``retain_internal`` on a slanted stack.  See
+:mod:`lumenairy.elements.pmm.twod_staggered`, "SLANT".
+
+A shear is NOT a TAPER -- a taper shrinks the cross-section and no shear
+absorbs a dilation.  Tapered (z-staircase) helpers remain hybrid-only: use
+:class:`PMM2DStackHybrid`.
 Uniform SCALAR layers route through the shared eps-free geometric eig
 (:func:`~lumenairy.elements.pmm.twod_staggered._homog_region_modes`) -- all
 uniform regions share the SAME eigenvectors, so a uniform<->uniform interface is
@@ -103,8 +121,10 @@ import numpy as np
 from ..rcwa._core import (  # shared flux projection + the generalized cascade
     _interface_smatrix_general,
     _modes_to_M,
+    _norm_slant_pair,
     _project_efficiency,
     _propagation_smatrix_general,
+    _slant_is_zero,
     _symmetry_on,
 )
 from ._core import (
@@ -271,6 +291,82 @@ def _stack_is_lossless(layers, eps_sup, eps_sub):
     return True
 
 
+def _layer_is_patterned(L):
+    """``True`` when the layer carries a PATTERN (a cell that is not constant
+    across the union grid), which is what makes a lateral frame offset
+    observable.  A ``uniform`` / ``uniform_tensor`` layer is homogeneous: a
+    translation maps it to itself, so its frame offset is a pure gauge."""
+    if L["kind"] in ("uniform", "uniform_tensor"):
+        return False
+    if L["kind"] == "magnetic":
+        return not (L["eps_uniform"] and L["mu_uniform"])
+    return True
+
+
+def _check_stack_slant(layers, fn):
+    """Refuse the slanted stacks whose FRAME ANCHOR is ambiguous.
+
+    Each slanted region is solved in its OWN frame, anchored at that layer's
+    TOP face (``u = x - t (z - z_top)``); the interface match between regions
+    is the IDENTITY (``det g = 1``, ``w = z``, and the covariant TANGENTIAL
+    components equal the lab-Cartesian ones), so what a stack actually
+    cascades is each layer's cell displaced laterally by the ACCUMULATED offset
+    of everything above it, ``Sh_i = sum_{j<i} t_j d_j``.  Two readings of that
+    are exact and each is measured:
+
+    * ``Sh_i = 0`` -- every layer above the pattern is vertical, so the cell
+      sits where the caller put it (the workhorse: one slanted patterned layer
+      among uniform films);
+    * ``Sh_i = t_i Z_i`` with every layer above at the SAME slant -- one global
+      shear of the whole stack, the frame simply continuing (the layer-split
+      identity: one slanted layer of depth ``d`` equals two of ``d/2``, measured
+      at 1.3e-15).
+
+    Anything else -- PATTERNED layers at different slants (a VERTICAL patterned
+    layer included), or a mix of vertical and slanted layers above a pattern --
+    puts one nodal grid at a real lateral translation relative to another, which
+    a nodal SEM basis cannot represent exactly unless the offset is a whole
+    number of grid cells.  Refuse it loudly rather than return the shifted
+    structure silently.
+    """
+    if all(_slant_is_zero(L.get("slant")) for L in layers):
+        return
+    pats = [i for i, L in enumerate(layers) if _layer_is_patterned(L)]
+    if pats:
+        sl0 = layers[pats[0]].get("slant", (0.0, 0.0))
+        bad = [i for i in pats if layers[i].get("slant", (0.0, 0.0)) != sl0]
+        if bad:
+            raise NotImplementedError(
+                f"{fn}: MIXED SLANTS between PATTERNED layers are not "
+                f"supported -- layer {pats[0]} is slanted {sl0} while layer "
+                f"{bad[0]} is slanted "
+                f"{layers[bad[0]].get('slant', (0.0, 0.0))} (a VERTICAL "
+                f"patterned layer counts as slant (0.0, 0.0)).  The frame "
+                f"offset between two differently sheared PATTERNED regions is "
+                f"a real lateral translation of one nodal grid relative to the "
+                f"other, exact only when it is a whole number of grid cells.  "
+                f"Give every patterned layer ONE slant, or z-staircase the "
+                f"odd one out, or use PMM2DStackHybrid (its Fourier "
+                f"projection decouples the layers).")
+        for i in pats:
+            above = [layers[j].get("slant", (0.0, 0.0)) for j in range(i)]
+            if not above:
+                continue
+            ti = layers[i].get("slant", (0.0, 0.0))
+            if all(_slant_is_zero(t) for t in above):
+                continue                      # Sh_i = 0: the cell is in place
+            if all(t == ti for t in above):
+                continue                      # one global shear of the stack
+            raise NotImplementedError(
+                f"{fn}: the layers ABOVE patterned layer {i} carry a MIX of "
+                f"vertical and slanted regions ({above}), so the accumulated "
+                f"lateral frame offset above that pattern is neither zero nor "
+                f"the one global shear {ti} -- the pattern would be silently "
+                f"displaced by sum_j t_j d_j.  Slant the whole stack "
+                f"uniformly, keep every layer above the pattern vertical, or "
+                f"use PMM2DStackHybrid.")
+
+
 def _warn_stag_closure(R_eff, T_eff, layers, eps_sup, eps_sub):
     """Lossless-closure tripwire for the PURE staggered cascade -- the no-floor
     sibling of :func:`~lumenairy.elements.pmm.twod._warn_lossless_energy_2d`
@@ -366,7 +462,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
     # ------------------------------------------------------------------ build
     def add_layer(self, thickness, *, eps=None, eps_cell=None, mu=None,
-                  mu_cell=None):
+                  mu_cell=None, slant=None):
         """Append a layer.  Pass exactly ONE of ``eps`` or ``eps_cell``, and
         at most one of ``mu`` (uniform) or ``mu_cell`` (patterned).
 
@@ -398,7 +494,44 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         its own region eig -- it cannot ride the shared eps-free geometric one
         -- and is deduped by ``(eps bytes, mu bytes)``.  OUT-OF-PLANE mu, and
         mu together with an out-of-plane eps, raise ``NotImplementedError``
-        (the first-order generator has no permeability blocks)."""
+        (the first-order generator has no permeability blocks).
+
+        ``slant=(t_x, t_y)`` (or a bare scalar ``t_x``) makes this ONE EXACT
+        SLANTED layer instead of a z-staircase: the whole cross-section
+        translates linearly with depth, by ``(t_x, t_y) * thickness`` from the
+        layer's TOP face to its bottom, and the cell you pass is the
+        cross-section at the **top**.  ``t`` is a TANGENT (lateral walk per
+        unit depth, ``t_x = tan(wall_tilt_x)``), the SAME public convention as
+        :meth:`~lumenairy.elements.pmm.PMM2DStackHybrid.add_layer` and the 1-D
+        ``slant_angle`` entries, so a layer moves between the engines
+        unchanged.  ``0`` / ``None`` (the default) is a plain vertical layer
+        and stays BIT-IDENTICAL to the pre-slant library.
+
+        It is EXACT at any slant magnitude and costs ONE eigensolve for the
+        whole layer: ``det J = 1``, so the sheared frame's metric is
+        z-invariant and the shear is a pointwise congruence on the cell tensor
+        plus six extra Galerkin blocks on the first-order generator
+        (``docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md``).  A slanted
+        layer therefore runs the ``4 q^2`` OUT-OF-PLANE generator -- its
+        covariant tensor has out-of-plane entries even for a scalar cell -- and
+        promotes the whole stack to the generalized cascade, exactly as an
+        out-of-plane tensor layer does.  A slant on a UNIFORM layer is accepted
+        and is a physical no-op (a shear of a homogeneous medium is a
+        coordinate change).
+
+        RESTRICTIONS, all raising: ``slant`` with ``mu`` / ``mu_cell`` (the
+        first-order generator has no permeability blocks); a stack whose
+        PATTERNED layers do not all share ONE slant, or in which the layers
+        ABOVE a patterned layer carry a mix of that slant and vertical -- both
+        raise from :meth:`solve`, where the whole stack is visible, because the
+        accumulated frame offset between two differently-sheared PATTERNED
+        regions is a real lateral translation of one nodal grid relative to the
+        other; and ``solve(retain_internal=True)`` on a slanted stack.
+
+        NOTE this models a slanted (tilted-axis, CONSTANT cross-section)
+        feature.  It does NOT model a TAPER (shrinking cross-section) -- no
+        shear absorbs a dilation.  A tapered feature still needs a
+        z-staircase."""
         self._modal = None      # geometry change supersedes retained amplitudes
         self._internal = None
         if (eps is None) == (eps_cell is None):
@@ -408,13 +541,23 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         t = float(thickness)
         if not t > 0:
             raise ValueError("PMM2DStackPure.add_layer: thickness must be > 0.")
+        sl = _norm_slant_pair(slant, "PMM2DStackPure.add_layer")
         if mu is not None or mu_cell is not None:
+            if not _slant_is_zero(sl):
+                raise NotImplementedError(
+                    "PMM2DStackPure.add_layer: slant= together with mu / "
+                    "mu_cell is not implemented -- a SLANTED layer runs the "
+                    "OUT-OF-PLANE first-order generator, which carries no "
+                    "permeability blocks (it eliminates G3 assuming mu = 1).  "
+                    "The shear's own metric anisotropy is absorbed "
+                    "analytically; a MATERIAL mu is not.  Drop mu, or "
+                    "z-staircase the slanted magnetic layer.")
             return self._add_magnetic_layer(t, eps, eps_cell, mu, mu_cell)
         if eps is not None:
             e = np.asarray(eps, dtype=_C)
             if e.ndim == 0:
                 self._layers.append(dict(kind="uniform", thickness=t,
-                                         eps=_C(eps)))
+                                         eps=_C(eps), slant=sl))
                 return self
             if e.shape != (3, 3):
                 raise ValueError(
@@ -424,7 +567,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     f"((Nx, Ny, 3, 3)).")
             _tile_needs_oop("PMM2DStackPure.add_layer", e[None, None])
             self._layers.append(dict(kind="uniform_tensor", thickness=t,
-                                     eps33=e))
+                                     eps33=e, slant=sl))
             return self
         cell = _validate_stag_cell("PMM2DStackPure.add_layer", eps_cell)
         grid = cell.shape[:2]
@@ -437,7 +580,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                 f"staggered cascade); got {grid} after {self._grid}.  "
                 f"Re-express every pattern on a common grid, or use "
                 f"PMM2DStackHybrid (no union-grid constraint).")
-        self._layers.append(dict(kind="patterned", thickness=t, eps_cell=cell))
+        self._layers.append(dict(kind="patterned", thickness=t, eps_cell=cell,
+                                 slant=sl))
         return self
 
     def _add_magnetic_layer(self, t, eps, eps_cell, mu, mu_cell):
@@ -507,7 +651,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     f"staggered cascade); got {grid} after {self._grid}.")
         self._layers.append(dict(kind="magnetic", thickness=t, eps=eps_spec,
                                  eps_uniform=eps_uni, mu=mu_spec,
-                                 mu_uniform=mu_uni))
+                                 mu_uniform=mu_uni, slant=(0.0, 0.0)))
         return self
 
     def set_source(self, wavelength, *, theta=0.0, phi=0.0):
@@ -540,6 +684,23 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             raise ValueError("PMM2DStackPure.solve: call set_source(...) first.")
         if not self._layers:
             raise ValueError("PMM2DStackPure.solve: add at least one layer.")
+        _check_stack_slant(self._layers, "PMM2DStackPure.solve")
+        _slanted_stack = any(not _slant_is_zero(L.get("slant"))
+                             for L in self._layers)
+        if retain_internal and _slanted_stack:
+            # The frame-anchor bookkeeping below is a FAR-FIELD correction on
+            # the transmitted orders.  An internal probe evaluated at a plane
+            # inside or below a sheared layer lives in the FRAME, not the lab,
+            # and needs the same treatment -- which _flux_at has not been
+            # taught.  Refuse rather than return frame-referenced fluxes.
+            raise NotImplementedError(
+                "PMM2DStackPure.solve: retain_internal=True is not supported "
+                "on a stack containing a SLANTED layer -- the internal-field "
+                "probe (_flux_at / layer_absorption) evaluates at a plane in "
+                "the SHEARED frame, where the lateral frame offset "
+                "sum_j t_j d_j has not been undone, so the retained "
+                "amplitudes are not lab-referenced.  Solve without "
+                "retain_internal, or z-staircase the slanted layer.")
         # Multi-patterned (A|B) cascades are fully supported: the historical
         # A|B energy blow-up was the far-field projection-kernel order MIRROR
         # (fixed in twod_staggered._stag_fourier_projection), not an
@@ -638,12 +799,23 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         eig_cache = {}
         any_oop = False
         for L in self._layers:
-            if L["kind"] == "uniform":
+            sl = L.get("slant", (0.0, 0.0))
+            slanted = not _slant_is_zero(sl)
+            if L["kind"] == "uniform" and not slanted:
                 W, V, lam = _homog_region_modes(geom, L["eps"])
                 six = _modes_as_general(W, V, lam)
             else:
                 mcell = None
-                if L["kind"] == "uniform_tensor":
+                if L["kind"] == "uniform" and slanted:
+                    # A SLANTED uniform layer cannot ride the shared eps-free
+                    # geometric eig: in the frame its covariant tensor carries
+                    # out-of-plane entries, so it is an out-of-plane region and
+                    # takes its own 4 q^2 solve on the union grid.  (Physically
+                    # it is still a no-op -- a shear of a homogeneous medium is
+                    # a coordinate change -- which is exactly the null test.)
+                    cell = np.ascontiguousarray(
+                        np.full((Nx, Ny), _C(L["eps"])))
+                elif L["kind"] == "uniform_tensor":
                     # A uniform TENSOR region is NOT eps-free-separable (its
                     # div(D)=0 Schur term mixes e11/e21 while Meps33 carries
                     # e33 alone), so it cannot ride the shared geometric eig --
@@ -659,14 +831,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     mcell = _as_layer_cell(L["mu"], L["mu_uniform"], Nx, Ny)
                 else:
                     cell = L["eps_cell"]
-                key = ((cell.shape, cell.tobytes()) if mcell is None else
+                # The SLANT is part of the key: two layers with the same
+                # cell and different slant vectors have different modes and
+                # must not share a cached solve.
+                key = ((cell.shape, cell.tobytes(), sl) if mcell is None else
                        (cell.shape, cell.tobytes(), mcell.shape,
-                        mcell.tobytes()))
+                        mcell.tobytes(), sl))
                 cached = eig_cache.get(key)
                 if cached is None:
                     sol = Granet2DTransverseE(px, py, Nx, Ny, M, cell,
                                               alpha0x=a0x, alpha0y=a0y, k0=k0,
-                                              mu_cell=mcell)
+                                              mu_cell=mcell,
+                                              slant=sl if slanted else None)
                     if sol.offplane:
                         cached = _region_modes_oop(sol,
                                                    symmetry=self.symmetry)
@@ -675,9 +851,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                         cached = _modes_as_general(Wl, Vl, lam_l)
                     eig_cache[key] = cached
                 six = cached
-                any_oop = any_oop or (len(cell.shape) == 4
-                                      and _tile_needs_oop(
-                                          "PMM2DStackPure.solve", cell))
+                # A SLANTED layer is an OUT-OF-PLANE region in the frame, so it
+                # promotes the whole stack to the generalized cascade exactly
+                # as an out-of-plane tensor layer does.
+                any_oop = any_oop or slanted or (
+                    len(cell.shape) == 4
+                    and _tile_needs_oop("PMM2DStackPure.solve", cell))
             modes.append(six + (L["thickness"],))
 
         # SQUARE Redheffer cascade: sup | (interface, propagate)* | sub.  The
@@ -751,6 +930,48 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         delta = ((order_x == 0) & (order_y == 0)).astype(_C)
         p0 = int(np.where((order_x == 0) & (order_y == 0))[0][0])
 
+        # ---- THE FRAME-ANCHOR PHASE (the one piece of bookkeeping a shear
+        # adds).  Every slanted region is solved in a frame anchored at ITS OWN
+        # TOP face, so the SUPERSTRATE side coincides with the lab and the
+        # SUBSTRATE plane sits at ``u = x - sum_j t_j d_j``.  Both bounding
+        # half-spaces are HOMOGENEOUS, so that lateral offset is a gauge -- a
+        # translation maps a homogeneous half-space to itself -- and it appears
+        # as ONE unimodular diagonal phase per order on the TRANSMITTED
+        # amplitudes alone:
+        #
+        #     T_lab(m) = exp(-i alpha_m . t d) T_frame(m)
+        #
+        # ``alpha_m`` is real for every order, propagating or evanescent, so
+        # the factor is always unimodular: R, T and the REFLECTION Jones are
+        # EXACT without it and the efficiencies are untouched -- only the
+        # TRANSMISSION amplitudes carry it.  That is precisely why it is a
+        # silent-wrong if omitted (the two papers this method follows report
+        # efficiencies, where a unimodular per-order factor is invisible; this
+        # library returns Jones matrices, where it is not).  MEASURED on a
+        # uniform null at slants of 10-35 deg and 25 deg incidence: the
+        # shipped arm reads 9.86e-08 .. 2.64e-05, omitting the factor leaves
+        # the transmission Jones wrong by 1.43e-01 .. 7.42e-01, and the ``+i``
+        # arm (2.86e-01 .. 1.33e+00) is about TWICE as wrong as no correction
+        # at all -- so it is not a fudge that could absorb an arbitrary
+        # residual (docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md
+        # table B3; the two builds agree there to every printed digit).
+        #
+        # ``t`` in that formula is the INTERNAL shear of ``x = u + t w``, which
+        # is the NEGATIVE of the public ``slant`` (the same relation
+        # ``Granet2DTransverseE`` applies to the congruence).  Written with the
+        # public vector the factor is therefore exp(+i alpha_m . slant d) --
+        # and the sign is not a matter of taste: on the uniform null it is the
+        # difference between 1e-07 and 1.3e+00 (table B3), with the wrong arm
+        # TWICE as wrong as applying no correction at all.
+        tphase = None
+        if _slanted_stack:
+            _shx = -sum(L.get("slant", (0.0, 0.0))[0] * L["thickness"]
+                        for L in self._layers)
+            _shy = -sum(L.get("slant", (0.0, 0.0))[1] * L["thickness"]
+                        for L in self._layers)
+            if _shx != 0.0 or _shy != 0.0:
+                tphase = np.exp(-1j * k0 * (kxv * _shx + kyv * _shy))
+
         R_rows, T_rows, j_cols, cinc_cols = [], [], [], []
         amp = {k: np.zeros((2, Nfo), dtype=_C)
                for k in ("rx", "ry", "tx", "ty")}
@@ -765,6 +986,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             t_ord = Hsub @ (S21 @ cinc)
             rx, ry = r_ord[:Nfo], r_ord[Nfo:]
             tx, ty = t_ord[:Nfo], t_ord[Nfo:]
+            if tphase is not None:
+                tx, ty = tx * tphase, ty * tphase
             rz = -(kxv * rx + kyv * ry) / safe_r
             tz = -(kxv * tx + kyv * ty) / safe_t
             Re, Te = _project_efficiency(np, kz_ref, kz_trn, kz_inc,

@@ -1,0 +1,318 @@
+{
+ "F3": [
+  {
+   "phi": 0.0,
+   "mount": "normal",
+   "pol": "te",
+   "plus": 1.0702055314171233e-07,
+   "minus": 1.0702055314171233e-07
+  },
+  {
+   "phi": 0.0,
+   "mount": "normal",
+   "pol": "tm",
+   "plus": 0.0011393020581191848,
+   "minus": 0.0011393020581191848
+  },
+  {
+   "phi": 0.0,
+   "mount": "oblique25",
+   "pol": "te",
+   "plus": 1.7866304927727228e-06,
+   "minus": 1.7866304927727228e-06
+  },
+  {
+   "phi": 0.0,
+   "mount": "oblique25",
+   "pol": "tm",
+   "plus": 0.00012511464401943062,
+   "minus": 0.00012511464401943062
+  },
+  {
+   "phi": 20.0,
+   "mount": "normal",
+   "pol": "te",
+   "plus": 3.369532089070315e-06,
+   "minus": 0.17112826506024836
+  },
+  {
+   "phi": 20.0,
+   "mount": "normal",
+   "pol": "tm",
+   "plus": 0.0007697202281346238,
+   "minus": 0.1593303074159854
+  },
+  {
+   "phi": 20.0,
+   "mount": "oblique25",
+   "pol": "te",
+   "plus": 1.1149043467328923e-06,
+   "minus": 0.008142038997003498
+  },
+  {
+   "phi": 20.0,
+   "mount": "oblique25",
+   "pol": "tm",
+   "plus": 0.00023884294948062212,
+   "minus": 0.06309925269319205
+  },
+  {
+   "phi": 35.0,
+   "mount": "normal",
+   "pol": "te",
+   "plus": 4.283265918281209e-06,
+   "minus": 0.41530225273743426
+  },
+  {
+   "phi": 35.0,
+   "mount": "normal",
+   "pol": "tm",
+   "plus": 0.001219473631039386,
+   "minus": 0.22384676014980068
+  },
+  {
+   "phi": 35.0,
+   "mount": "oblique25",
+   "pol": "te",
+   "plus": 1.4400703869377196e-06,
+   "minus": 0.02016208730021862
+  },
+  {
+   "phi": 35.0,
+   "mount": "oblique25",
+   "pol": "tm",
+   "plus": 0.0002237321264831893,
+   "minus": 0.12683714733328577
+  }
+ ],
+ "F3_te_worst_plus": 4.283265918281209e-06,
+ "F3_te_worst_plus_slanted": 4.283265918281209e-06,
+ "F3_te_best_minus_slanted": 0.008142038997003498,
+ "F3_tm_worst_plus": 0.001219473631039386,
+ "F3b": [
+  {
+   "phi": 0.0,
+   "mount": "normal",
+   "ex": 6.584381390545985e-05,
+   "ey": 2.3547668385470732e-06
+  },
+  {
+   "phi": 0.0,
+   "mount": "oblique25",
+   "ex": 3.6419045345459367e-05,
+   "ey": 9.711889610297675e-07
+  },
+  {
+   "phi": 35.0,
+   "mount": "normal",
+   "ex": 3.598614901390018e-05,
+   "ey": 2.218737002207538e-06
+  },
+  {
+   "phi": 35.0,
+   "mount": "oblique25",
+   "ex": 2.8710264292547416e-05,
+   "ey": 8.752807513084937e-07
+  }
+ ],
+ "F3b_worst_ex": 6.584381390545985e-05,
+ "F3b_worst_ex_vertical": 6.584381390545985e-05,
+ "F5": {
+  "selfmove": [
+   {
+    "mount": "normal",
+    "M": 3,
+    "vs_M4": 0.06872693614692599
+   },
+   {
+    "mount": "normal",
+    "M": 5,
+    "vs_M4": 0.006027624753662697
+   },
+   {
+    "mount": "conical",
+    "M": 3,
+    "vs_M4": 0.13255292870005542
+   },
+   {
+    "mount": "conical",
+    "M": 5,
+    "vs_M4": 0.005007614684109735
+   }
+  ],
+  "hybrid": [
+   {
+    "mount": "normal",
+    "sign": "+t",
+    "n_orders": 3,
+    "vs_pure": 0.026883498749497442,
+    "own_step": null
+   },
+   {
+    "mount": "normal",
+    "sign": "+t",
+    "n_orders": 5,
+    "vs_pure": 0.01926129016161704,
+    "own_step": 0.01201563742807038
+   },
+   {
+    "mount": "normal",
+    "sign": "+t",
+    "n_orders": 7,
+    "vs_pure": 0.012344872998415357,
+    "own_step": 0.006916417163201682
+   },
+   {
+    "mount": "normal",
+    "sign": "-t",
+    "n_orders": 3,
+    "vs_pure": 0.28431467546428707,
+    "own_step": null
+   },
+   {
+    "mount": "normal",
+    "sign": "-t",
+    "n_orders": 5,
+    "vs_pure": 0.2856444674094921,
+    "own_step": 0.01201563742805023
+   },
+   {
+    "mount": "normal",
+    "sign": "-t",
+    "n_orders": 7,
+    "vs_pure": 0.27872805024628333,
+    "own_step": 0.006916417163208788
+   },
+   {
+    "mount": "conical",
+    "sign": "+t",
+    "n_orders": 3,
+    "vs_pure": 0.03923702528422948,
+    "own_step": null
+   },
+   {
+    "mount": "conical",
+    "sign": "+t",
+    "n_orders": 5,
+    "vs_pure": 0.026297189799081994,
+    "own_step": 0.012939835485147488
+   },
+   {
+    "mount": "conical",
+    "sign": "+t",
+    "n_orders": 7,
+    "vs_pure": 0.017869765163514045,
+    "own_step": 0.013584279656018994
+   },
+   {
+    "mount": "conical",
+    "sign": "-t",
+    "n_orders": 3,
+    "vs_pure": 0.372979724572144,
+    "own_step": null
+   },
+   {
+    "mount": "conical",
+    "sign": "-t",
+    "n_orders": 5,
+    "vs_pure": 0.37556641207297636,
+    "own_step": 0.017036112061840858
+   },
+   {
+    "mount": "conical",
+    "sign": "-t",
+    "n_orders": 7,
+    "vs_pure": 0.3682537437179249,
+    "own_step": 0.026246180963906587
+   }
+  ],
+  "staircase": [
+   {
+    "mount": "normal",
+    "direction": "with",
+    "n": 1,
+    "vs_metric": 0.3697530315846109
+   },
+   {
+    "mount": "normal",
+    "direction": "with",
+    "n": 2,
+    "vs_metric": 0.1324239534573154
+   },
+   {
+    "mount": "normal",
+    "direction": "against",
+    "n": 1,
+    "vs_metric": 0.3697530315846109
+   },
+   {
+    "mount": "normal",
+    "direction": "against",
+    "n": 2,
+    "vs_metric": 0.3235744557767575
+   },
+   {
+    "mount": "conical",
+    "direction": "with",
+    "n": 1,
+    "vs_metric": 0.4869386065551854
+   },
+   {
+    "mount": "conical",
+    "direction": "with",
+    "n": 2,
+    "vs_metric": 0.22052690458267205
+   },
+   {
+    "mount": "conical",
+    "direction": "against",
+    "n": 1,
+    "vs_metric": 0.4869386065551854
+   },
+   {
+    "mount": "conical",
+    "direction": "against",
+    "n": 2,
+    "vs_metric": 0.4800283947255891
+   }
+  ],
+  "vertical_gap": [
+   {
+    "mount": "normal",
+    "vertical_vs_slanted": 0.3752713763143195
+   },
+   {
+    "mount": "conical",
+    "vertical_vs_slanted": 0.4626177925052553
+   }
+  ]
+ },
+ "F6": [
+  {
+   "M": 5,
+   "oop_s": 0.0834425000000465,
+   "slant_s": 0.07525469999995948,
+   "inplane_s": 0.0357997000000978,
+   "slant_over_oop": 0.901874943822603,
+   "slant_over_inplane": 2.102104207570284
+  },
+  {
+   "M": 6,
+   "oop_s": 0.22005109999997785,
+   "slant_s": 0.20467810000002373,
+   "inplane_s": 0.1175382000000127,
+   "slant_over_oop": 0.9301389540885928,
+   "slant_over_inplane": 1.7413751444211467
+  }
+ ],
+ "wall_s": 45.19040894508362,
+ "build": {
+  "lumenairy": "/mnt/c/tmp/lum_slant/lumenairy/__init__.py",
+  "version": "5.43.0",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "tag": "wsl"
+ }
+}

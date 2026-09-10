@@ -1,0 +1,131 @@
+{
+ "B11a_gauge": [
+  {
+   "slant": "vertical",
+   "gauge_refused": false,
+   "struct_dA_forced": 2.3129458158607283e-15,
+   "forced_reduction_would_run": true,
+   "forced_spectrum_gap": 7.800574206318749e-13,
+   "forced_pencil_resid": 2.5730824356983062e-14,
+   "tol": 1e-10
+  },
+  {
+   "slant": "x35",
+   "gauge_refused": true,
+   "struct_dA_forced": 2.312945815860729e-15,
+   "forced_reduction_would_run": true,
+   "forced_spectrum_gap": 9.494641657764435e-13,
+   "forced_pencil_resid": 2.5356139801415803e-14,
+   "tol": 1e-10
+  },
+  {
+   "slant": "diag35",
+   "gauge_refused": true,
+   "struct_dA_forced": 2.3129458158607283e-15,
+   "forced_reduction_would_run": true,
+   "forced_spectrum_gap": 5.187074698388101e-13,
+   "forced_pencil_resid": 2.849159786575764e-14,
+   "tol": 1e-10
+  }
+ ],
+ "B11a2": {
+  "slant_auto_eq_false": true,
+  "vert_auto_eq_false": false,
+  "slant_eq_vertical": false,
+  "dJ_slant_vs_vertical": 0.02112548622046485,
+  "sha": {
+   "vertical_auto": "829e62deb142b531",
+   "vertical_False": "8f9ac635b4148faa",
+   "x35_auto": "a654296cd1c40d19",
+   "x35_False": "a654296cd1c40d19"
+  },
+  "vertical_gauge_present": true,
+  "vertical_reduction_runs": true
+ },
+ "B11b": {
+  "mixed patterned slants": "NotImplementedError: PMM2DStackPure.solve: MIXED SLANTS between PATTERNED layers are not supported -- layer 0 is slanted (0.7002075382097097,",
+  "slanted above a pattern": "NotImplementedError: PMM2DStackPure.solve: the layers ABOVE patterned layer 3 carry a MIX of vertical and slanted regions ([(0.70020753820970",
+  "magnetic + slant": "NotImplementedError: PMM2DStackPure.add_layer: slant= together with mu / mu_cell is not implemented -- a SLANTED layer runs the OUT-OF-PLANE ",
+  "retain_internal + slant": "NotImplementedError: PMM2DStackPure.solve: retain_internal=True is not supported on a stack containing a SLANTED layer -- the internal-field ",
+  "efficiency entry + slant": "NotImplementedError: pmm_efficiency_2d_staggered: slant=(0.7002075382097097, 0.0) -- a SLANTED cell is an OUT-OF-PLANE tensor cell in the she",
+  "jones mu_cell + slant": "NotImplementedError: PMM2DStackPure.add_layer: slant= together with mu / mu_cell is not implemented -- a SLANTED layer runs the OUT-OF-PLANE ",
+  "bad slant shape": "ValueError: PMM2DStackPure.add_layer: slant must be a (t_x, t_y) pair or a scalar t_x, got (0.1, 0.2, 0.3).",
+  "ok_1 pattern + uniform films": "ok",
+  "ok_2 patterns, same slant": "ok",
+  "ok_uniform-only mixed slants": "ok"
+ },
+ "WOOD_lab_diag": [
+  4.0,
+  4.0,
+  4.0
+ ],
+ "WOOD_cov_diag": [
+  5.4399999999999995,
+  4.0,
+  4.0
+ ],
+ "WOOD_nudge": [
+  {
+   "cutoff_of": "lab eps",
+   "list": "lab",
+   "wl_on": 2.2e-06,
+   "wl_nudged": 2.20000022e-06,
+   "moved": true,
+   "rel_move": 9.99999999777344e-08
+  },
+  {
+   "cutoff_of": "lab eps",
+   "list": "covariant",
+   "wl_on": 2.2e-06,
+   "wl_nudged": 2.20000022e-06,
+   "moved": true,
+   "rel_move": 9.99999999777344e-08
+  },
+  {
+   "cutoff_of": "covariant e11 = eps(1+t^2)",
+   "list": "lab",
+   "wl_on": 2.5656188337319323e-06,
+   "wl_nudged": 2.5656188337319323e-06,
+   "moved": false,
+   "rel_move": 0.0
+  },
+  {
+   "cutoff_of": "covariant e11 = eps(1+t^2)",
+   "list": "covariant",
+   "wl_on": 2.5656188337319323e-06,
+   "wl_nudged": 2.565619090293816e-06,
+   "moved": true,
+   "rel_move": 1.0000000009710643e-07
+  }
+ ],
+ "WOOD_minq": [
+  {
+   "candidate": "lab eps",
+   "eps": 4.0,
+   "wl": 2.2e-06,
+   "min_abs_q": 0.007671736526199433
+  },
+  {
+   "candidate": "covariant e11",
+   "eps": 5.4399999999999995,
+   "wl": 2.5656188337319323e-06,
+   "min_abs_q": 1.2000333510099634
+  },
+  {
+   "candidate": "true null eps = |a|^2 + (t.a)^2",
+   "eps": 1.3599999999999999,
+   "wl": 1.1e-06,
+   "min_abs_q": 0.17036297384189078
+  }
+ ],
+ "wall_s": 2.329606056213379,
+ "build": {
+  "lumenairy": "/mnt/c/tmp/lum_slant/lumenairy/__init__.py",
+  "version": "5.43.0",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "tag": "wsl"
+ }
+}
