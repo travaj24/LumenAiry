@@ -51,46 +51,70 @@ def _stripe(er, eg, duty=0.5, Sx=64, Sy=8):
 
 PX, WL, DEPTH = 0.7e-6, 1.0e-6, 0.5e-6
 
-# --------------------------------------------------------------------------- #
-# Per-run truncation scan for the cross-solver test below.                      #
-#                                                                              #
-# WHICH truncation of this cell is numerically clean is a per-BUILD, per-BLAS-  #
-# THREAD-COUNT fact, so no rung may be hard-coded -- see the docstring of       #
-# test_pmm_fff_nv_matches_rcwa_fff_nv for the measurement.  These helpers scan  #
-# a ladder, score each rung by its OWN lossless closure, and let the test pick  #
-# the reference on the run that is actually executing.                         #
-# --------------------------------------------------------------------------- #
+#: Isotropic groove permittivity of the CROSS-SOLVER stripe.
+#:
+#: DELIBERATELY NOT 2.25 (2026-09-10,
+#: ``docs/audits/VERIFY_WOOD_LIST_AND_FFFNV_2026_09_10.md`` follow-up A; the
+#: same move ``tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py`` made for its
+#: own stripe, and for the same reason).  2.25 is simultaneously the director's
+#: ordinary permittivity (``no^2``, ``no = 1.5``) and ``n_substrate^2``, so a
+#: 2.25 groove makes a block of LAYER modes EXACTLY degenerate with the
+#: substrate region's at every truncation; the interface inverse then reads the
+#: rounding floor, which is a per-BUILD, per-BLAS-THREAD-COUNT quantity.  Every
+#: piece of scanning apparatus this file used to carry existed to survive that.
+#:
+#: MEASURED 2026-09-10 -- RCWA fff_nv lossless closure over ``_RCWA_LADDER`` at
+#: ``Sx`` = 64, on Windows py3.14.6 / numpy 2.4.4 at 1 and at 4 BLAS threads and
+#: on WSL py3.12.3 / numpy 2.4.6 at 1::
+#:
+#:     groove   worst closure over the 5 rungs      rungs under 1e-3
+#:     2.25     2.64e-02 / 1.72e-02 / 8.22e-03      4 / 4 / 2  of 5
+#:     2.10     5.37e-14 / 4.66e-14 / 5.37e-14      5 / 5 / 5  of 5
+#:
+#: -- and at 2.10 every ``sum(R)``, every ``sum(T)`` and every PMM rung's
+#: closure agree to all nine printed digits across the three configurations,
+#: where at 2.25 the SAME rung reads ``sum(R)`` = 0.064400 / 0.061786 / 0.062006
+#: on them.  With the coincidence gone the reference needs no search: it is
+#: taken at a fixed converged truncation and its theorem is ASSERTED.
+_STRIPE_EPS_GROOVE = 2.10
 
-#: RCWA reference truncations scanned.  ~0.1-1.0 s each, so the whole ladder is
-#: cheap.  Bounded above by the reference cell's x-sampling (rcwa needs
-#: 4*n_orders+1 <= Sx) and below by n_orders_x = 7, under which the stripe is
-#: not resolved at all.
+#: RCWA reference ladder, ~0.02 s per rung (``n_orders_y`` = 1).  Bounded above
+#: by the cell's x-sampling (rcwa needs ``4*n_orders + 1 <= Sx``) and below by
+#: ``n_orders_x`` = 7, under which the stripe is not resolved at all.  Every
+#: rung's own lossless closure is now ASSERTED rather than scored: on a
+#: non-degenerate cell the Li-1996 theorem holds at all of them, so a rung that
+#: misses it means the fixture has re-acquired a coincidence and nothing here
+#: may be measured against it.
 _RCWA_LADDER = (7, 9, 11, 13, 15)
 
-#: THE REFERENCE LADDER IS TWO-STAGE (2026-08-16).  The order cap is tied to
-#: the reference cell's SAMPLING, not chosen, so "more rungs" is bought by
-#: sampling the SAME ideal stripe more finely -- ``_stripe``'s duty-0.5 wall
-#: lands exactly on a sample edge at every ``Sx`` here (``Sx`` even), so the
-#: represented structure is IDENTICAL and only the Fourier coefficients get
-#: better.  Stage 2 is entered only when stage 1 yields no corroborated
-#: reference, so on a build where the shipped ladder works nothing about this
-#: test's cost or its reading changes.
+#: The rung the PMM is measured against.  The HIGHEST the sampling allows
+#: (``4*15 + 1 = 61 <= 64``), i.e. the best-converged one: ``sum(R)`` over the
+#: ladder runs 0.066481993 (7) / 0.066439317 (9) / 0.066416821 (11) /
+#: 0.066403334 (13) / 0.066394475 (15), so the rungs span 8.8e-05 and the
+#: reference's own residual truncation error is a few 1e-05 -- an order below
+#: the cross-solver residual it is used to measure.  FIXED rather than picked
+#: on the run: once every rung closes to 1e-14, "the cleanest rung" is a choice
+#: between machine-noise readings and would itself be a per-build fact.
 #:
-#: Measured 2026-08-16 on WSL py3.12 / numpy 2.5.1 / scipy 1.18.0, the build
-#: that forced this -- clean rungs (closure < 1e-3) and the corroborated pick:
-#:
-#:   sampling   4 threads                      1 thread
-#:   Sx =  64   clean [15]          -> NONE    clean [9, 13]        -> M=13
-#:   Sx = 128   clean [7,11,13,15,19,21,23,25,27] -> M=23   clean [7,11,13,15,21,23,27] -> M=23
-#:
-#: -- i.e. at 64 samples and 4 threads exactly ONE rung closes, so nothing can
-#: corroborate it and the test failed naming its own reference as unusable
-#: (correctly: it WAS unusable).  At 128 the same build has nine.  The three
-#: sampled references agree on ``sum(R)`` to 4.3e-05 (0.061786 / 0.061818 /
-#: 0.061829 at Sx 64 / 128 / 192), i.e. two decades inside ``_AGREE_TOL``, so
-#: which stage supplies the ruler does not move the cross-solver reading.
-_RCWA_REF_STAGES = ((64, _RCWA_LADDER),
-                    (128, (7, 11, 13, 15, 19, 21, 23, 25, 27)))
+#: HISTORY (kept; the apparatus this replaces was right about its symptom).
+#: 2026-08-08 replaced a hard-coded pair of rungs with a per-run closure scan,
+#: because WHICH rung was clean moved with ``OPENBLAS_NUM_THREADS``; 2026-08-16
+#: added a SECOND sampling stage (``Sx`` = 128) because on WSL py3.12 / numpy
+#: 2.5.1 at 4 threads the ``Sx`` = 64 ladder produced exactly one clean rung and
+#: one rung cannot be corroborated.  Both readings were real.  Neither cause
+#: was the truncation or the sampling: it was the groove sitting on
+#: ``no^2 = n_substrate^2`` (see ``_STRIPE_EPS_GROOVE``).  With that detuned,
+#: all five rungs close to 1e-14 on all three configurations measured, so the
+#: two-stage ladder, the corroboration filter and its tolerance are gone.
+_RCWA_REF_ORDERS = 15
+
+#: A rigorous RCWA rung's own Li-1996 lossless closure.  It is EXACT for a
+#: lossless stack, so this bar separates "the theorem holds" from "it does
+#: not"; it is not a convergence measurement.  Worst reading over the five
+#: rungs and the three configurations: 5.373e-14 -- 4.3 decades under this bar,
+#: which is itself ~5 decades under the 8.2e-03..2.6e-02 the index-coincident
+#: groove produced on the same ladder.
+_RCWA_SOUND_CLOSURE = 1e-9
 
 #: PMM truncations scanned, cheapest first.  Bounded above by the degree-11
 #: nodal grid (2*n_orders+1 <= 33) and below by n_orders = 9: n_orders = 7
@@ -102,28 +126,43 @@ _RCWA_REF_STAGES = ((64, _RCWA_LADDER),
 _PMM_LADDER = (9, 11, 13)
 _PMM_WANT_CLEAN = 2
 
-#: A rung is CLEAN when its own lossless closure |sum R + sum T - 2| is under
-#: this.  UNCHANGED -- it is the bar this test already asserted on both engines.
+#: A PMM rung is CLEAN when its own lossless closure |sum R + sum T - 2| is
+#: under this.  VALUE UNCHANGED; the sizing is now measured (2026-09-10).  The
+#: hybrid PMM does NOT reach machine closure here and is not expected to -- its
+#: Fourier-projection floor at degree 11 is the residual -- so unlike the RCWA
+#: side this stays a truncation bar.  On the detuned fixture the three rungs
+#: read 1.524e-04 (9) / 9.499e-05 (11) / 1.897e-04 (13), IDENTICAL to nine
+#: digits on Windows at 1 and at 4 BLAS threads and on WSL, so the 5.3x gap to
+#: this bar is headroom over a value with no build scatter at all rather than
+#: margin inside a spread.  (On the coincident groove the same rungs read
+#: 1.746e-04 / 2.856e-04 / 2.935e-04 on Windows-1 but 2.704e-03 / 6.130e-04 /
+#: 2.210e-04 on WSL -- rung 9 crossing the bar, which is what the scan existed
+#: to absorb.)  A rung over the bar is DROPPED, not a failure; only an empty
+#: clean set fails.
 _CLOSE_TOL = 1e-3
 
-#: A clean rung is CORROBORATED when another clean rung reproduces its sums to
-#: within this.  Half the cross-solver bar.  Necessary because closure is
-#: necessary and NOT sufficient: at one thread rcwa n_orders_x = 15 closes to
-#: 1.6e-04 while its sum(R) sits 2.6e-03 away from the 7/9/11 cluster (R and T
-#: redistribute between thread counts at fixed closure -- exactly the
-#: "PER-ORDER efficiencies are suspect" the engines warn about).  The exact
-#: value is not load-bearing in either direction: a rung that fails
-#: corroboration is only DROPPED, and the rung finally used is the cleanest one
-#: anyway (n_orders_x = 15 loses to 9 by three decades of closure).
-_AGREE_TOL = 2e-3
-
-#: Cross-solver bar.  UNCHANGED (see the docstring).
+#: Cross-solver bar.  VALUE UNCHANGED; sized from measurement (2026-09-10).
+#: PMM (Laurent-projected) and RCWA (Li-2003 successive) are DIFFERENT
+#: factorizations converging to slightly different floors, so the residual is a
+#: real quantity, not a machine-precision match.  On the detuned fixture,
+#: against ``_RCWA_REF_ORDERS``, the scanned PMM rungs read |d sum R| =
+#: 3.006e-04 (9) / 5.777e-04 (11) and |d sum T| = 4.530e-04 / 6.727e-04 --
+#: identical to nine digits on all three configurations.  4e-3 therefore sits
+#: 5.9x above a build-free measurement and ~15x below the 1e-2-and-up a gross
+#: factorization error would give; there is no wider placement that keeps both
+#: gaps, and no build spread for the lower one to hide in.
 _CROSS_TOL = 4e-3
 
 
 def _closure(R, T):
     """The two-polarization lossless closure defect, |sum R + sum T - 2|."""
     return abs(float(np.sum(R)) + float(np.sum(T)) - 2.0)
+
+
+def _sums(R, T):
+    """One solve's row for :func:`_table` / :func:`_clean`, minus the ``M``."""
+    return dict(sumR=float(np.sum(R)), sumT=float(np.sum(T)),
+                close=_closure(R, T), raised=None)
 
 
 def _scan(solve, ladder, want_clean=None):
@@ -163,16 +202,6 @@ def _clean(rows):
     return [r for r in rows if r["close"] < _CLOSE_TOL]
 
 
-def _corroborated_reference(rows):
-    """The rung to measure against on THIS run: the cleanest rung whose sums
-    another clean rung reproduces.  ``None`` when no rung qualifies."""
-    clean = _clean(rows)
-    ok = [r for r in clean
-          if any(q is not r and abs(q["sumR"] - r["sumR"]) < _AGREE_TOL
-                 and abs(q["sumT"] - r["sumT"]) < _AGREE_TOL for q in clean)]
-    return min(ok, key=lambda r: r["close"]) if ok else None
-
-
 def test_pmm_fff_nv_stripe_reduces_to_rigorous_1d():
     """A rotated-director stripe: pmm fff_nv converges to the rigorous 1-D
     full-tensor solver, and faster than pmm laurent."""
@@ -206,7 +235,30 @@ def test_pmm_fff_nv_stripe_reduces_to_rigorous_1d():
 
 def test_pmm_fff_nv_matches_rcwa_fff_nv():
     """Cross-solver: EVERY pmm fff_nv truncation that conserves converges to
-    the same answer as an rcwa fff_nv reference THIS RUN picks for itself.
+    the same answer as the rcwa fff_nv reference, whose own energy theorem is
+    asserted at every rung of its ladder.
+
+    **THE FIXTURE WAS THE PROBLEM ALL ALONG (2026-09-10,
+    ``docs/audits/VERIFY_WOOD_LIST_AND_FFFNV_2026_09_10.md`` follow-up A).**
+    The groove is ``_STRIPE_EPS_GROOVE`` (2.10) now, not the director's own
+    ordinary permittivity: 2.25 was simultaneously ``no^2`` and
+    ``n_substrate^2``, an EXACT layer<->region mode coincidence whose closure
+    defect is a reading of the rounding floor and therefore moves with the
+    LAPACK build and the BLAS thread count.  Everything the three history
+    entries below describe -- the re-pinning, the per-run closure scan, the
+    second sampling stage -- was that one fact seen from three angles.
+    Detuned, the whole test is build-free: all five rcwa rungs close to
+    <= 5.4e-14 and every ``sum(R)`` / ``sum(T)`` and PMM closure agrees to
+    nine digits on Windows py3.14/np2.4.4 at 1 AND at 4 BLAS threads and on
+    WSL py3.12/np2.4.6.  So the reference is FIXED again (at
+    ``_RCWA_REF_ORDERS``) and its theorem is ASSERTED at every rung instead of
+    scored -- which is also the tripwire that fires if the coincidence is ever
+    reintroduced.  The two-stage ``_RCWA_REF_STAGES`` ladder, the
+    ``_corroborated_reference`` filter and its ``_AGREE_TOL`` are gone; the
+    PMM-side scan stays, because that side's ~1e-4 closure is a real Fourier
+    floor rather than an instability.  The history below is kept as written --
+    every measurement in it stands, only its diagnosis was one level too
+    shallow.
 
     REFERENCE TRUNCATION MOVED 13 -> 11 (2026-08-04).  The RCWA reference at
     ``n_orders_x`` 13 sat ON this cell's measure-zero instability, and the
@@ -274,7 +326,7 @@ def test_pmm_fff_nv_matches_rcwa_fff_nv():
     T (5x headroom).
     """
     er = _rot(np.deg2rad(35.0), 1.5, 2.3)
-    eg = np.diag([2.25] * 3).astype(complex)
+    eg = np.diag([_STRIPE_EPS_GROOVE] * 3).astype(complex)
     cell = _stripe(er, eg)
 
     def _rcwa_at(Mx, rcell):
@@ -289,33 +341,29 @@ def test_pmm_fff_nv_matches_rcwa_fff_nv():
                                     formulation="fff_nv", symmetry=False)
         return R, T
 
-    # (1) the REFERENCE, chosen on this run.  The structure is provably
-    #     lossless, so a rung that does not conserve is not a ruler -- and
-    #     "no rung conserves" is a statement about the SAMPLING, which this
-    #     run is free to refine, not a verdict this test may hand down.
-    ref, rrows, stage, tried = None, [], None, []
-    for Sx, ladder in _RCWA_REF_STAGES:
-        rcell = _stripe(er, eg, Sx=Sx)
-        rrows = _scan(lambda M, c=rcell: _rcwa_at(M, c), ladder)
-        ref, stage = _corroborated_reference(rrows), Sx
-        if ref is not None:
-            break
-        tried.append(f"Sx={Sx}:\n    " + _table(rrows))
-    assert ref is not None, (
-        f"the RCWA fff_nv REFERENCE is unusable on this build AT EVERY "
-        f"SAMPLED RESOLUTION {[s for s, _l in _RCWA_REF_STAGES]}: no scanned "
-        f"truncation both conserves to better than {_CLOSE_TOL:.0e} and is "
-        f"reproduced by another one that does, so there is nothing for the "
-        f"PMM to be measured against.  Refining the sampling is what buys "
-        f"rungs here (the order cap is 4*n_orders+1 <= Sx), so an exhausted "
-        f"stage list means the reference engine itself has stopped "
-        f"converging on this cell.  This is a statement about the reference, "
-        f"NOT about pmm_jones_2d.\n    " + "\n    ".join(tried))
-    if stage != _RCWA_REF_STAGES[0][0]:
-        print(f"\nfff_nv reference: the Sx={_RCWA_REF_STAGES[0][0]} ladder had "
-              f"no corroborated rung on this build; refined to Sx={stage}")
+    # (1) the REFERENCE, at a FIXED converged truncation, with the rigorous
+    #     engine's OWN energy theorem asserted at EVERY rung of the ladder.
+    #     The structure is provably lossless and Li-1996 closure is exact for
+    #     it, so a rung that misses it is not a truncation statement at all --
+    #     it means the cell has re-acquired a layer<->region mode coincidence,
+    #     which is the one state nothing here may be measured against.
+    rrows = [dict(M=M, **_sums(*_rcwa_at(M, _stripe(er, eg, Sx=64))))
+             for M in _RCWA_LADDER]
+    worst = max(r["close"] for r in rrows)
+    assert worst < _RCWA_SOUND_CLOSURE, (
+        f"the RCWA fff_nv reference violates its OWN exact Li-1996 lossless "
+        f"closure by {worst:.3e} somewhere in {list(_RCWA_LADDER)}, so its "
+        f"per-order answers are suspect and there is nothing for the PMM to "
+        f"be measured against.  That is a property of the FIXTURE, not of "
+        f"either engine: check whether the cell has re-acquired a "
+        f"layer<->region mode coincidence (see _STRIPE_EPS_GROOVE).\n    "
+        + _table(rrows))
+    ref = next(r for r in rrows if r["M"] == _RCWA_REF_ORDERS)
 
-    # (2) the SUBJECT: every pmm truncation that conserves on this run.
+    # (2) the SUBJECT: every pmm truncation that conserves on this run.  This
+    #     side really is a truncation scan -- the hybrid PMM's Fourier floor
+    #     leaves ~1e-4 of closure at every rung (see _CLOSE_TOL), so "which
+    #     rungs are usable" is a genuine question here, unlike (1).
     prows = _scan(_pmm_at, _PMM_LADDER, want_clean=_PMM_WANT_CLEAN)
     pclean = _clean(prows)
     assert pclean, (
@@ -323,14 +371,13 @@ def test_pmm_fff_nv_matches_rcwa_fff_nv():
         f"{_CLOSE_TOL:.0e} on this build -- the PMM side has no stable "
         f"truncation here to compare.\n    " + _table(prows))
     print(f"\nfff_nv cross-solver: reference rcwa n_orders_x={ref['M']} "
-          f"(Sx={stage}, closure {ref['close']:.3e}); pmm rungs "
+          f"(closure {ref['close']:.3e}, ladder worst {worst:.3e}); pmm rungs "
           f"{[r['M'] for r in pclean]} of {[r['M'] for r in prows]}")
 
     # (3) PMM (Laurent-projected) and RCWA (Li-2003 successive) are DIFFERENT
     #     factorizations, so they converge to slightly different floors -- the
     #     cross-solver residual is a genuine one, not a machine-precision
-    #     match.  4e-3 keeps the check meaningful (catches gross errors)
-    #     without flaking.
+    #     match.  See _CROSS_TOL for the two-sided sizing of the 4e-3.
     for r in pclean:
         for q, a, b in (("R", r["sumR"], ref["sumR"]), ("T", r["sumT"], ref["sumT"])):
             assert abs(a - b) < _CROSS_TOL, (

@@ -1,0 +1,164 @@
+{
+ "f01_eff_te_normal": {
+  "R": "e4fe0371b726108d0a894cb0",
+  "T": "60bdd85667b455eeb60ea954",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 4,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f02_eff_tm_oblique": {
+  "R": "494afdabd4efe8c3c2fd927f",
+  "T": "27176e0daaeba4f490ff5970",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 4,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f03_eff_conical": {
+  "R": "9b92c7f029cbbcdec1c7f729",
+  "T": "5d891a8d5c5875e887b98f4c",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 4,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f04_eff_lossy_tm": {
+  "R": "0a02d2da81ee5c8030731117",
+  "T": "714c9194b7ecd54219ff11ce",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 4,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f05_eff_rect_periods": {
+  "R": "729117db5cb38e851abcd2ff",
+  "T": "c0c109e21346484121ba143d",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 4,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f06_jones_promoted_cell3": {
+  "J": "6c89236fe8a2c4cdc0ca7918",
+  "R": "015e6827ff5e1777d339352e",
+  "T": "d32cc7115b3b3b32d061bf86",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 4,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f07_jones_tensor_rot40": {
+  "J": "fa2407c242580dcf6f9a0722",
+  "R": "789ce687b1ee4410705ec6a7",
+  "T": "c7d1a2c56a179e08c60a7fd0",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 6,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f08_jones_promoted_oblique": {
+  "J": "5ebb6de2146a0076720bff31",
+  "R": "d5317cf035add8a4752b4039",
+  "T": "e7423a42b46351a3f45b191c",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 4,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f09_stack_uniform_patterned": {
+  "R": "e1a4c38d646337d4eebbc3c4",
+  "T": "19a4397d3b5f0bc22aaf5255",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 4,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f10_stack_ab_oblique": {
+  "J": "72c00405a0c6bdf02bd75a74",
+  "R": "db38d1e1211402bbfd4196d2",
+  "T": "30ce06a2185b90c4538aee63",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 5,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f11_stack_uniform_tensor_mix": {
+  "J": "8cc18e75d4a6f7805df81025",
+  "R": "f1c34c9b5b543f6543e86d9f",
+  "T": "c900e2a4c000192d897219c4",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 7,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f12_stack_lossy_conical": {
+  "J": "859c19ee365922dd88f62820",
+  "R": "0d33c0cc3d7e848f8a05b872",
+  "T": "8667136a2e142bdedbaddcc1",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 5,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f13_stack_scalar_jones": {
+  "J": "6c89236fe8a2c4cdc0ca7918",
+  "R": "015e6827ff5e1777d339352e",
+  "T": "d32cc7115b3b3b32d061bf86",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 4,
+    "out": "8.5e-07"
+   }
+  ]
+ },
+ "f14_stack_promoted_jones": {
+  "J": "6c89236fe8a2c4cdc0ca7918",
+  "R": "015e6827ff5e1777d339352e",
+  "T": "d32cc7115b3b3b32d061bf86",
+  "guard_calls": [
+   {
+    "in": "8.5e-07",
+    "n_eps": 4,
+    "out": "8.5e-07"
+   }
+  ]
+ }
+}
