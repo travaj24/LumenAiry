@@ -39,6 +39,7 @@ from ._core import (
     _interface_smatrix_mortar,
     _kz_forward,
     _layer_modes_metric,
+    _lossy_incidence,
     _mode_cut_scope,
     _ModeClassificationWarning,
     _n_propagating_orders,
@@ -58,11 +59,228 @@ from ._core import (
     _sem_modes_uniform,
     _t3_slant,
     _tensor3_dict,
+    _tensor_is_passive,
     _uniform_geo_eig,
 )
 
+# ===========================================================================
+# O-11 -- THE NEAR-COINCIDENT-WALL (SLIVER) REFUSAL
+# ===========================================================================
+# See ``docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md`` for the mechanism
+# tables and every bar's derivation, and open item O-11 of
+# ``docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md`` for the
+# report (its reproducer is ``f5f_attrib.py``; this fix's is
+# ``validation/probe_pmmstack_sliver/``).
+#
+# THE DEFECT.  Two layers whose wall sets differ by ``delta`` of the period put
+# a SLIVER element of exactly that width on the SHARED union grid.  The
+# spectral-element operators carry the element Jacobian ``J = w P / 2``: the
+# GLL mass scales with ``J`` and the stiffness with ``1/J``, so the nodal
+# ``Kx^2 = S0^-1 K / k0^2`` grows as ``1/w^2`` and the layer's modal spectrum
+# acquires SPURIOUS wavenumbers ``|q| ~ 0.65 N(N+1)/4 / (k0 J)`` -- measured
+# ``|q|max k0 J / (N(N+1)/4)`` = 0.680 / 0.660 / 0.653 / 0.651 / 0.649 at
+# degree 8 / 12 / 14 / 16 / 20, i.e. a free predictor.  Those modes are pure
+# discretisation: at ``w = 1e-4`` of a 1.2 um period they reach ``|q|`` = 7.7e4
+# against a physical index ceiling of 3.  They condition the interface
+# mode-match (``a = solve(Wb, Wa)``, ``b = solve(Vb, Va)`` with
+# ``V = Q W / lam``) as ``1/w^2`` -- measured 1.28e5 / 1.23e7 / 1.22e9 at ``w``
+# = 1e-2 / 1e-3 / 1e-4 -- and past a degree-dependent onset the interface
+# S-matrix stops being bounded (largest entry 3.9 -> 3.9e2 -> 1.5e5) and the
+# cascade returns a deterministic, energy-VIOLATING wrong answer.
+#
+# WHAT SEPARATES, MEASURED, AND WHAT DOES NOT.  Nothing per-layer and free
+# separates the correct solves from the wrong ones on this family: the T3-4
+# residual ``n_grow_post`` reads 0 on every row (the 2026-08-06
+# ``_forward_growth_flip`` repair redirects them all), the T3-4 margin reads
+# 1.0-1.3 on BOTH populations, and ``q_excess`` -- which is the right IDEA, a
+# mode called propagating that no propagating mode can be -- crosses 1 while
+# the answer is still right and then SATURATES across the onset (3.66 on the
+# last correct degree-14 row and 3.66 on the first wrong one).  What DOES
+# separate, by 5.4 decades over 138 dense rows on three degrees, is the
+# assembled answer's PASSIVITY:
+#
+#     max |R+T-1| among CORRECT rows   4.13e-06     (5.4 decades)
+#     min  (R+T-1) among WRONG rows    1.159e+00
+#
+# so this guard is a CONJUNCTION of that theorem violation with the GEOMETRIC
+# cause -- M1's ``_guarded_lstsq`` lesson (rank AND residual) again:
+#
+#   (a) the union grid MANUFACTURED a cell -- one whose two walls share no
+#       owning layer -- at least ``_SLIVER_OWN_SCALE_RATIO`` times finer than
+#       the finest wall spacing any single layer asked for; and
+#   (b) the solve reads super-unity above ``_STACK_SUPERUNITY_BAR`` on a
+#       PROVABLY PASSIVE stack with a LOSSLESS propagating incidence medium,
+#       where ``R + T <= 1`` is a theorem and not a tolerance.
+#
+# (b) alone would promote to a refusal every solve that today only warns,
+# including the documented many-slice quasi-resonance the warning was
+# deliberately left a warning for; (a) alone fires on correct solves (it is
+# true from ``delta`` = 3e-3 down, where the answer still tracks the physical
+# shift to 1e-4).  The conjunction confines the behaviour change to stacks that
+# BOTH carry the sliver and violate the theorem -- and every one measured is
+# wrong.
 
-def _warn_stack_energy(R_eff, T_eff):
+#: FAIL-BEFORE SWITCH for the refusal (2026-09-11).  ``False`` restores the
+#: pre-fix behaviour bit for bit: the super-unity WARNING below, and the wrong
+#: answer returned.  A switch, not a policy -- the guard changes nothing on any
+#: solve that does not trip BOTH conjuncts.
+PMM_SLIVER_GUARD = True
+
+#: BAR (b): the super-unity factor.  NOT a new constant -- it is the one
+#: :func:`_warn_stack_energy` has warned at since v5.14, reused here so the
+#: warning and the refusal cannot drift apart.  Measured populations on the
+#: O-11 fixture (46 deltas x degrees 12/14/20, snap disabled,
+#: ``validation/probe_pmmstack_sliver/p5_dense.py``, 2026-09-11): correct rows
+#: reach ``|R+T-1|`` = 4.13e-06, wrong rows start at ``R+T-1`` = +1.159.  1e-2
+#: sits 3.4 decades above the first and 2.1 decades below the second.
+_STACK_SUPERUNITY_BAR = 1.0e-2
+
+#: BAR (a): how much finer than the INPUT geometry a union cell must be before
+#: it counts as manufactured.  Scale-free (a ratio of two widths on one grid),
+#: so it carries no period, wavelength or degree.  Measured on the same
+#: fixture: the WIDEST cross-layer cell that ever produced a wrong answer sits
+#: at ratio 3.17e+03 (``w`` = 8.79e-05 against an own-scale 0.2786, degree 20)
+#: -- 1.5 decades above this bar -- while an ordinary NON-CONFORMING stack (two
+#: layers whose walls differ by a real 5% feature) reads ratio 2-10, i.e.
+#: 1.0-1.7 decades below it.  It is an ATTRIBUTION filter, not the pathology
+#: detector: the detector is (b), which is the conjunct with the decades.
+_SLIVER_OWN_SCALE_RATIO = 100.0
+
+
+def _cross_layer_sliver(layer_segments, min_feature_frac):
+    """The union cells that NO SINGLE LAYER asked for and that are far finer
+    than anything in the input geometry -- conjunct (a) of the O-11 guard.
+
+    Returns ``None`` when there is none, else
+    ``(w_narrow, x_left, x_right, w_widest, own_scale, n_flagged)``: the
+    narrowest flagged cell (fraction of a period) and its two walls, the
+    WIDEST flagged cell (which sizes the ``min_feature`` the refusal
+    prescribes), the finest wall spacing any single layer asked for, and how
+    many cells are flagged.  Every width is a FRACTION of the period.
+
+    The union grid is rebuilt with the SAME ``min_feature`` the solve used, so
+    what is screened is the grid the cascade actually ran on -- a pair the snap
+    already merged is gone -- with ``warn=False`` so the snap is not reported
+    twice.  A cell is MANUFACTURED when its two walls share no owning layer: a
+    thin feature INSIDE one layer (a 1 nm liner) owns both its walls and is
+    never flagged, which is the ownership rule the snap itself already uses."""
+    if len(layer_segments) < 2:
+        return None
+    uw, _eps, owners = _pmm_union_grid(layer_segments, min_feature_frac,
+                                       return_owners=True, warn=False)
+    own = float("inf")
+    for segs in layer_segments:
+        for seg in segs:
+            w = abs(float(seg[0]))
+            if 0.0 < w < own:
+                own = w
+    if not np.isfinite(own) or own <= 0.0:
+        return None
+    walls = np.concatenate([[0.0], np.cumsum(np.asarray(uw, dtype=float))])
+    hits = []
+    for i, w in enumerate(np.asarray(uw, dtype=float)):
+        w = float(w)
+        if w <= 0.0 or (owners[i] & owners[i + 1]):
+            continue                       # some ONE layer asked for this cell
+        if own / w >= _SLIVER_OWN_SCALE_RATIO:
+            hits.append((w, float(walls[i]), float(walls[i + 1])))
+    if not hits:
+        return None
+    narrow = min(hits)
+    return (narrow[0], narrow[1], narrow[2], max(h[0] for h in hits),
+            float(own), len(hits))
+
+
+def _stack_provably_passive(stack):
+    """True when ``R + T <= 1`` is a THEOREM for this stack: every layer
+    permittivity provably passive (:func:`_tensor_is_passive`), a LOSSLESS
+    propagating incidence medium, and a non-gain substrate.
+
+    An absorbing superstrate is excluded deliberately, not accidentally: the
+    family's ``kz_inc = Re(kz_sup)`` normalization legitimately returns totals
+    ABOVE unity there (:func:`~lumenairy.elements.pmm._core._lossy_incidence`
+    records the measured 1.00026 / 1.0152 / 1.0303 ladder), so the theorem does
+    not hold and the guard must not speak.  Anything this cannot resolve -- a
+    traced index, a callable or unresolved material, an off-diagonal tensor --
+    answers False, which leaves the solve exactly as it was."""
+    try:
+        n_sup, n_sub = complex(stack.n_sup), complex(stack.n_sub)
+    except (TypeError, ValueError):                  # traced / callable index
+        return False
+    if _lossy_incidence(n_sup) or float(np.imag(n_sup)) != 0.0:
+        return False
+    if float(np.imag(n_sub)) < 0.0:
+        return False
+    for layer in stack._layers:
+        for seg in layer[1]:
+            eps = seg[1]
+            if callable(eps) or isinstance(eps, str):
+                return False
+            try:
+                M = np.asarray(eps, dtype=_C)
+            except (TypeError, ValueError):          # traced payload
+                return False
+            if not _tensor_is_passive(M):
+                return False
+    return True
+
+
+def _sliver_refusal(stack, worst):
+    """The refusal message when a stack trips BOTH conjuncts, else ``None``.
+
+    Never raises and never changes a number; :func:`_warn_stack_energy` raises
+    on the message.  Costs nothing on a healthy solve: its only caller reaches
+    it after the super-unity test has already fired."""
+    if not PMM_SLIVER_GUARD or stack is None:
+        return None
+    try:
+        layers = list(stack._layers)
+        period = float(stack.period)
+        mf_frac = float(stack.min_feature) / period
+        degree = int(stack.degree)
+    except (AttributeError, TypeError, ValueError):  # pragma: no cover
+        return None
+    if not layers or not _stack_provably_passive(stack):
+        return None
+    hit = _cross_layer_sliver([L[1] for L in layers], mf_frac)
+    if hit is None:
+        return None
+    w, x_l, x_r, w_wide, own, n_hit = hit
+    mf_fix = 2.0 * w_wide * period
+    q_hat = 0.65 * (degree * (degree + 1) / 4.0) / (np.pi * w)
+    return (
+        f"PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the "
+        f"shared union grid.  The union of the layers' walls carries {n_hit} "
+        f"cell(s) no single layer asked for; the narrowest is {w:.3g} of a "
+        f"period ({w * period:.4g} m) between walls {x_l:.10g} and "
+        f"{x_r:.10g}, i.e. {own / w:.3g}x finer than the finest wall spacing "
+        f"any layer DOES ask for ({own:.4g} of a period).  Such a cell's "
+        f"spectral-element Jacobian scales the nodal Kx^2 as 1/w^2 and injects "
+        f"spurious modal wavenumbers |q| ~ {q_hat:.3g} against a physical "
+        f"index ceiling of a few, conditioning the interface mode-match as "
+        f"1/w^2 -- and this solve returned max R+T = {worst:.6g}, super-unity "
+        f"by more than {_STACK_SUPERUNITY_BAR:g} on a PROVABLY PASSIVE stack "
+        f"with a lossless propagating incidence medium, where R+T <= 1 is a "
+        f"theorem.  The answer is WRONG (measured 0.48 to 8.6 in absolute "
+        f"per-order efficiency on the reproducer), so it is refused rather "
+        f"than returned.  REMEDIES, in order: (1) pass "
+        f"min_feature={mf_fix:.4g} (metres) so the colliding cross-layer walls "
+        f"snap to their midpoints -- the snap moves each wall by at most "
+        f"{0.5 * mf_fix:.4g} m and the snapped answer was measured to land "
+        f"within 1.2x the sliver width of the exact coincident-wall limit; "
+        f"(2) place the colliding walls at the SAME coordinate, which removes "
+        f"the cell exactly; (3) layer_grids='per-layer', but ONLY on a stack "
+        f"with more than 2*window_halfwidth+1 layers -- a window IS a union, "
+        f"so on a shorter stack it rebuilds this same grid and returns this "
+        f"same answer (measured identical to 16 digits on the 2-layer "
+        f"reproducer).  Choose min_feature where the answer is stationary in "
+        f"BOTH degree and min_feature.  See "
+        f"docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md; set "
+        f"lumenairy.elements.pmm.stack.PMM_SLIVER_GUARD = False to restore "
+        f"the pre-fix warn-and-return behaviour.")
+
+
+def _warn_stack_energy(R_eff, T_eff, stack=None):
     """Energy tripwire for a stack solve -- the PMM counterpart of RCWA's
     ``_check_energy`` (replicated, not imported: pmm does not depend on rcwa
     internals).  Three severities, matching that model:
@@ -82,6 +300,15 @@ def _warn_stack_energy(R_eff, T_eff):
       many-interface tapered z-staircase can hit it at large ``n_slices``).
       Kept a WARNING (not a raise) so it never breaks an existing working
       solve; reduce ``n_slices`` / raise ``degree`` to clear it.
+    * ``R+T > 1`` AND the caller passed the ``stack`` it came from AND that
+      stack trips :func:`_sliver_refusal`'s two conjuncts -> **raise**
+      (O-11, 2026-09-11).  That is the same super-unity reading, ATTRIBUTED:
+      the union grid manufactured a near-coincident-wall sliver and the stack
+      is one for which ``R + T <= 1`` is a theorem, so the number is not
+      merely unreliable, it is wrong -- and the refusal names the
+      ``min_feature`` that removes the cell.  ``stack=None`` (the 2-D caller,
+      and any caller that has not opted in) keeps the warning exactly as it
+      was.
     """
     R = np.asarray(R_eff)
     T = np.asarray(T_eff)
@@ -100,7 +327,10 @@ def _warn_stack_energy(R_eff, T_eff):
             f"{least:.3e}); the efficiency normalisation is non-physical -- a "
             "gain or non-propagating incidence medium slipped past the entry "
             "guards (kz_inc < 0 negates every order).")
-    if worst > 1.0 + 1e-2:
+    if worst > 1.0 + _STACK_SUPERUNITY_BAR:
+        refusal = _sliver_refusal(stack, worst)
+        if refusal is not None:
+            raise ValueError(refusal)
         import warnings
         warnings.warn(
             f"PMMStack.solve: energy not conserved (max R+T = {worst:.3g} > 1) "
@@ -1047,7 +1277,7 @@ class PMMStack:
                 layer_grids=self.layer_grids,
                 window_halfwidth=self.window_halfwidth)
             self._modal = modal          # AUDIT_DYNAMETA_CONSUMER_API_GAPS B
-            _warn_stack_energy(R_eff, T_eff)
+            _warn_stack_energy(R_eff, T_eff, stack=self)
             # stack contract: the 1-D (m,) order array (pmm_jones_1d_segments
             # parity; y is degenerate so n_y == 0 for every order).
             return o2[:, 0], R_eff, T_eff, jones
@@ -1211,7 +1441,7 @@ class PMMStack:
         # like every classical PMMStack return, so an under-resolved solve is not
         # silently trusted.  Orders are the 1-D (m,) array (the classical /
         # pmm_jones_1d_segments contract; y is degenerate so n_y == 0 for all).
-        _warn_stack_energy(R_eff, T_eff)
+        _warn_stack_energy(R_eff, T_eff, stack=self)
         return order_x, R_eff, T_eff, jones
 
     def solve(self, *, stabilize=None, retain_internal=False):
@@ -1679,7 +1909,7 @@ class PMMStack:
             self._internal["cinc"] = np.stack(cinc_cols, axis=1)
             self._internal["R_tot"] = R_eff.sum(axis=1)
             self._internal["T_tot"] = T_eff.sum(axis=1)
-        _warn_stack_energy(R_eff, T_eff)
+        _warn_stack_energy(R_eff, T_eff, stack=self)
         if stabilize == "slices":
             self._slices_consensus_check(jones)
         elif stabilize not in (None, False):
@@ -1888,7 +2118,7 @@ class PMMStack:
             self._internal["cinc"] = np.stack(cinc_cols, axis=1)
             self._internal["R_tot"] = R_eff.sum(axis=1)
             self._internal["T_tot"] = T_eff.sum(axis=1)
-        _warn_stack_energy(R_eff, T_eff)
+        _warn_stack_energy(R_eff, T_eff, stack=self)
         return orders, R_eff, T_eff, jones
 
     def _solve_general_perlayer(self, wl, angle, k0, kx0, eps_sup, eps_sub,
@@ -2011,7 +2241,7 @@ class PMMStack:
             kx0 / k0, N, return_modal=True)
         modal["wavelength"] = float(wl)
         self._modal = modal
-        _warn_stack_energy(R_eff, T_eff)
+        _warn_stack_energy(R_eff, T_eff, stack=self)
         return orders, R_eff, T_eff, jones
 
     def per_order_amplitudes(self, port="reflection"):
@@ -2991,7 +3221,7 @@ class PMMStack:
             return iw, R, T, np.asarray(jr)
 
         def _store(iw, R, T, jr):
-            _warn_stack_energy(R, T)
+            _warn_stack_energy(R, T, stack=self)
             R_all[iw], T_all[iw], J_all[iw] = R, T, jr
 
         _mw = (min(os.cpu_count() or 1, int(wl.size)) if max_workers is None
@@ -3210,7 +3440,7 @@ class PMMStack:
             return iw, R, T, np.asarray(jr)
 
         def _store(iw, R, T, jr):
-            _warn_stack_energy(R, T)
+            _warn_stack_energy(R, T, stack=self)
             R_all[iw], T_all[iw], J_all[iw] = R, T, jr
 
         _mw = (min(_os.cpu_count() or 1, int(wl.size)) if max_workers is None
@@ -3385,7 +3615,7 @@ class PMMStack:
         R, T, jones = _assemble_jones_farfield(
             Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
             kx0 / k0, N)
-        _warn_stack_energy(R, T)
+        _warn_stack_energy(R, T, stack=self)
         return orders, R, T, np.conj(jones)        # conj: bridge +iwt -> public
 
 
@@ -3619,5 +3849,5 @@ class _PreparedPMMStack:
         R_eff, T_eff, jones = _assemble_jones_farfield(
             Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
             kx0 / k0, N)
-        _warn_stack_energy(R_eff, T_eff)
+        _warn_stack_energy(R_eff, T_eff, stack=self._st)
         return orders, R_eff, T_eff, jones

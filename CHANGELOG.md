@@ -4,6 +4,78 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed -- `PMMStack` REFUSES a near-coincident-wall SLIVER instead of returning a wrong answer (O-11)
+
+Two adjacent layers whose wall sets differ by `delta` of the period put a SLIVER
+element of exactly that width on the shared union grid, and past a
+degree-dependent onset the cascade returned a deterministic wrong answer -- up
+to **8.62** in absolute per-order efficiency, at `R+T` up to **23.4**.  Reported
+as open item O-11 of
+`docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md`.
+
+**The mechanism**, measured (`validation/probe_pmmstack_sliver/`).  The element
+Jacobian `J = w P / 2` scales the GLL mass by `J` and the stiffness by `1/J`, so
+the nodal `Kx^2` grows as `1/w^2` and the layer's modal spectrum acquires
+SPURIOUS wavenumbers `|q| ~ 0.65 N(N+1)/4 / (k0 J)` -- the constant reads
+0.680 / 0.660 / 0.653 / 0.651 / 0.649 at degree 8 / 12 / 14 / 16 / 20, so it is
+a free predictor and not a fit.  At `w = 1e-4` of a 1.2 um period those modes
+reach `|q|` = 7.7e+04 against a physical index ceiling of 3.  The interface
+mode-match then conditions as `1/w^2` (1.28e+05 -> 1.22e+09 over `w` = 1e-2 ->
+1e-4) and its S-matrix stops being bounded (largest entry 3.9 -> 3.9e+02 ->
+1.5e+05).
+
+**The correction to the report: O-11 is NOT energy-invisible in the 1-D stack.**
+Its own `R+T` reads 2.17 / 3.61 / 23.4 and the shipped `_warn_stack_energy`
+fires on every wrong row.  The 1.6e-08 closure quoted in the open item is the
+2-D MORTAR arm's; the reproducer suppressed warnings at module scope.
+
+**What ships** is a screen-and-REFUSE guard, and it is a CONJUNCTION -- M1's
+`_guarded_lstsq` lesson (rank AND residual) applied again:
+
+* **(a)** the union grid MANUFACTURED a cell -- one whose two walls share no
+  owning layer, so no single layer asked for it -- at least
+  `_SLIVER_OWN_SCALE_RATIO` = 100x finer than the finest wall spacing the input
+  geometry does ask for.  A thin feature INSIDE one layer (a 1 nm liner) owns
+  both its walls and is never flagged, which is the rule the existing
+  `min_feature` snap already uses; **and**
+* **(b)** the solve reads super-unity above `_STACK_SUPERUNITY_BAR` = 1e-2 on a
+  PROVABLY PASSIVE stack with a LOSSLESS propagating incidence medium, where
+  `R + T <= 1` is a theorem and not a tolerance.
+
+(b) is not a new constant -- it is the bar `_warn_stack_energy` has warned at
+since v5.14, now named once so the warning and the refusal cannot drift apart.
+Its separation, measured over 138 dense rows on three degrees and IDENTICAL on
+both builds (Windows py3.14 / OpenBLAS Haswell and WSL py3.12 / OpenBLAS
+SkylakeX): max `|R+T-1|` among CORRECT rows **4.125e-06** (3.39 decades below
+the bar), min `R+T-1` among WRONG rows **+1.159e+00** (2.06 decades above).
+
+Neither conjunct would do alone: (b) by itself would promote to a refusal every
+solve that only warns today -- including the many-interface quasi-resonance the
+warning was deliberately left a warning for, and the 2-D stacks' ordinary
+low-mode-count truncation -- while (a) by itself fires on correct solves.  The
+2-D callers pass no stack and keep the warning exactly as it was.
+
+The refusal names the measured sliver, the exact `min_feature=` (metres) that
+snaps it, the resulting maximum wall displacement, and the caveat on
+`layer_grids='per-layer'` (at `window_halfwidth = 1` a 2-layer window IS the
+whole union, so it rebuilds the same grid -- measured identical to 16 digits).
+The prescribed `min_feature` was scored against the EXACT `delta -> 0` reference
+at four degrees on both builds: `err/delta` = 1.152-1.154 with `R+T` = 1.000000,
+inside a `2 delta` bar derived from the structure's own continuity.
+
+`lumenairy.elements.pmm.stack.PMM_SLIVER_GUARD = False` restores the pre-fix
+warn-and-return behaviour bit for bit.  `_pmm_union_grid` gains keyword-only
+`return_owners` / `warn`, both defaulting to the pre-fix behaviour, and its
+2-tuple return is byte-identical.
+
+BIT-IDENTITY: 18 shipped fixtures -- shared and per-layer grids, taper with the
+snap dormant and active, Bragg, conical, slant, out-of-plane, lossy, sweep,
+`prepare()`, `stabilize='slices'`, `internal_field`, `layer_absorption` --
+hashed against the read-only main clone: **18 / 18 identical**.
+`tests/unit/test_fix_pmmstack_sliver_walls.py`, 17 tests, 6.1 s / 6.4 s.
+Full write-up, both builds' tables and every bar's derivation:
+`docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md`.
+
 ### Added -- a NATIVE constant-shear SLANT for the PURE staggered 2-D PMM (roadmap Phase D)
 
 `pmm_jones_2d_staggered(..., slant=(t_x, t_y))` and

@@ -4451,7 +4451,8 @@ def _tensor3_dict(M):
 
 
 
-def _pmm_union_grid(layer_segments, min_feature=None):
+def _pmm_union_grid(layer_segments, min_feature=None, *,
+                    return_owners=False, warn=True):
     """Build the shared nodal grid for a stack: the union of every layer's walls.
 
     ``layer_segments[i]`` = layer ``i``'s ``[(width_fraction, eps), ...]``.
@@ -4468,7 +4469,18 @@ def _pmm_union_grid(layer_segments, min_feature=None):
     snapped to their midpoint and a warning names the merged pairs -- but ONLY
     when the pair comes from DIFFERENT layers: a close pair owned by a single
     layer is that layer's own intentional thin feature (a 1 nm liner) and is
-    never thinned."""
+    never thinned.
+
+    ``return_owners`` (2026-09-11, the O-11 sliver guard) appends a THIRD
+    return value: ``owners[i]`` = the frozenset of LAYER INDICES that own union
+    wall ``i``, POST-snap, with the two period ends owned by every layer.  A
+    union cell whose two walls share NO owner is one the union MANUFACTURED --
+    no single layer asked for it -- which is exactly the near-coincident-wall
+    sliver :func:`~lumenairy.elements.pmm.stack._cross_layer_sliver` screens
+    for.  ``warn=False`` silences the snap warning for such a DIAGNOSTIC
+    re-build, so the guard's second call cannot double-report the snap the
+    solve's own call already reported.  Both are keyword-only and default to
+    the pre-2026-09-11 behaviour, which is byte-identical."""
     walls = {0.0, 1.0}
     wall_owners = {0.0: set(), 1.0: set()}
     cums = []
@@ -4520,7 +4532,7 @@ def _pmm_union_grid(layer_segments, min_feature=None):
                 else:
                     out_w.append(w)
                     out_o.append(ow)
-            if merged_pairs:
+            if merged_pairs and warn:
                 import warnings as _warnings
                 pairs_txt = ", ".join(
                     f"({a:.6g}, {b:.6g})" for a, b in merged_pairs[:6])
@@ -4541,8 +4553,12 @@ def _pmm_union_grid(layer_segments, min_feature=None):
                     f"(max wall displacement {max_disp:.3g} of a period).  "
                     f"Single-layer thin features are never merged.",
                     stacklevel=3)
-            keep = out_w
+            keep, owners = out_w, out_o
         uwalls = np.array(keep)
+        uowners = [frozenset(o) for o in owners]
+    else:
+        uowners = [frozenset(wall_owners.get(float(x), set()))
+                   for x in uwalls]
     uwidths = np.diff(uwalls)
     mids = 0.5 * (uwalls[:-1] + uwalls[1:])
     layer_eps_union = []
@@ -4553,6 +4569,8 @@ def _pmm_union_grid(layer_segments, min_feature=None):
                     len(segs) - 1)
             row.append(segs[j][1])
         layer_eps_union.append(row)
+    if return_owners:
+        return uwidths, layer_eps_union, uowners
     return uwidths, layer_eps_union
 
 
