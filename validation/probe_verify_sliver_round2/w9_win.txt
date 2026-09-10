@@ -1,1 +1,24 @@
 lumenairy: C:\tmp\lum_vsliver2\lumenairy\__init__.py
+  lumenairy                  C:\tmp\lum_vsliver2\lumenairy\__init__.py
+  python                     3.14.6
+  numpy                      2.4.4
+  configs                    1458
+  n_refusals                 2252
+  wall                       2647.065737724304
+  min_err_over_slope_d       0.9293198031611039
+  max_slope_among_refusals   7.623655790399863
+  n_false_refusals           11
+  n_borderline               11
+  --- the 12 refusals CLOSEST to being false ---
+    P=1.60e-06 wl=6.20e-07 sup=3.2 th=1.33 eps=16.0 deg=8 d=4.208e-06 slope=3.11 err/(s d)=0.93 move=171.5 su_snap=0.00e+00 R+T=1.00905 -> REFUSED
+    P=1.60e-06 wl=6.20e-07 sup=2.4 th=1.22 eps=12.0 deg=6 d=2.791e-06 slope=2.87 err/(s d)=1.01 move=293.6 su_snap=0.00e+00 R+T=1.01572 -> REFUSED
+    P=1.60e-06 wl=6.20e-07 sup=2.4 th=1.22 eps=12.0 deg=6 d=7.791e-06 slope=2.87 err/(s d)=1.02 move=103.3 su_snap=0.00e+00 R+T=1.01572 -> REFUSED
+    P=1.60e-06 wl=6.20e-07 sup=2.4 th=1.22 eps=12.0 deg=6 d=5.167e-06 slope=2.87 err/(s d)=1.02 move=157.1 su_snap=0.00e+00 R+T=1.01573 -> REFUSED
+    P=1.60e-06 wl=6.20e-07 sup=2.4 th=1.22 eps=12.0 deg=6 d=6.345e-06 slope=2.87 err/(s d)=1.04 move=127.4 su_snap=0.00e+00 R+T=1.01572 -> REFUSED
+    P=1.60e-06 wl=6.20e-07 sup=2.4 th=1.22 eps=12.0 deg=6 d=4.208e-06 slope=2.87 err/(s d)=1.04 move=193.6 su_snap=0.00e+00 R+T=1.01572 -> REFUSED
+    P=1.60e-06 wl=6.20e-07 sup=3.2 th=1.33 eps=9.0 deg=6 d=2.791e-06 slope=2.23 err/(s d)=1.15 move=106.9 su_snap=0.00e+00 R+T=1.00337 -> REFUSED
+    P=1.60e-06 wl=6.20e-07 sup=2.4 th=1.22 eps=12.0 deg=6 d=3.427e-06 slope=2.87 err/(s d)=1.17 move=238.5 su_snap=0.00e+00 R+T=1.01573 -> REFUSED
+    P=1.60e-06 wl=6.20e-07 sup=3.2 th=1.33 eps=9.0 deg=6 d=2.273e-06 slope=2.23 err/(s d)=1.21 move=131.5 su_snap=0.00e+00 R+T=1.00337 -> REFUSED
+    P=1.60e-06 wl=6.20e-07 sup=2.4 th=1.22 eps=12.0 deg=6 d=1.851e-06 slope=2.87 err/(s d)=1.36 move=445.2 su_snap=0.00e+00 R+T=1.01573 -> REFUSED
+    P=1.60e-06 wl=6.20e-07 sup=3.2 th=1.33 eps=9.0 deg=6 d=2.273e-06 slope=1.42 err/(s d)=1.45 move=118.0 su_snap=0.00e+00 R+T=1.00269 -> REFUSED
+    P=9.00e-07 wl=8.50e-07 sup=2.4 th=1.44 eps=9.0 deg=10 d=4.943e-05 slope=1.33 err/(s d)=112.67 move=151.9 su_snap=4.09e-06 R+T=1.01225 -> REFUSED

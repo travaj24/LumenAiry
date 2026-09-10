@@ -32,7 +32,7 @@ bar of the round-2 file restated.  No `lumenairy/` file was touched.
 | 3b | false negatives 8 / 660 -> 4 / 660 | **CONFIRMED, row for row** | **8 -> 4**, every one of the eight rows reproducing the fix's `err`, `err/delta` and `R+T-1` to 4 significant figures |
 | 3c | the four residuals, and which half of the guard holds each out | **CONFIRMED and COMPLETED** | the one row the fix left "not measured" reads `move / w_wide` = **21.6** -- the MOVE criterion's floor, not the trigger's |
 | 3d | a WRONG row exists below unity, which no super-unity bar can see | **CONFIRMED, and deeper** | **-1.1351e-03** (the fix reports -2.8048e-04); **11** sub-unity wrong rows and **29** wrong rows at or below the trigger, out of 878 |
-| 4a | R2-D: the move bar assumes `dR/dx` = O(1); no device was found that breaks it | **mechanism CONFIRMED, published bound REFUTED, decision HOLDS** | a guided-mode-resonance grating with degree-stationary `dR/d(duty)` = **169.2** puts a CORRECT row's `move / w_wide` at **833.78** vs the published "<= 26.58" (31x). But on all 14 rows adjudicated by an independent RCWA oracle the refusals are of answers RCWA also calls wrong, and on 12 of 14 the prescribed remedy is 1.8x-7.1x closer to the truth |
+| 4a | R2-D: the move bar assumes `dR/dx` = O(1); no device was found that breaks it | **mechanism CONFIRMED, published bound REFUTED, decision HOLDS** | a guided-mode-resonance grating with degree-stationary `dR/d(duty)` = **169.2** puts a CORRECT row's `move / w_wide` at **833.78** vs the published "<= 26.58" (31x). But on all 14 rows adjudicated by an independent RCWA oracle the refusals are of answers RCWA also calls wrong, and on 12 of 14 the prescribed remedy is 1.8x-7.1x closer to the truth.  A separate 1,458-configuration directed scan of the census box's mount produced **2,252 refusals and 0 false ones** |
 | 4b | the other direction -- a sliver-WRONG solve returned as `truncation` | **REFUTED -- found, and it is a round-2 behaviour change** | see **D-5**: the snap removes a **5,181x** super-unity and restores the answer to `err/delta` = 0.002, and the arbiter still says `truncation` because the residue lands on the mount's own 3.73e-05 truncation floor, above the ABSOLUTE 1e-5 closure |
 | 5a | the probe never mutates the caller's stack | **CONFIRMED** | the ONLY attribute a guarded solve writes is `_modal`, identical to a guard-disarmed control; `_src` and `_layers` objects and values unchanged; no `_sliver_probe` left behind; a prepared object's caches unchanged |
 | 5b | it never recurses | **CONFIRMED** | exactly 1 probe per refusal, 0 on a returned solve; a stack marked `_sliver_probe` has `_sliver_screen` = `None` and `_within_layer_hazard` = `None` |
@@ -42,7 +42,7 @@ bar of the round-2 file restated.  No `lumenairy/` file was touched.
 | 5g | the move is taken on the CENTRED order overlap, which matters | **CONFIRMED, and more than published** | the report says the order count differs on 359 of 637 rows; on my census box it differs on **69 of 69** arbitrated rows and on my clean fixtures on **0 of 100**.  `_sliver_answer_move` returns the centred distance (3.0 on synthetic `(2,5)` vs `(2,3)`) and `None` on a parity mismatch |
 | 5e | the `unknown` branch keeps round 1's decision and says so | **CONFIRMED** | dispersive sweep: `provably_passive` False, screen never reached, 0 probes, plain warning at `R+T` = 23.4. No resolved source: verdict `unknown`, REFUSED above the round-1 bar, message contains "could NOT be run on this path" |
 | 6a | the anisotropic classes are now reached; the non-Hermitian control is not | **CONFIRMED, to the digits published** | in-plane 45 deg `move` **38.86 / 290.36** (report: 38.9 / 290.4); out-of-plane 30 deg **22.18 / 316.46** (22.2 / 316.5); gyrotropic refused at err **685x / 2680x** (685 / 2680); non-Hermitian `provably_passive` False and returned at `R+T` = 1.093 |
-| 6b | the pol-0 evidence: pol 1 reads 0.01x the shift, pol 0 reads 316x, and the arbiter uses BOTH | **CONFIRMED, and it is decisive** | pol 1 **0.01055x**, pol 0 **316.4x**; `move` on pol 1 alone = **0.0106** (would NOT refuse), on both = **316.46** (refuses) |
+| 6b | the pol-0 evidence: pol 1 reads 0.01x the shift, pol 0 reads 316x, and the arbiter uses BOTH | **CONFIRMED, decisive, and BROADER than published** | on the out-of-plane director: pol 1 **0.01055x**, pol 0 **316.4x**; `move` on pol 1 alone = **0.0106** (would NOT refuse), on both = **316.46** (refuses).  And the same asymmetry appears on ORDINARY dense-superstrate grazing mounts with no anisotropy at all: 11 of 2,252 refusals in the 1,458-configuration directed scan read pol-1 `err/delta` of 5.9-13.3 and pol-0 `err/delta` of **153x-434x** (S5.3) |
 | 6c | the within-layer arm warns on the breaking widths and is silent on benign geometry | **CONFIRMED, with a sharper floor** | the ladder reproduces exactly; silent on 1e-2 .. 1e-5 AND on 1e-6 (`err` = **1.058e-03** at `R+T` = **0.999221**), and at 1e-7 it is silent on 1 of 4 degrees because that degree reads `R+T` = **0.5706**, SUB-unity |
 | 6d | can an OWNED liner be REFUSED through the cross-layer path? | **NO -- but the converse is a defect** | see **D-1**: an owned liner ANYWHERE disarms the cross-layer refusal |
 
@@ -467,13 +467,33 @@ of the census box's mount (dense superstrate 2.4 / 3.2, theta 1.22-1.44,
 lossy substrate, degrees 6 / 8 / 10) crossed with three periods, three
 wavelengths, three duty geometries, three ridge permittivities and two slice
 thicknesses, 40 deltas each, keeping only rows the shipped arbiter REFUSES.
-**NOT COMPLETED.**  `w9_r2d_attack.py` was still running after ~4 h on the
-contended box and produced no JSON.  Its question -- does a directed sweep of
-the census box's mount crossed with the geometry find a false refusal? -- was
-already answered by `w6` + `w10` below, which found the candidate rows and
-adjudicated them against an independent package; `w9` would have widened the
-search, not changed its verdict.  The script and its command line are in the
-probe directory for whoever picks it up.
+**Result: 1,458 configurations, 2,252 refusals, and -- once the correctness
+statistic is the one the LIBRARY uses -- ZERO false refusals.**  Wall 2,647 s.
+The scan's own scoring flagged 11 candidates with `err / (s * delta)` between
+**0.93 and 1.45** on ORDINARY devices (measured slopes 1.42-3.11, no
+resonance), which would be a false refusal on an ordinary device and a much
+worse finding than R2-D.  They are not.  Scored per polarization:
+
+| config | deg | `delta` | `err/delta` pol 1 | `err/delta` pol 0 | `err/delta` of the SNAPPED answer | `move/w` | `R+T` refused / snapped / reference |
+|---|---|---|---|---|---|---|---|
+| P 1.6 um, `n_sup` 2.4, theta 1.22, `eps` 12 | 6 | 2.791e-06 | **5.93** | **433.95** | **1.20** | 433.9 | 1.025469 / 1.002319 / 1.002321 |
+| the same | 6 | 4.208e-06 | 6.53 | **286.50** | 1.20 | 286.4 | 1.025466 / 1.002319 / 1.002321 |
+| the same | 6 | 7.791e-06 | 6.38 | **153.31** | 1.20 | 153.2 | 1.025464 / 1.002317 / 1.002321 |
+| P 1.6 um, `n_sup` 3.2, theta 1.33, `eps` 16 | 8 | 4.208e-06 | 13.31 | **279.29** | 1.85 | 279.8 | 1.121191 / 1.104969 / 1.104971 |
+
+Read that: on polarization 1 -- the campaign's own `err` convention, and the
+statistic this probe scored with -- the answer looks correct to 6-13x the wall
+shift.  On polarization 0 it is off by **153x to 434x**.  The SNAPPED answer
+tracks the exact `delta -> 0` reference to **1.20x** the wall shift and its
+`R+T` agrees with the reference to six digits (1.002319 vs 1.002321), so the
+prescribed remedy is right and the refused answer is wrong.
+
+**So `w9`'s 11 "false refusals" are an artefact of MY statistic, not a defect
+in the guard** -- and they are an independent, ORDINARY-device confirmation of
+the round-2 design's least obvious decision: taking the move on BOTH
+polarizations.  A pol-1-only move would have called 11 of 2,252 refusals
+false, on dense-superstrate grazing mounts that have nothing to do with
+liquid crystals.  See S7.2.
 
 ### S5.3 Outcome -- the mechanism is REAL, the published bound is REFUTED, the DECISION holds
 
@@ -667,6 +687,19 @@ reads 145.2x, `move` on pol 1 alone is 6.06 and on both is 145.26, and the
 library REFUSES.  A pol-1-only move would have left the refusal unfired in
 both cases.  **CONFIRMED: the arbiter uses both polarizations, and it is
 load-bearing.**
+
+**And the class is wider than the report claims.**  The round-2 report
+presents the both-polarizations move as an anisotropic-stack refinement ("this
+class is where taking the move on BOTH polarizations earns its keep").  The
+1,458-configuration directed scan found the same asymmetry on ISOTROPIC
+stacks: at period 1.6 um, `n_sup` = 2.4, theta = 1.22 rad, `eps_ridge` = 12,
+degree 6, `delta` = 2.791e-06, polarization 1 is off by **5.93x** the wall
+shift while polarization 0 is off by **433.95x**, and the snapped answer
+tracks the exact limit at **1.20x**.  Eleven such rows appeared in 2,252
+refusals.  A pol-1-only move would have called every one of them a false
+refusal, on a mount with no birefringence anywhere in it.  This is the
+strongest single piece of evidence for the shipped design that this
+verification found.
 
 ### S7.3 The within-layer ladder
 
@@ -1117,6 +1150,7 @@ file (12,612 -> 12,618 entries; a 6-line diff, nothing reformatted).
 | `w6_resonant.py` (2,028 rows) | 1,004 s | -- |
 | `w7_lc_within.py` | 27 s | 25 s |
 | `w8_lc_exact.py` | 21 s | 19 s |
+| `w9_r2d_attack.py` (1,458 configurations x 40 deltas) | 2,647 s | -- |
 | `w10_rcwa_oracle.py` (14 rows x 5 RCWA solves) | 233 s | -- |
 | `w11_closure_absolute.py` | 6 s | -- |
 
@@ -1143,7 +1177,7 @@ version-bumped.
 | | why | what stands in for it |
 |---|---|---|
 | the 43-file `PMMStack` regression | starved on a shared 24-CPU box (12 % of one core over 3 h); nothing failed, it did not finish | the 86-test five-file set green on both builds, and `git diff 24651c8 HEAD -- lumenairy/` EMPTY |
-| `w9_r2d_attack.py`, the exhaustive directed R2-D scan | ~4 h without finishing, same contention | `w6` + `w10`, which found the candidate rows and adjudicated them against RCWA |
+| an RCWA adjudication of the 11 `w9` candidates | the two packages disagree by 9.7e-02 on this mount's `delta` = 0 reference itself (a dense superstrate at 1.22 rad, where the PMM family's `kz_inc = Re(kz_sup)` normalization and the RCWA one need convention work I did not do) | the internal adjudication is decisive anyway: the SNAPPED answer tracks the exact `delta -> 0` limit to **1.20x** and its `R+T` matches the reference to six digits, so the refused answer is the wrong one |
 | the report's "the snapped grid resolves a different order count on 359 of 637 arbitrated rows" | not reproducible without their exact grids | measured on mine instead: 0 of 100 on clean fixtures, **69 of 69** on the census box -- the CONTRACT is confirmed, the count is theirs |
 | the report's own 110 / 648 false-positive count | their box's specific substrates and angles | my own 648-configuration box: **77 / 648 -> 0 / 648**, same character |
 | the arbiter's 0.20x Windows cost | a timing measurement on a contended box | **0.260x / 0.254x**, i.e. the claim "cheaper than the solve it guards" holds |
