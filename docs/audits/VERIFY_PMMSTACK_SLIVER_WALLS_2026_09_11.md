@@ -776,10 +776,19 @@ All on Windows unless stated, one BLAS thread, `PYTHONPATH=/c/tmp/lum_vsliver`.
 | the three files, **WSL** | **61 passed**, 32.89 s (15 + 19 + 27) |
 | the three files, Windows, M1 FIRST (so the leak check follows the disarm) | **61 passed**, 31.10 s |
 | the same three files with the M1 disarm INVERTED (verification arm, scratch copy) | **2 failed, 25 passed** — the same 2 tests on Windows at 1 / 2 / 4 BLAS threads and on WSL at 1 |
-| every test file importing `PMMStack` (`grep tests/ --include='*.py' -l PMMStack`, **41** files incl. the two new mortar files and mine), Windows, 1 thread, slow markers included | see below |
+| every test file importing `PMMStack` (`grep tests/ --include='*.py' -l PMMStack`, **41** files incl. the two new mortar files and mine), Windows, 1 thread, slow markers included | **793 passed, 1 skipped, 0 failed**, 40 min 09 s |
 | `ruff check lumenairy/ tests/` | **All checks passed** (also clean on `validation/probe_verify_sliver/`) |
 
 `.test_durations` spliced with the 15 measured Windows timings.
+
+The one skip is the pre-existing `test_niche_audit_m4_m5_m6_rcwa.py:387`
+(`threadpoolctl installed: the cap is effective here`), unrelated to this work.
+The regression collects the files in sorted order, so
+`test_m1_conditioning_guard.py` runs BEFORE
+`test_verify_pmmstack_sliver_walls.py` — i.e. the disarm-leak assertion is
+exercised in the gate, not only in the hand-ordered run above.  The slowest 25
+are unchanged in character (the four `test_audit_dynameta_consumer_api_2.py`
+pure-2-D arms dominate at 433 / 390 / 250 / 179 s).
 
 ---
 
