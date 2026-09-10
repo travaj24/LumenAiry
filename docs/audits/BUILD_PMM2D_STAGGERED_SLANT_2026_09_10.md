@@ -151,7 +151,12 @@ new cascade, no new far field.
 * `any_oop |= slanted`, so the stack takes the generalized cascade. **No
   cascade code changed.**
 * The eig-cache key carries the slant.
-* **The frame-anchor phase**, in `solve`, on the TRANSMITTED amplitudes only.
+* **The frame-anchor phase**, in `solve`, on the TRANSMITTED amplitudes only,
+  applied BEFORE `tz`, the efficiency projection and the retained
+  `_modal` dictionary -- so the `PerOrderAmplitudesMixin` consumer API returns
+  LAB-referenced transmitted amplitudes, not frame-referenced ones. (The
+  efficiencies are unaffected either way: the factor is unimodular. `solve`'s
+  returned Jones is the REFLECTION Jones, which needs nothing.)
 * **`_check_stack_slant`** and **`_layer_is_patterned`** -- the refusals (S4).
 * `retain_internal` + slant raises.
 
