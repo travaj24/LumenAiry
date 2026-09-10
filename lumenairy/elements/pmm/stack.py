@@ -729,7 +729,7 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
       ``stack=None`` (the 2-D caller, and any caller that has not opted in)
       keeps the warning exactly as it was.
 
-    * ``R+T > 1`` AND the narrowest cell is one a SINGLE layer OWNS and is
+    * ``R+T > 1`` AND the narrowest cell a SINGLE layer OWNS is
       thin enough to inject spurious ``|q|`` past ``_SLIVER_Q_EXCESS`` times
       the stack's index ceiling -> **warn** with the mechanism and the
       per-layer / mortar / 2-D routes (verification defect V-6).  Never
@@ -787,8 +787,9 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
     if liner is not None:
         w_l, q_l, n_max = liner
         warnings.warn(
-            f"PMMStack.solve: the narrowest cell of the shared union grid is a "
-            f"WITHIN-LAYER feature this geometry asked for -- {w_l:.3g} of a "
+            f"PMMStack.solve: the narrowest cell of the shared union grid "
+            f"that some ONE layer OWNS is a WITHIN-LAYER feature this "
+            f"geometry asked for -- {w_l:.3g} of a "
             f"period ({w_l * float(stack.period):.4g} m), owned by one layer, "
             f"so it is NOT refused.  But its spectral-element Jacobian scales "
             f"the nodal Kx^2 as 1/w^2 and injects spurious modal wavenumbers "

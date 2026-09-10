@@ -338,10 +338,21 @@ All eight rows the verification reported reproduce exactly:
 | 10 | 4.6995e-06 | grey | 9.6224e-05 | 20.5 | +3.7309e-05 | returned | returned (below the trigger) |
 | 8 | 2.3743e-06 | grey | 3.1738e-05 | 13.4 | +4.1990e-05 | returned | returned (below the trigger) |
 
-**8 -> 4**, and every one of the four is below `_SLIVER_TRIGGER_BAR`.  Their
-snapped closures are 1e-14 to 1e-8, i.e. the arbiter would attribute all four
-correctly -- it is the TRIGGER that keeps them out, and S3.1 shows the trigger
-cannot go lower without refusing correct solves.
+**8 -> 4**, and every one of the four is below `_SLIVER_TRIGGER_BAR`.  Which
+half of the guard is holding each of them out is worth stating exactly, because
+"lower the trigger" is not a universal answer:
+
+| the four | `move / w_wide` | snapped super-unity | would the ARBITER attribute it if the trigger let it through? |
+|---|---|---|---|
+| deg 10, 1.8854e-06, wrong, 176.5x | 423.3 | 0.0 | **yes** -- the TRIGGER alone holds it out |
+| deg 14, 4.7421e-06, grey, 46.2x | **83.3** | 2.38e-14 | **no** -- below the MOVE bar, so no trigger would reach it |
+| deg 10, 4.6995e-06, grey, 20.5x | -- | -- | not measured (its `R+T-1` = 3.73e-05 is below the probe's own arbitration cutoff) |
+| deg 8, 2.3743e-06, grey, 13.4x | 120.4 | 1.12e-08 | **yes** -- the trigger alone holds it out |
+
+So two of the four are the trigger's floor (and S3.1 shows the trigger cannot
+go lower without sitting on the correct population), one is the move
+criterion's floor, and one is unmeasured.  The three that the arbiter would not
+or might not attribute are all in the GREY band, 13-46x the physical shift.
 
 The conical path gains one more that the census did not count: at `phi` = 0.62,
 `delta` = 3e-5 the answer is 115x the physical shift at `R+T` = **1.00423** --
@@ -403,8 +414,14 @@ copy of `bb0527a`.  39 fixtures: the round-1 fix's 18
 
 | | fix tree vs pre-round-2 tip |
 |---|---|
-| Windows | **39 / 39 identical**, 0 differing, 0 errors |
-| WSL | **39 / 39 identical**, 0 differing, 0 errors |
+| Windows | **39 / 39 identical**, 0 differing, 0 errors; **0 / 39 warning sets differ** |
+| WSL | **39 / 39 identical**, 0 differing, 0 errors; **0 / 39 warning sets differ** |
+
+Round 2 adds two NEW warnings -- the truncation note appended to the plain
+super-unity warning, and the within-layer arm -- so bit-identity of the RETURN
+value is only half of "nothing changes".  `r8_bitid.py` therefore also records
+what each fixture WARNS: all 39 are silent on both trees on both builds, so no
+previously-quiet solve became noisy.
 
 | fixture | hash (first 32 hex) |
 |---|---|
@@ -500,6 +517,7 @@ the number where it was -- which is why the arbiter refuses to call it the cure.
 | | |
 |---|---|
 | **R2-A -- the floor is the theorem, and it is one-sided** | Four of the verification's eight rows remain returned because their super-unity is below the trigger, and the trigger cannot go lower without sitting ON the correct population's own envelope (1.01x at 1e-4, where the closure-only arbiter already refuses a correct row). Worse, the three-fixture grid contains a WRONG row at `R+T-1` = **-2.8048e-04** -- SUB-unity -- which no super-unity bar can ever see. A detector for that band needs something this campaign still has not found. |
+| **R2-A2 -- one of the four is the MOVE criterion's floor, not the trigger's** | The grey row at degree 14, `delta` = 4.7421e-06 (46.2x the physical shift) moves only **83.3** cell widths on the snapped grid, i.e. below `_SLIVER_MOVE_FACTOR`, so no trigger would reach it -- S4.2 has the per-row table. Lowering the move bar to catch it costs headroom over the correct population (which reaches 26.58) and was not taken. |
 | **R2-B -- the within-layer arm inherits the same floor** | At a liner of 1e-6 of a period the answer is already 1.06e-03 wrong while `R+T` reads 0.9992. The arm fires only above the trigger, so that width is silent. |
 | **R2-C -- the arbiter is inert on dispersive / keyed stacks** | A callable or unresolved `eps` makes `_stack_provably_passive` answer False, so those stacks never reach the screen at all -- they keep the plain warning, which is round 1's behaviour and pre-round-1's. Materialising the callables for the probe is possible and was not done. |
 | **R2-D -- `move` is compared to a GEOMETRIC width** | `move > 100 * w_wide` compares an efficiency difference with a period fraction, i.e. it silently assumes `dR/dx = O(1)`. That is the same shape of derivation the verification refuted for the round-1 remedy bar (V-4, measured slopes 1.04 / 1.15 / 4.44). Here it is measured rather than derived -- the two populations sit at <= 26.58 and >= 466.2 across four grids and three fixtures -- but a device with `dR/dx` above ~50 could in principle move a correct answer past the bar. No such device was found; a resonant fixture would be the way to attack it. |
