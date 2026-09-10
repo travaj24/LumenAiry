@@ -446,6 +446,19 @@ def test_the_guard_now_reaches_a_liquid_crystal_sliver():
         assert not refused2, (name, (msg2 or "")[:300])
         assert out2 is not None
     assert len(fired) == 3, fired
+    # The OUT-OF-PLANE director is refused on evidence a polarization-1-only
+    # statistic cannot see, which is why the move is taken on BOTH: scored
+    # against the exact delta -> 0 limit, pol 1 is 0.01x the physical shift
+    # (i.e. "correct") while pol 0 is 316x.  Re-derived here.
+    M = classes["lc_out_of_plane"]
+    ref, cur = _raw(_stack(0.0, 14, eps=M)), _raw(_stack(3e-5, 14, eps=M))
+    c = np.intersect1d(cur[0], ref[0])
+    ia, ib = np.searchsorted(cur[0], c), np.searchsorted(ref[0], c)
+    per_pol = [float(max(np.abs(cur[1][p][ia] - ref[1][p][ib]).max(),
+                         np.abs(cur[2][p][ia] - ref[2][p][ib]).max()))
+               for p in (0, 1)]
+    assert per_pol[1] <= 10.0 * 3e-5, per_pol      # pol 1 looks CORRECT ...
+    assert per_pol[0] > 100.0 * 3e-5, per_pol      # ... pol 0 is WRONG
     # ... and the NON-Hermitian payload, which no exact argument makes
     # passive, keeps the behaviour it had: warn and return.
     N = np.eye(3, dtype=complex) * 4.0

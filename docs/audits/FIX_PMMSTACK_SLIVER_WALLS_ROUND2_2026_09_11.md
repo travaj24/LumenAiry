@@ -246,14 +246,24 @@ Measured consequence on the O-11 sliver (`r7_anisotropic.py`, both builds):
 
 | tensor class | Hermitian EXACTLY? | provably passive | delta 1e-4 | delta 3e-5 | sliver-FREE control (3e-3) |
 |---|---|---|---|---|---|
-| in-plane LC director, 45 deg | Win **yes** / WSL **no** | **yes** | returned (err 39x, below the move bar) | **REFUSED** (err 288x, `R+T` 1.0105) | returned, `R+T` = 1 + 2.9e-11 |
-| out-of-plane LC director, 30 deg | no (round-off) | **yes** | returned | **REFUSED** (`R+T` 1.0133) | returned, `R+T` = 1 + 2.6e-11 |
+| in-plane LC director, 45 deg | Win **yes** / WSL **no** | **yes** | returned -- verdict `truncation`, `move` = 38.9 cell widths, below the bar | **REFUSED** -- `move` = 290.4, err 288x the shift, `R+T` 1.0105 | returned, `R+T` = 1 + 2.9e-11 |
+| out-of-plane LC director, 30 deg | no (round-off) | **yes** | returned -- `move` = 22.2 | **REFUSED** -- `move` = 316.5, `R+T` 1.0133 | returned, `R+T` = 1 + 2.6e-11 |
 | gyrotropic `eps_xy = -eps_yx = 0.35i` | yes | **yes** | **REFUSED** (err 685x) | **REFUSED** (err 2680x) | returned, `R+T` = 1 + 6.5e-11 |
 | NON-Hermitian `eps_xy = 0.2, eps_yx = 0` | no | **no** | returned (unchanged) | returned (unchanged) | returned |
 
 Round 1 read `R+T` = 2.183 on this class and only warned.  The negative control
 is the last row: a payload no exact argument makes passive keeps exactly the
 behaviour it had.
+
+**And this class is where taking the move on BOTH polarizations earns its
+keep.**  The out-of-plane director at `delta` = 3e-5 is refused on evidence the
+campaign's own `err` column cannot see: scored per polarization against the
+exact `delta -> 0` limit, polarization 1 is off by 3.17e-07 (**0.01x** the
+physical shift -- "correct" by the continuity rule) while polarization 0 is off
+by **9.49e-03**, i.e. **316x**.  A pol-1-only statistic would have called that
+solve right and a pol-1-only move would have left the refusal unfired.  The
+verification made the same definitional correction to round 1's separation
+claim (its S4.1); here it changes a DECISION.
 
 ### S3.6 The WITHIN-LAYER arm (V-6): warned, never refused
 
@@ -546,8 +556,8 @@ All with `PYTHONPATH` on the worktree and one BLAS thread.
 
 REGRESSION_RESULT
 
-`.test_durations` spliced with the 51 measured Windows timings of the three
-sliver files (12,571 -> 12,588 entries; the two renamed tests' stale entries
+`.test_durations` spliced with the 52 measured Windows timings of the three
+sliver files (12,571 -> 12,589 entries; the two renamed tests' stale entries
 dropped).
 
 `test_m1_conditioning_guard.py` prints two
