@@ -944,3 +944,24 @@ numpy, the platform and the three thread environment variables.
 | `b8_reference.py` | the repaired answer against an independent RCWA solve |
 | `b9_m1_instrument.py` | the M1 equilibration instrument's motivating population |
 | `b10_manufactured_energy.py` | the mount that returns `sum R + T` up to 110 |
+
+---
+
+## CORRECTIONS 2026-09-11 from the independent round-2 verification
+
+Source: `docs/audits/VERIFY_BRANCH_CUT_ROUND2_2026_09_11.md` (own fixtures,
+both builds, thread ladders).  Decisions stand; five statements are corrected:
+
+| statement here | verification's reading |
+|---|---|
+| the lossy census exemption ("lossy solves bit-identical") | holds only when the PATTERNED layer is lossy; a lossy spacer beside a lossless cell moves 1.3353e-03 per order; acted-on population 4-8 modes on such stacks |
+| hybrid pre-fix error 2.0035e-03 per order; `sum R+T` up to 109.9; the 1e-6 detune fails and 1e-3 cures | fixture-scoped: 7.4844 per order on the verification's fixture; `sum R+T` 2.2 .. 28.9 over six (build, thread) samples; cure at 1e-5; loudest modulation 1e-10 |
+| `cond(a+b)` 1.96e9 -> 14.5 | does not recover universally: 2.6e+01 .. 1.0e+08 post-fix (a 1/detune near-degeneracy), closure flat at 1.6e-10 -- benign |
+| array-max wins on all three populations | per-mode is not worse on ordinary RCWA (14.13 / 14.26 vs 13.88 / 14.01) and ties at cutoff; array-max KEPT for parity with the PMM selector |
+| hybrid-PMM band margins 6.75 / 6.46 decades | 6.94 / **1.00** (closest lossy/evanescent mode ~1e-7 against the 1e-8 band) |
+
+Also: a fourth JAX caller (`_berreman_jax.py`) reaches the shared root via
+`array_namespace` without an explicit `jnp` (works; noted); a NaN eigenvalue
+disarms the pin silently (shared with round 1); `_PASSIVITY_BAR`'s floor has
+1.05 decades of headroom over one fixture's truncation error; the X-1
+fail-before's worst sample is 29.27x against a `> 10x` pin.

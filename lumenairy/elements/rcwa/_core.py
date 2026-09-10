@@ -1244,6 +1244,14 @@ def _inv_lam(lam: np.ndarray) -> np.ndarray:
 #:   hybrid PMM P@Q (1463/1642 modes)  6.75 (1.7884e-15)    6.46 (2.8623e-02)
 #:   RCWA at a LAYER CUTOFF (72 mts)   4.04 (9.0475e-13)    3.34 (2.1844e-05)
 #:   ... the verification's deeper cutoff ladder:  0.17 (6.7172e-09)
+#:   ROUND-2 VERIFICATION 2026-09-11 (own populations, both builds):
+#:   hybrid PMM signal side is 1.00 decade (closest lossy/evanescent mode
+#:   ~1e-7), NOT 6.46; ordinary RCWA per-mode 14.13 / 14.26 vs array-max
+#:   13.88 / 14.01 (per-mode not worse), tie at cutoff -- array-max is kept
+#:   for PARITY with the PMM selector; cutoff driven to min|lam^2| = 3.2e-16
+#:   with silent motion <= 8.75e-11 and loud divergence 9.5e-02 when the
+#:   band is disabled; the lossy exemption below is about loss in the
+#:   PATTERNED layer (a lossy spacer beside a lossless cell still acts).
 #:
 #: The round-1 figure (7.6 / 6.9 decades) was SAMPLE-SCOPED to 51 fixtures that
 #: carried no LAYER-CUTOFF mount; the independent verification re-measured

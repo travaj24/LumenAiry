@@ -216,6 +216,34 @@ Evidence: `docs/audits/FIX_BRANCH_CUT_ROUND2_2026_09_11.md`; probes and JSON
 from both builds in `validation/probe_fix_branch_cut_round2/`; DECISION tests in
 `tests/unit/test_fix_branch_cut_round2.py`.
 
+**Round 2 verified 2026-09-11** (`docs/audits/VERIFY_BRANCH_CUT_ROUND2_2026_09_11.md`,
+`validation/probe_verify_branch_cut_round2/`, both builds): one definition,
+23 call sites, the refactor bit-identical to round 1 on 4,037 engineered
+values x 8 sizes; the pure staggered 2-D PMM and the 1-D `PMMStack` make zero
+calls and are bit-identical on 33/33 fixtures; X-1 closed to every printed
+digit; the M1 equilibration has 0 of 106 motivating calls and its code path
+is still reachable.  Five statements above are CORRECTED by that verification:
+(1) the lossy exemption is about loss in the PATTERNED layer -- a lossy spacer
+next to a lossless patterned cell still moves 1.3353e-03 per order, so the
+acted-on population on a lossy stack is 4-8 modes, not 0; (2) the hybrid's
+pre-fix error is fixture-scoped and reaches **7.4844** per order against an
+independent RCWA solve on the verification's fixture (2.0035e-03 on the
+build's), with `sum R+T` 2.2 .. 28.9 across six (build, thread) samples; the
+1e-6 permittivity detune returns a silently wrong answer and the cure is at
+1e-5, not 1e-3; the loudest modulation is 1e-10, not a 1e-6 window;
+(3) `cond(a+b)` does not recover universally after the fix -- a 1/detune
+near-degeneracy remains (2.6e+01 .. 1.0e+08) with the closure flat at
+1.6e-10, benign; (4) the band-scale comparison: per-mode scaling is not worse
+than array-max on ordinary RCWA (14.13 / 14.26 vs 13.88 / 14.01 decades) and
+the two tie at a cutoff, so array-max is kept for parity with the PMM
+selector, not because it wins everywhere; (5) the hybrid-PMM signal-side
+margin is **1.00 decade**, not 6.46 (the closest lossy/evanescent mode sits
+at ~1e-7 against the 1e-8 band).  Also recorded: a fourth JAX caller
+(`_berreman_jax.py`) reaches the shared root through `array_namespace`
+without an explicit `jnp`; a NaN eigenvalue disarms the pin silently; the
+`_PASSIVITY_BAR` floor has 1.05 decades of headroom over one fixture's
+truncation error.
+
 ### Fixed -- `PMMStack` REFUSES a near-coincident-wall SLIVER instead of returning a wrong answer (O-11)
 
 Two adjacent layers whose wall sets differ by `delta` of the period put a SLIVER
