@@ -689,9 +689,14 @@ out-of-plane / Berreman fixtures that DO reach the armed `T22` site):
 
 | | PRE | POST |
 |---|---|---|
-| motivating calls, WIN | **9 of 106** at 1 / 2 / 4 / 8 / 16 threads | **0 of 110** at every count |
-| motivating calls, WSL | **9 of 106** (8 at 4 threads) | **0 of 110** at every count |
+| motivating calls, WIN | **9 of 106** at 1 / 2 / 4 / 8 / 16 threads, **7 of 106** unpinned | **0 of 110** at every count |
+| motivating calls, WSL | **9 of 106** at 1 / 2 / 8 / 16, **8** at 4, **6** unpinned | **0 of 110** at every count |
 | armed `T22` equilibrated `rcond`, minimum | 2.792e-02 | 2.792e-02 (bar `1e-10`) |
+
+(The PRE count itself moves with the pool -- 9 / 8 / 7 / 6 -- which is the same
+thread-order dependence one level up: whether a given star denominator's raw
+residual crosses `1e-8` is decided by the reduction order.  The POST count is
+`0` at every one of the twelve (build, thread) samples.)
 
 Every one of the nine was the branch-cut defect: five M1 rungs, the
 normal-incidence M1 variant, the 2-D anisotropic coincidence cell, and two
