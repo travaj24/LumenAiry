@@ -1,0 +1,79 @@
+{
+ "version": "5.44.0",
+ "numpy": "2.4.4",
+ "python": "3.14.6",
+ "bars": {
+  "C64_PHASOR_TOL@R=0.0459,N=512": {
+   "measured": 4.203243744214564e-08,
+   "bar": 2.5e-07,
+   "sense": "upper",
+   "margin": 5.947787356945583,
+   "note": "true argmax 22.34 rad (docstring says 3.6e+02 / 1.3e+04)",
+   "argmax_rad": 22.33630389488161
+  },
+  "C64_PHASOR_TOL@R=0.005,N=1024": {
+   "measured": 4.211664652595496e-08,
+   "bar": 2.5e-07,
+   "sense": "upper",
+   "margin": 5.935895201103774,
+   "note": "true argmax 820.2 rad (docstring says 3.6e+02 / 1.3e+04)",
+   "argmax_rad": 820.1890790200528
+  },
+  "f32arg_control_ratio@R=0.0459": {
+   "measured": 23.486449193754467,
+   "bar": 10.0,
+   "sense": "lower",
+   "margin": 2.3486449193754466,
+   "note": "e_good 4.203e-08  e_naive 9.872e-07 (docstring records 1.5e-05 / 4.9e-04 and ratios 360x / 11600x)",
+   "e_good": 4.203243744214564e-08,
+   "e_naive": 9.871927064746166e-07
+  },
+  "f32arg_control_ratio@R=0.005": {
+   "measured": 727.0378990011739,
+   "bar": 100.0,
+   "sense": "lower",
+   "margin": 7.270378990011738,
+   "note": "e_good 4.198e-08  e_naive 3.052e-05 (docstring records 1.5e-05 / 4.9e-04 and ratios 360x / 11600x)",
+   "e_good": 4.198313606704293e-08,
+   "e_naive": 3.05233310396633e-05
+  },
+  "upsample_crop_rel_L2": {
+   "measured": 1.715123178672202e-07,
+   "bar": 1e-05,
+   "sense": "upper",
+   "margin": 58.30485019590084,
+   "note": "docstring records 2.0e-07 at N=2048; the test runs N=512"
+  },
+  "exact_focus_readout_rel_L2": {
+   "measured": 9.899520020541048e-08,
+   "bar": 0.0001,
+   "sense": "upper",
+   "margin": 1010.1499849740654,
+   "note": "a.dtype=complex128 b.dtype=complex64; the docstring records NO number"
+  },
+  "one_group_chain_rel_L2": {
+   "measured": 9.442662725037378e-08,
+   "bar": 0.0001,
+   "sense": "upper",
+   "margin": 1059.023316959615,
+   "note": "a.dtype=complex128 b.dtype=complex64"
+  },
+  "band_memory_saving_grids": {
+   "measured": 12.414693832397461,
+   "bar": 6.0,
+   "sense": "lower",
+   "margin": 2.06911563873291,
+   "note": "whole 22.63 grids (eng=True), band 10.21 grids (eng=True); the test docstring records 22.6 and 10.2",
+   "whole_grids": 22.62706232070923,
+   "band_grids": 10.212368488311768,
+   "whole_engaged": true,
+   "band_engaged": true
+  },
+  "route_change_rel_on_shipped_fixture": {
+   "measured": 0.002247942041001103,
+   "bar": null,
+   "sense": "informational",
+   "note": "model engaged=True incumbent engaged=False; CHANGELOG cites 2.19e-02 on the S10 fixture"
+  }
+ }
+}

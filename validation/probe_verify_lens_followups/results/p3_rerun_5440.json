@@ -1,0 +1,137 @@
+{
+ "version": "5.44.0",
+ "file": "C:\\tmp\\lum_v5440c\\lumenairy\\__init__.py",
+ "N": 4096,
+ "sub": 32,
+ "dx": 1.5e-06,
+ "auto_rows": 256,
+ "reps": 2,
+ "cases": {
+  "screen.whole": {
+   "eval_calls": 1,
+   "eval_pixels": 16777216,
+   "eval_channels": 50331648,
+   "eval_s": 0.9244000000035157,
+   "mc_calls": 0,
+   "mc_s": 0.0,
+   "rows": 0,
+   "inverse_map_kw": null,
+   "best": 19.160648899996886,
+   "all": [
+    20.164339299997664,
+    19.160648899996886
+   ],
+   "hash": "91da5e59c46beb1d967b28b3",
+   "engaged": true,
+   "gate_open": true,
+   "inst_total_s": 20.879300700005842,
+   "inst_rest_s": 19.954900700002327,
+   "eval_channels_per_pixel": 3.0
+  },
+  "screen.auto_band": {
+   "eval_calls": 16,
+   "eval_pixels": 16777216,
+   "eval_channels": 50331648,
+   "eval_s": 0.7934542000002693,
+   "mc_calls": 0,
+   "mc_s": 0.0,
+   "rows": 256,
+   "inverse_map_kw": null,
+   "best": 17.240612299996428,
+   "all": [
+    18.03390429999854,
+    17.240612299996428
+   ],
+   "hash": "91da5e59c46beb1d967b28b3",
+   "engaged": true,
+   "gate_open": true,
+   "inst_total_s": 16.5042589000077,
+   "inst_rest_s": 15.71080470000743,
+   "eval_channels_per_pixel": 3.0
+  },
+  "screen.auto_band_incumbent": {
+   "eval_calls": 0,
+   "eval_pixels": 0,
+   "eval_channels": 0,
+   "eval_s": 0.0,
+   "mc_calls": 32,
+   "mc_s": 1.4745449000038207,
+   "rows": 256,
+   "inverse_map_kw": false,
+   "best": 10.491590300007374,
+   "all": [
+    10.491590300007374,
+    10.836235900002066
+   ],
+   "hash": "66b9384477cf8a9ca1844c6a",
+   "engaged": false,
+   "gate_open": true,
+   "inst_total_s": 11.057410299996263,
+   "inst_rest_s": 9.582865399992443,
+   "eval_channels_per_pixel": 0.0
+  },
+  "ray_density.whole": {
+   "eval_calls": 1,
+   "eval_pixels": 16777216,
+   "eval_channels": 67108864,
+   "eval_s": 1.039749200004735,
+   "mc_calls": 1,
+   "mc_s": 0.6989517000038177,
+   "rows": 0,
+   "inverse_map_kw": null,
+   "best": 21.911893099997542,
+   "all": [
+    21.911893099997542,
+    22.0174713999877
+   ],
+   "hash": "08f9aa00b567ed87658cf8ca",
+   "engaged": true,
+   "gate_open": true,
+   "inst_total_s": 21.435722300011548,
+   "inst_rest_s": 19.697021400002996,
+   "eval_channels_per_pixel": 4.0
+  },
+  "ray_density.auto_band": {
+   "eval_calls": 32,
+   "eval_pixels": 33554432,
+   "eval_channels": 117440512,
+   "eval_s": 1.90787939997972,
+   "mc_calls": 16,
+   "mc_s": 0.7991908999683801,
+   "rows": 256,
+   "inverse_map_kw": null,
+   "best": 30.896212599996943,
+   "all": [
+    30.908011200008332,
+    30.896212599996943
+   ],
+   "hash": "08f9aa00b567ed87658cf8ca",
+   "engaged": true,
+   "gate_open": true,
+   "inst_total_s": 31.082165200001327,
+   "inst_rest_s": 28.375094900053227,
+   "eval_channels_per_pixel": 7.0
+  },
+  "ray_density.auto_band_incumbent": {
+   "eval_calls": 0,
+   "eval_pixels": 0,
+   "eval_channels": 0,
+   "eval_s": 0.0,
+   "mc_calls": 65,
+   "mc_s": 2.7111561999481637,
+   "rows": 256,
+   "inverse_map_kw": false,
+   "best": 13.638363000005484,
+   "all": [
+    13.638363000005484,
+    15.005765199995949
+   ],
+   "hash": "b0a55957c3feaadc66f87bba",
+   "engaged": false,
+   "gate_open": true,
+   "inst_total_s": 14.278030400004354,
+   "inst_rest_s": 11.56687420005619,
+   "eval_channels_per_pixel": 0.0
+  }
+ }
+}

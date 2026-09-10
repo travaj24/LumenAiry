@@ -93,8 +93,10 @@ def main():
         r = real(np.asarray(env).astype(np.complex128), nc, nf)
         return np.asarray(r).astype(dt)
 
-    for tag, leg, dist in (('exact', 'exact', 4.0e-3),
-                           ('paraxial', 'paraxial', 4.0e-3)):
+    _ro = dict(focus_readout=dict(dx_out=0.30e-6, N_out=96,
+                                  window_factor=4.0, n_fine_cap=4096),
+               final_leg='exact', on_tilt_exact_grid='warn')
+    for tag, over in (('exact', _ro), ('paraxial', {})):
         arms = {}
         for arm, wrapper, dt in (('A_shipped_c64', counting, np.complex64),
                                  ('B_forced_c128_c64', forced, np.complex64),
@@ -102,8 +104,8 @@ def main():
             calls['n'] = 0
             C._fourier_upsample_crop = wrapper
             try:
-                r = _chain(la, [g1, g2], E.astype(dt), final_leg=leg,
-                           final_distance=dist, carrier_reference='sphere')
+                r = _chain(la, [g1, g2], E.astype(dt),
+                           carrier_reference='sphere', **over)
                 f = np.asarray(r.field)
             finally:
                 C._fourier_upsample_crop = real
