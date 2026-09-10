@@ -269,18 +269,35 @@ def test_the_guard_has_a_measured_floor_the_theorem_cannot_reach():
     deg = 14
     ref = _solve(0.0, deg, guard=False)
     assert abs(ref[3] - 1.0) < 1e-9, ref[3]        # premise: exact reference
-    found = []
+    found, returned = [], 0
     for d in np.geomspace(3e-5, 1e-6, 60):
         d = float(d)
         try:
             res = _solve(d, deg, guard=True)
         except ValueError:
             continue                                # refused: the guard worked
+        returned += 1
         e = _err(res, ref)
         if e > 100.0 * d:
             found.append((d, e, res[3] - 1.0))
+    # the ladder must actually reach the guard: MEASURED 2026-09-11, both
+    # builds, 57 of these 60 rows are REFUSED and 3 come back -- so a run that
+    # returns nothing has stopped exercising the floor and must say so.
+    assert returned >= 2, returned
     if not found:
-        pytest.skip("no unrefused wrong row on this build's ladder")  # noqa: PT017
+        # The ladder is exhausted with NO miss -- a stronger guard than the one
+        # measured on 2026-09-11.  Never a skip (TESTING_STANDARDS rule 4): the
+        # claim becomes the unconditional one, that every returned row tracks
+        # the physical shift, and this test then fails honestly if a LATER
+        # change reopens the floor.
+        for d in np.geomspace(3e-5, 1e-6, 60):
+            d = float(d)
+            try:
+                res = _solve(d, deg, guard=True)
+            except ValueError:
+                continue
+            assert _err(res, ref) <= 100.0 * d, (d, _err(res, ref))
+        return
     worst = max(f[1] for f in found)
     # MEASURED 2026-09-11, BOTH builds: 8 unrefused wrong rows over 660 samples
     # (5 degrees x 60 deltas + a 120-point walk), worst absolute per-order
