@@ -619,10 +619,25 @@ oracle for (a).  Zeroth-order `R` for incident `E_y`:
   narrowest segment 237x the width contract.  The `wide` variant
   (0.21/0.55 vs 0.30/0.70) fails identically from `M`=6.
 
-**Consequence.**  Any user of `layer_grids='per-layer'` with ONE out-of-plane
-(or `slant`ed) layer next to an ordinary scalar layer loses their solve at
-`n_modes >= 5`.  On `24651c8` it worked.  This is a hard regression on a
-supported path.
+**Consequence, and the blast radius is wider than the fixture above.**  Any
+user of `layer_grids='per-layer'` with ONE out-of-plane layer next to an
+in-plane neighbour loses their solve at `n_modes >= 5`.  Scoped by measurement:
+
+| second layer | `M`=4 | `M`=5 | `M`=6 |
+|---|---|---|---|
+| a plain UNIFORM SPACER (`eps=2.1`) -- the commonest configuration of all | 7.654e-12, returns | **4.470e-14, REFUSED** | **6.746e-14, REFUSED** |
+| a PATTERNED scalar on other walls | 1.803e-11, returns | 1.118e-12, returns | **6.901e-14, REFUSED** |
+| the `v8` fixture (patterned scalar, `n_orders`=2) | 1.41e-11, returns | **8.40e-13, REFUSED** | **6.05e-14, REFUSED** |
+| BOTH layers out-of-plane | 1.32e-04 | 6.53e-06 | 1.26e-06 -- healthy |
+
+**An out-of-plane patterned layer with a uniform spacer above or below it is
+refused from `n_modes` = 5.**  On `24651c8` all of these solved.  This is a hard
+regression on a supported -- and ordinary -- path.
+
+MIXED SLANT (one slanted layer, one vertical) is NOT affected: it is refused
+earlier and for a different, documented reason
+(`NotImplementedError: ... MIXED SLANTS between PATTERNED layers`).  So the
+defect is confined to the mixed IN-PLANE / OUT-OF-PLANE tensor case.
 
 **Why the shipped gates missed it.**  `test_the_mortar_rcond_bar_has_decades_of_gap_on_both_sides`
 builds only in-plane fixtures; nothing in the 15 gates reaches
@@ -853,7 +868,7 @@ instead, since a failing gate would break the suite.)
 
 | # | severity | what | reproducer |
 |---|---|---|---|
-| **V1** | **P1 -- ship-blocking** | `_MORTAR_RCOND_REFUSE` = 1e-12, calibrated on the two IN-PLANE mortar sites, is applied unchanged to `_interface_smatrix_general_mortar_2d`, whose healthy population on a MIXED in-plane / out-of-plane per-layer stack is 1.4e-11 .. 2.6e-14.  Ordinary two-layer stacks (narrowest segment 237x the width bar) are REFUSED from `n_modes` = 5 up.  The refused solves converge to the union-grid oracle and are build-stable to 8 digits, so the refusal is a false positive.  Hard regression vs `24651c8`. | `validation/probe_verify_mortar_round2/v7_generalized.py`, `v8_oop_regression.py` |
+| **V1** | **P1 -- ship-blocking** | `_MORTAR_RCOND_REFUSE` = 1e-12, calibrated on the two IN-PLANE mortar sites, is applied unchanged to `_interface_smatrix_general_mortar_2d`, whose healthy population on a MIXED in-plane / out-of-plane per-layer stack is 1.4e-11 .. 2.6e-14.  Ordinary two-layer stacks (narrowest segment 237x the width bar) are REFUSED from `n_modes` = 5 up -- INCLUDING an out-of-plane layer next to a plain UNIFORM SPACER.  The refused solves converge to the union-grid oracle and are build-stable to 8 digits, so the refusal is a false positive.  Hard regression vs `24651c8`; zero test coverage. | `validation/probe_verify_mortar_round2/v7_generalized.py`, `v8_oop_regression.py` |
 | **V2** | P3 | The width contract refuses a CONFORMING per-layer stack (all layers on one wall array), which has no cross-grid projection and is measurably insensitive to the sliver (`delta`-independent to ~1e-4 over three decades). `Basis1D` cannot know its neighbours, so the refusal is structural. | `v3_guard.py nomortar_fp` |
 | **V3** | P3 -- documentation | The conditioning backstop is claimed as an independent second line; on a sliver that occupies ONE axis in the LAST layer it does not fire down to `delta` = 1e-7 (`rcond` ~1.1e-10 at 1e-6, 2 decades above the bar), because the `MassH_A V_A` operator is built from the FIRST grid and is `delta`-independent there (measured 1.384e+05 at every `delta`). | `v4_d2.py refuse`, `v2_d1.py exponents` |
 | **V4** | P3 -- documentation | The E-row exponent "~2.0" is the TWO-AXIS value; it is **1.0 per axis carrying the sliver** (measured 1.01 on a one-axis fixture).  The cross-mass exponents `C1_x`/`C2_x` are saturated at the float64 ceiling on both fixtures and disagree between `M` = 4 and 6 by 2.4x; they should be marked as such. | `v2_d1.py exponents` |
@@ -874,9 +889,12 @@ per-layer answers only in the last bits.
 V1 is a two-line change (either give the generalized site its own bar or leave
 it unguarded, as the plain 1-D site already is) plus one fixture added to
 `test_the_mortar_rcond_bar_has_decades_of_gap_on_both_sides`.  It is a hard
-regression on a supported path -- an out-of-plane or slanted per-layer stack
-next to an ordinary scalar layer -- that `24651c8` solved correctly and
-reproducibly, and no shipped gate covers it.
+regression on an ORDINARY path -- an out-of-plane per-layer layer with an
+in-plane neighbour, INCLUDING a plain uniform spacer, refused from
+`n_modes` = 5 -- that `24651c8` solved correctly and reproducibly, and no
+shipped gate covers it: `test_pmm2d_staggered_oop.py` contains no per-layer
+stack at all, and `test_verify_pmm2d_perlayer_slant.py`'s four tests slant BOTH
+layers, which is the healthy branch.
 
 Everything else in round 2 verifies.  D1's contract, its derivation and both
 sides of its bar reproduce on an independent fixture; D3 is a real, API-reachable
