@@ -15,7 +15,7 @@ on:
 
 jobs:
   unit:
-    name: Unit tests (Python ${{ matrix.python-version }}, shard ${{ matrix.shard }}/3)
+    name: Unit tests (Python ${{ matrix.python-version }}, shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -96,7 +96,7 @@ jobs:
       - name: Library import sanity
         run: python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
 
-      - name: Run unit tests (shard ${{ matrix.shard }}/3)
+      - name: Run unit tests (shard ${{ matrix.shard }}/4)
         # ``-p no:cacheprovider`` avoids writing the pytest cache to the readonly
         # CI filesystem layout.  Output tee'd to a file so the artifact upload
         # (next step) has something to surface on failure.
