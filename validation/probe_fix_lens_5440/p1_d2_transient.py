@@ -21,7 +21,7 @@ import tracemalloc
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _fixp                                                   # noqa: E402
+import _fixp  # noqa: E402
 
 WL = _fixp.WL
 NS = (2048, 4096)

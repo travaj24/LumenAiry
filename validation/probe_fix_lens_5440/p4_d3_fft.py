@@ -34,7 +34,7 @@ import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
-import _fixp                                                   # noqa: E402
+import _fixp  # noqa: E402
 
 WL = _fixp.WL
 

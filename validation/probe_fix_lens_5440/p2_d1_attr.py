@@ -24,8 +24,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE),
                                 'probe_verify_lens_5440'))
-import _fix                                                    # noqa: E402
-import _fixp                                                   # noqa: E402
+import _fix  # noqa: E402
+import _fixp  # noqa: E402
 
 N, DX, W, SUB = 384, 13e-6, 1.0e-3, 4
 THIS = os.path.basename(__file__)

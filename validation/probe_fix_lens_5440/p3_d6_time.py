@@ -37,8 +37,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(_HERE),
                                 'probe_verify_lens_5440'))
-import _fix                                                    # noqa: E402
-import _fixp                                                   # noqa: E402
+import _fix  # noqa: E402
+import _fixp  # noqa: E402
 
 
 def _kw(model, sub, dx, imap):
