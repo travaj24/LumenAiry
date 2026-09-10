@@ -11985,7 +11985,14 @@ def apply_real_lens_traced(
             if pe_b.dtype != target_cdtype:
                 pe_b = pe_b.astype(target_cdtype)
             if preserve_input_phase:
-                band = E_analytic[r0:r1] * pe_b
+                # ``E_analytic`` is a FREE variable of the enclosing call, captured by
+                # this closure and released by the ``del`` after the band loop (the
+                # memory release the whole-grid path also performs).  Every call of this
+                # closure precedes that ``del`` (asserted at lint time 2026-09-11: calls
+                # at [12042, 12170], del at [12289]); pyflakes sees the later ``del`` and reports
+                # F821 here -- a false positive.  A default-argument capture would defeat
+                # the release (it would pin the full grid until the call returns).
+                band = E_analytic[r0:r1] * pe_b  # noqa: F821
             else:
                 band = amp[r0:r1] * pe_b
             band = np.where(valid_b, band, target_cdtype.type(0))
