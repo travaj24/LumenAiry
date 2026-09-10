@@ -57,6 +57,7 @@ PYTHONPATH=/c/tmp/lum_v5430 ... python \
 | `v9_durability.py` | every constant the two new test files assert, re-measured on the SHIPPED fixtures (run on Windows and WSL) |
 | `v10_s10_route.py` | the CHANGELOG's named 2.19e-02 S10 difference, reproduced on both builds |
 | `v11_side_effects.py` | warning attribution (`stacklevel`), the D9 fraction, and wall time without `tracemalloc` |
+| `v19_fold_warn_attr.py` | attribution of the fold-caustic warning after it moved into a shared closure (companion to `v11`) |
 | `v12_d9_sum_order.py` | the one non-bit-identical quantity: the D9 origin sums, band-accumulated vs whole-grid |
 | `v13_sign_scan.py` | the two-row-halo `det J` sign scan, both algorithms transcribed and run against each other on 489 fields x 12 band heights, engineered to put flips ON band boundaries |
 | `v18_c15_probe_on_band.py` | whether the niche-C15 private `_imap_out['probe_rc']` diagnostic is filled on a banded call |
