@@ -108,7 +108,7 @@ def _hash_res(res):
     if len(res) == 4:
         o, R, T, J = res
         return sha(R, T, J)
-    o, R, T = res[0], res[1], res[2]
+    _o, R, T = res[0], res[1], res[2]
     return sha(R, T)
 
 
