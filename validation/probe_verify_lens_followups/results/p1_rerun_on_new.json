@@ -1,0 +1,150 @@
+{
+ "version": "5.44.0",
+ "file": "C:\\tmp\\lum_vlens2\\lumenairy\\__init__.py",
+ "cases": {
+  "2048/sph/envelope/c128": {
+   "N": 2048,
+   "dx": 6.5e-06,
+   "peak_bytes": 234914914,
+   "peak_MiB": 224.032320022583,
+   "peak_c64_grids": 7.001010000705719,
+   "out_dtype": "complex128",
+   "hash": "8f0abc58e7f8e83d5c598cdc"
+  },
+  "2048/sph/envelope/c64": {
+   "N": 2048,
+   "dx": 6.5e-06,
+   "peak_bytes": 198215018,
+   "peak_MiB": 189.03257179260254,
+   "peak_c64_grids": 5.907267868518829,
+   "out_dtype": "complex64",
+   "hash": "21012d896a0033df4cdc5eb3"
+  },
+  "2048/sph/reconstruct/c128": {
+   "N": 2048,
+   "dx": 6.5e-06,
+   "peak_bytes": 234914914,
+   "peak_MiB": 224.032320022583,
+   "peak_c64_grids": 7.001010000705719,
+   "out_dtype": "complex128",
+   "hash": "cb5e165dc22239f2d78a701c"
+  },
+  "2048/sph/reconstruct/c64": {
+   "N": 2048,
+   "dx": 6.5e-06,
+   "peak_bytes": 198214969,
+   "peak_MiB": 189.03252506256104,
+   "peak_c64_grids": 5.907266408205032,
+   "out_dtype": "complex64",
+   "hash": "e419ada8f38e83dc11f214ef"
+  },
+  "2048/astig/envelope/c128": {
+   "N": 2048,
+   "dx": 6.5e-06,
+   "peak_bytes": 134217920,
+   "peak_MiB": 128.00018310546875,
+   "peak_c64_grids": 4.000005722045898,
+   "out_dtype": "complex128",
+   "hash": "73ffeefea6bbfcb47c95e6ef"
+  },
+  "2048/astig/envelope/c64": {
+   "N": 2048,
+   "dx": 6.5e-06,
+   "peak_bytes": 67109056,
+   "peak_MiB": 64.00018310546875,
+   "peak_c64_grids": 2.0000057220458984,
+   "out_dtype": "complex64",
+   "hash": "695074a306ee40f30d638b7a"
+  },
+  "2048/astig/reconstruct/c128": {
+   "N": 2048,
+   "dx": 6.5e-06,
+   "peak_bytes": 134217920,
+   "peak_MiB": 128.00018310546875,
+   "peak_c64_grids": 4.000005722045898,
+   "out_dtype": "complex128",
+   "hash": "5320d4fbc22a55dcada36d35"
+  },
+  "2048/astig/reconstruct/c64": {
+   "N": 2048,
+   "dx": 6.5e-06,
+   "peak_bytes": 67109056,
+   "peak_MiB": 64.00018310546875,
+   "peak_c64_grids": 2.0000057220458984,
+   "out_dtype": "complex64",
+   "hash": "f65fc682dc93a8b691afacba"
+  },
+  "4096/sph/envelope/c128": {
+   "N": 4096,
+   "dx": 3.25e-06,
+   "peak_bytes": 939590754,
+   "peak_MiB": 896.063570022583,
+   "peak_c64_grids": 7.00049664080143,
+   "out_dtype": "complex128",
+   "hash": "638ac0eadc041f86ef691ca9"
+  },
+  "4096/sph/envelope/c64": {
+   "N": 4096,
+   "dx": 3.25e-06,
+   "peak_bytes": 671155186,
+   "peak_MiB": 640.0634632110596,
+   "peak_c64_grids": 5.000495806336403,
+   "out_dtype": "complex64",
+   "hash": "1f220762fbcb02679299dfb6"
+  },
+  "4096/sph/reconstruct/c128": {
+   "N": 4096,
+   "dx": 3.25e-06,
+   "peak_bytes": 939590754,
+   "peak_MiB": 896.063570022583,
+   "peak_c64_grids": 7.00049664080143,
+   "out_dtype": "complex128",
+   "hash": "d4fece245d6387ed12e2970e"
+  },
+  "4096/sph/reconstruct/c64": {
+   "N": 4096,
+   "dx": 3.25e-06,
+   "peak_bytes": 671155186,
+   "peak_MiB": 640.0634632110596,
+   "peak_c64_grids": 5.000495806336403,
+   "out_dtype": "complex64",
+   "hash": "3f55fa61aea89704e6739bb8"
+  },
+  "4096/astig/envelope/c128": {
+   "N": 4096,
+   "dx": 3.25e-06,
+   "peak_bytes": 536871104,
+   "peak_MiB": 512.0001831054688,
+   "peak_c64_grids": 4.000001430511475,
+   "out_dtype": "complex128",
+   "hash": "3276f0eb33ddeeef3ca77d67"
+  },
+  "4096/astig/envelope/c64": {
+   "N": 4096,
+   "dx": 3.25e-06,
+   "peak_bytes": 268435648,
+   "peak_MiB": 256.00018310546875,
+   "peak_c64_grids": 2.0000014305114746,
+   "out_dtype": "complex64",
+   "hash": "40f1b64a99f5d70bec8edf75"
+  },
+  "4096/astig/reconstruct/c128": {
+   "N": 4096,
+   "dx": 3.25e-06,
+   "peak_bytes": 536871104,
+   "peak_MiB": 512.0001831054688,
+   "peak_c64_grids": 4.000001430511475,
+   "out_dtype": "complex128",
+   "hash": "d6ffc6a563a9bec0587e77da"
+  },
+  "4096/astig/reconstruct/c64": {
+   "N": 4096,
+   "dx": 3.25e-06,
+   "peak_bytes": 268435648,
+   "peak_MiB": 256.00018310546875,
+   "peak_c64_grids": 2.0000014305114746,
+   "out_dtype": "complex64",
+   "hash": "3c7fe5f6edc708df32d8f516"
+  }
+ }
+}

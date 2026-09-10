@@ -1,0 +1,117 @@
+{
+ "_arm": {
+  "lumenairy_file": "C:/tmp/lum_vlens2/lumenairy/__init__.py",
+  "lumenairy_version": "5.44.0",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "python": "3.14.6",
+  "tag": "new"
+ },
+ "cases": {
+  "N=1024|_radial_carrier_phase": {
+   "c64_over_c128": 1.1428,
+   "complex128": {
+    "hash": "3fd9013e428fa6f56a35c91d",
+    "peak_MiB": 56.017,
+    "peak_c64_grids": 7.0021
+   },
+   "complex64": {
+    "hash": "106986a5cee628293b52d135",
+    "peak_MiB": 64.017,
+    "peak_c64_grids": 8.0021
+   }
+  },
+  "N=1024|_sphere_parab_conversion": {
+   "c64_over_c128": 1.1662,
+   "complex128": {
+    "hash": "0c3f03efd40748d323c41f0d",
+    "peak_MiB": 48.033,
+    "peak_c64_grids": 6.0041
+   },
+   "complex64": {
+    "hash": "6eb9b036fb42c8bc8b9c27f6",
+    "peak_MiB": 56.017,
+    "peak_c64_grids": 7.0021
+   }
+  },
+  "N=1024|_tilt_exactness_phase": {
+   "c64_over_c128": 1.0908,
+   "complex128": {
+    "hash": "7ef2f3a3fee7ac41fad00a25",
+    "peak_MiB": 88.159,
+    "peak_c64_grids": 11.0199
+   },
+   "complex64": {
+    "hash": "5e6a9d229e4d095806f3f3cf",
+    "peak_MiB": 96.16,
+    "peak_c64_grids": 12.0199
+   }
+  },
+  "N=1024|_tilt_ramp": {
+   "c64_over_c128": 1.2499,
+   "complex128": {
+    "hash": "5811562593005c23e1edfd44",
+    "peak_MiB": 32.016,
+    "peak_c64_grids": 4.002
+   },
+   "complex64": {
+    "hash": "f0774081b366576be150e128",
+    "peak_MiB": 40.016,
+    "peak_c64_grids": 5.0021
+   }
+  },
+  "N=2048|_radial_carrier_phase": {
+   "c64_over_c128": 0.8438,
+   "complex128": {
+    "hash": "e967720b7797e041c7fb48a8",
+    "peak_MiB": 224.032,
+    "peak_c64_grids": 7.001
+   },
+   "complex64": {
+    "hash": "346373120883272044b49144",
+    "peak_MiB": 189.032,
+    "peak_c64_grids": 5.9073
+   }
+  },
+  "N=2048|_sphere_parab_conversion": {
+   "c64_over_c128": 1.0,
+   "complex128": {
+    "hash": "85af2643b03ab9f7bf609c7b",
+    "peak_MiB": 192.064,
+    "peak_c64_grids": 6.002
+   },
+   "complex64": {
+    "hash": "61c9ccf43f48993eb538b64e",
+    "peak_MiB": 192.064,
+    "peak_c64_grids": 6.002
+   }
+  },
+  "N=2048|_tilt_exactness_phase": {
+   "c64_over_c128": 0.8531,
+   "complex128": {
+    "hash": "221e5cb9197de369389b4f17",
+    "peak_MiB": 352.19,
+    "peak_c64_grids": 11.006
+   },
+   "complex64": {
+    "hash": "db9f7d1a9c6572828d0e6c7d",
+    "peak_MiB": 300.441,
+    "peak_c64_grids": 9.3888
+   }
+  },
+  "N=2048|_tilt_ramp": {
+   "c64_over_c128": 0.7266,
+   "complex128": {
+    "hash": "e2febef28dd0f15b555acd53",
+    "peak_MiB": 128.032,
+    "peak_c64_grids": 4.001
+   },
+   "complex64": {
+    "hash": "4958aa597453aeece0dc0c02",
+    "peak_MiB": 93.032,
+    "peak_c64_grids": 2.9073
+   }
+  }
+ },
+ "free_gb": 80.77
+}
