@@ -63,4 +63,6 @@ PYTHONPATH=/c/tmp/lum_v5430 ... python \
 | `v18_c15_probe_on_band.py` | whether the niche-C15 private `_imap_out['probe_rc']` diagnostic is filled on a banded call |
 | `v14_c128_chain_identity.py` | the complex128 carrier chain, readout and crop hashed for the cross-release identity claim |
 
+| `v20_whole_grid_rd_time.py` | isolates the whole-grid ray-density call's wall time in a fresh process (the V15 cross-build discrepancy turned out to be a run-ordering artifact) |
+
 `results/` holds the JSON and the pytest / probe logs.
