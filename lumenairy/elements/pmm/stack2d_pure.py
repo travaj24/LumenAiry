@@ -71,7 +71,25 @@ the real-eigenvalue up/down split is non-critical for internal layers --
 Li 2003 J. Opt. A 5:345; *Gratings: Theory and Numeric Applications* ch. 13,
 2014, 13.2.3.3 -- is what makes the 2nd-order ``(W, +/-V, +/-lam)`` cascade
 sound as-is.)
-Tapered (z-staircase) helpers remain hybrid-only: use :class:`PMM2DStackHybrid`.
+A layer may also be SLANTED: ``add_layer(..., slant=(t_x, t_y))`` makes it ONE
+EXACT slanted region rather than a z-staircase -- the whole cross-section
+translates by ``t * thickness`` from the layer's TOP face to its bottom, ``t``
+being a TANGENT in the same PUBLIC convention as
+:class:`PMM2DStackHybrid` and the 1-D ``slant_angle`` entries.  It is exact at
+any slant magnitude and costs ONE eigensolve (``det J = 1``: the sheared
+frame's metric is z-invariant), and it promotes the whole stack to the
+generalized cascade, as an out-of-plane layer does -- a sheared cell IS an
+out-of-plane cell in the frame.  Slant on a UNIFORM layer is accepted and is a
+physical no-op.  The bookkeeping a shear adds is ONE unimodular phase per order
+on the TRANSMITTED amplitudes (the frame anchor); R and the reflection Jones
+need nothing.  Out of scope, all raising: MIXED slants between PATTERNED
+layers, a mix of vertical and slanted layers ABOVE a pattern, ``mu`` with a
+slant, and ``retain_internal`` on a slanted stack.  See
+:mod:`lumenairy.elements.pmm.twod_staggered`, "SLANT".
+
+A shear is NOT a TAPER -- a taper shrinks the cross-section and no shear
+absorbs a dilation.  Tapered (z-staircase) helpers remain hybrid-only: use
+:class:`PMM2DStackHybrid`.
 Uniform SCALAR layers route through the shared eps-free geometric eig
 (:func:`~lumenairy.elements.pmm.twod_staggered._homog_region_modes`) -- all
 uniform regions share the SAME eigenvectors, so a uniform<->uniform interface is

@@ -17,7 +17,7 @@ Legend: ✅ shipped · 🔄 in flight · ⬜ planned · ❌ open/known-hard ·
 | **1-D slanted** (normal inc.) | ✅ `pmm_efficiency_1d_slanted` | 🔄 (= diagonal case of below) | 🔄 `wiiihr0hl` | 🔄 `wiiihr0hl` |
 | **1-D oblique + slant** | ❌ cross-term unresolved | ❌ | ❌ | ❌ |
 | **2-D vertical** (rect pillars) | ✅ `pmm_efficiency_2d` (FMM-floored) + ✅ `pmm_efficiency_2d_staggered` (no-floor) | ✅ (via `eps_cell` grid; staggered) | ✅ `pmm_jones_2d` (FMM-floored, incl. out-of-plane) + ✅ `pmm_jones_2d_staggered` (no-floor, FULL (3,3) incl. out-of-plane) | ✅ (via the `eps_cell` tensor grid, both engines) |
-| **2-D slanted** | ⬜ planned (moderate) | ⬜ | ⬜ | ⬜ |
+| **2-D slanted** | ✅ `PMM2DStackHybrid(slant=)` (FMM-floored) + ✅ `pmm_jones_2d_staggered(slant=)` / `PMM2DStackPure.add_layer(slant=)` (no-floor) | ✅ (via the `eps_cell` grid, both engines) | ✅ hybrid (IN-PLANE tensors only) + ✅ staggered (FULL (3,3) incl. out-of-plane) | ✅ (via the `eps_cell` tensor grid) |
 | **2-D curved** (cylinder/ellipse) | ⬜ planned (hard) | ⬜ | ⬜ | ⬜ |
 
 Plus: `PMMStack` (multilayer 1-D), `grating_convergence_class` /
@@ -137,11 +137,52 @@ out-of-plane `μ`, `μ` with an out-of-plane `ε`, and magnetic HALF-SPACES.
 *(2-D multi-region is already supported via the `eps_cell` grid — only needs a
 multi-region test.)*
 
-### Phase D — 2-D slant — **the speed-win regime**
-Affine coordinate shear (Granet Eq.38) → constant metric → constant anisotropic
-tensor. Lifts the 1-D slant idea to 2-D; staircase-avoidance speed win
-(Edee-Granet 2024 ~3.4× vs FMM). **Reuses Phase C's tensor operator.**
-**Difficulty:** moderate. **This is the user's tapered-device regime.**
+### Phase D — 2-D slant — ✅ **SHIPPED** (hybrid 2026-08-16, PURE 2026-09-10)
+Affine coordinate shear → constant metric → constant anisotropic tensor, on
+BOTH 2-D engines: `PMM2DStackHybrid.add_layer(slant=)` (Fourier, FMM-floored,
+in-plane tensors) and — since 2026-09-10 — the no-floor staggered path,
+`pmm_jones_2d_staggered(slant=)` / `PMM2DStackPure.add_layer(slant=)`, which
+additionally covers slant × OUT-OF-PLANE anisotropy (the hybrid raises on that
+combination).
+
+The pure route is the **COVARIANT sheared frame** (Granet 2017 Eq. 5 /
+Edee-Granet 2024 Eq. 15), *not* the lab-Cartesian convection the 1-D path
+carries: in the staggered basis the covariant components have exactly the
+vertical continuity structure in the frame (`E_1` jumps across `u = const`;
+`E_2` and `t·E_t + E_z` are continuous), so the shipped de Rham placement is
+conformal for them at any slant, while the Cartesian form would need
+`⟨B|d/dx|B⟩` — the derivative of the DISCONTINUOUS set, whose element-wise
+Galerkin form silently drops the jump deltas. With `det J = 1` the whole shear
+is a **pointwise congruence** `ε → A⁻¹ ε A⁻ᵀ` plus **six Kronecker blocks** on
+the first-order out-of-plane generator; `_region_modes_oop`, the flux split,
+the cascade and the far field are untouched, and `slant = 0` is BIT-IDENTICAL.
+One new piece of bookkeeping: the frame-anchor phase `exp(-i αₘ·t d)` on the
+TRANSMITTED amplitudes.
+
+**Cost, measured:** the slant is FREE against the vertical OUT-OF-PLANE region
+solve it has to use anyway (0.87×–1.07×); 1.9×–3.0× against the `2q²` in-plane
+pencil is the shipped price of the first-order generator, not something the
+slant adds.
+
+**Correction to the figure this section used to quote:** *Edee-Granet 2024 "~3.4×
+vs FMM" is an **S-matrix-SIZE ratio at matched accuracy, not a wall clock**.*
+JOSA A 41:1803 §4.B: on a 2-D slanted grating, with `N_b = 55` layers the FMM
+reaches an S-matrix size of 6724 while the PMM levels off around 2000
+(6724/2000 = 3.36). The same section states the honest cost structure: the
+PMM's slanted eigenproblem is `4(2N)(2N)`, *twice as large as the FMM's in each
+layer*, but it replaces `N_b` of them. Measured here on a steep pillar, the
+staircase's ladder is capped by the union grid (a per-slice lateral step cannot
+go below one grid cell, and refining the grid multiplies the region eig by
+`(Nx(M−1))⁶`), so the practical statement is stronger than "one solve replaces
+N slices": at the slice counts a given union grid admits there may be no rung
+that reaches the slanted answer at all.
+
+Build docs: `docs/audits/BUILD_PMM2D_SLANT_METRIC_2026_08_16.md` (hybrid),
+`docs/audits/EXPERIMENT_PMM2D_STAGGERED_SLANT_2026_09_10.md` +
+`docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md` (pure).
+**Still open:** mixed slants between PATTERNED layers, `retain_internal` under
+a slanted layer, and TAPERS (a shear is not a dilation — still a z-staircase).
+**Phase E (2-D curved) is unchanged by this work.**
 
 ### Phase E — 2-D curved (cylinder/ellipse) — **hard**
 Granet's transfinite curved-quad mapping (Sec.3A): geometric construction of
@@ -174,7 +215,9 @@ Bugs / physics / adversarial sweep (explicitly requested earlier; long-pending).
   So the no-floor 2-D PMM is **RCWA parity per DOF on vertical pillars, not a
   speed win** — its win there is accuracy *quality* (no floor, exact sidewalls,
   position invariance, pinning the value RCWA converges toward). The genuine
-  *speed* win lives in slant/curved (Phases D/E).
+  *speed* win lives in slant/curved (Phases D/E) — and on the slant it is now
+  measured rather than projected: see Phase D on the S-matrix-size reading of
+  Edee-Granet's "3.4×" and on what the union grid does to a staircase ladder.
 - **Out-of-plane 2-D cells with a RE-ENTRANT corner have no converged
   reference.** Full out-of-plane anisotropy SHIPPED 2026-09-09 (Phase C above)
   and is machine-exact on uniform, straight-walled and convex cells. On a
@@ -230,7 +273,8 @@ That's why Phase C is the linchpin and is sequenced before D/E.
 |---|---|---|
 | Vertical / axis-aligned, many-layer stacks, dispersion sweeps, inverse-design (autodiff) | **RCWA** (`rcwa_efficiency_2d` / `RCWAStack`) | Mature, FFT-fast, JAX-differentiable; parity-or-better on vertical |
 | 2-D vertical, need exact energy / no-floor / position-invariance / pinned value on hard Gibbs cases | **`pmm_efficiency_2d_staggered`** | No Fourier floor; accuracy ceiling (to be quantified by Phase B) |
-| 1-D / 2-D **slanted or tapered** sidewalls | **PMM slant** (1-D shipped; 2-D = Phase D) | Staircase avoidance → genuine speed win; the device regime |
+| 1-D / 2-D **slanted** sidewalls | **PMM slant** (1-D shipped; 2-D shipped on BOTH engines, Phase D) | Staircase avoidance → genuine speed win; the device regime |
+| 1-D / 2-D **tapered** sidewalls | still a z-staircase (`PMM2DStackHybrid.add_tapered_pillar`) | a shear is not a dilation; no slant absorbs a taper |
 | Anisotropic / tunable-LC / Jones | **`pmm_jones_1d`** (1-D); **`pmm_jones_2d_staggered`** (2-D, FULL (3,3) incl. out-of-plane, no floor) or **`pmm_jones_2d`** (2-D, FMM-floored) | Full tensor → Jones |
 | Curved (cylinder/ellipse) pillars, spectral accuracy | **PMM curved** (Phase E) | Transfinite map removes the Gibbs floor |
 

@@ -134,9 +134,9 @@ than ~1e-4 on ``R`` per order.
 Scope / limitations
 -------------------
 * **Axis-aligned RECTANGULAR pillars only** -- the walls must coincide with the
-  segment boundaries of the ``(Nx, Ny)`` ``eps_cell`` grid (Eq. 26).  Curved /
-  slanted boundaries need Granet's transfinite curved-quad mapping (not
-  implemented).
+  segment boundaries of the ``(Nx, Ny)`` ``eps_cell`` grid (Eq. 26).  CURVED
+  boundaries need Granet's transfinite curved-quad mapping (not implemented).
+  A constant TILT of the walls IS supported: see SLANT below.
 * **Corner-capped.**  A right-angle dielectric pillar has field singularities at
   its four corners, so the bound-mode (and hence efficiency) convergence is
   ALGEBRAIC, not spectral -- monotone with NO floor, but at-best RCWA-parity
@@ -154,8 +154,54 @@ Scope / limitations
   while ``Meps33`` carries e33 alone), so it takes a full region eig like a
   patterned cell -- the shared geometric eig :func:`_homog_geom_cache` is
   scalar-only and raises on a tensor assembly.
-* ANISOTROPIC HALF-SPACES, SLANTED out-of-plane layers and the JAX twin stay
-  out of scope.
+* ANISOTROPIC HALF-SPACES and the JAX twin stay out of scope.
+
+SLANT (roadmap Phase D, 2026-09-10)
+-----------------------------------
+``slant=(t_x, t_y)`` on :func:`pmm_jones_2d_staggered` and on
+:meth:`~lumenairy.elements.pmm.PMM2DStackPure.add_layer` makes a layer ONE
+EXACT SLANTED region instead of a z-staircase: the whole cross-section
+translates laterally by ``t * depth`` from the layer's TOP face to its bottom,
+``eps_cell`` being the cross-section at the top.  ``t`` is a TANGENT
+(``t_x = tan(wall_tilt_x)``) -- the SAME public convention as
+:meth:`~lumenairy.elements.pmm.PMM2DStackHybrid.add_layer` and the 1-D
+``slant_angle`` entries, so a layer moves between the engines unchanged --
+and ``0`` / ``None`` is BIT-IDENTICAL to the pre-slant library.
+
+It is EXACT at any slant magnitude and costs ONE eigensolve for the whole
+layer.  In the sheared frame (``u = x - t_x w``, ``v = y - t_y w``, ``w = z``)
+``det J = 1``, so ``sqrt(g) = 1``, ``mu^33 = 1`` and ``eps^33 = eps_zz``; the
+shear is then exactly a POINTWISE congruence ``eps -> A^-1 eps A^-T`` on the
+cell tensor plus SIX extra Galerkin blocks on the first-order out-of-plane
+generator (:meth:`Granet2DTransverseE._assemble_oop`).  The COVARIANT field
+components are used, not the lab-Cartesian ones with a chain-rule convection:
+across a slanted wall the continuous combination is ``t . E_t + E_z``, not
+``E_z``, so the covariant components have exactly the vertical continuity
+structure in the frame and the shipped staggered de Rham placement is conformal
+for them at any slant.  A slanted cell therefore always runs the ``4 q^2``
+generator and the generalized cascade -- its covariant tensor has out-of-plane
+entries even when the cell is scalar -- and slant x ANISOTROPY (including
+out-of-plane) is the same line of code, a combination no other 2-D engine in
+this suite covers.
+
+The one piece of bookkeeping a shear adds is the FRAME-ANCHOR PHASE: the frame
+is anchored at each slanted layer's TOP, so the transmitted amplitudes carry
+one unimodular phase per order, ``exp(-i alpha_m . t d)``.  R, T and the
+REFLECTION Jones are exact without it.
+
+A SHEAR IS NOT A TAPER.  A shear is a tilted axis with a CONSTANT
+cross-section; no shear absorbs a dilation (a taper's ``sqrt(g)`` is
+z-dependent, which brings back a dilation generator, a non-normal pencil with
+no valid mode selector and a distorted far field).  A shrinking cross-section
+still needs a z-staircase.
+
+Out of scope for the slant, all raising: MIXED slants between PATTERNED layers,
+a mix of vertical and slanted layers ABOVE a pattern, ``mu`` together with a
+slant, ``retain_internal`` on a slanted stack, and
+:func:`pmm_efficiency_2d_staggered` (single-polarization efficiencies are not
+well-posed for a cell that is out-of-plane in the frame).  Derivation and every
+measured number: ``docs/audits/EXPERIMENT_PMM2D_STAGGERED_SLANT_2026_09_10.md``
+and ``docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md``.
 
 Conventions match the rest of the library: PUBLIC ``exp(-i w t)`` (``n = n + i
 kappa``, ``Im eps > 0`` for loss), forward ``exp(+i kz z)``, ``Im(kz) >= 0``.
