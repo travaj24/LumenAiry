@@ -1,0 +1,65 @@
+{
+ "_stamp": {
+  "arm": "pre",
+  "jax_copies": {
+   "_jax_stack2d": {
+    "band": false,
+    "conj": false,
+    "exact_pin": false
+   },
+   "_jax_twod": {
+    "band": false,
+    "conj": false,
+    "exact_pin": false
+   },
+   "_jax_twod_jones": {
+    "band": false,
+    "conj": false,
+    "exact_pin": false
+   }
+  },
+  "lumenairy_file": "C:\\tmp\\lum_bc2\\lumenairy\\__init__.py",
+  "node": "Tesla_Ryzen",
+  "numpy": "2.4.4",
+  "platform": "Windows",
+  "pmm_cut_band_rel": null,
+  "pmm_twod_has_conj": true,
+  "pmm_twod_has_exact_pin": true,
+  "python": "3.14.6",
+  "rcwa_cut_band_rel": 1e-08,
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "by_threshold": {
+  "noise_1e-06": {
+   "gap_decades": 0.19569360744709327,
+   "n": 42310,
+   "n_noise": 688,
+   "n_signal": 41622,
+   "noise_max": 1.5508913898817718e-08,
+   "signal_min": 2.433744551993614e-08
+  },
+  "noise_1e-12": {
+   "gap_decades": 3.092698924658251,
+   "n": 42310,
+   "n_noise": 666,
+   "n_signal": 41644,
+   "noise_max": 1.2159901999460068e-15,
+   "signal_min": 1.5053205812449333e-12
+  }
+ },
+ "n_arrays": 116,
+ "openblas_num_threads": "1",
+ "summary": {
+  "gap_decades": 3.092698924658251,
+  "n": 42310,
+  "n_noise": 666,
+  "n_signal": 41644,
+  "noise_max": 1.2159901999460068e-15,
+  "signal_min": 1.5053205812449333e-12
+ },
+ "worst_own_ratio_in_band": 3.5588330944867436e-09
+}

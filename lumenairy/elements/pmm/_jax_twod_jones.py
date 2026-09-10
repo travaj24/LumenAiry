@@ -100,6 +100,11 @@ def _pmm_jones_2d_cell_jax(period_x, period_y, eps_tensor_cell, region_layout,
         _modes_to_M,
         _propagation_smatrix_general,
         _redheffer_star,
+        # THE one modal branch selector, traced with ``jnp`` at its call site
+        # (round 2, 2026-09-11).  This module carried a private copy with the
+        # exact ``r.real == 0`` pin round 1 removed from the shared body -- see
+        # that body's docstring for what the copies cost.
+        _sqrt_decay,
     )
     _require_jax_x64("pmm_jones_2d")
     cj = jnp.complex128
@@ -188,11 +193,6 @@ def _pmm_jones_2d_cell_jax(period_x, period_y, eps_tensor_cell, region_layout,
         EZX=EZX, EZY=EZY, EXZ=EXZ, EYZ=EYZ)
 
     # ---- isotropic half-space modes (analytic Rayleigh, W = I) --------------
-    def _sqrt_decay(x):
-        r = jnp.sqrt(x.astype(cj))
-        on_cut = r.real == 0
-        return jnp.where(on_cut & (r.imag < 0), -r, r)
-
     def _inv_lam(lam):
         safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
         return 1.0 / safe
@@ -205,7 +205,7 @@ def _pmm_jones_2d_cell_jax(period_x, period_y, eps_tensor_cell, region_layout,
         Kx = jnp.diag(kxv.astype(cj))
         Ky = jnp.diag(kyv.astype(cj))
         kz = _kz_fwd(eps, kxv, kyv)
-        lam = _sqrt_decay(-jnp.concatenate([kz, kz]) ** 2)
+        lam = _sqrt_decay(-jnp.concatenate([kz, kz]) ** 2, jnp)
         eps_I = eps * jnp.eye(Nf, dtype=cj)
         Q = jnp.block([[Kx @ Ky, eps_I - Kx @ Kx],
                        [Ky @ Ky - eps_I, -Ky @ Kx]])

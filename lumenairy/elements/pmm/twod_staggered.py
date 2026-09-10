@@ -2363,12 +2363,6 @@ class Granet2DTransverseE:
 # =========================================================================== #
 # decay-branch helpers (public exp(-i w t))
 # =========================================================================== #
-def _sqrt_decay(x):
-    r = np.sqrt(np.asarray(x, dtype=_C))
-    on_cut = r.real == 0
-    return np.where(on_cut & (r.imag < 0), -r, r)
-
-
 def _inv_lam(lam):
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
     return 1.0 / safe
@@ -2580,11 +2574,13 @@ def _region_modes(solver: Granet2DTransverseE):
     # separately on ``solver.Ggram_blocks`` (see the H recovery below).
     G = -solver.Rmat
     g2, W = sla.eig(L, G)
-    # q = kz/k0 = gamma/k0 = sqrt(g2).  FORWARD branch chosen ROBUSTLY (the
-    # naive _sqrt_decay flips degenerate real-g2 pairs inconsistently on QZ
-    # noise -> the H-partner sign flips and the S-matrix loses passivity).  We
-    # pick Im(q) >= 0 (evanescent decay) with a noise tolerance, and for the
+    # q = kz/k0 = gamma/k0 = sqrt(g2).  FORWARD branch chosen ROBUSTLY: an
+    # EXACT sign test on sqrt(g2) flips degenerate real-g2 pairs inconsistently
+    # on QZ noise -> the H-partner sign flips and the S-matrix loses passivity.
+    # We pick Im(q) >= 0 (evanescent decay) with a noise tolerance, and for the
     # (near-)real propagating modes Re(q) > 0 (outgoing).  lam = -i q forward.
+    # (This module also carried a private, DEAD copy of ``_sqrt_decay`` with
+    # that exact pin until round 2 deleted it, 2026-09-11.)
     q = np.sqrt(np.asarray(g2, dtype=_C))
     q = _forward_branch_flip(q)       # shared scalar-vertical selector (S1-8)
     lam = -1j * q                     # forward propagator exp(-lam k0 z) decays

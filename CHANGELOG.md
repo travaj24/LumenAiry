@@ -60,14 +60,24 @@ both builds at every thread count (WSL reads `2.000000000000000` exactly), and
 the two lossy census fixtures are BIT-IDENTICAL to the pre-fix arm -- the change
 touches nothing where the sign of `Im(r)` is physics.  A lossless solve away from
 the coincidence moves by 1.04e-17 .. 5.54e-15; one on the coincidence moves by
-up to 1.81e-02, which is the fix.  `_sqrt_decay` is shared, so `rcwa/oned.py`,
-`rcwa/stack.py`, `pmm/twod.py`, the three PMM JAX twins and `elements/berreman.py`
-all get the pinned root -- though whether that CHANGES an answer needs a second
-condition: a LAYER MODE that numerically equals a REGION MODE, which an equal
-material index only makes possible.  The 1-D binary grating the warning text
-names (`n_groove = n_substrate = 1.5`, ridge 2.1, duty 0.5) has one mis-rooted
-TE mode pre-fix but no region mode within 0.165 of any layer mode, and its
-closure defect reads 8.2e-15 before and 8.1e-15 after on both builds.
+up to 1.81e-02, which is the fix.
+
+**Blast radius, corrected 2026-09-11 (round 2).**  This entry originally said
+`_sqrt_decay` "is shared", so `rcwa/oned.py`, `rcwa/stack.py`, `pmm/twod.py`,
+the three PMM JAX twins and `elements/berreman.py` "all get the pinned root".
+For the PMM half that was NOT true: five modules under `lumenairy/elements/pmm/`
+carried their OWN `_sqrt_decay` with the exact `Re(r) == 0` pin, and round 1 did
+not reach any of them.  Round 2 does; see the paragraph below.  What round 1
+DID reach is the RCWA solvers and Berreman -- and of those, `berreman_jones_1d`
+is a no-op surface (it uses the function only for homogeneous REGION modes built
+in exact arithmetic, where the OLD pin already fired; all four Berreman surfaces
+are bit-identical between the arms).  Whether a reached path CHANGES an answer
+needs a second condition: a LAYER MODE that numerically equals a mode of a
+medium built in exact arithmetic, which an equal material index only makes
+possible.  The 1-D binary grating the warning text names
+(`n_groove = n_substrate = 1.5`, ridge 2.1, duty 0.5) has one mis-rooted TE mode
+pre-fix but no region mode within 0.165 of any layer mode, and its closure
+defect reads 8.2e-15 before and 8.1e-15 after on both builds.
 
 Evidence: `docs/audits/FIX_RCWA_EVEN_SECTOR_WSL_2026_09_11.md`; probes (both
 builds, both arms) in `validation/probe_fix_rcwa_even_sector_wsl/`; DECISION test
@@ -92,6 +102,119 @@ test is RESTATED to assert the well-conditioned state and a closure bar of
 1e-10 (6.7 decades above the measurement, 8.3 below the old symptom); whether
 the equilibrated instrument retains any motivating population is under
 verification.
+
+
+**ROUND 2 (2026-09-11): the five PMM copies, and a WRONG answer they returned.**
+`_sqrt_decay` had SIX bodies.  Round 1 repaired one; five more --
+`pmm/twod.py`, `pmm/twod_staggered.py` (dead code), `pmm/_jax_twod.py`,
+`pmm/_jax_stack2d.py`, `pmm/_jax_twod_jones.py` -- kept the exact `Re(r) == 0`
+pin and the `-r` flip.  The independent verification found them (defect D1) and
+measured 5-9 propagating modes per `pmm_efficiency_2d_cell` solve coming back on
+the INCOMING root, but could not decide whether that made an answer WRONG rather
+than merely build-dependent: at ordinary contrasts the hybrid PMM's own Fourier
+truncation error (~1e-3) masks the effect, and nine fixtures moved by at most
+8.660e-15.
+
+It does, and the coincidence partner is a LAYER.  A three-layer
+`PMM2DStackHybrid` -- uniform `eps = 2.25` spacer / weakly modulated
+`eps = 2.25` cell / uniform spacer, `n_substrate = 1.63` so NOTHING coincides
+with a half-space -- returned per-order efficiencies **2.0035e-03** away from an
+independent `RCWAStack` solve of the same device, at a lossless closure defect of
+**-1.665e-04**, where the same stack without the spacers reads 1.0e-14.  A
+uniform layer's modes come from the same analytic Rayleigh helper a half-space
+region's do, in EXACT arithmetic, so a mis-rooted mode of the neighbouring
+STRUCTURED layer is that uniform layer's own BACKWARD mode.  Sampling the SAME
+device on a 32-pixel grid instead of a 6-pixel one makes it three decades
+louder: the pre-fix arm returns **`sum R + T` = 109.9 on a passive lossless
+stack** (Windows, 4 threads), 5.81 at one thread and 35.7 at eight, with
+per-order efficiencies up to **57.6** away from the repaired answer -- while the
+same stack WITHOUT the spacers reads 8.8539e-10 on every arm, build and thread
+count.  At a relative 1e-6 spacer detune -- the detune the library's own remedy
+text used to recommend -- it returns 2.000072107 SILENTLY, 9.3e-05 wrong per
+order.  WHICH truncation breaks is a per-build fact (Windows breaks `n_orders`
+3 and 4, WSL breaks 5 and 6), and the reading spans five decades with
+`OPENBLAS_NUM_THREADS` alone.  Post-fix every mount on both builds reads
+2.000000000, the closure envelope is `<= 8.9e-10` (the control mount's own
+Fourier truncation error), and the answer agrees with the independent method to
+**6.0e-15 per order**.
+
+The conditioning says the same thing build-independently, which is why it is the
+instrument: `cond(a + b)` at the PMM's own interface mode-match reads
+**1.959e+09 -> 1.453e+01** (Windows) and **2.915e+08 -> 2.760e+01** (WSL) on the
+spacer stack, 6.556e+08 -> 1.978e+01 on the substrate coincidence and
+1.173e+07 -> 5.094e+01 on the SUPERSTRATE one, against 9.9e+01 -> 2.0e+01 on the
+off-coincidence control.
+
+**What ships:** ONE definition.  `rcwa/_core._sqrt_decay` gained `xp` and
+`band` parameters whose defaults reproduce the round-1 body BIT FOR BIT (checked
+over 4,010 engineered values at six array sizes, `max |diff| = 0`), the five
+private copies were deleted, the NumPy modules import it and the three JAX twins
+call it with `jax.numpy` so the traced body is the same object the eager path
+runs.  A source-level DECISION test now pins that exactly one definition exists
+under `lumenairy/` and that no executable line tests a float's real or imaginary
+part against an exact zero -- the multi-copy shape that bred the six-copy
+factor-i defect (audit S1-8) cannot come back silently.
+
+**Scope, measured:** the PURE STAGGERED 2-D engine and the 1-D PMM never call
+this function at all (they select through `pmm/_core._forward_branch_flip`,
+already a relative band, and on the out-of-plane path through
+`_select_forward_flux`), so neither round of this campaign moved them -- 0 calls
+on every staggered surface of the census, `cond(a+b)` identical on both arms,
+and closure 5.1e-15 .. 1.2e-14 on the same coincidence that broke the hybrid.
+A SLANTED patterned layer is exempt too (it solves through the 4N first-order
+generator): `stack_slant_coinc` is bit-identical between the arms.  Every LOSSY surface is bit-identical between
+the arms (12 of 12, both builds).  `jax.grad` on an off-coincidence lossless
+cell is unchanged to all 13 recorded digits (`-1.851320700230e-02` before and
+after, on both builds) while its agreement with a central finite difference
+improves from 1.9e-08 to 8.2e-10; JAX-vs-NumPy parity on the coincident stack
+goes from 2.489e-05 to 3.331e-16.
+
+**The band's shape was re-decided by measurement, not kept by default.**  The
+band is relative to the ARRAY's largest root, so its verdict on one mode depends
+on the others -- the verification raised that as defect D4 and showed the noise
+side reaching 6.7172e-09 at a LAYER-CUTOFF mount, 1.5x under the `1e-8` bar
+(D3).  Round 2 measured the shipped ARRAY-MAX shape against a PER-MODE
+alternative (`|Re r| <= C * max(|r|, sqrt(eps_mach) * max|r|)`) on three
+populations and both builds: two-sided gaps **12.35 / 13.71 / 7.38 decades**
+(array-max) against **12.09 / 12.58 / 7.16** (per-mode) on the RCWA ordinary,
+hybrid-PMM and RCWA layer-cutoff populations.  ARRAY-MAX wins everywhere, and
+the cutoff corner -- where the two were supposed to separate -- separates them
+the other way: at a cutoff the mode's own magnitude has collapsed, so judging
+its real part against it is judging noise against noise, and the per-mode noise
+side reaches 6.8698e-08, already ABOVE the shipped bar.  The shape is kept and
+`_CUT_BAND_REL`'s stated margins are replaced by the measured table.
+
+**X-1 IS CLOSED.**  `tests/unit/test_m1_conditioning_guard.py` had pinned X-1 --
+one of the three unguarded solves the M1 campaign hardened -- as REPRODUCED AND
+STILL OPEN on the `THIN` 1-D family (period 10 um, ridge 1.55, groove 1.5,
+substrate AND superstrate 1.5, `n_orders` 6..30), where `n_orders = 21` TE
+returned `sum(R)` = 3.216567e-02 against a converged 2.0e-04 -- **152.6x wrong,
+agreed to every digit on both builds** -- and `n_orders = 19` TE returned
+`R + T = 1.018` on Windows while RAISING on WSL.  That geometry's groove index
+equals BOTH half-spaces', i.e. it is the coincidence on both sides at once, and
+the branch-cut fix closes it: the TE ladder goes from 7-8 raising cells and 14
+census-flagged cells to **0 and 0**, worst closure from 3.1956e-02 to
+**1.4e-15**, and `sum(R)` at `n_orders` 21 from 3.216567e-02 to **2.095174e-04**
+-- identical on both builds and at every thread count.  This is a user-visible
+correctness improvement on the DEFAULT `rcwa_efficiency_1d` path.  The two tests
+that pinned X-1 as open are restated as decisions about the closed state, with
+an ENGINEERED fail-before (the pre-round-1 body reinstalled in-process) that
+fires at every thread count on both builds instead of depending on which
+truncation a given BLAS reduction order happens to break; the file goes from
+22 passed / 5 skipped / 1 failed to **28 passed, 0 skipped**.
+
+The M1 equilibrated-residual instrument is KEPT and its justification re-dated:
+the population that chose it over the raw residual WAS this defect, and it is
+now empty, but a dormant guard that costs nothing is not a reason to delete
+library code -- no library code was removed in round 2.  `_check_energy`'s
+remedy text no longer recommends detuning by a relative 1e-6: measured on the
+uniform-spacer stack, a 1e-6 detune does NOT cure the layer-layer case
+(closure 8.1e-05) and only 1e-3 does, and the cause the advice addressed has
+been removed.
+
+Evidence: `docs/audits/FIX_BRANCH_CUT_ROUND2_2026_09_11.md`; probes and JSON
+from both builds in `validation/probe_fix_branch_cut_round2/`; DECISION tests in
+`tests/unit/test_fix_branch_cut_round2.py`.
 
 ### Fixed -- `PMMStack` REFUSES a near-coincident-wall SLIVER instead of returning a wrong answer (O-11)
 
