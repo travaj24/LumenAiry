@@ -1,0 +1,97 @@
+{
+ "_arm": {
+  "build": "wsl",
+  "tree": "prefix(48c8747)",
+  "tag": "wsl.prefix",
+  "lumenairy": "/mnt/c/tmp/lum_wslfix_pre/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "blas": {
+   "blas": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64"
+   },
+   "lapack": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64"
+   }
+  },
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ },
+ "reps": [
+  {
+   "rep": 0,
+   "dR": 0.016250719220965208,
+   "dJ": 0.04356730611523984,
+   "R_full_max": 0.03976446965327195,
+   "R_even_max": 0.056015188874237155,
+   "R_full_sum": 0.07943247946276746,
+   "R_even_sum": 0.08497917177364073,
+   "even_nonfinite": 0,
+   "full_nonfinite": 0,
+   "passes": false
+  },
+  {
+   "rep": 1,
+   "dR": 0.016250719220965208,
+   "dJ": 0.04356730611523984,
+   "R_full_max": 0.03976446965327195,
+   "R_even_max": 0.056015188874237155,
+   "R_full_sum": 0.07943247946276746,
+   "R_even_sum": 0.08497917177364073,
+   "even_nonfinite": 0,
+   "full_nonfinite": 0,
+   "passes": false
+  },
+  {
+   "rep": 2,
+   "dR": 0.016250719220965208,
+   "dJ": 0.04356730611523984,
+   "R_full_max": 0.03976446965327195,
+   "R_even_max": 0.056015188874237155,
+   "R_full_sum": 0.07943247946276746,
+   "R_even_sum": 0.08497917177364073,
+   "even_nonfinite": 0,
+   "full_nonfinite": 0,
+   "passes": false
+  },
+  {
+   "rep": 3,
+   "dR": 0.016250719220965208,
+   "dJ": 0.04356730611523984,
+   "R_full_max": 0.03976446965327195,
+   "R_even_max": 0.056015188874237155,
+   "R_full_sum": 0.07943247946276746,
+   "R_even_sum": 0.08497917177364073,
+   "even_nonfinite": 0,
+   "full_nonfinite": 0,
+   "passes": false
+  },
+  {
+   "rep": 4,
+   "dR": 0.016250719220965208,
+   "dJ": 0.04356730611523984,
+   "R_full_max": 0.03976446965327195,
+   "R_even_max": 0.056015188874237155,
+   "R_full_sum": 0.07943247946276746,
+   "R_even_sum": 0.08497917177364073,
+   "even_nonfinite": 0,
+   "full_nonfinite": 0,
+   "passes": false
+  }
+ ],
+ "deterministic": true,
+ "bar": 1e-08,
+ "verdict": "FAIL"
+}
