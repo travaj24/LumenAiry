@@ -255,15 +255,33 @@ def test_apply_tolerates_an_empty_or_missing_snapshot():
     _multi_apply_worker_state({})
 
 
-def test_ram_budget_is_divided_among_workers_not_copied():
+def test_ram_budget_is_divided_among_workers_not_copied(monkeypatch):
     # get_ram_budget() falls back to GLOBAL free memory and feeds both the
     # readout's fine-grid sizing and the parallel_amp gate, so handing each
     # worker the whole-box figure is K-fold oversubscription.
+    #
+    # ENGINEERED STATE (TESTING_STANDARDS restatement 3; 2026-09-11).  The
+    # capture reads ``get_ram_budget()`` LAZILY on every call, so two calls
+    # sample the box's free memory at two moments; on the 5.44.0 release
+    # matrix two runners read 13046452224 then a figure a few MB larger and
+    # the old ``four <= one // 4 + 1`` reading-vs-reading bar failed on
+    # py3.11 and py3.12 shards while every library path was unchanged.  The
+    # claim is about the DIVISION, so pin the reading and assert exactly.
+    import lumenairy.memory as _mem
+    fixed = 13046452224                     # a measured runner figure
+    monkeypatch.setattr(_mem, 'get_ram_budget', lambda: fixed)
     one = _multi_capture_worker_state(1)['ram_budget']
     four = _multi_capture_worker_state(4)['ram_budget']
-    assert one is not None and four is not None
-    assert four <= one // 4 + 1, \
-        f"worker budget not divided: {one} -> {four} at 4 workers"
+    assert one == fixed, one
+    assert four == fixed // 4,         f"worker budget not divided: {one} -> {four} at 4 workers"
+
+
+def test_ram_budget_capture_reads_the_live_budget_when_unpinned():
+    # The wiring claim, kept separate from the division claim: with nothing
+    # pinned the capture must still produce a positive live figure (None is
+    # the documented degraded fallback for a trimmed install only).
+    live = _multi_capture_worker_state(1)['ram_budget']
+    assert live is None or live > 0
 
 
 def test_ram_budget_division_is_safe_at_degenerate_worker_counts():
