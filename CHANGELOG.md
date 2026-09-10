@@ -426,7 +426,11 @@ banded field bit-identical in the first place.
   this size; the 7/4 evaluation the CHANGELOG named cost 0.84 s of it.  The
   two runs sit in different box-load regimes -- the UNCHANGED whole-grid arm
   reads 24.747 s and 20.179 s across them -- so the pixel count and the ratio
-  are the comparable quantities, not the seconds.
+  are the comparable quantities, not the seconds.  On the un-instrumented
+  best-of-3 wall clock, which is what a caller sees, the banded ray-density
+  route reads **1.285 -> 1.110** of the whole-grid call at N=4096 / sub=32 and
+  **1.130 -> 1.023** at N=2048 / sub=16; the SCREEN branch, which this fix
+  does not touch, stays in its 0.97x-1.08x band.
 * **Byte-identical, checked against the verification's own fixtures**:
   `validation/probe_verify_lens_5440/v2_banded_claim.py` re-run in all four
   regimes (plain, `--forced`, `--fold`, `--medianbite`) gives **864

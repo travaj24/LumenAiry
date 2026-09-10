@@ -1,0 +1,23 @@
+{
+ "version": "5.44.0",
+ "arms": {
+  "carrier": {
+   "whole_hash": "f7680b0c2ef005db9605beb2",
+   "band_hash": "f7680b0c2ef005db9605beb2",
+   "whole_engaged": true,
+   "band_engaged": true,
+   "band_gate_open": true,
+   "rel_band_vs_whole": 0.0,
+   "bit_equal": true
+  },
+  "carrier_none": {
+   "whole_hash": "0caa26d97c50bad02e361743",
+   "band_hash": "0caa26d97c50bad02e361743",
+   "whole_engaged": true,
+   "band_engaged": true,
+   "band_gate_open": true,
+   "rel_band_vs_whole": 0.0,
+   "bit_equal": true
+  }
+ }
+}

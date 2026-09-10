@@ -459,8 +459,13 @@ changes:
 
 | verification probe | what it hashes | result |
 |---|---|---|
+| `v1_without_identity` | 14 fixtures x `sag_chunk_rows` {0, None} -- the NON-banded traced calls, on field hash, `sum |E|^2`, `max |E|`, `engaged`, `gate_open`, `refused`, `n_out_of_domain` and the warning list | 28 cases, **224 fields compared, 0 mismatches** |
 | `v2_banded_claim` (all four regimes) | the banded field hash + `sum |E|^2`, `engaged`, `gate_open`, `n_out_of_domain` and the full warning list at band heights 0 / 1 / 3 / 7 / 32 / 128 / N, on 9 fixtures x 2 inversion routes | **864 comparisons, 0 mismatches**, every band hash equal to the verification's record |
 | `v14_c128_chain_identity` | 9 complex128 carrier-chain / readout / crop fixtures + every per-stage `dx`, `R` | **identical**, full JSON diff = wall-clock only |
+| `v16_phasor_band_invariance` | all four phase helpers at 16 / 61 / 1024 rows per band against a whole-grid `np.exp(float64).astype(complex64)` | **identical JSON** to the verification's record |
+| `v5_c64_ladder` | the complex64 phasor error and its float32-argument control over 2.0e+02 .. 2.0e+05 rad, all four helpers, 7 rungs | **identical JSON** to the verification's record |
+| `v3_determinism` (D14 / D15) | one field hash per case at `OPENBLAS/OMP/MKL/NUMEXPR_NUM_THREADS` 1 / 2 / 4, each in its own subprocess, on 6 cases including the banded ray-density + evaluator route the D6 fix touches | identical at every thread count AND equal to the verification's record (`eecefe42276fe6b7b4c67d2a`, `6bd918bc340591460ca8c503`, `4da384eec1ee92020afb1efe`, `203aee7468521ed5bbee545d`) |
+| `v10_s10_route` | the CHANGELOG's named S10 fixture, banded vs whole-grid at the shipped default | `f7680b0c2ef005db9605beb2` (carrier) and `0caa26d97c50bad02e361743` (`carrier=None`), banded == whole-grid, rel 0.0000e+00 -- the verification's recorded values |
 | `v6_c64_chain` | the complex64 two-group chain's rel L2 / rel power, the six-leg ladder, the crop's double rounding | **identical to 16 digits**; the only change is the upcast list, 5 -> 0 |
 | `v7_c64_memory` | whole-chain peak and every complex128 phasor return by caller frame | complex128 arm identical (376.9 MiB, 10 returns); complex64 arm 5 -> 0 returns |
 | `v9_durability` | every constant the two new test files assert | identical on both builds except the +270-byte tracemalloc row above |
@@ -473,7 +478,42 @@ changes:
 
 ## 8. Tests, lint, durations
 
-<!-- TESTS -->
+### 8a. What changed in the tests
+
+| file | change |
+|---|---|
+| `tests/unit/test_mixed_precision_carrier_helpers.py` | +10 cases (D2), and the D4/D5 docstring / bar corrections |
+| `tests/unit/test_banded_ray_density_and_inverse_map.py` | +3 cases (D1) and +3 cases (D7) |
+| `tests/unit/test_niche_perf_round2_2026_08_10.py` | docstring only (D3) |
+
+No test was loosened.  Two bars were TIGHTENED (1e-4 -> 1e-6, D5); one new bar
+was added with a derivation and a two-build measurement (the D2 tracemalloc
+gap); the rest of the changes are recorded numbers and stated margins.
+
+### 8b. The run
+
+<!-- TESTS-RUN -->
+
+### 8c. Lint
+
+`ruff check lumenairy/ tests/` -> **All checks passed!** (`validation/` is
+`extend-exclude`d by `pyproject.toml`, as for every other probe directory.)
+
+### 8d. `.test_durations`
+
+pytest-split's own store, one quiet single-threaded run per changed file
+(`--store-durations --clean-durations --durations-path <scratch>/<file>.json`,
+`OMP/OPENBLAS/MKL/NUMEXPR_NUM_THREADS=1`), spliced line-based per
+CHORE_TEST_HYGIENE_2026_08_16 (d)/(e):
+
+```
+measured 35 node ids over 2 files
+retained 12552, removed 19, added 35 -> 12587 entries
+re-parsed 12587 entries; 12552 retained lines byte-identical
+```
+
+35 entries, 30.47 s in total; formatting unchanged (2-space indent, sorted
+keys, CRLF in the working tree / LF in the blob).
 
 ---
 
