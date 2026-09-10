@@ -47,7 +47,10 @@ from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
     pmm_jones_2d_staggered,
 )
 from lumenairy.elements.rcwa import rcwa_jones_1d  # noqa: E402
-from lumenairy.elements.rcwa._core import uniaxial_tensor  # noqa: E402
+from lumenairy.elements.rcwa._core import (  # noqa: E402
+    _grazing_safe_wavelength,
+    uniaxial_tensor,
+)
 
 # --------------------------------------------------------------------------- #
 # fixtures (grids <= (3,3), M <= 8 -- the test-cost rule)
@@ -1039,3 +1042,96 @@ def test_api_two_identical_magnetic_layers_share_one_eig(monkeypatch):
         warnings.simplefilter("ignore")
         st2.solve()
     assert len(calls) == 2, len(calls)
+
+
+# =========================================================================== #
+# G10 -- the WOOD-ANOMALY nudge list carries a MAGNETIC layer's OWN cut-offs
+#        (follow-up, VERIFY_PMM2D_STAGGERED_MAGNETIC_2026_09_10.md V7)
+# =========================================================================== #
+#: NORMAL incidence with ``px == py``, so ``kt^2(m, n) = (m^2 + n^2)(wl/px)^2``.
+#: ``wl = px sqrt(eps mu)`` puts the ``(+/-1, 0)`` and ``(0, +/-1)`` orders
+#: EXACTLY on the magnetic layer's own cut-off, while ``eps``, ``mu`` and both
+#: half-spaces are far from every ``kt^2`` -- so a permittivity-only list
+#: cannot see the coincidence and the fixture isolates the ``eps*mu`` rule.
+_WPX, _WEPS, _WMU = 0.50e-6, 4.0, 2.25
+_WL_CUT = _WPX * np.sqrt(_WEPS * _WMU)
+
+
+def _wood_stack(wl, *, mu=None, n_modes=5):
+    st = PMM2DStackPure(_WPX, _WPX, n_superstrate=1.0, n_substrate=1.5,
+                        n_modes=n_modes, n_orders=3)
+    cell = np.full((2, 2), _WEPS + 0j)
+    if mu is None:
+        st.add_layer(0.28e-6, eps_cell=cell)
+    else:
+        st.add_layer(0.28e-6, eps_cell=cell, mu=mu)
+    st.set_source(float(wl))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return st.solve(jones=True)[1:]
+
+
+def _wood_nudged_wl():
+    """The wavelength the ``eps*mu`` rule lands on, from the library's OWN
+    guard driven with an explicit list -- never a recorded constant."""
+    mo = np.arange(-3, 4)
+    return _grazing_safe_wavelength(
+        float(_WL_CUT), 0.0, 0.0, np.tile(mo, len(mo)), np.repeat(mo, len(mo)),
+        _WPX, _WPX, [1.0, 2.25, _WEPS * _WMU])
+
+
+def test_g10_the_fixture_is_on_the_eps_mu_cutoff_and_only_that_rule_sees_it():
+    """FAIL-BEFORE, as a decision about the RULES.
+
+    Both arms are the library's own ``_grazing_safe_wavelength`` called with
+    two explicit lists, so neither references pre-change code.  The coincidence
+    is exact in float64, and ``eps``, ``mu`` and the two half-spaces are each
+    O(1) away from every ``kt^2`` -- the ONLY thing on the cut-off is the
+    PRODUCT.
+    """
+    mo = np.arange(-3, 4)
+    mx, my = np.tile(mo, len(mo)), np.repeat(mo, len(mo))
+    assert (_WL_CUT / _WPX) ** 2 - _WEPS * _WMU == 0.0
+    kt2 = np.unique((mx ** 2 + my ** 2) * (_WL_CUT / _WPX) ** 2)
+    for lone in (1.0, 2.25, _WEPS, _WMU):
+        # 1e-9 is the guard's own trigger band; these sit 1.0-2.25 away
+        assert float(np.min(np.abs(lone - kt2))) > 0.9, lone
+
+    def nudge(lst):
+        return _grazing_safe_wavelength(float(_WL_CUT), 0.0, 0.0, mx, my,
+                                        _WPX, _WPX, list(lst))
+    assert nudge([1.0, 2.25]) == _WL_CUT
+    assert nudge([1.0, 2.25, _WEPS]) == _WL_CUT          # the eps-only rule
+    assert nudge([1.0, 2.25, _WEPS, _WMU]) == _WL_CUT    # eps and mu SEPARATE
+    assert nudge([1.0, 2.25, _WEPS * _WMU]) != _WL_CUT   # only the PRODUCT
+
+
+def test_g10_a_magnetic_layer_on_its_cutoff_is_nudged():
+    """The PUBLIC-surface proof that the guard fired and landed exactly where
+    the ``eps*mu`` rule says: the solve AT the cut-off is BIT-IDENTICAL to the
+    same solve at the nudged wavelength (which is itself off every cut-off, so
+    it is not nudged again).  MEASURED: max|dR| = 0.0 on R, T and the Jones.
+    """
+    a = _wood_stack(_WL_CUT, mu=_WMU)
+    b = _wood_stack(_wood_nudged_wl(), mu=_WMU)
+    for x, y in zip(a, b):
+        assert np.array_equal(x, y), float(np.max(np.abs(x - y)))
+
+
+def test_g10_the_same_layer_with_unit_mu_is_not_nudged():
+    """The OTHER side: with ``mu = 1`` the product IS the permittivity, which
+    is off every cut-off here, so the guard must NOT fire -- the two solves
+    must DIFFER.  And a ``mu = 1`` magnetic layer must still agree with the
+    NONMAGNETIC layer to re-summation only (both take the same, empty nudge).
+
+    MEASURED 2026-09-10: the two wavelengths differ by 3.9e-08 in R (bar 1e-10,
+    ~400x, and decades above the 4.4e-15 re-summation floor of the last
+    assertion), and mu = 1 vs nonmagnetic reads 4.4e-15 (bar 1e-12).
+    """
+    c = _wood_stack(_WL_CUT, mu=1.0)
+    d = _wood_stack(_wood_nudged_wl(), mu=1.0)
+    assert float(np.max(np.abs(c[0] - d[0]))) > 1e-10
+    e = _wood_stack(_WL_CUT)
+    for x, y in zip(c, e):
+        assert float(np.max(np.abs(x - y))) < 1e-12, float(
+            np.max(np.abs(x - y)))
