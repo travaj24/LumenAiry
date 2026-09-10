@@ -1,0 +1,73 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "build": "win",
+  "tag": "fix.win",
+  "lumenairy": "C:\\tmp\\lum_vhyb\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "oblique25": {
+  "n_modes4": {
+   "shipped": 0.04282317838827871,
+   "none": 1.0798948678224802,
+   "conj": 1.6227248949523583,
+   "best_global": 0.8258431131124792,
+   "best_global_phase": 0.8761664788450183,
+   "n_orders_compared": 49,
+   "jones_shipped": 0.00889681416504486,
+   "jones_none": 0.9191232991729275,
+   "jones_conj": 1.6359327343305186
+  },
+  "n_modes5": {
+   "shipped": 0.04308948976604115,
+   "none": 1.0796645948128043,
+   "conj": 1.6226508619374398,
+   "best_global": 0.8256870706290969,
+   "best_global_phase": 0.8758225168797694,
+   "n_orders_compared": 49,
+   "jones_shipped": 0.009180964424871058,
+   "jones_none": 0.9188406574669283,
+   "jones_conj": 1.6357157175882362
+  },
+  "hybrid_own_step_5_7": 0.02637214134355165,
+  "hybrid_own_step_7_9": 0.009549250984735918,
+  "hybrid_own_jones_step_5_7": 0.001321900483924231
+ },
+ "conical25_40": {
+  "n_modes4": {
+   "shipped": 0.03234579609006648,
+   "none": 0.9372956543576003,
+   "conj": 1.358838843640439,
+   "best_global": 0.7507595805535674,
+   "best_global_phase": 0.6697819379164153,
+   "n_orders_compared": 49,
+   "jones_shipped": 0.007646639990127988,
+   "jones_none": 0.715133865236138,
+   "jones_conj": 1.3409388074515756
+  },
+  "n_modes5": {
+   "shipped": 0.03247484154072273,
+   "none": 0.9370342329242162,
+   "conj": 1.3587455602966583,
+   "best_global": 0.7505943516042435,
+   "best_global_phase": 0.6694376212189957,
+   "n_orders_compared": 49,
+   "jones_shipped": 0.00788188832940517,
+   "jones_none": 0.7148759749430778,
+   "jones_conj": 1.3407079089011242
+  },
+  "hybrid_own_step_5_7": 0.02135037716379785,
+  "hybrid_own_step_7_9": 0.01015888889899752,
+  "hybrid_own_jones_step_5_7": 0.0018055121741480512
+ },
+ "seconds": 250.6
+}

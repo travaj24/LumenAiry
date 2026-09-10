@@ -1,0 +1,69 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "lumenairy": "C:\\tmp\\lum_vhyb\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "P0": [
+  0.5705267962349557,
+  0.8212789871766337
+ ],
+ "arg_P0": 0.9636491804207441,
+ "walk_um": 0.22499999999999998,
+ "alpha0": 0.42261826174069944,
+ "1d_transmission_surface": {
+  "auto": "NO per-order amplitudes retained",
+  "convection": "retained",
+  "covariant": "NO per-order amplitudes retained"
+ },
+ "1d_shear_vs_staircase": {
+  "ns6": {
+   "dJt_as_returned": 0.9295134952605436,
+   "dJt_x_P0": 0.008221221414749362,
+   "dJt_x_conj_P0": 1.645110384559532,
+   "dJr": 0.007607475884488351,
+   "dR": 0.000724943608085997,
+   "dT": 0.006017884596790507,
+   "staircase_own_step": null
+  },
+  "ns12": {
+   "dJt_as_returned": 0.9272947207082208,
+   "dJt_x_P0": 0.0020736937046703994,
+   "dJt_x_conj_P0": 1.6426132871235424,
+   "dJr": 0.0021403415711032437,
+   "dR": 0.0002923624386768301,
+   "dT": 0.0017202997337192882,
+   "staircase_own_step": 0.006532352958037741
+  },
+  "ns24": {
+   "dJt_as_returned": 0.9275435876498962,
+   "dJt_x_P0": 0.0013460607078688686,
+   "dJt_x_conj_P0": 1.642767581890847,
+   "dJr": 0.0011733443377336217,
+   "dR": 0.00012145535677666325,
+   "dT": 0.000872366378320083,
+   "staircase_own_step": 0.0019285588154046036
+  }
+ },
+ "2d_vs_1d_staircase": {
+  "dJt_shipped": 0.027546683481850503,
+  "dJt_none": 0.9071934357940729,
+  "dJt_conj": 1.63187385958542,
+  "dJr": null,
+  "hybrid_own_n_orders_step": 0.012655131133897025,
+  "P0_hybrid": [
+   0.5705267962349557,
+   0.8212789871766337
+  ]
+ },
+ "seconds": 737.3
+}

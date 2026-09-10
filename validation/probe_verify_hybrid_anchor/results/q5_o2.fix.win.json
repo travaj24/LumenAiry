@@ -1,0 +1,594 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "lumenairy": "C:\\tmp\\lum_vhyb\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "F1_eps1_px1p2": {
+  "grid": {
+   "normal|M3": {
+    "RT": 1.0344234053094552,
+    "outcome": "SOLVED",
+    "warn": true,
+    "warn0": "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r",
+    "exc": null
+   },
+   "normal|M5": {
+    "RT": 1.0016288094324528,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "normal|M7": {
+    "RT": 1.0059170241697415,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "normal|M9": {
+    "RT": 1.0023228700363565,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "normal|M11": {
+    "RT": 1.0049650017914478,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique25|M3": {
+    "RT": 1.0248313811773744,
+    "outcome": "SOLVED",
+    "warn": true,
+    "warn0": "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r",
+    "exc": null
+   },
+   "oblique25|M5": {
+    "RT": 1.0107887388214167,
+    "outcome": "SOLVED",
+    "warn": true,
+    "warn0": "PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r",
+    "exc": null
+   },
+   "oblique25|M7": {
+    "RT": 1.006562949120802,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique25|M9": {
+    "RT": 1.0024125919376565,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique25|M11": {
+    "RT": 1.0040875629402854,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "conical25_40|M3": {
+    "RT": 1.022025387223953,
+    "outcome": "SOLVED",
+    "warn": true,
+    "warn0": "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r",
+    "exc": null
+   },
+   "conical25_40|M5": {
+    "RT": 1.0079067833251902,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "conical25_40|M7": {
+    "RT": 1.0099182020255955,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "conical25_40|M9": {
+    "RT": 1.0040198870299788,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "conical25_40|M11": {
+    "RT": 1.0082314703757258,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique40|M3": {
+    "RT": 1.3543566394287008,
+    "outcome": "SOLVED",
+    "warn": true,
+    "warn0": "PMMStack.solve: energy not conserved (max R+T = 1.35 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r",
+    "exc": null
+   },
+   "oblique40|M5": {
+    "RT": 0.9995956873148725,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique40|M7": {
+    "RT": 1.0093940695539667,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique40|M9": {
+    "RT": 1.0018367499825167,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique40|M11": {
+    "RT": 1.0061515735462032,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   }
+  },
+  "alphas": {
+   "normal": {
+    "cutoff": 1.0,
+    "nearest": [
+     {
+      "m": -2,
+      "n": 0,
+      "alpha": 1.1333333333333333,
+      "gap": 0.1333333333333333
+     },
+     {
+      "m": 0,
+      "n": -2,
+      "alpha": 1.1333333333333333,
+      "gap": 0.1333333333333333
+     },
+     {
+      "m": 0,
+      "n": 2,
+      "alpha": 1.1333333333333333,
+      "gap": 0.1333333333333333
+     }
+    ]
+   },
+   "oblique25": {
+    "cutoff": 1.0,
+    "nearest": [
+     {
+      "m": 1,
+      "n": 0,
+      "alpha": 0.9892849284073661,
+      "gap": -0.010715071592633851
+     },
+     {
+      "m": -2,
+      "n": -1,
+      "alpha": 0.9089703098011693,
+      "gap": -0.09102969019883067
+     },
+     {
+      "m": -2,
+      "n": 1,
+      "alpha": 0.9089703098011693,
+      "gap": -0.09102969019883067
+     }
+    ]
+   },
+   "conical25_40": {
+    "cutoff": 1.0,
+    "nearest": [
+     {
+      "m": 1,
+      "n": -1,
+      "alpha": 0.9380108836775564,
+      "gap": -0.06198911632244364
+     },
+     {
+      "m": 1,
+      "n": 0,
+      "alpha": 0.9309283502847295,
+      "gap": -0.06907164971527047
+     },
+     {
+      "m": 0,
+      "n": -2,
+      "alpha": 0.9204901229488325,
+      "gap": -0.07950987705116752
+     }
+    ]
+   },
+   "oblique40": {
+    "cutoff": 1.0,
+    "nearest": [
+     {
+      "m": -3,
+      "n": 0,
+      "alpha": 1.0572123903134607,
+      "gap": 0.057212390313460704
+     },
+     {
+      "m": -1,
+      "n": -2,
+      "alpha": 1.1358868088021268,
+      "gap": 0.13588680880212678
+     },
+     {
+      "m": -1,
+      "n": 2,
+      "alpha": 1.1358868088021268,
+      "gap": 0.13588680880212678
+     }
+    ]
+   }
+  },
+  "blowups": {
+   "oblique40|M3": {
+    "RT": 1.3543566394287008,
+    "outcome": "SOLVED",
+    "warn": true,
+    "warn0": "PMMStack.solve: energy not conserved (max R+T = 1.35 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r",
+    "exc": null
+   }
+  }
+ },
+ "F2_lowcontrast_px1p05": {
+  "grid": {
+   "normal|M3": {
+    "RT": 1.0018552138106869,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "normal|M5": {
+    "RT": 1.0006981423462837,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "normal|M7": {
+    "RT": 1.0007640561153337,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "normal|M9": {
+    "RT": 0.9999303510695425,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "normal|M11": {
+    "RT": 1.0005218848441988,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique25|M3": {
+    "RT": 1.0302595742502056,
+    "outcome": "SOLVED",
+    "warn": true,
+    "warn0": "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r",
+    "exc": null
+   },
+   "oblique25|M5": {
+    "RT": 1.0009559130808676,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique25|M7": {
+    "RT": 1.0023769075075448,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique25|M9": {
+    "RT": 0.9999122620279638,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique25|M11": {
+    "RT": 1.0006969526488472,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "conical25_40|M3": {
+    "RT": 1.0191805342883848,
+    "outcome": "SOLVED",
+    "warn": true,
+    "warn0": "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r",
+    "exc": null
+   },
+   "conical25_40|M5": {
+    "RT": 0.9985147818241132,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "conical25_40|M7": {
+    "RT": 1.0010123286143209,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "conical25_40|M9": {
+    "RT": 0.9999701674397633,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "conical25_40|M11": {
+    "RT": 1.0001665200363345,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique40|M3": {
+    "RT": 1.0008614253172277,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique40|M5": {
+    "RT": 1.0014282541815103,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique40|M7": {
+    "RT": 1.0006086025037524,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique40|M9": {
+    "RT": 1.0000005514751211,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   },
+   "oblique40|M11": {
+    "RT": 1.000447819014911,
+    "outcome": "SOLVED",
+    "warn": false,
+    "warn0": null,
+    "exc": null
+   }
+  },
+  "alphas": {
+   "normal": {
+    "cutoff": 1.0,
+    "nearest": [
+     {
+      "m": -1,
+      "n": -1,
+      "alpha": 0.9158716403940045,
+      "gap": -0.08412835960599552
+     },
+     {
+      "m": -1,
+      "n": 1,
+      "alpha": 0.9158716403940045,
+      "gap": -0.08412835960599552
+     },
+     {
+      "m": 1,
+      "n": -1,
+      "alpha": 0.9158716403940045,
+      "gap": -0.08412835960599552
+     }
+    ]
+   },
+   "oblique25": {
+    "cutoff": 1.0,
+    "nearest": [
+     {
+      "m": 1,
+      "n": 0,
+      "alpha": 1.070237309359747,
+      "gap": 0.07023730935974704
+     },
+     {
+      "m": -2,
+      "n": -1,
+      "alpha": 1.0866810961142304,
+      "gap": 0.08668109611423036
+     },
+     {
+      "m": -2,
+      "n": 1,
+      "alpha": 1.0866810961142304,
+      "gap": 0.08668109611423036
+     }
+    ]
+   },
+   "conical25_40": {
+    "cutoff": 1.0,
+    "nearest": [
+     {
+      "m": 1,
+      "n": 0,
+      "alpha": 1.0086340606935542,
+      "gap": 0.008634060693554213
+     },
+     {
+      "m": -2,
+      "n": 0,
+      "alpha": 1.0087595519854409,
+      "gap": 0.008759551985440872
+     },
+     {
+      "m": -1,
+      "n": 1,
+      "alpha": 0.9746575511205654,
+      "gap": -0.025342448879434598
+     }
+    ]
+   },
+   "oblique40": {
+    "cutoff": 1.0,
+    "nearest": [
+     {
+      "m": -2,
+      "n": -1,
+      "alpha": 0.9192943309601466,
+      "gap": -0.08070566903985343
+     },
+     {
+      "m": -2,
+      "n": 1,
+      "alpha": 0.9192943309601466,
+      "gap": -0.08070566903985343
+     },
+     {
+      "m": 0,
+      "n": -1,
+      "alpha": 0.9124616934455588,
+      "gap": -0.08753830655444117
+     }
+    ]
+   }
+  },
+  "blowups": {}
+ },
+ "mechanism": {
+  "F1_eps1_px1p2": {
+   "worst_pair": "oblique40|M3",
+   "rows": {
+    "slant_over_film": {
+     "outcome": "SOLVED",
+     "RT": 1.3543566394287008,
+     "warnings": [
+      "PMMStack.solve: energy not conserved (max R+T = 1.35 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r"
+     ],
+     "probe": {
+      "n_interfaces": 3,
+      "max_cond_Mb": 17.32473409777492,
+      "max_cond_T22": 478.08201670051864,
+      "worst_lam_f_min_re": -0.47839408427262947,
+      "worst_lam_b_max_re": 0.48057256228735473,
+      "max_prop_factor": 9.209541313021258
+     }
+    },
+    "slant_only": {
+     "outcome": "SOLVED",
+     "RT": 1.024850670452696,
+     "warnings": [
+      "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r"
+     ],
+     "probe": {
+      "n_interfaces": 2,
+      "max_cond_Mb": 17.32473409777492,
+      "max_cond_T22": 399.0591384512172,
+      "worst_lam_f_min_re": -0.47839408427262947,
+      "worst_lam_b_max_re": 0.48057256228735473,
+      "max_prop_factor": 9.209541313021258
+     }
+    },
+    "vertical_over_film": {
+     "outcome": "SOLVED",
+     "RT": 1.2074624022199123,
+     "warnings": [
+      "PMMStack.solve: energy not conserved (max R+T = 1.21 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The r"
+     ],
+     "probe": {
+      "n_interfaces": 0,
+      "max_cond_Mb": null,
+      "max_cond_T22": null,
+      "worst_lam_f_min_re": null,
+      "worst_lam_b_max_re": null,
+      "max_prop_factor": null
+     }
+    },
+    "slant_over_film_M-2": {
+     "outcome": "SOLVED",
+     "RT": 1.0023504224329642,
+     "warnings": []
+    },
+    "slant_over_film_M+2": {
+     "outcome": "SOLVED",
+     "RT": 0.9995956873148725,
+     "warnings": []
+    },
+    "alphas": {
+     "cutoff": 1.0,
+     "nearest": [
+      {
+       "m": -3,
+       "n": 0,
+       "alpha": 1.0572123903134607,
+       "gap": 0.057212390313460704
+      },
+      {
+       "m": -1,
+       "n": -2,
+       "alpha": 1.1358868088021268,
+       "gap": 0.13588680880212678
+      },
+      {
+       "m": -1,
+       "n": 2,
+       "alpha": 1.1358868088021268,
+       "gap": 0.13588680880212678
+      }
+     ]
+    },
+    "pure_same_solid": {
+     "outcome": "SOLVED",
+     "RT": 0.9999999998773519,
+     "warnings": []
+    }
+   }
+  },
+  "F2_lowcontrast_px1p05": "no blow-up on this grid"
+ },
+ "seconds": 1080.1
+}

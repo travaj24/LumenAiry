@@ -1,0 +1,173 @@
+{
+ "_arm": {
+  "arm": "v5440",
+  "lumenairy": "C:\\tmp\\lum_v5440\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "jax_version": "0.11.0",
+ "x64": true,
+ "numpy_slanted_vs_vertical": {
+  "dR": 0.003461588359670243,
+  "dT": 0.06889039300605357,
+  "dJones": 0.01535100565467415
+ },
+ "routes": {
+  "traced_thickness": {
+   "outcome": "SOLVED_SILENTLY",
+   "vs_vertical": {
+    "dR": 1.0609568779074152e-14,
+    "dT": 1.099120794378905e-14,
+    "dJones": 4.647473677703974e-14
+   },
+   "vs_correct_slanted": {
+    "dR": 0.0034615883596596335,
+    "dT": 0.06889039300605061,
+    "dJones": 0.015351005654661062
+   },
+   "closure": 1.0146593453251487,
+   "warnings": []
+  },
+  "traced_wavelength": {
+   "outcome": "SOLVED_SILENTLY",
+   "vs_vertical": {
+    "dR": 1.0609568779074152e-14,
+    "dT": 1.099120794378905e-14,
+    "dJones": 4.647473677703974e-14
+   },
+   "vs_correct_slanted": {
+    "dR": 0.0034615883596596335,
+    "dT": 0.06889039300605061,
+    "dJones": 0.015351005654661062
+   },
+   "closure": 1.0146593453251487,
+   "warnings": []
+  },
+  "traced_theta": {
+   "outcome": "SOLVED_SILENTLY",
+   "vs_vertical": {
+    "dR": 1.0609568779074152e-14,
+    "dT": 1.099120794378905e-14,
+    "dJones": 4.647473677703974e-14
+   },
+   "vs_correct_slanted": {
+    "dR": 0.0034615883596596335,
+    "dT": 0.06889039300605061,
+    "dJones": 0.015351005654661062
+   },
+   "closure": 1.0146593453251487,
+   "warnings": []
+  },
+  "traced_phi": {
+   "outcome": "SOLVED_SILENTLY",
+   "vs_vertical": {
+    "dR": 1.0609568779074152e-14,
+    "dT": 1.099120794378905e-14,
+    "dJones": 4.647473677703974e-14
+   },
+   "vs_correct_slanted": {
+    "dR": 0.0034615883596596335,
+    "dT": 0.06889039300605061,
+    "dJones": 0.015351005654661062
+   },
+   "closure": 1.0146593453251487,
+   "warnings": []
+  },
+  "traced_n_substrate": {
+   "outcome": "SOLVED_SILENTLY",
+   "vs_vertical": {
+    "dR": 1.0609568779074152e-14,
+    "dT": 1.099120794378905e-14,
+    "dJones": 4.647473677703974e-14
+   },
+   "vs_correct_slanted": {
+    "dR": 0.0034615883596596335,
+    "dT": 0.06889039300605061,
+    "dJones": 0.015351005654661062
+   },
+   "closure": 1.0146593453251487,
+   "warnings": []
+  },
+  "traced_n_superstrate": {
+   "outcome": "SOLVED_SILENTLY",
+   "vs_vertical": {
+    "dR": 1.0609568779074152e-14,
+    "dT": 1.099120794378905e-14,
+    "dJones": 4.647473677703974e-14
+   },
+   "vs_correct_slanted": {
+    "dR": 0.0034615883596596335,
+    "dT": 0.06889039300605061,
+    "dJones": 0.015351005654661062
+   },
+   "closure": 1.0146593453251487,
+   "warnings": []
+  },
+  "traced_uniform_eps": {
+   "outcome": "SOLVED_SILENTLY",
+   "vs_vertical": {
+    "dR": 1.559342932555552e-14,
+    "dT": 1.2545520178264269e-14,
+    "dJones": 6.556895375411017e-14
+   },
+   "vs_correct_slanted": {
+    "dR": 0.0034200456378377236,
+    "dT": 0.07028045041357286,
+    "dJones": 0.015129760824493799
+   },
+   "closure": 1.0147866377504888,
+   "warnings": []
+  }
+ },
+ "controls": {
+  "traced_thickness_VERTICAL": {
+   "outcome": "SOLVED",
+   "vs_numpy": {
+    "dR": 1.0609568779074152e-14,
+    "dT": 1.099120794378905e-14,
+    "dJones": 4.647473677703974e-14
+   },
+   "closure": 1.0146593453251487
+  },
+  "traced_thickness_CONSTTILE_slant": {
+   "outcome": "SOLVED",
+   "vs_numpy_vertical": {
+    "dR": 6.938893903907228e-18,
+    "dT": 1.1102230246251565e-16,
+    "dJones": 0.0
+   },
+   "closure": 0.9999999999999997
+  },
+  "grad_vertical_traced_thickness": {
+   "ad": -351609.3191246875,
+   "fd": -351608.8989097277,
+   "rel": 1.1951203770175443e-06
+  }
+ },
+ "pmm_jones_2d_route": {
+  "outcome": "SOLVED_SILENTLY",
+  "jax_slant_vs_numpy_VERTICAL": {
+   "dR": 8.393459538513781e-15,
+   "dT": 7.882583474838611e-15,
+   "dJones": 7.425623034938181e-14
+  },
+  "jax_slant_vs_numpy_SLANTED": {
+   "dR": 0.003847171586598674,
+   "dT": 0.05285006356818635,
+   "dJones": 0.01660890723667056
+  },
+  "numpy_slanted_vs_vertical": {
+   "dR": 0.0038471715865925,
+   "dT": 0.052850063568185446,
+   "dJones": 0.016608907236645022
+  }
+ }
+}

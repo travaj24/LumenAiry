@@ -1,0 +1,105 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "build": "wsl",
+  "tag": "fix.wsl",
+  "lumenairy": "/mnt/c/tmp/lum_vhyb/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ },
+ "jax_version": "0.10.2",
+ "x64": true,
+ "numpy_slanted_vs_vertical": {
+  "dR": 0.003461588359663868,
+  "dT": 0.06889039300605078,
+  "dJones": 0.01535100565466858
+ },
+ "routes": {
+  "traced_thickness": {
+   "outcome": "REFUSED",
+   "exc": "NotImplementedError",
+   "msg": "PMM2DStackHybrid.solve: a SLANTED patterned layer is not differentiable -- the slant runs the 4N generator and the generalized cascade, which the 2-D JAX surfac"
+  },
+  "traced_wavelength": {
+   "outcome": "REFUSED",
+   "exc": "NotImplementedError",
+   "msg": "PMM2DStackHybrid.solve: a SLANTED patterned layer is not differentiable -- the slant runs the 4N generator and the generalized cascade, which the 2-D JAX surfac"
+  },
+  "traced_theta": {
+   "outcome": "REFUSED",
+   "exc": "NotImplementedError",
+   "msg": "PMM2DStackHybrid.solve: a SLANTED patterned layer is not differentiable -- the slant runs the 4N generator and the generalized cascade, which the 2-D JAX surfac"
+  },
+  "traced_phi": {
+   "outcome": "REFUSED",
+   "exc": "NotImplementedError",
+   "msg": "PMM2DStackHybrid.solve: a SLANTED patterned layer is not differentiable -- the slant runs the 4N generator and the generalized cascade, which the 2-D JAX surfac"
+  },
+  "traced_n_substrate": {
+   "outcome": "REFUSED",
+   "exc": "NotImplementedError",
+   "msg": "PMM2DStackHybrid.solve: a SLANTED patterned layer is not differentiable -- the slant runs the 4N generator and the generalized cascade, which the 2-D JAX surfac"
+  },
+  "traced_n_superstrate": {
+   "outcome": "REFUSED",
+   "exc": "NotImplementedError",
+   "msg": "PMM2DStackHybrid.solve: a SLANTED patterned layer is not differentiable -- the slant runs the 4N generator and the generalized cascade, which the 2-D JAX surfac"
+  },
+  "traced_uniform_eps": {
+   "outcome": "REFUSED",
+   "exc": "NotImplementedError",
+   "msg": "PMM2DStackHybrid.solve: a SLANTED patterned layer is not differentiable -- the slant runs the 4N generator and the generalized cascade, which the 2-D JAX surfac"
+  }
+ },
+ "controls": {
+  "traced_thickness_VERTICAL": {
+   "outcome": "SOLVED",
+   "vs_numpy": {
+    "dR": 3.17280923756158e-15,
+    "dT": 6.772360450213455e-15,
+    "dJones": 7.002682773109257e-14
+   },
+   "closure": 1.0146593453251447
+  },
+  "traced_thickness_CONSTTILE_slant": {
+   "outcome": "SOLVED",
+   "vs_numpy_vertical": {
+    "dR": 6.938893903907228e-18,
+    "dT": 1.1102230246251565e-16,
+    "dJones": 0.0
+   },
+   "closure": 0.9999999999999997
+  },
+  "grad_vertical_traced_thickness": {
+   "ad": -351609.3191248252,
+   "fd": -351608.89895524684,
+   "rel": 1.194991308780217e-06
+  }
+ },
+ "pmm_jones_2d_route": {
+  "outcome": "SOLVED_SILENTLY",
+  "jax_slant_vs_numpy_VERTICAL": {
+   "dR": 3.8354736053847205e-15,
+   "dT": 1.765254609153999e-14,
+   "dJones": 6.038784898583365e-14
+  },
+  "jax_slant_vs_numpy_SLANTED": {
+   "dR": 0.003847171586599394,
+   "dT": 0.05285006356818811,
+   "dJones": 0.01660890723667348
+  },
+  "numpy_slanted_vs_vertical": {
+   "dR": 0.0038471715865988666,
+   "dT": 0.052850063568187874,
+   "dJones": 0.016608907236670953
+  }
+ }
+}

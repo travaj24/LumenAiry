@@ -1,0 +1,163 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "lumenairy": "C:\\tmp\\lum_vhyb\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "oblique25": {
+  "A_slanted_over_film": {
+   "shipped": 0.01990667530356167,
+   "n": 121,
+   "none": 1.102405037115068,
+   "conj": 1.5902583103119174
+  },
+  "A_oracle_step_K5_K15": 0.011001801137286037,
+  "B_film_above": {
+   "shipped": 0.009236747496094197,
+   "n": 121,
+   "none": 1.0263701829496215,
+   "conj": 1.5900359027371758
+  },
+  "D_two_slants": {
+   "walk_um": [
+    0.22499999999999998,
+    0.09,
+    0.315
+   ],
+   "sum": {
+    "shipped": 0.03013215439238274,
+    "n": 121,
+    "none": 1.4258657038751685,
+    "conj": 1.677763646748551
+   },
+   "only_layer1": 0.5255014929009093,
+   "only_layer2": 1.1566100173539857
+  },
+  "D_oracle_step_K5_K15": 0.010591414908130955,
+  "E_slanted_uniform_below": {
+   "vs_vertical_film": 0.0,
+   "jones_sha_equal": true,
+   "cost_of_summing_it": 0.5869915541477543
+  },
+  "F_consttile_slanted_below": {
+   "vs_vertical_film": 0.0,
+   "jones_sha_equal": true,
+   "cost_of_summing_it": 0.5869915541477543
+  },
+  "G_reflection_round_trip": {
+   "dR": 0.0018022493990068411,
+   "dR_oracle_step": 0.0005580635539985286,
+   "dJones_as_returned": 0.015254921223025283,
+   "dJones_x_P0": 0.9294731544691889,
+   "dJones_x_P0sq": 1.6398841139213778,
+   "dJones_oracle_step_K5_K15": 0.004321816490032399,
+   "per_order_refl_as_returned": 0.09697670542229896,
+   "per_order_refl_x_P": 1.6378293495306486,
+   "per_order_refl_x_P2": 1.539726967575268,
+   "per_order_refl_oracle_step": 0.026856107899418828
+  },
+  "H_scope_patterned_below": {
+   "as_written": {
+    "per_order_T": 0.3208834473294765,
+    "dR": 0.012513963448115391,
+    "dJones_reflection": 0.326620953734465,
+    "per_order_R": 0.6568909115406966
+   },
+   "plus_walk": {
+    "per_order_T": 0.04044487850223296,
+    "dR": 0.0006324051877800167,
+    "dJones_reflection": 0.04719656900922181,
+    "per_order_R": 0.08847783004350061
+   },
+   "minus_walk": {
+    "per_order_T": 0.3255360177006939,
+    "dR": 0.009481790065706357,
+    "dJones_reflection": 0.17504696345062795,
+    "per_order_R": 0.5688153196313868
+   }
+  }
+ },
+ "conical25_40": {
+  "A_slanted_over_film": {
+   "shipped": 0.014362339996520312,
+   "n": 121,
+   "none": 0.9828994191891349,
+   "conj": 1.3680529133440196
+  },
+  "A_oracle_step_K5_K15": 0.010629498878111675,
+  "B_film_above": {
+   "shipped": 0.010604143463371268,
+   "n": 121,
+   "none": 1.0126689926719188,
+   "conj": 1.368077705114221
+  },
+  "D_two_slants": {
+   "walk_um": [
+    0.22499999999999998,
+    0.09,
+    0.315
+   ],
+   "sum": {
+    "shipped": 0.02064089687595174,
+    "n": 121,
+    "none": 1.1712432898030416,
+    "conj": 1.6258207874073525
+   },
+   "only_layer1": 0.44920644167630347,
+   "only_layer2": 0.9544968972459389
+  },
+  "D_oracle_step_K5_K15": 0.008648986422432104,
+  "E_slanted_uniform_below": {
+   "vs_vertical_film": 0.0,
+   "jones_sha_equal": true,
+   "cost_of_summing_it": 0.5331295312924138
+  },
+  "F_consttile_slanted_below": {
+   "vs_vertical_film": 0.0,
+   "jones_sha_equal": true,
+   "cost_of_summing_it": 0.5331295312924138
+  },
+  "G_reflection_round_trip": {
+   "dR": 0.001138981985961289,
+   "dR_oracle_step": 0.0006812655272335211,
+   "dJones_as_returned": 0.007980417301727523,
+   "dJones_x_P0": 0.7191597351271926,
+   "dJones_x_P0sq": 1.3428376314037767,
+   "dJones_oracle_step_K5_K15": 0.005940042327121346,
+   "per_order_refl_as_returned": 0.04315050093806331,
+   "per_order_refl_x_P": 1.2163655452839193,
+   "per_order_refl_x_P2": 1.3988809027503464,
+   "per_order_refl_oracle_step": 0.03676367216709662
+  },
+  "H_scope_patterned_below": {
+   "as_written": {
+    "per_order_T": 0.2917774264014189,
+    "dR": 0.006194647599406567,
+    "dJones_reflection": 0.2628385687997167,
+    "per_order_R": 0.3909629974812526
+   },
+   "plus_walk": {
+    "per_order_T": 0.04136653701991789,
+    "dR": 0.001265684152759284,
+    "dJones_reflection": 0.07119056025381199,
+    "per_order_R": 0.08277737889159217
+   },
+   "minus_walk": {
+    "per_order_T": 0.34884775873248003,
+    "dR": 0.0069955860680564145,
+    "dJones_reflection": 0.18735440113318316,
+    "per_order_R": 0.5851809569420051
+   }
+  }
+ },
+ "seconds": 97.0
+}

@@ -1,0 +1,671 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "build": "win",
+  "tag": "fix.win",
+  "lumenairy": "C:\\tmp\\lum_vhyb\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "oblique25|M3": {
+  "slant_over_film": {
+   "outcome": "SOLVED",
+   "RT": 4.540815721371707e+28,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 4.54e+28 > 1) -- a near-singular"
+   ],
+   "probe": {
+    "n_interfaces": 3,
+    "max_cond_Mb": 171.3748541481662,
+    "max_cond_T22": 2223212297219022.5,
+    "worst_lam_f_min_re": -0.4019305295697865,
+    "worst_lam_b_max_re": 0.41836168212008357,
+    "max_prop_factor": 6.909010654370974
+   }
+  },
+  "slant_only": {
+   "outcome": "SOLVED",
+   "RT": 3.7610022193380797e+27,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 3.76e+27 > 1) -- a near-singular"
+   ],
+   "probe": {
+    "n_interfaces": 2,
+    "max_cond_Mb": 171.3748541481662,
+    "max_cond_T22": 4489263643601032.0,
+    "worst_lam_f_min_re": -0.4019305295697865,
+    "worst_lam_b_max_re": 0.41836168212008357,
+    "max_prop_factor": 6.909010654370974
+   }
+  },
+  "vertical_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.062995802391801,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.06 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 0,
+    "max_cond_Mb": null,
+    "max_cond_T22": null,
+    "worst_lam_f_min_re": null,
+    "worst_lam_b_max_re": null,
+    "max_prop_factor": null
+   }
+  },
+  "cutoffs": {
+   "superstrate(1.00)": {
+    "cutoff": 1.0,
+    "m": 1,
+    "n": 0,
+    "alpha": 0.989285,
+    "gap": -0.010715,
+    "rel_gap": -0.010715
+   },
+   "substrate(2.25)": {
+    "cutoff": 1.5,
+    "m": 1,
+    "n": -2,
+    "alpha": 1.50437,
+    "gap": 0.00437,
+    "rel_gap": 0.002913
+   },
+   "cell eps=1.00": {
+    "cutoff": 1.0,
+    "m": 1,
+    "n": 0,
+    "alpha": 0.989285,
+    "gap": -0.010715,
+    "rel_gap": -0.010715
+   },
+   "cell eps=2.00": {
+    "cutoff": 1.414214,
+    "m": -3,
+    "n": -1,
+    "alpha": 1.397432,
+    "gap": -0.016782,
+    "rel_gap": -0.011867
+   },
+   "cell eps=4.00": {
+    "cutoff": 2.0,
+    "m": 1,
+    "n": -3,
+    "alpha": 1.966897,
+    "gap": -0.033103,
+    "rel_gap": -0.016551
+   }
+  },
+  "pure": {
+   "outcome": "SOLVED",
+   "RT": 1.0000014807517161,
+   "warned": []
+  }
+ },
+ "oblique25|M5": {
+  "slant_over_film": {
+   "outcome": "SOLVED",
+   "RT": 5.844786922576e+29,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 5.84e+29 > 1) -- a near-singular"
+   ],
+   "probe": {
+    "n_interfaces": 3,
+    "max_cond_Mb": 171.37485414816678,
+    "max_cond_T22": 4481074697762352.0,
+    "worst_lam_f_min_re": -0.46693193534396155,
+    "worst_lam_b_max_re": 0.4662889156313213,
+    "max_prop_factor": 8.647069667351591
+   }
+  },
+  "slant_only": {
+   "outcome": "SOLVED",
+   "RT": 1.2570060247441439e+30,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.26e+30 > 1) -- a near-singular"
+   ],
+   "probe": {
+    "n_interfaces": 2,
+    "max_cond_Mb": 171.37485414816678,
+    "max_cond_T22": 4481074697762352.0,
+    "worst_lam_f_min_re": -0.46693193534396155,
+    "worst_lam_b_max_re": 0.4662889156313213,
+    "max_prop_factor": 8.647069667351591
+   }
+  },
+  "vertical_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.0411866375260872,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 0,
+    "max_cond_Mb": null,
+    "max_cond_T22": null,
+    "worst_lam_f_min_re": null,
+    "worst_lam_b_max_re": null,
+    "max_prop_factor": null
+   }
+  },
+  "cutoffs": {
+   "superstrate(1.00)": {
+    "cutoff": 1.0,
+    "m": 1,
+    "n": 0,
+    "alpha": 0.989285,
+    "gap": -0.010715,
+    "rel_gap": -0.010715
+   },
+   "substrate(2.25)": {
+    "cutoff": 1.5,
+    "m": 1,
+    "n": -2,
+    "alpha": 1.50437,
+    "gap": 0.00437,
+    "rel_gap": 0.002913
+   },
+   "cell eps=1.00": {
+    "cutoff": 1.0,
+    "m": 1,
+    "n": 0,
+    "alpha": 0.989285,
+    "gap": -0.010715,
+    "rel_gap": -0.010715
+   },
+   "cell eps=2.00": {
+    "cutoff": 1.414214,
+    "m": -3,
+    "n": -1,
+    "alpha": 1.397432,
+    "gap": -0.016782,
+    "rel_gap": -0.011867
+   },
+   "cell eps=4.00": {
+    "cutoff": 2.0,
+    "m": 1,
+    "n": -3,
+    "alpha": 1.966897,
+    "gap": -0.033103,
+    "rel_gap": -0.016551
+   }
+  },
+  "pure": {
+   "outcome": "SOLVED",
+   "RT": 1.000001480751718,
+   "warned": []
+  }
+ },
+ "oblique25|M7": {
+  "slant_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.6264222948656447e+29,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.63e+29 > 1) -- a near-singular"
+   ],
+   "probe": {
+    "n_interfaces": 3,
+    "max_cond_Mb": 171.3748541481656,
+    "max_cond_T22": 614399944665442.8,
+    "worst_lam_f_min_re": -0.10800340299094927,
+    "worst_lam_b_max_re": 0.07513644266979831,
+    "max_prop_factor": 1.647031464264282
+   }
+  },
+  "slant_only": {
+   "outcome": "SOLVED",
+   "RT": 6.342152641206387e+30,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 6.34e+30 > 1) -- a near-singular"
+   ],
+   "probe": {
+    "n_interfaces": 2,
+    "max_cond_Mb": 171.3748541481656,
+    "max_cond_T22": 1186128588441456.5,
+    "worst_lam_f_min_re": -0.10800340299094927,
+    "worst_lam_b_max_re": 0.07513644266979831,
+    "max_prop_factor": 1.647031464264282
+   }
+  },
+  "vertical_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.028261361933838,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 0,
+    "max_cond_Mb": null,
+    "max_cond_T22": null,
+    "worst_lam_f_min_re": null,
+    "worst_lam_b_max_re": null,
+    "max_prop_factor": null
+   }
+  },
+  "cutoffs": {
+   "superstrate(1.00)": {
+    "cutoff": 1.0,
+    "m": 1,
+    "n": 0,
+    "alpha": 0.989285,
+    "gap": -0.010715,
+    "rel_gap": -0.010715
+   },
+   "substrate(2.25)": {
+    "cutoff": 1.5,
+    "m": 1,
+    "n": -2,
+    "alpha": 1.50437,
+    "gap": 0.00437,
+    "rel_gap": 0.002913
+   },
+   "cell eps=1.00": {
+    "cutoff": 1.0,
+    "m": 1,
+    "n": 0,
+    "alpha": 0.989285,
+    "gap": -0.010715,
+    "rel_gap": -0.010715
+   },
+   "cell eps=2.00": {
+    "cutoff": 1.414214,
+    "m": -3,
+    "n": -1,
+    "alpha": 1.397432,
+    "gap": -0.016782,
+    "rel_gap": -0.011867
+   },
+   "cell eps=4.00": {
+    "cutoff": 2.0,
+    "m": 1,
+    "n": -3,
+    "alpha": 1.966897,
+    "gap": -0.033103,
+    "rel_gap": -0.016551
+   }
+  },
+  "pure": {
+   "outcome": "SOLVED",
+   "RT": 1.000001480751718,
+   "warned": []
+  }
+ },
+ "oblique25|M9": {
+  "slant_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.0067857826765088,
+   "warned": [],
+   "probe": {
+    "n_interfaces": 3,
+    "max_cond_Mb": 171.37485414816592,
+    "max_cond_T22": 33.798203423313204,
+    "worst_lam_f_min_re": -0.086479483293484,
+    "worst_lam_b_max_re": 0.09183585644033163,
+    "max_prop_factor": 1.5284905267728
+   }
+  },
+  "slant_only": {
+   "outcome": "SOLVED",
+   "RT": 1.0065082446536655,
+   "warned": [],
+   "probe": {
+    "n_interfaces": 2,
+    "max_cond_Mb": 171.37485414816592,
+    "max_cond_T22": 53.8126839867216,
+    "worst_lam_f_min_re": -0.086479483293484,
+    "worst_lam_b_max_re": 0.09183585644033163,
+    "max_prop_factor": 1.5284905267728
+   }
+  },
+  "vertical_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.0014644376731927,
+   "warned": [],
+   "probe": {
+    "n_interfaces": 0,
+    "max_cond_Mb": null,
+    "max_cond_T22": null,
+    "worst_lam_f_min_re": null,
+    "worst_lam_b_max_re": null,
+    "max_prop_factor": null
+   }
+  },
+  "cutoffs": {
+   "superstrate(1.00)": {
+    "cutoff": 1.0,
+    "m": 1,
+    "n": 0,
+    "alpha": 0.989285,
+    "gap": -0.010715,
+    "rel_gap": -0.010715
+   },
+   "substrate(2.25)": {
+    "cutoff": 1.5,
+    "m": 1,
+    "n": -2,
+    "alpha": 1.50437,
+    "gap": 0.00437,
+    "rel_gap": 0.002913
+   },
+   "cell eps=1.00": {
+    "cutoff": 1.0,
+    "m": 1,
+    "n": 0,
+    "alpha": 0.989285,
+    "gap": -0.010715,
+    "rel_gap": -0.010715
+   },
+   "cell eps=2.00": {
+    "cutoff": 1.414214,
+    "m": -3,
+    "n": -1,
+    "alpha": 1.397432,
+    "gap": -0.016782,
+    "rel_gap": -0.011867
+   },
+   "cell eps=4.00": {
+    "cutoff": 2.0,
+    "m": 1,
+    "n": -3,
+    "alpha": 1.966897,
+    "gap": -0.033103,
+    "rel_gap": -0.016551
+   }
+  },
+  "pure": {
+   "outcome": "SOLVED",
+   "RT": 1.000001480751718,
+   "warned": []
+  }
+ },
+ "conical25_40|M5": {
+  "slant_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.0446149211920324,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 3,
+    "max_cond_Mb": 68.7365163344913,
+    "max_cond_T22": 1630.3351405965163,
+    "worst_lam_f_min_re": -0.4061404325581587,
+    "worst_lam_b_max_re": 0.4629523176366439,
+    "max_prop_factor": 8.489539053330134
+   }
+  },
+  "slant_only": {
+   "outcome": "SOLVED",
+   "RT": 1.0461370191290913,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.05 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 2,
+    "max_cond_Mb": 68.7365163344913,
+    "max_cond_T22": 1630.3351405965163,
+    "worst_lam_f_min_re": -0.4061404325581587,
+    "worst_lam_b_max_re": 0.4629523176366439,
+    "max_prop_factor": 8.489539053330134
+   }
+  },
+  "vertical_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.0387688768307684,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 0,
+    "max_cond_Mb": null,
+    "max_cond_T22": null,
+    "worst_lam_f_min_re": null,
+    "worst_lam_b_max_re": null,
+    "max_prop_factor": null
+   }
+  },
+  "cutoffs": {
+   "superstrate(1.00)": {
+    "cutoff": 1.0,
+    "m": 1,
+    "n": -1,
+    "alpha": 0.938011,
+    "gap": -0.061989,
+    "rel_gap": -0.061989
+   },
+   "substrate(2.25)": {
+    "cutoff": 1.5,
+    "m": 2,
+    "n": -1,
+    "alpha": 1.486643,
+    "gap": -0.013357,
+    "rel_gap": -0.008905
+   },
+   "cell eps=1.00": {
+    "cutoff": 1.0,
+    "m": 1,
+    "n": -1,
+    "alpha": 0.938011,
+    "gap": -0.061989,
+    "rel_gap": -0.061989
+   },
+   "cell eps=2.00": {
+    "cutoff": 1.414214,
+    "m": -3,
+    "n": -1,
+    "alpha": 1.40752,
+    "gap": -0.006694,
+    "rel_gap": -0.004733
+   },
+   "cell eps=4.00": {
+    "cutoff": 2.0,
+    "m": 0,
+    "n": 3,
+    "alpha": 1.998056,
+    "gap": -0.001944,
+    "rel_gap": -0.000972
+   }
+  },
+  "pure": {
+   "outcome": "SOLVED",
+   "RT": 1.0000058074766973,
+   "warned": []
+  }
+ },
+ "oblique40|M3": {
+  "slant_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.0625708571179011,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.06 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 3,
+    "max_cond_Mb": 28.96608349216684,
+    "max_cond_T22": 47.778488041172096,
+    "worst_lam_f_min_re": -0.19820288449401793,
+    "worst_lam_b_max_re": 0.48508821300541294,
+    "max_prop_factor": 9.403691297468091
+   }
+  },
+  "slant_only": {
+   "outcome": "SOLVED",
+   "RT": 1.0800722191627292,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.08 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 2,
+    "max_cond_Mb": 27.75660737363029,
+    "max_cond_T22": 56.067462590777936,
+    "worst_lam_f_min_re": -0.19820288449401793,
+    "worst_lam_b_max_re": 0.48508821300541294,
+    "max_prop_factor": 9.403691297468091
+   }
+  },
+  "vertical_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.0728502612644335,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.07 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 0,
+    "max_cond_Mb": null,
+    "max_cond_T22": null,
+    "worst_lam_f_min_re": null,
+    "worst_lam_b_max_re": null,
+    "max_prop_factor": null
+   }
+  },
+  "cutoffs": {
+   "superstrate(1.00)": {
+    "cutoff": 1.0,
+    "m": -3,
+    "n": 0,
+    "alpha": 1.057212,
+    "gap": 0.057212,
+    "rel_gap": 0.057212
+   },
+   "substrate(2.25)": {
+    "cutoff": 1.5,
+    "m": -3,
+    "n": -2,
+    "alpha": 1.549885,
+    "gap": 0.049885,
+    "rel_gap": 0.033256
+   },
+   "cell eps=1.00": {
+    "cutoff": 1.0,
+    "m": -3,
+    "n": 0,
+    "alpha": 1.057212,
+    "gap": 0.057212,
+    "rel_gap": 0.057212
+   },
+   "cell eps=2.00": {
+    "cutoff": 1.414214,
+    "m": 1,
+    "n": -1,
+    "alpha": 1.335624,
+    "gap": -0.07859,
+    "rel_gap": -0.055571
+   },
+   "cell eps=4.00": {
+    "cutoff": 2.0,
+    "m": -3,
+    "n": -3,
+    "alpha": 2.001924,
+    "gap": 0.001924,
+    "rel_gap": 0.000962
+   }
+  },
+  "pure": {
+   "outcome": "SOLVED",
+   "RT": 1.000000965252108,
+   "warned": []
+  }
+ },
+ "normal|M5": {
+  "slant_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.039416299331693,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 3,
+    "max_cond_Mb": 87.93479207047982,
+    "max_cond_T22": 211.99152111941854,
+    "worst_lam_f_min_re": -0.09228679546294227,
+    "worst_lam_b_max_re": 0.08841273168670295,
+    "max_prop_factor": 1.5316782014999384
+   }
+  },
+  "slant_only": {
+   "outcome": "SOLVED",
+   "RT": 1.0349819662356998,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 2,
+    "max_cond_Mb": 87.93479207047982,
+    "max_cond_T22": 211.99152111941854,
+    "worst_lam_f_min_re": -0.09228679546294227,
+    "worst_lam_b_max_re": 0.08841273168670295,
+    "max_prop_factor": 1.5316782014999384
+   }
+  },
+  "vertical_over_film": {
+   "outcome": "SOLVED",
+   "RT": 1.0412836104250514,
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular int"
+   ],
+   "probe": {
+    "n_interfaces": 0,
+    "max_cond_Mb": null,
+    "max_cond_T22": null,
+    "worst_lam_f_min_re": null,
+    "worst_lam_b_max_re": null,
+    "max_prop_factor": null
+   }
+  },
+  "cutoffs": {
+   "superstrate(1.00)": {
+    "cutoff": 1.0,
+    "m": -2,
+    "n": 0,
+    "alpha": 1.133333,
+    "gap": 0.133333,
+    "rel_gap": 0.133333
+   },
+   "substrate(2.25)": {
+    "cutoff": 1.5,
+    "m": -2,
+    "n": -2,
+    "alpha": 1.602775,
+    "gap": 0.102775,
+    "rel_gap": 0.068517
+   },
+   "cell eps=1.00": {
+    "cutoff": 1.0,
+    "m": -2,
+    "n": 0,
+    "alpha": 1.133333,
+    "gap": 0.133333,
+    "rel_gap": 0.133333
+   },
+   "cell eps=2.00": {
+    "cutoff": 1.414214,
+    "m": -2,
+    "n": -1,
+    "alpha": 1.267105,
+    "gap": -0.147108,
+    "rel_gap": -0.104021
+   },
+   "cell eps=4.00": {
+    "cutoff": 2.0,
+    "m": -3,
+    "n": -2,
+    "alpha": 2.043146,
+    "gap": 0.043146,
+    "rel_gap": 0.021573
+   }
+  },
+  "pure": {
+   "outcome": "SOLVED",
+   "RT": 0.9999986811433332,
+   "warned": []
+  }
+ },
+ "_seconds": 754.2
+}

@@ -1,0 +1,60 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "lumenairy": "C:\\tmp\\lum_vhyb\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "internal_field": {
+  "Ex": "a3bbf0d0d2c7ea81",
+  "Ey": "68fa6638c18d4ca1",
+  "Ez": "ca00cf9d49828456",
+  "Hx": "dd19b3cdf5b3f1f0",
+  "Hy": "21bdbc697b3c9345",
+  "Hz": "da4158f3555ff04c",
+  "x": "4615e48cec3b09d1",
+  "y": "4615e48cec3b09d1",
+  "z": "c22401b81b8bb879"
+ },
+ "layer_absorption": "12025f4340a47c1e",
+ "cascade_stats": "[('cascade', 'fast'), ('tree', {'requested': False, 'engaged': False, 'peak_bytes': 0, 'budget': 0, 'leaves': 0, 'depth': 0})]",
+ "bridge_vertical_transmission_Ex": "165cf898f59691e4",
+ "bridge_vertical_transmission_Ey": "f8528b2d40c28344",
+ "bridge_vertical_reflection_Ex": "49f6014c2b577efb",
+ "bridge_vertical_reflection_Ey": "cd62aabf87793bc1",
+ "bridge_slanted_transmission_Ex": "39cde038912b30ee",
+ "bridge_slanted_transmission_Ey": "b52e987bfc760368",
+ "bridge_slanted_reflection_Ex": "efddedd5832059f1",
+ "bridge_slanted_reflection_Ey": "800411c19e1435f1",
+ "add_layer_params": [
+  "self",
+  "thickness",
+  "eps",
+  "eps_cell",
+  "eps_tensor_cell",
+  "region_layout",
+  "slant"
+ ],
+ "hybrid_has_mu_surface": false,
+ "pure_add_layer_params": [
+  "self",
+  "thickness",
+  "eps",
+  "eps_cell",
+  "mu",
+  "mu_cell",
+  "slant",
+  "x_walls",
+  "y_walls",
+  "grid",
+  "n_modes"
+ ]
+}
