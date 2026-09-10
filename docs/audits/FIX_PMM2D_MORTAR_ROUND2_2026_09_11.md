@@ -646,6 +646,7 @@ a pristine `git archive HEAD` tree in the scratchpad; every arm asserts which
 |---|---|
 | **WIN `with` vs WIN `pre`** | **87/87 identical, 0 mismatches** |
 | **WSL `with` vs WSL `pre`** | **87/87 identical, 0 mismatches** |
+| both, RE-RUN against the FINAL code (after the `LinAlgWarning` except-tuple and the 1e-9 boundary slack landed) | **87/87 on each**, and the WIN JSON came back byte-identical to the first pass |
 | WIN `with` vs WSL `with` | 20/87 identical -- and that is the EXPECTED reading, not a defect: it is the ordinary cross-BLAS last-bit spread on quantities that pass through a `zgeev` and a cascade.  The 20 that do agree are the integer ORDER arrays.  The claim bit-identity makes is per build, against that build's own pre-change tree, and it holds on both. |
 
 The arm is not vacuous: **21 of the 33 fixtures (63 of the 87 hashes) are full
