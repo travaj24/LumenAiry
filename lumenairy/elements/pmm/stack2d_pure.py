@@ -654,6 +654,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         The two axes may carry DIFFERENT wall positions; only the segment
         COUNTS must match.
 
+        **MINIMUM SEGMENT WIDTH -- a CONTRACT (round 2, 2026-09-11).**  Every
+        segment a non-uniform grid asks for must be at least
+        :data:`~lumenairy.elements.pmm.twod_staggered._STAG_MIN_SEG_FRAC`
+        (1e-3) of the period; a narrower one is REFUSED, naming the width and
+        the remedies.  The staggered stiffness carries the per-segment
+        ``1/J_n``, so a narrow segment carries spurious modal wavenumbers
+        ``~ 0.93 M (M + 1) / (4 k0 J)``.  Those are harmless inside one grid
+        and corrupt the L2 MORTAR that couples this layer to neighbours on
+        other grids -- ENERGY-INVISIBLY, with the lossless closure pinned, so
+        no tripwire downstream can see it.  See that constant for the
+        derivation and both measured gaps.
+
         ``grid`` (``'per-layer'`` only) is a UNIFORM layer's segment count --
         uniform layers have no walls of their own -- and defaults to 1.
         ``n_modes`` (``'per-layer'`` only) overrides the stack's modal count
@@ -980,7 +992,17 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
         A NOTE ON `M`: this is a per-layer solve, and a per-layer solve can be
         stationary in ONE knob and wrong (see :meth:`convergence_floor`).
-        Converge in ``n_modes`` for the taper AND in ``n_slices``."""
+        Converge in ``n_modes`` for the taper AND in ``n_slices``.
+
+        A NOTE ON `n_slices` AND A CLOSING TIP (round 2, 2026-09-11): the
+        midpoint rule's narrowest SAMPLED width is about
+        ``w_bottom / (2 n_slices)``, so a pillar that tapers to a point walks
+        toward the minimum-segment contract of
+        :data:`~lumenairy.elements.pmm.twod_staggered._STAG_MIN_SEG_FRAC`.
+        Measured on a pillar closing from half the period: 3.14e-02 / 8.01e-03
+        / 4.11e-03 of the period at ``n_slices`` = 8 / 32 / 64, crossing the
+        1e-3 contract at about 250 slices, where the slice is refused.  Stop
+        the taper before its tip closes, or lower ``n_slices``."""
         self._require_per_layer_taper("add_tapered_pillar")
         if rule not in ("midpoint", "bottom"):
             raise ValueError(
@@ -1620,6 +1642,27 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         identical-grid bypass so a CONFORMING stack is driven through the
         mortar algebra, which is the only way to score the conforming identity.
         Library code never sets it.
+
+        ROUND 2 (2026-09-11, ``FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md``).  This
+        path carries TWO guards that the shared path does not need, and they
+        are layered on purpose:
+
+        * the MINIMUM SEGMENT WIDTH contract, enforced where the grid is BUILT
+          (:class:`~lumenairy.elements.pmm.twod_staggered.Basis1D`), because
+          it is pure geometry and costs no solve.  It is what stops an
+          intra-layer sliver from putting spurious ``1/J_n`` wavenumbers into
+          the cross-grid projection ENERGY-INVISIBLY;
+        * the CONDITIONING backstop on the mortar's own solves
+          (:func:`~lumenairy.elements.pmm._core._guarded_mortar_solve`), which
+          catches what a fixed WIDTH bar cannot know -- the modal count, the
+          wavelength and the contrast all move the conditioning, and it
+          degrades about 3x per modal rung.
+
+        The mortar's ALGEBRA is not what either guards: three ALL-HOST layers
+        on three different non-uniform grids reproduce the ANALYTIC slab to
+        1.2e-10 at ``M`` = 5 and 3.3e-13 at ``M`` = 6, at every wall
+        separation.  What a degenerate grid loses is a PATTERNED neighbour's
+        structured trace.
         """
         px, py = self.period_x, self.period_y
         (wl, k0, kx0, ky0, a0x, a0y,

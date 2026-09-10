@@ -82,6 +82,22 @@ length; without the guard the out-of-plane parity block reduction would have
 been applied to a structure the pencil does not have.  A uniform lattice is
 mirror-symmetric, so the shipped behaviour is unchanged.
 
+> **CORRECTION 2026-09-11 (verification D4.2, fix round 2).**  The GUARD is
+> right and its BEHAVIOUR is confirmed two-sided (accepted on uniform and on
+> mirror-symmetric non-uniform wall sets, refused on asymmetric ones), but the
+> stated rationale is not the operative one.  Measured by
+> `VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md` S2.7: bypassing the guard on
+> an asymmetric wall set (patching `basis.uniform = True` around
+> `_stag_parity_1d`) changes the stack answer by **exactly 0.0e+00**, because
+> `_stag_block_eig`'s own assembled-pencil residual then reads
+> `|RAR+A|/|A| = 6.796e-01` against its `_STAG_BLOCK_TOL = 1e-10` -- nine
+> decades over -- and refuses the reduction itself.  The reduction IS genuinely
+> invalid there (forced past the residual gate too, its spectrum is wrong by
+> 3.921e-01 relative), so the guard is DEFENCE IN DEPTH and a cost saving, not
+> the barrier that prevents a wrong answer.  The mirror-symmetric NON-uniform
+> case is not merely accepted but correct: 1.710e-14 at stack level against
+> the dense `4 q^2` solve.
+
 ### 0.2 Per-layer element grids (the L2 mortar)
 
 ```python
@@ -288,6 +304,23 @@ Measured relative difference of the assembled mass:
 That is why the integer path is kept DISTINCT: routing the int through the
 array path would make N1's unconditional claim depend on the period.
 
+> **CORRECTION 2026-09-11 (verification D4.1, fix round 2).**  The table's
+> first row does not reproduce.  Re-measured over six grids by
+> `VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md` S8.2: the difference is
+> **3.084e-16 / 1.156e-16 / 4.626e-16** at `(1.2, 4, 5)` / `(0.9, 3, 6)` /
+> `(1.2, 6, ...)` and **exactly 0.0 only at `(1.2, 2, 5)`** -- one grid of the
+> six, not four.  The SHAPE of the claim ("ULP-close, not bit-identical, and
+> that is why the integer path is kept distinct") is confirmed at a worst
+> 4.626e-16 relative; the stated values are not.  The shipped test's docstring
+> was corrected on the verification branch (`6d8ce03`).
+>
+> Round 2 adds one more reason the two spellings must stay separable: the
+> per-segment quadrature rule of D3 (`_stag_quad_order`) is applied on the
+> ARRAY path and bypassed on the INTEGER path, so the integer path's
+> bit-identity is now structural rather than incidental.  The formula was
+> verified to return the same `2 M + 8` on every uniform lattice `M = 3..14 x
+> N = 1..60` the order cap allows, so the two spellings remain ULP-close.
+
 ### 4.3 N3 / N4 -- against exact independent oracles
 
 **N3** -- a duty-1/3 stripe has TWO exact-wall representations: a NON-uniform
@@ -438,6 +471,18 @@ the advantage GONE at `q = 30` on this same pair (1.48x the union's error once
 both arms have converged) and moving earlier still -- to between `q = 18` and
 `q = 24` -- on a corner-dominated 2-D pillar pair.  The durable half is the
 closure, which does not decay.
+
+> **CORRECTION 2026-09-11 (verification D4.3, fix round 2).**  The "1.48x at
+> `q = 30`" is the EXPERIMENT's PROTOTYPE reading, not the shipped library's,
+> and it does not reproduce here.  Re-measured by
+> `VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md` S7.1 against a reference built
+> one rung finer (degree 16): the shipped library reads **0.317 at `q = 30`**
+> on the same fixture -- i.e. still 3x better, not 1.48x worse -- and NEITHER
+> arm is resolvable against the oracle at `q >= 24`, so no ordering can be
+> claimed there in either direction.  The conservative framing ("not worse",
+> and the closure as the durable half) stands; the losing rung it cites does
+> not, and the honest statement is that the crossover is BELOW the resolution
+> of the available oracle.
 
 ### 6.2 The 3-slice staircase, the use case
 
