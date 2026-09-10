@@ -4,7 +4,7 @@ file does not cover (2026-09-11).
 ``tests/unit/test_fix_pmmstack_sliver_round3.py`` pins the D-5 repair, the
 bit-identity of the staircase box, the closure's two drop populations, the
 widening property and the note's FORMAT.  Re-measuring the same claims on an
-independent 2,304-row box and on nine D-5 mounts of five different device
+independent 2,304-row box and on nine D-5 mounts of four different device
 mechanisms
 (``docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND3_2026_09_11.md``,
 ``validation/probe_verify_sliver_round3/``) leaves five things unasserted
@@ -37,7 +37,7 @@ anywhere, and each is a DECISION rather than a bar:
    property on a subset.
 
 4. **The D-5 band is not one mount.**  The fix's D-5 fixture is a single
-   guided-mode grating.  Nine mounts across five mechanisms land in the band
+   guided-mode grating.  Nine mounts across four mechanisms land in the band
    on the verifier's box; the test asserts THREE independent mechanisms reach
    it and are refused, so a later change that narrows the band shows up.
 
@@ -467,7 +467,7 @@ def test_the_d5_band_is_reached_by_three_independent_mechanisms():
     mount (degree-6 floor 7.63e-05), a Fabry-Perot cavity between two
     corrugated mirrors (degree-8 floor 8.27e-05), and a near-Wood mount whose
     -2 order sits just inside its Rayleigh cutoff (degree-8 floor 1.55e-04).
-    Nine such mounts across five mechanisms were found on the verifier's box;
+    Nine such mounts across four mechanisms were found on the verifier's box;
     three are asserted here, each refused at a wall step where the answer is
     wrong and the prescribed snap restores it."""
     mounts = (("gmr", _gmr, 1.0e-6),

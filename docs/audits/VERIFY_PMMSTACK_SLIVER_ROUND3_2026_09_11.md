@@ -57,7 +57,7 @@ the two builds agree on every DECISION.
 | 2c | the CONJUNCTION attributes 0 correct rows at every fraction 1e-1 .. 1e-3 | **CONFIRMED on the ladder box** (but see 2d) | **0 / 737** arbitrated correct rows at all five fractions; the library refused **30** rows of 2,304, every one WRONG, **0 false positives**.  The claim does not survive a directed sweep of the same mounts -- row 2d |
 | 2d | no CORRECT row both drops past 100 and moves past 100 `w_wide` -- "0 correct rows attributed at ANY fraction from 1e-1 to 1e-3" | **REFUTED -- three FALSE REFUSALS found, and they are INHERITED from round 2** | 0 over the 2,304-row ladder box (closest joint approach **0.1376**, 7.27x), but a DIRECTED scan of that box's own worst mounts at **degree 4** finds **3** rows the library REFUSES whose answers are CORRECT (`err/delta` 0.979 / 1.051 / 1.065).  Their snapped solve reads BELOW unity, so the ROUND-2 ABSOLUTE closure admits them too -- confirmed by running the same probe on `f2371e0`, which refuses all three.  See defect **V-4** |
 | 2e | the analytic round-3 criterion equals the library's decision | **CONFIRMED** | **859 / 859** arbitrated rows |
-| 3a | the D-5 class is reachable | **CONFIRMED, and it is far broader than one mount** | **9** of 24 screened (mount, degree) pairs land in the band, across **5** unrelated mechanisms: guided-mode resonance, dense-superstrate grazing staircase, Fabry-Perot cavity, near-Wood mount, high-index-contrast lossy substrate |
+| 3a | the D-5 class is reachable | **CONFIRMED, and it is far broader than one mount** | **9** of 24 screened (mount, degree) pairs land in the band, across **4** unrelated mechanisms (of the 5 screened): guided-mode resonance, dense-superstrate grazing staircase, Fabry-Perot cavity, near-Wood mount.  The fifth screened mechanism, a high-index-contrast lossy substrate, converges too fast at every degree tried and does NOT land in the band |
 | 3b | the D-5 population runs 49.107 .. 5,304.6 in drop | **REFUTED as a floor (sample-scoped); the structural prediction is CONFIRMED** | 102 D-5 rows on my mounts run **3.6688 .. 4.2875e+06**.  The floor is 13.4x BELOW the published one and lands INSIDE the correct population's own drop range (0.638 .. 18.09), which is exactly what the fix's own S3.5 predicts structurally |
 | 3c | 1e-2 recovers 85 / 88 of the D-5 population | **CONFIRMED at the same rate** | **100 / 102** (98.0 % vs the fix's 96.6 %); 3e-3 recovers 88, 1e-3 recovers 77 |
 | 3d | R3-A: the rows the constant cannot reach are the visible edge of a structural band | **CONFIRMED, and one of them is returned SILENTLY** | 2 rows: drop **5.205** at `err/delta` **741.3** and drop **3.669** at `err/delta` **212.8**, both fully restored by the prescribed snap.  The first reads `R+T` = 1.00235, i.e. BELOW `_STACK_SUPERUNITY_BAR`, so it is returned with no warning at all |
@@ -71,8 +71,9 @@ the two builds agree on every DECISION.
 answers are refused), **V-1** (LOW, doc-only -- three published population
 bounds are sample-scoped and two are refuted), **V-2** (LOW, message wording),
 **V-3** (LOW, probe methodology -- an editable install can silently substitute
-a different checkout), **V-5** (LOW, message -- the refusal's per-layer remedy
-is qualified by stack length, which is not the property that decides it), plus the two open items round 3 carries forward,
+a different checkout), **V-5** (LOW, message -- the refusal's per-layer
+remedy is qualified by stack length, which is not what decides it), plus
+the two open items round 3 carries forward,
 **R3-B** and **R3-C**, both REPRODUCED here on my own devices, with R3-B shown
 to bite at PHYSICALLY realistic feature widths.  **V-4 is the only defect that
 changes a decision the library makes, it is present in round 2 as well as
@@ -349,7 +350,7 @@ sweeping the same mounts finely walks straight through it.
 
 `v3_d5.py` screens 24 (mount, degree) pairs by measuring each mount's
 sliver-FREE super-unity directly.  **Nine** land in the D-5 band
-(1e-5 .. 1e-3), across five unrelated mechanisms:
+(1e-5 .. 1e-3), across four of the five unrelated mechanisms screened:
 
 | mount | mechanism | sliver-free floor at that degree |
 |---|---|---|
@@ -392,8 +393,10 @@ piece of evidence an attribution needs except the shape of the closure:
 
 The shipped fraction recovers **98.0 %** of this population, against the
 96.6 % the fix reports on its five mounts.  The recovery claim is confirmed at
-the same rate on four additional mechanisms.  Note that the two rows 1e-2
-leaves returned are not recovered at 3e-2 or 1e-1 either -- their drops are
+the same rate on three additional mechanisms -- a grazing staircase, a
+Fabry-Perot cavity and a near-Wood mount -- beyond the guided-mode grating the
+fix used.  Note that the two rows 1e-2 leaves returned are not recovered at
+3e-2 or 1e-1 either -- their drops are
 5.205 and 3.669, below even the 10x a fraction of 1e-1 would demand -- so
 loosening the constant does not reach them.  That is R3-A restated as a
 measurement rather than an argument.
@@ -727,8 +730,17 @@ already points at R3-A; this verification adds the family number.
 |---|---|---|
 | the five sliver files + `test_m1_conditioning_guard.py` (92 tests: 19 + 19 + **6** + 15 + 6 + 27) | **92 passed**, 1 warning, 116.09 s | **92 passed**, 1 warning, 113.49 s |
 | `tests/unit/test_verify_pmmstack_sliver_round3.py` (5 new) | **5 passed**, 2.67 s idle / **14.97 s** with the box at 100 % CPU and three other agents running | **5 passed**, 15.63 s under that load |
-| the 43-file `PMMStack` regression | REGRESSION-RESULT | -- |
+| the 43-file `PMMStack` regression (`validation/probe_verify_sliver_round2/_pmmstack_test_files.txt`) | **819 passed, 1 skipped**, 76 warnings, 4,649.90 s (1:17:29) | -- |
 | `ruff check lumenairy/ tests/ validation/probe_verify_sliver_round3/` (WSL) | -- | **All checks passed!** |
+
+The regression reproduces the round-2 reading exactly -- **819 passed, 1
+skipped** -- and the skip is the same one
+(`test_niche_audit_m4_m5_m6_rcwa.py:387`, "threadpoolctl installed: the cap is
+effective here").  Its wall time is 4,649.90 s against round 2's 2,628.77 s, a
+ratio of **1.77x** that is entirely load: the box ran three other agents
+throughout, one of them with an 89 GB working set, and free physical memory
+touched 2.4 % of 128 GB mid-run.  The tail is committed as
+`validation/probe_verify_sliver_round3/_regression_win.txt`.
 
 The one warning in the sliver runs is the pre-existing deliberate
 `_pmm_union_grid` snap warning of
@@ -772,6 +784,12 @@ at degrees 6-10; the rows below need degree 4 and a finer step.
 `delta -> 0` solve of the same mount at the same degree: **the answer tracks
 the physical wall shift to about 1x**, which is as correct as this rule can
 call anything.  The library refuses all three.
+
+Degree 4 is a legal configuration and the library says so twice: the entry
+validation demands only `degree >= 2`, and the separate "degree too low to
+resolve the N propagating orders" guard -- which fires readily on this box's
+wider mounts -- does NOT fire here.  So this is not a caller reaching outside
+the supported range; it is a supported solve being refused.
 
 **Why both arms are met with nothing wrong.**  The two conjuncts fail for two
 independent and entirely benign reasons:
@@ -822,7 +840,8 @@ is pointed at a grid change that does not help.
 **Severity MEDIUM, not HIGH**: the class needs a mount whose sliver-free solve
 is SUB-unity (so the closure is free), more than two z-slices and a small
 enough wall step that the snap collapses them (so the move bar is free), and a
-degree low enough that the row is above the trigger at all; it does not appear at all in
+degree low enough that the row is above the trigger at all; it does not
+appear at all in
 2,304 rows of a four-step ladder at degrees 6-8, and it is not reachable
 through round 3's change -- round 2 refuses the same rows.
 
@@ -860,7 +879,7 @@ test fail, which is the gate working.
 | published | measured here | on |
 |---|---|---|
 | the CORRECT population's FINITE drop envelope is **36.611**, so 1e-2 carries 2.73x | **18.090** on an independent 576-mount box -- 5.53x.  Not a refutation; the fix's number stays binding | 722 finite-drop correct rows |
-| the D-5 population's drop floor is **49.107**, and the two populations are "1.34x apart" | **3.669** over nine mounts and five mechanisms -- the two populations OVERLAP, and the fix's own S3.5 predicts exactly this | 102 D-5 rows |
+| the D-5 population's drop floor is **49.107**, and the two populations are "1.34x apart" | **3.669** over nine mounts and four mechanisms -- the two populations OVERLAP, and the fix's own S3.5 predicts exactly this | 102 D-5 rows |
 | the CORRECT population's `move / w_wide` envelope is **79.032** against the 100 bar, "1.27x -- the bar to watch" | **161.073** -- the bar is INSIDE the correct population.  The published margin does not exist on an independent box | 737 arbitrated correct rows |
 
 None changes a decision the library makes, because the CONJUNCTION is what
@@ -1054,7 +1073,7 @@ measurement here supports that reading on devices the fix did not use:
    round 2's absolute closure and are refused on the round-3 branch point as
    well, so they are not a property of this change.
 4. **The defect it targets is broader than the fix claimed, and the fix covers
-   it.**  Nine mounts across five mechanisms land in the D-5 band; 1e-2
+   it.**  Nine mounts across four mechanisms land in the D-5 band; 1e-2
    recovers 100 of 102 rows (98.0 %).
 5. **Both builds agree on every decision** -- including the three V-4
    refusals -- with the largest meaningful cross-build spread 1.44e-02 against
@@ -1097,7 +1116,8 @@ either: both of its arms degenerate for structural reasons (a vacuous closure
 when the snapped solve leaves the super-unity regime, and a move normalised by
 a `w_wide` that vanishes while the snap's real geometry change does not).  The
 rest of this paragraph is the second item.  The single highest-value change
-this campaign points at is not a constant.  It is that `R + T` is both the detector and the
+this campaign points at is not a constant.  It is that `R + T` is both
+the detector and the
 attribution's denominator: R2-A bounds the guard below by the trigger, R3-A
 bounds the closure below by the mount's own truncation floor, and S4.4 shows a
 row that falls through both and is returned silently at 741x the wall shift.
@@ -1161,8 +1181,9 @@ other agents throughout, so the wall times are ratios and not benchmarks.
   mount at ONE degree by a directed sweep of six mounts.  How large that class
   is -- which combinations of sub-unity sliver-free solve, device slope and
   wall step reach it -- was not mapped, and the search was not exhaustive in
-  degree (only degrees 4 and 6 were swept on those mounts, and only the mounts
-  the ladder box had already flagged).  The population statistic that matters
+  degree (two degrees per mount -- each mount's own and two lower -- and only
+  the six mounts the ladder box had already flagged).  The population
+  statistic that matters
   for a repair is the joint distribution of `su_snapped == 0` and
   `move / w_wide > 100` over correct rows, and this verification measured it
   on 313 rows, not on thousands.
@@ -1171,6 +1192,20 @@ other agents throughout, so the wall times are ratios and not benchmarks.
 
 ## S12. Commits
 
-`verify/sliver-round3`, explicit-path `git add` only:
+`verify/sliver-round3`, branched from `4a6cf01` (wave2 tip, carrying round 3).
+Every commit uses explicit-path `git add`; nothing under `lumenairy/` is
+touched on any of them, and nothing was pushed, merged or tagged.
 
-COMMIT-SHAS
+| SHA | what |
+|---|---|
+| `7e4e27a` | the ten probes, both builds' JSON, the five DECISION tests, the five spliced `.test_durations` entries, and the report |
+| `c811b47` | defect **V-5** -- the refusal's per-layer remedy measured on a 6-layer stack, added to S2.4 and S8 |
+| `REGCOMMIT` | the 43-file `PMMStack` regression reading (819 passed, 1 skipped), defect **V-4**'s degree-legality note, the corrected mechanism count (four, not five), and the S11 / S12 closings |
+
+### S12.1 What this verification did NOT complete
+
+* the `C:/tmp/lum_vsliver3_pre` worktree (`f2371e0`, detached) was created for
+  the BEFORE arm and removed afterwards; it holds no work;
+* no `lumenairy/` change was attempted for any of V-1 .. V-5 or for R3-A /
+  R3-B / R3-C.  Each carries a reproducer and, where the defect changes a
+  decision, a pinning test.
