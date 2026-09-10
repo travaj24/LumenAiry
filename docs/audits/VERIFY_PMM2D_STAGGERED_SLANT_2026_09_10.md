@@ -1117,7 +1117,8 @@ the defects in S10 are reported with reproducers, not patched.
 | commit | what |
 |---|---|
 | `24c6a16` | `test(pmm2d slant verify)`: `validation/probe_verify_slant/` -- the 16 probes, the README (including the two traps they hit first) and every run's JSON, on both builds |
-| (this one) | `docs(pmm2d slant verify)`: this document |
+| `1b41afa` | `docs(pmm2d slant verify)`: this document |
+| (this one) | `docs(pmm2d slant verify)`: the commit hashes, self-referentially |
 
 Re-running everything:
 
