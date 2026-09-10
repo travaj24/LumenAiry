@@ -72,3 +72,66 @@ Cost note: `m2_nested.py`, `m4_stripe_1d.py`, `m4c_equal_dof.py`,
 `m6c_staircase_1d.py` and `m3_nonconforming.py` at their upper rungs run region
 eigenproblems of dimension 1800-2600 and take 3-13 minutes per point
 single-threaded. Start at the low rungs.
+
+---
+
+## FOLLOW-UP 2026-09-09 -- F1..F5 (open items O-1, O-2, O-6, O-10; roadmap N-1)
+
+Numbers in the experiment document's `FOLLOW-UP 2026-09-09` section.
+
+| file | what it is |
+|---|---|
+| `f1_crossbuild.py` | F1 (O-1) -- the six decisive tables (M1 identity, the isolated-mortar Fresnel error, M4 vs the 1-D oracle, M4c equal-DOF, the OOP twin, the conditioning census) in ONE process, so every build measures the same fixtures.  Writes `f1_crossbuild_<tag>.json` |
+| `f1_compare.py` | diffs the arms and reports the per-quantity CROSS-BUILD SPREAD and the spread envelope per family |
+| `f2_device_regime.py` | F2 (O-2) -- the corner-dominated 2-D pillar pair (own `N = 2` and `N = 3`, union `N = 6`, conical), equal-DOF mortar vs union against the union grid at the top of its own documented ladder; scalar and IN-PLANE LC TENSOR arms |
+| `f3_perlayer_M_recipe.py` | F3 (O-10) -- the two-knob `M_A` x `M_B` convergence SURFACE on the F2 pair, each layer's own single-layer residual, the greedy rule (6/9) and the FLOOR rule (15/16) |
+| `f4_uniform_oblique.py` | F4 (O-6) -- a UNIFORM layer on `N = 1` at oblique/conical: isolated vs the analytic Fresnel slab and vs `berreman_jones_1d`, then INSIDE a mortar cascade against the exact 1-D `PMMStack`, then against the shared-grid path |
+| `nonuniform.py` | F5 (roadmap N-1) -- the PROTOTYPE: `Basis1DNU` (Granet Eq. 31 with per-segment jacobians), `Granet2DTransverseE_NU`, `MortarStackNU` (per-layer own-WALLS grids through the mortar cascade) |
+| `f5_nonuniform.py` | F5 gates (a) bit-identity on uniform walls, (b) 2 non-uniform segments == 3 uniform segments, (c)/(c2) arbitrary walls vs the two hybrid oracles, (c3) arbitrary walls vs the EXACT 1-D oracle, (d) a 4-slice taper vs the hybrid staircase, (d2) the same taper vs the EXACT 1-D oracle |
+| `f5d_diag.py` | attributes gate (d2)'s `M = 5..7` plateau: the mortar-free control, the FORCED-mortar identity on non-uniform grids, the slice-count scaling, the per-order breakdown |
+| `f5e_nearwall.py` | the wall-separation sweep with the conditioning census, and the deep `M = 11` taper rung.  Its "explosion" reading is SUPERSEDED by `f5f_attrib.py` |
+| `f5f_attrib.py` | measures the 1-D `PMMStack` oracle's OWN degree-12-vs-14 self-gap alongside every comparison, and so attributes the near-coincident-wall blow-up to the ORACLE (open item O-11), not to the non-uniform mortar |
+
+### Commands (exactly as run)
+
+```
+# F1 -- three builds.  Windows:
+python validation/probe_pmm2d_staggered_mortar/f1_crossbuild.py win
+# the same OpenBLAS forced onto its SSE kernels (a genuinely different code path):
+OPENBLAS_CORETYPE=NEHALEM python validation/probe_pmm2d_staggered_mortar/f1_crossbuild.py win_nehalem
+# WSL / gcc / glibc / python 3.12:
+wsl.exe -e bash -lc "cd /mnt/c/tmp/lum_mortarp && PYTHONPATH=/mnt/c/tmp/lum_mortarp \
+  OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+  ~/lumvenv/bin/python validation/probe_pmm2d_staggered_mortar/f1_crossbuild.py wsl"
+python validation/probe_pmm2d_staggered_mortar/f1_compare.py          # win wsl win_nehalem
+
+python validation/probe_pmm2d_staggered_mortar/f2_device_regime.py scalar tensor
+python validation/probe_pmm2d_staggered_mortar/f3_perlayer_M_recipe.py
+python validation/probe_pmm2d_staggered_mortar/f4_uniform_oblique.py
+
+python validation/probe_pmm2d_staggered_mortar/f5_nonuniform.py a b
+python validation/probe_pmm2d_staggered_mortar/f5_nonuniform.py c d
+python validation/probe_pmm2d_staggered_mortar/f5_nonuniform.py c3 d2
+python validation/probe_pmm2d_staggered_mortar/f5d_diag.py
+python validation/probe_pmm2d_staggered_mortar/f5e_nearwall.py sweep
+python validation/probe_pmm2d_staggered_mortar/f5e_nearwall.py deep
+python validation/probe_pmm2d_staggered_mortar/f5f_attrib.py
+```
+
+Cost note for this round: `f2_device_regime.py`'s union reference ladder runs
+to `q = 36` (eig 2592, 1028 s for that one point) and the whole script is
+~45 min; `f5e_nearwall.py deep` is ~20 min; everything else is minutes.
+`f4_uniform_oblique.py` deliberately does NOT sweep `grid = 6` in part (ii)
+(`q = 6 (M_u - 1)` reaches an eig of 5832 at `M_u = 10`, an hour per point) --
+the shared-grid arm is measured in part (iii) instead.
+
+Two traps this round produced, recorded so they are not re-produced:
+
+* **Do not score a conical solve against `fresnel_slab_te`.**  At `phi != 0`
+  the incident `E_y` row is not s-polarized, so the scalar Fresnel formula
+  reads a spurious constant error (2.4e-02 FLAT in every `(N, M)` cell) that
+  looks exactly like a solver defect.  Use `berreman_jones_1d` for conical.
+* **Report the oracle's own self-gap next to every comparison.**  The
+  near-coincident-wall "explosion" of `f5e_nearwall.py` was the 1-D oracle
+  losing convergence (self-gap 4.8e-01), and at one `delta` the oracle's two
+  degrees agreed on a wrong answer -- invisible without the self-gap column.

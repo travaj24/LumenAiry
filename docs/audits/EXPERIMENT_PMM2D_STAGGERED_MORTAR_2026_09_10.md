@@ -1232,6 +1232,145 @@ surface points; the single exception (`M_A=7, M_B=7`: 4.24e-02 against
 4. The docstring must say, in these words, that *a per-layer solve can be
    stationary in one knob and wrong*, and must point at the floor screen.
 
+## F4 (O-6) -- a UNIFORM layer on `N = 1` at oblique / conical [M]
+
+`f4_uniform_oblique.py`.  O-6 asked whether a uniform layer may default to the
+cheapest grid the engine can express.  The worry was real -- S4.3 measured a
+uniform layer's own Bloch-phase error at 2.7e-11 (`M=5`) against 8.8e-17
+(`M=7`) at `theta = 0.20` -- so the question is whether `N = 1` makes it worse.
+
+### F4.1 ISOLATED: one uniform slab against the analytic Fresnel slab
+
+`n = 2`, 300 nm, vacuum half-spaces, `phi = 0` (so the incident `E_y` row IS
+s-polarized).  `|R - R_exact|`.  The exact answer does not depend on `N` at
+all, so every entry is the basis's own error.
+
+| `theta` | `N` | `M=3` | `M=4` | `M=5` | `M=6` | `M=7` | `M=8` | `M=9` |
+|---|---|---|---|---|---|---|---|---|
+| 0.00 | 1 | 1.1e-16 | 1.1e-16 | 3.2e-15 | 0.0e+00 | 3.9e-16 | 3.1e-14 | 6.1e-14 |
+| 0.00 | 2 | 6.7e-16 | 5.0e-16 | 2.1e-15 | 1.8e-14 | 1.1e-15 | 4.5e-14 | 1.5e-14 |
+| 0.00 | 3 | 1.2e-15 | 1.6e-15 | 1.4e-14 | 1.8e-14 | 2.7e-14 | 5.9e-14 | 2.9e-15 |
+| 0.20 | 1 | 1.0e-04 | 1.9e-06 | 6.2e-08 | 2.2e-10 | 1.2e-12 | 6.9e-14 | 1.0e-13 |
+| 0.20 | 2 | 6.8e-06 | 3.4e-08 | 1.2e-10 | 2.5e-13 | 4.7e-14 | 9.1e-14 | 1.1e-14 |
+| 0.20 | 3 | 1.4e-06 | 3.3e-09 | 4.6e-12 | 1.8e-15 | 2.8e-14 | 2.3e-14 | 7.1e-14 |
+| 0.40 | 1 | 5.2e-03 | 4.1e-04 | 1.6e-05 | 4.1e-07 | 2.6e-09 | 2.4e-10 | 3.1e-12 |
+| 0.40 | 2 | 2.7e-04 | 9.4e-06 | 9.9e-08 | 7.6e-10 | 4.1e-12 | 3.1e-14 | 4.8e-14 |
+| 0.40 | 3 | 7.9e-05 | 6.5e-07 | 4.2e-09 | 1.4e-11 | 4.5e-14 | 1.3e-13 | 3.1e-13 |
+| 0.60 | 1 | 5.5e-02 | 6.9e-02 | 6.4e-04 | 4.5e-05 | 1.1e-06 | 8.0e-08 | 2.1e-09 |
+| 0.60 | 2 | 4.5e-03 | 1.8e-04 | 4.5e-06 | 7.4e-08 | 8.5e-10 | 6.9e-12 | 8.3e-14 |
+| 0.60 | 3 | 6.8e-04 | 1.7e-05 | 2.0e-07 | 1.4e-09 | 7.0e-12 | 1.1e-13 | 7.2e-15 |
+
+CONICAL (`theta = 0.35`, `phi = 0.6`) against `berreman_jones_1d`, relative
+`dJones` -- the scalar Fresnel formula does NOT apply at `phi != 0` (see the
+trap note in the README):
+
+| `N` | `M=3` | `M=4` | `M=5` | `M=6` | `M=7` | `M=8` | `M=9` |
+|---|---|---|---|---|---|---|---|
+| 1 | 2.9e-03 | 1.3e-04 | 5.1e-06 | 5.5e-08 | 6.2e-10 | 5.1e-12 | 9.3e-14 |
+| 2 | 2.1e-04 | 2.4e-06 | 1.5e-08 | 6.0e-11 | 1.8e-13 | 1.0e-13 | 2.6e-13 |
+| 3 | 4.2e-05 | 2.1e-07 | 5.9e-10 | 1.0e-12 | 2.4e-14 | 1.3e-13 | 8.6e-14 |
+
+**At equal `M` a coarse grid looks worse; at equal DOF it is the other way
+round, by decades.**  Re-read by `q = N (M-1)`:
+
+| `theta = 0.60`, matched `q` | `N = 1` | `N = 2` | `N = 3` | `N=1` advantage |
+|---|---|---|---|---|
+| `q = 4` | **6.4e-04** | 4.5e-03 | -- | 7x |
+| `q = 6` | **1.1e-06** | 1.8e-04 | 6.8e-04 | 164x / 618x |
+| `q = 8` | **2.1e-09** | 4.5e-06 | -- | 2140x |
+
+| CONICAL, matched `q` | `N = 1` | `N = 2` | `N = 3` | `N=1` advantage |
+|---|---|---|---|---|
+| `q = 4` | **5.1e-06** | 2.1e-04 | -- | 41x |
+| `q = 6` | **6.2e-10** | 2.4e-06 | 4.2e-05 | 3900x / 68000x |
+| `q = 8` | **9.3e-14** | 1.5e-08 | -- | 160000x |
+
+**Reason, and it is the opposite of the worry:** the field in a uniform region
+is ONE analytic plane wave, so the error is spectral in the polynomial degree
+and the cheapest way to buy degree is to spend the whole `q` budget on ONE
+element.  `N = 1, M = 9` and `N = 3, M = 3` cost `q = 8` and `q = 6`
+respectively; the first is 2.1e-09 and the second 6.8e-04.  **Isolated, a
+uniform layer should be on `N = 1`.**
+
+### F4.2 IN A CASCADE, against the exact 1-D oracle
+
+The isolated result is not the whole answer, because inside a cascade the
+uniform layer's trace space must also carry the NEIGHBOURS' modal content --
+which has kinks at THEIR walls, and is not a single plane wave.  Fixture: a
+y-uniform stripe stack `A(duty 1/2, N=2, M_A=8) | uniform eps=2.25 (grid, M_u)
+| B(duty 1/3, N=3, M_B=7)`, so the exact 1-D `PMMStack` at degree 14 is the
+truth for the whole stack (self-gaps 2.32e-07 / 6.42e-07 / 2.00e-07).  Only the
+uniform layer varies.
+
+| `theta` | grid | `M_u=3` | 4 | 5 | 6 | 7 | 8 | 10 | 12 |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.00 | 1 | 5.7e-01 | 3.6e-01 | 1.4e-01 | 2.5e-01 | 5.0e-02 | 3.1e-02 | 1.3e-02 | **4.4e-03** |
+| 0.00 | 2 | 9.1e-02 | 5.1e-02 | 5.7e-02 | 9.0e-03 | 1.0e-02 | 4.2e-03 | 3.5e-03 | **3.5e-03** |
+| 0.00 | 3 | 2.0e-02 | 4.3e-02 | 6.3e-03 | 4.8e-03 | 3.4e-03 | 3.5e-03 | 3.5e-03 | **3.5e-03** |
+| 0.20 | 1 | 3.2e-01 | 2.9e-01 | 1.5e-01 | 1.6e-01 | 6.2e-02 | 1.4e-01 | 4.8e-02 | **2.0e-02** |
+| 0.20 | 2 | 1.7e-01 | 9.9e-02 | 7.8e-02 | 5.1e-02 | 3.5e-02 | 1.7e-02 | 1.2e-02 | **1.2e-02** |
+| 0.20 | 3 | 7.4e-02 | 7.5e-02 | 3.1e-02 | 1.6e-02 | 1.2e-02 | 1.2e-02 | 1.2e-02 | **1.2e-02** |
+| 0.40 | 1 | 4.3e-01 | 3.9e-01 | 2.8e-01 | 2.1e-01 | 2.1e-01 | 1.5e-01 | 7.1e-02 | **3.1e-02** |
+| 0.40 | 2 | 2.6e-01 | 1.6e-01 | 3.7e-01 | 1.0e-01 | 8.5e-02 | 3.0e-02 | 2.5e-02 | **2.5e-02** |
+| 0.40 | 3 | 1.1e-01 | 2.7e-01 | 4.8e-02 | 3.0e-02 | 2.5e-02 | 2.5e-02 | 2.5e-02 | **2.5e-02** |
+
+Three readings:
+
+1. **Every grid reaches the SAME floor** -- 3.5e-03 / 1.2e-02 / 2.5e-02 at
+   `theta = 0 / 0.20 / 0.40 -- and that floor is NOT the uniform layer: it is
+   layers A and B at their fixed `M_A = 8`, `M_B = 7`.  Once `M_u` is adequate
+   the uniform layer is never the limiter, on any grid.
+2. **`N = 1` needs a much higher `M_u` to get there.**  `grid = 3` is at the
+   floor by `M_u = 7`, `grid = 2` by `M_u = 8-10`, `grid = 1` still 1.3-1.7x
+   above it at `M_u = 12`.  **At the stack's default `M` (7-8 here), `grid = 1`
+   is 3-6x worse than `grid = 2` or `3`** -- and that is precisely the
+   configuration the natural API default would produce.
+3. **Per DOF `N = 1` is still competitive and often cheapest**: at
+   `theta = 0.40`, `grid = 1` reaches 3.1e-02 on `q = 11`, where `grid = 2`
+   needs `q = 14` for 3.0e-02 and `grid = 3` needs `q = 15`.
+
+### F4.3 Against the SHARED-GRID path
+
+The same stack on the union lattice `N = 6` with one global `M`, same oracle:
+
+| `theta` | union `M=4` (`q=18`) | union `M=5` (`q=24`) |
+|---|---|---|
+| 0.00 | 7.4e-03 (11.2 s) | 4.5e-04 (68.5 s) |
+| 0.20 | 2.8e-02 (11.5 s) | 3.5e-03 (70.0 s) |
+| 0.40 | 3.9e-02 (11.5 s) | 2.8e-03 (69.6 s) |
+
+The union arm at `q = 24` beats the per-layer arm's floor -- **because it also
+raises A and B**, which the per-layer arm held fixed at `q_A = 14`, `q_B = 18`
+by construction.  The eig work is `sum dim^3`: the per-layer arm at
+`(grid=1, M_u=12)` is `392^3 + 242^3 + 648^3 = 3.5e+08`; the union arm at
+`M = 5` is `3 x 1152^3 = 4.6e+09`, **13x more**.  This part of the table is not
+a per-layer-vs-union comparison (S7.3 and F2 are); it is the calibration that
+says the floors above are the neighbours' and nothing else.
+
+### F4.4 VERDICT on O-6
+
+**A uniform layer may go on `N = 1`, and it should -- but its `M_u` must NOT
+default to the stack's `M`.**
+
+* Isolated, `N = 1` is 1-5 DECADES better than `N = 2` or `N = 3` at equal DOF
+  at every angle measured, including conical (F4.1).  The field is one plane
+  wave; degree is the right currency and one element buys the most of it.
+* In a cascade the uniform layer must additionally represent the NEIGHBOURS'
+  traces, and there `N = 1` pays: it needs `M_u ~ 12` where `N = 3` needs
+  `M_u ~ 7` to reach the same floor.  At a shared default `M` it reads 3-6x
+  worse (F4.2).
+* **The API rule this yields:** `grid=1` is the right default for a uniform
+  layer, and `n_modes` for that layer must default not to the stack's `M` but
+  to the value that matches its NEIGHBOURS' `q` -- i.e.
+  `M_u = max(q_prev, q_next) / grid + 1`.  On the F4.2 fixture that gives
+  `M_u = 19` for `grid = 1` (`q_u = 18 = q_B`), comfortably past the floor,
+  at an eig dimension of `2 * 18^2 = 648` -- the same as layer B's and 8x
+  smaller than the union's.  **`N = 1` is cheap, `N = 1` at the stack's `M` is
+  a trap**, and the docstring must say so.
+* S2.5's far-field caveat is unchanged and now doubly load-bearing: an `N = 1`
+  END layer caps the Rayleigh orders at `(M-2)//2`.  With the `M_u` rule above
+  that cap is generous; with a defaulted `M_u` it is not.
+
 ## F5 (roadmap item N-1) -- NON-UNIFORM SEGMENT BOUNDARIES: **GO**
 
 `nonuniform.py` (the generalized basis), `f5_nonuniform.py` (gates a-d, c3, d2),
@@ -1585,3 +1724,26 @@ two slices with different walls.
 | **N5** | a multi-slice arbitrary-wall taper converges through NON-CONFORMING mortar interfaces | **1.20e-04** at `q = 30`, closure 4.9e-11 (F5.4 d2) |
 | **N6** | the conforming identity survives non-uniform grids: forcing the mortar on identical NON-UNIFORM grids reproduces the bypass | **2.08e-16 / 3.61e-16** through 5 forced interfaces (F5.5 [B]) |
 | **N7** | FAIL-BEFORE for the four `J_n` sites: reverting any one of them to the scalar `J` must break a NON-uniform solve while leaving every uniform solve bit-identical | not run; the four sites are identified and each is 1-3 lines. The build must run it -- a uniform-only gate cannot see any of them, exactly as G3 cannot see the V1/V2 swap |
+
+## F6 -- open items after this round
+
+| id | status |
+|---|---|
+| **O-1** second BLAS build | **CLOSED** by F1, with a caveat that must travel with it: the three arms vary OS, compiler, python, numpy and the BLAS KERNEL, but not the BLAS FAMILY (all three are scipy-openblas 0.3.31).  The measured spreads are a LOWER bound; the doc's original "numpy + MKL" build note was wrong and is corrected in the FOLLOW-UP header. |
+| **O-2** the equal-DOF advantage's regime | **CLOSED** by F2.  The corner-dominated 2-D pillar pair does not reverse the sign at working `q`; it moves the crossing from `q ~ 30` (stripes) to between `q = 18` and `q = 24`.  Same sign with an in-plane LC tensor.  The closure advantage is larger on the device class than on stripes (up to 5142x) and does not decay. |
+| **O-6** `N = 1` uniform layers at oblique | **CLOSED** by F4.  `N = 1` is right, by 1-5 decades per DOF isolated; the trap is its `n_modes`, which must scale to the NEIGHBOURS' `q`, not to the stack's `M`. |
+| **O-10** the per-layer `M` recipe | **CLOSED** by F3.  Ship stationarity-in-every-knob as the criterion and the per-layer own-residual FLOOR (15/16) as the cheap screen; do NOT ship the greedy rule (6/9). |
+| **N-1** non-uniform segments | **GO** (F5).  Four sites, `J -> J_n`; bit-identical on uniform walls including the out-of-plane generator; 4.05e-05 vs the exact oracle at arbitrary walls; 1.20e-04 on a four-slice arbitrary-wall taper.  Ship it WITH the mortar build (1-2 days on top). |
+| **O-3** `retain_internal` / `layer_absorption` per-layer | **STILL OPEN** -- designed (S12.3), not prototyped, not measured.  Unchanged by this round. |
+| **O-4** JAX twin | **STILL OPEN**, still not a regression. |
+| **O-5** `prepare()` / wavelength sweeps | **STILL OPEN**; non-uniform segments do not change the argument (the cached objects are still two small 1-D matrices per interface, now keyed on the wall array instead of on `N`). |
+| **O-7** the `(2, 2)` grid fallback in `PMM2DStackPure.solve` | **STILL OPEN**; with F5 it must become a per-layer WALL list, not a per-layer `N` list. |
+| **O-8** grids keyed on `tau` | **STILL OPEN** and slightly worse with F5: the cache key becomes the wall ARRAY plus `tau`, so an angle sweep over a taper rebuilds every slice's basis.  The tau-free/tau-dependent split S O-8 proposes is now the obvious fix. |
+| **O-9** clamp vs raise on `n_orders` | **STILL OPEN**; F4.4 makes it sharper (an `N = 1` end layer caps at `(M-2)//2`). |
+| **O-11** NEW -- **a suspected sliver-element defect in the shipped 1-D `PMMStack` at near-coincident LAYER walls** | Two layers whose wall sets differ by `delta = 1e-4 .. 1e-5` of the period: the solver's own degree-12-vs-14 self-gap reads 4.79e-01 and 8.17e+00, and at `delta = 1e-5` BOTH degrees agree on an answer 9.30e-01 away from the `delta -> 0` limit -- a converged-looking wrong answer, with the lossless closure sitting at 1.6e-08 throughout (**energy-invisible**).  Both `layer_grids` spellings read the same.  Reproducer: `f5f_attrib.py`.  Outside `1e-3 .. 3e-6` the solver is smooth and correct, and a 2-degree sidewall taper (`delta = 2.6e-03`) is nowhere near it -- but a `stabilize`-style degree consensus would NOT catch this, which is what makes it worth a ticket. |
+
+**Nothing in this round reopens the GO of S0.**  It narrows two claims (the
+equal-DOF ratio is regime-bounded, F2.4; the per-layer `M` needs a documented
+recipe, F3.4), removes the scope limitation that S0 stated as permanent (F5.6:
+arbitrary tapers are reachable), and replaces one assumption with a measurement
+(F1: which bars are build-free and which are not).
