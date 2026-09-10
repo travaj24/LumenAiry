@@ -164,9 +164,14 @@ def test_n1_integer_walls_reproduce_the_scalar_jacobian_bit_for_bit():
     SAME-BUILD two-arm sha256 comparison against a scalar-``J``
     reimplementation of each site, so it is a claim about the arithmetic, not
     about a tolerance.  MEASURED: worst ``|d| = 0.0e+00`` and 0 hash
-    mismatches over 6 grids x 8 families on BOTH builds; the 2-D pencils
-    ``Rmat/Lmat/Stt/Schur/Agen/Bgen`` over 3 grids x 5 cell kinds (scalar,
-    in-plane tensor, out-of-plane, magnetic, slanted) likewise identical.
+    mismatches over the 6 grids x 8 families BELOW on both builds, plus the
+    2-D pencils ``Rmat/Lmat/Stt/Schur/Agen/Bgen`` over the 2 grids x 3 cell
+    kinds this test runs.  (The build doc's wider net -- 3 grids x 5 cell
+    kinds including MAGNETIC and SLANTED, hashed against the pre-change module
+    swapped in on disk -- cannot live in the suite; the independent
+    verification re-ran that arm against the READ-ONLY main clone and reports
+    315/315 identical, see
+    ``docs/audits/VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md`` S1.)
     """
     worst = 0.0
     n = 0
@@ -230,9 +235,20 @@ def test_n2_explicit_uniform_walls_are_ulp_close_not_bit_identical():
     element, so ``linspace[i+1] - linspace[i]`` is not always the same double
     as ``d/N``.
 
-    MEASURED: exactly 0.0 at ``d = 1.2`` for ``N = 2, 3, 4, 6``; 1.96e-16
-    relative at ``d = 0.9, N = 4`` (both builds).  That is why the integer path
-    is kept DISTINCT -- routing the int through the array path would make N1's
+    RE-MEASURED 2026-09-11 (VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md S8),
+    because the values this docstring previously carried did not reproduce.
+    ``np.all(np.diff(np.linspace(0, d, N+1)) == d/N)`` is TRUE only for
+    ``N = 2`` among the grids below, and the assembled mass follows it:
+
+        (1.2, 2, 5)  0.0        (1.2, 4, 5)  3.084e-16
+        (0.9, 4, 5)  2.056e-16  (0.9, 3, 6)  3.084e-16
+        (1.2, 3, 6)  1.156e-16  (1.2, 6, 4)  4.626e-16
+
+    identical for ``tau = 1`` and for the Bloch ``tau``, and the same to a
+    factor 3 on ``mass<B|B>`` / ``stiff`` (``mixed`` is exactly 0 everywhere,
+    being scale-free).  So the SHAPE of the claim holds -- the difference is
+    ULP-level and period-dependent -- and that is why the integer path is kept
+    DISTINCT: routing the int through the array path would make N1's
     unconditional claim depend on the period."""
     worst = 0.0
     for d, N, M in ((1.2, 2, 5), (1.2, 4, 5), (0.9, 4, 5), (0.9, 3, 6)):
@@ -245,9 +261,10 @@ def test_n2_explicit_uniform_walls_are_ulp_close_not_bit_identical():
         Ma = ba.mass(ba.Btilde, ba.Btilde)
         worst = max(worst, float(np.max(np.abs(Mi - Ma)))
                     / float(np.max(np.abs(Mi))))
-    # a magnitude bar with 3 decades of gap on both sides: ULP-level above,
-    # and the smallest real signal this basis carries (N3's 9.6e-04 gap at
-    # M = 5) far above.  MEASURED worst 1.96e-16 (WIN) / 1.96e-16 (WSL).
+    # a magnitude bar with decades of gap on both sides: ULP-level below
+    # (RE-MEASURED worst 3.084e-16, 2026-09-11) and the smallest real signal
+    # this basis carries far above (N3's own arm-to-arm gap at M = 5 reads
+    # 1.9e-01 on this fixture).  3.4 decades of margin below the bar.
     assert worst < 1e-13, worst
 
 
@@ -403,22 +420,40 @@ def _score_vs_1d(o2d, R, T, o1d, R1d, T1d):
 def test_n3_two_exact_wall_representations_agree_inside_the_triangle_bar():
     """N3.  A duty-1/3 stripe has TWO exact-wall representations -- a
     NON-uniform 2-segment grid with its wall at ``P/3`` and the uniform
-    3-segment lattice -- and they must converge to the same answer.
+    3-segment lattice -- and they must converge to the same answer, on 2/3 of
+    the degrees of freedom (``q = 2(M-1)`` against ``3(M-1)``).
 
-    The bar is the TRIANGLE INEQUALITY against the exact 1-D oracle, derived
-    per rung and not fitted: two representations of ONE device may disagree by
-    at most the SUM of their own distances to truth.  MEASURED 5/5 rungs
-    inside on both builds; the NU arm reaches its accuracy on 2/3 of the
-    uniform arm's degrees of freedom (``q = 2(M-1)`` vs ``3(M-1)``)."""
+    THE TRIANGLE LINE IS NOT A GATE, and saying so is the point.
+    ``gap <= en + eu`` is a THEOREM for three max-norms taken over one order
+    set -- ``max_m |a-b| <= max_m |a-t| + max_m |b-t|`` -- so it cannot fail
+    whatever the library does, and the independent verification
+    (``docs/audits/VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md`` S8) flagged
+    the earlier form of this test as vacuous for exactly that reason.  It is
+    kept below because it REPORTS the three numbers, and the real DECISIONS
+    are asserted after the loop.
+
+    RE-MEASURED 2026-09-11 on this fixture (`q_NU`/`q_uniform` = 2(M-1)/3(M-1)):
+
+        M   err NU     err uniform   arm-to-arm gap   triangle bar
+        4   9.070e-02  1.877e-01     1.229e-01        2.784e-01
+        5   1.738e-01  1.700e-02     1.908e-01        1.908e-01
+        6   2.387e-02  4.358e-03     1.951e-02        2.826e-02
+        7   2.566e-03  1.586e-04     2.407e-03        2.753e-03
+        9   1.681e-05  2.834e-07     1.653e-05       4.648e-05
+
+    -- note the M = 5 rung sits INSIDE the triangle bar by a factor 1.0002,
+    which is what a tautology looks like when it is read as a margin.  The
+    oracle's own degree-12-vs-14 self-gap is 7.35e-06 here."""
     o1d, R1d, T1d, self_gap = _oracle_pair(
         (_PER / 3.0, 2.0 * _PER / 3.0), (_EPS_P, _EPS_H))
     # the oracle is readable throughout: its own degree-12-vs-14 self-gap
-    # (MEASURED 1.55e-05 WIN) sits well below the smallest gap scored below
+    # (RE-MEASURED 7.346e-06) sits decades below the finest gap scored below
     assert self_gap < 1e-4, self_gap
 
     cnu = np.array([[_EPS_P, _EPS_P], [_EPS_H, _EPS_H]], dtype=_C)
     cu = np.full((3, 3), _EPS_H + 0j)
     cu[0, :] = _EPS_P
+    gaps, errs_n, errs_u = [], [], []
     for M in (4, 5, 6, 7):
         stn = PMM2DStackPure(_PER, n_modes=M, n_orders=1,
                              layer_grids="per-layer")
@@ -438,7 +473,25 @@ def test_n3_two_exact_wall_representations_agree_inside_the_triangle_bar():
             i2 = np.where((ou[:, 0] == m) & (ou[:, 1] == 0))[0][0]
             gap = max(gap, abs(float(Rn[1, i1]) - float(Ru[1, i2])),
                       abs(float(Tn[1, i1]) - float(Tu[1, i2])))
+        # the triangle relation, REPORTED (see the docstring: it is a theorem)
         assert gap <= en + eu + 4.0 * self_gap, (M, gap, en, eu)
+        gaps.append(gap)
+        errs_n.append(en)
+        errs_u.append(eu)
+    # THE GATE, and it is one the library can fail: over M = 4 -> 7 both
+    # representations must approach the ORACLE and each other by a wide
+    # margin.  RE-MEASURED gap 1.229e-01 -> 2.407e-03 (51x), err NU
+    # 9.070e-02 -> 2.566e-03 (35x), err uniform 1.877e-01 -> 1.586e-04
+    # (1183x); barred at 10x, i.e. 3.5x-118x inside on the two arms and 5.1x
+    # inside on the gap.  (Neither arm is monotone -- the M = 5 rung of the
+    # NU arm is worse than M = 4 -- so the decision is on the ENDPOINTS,
+    # which is what the data supports.)
+    assert gaps[-1] < 0.1 * gaps[0], gaps
+    assert errs_n[-1] < 0.1 * errs_n[0], errs_n
+    assert errs_u[-1] < 0.1 * errs_u[0], errs_u
+    # ... and the finer arm is still READABLE against the oracle, so the
+    # convergence above is the solver's and not the oracle's floor.
+    assert errs_n[-1] > 2.0 * self_gap, (errs_n, self_gap)
 
 
 def test_n4_arbitrary_walls_converge_to_the_exact_1d_answer():

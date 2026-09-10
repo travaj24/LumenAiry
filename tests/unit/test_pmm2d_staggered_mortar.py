@@ -156,8 +156,19 @@ def test_g2_forced_mortar_reduces_to_the_square_modal_match(name, cells, M,
     (WIN) / 1.36e-13 (WSL) against a derived bar of 1.6e-11 -- a 120x gap with
     the build spread inside it.
 
+    ``_gram_cond`` is evaluated at NORMAL incidence even for the oblique and
+    conical rows.  That is deliberate and MEASURED (2026-09-11): the Gram's
+    ``cond_2`` moves at most 8.7 % across ``alpha0`` in
+    ``(0, 0) .. (1.7, -0.9)`` on these grids, and normal incidence is the
+    larger reading on two of the three, so it is a conservative proxy against
+    margins of 201x-2251x.
+
     NOTE this gate CANNOT see the V1/V2 H-row swap (on identical grids
-    ``C1 = G1``, ``C2 = G2`` and it cancels).  ``test_g3_*`` is what does."""
+    ``C1 = G1``, ``C2 = G2`` and it cancels).  ``test_g3_*`` is what does --
+    and the independent verification reproduced the BLINDNESS explicitly:
+    with the swap DISABLED this identity still reads 1.82e-15 (stripe pair)
+    and 3.65e-13 (pillar pair), i.e. it passes either way
+    (``VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md`` S4.1)."""
     N = cells[0].shape[0]
     st_a = PMM2DStackPure(_P, n_modes=M, n_orders=2)
     st_b = PMM2DStackPure(_P, n_modes=M, n_orders=2, layer_grids="per-layer")
@@ -251,14 +262,22 @@ def test_g4_transparent_interface_reproduces_the_analytic_fresnel_slab(grids):
     analytic Fresnel slab and there is no geometry to resolve -- nothing but
     the mortar can move the answer.
 
-    MEASURED at ``M = 7``, ``theta = 0.20`` (WIN): conforming (2,2) 6.7e-14,
-    nested (2,4) 1.2e-14, NON-conforming (2,3) 3.8e-14, (3,4) 3.6e-14, with
-    closure at or below 8.2e-14 throughout.  A NON-conforming mortar interface
-    is NOT measurably worse than a conforming one, which is what says every
-    gap in the accuracy gates is RESOLUTION, not the interface.  The bar is a
-    magnitude bar with decades on both sides (round-off above, the 1e-3-class
-    resolution signals of the other gates far below); the readings themselves
-    are round-off-limited and have an O(1) cross-build spread, so they are
+    RE-MEASURED 2026-09-11 AT THIS TEST'S OWN SETTING (``M = 6``,
+    ``theta = 0.20``) -- the readings this docstring previously carried were
+    the build doc's ``M = 7`` table, which is a different fixture and included
+    a ``(2, 4)`` arm this test does not run:
+
+        (2,2) conforming     2.278e-13   closure 7.11e-15
+        (2,4) nested         1.641e-13   closure 3.12e-13
+        (2,3) NON-conforming 1.474e-13   closure 2.83e-13
+        (3,4) NON-conforming 3.197e-14   closure 2.59e-14
+
+    A NON-conforming mortar interface is NOT measurably worse than a
+    conforming one, which is what says every gap in the accuracy gates is
+    RESOLUTION, not the interface.  The bar is a magnitude bar with decades on
+    both sides (440x above the worst reading, and the 1e-3-class resolution
+    signals of the other gates far below); the readings themselves are
+    round-off-limited and have an O(1) cross-build spread, so they are
     deliberately NOT pinned."""
     n, t, th, M = 2.0, 0.30, 0.20, 6
     k0 = 2 * np.pi / _WL
@@ -288,9 +307,15 @@ def test_g4_generalized_mortar_reproduces_berreman_through_a_split(grids):
     whole stack on the generalized S-matrix, so this exercises
     ``_interface_smatrix_general_mortar_2d`` -- the twin with the same V1/V2
     swap.  MEASURED at ``M = 7``, 25 deg CONICAL (WIN): conforming (2,2)
-    2.1e-12, NON-conforming (2,3) 3.2e-11, (3,4) 3.4e-13, closure <= 1.3e-11.
-    Bar 1e-8: five decades above the worst reading and five below the smallest
-    real signal (the M = 5 rung of the same fixture reads 1.6e-06)."""
+    2.1e-12, NON-conforming (2,3) 3.2e-11, closure <= 1.3e-11.  (A ``(3,4)``
+    reading of 3.4e-13 appears in the build doc's table; this test does not
+    run that pair.)  Bar 1e-8: five decades above the worst reading and five
+    below the smallest real signal (the M = 5 rung of the same fixture reads
+    1.6e-06).  The independent verification re-ran the same argument on ITS
+    OWN fixture over three mounts, two modal counts and three grid pairs and
+    reads 3.06e-11 .. 9.99e-12 at ``M = 7`` against 1.03e-06 .. 2.52e-05 at
+    ``M = 5`` -- the same two-sided separation
+    (``VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md`` S9)."""
     def _uni(no, ne, tilt, azim):
         c, s = np.cos(tilt), np.sin(tilt)
         d = np.array([s * np.cos(azim), s * np.sin(azim), c])
@@ -593,12 +618,21 @@ def test_g9_conditioning_census_refuses_nothing_in_the_useful_range():
     ``solve``s stay ``solve``s (LAPACK ``gesv`` is backward stable, so a
     residual screen on them measures nothing) and the compounded exposure
     lands on the explicit inverse, which is where the guard is.  MEASURED over
-    9 solves on three non-conforming configurations at ``M = 4, 5, 6``: worst
-    equilibrated ``rcond`` 8.9e-05 (WIN), i.e. FOUR decades above M1's 1e-8
-    screen, and it IMPROVES with ``M`` -- the opposite of a cliff, which is
-    what one expects when the conditioning is set by the basis's own Gram
-    rather than by the grid mismatch.  Nothing is refused, and the census is
-    an instrument here, not a gate."""
+    the 4 solves THIS TEST RUNS (two non-conforming configurations at
+    ``M = 4, 5``): worst equilibrated ``rcond`` 8.9e-05 (WIN), i.e. FOUR
+    decades above M1's 1e-8 screen.  The build doc's wider census (three
+    configurations at ``M = 4, 5, 6``) and the independent verification's
+    (nine solves on three configurations, worst 1.505e-05) agree: nothing is
+    refused in the useful range, and the census is an instrument here, not a
+    gate.
+
+    WHAT THIS DOES NOT SAY, and the verification measured it: the design
+    argument above holds for the configurations sampled, NOT in general.  On a
+    grid carrying two walls 1e-3 of the period apart the two UNGUARDED
+    ``solve``s reach ``cond_2`` 5.9e+07 and 4.9e+10 while ``I + BA``'s guarded
+    ``rcond`` still reads 2.5e-07, and below ``delta ~ 1e-7`` they raise a bare
+    ``numpy.linalg.LinAlgError``.  See
+    ``docs/audits/VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md`` S6.3-S6.4."""
     prev, _rc._INV_CENSUS = _rc._INV_CENSUS, []
     try:
         worst, seen = 1.0, set()
@@ -640,11 +674,16 @@ def test_cross_mass_kron_factorisation_is_an_identity_and_never_materialised():
     ``N = (6, 12), M = 6`` the dense ``C1`` is 51.8 MB against 0.058 MB for its
     two factors (900x) and the apply is 39x faster -- per COMPONENT per
     INTERFACE, of which a staircase has two and ``nlay + 1``.  MEASURED
-    identity 2.2e-16 .. 6.6e-16 across four grid pairs on both builds.
+    identity 2.2e-16 .. 6.6e-16 across the build doc's four grid pairs on both
+    builds; this test runs the three of them that are cheap, and the
+    independent verification re-ran five pairs and reads 2.73e-16 .. 5.08e-16
+    with memory ratios 75x / 225x / 588x / 900x / 1600x and apply speed-ups
+    0.49x / 3.04x / 15.6x / 40.4x / 66.6x.
 
     Note the small pairs are NOT faster factored ((2,3) at M=6 reads 0.34x on
-    WIN): the crossover is around 100x100 and the win is the MEMORY, which is
-    what makes the design work at all."""
+    WIN, 0.49x on the verification's re-run): the crossover is around 100x100
+    -- the (2,3) dense operator is exactly 100x225 -- and the win is the
+    MEMORY, which is what makes the design work at all."""
     rng = np.random.default_rng(0)
     ratios = []
     for (Na, Nb), M in (((2, 3), 6), ((3, 6), 6), ((6, 12), 6)):
@@ -883,8 +922,16 @@ def test_taper_agrees_with_the_hybrid_staircase_at_the_same_slices():
 
     r5, clo5 = _pure(4)
     r6, clo6 = _pure(5)
-    # 1. the pure arm CONVERGES (its own rung-to-rung gap shrinks) ...
-    assert abs(r6 - r5) < 0.5 * max(abs(r5 - r9), 1e-12) or abs(r6 - r5) < 5e-2
+    r7, _clo7 = _pure(6)
+    # 1. the pure arm CONVERGES (its own rung-to-rung gap shrinks).  RESTATED
+    #    2026-09-11: the previous form was
+    #       abs(r6-r5) < 0.5*max(abs(r5-r9), 1e-12) or abs(r6-r5) < 5e-2
+    #    whose FIRST clause is FALSE on this fixture (|r6-r5| = 2.797e-02
+    #    against 0.5*|r5-r9| = 1.442e-02), so it passed only through the
+    #    escape hatch and asserted nothing.  With the third rung the claim is
+    #    real: MEASURED |r(M5)-r(M4)| = 2.797e-02 and |r(M6)-r(M5)| =
+    #    9.356e-04, i.e. 30x tighter, barred at 2x with 15x inside it.
+    assert abs(r7 - r6) < 0.5 * abs(r6 - r5), (r5, r6, r7)
     # 2. ... it agrees with the hybrid to a few times the ORACLE's own
     #    self-gap -- the most this cross-engine comparison can assert ...
     assert abs(r6 - r9) < 20.0 * max(oracle_gap, 1e-6), (r6, r9, oracle_gap)
