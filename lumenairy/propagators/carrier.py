@@ -767,6 +767,26 @@ def _phasor_rows(arg_rows, shape, dtype):
     return out
 
 
+def _narrow_rows(val_rows, shape, dtype):
+    """``val_rows(r0, r1)`` assembled in row bands and STORED as ``dtype``.
+
+    The value-side sibling of :func:`_phasor_rows`, for the one reference
+    phase that is a PRODUCT of two already-exponentiated per-axis factors
+    rather than one ``exp`` (the astigmatic carrier of
+    :func:`_build_carrier_phase`).  The band expression is the whole-grid
+    expression on a slice and the multiply is elementwise, so the stored
+    result is bit for bit the narrowed whole-grid product -- what the band
+    removes is the full-grid complex128 transient, nothing else
+    (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D2)."""
+    ny, nx = int(shape[-2]), int(shape[-1])
+    out = np.empty((ny, nx), dtype=dtype)
+    br = int(max(16, min(ny, _PHASOR_BAND_BYTES // (16 * max(nx, 1)))))
+    for r0 in range(0, ny, br):
+        r1 = min(ny, r0 + br)
+        out[r0:r1] = val_rows(r0, r1)
+    return out
+
+
 def _radial_carrier_phase(shape, dx, dy, wavelength, R, sign, bld=np,
                           centre=(0.0, 0.0), dtype=None):
     """``exp(sign*i*k*(x^2+y^2)/(2R))`` on the centred grid (float64
@@ -1647,12 +1667,29 @@ def _propagate_carrier_astigmatic(E_env, R_x, R_y, z, wavelength, dx, dy):
 
 
 def _build_carrier_phase(shape, dx, dy, wavelength, R_carrier, sign, fn,
-                         bld=np):
+                         bld=np, dtype=None):
     """Carrier phase ``exp(sign*i*k*[x^2/(2R_x) + y^2/(2R_y)])`` for a scalar
     or ``(R_x, R_y)`` carrier.  Returns ``None`` when the carrier is fully
     collimated (a no-op).  Collimated axes of an astigmatic carrier drop out
     of the per-axis product.  Built on backend ``bld`` (host NumPy for JAX);
-    ``bld is np`` reproduces the historical NumPy screen byte-for-byte."""
+    ``bld is np`` reproduces the historical NumPy screen byte-for-byte.
+
+    ``dtype`` (v5.44.1, VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D2): the
+    seventh reference-phase construction, and the one the 5.44.0 change
+    missed -- ``carrier_referenced_envelope`` /
+    ``carrier_referenced_reconstruct`` reach it, so a complex64 chain still
+    materialised ONE FULL-GRID complex128 phasor per call (5 per two-group
+    chain; 4.29 GB each at N=16384).  ``None`` / ``complex128`` is the
+    shipped whole-grid path, BYTE-IDENTICAL; ``complex64`` takes the same
+    ``_phasor_rows`` route the other helpers take -- the float64 argument on
+    a row slice, narrowed only after ``exp``.  Pass the dtype of the field
+    this factor will multiply.
+
+    The ASTIGMATIC branch narrows the SAME complex128 per-axis PRODUCT the
+    shipped path forms, one row band at a time: ``px[j] * py[i]`` is a
+    single elementwise multiply either way, so the complex64 result is bit
+    for bit what ``(phase * py).astype(complex64)`` returns -- only the
+    full-grid complex128 transient is gone."""
     R_x, R_y, is_astig = _parse_carrier(R_carrier, fn)
     if not is_astig:
         R = R_x
@@ -1661,7 +1698,7 @@ def _build_carrier_phase(shape, dx, dy, wavelength, R_carrier, sign, fn,
         if R == 0.0:
             raise ValueError(f"{fn}: R_carrier == 0 (carrier focus).")
         return _radial_carrier_phase(shape, dx, dy, wavelength, float(R), sign,
-                                     bld)
+                                     bld, dtype=dtype)
     if R_x == 0.0 or R_y == 0.0:
         raise ValueError(
             f"{fn}: an astigmatic carrier axis radius == 0 (carrier focus).")
@@ -1672,7 +1709,23 @@ def _build_carrier_phase(shape, dx, dy, wavelength, R_carrier, sign, fn,
     if np.isfinite(R_y):                          # axis 0 == y
         py = _axis_carrier_phase(shape, dy, wavelength, float(R_y), 0, sign,
                                  bld)
-        phase = py if phase is None else phase * py
+        if phase is None:
+            phase = py
+        elif bld is np and _phasor_c64(dtype):
+            # the full-grid product, assembled in row bands and stored
+            # narrowed (the transient the whole-grid ``phase * py`` builds is
+            # the only thing that changes).
+            px = phase
+            phase = _narrow_rows(lambda r0, r1: px * py[r0:r1],
+                                 shape, np.complex64)
+        else:
+            phase = phase * py
+    if (phase is not None and bld is np and _phasor_c64(dtype)
+            and phase.dtype != np.complex64):
+        # a SINGLE finite axis: the factor is a broadcast row / column, not a
+        # grid, so there is no transient to remove -- only the dtype contract
+        # to keep (``astype`` of the same complex128 values).
+        phase = phase.astype(np.complex64)
     return phase
 
 
@@ -1720,7 +1773,9 @@ def carrier_referenced_reconstruct(
         dy = dx
     xp, is_jax, bld = _backend_of(E_env)
     phase = _build_carrier_phase(E_env.shape, dx, dy, wavelength, R_carrier,
-                                 +1, 'carrier_referenced_reconstruct', bld)
+                                 +1, 'carrier_referenced_reconstruct', bld,
+                                 dtype=(E_env.dtype if _is_complex(E_env)
+                                        else None))
     if phase is None:
         return E_env.copy() if hasattr(E_env, 'copy') else np.array(E_env)
     if _is_complex(E_env):
@@ -1770,7 +1825,9 @@ def carrier_referenced_envelope(
         dy = dx
     xp, is_jax, bld = _backend_of(E_full)
     phase = _build_carrier_phase(E_full.shape, dx, dy, wavelength, R_carrier,
-                                 -1, 'carrier_referenced_envelope', bld)
+                                 -1, 'carrier_referenced_envelope', bld,
+                                 dtype=(E_full.dtype if _is_complex(E_full)
+                                        else None))
     if phase is None:
         return E_full.copy() if hasattr(E_full, 'copy') else np.array(E_full)
     if _is_complex(E_full):

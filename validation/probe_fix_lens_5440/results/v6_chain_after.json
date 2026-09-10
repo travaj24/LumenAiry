@@ -1,0 +1,237 @@
+{
+ "version": "5.44.0",
+ "upsample_crop": {
+  "256->512": {
+   "out_dtype": "complex64",
+   "max_abs_diff_vs_single_rounding": 3.577079408008364e-07,
+   "peak": 1.1439074420253117,
+   "eps32_of_peak": 1.363643934756889e-07,
+   "double_rounded": true,
+   "rel_l2_vs_c128_input": 1.7451164816762418e-07
+  },
+  "512->256": {
+   "out_dtype": "complex64",
+   "max_abs_diff_vs_single_rounding": 2.5405169419697135e-07,
+   "peak": 1.080494325926056,
+   "eps32_of_peak": 1.2880496095729542e-07,
+   "double_rounded": true,
+   "rel_l2_vs_c128_input": 1.8500670965203756e-07
+  },
+  "512->512": {
+   "out_dtype": "complex64",
+   "max_abs_diff_vs_single_rounding": 0.0,
+   "peak": 1.1330469846725464,
+   "eps32_of_peak": 1.350697260704692e-07,
+   "double_rounded": false,
+   "rel_l2_vs_c128_input": 2.3935276152603425e-08
+  }
+ },
+ "six_leg": {
+  "rel_per_leg": [
+   6.496928963073073e-08,
+   1.0859353166585222e-07,
+   1.510200083179111e-07,
+   1.9229339653181196e-07,
+   2.333083242539361e-07,
+   2.7452348403340696e-07
+  ],
+  "dtype_c128_arm": "complex128",
+  "dtype_c64_arm": "complex64",
+  "slope_per_leg": 4.5753914005567825e-08
+ },
+ "real_chain": {
+  "N": 512,
+  "dx": 2.6e-05,
+  "dtype_c128_arm": "complex128",
+  "dtype_c64_arm": "complex64",
+  "rel_l2_field": 1.157936782559319e-07,
+  "rel_power": 7.688986734224147e-09,
+  "field_bar_2e_5_met": true,
+  "energy_bar_4e_5_met": true,
+  "upcasts_on_c64_arm": [],
+  "call_log_c64": [
+   {
+    "fn": "_phasor_rows",
+    "in": [],
+    "dtype_kw": null,
+    "out": "complex64"
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "in": [],
+    "dtype_kw": "complex64",
+    "out": "complex64"
+   },
+   {
+    "fn": "_phasor_rows",
+    "in": [],
+    "dtype_kw": null,
+    "out": "complex64"
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "in": [],
+    "dtype_kw": "complex64",
+    "out": "complex64"
+   },
+   {
+    "fn": "_phasor_rows",
+    "in": [],
+    "dtype_kw": null,
+    "out": "complex64"
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "in": [],
+    "dtype_kw": "complex64",
+    "out": "complex64"
+   },
+   {
+    "fn": "_phasor_rows",
+    "in": [],
+    "dtype_kw": null,
+    "out": "complex64"
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "in": [],
+    "dtype_kw": "complex64",
+    "out": "complex64"
+   },
+   {
+    "fn": "_phasor_rows",
+    "in": [],
+    "dtype_kw": null,
+    "out": "complex64"
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "in": [],
+    "dtype_kw": "complex64",
+    "out": "complex64"
+   },
+   {
+    "fn": "_phasor_rows",
+    "in": [],
+    "dtype_kw": null,
+    "out": "complex64"
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "in": [],
+    "dtype_kw": "complex64",
+    "out": "complex64"
+   },
+   {
+    "fn": "_phasor_rows",
+    "in": [],
+    "dtype_kw": null,
+    "out": "complex64"
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "in": [],
+    "dtype_kw": "complex64",
+    "out": "complex64"
+   },
+   {
+    "fn": "_phasor_rows",
+    "in": [],
+    "dtype_kw": null,
+    "out": "complex64"
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "in": [],
+    "dtype_kw": "complex64",
+    "out": "complex64"
+   },
+   {
+    "fn": "_phasor_rows",
+    "in": [],
+    "dtype_kw": null,
+    "out": "complex64"
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "in": [],
+    "dtype_kw": "complex64",
+    "out": "complex64"
+   },
+   {
+    "fn": "_phasor_rows",
+    "in": [],
+    "dtype_kw": null,
+    "out": "complex64"
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "in": [],
+    "dtype_kw": "complex64",
+    "out": "complex64"
+   }
+  ],
+  "call_log_c128": [
+   {
+    "fn": "_radial_carrier_phase",
+    "in": [],
+    "dtype_kw": "complex128",
+    "out": "complex128"
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "in": [],
+    "dtype_kw": "complex128",
+    "out": "complex128"
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "in": [],
+    "dtype_kw": "complex128",
+    "out": "complex128"
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "in": [],
+    "dtype_kw": "complex128",
+    "out": "complex128"
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "in": [],
+    "dtype_kw": "complex128",
+    "out": "complex128"
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "in": [],
+    "dtype_kw": "complex128",
+    "out": "complex128"
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "in": [],
+    "dtype_kw": "complex128",
+    "out": "complex128"
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "in": [],
+    "dtype_kw": "complex128",
+    "out": "complex128"
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "in": [],
+    "dtype_kw": "complex128",
+    "out": "complex128"
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "in": [],
+    "dtype_kw": "complex128",
+    "out": "complex128"
+   }
+  ]
+ }
+}

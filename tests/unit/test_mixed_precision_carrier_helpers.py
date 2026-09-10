@@ -124,6 +124,129 @@ def test_the_float32_argument_control_grows_with_the_argument():
 
 
 # ===========================================================================
+# 2b.  the SEVENTH reference phase: ``_build_carrier_phase`` (v5.44.1, D2)
+# ===========================================================================
+# VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D2: the 5.44.0 change gave ``dtype=``
+# to four helpers and missed this one, which
+# ``carrier_referenced_envelope`` / ``carrier_referenced_reconstruct`` reach --
+# so a complex64 chain still built ONE FULL-GRID complex128 phasor per call
+# (measured 5 per two-group chain; 4.29 GB each at N=16384).  Both sides are
+# pinned here: the complex64 arm builds no complex128 grid, and the complex128
+# arm is byte-identical.
+
+
+def _carrier_grids(N, dx, dtype):
+    x = (np.arange(N) - N / 2) * dx
+    r2 = x[None, :] ** 2 + x[:, None] ** 2
+    return np.exp(-r2 / (0.28 * N * dx) ** 2).astype(dtype)
+
+
+def _log_phase_helpers(monkeypatch, log):
+    """Wrap every reference-phase helper ``_build_carrier_phase`` can reach and
+    record ``(name, dtype, size)`` of what it returns -- the V7 caller probe
+    the verification recommended, as a test."""
+    for nm in ('_radial_carrier_phase', '_axis_carrier_phase',
+               '_phasor_rows', '_narrow_rows'):
+        real = getattr(C, nm)
+
+        def mk(real=real, nm=nm):
+            def wrapper(*a, **kw):
+                out = real(*a, **kw)
+                if out is not None:
+                    log.append((nm, np.dtype(out.dtype), int(out.size)))
+                return out
+            return wrapper
+        monkeypatch.setattr(C, nm, mk())
+
+
+@pytest.mark.parametrize('R', [55e-3, (55e-3, -70e-3), (55e-3, np.inf)],
+                         ids=['scalar', 'astigmatic', 'one-axis'])
+@pytest.mark.parametrize('fn_name', ['carrier_referenced_envelope',
+                                     'carrier_referenced_reconstruct'])
+def test_build_carrier_phase_builds_no_complex128_grid_on_a_complex64_field(
+        monkeypatch, R, fn_name):
+    """complex64 in -> the phase factor is complex64 and NO helper returns a
+    full-grid complex128 array (pre-fix: exactly one per call, on every
+    branch).  The VALUE pin is exact and two-arm: the complex64 factor is the
+    whole-grid complex128 factor narrowed ONCE, bit for bit -- on the radial
+    branch because ``_phasor_rows`` stores ``exp`` of the same float64
+    argument, on the astigmatic branch because ``_narrow_rows`` stores the
+    same elementwise per-axis product."""
+    N, dx = 256, 4.0e-6
+    fn = getattr(C, fn_name)
+    sign = -1 if fn_name == 'carrier_referenced_envelope' else +1
+    E64 = _carrier_grids(N, dx, np.complex64)
+    log = []
+    _log_phase_helpers(monkeypatch, log)
+    out = fn(E64, R, _WL, dx)
+    assert out.dtype == np.complex64
+    wide = [d for d in log if d[1] == np.dtype(np.complex128) and d[2] >= N * N]
+    assert wide == [], wide
+    # the factor itself, against the shipped whole-grid build narrowed once
+    ref = C._build_carrier_phase((N, N), dx, dx, _WL, R, sign, 'ref')
+    got = C._build_carrier_phase((N, N), dx, dx, _WL, R, sign, 'got',
+                                 dtype=np.complex64)
+    assert got.dtype == np.complex64
+    assert np.array_equal(got, ref.astype(np.complex64))
+    assert np.array_equal(np.asarray(out),
+                          (E64 * ref.astype(np.complex64)))
+
+
+@pytest.mark.parametrize('R', [55e-3, (55e-3, -70e-3), (55e-3, np.inf)],
+                         ids=['scalar', 'astigmatic', 'one-axis'])
+def test_build_carrier_phase_complex128_is_the_shipped_whole_grid_build(R):
+    """complex128 in -> byte-identical.  ``dtype=None`` (every pre-v5.44.1
+    call), ``dtype=complex128`` and the public helpers all take the shipped
+    whole-grid ``np.exp`` and return the same bits."""
+    N, dx = 256, 4.0e-6
+    a = C._build_carrier_phase((N, N), dx, dx, _WL, R, +1, 'a')
+    b = C._build_carrier_phase((N, N), dx, dx, _WL, R, +1, 'b',
+                               dtype=np.complex128)
+    assert a.dtype == np.complex128 and b.dtype == np.complex128
+    assert np.array_equal(a, b)
+    E128 = _carrier_grids(N, dx, np.complex128)
+    got = C.carrier_referenced_reconstruct(E128, R, _WL, dx)
+    assert got.dtype == np.complex128
+    assert np.array_equal(np.asarray(got), E128 * a)
+
+
+def test_the_complex64_carrier_call_no_longer_pays_a_full_grid_complex128():
+    """TEETH for the memory half, at the first N where the band is smaller
+    than the grid.
+
+    ``_phasor_rows`` / ``_narrow_rows`` band at ``_PHASOR_BAND_BYTES`` = 32 MB
+    of complex128 scratch, so the transient is a full grid until
+    ``16 N^2 > 32e6`` (N > 1414); N=2048 is the first power of two past it.
+    Measured (2026-09-11, numpy 2.4 / py 3.14, whole-call tracemalloc peak,
+    warm): complex128 arm 224.03 MiB both before and after; complex64 arm
+    224.03 MiB before the fix (the leak: the SAME peak, hence the audit's
+    "requesting complex64 saved 0.0 GB"), 189.03 MiB after -- a gap of
+    35.0 MiB = 8.75 * N^2 bytes, where the removed complex128 phasor is
+    16 N^2 = 64 MiB minus the 32 MB band that replaces it.  The bar is
+    4 * N^2 bytes (16.8 MiB), 2.2x under the measurement and infinitely above
+    the pre-fix gap of exactly 0."""
+    import tracemalloc
+
+    N, dx, R = 2048, 3.0e-6, 55e-3
+
+    def _peak(dtype):
+        E = _carrier_grids(N, dx, dtype)
+        C.carrier_referenced_envelope(E, R, _WL, dx)          # warm
+        tracemalloc.start()
+        tracemalloc.reset_peak()
+        out = C.carrier_referenced_envelope(E, R, _WL, dx)
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        assert out.dtype == dtype
+        return peak
+
+    p128 = _peak(np.complex128)
+    p64 = _peak(np.complex64)
+    assert p128 - p64 >= 4 * N * N, (p128 / 2 ** 20, p64 / 2 ** 20,
+                                     (p128 - p64) / 2 ** 20)
+
+
+# ===========================================================================
 # 3.  the transform pair, the readout and the chain keep complex64
 # ===========================================================================
 def test_fourier_upsample_crop_keeps_complex64():
