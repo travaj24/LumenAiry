@@ -1,0 +1,36 @@
+{
+ "bare": {
+  "jones_scalar_normal": "bdf3a8c2c0c9ad21e6af07ffc7c4d379d7f723ad638d97af41636cad015d1961",
+  "jones_inplane_normal": "3d20ed978360fb6276db4ba2ef7f7d424d0e1609ecb6be5cfdfec9825a2add52",
+  "jones_oop_normal": "7fb0a89a11c0b846d5b8eeec4e25d762b3b81e20ca4e8a784b8c34afed0b1ef0",
+  "jones_scalar_oblique": "e3aaaa9fa17cc1ed0ba56a230556746781bb1283dfe2c2ba0e836f85c43a1248",
+  "jones_inplane_oblique": "1e9acc6d75fece6b3ab8937c0be7c167ef1e86dc87e6309736ac4eaed59753bb",
+  "jones_oop_oblique": "2a7e9e11ddfc776d82556af3cd8ceeba725cdc07133d957fbedc0f69668b2193",
+  "jones_scalar_conical": "4a06896839c5b1fbdb28ca1840f2b12c8a334f2b34f14c78ba9c251360fcb023",
+  "jones_inplane_conical": "484489a0a112c3f5526c1235d00b0dbb7f10b80dc775f6546ac2afd214a9b94b",
+  "jones_oop_conical": "d59f2dd245475abb6dba54ac1b3662469a1077659d7d02a21aa1e2bc33215a22",
+  "jones_centro_auto_normal": "95c6dd613d75ca2c9632f1f4ae0dcfdac6639fc3b1c2328b3c0f7eff9957d676",
+  "jones_centro_false_normal": "0f8c2df74002e4b7f4b48d702e5cda0942c4561e7d66215e5e73648730276b89",
+  "jones_scalar3_conical": "312ce402315e681ffc63816ac06e0ae93558aa5d6414a5e80e61da36267af4db",
+  "eff_te_oblique": "1795768a425d40cb0cb240dd4c40d54ebce930840dfd2295fa9797eaeed6b82f",
+  "eff_tm_conical": "e6e0413cbe64fb28431f324683b46a18499c0b27fa4328611578a3393fc6ddb9",
+  "stack2_normal": "6d423f9010478d091d5c3338d09669495443268f2b5fc8595c141f599e4d45f7",
+  "stack2_conical": "21564228727968d7859a867c6d8aa8d2e5f26fc38f5e8cdbd06b31ed66946d58",
+  "stack3_oblique": "1d3cbf253f283bca0e3fbb3166ef75a4380ac4b3b0746086591f1336305402d4",
+  "stack_mu_conical": "12d8318a8994a00c2affb40974aebf4c8067c5a181754bac037349b9d577e447"
+ },
+ "spellings": {},
+ "_env": {
+  "lumenairy": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "arm": "base",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

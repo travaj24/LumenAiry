@@ -1,0 +1,309 @@
+{
+ "rows": {
+  "scalar/x0.30/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/x0.30/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/x0.30/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/y0.45/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/y0.45/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/y0.45/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/diag/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/diag/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/diag/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/big/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/big/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "scalar/big/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/x0.30/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/x0.30/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/x0.30/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/y0.45/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/y0.45/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/y0.45/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/diag/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/diag/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/diag/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/big/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/big/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "inplane/big/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/x0.30/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/x0.30/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/x0.30/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/y0.45/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/y0.45/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/y0.45/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/diag/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/diag/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/diag/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/big/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/big/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "oop/big/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/x0.30/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/x0.30/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/x0.30/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/y0.45/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/y0.45/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/y0.45/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/diag/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/diag/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/diag/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/big/normal": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/big/oblique": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  },
+  "nonrecip/big/conical": {
+   "A_identical": true,
+   "B_identical": true,
+   "dA": 0.0,
+   "dB": 0.0
+  }
+ },
+ "n_rows": 48,
+ "n_differing": 0,
+ "wrong_sign_relation_dA": 0.1814366351247611,
+ "_env": {
+  "lumenairy": "C:\\tmp\\lum_vslant\\lumenairy\\__init__.py",
+  "version": "5.43.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "arm": "tip",
+  "tag": "win",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

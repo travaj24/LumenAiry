@@ -1,0 +1,191 @@
+{
+ "refusals": {
+  "mixed_patterned_slants": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "PMM2DStackPure.solve: MIXED SLANTS between PATTERNED layers are not supported -- layer 0 is slanted (0.7002075382097097, 0.0) while layer 1 is slanted (0.2, 0.0) (a VERTICAL patterned layer counts as slant (0.0, 0.0)).  The frame offset between two differently sheared PATTERNED regions is a real lateral translation of one nodal grid relative to the other, exact only when it is a whole number of gr"
+  },
+  "vertical_patterned_counts_as_zero": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "PMM2DStackPure.solve: MIXED SLANTS between PATTERNED layers are not supported -- layer 0 is slanted (0.7002075382097097, 0.0) while layer 1 is slanted (0.0, 0.0) (a VERTICAL patterned layer counts as slant (0.0, 0.0)).  The frame offset between two differently sheared PATTERNED regions is a real lateral translation of one nodal grid relative to the other, exact only when it is a whole number of gr"
+  },
+  "mixed_frame_offset_above_pattern": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "PMM2DStackPure.solve: the layers ABOVE patterned layer 2 carry a MIX of vertical and slanted regions ([(0.7002075382097097, 0.0), (0.0, 0.0)]), so the accumulated lateral frame offset above that pattern is neither zero nor the one global shear (0.7002075382097097, 0.0) -- the pattern would be silently displaced by sum_j t_j d_j.  Slant the whole stack uniformly, keep every layer above the pattern "
+  },
+  "mu_uniform_plus_slant": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "PMM2DStackPure.add_layer: slant= together with mu / mu_cell is not implemented -- a SLANTED layer runs the OUT-OF-PLANE first-order generator, which carries no permeability blocks (it eliminates G3 assuming mu = 1).  The shear's own metric anisotropy is absorbed analytically; a MATERIAL mu is not.  Drop mu, or z-staircase the slanted magnetic layer."
+  },
+  "mu_cell_plus_slant": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "PMM2DStackPure.add_layer: slant= together with mu / mu_cell is not implemented -- a SLANTED layer runs the OUT-OF-PLANE first-order generator, which carries no permeability blocks (it eliminates G3 assuming mu = 1).  The shear's own metric anisotropy is absorbed analytically; a MATERIAL mu is not.  Drop mu, or z-staircase the slanted magnetic layer."
+  },
+  "solver_mu_cell_plus_slant": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "Granet2DTransverseE: slant= together with mu_cell is not implemented -- a sheared cell runs the OUT-OF-PLANE first-order generator, which carries no permeability blocks (it eliminates G3 assuming mu = 1).  The shear's OWN magnetic anisotropy mu^{lm} = g^{lm} is absorbed analytically by the six slant blocks; a MATERIAL mu is not."
+  },
+  "retain_internal_plus_slant": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "PMM2DStackPure.solve: retain_internal=True is not supported on a stack containing a SLANTED layer -- the internal-field probe (_flux_at / layer_absorption) evaluates at a plane in the SHEARED frame, where the lateral frame offset sum_j t_j d_j has not been undone, so the retained amplitudes are not lab-referenced.  Solve without retain_internal, or z-staircase the slanted layer."
+  },
+  "scalar_efficiency_entry": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "pmm_efficiency_2d_staggered: slant=(0.7002075382097097, 0.0) -- a SLANTED cell is an OUT-OF-PLANE tensor cell in the sheared frame (eps^13 = -t_x eps), so the two incident polarizations MIX and this entry's single-polarization efficiencies are not well-posed -- exactly the reason it already refuses a (Nx, Ny, 3, 3) cell.  Use pmm_jones_2d_staggered(..., slant=...), which drives BOTH polarizations "
+  },
+  "three_component_slant": {
+   "raised": "ValueError",
+   "ok": true,
+   "missing": [],
+   "msg": "PMM2DStackPure.add_layer: slant must be a (t_x, t_y) pair or a scalar t_x, got (0.1, 0.2, 0.3)."
+  },
+  "nonfinite_slant": {
+   "raised": "ValueError",
+   "ok": true,
+   "missing": [],
+   "msg": "PMM2DStackPure.add_layer: slant components must be finite, got (nan, 0.0)."
+  },
+  "hybrid_slant_times_oop": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "_layer_eigenmodes_tensor: a SLANTED layer with OUT-OF-PLANE coupling (eps_xz/yz/zx/zy) is not supported on THIS (Fourier) engine.  The 2-D slant metric here is validated for IN-PLANE tensors only; the slant x out-of-plane composition is unvalidated in this basis (the 1-D gen2 precedent hit the lossless trap).  The PURE staggered engine DOES cover the combination -- pmm_jones_2d_staggered(..., slan"
+  },
+  "zero_ezz_with_slant": {
+   "raised": "ValueError",
+   "ok": true,
+   "missing": [],
+   "msg": "Granet2DTransverseE: e_zz must be nonzero in every region (the E_z elimination divides by it)."
+  }
+ },
+ "accepted": {
+  "one_slanted_among_uniform": {
+   "ok": true,
+   "warnings": [],
+   "closure": 0.9974975515369074
+  },
+  "two_patterned_same_slant": {
+   "ok": true,
+   "warnings": [],
+   "closure": 0.9981736329317916
+  },
+  "uniform_only_mixed_slants": {
+   "ok": true,
+   "warnings": [],
+   "closure": 1.0000000066116586
+  },
+  "uniform_only_mixed_slants_is_a_noop": {
+   "dR": 1.2702463213221105e-09,
+   "dT": 1.8499908271962795e-09,
+   "dJones": 4.559207567915848e-09
+  },
+  "layer_split_normal": {
+   "dR": 8.413408858487514e-17,
+   "dT": 1.1102230246251565e-15,
+   "dJones": 5.558049685633556e-16,
+   "dJonesT": 1.197356359068535e-15
+  },
+  "layer_split_conical": {
+   "dR": 1.8735013540549517e-16,
+   "dT": 7.771561172376096e-16,
+   "dJones": 7.744952667651088e-16,
+   "dJonesT": 7.390492082589765e-16
+  },
+  "reading1_vs_reading2_oblique": {
+   "dR": 0.00017728320428201522,
+   "dT": 0.0007651720855485211,
+   "dJones": 0.0004308704447041264,
+   "dJonesT": 0.000664968432915554
+  },
+  "reading1_vs_reading2_conical": {
+   "dR": 5.024734421855623e-05,
+   "dT": 0.0004698202441764665,
+   "dJones": 0.0002710871605607397,
+   "dJonesT": 0.0005722321457334032
+  }
+ },
+ "sneaks": {
+  "tiny_slant_trips_mixed_gate": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "PMM2DStackPure.solve: MIXED SLANTS between PATTERNED layers are not supported -- layer 0 is slanted (1e-17, 0.0) while layer 1 is slanted (0.0, 0.0) (a VERTICAL patterned layer counts as slant (0.0, 0.0)).  The frame offset between two differently sheared PATTERNED regions is a real lateral translation of one nodal grid relative to the other, exact only when it is a whole number of grid cells.  Gi"
+  },
+  "tiny_slant_efficiency_entry": {
+   "raised": "NotImplementedError",
+   "ok": true,
+   "missing": [],
+   "msg": "pmm_efficiency_2d_staggered: slant=(1e-17, 0.0) -- a SLANTED cell is an OUT-OF-PLANE tensor cell in the sheared frame (eps^13 = -t_x eps), so the two incident polarizations MIX and this entry's single-polarization efficiencies are not well-posed -- exactly the reason it already refuses a (Nx, Ny, 3, 3) cell.  Use pmm_jones_2d_staggered(..., slant=...), which drives BOTH polarizations and returns ("
+  },
+  "tiny_slant_answer": {
+   "dR": 9.41521166586412e-16,
+   "dT": 1.1907141939104804e-14,
+   "dJones": 4.988886476316757e-15
+  },
+  "tiny_slant_routes_offplane": {
+   "vertical_offplane": false,
+   "tiny_offplane": true
+  },
+  "spelling_equivalence": {
+   "list": {
+    "dR": 0.0,
+    "dJones": 0.0
+   },
+   "nparray": {
+    "dR": 0.0,
+    "dJones": 0.0
+   },
+   "scalar": {
+    "dR": 0.0,
+    "dJones": 0.0
+   },
+   "npfloat": {
+    "dR": 0.0,
+    "dJones": 0.0
+   }
+  },
+  "uniform_layer_slant_is_noop": {
+   "dR": 2.1686989981617444e-09,
+   "dT": 2.33819508199673e-09,
+   "dJones": 6.081168159567532e-09,
+   "dJonesT": 2.011656576848268e-08
+  },
+  "parity_gauge": {
+   "vertical_gauge_is_none": false,
+   "slanted_gauge_is_none": true
+  },
+  "symmetry_auto_vs_false": {
+   "slanted_identical": true,
+   "vertical_identical": false,
+   "slant_is_visible": 0.021125486220462637
+  }
+ },
+ "_env": {
+  "lumenairy": "C:\\tmp\\lum_vslant\\lumenairy\\__init__.py",
+  "version": "5.43.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "arm": "tip",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

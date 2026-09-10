@@ -1,0 +1,56 @@
+{
+ "oblique25": {
+  "efficiencies_and_reflection_jones": {
+   "dR": 0.003885917796164826,
+   "dT": 0.010245428353955435,
+   "dJones_reflection": 0.005928195765258697,
+   "staircase_own_step_dR": 0.013544606341687377,
+   "staircase_own_step_dJ": 0.07997228692557566
+  },
+  "hybrid_per_order_transmission": {
+   "raw": 0.5913808036198995,
+   "times_Pm": 0.031220568381435502,
+   "times_conj_Pm": 0.48414008615677023,
+   "best_single_global_phase": 0.4630857759980679,
+   "amplitude_scale": 0.33773882607570216
+  },
+  "pure_per_order_transmission": {
+   "shipped": 0.07847894724092876,
+   "divide_out_Pm": 0.5962495480409861
+  }
+ },
+ "conical25_40": {
+  "efficiencies_and_reflection_jones": {
+   "dR": 0.00179625719573965,
+   "dT": 0.00992690325398099,
+   "dJones_reflection": 0.005269384377104838,
+   "staircase_own_step_dR": 0.013387670374952351,
+   "staircase_own_step_dJ": 0.060385939087118215
+  },
+  "hybrid_per_order_transmission": {
+   "raw": 0.5609809650722709,
+   "times_Pm": 0.01635995947681575,
+   "times_conj_Pm": 0.6954513748668899,
+   "best_single_global_phase": 0.4447449673864643,
+   "amplitude_scale": 0.3306982978858544
+  },
+  "pure_per_order_transmission": {
+   "shipped": 0.049148805210531256,
+   "divide_out_Pm": 0.5896719535956781
+  }
+ },
+ "_env": {
+  "lumenairy": "C:\\tmp\\lum_vslant\\lumenairy\\__init__.py",
+  "version": "5.43.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "arm": "tip",
+  "tag": "win",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

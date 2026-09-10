@@ -1,0 +1,127 @@
+{
+ "link1_1d_geometry": {
+  "normal/shear0.25": {
+   "shear": 0.25,
+   "slant_angle_deg": 32.0053832080835,
+   "sheared_plus_vs_rawangle_plus": 5.188731122873769e-06,
+   "sheared_minus_vs_rawangle_minus": 1.1736432124265228e-05,
+   "sheared_plus_vs_rawangle_minus": 0.35673434060330944,
+   "K2_walkPLUS_vs_shearPLUS": 0.05745705536386525,
+   "K2_walkPLUS_vs_shearMINUS": 0.33818411863664644,
+   "K4_walkPLUS_vs_shearPLUS": 0.021845777986086667,
+   "K4_walkPLUS_vs_shearMINUS": 0.35264739022957814,
+   "K8_walkPLUS_vs_shearPLUS": 0.01172320997991061,
+   "K8_walkPLUS_vs_shearMINUS": 0.35577348164143835,
+   "K16_walkPLUS_vs_shearPLUS": 0.005987345349723561,
+   "K16_walkPLUS_vs_shearMINUS": 0.35650128381128443
+  },
+  "normal/shear0.4": {
+   "shear": 0.4,
+   "slant_angle_deg": 45.00000000000001,
+   "sheared_plus_vs_rawangle_plus": 2.3959134515250113e-06,
+   "sheared_minus_vs_rawangle_minus": 2.169416170733074e-06,
+   "sheared_plus_vs_rawangle_minus": 0.6049211884734962,
+   "K2_walkPLUS_vs_shearPLUS": 0.059646662328420974,
+   "K2_walkPLUS_vs_shearMINUS": 0.5765691107105817,
+   "K4_walkPLUS_vs_shearPLUS": 0.019931235697157157,
+   "K4_walkPLUS_vs_shearMINUS": 0.5984595456334535,
+   "K8_walkPLUS_vs_shearPLUS": 0.011369667866056088,
+   "K8_walkPLUS_vs_shearMINUS": 0.603352467235692,
+   "K16_walkPLUS_vs_shearPLUS": 0.0061161571165831985,
+   "K16_walkPLUS_vs_shearMINUS": 0.6045336472682376
+  },
+  "oblique17/shear0.25": {
+   "shear": 0.25,
+   "slant_angle_deg": 32.0053832080835,
+   "sheared_plus_vs_rawangle_plus": 5.864927534224296e-06,
+   "sheared_minus_vs_rawangle_minus": 9.599610690885774e-06,
+   "sheared_plus_vs_rawangle_minus": 0.07038363409822046,
+   "K2_walkPLUS_vs_shearPLUS": 0.058674650937656336,
+   "K2_walkPLUS_vs_shearMINUS": 0.08148713369648253,
+   "K4_walkPLUS_vs_shearPLUS": 0.013833182014770462,
+   "K4_walkPLUS_vs_shearMINUS": 0.0828992542372885,
+   "K8_walkPLUS_vs_shearPLUS": 0.007818221402517644,
+   "K8_walkPLUS_vs_shearMINUS": 0.07819948988587977,
+   "K16_walkPLUS_vs_shearPLUS": 0.004291981544023771,
+   "K16_walkPLUS_vs_shearMINUS": 0.0746732500273859
+  },
+  "oblique17/shear0.4": {
+   "shear": 0.4,
+   "slant_angle_deg": 45.00000000000001,
+   "sheared_plus_vs_rawangle_plus": 1.1017681782986288e-06,
+   "sheared_minus_vs_rawangle_minus": 2.734134180712444e-06,
+   "sheared_plus_vs_rawangle_minus": 0.18804149685005084,
+   "K2_walkPLUS_vs_shearPLUS": 0.05179173899062289,
+   "K2_walkPLUS_vs_shearMINUS": 0.15288773497001146,
+   "K4_walkPLUS_vs_shearPLUS": 0.01041824242817252,
+   "K4_walkPLUS_vs_shearMINUS": 0.17818501790165575,
+   "K8_walkPLUS_vs_shearPLUS": 0.0036515787963677937,
+   "K8_walkPLUS_vs_shearMINUS": 0.18570493377771852,
+   "K16_walkPLUS_vs_shearPLUS": 0.0022753164409724524,
+   "K16_walkPLUS_vs_shearMINUS": 0.18748629442293197
+  }
+ },
+ "link2_index_direction": {
+  "oblique25": {
+   "same_profile": 2.167869881419815e-05,
+   "mirrored_profile": 0.012728494155393011
+  },
+  "oblique-25": {
+   "same_profile": 3.2786702775622345e-05,
+   "mirrored_profile": 0.012728442140224394
+  }
+ },
+ "link3_hybrid": {
+  "normal": {
+   "pure_plus_vs_vertical": 0.5891527239366128,
+   "pure_plus_vs_pure_minus": 0.07267130726726112,
+   "n3_hybPLUS_vs_purePLUS": 0.048658726274919684,
+   "n3_hybMINUS_vs_purePLUS": 0.07564588476918338,
+   "n3_hybPLUS_vs_pureMINUS": 0.07564588476919303,
+   "n5_hybPLUS_vs_purePLUS": 0.034746450508757354,
+   "n5_hybMINUS_vs_purePLUS": 0.08165026149812195,
+   "n5_hybPLUS_vs_pureMINUS": 0.08165026149813036,
+   "n5_hybrid_own_step": 0.06132143808847995,
+   "n7_hybPLUS_vs_purePLUS": 0.030359019415662214,
+   "n7_hybMINUS_vs_purePLUS": 0.0765306163984496,
+   "n7_hybPLUS_vs_pureMINUS": 0.07653061639846771,
+   "n7_hybrid_own_step": 0.009541135059178613,
+   "n9_hybPLUS_vs_purePLUS": 0.025479092601670417,
+   "n9_hybMINUS_vs_purePLUS": 0.07736236723625513,
+   "n9_hybPLUS_vs_pureMINUS": 0.07736236723627869,
+   "n9_hybrid_own_step": 0.010216065998557067
+  },
+  "conical": {
+   "pure_plus_vs_vertical": 0.4647247105872664,
+   "pure_plus_vs_pure_minus": 0.4301604340643833,
+   "n3_hybPLUS_vs_purePLUS": 0.05852534257004317,
+   "n3_hybMINUS_vs_purePLUS": 0.44566660652135404,
+   "n3_hybPLUS_vs_pureMINUS": 0.3780407046895227,
+   "n5_hybPLUS_vs_purePLUS": 0.020153554557207624,
+   "n5_hybMINUS_vs_purePLUS": 0.39683769566097593,
+   "n5_hybPLUS_vs_pureMINUS": 0.42305570610968735,
+   "n5_hybrid_own_step": 0.06571577699613018,
+   "n7_hybPLUS_vs_purePLUS": 0.011919533803278856,
+   "n7_hybMINUS_vs_purePLUS": 0.4059635826884107,
+   "n7_hybPLUS_vs_pureMINUS": 0.4230396112222724,
+   "n7_hybrid_own_step": 0.008234020753928768,
+   "n9_hybPLUS_vs_purePLUS": 0.010405349920198842,
+   "n9_hybMINUS_vs_purePLUS": 0.40993074275428476,
+   "n9_hybPLUS_vs_pureMINUS": 0.4244825473329358,
+   "n9_hybrid_own_step": 0.00632790989574436
+  }
+ },
+ "_env": {
+  "lumenairy": "C:\\tmp\\lum_vslant\\lumenairy\\__init__.py",
+  "version": "5.43.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "arm": "tip",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}
