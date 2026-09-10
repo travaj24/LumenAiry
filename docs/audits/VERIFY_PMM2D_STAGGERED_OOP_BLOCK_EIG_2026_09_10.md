@@ -702,6 +702,7 @@ Command, every run:
 | `test_pmm2d_staggered_oop_block_eig.py` + `test_pmm2d_staggered_oop_corner_convergence.py` (with the added test) | **38** | **passed** | 84.5 s |
 | `test_pmm2d_staggered_oop.py` (35) + `test_pmm2d_staggered_anisotropic.py` (41) + `test_pmm2d_staggered_magnetic.py` (32) + `test_pmm2d_staggered_wood_list.py` (18) | **126** | **passed** | 237.8 s |
 | **total** | **164** | **164 passed, 0 failed** | ~5.4 min |
+| all six files in ONE run | **164** | **164 passed** | 304.9 s |
 
 `ruff check lumenairy/ tests/` -- **clean**.  `ruff check
 validation/probe_verify_oop_block_eig/` -- clean.
