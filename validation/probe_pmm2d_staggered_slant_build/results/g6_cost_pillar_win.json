@@ -1,0 +1,289 @@
+{
+ "COST_region": [
+  {
+   "M": 4,
+   "q2": 36,
+   "inplane_s": 0.009451600002648775,
+   "oop_s": 0.028696299996227026,
+   "slant_s": 0.02865110000129789,
+   "slant_over_oop": 0.9984248842207853,
+   "slant_over_inplane": 3.0313491888430035
+  },
+  {
+   "M": 5,
+   "q2": 64,
+   "inplane_s": 0.03818120000505587,
+   "oop_s": 0.09609319999435684,
+   "slant_s": 0.08364400000573369,
+   "slant_over_oop": 0.870446608195437,
+   "slant_over_inplane": 2.190711659001229
+  },
+  {
+   "M": 6,
+   "q2": 100,
+   "inplane_s": 0.11906669999734731,
+   "oop_s": 0.2495853000000352,
+   "slant_s": 0.2356147000027704,
+   "slant_over_oop": 0.9440247482633679,
+   "slant_over_inplane": 1.9788463105807053
+  },
+  {
+   "M": 7,
+   "q2": 144,
+   "inplane_s": 0.3369980999996187,
+   "oop_s": 0.6883409000001848,
+   "slant_s": 0.6422500999979093,
+   "slant_over_oop": 0.9330407360622286,
+   "slant_over_inplane": 1.9057973917319888
+  }
+ ],
+ "COST_slant_over_oop_range": [
+  0.870446608195437,
+  0.9984248842207853
+ ],
+ "COST_e2e": [
+  {
+   "M": 5,
+   "vertical_s": 0.09657684999910998,
+   "slanted_s": 0.1495245500045712,
+   "ratio": 1.54824422215002
+  },
+  {
+   "M": 6,
+   "vertical_s": 0.2954421499998716,
+   "slanted_s": 0.43561969999427674,
+   "ratio": 1.4744669980044014
+  },
+  {
+   "M": 7,
+   "vertical_s": 0.820378599997639,
+   "slanted_s": 1.222978099998727,
+   "ratio": 1.4907484178673684
+  }
+ ],
+ "COST_e2e_ratio_range": [
+  1.4744669980044014,
+  1.54824422215002
+ ],
+ "PILLAR_selfmove": [
+  {
+   "mount": "normal",
+   "Nx": 4,
+   "M": 5,
+   "vs_ref": 0.0003069266867908871
+  },
+  {
+   "mount": "normal",
+   "Nx": 4,
+   "M": 6,
+   "vs_ref": 0.00021011563172046444
+  },
+  {
+   "mount": "normal",
+   "Nx": 8,
+   "M": 3,
+   "vs_ref": 0.0006115737126861642
+  },
+  {
+   "mount": "normal",
+   "Nx": 12,
+   "M": 3,
+   "vs_ref": 0.00027025209801079253
+  },
+  {
+   "mount": "conical",
+   "Nx": 4,
+   "M": 5,
+   "vs_ref": 0.0001299635952856093
+  },
+  {
+   "mount": "conical",
+   "Nx": 4,
+   "M": 6,
+   "vs_ref": 9.65783578296131e-05
+  },
+  {
+   "mount": "conical",
+   "Nx": 8,
+   "M": 3,
+   "vs_ref": 0.003076164755094979
+  },
+  {
+   "mount": "conical",
+   "Nx": 12,
+   "M": 3,
+   "vs_ref": 0.00048288737135016024
+  }
+ ],
+ "PILLAR_selfmove_worst": 0.003076164755094979,
+ "PILLAR_hybrid": [
+  {
+   "mount": "normal",
+   "sign": "+t",
+   "n_orders": 5,
+   "vs_pure": 0.016111339838226296,
+   "own_step": null
+  },
+  {
+   "mount": "normal",
+   "sign": "+t",
+   "n_orders": 7,
+   "vs_pure": 0.018878935934217633,
+   "own_step": 0.013081619929766641
+  },
+  {
+   "mount": "normal",
+   "sign": "+t",
+   "n_orders": 9,
+   "vs_pure": 0.006772864938177858,
+   "own_step": 0.0126415494342631
+  },
+  {
+   "mount": "normal",
+   "sign": "-t",
+   "n_orders": 5,
+   "vs_pure": 0.22217028355065752,
+   "own_step": null
+  },
+  {
+   "mount": "normal",
+   "sign": "-t",
+   "n_orders": 7,
+   "vs_pure": 0.21056782103654212,
+   "own_step": 0.011602462514115397
+  },
+  {
+   "mount": "normal",
+   "sign": "-t",
+   "n_orders": 9,
+   "vs_pure": 0.21213694624262366,
+   "own_step": 0.01304034205756266
+  },
+  {
+   "mount": "conical",
+   "sign": "+t",
+   "n_orders": 5,
+   "vs_pure": 0.038925228325070504,
+   "own_step": null
+  },
+  {
+   "mount": "conical",
+   "sign": "+t",
+   "n_orders": 7,
+   "vs_pure": 0.042316275119685276,
+   "own_step": 0.004873926347635518
+  },
+  {
+   "mount": "conical",
+   "sign": "+t",
+   "n_orders": 9,
+   "vs_pure": 0.024971833075632,
+   "own_step": 0.017344442044053276
+  },
+  {
+   "mount": "conical",
+   "sign": "-t",
+   "n_orders": 5,
+   "vs_pure": 0.22881706519166012,
+   "own_step": null
+  },
+  {
+   "mount": "conical",
+   "sign": "-t",
+   "n_orders": 7,
+   "vs_pure": 0.22696022943922872,
+   "own_step": 0.012880506737586894
+  },
+  {
+   "mount": "conical",
+   "sign": "-t",
+   "n_orders": 9,
+   "vs_pure": 0.25348739063602005,
+   "own_step": 0.026527161196791327
+  }
+ ],
+ "PILLAR_staircase": [
+  {
+   "mount": "normal",
+   "direction": "with",
+   "n": 1,
+   "vs_metric": 0.1399229783091946
+  },
+  {
+   "mount": "normal",
+   "direction": "with",
+   "n": 2,
+   "vs_metric": 0.0466982384647468
+  },
+  {
+   "mount": "normal",
+   "direction": "with",
+   "n": 4,
+   "vs_metric": 0.02075731316000351
+  },
+  {
+   "mount": "normal",
+   "direction": "against",
+   "n": 1,
+   "vs_metric": 0.1399229783091946
+  },
+  {
+   "mount": "normal",
+   "direction": "against",
+   "n": 2,
+   "vs_metric": 0.20643191281126774
+  },
+  {
+   "mount": "normal",
+   "direction": "against",
+   "n": 4,
+   "vs_metric": 0.20532630041485775
+  },
+  {
+   "mount": "conical",
+   "direction": "with",
+   "n": 1,
+   "vs_metric": 0.2127359103538205
+  },
+  {
+   "mount": "conical",
+   "direction": "with",
+   "n": 2,
+   "vs_metric": 0.07523086552862013
+  },
+  {
+   "mount": "conical",
+   "direction": "with",
+   "n": 4,
+   "vs_metric": 0.06174841554570587
+  },
+  {
+   "mount": "conical",
+   "direction": "against",
+   "n": 1,
+   "vs_metric": 0.2127359103538205
+  },
+  {
+   "mount": "conical",
+   "direction": "against",
+   "n": 2,
+   "vs_metric": 0.08693309029826708
+  },
+  {
+   "mount": "conical",
+   "direction": "against",
+   "n": 4,
+   "vs_metric": 0.19624116535107128
+  }
+ ],
+ "wall_s": 596.505026102066,
+ "build": {
+  "lumenairy": "C:\\tmp\\lum_slant\\lumenairy\\__init__.py",
+  "version": "5.43.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "tag": "win"
+ }
+}
