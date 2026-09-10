@@ -633,6 +633,56 @@ _INV_RESID_REFUSE = 1e-8
 # everything it does not refuse is bit-for-bit the pre-M1 library.  There is
 # deliberately no flag for it -- a switch nobody should flip is a liability.
 
+#: REFUSE, at the GENERALIZED interface's ``T22`` block ONLY (audit item O2,
+#: 2026-09-11).  The equilibrated reciprocal condition number below which
+#: :func:`_interface_smatrix_general`'s explicit ``T22`` inverse is scored on
+#: its own equation, and -- if that residual also misses ``_INV_RESID_REFUSE``
+#: -- refused.
+#:
+#: WHY A SITE-SCOPED BAR AND NOT THE GLOBAL ONE.  The M1 withdrawal above is
+#: correct and stands: there is no bar that works across every explicit inverse
+#: in the library, because the 2-D hybrid's HEALTHY interfaces read 3.9e-14 /
+#: 3.1e-13 on the same instrument that calls a 1-D thin grating broken.  What
+#: makes THIS site decidable is that its own population was measured, on both
+#: builds, and separates by ELEVEN DECADES with nothing in between.
+#:
+#: MEASURED 2026-09-11 over 71 generalized-cascade solves / 153 interfaces
+#: spanning every consumer of ``_interface_smatrix_general`` -- the 2-D hybrid
+#: (slanted and out-of-plane, shared / tree / fused cascades, n_orders 3..11,
+#: degree 7..15, four mounts, a theta scan), the 2-D PURE staggered engine
+#: (slanted, out-of-plane, magnetic), the 1-D ``PMMStack`` convection-slant and
+#: out-of-plane cascades, the native-conical ``PMMStack`` cascade, the
+#: ``pmm_jones_2d`` single-layer entry and the Berreman 4x4 planar cascade at
+#: four angles plus a lossy and a thick film.  A solve counts as BROKEN when it
+#: returns (or raises on) ``sum R + T`` above ``1.10`` per incident state:
+#:
+#:   population                       equil. rcond (T22)     equil. resid (T22)
+#:   BROKEN, 18 solves / 39 ifc       6.66e-18 .. 9.96e-02   7.9e-17 .. 2.5e-01
+#:   HEALTHY, 53 solves / 114 ifc     2.97e-05 .. 1.0        0.0 .. 1.47e-14
+#:
+#: A solve is refused when ANY of its interfaces trips, so the bar has to
+#: separate each solve's WORST interface.  On that statistic:
+#:
+#:   the WORST interface of the BEST broken solve    2.359e-16
+#:   the WORST interface of the WORST healthy solve  2.971e-05  (hybrid, M = 11)
+#:
+#: -- 11.10 decades, geometric middle ``8.4e-11``.  ``1e-10`` is that middle,
+#: rounded: 5.4 decades above every broken reading and 5.5 below every healthy
+#: one.  The CONFIRMING residual has its own 11.5-decade gap on the same rows
+#: (smallest broken per-solve residual ``4.18e-03``, largest healthy
+#: ``1.47e-14``), and ``_INV_RESID_REFUSE`` = ``1e-8`` sits 5.6 / 5.8 decades
+#: from each -- so, exactly as ``_guarded_lstsq`` requires of ITS refusal, a
+#: false refusal needs BOTH independent instruments to be wrong at once.
+#:
+#: NOT REFUSED, deliberately: the 17 BENIGN rows on which ``PMMStack.solve``'s
+#: energy tripwire already warns at ``sum R + T = 1.03 .. 1.08`` -- ordinary
+#: ``n_orders`` = 3..5 truncation residue, vertical rows included.  Their
+#: ``T22`` reads ``rcond`` 4.76e-04 .. 2.69e-02 and ``resid`` <= 1.5e-14, i.e.
+#: 6-8 decades on the safe side of BOTH bars.  Those warnings are exactly what
+#: made the 1e+30 rows invisible among them, and separating the two is the
+#: whole point of this refusal.
+_INV_T22_RCOND_REFUSE = 1e-10
+
 #: Census hook.  When set to a list, every guarded inverse appends
 #: ``(site, n, rcond_eq, resid_eq, refused)`` (``resid_eq`` is ``None`` when the
 #: screen passed and the residual was therefore never paid for).  ``None`` (the
@@ -760,7 +810,7 @@ def _equilibrated_inverse_residual(A):
     return _inverse_residual(Ae, Xe)
 
 
-def _guarded_inverse(A, site, hint=None):
+def _guarded_inverse(A, site, hint=None, rcond_refuse=None):
     """``inv(A)`` with a free conditioning screen and an equilibrated-residual
     refusal.
 
@@ -783,13 +833,23 @@ def _guarded_inverse(A, site, hint=None):
     ``_INV_CENSUS`` for the measurement that removed the one candidate tried.
 
     ``site`` names the call for the error text; ``hint`` is the remedy line.
+
+    ``rcond_refuse`` ARMS the refusal for ONE call site (audit item O2,
+    2026-09-11).  It is ``None`` -- dormant, and not one extra flop -- for
+    every caller but :func:`_interface_smatrix_general`, whose own population
+    was measured and separates by eleven decades; see
+    ``_INV_T22_RCOND_REFUSE``.  When armed, the free screen decides whether the
+    confirming residual is computed at all, and the REFUSAL needs BOTH: the
+    equilibrated ``rcond`` below ``rcond_refuse`` AND the equilibrated residual
+    above ``_INV_RESID_REFUSE``.  Anything not refused is returned unchanged,
+    bit for bit -- this adds a raise, never a different number.
     """
     xp = array_namespace(A)
     X = xp.linalg.inv(A)
     # DEFAULT PATH: bit-for-bit the pre-M1 library, and not one extra flop.
     # The census is the only consumer of the instruments (see the REFUSAL
-    # WITHDRAWN note above ``_INV_RCOND_SCREEN``).
-    if _INV_CENSUS is None or xp is not np:
+    # WITHDRAWN note above ``_INV_RCOND_SCREEN``) unless a site ARMS one.
+    if (_INV_CENSUS is None and rcond_refuse is None) or xp is not np:
         return X
     A_np = np.asarray(A)
     if not np.all(np.isfinite(A_np)):
@@ -797,13 +857,32 @@ def _guarded_inverse(A, site, hint=None):
         # defect, not a conditioning one, and ``_check_energy`` already names
         # it precisely ("non-finite total efficiency ... a NaN/inf material
         # index or permittivity reached the solve").  Record and stand aside.
-        _INV_CENSUS.append((site, int(A_np.shape[0]), float("nan"),
-                            float("nan"), False))
+        if _INV_CENSUS is not None:
+            _INV_CENSUS.append((site, int(A_np.shape[0]), float("nan"),
+                                float("nan"), False))
         return X
     rc = _rcond_1_equilibrated(A_np, X)
-    res = (None if rc >= _INV_RCOND_SCREEN
-           else _equilibrated_inverse_residual(A_np))
-    _INV_CENSUS.append((site, int(A_np.shape[0]), rc, res, False))
+    # The residual costs one extra inverse, so it is paid only where a screen
+    # asks for it: the census's historical ``_INV_RCOND_SCREEN`` when the
+    # census is armed, and the site's own bar when a refusal is armed.
+    thr = _INV_RCOND_SCREEN if _INV_CENSUS is not None else 0.0
+    if rcond_refuse is not None:
+        thr = max(thr, float(rcond_refuse))
+    res = None if rc >= thr else _equilibrated_inverse_residual(A_np)
+    refused = (rcond_refuse is not None and rc < float(rcond_refuse)
+               and res is not None and res > _INV_RESID_REFUSE)
+    if _INV_CENSUS is not None:
+        _INV_CENSUS.append((site, int(A_np.shape[0]), rc, res, refused))
+    if refused:
+        raise _ConditioningError(
+            f"{site}: the explicit inverse is numerically singular "
+            f"(equilibrated rcond = {rc:.3g} < {float(rcond_refuse):.3g}, and "
+            f"the inverse misses its own equation A X = I by {res:.3g} > "
+            f"{_INV_RESID_REFUSE:.3g} in the same scaling, on a "
+            f"{A_np.shape[0]} x {A_np.shape[0]} block).  Returning it would "
+            f"give a number no build agrees on -- measured on this failure "
+            f"class, sum R + T from 1e+27 to 1e+31."
+            + (f"  {hint}" if hint else ""))
     return X
 
 
@@ -2571,6 +2650,38 @@ def _modes_to_M(Wf, Vf, Wb, Vb):
 
 
 
+#: The remedy line the ``T22`` refusal carries.  Every clause is a MEASURED
+#: cure on the fixture that produced the refusal (the 2-D hybrid, a 6 x 6 cell
+#: at ``slant = (0.5, 0)`` over ``px = py = 1.20 um``, ``wl = 0.68 um``,
+#: oblique 25): ``n_orders`` 9 / 11 / 13 read ``sum R + T`` = 1.00651 / 1.00063
+#: / 1.00196 where 3 / 5 / 7 read 3.8e+27 / 1.3e+30 / 6.3e+30; ``degree`` = 7
+#: reads 1.051 where 9 .. 15 blow up; a wall tilt at or below 14 deg
+#: (``slant <= 0.25``) reads 1.043 where 19.3 deg (``0.35``) reads 6.3e+27; and
+#: the PURE staggered engine reads 1.0000015 on the identical solid.
+#:
+#: The clause that is NOT here is the one the library's own ``_EnergyError``
+#: advises, and it is absent because it was MEASURED NOT TO WORK: detuning the
+#: coincident ``eps = 1.0`` by a relative 1e-6 / 1e-4, or detuning the
+#: superstrate instead, leaves the blow-up at 3.5e+28 / 2.2e+28 / 2.2e+28.  The
+#: trigger is the DISCRETIZATION of the sheared (or out-of-plane) generator,
+#: not a permittivity coincidence and not a near-cut-off order -- a theta scan
+#: crosses the ``|alpha| = 1`` cut-off with no monotone relation to it at all
+#: (15 deg, 17% BELOW: 7.7e+28; 22 deg, 6% below: 1.058; 30 deg, 7% ABOVE:
+#: 2.5e+28).
+_T22_REFUSAL_HINT = (
+    "This is the GENERALIZED (4N) cascade's layer<->region mode match, which "
+    "only SLANTED and OUT-OF-PLANE layers reach (a vertical in-plane layer "
+    "keeps the [W; -V] <-> -lam symmetry and uses the differently structured "
+    "_interface_smatrix).  MEASURED remedies, in order of cheapness: raise "
+    "n_orders (9/11/13 gave sum R+T = 1.0065/1.0006/1.0020 where 3/5/7 gave "
+    "1e+27..1e+31), lower `degree` (7 gave 1.051 where 9..15 blew up), reduce "
+    "the shear (a wall tilt <= 14 deg was clean, >= 19 deg was not), or use "
+    "the PURE staggered engine (PMM2DStackPure / pmm_jones_2d_staggered read "
+    "1.0000015 on the identical solid).  DETUNING a coincident permittivity -- "
+    "the remedy the generic energy warning suggests -- was measured NOT to "
+    "help here (1e-6 and 1e-4 detunes both left the blow-up 28 decades out).")
+
+
 def _interface_smatrix_general(Ma, Mb):
     """Interface S-matrix (medium ``a`` -> medium ``b``) from the full field-mode
     matrices ``Ma, Mb`` (each ``[[Wf, Wb], [Vf, Vb]]``).
@@ -2583,8 +2694,14 @@ def _interface_smatrix_general(Ma, Mb):
 
     ``T22`` is inverted explicitly (``S12 = T22^{-1}``), so it carries the same
     exposure as :func:`_interface_smatrix`'s ``a + b`` and takes the same
-    screen-and-refuse guard (M1 / X-1).  This is the newest code in the family
-    and had no ``rcond``, no fallback and no probe."""
+    screen-and-refuse guard (M1 / X-1).
+
+    ARMED 2026-09-11 (audit item O2).  The M1 campaign withdrew the inverse
+    refusal because no GLOBAL bar separated healthy from broken; this site's
+    OWN population was then measured over 71 generalized-cascade solves on
+    both builds and separates by ELEVEN DECADES with nothing in between
+    (``_INV_T22_RCOND_REFUSE``), so the guard is armed HERE and nowhere else.
+    Everything it does not refuse is returned bit for bit."""
     xp = array_namespace(Ma, Mb)
     n2 = Ma.shape[0] // 2
     T = xp.linalg.solve(Mb, Ma)
@@ -2592,7 +2709,9 @@ def _interface_smatrix_general(Ma, Mb):
     T12 = T[:n2, n2:]
     T21 = T[n2:, :n2]
     T22 = T[n2:, n2:]
-    iT22 = _guarded_inverse(T22, "rcwa generalized interface (T22)")
+    iT22 = _guarded_inverse(T22, "rcwa generalized interface (T22)",
+                            hint=_T22_REFUSAL_HINT,
+                            rcond_refuse=_INV_T22_RCOND_REFUSE)
     # P2T (2026-08-17): ``T12 @ iT22`` IS ``S22`` and ``@`` left-associates,
     # so ``T12 @ iT22 @ T21`` is ``(T12 @ iT22) @ T21`` -- the same CSE as in
     # :func:`_interface_smatrix`, 4 gemm -> 3 at the SAME association order.
