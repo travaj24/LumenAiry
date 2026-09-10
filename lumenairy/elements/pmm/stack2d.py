@@ -384,8 +384,12 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         the generalized forward/backward cascade (as an out-of-plane layer
         does), so it is refused on DISPERSIVE (callable) and TRACED (JAX)
         layers, and combined with OUT-OF-PLANE tensor components
-        (``eps_xz/yz/zx/zy``).  A slant on a UNIFORM layer is accepted and is
-        a physical no-op (a shear of a homogeneous medium is a coordinate
+        (``eps_xz/yz/zx/zy``) -- for THAT combination use the PURE staggered
+        engine (:meth:`~lumenairy.elements.pmm.PMM2DStackPure.add_layer` /
+        :func:`~lumenairy.elements.pmm.pmm_jones_2d_staggered`, whose covariant
+        congruence is tensor-agnostic and is validated per order against
+        ``pmm_jones_1d_slanted``).  A slant on a UNIFORM layer is accepted and
+        is a physical no-op (a shear of a homogeneous medium is a coordinate
         change; measured <= 1.2e-13).
 
         NOTE this models a slanted (tilted-axis, CONSTANT cross-section)
