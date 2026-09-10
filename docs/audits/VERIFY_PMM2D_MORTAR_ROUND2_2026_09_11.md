@@ -40,7 +40,7 @@ limitations were prosecuted for whether they are worse than stated.
 | C13 | the shared path refuses `x_walls` / `y_walls` | **CONFIRMED** | both refused by name |
 | C14 | the closing taper crosses "at about 250 slices" | **CONFIRMED to the slice** | 250 -> 1.0000e-03 ACCEPTED, **256 -> 9.7656e-04 REFUSED** |
 | C15 | above the bar the cost is CONTINUOUS and NOT restored (1.0..5.0x) | **CONFIRMED, and 5.9x on my fixture** | `M`=8: 1.00 / 2.09 / 4.02 / 5.31 / **5.69** / 5.82 / **5.86x** at `delta` = 3e-1 / 1e-1 / 3e-2 / 1e-2 / 4.1e-3 / 2e-3 / 1e-3, all SILENT |
-| C16 | D2 healthy population 2.6e-07 .. 3.8e-04, bar 5.4 decades below | **REFUTED as stated** | my own healthy population reaches **1.502e-11** and the population of the THIRD guarded site runs **2.64e-14 .. 1.48e-04** -- see **DEFECT V1** |
+| C16 | D2 healthy population 2.6e-07 .. 3.8e-04, bar 5.4 decades below | **REFUTED as stated** | true for the two IN-PLANE sites (mine 3.18e-08 .. 1.08e-04); the THIRD guarded site's healthy population runs **2.64e-14 .. 1.48e-04** and ordinary stacks fall through the bar -- **DEFECT V1** |
 | C17 | the conditioning backstop independently refuses the sliver | **REFUTED as a general claim** | on a 2-layer stack whose sliver is in the LAST layer and on ONE axis, NOTHING is refused down to `delta` = **1e-7** (`rcond` ~1.1e-11) |
 | C18 | `LinAlgWarning` in the `except` tuple keeps the named refusal under `-W error` | **CONFIRMED** | `_ConditioningError` on BOTH builds under both warning filters |
 | C19 | the `~1850` plain 1-D site is rightly left unguarded | **CONFIRMED** | correct population's closest approach **1.948e-10** = 2.29 decades (builder: 1.0); every reading below is refused by the shipped 1-D guard at `rcond` = 1.951e-12; and the WIN/WSL spread on those readings is **8 %** |
@@ -611,10 +611,15 @@ oracle for (a).  Zeroth-order `R` for incident `E_y`:
   oracle's 0.064608 (0.06072 -> 0.06366 -> 0.06396 -> 0.06443), and its own
   lossless closure IMPROVES with `M` (1.08e-03 -> 2.94e-04).  These are ordinary
   converging answers;
-* they are **BUILD-STABLE**: WIN and WSL agree to all 8 printed digits at
-  `M` = 4, 5 and 6 (0.06072107 / 0.06365828 / 0.06396188 on both).  The guard's
-  stated justification -- "the answer would be a build-dependent number rather
-  than a solution" -- is **measurably false at this site**;
+* they are **BUILD-STABLE to 13 significant figures**.  WIN vs WSL on the
+  refused arms: 0.06072106725295 / 0.06072106725296 (`M`=4, rel 1.10e-13),
+  0.06365827997842 / 0.06365827997842 (`M`=5, rel **5.41e-14**),
+  0.06396187804410 / 0.06396187804408 (`M`=6, rel 2.48e-13),
+  0.06443417941741 / 0.06443417941739 (`M`=7, rel 2.86e-13).  The guard's stated
+  justification -- "the answer would be a build-dependent number rather than a
+  solution" -- is **measurably false at this site**: the operand is
+  rank-deficient but the system is CONSISTENT, so the solution is determined to
+  the last few bits on two different LAPACK builds;
 * the geometry is completely ordinary: two layers, ordinary non-uniform walls,
   narrowest segment 237x the width contract.  The `wide` variant
   (0.21/0.55 vs 0.30/0.70) fails identically from `M`=6.
