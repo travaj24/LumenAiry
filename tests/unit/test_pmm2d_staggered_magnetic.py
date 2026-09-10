@@ -407,7 +407,8 @@ def test_g3_duality_patterned_cell_ladder():
     discretization error, not build noise -- it is the same shape as the
     shipped G4 stripe ladder, whose BLAS-path sensitivity was measured at
     ~2e-09 relative), and a ladder drop of at least 5x (measured 21.9x at
-    worst, so 4.4x of headroom).
+    worst in the build table above, 23.85x on the verify re-measure through
+    this file's helpers, so >= 4.4x of headroom).
     """
     ec = _cell(_LC, 4.0 * _EYE)
     d5 = max(_duality(ec, None, th, ph, 5)[0]
@@ -777,10 +778,12 @@ def test_failbefore_the_r_vs_gram_separation_is_load_bearing(monkeypatch):
     Collapsing them applies ``[chi_t]^-1`` to every H partner -- an interface
     error that no eigenvalue and no renormalised energy check can see.
 
-    MEASURED 2026-09-10 (build doc M1b): intact 1.88e-14 against the analytic
-    oracle; with the Gram collapsed onto R, 2.15e-01.  Bars: intact < 1e-12,
-    collapsed > 1e-4 (3 decades under the measured break, 8 decades over the
-    intact arm).
+    MEASURED 2026-09-10 (verify re-measure through this file's own helpers,
+    max over {R, T, Jones} -- the build doc's M1b caption claimed that set but
+    its probe excluded the Jones): intact 3.0641e-14 against the analytic
+    oracle; with the Gram collapsed onto R, 3.2580e-01.  Bars: intact < 1e-12,
+    collapsed > 1e-4 (3.5 decades under the measured break, 8.5 decades over
+    the intact arm).
     """
     assert _slab_residual(4.0, 2.0, 0.35, 8) < 1e-12
     assert _knockout_residual(monkeypatch, "gram") > 1e-4
@@ -797,11 +800,13 @@ def test_failbefore_each_chi_weight_is_load_bearing(monkeypatch, kind, eq):
     MEASURED 2026-09-10 (build doc M1b), uniform eps=4 mu=2 slab at
     theta=0.35, M=8, against the analytic Airy oracle:
 
-        intact                       1.876e-14
-        chi33 -> 1   (S_tt)          7.232e-03
-        chi_t -> I   (R, K_tz)       2.747e-02
+        intact                       3.064e-14
+        chi33 -> 1   (S_tt)          2.336e-02
+        chi_t -> I   (R, K_tz)       2.229e-01
 
-    Bar 1e-4: 72x under the smaller break and 10 decades over the intact arm.
+    (verify re-measure 2026-09-10, max over {R, T, Jones}; the build doc's
+    M1b R/T-only readings were 1.876e-14 / 7.232e-03 / 2.747e-02.)
+    Bar 1e-4: 234x under the smaller break and 9.5 decades over the intact arm.
     (The MIXED chi12 / chi21 blocks cannot be seen by an isotropic mu; they
     are gated by the duality test below, which reads 3.402e-02 with them
     zeroed against 4.219e-14 intact.)

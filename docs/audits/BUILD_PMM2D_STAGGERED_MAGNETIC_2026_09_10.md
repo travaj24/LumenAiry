@@ -69,6 +69,21 @@ term in `K_tz22` repeats `d2` where `d1` belongs.  The code follows Eq. 21
 reproduced exactly.  The G2 analytic oracle and the G3 duality oracle both
 discriminate that choice (K3 in table M1b).
 
+**Correction (verification 2026-09-10, VERIFY_PMM2D_STAGGERED_MAGNETIC):**
+the appendix's Eq. 43 pairs the chi components with the derivatives EXACTLY
+as Eq. 21 does (row 1: chi22 with d1, chi21 with d2), so the 'pairs differently'
+clause above is wrong.  Its real defects are (a) an overall sign flip relative
+to Eq. 21, (b) the `d2`-for-`d1` typo in `K_tz22`'s second term, and (c) a
+double-primed first term in `K_tz22` (a second-derivative rendering where a
+first derivative belongs).  The appendix's signs are unreliable in general
+(its Eq. 39 lists all four `R` entries with `+`).  The code's choice is the
+Eq.-21 derivation and is pinned by the G2 analytic and G3 duality oracles; the
+overall sign IS load-bearing because the Schur term is bilinear in `K_tz`,
+`K_zt`.  Also: table M1b's caption says 'max over {R, T, Jones}' but the probe
+excluded the Jones -- the Jones-inclusive readings (3.064e-14 intact,
+3.258e-01 Gram-collapsed, 2.336e-02 chi33, 2.229e-01 chi_t) are in the test
+docstrings now; all in the safe direction.
+
 ---
 
 ## 2. THE TRAP -- R is not the Gram any more
