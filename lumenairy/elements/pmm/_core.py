@@ -5060,6 +5060,142 @@ def _guarded_solve(A, B, site, hint=None):
     return X
 
 
+#: REFUSE bar for the 2-D per-layer MORTAR interface solves (round-2 D2): the
+#: LAPACK 1-norm reciprocal condition estimate below which the operator is
+#: declared unusable and the solve raises instead of returning.
+#:
+#: WHY A CONDITION ESTIMATE AND NOT A RESIDUAL.  M1's finding stands -- a
+#: backward-stable ``gesv`` leaves a residual ~eps whatever its conditioning,
+#: so a residual screen on these measures nothing.  What it does NOT cover is
+#: an operator that has lost every digit, which is exactly what the 2-D mortar
+#: reaches: the VERIFY audit's reproducer raises a bare
+#: ``LinAlgError: Singular matrix`` here.
+#:
+#: WHY NOT THE FREE LOWER BOUND.  ``cond_2(A) >= ||A||_F ||X||_F /
+#: (sqrt(n) ||B||_F)`` is rigorous and costs three norms.  MEASURED 2026-09-11
+#: over 106 mortar solves (``validation/probe_pmm2d_mortar_round2/r4_screen.py``)
+#: it reads **0.79 .. 24.0** while the true ``cond_2`` runs 3.9e+02 .. 7.9e+15
+#: -- the right-hand side is the OTHER grid's trace, which carries none of the
+#: sliver's spurious content, so the ill-conditioning is never excited by this
+#: particular ``B``.  REFUTED as an instrument, and recorded as such.
+#:
+#: WHAT IT COSTS: NOTHING.  ``scipy.linalg.lu_factor`` + ``lu_solve`` is the
+#: same LAPACK ``getrf`` + ``getrs`` pair ``np.linalg.solve``'s ``gesv`` calls,
+#: and it was MEASURED BIT-IDENTICAL to ``np.linalg.solve`` on all 106 mortar
+#: solves plus five synthetic shapes; ``gecon`` is then O(n^2) on the factors
+#: that already exist (measured 0.96x the wall time of ``np.linalg.solve`` on a
+#: 450x450 complex pair).
+#:
+#: THE BAR, with both gaps measured over the same 106 solves.  ``rcond`` on the
+#: HEALTHY population -- every grid pair the shipped fixtures build (the
+#: taper's three adjacent slices at M = 4/5/6, non-uniform vs uniform,
+#: nested, conforming, a single interior wall, and ordinary fine features down
+#: to 2 % of the period) -- runs **2.61e-07 .. 3.77e-04**, so 1e-12 sits
+#: **5.4 decades below** it.  Pushed up the modal ladder on the shipped taper,
+#: where this operator conditions worst, it reads **1.62e-05 / 5.98e-07 /
+#: 2.64e-07 / 4.67e-08 / 3.89e-08** at ``M`` = 4 / 6 / 7 / 8 / 9 -- still 4.6
+#: decades clear at the largest modal count a 3-segment grid can afford
+#: (``M = 9`` is a 1458-dimension region eig per layer).
+#:
+#: The WRONG population, on the same operator family: an intra-layer sliver
+#: falls through the bar at a wall separation of 1e-03 of the period on the H
+#: row (7.34e-13 at ``M`` = 6) and reaches 2.15e-17 at 3e-05, and the
+#: unguarded ``solve`` raised outright at 1e-07.  ``gecon``'s estimate tracked
+#: the exact ``cond_2`` within a factor 21 across that whole range
+#: (``rcond * cond_2`` in [0.047, 0.595]).
+#:
+#: This is the BACKSTOP, not the primary guard: the geometry that produces it
+#: is refused at the same width by the minimum-segment contract
+#: (:data:`~lumenairy.elements.pmm.twod_staggered._STAG_MIN_SEG_FRAC`), which
+#: is derived from ACCURACY rather than from digits and lands in the same
+#: place.  The backstop earns its keep above ``M ~ 6``, where the conditioning
+#: degrades with the modal count and a fixed width contract cannot follow.
+_MORTAR_RCOND_REFUSE = 1e-12
+
+#: Census hook for the guarded mortar solves.  When set to a list, every call
+#: appends ``(site, n, rcond, refused)``.  ``None`` (the default) records
+#: nothing; the ``rcond`` itself is computed either way, because it is free.
+_MORTAR_SOLVE_CENSUS = None
+
+
+def _stag_grid_text(g, label):
+    """One line describing a :class:`StagGridOps` for an error message: its
+    segment counts, modal count, wall arrays and narrowest segment."""
+    try:
+        bits = []
+        for ax, b in (("x", g.bx), ("y", g.by)):
+            if b.uniform:
+                bits.append(f"{ax}: uniform N={b.N}")
+            else:
+                w = np.diff(np.asarray(b.xb))
+                bits.append(
+                    f"{ax}: N={b.N} walls "
+                    f"{np.array2string(np.asarray(b.xb), precision=6, threshold=10)}"
+                    f" (narrowest {float(np.min(w)) / b.d:.3e} of the period)")
+        return f"    grid {label}: M={g.M}, q={g.q}; " + "; ".join(bits)
+    except Exception:                       # noqa: BLE001  (diagnostic only)
+        return f"    grid {label}: <undescribable>"
+
+
+def _guarded_mortar_solve(A, B, site, ga=None, gb=None, hint=None):
+    """``inv(A) @ B`` for a 2-D per-layer MORTAR interface, with a FREE
+    conditioning screen and a named refusal (round-2 D2).
+
+    The answer returned is BIT-IDENTICAL to ``np.linalg.solve(A, B)`` --
+    ``lu_factor`` + ``lu_solve`` is the same ``getrf`` + ``getrs`` pair, and
+    that is measured, not assumed (see :data:`_MORTAR_RCOND_REFUSE`).  The
+    ``gecon`` estimate rides the factors that already exist.
+
+    ``ga`` / ``gb`` are the two grids; they appear in the message so the caller
+    is told WHICH grids met at the offending interface.
+    """
+    A = np.asarray(A)
+    if A.ndim != 2 or A.shape[0] != A.shape[1] or not np.all(np.isfinite(A)):
+        # Not a square finite operator: a NaN/inf material index or a shape
+        # defect, both of which ``_check_energy`` / the assembly diagnose far
+        # more precisely.  Stand aside on the historical arithmetic.
+        return np.linalg.solve(A, B)
+    n = int(A.shape[0])
+    try:
+        lu, piv = sla.lu_factor(A)
+    except (ValueError, sla.LinAlgError, np.linalg.LinAlgError):
+        rc = 0.0
+    else:
+        anorm = float(np.max(np.sum(np.abs(A), axis=0))) if A.size else 0.0
+        try:
+            gecon = sla.get_lapack_funcs("gecon", (A,))
+            rcv, info = gecon(lu, anorm)
+            rc = float(rcv) if int(info) == 0 else 0.0
+        except Exception:                   # noqa: BLE001  (instrument only)
+            rc = float("nan")
+        if not (rc < _MORTAR_RCOND_REFUSE):          # NaN -> not refused
+            if _MORTAR_SOLVE_CENSUS is not None:
+                _MORTAR_SOLVE_CENSUS.append((site, n, rc, False))
+            return sla.lu_solve((lu, piv), B)
+    if _MORTAR_SOLVE_CENSUS is not None:
+        _MORTAR_SOLVE_CENSUS.append((site, n, rc, True))
+    grids = "\n".join(t for t in (_stag_grid_text(ga, "A") if ga is not None
+                                  else None,
+                                  _stag_grid_text(gb, "B") if gb is not None
+                                  else None) if t)
+    raise _ConditioningError(
+        f"{site}: the {n}x{n} mortar operator is numerically singular -- "
+        f"LAPACK reciprocal 1-condition {rc:.3e} against a "
+        f"{_MORTAR_RCOND_REFUSE:.0e} bar, i.e. it cannot deliver a single "
+        f"correct digit of the interface S-matrix.  Every healthy mortar the "
+        f"shipped fixtures build reads 2.6e-07 or better (measured over 106 "
+        f"solves), so this is 5+ decades outside that population and the "
+        f"answer would be a build-dependent number rather than a solution."
+        + (f"\n{grids}" if grids else "")
+        + "\n  " + (hint or
+                    "The usual cause is a near-degenerate element grid: two "
+                    "walls of ONE layer far closer than the rest of that "
+                    "layer's partition, whose 1/J_n stiffness puts spurious "
+                    "wavenumbers into the cross-grid projection.  Merge the "
+                    "walls, carry the fine feature on layer_grids='shared', "
+                    "or lower n_slices on a closing taper."))
+
+
 def _guarded_solve_right(A, X, site, hint=None):
     """``X @ inv(A)`` -- the RIGHT-hand solve, as ``solve(A.T, X.T).T``.
 
@@ -5285,25 +5421,34 @@ def _interface_smatrix_mortar_2d(Wa, Va, Wb, Vb, ga, gb, cr, kron_apply):
     ``A`` is ``(2 qq_B) x (2 qq_A)`` and ``B`` its transpose shape, so ``BA`` is
     square and :func:`_redheffer_star_rect` cascades the result unchanged.
 
-    CONDITIONING (M1 / N-2, transplanted with its instruments).  The two
-    ``solve``s stay ``solve``s -- LAPACK ``gesv`` is backward stable, so a
-    residual screen on them measures nothing -- and the ONE explicit inverse,
-    ``I + BA``, carries the compounded exposure of both and is where the guard
-    goes.  Measured census over 45 site-calls on four non-conforming
+    CONDITIONING (M1 / N-2, transplanted with its instruments).  The explicit
+    inverse ``I + BA`` carries the compounded exposure of both solves and keeps
+    its M1 guard.  Measured census over 45 site-calls on four non-conforming
     configurations at ``M = 4, 5, 6`` (equilibrated reciprocal 1-condition):
     ``MassE_B W_B`` [1.08e-06, 1.01e-04], ``MassH_A V_A`` [7.00e-06, 3.88e-04],
-    ``I + BA`` [3.42e-04, 1.85e-02] -- the guarded site is the BEST conditioned
-    of the three, the same ordering M1 measured in 1-D, and nothing screened
-    in."""
+    ``I + BA`` [3.42e-04, 1.85e-02].
+
+    ROUND 2 (2026-09-11, defect D2).  The build's argument for leaving the two
+    ``solve``s bare -- ``gesv`` is backward stable, so a RESIDUAL screen on
+    them measures nothing -- is true and does not cover the case that actually
+    occurs: an operator that is numerically SINGULAR, where the build's
+    ordering inverts.  On a mortared sliver ``MassE_B W_B`` reaches ``cond_2``
+    5.5e+07 at a 1e-03 wall separation and raises a bare ``LinAlgError`` at
+    1e-07, while ``I + BA``'s guarded ``rcond`` still reads 2.5e-07.  Both now
+    go through :func:`_guarded_mortar_solve`, which is BIT-IDENTICAL to
+    ``np.linalg.solve`` (same LAPACK pair, measured on 106 solves) and screens
+    on the ``gecon`` estimate the factors already carry."""
     lhsE = _stag_blk2_apply(gb.V1, gb.V2, Wb, gb.qq, kron_apply)
     rhsE = _stag_blk2_apply(cr.C1H(), cr.C2H(), Wa, ga.qq, kron_apply)
-    A = np.linalg.solve(lhsE, rhsE)
+    A = _guarded_mortar_solve(
+        lhsE, rhsE, "pmm2d staggered mortar interface (MassE_B W_B)", ga, gb)
     # the V1/V2 SWAP on the H row (see the docstring) -- load-bearing, and
     # invisible to any conforming-grid identity test
     hb_a, hb_c = _stag_h_blocks(ga, cr)
     lhsH = _stag_blk2_apply(hb_a[0], hb_a[1], Va, ga.qq, kron_apply)
     rhsH = _stag_blk2_apply(hb_c[0], hb_c[1], Vb, gb.qq, kron_apply)
-    B = np.linalg.solve(lhsH, rhsH)
+    B = _guarded_mortar_solve(
+        lhsH, rhsH, "pmm2d staggered mortar interface (MassH_A V_A)", ga, gb)
     BA = B @ A
     I_a = np.eye(BA.shape[0], dtype=_C)
     # ONE factorisation for both right-hand sides, and ``.copy()`` on the S11
@@ -5355,7 +5500,8 @@ def _interface_smatrix_general_mortar_2d(six_a, six_b, ga, gb, cr, kron_apply):
     H4 = _stag_blk2_apply(hb_c[0], hb_c[1], Vb_b, gb.qq, kron_apply)
     A = np.block([[E1, E2], [H1, H2]])
     B = np.block([[E3, E4], [H3, H4]])
-    X = np.linalg.solve(A, B)
+    X = _guarded_mortar_solve(
+        A, B, "pmm2d staggered GENERALIZED mortar interface", ga, gb)
     return (X[:ma, :ma], X[:ma, ma:], X[ma:, :ma], X[ma:, ma:])
 
 
