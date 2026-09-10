@@ -1256,6 +1256,32 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                     "PMM2DStackHybrid: tensor layers are not differentiable (the "
                     "2-D JAX surface is scalar in-plane); use NumPy inputs "
                     "for tensor stacks.")
+            # SLANT (2026-09-11).  ``add_layer`` already refuses slant on a
+            # TRACED eps_cell, on exactly this ground -- "the slanted layer
+            # runs the 4N generator and the generalized cascade, which the 2-D
+            # JAX surface does not implement".  But the JAX dispatch is
+            # reached by SIX other traced inputs (a thickness, the wavelength,
+            # theta/phi, a half-space index, a traced uniform eps), and the
+            # jnp twin has no slant at all: it silently returned the VERTICAL
+            # answer, energy-conserving and unwarned.  MEASURED before this
+            # guard, a slanted patterned layer with a TRACED THICKNESS:
+            # bit-identical to the vertical stack (dR = dJones = 0.000e+00)
+            # and wrong against the NumPy slanted answer by dR 1.839e-02 /
+            # dJones 3.227e-02.  Same silent shape as the frame-anchor defect
+            # this file's 2026-09-11 fix closes, so it is refused here rather
+            # than left to a caller to notice.
+            if any(_layer_enters_slant_frame(L) for L in self._layers):
+                raise NotImplementedError(
+                    "PMM2DStackHybrid.solve: a SLANTED patterned layer is not "
+                    "differentiable -- the slant runs the 4N generator and the "
+                    "generalized cascade, which the 2-D JAX surface does not "
+                    "implement, and the jnp twin would silently return the "
+                    "VERTICAL answer (measured: dR = dJones = 0.0 against the "
+                    "vertical stack, 1.8e-02 / 3.2e-02 against the correct "
+                    "NumPy slanted answer).  Use NumPy inputs for slanted "
+                    "stacks (a traced THICKNESS, wavelength, theta/phi or "
+                    "half-space index is enough to route here), or z-staircase "
+                    "the slanted layer into vertical ones.")
             from ._jax_stack2d import _pmm_stack2d_solve_jax
             return _pmm_stack2d_solve_jax(self)
 

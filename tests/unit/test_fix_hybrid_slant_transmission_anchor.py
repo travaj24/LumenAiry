@@ -758,3 +758,54 @@ def test_f1_the_frame_referenced_surfaces_are_only_the_transmission_ones():
     v.set_source(WL, theta=th, phi=ph)
     v.solve(retain_internal=True)
     assert v.layer_absorption() is not None
+
+
+def test_f2_a_slanted_patterned_layer_refuses_the_JAX_path():
+    """The SAME silent shape, one dispatch away, found while censusing D1 and
+    closed in the same commit family.
+
+    ``add_layer`` already refuses ``slant=`` on a TRACED ``eps_cell``, on the
+    ground that "the slanted layer runs the 4N generator and the generalized
+    cascade, which the 2-D JAX surface does not implement".  But SIX other
+    traced inputs reach the JAX dispatch -- a layer THICKNESS, the wavelength,
+    ``theta``/``phi``, a half-space index, a traced uniform ``eps`` -- and the
+    jnp twin has no notion of a slant at all (``grep -c slant
+    lumenairy/elements/pmm/_jax_stack2d.py`` == 0).
+
+    MEASURED BEFORE the guard (WIN, jax 0.11.0, x64), a slanted patterned layer
+    with a TRACED THICKNESS: the solve RETURNED, energy-conserving and
+    unwarned, **bit-identical to the VERTICAL stack** (``dR = dJones =
+    0.000e+00``) and wrong against the correct NumPy slanted answer by
+    ``dR 1.839e-02 / dJones 3.227e-02``.
+
+    Three arms, so the guard cannot be read as "JAX plus slant raises":
+
+      * a traced THICKNESS and a traced WAVELENGTH both raise;
+      * the VERTICAL control on the same traced thickness still SOLVES, so the
+        refusal is about the shear and not about the API;
+      * a CONSTANT-tile slanted layer -- which never enters a frame and is a
+        genuine no-op -- still SOLVES, so the guard uses the same
+        ``_layer_enters_slant_frame`` decision as the anchor itself.
+    """
+    jax = pytest.importorskip("jax")
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+
+    def build(thickness, wl, cell_, slant):
+        st = _st()
+        st.add_layer(thickness, eps_cell=cell_, slant=slant)
+        st.set_source(wl, theta=MOUNTS["oblique25"][0], phi=0.0)
+        return st
+
+    with pytest.raises(NotImplementedError, match="SLANTED"):
+        build(jnp.asarray(DEP), WL, _cell(), (TSL, 0.0)).solve()
+    with pytest.raises(NotImplementedError, match="SLANTED"):
+        build(DEP, jnp.asarray(WL), _cell(), (TSL, 0.0)).solve()
+    # the VERTICAL control on the SAME traced thickness still solves
+    o, R, T, J = build(jnp.asarray(DEP), WL, _cell(), None).solve()
+    assert np.asarray(R).shape == np.asarray(T).shape
+    # ... and so does the CONSTANT-tile "slanted" layer, which is a real no-op
+    o2, R2, T2, J2 = build(jnp.asarray(DEP), WL,
+                           np.full((NXC, NXC), 2.25 + 0j), (TSL, 0.0)).solve()
+    assert float(np.max(np.asarray(R2).sum(axis=1)
+                        + np.asarray(T2).sum(axis=1))) < 1.05
