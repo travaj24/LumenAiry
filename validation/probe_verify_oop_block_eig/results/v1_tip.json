@@ -1,0 +1,168 @@
+{
+ "arm": "tip",
+ "lumenairy": "c:/tmp/lum_vacc/lumenairy/__init__.py",
+ "version": "5.43.0",
+ "numpy": "2.4.4",
+ "rows": {
+  "scalar (2,2) normal": {
+   "A_auto": "4771873762f75d4bcbfbc16bb8455ffc217addc22fa4a9a7d5e37d7f83ebc344",
+   "B_false": "4771873762f75d4bcbfbc16bb8455ffc217addc22fa4a9a7d5e37d7f83ebc344",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.9450188876185102,
+   "sumR": 0.05552795907579223
+  },
+  "scalar (3,3) normal": {
+   "A_auto": "257242a80295c70f015d5da07881f0b44aa8f122fc5497d8ee511b73fe8373be",
+   "B_false": "257242a80295c70f015d5da07881f0b44aa8f122fc5497d8ee511b73fe8373be",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.8444594378216026,
+   "sumR": 0.15556772988385315
+  },
+  "scalar (3,3) conical 25/40": {
+   "A_auto": "78b8262b290a5d0f92a6cad457048964a9a546c52080d99f201a1a6dfaee7b0d",
+   "B_false": "78b8262b290a5d0f92a6cad457048964a9a546c52080d99f201a1a6dfaee7b0d",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.8491509862144575,
+   "sumR": 0.15085860632815745
+  },
+  "in-plane tensor (3,3) centro normal": {
+   "A_auto": "84317c64bdc68ce3f152782c19a1eb4b514fe155787a45ca2a63f84ec47674cf",
+   "B_false": "84317c64bdc68ce3f152782c19a1eb4b514fe155787a45ca2a63f84ec47674cf",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.9175461156462204,
+   "sumR": 0.08245911219147507
+  },
+  "in-plane tensor (2,2) off-centre normal": {
+   "A_auto": "c62316f1fe79c05963c17b98083bbbf829c9f1a8fc6f9915990679d469bffd2e",
+   "B_false": "c62316f1fe79c05963c17b98083bbbf829c9f1a8fc6f9915990679d469bffd2e",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.8840659374829158,
+   "sumR": 0.11776511618672393
+  },
+  "in-plane tensor (3,3) centro oblique 20": {
+   "A_auto": "218e0bdd1953eb0ac6ce5e6e5a3fdf1c9f0d00feb67ef772e8b215bc71f22d21",
+   "B_false": "218e0bdd1953eb0ac6ce5e6e5a3fdf1c9f0d00feb67ef772e8b215bc71f22d21",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.9361005961851756,
+   "sumR": 0.06390209255977403
+  },
+  "OOP off-centre pillar (2,2) normal": {
+   "A_auto": "77a1a596b73c5c23148ed0deff516aca028f840569828b90e0f33a579072ff14",
+   "B_false": "77a1a596b73c5c23148ed0deff516aca028f840569828b90e0f33a579072ff14",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.9309074903247252,
+   "sumR": 0.06929652316116944
+  },
+  "OOP off-centre pillar (3,3) normal": {
+   "A_auto": "9506f75fd531271c7bf08b12fb344e82a19240ccf059c8b47a556bdd27be2316",
+   "B_false": "9506f75fd531271c7bf08b12fb344e82a19240ccf059c8b47a556bdd27be2316",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.937081775863557,
+   "sumR": 0.07462956986920707
+  },
+  "OOP parity-breaking tensor (2,2) normal": {
+   "A_auto": "0606db2b2c0556c8fe188d29651402a155caba0382bf0aef8344a90d5b9e08f6",
+   "B_false": "0606db2b2c0556c8fe188d29651402a155caba0382bf0aef8344a90d5b9e08f6",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.9353071349942912,
+   "sumR": 0.06539916830720924
+  },
+  "OOP parity-breaking tensor (3,3) normal": {
+   "A_auto": "af955c12dd329c3cab341c70f9acc70d6d57ca61a7b6b333577ee386b145bd24",
+   "B_false": "af955c12dd329c3cab341c70f9acc70d6d57ca61a7b6b333577ee386b145bd24",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.9270660666593988,
+   "sumR": 0.07293142285239981
+  },
+  "OOP centro (2,2) OBLIQUE 25": {
+   "A_auto": "4dd74c357ca24713fa2ac0e8238f7325ce5dcdf32560bfe35c07efca0cfedb87",
+   "B_false": "4dd74c357ca24713fa2ac0e8238f7325ce5dcdf32560bfe35c07efca0cfedb87",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.949142251451903,
+   "sumR": 0.05102323024342631
+  },
+  "OOP centro (3,3) CONICAL 25/40": {
+   "A_auto": "7d956be2563cc4a4ae89c793aba0b262c1a73ebe0796f823ea00fa385f729efd",
+   "B_false": "7d956be2563cc4a4ae89c793aba0b262c1a73ebe0796f823ea00fa385f729efd",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.8313370190016296,
+   "sumR": 0.05564504254384127
+  },
+  "OOP centro (2,2) OBLIQUE 5 (small angle)": {
+   "A_auto": "a5b3a37266c727bf8841dd6eb8568c490513b75eab384aba5b1418484544051e",
+   "B_false": "a5b3a37266c727bf8841dd6eb8568c490513b75eab384aba5b1418484544051e",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.9393428681012226,
+   "sumR": 0.061001197289760944
+  },
+  "OOP centro (3,3) CONICAL 1/90 (tiny polar)": {
+   "A_auto": "1d83404096919017601d4821563bbbf6b9c92bc08d0612f24ebe81bd28688c28",
+   "B_false": "1d83404096919017601d4821563bbbf6b9c92bc08d0612f24ebe81bd28688c28",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.825355323645717,
+   "sumR": 0.06827845778798666
+  },
+  "MAGNETIC scalar-mu on in-plane tensor (3,3) normal": {
+   "A_auto": "fafbbe12a5a16c5d57eec38e434e8977a0eef599354cc4e301c6181180474609",
+   "B_false": "fafbbe12a5a16c5d57eec38e434e8977a0eef599354cc4e301c6181180474609",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.9354471543694225,
+   "sumR": 0.06455205511823184
+  },
+  "MAGNETIC tensor-mu on scalar eps (3,3) conical 25/40": {
+   "A_auto": "687bae9ff5d80dc03daa57a0d3f245c31fd3d45109ee77d5c33cc796025d3a02",
+   "B_false": "687bae9ff5d80dc03daa57a0d3f245c31fd3d45109ee77d5c33cc796025d3a02",
+   "A_eq_B": true,
+   "dR_AB": 0.0,
+   "dT_AB": 0.0,
+   "dJ_AB": 0.0,
+   "sumT": 1.781723779022276,
+   "sumR": 0.21829000726546066
+  }
+ }
+}

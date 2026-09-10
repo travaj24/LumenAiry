@@ -1,0 +1,46 @@
+{
+ "reproduce": [
+  {
+   "engine": "staggered",
+   "rung": 7,
+   "worst": 4.440892098500626e-16,
+   "worst_key": "T(0, 0)p1",
+   "n": 48,
+   "seconds": 11.191768200005754
+  },
+  {
+   "engine": "rcwa",
+   "rung": 5,
+   "worst": 0.0,
+   "worst_key": "R(0, 0)p0",
+   "n": 48,
+   "seconds": 0.4615999000016018,
+   "upsample": 7
+  }
+ ],
+ "oop_knockout": [
+  {
+   "n_orders": 5,
+   "upsample": 7,
+   "dR": 0.0007626840063197434,
+   "dT": 0.012568976910188434,
+   "dJones": 0.0024063555477115304,
+   "identical": false
+  },
+  {
+   "n_orders": 7,
+   "upsample": 10,
+   "dR": 0.0007461868800128658,
+   "dT": 0.012362361226182068,
+   "dJones": 0.0024171627038300815,
+   "identical": false
+  },
+  {
+   "engine": "staggered",
+   "M": 6,
+   "dR": 0.0007400137269517478,
+   "dT": 0.012465836404399584,
+   "dJones": 0.0024203913731728963
+  }
+ ]
+}

@@ -1,0 +1,422 @@
+{
+ "failbefore": [
+  {
+   "cell": "off-centre pillar lc (2,2)",
+   "M": 6,
+   "dA": 0.7309426846564886,
+   "eigset": 0.2884069857543152,
+   "dR": 0.011271044871621946,
+   "dT": 0.19161212980968623,
+   "dJ": 0.057824187347557274,
+   "shipped_is_dense": true,
+   "accepted_at_tol_1": true
+  },
+  {
+   "cell": "off-centre pillar generic (3,3)",
+   "M": 6,
+   "dA": 0.6499039221907172,
+   "eigset": 0.21304169885020455,
+   "dR": 0.00712174678572753,
+   "dT": 0.135930319106357,
+   "dJ": 0.051526944837293524,
+   "shipped_is_dense": true,
+   "accepted_at_tol_1": true
+  },
+  {
+   "cell": "parity-breaking lc/lc2 (2,2)",
+   "M": 6,
+   "dA": 0.09944999555593306,
+   "eigset": 0.08269790468865747,
+   "dR": 0.0016716891348493267,
+   "dT": 0.010434472984495097,
+   "dJ": 0.014214432627605215,
+   "shipped_is_dense": true,
+   "accepted_at_tol_1": true
+  },
+  {
+   "cell": "parity-breaking lc/nonrec (3,3)",
+   "M": 6,
+   "dA": 0.023950693866884896,
+   "eigset": 0.07731630062871467,
+   "dR": 0.00023872457263470273,
+   "dT": 0.003831954384889348,
+   "dJ": 0.0008737411844548565,
+   "shipped_is_dense": true,
+   "accepted_at_tol_1": true
+  },
+  {
+   "cell": "off-centre metal (2,2)",
+   "M": 7,
+   "dA": 1.0334078706388325,
+   "eigset": 11.238364332761652,
+   "dR": 0.09609209799631614,
+   "dT": 0.3396916762686044,
+   "dJ": 0.23696482217689474,
+   "shipped_is_dense": true,
+   "accepted_at_tol_1": false
+  }
+ ],
+ "bar_safety": [
+  {
+   "d": 0.0,
+   "dA": 1.340779509104337e-15,
+   "accepted": true,
+   "dR": 1.5994150448506161e-15,
+   "dT": 4.6629367034256575e-15,
+   "dJ": 5.972894766420459e-15,
+   "shipped_identical": false,
+   "shipped_dR": 1.5994150448506161e-15
+  },
+  {
+   "d": 1e-13,
+   "dA": 4.950570495154476e-15,
+   "accepted": true,
+   "dR": 2.740863092043355e-16,
+   "dT": 4.9960036108132044e-15,
+   "dJ": 2.0784899360865884e-15,
+   "shipped_identical": false,
+   "shipped_dR": 2.740863092043355e-16
+  },
+  {
+   "d": 1e-12,
+   "dA": 5.046831588115813e-14,
+   "accepted": true,
+   "dR": 7.73686670285656e-16,
+   "dT": 4.551914400963142e-15,
+   "dJ": 4.283476019965963e-15,
+   "shipped_identical": false,
+   "shipped_dR": 7.73686670285656e-16
+  },
+  {
+   "d": 1e-11,
+   "dA": 5.068834123649833e-13,
+   "accepted": true,
+   "dR": 6.696032617270475e-16,
+   "dT": 4.135580766728708e-15,
+   "dJ": 4.1387244858105486e-15,
+   "shipped_identical": false,
+   "shipped_dR": 6.696032617270475e-16
+  },
+  {
+   "d": 1e-10,
+   "dA": 5.069659218732358e-12,
+   "accepted": true,
+   "dR": 1.5057399771478686e-15,
+   "dT": 1.3433698597964394e-14,
+   "dJ": 6.845252301866368e-15,
+   "shipped_identical": false,
+   "shipped_dR": 1.5057399771478686e-15
+  },
+  {
+   "d": 1e-09,
+   "dA": 5.069851740918281e-11,
+   "accepted": true,
+   "dR": 1.4224732503009818e-15,
+   "dT": 6.106226635438361e-15,
+   "dJ": 7.15333965134138e-15,
+   "shipped_identical": false,
+   "shipped_dR": 1.4224732503009818e-15
+  },
+  {
+   "d": 3e-09,
+   "dA": 1.5209582725924262e-10,
+   "accepted": false,
+   "dR": 8.222589276130066e-16,
+   "dT": 1.4432899320127035e-14,
+   "dJ": 3.090555321917488e-15,
+   "shipped_identical": true,
+   "shipped_dR": 0.0
+  },
+  {
+   "d": 1e-08,
+   "dA": 5.06986549250299e-10,
+   "accepted": false,
+   "dR": 2.248201624865942e-15,
+   "dT": 1.3988810110276972e-14,
+   "dJ": 8.295131736551221e-15,
+   "shipped_identical": true,
+   "shipped_dR": 0.0
+  },
+  {
+   "d": 1e-07,
+   "dA": 5.069867692756543e-09,
+   "accepted": false,
+   "dR": 2.3592239273284576e-16,
+   "dT": 1.2101430968414206e-14,
+   "dJ": 2.424246266179028e-15,
+   "shipped_identical": true,
+   "shipped_dR": 0.0
+  },
+  {
+   "d": 1e-06,
+   "dA": 5.0698701817933756e-08,
+   "accepted": false,
+   "dR": 1.1345091532888318e-15,
+   "dT": 1.5210055437364645e-14,
+   "dJ": 3.913116395418596e-15,
+   "shipped_identical": true,
+   "shipped_dR": 0.0
+  },
+  {
+   "d": 1e-05,
+   "dA": 5.069893017674942e-07,
+   "accepted": false,
+   "dR": 1.4371490109077456e-13,
+   "dT": 3.2596148002994596e-13,
+   "dJ": 5.368364185492579e-13,
+   "shipped_identical": true,
+   "shipped_dR": 0.0
+  },
+  {
+   "d": 0.0001,
+   "dA": 5.070121163753602e-06,
+   "accepted": false,
+   "dR": 1.4277398707740474e-11,
+   "dT": 3.284854332985532e-11,
+   "dJ": 5.363299754895898e-11,
+   "shipped_identical": true,
+   "shipped_dR": 0.0
+  },
+  {
+   "d": 0.001,
+   "dA": 5.0724026043803606e-05,
+   "accepted": false,
+   "dR": 1.4276146757807862e-09,
+   "dT": 3.2837256247475466e-09,
+   "dJ": 5.361802315824362e-09,
+   "shipped_identical": true,
+   "shipped_dR": 0.0
+  },
+  {
+   "d": 0.01,
+   "dA": 0.0005095217008912505,
+   "accepted": false,
+   "dR": 1.4264204702477135e-07,
+   "dT": 3.2746241850067914e-07,
+   "dJ": 5.34619766246092e-07,
+   "shipped_identical": true,
+   "shipped_dR": 0.0
+  },
+  {
+   "d": 0.1,
+   "dA": 0.005323361054089835,
+   "accepted": false,
+   "dR": 1.4110294258490308e-05,
+   "dT": 3.175712501649053e-05,
+   "dJ": 5.184046874991026e-05,
+   "shipped_identical": true,
+   "shipped_dR": 0.0
+  }
+ ],
+ "backward": [
+  {
+   "cell": "uniform tilted uniaxial",
+   "grid": 2,
+   "M": 5,
+   "q4": 256,
+   "dense": 1.041094142844161e-15,
+   "factored": 1.4789040969330286e-15,
+   "ratio": 1.420528688109623,
+   "fwd_dense": 128,
+   "fwd_fac": 128
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "grid": 2,
+   "M": 6,
+   "q4": 400,
+   "dense": 1.3595342687600166e-15,
+   "factored": 8.796165297204858e-16,
+   "ratio": 0.646998424337441,
+   "fwd_dense": 200,
+   "fwd_fac": 200
+  },
+  {
+   "cell": "uniform tilted uniaxial",
+   "grid": 2,
+   "M": 7,
+   "q4": 576,
+   "dense": 1.5024592932274572e-15,
+   "factored": 1.230051685329938e-15,
+   "ratio": 0.8186921874519768,
+   "fwd_dense": 288,
+   "fwd_fac": 288
+  },
+  {
+   "cell": "centro pair generic",
+   "grid": 2,
+   "M": 5,
+   "q4": 256,
+   "dense": 1.8158394773165264e-15,
+   "factored": 9.648219134703616e-16,
+   "ratio": 0.5313365666530112,
+   "fwd_dense": 128,
+   "fwd_fac": 128
+  },
+  {
+   "cell": "centro pair generic",
+   "grid": 2,
+   "M": 6,
+   "q4": 400,
+   "dense": 2.2420676116876553e-15,
+   "factored": 1.5833774629780848e-15,
+   "ratio": 0.7062130752543365,
+   "fwd_dense": 200,
+   "fwd_fac": 200
+  },
+  {
+   "cell": "centro pair generic",
+   "grid": 2,
+   "M": 7,
+   "q4": 576,
+   "dense": 2.331444579356475e-15,
+   "factored": 2.7895820630729515e-15,
+   "ratio": 1.1965036989397069,
+   "fwd_dense": 288,
+   "fwd_fac": 288
+  },
+  {
+   "cell": "centro pair NON-RECIPROCAL",
+   "grid": 2,
+   "M": 5,
+   "q4": 256,
+   "dense": 2.683161897616897e-15,
+   "factored": 1.175986873964736e-15,
+   "ratio": 0.4382839794382933,
+   "fwd_dense": 128,
+   "fwd_fac": 128
+  },
+  {
+   "cell": "centro pair NON-RECIPROCAL",
+   "grid": 2,
+   "M": 6,
+   "q4": 400,
+   "dense": 2.556696219985324e-15,
+   "factored": 1.866573646888761e-15,
+   "ratio": 0.7300725179229449,
+   "fwd_dense": 200,
+   "fwd_fac": 200
+  },
+  {
+   "cell": "centro pair NON-RECIPROCAL",
+   "grid": 2,
+   "M": 7,
+   "q4": 576,
+   "dense": 4.6083061648924665e-15,
+   "factored": 3.4314747612261912e-15,
+   "ratio": 0.7446282079450908,
+   "fwd_dense": 288,
+   "fwd_fac": 288
+  },
+  {
+   "cell": "centro pair LOSSY",
+   "grid": 2,
+   "M": 5,
+   "q4": 256,
+   "dense": 2.3361516522262696e-15,
+   "factored": 1.0162480503105137e-15,
+   "ratio": 0.43500945212271014,
+   "fwd_dense": 128,
+   "fwd_fac": 128
+  },
+  {
+   "cell": "centro pair LOSSY",
+   "grid": 2,
+   "M": 6,
+   "q4": 400,
+   "dense": 2.1202261977350052e-15,
+   "factored": 2.5617712144628453e-15,
+   "ratio": 1.2082537312290234,
+   "fwd_dense": 200,
+   "fwd_fac": 200
+  },
+  {
+   "cell": "centro pair LOSSY",
+   "grid": 2,
+   "M": 7,
+   "q4": 576,
+   "dense": 2.794989108686218e-15,
+   "factored": 3.2334750003167166e-15,
+   "ratio": 1.1568828623581322,
+   "fwd_dense": 288,
+   "fwd_fac": 288
+  },
+  {
+   "cell": "centro pair METAL",
+   "grid": 2,
+   "M": 5,
+   "q4": 256,
+   "dense": 4.891272748754518e-16,
+   "factored": 3.767980889664405e-16,
+   "ratio": 0.7703477363072544,
+   "fwd_dense": 128,
+   "fwd_fac": 128
+  },
+  {
+   "cell": "centro pair METAL",
+   "grid": 2,
+   "M": 6,
+   "q4": 400,
+   "dense": 4.625525259285534e-16,
+   "factored": 6.102665754288201e-16,
+   "ratio": 1.319345460720893,
+   "fwd_dense": 200,
+   "fwd_fac": 200
+  },
+  {
+   "cell": "centro pair METAL",
+   "grid": 2,
+   "M": 7,
+   "q4": 576,
+   "dense": 4.452745169063478e-16,
+   "factored": 7.593294499830578e-16,
+   "ratio": 1.705306324868269,
+   "fwd_dense": 288,
+   "fwd_fac": 288
+  },
+  {
+   "cell": "(3,3) ring lc + interior lossy",
+   "grid": 3,
+   "M": 5,
+   "q4": 576,
+   "dense": 2.3378809306158024e-15,
+   "factored": 4.8153700236990106e-15,
+   "ratio": 2.059715685533494,
+   "fwd_dense": 288,
+   "fwd_fac": 288
+  },
+  {
+   "cell": "(3,3) ring lc + interior lossy",
+   "grid": 3,
+   "M": 6,
+   "q4": 900,
+   "dense": 3.2006614878669106e-15,
+   "factored": 1.529854820785921e-14,
+   "ratio": 4.7798082570909335,
+   "fwd_dense": 450,
+   "fwd_fac": 450
+  },
+  {
+   "cell": "(3,3) cross orbit lc/nonrec",
+   "grid": 3,
+   "M": 5,
+   "q4": 576,
+   "dense": 2.4167376186393687e-15,
+   "factored": 8.262771792257837e-15,
+   "ratio": 3.4189776037457493,
+   "fwd_dense": 288,
+   "fwd_fac": 288
+  },
+  {
+   "cell": "(3,3) cross orbit lc/nonrec",
+   "grid": 3,
+   "M": 6,
+   "q4": 900,
+   "dense": 3.116702843140578e-15,
+   "factored": 1.679966884259442e-14,
+   "ratio": 5.390205511432735,
+   "fwd_dense": 450,
+   "fwd_fac": 450
+  }
+ ]
+}

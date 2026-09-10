@@ -1,0 +1,96 @@
+================================================================================================
+A. STRUCTURE RESIDUAL on the ASSEMBLED pencil (dense R, my own)
+================================================================================================
+cell                                                     grid   M          dA         dB   |R^2-I| engages
+uniform tilted uniaxial (2,2)                            (2,2)  5  9.528e-16  8.112e-17   0.0e+00 True   
+uniform tilted uniaxial (2,2)                            (2,2)  6  1.329e-15  2.109e-16   0.0e+00 True   
+uniform tilted uniaxial (2,2)                            (2,2)  7  3.226e-15  1.406e-16   0.0e+00 True   
+uniform tilted uniaxial (2,2)                            (2,2)  8  2.401e-15  7.030e-17   0.0e+00 True   
+uniform negative uniaxial (3,3)                          (3,3)  5  2.796e-15  8.112e-17   0.0e+00 True   
+uniform negative uniaxial (3,3)                          (3,3)  6  5.766e-15  2.373e-16   0.0e+00 True   
+uniform negative uniaxial (3,3)                          (3,3)  7  2.391e-15  5.931e-17   0.0e+00 True   
+uniform negative uniaxial (3,3)                          (3,3)  8  6.068e-15  1.582e-16   0.0e+00 True   
+centro pair lc (2,2)                                     (2,2)  5  9.697e-16  8.112e-17   0.0e+00 True   
+centro pair lc (2,2)                                     (2,2)  6  1.341e-15  2.109e-16   0.0e+00 True   
+centro pair lc (2,2)                                     (2,2)  7  3.228e-15  1.406e-16   0.0e+00 True   
+centro pair lc (2,2)                                     (2,2)  8  4.112e-15  7.030e-17   0.0e+00 True   
+centro pair generic dense tensor (2,2)                   (2,2)  5  8.000e-16  8.112e-17   0.0e+00 True   
+centro pair generic dense tensor (2,2)                   (2,2)  6  1.106e-15  2.109e-16   0.0e+00 True   
+centro pair generic dense tensor (2,2)                   (2,2)  7  2.663e-15  1.406e-16   0.0e+00 True   
+centro pair generic dense tensor (2,2)                   (2,2)  8  4.455e-15  7.030e-17   0.0e+00 True   
+centro pair NON-RECIPROCAL (2,2)                         (2,2)  5  9.915e-16  8.112e-17   0.0e+00 True   
+centro pair NON-RECIPROCAL (2,2)                         (2,2)  6  1.371e-15  2.109e-16   0.0e+00 True   
+centro pair NON-RECIPROCAL (2,2)                         (2,2)  7  3.300e-15  1.406e-16   0.0e+00 True   
+centro pair NON-RECIPROCAL (2,2)                         (2,2)  8  4.204e-15  7.030e-17   0.0e+00 True   
+centro pair LOSSY (2,2)                                  (2,2)  5  9.703e-16  8.112e-17   0.0e+00 True   
+centro pair LOSSY (2,2)                                  (2,2)  6  1.378e-15  2.109e-16   0.0e+00 True   
+centro pair LOSSY (2,2)                                  (2,2)  7  3.230e-15  1.406e-16   0.0e+00 True   
+centro pair LOSSY (2,2)                                  (2,2)  8  3.694e-15  7.030e-17   0.0e+00 True   
+centro pair strongly-lossy METAL (2,2)                   (2,2)  5  1.251e-16  8.112e-17   0.0e+00 True   
+centro pair strongly-lossy METAL (2,2)                   (2,2)  6  1.912e-16  2.109e-16   0.0e+00 True   
+centro pair strongly-lossy METAL (2,2)                   (2,2)  7  3.629e-16  1.406e-16   0.0e+00 True   
+centro pair strongly-lossy METAL (2,2)                   (2,2)  8  2.700e-16  7.030e-17   0.0e+00 True   
+(3,3) ring lc + INTERIOR lossy centre                    (3,3)  5  2.329e-15  8.112e-17   0.0e+00 True   
+(3,3) ring lc + INTERIOR lossy centre                    (3,3)  6  5.230e-15  2.373e-16   0.0e+00 True   
+(3,3) ring lc + INTERIOR lossy centre                    (3,3)  7  5.206e-15  5.931e-17   0.0e+00 True   
+(3,3) ring lc + INTERIOR lossy centre                    (3,3)  8  5.816e-15  1.582e-16   0.0e+00 True   
+(3,3) ring generic + INTERIOR non-reciprocal centre      (3,3)  5  2.329e-15  8.112e-17   0.0e+00 True   
+(3,3) ring generic + INTERIOR non-reciprocal centre      (3,3)  6  5.227e-15  2.373e-16   0.0e+00 True   
+(3,3) ring generic + INTERIOR non-reciprocal centre      (3,3)  7  4.450e-15  5.931e-17   0.0e+00 True   
+(3,3) ring generic + INTERIOR non-reciprocal centre      (3,3)  8  8.331e-15  1.582e-16   0.0e+00 True   
+(3,3) ring metal + INTERIOR lc2 centre                   (3,3)  5  2.628e-16  8.112e-17   0.0e+00 True   
+(3,3) ring metal + INTERIOR lc2 centre                   (3,3)  6  7.977e-16  2.373e-16   0.0e+00 True   
+(3,3) ring metal + INTERIOR lc2 centre                   (3,3)  7  5.393e-16  5.931e-17   0.0e+00 True   
+(3,3) ring metal + INTERIOR lc2 centre                   (3,3)  8  1.388e-15  1.582e-16   0.0e+00 True   
+(3,3) cross orbit lc / nonrec                            (3,3)  5  2.329e-15  8.112e-17   0.0e+00 True   
+(3,3) cross orbit lc / nonrec                            (3,3)  6  5.234e-15  2.373e-16   0.0e+00 True   
+(3,3) cross orbit lc / nonrec                            (3,3)  7  3.012e-15  5.931e-17   0.0e+00 True   
+(3,3) cross orbit lc / nonrec                            (3,3)  8  6.617e-15  1.582e-16   0.0e+00 True   
+(2,2) cross orbit lossy / generic                        (2,2)  5  8.000e-16  8.112e-17   0.0e+00 True   
+(2,2) cross orbit lossy / generic                        (2,2)  6  1.287e-15  2.109e-16   0.0e+00 True   
+(2,2) cross orbit lossy / generic                        (2,2)  7  2.661e-15  1.406e-16   0.0e+00 True   
+(2,2) cross orbit lossy / generic                        (2,2)  8  3.009e-15  7.030e-17   0.0e+00 True   
+(3,3) pair lc2 + centre metal                            (3,3)  5  2.628e-16  8.112e-17   0.0e+00 True   
+(3,3) pair lc2 + centre metal                            (3,3)  6  8.053e-16  2.373e-16   0.0e+00 True   
+(3,3) pair lc2 + centre metal                            (3,3)  7  1.528e-15  5.931e-17   0.0e+00 True   
+(3,3) pair lc2 + centre metal                            (3,3)  8  2.976e-15  1.582e-16   0.0e+00 True   
+
+off-centre pillar lc (2,2)                               (2,2)  6  7.309e-01  2.109e-16   0.0e+00 False  
+off-centre pillar generic (3,3)                          (3,3)  6  6.499e-01  2.373e-16   0.0e+00 False  
+parity-breaking tensor lc/lc2 (2,2)                      (2,2)  6  9.945e-02  2.109e-16   0.0e+00 False  
+parity-breaking tensor lc/nonrec (3,3)                   (3,3)  6  2.395e-02  2.373e-16   0.0e+00 False  
+parity-breaking tensor, 1e-3 relative (2,2)              (2,2)  6  5.072e-05  2.109e-16   0.0e+00 False  
+parity-breaking tensor, 1e-7 relative (2,2)              (2,2)  6  2.535e-09  2.109e-16   0.0e+00 False  
+centro pair, OBLIQUE 25                                  (2,2)  6         GAUGE REFUSES           False  
+centro pair, CONICAL 25/40                               (3,3)  6         GAUGE REFUSES           False  
+centro pair, OBLIQUE 1e-6 rad                            (2,2)  6         GAUGE REFUSES           False  
+
+carrying envelope dA : 1.251e-16 .. 8.331e-15   (52 rows, all engage=True)
+carrying envelope dB : 5.931e-17 .. 2.373e-16
+smallest REAL violation dA: 2.535e-09   (any engaged? False)
+
+================================================================================================
+B. ON vs OFF at NORMAL incidence on parity-symmetric OOP cells
+================================================================================================
+cell                                                     M    4q^2         dR         dT     dJones  d(eig set)       split min|q|/max
+uniform tilted uniaxial (2,2)                             7    576  8.812e-16  4.774e-15  2.308e-15   9.273e-13        True  3.243e-02
+uniform negative uniaxial (3,3)                           6    900  1.742e-15  5.240e-14  6.289e-15   4.992e-13        True  2.269e-02
+centro pair lc (2,2)                                      7    576  1.360e-15  8.993e-15  7.579e-15   2.339e-12        True  1.165e-02
+centro pair generic dense tensor (2,2)                    7    576  3.608e-15  2.087e-14  1.379e-14   1.136e-12        True  1.924e-02
+centro pair NON-RECIPROCAL (2,2)                          7    576  1.808e-15  1.332e-14  8.517e-15   1.806e-12        True  1.034e-02
+centro pair LOSSY (2,2)                                   7    576  9.506e-16  1.815e-14  8.636e-15   1.093e-12        True  2.118e-02
+centro pair strongly-lossy METAL (2,2)                    7    576  5.509e-15  1.141e-14  2.046e-14   1.092e-12        True  3.522e-02
+(3,3) ring lc + INTERIOR lossy centre                     6    900  8.396e-16  1.521e-14  7.975e-15   6.343e-13        True  2.068e-02
+(3,3) ring generic + INTERIOR non-reciprocal centre       6    900  4.204e-15  9.082e-14  1.582e-14   5.738e-13        True  1.816e-02
+(3,3) ring metal + INTERIOR lc2 centre                    6    900  2.028e-14  8.148e-14  4.903e-14   9.717e-13        True  2.206e-02
+(3,3) cross orbit lc / nonrec                             6    900  1.648e-15  3.642e-14  1.275e-14   8.847e-13        True  1.535e-02
+(2,2) cross orbit lossy / generic                         7    576  2.130e-15  3.053e-14  6.721e-15   1.269e-12        True  1.924e-02
+(3,3) pair lc2 + centre metal                             6    900  5.378e-15  6.928e-14  1.826e-14   1.241e-12        True  2.039e-02
+
+worst dR        2.028e-14
+worst dT        9.082e-14
+worst dJones    4.903e-14
+worst d(eigset) 2.339e-12
+split exact 2q^2/2q^2 on BOTH arms in 13/13 rows
+min|q|/max|q| range 1.03e-02 .. 3.52e-02 (floor _STAG_GAM_FLOOR = 1e-13)
+bit-identical rows (should be 0 -- the arms are different algorithms): 0
