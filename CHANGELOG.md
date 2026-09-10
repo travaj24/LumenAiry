@@ -88,7 +88,6 @@ the strongest available evidence its conjunction is real.
 Full write-up, both builds' tables and every bar's derivation:
 `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md`.
 
-## [5.44.0] — 2026-09-10
 ### Added -- PER-LAYER element grids (L2 mortar) + NON-UNIFORM segment boundaries for the PURE staggered 2-D PMM
 
 Two coupled changes that only pay together, and between them they make an
@@ -198,6 +197,7 @@ surface points, at one region eig per layer instead of the stack's.
 Experiment: `docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md`.
 Build: `docs/audits/BUILD_PMM2D_STAGGERED_MORTAR_2026_09_11.md`.
 
+## [5.44.0] — 2026-09-10
 
 ### Added -- a NATIVE constant-shear SLANT for the PURE staggered 2-D PMM (roadmap Phase D)
 
