@@ -216,6 +216,60 @@ def test_ray_density_self_check_warnings_name_the_caller(monkeypatch, rows):
 
 
 # ===========================================================================
+# 2c.  niche C15's private probe is filled on the band path (v5.44.1, D7)
+# ===========================================================================
+_PROBE_RC = (np.array([100, 150, 200, 260]), np.array([100, 150, 200, 260]))
+
+
+def _run_with_probe(rows, **kw):
+    IM.inverse_map_cache_clear()
+    rec = {'probe_rc': _PROBE_RC}
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        out = la.apply_real_lens_traced(_field(), sag_chunk_rows=rows,
+                                        _imap_out=rec, **kw)
+    IM.inverse_map_cache_clear()
+    return np.asarray(out), rec
+
+
+@pytest.mark.parametrize('mode, imap', [
+    (dict(amplitude_model='screen'), True),
+    (dict(amplitude_model='ray_density', preserve_input_phase=True), True),
+    (dict(amplitude_model='ray_density', preserve_input_phase=True), False),
+], ids=['screen.evaluator', 'rd.evaluator', 'rd.coarse_newton'])
+def test_the_c15_probe_is_filled_on_the_band_path(mode, imap):
+    """``_imap_out['probe_rc']`` asks for the FINALISED OPL (and the
+    ray-density amplitude where one is built) at named pixels -- niche C15's
+    independent oracle for deciding which INVERSION is faithful.  The block
+    that fills it sits after the row-band assembly's ``return``, so a banded
+    call filled nothing (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D7).  Inert
+    while a banded call was always the incumbent; at the shipped default a
+    banded call IS the evaluator, so a C15-style comparison at N >= 4096 got
+    silence exactly where it needed the model's OPL.
+
+    The band path gathers the same pixels band by band, so the pin is
+    EQUALITY with the whole-grid arm's values -- ``np.array_equal``, the same
+    bar the field carries -- and the field must be unmoved by asking."""
+    kw = _base_kw(inverse_map=imap, **mode)
+    whole, rec_w = _run_with_probe(0, **kw)
+    assert 'probe_opl' in rec_w
+    for rows in (32, 7):
+        band, rec_b = _run_with_probe(rows, **kw)
+        assert np.array_equal(whole, band), rows
+        assert 'probe_opl' in rec_b, (rows, sorted(rec_b))
+        assert np.array_equal(rec_b['probe_opl'], rec_w['probe_opl']), rows
+        assert np.isfinite(rec_b['probe_opl']).any(), rec_b['probe_opl']
+        assert (rec_b['probe_ard'] is None) == (rec_w['probe_ard'] is None)
+        if rec_w['probe_ard'] is not None:
+            assert np.array_equal(rec_b['probe_ard'], rec_w['probe_ard']), rows
+        assert rec_b['probe_opl_piston'] == rec_w['probe_opl_piston']
+        # asking must not move the field: the probe retains M values and
+        # nothing reads it back
+        plain, _, _ = _run(rows, **kw)
+        assert np.array_equal(plain, band), rows
+
+
+# ===========================================================================
 # 3.  the memory lever is real on the routes that used to refuse it
 # ===========================================================================
 def test_band_path_lowers_the_peak_on_the_ray_density_inverse_map_route():

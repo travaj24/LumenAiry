@@ -11979,6 +11979,41 @@ def apply_real_lens_traced(
         _oa_measure = bool(_rd_swap_band and _origin_set
                            and ORIGIN_AMP_SUPPORT_CHECK != 'silent')
 
+        # ---- niche C15's PRIVATE PROBE, on the band path (v5.44.1, D7) ----
+        # The whole-grid branches sample the finalised ``opl_map`` / ``ard_map``
+        # below; this path never builds either as a full grid, and the probe
+        # block sat after its ``return``, so a banded call filled nothing
+        # (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D7).  That was inert while a
+        # banded call was always the incumbent; at the shipped default it IS
+        # the evaluator now, so a C15-style inversion comparison at N >= 4096
+        # got silence exactly where it needed the model's OPL.  Same contract
+        # as there: opt-in, diagnostic-only, nothing reads it back, and only
+        # the M sampled values are retained -- a call that does not ask pays
+        # one ``is None`` test per band and keeps every bit and every byte.
+        _pb = None
+        if _imap_out is not None and _imap_out.get('probe_rc') is not None:
+            _pb_r = np.asarray(_imap_out['probe_rc'][0], dtype=np.intp)
+            _pb_c = np.asarray(_imap_out['probe_rc'][1], dtype=np.intp)
+            _pb = {'r': _pb_r, 'c': _pb_c,
+                   'opl': np.full(_pb_r.shape, np.nan, dtype=np.float64),
+                   'ard': (np.full(_pb_r.shape, np.nan, dtype=np.float64)
+                           if _rd_swap_band else None)}
+
+        def _probe_band(r0, r1, opl_b, ard_b):
+            """Gather the probe pixels that fall in rows ``r0:r1`` from this
+            band's FINAL OPL (and ray-density amplitude), in probe order --
+            the band-wise form of ``opl_map[_p_r, _p_c]``."""
+            if _pb is None:
+                return
+            _sel = (_pb['r'] >= r0) & (_pb['r'] < r1)
+            if not _sel.any():
+                return
+            _rr = _pb['r'][_sel] - r0
+            _cc = _pb['c'][_sel]
+            _pb['opl'][_sel] = np.asarray(opl_b)[_rr, _cc]
+            if _pb['ard'] is not None and ard_b is not None:
+                _pb['ard'][_sel] = np.asarray(ard_b)[_rr, _cc]
+
         def _step3_band(r0, r1, opl_b):
             """Step 3 on rows ``r0:r1`` -- the whole-grid expressions on a
             slice (delta-phase, piston, combine, valid / aperture masks)."""
@@ -11997,8 +12032,9 @@ def apply_real_lens_traced(
                 # ``E_analytic`` is a FREE variable of the enclosing call, captured by
                 # this closure and released by the ``del`` after the band loop (the
                 # memory release the whole-grid path also performs).  Every call of this
-                # closure precedes that ``del`` (asserted at lint time 2026-09-11: calls
-                # at [12042, 12170], del at [12289]); pyflakes sees the later ``del`` and reports
+                # closure precedes that ``del`` (re-checked 2026-09-11 after the D7
+                # probe insertion: calls at [12093, 12223], del at [12350]); pyflakes
+                # sees the later ``del`` and reports
                 # F821 here -- a false positive.  A default-argument capture would defeat
                 # the release (it would pin the full grid until the call returns).
                 band = E_analytic[r0:r1] * pe_b  # noqa: F821
@@ -12056,6 +12092,7 @@ def apply_real_lens_traced(
                                             order=1, mode='nearest')
                     opl_b = np.where(nan_b > 0.5, np.nan, opl_b)
                 band = _step3_band(r0, r1, opl_b)
+                ard_b = None
                 if _rd_swap_band:
                     _a_rd = map_coordinates(_ard_coarse_clean, coords_b,
                                             order=1, mode='nearest')
@@ -12084,6 +12121,7 @@ def apply_real_lens_traced(
                             (_ye_f - _org_y) / dy + N / 2.0,
                             (_xe_f - _org_x) / dx + N / 2.0, _xe_f.shape))
                     band = _swap_band(r0, r1, band, ard_b, resid_b)
+                _probe_band(r0, r1, opl_b, ard_b)
                 del ii_b, jj_b, coords_b
                 E_out[r0:r1] = band
         else:
@@ -12184,6 +12222,8 @@ def apply_real_lens_traced(
                     np.copyto(_yin_b, 0.0, where=_bad_b)
                     del _bad_b
                 band = _step3_band(r0, r1, _opl_b)
+                if not _rd_swap_band:
+                    _probe_band(r0, r1, _opl_b, None)
                 if _rd_swap_band:
                     sh = _Xb.shape
                     invalid_b = ~np.isfinite(_opl_b)
@@ -12220,6 +12260,7 @@ def apply_real_lens_traced(
                         # from x), the whole-grid branch's expression.
                         resid_b = _unit_phasor(
                             _pip_sample_residual(_row, _col, sh))
+                    _probe_band(r0, r1, _opl_b, a_rd)
                     band = _swap_band(r0, r1, band, a_rd, resid_b)
                     del a_in, a_rd, _col, _row, xef, yef, invalid_b
                 del _outs, _xin_b, _yin_b, _opl_b, _ok_b
@@ -12243,6 +12284,11 @@ def apply_real_lens_traced(
                 _origin_amp_support_verdict(
                     (_oa_cut / _oa_tot) if _oa_tot > 0.0 else 0.0)
             _ray_density_self_checks(E_out)
+        if _pb is not None:
+            # same three keys, same order, same dtypes as the whole-grid block
+            _imap_out['probe_opl'] = _pb['opl']
+            _imap_out['probe_ard'] = _pb['ard']
+            _imap_out['probe_opl_piston'] = float(_opl_piston)
         call_progress(progress, 'real_lens_traced', 1.0, 'done')
         return E_out
     # ---- PRIVATE DIAGNOSTIC PROBE (niche C15's independent oracle) ---------
