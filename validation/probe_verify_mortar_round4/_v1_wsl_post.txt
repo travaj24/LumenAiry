@@ -1,0 +1,42 @@
+part g ...
+part g: 0.08 s
+part f ...
+  conf2                        warn=0 [] [] R00=0.060685702323 0.8s
+  conf3                        warn=0 [] [] R00=0.091140102426 0.3s
+  conf_narrow_y                warn=0 [] [] R00=0.041848340834 0.2s
+  conf_narrow_x                warn=0 [] [] R00=0.042157313466 0.2s
+  x_only_ord                   warn=0 [] [] R00=0.050564394342 0.3s
+  x_only_narrow_x              warn=1 ['x'] [0.005] R00=0.019887090163 0.3s
+  x_only_narrow_y              warn=0 [] [] R00=0.041755753960 0.4s
+  x_only_mixed                 warn=1 ['x'] [0.009] R00=0.041633879064 0.5s
+  y_only_ord                   warn=0 [] [] R00=0.050299212142 0.6s
+  y_only_narrow_y              warn=1 ['y'] [0.005] R00=0.020775653467 0.6s
+  y_only_narrow_x              warn=0 [] [] R00=0.041933029482 0.5s
+  both_ord                     warn=0 [] [] R00=0.044901907686 0.6s
+  both_narrow_x                warn=1 ['x'] [0.004] R00=0.018376252047 0.6s
+  both_narrow_y                warn=1 ['y'] [0.004] R00=0.018431274378 0.5s
+  oop_x_only                   warn=0 [] [] R00=0.032609091279 0.7s
+  oop_both                     warn=0 [] [] R00=0.032467413949 0.6s
+  oop_narrow_y_conf            warn=0 [] [] R00=0.046709862554 0.7s
+  oop_spacer                   warn=0 [] [] R00=0.046118987535 0.5s
+  oop_both_sides               warn=0 [] [] R00=0.048036175097 0.7s
+  magnetic_x_only              warn=0 [] [] R00=0.033174729747 0.8s
+  magnetic_narrow_y_conf       warn=0 [] [] R00=0.046717246261 0.7s
+  magnetic_conf                warn=0 [] [] R00=0.034101228543 0.5s
+  slant_spacer                 warn=0 [] [] R00=0.058558062067 0.6s
+  slant_spacer_narrow_y        warn=1 ['y'] [0.003] R00=0.045782133271 0.5s
+  taper8                       warn=0 [] [] R00=0.069468222540 1.6s
+  taper9                       warn=1 ['x'] [0.02889] R00=0.077916657536 1.8s
+  taper16                      warn=1 ['x'] [0.01625] R00=0.074543008010 3.1s
+  advB_i                       warn=1 ['x'] [0.006] R00=0.066122881368 2.3s
+  advB_ii                      warn=1 ['y'] [0.004] R00=0.077356686410 3.4s
+  advB_iii                     warn=0 [] [] R00=0.077470933517 0.9s
+  advB_far                     warn=1 ['x'] [0.005] R00=0.038635381646 0.8s
+  advB_ymortar_narrow_x        warn=0 [] [] R00=0.041713843489 0.5s
+  conf2|forced                 warn=0 [] [] R00=0.060685702323 0.5s
+  conf_narrow_y|forced         warn=1 ['y'] [0.003] R00=0.041848340834 0.2s
+  conf_narrow_x|forced         warn=1 ['x'] [0.003] R00=0.042157313466 0.3s
+part f: 28.21 s
+part w ...
+part w: 0.00 s
+wrote /mnt/c/tmp/lum_vmortar4/validation/probe_verify_mortar_round4/v1_axis_identity_wsl_post.json

@@ -1,0 +1,42 @@
+part g ...
+part g: 0.14 s
+part f ...
+  conf2                        warn=0 [] [] R00=0.060685702323 1.7s
+  conf3                        warn=0 [] [] R00=0.091140102427 0.5s
+  conf_narrow_y                warn=0 [] [] R00=0.041848340834 0.4s
+  conf_narrow_x                warn=0 [] [] R00=0.042157313466 0.4s
+  x_only_ord                   warn=0 [] [] R00=0.050564394342 0.6s
+  x_only_narrow_x              warn=1 ['x'] [0.005] R00=0.019887090163 0.5s
+  x_only_narrow_y              warn=1 ['y'] [0.003] R00=0.041755753960 0.4s
+  x_only_mixed                 warn=1 ['y'] [0.003] R00=0.041633879064 0.5s
+  y_only_ord                   warn=0 [] [] R00=0.050299212143 0.6s
+  y_only_narrow_y              warn=1 ['y'] [0.005] R00=0.020775653466 0.5s
+  y_only_narrow_x              warn=1 ['x'] [0.003] R00=0.041933029482 0.6s
+  both_ord                     warn=0 [] [] R00=0.044901907687 0.6s
+  both_narrow_x                warn=1 ['x'] [0.004] R00=0.018376252047 0.5s
+  both_narrow_y                warn=1 ['y'] [0.004] R00=0.018431274381 0.5s
+  oop_x_only                   warn=0 [] [] R00=0.032609091278 0.5s
+  oop_both                     warn=0 [] [] R00=0.032467413949 0.6s
+  oop_narrow_y_conf            warn=1 ['y'] [0.003] R00=0.046709862554 0.5s
+  oop_spacer                   warn=0 [] [] R00=0.046118987534 0.5s
+  oop_both_sides               warn=0 [] [] R00=0.048036175097 0.8s
+  magnetic_x_only              warn=0 [] [] R00=0.033174729747 0.7s
+  magnetic_narrow_y_conf       warn=1 ['y'] [0.003] R00=0.046717246261 0.7s
+  magnetic_conf                warn=0 [] [] R00=0.034101228543 0.8s
+  slant_spacer                 warn=0 [] [] R00=0.058558062066 0.8s
+  slant_spacer_narrow_y        warn=1 ['y'] [0.003] R00=0.045782133271 0.6s
+  taper8                       warn=0 [] [] R00=0.069468222593 1.6s
+  taper9                       warn=1 ['x'] [0.02889] R00=0.077916657536 1.9s
+  taper16                      warn=1 ['x'] [0.01625] R00=0.074543008010 3.0s
+  advB_i                       warn=1 ['x'] [0.006] R00=0.066122881351 2.4s
+  advB_ii                      warn=1 ['y'] [0.004] R00=0.077356686410 3.7s
+  advB_iii                     warn=0 [] [] R00=0.077470933519 0.6s
+  advB_far                     warn=1 ['x'] [0.005] R00=0.038635381646 0.9s
+  advB_ymortar_narrow_x        warn=1 ['x'] [0.003] R00=0.041713843489 0.4s
+  conf2|forced                 warn=0 [] [] R00=0.060685702323 0.3s
+  conf_narrow_y|forced         warn=1 ['y'] [0.003] R00=0.041848340834 0.4s
+  conf_narrow_x|forced         warn=1 ['x'] [0.003] R00=0.042157313466 0.2s
+part f: 30.07 s
+part w ...
+part w: 0.00 s
+wrote C:\tmp\lum_vmortar4\validation\probe_verify_mortar_round4\v1_axis_identity_win_pre.json

@@ -1,0 +1,98 @@
+  oop_x_only               M=4 -> one_promoted: on 0.0000/1.0000 spread 1.1547e-07 s_ratio 3.157e-10
+  oop_x_only               M=5 -> one_promoted: on 0.0000/1.0000 spread 7.5757e-08 s_ratio 8.794e-12
+  oop_x_only               M=6 -> one_promoted: on 0.0000/1.0000 spread 2.1378e-08 s_ratio 1.415e-12
+  oop_both                 M=4 -> one_promoted: on 0.0000/1.0000 spread 3.9293e-08 s_ratio 2.027e-10
+  oop_both                 M=5 -> one_promoted: on 0.0000/1.0000 spread 2.9724e-08 s_ratio 1.338e-12
+  oop_both                 M=6 -> one_promoted: on 0.0000/1.0000 spread 1.7712e-08 s_ratio 1.075e-12
+  oop_spacer               M=4 -> one_promoted: on 0.0000/1.0000 spread 4.5357e-08 s_ratio 2.851e-11
+  oop_spacer               M=5 -> one_promoted: on 0.0000/1.0000 spread 3.0268e-08 s_ratio 3.251e-12
+  oop_spacer               M=6 -> one_promoted: on 0.0000/1.0000 spread 2.9559e-08 s_ratio 3.943e-13
+  oop_narrow_y_conf        M=4 -> one_promoted: on 0.0000/1.0000 spread 2.2312e-08 s_ratio 1.852e-14
+  oop_narrow_y_conf        M=5 -> one_promoted: on 0.0000/1.0000 spread 3.7656e-09 s_ratio 1.618e-15
+  oop_narrow_y_conf        M=6 -> one_promoted: on 0.0000/1.0000 spread 2.4126e-09 s_ratio 3.180e-15
+  magnetic_x_only          M=4 -> one_promoted: on 0.0000/1.0000 spread 2.8077e-08 s_ratio 1.723e-10
+  magnetic_x_only          M=5 -> one_promoted: on 0.0000/1.0000 spread 5.9305e-08 s_ratio 7.001e-12
+  magnetic_x_only          M=6 -> one_promoted: on 0.0000/1.0000 spread 6.2610e-08 s_ratio 2.163e-12
+  slant_spacer             M=4 -> one_promoted: on 0.0000/1.0000 spread 1.0431e-07 s_ratio 5.705e-10
+  slant_spacer             M=5 -> one_promoted: on 0.0000/1.0000 spread 9.1464e-08 s_ratio 2.282e-11
+  slant_spacer             M=6 -> one_promoted: on 0.0000/1.0000 spread 1.5344e-07 s_ratio 1.307e-11
+  bars_strong_oop          M=4 -> one_promoted: on 0.0000/1.0000 spread 4.5754e-08 s_ratio 2.027e-10
+  bars_strong_oop          M=5 -> one_promoted: on 0.0000/1.0000 spread 3.3902e-08 s_ratio 1.347e-12
+  bars_strong_oop          M=6 -> one_promoted: on 0.0000/1.0000 spread 3.0302e-08 s_ratio 1.079e-12
+  bars_tiny_slant          M=4 -> one_promoted: on 0.0000/1.0000 spread 9.5102e-08 s_ratio 5.753e-10
+  bars_tiny_slant          M=5 -> one_promoted: on 0.0000/1.0000 spread 2.7227e-07 s_ratio 2.377e-11
+  bars_tiny_slant          M=6 -> one_promoted: on 0.0000/1.0000 spread 2.1267e-07 s_ratio 1.232e-11
+  bars_both_promoted       M=4 -> one_promoted: on 0.0000/1.0000 spread 3.9293e-08 s_ratio 2.027e-10; both_promoted: on 0.8617/0.5074 spread 5.8883e-01 s_ratio 2.647e-06
+  bars_both_promoted       M=5 -> one_promoted: on 0.0000/1.0000 spread 2.9724e-08 s_ratio 1.338e-12; both_promoted: on 0.8850/0.4655 spread 5.2600e-01 s_ratio 2.415e-07
+  bars_both_promoted       M=6 -> one_promoted: on 0.0000/1.0000 spread 1.7712e-08 s_ratio 1.075e-12; both_promoted: on 0.9264/0.3766 spread 4.0653e-01 s_ratio 2.251e-07
+  oop_both_sides           M=4 -> neither_promoted: on 0.7451/0.6670 spread 8.9515e-01 s_ratio 1.378e-03
+  oop_both_sides           M=5 -> neither_promoted: on 0.6666/0.7454 spread 8.9433e-01 s_ratio 2.076e-05
+  oop_both_sides           M=6 -> neither_promoted: on 0.6689/0.7434 spread 8.9981e-01 s_ratio 2.991e-05
+  bars_slant_both          M=4 -> neither_promoted: on 0.7363/0.6767 spread 9.1908e-01 s_ratio 1.177e-03
+  bars_slant_both          M=5 -> neither_promoted: on 0.4912/0.8711 spread 5.6385e-01 s_ratio 3.394e-05
+  bars_slant_both          M=6 -> neither_promoted: on 0.6219/0.7831 spread 7.9414e-01 s_ratio 1.934e-05
+  bars_near_inplane_oop    M=4 -> neither_promoted: on 0.5620/0.8272 spread 6.7939e-01 s_ratio 1.120e-03
+  bars_near_inplane_oop    M=5 -> neither_promoted: on 0.4773/0.8787 spread 5.4321e-01 s_ratio 1.518e-05
+  bars_near_inplane_oop    M=6 -> neither_promoted: on 0.6821/0.7312 spread 9.3285e-01 s_ratio 3.053e-05
+  oracle self-gap (deg 12 -> 14) = 1.193027e-06
+  M=5 e_ord=1.647715e-01 e_band=7.799080e-02 ratio=0.4733 warn=0/1 (7.8 s)
+  M=6 e_ord=9.780604e-03 e_band=1.456122e-02 ratio=1.4888 warn=0/1 (43.4 s)
+  M=7 e_ord=2.499662e-03 e_band=7.225423e-03 ratio=2.8906 warn=0/1 (109.5 s)
+wrote C:\tmp\lum_vmortar4\validation\probe_verify_mortar_round4\v2_bars_win.json
+{
+ "both_promoted": {
+  "max_on_max": 0.9263762379061515,
+  "max_on_min": 0.8617114187518041,
+  "n_operands": 3,
+  "residual_max": 1.9004578858729704e-14,
+  "s_ratio_max": 2.6465720393873076e-06,
+  "s_ratio_min": 2.2512231169114157e-07,
+  "spread_max": 0.5888266989793375,
+  "spread_min": 0.4065295810843514
+ },
+ "neither_promoted": {
+  "max_on_max": 0.8787233186878588,
+  "max_on_min": 0.7312328212710152,
+  "n_operands": 9,
+  "residual_max": 2.109425076086235e-14,
+  "s_ratio_max": 0.001377917239797362,
+  "s_ratio_min": 1.5176422167662856e-05,
+  "spread_max": 0.9328464826732534,
+  "spread_min": 0.5432101967083
+ },
+ "one_promoted": {
+  "max_on_max": 1.0000000000000004,
+  "max_on_min": 0.9999999999999624,
+  "n_operands": 27,
+  "residual_max": 3.375561723632067e-14,
+  "s_ratio_max": 5.753357567626932e-10,
+  "s_ratio_min": 1.6177734308336032e-15,
+  "spread_max": 2.722719580263006e-07,
+  "spread_min": 2.4125627527885952e-09
+ }
+}
+{
+ "old_bar_max_on_worst_ctrl": 0.9263762379061515,
+ "old_bar_slack_vs_0p95": 0.02362376209384842,
+ "s_ctrl_gt_0p1_margin": 4.065295810843514,
+ "s_ctrl_over_1e3_s_mixed": 1493.101177334913,
+ "s_ctrl_worst": 0.4065295810843514,
+ "s_mixed_lt_1e_3_margin_decades": 3.5649970854377204,
+ "s_mixed_worst": 2.722719580263006e-07
+}
+{
+ "e_ord_6_over_e_ord_5": 0.05935858537433962,
+ "oracle_precondition": {
+  "bar": 20.0,
+  "gap_between_arms_M6": 0.004780619370186992,
+  "ratio": 4007.1351115699636,
+  "self_gap": 1.1930267478088563e-06
+ },
+ "precondition_bar": 0.5,
+ "precondition_margin": 8.423381333075824,
+ "ratio_M5": 0.47332693536797993,
+ "ratio_M6": 1.4887856908483081,
+ "ratio_bar": 1.15,
+ "ratio_margin": 0.41158863945041735,
+ "worst_ratio": 0.47332693536797993
+}

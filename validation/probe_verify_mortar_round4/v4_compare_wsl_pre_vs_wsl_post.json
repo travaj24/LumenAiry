@@ -1,0 +1,127 @@
+{
+ "counts": {
+  "answer": 0,
+  "ignored": 0,
+  "other": 0,
+  "warning": 17
+ },
+ "diffs": [
+  {
+   "kind": "warning",
+   "path": ".f.advB_ymortar_narrow_x.axes[0]",
+   "post": "<missing>",
+   "pre": "x"
+  },
+  {
+   "kind": "warning",
+   "path": ".f.advB_ymortar_narrow_x.n_warn",
+   "post": 0,
+   "pre": 1
+  },
+  {
+   "kind": "warning",
+   "path": ".f.advB_ymortar_narrow_x.widths[0]",
+   "post": "<missing>",
+   "pre": 0.003
+  },
+  {
+   "kind": "warning",
+   "path": ".f.magnetic_narrow_y_conf.axes[0]",
+   "post": "<missing>",
+   "pre": "y"
+  },
+  {
+   "kind": "warning",
+   "path": ".f.magnetic_narrow_y_conf.n_warn",
+   "post": 0,
+   "pre": 1
+  },
+  {
+   "kind": "warning",
+   "path": ".f.magnetic_narrow_y_conf.widths[0]",
+   "post": "<missing>",
+   "pre": 0.003
+  },
+  {
+   "kind": "warning",
+   "path": ".f.oop_narrow_y_conf.axes[0]",
+   "post": "<missing>",
+   "pre": "y"
+  },
+  {
+   "kind": "warning",
+   "path": ".f.oop_narrow_y_conf.n_warn",
+   "post": 0,
+   "pre": 1
+  },
+  {
+   "kind": "warning",
+   "path": ".f.oop_narrow_y_conf.widths[0]",
+   "post": "<missing>",
+   "pre": 0.003
+  },
+  {
+   "kind": "warning",
+   "path": ".f.x_only_mixed.axes[0]",
+   "post": "x",
+   "pre": "y"
+  },
+  {
+   "kind": "warning",
+   "path": ".f.x_only_mixed.widths[0]",
+   "post": 0.009,
+   "pre": 0.003
+  },
+  {
+   "kind": "warning",
+   "path": ".f.x_only_narrow_y.axes[0]",
+   "post": "<missing>",
+   "pre": "y"
+  },
+  {
+   "kind": "warning",
+   "path": ".f.x_only_narrow_y.n_warn",
+   "post": 0,
+   "pre": 1
+  },
+  {
+   "kind": "warning",
+   "path": ".f.x_only_narrow_y.widths[0]",
+   "post": "<missing>",
+   "pre": 0.003
+  },
+  {
+   "kind": "warning",
+   "path": ".f.y_only_narrow_x.axes[0]",
+   "post": "<missing>",
+   "pre": "x"
+  },
+  {
+   "kind": "warning",
+   "path": ".f.y_only_narrow_x.n_warn",
+   "post": 0,
+   "pre": 1
+  },
+  {
+   "kind": "warning",
+   "path": ".f.y_only_narrow_x.widths[0]",
+   "post": "<missing>",
+   "pre": 0.003
+  }
+ ],
+ "leaves_compared": 782,
+ "post": "wsl_post",
+ "pre": "wsl_pre",
+ "sections": [
+  "M",
+  "band_hi",
+  "band_lo",
+  "env",
+  "f",
+  "g",
+  "lumenairy_file",
+  "tag",
+  "tree",
+  "w"
+ ]
+}
