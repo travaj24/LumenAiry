@@ -394,11 +394,13 @@ of what round 2 prevents has to lift both), on fixture 2 at `M` = 6:
 
 | arm | err vs the exact oracle | closure | warnings |
 |---|---|---|---|
-| ordinary (`delta` = 0.30) | 7.294e-03 | 1.5e-05 | none |
-| **sliver (`delta` = 1e-05)** | **4.990e-02** | 7.9e-06 | **none** |
+| ordinary (`delta` = 0.30) | 7.2941e-03 | 1.53e-05 | none |
+| **sliver (`delta` = 1e-05)** | **4.9904e-02** | 7.94e-06 | **none** |
 
 **6.84x worse, with the closure 3.5 decades UNDER the engine's own tripwire
-and no warning on either arm.**  With the guards armed the sliver arm is
+and no warning on either arm.**  Every figure in that table is identical on
+both builds to 11 significant digits (`r8_twobuild_{win,wsl}.json`); the
+ratio reads 6.841625743683 / 6.841625743694.  With the guards armed the sliver arm is
 refused -- by the WIDTH contract (which needs no solve), and independently by
 the CONDITIONING backstop with the width contract lifted (`rcond` = 3.168e-15
 on that fixture) -- while the ordinary arm returns the identical number.
