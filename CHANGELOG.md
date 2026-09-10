@@ -267,11 +267,14 @@ defects were fixed (`docs/audits/FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md`).
   1e-2 .. 1e-6, with the last rung improving 11.71x against 2.32x.  The bar
   sits 2.10 decades below the narrowest segment any ordinary shipped geometry
   asks for (0.1250 of the period, a nested refinement), and a taper whose tip
-  CLOSES walks toward
-  it at `w_bottom / (2 n_slices)` -- crossing at about 250 slices, which is
-  remedy (4) in the message.  The INTEGER lattice is exempt and cannot reach
-  the bar at any affordable `N`.  Fail-before switch
-  `twod_staggered.PMM2D_STAG_MIN_SEG_GUARD`.
+  CLOSES walks toward it at `w_bottom / (2 n_slices)` -- crossing at about 250
+  slices, which is remedy (4) in the message.  The INTEGER lattice is exempt
+  and cannot reach the bar at any affordable `N`.  Fail-before switch
+  `twod_staggered.PMM2D_STAG_MIN_SEG_GUARD`.  **The accuracy cost is
+  CONTINUOUS in the wall width, so the contract does not remove it above the
+  bar**: an ordinary 0.12 partition already costs 1.5x on this measure and a
+  64-slice CLOSING taper, at 4.1e-03, is returned with a ~4x floor.  Converge
+  in `n_modes`.
 
 * **The three 2-D mortar interface solves are GUARDED.**  They raised a bare
   `numpy.linalg.LinAlgError: Singular matrix`; they now go through
@@ -288,9 +291,11 @@ defects were fixed (`docs/audits/FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md`).
 * **The far-field projector's Gauss rule is sized PER SEGMENT.**  `nq = 2M + 8`
   was sized for a segment of length `d/N`; on a 0.96 `d` segment at `M = 4`
   with orders to 7 its kernel error reached **7.5e-04**, and it is now
-  **5.6e-15**.  The rule's constants are an upper envelope of a measurement
+  **4.7e-15**.  The rule's constants are an upper envelope of a measurement
   (slope 0.6341-0.6455 across `M = 3..12`, a 1.8 % spread).  The INTEGER path
-  bypasses the formula entirely and is bit-identical by construction.
+  bypasses the formula entirely and is bit-identical by construction, and the
+  two builds agree on every `nq` the rule hands out (36 cells, 0 mismatches)
+  and on the kernel error to 1.24e-16.
 
 BIT-IDENTITY for the whole of round 2: **33 fixtures / 87 sha256 hashes**
 against a pristine pre-change tree, 0 mismatches, on both builds.

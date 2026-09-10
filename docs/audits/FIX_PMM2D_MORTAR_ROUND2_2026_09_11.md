@@ -25,7 +25,7 @@ which `lumenairy` it imported.
 |---|---|
 | **D1** | An intra-layer SLIVER under a mortar is **not a wandering wrong answer and has no onset** -- it is a **FLOOR under the `n_modes` ladder**, energy-invisibly.  Fixed by a MINIMUM SEGMENT WIDTH **contract** at `Basis1D.__init__`: `_STAG_MIN_SEG_FRAC` = **1e-3 of the period**, 2.10 decades below the narrowest segment any ordinary shipped geometry asks for and landing on the same width as the independent conditioning bar. |
 | **D2** | The three 2-D mortar `np.linalg.solve` calls now go through `_guarded_mortar_solve` -- **bit-identical** (`lu_factor` + `lu_solve` is the same LAPACK pair, measured on 106 solves at 0.96x wall time) with a free LAPACK `gecon` screen.  Bar `_MORTAR_RCOND_REFUSE` = **1e-12**, healthy population **2.61e-07 .. 3.77e-04**. |
-| **D3** | `_stag_fourier_projection`'s Gauss rule is now sized PER SEGMENT from that segment's own half-phase.  Long-segment kernel error **7.5e-04 -> 5.6e-15**; the INTEGER path bypasses the formula and is bit-identical by construction. |
+| **D3** | `_stag_fourier_projection`'s Gauss rule is now sized PER SEGMENT from that segment's own half-phase.  Long-segment kernel error **7.5e-04 -> 4.7e-15**; the INTEGER path bypasses the formula and is bit-identical by construction. |
 | **the ~1850 site** | **LEFT UNGUARDED, by measurement.**  Reachable with a near-singular operand, but every reading below the bar is already refused by the shipped 1-D sliver guard, and the CORRECT 1-D population comes within **1.0 decade** of a 1e-12 bar against 5.4 decades on the mortar path. |
 | **Bit-identity** | **33 fixtures / 87 sha256 hashes**, each build against a pristine `git archive HEAD` tree of the SAME build: **0 mismatches on WIN, 0 on WSL**. |
 | **Tests** | `tests/unit/test_fix_pmm2d_mortar_round2.py`, **15 tests**, 80.2 s (WIN); with `test_pmm2d_staggered_nonuniform.py`, 31 passed in 188.5 s (WSL). |
@@ -607,7 +607,7 @@ what makes it a statement about the SHIPPED library.
 | `the_integer_lattice_projector_is_bit_identical_to_the_fixed_rule` | D3 bit-identity against an in-process reimplementation of the pre-change rule |
 | `the_rule_returns_the_shipped_order_on_every_uniform_lattice` | 720 cells, 0 violations |
 | `the_quadrature_rule_clears_the_measured_requirement` | the requirement re-measured with the oracle's own floor as the bar |
-| `a_long_segment_kernel_is_back_at_round_off` | 7.5e-04 -> 5.6e-15, and the improvement is DECADES |
+| `a_long_segment_kernel_is_back_at_round_off` | 7.5e-04 -> 4.7e-15, and the improvement is DECADES |
 
 ### 7.1 Runs
 

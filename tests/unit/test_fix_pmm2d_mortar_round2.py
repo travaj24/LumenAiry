@@ -883,6 +883,6 @@ def test_a_long_segment_kernel_is_back_at_round_off():
         sc = float(np.max(np.abs(Sr)))
         e_new = float(np.max(np.abs(new(b.B) - Sr))) / sc
         e_old = float(np.max(np.abs(old(b.B) - Sr))) / sc
-        # measured (WIN / WSL) at (0.96, M=4, m<=7): old 7.5e-04, new 5.6e-15
+        # measured (WIN / WSL) at (0.96, M=4, m<=7): old 7.5e-04, new 4.7e-15
         assert e_new < 1e-13, (frac, M, e_new)
         assert e_old > 100.0 * e_new, (frac, M, e_old, e_new)
