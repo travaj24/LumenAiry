@@ -11,11 +11,12 @@ repair (`_MORTAR_RESID_REFUSE`), the S5.4 degradation-band warning, the
 restored v8 table, the bit-identity battery and the round-3 gate file.
 
 **Method** every number in this report was RE-MEASURED in this worktree by
-`validation/probe_verify_mortar_round3/` (nine scripts plus two helpers), on
-BOTH builds, against fixtures written here.  Nothing is read from the fix
-doc, from its probes or from its tests: where one of their numbers is quoted
-it is labelled as theirs and stands beside mine.  The one thing REUSED is the
-fix's own diff, which is what is being checked.
+`validation/probe_verify_mortar_round3/` (eight probes plus three helpers),
+against fixtures written here, on BOTH builds except where S12 says
+otherwise.  Nothing is read from the fix doc, from its probes or from its
+tests: where one of their numbers is quoted it is labelled as theirs and
+stands beside mine.  The one thing REUSED is the fix's own diff, which is
+what is being checked.
 
 **Binding** `docs/TESTING_STANDARDS.md`.
 
@@ -25,11 +26,11 @@ fix's own diff, which is what is being checked.
 
 | # | claim (fix's wording) | verdict | my numbers |
 |---|---|---|---|
-| a1 | the generalized mortar operand is rank-deficient BY CONSTRUCTION when a promoted in-plane region meets a non-promoted one, near-null participation 0.000 / 1.000 | **CONFIRMED** | 0.000 / 1.000 on 11 mixed operands across 6 fixture classes, `s_min/s_max` 1.36e-10 .. 2.07e-12; controls 0.83/0.56, 0.79/0.62, `s_min/s_max` 8.1e-4 .. 2.6e-5.  IDENTICAL WIN/WSL to every digit |
+| a1 | the generalized mortar operand is rank-deficient BY CONSTRUCTION when a promoted in-plane region meets a non-promoted one, near-null participation 0.000 / 1.000 | **CONFIRMED** | **exactly 0.000 / 1.000 on all 16 distinct mixed operands** across 6 fixture classes, `s_min/s_max` 4.3089e-14 .. 1.4856e-10; the 7 controls read 0.353-0.829 / 0.559-0.935 at `s_min/s_max` 2.6298e-05 .. 8.1053e-04.  WIN and WSL agree on every mixed `s_min/s_max` to 1e-3 relative |
 | a2 | ... "whenever **EITHER** side of the interface is promoted" (S0, S3.1, and the site's own comment) | **REFUTED as worded / RESTATED** | with **BOTH** sides promoted the operand is HEALTHY: `s_min/s_max` 2.63e-05 / 2.42e-08 / 4.29e-07 at `M` = 4/5/6 and participation 0.884/0.468 -- 5.3 decades above the one-promoted operand and within 1.5 decades of the both-out-of-plane control.  The mechanism needs an ASYMMETRIC interface |
-| a3 | the system is CONSISTENT anyway (residual is ordinary backward stability) | **CONFIRMED** | mixed residuals 8.45e-15 .. 5.85e-14 (WIN) / 8.75e-15 .. 5.36e-14 (WSL), indistinguishable from the controls' 5.99e-15 .. 2.45e-14 |
+| a3 | the system is CONSISTENT anyway (residual is ordinary backward stability) | **CONFIRMED** | mixed residuals 8.4532e-15 .. 5.8482e-14 (WIN) / 8.7454e-15 .. 5.3637e-14 (WSL), indistinguishable from the controls' 5.9919e-15 .. 2.4471e-14 |
 | a4 | range membership predicts the cross-build spread "within a factor 3" | **BOUNDED, and NOT discriminating** | prediction `eps/rangeB` = 4.5e-14 .. 3.5e-13; my measured WIN/WSL relative spread of `R00` on the same solves is 5.7e-15 .. 6.0e-11, i.e. within 1.4x on some rungs and 30x out on others.  The SAME formula returns 9.7e-14 .. 2.3e-13 on the HEALTHY controls, whose measured spread is 7.2e-14 .. 4.0e-13 -- so agreement "within 3x" is not evidence for the mechanism |
-| b1 | `rcond` is REFUTED as an instrument at this site (healthy and sliver populations cross) | **CONFIRMED, and sharper** | healthy `rcond` **5.8555e-15 .. 4.7002e-05** over 43 operands on both builds, so the round-2 bar 1e-12 sits THREE decades inside the healthy population -- and my PRE-tree run reproduces the refusal at `rcond` = 8.85e-14 / 6.87e-15 / 3.26e-13 / 1.44e-13 on four ordinary stacks |
+| b1 | `rcond` is REFUTED as an instrument at this site (healthy and sliver populations cross) | **CONFIRMED, and sharper** | healthy `rcond` **5.8555e-15 .. 4.7002e-05** over 43 operands, so the round-2 bar 1e-12 sits three decades inside the healthy population: **18 of my 43 ordinary operands (42 %) would be REFUSED by it**, the same 18 on both builds.  My PRE-tree run reproduces four of those refusals through the public API |
 | b2 | `_MORTAR_RESID_REFUSE` = 1e-6 has 6.9 decades below / 4.7 above | **CONFIRMED, with my own (tighter) margins** | 43 healthy operands: worst **4.5550e-13** (WIN) / 4.4802e-13 (WSL) = **6.34 decades below**, not 6.9 -- the fix's population has no wide-angle case.  10 broken operands: closest **7.799e-02** (WIN) / 1.3079e-01 (WSL) = **4.89 decades above**.  Two-sided, worst of both builds |
 | b3 | the residual makes the RIGHT distinction (rank-deficient-but-consistent passes, inconsistent refused) | **CONFIRMED** | same operand: consistent RHS 9.66e-15 ACCEPTED, inconsistent RHS 1.65e+01 REFUSED, exactly singular 8.40e-02 (WIN) / 1.73e-01 (WSL) REFUSED, zero column NaN REFUSED -- and a zero ROW, which the fix did not test, NaN REFUSED |
 | b4 | the residual is NOT a sliver backstop; the width contract is the only line | **CONFIRMED** | S5: with the contract lifted the answer moves while the residual stays in the healthy band |
@@ -38,8 +39,8 @@ fix's own diff, which is what is being checked.
 | d1 | the band `[1e-3, 3e-2)` warns, with switch, once per solve, naming width / class / remedies | **CONFIRMED** | 15/15 message tokens on both builds; silent at 6e-2, warns at 2.9e-2 and 1.2e-3, refused at 9e-4; switch off -> 0, on -> 1; FOUR banded layers -> ONE warning |
 | d2 | `3e-2` carries "4.65x measured cost", 2x first exceeded at 2e-1 | **CONFIRMED in direction, BOUNDED in magnitude** | my independent fixture: the edge carries **13.5x** (`M` = 7) / **22.9x** (`M` = 8), and 2x is first exceeded at **2e-1** on both rungs -- same crossing, 3-5x steeper |
 | d3 | "3.6x below the narrowest ordinary geometry (1.25e-1 / 1.09e-1), so NO ordinary stack warns" | **half CONFIRMED, half REFUTED** | 0 warnings on my 32-geometry census, on both builds -- but the narrowest ORDINARY geometry I reach is **5.000e-02** (a duty-0.9 pillar) = **1.67x** the edge, and a 16-cell uniform lattice is 6.25e-02 = 2.08x.  The 3.6x is a property of the round-2 battery, not of the library |
-| d4 | closing tapers at 32/64 slices land in the band by design | **CONFIRMED, and it starts earlier** | 8.0094e-03 / 3.9062e-03 measured -- and a closing taper lands in the band from **9 slices** (its narrowest is `w_bottom / (2 n_slices)`; at 8 slices it is 3.1250e-02, **1.04x** outside) |
-| e1 | bit-identity 165/165, 0 warning-set differences | **CONFIRMED on an independent battery** | 37 fixtures / 120 hashes, mine: **33 identical, 0 warning-set differences**; the only 4 that move are the previously-REFUSED mixed stacks, from a refusal to an answer |
+| d4 | closing tapers at 32/64 slices land in the band by design | **CONFIRMED, and it starts earlier** | on my own 0.25 .. 0.75 closing taper, 7.8125e-03 at 32 slices and 3.9062e-03 at 64 (theirs, on a slightly different bottom width, reads 8.0094e-03 / 4.1047e-03) -- and the surface enters the band from **9 slices**, not 16: its narrowest is `w_bottom / (2 n_slices)`, so 8 slices is 3.1250e-02, only **1.04x** outside the edge |
+| e1 | bit-identity 165/165, 0 warning-set differences | **CONFIRMED on an independent battery, both builds** | 37 fixtures / 120 hashes: **33 identical, 0 warning-set differences on WIN and again on WSL**; the only 4 that move are the previously-REFUSED mixed stacks, from a refusal to an answer, and their four `rcond` readings are identical across builds.  The harness is shown to reproduce its own hashes (37/37) before the comparison is believed |
 | e2 | 7 suites WIN 185 / WSL 185; whole surface 367; the new warning fires on exactly one gate | **CONFIRMED** | WIN 185 passed / WSL 185 passed; surface **367 passed, 24 warnings**; `grep -c "degradation band"` over the surface log = **1**, on `test_the_mortars_own_algebra_is_exact_at_every_wall_separation` |
 | f | cost: the probe is "0-6 % over the existing gecon screen" | **CONFIRMED to within the box's noise** | `residual / gecon` = 0.897 .. 1.101 (WIN) / 0.936 .. 1.213 (WSL) on five widths, against a `bare / gecon` noise floor of 0.834 .. 1.170 -- the overhead is BELOW what a shared box can resolve, and the FLOP argument (1.7/n) is the load-bearing one.  The EXACT residual costs 1.49 .. 2.10x the gecon screen, so skipping it is worth 49-110 % |
 
@@ -152,9 +153,15 @@ one of those different from the fix's fixture.
 | **both in-plane** (control) | 4 | 162 | -- | -- | -- | -- | reaches NO generalized site at all: two IN-PLANE mortar sites |
 
 Every `s_min/s_max`, every `rcond` and every participation figure above is
-**IDENTICAL on WIN and WSL to all four digits printed**; the residuals agree
-to two.  I could not refute the claim: no mixed fixture gave anything but
-0.000 / 1.000, and no NEITHER-promoted control gave a localised near-null.
+**IDENTICAL on WIN and WSL to all four digits printed** (and every mixed
+`s_min/s_max` agrees between the builds to 1e-3 relative); the residuals agree
+to two digits.  Over the FULL set -- 16 distinct mixed operands across those
+six classes -- the participation is **exactly 0.000 / 1.000 on every one**,
+`s_min/s_max` runs 4.3089e-14 .. 1.4856e-10 and the residual 8.4532e-15 ..
+5.8482e-14, while the 7 NEITHER-promoted controls run 0.353-0.829 / 0.559-0.935
+at `s_min/s_max` 2.6298e-05 .. 8.1053e-04.  I could not refute the claim: no
+mixed fixture gave anything but 0.000 / 1.000, and no control gave a localised
+near-null.
 
 **Two adversarial controls that could have refuted it, and did not.**
 
@@ -238,9 +245,10 @@ destroy the others.
 
 ### 4.1 HEALTHY -- 43 operands from 35 ORDINARY per-layer stacks
 
-Nothing in this population has a segment narrower than an ordinary geometry
-(every fixture's narrowest is 0.187 of the period or wider = 187x the width
-contract).  The stacks span six DEVICE variants -- period 0.52 / 0.87 / 0.95 /
+Nothing in this population has a segment an ordinary geometry would not ask
+for: the narrowest over all thirteen wall arrays is **0.0900 of the period**
+(the wide-angle fixture's second layer) -- **3.0x** the band's upper edge and
+**90x** the width contract -- and every one of the 43 solves is SILENT.  The stacks span six DEVICE variants -- period 0.52 / 0.87 / 0.95 /
 1.10 / 1.40 um, wavelength 0.41 .. 1.55 um, incidence 0.0 .. 0.95 rad, pillar
 permittivity 4.0 .. 30.0, four wall pairs -- crossed with seven stack shapes
 (out-of-plane + uniform spacer, out-of-plane + in-plane patterned,
@@ -261,11 +269,16 @@ at `M` = 4..8 and `n_orders` = 1..3.
 Two readings matter.
 
 **The `rcond` refutation is reproduced, and it is sharper than the fix says.**
-The healthy `rcond` population reaches down to **5.86e-15**, so the in-plane
-pair's 1e-12 bar sits three decades INSIDE it -- and the floor is set by the
-`M` = 8 rung, so it does walk down the modal ladder exactly as the fix
-predicts.  There is no fixed `rcond` bar with a gap on both sides at this
-site.
+The healthy `rcond` population reaches down to **5.8555e-15**, so the in-plane
+pair's 1e-12 bar sits three decades INSIDE it.  Counted directly: **18 of the
+43 ordinary operands -- 42 % -- read below 1e-12 and would be REFUSED by the
+round-2 screen**, and it is the SAME 18 on both builds, at `rcond` 5.8555e-15
+.. 8.0465e-13.  Every one of them is an ASYMMETRIC interface (8 uniform
+spacer, 7 in-plane patterned, 2 magnetic, 1 from the six-layer stack); no
+both-out-of-plane or both-slanted operand is among them, which is the
+mechanism of S3 showing through the population.  They spread over `M` = 4 (1),
+5 (8), 6 (5), 7 (3) and 8 (1), so the defect is not confined to one modal
+count.  There is no fixed `rcond` bar with a gap on both sides at this site.
 
 **The residual bar's LOWER margin is 6.3 decades, not 6.9.**  My worst healthy
 reading is 4.5550e-13 (WIN) / 4.4802e-13 (WSL), against the fix's 1.19e-13 --
@@ -406,6 +419,9 @@ independent path to the same device.
 | out-of-plane + uniform spacer | 0.011033295 / 0.011030019 / 0.011035833 / 0.011036269 | 0.011039685 (`M` = 7, conforming) | 6.390e-06 -> 9.666e-06 -> 3.852e-06 -> **3.416e-06** | 4.363e-07 |
 | SLANTED + uniform spacer | 0.017193228 / 0.015930308 / 0.015990792 | 0.015987868 (`M` = 6) | 1.205e-03 -> 5.756e-05 -> **2.924e-06** | 6.048e-05 |
 
+**WSL reproduces every gap and every step in that table to four significant
+figures** -- these are discretisation quantities, not build-sensitive ones.
+
 The first and third arms converge onto the mortar-free twin by 175x and 412x
 across the ladder, and at the last rung the gap is 12x and 21x INSIDE the
 per-layer arm's own step.  The spacer arm's gap is flat at 3e-06 absolute on
@@ -428,13 +444,17 @@ conforming; `add_tapered_pillar` at 4, 8 (both rules) and 16 slices;
 `add_tapered_pillars`; two 1-D `PMMStack` arms; and the six MIXED stacks.
 
 ```
-post vs pre: 33 identical, 4 differing (of 37 fixtures, 120 hashes)
-  MIXED_spacer_M5   ERROR CHANGED: pre=_ConditioningError ...  post=None
-  MIXED_spacer_M6   ERROR CHANGED: pre=_ConditioningError ...  post=None
-  MIXED_pattern_M5  ERROR CHANGED: pre=_ConditioningError ...  post=None
-  MIXED_pattern_M6  ERROR CHANGED: pre=_ConditioningError ...  post=None
-warning sets: identical on all 37
+WIN  post vs pre: 33 identical, 4 differing (of 37 fixtures, 120 hashes)
+WSL  post vs pre: 33 identical, 4 differing (of 37 fixtures, 120 hashes)
+  MIXED_spacer_M5   ERROR CHANGED: pre=_ConditioningError (rcond 8.853e-14) post=None
+  MIXED_spacer_M6   ERROR CHANGED: pre=_ConditioningError (rcond 6.870e-15) post=None
+  MIXED_pattern_M5  ERROR CHANGED: pre=_ConditioningError (rcond 3.263e-13) post=None
+  MIXED_pattern_M6  ERROR CHANGED: pre=_ConditioningError (rcond 1.443e-13) post=None
+warning sets: identical on all 37, on both builds
 ```
+
+The four `rcond` readings above are identical on WIN and WSL to every digit --
+the refused solves are not a build accident.
 
 **Nothing else moved a bit, and nothing gained or lost a warning**, and the
 four that moved moved only from a refusal to an answer.  CONFIRMED.
@@ -507,9 +527,13 @@ y walls carry no feature and the DEVICE cannot depend on their separation:
 | **1.2e-03** | 0.247088457739 | 3.9e-13 | **1** | **y** |
 
 WSL reads the same `R00` to twelve figures with movements 6.4e-15 .. 1.3e-13.
-The warning claims "about 4-5x the error of the same device on an ordinary
-partition"; the measured movement is **round-off**, twelve decades below what
-the message says.
+
+The message claims the width costs "about 4-5x the error of the same device on
+an ordinary partition" (and "about 5-6x" / "about 6x, its floor" on the
+narrower rungs).  Stated as the ratio the message is about: the answer on a
+band-width y segment divided by the answer on an ORDINARY (3e-1) one is
+**1.000000000000** to twelve decimal places, on both builds.  The claimed
+factor is not merely small here; it is absent to round-off.
 
 **Severity** P3.  It is a warning, not a refusal and not a wrong answer, and
 the remedies it prints are harmless.  But it is exactly the class of noise
@@ -535,7 +559,11 @@ already computes `len({g.key() for g in gof}) > 1`.
   `q = N (M - 1)` per axis and a `2 q^2` region eig, so the smallest banded
   lattice is a **20808**-dimension dense eigenproblem (6.5 GiB of operand) at
   `M` = 4 and 57800 (49.8 GiB) at `M` = 6.  Bounded by
-  `test_a_uniform_lattice_cannot_reach_the_band_through_the_public_api`.
+  `test_a_uniform_lattice_cannot_reach_the_band_through_the_public_api`.  At
+  the counts that ARE reachable (`N` = 1, 2, 4, 6, 8 beside a 3-segment
+  pillar layer, `M` = 5) the stack is SILENT, residuates at 3.0e-15 ..
+  8.0e-15, and sits 3.3e-03 .. 8.4e-03 from its own conforming twin -- an
+  ordinary discretisation difference (`v5_falsepos.py fp1`).
 * **two grids with a razor-thin COMMON REFINEMENT.**  Each layer's own
   segments can be wide (0.31) while their union carries a segment of 1e-11 --
   neither the contract nor the band sees that.  Measured over offsets 3e-1
@@ -553,12 +581,13 @@ already computes `len({g.key() for g in gof}) > 1`.
 
 The P1 it repairs is real and is reproduced here against the pre-fix tree on
 my own geometry (S4.3); the instrument it chose is the right one and its two
-gaps are 6.9 and 4.7 decades on both builds, re-derived on populations built
-here (S4); the answers it un-refuses converge to a mortar-free twin of the
-same device (S6); it moves nothing else, on an independent 120-hash battery
-(S7); its cost is below what a shared box can resolve (S0 row f); and its 14
-gates are decision-shaped, derived from the running build, and carry no
-cross-build value pin.
+gaps, re-derived on populations built here, are **6.34 decades below and 4.89
+above, worst of both builds** (S4); the answers it un-refuses converge to a
+mortar-free twin of the same device (S6); it moves nothing else, on an
+independent 37-fixture / 120-hash battery whose harness is shown to reproduce
+its own hashes first (S7); its cost is below what a shared box can resolve
+(S0 row f); and its 14 gates are decision-shaped, derived from the running
+build, and carry no cross-build value pin (S14).
 
 The two defects found are P3 and neither blocks: DEFECT 1 is one word in three
 docstrings, DEFECT 2 is a warning that fires on a harmless axis.  Both have a
@@ -567,9 +596,10 @@ PINS the current behaviour so it fails -- loudly, with the instruction to
 re-pin -- when the axis conditioning is added.
 
 **One thing to record in the release notes rather than fix.**  The
-degradation the band warning exists for is already 5x-13x by the time a
-segment reaches the band's UPPER edge (S11), so the warning covers the flat
-tail and not the rise.  That is a consequence of the census constraint the fix
+degradation the band warning exists for is already **13.5x** (`M` = 7) /
+**22.9x** (`M` = 8) by the time a segment reaches the band's UPPER edge, and
+grows only a further 1.24x from there to the contract (S11), so the warning
+covers the flat tail and not the rise.  That is a consequence of the census constraint the fix
 states plainly; it is not a defect, but a user reading "no warning" as "no
 degradation" would be wrong, and the doc currently invites that reading.
 
@@ -583,8 +613,9 @@ contrast (`eps` = 144), a lossy metal (-20 + 1.5i), five far-field orders,
 `M` = 8, a dense superstrate (n = 2.4 / 3.5), near-Wood incidence, a
 SIX-layer stack, a strongly out-of-plane tensor, and two posts whose width
 sits just above the contract and just above the band.  Every one of them has a
-generalized-mortar residual of **8.6e-15 .. 1.21e-13**, i.e. 7 decades under
-the bar, and nine of the eleven raise no warning at all.
+generalized-mortar residual of **8.60e-15 .. 1.21e-13**, i.e. 7 decades under
+the bar, and TEN of the eleven raise no warning at all (the exception is the
+post just above the width contract, which is inside the band and warns).
 
 Two looked like a find: a 3.2e-2-wide out-of-plane post (JUST above the band's
 upper edge, so silent) read `R00` = 1.44e-04 at `M` = 5 against its union
@@ -763,7 +794,18 @@ gate that deliberately sweeps wall separations through the band.
    (1.86e-04) is already only 4.6x the oracle's own self-gap (4.01e-05), so an
    `M` = 9 row would need a degree-16 oracle as well.
 5. **The WSL degradation ladder was run at `M` = 7 only** (the row that
-   carries the argument), not at 6 and 8.
+   carries the argument), not at 6 and 8.  All eleven of its rungs reproduce
+   WIN to SEVEN significant figures, which is the strongest cross-build
+   statement in this report and the reason the other two rows were not
+   repeated.
+5b. **The HUNT's convergence ladder (`v8`) was run on WIN only.**  It is the
+   most expensive probe here (its union arm is 200 s a rung at `M` = 6) and
+   what it measures -- whether two discretisations of one device approach
+   each other as `M` rises -- has no meaningful cross-build content: the
+   quantity is a discretisation gap of 1e-3 .. 1e-2 against a cross-build
+   spread of 1e-13.  Its sibling `v7` WAS run on both builds and reproduces
+   to four significant figures, which is the evidence for that reading.  S10's
+   conclusion is therefore single-build; S6's is not.
 6. **The WSL sliver ladder was run at `M` = 5 only**, and the WSL population
    probe was killed once by memory pressure mid-run (another agent's pytest
    held 40 GB of a 128 GB box, leaving 45 MB free), which is why the
@@ -781,7 +823,14 @@ gate that deliberately sweeps wall separations through the band.
 9. **The MERGE.**  `wave2/pmm2d` was merged into this branch and the seven
    suites repeated on both builds (S13); the PROBES were not re-run on the
    merged tree, so every measured number above belongs to the fix branch tip
-   `5f01eea`.
+   `5f01eea`.  The merge changes `lumenairy/elements/pmm/stack.py` (the 1-D
+   sliver arbiter) and `lumenairy/elements/rcwa/_core.py` (the modal
+   branch-cut fix, which the RCWA verification measures at 1e-17 .. 5e-15 on
+   lossless answers), so the one thing that could have moved under my numbers
+   is the 1-D `PMMStack` ORACLE the degradation ladder is scored against.  It
+   did not: re-run on the merged tree, its degree-12 -> 14 self-gap reads
+   **4.0144485987e-05**, identical to the branch-tip reading to all eleven
+   figures, and its `M` <= 1 reflectances are unchanged.
 
 ---
 
@@ -801,8 +850,10 @@ WSL   185 passed, 3 warnings in 1074.17s (0:17:54)
 ```
 
 **The whole `pmm2d` surface, Windows** (`test_pmm2d*.py` +
-`test_fix_pmm2d*.py` + `test_verify_pmm2d*.py`, which now includes this
-verification's own file):
+`test_fix_pmm2d*.py` + `test_verify_pmm2d*.py`).  This run was collected
+BEFORE this verification's own gate file existed, so its 367 is directly
+comparable with the fix's 367 -- the same tests, not the same count by
+coincidence:
 
 ```
 367 passed, 24 warnings in 2146.83s (0:35:46)
@@ -824,7 +875,44 @@ the 60 s budget; the four node ids are spliced into `.test_durations`
 
 ### 13.2 After merging `wave2/pmm2d`
 
-MERGE_RESULT_PLACEHOLDER
+`git merge --no-edit wave2/pmm2d` at `2898767` (which carries the round-3 fix
+merge `448ee85`, the sliver round-3 arbiter, the slant V1/V2/O2 fix and the
+RCWA modal branch-cut fix).  `.test_durations` auto-merged to 12722 entries,
+sorted, with all four of this verification's node ids present and all
+fourteen of the round-3 gate's.
+
+**The merge does not touch any of the three files round 3 changed**
+(`git diff --stat 20e112b 852ea61 -- lumenairy/elements/pmm/{_core,twod_staggered,stack2d_pure}.py`
+is empty), so nothing above can have moved under it; the two files it does
+change are `lumenairy/elements/pmm/stack.py` and
+`lumenairy/elements/rcwa/_core.py`, and the one thing of mine that reads
+either -- the 1-D `PMMStack` oracle -- is re-measured unchanged to eleven
+figures (S12 item 9).
+
+The seven suites PLUS this verification's own file, both builds, one thread in
+the shell:
+
+```
+WIN   189 passed, 3 warnings in 1154.39s (0:19:14)
+WSL   189 passed, 3 warnings in 1191.33s (0:19:51)
+```
+
+189 = the seven suites' 185 plus this verification's 4, and the three warnings
+are the same three as before the merge: the new band warning on
+`test_the_mortars_own_algebra_is_exact_at_every_wall_separation` (one
+occurrence, checked by `grep -c` on both logs) and round 2's two open-item
+`RuntimeWarning`s.  **Nothing the merge brought in changes any reading in this
+report**, and this verification's own four gates -- including the one that
+PINS defect 2 -- pass on the merged tree on both builds.
+
+**A merge mechanic worth recording.**  The first `git merge` printed
+`fatal: update_ref failed for ref 'HEAD': couldn't set
+'refs/heads/verify/mortar-round3'` while reporting `Merge made by the 'ort'
+strategy` -- the index and worktree were merged but the commit was never
+created.  The shared `.git` on `D:` is being written by several agents at
+once, so ref-lock contention is the likely cause.  `git commit --no-edit`
+completed it (`852ea61`).  A merge that says it succeeded is not one until
+`git log` shows the commit.
 
 ### 13.3 `ruff`
 
@@ -909,3 +997,65 @@ authoritative-looking output.**
    residuates.  Measuring the broken population the other way killed a
    two-hour run on both builds.  The populations are now written per PART so
    one failure cannot destroy the others.
+
+---
+
+## S14. Test durability -- every constant in the round-3 gate file
+
+`tests/unit/test_fix_pmm2d_mortar_round3.py`, 14 gates.  For each numeric
+constant: where it comes from, what margin it carries against the value the
+running build produces, whether that margin is FAMILY-scoped (re-derived from
+the build on every run) or SAMPLE-scoped (a property of the fixture the gate
+happens to use), and whether the quantity it reads has a cross-build spread at
+all.
+
+| constant | origin | measured margin | scope | build-sensitive? |
+|---|---|---|---|---|
+| `mixed.s_ratio < 1e-4 * ctrl.s_ratio` | the CONTROL's own reading, re-measured each run | 600x (mine: 1.36e-10 / 8.11e-04 = 1.7e-07) | FAMILY | no -- both sides move together |
+| `max(mixed.on) > 0.95`, `min(mixed.on) < 0.05` | the localisation DECISION | exact: 1.000 / 0.000 on all 16 mixed operands I built, both builds | FAMILY | no |
+| `max(ctrl.on) < 0.95` | the control must NOT localise | 0.12 on the gate's own control (0.829) -- but only **0.015** on a legitimate neighbouring fixture: an out-of-plane tensor that is in-plane to 1e-9 reads **0.935** | **SAMPLE** | no, but fixture-sensitive |
+| `mixed.residual < 1e-2 * _MORTAR_RESID_REFUSE` | the shipped bar | 1e+6 (8.6e-15 against 1e-08) | FAMILY | no |
+| `mixed.residual < 1e-11` | none stated -- an ABSOLUTE floor | 3 decades (8.6e-15).  The file's ONLY absolute bar; harmless because it is asserted at `M` = 4 only, so it cannot walk with `n eps` | SAMPLE | no |
+| `closure < 1e-2` (x4) | "this is a real answer" | 3-6 decades | FAMILY | no |
+| `step56 < 0.2 * step45` | the ladder's own steps | 12x (measured 61x against an asserted 5x) | FAMILY | no |
+| `gap < 0.5 * step45` | the ladder's own coarsest step | 5.5x (measured 11x inside) | FAMILY | no |
+| `abs(per5 - uni) < max(5 * step, 1e-2)` | the arm's own step, OR an absolute 1e-2 | the `1e-2` term is ~17 % of `R00` and would dominate if the step ever collapsed; on my own convergence data the gap is comfortably inside the `5 * step` term, so the floor is never reached | FAMILY, with a SAMPLE floor | no |
+| `worst_healthy < 1e-4 * bar` | the healthy population, re-measured | 2.2e+06 (my worst healthy 4.56e-13) | FAMILY | no (WIN/WSL within 2 %) |
+| `bad_singular > 1e4 * bar`, `bad_incons > 1e4 * bar` | the broken population, re-measured | 8x / 1.6e+03 (mine 7.8e-02 / 1.65e+01) | FAMILY | no |
+| `true_singular > 1e2 * bar` | the least-squares residual | 12x measured | FAMILY | no |
+| `ok_rank_def < 1e-4 * bar` | the V1 shape must PASS | 1e+07 (9.7e-15) | FAMILY | no |
+| `0.01 < probe/exact < 100` | the estimator | 64x (mine 0.68 .. 1.55 healthy, 0.74 .. 1.78 broken) | FAMILY | no |
+| `2.0e-2` / `6.0e-2` / `1.2e-3` / `9.0e-4` band widths | stated multiples of the two edges (1.5x inside, 2x outside) | they are INPUTS, not readings | FAMILY | no |
+| `"2.000e-02" in msg` | a formatted echo of the gate's own input | exact | FAMILY | no |
+| **`worst > 3.0 * edge`** (the census) | the ROUND-2 BATTERY's narrowest ordinary geometry | 1.2x on that battery (1.09e-1) -- but **0.56x** on a duty-0.9 pillar (5.0e-02), which the battery does not contain.  The docstring claims it of "ANY ordinary per-layer geometry the library builds" | **SAMPLE, stated as FAMILY** | no |
+| `_STAG_MIN_SEG_FRAC <= f < edge` (closing tapers) | the library's own two constants | derived; reproduced (mine 7.81e-03 / 3.91e-03 at 32 / 64 slices) | FAMILY | no |
+| `self_gap < 0.05 * abs(e_band - e_ord)` | the oracle's own 12 -> 14 gap | 500x on my fixture (4.01e-05 against a 7.1e-03 difference) | FAMILY | no |
+| **`e_band > 1.15 * e_ord`** at `M` = 6 | the fix's own ladder on ITS fixture (1.55) | 1.35x -- **the thinnest margin in the file**, and it sits on the one rung whose ratio is fixture-sensitive by construction: on MY independent fixture the `M` = 6 ordinary arm has not converged and the same ratio reads 1.30 at 3e-3 and **0.18** at 1.5e-1 | **SAMPLE** | no -- the quantity is identical WIN/WSL to 7 significant figures |
+
+**No cross-build value pin anywhere in the file.**  I checked every numeric
+literal: the only fixed numbers are the library's own constants, the geometry,
+the band widths (inputs), and the two SAMPLE-scoped bars called out above.
+The one measured reading recorded in the file (`R00` at `M` = 7) is in a
+comment and is explicitly not asserted, as the fix says.
+
+**Two observations for the next round, neither ship-blocking.**
+
+1. `max(ctrl.on) < 0.95` and `e_band > 1.15 * e_ord` are the two bars whose
+   margin is a property of the chosen fixture rather than of the library.  The
+   first would be crossed by a control whose tensor is nearly in-plane (0.935
+   measured); the second by any fixture whose `M` = 6 ordinary arm has not
+   converged (0.18 measured on mine).  Both are cheap to make family-scoped:
+   assert the control's participation against the MIXED one's rather than
+   against 0.95, and take the ladder's decision on the rung whose ordinary arm
+   the gate itself verifies has converged.
+2. `test_no_ordinary_geometry_the_library_builds_lands_in_the_band` states a
+   family claim over a sample.  Adding a duty-0.9 pillar and a 16-cell uniform
+   lattice to that census would make the assertion honest -- at `2.0 * edge`
+   rather than `3.0 * edge`, which my census still clears.
+
+**The thread-pinning trap the fix records is real and is in this file too.**
+`os.environ.setdefault("OMP_NUM_THREADS", "1")` at import time does NOTHING in
+a multi-file run, because numpy has already been imported by an earlier file.
+Both the round-3 gate file and this verification's own gate file carry that
+pattern; both carry a comment saying so; and every multi-file run in S13 sets
+the three variables in the SHELL.

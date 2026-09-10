@@ -1,0 +1,338 @@
+{
+ "tag": "wslpre",
+ "root": "/mnt/c/tmp/lum_vmortar3_pre",
+ "lumenairy": "/mnt/c/tmp/lum_vmortar3_pre/lumenairy/__init__.py",
+ "version": "5.44.0",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "n_fixtures": 37,
+ "n_hashes": 108,
+ "rows": {
+  "shared_scalar": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "c0a6e74000bfec8d82117f09cc3b87b772fbfe0e6003d2df557e6852c0bb7ebe",
+    "a0fa18bc83b747b6afb88c79d92db3a245c913dc696045a87d715509e09e305f"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_scalar_jones": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "c0a6e74000bfec8d82117f09cc3b87b772fbfe0e6003d2df557e6852c0bb7ebe",
+    "a0fa18bc83b747b6afb88c79d92db3a245c913dc696045a87d715509e09e305f",
+    "af1c0db300ea72a004bcc1895d79fc182569542d05fdbeeb7f9b402a8cab0b2c"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_scalar_M6_N3": {
+   "hashes": [
+    "432e423431e83f9b158082c95714494ce0fc8b3f98d4f93aa94ffb84491089b9",
+    "b50534b0fd4ffd8e96e602415dcbfa8dd5e68568a42bad118714b2e239153c54",
+    "33eb3032d8b8cab23aa00c8e683a3357508ef764bf5505670534186268ecc669"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_tensor_uniform": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "61054a2bbbae3c6cbce04710e3db35b0e4d9b1c45485bdd44b8d7f915cac0769",
+    "32dd892ae3676bb4fb513b36ce48579ebd43c8d46072a7cdaac8d18fdaae59e5"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_oop": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "69726eb9c12e626ce91769eacba5669c9f8968ffa841ebb6b35e23125a139e3f",
+    "eb192ca352fbfd0c4fce948cb65c4b9f61545abac0a372a155bed679a8d8c647"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_oop_normal_incidence": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "4f1080ac106de9ca9aacbfb0e27a769eaf5e3f9dfc2e1145cd50e6c20eee7129",
+    "4387bec6e638a04ec730c37c09f60419b57aa8ba4bdb9ae7a3fc553f83729355"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_magnetic": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "e6ca6c7f5bbbbbed5d404c50df9ab3ac0b01a2ef624cf4cfd72bf8d33878c579",
+    "7a6d541c195ba0c4f6555f5a1d128fe899e2d5a75a195a9c206a17d56d488edf"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_slant": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "ede89647e8ea78d650fc07c9376574f9af2ce5e1b36c0f331e0d66d2b1f0b89e",
+    "0ed0d431f99c4512fda4b3b16eb816d579d798018eda9b79cea91202f1cd7d7a"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_retain_internal": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "c0a6e74000bfec8d82117f09cc3b87b772fbfe0e6003d2df557e6852c0bb7ebe",
+    "a0fa18bc83b747b6afb88c79d92db3a245c913dc696045a87d715509e09e305f",
+    "d200599ef43775fa96d8592350dfe37d4a8fa4aad7a3e8ca3be83f0cc6ffb5ef"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_per_order_amplitudes": {
+   "hashes": [
+    "81d326f887043b7afa13f030e9c33940d74eb6bf461100f9e662785c2b681417",
+    "97b63bf67cce08b094d533c165c8975cca6482715da9641c9ec7567930e2bf5a",
+    "23f99bfbf50f4fdffc98a3e90183daa4589c6e91ac46e57dbc85eef7f2fa13a2",
+    "a67be8edfb25a0ee177d04724752f60dfcf04a6ef6a3855364c6a9abbc376210",
+    "32d8da3672b33cad5a68aff552c5fff478772b5754b2e780955345e12fc5a7dc",
+    "7ff951c29481b3d9211704d7eff5ab79e87f71bbfeff2f7bb22a717631eeb98c",
+    "cf946dc6cace525f63bb340dbf32a7c5a6ad3d8422c294f40ccd5f5c329c1dfc",
+    "79f69a8fcf8608c420fb12b45ba71e5d156cd38a87a536cc84c3b991142c90ef",
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "c03875eef5d0dc35eaa29b4d41cac15f685d585105146ade8b245f9127446863"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_lossy_metal": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "59887b995d4dfd9c52fb47dbf251e6c61ae020405723845019444b94ca91d93e",
+    "083f1e56e7e23f712c9c57a3165612a11bdb68d5b9a796d98359a4dc3394b1bd"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_conforming": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "63f1bd01ab88306942397e044ebd553f4ea35fed52c611680170bf3dc148bc20",
+    "2d3683b3b83d6cd5e85ce9cd209ccab2f4c64d4893b82ed463f98a8b2f3f4b09"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_non_conforming": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "f859192e1d03249b3244fbbd11f95d99535b49f916777acb8ffacc60fb0ca9af",
+    "851a2c4f5dae9538e778523c045b03d8dffca5626ed278913f4586287a581ebe"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_non_conforming_M6": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "dff80cf86c2b2ba15b208a35b3380e7ea782f70c75d84bd29a8efc70ef450354",
+    "2379b16518783d223d4dd5ad0094e46c73c46fa3c4b0405d3357646c3298113b"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_nested": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "0ee1ce44c68d6a86b537667d957a8bd43899759b96adc38a7339c99016031a9f",
+    "bf6025b0448b754e3d70d43444350c3ea32d157da2eda432b2de8d7187b9815a"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_union": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "04f677ea7a4f406e9699e9ec398854d4975c5034cbee380d82e815fd529e4c38",
+    "7fc12e1d32e6acb7aab8c3ae4be2b23bb7f9010bc8427adc9bb85ac3868b5f45"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_per_layer_n_modes": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "607d789dcce636a08a95ed979fc83c5744c4f1f11b4b073d3d5616d8fd759103",
+    "78e6aa8d2fdc5d35cb9eabbcbd54498ab255e58756b46246a07b3bd545061c5e"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_uniform_spacer": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "c44d1a7ca41ee1b1f2a5015d8fcd6db9e8c0d029d847208c11629ee40fab00ca",
+    "40cc359f4a4c23e569a19a5c573d1f7c9c668a1afdc219f4c667416ede9fd57b"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_uniform_lattice_N5": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "4c732cd0316ef0696af73740f540f5bd7291dbda23c6b38b232b0b7c62c270e2",
+    "3589238e0885354575772736e30ebae6ce8a6b550691ecac2844c6fe5680ff99"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_magnetic": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "a9be10205ac68d6d286de1c81b50aa51ca663d9f5c88818cbe12f38afa97fb1b",
+    "d4174aad7dec4b2ad01e46ea6e2cd89147789d6e400353430e75ee5fc5ae48b9"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_slant_both": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "7deddc52b599850e3f5f33262baa265697f133bf3f31aea75c831df8b3227485",
+    "21bff37084994d56a27dacfead6b1be8053bb138b9f7c3190112d01dae96721e"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_slant_conforming": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "34aa37fbeafdf85f511842375983c406ea3c93cf922351a622948a9943acebc2",
+    "15bd6b915062d859079fbb9fbf127ec1c3041a574952845cba39cdd98634993b"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_oop_both": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "7c8c7c98544d9ec5b04862c239af514e804b02f0729b38028934b97da44b5f1e",
+    "54dc95e80329e7423007d6aeafdde75465ccfd99bf07d450287f779a1fb3f2c1"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_oop_conforming": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "951de0853bfa49fd839ccc57744730f8a54f080fda7f5e69e3d32296d2f174ec",
+    "b8ee09d775b68eeae919c8c95d238820970f7937e2932068849d147641a8bf6e"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "taper_midpoint_4": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "53f9471909124ab725dea3aa24137efe5987068b1bc4ad9fa16388cdadf8864e",
+    "c6aa92261d72b7f9b7b9339f006fe68499bf70404430aa4a9b4200634f3ffa1f"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "taper_midpoint_8": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "66d20f3da837073181bcfba8e6611ea37634d67355c221b646be42d7d686b5fc",
+    "d0b88fc81b073b4220c79e576548c0a3656276585e6f09c4bdb3237a7370ce51"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "taper_bottom_8": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "f121bded275f50ac9b90759005ca129d7caf132c222b0649b657cd201cf8571b",
+    "869ef5456d102c843a23b0e4be27425e5dfb6e41984b9ac63ed92140c7fbf5e6"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "taper_midpoint_16": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "29c6a88be624a5e07503fd1b8194828ac04c309d6dabf18b733504b0add8c17c",
+    "60cdef0fb809bd0b3b615319d388111e4e6a95120cf66a896b3eea71cbedeb7d"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "tapered_pillars_8": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "d36377ff3b5120db7484e74df8900309886ca5ef7836c0a1cc9d45a6e994e5a1",
+    "36259f83fd4aaf3393284756380147df346460ac783ba3380d918dc79fcf4f18"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "pmmstack_1d_deg8": {
+   "hashes": [
+    "8849c4fd0fdcf22bfee03d397dd3bcab31f64ed3fecc1062a6c7cf5863d05a25",
+    "d71051fcd1932daa199a4af0dca4bf072fc54d1c17ed9925bbedc0cbed26538f",
+    "08b02feafceed6dea3c3fcabd490afdcb270a992fddb75b3778f2799f81dec18"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "pmmstack_1d_deg12": {
+   "hashes": [
+    "8849c4fd0fdcf22bfee03d397dd3bcab31f64ed3fecc1062a6c7cf5863d05a25",
+    "bad27b34a54087ffb85559376e23108f0a1c14b6b4a2d9f1f1c39fbaea78524b",
+    "d1a7ac2d3fbf15198b372730ccab623f1c845cc4d46095b1641408dc983746ca"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "MIXED_spacer_M4": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "fd438fa242f13993cd61e0420fa2d64e3b5df1af36a131accdcc77f19a504a81",
+    "c02a2bf21e005ac13bedbc55da83d6c4e2f25002b43d658f55bcfd5c64c26ef5"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "MIXED_spacer_M5": {
+   "hashes": [],
+   "error": "_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 576x576 mortar operator is numerically singular -- LAPACK reciprocal 1-condition 8.853e-14 against a 1e-12 bar",
+   "warnings": []
+  },
+  "MIXED_spacer_M6": {
+   "hashes": [],
+   "error": "_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 900x900 mortar operator is numerically singular -- LAPACK reciprocal 1-condition 6.870e-15 against a 1e-12 bar",
+   "warnings": []
+  },
+  "MIXED_pattern_M4": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "35342be79126abe20abb1bda8e8ea6c047f378d6244ec656c437ab04066d4902",
+    "dad9abcb29e6af9f8e83d9767e9d9f6a0f584baab7c4a86a7687218c7aae019b"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "MIXED_pattern_M5": {
+   "hashes": [],
+   "error": "_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 576x576 mortar operator is numerically singular -- LAPACK reciprocal 1-condition 3.263e-13 against a 1e-12 bar",
+   "warnings": []
+  },
+  "MIXED_pattern_M6": {
+   "hashes": [],
+   "error": "_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 900x900 mortar operator is numerically singular -- LAPACK reciprocal 1-condition 1.443e-13 against a 1e-12 bar",
+   "warnings": []
+  }
+ }
+}
