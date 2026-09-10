@@ -165,13 +165,18 @@ def test_upsample_crop_result_does_not_alias_a_plan_workspace():
     assert first.tobytes() == keep.tobytes()
 
 
-def test_upsample_crop_keeps_numpys_double_only_output_dtype():
-    """numpy's FFT is double-only and returned complex128 for every input
-    dtype; the dispatcher's backends preserve complex64.  The promotion in the
-    function is what keeps a narrow caller's output where it was."""
+def test_upsample_crop_keeps_the_envelope_dtype():
+    """CONTRACT CHANGED in 5.44.0 (CHANGELOG: "complex64 THROUGH the carrier
+    chain", AUDIT_TRACED_MEMORY_2026_08_09 sec 3 / row 12): the crop now pads
+    and returns in the ENVELOPE's dtype -- its hard complex128 pad sat on the
+    memory-dominant stage and was where a complex64 chain silently widened.
+    numpy's FFT is still double-only, so a complex64 input is transformed in
+    complex128 and NARROWED back on return; a complex128 input is untouched.
+    (Pre-5.44 this test pinned complex128 for every input, the promotion that
+    kept a narrow caller's output wide.)"""
     for dt in (np.complex64, np.complex128):
         out = C._fourier_upsample_crop(_smooth_env(128, dtype=dt), 64, 256)
-        assert out.dtype == np.complex128, dt
+        assert out.dtype == dt, dt
     # the no-transform branch is a pure crop and keeps the input dtype, as it
     # always did
     same = C._fourier_upsample_crop(_smooth_env(128, dtype=np.complex64),

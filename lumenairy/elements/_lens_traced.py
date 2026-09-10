@@ -11481,7 +11481,7 @@ def apply_real_lens_traced(
     ard_map = None
     if _ray_density:
         if _imap is not None and _chunk_assembly:
-            # v5.44: deferred to the two-pass band assembly below, which runs
+            # v5.44: performed by the two-pass band assembly below, which runs
             # this closure's census and amplitude per band (see
             # ``_ray_density_amp_grid``'s docstring: everything below the
             # inversion is shared, and the band loop is one more source of
