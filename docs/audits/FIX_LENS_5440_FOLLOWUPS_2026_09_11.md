@@ -44,7 +44,8 @@ returns v5.43.0's banded FIELD HASH bit for bit and lands on v5.43.0's time.
 |---|---|---|
 | **D2** | `dtype=` threaded through `_build_carrier_phase`; new `_narrow_rows` for the astigmatic product; both public helpers pass the field's dtype | per-call transient at N=4096 on a complex64 field: **896.06 -> 640.06 MiB** (scalar carrier) and **512.00 -> 256.00 MiB** (astigmatic); full-grid complex128 phasors per two-group chain **5 -> 0**; every field hash unchanged |
 | **D1** | `stacklevel=2 -> 3` on the three ray-density self-check warnings | warnings attributed to the library **6 of 9 -> 0 of 9**; field hash unchanged |
-| **D6** | CHANGELOG bullet corrected with a dated addendum; `apply_real_lens_traced` docstring priced | the doubling IS the route change, **confirmed by a same-build control that reproduces v5.43.0's exact bits**; but the *reason* the bullet gives is wrong -- the screen branch evaluates **3/3 in ONE pass** and the evaluations are **0.88 s of 18.52 s** |
+| **D6** (attribution) | CHANGELOG bullet corrected with a dated addendum; `apply_real_lens_traced` docstring priced | the doubling IS the route change, **confirmed by a same-build control that reproduces v5.43.0's exact bits**; but the *reason* the bullet gives is wrong -- the screen branch evaluates **3/3 in ONE pass** and the evaluations are **0.88 s of 18.52 s**, while the evaluator's whole-grid DOMAIN TEST is 8.9 s |
+| **D6** (the part that was not the evaluator) | the banded ray-density branch's pass 2 stopped recomputing pass 1's domain mask | `domain_mask` **2.00 -> 1.00 grids** of pixels, 32 -> 16 calls, **15.05 -> 6.61 s**; banded/whole **1.285 -> 1.110** at N=4096 and **1.130 -> 1.023** at N=2048; 864 byte-identity comparisons, 0 mismatches |
 | **D3** | measured and KEPT; three rationale comments and one test docstring corrected | complex64 chain with the single-precision transform pair: rel L2 **3.112e-07**, rel power **2.520e-07** -- 64x / 159x under the bars, and NOT worse than a forced complex128 pair (3.156e-07 / 2.334e-07) |
 | **D4** | four recorded measurements corrected | arguments **22.34 / 820.19 rad** (not 3.6e+02 / 1.3e+04); control **9.8719e-07 / 3.0523e-05** (not 1.5e-05 / 4.9e-04); ratios **23.5x / 727.0x** (not 360x / 11 600x) |
 | **D5** | two 1e-4 bars tightened to 1e-6; the readout test now records its number | readout **9.8995e-08** (Win) / **9.8841e-08** (WSL); one-group chain **9.4427e-08** on both; margins 1010x/1059x -> **10.1x / 10.6x** |
@@ -406,7 +407,7 @@ re-measurements, not new fixtures.
 | upsample crop rel L2 | `<= 1e-5` | 1.71512e-07 | 1.71512e-07 | 58.3x | "2.0e-07 at N=2048" (test runs N=512) |
 | exact readout rel L2 | was `<= 1e-4`, now **1e-6** | **9.8995e-08** | **9.8841e-08** | 1010x -> **10.1x** | no number at all |
 | one-group chain rel L2 | was `<= 1e-4`, now **1e-6** | **9.4427e-08** | **9.4427e-08** | 1059x -> **10.6x** | "2.8e-7/leg, 1.1e-6 after six" (a different chain) |
-| band memory saving | `>= 6` grids | 12.4147 (22.627 -> 10.212) | 12.2902 (22.503 -> 10.213) | 2.07x / 2.05x | 22.6 / 10.2 -- reproduces |
+| band memory saving | `>= 6` grids | 12.4148 (22.6273 -> 10.2124) | 12.2902 (22.5031 -> 10.2129) | 2.07x / 2.05x | 22.6 / 10.2 -- reproduces |
 
 Notes on the two bars that changed and on the one that did not:
 
@@ -419,10 +420,15 @@ Notes on the two bars that changed and on the one that did not:
   2.3e+04, 4.6e+04, 1.9e+05 over 2.0e+02 .. 2.0e+05 rad), and both shipped
   fixtures sit below that.  Tightening the FIXTURES would change what the test
   is about; stating the regime is the honest fix;
-* `band_memory_saving_grids` moved by 0.0001 grids on Windows (12.414588 ->
-  12.414717, ~270 bytes at N=512) -- the closure object D7 adds per banded
-  call.  Against a 2.07x margin on a 6-grid bar this is noise, and it is the
-  ONLY tracemalloc number this branch moves.
+* `band_memory_saving_grids` is the ONLY tracemalloc number this branch moves,
+  and it moves by 510 bytes.  Re-measured after ALL seven changes: Windows
+  **12.414831** (22.627261 -> 10.212430), WSL **12.290180** (22.503060 ->
+  10.212880), against the verification's 12.414588 / 12.290169.  Two things
+  could have shown up here and did not: the closure object D7 adds per banded
+  call (~270 bytes), and the ONE BOOL GRID D6 adds to the banded ray-density
+  pass (`N^2` = 262 144 bytes = 0.125 grids at N=512) -- the bool grid is not
+  live at the call's peak, so it costs 57 bytes of peak rather than 0.125
+  grids.  The 6-grid bar keeps its 2.07x / 2.05x margin.
 
 ---
 
