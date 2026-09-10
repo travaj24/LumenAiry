@@ -1,0 +1,121 @@
+{
+ "bitid": {
+  "n_mortar_operands": 35,
+  "n_identical": 35,
+  "n_differing": 0,
+  "operator_sizes": {
+   "162": 10,
+   "288": 12,
+   "450": 10,
+   "128": 1,
+   "800": 1,
+   "324": 1
+  },
+  "synthetic_identical": 7,
+  "synthetic_n": 7,
+  "t_numpy": 0.04110059999998157,
+  "t_scipy": 0.04491743999997198,
+  "ratio": 1.0928657975794056
+ },
+ "pop": {
+  "n": 35,
+  "rcond_min": 1.5020923405990426e-11,
+  "rcond_max": 0.00010783117861386418,
+  "bar": 1e-12,
+  "decades_below": 1.1766966315895446,
+  "per_site": {
+   "pmm2d staggered mortar interface (MassE_B W_B)": [
+    3.9570401089842775e-06,
+    0.00010783117861386418,
+    17
+   ],
+   "pmm2d staggered mortar interface (MassH_A V_A)": [
+    3.1775275773764905e-08,
+    4.5960035519010605e-05,
+    17
+   ],
+   "pmm2d staggered GENERALIZED mortar interface": [
+    1.5020923405990426e-11,
+    1.5020923405990426e-11,
+    1
+   ]
+  },
+  "modal_ladder": {
+   "4": 1.6467385883152963e-05,
+   "6": 7.359071027022651e-07,
+   "7": 4.664356633164234e-07,
+   "8": 1.4188424688297356e-07
+  }
+ },
+ "refuse": {
+  "0.001": {
+   "outcome": "RETURNED"
+  },
+  "0.0001": {
+   "outcome": "RETURNED"
+  },
+  "1e-05": {
+   "outcome": "RETURNED"
+  },
+  "1e-07": {
+   "outcome": "RETURNED"
+  }
+ },
+ "warnerr": {
+  "default": "_ConditioningError: probe site: the 6x6 mortar operator is numerically singular -- LAPACK ",
+  "error": "_ConditioningError: probe site: the 6x6 mortar operator is numerically singular -- LAPACK ",
+  "LinAlgWarning_in_except": true
+ },
+ "plain1d_closest_correct_rcond": 1.9482262666355e-10,
+ "plain1d": {
+  "d0.01_mfNone": {
+   "outcome": "RETURNED",
+   "RT": 0.9999999999957582,
+   "min_rcond": 2.9537705815952574e-06,
+   "n_interface_calls": 3,
+   "n_warnings": 0,
+   "warnings": []
+  },
+  "d0.001_mfNone": {
+   "outcome": "RETURNED",
+   "RT": 1.00000000083234,
+   "min_rcond": 2.259449128030177e-08,
+   "n_interface_calls": 3,
+   "n_warnings": 0,
+   "warnings": []
+  },
+  "d0.0001_mfNone": {
+   "outcome": "RETURNED",
+   "RT": 1.0000001179506945,
+   "min_rcond": 1.9482262666355e-10,
+   "n_interface_calls": 3,
+   "n_warnings": 0,
+   "warnings": []
+  },
+  "d1e-05_mfNone": {
+   "outcome": "REFUSED",
+   "type": "ValueError",
+   "message": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 1 cell(s) no single layer asked for; the narrowest is 1e-05 of a period (8e-1",
+   "min_rcond": 1.951170428647643e-12
+  },
+  "d1e-05_mf0.0": {
+   "outcome": "REFUSED",
+   "type": "ValueError",
+   "message": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 1 cell(s) no single layer asked for; the narrowest is 1e-05 of a period (8e-1",
+   "min_rcond": 1.951170428647643e-12
+  },
+  "d1e-06_mf0.0": {
+   "outcome": "REFUSED",
+   "type": "ValueError",
+   "message": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 1 cell(s) no single layer asked for; the narrowest is 1e-06 of a period (8e-1",
+   "min_rcond": 1.9543324009036786e-14
+  },
+  "d1e-07_mf0.0": {
+   "outcome": "REFUSED",
+   "type": "ValueError",
+   "message": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 1 cell(s) no single layer asked for; the narrowest is 1e-07 of a period (8e-1",
+   "min_rcond": 1.95539632818349e-16
+  }
+ },
+ "_lumenairy": "/mnt/c/tmp/lum_vmortar2/lumenairy/__init__.py"
+}
