@@ -347,6 +347,194 @@ about the shear, not about the API.
   `conj / none` range `1.7878 .. 1.9920` is stated so the 1.5 bar's origin is
   visible).  No assertion loosened; three tightened into decisions.
 
+### Fixed -- `PMMStack`'s TRANSMITTED amplitudes on a SHEARED stack were FRAME-referenced (silent-wrong)
+
+The 2-D hybrid's frame-anchor defect, one dimension down -- **V2** of
+`docs/audits/VERIFY_HYBRID_SLANT_TRANSMISSION_ANCHOR_2026_09_11.md`.  A sheared
+layer is solved in `u = x - z tan(phi)`, so what the cascade carries is the
+FRAME Fourier coefficient; `jones_transmission()`,
+`per_order_amplitudes('transmission')` and the `jones_field_from_orders` bridge
+that consumes it handed that straight to the caller.  The factor omitted is
+UNIMODULAR (measured `max ||P_m| - 1| = 1.11e-16`), so `R` and `T` closed and
+nothing warned.
+
+**The 1-D anchor**, specialised from the 2-D rule to the 1-D x-only shear and
+the 1-D sign convention (`add_sheared_grating` stores `slant_angle =
+arctan(shear * period / thickness)` and walks the LAB ridge centre toward `+x`
+with depth):
+
+```
+    A_lab(m) = exp(+i k0 alpha_m W) A_frame(m),
+    W = sum_j tan(phi_j) d_j  over the layers that enter a sheared frame
+```
+
+**The sign is a measurement, not a convention.**  Against the engine's OWN
+z-staircase of the identical parallelogram -- lab-referenced by construction --
+at `P = 0.80 um`, `wl = 0.55 um`, `d = 0.40 um`, `eps 4.20/1.45`, duty 0.45,
+`shear = 0.30` (a 0.30-PERIOD walk: neither the half- nor the quarter-period
+degeneracy), oblique 25, `n_slices` 6 / 12 / 24:
+
+| arm | ns 6 | ns 12 | ns 24 |
+|---|---|---|---|
+| transmission Jones, AS RETURNED (pre-fix) | 1.0862 | 1.0878 | 1.0936 |
+| transmission Jones, `x P` (**shipped**) | **3.657e-02** | **1.429e-02** | **5.099e-03** |
+| transmission Jones, `x conj(P)` | 1.8189 | 1.8228 | 1.8292 |
+| per-order amplitudes, AS RETURNED | 1.4703 | 1.4715 | 1.4724 |
+| per-order amplitudes, `x P` (**shipped**) | **3.493e-02** | **1.373e-02** | **5.083e-03** |
+| the staircase's OWN last step | -- | 2.446e-02 | 1.038e-02 |
+| the REFLECTION Jones, as returned | 1.924e-02 | 9.304e-03 | 4.622e-03 |
+
+The shipped arm converges through the oracle's own step (2.04x below it at
+`n_slices = 24`); the un-anchored one is FLAT to 0.7% over a 4x refinement; the
+conjugate is worse than applying nothing at all.  The REFLECTION converges as
+returned, which is the derivation's statement that the frame is anchored at the
+stack's TOP -- where the reflected wave leaves it.
+
+**Where the 1-D rule DIFFERS from the 2-D one, and it is measured rather than
+assumed.**  The 2-D hybrid short-circuits a constant tile to
+`_homogeneous_modes` before the slant is read, so a uniform slanted 2-D layer
+never enters a frame.  The 1-D metric generator has no such short-circuit --
+`_build_generator_metric` adds `tan_conv * Dopx` whenever `|tan_conv| > 1e-14`.
+A UNIFORM `eps = 2.60` slanted layer against the VERTICAL film of the same
+`eps` (the same physical solid: a shear of a homogeneous medium is a pure
+coordinate change) reads, on the transmission Jones, **1.0950** as returned,
+**2.87e-14** with the anchor, **1.8326** conjugated -- so uniform slanted layers
+DO enter the walk sum, and that no-op is an exact analytic oracle for the
+anchor.
+
+**Composition.**  The walks ADD.  Two sheared layers at different shears,
+thicknesses, duties and permittivities against a staircase that places the lower
+layer at the ACCUMULATED walk: the full sum reads `2.954e-03` against the
+oracle's own `4.112e-03` step, while only-layer-1 reads `3.818e-01` (129x), no
+sum at all `1.2495` (423x) and the conjugate sum `1.9516` (661x).  The
+LAYER-SPLIT identity holds to `1.08e-15` and is BLIND to the sum -- one layer
+and two halves read the same number under the right sum (`3.708e-03` both), the
+same number under a HALF sum (`9.162e-01` both) and the same under NO sum
+(`1.3750` both) -- which is why the staircase, not the split, is the arbiter.
+
+**Scope.**  Applied to the transmitted amplitudes ONLY, at both modal sites that
+can hold a sheared layer.  `R`, `T`, the reflection Jones and the reflected
+per-order amplitudes are BIT-IDENTICAL; the walk is exactly `0.0` on any stack
+with no sheared layer, which short-circuits the anchor entirely.  The conical
+and all-vertical-per-layer modal sites carry a comment saying why they need
+nothing (conical REFUSES slanted layers; the vertical per-layer cascade is
+all-vertical by routing).  The COVARIANT (uniform-slant) cascade retains no
+amplitudes at all and is untouched.
+
+### Fixed -- `pmm_jones_2d(..., slant=...)` reached the JAX dispatch and silently got the VERTICAL answer
+
+**V1** of the same verification -- the shape the 2026-09-11 `PMM2DStackHybrid`
+guard closed, one function away, on a public single-layer entry.
+`pmm_jones_2d`'s `if any(is_jax_array(a) for a in _jx)` branch handed off to
+`_pmm_jones_2d_cell_jax` WITHOUT `slant`, and the normalization
+`slant = _norm_slant_pair(...)` was not reached until after the branch; the jnp
+twin takes no slant argument at all.
+
+MEASURED before the guard on a slanted PATTERNED `(6, 4, 3, 3)` cell at
+`slant = (0.5, 0)`, oblique 25, `n_orders = 3`, `degree = 5` -- **all SEVEN**
+members of the dispatch tuple (`eps_tensor_cell`, `n_substrate`,
+`n_superstrate`, `depth`, `wavelength`, `theta`, `phi`) solved silently, every
+one reading identically and with zero warnings:
+
+| arm | reading |
+|---|---|
+| the traced solve vs the NumPy **VERTICAL** call | `dR 1.34e-15`, `dT 4.24e-15`, `dJones 1.50e-14` |
+| the traced solve vs the NumPy **SLANTED** call | **`dR 3.670e-03`, `dT 5.514e-02`, `dJones 1.546e-02`** |
+| the two NumPy calls against each other | `dR 3.670e-03`, `dT 5.514e-02`, `dJones 1.546e-02` |
+
+-- the last two agreeing is what makes it *the* vertical answer rather than
+close to it.  Unlike the frame anchor this is not a unimodular phase: `R` and
+`T` are wrong too.  All seven now raise `NotImplementedError`, naming which
+traced input routed the call.
+
+The decision is the same "does this cell get SOLVED IN A SHEARED FRAME" one the
+anchor uses, so a CONSTANT-valued cell -- a measured no-op (`dR 4.9e-17 /
+dT 2.1e-14 / dJones 5.4e-16` against the vertical call) -- and every VERTICAL
+traced call still solve, bit for bit, and `jax.grad` still agrees with a central
+FD to `rel 1.5e-08`.
+
+### Fixed -- the GENERALIZED interface's `T22` inverse now REFUSES a numerically singular mode match (audit O2)
+
+`_interface_smatrix_general` inverts `T22 = (inv(Mb) Ma)[2N:, 2N:]` explicitly
+through `_guarded_inverse`, whose screen is dormant by default
+(`_INV_CENSUS = None`), so nothing screened `cond(T22) = 4.5e+15` on solves
+returning `sum R + T` up to **6.3e+30**.  The failure was LOUD but not
+DISCRIMINATING: the warning it raises is textually identical to the one 17
+ordinary `sum R + T = 1.03 .. 1.08` truncation rows raise, and the library's own
+advice for that warning class (detune a coincident permittivity) was measured
+NOT to work on this one.
+
+**The threshold is derived from this site's own measured population**, on both
+builds, over 71 generalized-cascade solves / 153 interfaces spanning EVERY
+consumer of the binding -- the 2-D hybrid (slanted and out-of-plane;
+shared/tree/fused cascades; `n_orders` 3..11; `degree` 7..15; four mounts; a
+theta scan), the 2-D PURE staggered engine (slanted / out-of-plane / magnetic),
+the 1-D `PMMStack` convection-slant and out-of-plane cascades, the
+native-conical `PMMStack` cascade, `pmm_jones_2d`, and the Berreman 4x4 planar
+cascade at four angles plus a lossy and a thick film:
+
+The two populations are the SAME 18 / 53 solves on both builds:
+
+| population | solves / interfaces | equilibrated `rcond(T22)` | equilibrated residual |
+|---|---|---|---|
+| BROKEN (`sum R+T > 1.10` per state) | 18 / 39 | 6.7e-18 .. 1.0e-01 | 7.9e-17 .. 2.5e-01 |
+| HEALTHY | 53 / 114 | **2.971e-05** .. 1.0 | 0.0 .. **1.53e-14** |
+
+A solve is refused when ANY interface trips, so the bar must separate each
+solve's WORST interface: the best broken solve reads **2.359e-16** (WIN) /
+**7.120e-16** (WSL), the worst healthy one **2.971e-05** on both -- a
+**10.62-decade** gap on the tighter build (11.10 on the other), geometric middle
+`1.45e-10` / `8.4e-11`.  `_INV_T22_RCOND_REFUSE = 1e-10` is that middle rounded
+and sits inside the gap on BOTH: 5.15 decades above every broken reading and
+5.47 below every healthy one.  The CONFIRMING residual has its own 11.39-decade
+gap on the same rows (smallest broken per-solve residual `3.76e-03`, largest
+healthy `1.53e-14`) and the existing `_INV_RESID_REFUSE = 1e-8` sits 5.4 / 5.8
+decades from each, so -- exactly as `_guarded_lstsq`'s surviving refusal
+requires -- a FALSE refusal needs BOTH independent instruments to be wrong at
+once.
+
+**The two-sided check:** with the guard armed, the set of solves that RAISE is
+EXACTLY the 18 that were broken -- on both builds, with no healthy solve refused
+(56 still solve) and no broken one let through.  And a separate hash census over
+the same fixture set finds **216 of 216 hashes identical, 0 moved**, on both
+builds, over the 54 fixtures the guard does not refuse.
+
+**NOT refused, deliberately**: the benign rows the energy tripwire ALREADY warns
+on, in text indistinguishable from a 1e+30's -- 22 of them in this census, the
+same 22 on both builds, at `sum R + T = 1.0130 .. 1.0726`, out-of-plane VERTICAL
+rows included.  Their `T22` reads `rcond` 9.35e-05 .. 3.75e-03 and `resid`
+<= 1.53e-14: six decades on the safe side of BOTH bars.  Separating them from
+the 1e+30s is the whole point of the refusal.
+
+The M1 withdrawal of the GLOBAL inverse refusal STANDS and is not reopened:
+there is still no bar that works across every explicit inverse in the library.
+What is new is that this ONE site's population was measured and is decidable, so
+the guard is armed here through a new `rcond_refuse=` parameter and nowhere
+else; every other `_guarded_inverse` caller keeps the zero-cost early return,
+and the JAX / CuPy backends keep the historical arithmetic.
+
+**Two findings the audit item did not have.**  The blow-up is NOT slant-specific
+-- an OUT-OF-PLANE VERTICAL hybrid layer on the same fixture reads `sum R + T =
+2.77e+26` and is caught by the same screen; what carries it is the GENERALIZED
+(4N) cascade, which slanted and out-of-plane layers both reach and a vertical
+in-plane layer never does.  And the MORTAR interfaces need no such guard, for a
+structural reason rather than a threshold: both
+`_interface_smatrix_general_mortar` and its 2-D twin end in
+`np.linalg.solve(A, B)` with no explicit inverse at all, and measured on the
+same blow-up fixture class their own `cond(A)` reads `3.14e+03 .. 1.23e+04` on a
+936 x 936 solve at `sum R + T = 0.9997`.
+
+The refusal names the generalized interface, the block size, both instruments
+and the MEASURED remedies (`n_orders >= 9`: 1.0065 / 1.0006 / 1.0020;
+`degree = 7`: 1.0442; a wall tilt at or below 14 deg: 1.0436; the PURE engine:
+1.0000015), and says explicitly that the detune advice does NOT apply here.
+`_ConditioningError` subclasses `_EnergyError`, so existing `stabilize=` retry
+ladders step `n_orders` around it unchanged.
+
+Gate for all three: `tests/unit/test_fix_slant_anchor_v1_v2_o2.py`.  Evidence:
+`docs/audits/FIX_SLANT_ANCHOR_V1_V2_O2_2026_09_11.md`; probes in
+`validation/probe_fix_slant_anchor_v1v2o2/` (both builds, pre- and post-fix).
+
 ## [5.44.0] — 2026-09-10
 
 ### Added -- a NATIVE constant-shear SLANT for the PURE staggered 2-D PMM (roadmap Phase D)
