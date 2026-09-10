@@ -408,9 +408,20 @@ harmless relabelling of a layer-internal direction, and the closure defect reads
 8.2e-15 pre-fix and 8.1e-15 post-fix on both builds, at every truncation and
 detune tried.
 
+The SCALAR 2-D entry point says the same thing from a third direction: the same
+`eps = 2.25` background carrying an isotropic `eps = 4` block, solved through
+`rcwa_efficiency_2d`, closes to `-1.3e-14` PRE-fix and `+8.9e-16` post, and
+`RCWAStack` on that geometry gives `sum R + T = 2` exactly on both arms.
+`pmm_efficiency_2d` on the equivalent pillar-in-host cell (`eps_host = 2.25`,
+`n_substrate = 1.5`) is BIT-IDENTICAL between the two arms.  It is
+the ANISOTROPIC tensor cell -- whose rotated director leaves the background
+modes nearly decoupled -- that actually puts a layer mode on top of a region
+mode.
+
 So: the fix removes a build-dependent branch choice everywhere, and REPAIRS an
-answer wherever that choice met a matching region mode.  A 1-D groove
-coincidence is not automatically one of those places.
+answer wherever that choice met a matching region mode.  A coincident
+permittivity alone -- in 1-D, or in the scalar 2-D path -- is not automatically
+one of those places.
 
 Test evidence for the shared paths is in §7.
 
