@@ -17,7 +17,7 @@ as open item O-11 of
 Jacobian `J = w P / 2` scales the GLL mass by `J` and the stiffness by `1/J`, so
 the nodal `Kx^2` grows as `1/w^2` and the layer's modal spectrum acquires
 SPURIOUS wavenumbers `|q| ~ 0.65 N(N+1)/4 / (k0 J)` -- the constant reads
-0.680 / 0.660 / 0.653 / 0.651 / 0.649 at degree 8 / 12 / 14 / 16 / 20, so it is
+0.6786 / 0.6575 / 0.6537 / 0.6513 / 0.6485 at degree 8 / 12 / 14 / 16 / 20, so it is
 a free predictor and not a fit.  At `w = 1e-4` of a 1.2 um period those modes
 reach `|q|` = 7.7e+04 against a physical index ceiling of 3.  The interface
 mode-match then conditions as `1/w^2` (1.28e+05 -> 1.22e+09 over `w` = 1e-2 ->
@@ -73,6 +73,15 @@ snap dormant and active, Bragg, conical, slant, out-of-plane, lossy, sweep,
 `prepare()`, `stabilize='slices'`, `internal_field`, `layer_absorption` --
 hashed against the read-only main clone: **18 / 18 identical**.
 `tests/unit/test_fix_pmmstack_sliver_walls.py`, 18 tests, 6.6 s / 7.3 s.
+One shipped file needed the switch, and it is the right one:
+`tests/unit/test_m1_conditioning_guard.py` drives the audit staircase (2 nm
+cross-layer cells at ratio 157) deliberately past capacity and HARVESTS pre-fix
+draws at `R+T` = 2.13 and 15.7, which is precisely what the refusal refuses.  A
+module-scope autouse fixture throws `PMM_SLIVER_GUARD` off for that file --
+module-scope because which arms trip it is a BLAS fact (that file records
+closure moving 6.65e-06 -> 2.14e+01 between one and two OpenBLAS threads on the
+same cell).  That the guard found that staircase without being aimed at it is
+the strongest available evidence its conjunction is real.
 Full write-up, both builds' tables and every bar's derivation:
 `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md`.
 

@@ -78,7 +78,7 @@ from ._core import (
 # GLL mass scales with ``J`` and the stiffness with ``1/J``, so the nodal
 # ``Kx^2 = S0^-1 K / k0^2`` grows as ``1/w^2`` and the layer's modal spectrum
 # acquires SPURIOUS wavenumbers ``|q| ~ 0.65 N(N+1)/4 / (k0 J)`` -- measured
-# ``|q|max k0 J / (N(N+1)/4)`` = 0.680 / 0.660 / 0.653 / 0.651 / 0.649 at
+# ``|q|max k0 J / (N(N+1)/4)`` = 0.6786 / 0.6575 / 0.6537 / 0.6513 / 0.6485 at
 # degree 8 / 12 / 14 / 16 / 20, i.e. a free predictor.  Those modes are pure
 # discretisation: at ``w = 1e-4`` of a 1.2 um period they reach ``|q|`` = 7.7e4
 # against a physical index ceiling of 3.  They condition the interface
@@ -249,7 +249,7 @@ def _sliver_refusal(stack, worst):
     mf_fix = 2.0 * w_wide * period
     # |q|max ~ 0.65 N(N+1)/4 / (k0 J) with J = w P / 2 and k0 = 2 pi / wl --
     # the MEASURED predictor (S3.2 of the fix audit; the constant reads
-    # 0.680 / 0.660 / 0.653 / 0.651 / 0.649 at degree 8 / 12 / 14 / 16 / 20).
+    # 0.6786 / 0.6575 / 0.6537 / 0.6513 / 0.6485 at degree 8/12/14/16/20).
     try:
         wl = float(stack._src["wl"])
     except (AttributeError, KeyError, TypeError, ValueError):

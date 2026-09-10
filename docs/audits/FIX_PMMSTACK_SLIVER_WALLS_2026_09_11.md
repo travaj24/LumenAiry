@@ -111,11 +111,11 @@ asymmetric snap of S2 note 3.
 
 ### S3.2 The spurious-wavenumber predictor is FREE
 
-`|q|max · k0 J / (N(N+1)/4)`, measured at `w` = 1e-2:
+`|q|max · k0 J / (N(N+1)/4)`, measured at `w` = 3e-3 (`k0 J` = 1.331e-02):
 
 | degree | 8 | 12 | 14 | 16 | 20 |
 |---|---|---|---|---|---|
-| constant | **0.680** | **0.660** | **0.653** | **0.651** | **0.649** |
+| constant | **0.6786** | **0.6575** | **0.6537** | **0.6513** | **0.6485** |
 
 So `|q|max ≈ 0.65 · N(N+1)/4 / (k0 J)` predicts the sliver's spurious spectrum
 from geometry and degree alone, with no eig. It is what the refusal quotes,
@@ -257,7 +257,7 @@ widths on one grid), so it carries no period, wavelength or degree.
 
 | population | ratio | distance to 100 |
 |---|---|---|
-| the WIDEST cross-layer cell that ever produced a wrong answer (`w` = 8.79e-05 against own-scale 0.2786, degree 20) | 3.17e+03 | **1.50 decades** above |
+| the WIDEST cross-layer cell that ever produced a wrong answer (`w` = 8.786e-05 against own-scale 0.27865, degree 20) | 3.172e+03 | **1.50 decades** above |
 | an ordinary NON-CONFORMING stack (two layers whose walls differ by a real 5% feature: walls 0.30/0.50 vs 0.35/0.55) | 2 – 10 | **1.0 – 1.7 decades** below |
 | the M2 audit-class 2° coated taper (1.2 nm collisions against ~200 nm features) | ~1.7e+02 | 0.23 decades above |
 
@@ -441,6 +441,28 @@ capped at file top before numpy is imported.
 **Regression.** Every test file that imports `PMMStack`
 (`grep tests/ --include='*.py' -l PMMStack`, 37 files) plus this one: green.
 `ruff check lumenairy/ tests/`: clean.
+
+**One shipped test file needed a switch, and it is the right one.**
+`tests/unit/test_m1_conditioning_guard.py` drives the audit staircase — six
+slices whose walls shift 4 nm on a 1 µm period, so the union grid carries 2 nm
+cross-layer cells at ratio **157** — deliberately past its capacity, and
+several of its arms disarm `INTERFACE_CONDITIONING_GUARD` or
+`PMM_CONICAL_PERLAYER_ORDER_CAP` to HARVEST a pre-fix draw whose `R+T` then
+reads **2.13** and **15.7**. Those harvests are exactly what the sliver guard
+refuses, so two of its 27 tests raised instead of returning
+(`test_rcond_of_hsup_would_have_been_the_wrong_instrument` and
+`test_t3_3_fail_before_reproduces_the_over_capacity_draw`). Which arms trip it
+is a BLAS fact — that file's own docstring records closure moving from 6.65e-06
+to 2.14e+01 between one and two OpenBLAS threads on the SAME cell — so the fix
+is a MODULE-scope autouse fixture that throws `PMM_SLIVER_GUARD` off for the
+whole file, not a per-arm patch that a second build would defeat. Nothing in
+that file asserts the sliver behaviour; this fix's own file owns it. With the
+fixture: 27 + 18 = **45 passed**, 10.98 s.
+
+That the guard fires on the M1 staircase unprompted is the strongest available
+evidence that its conjunction is real: a colliding-wall staircase driven past
+capacity is the same defect family, and the guard found it without being aimed
+at it.
 
 ---
 

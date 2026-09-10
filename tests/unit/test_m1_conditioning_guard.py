@@ -28,6 +28,7 @@ import pytest
 
 import lumenairy.elements.pmm._core as _pc
 import lumenairy.elements.pmm.conical as _con
+import lumenairy.elements.pmm.stack as _ps
 import lumenairy.elements.rcwa._core as _rc
 from lumenairy.elements.pmm import PMMStack
 from lumenairy.elements.rcwa import rcwa_efficiency_1d
@@ -46,6 +47,29 @@ STAIR = [(60e-9, [(0.5 - 0.35 / 2 - 0.002 * i, 1.0 + 0j),
                   (0.35 + 0.004 * i, 4.0 + 0j),
                   (0.5 - 0.35 / 2 - 0.002 * i, 1.0 + 0j)])
          for i in range(6)]
+
+
+# O-11 (2026-09-11, docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md).  The
+# audit staircase above is EXACTLY the geometry the sliver refusal screens for:
+# six slices whose walls shift 4 nm on a 1 um period, so the union grid carries
+# 2 nm cross-layer cells, 157x finer than anything the layers asked for.  This
+# file's whole purpose is to DRIVE that stack past its capacity and read the
+# wrong answers that come back -- several of its arms deliberately disarm
+# `INTERFACE_CONDITIONING_GUARD` or `PMM_CONICAL_PERLAYER_ORDER_CAP` to harvest
+# a pre-fix draw whose `R+T` then reads 2.1 to 21 -- and the sliver refusal
+# would turn those harvests into raises.  Which of them trip it is a BLAS fact
+# (this file's own docstrings record closure moving from 6.7e-06 to 2.1e+01
+# between one and two OpenBLAS threads on the SAME cell), so the switch is
+# thrown for the MODULE rather than per arm.  Nothing here asserts the sliver
+# behaviour; tests/unit/test_fix_pmmstack_sliver_walls.py owns it.
+@pytest.fixture(autouse=True)
+def _sliver_guard_off():
+    prev = _ps.PMM_SLIVER_GUARD
+    _ps.PMM_SLIVER_GUARD = False
+    try:
+        yield
+    finally:
+        _ps.PMM_SLIVER_GUARD = prev
 
 
 @pytest.fixture
