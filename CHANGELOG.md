@@ -62,7 +62,12 @@ touches nothing where the sign of `Im(r)` is physics.  A lossless solve away fro
 the coincidence moves by 1.04e-17 .. 5.54e-15; one on the coincidence moves by
 up to 1.81e-02, which is the fix.  `_sqrt_decay` is shared, so `rcwa/oned.py`,
 `rcwa/stack.py`, `pmm/twod.py`, the three PMM JAX twins and `elements/berreman.py`
-all gain the same correction.
+all get the pinned root -- though whether that CHANGES an answer needs a second
+condition: a LAYER MODE that numerically equals a REGION MODE, which an equal
+material index only makes possible.  The 1-D binary grating the warning text
+names (`n_groove = n_substrate = 1.5`, ridge 2.1, duty 0.5) has one mis-rooted
+TE mode pre-fix but no region mode within 0.165 of any layer mode, and its
+closure defect reads 8.2e-15 before and 8.1e-15 after on both builds.
 
 Evidence: `docs/audits/FIX_RCWA_EVEN_SECTOR_WSL_2026_09_11.md`; probes (both
 builds, both arms) in `validation/probe_fix_rcwa_even_sector_wsl/`; DECISION test

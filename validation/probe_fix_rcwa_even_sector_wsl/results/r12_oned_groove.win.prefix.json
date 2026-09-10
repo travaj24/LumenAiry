@@ -1,0 +1,214 @@
+{
+ "_arm": {
+  "build": "win",
+  "tree": "prefix(48c8747)",
+  "tag": "win.prefix",
+  "lumenairy": "C:\\tmp\\lum_wslfix_pre\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "blas": {
+   "blas": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24"
+   },
+   "lapack": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24"
+   }
+  },
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ },
+ "rows": [
+  {
+   "pol": "te",
+   "nord": 6,
+   "detune": 0.0,
+   "defect": 4.440892098500626e-16
+  },
+  {
+   "pol": "te",
+   "nord": 6,
+   "detune": 1e-09,
+   "defect": 0.0
+  },
+  {
+   "pol": "te",
+   "nord": 6,
+   "detune": 1e-06,
+   "defect": -2.220446049250313e-16
+  },
+  {
+   "pol": "te",
+   "nord": 6,
+   "detune": 0.001,
+   "defect": 2.220446049250313e-16
+  },
+  {
+   "pol": "te",
+   "nord": 10,
+   "detune": 0.0,
+   "defect": 1.1102230246251565e-15
+  },
+  {
+   "pol": "te",
+   "nord": 10,
+   "detune": 1e-09,
+   "defect": 2.4424906541753444e-15
+  },
+  {
+   "pol": "te",
+   "nord": 10,
+   "detune": 1e-06,
+   "defect": 1.9984014443252818e-15
+  },
+  {
+   "pol": "te",
+   "nord": 10,
+   "detune": 0.001,
+   "defect": 2.6645352591003757e-15
+  },
+  {
+   "pol": "te",
+   "nord": 14,
+   "detune": 0.0,
+   "defect": -3.885780586188048e-15
+  },
+  {
+   "pol": "te",
+   "nord": 14,
+   "detune": 1e-09,
+   "defect": -5.10702591327572e-15
+  },
+  {
+   "pol": "te",
+   "nord": 14,
+   "detune": 1e-06,
+   "defect": -3.774758283725532e-15
+  },
+  {
+   "pol": "te",
+   "nord": 14,
+   "detune": 0.001,
+   "defect": -4.6629367034256575e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 6,
+   "detune": 0.0,
+   "defect": 4.884981308350689e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 6,
+   "detune": 1e-09,
+   "defect": 4.884981308350689e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 6,
+   "detune": 1e-06,
+   "defect": 3.3306690738754696e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 6,
+   "detune": 0.001,
+   "defect": 3.9968028886505635e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 10,
+   "detune": 0.0,
+   "defect": -1.2212453270876722e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 10,
+   "detune": 1e-09,
+   "defect": -1.4432899320127035e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 10,
+   "detune": 1e-06,
+   "defect": -1.5543122344752192e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 10,
+   "detune": 0.001,
+   "defect": -1.5543122344752192e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 14,
+   "detune": 0.0,
+   "defect": 8.215650382226158e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 14,
+   "detune": 1e-09,
+   "defect": 7.771561172376096e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 14,
+   "detune": 1e-06,
+   "defect": 7.993605777301127e-15
+  },
+  {
+   "pol": "tm",
+   "nord": 14,
+   "detune": 0.001,
+   "defect": 6.8833827526759706e-15
+  }
+ ],
+ "spectra": [
+  {
+   "pol": "te",
+   "nord": 10,
+   "layer_propagating": [
+    -3.832986894267547,
+    -2.0847219481066017,
+    -1.4490356327432135
+   ],
+   "substrate": [
+    -2.25,
+    -0.81
+   ],
+   "closest_layer_region_gap": 0.16527805189339828,
+   "n_on_cut": 3,
+   "n_prefix_incoming": 1
+  },
+  {
+   "pol": "tm",
+   "nord": 10,
+   "layer_propagating": [
+    -3.615339084649738,
+    -1.7444310832237047,
+    -1.6536077131921711
+   ],
+   "substrate": [
+    -2.25,
+    -0.81
+   ],
+   "closest_layer_region_gap": 0.5055689167762953,
+   "n_on_cut": 3,
+   "n_prefix_incoming": 0
+  }
+ ],
+ "coincident_max": 8.215650382226158e-15,
+ "detuned_max": 7.993605777301127e-15
+}

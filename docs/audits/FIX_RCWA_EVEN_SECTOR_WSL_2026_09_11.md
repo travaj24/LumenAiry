@@ -386,10 +386,33 @@ and `-1.172e-04` / `-7.696e-04` at `theta = 0.2, phi = 0.7`, going to
 `4.97e-14` / `1.08e-13` and `1.33e-15` / `1.47e-14` after.  The full-vs-even
 test was the detector, not the location.
 
-**Blast radius.**  `_sqrt_decay` is shared: `rcwa/oned.py`, `rcwa/twod.py`,
-`rcwa/stack.py`, `pmm/twod.py`, `pmm/_jax_twod.py`, `pmm/_jax_stack2d.py`,
-`pmm/_jax_twod_jones.py` and `elements/berreman.py` all call it.  Every one of
-those gains the same correction.  Test evidence in §7.
+**Blast radius, and a limit on it.**  `_sqrt_decay` is shared: `rcwa/oned.py`,
+`rcwa/twod.py`, `rcwa/stack.py`, `pmm/twod.py`, `pmm/_jax_twod.py`,
+`pmm/_jax_stack2d.py`, `pmm/_jax_twod_jones.py` and `elements/berreman.py` all
+call it, and every one now gets the pinned root.  Whether that CHANGES a given
+answer depends on a second condition, which `r12_oned_groove.py` measures.
+
+The permittivity coincidence is necessary but NOT sufficient.  What makes
+`a + b` singular is a LAYER MODE that numerically equals a REGION MODE -- and
+an equal material index only makes that possible.  In the 2-D fixture the
+background occupies 3/4 of the cell, so the layer really does carry modes at
+`lam^2 = -2.249999999999987` and `-0.81`, i.e. the substrate's own `-kz^2` for
+the (0,0) and (+-1,0)/(0,+-1) orders, to 1.3e-14.  In the 1-D binary grating
+that the warning text names explicitly -- `n_groove = n_substrate = 1.5`,
+ridge 2.1, duty 0.5 -- the ridge hybridises everything: the layer's propagating
+eigenvalues are `-3.8330, -2.0847, -1.4490` (TE) and `-3.6153, -1.7444,
+-1.6536` (TM) against the substrate's `-2.2500, -0.8100`, the CLOSEST approach
+being 0.165.  One of its three on-cut TE modes is mis-rooted pre-fix, exactly as
+in 2-D -- but with no region mode to be confused with, the mis-rooting is a
+harmless relabelling of a layer-internal direction, and the closure defect reads
+8.2e-15 pre-fix and 8.1e-15 post-fix on both builds, at every truncation and
+detune tried.
+
+So: the fix removes a build-dependent branch choice everywhere, and REPAIRS an
+answer wherever that choice met a matching region mode.  A 1-D groove
+coincidence is not automatically one of those places.
+
+Test evidence for the shared paths is in §7.
 
 ---
 
