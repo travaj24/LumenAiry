@@ -1310,7 +1310,11 @@ class PMMStack:
         (radians) tilts the layer's straight side-walls from the vertical (``0``
         = vertical); a slanted layer is solved by the div-conforming covariant-
         metric generator and cascaded via the general fwd/back S-matrix, so a
-        stack may MIX vertical and slanted layers.  Returns ``self``."""
+        stack may MIX vertical and slanted layers.  NOTE on lateral placement
+        (verification 2026-09-11, D1): a slanted layer below other slanted
+        layers is solved in THEIR frame, so its lateral coordinates (segment
+        walls) are offset in the lab by the sum of the walks above it -- see
+        :meth:`add_sheared_grating`.  Returns ``self``."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
         self._modal = None      # ... and retained per-order amplitudes (B)
         if (segments is None) == (eps is None):
@@ -1582,7 +1586,25 @@ class PMMStack:
         :meth:`add_tapered_grating`).  Same ``shear`` units, same centre law:
         the ridge centre is ``centre + shear * (zeta - 0.5)`` in period
         fractions, so this and the staircase describe the SAME structure and
-        the two are interchangeable at the call site.
+        the two are interchangeable at the call site -- for the FIRST sheared
+        layer of the stack.
+
+        WHERE A SECOND SHEARED LAYER SITS (verification 2026-09-11, D1).  The
+        cascade matches successive sheared layers' FRAME coefficients directly,
+        with no re-referencing between them, so a later sheared layer is solved
+        in the frame of the sheared layers above it, ``u = x - W_above`` with
+        ``W_above`` the sum of their walks (``shear * P`` each, in the sign
+        convention of ``shear``).  ``centre`` is therefore a LAB position for
+        the first sheared layer and a FRAME position for every later one: the
+        later ridge stands at ``centre + W_above`` in the lab.  To place a
+        second sheared ridge at a lab position ``c``, pass ``centre = c -
+        W_above``.  MEASURED against a hand-built z-staircase: per-order
+        transmitted amplitudes 1.83e-02 / 8.04e-03 at 6 / 12 rungs when the
+        oracle puts layer 2 at ``centre + W_1`` (converging 2.3x per doubling)
+        against 1.139 / 1.142 (flat) when it puts it at ``centre`` -- a
+        convergence statement, not a tolerance.  The transmitted-amplitude
+        frame anchor (``A_lab = exp(+i k0 alpha_m W) A_frame``) is applied
+        once, at the end, and does not touch this relative placement.
 
         Parameters
         ----------

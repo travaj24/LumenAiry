@@ -773,7 +773,15 @@ def test_o2_the_threshold_sits_in_the_measured_gap_on_both_sides():
                  slant 0.25, normal)    rcond >= 2.97e-05
 
     ``_INV_T22_RCOND_REFUSE`` = 1e-10 is the geometric middle of the measured
-    11.10-decade gap (8.4e-11).  The bars below give each side five decades."""
+    11.10-decade gap (8.4e-11).  The bars below give each side five decades.
+
+    RESTATED 2026-09-11 (verification, durability flag): the broken-side bar
+    was 1e-15 -- a SAMPLE property of this one fixture (3.90e-17).  The
+    verification's wider population of 134 solves / 229 interfaces reads the
+    broken rcond up to 4.78e-16 (0.32 decades under 1e-15, i.e. inside
+    build noise), so the bar is now 1e-13: 2.3 decades above the family's
+    broken envelope and 3.0 decades below the refusal bar 1e-10, with the
+    healthy side (>= 2.08e-05) untouched."""
     rows = []
     _rc._INV_CENSUS = rows
     try:
@@ -781,7 +789,7 @@ def test_o2_the_threshold_sits_in_the_measured_gap_on_both_sides():
             _o2_hybrid(M=5, slant=0.5).solve()
         broken = [r for r in rows if r[4]]
         assert broken, "the census recorded no refused row"
-        assert max(r[2] for r in broken) < 1e-15
+        assert max(r[2] for r in broken) < 1e-13
         assert min(r[3] for r in broken) > 1e-3
         rows.clear()
         with warnings.catch_warnings():

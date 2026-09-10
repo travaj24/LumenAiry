@@ -964,6 +964,34 @@ Gate for all three: `tests/unit/test_fix_slant_anchor_v1_v2_o2.py`.  Evidence:
 `docs/audits/FIX_SLANT_ANCHOR_V1_V2_O2_2026_09_11.md`; probes in
 `validation/probe_fix_slant_anchor_v1v2o2/` (both builds, pre- and post-fix).
 
+* **Verified 2026-09-11** (`docs/audits/VERIFY_SLANT_ANCHOR_V1_V2_O2_2026_09_11.md`,
+  `validation/probe_verify_slant_anchor/`, three trees: pre-fix, tip, and the
+  tip with only the three fix commits reverted).  V1: the seven traced routes
+  reproduce (one shared digest, `dR` 2.88e-02 from the correct slanted call)
+  and refuse post-fix; no eighth route among 22 candidates; the constant-tile
+  no-op holds to 1.97e-14 at conical incidence and on an anisotropic tile.
+  V2: the sign confirmed by five independent means (own ladder 4.52e-02 ->
+  6.30e-03 vs a flat 1.14; analytic film 3.4-4.1e-14 at three slants both
+  signs; `PMM2DStackPure` 275x; `RCWAStack` 58.6x); census 585 identical /
+  55 moved / 0 unexpected on both builds against both trees.  O2: re-derived on
+  134 solves / 229 interfaces -- refused rcond <= 4.78e-16, healthy >= 2.08e-05,
+  gap 10.6 decades, refused == broken 21/21, 110/110 bit-identical; no healthy
+  solve within two decades of the bar was found (grazing, dense superstrate,
+  high contrast, `n_orders` 11, near-Wood).  Three findings, none silent-wrong:
+  (D1, P2, PRE-EXISTING) `add_sheared_grating`'s `centre` is a LAB position
+  for the FIRST sheared layer and a FRAME position (`+ sum of the walks
+  above`) for later ones -- the cascade matches frame coefficients directly;
+  measured 142x against a hand-built staircase, a convergence statement; now
+  documented in `add_sheared_grating` and `add_layer`; (D2, P3) on the default
+  `factorization='auto'` a single in-plane sheared grating takes the covariant
+  cascade, which retains no per-order amplitudes, so the anchored surface is
+  reachable only on the factorizations that retain them; (D3, P4) a CONCRETE
+  (non-tracer) `jnp` constant cell is refused although it is a measured
+  no-op.  Durability: the O2 test's broken-side bar 1e-15 was a sample
+  property (the family reaches 4.78e-16) and is restated to 1e-13.  The screen
+  is free for unarmed callers and costs 1.10x-1.51x of the inverse at the
+  armed site (n = 66..722).
+
 ## [5.44.0] — 2026-09-10
 
 ### Added -- a NATIVE constant-shear SLANT for the PURE staggered 2-D PMM (roadmap Phase D)
