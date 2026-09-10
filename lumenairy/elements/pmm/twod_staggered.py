@@ -877,8 +877,17 @@ class Basis1D:
                     "Basis1D: walls must be STRICTLY increasing (a zero-width "
                     f"segment has no affine map), got {xb!r}.")
             frac = float(np.min(w)) / self.d
+            # The comparison carries a RELATIVE slack, and it is not
+            # fastidiousness: a caller who asks for EXACTLY the documented
+            # minimum computes it in floating point, and
+            # ``(0.28572 - 0.28452) / 1.2`` is 9.999999999999824e-04 -- 1.8e-16
+            # BELOW 1e-3.  Without the slack the documented boundary is a coin
+            # flip on the caller's own arithmetic, which is exactly the
+            # at-threshold shape ``docs/TESTING_STANDARDS.md`` calls S4.  The
+            # slack is 1e-9 relative: nine decades tighter than any real
+            # feature and nine decades looser than a rounding of the bar.
             refuse = bool(PMM2D_STAG_MIN_SEG_GUARD
-                          and frac < _STAG_MIN_SEG_FRAC)
+                          and frac < _STAG_MIN_SEG_FRAC * (1.0 - 1e-9))
             if _STAG_SEG_CENSUS is not None:
                 _STAG_SEG_CENSUS.append((self.d, int(xb.size - 1), self.M,
                                          frac, refuse))

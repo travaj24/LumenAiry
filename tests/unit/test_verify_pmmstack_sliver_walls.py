@@ -43,6 +43,7 @@ import pytest  # noqa: E402
 
 from lumenairy.elements.pmm import PMMStack  # noqa: E402
 from lumenairy.elements.pmm import stack as ps  # noqa: E402
+from lumenairy.elements.pmm import twod_staggered as _ts  # noqa: E402
 from lumenairy.elements.pmm._core import (  # noqa: E402
     _WALL_SNAP_DEADBAND,
     _pmm_union_grid,
@@ -557,11 +558,26 @@ def test_the_hybrid_has_no_union_grid_and_keeps_the_plain_warning():
 
 def test_the_mortar_carries_a_within_layer_sliver_without_a_silent_wrong_answer():
     """The claim the fix audit's S7 makes about the in-flight mortar work,
-    tested rather than assumed.  A caller CAN put two of one layer's own walls
-    1e-5 of a period apart through ``x_walls`` -- the exact configuration the
+    tested rather than assumed -- RESTATED 2026-09-11 for the round-2 contract.
+
+    ORIGINAL CLAIM, and it still holds: a caller can put two of one layer's own
+    walls close together through ``x_walls`` -- the exact configuration the
     shared 1-D union grid turns catastrophic at 1e-4 -- and on the per-layer
     mortar the answer stays on the exact ``d -> 0`` limit (the stripe vanishes)
-    and closes."""
+    and closes.  MEASURED at ``err/d`` = 0.46 (1e-3) and 0.34 (1e-5),
+    ``|R+T-1|`` <= 8e-7, both builds.
+
+    WHAT CHANGED.  ``docs/audits/FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md`` makes
+    a MINIMUM SEGMENT WIDTH a contract of the ``x_walls`` surface
+    (``_STAG_MIN_SEG_FRAC`` = 1e-3 of the period), because the SAME geometry
+    with the layer's NEIGHBOURS on other grids is energy-invisibly degraded --
+    a case this single-layer fixture cannot reach, since both its interfaces
+    are plain square matches against the half-spaces.  So the two readings
+    below the contract are now REFUSED rather than returned, and this test
+    keeps BOTH halves: the original numbers are re-measured with the guard
+    disarmed (the pre-round-2 arm, which is what the original claim was
+    about), and the refusal is asserted with it armed.
+    """
     def _nu(walls, M):
         tile = np.array([[_EH] * 3, [_EP] * 3, [_EH] * 3], dtype=complex)
         st = PMM2DStackPure(_P2, n_modes=M, n_orders=1,
@@ -593,13 +609,48 @@ def test_the_mortar_carries_a_within_layer_sliver_without_a_silent_wrong_answer(
     M = 5
     ref = _run(_uni(M))
     a0 = 0.2371
-    for d in (1e-3, 1e-5):
+
+    # (1) ABOVE the contract the behaviour is unchanged and the ORIGINAL
+    #     continuity claim is re-measured on the narrowest widths the guard
+    #     ACCEPTS.  MEASURED 2026-09-11, both builds: err/d = 0.481 / 0.440 /
+    #     0.430 at d = 1.5e-3 / 1.1e-3 / 1.0e-3 (the contract itself), with
+    #     |R+T-1| = 1.68e-06 / 8.80e-07 / 7.27e-07 -- i.e. the SAME 0.43-0.48
+    #     slope the pre-round-2 reading had, and the closure improving as the
+    #     stripe vanishes.  (At d = 1e-2 the stripe is a real feature again and
+    #     M = 5 leaves 3.9e-04 of closure, which is discretisation, not this
+    #     mechanism -- hence widths just above the bar.)
+    for d in (1.5e-3, 1.1e-3, 1.0e-3):
         r = _run(_nu([a0, a0 + d], M))
         e = float(max(np.abs(r[0] - ref[0]).max(), np.abs(r[1] - ref[1]).max()))
-        # continuity in d, and no theorem violation -- MEASURED 2026-09-11 at
-        # err/d = 0.46 (1e-3) and 0.34 (1e-5), |R+T-1| <= 8e-7, both builds.
         assert e <= 5.0 * d, (d, e)
         assert abs(r[2] - 1.0) < 1e-4, (d, r[2])
+
+    # (2) BELOW it the geometry is REFUSED at the grid's own entry point, by
+    #     name -- a stronger property than "not silent".
+    for d in (3e-4, 1e-5):
+        with pytest.raises(ValueError, match="minimum"):
+            _run(_nu([a0, a0 + d], M))
+
+    # (3) ... and the ORIGINAL readings are not lost: with the round-2 guard
+    #     disarmed (its fail-before switch) this fixture still tracks the
+    #     exact d -> 0 limit BELOW the contract too, which is what the
+    #     pre-round-2 claim said.  MEASURED 2026-09-11 at err/d = 0.35 (3e-4)
+    #     and 0.34 (1e-5), both builds -- the same slope as above the bar, so
+    #     the contract is refusing a geometry that this SINGLE-LAYER fixture
+    #     carries correctly, on purpose: Basis1D is built before it knows
+    #     whether it will be mortared.
+    prev = _ts.PMM2D_STAG_MIN_SEG_GUARD
+    _ts.PMM2D_STAG_MIN_SEG_GUARD = False
+    try:
+        for d in (3e-4, 1e-5):
+            r = _run(_nu([a0, a0 + d], M))
+            e = float(max(np.abs(r[0] - ref[0]).max(),
+                          np.abs(r[1] - ref[1]).max()))
+            assert e <= 5.0 * d, (d, e)
+            assert abs(r[2] - 1.0) < 1e-4, (d, r[2])
+    finally:
+        _ts.PMM2D_STAG_MIN_SEG_GUARD = prev
+    assert _ts.PMM2D_STAG_MIN_SEG_GUARD is True
 
 
 def test_the_mortars_within_layer_sliver_fails_LOUDLY_when_it_fails():
