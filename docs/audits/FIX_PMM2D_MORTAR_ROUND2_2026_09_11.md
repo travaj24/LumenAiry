@@ -233,6 +233,28 @@ near-coincident walls appear only in the integration mesh
 (`cond(C_bb^x)` measured CONSTANT at 9.43e+01), here the sliver IS a spectral
 element of one of the two grids.
 
+> **CORRECTION 2026-09-11 (round 3, DEFECTS V4 of
+> `VERIFY_PMM2D_MORTAR_ROUND2_2026_09_11.md`).**  Two of the exponents above
+> are restated; the arithmetic and the conclusion are unchanged.
+>
+> * **The E row's `~2.0` is the TWO-AXIS value.**  The exponent is
+>   **1.0 PER AXIS CARRYING THE SLIVER**: a fixture whose sliver sits on ONE
+>   axis (y walls identical on every layer) fits **1.010 at `M` = 4 and 1.006
+>   at `M` = 6**, against 1.995 / 1.994 on this doc's two-axis fixture --
+>   exactly twice.  So the E-row conditioning is `1/w` for a one-axis sliver
+>   and `1/w^2` for a two-axis one, and the fixture above carries the sliver on
+>   both axes.  The message text and the bar are unaffected (the bar is derived
+>   from ACCURACY, not from the exponent).
+> * **The CROSS-MASS exponents `C1_x` / `C2_x` are SATURATED and should not be
+>   read as measurements.**  On both fixtures the fitted operators reach the
+>   float64 ceiling (~3.6e+18) inside the fit window, and the fits disagree
+>   between `M` = 4 and `M` = 6 by 2.4x (2.939 / 1.224 on the one-axis fixture
+>   against 1.025 / 1.284 here).  Nothing in the fix rests on them.
+> * **The H row is FASTER than the E row on the same slot on both fixtures**
+>   (2.30 / 2.06 against 1.01 / 1.006 on the one-axis fixture; 3.218 / 3.003
+>   against 1.995 / 1.994 here) -- that claim reproduces.  Its exponent is
+>   BOUNDED, not pinned: the doc's own last rung sits at the same ceiling.
+
 ### 2.6 The SHARED-grid path CANNOT be driven into the band
 
 The verification could not finish its shared-lattice control.  It is settled
@@ -278,6 +300,32 @@ The INTEGER path is EXEMPT and that costs nothing: a uniform lattice's
 segments are all `d/N`, so reaching the bar needs `N > 1000`, i.e. `q >= 3000`
 at `M = 4` and a `2 q^2 = 1.8e+07`-dimension region eigenproblem.  The
 exemption is also what keeps gate N1's bit-identity claim unconditional.
+
+> **CORRECTION 2026-09-11 (round 3, DEFECTS V5 and V6 of
+> `VERIFY_PMM2D_MORTAR_ROUND2_2026_09_11.md`).**  Two properties of the
+> contract that this section leaves unstated, both confirmed by measurement:
+>
+> * **The bar is a pure PERIOD FRACTION.  There is no wavelength in it.**  On
+>   a 1 um period it refuses features below 0.8 nm, which is obviously right;
+>   on a 40 um period (a DOE or a large metasurface supercell) the SAME bar
+>   refuses a 40 nm feature, which is physically ordinary.  That is
+>   DEFENSIBLE -- the conditioning being guarded is a cross-grid projection on
+>   ONE period and is governed by `w/d` alone, which is why the spurious
+>   spectrum `|gamma| ~ c M (M+1) / (4 J)` carries no `k0` -- but a user with a
+>   large period will meet it and this doc did not say so.  Related: remedy (2)
+>   ("carry the fine feature on the SHARED lattice with an `N` that resolves
+>   it") needs `N >= 500 / 1000 / 2000 / 10000` for features of 2e-3 / 1e-3 /
+>   5e-4 / 1e-4 of the period, and the shared lattice's own segments are then
+>   `d/N`, i.e. the SAME width the per-layer path was refused for.  The remedy
+>   WORKS -- a uniform lattice's mortar is the identity, so the width is
+>   harmless there -- but the message reads as though the width itself were the
+>   problem, which it is not: the MORTAR is.
+> * **The contract fires at `PMM2DStackPure.solve()`, not at `add_layer`.**
+>   "Enforced where the grid is BUILT" is true of `Basis1D`, but `add_layer`
+>   only RECORDS the wall array; `Basis1D` is constructed when the stack is
+>   solved.  Measured: a 1e-4 grid is `add_layer`-ACCEPTED and `solve`-REFUSED,
+>   so a user building a 400-slice taper pays the whole build before the
+>   refusal.
 
 ### 3.2 THE BAR, both sides measured
 
@@ -502,6 +550,41 @@ reports an exactly-zero pivot as a `LinAlgWarning` and returns usable factors
 `-W error` the same condition arrives as an EXCEPTION.  `LinAlgWarning` is in
 the guard's `except` tuple so both paths end in the same named
 `_ConditioningError` rather than in a bare warning-turned-exception.
+
+> **CORRECTION 2026-09-11 (round 3, DEFECTS V1 and V3 of
+> `VERIFY_PMM2D_MORTAR_ROUND2_2026_09_11.md`).**  Two claims in S4.3/S4.4 are
+> withdrawn, and one of the three wirings above has been changed.  Full
+> account: `FIX_PMM2D_MORTAR_ROUND3_2026_09_11.md`.
+>
+> * **The `rcond` bar is NOT applied at `_interface_smatrix_general_mortar_2d`
+>   any more (DEFECT V1, P1).**  The 1e-12 bar was calibrated on the two
+>   IN-PLANE sites and applied unchanged to the third.  That site's operand is
+>   RANK-DEFICIENT BY CONSTRUCTION whenever one side of the interface is an
+>   in-plane region promoted to the generalized 6-tuple form by
+>   `_modes_as_general` -- measured: **100 % of the near-null right singular
+>   vector lies in the promoted side's block column**, at every `M`, on both
+>   builds -- so its healthy population runs **1.26e-14 .. 1.52e-04** over 28
+>   ordinary stacks and the bar sat INSIDE it.  Ordinary mixed in-plane /
+>   out-of-plane per-layer stacks were REFUSED from `n_modes` = 5 up,
+>   INCLUDING an out-of-plane layer next to a plain uniform spacer.  That site
+>   now takes its own decision on the RESIDUAL (`_MORTAR_RESID_REFUSE` = 1e-6,
+>   healthy 4.80e-15 .. 1.19e-13, broken 1.20e-01 .. 3.53e+01).  The two
+>   IN-PLANE sites are unchanged, bit for bit.
+> * **"The backstop earns its keep above `M ~ 6`, where a fixed width contract
+>   cannot follow" is REFUTED as a general claim (DEFECT V3, P3).**  The
+>   `MassH_A V_A` operator is built from the FIRST grid, so when the sliver
+>   sits on ONE axis in the LAST layer that operator is `delta`-INDEPENDENT
+>   (measured **1.384e+05 at every `delta` from 3e-1 to 1e-6**) and only the E
+>   row sees the sliver -- at exponent 1.0 per axis.  Measured on such a stack
+>   with the width contract lifted, NOTHING is refused down to
+>   `delta` = 1e-7 (`rcond(MassE_B W_B)` = 1.116e-10 at 1e-6, still 2 decades
+>   ABOVE the bar).  The statement is true on THIS section's fixture (a sliver
+>   on BOTH axes with patterned neighbours on both sides, so the sliver's grid
+>   does occupy the `A` slot) and false in general.  **The WIDTH CONTRACT is
+>   the only line against a sliver on the per-layer path**; the conditioning
+>   screen is a named-refusal surface for singular operands, not a second
+>   accuracy guard.  Nothing in D1 depends on this -- the width contract fires
+>   on all of these.
 
 ### 4.5 The `~1850` site -- LEFT UNGUARDED, and this is the measurement
 
