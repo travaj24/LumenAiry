@@ -27,12 +27,12 @@ README, and the JSON every table below is read from, on both builds).
 | **The defect** | Round 1 read super-unity on a passive stack as a theorem violation and, whenever a manufactured sliver was also present, ATTRIBUTED the violation to that sliver. Super-unity DETECTS but does not ATTRIBUTE: on a passive stack it is just as often ordinary under-convergence, and the wrong population reaches DOWN below the 1e-2 bar. Hence false positives at 17.0 % of one realistic parameter box AND false negatives at 8 in 660. |
 | **What ships** | An **ARBITER**. When a manufactured sliver is present on a provably passive stack AND the solve reads super-unity above a TRIGGER one decade below the warning bar, the library re-solves ONCE on the grid the `min_feature` it is about to prescribe would produce. If the super-unity VANISHES **and** the answer MOVES far past the geometric perturbation that snap describes -> the sliver caused it, REFUSE, and the message says what was measured. If it SURVIVES -> the sliver did not, RETURN under the plain super-unity warning, which now says so and names `degree` / `n_slices`. If the one solve cannot be run (keyed / dispersive materials) -> round 1's decision, unchanged. |
 | **False positives** | **110 / 648 -> 0 / 648** on the verification's own realistic staircase box, both builds. |
-| **False negatives** | **8 / 660 -> 4 / 660** on the verification's own two grids; the four that remain are exactly the rows whose super-unity is below the trigger, and the trigger cannot go lower without refusing correct solves (measured: 1 of 391 at 1e-4). |
+| **False negatives** | **8 / 660 -> 4 / 660** on the verification's own two grids; the four that remain are exactly the rows whose super-unity is below the trigger, and the trigger cannot go lower without sitting ON the correct population's own envelope (1.0979e-04 measured over 600 correct rows -- at 1e-4 the bar would carry 1.01x). |
 | **Passivity** | `_stack_provably_passive` now accepts any tensor whose ANTI-HERMITIAN part is positive semi-definite -- the whole liquid-crystal / birefringent class, lossless or lossy. Measured: the O-11 sliver on a 45-degree in-plane director, on an out-of-plane director and on a gyrotropic layer is now REFUSED where round 1 read `R+T` = 2.18 and only warned; a NON-Hermitian payload still keeps the behaviour it had. |
 | **Within-layer liners** | Never refused -- it is the geometry the caller asked for -- but WARNED with the mechanism and the per-layer / mortar / 2-D routes when the trigger super-unity is met and the owned cell's spurious-`\|q\|` predictor is past the stack's index ceiling by `_SLIVER_Q_EXCESS`. |
 | **Cost** | One extra solve, **0.20x** (Windows) / **0.27x** (WSL) of the solve it guards, paid ONLY on a stack that already carries a manufactured sliver, is provably passive, and reads super-unity above the trigger. Fires on **0 of 600** converged correct rows. |
 | **Bit-identity** | **39 / 39** -- the round-1 fix's 18 fixtures and the verification's 21 -- hashed against a read-only copy of the pre-round-2 tip `bb0527a`. |
-| **Tests** | `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (17), plus the round-1 file's margin test RESTATED as a decision test and the verification's V-1 pinning test re-pinned against the improvement. |
+| **Tests** | `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (18), plus the round-1 file's margin test RESTATED as a decision test and the verification's V-1 pinning test re-pinned against the improvement. |
 
 ---
 
@@ -102,18 +102,24 @@ Adding the 209 correct rows of `r1_populations.py` and `r2_falseneg.py`:
 **1.0979e-04 over 600 CORRECT rows**, so 1e-3 carries **9.11x**.  The ladder, scored two-sided on the same
 1,380 rows (r1 + r2 + r3):
 
-| trigger | wrong REFUSED | RIGHT refused (false positives) | wrong / grey RETURNED |
-|---|---|---|---|
-| 1e-2 (round 1's bar) | 770 / 777 | 0 / 600 | 7 / 3 |
-| 3e-3 | 772 / 777 | 0 / 600 | 5 / 3 |
-| **1e-3 (SHIPPED)** | **774 / 777** | **0 / 600** | **3 / 3** |
-| 3e-4 | 775 / 777 | 0 / 600 | 2 / 2 |
-| 1e-4 | 775 / 777 | **1 / 600** | 2 / 2 |
+| trigger | headroom over the 1.0979e-04 envelope | wrong REFUSED | RIGHT refused | wrong / grey RETURNED | RIGHT refused by the CLOSURE-ONLY arbiter |
+|---|---|---|---|---|---|
+| 1e-2 (round 1's bar) | 91.1x | 770 / 777 | 0 / 600 | 7 / 3 | 0 / 600 |
+| 3e-3 | 27.3x | 772 / 777 | 0 / 600 | 5 / 3 | 0 / 600 |
+| **1e-3 (SHIPPED)** | **9.11x** | **774 / 777** | **0 / 600** | **3 / 3** | 0 / 600 |
+| 3e-4 | 2.73x | 775 / 777 | 0 / 600 | 2 / 3 | 0 / 600 |
+| 1e-4 | **1.01x** | 775 / 777 | 0 / 600 | 2 / 3 | **1 / 600** |
 
-3e-4 would catch two more rows and is DECLINED: its headroom over the family
-envelope is 2.73x, not a decade, and rule 5 asks for the family's envelope.
-1e-4 is where correct solves start being refused, which is the measurement that
-makes the floor a property of the physics rather than a choice.
+Identical on both builds.  3e-4 would catch ONE more wrong row and is
+DECLINED: 2.73x is not a decade, and rule 5 asks for headroom over the
+FAMILY's envelope rather than over the sample that happens to have been
+scored.  At 1e-4 the bar sits ON that envelope (1.01x) -- the shipped
+two-criterion arbiter still holds the line there because the MOVE criterion
+catches what the trigger no longer does, but the closure-only form of the
+arbiter (the verification's own discriminator) already refuses a correct row,
+which is the concrete demonstration that the boundary is real and not a
+sampling artefact.  A guard whose bar sits on its population is the exact
+defect the verification raised against round 1.
 
 **The floor is not removable by any super-unity bar.**  The O-11 family's worst
 WRONG row on the three-fixture grid reads `R+T-1` = **-2.8048e-04** -- SUB-unity.
@@ -142,15 +148,23 @@ Measured over the **1,133 arbitrated rows** of all four grids (Windows):
 | **RIGHT** (n = 345) | 0 ... 1.2815e-01 | 0.1218 ... **26.58** |
 | **the bars** | **1e-5**: 6.5x above the wrong population, 3.9x below the truncation population's best (3.860e-05) | **100**: 3.76x above the correct population, 4.66x below the wrong one |
 
-**Why BOTH.** The closure criterion alone is the discriminator the verification
-measured (8/8 and 63/63) and it removes 93 of the 110 false positives -- but it
-re-admits **6** of them, whose truncation super-unity happens to land BELOW
-unity on the snapped grid, which the one-sided closure reads as "vanished".  A
-one-sided test is not optional: `R + T <= 1` is what the theorem says, and a
-passive stack with an absorbing substrate reads below unity legitimately.  The
-move criterion is what separates those 6, and it is not a new constant -- 100 is
-the `err > 100 delta` WRONG rule the round-1 fix, its verification and every
-probe in this campaign already classify with.
+**Why BOTH, and the ladder that shows it.** Scored on the 110 rows round 1
+refused although correct (`r4_falsepos.py`):
+
+| criterion | false positives left, Windows | WSL |
+|---|---|---|
+| round 1 (no arbiter) | **110** | **110** |
+| "the super-unity falls below the TRIGGER" -- the verification's own phrasing of its measured discriminator | **17** | **17** |
+| the shipped ONE-SIDED closure, `max(R+T) - 1 <= 1e-5` | **6** | **6** |
+| **that AND `move > 100 * w_wide` (SHIPPED)** | **0** | **0** |
+
+The closure test has to be ONE-SIDED -- `R + T <= 1` is what the theorem says,
+and a passive stack with an absorbing substrate reads below unity legitimately
+-- which is exactly why 6 rows survive it: their truncation super-unity happens
+to land BELOW unity on the snapped grid, and a one-sided test reads that as
+"vanished".  The move criterion is what separates those 6, and it is not a new
+constant: 100 is the `err > 100 delta` WRONG rule the round-1 fix, its
+verification and every probe in this campaign already classify with.
 
 With both: **0 false positives, 774 / 774 wrong rows attributed, 0 / 14 grey
 rows attributed.**
@@ -374,6 +388,7 @@ does fire the caller was already being told their answer is unreliable.
 | `solve_vs_wavelength` | the sweep never writes `stack._src`, so round 2 passes the sweep's own `(wl, angle)` EXPLICITLY. Asserted by spying on the probe: with a STALE `set_source(4e-07)` on the stack and a sweep at 8.5e-07, the arbiter is handed **[8.5e-07]** and the solve is REFUSED. Without the explicit `src` the re-solve would have run at a different physics. |
 | `solve_vs_wavelength`, DISPERSIVE | `provably_passive = False` (a callable `eps` cannot be resolved), so the geometric screen is never reached, the probe runs **0x**, and the solve RETURNS under the plain warning -- unchanged from round 1 |
 | `prepare().solve` | `set_source` is never required there, so `st._src` is unset; the arbiter is handed **[8.5e-07]** from the call and the solve is REFUSED with a measured attribution |
+| `solve_vs_wavelength` at **2 and 4 workers** | the verification could not check the guard raising from inside a thread pool. `_store` runs on the CALLING thread in both branches, so the arbiter's extra solve is a main-thread solve: measured, the sweep REFUSES identically at 1 / 2 / 4 workers with the probe handed `[8.5e-07]` each time, and a HEALTHY 2-wavelength sweep is probed **0x** and stays byte-identical across worker counts |
 | JAX / traced | `_stack_provably_passive` answers False on a traced payload, so the guard is inert by construction -- unchanged |
 
 ---
@@ -424,7 +439,7 @@ within-layer warning fires
 
 | file | tests | Windows | WSL |
 |---|---|---|---|
-| `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (new) | 17 | 26.10 s | 27.11 s |
+| `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (new) | 18 | 25.95 s | 26.64 s |
 | `tests/unit/test_fix_pmmstack_sliver_walls.py` (round 1, one test restated) | 19 | 17.52 s | 17.22 s |
 | `tests/unit/test_verify_pmmstack_sliver_walls.py` (verification, one test re-pinned) | 15 | 32.40 s | 30.78 s |
 
@@ -446,6 +461,7 @@ within-layer warning fires
 | `test_a_within_layer_sliver_is_warned_with_the_mechanism_never_refused` | V-6's warn-not-refuse contract and the routes the message must name |
 | `test_the_within_layer_warning_is_silent_on_ordinary_geometry` | the other side of it |
 | `test_the_sweep_arbitrates_at_its_own_wavelength_not_a_stale_set_source` | the sweep's explicit `src`, asserted by spying on the probe |
+| `test_the_sweep_arbitrates_the_same_way_at_any_worker_count` | the thread-pool sweep at 1 / 2 / 4 workers, plus the healthy sweep's byte-identity across worker counts |
 | `test_the_prepared_path_arbitrates_at_the_wavelength_it_was_given` | the same for `prepare()` |
 | `test_the_conical_path_carries_the_arbiter_too` | the conical map, two-sided, including the row that is below round 1's bar |
 | `test_the_fail_before_switch_still_disarms_everything_round_2_added` | `PMM_SLIVER_GUARD = False` |
@@ -483,7 +499,7 @@ the number where it was -- which is why the arbiter refuses to call it the cure.
 
 | | |
 |---|---|
-| **R2-A -- the floor is the theorem, and it is one-sided** | Four of the verification's eight rows remain returned because their super-unity is below the trigger, and the trigger cannot go lower without refusing correct solves (measured: 1 of 391 at 1e-4). Worse, the three-fixture grid contains a WRONG row at `R+T-1` = **-2.8048e-04** -- SUB-unity -- which no super-unity bar can ever see. A detector for that band needs something this campaign still has not found. |
+| **R2-A -- the floor is the theorem, and it is one-sided** | Four of the verification's eight rows remain returned because their super-unity is below the trigger, and the trigger cannot go lower without sitting ON the correct population's own envelope (1.01x at 1e-4, where the closure-only arbiter already refuses a correct row). Worse, the three-fixture grid contains a WRONG row at `R+T-1` = **-2.8048e-04** -- SUB-unity -- which no super-unity bar can ever see. A detector for that band needs something this campaign still has not found. |
 | **R2-B -- the within-layer arm inherits the same floor** | At a liner of 1e-6 of a period the answer is already 1.06e-03 wrong while `R+T` reads 0.9992. The arm fires only above the trigger, so that width is silent. |
 | **R2-C -- the arbiter is inert on dispersive / keyed stacks** | A callable or unresolved `eps` makes `_stack_provably_passive` answer False, so those stacks never reach the screen at all -- they keep the plain warning, which is round 1's behaviour and pre-round-1's. Materialising the callables for the probe is possible and was not done. |
 | **R2-D -- `move` is compared to a GEOMETRIC width** | `move > 100 * w_wide` compares an efficiency difference with a period fraction, i.e. it silently assumes `dR/dx = O(1)`. That is the same shape of derivation the verification refuted for the round-1 remedy bar (V-4, measured slopes 1.04 / 1.15 / 4.44). Here it is measured rather than derived -- the two populations sit at <= 26.58 and >= 466.2 across four grids and three fixtures -- but a device with `dR/dx` above ~50 could in principle move a correct answer past the bar. No such device was found; a resonant fixture would be the way to attack it. |
@@ -502,11 +518,11 @@ All with `PYTHONPATH` on the worktree and one BLAS thread.
 
 | run | Windows | WSL |
 |---|---|---|
-| `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (new) | **17 passed**, 26.10 s | **17 passed**, 27.11 s |
+| `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (new) | **18 passed**, 25.95 s | **18 passed**, 26.64 s |
 | `tests/unit/test_fix_pmmstack_sliver_walls.py` (round 1) | **19 passed**, 17.52 s | **19 passed**, 17.22 s |
 | `tests/unit/test_verify_pmmstack_sliver_walls.py` (verification) | **15 passed**, 32.40 s | **15 passed**, 30.78 s |
 | `tests/unit/test_m1_conditioning_guard.py` | **27 passed**, 4.9 s | **27 passed**, 4.85 s |
-| all four in one process | **78 passed**, 76.85 s | **78 passed**, 84.94 s |
+| all four in one process | **79 passed**, 73.48 s | **79 passed**, 78.58 s |
 | every test file importing `PMMStack` (`grep tests/ --include='*.py' -l PMMStack`, **42** files incl. this round's), slow markers included | see below | -- |
 | `ruff check lumenairy/ tests/ validation/probe_pmmstack_sliver_round2/` | **All checks passed** | -- |
 
@@ -537,7 +553,7 @@ Every number in S3 and S4 is IDENTICAL on the two builds to the digits printed:
 | `move / w_wide`, WRONG population | 466.2 ... 6.04e+07 | 466.2 ... 6.04e+07 |
 | CORRECT envelope over 600 rows | 1.0979e-04 | 1.0979e-04 |
 | false positives, round 1 -> round 2 | 110 / 648 -> **0 / 648** | 110 / 648 -> **0 / 648** |
-| closure criterion ALONE would leave | 17 | 17 |
+| "super-unity below the trigger" alone would leave | 17 | 17 |
 | false negatives, round 1 -> round 2 | 8 / 660 -> **4 / 660** | 8 / 660 -> **4 / 660** |
 | arbiter fired on correct rows of the under-converged box | 345 / 634, 11 ms mean | 345 / 634, 10 ms mean |
 | bit-identity, 39 fixtures vs the pre-round-2 tip | **39 / 39** | **39 / 39** |

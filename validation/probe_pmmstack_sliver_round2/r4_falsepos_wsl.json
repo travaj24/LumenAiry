@@ -23,6 +23,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -47,6 +48,7 @@
    "move_both": 0.003451255475342252,
    "move0": 0.0004528247958245357,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -72,6 +74,7 @@
    "move_both": 0.0014044330657755934,
    "move0": 0.0006331587528784488,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -97,6 +100,7 @@
    "move_both": 0.013008746951293663,
    "move0": 0.008811883238821594,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -122,6 +126,7 @@
    "move_both": 0.005229323486240556,
    "move0": 0.0032803869105152983,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -147,6 +152,7 @@
    "move_both": 0.002957819148784749,
    "move0": 0.0024320291733607724,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -167,6 +173,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -191,6 +198,7 @@
    "move_both": 0.004441705811483676,
    "move0": 0.004441705811483676,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -216,6 +224,7 @@
    "move_both": 0.0012335653226304023,
    "move0": 0.0006869258502091857,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -241,6 +250,7 @@
    "move_both": 0.011367005909197148,
    "move0": 0.011367005909197148,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -266,6 +276,7 @@
    "move_both": 0.005666222763225592,
    "move0": 0.005666222763225592,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -291,6 +302,7 @@
    "move_both": 0.0017617571051708296,
    "move0": 0.0012848853937329485,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -311,6 +323,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -335,6 +348,7 @@
    "move_both": 0.0015751258307254434,
    "move0": 0.0015751258307254434,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -360,6 +374,7 @@
    "move_both": 0.0004534901188392726,
    "move0": 0.0004534901188392726,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -385,6 +400,7 @@
    "move_both": 0.019016190005043454,
    "move0": 0.019016190005043454,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -410,6 +426,7 @@
    "move_both": 0.005976044587530427,
    "move0": 0.005976044587530427,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -435,6 +452,7 @@
    "move_both": 0.001748106763340307,
    "move0": 0.001748106763340307,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -455,6 +473,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -479,6 +498,7 @@
    "move_both": 0.0019893400605136558,
    "move0": 0.0019893400605136558,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -504,6 +524,7 @@
    "move_both": 0.0006000846761444745,
    "move0": 0.0006000846761444745,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -529,6 +550,7 @@
    "move_both": 0.0023928827853000323,
    "move0": 0.0006991582726034173,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -554,6 +576,7 @@
    "move_both": 0.0007994123949621457,
    "move0": 0.00029908788107119166,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -579,6 +602,7 @@
    "move_both": 0.00024375612023944115,
    "move0": 9.611897065847641e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -599,6 +623,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -618,6 +643,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -637,6 +663,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -656,6 +683,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -675,6 +703,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -694,6 +723,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -713,6 +743,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -732,6 +763,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -751,6 +783,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -770,6 +803,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -789,6 +823,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -808,6 +843,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -827,6 +863,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -851,6 +888,7 @@
    "move_both": 0.0013899580686427548,
    "move0": 0.0011909238146800005,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -876,6 +914,7 @@
    "move_both": 0.00043060531852628925,
    "move0": 0.00037081226207191786,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -901,6 +940,7 @@
    "move_both": 0.012984334139548248,
    "move0": 0.012984334139548248,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -926,6 +966,7 @@
    "move_both": 0.0043893601348957145,
    "move0": 0.0043893601348957145,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -951,6 +992,7 @@
    "move_both": 0.0013225954294829867,
    "move0": 0.0013225954294829867,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -971,6 +1013,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -995,6 +1038,7 @@
    "move_both": 0.002529695642751073,
    "move0": 0.002529695642751073,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1020,6 +1064,7 @@
    "move_both": 0.0007514587452844834,
    "move0": 0.0007514587452844834,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1045,6 +1090,7 @@
    "move_both": 0.0033204175174585404,
    "move0": 0.00290199989499762,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1070,6 +1116,7 @@
    "move_both": 0.0011138023524277785,
    "move0": 0.0008859232871385458,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1095,6 +1142,7 @@
    "move_both": 0.0003862972766727297,
    "move0": 0.000256803269201078,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1115,6 +1163,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1139,6 +1188,7 @@
    "move_both": 0.0012984809089455762,
    "move0": 0.0012984809089455762,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1164,6 +1214,7 @@
    "move_both": 0.00037313858404597333,
    "move0": 0.00037313858404597333,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1189,6 +1240,7 @@
    "move_both": 0.021938153732077526,
    "move0": 0.021938153732077526,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1214,6 +1266,7 @@
    "move_both": 0.007443193269908055,
    "move0": 0.007443193269908055,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1239,6 +1292,7 @@
    "move_both": 0.0022350391982401407,
    "move0": 0.0022350391982401407,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1259,6 +1313,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1283,6 +1338,7 @@
    "move_both": 0.0017964463227717609,
    "move0": 0.0017964463227717609,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1308,6 +1364,7 @@
    "move_both": 0.0005419774726674875,
    "move0": 0.0005419774726674875,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1333,6 +1390,7 @@
    "move_both": 0.002433111191705001,
    "move0": 0.002338401568618531,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1358,6 +1416,7 @@
    "move_both": 0.0008442759418712809,
    "move0": 0.0008284447028522601,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1383,6 +1442,7 @@
    "move_both": 0.000256034170009134,
    "move0": 0.000253126425706629,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1403,6 +1463,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1422,6 +1483,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1441,6 +1503,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1460,6 +1523,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1479,6 +1543,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1498,6 +1563,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1517,6 +1583,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1536,6 +1603,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1555,6 +1623,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1574,6 +1643,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1593,6 +1663,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1612,6 +1683,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1631,6 +1703,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1655,6 +1728,7 @@
    "move_both": 0.0010622912536617513,
    "move0": 0.0010622912536617513,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1680,6 +1754,7 @@
    "move_both": 0.0009298665222037573,
    "move0": 0.00032936472797107097,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1705,6 +1780,7 @@
    "move_both": 0.009503733162116612,
    "move0": 0.009503733162116612,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1730,6 +1806,7 @@
    "move_both": 0.0032146519740516855,
    "move0": 0.0032146519740516855,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1755,6 +1832,7 @@
    "move_both": 0.0009687613509481441,
    "move0": 0.0009687613509481441,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1775,6 +1853,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1799,6 +1878,7 @@
    "move_both": 0.0013205378677486612,
    "move0": 0.0013205378677486612,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1824,6 +1904,7 @@
    "move_both": 0.0005139572245087013,
    "move0": 0.0003885853960093888,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1849,6 +1930,7 @@
    "move_both": 0.0017407615440416802,
    "move0": 0.0003659336364943977,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1874,6 +1956,7 @@
    "move_both": 0.000579881816397676,
    "move0": 0.00020714047097125654,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1899,6 +1982,7 @@
    "move_both": 0.0006492815778338561,
    "move0": 7.117695961966763e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1919,6 +2003,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -1943,6 +2028,7 @@
    "move_both": 0.0009784162801780866,
    "move0": 0.0008209379869082989,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1968,6 +2054,7 @@
    "move_both": 0.0007683442957431442,
    "move0": 0.00023618453875473566,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -1993,6 +2080,7 @@
    "move_both": 0.011723866225137325,
    "move0": 0.011723866225137325,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2018,6 +2106,7 @@
    "move_both": 0.0042733433367188045,
    "move0": 0.0042733433367188045,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2043,6 +2132,7 @@
    "move_both": 0.0013176334447909666,
    "move0": 0.0013176334447909666,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2063,6 +2153,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2087,6 +2178,7 @@
    "move_both": 0.001109325512847259,
    "move0": 0.001109325512847259,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2112,6 +2204,7 @@
    "move_both": 0.00033505639574682444,
    "move0": 0.00033505639574682444,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2137,6 +2230,7 @@
    "move_both": 0.0025771490506584227,
    "move0": 0.0025771490506584227,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2162,6 +2256,7 @@
    "move_both": 0.0008627547763123689,
    "move0": 0.0008627547763123689,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2187,6 +2282,7 @@
    "move_both": 0.00025827109649578794,
    "move0": 0.00025827109649578794,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2207,6 +2303,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2231,6 +2328,7 @@
    "move_both": 0.001561386879971205,
    "move0": 0.001561386879971205,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2256,6 +2354,7 @@
    "move_both": 0.0004556047998247603,
    "move0": 0.0004556047998247603,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2276,6 +2375,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2295,6 +2395,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2314,6 +2415,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2333,6 +2435,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2357,6 +2460,7 @@
    "move_both": 0.00043053732594056093,
    "move0": 0.00043053732594056093,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2382,6 +2486,7 @@
    "move_both": 0.00013143023631245754,
    "move0": 0.00013143023631245754,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2402,6 +2507,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2421,6 +2527,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2440,6 +2547,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2459,6 +2567,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2483,6 +2592,7 @@
    "move_both": 0.0018499527571646836,
    "move0": 0.00038048930458056685,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2508,6 +2618,7 @@
    "move_both": 0.0005451019006237588,
    "move0": 4.537568717266627e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2533,6 +2644,7 @@
    "move_both": 0.015768586004487856,
    "move0": 0.01074409991241676,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2558,6 +2670,7 @@
    "move_both": 0.0046442711500520595,
    "move0": 0.0023274972965550145,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2583,6 +2696,7 @@
    "move_both": 0.0013271679635280115,
    "move0": 0.0005719284447225359,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2603,6 +2717,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2627,6 +2742,7 @@
    "move_both": 0.00032473811754469596,
    "move0": 0.000290970359694942,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2652,6 +2768,7 @@
    "move_both": 0.0002006018167579897,
    "move0": 8.053384750461579e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2677,6 +2794,7 @@
    "move_both": 0.0024424931439620103,
    "move0": 0.0011780360360599262,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2702,6 +2820,7 @@
    "move_both": 0.0006812013329081101,
    "move0": 0.0005358007611465654,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2727,6 +2846,7 @@
    "move_both": 0.00020818612894372632,
    "move0": 0.00016914215628827112,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2747,6 +2867,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2771,6 +2892,7 @@
    "move_both": 0.001728478498566055,
    "move0": 0.001728478498566055,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2796,6 +2918,7 @@
    "move_both": 0.0005377665907252416,
    "move0": 0.0005377665907252416,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2821,6 +2944,7 @@
    "move_both": 0.005292516683265247,
    "move0": 0.0029556852916020615,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2846,6 +2970,7 @@
    "move_both": 0.001703191681122429,
    "move0": 0.0009423145579476877,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2871,6 +2996,7 @@
    "move_both": 0.00048073371673218457,
    "move0": 0.000276587291768271,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2891,6 +3017,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -2915,6 +3042,7 @@
    "move_both": 0.0005360745736434636,
    "move0": 0.0005360745736434636,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2940,6 +3068,7 @@
    "move_both": 0.0001557602282447057,
    "move0": 0.0001557602282447057,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2965,6 +3094,7 @@
    "move_both": 0.0009107366099879929,
    "move0": 0.0005166732576344923,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -2990,6 +3120,7 @@
    "move_both": 0.000306216748047497,
    "move0": 0.00023064268312422698,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3015,6 +3146,7 @@
    "move_both": 9.203777448915998e-05,
    "move0": 7.546047376494336e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3035,6 +3167,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3059,6 +3192,7 @@
    "move_both": 0.0009737162194537463,
    "move0": 0.0009118063402894228,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3084,6 +3218,7 @@
    "move_both": 0.0002913946390659117,
    "move0": 0.0002780483706290582,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3109,6 +3244,7 @@
    "move_both": 0.005574746688831511,
    "move0": 0.005574746688831511,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3134,6 +3270,7 @@
    "move_both": 0.0021975323156104842,
    "move0": 0.0021975323156104842,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3159,6 +3296,7 @@
    "move_both": 0.0006956394212805916,
    "move0": 0.0006956394212805916,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3179,6 +3317,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3198,6 +3337,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3222,6 +3362,7 @@
    "move_both": 0.00016872997722083838,
    "move0": 0.0001469153635872411,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3242,6 +3383,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3261,6 +3403,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3280,6 +3423,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3299,6 +3443,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3323,6 +3468,7 @@
    "move_both": 0.0018093651476834768,
    "move0": 0.0011278765039439698,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3348,6 +3494,7 @@
    "move_both": 0.0005311312825299515,
    "move0": 0.00038155100782566453,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3373,6 +3520,7 @@
    "move_both": 0.017560448368979957,
    "move0": 0.014716542965592994,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3398,6 +3546,7 @@
    "move_both": 0.005357708042955017,
    "move0": 0.0031899989072609047,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3423,6 +3572,7 @@
    "move_both": 0.0015414103446885624,
    "move0": 0.0007632451956396391,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3443,6 +3593,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3467,6 +3618,7 @@
    "move_both": 0.0002587425987569071,
    "move0": 0.00018902224992656258,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3492,6 +3644,7 @@
    "move_both": 0.00013925915705431018,
    "move0": 5.131504286493005e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3517,6 +3670,7 @@
    "move_both": 0.002759559502778175,
    "move0": 0.002759559502778175,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3542,6 +3696,7 @@
    "move_both": 0.0008179158590086999,
    "move0": 0.0008179158590086999,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3567,6 +3722,7 @@
    "move_both": 0.00023590100833204009,
    "move0": 0.00023590100833204009,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3587,6 +3743,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3611,6 +3768,7 @@
    "move_both": 0.0014730770944098026,
    "move0": 0.0014730770944098026,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3636,6 +3794,7 @@
    "move_both": 0.00045716603204948303,
    "move0": 0.00045716603204948303,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3661,6 +3820,7 @@
    "move_both": 0.004740304431083642,
    "move0": 0.0020298739028152823,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3686,6 +3846,7 @@
    "move_both": 0.0014606234708122168,
    "move0": 0.00047999768452966496,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3711,6 +3872,7 @@
    "move_both": 0.0004170500347159267,
    "move0": 0.00012285481991769487,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3731,6 +3893,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3755,6 +3918,7 @@
    "move_both": 0.00031754251262638977,
    "move0": 0.00031754251262638977,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3780,6 +3944,7 @@
    "move_both": 9.166915447900159e-05,
    "move0": 9.166915447900159e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3805,6 +3970,7 @@
    "move_both": 0.0010603505724363638,
    "move0": 0.0010603505724363638,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3830,6 +3996,7 @@
    "move_both": 0.0004011600789166625,
    "move0": 0.0004011600789166625,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3855,6 +4022,7 @@
    "move_both": 0.0001252172119311501,
    "move0": 0.0001252172119311501,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3875,6 +4043,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -3899,6 +4068,7 @@
    "move_both": 0.000718305575096001,
    "move0": 0.0006115906599720722,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3924,6 +4094,7 @@
    "move_both": 0.00021282144275858172,
    "move0": 0.00018710212773631607,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3949,6 +4120,7 @@
    "move_both": 0.00621066535375181,
    "move0": 0.00621066535375181,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3974,6 +4146,7 @@
    "move_both": 0.0022249171626178565,
    "move0": 0.0022249171626178565,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -3999,6 +4172,7 @@
    "move_both": 0.000681969221154044,
    "move0": 0.000681969221154044,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4019,6 +4193,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4038,6 +4213,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4057,6 +4233,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4076,6 +4253,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4095,6 +4273,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4114,6 +4293,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4133,6 +4313,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4157,6 +4338,7 @@
    "move_both": 0.0011359431766357897,
    "move0": 0.0011359431766357897,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4182,6 +4364,7 @@
    "move_both": 0.0003522225418423064,
    "move0": 0.0003522225418423064,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4207,6 +4390,7 @@
    "move_both": 0.009725578133846002,
    "move0": 0.008923678948519087,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4232,6 +4416,7 @@
    "move_both": 0.003078448296691804,
    "move0": 0.0018111512229029847,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4257,6 +4442,7 @@
    "move_both": 0.0008908152602051349,
    "move0": 0.00039665136988953353,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4277,6 +4463,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4301,6 +4488,7 @@
    "move_both": 0.00012178960292708041,
    "move0": 8.904803772202818e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4326,6 +4514,7 @@
    "move_both": 6.543820540604603e-05,
    "move0": 2.3820265418250663e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4351,6 +4540,7 @@
    "move_both": 0.0017187471006891736,
    "move0": 0.001399050710473082,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4376,6 +4566,7 @@
    "move_both": 0.0004018142274661504,
    "move0": 0.000392161935404034,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4401,6 +4592,7 @@
    "move_both": 0.00011323202524216036,
    "move0": 0.00011323202524216036,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4421,6 +4613,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4445,6 +4638,7 @@
    "move_both": 0.0007272508958856561,
    "move0": 0.0007272508958856561,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4470,6 +4664,7 @@
    "move_both": 0.00022590133692712566,
    "move0": 0.00022590133692712566,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4495,6 +4690,7 @@
    "move_both": 0.003743550720665123,
    "move0": 0.003743550720665123,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4520,6 +4716,7 @@
    "move_both": 0.0010144962583512607,
    "move0": 0.0010144962583512607,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4545,6 +4742,7 @@
    "move_both": 0.0002790897721309804,
    "move0": 0.0002790897721309804,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4565,6 +4763,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4584,6 +4783,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4603,6 +4803,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4627,6 +4828,7 @@
    "move_both": 0.0006096818735341625,
    "move0": 0.0003321168418084497,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4652,6 +4854,7 @@
    "move_both": 0.0002110802452155447,
    "move0": 0.00014681796710802608,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4677,6 +4880,7 @@
    "move_both": 6.337639597286948e-05,
    "move0": 4.791508102475195e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4697,6 +4901,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4721,6 +4926,7 @@
    "move_both": 0.0004199923818534179,
    "move0": 0.00026127032400946604,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4746,6 +4952,7 @@
    "move_both": 0.00012342374919960264,
    "move0": 7.993988896837223e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4771,6 +4978,7 @@
    "move_both": 0.0034693907160588955,
    "move0": 0.0034693907160588955,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4796,6 +5004,7 @@
    "move_both": 0.001150340637195324,
    "move0": 0.001150340637195324,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4821,6 +5030,7 @@
    "move_both": 0.0003442794399163285,
    "move0": 0.0003442794399163285,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -4841,6 +5051,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4860,6 +5071,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4879,6 +5091,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4898,6 +5111,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4917,6 +5131,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4936,6 +5151,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4955,6 +5171,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -4979,6 +5196,7 @@
    "move_both": 0.003984595599534624,
    "move0": 0.00023380274413770108,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5004,6 +5222,7 @@
    "move_both": 0.001650645927531575,
    "move0": 0.0008081268204092606,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5029,6 +5248,7 @@
    "move_both": 0.012043462941301264,
    "move0": 0.012043462941301264,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5054,6 +5274,7 @@
    "move_both": 0.005514779497378032,
    "move0": 0.004968657537187282,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5079,6 +5300,7 @@
    "move_both": 0.0031026521239345198,
    "move0": 0.0028003213176985287,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5099,6 +5321,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5123,6 +5346,7 @@
    "move_both": 0.0039160422843325556,
    "move0": 0.0037133850013856273,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5148,6 +5372,7 @@
    "move_both": 0.001507046668566582,
    "move0": 0.00034162429571898967,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5173,6 +5398,7 @@
    "move_both": 0.010444850859677057,
    "move0": 0.010444850859677057,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5198,6 +5424,7 @@
    "move_both": 0.0049426867006281405,
    "move0": 0.0049426867006281405,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5223,6 +5450,7 @@
    "move_both": 0.0015025949501909046,
    "move0": 0.0011236677292314479,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5243,6 +5471,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5267,6 +5496,7 @@
    "move_both": 0.0015212804659425205,
    "move0": 0.0015212804659425205,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5292,6 +5522,7 @@
    "move_both": 0.000439116157511632,
    "move0": 0.000439116157511632,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5317,6 +5548,7 @@
    "move_both": 0.01630854512707902,
    "move0": 0.01630854512707902,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5342,6 +5574,7 @@
    "move_both": 0.005200770962300316,
    "move0": 0.005200770962300316,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5367,6 +5600,7 @@
    "move_both": 0.0015306113775471752,
    "move0": 0.0015306113775471752,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5387,6 +5621,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5411,6 +5646,7 @@
    "move_both": 0.0018128992157865342,
    "move0": 0.0018128992157865342,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5436,6 +5672,7 @@
    "move_both": 0.0005466699741991099,
    "move0": 0.0005466699741991099,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5461,6 +5698,7 @@
    "move_both": 0.0023574189296096115,
    "move0": 0.0006721677544315185,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5486,6 +5724,7 @@
    "move_both": 0.0007545508686217506,
    "move0": 0.00027902612499142165,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5511,6 +5750,7 @@
    "move_both": 0.00022053433327506866,
    "move0": 8.888387512129281e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5531,6 +5771,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5550,6 +5791,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5569,6 +5811,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5588,6 +5831,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5607,6 +5851,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5626,6 +5871,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5645,6 +5891,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5664,6 +5911,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5683,6 +5931,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5702,6 +5951,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5721,6 +5971,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5740,6 +5991,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5759,6 +6011,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5783,6 +6036,7 @@
    "move_both": 0.0015945162758340334,
    "move0": 0.0011594437900183108,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5808,6 +6062,7 @@
    "move_both": 0.000493554395136736,
    "move0": 0.0003615743684974859,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5833,6 +6088,7 @@
    "move_both": 0.014510208084972553,
    "move0": 0.014510208084972553,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5858,6 +6114,7 @@
    "move_both": 0.004886784937764843,
    "move0": 0.004886784937764843,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5883,6 +6140,7 @@
    "move_both": 0.0014705458985120323,
    "move0": 0.0014705458985120323,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5903,6 +6161,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -5927,6 +6186,7 @@
    "move_both": 0.002372903239613644,
    "move0": 0.002372903239613644,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5952,6 +6212,7 @@
    "move_both": 0.00070325566021745,
    "move0": 0.00070325566021745,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -5977,6 +6238,7 @@
    "move_both": 0.002917498076666303,
    "move0": 0.002917498076666303,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6002,6 +6264,7 @@
    "move_both": 0.0008823203413939884,
    "move0": 0.0008649704228351762,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6027,6 +6290,7 @@
    "move_both": 0.0003769766933399482,
    "move0": 0.0002475904490527592,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6047,6 +6311,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6071,6 +6336,7 @@
    "move_both": 0.001386048078343749,
    "move0": 0.001386048078343749,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6096,6 +6362,7 @@
    "move_both": 0.00039950644548947256,
    "move0": 0.00039950644548947256,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6121,6 +6388,7 @@
    "move_both": 0.018980863209268117,
    "move0": 0.018980863209268117,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6146,6 +6414,7 @@
    "move_both": 0.006407590217406389,
    "move0": 0.006407590217406389,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6171,6 +6440,7 @@
    "move_both": 0.001920964336255493,
    "move0": 0.001920964336255493,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6191,6 +6461,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6215,6 +6486,7 @@
    "move_both": 0.0016893539862875562,
    "move0": 0.0016893539862875562,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6240,6 +6512,7 @@
    "move_both": 0.0005096806302268275,
    "move0": 0.0005096806302268275,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6265,6 +6538,7 @@
    "move_both": 0.0020131593622812194,
    "move0": 0.001647075374614726,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6290,6 +6564,7 @@
    "move_both": 0.0007005017815338854,
    "move0": 0.0005896092041552947,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6315,6 +6590,7 @@
    "move_both": 0.00021250249671203592,
    "move0": 0.00018065014931978318,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6335,6 +6611,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6354,6 +6631,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6373,6 +6651,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6392,6 +6671,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6411,6 +6691,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6430,6 +6711,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6449,6 +6731,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6468,6 +6751,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6487,6 +6771,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6506,6 +6791,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6525,6 +6811,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6544,6 +6831,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6563,6 +6851,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6587,6 +6876,7 @@
    "move_both": 0.0010744929124348879,
    "move0": 0.0010744929124348879,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6612,6 +6902,7 @@
    "move_both": 0.000951274380010329,
    "move0": 0.00033359721139480936,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6637,6 +6928,7 @@
    "move_both": 0.010356348420180628,
    "move0": 0.010356348420180628,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6662,6 +6954,7 @@
    "move_both": 0.003485962398294018,
    "move0": 0.003485962398294018,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6687,6 +6980,7 @@
    "move_both": 0.001048478680856113,
    "move0": 0.001048478680856113,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6707,6 +7001,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6731,6 +7026,7 @@
    "move_both": 0.001280087373581873,
    "move0": 0.001280087373581873,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6756,6 +7052,7 @@
    "move_both": 0.000514969491420954,
    "move0": 0.0003760381244425348,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6781,6 +7078,7 @@
    "move_both": 0.0015030034103323334,
    "move0": 0.00030956032292583924,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6806,6 +7104,7 @@
    "move_both": 0.0005063081450144705,
    "move0": 0.00019054495077452938,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6831,6 +7130,7 @@
    "move_both": 0.0006655729029375335,
    "move0": 6.647200384291008e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6851,6 +7151,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -6875,6 +7176,7 @@
    "move_both": 0.0010111787650670216,
    "move0": 0.0009231830959143261,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6900,6 +7202,7 @@
    "move_both": 0.0007819294845370882,
    "move0": 0.0002661221180565443,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6925,6 +7228,7 @@
    "move_both": 0.01104311486084475,
    "move0": 0.01104311486084475,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6950,6 +7254,7 @@
    "move_both": 0.003980009979878241,
    "move0": 0.003980009979878241,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6975,6 +7280,7 @@
    "move_both": 0.001221852660927114,
    "move0": 0.001221852660927114,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -6995,6 +7301,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7019,6 +7326,7 @@
    "move_both": 0.001056952823431656,
    "move0": 0.001056952823431656,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7044,6 +7352,7 @@
    "move_both": 0.00031923917786635947,
    "move0": 0.00031923917786635947,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7069,6 +7378,7 @@
    "move_both": 0.0017609382438112248,
    "move0": 0.0016700856191177449,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7094,6 +7404,7 @@
    "move_both": 0.0005960793662096731,
    "move0": 0.0005676177079927403,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7119,6 +7430,7 @@
    "move_both": 0.00020470545400002108,
    "move0": 0.00017061853818411965,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7139,6 +7451,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7163,6 +7476,7 @@
    "move_both": 0.0014667057590925792,
    "move0": 0.0014667057590925792,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7188,6 +7502,7 @@
    "move_both": 0.0004246383004001819,
    "move0": 0.0004246383004001819,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7208,6 +7523,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7227,6 +7543,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7246,6 +7563,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7265,6 +7583,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7289,6 +7608,7 @@
    "move_both": 0.0004190919479548638,
    "move0": 0.0004190919479548638,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7314,6 +7634,7 @@
    "move_both": 0.00012810797428253196,
    "move0": 0.00012810797428253196,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7334,6 +7655,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7353,6 +7675,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7377,6 +7700,7 @@
    "move_both": 0.00019905781278795054,
    "move0": 0.00019905781278795054,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7397,6 +7721,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7421,6 +7746,7 @@
    "move_both": 0.0016568904656528716,
    "move0": 0.0006972406365777228,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7446,6 +7772,7 @@
    "move_both": 0.0004710489742069113,
    "move0": 0.00014353641089503988,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7471,6 +7798,7 @@
    "move_both": 0.014956914738856242,
    "move0": 0.01250319142758649,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7496,6 +7824,7 @@
    "move_both": 0.004560690242735435,
    "move0": 0.003066411160403848,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7521,6 +7850,7 @@
    "move_both": 0.0013192475081759691,
    "move0": 0.0008044895710197508,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7541,6 +7871,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7565,6 +7896,7 @@
    "move_both": 0.00032060653587639987,
    "move0": 0.00032060653587639987,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7590,6 +7922,7 @@
    "move_both": 0.0001651786888470033,
    "move0": 8.99604945321375e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7615,6 +7948,7 @@
    "move_both": 0.002186888863449636,
    "move0": 0.00040886245421978273,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7640,6 +7974,7 @@
    "move_both": 0.00059999726518601,
    "move0": 0.00027094061482313414,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7665,6 +8000,7 @@
    "move_both": 0.0001859960928366493,
    "move0": 9.013656085632427e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7685,6 +8021,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7709,6 +8046,7 @@
    "move_both": 0.001552652783567754,
    "move0": 0.001552652783567754,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7734,6 +8072,7 @@
    "move_both": 0.0004847481267868936,
    "move0": 0.0004847481267868936,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7759,6 +8098,7 @@
    "move_both": 0.005135207802765884,
    "move0": 0.0038270258480535,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7784,6 +8124,7 @@
    "move_both": 0.0016521665621845871,
    "move0": 0.0012092497445981287,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7809,6 +8150,7 @@
    "move_both": 0.0004653994041260434,
    "move0": 0.00035465258987166237,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7829,6 +8171,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7853,6 +8196,7 @@
    "move_both": 0.0005875430859419994,
    "move0": 0.0005875430859419994,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7878,6 +8222,7 @@
    "move_both": 0.00017145581098931828,
    "move0": 0.00017145581098931828,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7903,6 +8248,7 @@
    "move_both": 0.0007585871560538311,
    "move0": 0.0005463088828088214,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7928,6 +8274,7 @@
    "move_both": 0.00025618965684136644,
    "move0": 0.0002301035451807154,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7953,6 +8300,7 @@
    "move_both": 7.712483614835328e-05,
    "move0": 7.418304799144959e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -7973,6 +8321,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -7997,6 +8346,7 @@
    "move_both": 0.001029163269541944,
    "move0": 0.0008435575551996033,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8022,6 +8372,7 @@
    "move_both": 0.00030676855703914985,
    "move0": 0.0002572042798775209,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8047,6 +8398,7 @@
    "move_both": 0.006541161011038965,
    "move0": 0.006541161011038965,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8072,6 +8424,7 @@
    "move_both": 0.0025419555343345612,
    "move0": 0.0025419555343345612,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8097,6 +8450,7 @@
    "move_both": 0.0008005595558483458,
    "move0": 0.0008005595558483458,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8117,6 +8471,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8136,6 +8491,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8155,6 +8511,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8174,6 +8531,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8193,6 +8551,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8212,6 +8571,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8231,6 +8591,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8255,6 +8616,7 @@
    "move_both": 0.0014537911014589379,
    "move0": 0.0006656521550890693,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8280,6 +8642,7 @@
    "move_both": 0.0004297302948797002,
    "move0": 0.00024251168270450485,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8305,6 +8668,7 @@
    "move_both": 0.015246237396417159,
    "move0": 0.012914583912396416,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8330,6 +8694,7 @@
    "move_both": 0.00470784622942088,
    "move0": 0.0028078117823008286,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8355,6 +8720,7 @@
    "move_both": 0.0013593703227277251,
    "move0": 0.0006695668997338533,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8375,6 +8741,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8399,6 +8766,7 @@
    "move_both": 0.00025630798737497074,
    "move0": 0.00020838634400421885,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8424,6 +8792,7 @@
    "move_both": 0.00013860103451231393,
    "move0": 5.7481496849032254e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8449,6 +8818,7 @@
    "move_both": 0.0018213993874116323,
    "move0": 0.001781391337941196,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8474,6 +8844,7 @@
    "move_both": 0.0005419256939630523,
    "move0": 0.0005419256939630523,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8499,6 +8870,7 @@
    "move_both": 0.00015782899459693134,
    "move0": 0.00015782899459693134,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8519,6 +8891,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8543,6 +8916,7 @@
    "move_both": 0.0013264208383603204,
    "move0": 0.0013264208383603204,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8568,6 +8942,7 @@
    "move_both": 0.0004128341948502756,
    "move0": 0.0004128341948502756,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8593,6 +8968,7 @@
    "move_both": 0.004491501087018013,
    "move0": 0.002690754442636223,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8618,6 +8994,7 @@
    "move_both": 0.0014016226579632862,
    "move0": 0.0007518196583103931,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8643,6 +9020,7 @@
    "move_both": 0.0004013206112730705,
    "move0": 0.00020960264723213218,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8663,6 +9041,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8687,6 +9066,7 @@
    "move_both": 0.00036325668691550295,
    "move0": 0.00036325668691550295,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8712,6 +9092,7 @@
    "move_both": 0.00010551009561254876,
    "move0": 0.00010551009561254876,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8737,6 +9118,7 @@
    "move_both": 0.0007936808289048525,
    "move0": 0.0007936808289048525,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8762,6 +9144,7 @@
    "move_both": 0.00030126527065366115,
    "move0": 0.00030126527065366115,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8787,6 +9170,7 @@
    "move_both": 9.417057868144063e-05,
    "move0": 9.417057868144063e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8807,6 +9191,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8831,6 +9216,7 @@
    "move_both": 0.0007678889173593495,
    "move0": 0.0005982354602843687,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8856,6 +9242,7 @@
    "move_both": 0.00022770511015612893,
    "move0": 0.00018289425052930852,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8881,6 +9268,7 @@
    "move_both": 0.007215285045336084,
    "move0": 0.007215285045336084,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8906,6 +9294,7 @@
    "move_both": 0.0025410427776200173,
    "move0": 0.0025410427776200173,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8931,6 +9320,7 @@
    "move_both": 0.0007741819281829043,
    "move0": 0.0007741819281829043,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -8951,6 +9341,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8970,6 +9361,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -8989,6 +9381,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9008,6 +9401,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9027,6 +9421,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9046,6 +9441,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9065,6 +9461,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9089,6 +9486,7 @@
    "move_both": 0.0008281579458747634,
    "move0": 0.0008281579458747634,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9114,6 +9512,7 @@
    "move_both": 0.00026061117699616165,
    "move0": 0.00026061117699616165,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9139,6 +9538,7 @@
    "move_both": 0.007774390422538524,
    "move0": 0.005669297314183752,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9164,6 +9564,7 @@
    "move_both": 0.0024129727712366954,
    "move0": 0.0008493842717284261,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9189,6 +9590,7 @@
    "move_both": 0.0006910115890176975,
    "move0": 0.00012551765941726245,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9209,6 +9611,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9233,6 +9636,7 @@
    "move_both": 0.0001345339152551972,
    "move0": 9.052538754261708e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9258,6 +9662,7 @@
    "move_both": 6.509888032947184e-05,
    "move0": 2.447327759758089e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9283,6 +9688,7 @@
    "move_both": 0.0010694079551680005,
    "move0": 0.0009023816399270634,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9308,6 +9714,7 @@
    "move_both": 0.0002629009143007579,
    "move0": 0.0002509434400839172,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9333,6 +9740,7 @@
    "move_both": 7.361366247571333e-05,
    "move0": 7.361366247571333e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9353,6 +9761,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9377,6 +9786,7 @@
    "move_both": 0.0006643420594910632,
    "move0": 0.0006643420594910632,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9402,6 +9812,7 @@
    "move_both": 0.0002066561624427532,
    "move0": 0.0002066561624427532,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9427,6 +9838,7 @@
    "move_both": 0.002997137680230022,
    "move0": 0.002997137680230022,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9452,6 +9864,7 @@
    "move_both": 0.0008444550185231492,
    "move0": 0.0008444550185231492,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9477,6 +9890,7 @@
    "move_both": 0.0002365905385406375,
    "move0": 0.0002365905385406375,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9497,6 +9911,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9516,6 +9931,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9535,6 +9951,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9554,6 +9971,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9573,6 +9991,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9592,6 +10011,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9611,6 +10031,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9630,6 +10051,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9649,6 +10071,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9673,6 +10096,7 @@
    "move_both": 0.0037096420911658656,
    "move0": 0.0037096420911658656,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9698,6 +10122,7 @@
    "move_both": 0.001227671716608092,
    "move0": 0.001227671716608092,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9723,6 +10148,7 @@
    "move_both": 0.000367084255143868,
    "move0": 0.000367084255143868,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9743,6 +10169,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9762,6 +10189,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9781,6 +10209,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9800,6 +10229,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9819,6 +10249,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9838,6 +10269,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9857,6 +10289,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -9881,6 +10314,7 @@
    "move_both": 0.007637419574334857,
    "move0": 0.005829219024021393,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9906,6 +10340,7 @@
    "move_both": 0.003322477397770862,
    "move0": 0.0025079570279873953,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9931,6 +10366,7 @@
    "move_both": 0.01583940073585427,
    "move0": 0.01583940073585427,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9956,6 +10392,7 @@
    "move_both": 0.008861024424707695,
    "move0": 0.007526810681132812,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -9981,6 +10418,7 @@
    "move_both": 0.004524529659193685,
    "move0": 0.0013141971158852628,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10001,6 +10439,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10025,6 +10464,7 @@
    "move_both": 0.006596606458179853,
    "move0": 0.001529860983536746,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10050,6 +10490,7 @@
    "move_both": 0.002553044717385669,
    "move0": 0.0009762843898455942,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10075,6 +10516,7 @@
    "move_both": 0.003218111764274584,
    "move0": 0.001399567565307125,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10100,6 +10542,7 @@
    "move_both": 0.001553981456499134,
    "move0": 0.0005865933025847037,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10125,6 +10568,7 @@
    "move_both": 0.0005075337631575416,
    "move0": 0.0003733579660810671,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10145,6 +10589,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10169,6 +10614,7 @@
    "move_both": 0.0015360511564035395,
    "move0": 8.110744084543348e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10194,6 +10640,7 @@
    "move_both": 0.00041800983929907165,
    "move0": 2.7468799795371535e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10214,6 +10661,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10233,6 +10681,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10252,6 +10701,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10271,6 +10721,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10295,6 +10746,7 @@
    "move_both": 0.001556082364114808,
    "move0": 0.001556082364114808,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10320,6 +10772,7 @@
    "move_both": 0.00046754029519074924,
    "move0": 0.00046754029519074924,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10340,6 +10793,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10359,6 +10813,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10378,6 +10833,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10397,6 +10853,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10416,6 +10873,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10435,6 +10893,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10454,6 +10913,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10473,6 +10933,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10492,6 +10953,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10511,6 +10973,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10530,6 +10993,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10549,6 +11013,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10568,6 +11033,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10587,6 +11053,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10606,6 +11073,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10625,6 +11093,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10649,6 +11118,7 @@
    "move_both": 0.002590916339961717,
    "move0": 0.0017047495193298623,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10674,6 +11144,7 @@
    "move_both": 0.0007990982373733829,
    "move0": 0.0005267213556844341,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10699,6 +11170,7 @@
    "move_both": 0.008837457366872359,
    "move0": 0.008837457366872359,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10724,6 +11196,7 @@
    "move_both": 0.002601491182822213,
    "move0": 0.002601491182822213,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10749,6 +11222,7 @@
    "move_both": 0.0007427914574229533,
    "move0": 0.0007427914574229533,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10769,6 +11243,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10793,6 +11268,7 @@
    "move_both": 0.0018067318130654472,
    "move0": 0.001639650066464493,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10818,6 +11294,7 @@
    "move_both": 0.000551193783517305,
    "move0": 0.0004838553710021509,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10843,6 +11320,7 @@
    "move_both": 0.003285506892427792,
    "move0": 0.003285506892427792,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10868,6 +11346,7 @@
    "move_both": 0.0013078777958700494,
    "move0": 0.0013078777958700494,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10893,6 +11372,7 @@
    "move_both": 0.00041511147341399823,
    "move0": 0.00041511147341399823,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10913,6 +11393,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -10937,6 +11418,7 @@
    "move_both": 0.001113934961049834,
    "move0": 8.149965736647946e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10962,6 +11444,7 @@
    "move_both": 0.00029399369909022255,
    "move0": 3.739319118822859e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -10982,6 +11465,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11001,6 +11485,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11020,6 +11505,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11039,6 +11525,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11063,6 +11550,7 @@
    "move_both": 0.0014535233445743811,
    "move0": 0.0014535233445743811,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11088,6 +11576,7 @@
    "move_both": 0.00043651345352391235,
    "move0": 0.00043651345352391235,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11108,6 +11597,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11127,6 +11617,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11146,6 +11637,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11165,6 +11657,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11184,6 +11677,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11203,6 +11697,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11222,6 +11717,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11241,6 +11737,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11260,6 +11757,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11279,6 +11777,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11298,6 +11797,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11317,6 +11817,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11336,6 +11837,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11355,6 +11857,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11374,6 +11877,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11393,6 +11897,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11417,6 +11922,7 @@
    "move_both": 0.001400930365557218,
    "move0": 0.001400930365557218,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11442,6 +11948,7 @@
    "move_both": 0.0014651338942530037,
    "move0": 0.000430442464438463,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11467,6 +11974,7 @@
    "move_both": 0.006080926083884108,
    "move0": 0.006080926083884108,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11492,6 +12000,7 @@
    "move_both": 0.0016969238791623154,
    "move0": 0.0016969238791623154,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11517,6 +12026,7 @@
    "move_both": 0.0013594269994064156,
    "move0": 0.00047164025356172257,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11537,6 +12047,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11561,6 +12072,7 @@
    "move_both": 0.000978114470887359,
    "move0": 0.000978114470887359,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11586,6 +12098,7 @@
    "move_both": 0.0007403045696885652,
    "move0": 0.00028835048823505627,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11611,6 +12124,7 @@
    "move_both": 0.002823368956506589,
    "move0": 0.002823368956506589,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11636,6 +12150,7 @@
    "move_both": 0.0010538573460476819,
    "move0": 0.0010538573460476819,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11661,6 +12176,7 @@
    "move_both": 0.0006560205533853603,
    "move0": 0.0003280686348233752,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11681,6 +12197,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11705,6 +12222,7 @@
    "move_both": 0.0011702589979565095,
    "move0": 5.716202154759653e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11730,6 +12248,7 @@
    "move_both": 0.0008569742156092006,
    "move0": 2.6151666218221514e-05,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11755,6 +12274,7 @@
    "move_both": 0.00959017291426556,
    "move0": 0.00959017291426556,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11780,6 +12300,7 @@
    "move_both": 0.0032563676341631487,
    "move0": 0.0032563676341631487,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11805,6 +12326,7 @@
    "move_both": 0.0009796701959517984,
    "move0": 0.0009796701959517984,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11825,6 +12347,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11849,6 +12372,7 @@
    "move_both": 0.000919671258789001,
    "move0": 0.000919671258789001,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11874,6 +12398,7 @@
    "move_both": 0.0002760905967422733,
    "move0": 0.0002760905967422733,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -11899,7 +12424,8 @@
    "move_both": 0.00103854760654154,
    "move0": 0.00103854760654154,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -11919,6 +12445,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11938,6 +12465,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11957,6 +12485,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -11981,6 +12510,7 @@
    "move_both": 0.0011559010127168978,
    "move0": 0.0011559010127168978,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12006,6 +12536,7 @@
    "move_both": 0.00033712681621733687,
    "move0": 0.00033712681621733687,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12026,6 +12557,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12045,6 +12577,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12064,6 +12597,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12083,6 +12617,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12107,6 +12642,7 @@
    "move_both": 0.0004681856904199533,
    "move0": 0.0004681856904199533,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12132,6 +12668,7 @@
    "move_both": 0.00014186165927354555,
    "move0": 0.00014186165927354555,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12152,6 +12689,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12171,6 +12709,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12190,6 +12729,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12209,6 +12749,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12233,6 +12774,7 @@
    "move_both": 0.0018347078693542462,
    "move0": 0.0004767562302402384,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12258,6 +12800,7 @@
    "move_both": 0.0005355689373792716,
    "move0": 0.00015508327845736858,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12283,6 +12826,7 @@
    "move_both": 0.004948660589359041,
    "move0": 0.001690034392497819,
    "same_shape": false,
+   "trigger_only": true,
    "closure_only": true,
    "attributed": false
   },
@@ -12308,6 +12852,7 @@
    "move_both": 0.0013866087749080866,
    "move0": 0.0011452064001230555,
    "same_shape": false,
+   "trigger_only": true,
    "closure_only": true,
    "attributed": false
   },
@@ -12333,6 +12878,7 @@
    "move_both": 0.0004036674810011798,
    "move0": 0.0004036674810011798,
    "same_shape": false,
+   "trigger_only": true,
    "closure_only": true,
    "attributed": false
   },
@@ -12353,6 +12899,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12377,7 +12924,8 @@
    "move_both": 0.0006866629869994867,
    "move0": 0.00010353559804510137,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -12402,7 +12950,8 @@
    "move_both": 0.00022992910270466056,
    "move0": 3.381768063204227e-05,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -12427,7 +12976,8 @@
    "move_both": 0.004266090242751819,
    "move0": 0.0007948360708682767,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -12452,7 +13002,8 @@
    "move_both": 0.0014187364987503503,
    "move0": 0.00024084892261810875,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -12477,7 +13028,8 @@
    "move_both": 0.0004204228904962637,
    "move0": 6.971287160006945e-05,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -12497,6 +13049,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12521,6 +13074,7 @@
    "move_both": 0.0016070702152373162,
    "move0": 0.0016070702152373162,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12546,6 +13100,7 @@
    "move_both": 0.0004899907745473664,
    "move0": 0.0004899907745473664,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12571,6 +13126,7 @@
    "move_both": 0.006628207122796881,
    "move0": 0.003152580796586202,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12596,6 +13152,7 @@
    "move_both": 0.002161811851065898,
    "move0": 0.0009375786885040815,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12621,6 +13178,7 @@
    "move_both": 0.0006261242691476543,
    "move0": 0.00026954084338171036,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12641,6 +13199,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12660,6 +13219,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12679,6 +13239,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12698,6 +13259,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12717,6 +13279,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12736,6 +13299,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12755,6 +13319,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12779,6 +13344,7 @@
    "move_both": 0.0011660676348730359,
    "move0": 0.0010987108582600769,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12804,6 +13370,7 @@
    "move_both": 0.000343419263131306,
    "move0": 0.00033067685165422134,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -12824,6 +13391,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12843,6 +13411,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12862,6 +13431,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12881,6 +13451,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12900,6 +13471,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12919,6 +13491,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12938,6 +13511,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12957,6 +13531,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12976,6 +13551,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -12995,6 +13571,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13019,6 +13596,7 @@
    "move_both": 0.0012105051753532603,
    "move0": 0.0007850655098249337,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13044,6 +13622,7 @@
    "move_both": 0.00035461739573006135,
    "move0": 0.00023536153011238792,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13069,6 +13648,7 @@
    "move_both": 0.007066338633364033,
    "move0": 0.007066338633364033,
    "same_shape": false,
+   "trigger_only": true,
    "closure_only": true,
    "attributed": false
   },
@@ -13094,6 +13674,7 @@
    "move_both": 0.0029127224817196984,
    "move0": 0.0029127224817196984,
    "same_shape": false,
+   "trigger_only": true,
    "closure_only": true,
    "attributed": false
   },
@@ -13119,6 +13700,7 @@
    "move_both": 0.0009236350160386486,
    "move0": 0.0009236350160386486,
    "same_shape": false,
+   "trigger_only": true,
    "closure_only": true,
    "attributed": false
   },
@@ -13139,6 +13721,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13163,7 +13746,8 @@
    "move_both": 0.0004656817396048174,
    "move0": 8.364569498042762e-05,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -13188,7 +13772,8 @@
    "move_both": 0.00016876044894331482,
    "move0": 2.7290950792679958e-05,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -13213,7 +13798,8 @@
    "move_both": 0.0032406171178813725,
    "move0": 8.990759653282332e-05,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -13233,6 +13819,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13252,6 +13839,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13271,6 +13859,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13295,6 +13884,7 @@
    "move_both": 0.0012900309952642575,
    "move0": 0.0012900309952642575,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13320,6 +13910,7 @@
    "move_both": 0.00039264777900493986,
    "move0": 0.00039264777900493986,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13345,6 +13936,7 @@
    "move_both": 0.0045227689100065804,
    "move0": 0.0018165921649989647,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13370,6 +13962,7 @@
    "move_both": 0.0014987824734723487,
    "move0": 0.0005329281175566747,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13395,6 +13988,7 @@
    "move_both": 0.0004413774288151151,
    "move0": 0.000152064560116294,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13415,6 +14009,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13434,6 +14029,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13453,6 +14049,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13472,6 +14069,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13491,6 +14089,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13510,6 +14109,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13529,6 +14129,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13553,6 +14154,7 @@
    "move_both": 0.0008388830776732137,
    "move0": 0.0008388830776732137,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13578,6 +14180,7 @@
    "move_both": 0.0002527678196438954,
    "move0": 0.0002527678196438954,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13598,6 +14201,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13617,6 +14221,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13636,6 +14241,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13655,6 +14261,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13674,6 +14281,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13693,6 +14301,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13712,6 +14321,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13731,6 +14341,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13750,6 +14361,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13769,6 +14381,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13793,6 +14406,7 @@
    "move_both": 0.0005784233478304257,
    "move0": 0.0005784233478304257,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13818,6 +14432,7 @@
    "move_both": 0.00016785201283175955,
    "move0": 0.000164840687595591,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -13843,7 +14458,8 @@
    "move_both": 0.005023025548199778,
    "move0": 0.005023025548199778,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -13868,7 +14484,8 @@
    "move_both": 0.0019105146214422053,
    "move0": 0.0019105146214422053,
    "same_shape": false,
-   "closure_only": true,
+   "trigger_only": true,
+   "closure_only": false,
    "attributed": false
   },
   {
@@ -13888,6 +14505,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13907,6 +14525,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13926,6 +14545,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13945,6 +14565,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13964,6 +14585,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -13983,6 +14605,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14002,6 +14625,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14021,6 +14645,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14040,6 +14665,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14059,6 +14685,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14078,6 +14705,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14097,6 +14725,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14116,6 +14745,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14135,6 +14765,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14154,6 +14785,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14173,6 +14805,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14192,6 +14825,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14211,6 +14845,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14230,6 +14865,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14249,6 +14885,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14273,6 +14910,7 @@
    "move_both": 0.00039610216422802935,
    "move0": 0.00039610216422802935,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -14298,6 +14936,7 @@
    "move_both": 0.00011940565365364808,
    "move0": 0.00011940565365364808,
    "same_shape": false,
+   "trigger_only": false,
    "closure_only": false,
    "attributed": false
   },
@@ -14318,6 +14957,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14337,6 +14977,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14356,6 +14997,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14375,6 +15017,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14394,6 +15037,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14413,6 +15057,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14432,6 +15077,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14451,6 +15097,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   },
   {
@@ -14470,6 +15117,7 @@
    "round1_refuse": false,
    "triggers": false,
    "attributed": false,
+   "trigger_only": false,
    "closure_only": false
   }
  ],
@@ -14477,9 +15125,10 @@
  "n_right": 634,
  "n_fp_round1": 110,
  "n_fp_round2": 0,
- "n_fp_closure_only": 17,
+ "n_fp_trigger_only": 17,
+ "n_fp_closure_only": 6,
  "arbiter_fired_on_correct": 345,
- "arbiter_mean_s": 0.0108998604456825,
+ "arbiter_mean_s": 0.01015543649025079,
  "arbiter_n": 359,
- "wall_s": 92.84102582931519
+ "wall_s": 83.66449451446533
 }

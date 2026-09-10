@@ -98,6 +98,11 @@ def main():
                 else os.path.join(HERE, "r8_bitid.json"))
     lib = os.path.abspath(lumenairy.__file__)
     print("lumenairy:", lib, lumenairy.__version__)
+    # This probe runs against TWO trees on purpose -- the worktree and the
+    # read-only copy of the pre-round-2 tip -- so it asserts that it imported
+    # one of them and records which in the JSON.
+    _p = lib.replace("\\", "/")
+    assert "lum_sliver2" in _p or "tipref" in _p, lib
     hashes = collect()
     print(f"  {len(hashes)} fixtures hashed")
     with open(out_path, "w") as f:

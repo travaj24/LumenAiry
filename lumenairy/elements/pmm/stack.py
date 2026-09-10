@@ -172,10 +172,14 @@ _STACK_SUPERUNITY_BAR = 1.0e-2
 #: envelope measured as a FAMILY property rather than a sample's -- 720 rows
 #: over THREE fixtures (O-11 1.2/0.85 um, a visible 0.9/0.62 um and a telecom
 #: 1.55/1.31 um stack, continuity slopes 1.15 / 4.44 / 1.04) x degrees
-#: 10/14/18 read max ``|R+T-1|`` = 1.098e-04 among the 391 CORRECT rows
+#: 10/14/18 read max ``|R+T-1|`` = 1.0979e-04 among their 391 CORRECT rows,
+#: and so do the further 209 correct rows of ``r1_populations.py`` and
+#: ``r2_falseneg.py`` -- 1.0979e-04 over 600 in all
 #: (``validation/probe_pmmstack_sliver_round2/r3_trigger.py``), so this bar
-#: carries 9.1x.  It is the binding constraint on the guard's floor: at 1e-4
-#: the ladder starts refusing correct rows (measured, 1 of 391).
+#: carries 9.11x, IDENTICAL on both builds.  It is the binding constraint on
+#: the guard's floor: 3e-4 would catch one more wrong row at 2.73x, and 1e-4
+#: would sit ON the population it must clear (1.01x), which is the exact
+#: defect the verification raised against round 1's own bar.
 _SLIVER_TRIGGER_BAR = 1.0e-3
 
 #: ARBITER criterion 1: the super-unity the RE-SOLVE on the prescribed

@@ -214,8 +214,10 @@ def test_the_round1_misses_are_refused_or_are_below_the_trigger():
     than as a margin.
 
     The floor is not an implementation choice: the family's CORRECT population
-    reaches ``|R+T-1|`` = 1.10e-04, so a trigger low enough to catch the last
-    rows starts refusing correct solves (measured: 1 of 391 at 1e-4)."""
+    reaches ``|R+T-1|`` = 1.10e-04 over 600 rows and three fixtures, so a
+    trigger low enough to catch the last rows would sit ON that population --
+    1.01x at 1e-4, where the closure-only form of the arbiter already refuses
+    a correct row."""
     refs = {}
     caught, floor = [], []
     for deg, d in _ROUND1_MISSES:
@@ -530,6 +532,41 @@ def test_the_sweep_arbitrates_at_its_own_wavelength_not_a_stale_set_source():
     finally:
         ps._sliver_probe_solve = real
     assert seen == [_WL], seen
+
+
+def test_the_sweep_arbitrates_the_same_way_at_any_worker_count():
+    """The verification could not check the guard raising from inside a
+    thread-pool sweep.  ``_store`` runs on the CALLING thread in both the
+    serial and the threaded branch, so the arbiter's one extra solve is a
+    main-thread solve at any worker count -- and a HEALTHY sweep must still be
+    byte-identical across worker counts, which is that method's own contract."""
+    seen = []
+    real = ps._sliver_probe_solve
+
+    def _spy(stack, mf, src):
+        seen.append(float(src["wl"]))
+        return real(stack, mf, src)
+
+    ps._sliver_probe_solve = _spy
+    try:
+        for mw in (1, 2, 4):
+            seen.clear()
+            with pytest.raises(ValueError, match="NEAR-COINCIDENT-WALL SLIVER"):
+                _stack(1e-4, 14).solve_vs_wavelength(
+                    [_WL, 0.9e-6], angle=_THETA, max_workers=mw)
+            assert seen == [_WL], (mw, seen)
+        seen.clear()
+        outs = []
+        for mw in (1, 2, 4):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                _o, R, _T = _stack(3e-3, 14).solve_vs_wavelength(
+                    [_WL, 0.9e-6], angle=_THETA, max_workers=mw)
+            outs.append(np.asarray(R))
+        assert seen == [], seen                 # healthy: never probed
+        assert all(np.array_equal(outs[0], x) for x in outs[1:])
+    finally:
+        ps._sliver_probe_solve = real
 
 
 def test_the_prepared_path_arbitrates_at_the_wavelength_it_was_given():

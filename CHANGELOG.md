@@ -125,9 +125,9 @@ below the closure bar) while the TRUNCATION population's best is 3.860e-05
 below the move bar) while the wrong one moves at least 466.2 (4.7x above).  The
 trigger is derived as a FAMILY property rather than a sample's -- 600 CORRECT
 rows over three fixtures whose continuity slopes differ by 4x reach
-`|R+T-1|` = 1.0979e-04, so 1e-3 carries 9.11x; at 1e-4 the ladder starts
-refusing correct solves (1 of 391), which is what makes the guard's floor a
-property of the theorem rather than a choice.
+`|R+T-1|` = 1.0979e-04, so 1e-3 carries 9.11x; at 1e-4 the bar would sit ON
+that population (1.01x), which is what makes the guard's floor a property of
+the theorem rather than a choice.
 
 MEASURED RESULT, both builds: false positives **110/648 -> 0/648**, false
 negatives **8/660 -> 4/660** (the four that remain are exactly the rows whose
@@ -174,7 +174,7 @@ BIT-IDENTITY: **39 / 39** -- the round-1 fix's 18 fixtures and the
 verification's 21 -- against a read-only copy of the pre-round-2 tip, on both
 builds.  `PMM_SLIVER_GUARD = False` still disarms everything, now including the
 arbiter's solve and the within-layer warning.
-`tests/unit/test_fix_pmmstack_sliver_walls_round2.py`, 17 tests; the round-1
+`tests/unit/test_fix_pmmstack_sliver_walls_round2.py`, 18 tests; the round-1
 file's margin test is RESTATED as a decision test (its bars were a property of
 its 13-row ladder and fail by 42x on a 120-row grid) and the verification's
 V-1 pinning test is re-pinned against the improvement it asked for.

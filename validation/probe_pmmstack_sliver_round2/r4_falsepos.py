@@ -145,10 +145,14 @@ def main():
                 row["move0"] = None if snap is None else err0(cur, snap)
                 row["same_shape"] = (None if snap is None
                                      else bool(len(cur[0]) == len(snap[0])))
-                # the CLOSURE criterion alone (the verification's measured
-                # discriminator) ...
-                row["closure_only"] = bool(snap is not None
+                # the verification's own phrasing of its discriminator --
+                # "the super-unity falls below the trigger" -- scored alone ...
+                row["trigger_only"] = bool(snap is not None
                                            and snap[3] <= 1.0 + TRIG)
+                # ... and the shipped ONE-SIDED closure, scored alone.
+                row["closure_only"] = bool(
+                    snap is not None
+                    and max(snap[3] - 1.0, 0.0) <= CLOSURE)
                 # ... and the SHIPPED decision, which is closure AND move.
                 row["attributed"] = bool(
                     snap is not None
@@ -157,6 +161,7 @@ def main():
                     and row["move_both"] > MOVE * row["w_wide"])
             else:
                 row["attributed"] = False
+                row["trigger_only"] = False
                 row["closure_only"] = False
             rows.append(row)
         if tried % 162 == 0:
@@ -171,9 +176,12 @@ def main():
     print(f"  ROUND 1 false positives : {len(fp1)} "
           f"({100.0 * len(fp1) / max(len(rows), 1):.1f}% of scored, "
           f"{100.0 * len(fp1) / max(len(right), 1):.1f}% of correct)")
+    fp_t = [r for r in right if r["trigger_only"]]
     fp_c = [r for r in right if r["closure_only"]]
-    print(f"  ROUND 2 false positives : {len(fp2)}  (closure criterion alone "
-          f"would leave {len(fp_c)})")
+    print(f"  ROUND 2 false positives : {len(fp2)}  -- the ladder: "
+          f"round1 {len(fp1)} -> 'super-unity below the trigger' alone "
+          f"{len(fp_t)} -> one-sided closure alone {len(fp_c)} -> "
+          f"closure AND move {len(fp2)}")
     print(f"  arbiter FIRED on        : {len(trig_right)} of {len(right)} "
           f"correct rows ({100.0 * len(trig_right) / max(len(right), 1):.1f}%)"
           f", {sum(1 for r in rows if r['triggers'])} of {len(rows)} total")
@@ -196,6 +204,7 @@ def main():
                        rows=rows, tried=tried,
                        n_right=len(right), n_fp_round1=len(fp1),
                        n_fp_round2=len(fp2),
+                       n_fp_trigger_only=len(fp_t),
                        n_fp_closure_only=len(fp_c),
                        arbiter_fired_on_correct=len(trig_right),
                        arbiter_mean_s=float(np.mean(arb_times))
