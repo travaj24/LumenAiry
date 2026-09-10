@@ -607,7 +607,9 @@ what makes it a statement about the SHIPPED library.
 | `test_fix_pmm2d_mortar_round2.py` + `test_pmm2d_staggered_nonuniform.py` | -- | **31 passed**, 188.5 s |
 | `test_pmm2d_staggered_mortar.py` + `test_verify_pmm2d_perlayer_slant.py` | **35 passed**, 298.5 s | -- |
 | `test_pmm2d_staggered_nonuniform.py` | **16 passed**, 74.7 s | included above |
-| the twelve required suites together | SEE S7.2 | -- |
+| **the twelve required suites together** | **310 passed, 0 failed**, 1333.8 s | see below |
+| the ten of those that do not overlap the two rows above | -- | (running) |
+| every test file that imports `PMMStack` (42 files) | -- | (running) |
 | `ruff check lumenairy/ tests/` | **clean** (also over `validation/probe_pmm2d_mortar_round2/`) | -- |
 
 ---
