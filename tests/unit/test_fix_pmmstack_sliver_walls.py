@@ -186,24 +186,59 @@ def test_a_delta_far_outside_the_hazard_is_bit_for_bit_untouched():
             assert np.array_equal(a, b), d
 
 
-def test_the_bar_has_decades_of_gap_on_both_sides_measured_here():
-    """TESTING_STANDARDS rule 5, re-derived on the running build.  The guard's
-    bar is ``_STACK_SUPERUNITY_BAR``; this measures the two populations it must
-    separate and requires decades either side -- so the assertion survives any
-    build whose separation is still real, and fails honestly on one whose is
-    not."""
-    refs = {deg: _solve(0.0, deg, guard=False) for deg in (12, 14)}
-    right, wrong = [], []
-    for deg, d in _LADDER:
-        kind, _e, tot, _res = _classify(d, deg, refs[deg])
-        if kind == "right":
-            right.append(abs(tot - 1.0))
-        elif kind == "wrong":
-            wrong.append(tot - 1.0)
-    assert len(right) >= 4 and len(wrong) >= 4, (right, wrong)
-    bar = ps._STACK_SUPERUNITY_BAR
-    assert max(right) <= bar / 100.0, (max(right), bar)      # >= 2 decades
-    assert min(wrong) >= bar * 30.0, (min(wrong), bar)       # >= 1.5 decades
+def test_the_guards_DECISION_is_right_on_a_dense_grid_not_just_this_ladder():
+    """TESTING_STANDARDS rule 5 -- RESTATED 2026-09-11 (round 2).
+
+    This test used to assert MARGINS: that the correct population sat two
+    decades below ``_STACK_SUPERUNITY_BAR`` and the wrong one 1.5 decades
+    above.  Both held on the 13-row ``_LADDER`` (317x and 3.91x of headroom)
+    and BOTH ARE FALSE OF THE FAMILY: on a 120-row grid of the same fixture
+    the verification measured 9.87e-05 and +7.14e-03, so the first assertion
+    passes by 1.3 % and the second FAILS BY 42x.  A margin re-derived on the
+    sample that makes it hold is exactly what rule 5 forbids.
+
+    What is durable is the guard's DECISION, so that is what this asserts, on
+    a grid four times denser than the ladder and spanning the same family: no
+    row the continuity rule calls RIGHT may be refused, no row it calls WRONG
+    may be returned unless its super-unity is below the trigger -- and the
+    floor that leaves is measured here rather than assumed."""
+    deltas = [float(x) for x in np.geomspace(3e-3, 1e-6, 30)]
+    right = wrong = grey = 0
+    refused_right = []
+    returned_wrong = []
+    for deg in (12, 14):
+        ref = _solve(0.0, deg, guard=False)
+        for d in deltas:
+            kind, e, tot, pre = _classify(d, deg, ref)
+            try:
+                post = _solve(d, deg, guard=True)
+                refused = False
+            except ValueError as exc:
+                assert "NEAR-COINCIDENT-WALL SLIVER" in str(exc), str(exc)[:200]
+                post, refused = None, True
+            if kind == "right":
+                right += 1
+                if refused:
+                    refused_right.append((deg, d, e / d, tot))
+                else:
+                    for a, b in zip(pre, post):
+                        assert np.array_equal(a, b), (deg, d)
+            elif kind == "wrong":
+                wrong += 1
+                if not refused:
+                    returned_wrong.append((deg, d, e / d, tot))
+            else:
+                grey += 1
+    assert right >= 20 and wrong >= 10, (right, wrong, grey)
+    # NO false positive is tolerated: a correct answer must never be refused.
+    assert refused_right == [], refused_right
+    # The FLOOR is the trigger, and it is stated as a decision: every wrong row
+    # the guard returns must be one whose super-unity is below the trigger, so
+    # the residual is the theorem's, not the implementation's.
+    for deg, d, eod, tot in returned_wrong:
+        assert tot - 1.0 <= ps._SLIVER_TRIGGER_BAR, (deg, d, eod, tot)
+    assert len(returned_wrong) <= max(1, wrong // 5), (returned_wrong,
+                                                          wrong)
 
 
 def test_the_refusal_names_the_geometry_and_the_two_remedies():

@@ -1,0 +1,187 @@
+{
+ "meta": {
+  "lumenairy": "/mnt/c/tmp/lum_sliver2/lumenairy/__init__.py",
+  "python": "3.12.3",
+  "numpy": "2.4.6"
+ },
+ "m2": [
+  {
+   "ns": 2,
+   "min_feature": "library default",
+   "ratio": null,
+   "raw_ratio": 12.114772312931073,
+   "raw_w_m": 4.1271927122089605e-10,
+   "raw_own": 0.007142857142857145,
+   "w_m": null,
+   "own": null,
+   "n_cells": null
+  },
+  {
+   "ns": 2,
+   "min_feature": "no snap",
+   "ratio": null,
+   "raw_ratio": 12.114772312931073,
+   "raw_w_m": 4.1271927122089605e-10,
+   "raw_own": 0.007142857142857145,
+   "w_m": null,
+   "own": null,
+   "n_cells": null
+  },
+  {
+   "ns": 3,
+   "min_feature": "library default",
+   "ratio": null,
+   "raw_ratio": 3.5931918005045196,
+   "raw_w_m": 1.3915204858527043e-09,
+   "raw_own": 0.007142857142857145,
+   "w_m": null,
+   "own": null,
+   "n_cells": null
+  },
+  {
+   "ns": 3,
+   "min_feature": "no snap",
+   "ratio": null,
+   "raw_ratio": 3.5931918005045196,
+   "raw_w_m": 1.3915204858527043e-09,
+   "raw_own": 0.007142857142857145,
+   "w_m": null,
+   "own": null,
+   "n_cells": null
+  },
+  {
+   "ns": 6,
+   "min_feature": "library default",
+   "ratio": null,
+   "raw_ratio": 12.114772312933354,
+   "raw_w_m": 4.1271927122081834e-10,
+   "raw_own": 0.007142857142857145,
+   "w_m": null,
+   "own": null,
+   "n_cells": null
+  },
+  {
+   "ns": 6,
+   "min_feature": "no snap",
+   "ratio": null,
+   "raw_ratio": 12.114772312933354,
+   "raw_w_m": 4.1271927122081834e-10,
+   "raw_own": 0.007142857142857145,
+   "w_m": null,
+   "own": null,
+   "n_cells": null
+  },
+  {
+   "ns": 8,
+   "min_feature": "library default",
+   "ratio": null,
+   "raw_ratio": 12.114772312933354,
+   "raw_w_m": 4.1271927122081834e-10,
+   "raw_own": 0.007142857142857145,
+   "w_m": null,
+   "own": null,
+   "n_cells": null
+  },
+  {
+   "ns": 8,
+   "min_feature": "no snap",
+   "ratio": null,
+   "raw_ratio": 12.114772312933354,
+   "raw_w_m": 4.1271927122081834e-10,
+   "raw_own": 0.007142857142857145,
+   "w_m": null,
+   "own": null,
+   "n_cells": null
+  }
+ ],
+ "liner_ratio": [
+  {
+   "liner": 0.2786,
+   "delta": 0.0001,
+   "ratio": 2785.500000000307,
+   "err": 0.4789426860170594,
+   "err_over_delta": 4789.4268601705935,
+   "RplusT": 2.1729793521442984,
+   "fires_at_100": true,
+   "fires_at_10": true
+  },
+  {
+   "liner": 0.1,
+   "delta": 0.0001,
+   "ratio": 1000.0000000001102,
+   "err": 0.00041182463030087213,
+   "err_over_delta": 4.118246303008721,
+   "RplusT": 0.9999999744926343,
+   "fires_at_100": true,
+   "fires_at_10": true
+  },
+  {
+   "liner": 0.03,
+   "delta": 0.0001,
+   "ratio": 300.000000000033,
+   "err": 8.185608143440604e-05,
+   "err_over_delta": 0.8185608143440604,
+   "RplusT": 1.0000001208518048,
+   "fires_at_100": true,
+   "fires_at_10": true
+  },
+  {
+   "liner": 0.01,
+   "delta": 0.0001,
+   "ratio": 100.00000000001101,
+   "err": 9.640679717123901e-05,
+   "err_over_delta": 0.9640679717123901,
+   "RplusT": 1.0000001838850732,
+   "fires_at_100": true,
+   "fires_at_10": true
+  },
+  {
+   "liner": 0.003,
+   "delta": 0.0001,
+   "ratio": null,
+   "err": 0.00010687821766142136,
+   "err_over_delta": 1.0687821766142136,
+   "RplusT": 1.0000000577185355,
+   "fires_at_100": false,
+   "fires_at_10": false
+  },
+  {
+   "liner": 0.0012,
+   "delta": 0.0001,
+   "ratio": null,
+   "err": 0.00011180405219751721,
+   "err_over_delta": 1.1180405219751721,
+   "RplusT": 1.0000002061322617,
+   "fires_at_100": false,
+   "fires_at_10": false
+  },
+  {
+   "liner": 0.001,
+   "delta": 0.0001,
+   "ratio": null,
+   "err": 0.00011232411817180266,
+   "err_over_delta": 1.1232411817180266,
+   "RplusT": 0.9999999621246849,
+   "fires_at_100": false,
+   "fires_at_10": false
+  },
+  {
+   "liner": 0.0005,
+   "delta": 0.0001,
+   "ratio": null,
+   "err": 0.0001137262056982169,
+   "err_over_delta": 1.137262056982169,
+   "RplusT": 1.0000000964749813,
+   "fires_at_100": false,
+   "fires_at_10": false
+  }
+ ],
+ "ordinary": {
+  "n": 4192,
+  "max": 25.426826265592823,
+  "p999": 21.760395572456094,
+  "p99": 15.324144735838733,
+  "median": 2.4956083327524357
+ },
+ "wall_s": 3.009047746658325
+}

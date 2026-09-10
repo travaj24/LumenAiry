@@ -1,0 +1,134 @@
+{
+ "meta": {
+  "lumenairy": "C:\\tmp\\lum_sliver2\\lumenairy\\__init__.py",
+  "python": "3.14.6",
+  "numpy": "2.4.4"
+ },
+ "classes": [
+  {
+   "cls": "lc_in_plane_45deg",
+   "hermitian": true,
+   "provably_passive": true,
+   "sliver": {
+    "0.0001": {
+     "unguarded_RplusT": 1.0047788572519478,
+     "err": 0.0038534337865074875,
+     "err_over_delta": 38.534337865074875,
+     "refused": false,
+     "names_sliver": false,
+     "guarded_RplusT": 1.0047788572519478,
+     "warned": []
+    },
+    "3e-05": {
+     "unguarded_RplusT": 1.0105352158191463,
+     "err": 0.008650564485824908,
+     "err_over_delta": 288.3521495274969,
+     "refused": true,
+     "names_sliver": true,
+     "guarded_RplusT": null,
+     "warned": []
+    }
+   },
+   "clean": {
+    "ok": true,
+    "RplusT": 1.000000000021711,
+    "refused": false
+   }
+  },
+  {
+   "cls": "lc_out_of_plane_30deg",
+   "hermitian": false,
+   "provably_passive": true,
+   "sliver": {
+    "0.0001": {
+     "unguarded_RplusT": 1.0032649214090381,
+     "err": 2.4276548360457895e-07,
+     "err_over_delta": 0.0024276548360457895,
+     "refused": false,
+     "names_sliver": false,
+     "guarded_RplusT": 1.0032649214090381,
+     "warned": []
+    },
+    "3e-05": {
+     "unguarded_RplusT": 1.0133023241272112,
+     "err": 3.1653161869371615e-07,
+     "err_over_delta": 0.010551053956457205,
+     "refused": true,
+     "names_sliver": true,
+     "guarded_RplusT": null,
+     "warned": []
+    }
+   },
+   "clean": {
+    "ok": true,
+    "RplusT": 1.0000000000254545,
+    "refused": false
+   }
+  },
+  {
+   "cls": "gyrotropic",
+   "hermitian": true,
+   "provably_passive": true,
+   "sliver": {
+    "0.0001": {
+     "unguarded_RplusT": 1.084239638640805,
+     "err": 0.06853525023177609,
+     "err_over_delta": 685.3525023177609,
+     "refused": true,
+     "names_sliver": true,
+     "guarded_RplusT": null,
+     "warned": []
+    },
+    "3e-05": {
+     "unguarded_RplusT": 1.0976684084853139,
+     "err": 0.08038790633432469,
+     "err_over_delta": 2679.5968778108227,
+     "refused": true,
+     "names_sliver": true,
+     "guarded_RplusT": null,
+     "warned": []
+    }
+   },
+   "clean": {
+    "ok": true,
+    "RplusT": 1.000000000065065,
+    "refused": false
+   }
+  },
+  {
+   "cls": "non_hermitian_epsxy",
+   "hermitian": false,
+   "provably_passive": false,
+   "sliver": {
+    "0.0001": {
+     "unguarded_RplusT": 1.0821820139168623,
+     "err": 0.06614234310073674,
+     "err_over_delta": 661.4234310073674,
+     "refused": false,
+     "names_sliver": false,
+     "guarded_RplusT": 1.0821820139168623,
+     "warned": [
+      "PMMStack.solve: energy not conserved (max R+T = 1.08 > 1) --"
+     ]
+    },
+    "3e-05": {
+     "unguarded_RplusT": 1.093109884760595,
+     "err": 0.07605182344933281,
+     "err_over_delta": 2535.060781644427,
+     "refused": false,
+     "names_sliver": false,
+     "guarded_RplusT": 1.093109884760595,
+     "warned": [
+      "PMMStack.solve: energy not conserved (max R+T = 1.09 > 1) --"
+     ]
+    }
+   },
+   "clean": {
+    "ok": true,
+    "RplusT": 1.000638492140899,
+    "refused": false
+   }
+  }
+ ],
+ "wall_s": 3.8011651039123535
+}
