@@ -967,7 +967,8 @@ pushed, tagged or version-bumped; **no library file was edited**.
 |---|---|
 | `a57e7a8` | `test(probes)`: `validation/probe_verify_hybrid_anchor/` -- the first 13 scripts, the README and every run's JSON on both arms and both builds |
 | `2b285fd` | `test(pmm2d hybrid anchor)`: the four durability restatements of S5.3 |
-| (this doc) | `docs`: `VERIFY_HYBRID_SLANT_TRANSMISSION_ANCHOR_2026_09_11.md` |
+| `487f465` | `test(probes)`: the O2 mechanism probes -- `q5c` (mode level), `q5d` (interface level), `q5e` (the four discriminators) |
+| `24b16a0` | `docs`: this document |
 
 ---
 
