@@ -86,6 +86,7 @@ Numbers in the experiment document's `FOLLOW-UP 2026-09-09` section.
 | `f2_device_regime.py` | F2 (O-2) -- the corner-dominated 2-D pillar pair (own `N = 2` and `N = 3`, union `N = 6`, conical), equal-DOF mortar vs union against the union grid at the top of its own documented ladder; scalar and IN-PLANE LC TENSOR arms |
 | `f3_perlayer_M_recipe.py` | F3 (O-10) -- the two-knob `M_A` x `M_B` convergence SURFACE on the F2 pair, each layer's own single-layer residual, the greedy rule (6/9) and the FLOOR rule (15/16) |
 | `f4_uniform_oblique.py` | F4 (O-6) -- a UNIFORM layer on `N = 1` at oblique/conical: isolated vs the analytic Fresnel slab and vs `berreman_jones_1d`, then INSIDE a mortar cascade against the exact 1-D `PMMStack`, then against the shared-grid path |
+| `f4b_mu_rule.py` | F4.4 -- MEASURES the proposed uniform-layer rule `M_u = max(q_prev, q_next) / grid + 1` instead of deriving it: at matched `q_u` the grid choice does not matter (3 %), and the stack-default `M_u` is 5-14x worse |
 | `nonuniform.py` | F5 (roadmap N-1) -- the PROTOTYPE: `Basis1DNU` (Granet Eq. 31 with per-segment jacobians), `Granet2DTransverseE_NU`, `MortarStackNU` (per-layer own-WALLS grids through the mortar cascade) |
 | `f5_nonuniform.py` | F5 gates (a) bit-identity on uniform walls, (b) 2 non-uniform segments == 3 uniform segments, (c)/(c2) arbitrary walls vs the two hybrid oracles, (c3) arbitrary walls vs the EXACT 1-D oracle, (d) a 4-slice taper vs the hybrid staircase, (d2) the same taper vs the EXACT 1-D oracle |
 | `f5d_diag.py` | attributes gate (d2)'s `M = 5..7` plateau: the mortar-free control, the FORCED-mortar identity on non-uniform grids, the slice-count scaling, the per-order breakdown |
@@ -108,6 +109,7 @@ python validation/probe_pmm2d_staggered_mortar/f1_compare.py          # win wsl 
 python validation/probe_pmm2d_staggered_mortar/f2_device_regime.py scalar tensor
 python validation/probe_pmm2d_staggered_mortar/f3_perlayer_M_recipe.py
 python validation/probe_pmm2d_staggered_mortar/f4_uniform_oblique.py
+python validation/probe_pmm2d_staggered_mortar/f4b_mu_rule.py
 
 python validation/probe_pmm2d_staggered_mortar/f5_nonuniform.py a b
 python validation/probe_pmm2d_staggered_mortar/f5_nonuniform.py c d

@@ -1359,14 +1359,25 @@ default to the stack's `M`.**
   traces, and there `N = 1` pays: it needs `M_u ~ 12` where `N = 3` needs
   `M_u ~ 7` to reach the same floor.  At a shared default `M` it reads 3-6x
   worse (F4.2).
-* **The API rule this yields:** `grid=1` is the right default for a uniform
-  layer, and `n_modes` for that layer must default not to the stack's `M` but
-  to the value that matches its NEIGHBOURS' `q` -- i.e.
-  `M_u = max(q_prev, q_next) / grid + 1`.  On the F4.2 fixture that gives
-  `M_u = 19` for `grid = 1` (`q_u = 18 = q_B`), comfortably past the floor,
-  at an eig dimension of `2 * 18^2 = 648` -- the same as layer B's and 8x
-  smaller than the union's.  **`N = 1` is cheap, `N = 1` at the stack's `M` is
-  a trap**, and the docstring must say so.
+* **The API rule this yields, MEASURED** (`f4b_mu_rule.py`): `n_modes` for a
+  uniform layer must default not to the stack's `M` but to the value that
+  matches its NEIGHBOURS' `q` -- `M_u = max(q_prev, q_next) / grid + 1`.  On
+  the F4.2 fixture (`q_A = 14`, `q_B = 18`) that is `M_u = 19` on `grid = 1`,
+  `M_u = 10` on `grid = 2`, `M_u = 7` on `grid = 3`, all three at `q_u = 18`
+  and an eig dimension of `2 * 18^2 = 648`:
+
+  | `theta` | `grid=1, M_u=7` (the DEFAULT, `q_u=6`) | `grid=1, M_u=19` | `grid=2, M_u=10` | `grid=3, M_u=7` |
+  |---|---|---|---|---|
+  | 0.00 | 5.00e-02 | **3.46e-03** | 3.54e-03 | 3.45e-03 |
+  | 0.20 | 6.23e-02 | **1.21e-02** | 1.24e-02 | 1.18e-02 |
+  | 0.40 | 2.13e-01 | **2.50e-02** | 2.53e-02 | 2.47e-02 |
+
+  **At matched `q_u` the grid choice does not matter at all** -- the three
+  columns agree to 3 %, and all three sit on the neighbours' floor.  The
+  stack-default `M_u` is 14x / 5x / 8.5x worse.  So `grid = 1` is the right
+  default because it is the cheapest basis to build, not because it is more
+  accurate; the accuracy lever is `q_u`.  **`N = 1` is cheap, `N = 1` at the
+  stack's `M` is a trap**, and the docstring must say so.
 * S2.5's far-field caveat is unchanged and now doubly load-bearing: an `N = 1`
   END layer caps the Rayleigh orders at `(M-2)//2`.  With the `M_u` rule above
   that cap is generous; with a defaulted `M_u` it is not.
