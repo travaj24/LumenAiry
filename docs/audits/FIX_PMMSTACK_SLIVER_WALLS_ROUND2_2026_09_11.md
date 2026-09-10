@@ -187,6 +187,18 @@ arbitrated rows, so this matters.
 | `'unknown'` | the one solve cannot be run: no resolved source, dispersive / keyed materials, or the re-solve itself raises | **ROUND 1's decision, unchanged**: raise above `_STACK_SUPERUNITY_BAR`, warn below it -- and the message says the attribution could not be measured |
 | `None` | the geometric screen does not fire, or the stack is not provably passive, or `PMM_SLIVER_GUARD = False` | nothing changes at all |
 
+**The probe geometry is never a different DEVICE, and that is structural.**
+Every flagged cell satisfies `own / w >= _SLIVER_OWN_SCALE_RATIO` = 100, and
+`w_wide` is the WIDEST of them, so the prescribed
+`mf_fix = 2 * w_wide * period` is at most `own * period / 50` -- fifty times
+finer than the finest wall spacing any single layer asked for.  `min_feature`
+merges pairs CLOSER than itself, so it cannot reach a pair the caller
+intended: the re-solve removes the manufactured cells and nothing else.
+Measured over 182 flagged geometries (the O-11 grid at three degrees plus the
+staircase box): worst `mf_fix / own` = **1.898e-02**, against the structural
+bound 2.000e-02.  So a "yes" from the arbiter is evidence about THIS device,
+not about a nearby one.
+
 The re-solve is `stack._min_feature_clone(mf_fix)` -- the union-grid consensus
 probe's own helper, pre-existing since the 2026-07-28 audit -- with the source
 record copied and `_sliver_probe = True` set, so a probe can never arbitrate
