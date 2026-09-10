@@ -60,12 +60,17 @@ The verification's reproducer (S6.3 there) is a 2-D pillar sandwich at
 reference -- the same stack with the middle layer on a ONE-segment grid, which
 is the same device -- has an `M`-ladder self-gap of **9.156e-04** between
 `M = 7` and `M = 8`, and its `M = 4..7` errors at a HEALTHY `delta = 0.30`
-read 1.04e-03 / 6.46e-03 / 1.34e-03 / 1.62e-03: **non-monotone, and the same
-size as the effect being measured.**  On that fixture "the answer wandered by
-7.8e-03" is a true reading, but it cannot be attributed to the sliver rather
-than to the device's own slow, oscillatory convergence.
+read 1.04e-03 / 6.46e-03 / 1.34e-03 / 1.62e-03: **non-monotone, and within an
+order of magnitude of the effect being measured.**
 
-So the fixture was rebuilt to make the attribution exact.
+Two things follow, and both matter.  The 7.8e-03 excursion is 8.5x that
+self-gap, so **a real component IS present** -- the verification's defect is
+not an artefact.  But the excursion's SHAPE -- "wandering", "not even
+monotone at `M = 8`" -- is not separable on that fixture from the device's own
+slow, oscillatory convergence, which is non-monotone at a healthy wall
+spacing too.  So the fixture was rebuilt to make the attribution exact, and
+the rebuilt one says the shape is a FLOOR rather than a wander (S2.3), and
+that the size is 3.4-6.3x rather than 8 %.
 
 ### 2.2 The fixture that does separate them
 
@@ -638,6 +643,16 @@ what makes it a statement about the SHIPPED library.
 5. **The verification's own S12 items** (JAX per-layer, `prepare()`,
    `tau`-keyed cache cost) are untouched -- they are the build's open items,
    not defects.
+6. **The accuracy cost in the band ABOVE the bar is NOT removed** (S3.2a).
+   It is continuous, it shades into ordinary partition quality, and the
+   `n_modes` ladder remains the user's instrument for it.  Logged as **open
+   item C**, with the concrete case named: a 64-slice closing taper at
+   4.1e-03 of the period is returned, carrying a ~4x floor.
+7. **The verification's own S6.3 fixture was not re-run at `M = 10`** (its
+   S12 item 4).  It was SUPERSEDED rather than extended: its `M`-ladder
+   self-gap is within an order of magnitude of the effect, so another rung on
+   it cannot settle the shape.  What replaced it is an exact-oracle fixture
+   run to `M = 8` and an analytic-oracle attribution run to `M = 7`.
 
 ---
 
