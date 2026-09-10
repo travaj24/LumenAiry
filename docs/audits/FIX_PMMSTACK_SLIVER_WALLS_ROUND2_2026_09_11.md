@@ -576,7 +576,30 @@ All with `PYTHONPATH` on the worktree and one BLAS thread.
 | every test file importing `PMMStack` (`grep tests/ --include='*.py' -l PMMStack`, **42** files incl. this round's), slow markers included | see below | -- |
 | `ruff check lumenairy/ tests/ validation/probe_pmmstack_sliver_round2/` | **All checks passed** | -- |
 
-REGRESSION_RESULT
+**REGRESSION.**  Every test file that imports `PMMStack` -- 42 files
+(`validation/probe_pmmstack_sliver_round2/_regression_files.txt` records the
+list), including the two mortar files, the verification's and this round's --
+Windows, one BLAS thread, slow markers INCLUDED:
+
+| | |
+|---|---|
+| result | **812 passed, 1 skipped, 0 failed** |
+| wall | 43 min 19 s |
+| the skip | the pre-existing `test_niche_audit_m4_m5_m6_rcwa.py:387` (*"threadpoolctl installed: the cap is effective here"*), unrelated to this work -- the same one the round-1 and verification regressions record |
+| the four slowest | the same `test_audit_dynameta_consumer_api_2.py` pure-2-D arms as before (499 / 379 / 255 / 219 s), unchanged in character |
+
+For reference the same gate reads **793 passed / 1 skipped** on the
+pre-round-2 tip (the verification's run, 41 files) and **731 / 1** on the
+round-1 fix (37 files).
+
+That run was taken on the library exactly as it ships (frozen at `84e15e7`; no
+`lumenairy/` file changed after it started -- `git show --stat` on every later
+commit shows only `tests/`, `docs/`, `.test_durations` and `validation/`).
+Two test additions landed in `test_fix_pmmstack_sliver_walls_round2.py`
+afterwards -- the per-layer arm and the polarization-0 assertion inside the LC
+gate -- so the file-level total is now 813; both were run green on BOTH builds
+in that file's own run (19 passed, 24.66 s Windows / 27.94 s WSL) and in the
+four-file run (80 passed on both).
 
 `.test_durations` spliced with the 53 measured Windows timings of the three
 sliver files (12,571 -> 12,590 entries; the two renamed tests' stale entries

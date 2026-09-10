@@ -180,6 +180,9 @@ arbiter's solve and the within-layer warning.
 file's margin test is RESTATED as a decision test (its bars were a property of
 its 13-row ladder and fail by 42x on a 120-row grid) and the verification's
 V-1 pinning test is re-pinned against the improvement it asked for.
+Regression: every test file importing `PMMStack` (42) -- **812 passed,
+1 skipped, 0 failed** with the slow markers included (43:19), against 793 / 1
+on the pre-round-2 tip.
 Full write-up: `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md`.
 
 ### Fixed -- the `min_feature` wall-snap treats a SYMMETRIC pair symmetrically
