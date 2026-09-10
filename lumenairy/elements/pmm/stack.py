@@ -151,6 +151,32 @@ from ._core import (
 # positives 110/648 -> 0/648, false negatives 8/660 -> 4/660, and the arbiter
 # fires on 0 of 600 CONVERGED correct rows (it can only fire on a stack that
 # already reads super-unity above the trigger).
+#
+# ROUND 3 (2026-09-11) -- "VANISHES" HAD TO BE READ RELATIVELY.  Round 2's
+# verification (``docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND2_2026_09_11.md``,
+# defect D-5) measured the one case the round-2 criterion cannot express: a
+# stack whose SLIVER-FREE truncation super-unity already sits above the
+# ABSOLUTE closure bar.  There the snapped super-unity can never reach that
+# bar, so the arbiter says ``truncation`` however completely the snap restores
+# the answer -- measured, it removed a 621x-5,181x super-unity and put the
+# answer back on the sliver-free reference to err/delta = 0.0019, and round 2
+# returned the wrong number (off by 1,811x-3,501x the physical wall shift, at
+# R+T = 1.19) under a warning saying the prescribed remedy would silence
+# nothing.  Round 1 refused all three rows, so it was a behaviour change.
+#
+# So the closure asks the snap to REMOVE most of the violation rather than to
+# reach a fixed floor:
+#
+#     su_snapped <= max(_SLIVER_ATTRIB_CLOSURE,
+#                       (max(R+T) - 1) * _SLIVER_CLOSURE_FRACTION)
+#
+# with the round-2 value kept as the lower arm, so the criterion is a widening
+# and never a tightening.  Measured on both builds: the two censuses are
+# unchanged row for row (false positives 0/648 with all 648 returned answers
+# bit-identical to the unguarded ones, false negatives 4/660), and over 615
+# arbitrated rows of eight devices the only verdicts that move are 85 rows of
+# the D-5 class, every one of them WRONG by both continuity rules and the
+# mildest of them off by 517.7x the physical wall shift.
 
 #: FAIL-BEFORE SWITCH for the refusal (2026-09-11).  ``False`` restores the
 #: pre-fix behaviour bit for bit: the super-unity WARNING below, and the wrong
@@ -190,7 +216,85 @@ _SLIVER_TRIGGER_BAR = 1.0e-3
 #: SLIVER population's worst residual super-unity after the snap is 1.54e-06
 #: (6.5x below this bar) while the TRUNCATION population's best is 3.86e-05
 #: (3.9x above it) -- a 1.40-decade gap, and this bar sits in it.
+#:
+#: ROUND 3 KEEPS IT, as the LOWER arm of the ``max`` in the criterion below.
+#: A stack whose sliver-free truncation floor is under 1e-5 is arbitrated
+#: exactly as round 2 arbitrated it, so the round-3 change can only ever
+#: attribute MORE, never less -- which is what makes it a widening of the
+#: criterion rather than a re-tuning of it.
 _SLIVER_ATTRIB_CLOSURE = 1.0e-5
+
+#: ROUND-3 CLOSURE, RELATIVE (2026-09-11; verification defect D-5).  The bar
+#: above is ABSOLUTE, so on a stack whose SLIVER-FREE truncation super-unity
+#: already sits above 1e-5 the criterion can NEVER be met, however completely
+#: the prescribed snap restores the answer: the arbiter says ``truncation``,
+#: the wrong number is RETURNED, and the message names a remedy it claims will
+#: not work.  Measured on a guided-mode grating in a dense-superstrate grazing
+#: mount (period 1.0 um, n_sup 2.4, n_sub 1.45+0.05i, wl 0.93 um, theta 1.22,
+#: degree 8) whose sliver-free degree ladder -- 2.078e-04 / 3.7295e-05 /
+#: 9.832e-06 / 2.961e-07 / 3.153e-09 at degrees 6/8/10/12/14 -- is clean
+#: truncation: the snap removes a 621x-5,181x super-unity and puts the answer
+#: back on the sliver-free reference to err/delta = 0.0019, and round 2
+#: returned all three rows, off by 1,811x-3,501x the physical wall shift at
+#: R+T = 1.19.
+#:
+#: So the criterion becomes "the snap must REMOVE most of the violation"
+#: rather than "it must reach a fixed floor", and the constant is sized on the
+#: super-unity DROP factor ``(worst - 1) / su_snapped``.  Every number below
+#: was measured for this change on BOTH builds and agrees between them to 10
+#: significant figures (2026-09-11, ``validation/probe_fix_sliver_round3/``).
+#:
+#: THE SIZING RULE, and it is not the obvious one.  The closure has never been
+#: a separator on its own -- round 2 says so about its own bar ("without the
+#: move criterion the closure alone re-admits 6 false positives whose
+#: truncation super-unity happens to fall BELOW unity on the snapped grid"),
+#: and a wider box makes that plainer: over 1,078 arbitrated CORRECT rows of a
+#: 576-configuration box spanning three periods, two wavelengths, two
+#: superstrate indices, three lossy substrates, two angles, two degrees, two
+#: ridge permittivities and two slice counts (``s4_lower_envelope.py``), 21
+#: rows have an INFINITE drop, because their snapped solve leaves the
+#: super-unity regime entirely -- and those 21 are exactly the rows the
+#: ABSOLUTE bar admits too.  So what this constant must not do is admit a
+#: correct row the round-2 closure did not already admit, and that is what
+#: fixes it:
+#:
+#:   * the CORRECT population's FINITE drop envelope is 36.611 (those 1,078
+#:     rows; the 291 arbitrated correct rows of the 648-configuration census
+#:     box in ``s1_census.py`` reach only 2.2893).  1e-2 demands a 100x drop,
+#:     so it carries 2.73x over that envelope -- and, measured, the set of
+#:     correct rows it admits is 21, IDENTICAL to the absolute bar's 21, while
+#:     3e-2 and 1e-1 admit 22.  1e-2 is the COARSEST value on the
+#:     1e-1 / 3e-2 / 1e-2 / 3e-3 / 1e-3 ladder that adds no correct row at all.
+#:   * the D-5 population -- rows whose snapped answer IS the sliver-free
+#:     reference but whose residue lands on the mount's own truncation floor,
+#:     so the ABSOLUTE bar rejects them -- runs 49.107 .. 5,304.6 over 88 rows
+#:     on five mounts and two degrees (``s3_dropgap.py``).  1e-2 recovers 85 of
+#:     the 88; 3e-3 and 1e-3 recover 60 and 32.
+#:
+#: and the CONJUNCTION is where the decision actually lives: 0 of those 1,078
+#: correct rows (and 0 of the census box's 291, and 0 of ``s3``'s 615
+#: arbitrated rows) is attributed at ANY fraction from 1e-1 to 1e-3, because
+#: the move criterion holds every one out -- the correct population's
+#: ``move / w_wide`` envelope is 79.032 against the 100x bar, and among the
+#: rows this closure admits it is 37.007.
+#:
+#: The flip census is one-sided, which is the other half of the claim: over
+#: 615 arbitrated rows of eight devices (five ordinary staircases with
+#: continuity slopes 0.47 .. 31.4, five D-5 mounts, four points on a
+#: guided-mode resonance flank with ``dR/d(duty)`` 128-174) every verdict this
+#: constant moves is ``truncation`` -> ``sliver`` on a row that is WRONG by
+#: both the absolute and the slope-normalised continuity rule, the mildest at
+#: 517.7x the physical wall shift, and NO row moves the other way.
+#:
+#: The upper side is a COVERAGE statement rather than a second envelope,
+#: because the D-5 population has no floor above the correct one: a row's drop
+#: is at least ``_SLIVER_TRIGGER_BAR`` divided by the mount's own truncation
+#: floor, so a mount whose floor is within this fraction of the trigger cannot
+#: be attributed at any setting.  The three D-5 rows 1e-2 leaves returned are
+#: the visible edge of that band (drop 49.107 on a degree-6 mount whose floor
+#: is 2.078e-04, i.e. 4.8x below the trigger).  Same shape of limit as R2-A;
+#: recorded as open item R3-A.
+_SLIVER_CLOSURE_FRACTION = 1.0e-2
 
 #: ARBITER criterion 2: how far the answer must MOVE, in units of the widest
 #: manufactured cell (which is the largest displacement the prescribed snap
@@ -531,9 +635,12 @@ def _sliver_arbiter(stack, worst, R_eff, T_eff, src):
     Returns ``None`` when the stack does not trip the geometric screen at all
     (nothing changes), else ``(verdict, evidence)`` with ``verdict`` one of
 
-    ``'sliver'``      the super-unity VANISHES on the prescribed
-                      ``min_feature`` grid AND the answer moves far past the
-                      geometric perturbation that snap describes -> REFUSE.
+    ``'sliver'``      the super-unity FALLS AWAY on the prescribed
+                      ``min_feature`` grid -- to ``_SLIVER_ATTRIB_CLOSURE``
+                      outright, or by ``1 / _SLIVER_CLOSURE_FRACTION`` of
+                      itself, whichever is the weaker demand (ROUND 3) -- AND
+                      the answer moves far past the geometric perturbation
+                      that snap describes -> REFUSE.
     ``'truncation'``  it SURVIVES (or the answer barely moves): the sliver is
                       present and is not what moved the number -> WARN, and
                       name ``degree`` / ``n_slices``.
@@ -561,10 +668,19 @@ def _sliver_arbiter(stack, worst, R_eff, T_eff, src):
     move = _sliver_answer_move(R_eff, T_eff, R2, T2)
     if move is None:                                 # pragma: no cover
         return ("unknown", None)
+    # ROUND 3 (verification defect D-5): the closure is RELATIVE -- the
+    # prescribed snap has to REMOVE most of the violation rather than reach a
+    # fixed floor, which a stack whose own truncation floor sits above that
+    # floor can never do.  The round-2 absolute value is kept as the lower arm
+    # of the max, so this criterion is never STRICTER than round 2's: every
+    # solve round 2 attributed is still attributed, and only a ``truncation``
+    # verdict can become a ``sliver`` one.
+    violation = max(worst - 1.0, 0.0)
+    closure = max(_SLIVER_ATTRIB_CLOSURE, violation * _SLIVER_CLOSURE_FRACTION)
+    drop = (violation / su) if su > 0.0 else float("inf")
     ev = dict(snapped_super_unity=su, move=move, w_wide=w_wide, mf_fix=mf_fix,
-              hit=hit)
-    attributed = (su <= _SLIVER_ATTRIB_CLOSURE
-                  and move > _SLIVER_MOVE_FACTOR * w_wide)
+              hit=hit, closure=closure, drop=drop, violation=violation)
+    attributed = (su <= closure and move > _SLIVER_MOVE_FACTOR * w_wide)
     return ("sliver" if attributed else "truncation", ev)
 
 
@@ -638,17 +754,26 @@ def _sliver_refusal(stack, worst, *, evidence=None):
             "geometry and the theorem alone -- which is exactly the 2026-09-11 "
             "round-1 behaviour.  ")
     else:
+        drop = evidence.get("drop", float("inf"))
+        viol = evidence.get("violation", max(worst - 1.0, 0.0))
+        drop_txt = (f"ALL of the 1+{viol:.3g} this solve reads"
+                    if not np.isfinite(drop) else
+                    f"a {drop:.4g}x drop from the 1+{viol:.3g} this solve "
+                    f"reads")
         attrib = (
             f"  ATTRIBUTION, MEASURED ON THIS CALL (one extra solve): "
             f"re-solved on the min_feature={evidence['mf_fix']:.4g} grid the "
             f"cell is gone and the super-unity GOES WITH IT -- max R+T there "
-            f"is 1+{evidence['snapped_super_unity']:.3g} (bar "
-            f"{_SLIVER_ATTRIB_CLOSURE:g}) -- while the answer MOVES "
-            f"{evidence['move']:.3g} in per-order efficiency, "
-            f"{evidence['move'] / evidence['w_wide']:.4g}x the widest "
-            f"manufactured cell (bar {_SLIVER_MOVE_FACTOR:g}x).  So the "
-            f"SLIVER moved this answer, not degree / n_slices: this refusal "
-            f"is an attribution, not a guess.  ")
+            f"is 1+{evidence['snapped_super_unity']:.3g}, i.e. {drop_txt} "
+            f"(bar: the snap must remove {1.0 / _SLIVER_CLOSURE_FRACTION:.3g}x "
+            f"of the violation, or reach {_SLIVER_ATTRIB_CLOSURE:g} outright, "
+            f"whichever is the weaker demand -- here "
+            f"{evidence.get('closure', _SLIVER_ATTRIB_CLOSURE):.3g}) -- while "
+            f"the answer MOVES {evidence['move']:.3g} in per-order "
+            f"efficiency, {evidence['move'] / evidence['w_wide']:.4g}x the "
+            f"widest manufactured cell (bar {_SLIVER_MOVE_FACTOR:g}x).  So "
+            f"the SLIVER moved this answer, not degree / n_slices: this "
+            f"refusal is an attribution, not a guess.  ")
     return (
         f"PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the "
         f"shared union grid.  The union of the layers' walls carries {n_hit} "
@@ -682,7 +807,8 @@ def _sliver_refusal(stack, worst, *, evidence=None):
         f"says so.  Choose min_feature where the answer is stationary in "
         f"BOTH degree and min_feature.  " + attrib
         + "See docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md and "
-        "docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md; set "
+        "docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md and "
+        "docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md; set "
         "lumenairy.elements.pmm.stack.PMM_SLIVER_GUARD = False to restore "
         "the pre-fix warn-and-return behaviour.")
 
@@ -713,10 +839,12 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
       answer, and act on its verdict (O-11 round 1 2026-09-11, round 2
       2026-09-11):
 
-      - ``'sliver'`` -> **raise**.  The super-unity vanishes on the
-        prescribed ``min_feature`` grid and the answer moves far past the
-        geometric perturbation that snap describes, so the number is not
-        merely unreliable, it is wrong -- and the refusal names the
+      - ``'sliver'`` -> **raise**.  The super-unity falls away on the
+        prescribed ``min_feature`` grid -- to ``_SLIVER_ATTRIB_CLOSURE``
+        outright or by ``1 / _SLIVER_CLOSURE_FRACTION`` of itself, whichever
+        is the weaker demand (ROUND 3, defect D-5) -- and the answer moves far
+        past the geometric perturbation that snap describes, so the number is
+        not merely unreliable, it is wrong -- and the refusal names the
         ``min_feature`` that removes the cell AND what the arbiter measured.
       - ``'truncation'`` -> **warn** (this bar's ordinary warning, with one
         sentence saying a sliver is present and is NOT the cause).  Round 1
@@ -767,15 +895,40 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
         if kind == "unknown" and worst > 1.0 + _STACK_SUPERUNITY_BAR:
             raise ValueError(_sliver_refusal(stack, worst))
         if kind == "truncation":
+            # ROUND 3: say WHICH of the two criteria was not met, and quote
+            # what was MEASURED.  Round 2 ended this note with "raising
+            # min_feature will silence nothing here" unconditionally, which is
+            # false on every row whose snap DOES remove the violation and
+            # whose verdict turns on the move criterion instead -- and false
+            # by 621x-5,181x on the class of verification defect D-5.
+            su_snap = ev["snapped_super_unity"]
+            drop = ev.get("drop", float("inf"))
+            mv = ev["move"] / ev["w_wide"]
+            if su_snap <= ev.get("closure", _SLIVER_ATTRIB_CLOSURE):
+                why = (
+                    f"the super-unity DOES fall away there -- to "
+                    f"1+{su_snap:.3g}, a {drop:.4g}x drop -- but the answer "
+                    f"moves only {mv:.3g}x the widest manufactured cell "
+                    f"against the {_SLIVER_MOVE_FACTOR:g}x an attribution "
+                    f"asks for, so this number does not depend on that cell.  "
+                    f"Raising min_feature removes the cell without moving the "
+                    f"answer")
+            else:
+                why = (
+                    f"the super-unity SURVIVES at 1+{su_snap:.3g} -- a "
+                    f"{drop:.4g}x drop from the "
+                    f"1+{ev.get('violation', max(worst - 1.0, 0.0)):.3g} here, "
+                    f"against the {1.0 / _SLIVER_CLOSURE_FRACTION:.3g}x an "
+                    f"attribution asks for -- and the answer moves {mv:.3g}x "
+                    f"the widest manufactured cell (bar "
+                    f"{_SLIVER_MOVE_FACTOR:g}x).  Raising min_feature leaves "
+                    f"1+{su_snap:.3g} standing")
             note = (
                 f"  A near-coincident-wall SLIVER ({ev['hit'][0]:.3g} of a "
                 f"period) IS present on the union grid but is NOT what moved "
                 f"this answer: re-solved on the min_feature={ev['mf_fix']:.4g} "
-                f"grid that removes it, the super-unity SURVIVES at "
-                f"1+{ev['snapped_super_unity']:.3g} and the answer moves only "
-                f"{ev['move'] / ev['w_wide']:.3g}x the cell width.  Raising "
-                f"min_feature will silence nothing here -- reduce n_slices or "
-                f"raise degree.")
+                f"grid that removes it, {why} -- reduce n_slices or raise "
+                f"degree.")
     import warnings
     if worst > 1.0 + _STACK_SUPERUNITY_BAR:
         warnings.warn(

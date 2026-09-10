@@ -185,6 +185,94 @@ Regression: every test file importing `PMMStack` (42) -- **812 passed,
 on the pre-round-2 tip.
 Full write-up: `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md`.
 
+**ROUND 3 (2026-09-11) -- the arbiter's CLOSURE is now RELATIVE.**  The
+independent verification of round 2
+(`docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND2_2026_09_11.md`, defect **D-5**)
+found the one case round 2's criterion cannot express, and it is the one place
+round 2 was worse than round 1.  `_SLIVER_ATTRIB_CLOSURE` asked the re-solve on
+the prescribed `min_feature` grid to reach an ABSOLUTE 1e-5, so on a stack whose
+SLIVER-FREE truncation super-unity already sits above that bar the criterion can
+NEVER be met -- however completely the snap restores the answer.  Measured on a
+guided-mode grating in a dense-superstrate grazing mount (period 1.0 um,
+`n_sup` 2.4, `n_sub` 1.45+0.05i, `wl` 0.93 um, theta 1.22, degree 8, whose
+sliver-free degree ladder 2.078e-04 / 3.7295e-05 / 9.832e-06 / 2.961e-07 /
+3.153e-09 at degrees 6/8/10/12/14 is clean truncation): the snap removes a
+**621x-5,181x** super-unity and puts the answer back on the sliver-free
+reference to `err/delta` = **0.0019**, and round 2 returned all three rows --
+off by **1,811x-3,501x** the physical wall shift at `R+T` = 1.19 -- under a
+warning saying the prescribed remedy would "silence nothing here".  The closure
+now asks the snap to REMOVE most of the violation instead:
+`su_snapped <= max(_SLIVER_ATTRIB_CLOSURE, (max(R+T) - 1) *
+_SLIVER_CLOSURE_FRACTION)` with `_SLIVER_CLOSURE_FRACTION` = **1e-2**, the
+round-2 value kept as the LOWER arm -- so the criterion is a widening and never
+a tightening, and a `sliver` verdict can never become a `truncation` one.
+
+The constant is sized on the super-unity DROP factor `(max(R+T) - 1) /
+su_snapped`, and the sizing rule is not the obvious one.  The closure has never
+been a separator on its own -- round 2 says as much about its own bar -- and a
+576-configuration box (three periods, two wavelengths, two superstrate indices,
+three lossy substrates, two angles, two degrees, two ridge permittivities, two
+slice counts, four wall steps) makes that plain: of its **1,078** arbitrated
+CORRECT rows, **21** have an INFINITE drop because their snapped solve leaves
+the super-unity regime, and those 21 are exactly the rows the ABSOLUTE bar
+admits too.  So what the constant must not do is admit a correct row the
+round-2 closure did not already admit, and **1e-2 is the coarsest value on the
+1e-1 / 3e-2 / 1e-2 / 3e-3 / 1e-3 ladder that admits none** (3e-2 and 1e-1 admit
+one more, a correct row with a finite drop of 36.611; 1e-2 clears that envelope
+by 2.73x).  Against it, the D-5 population runs **49.107 .. 5,304.6** over 88
+rows on five mounts, of which 1e-2 recovers **85** -- 3e-3 and 1e-3 would
+recover 60 and 32, the worst row they leave returned being off by 6,439x and
+11,582x the physical wall shift.  The CONJUNCTION is where the decision lives:
+over **1,369** arbitrated CORRECT rows on two independent boxes (and the 615
+further arbitrated rows of an eight-device scan, none of which the continuity
+rule calls correct), **0** are attributed at any fraction from 1e-1 to 1e-3,
+because the move criterion holds every one out (their `move / w_wide` envelope is 79.032 against the 100x bar,
+and 37.007 among the rows the closure admits).
+
+MEASURED RESULT, both builds, agreeing to 10 significant figures: both censuses
+are unchanged row for row -- false positives **0/648** with all **648/648**
+returned answers still bit-identical to the unguarded ones, false negatives
+**4/660** -- and over 615 arbitrated rows of eight devices (five staircases
+with continuity slopes 0.47 .. 31.4, five D-5 mounts, four points on a
+guided-mode resonance flank with `dR/d(duty)` 128-174) the ONLY verdicts that
+move are **85** rows of the D-5 class, every one WRONG by both the absolute and
+the slope-normalised continuity rule and the mildest off by **517.7x** the wall
+shift, with **0** moving the other way.  Both messages are rewritten to be true
+under the new criterion: the `truncation` note names WHICH of the two criteria
+was not met and quotes the measured drop and the residue the prescribed grid
+leaves (the unconditional "raising min_feature will silence nothing here" is
+gone), and the refusal's ATTRIBUTION paragraph quotes the drop and the closure
+actually applied rather than the absolute bar.
+
+Also in this round, from the same verification: the round-2 report's four
+SAMPLE-scoped numbers are corrected in a new S0.1 table (trigger headroom
+9.11x -> **8.03x**; the wrong population's `move / w_wide` floor 466.2 ->
+**147.411**, so that bar carries 1.47x and not 4.66x; "one sub-unity wrong row"
+-> at least **11**, worst -1.13511e-03; and "CORRECT rows move at most 26.58"
+-> **833.78** on a resonant device, which refutes the published bound by 31x
+without changing the decision -- the move criterion's correctness rests on the
+CLOSURE arm, not on a universal `dR/dx` = O(1)), and the verification's D-5
+pinning test is re-pinned against the repair it asked for.
+
+Three OPEN items are recorded rather than fixed.  **R3-A** is a limit rather
+than a defect: a row's drop is at least the trigger divided by the mount's own
+truncation floor, so a mount whose floor is within `_SLIVER_CLOSURE_FRACTION`
+of the trigger cannot be attributed at any setting -- R2-A one level deeper,
+and the three D-5 rows 1e-2 leaves returned (drop 49.107, degree 6) are its
+visible edge.  **R3-B** (pre-existing, MEDIUM): one thin OWNED feature lowers
+the GLOBAL own-scale and disarms the cross-layer refusal for the whole stack --
+reproducer
+`tests/unit/test_verify_pmmstack_sliver_round2.py::test_an_owned_liner_anywhere_disarms_the_cross_layer_refusal`,
+measured `own / w` 9,287.3 -> 0.03 and `R+T` = 23.30 RETURNED.  **R3-C**
+(pre-existing, LOW): a KEYED `prepare()` stack is not `_stack_provably_passive`,
+so the screen is never reached -- reproducer
+`tests/unit/test_verify_pmmstack_sliver_round2.py::test_a_keyed_prepared_stack_is_outside_the_guard_entirely`,
+measured `R+T` = 23.42 returned under the plain warning.  Both R3-B and R3-C are
+changes to the SCREEN rather than to the arbiter and need their own
+bit-identity and census arms.
+`tests/unit/test_fix_pmmstack_sliver_round3.py`, 6 tests, 3.64 s (Windows) / 3.21 s (WSL).
+Full write-up: `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md`.
+
 ### Fixed -- the `min_feature` wall-snap treats a SYMMETRIC pair symmetrically
 
 `_pmm_union_grid` merges a cross-layer wall pair when `d < min_feature`, and `d`
