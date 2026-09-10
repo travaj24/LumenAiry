@@ -1,0 +1,2207 @@
+{
+ "_arm": {
+  "arm": "slfix",
+  "build": "win",
+  "tag": "slfix.win",
+  "tree": "postfix(branch tip)",
+  "lumenairy": "C:\\tmp\\lum_slfix\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "hyb_sl0.50_dg11_ob25_M3": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.87e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0157 > 1e-08 in the same scaling, on a 98 x 98 b",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 765749358479526.5,
+   "min_rcond_eq": 1.8654469805272778e-16,
+   "max_resid_eq": 0.015664350214069072,
+   "sizes": [
+    98
+   ],
+   "rows": [
+    {
+     "n": 98,
+     "cond": 765749358479526.5,
+     "rcond_eq": 1.8654469805272778e-16,
+     "resid_eq": 0.015664350214069072
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_ob25_film_M3": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.87e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0157 > 1e-08 in the same scaling, on a 98 x 98 b",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 765749358479526.5,
+   "min_rcond_eq": 1.8654469805272778e-16,
+   "max_resid_eq": 0.015664350214069072,
+   "sizes": [
+    98
+   ],
+   "rows": [
+    {
+     "n": 98,
+     "cond": 765749358479526.5,
+     "rcond_eq": 1.8654469805272778e-16,
+     "resid_eq": 0.015664350214069072
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3.9e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0808 > 1e-08 in the same scaling, on a 242 x 242 ",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 4481074697762352.0,
+   "min_rcond_eq": 3.9020347975000443e-17,
+   "max_resid_eq": 0.08082045091683741,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 4481074697762352.0,
+     "rcond_eq": 3.9020347975000443e-17,
+     "resid_eq": 0.08082045091683741
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_ob25_film_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3.9e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0808 > 1e-08 in the same scaling, on a 242 x 242 ",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 4481074697762352.0,
+   "min_rcond_eq": 3.9020347975000443e-17,
+   "max_resid_eq": 0.08082045091683741,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 4481074697762352.0,
+     "rcond_eq": 3.9020347975000443e-17,
+     "resid_eq": 0.08082045091683741
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_ob25_M7": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 4.15e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0027 > 1e-08 in the same scaling, on a 450 x 450",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 517634707364392.75,
+   "min_rcond_eq": 4.1453098144680706e-16,
+   "max_resid_eq": 0.0026961243261880634,
+   "sizes": [
+    450
+   ],
+   "rows": [
+    {
+     "n": 450,
+     "cond": 517634707364392.75,
+     "rcond_eq": 4.1453098144680706e-16,
+     "resid_eq": 0.0026961243261880634
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_ob25_film_M7": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 4.15e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0027 > 1e-08 in the same scaling, on a 450 x 450",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 517634707364392.75,
+   "min_rcond_eq": 4.1453098144680706e-16,
+   "max_resid_eq": 0.0026961243261880634,
+   "sizes": [
+    450
+   ],
+   "rows": [
+    {
+     "n": 450,
+     "cond": 517634707364392.75,
+     "rcond_eq": 4.1453098144680706e-16,
+     "resid_eq": 0.0026961243261880634
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_ob25_M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0065082446536655,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 53.8126839867216,
+   "min_rcond_eq": 0.0011214646693376985,
+   "max_resid_eq": 2.271837830209438e-15,
+   "sizes": [
+    722
+   ],
+   "rows": [
+    {
+     "n": 722,
+     "cond": 33.759652030188526,
+     "rcond_eq": 0.001337945396323279,
+     "resid_eq": 2.271837830209438e-15
+    },
+    {
+     "n": 722,
+     "cond": 53.8126839867216,
+     "rcond_eq": 0.0011214646693376985,
+     "resid_eq": 1.5609797364961404e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_ob25_film_M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0067857826765088,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 3,
+   "max_cond": 33.798203423313204,
+   "min_rcond_eq": 0.001337945396323279,
+   "max_resid_eq": 2.271837830209438e-15,
+   "sizes": [
+    722
+   ],
+   "rows": [
+    {
+     "n": 722,
+     "cond": 33.759652030188526,
+     "rcond_eq": 0.001337945396323279,
+     "resid_eq": 2.271837830209438e-15
+    },
+    {
+     "n": 722,
+     "cond": 33.798203423313204,
+     "rcond_eq": 0.0023795176446769657,
+     "resid_eq": 1.4093301272151119e-15
+    },
+    {
+     "n": 722,
+     "cond": 10.015147072880614,
+     "rcond_eq": 0.09955092516328252,
+     "resid_eq": 7.316223843513776e-17
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_ob25_M11": {
+  "outcome": "SOLVED",
+  "RT": 1.0006307018964447,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 712.7140235367814,
+   "min_rcond_eq": 2.9710970587251556e-05,
+   "max_resid_eq": 1.2310579910079064e-14,
+   "sizes": [
+    1058
+   ],
+   "rows": [
+    {
+     "n": 1058,
+     "cond": 604.1270088306147,
+     "rcond_eq": 2.9710970587251556e-05,
+     "resid_eq": 1.2310579910079064e-14
+    },
+    {
+     "n": 1058,
+     "cond": 712.7140235367814,
+     "rcond_eq": 0.00028122832409711515,
+     "resid_eq": 6.031586073995926e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_ob25_film_M11": {
+  "outcome": "SOLVED",
+  "RT": 1.0010181611237248,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 3,
+   "max_cond": 604.1270088306147,
+   "min_rcond_eq": 2.9710970587251556e-05,
+   "max_resid_eq": 1.2310579910079064e-14,
+   "sizes": [
+    1058
+   ],
+   "rows": [
+    {
+     "n": 1058,
+     "cond": 604.1270088306147,
+     "rcond_eq": 2.9710970587251556e-05,
+     "resid_eq": 1.2310579910079064e-14
+    },
+    {
+     "n": 1058,
+     "cond": 544.8107748267355,
+     "rcond_eq": 0.0003284077169266274,
+     "resid_eq": 5.4391809511479914e-15
+    },
+    {
+     "n": 1058,
+     "cond": 10.015147072880616,
+     "rcond_eq": 0.09955092516328252,
+     "resid_eq": 7.227116515126519e-17
+    }
+   ]
+  }
+ },
+ "hyb_sl0.00_dg11_ob25_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0381658644135738,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 0
+  }
+ },
+ "hyb_sl0.10_dg11_ob25_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0408469189249316,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 48.65639573779328,
+   "min_rcond_eq": 0.001091382521546647,
+   "max_resid_eq": 2.3115677048014147e-15,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 17.754562313561646,
+     "rcond_eq": 0.003033060116841184,
+     "resid_eq": 2.3115677048014147e-15
+    },
+    {
+     "n": 242,
+     "cond": 48.65639573779328,
+     "rcond_eq": 0.001091382521546647,
+     "resid_eq": 2.187296490971017e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.25_dg11_ob25_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0435854786495338,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 65.56367014239336,
+   "min_rcond_eq": 0.0011475645090336585,
+   "max_resid_eq": 2.041863610767546e-15,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 23.93484569889399,
+     "rcond_eq": 0.002182069316265257,
+     "resid_eq": 2.041863610767546e-15
+    },
+    {
+     "n": 242,
+     "cond": 65.56367014239336,
+     "rcond_eq": 0.0011475645090336585,
+     "resid_eq": 1.6117745723972224e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.35_dg11_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 9.1e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0372 > 1e-08 in the same scaling, on a 242 x 242 ",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 3566047943302132.0,
+   "min_rcond_eq": 9.098156523724261e-17,
+   "max_resid_eq": 0.037186981565218394,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 3566047943302132.0,
+     "rcond_eq": 9.098156523724261e-17,
+     "resid_eq": 0.037186981565218394
+    }
+   ]
+  }
+ },
+ "hyb_sl1.00_dg11_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3.42e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0543 > 1e-08 in the same scaling, on a 242 x 242",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 2886963535017305.0,
+   "min_rcond_eq": 3.4191113908425386e-17,
+   "max_resid_eq": 0.054275138500025605,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 2886963535017305.0,
+     "rcond_eq": 3.4191113908425386e-17,
+     "resid_eq": 0.054275138500025605
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg7_ob25_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0441877346370887,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 59.38484637070722,
+   "min_rcond_eq": 0.0015920531001656934,
+   "max_resid_eq": 2.0636600166332873e-15,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 44.36160397750298,
+     "rcond_eq": 0.002209902209695175,
+     "resid_eq": 2.0636600166332873e-15
+    },
+    {
+     "n": 242,
+     "cond": 59.38484637070722,
+     "rcond_eq": 0.0015920531001656934,
+     "resid_eq": 1.3902069434498157e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg9_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 6.51e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0428 > 1e-08 in the same scaling, on a 242 x 242",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 3022092584146682.0,
+   "min_rcond_eq": 6.509848867705957e-17,
+   "max_resid_eq": 0.04276625435152482,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 3022092584146682.0,
+     "rcond_eq": 6.509848867705957e-17,
+     "resid_eq": 0.04276625435152482
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg13_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.13e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0137 > 1e-08 in the same scaling, on a 242 x 242",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 867647165446153.2,
+   "min_rcond_eq": 2.130390588503989e-16,
+   "max_resid_eq": 0.013686649828368645,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 867647165446153.2,
+     "rcond_eq": 2.130390588503989e-16,
+     "resid_eq": 0.013686649828368645
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg15_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.36e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.013 > 1e-08 in the same scaling, on a 242 x 242 ",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 778522279201187.2,
+   "min_rcond_eq": 2.3587293461535107e-16,
+   "max_resid_eq": 0.013036432720001136,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 778522279201187.2,
+     "rcond_eq": 2.3587293461535107e-16,
+     "resid_eq": 0.013036432720001136
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_th15_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 4.38e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.043 > 1e-08 in the same scaling, on a 242 x 242 ",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 3367397791150841.0,
+   "min_rcond_eq": 4.38205226593528e-17,
+   "max_resid_eq": 0.04296472520037311,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 3367397791150841.0,
+     "rcond_eq": 4.38205226593528e-17,
+     "resid_eq": 0.04296472520037311
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_th20_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.09e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.148 > 1e-08 in the same scaling, on a 242 x 242 ",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 7003032094317005.0,
+   "min_rcond_eq": 1.0901307660741835e-17,
+   "max_resid_eq": 0.14778442323911256,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 7003032094317005.0,
+     "rcond_eq": 1.0901307660741835e-17,
+     "resid_eq": 0.14778442323911256
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_th22_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0554404190695175,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.06 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 1189.7867656649391,
+   "min_rcond_eq": 0.0004762542391241829,
+   "max_resid_eq": 6.460120274284347e-15,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 66.05807554126201,
+     "rcond_eq": 0.0007760227003461069,
+     "resid_eq": 2.342915411047904e-15
+    },
+    {
+     "n": 242,
+     "cond": 1189.7867656649391,
+     "rcond_eq": 0.0004762542391241829,
+     "resid_eq": 6.460120274284347e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_th30_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 8.89e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0313 > 1e-08 in the same scaling, on a 242 x 242",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 1903459059686810.5,
+   "min_rcond_eq": 8.891960568693233e-17,
+   "max_resid_eq": 0.03128173905950177,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 1903459059686810.5,
+     "rcond_eq": 8.891960568693233e-17,
+     "resid_eq": 0.03128173905950177
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_th35_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.06849927878352,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.07 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 50.53660168564407,
+   "min_rcond_eq": 0.0037518005800021258,
+   "max_resid_eq": 1.8441236400236112e-15,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 50.53660168564407,
+     "rcond_eq": 0.0037518005800021258,
+     "resid_eq": 1.8441236400236112e-15
+    },
+    {
+     "n": 242,
+     "cond": 16.212880853834807,
+     "rcond_eq": 0.004520067440793006,
+     "resid_eq": 1.066464098679835e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_normal_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0349819662356998,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 211.99152111941854,
+   "min_rcond_eq": 0.0007291349769202115,
+   "max_resid_eq": 3.4112457966318017e-15,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 211.99152111941854,
+     "rcond_eq": 0.0007291349769202115,
+     "resid_eq": 3.4112457966318017e-15
+    },
+    {
+     "n": 242,
+     "cond": 53.387022256300526,
+     "rcond_eq": 0.003707593163599399,
+     "resid_eq": 1.294674244723612e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_conical25_40_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0461370191290913,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.05 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 1630.3351405965163,
+   "min_rcond_eq": 9.34639978035999e-05,
+   "max_resid_eq": 1.4694308112517246e-14,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 1630.3351405965163,
+     "rcond_eq": 9.34639978035999e-05,
+     "resid_eq": 1.4694308112517246e-14
+    },
+    {
+     "n": 242,
+     "cond": 685.6703216764896,
+     "rcond_eq": 0.00023464018680241595,
+     "resid_eq": 7.801218451244156e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_dg11_oblique40_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0726292370875938,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.07 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 22.54091216575419,
+   "min_rcond_eq": 0.003476600432527021,
+   "max_resid_eq": 1.7858129156135685e-15,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 22.54091216575419,
+     "rcond_eq": 0.003476600432527021,
+     "resid_eq": 1.7858129156135685e-15
+    },
+    {
+     "n": 242,
+     "cond": 15.516364558650825,
+     "rcond_eq": 0.0038596822967801323,
+     "resid_eq": 1.0989149579536444e-15
+    }
+   ]
+  }
+ },
+ "hyb_OOP_vert_ob25_M3": {
+  "outcome": "SOLVED",
+  "RT": 1.058027163638578,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.06 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 38.490171623293115,
+   "min_rcond_eq": 0.002661144710583843,
+   "max_resid_eq": 1.471330231958991e-15,
+   "sizes": [
+    98
+   ],
+   "rows": [
+    {
+     "n": 98,
+     "cond": 14.968315375652605,
+     "rcond_eq": 0.0052327691634461585,
+     "resid_eq": 1.4704601354219167e-15
+    },
+    {
+     "n": 98,
+     "cond": 38.490171623293115,
+     "rcond_eq": 0.002661144710583843,
+     "resid_eq": 1.471330231958991e-15
+    }
+   ]
+  }
+ },
+ "hyb_OOP_vert_benign_M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0484514082531324,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.05 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 105.02161942474085,
+   "min_rcond_eq": 0.000911877501176945,
+   "max_resid_eq": 2.7662579384722297e-15,
+   "sizes": [
+    98
+   ],
+   "rows": [
+    {
+     "n": 98,
+     "cond": 23.046928505874554,
+     "rcond_eq": 0.0030665371295572393,
+     "resid_eq": 1.4659756361561615e-15
+    },
+    {
+     "n": 98,
+     "cond": 105.02161942474085,
+     "rcond_eq": 0.000911877501176945,
+     "resid_eq": 2.7662579384722297e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_benign_M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0541001927915348,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.05 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 60.4308793227201,
+   "min_rcond_eq": 0.0024405225396752802,
+   "max_resid_eq": 1.2948379040929986e-15,
+   "sizes": [
+    98
+   ],
+   "rows": [
+    {
+     "n": 98,
+     "cond": 22.269189037986017,
+     "rcond_eq": 0.003318809236563044,
+     "resid_eq": 1.2798665602897213e-15
+    },
+    {
+     "n": 98,
+     "cond": 60.4308793227201,
+     "rcond_eq": 0.0024405225396752802,
+     "resid_eq": 1.2948379040929986e-15
+    }
+   ]
+  }
+ },
+ "hyb_OOP_vert_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.66e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0165 > 1e-08 in the same scaling, on a 242 x 242",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 856500712461306.9,
+   "min_rcond_eq": 1.6625273514805227e-16,
+   "max_resid_eq": 0.01651500639779754,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 856500712461306.9,
+     "rcond_eq": 1.6625273514805227e-16,
+     "resid_eq": 0.01651500639779754
+    }
+   ]
+  }
+ },
+ "hyb_OOP_vert_benign_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0288472243142222,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 42.476678678885946,
+   "min_rcond_eq": 0.0008006026438009412,
+   "max_resid_eq": 3.1873876212603472e-15,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 30.720934135135316,
+     "rcond_eq": 0.0018768090399721694,
+     "resid_eq": 3.1873876212603472e-15
+    },
+    {
+     "n": 242,
+     "cond": 42.476678678885946,
+     "rcond_eq": 0.0008006026438009412,
+     "resid_eq": 2.1982630474712403e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_benign_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0324499004697332,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 78.96433358971844,
+   "min_rcond_eq": 0.0009688527285308287,
+   "max_resid_eq": 2.2350262864895605e-15,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 78.96433358971844,
+     "rcond_eq": 0.0009688527285308287,
+     "resid_eq": 2.2350262864895605e-15
+    },
+    {
+     "n": 242,
+     "cond": 78.35561959796345,
+     "rcond_eq": 0.0014380139014254373,
+     "resid_eq": 1.3291821333581985e-15
+    }
+   ]
+  }
+ },
+ "hyb_OOP_vert_ob25_M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0248092521724024,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 61.76260760393077,
+   "min_rcond_eq": 0.0007907494604248735,
+   "max_resid_eq": 5.9789208663802624e-15,
+   "sizes": [
+    450
+   ],
+   "rows": [
+    {
+     "n": 450,
+     "cond": 42.601965014357106,
+     "rcond_eq": 0.000820701207319232,
+     "resid_eq": 5.9789208663802624e-15
+    },
+    {
+     "n": 450,
+     "cond": 61.76260760393077,
+     "rcond_eq": 0.0007907494604248735,
+     "resid_eq": 2.4849934069502893e-15
+    }
+   ]
+  }
+ },
+ "hyb_OOP_vert_benign_M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0163272266331034,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 43.274398350728795,
+   "min_rcond_eq": 0.0008177495620907016,
+   "max_resid_eq": 2.8036269413193138e-15,
+   "sizes": [
+    450
+   ],
+   "rows": [
+    {
+     "n": 450,
+     "cond": 38.8280301867562,
+     "rcond_eq": 0.0015035875423380204,
+     "resid_eq": 2.8036269413193138e-15
+    },
+    {
+     "n": 450,
+     "cond": 43.274398350728795,
+     "rcond_eq": 0.0008177495620907016,
+     "resid_eq": 2.0641467287988425e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_benign_M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0181167215121851,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) --"
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 29.82365861956884,
+   "min_rcond_eq": 0.0015776202269248347,
+   "max_resid_eq": 1.828587300050384e-15,
+   "sizes": [
+    450
+   ],
+   "rows": [
+    {
+     "n": 450,
+     "cond": 18.31190262391309,
+     "rcond_eq": 0.003669833173177522,
+     "resid_eq": 1.828587300050384e-15
+    },
+    {
+     "n": 450,
+     "cond": 29.82365861956884,
+     "rcond_eq": 0.0015776202269248347,
+     "resid_eq": 1.2472712708731795e-15
+    }
+   ]
+  }
+ },
+ "hyb_OOP_vert_ob25_M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0032306134988456,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 74.7741518582967,
+   "min_rcond_eq": 0.0005020581219961134,
+   "max_resid_eq": 9.273837672798268e-15,
+   "sizes": [
+    722
+   ],
+   "rows": [
+    {
+     "n": 722,
+     "cond": 55.2014210830168,
+     "rcond_eq": 0.0005713320047222781,
+     "resid_eq": 9.273837672798268e-15
+    },
+    {
+     "n": 722,
+     "cond": 74.7741518582967,
+     "rcond_eq": 0.0005020581219961134,
+     "resid_eq": 3.4929570953729758e-15
+    }
+   ]
+  }
+ },
+ "hyb_OOP_vert_benign_M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0025026486258972,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 51.07681267510909,
+   "min_rcond_eq": 0.0006552608098803048,
+   "max_resid_eq": 3.267508048724584e-15,
+   "sizes": [
+    722
+   ],
+   "rows": [
+    {
+     "n": 722,
+     "cond": 51.07681267510909,
+     "rcond_eq": 0.001311717045232819,
+     "resid_eq": 3.267508048724584e-15
+    },
+    {
+     "n": 722,
+     "cond": 46.063084290492796,
+     "rcond_eq": 0.0006552608098803048,
+     "resid_eq": 2.082079567246281e-15
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_benign_M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0034753375928709,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 48.89791492655285,
+   "min_rcond_eq": 0.0013784571617686543,
+   "max_resid_eq": 2.2063765536392003e-15,
+   "sizes": [
+    722
+   ],
+   "rows": [
+    {
+     "n": 722,
+     "cond": 39.728378056242335,
+     "rcond_eq": 0.0015066440555766844,
+     "resid_eq": 2.2063765536392003e-15
+    },
+    {
+     "n": 722,
+     "cond": 48.89791492655285,
+     "rcond_eq": 0.0013784571617686543,
+     "resid_eq": 1.3857115732850826e-15
+    }
+   ]
+  }
+ },
+ "hyb_OOP_sl0.50_ob25_M9": {
+  "outcome": "RAISE",
+  "exc": "NotImplementedError",
+  "msg": "_layer_eigenmodes_tensor: a SLANTED layer with OUT-OF-PLANE coupling (eps_xz/yz/zx/zy) is not supported on THIS (Fourier) engine.  The 2-D slant metric here is validated for IN-PLANE tensors only; the slant x out-of-plan",
+  "T22": {
+   "n_interfaces": 0
+  }
+ },
+ "hyb_sl0.50_benign_tree_M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0054027306959759,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 3,
+   "max_cond": 39.728378056242335,
+   "min_rcond_eq": 0.0015066440555766844,
+   "max_resid_eq": 2.2063765536392003e-15,
+   "sizes": [
+    722
+   ],
+   "rows": [
+    {
+     "n": 722,
+     "cond": 39.728378056242335,
+     "rcond_eq": 0.0015066440555766844,
+     "resid_eq": 2.2063765536392003e-15
+    },
+    {
+     "n": 722,
+     "cond": 28.892743381941045,
+     "rcond_eq": 0.0025488820621801115,
+     "resid_eq": 1.233796705624795e-15
+    },
+    {
+     "n": 722,
+     "cond": 10.015147072880614,
+     "rcond_eq": 0.09955092516328252,
+     "resid_eq": 7.316223843513776e-17
+    }
+   ]
+  }
+ },
+ "hyb_sl0.50_benign_fused_M9": {
+  "outcome": "SOLVED",
+  "RT": 1.005402730695976,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 3,
+   "max_cond": 39.728378056242335,
+   "min_rcond_eq": 0.0015066440555766844,
+   "max_resid_eq": 2.2063765536392003e-15,
+   "sizes": [
+    722
+   ],
+   "rows": [
+    {
+     "n": 722,
+     "cond": 39.728378056242335,
+     "rcond_eq": 0.0015066440555766844,
+     "resid_eq": 2.2063765536392003e-15
+    },
+    {
+     "n": 722,
+     "cond": 28.892743381941045,
+     "rcond_eq": 0.0025488820621801115,
+     "resid_eq": 1.233796705624795e-15
+    },
+    {
+     "n": 722,
+     "cond": 10.015147072880614,
+     "rcond_eq": 0.09955092516328252,
+     "resid_eq": 7.316223843513776e-17
+    }
+   ]
+  }
+ },
+ "pure_sl0.50_ob25_M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0000277294974587,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 378.1632481617909,
+   "min_rcond_eq": 0.0011157056314195213,
+   "max_resid_eq": 1.296084991081892e-15,
+   "sizes": [
+    648
+   ],
+   "rows": [
+    {
+     "n": 648,
+     "cond": 352.4635087842567,
+     "rcond_eq": 0.0011157056314195213,
+     "resid_eq": 1.1801172024875826e-15
+    },
+    {
+     "n": 648,
+     "cond": 378.1632481617909,
+     "rcond_eq": 0.0016989178374160142,
+     "resid_eq": 1.296084991081892e-15
+    }
+   ]
+  }
+ },
+ "pure_sl0.50_benign_M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0000750957803792,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 509.96803437064153,
+   "min_rcond_eq": 0.001838071938124222,
+   "max_resid_eq": 1.2009108272257928e-15,
+   "sizes": [
+    648
+   ],
+   "rows": [
+    {
+     "n": 648,
+     "cond": 509.96803437064153,
+     "rcond_eq": 0.0025077671900397714,
+     "resid_eq": 1.1971510919491364e-15
+    },
+    {
+     "n": 648,
+     "cond": 416.0984726806785,
+     "rcond_eq": 0.001838071938124222,
+     "resid_eq": 1.2009108272257928e-15
+    }
+   ]
+  }
+ },
+ "pure_OOP_vert_ob25_M3": {
+  "outcome": "SOLVED",
+  "RT": 0.9999994608145751,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 308.0757551512645,
+   "min_rcond_eq": 0.00045909872567794635,
+   "max_resid_eq": 2.3330033814720326e-15,
+   "sizes": [
+    648
+   ],
+   "rows": [
+    {
+     "n": 648,
+     "cond": 308.0757551512645,
+     "rcond_eq": 0.00045909872567794635,
+     "resid_eq": 2.3330033814720326e-15
+    },
+    {
+     "n": 648,
+     "cond": 227.9530086114221,
+     "rcond_eq": 0.0009743035476139315,
+     "resid_eq": 1.8888909506510588e-15
+    }
+   ]
+  }
+ },
+ "pure_OOP_vert_benign_M3": {
+  "outcome": "SOLVED",
+  "RT": 0.9999729101834441,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 281.6495006961304,
+   "min_rcond_eq": 0.001187491089001692,
+   "max_resid_eq": 1.6179840241529012e-15,
+   "sizes": [
+    648
+   ],
+   "rows": [
+    {
+     "n": 648,
+     "cond": 263.8702844435452,
+     "rcond_eq": 0.0015319708398080466,
+     "resid_eq": 1.3727059249992706e-15
+    },
+    {
+     "n": 648,
+     "cond": 281.6495006961304,
+     "rcond_eq": 0.001187491089001692,
+     "resid_eq": 1.6179840241529012e-15
+    }
+   ]
+  }
+ },
+ "pure_sl0.50_ob25_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.000027729497459,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 378.1632481617909,
+   "min_rcond_eq": 0.0011157056314195213,
+   "max_resid_eq": 1.296084991081892e-15,
+   "sizes": [
+    648
+   ],
+   "rows": [
+    {
+     "n": 648,
+     "cond": 352.4635087842567,
+     "rcond_eq": 0.0011157056314195213,
+     "resid_eq": 1.1801172024875826e-15
+    },
+    {
+     "n": 648,
+     "cond": 378.1632481617909,
+     "rcond_eq": 0.0016989178374160142,
+     "resid_eq": 1.296084991081892e-15
+    }
+   ]
+  }
+ },
+ "pure_sl0.50_benign_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0000750957803797,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 509.96803437064153,
+   "min_rcond_eq": 0.001838071938124222,
+   "max_resid_eq": 1.2009108272257928e-15,
+   "sizes": [
+    648
+   ],
+   "rows": [
+    {
+     "n": 648,
+     "cond": 509.96803437064153,
+     "rcond_eq": 0.0025077671900397714,
+     "resid_eq": 1.1971510919491364e-15
+    },
+    {
+     "n": 648,
+     "cond": 416.0984726806785,
+     "rcond_eq": 0.001838071938124222,
+     "resid_eq": 1.2009108272257928e-15
+    }
+   ]
+  }
+ },
+ "pure_OOP_vert_ob25_M5": {
+  "outcome": "SOLVED",
+  "RT": 0.9999994608145758,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 308.0757551512645,
+   "min_rcond_eq": 0.00045909872567794635,
+   "max_resid_eq": 2.3330033814720326e-15,
+   "sizes": [
+    648
+   ],
+   "rows": [
+    {
+     "n": 648,
+     "cond": 308.0757551512645,
+     "rcond_eq": 0.00045909872567794635,
+     "resid_eq": 2.3330033814720326e-15
+    },
+    {
+     "n": 648,
+     "cond": 227.9530086114221,
+     "rcond_eq": 0.0009743035476139315,
+     "resid_eq": 1.8888909506510588e-15
+    }
+   ]
+  }
+ },
+ "pure_OOP_vert_benign_M5": {
+  "outcome": "SOLVED",
+  "RT": 0.9999729101834451,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 281.6495006961304,
+   "min_rcond_eq": 0.001187491089001692,
+   "max_resid_eq": 1.6179840241529012e-15,
+   "sizes": [
+    648
+   ],
+   "rows": [
+    {
+     "n": 648,
+     "cond": 263.8702844435452,
+     "rcond_eq": 0.0015319708398080466,
+     "resid_eq": 1.3727059249992706e-15
+    },
+    {
+     "n": 648,
+     "cond": 281.6495006961304,
+     "rcond_eq": 0.001187491089001692,
+     "resid_eq": 1.6179840241529012e-15
+    }
+   ]
+  }
+ },
+ "pure_mag_vert_ob25_M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0003536591168778,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 0
+  }
+ },
+ "pure_mag_OOP_ob25_M3": {
+  "outcome": "RAISE",
+  "exc": "NotImplementedError",
+  "msg": "PMM2DStackPure.add_layer: a MAGNETIC layer with an OUT-OF-PLANE eps is not implemented -- the out-of-plane first-order generator carries no permeability blocks.  Use a BLOCK-FORM eps with mu, or drop mu.",
+  "T22": {
+   "n_interfaces": 0
+  }
+ },
+ "pure_mag_sl0.50_ob25_M3": {
+  "outcome": "RAISE",
+  "exc": "NotImplementedError",
+  "msg": "PMM2DStackPure.add_layer: slant= together with mu / mu_cell is not implemented -- a SLANTED layer runs the OUT-OF-PLANE first-order generator, which carries no permeability blocks (it eliminates G3 assuming mu = 1).  The",
+  "T22": {
+   "n_interfaces": 0
+  }
+ },
+ "oned_shear0.15_ob25": {
+  "outcome": "SOLVED",
+  "RT": 1.000000000000104,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 77.31051503701704,
+   "min_rcond_eq": 0.011640200172383125,
+   "max_resid_eq": 4.631295714359715e-16,
+   "sizes": [
+    72
+   ],
+   "rows": [
+    {
+     "n": 72,
+     "cond": 77.31051503701704,
+     "rcond_eq": 0.011870620045769845,
+     "resid_eq": 3.7583447344141513e-16
+    },
+    {
+     "n": 72,
+     "cond": 60.816660855424075,
+     "rcond_eq": 0.011640200172383125,
+     "resid_eq": 4.631295714359715e-16
+    }
+   ]
+  }
+ },
+ "oned_shear0.30_ob25": {
+  "outcome": "SOLVED",
+  "RT": 0.9999999999996022,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 249.79064965012594,
+   "min_rcond_eq": 0.0018962502315644774,
+   "max_resid_eq": 2.0571832152483936e-15,
+   "sizes": [
+    72
+   ],
+   "rows": [
+    {
+     "n": 72,
+     "cond": 201.13463830321376,
+     "rcond_eq": 0.0018962502315644774,
+     "resid_eq": 1.4059957305549934e-15
+    },
+    {
+     "n": 72,
+     "cond": 249.79064965012594,
+     "rcond_eq": 0.0021426524555024063,
+     "resid_eq": 2.0571832152483936e-15
+    }
+   ]
+  }
+ },
+ "oned_shear0.60_ob25": {
+  "outcome": "SOLVED",
+  "RT": 1.0000000008625096,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 598.9943945013308,
+   "min_rcond_eq": 0.0017966399359751607,
+   "max_resid_eq": 1.2490733570207595e-15,
+   "sizes": [
+    72
+   ],
+   "rows": [
+    {
+     "n": 72,
+     "cond": 598.9943945013308,
+     "rcond_eq": 0.0017966399359751607,
+     "resid_eq": 8.391608337343565e-16
+    },
+    {
+     "n": 72,
+     "cond": 491.62592871541483,
+     "rcond_eq": 0.00207811775873302,
+     "resid_eq": 1.2490733570207595e-15
+    }
+   ]
+  }
+ },
+ "oned_shear1.00_ob25": {
+  "outcome": "SOLVED",
+  "RT": 1.0000000002419396,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 112.03453421706716,
+   "min_rcond_eq": 0.011734450417774808,
+   "max_resid_eq": 5.339559475956325e-16,
+   "sizes": [
+    72
+   ],
+   "rows": [
+    {
+     "n": 72,
+     "cond": 112.03453421706716,
+     "rcond_eq": 0.014398979580367116,
+     "resid_eq": 5.339559475956325e-16
+    },
+    {
+     "n": 72,
+     "cond": 80.59575638491606,
+     "rcond_eq": 0.011734450417774808,
+     "resid_eq": 4.9565952042269e-16
+    }
+   ]
+  }
+ },
+ "oned_shear0.30_th0": {
+  "outcome": "SOLVED",
+  "RT": 1.0000000002436902,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 267.2615538704554,
+   "min_rcond_eq": 0.0017549412767011363,
+   "max_resid_eq": 1.8760963100889028e-15,
+   "sizes": [
+    72
+   ],
+   "rows": [
+    {
+     "n": 72,
+     "cond": 215.16765357943612,
+     "rcond_eq": 0.0017549412767011363,
+     "resid_eq": 1.0173134077390865e-15
+    },
+    {
+     "n": 72,
+     "cond": 267.2615538704554,
+     "rcond_eq": 0.002412576226232934,
+     "resid_eq": 1.8760963100889028e-15
+    }
+   ]
+  }
+ },
+ "oned_shear0.30_th40": {
+  "outcome": "SOLVED",
+  "RT": 1.0000000162743223,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 234.36355574809704,
+   "min_rcond_eq": 0.002001754380425368,
+   "max_resid_eq": 2.011428415330114e-15,
+   "sizes": [
+    72
+   ],
+   "rows": [
+    {
+     "n": 72,
+     "cond": 188.72840083142307,
+     "rcond_eq": 0.002001754380425368,
+     "resid_eq": 1.1644839658960168e-15
+    },
+    {
+     "n": 72,
+     "cond": 234.36355574809704,
+     "rcond_eq": 0.0020316480162661664,
+     "resid_eq": 2.011428415330114e-15
+    }
+   ]
+  }
+ },
+ "oned_shear0.30_th60": {
+  "outcome": "SOLVED",
+  "RT": 1.000000016531626,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 219.72378326460725,
+   "min_rcond_eq": 0.0020429381267776927,
+   "max_resid_eq": 1.7226205429033648e-15,
+   "sizes": [
+    72
+   ],
+   "rows": [
+    {
+     "n": 72,
+     "cond": 176.83294380361846,
+     "rcond_eq": 0.0021448376893987474,
+     "resid_eq": 1.2080363509675983e-15
+    },
+    {
+     "n": 72,
+     "cond": 219.72378326460725,
+     "rcond_eq": 0.0020429381267776927,
+     "resid_eq": 1.7226205429033648e-15
+    }
+   ]
+  }
+ },
+ "oned_OOP_vert_ob25": {
+  "outcome": "SOLVED",
+  "RT": 0.9999999999976201,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 32.71613672751625,
+   "min_rcond_eq": 0.02693630634268979,
+   "max_resid_eq": 3.55985572538074e-16,
+   "sizes": [
+    48
+   ],
+   "rows": [
+    {
+     "n": 48,
+     "cond": 32.71613672751625,
+     "rcond_eq": 0.029579303558404782,
+     "resid_eq": 3.365046365037211e-16
+    },
+    {
+     "n": 48,
+     "cond": 23.963927649170493,
+     "rcond_eq": 0.02693630634268979,
+     "resid_eq": 3.55985572538074e-16
+    }
+   ]
+  }
+ },
+ "pmmstack_conical": {
+  "outcome": "SOLVED",
+  "RT": 1.0000000026490161,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 0
+  }
+ },
+ "pmmstack_conical_OOP": {
+  "outcome": "RAISE",
+  "exc": "NotImplementedError",
+  "msg": "PMMStack.solve (conical, phi != 0): a stack containing a PATTERNED layer together with an out-of-plane tensor (eps_xz/yz/zx/zy) is not supported -- the previous projected route returned silently-wrong retardance for patt",
+  "T22": {
+   "n_interfaces": 0
+  }
+ },
+ "berreman_oop_th0": {
+  "outcome": "SOLVED",
+  "RT": 1.0000000000000004,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 3,
+   "max_cond": 1.040340050128218,
+   "min_rcond_eq": 0.4953835051278589,
+   "max_resid_eq": 7.907399322803027e-17,
+   "sizes": [
+    2
+   ],
+   "rows": [
+    {
+     "n": 2,
+     "cond": 1.040340050128218,
+     "rcond_eq": 0.5052392247853005,
+     "resid_eq": 4.0653037480841706e-17
+    },
+    {
+     "n": 2,
+     "cond": 1.022054770146833,
+     "rcond_eq": 0.4953835051278589,
+     "resid_eq": 7.907399322803027e-17
+    },
+    {
+     "n": 2,
+     "cond": 1.0,
+     "rcond_eq": 1.0,
+     "resid_eq": 0.0
+    }
+   ]
+  }
+ },
+ "berreman_oop_th30": {
+  "outcome": "SOLVED",
+  "RT": 1.0,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 1.1788284989382365,
+   "min_rcond_eq": 0.4759551196067986,
+   "max_resid_eq": 1.143230029028579e-16,
+   "sizes": [
+    2
+   ],
+   "rows": [
+    {
+     "n": 2,
+     "cond": 1.1788284989382365,
+     "rcond_eq": 0.48458224043078807,
+     "resid_eq": 1.5665119119086763e-17
+    },
+    {
+     "n": 2,
+     "cond": 1.105189978566382,
+     "rcond_eq": 0.4759551196067986,
+     "resid_eq": 1.143230029028579e-16
+    }
+   ]
+  }
+ },
+ "berreman_oop_th60": {
+  "outcome": "SOLVED",
+  "RT": 1.000000000000005,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 3,
+   "max_cond": 1.9214701941287815,
+   "min_rcond_eq": 0.441914400316817,
+   "max_resid_eq": 1.6548502923104907e-16,
+   "sizes": [
+    2
+   ],
+   "rows": [
+    {
+     "n": 2,
+     "cond": 1.9214701941287815,
+     "rcond_eq": 0.4526809750188032,
+     "resid_eq": 1.1102297914741167e-16
+    },
+    {
+     "n": 2,
+     "cond": 1.363949214083163,
+     "rcond_eq": 0.441914400316817,
+     "resid_eq": 1.6548502923104907e-16
+    },
+    {
+     "n": 2,
+     "cond": 1.0180308511298197,
+     "rcond_eq": 0.9885013332103612,
+     "resid_eq": 6.728311529488103e-19
+    }
+   ]
+  }
+ },
+ "berreman_oop_th80": {
+  "outcome": "SOLVED",
+  "RT": 0.9999999999999991,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 3,
+   "max_cond": 4.665108739071574,
+   "min_rcond_eq": 0.37574429889691396,
+   "max_resid_eq": 8.783053520233167e-17,
+   "sizes": [
+    2
+   ],
+   "rows": [
+    {
+     "n": 2,
+     "cond": 4.665108739071574,
+     "rcond_eq": 0.37574429889691396,
+     "resid_eq": 7.485174984876607e-17
+    },
+    {
+     "n": 2,
+     "cond": 1.5329622109253647,
+     "rcond_eq": 0.41761801494879147,
+     "resid_eq": 8.783053520233167e-17
+    },
+    {
+     "n": 2,
+     "cond": 1.027714193592499,
+     "rcond_eq": 0.9824010952552052,
+     "resid_eq": 1.216917459305325e-19
+    }
+   ]
+  }
+ },
+ "berreman_oop_lossy": {
+  "outcome": "SOLVED",
+  "RT": 0.519798426060791,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 3,
+   "max_cond": 1.1783792965775137,
+   "min_rcond_eq": 0.4762731349864857,
+   "max_resid_eq": 2.1697100089225256e-16,
+   "sizes": [
+    2
+   ],
+   "rows": [
+    {
+     "n": 2,
+     "cond": 1.1783792965775137,
+     "rcond_eq": 0.4846150803176958,
+     "resid_eq": 6.945668977507166e-17
+    },
+    {
+     "n": 2,
+     "cond": 1.104660653684346,
+     "rcond_eq": 0.4762731349864857,
+     "resid_eq": 2.1697100089225256e-16
+    },
+    {
+     "n": 2,
+     "cond": 1.0044167210911192,
+     "rcond_eq": 0.9971664793486991,
+     "resid_eq": 9.197804322385944e-21
+    }
+   ]
+  }
+ },
+ "berreman_oop_thick": {
+  "outcome": "SOLVED",
+  "RT": 1.0000000000000009,
+  "warned": [],
+  "T22": {
+   "n_interfaces": 0
+  }
+ },
+ "jones2d_sl0.50_ob25": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.74e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.11 > 1e-08 in the same scaling, on a 98 x 98 blo",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 4791995269681291.0,
+   "min_rcond_eq": 2.736023513892046e-17,
+   "max_resid_eq": 0.11038651177651598,
+   "sizes": [
+    98
+   ],
+   "rows": [
+    {
+     "n": 98,
+     "cond": 4791995269681291.0,
+     "rcond_eq": 2.736023513892046e-17,
+     "resid_eq": 0.11038651177651598
+    }
+   ]
+  }
+ },
+ "jones2d_OOP_vert_M3": {
+  "outcome": "RAISE",
+  "exc": "_EnergyError",
+  "msg": "pmm_jones_2d: energy non-conservation detected (sum R+T = 2.120e+00 exceeds 2); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincide",
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 27.772850197738133,
+   "min_rcond_eq": 0.0023517984031574323,
+   "max_resid_eq": 1.7568990805709692e-15,
+   "sizes": [
+    98
+   ],
+   "rows": [
+    {
+     "n": 98,
+     "cond": 8.105295432597385,
+     "rcond_eq": 0.006267812556109809,
+     "resid_eq": 1.5948719373885892e-15
+    },
+    {
+     "n": 98,
+     "cond": 27.772850197738133,
+     "rcond_eq": 0.0023517984031574323,
+     "resid_eq": 1.7568990805709692e-15
+    }
+   ]
+  }
+ },
+ "jones2d_OOP_benign_M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0523140600025473,
+  "warned": [
+   "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 "
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 22.454287472997375,
+   "min_rcond_eq": 0.0017057920550160907,
+   "max_resid_eq": 1.5523450250816325e-15,
+   "sizes": [
+    98
+   ],
+   "rows": [
+    {
+     "n": 98,
+     "cond": 8.206295348200104,
+     "rcond_eq": 0.004316857698665354,
+     "resid_eq": 1.3649879370971004e-15
+    },
+    {
+     "n": 98,
+     "cond": 22.454287472997375,
+     "rcond_eq": 0.0017057920550160907,
+     "resid_eq": 1.5523450250816325e-15
+    }
+   ]
+  }
+ },
+ "jones2d_sl0.50_benign_M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0515899600732213,
+  "warned": [
+   "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 "
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 150.74025670391524,
+   "min_rcond_eq": 0.0010819420431733362,
+   "max_resid_eq": 1.9855709853298897e-15,
+   "sizes": [
+    98
+   ],
+   "rows": [
+    {
+     "n": 98,
+     "cond": 39.764278435833035,
+     "rcond_eq": 0.0032239391455629643,
+     "resid_eq": 1.803353976749239e-15
+    },
+    {
+     "n": 98,
+     "cond": 150.74025670391524,
+     "rcond_eq": 0.0010819420431733362,
+     "resid_eq": 1.9855709853298897e-15
+    }
+   ]
+  }
+ },
+ "jones2d_OOP_vert_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 5.95e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.034 > 1e-08 in the same scaling, on a 242 x 242 ",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 2091011222221708.8,
+   "min_rcond_eq": 5.953081797852393e-17,
+   "max_resid_eq": 0.03399730824898602,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 2091011222221708.8,
+     "rcond_eq": 5.953081797852393e-17,
+     "resid_eq": 0.03399730824898602
+    }
+   ]
+  }
+ },
+ "jones2d_OOP_benign_M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0268900543295052,
+  "warned": [
+   "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 "
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 30.40769501174713,
+   "min_rcond_eq": 0.0008214904885348524,
+   "max_resid_eq": 3.1894571042655943e-15,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 21.81040304115976,
+     "rcond_eq": 0.0017428788993161402,
+     "resid_eq": 3.1894571042655943e-15
+    },
+    {
+     "n": 242,
+     "cond": 30.40769501174713,
+     "rcond_eq": 0.0008214904885348524,
+     "resid_eq": 2.211796558586664e-15
+    }
+   ]
+  }
+ },
+ "jones2d_sl0.50_benign_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.85e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.07 > 1e-08 in the same scaling, on a 242 x 242 b",
+  "T22": {
+   "n_interfaces": 1,
+   "max_cond": 1.1232417343483348e+16,
+   "min_rcond_eq": 1.847505767364985e-17,
+   "max_resid_eq": 0.07003115699974585,
+   "sizes": [
+    242
+   ],
+   "rows": [
+    {
+     "n": 242,
+     "cond": 1.1232417343483348e+16,
+     "rcond_eq": 1.847505767364985e-17,
+     "resid_eq": 0.07003115699974585
+    }
+   ]
+  }
+ },
+ "jones2d_OOP_vert_M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0207498343360124,
+  "warned": [
+   "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 "
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 55.318777147074385,
+   "min_rcond_eq": 0.0007441422445548791,
+   "max_resid_eq": 5.378953025852333e-15,
+   "sizes": [
+    450
+   ],
+   "rows": [
+    {
+     "n": 450,
+     "cond": 39.833697948893686,
+     "rcond_eq": 0.0010101224197348586,
+     "resid_eq": 5.378953025852333e-15
+    },
+    {
+     "n": 450,
+     "cond": 55.318777147074385,
+     "rcond_eq": 0.0007441422445548791,
+     "resid_eq": 2.8015125310668586e-15
+    }
+   ]
+  }
+ },
+ "jones2d_OOP_benign_M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0130270883227235,
+  "warned": [
+   "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 "
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 48.11554899272856,
+   "min_rcond_eq": 0.0007833958038270856,
+   "max_resid_eq": 3.34554632940322e-15,
+   "sizes": [
+    450
+   ],
+   "rows": [
+    {
+     "n": 450,
+     "cond": 47.566838401195824,
+     "rcond_eq": 0.001328340360447708,
+     "resid_eq": 3.34554632940322e-15
+    },
+    {
+     "n": 450,
+     "cond": 48.11554899272856,
+     "rcond_eq": 0.0007833958038270856,
+     "resid_eq": 2.021050192815664e-15
+    }
+   ]
+  }
+ },
+ "jones2d_sl0.50_benign_M7": {
+  "outcome": "SOLVED",
+  "RT": 1.015648877885731,
+  "warned": [
+   "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 "
+  ],
+  "T22": {
+   "n_interfaces": 2,
+   "max_cond": 167.33940332161362,
+   "min_rcond_eq": 0.0004990120602655173,
+   "max_resid_eq": 4.0012821183093155e-15,
+   "sizes": [
+    450
+   ],
+   "rows": [
+    {
+     "n": 450,
+     "cond": 167.33940332161362,
+     "rcond_eq": 0.0004990120602655173,
+     "resid_eq": 4.0012821183093155e-15
+    },
+    {
+     "n": 450,
+     "cond": 139.8271115526455,
+     "rcond_eq": 0.0009422793356324345,
+     "resid_eq": 1.6031068837216968e-15
+    }
+   ]
+  }
+ },
+ "_populations": {
+  "broken": {
+   "n_solves": 5,
+   "n_interfaces": 14,
+   "rcond_min": 0.0023517984031574323,
+   "rcond_max": 1.0,
+   "resid_min": 0.0,
+   "resid_max": 1.7568990805709692e-15,
+   "cond_min": 1.0,
+   "cond_max": 27.772850197738133
+  },
+  "healthy": {
+   "n_solves": 66,
+   "n_interfaces": 118,
+   "rcond_min": 1.0901307660741835e-17,
+   "rcond_max": 0.4846150803176958,
+   "resid_min": 6.945668977507166e-17,
+   "resid_max": 0.14778442323911256,
+   "cond_min": 1.104660653684346,
+   "cond_max": 1.1232417343483348e+16
+  },
+  "broken_worst_interface_rcond": [
+   [
+    0.0023517984031574323,
+    "jones2d_OOP_vert_M3"
+   ],
+   [
+    0.37574429889691396,
+    "berreman_oop_th80"
+   ],
+   [
+    0.441914400316817,
+    "berreman_oop_th60"
+   ],
+   [
+    0.4759551196067986,
+    "berreman_oop_th30"
+   ],
+   [
+    0.4953835051278589,
+    "berreman_oop_th0"
+   ]
+  ],
+  "healthy_worst_interface_rcond": [
+   [
+    1.0901307660741835e-17,
+    "hyb_sl0.50_dg11_th20_M5"
+   ],
+   [
+    1.847505767364985e-17,
+    "jones2d_sl0.50_benign_M5"
+   ],
+   [
+    2.736023513892046e-17,
+    "jones2d_sl0.50_ob25"
+   ],
+   [
+    3.4191113908425386e-17,
+    "hyb_sl1.00_dg11_ob25_M5"
+   ],
+   [
+    3.9020347975000443e-17,
+    "hyb_sl0.50_dg11_ob25_M5"
+   ],
+   [
+    3.9020347975000443e-17,
+    "hyb_sl0.50_dg11_ob25_film_M5"
+   ]
+  ],
+  "broken_names": [
+   "berreman_oop_th0",
+   "berreman_oop_th30",
+   "berreman_oop_th60",
+   "berreman_oop_th80",
+   "jones2d_OOP_vert_M3"
+  ],
+  "healthy_names": [
+   "berreman_oop_lossy",
+   "hyb_OOP_vert_benign_M3",
+   "hyb_OOP_vert_benign_M5",
+   "hyb_OOP_vert_benign_M7",
+   "hyb_OOP_vert_benign_M9",
+   "hyb_OOP_vert_ob25_M3",
+   "hyb_OOP_vert_ob25_M5",
+   "hyb_OOP_vert_ob25_M7",
+   "hyb_OOP_vert_ob25_M9",
+   "hyb_sl0.10_dg11_ob25_M5",
+   "hyb_sl0.25_dg11_ob25_M5",
+   "hyb_sl0.35_dg11_ob25_M5",
+   "hyb_sl0.50_benign_M3",
+   "hyb_sl0.50_benign_M5",
+   "hyb_sl0.50_benign_M7",
+   "hyb_sl0.50_benign_M9",
+   "hyb_sl0.50_benign_fused_M9",
+   "hyb_sl0.50_benign_tree_M9",
+   "hyb_sl0.50_dg11_conical25_40_M5",
+   "hyb_sl0.50_dg11_normal_M5",
+   "hyb_sl0.50_dg11_ob25_M11",
+   "hyb_sl0.50_dg11_ob25_M3",
+   "hyb_sl0.50_dg11_ob25_M5",
+   "hyb_sl0.50_dg11_ob25_M7",
+   "hyb_sl0.50_dg11_ob25_M9",
+   "hyb_sl0.50_dg11_ob25_film_M11",
+   "hyb_sl0.50_dg11_ob25_film_M3",
+   "hyb_sl0.50_dg11_ob25_film_M5",
+   "hyb_sl0.50_dg11_ob25_film_M7",
+   "hyb_sl0.50_dg11_ob25_film_M9",
+   "hyb_sl0.50_dg11_oblique40_M5",
+   "hyb_sl0.50_dg11_th15_M5",
+   "hyb_sl0.50_dg11_th20_M5",
+   "hyb_sl0.50_dg11_th22_M5",
+   "hyb_sl0.50_dg11_th30_M5",
+   "hyb_sl0.50_dg11_th35_M5",
+   "hyb_sl0.50_dg13_ob25_M5",
+   "hyb_sl0.50_dg15_ob25_M5",
+   "hyb_sl0.50_dg7_ob25_M5",
+   "hyb_sl0.50_dg9_ob25_M5",
+   "hyb_sl1.00_dg11_ob25_M5",
+   "jones2d_OOP_benign_M3",
+   "jones2d_OOP_benign_M5",
+   "jones2d_OOP_benign_M7",
+   "jones2d_OOP_vert_M5",
+   "jones2d_OOP_vert_M7",
+   "jones2d_sl0.50_benign_M3",
+   "jones2d_sl0.50_benign_M5",
+   "jones2d_sl0.50_benign_M7",
+   "jones2d_sl0.50_ob25",
+   "oned_OOP_vert_ob25",
+   "oned_shear0.15_ob25",
+   "oned_shear0.30_ob25",
+   "oned_shear0.30_th0",
+   "oned_shear0.30_th40",
+   "oned_shear0.30_th60",
+   "oned_shear0.60_ob25",
+   "oned_shear1.00_ob25",
+   "pure_OOP_vert_benign_M3",
+   "pure_OOP_vert_benign_M5",
+   "pure_OOP_vert_ob25_M3",
+   "pure_OOP_vert_ob25_M5",
+   "pure_sl0.50_benign_M3",
+   "pure_sl0.50_benign_M5",
+   "pure_sl0.50_ob25_M3",
+   "pure_sl0.50_ob25_M5"
+  ]
+ },
+ "_seconds": 520.9,
+ "_berreman_repatched": {
+  "tree": "postfix(branch tip)",
+  "n": 6
+ }
+}

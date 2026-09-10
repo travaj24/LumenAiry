@@ -1,0 +1,96 @@
+{
+ "_arm": {
+  "arm": "slfix",
+  "build": "wsl",
+  "tag": "slfix.wsl",
+  "lumenairy": "/mnt/c/tmp/lum_slfix/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "fixture": {
+  "period_um": 0.7999999999999999,
+  "wl_um": 0.55,
+  "layer1": [
+   0.24,
+   0.25,
+   0.45,
+   4.2,
+   1.45
+  ],
+  "layer2": [
+   0.16,
+   0.1,
+   0.35,
+   2.9,
+   1.6
+  ],
+  "W1_um": 0.19999999999999998,
+  "W2_um": 0.08,
+  "W_total_um": 0.27999999999999997,
+  "theta_deg": 25.0
+ },
+ "two_sheared_vs_staircase": {
+  "K4": {
+   "amps_full_sum": 0.028958463049843945,
+   "amps_only_layer1": 0.5559327441841515,
+   "amps_only_layer2": 1.1696623541172029,
+   "amps_no_sum": 1.3626463805520768,
+   "amps_conjugate_sum": 1.6249814969986227,
+   "J_full_sum": 0.015299314284588559,
+   "J_no_sum": 1.2506366002371325,
+   "J_only_layer1": 0.38075957133051636,
+   "J_conjugate_sum": 1.9555041643463962,
+   "oracle_step_amps": null,
+   "oracle_step_J": null
+  },
+  "K6": {
+   "amps_full_sum": 0.014199172473360921,
+   "amps_only_layer1": 0.5539175008598836,
+   "amps_only_layer2": 1.1658136134903148,
+   "amps_no_sum": 1.360068442233435,
+   "amps_conjugate_sum": 1.6300128107931027,
+   "J_full_sum": 0.00874441769434368,
+   "J_no_sum": 1.2488093068058936,
+   "J_only_layer1": 0.38015140591711644,
+   "J_conjugate_sum": 1.9525243303296955,
+   "oracle_step_amps": 0.015451134896056068,
+   "oracle_step_J": 0.007090879359132899
+  },
+  "K8": {
+   "amps_full_sum": 0.008932718506939856,
+   "amps_only_layer1": 0.5538139280018635,
+   "amps_only_layer2": 1.1649116983745085,
+   "amps_no_sum": 1.359461022178705,
+   "amps_conjugate_sum": 1.6317902931742978,
+   "J_full_sum": 0.005884895331552332,
+   "J_no_sum": 1.2489709678867509,
+   "J_only_layer1": 0.38080163763240266,
+   "J_conjugate_sum": 1.951923101372244,
+   "oracle_step_amps": 0.0055327754977728604,
+   "oracle_step_J": 0.0029676906579699995
+  }
+ },
+ "layer_split": {
+  "sha_J_equal": false,
+  "sha_perT_equal": false,
+  "dJ": 3.7900972837517375e-16,
+  "damps": 6.472045601093793e-16,
+  "one_layer_vs_staircase": 0.010366697367474026,
+  "two_halves_vs_staircase": 0.010366697367473717,
+  "one_layer_HALF_sum": 0.916973821651908,
+  "two_halves_HALF_sum": 0.9169738216519076,
+  "one_layer_NO_sum": 1.3761611497275028,
+  "two_halves_NO_sum": 1.3761611497275026,
+  "J_one_vs_stair": 0.003106637193677984,
+  "J_two_vs_stair": 0.003106637193677637
+ },
+ "seconds": 32.5
+}

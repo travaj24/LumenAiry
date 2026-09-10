@@ -1,0 +1,170 @@
+{
+ "_arm": {
+  "arm": "slfix",
+  "build": "wsl",
+  "tag": "slfix.wsl",
+  "lumenairy": "/mnt/c/tmp/lum_slfix/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ },
+ "numpy_slanted_vs_vertical": {
+  "dR": 0.0036700921434810667,
+  "dT": 0.05513540231118925,
+  "dJones": 0.015457253102438546
+ },
+ "routes": {
+  "eps_tensor_cell": {
+   "outcome": "SOLVED_SILENTLY",
+   "warnings": [],
+   "vs_numpy_VERTICAL": {
+    "dR": 2.3306009899748403e-15,
+    "dT": 2.9531932455029164e-14,
+    "dJones": 1.6686399524940675e-14
+   },
+   "vs_numpy_SLANTED": {
+    "dR": 0.003670092143478736,
+    "dT": 0.05513540231119042,
+    "dJones": 0.015457253102437764
+   }
+  },
+  "n_substrate": {
+   "outcome": "SOLVED_SILENTLY",
+   "warnings": [],
+   "vs_numpy_VERTICAL": {
+    "dR": 2.3306009899748403e-15,
+    "dT": 2.9531932455029164e-14,
+    "dJones": 1.6686399524940675e-14
+   },
+   "vs_numpy_SLANTED": {
+    "dR": 0.003670092143478736,
+    "dT": 0.05513540231119042,
+    "dJones": 0.015457253102437764
+   }
+  },
+  "n_superstrate": {
+   "outcome": "SOLVED_SILENTLY",
+   "warnings": [],
+   "vs_numpy_VERTICAL": {
+    "dR": 2.3306009899748403e-15,
+    "dT": 2.9531932455029164e-14,
+    "dJones": 1.6686399524940675e-14
+   },
+   "vs_numpy_SLANTED": {
+    "dR": 0.003670092143478736,
+    "dT": 0.05513540231119042,
+    "dJones": 0.015457253102437764
+   }
+  },
+  "depth": {
+   "outcome": "SOLVED_SILENTLY",
+   "warnings": [],
+   "vs_numpy_VERTICAL": {
+    "dR": 2.3306009899748403e-15,
+    "dT": 2.9531932455029164e-14,
+    "dJones": 1.6686399524940675e-14
+   },
+   "vs_numpy_SLANTED": {
+    "dR": 0.003670092143478736,
+    "dT": 0.05513540231119042,
+    "dJones": 0.015457253102437764
+   }
+  },
+  "wavelength": {
+   "outcome": "SOLVED_SILENTLY",
+   "warnings": [],
+   "vs_numpy_VERTICAL": {
+    "dR": 2.3306009899748403e-15,
+    "dT": 2.9531932455029164e-14,
+    "dJones": 1.6686399524940675e-14
+   },
+   "vs_numpy_SLANTED": {
+    "dR": 0.003670092143478736,
+    "dT": 0.05513540231119042,
+    "dJones": 0.015457253102437764
+   }
+  },
+  "theta": {
+   "outcome": "SOLVED_SILENTLY",
+   "warnings": [],
+   "vs_numpy_VERTICAL": {
+    "dR": 2.3306009899748403e-15,
+    "dT": 2.9531932455029164e-14,
+    "dJones": 1.6686399524940675e-14
+   },
+   "vs_numpy_SLANTED": {
+    "dR": 0.003670092143478736,
+    "dT": 0.05513540231119042,
+    "dJones": 0.015457253102437764
+   }
+  },
+  "phi": {
+   "outcome": "SOLVED_SILENTLY",
+   "warnings": [],
+   "vs_numpy_VERTICAL": {
+    "dR": 2.3306009899748403e-15,
+    "dT": 2.9531932455029164e-14,
+    "dJones": 1.6686399524940675e-14
+   },
+   "vs_numpy_SLANTED": {
+    "dR": 0.003670092143478736,
+    "dT": 0.05513540231119042,
+    "dJones": 0.015457253102437764
+   }
+  }
+ },
+ "controls": {
+  "vertical_traced_depth": {
+   "outcome": "SOLVED",
+   "hashes": {
+    "orders": "6da240d455a94db8",
+    "R": "b75027780038a607",
+    "T": "95f8c642df76c10b",
+    "J": "db72b46c3965c309"
+   },
+   "vs_numpy": {
+    "dR": 2.3306009899748403e-15,
+    "dT": 2.9531932455029164e-14,
+    "dJones": 1.6686399524940675e-14
+   }
+  },
+  "const_tile_numpy_slant_is_a_noop": {
+   "dR": 8.326672684688674e-17,
+   "dT": 2.3647750424515834e-14,
+   "dJones": 2.0660148767341112e-16
+  },
+  "const_tile_numpy_hashes_equal": false,
+  "const_tile_traced_depth": {
+   "outcome": "SOLVED",
+   "hashes": {
+    "orders": "6da240d455a94db8",
+    "R": "4da7756d1472d7d0",
+    "T": "24f64a59807cbd54",
+    "J": "ace6707578d6c55b"
+   },
+   "vs_numpy_slanted": {
+    "dR": 1.829179069528082e-12,
+    "dT": 2.784136311317553e-08,
+    "dJones": 5.875385506792104e-16
+   },
+   "vs_numpy_vertical": {
+    "dR": 1.829179069528082e-12,
+    "dT": 2.784136311317553e-08,
+    "dJones": 5.554936044299742e-16
+   }
+  },
+  "grad_vertical_traced_depth": {
+   "ad": -332100.245583714,
+   "fd": -332100.24051877344,
+   "rel": 1.525124022131391e-08
+  }
+ },
+ "jax_version": "0.10.2"
+}

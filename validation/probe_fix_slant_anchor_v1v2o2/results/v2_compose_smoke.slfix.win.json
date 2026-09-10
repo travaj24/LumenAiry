@@ -1,0 +1,83 @@
+{
+ "_arm": {
+  "arm": "slfix",
+  "build": "win",
+  "tag": "slfix.win",
+  "lumenairy": "C:\\tmp\\lum_slfix\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "fixture": {
+  "period_um": 0.7999999999999999,
+  "wl_um": 0.55,
+  "layer1": [
+   0.24,
+   0.25,
+   0.45,
+   4.2,
+   1.45
+  ],
+  "layer2": [
+   0.16,
+   0.1,
+   0.35,
+   2.9,
+   1.6
+  ],
+  "W1_um": 0.19999999999999998,
+  "W2_um": 0.08,
+  "W_total_um": 0.27999999999999997,
+  "theta_deg": 25.0
+ },
+ "two_sheared_vs_staircase": {
+  "K8": {
+   "amps_full_sum": 0.009468945317533915,
+   "amps_only_layer1": 0.5534794909141151,
+   "amps_only_layer2": 1.1645524540943297,
+   "amps_no_sum": 1.3591003106187618,
+   "amps_conjugate_sum": 1.6316511946849614,
+   "J_full_sum": 0.006993680876641174,
+   "J_no_sum": 1.2481551368538986,
+   "J_only_layer1": 0.3798345631087295,
+   "J_conjugate_sum": 1.9516249631482934,
+   "oracle_step_amps": null,
+   "oracle_step_J": null
+  },
+  "K16": {
+   "amps_full_sum": 0.0036939584357872975,
+   "amps_only_layer1": 0.5541888454762681,
+   "amps_only_layer2": 1.1643460803780423,
+   "amps_no_sum": 1.3590149385386558,
+   "amps_conjugate_sum": 1.6335137572353513,
+   "J_full_sum": 0.0029542924831901965,
+   "J_no_sum": 1.2494975269313708,
+   "J_only_layer1": 0.3817904871551102,
+   "J_conjugate_sum": 1.951605254401158,
+   "oracle_step_amps": 0.0060644790667127736,
+   "oracle_step_J": 0.004112073769292409
+  }
+ },
+ "layer_split": {
+  "sha_J_equal": false,
+  "sha_perT_equal": false,
+  "dJ": 5.764704144437671e-16,
+  "damps": 1.0780920253816812e-15,
+  "one_layer_vs_staircase": 0.0037080648040470816,
+  "two_halves_vs_staircase": 0.003708064804046887,
+  "one_layer_HALF_sum": 0.9161906911084066,
+  "two_halves_HALF_sum": 0.916190691108406,
+  "one_layer_NO_sum": 1.3750427357698265,
+  "two_halves_NO_sum": 1.3750427357698263,
+  "J_one_vs_stair": 0.0008897090036246726,
+  "J_two_vs_stair": 0.0008897090036248859
+ },
+ "seconds": 1062.9
+}

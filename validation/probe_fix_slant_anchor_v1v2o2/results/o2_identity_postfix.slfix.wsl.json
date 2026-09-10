@@ -1,0 +1,699 @@
+{
+ "_arm": {
+  "arm": "slfix",
+  "build": "wsl",
+  "tag": "slfix.wsl",
+  "tree": "postfix(branch tip)",
+  "lumenairy": "/mnt/c/tmp/lum_slfix/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "berreman_oop_lossy": {
+  "orders": "af5570f5a1810b7a",
+  "R": "9d91f223d8225557",
+  "T": "6f9e3e78f2f48997",
+  "J": "f9080384d6a3a7a9",
+  "outcome": "SOLVED",
+  "RT": 0.3680007223093528
+ },
+ "berreman_oop_th0": {
+  "orders": "af5570f5a1810b7a",
+  "R": "ed7c982ea39f4e0b",
+  "T": "f5127fd1b42f1c44",
+  "J": "ef75d44db617bb07",
+  "outcome": "SOLVED",
+  "RT": 1.8072973105578167
+ },
+ "berreman_oop_th30": {
+  "orders": "af5570f5a1810b7a",
+  "R": "ff567b54f5119ee4",
+  "T": "1d19401446b36d8d",
+  "J": "0b963781829e87c6",
+  "outcome": "SOLVED",
+  "RT": 1.774715730537781
+ },
+ "berreman_oop_th60": {
+  "orders": "af5570f5a1810b7a",
+  "R": "aa5377856abd64c6",
+  "T": "68ace69b24c62f97",
+  "J": "91dd2596df38aeb5",
+  "outcome": "SOLVED",
+  "RT": 1.6623662763268414
+ },
+ "berreman_oop_th80": {
+  "orders": "af5570f5a1810b7a",
+  "R": "248575fbe0e60fdd",
+  "T": "684acfb9e40b188d",
+  "J": "f9e6d1a262950c91",
+  "outcome": "SOLVED",
+  "RT": 1.251769512672487
+ },
+ "berreman_oop_thick": {
+  "orders": "af5570f5a1810b7a",
+  "R": "dae6f51fa79e3137",
+  "T": "0f84b865a6137823",
+  "J": "1da16de896800759",
+  "outcome": "SOLVED",
+  "RT": 1.6852239575999324
+ },
+ "hyb_OOP_sl0.50_ob25_M9": {
+  "outcome": "RAISE",
+  "exc": "NotImplementedError",
+  "msg": "_layer_eigenmodes_tensor: a SLANTED layer with OUT-OF-PLANE coupling (eps_xz/yz/zx/zy) is not supported on THIS (Fourier) engine.  The 2-D slant metric here is "
+ },
+ "hyb_OOP_vert_benign_M3": {
+  "orders": "6da240d455a94db8",
+  "R": "a3e614c8ef676870",
+  "T": "9854d7b9d08795ae",
+  "J": "4b9c92da9ffd7190",
+  "outcome": "SOLVED",
+  "RT": 1.0484514082531358
+ },
+ "hyb_OOP_vert_benign_M5": {
+  "orders": "70e79099e0312160",
+  "R": "f095c18be9f0d998",
+  "T": "5ac00c74c5ea509e",
+  "J": "84665b1064064466",
+  "outcome": "SOLVED",
+  "RT": 1.0288472243142166
+ },
+ "hyb_OOP_vert_benign_M7": {
+  "orders": "8c7e283c3548cbd5",
+  "R": "c2de9b2cbcde3881",
+  "T": "55a3a4939855e016",
+  "J": "f1ed6d1ccd5ce167",
+  "outcome": "SOLVED",
+  "RT": 1.0163272266330998
+ },
+ "hyb_OOP_vert_benign_M9": {
+  "orders": "d5d75a8ab610461d",
+  "R": "29cfc933242ff47f",
+  "T": "48d558490b656411",
+  "J": "cc1f61498c980812",
+  "outcome": "SOLVED",
+  "RT": 1.0025026486258513
+ },
+ "hyb_OOP_vert_ob25_M3": {
+  "orders": "6da240d455a94db8",
+  "R": "af2e62276ee4ad87",
+  "T": "dc9216701644ac5a",
+  "J": "757b9bb0ae4821df",
+  "outcome": "SOLVED",
+  "RT": 1.0580271636385923
+ },
+ "hyb_OOP_vert_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 7.12e-16 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_OOP_vert_ob25_M7": {
+  "orders": "8c7e283c3548cbd5",
+  "R": "f8b2dd519cd2ecfc",
+  "T": "5dcf2b31784f813e",
+  "J": "14e6035411684f20",
+  "outcome": "SOLVED",
+  "RT": 1.0248092521723935
+ },
+ "hyb_OOP_vert_ob25_M9": {
+  "orders": "d5d75a8ab610461d",
+  "R": "089dd8fe09979c9f",
+  "T": "3cc7b58f4b927d86",
+  "J": "a5e6e14d3049e895",
+  "outcome": "SOLVED",
+  "RT": 1.0032306134987539
+ },
+ "hyb_sl0.00_dg11_ob25_M5": {
+  "orders": "70e79099e0312160",
+  "R": "b58eb0cf4e0c3a9c",
+  "T": "d3a80134307ee222",
+  "J": "7639cbc616ec6cc3",
+  "outcome": "SOLVED",
+  "RT": 1.038165864413861
+ },
+ "hyb_sl0.10_dg11_ob25_M5": {
+  "orders": "70e79099e0312160",
+  "R": "ffb366af3fc1a9b3",
+  "T": "1b19d2a5c719ebb2",
+  "J": "65e4d499384318ec",
+  "outcome": "SOLVED",
+  "RT": 1.040846918924946
+ },
+ "hyb_sl0.25_dg11_ob25_M5": {
+  "orders": "70e79099e0312160",
+  "R": "6344b2543c36f24c",
+  "T": "87214eda46df7f8c",
+  "J": "882c1fc0b24b0825",
+  "outcome": "SOLVED",
+  "RT": 1.0435854786495338
+ },
+ "hyb_sl0.35_dg11_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.72e-16 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_sl0.50_benign_M3": {
+  "orders": "6da240d455a94db8",
+  "R": "eb55c95d2fa0387d",
+  "T": "cbe3596ac9e8bd74",
+  "J": "21abe65fe933a373",
+  "outcome": "SOLVED",
+  "RT": 1.0541001927915292
+ },
+ "hyb_sl0.50_benign_M5": {
+  "orders": "70e79099e0312160",
+  "R": "55d0bb0baa07a699",
+  "T": "c46d0bc8dfedb4c3",
+  "J": "2ee893cadfa3cd7f",
+  "outcome": "SOLVED",
+  "RT": 1.0324499004697212
+ },
+ "hyb_sl0.50_benign_M7": {
+  "orders": "8c7e283c3548cbd5",
+  "R": "9a279c1ceee21bb3",
+  "T": "886ea8b65c700394",
+  "J": "99fd52bedc34cd57",
+  "outcome": "SOLVED",
+  "RT": 1.0181167215121922
+ },
+ "hyb_sl0.50_benign_M9": {
+  "orders": "d5d75a8ab610461d",
+  "R": "c6e1c034c9514ac1",
+  "T": "043e9d3c637a67e3",
+  "J": "5a843207ed4aacc0",
+  "outcome": "SOLVED",
+  "RT": 1.003475337592836
+ },
+ "hyb_sl0.50_benign_fused_M9": {
+  "orders": "d5d75a8ab610461d",
+  "R": "2c8051a7a97c7850",
+  "T": "dbaf28518ed74c9f",
+  "J": "9fc810c2590b94c8",
+  "outcome": "SOLVED",
+  "RT": 1.0054027306959508
+ },
+ "hyb_sl0.50_benign_tree_M9": {
+  "orders": "d5d75a8ab610461d",
+  "R": "a89769f8899c5251",
+  "T": "a21e5506984a4d3a",
+  "J": "ff2cdc9e9aeebf86",
+  "outcome": "SOLVED",
+  "RT": 1.0054027306959508
+ },
+ "hyb_sl0.50_dg11_conical25_40_M5": {
+  "orders": "70e79099e0312160",
+  "R": "938c83201e98de3e",
+  "T": "247c2b22b72a465c",
+  "J": "2386356496d2472f",
+  "outcome": "SOLVED",
+  "RT": 1.0461370191292545
+ },
+ "hyb_sl0.50_dg11_normal_M5": {
+  "orders": "70e79099e0312160",
+  "R": "3c3492dc55d88115",
+  "T": "4cf0c301037596e3",
+  "J": "1ce0648e9f1515c1",
+  "outcome": "SOLVED",
+  "RT": 1.0349819662357276
+ },
+ "hyb_sl0.50_dg11_ob25_M11": {
+  "orders": "9f0d064d0082544c",
+  "R": "03bca37cbc0e6357",
+  "T": "0758df59b3626f41",
+  "J": "f6b84716feeb87ea",
+  "outcome": "SOLVED",
+  "RT": 1.000630701896505
+ },
+ "hyb_sl0.50_dg11_ob25_M3": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.43e-16 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_sl0.50_dg11_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 7.12e-17 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_sl0.50_dg11_ob25_M7": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.16e-16 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_sl0.50_dg11_ob25_M9": {
+  "orders": "d5d75a8ab610461d",
+  "R": "1dbfedd9a53cea5d",
+  "T": "381df06b025e331c",
+  "J": "351328dba590f036",
+  "outcome": "SOLVED",
+  "RT": 1.006508244653665
+ },
+ "hyb_sl0.50_dg11_ob25_film_M11": {
+  "orders": "9f0d064d0082544c",
+  "R": "f02bcbe13446634b",
+  "T": "f8ad6cd3f321fc14",
+  "J": "9f5c769890117486",
+  "outcome": "SOLVED",
+  "RT": 1.0010181611237874
+ },
+ "hyb_sl0.50_dg11_ob25_film_M3": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.43e-16 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_sl0.50_dg11_ob25_film_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 7.12e-17 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_sl0.50_dg11_ob25_film_M7": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.16e-16 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_sl0.50_dg11_ob25_film_M9": {
+  "orders": "d5d75a8ab610461d",
+  "R": "9a6dc5b8ebfd203c",
+  "T": "ab4d2e72935e430e",
+  "J": "45932ce3c45ed9a1",
+  "outcome": "SOLVED",
+  "RT": 1.0067857826765216
+ },
+ "hyb_sl0.50_dg11_oblique40_M5": {
+  "orders": "70e79099e0312160",
+  "R": "83ded93e0e8feeac",
+  "T": "5aebdf16b4e9fa01",
+  "J": "1cde35f5c421dcad",
+  "outcome": "SOLVED",
+  "RT": 1.0726292370875958
+ },
+ "hyb_sl0.50_dg11_th15_M5": {
+  "outcome": "RAISE",
+  "exc": "KeyError",
+  "msg": "'th15'"
+ },
+ "hyb_sl0.50_dg11_th20_M5": {
+  "outcome": "RAISE",
+  "exc": "KeyError",
+  "msg": "'th20'"
+ },
+ "hyb_sl0.50_dg11_th22_M5": {
+  "outcome": "RAISE",
+  "exc": "KeyError",
+  "msg": "'th22'"
+ },
+ "hyb_sl0.50_dg11_th30_M5": {
+  "outcome": "RAISE",
+  "exc": "KeyError",
+  "msg": "'th30'"
+ },
+ "hyb_sl0.50_dg11_th35_M5": {
+  "outcome": "RAISE",
+  "exc": "KeyError",
+  "msg": "'th35'"
+ },
+ "hyb_sl0.50_dg13_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3.17e-16 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_sl0.50_dg15_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3.32e-16 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_sl0.50_dg7_ob25_M5": {
+  "orders": "70e79099e0312160",
+  "R": "e2910f69416415b7",
+  "T": "1c14e87982d5a60e",
+  "J": "dc200b6441f91fd4",
+  "outcome": "SOLVED",
+  "RT": 1.0441877346370843
+ },
+ "hyb_sl0.50_dg9_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.96e-16 < 1e-10, and the inverse misses its own equation A"
+ },
+ "hyb_sl1.00_dg11_ob25_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3.38e-17 < 1e-10, and the inverse misses its own equation A"
+ },
+ "jones2d_OOP_benign_M3": {
+  "orders": "6da240d455a94db8",
+  "R": "c6eeb848651e8a40",
+  "T": "7c22737321def4a7",
+  "J": "833d471d2b098f87",
+  "outcome": "SOLVED",
+  "RT": 1.0523140600025445
+ },
+ "jones2d_OOP_benign_M5": {
+  "orders": "70e79099e0312160",
+  "R": "91d96eb24c6dc9e8",
+  "T": "6c8c973e359a0f8a",
+  "J": "76af17f3e2fdbe67",
+  "outcome": "SOLVED",
+  "RT": 1.0268900543295363
+ },
+ "jones2d_OOP_benign_M7": {
+  "orders": "8c7e283c3548cbd5",
+  "R": "ed0b22b2e872793a",
+  "T": "2e0de2e24ad1ca6d",
+  "J": "fe39fbab245c92d5",
+  "outcome": "SOLVED",
+  "RT": 1.0130270883227261
+ },
+ "jones2d_OOP_vert_M3": {
+  "outcome": "RAISE",
+  "exc": "_EnergyError",
+  "msg": "pmm_jones_2d: energy non-conservation detected (sum R+T = 2.120e+00 exceeds 2); the solve is numerically unstable at this geometry (a near-degenerate layer<->re"
+ },
+ "jones2d_OOP_vert_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 5.04e-17 < 1e-10, and the inverse misses its own equation A"
+ },
+ "jones2d_OOP_vert_M7": {
+  "orders": "8c7e283c3548cbd5",
+  "R": "bc1fab8216d38ad7",
+  "T": "ee4cb05dadc08953",
+  "J": "557359ae324901d5",
+  "outcome": "SOLVED",
+  "RT": 1.0207498343360257
+ },
+ "jones2d_sl0.50_benign_M3": {
+  "orders": "6da240d455a94db8",
+  "R": "e3b164c680710ecf",
+  "T": "b98d79145517ce66",
+  "J": "78f30add7e124b34",
+  "outcome": "SOLVED",
+  "RT": 1.051589960073213
+ },
+ "jones2d_sl0.50_benign_M5": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.42e-17 < 1e-10, and the inverse misses its own equation A"
+ },
+ "jones2d_sl0.50_benign_M7": {
+  "orders": "8c7e283c3548cbd5",
+  "R": "3307417e9e0efed1",
+  "T": "adb2f5dd17ba0545",
+  "J": "17251bfa79cccdff",
+  "outcome": "SOLVED",
+  "RT": 1.0156488778857107
+ },
+ "jones2d_sl0.50_ob25": {
+  "outcome": "RAISE",
+  "exc": "_ConditioningError",
+  "msg": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 4.55e-17 < 1e-10, and the inverse misses its own equation A"
+ },
+ "oned_OOP_vert_ob25": {
+  "orders": "49fdffa328e1dbc8",
+  "R": "87241d09b84c4985",
+  "T": "e0e1d4db04384149",
+  "J": "e64484af08a902d4",
+  "outcome": "SOLVED",
+  "RT": 0.9999999999976509
+ },
+ "oned_shear0.15_ob25": {
+  "orders": "49fdffa328e1dbc8",
+  "R": "532027e572fd983e",
+  "T": "457ad7ee78feb172",
+  "J": "3b7f7c7fd44c453a",
+  "outcome": "SOLVED",
+  "RT": 1.000000000000107
+ },
+ "oned_shear0.30_ob25": {
+  "orders": "49fdffa328e1dbc8",
+  "R": "00cc9146bac0c9a7",
+  "T": "8e5cc9709237d45a",
+  "J": "be689d6f7070961d",
+  "outcome": "SOLVED",
+  "RT": 0.999999999999599
+ },
+ "oned_shear0.30_th0": {
+  "orders": "49fdffa328e1dbc8",
+  "R": "dc183b63d41125a4",
+  "T": "7a020865c9ff397f",
+  "J": "9cf84bfbf80e9c14",
+  "outcome": "SOLVED",
+  "RT": 1.0000000002437037
+ },
+ "oned_shear0.30_th40": {
+  "orders": "49fdffa328e1dbc8",
+  "R": "68e26239e6fc7ccb",
+  "T": "6d2857d3064599bc",
+  "J": "d46efa389f8eaf77",
+  "outcome": "SOLVED",
+  "RT": 1.000000016274349
+ },
+ "oned_shear0.30_th60": {
+  "orders": "49fdffa328e1dbc8",
+  "R": "5d598944cccbd0f6",
+  "T": "b42d9394eaa40e4a",
+  "J": "54e199d1c43012ed",
+  "outcome": "SOLVED",
+  "RT": 1.000000016531624
+ },
+ "oned_shear0.60_ob25": {
+  "orders": "49fdffa328e1dbc8",
+  "R": "b3a6642b7b1fff3b",
+  "T": "5e8ac9eea1beac6d",
+  "J": "33ab8be75bb6062b",
+  "outcome": "SOLVED",
+  "RT": 1.0000000008625252
+ },
+ "oned_shear1.00_ob25": {
+  "orders": "49fdffa328e1dbc8",
+  "R": "01627a119fe61843",
+  "T": "f14c0a932534de61",
+  "J": "66970b01ee46cd4d",
+  "outcome": "SOLVED",
+  "RT": 1.000000000241946
+ },
+ "pmmstack_conical": {
+  "orders": "6c2ae4d79be3cce4",
+  "R": "3cfeaf06714f0e0b",
+  "T": "10b1c2826969e2c7",
+  "J": "19948b627c24decf",
+  "outcome": "SOLVED",
+  "RT": 1.00000000264902
+ },
+ "pmmstack_conical_OOP": {
+  "outcome": "RAISE",
+  "exc": "NotImplementedError",
+  "msg": "PMMStack.solve (conical, phi != 0): a stack containing a PATTERNED layer together with an out-of-plane tensor (eps_xz/yz/zx/zy) is not supported -- the previous"
+ },
+ "pure_OOP_vert_benign_M3": {
+  "orders": "6da240d455a94db8",
+  "R": "4b50e5b089f50573",
+  "T": "711ff5b448c08066",
+  "J": "ec98686c275c7a72",
+  "outcome": "SOLVED",
+  "RT": 0.9999729101748933
+ },
+ "pure_OOP_vert_benign_M5": {
+  "orders": "70e79099e0312160",
+  "R": "164254d482586b6f",
+  "T": "583fc9ae2511332d",
+  "J": "fe8b1af890235a75",
+  "outcome": "SOLVED",
+  "RT": 0.9999729101748925
+ },
+ "pure_OOP_vert_ob25_M3": {
+  "orders": "6da240d455a94db8",
+  "R": "df90f68607c2443c",
+  "T": "8c01bf0d1518bc6a",
+  "J": "67cfc6ad96b073f9",
+  "outcome": "SOLVED",
+  "RT": 0.9999994608139646
+ },
+ "pure_OOP_vert_ob25_M5": {
+  "orders": "70e79099e0312160",
+  "R": "aa80e162c2f8acf9",
+  "T": "ea1087ea6a0c0a2c",
+  "J": "9b3ab2975ab1033e",
+  "outcome": "SOLVED",
+  "RT": 0.9999994608139635
+ },
+ "pure_mag_OOP_ob25_M3": {
+  "outcome": "RAISE",
+  "exc": "NotImplementedError",
+  "msg": "PMM2DStackPure.add_layer: a MAGNETIC layer with an OUT-OF-PLANE eps is not implemented -- the out-of-plane first-order generator carries no permeability blocks."
+ },
+ "pure_mag_sl0.50_ob25_M3": {
+  "outcome": "RAISE",
+  "exc": "NotImplementedError",
+  "msg": "PMM2DStackPure.add_layer: slant= together with mu / mu_cell is not implemented -- a SLANTED layer runs the OUT-OF-PLANE first-order generator, which carries no "
+ },
+ "pure_mag_vert_ob25_M3": {
+  "orders": "6da240d455a94db8",
+  "R": "a09b2cb9aae8556d",
+  "T": "cf795cf12fbde388",
+  "J": "ca6eb54a0ccfe1cc",
+  "outcome": "SOLVED",
+  "RT": 1.0003536590990447
+ },
+ "pure_sl0.50_benign_M3": {
+  "orders": "6da240d455a94db8",
+  "R": "0ee12f9cdaa82225",
+  "T": "ecc14f72e73f6ed9",
+  "J": "5b79cbc267d7d648",
+  "outcome": "SOLVED",
+  "RT": 1.0000750958045657
+ },
+ "pure_sl0.50_benign_M5": {
+  "orders": "70e79099e0312160",
+  "R": "04abdd761f027eec",
+  "T": "3ca763f8bbeef72b",
+  "J": "abcb5ab40bc43c86",
+  "outcome": "SOLVED",
+  "RT": 1.0000750958045652
+ },
+ "pure_sl0.50_ob25_M3": {
+  "orders": "6da240d455a94db8",
+  "R": "98e4ead10aaa1c05",
+  "T": "5da66592775984e4",
+  "J": "4d748087db0b3d1e",
+  "outcome": "SOLVED",
+  "RT": 1.00002772950855
+ },
+ "pure_sl0.50_ob25_M5": {
+  "orders": "70e79099e0312160",
+  "R": "656b60f5f4f4d736",
+  "T": "ccfecb480a5e28c2",
+  "J": "b339f574e2794463",
+  "outcome": "SOLVED",
+  "RT": 1.0000277295085491
+ },
+ "_mortar": {
+  "oned_perlayer_sh0.30_M7_dg12": {
+   "outcome": "SOLVED",
+   "RT": 1.0000000000001432,
+   "warned": [],
+   "mortar": {
+    "n": 0,
+    "max_cond": null,
+    "sizes": []
+   }
+  },
+  "oned_perlayer_sh0.30_M11_dg12": {
+   "outcome": "SOLVED",
+   "RT": 1.0000000000001446,
+   "warned": [],
+   "mortar": {
+    "n": 0,
+    "max_cond": null,
+    "sizes": []
+   }
+  },
+  "oned_perlayer_sh0.30_M7_dg16": {
+   "outcome": "SOLVED",
+   "RT": 1.0000000000001488,
+   "warned": [],
+   "mortar": {
+    "n": 0,
+    "max_cond": null,
+    "sizes": []
+   }
+  },
+  "oned_perlayer_sh0.60_M7_dg12": {
+   "outcome": "SOLVED",
+   "RT": 1.0000000013762858,
+   "warned": [],
+   "mortar": {
+    "n": 0,
+    "max_cond": null,
+    "sizes": []
+   }
+  },
+  "oned_perlayer_sh0.60_M11_dg12": {
+   "outcome": "SOLVED",
+   "RT": 1.0000000013762849,
+   "warned": [],
+   "mortar": {
+    "n": 0,
+    "max_cond": null,
+    "sizes": []
+   }
+  },
+  "oned_perlayer_sh0.60_M7_dg16": {
+   "outcome": "SOLVED",
+   "RT": 0.9999999999999942,
+   "warned": [],
+   "mortar": {
+    "n": 0,
+    "max_cond": null,
+    "sizes": []
+   }
+  },
+  "pure_mortar2d_M3_g1.0": {
+   "outcome": "SOLVED",
+   "RT": 0.9997035663308984,
+   "warned": [],
+   "mortar": {
+    "n": 1,
+    "max_cond": 3140.0212826407383,
+    "sizes": [
+     936
+    ]
+   }
+  },
+  "pure_mortar2d_M3_g2.1": {
+   "outcome": "SOLVED",
+   "RT": 1.0001477537030556,
+   "warned": [],
+   "mortar": {
+    "n": 1,
+    "max_cond": 12111.845941003352,
+    "sizes": [
+     936
+    ]
+   }
+  },
+  "pure_mortar2d_M5_g1.0": {
+   "outcome": "SOLVED",
+   "RT": 0.9997035663308973,
+   "warned": [],
+   "mortar": {
+    "n": 1,
+    "max_cond": 3140.0212826407383,
+    "sizes": [
+     936
+    ]
+   }
+  },
+  "pure_mortar2d_M5_g2.1": {
+   "outcome": "SOLVED",
+   "RT": 1.0001477537030543,
+   "warned": [],
+   "mortar": {
+    "n": 1,
+    "max_cond": 12111.845941003352,
+    "sizes": [
+     936
+    ]
+   }
+  },
+  "pure_mortar2d_M3_nm6_g1.0": {
+   "outcome": "SOLVED",
+   "RT": 0.9999998588416571,
+   "warned": [],
+   "mortar": {
+    "n": 1,
+    "max_cond": 12281.501107512557,
+    "sizes": [
+     2600
+    ]
+   }
+  }
+ },
+ "_seconds": 1092.8
+}
