@@ -670,9 +670,11 @@ PMM2D_STAG_MIN_SEG_GUARD = True
 #: Inside ONE grid those modes are harmless -- they are evanescent to machine
 #: zero and the plain square modal match sees the SAME set on both sides
 #: (measured ``delta``-independent to 4.1e-13).  Across a MORTAR they are not:
-#: the cross-grid projection conditions as ``1/w^2`` on the E row and
-#: ``1/w^3.2`` on the H row (fitted exponents 1.995 / 3.218 and 1.994 / 3.214
-#: on two fixtures), and the damage is ENERGY-INVISIBLE -- the lossless closure
+#: the cross-grid projection conditions as ``1/w^2`` on the E row and FASTER
+#: than that on the H row (fitted exponents on two fixtures and two builds:
+#: E row 1.995 / 1.995 and 1.994 / 1.994; H row 3.218 / 3.003 and 3.214 /
+#: 3.103, the spread there being the fit's last rung sitting at the float64
+#: ceiling), and the damage is ENERGY-INVISIBLE -- the lossless closure
 #: stays pinned at 8.0e-08 across the whole ladder, so ``_warn_stag_closure``
 #: and the 1-D fix's ``R+T`` screen have nothing to see.
 #:

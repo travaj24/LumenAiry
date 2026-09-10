@@ -190,17 +190,26 @@ being fine, which is precisely how the 1-D `|q|max` bar failed
 OVERLAP across degrees).
 
 **Which operator carries the `1/w`**, fitted exponents in `1/delta` over the
-tail `delta <= 1e-2`, on TWO fixtures (`v_s63` / `alt`):
+tail `delta <= 1e-2`, on TWO fixtures (`v_s63` / `alt`) and TWO builds:
 
-| operator | exponent (fx 1) | (fx 2) |
+| operator | fx 1, WIN / WSL | fx 2, WIN / WSL |
 |---|---|---|
-| `\|gamma\|max` of the sliver grid | 0.999 | 0.999 |
-| `W_b` (the E-field modal matrix) | **0.029** | **-0.075** (FLAT) |
-| `V_b` (the H-field modal matrix) | **2.028** | **1.950** |
-| `MassE_B W_B` (the E-row solve) | 1.995 | 1.994 |
-| `MassH_A V_A` with the SLIVER in `A` (the H-row solve) | **3.218** | **3.214** |
-| cross-mass factor `C1_x` | 1.025 | 1.284 |
-| cross-mass factor `C2_x` | 2.303 | 2.200 |
+| `\|gamma\|max` of the sliver grid | 0.999 / 0.999 | 0.999 / 0.999 |
+| `W_b` (the E-field modal matrix) | **0.029 / 0.029** | **-0.075 / -0.069** (FLAT) |
+| `V_b` (the H-field modal matrix) | **2.028 / 2.028** | **1.950 / 1.951** |
+| `MassE_B W_B` (the E-row solve) | 1.995 / 1.995 | 1.994 / 1.994 |
+| `MassH_A V_A` with the SLIVER in `A` (the H-row solve) | **3.218 / 3.003** | **3.214 / 3.103** |
+| cross-mass factor `C1_x` | 1.025 / 1.025 | 1.284 / 1.284 |
+| cross-mass factor `C2_x` | 2.303 / 2.303 | 2.200 / 2.200 |
+
+Every exponent agrees between the builds to the digits printed EXCEPT the
+H-row one, and the reason is stated rather than smoothed: that fit's
+`delta = 1e-6` point sits at the float64 ceiling (`cond_2` reads 2.3e+19 and
+7.4e+19 on the two fixtures), so its last decade is measuring the arithmetic
+rather than the operator.  The claim it supports -- that the H row grows
+FASTER than `1/w^2` because it multiplies the sliver grid's own mass by the
+sliver grid's own `V` -- is carried by every rung above that one and by both
+builds.
 
 **The `1/w^2` lives in the `V` half**, exactly as the 1-D verification located
 it (`VERIFY_PMMSTACK_SLIVER_WALLS_2026_09_11.md` claim 2b: `cond(V)` fits

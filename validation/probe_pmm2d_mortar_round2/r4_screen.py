@@ -36,6 +36,7 @@ import scipy.linalg as sla
 
 import lumenairy
 from lumenairy.elements.pmm import _core as _pc
+from lumenairy.elements.pmm import twod_staggered as _ts
 from lumenairy.elements.pmm.twod_staggered import (
     Granet2DTransverseE,
     StagCrossOps,
@@ -249,8 +250,16 @@ SECTIONS = {"pop": sec_pop}
 
 
 def main():
-    for w in (sys.argv[1:] or list(SECTIONS)):
-        SECTIONS[w]()
+    # These probes MAP the refused band on purpose, so the round-2 guards are
+    # lifted for their duration.  Library code never does this.
+    _ts.PMM2D_STAG_MIN_SEG_GUARD = False
+    prev_rc, _pc._MORTAR_RCOND_REFUSE = _pc._MORTAR_RCOND_REFUSE, 0.0
+    try:
+        for w in (sys.argv[1:] or list(SECTIONS)):
+            SECTIONS[w]()
+    finally:
+        _ts.PMM2D_STAG_MIN_SEG_GUARD = True
+        _pc._MORTAR_RCOND_REFUSE = prev_rc
     tag = os.environ.get("R_TAG", "")
     path = os.path.join(HERE, f"r4_screen{('_' + tag) if tag else ''}.json")
     with open(path, "w") as fh:
