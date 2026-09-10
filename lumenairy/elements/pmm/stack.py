@@ -484,9 +484,26 @@ class PMMStack:
         # 2.1x faster) at min_feature=1.5e-9.  The snap also MOVES walls
         # (<= min_feature/2), so the converged value itself depends on it --
         # choose the value where the answer is stationary in BOTH `degree` and
-        # `min_feature`, not merely the largest one that runs.  A cross-layer
-        # sliver left in the grid is now reported by `_pmm_union_grid`.  See
+        # `min_feature`, not merely the largest one that runs.  See
         # docs/audits/AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md.
+        #
+        # WHAT REPORTS A SLIVER, EXACTLY (open item C, 2026-09-11; corrected
+        # here 2026-09-11 by the verification of that fix).  This block used to
+        # say "a cross-layer sliver left in the grid is now reported by
+        # `_pmm_union_grid`".  It is NOT: `_pmm_union_grid` warns only about
+        # the pairs it SNAPS, and a sliver left in the grid is by definition
+        # one it did not snap.  There are two reports, neither of them that:
+        #   * `_pmm_union_grid`'s warning -- fires when the snap MERGES pairs,
+        #     and names the pairs and the max wall displacement;
+        #   * `_sliver_refusal` (O-11, below) -- RAISES on a sliver LEFT in the
+        #     grid, but only in CONJUNCTION with super-unity above
+        #     `_STACK_SUPERUNITY_BAR` on a provably passive stack.  A sliver
+        #     left in the grid whose answer still closes is not reported at
+        #     all: that is the deliberate trade of S4.2 of
+        #     docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md (a plain
+        #     report would fire on correct solves), and its measured cost is
+        #     the false-negative census in
+        #     docs/audits/VERIFY_PMMSTACK_SLIVER_WALLS_2026_09_11.md S4.
         self.min_feature = (float(period) * 1e-5 if min_feature is None
                             else float(min_feature))
         # 'per-layer' (audit R-6, 2026-07-28): each layer is assembled on its

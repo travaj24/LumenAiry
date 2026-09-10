@@ -1,0 +1,551 @@
+{
+ "meta": {
+  "lumenairy": "/mnt/c/tmp/lum_vsliver/lumenairy/__init__.py",
+  "python": "3.12.3",
+  "numpy": "2.4.6"
+ },
+ "part_a": [
+  {
+   "delta": 0.01,
+   "w": 0.010000000000000009,
+   "n_cells": 5,
+   "k0J": 0.04560376432630349,
+   "degree": 10,
+   "cond_S0": 103.25671579778798,
+   "norm_Kx2": 183235.15678246846,
+   "qmax": 426.70163737662034,
+   "pred_const": 0.7076073057662258,
+   "cond_iface": 10.302604364624345,
+   "cond_block": 44478.930090423106,
+   "cond_Wa": 9.346632766050359,
+   "cond_Wb": 6.096157016087994,
+   "cond_Va": 92330.04517028946,
+   "cond_Vb": 28945.749862715304,
+   "smax": 2.414238278210441
+  },
+  {
+   "delta": 0.01,
+   "w": 0.010000000000000009,
+   "n_cells": 5,
+   "k0J": 0.04560376432630349,
+   "degree": 14,
+   "cond_S0": 141.00860021088354,
+   "norm_Kx2": 649601.531080096,
+   "qmax": 804.9532807917476,
+   "pred_const": 0.6992171373506981,
+   "cond_iface": 9.786914517293454,
+   "cond_block": 157861.82618495074,
+   "cond_Wa": 11.123217185593774,
+   "cond_Wb": 7.387967010166627,
+   "cond_Va": 327452.3864314439,
+   "cond_Vb": 102732.46575372184,
+   "smax": 2.43472692003128
+  },
+  {
+   "delta": 0.01,
+   "w": 0.010000000000000009,
+   "n_cells": 5,
+   "k0J": 0.04560376432630349,
+   "degree": 18,
+   "cond_S0": 179.0575522503039,
+   "norm_Kx2": 1704655.4688048507,
+   "qmax": 1304.518535264961,
+   "pred_const": 0.6958006531171685,
+   "cond_iface": 9.477937283631245,
+   "cond_block": 414239.51017273264,
+   "cond_Wa": 13.153614676341038,
+   "cond_Wb": 8.249330058134015,
+   "cond_Va": 859156.1807333102,
+   "cond_Vb": 269568.6339229073,
+   "smax": 2.4461362690724036
+  },
+  {
+   "delta": 0.001,
+   "w": 0.0010000000000000009,
+   "n_cells": 5,
+   "k0J": 0.004560376432630349,
+   "degree": 10,
+   "cond_S0": 1032.5671579778614,
+   "norm_Kx2": 18207549.614831116,
+   "qmax": 3995.086649881847,
+   "pred_const": 0.6625126910704475,
+   "cond_iface": 4.5316545542889735,
+   "cond_block": 4338967.49661049,
+   "cond_Wa": 18.566476577693013,
+   "cond_Wb": 8.69607096123791,
+   "cond_Va": 9184823.286215406,
+   "cond_Vb": 2834522.03699887,
+   "smax": 2.7356630746065234
+  },
+  {
+   "delta": 0.001,
+   "w": 0.0010000000000000009,
+   "n_cells": 5,
+   "k0J": 0.004560376432630349,
+   "degree": 14,
+   "cond_S0": 1410.0860021088106,
+   "norm_Kx2": 64491381.70253828,
+   "qmax": 7508.373064331964,
+   "pred_const": 0.6522096679995428,
+   "cond_iface": 5.345288959786189,
+   "cond_block": 15327220.179791937,
+   "cond_Wa": 22.6385892565231,
+   "cond_Wb": 11.022284628966164,
+   "cond_Va": 32474867.510940883,
+   "cond_Vb": 10009549.144902967,
+   "smax": 2.6763832260810267
+  },
+  {
+   "delta": 0.001,
+   "w": 0.0010000000000000009,
+   "n_cells": 5,
+   "k0J": 0.004560376432630349,
+   "degree": 18,
+   "cond_S0": 1790.575522503007,
+   "norm_Kx2": 169145838.72558495,
+   "qmax": 12153.251153521396,
+   "pred_const": 0.6482269022263927,
+   "cond_iface": 6.01136729324701,
+   "cond_block": 40175192.77043861,
+   "cond_Wa": 25.124299069886156,
+   "cond_Wb": 13.143376929816071,
+   "cond_Va": 85115950.33533284,
+   "cond_Vb": 26233003.150207072,
+   "smax": 2.548987798684072
+  },
+  {
+   "delta": 0.0001,
+   "w": 9.999999999998899e-05,
+   "n_cells": 5,
+   "k0J": 0.0004560376432629843,
+   "degree": 10,
+   "cond_S0": 10325.671579779222,
+   "norm_Kx2": 1820642858.550525,
+   "qmax": 39721.1563255317,
+   "pred_const": 0.658703364304584,
+   "cond_iface": 4.583298094399985,
+   "cond_block": 433395524.245098,
+   "cond_Wa": 22.56699389870012,
+   "cond_Wb": 9.52471353551373,
+   "cond_Va": 920553009.1260196,
+   "cond_Vb": 283336877.6371683,
+   "smax": 3.09791194897564
+  },
+  {
+   "delta": 0.0001,
+   "w": 9.999999999998899e-05,
+   "n_cells": 5,
+   "k0J": 0.0004560376432629843,
+   "degree": 14,
+   "cond_S0": 14100.860021088936,
+   "norm_Kx2": 6448717819.363372,
+   "qmax": 74555.5446243587,
+   "pred_const": 0.6476216164320153,
+   "cond_iface": 5.467506456977916,
+   "cond_block": 1530060667.8780897,
+   "cond_Wa": 30.893878271852945,
+   "cond_Wb": 12.738247920354969,
+   "cond_Va": 3249656905.6972914,
+   "cond_Vb": 1000243188.1272988,
+   "smax": 3.2900317439615367
+  },
+  {
+   "delta": 0.0001,
+   "w": 9.999999999998899e-05,
+   "n_cells": 5,
+   "k0J": 0.0004560376432629843,
+   "degree": 18,
+   "cond_S0": 17905.755225031127,
+   "norm_Kx2": 16913455027.931767,
+   "qmax": 120631.37865147911,
+   "pred_const": 0.6434204634360843,
+   "cond_iface": 6.138580884276662,
+   "cond_block": 4008333098.5499268,
+   "cond_Wa": 37.990396568320854,
+   "cond_Wb": 15.92970673833107,
+   "cond_Va": 8512789175.374263,
+   "cond_Vb": 2620112793.218516,
+   "smax": 3.378092790233193
+  },
+  {
+   "delta": 3e-05,
+   "w": 2.999999999997449e-05,
+   "n_cells": 5,
+   "k0J": 0.000136811292978794,
+   "degree": 10,
+   "cond_S0": 34418.905265991474,
+   "norm_Kx2": 20229353647.956223,
+   "qmax": 132353.2049014906,
+   "pred_const": 0.6584513851803704,
+   "cond_iface": 4.591482992859067,
+   "cond_block": 4814955260.698524,
+   "cond_Wa": 22.975703607041908,
+   "cond_Wb": 9.60376403609773,
+   "cond_Va": 10230400253.253284,
+   "cond_Vb": 3148112206.35028,
+   "smax": 3.1308952734103324
+  },
+  {
+   "delta": 3e-05,
+   "w": 2.999999999997449e-05,
+   "n_cells": 5,
+   "k0J": 0.000136811292978794,
+   "degree": 14,
+   "cond_S0": 47002.86673704607,
+   "norm_Kx2": 71652377336.08557,
+   "qmax": 248407.92314988008,
+   "pred_const": 0.6473335076630855,
+   "cond_iface": 5.504529636649382,
+   "cond_block": 16998036419.238956,
+   "cond_Wa": 31.931586614935064,
+   "cond_Wb": 12.930085806143422,
+   "cond_Va": 36115194186.50325,
+   "cond_Vb": 11113474171.214413,
+   "smax": 3.35557869566357
+  },
+  {
+   "delta": 3e-05,
+   "w": 2.999999999997449e-05,
+   "n_cells": 5,
+   "k0J": 0.000136811292978794,
+   "degree": 18,
+   "cond_S0": 59685.85075020907,
+   "norm_Kx2": 187927163218.5015,
+   "qmax": 401895.8088776493,
+   "pred_const": 0.6430863772550817,
+   "cond_iface": 235646.88084543656,
+   "cond_block": 93639820062.45943,
+   "cond_Wa": 40.010548327213556,
+   "cond_Wb": 16.29972257536426,
+   "cond_Va": 94602308230.49345,
+   "cond_Vb": 29111478928.925655,
+   "smax": 158334.02050529604
+  }
+ ],
+ "powers": {
+  "deg10_cond_S0": [
+   0.9999999999999923,
+   0.9999999999999772,
+   1.0000000000008507
+  ],
+  "deg10_norm_Kx2": [
+   1.9972426979503883,
+   1.9999732598921485,
+   1.999999530002125
+  ],
+  "deg10_qmax": [
+   0.9714018938387726,
+   0.9974956795724114,
+   0.9996822093730279
+  ],
+  "deg10_cond_iface": [
+   -0.356690226183373,
+   0.004921307956335588,
+   0.0014819413601484097
+  ],
+  "deg10_cond_block": [
+   1.989232064773607,
+   1.9994980251452419,
+   1.9999050326653254
+  ],
+  "deg10_cond_Wa": [
+   0.2980743146698196,
+   0.08474421744161312,
+   0.014908061694442077
+  ],
+  "deg10_cond_Wb": [
+   0.15426693058920432,
+   0.03952884773908616,
+   0.006864991586789001
+  ],
+  "deg10_cond_Va": [
+   1.997727756972158,
+   2.0009779969730506,
+   2.0001651105686102
+  ],
+  "deg10_cond_Vb": [
+   1.9908950329705097,
+   1.9998232659201594,
+   1.99998012737301
+  ],
+  "deg14_cond_S0": [
+   0.9999999999999923,
+   0.9999999999999772,
+   1.0000000000008509
+  ],
+  "deg14_norm_Kx2": [
+   1.9968546417799324,
+   1.9999716920280357,
+   1.9999995029512914
+  ],
+  "deg14_qmax": [
+   0.9697751682336181,
+   0.9969341040217977,
+   0.9996304143639224
+  ],
+  "deg14_cond_iface": [
+   -0.2626746074308679,
+   0.009818116991929485,
+   0.005605333462323775
+  ],
+  "deg14_cond_block": [
+   1.9871862736828578,
+   1.999245255003104,
+   1.9998711242940592
+  ],
+  "deg14_cond_Wa": [
+   0.30861894282845936,
+   0.1350230710866874,
+   0.027440524977775244
+  ],
+  "deg14_cond_Wb": [
+   0.1737466741436179,
+   0.06283807552265631,
+   0.012415325414624374
+  ],
+  "deg14_cond_Va": [
+   1.9963992280801002,
+   2.0002901232460206,
+   2.0001815958270095
+  ],
+  "deg14_cond_Vb": [
+   1.9887068041668639,
+   1.9996910862100061,
+   1.9999746624125216
+  ],
+  "deg18_cond_S0": [
+   0.9999999999999923,
+   0.9999999999999772,
+   1.0000000000008507
+  ],
+  "deg18_norm_Kx2": [
+   1.9966247017701764,
+   1.9999710151099466,
+   1.9999994923084872
+  ],
+  "deg18_qmax": [
+   0.9692422187691475,
+   0.9967678183153256,
+   0.9995686202637392
+  ],
+  "deg18_cond_iface": [
+   -0.19774056652838512,
+   0.009094718567109564,
+   8.767221376461785
+  ],
+  "deg18_cond_block": [
+   1.986706449742573,
+   1.999005835595889,
+   2.6172354067788017
+  ],
+  "deg18_cond_Wa": [
+   0.28104883900356964,
+   0.17957987258951955,
+   0.043032302260202805
+  ],
+  "deg18_cond_Wb": [
+   0.20228828270539856,
+   0.08350081772120063,
+   0.019072169497487707
+  ],
+  "deg18_cond_Va": [
+   1.9959388337495256,
+   2.000060925459131,
+   2.0001383963422477
+  ],
+  "deg18_cond_Vb": [
+   1.9881786536086052,
+   1.9994719762597977,
+   1.9999747377696595
+  ]
+ },
+ "part_b": [
+  {
+   "delta": 0.01,
+   "sliver_m": 1.2e-08,
+   "selfgap_shared": 2.8417078579145993e-08,
+   "selfgap_perlayer": 2.8417078579145993e-08,
+   "perlayer_vs_shared": 0.0,
+   "shift_from_ref": 0.009264004347885935,
+   "RplusT": 1.0000000000027505,
+   "abs_RT_minus_1": 2.750466521206363e-12,
+   "energy_warned": false,
+   "refused": false,
+   "warnings": []
+  },
+  {
+   "delta": 0.0026,
+   "sliver_m": 3.1199999999999996e-09,
+   "selfgap_shared": 3.5311686630290495e-08,
+   "selfgap_perlayer": 3.5311686630290495e-08,
+   "perlayer_vs_shared": 0.0,
+   "shift_from_ref": 0.0028285784652750667,
+   "RplusT": 0.9999999996960945,
+   "abs_RT_minus_1": 3.039054563558352e-10,
+   "energy_warned": false,
+   "refused": false,
+   "warnings": []
+  },
+  {
+   "delta": 0.001,
+   "sliver_m": 1.2e-09,
+   "selfgap_shared": 4.335988190717899e-08,
+   "selfgap_perlayer": 4.335988190717899e-08,
+   "perlayer_vs_shared": 0.0,
+   "shift_from_ref": 0.0011277153186416422,
+   "RplusT": 0.999999998294812,
+   "abs_RT_minus_1": 1.7051879908080991e-09,
+   "energy_warned": false,
+   "refused": false,
+   "warnings": []
+  },
+  {
+   "delta": 0.0003,
+   "sliver_m": 3.5999999999999995e-10,
+   "selfgap_shared": 6.429054827394864e-08,
+   "selfgap_perlayer": 6.429054827394864e-08,
+   "perlayer_vs_shared": 0.0,
+   "shift_from_ref": 0.0003437321978685959,
+   "RplusT": 1.0000000105934783,
+   "abs_RT_minus_1": 1.059347831677826e-08,
+   "energy_warned": false,
+   "refused": false,
+   "warnings": []
+  },
+  {
+   "delta": 0.0001,
+   "sliver_m": 1.2e-10,
+   "selfgap_shared": 0.47892582012319623,
+   "selfgap_perlayer": 0.47892582012319623,
+   "perlayer_vs_shared": 0.0,
+   "shift_from_ref": 0.4789426860170594,
+   "RplusT": 2.1729793521442984,
+   "abs_RT_minus_1": 1.1729793521442984,
+   "energy_warned": true,
+   "refused": true,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 2.17 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree."
+   ]
+  },
+  {
+   "delta": 3e-05,
+   "sliver_m": 3.6e-11,
+   "selfgap_shared": 8.172317241458694,
+   "selfgap_perlayer": 8.172317241458694,
+   "perlayer_vs_shared": 0.0,
+   "shift_from_ref": 8.618115059495839,
+   "RplusT": 23.422521145763433,
+   "abs_RT_minus_1": 22.422521145763433,
+   "energy_warned": true,
+   "refused": true,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 23.4 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree."
+   ]
+  },
+  {
+   "delta": 1e-05,
+   "sliver_m": 1.2e-11,
+   "selfgap_shared": 0.00011812738356331565,
+   "selfgap_perlayer": 0.00011812738356331565,
+   "perlayer_vs_shared": 0.0,
+   "shift_from_ref": 0.9304787933306415,
+   "RplusT": 3.6128533119734287,
+   "abs_RT_minus_1": 2.6128533119734287,
+   "energy_warned": true,
+   "refused": true,
+   "warnings": [
+    "_pmm_union_grid: snapped 1 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=1e-05 (period fractions): (0.62505, 0.62506).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 5e-06 of a period).  Single-layer thin features are never merged.",
+    "PMMStack.solve: energy not conserved (max R+T = 3.61 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree."
+   ]
+  },
+  {
+   "delta": 3e-06,
+   "sliver_m": 3.6e-12,
+   "selfgap_shared": 5.4682672556705114e-08,
+   "selfgap_perlayer": 5.4682672556705114e-08,
+   "perlayer_vs_shared": 0.0,
+   "shift_from_ref": 3.460599021898325e-06,
+   "RplusT": 0.999999999999997,
+   "abs_RT_minus_1": 2.9976021664879227e-15,
+   "energy_warned": false,
+   "refused": false,
+   "warnings": [
+    "_pmm_union_grid: snapped 2 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=1e-05 (period fractions): (0.278647, 0.27865), (0.62505, 0.625053).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 1.5e-06 of a period).  Single-layer thin features are never merged."
+   ]
+  },
+  {
+   "delta": 1e-06,
+   "sliver_m": 1.2e-12,
+   "selfgap_shared": 5.4684100414537085e-08,
+   "selfgap_perlayer": 5.4684100414537085e-08,
+   "perlayer_vs_shared": 0.0,
+   "shift_from_ref": 1.1535567598919272e-06,
+   "RplusT": 1.000000000000004,
+   "abs_RT_minus_1": 3.9968028886505635e-15,
+   "energy_warned": false,
+   "refused": false,
+   "warnings": [
+    "_pmm_union_grid: snapped 2 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=1e-05 (period fractions): (0.278649, 0.27865), (0.62505, 0.625051).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 5e-07 of a period).  Single-layer thin features are never merged."
+   ]
+  },
+  {
+   "delta": 0.0,
+   "sliver_m": 0.0,
+   "selfgap_shared": 5.468478697645551e-08,
+   "selfgap_perlayer": 5.468478697645551e-08,
+   "perlayer_vs_shared": 0.0,
+   "shift_from_ref": 0.0,
+   "RplusT": 1.0000000000000322,
+   "abs_RT_minus_1": 3.219646771412954e-14,
+   "energy_warned": false,
+   "refused": false,
+   "warnings": []
+  }
+ ],
+ "part_c": {
+  "n2": {
+   "union_cells": 5,
+   "union_min": 9.999999999998899e-05,
+   "per_layer_equals_union": [
+    true,
+    true
+   ],
+   "per_layer_cells": [
+    5,
+    5
+   ]
+  },
+  "n3": {
+   "union_cells": 7,
+   "union_min": 9.999999999998899e-05,
+   "per_layer_equals_union": [
+    false,
+    true,
+    false
+   ],
+   "per_layer_cells": [
+    5,
+    7,
+    5
+   ]
+  },
+  "n5": {
+   "union_cells": 11,
+   "union_min": 9.999999999998899e-05,
+   "per_layer_equals_union": [
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "per_layer_cells": [
+    5,
+    7,
+    7,
+    7,
+    5
+   ]
+  }
+ }
+}

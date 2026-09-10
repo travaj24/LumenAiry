@@ -4451,6 +4451,17 @@ def _tensor3_dict(M):
 
 
 
+#: ROUND-OFF deadband on :func:`_pmm_union_grid`'s ``min_feature`` comparison,
+#: in PERIOD FRACTIONS -- the coordinate the union walls live in (open item A,
+#: 2026-09-11).  Sized on the measurement, not chosen: the worst
+#: ``|d_computed - min_feature|`` over 120,000 random two-layer layouts across
+#: six ``min_feature`` decades is 1.565e-16 (0.70 ULP of 1.0), so 16 ULP is 23x
+#: that and still ~3.6e-15 of a period -- below any geometry a caller can
+#: express, and below the function's own 1e-9 fractional dedup ``tol`` by six
+#: decades.
+_WALL_SNAP_DEADBAND = 16.0 * float(np.finfo(float).eps)
+
+
 def _pmm_union_grid(layer_segments, min_feature=None, *,
                     return_owners=False, warn=True):
     """Build the shared nodal grid for a stack: the union of every layer's walls.
@@ -4469,7 +4480,11 @@ def _pmm_union_grid(layer_segments, min_feature=None, *,
     snapped to their midpoint and a warning names the merged pairs -- but ONLY
     when the pair comes from DIFFERENT layers: a close pair owned by a single
     layer is that layer's own intentional thin feature (a 1 nm liner) and is
-    never thinned.
+    never thinned.  "Closer than" is tested on a ``_WALL_SNAP_DEADBAND``
+    round-off deadband (2026-09-11, open item A) so that two pairs the caller
+    made the SAME width -- which reach here as cumulative sums straddling
+    ``min_feature`` by a fraction of an ULP -- are treated the same way on both
+    sides instead of one merging and the other not.
 
     ``return_owners`` (2026-09-11, the O-11 sliver guard) appends a THIRD
     return value: ``owners[i]`` = the frozenset of LAYER INDICES that own union
@@ -4517,14 +4532,35 @@ def _pmm_union_grid(layer_segments, min_feature=None, *,
             keep[-1] = uwalls[-1]
         # ---- PHYSICAL wall-snap (item 3a): cross-layer pairs only ----------
         if min_feature is not None and float(min_feature) > tol:
+            # ROUND-OFF DEADBAND on the threshold (open item A of
+            # docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md, verified and
+            # sized in docs/audits/VERIFY_PMMSTACK_SLIVER_WALLS_2026_09_11.md).
+            # ``d`` is a difference of CUMULATIVE SUMS of period fractions, so
+            # two pairs the caller made the SAME width land on either side of a
+            # ``mf`` set to that width: measured on the O-11 taper at
+            # ``mf = 1e-5`` the two separations read 1.0000000000010001e-05 and
+            # 9.99999999995449e-06, and the bare comparison then merged ONE of
+            # the symmetric pair and left the other -- a geometry nobody asked
+            # for (three fixtures, err 0.93 / 2.4 / 16.4 against the exact
+            # coincident-wall limit, where snapping BOTH reads 1.2e-05 to
+            # 3.5e-05).  ``<=`` does not fix it: the pair straddles ``mf``, it
+            # does not sit on it.  The walls live in [0, 1], so the deadband is
+            # ABSOLUTE in period fractions: measured worst |d - mf| over 120k
+            # random two-layer layouts x six ``mf`` decades is 1.565e-16, i.e.
+            # 0.70 ULP of 1.0, and 16 ULP carries 23x headroom over that while
+            # remaining ~3.6e-15 of a period -- far below any geometry a caller
+            # can express.  It SUBTRACTS, so ``min_feature`` keeps the
+            # "closer than" meaning this docstring states and the change can
+            # only ever merge FEWER pairs than before, never more.
             mf = float(min_feature)
+            mf_thr = mf - _WALL_SNAP_DEADBAND
             merged_pairs = []
             out_w = [keep[0]]
             out_o = [owners[0]]
             for w, ow in zip(keep[1:], owners[1:]):
                 d = w - out_w[-1]
                 interior = 0.0 < out_w[-1] and w < 1.0
-                if (d < mf and interior
+                if (d < mf_thr and interior
                         and not (out_o[-1] & ow)):      # no common owner layer
                     merged_pairs.append((out_w[-1], w))
                     out_w[-1] = 0.5 * (out_w[-1] + w)   # snap to midpoint

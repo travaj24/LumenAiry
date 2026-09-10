@@ -1,0 +1,180 @@
+{
+ "meta": {
+  "lumenairy": "C:\\tmp\\lum_vsliver\\lumenairy\\__init__.py",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "bar_b": 0.01,
+  "bar_a": 100.0
+ },
+ "c": [
+  {
+   "tag": "c1_non_conforming",
+   "refused": false,
+   "RplusT": [
+    0.9999999999996435,
+    0.999999999999938
+   ],
+   "warned": [],
+   "screen": null
+  },
+  {
+   "tag": "c2_owned_liner",
+   "refused": false,
+   "RplusT": [
+    1.0000000008512848,
+    0.9999999967110278
+   ],
+   "warned": [],
+   "screen": null
+  },
+  {
+   "tag": "c2b_liner_split_by_neighbour",
+   "refused": true,
+   "sliver": true,
+   "msg": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 1 cell(s) no single layer asked for; ",
+   "screen": [
+    1.0000000000287557e-07,
+    0.3,
+    0.3000001,
+    1.0000000000287557e-07,
+    0.0010000000000000009,
+    1
+   ]
+  },
+  {
+   "tag": "c3_lossy_substrate_(1.5+0.05j)",
+   "refused": false,
+   "RplusT": [
+    0.9999451131952672,
+    0.9999999745235071
+   ],
+   "warned": [],
+   "provably_passive": true
+  },
+  {
+   "tag": "c3_lossy_substrate_(1.5+0.5j)",
+   "refused": false,
+   "RplusT": [
+    0.9993459115389817,
+    0.9999997125935134
+   ],
+   "warned": [],
+   "provably_passive": true
+  },
+  {
+   "tag": "c3_lossy_substrate_(3+2j)",
+   "refused": false,
+   "RplusT": [
+    0.9981476359113544,
+    0.999998698777171
+   ],
+   "warned": [],
+   "provably_passive": true
+  },
+  {
+   "tag": "c3b_lossy_substrate_plus_sliver",
+   "refused": true,
+   "sliver": true,
+   "msg": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 2 cell(s) no single layer asked for; ",
+   "provably_passive": true
+  },
+  {
+   "tag": "c4_offdiag_tensor_with_sliver",
+   "refused": false,
+   "RplusT": [
+    1.4378884480900576,
+    2.1829557844308347
+   ],
+   "warned": [
+    "PMMStack.solve: energy not conserved (max R+T = 2.18 > 1) -- a near-si"
+   ],
+   "provably_passive": false
+  },
+  {
+   "tag": "c5_conical_healthy",
+   "refused": false,
+   "RplusT": [
+    0.9999999999997485,
+    0.999999999999984
+   ],
+   "warned": []
+  },
+  {
+   "tag": "c5b_conical_with_sliver",
+   "refused": false,
+   "RplusT": [
+    1.000052043564407,
+    1.0000149123334157
+   ],
+   "warned": []
+  },
+  {
+   "tag": "c6_slant_healthy",
+   "refused": false,
+   "RplusT": [
+    1.000000000001894,
+    1.0000000000000226
+   ],
+   "warned": []
+  },
+  {
+   "tag": "c6b_slant_with_sliver",
+   "refused": false,
+   "RplusT": [
+    0.9999993358386111,
+    1.000000299364735
+   ],
+   "warned": []
+  },
+  {
+   "tag": "c7_taper_ns16_deg6",
+   "refused": false,
+   "RplusT": [
+    1.0000030060662124,
+    0.9999932170152656
+   ],
+   "warned": [],
+   "screen": null
+  },
+  {
+   "tag": "c7_taper_ns24_deg6",
+   "refused": false,
+   "RplusT": [
+    1.0000026930677606,
+    0.9999934380094251
+   ],
+   "warned": [],
+   "screen": null
+  },
+  {
+   "tag": "c7_taper_ns32_deg6",
+   "refused": false,
+   "RplusT": [
+    1.0000025234959655,
+    0.9999935491488379
+   ],
+   "warned": [],
+   "screen": null
+  },
+  {
+   "tag": "c7_taper_ns24_deg8",
+   "refused": false,
+   "RplusT": [
+    1.0000000017102761,
+    0.9999999880621697
+   ],
+   "warned": [],
+   "screen": null
+  },
+  {
+   "tag": "c7_taper_ns40_deg6",
+   "refused": false,
+   "RplusT": [
+    1.00000241680273,
+    0.999993607311543
+   ],
+   "warned": [],
+   "screen": null
+  }
+ ]
+}

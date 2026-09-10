@@ -1,0 +1,108 @@
+{
+ "meta": {
+  "lumenairy": "/mnt/c/tmp/lum_vsliver/lumenairy/__init__.py",
+  "python": "3.12.3",
+  "numpy": "2.4.6"
+ },
+ "rows": [
+  {
+   "mode": "classical",
+   "degree": 10,
+   "n_rows": 40,
+   "n_wrong": 18,
+   "n_right": 22,
+   "n_refused": 18,
+   "refused_wrong": 18,
+   "refused_right": 0,
+   "misses": [],
+   "worst_wrong_err": 0.9356537784041064,
+   "worst_wrong_RT": 3.6333958322494144,
+   "max_absRT1_right": 8.560034605586964e-07,
+   "min_RT1_wrong": 1.1725791944257762
+  },
+  {
+   "mode": "classical",
+   "degree": 14,
+   "n_rows": 40,
+   "n_wrong": 19,
+   "n_right": 21,
+   "n_refused": 19,
+   "refused_wrong": 19,
+   "refused_right": 0,
+   "misses": [],
+   "worst_wrong_err": 10.109783295058428,
+   "worst_wrong_RT": 28.672799319331627,
+   "max_absRT1_right": 7.640838919353854e-07,
+   "min_RT1_wrong": 1.1028726281820118
+  },
+  {
+   "mode": "conical",
+   "degree": 10,
+   "n_rows": 40,
+   "n_wrong": 15,
+   "n_right": 22,
+   "n_refused": 14,
+   "refused_wrong": 14,
+   "refused_right": 0,
+   "misses": [
+    {
+     "delta": 1.4422495703074105e-05,
+     "err": 0.00362016350844796,
+     "err_over_delta": 251.00811835751387,
+     "RplusT": 1.005535042576279,
+     "kind": "wrong",
+     "refused": false
+    }
+   ],
+   "worst_wrong_err": 115121.03721220238,
+   "worst_wrong_RT": 300298.9408698227,
+   "max_absRT1_right": 0.00020078400393752638,
+   "min_RT1_wrong": 0.0055350425762790145
+  },
+  {
+   "mode": "conical",
+   "degree": 14,
+   "n_rows": 40,
+   "n_wrong": 19,
+   "n_right": 21,
+   "n_refused": 19,
+   "refused_wrong": 19,
+   "refused_right": 0,
+   "misses": [],
+   "worst_wrong_err": 124392.56784004426,
+   "worst_wrong_RT": 404575.7892596319,
+   "max_absRT1_right": 0.00038180332157899954,
+   "min_RT1_wrong": 251.2577703833123
+  },
+  {
+   "mode": "slant",
+   "degree": 10,
+   "n_rows": 40,
+   "n_wrong": 18,
+   "n_right": 22,
+   "n_refused": 18,
+   "refused_wrong": 18,
+   "refused_right": 0,
+   "misses": [],
+   "worst_wrong_err": 0.9352487744874731,
+   "worst_wrong_RT": 3.630849837896713,
+   "max_absRT1_right": 8.777579281193937e-07,
+   "min_RT1_wrong": 1.1714574513975888
+  },
+  {
+   "mode": "slant",
+   "degree": 14,
+   "n_rows": 40,
+   "n_wrong": 19,
+   "n_right": 21,
+   "n_refused": 19,
+   "refused_wrong": 19,
+   "refused_right": 0,
+   "misses": [],
+   "worst_wrong_err": 10.29550715987869,
+   "worst_wrong_RT": 29.277600852948655,
+   "max_absRT1_right": 1.1939528237192576e-06,
+   "min_RT1_wrong": 1.106886140246094
+  }
+ ]
+}
