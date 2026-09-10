@@ -1,0 +1,447 @@
+{
+ "_stamp": {
+  "arm": "post",
+  "cut_band_rel": 1e-08,
+  "lumenairy_file": "/mnt/c/tmp/lum_vrcwa/lumenairy/__init__.py",
+  "node": "TeslaRyzen",
+  "numpy": "2.4.6",
+  "platform": "Linux",
+  "python": "3.12.3",
+  "sqrt_decay_has_conj": true,
+  "sqrt_decay_has_exact_pin": false,
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "rows": [
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "dc20460859272848",
+   "hash_pre": "b5fe94915fb2e64f",
+   "max_move": 1.7541523789077473e-14,
+   "name": "jones2d_coinc_tw0.0"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "aedfdb37fe277813",
+   "hash_pre": "9a4a6f7dca5f13e1",
+   "max_move": 1.7860591562054872e-14,
+   "name": "jones2d_offcoinc_tw0.0"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "154623e490591016",
+   "hash_pre": "1a9f30fb6cbe3f7b",
+   "max_move": 0.00026746952942424684,
+   "name": "jones2d_coinc_tw0.4"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "e7069684ac1e194f",
+   "hash_pre": "068315fb0f1e1c46",
+   "max_move": 3.6641691137761335e-15,
+   "name": "jones2d_offcoinc_tw0.4"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "b7091deed3f9426b",
+   "hash_pre": "9528d874874915b1",
+   "max_move": 0.043567306111451945,
+   "name": "jones2d_coinc_tw0.7"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "63aeaa3293570178",
+   "hash_pre": "64feaa70f15f82a0",
+   "max_move": 5.906241966987509e-15,
+   "name": "jones2d_offcoinc_tw0.7"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "70b0db6bc315a058",
+   "hash_pre": "8d9b3e4224137763",
+   "max_move": 0.000835894098917378,
+   "name": "jones2d_coinc_tw1.1"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "42cfa0a219d0833b",
+   "hash_pre": "079b6d0d87dc7325",
+   "max_move": 6.328271240363392e-15,
+   "name": "jones2d_offcoinc_tw1.1"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "b7091deed3f9426b",
+   "hash_pre": "9528d874874915b1",
+   "max_move": 0.043567306111451945,
+   "name": "jones2d_fold_True"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "71b5dc8ddf4fd52f",
+   "hash_pre": "ccfb74dd935859e3",
+   "max_move": 0.0025093022107127716,
+   "name": "jones2d_fold_False"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "b76e3d40f5fd911a",
+   "hash_pre": "997ae124116727c3",
+   "max_move": 7.661735617718601e-06,
+   "name": "jones2d_obl_t0.3_p0.0"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "845a55713e114036",
+   "hash_pre": "a594aa9f2a45ae53",
+   "max_move": 0.0015538068015342743,
+   "name": "jones2d_obl_t0.2_p0.7"
+  },
+  {
+   "bit_identical": true,
+   "cls": "b",
+   "hash_post": "de8efa636e2f499b",
+   "hash_pre": "de8efa636e2f499b",
+   "max_move": 0.0,
+   "name": "jones2d_OOP_coinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "a",
+   "hash_post": "57d030c04a8e79ed",
+   "hash_pre": "57d030c04a8e79ed",
+   "max_move": 0.0,
+   "name": "jones2d_OOP_offcoinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "c",
+   "hash_post": "0c57b794980a2cc2",
+   "hash_pre": "0c57b794980a2cc2",
+   "max_move": 0.0,
+   "name": "jones2d_lossy_im1e-02"
+  },
+  {
+   "bit_identical": true,
+   "cls": "c",
+   "hash_post": "89ade9dce2bc3456",
+   "hash_pre": "89ade9dce2bc3456",
+   "max_move": 0.0,
+   "name": "jones2d_lossy_im1e-04"
+  },
+  {
+   "bit_identical": true,
+   "cls": "c",
+   "hash_post": "7467689e2822a148",
+   "hash_pre": "7467689e2822a148",
+   "max_move": 0.0,
+   "name": "jones2d_lossy_im1e-06"
+  },
+  {
+   "bit_identical": true,
+   "cls": "c",
+   "hash_post": "4e08eac4acbb3503",
+   "hash_pre": "4e08eac4acbb3503",
+   "max_move": 0.0,
+   "name": "jones2d_metal_block"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "e404df21f0c2bcc1",
+   "hash_pre": "38e0345f9bc3b18a",
+   "max_move": 1.0685896612017132e-15,
+   "name": "eff2d_block4_coinc"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "1a214a69e14c966a",
+   "hash_pre": "ec93c686dbc3d8e6",
+   "max_move": 8.881784197001252e-16,
+   "name": "eff2d_weakmod_coinc"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "5f169906c42b41e3",
+   "hash_pre": "abdcebfcea1ede4d",
+   "max_move": 1.6375789613221059e-15,
+   "name": "eff2d_offcoinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "c",
+   "hash_post": "1ea90af9511d52b8",
+   "hash_pre": "1ea90af9511d52b8",
+   "max_move": 0.0,
+   "name": "eff2d_lossy"
+  },
+  {
+   "bit_identical": true,
+   "cls": "a",
+   "hash_post": "e6f8aff3e24f6850",
+   "hash_pre": "e6f8aff3e24f6850",
+   "max_move": 0.0,
+   "name": "eff1d_te_duty0.02_coincgroove"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "da4d4588f945479b",
+   "hash_pre": "c4ae04d0aff9f812",
+   "max_move": 2.3869795029440866e-15,
+   "name": "eff1d_te_duty0.50_coincgroove"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "33622e73638bd7eb",
+   "hash_pre": "59af8a498892f7de",
+   "max_move": 4.6074255521944e-15,
+   "name": "eff1d_te_offcoinc"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "3e3faec96d598712",
+   "hash_pre": "3a914b928b352969",
+   "max_move": 2.220446049250313e-16,
+   "name": "eff1d_tm_duty0.02_coincgroove"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "53d4db296db5db8e",
+   "hash_pre": "ef6608934c831791",
+   "max_move": 5.440092820663267e-15,
+   "name": "eff1d_tm_duty0.50_coincgroove"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "bd994cf0987b7969",
+   "hash_pre": "8d4bfe1899e238ae",
+   "max_move": 5.88418203051333e-15,
+   "name": "eff1d_tm_offcoinc"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "2f9962b6fdc56557",
+   "hash_pre": "eaa107257c078bff",
+   "max_move": 1.6653345369377348e-15,
+   "name": "eff1d_oblique_te"
+  },
+  {
+   "bit_identical": true,
+   "cls": "c",
+   "hash_post": "de8b4880fff1f054",
+   "hash_pre": "de8b4880fff1f054",
+   "max_move": 0.0,
+   "name": "eff1d_lossy_ridge"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "18afa0d4ac5facf8",
+   "hash_pre": "0233468a9344effe",
+   "max_move": 3.1563349657991453e-15,
+   "name": "jones1d_conical"
+  },
+  {
+   "bit_identical": true,
+   "cls": "c",
+   "hash_post": "10a923bd880d67ff",
+   "hash_pre": "10a923bd880d67ff",
+   "max_move": 0.0,
+   "name": "jones1d_conical_lossy"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "75e1ed74066de762",
+   "hash_pre": "f4a04a8f344148d6",
+   "max_move": 2.0834028946481453e-14,
+   "name": "stack_iso_coinc"
+  },
+  {
+   "bit_identical": false,
+   "cls": "a",
+   "hash_post": "1c932c1b89406e47",
+   "hash_pre": "bb46ff5236f2357d",
+   "max_move": 2.3564483697668948e-14,
+   "name": "stack_iso_offcoinc"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "8e46acc1ebd03522",
+   "hash_pre": "1fa814bdd8825308",
+   "max_move": 0.025734582162797226,
+   "name": "stack_tensor_coinc"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "30d76dc8a33b9da8",
+   "hash_pre": "cfee913f9b419912",
+   "max_move": 0.022789081789450383,
+   "name": "stack_tensor_coinc_full"
+  },
+  {
+   "cls": "a",
+   "error": "_EnergyError(\"RCWAStack.solve: energy non-conservation detected (sum R+T = 2.151e+00 exceeds 2); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a me",
+   "name": "stack_tensor_offcoinc",
+   "pre_raised": "_EnergyError(\"RCWAStack.solve: energy non-conservation detected (sum R+T = 2.151e+00 exceeds 2); the solve is numerically unstable at this geometry (a near-dege"
+  },
+  {
+   "bit_identical": true,
+   "cls": "b",
+   "hash_post": "547e7709756fc1a2",
+   "hash_pre": "547e7709756fc1a2",
+   "max_move": 0.0,
+   "name": "berreman_coinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "a",
+   "hash_post": "0c60be8f29552e6f",
+   "hash_pre": "0c60be8f29552e6f",
+   "max_move": 0.0,
+   "name": "berreman_offcoinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "c",
+   "hash_post": "5f6bf012a4febd45",
+   "hash_pre": "5f6bf012a4febd45",
+   "max_move": 0.0,
+   "name": "berreman_lossy"
+  },
+  {
+   "bit_identical": true,
+   "cls": "a",
+   "hash_post": "8d92f63201e89708",
+   "hash_pre": "8d92f63201e89708",
+   "max_move": 0.0,
+   "name": "berreman_iso"
+  },
+  {
+   "bit_identical": true,
+   "cls": "d",
+   "hash_post": "dfe77196b6189e62",
+   "hash_pre": "dfe77196b6189e62",
+   "max_move": 0.0,
+   "name": "pmm_efficiency_2d_coinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "d",
+   "hash_post": "150cca5c0c6d6668",
+   "hash_pre": "150cca5c0c6d6668",
+   "max_move": 0.0,
+   "name": "pmm_efficiency_2d_weakmod"
+  },
+  {
+   "bit_identical": false,
+   "cls": "b",
+   "hash_post": "f4ae5765c62c45e6",
+   "hash_pre": "666a3f0ec8b3ee6c",
+   "max_move": 0.0018824989751203836,
+   "name": "pmm_jones_2d_coinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "e",
+   "hash_post": "ea31cf2bdbf5d192",
+   "hash_pre": "ea31cf2bdbf5d192",
+   "max_move": 0.0,
+   "name": "pmm_jones_2d_staggered_coinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "e",
+   "hash_post": "2a4541f6c2834fb0",
+   "hash_pre": "2a4541f6c2834fb0",
+   "max_move": 0.0,
+   "name": "pmm_eff_2d_staggered_coinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "d",
+   "hash_post": "cd541e1c5a9988c7",
+   "hash_pre": "cd541e1c5a9988c7",
+   "max_move": 0.0,
+   "name": "pmm_efficiency_1d_coinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "d",
+   "hash_post": "dedc5a45aa620ec1",
+   "hash_pre": "dedc5a45aa620ec1",
+   "max_move": 0.0,
+   "name": "pmm_jones_1d_coinc"
+  },
+  {
+   "bit_identical": true,
+   "cls": "d",
+   "hash_post": "cc1554756c7e7f52",
+   "hash_pre": "cc1554756c7e7f52",
+   "max_move": 0.0,
+   "name": "pmm2d_stack_pure_coinc"
+  }
+ ],
+ "summary": {
+  "a": {
+   "max_move": 2.3564483697668948e-14,
+   "min_nonzero_move": 2.220446049250313e-16,
+   "n": 19,
+   "n_bit_identical": 4,
+   "worst": "stack_iso_offcoinc"
+  },
+  "b": {
+   "max_move": 0.043567306111451945,
+   "min_nonzero_move": 8.881784197001252e-16,
+   "n": 14,
+   "n_bit_identical": 2,
+   "worst": "jones2d_coinc_tw0.7"
+  },
+  "c": {
+   "max_move": 0.0,
+   "min_nonzero_move": 0.0,
+   "n": 8,
+   "n_bit_identical": 8,
+   "worst": "jones2d_lossy_im1e-02"
+  },
+  "d": {
+   "max_move": 0.0,
+   "min_nonzero_move": 0.0,
+   "n": 5,
+   "n_bit_identical": 5,
+   "worst": "pmm_efficiency_2d_coinc"
+  },
+  "e": {
+   "max_move": 0.0,
+   "min_nonzero_move": 0.0,
+   "n": 2,
+   "n_bit_identical": 2,
+   "worst": "pmm_jones_2d_staggered_coinc"
+  }
+ }
+}

@@ -1,0 +1,1035 @@
+{
+ "_stamp": {
+  "arm": "post",
+  "cut_band_rel": 1e-08,
+  "lumenairy_file": "/mnt/c/tmp/lum_vrcwa/lumenairy/__init__.py",
+  "node": "TeslaRyzen",
+  "numpy": "2.4.6",
+  "platform": "Linux",
+  "python": "3.12.3",
+  "sqrt_decay_has_conj": true,
+  "sqrt_decay_has_exact_pin": false,
+  "threads": {
+   "MKL_NUM_THREADS": null,
+   "OMP_NUM_THREADS": null,
+   "OPENBLAS_NUM_THREADS": null
+  }
+ },
+ "fixtures": {
+  "berreman_coinc": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": 0.0,
+    "armed_raw_max": 0.0,
+    "armed_rcond_min": 1.0,
+    "eq_max": 0.0,
+    "error": null,
+    "n_armed_calls": 3,
+    "n_calls": 5,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.570092458683775e+284,
+    "raw_max": 1.570092458683775e-16,
+    "rcond_min": 1.0,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa generalized interface (T22)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 0.0,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 2,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.570092458683775e+284,
+    "raw_max": 1.570092458683775e-16,
+    "rcond_min": 1.0,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "berreman_offcoinc": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": 0.0,
+    "armed_raw_max": 0.0,
+    "armed_rcond_min": 1.0,
+    "eq_max": 1.5701051861654331e-16,
+    "error": null,
+    "n_armed_calls": 1,
+    "n_calls": 5,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.9999918938668757,
+    "raw_max": 1.570092458683775e-16,
+    "rcond_min": 1.0,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa generalized interface (T22)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 1.5701051861654331e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.9999918938668757,
+    "raw_max": 1.570092458683775e-16,
+    "rcond_min": 1.0,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "jones1d_conical_coinc": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 1.8669325698064917e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.0207299737605444,
+    "raw_max": 1.905634032991286e-16,
+    "rcond_min": 0.19618728867020002,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 3.731302942126748e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 4.028110209615359,
+    "raw_max": 1.5030099476348579e-15,
+    "rcond_min": 0.0036374720384150377,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "jones2d_coinc": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 4.7732564515507394e-14,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 2.5900422194259853,
+    "raw_max": 1.2362935733663881e-13,
+    "rcond_min": 9.725708937971319e-05,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 7.391611018922949e-14,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.736245185380655,
+    "raw_max": 1.2833649043811568e-13,
+    "rcond_min": 9.715004995961517e-05,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "jones2d_offcoinc": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 4.7732564515507394e-14,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 2.5900422194259853,
+    "raw_max": 1.2362935733663881e-13,
+    "rcond_min": 9.725708937971319e-05,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 7.391611018922949e-14,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.736245185380655,
+    "raw_max": 1.2833649043811568e-13,
+    "rcond_min": 9.715004995961517e-05,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "lossy_im1e-02": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 6.029758863008256e-14,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.7734746160578925,
+    "raw_max": 4.663865421486986e-14,
+    "rcond_min": 0.0001319191176539443,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 6.029758863008256e-14,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.7734746160578925,
+    "raw_max": 4.663865421486986e-14,
+    "rcond_min": 0.0001319191176539443,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "lossy_im1e-06": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 1.6122733548778298e-13,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.36510513922735033,
+    "raw_max": 5.886492877052173e-14,
+    "rcond_min": 8.20173117817882e-05,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 1.6122733548778298e-13,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.36510513922735033,
+    "raw_max": 5.886492877052173e-14,
+    "rcond_min": 8.20173117817882e-05,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "m1_aniso_DETUNED_M15": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 3.563991847036288e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.038247480448868,
+    "raw_max": 3.7003055555257327e-16,
+    "rcond_min": 0.034849957420101475,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 5.39043323397743e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 3.990376237040473,
+    "raw_max": 2.1509856684216765e-15,
+    "rcond_min": 0.000867438716622038,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "m1_aniso_DETUNED_M25": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 5.369934010182018e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.0522740702639235,
+    "raw_max": 5.650642317942904e-16,
+    "rcond_min": 0.023040137990064866,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 5.663310888117408e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.2408740538483904,
+    "raw_max": 7.027455539941976e-16,
+    "rcond_min": 0.023202609628818364,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "m1_aniso_DETUNED_M5": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 4.4222360717450086e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.944415148093998,
+    "raw_max": 4.176426734603682e-16,
+    "rcond_min": 0.04182061376651453,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 6.5385944444820146e-15,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 3.7809330698976105,
+    "raw_max": 2.4721987965790844e-14,
+    "rcond_min": 0.0008734923511665591,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "m1_aniso_M15": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 3.471699711686871e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.06584839209143,
+    "raw_max": 3.7003055555257327e-16,
+    "rcond_min": 0.03521793545944526,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 6.065884975531011e-15,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 1,
+    "ratio_raw_over_eq": 1633100924807.5327,
+    "raw_max": 0.009906202363315813,
+    "rcond_min": 0.00010241040684082405,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": 0.009906202363315813
+   }
+  },
+  "m1_aniso_M15_normal": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 4.792573794659444e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.8088569578469882,
+    "raw_max": 3.8765066598054343e-16,
+    "rcond_min": 0.06562166570273299,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 1.3912846924398302e-15,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 1,
+    "ratio_raw_over_eq": 30458597253040.316,
+    "raw_max": 0.042376580111344854,
+    "rcond_min": 0.000189479386696787,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": 0.042376580111344854
+   }
+  },
+  "m1_aniso_M19": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 4.187473776798398e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.9650682571594961,
+    "raw_max": 4.041198019675923e-16,
+    "rcond_min": 0.02591782819676464,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 1.1548407887172956e-14,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 1,
+    "ratio_raw_over_eq": 1038108071872.4296,
+    "raw_max": 0.011988495444949475,
+    "rcond_min": 2.7705461354105472e-05,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": 0.011988495444949475
+   }
+  },
+  "m1_aniso_M25": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 5.369934010182018e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.8771352390429517,
+    "raw_max": 4.71015835166588e-16,
+    "rcond_min": 0.023040137990064866,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 8.619186145700245e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 1,
+    "ratio_raw_over_eq": 19033651118687.688,
+    "raw_max": 0.01640545820242849,
+    "rcond_min": 0.00019633509719415443,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": 0.01640545820242849
+   }
+  },
+  "m1_aniso_M5": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 5.13619930208569e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.6922454605821988,
+    "raw_max": 3.5555106515142765e-16,
+    "rcond_min": 0.04259706615565115,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 1.5116180449228504e-15,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 1,
+    "ratio_raw_over_eq": 462478363283340.44,
+    "raw_max": 0.6990906393254829,
+    "rcond_min": 0.001033730061679513,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": 0.6990906393254829
+   }
+  },
+  "m1_aniso_M9": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 4.3622792032682174e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.2458179488050807,
+    "raw_max": 5.434605729130672e-16,
+    "rcond_min": 0.04170137013557679,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 3.881605394571253e-15,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 1,
+    "ratio_raw_over_eq": 70894553090938.77,
+    "raw_max": 0.275184679723506,
+    "rcond_min": 0.0003329862419728113,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": 0.275184679723506
+   }
+  },
+  "oned_groove_eq_sub_te": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 3.3890977525794485e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.7058444227982913,
+    "raw_max": 2.392175746976427e-16,
+    "rcond_min": 0.2112076283687535,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 3.114843751445192e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.3244775551410681,
+    "raw_max": 4.125540636560561e-16,
+    "rcond_min": 0.02915480456698689,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "oned_metal_tm": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 9.513108456004915e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.8529226856212081,
+    "raw_max": 8.113946012901536e-16,
+    "rcond_min": 0.011135179067040465,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 9.513108456004915e-16,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.8529226856212081,
+    "raw_max": 8.113946012901536e-16,
+    "rcond_min": 0.011135179067040465,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "oop_1d_coinc": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": 4.259705205571096e-16,
+    "armed_raw_max": 4.053443965982571e-16,
+    "armed_rcond_min": 0.03365187383488392,
+    "eq_max": 4.259705205571096e-16,
+    "error": null,
+    "n_armed_calls": 2,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.9515785178470181,
+    "raw_max": 4.053443965982571e-16,
+    "rcond_min": 0.03365187383488392,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa generalized interface (T22)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": 4.259705205571096e-16,
+    "armed_raw_max": 4.053443965982571e-16,
+    "armed_rcond_min": 0.03365187383488392,
+    "eq_max": 4.259705205571096e-16,
+    "error": null,
+    "n_armed_calls": 2,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.9515785178470181,
+    "raw_max": 4.053443965982571e-16,
+    "rcond_min": 0.03365187383488392,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa generalized interface (T22)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "oop_1d_offcoinc": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": 4.387471370057491e-16,
+    "armed_raw_max": 3.998125157350121e-16,
+    "armed_rcond_min": 0.03365187383488392,
+    "eq_max": 4.387471370057491e-16,
+    "error": null,
+    "n_armed_calls": 2,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.9112595433979394,
+    "raw_max": 3.998125157350121e-16,
+    "rcond_min": 0.03365187383488392,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa generalized interface (T22)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": 4.387471370057491e-16,
+    "armed_raw_max": 3.998125157350121e-16,
+    "armed_rcond_min": 0.03365187383488392,
+    "eq_max": 4.387471370057491e-16,
+    "error": null,
+    "n_armed_calls": 2,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.9112595433979394,
+    "raw_max": 3.998125157350121e-16,
+    "rcond_min": 0.03365187383488392,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa generalized interface (T22)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "oop_2d_coinc": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": 9.839563420457173e-16,
+    "armed_raw_max": 1.5239003651111918e-15,
+    "armed_rcond_min": 0.02792484597523004,
+    "eq_max": 9.839563420457173e-16,
+    "error": null,
+    "n_armed_calls": 2,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.548747947437273,
+    "raw_max": 1.5239003651111918e-15,
+    "rcond_min": 0.02792484597523004,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa generalized interface (T22)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": 9.839563420457173e-16,
+    "armed_raw_max": 1.5239003651111918e-15,
+    "armed_rcond_min": 0.02792484597523004,
+    "eq_max": 9.839563420457173e-16,
+    "error": null,
+    "n_armed_calls": 2,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.548747947437273,
+    "raw_max": 1.5239003651111918e-15,
+    "rcond_min": 0.02792484597523004,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa generalized interface (T22)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "oop_2d_offcoinc": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": 9.839563420457173e-16,
+    "armed_raw_max": 1.5239003651111918e-15,
+    "armed_rcond_min": 0.028588649752031445,
+    "eq_max": 9.839563420457173e-16,
+    "error": null,
+    "n_armed_calls": 2,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.548747947437273,
+    "raw_max": 1.5239003651111918e-15,
+    "rcond_min": 0.028588649752031445,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa generalized interface (T22)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": 9.839563420457173e-16,
+    "armed_raw_max": 1.5239003651111918e-15,
+    "armed_rcond_min": 0.028588649752031445,
+    "eq_max": 9.839563420457173e-16,
+    "error": null,
+    "n_armed_calls": 2,
+    "n_calls": 4,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.548747947437273,
+    "raw_max": 1.5239003651111918e-15,
+    "rcond_min": 0.028588649752031445,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa generalized interface (T22)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "stack_spacer_coinc": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 1.2663567184712932e-15,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 10,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.7691581016233978,
+    "raw_max": 9.740285295574155e-16,
+    "rcond_min": 0.008289415382338565,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 6.300456789305344e-15,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 10,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.4453485817605896,
+    "raw_max": 9.106356284866357e-15,
+    "rcond_min": 0.0009399160809387641,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  },
+  "stack_spacer_control": {
+   "post": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 1.3314932999731421e-15,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 10,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 0.9395391667287786,
+    "raw_max": 1.2509901055617175e-15,
+    "rcond_min": 0.00820710000423929,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   },
+   "pre": {
+    "armed_below_bar": 0,
+    "armed_eq_max": null,
+    "armed_raw_max": null,
+    "armed_rcond_min": null,
+    "eq_max": 2.51183811485792e-15,
+    "error": null,
+    "n_armed_calls": 0,
+    "n_calls": 10,
+    "n_motivating": 0,
+    "ratio_raw_over_eq": 1.6522582923481561,
+    "raw_max": 4.1502053543101586e-15,
+    "rcond_min": 0.0022660495302792103,
+    "sites": [
+     "rcwa Redheffer star (I - A22 B11)",
+     "rcwa Redheffer star (I - B11 A22)",
+     "rcwa interface mode-match (a+b)"
+    ],
+    "worst_motivating_raw": null
+   }
+  }
+ },
+ "openblas_num_threads": "unpinned",
+ "totals": {
+  "armed_rcond_min_post": 0.02792484597523004,
+  "armed_rcond_min_pre": 0.02792484597523004,
+  "calls_post": 110,
+  "calls_pre": 106,
+  "motivating_post": 0,
+  "motivating_pre": 6
+ }
+}

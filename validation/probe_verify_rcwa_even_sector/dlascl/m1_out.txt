@@ -1,0 +1,252 @@
+...........Fssss.s.........                                              [100%]
+=================================== FAILURES ===================================
+_______________ test_anisotropic_cascade_is_not_falsely_refused ________________
+
+    def test_anisotropic_cascade_is_not_falsely_refused():
+        """THE FALSE-POSITIVE REGRESSION GUARD, and the reason the guard scores an
+        equilibrated operator rather than the raw one.
+    
+        ``rcwa_jones_1d`` on a uniaxial cell builds star denominators with
+        ``||I - B11 A22||_1`` ~ 1e16-1e17 at EVERY truncation -- deep-evanescent
+        blocks of the generalized S-matrix -- so their RAW inverse residual runs
+        1e-2 to 5e-1 while the answer is right and both BLAS builds agree to twelve
+        digits.  A raw-residual bar refuses all of them; the equilibrated one reads
+        1e-15 .. 6e-14 and passes all of them.
+    
+        **v5.33.1 -- THE ENERGY BAR WAS NOT MEASURING THE CLAIM.**  The test also
+        asserted ``|R+T-2| < 5e-3`` per rung.  On this cell that residual is NOT a
+        convergence indicator: it plateaus at ~1e-3 after M = 7 and then jitters
+        with the BLAS reduction order over more than two decades, because the
+        cascade carries near-degenerate deep-evanescent pairs::
+    
+            rung  Win 1 thr   Win 2 thr   Win 24 thr   ubuntu CI
+            M=15  1.259e-04   5.401e-05   1.244e-03    -
+            M=17  1.664e-03   1.247e-03   4.480e-03    -    <- 1.1x under the bar
+            M=25  2.041e-03   7.008e-05   3.811e-03    -
+            worst of (9,15,19,25)                      1.312e-02   <- FAILED
+    
+        The 5e-3 constant was calibrated on two environments and the CI excursion
+        walked straight through it.
+    
+        **v5.33.2 -- THE ANCHOR RUNG WAS NOT AN ANCHOR EITHER**
+        (``FIX_CI_ROUND2_PMM_2026_08_08``).  The replacement scored the refined
+        rungs against the ladder's own "deliberately unconverged" M = 5 rung.  On
+        ubuntu CI py3.10/3.11 that rung closed at ``1.937e-05`` -- three decades
+        TIGHTER than the 2.020e-02 it reads here -- so ``5 x loose`` became a
+        1e-04 bar and a refined rung reading 1.312e-02 walked through that one
+        too.  ``max([1.3116e-02, 1.0457e-03, 9.9920e-15, 1.1106e-03])`` is the CI
+        ladder verbatim: 12 decades of spread inside one run.
+    
+        The reason no rung can be the anchor is now measured rather than supposed.
+        Holding code, geometry and rung fixed and varying ONLY the BLAS pool and
+        the mount [M]::
+    
+            rung   |R+T-2|                                              J00
+                   Win 1 thr   Win 2 thr   Win 24 thr  WSL 1 thr   WSL 2 thr
+            M= 3   4.2577e-03  4.2577e-03  4.2577e-03  4.8709e-02  4.8709e-02   =
+            M= 5   2.0200e-02  2.0200e-02  2.0200e-02  4.4875e-03  4.4875e-03   =
+            M= 7   4.4301e-04  4.4301e-04  4.4301e-04  5.4675e-04  5.4675e-04   =
+            M= 9   2.0581e-03  2.0581e-03  2.0581e-03  3.9565e-03  3.9565e-03   =
+            M=15   1.2593e-04  5.4012e-05  1.2443e-03  1.7622e-03  4.4269e-04   =
+            M=19   1.5227e-04  2.4035e-04  1.1724e-04  5.4986e-04  2.8244e-04   =
+            M=25   2.0413e-03  7.0078e-05  3.8106e-03  1.2089e-03  2.0599e-03   =
+            M=29   2.5313e-14  4.2829e-04  6.2761e-04  2.0662e-03  2.0028e-04   =
+    
+        ``J00`` in the last column is IDENTICAL to every printed digit in all ten
+        cells -- across two pythons (3.14.6 / 3.12.3), two numpys (2.4.4 / 2.4.6)
+        and two OpenBLAS kernels (Haswell / SkylakeX) -- while the SAME rung's
+        closure moves by up to 54x with the pool and 11x with the mount, and the
+        sequence is non-monotone in M on every one of them.  On a LOSSLESS cascade
+        ``R + T = 2`` is very nearly tautological -- the campaign's standing
+        caution -- so what this residual measures is the round-off of the
+        near-cancelling deep-evanescent star denominators, not the truncation.  A
+        quantity with no systematic content cannot carry a convergence claim under
+        ANY bar, absolute or relative, so it is no longer asked to.
+    
+        What is asserted, all comparative or instrument-anchored:
+    
+          (a) NOTHING is refused -- the regression guard proper;
+          (b) the RAW instruments would refuse every rung (raw residual 1.1e-2 ..
+              2.8e-1 against ``_INV_RESID_REFUSE`` = 1e-8) and the EQUILIBRATED
+              ones pass every rung by five orders (1e-15 .. 6e-14) -- the measured
+              separation that chose the instrument, ~1e6 x 1e5 wide;
+          (c) ``J00`` is stationary;
+          (d) ``J00`` is CAUCHY -- ``|J00(M) - J00(M_finest)|`` strictly DECREASES
+              rung by rung, 1.1357e-04 -> 3.6167e-05 -> 1.0151e-05 -> 4.244e-06,
+              ~3x per step, IDENTICAL on both mounts at every thread count (the
+              table above).  This is the claim "refining the truncation is not
+              making the cascade worse", made on the quantity that actually
+              converges and that does not move with the pool.  It is strictly
+              stronger than the energy ratio it replaces: an energy bar cannot see
+              a cascade that drifts to a wrong-but-unitary answer, which is the
+              failure mode this whole campaign exists for;
+          (e) the closure ladder is PRINTED, never asserted on.  The evidence
+              that it is round-off is the CROSS-POOL table above, and a test
+              cannot vary the BLAS pool in-process; every single-process statistic
+              on it is itself a coin flip.  That was measured rather than assumed
+              -- see the comment at the print;
+          (f) and the only thing the closure CAN carry: the cascade has not blown
+              up, ``|R+T-2| < 0.5`` on every rung.  Worst ever measured anywhere
+              is 2.02e-02 (25x headroom) and the mis-assembled-cascade magnitude
+              this class produces when it does go wrong is ``|R+T-1|`` = 21 (the
+              ninth name, 40x the other side), so 0.5 sits inside a three-decade
+              gap and is not a calibration.
+        """
+        from lumenairy.elements.rcwa import rcwa_jones_1d, uniaxial_tensor
+        er = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=np.deg2rad(20))
+        eg = (1.5 ** 2) * np.eye(3)
+    
+        # a test-local spy on the SAME operators the guard sees, so (b) is read off
+        # the equations rather than asserted from the audit's prose.  It delegates
+        # to the shipped function, so nothing about the solve changes.
+        seen = []
+        _orig = _rc._guarded_inverse
+    
+        def _spy(A, site, hint=None):
+            A_np = np.asarray(A)
+            if (A_np.ndim == 2 and A_np.shape[0] == A_np.shape[1]
+                    and np.all(np.isfinite(A_np))):
+                X = np.linalg.inv(A_np)
+                seen.append((_rc._inverse_residual(A_np, X),
+                             _rc._equilibrated_inverse_residual(A_np),
+                             _rc._rcond_1_equilibrated(A_np, X)))
+            return _orig(A, site, hint)
+    
+        def run(M):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                o, R, T, J = rcwa_jones_1d(1.0e-6, er, eg, 1.5, 1.0, 0.4e-6, 0.5,
+                                           WL, angle=np.deg2rad(10), n_orders=M)
+            return (abs(float(np.sum(R) + np.sum(T)) - 2.0),
+                    complex(np.asarray(J)[0, 0]))
+    
+        _rc._guarded_inverse = _spy
+        try:
+            # M = 5 is the ladder's own coarsest rung; it is NOT part of the
+            # stationarity claim (c) but IS part of the Cauchy claim (d).
+            loose, j5 = run(5)
+            rungs = [run(M) for M in (9, 15, 19, 25)]
+        finally:                                  # (a) nothing raised, either
+            _rc._guarded_inverse = _orig
+    
+        assert seen, "the spy never saw a guarded inverse: nothing was measured"
+        raw = max(s[0] for s in seen)
+        eq = max(s[1] for s in seen)
+        eq_rc = min(s[2] for s in seen)
+        # (b) the separation that chose the instrument.  Both halves, as ratios.
+>       assert raw > 1.0e3 * _rc._INV_RESID_REFUSE, (
+            f"the raw residual on this cascade reads {raw:.3e}: it no longer "
+            f"exceeds the refusal bar, so this cell has stopped being the "
+            f"false-positive the equilibration exists for")
+E       AssertionError: the raw residual on this cascade reads 5.522e-16: it no longer exceeds the refusal bar, so this cell has stopped being the false-positive the equilibration exists for
+E       assert np.float64(5.521680828867083e-16) > (1000.0 * 1e-08)
+E        +  where 1e-08 = _rc._INV_RESID_REFUSE
+
+tests/unit/test_m1_conditioning_guard.py:740: AssertionError
+=========================== short test summary info ============================
+SKIPPED [4] tests/unit/test_m1_conditioning_guard.py:864: X-1 does not manifest anywhere in the scanned ladder on this build, and this is probe-backed rather than assumed: the census instrument still flags a synthetic cond-1e20 operator (_census_instrument_is_alive() is True), so the screen is live and the thin-grating family simply carries no near-cancelling star denominator here.  Scan:
+     6 te returned       close=6.661e-16 sumR=1.9880e-04 flagged=0
+     7 te returned       close=8.882e-16 sumR=2.0041e-04 flagged=0
+     8 te returned       close=1.443e-15 sumR=2.0044e-04 flagged=0
+     9 te returned       close=0.000e+00 sumR=2.0117e-04 flagged=0
+    10 te returned       close=1.332e-15 sumR=2.0122e-04 flagged=0
+    11 te returned       close=3.331e-16 sumR=2.0153e-04 flagged=0
+    12 te returned       close=8.882e-16 sumR=2.0158e-04 flagged=0
+    13 te returned       close=0.000e+00 sumR=2.0174e-04 flagged=0
+    14 te returned       close=1.110e-15 sumR=2.0180e-04 flagged=0
+    15 te returned       close=7.772e-16 sumR=2.0209e-04 flagged=0
+    16 te returned       close=2.220e-16 sumR=2.0215e-04 flagged=0
+    17 te returned       close=0.000e+00 sumR=2.0304e-04 flagged=0
+    18 te returned       close=1.221e-15 sumR=2.0306e-04 flagged=0
+    19 te returned       close=1.110e-15 sumR=2.0538e-04 flagged=0
+    20 te returned       close=4.441e-16 sumR=2.0535e-04 flagged=0
+    21 te returned       close=5.551e-16 sumR=2.0952e-04 flagged=0
+    22 te returned       close=7.772e-16 sumR=2.0943e-04 flagged=0
+    23 te returned       close=0.000e+00 sumR=2.0941e-04 flagged=0
+    24 te returned       close=6.661e-16 sumR=2.0941e-04 flagged=0
+    25 te returned       close=3.331e-16 sumR=2.0941e-04 flagged=0
+    26 te returned       close=3.331e-16 sumR=2.0941e-04 flagged=0
+    27 te returned       close=0.000e+00 sumR=2.0941e-04 flagged=0
+    28 te returned       close=3.331e-16 sumR=2.0941e-04 flagged=0
+    29 te returned       close=4.441e-16 sumR=2.0941e-04 flagged=0
+    30 te returned       close=4.441e-16 sumR=2.0941e-04 flagged=0
+     6 tm returned       close=4.441e-16 sumR=1.9758e-04 flagged=0
+     7 tm returned       close=6.661e-16 sumR=1.9901e-04 flagged=0
+     8 tm returned       close=5.551e-16 sumR=1.9909e-04 flagged=0
+     9 tm returned       close=5.551e-16 sumR=1.9969e-04 flagged=0
+    10 tm returned       close=4.441e-16 sumR=1.9974e-04 flagged=0
+    11 tm returned       close=8.882e-16 sumR=1.9998e-04 flagged=0
+    12 tm returned       close=6.661e-16 sumR=2.0002e-04 flagged=0
+    13 tm returned       close=3.331e-16 sumR=2.0015e-04 flagged=0
+    14 tm returned       close=7.772e-16 sumR=2.0018e-04 flagged=0
+    15 tm returned       close=0.000e+00 sumR=2.0037e-04 flagged=0
+    16 tm returned       close=6.661e-16 sumR=2.0038e-04 flagged=0
+    17 tm returned       close=8.882e-16 sumR=2.0070e-04 flagged=0
+    18 tm returned       close=6.661e-16 sumR=2.0071e-04 flagged=0
+    19 tm returned       close=1.110e-16 sumR=2.0111e-04 flagged=0
+    20 tm returned       close=0.000e+00 sumR=2.0112e-04 flagged=0
+    21 tm returned       close=2.220e-16 sumR=2.0138e-04 flagged=0
+    22 tm returned       close=6.661e-16 sumR=2.0138e-04 flagged=0
+    23 tm returned       close=4.441e-16 sumR=2.0137e-04 flagged=0
+    24 tm returned       close=8.882e-16 sumR=2.0137e-04 flagged=0
+    25 tm returned       close=1.110e-16 sumR=2.0138e-04 flagged=0
+    26 tm returned       close=9.992e-16 sumR=2.0138e-04 flagged=0
+    27 tm returned       close=4.441e-16 sumR=2.0138e-04 flagged=0
+    28 tm returned       close=6.661e-16 sumR=2.0138e-04 flagged=0
+    29 tm returned       close=5.551e-16 sumR=2.0139e-04 flagged=0
+    30 tm returned       close=2.220e-16 sumR=2.0139e-04 flagged=0
+SKIPPED [1] tests/unit/test_m1_conditioning_guard.py:1000: the pre-M1 X-1 answer does not reproduce on any truncation of the scanned ladder on this build: every cell that returns closes better than 1e-06.  This is probe-backed rather than assumed -- the census instrument still flags a synthetic cond-1e20 operator, so the screen is live and the family simply carries no silently-wrong truncation here.  Scan:
+     6 te returned       close=6.661e-16 sumR=1.9880e-04 flagged=0
+     7 te returned       close=8.882e-16 sumR=2.0041e-04 flagged=0
+     8 te returned       close=1.443e-15 sumR=2.0044e-04 flagged=0
+     9 te returned       close=0.000e+00 sumR=2.0117e-04 flagged=0
+    10 te returned       close=1.332e-15 sumR=2.0122e-04 flagged=0
+    11 te returned       close=3.331e-16 sumR=2.0153e-04 flagged=0
+    12 te returned       close=8.882e-16 sumR=2.0158e-04 flagged=0
+    13 te returned       close=0.000e+00 sumR=2.0174e-04 flagged=0
+    14 te returned       close=1.110e-15 sumR=2.0180e-04 flagged=0
+    15 te returned       close=7.772e-16 sumR=2.0209e-04 flagged=0
+    16 te returned       close=2.220e-16 sumR=2.0215e-04 flagged=0
+    17 te returned       close=0.000e+00 sumR=2.0304e-04 flagged=0
+    18 te returned       close=1.221e-15 sumR=2.0306e-04 flagged=0
+    19 te returned       close=1.110e-15 sumR=2.0538e-04 flagged=0
+    20 te returned       close=4.441e-16 sumR=2.0535e-04 flagged=0
+    21 te returned       close=5.551e-16 sumR=2.0952e-04 flagged=0
+    22 te returned       close=7.772e-16 sumR=2.0943e-04 flagged=0
+    23 te returned       close=0.000e+00 sumR=2.0941e-04 flagged=0
+    24 te returned       close=6.661e-16 sumR=2.0941e-04 flagged=0
+    25 te returned       close=3.331e-16 sumR=2.0941e-04 flagged=0
+    26 te returned       close=3.331e-16 sumR=2.0941e-04 flagged=0
+    27 te returned       close=0.000e+00 sumR=2.0941e-04 flagged=0
+    28 te returned       close=3.331e-16 sumR=2.0941e-04 flagged=0
+    29 te returned       close=4.441e-16 sumR=2.0941e-04 flagged=0
+    30 te returned       close=4.441e-16 sumR=2.0941e-04 flagged=0
+     6 tm returned       close=4.441e-16 sumR=1.9758e-04 flagged=0
+     7 tm returned       close=6.661e-16 sumR=1.9901e-04 flagged=0
+     8 tm returned       close=5.551e-16 sumR=1.9909e-04 flagged=0
+     9 tm returned       close=5.551e-16 sumR=1.9969e-04 flagged=0
+    10 tm returned       close=4.441e-16 sumR=1.9974e-04 flagged=0
+    11 tm returned       close=8.882e-16 sumR=1.9998e-04 flagged=0
+    12 tm returned       close=6.661e-16 sumR=2.0002e-04 flagged=0
+    13 tm returned       close=3.331e-16 sumR=2.0015e-04 flagged=0
+    14 tm returned       close=7.772e-16 sumR=2.0018e-04 flagged=0
+    15 tm returned       close=0.000e+00 sumR=2.0037e-04 flagged=0
+    16 tm returned       close=6.661e-16 sumR=2.0038e-04 flagged=0
+    17 tm returned       close=8.882e-16 sumR=2.0070e-04 flagged=0
+    18 tm returned       close=6.661e-16 sumR=2.0071e-04 flagged=0
+    19 tm returned       close=1.110e-16 sumR=2.0111e-04 flagged=0
+    20 tm returned       close=0.000e+00 sumR=2.0112e-04 flagged=0
+    21 tm returned       close=2.220e-16 sumR=2.0138e-04 flagged=0
+    22 tm returned       close=6.661e-16 sumR=2.0138e-04 flagged=0
+    23 tm returned       close=4.441e-16 sumR=2.0137e-04 flagged=0
+    24 tm returned       close=8.882e-16 sumR=2.0137e-04 flagged=0
+    25 tm returned       close=1.110e-16 sumR=2.0138e-04 flagged=0
+    26 tm returned       close=9.992e-16 sumR=2.0138e-04 flagged=0
+    27 tm returned       close=4.441e-16 sumR=2.0138e-04 flagged=0
+    28 tm returned       close=6.661e-16 sumR=2.0138e-04 flagged=0
+    29 tm returned       close=5.551e-16 sumR=2.0139e-04 flagged=0
+    30 tm returned       close=2.220e-16 sumR=2.0139e-04 flagged=0
+FAILED tests/unit/test_m1_conditioning_guard.py::test_anisotropic_cascade_is_not_falsely_refused
+1 failed, 21 passed, 5 skipped in 6.03s
+ ** On entry to DLASCL parameter number  4 had an illegal value
+ ** On entry to DLASCL parameter number  4 had an illegal value
