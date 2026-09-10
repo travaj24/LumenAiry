@@ -1,0 +1,443 @@
+{
+ "constant_tile_noop": {
+  "aniso_conical": {
+   "bigslant_vs_vertical": {
+    "dJones": 1.0281194644655882e-14,
+    "dR": 2.0953900923272508e-15,
+    "dT": 2.9675658925993024e-15,
+    "sha": "851a2a147ae1e289"
+   },
+   "slant_vs_vertical": {
+    "dJones": 1.1015825668514618e-14,
+    "dR": 1.0201802618483598e-14,
+    "dT": 3.3119446390018254e-15,
+    "sha": "5c1cb7b8e032ddb2"
+   },
+   "traced_outcome": "SOLVED",
+   "traced_vs_numpy_vertical": {
+    "dJones": 6.9421563534872415e-15,
+    "dR": 3.813825751436473e-11,
+    "dT": 4.2469759274297546e-08,
+    "sha": "2939ad67867c0140"
+   }
+  },
+  "aniso_ob28": {
+   "bigslant_vs_vertical": {
+    "dJones": 8.928750412786286e-15,
+    "dR": 6.523622320651146e-15,
+    "dT": 9.020701700054463e-15,
+    "sha": "0741a2ae98c9afc7"
+   },
+   "slant_vs_vertical": {
+    "dJones": 1.3782372880634987e-14,
+    "dR": 1.7062292739416337e-14,
+    "dT": 8.887691402841592e-15,
+    "sha": "8a6c06764e405e59"
+   },
+   "traced_outcome": "SOLVED",
+   "traced_vs_numpy_vertical": {
+    "dJones": 2.853100838118128e-14,
+    "dR": 2.8323650638702357e-10,
+    "dT": 1.112426676424644e-10,
+    "sha": "b754cb050553f0a1"
+   }
+  },
+  "iso_conical": {
+   "bigslant_vs_vertical": {
+    "dJones": 9.643151009390781e-15,
+    "dR": 1.7355978520789634e-14,
+    "dT": 9.501675915068542e-15,
+    "sha": "388726467721454d"
+   },
+   "slant_vs_vertical": {
+    "dJones": 1.1576172826760381e-14,
+    "dR": 1.0149776738186248e-14,
+    "dT": 6.793993047310414e-15,
+    "sha": "afde0e424429cc2b"
+   },
+   "traced_outcome": "SOLVED",
+   "traced_vs_numpy_vertical": {
+    "dJones": 1.8645210990450992e-14,
+    "dR": 5.747590331928925e-11,
+    "dT": 4.752585589484479e-08,
+    "sha": "e092db28434481f1"
+   }
+  },
+  "iso_normal": {
+   "bigslant_vs_vertical": {
+    "dJones": 2.6199412119692277e-16,
+    "dR": 1.698231593040118e-16,
+    "dT": 4.630074761629588e-16,
+    "sha": "b08c8bfc6903e0fb"
+   },
+   "slant_vs_vertical": {
+    "dJones": 2.6199412119692277e-16,
+    "dR": 1.698231593040118e-16,
+    "dT": 4.630074761629588e-16,
+    "sha": "b08c8bfc6903e0fb"
+   },
+   "traced_outcome": "SOLVED",
+   "traced_vs_numpy_vertical": {
+    "dJones": 3.969996969102022e-15,
+    "dR": 8.475194229563115e-11,
+    "dT": 3.653061533522612e-08,
+    "sha": "0c4dbf3f62bcb2f0"
+   }
+  },
+  "iso_ob28": {
+   "bigslant_vs_vertical": {
+    "dJones": 9.385775662434526e-15,
+    "dR": 9.403756542824223e-15,
+    "dT": 3.5370084867452756e-15,
+    "sha": "dde81cec04f6983d"
+   },
+   "slant_vs_vertical": {
+    "dJones": 9.465305457253948e-15,
+    "dR": 2.2841449979811203e-15,
+    "dT": 1.5958976667358255e-14,
+    "sha": "93ff4d8e6a0d775e"
+   },
+   "traced_outcome": "SOLVED",
+   "traced_vs_numpy_vertical": {
+    "dJones": 1.0717436211643271e-14,
+    "dR": 2.741934728352228e-10,
+    "dT": 1.5041104104972209e-10,
+    "sha": "49bd477ebc8b32bd"
+   }
+  }
+ },
+ "eighth_route_hunt": {
+  "concrete_jnp_cell_vertical": {
+   "outcome": "SOLVED",
+   "vs_numpy_vertical": {
+    "dJones": 2.4850491916706555e-13,
+    "dR": 3.3655258419321413e-13,
+    "dT": 1.0962217239324225e-14,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "warnings": []
+  },
+  "const_concrete_jnp_cell_slanted": {
+   "numpy_vertical_sha": "498387b4632ad459",
+   "outcome": "SOLVED",
+   "traced": "49bd477ebc8b32bd",
+   "warnings": []
+  },
+  "const_numpy_cell_traced_depth": {
+   "outcome": "SOLVED",
+   "sha_equal": false,
+   "vs_numpy_vertical": {
+    "dJones": 1.0717436211643271e-14,
+    "dR": 2.741934728352228e-10,
+    "dT": 1.5041104104972209e-10,
+    "sha": "49bd477ebc8b32bd"
+   },
+   "warnings": []
+  },
+  "grad_over_depth": {
+   "grad": 131505.66023152965,
+   "outcome": "SOLVED",
+   "warnings": []
+  },
+  "hybrid_stack_scalar_cell_traced_t": {
+   "message": "PMM2DStackHybrid.solve: a SLANTED patterned layer is not differentiable -- the slant runs the 4N generator and the generalized cascade, which the 2-D JAX surface does not implement, and the jnp twin would silently return the VERTICAL answer (measured: dR = dJones = 0.0 against the vertical stack, 1.8e-02 / 3.2e-02 against the correct NumPy slanted answer).  Use NumPy inputs for slanted stacks (a t",
+   "outcome": "NotImplementedError",
+   "warnings": []
+  },
+  "hybrid_stack_traced_n_sub": {
+   "message": "PMM2DStackHybrid: tensor layers are not differentiable (the 2-D JAX surface is scalar in-plane); use NumPy inputs for tensor stacks.",
+   "outcome": "NotImplementedError",
+   "warnings": []
+  },
+  "hybrid_stack_traced_t": {
+   "message": "PMM2DStackHybrid: tensor layers are not differentiable (the 2-D JAX surface is scalar in-plane); use NumPy inputs for tensor stacks.",
+   "outcome": "NotImplementedError",
+   "warnings": []
+  },
+  "hybrid_stack_traced_theta": {
+   "message": "PMM2DStackHybrid: tensor layers are not differentiable (the 2-D JAX surface is scalar in-plane); use NumPy inputs for tensor stacks.",
+   "outcome": "NotImplementedError",
+   "warnings": []
+  },
+  "hybrid_stack_traced_wl": {
+   "message": "PMM2DStackHybrid: tensor layers are not differentiable (the 2-D JAX surface is scalar in-plane); use NumPy inputs for tensor stacks.",
+   "outcome": "NotImplementedError",
+   "warnings": []
+  },
+  "jit_over_depth": {
+   "R_sha": "37d885245189dc6a",
+   "outcome": "SOLVED",
+   "warnings": []
+  },
+  "private_twin_signature": {
+   "has_slant": false,
+   "outcome": "SOLVED",
+   "signature": [
+    "period_x",
+    "period_y",
+    "eps_tensor_cell",
+    "region_layout",
+    "n_substrate",
+    "n_superstrate",
+    "depth",
+    "wavelength",
+    "theta",
+    "phi",
+    "degree",
+    "elements_per_strip",
+    "grade",
+    "n_orders",
+    "formulation"
+   ],
+   "warnings": []
+  },
+  "pure_stack_concrete_jnp_thickness": {
+   "R_sha": "8126f1c0fb43f260",
+   "outcome": "SOLVED",
+   "warnings": []
+  },
+  "pure_staggered_traced_depth": {
+   "R_sha": "8126f1c0fb43f260",
+   "outcome": "SOLVED",
+   "warnings": []
+  },
+  "pure_staggered_under_jit": {
+   "message": "Abstract tracer value encountered where concrete value is expected: traced array with shape float64[]\nThe problem arose with the `float` function. If trying to convert the data type of a value, try using `x.astype(float)` or `jnp.array(x, float)` instead.\nThe error occurred while tracing the function <lambda> at /mnt/c/tmp/lum_vslant/validation/probe_verify_slant_anchor/t3_v1_jax.py:373 for jit. T",
+   "outcome": "ConcretizationTypeError",
+   "warnings": []
+  },
+  "slant_is_a_concrete_jnp_array": {
+   "outcome": "SOLVED",
+   "vs_numpy_slanted": {
+    "dJones": 0.0,
+    "dR": 0.0,
+    "dT": 0.0,
+    "sha": "8c7961f10acdd31a"
+   },
+   "vs_numpy_vertical": {
+    "dJones": 0.08355441892917526,
+    "dR": 0.0293585730912737,
+    "dT": 0.009481916415251208,
+    "sha": "8c7961f10acdd31a"
+   },
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.960e-02, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass"
+   ]
+  },
+  "slant_traced_under_jit": {
+   "message": "Abstract tracer value encountered where concrete value is expected: traced array with shape float64[]\nThe problem arose with the `float` function. If trying to convert the data type of a value, try using `x.astype(float)` or `jnp.array(x, float)` instead.\nThe error occurred while tracing the function <lambda> at /mnt/c/tmp/lum_vslant/validation/probe_verify_slant_anchor/t3_v1_jax.py:182 for jit. T",
+   "outcome": "ConcretizationTypeError",
+   "warnings": []
+  },
+  "tile_varies_by_5e-11_above_tol": {
+   "R_sha": "282d2bcb0fb99c47",
+   "outcome": "SOLVED",
+   "warnings": []
+  },
+  "tile_varies_by_5e-13_declared_noop": {
+   "numpy_slant_vs_vertical": {
+    "dJones": 7.974711648073768e-15,
+    "dR": 3.3642256219804084e-06,
+    "dT": 8.101794052426073e-05,
+    "sha": "aa1707f0f863a2c2"
+   },
+   "outcome": "SOLVED",
+   "traced_vs_numpy_slanted": {
+    "dJones": 1.3713372518551573e-14,
+    "dR": 2.1758876744262572e-06,
+    "dT": 0.0004031351405295493,
+    "sha": "9c73123345e30da3"
+   },
+   "traced_vs_numpy_vertical": {
+    "dJones": 1.5597639605860646e-14,
+    "dR": 5.284186541851309e-06,
+    "dT": 0.00045839244714729365,
+    "sha": "9c73123345e30da3"
+   },
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +8.919e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass",
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +7.962e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass"
+   ]
+  },
+  "traced_depth_explicit_zero_slant": {
+   "outcome": "SOLVED",
+   "vs_numpy_vertical": {
+    "dJones": 2.4850491916706555e-13,
+    "dR": 3.3655258419321413e-13,
+    "dT": 1.0962217239324225e-14,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "warnings": []
+  },
+  "traced_depth_y_only_slant": {
+   "R_sha": "c367022d1cff8221",
+   "outcome": "SOLVED",
+   "warnings": []
+  },
+  "vertical_traced_grad_vs_fd": {
+   "ad": 131505.66023152965,
+   "fd": 131505.66066100213,
+   "fd_floor": 4.3582520301116235e-05,
+   "outcome": "SOLVED",
+   "rel": 3.265809824562471e-09,
+   "warnings": []
+  },
+  "vmap_over_wavelength": {
+   "R_sha": "e464b6d93f32412a",
+   "outcome": "SOLVED",
+   "warnings": []
+  }
+ },
+ "numpy_slanted_sha": "8c7961f10acdd31a",
+ "numpy_vertical_sha": "b17127d816333a60",
+ "numpy_vertical_vs_slanted": {
+  "dJones": 0.08257670740897582,
+  "dR": 0.028809033027966866,
+  "dT": 0.009444875893143575,
+  "sha": "b17127d816333a60"
+ },
+ "numpy_warnings": [
+  "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.990e-02, structure is provably lossless): the truncation is numerically unstable here",
+  "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.960e-02, structure is provably lossless): the truncation is numerically unstable here"
+ ],
+ "seven": {
+  "depth": {
+   "outcome": "SOLVED",
+   "secs": 0.13,
+   "vs_numpy_slanted": {
+    "dJones": 0.08257670740895966,
+    "dR": 0.028809033028047736,
+    "dT": 0.009444875893148182,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "vs_numpy_vertical": {
+    "dJones": 2.4850491916706555e-13,
+    "dR": 3.3655258419321413e-13,
+    "dT": 1.0962217239324225e-14,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "warnings": []
+  },
+  "eps_tensor_cell": {
+   "outcome": "SOLVED",
+   "secs": 12.28,
+   "vs_numpy_slanted": {
+    "dJones": 0.08257670740895966,
+    "dR": 0.028809033028047736,
+    "dT": 0.009444875893148182,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "vs_numpy_vertical": {
+    "dJones": 2.4850491916706555e-13,
+    "dR": 3.3655258419321413e-13,
+    "dT": 1.0962217239324225e-14,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "warnings": []
+  },
+  "n_substrate": {
+   "outcome": "SOLVED",
+   "secs": 0.14,
+   "vs_numpy_slanted": {
+    "dJones": 0.08257670740895966,
+    "dR": 0.028809033028047736,
+    "dT": 0.009444875893148182,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "vs_numpy_vertical": {
+    "dJones": 2.4850491916706555e-13,
+    "dR": 3.3655258419321413e-13,
+    "dT": 1.0962217239324225e-14,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "warnings": []
+  },
+  "n_superstrate": {
+   "outcome": "SOLVED",
+   "secs": 0.12,
+   "vs_numpy_slanted": {
+    "dJones": 0.08257670740895966,
+    "dR": 0.028809033028047736,
+    "dT": 0.009444875893148182,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "vs_numpy_vertical": {
+    "dJones": 2.4850491916706555e-13,
+    "dR": 3.3655258419321413e-13,
+    "dT": 1.0962217239324225e-14,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "warnings": []
+  },
+  "phi": {
+   "outcome": "SOLVED",
+   "secs": 0.1,
+   "vs_numpy_slanted": {
+    "dJones": 0.08257670740895966,
+    "dR": 0.028809033028047736,
+    "dT": 0.009444875893148182,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "vs_numpy_vertical": {
+    "dJones": 2.4850491916706555e-13,
+    "dR": 3.3655258419321413e-13,
+    "dT": 1.0962217239324225e-14,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "warnings": []
+  },
+  "theta": {
+   "outcome": "SOLVED",
+   "secs": 0.11,
+   "vs_numpy_slanted": {
+    "dJones": 0.08257670740895966,
+    "dR": 0.028809033028047736,
+    "dT": 0.009444875893148182,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "vs_numpy_vertical": {
+    "dJones": 2.4850491916706555e-13,
+    "dR": 3.3655258419321413e-13,
+    "dT": 1.0962217239324225e-14,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "warnings": []
+  },
+  "wavelength": {
+   "outcome": "SOLVED",
+   "secs": 0.11,
+   "vs_numpy_slanted": {
+    "dJones": 0.08257670740895966,
+    "dR": 0.028809033028047736,
+    "dT": 0.009444875893148182,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "vs_numpy_vertical": {
+    "dJones": 2.4850491916706555e-13,
+    "dR": 3.3655258419321413e-13,
+    "dT": 1.0962217239324225e-14,
+    "sha": "7b8d7f204e2d3258"
+   },
+   "warnings": []
+  }
+ },
+ "stamp": {
+  "arm": "pre",
+  "build": "wsl",
+  "jax": "0.10.2",
+  "jax_x64": true,
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "/mnt/c/tmp/lum_vslant_pre/lumenairy/__init__.py",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "scipy": "1.17.1",
+  "threads": {
+   "MKL_NUM_THREADS": null,
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  },
+  "tree": "/mnt/c/tmp/lum_vslant_pre",
+  "utc": "2026-09-10T11:01:58Z"
+ }
+}
