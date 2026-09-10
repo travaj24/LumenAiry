@@ -698,6 +698,17 @@ The two builds agree on the required suites' count exactly (310 = 310), which
 is the reading that matters for a change whose whole claim is that it moves
 nothing on a healthy path.
 
+**A note on ORDER, because it is the sort of thing that quietly invalidates a
+regression run.**  Those two 310-runs predate the last two library commits --
+`LinAlgWarning` in the guard's `except` tuple, and the 1e-9 boundary slack.
+Both are strictly behaviour-preserving on every path those 310 tests take (the
+first is reachable only from an exactly singular `lu_factor`, the second only
+ever REMOVES a refusal), and everything downstream of them was re-run: the
+bit-identity harness on both builds (87/87 each), the 15 round-2 gates, and the
+three contract-touching files (61 on WSL).  A confirmation run of the twelve
+suites plus those three against the final tree was also started; its log is
+`suite_final_wsl.log`.
+
 ### 7.2 The PMMStack-importing sweep, and what it found
 
 `_core.py` is shared, so every test file that imports `PMMStack` -- **42
