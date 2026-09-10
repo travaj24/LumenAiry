@@ -593,7 +593,9 @@ bounded, not the `~210` a from-scratch convection form produces in 1-D.
 
 `v5_parity.py`.  Five centro-symmetric cell families (out-of-plane `(2,2)` and
 `(3,3)`, scalar, LOSSY, HIGH CONTRAST) x six slants (vertical, x20, x35, **y35**,
-diag35, **x60**) = **28 rows**, `M = 6`, normal incidence.
+diag35, **x60**) = **28 rows** (25 slanted + 3 vertical controls; a VERTICAL
+scalar cell has no `4 q^2` pencil at all, so those two rows do not exist),
+`M = 6`, normal incidence.
 
 Forcing is done TWO ways, neither of them `_slant_is_zero` (the build records
 that patching that name silently builds the VERTICAL pencil, because
@@ -612,7 +614,7 @@ that patching that name silently builds the VERTICAL pencil, because
 | `max\|R A R + A\| / max\|A\|` | **3.998e-16 .. 3.881e-15** (bar `_STAG_BLOCK_TOL` = `1e-10`) |
 | `max\|R B R - B\| / max\|B\|` | 1.739e-16 .. 1.956e-16 |
 | `_stag_block_eig` runs when forced | **28 / 28** |
-| the shipped gauge REFUSES the slanted rows | **23 / 23**; and ACCEPTS all 5 vertical controls |
+| the shipped gauge REFUSES the slanted rows | **25 / 25**; and ACCEPTS all 3 vertical controls |
 
 **Five decades below the bar, at every slant to 60 degrees, on every cell
 family including a lossy one.  CONFIRMED.**
