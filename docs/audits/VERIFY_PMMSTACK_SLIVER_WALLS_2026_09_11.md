@@ -31,7 +31,7 @@ the fix left as "small, contained" were re-opened and one of them was fixed.
 | 7 | Attribution ratio ≥ 100; widest wrong row 3172; non-conforming 1.3–4.0 | **CONFIRMED** | 3170.5 measured at δ = 8.786e-05, degree 20; control reads exactly 1.33 / 4.0 / 4.0 |
 | 8 | "the M2 audit-class 2° coated taper is at ratio ~1.7e+02, 0.23 decades above the bar" | **REFUTED** | `_cross_layer_sliver` reads **12.11** on that device (own-scale is the 5 nm COAT, not the 200 nm ridge) and returns **None** at every `n_slices` |
 | 9 | False positives: 0 | **CONFIRMED on the O-11 family, REFUTED off it** | 0/190 dense rows, 0/243 walk rows, 0/64 conical+slant rows — but **110 of 648** realistic staircase configurations refuse a solve within 0.35–8.8× the physical shift |
-| 10 | False negatives: 1 row in 138 ("open item B") | **BOUNDED — wider than stated** | **8** confirmed misses in 660 samples (errors to **2.80e-03**, `R+T−1` to **+7.14e-03**), plus 1 in 40 on the conical path; band = isolated δ, ≤ 0.6% of δ wide |
+| 10 | False negatives: 1 row in 138 ("open item B") | **BOUNDED — wider than stated** | **8** returned-but-not-correct rows in 660 samples (5 WRONG, 3 grey) (errors to **2.80e-03**, `R+T−1` to **+7.14e-03**), plus 1 in 40 on the conical path; band = isolated δ, ≤ 0.6% of δ wide |
 | 11 | Remedy: `err/δ` = 1.152–1.154 inside a `2 δ` bar | **CONFIRMED on O-11, REFUTED as scale-free** | 1.1524–1.1535 (O-11) ✓; 1.2073–1.2077 (my telecom fixture) ✓; **3.5127–3.5147** (my 0.9 µm fixture) — 9/9 rows outside `2 δ` |
 | 12 | Open item A (asymmetric snap) is "small, contained" | **REPRODUCED, and FIXED (follow-up 1)** | when it bites the answer is 0.93 / 2.40 / 16.4 from the exact limit; `<=` does not fix it; a 16-ULP deadband does, 11 of 11,418 cases changed, all on-threshold |
 | 13 | `PMM2DStackPure`'s union is the pixel lattice (aspect 1.0) | **CONFIRMED, STRENGTHENED** | aspect exactly 1.0 at N = 8…256, and `add_layer` REFUSES a second lattice, so no non-trivial union can form |
@@ -269,10 +269,12 @@ rather than the detector. **CONFIRMED.**
 
 `v3_guard.py` sections B, E and F, and `v10_paths.py`.
 
-**Census.** 8 confirmed misses in 660 samples (60 log δ in 3e-5…1e-6 × degrees
-8/10/12/14/16, plus the 120 × 3 grid of S4.1). Every one re-solved END TO END
-with the guard armed — each RETURNED, and none of them even WARNED (all sit
-below the 1e-2 bar):
+**Census.** 8 rows in 660 samples (60 log δ in 3e-5…1e-6 × degrees
+8/10/12/14/16, plus the 120 × 3 grid of S4.1) that the guard RETURNS and that
+are not CORRECT by the fix's own continuity rule — **5 are WRONG** (err > 100 δ)
+and 3 sit in its GREY band (13–46 δ). Every one re-solved END TO END with the
+guard armed: each RETURNED, and none of them even WARNED (all sit below the
+1e-2 bar):
 
 | degree | δ | err vs the exact limit | × the physical shift | `R+T−1` | snapped-remedy err |
 |---|---|---|---|---|---|
@@ -463,6 +465,17 @@ on a provably passive stack it is equally often ordinary under-convergence.
   — and returns the same unreliable number under the plain warning. A caller
   who follows the message in the order it is written is led away from the
   operative cause.
+
+**What the harm is, stated precisely.** These solves are UNDER-CONVERGED: a
+degree-6 answer reading `R+T` = 1.036 is unreliable however the walls are
+placed, and the pre-fix response (a warning naming `n_slices` / `degree`) was
+the right one. The defect is not that a good answer is thrown away — it is that
+the super-unity is ATTRIBUTED to the sliver, which measurably did not cause it
+(the answer moves by 0.35–8.8× the physical wall shift, i.e. by the physical
+amount), and that the remedy named first removes the ATTRIBUTION rather than
+the error. Conjunct (a) is doing exactly what S4.2 of the fix says it does —
+confining the behaviour change — but on this family the population it confines
+the change to is one where (b) is not reading a theorem violation.
 
 This is the fix's **open item F**, quantified, and materially wider than its
 statement of it: F says "a tapered staircase carries BOTH", and mitigates with
@@ -745,12 +758,16 @@ All on Windows unless stated, one BLAS thread, `PYTHONPATH=/c/tmp/lum_vsliver`.
 
 | run | result |
 |---|---|
-| `tests/unit/test_verify_pmmstack_sliver_walls.py` (new, 15 tests) | **15 passed**, 16.6 s / 17.8 s / 15.8 s (three runs) |
+| `tests/unit/test_verify_pmmstack_sliver_walls.py` (new) | **15 passed**, 19.89 s (at 14 tests: 16.59 / 17.84 / 15.83 s over three runs) |
 | `tests/unit/test_fix_pmmstack_sliver_walls.py` | **19 passed**, 6.07 s / 6.76 s |
 | `tests/unit/test_m1_conditioning_guard.py` + the fix file | **46 passed**, 9.45 s |
-| the three files, **WSL** | **60 passed**, 29.67 s |
-| every test file importing `PMMStack` (`grep tests/ --include='*.py' -l PMMStack`, **41** files incl. the two new mortar files and mine) | see below |
-| `ruff check lumenairy/ tests/` | see below |
+| the three files, **WSL** | **61 passed**, 32.89 s (15 + 19 + 27) |
+| the three files, Windows, M1 FIRST (so the leak check follows the disarm) | **61 passed**, 31.10 s |
+| the same three files with the M1 disarm INVERTED (verification arm, scratch copy) | **2 failed, 25 passed** — the same 2 tests on Windows at 1 / 2 / 4 BLAS threads and on WSL at 1 |
+| every test file importing `PMMStack` (`grep tests/ --include='*.py' -l PMMStack`, **41** files incl. the two new mortar files and mine), Windows, 1 thread, slow markers included | see below |
+| `ruff check lumenairy/ tests/` | **All checks passed** (also clean on `validation/probe_verify_sliver/`) |
+
+`.test_durations` spliced with the 15 measured Windows timings.
 
 ---
 
