@@ -436,6 +436,38 @@ and the remedies.  Wired at all three sites the verification named:
 `_interface_smatrix_general_mortar_2d`'s single solve (the OUT-OF-PLANE /
 SLANTED per-layer path).
 
+As emitted, on the S3.3 fixture with the width contract lifted:
+
+```
+pmm2d staggered mortar interface (MassH_A V_A): the 450x450 mortar operator is
+numerically singular -- LAPACK reciprocal 1-condition 3.168e-15 against a
+1e-12 bar, i.e. it cannot deliver a single correct digit of the interface
+S-matrix.  Every healthy mortar the shipped fixtures build reads 2.6e-07 or
+better (measured over 106 solves), so this is 5+ decades outside that
+population and the answer would be a build-dependent number rather than a
+solution.
+    grid A: M=6, q=15; x: N=3 walls [0. 0.599994 0.600006 1.2 ] (narrowest
+            1.000e-05 of the period); y: N=3 walls [0. 0.324 0.732 1.2 ]
+            (narrowest 2.700e-01 of the period)
+    grid B: M=6, q=15; x: N=3 walls [0. 0.37404 0.88824 1.2 ] (narrowest
+            2.598e-01 of the period); y: ... (narrowest 2.700e-01 ...)
+  The usual cause is a near-degenerate element grid: two walls of ONE layer
+  far closer than the rest of that layer's partition, whose 1/J_n stiffness
+  puts spurious wavenumbers into the cross-grid projection.  Merge the walls,
+  carry the fine feature on layer_grids='shared', or lower n_slices on a
+  closing taper.
+```
+
+-- i.e. it names WHICH of the two grids is degenerate and by how much, which a
+bare `LinAlgError` could not.
+
+One robustness detail, because it is easy to get wrong: `scipy.linalg.lu_factor`
+reports an exactly-zero pivot as a `LinAlgWarning` and returns usable factors
+(`gecon` then reads `rcond` = 0.0 and the refusal fires normally), but under
+`-W error` the same condition arrives as an EXCEPTION.  `LinAlgWarning` is in
+the guard's `except` tuple so both paths end in the same named
+`_ConditioningError` rather than in a bare warning-turned-exception.
+
 ### 4.5 The `~1850` site -- LEFT UNGUARDED, and this is the measurement
 
 `_interface_smatrix`'s two solves are shared by the 1-D `PMMStack`, the 2-D
