@@ -568,9 +568,10 @@ a pristine `git archive HEAD` tree in the scratchpad; every arm asserts which
 | **WSL `with` vs WSL `pre`** | **87/87 identical, 0 mismatches** |
 | WIN `with` vs WSL `with` | 20/87 identical -- and that is the EXPECTED reading, not a defect: it is the ordinary cross-BLAS last-bit spread on quantities that pass through a `zgeev` and a cascade.  The 20 that do agree are the integer ORDER arrays.  The claim bit-identity makes is per build, against that build's own pre-change tree, and it holds on both. |
 
-The arm is not vacuous: 21 of the hashes are full stack solves that take the
-mortar, the taper builders, the generalized cascade (slant + OOP) and the 1-D
-cascade, and 12 are the projector D3 edits.  Running the pristine arm from a
+The arm is not vacuous: **21 of the 33 fixtures (63 of the 87 hashes) are full
+stack solves** that take the mortar, both taper builders, the generalized
+cascade (slant + out-of-plane) and the 1-D cascade, and the remaining 12
+fixtures (24 hashes) are the projector D3 touched directly.  Running the pristine arm from a
 `git archive HEAD` copy (rather than from an in-process reimplementation) is
 what makes it a statement about the SHIPPED library.
 
