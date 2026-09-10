@@ -1200,7 +1200,7 @@ touched on any of them, and nothing was pushed, merged or tagged.
 |---|---|
 | `7e4e27a` | the ten probes, both builds' JSON, the five DECISION tests, the five spliced `.test_durations` entries, and the report |
 | `c811b47` | defect **V-5** -- the refusal's per-layer remedy measured on a 6-layer stack, added to S2.4 and S8 |
-| `REGCOMMIT` | the 43-file `PMMStack` regression reading (819 passed, 1 skipped), defect **V-4**'s degree-legality note, the corrected mechanism count (four, not five), and the S11 / S12 closings |
+| `7280bd0` | the 43-file `PMMStack` regression reading (819 passed, 1 skipped), defect **V-4**'s degree-legality note, the corrected mechanism count (four, not five), and the S11 / S12 closings |
 
 ### S12.1 What this verification did NOT complete
 
