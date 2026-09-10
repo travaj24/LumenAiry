@@ -375,3 +375,25 @@ decades below the smallest step compared.
 | `.../results/t1_corner.json`, `t1_chiral.json` | every rung, every observable, every fit |
 | `.../logs/t1_*.txt`, `logs/t2_*.md` | the console record and the rendered tables |
 | `tests/unit/test_pmm2d_staggered_oop_corner_convergence.py` | the one test |
+
+## Corrections (verification 2026-09-10, VERIFY_PMM2D_STAGGERED_OOP_BLOCK_EIG)
+
+An independent re-fit (400-point p scan) and a second extrapolant (pure Aitken/Shanks)
+reproduce every sound-fit count, sigma envelope, pairwise row (43/47, 13/17, 11/16,
+58/60), direction count and the C5 bound (1.341e-04 -> 1.099e-04; 5.93e-05 inside the
+Fourier mutual top 6.10e-05) exactly.  Three statements in this doc are corrected:
+
+* S0 item 1: hybrid-laurent's sound-fit count at the first cell is 18/32 (its own C2
+  table agrees); 13/32 is rcwa's number.
+* S0 item 4: "worst-case distance falling by 1.3x to 5.4x" reads 0.65x..5.84x under the
+  doc's own selection rule; one row (corner/normal, hybrid-li, T(0,0)p0, 3.463e-04 ->
+  5.336e-04, printed in C4) moves AWAY by 1.54x, and the largest fall is 5.84x.
+* S2/C2: the observable set is described as including the four Jones entries, but the
+  live counts (32/28/36/40) exclude all eight Jones components; no verdict changes when
+  they are included.
+* Cherry-picking check: with the UNSOUND (boundary-p) fits INCLUDED the headline
+  survives (staggered inside the band the Fourier arms occupy among themselves) but the
+  ranking sentence does not -- hybrid-li vs rcwa (93.4%) beats staggered vs
+  hybrid-laurent (91.2%), and under pure Aitken the bands overlap.  This stays a BOUND.
+* The chiral/conical staggered count is p-scan-resolution-sensitive by one (10/36 at
+  400 points, 11/36 at >= 1201).

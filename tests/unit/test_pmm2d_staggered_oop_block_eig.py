@@ -489,7 +489,11 @@ def test_forcing_the_reduction_without_the_structure_is_wrong_by_decades(
     ref = jones_call(cell, 6, False)
     saved = TS._STAG_BLOCK_TOL
     try:
-        TS._STAG_BLOCK_TOL = 1.0
+        # np.inf, not 1.0: the structure residual dA is bounded by 2, so a
+        # 1.0 disarm still REFUSES some cells (an off-centre metal pillar reads
+        # dA = 1.033 -- verify D4, 2026-09-10) and the fail-before would then
+        # fail loudly for the wrong reason instead of forcing the reduction.
+        TS._STAG_BLOCK_TOL = np.inf
         forced = jones_call(cell, 6, True)
     finally:
         TS._STAG_BLOCK_TOL = saved

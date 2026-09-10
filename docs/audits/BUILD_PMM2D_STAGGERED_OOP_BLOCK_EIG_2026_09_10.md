@@ -384,3 +384,18 @@ under the 40 s per-test rule; the file is under the 3 min rule; grids are
    sectors is a separate (and probably worthwhile) question this build did not
    measure.
 5. **NumPy only**, as the whole staggered path is.
+
+## Corrections (verification 2026-09-10, VERIFY_PMM2D_STAGGERED_OOP_BLOCK_EIG)
+
+* Gate (2)'s "8.8 decades of gap above" describes the four violating FIXTURES, not the
+  gate: an engineered 1e-7-relative parity break reads dA = 2.535e-09, only 1.4 decades
+  above the 1e-10 bar.  The bar is nevertheless safe for a reason this doc did not
+  measure: the observable error is QUADRATIC in the residual (dR ~ 0.56 dA^2 over
+  five decades), so the worst error the gate can accept is ~6e-21.  The crossing sits
+  exactly at 1e-10 (last accepted 5.070e-11, first refused 1.521e-10).
+* The fail-before's `_STAG_BLOCK_TOL = 1.0` was not a full disarm (dA <= 2; an off-centre
+  metal pillar at dA = 1.033 was still refused); the test now disarms with `np.inf`.
+* Backward-error ratio re-measured 0.435..5.390 (this doc: 0.28..7.20); the 1e2 bar is
+  two-sided (a forced reduction reads 5.85e12..2.03e13).
+* Cold-subprocess single-layer speed is 1.12..1.51x (~0.7 s per-process warm-up dilutes
+  it); the 1.49-1.55x figure is the warm number.
