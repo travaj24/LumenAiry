@@ -1,0 +1,70 @@
+====================================================================================================
+A. FAIL-BEFORE -- _STAG_BLOCK_TOL disarmed (inf), SHIPPED entry point, structure-violating cells
+====================================================================================================
+cell                                 M          dA   d(eigset)         dR         dT     dJones shipped==dense tol=1 accepts
+off-centre pillar lc (2,2)            6  7.309e-01   2.884e-01  1.127e-02  1.916e-01  5.782e-02 True           True 
+off-centre pillar generic (3,3)       6  6.499e-01   2.130e-01  7.122e-03  1.359e-01  5.153e-02 True           True 
+parity-breaking lc/lc2 (2,2)          6  9.945e-02   8.270e-02  1.672e-03  1.043e-02  1.421e-02 True           True 
+parity-breaking lc/nonrec (3,3)       6  2.395e-02   7.732e-02  2.387e-04  3.832e-03  8.737e-04 True           True 
+off-centre metal (2,2)                7  1.033e+00   1.124e+01  9.609e-02  3.397e-01  2.370e-01 True           False
+
+forced-error envelope: dR 2.39e-04 .. 9.61e-02;  dT 3.83e-03 .. 3.40e-01;  dJones 8.74e-04 .. 2.37e-01
+eigenvalue-set error   7.73e-02 .. 1.12e+01
+the SHIPPED answer equals the dense one on 5/5 rows
+
+====================================================================================================
+B. THE BAR'S OWN SAFETY -- a CONTINUOUS violation swept across _STAG_BLOCK_TOL = 1e-10
+====================================================================================================
+The mirror pixel's e13/e31 are scaled by (1 + d); dA is measured, the gate's DECISION recorded,
+and the reduction is FORCED (tol=inf) so the error it WOULD have produced is visible on both sides.
+
+ d (relative)          dA  accepted  dR(forced)  dT(forced)  dJ(forced)     dR/dA
+      0.0e+00   1.341e-15      True   1.599e-15   4.663e-15   5.973e-15  1.19e+00
+      1.0e-13   4.951e-15      True   2.741e-16   4.996e-15   2.078e-15  5.54e-02
+      1.0e-12   5.047e-14      True   7.737e-16   4.552e-15   4.283e-15  1.53e-02
+      1.0e-11   5.069e-13      True   6.696e-16   4.136e-15   4.139e-15  1.32e-03
+      1.0e-10   5.070e-12      True   1.506e-15   1.343e-14   6.845e-15  2.97e-04
+      1.0e-09   5.070e-11      True   1.422e-15   6.106e-15   7.153e-15  2.81e-05
+      3.0e-09   1.521e-10     False   8.223e-16   1.443e-14   3.091e-15  5.41e-06
+      1.0e-08   5.070e-10     False   2.248e-15   1.399e-14   8.295e-15  4.43e-06
+      1.0e-07   5.070e-09     False   2.359e-16   1.210e-14   2.424e-15  4.65e-08
+      1.0e-06   5.070e-08     False   1.135e-15   1.521e-14   3.913e-15  2.24e-08
+      1.0e-05   5.070e-07     False   1.437e-13   3.260e-13   5.368e-13  2.83e-07
+      1.0e-04   5.070e-06     False   1.428e-11   3.285e-11   5.363e-11  2.82e-06
+      1.0e-03   5.072e-05     False   1.428e-09   3.284e-09   5.362e-09  2.81e-05
+      1.0e-02   5.095e-04     False   1.426e-07   3.275e-07   5.346e-07  2.80e-04
+      1.0e-01   5.323e-03     False   1.411e-05   3.176e-05   5.184e-05  2.65e-03
+
+ACCEPTED rungs (6): worst dR that the reduction would introduce = 1.599e-15
+   -- the test suite's agreement bar is 1e-11 and its measured agreement is <= 2.0e-14 (V2)
+REFUSED rungs (9): smallest dA refused = 1.521e-10, and every one of them is bit-identical to dense: True
+empirical amplification dR/dA over the sweep: 2.24e-08 .. 2.65e-03  ->  at the bar (dA = 1e-10) the accepted error is <= 2.65e-13
+
+====================================================================================================
+C. EIGENPAIR BACKWARD ERROR -- factored vs the dense zgeev on the SAME pencil
+====================================================================================================
+cell                               grid   M    4q^2       dense    factored   ratio   fwd d/f
+uniform tilted uniaxial            (2,2)  5    256   1.041e-15   1.479e-15    1.42  128/128 
+uniform tilted uniaxial            (2,2)  6    400   1.360e-15   8.796e-16    0.65  200/200 
+uniform tilted uniaxial            (2,2)  7    576   1.502e-15   1.230e-15    0.82  288/288 
+centro pair generic                (2,2)  5    256   1.816e-15   9.648e-16    0.53  128/128 
+centro pair generic                (2,2)  6    400   2.242e-15   1.583e-15    0.71  200/200 
+centro pair generic                (2,2)  7    576   2.331e-15   2.790e-15    1.20  288/288 
+centro pair NON-RECIPROCAL         (2,2)  5    256   2.683e-15   1.176e-15    0.44  128/128 
+centro pair NON-RECIPROCAL         (2,2)  6    400   2.557e-15   1.867e-15    0.73  200/200 
+centro pair NON-RECIPROCAL         (2,2)  7    576   4.608e-15   3.431e-15    0.74  288/288 
+centro pair LOSSY                  (2,2)  5    256   2.336e-15   1.016e-15    0.44  128/128 
+centro pair LOSSY                  (2,2)  6    400   2.120e-15   2.562e-15    1.21  200/200 
+centro pair LOSSY                  (2,2)  7    576   2.795e-15   3.233e-15    1.16  288/288 
+centro pair METAL                  (2,2)  5    256   4.891e-16   3.768e-16    0.77  128/128 
+centro pair METAL                  (2,2)  6    400   4.626e-16   6.103e-16    1.32  200/200 
+centro pair METAL                  (2,2)  7    576   4.453e-16   7.593e-16    1.71  288/288 
+(3,3) ring lc + interior lossy     (3,3)  5    576   2.338e-15   4.815e-15    2.06  288/288 
+(3,3) ring lc + interior lossy     (3,3)  6    900   3.201e-15   1.530e-14    4.78  450/450 
+(3,3) cross orbit lc/nonrec        (3,3)  5    576   2.417e-15   8.263e-15    3.42  288/288 
+(3,3) cross orbit lc/nonrec        (3,3)  6    900   3.117e-15   1.680e-14    5.39  450/450 
+
+dense    envelope 4.453e-16 .. 4.608e-15   (19 combinations)
+factored envelope 3.768e-16 .. 1.680e-14
+RATIO    envelope 0.435 .. 5.390   (the test's bar is 1e2 -> headroom 1.27 decades)
+forward counts equal on 19/19 rows
