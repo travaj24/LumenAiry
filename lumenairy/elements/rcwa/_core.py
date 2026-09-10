@@ -646,41 +646,52 @@ _INV_RESID_REFUSE = 1e-8
 #: makes THIS site decidable is that its own population was measured, on both
 #: builds, and separates by ELEVEN DECADES with nothing in between.
 #:
-#: MEASURED 2026-09-11 over 71 generalized-cascade solves / 153 interfaces
-#: spanning every consumer of ``_interface_smatrix_general`` -- the 2-D hybrid
-#: (slanted and out-of-plane, shared / tree / fused cascades, n_orders 3..11,
-#: degree 7..15, four mounts, a theta scan), the 2-D PURE staggered engine
-#: (slanted, out-of-plane, magnetic), the 1-D ``PMMStack`` convection-slant and
-#: out-of-plane cascades, the native-conical ``PMMStack`` cascade, the
-#: ``pmm_jones_2d`` single-layer entry and the Berreman 4x4 planar cascade at
-#: four angles plus a lossy and a thick film.  A solve counts as BROKEN when it
-#: returns (or raises on) ``sum R + T`` above ``1.10`` per incident state:
+#: MEASURED 2026-09-11 ON BOTH BUILDS (Windows py3.14.6 / numpy 2.4.4 and WSL
+#: py3.12.3 / numpy 2.4.6, both scipy-openblas, all thread caps 1) over 71
+#: generalized-cascade solves / 153 interfaces spanning every consumer of
+#: ``_interface_smatrix_general`` -- the 2-D hybrid (slanted and out-of-plane,
+#: shared / tree / fused cascades, n_orders 3..11, degree 7..15, four mounts, a
+#: theta scan), the 2-D PURE staggered engine (slanted, out-of-plane, magnetic),
+#: the 1-D ``PMMStack`` convection-slant and out-of-plane cascades, the
+#: native-conical ``PMMStack`` cascade, the ``pmm_jones_2d`` single-layer entry
+#: and the Berreman 4x4 planar cascade at four angles plus a lossy and a thick
+#: film.  A solve counts as BROKEN when it returns (or raises on) ``sum R + T``
+#: above ``1.10`` per incident state.  The two populations are the SAME 18 / 53
+#: solves on both builds:
 #:
-#:   population                       equil. rcond (T22)     equil. resid (T22)
-#:   BROKEN, 18 solves / 39 ifc       6.66e-18 .. 9.96e-02   7.9e-17 .. 2.5e-01
-#:   HEALTHY, 53 solves / 114 ifc     2.97e-05 .. 1.0        0.0 .. 1.47e-14
+#:   population                    equil. rcond (T22)      equil. resid (T22)
+#:   BROKEN,  18 solves /  39 ifc  6.7e-18 .. 1.0e-01      7.9e-17 .. 2.5e-01
+#:   HEALTHY, 53 solves / 114 ifc  2.971e-05 .. 1.0        0.0 .. 1.53e-14
 #:
 #: A solve is refused when ANY of its interfaces trips, so the bar has to
-#: separate each solve's WORST interface.  On that statistic:
+#: separate each solve's WORST interface.  On that statistic, worst case over
+#: BOTH builds:
 #:
-#:   the WORST interface of the BEST broken solve    2.359e-16
-#:   the WORST interface of the WORST healthy solve  2.971e-05  (hybrid, M = 11)
+#:   the WORST interface of the BEST broken solve    2.359e-16 WIN, 7.120e-16 WSL
+#:   the WORST interface of the WORST healthy solve  2.971e-05 on both
+#:                                                   (the hybrid at n_orders 11)
 #:
-#: -- 11.10 decades, geometric middle ``8.4e-11``.  ``1e-10`` is that middle,
-#: rounded: 5.4 decades above every broken reading and 5.5 below every healthy
-#: one.  The CONFIRMING residual has its own 11.5-decade gap on the same rows
-#: (smallest broken per-solve residual ``4.18e-03``, largest healthy
-#: ``1.47e-14``), and ``_INV_RESID_REFUSE`` = ``1e-8`` sits 5.6 / 5.8 decades
+#: -- a 10.62-decade gap on the tighter build (11.10 on the other), whose
+#: geometric middle is ``1.45e-10`` / ``8.4e-11``.  ``1e-10`` sits inside both:
+#: 5.15 decades above every broken reading and 5.47 below every healthy one.
+#: The CONFIRMING residual has its own 11.39-decade gap on the same rows
+#: (smallest broken per-solve residual ``3.76e-03``, largest healthy
+#: ``1.53e-14``), and ``_INV_RESID_REFUSE`` = ``1e-8`` sits 5.4 / 5.8 decades
 #: from each -- so, exactly as ``_guarded_lstsq`` requires of ITS refusal, a
 #: false refusal needs BOTH independent instruments to be wrong at once.
 #:
-#: NOT REFUSED, deliberately: the 17 BENIGN rows on which ``PMMStack.solve``'s
-#: energy tripwire already warns at ``sum R + T = 1.03 .. 1.08`` -- ordinary
-#: ``n_orders`` = 3..5 truncation residue, vertical rows included.  Their
-#: ``T22`` reads ``rcond`` 4.76e-04 .. 2.69e-02 and ``resid`` <= 1.5e-14, i.e.
-#: 6-8 decades on the safe side of BOTH bars.  Those warnings are exactly what
-#: made the 1e+30 rows invisible among them, and separating the two is the
-#: whole point of this refusal.
+#: TWO-SIDED, and this is the check that matters: with the guard armed, the set
+#: of solves that RAISE is EXACTLY the 18 that were broken -- on both builds,
+#: with no healthy solve refused and no broken one let through.
+#:
+#: NOT REFUSED, deliberately: the BENIGN rows on which the energy tripwire
+#: already warns at ``sum R + T = 1.01 .. 1.08`` -- ordinary low-``n_orders``
+#: truncation residue, out-of-plane VERTICAL rows included.  There are 22 of
+#: them in this census, identical on both builds, and their ``T22`` reads
+#: ``rcond`` 9.35e-05 .. 3.75e-03 and ``resid`` <= 1.53e-14: 6 to 8 decades on
+#: the safe side of BOTH bars.  Those warnings are exactly what made the 1e+30
+#: rows invisible among them, and separating the two is the whole point of this
+#: refusal.
 _INV_T22_RCOND_REFUSE = 1e-10
 
 #: Census hook.  When set to a list, every guarded inverse appends
