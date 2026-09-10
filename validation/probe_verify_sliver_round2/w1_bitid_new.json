@@ -1,0 +1,136 @@
+{
+ "tag": "new",
+ "lumenairy": "C:\\tmp\\lum_vsliver2\\lumenairy\\__init__.py",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "rows": {
+  "w01_single_uniform": {
+   "hash": "cad4e3292332c92e2120a1007007a9f2d4843b57c61d367d8445e143ab876b50",
+   "warnings": []
+  },
+  "w02_binary_grating_oblique": {
+   "hash": "c6680fa1940c5d7e079f26164e2c2ca001d3d03b6223a83e1d73a5956546aec6",
+   "warnings": []
+  },
+  "w03_three_layer_non_conforming": {
+   "hash": "17bd02b453617a35abb80e48f48f6a63ad01aa6d7ae1f1c87710a06e99bf316e",
+   "warnings": []
+  },
+  "w04_bragg_abab_dedupe": {
+   "hash": "5cb2f0f46c759cc2e6d2053c7cfd30942336e9e327a126b51667ba64e4024f42",
+   "warnings": []
+  },
+  "w05_lossy_layers": {
+   "hash": "5abc154fa5a8cdb1bdf8182e845ed40c13c3fa6519bed91f1f19cbf515b9d5d4",
+   "warnings": []
+  },
+  "w06_lossy_substrate": {
+   "hash": "0c6d79c37b48da7bfc9108ac07792bbbc850d57417b1270fff94ac338875e356",
+   "warnings": []
+  },
+  "w07_absorbing_superstrate": {
+   "hash": "7feae358a286946edae35ef26770c3331ecb07cfed2c30b8d549842f99414bc5",
+   "warnings": []
+  },
+  "w08_conical": {
+   "hash": "bd2cb60979f7b685fa06258ea6ecca4864501f5729a78222e422c9c73f81eb79",
+   "warnings": []
+  },
+  "w09_slant": {
+   "hash": "b095038f34324aa35a6340679555477f4a930e27107f291d658db81db53f7753",
+   "warnings": []
+  },
+  "w10_mixed_slant": {
+   "hash": "b4a721cbbe9c68341f015c2d36a6de076b86ac4123d31b069af9c91a682af631",
+   "warnings": []
+  },
+  "w11_in_plane_director": {
+   "hash": "82b54257d18a28ca7a3c031bd718f8ea74cac202eaf3b8aea62c8b3d805556ba",
+   "warnings": []
+  },
+  "w12_out_of_plane_director": {
+   "hash": "4fa7aa793e05fb7ec74caa69acc4f040542c0f92cdc6535e251f8025fb0b4473",
+   "warnings": []
+  },
+  "w13_gyrotropic": {
+   "hash": "9844bb480e3379d5d43587ccfc4bfe882ffa10de97ab3f38d3fe62439229e23f",
+   "warnings": []
+  },
+  "w14_non_hermitian": {
+   "hash": "377c1b92986210cebbe000c2464240340ea94cbd73e9b4aef514858c47b37852",
+   "warnings": []
+  },
+  "w15_taper_snap_active": {
+   "hash": "7c3daf4627f530f2145734f57d49ff1fd768754a313efc576f71359af0349abd",
+   "warnings": [
+    "_pmm_union_grid: snapped 14 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00214 (period fractions): (0.274125, 0.274375), (0.27425, 0.274625), (0.274438, 0.274875), (0.274656,"
+   ]
+  },
+  "w16_taper_no_snap": {
+   "hash": "33913003d37966472606eb6bb98fcbf7d33e4fafb9b678cd4f4005e7be10eb5a",
+   "warnings": []
+  },
+  "w17_per_layer_window": {
+   "hash": "f32b2f681882ad74e5de66084e6107e17fc4f2a6e49b9cca746abf81ce430dc2",
+   "warnings": []
+  },
+  "w18_per_layer_window_hw2": {
+   "hash": "21110f5a01f7f3e7126b1fe03246d5eafc955327bd0da1e329f03fb18417d392",
+   "warnings": []
+  },
+  "w19_stabilize_slices": {
+   "hash": "cd6622f9796e949d2396d6dcd2a5144de20abf4c8979205ff161b0b22257fccb",
+   "warnings": []
+  },
+  "w20_internal_field": {
+   "hash": "f69a7272095cf537ee870176662e7fdbd60886e61150eef111e76346e7408d72",
+   "warnings": []
+  },
+  "w21_layer_absorption": {
+   "hash": "93a77fa5ed2b85e4aa0c209dc46b18986d6e8b761e5b289cdcdcb21af3aa53cf",
+   "warnings": []
+  },
+  "w22_per_order_amplitudes": {
+   "hash": "448fb785e21fc1f45de9368ca8de032643cf744f33e036e653b7c8baf9fcaf2b",
+   "warnings": []
+  },
+  "w23_sweep_w1": {
+   "hash": "2b3c063facb11ac638f58dce3687d12796ccf227efda7a1004ec60ffd78d9bfe",
+   "warnings": []
+  },
+  "w24_sweep_w2": {
+   "hash": "2b3c063facb11ac638f58dce3687d12796ccf227efda7a1004ec60ffd78d9bfe",
+   "warnings": []
+  },
+  "w25_sweep_w4": {
+   "hash": "2b3c063facb11ac638f58dce3687d12796ccf227efda7a1004ec60ffd78d9bfe",
+   "warnings": []
+  },
+  "w26_prepare": {
+   "hash": "75cf421b43aa048599144a4ebd0f516eec727d8411793122744113da7c46b909",
+   "warnings": []
+  },
+  "w27_sweep_dispersive": {
+   "hash": "95f6bc07562219c7b5966aea72c558ae07b6b9f8f967b0ae384cf68b3aefb0fb",
+   "warnings": []
+  },
+  "w28_sliver_below_trigger": {
+   "hash": "bfbedda1631c0ff9383423df2f31d1e3c750ed3a9d29c04f84a990e439f2ba0f",
+   "warnings": []
+  },
+  "w29_superunity_no_sliver": {
+   "hash": "18b18d5f3a2535adcdeb2be2054e66515aa2f80b2c492822e690d83959b97fe2",
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degr"
+   ]
+  },
+  "w30_between_trigger_and_bar": {
+   "hash": "a32d7147eb0462ae889e38f78189f99fe2d96ca9876731975290d3b100666a8e",
+   "warnings": []
+  },
+  "w31_benign_within_layer_liner": {
+   "hash": "3b7141ba28ca1391ab5c278b0873fc69ff6b38bc4dfe515f0563e0c8b2a00fa1",
+   "warnings": []
+  }
+ }
+}
