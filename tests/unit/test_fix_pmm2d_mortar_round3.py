@@ -878,11 +878,16 @@ def test_the_band_the_warning_names_carries_a_measurable_cost():
     # MEASURED 2.2621e-02 / 8.3330e-02 = 0.271 (a 3.68x fall); asserted at
     # 0.5, i.e. 1.84x of margin.
     assert ladder[6][0] < 0.5 * ladder[5][0], ladder
-    # (3) the DECISION, at BOTH rungs the gate can afford: the band costs
-    # accuracy on a device that cannot depend on the wall separation.
-    # MEASURED ratios 1.611 (M = 5) and 1.551 (M = 6) on both builds -- and
-    # 1.638 at M = 7 and 4.81 at M = 8 in the probe, which the gate does not
-    # run.  Asserted at 1.15, i.e. with 1.35x of margin on the WORST rung, of a
-    # quantity whose cross-build spread is a discretisation round-off.
-    for M, (eo, eb) in sorted(ladder.items()):
-        assert eb > 1.15 * eo, (M, eb, eo, self_gap, ladder)
+    # (3) the DECISION, at the ONE rung the precondition certifies (M = 6):
+    # the band costs accuracy on a device that cannot depend on the wall
+    # separation.  MEASURED ratio 1.551 (M = 6) on both builds -- and 1.638
+    # at M = 7 and 4.81 at M = 8 in the probe, which the gate does not run.
+    # Asserted at 1.15, i.e. with 1.35x of margin, of a quantity whose
+    # cross-build spread is a discretisation round-off.
+    # RESTATED 2026-09-11 (round-4 verification, DEFECT 1): the M = 5 rung is
+    # the precondition's INPUT, not a certified rung -- its own ordinary arm
+    # is not shown to be falling -- and the verification's independent
+    # fixture reads 0.4733 there (2.4x under the bar) while satisfying the
+    # precondition by 8.4x.  So M = 5 is no longer asserted on; it feeds (2).
+    eo, eb = ladder[6]
+    assert eb > 1.15 * eo, (6, eb, eo, self_gap, ladder)

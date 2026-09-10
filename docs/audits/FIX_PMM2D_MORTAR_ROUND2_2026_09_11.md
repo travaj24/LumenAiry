@@ -559,8 +559,9 @@ the guard's `except` tuple so both paths end in the same named
 > * **The `rcond` bar is NOT applied at `_interface_smatrix_general_mortar_2d`
 >   any more (DEFECT V1, P1).**  The 1e-12 bar was calibrated on the two
 >   IN-PLANE sites and applied unchanged to the third.  That site's operand is
->   RANK-DEFICIENT BY CONSTRUCTION whenever one side of the interface is an
->   in-plane region promoted to the generalized 6-tuple form by
+>   RANK-DEFICIENT BY CONSTRUCTION whenever EXACTLY ONE side of the interface
+>   is an in-plane region promoted to the generalized 6-tuple form by
+>   (corrected 2026-09-11, round-4 verification: both sides promoted is healthy)
 >   `_modes_as_general` -- measured: **100 % of the near-null right singular
 >   vector lies in the promoted side's block column**, at every `M`, on both
 >   builds -- so its healthy population runs **1.26e-14 .. 1.52e-04** over 28
