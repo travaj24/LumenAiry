@@ -246,6 +246,54 @@ surface points, at one region eig per layer instead of the stack's.
 
 Experiment: `docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md`.
 Build: `docs/audits/BUILD_PMM2D_STAGGERED_MORTAR_2026_09_11.md`.
+
+**ROUND 2 (2026-09-11), after independent verification.**  The build was
+audited (`docs/audits/VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md`) and three
+defects were fixed (`docs/audits/FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md`).
+
+* **A MINIMUM SEGMENT WIDTH is now a documented CONTRACT of the `x_walls` /
+  `y_walls` / `add_tapered_pillar(s)` surface.**  A NON-UNIFORM element grid
+  whose narrowest segment is below `1e-3` of the period is REFUSED, naming the
+  width and four remedies.  The reason is the per-segment `1/J_n` stiffness: a
+  narrow segment carries spurious modal wavenumbers
+  `|gamma| = c(M) M (M+1) / (4 k0 J)` -- the constant measured **0.9165
+  (M = 4) / 0.9536 (M = 6)**, stable to four digits over five decades of wall
+  separation -- which are harmless inside one grid and corrupt the L2 mortar
+  that couples that layer to neighbours on other grids.  The damage is
+  ENERGY-INVISIBLE (the lossless closure stays pinned at 8.0e-08) and it is a
+  FLOOR under the `n_modes` ladder, not a wander: scored against an exact 1-D
+  oracle the `M = 8` error reads 1.18e-04 on an ordinary grid against
+  4.05e-04 / 5.31e-04 / 6.36e-04 / 7.09e-04 / 7.42e-04 at wall separations
+  1e-2 .. 1e-6, with the last rung improving 11.71x against 2.32x.  The bar
+  sits 2.27 decades below the narrowest segment any ordinary shipped geometry
+  asks for (0.1873 of the period), and a taper whose tip CLOSES walks toward
+  it at `w_bottom / (2 n_slices)` -- crossing at about 250 slices, which is
+  remedy (4) in the message.  The INTEGER lattice is exempt and cannot reach
+  the bar at any affordable `N`.  Fail-before switch
+  `twod_staggered.PMM2D_STAG_MIN_SEG_GUARD`.
+
+* **The three 2-D mortar interface solves are GUARDED.**  They raised a bare
+  `numpy.linalg.LinAlgError: Singular matrix`; they now go through
+  `_guarded_mortar_solve`, which is BIT-IDENTICAL (`lu_factor` + `lu_solve` is
+  the same LAPACK pair `gesv` calls -- measured equal on 106 mortar solves at
+  0.96x the wall time) and screens on the `gecon` estimate the factors already
+  carry.  Refusal bar 1e-12, with the healthy population measured at
+  2.61e-07 .. 3.77e-04 (and 3.89e-08 even at `M = 9`).  The refusal names both
+  grids' wall arrays, their narrowest segments and the remedies.  The plain
+  1-D interface solves are left unguarded BY MEASUREMENT -- their correct
+  population comes within 1.0 decade of the same bar, against 5.4 decades on
+  the mortar path.
+
+* **The far-field projector's Gauss rule is sized PER SEGMENT.**  `nq = 2M + 8`
+  was sized for a segment of length `d/N`; on a 0.96 `d` segment at `M = 4`
+  with orders to 7 its kernel error reached **7.5e-04**, and it is now
+  **5.6e-15**.  The rule's constants are an upper envelope of a measurement
+  (slope 0.6341-0.6455 across `M = 3..12`, a 1.8 % spread).  The INTEGER path
+  bypasses the formula entirely and is bit-identical by construction.
+
+BIT-IDENTITY for the whole of round 2: **33 fixtures / 87 sha256 hashes**
+against a pristine pre-change tree, 0 mismatches, on both builds.
+
 ### Fixed -- `PMM2DStackHybrid`'s TRANSMITTED amplitudes on a SLANTED PATTERNED layer were FRAME-referenced (silent-wrong)
 
 `PMM2DStackHybrid.jones_transmission()` and
