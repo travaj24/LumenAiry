@@ -656,6 +656,10 @@ not the other.
 | `c7413e0` | `test(pmm)` -- the thread-pool sweep arm, and every bar's justification re-measured against the SHIPPED two-criterion arbiter |
 | `84e15e7` | `docs(pmm)` -- this report, the WARNING-identity arm of the bit-identity probe, the per-row residual analysis |
 | `1b6aa6b` | `test(pmm)` -- the out-of-plane director's refusal is polarization-0 evidence, re-derived in the LC gate |
+| `d5c575f` | `docs(pmm)` -- the commit ledger and the warning-identity line in the changelog |
+| `fa9db07` | `test(pmm)` -- the per-layer window path is arbitrated on its own grid, two-sided on a 5-layer staircase |
+| `ae6dcd6` | `docs(pmm)` -- the prescribed `min_feature` is bounded at `own / 50`, so the arbiter's re-solve is the same device |
+| `e9055c9` | `docs(pmm)` -- the full `PMMStack` regression: 812 passed, 1 skipped, 0 failed in 43:19 |
 
 Probes: `validation/probe_pmmstack_sliver_round2/` -- `r_fixtures.py`,
 `r1_populations.py`, `r2_falseneg.py`, `r3_trigger.py`, `r4_falsepos.py`,
