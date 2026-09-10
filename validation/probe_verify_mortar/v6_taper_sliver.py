@@ -115,29 +115,33 @@ def sec_taper():
           flush=True)
 
     # ---- (b) a FINE SHARED-GRID staircase, on walls a lattice CAN express --
-    # Slice walls snapped to an N = 40 lattice (the finest the shared path can
-    # afford here); the SAME geometry, both engines.
-    Nl = 40
-    xs = []
-    for _s in range(4):
-        z = 1.0 - (_s + 0.5) / 4
-        lo = xb0[0] + (xb1[0] - xb0[0]) * z
-        hi = xb0[1] + (xb1[1] - xb0[1]) * z
-        xs.append((round(lo / P * Nl) / Nl, round(hi / P * Nl) / Nl))
-    print(f"[taper] lattice-snapped slice bounds on N={Nl}: {xs}", flush=True)
+    # A SHALLOWER taper chosen so its slice walls land EXACTLY on an N = 20
+    # lattice: bounds (0.20, 0.70) -> (0.30, 0.60) over 3 midpoint slices give
+    # (0.30, 0.60) / (0.25, 0.65) / (0.20, 0.70), all on multiples of 0.05.
+    # The original 4-slice taper needs N = 40, whose M = 3 union solve is a
+    # 12800-dimension eig -- which is the point of the whole feature, and is
+    # recorded here rather than run.
+    Nl = 20
+    xs = [(0.30, 0.60), (0.25, 0.65), (0.20, 0.70)]
+    out["shared_lattice_note"] = (
+        "the 4-slice fixture above needs N = 40 (q = 80 at M = 3, eig dim "
+        "12800, a 2.6 GB matrix); the shared arm below is a SHALLOWER "
+        "3-slice taper chosen to land on N = 20")
+    print(f"[taper] shared-lattice arm: N={Nl}, slices {xs}", flush=True)
     shared = {}
-    for M in (3, 4):
+    for M in (3,):
         t0 = time.time()
         st = PMM2DStackPure(P, n_modes=M, n_orders=1)
         for lo, hi in xs:
             cell = np.full((Nl, Nl), _C(EPS_H))
             a, b = int(round(lo * Nl)), int(round(hi * Nl))
             cell[a:b, a:b] = EPS_P
-            st.add_layer(0.30 / 4, eps_cell=cell)
+            st.add_layer(0.30 / 3, eps_cell=cell)
         st.set_source(WL, theta=TH, phi=PH)
         (o, R, T), _w = solve(st, jones=False)
         p0 = int(np.where((o[:, 0] == 0) & (o[:, 1] == 0))[0][0])
         shared[M] = {"R00": float(R[0, p0]), "q": Nl * (M - 1),
+                     "eig_dim": 2 * (Nl * (M - 1)) ** 2,
                      "closure": float(np.max(np.abs(R.sum(1) + T.sum(1)
                                                     - 1.0))),
                      "wall_s": time.time() - t0}
@@ -146,26 +150,27 @@ def sec_taper():
               f"{shared[M]['closure']:.3e}  {shared[M]['wall_s']:.1f}s",
               flush=True)
     out["shared_lattice_staircase"] = shared
-    # the SAME snapped geometry on the per-layer non-uniform route
+    # the SAME geometry on the per-layer non-uniform route
     snap = {}
-    for M in (5, 6):
+    for M in (4, 5, 6, 7):
         t0 = time.time()
         st = PMM2DStackPure(P, n_modes=M, n_orders=1,
                             layer_grids="per-layer")
         for lo, hi in xs:
             tile = np.full((3, 3), _C(EPS_H))
             tile[1, 1] = EPS_P
-            st.add_layer(0.30 / 4, eps_cell=tile,
+            st.add_layer(0.30 / 3, eps_cell=tile,
                          x_walls=[lo * P, hi * P],
                          y_walls=[lo * P, hi * P], n_modes=M)
         st.set_source(WL, theta=TH, phi=PH)
         (o, R, T), _w = solve(st, jones=False)
         p0 = int(np.where((o[:, 0] == 0) & (o[:, 1] == 0))[0][0])
-        snap[M] = {"R00": float(R[0, p0]),
+        snap[M] = {"R00": float(R[0, p0]), "q": 3 * (M - 1),
+                   "eig_dim": 2 * (3 * (M - 1)) ** 2,
                    "closure": float(np.max(np.abs(R.sum(1) + T.sum(1) - 1.0))),
                    "wall_s": time.time() - t0}
-        print(f"[taper] per-layer on the SNAPPED walls M={M}: "
-              f"R(0,0)={snap[M]['R00']:.6f}  closure "
+        print(f"[taper] per-layer on the SAME walls M={M} (q={3*(M-1)}, eig "
+              f"dim {2*(3*(M-1))**2}): R(0,0)={snap[M]['R00']:.6f}  closure "
               f"{snap[M]['closure']:.3e}  {snap[M]['wall_s']:.1f}s",
               flush=True)
     out["perlayer_snapped"] = snap

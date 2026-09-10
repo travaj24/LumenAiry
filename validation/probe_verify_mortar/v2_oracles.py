@@ -126,7 +126,7 @@ def sec_hybrid():
     tile = np.full((3, 3), _C(e_h))
     tile[1, 1] = _C(e_p)
     hyb = {}
-    for deg in (8, 10, 12):
+    for deg in (7, 9, 11):
         st = PMM2DStackHybrid(PX, PY, n_superstrate=1.0, n_substrate=1.45,
                               degree=deg, n_orders=5)
         st.add_tapered_pillar(t, eps_pillar=e_p, eps_host=e_h,
@@ -142,11 +142,11 @@ def sec_hybrid():
     def _gap(a, b):
         return float(max(np.max(np.abs(a[1] - b[1])),
                          np.max(np.abs(a[2] - b[2]))))
-    out["hybrid_selfgap_8_10"] = _gap(hyb[8], hyb[10])
-    out["hybrid_selfgap_10_12"] = _gap(hyb[10], hyb[12])
-    oh, Rh, Th = hyb[12]
-    print(f"[hybrid] oracle self-gap deg8-10 {out['hybrid_selfgap_8_10']:.3e},"
-          f" deg10-12 {out['hybrid_selfgap_10_12']:.3e}", flush=True)
+    out["hybrid_selfgap_7_9"] = _gap(hyb[7], hyb[9])
+    out["hybrid_selfgap_9_11"] = _gap(hyb[9], hyb[11])
+    oh, Rh, Th = hyb[11]
+    print(f"[hybrid] oracle self-gap deg7-9 {out['hybrid_selfgap_7_9']:.3e},"
+          f" deg9-11 {out['hybrid_selfgap_9_11']:.3e}", flush=True)
     idxh = {(int(a), int(b)): i for i, (a, b) in enumerate(oh)}
     lad = {}
     for M in (4, 5, 6, 7):
@@ -172,17 +172,17 @@ def sec_hybrid():
     cell = np.full((npix, npix), _C(e_h))
     cell[3:5, 3:5] = _C(e_p)
     hy2 = {}
-    for deg in (8, 11):
+    for deg in (7, 11):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             eff = pmm_efficiency_2d_cell(
                 PX, PY, cell, 1.45, 1.0, t, WL, degree=deg,
                 polarization="te", theta=theta, phi=phi, n_orders=5)
-        hy2[deg] = (np.asarray(eff.orders), np.asarray(eff.R),
-                    np.asarray(eff.T))
-    out["cell_selfgap_8_11"] = float(max(
-        np.max(np.abs(hy2[8][1] - hy2[11][1])),
-        np.max(np.abs(hy2[8][2] - hy2[11][2]))))
+        _o, _R, _T = eff              # Efficiency2D unpacks as (orders,R,T)
+        hy2[deg] = (np.asarray(_o), np.asarray(_R), np.asarray(_T))
+    out["cell_selfgap_7_11"] = float(max(
+        np.max(np.abs(hy2[7][1] - hy2[11][1])),
+        np.max(np.abs(hy2[7][2] - hy2[11][2]))))
     oc, Rc, Tc = hy2[11]
     idxc = {(int(a), int(b)): i for i, (a, b) in enumerate(oc)}
     tile2 = np.full((3, 3), _C(e_h))
@@ -203,8 +203,8 @@ def sec_hybrid():
         print(f"[hybrid] pixel walls (3/8,5/8) M={M}: per-order max "
               f"|pure - pmm_efficiency_2d_cell(te)| = {err:.4e}", flush=True)
     out["cell_ladder"] = lad2
-    print(f"[hybrid] pmm_efficiency_2d_cell self-gap deg8-11 "
-          f"{out['cell_selfgap_8_11']:.3e}", flush=True)
+    print(f"[hybrid] pmm_efficiency_2d_cell self-gap deg7-11 "
+          f"{out['cell_selfgap_7_11']:.3e}", flush=True)
     RES["hybrid"] = out
 
 
