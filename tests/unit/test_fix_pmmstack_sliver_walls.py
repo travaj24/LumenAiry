@@ -423,6 +423,20 @@ def test_the_wavenumber_the_message_quotes_is_the_one_the_solve_actually_has():
     assert 0.9 < quoted / measured < 1.1, (quoted, measured)
 
 
+def test_an_unknown_wavelength_prints_the_symbol_not_a_nan():
+    """``prepare()`` never requires ``set_source``, so the refusal can be
+    reached with no wavelength on the stack.  It must degrade to the SYMBOL,
+    not to a ``nan`` the reader would have to interpret."""
+    st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=14)
+    for (a, b) in _frames(1e-4):
+        st.add_layer(_DZ, segments=[(a, _EH), (b - a, _EP), (1.0 - b, _EH)])
+    msg = ps._sliver_refusal(st, 2.17)          # _src is None: never sourced
+    assert msg is not None
+    assert "|q| ~ 0.65 N(N+1)/4 / (k0 J)" in msg, msg[:400]
+    # ("quasi-resonance" contains "nan", so score the slot, not the string)
+    assert "|q| ~ nan" not in msg
+
+
 def test_per_layer_grids_is_not_a_second_opinion_on_a_two_layer_stack():
     """The caveat the refusal states: at ``window_halfwidth = 1`` a 2-layer
     window IS the whole union, so the per-layer path rebuilds the same grid and

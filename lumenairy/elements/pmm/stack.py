@@ -250,11 +250,15 @@ def _sliver_refusal(stack, worst):
     # |q|max ~ 0.65 N(N+1)/4 / (k0 J) with J = w P / 2 and k0 = 2 pi / wl --
     # the MEASURED predictor (S3.2 of the fix audit; the constant reads
     # 0.6786 / 0.6575 / 0.6537 / 0.6513 / 0.6485 at degree 8/12/14/16/20).
+    # The wavelength is the solve's, not the stack's, on the PREPARED path
+    # (``prepare()`` never requires ``set_source``), so an unknown one prints
+    # the SYMBOL rather than a ``nan``.
     try:
         wl = float(stack._src["wl"])
     except (AttributeError, KeyError, TypeError, ValueError):
         wl = float("nan")
-    q_hat = 0.65 * (degree * (degree + 1) / 4.0) * wl / (np.pi * w * period)
+    q_txt = (f"{0.65 * (degree * (degree + 1) / 4.0) * wl / (np.pi * w * period):.3g}"
+             if np.isfinite(wl) else "0.65 N(N+1)/4 / (k0 J)")
     return (
         f"PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the "
         f"shared union grid.  The union of the layers' walls carries {n_hit} "
@@ -263,7 +267,7 @@ def _sliver_refusal(stack, worst):
         f"{x_r:.10g}, i.e. {own / w:.3g}x finer than the finest wall spacing "
         f"any layer DOES ask for ({own:.4g} of a period).  Such a cell's "
         f"spectral-element Jacobian scales the nodal Kx^2 as 1/w^2 and injects "
-        f"spurious modal wavenumbers |q| ~ {q_hat:.3g} against a physical "
+        f"spurious modal wavenumbers |q| ~ {q_txt} against a physical "
         f"index ceiling of a few, conditioning the interface mode-match as "
         f"1/w^2 -- and this solve returned max R+T = {worst:.6g}, super-unity "
         f"by more than {_STACK_SUPERUNITY_BAR:g} on a PROVABLY PASSIVE stack "

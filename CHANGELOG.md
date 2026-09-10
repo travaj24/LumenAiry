@@ -72,7 +72,7 @@ BIT-IDENTITY: 18 shipped fixtures -- shared and per-layer grids, taper with the
 snap dormant and active, Bragg, conical, slant, out-of-plane, lossy, sweep,
 `prepare()`, `stabilize='slices'`, `internal_field`, `layer_absorption` --
 hashed against the read-only main clone: **18 / 18 identical**.
-`tests/unit/test_fix_pmmstack_sliver_walls.py`, 18 tests, 6.6 s / 7.3 s.
+`tests/unit/test_fix_pmmstack_sliver_walls.py`, 19 tests, 7.8 s / 7.6 s.
 One shipped file needed the switch, and it is the right one:
 `tests/unit/test_m1_conditioning_guard.py` drives the audit staircase (2 nm
 cross-layer cells at ratio 157) deliberately past capacity and HARVESTS pre-fix
