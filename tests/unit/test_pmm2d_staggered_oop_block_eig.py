@@ -393,6 +393,81 @@ def test_structure_bar_has_a_gap_on_both_sides_measured_through_the_gate():
     assert struct_dA(ok) < tol < struct_dA(bad)
 
 
+def near_miss(d):
+    """A (2, 2) cell whose two mirror pixels differ ONLY by a relative ``d`` on
+    the out-of-plane entries, so the structure residual can be walked across
+    ``_STAG_BLOCK_TOL`` instead of jumped over by eight decades."""
+    t2 = TIL.copy()
+    t2[0, 2] = TIL[0, 2] * (1.0 + d)
+    t2[2, 0] = TIL[2, 0] * (1.0 + d)
+    c = _tile(AIR, 2)
+    c[0, 0] = TIL
+    c[1, 1] = t2
+    return c
+
+
+def test_the_bar_is_walked_across_and_everything_it_accepts_is_still_exact():
+    """The gate's bar tested where it actually sits, not eight decades away.
+
+    ``test_structure_bar_has_a_gap_on_both_sides...`` above moves the BAR past
+    fixtures whose residual is 6e-02 .. 7e-01.  This test instead moves the
+    FIXTURE across the bar: a family of cells whose two mirror pixels differ by
+    a relative ``d`` walks ``dA`` from ~1e-13 to ~1e-07, i.e. through
+    ``_STAG_BLOCK_TOL = 1e-10``, and every quantity below is measured at
+    runtime -- nothing is pinned.
+
+    Three claims, all two-sided:
+
+    * the family really does SPAN the bar (asserted, not hoped: at least one
+      rung a factor 2 under it and one a factor 2 over it);
+    * the gate's decision follows its own stated predicate on both sides of
+      that guard band;
+    * and -- the claim that makes the bar SAFE rather than merely tidy --
+      every cell the gate ACCEPTS still reproduces the dense path to the same
+      1e-11 the exact-symmetry tests assert.  MEASURED on this build
+      2026-09-10: the largest accepted residual is dA = 5.1e-11 and the
+      observable error there is 1.6e-15, because the reduction's error is
+      QUADRATIC in ``dA`` (fitted 0.56 * dA^2 over the sweep), so the accepted
+      error at the bar itself is ~1e-20 -- four decades under the 1e-11 bar at
+      the worst rung measured, and the guard band's factor 2 is ~5 decades
+      above ``dA``'s own build spread (a deterministic assembly quantity whose
+      roundoff floor is ~5e-15 relative).
+    """
+    tol = TS._STAG_BLOCK_TOL
+    rungs = []
+    for d in (1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6):
+        cell = near_miss(d)
+        sol = solver(cell, 5)
+        g = _stag_parity_gauge(sol)
+        assert g is not None, "normal incidence: the gauge must be available"
+        dA = struct_dA(sol)
+        accepted = _stag_block_eig(sol.Agen, sol.Bgen, sol.q * sol.q,
+                                   g) is not None
+        rungs.append((d, cell, dA, accepted))
+    # the ladder must actually straddle the bar, with a guard band
+    assert any(dA <= tol / 2 for _d, _c, dA, _a in rungs), rungs
+    assert any(dA >= 2 * tol for _d, _c, dA, _a in rungs), rungs
+    # the gate follows its own predicate outside the guard band
+    for d, cell, dA, accepted in rungs:
+        if dA <= tol / 2:
+            assert accepted, (d, dA)
+        elif dA >= 2 * tol:
+            assert not accepted, (d, dA)
+    # and everything it ACCEPTS is still exact
+    acc = [(d, cell, dA) for d, cell, dA, a in rungs if a]
+    assert acc, rungs
+    for d, cell, dA in acc:
+        on = jones_call(cell, 5, True)
+        off = jones_call(cell, 5, False)
+        assert max(dmax(on[1], off[1]), dmax(on[2], off[2]),
+                   dmax(on[3], off[3])) <= 1e-11, (d, dA)
+    # and everything it REFUSES runs the dense branch bit-for-bit
+    ref = [(d, cell) for d, cell, _dA, a in rungs if not a]
+    assert ref, rungs
+    d, cell = ref[0]
+    assert rt_hash(jones_call(cell, 5, True)[1:])         == rt_hash(jones_call(cell, 5, False)[1:])
+
+
 @pytest.mark.parametrize("label,cellf,Nx", [
     ("off-centre pillar", lambda: offcentre(TIL, 2), 2),
     ("parity-breaking tensor", lambda: broken(3), 3),

@@ -7316,6 +7316,7 @@
   "tests/unit/test_pmm2d_staggered_oop_block_eig.py::test_scalar_and_in_plane_cells_are_untouched_by_the_keyword": 1.317,
   "tests/unit/test_pmm2d_staggered_oop_block_eig.py::test_structure_bar_has_a_gap_on_both_sides_measured_through_the_gate": 1.882,
   "tests/unit/test_pmm2d_staggered_oop_block_eig.py::test_symmetry_keyword_is_validated_and_recorded": 0.001,
+  "tests/unit/test_pmm2d_staggered_oop_block_eig.py::test_the_bar_is_walked_across_and_everything_it_accepts_is_still_exact": 1.93,
   "tests/unit/test_pmm2d_staggered_oop_corner_convergence.py::test_staggered_oop_corner_ladder_steps_shrink_and_start_above_the_floor": 19.474,
   "tests/unit/test_pmm2d_staggered_wood_list.py::test_cutoff_warning_still_keys_on_the_half_spaces_only": 0.14726019999943674,
   "tests/unit/test_pmm2d_staggered_wood_list.py::test_every_scalar_site_takes_the_layer_cutoff_nudge[patterned]": 0.6853482999940752,
