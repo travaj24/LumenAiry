@@ -723,12 +723,20 @@ PMM2D_STAG_MIN_SEG_GUARD = True
 #:     raised outright at 1e-07.
 #:
 #: THIS BAR IS ``M``-INDEPENDENT AND THE CONDITIONING IS NOT, and the layering
-#: is deliberate.  ``rcond`` falls about 3x per modal rung (measured on the
-#: shipped taper: 1.62e-05 / 5.98e-07 / 2.64e-07 / 4.67e-08 at ``M`` = 4 / 6 /
-#: 7 / 8), so above ``M ~ 6`` the conditioning backstop is the one that fires
-#: first on a marginal grid.  A fixed WIDTH contract cannot know ``M``, the
-#: wavelength or the contrast; it is the simple, documented, cheap half, and
-#: the backstop names the same remedies.
+#: is deliberate.  ``rcond`` falls about 3x per modal rung and then flattens
+#: (measured on the shipped taper: 1.62e-05 / 5.98e-07 / 2.64e-07 / 4.67e-08 /
+#: 3.89e-08 / 2.81e-08 at ``M`` = 4 / 6 / 7 / 8 / 9 / 10), so above ``M ~ 6``
+#: the conditioning backstop is the one that fires first on a marginal grid.
+#: A fixed WIDTH contract cannot know ``M``, the wavelength or the contrast;
+#: it is the simple, documented, cheap half, and the backstop names the same
+#: remedies.
+#:
+#: THE COMPARISON CARRIES A 1e-9 RELATIVE SLACK, because a caller who asks for
+#: EXACTLY this minimum computes it in floating point and can land 1.8e-16
+#: BELOW it (measured: ``(0.28572 - 0.28452) / 1.2`` = 9.999999999999824e-04,
+#: which is a SHIPPED fixture).  Without the slack the documented boundary
+#: would be decided by the caller's own arithmetic -- the at-threshold shape
+#: ``docs/TESTING_STANDARDS.md`` calls S4.  See ``Basis1D.__init__``.
 #:
 #: THE INTEGER PATH IS EXEMPT, and that costs nothing: a uniform lattice's
 #: segments are all ``d/N``, so reaching this bar needs ``N > 1000``, i.e.
