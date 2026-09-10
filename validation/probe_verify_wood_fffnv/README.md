@@ -35,6 +35,7 @@ wsl.exe -e bash -lc "cd /mnt/c/tmp/lum_vwood && PYTHONPATH=/mnt/c/tmp/lum_vwood 
 | `v5_ladder.py` | the rigorous 1-D lossless-closure ladder (n_orders 11..41) for the `fff_nv` stripe at four groove permittivities |
 | `v6_mech.py` | the MECHANISM: Hermiticity of the Li in-plane operator, `cond(W)`, `cond([W; V])`, `cond(a + b)` at BOTH interfaces, the layer<->region modal-eigenvalue gap and the count of exactly degenerate modes, and the defect-vs-detune law |
 | `v7_bars.py` | every numeric bar asserted in `tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py`, measured |
+| `v9_isolate.py` | the "it is not the anisotropic solver" controls (rotated / diagonal / isotropic / other symmetric / gyrotropic / uniform / matched half-spaces / detuned), and the 1-D reference's own closure vs `n_ref` |
 | `v8_pmm1320.py` | `tests/unit/test_v5_20_13_pmm_jones_2d_fff_nv.py`'s RCWA and PMM ladders at the coincident and the detuned groove, plus that file's other bars |
 
 `_out_v*_<tag>.json` are the recorded readings (`win1` = Windows py3.14.6 /
