@@ -1,0 +1,371 @@
+{
+ "lumenairy": "C:\\tmp\\lum_vmortar2\\lumenairy\\__init__.py",
+ "generalized": {
+  "oop_M4_nonconf": {
+   "error": null,
+   "closure": 0.0010837330985089544,
+   "n_warnings": 0,
+   "gen_rcond_min": 1.4091772857446237e-11,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 324
+  },
+  "oop_M4_conf": {
+   "error": null,
+   "closure": 0.0015371090628029105,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "oop_M4_wide": {
+   "error": null,
+   "closure": 0.0028015490615866945,
+   "n_warnings": 0,
+   "gen_rcond_min": 1.2252163463022446e-11,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 324
+  },
+  "oop_M5_nonconf": {
+   "error": "_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 576x576 mortar operator is numerically s",
+   "closure": NaN,
+   "n_warnings": -1,
+   "gen_rcond_min": 8.39565006759342e-13,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 576
+  },
+  "oop_M5_conf": {
+   "error": null,
+   "closure": 0.0007257487113181416,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "oop_M5_wide": {
+   "error": null,
+   "closure": 0.0007062082758646504,
+   "n_warnings": 0,
+   "gen_rcond_min": 1.172120930636756e-12,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 576
+  },
+  "oop_M6_nonconf": {
+   "error": "_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 900x900 mortar operator is numerically s",
+   "closure": NaN,
+   "n_warnings": -1,
+   "gen_rcond_min": 6.052480901879727e-14,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 900
+  },
+  "oop_M6_conf": {
+   "error": null,
+   "closure": 0.00030774091642149504,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "oop_M6_wide": {
+   "error": "_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 900x900 mortar operator is numerically s",
+   "closure": NaN,
+   "n_warnings": -1,
+   "gen_rcond_min": 3.3530646601743454e-13,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 900
+  },
+  "oop_M7_nonconf": {
+   "error": "_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 1296x1296 mortar operator is numerically",
+   "closure": NaN,
+   "n_warnings": -1,
+   "gen_rcond_min": 2.6439268821979446e-14,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 1296
+  },
+  "oop_M7_conf": {
+   "error": null,
+   "closure": 0.00028560450787828984,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "oop_M7_wide": {
+   "error": "_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 1296x1296 mortar operator is numerically",
+   "closure": NaN,
+   "n_warnings": -1,
+   "gen_rcond_min": 3.746795405980954e-14,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 1296
+  },
+  "oop_both_M4_nonconf": {
+   "error": null,
+   "closure": 0.0006450914159128462,
+   "n_warnings": 0,
+   "gen_rcond_min": 0.000131562504155434,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 324
+  },
+  "oop_both_M4_conf": {
+   "error": null,
+   "closure": 0.0017788212943710136,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "oop_both_M4_wide": {
+   "error": null,
+   "closure": 0.0005184797183823697,
+   "n_warnings": 0,
+   "gen_rcond_min": 0.00014812776322154175,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 324
+  },
+  "oop_both_M5_nonconf": {
+   "error": null,
+   "closure": 0.00040904362398452854,
+   "n_warnings": 0,
+   "gen_rcond_min": 6.5265448244898485e-06,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 576
+  },
+  "oop_both_M5_conf": {
+   "error": null,
+   "closure": 0.0004083641597321108,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "oop_both_M5_wide": {
+   "error": null,
+   "closure": 0.00028258024869443066,
+   "n_warnings": 0,
+   "gen_rcond_min": 1.3278133651073767e-05,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 576
+  },
+  "oop_both_M6_nonconf": {
+   "error": null,
+   "closure": 0.0003651530807200487,
+   "n_warnings": 0,
+   "gen_rcond_min": 1.2640358903941958e-06,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 900
+  },
+  "oop_both_M6_conf": {
+   "error": null,
+   "closure": 0.00031384316224103426,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "oop_both_M6_wide": {
+   "error": null,
+   "closure": 0.0003346668594976787,
+   "n_warnings": 0,
+   "gen_rcond_min": 6.652229504403638e-06,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 900
+  },
+  "oop_both_M7_nonconf": {
+   "error": null,
+   "closure": 0.00035900452961667995,
+   "n_warnings": 0,
+   "gen_rcond_min": 5.772884343563095e-07,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 1296
+  },
+  "oop_both_M7_conf": {
+   "error": null,
+   "closure": 0.00031576150407697234,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "oop_both_M7_wide": {
+   "error": null,
+   "closure": 0.00033162214435167314,
+   "n_warnings": 0,
+   "gen_rcond_min": 6.14174896298439e-07,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 1296
+  },
+  "slant_M4_nonconf": {
+   "error": null,
+   "closure": 0.002258791015259498,
+   "n_warnings": 0,
+   "gen_rcond_min": 0.00010698639397013377,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 324
+  },
+  "slant_M4_conf": {
+   "error": null,
+   "closure": 0.0038941732720310096,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "slant_M4_wide": {
+   "error": null,
+   "closure": 0.0007687612860520776,
+   "n_warnings": 0,
+   "gen_rcond_min": 0.00010833391312589095,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 324
+  },
+  "slant_M5_nonconf": {
+   "error": null,
+   "closure": 0.00010521742496272246,
+   "n_warnings": 0,
+   "gen_rcond_min": 5.0368373075393005e-06,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 576
+  },
+  "slant_M5_conf": {
+   "error": null,
+   "closure": 0.0003897335639164723,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "slant_M5_wide": {
+   "error": null,
+   "closure": 0.00012790239118531943,
+   "n_warnings": 0,
+   "gen_rcond_min": 1.0072139982031059e-05,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 576
+  },
+  "slant_M6_nonconf": {
+   "error": null,
+   "closure": 1.639508157247338e-05,
+   "n_warnings": 0,
+   "gen_rcond_min": 1.008449982900593e-06,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 900
+  },
+  "slant_M6_conf": {
+   "error": null,
+   "closure": 1.4273190846902928e-05,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "slant_M6_wide": {
+   "error": null,
+   "closure": 1.2605508097784934e-05,
+   "n_warnings": 0,
+   "gen_rcond_min": 4.838820331158072e-06,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 900
+  },
+  "slant_M7_nonconf": {
+   "error": null,
+   "closure": 7.725085994225722e-07,
+   "n_warnings": 0,
+   "gen_rcond_min": 3.275580715189906e-07,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 1296
+  },
+  "slant_M7_conf": {
+   "error": null,
+   "closure": 1.842105522009696e-06,
+   "n_warnings": 0,
+   "gen_rcond_min": null,
+   "n_gen": 0,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": null
+  },
+  "slant_M7_wide": {
+   "error": null,
+   "closure": 8.267242572745914e-07,
+   "n_warnings": 0,
+   "gen_rcond_min": 4.3092955950541185e-07,
+   "n_gen": 1,
+   "plain_rcond_min": null,
+   "n_plain": 0,
+   "n": 1296
+  }
+ },
+ "summary": {
+  "n": 24,
+  "rcond_min": 2.6439268821979446e-14,
+  "rcond_max": 0.00014812776322154175,
+  "decades_to_bar": -1.5777505594349015
+ }
+}

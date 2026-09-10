@@ -1,0 +1,591 @@
+{
+ "census": {
+  "single interior wall at 0.4": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.4,
+   "refused": false,
+   "error": null
+  },
+  "duty-1/3 pair": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.3333333333333333,
+   "refused": false,
+   "error": null
+  },
+  "conforming 0.2371/0.6183": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.2371,
+   "refused": false,
+   "error": null
+  },
+  "non-conforming 0.3117/0.7402": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.25980000000000003,
+   "refused": false,
+   "error": null
+  },
+  "axes carrying different walls": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.21,
+   "refused": false,
+   "error": null
+  },
+  "nested refinement 0.125/0.25/0.75/0.875": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.12499999999999997,
+   "refused": false,
+   "error": null
+  },
+  "straight-ish taper n_slices=4": {
+   "n_nonuniform_bases": 20,
+   "narrowest": 0.23374999999999999,
+   "refused": false,
+   "error": null
+  },
+  "straight-ish taper n_slices=8": {
+   "n_nonuniform_bases": 36,
+   "narrowest": 0.22687500000000002,
+   "refused": false,
+   "error": null
+  },
+  "straight-ish taper n_slices=16": {
+   "n_nonuniform_bases": 68,
+   "narrowest": 0.22343749999999998,
+   "refused": false,
+   "error": null
+  },
+  "straight-ish taper n_slices=32": {
+   "n_nonuniform_bases": 132,
+   "narrowest": 0.22171875,
+   "refused": false,
+   "error": null
+  },
+  "straight-ish taper n_slices=64": {
+   "n_nonuniform_bases": 260,
+   "narrowest": 0.220859375,
+   "refused": false,
+   "error": null
+  },
+  "add_tapered_pillars n_slices=4": {
+   "n_nonuniform_bases": 20,
+   "narrowest": 0.13749999999999996,
+   "refused": false,
+   "error": null
+  },
+  "add_tapered_pillars n_slices=6": {
+   "n_nonuniform_bases": 28,
+   "narrowest": 0.12500000000000003,
+   "refused": false,
+   "error": null
+  },
+  "add_tapered_pillars n_slices=16": {
+   "n_nonuniform_bases": 68,
+   "narrowest": 0.10937499999999996,
+   "refused": false,
+   "error": null
+  },
+  "pillar edge 0.05 from the period end": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.05,
+   "refused": false,
+   "error": null
+  },
+  "pillar edge 0.01 from the period end": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.009999999999999905,
+   "refused": false,
+   "error": null
+  },
+  "pillar edge 0.002 from the period end": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.0019999999999999385,
+   "refused": false,
+   "error": null
+  },
+  "pillar edge 0.0011 from the period end": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.0011,
+   "refused": false,
+   "error": null
+  },
+  "pillar edge 0.001 from the period end": {
+   "n_nonuniform_bases": 6,
+   "narrowest": 0.001,
+   "refused": false,
+   "error": null
+  },
+  "pillar edge 0.0009 from the period end": {
+   "n_nonuniform_bases": 1,
+   "narrowest": 0.0009,
+   "refused": true,
+   "error": "ValueError: Basis1D: segment 0 of this NON-UNIFORM element grid is 9e-10 wide -- 9.000e-04 of the peri"
+  },
+  "pillar edge 0.0001 from the period end": {
+   "n_nonuniform_bases": 1,
+   "narrowest": 0.0001,
+   "refused": true,
+   "error": "ValueError: Basis1D: segment 0 of this NON-UNIFORM element grid is 1e-10 wide -- 1.000e-04 of the peri"
+  }
+ },
+ "boundary": {
+  "exactly 1e-3": {
+   "requested": 0.001,
+   "actual_fraction": 0.0009999999999999957,
+   "actual_minus_bar": -4.336808689942018e-18,
+   "outcome": "ACCEPTED",
+   "msg": ""
+  },
+  "1e-3 - 2e-9  (absolute)": {
+   "requested": 0.000999998,
+   "actual_fraction": 0.0009999979999999885,
+   "actual_minus_bar": -2.0000000115240335e-09,
+   "outcome": "REFUSED",
+   "msg": "Basis1D: segment 1 of this NON-UNIFORM element grid is 9.99998e-10 wide -- 1.000e-03 of the period 1e-06, belo"
+  },
+  "1e-3 * (1 - 5e-10)  inside slack": {
+   "requested": 0.0009999999995,
+   "actual_fraction": 0.000999999999500008,
+   "actual_minus_bar": -4.999919749060222e-13,
+   "outcome": "ACCEPTED",
+   "msg": ""
+  },
+  "1e-3 * (1 - 1e-9)   ON the slack": {
+   "requested": 0.000999999999,
+   "actual_fraction": 0.000999999998999994,
+   "actual_minus_bar": -1.0000060675363631e-12,
+   "outcome": "REFUSED",
+   "msg": "Basis1D: segment 1 of this NON-UNIFORM element grid is 1e-09 wide -- 1.000e-03 of the period 1e-06, below the "
+  },
+  "1e-3 * (1 - 2e-9)   OUTSIDE slack": {
+   "requested": 0.000999999998,
+   "actual_fraction": 0.0009999999979999922,
+   "actual_minus_bar": -2.0000077982640363e-12,
+   "outcome": "REFUSED",
+   "msg": "Basis1D: segment 1 of this NON-UNIFORM element grid is 1e-09 wide -- 1.000e-03 of the period 1e-06, below the "
+  },
+  "1e-3 * (1 - 1e-6)": {
+   "requested": 0.000999999,
+   "actual_fraction": 0.000999998999999992,
+   "actual_minus_bar": -1.000000007930421e-09,
+   "outcome": "REFUSED",
+   "msg": "Basis1D: segment 1 of this NON-UNIFORM element grid is 9.99999e-10 wide -- 1.000e-03 of the period 1e-06, belo"
+  },
+  "1.001e-3": {
+   "requested": 0.001001,
+   "actual_fraction": 0.001000999999999997,
+   "actual_minus_bar": 9.999999999968801e-07,
+   "outcome": "ACCEPTED",
+   "msg": ""
+  },
+  "shipped_fixture_arithmetic": {
+   "expr": "(0.28572 - 0.28452) / 1.2",
+   "value": 0.0009999999999999825,
+   "minus_bar": -1.7564075194265172e-17,
+   "below_bar": true
+  },
+  "shipped_fixture_outcome": "ACCEPTED",
+  "switch": {
+   "True": "REFUSED: Basis1D: segment 1 of this NON-UNIFORM element grid is 2e-10",
+   "False": "ACCEPTED (N=3)"
+  },
+  "public_surface": {
+   "at the bar 1e-3": {
+    "add_layer": "add_layer ACCEPTED",
+    "solve": "solve ACCEPTED"
+   },
+   "under the bar 1e-4": {
+    "add_layer": "add_layer ACCEPTED",
+    "solve": "solve REFUSED: Basis1D: segment 1 of this NON-UNIFORM element gri"
+   }
+  }
+ },
+ "exempt": {
+  "bar": 0.001,
+  "N_needed": 1000,
+  "uniform_lattice_fractions": {
+   "2": {
+    "seg_fraction": 0.5,
+    "under_bar": false
+   },
+   "3": {
+    "seg_fraction": 0.3333333333333333,
+    "under_bar": false
+   },
+   "12": {
+    "seg_fraction": 0.08333333333333333,
+    "under_bar": false
+   },
+   "60": {
+    "seg_fraction": 0.016666666666666666,
+    "under_bar": false
+   },
+   "1000": {
+    "seg_fraction": 0.001,
+    "under_bar": false
+   },
+   "1001": {
+    "seg_fraction": 0.000999000999000999,
+    "under_bar": true
+   },
+   "5000": {
+    "seg_fraction": 0.0002,
+    "under_bar": true
+   }
+  },
+  "integer_N2000_built": {
+   "N": 2000,
+   "uniform": true,
+   "seg_fraction": 0.0005
+  },
+  "array_N2000": "REFUSED: Basis1D: segment 576 of this NON-UNIFORM element grid is 0.0005 wide -- 5.000e-0",
+  "N1001_M4_region_eig_dim": 18036018
+ },
+ "shared": {
+  "['x_walls']": "REFUSED: PMM2DStackPure.add_layer: x_walls is only meaningful with layer_grids='per-layer' -- the shared path solves ONE union grid at ONE ",
+  "['y_walls']": "REFUSED: PMM2DStackPure.add_layer: y_walls is only meaningful with layer_grids='per-layer' -- the shared path solves ONE union grid at ONE ",
+  "shared_lattice": {
+   "3": {
+    "uniform": true,
+    "seg": 0.3333333333333333
+   },
+   "5": {
+    "uniform": true,
+    "seg": 0.2
+   },
+   "8": {
+    "uniform": true,
+    "seg": 0.125
+   },
+   "13": {
+    "uniform": true,
+    "seg": 0.07692307692307693
+   },
+   "24": {
+    "uniform": true,
+    "seg": 0.041666666666666664
+   },
+   "100": {
+    "uniform": true,
+    "seg": 0.01
+   }
+  }
+ },
+ "_lumenairy": "C:\\tmp\\lum_vmortar2\\lumenairy\\__init__.py",
+ "_bar": 0.001,
+ "falsepos": {
+  "closing_taper": {
+   "4": {
+    "n_nonuniform_bases": 20,
+    "narrowest": 0.06250000174999996,
+    "refused": false,
+    "error": null
+   },
+   "8": {
+    "n_nonuniform_bases": 36,
+    "narrowest": 0.031250001874999885,
+    "refused": false,
+    "error": null
+   },
+   "32": {
+    "n_nonuniform_bases": 132,
+    "narrowest": 0.007812501968749976,
+    "refused": false,
+    "error": null
+   },
+   "64": {
+    "n_nonuniform_bases": 260,
+    "narrowest": 0.003906251984374886,
+    "refused": false,
+    "error": null
+   },
+   "128": {
+    "n_nonuniform_bases": 516,
+    "narrowest": 0.0019531269921876583,
+    "refused": false,
+    "error": null
+   },
+   "200": {
+    "n_nonuniform_bases": 804,
+    "narrowest": 0.00125000199499996,
+    "refused": false,
+    "error": null
+   },
+   "250": {
+    "n_nonuniform_bases": 1004,
+    "narrowest": 0.0010000019959999693,
+    "refused": false,
+    "error": null
+   },
+   "256": {
+    "n_nonuniform_bases": 1,
+    "narrowest": 0.000976564496093621,
+    "refused": true,
+    "error": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 9.76564e-10 wide -- 9.766e-04 of th"
+   },
+   "300": {
+    "n_nonuniform_bases": 1,
+    "narrowest": 0.0008333353299999756,
+    "refused": true,
+    "error": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 8.33335e-10 wide -- 8.333e-04 of th"
+   },
+   "512": {
+    "n_nonuniform_bases": 1,
+    "narrowest": 0.0004882832480468142,
+    "refused": true,
+    "error": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 4.88283e-10 wide -- 4.883e-04 of th"
+   }
+  },
+  "message": "Basis1D: segment 1 of this NON-UNIFORM element grid is 8.33335e-10 wide -- 8.333e-04 of the period 1e-06, below the minimum 1e-03 this basis contracts for (walls [0.000000e+00 4.995833e-07 5.004167e-07 1.000000e-06]).\n  WHY.  The staggered stiffness carries the per-segment 1/J_n (Granet Eq. 31), so a segment this narrow carries spurious modal wavenumbers |gamma| ~ 1.07e+03 x G (G = 2 pi / period) -- modes oscillating that many times per period, against the handful a physical mode of this cell can.  Inside one grid they are harmless; across an L2 MORTAR (layer_grids='per-layer' with neighbours on other grids) the cross-grid projection conditions as 1/w^2 on the E row and 1/w^3.2 on the H row, and the damage is ENERGY-INVISIBLE -- the lossless closure stays pinned, so no tripwire fires.  MEASURED: a device that cannot depend on this wall separation at all reads a 3.4-5.4x FLOOR under its n_modes ladder (docs/audits/FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md).\n  REMEDIES.  (1) MERGE the two walls -- a feature this fine is below what the method resolves; (2) carry the fine feature on the SHARED lattice (PMM2DStackPure(..., layer_grids='shared') with an N that resolves it), where every cell is period/N and this cannot form; (3) use PMM2DStackHybrid, which is Fourier-projected and has no element grid; (4) on a TAPER, lower n_slices or stop the taper before its tip closes (the midpoint rule's narrowest sampled width is ~w_bottom / (2 n_slices)).  Raising n_modes is NOT a remedy: the spurious spectrum grows as M (M + 1).",
+  "thin_ridge": {
+   "0.005": {
+    "n_nonuniform_bases": 6,
+    "narrowest": 0.004999999999999952,
+    "refused": false,
+    "error": null
+   },
+   "0.002": {
+    "n_nonuniform_bases": 6,
+    "narrowest": 0.0019999999999999385,
+    "refused": false,
+    "error": null
+   },
+   "0.0012": {
+    "n_nonuniform_bases": 6,
+    "narrowest": 0.0011999999999999843,
+    "refused": false,
+    "error": null
+   },
+   "0.001": {
+    "n_nonuniform_bases": 6,
+    "narrowest": 0.0009999999999999692,
+    "refused": false,
+    "error": null
+   },
+   "0.0008": {
+    "n_nonuniform_bases": 1,
+    "narrowest": 0.0007999999999999543,
+    "refused": true,
+    "error": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 8e-10 wide -- 8.000e-04 of the peri"
+   },
+   "0.0005": {
+    "n_nonuniform_bases": 1,
+    "narrowest": 0.0005000000000000376,
+    "refused": true,
+    "error": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 5e-10 wide -- 5.000e-04 of the peri"
+   },
+   "0.0001": {
+    "n_nonuniform_bases": 1,
+    "narrowest": 0.00010000000000000751,
+    "refused": true,
+    "error": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 1e-10 wide -- 1.000e-04 of the peri"
+   }
+  },
+  "remedy_shared_N_needed": {
+   "0.002": 500,
+   "0.001": 1000,
+   "0.0005": 2000,
+   "0.0001": 10000
+  }
+ },
+ "nomortar_fp": {
+  "refused_by_the_contract": {
+   "0.0001": "REFUSED: Basis1D: segment 1 of this NON-UNIFORM element grid is 1.05e-10 wide -",
+   "1e-06": "REFUSED: Basis1D: segment 1 of this NON-UNIFORM element grid is 1.05e-12 wide -"
+  },
+  "accuracy_with_guard_lifted": {
+   "0.3": {
+    "4": {
+     "err": 0.4118004390404946,
+     "closure": 0.013443246251018337,
+     "n_warnings": 0
+    },
+    "5": {
+     "err": 0.3233985043798849,
+     "closure": 9.963761567988172e-05,
+     "n_warnings": 0
+    },
+    "6": {
+     "err": 0.3218441154132709,
+     "closure": 3.2499276644837316e-05,
+     "n_warnings": 0
+    }
+   },
+   "0.01": {
+    "4": {
+     "err": 0.5898202075068247,
+     "closure": 0.0031092528575891176,
+     "n_warnings": 0
+    },
+    "5": {
+     "err": 0.569638323947491,
+     "closure": 0.0029552211446288723,
+     "n_warnings": 0
+    },
+    "6": {
+     "err": 0.5152637866255736,
+     "closure": 0.0003717273234968843,
+     "n_warnings": 0
+    }
+   },
+   "0.0001": {
+    "4": {
+     "err": 0.5919088949340562,
+     "closure": 0.002417916154744848,
+     "n_warnings": 0
+    },
+    "5": {
+     "err": 0.5754562845321586,
+     "closure": 0.002524629565712866,
+     "n_warnings": 0
+    },
+    "6": {
+     "err": 0.5268811150633879,
+     "closure": 0.00027521253477313934,
+     "n_warnings": 0
+    }
+   },
+   "1e-06": {
+    "4": {
+     "err": 0.591924184069026,
+     "closure": 0.002420381423554163,
+     "n_warnings": 0
+    },
+    "5": {
+     "err": 0.5755048392883976,
+     "closure": 0.002520981854872595,
+     "n_warnings": 0
+    },
+    "6": {
+     "err": 0.5269986001427871,
+     "closure": 0.0002742687673804589,
+     "n_warnings": 0
+    }
+   }
+  }
+ },
+ "degraded": {
+  "oracle_selfgap": 1.4594572054174582e-05,
+  "band": {
+   "0.3": {
+    "6": {
+     "err": 0.01337892442522054,
+     "closure": 0.00026835894226517887,
+     "n_warnings": 0
+    },
+    "8": {
+     "err": 0.0005227532880009364,
+     "closure": 3.870203293399044e-07,
+     "n_warnings": 0
+    }
+   },
+   "0.1": {
+    "6": {
+     "err": 0.015672956157247855,
+     "closure": 0.00027199230510976946,
+     "n_warnings": 0
+    },
+    "8": {
+     "err": 0.0010904248293616206,
+     "closure": 3.892716460285328e-07,
+     "n_warnings": 0
+    }
+   },
+   "0.03": {
+    "6": {
+     "err": 0.01687034560904176,
+     "closure": 0.000275655222153004,
+     "n_warnings": 0
+    },
+    "8": {
+     "err": 0.002101339889788556,
+     "closure": 3.879198509082471e-07,
+     "n_warnings": 0
+    }
+   },
+   "0.01": {
+    "6": {
+     "err": 0.017255702888925074,
+     "closure": 0.00027651137166340156,
+     "n_warnings": 0
+    },
+    "8": {
+     "err": 0.002776557502985222,
+     "closure": 3.8717845929348016e-07,
+     "n_warnings": 0
+    }
+   },
+   "0.0041": {
+    "6": {
+     "err": 0.017541318040665534,
+     "closure": 0.00027676713647006856,
+     "n_warnings": 0
+    },
+    "8": {
+     "err": 0.0029770333291034845,
+     "closure": 3.8695973336722034e-07,
+     "n_warnings": 0
+    }
+   },
+   "0.003": {
+    "6": {
+     "err": 0.01764681499798387,
+     "closure": 0.00027681866449591475,
+     "n_warnings": 0
+    },
+    "8": {
+     "err": 0.003012944117774752,
+     "closure": 3.8691773274202035e-07,
+     "n_warnings": 0
+    }
+   },
+   "0.002": {
+    "6": {
+     "err": 0.017789106941213495,
+     "closure": 0.00027686857892472716,
+     "n_warnings": 0
+    },
+    "8": {
+     "err": 0.003043017436602846,
+     "closure": 3.868785918292872e-07,
+     "n_warnings": 0
+    }
+   },
+   "0.0015": {
+    "6": {
+     "err": 0.017893390549252788,
+     "closure": 0.00027689548669762587,
+     "n_warnings": 0
+    },
+    "8": {
+     "err": 0.0030558079418415707,
+     "closure": 3.8685812553396204e-07,
+     "n_warnings": 0
+    }
+   },
+   "0.0011": {
+    "6": {
+     "err": 0.018008200761380634,
+     "closure": 0.0002769186434228299,
+     "n_warnings": 0
+    },
+    "8": {
+     "err": 0.00306363820992972,
+     "closure": 3.868411855290077e-07,
+     "n_warnings": 0
+    }
+   },
+   "0.001": {
+    "6": {
+     "err": 0.018043838030690734,
+     "closure": 0.0002769247630960425,
+     "n_warnings": 0
+    },
+    "8": {
+     "err": 0.003065033055139721,
+     "closure": 3.868368119164245e-07,
+     "n_warnings": 0
+    }
+   }
+  }
+ }
+}
