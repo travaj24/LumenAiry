@@ -330,6 +330,9 @@ Comparison is per order, on R and T; row 0 = incident `Ex` (= TM at `phi = 0`),
 row 1 = `Ey` (= TE).
 
 **Table B5a -- the SIGN, arbitrated by the oracle** (`phi = 35 deg`, `M = 7`;
+the `phi = 10` rows read `+tan 1.79e-06 / -tan 7.29e-02` at normal and
+`1.44e-06 / 6.23e-03` at oblique 25, i.e. the wrong arm is 4.3e+03 .. 4.1e+04
+times worse on TE at every slant tested;
 "ctrl" is the same 2-D cell at slant 0 against `pmm_efficiency_1d`). Identical
 on both builds:
 
@@ -713,16 +716,18 @@ twice the FMM's per layer, but it replaces `N_b` of them.
 
 ## 11. Tests
 
-`tests/unit/test_pmm2d_staggered_slant.py` -- **68 tests**.
+`tests/unit/test_pmm2d_staggered_slant.py` -- **70 tests**.
 
 | build | wall | slowest test |
 |---|---|---|
-| WIN | **84.0 s** | 5.69 s (`test_b2_null_residual_is_discretization_and_spectral`) |
-| WSL | **77.1 s** | 5.44 s (`test_m4_slanted_pillar_vs_independent_hybrid_metric[normal]`) |
+| WIN | **81.2 s** (85.8 s under load) | 5.68 s (`test_m4_slanted_pillar_vs_independent_hybrid_metric[conical]`) |
+| WSL | **84.7 s** (measured while the WIN run was in flight) | 5.4 s |
 
 Within the plan's test-cost rule (file < 4 min, no test > 40 s, grids
 `<= (3,3)`, `M <= 8`, OMP caps at the file top). `.test_durations` spliced by
-dict union (68 new entries, nothing else touched).
+dict union (70 new entries, nothing else touched -- `--clean-durations` on a
+single-file run DROPS every other entry, so the file was restored from git and
+the 70 new keys merged in).
 
 The suite's shape, in the order it is written:
 
@@ -732,7 +737,7 @@ The suite's shape, in the order it is written:
 | `test_b2_uniform_layer_at_any_slant_is_a_noop` (5), `test_b2_null_residual_is_discretization_and_spectral` | B2 |
 | `test_b3_frame_anchor_phase_two_sided` (4) | B3 |
 | `test_b4_sheared_frame_dispersion_matches_exact_roots` (5), `test_b4_both_halves_of_the_formulation_are_load_bearing` (5), `test_b4_sum_of_roots_and_m_ladder` | B4 |
-| `test_b5_slanted_stripe_matches_1d_oracle_per_order` (6), `test_b5_wrong_slant_sign_conserves_energy` | B5 |
+| `test_b5_slanted_stripe_matches_1d_oracle_per_order` (8: slants 0/10/20/35 x normal/oblique), `test_b5_wrong_slant_sign_conserves_energy` | B5 |
 | `test_b6_slant_times_out_of_plane_matches_1d_jones` (4), `test_b6_hybrid_refuses_slant_times_out_of_plane` | B6 |
 | `test_b7_forward_backward_split_is_exactly_half` (4) | B7 |
 | `test_b8_no_forward_mode_grows_and_closure_does_not_run_away` (4) | B8 |
@@ -751,8 +756,9 @@ sha256.
 `test_pmm2d_staggered_oop_block_eig.py`, `test_pmm2d_staggered_anisotropic.py`,
 `test_pmm2d_staggered_magnetic.py`, `test_pmm2d_staggered_wood_list.py`,
 `test_v5_12_0_pmm2d_staggered.py`, `test_v5_21_pmm2d_staggered_oblique.py`,
-`test_p2c_pmm2d_stack_cascade.py`, `test_v5_14_0_pmm2d_stack.py`):
-**228 passed in 435.6 s** on WIN, after the `wave2/pmm2d` merge.
+`test_p2c_pmm2d_stack_cascade.py`, `test_v5_14_0_pmm2d_stack.py`), together
+with the new file: **296 passed in 513.1 s** on WIN, after the `wave2/pmm2d`
+merge (228 passed in 435.6 s for the eight regression files alone).
 
 `ruff check lumenairy/ tests/` clean.
 
@@ -766,7 +772,11 @@ sha256.
 | `e6ee0da` | `feat(pmm2d slant)`: `slant=` through `PMM2DStackPure`, the frame-anchor phase, the refusals, the Wood decision |
 | `0b62943` | `test(pmm2d slant)`: gates B1-B11, bars from two builds, + `validation/probe_pmm2d_staggered_slant_build/` |
 | `f23b0a3` | merge `wave2/pmm2d` (brings the prototype into the tree + the magnetic Wood `eps*mu` follow-up) |
-| (this doc) | `docs(pmm2d slant)`: the build doc, the module docstrings, `PMM_ROADMAP` Phase D -> shipped, `CHANGELOG` |
+| `c5f8ac5` | `docs(pmm2d slant)`: this document, the module scope sections, `PMM_ROADMAP` Phase D -> shipped (with the "3.4x" correction), `CHANGELOG` |
+| `1ab1578` | `docs(pmm2d slant)`: the HYBRID's slant x out-of-plane refusal now points at the pure engine (message + docstring; no behaviour change) |
+| `e021c7f` | `docs(pmm2d slant)`: three library comments re-cited from the prototype's single-build campaign to THIS build's two-build tables |
+| `101f7ee` | `test(pmm2d slant)`: the lossless trap, with the number that makes it sharp (both sign arms close energy to the SAME `3.850e-07`) |
+| `0731599` | `docs(pmm2d slant)`: the consumer per-order amplitudes are LAB-referenced |
 
 ---
 

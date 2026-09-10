@@ -542,7 +542,7 @@ def _perorder(a, b):
                for m in _ORD if m in a and m in b)
 
 
-@pytest.mark.parametrize("phi_deg", [0.0, 20.0, 35.0])
+@pytest.mark.parametrize("phi_deg", [0.0, 10.0, 20.0, 35.0])
 @pytest.mark.parametrize("theta,mount", [(0.0, "normal"),
                                          (np.deg2rad(25.0), "oblique25")])
 def test_b5_slanted_stripe_matches_1d_oracle_per_order(phi_deg, theta, mount):
@@ -562,9 +562,13 @@ def test_b5_slanted_stripe_matches_1d_oracle_per_order(phi_deg, theta, mount):
     MEASURED (M = 7, orders -1..+1, both builds agreeing to three digits):
 
         TE, slant = +tan(angle)   1.07e-07 (phi 0) .. 4.28e-06 (phi 35)
-        TE, slant = -tan(angle)   8.14e-03 .. 4.15e-01
+        TE, slant = -tan(angle)   6.23e-03 (phi 10, oblique -- the SMALLEST
+                                  wrong reading) .. 4.15e-01 (phi 35, normal)
         TM, slant = +tan(angle)   1.14e-03 (phi 0, the VERTICAL control) ..
                                   1.22e-03 -- ORACLE-limited, see below
+
+    The wrong-sign arm's ratio to the right one is 4.3e+03 .. 4.1e+04 on TE and
+    86x .. 153x on the oracle-limited TM, at every slant.
 
     Bars: TE < 1e-04 (23x above the worst reading, two decades below the
     smallest wrong-sign reading); the wrong sign > 1e-03; TM < 5e-03, which
