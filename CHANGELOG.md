@@ -2,7 +2,7 @@
 
 All notable changes to the core library are documented here.
 
-## [5.44.0] — 2026-09-10
+## [Unreleased]
 
 ### Fixed -- `PMMStack` REFUSES a near-coincident-wall SLIVER instead of returning a wrong answer (O-11)
 
@@ -87,6 +87,8 @@ same cell).  That the guard found that staircase without being aimed at it is
 the strongest available evidence its conjunction is real.
 Full write-up, both builds' tables and every bar's derivation:
 `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md`.
+
+## [5.44.0] — 2026-09-10
 
 ### Added -- a NATIVE constant-shear SLANT for the PURE staggered 2-D PMM (roadmap Phase D)
 
