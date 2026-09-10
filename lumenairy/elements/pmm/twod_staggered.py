@@ -34,6 +34,40 @@ Why this over the FMM-floored hybrid
   boundaries (Eq. 26), so ``eps`` is exact per element (no Gibbs); the total
   efficiencies are invariant to the pillar's position in the cell.
 
+Segment boundaries -- UNIFORM or ARBITRARY (Eq. 31)
+----------------------------------------------------
+Granet Eq. 31 maps EACH segment individually,
+``x = 0.5 (x_{n+1} - x_n) u + 0.5 (x_{n+1} + x_n)``, so nothing in the
+formulation requires the segments to be equal.  :class:`Basis1D` and
+:class:`Granet2DTransverseE` therefore take their per-axis segmentation as
+EITHER an ``int N`` -- the uniform lattice, and then every matrix they build is
+BIT-IDENTICAL to the pre-2026-09-11 library -- or an increasing ``(N + 1,)``
+array of wall positions.  The generalization is the scalar jacobian ``J``
+becoming a per-segment ``J_n``, at exactly four sites
+(:meth:`Basis1D._global_matrix`, :func:`_global_pair_segmat`,
+:meth:`Granet2DTransverseE._eps_dir` and :func:`_stag_fourier_projection`);
+everything else -- the reference-interval elementary matrices, the hat glue of
+Eqs. 32-33 including the Bloch ``tau`` hat, and the de Rham property
+``d(Btilde) subset span(B)`` that makes this basis spurious-free -- is
+per-segment and scale-free.
+
+This is what makes an arbitrary TAPER representable: a wall that moves 1.8 nm
+per z-slice on a 700 nm period needs ``N ~ 390`` uniform segments (``q >= 1170``,
+an eigenproblem above 2.7e+06) and THREE non-uniform ones.
+
+Per-layer element grids (the L2 mortar)
+----------------------------------------
+:class:`StagGridOps` / :class:`StagCrossOps`, :func:`_stag_cross_mass_1d` and
+:func:`_stag_kron_apply` are the basis-level ingredients of
+``PMM2DStackPure(..., layer_grids='per-layer')``, where each layer keeps its own
+segmentation and adjacent grids are coupled weakly.  The cross-mass between two
+partitions is EXACT by Gauss-Legendre on their UNION (on each union
+sub-interval both sides are polynomials of degree ``<= M-1``), it is COMPLEX
+(the Bloch ``tau`` glue lives in the basis), and its 2-D form factors exactly
+as a Kronecker product -- which is why it is never materialised (900x memory at
+``N = (6, 12), M = 6``).  The interface algebra itself lives beside its 1-D
+sibling in :mod:`lumenairy.elements.pmm._core`.
+
 Anisotropy -- FULL ``(3, 3)`` tensors, in-plane AND out-of-plane
 ----------------------------------------------------------------
 ``eps_cell`` may be a scalar ``(Nx, Ny)`` map (the isotropic solver
@@ -233,6 +267,7 @@ import numpy as np
 import scipy.linalg as sla
 from numpy.polynomial.legendre import leggauss
 
+from ...cache import ByteBudgetedLRU as _ByteBudgetedLRU
 from ..rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
 from ..rcwa._core import (  # shared flux projection + the OOP mode selector
     _norm_slant_pair,
@@ -623,18 +658,77 @@ class Basis1D:
     from the per-segment elementary matrices of the modified-Legendre functions
     (computed once by Gauss-Legendre quadrature of high order -> exact for
     polynomials).
+
+    SEGMENT BOUNDARIES (Granet Eq. 31) may be UNIFORM or ARBITRARY.  ``walls``
+    is either an ``int`` ``N`` -- the uniform lattice, and then every matrix
+    this class builds is BIT-IDENTICAL to the pre-2026-09-11 library -- or an
+    increasing ``(N + 1,)`` array of boundaries running ``0 .. d``.  Eq. 31
+    maps EACH segment individually,
+    ``x = 0.5 (x_{n+1} - x_n) u + 0.5 (x_{n+1} + x_n)``, so nothing in the
+    formulation requires the segments to be equal; the uniform lattice was an
+    implementation choice, and lifting it is what makes arbitrary tapers (walls
+    that move a few nm per z-slice) representable at all -- on a uniform
+    lattice a 1.8 nm wall offset on a 700 nm period needs ``N ~ 390``.
+
+    ``self.J`` (the ONE scalar jacobian) survives only on the uniform path and
+    is ``None`` on a non-uniform basis ON PURPOSE, so that any un-migrated
+    reader raises a ``TypeError`` immediately instead of silently applying one
+    segment's scaling to all of them.  The per-segment jacobians
+    ``self.Jn = 0.5 * diff(xb)`` are the general quantity, and the four sites
+    that consume them are :meth:`_global_matrix`, :func:`_global_pair_segmat`,
+    :meth:`Granet2DTransverseE._eps_dir` and
+    :func:`_stag_fourier_projection`.  Everything else is invariant:
+    ``m_ref``/``s_ref``/``c_ref`` live on the reference interval, the hat glue
+    (Eqs. 32-33, including the Bloch ``tau`` hat) is a statement about the
+    reference interval alone, and the de Rham property
+    ``d(Btilde) subset span(B)`` is per-segment and scale-free.
+
+    The INTEGER path is kept DISTINCT from an explicitly-passed uniform array,
+    and that is a measurement, not fastidiousness: ``np.linspace`` computes
+    ``start + i*step`` and pins the last element, so ``linspace[i+1] -
+    linspace[i]`` is not always the same double as ``d/N`` (measured 1.96e-16
+    relative at ``d = 0.9, N = 4``; exactly 0 at ``d = 1.2``).  Routing the int
+    through the array path would make the bit-identity claim conditional on the
+    period.
     """
 
-    def __init__(self, d, N, M, tau=1.0 + 0.0j):
+    def __init__(self, d, walls, M, tau=1.0 + 0.0j):
         assert M >= 3, "Basis1D needs M>=3 (M=2 gives a degenerate cardinality)"
         self.d = float(d)
-        self.N = int(N)
         self.M = int(M)
         self.tau = _C(tau)
-        self.h = self.d / self.N                 # segment length
-        self.J = 0.5 * self.h                    # dx/du jacobian
-        # segment boundaries on the eps walls (Eq.31, uniform)
-        self.xb = np.linspace(0.0, self.d, self.N + 1)
+        if np.ndim(walls) == 0:
+            # UNIFORM lattice -- the shipped path, bit for bit.
+            self.N = int(walls)
+            if self.N < 1:
+                raise ValueError(f"Basis1D: N must be >= 1, got {walls!r}.")
+            self.h = self.d / self.N             # segment length
+            self.J = 0.5 * self.h                # dx/du jacobian
+            # segment boundaries on the eps walls (Eq.31, uniform)
+            self.xb = np.linspace(0.0, self.d, self.N + 1)
+            self.Jn = np.full(self.N, self.J, dtype=float)
+            self.uniform = True
+        else:
+            xb = np.asarray(walls, dtype=float).ravel()
+            if xb.ndim != 1 or xb.size < 2:
+                raise ValueError(
+                    f"Basis1D: walls must be an int N or an increasing "
+                    f"(N + 1,) boundary array, got shape "
+                    f"{np.shape(walls)!r}.")
+            if abs(xb[0]) > 1e-13 * self.d or abs(xb[-1] - self.d) > 1e-13 * self.d:
+                raise ValueError(
+                    f"Basis1D: walls must run 0 .. d = {self.d!r}, got "
+                    f"{xb[0]!r} .. {xb[-1]!r}.")
+            if np.any(np.diff(xb) <= 0.0):
+                raise ValueError(
+                    "Basis1D: walls must be STRICTLY increasing (a zero-width "
+                    f"segment has no affine map), got {xb!r}.")
+            self.N = int(xb.size - 1)
+            self.xb = xb
+            self.Jn = 0.5 * np.diff(xb)
+            self.h = None
+            self.J = None                        # loud, not silent
+            self.uniform = False
         self._build_elementary()
         self._build_sets()
 
@@ -715,22 +809,29 @@ class Basis1D:
     def _global_matrix(self, ref, setL, setR, eps_seg=None):
         """<setL_i | (ref) | setR_j> on the period, assembled from per-segment
         elementary matrix `ref` (one of m_ref/s_ref/c_ref on reference u).
-        Physical scaling: mass-type (m_ref) -> *J ; stiffness s_ref -> *(1/J);
-        mixed c_ref (one derivative) -> *1 (the du cancels the 1/J of d/dx times
-        the J of du).  `eps_seg` (length N) multiplies the per-segment integral
+        Physical scaling: mass-type (m_ref) -> *J_n ; stiffness s_ref ->
+        *(1/J_n); mixed c_ref (one derivative) -> *1 (the du cancels the 1/J_n
+        of d/dx times the J_n of du, on EVERY segment whatever its length --
+        which is why the mixed matrix was already non-uniform-correct and needs
+        no edit).  `eps_seg` (length N) multiplies the per-segment integral
         (piecewise-constant eps; element walls on eps steps -> exact).
-        Real inner product INT x* y -> conjugate the LEFT coefficients."""
-        N, _M = self.N, self.M
+        Real inner product INT x* y -> conjugate the LEFT coefficients.
+
+        SITE 1 of 4 for non-uniform segments (Granet Eq. 31): the scale is a
+        per-segment VECTOR ``J_n``.  On the uniform path ``Jn`` is
+        ``np.full(N, 0.5 * d / N)``, i.e. exactly the ``np.ones(N) * J`` this
+        line used to build, so the assembled matrices are bit-identical."""
+        _N, _M = self.N, self.M
         if ref is self.m_ref:
-            scale = self.J
+            scale = self.Jn
         elif ref is self.s_ref:
-            scale = 1.0 / self.J
+            scale = 1.0 / self.Jn
         else:                                    # c_ref : one derivative
-            scale = 1.0
+            scale = np.ones(self.N)
         # Stack each set into a (dim, N, M) tensor for vectorized contraction.
         L_ten = np.array(setL)                    # (dimL, N, M)
         R_ten = np.array(setR)                    # (dimR, N, M)
-        w_seg = np.ones(N, dtype=_C) * scale
+        w_seg = np.asarray(scale, dtype=_C)
         if eps_seg is not None:
             w_seg = w_seg * np.asarray(eps_seg, dtype=_C)
         # out[i,j] = sum_seg w_seg[seg] * conj(L[i,seg,:]) @ ref @ R[j,seg,:]
@@ -799,20 +900,245 @@ class Basis1D:
 def _global_pair_segmat(basis: Basis1D, ref, setL, setR):
     """Like _global_matrix but returns the PER-SEGMENT contributions stacked:
     G[seg] (dimL,dimR) so the 2-D eps-weighted assembly can weight each
-    (segx,segy) cell.  ref in {m_ref}; scale handled here."""
+    (segx,segy) cell.  ref in {m_ref}; scale handled here.
+
+    SITE 2 of 4 for non-uniform segments: the scale is the per-segment
+    ``J_n`` broadcast over the segment axis.  On the uniform path every entry
+    of ``Jn`` is the scalar ``J`` this used to multiply by, so the result is
+    bit-identical (IEEE multiplication by the same double)."""
     _N, _M = basis.N, basis.M
     if ref is basis.m_ref:
-        scale = basis.J
+        scale = basis.Jn
     elif ref is basis.s_ref:
-        scale = 1.0 / basis.J
+        scale = 1.0 / basis.Jn
     else:
-        scale = 1.0
+        scale = np.ones(basis.N)
     L_ten = np.array(setL)        # (dimL,N,M)
     R_ten = np.array(setR)        # (dimR,N,M)
     RR = np.einsum("ab,jsb->jsa", ref, R_ten)            # (dimR,N,M)
-    # per-segment matrix G[s,i,j] = scale * conj(L[i,s]) . RR[j,s]
-    G = scale * np.einsum("isa,jsa->sij", np.conj(L_ten), RR)
+    # per-segment matrix G[s,i,j] = J_n[s] * conj(L[i,s]) . RR[j,s]
+    G = np.asarray(scale)[:, None, None] * np.einsum(
+        "isa,jsa->sij", np.conj(L_ten), RR)
     return G                       # (N, dimL, dimR)
+
+
+def _stag_axis_masses(bx: Basis1D, by: Basis1D):
+    """The four 1-D masses that FACTOR the V1 / V2 block field Grams:
+    ``(Mtt_x, Mbb_x, Mtt_y, Mbb_y)``.
+
+    ``G1 = kron(Mtt_y, Mbb_x)`` and ``G2 = kron(Mbb_y, Mtt_x)`` -- and these
+    are not merely LIKE the eigensolver's ``-Rmat`` blocks, they ARE them, bit
+    for bit (measured 0.0 in the probe's algebra smoke), which is why the
+    mortar reads its E-row mass operator off the same factors the assembly
+    already builds instead of rebuilding a second one.  Factored out of
+    :meth:`Granet2DTransverseE._axis_mats` so the per-layer-grid cascade
+    (:class:`~lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure` with
+    ``layer_grids='per-layer'``) shares one definition with the assembly."""
+    return (bx.mass(bx.Btilde, bx.Btilde), bx.mass(bx.B, bx.B),
+            by.mass(by.Btilde, by.Btilde), by.mass(by.B, by.B))
+
+
+# --------------------------------------------------------------------------- #
+# L2 MORTAR ingredients for PER-LAYER element grids (2-D pure staggered PMM).
+# Design + measurements: docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md
+# --------------------------------------------------------------------------- #
+def _stag_basis_fingerprint(b: Basis1D):
+    """Exact content fingerprint of a :class:`Basis1D` -- the geometry the
+    cross-mass consumes and nothing else.
+
+    The WALL ARRAY is part of the key (not an integer ``N``): with non-uniform
+    segments two bases can share ``N`` and ``M`` and be different grids.  So is
+    ``tau``: the Bloch glue (Eq. 33) is IN the basis, so an angle sweep is a
+    different basis and must not hit a cached cross-mass (open item O-8 in the
+    experiment doc proposes splitting the tau-free part; not done here)."""
+    return (float(b.d), int(b.M), complex(b.tau),
+            np.asarray(b.xb, dtype=float).tobytes())
+
+
+def _stag_cross_mass_1d(ba: Basis1D, bb: Basis1D, which: str):
+    """``C[i, j] = INT_0^d conj(phi^a_i(x)) phi^b_j(x) dx`` between the SAME
+    named global set (``'B'`` or ``'Btilde'``) on two :class:`Basis1D` objects
+    covering the same period but on DIFFERENT segmentations.
+
+    EXACT by Gauss-Legendre on the UNION of the two segment partitions: on
+    every union sub-interval both sides are polynomials of degree ``<= M-1``,
+    so ``M_a + M_b + 2`` points integrate the product exactly.  Near-coincident
+    walls of the two lattices therefore appear only in this INTEGRATION mesh
+    and NEVER as spectral elements -- the property the 1-D
+    :func:`~lumenairy.elements.pmm._core._sem_cross_mass` docstring calls the
+    decisive difference from a shared union grid, and the reason the shipped
+    1-D sliver defect at near-coincident LAYER walls has no analogue here (the
+    probe measured the pure arm smooth and monotone in the wall separation all
+    the way to zero while the 1-D oracle's own self-gap blew up).
+
+    The LEFT set is CONJUGATED, and unlike the 1-D nodal SEM's real cross-mass
+    this one is COMPLEX: :class:`Basis1D` glues its periodic hat with
+    ``tau = exp(-i alpha0 d)`` (Eq. 33), so the basis itself carries the Bloch
+    phase and both the mass and the cross-mass are complex.  ``Cab^T`` in the
+    1-D mortar algebra is therefore ``Cab^H`` here -- using the transpose is a
+    silent error at normal incidence (``tau = 1``) and O(1) at oblique.
+
+    Reduces to ``ba.mass(set, set)`` to quadrature round-off when
+    ``ba is bb`` (measured 9.8e-16)."""
+    if abs(ba.d - bb.d) > 1e-13 * max(ba.d, 1.0):
+        raise ValueError(
+            f"_stag_cross_mass_1d: the two bases must span ONE period, got "
+            f"{ba.d!r} and {bb.d!r}.")
+    Sa = np.asarray(getattr(ba, which))          # (dimA, Na, Ma)
+    Sb = np.asarray(getattr(bb, which))          # (dimB, Nb, Mb)
+    Ma, Mb = ba.M, bb.M
+    xg, wg = leggauss(Ma + Mb + 2)
+    cuts = np.unique(np.concatenate([ba.xb, bb.xb]))
+    tol = 1e-12 * ba.d
+    merged = [float(cuts[0])]
+    for x in cuts[1:]:
+        if float(x) - merged[-1] > tol:
+            merged.append(float(x))
+    C = np.zeros((Sa.shape[0], Sb.shape[0]), dtype=_C)
+    for u0, u1 in zip(merged[:-1], merged[1:]):
+        mid = 0.5 * (u0 + u1)
+        ea = min(max(int(np.searchsorted(ba.xb, mid, side="right") - 1), 0),
+                 ba.N - 1)
+        eb = min(max(int(np.searchsorted(bb.xb, mid, side="right") - 1), 0),
+                 bb.N - 1)
+        axl, axr = ba.xb[ea], ba.xb[ea + 1]
+        bxl, bxr = bb.xb[eb], bb.xb[eb + 1]
+        J = 0.5 * (u1 - u0)
+        xphys = mid + J * xg
+        Va, _ = _modleg_value_deriv(Ma, (2.0 * xphys - (axl + axr)) / (axr - axl))
+        Vb, _ = _modleg_value_deriv(Mb, (2.0 * xphys - (bxl + bxr)) / (bxr - bxl))
+        Ce = (Va * (wg * J)) @ Vb.T              # (Ma, Mb)
+        C += np.conj(Sa[:, ea, :]) @ Ce @ Sb[:, eb, :].T
+    return C
+
+
+#: Retained staggered 1-D cross-masses.  An entry is ``q_a x q_b`` complex128,
+#: i.e. KILOBYTES (0.014 MB at ``N = (3, 6), M = 6``) against the 3.09 MB the
+#: dense 2-D Kronecker product it factors would take -- see
+#: :func:`_stag_kron_apply`.  ``max_bytes=None`` = bounded by the collective
+#: ``LUMENAIRY_CACHE_BUDGET_MB`` ceiling only; ``clear_asm_caches`` drains it
+#: through the registry and ``cache_report()`` shows it by name.
+_STAG_GEO_CACHE = _ByteBudgetedLRU("pmm2d_staggered_geometry")
+
+
+def _stag_cross_mass_1d_cached(ba: Basis1D, bb: Basis1D, which: str):
+    """:func:`_stag_cross_mass_1d`, memoized on the two bases' fingerprints.
+
+    A hit returns the stored (read-only) array by identity; a miss computes the
+    identical bytes the uncached function computes."""
+    key = ("stag_cross", which, _stag_basis_fingerprint(ba),
+           _stag_basis_fingerprint(bb))
+    hit = _STAG_GEO_CACHE.get(key)
+    if hit is not None:
+        return hit
+    C = _stag_cross_mass_1d(ba, bb, which)
+    C.setflags(write=False)
+    _STAG_GEO_CACHE.put(key, C)
+    return C
+
+
+def _stag_kron_apply(Ky, Kx, X):
+    """``kron(Ky, Kx) @ X`` WITHOUT materialising the Kronecker product.
+
+    The eigensolver's index convention is ``I = jx + qx*jy`` (y slow, x fast),
+    i.e. ``np.kron(Ky, Kx)``.  ``X`` has ``qyB * qxB`` rows
+    (``qxB = Kx.shape[1]``, ``qyB = Ky.shape[1]``); the result has
+    ``qyA * qxA``.
+
+    This is an IDENTITY, not an approximation -- both 2-D field spaces are
+    tensor products and both segment partitions are rectangular, so every 2-D
+    mass and cross-mass factors exactly (measured 3.2e-16 .. 4.3e-16, i.e. BLAS
+    reassociation only).  Materialising the dense operator is a REJECTED
+    design and the measurement is not close: at ``N = (6, 12), M = 6`` the
+    dense ``C1`` is 49.4 MB against 0.055 MB for its two factors (900x) and the
+    separable apply is 49x faster -- per COMPONENT per INTERFACE, of which a
+    staircase has two and ``nlay + 1``."""
+    qxA, qxB = Kx.shape
+    qyA, qyB = Ky.shape
+    n = X.shape[1] if X.ndim == 2 else 1
+    Xr = X.reshape(qyB, qxB, n)
+    T = np.einsum("bx,yxn->ybn", Kx, Xr, optimize=True)      # (qyB, qxA, n)
+    Y = np.einsum("ay,ybn->abn", Ky, T, optimize=True)       # (qyA, qxA, n)
+    return Y.reshape(qyA * qxA, n)
+
+
+class StagGridOps:
+    """One layer's own element grid: the two :class:`Basis1D` axes and the
+    FACTORS of its V1 / V2 block field Grams.
+
+    ``V1 (E1 = Ex) = B(x) (x) Btilde(y)``  with Gram ``G1 = kron(Mtt_y, Mbb_x)``
+    ``V2 (E2 = Ey) = Btilde(x) (x) B(y)``  with Gram ``G2 = kron(Mbb_y, Mtt_x)``
+
+    and ``G = -Rmat = blkdiag(G1, G2)`` is exactly what the eigensolver
+    assembles, so ``.V1`` / ``.V2`` are the same operators bit for bit
+    (:func:`_stag_axis_masses`).  Each is held as its ``(Ky, Kx)`` FACTOR PAIR
+    and applied through :func:`_stag_kron_apply`; the dense form is never
+    built.
+
+    ``key()`` fingerprints the grid CONTENT (wall arrays, ``M``, ``tau``), so
+    two layers whose walls coincide share one grid object and their interface
+    takes the plain square modal match rather than a mortar."""
+
+    __slots__ = ("bx", "by", "M", "q", "qq", "Mtt_x", "Mbb_x", "Mtt_y",
+                 "Mbb_y", "V1", "V2", "_key")
+
+    def __init__(self, period_x, period_y, wx, wy, M, taux, tauy):
+        self.M = int(M)
+        self.bx = Basis1D(period_x, wx, M, taux)
+        self.by = Basis1D(period_y, wy, M, tauy)
+        if self.bx.dim != self.by.dim:
+            raise ValueError(
+                f"StagGridOps: the staggered tensor basis needs equal SEGMENT "
+                f"COUNTS per axis (Nx == Ny); got Nx = {self.bx.N}, "
+                f"Ny = {self.by.N}.  The wall POSITIONS may differ freely.")
+        self.q = self.bx.dim
+        self.qq = self.q * self.q
+        (self.Mtt_x, self.Mbb_x,
+         self.Mtt_y, self.Mbb_y) = _stag_axis_masses(self.bx, self.by)
+        self.V1 = (self.Mtt_y, self.Mbb_x)      # (Ky, Kx)
+        self.V2 = (self.Mbb_y, self.Mtt_x)
+        self._key = (_stag_basis_fingerprint(self.bx),
+                     _stag_basis_fingerprint(self.by))
+
+    def key(self):
+        return self._key
+
+    @property
+    def N(self):
+        return self.bx.N
+
+
+class StagCrossOps:
+    """The cross-mass between two :class:`StagGridOps`, as EXACT Kronecker
+    FACTORS::
+
+        C1 = kron( Ctt_y(A,B), Cbb_x(A,B) )      (the V1 = E1 / H2 space)
+        C2 = kron( Cbb_y(A,B), Ctt_x(A,B) )      (the V2 = E2 / H1 space)
+
+    Both factor exactly because both spaces are tensor products and both
+    partitions are rectangular.  ``C1H()`` / ``C2H()`` are the CONJUGATE
+    transposes -- the staggered basis is complex (the Bloch ``tau`` glue lives
+    IN it), so the 1-D mortar's ``Cab^T`` is ``Cab^H`` here."""
+
+    __slots__ = ("C1", "C2")
+
+    def __init__(self, ga: "StagGridOps", gb: "StagGridOps"):
+        Cbb_x = _stag_cross_mass_1d_cached(ga.bx, gb.bx, "B")
+        Ctt_x = _stag_cross_mass_1d_cached(ga.bx, gb.bx, "Btilde")
+        Cbb_y = _stag_cross_mass_1d_cached(ga.by, gb.by, "B")
+        Ctt_y = _stag_cross_mass_1d_cached(ga.by, gb.by, "Btilde")
+        self.C1 = (Ctt_y, Cbb_x)
+        self.C2 = (Cbb_y, Ctt_x)
+
+    @staticmethod
+    def _H(pair):
+        return (pair[0].conj().T, pair[1].conj().T)
+
+    def C1H(self):
+        return self._H(self.C1)
+
+    def C2H(self):
+        return self._H(self.C2)
 
 
 class Granet2DTransverseE:
@@ -822,7 +1148,15 @@ class Granet2DTransverseE:
     Parameters
     ----------
     px, py    : period (units of wavelength)
-    Nx, Ny    : segments per axis (walls on eps steps)
+    wx, wy    : per-axis segmentation -- either an ``int`` (``Nx`` / ``Ny``
+                UNIFORM segments, the shipped spelling, BIT-IDENTICAL) or an
+                increasing ``(N + 1,)`` array of SEGMENT BOUNDARIES running
+                ``0 .. period`` (Granet Eq. 31 maps each segment individually,
+                so the walls need not be equally spaced).  Arbitrary walls are
+                what makes a TAPER representable: a wall that moves 1.8 nm per
+                z-slice needs ``N ~ 390`` on a uniform lattice and 3 segments
+                on its own.  The two axes may carry DIFFERENT wall positions;
+                only the segment COUNTS must match (``bx.dim == by.dim``).
     M         : modified-Legendre functions per segment per axis (degree knob)
     eps_cell  : (Nx, Ny) array of constant SCALAR eps per segment-cell, OR
                 (Nx, Ny, 3, 3) BLOCK-FORM permittivity tensors (Granet Eq. 7,
@@ -852,7 +1186,7 @@ class Granet2DTransverseE:
                 z-staircase.
     """
 
-    def __init__(self, px, py, Nx, Ny, M, eps_cell,
+    def __init__(self, px, py, wx, wy, M, eps_cell,
                  alpha0x=0.0, alpha0y=0.0, k0=2.0 * np.pi, mu_cell=None,
                  slant=None):
         self.k0 = float(k0)
@@ -860,8 +1194,8 @@ class Granet2DTransverseE:
         self.alpha0y = float(alpha0y)
         taux = np.exp(-1j * alpha0x * px)
         tauy = np.exp(-1j * alpha0y * py)
-        self.bx = Basis1D(px, Nx, M, taux)
-        self.by = Basis1D(py, Ny, M, tauy)
+        self.bx = Basis1D(px, wx, M, taux)
+        self.by = Basis1D(py, wy, M, tauy)
         self.eps_cell = np.asarray(eps_cell, dtype=_C)   # (Nx,Ny) or (Nx,Ny,3,3)
         if self.eps_cell.ndim not in (2, 4) or (
                 self.eps_cell.ndim == 4 and self.eps_cell.shape[2:] != (3, 3)):
@@ -869,6 +1203,14 @@ class Granet2DTransverseE:
                 f"Granet2DTransverseE: eps_cell must be (Nx, Ny) scalar or "
                 f"(Nx, Ny, 3, 3) block-form tensor, got shape "
                 f"{self.eps_cell.shape}.")
+        if self.eps_cell.shape[:2] != (self.bx.N, self.by.N):
+            # With explicit WALLS the cell grid is no longer implied by the
+            # constructor arguments, so the pairing has to be checked (on the
+            # integer path it is automatic and this can never fire).
+            raise ValueError(
+                f"Granet2DTransverseE: eps_cell grid "
+                f"{self.eps_cell.shape[:2]} does not match the segmentation "
+                f"({self.bx.N}, {self.by.N}) implied by wx / wy.")
         self.q = self.bx.dim                              # = Nx*(M-1)
         assert self.bx.dim == self.by.dim, "use square (Nx*(M-1)==Ny*(M-1))"
         # SLANT (constant x-z / y-z SHEAR; roadmap Phase D, build doc
@@ -963,15 +1305,16 @@ class Granet2DTransverseE:
     # --- per-axis 1-D ingredient matrices between set pairs (no eps) ---------
     def _axis_mats(self):
         bx, by = self.bx, self.by
+        # the four MASSES -- shared with the per-layer-grid mortar, which needs
+        # exactly these as the FACTORS of the V1 / V2 block field Grams
+        # (:func:`_stag_axis_masses`; ``-Rmat``'s blocks bit for bit)
+        (self.Mtt_x, self.Mbb_x,
+         self.Mtt_y, self.Mbb_y) = _stag_axis_masses(bx, by)
         # x-axis
-        self.Mtt_x = bx.mass(bx.Btilde, bx.Btilde)        # <til|til>
-        self.Mbb_x = bx.mass(bx.B, bx.B)                  # <B|B>
         self.Ctb_x = bx.mixed(bx.Btilde, bx.B)            # <til| d B>
         self.Cbt_x = bx.mixed(bx.B, bx.Btilde)            # <B  | d til>
         self.Ctt_x = bx.mixed(bx.Btilde, bx.Btilde)       # <til| d til>
         # y-axis
-        self.Mtt_y = by.mass(by.Btilde, by.Btilde)
-        self.Mbb_y = by.mass(by.B, by.B)
         self.Ctb_y = by.mixed(by.Btilde, by.B)
         self.Cbt_y = by.mixed(by.B, by.Btilde)
         self.Ctt_y = by.mixed(by.Btilde, by.Btilde)
@@ -1529,17 +1872,21 @@ class Granet2DTransverseE:
             sR = getattr(basis, rset)
             Lt = np.array(sL)
             Rt = np.array(sR)
+            # SITE 3 of 4 for non-uniform segments: per-segment ``J_n``.  On
+            # the uniform path ``Jn`` is the constant ``J`` this multiplied
+            # by, so the assembly is bit-identical.
             if op == "m":                           # mass (no deriv)
                 RR = np.einsum("ab,jsb->jsa", basis.m_ref, Rt)
-                scale = basis.J
+                scale = basis.Jn
             elif op == "dL":                        # deriv on LEFT (test): INT (dL) R
                 # c_ref[a,b]=INT La' Lb -> INT (dL_a) R_b = conj(L)@c_ref@R
                 RR = np.einsum("ab,jsb->jsa", basis.c_ref, Rt)
-                scale = 1.0
+                scale = np.ones(basis.N)
             else:                                   # 'd' deriv on trial (right): INT L (dR)
                 RR = np.einsum("ab,jsb->jsa", basis.c_ref.T, Rt)
-                scale = 1.0
-            return scale * np.einsum("isa,jsa->sij", np.conj(Lt), RR)
+                scale = np.ones(basis.N)
+            return np.asarray(scale)[:, None, None] * np.einsum(
+                "isa,jsa->sij", np.conj(Lt), RR)
         Gx = segmat(bx, lx, opx, rx)
         Gy = segmat(by, ly, opy, ry)
         eps = self.eps_cell if wmap is None else wmap
@@ -1605,9 +1952,13 @@ def _stag_fourier_projection(basis: Basis1D, orders, alpha0=0.0):
     # per-order oracle test vs pmm_efficiency_2d_cell pinned the form
     # stag[m] = oracle[-m]*kz(m)/kz(-m) before this fix).
     #   c[m, seg, a] = (1/d) INT_seg Ltilde_a(u(x)) e^{+i(mG + alpha0)x} dx
+    # SITE 4 of 4 for non-uniform segments: the quadrature points and the
+    # ``J/d`` weight come from segment ``n``'s OWN affine map (Eq. 31).  On the
+    # uniform path ``Jn[seg]`` is the constant ``J``, so the projector is
+    # bit-identical.
     T_local = np.zeros((len(orders), N, M), dtype=_C)
-    J = basis.J
     for seg in range(N):
+        J = basis.Jn[seg]
         xphys = 0.5 * (xb[seg] + xb[seg + 1]) + J * xg     # physical x at quad pts
         phase = np.exp(1j * np.outer(orders * G + alpha0, xphys))   # (nO, nq)
         # contribution[m,a] = (J/d) sum_q phase[m,q] wg[q] Vref[a,q]
@@ -1792,6 +2143,17 @@ def _stag_parity_1d(basis: Basis1D):
     """
     if basis.tau != 1.0:
         return None
+    if not basis.uniform:
+        # NON-UNIFORM walls: ``x -> d - x`` sends segment ``n`` to ``N-1-n``,
+        # which is a signed permutation of the LOCAL functions only when the
+        # two segments have the same length (their affine maps must agree).  A
+        # mirror-symmetric wall set qualifies; anything else does not, and the
+        # honest answer is "no parity structure" -- the caller then runs the
+        # dense 4 q^2 eig, which is the correct-by-construction path.
+        seglen = np.diff(basis.xb)
+        if not np.allclose(seglen, seglen[::-1], rtol=0.0,
+                           atol=1e-13 * basis.d):
+            return None
     N, M = basis.N, basis.M
     seg = np.arange(N)
     # --- Btilde: N hats (node j) then bubbles at N + seg*(M-2) + (a-2)

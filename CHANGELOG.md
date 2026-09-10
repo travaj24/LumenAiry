@@ -89,6 +89,115 @@ Full write-up, both builds' tables and every bar's derivation:
 `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md`.
 
 ## [5.44.0] — 2026-09-10
+### Added -- PER-LAYER element grids (L2 mortar) + NON-UNIFORM segment boundaries for the PURE staggered 2-D PMM
+
+Two coupled changes that only pay together, and between them they make an
+ARBITRARY TAPER reachable on the no-floor engine for the first time.
+
+**Non-uniform segment boundaries (Granet 2023 Eq. 31).**  `Basis1D(d, walls, M,
+tau)` and `Granet2DTransverseE(px, py, wx, wy, M, eps_cell)` now take their
+per-axis segmentation as EITHER an `int N` -- the uniform lattice -- or an
+increasing `(N+1,)` array of wall positions.  Eq. 31 maps each segment
+individually, so the uniform lattice was only ever an implementation choice;
+the whole change is the scalar jacobian `J` becoming a per-segment `J_n` at
+FOUR sites.  `Basis1D.mixed` needed no edit at all (the `du` of the integral
+cancels the `1/J_n` of `d/dx` on every segment whatever its length), and the de
+Rham property that makes this basis spurious-free is per-segment and
+scale-free.  `Basis1D.J` is `None` on a non-uniform basis ON PURPOSE, so an
+un-migrated reader raises a `TypeError` instead of silently applying one
+segment's scaling to all of them.
+
+The INTEGER path is BIT-IDENTICAL to the previous library: 48 matrix hashes
+over 6 grids x 8 families against a scalar-`J` reimplementation (worst
+`|d| = 0.0e+00`, 0 hash mismatches), and the assembled 2-D pencils
+`Rmat / Lmat / Stt / Schur / Agen / Bgen` over 3 grids x 5 cell kinds (scalar,
+in-plane tensor, out-of-plane, magnetic, slanted) identical byte for byte.  The
+int is kept a DISTINCT code path because `np.linspace` computes `start + i*step`
+and pins its last element, so `linspace[i+1] - linspace[i]` is not always the
+same double as `d/N` (measured 1.96e-16 relative at `d = 0.9, N = 4`) --
+routing the int through the array path would make the identity claim depend on
+the period.
+
+**Per-layer element grids.**  `PMM2DStackPure(..., layer_grids='shared' |
+'per-layer')` -- the 1-D `PMMStack` spelling, hyphen included.  `'shared'` is
+the default and is the union-grid path unchanged; `'per-layer'` drops the
+union-grid raise, gives every layer its own grid and its own `n_modes`, and
+couples adjacent grids by an L2 MORTAR (tangential E tested on the lower
+layer's trace space, tangential H on the upper layer's; rectangular S-matrices
+cascaded by the existing `_redheffer_star_rect`).  Two layers whose grids
+coincide bypass the mortar and reproduce `'shared'` BIT-EXACTLY.
+
+    st = PMM2DStackPure(period, n_modes=8, layer_grids="per-layer")
+    st.add_layer(t, eps_cell=tile, x_walls=[x0, x1], y_walls=[y0, y1])
+    st.add_layer(t, eps=2.25, grid=1)          # uniform: no walls of its own
+    st.add_tapered_pillar(t, eps_pillar=..., eps_host=..., n_slices=6)
+
+`x_walls` / `y_walls` place a patterned layer's walls freely (`eps_cell` is
+then the STRIP TILE -- literally the hybrid's `tile`, which is what lets
+`add_tapered_pillar` transplant verbatim); `grid=` sizes a UNIFORM layer, which
+has no walls of its own; `n_modes=` is the per-layer modal count.  A patterned
+layer's segment COUNT always comes from its own cell and is never a free
+parameter, because a pillar 1/2 of the period wide exists on `N in {2,4,...}`
+and one 1/3 wide on `N in {3,6,...}` -- accepting a free `N` would silently
+change the DEVICE.  `window_halfwidth` RAISES: on a segment partition the only
+partition carrying two layers' walls is their common refinement, i.e. the union
+grid, so there is no local enrichment to widen.
+
+**The one genuinely 2-D piece.**  The 1-D mortar's `kron(I_2, .)` block
+operator does NOT carry over: here `E1` and `E2` live in DIFFERENT
+tensor-product spaces and the Eq.-25 H partner SWAPS them, so `MassH =
+blkdiag(G2, G1)` and `CrossH = blkdiag(C2, C1)` while `MassE = blkdiag(G1, G2)`.
+The swap is SILENT on a conforming interface (there `C1 = G1`, `C2 = G2` and it
+cancels identically), so no identity-class gate can see it -- measured
+fail-before on a non-conforming pair: with the swap 5.8e-03 from the reference
+and closure 1.0e-08, without it 8.0e+00 and 2.8e+01.  Cross-masses are COMPLEX
+(the Bloch `tau` glue lives in the basis), so the 1-D `Cab^T` becomes `Cab^H`;
+using the transpose would be silent at normal incidence.
+
+**Also in this change.**  Half-spaces ride the END layers' grids, so no mortar
+sits where the far field is projected and there are two projectors; the
+far-field order capacity is DERIVED from those grids (`n_orders <= (q-1)//2`
+with `q = N (M-1)`) and RAISES above it rather than quietly retaining aliased
+order slots; the region-eig cache is keyed on `(walls, tau, M, cell bytes,
+slant)`; `retain_internal` / `layer_absorption` use the rectangular star and
+PER-LAYER field Grams applied separably (cross-machinery budget closure
+measured 5.4e-04 on a non-conforming lossy pair); and a UNIFORM layer's
+`n_modes` defaults to the measured neighbour rule
+`M_u = max(q_prev, q_next) / N_u + 1` rather than to the stack's `M` -- `N = 1`
+is the cheapest region the engine can express and is 1-5 decades better per
+degree of freedom in isolation, but `N = 1` at the stack's `M` is a trap
+(3-6x worse in a cascade).
+
+**Tapers on the no-floor engine.**  `PMM2DStackPure.add_tapered_pillar` and
+`add_tapered_pillars` transplant the hybrid's surfaces: an auto-sliced
+z-staircase of exact-wall scalar layers, each slice on its OWN non-uniform
+grid, no two slices sharing a wall.  A wall moving 1.8 nm per slice on a 700 nm
+period costs `q = 3(M-1)` -- an eigenproblem of 1152 at `M = 9` -- against the
+`q >= 1170` and 2.7e+06-dimension pencil a uniform lattice would need.
+
+**What this does NOT claim.**  Per-layer grids are not faster per degree of
+freedom in general.  At EQUAL DOF the per-layer arm measured 7.6x / 7.3x more
+accurate than the union grid at `q = 18 / 24` on a stripe pair and 1.48x WORSE
+at `q = 30` once both arms converge; on a corner-dominated 2-D pillar pair the
+crossing moves earlier, to between `q = 18` and `q = 24`.  The durable half is
+the two-sided lossless closure, 170x-5142x tighter with no decay.  What IS
+structural is the DOF FLOOR: on a 3-slice staircase with per-slice `N = 2, 3, 4`
+the union lattice is `N = 12` and cannot be run below `q = 24` at all, where
+per-layer reaches `q = 12` -- 64x less eig work, 1832x at production `M`, and
+2.97 GB per matrix versus 0.037 GB at `M = 8`.
+
+**The usability cost, stated plainly:** a per-layer solve can be STATIONARY IN
+ONE KNOB AND WRONG.  Measured on a two-layer pillar pair, walking one layer's
+`n_modes` across four rungs gave an answer stationary to 4 % and wrong by 27 %
+-- and not even monotone -- because the other layer was the limiting error the
+whole time.  The stopping criterion is stationarity in EVERY `n_modes`, and
+`PMM2DStackPure.convergence_floor()` is the cheap screen: each layer's own
+single-layer residual, a measured lower bound on the stack error at 15 of 16
+surface points, at one region eig per layer instead of the stack's.
+
+Experiment: `docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md`.
+Build: `docs/audits/BUILD_PMM2D_STAGGERED_MORTAR_2026_09_11.md`.
+
 
 ### Added -- a NATIVE constant-shear SLANT for the PURE staggered 2-D PMM (roadmap Phase D)
 

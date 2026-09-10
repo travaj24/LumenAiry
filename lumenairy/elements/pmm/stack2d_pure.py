@@ -24,11 +24,14 @@ vs PMM2DStackHybrid
 * **No Fourier floor.**  Patterned-layer energy/accuracy is ``n_orders``-
   independent; raise the modal degree ``n_modes`` (``M``) to converge.
 * **Exact sidewalls + position invariance** (walls land on the ``eps_cell`` grid).
-* **UNION-GRID constraint.**  All patterned layers share ONE common SQUARE
-  ``(Nx, Ny)`` segmentation (the 1-D :class:`PMMStack` union grid lifted to 2-D):
-  the modal matrices must be conformable across interfaces.  The hybrid decouples
-  layers through the Fourier projection, so it has NO union-grid constraint (walls
-  may differ per layer).  Re-express each layer's pattern on a common grid.
+* **Union grid by DEFAULT, not by necessity.**  ``layer_grids='shared'`` (the
+  default) puts all patterned layers on ONE common SQUARE ``(Nx, Ny)``
+  segmentation -- the 1-D :class:`PMMStack` union grid lifted to 2-D -- so the
+  modal matrices are conformable across every interface.
+  ``layer_grids='per-layer'`` lifts that: each layer keeps its OWN grid and its
+  own modal count, and adjacent grids are coupled by an L2 MORTAR (see
+  "Per-layer element grids" below).  The hybrid decouples layers through its
+  Fourier projection and so never had the constraint at all.
 
 Scope
 -----
@@ -88,8 +91,51 @@ slant, and ``retain_internal`` on a slanted stack.  See
 :mod:`lumenairy.elements.pmm.twod_staggered`, "SLANT".
 
 A shear is NOT a TAPER -- a taper shrinks the cross-section and no shear
-absorbs a dilation.  Tapered (z-staircase) helpers remain hybrid-only: use
-:class:`PMM2DStackHybrid`.
+absorbs a dilation, so a tapered feature still needs a z-staircase.  That
+staircase is now available on THIS engine too:
+:meth:`PMM2DStackPure.add_tapered_pillar` / :meth:`add_tapered_pillars` with
+``layer_grids='per-layer'`` put each slice on its own NON-UNIFORM grid at
+exact walls (see below).
+
+Per-layer element grids (``layer_grids='per-layer'``)
+-----------------------------------------------------
+Every layer carries its OWN segmentation and its own ``n_modes``, and adjacent
+grids are coupled WEAKLY: tangential E is tested against the lower layer's
+trace space and tangential H against the upper layer's (the classic
+mode-matching pairing, which keeps the interface system square for unequal
+mode counts), with the resulting rectangular S-matrices cascaded by
+``_redheffer_star_rect``.  Two layers whose grids COINCIDE bypass the mortar
+entirely and reproduce ``layer_grids='shared'`` BIT-EXACTLY.
+
+* ``add_layer(..., x_walls=, y_walls=)`` gives a PATTERNED layer arbitrary wall
+  POSITIONS (``eps_cell`` is then the strip TILE, exactly the hybrid's
+  geometry description); its segment COUNT always comes from that cell and is
+  never a free parameter, because a pillar 1/2 of the period wide exists on
+  ``N in {2,4,...}`` and one 1/3 wide on ``N in {3,6,...}`` -- accepting a free
+  ``N`` would silently change the DEVICE.
+* ``add_layer(..., grid=)`` applies to UNIFORM layers, which have no walls of
+  their own; it defaults to ``1``, the cheapest region the engine can express.
+* ``add_layer(..., n_modes=)`` is the per-layer modal count and is the lever
+  that makes the mode pay.  A uniform layer's default is NOT the stack's ``M``
+  but the measured neighbour rule ``M_u = max(q_prev, q_next) / N_u + 1``:
+  ``N = 1`` is cheap, ``N = 1`` at the stack's ``M`` is a trap.
+* The far-field order capacity is set by the END grids (the half-spaces ride
+  them), ``n_orders <= (q - 1) // 2`` with ``q = N (M - 1)``; asking for more
+  RAISES rather than silently retaining aliased order slots.
+* ``window_halfwidth`` RAISES.  On a segment partition the only partition
+  carrying two layers' walls is their common refinement -- the union grid
+  itself -- so there is no local enrichment to widen.  Per-layer grids here are
+  own-walls-only, and own-walls-only works.
+
+**A per-layer solve can be STATIONARY IN ONE KNOB AND WRONG.**  Measured on a
+two-layer pillar pair: walking one layer's ``n_modes`` across four rungs gave
+an answer stationary to 4 % and wrong by 27 %, because the OTHER layer was the
+limiting error the whole time -- and it was not even monotone.  The stopping
+criterion is therefore stationarity in EVERY ``n_modes``, screened first by
+:meth:`convergence_floor`, whose per-layer own-residual is a measured LOWER
+BOUND on the stack's error (15 of 16 surface points) and costs one region eig
+per layer instead of the stack's.  The union grid's single ``M`` is
+*convenient* precisely because it cannot be mis-set per layer.
 Uniform SCALAR layers route through the shared eps-free geometric eig
 (:func:`~lumenairy.elements.pmm.twod_staggered._homog_region_modes`) -- all
 uniform regions share the SAME eigenvectors, so a uniform<->uniform interface is
@@ -131,12 +177,17 @@ from ._core import (
     PerOrderAmplitudesMixin,
     _guarded_lstsq,
     _interface_smatrix,
+    _interface_smatrix_general_mortar_2d,
+    _interface_smatrix_mortar_2d,
     _propagation_smatrix,
     _redheffer_star,
+    _redheffer_star_rect,
 )
 from .twod_staggered import (
     _C,
     Granet2DTransverseE,
+    StagCrossOps,
+    StagGridOps,
     _far_projector_2d,
     _homog_geom_cache,
     _homog_region_modes,
@@ -147,6 +198,7 @@ from .twod_staggered import (
     _region_modes_oop,
     _require_inplane_mu,
     _require_nonmagnetic_halfspace,
+    _stag_kron_apply,
     _tile_needs_oop,
     _validate_stag_cell,
     _validate_stag_mu,
@@ -191,6 +243,62 @@ def _as_layer_cell(spec, uniform, Nx, Ny):
     if spec.ndim == 0:
         return np.full((Nx, Ny), spec, dtype=_C)
     return np.ascontiguousarray(np.broadcast_to(spec, (Nx, Ny, 3, 3)))
+
+
+def _stag_walls_spec(period, walls, n_default, axis, fn):
+    """A layer's per-axis segmentation as either an ``int`` (the UNIFORM
+    lattice) or a full ``(N + 1,)`` boundary array on ``[0, period]``.
+
+    ``walls=None`` returns the INT ``n_default`` -- and returning the int
+    rather than ``np.linspace`` is load-bearing: ``Basis1D`` keeps a distinct
+    integer path because ``linspace`` computes ``start + i*step`` and pins its
+    last element, so ``linspace[i+1] - linspace[i]`` is not always the same
+    double as ``d/N`` (measured 1.96e-16 relative at ``d = 0.9, N = 4``).  The
+    int is what makes "``x_walls=None`` is bit-identical to today" true for
+    every period.
+
+    A given ``walls`` is accepted in EITHER of the two spellings the library
+    already uses: the hybrid's INTERIOR wall list (``add_tapered_pillar``'s
+    ``xw``, which excludes ``0`` and ``period``) or a full boundary array."""
+    if walls is None:
+        return int(n_default)
+    w = np.asarray(walls, dtype=float).ravel()
+    if w.size == 0:
+        raise ValueError(
+            f"{fn}: {axis} must name at least one wall (or be None for the "
+            f"uniform lattice).")
+    if np.any(np.diff(w) <= 0.0):
+        raise ValueError(
+            f"{fn}: {axis} must be STRICTLY increasing, got {w!r}.")
+    tol = 1e-12 * period
+    if abs(w[0]) <= tol and abs(w[-1] - period) <= tol:
+        full = w.copy()
+        full[0] = 0.0
+        full[-1] = period
+    else:
+        if not (0.0 < w[0] and w[-1] < period):
+            raise ValueError(
+                f"{fn}: {axis} interior walls must satisfy "
+                f"0 < w < period = {period!r}, got {w!r}.  (A FULL boundary "
+                f"array starting at 0 and ending at the period is also "
+                f"accepted.)")
+        full = np.concatenate([[0.0], w, [period]])
+    if full.size < 2:
+        raise ValueError(f"{fn}: {axis} yields fewer than one segment.")
+    return full
+
+
+def _stag_walls_n(spec):
+    """Segment count of a :func:`_stag_walls_spec` result."""
+    return int(spec) if np.ndim(spec) == 0 else int(np.size(spec) - 1)
+
+
+def _stag_interior(spec):
+    """The INTERIOR walls of a :func:`_stag_walls_spec` result, or ``None`` on
+    the uniform (integer) path -- the form :meth:`add_layer` takes back."""
+    if np.ndim(spec) == 0:
+        return None
+    return np.asarray(spec, dtype=float)[1:-1].copy()
 
 
 def _spec_is_lossless(spec, uniform):
@@ -414,6 +522,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         Half-width of the retained Rayleigh order set for the once-only forward
         far-field projection.  The result is independent of this (no floor) as
         long as it covers the propagating orders.  Default 7.
+    layer_grids : {'shared', 'per-layer'}, optional
+        ``'shared'`` (default) solves ONE union grid at ONE modal count and is
+        the pre-2026-09-11 path unchanged.  ``'per-layer'`` gives every layer
+        its own element grid and its own ``n_modes``, coupled by an L2 mortar;
+        see "Per-layer element grids" in the module docstring, and note that
+        it makes ``n_modes`` a PER-LAYER knob whose convergence must be checked
+        per layer (:meth:`convergence_floor`).  A per-layer stack whose grids
+        happen to coincide is BIT-EXACT against ``'shared'``.
+    window_halfwidth : optional
+        Accepted only to RAISE.  The 1-D per-layer surface enriches each
+        layer's grid with its neighbours' walls; in this basis that means their
+        common refinement, i.e. the union grid, so there is nothing to widen.
     symmetry : {'auto', True, False}, optional
         Opt into the PARITY-sign block reduction of the OUT-OF-PLANE region
         solve (``lumenairy.elements.pmm.twod_staggered._stag_block_eig``): one
@@ -429,7 +549,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
     def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
                  n_substrate=1.0, n_modes=8, degree=None, n_orders=7,
-                 mu_superstrate=None, mu_substrate=None, symmetry="auto"):
+                 mu_superstrate=None, mu_substrate=None, symmetry="auto",
+                 layer_grids="shared", window_halfwidth=None):
         # The half-spaces are NONMAGNETIC (mu = 1) and isotropic: the Rayleigh
         # far field normalises with the vacuum wave impedance.  Accepting the
         # keyword and RAISING is the loud form of that restriction (a silently
@@ -454,6 +575,35 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         # cell that is its own parity image) and falls back to the dense
         # 4 q^2 eig bit-for-bit otherwise.  False forces the dense path.
         self.symmetry = _symmetry_on(symmetry)
+        if layer_grids not in ("shared", "per-layer"):
+            raise ValueError(
+                "PMM2DStackPure: layer_grids must be 'shared' or 'per-layer' "
+                f"(the 1-D PMMStack spelling, hyphen included), got "
+                f"{layer_grids!r}.")
+        self.layer_grids = layer_grids
+        if window_halfwidth is not None:
+            # The 1-D per-layer surface enriches each layer's grid with its
+            # NEIGHBOURS' walls (a "window"), because own-walls-only was
+            # MEASURED there to leave a 75-83 % degree spread.  In THIS basis a
+            # window is unrepresentable: Granet's segmentation is one
+            # partition of the period, so the only partition containing two
+            # layers' walls is their common refinement -- which IS the union
+            # grid this mode exists to avoid.  Per-layer grids here are
+            # necessarily own-walls-only, and own-walls-only WORKS (the 1-D
+            # failure was a nodal-SEM boundary-layer defect at arbitrary wall
+            # positions and does not transfer: measured 7.6x / 7.3x MORE
+            # accurate than the union grid at equal DOF on a stripe pair, 1.9x
+            # / 5.5x on a corner-dominated 2-D pillar pair).  So there is
+            # nothing to widen, and a silently ignored keyword would be worse
+            # than a refusal.
+            raise ValueError(
+                "PMM2DStackPure: window_halfwidth has no meaning in the "
+                "staggered basis.  A per-layer grid here is a SEGMENT "
+                "PARTITION of the period, so enriching a layer's grid with "
+                "its neighbours' walls means their common refinement -- the "
+                "union grid itself.  Per-layer grids are own-walls-only "
+                "(measured MORE accurate than the union grid at equal degrees "
+                "of freedom); drop the keyword.")
         self._layers = []          # dicts: kind, thickness, eps | eps_cell
         self._grid = None          # common (Nx, Ny) set by the first patterned layer
         self._src = None
@@ -462,7 +612,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
     # ------------------------------------------------------------------ build
     def add_layer(self, thickness, *, eps=None, eps_cell=None, mu=None,
-                  mu_cell=None, slant=None):
+                  mu_cell=None, slant=None, x_walls=None, y_walls=None,
+                  grid=None, n_modes=None):
         """Append a layer.  Pass exactly ONE of ``eps`` or ``eps_cell``, and
         at most one of ``mu`` (uniform) or ``mu_cell`` (patterned).
 
@@ -476,8 +627,27 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
         ``eps_cell`` is a PATTERNED layer: a SQUARE ``(Nx, Ny)`` scalar grid, or
         a ``(Nx, Ny, 3, 3)`` block-form tensor grid (walls on the segment
-        boundaries).  All patterned layers must share one common ``(Nx, Ny)``
-        grid (union-grid constraint).
+        boundaries).  With ``layer_grids='shared'`` all patterned layers must
+        share one common ``(Nx, Ny)`` grid (the union-grid constraint); with
+        ``'per-layer'`` each keeps its own.
+
+        ``x_walls`` / ``y_walls`` (``layer_grids='per-layer'`` only) place a
+        patterned layer's walls FREELY -- the INTERIOR wall positions in metres
+        (a full ``0 .. period`` boundary array is also accepted), so
+        ``eps_cell`` becomes the STRIP TILE of shape
+        ``(len(x_walls) + 1, len(y_walls) + 1)``: literally the hybrid's
+        ``tile``, which is what lets a taper staircase move between the two
+        2-D engines unchanged.  ``None`` is the uniform lattice implied by
+        ``eps_cell.shape`` and is BIT-IDENTICAL to the pre-2026-09-11 library.
+        The two axes may carry DIFFERENT wall positions; only the segment
+        COUNTS must match.
+
+        ``grid`` (``'per-layer'`` only) is a UNIFORM layer's segment count --
+        uniform layers have no walls of their own -- and defaults to 1.
+        ``n_modes`` (``'per-layer'`` only) overrides the stack's modal count
+        for this layer; for a UNIFORM layer it defaults to the measured
+        neighbour rule ``max(q_prev, q_next) / N_u + 1`` rather than to the
+        stack's ``M``.
 
         OUT-OF-PLANE tensor coupling (``e_xz``/``e_yz``/``e_zx``/``e_zy``
         above a RELATIVE ``1e-12`` floor) routes that layer to the first-order
@@ -538,6 +708,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             raise ValueError(
                 "PMM2DStackPure.add_layer: pass exactly ONE of eps (uniform) or "
                 "eps_cell (patterned).")
+        _pl = self._perlayer_spec(eps, eps_cell, x_walls, y_walls, grid,
+                                  n_modes)
         t = float(thickness)
         if not t > 0:
             raise ValueError("PMM2DStackPure.add_layer: thickness must be > 0.")
@@ -552,13 +724,14 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     "The shear's own metric anisotropy is absorbed "
                     "analytically; a MATERIAL mu is not.  Drop mu, or "
                     "z-staircase the slanted magnetic layer.")
-            return self._add_magnetic_layer(t, eps, eps_cell, mu, mu_cell)
+            self._add_magnetic_layer(t, eps, eps_cell, mu, mu_cell)
+            return self._finish_layer(_pl)
         if eps is not None:
             e = np.asarray(eps, dtype=_C)
             if e.ndim == 0:
                 self._layers.append(dict(kind="uniform", thickness=t,
                                          eps=_C(eps), slant=sl))
-                return self
+                return self._finish_layer(_pl)
             if e.shape != (3, 3):
                 raise ValueError(
                     f"PMM2DStackPure.add_layer: a uniform eps must be a scalar "
@@ -568,20 +741,117 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             _tile_needs_oop("PMM2DStackPure.add_layer", e[None, None])
             self._layers.append(dict(kind="uniform_tensor", thickness=t,
                                      eps33=e, slant=sl))
-            return self
+            return self._finish_layer(_pl)
         cell = _validate_stag_cell("PMM2DStackPure.add_layer", eps_cell)
-        grid = cell.shape[:2]
-        if self._grid is None:
-            self._grid = grid
-        elif grid != self._grid:
-            raise ValueError(
-                f"PMM2DStackPure.add_layer: all patterned layers must share ONE "
-                f"common (Nx, Ny) grid (the union-grid constraint of the pure "
-                f"staggered cascade); got {grid} after {self._grid}.  "
-                f"Re-express every pattern on a common grid, or use "
-                f"PMM2DStackHybrid (no union-grid constraint).")
+        cgrid = cell.shape[:2]
+        if self.layer_grids == "shared":
+            if self._grid is None:
+                self._grid = cgrid
+            elif cgrid != self._grid:
+                raise ValueError(
+                    f"PMM2DStackPure.add_layer: all patterned layers must share "
+                    f"ONE common (Nx, Ny) grid (the union-grid constraint of the "
+                    f"pure staggered cascade); got {cgrid} after {self._grid}.  "
+                    f"Re-express every pattern on a common grid, pass "
+                    f"layer_grids='per-layer' (each layer keeps its own grid, "
+                    f"coupled by an L2 mortar), or use PMM2DStackHybrid (no "
+                    f"union-grid constraint).")
         self._layers.append(dict(kind="patterned", thickness=t, eps_cell=cell,
                                  slant=sl))
+        return self._finish_layer(_pl)
+
+    def _perlayer_spec(self, eps, eps_cell, x_walls, y_walls, grid, n_modes):
+        """Validate the four PER-LAYER-GRID keywords and turn them into the
+        record fields ``(wx, wy, M)`` -- or ``{}`` on the shared path, where
+        all four are REFUSED.
+
+        The rules are measurements, not taste:
+
+        * a PATTERNED layer's segment COUNT comes from its own ``eps_cell``
+          (and its wall POSITIONS from ``x_walls`` / ``y_walls`` when given),
+          never from ``grid=``.  Which grids are admissible is a GEOMETRY
+          question: a pillar 1/2 of the period wide exists on ``N in {2,4,..}``
+          and one 1/3 wide on ``N in {3,6,..}``, so accepting a free ``N`` for
+          a patterned layer silently changes the DEVICE.  (The probe made
+          exactly that mistake once and had to withdraw the arm.)
+        * a UNIFORM layer has no walls of its own, so ``grid=`` is legal there
+          and defaults to 1 -- the cheapest region the engine can express, and
+          measured 1-5 DECADES better than ``N = 2`` or ``3`` per degree of
+          freedom at every angle, including conical, because the field is ONE
+          plane wave and degree is the right currency.
+        * ``n_modes=`` is the per-layer modal count and it is the lever that
+          makes this mode pay.  For a UNIFORM layer it must NOT default to the
+          stack's ``M``: inside a cascade the uniform layer must also carry the
+          NEIGHBOURS' traces, and at the stack default a ``grid = 1`` layer
+          measured 3-6x worse than ``grid = 2/3``.  The MEASURED rule is
+          ``M_u = max(q_prev, q_next) / grid + 1`` (at matched ``q_u`` the grid
+          choice does not matter at all -- three columns agreeing to 3 %), and
+          :meth:`solve` applies it when ``n_modes`` is not given for a uniform
+          layer.  ``N = 1`` is cheap; ``N = 1`` at the stack's ``M`` is a trap.
+        """
+        given = {"x_walls": x_walls, "y_walls": y_walls, "grid": grid,
+                 "n_modes": n_modes}
+        if self.layer_grids == "shared":
+            bad = sorted(k for k, v in given.items() if v is not None)
+            if bad:
+                raise ValueError(
+                    f"PMM2DStackPure.add_layer: {', '.join(bad)} "
+                    f"{'is' if len(bad) == 1 else 'are'} only meaningful with "
+                    f"layer_grids='per-layer' -- the shared path solves ONE "
+                    f"union grid at ONE modal count, which is exactly what "
+                    f"makes it impossible to mis-set per layer.  Construct the "
+                    f"stack with PMM2DStackPure(..., layer_grids='per-layer').")
+            return {}
+        fn = "PMM2DStackPure.add_layer"
+        M = self.M if n_modes is None else int(n_modes)
+        if M < 3:
+            raise ValueError(
+                f"{fn}: n_modes (modified-Legendre count M) must be >= 3, got "
+                f"{n_modes!r}.")
+        if eps_cell is not None:
+            if grid is not None:
+                raise ValueError(
+                    f"{fn}: grid= is not accepted for a PATTERNED layer -- its "
+                    f"segment count comes from its own eps_cell, which is what "
+                    f"names the walls.  Asking for a 1/2-wide pillar 'on N=3' "
+                    f"would silently make it 2/3 wide.  Pass the cell you "
+                    f"want (and x_walls / y_walls to place its walls freely).")
+            cell = np.asarray(eps_cell)
+            nx, ny = cell.shape[0], cell.shape[1]
+            wx = _stag_walls_spec(self.period_x, x_walls, nx, "x_walls", fn)
+            wy = _stag_walls_spec(self.period_y, y_walls, ny, "y_walls", fn)
+            for nm, spec, n_cell in (("x_walls", wx, nx), ("y_walls", wy, ny)):
+                if _stag_walls_n(spec) != n_cell:
+                    raise ValueError(
+                        f"{fn}: {nm} yields {_stag_walls_n(spec)} segments but "
+                        f"eps_cell has {n_cell} strips on that axis.  With "
+                        f"walls given, eps_cell is the STRIP TILE -- shape "
+                        f"(len(x_walls) + 1, len(y_walls) + 1) for interior "
+                        f"wall lists, exactly the hybrid's `tile`.")
+            return {"wx": wx, "wy": wy, "M": M, "n_modes_given": True}
+        # UNIFORM (scalar / tensor / magnetic-uniform): no walls of its own.
+        if grid is not None and (x_walls is not None or y_walls is not None):
+            raise ValueError(
+                f"{fn}: pass grid= OR x_walls/y_walls for a uniform layer, not "
+                f"both (grid= IS the uniform-lattice spelling).")
+        n_def = 1 if grid is None else int(grid)
+        if n_def < 1:
+            raise ValueError(f"{fn}: grid must be >= 1, got {grid!r}.")
+        wx = _stag_walls_spec(self.period_x, x_walls, n_def, "x_walls", fn)
+        wy = _stag_walls_spec(self.period_y, y_walls, n_def, "y_walls", fn)
+        if _stag_walls_n(wx) != _stag_walls_n(wy):
+            raise ValueError(
+                f"{fn}: a layer needs EQUAL segment counts per axis "
+                f"(Nx == Ny), got {_stag_walls_n(wx)} and "
+                f"{_stag_walls_n(wy)}.  The wall POSITIONS may differ freely.")
+        return {"wx": wx, "wy": wy, "M": M,
+                "n_modes_given": n_modes is not None}
+
+    def _finish_layer(self, pl):
+        """Attach the per-layer grid record produced by :meth:`_perlayer_spec`
+        to the layer just appended (a no-op on the shared path)."""
+        if pl:
+            self._layers[-1].update(pl)
         return self
 
     def _add_magnetic_layer(self, t, eps, eps_cell, mu, mu_cell):
@@ -639,7 +909,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             mu_uni = False
         # union grid: any PATTERNED side (eps_cell or mu_cell) registers it
         for spec, uni in ((eps_spec, eps_uni), (mu_spec, mu_uni)):
-            if uni:
+            if uni or self.layer_grids != "shared":
                 continue
             grid = tuple(np.shape(spec)[:2])
             if self._grid is None:
@@ -654,6 +924,242 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                                  mu_uniform=mu_uni, slant=(0.0, 0.0)))
         return self
 
+    # ------------------------------------------------------------- tapers
+    def _require_per_layer_taper(self, fn):
+        if self.layer_grids != "per-layer":
+            raise ValueError(
+                f"PMM2DStackPure.{fn}: a taper is a z-staircase whose slices "
+                f"have DIFFERENT wall positions, so it needs "
+                f"layer_grids='per-layer' (each slice on its own non-uniform "
+                f"grid, adjacent slices coupled by an L2 mortar).  On the "
+                f"shared union grid the walls would have to land on ONE "
+                f"lattice: a 2-degree sidewall over 310 nm at 6 slices moves a "
+                f"wall ~1.8 nm per slice, which on a 700 nm period needs "
+                f"N ~ 390 -- q = 390 (M - 1), i.e. unreachable at any M.  "
+                f"Construct with PMM2DStackPure(..., layer_grids='per-layer'), "
+                f"or use PMM2DStackHybrid (its Fourier projection decouples "
+                f"the layers).")
+
+    def add_tapered_pillar(self, thickness, *, eps_pillar, eps_host,
+                           x_bounds_bottom, y_bounds_bottom,
+                           x_bounds_top=None, y_bounds_top=None,
+                           n_slices=8, rule="midpoint"):
+        """Append a TAPERED rectangular pillar (sloped sidewalls) as a
+        z-staircase of ``n_slices`` EXACT-WALL scalar layers -- the
+        :meth:`PMM2DStackHybrid.add_tapered_pillar` surface on the PURE
+        (no-floor) engine, and the reason non-uniform segments were built.
+
+        Each slice sits on its OWN 3-segment NON-UNIFORM grid whose two
+        interior walls are the interpolated pillar bounds, so NO TWO SLICES
+        SHARE A WALL and the walls are exact (no lattice snapping, no pixel
+        rounding).  Adjacent slices are coupled by the L2 mortar.  Requires
+        ``layer_grids='per-layer'``.
+
+        The pillar bounds interpolate linearly from ``*_bounds_bottom`` to
+        ``*_bounds_top`` (default: equal -> a straight pillar);
+        ``rule='midpoint'`` samples at slice midpoints (O(1/n_slices^2)),
+        ``'bottom'`` at the slice bottoms.  Slice order is TOP-down, as the
+        stack is built superstrate-first.
+
+        Cost, and it is the whole point: 3 segments per slice, ``q = 3 (M-1)``,
+        so a production ``M = 9`` slice is a ``2 * 24^2 = 1152`` eigenproblem
+        where the uniform lattice would need ``q >= 1170`` and an eig above
+        2.7e+06.
+
+        A NOTE ON `M`: this is a per-layer solve, and a per-layer solve can be
+        stationary in ONE knob and wrong (see :meth:`convergence_floor`).
+        Converge in ``n_modes`` for the taper AND in ``n_slices``."""
+        self._require_per_layer_taper("add_tapered_pillar")
+        if rule not in ("midpoint", "bottom"):
+            raise ValueError(
+                f"PMM2DStackPure.add_tapered_pillar: rule must be 'midpoint' "
+                f"or 'bottom', got {rule!r}")
+        n_slices = int(n_slices)
+        if n_slices < 1:
+            raise ValueError(
+                "PMM2DStackPure.add_tapered_pillar: n_slices must be >= 1")
+        xb0 = tuple(map(float, x_bounds_bottom))
+        yb0 = tuple(map(float, y_bounds_bottom))
+        xb1 = xb0 if x_bounds_top is None else tuple(map(float, x_bounds_top))
+        yb1 = yb0 if y_bounds_top is None else tuple(map(float, y_bounds_top))
+        dz = float(thickness) / n_slices
+        for s in range(n_slices):
+            zfrac = (1.0 - (s + 0.5) / n_slices if rule == "midpoint"
+                     else 1.0 - (s + 1.0) / n_slices)
+            xw = [xb0[0] + (xb1[0] - xb0[0]) * zfrac,
+                  xb0[1] + (xb1[1] - xb0[1]) * zfrac]
+            yw = [yb0[0] + (yb1[0] - yb0[0]) * zfrac,
+                  yb0[1] + (yb1[1] - yb0[1]) * zfrac]
+            if not (0.0 < xw[0] < xw[1] < self.period_x
+                    and 0.0 < yw[0] < yw[1] < self.period_y):
+                raise ValueError(
+                    "PMM2DStackPure.add_tapered_pillar: interpolated pillar "
+                    f"bounds {xw} x {yw} must satisfy 0 < lo < hi < period at "
+                    "every slice.")
+            tile = np.full((3, 3), _C(eps_host), dtype=_C)
+            tile[1, 1] = _C(eps_pillar)
+            self.add_layer(dz, eps_cell=tile, x_walls=xw, y_walls=yw)
+        return self
+
+    def add_tapered_pillars(self, thickness, *, pillars, eps_host,
+                            n_slices=8):
+        """Append MULTI-PILLAR tapered layers as an auto-sliced z-staircase --
+        the N-feature, center-anchored generalization of
+        :meth:`add_tapered_pillar`, transplanted from
+        :meth:`PMM2DStackHybrid.add_tapered_pillars`.
+
+        ``pillars`` is a list of
+        ``((cx, cy), (wx_top, wy_top), (wx_bottom, wy_bottom), eps)`` in
+        ABSOLUTE metres; each pillar tapers linearly ABOUT ITS OWN FIXED
+        CENTER.  ``eps_host`` fills the remainder.  Every slice's walls are
+        EXACT spectral-element walls on that slice's OWN non-uniform grid, so
+        the whole staircase is representable without a common lattice.
+        Pillars must lie strictly inside the cell (no wrap) and may not
+        overlap.  Requires ``layer_grids='per-layer'``.
+
+        The staggered tensor basis needs EQUAL SEGMENT COUNTS per axis, so a
+        slice whose pillars produce a different number of x- and y-walls is
+        refused; center-anchored square-ish pillar sets satisfy it naturally.
+        """
+        self._require_per_layer_taper("add_tapered_pillars")
+        n = int(n_slices)
+        if n < 1:
+            raise ValueError(
+                f"PMM2DStackPure.add_tapered_pillars: n_slices must be >= 1, "
+                f"got {n_slices}.")
+        pil = [((float(c[0]), float(c[1])), (float(wt[0]), float(wt[1])),
+                (float(wb[0]), float(wb[1])), _C(e))
+               for c, wt, wb, e in pillars]
+        eh = _C(eps_host)
+        dz = float(thickness) / n
+        for k in range(n):
+            zeta = (k + 0.5) / n
+            rects = []
+            for (cx, cy), (wxt, wyt), (wxb, wyb), e in pil:
+                wxz = wxt + (wxb - wxt) * zeta
+                wyz = wyt + (wyb - wyt) * zeta
+                if wxz <= 0.0 or wyz <= 0.0:
+                    continue
+                x0, x1 = cx - 0.5 * wxz, cx + 0.5 * wxz
+                y0, y1 = cy - 0.5 * wyz, cy + 0.5 * wyz
+                if not (0.0 < x0 < x1 < self.period_x
+                        and 0.0 < y0 < y1 < self.period_y):
+                    raise ValueError(
+                        "PMM2DStackPure.add_tapered_pillars: every pillar must "
+                        "lie strictly inside the cell at every slice (no "
+                        f"wrap); got x [{x0:.3e}, {x1:.3e}], "
+                        f"y [{y0:.3e}, {y1:.3e}].")
+                rects.append((x0, x1, y0, y1, e))
+            for i, (ax0, ax1, ay0, ay1, _e) in enumerate(rects):
+                for bx0, bx1, by0, by1, _e2 in rects[i + 1:]:
+                    if ax0 < bx1 and bx0 < ax1 and ay0 < by1 and by0 < ay1:
+                        raise ValueError(
+                            "PMM2DStackPure.add_tapered_pillars: pillars "
+                            "overlap; merge or separate them explicitly.")
+            xw = sorted({v for r in rects for v in (r[0], r[1])})
+            yw = sorted({v for r in rects for v in (r[2], r[3])})
+            if len(xw) != len(yw):
+                raise ValueError(
+                    f"PMM2DStackPure.add_tapered_pillars: slice {k} yields "
+                    f"{len(xw)} x-walls and {len(yw)} y-walls; the staggered "
+                    f"tensor basis needs EQUAL SEGMENT COUNTS per axis "
+                    f"(Nx == Ny -- the wall POSITIONS may differ freely).  "
+                    f"Use PMM2DStackHybrid for an unequal wall layout.")
+            bx = [0.0] + xw + [self.period_x]
+            by = [0.0] + yw + [self.period_y]
+            tile = np.full((len(xw) + 1, len(yw) + 1), eh, dtype=_C)
+            for ix in range(len(xw) + 1):
+                mx = 0.5 * (bx[ix] + bx[ix + 1])
+                for iy in range(len(yw) + 1):
+                    my = 0.5 * (by[iy] + by[iy + 1])
+                    for x0, x1, y0, y1, e in rects:
+                        if x0 < mx < x1 and y0 < my < y1:
+                            tile[ix, iy] = e
+                            break
+            self.add_layer(dz, eps_cell=tile, x_walls=xw, y_walls=yw)
+        return self
+
+    def convergence_floor(self, *, n_modes=None):
+        """The CHEAP per-layer convergence SCREEN: each layer's own
+        single-layer residual, a MEASURED lower bound on the stack's error.
+
+        Returns ``(floor, per_layer)`` -- ``floor`` the max over layers and
+        ``per_layer`` the list.  Each entry is that layer ALONE between the
+        stack's half-spaces on its own grid, scored against the SAME layer
+        alone one modal rung up (``n_modes`` overrides the rung, default
+        ``M_i + 2``).  Cost: one single-layer solve per layer, i.e. ONE region
+        eig instead of the stack's.
+
+        WHY THIS EXISTS, and it is a measurement.  A per-layer solve **can be
+        stationary in one knob and wrong**.  Walking ``M_A`` alone across four
+        rungs on a measured two-layer pillar pair gave 3.42e-01, 2.82e-01,
+        2.68e-01, 2.79e-01 -- stationary to 4 %, NOT monotone, and 27 % wrong,
+        because layer B's own ``M_B`` was the limiting error the whole time;
+        the mirror experiment fails the same way.  Only the DIAGONAL descends.
+        So:
+
+        1. **The stopping criterion is stationarity in EVERY ``n_modes``, never
+           in one.**  Stationarity in one knob is not evidence.
+        2. **Screen with this floor first.**  ``pair_error >= max_i
+           own_residual_i`` held at 15 of 16 surface points (the single
+           exception missed by 1.2x), so a layer whose own residual is 5e-02
+           makes a 1e-03 stack answer impossible -- and that is knowable before
+           the stack is ever assembled.
+        3. A greedy "raise the layer with the larger residual" rule was tested
+           and reads 6/9.  It is a HINT, not a rule; the floor is the gate.
+        """
+        if self.layer_grids != "per-layer":
+            raise ValueError(
+                "PMM2DStackPure.convergence_floor: only meaningful with "
+                "layer_grids='per-layer' -- the shared path carries ONE modal "
+                "count for the whole stack, which is exactly what makes it "
+                "impossible to mis-set per layer.")
+        if self._src is None:
+            raise ValueError(
+                "PMM2DStackPure.convergence_floor: call set_source(...) first.")
+        Ms = self._perlayer_modal_counts()
+        out = []
+        for L, Mi in zip(self._layers, Ms):
+            vals = []
+            # the ISOLATED layer's end grids are its OWN, so its Rayleigh
+            # capacity is q = N (M - 1) and the stack's n_orders may exceed it.
+            # CLAMP rather than raise -- this is an internal residual probe --
+            # and clamp on the LOWER rung so both rungs retain the same order
+            # set and the two vectors are comparable.
+            _nq = _stag_walls_n(L["wx"]) * (Mi - 1)
+            _nord = max(0, min(self.n_orders, (_nq - 1) // 2))
+            for M in (Mi, Mi + 2 if n_modes is None else int(n_modes)):
+                st = PMM2DStackPure(
+                    self.period_x, self.period_y,
+                    n_superstrate=self.n_sup, n_substrate=self.n_sub,
+                    n_modes=M, n_orders=_nord,
+                    symmetry=self.symmetry, layer_grids="per-layer")
+                kw = dict(thickness=L["thickness"], n_modes=M)
+                if L["kind"] == "patterned":
+                    kw.update(eps_cell=L["eps_cell"], x_walls=_stag_interior(
+                        L["wx"]), y_walls=_stag_interior(L["wy"]))
+                elif L["kind"] == "uniform":
+                    kw.update(eps=L["eps"], grid=_stag_walls_n(L["wx"]))
+                elif L["kind"] == "uniform_tensor":
+                    kw.update(eps=L["eps33"], grid=_stag_walls_n(L["wx"]))
+                else:                       # magnetic
+                    kw.update(
+                        **({"eps": L["eps"]} if L["eps_uniform"]
+                           else {"eps_cell": L["eps"]}),
+                        **({"mu": L["mu"]} if L["mu_uniform"]
+                           else {"mu_cell": L["mu"]}))
+                    if L["eps_uniform"] and L["mu_uniform"]:
+                        kw["grid"] = _stag_walls_n(L["wx"])
+                t = kw.pop("thickness")
+                st.add_layer(t, **kw)
+                st.set_source(self._src["wl"], theta=self._src["theta"],
+                              phi=self._src["phi"])
+                o, R, T = st.solve(jones=False)
+                vals.append(np.concatenate([np.asarray(R).ravel(),
+                                            np.asarray(T).ravel()]))
+            out.append(float(np.max(np.abs(vals[0] - vals[1]))))
+        return (max(out) if out else 0.0), out
+
     def set_source(self, wavelength, *, theta=0.0, phi=0.0):
         """Set the incident plane wave: vacuum ``wavelength`` (m), polar
         ``theta`` and azimuth ``phi`` (radians)."""
@@ -663,58 +1169,29 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                          phi=float(phi))
         return self
 
-    # ------------------------------------------------------------------ solve
-    def solve(self, *, jones=True, retain_internal=False):
-        """Cascade the stack and return the diffraction efficiencies.
+    def _source_prep(self):
+        """Source/wavelength preamble shared by the shared-grid and per-layer
+        cascades.
 
-        Returns ``(orders, R, T, jones)`` (default) or ``(orders, R, T)`` when
-        ``jones=False``.  ``orders`` is ``(Nfo, 2)`` ``(m, n)`` pairs; ``R``/``T``
-        are ``(2, Nfo)`` real efficiencies (row 0 = incident ``Ex``, row 1 =
-        incident ``Ey``); ``jones`` is the ``(2, 2)`` order-0 reflection Jones.
+        Moved VERBATIM out of :meth:`solve` when ``layer_grids='per-layer'``
+        was added (2026-09-11) so the two paths cannot drift apart: the
+        propagating-incidence precondition, the Wood-anomaly wavelength nudge
+        over EVERY region's real permittivities, and the Rayleigh-cutoff
+        proximity warning.  The arithmetic is unchanged, so the shared path
+        stays bit-identical.
 
-        ``retain_internal=True`` (AUDIT_DYNAMETA_CONSUMER_API_GAPS C3)
-        additionally retains the per-layer partial cascades + the staggered
-        block field Gram for :meth:`layer_absorption` -- absorption budgets
-        for the engine of record on lossy-metal cells."""
-        # every solve supersedes the retained per-order amplitudes AND the
-        # retained internals (the audit-P1-04 invalidation contract)
-        self._modal = None
-        self._internal = None
-        if self._src is None:
-            raise ValueError("PMM2DStackPure.solve: call set_source(...) first.")
-        if not self._layers:
-            raise ValueError("PMM2DStackPure.solve: add at least one layer.")
-        _check_stack_slant(self._layers, "PMM2DStackPure.solve")
-        _slanted_stack = any(not _slant_is_zero(L.get("slant"))
-                             for L in self._layers)
-        if retain_internal and _slanted_stack:
-            # The frame-anchor bookkeeping below is a FAR-FIELD correction on
-            # the transmitted orders.  An internal probe evaluated at a plane
-            # inside or below a sheared layer lives in the FRAME, not the lab,
-            # and needs the same treatment -- which _flux_at has not been
-            # taught.  Refuse rather than return frame-referenced fluxes.
-            raise NotImplementedError(
-                "PMM2DStackPure.solve: retain_internal=True is not supported "
-                "on a stack containing a SLANTED layer -- the internal-field "
-                "probe (_flux_at / layer_absorption) evaluates at a plane in "
-                "the SHEARED frame, where the lateral frame offset "
-                "sum_j t_j d_j has not been undone, so the retained "
-                "amplitudes are not lab-referenced.  Solve without "
-                "retain_internal, or z-staircase the slanted layer.")
-        # Multi-patterned (A|B) cascades are fully supported: the historical
-        # A|B energy blow-up was the far-field projection-kernel order MIRROR
-        # (fixed in twod_staggered._stag_fourier_projection), not an
-        # interface/mode-sorting defect -- see the module docstring (Scope) and
-        # test_v5_21_pmm2d_staggered_oblique.test_stack_pure_multilayer_ab_vs_1d.
+        NOTE the layer loop reads the LAYER RECORDS, never a union cell, so it
+        carries over to per-layer grids untouched (open item O-7).
+
+        Returns ``(wl, k0, kx0, ky0, a0x, a0y, eps_sup, eps_sub)`` -- ``wl``
+        being the possibly NUDGED wavelength every downstream quantity uses.
+        """
         wl = self._src["wl"]
         theta, phi = self._src["theta"], self._src["phi"]
         px, py = self.period_x, self.period_y
         eps_sup = _C(self.n_sup) ** 2
         eps_sub = _C(self.n_sub) ** 2
-        Nx, Ny = self._grid if self._grid is not None else (2, 2)
-        M = self.M
         n_orders = self.n_orders
-
         from ..rcwa._core import (
             _grazing_safe_wavelength,
             _require_propagating_incidence,
@@ -773,6 +1250,60 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         kx0 = nre * np.sin(theta) * np.cos(phi)
         ky0 = nre * np.sin(theta) * np.sin(phi)
         a0x, a0y = kx0 * k0, ky0 * k0
+        return wl, k0, kx0, ky0, a0x, a0y, eps_sup, eps_sub
+
+    # ------------------------------------------------------------------ solve
+    def solve(self, *, jones=True, retain_internal=False):
+        """Cascade the stack and return the diffraction efficiencies.
+
+        Returns ``(orders, R, T, jones)`` (default) or ``(orders, R, T)`` when
+        ``jones=False``.  ``orders`` is ``(Nfo, 2)`` ``(m, n)`` pairs; ``R``/``T``
+        are ``(2, Nfo)`` real efficiencies (row 0 = incident ``Ex``, row 1 =
+        incident ``Ey``); ``jones`` is the ``(2, 2)`` order-0 reflection Jones.
+
+        ``retain_internal=True`` (AUDIT_DYNAMETA_CONSUMER_API_GAPS C3)
+        additionally retains the per-layer partial cascades + the staggered
+        block field Gram for :meth:`layer_absorption` -- absorption budgets
+        for the engine of record on lossy-metal cells."""
+        # every solve supersedes the retained per-order amplitudes AND the
+        # retained internals (the audit-P1-04 invalidation contract)
+        self._modal = None
+        self._internal = None
+        if self._src is None:
+            raise ValueError("PMM2DStackPure.solve: call set_source(...) first.")
+        if not self._layers:
+            raise ValueError("PMM2DStackPure.solve: add at least one layer.")
+        _check_stack_slant(self._layers, "PMM2DStackPure.solve")
+        _slanted_stack = any(not _slant_is_zero(L.get("slant"))
+                             for L in self._layers)
+        if retain_internal and _slanted_stack:
+            # The frame-anchor bookkeeping below is a FAR-FIELD correction on
+            # the transmitted orders.  An internal probe evaluated at a plane
+            # inside or below a sheared layer lives in the FRAME, not the lab,
+            # and needs the same treatment -- which _flux_at has not been
+            # taught.  Refuse rather than return frame-referenced fluxes.
+            raise NotImplementedError(
+                "PMM2DStackPure.solve: retain_internal=True is not supported "
+                "on a stack containing a SLANTED layer -- the internal-field "
+                "probe (_flux_at / layer_absorption) evaluates at a plane in "
+                "the SHEARED frame, where the lateral frame offset "
+                "sum_j t_j d_j has not been undone, so the retained "
+                "amplitudes are not lab-referenced.  Solve without "
+                "retain_internal, or z-staircase the slanted layer.")
+        if self.layer_grids == "per-layer":
+            return self._solve_per_layer(jones=jones,
+                                         retain_internal=retain_internal)
+        # Multi-patterned (A|B) cascades are fully supported: the historical
+        # A|B energy blow-up was the far-field projection-kernel order MIRROR
+        # (fixed in twod_staggered._stag_fourier_projection), not an
+        # interface/mode-sorting defect -- see the module docstring (Scope) and
+        # test_v5_21_pmm2d_staggered_oblique.test_stack_pure_multilayer_ab_vs_1d.
+        px, py = self.period_x, self.period_y
+        Nx, Ny = self._grid if self._grid is not None else (2, 2)
+        M = self.M
+        n_orders = self.n_orders
+        (wl, k0, kx0, ky0, a0x, a0y,
+         eps_sup, eps_sub) = self._source_prep()
 
         # Shared eps-free geometric eig -> both half-spaces AND every uniform
         # layer (degeneracy-safe; all share the eigenvectors W0).
@@ -1021,6 +1552,346 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             return orders2d, R_eff, T_eff
         return orders2d, R_eff, T_eff, jmat
 
+    # ------------------------------------------------- per-layer grid cascade
+    def _perlayer_modal_counts(self):
+        """Each layer's effective modal count ``M_i``, applying the MEASURED
+        default for a UNIFORM layer that did not name one.
+
+        F4 (open item O-6) measured both halves of this.  ISOLATED, a uniform
+        region wants the whole ``q`` budget on ONE element: the field is a
+        single plane wave, so the error is spectral in the polynomial degree
+        and ``N = 1`` beats ``N = 2`` / ``N = 3`` by 1-5 DECADES at matched
+        ``q`` at every angle measured, conical included.  IN A CASCADE the
+        uniform layer must ALSO represent its neighbours' traces, which have
+        kinks at THEIR walls -- and there ``N = 1`` at the stack's ``M`` reads
+        3-6x worse than ``N = 2`` or ``3``.  The fix is not the grid but the
+        DEGREE: at matched ``q_u = max(q_prev, q_next)`` the three grids agree
+        to 3 % and all sit on the neighbours' floor, so
+
+            M_u = max(q_prev, q_next) / N_u + 1
+
+        is the default, and an explicit ``n_modes=`` overrides it.  ``N = 1``
+        is cheap; ``N = 1`` at the stack's ``M`` is a trap.
+        """
+        Ls = self._layers
+        n = len(Ls)
+        base = [None] * n
+        for i, L in enumerate(Ls):
+            fixed = (L["kind"] not in ("uniform", "uniform_tensor")
+                     or L.get("n_modes_given", False))
+            if fixed:
+                base[i] = int(L["M"])
+        out = []
+        for i, L in enumerate(Ls):
+            if base[i] is not None:
+                out.append(base[i])
+                continue
+            nb = [j for j in (i - 1, i + 1) if 0 <= j < n and base[j] is not None]
+            q_nb = max((_stag_walls_n(Ls[j]["wx"]) * (base[j] - 1)
+                        for j in nb), default=None)
+            Nu = _stag_walls_n(L["wx"])
+            if q_nb is None:
+                out.append(int(L["M"]))
+            else:
+                out.append(max(3, int(-(-q_nb // Nu)) + 1))
+        return out
+
+    def _solve_per_layer(self, *, jones, retain_internal, force_mortar=False):
+        """``layer_grids='per-layer'``: every layer on its OWN element grid,
+        adjacent grids coupled by an L2 MORTAR.
+
+        Design and every number quoted in the comments:
+        ``docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md`` and the
+        build doc ``BUILD_PMM2D_STAGGERED_MORTAR_2026_09_11.md``.
+
+        ``force_mortar=True`` is a TEST INSTRUMENT: it disables the
+        identical-grid bypass so a CONFORMING stack is driven through the
+        mortar algebra, which is the only way to score the conforming identity.
+        Library code never sets it.
+        """
+        px, py = self.period_x, self.period_y
+        (wl, k0, kx0, ky0, a0x, a0y,
+         eps_sup, eps_sub) = self._source_prep()
+        taux = np.exp(-1j * a0x * px)
+        tauy = np.exp(-1j * a0y * py)
+        Ms = self._perlayer_modal_counts()
+
+        # ---- per-layer grids, deduped on CONTENT (walls + tau + M) ----------
+        def _wkey(w):
+            if np.ndim(w) == 0:
+                return ("N", int(w))
+            return ("W", np.asarray(w, dtype=float).tobytes())
+
+        grids_pre, grids_by_key = {}, {}
+
+        def _grid(wx, wy, M):
+            pre = (_wkey(wx), _wkey(wy), int(M))
+            g = grids_pre.get(pre)
+            if g is None:
+                g = StagGridOps(px, py, wx, wy, M, taux, tauy)
+                g = grids_by_key.setdefault(g.key(), g)
+                grids_pre[pre] = g
+            return g
+
+        gof = [_grid(L["wx"], L["wy"], M) for L, M in zip(self._layers, Ms)]
+        # HALF-SPACES ride the grid of the layer they TOUCH -- the 1-D
+        # convention, and more strongly motivated here: both end interfaces
+        # become PLAIN square matches, so no mortar ever sits where the far
+        # field is projected, and the eps-free geometric eig that makes the two
+        # half-spaces free is per grid and already built for that layer.
+        g_sup, g_sub = gof[0], gof[-1]
+
+        # ---- the far-field order CAP, derived from the END grids ------------
+        # T3-3 applied before it bites: the per-axis Rayleigh projection has
+        # q = N (M - 1) columns, so it can carry at most q order slots; asking
+        # for more makes the retained orders linearly DEPENDENT (slots aliasing
+        # one another) and the least-squares draw build-dependent -- while
+        # conserving energy exactly, i.e. energy-invisible.  The probe CLAMPED;
+        # a shipped surface RAISES (open item O-9), because a user who asks for
+        # orders the end grids cannot carry should be told, not quietly served
+        # fewer.
+        cap = min((g_sup.q - 1) // 2, (g_sub.q - 1) // 2)
+        if self.n_orders > cap:
+            raise ValueError(
+                f"PMM2DStackPure.solve: n_orders={self.n_orders} exceeds what "
+                f"this stack's END grids can carry.  The forward Rayleigh "
+                f"projection has q = N (M - 1) columns per axis -- {g_sup.q} "
+                f"at the top (N={g_sup.N}, M={g_sup.M}) and {g_sub.q} at the "
+                f"bottom (N={g_sub.N}, M={g_sub.M}) -- so "
+                f"n_orders <= (q - 1) // 2 = {cap}.  Beyond it the retained "
+                f"order slots alias one another and the least-squares draw is "
+                f"build-dependent while conserving energy exactly.  Lower "
+                f"n_orders to {cap}, or raise the FIRST and LAST layers' "
+                f"n_modes / grid (the half-spaces ride their grids).")
+        n_orders = self.n_orders
+
+        # ---- per-grid eps-free geometric eig (half-spaces + uniform scalar) -
+        geo_cache = {}
+
+        def _walls_of(g):
+            return (g.bx.N if g.bx.uniform else g.bx.xb,
+                    g.by.N if g.by.uniform else g.by.xb)
+
+        def _geo(g):
+            hit = geo_cache.get(g.key())
+            if hit is None:
+                wxg, wyg = _walls_of(g)
+                sol = Granet2DTransverseE(
+                    px, py, wxg, wyg, g.M,
+                    np.full((g.bx.N, g.by.N), eps_sup),
+                    alpha0x=a0x, alpha0y=a0y, k0=k0)
+                hit = _homog_geom_cache(sol)
+                geo_cache[g.key()] = hit
+            return hit
+
+        Wsup, Vsup, lam_sup = _homog_region_modes(_geo(g_sup), eps_sup)
+        Wsub, Vsub, lam_sub = _homog_region_modes(_geo(g_sub), eps_sub)
+
+        # ---- per-layer modes ------------------------------------------------
+        modes, any_oop, eig_cache = [], False, {}
+        for L, g in zip(self._layers, gof):
+            sl = L.get("slant", (0.0, 0.0))
+            slanted = not _slant_is_zero(sl)
+            Nx, Ny = g.bx.N, g.by.N
+            if L["kind"] == "uniform" and not slanted:
+                W, V, lam = _homog_region_modes(_geo(g), L["eps"])
+                six = _modes_as_general(W, V, lam)
+            else:
+                mcell = None
+                if L["kind"] == "uniform" and slanted:
+                    cell = np.ascontiguousarray(
+                        np.full((Nx, Ny), _C(L["eps"])))
+                elif L["kind"] == "uniform_tensor":
+                    cell = np.ascontiguousarray(
+                        np.broadcast_to(L["eps33"], (Nx, Ny, 3, 3)))
+                elif L["kind"] == "magnetic":
+                    cell = _as_layer_cell(L["eps"], L["eps_uniform"], Nx, Ny)
+                    mcell = _as_layer_cell(L["mu"], L["mu_uniform"], Nx, Ny)
+                else:
+                    cell = L["eps_cell"]
+                # O-8: the eig key carries the GRID (wall arrays + tau + M),
+                # not an integer N -- two layers can share N and M and still be
+                # different grids, and the Bloch glue lives in the basis.
+                key = ((g.key(), cell.shape, cell.tobytes(), sl)
+                       if mcell is None else
+                       (g.key(), cell.shape, cell.tobytes(), mcell.shape,
+                        mcell.tobytes(), sl))
+                cached = eig_cache.get(key)
+                if cached is None:
+                    wxg, wyg = _walls_of(g)
+                    sol = Granet2DTransverseE(
+                        px, py, wxg, wyg, g.M, cell,
+                        alpha0x=a0x, alpha0y=a0y, k0=k0,
+                        mu_cell=mcell, slant=sl if slanted else None)
+                    if sol.offplane:
+                        cached = _region_modes_oop(sol, symmetry=self.symmetry)
+                    else:
+                        Wl, Vl, lam_l, _g2 = _region_modes(sol)
+                        cached = _modes_as_general(Wl, Vl, lam_l)
+                    eig_cache[key] = cached
+                six = cached
+                any_oop = any_oop or slanted or (
+                    len(cell.shape) == 4
+                    and _tile_needs_oop("PMM2DStackPure.solve", cell))
+            modes.append(six + (L["thickness"],))
+
+        # ---- interfaces: PLAIN when the two grids coincide, mortar otherwise -
+        cross_cache = {}
+
+        def _cross(ga, gb):
+            key = (ga.key(), gb.key())
+            hit = cross_cache.get(key)
+            if hit is None:
+                hit = StagCrossOps(ga, gb)
+                cross_cache[key] = hit
+            return hit
+
+        nlay = len(modes)
+
+        def _ifc(ia, ib):
+            if ia is None:
+                ga, gb = g_sup, gof[0]
+                sa = (Wsup, Vsup, lam_sup, Wsup, -Vsup, -lam_sup)
+                sb = modes[0][:6]
+            elif ib is None:
+                ga, gb = gof[-1], g_sub
+                sa = modes[-1][:6]
+                sb = (Wsub, Vsub, lam_sub, Wsub, -Vsub, -lam_sub)
+            else:
+                ga, gb = gof[ia], gof[ib]
+                sa, sb = modes[ia][:6], modes[ib][:6]
+            # The identical-grid BYPASS is what makes this mode safe to expose:
+            # a per-layer stack whose grids happen to coincide takes the
+            # shipped square interface and reproduces layer_grids='shared'
+            # BIT-EXACTLY (the 1-D contract, lifted to 2-D).
+            same = (ga.key() == gb.key()) and not force_mortar
+            if any_oop:
+                if same:
+                    return _interface_smatrix_general(
+                        _modes_to_M(sa[0], sa[1], sa[3], sa[4]),
+                        _modes_to_M(sb[0], sb[1], sb[3], sb[4]))
+                return _interface_smatrix_general_mortar_2d(
+                    sa, sb, ga, gb, _cross(ga, gb), _stag_kron_apply)
+            if same:
+                return _interface_smatrix(sa[0], sa[1], sb[0], sb[1])
+            return _interface_smatrix_mortar_2d(
+                sa[0], sa[1], sb[0], sb[1], ga, gb, _cross(ga, gb),
+                _stag_kron_apply)
+
+        ifc = [_ifc(None, 0)]
+        for i in range(1, nlay):
+            ifc.append(_ifc(i - 1, i))
+        ifc.append(_ifc(nlay - 1, None))
+        if any_oop:
+            prop = [_propagation_smatrix_general(m[2], m[5], k0 * m[6])
+                    for m in modes]
+        else:
+            prop = [_propagation_smatrix(m[2], k0 * m[6]) for m in modes]
+        # RECTANGULAR Redheffer: adjacent per-layer grids carry different mode
+        # counts, so the off-diagonal blocks are rectangular.  The star is
+        # REUSED UNCHANGED from the 1-D per-layer path (dimension-agnostic, and
+        # already carrying M1's star-denominator guards).
+        S = ifc[0]
+        for i in range(nlay):
+            S = _redheffer_star_rect(S, prop[i])
+            S = _redheffer_star_rect(S, ifc[i + 1])
+        S11, _S12, S21, _S22 = S
+        S_above = S_below_bot = None
+        if retain_internal:
+            S_above = [None] * nlay
+            S_above[0] = ifc[0]
+            for i in range(1, nlay):
+                S_above[i] = _redheffer_star_rect(
+                    _redheffer_star_rect(S_above[i - 1], prop[i - 1]), ifc[i])
+            S_below_bot = [None] * nlay
+            S_below_bot[nlay - 1] = ifc[nlay]
+            for i in range(nlay - 2, -1, -1):
+                S_below_bot[i] = _redheffer_star_rect(
+                    _redheffer_star_rect(ifc[i + 1], prop[i + 1]),
+                    S_below_bot[i + 1])
+
+        # ---- far field: TWO projectors, one per END grid --------------------
+        ox = np.arange(-n_orders, n_orders + 1)
+        oy = np.arange(-n_orders, n_orders + 1)
+        order_x = np.tile(ox, len(oy))
+        order_y = np.repeat(oy, len(ox))
+        Nfo = len(order_x)
+        P1s, P2s = _far_projector_2d(g_sup.bx, g_sup.by, ox, oy, a0x, a0y)
+        P1t, P2t = _far_projector_2d(g_sub.bx, g_sub.by, ox, oy, a0x, a0y)
+        Hsup = _pmm2d_project_orders(P1s, P2s, Wsup, g_sup.qq)
+        Hsub = _pmm2d_project_orders(P1t, P2t, Wsub, g_sub.qq)
+        kxv = kx0 + order_x * (wl / px)
+        kyv = ky0 + order_y * (wl / py)
+        kz_ref, kz_trn, kz_inc, safe_r, safe_t = _pmm2d_order_kz(
+            eps_sup, eps_sub, kxv, kyv, kx0, ky0)
+        delta = ((order_x == 0) & (order_y == 0)).astype(_C)
+        p0 = int(np.where((order_x == 0) & (order_y == 0))[0][0])
+
+        # the frame-anchor phase a SHEAR adds -- identical to the shared path
+        # (it is a far-field correction on the TRANSMITTED orders and knows
+        # nothing about the element grids)
+        tphase = None
+        if any(not _slant_is_zero(L.get("slant")) for L in self._layers):
+            _shx = -sum(L.get("slant", (0.0, 0.0))[0] * L["thickness"]
+                        for L in self._layers)
+            _shy = -sum(L.get("slant", (0.0, 0.0))[1] * L["thickness"]
+                        for L in self._layers)
+            if _shx != 0.0 or _shy != 0.0:
+                tphase = np.exp(-1j * k0 * (kxv * _shx + kyv * _shy))
+
+        R_rows, T_rows, j_cols, cinc_cols = [], [], [], []
+        amp = {k: np.zeros((2, Nfo), dtype=_C)
+               for k in ("rx", "ry", "tx", "ty")}
+        for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
+            long_inc = kx0 * ex0 + ky0 * ey0
+            einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
+            rhs = np.concatenate([ex0 * delta, ey0 * delta])
+            cinc = _guarded_lstsq(
+                Hsup, rhs, "PMM2DStackPure far-field Rayleigh projection")
+            cinc_cols.append(cinc)
+            r_ord = Hsup @ (S11 @ cinc)
+            t_ord = Hsub @ (S21 @ cinc)
+            rx, ry = r_ord[:Nfo], r_ord[Nfo:]
+            tx, ty = t_ord[:Nfo], t_ord[Nfo:]
+            if tphase is not None:
+                tx, ty = tx * tphase, ty * tphase
+            rz = -(kxv * rx + kyv * ry) / safe_r
+            tz = -(kxv * tx + kyv * ty) / safe_t
+            Re, Te = _project_efficiency(np, kz_ref, kz_trn, kz_inc,
+                                         rx, ry, rz, tx, ty, tz, einc_sq)
+            R_rows.append(Re)
+            T_rows.append(Te)
+            j_cols.append(np.stack([rx[p0], ry[p0]]))
+            amp["rx"][col], amp["ry"][col] = rx, ry
+            amp["tx"][col], amp["ty"][col] = tx, ty
+        R_eff = np.stack(R_rows)
+        T_eff = np.stack(T_rows)
+        jmat = np.stack(j_cols, axis=1)
+        orders2d = np.stack([order_x, order_y], axis=1)
+        self._modal = dict(
+            orders=orders2d.copy(), p0=p0,
+            kx=kxv.copy(), ky=kyv.copy(),
+            kz_ref=kz_ref.copy(), kz_trn=kz_trn.copy(),
+            kz_inc=kz_inc, kx0=float(kx0), ky0=float(ky0),
+            wavelength=float(wl), **amp)
+        if retain_internal:
+            # PER-LAYER field Grams: _flux_at integrates with the layer's OWN
+            # blkdiag(G1_i, G2_i), and there is NO new assembly -- G_i IS
+            # -Rmat_i and its FACTORS are already in the layer's StagGridOps,
+            # so the flux quadrature is separable too.
+            self._internal = dict(
+                modes=modes, S_above=S_above, S_below_bot=S_below_bot,
+                G=None, qq=None,
+                G_of=[(g.V1, g.V2) for g in gof],
+                qq_of=[g.qq for g in gof],
+                k0=k0, any_oop=any_oop,
+                cinc=np.stack(cinc_cols, axis=1),
+                R_tot=R_eff.sum(axis=1), T_tot=T_eff.sum(axis=1))
+        _warn_stag_closure(R_eff, T_eff, self._layers, eps_sup, eps_sub)
+        if not jones:
+            return orders2d, R_eff, T_eff
+        return orders2d, R_eff, T_eff, jmat
+
     # -------------------------------------------------- internal observables
     def _internal_amplitudes(self):
         """Per-layer ``(c_fwd_top, c_bwd_bot)`` modal amplitudes from the
@@ -1065,7 +1936,13 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         d = self._internal
         Wf, Vf, lam_f, Wb, Vb, lam_b, t = d["modes"][i]
         c_fwd, c_bwd = amps[i]
-        k0, qq = d["k0"], d["qq"]
+        k0 = d["k0"]
+        # PER-LAYER grids: the flux bilinear form is the LAYER's own block
+        # field Gram blkdiag(G1_i, G2_i) and its own qq_i, not one shared pair.
+        # No new assembly -- G_i IS -Rmat_i, and the layer's StagGridOps
+        # already holds its Kronecker FACTORS, so the quadrature is separable.
+        per_layer = d.get("G_of") is not None
+        qq = d["qq_of"][i] if per_layer else d["qq"]
         # ``c_fwd`` is referenced to the layer TOP and ``c_bwd`` to its BOTTOM.
         # For a SYMMETRIC region (Wb = Wf, Vb = -Vf, lam_b = -lam_f) this is
         # the shipped expression term for term.
@@ -1073,10 +1950,16 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         Q = np.exp(lam_b * k0 * ((1.0 - z_frac) * t))[:, None]
         E = Wf @ (P * c_fwd) + Wb @ (Q * c_bwd)
         H = Vf @ (P * c_fwd) + Vb @ (Q * c_bwd)
-        G = d["G"]
-        G1, G2 = G[:qq, :qq], G[qq:, qq:]
-        val = (np.sum(np.conj(H[qq:]) * (G1 @ E[:qq]), axis=0)
-               - np.sum(np.conj(H[:qq]) * (G2 @ E[qq:]), axis=0))
+        if per_layer:
+            V1, V2 = d["G_of"][i]
+            G1E = _stag_kron_apply(V1[0], V1[1], E[:qq])
+            G2E = _stag_kron_apply(V2[0], V2[1], E[qq:])
+        else:
+            G = d["G"]
+            G1E = G[:qq, :qq] @ E[:qq]
+            G2E = G[qq:, qq:] @ E[qq:]
+        val = (np.sum(np.conj(H[qq:]) * G1E, axis=0)
+               - np.sum(np.conj(H[:qq]) * G2E, axis=0))
         return np.real(val)
 
     def layer_absorption(self):

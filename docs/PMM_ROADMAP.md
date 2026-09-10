@@ -180,9 +180,66 @@ that reaches the slanted answer at all.
 Build docs: `docs/audits/BUILD_PMM2D_SLANT_METRIC_2026_08_16.md` (hybrid),
 `docs/audits/EXPERIMENT_PMM2D_STAGGERED_SLANT_2026_09_10.md` +
 `docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md` (pure).
-**Still open:** mixed slants between PATTERNED layers, `retain_internal` under
-a slanted layer, and TAPERS (a shear is not a dilation — still a z-staircase).
-**Phase E (2-D curved) is unchanged by this work.**
+**Still open:** mixed slants between PATTERNED layers and `retain_internal`
+under a slanted layer.  TAPERS remain a z-staircase (a shear is not a
+dilation) but are no longer UNREACHABLE on the pure engine -- see the item
+below.  **Phase E (2-D curved) is unchanged by this work.**
+
+### Per-layer element grids + non-uniform segments -- **SHIPPED 2026-09-11**
+
+Two coupled changes to the PURE staggered 2-D PMM, and they only pay together.
+
+**Non-uniform segment boundaries.**  Granet Eq. 31 maps EACH segment
+individually, so nothing in the formulation requires equal segments; the
+uniform lattice (`Basis1D.xb = linspace`, one scalar jacobian `J`) was an
+implementation choice.  `Basis1D(d, walls, M, tau)` and
+`Granet2DTransverseE(px, py, wx, wy, M, eps_cell)` now take `walls` as an
+`int N` (the uniform lattice, BIT-IDENTICAL to the pre-change library on every
+matrix family and on the assembled `Rmat/Lmat/Stt/Schur/Agen/Bgen`) or as an
+increasing `(N+1,)` boundary array.  The whole change is ONE change at FOUR
+sites -- the scalar `J` becomes a per-segment `J_n`; `Basis1D.mixed` needed no
+edit at all, and the de Rham property that makes the basis spurious-free is
+per-segment and scale-free.  `Basis1D.J` is `None` on a non-uniform basis on
+purpose, so an un-migrated reader raises instead of mis-scaling silently.
+
+**Per-layer element grids (L2 mortar).**
+`PMM2DStackPure(..., layer_grids='shared' | 'per-layer')` -- the 1-D `PMMStack`
+spelling.  `'shared'` is the default and is the union-grid path unchanged;
+`'per-layer'` drops the union-grid raise, gives every layer its own grid and
+its own `n_modes`, and couples adjacent grids by an L2 mortar whose 2-D
+cross-masses factor EXACTLY as Kronecker products (900x memory against the
+dense form at `N = (6,12), M = 6`, and it is never materialised).  The one
+genuinely 2-D piece: the two transverse components live in DIFFERENT
+tensor-product spaces and the Eq.-25 H partner SWAPS them, so the H row is
+tested with the V1/V2 blocks exchanged -- silent on a conforming interface and
+O(1) otherwise.  There is NO window enrichment and cannot be: on a segment
+partition the only partition carrying two layers' walls is their common
+refinement, i.e. the union grid.  Own-walls-only is what this basis has, and
+it works.
+
+**What this unlocks, and what it does not.**  It unlocks arbitrary-wall
+z-staircases (`PMM2DStackPure.add_tapered_pillar` / `add_tapered_pillars`) and
+mixed-resolution stacks, and it removes the union grid's DOF FLOOR: on a
+3-slice staircase with per-slice `N = 2, 3, 4` the union lattice is `N = 12`
+and cannot be run below `q = 24` at all, where per-layer reaches `q = 12` --
+64x less eig work at the floor, 1832x at production `M`.  It does NOT make the
+pure engine faster than the union grid per degree of freedom in general: at
+EQUAL DOF the per-layer arm measured 7.6x / 7.3x more accurate at `q = 18 / 24`
+on a stripe pair and 1.48x WORSE at `q = 30` once both arms converge; on a
+corner-dominated 2-D pillar pair the crossing moves earlier (between `q = 18`
+and `q = 24`).  The durable half is the lossless closure, 170x-5142x tighter
+with no decay across the measured range.
+
+**The usability cost is real and is documented, not footnoted:** a per-layer
+solve can be STATIONARY IN ONE KNOB AND WRONG (measured: 4 % stationary across
+four rungs of one layer's `M` while 27 % wrong, because the other layer was
+the limiting error the whole time).  `PMM2DStackPure.convergence_floor()` is
+the cheap screen -- each layer's own single-layer residual, a measured lower
+bound on the stack error at 15 of 16 surface points -- and the stopping
+criterion is stationarity in EVERY `n_modes`, never in one.
+
+Experiment: `docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md`.
+Build: `docs/audits/BUILD_PMM2D_STAGGERED_MORTAR_2026_09_11.md`.
 
 ### Phase E — 2-D curved (cylinder/ellipse) — **hard**
 Granet's transfinite curved-quad mapping (Sec.3A): geometric construction of
@@ -274,7 +331,7 @@ That's why Phase C is the linchpin and is sequenced before D/E.
 | Vertical / axis-aligned, many-layer stacks, dispersion sweeps, inverse-design (autodiff) | **RCWA** (`rcwa_efficiency_2d` / `RCWAStack`) | Mature, FFT-fast, JAX-differentiable; parity-or-better on vertical |
 | 2-D vertical, need exact energy / no-floor / position-invariance / pinned value on hard Gibbs cases | **`pmm_efficiency_2d_staggered`** | No Fourier floor; accuracy ceiling (to be quantified by Phase B) |
 | 1-D / 2-D **slanted** sidewalls | **PMM slant** (1-D shipped; 2-D shipped on BOTH engines, Phase D) | Staircase avoidance → genuine speed win; the device regime |
-| 1-D / 2-D **tapered** sidewalls | still a z-staircase (`PMM2DStackHybrid.add_tapered_pillar`) | a shear is not a dilation; no slant absorbs a taper |
+| 1-D / 2-D **tapered** sidewalls | a z-staircase, on EITHER 2-D engine: `PMM2DStackHybrid.add_tapered_pillar(s)` or, no-floor, `PMM2DStackPure.add_tapered_pillar(s)` with `layer_grids='per-layer'` | a shear is not a dilation; no slant absorbs a taper. What CHANGED 2026-09-11 is that the pure engine can express the staircase at all: each slice sits on its own **non-uniform** 3-segment grid at exact walls, so a wall moving 1.8 nm per slice costs `q = 3(M-1)` instead of the `N ~ 390` a uniform lattice would need |
 | Anisotropic / tunable-LC / Jones | **`pmm_jones_1d`** (1-D); **`pmm_jones_2d_staggered`** (2-D, FULL (3,3) incl. out-of-plane, no floor) or **`pmm_jones_2d`** (2-D, FMM-floored) | Full tensor → Jones |
 | Curved (cylinder/ellipse) pillars, spectral accuracy | **PMM curved** (Phase E) | Transfinite map removes the Gibbs floor |
 
