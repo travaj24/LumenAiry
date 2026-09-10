@@ -948,10 +948,13 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         # silent-wrong if omitted (the two papers this method follows report
         # efficiencies, where a unimodular per-order factor is invisible; this
         # library returns Jones matrices, where it is not).  MEASURED on a
-        # uniform null at 35 deg slant and 25 deg incidence: omitting it leaves
-        # the transmission Jones wrong by 1.0e-01 .. 6.2e-01, and the ``+i``
-        # arm is TWICE as wrong as no correction at all
-        # (docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md table B3).
+        # uniform null at slants of 10-35 deg and 25 deg incidence: the
+        # shipped arm reads 9.86e-08 .. 2.64e-05, omitting the factor leaves
+        # the transmission Jones wrong by 1.43e-01 .. 7.42e-01, and the ``+i``
+        # arm (2.86e-01 .. 1.33e+00) is about TWICE as wrong as no correction
+        # at all -- so it is not a fudge that could absorb an arbitrary
+        # residual (docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md
+        # table B3; the two builds agree there to every printed digit).
         #
         # ``t`` in that formula is the INTERNAL shear of ``x = u + t w``, which
         # is the NEGATIVE of the public ``slant`` (the same relation

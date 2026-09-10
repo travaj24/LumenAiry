@@ -445,9 +445,11 @@ def _slant_rot_gauge(eps33, tx, ty):
     once, here, and :meth:`Granet2DTransverseE._assemble_oop` then builds in the
     rotated gauge with ``rot = 1`` (it must not apply the rotation twice).
 
-    Getting the ``t`` half wrong is not silent: the prototype's dispersion gate
-    measures the un-rotated arms at ``1.3e-02 .. 1.3e-01`` against ``3e-14``
-    (EXPERIMENT doc S4.2, the ``a-`` columns).
+    Getting the ``t`` half wrong is not silent, and the gap is measured on two
+    builds: the sheared-frame dispersion gate reads ``3.53e-02 .. 1.13e-01`` on
+    the un-rotated (``a-``) arms against ``1.4e-14 .. 6.2e-14`` on the physical
+    one (``docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md`` table B4a;
+    ``tests/unit/test_pmm2d_staggered_slant.py`` walks both).
     """
     e = np.array(eps33, dtype=_C, copy=True)
     rot = _OOP_ROT_SIGN
@@ -877,10 +879,14 @@ class Granet2DTransverseE:
         # helper both 2-D engines and the 1-D entries use, so a scalar
         # ``slant=0.0`` and ``slant=None`` are one (vertical, byte-identical)
         # path.  The INTERNAL shear of the frame ``x = u + t w`` is the
-        # NEGATIVE of it (measured three ways: EXPERIMENT doc S4.3 against
-        # ``pmm_efficiency_1d_slanted``, S4.4(b) against the hybrid metric and
-        # S4.4(c) against a pure-solver staircase), and the rotation gauge
-        # flips it once more (:func:`_slant_rot_gauge`).
+        # NEGATIVE of it, pinned FOUR ways in the build doc's tables, each
+        # against an independently validated engine: B5 against
+        # ``pmm_efficiency_1d_slanted`` per order (1.22e-03 vs 4.15e-01), M4b
+        # against the hybrid slant metric (1.23e-02 vs 2.79e-01, and only the
+        # right arm improves with truncation), M4c against a pure-solver
+        # z-staircase (converges only marching WITH the slant), and B4a
+        # against the EXACT quartic roots (1.4e-14 vs 3.5e-02).  The rotation
+        # gauge flips it once more (:func:`_slant_rot_gauge`).
         self.slant = _norm_slant_pair(slant, "Granet2DTransverseE")
         self.slanted = not _slant_is_zero(self.slant)
         self._slant_rot = (0.0, 0.0)
