@@ -1,0 +1,933 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "lumenairy": "C:\\tmp\\lum_vhyb\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "fixture": {
+  "px": 1.2e-06,
+  "wl": 6.8e-07,
+  "d": 5e-07,
+  "df": 2.5e-07,
+  "feps": 3.6,
+  "tsl": 0.5,
+  "walk_um": 0.25,
+  "walk_over_period": 0.20833333333333334,
+  "cell": [
+   [
+    4.0,
+    4.0,
+    4.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    4.0,
+    4.0,
+    4.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    2.0,
+    2.0,
+    2.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ]
+  ]
+ },
+ "grid": {
+  "slant_over_film|normal|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0754119004246419,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|normal|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.039416299331693,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|normal|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.0262014106000634,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|normal|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0046794353520645,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|normal|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0031013209337374,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|normal|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0015782883761846,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|oblique25|M3": {
+   "outcome": "SOLVED",
+   "RT": 4.540815721371707e+28,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique25|M5": {
+   "outcome": "SOLVED",
+   "RT": 5.844786922576e+29,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique25|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.6264222948656447e+29,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique25|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0067857826765088,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|oblique25|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0010181611237248,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|oblique25|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0028123945550222,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|conical25_40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0478240681152864,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|conical25_40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0446149211920324,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|conical25_40|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.027619077905145,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|conical25_40|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0073437375789063,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|conical25_40|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0028259925771628,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|conical25_40|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0020569351555784,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|oblique40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0625708571179011,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0567052765176266,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique40|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.0316991432538813,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique40|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.007029567466187,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|oblique40|M11": {
+   "outcome": "SOLVED",
+   "RT": 0.9988717379580303,
+   "warned": false,
+   "exc": null
+  },
+  "slant_over_film|oblique40|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0026092330604095,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|normal|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0640503322164505,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|normal|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0349819662356998,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|normal|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.0252699667796012,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|normal|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0032663420588657,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|normal|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0029862926376452,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|normal|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0015148636005449,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|oblique25|M3": {
+   "outcome": "SOLVED",
+   "RT": 3.7610022193380797e+27,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique25|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.2570060247441439e+30,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique25|M7": {
+   "outcome": "SOLVED",
+   "RT": 6.342152641206387e+30,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique25|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0065082446536655,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|oblique25|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0006307018964447,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|oblique25|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0019629740484304,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|conical25_40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0513489805289145,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|conical25_40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0461370191290913,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|conical25_40|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.0275409420813733,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|conical25_40|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0073543714640376,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|conical25_40|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0024328959465552,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|conical25_40|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0019946777815782,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|oblique40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0800722191627292,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0726292370875938,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique40|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.030760530539076,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique40|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0113397947797946,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique40|M11": {
+   "outcome": "SOLVED",
+   "RT": 0.9960417068023294,
+   "warned": false,
+   "exc": null
+  },
+  "slant_only|oblique40|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.00123299845893,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|normal|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0795821876154599,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|normal|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0412836104250514,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|normal|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.024253953194724,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|normal|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0034782441214731,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|normal|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0056582858567369,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|normal|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.001685475688241,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|oblique25|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.062995802391801,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|oblique25|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0411866375260872,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|oblique25|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.028261361933838,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|oblique25|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0014644376731927,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|oblique25|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0062282399816547,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|oblique25|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0043847584605825,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|conical25_40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0572082842050232,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|conical25_40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0387688768307684,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|conical25_40|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.0260585339712205,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|conical25_40|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0012636950407603,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|conical25_40|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.005630426251848,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|conical25_40|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0023000262649453,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|oblique40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0728502612644335,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|oblique40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0619295265410706,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|oblique40|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.0346189377528807,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|oblique40|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.003923458345327,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|oblique40|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0034467188576104,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_over_film|oblique40|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0026105529682918,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|normal|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.075505179175764,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|normal|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0358040528605885,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|normal|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.0225005647989602,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|normal|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0033762523910263,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|normal|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0047660483007688,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|normal|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0015359582733587,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|oblique25|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0574731495677692,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|oblique25|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0381658644135738,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|oblique25|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.0254007544184869,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|oblique25|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.000725873193212,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|oblique25|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0047192502996058,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|oblique25|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0022294653078998,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|conical25_40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0591557268835499,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|conical25_40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0374888731247973,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|conical25_40|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.0247656936555583,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|conical25_40|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.0014841769303966,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|conical25_40|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0049934109038865,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|conical25_40|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0021167615623399,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|oblique40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0758124466558563,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|oblique40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.061595656884288,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|oblique40|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.033372565278706,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|oblique40|M9": {
+   "outcome": "SOLVED",
+   "RT": 1.003724406070553,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|oblique40|M11": {
+   "outcome": "SOLVED",
+   "RT": 1.0041630480650734,
+   "warned": false,
+   "exc": null
+  },
+  "vertical_only|oblique40|M13": {
+   "outcome": "SOLVED",
+   "RT": 1.0024600161761728,
+   "warned": false,
+   "exc": null
+  }
+ },
+ "blowups": {
+  "slant_over_film|normal|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0754119004246419,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique25|M3": {
+   "outcome": "SOLVED",
+   "RT": 4.540815721371707e+28,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique25|M5": {
+   "outcome": "SOLVED",
+   "RT": 5.844786922576e+29,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique25|M7": {
+   "outcome": "SOLVED",
+   "RT": 1.6264222948656447e+29,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0625708571179011,
+   "warned": true,
+   "exc": null
+  },
+  "slant_over_film|oblique40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0567052765176266,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|normal|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0640503322164505,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique25|M3": {
+   "outcome": "SOLVED",
+   "RT": 3.7610022193380797e+27,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique25|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.2570060247441439e+30,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique25|M7": {
+   "outcome": "SOLVED",
+   "RT": 6.342152641206387e+30,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|conical25_40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0513489805289145,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0800722191627292,
+   "warned": true,
+   "exc": null
+  },
+  "slant_only|oblique40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0726292370875938,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|normal|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0795821876154599,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|oblique25|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.062995802391801,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|conical25_40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0572082842050232,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|oblique40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0728502612644335,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_over_film|oblique40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.0619295265410706,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|normal|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.075505179175764,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|oblique25|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0574731495677692,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|conical25_40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0591557268835499,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|oblique40|M3": {
+   "outcome": "SOLVED",
+   "RT": 1.0758124466558563,
+   "warned": true,
+   "exc": null
+  },
+  "vertical_only|oblique40|M5": {
+   "outcome": "SOLVED",
+   "RT": 1.061595656884288,
+   "warned": true,
+   "exc": null
+  }
+ },
+ "silent_blowups": {},
+ "mechanism": {
+  "worst": "slant_only|oblique25|M7",
+  "rows": {
+   "slant_over_film": {
+    "outcome": "SOLVED",
+    "RT": 1.6264222948656447e+29,
+    "warn": [
+     "PMMStack.solve: energy not conserved (max R+T = 1.63e+29 > 1) -- a near-singular interface"
+    ],
+    "probe": {
+     "n_interfaces": 3,
+     "max_cond_Mb": 171.3748541481656,
+     "max_cond_T22": 614399944665442.8,
+     "worst_lam_f_min_re": -0.10800340299094927,
+     "worst_lam_b_max_re": 0.07513644266979831,
+     "max_prop_factor": 1.647031464264282
+    }
+   },
+   "slant_only": {
+    "outcome": "SOLVED",
+    "RT": 6.342152641206387e+30,
+    "warn": [
+     "PMMStack.solve: energy not conserved (max R+T = 6.34e+30 > 1) -- a near-singular interface"
+    ],
+    "probe": {
+     "n_interfaces": 2,
+     "max_cond_Mb": 171.3748541481656,
+     "max_cond_T22": 1186128588441456.5,
+     "worst_lam_f_min_re": -0.10800340299094927,
+     "worst_lam_b_max_re": 0.07513644266979831,
+     "max_prop_factor": 1.647031464264282
+    }
+   },
+   "vertical_over_film": {
+    "outcome": "SOLVED",
+    "RT": 1.028261361933838,
+    "warn": [
+     "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mod"
+    ],
+    "probe": {
+     "n_interfaces": 0,
+     "max_cond_Mb": null,
+     "max_cond_T22": null,
+     "worst_lam_f_min_re": null,
+     "worst_lam_b_max_re": null,
+     "max_prop_factor": null
+    }
+   },
+   "vertical_only": {
+    "outcome": "SOLVED",
+    "RT": 1.0254007544184869,
+    "warn": [
+     "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mod"
+    ],
+    "probe": {
+     "n_interfaces": 0,
+     "max_cond_Mb": null,
+     "max_cond_T22": null,
+     "worst_lam_f_min_re": null,
+     "worst_lam_b_max_re": null,
+     "max_prop_factor": null
+    }
+   },
+   "ladder": {
+    "M3": 3.7610022193380797e+27,
+    "M5": 1.2570060247441439e+30,
+    "M7": 6.342152641206387e+30,
+    "M9": 1.0065082446536655,
+    "M11": 1.0006307018964447,
+    "M13": 1.0019629740484304
+   },
+   "near_superstrate_cutoff_1.0": [
+    {
+     "m": 1,
+     "n": 0,
+     "alpha": 0.989285,
+     "gap": -0.010715
+    },
+    {
+     "m": -2,
+     "n": -1,
+     "alpha": 0.90897,
+     "gap": -0.09103
+    },
+    {
+     "m": -2,
+     "n": 1,
+     "alpha": 0.90897,
+     "gap": -0.09103
+    },
+    {
+     "m": 1,
+     "n": -1,
+     "alpha": 1.140086,
+     "gap": 0.140086
+    }
+   ],
+   "near_substrate_cutoff_1.5": [
+    {
+     "m": 1,
+     "n": -2,
+     "alpha": 1.50437,
+     "gap": 0.00437
+    },
+    {
+     "m": 1,
+     "n": 2,
+     "alpha": 1.50437,
+     "gap": 0.00437
+    },
+    {
+     "m": 2,
+     "n": 0,
+     "alpha": 1.555952,
+     "gap": 0.055952
+    },
+    {
+     "m": -3,
+     "n": -1,
+     "alpha": 1.397432,
+     "gap": -0.102568
+    }
+   ],
+   "cell_values": [
+    1.0,
+    2.0,
+    4.0
+   ],
+   "eps_sup": 1.0,
+   "eps_sub": 2.25,
+   "pure_same_solid": {
+    "outcome": "SOLVED",
+    "RT": 1.000000045795028,
+    "warn": []
+   }
+  }
+ },
+ "seconds": 2455.4
+}

@@ -1,0 +1,2083 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "build": "win",
+  "tag": "fix.win",
+  "lumenairy": "C:\\tmp\\lum_vhyb\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "slant_over_film|normal|M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0754119004246419,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.08 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 98,
+    "n_backward": 98,
+    "n_growing_forward": 4,
+    "n_growing_backward": 21,
+    "worst_growth_rate": 0.008468636325867121,
+    "growth_factor": 1.039900471750916,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000772,
+     -0.001375,
+     -0.001347,
+     -0.000667
+    ],
+    "bad_backward_reGam": [
+     0.003174,
+     0.001908,
+     0.003047,
+     0.000332,
+     0.00274,
+     0.002873
+    ],
+    "bad_forward_relflux": [
+     0.4200541,
+     0.38782298,
+     0.37787877,
+     0.37944487
+    ],
+    "bad_backward_relflux": [
+     0.35910538,
+     0.37452021,
+     0.41016767,
+     0.36542137,
+     0.36320178,
+     0.44133013
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|normal|M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0640503322164505,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.06 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 98,
+    "n_backward": 98,
+    "n_growing_forward": 4,
+    "n_growing_backward": 21,
+    "worst_growth_rate": 0.008468636325867121,
+    "growth_factor": 1.039900471750916,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000772,
+     -0.001375,
+     -0.001347,
+     -0.000667
+    ],
+    "bad_backward_reGam": [
+     0.003174,
+     0.001908,
+     0.003047,
+     0.000332,
+     0.00274,
+     0.002873
+    ],
+    "bad_forward_relflux": [
+     0.4200541,
+     0.38782298,
+     0.37787877,
+     0.37944487
+    ],
+    "bad_backward_relflux": [
+     0.35910538,
+     0.37452021,
+     0.41016767,
+     0.36542137,
+     0.36320178,
+     0.44133013
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|normal|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.039416299331693,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 242,
+    "n_backward": 242,
+    "n_growing_forward": 24,
+    "n_growing_backward": 5,
+    "worst_growth_rate": 0.09228679546294227,
+    "growth_factor": 1.5316782014999384,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.001033,
+     -0.00082,
+     -0.00026,
+     -0.000384,
+     -1.4e-05,
+     -0.001469
+    ],
+    "bad_backward_reGam": [
+     9.7e-05,
+     0.000107,
+     1.9e-05,
+     0.088413,
+     0.000601
+    ],
+    "bad_forward_relflux": [
+     0.35096485,
+     0.36640278,
+     0.40595671,
+     0.33818254,
+     0.34648174,
+     0.3422315
+    ],
+    "bad_backward_relflux": [
+     0.4208946,
+     0.37898914,
+     0.39276369,
+     0.00183501,
+     0.32279231
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|normal|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0349819662356998,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 242,
+    "n_backward": 242,
+    "n_growing_forward": 24,
+    "n_growing_backward": 5,
+    "worst_growth_rate": 0.09228679546294227,
+    "growth_factor": 1.5316782014999384,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.001033,
+     -0.00082,
+     -0.00026,
+     -0.000384,
+     -1.4e-05,
+     -0.001469
+    ],
+    "bad_backward_reGam": [
+     9.7e-05,
+     0.000107,
+     1.9e-05,
+     0.088413,
+     0.000601
+    ],
+    "bad_forward_relflux": [
+     0.35096485,
+     0.36640278,
+     0.40595671,
+     0.33818254,
+     0.34648174,
+     0.3422315
+    ],
+    "bad_backward_relflux": [
+     0.4208946,
+     0.37898914,
+     0.39276369,
+     0.00183501,
+     0.32279231
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|normal|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0262014106000634,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 450,
+    "n_backward": 450,
+    "n_growing_forward": 4,
+    "n_growing_backward": 25,
+    "worst_growth_rate": 0.010290146763472471,
+    "growth_factor": 1.0486885325480846,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -9.5e-05,
+     -0.000374,
+     -0.003499,
+     -0.003236
+    ],
+    "bad_backward_reGam": [
+     6.4e-05,
+     0.000277,
+     0.000144,
+     0.000263,
+     0.000157,
+     0.002343
+    ],
+    "bad_forward_relflux": [
+     0.39506247,
+     0.36850412,
+     0.08440436,
+     0.34507001
+    ],
+    "bad_backward_relflux": [
+     0.41931767,
+     0.3534275,
+     0.36840672,
+     0.37901291,
+     0.4065242,
+     0.33369004
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|normal|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0252699667796012,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 450,
+    "n_backward": 450,
+    "n_growing_forward": 4,
+    "n_growing_backward": 25,
+    "worst_growth_rate": 0.010290146763472471,
+    "growth_factor": 1.0486885325480846,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -9.5e-05,
+     -0.000374,
+     -0.003499,
+     -0.003236
+    ],
+    "bad_backward_reGam": [
+     6.4e-05,
+     0.000277,
+     0.000144,
+     0.000263,
+     0.000157,
+     0.002343
+    ],
+    "bad_forward_relflux": [
+     0.39506247,
+     0.36850412,
+     0.08440436,
+     0.34507001
+    ],
+    "bad_backward_relflux": [
+     0.41931767,
+     0.3534275,
+     0.36840672,
+     0.37901291,
+     0.4065242,
+     0.33369004
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|normal|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0046794353520645,
+  "warned": [],
+  "modes": [
+   {
+    "n_forward": 722,
+    "n_backward": 722,
+    "n_growing_forward": 15,
+    "n_growing_backward": 14,
+    "worst_growth_rate": 0.0069536433018765045,
+    "growth_factor": 1.032647359702328,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -3.2e-05,
+     -4.1e-05,
+     -0.000686,
+     -0.001438,
+     -0.000213,
+     -0.000318
+    ],
+    "bad_backward_reGam": [
+     0.000337,
+     0.000233,
+     1.4e-05,
+     9.2e-05,
+     0.000197,
+     2.7e-05
+    ],
+    "bad_forward_relflux": [
+     0.41990686,
+     0.37639583,
+     0.409488,
+     0.33299905,
+     0.40521624,
+     0.35138402
+    ],
+    "bad_backward_relflux": [
+     0.35486181,
+     0.36936556,
+     0.38401208,
+     0.39408462,
+     0.34055534,
+     0.35727639
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|normal|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0032663420588657,
+  "warned": [],
+  "modes": [
+   {
+    "n_forward": 722,
+    "n_backward": 722,
+    "n_growing_forward": 15,
+    "n_growing_backward": 14,
+    "worst_growth_rate": 0.0069536433018765045,
+    "growth_factor": 1.032647359702328,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -3.2e-05,
+     -4.1e-05,
+     -0.000686,
+     -0.001438,
+     -0.000213,
+     -0.000318
+    ],
+    "bad_backward_reGam": [
+     0.000337,
+     0.000233,
+     1.4e-05,
+     9.2e-05,
+     0.000197,
+     2.7e-05
+    ],
+    "bad_forward_relflux": [
+     0.41990686,
+     0.37639583,
+     0.409488,
+     0.33299905,
+     0.40521624,
+     0.35138402
+    ],
+    "bad_backward_relflux": [
+     0.35486181,
+     0.36936556,
+     0.38401208,
+     0.39408462,
+     0.34055534,
+     0.35727639
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|oblique25|M3": {
+  "outcome": "SOLVED",
+  "RT": 4.540815721371707e+28,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 4.54e+28 > 1) -- a nea"
+  ],
+  "modes": [
+   {
+    "n_forward": 98,
+    "n_backward": 98,
+    "n_growing_forward": 8,
+    "n_growing_backward": 13,
+    "worst_growth_rate": 0.41836168212008357,
+    "growth_factor": 6.909010654370972,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000499,
+     -3e-05,
+     -0.000546,
+     -9.3e-05,
+     -0.398963,
+     -0.401931
+    ],
+    "bad_backward_reGam": [
+     0.000539,
+     0.001192,
+     0.000128,
+     0.00041,
+     0.000334,
+     0.001732
+    ],
+    "bad_forward_relflux": [
+     0.45916019,
+     0.42738203,
+     0.3926486,
+     0.30565238,
+     0.0030612,
+     0.00438562
+    ],
+    "bad_backward_relflux": [
+     0.35602542,
+     0.35842414,
+     0.38744501,
+     0.35860075,
+     0.38605464,
+     0.44282939
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|oblique25|M3": {
+  "outcome": "SOLVED",
+  "RT": 3.7610022193380797e+27,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 3.76e+27 > 1) -- a nea"
+  ],
+  "modes": [
+   {
+    "n_forward": 98,
+    "n_backward": 98,
+    "n_growing_forward": 8,
+    "n_growing_backward": 13,
+    "worst_growth_rate": 0.41836168212008357,
+    "growth_factor": 6.909010654370972,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000499,
+     -3e-05,
+     -0.000546,
+     -9.3e-05,
+     -0.398963,
+     -0.401931
+    ],
+    "bad_backward_reGam": [
+     0.000539,
+     0.001192,
+     0.000128,
+     0.00041,
+     0.000334,
+     0.001732
+    ],
+    "bad_forward_relflux": [
+     0.45916019,
+     0.42738203,
+     0.3926486,
+     0.30565238,
+     0.0030612,
+     0.00438562
+    ],
+    "bad_backward_relflux": [
+     0.35602542,
+     0.35842414,
+     0.38744501,
+     0.35860075,
+     0.38605464,
+     0.44282939
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|oblique25|M5": {
+  "outcome": "SOLVED",
+  "RT": 5.844786922576e+29,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 5.84e+29 > 1) -- a nea"
+  ],
+  "modes": [
+   {
+    "n_forward": 242,
+    "n_backward": 242,
+    "n_growing_forward": 32,
+    "n_growing_backward": 21,
+    "worst_growth_rate": 0.46693193534396155,
+    "growth_factor": 8.64706966735159,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000121,
+     -0.000576,
+     -0.001073,
+     -0.00012,
+     -0.003581,
+     -0.003216
+    ],
+    "bad_backward_reGam": [
+     3.5e-05,
+     0.000195,
+     0.000133,
+     6e-05,
+     0.00043,
+     2.7e-05
+    ],
+    "bad_forward_relflux": [
+     0.42159069,
+     0.35117327,
+     0.36626446,
+     0.37862813,
+     0.40797884,
+     0.34560537
+    ],
+    "bad_backward_relflux": [
+     0.40630245,
+     0.3386802,
+     0.39567626,
+     0.34646185,
+     0.3651046,
+     0.394471
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|oblique25|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.2570060247441439e+30,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.26e+30 > 1) -- a nea"
+  ],
+  "modes": [
+   {
+    "n_forward": 242,
+    "n_backward": 242,
+    "n_growing_forward": 32,
+    "n_growing_backward": 21,
+    "worst_growth_rate": 0.46693193534396155,
+    "growth_factor": 8.64706966735159,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000121,
+     -0.000576,
+     -0.001073,
+     -0.00012,
+     -0.003581,
+     -0.003216
+    ],
+    "bad_backward_reGam": [
+     3.5e-05,
+     0.000195,
+     0.000133,
+     6e-05,
+     0.00043,
+     2.7e-05
+    ],
+    "bad_forward_relflux": [
+     0.42159069,
+     0.35117327,
+     0.36626446,
+     0.37862813,
+     0.40797884,
+     0.34560537
+    ],
+    "bad_backward_relflux": [
+     0.40630245,
+     0.3386802,
+     0.39567626,
+     0.34646185,
+     0.3651046,
+     0.394471
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|oblique25|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.6264222948656447e+29,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.63e+29 > 1) -- a nea"
+  ],
+  "modes": [
+   {
+    "n_forward": 450,
+    "n_backward": 450,
+    "n_growing_forward": 5,
+    "n_growing_backward": 9,
+    "worst_growth_rate": 0.10800340299094927,
+    "growth_factor": 1.6470314642642818,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000343,
+     -0.000242,
+     -2.2e-05,
+     -0.108003,
+     -0.00055
+    ],
+    "bad_backward_reGam": [
+     0.000478,
+     0.000436,
+     0.00066,
+     0.000144,
+     0.000196,
+     0.00029
+    ],
+    "bad_forward_relflux": [
+     0.41988529,
+     0.37941078,
+     0.37914293,
+     0.00531301,
+     0.2088963
+    ],
+    "bad_backward_relflux": [
+     0.41866714,
+     0.37879575,
+     0.33586949,
+     0.35039481,
+     0.42540816,
+     0.3811166
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|oblique25|M7": {
+  "outcome": "SOLVED",
+  "RT": 6.342152641206387e+30,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 6.34e+30 > 1) -- a nea"
+  ],
+  "modes": [
+   {
+    "n_forward": 450,
+    "n_backward": 450,
+    "n_growing_forward": 5,
+    "n_growing_backward": 9,
+    "worst_growth_rate": 0.10800340299094927,
+    "growth_factor": 1.6470314642642818,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000343,
+     -0.000242,
+     -2.2e-05,
+     -0.108003,
+     -0.00055
+    ],
+    "bad_backward_reGam": [
+     0.000478,
+     0.000436,
+     0.00066,
+     0.000144,
+     0.000196,
+     0.00029
+    ],
+    "bad_forward_relflux": [
+     0.41988529,
+     0.37941078,
+     0.37914293,
+     0.00531301,
+     0.2088963
+    ],
+    "bad_backward_relflux": [
+     0.41866714,
+     0.37879575,
+     0.33586949,
+     0.35039481,
+     0.42540816,
+     0.3811166
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|oblique25|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0067857826765088,
+  "warned": [],
+  "modes": [
+   {
+    "n_forward": 722,
+    "n_backward": 722,
+    "n_growing_forward": 18,
+    "n_growing_backward": 14,
+    "worst_growth_rate": 0.09183585644033163,
+    "growth_factor": 1.5284905267728,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -1.4e-05,
+     -0.000106,
+     -3.5e-05,
+     -0.002037,
+     -0.000473,
+     -0.001681
+    ],
+    "bad_backward_reGam": [
+     0.000151,
+     0.000104,
+     8.8e-05,
+     6e-06,
+     4.9e-05,
+     8.8e-05
+    ],
+    "bad_forward_relflux": [
+     0.42011672,
+     0.35318564,
+     0.3767089,
+     0.33332851,
+     0.35055042,
+     0.38937733
+    ],
+    "bad_backward_relflux": [
+     0.41970716,
+     0.35502881,
+     0.37630756,
+     0.42589671,
+     0.37313757,
+     0.39818884
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|oblique25|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0065082446536655,
+  "warned": [],
+  "modes": [
+   {
+    "n_forward": 722,
+    "n_backward": 722,
+    "n_growing_forward": 18,
+    "n_growing_backward": 14,
+    "worst_growth_rate": 0.09183585644033163,
+    "growth_factor": 1.5284905267728,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -1.4e-05,
+     -0.000106,
+     -3.5e-05,
+     -0.002037,
+     -0.000473,
+     -0.001681
+    ],
+    "bad_backward_reGam": [
+     0.000151,
+     0.000104,
+     8.8e-05,
+     6e-06,
+     4.9e-05,
+     8.8e-05
+    ],
+    "bad_forward_relflux": [
+     0.42011672,
+     0.35318564,
+     0.3767089,
+     0.33332851,
+     0.35055042,
+     0.38937733
+    ],
+    "bad_backward_relflux": [
+     0.41970716,
+     0.35502881,
+     0.37630756,
+     0.42589671,
+     0.37313757,
+     0.39818884
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|conical25_40|M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0478240681152864,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.05 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 98,
+    "n_backward": 98,
+    "n_growing_forward": 2,
+    "n_growing_backward": 12,
+    "worst_growth_rate": 0.003023946726885594,
+    "growth_factor": 1.0140686461079442,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.001626,
+     -0.000671
+    ],
+    "bad_backward_reGam": [
+     0.0012,
+     5.2e-05,
+     0.000286,
+     0.003024,
+     0.000446,
+     0.000725
+    ],
+    "bad_forward_relflux": [
+     0.37387236,
+     0.42160241
+    ],
+    "bad_backward_relflux": [
+     0.35679401,
+     0.35583111,
+     0.38418269,
+     0.43410983,
+     0.44725578,
+     0.46043232
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|conical25_40|M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0513489805289145,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.05 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 98,
+    "n_backward": 98,
+    "n_growing_forward": 2,
+    "n_growing_backward": 12,
+    "worst_growth_rate": 0.003023946726885594,
+    "growth_factor": 1.0140686461079442,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.001626,
+     -0.000671
+    ],
+    "bad_backward_reGam": [
+     0.0012,
+     5.2e-05,
+     0.000286,
+     0.003024,
+     0.000446,
+     0.000725
+    ],
+    "bad_forward_relflux": [
+     0.37387236,
+     0.42160241
+    ],
+    "bad_backward_relflux": [
+     0.35679401,
+     0.35583111,
+     0.38418269,
+     0.43410983,
+     0.44725578,
+     0.46043232
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|conical25_40|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0446149211920324,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 242,
+    "n_backward": 242,
+    "n_growing_forward": 27,
+    "n_growing_backward": 21,
+    "worst_growth_rate": 0.4629523176366439,
+    "growth_factor": 8.48953905333013,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000781,
+     -0.001076,
+     -0.002585,
+     -0.002779,
+     -0.000792,
+     -0.001001
+    ],
+    "bad_backward_reGam": [
+     3e-05,
+     3.2e-05,
+     0.000493,
+     0.000154,
+     0.000178,
+     0.000224
+    ],
+    "bad_forward_relflux": [
+     0.35106381,
+     0.36606037,
+     0.40783887,
+     0.3422577,
+     0.39108093,
+     0.3392176
+    ],
+    "bad_backward_relflux": [
+     0.37841403,
+     0.40614022,
+     0.34005558,
+     0.3965432,
+     0.34014335,
+     0.40344887
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|conical25_40|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0461370191290913,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.05 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 242,
+    "n_backward": 242,
+    "n_growing_forward": 27,
+    "n_growing_backward": 21,
+    "worst_growth_rate": 0.4629523176366439,
+    "growth_factor": 8.48953905333013,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000781,
+     -0.001076,
+     -0.002585,
+     -0.002779,
+     -0.000792,
+     -0.001001
+    ],
+    "bad_backward_reGam": [
+     3e-05,
+     3.2e-05,
+     0.000493,
+     0.000154,
+     0.000178,
+     0.000224
+    ],
+    "bad_forward_relflux": [
+     0.35106381,
+     0.36606037,
+     0.40783887,
+     0.3422577,
+     0.39108093,
+     0.3392176
+    ],
+    "bad_backward_relflux": [
+     0.37841403,
+     0.40614022,
+     0.34005558,
+     0.3965432,
+     0.34014335,
+     0.40344887
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|conical25_40|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.027619077905145,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 450,
+    "n_backward": 450,
+    "n_growing_forward": 8,
+    "n_growing_backward": 12,
+    "worst_growth_rate": 0.43007647568808477,
+    "growth_factor": 7.2932456858107235,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000319,
+     -0.000176,
+     -7.8e-05,
+     -0.000313,
+     -0.000152,
+     -0.357534
+    ],
+    "bad_backward_reGam": [
+     0.000464,
+     0.000493,
+     0.001337,
+     0.000391,
+     0.000888,
+     4.9e-05
+    ],
+    "bad_forward_relflux": [
+     0.42009215,
+     0.37888313,
+     0.36530869,
+     0.30819252,
+     0.31282584,
+     0.00331839
+    ],
+    "bad_backward_relflux": [
+     0.41904542,
+     0.37836015,
+     0.33799622,
+     0.34327748,
+     0.40143275,
+     0.45611159
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|conical25_40|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0275409420813733,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 450,
+    "n_backward": 450,
+    "n_growing_forward": 8,
+    "n_growing_backward": 12,
+    "worst_growth_rate": 0.43007647568808477,
+    "growth_factor": 7.2932456858107235,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000319,
+     -0.000176,
+     -7.8e-05,
+     -0.000313,
+     -0.000152,
+     -0.357534
+    ],
+    "bad_backward_reGam": [
+     0.000464,
+     0.000493,
+     0.001337,
+     0.000391,
+     0.000888,
+     4.9e-05
+    ],
+    "bad_forward_relflux": [
+     0.42009215,
+     0.37888313,
+     0.36530869,
+     0.30819252,
+     0.31282584,
+     0.00331839
+    ],
+    "bad_backward_relflux": [
+     0.41904542,
+     0.37836015,
+     0.33799622,
+     0.34327748,
+     0.40143275,
+     0.45611159
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|conical25_40|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0073437375789063,
+  "warned": [],
+  "modes": [
+   {
+    "n_forward": 722,
+    "n_backward": 722,
+    "n_growing_forward": 16,
+    "n_growing_backward": 16,
+    "worst_growth_rate": 0.002287255963779416,
+    "growth_factor": 1.010623126801179,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -7.1e-05,
+     -9e-05,
+     -0.002287,
+     -0.000604,
+     -0.00123,
+     -0.000128
+    ],
+    "bad_backward_reGam": [
+     0.000133,
+     0.000183,
+     2.4e-05,
+     8.6e-05,
+     5.8e-05,
+     0.000158
+    ],
+    "bad_forward_relflux": [
+     0.41987186,
+     0.37757486,
+     0.33509459,
+     0.344139,
+     0.37923621,
+     0.44343425
+    ],
+    "bad_backward_relflux": [
+     0.41951419,
+     0.35502429,
+     0.36920791,
+     0.37724038,
+     0.44737646,
+     0.45243356
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|conical25_40|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0073543714640376,
+  "warned": [],
+  "modes": [
+   {
+    "n_forward": 722,
+    "n_backward": 722,
+    "n_growing_forward": 16,
+    "n_growing_backward": 16,
+    "worst_growth_rate": 0.002287255963779416,
+    "growth_factor": 1.010623126801179,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -7.1e-05,
+     -9e-05,
+     -0.002287,
+     -0.000604,
+     -0.00123,
+     -0.000128
+    ],
+    "bad_backward_reGam": [
+     0.000133,
+     0.000183,
+     2.4e-05,
+     8.6e-05,
+     5.8e-05,
+     0.000158
+    ],
+    "bad_forward_relflux": [
+     0.41987186,
+     0.37757486,
+     0.33509459,
+     0.344139,
+     0.37923621,
+     0.44343425
+    ],
+    "bad_backward_relflux": [
+     0.41951419,
+     0.35502429,
+     0.36920791,
+     0.37724038,
+     0.44737646,
+     0.45243356
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|oblique40|M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0625708571179011,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.06 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 98,
+    "n_backward": 98,
+    "n_growing_forward": 1,
+    "n_growing_backward": 6,
+    "worst_growth_rate": 0.48508821300541294,
+    "growth_factor": 9.403691297468091,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.198203
+    ],
+    "bad_backward_reGam": [
+     0.004941,
+     0.001623,
+     0.001557,
+     0.000286,
+     0.000323,
+     0.485088
+    ],
+    "bad_forward_relflux": [
+     0.00431993
+    ],
+    "bad_backward_relflux": [
+     0.35328405,
+     0.39388804,
+     0.3592633,
+     0.35595626,
+     0.42351149,
+     0.0110764
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|oblique40|M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0800722191627292,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.08 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 98,
+    "n_backward": 98,
+    "n_growing_forward": 1,
+    "n_growing_backward": 6,
+    "worst_growth_rate": 0.48508821300541294,
+    "growth_factor": 9.403691297468091,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.198203
+    ],
+    "bad_backward_reGam": [
+     0.004941,
+     0.001623,
+     0.001557,
+     0.000286,
+     0.000323,
+     0.485088
+    ],
+    "bad_forward_relflux": [
+     0.00431993
+    ],
+    "bad_backward_relflux": [
+     0.35328405,
+     0.39388804,
+     0.3592633,
+     0.35595626,
+     0.42351149,
+     0.0110764
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|oblique40|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0567052765176266,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.06 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 242,
+    "n_backward": 242,
+    "n_growing_forward": 30,
+    "n_growing_backward": 22,
+    "worst_growth_rate": 0.4710943690585219,
+    "growth_factor": 8.814965442725443,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000791,
+     -0.000788,
+     -0.000676,
+     -0.004689,
+     -0.003763,
+     -0.00198
+    ],
+    "bad_backward_reGam": [
+     0.000138,
+     0.000363,
+     0.000151,
+     9.9e-05,
+     0.000543,
+     4.4e-05
+    ],
+    "bad_forward_relflux": [
+     0.42238757,
+     0.36764575,
+     0.37891346,
+     0.40958713,
+     0.3498011,
+     0.38188328
+    ],
+    "bad_backward_relflux": [
+     0.35348284,
+     0.37059563,
+     0.40671546,
+     0.39530841,
+     0.3398999,
+     0.42201312
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|oblique40|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0726292370875938,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.07 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 242,
+    "n_backward": 242,
+    "n_growing_forward": 30,
+    "n_growing_backward": 22,
+    "worst_growth_rate": 0.4710943690585219,
+    "growth_factor": 8.814965442725443,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000791,
+     -0.000788,
+     -0.000676,
+     -0.004689,
+     -0.003763,
+     -0.00198
+    ],
+    "bad_backward_reGam": [
+     0.000138,
+     0.000363,
+     0.000151,
+     9.9e-05,
+     0.000543,
+     4.4e-05
+    ],
+    "bad_forward_relflux": [
+     0.42238757,
+     0.36764575,
+     0.37891346,
+     0.40958713,
+     0.3498011,
+     0.38188328
+    ],
+    "bad_backward_relflux": [
+     0.35348284,
+     0.37059563,
+     0.40671546,
+     0.39530841,
+     0.3398999,
+     0.42201312
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|oblique40|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0316991432538813,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 450,
+    "n_backward": 450,
+    "n_growing_forward": 8,
+    "n_growing_backward": 13,
+    "worst_growth_rate": 0.47177063586426327,
+    "growth_factor": 8.842549507530917,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000234,
+     -0.000215,
+     -0.000132,
+     -0.000264,
+     -0.454421,
+     -0.306431
+    ],
+    "bad_backward_reGam": [
+     0.000281,
+     1.1e-05,
+     7.3e-05,
+     0.000107,
+     9.6e-05,
+     0.0002
+    ],
+    "bad_forward_relflux": [
+     0.41991101,
+     0.37940952,
+     0.39742996,
+     0.404047,
+     0.00365939,
+     0.00320144
+    ],
+    "bad_backward_relflux": [
+     0.41859902,
+     0.35386531,
+     0.36845052,
+     0.37889894,
+     0.40688878,
+     0.39789542
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|oblique40|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.030760530539076,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 450,
+    "n_backward": 450,
+    "n_growing_forward": 8,
+    "n_growing_backward": 13,
+    "worst_growth_rate": 0.47177063586426327,
+    "growth_factor": 8.842549507530917,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.000234,
+     -0.000215,
+     -0.000132,
+     -0.000264,
+     -0.454421,
+     -0.306431
+    ],
+    "bad_backward_reGam": [
+     0.000281,
+     1.1e-05,
+     7.3e-05,
+     0.000107,
+     9.6e-05,
+     0.0002
+    ],
+    "bad_forward_relflux": [
+     0.41991101,
+     0.37940952,
+     0.39742996,
+     0.404047,
+     0.00365939,
+     0.00320144
+    ],
+    "bad_backward_relflux": [
+     0.41859902,
+     0.35386531,
+     0.36845052,
+     0.37889894,
+     0.40688878,
+     0.39789542
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_over_film|oblique40|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.007029567466187,
+  "warned": [],
+  "modes": [
+   {
+    "n_forward": 722,
+    "n_backward": 722,
+    "n_growing_forward": 16,
+    "n_growing_backward": 11,
+    "worst_growth_rate": 0.0014438175303645188,
+    "growth_factor": 1.006692718201512,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.00033,
+     -0.00018,
+     -0.000449,
+     -0.000142,
+     -0.001442,
+     -0.001329
+    ],
+    "bad_backward_reGam": [
+     0.0001,
+     2.9e-05,
+     1.9e-05,
+     3e-05,
+     1.9e-05,
+     7.6e-05
+    ],
+    "bad_forward_relflux": [
+     0.3524664,
+     0.36683718,
+     0.3301249,
+     0.34944396,
+     0.4237496,
+     0.35828433
+    ],
+    "bad_backward_relflux": [
+     0.41966428,
+     0.37640838,
+     0.40928046,
+     0.33664558,
+     0.40532646,
+     0.35218562
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "slant_only|oblique40|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0113397947797946,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-si"
+  ],
+  "modes": [
+   {
+    "n_forward": 722,
+    "n_backward": 722,
+    "n_growing_forward": 16,
+    "n_growing_backward": 11,
+    "worst_growth_rate": 0.0014438175303645188,
+    "growth_factor": 1.006692718201512,
+    "k0d": 4.619989196455578,
+    "bad_forward_reGam": [
+     -0.00033,
+     -0.00018,
+     -0.000449,
+     -0.000142,
+     -0.001442,
+     -0.001329
+    ],
+    "bad_backward_reGam": [
+     0.0001,
+     2.9e-05,
+     1.9e-05,
+     3e-05,
+     1.9e-05,
+     7.6e-05
+    ],
+    "bad_forward_relflux": [
+     0.3524664,
+     0.36683718,
+     0.3301249,
+     0.34944396,
+     0.4237496,
+     0.35828433
+    ],
+    "bad_backward_relflux": [
+     0.41966428,
+     0.37640838,
+     0.40928046,
+     0.33664558,
+     0.40532646,
+     0.35218562
+    ],
+    "in_stability_band": [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   }
+  ]
+ },
+ "vertical_over_film|normal|M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0795821876154599,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.08 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|normal|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0412836104250514,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|normal|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.024253953194724,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|normal|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0034782441214731,
+  "warned": [],
+  "modes": []
+ },
+ "vertical_over_film|oblique25|M3": {
+  "outcome": "SOLVED",
+  "RT": 1.062995802391801,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.06 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|oblique25|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0411866375260872,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|oblique25|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.028261361933838,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|oblique25|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0014644376731927,
+  "warned": [],
+  "modes": []
+ },
+ "vertical_over_film|conical25_40|M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0572082842050232,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.06 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|conical25_40|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0387688768307684,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|conical25_40|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0260585339712205,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|conical25_40|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.0012636950407603,
+  "warned": [],
+  "modes": []
+ },
+ "vertical_over_film|oblique40|M3": {
+  "outcome": "SOLVED",
+  "RT": 1.0728502612644335,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.07 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|oblique40|M5": {
+  "outcome": "SOLVED",
+  "RT": 1.0619295265410706,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.06 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|oblique40|M7": {
+  "outcome": "SOLVED",
+  "RT": 1.0346189377528807,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-si"
+  ],
+  "modes": []
+ },
+ "vertical_over_film|oblique40|M9": {
+  "outcome": "SOLVED",
+  "RT": 1.003923458345327,
+  "warned": [],
+  "modes": []
+ },
+ "_seconds": 182.6
+}

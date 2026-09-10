@@ -51,8 +51,11 @@ Run everything with `OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=MKL_NUM_THREADS=1`.
 | `q3_composition.py` | 3 | A slanted-over-film / B film-above / D two DIFFERENT slants / E+F the two null shapes below / G the reflection round trip / H the shear-continued SCOPE |
 | `q3b_split.py` | 3 | the layer-split identity and its BLINDNESS to the walk sum |
 | `q4_jax.py` | 4 | seven traced routes to the jnp twin, two controls, an AD-vs-FD gradient, and the `pmm_jones_2d` route the fix did not close |
-| `q5_o2_blowup.py` | 5 | the O2 grid on two of this set's own fixtures, plus the generalized-cascade instrumentation (`Probe`) |
+| `q5_o2_blowup.py` | 5 | the O2 grid on two of this set's own fixtures, plus the generalized-cascade instrumentation (`Probe`: `cond(Mb)`, `cond(T22)`, the forward/backward eigenvalue split, the largest propagation factor) |
 | `q5b_o2_exact.py` | 5 | the O2 grid on the EXACT fixture the fix's probes rejected, 4 stack shapes x 4 mounts x 6 `n_orders` |
+| `q5c_mechanism.py` | 5 | the MODE-level instrumentation (`ModeProbe` on `_layer_modes_projected`): how many modes are on the wrong side of the forward/backward split, and the growing exponential that puts into the cascade -- plus the VERTICAL control |
+| `q5d_conditioning.py` | 5 | the INTERFACE-level half: `cond(T22)` at the pairs `q5c` found, the full cut-off table (superstrate / substrate / every cell value), and the PURE control |
+| `q5e_discriminators.py` | 5 | the four one-axis scans that decide what the blow-up depends on: DETUNE, `theta`, the slant magnitude, the spectral `degree` |
 | `q6_durability.py` | 6 | re-measures every numeric bar in `tests/unit/test_fix_hybrid_slant_transmission_anchor.py` through the test module's own fixtures and prints bar / measured / margin |
 
 `results/` holds every run's JSON (suffixed by arm) and the console logs.
