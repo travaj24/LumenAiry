@@ -206,6 +206,24 @@ def test_the_minimum_segment_bar_clears_every_geometry_the_library_builds():
     n_cross = 0.5 / (2.0 * bar)
     assert n_cross > 200.0, n_cross
     assert min(closing.values()) > 3.0 * bar, closing
+    # (d) the census is read off the stack's own wall arrays above, which is
+    # the API's INTENT.  Arm the basis's own census through a real solve and
+    # confirm that what ``Basis1D`` is actually handed agrees, and that
+    # nothing was refused -- the guard is where the grid is BUILT, so this is
+    # the arm that proves it sees the same geometry.
+    seen = _ts._STAG_SEG_CENSUS
+    _ts._STAG_SEG_CENSUS = []
+    try:
+        st = _shipped_geometry_battery()["nested"]
+        st.set_source(_WL, theta=_TH, phi=_PH)
+        st.solve(jones=False)
+        rows = list(_ts._STAG_SEG_CENSUS)
+    finally:
+        _ts._STAG_SEG_CENSUS = seen
+    assert rows, "the census recorded nothing -- is the guard still on the "                 "path the solve takes?"
+    assert not any(r[4] for r in rows), rows          # nothing refused
+    assert min(r[3] for r in rows) == pytest.approx(census["nested"],
+                                                    rel=1e-12), (rows, census)
 
 
 def test_a_requested_sliver_is_refused_and_the_message_names_the_cure():

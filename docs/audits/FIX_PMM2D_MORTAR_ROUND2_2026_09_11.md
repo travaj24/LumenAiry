@@ -310,6 +310,32 @@ fixed WIDTH contract cannot know `M`, the wavelength or the contrast; it is
 the cheap, documented, solve-free half, and the backstop names the same
 remedies.
 
+### 3.2a WHAT THE GUARD DOES NOT DO, stated plainly
+
+The accuracy cost is CONTINUOUS in the wall width (S2.3), so a bar that
+refuses at 1e-3 does not restore accuracy above 1e-3 -- it refuses where the
+operator runs out of digits, and the band between an ordinary partition and
+the bar carries a real, unrefused cost:
+
+| narrowest segment | 3e-01 | 1e-01 | 3e-02 | 1e-02 | 3e-03 | 1e-03 (the bar) |
+|---|---|---|---|---|---|---|
+| err at `M` = 6, fixture 2 | 7.29e-03 | 1.24e-02 | 1.95e-02 | 2.59e-02 | 3.14e-02 | 3.61e-02 |
+| x the ordinary arm | 1.0 | 1.7 | 2.7 | 3.6 | 4.3 | 5.0 |
+
+and the ORDINARY control at 0.12 -- a perfectly reasonable partition nobody
+would refuse -- already reads 1.114e-02, i.e. 1.5x.  **So part of that band is
+just "a less balanced partition is less accurate", which is a property of the
+method and not a defect**, and the rest shades continuously into the sliver
+regime.  There is no width at which the two can be separated, which is why the
+bar is placed on DIGITS rather than on a chosen accuracy multiple, and why the
+`n_modes` ladder -- not this guard -- remains the user's instrument.
+
+The concrete case a user meets is the closing taper: at `n_slices` = 64 its
+narrowest sampled segment is 4.1e-03, **above the bar and therefore returned**,
+with a floor of roughly 4x on its `n_modes` ladder.  That is a documented cost
+of slicing a taper to its tip, not something the guard removes; it is why
+`add_tapered_pillar`'s docstring now carries the arithmetic.
+
 ### 3.3 FAIL-BEFORE, two-sided
 
 `test_fail_before_the_sliver_the_guard_refuses_is_measurably_wrong`.  With
