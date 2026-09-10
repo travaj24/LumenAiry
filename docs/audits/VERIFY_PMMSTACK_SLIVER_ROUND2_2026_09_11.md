@@ -1109,7 +1109,12 @@ on this branch (the round-2 report's 42 plus
 report was written.  The reason is the box, not the tests: 24 logical CPUs
 shared with several other agents' pytest suites and probe sweeps (one of them
 holding 14 GB), so the run accumulated 1,324 s of CPU over 3 h of wall time --
-about 12 % of one core.  Nothing failed; it did not finish.
+about 12 % of one core.  Nothing failed; it did not finish.  Its partial output is committed as
+`validation/probe_verify_sliver_round2/_regression_win.txt` -- **53 % of the
+collected tests, one `s`, zero `F` and zero `E`** at the point this report was
+closed, the single skip being the pre-existing
+`test_niche_audit_m4_m5_m6_rcwa.py:387` threadpoolctl skip that the round-1,
+verification and round-2 regressions all record.
 
 What IS green on this branch, on BOTH builds:
 
