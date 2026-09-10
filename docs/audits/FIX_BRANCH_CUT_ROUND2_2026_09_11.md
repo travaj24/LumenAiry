@@ -815,7 +815,13 @@ Three readings are worth calling out.
   than from the function's inputs.
 * **Every staggered and 1-D PMM surface is bit-identical** -- 0.000e+00 on all
   of them, including the OUT-OF-PLANE and MAGNETIC ones -- because they never
-  call the function.  That is the scope claim of section 2, measured.
+  call the function.  That is the scope claim of section 2, measured.  (Two
+  census rows produced no number because the FIXTURE, not the arm, refuses
+  them: `stag_slant` raises `NotImplementedError` on both arms -- the staggered
+  entry's slant is scoped narrower than I assumed -- and `onedjones_conical`
+  raises `TypeError` from a signature I got wrong.  Both raise identically on
+  both arms, so neither hides a motion; the slanted PMM path is covered by
+  `stack_slant` and `stack_slant_coinc` instead.)
 * **`stack_slant_coinc` is bit-identical (0.000e+00) while `stack_spacer_coinc`
   moves 2.9e-05.**  A SLANTED patterned layer is solved through the 4N
   first-order generator and `_generator_modes`, not through `_sqrt_decay`, so
