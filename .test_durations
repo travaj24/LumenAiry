@@ -12661,6 +12661,8 @@
   "tests/unit/test_verify_pmm2d_mortar_round3.py::test_a_uniform_lattice_cannot_reach_the_band_through_the_public_api": 0.01,
   "tests/unit/test_verify_pmm2d_mortar_round3.py::test_ordinary_geometries_sit_closer_to_the_band_edge_than_3x": 13.25,
   "tests/unit/test_verify_pmm2d_mortar_round3.py::test_the_band_warning_does_not_fire_on_an_axis_that_carries_no_mortar": 1.39,
+  "tests/unit/test_verify_pmm2d_mortar_round4.py::test_the_axis_the_rule_skips_is_harmless_and_the_one_it_keeps_is_not": 8.11,
+  "tests/unit/test_verify_pmm2d_mortar_round4.py::test_the_ordinary_arm_precondition_does_not_certify_the_m5_rung": 20.15,
   "tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_per_layer_on_coinciding_grids_is_bit_exact_vs_shared": 31.86,
   "tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_across_non_conforming_grids_matches_the_1d_oracle[15.0-0.0]": 27.09,
   "tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_across_non_conforming_grids_matches_the_1d_oracle[28.0-22.0]": 28.42,
