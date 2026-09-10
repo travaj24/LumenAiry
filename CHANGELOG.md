@@ -88,6 +88,56 @@ the strongest available evidence its conjunction is real.
 Full write-up, both builds' tables and every bar's derivation:
 `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md`.
 
+### Fixed -- the `min_feature` wall-snap treats a SYMMETRIC pair symmetrically
+
+`_pmm_union_grid` merges a cross-layer wall pair when `d < min_feature`, and `d`
+is a difference of CUMULATIVE SUMS of period fractions -- so two pairs a caller
+made the SAME width land on either side of a `min_feature` set to that width.
+MEASURED on three fixtures at the library default: the separations read
+`1.0000000000010001e-05` and `9.99999999995449e-06`, one merged and one did
+not, and the resulting geometry -- one nobody asked for -- solved **0.93 / 2.40
+/ 16.4** from the exact coincident-wall limit where snapping BOTH reads
+1.15e-05 / 1.21e-05 / 3.51e-05.  `<=` does NOT fix it: the pair STRADDLES the
+threshold, it does not sit on it.
+
+The comparison now carries an ABSOLUTE round-off deadband
+(`_WALL_SNAP_DEADBAND` = 16 ULP of 1.0 = 3.55e-15 of a period -- the walls live
+in `[0, 1]`, and the worst `|d - min_feature|` over 120,000 random two-layer
+layouts across six `min_feature` decades is 1.565e-16, so the deadband carries
+23x headroom and sits six decades below the function's own 1e-9 dedup `tol`).
+It SUBTRACTS, so `min_feature` keeps the "closer than" meaning its docstring
+states and the change can only ever merge FEWER pairs, never more.
+
+Two-sided against the pre-fix library over 11,418 deterministic cases
+(0.01x..100x `min_feature` on four values, 4,000 random two-layer layouts, 200
+random 6-slice tapers): **11 differ, all 11 ON the threshold; 11,407
+off-threshold cases bit-identical.**  Open item A of the O-11 fix;
+`validation/probe_verify_sliver/v5_deadband.py`,
+`tests/unit/test_verify_pmmstack_sliver_walls.py`.
+
+### Docs -- `PMMStack`'s `min_feature` comment no longer promises a report that does not exist
+
+It said "a cross-layer sliver left in the grid is now reported by
+`_pmm_union_grid`".  It is not: that function warns only about the pairs it
+SNAPS.  The comment now names the two reports that DO exist -- the snap warning
+and the O-11 conjunction refusal -- and the gap between them.  Open item C.
+
+### Verified -- the O-11 sliver fix, re-measured independently
+
+`docs/audits/VERIFY_PMMSTACK_SLIVER_WALLS_2026_09_11.md` re-measures every claim
+of the fix above on its own fixtures and on both builds: bit-identity 21/21, the
+`1/w` and `1/w^2` exponents FITTED, the `|q|` predictor, both O-11 corrections,
+the attribution ratios, and -- tested rather than assumed -- that the per-layer
+MORTAR route carries a within-layer sliver to 1e-6 of a period without a silent
+wrong answer.  It also BOUNDS three claims: the "3.4 / 2.1 decades" separation
+is a property of the fix's 46-point sample (a 120-point grid of the same family
+reads 9.87e-05 and 7.14e-03, the latter BELOW the bar), the remedy's `2*delta`
+bar is the O-11 fixture's own sensitivity rather than a scale-free bound, and
+the refusal fires on solves whose super-unity is ordinary truncation (110 of 648
+realistic staircase configurations) where its first-named remedy silences the
+guard without changing the number.  Open items B, E and F of the fix are
+re-measured there; E is closed.
+
 ### Added -- PER-LAYER element grids (L2 mortar) + NON-UNIFORM segment boundaries for the PURE staggered 2-D PMM
 
 Two coupled changes that only pay together, and between them they make an

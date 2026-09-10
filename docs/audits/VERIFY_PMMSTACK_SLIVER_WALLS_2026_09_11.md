@@ -302,6 +302,19 @@ worst row every propagating order is off in the same direction by 1.8e-04 to
 | deg 14, 1.5859e-06 | 0 / 81 | 78 | 3 | 3 | all zero-width | 2.3631e-03 | +6.8637e-03 |
 | deg 12, 2.2413e-06 | 0 / 81 | 78 | 3 | 3 | all zero-width | 1.9737e-03 | +4.0354e-03 |
 
+and around the fix's own grey row (degree 12, δ = 5.544e-06 — the neighbourhood
+open item B names), a 121-point walk of 0.7 … 1.3 × that δ:
+
+| right | refused | quiet | contiguous runs | max err inside | max `err/δ` inside | max `R+T−1` inside |
+|---|---|---|---|---|---|---|
+| **3 / 121** | 108 | 10 | 10, **all zero-width** | 2.9504e-04 | 63.6 | +5.2375e-04 |
+
+Same shape: isolated δ, ~8 % of samples, errors two decades under the refused
+population. (Note the trap: at the ROUNDED δ `5.544e-06` the answer reads
+err 8.58e+00 at `R+T−1` = +22.3 and IS refused — the audit's grey row is at the
+exact `geomspace` float, which my S4.1 re-run of its own grid reproduces
+exactly.)
+
 Read this as the guard's FLOOR: inside the hazard band essentially nothing is
 correct, the guard refuses ≈ 93 % of it, and the ≈ 7 % it returns are isolated
 δ carrying errors up to **8.0e-03** at `R+T−1` up to **+9.69e-03** — 3 % under
@@ -391,6 +404,30 @@ conical and slant maps, and 0 among the shipped battery
 lossy substrates at Im(n) = 0.05 / 0.5 / 2.0, conical and slant mounts with and
 without a sliver, and many-slice tapers at `n_slices` 16–40 and degree 6–8 —
 all returned, all closing to ≤ 3e-06.
+
+**The negative controls, independently.** Each built WITH the 1e-4 sliver
+present, and `_sliver_refusal` called with a fabricated `worst = 5.0` so the
+passivity test is the only thing that can stop it:
+
+| stack | `_stack_provably_passive` | screen (a) hits | refusal at `worst = 5.0` |
+|---|---|---|---|
+| baseline (passive, lossless) | True | yes | **YES** |
+| GAIN layer `ε = (3 − 0.5j)²` | False | yes | no |
+| GAIN layer `ε = (3 − 0.001j)²` (marginal) | False | yes | no |
+| LOSSY layer `ε = (3 + 0.5j)²` | True | yes | **YES** |
+| GAIN substrate `n = 1.5 − 0.01j` | False | yes | no |
+| LOSSY substrate `n = 1.5 + 0.5j` | True | yes | **YES** |
+| ABSORBING superstrate `n = 1 + 0.01j` | False | yes | no |
+| off-diagonal in-plane tensor | False | yes | no |
+
+All correct, and the screen (a) fires on every one of them — so the passivity
+conjunct is what is doing the gating, exactly as designed.
+
+**Conjunct (a) is sound by construction.** Because a cell is manufactured only
+when no single layer owns both its walls, a flagged cell at ratio > 100 always
+means two DIFFERENT layers placed walls within `own/100` of each other — a
+genuine sliver. The false-positive exposure is therefore entirely in (b), which
+is where the measurement below finds it.
 
 **Off it: 110 in 648.** Conjunct (b) reads super-unity as a theorem violation;
 on a provably passive stack it is equally often ordinary under-convergence.
@@ -557,6 +594,13 @@ against this tree and against the read-only main clone):
   **1.0103 / 1.0072** at degree 7 / 3 orders and produces the plain
   `energy not conserved` warning with no SLIVER text — which is exactly what
   `stack2d.py` passing `stack=None` is for. **CONFIRMED.**
+* **"`_pmm_union_grid` has no 2-D caller."** Enumerated:
+  `lumenairy/elements/pmm/{stack,conical,_jax_stack}.py` and `_core.py`'s own
+  `_perlayer_window_grids`. No 2-D module calls it. **CONFIRMED** — and note
+  that two of the three callers are the CONICAL and JAX paths, which is why
+  S4.3's conical map matters and why the JAX path (where
+  `_stack_provably_passive` returns `False` on traced payloads) is the one
+  place the guard is inert by construction.
 
 ### S6.2 A sliver INSIDE one layer's own non-uniform grid — the mortar claim
 

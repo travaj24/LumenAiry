@@ -4548,7 +4548,7 @@ def _pmm_union_grid(layer_segments, min_feature=None, *,
             # ABSOLUTE in period fractions: measured worst |d - mf| over 120k
             # random two-layer layouts x six ``mf`` decades is 1.565e-16, i.e.
             # 0.70 ULP of 1.0, and 16 ULP carries 23x headroom over that while
-            # remaining ~1e-15 of a period -- far below any geometry a caller
+            # remaining ~3.6e-15 of a period -- far below any geometry a caller
             # can express.  It SUBTRACTS, so ``min_feature`` keeps the
             # "closer than" meaning this docstring states and the change can
             # only ever merge FEWER pairs than before, never more.
