@@ -5157,8 +5157,16 @@ def _guarded_mortar_solve(A, B, site, ga=None, gb=None, hint=None):
         return np.linalg.solve(A, B)
     n = int(A.shape[0])
     try:
+        # ``LinAlgWarning`` ("Diagonal number k is exactly zero") is in the
+        # tuple ON PURPOSE: without ``-W error`` scipy WARNS and returns usable
+        # factors, ``gecon`` then reads ``rcond`` = 0.0 and the refusal below
+        # fires with its full message; WITH ``-W error`` the same condition
+        # arrives as an exception, and catching it here keeps the caller's
+        # error the named :class:`_ConditioningError` in both cases instead of
+        # a bare warning-turned-exception.
         lu, piv = sla.lu_factor(A)
-    except (ValueError, sla.LinAlgError, np.linalg.LinAlgError):
+    except (ValueError, sla.LinAlgError, np.linalg.LinAlgError,
+            sla.LinAlgWarning):
         rc = 0.0
     else:
         anorm = float(np.max(np.sum(np.abs(A), axis=0))) if A.size else 0.0
