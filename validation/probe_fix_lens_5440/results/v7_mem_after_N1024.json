@@ -1,0 +1,107 @@
+{
+ "version": "5.44.0",
+ "N": 1024,
+ "dx": 1.3e-05,
+ "grid_c128_bytes": 16777216.0,
+ "c128": {
+  "peak_bytes": 395166657,
+  "peak_grids_c128": 23.55376821756363,
+  "field_dtype": "complex128",
+  "result_dtype2": "complex128",
+  "helper_calls": 10,
+  "complex128_returns": [
+   {
+    "fn": "_radial_carrier_phase",
+    "caller": "_build_carrier_phase",
+    "lineno": 1700,
+    "dtype_kw": "complex128",
+    "out_dtype": "complex128",
+    "nbytes": 16777216
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "caller": "propagate_traced_carrier_chain",
+    "lineno": 8430,
+    "dtype_kw": "complex128",
+    "out_dtype": "complex128",
+    "nbytes": 16777216
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "caller": "propagate_traced_carrier_chain",
+    "lineno": 8505,
+    "dtype_kw": "complex128",
+    "out_dtype": "complex128",
+    "nbytes": 16777216
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "caller": "_build_carrier_phase",
+    "lineno": 1700,
+    "dtype_kw": "complex128",
+    "out_dtype": "complex128",
+    "nbytes": 16777216
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "caller": "_build_carrier_phase",
+    "lineno": 1700,
+    "dtype_kw": "complex128",
+    "out_dtype": "complex128",
+    "nbytes": 16777216
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "caller": "propagate_traced_carrier_chain",
+    "lineno": 8430,
+    "dtype_kw": "complex128",
+    "out_dtype": "complex128",
+    "nbytes": 16777216
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "caller": "propagate_traced_carrier_chain",
+    "lineno": 8505,
+    "dtype_kw": "complex128",
+    "out_dtype": "complex128",
+    "nbytes": 16777216
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "caller": "_build_carrier_phase",
+    "lineno": 1700,
+    "dtype_kw": "complex128",
+    "out_dtype": "complex128",
+    "nbytes": 16777216
+   },
+   {
+    "fn": "_sphere_parab_conversion",
+    "caller": "propagate_traced_carrier_chain",
+    "lineno": 8584,
+    "dtype_kw": "complex128",
+    "out_dtype": "complex128",
+    "nbytes": 16777216
+   },
+   {
+    "fn": "_radial_carrier_phase",
+    "caller": "_build_carrier_phase",
+    "lineno": 1700,
+    "dtype_kw": "complex128",
+    "out_dtype": "complex128",
+    "nbytes": 16777216
+   }
+  ],
+  "complex128_bytes_returned": 167772160
+ },
+ "c64": {
+  "peak_bytes": 348885872,
+  "peak_grids_c128": 20.795218467712402,
+  "field_dtype": "complex64",
+  "result_dtype2": "complex64",
+  "helper_calls": 10,
+  "complex128_returns": [],
+  "complex128_bytes_returned": 0
+ },
+ "saving_bytes": 46280785,
+ "saving_frac": 0.11711713065912846
+}

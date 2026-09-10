@@ -1,0 +1,127 @@
+{
+ "version": "5.44.0",
+ "file": "C:\\tmp\\lum_lensfix\\lumenairy\\__init__.py",
+ "cases": {
+  "chain2_sphere": {
+   "hash": "577e209a0757a57bab89857f",
+   "dtype": "complex128",
+   "shape": [
+    512,
+    512
+   ],
+   "sum_abs2": 30289.032970233027,
+   "stage_scalars": [
+    {
+     "R_out": -2.5082966968961884,
+     "dx": 2.6e-05
+    },
+    {
+     "R_out": -0.050528094151891856,
+     "dx": 2.5875612801154634e-05
+    }
+   ],
+   "secs": 3.39
+  },
+  "chain2_parab": {
+   "hash": "ae7983bcf984d93609759cf1",
+   "dtype": "complex128",
+   "shape": [
+    512,
+    512
+   ],
+   "sum_abs2": 30288.885120001116,
+   "stage_scalars": [
+    {
+     "R_out": -2.5082966968961884,
+     "dx": 2.6e-05
+    },
+    {
+     "R_out": -0.050528094151891856,
+     "dx": 2.5875612801154634e-05
+    }
+   ],
+   "secs": 1.14
+  },
+  "chain3_sphere": {
+   "hash": "c6dda90c08bd2f8830a348b9",
+   "dtype": "complex128",
+   "shape": [
+    512,
+    512
+   ],
+   "sum_abs2": 44799.28170425485,
+   "stage_scalars": [
+    {
+     "R_out": -2.5082966968961884,
+     "dx": 2.6e-05
+    },
+    {
+     "R_out": -0.050528094151891856,
+     "dx": 2.5875612801154634e-05
+    },
+    {
+     "R_out": -0.02735347971534278,
+     "dx": 2.126668149038062e-05
+    }
+   ],
+   "secs": 1.87
+  },
+  "chain2_final_leg": {
+   "hash": "4cd9552cefd80598e5a04fd6",
+   "dtype": "complex128",
+   "shape": [
+    512,
+    512
+   ],
+   "sum_abs2": 39001.65430224076,
+   "stage_scalars": [
+    {
+     "R_out": -2.5082966968961884,
+     "dx": 2.6e-05
+    },
+    {
+     "R_out": -0.050528094151891856,
+     "dx": 2.5875612801154634e-05
+    }
+   ],
+   "secs": 1.27
+  },
+  "chain2_readout": {
+   "hash": "ab751a2265db2c814047852c",
+   "dtype": "complex128",
+   "shape": [
+    96,
+    96
+   ],
+   "sum_abs2": 9473.197515630589,
+   "stage_scalars": [
+    {
+     "R_out": -2.5082966968961884,
+     "dx": 2.6e-05
+    },
+    {
+     "R_out": -0.050528094151891856,
+     "dx": 2.5875612801154634e-05
+    }
+   ],
+   "secs": 1.33
+  },
+  "readout_direct": {
+   "hash": "65b759bab27be8cac1cecd2c",
+   "dtype": "complex128",
+   "sum_abs2": 7748283.682966568
+  },
+  "crop_128_256": {
+   "hash": "5baf422b957ea82d0de43dd5",
+   "dtype": "complex128"
+  },
+  "crop_256_128": {
+   "hash": "4c5d9fd17d5ebab8ede34b1c",
+   "dtype": "complex128"
+  },
+  "crop_256_256": {
+   "hash": "b3d0a0b2f94beb33ea1cab24",
+   "dtype": "complex128"
+  }
+ }
+}

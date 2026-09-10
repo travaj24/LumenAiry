@@ -1,0 +1,74 @@
+{
+ "version": "5.44.0",
+ "file": "C:\\tmp\\lum_lensfix\\lumenairy\\__init__.py",
+ "this": "p2_d1_attr.py",
+ "arms": {
+  "0": {
+   "hash": "a78a7ff1533ade9e24e9f84a",
+   "warnings": [
+    {
+     "msg": "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAVE GRID, but the analytic ampli",
+     "file": "p2_d1_attr.py",
+     "line": 48
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / apert",
+     "file": "p2_d1_attr.py",
+     "line": 48
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND self-check FAILED -- the field's ",
+     "file": "p2_d1_attr.py",
+     "line": 48
+    }
+   ],
+   "n_from_caller": 3,
+   "n_total": 3
+  },
+  "32": {
+   "hash": "a78a7ff1533ade9e24e9f84a",
+   "warnings": [
+    {
+     "msg": "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAVE GRID, but the analytic ampli",
+     "file": "p2_d1_attr.py",
+     "line": 48
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / apert",
+     "file": "p2_d1_attr.py",
+     "line": 48
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND self-check FAILED -- the field's ",
+     "file": "p2_d1_attr.py",
+     "line": 48
+    }
+   ],
+   "n_from_caller": 3,
+   "n_total": 3
+  },
+  "7": {
+   "hash": "a78a7ff1533ade9e24e9f84a",
+   "warnings": [
+    {
+     "msg": "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAVE GRID, but the analytic ampli",
+     "file": "p2_d1_attr.py",
+     "line": 48
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / apert",
+     "file": "p2_d1_attr.py",
+     "line": 48
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND self-check FAILED -- the field's ",
+     "file": "p2_d1_attr.py",
+     "line": 48
+    }
+   ],
+   "n_from_caller": 3,
+   "n_total": 3
+  }
+ },
+ "n_attributed_to_library": 0
+}

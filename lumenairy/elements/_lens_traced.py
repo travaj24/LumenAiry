@@ -7524,6 +7524,19 @@ def apply_real_lens_traced(
         evaluator on a large-N call.  The three post-swap ray-density
         self-checks are whole-grid reductions and run on the finished
         field on either path.
+
+        **COST** (v5.44.1, re-measured 2026-09-11 at N=4096 / sub=32 /
+        dx=1.5 um, AUTO band height, inverse-map cache cleared per call):
+        banding itself is free -- the banded call is 0.97x-1.08x the
+        whole-grid call at the SAME inversion -- but a banded SCREEN call
+        at the shipped default costs about 1.6x what it did on v5.43.0,
+        because it now runs the evaluator instead of the incumbent it used
+        to select silently (18.5 s vs 11.9 s for the same call forced back
+        onto the incumbent with ``inverse_map=False``, which returns
+        v5.43.0's bits exactly).  That price is the evaluator's whole-grid
+        DOMAIN TEST (~8.9 s), not its channel evaluations (~0.9 s); pass
+        ``inverse_map=False`` to buy the old speed back at the old, less
+        faithful, answer.
     amplitude_model : {'screen', 'ray_density'}, default 'screen'
         Which model supplies the exit-plane AMPLITUDE (the phase is the
         ray-traced OPL either way).
@@ -11755,7 +11768,16 @@ def apply_real_lens_traced(
     def _ray_density_self_checks(E_out):
         """The three post-swap ray-density self-checks (energy, halo,
         retained band) -- whole-grid REDUCTIONS over the finished field,
-        shared by the whole-grid swap and the v5.44 band assembly."""
+        shared by the whole-grid swap and the v5.44 band assembly.
+
+        ``stacklevel=3`` on all three (v5.44.1,
+        VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D1): this is a nested closure,
+        so ``2`` reports ``_lens_traced.py`` -- its own caller -- instead of
+        the caller of ``apply_real_lens_traced``, which is what v5.43.0
+        reported, what ``warnings.filterwarnings(module=...)`` keys on, and
+        what the default filter's per-location dedup registry is indexed by.
+        ``_warn_ray_density_fold`` and ``_origin_amp_support_verdict``, the
+        two sibling closures, already carry ``3``."""
         # ---- v5.30 (audit E-M6): post-hoc ENERGY SELF-CHECK ------------------
         # Two N^2 reductions, negligible against the trace + Newton stages.
         # Reference = the input power the element ADMITS (inside the entrance
@@ -11796,7 +11818,7 @@ def apply_real_lens_traced(
                     f"apply_real_lens_fga there), a ray map running off the "
                     f"grid, or an aperture_diameter wider than the traced "
                     f"pupil.  Lower ray_subsample to check convergence.",
-                    RuntimeWarning, stacklevel=2)
+                    RuntimeWarning, stacklevel=3)
         # ---- v5.32: HALO-AMPLITUDE self-check --------------------------
         # The power sum above cannot see a lobe deposited outside the traced
         # pupil (measured: a defect whose total-power signature vanished
@@ -11862,7 +11884,7 @@ def apply_real_lens_traced(
                             f"apply_real_lens_fga); set "
                             f"lumenairy.elements._lens_traced."
                             f"RAY_DENSITY_HALO_CHECK = 'silent' to suppress.",
-                            RuntimeWarning, stacklevel=2)
+                            RuntimeWarning, stacklevel=3)
                 del _h_abs
             del _h_far
         # ---- niche C14: the RETAINED-BAND self-check --------------------
@@ -11926,7 +11948,7 @@ def apply_real_lens_traced(
                         f"lumenairy.elements._lens_traced."
                         f"SUPPORT_BAND_CHECK = 'silent' to suppress (that is "
                         f"also the pre-C14 fail-before).",
-                        RuntimeWarning, stacklevel=2)
+                        RuntimeWarning, stacklevel=3)
                 del _bd_abs
             del _bd_in, _bd_band
 
@@ -11970,6 +11992,41 @@ def apply_real_lens_traced(
         _oa_measure = bool(_rd_swap_band and _origin_set
                            and ORIGIN_AMP_SUPPORT_CHECK != 'silent')
 
+        # ---- niche C15's PRIVATE PROBE, on the band path (v5.44.1, D7) ----
+        # The whole-grid branches sample the finalised ``opl_map`` / ``ard_map``
+        # below; this path never builds either as a full grid, and the probe
+        # block sat after its ``return``, so a banded call filled nothing
+        # (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D7).  That was inert while a
+        # banded call was always the incumbent; at the shipped default it IS
+        # the evaluator now, so a C15-style inversion comparison at N >= 4096
+        # got silence exactly where it needed the model's OPL.  Same contract
+        # as there: opt-in, diagnostic-only, nothing reads it back, and only
+        # the M sampled values are retained -- a call that does not ask pays
+        # one ``is None`` test per band and keeps every bit and every byte.
+        _pb = None
+        if _imap_out is not None and _imap_out.get('probe_rc') is not None:
+            _pb_r = np.asarray(_imap_out['probe_rc'][0], dtype=np.intp)
+            _pb_c = np.asarray(_imap_out['probe_rc'][1], dtype=np.intp)
+            _pb = {'r': _pb_r, 'c': _pb_c,
+                   'opl': np.full(_pb_r.shape, np.nan, dtype=np.float64),
+                   'ard': (np.full(_pb_r.shape, np.nan, dtype=np.float64)
+                           if _rd_swap_band else None)}
+
+        def _probe_band(r0, r1, opl_b, ard_b):
+            """Gather the probe pixels that fall in rows ``r0:r1`` from this
+            band's FINAL OPL (and ray-density amplitude), in probe order --
+            the band-wise form of ``opl_map[_p_r, _p_c]``."""
+            if _pb is None:
+                return
+            _sel = (_pb['r'] >= r0) & (_pb['r'] < r1)
+            if not _sel.any():
+                return
+            _rr = _pb['r'][_sel] - r0
+            _cc = _pb['c'][_sel]
+            _pb['opl'][_sel] = np.asarray(opl_b)[_rr, _cc]
+            if _pb['ard'] is not None and ard_b is not None:
+                _pb['ard'][_sel] = np.asarray(ard_b)[_rr, _cc]
+
         def _step3_band(r0, r1, opl_b):
             """Step 3 on rows ``r0:r1`` -- the whole-grid expressions on a
             slice (delta-phase, piston, combine, valid / aperture masks)."""
@@ -11988,8 +12045,9 @@ def apply_real_lens_traced(
                 # ``E_analytic`` is a FREE variable of the enclosing call, captured by
                 # this closure and released by the ``del`` after the band loop (the
                 # memory release the whole-grid path also performs).  Every call of this
-                # closure precedes that ``del`` (asserted at lint time 2026-09-11: calls
-                # at [12042, 12170], del at [12289]); pyflakes sees the later ``del`` and reports
+                # closure precedes that ``del`` (re-checked 2026-09-11 after the D7
+                # probe insertion: calls at [12093, 12223], del at [12350]); pyflakes
+                # sees the later ``del`` and reports
                 # F821 here -- a false positive.  A default-argument capture would defeat
                 # the release (it would pin the full grid until the call returns).
                 band = E_analytic[r0:r1] * pe_b  # noqa: F821
@@ -12047,6 +12105,7 @@ def apply_real_lens_traced(
                                             order=1, mode='nearest')
                     opl_b = np.where(nan_b > 0.5, np.nan, opl_b)
                 band = _step3_band(r0, r1, opl_b)
+                ard_b = None
                 if _rd_swap_band:
                     _a_rd = map_coordinates(_ard_coarse_clean, coords_b,
                                             order=1, mode='nearest')
@@ -12075,6 +12134,7 @@ def apply_real_lens_traced(
                             (_ye_f - _org_y) / dy + N / 2.0,
                             (_xe_f - _org_x) / dx + N / 2.0, _xe_f.shape))
                     band = _swap_band(r0, r1, band, ard_b, resid_b)
+                _probe_band(r0, r1, opl_b, ard_b)
                 del ii_b, jj_b, coords_b
                 E_out[r0:r1] = band
         else:
@@ -12083,17 +12143,33 @@ def apply_real_lens_traced(
             _ch_all = [_CH.CH_X_IN, _CH.CH_Y_IN, _CH.CH_OPL, _CH.CH_DET_J]
             _ch_p2 = [_CH.CH_X_IN, _CH.CH_Y_IN, _CH.CH_OPL]
 
-            def _eval_band(r0, r1, chans):
+            def _eval_band(r0, r1, chans, ok=None):
                 """The model's channels and its domain mask on rows
                 ``r0:r1``.  ``domain_mask(axes=(x, _y_ax[r0:r1]))`` is the
                 screened hull test on the band's own axis pair -- a per-pixel
                 test whose radial screens are global constants, so a band
-                slice is bit-identical to the full evaluation."""
+                slice is bit-identical to the full evaluation.
+
+                ``ok`` (v5.44.1, VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D6)
+                hands back a mask ALREADY computed for these very rows, which
+                is what the two-pass ray-density branch has: pass 1 evaluates
+                CH_X_IN / CH_Y_IN and takes the mask, pass 2 evaluates the
+                same two channels again (``eval_into`` writes each channel
+                independently, which is what makes the banded field
+                bit-identical in the first place) and used to recompute the
+                IDENTICAL mask.  MEASURED at N=4096, sub=32: the domain test
+                ran over 2.00 grids of pixels instead of 1.00 and cost
+                15.05 s of the call's 31.2 s, against 8.83 s for the
+                whole-grid arm -- 6.2 s of the banded route's 6.5 s penalty,
+                and none of it the 7/4 evaluation (that is 0.84 s).  The cache
+                is one bool grid, N^2 bytes = 1/8 of a float64 grid."""
                 Xb = np.broadcast_to(x[None, :], (r1 - r0, N))
                 Yb = np.broadcast_to(_y_ax[r0:r1, None], (r1 - r0, N))
                 outs = [np.empty((r1 - r0, N), dtype=np.float64)
                         for _ in chans]
                 _imap.eval_into(Xb, Yb, outs, channels=chans)
+                if ok is not None:
+                    return Xb, Yb, outs, ok
                 ok_b = _imap.domain_mask(Xb, Yb, outs[0], outs[1],
                                          axes=(x, _y_ax[r0:r1]),
                                          relax=_im_relax)
@@ -12107,6 +12183,8 @@ def apply_real_lens_traced(
                 # ---- pass 1: |det J|, the finite mask, and the census --------
                 _absdet = np.empty((N, N), dtype=np.float64)
                 _fin = np.empty((N, N), dtype=bool)
+                # the domain mask pass 2 would otherwise recompute (D6).
+                _okall = np.empty((N, N), dtype=bool)
                 _any_fin = False
                 _amin = np.inf
                 _amax = -np.inf
@@ -12117,6 +12195,7 @@ def apply_real_lens_traced(
                     r1 = min(N, r0 + cr)
                     _Xb, _Yb, _outs, _ok_b = _eval_band(r0, r1, _ch_all)
                     _opl_b, _detj_b = _outs[2], _outs[3]
+                    _okall[r0:r1] = _ok_b
                     _n_out += int(_ok_b.size - _ok_b.sum())
                     _opl_b = np.where(_ok_b, _opl_b, np.nan)
                     _absdet_b = np.abs(_detj_b)
@@ -12162,7 +12241,9 @@ def apply_real_lens_traced(
             # ---- pass 2 (or the only pass): entrance, OPL, Step 3, swap ------
             for r0 in range(0, N, cr):
                 r1 = min(N, r0 + cr)
-                _Xb, _Yb, _outs, _ok_b = _eval_band(r0, r1, _ch_p2)
+                _Xb, _Yb, _outs, _ok_b = _eval_band(
+                    r0, r1, _ch_p2,
+                    ok=(_okall[r0:r1] if _rd_swap_band else None))
                 _xin_b, _yin_b, _opl_b = _outs
                 if not _rd_swap_band:
                     _n_out += int(_ok_b.size - _ok_b.sum())
@@ -12175,6 +12256,8 @@ def apply_real_lens_traced(
                     np.copyto(_yin_b, 0.0, where=_bad_b)
                     del _bad_b
                 band = _step3_band(r0, r1, _opl_b)
+                if not _rd_swap_band:
+                    _probe_band(r0, r1, _opl_b, None)
                 if _rd_swap_band:
                     sh = _Xb.shape
                     invalid_b = ~np.isfinite(_opl_b)
@@ -12211,12 +12294,13 @@ def apply_real_lens_traced(
                         # from x), the whole-grid branch's expression.
                         resid_b = _unit_phasor(
                             _pip_sample_residual(_row, _col, sh))
+                    _probe_band(r0, r1, _opl_b, a_rd)
                     band = _swap_band(r0, r1, band, a_rd, resid_b)
                     del a_in, a_rd, _col, _row, xef, yef, invalid_b
                 del _outs, _xin_b, _yin_b, _opl_b, _ok_b
                 E_out[r0:r1] = band
             if _rd_swap_band:
-                del _absdet, _absin
+                del _absdet, _absin, _okall
             _imap_rec['n_out_of_domain'] = int(_n_out)
             if _imap_out is not None:
                 _imap_out['n_out_of_domain'] = int(_n_out)
@@ -12234,6 +12318,11 @@ def apply_real_lens_traced(
                 _origin_amp_support_verdict(
                     (_oa_cut / _oa_tot) if _oa_tot > 0.0 else 0.0)
             _ray_density_self_checks(E_out)
+        if _pb is not None:
+            # same three keys, same order, same dtypes as the whole-grid block
+            _imap_out['probe_opl'] = _pb['opl']
+            _imap_out['probe_ard'] = _pb['ard']
+            _imap_out['probe_opl_piston'] = float(_opl_piston)
         call_progress(progress, 'real_lens_traced', 1.0, 'done')
         return E_out
     # ---- PRIVATE DIAGNOSTIC PROBE (niche C15's independent oracle) ---------

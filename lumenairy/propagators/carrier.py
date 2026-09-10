@@ -767,6 +767,26 @@ def _phasor_rows(arg_rows, shape, dtype):
     return out
 
 
+def _narrow_rows(val_rows, shape, dtype):
+    """``val_rows(r0, r1)`` assembled in row bands and STORED as ``dtype``.
+
+    The value-side sibling of :func:`_phasor_rows`, for the one reference
+    phase that is a PRODUCT of two already-exponentiated per-axis factors
+    rather than one ``exp`` (the astigmatic carrier of
+    :func:`_build_carrier_phase`).  The band expression is the whole-grid
+    expression on a slice and the multiply is elementwise, so the stored
+    result is bit for bit the narrowed whole-grid product -- what the band
+    removes is the full-grid complex128 transient, nothing else
+    (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D2)."""
+    ny, nx = int(shape[-2]), int(shape[-1])
+    out = np.empty((ny, nx), dtype=dtype)
+    br = int(max(16, min(ny, _PHASOR_BAND_BYTES // (16 * max(nx, 1)))))
+    for r0 in range(0, ny, br):
+        r1 = min(ny, r0 + br)
+        out[r0:r1] = val_rows(r0, r1)
+    return out
+
+
 def _radial_carrier_phase(shape, dx, dy, wavelength, R, sign, bld=np,
                           centre=(0.0, 0.0), dtype=None):
     """``exp(sign*i*k*(x^2+y^2)/(2R))`` on the centred grid (float64
@@ -1647,12 +1667,29 @@ def _propagate_carrier_astigmatic(E_env, R_x, R_y, z, wavelength, dx, dy):
 
 
 def _build_carrier_phase(shape, dx, dy, wavelength, R_carrier, sign, fn,
-                         bld=np):
+                         bld=np, dtype=None):
     """Carrier phase ``exp(sign*i*k*[x^2/(2R_x) + y^2/(2R_y)])`` for a scalar
     or ``(R_x, R_y)`` carrier.  Returns ``None`` when the carrier is fully
     collimated (a no-op).  Collimated axes of an astigmatic carrier drop out
     of the per-axis product.  Built on backend ``bld`` (host NumPy for JAX);
-    ``bld is np`` reproduces the historical NumPy screen byte-for-byte."""
+    ``bld is np`` reproduces the historical NumPy screen byte-for-byte.
+
+    ``dtype`` (v5.44.1, VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D2): the
+    seventh reference-phase construction, and the one the 5.44.0 change
+    missed -- ``carrier_referenced_envelope`` /
+    ``carrier_referenced_reconstruct`` reach it, so a complex64 chain still
+    materialised ONE FULL-GRID complex128 phasor per call (5 per two-group
+    chain; 4.29 GB each at N=16384).  ``None`` / ``complex128`` is the
+    shipped whole-grid path, BYTE-IDENTICAL; ``complex64`` takes the same
+    ``_phasor_rows`` route the other helpers take -- the float64 argument on
+    a row slice, narrowed only after ``exp``.  Pass the dtype of the field
+    this factor will multiply.
+
+    The ASTIGMATIC branch narrows the SAME complex128 per-axis PRODUCT the
+    shipped path forms, one row band at a time: ``px[j] * py[i]`` is a
+    single elementwise multiply either way, so the complex64 result is bit
+    for bit what ``(phase * py).astype(complex64)`` returns -- only the
+    full-grid complex128 transient is gone."""
     R_x, R_y, is_astig = _parse_carrier(R_carrier, fn)
     if not is_astig:
         R = R_x
@@ -1661,7 +1698,7 @@ def _build_carrier_phase(shape, dx, dy, wavelength, R_carrier, sign, fn,
         if R == 0.0:
             raise ValueError(f"{fn}: R_carrier == 0 (carrier focus).")
         return _radial_carrier_phase(shape, dx, dy, wavelength, float(R), sign,
-                                     bld)
+                                     bld, dtype=dtype)
     if R_x == 0.0 or R_y == 0.0:
         raise ValueError(
             f"{fn}: an astigmatic carrier axis radius == 0 (carrier focus).")
@@ -1672,7 +1709,23 @@ def _build_carrier_phase(shape, dx, dy, wavelength, R_carrier, sign, fn,
     if np.isfinite(R_y):                          # axis 0 == y
         py = _axis_carrier_phase(shape, dy, wavelength, float(R_y), 0, sign,
                                  bld)
-        phase = py if phase is None else phase * py
+        if phase is None:
+            phase = py
+        elif bld is np and _phasor_c64(dtype):
+            # the full-grid product, assembled in row bands and stored
+            # narrowed (the transient the whole-grid ``phase * py`` builds is
+            # the only thing that changes).
+            px = phase
+            phase = _narrow_rows(lambda r0, r1: px * py[r0:r1],
+                                 shape, np.complex64)
+        else:
+            phase = phase * py
+    if (phase is not None and bld is np and _phasor_c64(dtype)
+            and phase.dtype != np.complex64):
+        # a SINGLE finite axis: the factor is a broadcast row / column, not a
+        # grid, so there is no transient to remove -- only the dtype contract
+        # to keep (``astype`` of the same complex128 values).
+        phase = phase.astype(np.complex64)
     return phase
 
 
@@ -1720,7 +1773,9 @@ def carrier_referenced_reconstruct(
         dy = dx
     xp, is_jax, bld = _backend_of(E_env)
     phase = _build_carrier_phase(E_env.shape, dx, dy, wavelength, R_carrier,
-                                 +1, 'carrier_referenced_reconstruct', bld)
+                                 +1, 'carrier_referenced_reconstruct', bld,
+                                 dtype=(E_env.dtype if _is_complex(E_env)
+                                        else None))
     if phase is None:
         return E_env.copy() if hasattr(E_env, 'copy') else np.array(E_env)
     if _is_complex(E_env):
@@ -1770,7 +1825,9 @@ def carrier_referenced_envelope(
         dy = dx
     xp, is_jax, bld = _backend_of(E_full)
     phase = _build_carrier_phase(E_full.shape, dx, dy, wavelength, R_carrier,
-                                 -1, 'carrier_referenced_envelope', bld)
+                                 -1, 'carrier_referenced_envelope', bld,
+                                 dtype=(E_full.dtype if _is_complex(E_full)
+                                        else None))
     if phase is None:
         return E_full.copy() if hasattr(E_full, 'copy') else np.array(E_full)
     if _is_complex(E_full):
@@ -3320,18 +3377,45 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     if n_fine == n_crop:
         out = ec
     else:
-        # DTYPE PARITY with the raw ``np.fft`` this replaced: numpy's FFT is
-        # double-only and returns complex128 for EVERY input dtype, while the
-        # dispatcher's pyFFTW / scipy backends preserve complex64.  Promote
-        # here so a non-complex128 caller keeps the historical output dtype
-        # instead of silently acquiring a narrower one (the shipped chain is
-        # complex128, where ``asarray`` is a no-op and no copy is made).
+        # DTYPE PARITY with the raw ``np.fft`` this replaced.  Promote here so
+        # a non-complex128 caller keeps the historical output dtype instead of
+        # silently acquiring a narrower one (the shipped chain is complex128,
+        # where ``asarray`` is a no-op and no copy is made).
+        #
+        # CORRECTION 2026-09-11 (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D3):
+        # the parity this was written for -- "numpy's FFT is double-only and
+        # returns complex128 for EVERY input dtype, while the dispatcher's
+        # pyFFTW / scipy backends preserve complex64" -- has not held since
+        # numpy 2.0, which has a single-precision FFT: ``np.fft.fft2`` of a
+        # complex64 array RETURNS complex64.  So on numpy >= 2 every backend
+        # preserves complex64 and this promotion is what makes the OTHER
+        # dtypes (real, float32, complex256) land on complex128, which is
+        # still the historical answer for them.  The complex64 branch below is
+        # therefore not a narrowing of a complex128 transform: BOTH transforms
+        # of the pair run in single precision.  MEASURED and accepted -- see
+        # the ``_cdt`` note.
         _ecs = np.fft.ifftshift(ec)
         # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 sec 3.3): a complex64 envelope
         # stays complex64 through the transform pair -- this hard complex128
         # pad was the leak the audit found sitting directly on the
         # memory-dominant stage.  Every other input is promoted to complex128
         # exactly as before, so the shipped chain is byte-identical.
+        #
+        # PRECISION, measured 2026-09-11 (D3,
+        # ``validation/probe_fix_lens_5440/p4_d3_fft.py``), and KEPT as it is:
+        # on a REAL two-group traced carrier chain with an exact focus readout
+        # (the stage that calls this) a complex64 envelope lands at rel L2
+        # 3.112e-07 and rel total power 2.520e-07 against the complex128 chain
+        # -- 64x and 159x under the campaign's 2e-05 field / 4e-05 energy bars
+        # -- while forcing the transform pair into complex128 and narrowing
+        # ONCE on return lands at 3.156e-07 / 2.334e-07, i.e. NOT better: on a
+        # complex64 chain the error is dominated by the complex64 STORAGE of
+        # the envelope, not by the transform.  The transform's own share is
+        # rel L2 2.662e-07 between the two arms.  Directly on the crop the
+        # single-precision pair costs 2.6 x eps32 x peak against a narrow-once
+        # reference (a narrow-once is <= 0.5x), growing slowly with N: rel L2
+        # 1.454e-07 / 1.472e-07 / 1.545e-07 / 1.674e-07 at n_fine = 256 / 512 /
+        # 1024 / 2048, the ~sqrt(log2 N) an FFT accumulates.
         _cdt = (np.dtype(np.complex64) if _ecs.dtype == np.complex64
                 else np.dtype(np.complex128))
         if _ecs.dtype != _cdt:
@@ -5236,8 +5320,12 @@ def _shift_envelope(env, sx, sy, dx):
     :func:`_fourier_upsample_crop`.  Same dispatcher, same accuracy statement
     (bounded at FFT round-off, NOT bit-identical -- see that function's note
     and ``FIX_PERF_ROUND2_2026_08_10.md`` sec 5), and the same dtype-parity
-    promotion so a non-complex128 caller keeps the complex128 numpy's
-    double-only FFT always returned.
+    promotion, which here is UNCONDITIONAL: this transform pair always runs in
+    complex128 and the result is narrowed back to the input's dtype on return.
+    (2026-09-11, D3: the historical justification for the promotion -- that
+    numpy's FFT was double-only -- lapsed at numpy 2.0, but the promotion
+    itself is what this function does and is left as it is; the crop, which
+    does NOT promote a complex64 input, carries the measured cost note.)
 
     BUFFER OWNERSHIP: ``_fft2``'s result is consumed by the ``* ramp``
     multiply (a fresh array) before any other FFT is issued, and ``_ifft2``'s
