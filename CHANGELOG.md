@@ -400,6 +400,50 @@ defects were fixed (`docs/audits/FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md`).
 BIT-IDENTITY for the whole of round 2: **33 fixtures / 87 sha256 hashes**
 against a pristine pre-change tree, 0 mismatches, on both builds.
 
+**ROUND 3 (2026-09-11, `docs/audits/FIX_PMM2D_MORTAR_ROUND3_2026_09_11.md`),
+two corrections to the two bullets above.**
+
+* **The 1e-12 `rcond` bar no longer applies to the GENERALIZED mortar site**
+  (`_interface_smatrix_general_mortar_2d`, the `4 qq x 4 qq` solve an
+  OUT-OF-PLANE tensor or a SLANTED per-layer layer takes).  It was calibrated
+  on the two IN-PLANE sites and applied to the third unchanged, and it REFUSED
+  ordinary mixed in-plane / out-of-plane per-layer stacks from `n_modes` = 5
+  up -- including an out-of-plane patterned layer next to a plain UNIFORM
+  SPACER, the commonest configuration there is.  That site's operand is
+  RANK-DEFICIENT BY CONSTRUCTION whenever either side is an in-plane region
+  promoted to the generalized 6-tuple form (measured: **100 % of the near-null
+  right singular vector lies in the promoted side's block column**, at every
+  `M`, on both builds, against no localisation at all on the both-out-of-plane
+  and both-slanted controls), while the system stays CONSISTENT -- so its
+  healthy `rcond` population runs **1.26e-14 .. 1.52e-04** over 28 ordinary
+  stacks and CROSSES both the bar and the sliver population the bar exists
+  for.  It now takes its own decision on the RESIDUAL,
+  `_MORTAR_RESID_REFUSE = 1e-6`: healthy **4.80e-15 .. 1.19e-13** over 23
+  solves at `M` = 4..8 (7.0 decades under), exactly singular **1.20e-01** and
+  inconsistent **3.53e+01** (5.1 decades over), while the same rank-deficient
+  operand with a consistent right-hand side is correctly ACCEPTED at 2.85e-14.
+  The screen rides three `O(n^2)` matvecs on a deterministic generic probe and
+  pays the exact `O(n^3)` residual only before refusing.  **The two IN-PLANE
+  sites are untouched, bit for bit**, and the whole change moves nothing: 165
+  of 165 hashes identical on the round-2 verifier's own battery, 0 warning-set
+  differences.
+* **The accuracy band ABOVE the width contract now WARNS.**  Between `1e-3`
+  and `_STAG_SLIVER_BAND_FRAC` = `3e-2` of the period a per-layer stack that
+  actually builds a mortar raises a `UserWarning` -- never a refusal -- naming
+  the width, the measured degradation and five remedies, and saying that
+  `n_modes` will not remove it (the ladder FLATTENS there, so a convergence
+  study reads the floor as convergence).  The upper edge is DERIVED and its two
+  constraints conflict: the "cost exceeds 2x" width is 2e-1 on this campaign's
+  fixture and 1e-1 on the verification's -- WIDER than every ordinary geometry
+  -- so the false-positive census binds instead.  3e-2 carries **4.65x**
+  measured cost at the edge (2.3x over the 2x bar) and sits **3.6x below** the
+  narrowest segment any ordinary geometry asks for, so **no ordinary stack
+  warns**; the one geometry that does is a taper whose tip CLOSES (8.0e-03 at
+  32 slices, 4.1e-03 at 64), which is exactly the surface it exists for.  A
+  fully CONFORMING per-layer stack never warns -- it builds no mortar, and is
+  measured `delta`-insensitive.  Switch
+  `twod_staggered.PMM2D_STAG_SLIVER_BAND_WARN`.
+
 ### Fixed -- `PMM2DStackHybrid`'s TRANSMITTED amplitudes on a SLANTED PATTERNED layer were FRAME-referenced (silent-wrong)
 
 `PMM2DStackHybrid.jones_transmission()` and

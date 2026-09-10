@@ -353,6 +353,8 @@ def _clear_pmm_caches() -> None:
         _LAGRANGE_DREF_CACHE.clear()
     with _LAGRANGE_BARY_LOCK:
         _LAGRANGE_BARY_CACHE.clear()
+    with _MORTAR_PROBE_LOCK:
+        _MORTAR_PROBE_CACHE.clear()
     _PERLAYER_GEO_CACHE.clear()
     _clear_geo_eig_cache()
 
@@ -5110,12 +5112,162 @@ def _guarded_solve(A, B, site, hint=None):
 #: is derived from ACCURACY rather than from digits and lands in the same
 #: place.  The backstop earns its keep above ``M ~ 6``, where the conditioning
 #: degrades with the modal count and a fixed width contract cannot follow.
+#:
+#: **CORRECTION, ROUND 3 (2026-09-11, DEFECT V1 of**
+#: ``docs/audits/VERIFY_PMM2D_MORTAR_ROUND2_2026_09_11.md`` **S6.3).**  Every
+#: number above was measured on, and applies to, the TWO IN-PLANE sites only
+#: (``MassE_B W_B`` and ``MassH_A V_A``).  It was ALSO applied, wrongly, to the
+#: third site :func:`_interface_smatrix_general_mortar_2d`, whose healthy
+#: population is decades lower and CROSSES it.  That site now takes its own
+#: decision on the RESIDUAL (:data:`_MORTAR_RESID_REFUSE`); this constant is
+#: the in-plane pair's alone and their behaviour is unchanged, bit for bit.
 _MORTAR_RCOND_REFUSE = 1e-12
 
+#: REFUSE bar for the GENERALIZED per-layer mortar site
+#: (:func:`_interface_smatrix_general_mortar_2d`, the ``4 qq x 4 qq`` block
+#: solve an OUT-OF-PLANE tensor or a SLANTED per-layer layer takes), on the
+#: RELATIVE RESIDUAL ``||A X - B|| / ||B||`` rather than on a condition
+#: estimate.  ROUND 3, 2026-09-11.
+#:
+#: WHY THIS SITE NEEDS ITS OWN INSTRUMENT.  Its operand is RANK-DEFICIENT BY
+#: CONSTRUCTION whenever one side of the interface is an IN-PLANE region
+#: promoted to the 6-tuple general form by
+#: :func:`~lumenairy.elements.pmm.twod_staggered._modes_as_general`.  MEASURED
+#: (``validation/probe_fix_mortar_round3/r1_mechanism.py``) on a two-layer
+#: stack with ONE out-of-plane patterned layer and ONE ordinary in-plane
+#: neighbour, ``M`` = 4 / 5 / 6 / 7: the smallest singular value falls to
+#: ``s_min / s_max`` = 2.54e-10 / 1.35e-11 / 9.22e-13 / 6.81e-13 while the
+#: healthy BOTH-out-of-plane and BOTH-slanted stacks read 2.9e-03 .. 2.2e-05 --
+#: and **100.0 % of the near-null right singular vector lies in the PROMOTED
+#: side's block column** (``||v_a|| / ||v||`` = 0.000, ``||v_b|| / ||v||`` =
+#: 1.000, on every mixed operand at every ``M``), against 0.62-0.91 / 0.41-0.78
+#: -- i.e. no localisation at all -- on the both-out-of-plane and both-slanted
+#: controls.  The near-null space is a STRUCTURAL property of the promotion,
+#: not a symptom of a bad grid.
+#:
+#: The system is nevertheless CONSISTENT, and that is the whole point: the
+#: measured residual of the answer ``lu_solve`` returns is **8.13e-15 /
+#: 1.62e-14 / 3.02e-14 / 4.63e-14** on those same four operands -- ordinary
+#: backward stability -- and the answers converge monotonically to the
+#: common-refinement union oracle and agree WIN/WSL to 13 significant figures.
+#: A CONDITION estimate is a worst-case-over-all-``B`` quantity and cannot see
+#: that; the residual can.
+#:
+#: THE BAR, with BOTH gaps measured, and there is no third instrument with a
+#: gap at all:
+#:
+#:   * ``rcond`` HAS NO GAP HERE.  Over 28 ORDINARY per-layer stacks that reach
+#:     this site (narrowest segment 0.237 of the period = 237x the width
+#:     contract) it runs **1.26e-14 .. 1.52e-04**, so the in-plane pair's
+#:     1e-12 sits INSIDE the healthy population -- and the SLIVER population
+#:     the guard exists for runs **1.59e-24 .. 1.17e-05**, so the two CROSS.
+#:     Worse, the healthy floor walks DOWN the modal ladder (4.75e-15 at
+#:     ``M`` = 8), so any fixed ``rcond`` bar is the floor-bar shape
+#:     ``docs/TESTING_STANDARDS.md`` calls S4.  REFUTED by measurement.
+#:   * the RESIDUAL, HEALTHY side: over 23 generalized-site solves spanning
+#:     ``M`` = 4..8 (``n`` = 324 .. 1764), mixed in-plane/out-of-plane,
+#:     both-out-of-plane, both-slanted, an out-of-plane layer next to a plain
+#:     UNIFORM SPACER and a three-layer stack whose middle interface has BOTH
+#:     sides promoted, it runs **4.80e-15 .. 1.19e-13** (WIN) and
+#:     **4.84e-15 .. 1.21e-13** (WSL) -- and it does NOT degrade with the modal
+#:     ladder (it tracks ``n * eps``, which is what backward stability means).
+#:     1e-6 is **6.9 decades above** the worst of either build.
+#:   * the RESIDUAL, WRONG side, on operands of this site's own shape: an
+#:     EXACTLY singular operand (a repeated column) with the site's real
+#:     right-hand side reads **1.20e-01** (WIN) / **5.57e-02** (WSL); a
+#:     rank-deficient operand with a right-hand side carrying a component
+#:     OUTSIDE its range reads **3.53e+01** / **1.22e+01**; a zero column reads
+#:     **NaN** (and NaN is REFUSED, see :func:`_guarded_mortar_solve`).  1e-6
+#:     is **4.7 decades below** the closest of those on either build.  The same
+#:     rank-deficient operand with a CONSISTENT right-hand side reads 2.85e-14
+#:     / 1.26e-14 and is correctly ACCEPTED.
+#:
+#: WHAT IT DOES NOT DO, stated plainly.  It is NOT a backstop for the minimum
+#: segment width contract at this site, and no residual could be: M1's finding
+#: holds here too.  MEASURED with the width contract LIFTED on a device that
+#: CANNOT depend on the wall separation, ``M`` = 4: the answer is 2.0e-02
+#: wrong at a 1e-03 separation while the residual reads 7.3e-15, and it stays
+#: inside the healthy band down to a separation of 1e-05.  The
+#: :data:`~lumenairy.elements.pmm.twod_staggered._STAG_MIN_SEG_FRAC` contract
+#: is the ONLY line against a sliver here, exactly as at the plain 1-D
+#: interface (S4.5 of the round-2 fix doc).
+#:
+#: WHAT IT COSTS.  The screen reads the residual on ONE deterministic generic
+#: PROBE vector -- three ``O(n^2)`` matvecs against the ``O(n^3)`` factor-plus-
+#: solve it rides.  The FLOP argument first, because it does not depend on a
+#: shared box: ``lu_factor`` + ``lu_solve`` with ``n`` right-hand sides is
+#: ``(2/3 + 2) n^3`` complex multiply-adds and the probe is ``3 n^2``, i.e.
+#: ``1.7 / n`` of the call -- **0.35 % at n = 324, 0.06 % at n = 1764**.
+#: Measured, minimum of 9 INTERLEAVED repetitions on a shared box, against the
+#: bare ``lu_factor`` + ``lu_solve`` at ``n`` = 324 / 576 / 900 / 1296 / 1764:
+#: round 2's ``gecon`` screen alone costs 1.03-1.13x (WIN) / 1.01-1.06x (WSL)
+#: -- its ``anorm`` allocates an ``n x n`` temporary, which is where that goes
+#: -- and adding this residual probe on top reads 1.07-1.14x / 0.99-1.10x, i.e.
+#: **0-6 % over the screen that was already there**, against **1.57-1.76x /
+#: 1.47-1.72x** for the exact Frobenius residual.  That is why the exact one is
+#: paid ONLY when the probe already exceeds the bar -- and paying it then is
+#: what makes an unlucky probe unable to refuse a good solve.  Probe and exact
+#: agree within **1.6x on all 51 real operands measured**
+#: (``r3_residual_screen.py``, ``r4_cost.py``).
+_MORTAR_RESID_REFUSE = 1e-6
+
 #: Census hook for the guarded mortar solves.  When set to a list, every call
-#: appends ``(site, n, rcond, refused)``.  ``None`` (the default) records
-#: nothing; the ``rcond`` itself is computed either way, because it is free.
+#: appends ``(site, n, rcond, refused, residual)``.  ``None`` (the default)
+#: records nothing; the ``rcond`` itself is computed either way, because it is
+#: free.  ``residual`` is ``None`` at the two IN-PLANE sites, which do not
+#: compute one (ROUND 3: the tuple grew from four entries to five; every
+#: shipped consumer indexes ``[0]``..``[3]``).
 _MORTAR_SOLVE_CENSUS = None
+
+#: Cache for the residual screen's probe vectors, keyed by width.  Guarded by a
+#: companion lock and enrolled with :func:`_clear_pmm_caches`, the library's
+#: cache policy: one read-only complex128 vector per DISTINCT operand width,
+#: which is a handful of entries for any stack (a few kB).
+_MORTAR_PROBE_CACHE: dict = {}
+_MORTAR_PROBE_LOCK = threading.Lock()
+
+
+def _mortar_probe(k):
+    """The DETERMINISTIC generic probe vector the residual screen contracts
+    ``A X - B`` against (round 3).
+
+    A fixed-seed ``PCG64`` draw is bit-reproducible on every platform numpy
+    supports, so this is a CONSTANT of the library and not a random number; it
+    is drawn once per width and cached.  It is random-LOOKING on purpose: the
+    screen asks whether ``A X = B`` is CONSISTENT, a STRUCTURED probe can be
+    orthogonal to a structured inconsistency, and a generic one is not, with
+    probability one.  The over-estimate direction is covered anyway -- the
+    caller re-measures the EXACT residual before refusing.
+    """
+    with _MORTAR_PROBE_LOCK:
+        v = _MORTAR_PROBE_CACHE.get(k)
+    if v is not None:
+        return v
+    r = np.random.default_rng(0x5EED)
+    v = _readonly(np.ascontiguousarray(
+        r.standard_normal(k) + 1j * r.standard_normal(k), dtype=_C))
+    with _MORTAR_PROBE_LOCK:
+        _MORTAR_PROBE_CACHE[k] = v
+    return v
+
+
+def _mortar_residual(A, X, B, probe=True):
+    """``||A X - B|| / ||B||`` for the generalized mortar's residual screen.
+
+    ``probe=True`` contracts both sides with :func:`_mortar_probe` first --
+    three ``O(n^2)`` matvecs instead of an ``O(n^3)`` GEMM.  A right-hand side
+    that is exactly zero is trivially consistent and scores ``0.0``; anything
+    non-finite scores ``NaN``, which the caller REFUSES.
+    """
+    if probe and B.ndim == 2 and B.shape[1] > 0:
+        v = _mortar_probe(int(B.shape[1]))
+        B = B @ v
+        X = X @ v
+    num = float(np.linalg.norm(A @ X - B))
+    den = float(np.linalg.norm(B))
+    if den > 0.0:
+        return num / den
+    return 0.0 if num == 0.0 else float("inf")
 
 
 def _stag_grid_text(g, label):
@@ -5137,14 +5289,32 @@ def _stag_grid_text(g, label):
         return f"    grid {label}: <undescribable>"
 
 
-def _guarded_mortar_solve(A, B, site, ga=None, gb=None, hint=None):
+def _guarded_mortar_solve(A, B, site, ga=None, gb=None, hint=None,
+                          screen="rcond"):
     """``inv(A) @ B`` for a 2-D per-layer MORTAR interface, with a FREE
-    conditioning screen and a named refusal (round-2 D2).
+    screen and a named refusal (round-2 D2, round-3 V1).
 
     The answer returned is BIT-IDENTICAL to ``np.linalg.solve(A, B)`` --
     ``lu_factor`` + ``lu_solve`` is the same ``getrf`` + ``getrs`` pair, and
     that is measured, not assumed (see :data:`_MORTAR_RCOND_REFUSE`).  The
     ``gecon`` estimate rides the factors that already exist.
+
+    ``screen`` names WHICH quantity takes the refusal decision, and the two
+    are not interchangeable -- each has a two-sided gap only on its own site:
+
+    * ``'rcond'`` (the default, the two IN-PLANE sites) refuses on the LAPACK
+      reciprocal 1-condition against :data:`_MORTAR_RCOND_REFUSE`.  Healthy
+      population 2.6e-07 .. 3.8e-04, 5.4 decades clear.
+    * ``'residual'`` (the GENERALIZED site) refuses on the relative residual
+      ``||A X - B|| / ||B||`` against :data:`_MORTAR_RESID_REFUSE`.  That
+      site's operand is RANK-DEFICIENT BY CONSTRUCTION on any interface with a
+      promoted in-plane side, so its healthy ``rcond`` runs 1.26e-14 ..
+      1.52e-04 and CROSSES both the in-plane bar and the sliver population --
+      ROUND 3 / DEFECT V1.  The residual separates the two things that matter
+      there (consistent-but-rank-deficient, which is ordinary, from singular or
+      inconsistent, which is not) with 6.9 decades of margin below and 4.7
+      above, worst of two builds.  See :data:`_MORTAR_RESID_REFUSE` for both
+      populations.
 
     ``ga`` / ``gb`` are the two grids; they appear in the message so the caller
     is told WHICH grids met at the offending interface.
@@ -5156,6 +5326,8 @@ def _guarded_mortar_solve(A, B, site, ga=None, gb=None, hint=None):
         # more precisely.  Stand aside on the historical arithmetic.
         return np.linalg.solve(A, B)
     n = int(A.shape[0])
+    res = None
+    lu_failed = False
     try:
         # ``LinAlgWarning`` ("Diagonal number k is exactly zero") is in the
         # tuple ON PURPOSE: without ``-W error`` scipy WARNS and returns usable
@@ -5168,6 +5340,12 @@ def _guarded_mortar_solve(A, B, site, ga=None, gb=None, hint=None):
     except (ValueError, sla.LinAlgError, np.linalg.LinAlgError,
             sla.LinAlgWarning):
         rc = 0.0
+        # ROUND 3: on the residual screen there is no answer to residuate, so
+        # the reading is +inf, which the ``res <= bar`` test REFUSES.  Leaving
+        # it ``None`` would have thrown a TypeError out of the error message
+        # itself -- under ``-W error``, which is exactly when this branch runs.
+        lu_failed = True
+        res = float("inf")
     else:
         anorm = float(np.max(np.sum(np.abs(A), axis=0))) if A.size else 0.0
         try:
@@ -5176,24 +5354,65 @@ def _guarded_mortar_solve(A, B, site, ga=None, gb=None, hint=None):
             rc = float(rcv) if int(info) == 0 else 0.0
         except Exception:                   # noqa: BLE001  (instrument only)
             rc = float("nan")
-        if not (rc < _MORTAR_RCOND_REFUSE):          # NaN -> not refused
+        if screen == "residual":
+            X = sla.lu_solve((lu, piv), B)
+            # NOTE the comparison direction: ``res <= bar`` ACCEPTS, so a NaN
+            # (a non-finite answer, e.g. a zero column) fails it and is
+            # REFUSED.  The cheap probe decides the healthy path; only when it
+            # says "inconsistent" is the EXACT residual paid, so an unlucky
+            # probe cannot refuse a good solve.
+            res = _mortar_residual(A, X, B, probe=True)
+            if not res <= _MORTAR_RESID_REFUSE:
+                res = _mortar_residual(A, X, B, probe=False)
+            if res <= _MORTAR_RESID_REFUSE:
+                if _MORTAR_SOLVE_CENSUS is not None:
+                    _MORTAR_SOLVE_CENSUS.append((site, n, rc, False, res))
+                return X
+        elif not (rc < _MORTAR_RCOND_REFUSE):        # NaN -> not refused
             if _MORTAR_SOLVE_CENSUS is not None:
-                _MORTAR_SOLVE_CENSUS.append((site, n, rc, False))
+                _MORTAR_SOLVE_CENSUS.append((site, n, rc, False, None))
             return sla.lu_solve((lu, piv), B)
     if _MORTAR_SOLVE_CENSUS is not None:
-        _MORTAR_SOLVE_CENSUS.append((site, n, rc, True))
+        _MORTAR_SOLVE_CENSUS.append((site, n, rc, True, res))
     grids = "\n".join(t for t in (_stag_grid_text(ga, "A") if ga is not None
                                   else None,
                                   _stag_grid_text(gb, "B") if gb is not None
                                   else None) if t)
+    if screen == "residual":
+        if lu_failed:
+            how = ("the factorisation itself FAILED (an exactly zero pivot), "
+                   "so there is no answer to residuate")
+        elif not np.isfinite(res):
+            how = ("the answer LAPACK returns is NOT FINITE, so its residual "
+                   "is NaN")
+        else:
+            how = (f"the answer LAPACK returns leaves a relative residual "
+                   f"||A X - B|| / ||B|| = {res:.3e}")
+        head = (
+            f"{site}: the {n}x{n} mortar system has NO SOLUTION -- {how} "
+            f"against a "
+            f"{_MORTAR_RESID_REFUSE:.0e} bar, i.e. the right-hand side does "
+            f"not lie in the operator's range.  This site's operand is "
+            f"RANK-DEFICIENT BY CONSTRUCTION whenever one side of the "
+            f"interface is an in-plane region promoted to the generalized "
+            f"6-tuple form, so a CONDITION number says nothing here (its "
+            f"healthy population reaches 1.3e-14, measured over 28 ordinary "
+            f"stacks; this solve reads {rc:.3e}).  What is being refused is "
+            f"INCONSISTENCY, and every healthy generalized mortar the shipped "
+            f"fixtures build residuates at 1.2e-13 or better (23 solves, "
+            f"M = 4..8), 7 decades under this bar.")
+    else:
+        head = (
+            f"{site}: the {n}x{n} mortar operator is numerically singular -- "
+            f"LAPACK reciprocal 1-condition {rc:.3e} against a "
+            f"{_MORTAR_RCOND_REFUSE:.0e} bar, i.e. it cannot deliver a single "
+            f"correct digit of the interface S-matrix.  Every healthy mortar "
+            f"the shipped fixtures build reads 2.6e-07 or better (measured "
+            f"over 106 solves), so this is 5+ decades outside that population "
+            f"and the answer would be a build-dependent number rather than a "
+            f"solution.")
     raise _ConditioningError(
-        f"{site}: the {n}x{n} mortar operator is numerically singular -- "
-        f"LAPACK reciprocal 1-condition {rc:.3e} against a "
-        f"{_MORTAR_RCOND_REFUSE:.0e} bar, i.e. it cannot deliver a single "
-        f"correct digit of the interface S-matrix.  Every healthy mortar the "
-        f"shipped fixtures build reads 2.6e-07 or better (measured over 106 "
-        f"solves), so this is 5+ decades outside that population and the "
-        f"answer would be a build-dependent number rather than a solution."
+        head
         + (f"\n{grids}" if grids else "")
         + "\n  " + (hint or
                     "The usual cause is a near-degenerate element grid: two "
@@ -5508,8 +5727,16 @@ def _interface_smatrix_general_mortar_2d(six_a, six_b, ga, gb, cr, kron_apply):
     H4 = _stag_blk2_apply(hb_c[0], hb_c[1], Vb_b, gb.qq, kron_apply)
     A = np.block([[E1, E2], [H1, H2]])
     B = np.block([[E3, E4], [H3, H4]])
+    # ROUND 3 / DEFECT V1: this site takes its decision on the RESIDUAL, not on
+    # a condition estimate.  Its operand is RANK-DEFICIENT BY CONSTRUCTION when
+    # either side is an in-plane region promoted by ``_modes_as_general``
+    # (measured: 100 % of the near-null right singular vector lies in the
+    # promoted side's block column), while the system stays CONSISTENT -- so
+    # ``rcond`` refused ordinary mixed in-plane / out-of-plane stacks from
+    # ``n_modes`` = 5 up.  See :data:`_MORTAR_RESID_REFUSE`.
     X = _guarded_mortar_solve(
-        A, B, "pmm2d staggered GENERALIZED mortar interface", ga, gb)
+        A, B, "pmm2d staggered GENERALIZED mortar interface", ga, gb,
+        screen="residual")
     return (X[:ma, :ma], X[:ma, ma:], X[ma:, :ma], X[ma:, ma:])
 
 

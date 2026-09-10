@@ -214,6 +214,7 @@ from .twod_staggered import (
     _tile_needs_oop,
     _validate_stag_cell,
     _validate_stag_mu,
+    _warn_stag_sliver_band,
     _wood_eps_reals,
 )
 
@@ -664,7 +665,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         and corrupt the L2 MORTAR that couples this layer to neighbours on
         other grids -- ENERGY-INVISIBLY, with the lossless closure pinned, so
         no tripwire downstream can see it.  See that constant for the
-        derivation and both measured gaps.
+        derivation and both measured gaps.  The contract is reached at
+        :meth:`solve`, not here -- ``add_layer`` only RECORDS the wall array.
+
+        **THE BAND JUST ABOVE IT WARNS (round 3, 2026-09-11).**  A narrowest
+        segment between that contract and
+        :data:`~lumenairy.elements.pmm.twod_staggered._STAG_SLIVER_BAND_FRAC`
+        (3e-2 of the period) is ACCEPTED and measurably less accurate -- 4.65x
+        on a device that cannot depend on the wall separation at all, and it is
+        a FLOOR that ``n_modes`` does not remove -- so :meth:`solve` raises a
+        :class:`UserWarning` naming the width, the cost and the remedies.  It
+        fires only when the stack actually builds a cross-grid MORTAR; a fully
+        CONFORMING per-layer stack is silent.
 
         ``grid`` (``'per-layer'`` only) is a UNIFORM layer's segment count --
         uniform layers have no walls of their own -- and defaults to 1.
@@ -1689,6 +1701,14 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             return g
 
         gof = [_grid(L["wx"], L["wy"], M) for L, M in zip(self._layers, Ms)]
+        # ROUND 3 (VERIFY S5.4): the band ABOVE the width contract is accepted
+        # and measurably degraded, and until now SILENTLY.  This is the one
+        # place where the NEIGHBOURS are known, so the warning is conditioned
+        # on the stack actually building a cross-grid interface -- a fully
+        # CONFORMING per-layer stack takes the plain square match everywhere
+        # and is measured delta-independent, so it must not warn.
+        _warn_stag_sliver_band(
+            gof, force_mortar or len({g.key() for g in gof}) > 1)
         # HALF-SPACES ride the grid of the layer they TOUCH -- the 1-D
         # convention, and more strongly motivated here: both end interfaces
         # become PLAIN square matches, so no mortar ever sits where the far

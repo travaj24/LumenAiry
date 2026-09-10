@@ -263,6 +263,8 @@ in ``docs/audits/EXPERIMENT_PMM2D_STAGGERED_OOP_2026_09_09.md`` (candidate
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import scipy.linalg as sla
 from numpy.polynomial.legendre import leggauss
@@ -743,7 +745,126 @@ PMM2D_STAG_MIN_SEG_GUARD = True
 #: ``q >= 2000`` and a ``2 q^2 = 8e+06``-dimension region eigenproblem.  The
 #: exemption is what keeps gate N1 (integer walls BIT-IDENTICAL to the
 #: pre-2026-09-11 library) unconditional.
+#:
+#: **CORRECTIONS, ROUND 3 (2026-09-11**,
+#: ``docs/audits/FIX_PMM2D_MORTAR_ROUND3_2026_09_11.md`` **).**
+#:
+#: * this bar is a pure PERIOD FRACTION -- there is NO WAVELENGTH in it -- so
+#:   on a large-period cell it refuses features that are physically ordinary
+#:   (40 nm on a 40 um period).  That is DEFENSIBLE, because the conditioning
+#:   it guards is a cross-grid projection on ONE period and is governed by
+#:   ``w/d`` alone, but it was unstated (VERIFY round 2, DEFECT V5);
+#: * the contract fires at ``PMM2DStackPure.solve()``, NOT at ``add_layer`` --
+#:   ``add_layer`` only RECORDS the wall array, and :class:`Basis1D` is built
+#:   when the stack is solved, so a 400-slice taper is built in full before it
+#:   is refused (DEFECT V6).  "At the grid's entry point" above is true of
+#:   :class:`Basis1D`, not of the user's call site;
+#: * the E-row exponent quoted above as "``1/w^2``" is the TWO-AXIS value.  It
+#:   is **1.0 per axis carrying the sliver** (measured 1.01 / 1.006 at
+#:   ``M`` = 4 / 6 on a ONE-axis fixture against 1.995 / 1.994 on a two-axis
+#:   one), so a sliver on one axis conditions as ``1/w`` and on both as
+#:   ``1/w^2`` (DEFECT V4).  The H row is faster than the E row on the same
+#:   slot on both fixtures, which is the claim that matters, but its exponent
+#:   is BOUNDED, not pinned;
+#: * the CROSS-MASS exponents (``C1_x`` / ``C2_x``) quoted in the round-2 fix
+#:   doc are SATURATED at the float64 ceiling on both fixtures (they reach
+#:   3.6e+18 and disagree between ``M`` = 4 and 6 by 2.4x).  Nothing rests on
+#:   them; read them as "saturated", not as measurements;
+#: * the CONDITIONING BACKSTOP
+#:   (:data:`~lumenairy.elements.pmm._core._MORTAR_RCOND_REFUSE`) is NOT an
+#:   independent second line.  Its ``MassH_A V_A`` operator is built from the
+#:   FIRST grid, so on a sliver that occupies ONE axis in the LAST layer it is
+#:   ``delta``-INDEPENDENT (measured 1.384e+05 at every ``delta`` from 3e-1 to
+#:   1e-6) and does not fire down to ``delta`` = 1e-7 (DEFECT V3).  At the
+#:   GENERALIZED site it does not screen conditioning at all any more
+#:   (:data:`~lumenairy.elements.pmm._core._MORTAR_RESID_REFUSE`).  THIS
+#:   CONTRACT IS THE ONLY LINE AGAINST A SLIVER on the per-layer path.
 _STAG_MIN_SEG_FRAC = 1.0e-3
+
+#: Switch for the DEGRADATION-BAND warning (round-3, VERIFY S5.4).  ``False``
+#: restores the round-2 SILENCE in the band above the width contract, bit for
+#: bit -- it exists so a test can demonstrate the silence the warning replaces,
+#: and so a user who has read the measurement can turn it off.  Same style and
+#: same status as :data:`PMM2D_STAG_MIN_SEG_GUARD`: not a supported user knob.
+PMM2D_STAG_SLIVER_BAND_WARN = True
+
+#: UPPER EDGE of the SILENTLY-DEGRADED band, as a fraction of the period.  A
+#: per-layer stack whose narrowest segment lands in
+#: ``[_STAG_MIN_SEG_FRAC, _STAG_SLIVER_BAND_FRAC)`` -- ACCEPTED by the width
+#: contract, and MEASURABLY degraded by it -- gets a :class:`UserWarning` from
+#: :meth:`~lumenairy.elements.pmm.PMM2DStackPure.solve`.  ROUND 3, 2026-09-11.
+#:
+#: WHY A BAND AND NOT A SECOND REFUSAL.  Above :data:`_STAG_MIN_SEG_FRAC` the
+#: answer is a real answer -- it converges, it conserves energy, and it is
+#: build-stable.  It is simply LESS ACCURATE than the same device on an
+#: ordinary partition, by a factor that grows smoothly as the segment narrows
+#: and that ``n_modes`` does NOT remove.  Refusing it would be wrong; leaving
+#: it SILENT is what the VERIFY audit's S5.4 called the last silent-wrong-
+#: answer surface on this path, because the ``n_modes`` ladder FLATTENS in the
+#: band, so a user converging in ``n_modes`` reads the flattening as
+#: convergence while sitting on a floor.
+#:
+#: THE MEASUREMENT.  Scored against the exact 1-D ``PMMStack`` (degree 14,
+#: whose own 12 -> 14 self-gap is 1.49e-05) on a y-uniform 3-layer stack whose
+#: MIDDLE layer is ALL HOST, so the DEVICE cannot depend on the wall separation
+#: at all and every deviation is numerical damage.  Ratio to the ordinary
+#: (3e-01) end of the SAME ladder, re-measured 2026-09-11 on a fixture
+#: independent of the VERIFY audit's -- different period, wavelength, angle,
+#: contrast, wall positions and sliver centre
+#: (``validation/probe_fix_mortar_round3/r5_degradation_band.py``, identical on
+#: WIN and WSL):
+#:
+#:   narrowest/period  3e-1  2e-1  1e-1  5e-2  3e-2  1e-2  3e-3  1e-3
+#:   this fixture M=6  1.00  1.03  1.13  1.25  1.32  1.44  1.55  1.66
+#:   this fixture M=7  1.00  1.06  1.31  1.49  1.56  1.62  1.64  1.64
+#:   this fixture M=8  1.00  2.28  4.04  4.55  4.65  4.74  4.81  4.87
+#:   VERIFY fixture M=8  1.00   --   2.09   --   4.02  5.31  5.76  5.86
+#:
+#: Every rung of every row above is IDENTICAL on WIN and WSL to the three
+#: decimals printed, and the 1-D oracle's own self-gap agrees to 11 significant
+#: figures -- it is a pure discretisation quantity with no meaningful
+#: cross-build spread.
+#:
+#: The floor is only VISIBLE at rungs where the ordinary arm has converged
+#: below it, which is why the ``M`` = 6 and 7 rows are mild and the ``M`` = 8
+#: row is not: at ``M`` = 8 the ordinary arm reads 4.68e-04 while the band arm
+#: saturates at ~2.2e-03.
+#:
+#: THE UPPER EDGE, with BOTH constraints measured -- and they pull in OPPOSITE
+#: directions, which is the whole difficulty:
+#:
+#:   * ACCURACY says as WIDE as possible.  The bar is "the measured cost
+#:     exceeds 2x", and on the ``M`` = 8 ladder that is first true at
+#:     **2e-01** on this fixture (2.28x) and at **1e-01** on the VERIFY
+#:     audit's (2.09x).
+#:   * FALSE POSITIVES say as NARROW as possible.  The narrowest segment any
+#:     ORDINARY geometry the library builds asks for is **1.2500e-01** in the
+#:     shipped battery (a nested refinement) and **1.0937e-01** in the VERIFY
+#:     audit's wider census (``add_tapered_pillars`` at 16 slices).
+#:
+#: So the ACCURACY criterion alone would put the edge ON TOP OF the ordinary
+#: population -- 2e-01 is WIDER than every per-layer geometry except a single
+#: interior wall and a duty-1/3 pair.  **THE CENSUS IS THE BINDING
+#: CONSTRAINT**, and 3e-02 is the largest round decade-third that keeps a
+#: stated factor on both sides:
+#:
+#:   * **4.65x** measured cost at the edge on this fixture (4.02x on the VERIFY
+#:     audit's), i.e. the 2x bar is cleared by **2.3x**;
+#:   * **3.6x below** the narrowest ordinary geometry (4.2x below the shipped
+#:     battery's), so NO ordinary stack warns.  The census is re-run on the
+#:     running build by ``tests/unit/test_fix_pmm2d_mortar_round3.py``.
+#:
+#: The ONE surface that DOES land in the band is the one the round-2 census
+#: identified as walking toward the contract: a taper whose tip CLOSES, whose
+#: narrowest sampled width is ``~ w_bottom / (2 n_slices)`` -- measured
+#: 8.0094e-03 at 32 slices and 4.1047e-03 at 64.  That is the intent, not a
+#: false positive.
+#:
+#: The band's LOWER edge is :data:`_STAG_MIN_SEG_FRAC` itself: below it the
+#: stack is REFUSED, so the warning would never be read.  Both edges carry the
+#: same 1e-9 RELATIVE slack the contract does, so the two rules are exactly
+#: complementary -- see :func:`_warn_stag_sliver_band`.
+_STAG_SLIVER_BAND_FRAC = 3.0e-2
 
 #: Census hook for the minimum-segment contract.  When set to a list, every
 #: NON-UNIFORM :class:`Basis1D` appends
@@ -789,6 +910,87 @@ def _raise_stag_sliver(xb, w, d, frac, M):
         f"before its tip closes (the midpoint rule's narrowest sampled width "
         f"is ~w_bottom / (2 n_slices)).  Raising n_modes is NOT a remedy: the "
         f"spurious spectrum grows as M (M + 1).")
+
+
+def _stag_band_narrowest(grids):
+    """Narrowest segment over a list of :class:`StagGridOps`, as a fraction of
+    that axis's period, with the grid and axis that owns it.  Costs no solve --
+    it reads the wall arrays the grids already hold."""
+    worst, where = 1.0, None
+    for gi, g in enumerate(grids):
+        for ax, b in (("x", g.bx), ("y", g.by)):
+            if b.uniform:
+                f = 1.0 / float(b.N)
+            else:
+                f = float(np.min(np.diff(np.asarray(b.xb)))) / float(b.d)
+            if f < worst:
+                worst, where = f, (gi, ax, b)
+    return worst, where
+
+
+def _warn_stag_sliver_band(grids, mortared, fn="PMM2DStackPure.solve"):
+    """ROUND-3 band warning: a per-layer segment ACCEPTED by the width contract
+    but measurably degraded by its own narrowness (VERIFY round 2, S5.4).
+
+    ``grids`` are the per-layer :class:`StagGridOps`; ``mortared`` says whether
+    this stack actually builds a CROSS-GRID interface.  It does not warn when
+    it does not: on a stack whose layers all share ONE grid every interface is
+    the plain square modal match, and such a stack is MEASURED
+    ``delta``-independent to ~1e-04 over three decades of wall separation
+    against the mortared arm's 5.9x -- warning there would be the same false
+    positive as DEFECT V2.
+
+    WARNS, never raises, and returns whether it warned."""
+    if not (PMM2D_STAG_SLIVER_BAND_WARN and mortared):
+        return False
+    frac, where = _stag_band_narrowest(grids)
+    # BOTH edges carry the SAME 1e-9 RELATIVE slack the width contract does,
+    # and for the same reason: a caller who asks for EXACTLY an edge computes
+    # it in floating point and lands either side of it (measured:
+    # ``0.47 - 0.44`` is 2.99999999999999970e-02, 3e-17 UNDER 3e-2).  With the
+    # slack the documented boundary is deterministic instead of a coin flip on
+    # the caller's own arithmetic, and the two rules line up EXACTLY: a grid
+    # the contract accepts is either in the band or above it, never neither.
+    if not (_STAG_MIN_SEG_FRAC * (1.0 - 1e-9) <= frac
+            < _STAG_SLIVER_BAND_FRAC * (1.0 - 1e-9)):
+        return False
+    gi, ax, b = where
+    # the measured degradation CLASS, read off the band the width lands in --
+    # the ladder in _STAG_SLIVER_BAND_FRAC, quoted as a range because it is
+    # fixture-dependent and grows toward the contract
+    if frac >= 1.0e-2:
+        cls = "about 4-5x"
+    elif frac >= 3.0e-3:
+        cls = "about 5-6x"
+    else:
+        cls = "about 6x, its floor"
+    warnings.warn(
+        f"{fn}: layer {gi}'s element grid has a segment "
+        f"{frac:.3e} of the period wide on the {ax} axis (walls "
+        f"{np.array2string(np.asarray(b.xb), precision=6, threshold=10)}).  "
+        f"That is ABOVE the {_STAG_MIN_SEG_FRAC:.0e} minimum this basis "
+        f"contracts for, so the solve proceeds -- but it is inside the "
+        f"MEASURED degradation band {_STAG_MIN_SEG_FRAC:.0e} .. "
+        f"{_STAG_SLIVER_BAND_FRAC:.0e}, where the per-segment 1/J_n stiffness "
+        f"puts spurious modal wavenumbers into the L2 MORTAR that couples this "
+        f"layer to neighbours on other grids.  MEASURED cost on a device that "
+        f"cannot depend on the wall separation at all: {cls} the error of the "
+        f"same device on an ordinary partition, and it is a FLOOR -- raising "
+        f"n_modes does NOT remove it, and the n_modes ladder FLATTENS here, so "
+        f"a convergence study will read the floor as convergence.  The "
+        f"lossless closure stays pinned, so no energy tripwire can see this.\n"
+        f"  REMEDIES.  (1) MERGE the two walls if the feature is finer than "
+        f"the device needs; (2) carry the fine feature on the SHARED lattice "
+        f"(PMM2DStackPure(..., layer_grids='shared') with an N that resolves "
+        f"it), where every cell is period/N and no mortar forms; (3) put the "
+        f"NEIGHBOURS on this layer's wall array too -- a CONFORMING per-layer "
+        f"stack takes the plain square modal match and no mortar at all; "
+        f"(4) use PMM2DStackHybrid, which is Fourier-projected and has no "
+        f"element grid; (5) on a TAPER, lower n_slices.  To silence this "
+        f"warning after reading the measurement, set "
+        f"lumenairy.elements.pmm.twod_staggered."
+        f"PMM2D_STAG_SLIVER_BAND_WARN = False.", stacklevel=3)
+    return True
 
 
 class Basis1D:
@@ -3069,7 +3271,6 @@ def pmm_efficiency_2d_staggered(
     _gap = min(float(np.min(np.abs(float(np.real(e)) - _kt2)))
                for e in (eps_sup, eps_sub))
     if _gap < 1e-4:
-        import warnings
         warnings.warn(
             f"pmm_efficiency_2d_staggered: a diffraction order is within "
             f"{_gap:.2g} (kt^2 units) of a Rayleigh cutoff; the staggered "

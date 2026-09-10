@@ -1,0 +1,141 @@
+{
+ "tag": "wsl",
+ "lumenairy": "/mnt/c/tmp/lum_mortar3/lumenairy/__init__.py",
+ "construction_sites": {
+  "Basis1D": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 0.000",
+  "StagGridOps": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 0.000",
+  "Granet2DTransverseE": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 0.000"
+ },
+ "conforming_sensitivity": {
+  "4": {
+   "values": {
+    "3e-01": {
+     "R00": 0.06922263934073358,
+     "err_vs_oracle": 0.38808476098621164,
+     "closure": 0.0067959884238342205,
+     "warnings": []
+    },
+    "1e-02": {
+     "R00": 0.12409939700859192,
+     "err_vs_oracle": 0.48617155022936476,
+     "closure": 0.0070502134379351045,
+     "warnings": []
+    },
+    "1e-03": {
+     "R00": 0.11415509152146451,
+     "err_vs_oracle": 0.4910804392519318,
+     "closure": 0.007839183782651693,
+     "warnings": []
+    },
+    "1e-04": {
+     "R00": 0.11315606076934273,
+     "err_vs_oracle": 0.4914507399446273,
+     "closure": 0.007923417808643585,
+     "warnings": []
+    },
+    "1e-05": {
+     "R00": 0.11305608198206919,
+     "err_vs_oracle": 0.49148646909868055,
+     "closure": 0.007931866557661094,
+     "warnings": []
+    },
+    "1e-06": {
+     "R00": 0.11304607589571314,
+     "err_vs_oracle": 0.491490024152215,
+     "closure": 0.007932709395792603,
+     "warnings": []
+    }
+   },
+   "spread": 0.054876757667858336,
+   "relative": 0.7927573723061797,
+   "err_ratio": 1.2664502025362374
+  },
+  "5": {
+   "values": {
+    "3e-01": {
+     "R00": 0.04339426183690614,
+     "err_vs_oracle": 0.3600905757147496,
+     "closure": 0.0002940536282372008,
+     "warnings": []
+    },
+    "1e-02": {
+     "R00": 0.18394652895992925,
+     "err_vs_oracle": 0.4326603844613851,
+     "closure": 0.0033429172620176306,
+     "warnings": []
+    },
+    "1e-03": {
+     "R00": 0.15676026029380802,
+     "err_vs_oracle": 0.4312522510732261,
+     "closure": 0.0031806073103117782,
+     "warnings": []
+    },
+    "1e-04": {
+     "R00": 0.15444818579180053,
+     "err_vs_oracle": 0.43113519405158024,
+     "closure": 0.003170556615873954,
+     "warnings": []
+    },
+    "1e-05": {
+     "R00": 0.15422045716559749,
+     "err_vs_oracle": 0.4311236977636085,
+     "closure": 0.003169614419863631,
+     "warnings": []
+    },
+    "1e-06": {
+     "R00": 0.15419771513607927,
+     "err_vs_oracle": 0.4311225505977975,
+     "closure": 0.003169520805929693,
+     "warnings": []
+    }
+   },
+   "spread": 0.1405522671230231,
+   "relative": 3.238959741987951,
+   "err_ratio": 1.2015320967581296
+  },
+  "6": {
+   "values": {
+    "3e-01": {
+     "R00": 0.036806874961737096,
+     "err_vs_oracle": 0.36126510885678537,
+     "closure": 3.545303013685608e-05,
+     "warnings": []
+    },
+    "1e-02": {
+     "R00": 0.07761406672471355,
+     "err_vs_oracle": 0.5056999697941165,
+     "closure": 8.941272176454795e-05,
+     "warnings": []
+    },
+    "1e-03": {
+     "R00": 0.07700806350834907,
+     "err_vs_oracle": 0.5009949620131926,
+     "closure": 9.714101246749429e-05,
+     "warnings": []
+    },
+    "1e-04": {
+     "R00": 0.07698262342308086,
+     "err_vs_oracle": 0.5004171352294828,
+     "closure": 9.762767824517127e-05,
+     "warnings": []
+    },
+    "1e-05": {
+     "R00": 0.07698045341431453,
+     "err_vs_oracle": 0.5003581636147219,
+     "closure": 9.762433414728378e-05,
+     "warnings": []
+    },
+    "1e-06": {
+     "R00": 0.07698023966464089,
+     "err_vs_oracle": 0.5003522540121208,
+     "closure": 9.760831702498862e-05,
+     "warnings": []
+    }
+   },
+   "spread": 0.04080719176297645,
+   "relative": 1.1086839566085933,
+   "err_ratio": 1.3998029629664257
+  }
+ },
+ "shipped_refusal": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 0.000465 wide -- 5.000e-04 of the period 0.93, below the minimum "
+}
