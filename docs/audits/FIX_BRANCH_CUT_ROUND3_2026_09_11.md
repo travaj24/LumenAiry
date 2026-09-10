@@ -258,23 +258,28 @@ and a round-off floor `eps |f| / h` (~1e-12), so the gate sits four decades
 above the FD method error and four to five below the observed defect. An
 h-ladder is reported per row so an FD-limited reading is visible.
 
-| fixture | rel |
-|---|---|
-| near-normal `sum(T)` | 3.464e-07 |
-| near-normal `sum(R)` | 5.692e-06 |
-| θ = 1e-7 `sum(T)` | 2.877e-07 |
-| oblique 0.30 TE | 8.143e-06 |
-| oblique 0.30 TM | 9.340e-07 |
-| conical θ=0.40 φ=0.7 | 1.349e-07 |
-| conical 1e-8 off normal, φ=0.7 | 1.246e-07 |
-| LOSSY `eps = 6+0.4j` normal | 3.724e-07 |
-| LOSSY oblique 0.35 | 5.257e-06 |
-| high-index substrate 2.4 | 5.322e-07 |
-| rectangular pillar | 3.571e-07 |
-| deeper `degree = 7`, `n_orders = 3` | 1.513e-07 |
+Run on BOTH builds: **WIN** = Windows py3.14.6 / jax 0.11.0 / numpy 2.4.4, and
+**WSL** = py3.12.3 / jax 0.10.2 / numpy 2.4.6 — which is CI's JAX python.
 
-**Worst 8.143e-06** against the 1e-04 gate. **JAX/NumPy forward parity worst
-7.709e-15** on the same twelve.
+| fixture | rel, WIN | rel, WSL |
+|---|---|---|
+| near-normal `sum(T)` | 3.464e-07 | 3.458e-07 |
+| near-normal `sum(R)` | 5.692e-06 | 5.706e-06 |
+| θ = 1e-7 `sum(T)` | 2.877e-07 | 2.885e-07 |
+| oblique 0.30 TE | 8.143e-06 | 8.144e-06 |
+| oblique 0.30 TM | 9.340e-07 | 9.343e-07 |
+| conical θ=0.40 φ=0.7 | 1.349e-07 | 1.347e-07 |
+| conical 1e-8 off normal, φ=0.7 | 1.246e-07 | 4.083e-06 |
+| LOSSY `eps = 6+0.4j` normal | 3.724e-07 | 3.726e-07 |
+| LOSSY oblique 0.35 | 5.257e-06 | 5.257e-06 |
+| high-index substrate 2.4 | 5.322e-07 | 5.309e-07 |
+| rectangular pillar | 3.571e-07 | 3.569e-07 |
+| deeper `degree = 7`, `n_orders = 3` | 1.513e-07 | 1.526e-07 |
+
+**Worst 8.143e-06 (WIN) / 8.144e-06 (WSL)** against the 1e-04 gate — four
+decades of margin, and the two builds agree to three significant figures on
+every row but one. **JAX/NumPy forward parity worst 7.709e-15 (WIN) /
+8.585e-15 (WSL)** on the same twelve.
 
 SLANTED is excluded by construction — the hybrid 2-D PMM has no slant
 parameter, so there is no such fixture to differentiate.
@@ -465,9 +470,12 @@ Other limits:
   not the right instrument and none is claimed. The motion is up to `1.6e-07`
   in `sum(T)` at near-normal incidence and `<= 6.9e-12` away from the band's
   edge; what IS bit-identical is the flip SELECTOR (§7) and the root's square;
-* the JAX gates were run on Windows py3.14 / jax 0.11.0. CI's JAX job is
-  py3.12; the failure reproduced identically on both, but the post-fix numbers
-  in §6.1 are Windows-only;
+* the post-fix JAX census in §6.1 is now run on BOTH builds, including WSL
+  py3.12 / jax 0.10.2 (CI's JAX python), and they agree. The PRE-fix
+  reproduction and the candidate comparison in §3 are Windows-only; the CI log
+  supplies the py3.12 pre-fix readings (6.18 / 0.71 relative, the same two
+  gates), so the defect itself is two-build evidenced even though the
+  candidate sweep is not;
 * the pre-existing azimuth-gauge artifact at `theta == 0` exactly with
   `phi != 0` (§6.1) is recorded, not repaired;
 * **`lumenairy` is pip-installed on the measuring host as a path install

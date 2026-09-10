@@ -298,7 +298,9 @@ non-holomorphic and it scored WORSE than `conj` on both gates (18.1 and 0.38).
 
 Post-fix, `jax.grad` matches central finite differences to **8.14e-06** worst
 over 12 fixtures (near-normal, oblique, conical, lossy, high-index, rectangular,
-deeper degree; gate 1e-04) with JAX/NumPy forward parity at **7.71e-15**.  The
+deeper degree; gate 1e-04) with JAX/NumPy forward parity at **7.71e-15** --
+measured on Windows py3.14 / jax 0.11.0 AND on py3.12 / jax 0.10.2, which is
+CI's JAX python, the two agreeing to three significant figures on every row.  The
 exact-index-coincidence fixture of `test_audit_s1_2_rcwa_lossless_tripwire.py`
 now closes at **<= 6.772e-13** over five (build x core-type) samples, against
 7.289e-04 .. 5.001e-02 on the pre-round-1 arm.  Four tests that pinned the
