@@ -11755,7 +11755,16 @@ def apply_real_lens_traced(
     def _ray_density_self_checks(E_out):
         """The three post-swap ray-density self-checks (energy, halo,
         retained band) -- whole-grid REDUCTIONS over the finished field,
-        shared by the whole-grid swap and the v5.44 band assembly."""
+        shared by the whole-grid swap and the v5.44 band assembly.
+
+        ``stacklevel=3`` on all three (v5.44.1,
+        VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D1): this is a nested closure,
+        so ``2`` reports ``_lens_traced.py`` -- its own caller -- instead of
+        the caller of ``apply_real_lens_traced``, which is what v5.43.0
+        reported, what ``warnings.filterwarnings(module=...)`` keys on, and
+        what the default filter's per-location dedup registry is indexed by.
+        ``_warn_ray_density_fold`` and ``_origin_amp_support_verdict``, the
+        two sibling closures, already carry ``3``."""
         # ---- v5.30 (audit E-M6): post-hoc ENERGY SELF-CHECK ------------------
         # Two N^2 reductions, negligible against the trace + Newton stages.
         # Reference = the input power the element ADMITS (inside the entrance
@@ -11796,7 +11805,7 @@ def apply_real_lens_traced(
                     f"apply_real_lens_fga there), a ray map running off the "
                     f"grid, or an aperture_diameter wider than the traced "
                     f"pupil.  Lower ray_subsample to check convergence.",
-                    RuntimeWarning, stacklevel=2)
+                    RuntimeWarning, stacklevel=3)
         # ---- v5.32: HALO-AMPLITUDE self-check --------------------------
         # The power sum above cannot see a lobe deposited outside the traced
         # pupil (measured: a defect whose total-power signature vanished
@@ -11862,7 +11871,7 @@ def apply_real_lens_traced(
                             f"apply_real_lens_fga); set "
                             f"lumenairy.elements._lens_traced."
                             f"RAY_DENSITY_HALO_CHECK = 'silent' to suppress.",
-                            RuntimeWarning, stacklevel=2)
+                            RuntimeWarning, stacklevel=3)
                 del _h_abs
             del _h_far
         # ---- niche C14: the RETAINED-BAND self-check --------------------
@@ -11926,7 +11935,7 @@ def apply_real_lens_traced(
                         f"lumenairy.elements._lens_traced."
                         f"SUPPORT_BAND_CHECK = 'silent' to suppress (that is "
                         f"also the pre-C14 fail-before).",
-                        RuntimeWarning, stacklevel=2)
+                        RuntimeWarning, stacklevel=3)
                 del _bd_abs
             del _bd_in, _bd_band
 

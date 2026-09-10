@@ -27,6 +27,7 @@ exactly nothing, so the bar is exact -- the same bar
 """
 from __future__ import annotations
 
+import os
 import warnings
 
 import numpy as np
@@ -150,6 +151,68 @@ def test_band_path_result_differs_from_the_incumbent_it_used_to_select():
     incumbent, rec_i, _ = _run(64, inverse_map=False, **kw)
     assert rec_m['engaged'] and not rec_i['engaged']
     assert not np.array_equal(model, incumbent)
+
+
+# ===========================================================================
+# 2b.  the self-check warnings are attributed to the CALLER (v5.44.1, D1)
+# ===========================================================================
+def _run_recording_filenames(rows, **kw):
+    """Like ``_run`` but keeps each warning's ``filename`` -- the field
+    ``warnings.filterwarnings(module=...)`` and the default filter's
+    per-location dedup registry key on."""
+    IM.inverse_map_cache_clear()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        out = la.apply_real_lens_traced(_field(), sag_chunk_rows=rows, **kw)
+    IM.inverse_map_cache_clear()
+    return np.asarray(out), [(os.path.basename(str(w.filename)),
+                              str(w.message)) for w in caught]
+
+
+@pytest.mark.parametrize('rows', [0, 32, 7], ids=['whole', 'band32', 'band7'])
+def test_ray_density_self_check_warnings_name_the_caller(monkeypatch, rows):
+    """The three self-checks live in a nested closure shared by the banded and
+    the whole-grid path, so their ``stacklevel`` has to be 3, not the 2 they
+    were written with when they sat in the function body (v5.44.1,
+    VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D1).
+
+    MEASURED before the fix, on this box: 2 of the 3 notices the probe fires
+    were attributed to ``_lens_traced.py:12236`` on the banded path and
+    ``:12350`` on the whole-grid one; v5.43.0 attributed all three to the
+    caller.  That file/line is what ``warnings.filterwarnings(module=...)``
+    selects on and what the default filter's per-location dedup registry is
+    keyed by, so a library attribution also stops a second call from a
+    different caller module re-warning.
+
+    Every threshold is driven over so the energy notice FIRES; the assertion
+    is that THIS file is what it names, on both routes, and that no notice
+    ``apply_real_lens_traced`` itself raises names the library.  (The
+    ``apply_real_lens:`` notices of the analytic sub-call are a different
+    function with a genuine library caller and are excluded by prefix.  The
+    halo and support-band notices need a fixture this one is not -- they are
+    measured on the caller in ``validation/probe_fix_lens_5440/p2_d1_attr.py``,
+    which fires the support-band check on both routes.)  Byte-identity of the
+    field is asserted alongside: a stacklevel must not be able to move a
+    value."""
+    import lumenairy.elements._lens_traced as LT
+    monkeypatch.setattr(LT, '_RD_ENERGY_GAIN_TOL', -1.0)
+    monkeypatch.setattr(LT, '_RD_ENERGY_DEFICIT_BASE', -1.0)
+    monkeypatch.setattr(LT, '_RD_ENERGY_DEFICIT_PER_SUB', 0.0)
+    monkeypatch.setattr(LT, '_RD_HALO_AMAX_TOL', 0.0)
+    monkeypatch.setattr(LT, '_SUPPORT_BAND_PEAK_RATIO_TOL', 0.0)
+    kw = _base_kw(amplitude_model='ray_density', preserve_input_phase=True)
+    whole, w_whole = _run_recording_filenames(0, **kw)
+    got, ws = _run_recording_filenames(rows, **kw)
+    assert np.array_equal(whole, got), rows
+    here = os.path.basename(__file__)
+    for tag, got_ws in (('band', ws), ('whole', w_whole)):
+        fired = [(f, m) for f, m in got_ws
+                 if "'ray_density' energy self-check FAILED" in m]
+        assert len(fired) == 1, (tag, got_ws)      # or this pins nothing
+        assert fired[0][0] == here, (tag, fired)
+        mine = [(f, m) for f, m in got_ws
+                if m.startswith('apply_real_lens_traced:')]
+        assert [f for f, _ in mine if f != here] == [], (tag, mine)
 
 
 # ===========================================================================
