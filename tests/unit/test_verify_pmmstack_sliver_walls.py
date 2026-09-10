@@ -301,6 +301,75 @@ def test_the_guard_has_a_measured_floor_the_theorem_cannot_reach():
 
 
 # ==========================================================================
+# THE ATTRIBUTION HOLE (the fix audit's open item F), MEASURED
+# ==========================================================================
+def test_the_refusal_fires_when_the_super_unity_is_TRUNCATION_not_the_sliver():
+    """Conjunct (b) reads super-unity as a theorem violation.  On a provably
+    passive stack it can equally be ORDINARY UNDER-CONVERGENCE -- a lossy
+    substrate at a large angle and a modest degree is enough, no many-slice
+    quasi-resonance required.  When such a stack also carries a HARMLESS sliver
+    (well above the onset, the answer still on the physical shift) the refusal
+    fires and blames the sliver.
+
+    Three things are asserted, all measured here, and all of them are
+    STATEMENTS OF A KNOWN DEFECT: if the guard is later taught to separate the
+    two causes this test fails, and that failure is the gate working -- re-pin
+    it against the improvement, do not relax it.  MEASURED 2026-09-11 on BOTH
+    builds (``validation/probe_verify_sliver/v9_falsepos.py``): 110 of 648
+    realistic staircase configurations refuse a solve whose answer is within
+    0.35-8.8x the physical shift, and 26 of 960 sliver-FREE provably passive
+    stacks already read above the bar (worst R+T-1 = 3.814e-02)."""
+    def _st(delta, degree, mf=_NO_SNAP, nl=2):
+        st = PMMStack(_P, n_superstrate=2.5, n_substrate=1.5 + 0.05j,
+                      degree=degree, min_feature=mf, far_field_orders=31)
+        for k in range(nl):
+            dd = delta * k / max(nl - 1, 1)
+            st.add_layer(_DZ, segments=[(_A0 - dd, _EH),
+                                        (_B0 + dd - (_A0 - dd), 12.0),
+                                        (1.0 - (_B0 + dd), _EH)])
+        st.set_source(_WL, theta=1.2)
+        return st
+
+    def _go(st, guard=True):
+        was = ps.PMM_SLIVER_GUARD
+        ps.PMM_SLIVER_GUARD = guard
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                o, R, T, _J = st.solve()
+            o = np.asarray(o).ravel()
+            i = np.argsort(o)
+            tot = np.real(R).sum(axis=-1) + np.real(T).sum(axis=-1)
+            return (o[i], np.asarray(R)[1][i], np.asarray(T)[1][i],
+                    float(np.max(tot)))
+        finally:
+            ps.PMM_SLIVER_GUARD = was
+
+    d = 1e-3
+    assert ps._stack_provably_passive(_st(d, 6)) is True
+    # (i) the sliver is HARMLESS here: the answer tracks the exact delta -> 0
+    #     limit to within the fix's own "correct" rule.
+    ref, cur = _go(_st(0.0, 6), False), _go(_st(d, 6), False)
+    c = np.intersect1d(cur[0], ref[0])
+    ia, ib = np.searchsorted(cur[0], c), np.searchsorted(ref[0], c)
+    e = float(max(np.abs(cur[1][ia] - ref[1][ib]).max(),
+                  np.abs(cur[2][ia] - ref[2][ib]).max()))
+    assert e <= 10.0 * d, (e, d)
+    assert cur[3] > 1.0 + ps._STACK_SUPERUNITY_BAR, cur[3]
+    # (ii) ... and it is refused anyway, naming the sliver.
+    with pytest.raises(ValueError, match="NEAR-COINCIDENT-WALL SLIVER") as ei:
+        _go(_st(d, 6), True)
+    mf = float(str(ei.value).split("min_feature=")[1].split(" ")[0])
+    # (iii) remedy (1) -- the one the message names FIRST, with a number --
+    #       silences the refusal and leaves the answer where it was.
+    fixed = _go(_st(d, 6, mf=mf), True)
+    assert abs(fixed[3] - cur[3]) < 1e-3, (fixed[3], cur[3])
+    assert fixed[3] > 1.0 + ps._STACK_SUPERUNITY_BAR, fixed[3]
+    # ... while remedy (4), degree, is the one that actually converges it.
+    assert _go(_st(d, 12), True)[3] < 1.0 + 1e-5
+
+
+# ==========================================================================
 # THE REMEDY'S BAR IS THE STRUCTURE'S, NOT THE NUMBER 2
 # ==========================================================================
 def test_the_remedy_lands_on_the_structures_own_continuity_slope():
