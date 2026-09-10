@@ -1,0 +1,557 @@
+{
+ "C1_pmmstack_union": {
+  "reference_raised": null,
+  "rows": [
+   {
+    "closure": 7.260858581048524e-13,
+    "delta": 0.1,
+    "raised": null,
+    "shift_vs_delta0": 0.0356966027297827,
+    "sliver_m": 1.2e-07,
+    "warnings": []
+   },
+   {
+    "closure": 2.1682655670929307e-12,
+    "delta": 0.03,
+    "raised": null,
+    "shift_vs_delta0": 0.045264525180965326,
+    "sliver_m": 3.6e-08,
+    "warnings": []
+   },
+   {
+    "closure": 1.2541523375375618e-11,
+    "delta": 0.01,
+    "raised": null,
+    "shift_vs_delta0": 0.021930020861476884,
+    "sliver_m": 1.2e-08,
+    "warnings": []
+   },
+   {
+    "closure": 4.551747867509448e-10,
+    "delta": 0.003,
+    "raised": null,
+    "shift_vs_delta0": 0.007867503045838747,
+    "sliver_m": 3.6e-09,
+    "warnings": []
+   },
+   {
+    "closure": 6.754525827545876e-09,
+    "delta": 0.001,
+    "raised": null,
+    "shift_vs_delta0": 0.002777336506717798,
+    "sliver_m": 1.2e-09,
+    "warnings": []
+   },
+   {
+    "closure": 9.986350268942346e-08,
+    "delta": 0.0003,
+    "raised": null,
+    "shift_vs_delta0": 0.0008506355919027098,
+    "sliver_m": 3.5999999999999995e-10,
+    "warnings": []
+   },
+   {
+    "delta": 0.0001,
+    "raised": "ValueError: PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 2 cell(s) no single layer asked for; the narrowest is 0.0001 of a period (1.2e-10 m) between walls 0.2916 and 0.2917, i.e. 2.92e+03x fine",
+    "sliver_m": 1.2e-10,
+    "warnings": []
+   },
+   {
+    "delta": 1e-05,
+    "raised": "ValueError: PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 2 cell(s) no single layer asked for; the narrowest is 1e-05 of a period (1.2e-11 m) between walls 0.6109 and 0.61091, i.e. 2.92e+04x fine",
+    "sliver_m": 1.2e-11,
+    "warnings": []
+   },
+   {
+    "closure": 4.241051954068098e-14,
+    "delta": 1e-06,
+    "raised": null,
+    "shift_vs_delta0": 3.155000429105881e-06,
+    "sliver_m": 1.2e-12,
+    "warnings": [
+     {
+      "cls": "UserWarning",
+      "msg": "_pmm_union_grid: snapped 2 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=1e-05 (period fractions): (0.291699, 0.2917), (0.6109, 0.610901).  These near-zero-width union elements are the staircase wa"
+     }
+    ]
+   }
+  ]
+ },
+ "C2_hybrid_intralayer": {
+  "reference_raised": null,
+  "rows": [
+   {
+    "closure": 0.007465068561318233,
+    "delta": 0.1,
+    "raised": null,
+    "rt": [
+     1.0019415535094367,
+     1.0074650685613182
+    ],
+    "sem": {
+     "cond_axis_Mx": 17.32326937566557,
+     "cond_mass_M": 133.37584971638773,
+     "max_abs_Gx": 10.674627351337435,
+     "n_dof": 441,
+     "widest_over_narrowest": 6.000000000000002
+    },
+    "shift_vs_nopillar": 0.024352131416370715,
+    "sliver_m": 1.2e-07,
+    "warnings": []
+   },
+   {
+    "closure": 3.406348911938473e-05,
+    "delta": 0.03,
+    "raised": null,
+    "rt": [
+     1.000023710969864,
+     1.0000340634891194
+    ],
+    "sem": {
+     "cond_axis_Mx": 43.718058589797195,
+     "cond_mass_M": 336.59542468097175,
+     "max_abs_Gx": 34.14799550148007,
+     "n_dof": 441,
+     "widest_over_narrowest": 22.333333333333364
+    },
+    "shift_vs_nopillar": 0.0009276458178301417,
+    "sliver_m": 3.6e-08,
+    "warnings": []
+   },
+   {
+    "closure": 3.213237176780126e-06,
+    "delta": 0.01,
+    "raised": null,
+    "rt": [
+     1.000001635337856,
+     1.0000032132371768
+    ],
+    "sem": {
+     "cond_axis_Mx": 135.06922579235828,
+     "cond_mass_M": 1039.9291478949406,
+     "max_abs_Gx": 102.44398650444006,
+     "n_dof": 441,
+     "widest_over_narrowest": 68.99999999999999
+    },
+    "shift_vs_nopillar": 9.52609635018753e-05,
+    "sliver_m": 1.2e-08,
+    "warnings": []
+   },
+   {
+    "closure": 3.863709852058861e-07,
+    "delta": 0.003,
+    "raised": null,
+    "rt": [
+     1.000000147802047,
+     1.0000003863709852
+    ],
+    "sem": {
+     "cond_axis_Mx": 454.79831100132833,
+     "cond_mass_M": 3501.597179143881,
+     "max_abs_Gx": 341.47995501480466,
+     "n_dof": 441,
+     "widest_over_narrowest": 232.33333333333636
+    },
+    "shift_vs_nopillar": 1.0960859895936537e-05,
+    "sliver_m": 3.6e-09,
+    "warnings": []
+   },
+   {
+    "closure": 7.434763160674152e-08,
+    "delta": 0.001,
+    "raised": null,
+    "rt": [
+     1.0000000181682671,
+     1.0000000743476316
+    ],
+    "sem": {
+     "cond_axis_Mx": 1368.309983026952,
+     "cond_mass_M": 10534.93441128367,
+     "max_abs_Gx": 1024.439865044414,
+     "n_dof": 441,
+     "widest_over_narrowest": 699.0000000000091
+    },
+    "shift_vs_nopillar": 2.0979742345605956e-06,
+    "sliver_m": 1.2e-09,
+    "warnings": []
+   },
+   {
+    "closure": 1.6688427972866293e-08,
+    "delta": 0.0003,
+    "raised": null,
+    "rt": [
+     1.0000000022894069,
+     1.000000016688428
+    ],
+    "sem": {
+     "cond_axis_Mx": 4565.600835116769,
+     "cond_mass_M": 35151.61472377397,
+     "max_abs_Gx": 3414.799550148148,
+     "n_dof": 441,
+     "widest_over_narrowest": 2332.3333333334326
+    },
+    "shift_vs_nopillar": 4.7028098926205075e-07,
+    "sliver_m": 3.5999999999999995e-10,
+    "warnings": []
+   },
+   {
+    "closure": 5.053791163334154e-09,
+    "delta": 0.0001,
+    "raised": null,
+    "rt": [
+     1.0000000005039973,
+     1.0000000050537912
+    ],
+    "sem": {
+     "cond_axis_Mx": 13700.71755537529,
+     "cond_mass_M": 105484.98704518945,
+     "max_abs_Gx": 10244.398650445948,
+     "n_dof": 441,
+     "widest_over_narrowest": 6999.000000001327
+    },
+    "shift_vs_nopillar": 1.4174386520071636e-07,
+    "sliver_m": 1.2e-10,
+    "warnings": []
+   },
+   {
+    "closure": 5.156366444936111e-10,
+    "delta": 1e-05,
+    "raised": null,
+    "rt": [
+     1.0000000000968106,
+     1.0000000005156366
+    ],
+    "sem": {
+     "cond_axis_Mx": 137024.7932786749,
+     "cond_mass_M": 1054985.5133828323,
+     "max_abs_Gx": 102443.9865043239,
+     "n_dof": 441,
+     "widest_over_narrowest": 69998.99999992062
+    },
+    "shift_vs_nopillar": 1.3500639384211865e-08,
+    "sliver_m": 1.2e-11,
+    "warnings": []
+   },
+   {
+    "closure": 8.558709296835332e-11,
+    "delta": 1e-06,
+    "raised": null,
+    "rt": [
+     1.0000000000695861,
+     1.000000000085587
+    ],
+    "sem": {
+     "cond_axis_Mx": 1370265.5505602132,
+     "cond_mass_M": 10549990.777133,
+     "max_abs_Gx": 1024439.8650793948,
+     "n_dof": 441,
+     "widest_over_narrowest": 699999.0000239114
+    },
+    "shift_vs_nopillar": 1.3433322232359046e-09,
+    "sliver_m": 1.2e-12,
+    "warnings": []
+   },
+   {
+    "closure": 6.699529819798045e-11,
+    "delta": 1e-07,
+    "raised": null,
+    "rt": [
+     1.0000000000669953,
+     1.0000000000428213
+    ],
+    "sem": {
+     "cond_axis_Mx": 13702673.127558812,
+     "cond_mass_M": 105500043.44684222,
+     "max_abs_Gx": 10244398.653957563,
+     "n_dof": 441,
+     "widest_over_narrowest": 6999999.002400812
+    },
+    "shift_vs_nopillar": 1.3426615375067286e-10,
+    "sliver_m": 1.2e-13,
+    "warnings": []
+   },
+   {
+    "closure": 6.675060504335306e-11,
+    "delta": 1e-08,
+    "raised": null,
+    "rt": [
+     1.0000000000667506,
+     1.0000000000385465
+    ],
+    "sem": {
+     "cond_axis_Mx": 137026748.95376438,
+     "cond_mass_M": 1055000570.5767817,
+     "max_abs_Gx": 102443986.58477011,
+     "n_dof": 441,
+     "widest_over_narrowest": 69999999.05488953
+    },
+    "shift_vs_nopillar": 4.2227734186543855e-11,
+    "sliver_m": 1.2e-14,
+    "warnings": []
+   },
+   {
+    "closure": 6.671574404037983e-11,
+    "delta": 1e-10,
+    "raised": null,
+    "rt": [
+     1.0000000000667157,
+     1.0000000000380764
+    ],
+    "sem": {
+     "cond_axis_Mx": 13702674545.11125,
+     "cond_mass_M": 105500054360.90565,
+     "max_abs_Gx": 10244398251.726564,
+     "n_dof": 441,
+     "widest_over_narrowest": 6999999726.556278
+    },
+    "shift_vs_nopillar": 4.2227975772723746e-11,
+    "sliver_m": 1.2e-16,
+    "warnings": []
+   },
+   {
+    "closure": 6.671574404037983e-11,
+    "delta": 1e-12,
+    "raised": null,
+    "rt": [
+     1.0000000000667157,
+     1.0000000000380713
+    ],
+    "sem": {
+     "cond_axis_Mx": 1370349673170.3926,
+     "cond_mass_M": 10550638456527.098,
+     "max_abs_Gx": 1024501293370.055,
+     "n_dof": 441,
+     "widest_over_narrowest": 700041973988.3235
+    },
+    "shift_vs_nopillar": 4.222797821727543e-11,
+    "sliver_m": 1.2e-18,
+    "warnings": []
+   },
+   {
+    "closure": 6.670797247920746e-11,
+    "delta": 1e-14,
+    "raised": null,
+    "rt": [
+     1.000000000066708,
+     1.0000000000380709
+    ],
+    "sem": {
+     "cond_axis_Mx": 137435157929752.4,
+     "cond_mass_M": 1058145005557439.8,
+     "max_abs_Gx": 102749319980202.08,
+     "n_dof": 441,
+     "widest_over_narrowest": 70208634435583.09
+    },
+    "shift_vs_nopillar": 4.2227978264147315e-11,
+    "sliver_m": 1.2e-20,
+    "warnings": []
+   }
+  ],
+  "rows_degree13": [
+   {
+    "closure": 1.1092839924398135e-07,
+    "degree": 13,
+    "delta": 0.01,
+    "raised": null,
+    "rt": [
+     0.9999999885645576,
+     0.9999998890716008
+    ],
+    "sem": {
+     "cond_axis_Mx": 239.10730273426927,
+     "cond_mass_M": 3359.7388408886904,
+     "max_abs_Gx": 323.2086276211334,
+     "n_dof": 1521,
+     "widest_over_narrowest": 68.99999999999999
+    },
+    "shift_vs_nopillar": 8.189023619331603e-05,
+    "warnings": []
+   },
+   {
+    "closure": 2.1194157540094238e-13,
+    "degree": 13,
+    "delta": 0.0001,
+    "raised": null,
+    "rt": [
+     1.0000000000000098,
+     0.9999999999997881
+    ],
+    "sem": {
+     "cond_axis_Mx": 24253.79727300678,
+     "cond_mass_M": 340794.3789476,
+     "max_abs_Gx": 32320.862762119472,
+     "n_dof": 1521,
+     "widest_over_narrowest": 6999.000000001327
+    },
+    "shift_vs_nopillar": 3.0703121711717074e-08,
+    "warnings": []
+   },
+   {
+    "closure": 3.1086244689504383e-15,
+    "degree": 13,
+    "delta": 1e-06,
+    "raised": null,
+    "rt": [
+     1.0,
+     0.9999999999999969
+    ],
+    "sem": {
+     "cond_axis_Mx": 2425722.7943826546,
+     "cond_mass_M": 34084258.39077651,
+     "max_abs_Gx": 3232086.2763217404,
+     "n_dof": 1521,
+     "widest_over_narrowest": 699999.0000239114
+    },
+    "shift_vs_nopillar": 2.3599339149527054e-10,
+    "warnings": []
+   },
+   {
+    "closure": 8.881784197001252e-16,
+    "degree": 13,
+    "delta": 1e-08,
+    "raised": null,
+    "rt": [
+     0.9999999999999991,
+     0.9999999999999997
+    ],
+    "sem": {
+     "cond_axis_Mx": 242572622.68718895,
+     "cond_mass_M": 3408430662.128754,
+     "max_abs_Gx": 323208627.87457305,
+     "n_dof": 1521,
+     "widest_over_narrowest": 69999999.05488953
+    },
+    "shift_vs_nopillar": 2.3520629888196254e-12,
+    "warnings": []
+   },
+   {
+    "closure": 4.440892098500626e-16,
+    "degree": 13,
+    "delta": 1e-10,
+    "raised": null,
+    "rt": [
+     1.0000000000000004,
+     0.9999999999999997
+    ],
+    "sem": {
+     "cond_axis_Mx": 24257261648.65934,
+     "cond_mass_M": 340843057500.3093,
+     "max_abs_Gx": 32320861504.168186,
+     "n_dof": 1521,
+     "widest_over_narrowest": 6999999726.556278
+    },
+    "shift_vs_nopillar": 2.398081733190338e-14,
+    "warnings": []
+   }
+  ]
+ },
+ "C2_pure_mortar": [
+  {
+   "closure": 9.914957743717423e-12,
+   "delta": 0.1,
+   "raised": null,
+   "rt": [
+    0.999999999990085,
+    1.0000000000059353
+   ],
+   "seg_frac": 0.1,
+   "warnings": []
+  },
+  {
+   "closure": 6.980971356540522e-12,
+   "delta": 0.03,
+   "raised": null,
+   "rt": [
+    0.999999999993019,
+    0.9999999999995934
+   ],
+   "seg_frac": 0.03,
+   "warnings": []
+  },
+  {
+   "closure": 1.1928680265782532e-11,
+   "delta": 0.01,
+   "raised": null,
+   "rt": [
+    0.9999999999880713,
+    1.0000000000118565
+   ],
+   "seg_frac": 0.01,
+   "warnings": [
+    {
+     "cls": "UserWarning",
+     "msg": "PMM2DStackPure.solve: layer 1's element grid has a segment 1.000e-02 of the period wide on the x axis (walls [0.00e+00 3.60e-07 3.72e-07 8.40e-07 1.20e-06]).  That is ABOVE the 1e-03 minimum this basis contracts for, so "
+    }
+   ]
+  },
+  {
+   "closure": 1.3318235403403378e-11,
+   "delta": 0.003,
+   "raised": null,
+   "rt": [
+    0.9999999999899799,
+    1.0000000000133182
+   ],
+   "seg_frac": 0.003,
+   "warnings": [
+    {
+     "cls": "UserWarning",
+     "msg": "PMM2DStackPure.solve: layer 1's element grid has a segment 3.000e-03 of the period wide on the x axis (walls [0.000e+00 3.600e-07 3.636e-07 8.400e-07 1.200e-06]).  That is ABOVE the 1e-03 minimum this basis contracts for"
+    }
+   ]
+  },
+  {
+   "closure": 2.477684724055962e-11,
+   "delta": 0.001,
+   "raised": null,
+   "rt": [
+    0.9999999999905966,
+    1.0000000000247768
+   ],
+   "seg_frac": 0.001,
+   "warnings": [
+    {
+     "cls": "UserWarning",
+     "msg": "PMM2DStackPure.solve: layer 1's element grid has a segment 1.000e-03 of the period wide on the x axis (walls [0.000e+00 3.600e-07 3.612e-07 8.400e-07 1.200e-06]).  That is ABOVE the 1e-03 minimum this basis contracts for"
+    }
+   ]
+  },
+  {
+   "delta": 0.0003,
+   "raised": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 3.6e-10 wide -- 3.000e-04 of the period 1.2e-06, below the minimum 1e-03 this basis contracts for (walls [0.0000e+00 3.6000e-07 3.6036e-07 8.4000e-07 1.2000e-06]).   WHY.  The staggered stiffness carries t",
+   "seg_frac": 0.0003,
+   "warnings": []
+  },
+  {
+   "delta": 0.0001,
+   "raised": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 1.2e-10 wide -- 1.000e-04 of the period 1.2e-06, below the minimum 1e-03 this basis contracts for (walls [0.0000e+00 3.6000e-07 3.6012e-07 8.4000e-07 1.2000e-06]).   WHY.  The staggered stiffness carries t",
+   "seg_frac": 0.0001,
+   "warnings": []
+  },
+  {
+   "delta": 1e-05,
+   "raised": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 1.2e-11 wide -- 1.000e-05 of the period 1.2e-06, below the minimum 1e-03 this basis contracts for (walls [0.00000e+00 3.60000e-07 3.60012e-07 8.40000e-07 1.20000e-06]).   WHY.  The staggered stiffness carr",
+   "seg_frac": 1e-05,
+   "warnings": []
+  },
+  {
+   "delta": 1e-06,
+   "raised": "ValueError: Basis1D: segment 1 of this NON-UNIFORM element grid is 1.2e-12 wide -- 1.000e-06 of the period 1.2e-06, below the minimum 1e-03 this basis contracts for (walls [0.000000e+00 3.600000e-07 3.600012e-07 8.400000e-07 1.200000e-06]).   WHY.  The staggered stiffness",
+   "seg_frac": 1e-06,
+   "warnings": []
+  }
+ ],
+ "_stamp": {
+  "lumenairy_file": "C:\\tmp\\lum_borscope\\lumenairy\\__init__.py",
+  "node": "Tesla_Ryzen",
+  "numpy": "2.4.4",
+  "platform": "Windows",
+  "python": "3.14.6",
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  },
+  "version": "5.44.0"
+ }
+}

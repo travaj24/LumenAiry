@@ -1,0 +1,1538 @@
+{
+ "_stamp": {
+  "lumenairy_file": "C:\\tmp\\lum_borscope\\lumenairy\\__init__.py",
+  "node": "Tesla_Ryzen",
+  "numpy": "2.4.4",
+  "platform": "Windows",
+  "python": "3.14.6",
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  },
+  "version": "5.44.0"
+ },
+ "berreman": [
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 1,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 1,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa generalized interface (T22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 3.3306690738754696e-16,
+   "name": "berreman_planar_det0e+00_th0.00",
+   "raised": null,
+   "rt": [
+    1.0,
+    0.9999999999999997
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0000000000000002,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0000000000000002,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa generalized interface (T22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 2.220446049250313e-16,
+   "name": "berreman_planar_det0e+00_th0.35",
+   "raised": null,
+   "rt": [
+    0.9999999999999998,
+    0.9999999999999999
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0000000000000004,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0000000000000004,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa generalized interface (T22)": {
+      "n_calls": 4,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 6.661338147750939e-16,
+   "name": "berreman_planar_det1e-06_th0.00",
+   "raised": null,
+   "rt": [
+    1.0000000000000007,
+    0.9999999999999996
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999999998,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999999998,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa generalized interface (T22)": {
+      "n_calls": 4,
+      "rcond_max": 1.0000000000000002,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 6.661338147750939e-16,
+   "name": "berreman_planar_det1e-06_th0.35",
+   "raised": null,
+   "rt": [
+    0.9999999999999996,
+    1.0000000000000007
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa generalized interface (T22)": {
+      "n_calls": 4,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 2.220446049250313e-16,
+   "name": "berreman_planar_det-1e-06_th0.00",
+   "raised": null,
+   "rt": [
+    0.9999999999999998,
+    1.0000000000000002
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa generalized interface (T22)": {
+      "n_calls": 4,
+      "rcond_max": 1.0,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 6.661338147750939e-16,
+   "name": "berreman_planar_det-1e-06_th0.35",
+   "raised": null,
+   "rt": [
+    0.9999999999999997,
+    1.0000000000000007
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 1,
+      "rcond_max": 1.0000000000000002,
+      "rcond_min": 1.0000000000000002,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 1,
+      "rcond_max": 1.0000000000000002,
+      "rcond_min": 1.0000000000000002,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 4.440892098500626e-16,
+   "name": "berreman_planar_nospacer",
+   "raised": null,
+   "rt": [
+    1.0000000000000002,
+    1.0000000000000004
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 2,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9941685104345869,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 2,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9964501995246828,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa generalized interface (T22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.697773082575447,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 1.9984014443252818e-15,
+   "name": "berreman_offplane_det0e+00",
+   "raised": null,
+   "rt": [
+    0.999999999999998,
+    1.0000000000000002
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 0.9999999849803667,
+      "rcond_min": 0.9941685327370416,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 0.9999999849123751,
+      "rcond_min": 0.9964502133933824,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa generalized interface (T22)": {
+      "n_calls": 4,
+      "rcond_max": 0.9999999623819295,
+      "rcond_min": 0.6977731160442209,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 2.220446049250313e-15,
+   "name": "berreman_offplane_det1e-06",
+   "raised": null,
+   "rt": [
+    0.9999999999999978,
+    0.999999999999999
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0000000000000002,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0000000000000002,
+      "rcond_min": 1.0,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 2.220446049250313e-16,
+   "name": "berremanstack_det0e+00",
+   "raised": null,
+   "rt": [
+    0.9999999999999998,
+    0.9999999999999999
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999999998,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999999998,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       2
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 6.661338147750939e-16,
+   "name": "berremanstack_det1e-06",
+   "raised": null,
+   "rt": [
+    0.9999999999999996,
+    1.0000000000000007
+   ],
+   "warnings": []
+  }
+ ],
+ "coatings": [
+  {
+   "R": 0.01644491287885672,
+   "RplusT": 0.9999999999999999,
+   "T": 0.9835550871211431,
+   "angle": 0.7289979285707394,
+   "name": "coating_below_d5e-08"
+  },
+  {
+   "R": 0.8630025350870073,
+   "RplusT": 0.9999999999999999,
+   "T": 0.13699746491299258,
+   "angle": 0.7289979285707394,
+   "name": "coating_below_d1e-06"
+  },
+  {
+   "R": 0.01661607438321161,
+   "RplusT": 0.9999999999999993,
+   "T": 0.9833839256167877,
+   "angle": 0.7297276554972387,
+   "name": "coating_crit_1em9_d5e-08"
+  },
+  {
+   "R": 0.8702914199261339,
+   "RplusT": 1.0000000000000002,
+   "T": 0.1297085800738663,
+   "angle": 0.7297276554972387,
+   "name": "coating_crit_1em9_d1e-06"
+  },
+  {
+   "R": 0.01664156167817127,
+   "RplusT": 1.0,
+   "T": 0.9833584383218287,
+   "angle": 0.7297276562269663,
+   "name": "coating_crit_exact_d5e-08"
+  },
+  {
+   "R": 0.8712878779682854,
+   "RplusT": 0.9999999999999999,
+   "T": 0.12871212203171445,
+   "angle": 0.7297276562269663,
+   "name": "coating_crit_exact_d1e-06"
+  },
+  {
+   "R": 0.01683965122708678,
+   "RplusT": 1.0000000000000007,
+   "T": 0.9831603487729139,
+   "angle": 0.7304573838831933,
+   "name": "coating_above_d5e-08"
+  },
+  {
+   "R": 0.8790621226833368,
+   "RplusT": 1.0,
+   "T": 0.12093787731666321,
+   "angle": 0.7304573838831933,
+   "name": "coating_above_d1e-06"
+  }
+ ],
+ "hybrid": [
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 0.9999999999999991,
+      "rcond_min": 0.007627189984369248,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999990469759,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999973732667403,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 3.257056846450723e-10,
+   "name": "hybrid_det0e+00_sp1",
+   "raised": null,
+   "rt": [
+    1.0000000003257057,
+    1.000000000325705
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 2,
+      "rcond_max": 0.016068196014351985,
+      "rcond_min": 0.007627189984369248,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999990469759,
+      "rcond_min": 0.9999999990469759,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999973732667403,
+      "rcond_min": 0.9999973732667403,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 3.257056846450723e-10,
+   "name": "hybrid_det0e+00_sp0",
+   "raised": null,
+   "rt": [
+    1.0000000003257057,
+    1.000000000325705
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 0.9999977142859595,
+      "rcond_min": 0.009588306754077047,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 0.9999999999644837,
+      "rcond_min": 0.9999999991230335,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 0.9999999992256992,
+      "rcond_min": 0.9999969503725356,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 3.257056846450723e-10,
+   "name": "hybrid_det1e-06_sp1",
+   "raised": null,
+   "rt": [
+    1.0000000003257057,
+    1.0000000003257057
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 2,
+      "rcond_max": 0.015206086847661681,
+      "rcond_min": 0.009588301816782085,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999991214772,
+      "rcond_min": 0.9999999991214772,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999969436716727,
+      "rcond_min": 0.9999969436716727,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 3.2570590668967725e-10,
+   "name": "hybrid_det1e-06_sp0",
+   "raised": null,
+   "rt": [
+    1.0000000003257044,
+    1.000000000325706
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 0.9999999999999991,
+      "rcond_min": 0.10476227974162605,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999973329938,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999955887165102,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       162
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 2.054092451686529e-10,
+   "name": "hybrid_oblique",
+   "raised": null,
+   "rt": [
+    1.0000000002054092,
+    1.0000000002023017
+   ],
+   "warnings": []
+  }
+ ],
+ "pmmstack": [
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 0.47129894912649495,
+      "rcond_min": 0.3596760167620995,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999998335,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999997942,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 4.218847493575595e-15,
+   "name": "pmmstack_det0e+00_sp1",
+   "raised": null,
+   "rt": [
+    0.9999999999999991,
+    1.0000000000000042
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 2,
+      "rcond_max": 0.7258349957108776,
+      "rcond_min": 0.7231883057213424,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999998335,
+      "rcond_min": 0.9999999999998335,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999997942,
+      "rcond_min": 0.9999999999997942,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 4.6629367034256575e-15,
+   "name": "pmmstack_det0e+00_sp0",
+   "raised": null,
+   "rt": [
+    0.9999999999999991,
+    1.0000000000000047
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 0.43311840878133523,
+      "rcond_min": 0.41402032075879225,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 0.9999999999997136,
+      "rcond_min": 0.9999999999993268,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 0.9999999999995741,
+      "rcond_min": 0.9999999999995346,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 4.440892098500626e-15,
+   "name": "pmmstack_det1e-06_sp1",
+   "raised": null,
+   "rt": [
+    0.9999999999999989,
+    1.0000000000000044
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 2,
+      "rcond_max": 0.7258353303983349,
+      "rcond_min": 0.7231886317411678,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999994866,
+      "rcond_min": 0.9999999999994866,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999994305,
+      "rcond_min": 0.9999999999994305,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 4.884981308350689e-15,
+   "name": "pmmstack_det1e-06_sp0",
+   "raised": null,
+   "rt": [
+    0.9999999999999988,
+    1.0000000000000049
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 0.9999999999943854,
+      "rcond_min": 0.9999953734848656,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999998637,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999997264,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       54
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 3.5416114485542494e-14,
+   "name": "pmmstack_oblique",
+   "raised": null,
+   "rt": [
+    0.999999999999971,
+    0.9999999999999646
+   ],
+   "warnings": []
+  }
+ ],
+ "pure": [
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 0.9999999999784843,
+      "rcond_min": 0.004871130609627545,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999997922,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.999999999997722,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 6.8833827526759706e-15,
+   "name": "pure_det0e+00_sp1",
+   "raised": null,
+   "rt": [
+    1.0000000000000064,
+    0.9999999999999931
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 2,
+      "rcond_max": 0.005920139511017442,
+      "rcond_min": 0.004871130609627545,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999997922,
+      "rcond_min": 0.9999999999997922,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 1,
+      "rcond_max": 0.999999999997722,
+      "rcond_min": 0.999999999997722,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 6.439293542825908e-15,
+   "name": "pure_det0e+00_sp0",
+   "raised": null,
+   "rt": [
+    1.0000000000000064,
+    0.9999999999999944
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 0.9999950649229089,
+      "rcond_min": 0.002932088890063882,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 0.9999999999995624,
+      "rcond_min": 0.9999999999986857,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 0.9999999999981846,
+      "rcond_min": 0.999999999994416,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 1.1324274851176597e-14,
+   "name": "pure_det1e-06_sp1",
+   "raised": null,
+   "rt": [
+    1.0000000000000113,
+    0.9999999999999967
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 2,
+      "rcond_max": 0.004413498615749773,
+      "rcond_min": 0.00293208778871763,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999986309,
+      "rcond_min": 0.9999999999986309,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999924052,
+      "rcond_min": 0.9999999999924052,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 9.547918011776346e-15,
+   "name": "pure_det1e-06_sp0",
+   "raised": null,
+   "rt": [
+    1.0000000000000095,
+    0.9999999999999962
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "pmm interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 0.9999999999781548,
+      "rcond_min": 0.035677800974275184,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     },
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999975313,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999749085,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       800
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 1.3322676295501878e-15,
+   "name": "pure_oblique",
+   "raised": null,
+   "rt": [
+    1.0000000000000013,
+    1.0000000000000009
+   ],
+   "warnings": []
+  }
+ ],
+ "rcwastack": [
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999998104,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999997762,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     },
+     "rcwa interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999976912129024,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 4.440892098500626e-16,
+   "name": "rcwastack_det0e+00_sp1",
+   "raised": null,
+   "rt": [
+    1.0000000000000004,
+    1.0000000000000004
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999998104,
+      "rcond_min": 0.9999999999998104,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999997762,
+      "rcond_min": 0.9999999999997762,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     },
+     "rcwa interface mode-match (a+b)": {
+      "n_calls": 2,
+      "rcond_max": 0.9999976912132901,
+      "rcond_min": 0.9999976912129024,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 4.440892098500626e-16,
+   "name": "rcwastack_det0e+00_sp0",
+   "raised": null,
+   "rt": [
+    1.0,
+    1.0000000000000004
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 0.9999999999997622,
+      "rcond_min": 0.999999999999674,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 0.9999999999997395,
+      "rcond_min": 0.9999999999996172,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     },
+     "rcwa interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999976912129879,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 1.1102230246251565e-15,
+   "name": "rcwastack_det1e-06_sp1",
+   "raised": null,
+   "rt": [
+    1.0000000000000002,
+    1.000000000000001
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999994316,
+      "rcond_min": 0.9999999999994316,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 1,
+      "rcond_max": 0.9999999999993878,
+      "rcond_min": 0.9999999999993878,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     },
+     "rcwa interface mode-match (a+b)": {
+      "n_calls": 2,
+      "rcond_max": 0.9999976912127645,
+      "rcond_min": 0.9999976912113796,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       20
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 6.661338147750939e-16,
+   "name": "rcwastack_det1e-06_sp0",
+   "raised": null,
+   "rt": [
+    0.9999999999999993,
+    1.0
+   ],
+   "warnings": []
+  },
+  {
+   "census": {
+    "inverse": {
+     "rcwa Redheffer star (I - A22 B11)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999998761,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       38
+      ]
+     },
+     "rcwa Redheffer star (I - B11 A22)": {
+      "n_calls": 3,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999999999996991,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       38
+      ]
+     },
+     "rcwa interface mode-match (a+b)": {
+      "n_calls": 4,
+      "rcond_max": 1.0,
+      "rcond_min": 0.9999952563094068,
+      "refused": 0,
+      "resid_max": null,
+      "resid_min": null,
+      "widths": [
+       38
+      ]
+     }
+    },
+    "mortar": {}
+   },
+   "closure": 3.885780586188048e-15,
+   "name": "rcwastack_oblique",
+   "raised": null,
+   "rt": [
+    1.0000000000000002,
+    0.9999999999999961
+   ],
+   "warnings": []
+  }
+ ]
+}

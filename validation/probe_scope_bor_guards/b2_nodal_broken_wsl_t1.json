@@ -1,0 +1,2076 @@
+{
+ "threads": "1",
+ "rows": [
+  {
+   "rbig_lambda": 2.0,
+   "basis": "staggered",
+   "m": 1,
+   "N": 140,
+   "n_orders": 10,
+   "closure": 1.2578826869003024e-13,
+   "max_energy": 1.0000000000000746,
+   "sumR": 1.4903021701335528,
+   "warned": [],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999992251,
+     "resid": 7.170400258708605e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0037521734651938454,
+     "resid": 5.806045087728961e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999962,
+     "resid": 2.65185947768298e-33
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999987,
+     "resid": 1.5495178682973637e-33
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.008130912192159301,
+     "resid": 5.093609767349262e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0007670248188109843,
+     "resid": 1.6117654187201546e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.006494662975076837,
+     "resid": 1.2550269352047167e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999992251,
+     "resid": 7.170400258708605e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999996965,
+     "resid": 1.314557030066448e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999993614,
+     "resid": 4.808849153634481e-30
+    }
+   ],
+   "apb_rcond_min": 0.0037521734651938454,
+   "apb_resid_max": 5.806045087728961e-16
+  },
+  {
+   "rbig_lambda": 2.0,
+   "basis": "nodal",
+   "m": 1,
+   "N": 140,
+   "n_orders": 12,
+   "closure": 73.03299205049048,
+   "max_energy": 74.03299205049048,
+   "sumR": 146.1178013224051,
+   "warned": [],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.999999999992979,
+     "resid": 5.323487374202122e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 5.129896556359111e-05,
+     "resid": 5.3783209967644354e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999990881,
+     "resid": 7.293805039877321e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999868201,
+     "resid": 7.947178335131222e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 2.2462584360172125e-05,
+     "resid": 5.306855141244703e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 9.218873642317508e-06,
+     "resid": 2.280989038447698e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.623657849608094e-05,
+     "resid": 1.8892222452452276e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.999999999992979,
+     "resid": 5.323487374202122e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999972684,
+     "resid": 8.29477672666617e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999968334,
+     "resid": 2.737504211465812e-29
+    }
+   ],
+   "apb_rcond_min": 2.2462584360172125e-05,
+   "apb_resid_max": 5.3783209967644354e-14
+  },
+  {
+   "rbig_lambda": 4.0,
+   "basis": "staggered",
+   "m": 1,
+   "N": 140,
+   "n_orders": 22,
+   "closure": 3.0819791163594346e-13,
+   "max_energy": 1.0000000000003082,
+   "sumR": 4.799476970084781,
+   "warned": [],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999995366,
+     "resid": 2.644156678478512e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.006444576613221099,
+     "resid": 5.206489292249448e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999931,
+     "resid": 5.3352114702270244e-33
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999931,
+     "resid": 6.566696003672907e-33
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.008812450597734093,
+     "resid": 5.581952734069532e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.02124827101256331,
+     "resid": 4.823267245367802e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.08033951724533782,
+     "resid": 4.962818716682594e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999995366,
+     "resid": 2.644156678478512e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999996891,
+     "resid": 1.5063243800908596e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999538,
+     "resid": 1.4296182153944096e-31
+    }
+   ],
+   "apb_rcond_min": 0.006444576613221099,
+   "apb_resid_max": 5.581952734069532e-16
+  },
+  {
+   "rbig_lambda": 4.0,
+   "basis": "nodal",
+   "m": 1,
+   "N": 140,
+   "n_orders": 25,
+   "closure": 15.382428628763922,
+   "max_energy": 16.382428628763922,
+   "sumR": 35.071344641893695,
+   "warned": [],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999952991,
+     "resid": 3.7140556092979153e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 7.980259409336885e-06,
+     "resid": 7.872986139247855e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999981153,
+     "resid": 9.124552309412822e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999571736,
+     "resid": 1.899307152406493e-28
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.6282110820339502e-05,
+     "resid": 5.841986801258457e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 2.7932201652410774e-06,
+     "resid": 1.5300989568367649e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 3.6474061258485865e-06,
+     "resid": 1.5936220989521752e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999952991,
+     "resid": 3.7140556092979153e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999957909,
+     "resid": 1.053196973862116e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999985725,
+     "resid": 7.049145454641334e-30
+    }
+   ],
+   "apb_rcond_min": 7.980259409336885e-06,
+   "apb_resid_max": 7.872986139247855e-14
+  },
+  {
+   "rbig_lambda": 6.0,
+   "basis": "staggered",
+   "m": 1,
+   "N": 140,
+   "n_orders": 33,
+   "closure": 3.148592497836944e-13,
+   "max_energy": 1.0000000000001388,
+   "sumR": 6.790358757934226,
+   "warned": [],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999991012,
+     "resid": 1.9633625242595108e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0026041689136079346,
+     "resid": 9.74550343890411e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999611,
+     "resid": 1.8569707745095627e-32
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999447,
+     "resid": 2.294423420546777e-32
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.005240486614308951,
+     "resid": 8.195783616886421e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.02378144203629694,
+     "resid": 6.069658423264028e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.054579830139519156,
+     "resid": 6.105830005455099e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999991012,
+     "resid": 1.9633625242595108e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.999999999998922,
+     "resid": 5.942092445652761e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999349,
+     "resid": 1.504916914882066e-31
+    }
+   ],
+   "apb_rcond_min": 0.0026041689136079346,
+   "apb_resid_max": 9.74550343890411e-16
+  },
+  {
+   "rbig_lambda": 6.0,
+   "basis": "nodal",
+   "m": 1,
+   "N": 140,
+   "n_orders": 37,
+   "closure": 38.80189674361542,
+   "max_energy": 39.80189674361542,
+   "sumR": 84.9183777840823,
+   "warned": [
+    "build_layer(basis='nodal'): the cell radius Rbig is 6.0 vacuum wavelengths; the nodal FD basis devel"
+   ],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999974098,
+     "resid": 1.6963778584295924e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 9.475203585808532e-06,
+     "resid": 1.5675542660479212e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999988374,
+     "resid": 6.899984757109885e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999886215,
+     "resid": 9.313755994775671e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.9203303071625222e-05,
+     "resid": 4.815429549020113e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 8.535326853519149e-05,
+     "resid": 6.5472439962858586e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 5.7761928683919586e-05,
+     "resid": 1.004580832180239e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999974098,
+     "resid": 1.6963778584295924e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999990858,
+     "resid": 4.376318226921142e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999991716,
+     "resid": 4.601764582986834e-30
+    }
+   ],
+   "apb_rcond_min": 9.475203585808532e-06,
+   "apb_resid_max": 1.5675542660479212e-13
+  },
+  {
+   "rbig_lambda": 8.0,
+   "basis": "staggered",
+   "m": 1,
+   "N": 140,
+   "n_orders": 45,
+   "closure": 4.71955807768154e-13,
+   "max_energy": 1.000000000000392,
+   "sumR": 8.929643441301092,
+   "warned": [],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999997862,
+     "resid": 1.0507633391477728e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.004886951110184206,
+     "resid": 1.20045036790593e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999911,
+     "resid": 1.32758610064849e-32
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999787,
+     "resid": 2.4095032677526258e-32
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.005255453288600653,
+     "resid": 1.595247415779789e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.02160044822387545,
+     "resid": 6.489262223407217e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.032809944544053615,
+     "resid": 6.52324184197804e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999997862,
+     "resid": 1.0507633391477728e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999997269,
+     "resid": 1.9385801441126513e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999611,
+     "resid": 1.5870968251400307e-31
+    }
+   ],
+   "apb_rcond_min": 0.004886951110184206,
+   "apb_resid_max": 1.595247415779789e-15
+  },
+  {
+   "rbig_lambda": 8.0,
+   "basis": "nodal",
+   "m": 1,
+   "N": 140,
+   "n_orders": 52,
+   "closure": 127.7674388973856,
+   "max_energy": 128.7674388973856,
+   "sumR": 423.99585178742126,
+   "warned": [
+    "build_layer(basis='nodal'): the cell radius Rbig is 8.0 vacuum wavelengths; the nodal FD basis devel"
+   ],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999972868,
+     "resid": 1.6874916282450129e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 3.552404306478879e-06,
+     "resid": 1.0817265950020171e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.999999999990985,
+     "resid": 7.367559446039249e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999505536,
+     "resid": 2.73352306070713e-28
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 8.137456225965755e-06,
+     "resid": 1.3114297295215484e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 2.3712507726889052e-06,
+     "resid": 2.285416107091106e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 3.6329498229021003e-06,
+     "resid": 2.179513399156229e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999972868,
+     "resid": 1.6874916282450129e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999940541,
+     "resid": 2.230708628160671e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999987119,
+     "resid": 7.209399509351188e-30
+    }
+   ],
+   "apb_rcond_min": 3.552404306478879e-06,
+   "apb_resid_max": 1.3114297295215484e-13
+  },
+  {
+   "rbig_lambda": 10.0,
+   "basis": "staggered",
+   "m": 1,
+   "N": 140,
+   "n_orders": 56,
+   "closure": 6.095124405192109e-13,
+   "max_energy": 1.0000000000006095,
+   "sumR": 12.029532195040812,
+   "warned": [],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999996876,
+     "resid": 1.0262034472217164e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0031362372872845985,
+     "resid": 1.4279329757048963e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999738,
+     "resid": 4.599219479676051e-32
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999465,
+     "resid": 5.322225806352301e-32
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0026633647010394865,
+     "resid": 2.223179891547923e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.007043963338298463,
+     "resid": 7.723339378701276e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0027223032123635973,
+     "resid": 9.017823442115404e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999996876,
+     "resid": 1.0262034472217164e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999982103,
+     "resid": 9.969841710423016e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999152,
+     "resid": 3.6982969703628356e-31
+    }
+   ],
+   "apb_rcond_min": 0.0026633647010394865,
+   "apb_resid_max": 2.223179891547923e-15
+  },
+  {
+   "rbig_lambda": 10.0,
+   "basis": "nodal",
+   "m": 1,
+   "N": 140,
+   "n_orders": 79,
+   "closure": 64.00498705480726,
+   "max_energy": 65.00498705480726,
+   "sumR": 160.13197833233076,
+   "warned": [
+    "build_layer(basis='nodal'): the cell radius Rbig is 10.0 vacuum wavelengths; the nodal FD basis deve"
+   ],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999991447,
+     "resid": 1.0624092044030019e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 2.7255936633159116e-05,
+     "resid": 4.012859545654704e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999987033,
+     "resid": 1.9061603114003817e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999899085,
+     "resid": 1.3954951710972676e-28
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0401346502494941e-05,
+     "resid": 1.4604148785622495e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.1572218956783403e-05,
+     "resid": 3.1639859313049843e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 7.824991375235935e-06,
+     "resid": 4.5743646087699966e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999991447,
+     "resid": 1.0624092044030019e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999981373,
+     "resid": 2.0139870734144654e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999994584,
+     "resid": 4.131733042017111e-30
+    }
+   ],
+   "apb_rcond_min": 1.0401346502494941e-05,
+   "apb_resid_max": 1.4604148785622495e-13
+  },
+  {
+   "rbig_lambda": 12.0,
+   "basis": "staggered",
+   "m": 1,
+   "N": 140,
+   "n_orders": 68,
+   "closure": 4.338751580235112e-13,
+   "max_energy": 1.0000000000004339,
+   "sumR": 12.774152422910715,
+   "warned": [],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999996545,
+     "resid": 9.831576542803368e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.004299304828755043,
+     "resid": 2.3028323663996435e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999722,
+     "resid": 4.406642302177478e-32
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999243,
+     "resid": 7.526973892343315e-32
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0015628619065462175,
+     "resid": 2.8021051421340322e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.003806607609613747,
+     "resid": 6.653721037265292e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.002037575474557961,
+     "resid": 8.047202137945064e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999996545,
+     "resid": 9.831576542803368e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999989992,
+     "resid": 7.218828548917286e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999372,
+     "resid": 2.652996968552466e-31
+    }
+   ],
+   "apb_rcond_min": 0.0015628619065462175,
+   "apb_resid_max": 2.8021051421340322e-15
+  },
+  {
+   "rbig_lambda": 12.0,
+   "basis": "nodal",
+   "m": 1,
+   "N": 140,
+   "n_orders": 83,
+   "closure": 247.8484185935547,
+   "max_energy": 248.8484185935547,
+   "sumR": 642.7328368174344,
+   "warned": [
+    "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vacuum wavelengths; the nodal FD basis deve"
+   ],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999991507,
+     "resid": 8.833364262329375e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 3.138056163551906e-05,
+     "resid": 9.80858038409896e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999983171,
+     "resid": 2.648830104952474e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999841898,
+     "resid": 2.9667423646260616e-28
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 8.85425152565104e-06,
+     "resid": 1.913502775755635e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 4.528606176548669e-06,
+     "resid": 7.534789931373629e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 4.867162317248485e-06,
+     "resid": 6.970728745617212e-14
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999991507,
+     "resid": 8.833364262329375e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999959541,
+     "resid": 3.620951944840345e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999995477,
+     "resid": 4.815949200498556e-30
+    }
+   ],
+   "apb_rcond_min": 8.85425152565104e-06,
+   "apb_resid_max": 1.913502775755635e-13
+  },
+  {
+   "rbig_lambda": 14.0,
+   "basis": "staggered",
+   "m": 1,
+   "N": 140,
+   "n_orders": 81,
+   "closure": 1.9317880628477724e-13,
+   "max_energy": 1.000000000000161,
+   "sumR": 15.68633468365259,
+   "warned": [],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999995681,
+     "resid": 9.499740657365802e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0023290179988018195,
+     "resid": 2.2724999917337377e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999389,
+     "resid": 4.968766825530604e-32
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999998403,
+     "resid": 1.495984707258596e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0008257056607807587,
+     "resid": 3.730616989776458e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.007419062145334487,
+     "resid": 7.3779034519677735e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.002427711587262084,
+     "resid": 7.946034017848966e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999995681,
+     "resid": 9.499740657365802e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999991798,
+     "resid": 5.589371745510443e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999138,
+     "resid": 2.7449013059517084e-31
+    }
+   ],
+   "apb_rcond_min": 0.0008257056607807587,
+   "apb_resid_max": 3.730616989776458e-15
+  },
+  {
+   "rbig_lambda": 14.0,
+   "basis": "nodal",
+   "m": 1,
+   "N": 140,
+   "n_orders": 86,
+   "closure": 406.3226933609542,
+   "max_energy": 407.3226933609542,
+   "sumR": 1411.6818745461092,
+   "warned": [
+    "build_layer(basis='nodal'): the cell radius Rbig is 14.0 vacuum wavelengths; the nodal FD basis deve"
+   ],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999979898,
+     "resid": 7.389677242844291e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 2.973033299987189e-06,
+     "resid": 5.368858280114762e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999998852038,
+     "resid": 4.948970707401113e-28
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999998897173,
+     "resid": 4.473500447499984e-28
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 3.288825806647748e-06,
+     "resid": 3.174937678511505e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 8.446093653260339e-07,
+     "resid": 9.175614657814843e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 9.00392793039209e-07,
+     "resid": 1.0136765337768098e-12
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999979898,
+     "resid": 7.389677242844291e-30
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999951117,
+     "resid": 4.0381575326643087e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999977036,
+     "resid": 7.01064364415322e-30
+    }
+   ],
+   "apb_rcond_min": 2.973033299987189e-06,
+   "apb_resid_max": 5.368858280114762e-13
+  },
+  {
+   "rbig_lambda": 16.0,
+   "basis": "staggered",
+   "m": 1,
+   "N": 140,
+   "n_orders": 94,
+   "closure": 1.2099210522364956e-12,
+   "max_energy": 1.000000000000835,
+   "sumR": 18.045117904876555,
+   "warned": [],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999997025,
+     "resid": 7.098171970997846e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.002957834685610086,
+     "resid": 2.7433322884599553e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999543,
+     "resid": 6.545121795759449e-32
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999998723,
+     "resid": 1.4469132863125426e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0004656162856044627,
+     "resid": 4.841847073891053e-15
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.001580584395476156,
+     "resid": 7.682409505166537e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.0006994340830882296,
+     "resid": 9.425230441214517e-16
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999997025,
+     "resid": 7.098171970997846e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999993798,
+     "resid": 5.045294066609725e-31
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999999194,
+     "resid": 2.921749267013785e-31
+    }
+   ],
+   "apb_rcond_min": 0.0004656162856044627,
+   "apb_resid_max": 4.841847073891053e-15
+  },
+  {
+   "rbig_lambda": 16.0,
+   "basis": "nodal",
+   "m": 1,
+   "N": 140,
+   "n_orders": 88,
+   "closure": 176.14274040046905,
+   "max_energy": 177.14274040046905,
+   "sumR": 252.18943433521753,
+   "warned": [
+    "build_layer(basis='nodal'): the cell radius Rbig is 16.0 vacuum wavelengths; the nodal FD basis deve"
+   ],
+   "error": null,
+   "inverses": [
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.999999999999245,
+     "resid": 1.9019342159669193e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 7.089090973150733e-06,
+     "resid": 1.766528851353286e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999889522,
+     "resid": 1.2463750806284296e-28
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999078606,
+     "resid": 1.7504747772699195e-27
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 3.974100256924312e-06,
+     "resid": 3.7943770553492173e-13
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 2.314302607447082e-08,
+     "resid": 6.47543844642965e-11
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 2.3267130542838568e-08,
+     "resid": 6.244486031663404e-11
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 1.0,
+     "resid": 0.0
+    },
+    {
+     "site": "elements/bor/zcascade.py:241:interface_smatrix",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.999999999999245,
+     "resid": 1.9019342159669193e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:260:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999929456,
+     "resid": 5.66808420871688e-29
+    },
+    {
+     "site": "elements/bor/zcascade.py:261:redheffer_star",
+     "kind": "inv",
+     "n": 280,
+     "rcond": 0.9999999999991873,
+     "resid": 1.3323826669704586e-29
+    }
+   ],
+   "apb_rcond_min": 3.974100256924312e-06,
+   "apb_resid_max": 3.7943770553492173e-13
+  }
+ ],
+ "_build": {
+  "python": "3.12.3",
+  "platform": "Linux",
+  "numpy": "2.4.6",
+  "threads_env": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "_tree": "/mnt/c/tmp/lum_borscope/lumenairy/__init__.py"
+}

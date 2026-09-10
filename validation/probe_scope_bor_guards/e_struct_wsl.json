@@ -1,0 +1,768 @@
+{
+ "_stamp": {
+  "lumenairy_file": "/mnt/c/tmp/lum_borscope/lumenairy/__init__.py",
+  "node": "TeslaRyzen",
+  "numpy": "2.4.6",
+  "platform": "Linux",
+  "python": "3.12.3",
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  },
+  "version": "5.44.0"
+ },
+ "berreman_jax_sqrt_call": [
+  "lam = _sqrt_decay(-jnp.concatenate([kzc, kzc]) ** 2)"
+ ],
+ "branch_rules": {
+  "berreman._split_fwd_bwd": {
+   "line": 170,
+   "relative_band": true
+  },
+  "coatings._cos_theta": {
+   "abs_floor": true,
+   "exact_pin": true,
+   "line": 28
+  },
+  "eme_2d._ky_forward": {
+   "exact_pin": true,
+   "line": 115
+  },
+  "eme_2d_vector._strip_split_forward": {
+   "line": 251,
+   "relative_band": true
+  },
+  "eme_diffraction.mode_match(qz)": {
+   "exact_pin": true,
+   "line": 129
+  },
+  "pmm.twod._kz_forward2": {
+   "exact_pin": true,
+   "line": 421
+  }
+ },
+ "build_axis": {
+  "has_epn_solve": true,
+  "has_mass_inverse": true,
+  "inv_lam_abs_floor": true,
+  "min_width_contract": false
+ },
+ "coatings": {
+  "cascade_kind": "2x2 characteristic (Abeles) transfer-matrix product",
+  "functions": [
+   "coating_reflectance",
+   "coating_reflectance_jax",
+   "quarter_wave_ar",
+   "broadband_ar_v_coat",
+   "_coating_sellmeier",
+   "get_coating_material_index"
+  ],
+  "has_explicit_inverse": false
+ },
+ "guard_constants": {
+  "INTERFACE_CONDITIONING_GUARD": true,
+  "INV_RESID_REFUSE": 1e-08,
+  "INV_T22_RCOND_REFUSE": 1e-10,
+  "LSTSQ_RESID_BAR": 1e-09,
+  "MORTAR_RCOND_REFUSE": 1e-12,
+  "MORTAR_RESID_REFUSE": 1e-06,
+  "PMM_SLIVER_GUARD": true,
+  "SLIVER_OWN_SCALE_RATIO": 100.0,
+  "SLIVER_Q_EXCESS": 1000000.0,
+  "SLIVER_TRIGGER_BAR": 0.001,
+  "STACK_SUPERUNITY_BAR": 0.01,
+  "STAG_CLOSURE_TOL": 0.05,
+  "STAG_MIN_SEG_FRAC": 0.001,
+  "STAG_SLIVER_BAND_FRAC": 0.03
+ },
+ "hybrid_grid": {
+  "builds_per_layer_axis": true,
+  "min_width_contract": false,
+  "uses_mortar": false,
+  "uses_union_grid": false
+ },
+ "modules": {
+  "lumenairy.elements._berreman_jax": {
+   "guarded": [],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/_berreman_jax.py",
+   "raw_linalg": [
+    [
+     130,
+     "c_inc = jnp.linalg.solve(Wf_s, Einc)"
+    ],
+    [
+     207,
+     "c_inc = jnp.linalg.solve(Wf_s, Einc)"
+    ],
+    [
+     239,
+     "denom = jnp.linalg.inv(I2 - A22 @ Sb11)"
+    ]
+   ],
+   "sqrt": [
+    [
+     396,
+     "lam = _sqrt_decay(-jnp.concatenate([kzc, kzc]) ** 2)"
+    ],
+    [
+     446,
+     "kz_inc = jnp.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2))"
+    ]
+   ]
+  },
+  "lumenairy.elements.berreman": {
+   "guarded": [],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/berreman.py",
+   "raw_linalg": [
+    [
+     508,
+     "c_inc = np.linalg.solve(Wf_s, Einc)          # forward sup modal amps"
+    ],
+    [
+     1055,
+     "cinc[:, col] = np.linalg.solve(core[\"Wf_s\"], Einc)"
+    ],
+    [
+     1081,
+     "cinc[:, col] = np.linalg.solve(core[\"Wf_s\"], Einc)"
+    ],
+    [
+     1126,
+     "denom = np.linalg.inv(np.eye(2, dtype=_C) - A22 @ Sb11)"
+    ]
+   ],
+   "sqrt": [
+    [
+     594,
+     "lam = _sqrt_decay(-np.concatenate([kzc, kzc]) ** 2)"
+    ],
+    [
+     733,
+     "kz_inc = float(np.real(_sqrt_forward(_C(eps_sup) - kx0 ** 2 - ky0 ** 2)))"
+    ]
+   ]
+  },
+  "lumenairy.elements.coatings": {
+   "guarded": [],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/coatings.py",
+   "raw_linalg": [],
+   "sqrt": [
+    [
+     177,
+     "ct = np.sqrt(1.0 - (n0sin0 / n_layer) ** 2 + 0j)"
+    ],
+    [
+     435,
+     "n_layer = np.sqrt(n_substrate)  # ideal for an AIR ambient (see docstring)"
+    ],
+    [
+     711,
+     "return np.sqrt(1.0 + n_sq_minus_1)"
+    ]
+   ]
+  },
+  "lumenairy.elements.eme.eme_2d": {
+   "guarded": [],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/eme/eme_2d.py",
+   "raw_linalg": [
+    [
+     142,
+     "a = np.linalg.solve(Wb, Wa)"
+    ],
+    [
+     143,
+     "b = np.linalg.solve(Vb, Va)"
+    ],
+    [
+     145,
+     "ia = np.linalg.inv(apb)"
+    ],
+    [
+     159,
+     "D = np.linalg.inv(I - B11 @ A22)"
+    ],
+    [
+     160,
+     "F = np.linalg.inv(I - A22 @ B11)"
+    ]
+   ],
+   "sqrt": [
+    [
+     111,
+     "Phi = Phi / np.sqrt(np.where(np.abs(_nrm) < 1e-300, 1.0, _nrm))"
+    ],
+    [
+     129,
+     "ky = np.sqrt(np.asarray(lam) - qz2 + 0j)"
+    ]
+   ]
+  },
+  "lumenairy.elements.eme.eme_2d_vector": {
+   "guarded": [],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/eme/eme_2d_vector.py",
+   "raw_linalg": [
+    [
+     1017,
+     "Ti = np.linalg.solve(getG(zt), V)"
+    ]
+   ],
+   "sqrt": [
+    [
+     284,
+     "qz = np.sqrt(complex(qz2)) if qz2 != 0.0 else 0.0"
+    ],
+    [
+     302,
+     "mu = np.sqrt(mu2)"
+    ],
+    [
+     627,
+     "cur = 1.0 / np.sqrt(nz)"
+    ],
+    [
+     693,
+     "return float(np.sqrt(max(0.0, 1.0 - min(cmax, 1.0))))"
+    ],
+    [
+     778,
+     "root = np.sqrt(complex(qz2))"
+    ],
+    [
+     1261,
+     "sigma = 1j * k0 * np.sqrt(float(np.max(eps_xy.real))) * 0.78"
+    ],
+    [
+     1288,
+     "En = np.sqrt(np.sum(np.abs(Ex) ** 2 + np.abs(Ey) ** 2 + np.abs(Ez) ** 2))"
+    ]
+   ]
+  },
+  "lumenairy.elements.eme.eme_diffraction": {
+   "guarded": [],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/eme/eme_diffraction.py",
+   "raw_linalg": [
+    [
+     192,
+     "cpm = np.linalg.lstsq(A, rhs, rcond=None)[0]"
+    ]
+   ],
+   "sqrt": [
+    [
+     114,
+     "norm = np.sqrt(Lx * Ly)"
+    ],
+    [
+     123,
+     "return np.sqrt(eps * k0 ** 2 - kx ** 2 - ky ** 2 + 0j)"
+    ],
+    [
+     169,
+     "Psi = Psi / np.sqrt(pnorm)"
+    ],
+    [
+     171,
+     "qz = np.sqrt(np.asarray(qz2, complex) + 0j)"
+    ]
+   ]
+  },
+  "lumenairy.elements.pmm.stack": {
+   "guarded": [
+    [
+     2721,
+     "ci = _guarded_lstsq("
+    ],
+    [
+     2934,
+     "ci = _guarded_lstsq("
+    ]
+   ],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/pmm/stack.py",
+   "raw_linalg": [
+    [
+     3289,
+     "c_fwd = np.linalg.solve(M, A21 @ d[\"cinc\"])"
+    ]
+   ],
+   "sqrt": [
+    [
+     648,
+     "vals.append(float(np.sqrt(np.max(np.abs(M)))))"
+    ],
+    [
+     2118,
+     "_idx = [float(np.real(np.sqrt(eps_sup))), float(np.real(np.sqrt(eps_sub)))]"
+    ],
+    [
+     2122,
+     "_idx.append(float(np.real(np.sqrt(np.max(np.abs(_d))))))"
+    ],
+    [
+     2130,
+     "nre = float(np.real(np.sqrt(eps_sup)))"
+    ],
+    [
+     2674,
+     "n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))"
+    ],
+    [
+     2676,
+     "+ [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))"
+    ],
+    [
+     2885,
+     "n_max = max([np.real(np.sqrt(np.asarray(e, _C).reshape(3, 3)[0, 0]"
+    ],
+    [
+     2889,
+     "+ [np.real(np.sqrt(np.asarray(e, _C).reshape(3, 3)[1, 1]))"
+    ],
+    [
+     3031,
+     "n_max.append(np.real(np.sqrt(M3[0, 0])))"
+    ],
+    [
+     3032,
+     "n_max.append(np.real(np.sqrt(M3[1, 1])))"
+    ],
+    [
+     3956,
+     "_nmx.append(np.real(np.sqrt(M3[0, 0])))"
+    ],
+    [
+     3957,
+     "_nmx.append(np.real(np.sqrt(M3[1, 1])))"
+    ],
+    [
+     4161,
+     "_nmx.append(np.real(np.sqrt(M3[0, 0])))"
+    ],
+    [
+     4162,
+     "_nmx.append(np.real(np.sqrt(M3[1, 1])))"
+    ],
+    [
+     4417,
+     "n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))"
+    ],
+    [
+     4419,
+     "+ [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))"
+    ],
+    [
+     4675,
+     "n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))"
+    ],
+    [
+     4677,
+     "+ [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))"
+    ]
+   ]
+  },
+  "lumenairy.elements.pmm.stack2d": {
+   "guarded": [],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/pmm/stack2d.py",
+   "raw_linalg": [
+    [
+     839,
+     "EPS_inv = np.linalg.inv(EpsF)"
+    ],
+    [
+     1794,
+     "h[\"Ez\"] = np.linalg.solve(EpsF,"
+    ],
+    [
+     1828,
+     "c_fwd = np.linalg.solve(M, A21 @ d[\"cinc\"])"
+    ]
+   ],
+   "sqrt": [
+    [
+     1290,
+     "nre = float(np.real(np.sqrt(eps_sup)))"
+    ]
+   ]
+  },
+  "lumenairy.elements.pmm.stack2d_pure": {
+   "guarded": [
+    [
+     1560,
+     "cinc = _guarded_lstsq("
+    ],
+    [
+     1928,
+     "cinc = _guarded_lstsq("
+    ]
+   ],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/pmm/stack2d_pure.py",
+   "raw_linalg": [
+    [
+     1995,
+     "c_fwd = np.linalg.solve(M, A21 @ d[\"cinc\"])"
+    ]
+   ],
+   "sqrt": [
+    [
+     1246,
+     "nre0 = float(np.real(np.sqrt(eps_sup)))"
+    ],
+    [
+     1296,
+     "nre = float(np.real(np.sqrt(eps_sup)))"
+    ]
+   ]
+  },
+  "lumenairy.elements.pmm.twod": {
+   "guarded": [],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/pmm/twod.py",
+   "raw_linalg": [
+    [
+     393,
+     "Minv = np.linalg.inv(M)"
+    ],
+    [
+     408,
+     "Epn = np.linalg.solve(P_inv, M)  # inverse rule [[1/eps]]^-1 (wall-normal Ex)"
+    ],
+    [
+     473,
+     "Tpinv = np.linalg.pinv(Tp)"
+    ],
+    [
+     486,
+     "Minv = np.linalg.inv(M)"
+    ],
+    [
+     494,
+     "Epn=np.linalg.solve(P_inv, M))"
+    ],
+    [
+     544,
+     "Txp = np.linalg.pinv(Tx)"
+    ],
+    [
+     546,
+     "Typ = np.linalg.pinv(Ty)"
+    ],
+    [
+     589,
+     "Txp = np.linalg.pinv(Tx)"
+    ],
+    [
+     611,
+     "Typ = np.linalg.pinv(Ty)"
+    ],
+    [
+     654,
+     "EPS_inv = EinvF if formulation == \"li\" else np.linalg.inv(EpsF)"
+    ],
+    [
+     725,
+     "EPS_inv_r = _rc(EinvF) if formulation == \"li\" else np.linalg.inv(EpsF_r)"
+    ]
+   ],
+   "sqrt": [
+    [
+     423,
+     "val = np.sqrt(np.asarray(eps - kx ** 2 - ky ** 2, dtype=_C))"
+    ],
+    [
+     668,
+     "lam = _sqrt_decay(lam2)"
+    ],
+    [
+     755,
+     "lam_e = _sqrt_decay(lam2_e)"
+    ],
+    [
+     778,
+     "lam = _sqrt_decay(-np.concatenate([kz, kz]) ** 2)"
+    ],
+    [
+     801,
+     "nre = float(np.real(np.sqrt(eps_sup)))"
+    ],
+    [
+     1455,
+     "nre = float(np.real(np.sqrt(eps_sup)))"
+    ]
+   ]
+  },
+  "lumenairy.elements.pmm.twod_staggered": {
+   "guarded": [
+    [
+     3427,
+     "cinc = _guarded_lstsq(                                   # (2 q^2,)"
+    ]
+   ],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/pmm/twod_staggered.py",
+   "raw_linalg": [
+    [
+     1981,
+     "Gw_inv = np.linalg.inv(Gw)"
+    ],
+    [
+     2074,
+     "Schur = Ktz @ np.linalg.solve(Meps33, Kzt)"
+    ],
+    [
+     2237,
+     "E3S = np.linalg.solve("
+    ],
+    [
+     2240,
+     "G3S = np.linalg.solve(Gw, np.concatenate([-CwE1, CwE2, Z, Z], axis=1))"
+    ],
+    [
+     2619,
+     "Ginv = np.linalg.inv(G)"
+    ],
+    [
+     2624,
+     "Dual = np.concatenate([np.linalg.solve(G1g, LW[:qq, :]),"
+    ],
+    [
+     2625,
+     "np.linalg.solve(G2g, LW[qq:, :])], axis=0)"
+    ],
+    [
+     3110,
+     "Ginv = np.linalg.inv(G)"
+    ]
+   ],
+   "sqrt": [
+    [
+     2372,
+     "val = np.sqrt(np.asarray(eps - kx ** 2 - ky ** 2, dtype=_C))"
+    ],
+    [
+     2584,
+     "q = np.sqrt(np.asarray(g2, dtype=_C))"
+    ],
+    [
+     2859,
+     "inv2 = 1.0 / np.sqrt(2.0)"
+    ],
+    [
+     2919,
+     "qv = np.sqrt(np.asarray(mu, dtype=_C))"
+    ],
+    [
+     2931,
+     "nrm = np.sqrt(1.0 + np.sum(np.abs(um) ** 2, axis=0))"
+    ],
+    [
+     3131,
+     "q = np.sqrt(np.asarray(g2, dtype=_C))"
+    ],
+    [
+     3317,
+     "nre0 = float(np.real(np.sqrt(eps_sup)))"
+    ],
+    [
+     3358,
+     "nre = float(np.real(np.sqrt(eps_sup)))"
+    ]
+   ]
+  },
+  "lumenairy.elements.rcwa._core": {
+   "guarded": [
+    [
+     824,
+     "def _guarded_inverse(A, site, hint=None, rcond_refuse=None):"
+    ],
+    [
+     2703,
+     "D = _guarded_inverse(I - B11 @ A22, \"rcwa Redheffer star (I - B11 A22)\")"
+    ],
+    [
+     2704,
+     "F = _guarded_inverse(I - A22 @ B11, \"rcwa Redheffer star (I - A22 B11)\")"
+    ],
+    [
+     2741,
+     "iapb = _guarded_inverse(apb, \"rcwa interface mode-match (a+b)\")"
+    ],
+    [
+     2875,
+     "iT22 = _guarded_inverse(T22, \"rcwa generalized interface (T22)\","
+    ]
+   ],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/rcwa/_core.py",
+   "raw_linalg": [
+    [
+     816,
+     "Xe = np.linalg.inv(Ae)"
+    ],
+    [
+     4164,
+     "Vinv = jnp.linalg.inv(V)"
+    ]
+   ],
+   "sqrt": [
+    [
+     798,
+     "return r / np.sqrt(n) if np.isfinite(r) else float(\"inf\")"
+    ],
+    [
+     1131,
+     "def _sqrt_forward(x: np.ndarray) -> np.ndarray:"
+    ],
+    [
+     1181,
+     "return _sqrt_forward(xp.conj(xp.asarray(eps_region).astype(_C))"
+    ],
+    [
+     1284,
+     "def _sqrt_decay(x, xp=None, band: float = _CUT_BAND_REL):"
+    ],
+    [
+     2255,
+     "inv2 = 1.0 / np.sqrt(2.0)"
+    ],
+    [
+     2360,
+     "lam_e = _sqrt_decay(lam2_e)"
+    ],
+    [
+     2461,
+     "kz = _sqrt_forward(eps0 - kxd ** 2 - kyd ** 2)"
+    ],
+    [
+     2462,
+     "lam_full = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)"
+    ],
+    [
+     2480,
+     "lam_e = _sqrt_decay(lam2_e)"
+    ],
+    [
+     2552,
+     "kz = _sqrt_forward(eps0 - xp.diag(Kx) ** 2 - xp.diag(Ky) ** 2)"
+    ],
+    [
+     2553,
+     "lam = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)"
+    ],
+    [
+     2570,
+     "lam = _sqrt_decay(lam2)                  # = i kz (prop.) / |gamma| (evan.)"
+    ],
+    [
+     2617,
+     "kz = _sqrt_forward(eps - kx ** 2 - ky ** 2)   # per-order kz/k0"
+    ],
+    [
+     2618,
+     "lam = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)"
+    ],
+    [
+     3637,
+     "inv2 = 1.0 / np.sqrt(2.0)"
+    ],
+    [
+     3688,
+     "gam = np.sqrt(np.asarray(mu, dtype=_C))"
+    ],
+    [
+     3870,
+     "lam = _sqrt_decay(lam2)"
+    ],
+    [
+     3881,
+     "kz = _sqrt_forward(eps0 - xp.diag(Kx) ** 2 - xp.diag(Ky) ** 2)"
+    ],
+    [
+     3882,
+     "lam_u = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)"
+    ]
+   ]
+  },
+  "lumenairy.elements.rcwa.stack": {
+   "guarded": [],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/rcwa/stack.py",
+   "raw_linalg": [
+    [
+     942,
+     "denom = np.linalg.inv(np.eye(2 * N, dtype=_C) - Sa22 @ Sb11)"
+    ],
+    [
+     1086,
+     "Sz = np.linalg.solve(EPS, rhs)                   # curl-H z-comp"
+    ]
+   ],
+   "sqrt": [
+    [
+     2608,
+     "lam = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)"
+    ],
+    [
+     2874,
+     "nre = float(np.real(np.sqrt(eps_sup)))"
+    ],
+    [
+     3049,
+     "kz_inc = (xp.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2))"
+    ],
+    [
+     3051,
+     "float(np.real(_sqrt_forward(np.conj(eps_sup)"
+    ]
+   ]
+  },
+  "lumenairy.elements.thin_grating": {
+   "guarded": [],
+   "path": "/mnt/c/tmp/lum_borscope/lumenairy/elements/thin_grating.py",
+   "raw_linalg": [],
+   "sqrt": []
+  }
+ },
+ "pmmstack_grid": {
+  "guarded_lstsq": true,
+  "sliver_guard": true,
+  "uses_union_grid": true
+ },
+ "pure_grid": {
+  "guarded_lstsq": true,
+  "interface_general": true,
+  "mortar_2d": true,
+  "uses_mortar": true
+ },
+ "rcwa_armed": {
+  "guarded_inverse_sites": [
+   "D = _guarded_inverse(I - B11 @ A22, \"rcwa Redheffer star (I - B11 A22)\")",
+   "F = _guarded_inverse(I - A22 @ B11, \"rcwa Redheffer star (I - A22 B11)\")",
+   "iapb = _guarded_inverse(apb, \"rcwa interface mode-match (a+b)\")",
+   "iT22 = _guarded_inverse(T22, \"rcwa generalized interface (T22)\","
+  ],
+  "t22_armed": true
+ },
+ "rcwastack": {
+  "raw_inverses": [
+   [
+    942,
+    "denom = np.linalg.inv(np.eye(2 * N, dtype=_C) - Sa22 @ Sb11)"
+   ],
+   [
+    1086,
+    "Sz = np.linalg.solve(EPS, rhs)                   # curl-H z-comp"
+   ]
+  ],
+  "sqrt_decay": true
+ },
+ "shared_sqrt_decay": {
+  "berreman_has_private_def": false,
+  "berreman_is_shared": true,
+  "berreman_jax_has_private_def": false,
+  "cut_band_rel": 1e-08,
+  "pmm_twod_is_shared": true
+ },
+ "thin_grating": {
+  "functions": [
+   "thin_grating_efficiency_1d",
+   "grating_efficiency_vs_wavelength"
+  ],
+  "has_cascade": false,
+  "reflection_is_zero": true
+ }
+}
