@@ -609,6 +609,37 @@ def test_anisotropic_cascade_is_not_falsely_refused():
     """THE FALSE-POSITIVE REGRESSION GUARD, and the reason the guard scores an
     equilibrated operator rather than the raw one.
 
+    **RESTATED 2026-09-11 -- this cell's ill-conditioning WAS the RCWA
+    branch-cut defect** (`docs/audits/FIX_RCWA_EVEN_SECTOR_WSL_2026_09_11.md`):
+    a propagating mode of the lossless uniaxial layer was handed the INCOMING
+    root of ``lam^2`` because the outgoing-root pin tested for an EXACTLY zero
+    real part, and against the groove/substrate index coincidence
+    (``eps_groove`` = ``n_sub^2`` = 2.25) that mode duplicated a substrate
+    backward mode, so the generalized interface's ``T22`` went near-singular.
+    Everything the paragraphs below attribute to "near-cancelling
+    deep-evanescent star denominators" and "BLAS reduction order" was that:
+    measured on the pre-fix tree (48c8747) at ``M`` = 5 / 9 / 15 / 19 / 25 the
+    RAW inverse residual read 5.2e-01 / 2.8e-01 / 1.2e-02 / 1.7e-02 / 1.1e-02,
+    ``rcond`` 1.7e-03 .. 1.2e-05, and ``|R+T-2|`` 2.0e-02 / 2.1e-03 / 1.3e-04
+    / 1.5e-04 / 2.0e-03 at one thread against 2.0e-02 / 2.1e-03 / 2.0e-03 /
+    4.4e-16 / 9.3e-03 at four.  On the fixed tree the same rungs read raw
+    residual <= 5.5e-16, equilibrated residual <= 5.4e-16, ``rcond`` >= 2.3e-02
+    and ``|R+T-2|`` <= 2.1e-14 -- at 1, 4 and 8 threads and on both builds
+    (Windows py3.14 / OpenBLAS Haswell, WSL py3.12 / OpenBLAS SkylakeX) --
+    while ``J00`` is unchanged to six figures on every rung.  So the closure IS
+    deterministic and IS a valid tripwire here, the raw and equilibrated
+    instruments now AGREE, and premise (b) below is inverted: this cell no
+    longer motivates the equilibration.  Whether ANY fixture still does is the
+    subject of the fix's independent verification; the rationale text below is
+    kept for the record and is no longer the claim.  What is asserted now:
+    (a) nothing refused; (b') raw residual < 1e-3 x the refusal bar (measured
+    5.5e-16: 4.3 decades under the assertion, the bar 3 decades above it),
+    equilibrated residual likewise, ``rcond`` > 10 x the screen, and the two
+    residual instruments within 10x of each other (measured 0.7x .. 1.3x);
+    (c) and (d) unchanged; (f') the closure ladder is ASSERTED at
+    ``|R+T-2| < 1e-10`` on every rung -- 6.7 decades above the measured
+    2.1e-14 and 8.3 decades below the pre-fix symptom 2.0e-02, on both builds.
+
     ``rcwa_jones_1d`` on a uniaxial cell builds star denominators with
     ``||I - B11 A22||_1`` ~ 1e16-1e17 at EVERY truncation -- deep-evanescent
     blocks of the generalized S-matrix -- so their RAW inverse residual runs
@@ -736,19 +767,25 @@ def test_anisotropic_cascade_is_not_falsely_refused():
     raw = max(s[0] for s in seen)
     eq = max(s[1] for s in seen)
     eq_rc = min(s[2] for s in seen)
-    # (b) the separation that chose the instrument.  Both halves, as ratios.
-    assert raw > 1.0e3 * _rc._INV_RESID_REFUSE, (
-        f"the raw residual on this cascade reads {raw:.3e}: it no longer "
-        f"exceeds the refusal bar, so this cell has stopped being the "
-        f"false-positive the equilibration exists for")
+    # (b') RESTATED 2026-09-11: with the branch cut pinned the T22 operators
+    #      on this cascade are well conditioned, so BOTH instruments sit deep
+    #      under the refusal bar and agree.  The pre-fix shape (raw > 1e3 x
+    #      bar, raw / eq > 1e9) is the defect's signature and would now FAIL.
+    assert raw < 1.0e-3 * _rc._INV_RESID_REFUSE, (
+        f"the raw residual on this cascade reads {raw:.3e}: the T22 operators "
+        f"are ill-conditioned again, which on this cell means a propagating "
+        f"layer mode carries the incoming root (the RCWA branch-cut defect "
+        f"fixed 2026-09-11)")
     assert eq < 1.0e-3 * _rc._INV_RESID_REFUSE, (
         f"the EQUILIBRATED residual reads {eq:.3e} against the refusal bar "
-        f"{_rc._INV_RESID_REFUSE:.0e} -- equilibration stopped rescuing the "
-        f"correct answer and the guard is one round-off from refusing it")
-    # the free screen does not even fire here, so the residual is never paid
-    # for: measured 1.2e-05 .. 3.1e-04 against the 1e-08 screen.
+        f"{_rc._INV_RESID_REFUSE:.0e} -- the guard is one round-off from "
+        f"refusing a correct answer")
+    # the free screen does not fire here either: measured rcond >= 2.3e-02
+    # against the 1e-08 screen (pre-fix it read 1.2e-05 .. 1.7e-03).
     assert eq_rc > 1.0e1 * _rc._INV_RCOND_SCREEN
-    assert raw / eq > 1.0e9                   # measured 1e12 .. 1e13
+    assert 0.1 < raw / eq < 10.0, (            # measured 0.7x .. 1.3x
+        f"the raw and equilibrated residuals disagree by {raw / eq:.3g}x on "
+        f"a well-conditioned cascade")
 
     # (c) the ANSWER is stationary -- converging, not wandering.
     ref = rungs[0][1]
@@ -787,10 +824,15 @@ def test_anisotropic_cascade_is_not_falsely_refused():
           f"{[f'{c:.3e}' for c in closes]}  spread {hi / max(lo, 1e-300):.3g}x"
           f" -- round-off on the near-cancelling star denominators, NOT a "
           f"convergence indicator; the answer's own convergence is (d).")
-    # (f) the one thing it CAN carry: the cascade has not blown up.
-    assert hi < 0.5, (
-        f"a rung closes at {hi:.3e} on a lossless cascade: |R+T-2| that large "
-        f"is a MIS-ASSEMBLED cascade, not round-off "
+    # (f') RESTATED 2026-09-11: the closure is deterministic on the fixed tree
+    #      (<= 2.1e-14 on every rung at 1 / 4 / 8 threads, both builds) and
+    #      is asserted with a derived two-sided bar: 1e-10 sits 6.7 decades
+    #      above the measurement and 8.3 decades below the pre-fix symptom
+    #      (2.0e-02, the branch-cut defect), inside a fourteen-decade gap.
+    assert hi < 1.0e-10, (
+        f"a rung closes at {hi:.3e} on a lossless cascade whose closure reads "
+        f"<= 2.1e-14 on the fixed tree: either the cascade is mis-assembled "
+        f"or a propagating mode carries the incoming root again "
         f"({[f'{c:.3e}' for c in closes]})")
 
 

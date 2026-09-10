@@ -76,6 +76,23 @@ pre-fix tree on BOTH builds; the 2 that pass are the guards the fix must not
 cost).
 
 
+**A second reproducer, found by the merged-tree run (2026-09-11).**  The
+uniaxial cascade that `tests/unit/test_m1_conditioning_guard.py` had recorded
+since v5.33.1 as the FALSE POSITIVE the equilibrated inverse residual exists
+for -- raw `T22` residual 1e-2 .. 5e-1 "while the answer is right", an
+`|R+T-2|` ladder that "jitters with the BLAS reduction order over more than
+two decades" -- was this defect: its groove permittivity equals the substrate's
+(2.25), so a mis-rooted propagating layer mode duplicated a substrate backward
+mode.  Pre-fix at `M` = 5 / 9 / 15 / 19 / 25: raw residual 5.2e-01 / 2.8e-01 /
+1.2e-02 / 1.7e-02 / 1.1e-02, `rcond` 1.7e-03 .. 1.2e-05, `|R+T-2|` 2.0e-02 ..
+1.3e-04 at one thread and a different ladder at four.  Post-fix: raw residual
+<= 5.5e-16, equilibrated <= 5.4e-16, `rcond` >= 2.3e-02, `|R+T-2|` <= 2.1e-14
+at 1 / 4 / 8 threads on both builds, `J00` unchanged to six figures.  The
+test is RESTATED to assert the well-conditioned state and a closure bar of
+1e-10 (6.7 decades above the measurement, 8.3 below the old symptom); whether
+the equilibrated instrument retains any motivating population is under
+verification.
+
 ### Fixed -- `PMMStack` REFUSES a near-coincident-wall SLIVER instead of returning a wrong answer (O-11)
 
 Two adjacent layers whose wall sets differ by `delta` of the period put a SLIVER
