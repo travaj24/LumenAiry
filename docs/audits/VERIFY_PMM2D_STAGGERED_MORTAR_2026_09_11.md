@@ -894,6 +894,17 @@ survives is:
 does.  The specific losing rung is a prototype number and should not be quoted
 as a library measurement.**
 
+**Is the losing regime DOCUMENTED and not asserted away?  YES, on both counts,
+and this audit checked it directly.**  The build doc's G6 section states the
+`q = 30` reversal in its own text, the shipped test's docstring repeats it
+("1.48x WORSE at `q = 30` once both arms have converged"), and the ASSERTION is
+`em < 2.0 * eu` -- a ratio bar with 2x of slack that *permits the mortar to be
+worse* and would still pass at the experiment's own 1.48x.  Nothing in the
+gate forces the advantage to exist.  The staircase gate is the same shape
+(`ep < 1.2 * eu`).  The one thing neither says is that the reversal is a
+PROTOTYPE reading; on the shipped library it does not occur at `q = 30`, and at
+`q >= 24` the question is not answerable against this oracle at all.
+
 ### 7.2 The 3-slice staircase
 
 Slice widths 1/2, 1/3, 1/6 (so per-slice `N = 2, 3, 6`, union `N = 6`),
