@@ -4,11 +4,13 @@ Companion to ``tests/unit/test_fix_pmmstack_sliver_walls_round2.py``.  Evidence
 and every number: ``docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND2_2026_09_11.md``
 and ``validation/probe_verify_sliver_round2/``.
 
-Four of the five tests here PIN A KNOWN LIMITATION rather than a fix.  Each
-says so in its own docstring, with the instruction the round-1 verification
+Most of the tests here PIN A KNOWN LIMITATION rather than a fix.  Each says so
+in its own docstring, with the instruction the round-1 verification
 established: **if the library is later taught to handle the case, this test
 fails, and that failure is the gate working -- re-pin it against the
-improvement, do not relax it.**
+improvement, do not relax it.**  The D-5 test at the bottom of this file has
+already been through that cycle: round 3 shipped the relative closure it asked
+for, and it now pins the REPAIRED decision.
 
 Everything asserted is measured on the running build; the only fixed numbers
 are the library's own constants and the geometry.
@@ -360,33 +362,39 @@ def test_every_returned_row_of_the_staircase_box_is_bit_identical():
 
 
 # ==========================================================================
-# D-5 -- the CLOSURE criterion is ABSOLUTE, so a snap that restores the
-#        answer completely is still not believed
+# D-5 -- the CLOSURE criterion WAS ABSOLUTE, so a snap that restored the
+#        answer completely was still not believed.  RE-PINNED 2026-09-11
+#        against the repair (round 3).
 # ==========================================================================
-def test_the_closure_criterion_is_absolute_not_relative():
-    """PINS A ROUND-2 BEHAVIOUR CHANGE (verification defect D-5).
+def test_the_closure_criterion_is_relative_not_absolute():
+    """RE-PINNED AGAINST THE IMPROVEMENT this verification asked for
+    (defect D-5; the repair is
+    ``docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md``).
 
-    ``_SLIVER_ATTRIB_CLOSURE`` asks the snapped super-unity to fall below a
-    FIXED 1e-5.  On a stack whose SLIVER-FREE truncation super-unity already
-    sits ABOVE that bar, the criterion can never be met -- however completely
-    the snap restores the answer.  The arbiter then says ``truncation``, the
-    solve RETURNS a wrong number, and the warning tells the caller that
-    raising ``min_feature`` "will silence nothing here", which is the opposite
-    of what is measured: on this fixture the snapped answer IS the sliver-free
-    reference to five decimal places.
+    AS FIRST WRITTEN (2026-09-11) this test pinned the DEFECT.
+    ``_SLIVER_ATTRIB_CLOSURE`` asked the snapped super-unity to fall below a
+    FIXED 1e-5, so on a stack whose SLIVER-FREE truncation super-unity already
+    sits ABOVE that bar the criterion could never be met -- however completely
+    the snap restored the answer.  The arbiter then said ``truncation``, the
+    solve RETURNED a number wrong by 1,811x-3,501x the physical wall shift at
+    ``R+T`` = 1.19, and the warning told the caller that raising
+    ``min_feature`` "will silence nothing here", which is the opposite of what
+    is measured: on this fixture the snapped answer IS the sliver-free
+    reference to five decimal places.  Round 1 REFUSED these rows, so it was a
+    behaviour change and not an inherited floor.
 
-    Round 1 REFUSED these rows (the screen fires and ``R+T-1`` is 0.19), so
-    this is a behaviour change, not an inherited floor.
+    ROUND 3 makes the closure RELATIVE --
+    ``su <= max(_SLIVER_ATTRIB_CLOSURE, (worst - 1) *
+    _SLIVER_CLOSURE_FRACTION)`` -- so what is pinned now is the repaired
+    DECISION: the same three rows are REFUSED, the refusal names the
+    ``min_feature`` that was measured to restore the answer, and the false
+    sentence is gone from the library.  The PREMISE is asserted unchanged,
+    because it is what makes the class reachable: the mount's super-unity is
+    ordinary truncation (a monotone degree ladder) whose degree-8 floor sits
+    ABOVE the absolute bar and BELOW the trigger.
 
-    The measured repair is a RELATIVE closure -- require the snap to remove
-    most of the violation rather than to reach a fixed floor.  The two
-    populations separate by five decades on that statistic: over the 291
-    arbitrated CORRECT rows of the false-positive census box the super-unity
-    DROP factor is 0.90 .. 2.29, and over the 448 arbitrated WRONG rows of the
-    false-negative grid it is at least 1.78e+05 (2026-09-11, both builds,
-    ``validation/probe_verify_sliver_round2/w5_census.py``).
-
-    If a relative closure ships, this test fails -- that failure is the gate
+    If a later change makes the criterion absolute again, or moves this class
+    back into ``truncation``, this test fails -- that failure is the gate
     working; re-pin it against the improvement, do not relax it."""
     def _gmr(delta, deg=8):
         """A guided-mode-resonance grating in a dense-superstrate grazing
@@ -430,21 +438,25 @@ def test_the_closure_criterion_is_absolute_not_relative():
         if not (err > 100.0 and err_snapped < 1.0):
             continue
         found.append((delta, err, err_snapped, cur[3], snapped[3]))
-        # round 1 would have refused: the screen fires and R+T is past its bar
+        # round 1 refused these rows: the screen fires and R+T is past its bar
         assert cur[3] > 1.0 + ps._STACK_SUPERUNITY_BAR, (delta, cur[3])
         # the snap removes essentially all of the violation ...
         drop = (cur[3] - 1.0) / max(snapped[3] - 1.0, 1e-300)
-        assert drop > 100.0, (delta, drop)
-        # ... but lands ABOVE the ABSOLUTE bar, so it is not believed
+        assert drop > 1.0 / ps._SLIVER_CLOSURE_FRACTION, (delta, drop)
+        # ... and still lands ABOVE the ABSOLUTE bar, which is what made the
+        # round-2 criterion unreachable on this class
         assert snapped[3] - 1.0 > ps._SLIVER_ATTRIB_CLOSURE, (delta,
                                                               snapped[3])
         v, ev = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
-        assert v == "truncation", (delta, v, ev)
+        assert v == "sliver", (delta, v, ev)
         assert ev["move"] / ev["w_wide"] > ps._SLIVER_MOVE_FACTOR, ev
-        # and the solve returns, with the message that is measurably wrong
+        # the RELATIVE arm is the one that admits it
+        assert ev["closure"] > ps._SLIVER_ATTRIB_CLOSURE, ev
+        # and the solve is REFUSED, naming the remedy measured to restore it
         refused, msg, out, warns = _guarded(_gmr(delta))
-        assert not refused, (delta, (msg or "")[:200])
-        assert out is not None
-        assert any("is NOT what moved this answer" in w for w in warns), warns
-        assert any("will silence nothing here" in w for w in warns), warns
+        assert refused and out is None, (delta, (msg or "")[:200])
+        assert "NEAR-COINCIDENT-WALL SLIVER" in msg, msg[:200]
+        assert "pass min_feature=" in msg, msg[:400]
+        assert "will silence nothing here" not in msg
+        assert not [w for w in warns if "will silence nothing here" in w]
     assert len(found) >= 2, found

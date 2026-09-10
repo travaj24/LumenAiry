@@ -34,6 +34,26 @@ README, and the JSON every table below is read from, on both builds).
 | **Bit-identity** | **39 / 39** -- the round-1 fix's 18 fixtures and the verification's 21 -- hashed against a read-only copy of the pre-round-2 tip `bb0527a`. |
 | **Tests** | `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (19), plus the round-1 file's margin test RESTATED as a decision test and the verification's V-1 pinning test re-pinned against the improvement. |
 
+### S0.1 CORRECTIONS, 2026-09-11 (verification defect D-4, applied in round 3)
+
+Four numbers published above and below are properties of the SAMPLE this
+report measured on, not of the family.  They are corrected here from the
+independent re-measurement
+(`docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND2_2026_09_11.md` S3.1, S3.3, S4.4,
+S5.3) and from the round-3 work
+(`docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md`).  **None of the
+four changes a decision**; all four make the guard's floors look further away
+than they are, which is the defect the round-1 verification raised in the first
+place.  Every site where one of them appears below carries an inline
+`[D-4: ...]` marker.
+
+| published here | corrected | measured on |
+|---|---|---|
+| the trigger clears the correct population by **9.11x** | **8.03x** -- envelope **1.24481e-04** | 826 correct rows over FIVE fixtures (this report used 600 over three); both builds |
+| the WRONG population's `move / w_wide` floor is **466.2**, so the bar carries 4.66x | **147.411** (polarization 1 alone: **134.171**), so the bar carries **1.47x** | a 2,250-row grid over five fixtures whose continuity slopes span 0.47 .. 31.4; both builds read 147.411 to six figures, so the DECISION on those rows is stable |
+| the CORRECT population moves at most **26.58**, i.e. 3.8x below the move bar | **833.78**, on a guided-mode-resonance grating whose degree-stationary `dR/d(duty)` is **169.2** | 2,028 rows, 936 of them on devices with slope > 20.  The move bar is a DECISION criterion whose correctness rests on the CLOSURE arm, not on a universal `dR/dx` = O(1): on all 14 rows adjudicated against an independent `RCWAStack` oracle the refusals are of answers RCWA also calls wrong, and on 12 of 14 the prescribed `min_feature` is 1.8x-7.1x closer to the truth |
+| ONE sub-unity WRONG row, at `R+T-1` = **-2.8048e-04** | at least **11** sub-unity wrong rows, the worst at **-1.13511e-03**; 29 of 878 wrong rows sit at or below the trigger | the same 2,250-row grid, both builds |
+
 ---
 
 ## S1. The two builds
@@ -93,13 +113,15 @@ slopes differ by 4x, 80 log-spaced deltas each, three degrees
 
 | fixture | period / lambda / theta | rows | CORRECT | max `\|R+T-1\|` among CORRECT | min `R+T-1` among WRONG |
 |---|---|---|---|---|---|
-| O-11 | 1.2 / 0.85 um / 0.15 | 240 | 126 | **1.0979e-04** | **-2.8048e-04** (SUB-unity) |
+| O-11 | 1.2 / 0.85 um / 0.15 | 240 | 126 | **1.0979e-04** | **-2.8048e-04** (SUB-unity) [D-4: one of at least 11, worst -1.13511e-03 -- S0.1] |
 | mine, visible | 0.9 / 0.62 um / 0.21 | 240 | 121 | 1.5985e-06 | +9.5221e-02 |
 | mine, telecom | 1.55 / 1.31 um / 0.08 | 240 | 144 | 5.6168e-06 | +3.7334e-02 |
 | **ALL** | | **720** | **391** | **1.0979e-04** | **-2.8048e-04** |
 
 Adding the 209 correct rows of `r1_populations.py` and `r2_falseneg.py`:
-**1.0979e-04 over 600 CORRECT rows**, so 1e-3 carries **9.11x**.  The ladder, scored two-sided on the same
+**1.0979e-04 over 600 CORRECT rows**, so 1e-3 carries **9.11x** [D-4: a
+five-fixture family reads 1.24481e-04 over 826 correct rows, i.e. **8.03x** --
+S0.1].  The ladder, scored two-sided on the same
 1,380 rows (r1 + r2 + r3):
 
 | trigger | headroom over the 1.0979e-04 envelope | wrong REFUSED | RIGHT refused | wrong / grey RETURNED | RIGHT refused by the CLOSURE-ONLY arbiter |
@@ -122,7 +144,9 @@ sampling artefact.  A guard whose bar sits on its population is the exact
 defect the verification raised against round 1.
 
 **The floor is not removable by any super-unity bar.**  The O-11 family's worst
-WRONG row on the three-fixture grid reads `R+T-1` = **-2.8048e-04** -- SUB-unity.
+WRONG row on the three-fixture grid reads `R+T-1` = **-2.8048e-04** -- SUB-unity
+[D-4: at least **11** such rows on a denser grid, the worst reading
+**-1.13511e-03** -- S0.1].
 A guard whose detector is `R+T <= 1` cannot see that row at any bar.
 
 ### S3.2 The arbiter's two criteria
@@ -143,10 +167,10 @@ Measured over the **1,133 arbitrated rows** of all four grids (Windows):
 
 | population | `max(R+T) - 1` on the snapped grid | `move / w_wide` |
 |---|---|---|
-| **WRONG** (n = 774) | 0 ... **1.5368e-06** | **466.2** ... 6.04e+07 |
+| **WRONG** (n = 774) | 0 ... **1.5368e-06** | **466.2** ... 6.04e+07 [D-4: the family floor is **147.411** -- S0.1] |
 | grey (n = 14) | 4.5038e-03 ... 1.2876e-01 | 11.07 ... 45.25 |
-| **RIGHT** (n = 345) | 0 ... 1.2815e-01 | 0.1218 ... **26.58** |
-| **the bars** | **1e-5**: 6.5x above the wrong population, 3.9x below the truncation population's best (3.860e-05) | **100**: 3.76x above the correct population, 4.66x below the wrong one |
+| **RIGHT** (n = 345) | 0 ... 1.2815e-01 | 0.1218 ... **26.58** [D-4: a resonant device reaches **833.78** -- S0.1] |
+| **the bars** | **1e-5**: 6.5x above the wrong population, 3.9x below the truncation population's best (3.860e-05).  **ROUND 3** makes this bar the LOWER arm of a RELATIVE closure (defect D-5) | **100**: 3.76x above the correct population, 4.66x below the wrong one [D-4: **1.47x** below the family -- S0.1] |
 
 **Why BOTH, and the ladder that shows it.** Scored on the 110 rows round 1
 refused although correct (`r4_falsepos.py`):
@@ -173,7 +197,8 @@ rows attributed.**
 than on polarization 1 (the campaign's `err` convention, and the verification's
 S4.1 definitional correction).  Measured separately: on polarization 1 the
 correct population reaches 26.6 and the wrong one starts at 338; on both, 26.58
-and 466.2 -- the same decision with more room.  Order sets are
+and 466.2 -- the same decision with more room [D-4: the family floors are 134.171
+and 147.411 respectively, so the room is 1.34x / 1.47x -- S0.1].  Order sets are
 `arange(-half, half+1)` on every path, so the comparison is the CENTRED overlap;
 the snapped grid resolves a different number of orders on **359 of 637**
 arbitrated rows, so this matters.
@@ -341,7 +366,9 @@ wall steps of 0.36-3.6 nm on a 1.2 um period (`r4_falsepos.py`).
 The 110 are gone because the arbiter measures what round 1 assumed: on all of
 them the super-unity SURVIVES the prescribed snap (the truncation population's
 best snapped super-unity is 3.860e-05, 3.9x above the closure bar) or the
-answer does not move (`move / w_wide` <= 26.58, 3.8x below the move bar).
+answer does not move (`move / w_wide` <= 26.58, 3.8x below the move bar)
+[D-4: 26.58 is this box's number; a resonant device puts a CORRECT row at
+833.78 -- S0.1].
 
 ### S4.2 FALSE NEGATIVES -- the verification's own 660 rows
 
@@ -548,11 +575,11 @@ the number where it was -- which is why the arbiter refuses to call it the cure.
 
 | | |
 |---|---|
-| **R2-A -- the floor is the theorem, and it is one-sided** | Four of the verification's eight rows remain returned because their super-unity is below the trigger, and the trigger cannot go lower without sitting ON the correct population's own envelope (1.01x at 1e-4, where the closure-only arbiter already refuses a correct row). Worse, the three-fixture grid contains a WRONG row at `R+T-1` = **-2.8048e-04** -- SUB-unity -- which no super-unity bar can ever see. A detector for that band needs something this campaign still has not found. |
-| **R2-A2 -- one of the four is the MOVE criterion's floor, not the trigger's** | The grey row at degree 14, `delta` = 4.7421e-06 (46.2x the physical shift) moves only **83.3** cell widths on the snapped grid, i.e. below `_SLIVER_MOVE_FACTOR`, so no trigger would reach it -- S4.2 has the per-row table. Lowering the move bar to catch it costs headroom over the correct population (which reaches 26.58) and was not taken. |
+| **R2-A -- the floor is the theorem, and it is one-sided** | Four of the verification's eight rows remain returned because their super-unity is below the trigger, and the trigger cannot go lower without sitting ON the correct population's own envelope (1.01x at 1e-4, where the closure-only arbiter already refuses a correct row). Worse, the three-fixture grid contains a WRONG row at `R+T-1` = **-2.8048e-04** -- SUB-unity -- which no super-unity bar can ever see [D-4: at least **11** such rows, worst **-1.13511e-03** -- S0.1]. A detector for that band needs something this campaign still has not found. |
+| **R2-A2 -- one of the four is the MOVE criterion's floor, not the trigger's** | The grey row at degree 14, `delta` = 4.7421e-06 (46.2x the physical shift) moves only **83.3** cell widths on the snapped grid, i.e. below `_SLIVER_MOVE_FACTOR`, so no trigger would reach it -- S4.2 has the per-row table. Lowering the move bar to catch it costs headroom over the correct population (which reaches 26.58 here and **833.78** on a resonant device -- D-4, S0.1) and was not taken. |
 | **R2-B -- the within-layer arm inherits the same floor** | At a liner of 1e-6 of a period the answer is already 1.06e-03 wrong while `R+T` reads 0.9992. The arm fires only above the trigger, so that width is silent. |
 | **R2-C -- the arbiter is inert on dispersive / keyed stacks** | A callable or unresolved `eps` makes `_stack_provably_passive` answer False, so those stacks never reach the screen at all -- they keep the plain warning, which is round 1's behaviour and pre-round-1's. Materialising the callables for the probe is possible and was not done. |
-| **R2-D -- `move` is compared to a GEOMETRIC width** | `move > 100 * w_wide` compares an efficiency difference with a period fraction, i.e. it silently assumes `dR/dx = O(1)`. That is the same shape of derivation the verification refuted for the round-1 remedy bar (V-4, measured slopes 1.04 / 1.15 / 4.44). Here it is measured rather than derived -- the two populations sit at <= 26.58 and >= 466.2 across four grids and three fixtures -- but a device with `dR/dx` above ~50 could in principle move a correct answer past the bar. No such device was found; a resonant fixture would be the way to attack it. |
+| **R2-D -- `move` is compared to a GEOMETRIC width** | `move > 100 * w_wide` compares an efficiency difference with a period fraction, i.e. it silently assumes `dR/dx = O(1)`. That is the same shape of derivation the verification refuted for the round-1 remedy bar (V-4, measured slopes 1.04 / 1.15 / 4.44). Here it is measured rather than derived -- the two populations sit at <= 26.58 and >= 466.2 across four grids and three fixtures -- but a device with `dR/dx` above ~50 could in principle move a correct answer past the bar. No such device was found; a resonant fixture would be the way to attack it. **RE-STATED, not closed, 2026-09-11 (D-4 / verification S5.3):** the counter-fixture exists -- a guided-mode-resonance grating with a degree-stationary `dR/d(duty)` of 169.2, on which a CORRECT row's `move / w_wide` reaches **833.78**, a 31x refutation of the published bound; and the family floors are 147.411 / 134.171 rather than 466.2 / 338. The DECISION survives: on all 14 rows adjudicated against an independent `RCWAStack` oracle the guard refuses answers RCWA also calls wrong, and on 12 of 14 the prescribed `min_feature` is 1.8x-7.1x closer to the truth. So the criterion keeps its bar and loses its published margin, and its correctness rests on the CLOSURE arm rather than on a universal `dR/dx` = O(1). |
 | **R2-E -- the 2-D stacks still pass `stack=None`** | Unchanged from round 1: `stack2d.py` keeps the plain warning, which is correct while `PMM2DStackPure`'s union is the pixel lattice. The union-forming route of the mortar work (round 1's open item D) is still the owner of that hazard. |
 | **R2-F -- one arbitration per super-unity report** | On `solve_vs_wavelength` the probe runs per wavelength that trips the trigger, so a sweep whose whole band is in the hazard pays it on every point. Not measured beyond the single-wavelength case. |
 
@@ -623,8 +650,11 @@ Every number in S3 and S4 is IDENTICAL on the two builds to the digits printed:
 | snapped super-unity, WRONG population | 0 ... 1.5368e-06 | 0 ... 1.5368e-06 |
 | snapped super-unity, TRUNCATION population's best | 3.860e-05 | 3.860e-05 |
 | `move / w_wide`, CORRECT population | 0.1218 ... 26.58 | 0.1218 ... 26.58 |
+| the same on a RESONANT device (D-4, S0.1) | 833.78 | -- |
 | `move / w_wide`, WRONG population | 466.2 ... 6.04e+07 | 466.2 ... 6.04e+07 |
+| the same, FAMILY floor (D-4, S0.1) | 147.411 | 147.411 |
 | CORRECT envelope over 600 rows | 1.0979e-04 | 1.0979e-04 |
+| the same over 826 rows / 5 fixtures (D-4, S0.1) | 1.24481e-04 | 1.24481e-04 |
 | false positives, round 1 -> round 2 | 110 / 648 -> **0 / 648** | 110 / 648 -> **0 / 648** |
 | "super-unity below the trigger" alone would leave | 17 | 17 |
 | false negatives, round 1 -> round 2 | 8 / 660 -> **4 / 660** | 8 / 660 -> **4 / 660** |
