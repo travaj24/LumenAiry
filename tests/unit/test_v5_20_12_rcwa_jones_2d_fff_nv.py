@@ -25,6 +25,8 @@ fast convergence, the uniform-cell routing, and the JAX guard.
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -306,59 +308,217 @@ def test_fff_nv_stripe_reduces_to_rigorous_1d():
     assert jf < 0.2 * jl, f"fff_nv Jones err {jf:.2e} not < 0.2 x {jl:.2e}"
 
 
+#: The modules that BIND the shared ``_sqrt_decay``.  Rebinding the name in
+#: each of them is how :class:`_pre_round1_branch` reaches every solver path;
+#: patching only the definition module would leave the ``from ... import``
+#: copies pointing at the shipped body.
+_SQRT_DECAY_BOUND = ("lumenairy.elements.rcwa._core",
+                     "lumenairy.elements.rcwa.oned",
+                     "lumenairy.elements.rcwa.stack",
+                     "lumenairy.elements.pmm.twod",
+                     "lumenairy.elements.berreman")
+
+
+def _pre_round1_sqrt_decay(x, xp=None, band=1e-8):
+    """The PRE-5.45.0 branch body, re-typed: the EXACT ``Re(r) == 0`` on-cut
+    test and the ``-r`` flip.
+
+    An ``eig`` output never satisfies ``Re(r) == 0`` -- its real part is the
+    eigensolver's backward error, ~1e-16 -- so this body never pins a
+    structured layer's propagating mode, and the mode-match degeneracy at an
+    index coincidence comes back.  That is what makes it a usable
+    fail-before: the state is CONSTRUCTED, not hoped for from a build.
+    """
+    from lumenairy.backend.array import array_namespace  # noqa: PLC0415
+    if xp is None:
+        xp = array_namespace(x)
+    x = xp.asarray(x).astype(complex)
+    r = xp.sqrt(x)
+    return xp.where((r.real == 0) & (r.imag < 0), -r, r)
+
+
+class _pre_round1_branch:
+    """Reinstate the pre-5.45.0 branch body for the duration of a block."""
+
+    def __init__(self):
+        self._saved = []
+
+    def __enter__(self):
+        import importlib  # noqa: PLC0415
+        for name in _SQRT_DECAY_BOUND:
+            mod = importlib.import_module(name)
+            if hasattr(mod, "_sqrt_decay"):
+                self._saved.append((mod, mod._sqrt_decay))
+                mod._sqrt_decay = _pre_round1_sqrt_decay
+        assert self._saved, _SQRT_DECAY_BOUND
+        return self
+
+    def __exit__(self, *a):
+        for mod, fn in self._saved:
+            mod._sqrt_decay = fn
+        return False
+
+
+def _worst_closure(eps_groove, er, ladder):
+    """Worst ``|sum R + sum T - 2|`` over the truncation ladder, how many
+    rungs stay sound, and the tripwire messages the ladder raised.
+
+    The warnings are COLLECTED here rather than left to a ``pytest.warns``
+    around the call: the recorder has to be inside the loop to attribute a
+    warning to its rung, and a ``catch_warnings`` block consumes what it
+    records, so an outer ``pytest.warns`` would see nothing.  Returning the
+    messages keeps the assertion on the text without that trap.
+    """
+    worst, sound, msgs = 0.0, 0, []
+    for n in ladder:
+        eg = np.diag([eps_groove] * 3).astype(complex)
+        with warnings.catch_warnings(record=True) as ws:
+            warnings.simplefilter("always")
+            _o, R1, T1, _J = rcwa_jones_1d_segments(
+                PX, [(0.5, er), (0.5, eg)], 1.5, 1.0, DEPTH, WL, theta=0.0,
+                n_orders=n)
+        d = abs(float(np.sum(R1) + np.sum(T1) - 2.0))
+        worst = max(worst, d)
+        sound += d < _ONED_SOUND_CLOSURE
+        msgs += [str(w.message) for w in ws
+                 if "lossless energy closure violated" in str(w.message)]
+    return worst, sound, msgs
+
+
 def test_stripe_fixture_is_free_of_the_mode_match_degeneracy():
     """The reference fixture admits its OWN energy theorem at EVERY truncation
-    -- and the index-coincident cell it replaced does not.  Two-sided.
+    -- and the pre-5.45.0 solver, on the index-coincident cell it replaced,
+    does not.  Two-sided, with the negative arm ENGINEERED.
 
     This is the property the whole reduction test rests on, so it is asserted
     directly instead of being hoped for: the rigorous 1-D solver's lossless
     closure is exact for a lossless stack, and on a non-degenerate cell it
     holds at every ``n_orders`` rather than at a lucky one.
 
-    The NEGATIVE arm reconstructs the coincidence through the public API by
-    setting the groove to the director's own ordinary permittivity
-    (``no^2 = 2.25``), which is also ``n_sub^2`` -- the layer's ordinary
-    channel then carries modes EXACTLY degenerate with the region's, the
-    interface inverse amplifies the rounding floor, and the defect over the
-    same ladder is decades worse.  Neither arm reads a recorded number: the
-    claim is the RATIO between the two arms, measured in the same run.
+    **RESTATED 2026-09-11 (CI KERNEL SWEEP,**
+    ``docs/audits/CI_KERNEL_SWEEP_2026_09_11.md`` **).**  The NEGATIVE arm used
+    to reconstruct the coincidence through the public API alone -- groove
+    permittivity set to the director's own ``no^2`` = 2.25, which is also
+    ``n_sub^2`` -- and then require the library to WARN about the closure it
+    violated.  **That arm is dead, and it was killed by a fix in this very
+    release.**  5.45.0's modal branch-cut repair (``_sqrt_decay``'s relative
+    on-cut band) is precisely the repair of "a LAYER permittivity EXACTLY
+    EQUAL to a REGION's ... degenerate at EVERY truncation", so the
+    coincidence no longer bites: the degenerate arm now reads **2.498e-13,
+    16 of 16 truncations sound, no warning**, against the 2.761e-02 and 0 of
+    16 this docstring recorded on 2026-09-10.
 
-    MEASURED 2026-09-10, worst |sum R + sum T - 2| over n_orders 11..41, on
-    Windows-1-thread / Windows-4-threads / WSL: clean 2.083e-13 / 1.821e-13 /
-    1.861e-13 (16 of 16 truncations sound on every one) and coincident
-    2.761e-02 / 2.309e-02 / 5.001e-02 (0 / 1 / 0 of 16 sound) -- a ratio of
-    ~1.3e11 against the 1e5 asserted, i.e. six decades of margin, and the
-    coincident worst sits 5 decades above the 1e-13 floor the ratio is taken
-    from.  If the solver is ever made degeneracy-robust this test fails, and
-    that is the gate working: it must then be re-derived (durability rule),
-    not widened.
+    This is NOT a kernel-dependent test.  It fails identically on every arm
+    measured -- Windows py3.14 and WSL py3.12, Haswell / Sandybridge /
+    Nehalem / Katmai -- and it failed on CI (slow-gate shard 1) for the same
+    reason it fails here.  It is recorded in the sweep because the sweep is
+    what found it: the shard's ``DID NOT WARN`` looks exactly like the two
+    genuinely kernel-decided warnings beside it in that matrix, and only a
+    two-sided measurement separates them.
+
+    The durability rule the old docstring wrote for exactly this event says
+    re-derive, not widen.  So the negative arm is now CONSTRUCTED
+    (``docs/TESTING_STANDARDS.md`` restatement 3): the pre-5.45.0 branch body
+    is reinstated at every module that binds it, which reopens the degeneracy
+    by NINE TO ELEVEN DECADES and makes the tripwire fire again.
+
+    MEASURED 2026-09-11 at one thread on EIGHT ARMS -- Windows py3.14.6 /
+    numpy 2.4.4 and WSL py3.12.3 / numpy 2.4.6, each under
+    ``OPENBLAS_CORETYPE`` Haswell / Sandybridge / Nehalem / Katmai -- worst
+    ``|sum R + sum T - 2|`` over the 16 rungs of ``n_orders`` 11..41:
+
+        arm                 clean          coincident        rungs   warns
+        SHIPPED, all 8    2.0-4.6e-13     2.5-6.4e-13        16/16     0
+        PRE-FIX WIN-HAS   2.083e-13       2.761e-02           0/16    16
+        PRE-FIX WIN-SBR   3.020e-13       4.690e-02           1/16    14
+        PRE-FIX WIN-NEH   2.958e-13       8.158e-03           2/16    14
+        PRE-FIX WIN-KAT   4.008e-13       7.289e-04           5/16    11
+        PRE-FIX WSL-HAS   1.861e-13       5.001e-02           0/16    16
+        PRE-FIX WSL-SBR   3.069e-13       4.802e-02           1/16    14
+        PRE-FIX WSL-NEH   2.918e-13       2.955e-03           2/16    12
+        PRE-FIX WSL-KAT   4.035e-13       1.584e-03           5/16    11
+
+    THE COLUMN THAT MATTERS IS "rungs", and it is why this restatement was
+    itself restated once.  The first version of this test asserted
+    ``pre_coin_sound == 0`` -- an EXACT COUNT over nondeterministic machinery,
+    ``docs/TESTING_STANDARDS.md`` shape S5 -- because 0/16 is what the Haswell
+    arm reads.  It is 1/16 on Sandybridge, 2/16 on Nehalem and 5/16 on Katmai,
+    on BOTH builds: WHICH rungs of the ladder happen to land on the wrong side
+    of a rounding-level degeneracy is exactly the thing the kernel decides.
+    That assertion failed on the WSL-Sandybridge arm of this sweep's own
+    verification pass and has been withdrawn.
+
+    What survives every arm is the READING, and it has room on both sides:
+    the coincident worst is **7.289e-04 at its smallest**, seven decades above
+    the clean population's 4.6e-13 ceiling and 73x above the 1e-05 bar
+    asserted below, while the shipped solver keeps that same cell at 6.4e-13
+    or better.  Both claims are unconditional on every arm: the shipped solver
+    is sound on both cells, and the defect the fixture was moved off is real
+    and reconstructible on demand.
     """
     er = _rot(np.deg2rad(35.0), 1.5, 2.3)
     ladder = range(11, 42, 2)
+    n_rungs = len(list(ladder))
 
-    def worst(eps_groove):
-        eg = np.diag([eps_groove] * 3).astype(complex)
-        out = 0.0
-        for n in ladder:
-            _o, R1, T1, _J = rcwa_jones_1d_segments(
-                PX, [(0.5, er), (0.5, eg)], 1.5, 1.0, DEPTH, WL, theta=0.0,
-                n_orders=n)
-            out = max(out, abs(float(np.sum(R1) + np.sum(T1) - 2.0)))
-        return out
-
-    clean = worst(_STRIPE_EPS_GROOVE)
+    # ---- the POSITIVE arm, on the shipped solver
+    clean, clean_sound, clean_msgs = _worst_closure(
+        _STRIPE_EPS_GROOVE, er, ladder)
     assert clean < _ONED_SOUND_CLOSURE, (
-        f"the reference fixture violates its own exact lossless closure by "
-        f"{clean:.3e} somewhere in {ladder.start}..{ladder.stop - 1}")
-    # the coincidence IS the thing being avoided, so prove it still bites.
-    # Floor the ratio on 1e-13 (the float64 level a clean closure lives at) so
-    # a lucky clean run cannot inflate the requirement.
-    with pytest.warns(UserWarning, match="lossless energy closure violated"):
-        degenerate = worst(_DEGENERATE_EPS_GROOVE)
-    assert degenerate > 1e5 * max(clean, 1e-13), (
-        f"the index-coincident cell closed to {degenerate:.3e} against the "
-        f"clean {clean:.3e}: the mode-match degeneracy this fixture was moved "
-        f"off no longer bites, so the move (and this test) must be re-derived")
+        "the reference fixture violates its own exact lossless closure by "
+        "%.3e somewhere in %d..%d" % (clean, ladder.start, ladder.stop - 1))
+    assert clean_sound == n_rungs, (clean_sound, n_rungs, clean)
+    assert clean_msgs == [], clean_msgs
+
+    # ---- and the coincidence is sound on the shipped solver TOO, which is
+    # what 5.45.0 bought.  Same bar as the reference fixture -- this is the
+    # claim that used to be its opposite.
+    coincident, coin_sound, coin_msgs = _worst_closure(
+        _DEGENERATE_EPS_GROOVE, er, ladder)
+    assert coincident < _ONED_SOUND_CLOSURE, (
+        "the index-coincident cell no longer closes on the shipped solver "
+        "(%.3e): the 5.45.0 branch-cut repair has regressed" % coincident)
+    assert coin_sound == n_rungs, (coin_sound, n_rungs, coincident)
+    assert coin_msgs == [], coin_msgs
+
+    # ---- the NEGATIVE arm, ENGINEERED: reinstate the pre-5.45.0 branch body
+    # and the degeneracy comes back, loudly.  Bars placed by the gap: the
+    # shipped readings are ~2.5e-13 and the pre-fix coincident one 2.761e-02,
+    # so the 1e5 ratio below leaves six decades of margin on each side.
+    with _pre_round1_branch():
+        pre_clean, _pre_clean_sound, _pre_clean_msgs = _worst_closure(
+            _STRIPE_EPS_GROOVE, er, ladder)
+        pre_coin, pre_coin_sound, pre_coin_msgs = _worst_closure(
+            _DEGENERATE_EPS_GROOVE, er, ladder)
+    # the library must SAY SO, and say what it measured
+    assert pre_coin_msgs, "the tripwire stayed silent on the pre-fix arm"
+    assert "lossless energy closure violated" in pre_coin_msgs[0]
+    # the pre-fix arm must break the COINCIDENCE and only the coincidence --
+    # otherwise it is demonstrating some other defect.  Clean stays sound on
+    # all eight arms (worst 4.035e-13 against this 1e-09 bar).
+    assert pre_clean < _ONED_SOUND_CLOSURE, (
+        "the pre-fix branch body also breaks the NON-coincident fixture "
+        "(%.3e), so it is not isolating the mode-match degeneracy"
+        % pre_clean)
+    # THE reading, bounded on both sides by the eight-arm census in the
+    # docstring: coincident worst 7.289e-04 .. 5.001e-02 (73x to 5000x above
+    # this bar) against a clean population that never leaves 4.6e-13.
+    assert pre_coin > 1e-5, (
+        "the index-coincident cell closed to %.3e even with the pre-5.45.0 "
+        "branch body: the mode-match degeneracy this fixture was moved off "
+        "can no longer be reconstructed, so the move (and this test) must be "
+        "re-derived" % pre_coin)
+    # ... and as a RATIO against the clean arm measured in the same run, which
+    # is what makes it a defect rather than a scale: 1.82e+09 .. 2.69e+11 over
+    # the eight arms, against this 1e+05.
+    assert pre_coin > 1e5 * max(pre_clean, 1e-13), (pre_coin, pre_clean)
+    # at least ONE rung of the ladder is broken.  Deliberately not a count:
+    # 0 / 1 / 2 / 5 of 16 rungs stay sound on Haswell / Sandybridge / Nehalem
+    # / Katmai, so any exact count here is a kernel reading (see the
+    # docstring's "rungs" column).
+    assert pre_coin_sound < n_rungs, (pre_coin_sound, n_rungs, pre_coin)
+    # and the fix is worth decades on the same ladder, measured here.
+    # Census: 1.6e+09 .. 6.3e+11 over the eight arms, against this 1e+07.
+    assert pre_coin / max(coincident, 1e-13) > 1e7, (pre_coin, coincident)
 
 
 def test_fff_nv_beats_laurent_convergence():

@@ -1351,6 +1351,76 @@ Gate for all three: `tests/unit/test_fix_slant_anchor_v1_v2_o2.py`.  Evidence:
   is free for unarmed callers and costs 1.10x-1.51x of the inverse at the
   armed site (n = 66..722).
 
+### Testing -- the fast gate now compares its guard DECISIONS across BLAS micro-kernels
+
+The 5.45.0 release matrix went red on CI while the same commit was green on both
+local builds, and every failure was a DECISION -- a guard that refuses on one
+machine and returns on another, or a bar pinned on a build-dependent reading.
+Nothing in the gate could have caught that locally, because the gate only ever
+ran on one BLAS micro-kernel.
+
+`OPENBLAS_CORETYPE` re-dispatches the whole kernel set of the bundled
+DYNAMIC_ARCH scipy-openblas at import time, and it is honoured on both builds
+(verified by reading the loaded kernel back out via `threadpoolctl`, not by
+trusting the variable).  `validation/probe_ci_kernel_sweep/` takes the library's
+guard decisions -- the 1-D sliver refuse/return, both 2-D mortar screens, the
+per-layer width band's warn/silent/refuse, the RCWA generalized interface's
+`T22` refuse/accept and the modal branch-cut orientation census -- on eight
+(build, kernel) arms at one thread, and `tests/unit/test_ci_kernel_consistency.py`
+(5 tests, 5.3 s) asserts they AGREE.  54 of 56 decisions are unanimous.
+
+Two measured facts change how the red matrix should be read, and both are
+recorded in `docs/audits/CI_KERNEL_SWEEP_2026_09_11.md`: `OPENBLAS_CORETYPE=ZEN`
+is NOT a distinct kernel in these wheels (it, and any unrecognised name, falls
+back to auto-detection, which on a Zen CPU reports `Haswell`) -- so **the local
+default arm already IS the CI Zen arm at the BLAS-kernel level** -- and
+`SKYLAKEX` is unreachable on a non-AVX-512 host (SIGILL on both builds).
+
+The two decisions that are NOT unanimous are the same site, the plain 1-D
+`_interface_smatrix` mode match, and they are why
+`test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why` is
+restated.  It used to close on "the row that would trip a bar here is already
+refused by the sliver guard" -- a claim about a different guard, false on CI,
+where that guard stayed silent because its trigger is the answer's own energy
+super-unity and that reads 1.05e-06 there against 1.17--2.61 here.  It now
+asserts the site's unguarded body structurally, re-measures both populations
+with the sliver guard disarmed so the site is reached on every build, states the
+gap as a decade count (`< 2.1`, measured 1.965--1.999 over eight arms), and
+requires the committed census to show a 1e-12 bar's verdict here to be
+NON-unanimous -- `refuse` on Haswell / Sandybridge / Nehalem, `accept` on
+Katmai, on both builds.  That is why the site ships unguarded, said as a
+decision rather than as a distance from a bar.
+
+The sweep also found a test that fails on **every** arm and was never a kernel
+problem at all: `test_v5_20_12_rcwa_jones_2d_fff_nv.py::
+test_stripe_fixture_is_free_of_the_mode_match_degeneracy`.  Its NEGATIVE arm
+reconstructed a mode-match degeneracy through an index coincidence and asked
+the library to warn -- and the branch-cut repair at the top of this release is
+exactly the repair of that failure class, so the coincidence stopped biting
+(2.498e-13, 16 of 16 truncations sound, silent, against the 2.761e-02 and 0 of
+16 its docstring recorded the day before).  On a CI shard that presents as
+`DID NOT WARN`, character-for-character what a genuinely kernel-decided
+warning looks like; only the two-sided measurement separates them.  Following
+the durability rule its own docstring wrote for this event, the negative arm is
+re-derived as an ENGINEERED fail-before -- the pre-5.45.0 branch body
+reinstated at every module that binds it, which reopens the defect by nine to
+eleven decades and makes the tripwire fire again -- and the old claim becomes a
+positive one: the coincidence is sound on the shipped solver too, at the same
+bar.  (Note for anyone reproducing: mutating `_CUT_BAND_REL` does nothing,
+because `_sqrt_decay`'s `band` is a default argument bound at def time.)
+
+That restatement then had to be restated itself, which is recorded rather than
+tidied away: its first version asserted that ZERO of the 16 truncation rungs
+survive the pre-fix body -- the Haswell reading -- and it failed on
+WSL-Sandybridge.  The ladder reads 0 / 1 / 2 / 5 rungs sound on Haswell /
+Sandybridge / Nehalem / Katmai on both builds, because WHICH rung lands on the
+wrong side of a rounding-level degeneracy is what the kernel decides.  An exact
+count over nondeterministic machinery is `TESTING_STANDARDS` shape S5, written
+into a brand-new test by the sweep that exists to remove it.  The count is
+withdrawn in favour of the reading, whose coincident worst never falls below
+7.289e-04 -- seven decades above the clean population and 73x above the bar --
+on any of the eight arms.
+
 ### Deprecation horizon
 
 * `NEXT_REMOVAL_VERSION` slipped `5.46` -> `5.48` (fifth proactive one-line
