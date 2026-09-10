@@ -386,8 +386,9 @@ on that fixture) -- while the ordinary arm returns the identical number.
 `O(n^2)` on factors that already exist.  MEASURED:
 
 * **bit-identity**: `lu_solve(lu_factor(A), B) == np.linalg.solve(A, B)` byte
-  for byte on **all 106 mortar solves** of the probe population (`r4_screen.py`,
-  `lu_solve_bitidentical: True`) plus five synthetic shapes
+  for byte on **all 106 mortar solves** of the probe population, **on BOTH
+  builds** (`r4_screen.py`, `lu_solve_bitidentical: True` in
+  `r4_screen.json` and `r4_screen_wsl.json`), plus five synthetic shapes
   (72 / 162 / 200x120 / 450 / 288x450 complex);
 * **cost**: 0.0436 s vs 0.0455 s for `np.linalg.solve` on a 450x450 complex
   pair, i.e. **0.96x** -- the `gecon` call is inside the noise.
@@ -401,7 +402,11 @@ taper's three adjacent slices at `M` = 4/5/6, non-uniform vs uniform,
 non-uniform vs non-uniform, uniform 2 vs 3 and 3 vs 5, a nested refinement,
 conforming, a single interior wall, and ordinary fine features down to 2 % of
 the period), 106 solves: **`rcond` = 2.61e-07 .. 3.77e-04**, so the bar sits
-**5.4 decades below it**.
+**5.4 decades below it**.  The two builds agree to six significant figures on
+every summary of that population (worst healthy `rcond` 2.6100830e-07 WIN /
+2.6099070e-07 WSL; worst sliver 1.2885149e-17 on both; the `gecon`-vs-`cond_2`
+ratio bracket [0.0467144056374, 0.5953032635510] on both), so the bar is not
+sitting on one machine's arithmetic.
 
 Pushed up the modal ladder on the shipped taper, where this operator
 conditions worst:
