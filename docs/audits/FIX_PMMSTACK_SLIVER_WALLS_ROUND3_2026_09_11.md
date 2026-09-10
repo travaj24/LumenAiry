@@ -576,3 +576,38 @@ renamed D-5 entry (12,633 -> 12,639; an 8-line diff, nothing reformatted).
 | **R3-B (was D-1, MEDIUM, pre-existing) -- one thin OWNED feature disarms the cross-layer refusal for the WHOLE stack** | `_cross_layer_sliver` computes the own-scale as the GLOBAL minimum wall spacing over all layers, and flags a manufactured cell only when `own / w >= _SLIVER_OWN_SCALE_RATIO`.  A single sliver-thin feature that ONE layer legitimately owns therefore lowers `own` for every manufactured cell in the stack and the screen goes silent on genuine cross-layer slivers.  Measured (verification S8 D-1, `w8_lc_exact.py` arm B, both builds): the O-11 sliver at `delta` = 3e-5 reads `own / w` = 9,287.3, the screen fires and the solve is REFUSED at `R+T` = 2.17 (degree 12) / 23.4 (degree 14); adding a 1e-6-of-a-period liner ONE layer owns drops `own` to 1e-06 and `own / w` to **0.03**, the screen returns `None`, and the same stack is RETURNED at `R+T` = **23.30**.  Reproducer: `tests/unit/test_verify_pmmstack_sliver_round2.py::test_an_owned_liner_anywhere_disarms_the_cross_layer_refusal`.  NOT fixed here, deliberately: the repair is to score `own` per flagged cell against the finest spacing of the layers that own that cell's neighbours, which needs the per-cell owner sets `_pmm_union_grid` already returns but is a change to the SCREEN, i.e. to the input of every census in rounds 1-3, and would have to be re-measured against the 27,904-cell ordinary-geometry population that sizes `_SLIVER_OWN_SCALE_RATIO`.  It is not a one-line per-layer own-scale.  Round 1 behaves identically, so it is inherited and not a regression, and the caller is not left blind -- the within-layer warning fires on the same stack, though it names the liner rather than the cross-layer pair |
 | **R3-C (was D-2, LOW, pre-existing) -- a KEYED `prepare()` stack is outside the guard entirely** | `_segment_passive` returns False for a `str` payload, so `_stack_provably_passive` is False for any stack carrying material KEYS -- which is the case `prepare()` exists for.  Measured (verification S8 D-2, both builds): a keyed prepared stack with the O-11 sliver at `delta` = 3e-5 solves to `R+T` = **23.42** with the screen never reached, **0** probes and only the plain super-unity warning.  Reproducer: `tests/unit/test_verify_pmmstack_sliver_round2.py::test_a_keyed_prepared_stack_is_outside_the_guard_entirely`.  NOT fixed here: `_PreparedPMMStack.solve` resolves `materials` before it solves, so handing the RESOLVED tensors to the guard is available without materialising anything, but it changes which stacks the guard reaches and needs its own bit-identity and census arms.  This is round 2's R2-C, now with a measurement attached |
 | **R2-A, R2-B, R2-D, R2-E, R2-F** | unchanged from round 2, except that R2-D's published bound is corrected (S7.2) and R2-A now has a sibling in R3-A |
+
+---
+
+## CORRECTIONS 2026-09-11 from the independent round-3 verification
+
+Source: `docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND3_2026_09_11.md` (own
+576-mount / 2,304-row box, six D-5 mounts over four mechanisms, both builds;
+every decision identical on WIN and WSL).  The decisions in this document
+stand; three of its published numbers are properties of its samples:
+
+| published here | verification's reading | consequence |
+|---|---|---|
+| the D-5 population's drop floor is 49.107 (S3, R3-A) | **3.669** over 102 rows on four mechanisms | the R3-A band reaches INSIDE the correct population's drop range (0.64 .. 18.09); no setting of the fraction separates them, as R3-A already says.  One such row (drop 5.205, `err/delta` 741) is returned at `R+T` = 1.00235, BELOW the plain warning bar -- silently |
+| the correct population's `move / w_wide` envelope is 79.032 (1.27x under the 100x bar) | **161.073** on the verification's ladder box; **906.555** on a tapered family (`move` saturates at 4.3e-3 while `w_wide` vanishes) | the move bar is INSIDE the correct population.  The move arm is not what holds correct rows out; the closure arm does.  The verification's decision, with numbers, is NOT to re-derive the bar for 5.45.0: the statistic (a move in units of a vanishing cell width), not its value, is the problem, and no fixed value is safe |
+| the correct population's finite drop envelope is 36.611 (2.73x) | 18.090 on the verification's box (5.53x) | this document's larger envelope stays binding |
+
+Recovery rate: 100 / 102 D-5 rows at 1e-2 (this document: 85 / 88), 88 at
+3e-3, 77 at 1e-3.  Flip census on the verification's fixtures: 11 flips, all
+`truncation -> sliver`, all wrong (`err/delta` 52,048 .. 7.6e+07) and all
+restored by the prescribed grid.
+
+**New open item V-4 (MEDIUM, INHERITED -- round 2 refuses the identical
+rows).**  On one mount (period 1.02 um, `wl` 0.633 um, `n_sup` 3.10, `n_sub`
+2.90+1.10i, theta 1.35, eps 12.25, 3 slices, **degree 4**) at `delta` =
+1.662e-5 / 1.269e-5 / 7.395e-6 three CORRECT answers (`err/delta` 1.051 /
+1.065 / 0.979) are REFUSED: `su_snapped` is exactly 0 (so the absolute bar
+admits them as well), `move / w_wide` = 114.7 / 150.0 / 256.5 -- both arms
+degenerate at once -- and the prescribed remedy moves the answer slightly
+AWAY from a degree-16 reference (0.0592457 returned vs 0.0592724 snapped).
+Degree 4 is supported, and the "degree too low" guard does not fire.  A
+false REFUSAL, not a wrong answer; the subject of a later round.  R3-B was
+reproduced and sharpened (a 2 nm liner plus a 37 pm wall mismatch, own/w =
+54.5, silences the screen: `R+T` = 2.92, `err/delta` 2,573, returned under
+the generic warning; non-monotone in `delta`), and R3-C reproduced
+(`R+T` = 2.7598 returned).

@@ -294,6 +294,28 @@ _SLIVER_ATTRIB_CLOSURE = 1.0e-5
 #: the visible edge of that band (drop 49.107 on a degree-6 mount whose floor
 #: is 2.078e-04, i.e. 4.8x below the trigger).  Same shape of limit as R2-A;
 #: recorded as open item R3-A.
+#:
+#: VERIFIED 2026-09-11 (independent, own 576-mount / 2,304-row box, both
+#: builds; docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND3_2026_09_11.md): the
+#: decision holds -- 42/42 returned answers bit-identical, 13/13 round-2
+#: refusals preserved, 11 one-way flips all wrong (err/delta 5.2e4..7.6e7)
+#: and all restored by the prescribed grid, 0 false positives / 2,304 rows,
+#: analytic == library on 859/859, 100/102 D-5 rows recovered across FOUR
+#: mechanisms (guided-mode resonance, grazing staircase, Fabry-Perot,
+#: near-Wood).  Three of the numbers above are SAMPLE-scoped: the D-5 drop
+#: floor is 3.669 on the wider family (not 49.107; it sits INSIDE the correct
+#: population's 0.64..18.09, which is the structural R3-A floor -- one such
+#: row is returned SILENTLY at R+T 1.00235, below the warning bar); the
+#: correct population's ``move / w_wide`` envelope reaches 161.07 (ladder
+#: box) and 906.6 (tapered family), so the 100x move bar is INSIDE the
+#: correct population and the move arm protects nothing on its own -- the
+#: closure arm carries the decision; the finite-drop correct envelope on that
+#: box is 18.09 (36.611 above stays the binding, larger, envelope).  Open,
+#: inherited from round 2 (V-4, MEDIUM): three CORRECT degree-4 answers on
+#: one mount (n_sup 3.10, n_sub 2.90+1.10i, theta 1.35) are refused with
+#: su_snapped exactly 0 and move/w_wide 115..257 -- both arms degenerate --
+#: and the named remedy makes them slightly worse; round 2 refuses the same
+#: rows.  R3-B and R3-C reproduced (see the build doc).
 _SLIVER_CLOSURE_FRACTION = 1.0e-2
 
 #: ARBITER criterion 2: how far the answer must MOVE, in units of the widest
