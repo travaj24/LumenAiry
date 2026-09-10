@@ -113,6 +113,13 @@ The two builds' hashes DIFFER from each other (`w01` reads
 `cad4e3292332c92e...` on Windows and `72da461acd93daa8...` on WSL), which is
 the control proving 31/31 within a build is evidence rather than luck.
 
+**Every `_warn_stack_energy` call site, before and after.**  Nine in
+`stack.py` on both arms, in the same order, every one still passing
+`stack=self` (or `stack=self._st` on the prepared path); exactly THREE gained
+a `src=` argument -- the two `solve_vs_wavelength` stores and the prepared
+path, i.e. the three whose wavelength is not `stack._src`.  No 1-D caller lost
+its `stack=` and none gained `stack=None`.
+
 **The 1-D and 2-D callers that pass `stack=None`.**
 `git diff bb0527a 24651c8 -- lumenairy/elements/pmm/stack2d.py
 lumenairy/elements/pmm/stack2d_pure.py lumenairy/elements/pmm/twod.py` is
@@ -147,10 +154,16 @@ significant figures.
 |---|---|---|---|
 | correct population's super-unity envelope | 1.0979e-04 (600 rows, 3 fixtures) | **1.24481e-04** (826 rows, 5 fixtures) | 1.24481e-04 |
 | headroom at 1e-3 | 9.11x | **8.03x** | 8.03x |
-| per-fixture envelopes | -- | `C_nir` 9.130e-05, `O11` 1.564e-05, `B_vis` **1.2448e-04**, `D_tele` 1.718e-05 | identical |
+| per-fixture envelopes | -- | `C_nir` 9.130e-05 (281 rows), `O11` 1.564e-05 (236), `B_vis` **1.2448e-04** (293), `D_tele` 1.718e-05 (16) | identical |
+| `S_steep` | -- | **no CORRECT rows at all** -- its own slope (31.4) is above the campaign's 10x "RIGHT" cutoff, so the absolute continuity rule cannot label it | identical |
 
 The claim "9.11x" is a property of the fix's three fixtures.  Adding two more
 raises the family envelope by 13 % and drops the headroom to 8.03x.  The
+`S_steep` row is worth noticing on its own: a device whose physical `dR/dx` is
+31.4 has NO rows the campaign's absolute `err <= 10 delta` rule calls RIGHT,
+at any delta -- the classification rule the whole census rests on is itself a
+`dR/dx = O(1)` assumption, which is the same assumption R2-D raises about the
+move criterion (S5.1).  The
 DECISION the trigger encodes is unaffected -- it still clears the correct
 population, on both builds, by most of a decade -- so this is BOUNDED rather
 than REFUTED, but the report's "9.11x" should be read as a lower bound on the
@@ -705,10 +718,9 @@ single sliver-thin feature that ONE layer legitimately owns therefore lowers
 `own` for every manufactured cell in the stack, and the screen goes silent on
 genuine cross-layer slivers that would otherwise be refused.
 
-Measured (`w8_lc_exact.py` arm B, Windows; WSL identical):
-
-The screen is pure geometry, so the two `own / w` columns below are
-degree-independent; the `R+T` column is the solve's.
+Measured (`w8_lc_exact.py` arm B, Windows; WSL identical to 6 figures).  The
+screen is pure geometry, so the `own` and `own / w` columns are
+degree-independent; the `R+T` columns are the solve's.
 
 | stack | `own` | manufactured cells | `own / w` | screen | `R+T` deg 12 | `R+T` deg 14 | verdict |
 |---|---|---|---|---|---|---|---|
@@ -733,9 +745,8 @@ st.solve()                                                   # returns R+T = 23.
 The caller is not left blind -- the round-2 WITHIN-LAYER warning fires on the
 same stack -- but the message names the liner, not the cross-layer sliver, and
 the solve returns a number that violates the theorem by a factor of 23.
-Round 1 behaves
-identically (the screen is unchanged), so this is not a regression, and it
-does not block the release.  It should be stated as an open item next to R2-B,
+Round 1 behaves identically (the screen is unchanged), so this is not a
+regression and it does not block the release.  It should be stated as an open item next to R2-B,
 because S3.6's "never refused -- it is the geometry the caller asked for"
 reads as if the within-layer arm only ADDS a warning, and in fact its presence
 also REMOVES a refusal.
@@ -785,6 +796,11 @@ BETWEEN the closure bar and the trigger.  The stack is `provably_passive`, so
 | 6.8726e-06 | **+1.9267e-01** | +3.7294e-05 | **5,166x** | 13,665 | **1811** | **0.00193** | `truncation`, RETURNED |
 | 5.2134e-06 | **+1.9323e-01** | +3.7295e-05 | **5,181x** | 18,251 | **2399** | **0.00193** | `truncation`, RETURNED |
 | 3.0000e-06 | **+2.3157e-02** | +3.7295e-05 | **621x** | 3,501 | **3501** | **0.00193** | `truncation`, RETURNED |
+
+Every digit printed above is IDENTICAL on WSL
+(`w11_closure_absolute_wsl.json`): the same three verdicts, the same 5,166x /
+5,181x / 621x drops, the same 0.00193, and a degree ladder agreeing to 10
+significant figures.  This is not a knife-edge.
 
 Read that row by row: the returned answer violates the energy theorem by
 **19 %** and is off by **1,811x to 3,501x the physical wall shift**; the
@@ -915,7 +931,8 @@ round-2 report records; none of the four sliver files produces any.
 | `_SLIVER_OWN_SCALE_RATIO` = 100 | 4,192 random stacks | yes | **3.93x** over 27,904 cells | two-sided, 0.6 decades |
 | `_PASSIVE_ANTIHERM_DEADBAND` = 16 ULP | 200k + 50k directors | yes | **25.5x** above round-off, **9 decades** below `Im(n)` = 1e-6 gain | two-sided by decades |
 | `_SLIVER_Q_EXCESS` = 1e+6 | ordinary vs breaking liners | yes | **2.5 decades / 0.94 decades** | two-sided |
-| test: `min(sliver move) >= 300` | five hand-picked rows | yes | sample 4789.5, family **147.41** | **sample-scoped -- D-3** |
+| test: `min(sliver move) >= 300` (BEFORE) | five hand-picked rows | yes | sample 4789.5, family **147.41** | **sample-scoped -- D-3** |
+| test: the same, RESTATED here (`667f416`) | the two populations the test measures | yes | separation 4789.5 / 3.451 = **1,388x** against a demanded 10x | two-sided, 139x |
 | test: `max(sliver su_snap) <= 1e-6` | same five | yes | 2.465e-13 | 6.6 decades |
 | test: `min(trunc su_snap) >= 1e-4` | three rows | yes | 2.543e-03 | 25x |
 | test: `max(trunc move) <= 33.3` | three rows | yes | 3.451 | 9.7x |
@@ -926,10 +943,10 @@ round-2 report records; none of the four sliver files produces any.
 
 | shape | present? | where |
 |---|---|---|
-| S1 magnitude-ratio defect pin | **yes, once** | D-3 (`min(sliver move) >= 300`) |
+| S1 magnitude-ratio defect pin | **yes, once -- FIXED in this branch** | D-3 (`min(sliver move) >= 300`), restated in `667f416` as a population separation |
 | S2 pre-fix-referencing arm | no -- `test_fail_before_round1_...` forces round 1's `unknown` branch through the CURRENT code path (`st._src = None`), so it does not read a prior build | |
 | S3 env-dependent precondition | no -- the thread-pool test SETS `max_workers` rather than checking the box, and never skips | |
-| S4 floor bar | no bar is closer than 8x to its population except D-3's | |
+| S4 floor bar | no bar in the three files is closer than 8x to its population, D-3's included after the restatement | |
 | S5 exact count / set of nondeterministic machinery | **no** -- `len(fired) == 3`, `len(calls) == 1` and `seen == [_WL]` are all counts of deterministic loop bodies and spy hits, not of a mode census; every population statement is an inequality (`>= 40`, `>= 8`, `>= 4`, `>= 10`, `<= max(1, wrong // 5)`) | |
 
 No `pytest.skip` on a resource check anywhere in the three files.
