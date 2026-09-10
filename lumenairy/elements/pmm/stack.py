@@ -117,8 +117,40 @@ from ._core import (
 # deliberately left a warning for; (a) alone fires on correct solves (it is
 # true from ``delta`` = 3e-3 down, where the answer still tracks the physical
 # shift to 1e-4).  The conjunction confines the behaviour change to stacks that
-# BOTH carry the sliver and violate the theorem -- and every one measured is
-# wrong.
+# BOTH carry the sliver and violate the theorem.
+#
+# ROUND 2 (2026-09-11) -- THE ARBITER, and why the conjunction alone is not
+# enough.  ``docs/audits/VERIFY_PMMSTACK_SLIVER_WALLS_2026_09_11.md`` measured
+# the conjunction BOTH ways and refuted its margins in both directions:
+#
+#   * FALSE POSITIVES.  On a passive stack, super-unity is just as often
+#     ordinary under-convergence as a theorem violation.  110 of 648 realistic
+#     staircase configurations (lossy substrate, theta 1.2-1.45, degree 6-10,
+#     wall steps 0.36-3.6 nm) were REFUSED although their answer tracks the
+#     exact ``delta -> 0`` limit to 0.35-8.8x the physical wall shift -- and
+#     the first-named remedy silenced the refusal without moving the number
+#     (1.03559 vs 1.03557), because it removes the ATTRIBUTION, not the error.
+#   * FALSE NEGATIVES.  On a 120-delta x 3-degree grid the CORRECT population
+#     reaches ``|R+T-1|`` = 9.87e-05 and the WRONG one reaches DOWN to
+#     +7.14e-03 -- BELOW the 1e-2 bar -- so 8 of 660 wrong solves returned
+#     unwarned, with errors to 2.8e-03.
+#
+# Both are one defect: super-unity is the DETECTOR but not the ATTRIBUTION.
+# What attributes, measured, is ONE extra solve at the point where the library
+# is about to raise anyway --
+#
+#     re-solve on the grid the prescribed ``min_feature`` would produce.
+#     If the super-unity VANISHES and the answer MOVES far past the geometric
+#     perturbation that snap describes, the sliver caused it -> REFUSE.
+#     If it SURVIVES, the sliver did not -> fall through to the WARNING and
+#     name degree / n_slices.
+#
+# so round 2 lowers the trigger to ``_SLIVER_TRIGGER_BAR`` (one decade above
+# the correct population's measured envelope) and gates the refusal on that
+# arbiter.  Measured on the shipped bars, 2026-09-11, both builds: false
+# positives 110/648 -> 0/648, false negatives 8/660 -> 4/660, and the arbiter
+# fires on 0 of 600 CONVERGED correct rows (it can only fire on a stack that
+# already reads super-unity above the trigger).
 
 #: FAIL-BEFORE SWITCH for the refusal (2026-09-11).  ``False`` restores the
 #: pre-fix behaviour bit for bit: the super-unity WARNING below, and the wrong
@@ -135,6 +167,67 @@ PMM_SLIVER_GUARD = True
 #: sits 3.4 decades above the first and 2.1 decades below the second.
 _STACK_SUPERUNITY_BAR = 1.0e-2
 
+#: ROUND-2 TRIGGER: the super-unity at which the ARBITER runs.  One decade
+#: below the warning bar, and one decade ABOVE the correct population's
+#: envelope measured as a FAMILY property rather than a sample's -- 720 rows
+#: over THREE fixtures (O-11 1.2/0.85 um, a visible 0.9/0.62 um and a telecom
+#: 1.55/1.31 um stack, continuity slopes 1.15 / 4.44 / 1.04) x degrees
+#: 10/14/18 read max ``|R+T-1|`` = 1.098e-04 among the 391 CORRECT rows
+#: (``validation/probe_pmmstack_sliver_round2/r3_trigger.py``), so this bar
+#: carries 9.1x.  It is the binding constraint on the guard's floor: at 1e-4
+#: the ladder starts refusing correct rows (measured, 1 of 391).
+_SLIVER_TRIGGER_BAR = 1.0e-3
+
+#: ARBITER criterion 1: the super-unity the RE-SOLVE on the prescribed
+#: ``min_feature`` grid is allowed to keep before the sliver stops being the
+#: attributed cause.  One-sided, because ``R + T <= 1`` is what the theorem
+#: says -- a passive stack with an absorbing substrate reads BELOW unity
+#: legitimately.  Measured over 1,133 arbitrated rows on four grids: the
+#: SLIVER population's worst residual super-unity after the snap is 1.54e-06
+#: (6.5x below this bar) while the TRUNCATION population's best is 3.86e-05
+#: (3.9x above it) -- a 1.40-decade gap, and this bar sits in it.
+_SLIVER_ATTRIB_CLOSURE = 1.0e-5
+
+#: ARBITER criterion 2: how far the answer must MOVE, in units of the widest
+#: manufactured cell (which is the largest displacement the prescribed snap
+#: can apply to any wall), before the move stops being the geometric
+#: perturbation itself.  NOT a new constant -- it is the campaign's own
+#: ``err > 100 delta`` WRONG rule, the same one every probe and test in this
+#: family classifies with.  Measured on the same 1,133 rows: CORRECT rows move
+#: at most 26.6x (3.8x below the bar), WRONG rows at least 338x (3.4x above).
+#: Without it the closure criterion alone re-admits 6 false positives whose
+#: truncation super-unity happens to fall BELOW unity on the snapped grid.
+_SLIVER_MOVE_FACTOR = 100.0
+
+#: The WITHIN-LAYER arm (verification defect V-6).  A sliver-thin feature a
+#: single layer OWNS is the geometry the caller asked for, so it is never
+#: refused -- but the same ``1/w^2`` mechanism is already catastrophic there
+#: (measured: a liner at 1e-6 of a period reads err 1.06e-03; at 1e-7, err
+#: 1.05 with ``R+T`` from 0.571 to 4.19).  When the trigger super-unity is met
+#: and the narrowest cell is an OWNED one whose predicted spurious ``|q|``
+#: exceeds the stack's physical index ceiling by this factor, the warning says
+#: so and names the routes that keep the feature on its own grid.  Measured
+#: (``r5_within_layer.py``): ordinary owned cells (0.001-0.30 of a period,
+#: degrees 8-16) read q-excess <= 3.32e+03, i.e. 2.5 decades below; the liners
+#: that actually break AND read super-unity start at 8.79e+06, 0.94 decades
+#: above.
+_SLIVER_Q_EXCESS = 1.0e+6
+
+#: ROUND-2 passivity for a general tensor: how far below zero the smallest
+#: eigenvalue of the anti-Hermitian part ``(eps - eps^H) / 2i`` may sit, in
+#: units of ``max|eps|``, and still count as ROUND-OFF rather than GAIN.  An
+#: EXACTLY Hermitian or exactly diagonal payload needs none of it (the part is
+#: identically zero and ``eigvalsh`` returns exact zeros); what needs it is the
+#: way anisotropic media are actually built -- ``R @ diag(no^2, no^2, ne^2) @
+#: R.T`` is symmetric in exact arithmetic and only nearly so in floats.
+#: MEASURED over 200,000 random rotated uniaxial directors (arbitrary axis,
+#: n = 1.2-4.0): worst spurious ``-lam_min/max|eps|`` = 1.71e-16 = 0.77 ULP,
+#: and 0.00 ULP over 50,000 LOSSY ones.  16 ULP is 20.8x that, and it sits 9
+#: decades below the smallest gain that could matter (an ``Im(n)`` of 1e-6
+#: reads -1.0e-06, i.e. 5.8e+09 ULP).  The sizing constant is the one
+#: ``_WALL_SNAP_DEADBAND`` already uses.
+_PASSIVE_ANTIHERM_DEADBAND = 16.0 * float(np.finfo(float).eps)
+
 #: BAR (a): how much finer than the INPUT geometry a union cell must be before
 #: it counts as manufactured.  Scale-free (a ratio of two widths on one grid),
 #: so it carries no period, wavelength or degree.  Measured on the same
@@ -142,8 +235,20 @@ _STACK_SUPERUNITY_BAR = 1.0e-2
 #: at ratio 3.17e+03 (``w`` = 8.79e-05 against an own-scale 0.2786, degree 20)
 #: -- 1.5 decades above this bar -- while an ordinary NON-CONFORMING stack (two
 #: layers whose walls differ by a real 5% feature: 0.30/0.50 vs 0.35/0.55) reads
-#: 1.33 / 4.0 / 4.0 on its three cross-layer cells, i.e. 1.4-1.9 decades below.  It is an ATTRIBUTION filter, not the pathology
-#: detector: the detector is (b), which is the conjunct with the decades.
+#: 1.33 / 4.0 / 4.0 on its three cross-layer cells, i.e. 1.4-1.9 decades
+#: below.  It is an ATTRIBUTION filter, not the pathology detector.
+#:
+#: ROUND 2 RE-MEASURED IT AND KEPT IT AT 100 (``r6_ratio.py``).  4,192 random
+#: ORDINARY non-conforming two-layer stacks -- every cross-layer wall gap a
+#: real 1-8% feature -- read a largest ratio of 25.4 (p99.9 = 21.8), so the
+#: bar sits 3.9x above the population it must clear.  The verification's M2
+#: coated-taper class reads 12.11 (its own-scale is the 5 nm conformal COAT,
+#: not the ridge), which is INSIDE that ordinary population: no ratio bar can
+#: admit that class without admitting ordinary non-conforming geometry.  And
+#: the class does not carry the defect in any case measured -- at the delta
+#: that is catastrophic on the bare fixture (1e-4, degree 14, err 0.479) the
+#: same delta with an owned liner sized to give ratio 100 / 300 / 1000 reads
+#: err = 1.0 / 0.8 / 4.1 x delta, i.e. CORRECT.
 _SLIVER_OWN_SCALE_RATIO = 100.0
 
 
@@ -191,9 +296,52 @@ def _cross_layer_sliver(layer_segments, min_feature_frac):
             float(own), len(hits))
 
 
+def _segment_passive(stack, eps):
+    """True when ONE segment's permittivity is PROVABLY passive, for the
+    guard's purposes -- the union of two EXACT sufficient conditions:
+
+    * DIAGONAL and lossy-or-lossless (:func:`_tensor_is_passive`, the
+      condition ``_forward_growth_flip`` already uses; unchanged, and free); or
+    * the general statement (ROUND 2): the ANTI-HERMITIAN part
+      ``A = (eps - eps^H) / 2i`` -- which is the part that does the absorbing
+      in the library's ``Im >= 0`` lossy convention -- is POSITIVE
+      SEMI-DEFINITE.  ``A`` is Hermitian by construction, so this is one 3x3
+      ``eigvalsh``, and it is EXACT for the two cases that matter: an exactly
+      Hermitian ``eps`` gives ``A == 0`` identically, and a diagonal one gives
+      ``A = diag(Im)``.  The deadband ``_PASSIVE_ANTIHERM_DEADBAND`` exists
+      only for round-off in how such a tensor is BUILT (see that constant).
+
+    That is the whole anisotropic device class the round-1 guard was silent
+    on: a rotated uniaxial LIQUID-CRYSTAL director (in-plane or out-of-plane,
+    lossless or lossy), a real symmetric out-of-plane tensor, and a gyrotropic
+    ``eps_xy = -eps_yx = i g``.  Measured (verification S4.4): under the
+    round-1 test the O-11 sliver on such a layer read ``R+T`` = 2.183 and only
+    WARNED; measured here (``r7_anisotropic.py``) it is now refused, while the
+    non-Hermitian ``eps_xy = 0.2, eps_yx = 0`` payload -- which no exact
+    argument makes passive -- still keeps the behaviour it had."""
+    if callable(eps) or isinstance(eps, str):
+        return False
+    if is_jax_array(eps):                            # traced payload
+        return False
+    try:
+        M = np.asarray(eps, dtype=_C)
+    except (TypeError, ValueError):                  # unresolvable payload
+        return False
+    if _tensor_is_passive(M):
+        return True
+    if M.ndim != 2 or M.shape != (3, 3):
+        return False
+    A = (M - np.conjugate(M).T) / 2.0j
+    if not np.all(np.isfinite(A)):
+        return False
+    scale = max(float(np.max(np.abs(M))), 1.0)
+    lam = np.linalg.eigvalsh(A)
+    return bool(float(np.min(lam)) >= -_PASSIVE_ANTIHERM_DEADBAND * scale)
+
+
 def _stack_provably_passive(stack):
     """True when ``R + T <= 1`` is a THEOREM for this stack: every layer
-    permittivity provably passive (:func:`_tensor_is_passive`), a LOSSLESS
+    permittivity provably passive (:func:`_segment_passive`), a LOSSLESS
     propagating incidence medium, and a non-gain substrate.
 
     An absorbing superstrate is excluded deliberately, not accidentally: the
@@ -201,8 +349,8 @@ def _stack_provably_passive(stack):
     ABOVE unity there (:func:`~lumenairy.elements.pmm._core._lossy_incidence`
     records the measured 1.00026 / 1.0152 / 1.0303 ladder), so the theorem does
     not hold and the guard must not speak.  Anything this cannot resolve -- a
-    traced index, a callable or unresolved material, an off-diagonal tensor --
-    answers False, which leaves the solve exactly as it was."""
+    traced index, a callable or unresolved material, a LOSSY off-diagonal
+    tensor -- answers False, which leaves the solve exactly as it was."""
     try:
         n_sup, n_sub = complex(stack.n_sup), complex(stack.n_sub)
     except (TypeError, ValueError):                  # traced / callable index
@@ -213,26 +361,73 @@ def _stack_provably_passive(stack):
         return False
     for layer in stack._layers:
         for seg in layer[1]:
-            eps = seg[1]
-            if callable(eps) or isinstance(eps, str):
-                return False
-            try:
-                M = np.asarray(eps, dtype=_C)
-            except (TypeError, ValueError):          # traced payload
-                return False
-            if not _tensor_is_passive(M):
+            if not _segment_passive(stack, seg[1]):
                 return False
     return True
 
 
-def _sliver_refusal(stack, worst):
-    """The refusal message when a stack trips BOTH conjuncts, else ``None``.
+def _narrowest_owned_cell(layer_segments, min_feature_frac):
+    """``(w, degree-free)`` -- the narrowest cell of the grid the cascade ran
+    on that some ONE layer OWNS (both walls), or ``None``.
 
-    Never raises and never changes a number; :func:`_warn_stack_energy` raises
-    on the message.  Costs nothing on a healthy solve: its only caller reaches
-    it after the super-unity test has already fired."""
+    The counterpart of :func:`_cross_layer_sliver`: that one reports the cells
+    the union MANUFACTURED, this one the sliver-thin features the caller
+    ASKED for.  They are the two halves of the same mechanism -- ``1/w^2`` in
+    the nodal operator does not care who owns the walls -- but only the first
+    is ever refused, because the second is the geometry the caller described.
+    """
+    if not layer_segments:
+        return None
+    uw, _eps, owners = _pmm_union_grid(layer_segments, min_feature_frac,
+                                       return_owners=True, warn=False)
+    best = None
+    for i, w in enumerate(np.asarray(uw, dtype=float)):
+        w = float(w)
+        if w <= 0.0 or not (owners[i] & owners[i + 1]):
+            continue
+        if best is None or w < best:
+            best = w
+    return best
+
+
+def _stack_index_ceiling(stack):
+    """The largest physical refractive index anywhere in the stack -- what the
+    spurious modal wavenumbers of a sliver element are measured AGAINST."""
+    vals = []
+    for n in (stack.n_sup, stack.n_sub):
+        try:
+            vals.append(abs(complex(n)))
+        except (TypeError, ValueError):
+            return None
+    for layer in stack._layers:
+        for seg in layer[1]:
+            eps = seg[1]
+            if callable(eps) or isinstance(eps, str) or is_jax_array(eps):
+                return None
+            try:
+                M = np.asarray(eps, dtype=_C)
+            except (TypeError, ValueError):
+                return None
+            vals.append(float(np.sqrt(np.max(np.abs(M)))))
+    return max(vals) if vals else None
+
+
+def _sliver_q_predictor(w_frac, period, degree, wl):
+    """``|q|max ~ 0.65 N(N+1)/4 / (k0 J)`` with ``J = w P / 2`` -- the MEASURED
+    free predictor of a sliver element's spurious modal spectrum, in index
+    units (the constant reads 0.6786 / 0.6575 / 0.6537 / 0.6513 / 0.6485 at
+    degree 8 / 12 / 14 / 16 / 20)."""
+    return 0.65 * (degree * (degree + 1) / 4.0) * wl / (np.pi * w_frac * period)
+
+
+def _sliver_screen(stack):
+    """``(hit, period, degree, wl)`` when this stack trips the GEOMETRIC half
+    of the guard on a stack for which ``R + T <= 1`` is a theorem, else
+    ``None``.  Pure geometry -- it never solves and never raises."""
     if not PMM_SLIVER_GUARD or stack is None:
         return None
+    if getattr(stack, "_sliver_probe", False):
+        return None            # the arbiter's own re-solve is never arbitrated
     try:
         layers = list(stack._layers)
         period = float(stack.period)
@@ -243,8 +438,179 @@ def _sliver_refusal(stack, worst):
     if not layers or not _stack_provably_passive(stack):
         return None
     hit = _cross_layer_sliver([L[1] for L in layers], mf_frac)
-    if hit is None:
+    return None if hit is None else (hit, period, degree)
+
+
+def _sliver_source(stack, src):
+    """The ``(wl, angle, phi)`` record the ARBITER must re-solve at.
+
+    ``src`` is passed EXPLICITLY by the callers whose wavelength is not the
+    stack's own -- the two ``solve_vs_wavelength`` stores and the prepared
+    path -- because ``stack._src`` there is whatever the caller last set with
+    :meth:`~PMMStack.set_source`, i.e. a DIFFERENT physics.  Every ``solve()``
+    site passes nothing and the stack's own record is used."""
+    rec = src if src is not None else getattr(stack, "_src", None)
+    if not isinstance(rec, dict):
         return None
+    try:
+        wl = float(rec["wl"])
+        angle = float(rec["angle"])
+    except (KeyError, TypeError, ValueError):        # traced / unset source
+        return None
+    if not (np.isfinite(wl) and np.isfinite(angle)):
+        return None
+    out = dict(rec)
+    out["wl"], out["angle"] = wl, angle
+    return out
+
+
+def _sliver_answer_move(R_a, T_a, R_b, T_b):
+    """The largest per-order efficiency difference between two solves of the
+    same stack, over the orders they SHARE.
+
+    Both order sets are ``arange(-half, half+1)``, so the shared set is the
+    CENTRED overlap -- no order array is needed and a snapped grid that
+    resolves a different number of orders still compares cleanly."""
+    out = 0.0
+    for A, B in ((R_a, R_b), (T_a, T_b)):
+        A = np.real(np.asarray(A))
+        B = np.real(np.asarray(B))
+        if A.ndim != B.ndim or A.shape[:-1] != B.shape[:-1]:
+            return None
+        k = min(A.shape[-1], B.shape[-1])
+        if k <= 0 or (A.shape[-1] - k) % 2 or (B.shape[-1] - k) % 2:
+            return None
+        ia, ib = (A.shape[-1] - k) // 2, (B.shape[-1] - k) // 2
+        out = max(out, float(np.max(np.abs(A[..., ia:ia + k]
+                                           - B[..., ib:ib + k]))))
+    return out
+
+
+def _sliver_probe_solve(stack, mf_fix, src):
+    """ONE re-solve of this stack on the grid ``min_feature = mf_fix`` would
+    produce -- the arbiter's single measurement, and its whole cost.
+
+    Returns ``(super_unity, R, T)`` or ``None`` when the re-solve cannot be
+    run on this path (a dispersive or keyed stack, an unresolved source, or a
+    solve that raises for its own reasons).  The clone is marked
+    ``_sliver_probe`` so it can never arbitrate itself, and its warnings are
+    the probe's, not the caller's."""
+    import warnings as _warnings
+    try:
+        clone = stack._min_feature_clone(float(mf_fix))
+    except (AttributeError, TypeError, ValueError):  # pragma: no cover
+        return None
+    clone._src = dict(src)
+    clone._sliver_probe = True
+    try:
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("ignore")     # probe noise is not the user's
+            _o, R, T, _J = clone.solve()
+    except (ValueError, NotImplementedError, RuntimeError):
+        # NARROWED to the exception surface a PMM solve can present (the
+        # non-ui broad-except budget, tests/unit/test_audit_except_budget.py),
+        # exactly as ``_union_grid_consensus_check`` narrows its own probe.
+        # SKIP, do not score: a probe that cannot run is NOT evidence either
+        # way, and the caller falls back to the round-1 behaviour.
+        return None
+    tot = (np.real(np.asarray(R)).sum(axis=-1)
+           + np.real(np.asarray(T)).sum(axis=-1))
+    if not np.size(tot) or not np.all(np.isfinite(tot)):
+        return None
+    return (max(float(np.max(tot)) - 1.0, 0.0), R, T)
+
+
+def _sliver_arbiter(stack, worst, R_eff, T_eff, src):
+    """WHICH cause moved this answer -- the sliver, or the truncation the
+    plain super-unity warning has always named?
+
+    Returns ``None`` when the stack does not trip the geometric screen at all
+    (nothing changes), else ``(verdict, evidence)`` with ``verdict`` one of
+
+    ``'sliver'``      the super-unity VANISHES on the prescribed
+                      ``min_feature`` grid AND the answer moves far past the
+                      geometric perturbation that snap describes -> REFUSE.
+    ``'truncation'``  it SURVIVES (or the answer barely moves): the sliver is
+                      present and is not what moved the number -> WARN, and
+                      name ``degree`` / ``n_slices``.
+    ``'unknown'``     the one extra solve could not be run on this path -> the
+                      caller keeps ROUND 1's behaviour exactly.
+
+    Costs ONE solve, and only on a stack that already carries a manufactured
+    sliver, is provably passive, and reads super-unity above
+    ``_SLIVER_TRIGGER_BAR`` -- measured: 0 of 600 converged correct rows, and
+    13 ms mean on the 2-4 layer staircase box where it does fire."""
+    scr = _sliver_screen(stack)
+    if scr is None:
+        return None
+    hit, period, _degree = scr
+    w_wide = hit[3]
+    mf_fix = 2.0 * w_wide * period
+    rec = _sliver_source(stack, src)
+    if rec is None:
+        return ("unknown", None)
+    probe = _sliver_probe_solve(stack, mf_fix, rec)
+    if probe is None:
+        return ("unknown", None)
+    su, R2, T2 = probe
+    move = _sliver_answer_move(R_eff, T_eff, R2, T2)
+    if move is None:                                 # pragma: no cover
+        return ("unknown", None)
+    ev = dict(snapped_super_unity=su, move=move, w_wide=w_wide, mf_fix=mf_fix,
+              hit=hit)
+    attributed = (su <= _SLIVER_ATTRIB_CLOSURE
+                  and move > _SLIVER_MOVE_FACTOR * w_wide)
+    return ("sliver" if attributed else "truncation", ev)
+
+
+def _within_layer_hazard(stack, src):
+    """The WITHIN-LAYER arm (verification defect V-6): the narrowest cell of
+    the grid is one a SINGLE layer owns, and it is thin enough that the same
+    ``1/w^2`` mechanism is already injecting spurious modal wavenumbers far
+    past anything the stack's materials can support.
+
+    Returns ``(w, q_pred, n_max)`` or ``None``.  This is the caller's OWN
+    geometry, so it is never refused -- the warning names it and names the
+    routes that keep the feature on its own grid."""
+    if not PMM_SLIVER_GUARD or stack is None:
+        return None
+    if getattr(stack, "_sliver_probe", False):
+        return None
+    try:
+        layers = list(stack._layers)
+        period = float(stack.period)
+        mf_frac = float(stack.min_feature) / period
+        degree = int(stack.degree)
+    except (AttributeError, TypeError, ValueError):  # pragma: no cover
+        return None
+    if not layers or not _stack_provably_passive(stack):
+        return None
+    rec = _sliver_source(stack, src)
+    if rec is None:
+        return None
+    w = _narrowest_owned_cell([L[1] for L in layers], mf_frac)
+    n_max = _stack_index_ceiling(stack)
+    if w is None or not n_max:
+        return None
+    q = _sliver_q_predictor(w, period, degree, rec["wl"])
+    if q < _SLIVER_Q_EXCESS * n_max:
+        return None
+    return (w, q, n_max)
+
+
+def _sliver_refusal(stack, worst, *, evidence=None):
+    """The refusal message when a stack trips the guard, else ``None``.
+
+    Never raises and never changes a number; :func:`_warn_stack_energy` raises
+    on the message.  Costs nothing on a healthy solve: its only caller reaches
+    it after the super-unity test has already fired.  ``evidence`` is the
+    ARBITER's record when the one extra solve could be run -- the message then
+    states what it measured; without it the message says so, and the caller is
+    on round 1's behaviour."""
+    scr = _sliver_screen(stack)
+    if scr is None:
+        return None
+    hit, period, degree = scr
     w, x_l, x_r, w_wide, own, n_hit = hit
     mf_fix = 2.0 * w_wide * period
     # |q|max ~ 0.65 N(N+1)/4 / (k0 J) with J = w P / 2 and k0 = 2 pi / wl --
@@ -257,8 +623,27 @@ def _sliver_refusal(stack, worst):
         wl = float(stack._src["wl"])
     except (AttributeError, KeyError, TypeError, ValueError):
         wl = float("nan")
-    q_txt = (f"{0.65 * (degree * (degree + 1) / 4.0) * wl / (np.pi * w * period):.3g}"
+    q_txt = (f"{_sliver_q_predictor(w, period, degree, wl):.3g}"
              if np.isfinite(wl) else "0.65 N(N+1)/4 / (k0 J)")
+    if evidence is None:
+        attrib = (
+            "  ATTRIBUTION: the one-solve arbiter could NOT be run on this "
+            "path (no resolved source, or dispersive / keyed materials the "
+            "re-solve cannot materialise), so the sliver is named from the "
+            "geometry and the theorem alone -- which is exactly the 2026-09-11 "
+            "round-1 behaviour.  ")
+    else:
+        attrib = (
+            f"  ATTRIBUTION, MEASURED ON THIS CALL (one extra solve): "
+            f"re-solved on the min_feature={evidence['mf_fix']:.4g} grid the "
+            f"cell is gone and the super-unity GOES WITH IT -- max R+T there "
+            f"is 1+{evidence['snapped_super_unity']:.3g} (bar "
+            f"{_SLIVER_ATTRIB_CLOSURE:g}) -- while the answer MOVES "
+            f"{evidence['move']:.3g} in per-order efficiency, "
+            f"{evidence['move'] / evidence['w_wide']:.4g}x the widest "
+            f"manufactured cell (bar {_SLIVER_MOVE_FACTOR:g}x).  So the "
+            f"SLIVER moved this answer, not degree / n_slices: this refusal "
+            f"is an attribution, not a guess.  ")
     return (
         f"PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the "
         f"shared union grid.  The union of the layers' walls carries {n_hit} "
@@ -270,7 +655,7 @@ def _sliver_refusal(stack, worst):
         f"spurious modal wavenumbers |q| ~ {q_txt} against a physical "
         f"index ceiling of a few, conditioning the interface mode-match as "
         f"1/w^2 -- and this solve returned max R+T = {worst:.6g}, super-unity "
-        f"by more than {_STACK_SUPERUNITY_BAR:g} on a PROVABLY PASSIVE stack "
+        f"by more than {_SLIVER_TRIGGER_BAR:g} on a PROVABLY PASSIVE stack "
         f"with a lossless propagating incidence medium, where R+T <= 1 is a "
         f"theorem.  The answer is WRONG (measured 0.48 to 8.6 in absolute "
         f"per-order efficiency on the reproducer), so it is refused rather "
@@ -287,15 +672,17 @@ def _sliver_refusal(stack, worst):
         f"reproducer); (4) if this is a TAPERED staircase, reduce n_slices or "
         f"raise degree -- the many-interface quasi-resonance the plain "
         f"super-unity warning names can co-occur with the sliver on the same "
-        f"stack, and this refusal cannot tell you which of the two moved the "
-        f"answer.  Choose min_feature where the answer is stationary in "
-        f"BOTH degree and min_feature.  See "
-        f"docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md; set "
-        f"lumenairy.elements.pmm.stack.PMM_SLIVER_GUARD = False to restore "
-        f"the pre-fix warn-and-return behaviour.")
+        f"stack; where the arbiter ran it has already ruled that cause OUT "
+        f"for this solve (see ATTRIBUTION below), and where it could not, it "
+        f"says so.  Choose min_feature where the answer is stationary in "
+        f"BOTH degree and min_feature.  " + attrib
+        + "See docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md and "
+        "docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md; set "
+        "lumenairy.elements.pmm.stack.PMM_SLIVER_GUARD = False to restore "
+        "the pre-fix warn-and-return behaviour.")
 
 
-def _warn_stack_energy(R_eff, T_eff, stack=None):
+def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
     """Energy tripwire for a stack solve -- the PMM counterpart of RCWA's
     ``_check_energy`` (replicated, not imported: pmm does not depend on rcwa
     internals).  Three severities, matching that model:
@@ -316,14 +703,36 @@ def _warn_stack_energy(R_eff, T_eff, stack=None):
       Kept a WARNING (not a raise) so it never breaks an existing working
       solve; reduce ``n_slices`` / raise ``degree`` to clear it.
     * ``R+T > 1`` AND the caller passed the ``stack`` it came from AND that
-      stack trips :func:`_sliver_refusal`'s two conjuncts -> **raise**
-      (O-11, 2026-09-11).  That is the same super-unity reading, ATTRIBUTED:
-      the union grid manufactured a near-coincident-wall sliver and the stack
-      is one for which ``R + T <= 1`` is a theorem, so the number is not
-      merely unreliable, it is wrong -- and the refusal names the
-      ``min_feature`` that removes the cell.  ``stack=None`` (the 2-D caller,
-      and any caller that has not opted in) keeps the warning exactly as it
-      was.
+      stack carries a manufactured near-coincident-wall sliver on a provably
+      passive geometry -> ask :func:`_sliver_arbiter` WHICH cause moved the
+      answer, and act on its verdict (O-11 round 1 2026-09-11, round 2
+      2026-09-11):
+
+      - ``'sliver'`` -> **raise**.  The super-unity vanishes on the
+        prescribed ``min_feature`` grid and the answer moves far past the
+        geometric perturbation that snap describes, so the number is not
+        merely unreliable, it is wrong -- and the refusal names the
+        ``min_feature`` that removes the cell AND what the arbiter measured.
+      - ``'truncation'`` -> **warn** (this bar's ordinary warning, with one
+        sentence saying a sliver is present and is NOT the cause).  Round 1
+        refused 110 of 648 realistic staircases here whose answers were
+        within 0.35-8.8x the physical wall shift.
+      - ``'unknown'`` (the arbiter could not run: keyed / dispersive
+        materials, no resolved source) -> ROUND 1's behaviour, unchanged:
+        raise above ``_STACK_SUPERUNITY_BAR``, warn below it.
+
+      ``stack=None`` (the 2-D caller, and any caller that has not opted in)
+      keeps the warning exactly as it was.
+
+    * ``R+T > 1`` AND the narrowest cell is one a SINGLE layer OWNS and is
+      thin enough to inject spurious ``|q|`` past ``_SLIVER_Q_EXCESS`` times
+      the stack's index ceiling -> **warn** with the mechanism and the
+      per-layer / mortar / 2-D routes (verification defect V-6).  Never
+      refused: that cell is the geometry the caller ASKED for.
+
+    ``src`` is the ``(wl, angle, phi)`` record the arbiter must re-solve at,
+    and is passed explicitly by the callers whose wavelength is not
+    ``stack._src`` -- the two wavelength sweeps and the prepared path.
     """
     R = np.asarray(R_eff)
     T = np.asarray(T_eff)
@@ -342,16 +751,55 @@ def _warn_stack_energy(R_eff, T_eff, stack=None):
             f"{least:.3e}); the efficiency normalisation is non-physical -- a "
             "gain or non-propagating incidence medium slipped past the entry "
             "guards (kz_inc < 0 negates every order).")
+    if worst <= 1.0 + _SLIVER_TRIGGER_BAR:
+        return
+    verdict = _sliver_arbiter(stack, worst, R_eff, T_eff, src)
+    note = ""
+    if verdict is not None:
+        kind, ev = verdict
+        if kind == "sliver":
+            raise ValueError(_sliver_refusal(stack, worst, evidence=ev))
+        if kind == "unknown" and worst > 1.0 + _STACK_SUPERUNITY_BAR:
+            raise ValueError(_sliver_refusal(stack, worst))
+        if kind == "truncation":
+            note = (
+                f"  A near-coincident-wall SLIVER ({ev['hit'][0]:.3g} of a "
+                f"period) IS present on the union grid but is NOT what moved "
+                f"this answer: re-solved on the min_feature={ev['mf_fix']:.4g} "
+                f"grid that removes it, the super-unity SURVIVES at "
+                f"1+{ev['snapped_super_unity']:.3g} and the answer moves only "
+                f"{ev['move'] / ev['w_wide']:.3g}x the cell width.  Raising "
+                f"min_feature will silence nothing here -- reduce n_slices or "
+                f"raise degree.")
+    import warnings
     if worst > 1.0 + _STACK_SUPERUNITY_BAR:
-        refusal = _sliver_refusal(stack, worst)
-        if refusal is not None:
-            raise ValueError(refusal)
-        import warnings
         warnings.warn(
             f"PMMStack.solve: energy not conserved (max R+T = {worst:.3g} > 1) "
             "-- a near-singular interface mode-match in the cascade (e.g. too "
             "many tapered slices). The result is unreliable; reduce n_slices or "
-            "raise degree.", stacklevel=3)
+            "raise degree." + note, stacklevel=3)
+    liner = _within_layer_hazard(stack, src)
+    if liner is not None:
+        w_l, q_l, n_max = liner
+        warnings.warn(
+            f"PMMStack.solve: the narrowest cell of the shared union grid is a "
+            f"WITHIN-LAYER feature this geometry asked for -- {w_l:.3g} of a "
+            f"period ({w_l * float(stack.period):.4g} m), owned by one layer, "
+            f"so it is NOT refused.  But its spectral-element Jacobian scales "
+            f"the nodal Kx^2 as 1/w^2 and injects spurious modal wavenumbers "
+            f"|q| ~ {q_l:.3g} against this stack's physical index ceiling of "
+            f"{n_max:.3g} ({q_l / n_max:.3g}x, bar {_SLIVER_Q_EXCESS:g}x), and "
+            f"this solve read max R+T = {worst:.6g} on a PROVABLY PASSIVE "
+            f"stack where R+T <= 1 is a theorem -- i.e. the SAME mechanism as "
+            f"the cross-layer sliver refusal, on a cell nobody can snap away "
+            f"(measured: a liner at 1e-6 of a period costs err 1.06e-03, at "
+            f"1e-7 err 1.05 with R+T from 0.571 to 4.19).  Keep the feature "
+            f"OFF the shared grid: layer_grids='per-layer' (measured err/d = "
+            f"0.34-0.46 down to 1e-6 of a period, |R+T-1| <= 8.0e-07), the "
+            f"2-D mortar cascade (PMM2DStackPure/Hybrid, which never forms a "
+            f"union), or widen the feature.  See docs/audits/"
+            f"VERIFY_PMMSTACK_SLIVER_WALLS_2026_09_11.md (S4.4, S6.2).",
+            stacklevel=3)
 
 
 class PMMStack:
@@ -3253,7 +3701,13 @@ class PMMStack:
             return iw, R, T, np.asarray(jr)
 
         def _store(iw, R, T, jr):
-            _warn_stack_energy(R, T, stack=self)
+            # ``src`` EXPLICITLY (O-11 round 2): the sweep never writes
+            # ``self._src``, so the stack's own record is whatever the caller
+            # last passed to set_source() -- a DIFFERENT wavelength, which the
+            # arbiter's re-solve must not use.
+            _warn_stack_energy(R, T, stack=self,
+                               src=dict(wl=float(wl[iw]), angle=float(angle),
+                                        phi=0.0))
             R_all[iw], T_all[iw], J_all[iw] = R, T, jr
 
         _mw = (min(os.cpu_count() or 1, int(wl.size)) if max_workers is None
@@ -3472,7 +3926,13 @@ class PMMStack:
             return iw, R, T, np.asarray(jr)
 
         def _store(iw, R, T, jr):
-            _warn_stack_energy(R, T, stack=self)
+            # ``src`` EXPLICITLY (O-11 round 2): the sweep never writes
+            # ``self._src``, so the stack's own record is whatever the caller
+            # last passed to set_source() -- a DIFFERENT wavelength, which the
+            # arbiter's re-solve must not use.
+            _warn_stack_energy(R, T, stack=self,
+                               src=dict(wl=float(wl[iw]), angle=float(angle),
+                                        phi=0.0))
             R_all[iw], T_all[iw], J_all[iw] = R, T, jr
 
         _mw = (min(_os.cpu_count() or 1, int(wl.size)) if max_workers is None
@@ -3881,5 +4341,8 @@ class _PreparedPMMStack:
         R_eff, T_eff, jones = _assemble_jones_farfield(
             Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
             kx0 / k0, N)
-        _warn_stack_energy(R_eff, T_eff, stack=self._st)
+        # ``src`` EXPLICITLY (O-11 round 2): prepare() never requires
+        # set_source, so ``st._src`` is unset or stale on this path.
+        _warn_stack_energy(R_eff, T_eff, stack=self._st,
+                           src=dict(wl=wl, angle=float(angle), phi=0.0))
         return orders, R_eff, T_eff, jones
