@@ -44,6 +44,22 @@ points at the 1-D differentiable solvers (``pmm_jones_1d`` / ``rcwa_jones_1d``
 for a 1-D grating, ``berreman_jones_1d`` for a uniform anisotropic layer -- the
 exact, analytic planar tool).
 
+VERTICAL CELLS ONLY -- this twin has NO ``slant``.  The shear is carried by
+``_layer_eigenmodes_tensor(..., slant=...)``'s convection block, and nothing in
+this module ever passes one, so a slanted cell handed to this twin would come
+back as the VERTICAL answer.  Before 2026-09-11 that is exactly what happened:
+``pmm_jones_2d``'s JAX dispatch did not read ``slant`` either, and all SEVEN
+traced routes (``eps_tensor_cell``, ``n_substrate``, ``n_superstrate``,
+``depth``, ``wavelength``, ``theta``, ``phi``) returned the vertical answer
+silently -- bit-close to the NumPy VERTICAL call (``dR 1.3e-15``) and wrong
+against the NumPy SLANTED one by ``dR 3.7e-03 / dT 5.5e-02 / dJones 1.5e-02``,
+with no warning (defect V1 of
+``docs/audits/VERIFY_HYBRID_SLANT_TRANSMISSION_ANCHOR_2026_09_11.md``).  The
+public entry now REFUSES a slanted PATTERNED cell before reaching here; a
+CONSTANT-valued cell is a measured no-op (``dR 4.9e-17``) and still arrives.
+Any future slant support must be added HERE first -- the refusal upstream is
+what keeps the two in step.
+
 The forward/backward modal split uses the trace-safe ``jnp.argsort`` flux
 selector ``_select_forward_flux_jax`` (already wired into
 ``_layer_eigenmodes_tensor``'s jax branch); the generalized S-matrix cascade
