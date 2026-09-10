@@ -1,0 +1,26 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+  M3 pillar (2,3)      M=4  calls  3  worst equilibrated rcond 4.57e-05
+  M3 pillar (2,3)      M=5  calls  3  worst equilibrated rcond 1.48e-05
+  M3 pillar (2,3)      M=6  calls  3  worst equilibrated rcond 5.29e-06
+  M3 pillar (2,6)      M=4  calls  3  worst equilibrated rcond 1.28e-05
+  M3 pillar (2,6)      M=5  calls  3  worst equilibrated rcond 2.90e-06
+  M3 pillar (2,6)      M=6  calls  3  worst equilibrated rcond 1.08e-06
+  M4 stripe (2,3)      M=4  calls  3  worst equilibrated rcond 2.01e-05
+  M4 stripe (2,3)      M=5  calls  3  worst equilibrated rcond 3.30e-05
+  M4 stripe (2,3)      M=6  calls  3  worst equilibrated rcond 1.90e-05
+  M6 taper (2,3,6)     M=4  calls  6  worst equilibrated rcond 3.27e-05
+  M6 taper (2,3,6)     M=5  calls  6  worst equilibrated rcond 1.09e-05
+  M6 taper (2,3,6)     M=6  calls  6  worst equilibrated rcond 4.39e-06
+
+SITE SUMMARY (M1 screen _INV_RCOND_SCREEN = 1e-08; below it M1 pays for the confirming residual, and NOTHING is refused -- the inverse refusal was withdrawn)
+  mortar E-row (MassE_B W_B)             calls  15  rcond_eq [1.08e-06, 1.01e-04]  below screen: 0
+  mortar H-row (MassH_A V_A)             calls  15  rcond_eq [7.00e-06, 3.88e-04]  below screen: 0
+  mortar interface (I + BA)              calls  15  rcond_eq [3.42e-04, 1.85e-02]  below screen: 0
+
+SEPARABLE vs DENSE cross-mass application
+  grids(2,3) M=6: dense kron     0.34 MB vs factors  0.005 MB (   75.0x)  apply    2.0x faster  identity to 3.2e-16
+  grids(3,6) M=6: dense kron     3.09 MB vs factors  0.014 MB (  225.0x)  apply    6.8x faster  identity to 3.7e-16
+  grids(4,6) M=8: dense kron    21.10 MB vs factors  0.036 MB (  588.0x)  apply   36.4x faster  identity to 4.3e-16
+  grids(6,12) M=6: dense kron    49.44 MB vs factors  0.055 MB (  900.0x)  apply   49.2x faster  identity to 3.8e-16
+
+[exited with code 0]

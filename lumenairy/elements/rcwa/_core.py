@@ -3532,11 +3532,18 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
         # rather than inherit an open corner silently.
         raise NotImplementedError(
             "_layer_eigenmodes_tensor: a SLANTED layer with OUT-OF-PLANE "
-            "coupling (eps_xz/yz/zx/zy) is not supported.  The 2-D slant "
-            "metric is validated for IN-PLANE tensors only; the slant x "
-            "out-of-plane composition is unvalidated (the 1-D gen2 precedent "
-            "hit the lossless trap).  Use an in-plane tensor, or model the "
-            "slant as a z-staircase of vertical out-of-plane layers.")
+            "coupling (eps_xz/yz/zx/zy) is not supported on THIS (Fourier) "
+            "engine.  The 2-D slant metric here is validated for IN-PLANE "
+            "tensors only; the slant x out-of-plane composition is "
+            "unvalidated in this basis (the 1-D gen2 precedent hit the "
+            "lossless trap).  The PURE staggered engine DOES cover the "
+            "combination -- pmm_jones_2d_staggered(..., slant=...) or "
+            "PMM2DStackPure.add_layer(..., slant=...), whose covariant "
+            "congruence is tensor-agnostic (validated per order against "
+            "pmm_jones_1d_slanted at 2.8e-05, "
+            "docs/audits/BUILD_PMM2D_STAGGERED_SLANT_2026_09_10.md B6).  "
+            "Otherwise use an in-plane tensor, or model the slant as a "
+            "z-staircase of vertical out-of-plane layers.")
     if _slanted or any(t is not None for t in (EZX, EZY, EXZ, EYZ)):
         # ---- full-3x3 (out-of-plane) generator path (Li 2003) ---------------
         # Also the SLANT path: a shear breaks the same [W; -V] <-> -lam

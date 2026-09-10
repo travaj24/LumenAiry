@@ -1,0 +1,75 @@
+{
+ "config": {
+  "eps": 4.0,
+  "t": [
+   0.6,
+   0.0
+  ],
+  "M": 6,
+  "grid": 2,
+  "n_orders": 3
+ },
+ "candidates": {
+  "lab_eps": {
+   "candidate_value": 4.0,
+   "wl_over_px": 2.0,
+   "min_abs_q_slanted": 0.0010276604481658628,
+   "min_abs_q_vertical": 0.0010276603964047774,
+   "kind": "oop_q",
+   "nudge_fires_lab_list": true,
+   "nudge_rel_lab": 1.0000000005838672e-07,
+   "nudge_fires_covariant_list": true,
+   "nudge_rel_cov": 1.0000000005838672e-07
+  },
+  "covariant_eps_1_plus_t2": {
+   "candidate_value": 5.4399999999999995,
+   "wl_over_px": 2.33238075793812,
+   "min_abs_q_slanted": 1.2000005984485753,
+   "min_abs_q_vertical": 1.200000598448519,
+   "kind": "oop_q",
+   "nudge_fires_lab_list": false,
+   "nudge_rel_lab": 0.0,
+   "nudge_fires_covariant_list": true,
+   "nudge_rel_cov": 1.0000000005838672e-07
+  },
+  "per_order_alpha2_plus_ta2": {
+   "candidate_value": 1.3599999999999999,
+   "wl_over_px": 1.16619037896906,
+   "min_abs_q_slanted": 0.431641786395194,
+   "min_abs_q_vertical": 1.1313531624704485,
+   "kind": "oop_q",
+   "nudge_fires_lab_list": false,
+   "nudge_rel_lab": 0.0,
+   "nudge_fires_covariant_list": true,
+   "nudge_rel_cov": 1.0000000005838672e-07
+  }
+ },
+ "nudge": {},
+ "stack": {
+  "slanted": {
+   "closure_on_cutoff": 1.0000000000000848,
+   "closure_detuned": 1.0000000000000848,
+   "dJones_on_vs_detuned": 0.0,
+   "dR": 0.0
+  },
+  "vertical": {
+   "closure_on_cutoff": 1.0000000000000355,
+   "closure_detuned": 1.0000000000000355,
+   "dJones_on_vs_detuned": 0.0,
+   "dR": 0.0
+  }
+ },
+ "_env": {
+  "lumenairy": "C:\\tmp\\lum_vslant\\lumenairy\\__init__.py",
+  "version": "5.43.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "arm": "tip",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

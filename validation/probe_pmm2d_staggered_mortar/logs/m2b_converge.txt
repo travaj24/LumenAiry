@@ -1,0 +1,16 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+reference union(N=4) M=6:   23.8s  sumR(Ey) 0.28747575
+reference union(N=4) M=8:  198.9s  sumR(Ey) 0.28718334
+reference self-gap M=6 vs 8: 2.838e-02
+
+  mortar A(N=2,M= 5) | B(N=4,M=6)  vs ref(M=6)  5.67e-01   vs ref(M=8)  5.72e-01 | closure  3.8e-04 |   23.5s
+  mortar A(N=2,M= 7) | B(N=4,M=6)  vs ref(M=6)  2.45e-01   vs ref(M=8)  2.49e-01 | closure  8.7e-07 |   26.0s
+  mortar A(N=2,M= 9) | B(N=4,M=6)  vs ref(M=6)  1.33e-02   vs ref(M=8)  3.26e-02 | closure  1.8e-07 |   36.5s
+  mortar A(N=2,M=11) | B(N=4,M=6)  vs ref(M=6)  1.85e-02   vs ref(M=8)  3.71e-02 | closure  1.8e-07 |   47.0s
+  mortar A(N=2,M=13) | B(N=4,M=6)  vs ref(M=6)  1.10e-02   vs ref(M=8)  2.11e-02 | closure  1.8e-07 |  102.9s
+
+CONFORMING control mortar A(N=4,M=6) vs union ref: 0.000e+00
+H_BLOCK_SWAP=False  vs ref(M=8): 7.280e+01   closure 8.22e+01
+H_BLOCK_SWAP=True   vs ref(M=8): 3.707e-02   closure 1.75e-07
+
+[exited with code 0]

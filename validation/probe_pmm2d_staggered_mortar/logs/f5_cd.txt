@@ -1,0 +1,31 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+
+=== GATE (c) -- ARBITRARY walls on their own 3x3 NU grid ===
+  hybrid PMM (80-px cell) degree=11 n_orders=7: R(0,0)=0.107991438  T(0,0)=0.424112458
+  hybrid PMM (80-px cell) degree=11 n_orders=11: R(0,0)=0.105229909  T(0,0)=0.425973740   self-gap 7.87e-03
+  hybrid PMM (80-px cell) degree=13 n_orders=11: R(0,0)=0.106776687  T(0,0)=0.425271198   self-gap 1.55e-03
+  RCWA (80-px cell) n_orders=11: R(0,0)=0.122451909  T(0,0)=0.409011974
+  RCWA (80-px cell) n_orders=15: R(0,0)=0.119468096  T(0,0)=0.414038409   self-gap 5.03e-03
+  pure NU 3x3  M=4 (q=9)  vs hybrid  2.04e-01 | vs RCWA  2.16e-01  closure  1.1e-04    0.2s
+  pure NU 3x3  M=5 (q=12)  vs hybrid  8.30e-02 | vs RCWA  7.48e-02  closure  2.0e-05    0.9s
+  pure NU 3x3  M=6 (q=15)  vs hybrid  7.12e-03 | vs RCWA  1.62e-02  closure  1.9e-06    3.2s
+  pure NU 3x3  M=7 (q=18)  vs hybrid  4.29e-03 | vs RCWA  1.07e-02  closure  4.2e-08   10.7s
+  hybrid exact-wall degree=11 n_orders=7: R(0,0)=0.129733774
+  hybrid exact-wall degree=11 n_orders=11: R(0,0)=0.127253609   self-gap 7.96e-03
+  hybrid exact-wall degree=13 n_orders=11: R(0,0)=0.128749798   self-gap 1.50e-03
+  pure NU 3x3 @ (0.2371, 0.6183)  M=4  vs hybrid  1.79e-01  closure  2.2e-04
+  pure NU 3x3 @ (0.2371, 0.6183)  M=5  vs hybrid  7.81e-02  closure  4.7e-05
+  pure NU 3x3 @ (0.2371, 0.6183)  M=6  vs hybrid  9.29e-03  closure  1.6e-06
+  pure NU 3x3 @ (0.2371, 0.6183)  M=7  vs hybrid  9.68e-03  closure  4.0e-08
+
+=== GATE (d) -- 4-slice TAPER: NU mortar cascade vs the hybrid ===
+  slice walls (x, fraction of period): ['0.2787-0.6250', '0.2525-0.6533', '0.2264-0.6816', '0.2004-0.7099']
+  hybrid staircase degree=9  R(0,0)=0.083632559  closure  4.1e-03   10.9s
+  hybrid degree 11: self-gap vs previous 8.69e-03
+  hybrid staircase degree=11  R(0,0)=0.089376297  closure  2.4e-03   11.3s
+  NU mortar cascade M=4 (q=9, 4 slices, 5 mortar interfaces)  vs hybrid  2.78e-01  closure  3.4e-03     0.5s
+  NU mortar cascade M=5 (q=12, 4 slices, 5 mortar interfaces)  vs hybrid  1.43e-01  closure  3.5e-04     2.7s
+  NU mortar cascade M=6 (q=15, 4 slices, 5 mortar interfaces)  vs hybrid  4.16e-02  closure  1.3e-05    10.4s
+  NU mortar cascade M=7 (q=18, 4 slices, 5 mortar interfaces)  vs hybrid  3.18e-02  closure  2.1e-06    30.1s
+
+wrote f5_nonuniform.json
