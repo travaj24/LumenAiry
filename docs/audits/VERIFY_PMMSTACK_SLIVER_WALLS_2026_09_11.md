@@ -34,7 +34,7 @@ the fix left as "small, contained" were re-opened and one of them was fixed.
 | 10 | False negatives: 1 row in 138 ("open item B") | **BOUNDED — wider than stated** | **8** returned-but-not-correct rows in 660 samples (5 WRONG, 3 grey) (errors to **2.80e-03**, `R+T−1` to **+7.14e-03**), plus 1 in 40 on the conical path; band = isolated δ, ≤ 0.6% of δ wide |
 | 11 | Remedy: `err/δ` = 1.152–1.154 inside a `2 δ` bar | **CONFIRMED on O-11, REFUTED as scale-free** | 1.1524–1.1535 (O-11) ✓; 1.2073–1.2077 (my telecom fixture) ✓; **3.5127–3.5147** (my 0.9 µm fixture) — 9/9 rows outside `2 δ` |
 | 12 | Open item A (asymmetric snap) is "small, contained" | **REPRODUCED, and FIXED (follow-up 1)** | when it bites the answer is 0.93 / 2.40 / 16.4 from the exact limit; `<=` does not fix it; a 16-ULP deadband does, 11 of 11,418 cases changed, all on-threshold |
-| 13 | `PMM2DStackPure`'s union is the pixel lattice (aspect 1.0) | **CONFIRMED, STRENGTHENED** | aspect exactly 1.0 at N = 8…256, and `add_layer` REFUSES a second lattice, so no non-trivial union can form |
+| 13 | `PMM2DStackPure`'s union is the pixel lattice (aspect 1.0) | **CONFIRMED, STRENGTHENED** | aspect exactly 1.0 at N = 8, 12, 24, 64, 129, and `add_layer` REFUSES a second lattice, so no non-trivial union can form |
 | 14 | `PMM2DStackHybrid` has no union grid | **CONFIRMED** | two different lattices accepted and solved; super-unity 1.0103 → the plain warning, no SLIVER text |
 | 15 | "the mortar route is the safe one" | **CONFIRMED** for this hazard, with one message defect | a within-layer sliver to **1e-6** of a period: `err/d` = 0.34–0.46, `\|R+T−1\|` ≤ 8.0e-07, `n_modes` spread → 7.9e-09. At 1e-7: `LinAlgError: Singular matrix` (loud, unhelpful, not silent) |
 | 16 | Open item E: the onset was mapped only on the classical cascade | **CLOSED by measurement** | conical and slant mapped: 0 false positives, 1 miss in 240 rows (conical, degree 10) |
@@ -609,7 +609,7 @@ against this tree and against the read-only main clone):
 ### S6.1 The two shipped claims
 
 * **`PMM2DStackPure`'s shared grid.** Every cell is `period/N`, aspect ratio
-  **exactly 1.0** at N = 8, 12, 24, 64, 129, 256. Stronger than the audit
+  **exactly 1.0** at N = 8, 12, 24, 64 and 129 (odd sizes included). Stronger than the audit
   states: `add_layer` REFUSES a second patterned layer on a different lattice —
   *"all patterned layers must share ONE common (Nx, Ny) grid (the union-grid
   constraint of the pure staggered cascade)"* — so a non-trivial union is not
@@ -826,6 +826,14 @@ re-measured in S4.3 and remains open. Open item **F** is V-1.
 * **The fix's claim that the geometric screen costs "nothing" on a healthy
   solve.** True by inspection (it is reached only after the super-unity test),
   not timed.
+* **The PREPARED path (`_PreparedPMMStack.solve`) reaching the refusal on a
+  stack that actually carries a sliver.** My bit-identity set exercises
+  `prepare()` on a healthy stack, and the fix's own file covers the
+  no-wavelength message degradation; the prepared path's refusal on a sliver
+  stack is covered by reading (`stack=self._st`), not by a run of mine.
+* **`stabilize='slices'` interacting with the refusal.** The guard raises
+  before `_slices_consensus_check` runs; I did not construct a stack where the
+  two would disagree.
 * **Whether V-1's 17 % figure generalises beyond the parameter box I scanned.**
   It is a census over one product of realistic values, not a measure over
   device space.
@@ -840,8 +848,13 @@ re-measured in S4.3 and remains open. Open item **F** is V-1.
 | `88c0763` | `probe(verify)` — tasks 3–5: the guard attacked both ways, the remedy, the 2-D/mortar route |
 | `5fb8cfb` | `fix(pmm)` — follow-up 1 (the `min_feature` deadband, open item A) and follow-up 2 (open item C's comment) |
 | `bb303ce` | `test(pmm)` — `tests/unit/test_verify_pmmstack_sliver_walls.py` |
+| `28be347` | `docs(pmm)` — this report + the probe README |
+| `ae82b2d` | `changelog` — the two follow-ups and the verification, in `[Unreleased]` |
+| `50e6db2` | `docs(pmm)` — the grey-row band, the negative-control census, what the false positives cost |
+| `c996c08` | `test(pmm)` — the floor test never SKIPS (TESTING_STANDARDS rule 4) |
+| `288ae12` | `probe(verify)` — the measured discriminator for open item F |
 
 Probes: `validation/probe_verify_sliver/` — `v1_bitid.py` + `v_fixtures.py`,
 `v2_mech.py`, `v3_guard.py`, `v4_remedy.py`, `v5_deadband.py`,
-`v6_2d_mortar.py`, `v7_durability.py`, `v9_falsepos.py`, `v10_paths.py`, and
-their JSON on both builds.
+`v6_2d_mortar.py`, `v7_durability.py`, `v9_falsepos.py`, `v10_paths.py`,
+`v11_discriminator.py`, and their JSON on both builds.
