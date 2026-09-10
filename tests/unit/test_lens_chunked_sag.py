@@ -15,23 +15,22 @@ the ULP level *between calls*.  Byte-equality across separate lens calls is
 therefore only guaranteed with auto-promote off, which the fixture pins
 (matching the production runner configuration).
 
-2026-08-13 -- THE TRACED BYTE-IDENTITY PINS NAME ``inverse_map=False``, AND
-THE SCOPE IS THE CONTRACT'S OWN.  Since ``FIX_G8_PROBE_2026_08_12`` the
-inverse-characteristic evaluator ships on, and ``_imap_domain_gate``
-(``_lens_traced.py`` :8466) excludes the band path BY CONSTRUCTION -- ``not
-_chunk_assembly``, "the band path exists to never materialise a full-grid
-float64; handing it one would undo the memory fix it is" (:10311).  So at
-the shipped default a banded traced call and a whole-grid traced call are
-two DIFFERENT inversions (the incumbent coarse-Newton one and the model),
-not two decompositions of one, and byte-identity is not a claim anyone is
-making about them.  ``sag_chunk_rows``'s claim -- every banded op is
-pointwise, so banding changes no value -- is exactly true of the path the
-gate leaves in place, and that is what these pins measure.  The exclusion
-itself is asserted, at the gate, in
+2026-08-13 -- THE TRACED BYTE-IDENTITY PINS NAME ``inverse_map=False``.
+They were scoped that way because, from ``FIX_G8_PROBE_2026_08_12`` (v5.35)
+to v5.43, ``_imap_domain_gate`` excluded the band path BY CONSTRUCTION, so a
+banded call and a whole-grid call at the shipped default were two DIFFERENT
+inversions (the incumbent coarse-Newton one and the model); the pins measured
+the one algorithm both paths shared.  v5.44 retired that exclusion (the band
+path evaluates the model per band), so the pins here are now one of TWO
+byte-identity claims: this file's, at the incumbent inversion, and
+``test_banded_ray_density_and_inverse_map.py``'s, at the evaluator and on
+the ray-density branch (which also used to force banding off).  The
+``inverse_map=False`` scoping is kept because it still names exactly the
+algorithm each pin compares; the retired gate is asserted on both sides in
 ``test_niche_s10_sibling_patterns.py::
-test_row_band_assembly_matches_whole_grid_under_a_carrier``; the measured
-size of the difference and the consequence for AUTO banding at N >= 4096 are
-in ``docs/audits/FIX_RELEASE_FIFTEEN_2026_08_13.md`` S2.2.  ``apply_real_lens``
+test_row_band_assembly_matches_whole_grid_under_a_carrier``.  The measured
+size of the pre-v5.44 difference is in
+``docs/audits/FIX_RELEASE_FIFTEEN_2026_08_13.md`` S2.2.  ``apply_real_lens``
 has no evaluator and is unscoped here.
 """
 import numpy as np

@@ -7116,9 +7116,13 @@ def apply_real_lens_traced(
         pre-feature library; see that flag's own note for the exact-trace
         oracle and the design-121 banner measurement that decided the
         default.  Ignored at ``ray_subsample == 1`` (there is no coarse lattice
-        to replace), with ``inversion_method != 'newton'``, with
-        ``use_gpu=True``, and on the row-band assembly path (which exists
-        precisely so a full-grid float64 is never materialised).
+        to replace), with ``inversion_method != 'newton'`` and with
+        ``use_gpu=True``.  Since v5.44 the row-band assembly path
+        (``sag_chunk_rows``, AUTO at ``N >= 4096``) keeps the evaluator:
+        the model is evaluated per band, in two passes on the ray-density
+        branch so the caustic census sees the whole ``|det J|`` first --
+        one float64 grid plus its finite mask, instead of the four
+        full-grid channels the whole-grid branch materialises.
     newton_max_iters : int, optional
         Newton iteration cap; ``None`` (default) uses the module default
         (12).  Honoured by BOTH the serial and the process-pool inversion
@@ -7504,20 +7508,22 @@ def apply_real_lens_traced(
         ``None`` -> AUTO: row-banded (``max(256, N // 16)`` rows per
         band) when ``N >= 4096``, whole-grid below.  ``0`` forces the
         whole-grid path in BOTH stages; a positive int forces that
-        band size.  Byte-identical to the whole-grid path, WITH ONE
-        NAMED EXCEPTION since v5.35: the band path refuses the
-        inverse-characteristic evaluator by construction (see
-        ``_imap_domain_gate`` and its note below), so on a call the
-        evaluator would otherwise engage -- ``ray_subsample > 1``,
-        ``inversion_method='newton'``, not ``use_gpu``, and the
-        ``'screen'`` amplitude, since ``'ray_density'`` forces the band
-        path off anyway -- banding selects the incumbent coarse-Newton
-        inversion instead.  Byte-identity then holds against the
-        whole-grid path with ``inverse_map=False``, not against the
-        default (measured 2.19e-02 relative on the niche-S10 carrier
-        fixture).  Refused, never degraded: that incumbent is the
-        pre-v5.35 shipped inversion.  Pass ``sag_chunk_rows=0`` on a
-        large-N call to keep the evaluator.
+        band size.  Byte-identical to the whole-grid path AT THE SAME
+        INVERSION -- and since v5.44 that is every inversion the
+        ``ray_subsample > 1`` Newton path offers: the
+        inverse-characteristic evaluator is evaluated per band (two
+        passes on the ray-density branch, for the caustic census), and
+        ``amplitude_model='ray_density'`` bands too (its upsample, NaN
+        pass, transported residual and magnitude swap are pointwise).
+        Between v5.35 and v5.43 the band path REFUSED the evaluator by
+        construction and ``'ray_density'`` forced the band path off, so a
+        banded call silently selected the incumbent coarse-Newton
+        inversion (measured 2.19e-02 relative from the evaluator's
+        answer on the niche-S10 carrier fixture); both exclusions are
+        gone, and ``sag_chunk_rows=0`` is no longer needed to keep the
+        evaluator on a large-N call.  The three post-swap ray-density
+        self-checks are whole-grid reductions and run on the finished
+        field on either path.
     amplitude_model : {'screen', 'ray_density'}, default 'screen'
         Which model supplies the exit-plane AMPLITUDE (the phase is the
         ray-traced OPL either way).
@@ -8329,12 +8335,21 @@ def apply_real_lens_traced(
     from ._lens_real import _resolve_sag_chunk_rows
     _sag_chunk_rows_raw = sag_chunk_rows
     sag_chunk_rows = _resolve_sag_chunk_rows(sag_chunk_rows, N)
+    # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 row 3, closed): ``amplitude_model=
+    # 'ray_density'`` no longer forces the band path OFF.  The magnitude swap,
+    # the residual multiply, the ray-density upsample and its NaN pass are all
+    # pointwise in the exit pixel, so they band exactly as Step 3 does and the
+    # banded field is byte-identical (pinned by
+    # tests/unit/test_banded_ray_density_and_inverse_map.py).  The three
+    # post-swap self-checks are whole-grid REDUCTIONS and run on the finished
+    # field on either path.  The inverse-characteristic evaluator bands too
+    # (a two-pass loop -- see the band assembly), so ``_imap_domain_gate``
+    # below no longer excludes this path either: a banded call at the shipped
+    # default is now the SAME inversion as the whole-grid call.
     _chunk_assembly = (
         sag_chunk_rows is not None and int(sag_chunk_rows) > 0
         and max(1, int(ray_subsample)) > 1
         and inversion_method == 'newton'
-        and not _ray_density   # ray-density does the magnitude swap on the
-                               # whole-grid exit field (below), not per band
     )
     if _chunk_assembly:
         X = Y = None
@@ -8396,9 +8411,9 @@ def apply_real_lens_traced(
         _carrier_src = 'auto'
     if _carrier_src is not None:
         if X is None:
-            # (chunked-assembly path only, which niche D9's origin can never
-            # reach -- ray-density forces ``_chunk_assembly`` off -- but the
-            # axes are split here too so the two constructions cannot drift.)
+            # (chunked-assembly path.  Since v5.44 niche D9's origin CAN reach
+            # it -- ray-density bands -- so the axes are split here exactly as
+            # the whole-grid branch splits them, and the two cannot drift.)
             _cx = (np.arange(E_in.shape[0]) - E_in.shape[0] / 2) * dx
             _cy = _cx
             if _origin_set:
@@ -9142,8 +9157,11 @@ def apply_real_lens_traced(
     # fill" keeps the rectangle but fabricates data outside the disc, which is
     # not a restriction at all.  Both are refuted in
     # FIX_FIT_DOMAIN_SYMMETRY_2026_08_12 S2.
+    # v5.44: ``not _chunk_assembly`` dropped from the gate -- the band path
+    # evaluates the model per band (two passes on the ray-density branch, for
+    # the caustic census), so it no longer has to fall back to the incumbent.
     _imap_domain_gate = (sub > 1 and inversion_method == 'newton'
-                         and not _chunk_assembly and not use_gpu)
+                         and not use_gpu)
     #: True when a fit domain must be resolved even though the resolved basis
     #: cannot apply it to its own forward fit.  Scoped to the calls that
     #: actually build the model, so no spline call that does not build one
@@ -10991,9 +11009,13 @@ def apply_real_lens_traced(
     #   inversion_method newton the 'fit' path is already a per-pixel exit
     #                           polynomial, and 'backward_trace' has no
     #                           forward fits to build a map from;
-    #   not _chunk_assembly     the band path exists to never materialise a
-    #                           full-grid float64; handing it one would undo
-    #                           the memory fix it is;
+    #   (not _chunk_assembly    RETIRED in v5.44: the band path used to refuse
+    #                           the model because evaluating it meant four
+    #                           full-grid float64 channels; the band loop now
+    #                           evaluates it per band, keeping only |det J|
+    #                           and its finite mask whole for the census
+    #                           median, so the memory fix and the model
+    #                           coexist -- see the two-pass band assembly;)
     #   not use_gpu             the fits live on the device and the map's
     #                           kernel is a CPU numba/NumPy pair;
     _imap = None
@@ -11135,6 +11157,23 @@ def apply_real_lens_traced(
         opl_map = _opl_by_backward_trace(
             E_analytic, lens_prescription, wavelength, dx,
             N_grid=N, ray_subsample=sub)
+    elif _imap is not None and _chunk_assembly:
+        # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 row 3): the model is evaluated
+        # PER BAND inside the row-band assembly below -- two passes on the
+        # ray-density branch (|det J| first, for the caustic census's median /
+        # min / max / sign scan, then the other three channels), one pass
+        # otherwise -- so none of the four full-grid channels is built here.
+        # ``amp`` is dead on the preserve path exactly as it is on the
+        # coarse-Newton band path (Step 3 combines with ``E_analytic``); on
+        # the 'remap' path it stays, for the origin support measurement.
+        if preserve_input_phase:
+            del amp
+        opl_map = None
+        _im_xin = _im_yin = _im_detj = None
+        _im_relax = (np.sqrt(2.0) * sub * dx
+                     + float(_exit_support.feather
+                             if _exit_support.feather is not None
+                             else _SUPPORT_BOUND_FEATHER_CELLS * sub * dx))
     elif _imap is not None:
         # ---- the inverse characteristic, evaluated at EVERY exit pixel -----
         # This replaces the whole coarse-lattice chain below it: the Newton on
@@ -11424,9 +11463,31 @@ def apply_real_lens_traced(
     # sub=1) and upsampled identically, so the ray-density magnitude and the
     # traced OPL phase share exit positions.  ``_chunk_assembly`` is forced off
     # for ray-density, so X/Y exist here.
+    def _warn_ray_density_fold():
+        """The fold-caustic warning, shared by the whole-grid closure call
+        site and the v5.44 banded census (which learns of the fold only after
+        its first pass, inside the band assembly)."""
+        import warnings as _rd_warn
+        _rd_warn.warn(
+            "apply_real_lens_traced: amplitude_model='ray_density' "
+            "detected a fold caustic (det J -> 0 or a sign change) in the "
+            "ray map.  The single-branch ray-density amplitude is CAPPED "
+            "there (finite, never inf/nan) but is UNRELIABLE near the fold "
+            "-- this mode does NOT sum the multi-valued ray branches with "
+            "the KMAH/Maslov phase.  Use apply_real_lens_gbd or "
+            "apply_real_lens_fga for caustic-faithful amplitude.",
+            RuntimeWarning, stacklevel=3)
+
     ard_map = None
     if _ray_density:
-        if _imap is not None:
+        if _imap is not None and _chunk_assembly:
+            # v5.44: deferred to the two-pass band assembly below, which runs
+            # this closure's census and amplitude per band (see
+            # ``_ray_density_amp_grid``'s docstring: everything below the
+            # inversion is shared, and the band loop is one more source of
+            # the entrance point -- the same model, one band at a time).
+            pass
+        elif _imap is not None:
             # The inverse characteristic already solved the inversion at every
             # exit pixel, so there is no second Newton, no coarse amplitude
             # lattice and no upsample: the amplitude closure runs ONCE, at full
@@ -11460,6 +11521,17 @@ def apply_real_lens_traced(
                     _pa > 1e-6, _pz / np.maximum(_pa, 1e-300), 1.0 + 0.0j)
                 del _pz, _pa
             _im_detj = None
+        elif sub > 1 and _chunk_assembly:
+            # v5.44: the coarse ray-density lattice is built exactly as the
+            # whole-grid branch below builds it (same closure; ``Xs``/``Ys``
+            # are element-identical to ``X[::sub, ::sub]``).  Its upsample,
+            # NaN pass, the residual and the magnitude swap run per band in
+            # the assembly loop; only the SMALL coarse arrays survive here.
+            ard_coarse = _ray_density_amp_grid(Xs, Ys)
+            _ard_coarse_clean = np.where(np.isnan(ard_coarse), 0.0, ard_coarse)
+            _nan_rd_coarse = (np.isnan(ard_coarse).astype(np.float64)
+                              if bool(np.isnan(ard_coarse).any()) else None)
+            del ard_coarse
         elif sub > 1:
             Xs_rd = X[::sub, ::sub]
             Ys_rd = Y[::sub, ::sub]
@@ -11558,20 +11630,15 @@ def apply_real_lens_traced(
         # Release the cached entrance-grid residual pair (2 float64 N^2
         # arrays -- 1 GiB at the N = 8192 fine retrace leg): it is only ever
         # needed while the residual map is being built.
-        _pip_res_ri[0] = None
-        _rd_entrance_coarse[0] = None
-        _rd_resid_coarse[0] = None
+        # v5.44: on the band path the residual map is built INSIDE the band
+        # assembly, so the pair (and the coarse residual / entrance stash) is
+        # released there instead.
+        if not _chunk_assembly:
+            _pip_res_ri[0] = None
+            _rd_entrance_coarse[0] = None
+            _rd_resid_coarse[0] = None
         if _rd_fold_detected[0]:
-            import warnings as _rd_warn
-            _rd_warn.warn(
-                "apply_real_lens_traced: amplitude_model='ray_density' "
-                "detected a fold caustic (det J -> 0 or a sign change) in the "
-                "ray map.  The single-branch ray-density amplitude is CAPPED "
-                "there (finite, never inf/nan) but is UNRELIABLE near the fold "
-                "-- this mode does NOT sum the multi-valued ray branches with "
-                "the KMAH/Maslov phase.  Use apply_real_lens_gbd or "
-                "apply_real_lens_fga for caustic-faithful amplitude.",
-                RuntimeWarning, stacklevel=2)
+            _warn_ray_density_fold()
     if _imap is not None:
         # The inverse map's full-grid channels are consumed by here: the OPL is
         # ``opl_map``, the amplitude is ``ard_map``, and the entrance pullback
@@ -11650,210 +11717,45 @@ def apply_real_lens_traced(
         # region / opl depend on E_in), and carrier != 'auto'; the factory
         # enforces all four.
         E_analytic = np.ones_like(E_analytic)
-    if _chunk_assembly and opl_map is None:
-        # Row-band assembly: upsample + delta-phase + combine + masks per
-        # (chunk_rows x N) band, writing into E_analytic in place (it is not
-        # read again after its own band is consumed).  Element-identical to
-        # the whole-grid branch below: map_coordinates interpolates each
-        # output point independently from the WHOLE coarse grid (true at
-        # ANY spline order -- the prefilter runs on the coarse INPUT, which
-        # is never banded), and every other op is pointwise; the band
-        # aperture term ``x[j]^2 + x[i]^2`` reproduces
-        # ``(X**2 + Y**2)[r0:r1]`` exactly.  The OPL upsample uses the SAME
-        # ``_opl_up_order`` (cubic under an engaged carrier, R7) the
-        # whole-grid path uses -- see the note at its definition.
-        from scipy.ndimage import map_coordinates
-        cr = int(sag_chunk_rows)
-        r_ap_sq = (aperture / 2) ** 2 if aperture is not None else None
-        E_out = E_analytic
-        for r0 in range(0, N, cr):
-            r1 = min(N, r0 + cr)
-            ii_b, jj_b = np.indices((r1 - r0, N), dtype=np.float64)
-            if r0:
-                ii_b += r0
-            # ii/sub, not ii*Ns/N: exact for any sub (see the whole-grid
-            # OPL upsample -- same lattice, same walk bug otherwise).
-            coords_b = np.array([ii_b / sub, jj_b / sub])
-            opl_b = map_coordinates(_opl_coarse_clean, coords_b,
-                                    order=_opl_up_order, mode='nearest',
-                                    prefilter=(_opl_up_order > 1))
-            # NaN mask stays order-1 (crisp ray-domain boundary), exactly as
-            # the whole-grid path does -- including its NaN-pass guard, so the
-            # banded and whole-grid routes stay element-identical to each
-            # other as well as to their pre-guard selves.
-            if _nan_coarse is not None:
-                nan_b = map_coordinates(_nan_coarse, coords_b,
-                                        order=1, mode='nearest')
-            else:
-                nan_b = None
-            del ii_b, jj_b, coords_b
-            if nan_b is not None:
-                opl_b = np.where(nan_b > 0.5, np.nan, opl_b)
-            valid_b = np.isfinite(opl_b)
-            if preserve_input_phase:
-                dp_b = np.where(
-                    valid_b, k0 * opl_b - phase_analytic_lens[r0:r1], 0.0)
-            else:
-                dp_b = np.where(valid_b, k0 * opl_b, 0.0)
-            pe_b = np.exp(1j * dp_b)
-            if _opl_piston_phasor is not None:
-                pe_b *= _opl_piston_phasor      # absolute-OPL piston (in place)
-            if pe_b.dtype != target_cdtype:
-                pe_b = pe_b.astype(target_cdtype)
-            if preserve_input_phase:
-                band = E_analytic[r0:r1] * pe_b
-            else:
-                band = amp[r0:r1] * pe_b
-            band = np.where(valid_b, band, target_cdtype.type(0))
-            if r_ap_sq is not None:
-                h_b = x[None, :] ** 2 + _y_ax[r0:r1, None] ** 2
-                band = np.where(h_b <= r_ap_sq, band,
-                                target_cdtype.type(0))
-            E_out[r0:r1] = band
-        if E_out.dtype != target_cdtype:
-            E_out = E_out.astype(target_cdtype)
-        call_progress(progress, 'real_lens_traced', 1.0, 'done')
-        return E_out
-    # ---- PRIVATE DIAGNOSTIC PROBE (niche C15's independent oracle) ---------
-    # A caller that passes ``_imap_out`` carrying ``probe_rc = (rows, cols)``
-    # gets the FINALISED ``opl_map`` -- and ``ard_map`` where one was built --
-    # sampled at exactly those pixels, in the same dict.  Same contract as
-    # ``_exit_na_out``: private, opt-in, pure-diagnostic, nothing reads it
-    # back, and it retains only the M sampled values, never a full-grid array,
-    # so a call that does not ask pays one dict lookup and keeps every bit and
-    # every byte.
-    #
-    # WHY IT EXISTS.  Deciding which INVERSION is faithful needs the map each
-    # arm actually built, and the returned field carries it only through the
-    # amplitude model, the piston phasor and the residual transport -- three
-    # stages that are common to both arms and would only add noise to the
-    # comparison.  Taken HERE because this is the one point every non-chunked
-    # branch converges on with ``opl_map`` final.
-    if _imap_out is not None and _imap_out.get('probe_rc') is not None:
-        _p_r = np.asarray(_imap_out['probe_rc'][0], dtype=np.intp)
-        _p_c = np.asarray(_imap_out['probe_rc'][1], dtype=np.intp)
-        _imap_out['probe_opl'] = np.asarray(opl_map)[_p_r, _p_c].copy()
-        _imap_out['probe_ard'] = (None if ard_map is None else
-                                  np.asarray(ard_map)[_p_r, _p_c].copy())
-        _imap_out['probe_opl_piston'] = float(_opl_piston)
-        del _p_r, _p_c
+    def _origin_amp_support_verdict(_oa_frac):
+        """niche D9's origin support verdict on the measured fraction --
+        shared by the whole-grid swap and the v5.44 band loop (which
+        accumulates the two sums band by band)."""
+        if _oa_frac > _ORIGIN_AMP_SUPPORT_TOL:
+            _oa_msg = (
+                f"apply_real_lens_traced: origin=({_org_x * 1e3:+.4f}, "
+                f"{_org_y * 1e3:+.4f}) mm decentres the WAVE GRID, but the "
+                f"analytic amplitude leg (apply_real_lens) has no origin "
+                f"and built this element -- its sag, its "
+                f"aperture_diameter / clear_aperture masks and its stop -- "
+                f"about the GRID centre, which is not the optical axis "
+                f"here.  That leg reaches the returned field ONLY through "
+                f"its zero set, and its zeros are deleting "
+                f"{_oa_frac * 100:.6f} % of the ray-density exit power "
+                f"(tolerance {_ORIGIN_AMP_SUPPORT_TOL * 100:.1e} %, i.e. "
+                f"the intended value is zero).  The light removed is real "
+                f"beam clipped by a stop placed at the wrong transverse "
+                f"position, NOT physical vignetting -- the physical "
+                f"entrance stop is applied separately, on absolute "
+                f"entrance coordinates.  Remedies: shrink the grid (or "
+                f"raise window_factor's beam multiple) so the decentred "
+                f"window stays clear of the analytic leg's masks; widen or "
+                f"drop aperture_diameter / the per-surface clear_aperture "
+                f"on the prescription handed to this call (the ray leg "
+                f"already enforces the true stop); or keep origin=(0, 0) "
+                f"and pay for the axis-centred window.  Set "
+                f"lumenairy.elements._lens_traced.ORIGIN_AMP_SUPPORT_CHECK "
+                f"= 'warn' to accept the deletion, 'silent' to stop "
+                f"measuring it.")
+            if ORIGIN_AMP_SUPPORT_CHECK == 'error':
+                raise NotImplementedError(_oa_msg)
+            import warnings as _oa_warn
+            _oa_warn.warn(_oa_msg, RuntimeWarning, stacklevel=3)
 
-    valid = np.isfinite(opl_map)
-    # v5.16.2: free each full-grid intermediate as soon as its consumer is
-    # built (delta_phase/phase after phase_exp; phase_exp after E_out;
-    # opl_map after the phase build).  Pure lifetime fixes -- values and
-    # outputs unchanged.
-    if preserve_input_phase:
-        delta_phase = np.where(valid, k0 * opl_map - phase_analytic_lens, 0.0)
-        del opl_map
-        phase_exp = np.exp(1j * delta_phase)
-        del delta_phase
-        if _opl_piston_phasor is not None:
-            phase_exp *= _opl_piston_phasor     # absolute-OPL piston (in place)
-        if phase_exp.dtype != target_cdtype:
-            phase_exp = phase_exp.astype(target_cdtype)
-        E_out = E_analytic * phase_exp
-        del phase_exp
-    else:
-        phase = np.where(valid, k0 * opl_map, 0.0)
-        del opl_map
-        phase_exp = np.exp(1j * phase)
-        del phase
-        if _opl_piston_phasor is not None:
-            phase_exp *= _opl_piston_phasor     # absolute-OPL piston (in place)
-        if phase_exp.dtype != target_cdtype:
-            phase_exp = phase_exp.astype(target_cdtype)
-        E_out = amp * phase_exp
-        del phase_exp
-    # ...and the analytic field itself.  The assembly above is its LAST reader
-    # on BOTH branches (``preserve_input_phase='remap'`` sets the flag False at
-    # its normalisation, so the remap path arrives here through the ``amp``
-    # branch, and the ray-density swap below divides the screen modulus out and
-    # reads ``amp``, never ``E_analytic``).  4.295 GB complex128 at
-    # n_fine = 16384, held to the end of the call.  Pure lifetime.
-    del E_analytic
-    # Zero outside the exit-pupil (ray-coverage) region
-    E_out = np.where(valid, E_out, target_cdtype.type(0))
-    del valid                  # full-grid bool, 0.268 GB at n_fine=16384
-    # And outside the entrance aperture (defensive: in practice the
-    # ray-coverage region is a subset of the entrance aperture, so
-    # this is a no-op except in pathological configurations)
-    if aperture is not None:
-        E_out = np.where(X ** 2 + Y ** 2 <= (aperture / 2) ** 2,
-                         E_out, target_cdtype.type(0))
-    # ---- N12 (P11): swap the exit MAGNITUDE to the ray-density amplitude -----
-    # The screen-mode ``E_out`` above carries the correct traced OPL phase and
-    # the valid / aperture masks (it is 0 outside the ray-covered pupil).  In
-    # ray-density mode we keep that phase (its unit phasor) and replace the
-    # magnitude with ``|E_in|/sqrt(|det J|)`` -- the geometric ray-tube energy
-    # redistribution the screen amplitude lacks.  The unit phasor is 0 exactly
-    # where the screen field is 0 (masked region), so the ray-density field
-    # inherits the same support without a separate mask; NaN ray-density values
-    # (out-of-domain) contribute 0.
-    if _ray_density and ard_map is not None:
-        _absE = np.abs(E_out)
-        with np.errstate(divide='ignore', invalid='ignore'):
-            _unit = np.divide(E_out, _absE,
-                              out=np.zeros_like(E_out), where=_absE > 0)
-        del _absE              # consumed by the divide; 2.147 GB float64
-        _ard = np.where(np.isfinite(ard_map), ard_map, 0.0)
-        ard_map = None         # consumed by the where; 2.147 GB float64
-        # ---- niche D9: the analytic amplitude leg's ZERO SET, measured -------
-        # ``amp`` is the ONE thing an axis-centred ``apply_real_lens`` still
-        # contributes here, and it contributes only where it is exactly 0 (the
-        # swap above divides its modulus out).  Under a decentred ``origin``
-        # that leg placed the element's sag, its aperture / clear_aperture
-        # masks and its stop about the wrong transverse point, so its zeros are
-        # in the wrong place -- harmlessly, IF they do not overlap the beam.
-        # That is measurable, so it is measured rather than assumed.  See
-        # ``ORIGIN_AMP_SUPPORT_CHECK``.
-        if _origin_set and ORIGIN_AMP_SUPPORT_CHECK != 'silent':
-            _oa_w = _ard * _ard
-            _oa_tot = float(_oa_w.sum())
-            _oa_cut = float(_oa_w[amp <= 0.0].sum()) if _oa_tot > 0.0 else 0.0
-            _oa_frac = (_oa_cut / _oa_tot) if _oa_tot > 0.0 else 0.0
-            del _oa_w
-            if _oa_frac > _ORIGIN_AMP_SUPPORT_TOL:
-                _oa_msg = (
-                    f"apply_real_lens_traced: origin=({_org_x * 1e3:+.4f}, "
-                    f"{_org_y * 1e3:+.4f}) mm decentres the WAVE GRID, but the "
-                    f"analytic amplitude leg (apply_real_lens) has no origin "
-                    f"and built this element -- its sag, its "
-                    f"aperture_diameter / clear_aperture masks and its stop -- "
-                    f"about the GRID centre, which is not the optical axis "
-                    f"here.  That leg reaches the returned field ONLY through "
-                    f"its zero set, and its zeros are deleting "
-                    f"{_oa_frac * 100:.6f} % of the ray-density exit power "
-                    f"(tolerance {_ORIGIN_AMP_SUPPORT_TOL * 100:.1e} %, i.e. "
-                    f"the intended value is zero).  The light removed is real "
-                    f"beam clipped by a stop placed at the wrong transverse "
-                    f"position, NOT physical vignetting -- the physical "
-                    f"entrance stop is applied separately, on absolute "
-                    f"entrance coordinates.  Remedies: shrink the grid (or "
-                    f"raise window_factor's beam multiple) so the decentred "
-                    f"window stays clear of the analytic leg's masks; widen or "
-                    f"drop aperture_diameter / the per-surface clear_aperture "
-                    f"on the prescription handed to this call (the ray leg "
-                    f"already enforces the true stop); or keep origin=(0, 0) "
-                    f"and pay for the axis-centred window.  Set "
-                    f"lumenairy.elements._lens_traced.ORIGIN_AMP_SUPPORT_CHECK "
-                    f"= 'warn' to accept the deletion, 'silent' to stop "
-                    f"measuring it.")
-                if ORIGIN_AMP_SUPPORT_CHECK == 'error':
-                    raise NotImplementedError(_oa_msg)
-                import warnings as _oa_warn
-                _oa_warn.warn(_oa_msg, RuntimeWarning, stacklevel=2)
-        E_out = _ard * _unit
-        # The ray-density magnitude and the unit phasor are consumed by that
-        # one multiply -- 2.147 + 4.295 GB at n_fine = 16384, both caught live
-        # in the census (sec 2.3) while the readout was building its own grids.
-        del _ard, _unit
-        # preserve_input_phase='remap': multiply the geometrically-transported
-        # input-residual phasor onto the k0*opl exit phase (audit S6.7).  Unit
-        # modulus by construction, identity where the pullback is undefined.
-        if _rd_resid_map is not None:
-            E_out = E_out * _rd_resid_map.astype(E_out.dtype, copy=False)
-            _rd_resid_map = None       # consumed; 4.295 GB complex128
+    def _ray_density_self_checks(E_out):
+        """The three post-swap ray-density self-checks (energy, halo,
+        retained band) -- whole-grid REDUCTIONS over the finished field,
+        shared by the whole-grid swap and the v5.44 band assembly."""
         # ---- v5.30 (audit E-M6): post-hoc ENERGY SELF-CHECK ------------------
         # Two N^2 reductions, negligible against the trace + Newton stages.
         # Reference = the input power the element ADMITS (inside the entrance
@@ -11862,8 +11764,11 @@ def apply_real_lens_traced(
         # 0.935 vs 0.990 on the same 1.2x aperture:beam cell).
         _rd_pin = np.abs(np.asarray(E_in, dtype=np.complex128)) ** 2
         if aperture is not None:
-            _rd_pin = np.where(X ** 2 + Y ** 2 <= (aperture / 2) ** 2,
-                               _rd_pin, 0.0)
+            # (axes form -- identical to ``X ** 2 + Y ** 2`` on the whole-grid
+            # path, where X / Y are broadcast views of these very axes, and
+            # the only form available on the band path, where X is None.)
+            _rd_pin = np.where(x[None, :] ** 2 + _y_ax[:, None] ** 2
+                               <= (aperture / 2) ** 2, _rd_pin, 0.0)
         _rd_p_in = float(_rd_pin.sum())
         del _rd_pin
         _rd_p_out = float((np.abs(E_out) ** 2).sum())
@@ -12024,6 +11929,419 @@ def apply_real_lens_traced(
                         RuntimeWarning, stacklevel=2)
                 del _bd_abs
             del _bd_in, _bd_band
+
+    if _chunk_assembly and opl_map is None:
+        # Row-band assembly: upsample + delta-phase + combine + masks per
+        # (chunk_rows x N) band, writing into E_analytic in place (it is not
+        # read again after its own band is consumed).  Element-identical to
+        # the whole-grid branch below: map_coordinates interpolates each
+        # output point independently from the WHOLE coarse grid (true at
+        # ANY spline order -- the prefilter runs on the coarse INPUT, which
+        # is never banded), and every other op is pointwise; the band
+        # aperture term ``x[j]^2 + x[i]^2`` reproduces
+        # ``(X**2 + Y**2)[r0:r1]`` exactly.  The OPL upsample uses the SAME
+        # ``_opl_up_order`` (cubic under an engaged carrier, R7) the
+        # whole-grid path uses -- see the note at its definition.
+        #
+        # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 row 3, closed).  The loop now
+        # also serves ``amplitude_model='ray_density'`` (the upsample of the
+        # coarse ray-density lattice, its NaN pass, the transported residual
+        # and the magnitude swap are pointwise in the exit pixel and run per
+        # band) and the inverse-characteristic evaluator (evaluated per band;
+        # on the ray-density branch in TWO passes, because the closure's
+        # caustic census needs the MEDIAN of |det J| over the finite set
+        # before any band's amplitude can be formed -- pass 1 evaluates all
+        # four channels and keeps only |det J| and its finite mask, pass 2
+        # re-evaluates the other three and finishes).  Every per-pixel
+        # quantity is the whole-grid expression on a slice; the median is
+        # taken over the same values in the same row-major order; the sign
+        # scan's ``any()`` is order-independent -- so the banded field and the
+        # census are identical to the whole-grid path's, at the SAME
+        # inversion (pinned by tests/unit/test_banded_ray_density_and_inverse_map.py).
+        # The three post-swap self-checks are reductions over the finished
+        # field and run once, after the loop, through the shared closure.
+        from scipy.ndimage import map_coordinates
+        cr = int(sag_chunk_rows)
+        r_ap_sq = (aperture / 2) ** 2 if aperture is not None else None
+        E_out = E_analytic
+        _rd_swap_band = bool(_ray_density)
+        _oa_tot = 0.0
+        _oa_cut = 0.0
+        _oa_measure = bool(_rd_swap_band and _origin_set
+                           and ORIGIN_AMP_SUPPORT_CHECK != 'silent')
+
+        def _step3_band(r0, r1, opl_b):
+            """Step 3 on rows ``r0:r1`` -- the whole-grid expressions on a
+            slice (delta-phase, piston, combine, valid / aperture masks)."""
+            valid_b = np.isfinite(opl_b)
+            if preserve_input_phase:
+                dp_b = np.where(
+                    valid_b, k0 * opl_b - phase_analytic_lens[r0:r1], 0.0)
+            else:
+                dp_b = np.where(valid_b, k0 * opl_b, 0.0)
+            pe_b = np.exp(1j * dp_b)
+            if _opl_piston_phasor is not None:
+                pe_b *= _opl_piston_phasor      # absolute-OPL piston (in place)
+            if pe_b.dtype != target_cdtype:
+                pe_b = pe_b.astype(target_cdtype)
+            if preserve_input_phase:
+                band = E_analytic[r0:r1] * pe_b
+            else:
+                band = amp[r0:r1] * pe_b
+            band = np.where(valid_b, band, target_cdtype.type(0))
+            if r_ap_sq is not None:
+                h_b = x[None, :] ** 2 + _y_ax[r0:r1, None] ** 2
+                band = np.where(h_b <= r_ap_sq, band,
+                                target_cdtype.type(0))
+            return band
+
+        def _swap_band(r0, r1, band, ard_b, resid_b):
+            """The ray-density magnitude swap on rows ``r0:r1`` -- the
+            whole-grid swap's expressions on a slice.  The niche-D9 origin
+            support measurement accumulates its two sums band by band."""
+            nonlocal _oa_tot, _oa_cut
+            _absE = np.abs(band)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                _unit = np.divide(band, _absE,
+                                  out=np.zeros_like(band), where=_absE > 0)
+            _ard = np.where(np.isfinite(ard_b), ard_b, 0.0)
+            if _oa_measure:
+                _oa_w = _ard * _ard
+                _oa_tot += float(_oa_w.sum())
+                _oa_cut += float(_oa_w[amp[r0:r1] <= 0.0].sum())
+                del _oa_w
+            band = _ard * _unit
+            if resid_b is not None:
+                band = band * resid_b.astype(band.dtype, copy=False)
+            return band
+
+        def _unit_phasor(_pz):
+            _pa = np.abs(_pz)
+            return np.where(_pa > 1e-6, _pz / np.maximum(_pa, 1e-300),
+                            1.0 + 0.0j)
+
+        if _imap is None:
+            # ---- coarse-Newton lattice, upsampled per band ------------------
+            for r0 in range(0, N, cr):
+                r1 = min(N, r0 + cr)
+                ii_b, jj_b = np.indices((r1 - r0, N), dtype=np.float64)
+                if r0:
+                    ii_b += r0
+                # ii/sub, not ii*Ns/N: exact for any sub (see the whole-grid
+                # OPL upsample -- same lattice, same walk bug otherwise).
+                coords_b = np.array([ii_b / sub, jj_b / sub])
+                opl_b = map_coordinates(_opl_coarse_clean, coords_b,
+                                        order=_opl_up_order, mode='nearest',
+                                        prefilter=(_opl_up_order > 1))
+                # NaN mask stays order-1 (crisp ray-domain boundary), exactly
+                # as the whole-grid path does -- including its NaN-pass guard.
+                if _nan_coarse is not None:
+                    nan_b = map_coordinates(_nan_coarse, coords_b,
+                                            order=1, mode='nearest')
+                    opl_b = np.where(nan_b > 0.5, np.nan, opl_b)
+                band = _step3_band(r0, r1, opl_b)
+                if _rd_swap_band:
+                    _a_rd = map_coordinates(_ard_coarse_clean, coords_b,
+                                            order=1, mode='nearest')
+                    if _nan_rd_coarse is not None:
+                        _nan_rd = map_coordinates(_nan_rd_coarse, coords_b,
+                                                  order=1, mode='nearest')
+                        ard_b = np.where(_nan_rd > 0.5, np.nan, _a_rd)
+                    else:
+                        ard_b = _a_rd
+                    resid_b = None
+                    if _pip_remap and _rd_resid_coarse[0] is not None:
+                        _prc = _rd_resid_coarse[0]
+                        resid_b = _unit_phasor(
+                            map_coordinates(np.real(_prc), coords_b, order=1,
+                                            mode='nearest')
+                            + 1j * map_coordinates(np.imag(_prc), coords_b,
+                                                   order=1, mode='nearest'))
+                    elif _pip_full and _rd_entrance_coarse[0] is not None:
+                        _xe_c, _ye_c = _rd_entrance_coarse[0]
+                        _xe_f = map_coordinates(_xe_c, coords_b, order=1,
+                                                mode='nearest')
+                        _ye_f = map_coordinates(_ye_c, coords_b, order=1,
+                                                mode='nearest')
+                        # niche D9 (row from y, col from x), as whole-grid.
+                        resid_b = _unit_phasor(_pip_sample_residual(
+                            (_ye_f - _org_y) / dy + N / 2.0,
+                            (_xe_f - _org_x) / dx + N / 2.0, _xe_f.shape))
+                    band = _swap_band(r0, r1, band, ard_b, resid_b)
+                del ii_b, jj_b, coords_b
+                E_out[r0:r1] = band
+        else:
+            # ---- the inverse characteristic, evaluated per band --------------
+            _CH = _IMAP.InverseCharacteristic
+            _ch_all = [_CH.CH_X_IN, _CH.CH_Y_IN, _CH.CH_OPL, _CH.CH_DET_J]
+            _ch_p2 = [_CH.CH_X_IN, _CH.CH_Y_IN, _CH.CH_OPL]
+
+            def _eval_band(r0, r1, chans):
+                """The model's channels and its domain mask on rows
+                ``r0:r1``.  ``domain_mask(axes=(x, _y_ax[r0:r1]))`` is the
+                screened hull test on the band's own axis pair -- a per-pixel
+                test whose radial screens are global constants, so a band
+                slice is bit-identical to the full evaluation."""
+                Xb = np.broadcast_to(x[None, :], (r1 - r0, N))
+                Yb = np.broadcast_to(_y_ax[r0:r1, None], (r1 - r0, N))
+                outs = [np.empty((r1 - r0, N), dtype=np.float64)
+                        for _ in chans]
+                _imap.eval_into(Xb, Yb, outs, channels=chans)
+                ok_b = _imap.domain_mask(Xb, Yb, outs[0], outs[1],
+                                         axes=(x, _y_ax[r0:r1]),
+                                         relax=_im_relax)
+                return Xb, Yb, outs, ok_b
+
+            call_progress(progress, 'real_lens_traced', 0.60,
+                          'inverse map: evaluating %d exit pixels in '
+                          '%d-row bands' % (N * N, cr))
+            _n_out = 0
+            if _rd_swap_band:
+                # ---- pass 1: |det J|, the finite mask, and the census --------
+                _absdet = np.empty((N, N), dtype=np.float64)
+                _fin = np.empty((N, N), dtype=bool)
+                _any_fin = False
+                _amin = np.inf
+                _amax = -np.inf
+                _sign_change = False
+                _prev_sd = None
+                _prev_fin = None
+                for r0 in range(0, N, cr):
+                    r1 = min(N, r0 + cr)
+                    _Xb, _Yb, _outs, _ok_b = _eval_band(r0, r1, _ch_all)
+                    _opl_b, _detj_b = _outs[2], _outs[3]
+                    _n_out += int(_ok_b.size - _ok_b.sum())
+                    _opl_b = np.where(_ok_b, _opl_b, np.nan)
+                    _absdet_b = np.abs(_detj_b)
+                    _fin_b = np.isfinite(_absdet_b) & np.isfinite(_opl_b)
+                    _absdet[r0:r1] = _absdet_b
+                    _fin[r0:r1] = _fin_b
+                    if _fin_b.any():
+                        _any_fin = True
+                        _amin = min(_amin, float(np.min(_absdet_b[_fin_b])))
+                        _amax = max(_amax, float(np.max(_absdet_b[_fin_b])))
+                    _sd_b = np.sign(_detj_b)
+                    _mh = _fin_b[:, 1:] & _fin_b[:, :-1]
+                    if bool(np.any((_sd_b[:, 1:] * _sd_b[:, :-1] < 0.0) & _mh)):
+                        _sign_change = True
+                    if r1 - r0 > 1:
+                        _mv = _fin_b[1:, :] & _fin_b[:-1, :]
+                        if bool(np.any((_sd_b[1:, :] * _sd_b[:-1, :] < 0.0)
+                                       & _mv)):
+                            _sign_change = True
+                    if _prev_sd is not None and bool(np.any(
+                            (_prev_sd * _sd_b[0] < 0.0)
+                            & (_prev_fin & _fin_b[0]))):
+                        _sign_change = True
+                    _prev_sd = _sd_b[-1].copy()
+                    _prev_fin = _fin_b[-1].copy()
+                    del _outs, _opl_b, _detj_b, _absdet_b, _sd_b, _mh
+                # the same three fold tests the closure makes, on the same
+                # numbers: the median over the same value multiset in the same
+                # row-major order, the min / max over the same set.
+                _ref = float(np.median(_absdet[_fin])) if _any_fin else 0.0
+                _floor = _RAY_DENSITY_CAUSTIC_FLOOR_REL * _ref
+                if _any_fin:
+                    if _floor > 0.0 and _amin < _floor:
+                        _rd_fold_detected[0] = True
+                    if _amin > 0.0 and _amax / _amin > _RAY_DENSITY_CAUSTIC_MAXMIN:
+                        _rd_fold_detected[0] = True
+                if _sign_change:
+                    _rd_fold_detected[0] = True
+                del _fin, _prev_sd, _prev_fin
+                if _rd_fold_detected[0]:
+                    _warn_ray_density_fold()
+                _absin = np.abs(np.asarray(E_in)).astype(np.float64)
+            # ---- pass 2 (or the only pass): entrance, OPL, Step 3, swap ------
+            for r0 in range(0, N, cr):
+                r1 = min(N, r0 + cr)
+                _Xb, _Yb, _outs, _ok_b = _eval_band(r0, r1, _ch_p2)
+                _xin_b, _yin_b, _opl_b = _outs
+                if not _rd_swap_band:
+                    _n_out += int(_ok_b.size - _ok_b.sum())
+                if not _ok_b.all():
+                    _bad_b = ~_ok_b
+                    _opl_b = np.where(_ok_b, _opl_b, np.nan)
+                    # park the out-of-domain entrance coordinates on the
+                    # origin, exactly as the whole-grid branch does.
+                    np.copyto(_xin_b, 0.0, where=_bad_b)
+                    np.copyto(_yin_b, 0.0, where=_bad_b)
+                    del _bad_b
+                band = _step3_band(r0, r1, _opl_b)
+                if _rd_swap_band:
+                    sh = _Xb.shape
+                    invalid_b = ~np.isfinite(_opl_b)
+                    xef = _xin_b.ravel()
+                    yef = _yin_b.ravel()
+                    _col = (xef - _org_x) / dx + N / 2.0
+                    _row = (yef - _org_y) / dy + N / 2.0
+                    a_in = map_coordinates(_absin, np.vstack([_row, _col]),
+                                           order=1, mode='constant',
+                                           cval=0.0).reshape(sh)
+                    resid_b = None
+                    if _pip_remap and not _pip_full:
+                        # 'lattice' on this route is the RAW sample, as the
+                        # closure stashes it (no renormalisation).
+                        resid_b = _pip_sample_residual(_row, _col, sh)
+                    _absdet_b = _absdet[r0:r1]
+                    _capped = (np.maximum(_absdet_b, _floor)
+                               if _floor > 0.0 else _absdet_b)
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        a_rd = a_in / np.sqrt(_capped)
+                    a_rd = np.where(invalid_b | (~np.isfinite(a_rd)),
+                                    np.nan, a_rd)
+                    if aperture is not None:
+                        r_ent2 = (xef * xef + yef * yef).reshape(sh)
+                        a_rd = np.where(r_ent2 <= (0.5 * aperture) ** 2,
+                                        a_rd, np.nan)
+                    if _sup_bound is not None:
+                        a_rd = a_rd * _support_taper(
+                            _Xb, _Yb, _axes=(x, _y_ax[r0:r1]))
+                    if _pip_full:
+                        # S12 'full': the phasor sampled at the EXACT entrance
+                        # point, renormalised -- the same coordinates as
+                        # ``_row`` / ``_col`` (niche D9: row from y, col
+                        # from x), the whole-grid branch's expression.
+                        resid_b = _unit_phasor(
+                            _pip_sample_residual(_row, _col, sh))
+                    band = _swap_band(r0, r1, band, a_rd, resid_b)
+                    del a_in, a_rd, _col, _row, xef, yef, invalid_b
+                del _outs, _xin_b, _yin_b, _opl_b, _ok_b
+                E_out[r0:r1] = band
+            if _rd_swap_band:
+                del _absdet, _absin
+            _imap_rec['n_out_of_domain'] = int(_n_out)
+            if _imap_out is not None:
+                _imap_out['n_out_of_domain'] = int(_n_out)
+            call_progress(progress, 'real_lens_traced', 0.88,
+                          'inverse map: %d pixels outside the landing hull'
+                          % (_n_out,))
+        if E_out.dtype != target_cdtype:
+            E_out = E_out.astype(target_cdtype)
+        if _rd_swap_band:
+            # the residual pair and the coarse stash were held for the loop.
+            _pip_res_ri[0] = None
+            _rd_entrance_coarse[0] = None
+            _rd_resid_coarse[0] = None
+            if _oa_measure:
+                _origin_amp_support_verdict(
+                    (_oa_cut / _oa_tot) if _oa_tot > 0.0 else 0.0)
+            _ray_density_self_checks(E_out)
+        call_progress(progress, 'real_lens_traced', 1.0, 'done')
+        return E_out
+    # ---- PRIVATE DIAGNOSTIC PROBE (niche C15's independent oracle) ---------
+    # A caller that passes ``_imap_out`` carrying ``probe_rc = (rows, cols)``
+    # gets the FINALISED ``opl_map`` -- and ``ard_map`` where one was built --
+    # sampled at exactly those pixels, in the same dict.  Same contract as
+    # ``_exit_na_out``: private, opt-in, pure-diagnostic, nothing reads it
+    # back, and it retains only the M sampled values, never a full-grid array,
+    # so a call that does not ask pays one dict lookup and keeps every bit and
+    # every byte.
+    #
+    # WHY IT EXISTS.  Deciding which INVERSION is faithful needs the map each
+    # arm actually built, and the returned field carries it only through the
+    # amplitude model, the piston phasor and the residual transport -- three
+    # stages that are common to both arms and would only add noise to the
+    # comparison.  Taken HERE because this is the one point every non-chunked
+    # branch converges on with ``opl_map`` final.
+    if _imap_out is not None and _imap_out.get('probe_rc') is not None:
+        _p_r = np.asarray(_imap_out['probe_rc'][0], dtype=np.intp)
+        _p_c = np.asarray(_imap_out['probe_rc'][1], dtype=np.intp)
+        _imap_out['probe_opl'] = np.asarray(opl_map)[_p_r, _p_c].copy()
+        _imap_out['probe_ard'] = (None if ard_map is None else
+                                  np.asarray(ard_map)[_p_r, _p_c].copy())
+        _imap_out['probe_opl_piston'] = float(_opl_piston)
+        del _p_r, _p_c
+
+    valid = np.isfinite(opl_map)
+    # v5.16.2: free each full-grid intermediate as soon as its consumer is
+    # built (delta_phase/phase after phase_exp; phase_exp after E_out;
+    # opl_map after the phase build).  Pure lifetime fixes -- values and
+    # outputs unchanged.
+    if preserve_input_phase:
+        delta_phase = np.where(valid, k0 * opl_map - phase_analytic_lens, 0.0)
+        del opl_map
+        phase_exp = np.exp(1j * delta_phase)
+        del delta_phase
+        if _opl_piston_phasor is not None:
+            phase_exp *= _opl_piston_phasor     # absolute-OPL piston (in place)
+        if phase_exp.dtype != target_cdtype:
+            phase_exp = phase_exp.astype(target_cdtype)
+        E_out = E_analytic * phase_exp
+        del phase_exp
+    else:
+        phase = np.where(valid, k0 * opl_map, 0.0)
+        del opl_map
+        phase_exp = np.exp(1j * phase)
+        del phase
+        if _opl_piston_phasor is not None:
+            phase_exp *= _opl_piston_phasor     # absolute-OPL piston (in place)
+        if phase_exp.dtype != target_cdtype:
+            phase_exp = phase_exp.astype(target_cdtype)
+        E_out = amp * phase_exp
+        del phase_exp
+    # ...and the analytic field itself.  The assembly above is its LAST reader
+    # on BOTH branches (``preserve_input_phase='remap'`` sets the flag False at
+    # its normalisation, so the remap path arrives here through the ``amp``
+    # branch, and the ray-density swap below divides the screen modulus out and
+    # reads ``amp``, never ``E_analytic``).  4.295 GB complex128 at
+    # n_fine = 16384, held to the end of the call.  Pure lifetime.
+    del E_analytic
+    # Zero outside the exit-pupil (ray-coverage) region
+    E_out = np.where(valid, E_out, target_cdtype.type(0))
+    del valid                  # full-grid bool, 0.268 GB at n_fine=16384
+    # And outside the entrance aperture (defensive: in practice the
+    # ray-coverage region is a subset of the entrance aperture, so
+    # this is a no-op except in pathological configurations)
+    if aperture is not None:
+        E_out = np.where(X ** 2 + Y ** 2 <= (aperture / 2) ** 2,
+                         E_out, target_cdtype.type(0))
+    # ---- N12 (P11): swap the exit MAGNITUDE to the ray-density amplitude -----
+    # The screen-mode ``E_out`` above carries the correct traced OPL phase and
+    # the valid / aperture masks (it is 0 outside the ray-covered pupil).  In
+    # ray-density mode we keep that phase (its unit phasor) and replace the
+    # magnitude with ``|E_in|/sqrt(|det J|)`` -- the geometric ray-tube energy
+    # redistribution the screen amplitude lacks.  The unit phasor is 0 exactly
+    # where the screen field is 0 (masked region), so the ray-density field
+    # inherits the same support without a separate mask; NaN ray-density values
+    # (out-of-domain) contribute 0.
+    if _ray_density and ard_map is not None:
+        _absE = np.abs(E_out)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            _unit = np.divide(E_out, _absE,
+                              out=np.zeros_like(E_out), where=_absE > 0)
+        del _absE              # consumed by the divide; 2.147 GB float64
+        _ard = np.where(np.isfinite(ard_map), ard_map, 0.0)
+        ard_map = None         # consumed by the where; 2.147 GB float64
+        # ---- niche D9: the analytic amplitude leg's ZERO SET, measured -------
+        # ``amp`` is the ONE thing an axis-centred ``apply_real_lens`` still
+        # contributes here, and it contributes only where it is exactly 0 (the
+        # swap above divides its modulus out).  Under a decentred ``origin``
+        # that leg placed the element's sag, its aperture / clear_aperture
+        # masks and its stop about the wrong transverse point, so its zeros are
+        # in the wrong place -- harmlessly, IF they do not overlap the beam.
+        # That is measurable, so it is measured rather than assumed.  See
+        # ``ORIGIN_AMP_SUPPORT_CHECK``.
+        if _origin_set and ORIGIN_AMP_SUPPORT_CHECK != 'silent':
+            _oa_w = _ard * _ard
+            _oa_tot = float(_oa_w.sum())
+            _oa_cut = float(_oa_w[amp <= 0.0].sum()) if _oa_tot > 0.0 else 0.0
+            _oa_frac = (_oa_cut / _oa_tot) if _oa_tot > 0.0 else 0.0
+            del _oa_w
+            _origin_amp_support_verdict(_oa_frac)
+        E_out = _ard * _unit
+        # The ray-density magnitude and the unit phasor are consumed by that
+        # one multiply -- 2.147 + 4.295 GB at n_fine = 16384, both caught live
+        # in the census (sec 2.3) while the readout was building its own grids.
+        del _ard, _unit
+        # preserve_input_phase='remap': multiply the geometrically-transported
+        # input-residual phasor onto the k0*opl exit phase (audit S6.7).  Unit
+        # modulus by construction, identity where the pullback is undefined.
+        if _rd_resid_map is not None:
+            E_out = E_out * _rd_resid_map.astype(E_out.dtype, copy=False)
+            _rd_resid_map = None       # consumed; 4.295 GB complex128
+        _ray_density_self_checks(E_out)
+
     if E_out.dtype != target_cdtype:
         E_out = E_out.astype(target_cdtype)
     call_progress(progress, 'real_lens_traced', 1.0, 'done')

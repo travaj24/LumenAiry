@@ -377,17 +377,24 @@ def test_row_band_assembly_matches_whole_grid_under_a_carrier():
     w0 = np.asarray(apply_real_lens_traced(E, sag_chunk_rows=0, **kw_nc))
     b0 = np.asarray(apply_real_lens_traced(E, sag_chunk_rows=64, **kw_nc))
     assert np.array_equal(w0, b0)
-    # ... and the reason the scoping is needed, at the SHIPPED default: the
-    # whole-grid call builds the evaluator, the banded call never opens its
-    # gate.  Structural, so it is asserted on the gate itself and not on a
-    # field difference that a fixture change could quieten.
+    # ... and at the SHIPPED default (v5.44): the whole-grid call AND the
+    # banded call both build and engage the evaluator -- the band path now
+    # evaluates the model per band instead of refusing it -- and the two
+    # fields are byte-identical.  Between v5.35 and v5.43 the banded arm
+    # reported ``gate_open=False`` and returned the incumbent coarse-Newton
+    # inversion (2.19e-02 relative away); that scoping is retired, and this
+    # is asserted on the gate itself so the retirement cannot silently
+    # regress either way.
     kw_d = dict(kw)
     del kw_d['inverse_map']
     rec_w, rec_b = {}, {}
-    apply_real_lens_traced(E, sag_chunk_rows=0, _imap_out=rec_w, **kw_d)
-    apply_real_lens_traced(E, sag_chunk_rows=32, _imap_out=rec_b, **kw_d)
+    w_d = np.asarray(apply_real_lens_traced(E, sag_chunk_rows=0,
+                                            _imap_out=rec_w, **kw_d))
+    b_d = np.asarray(apply_real_lens_traced(E, sag_chunk_rows=32,
+                                            _imap_out=rec_b, **kw_d))
     assert rec_w['gate_open'] and rec_w['engaged'], rec_w
-    assert not rec_b['gate_open'] and not rec_b['engaged'], rec_b
+    assert rec_b['gate_open'] and rec_b['engaged'], rec_b
+    assert np.array_equal(w_d, b_d)
 
 
 # ===========================================================================

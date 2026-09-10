@@ -186,6 +186,100 @@ change.
 * `LUMENAIRY_DISABLE_JAX=1` forces the JAX path off even when `jax` is
   installed (an escape hatch for backend-parity debugging).
 
+### Changed -- the traced ROW-BAND assembly now serves `amplitude_model='ray_density'` AND the inverse-characteristic evaluator (AUDIT_TRACED_MEMORY_2026_08_09 row 3, closed)
+
+`apply_real_lens_traced(sag_chunk_rows=...)` (AUTO at `N >= 4096`) had two
+named exclusions: `'ray_density'` forced the band path OFF (the magnitude swap
+ran on the whole-grid exit field), and `_imap_domain_gate` carried
+`not _chunk_assembly`, so a banded call at the shipped default silently
+selected the incumbent coarse-Newton inversion instead of the evaluator -- a
+DIFFERENT answer (2.19e-02 relative on the S10 carrier fixture).  Both are
+gone.
+
+* **Ray density bands.**  The coarse ray-density lattice, its NaN pass, the
+  transported residual (`'lattice'` and `'full'` sampling) and the magnitude
+  swap are pointwise in the exit pixel and now run inside the same band loop
+  as Step 3.  The three post-swap self-checks (energy, halo, retained band)
+  are whole-grid REDUCTIONS and run once on the finished field through a
+  shared closure; the niche-D9 origin support measurement accumulates its two
+  sums band by band (a decision against a tolerance, not a field value).
+* **The evaluator bands.**  On the band path the inverse characteristic is
+  evaluated PER BAND -- in TWO passes on the ray-density branch, because the
+  closure's caustic census needs the MEDIAN of `|det J|` over the finite set
+  before any band's amplitude can be formed: pass 1 evaluates all four
+  channels and keeps only `|det J|` and its finite mask (running the min /
+  max and the adjacent-pixel sign scan band-wise with a one-row halo), pass 2
+  re-evaluates the other three and finishes.  The model is evaluated 7/4
+  times (the audit measured one evaluation at 1.9 s on the 8192-square
+  design-121 last group against a 96.9 s element).  `InverseCharacteristic.
+  domain_mask(axes=(x, _y_ax[r0:r1]))` and `_TracedExitSupport.taper_grid`
+  are per-pixel tests whose radial screens are global constants, so a band
+  slice is bit-identical to the full evaluation.
+* **BYTE-IDENTICAL, at the SAME inversion.**  Every per-pixel quantity is the
+  whole-grid expression on a slice; the median is over the same values in the
+  same row-major order; the sign scan's `any()` is order-independent.  Pinned
+  by `tests/unit/test_banded_ray_density_and_inverse_map.py`: `np.array_equal`
+  across preserve / remap (`None`, `'lattice'`, `'full'`) / aperture / piston /
+  origin x band heights 32 / 128 / 7, on BOTH the coarse-Newton and the
+  evaluator routes, with the diagnostics (`n_out_of_domain`, the fold-caustic
+  warning and the three self-check warnings) equal.  The pre-existing pins in
+  `test_lens_chunked_sag.py` and `test_niche_s10_sibling_patterns.py` keep
+  their `inverse_map=False` scoping (it still names the algorithm they
+  compare); S10's gate assertion now requires BOTH arms to engage.
+* **Measured** (this laptop, numpy 2.4 / scipy 1.17; whole-call tracemalloc
+  peak, warm, N=512, sub=16, ray-density + evaluator): 22.6 float64 grids
+  whole-grid -> 10.2 banded.  The standalone prototypes
+  (`../Lumenairy_prototypes/`, 2496 + 336 byte-identical runs) put the
+  assembly's own transient at 24 -> 1.2 grids (coarse-Newton route) and
+  30 -> 3.7 grids (evaluator route) at N=4096.  Wall time is neutral on the
+  coarse route and ~10 % higher on the evaluator route (the 7/4 evaluation).
+  Scaled to the audit's 16384 fine leg the route's transient drops from
+  ~64 GB to ~8 GB.
+* **Not this change's, but visible next to it:** `preserve_input_phase=
+  'remap'`'s residual builder de-chirps by the niche-C6 eikonal in bands of
+  `4194304 // N` rows -- the WHOLE grid below N=2048 -- and
+  `_ResidualEikonal.value` on a full grid is a ~23-grid transient (measured
+  at N=512, identical on both arms).  Harmless at production N (256 rows at
+  16384) and left as it is; it is why the memory pin uses the no-remap arm.
+* Docstrings of `sag_chunk_rows` and `inverse_map` updated; the
+  `_chunk_assembly` / `_imap_domain_gate` comments record the retirement.
+
+### Changed -- complex64 THROUGH the carrier chain (AUDIT_TRACED_MEMORY_2026_08_09 sec 3 / row 12, closed)
+
+The audit measured that requesting complex64 saved 0.0 GB: six helpers in
+`propagators/carrier.py` returned complex128 unconditionally, NumPy promoted
+the product at the first hand-off, and the dtype survived exactly one leg.
+Its prescription is now the implementation: complex64 STORAGE of the smooth
+envelope, float64 CONSTRUCTION of every reference-phase ARGUMENT, and the
+phasor narrowed only after `exp`.
+
+* `_radial_carrier_phase`, `_tilt_ramp`, `_tilt_exactness_phase` and
+  `_sphere_parab_conversion` take `dtype=`.  `None` / `complex128` is the
+  shipped whole-grid `np.exp` (BYTE-IDENTICAL -- pinned); `complex64` builds
+  the SAME expression on row slices of the same float64 operands through the
+  new `_phasor_rows` and stores the result narrowed, which also removes the
+  full-grid complex128 transient.  `_fourier_upsample_crop` pads in the
+  envelope's dtype (its hard complex128 pad sat on the memory-dominant stage);
+  `carrier_referenced_exact_focus_readout` keeps the envelope's dtype instead
+  of its two explicit complex128 casts.  Every call site in the exact readout,
+  `_fine_trace_group_exit` and the chain's group hand-offs passes the dtype of
+  the field the factor multiplies, so a complex128 chain runs the shipped
+  bits and a complex64 one stays complex64.
+* **Precision, measured** (`tests/unit/test_mixed_precision_carrier_helpers.py`,
+  prototypes' `validate_mixed_precision.py`): a complex64 phasor is one
+  float32 rounding from the complex128 one -- max |dz| 4.2e-08, FLAT from
+  3.6e+02 to 3.3e+04 rad of argument -- against a float32-ARGUMENT build that
+  reads 1.5e-05 at 3.6e+02 rad and 9.8e-04 at 3.3e+04 rad (the control the
+  test keeps).  On a synthetic six-leg chain the mixed-precision field keeps
+  complex64 through every leg with relative L2 error growing linearly at
+  ~1.9e-07 per leg (1.1e-06 after six, four decades under the chain's 4e-05
+  energy honesty bar); the shipped helpers fed the same complex64 field upcast
+  at leg 1, reproducing the audit.  The one-group `propagate_traced_carrier_chain`
+  and the exact readout are pinned to return complex64 for a complex64 input.
+* NOT claimed: accumulated error through the real design-121 chain (needs the
+  `.zmx`); the readout's internal Bluestein arrays beyond the two named casts
+  were not dtype-traced.
+
 ## [5.43.0] — 2026-09-09
 
 ### Changed -- deprecation horizon slipped 5.44 -> 5.46 (fourth deliberate one-line slip)

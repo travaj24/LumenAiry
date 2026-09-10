@@ -724,8 +724,51 @@ class CarrierReferencedField(NamedTuple):
     dx: float
 
 
+#: Row-band size (bytes of complex128 scratch) for :func:`_phasor_rows`.
+_PHASOR_BAND_BYTES = 32e6
+
+
+def _phasor_c64(dtype):
+    """True when a reference-phase helper was asked for a complex64 phasor.
+
+    v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 sec 3.3 / row 12).  ``dtype=None``
+    (every pre-v5.44 call) and ``complex128`` select the shipped whole-grid
+    ``np.exp`` -- byte-identical.  Only an explicit ``complex64`` takes the
+    banded build below."""
+    return dtype is not None and np.dtype(dtype) == np.dtype(np.complex64)
+
+
+def _phasor_rows(arg_rows, shape, dtype):
+    """``exp(arg)`` assembled in row bands and STORED as ``dtype``.
+
+    THE PRECISION BOUNDARY, drawn where the audit said it belongs
+    (AUDIT_TRACED_MEMORY_2026_08_09 sec 3.4): the ARGUMENT of a reference
+    phase -- ``k S`` with ``k S`` up to ~1e6 rad -- has no float32
+    representation at all, but its VALUE (a unit phasor) is representable
+    in complex64 to one float32 rounding.  So ``arg_rows(r0, r1)`` returns
+    the SAME complex128 expression the whole-grid helper evaluates, on a row
+    slice of the same float64 operands, and only the finished phasor is
+    narrowed.  Measured on the four helpers this serves: max |c64 - c128|
+    = 4.2e-08, flat from 357 rad to 3.3e4 rad of argument, against a
+    float32-ARGUMENT build that reads 1.5e-05 at 357 rad and 9.8e-04 at
+    3.3e4 rad (Lumenairy_prototypes/validate_mixed_precision.py).
+
+    Why the shipped complex64 request saved 0.0 GB: six helpers returned
+    complex128 unconditionally, NumPy promoted the product, and the dtype
+    survived exactly one chain leg.  With the phasor built in the field's
+    own dtype the promotion never happens.  Banding also removes the
+    full-grid complex128 transient the whole-grid ``np.exp`` allocates."""
+    ny, nx = int(shape[-2]), int(shape[-1])
+    out = np.empty((ny, nx), dtype=dtype)
+    br = int(max(16, min(ny, _PHASOR_BAND_BYTES // (16 * max(nx, 1)))))
+    for r0 in range(0, ny, br):
+        r1 = min(ny, r0 + br)
+        out[r0:r1] = np.exp(arg_rows(r0, r1))
+    return out
+
+
 def _radial_carrier_phase(shape, dx, dy, wavelength, R, sign, bld=np,
-                          centre=(0.0, 0.0)):
+                          centre=(0.0, 0.0), dtype=None):
     """``exp(sign*i*k*(x^2+y^2)/(2R))`` on the centred grid (float64
     carrier argument, cast to nothing here -- caller casts).  Built on backend
     ``bld`` (host NumPy for JAX, the device namespace otherwise); ``bld is np``
@@ -733,7 +776,12 @@ def _radial_carrier_phase(shape, dx, dy, wavelength, R, sign, bld=np,
 
     ``centre`` (niche D1) DECENTRES the parabola to ``(x0, y0)`` -- the
     transverse position of a tilted congruence's chief ray.  The default
-    ``(0, 0)`` is short-circuited, so the on-axis screen is untouched."""
+    ``(0, 0)`` is short-circuited, so the on-axis screen is untouched.
+
+    ``dtype`` (v5.44): ``np.complex64`` returns the phasor in complex64,
+    built in float64 per row band (:func:`_phasor_rows`) -- pass the dtype of
+    the field this factor will multiply so a complex64 chain stays
+    complex64.  ``None`` / ``complex128`` is the shipped path, unchanged."""
     Ny, Nx = shape
     x = (bld.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     y = (bld.arange(Ny, dtype=np.float64) - Ny / 2) * dy
@@ -743,6 +791,10 @@ def _radial_carrier_phase(shape, dx, dy, wavelength, R, sign, bld=np,
     Y, X = bld.meshgrid(y, x, indexing='ij')
     r2 = X * X + Y * Y
     k = 2.0 * np.pi / wavelength
+    if bld is np and _phasor_c64(dtype):
+        return _phasor_rows(
+            lambda r0, r1: sign * 1j * k * r2[r0:r1] / (2.0 * R),
+            (Ny, Nx), np.complex64)
     return bld.exp(sign * 1j * k * r2 / (2.0 * R))
 
 
@@ -2847,7 +2899,7 @@ def _exact_tilt_reference():
 
 
 def _tilt_exactness_phase(shape, dx, dy, wavelength, R, L, M, sign,
-                          centre=(0.0, 0.0)):
+                          centre=(0.0, 0.0), dtype=None):
     """BAND-LIMITED factor ``exp(sign*i*k*D*T(r))`` that upgrades a
     sphere-PLUS-RAMP tilted carrier to the EXACT displaced-point-source
     eikonal, or ``None`` when there is nothing to add (niche C5, 2026-07-30).
@@ -2958,6 +3010,13 @@ def _tilt_exactness_phase(shape, dx, dy, wavelength, R, L, M, sign,
     r_safe = (np.sqrt(b * b + 4.0 * a * c) - b) / (2.0 * a)
     t = np.clip((np.sqrt(r2) - 0.75 * r_safe) / (0.25 * r_safe), 0.0, 1.0)
     k = 2.0 * np.pi / wavelength
+    if _phasor_c64(dtype):
+        # v5.44: same expression on row slices of the same float64 D / t,
+        # stored complex64 (see _phasor_rows for the precision boundary).
+        return _phasor_rows(
+            lambda r0, r1: (sign * 1j * k * D[r0:r1]
+                            * np.cos(0.5 * np.pi * t[r0:r1]) ** 2),
+            (Ny, Nx), np.complex64)
     return np.exp(sign * 1j * k * D * np.cos(0.5 * np.pi * t) ** 2)
 
 
@@ -3027,7 +3086,7 @@ SPHERE_PARAB_CONVERSION_EXACT = True
 
 
 def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
-                             centre=(0.0, 0.0)):
+                             centre=(0.0, 0.0), dtype=None):
     """Parabola <-> exact-sphere carrier-convention conversion factor
     ``exp(sign*i*k*(S(R) - r^2/(2R)))`` on the centred grid, or ``None`` for a
     collimated/degenerate carrier (nothing to convert).
@@ -3168,8 +3227,18 @@ def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
             f"expensive) or lower the carrier NA if that path is used.",
             RuntimeWarning, stacklevel=3)
     if SPHERE_PARAB_CONVERSION_EXACT:
+        if _phasor_c64(dtype):
+            # v5.44: same expression on row slices, stored complex64.
+            return _phasor_rows(
+                lambda r0, r1: sign * 1j * k * diff[r0:r1],
+                (ny, n), np.complex64)
         return np.exp(sign * 1j * k * diff)
     t = np.clip((np.sqrt(r2) - 0.75 * r_safe) / (0.25 * r_safe), 0.0, 1.0)
+    if _phasor_c64(dtype):
+        return _phasor_rows(
+            lambda r0, r1: (sign * 1j * k * diff[r0:r1]
+                            * np.cos(0.5 * np.pi * t[r0:r1]) ** 2),
+            (ny, n), np.complex64)
     return np.exp(sign * 1j * k * diff * np.cos(0.5 * np.pi * t) ** 2)
 
 
@@ -3258,13 +3327,20 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
         # instead of silently acquiring a narrower one (the shipped chain is
         # complex128, where ``asarray`` is a no-op and no copy is made).
         _ecs = np.fft.ifftshift(ec)
-        if _ecs.dtype != np.complex128:
-            _ecs = _ecs.astype(np.complex128)
+        # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 sec 3.3): a complex64 envelope
+        # stays complex64 through the transform pair -- this hard complex128
+        # pad was the leak the audit found sitting directly on the
+        # memory-dominant stage.  Every other input is promoted to complex128
+        # exactly as before, so the shipped chain is byte-identical.
+        _cdt = (np.dtype(np.complex64) if _ecs.dtype == np.complex64
+                else np.dtype(np.complex128))
+        if _ecs.dtype != _cdt:
+            _ecs = _ecs.astype(_cdt)
         F = np.fft.fftshift(_fft2(_ecs))
         del _ecs
         if n_fine > n_crop:
             # Zero-pad the spectrum (exact band-limited upsample).
-            pad = np.zeros((n_fine, n_fine), dtype=np.complex128)
+            pad = np.zeros((n_fine, n_fine), dtype=_cdt)
             o = n_fine // 2 - n_crop // 2
             pad[o:o + n_crop, o:o + n_crop] = F
         else:
@@ -4553,14 +4629,22 @@ def carrier_referenced_exact_focus_readout(
     if np.isfinite(R) and R != 0.0:
         S = _exact_sphere_eikonal(E.shape, dx, dx, wavelength, R,
                                   centre=((_cx, _cy) if _dec else (0.0, 0.0)))
-        env = E * np.exp(-1j * k * S)
+        if np.asarray(E).dtype == np.complex64:
+            # v5.44: de-chirp in the field's own dtype (float64 argument,
+            # complex64 phasor) so a complex64 field stays complex64 here.
+            env = E * _phasor_rows(lambda r0, r1: -1j * k * S[r0:r1],
+                                   S.shape, np.complex64)
+        else:
+            env = E * np.exp(-1j * k * S)
     else:
         env = E
+    _env_dt = np.asarray(env).dtype
     if _tL or _tM:
         # niche D6: reference the uniform tilt out too, so what gets resampled
         # is the genuine (smooth) aberration residual rather than a residual
         # riding a linear ramp.  Restored on the fine grid below.
-        _rp = _tilt_ramp(E.shape, dx, wavelength, _tL, _tM, _cx, _cy, -1)
+        _rp = _tilt_ramp(E.shape, dx, wavelength, _tL, _tM, _cx, _cy, -1,
+                         dtype=_env_dt)
         if _rp is not None:
             env = env * _rp
         # niche C5: sphere + ramp is not a wavefront -- take out the exact
@@ -4569,7 +4653,8 @@ def carrier_referenced_exact_focus_readout(
         # beam radius on design 121's last group).  Restored, term for term,
         # about the fine grid's own origin below.
         _xf = _tilt_exactness_phase(E.shape, dx, dx, wavelength, R,
-                                    _tL, _tM, -1, centre=(_cx, _cy))
+                                    _tL, _tM, -1, centre=(_cx, _cy),
+                                    dtype=_env_dt)
         if _xf is not None:
             env = env * _xf
 
@@ -4729,20 +4814,32 @@ def carrier_referenced_exact_focus_readout(
     # -- reconstruct the exact sphere on the fine grid ------------------------
     # (decentred: the fine grid is CENTRED ON THE CHIEF RAY, so the sphere and
     # the tilt ramp are both referenced to its own origin.)
+    # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 sec 3.3): these two casts were the
+    # readout's own complex128 leak.  The field keeps the ENVELOPE's dtype --
+    # complex64 stays complex64, with the sphere's phasor built in float64
+    # per row band -- and every other dtype is promoted exactly as before.
+    _fine_dt = (np.dtype(np.complex64)
+                if np.asarray(env_f).dtype == np.complex64
+                else np.dtype(np.complex128))
     if np.isfinite(R) and R != 0.0:
         S_f = _exact_sphere_eikonal((N_fine, N_fine), dx_fine, dx_fine,
                                     wavelength, R)
-        E_fine = (env_f * np.exp(1j * k * S_f)).astype(np.complex128)
+        if _fine_dt == np.complex64:
+            E_fine = env_f * _phasor_rows(lambda r0, r1: 1j * k * S_f[r0:r1],
+                                          S_f.shape, np.complex64)
+        else:
+            E_fine = (env_f * np.exp(1j * k * S_f)).astype(np.complex128)
     else:
-        E_fine = np.asarray(env_f, dtype=np.complex128)
+        E_fine = np.asarray(env_f, dtype=_fine_dt)
     if _tL or _tM:
         _rp = _tilt_ramp((N_fine, N_fine), dx_fine, wavelength, _tL, _tM,
-                         0.0, 0.0, +1)
+                         0.0, 0.0, +1, dtype=_fine_dt)
         if _rp is not None:
             E_fine = E_fine * _rp
         # niche C5: restore the exactness term taken out on the coarse grid.
         _xf = _tilt_exactness_phase((N_fine, N_fine), dx_fine, dx_fine,
-                                    wavelength, R, _tL, _tM, +1)
+                                    wavelength, R, _tL, _tM, +1,
+                                    dtype=_fine_dt)
         if _xf is not None:
             E_fine = E_fine * _xf
 
@@ -5166,15 +5263,24 @@ def _shift_envelope(env, sx, sy, dx):
     return np.array(out, copy=True)
 
 
-def _tilt_ramp(shape, dx, wavelength, L, M, x0, y0, sign):
+def _tilt_ramp(shape, dx, wavelength, L, M, x0, y0, sign, dtype=None):
     """``exp(sign*i*k*(L*(x-x0) + M*(y-y0)))`` on the centred grid, or ``None``
-    when the tilt is identically zero (nothing to impose)."""
+    when the tilt is identically zero (nothing to impose).
+
+    ``dtype`` (v5.44): ``np.complex64`` returns the phasor in complex64,
+    built in float64 per row band (:func:`_phasor_rows`); ``None`` /
+    ``complex128`` is the shipped path, unchanged."""
     if L == 0.0 and M == 0.0:
         return None
     ny, nx = int(shape[-2]), int(shape[-1])
     x = (np.arange(nx, dtype=np.float64) - nx / 2) * dx - float(x0)
     y = (np.arange(ny, dtype=np.float64) - ny / 2) * dx - float(y0)
     k = 2.0 * np.pi / wavelength
+    if _phasor_c64(dtype):
+        return _phasor_rows(
+            lambda r0, r1: sign * 1j * k * (L * x[None, :]
+                                            + M * y[r0:r1, None]),
+            (ny, nx), np.complex64)
     return np.exp(sign * 1j * k * (L * x[None, :] + M * y[:, None]))
 
 
@@ -6535,7 +6641,8 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
             # carrier_referenced_exact_focus_readout, which references the
             # exact sphere itself.
             _cf = _sphere_parab_conversion(np.shape(E_full), dx_fine,
-                                           wavelength, R_in, +1, w_beam=w)
+                                           wavelength, R_in, +1, w_beam=w,
+                                           dtype=np.asarray(E_full).dtype)
             if _cf is not None:
                 E_full = np.asarray(E_full) * _cf
         _carrier_arg = R_in
@@ -6579,24 +6686,27 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
             env if _origin_ok else _shift_envelope(env, x_c, y_c, cur_dx),
             n_crop, n_fine)
         _sh = (n_fine, n_fine)
+        # v5.44: every factor is built in the field's own dtype (complex128
+        # takes the shipped path bit for bit; complex64 stays complex64).
+        _ff_dt = np.asarray(env_f).dtype
         _ph = _radial_carrier_phase(_sh, dx_fine, dx_fine, wavelength, R_in,
-                                    +1, centre=_ctr) \
+                                    +1, centre=_ctr, dtype=_ff_dt) \
             if np.isfinite(R_in) else None
         E_full = env_f if _ph is None else np.asarray(env_f) * _ph
         if sphere_reference:
             _cf = _sphere_parab_conversion(_sh, dx_fine, wavelength, R_in, +1,
-                                           w_beam=w, centre=_ctr)
+                                           w_beam=w, centre=_ctr, dtype=_ff_dt)
             if _cf is not None:
                 E_full = np.asarray(E_full) * _cf
         _rp = _tilt_ramp(_sh, dx_fine, wavelength, tL, tM, _ctr[0], _ctr[1],
-                         +1)
+                         +1, dtype=_ff_dt)
         if _rp is not None:
             E_full = np.asarray(E_full) * _rp
         # niche C5: the same exactness term the coarse hand-off adds, on the
         # fine grid -- the element's TiltedCarrier evaluates the exact
         # congruence here too, so the reference handed to it must be it.
         _xf = _tilt_exactness_phase(_sh, dx_fine, dx_fine, wavelength, R_in,
-                                    tL, tM, +1, centre=_ctr)
+                                    tL, tM, +1, centre=_ctr, dtype=_ff_dt)
         if _xf is not None:
             E_full = np.asarray(E_full) * _xf
         from ..elements._lens_traced import TiltedCarrier as _TC
@@ -8262,7 +8372,8 @@ def propagate_traced_carrier_chain(
                 # ray launch assumes (see carrier_reference)
                 _cf = _sphere_parab_conversion(
                     np.shape(E_full), cur_dx, wavelength, R_use, +1,
-                    w_beam=_envelope_amp_radius(env, cur_dx, cur_dx))
+                    w_beam=_envelope_amp_radius(env, cur_dx, cur_dx),
+                    dtype=np.asarray(E_full).dtype)
                 if _cf is not None:
                     E_full = np.asarray(E_full) * _cf
             _carrier_arg = R_use
@@ -8277,18 +8388,19 @@ def propagate_traced_carrier_chain(
                                  f"groups[{gi}] ({_name})", on_decentred_fit,
                                  decentre_fit_frac)
             env_axis = _shift_envelope(env, x_c, y_c, cur_dx)
+            _ga_dt = np.asarray(env_axis).dtype      # v5.44: field's dtype
             _ph = _radial_carrier_phase(
                 np.shape(env_axis), cur_dx, cur_dx, wavelength, R_use, +1,
-                centre=(x_c, y_c)) if np.isfinite(R_use) else None
+                centre=(x_c, y_c), dtype=_ga_dt) if np.isfinite(R_use) else None
             E_full = env_axis if _ph is None else np.asarray(env_axis) * _ph
             if _sphere_ref:
                 _cf = _sphere_parab_conversion(
                     np.shape(E_full), cur_dx, wavelength, R_use, +1,
-                    w_beam=_w_track, centre=(x_c, y_c))
+                    w_beam=_w_track, centre=(x_c, y_c), dtype=_ga_dt)
                 if _cf is not None:
                     E_full = np.asarray(E_full) * _cf
             _rp = _tilt_ramp(np.shape(E_full), cur_dx, wavelength,
-                             tilt_L, tilt_M, x_c, y_c, +1)
+                             tilt_L, tilt_M, x_c, y_c, +1, dtype=_ga_dt)
             if _rp is not None:
                 E_full = np.asarray(E_full) * _rp
             # niche C5: sphere + ramp is not a wavefront -- add the term that
@@ -8296,7 +8408,7 @@ def propagate_traced_carrier_chain(
             # TiltedCarrier now evaluates (both read the same flag).
             _xf = _tilt_exactness_phase(
                 np.shape(E_full), cur_dx, cur_dx, wavelength, R_use,
-                tilt_L, tilt_M, +1, centre=(x_c, y_c))
+                tilt_L, tilt_M, +1, centre=(x_c, y_c), dtype=_ga_dt)
             if _xf is not None:
                 E_full = np.asarray(E_full) * _xf
             from ..elements._lens_traced import TiltedCarrier as _TC
@@ -8334,7 +8446,8 @@ def propagate_traced_carrier_chain(
                 # re-envelope against the EXACT exit sphere, so the stored
                 # envelope is the wavefront residual (the carried content)
                 _cf = _sphere_parab_conversion(E_exit.shape, cur_dx,
-                                               wavelength, R_out, -1)
+                                               wavelength, R_out, -1,
+                                               dtype=E_exit.dtype)
                 if _cf is not None:
                     E_exit = E_exit * _cf
             env = carrier_referenced_envelope(E_exit, R_out, wavelength,
@@ -8351,7 +8464,8 @@ def propagate_traced_carrier_chain(
                 presc, (_A, _B, _C, _D), x_c, y_c, tilt_L, tilt_M,
                 wavelength, _fn)
             _rp = _tilt_ramp(E_exit.shape, cur_dx, wavelength,
-                             L_out, M_out, x_c_out, y_c_out, -1)
+                             L_out, M_out, x_c_out, y_c_out, -1,
+                             dtype=E_exit.dtype)
             if _rp is not None:
                 E_exit = E_exit * _rp
             # niche C5: divide out the same exactness term the entrance added,
@@ -8359,18 +8473,20 @@ def propagate_traced_carrier_chain(
             # congruence rather than against a sphere-plus-ramp stand-in.
             _xf = _tilt_exactness_phase(
                 E_exit.shape, cur_dx, cur_dx, wavelength, R_out,
-                L_out, M_out, -1, centre=(x_c_out, y_c_out))
+                L_out, M_out, -1, centre=(x_c_out, y_c_out),
+                dtype=E_exit.dtype)
             if _xf is not None:
                 E_exit = E_exit * _xf
             if _sphere_ref:
                 _cf = _sphere_parab_conversion(
                     E_exit.shape, cur_dx, wavelength, R_out, -1,
-                    centre=(x_c_out, y_c_out))
+                    centre=(x_c_out, y_c_out), dtype=E_exit.dtype)
                 if _cf is not None:
                     E_exit = E_exit * _cf
             _ph = _radial_carrier_phase(
                 E_exit.shape, cur_dx, cur_dx, wavelength, R_out, -1,
-                centre=(x_c_out, y_c_out)) if np.isfinite(R_out) else None
+                centre=(x_c_out, y_c_out),
+                dtype=E_exit.dtype) if np.isfinite(R_out) else None
             env_axis = E_exit if _ph is None else E_exit * _ph
             env = _shift_envelope(env_axis, -x_c_out, -y_c_out, cur_dx)
             if np.iscomplexobj(E_in) and env.dtype != E_in.dtype:
@@ -8410,7 +8526,8 @@ def propagate_traced_carrier_chain(
     if _sphere_ref:
         _cf = _sphere_parab_conversion(
             np.shape(env), cur_dx, wavelength, R, +1,
-            w_beam=_envelope_amp_radius(env, cur_dx, cur_dx))
+            w_beam=_envelope_amp_radius(env, cur_dx, cur_dx),
+            dtype=np.asarray(env).dtype)
         if _cf is not None:
             env = np.asarray(env) * _cf
     if _tilted:
@@ -8418,7 +8535,8 @@ def propagate_traced_carrier_chain(
         # paths rebuild the reference as parabola + ramp.  The stored envelope
         # is in the CHIEF-RAY-TRACKING frame, so the term is centred there.
         _xf = _tilt_exactness_phase(
-            np.shape(env), cur_dx, cur_dx, wavelength, R, tilt_L, tilt_M, +1)
+            np.shape(env), cur_dx, cur_dx, wavelength, R, tilt_L, tilt_M, +1,
+            dtype=np.asarray(env).dtype)
         if _xf is not None:
             env = np.asarray(env) * _xf
     if focus_readout is not None:
@@ -8504,7 +8622,8 @@ def propagate_traced_carrier_chain(
         # the returned grid is CENTRED ON THE CHIEF RAY at (x_c, y_c); the
         # tilt ramp is referenced to that same point.
         _rp = _tilt_ramp(np.shape(field), cur_dx, wavelength,
-                         tilt_L, tilt_M, 0.0, 0.0, +1)
+                         tilt_L, tilt_M, 0.0, 0.0, +1,
+                         dtype=np.asarray(field).dtype)
         if _rp is not None:
             field = np.asarray(field) * _rp
         stages.append({'name': '<target>', 'target': True,
