@@ -273,11 +273,11 @@ defects were fixed (`docs/audits/FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md`).
   `twod_staggered.PMM2D_STAG_MIN_SEG_GUARD`.  The comparison carries a 1e-9
   RELATIVE slack so that a caller who asks for EXACTLY the documented minimum
   is deterministically accepted rather than deciding it on their own floating
-  point (`(0.28572 - 0.28452) / 1.2` is 1.8e-16 below `1e-3`).  **The accuracy cost is
-  CONTINUOUS in the wall width, so the contract does not remove it above the
-  bar**: an ordinary 0.12 partition already costs 1.5x on this measure and a
-  64-slice CLOSING taper, at 4.1e-03, is returned with a ~4x floor.  Converge
-  in `n_modes`.
+  point (`(0.28572 - 0.28452) / 1.2` is 1.8e-16 below `1e-3`).  **The accuracy
+  cost is CONTINUOUS in the wall width, so the contract does not remove it
+  above the bar**: an ordinary 0.12 partition already costs 1.5x on this
+  measure and a 64-slice CLOSING taper, at 4.1e-03, is returned with a ~4x
+  floor.  Converge in `n_modes`.
 
 * **The three 2-D mortar interface solves are GUARDED.**  They raised a bare
   `numpy.linalg.LinAlgError: Singular matrix`; they now go through
