@@ -695,8 +695,13 @@ PMM2D_STAG_MIN_SEG_GUARD = True
 #:
 #: THE BAR, with the gap on both sides measured.  ``1e-3`` of the period sits
 #:
-#:   * **2.27 decades BELOW** the narrowest segment any ORDINARY shipped
-#:     geometry asks for -- 0.1873 of the period, the mortar suite's taper.
+#:   * **2.10 decades BELOW** the narrowest segment any ORDINARY shipped
+#:     geometry asks for.  Census over every per-layer geometry class the
+#:     library builds: 4.000e-01 (a single interior wall), 3.333e-01
+#:     (duty-1/3), 2.371e-01 (conforming and non-conforming), 2.100e-01 (axes
+#:     carrying different walls), 2.004e-01 .. 1.881e-01 (the mortar suite's
+#:     taper at 4 .. 64 slices), 1.733e-01 (``add_tapered_pillars``) and
+#:     **1.250e-01** (a nested refinement -- the worst).
 #:     The ONE surface that walks toward the bar is a taper whose tip CLOSES:
 #:     the midpoint rule's narrowest sampled segment is
 #:     ``~ w_bottom / (2 n_slices)``, measured 3.14e-02 / 8.01e-03 / 4.11e-03

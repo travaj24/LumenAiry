@@ -40,7 +40,7 @@ is a LOWER bound -- the same caveat the build and the verification carry.
 
 | | |
 |---|---|
-| **D1** | An intra-layer SLIVER under a mortar is **not a wandering wrong answer and has no onset** -- it is a **FLOOR under the `n_modes` ladder**, energy-invisibly.  Fixed by a MINIMUM SEGMENT WIDTH **contract** at `Basis1D.__init__`: `_STAG_MIN_SEG_FRAC` = **1e-3 of the period**, 2.27 decades below the narrowest segment any ordinary shipped geometry asks for and landing on the same width as the independent conditioning bar. |
+| **D1** | An intra-layer SLIVER under a mortar is **not a wandering wrong answer and has no onset** -- it is a **FLOOR under the `n_modes` ladder**, energy-invisibly.  Fixed by a MINIMUM SEGMENT WIDTH **contract** at `Basis1D.__init__`: `_STAG_MIN_SEG_FRAC` = **1e-3 of the period**, 2.10 decades below the narrowest segment any ordinary shipped geometry asks for and landing on the same width as the independent conditioning bar. |
 | **D2** | The three 2-D mortar `np.linalg.solve` calls now go through `_guarded_mortar_solve` -- **bit-identical** (`lu_factor` + `lu_solve` is the same LAPACK pair, measured on 106 solves at 0.96x wall time) with a free LAPACK `gecon` screen.  Bar `_MORTAR_RCOND_REFUSE` = **1e-12**, healthy population **2.61e-07 .. 3.77e-04**. |
 | **D3** | `_stag_fourier_projection`'s Gauss rule is now sized PER SEGMENT from that segment's own half-phase.  Long-segment kernel error **7.5e-04 -> 5.6e-15**; the INTEGER path bypasses the formula and is bit-identical by construction. |
 | **the ~1850 site** | **LEFT UNGUARDED, by measurement.**  Reachable with a near-singular operand, but every reading below the bar is already refused by the shipped 1-D sliver guard, and the CORRECT 1-D population comes within **1.0 decade** of a 1e-12 bar against 5.4 decades on the mortar path. |
@@ -264,18 +264,18 @@ which re-measures this on the running build):
 
 | geometry | narrowest segment / period | x the bar |
 |---|---|---|
-| conforming / non-conforming (`0.2371, 0.6183` vs `0.3117, 0.7402`) | 2.371e-01 | 237 |
-| axes carrying different walls (`0.21, 0.55` x `0.33, 0.78`) | 2.100e-01 | 210 |
-| a single interior wall at `0.4` | 4.000e-01 | 400 |
-| duty-1/3 pair | 3.333e-01 | 333 |
-| nested refinement (`0.125, 0.25, 0.75, 0.875`) | 1.250e-01 | 125 |
-| **the mortar suite's taper, `n_slices` 4..64** | **1.873e-01** | **187** |
-| `add_tapered_pillars`, 6 slices | 2.600e-01 | 260 |
-| closing taper, `n_slices` = 8 | 3.144e-02 | 31 |
-| closing taper, `n_slices` = 32 | 8.009e-03 | 8.0 |
-| closing taper, `n_slices` = 64 | 4.105e-03 | 4.1 |
+| a single interior wall at `0.4` | 4.0000e-01 | 400.0 |
+| duty-1/3 pair | 3.3333e-01 | 333.3 |
+| conforming / non-conforming (`0.2371, 0.6183` vs `0.3117, 0.7402`) | 2.3710e-01 | 237.1 |
+| axes carrying different walls (`0.21, 0.55` x `0.33, 0.78`) | 2.1000e-01 | 210.0 |
+| the mortar suite's taper, `n_slices` = 4 / 8 / 16 / 32 / 64 | 2.0035e-01 .. 1.8812e-01 | 200.3 .. 188.1 |
+| `add_tapered_pillars`, 6 slices | 1.7333e-01 | 173.3 |
+| **nested refinement (`0.125, 0.25, 0.75, 0.875`) -- the WORST ordinary one** | **1.2500e-01** | **125.0** |
+| closing taper, `n_slices` = 8 | 3.1438e-02 | 31.4 |
+| closing taper, `n_slices` = 32 | 8.0094e-03 | 8.0 |
+| closing taper, `n_slices` = 64 | 4.1047e-03 | 4.1 |
 
-**2.27 decades** of gap to the narrowest ORDINARY geometry.  The ONE surface
+**2.10 decades** of gap to the narrowest ORDINARY geometry.  The ONE surface
 that walks toward the bar is a taper whose tip CLOSES -- the midpoint rule's
 narrowest SAMPLED width is `~ w_bottom / (2 n_slices)`, so a pillar closing
 from half the period crosses at about **250 slices**.  That is reported, not

@@ -170,11 +170,14 @@ def test_the_minimum_segment_bar_clears_every_geometry_the_library_builds():
     for.
 
     MEASURED 2026-09-11, both builds (these are pure geometry, so the two
-    agree exactly): the narrowest any ORDINARY fixture asks for is
-    **1.873e-01** of the period (the mortar suite's taper), i.e. **187x** the
+    agree exactly): 4.0000e-01 (a single interior wall) / 3.3333e-01
+    (duty-1/3) / 2.3710e-01 (conforming and non-conforming) / 2.1000e-01
+    (axes carrying different walls) / 2.0035e-01 .. 1.8812e-01 (the mortar
+    suite's taper at 4 .. 64 slices) / 1.7333e-01 (``add_tapered_pillars``) /
+    **1.2500e-01** (the nested refinement -- the WORST), i.e. **125x** the
     1e-3 bar.  The one surface that APPROACHES the bar is a taper whose tip
     closes, and it does so at exactly the rate the midpoint rule predicts --
-    3.144e-02 / 8.009e-03 / 4.105e-03 at ``n_slices`` = 8 / 32 / 64, i.e.
+    3.1438e-02 / 8.0094e-03 / 4.1047e-03 at ``n_slices`` = 8 / 32 / 64, i.e.
     ``~ w_bottom / (2 n_slices)``.  That is REPORTED here, with the crossing
     slice count derived, rather than hidden: it is remedy (4) in the refusal
     message."""
@@ -183,7 +186,7 @@ def test_the_minimum_segment_bar_clears_every_geometry_the_library_builds():
     ordinary = {k: v for k, v in census.items() if "closing" not in k}
     closing = {k: v for k, v in census.items() if "closing" in k}
     # (a) every ORDINARY geometry class is two decades above the bar --
-    # measured worst 1.873e-01 (187x).  Two decades is the DECISION.
+    # measured worst 1.250e-01 (125x).  Two decades is the DECISION.
     worst = min(ordinary.values())
     assert worst > 100.0 * bar, (worst, bar, ordinary)
     # (b) the CLOSING taper is the one surface that walks toward the bar, and

@@ -265,8 +265,9 @@ defects were fixed (`docs/audits/FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md`).
   oracle the `M = 8` error reads 1.18e-04 on an ordinary grid against
   4.05e-04 / 5.31e-04 / 6.36e-04 / 7.09e-04 / 7.42e-04 at wall separations
   1e-2 .. 1e-6, with the last rung improving 11.71x against 2.32x.  The bar
-  sits 2.27 decades below the narrowest segment any ordinary shipped geometry
-  asks for (0.1873 of the period), and a taper whose tip CLOSES walks toward
+  sits 2.10 decades below the narrowest segment any ordinary shipped geometry
+  asks for (0.1250 of the period, a nested refinement), and a taper whose tip
+  CLOSES walks toward
   it at `w_bottom / (2 n_slices)` -- crossing at about 250 slices, which is
   remedy (4) in the message.  The INTEGER lattice is exempt and cannot reach
   the bar at any affordable `N`.  Fail-before switch
