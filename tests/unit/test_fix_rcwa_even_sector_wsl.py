@@ -117,6 +117,18 @@ def test_sqrt_decay_pins_the_outgoing_root_through_eigensolver_noise():
     the mis-rooted modes came back at ``lam = -1.500000000000j`` and
     ``-0.910599187849j`` while the substrate's own modes -- built through exact
     arithmetic, where the old pin did fire -- were ``+1.5000j`` / ``+0.9000j``.
+
+    ROUND 3, 2026-09-11: the second assertion below used to read
+    ``Re(lam) >= 0`` unconditionally, which held because the flip took
+    ``conj(r)``.  Round 3 takes ``-r`` instead -- the exact ``lam -> -lam``
+    involution, and the only HOLOMORPHIC flip -- so a FLIPPED mode now carries
+    ``Re(lam) = -|Re(r)|``.  The contraction claim is therefore restated at its
+    true strength, which is still a DECISION and still two-sided: the
+    contraction may be lost ONLY on the flipped set and ONLY by the band width
+    that admitted those modes.  Here every entry is engineered to be on the
+    cut, so every entry is flipped or already outgoing, and the bound is
+    ``_CUT_BAND_REL * max(max|r|, 1)``.  See
+    ``docs/audits/FIX_BRANCH_CUT_ROUND3_2026_09_11.md``.
     """
     lam2 = np.array([-kz ** 2 + 1j * eta for kz in _KZ
                      for eta in _ETA_LADDER], dtype=complex)
@@ -125,9 +137,18 @@ def test_sqrt_decay_pins_the_outgoing_root_through_eigensolver_noise():
         "incoming root returned for %d of %d numerically-on-the-cut modes"
         % (int(np.sum(lam.imag < 0)), lam.size))
     # The other half of this function's contract, which the fix must not cost:
-    # Re(lam) >= 0 is what makes exp(-lam k0 L) a CONTRACTION.
-    assert np.all(lam.real >= 0.0)
-    # And the root is still a root: |lam|^2 must reproduce |lam^2|.
+    # exp(-lam k0 L) stays a CONTRACTION up to the band that admitted the mode.
+    r = np.sqrt(lam2)
+    band = _rc._CUT_BAND_REL * max(float(np.max(np.abs(r))), 1.0)
+    assert np.all(lam.real >= -band), (
+        "a root came back at Re(lam) = %.3e, past the -%.3e the on-cut band "
+        "can account for: exp(-lam k0 L) is GROWING for a reason the flip "
+        "does not explain" % (float(np.min(lam.real)), band))
+    assert np.all(lam.real[np.abs(r.real) > band] >= 0.0), (
+        "a mode OUTSIDE the on-cut band lost the principal branch")
+    # And the root is still a root -- exactly, since (-r)**2 == r**2 == lam^2.
+    assert np.array_equal(lam ** 2, r ** 2), (
+        "the returned root does not square back to lam^2 bit-for-bit")
     assert np.max(np.abs(lam ** 2 - lam2)) < 1e-12 * np.max(np.abs(lam2))
 
 

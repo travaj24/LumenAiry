@@ -248,32 +248,197 @@ def test_nonreciprocal_real_asymmetric_tensor_not_lossless():
 # (5) the guard's message must name the EXACT-INDEX coincidence and its remedy
 #     (2026-09-10, VERIFY_WOOD_LIST_AND_FFFNV_2026_09_10 follow-up B).
 # --------------------------------------------------------------------------- #
-def test_closure_warning_names_the_exact_index_coincidence_and_the_detune():
-    """A layer permittivity EXACTLY equal to a region's is a different failure
-    from the (period, n_orders) near-degeneracy the message already named, and
-    the remedy is the opposite one: no ``n_orders`` helps, detuning does.
+#: Bar on ``|sum R + sum T - 2|`` for the exact-index-coincidence fixture.
+#:
+#: The structure is provably lossless, so ``sum R + sum T == 2`` is EXACT at
+#: every truncation under the Laurent rule (2 rather than 1: two incident
+#: polarizations).  That conservation law is the reference -- there is no
+#: second solve to compare against and no prior reading to reproduce, and its
+#: error floor is the arithmetic.
+#:
+#: Measured 2026-09-11 over ``n_orders`` 11..41 (16 truncations), on
+#: (Windows py3.14 / numpy 2.4.4) x {HASWELL, PRESCOTT->Katmai, SANDYBRIDGE}
+#: and (WSL py3.12 / numpy 2.4.6) x {HASWELL, PRESCOTT->Katmai}, one BLAS
+#: thread, ``OPENBLAS_CORETYPE`` pinned on the command line:
+#:
+#:   arm / build-coretype        worst |closure|   warnings
+#:   POST coincident  WIN-HASWELL      1.643e-13     0/16
+#:   POST coincident  WIN-PRESCOTT     3.579e-13     0/16
+#:   POST coincident  WIN-SANDYBRIDGE  3.477e-13     0/16
+#:   POST coincident  WSL-HASWELL      1.386e-13     0/16
+#:   POST coincident  WSL-PRESCOTT     3.682e-13     0/16
+#:   POST detuned     (all five)     <=6.772e-13     0/16
+#:   PRE  coincident  WIN-HASWELL      2.761e-02    16/16
+#:   PRE  coincident  WIN-PRESCOTT     7.289e-04    11/16
+#:   PRE  coincident  WIN-SANDYBRIDGE  4.690e-02    14/16
+#:   PRE  coincident  WSL-HASWELL      5.001e-02    16/16
+#:   PRE  coincident  WSL-PRESCOTT     1.584e-03    11/16
+#:   PRE  detuned     (all five)     <=5.840e-13     0/16
+#:
+#: ``SKYLAKEX`` is not in the table because it is not runnable on the
+#: measuring hardware (a Ryzen 9 5950X has no AVX-512: forcing that kernel
+#: aborts numpy with SIGILL on both builds), and the bundled OpenBLAS carries
+#: no Zen target at all, so ``OPENBLAS_CORETYPE=ZEN`` resolves to Haswell --
+#: which is also what CI's AMD EPYC runners select.
+#:
+#: The bar sits 3.17 decades above the POST envelope (6.772e-13) and 5.86
+#: decades below the smallest PRE reading that manifests (7.289e-04), inside a
+#: gap the measurement leaves entirely empty.
+_S1_2_CLOSURE_BAR = 1e-9
 
-    The fixture is that coincidence, built through the public API: a rotated
+
+def _s1_2_fixture(detune=0.0):
+    """The exact-index coincidence, built through the public API: a rotated
     director whose ordinary ``no^2`` is 2.25, a groove of 2.25, and
-    ``n_substrate`` = 1.5 -- so the layer carries modes exactly degenerate with
-    the substrate's and the lossless closure reads the rounding floor
-    (measured 2026-09-10, |sum R + sum T - 2| over ``n_orders`` 11..41: worst
-    2.761e-02 [Win py3.14/np2.4.4, 1 BLAS thread] / 2.309e-02 [4 threads] /
-    5.001e-02 [WSL py3.12/np2.4.6], with 0 / 1 / 0 of the 16 truncations sound
-    -- i.e. WHICH truncation is usable is a per-build fact, which is exactly
-    what makes "change n_orders" the wrong advice).  ``n_orders = 19`` is
-    inside that band on every configuration measured.
-
-    Message text only; no numeric behaviour is asserted here (the tripwire's
-    own threshold is tested above).
-    """
+    ``n_substrate`` = 1.5, so the LAYER carries modes exactly degenerate with
+    the substrate's.  ``detune`` walks ONLY the groove index off the
+    substrate's, leaving the director, the period and the truncation exactly
+    where they were -- the control that shows the coincidence is the cause."""
     th = np.deg2rad(35.0)
     c, s = np.cos(th), np.sin(th)
     rot = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
     er = rot @ np.diag([2.3 ** 2, 1.5 ** 2, 1.5 ** 2]).astype(complex) @ rot.T
-    eg = np.diag([1.5 ** 2] * 3).astype(complex)     # == no^2 == n_substrate^2
-    with pytest.warns(_EnergyWarning) as rec:
-        rcwa_jones_1d_segments(0.7e-6, [(0.5, er), (0.5, eg)], 1.5, 1.0,
-                               0.5e-6, 1.0e-6, angle=0.0, n_orders=19)
-    text = " ".join(str(w.message) for w in rec)
-    assert "EXACTLY EQUAL" in text and "DETUNE" in text, text
+    eg = np.diag([(1.5 * (1.0 + detune)) ** 2] * 3).astype(complex)
+    return er, eg
+
+
+def _s1_2_closure(er, eg, n_orders):
+    """``(|sum R + sum T - 2|, an _EnergyWarning fired)`` at one truncation."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        out = rcwa_jones_1d_segments(0.7e-6, [(0.5, er), (0.5, eg)], 1.5, 1.0,
+                                     0.5e-6, 1.0e-6, angle=0.0,
+                                     n_orders=n_orders)
+    fired = [w for w in rec if isinstance(w.message, _EnergyWarning)]
+    return (abs(float(np.sum(out[1]) + np.sum(out[2])) - 2.0), fired)
+
+
+def _s1_2_pre_round1_sqrt_decay(x, xp=None, band=1e-8):
+    """The pre-round-1 branch body: the EXACT ``Re(r) == 0`` pin.  An ``eig``
+    output never satisfies it -- its real part is the eigensolver's backward
+    error, ~1e-16 -- so the pin fires only for the REGION modes, built in exact
+    arithmetic, and never for a structured LAYER's.  Reinstating it is how the
+    fail-before below is ENGINEERED rather than hoped for from a build."""
+    from lumenairy.backend.array import array_namespace
+    if xp is None:
+        xp = array_namespace(x)
+    x = xp.asarray(x).astype(complex)
+    r = xp.sqrt(x)
+    return xp.where((r.real == 0) & (r.imag < 0), -r, r)
+
+
+class _s1_2_pre_arm:
+    """Reinstate the pre-round-1 branch body at every module that binds the
+    shared selector, for the duration of a ``with`` block."""
+
+    _MODULES = ("lumenairy.elements.rcwa._core", "lumenairy.elements.rcwa.oned",
+                "lumenairy.elements.rcwa.stack", "lumenairy.elements.pmm.twod",
+                "lumenairy.elements.berreman")
+
+    def __enter__(self):
+        import importlib
+        self._saved = []
+        for name in self._MODULES:
+            mod = importlib.import_module(name)
+            if hasattr(mod, "_sqrt_decay"):
+                self._saved.append((mod, mod._sqrt_decay))
+                mod._sqrt_decay = _s1_2_pre_round1_sqrt_decay
+        return self
+
+    def __exit__(self, *a):
+        for mod, fn in self._saved:
+            mod._sqrt_decay = fn
+        return False
+
+
+def test_the_exact_index_coincidence_now_closes_and_the_warning_is_silent():
+    """The exact-index coincidence is REPAIRED, so the guard is silent on it --
+    and that silence is asserted as an ANSWER, not as an absence.
+
+    RESTATED 2026-09-11 (branch-cut ROUND 3).  Until this date the test asserted
+    the guard's MESSAGE TEXT, requiring the words ``EXACTLY EQUAL`` and
+    ``DETUNE`` in a warning it expected the fixture to raise.  Both halves of
+    that had expired: round 2 dropped the "detune by ~1e-6" advice (measured
+    NOT to cure this class -- a relative 1e-6 leaves 8.1e-05 on Windows and
+    2.3e-04 on WSL), and the branch-cut fix CURED the fixture, so no warning
+    fires at all.  ``DID NOT WARN`` was the failure on every CI shard.
+
+    What replaces it is the contract the repair actually established, stated
+    against the conservation law rather than against the message:
+
+      (a) the coincident fixture CLOSES to :data:`_S1_2_CLOSURE_BAR` at every
+          truncation on the ladder -- the answer is right, which is the reason
+          the guard is quiet;
+      (b) it agrees with the DETUNED control, which has no coincidence at all,
+          to the same bar -- so the coincidence has stopped being a distinct
+          numerical regime rather than merely stopped being loud;
+      (c) NO ``_EnergyWarning`` fires anywhere on the ladder.  A decision on a
+          count, which no build can move.
+
+    The fail-before is the sibling test below, and it is where the message text
+    is still asserted -- on the arm where the message is still reachable, which
+    is better coverage than the old form had.
+    """
+    er, eg = _s1_2_fixture()
+    _, eg_off = _s1_2_fixture(detune=1e-3)
+    worst_c = worst_d = 0.0
+    warned = 0
+    for n in range(11, 42, 2):
+        c, fired = _s1_2_closure(er, eg, n)
+        d, _ = _s1_2_closure(er, eg_off, n)
+        worst_c = max(worst_c, c)
+        worst_d = max(worst_d, d)
+        warned += len(fired)
+    assert worst_c < _S1_2_CLOSURE_BAR, (
+        f"the exact-index coincidence misses lossless closure by {worst_c:.3e} "
+        f"somewhere on n_orders 11..41: the modal branch cut has REOPENED and "
+        f"a propagating layer mode is carrying the incoming root again")
+    assert worst_d < _S1_2_CLOSURE_BAR, (
+        f"the DETUNED control misses closure by {worst_d:.3e}, so it cannot "
+        f"show that the coincidence is no longer a distinct regime")
+    assert abs(worst_c - worst_d) < _S1_2_CLOSURE_BAR
+    assert warned == 0, (
+        f"{warned} lossless-closure warnings fired on a fixture that closes "
+        f"at {worst_c:.3e}: the guard is warning about a right answer")
+
+
+def test_the_pre_round_one_branch_reopens_it_and_the_message_names_the_cause():
+    """The fail-before, ENGINEERED and two-sided -- and the surviving home of
+    the message-text claim.
+
+    With the pre-round-1 branch body reinstated the coincident fixture misses
+    closure by orders somewhere on the ladder while the DETUNED control stays
+    at the arithmetic floor everywhere on it, so the coincidence is
+    demonstrably the cause.  WHICH truncations manifest is a per-build fact
+    (11 to 16 of 16 warned across the five build x core-type samples in
+    :data:`_S1_2_CLOSURE_BAR`), so the assertion is on the WORST over the
+    ladder, never on a named truncation.
+
+    The message the guard emits there must still name the coincidence and its
+    real status: that this class was REPAIRED, so meeting it again is a
+    regression to report rather than a modelling choice to work around.  That
+    is the round-2 rewrite of the remedy text, and this is the only arm on
+    which it can be read, since the shipped tree no longer reaches it.
+    """
+    er, eg = _s1_2_fixture()
+    _, eg_off = _s1_2_fixture(detune=1e-3)
+    ladder = range(11, 42, 2)
+    with _s1_2_pre_arm():
+        bad = {n: _s1_2_closure(er, eg, n) for n in ladder}
+        good = {n: _s1_2_closure(er, eg_off, n)[0] for n in ladder}
+    worst_bad = max(v[0] for v in bad.values())
+    worst_good = max(good.values())
+    assert worst_bad > 1e3 * max(worst_good, 1e-15), (
+        "the pre-round-1 arm does not reopen the coincidence at any truncation "
+        "on this build: coincident worst %.3e against detuned worst %.3e"
+        % (worst_bad, worst_good))
+    assert worst_good < _S1_2_CLOSURE_BAR, (
+        "the DETUNED control is not clean on the pre-round-1 arm (%.3e), so "
+        "it cannot show that the coincidence is what breaks it" % worst_good)
+    text = " ".join(str(w.message)
+                    for v in bad.values() for w in v[1])
+    assert text, "the pre-round-1 arm reopened the defect but warned about none"
+    assert "EXACTLY EQUAL" in text, text
+    assert "UNIFORM LAYER" in text, text
+    assert "2026-09-11" in text and "branch cut" in text, text
+    assert "report" in text, text

@@ -171,20 +171,42 @@ _SPACER_LOSS_LADDER = (3, 4, 5)
 
 
 def _acted_on_layer_modes(**kw):
-    """Count the modes the shipped band conjugates in one solve of ``_stack``,
-    separating LAYER eigenproblem arrays from the analytic Rayleigh helper's
-    (whose ``Im`` is exactly zero by construction)."""
+    """``(n_acted_on, n_on_cut)`` for one solve of ``_stack``, counted over the
+    LAYER eigenproblem arrays only (the analytic Rayleigh helper's ``Im`` is
+    exactly zero by construction, so it is excluded).
+
+    THE TWO COUNTS ARE NOT INTERCHANGEABLE, and round 3 (2026-09-11) had to
+    separate them:
+
+    * ``n_on_cut`` is the band's REACH -- ``|Re(r)| <= band * max(max|r|, 1)``.
+      It is a MAGNITUDE test, so it is decided by the mode's physics (a
+      propagating lossless mode sits on the cut; a lossy or evanescent one does
+      not) and is stable across BLAS kernels.
+    * ``n_acted_on`` is reach AND ``Im(r) < 0``.  That second clause is the
+      eigensolver's backward-error SIGN, which is a coin flip per mode -- it is
+      the very quantity the branch cut exists to stop mattering.  Over a small
+      on-cut population it can come out ZERO by luck.
+
+    Measured: with loss in the SPACER only this fixture puts 8 layer modes on
+    the cut at every truncation on every kernel, but the ACTED-ON count reads
+    ``{3: 8, 4: 0, 5: 8}`` on WSL/py3.12 under ``OPENBLAS_CORETYPE=PRESCOTT``
+    (Katmai) against ``{3: 8, 4: 8, 5: 8}`` on Haswell, Zen and Sandybridge --
+    identically on the round-2 tree and the round-3 one, so this is a defect in
+    the test's choice of quantity, not a regression.
+    """
     n_layer = 0
+    n_cut = 0
     saved = _rc._sqrt_decay
 
     def tap(x, xp=None, band=_rc._CUT_BAND_REL):
-        nonlocal n_layer
+        nonlocal n_layer, n_cut
         xx = np.asarray(x).astype(complex)
         if xx.size and not np.all(xx.imag == 0.0):
             r = np.sqrt(xx)
             mx = max(float(np.max(np.abs(r))), 1.0)
-            n_layer += int(np.sum((np.abs(r.real) <= band * mx)
-                                  & (r.imag < 0)))
+            on_cut = np.abs(r.real) <= band * mx
+            n_cut += int(np.sum(on_cut))
+            n_layer += int(np.sum(on_cut & (r.imag < 0)))
         return saved(x, xp, band) if xp is not None else saved(x, band=band)
 
     import lumenairy.elements as EL
@@ -207,43 +229,66 @@ def _acted_on_layer_modes(**kw):
     finally:
         for mod, fn in patched:
             mod._sqrt_decay = fn
-    return n_layer
+    return n_layer, n_cut
 
 
-def test_a_lossy_spacer_alone_does_not_empty_the_acted_on_population():
+def test_a_lossy_spacer_alone_does_not_empty_the_bands_jurisdiction():
     """The other side of gate 1, stated on the MECHANISM rather than on a
     closure reading, because whether a given truncation of a given fixture
     manifests the pre-round-1 defect is a per-build fact (measured: this
     fixture's worst pre/post closure ratio over ``n_orders`` 3/4/5 is 6.95 on
     WIN and 1.05 on WSL, so a ratio bar there would be per-build).
 
-    What IS build-free is the count the band's own predicate produces.  The
-    round-2 file's gate 6 justifies its lossy exemption with "for a lossy layer
-    the acted-on population is EMPTY".  That is true of the PATTERNED layer and
-    false of the SPACER: with loss only in the spacer the patterned layer's
-    propagating modes are still exactly on the cut, and the band still acts on
-    every one of them -- which is why such a stack was still wrong by 1.3e-03
-    per order before round 2.  If this ever reads zero, "lossy" has silently
-    widened to mean "loss anywhere", and the scope statement stops being true.
+    The round-2 file's gate 6 justifies its lossy exemption with "for a lossy
+    layer the acted-on population is EMPTY".  That is true of the PATTERNED
+    layer and false of the SPACER: with loss only in the spacer the patterned
+    layer's propagating modes are still exactly on the cut, so the band still
+    has JURISDICTION over every one of them -- which is why such a stack was
+    still wrong by 1.3e-03 per order before round 2.  If this ever reads zero,
+    "lossy" has silently widened to mean "loss anywhere", and the scope
+    statement stops being true.
+
+    RESTATED 2026-09-11 (ROUND 3).  Until this date the claim was made on the
+    ACTED-ON count, and that count is not build-free: it requires the band's
+    reach AND ``Im(r) < 0``, and the second clause is the eigensolver's
+    backward-error sign -- a coin flip per mode, and the very quantity the
+    branch cut exists to stop mattering.  Over this fixture's 8-mode on-cut
+    population it came out ZERO at ``n_orders = 4`` on WSL/py3.12 under
+    ``OPENBLAS_CORETYPE=PRESCOTT`` (Katmai): ``{3: 8, 4: 0, 5: 8}``, against
+    ``{3: 8, 4: 8, 5: 8}`` on Haswell, Zen and Sandybridge, IDENTICALLY on the
+    round-2 tree and the round-3 one.  The claim is now made on the REACH --
+    ``|Re(r)| <= band * max(max|r|, 1)``, a magnitude, decided by the mode's
+    physics rather than by a last bit -- which is also the quantity the scope
+    statement is actually about.  The acted-on count is still asserted, but
+    SUMMED OVER THE LADDER, where a single unlucky truncation cannot empty it.
     """
     for M in _SPACER_LOSS_LADDER:
-        with_cell_loss = _acted_on_layer_modes(n_orders=M, cell_loss=1e-6)
-        assert with_cell_loss == 0, (
+        acted, on_cut = _acted_on_layer_modes(n_orders=M, cell_loss=1e-6)
+        assert on_cut == 0, (
             "a LOSSY PATTERNED CELL (Im eps = 1e-6, n_orders = %d) still puts "
-            "%d layer mode(s) in the acted-on population: the exemption gate 1 "
-            "relies on does not hold" % (M, with_cell_loss))
-    n = {M: _acted_on_layer_modes(n_orders=M, spacer_loss=1e-6)
-         for M in _SPACER_LOSS_LADDER}
-    assert all(v > 0 for v in n.values()), (
-        "with loss in the SPACER only, the acted-on population is empty at "
-        "%s: the lossy exemption would then be about loss ANYWHERE in the "
-        "stack, which it is not -- measured 4..8 acted-on layer modes on both "
-        "builds" % {k: v for k, v in n.items()})
+            "%d layer mode(s) ON THE CUT: the exemption gate 1 relies on does "
+            "not hold" % (M, on_cut))
+        assert acted == 0                       # implied, and cheap to pin
+    rows = {M: _acted_on_layer_modes(n_orders=M, spacer_loss=1e-6)
+            for M in _SPACER_LOSS_LADDER}
+    cut = {M: v[1] for M, v in rows.items()}
+    acted = {M: v[0] for M, v in rows.items()}
+    assert all(v > 0 for v in cut.values()), (
+        "with loss in the SPACER only, the band's jurisdiction over the "
+        "PATTERNED layer is empty at %s: the lossy exemption would then be "
+        "about loss ANYWHERE in the stack, which it is not -- measured 8 "
+        "on-cut layer modes at every truncation on every kernel" % cut)
+    assert sum(acted.values()) > 0, (
+        "with loss in the SPACER only, the band ACTS on nothing anywhere on "
+        "the ladder (%s): the jurisdiction is real but nothing in it ever "
+        "carries the incoming root, which would mean the fixture no longer "
+        "exercises the flip at all" % acted)
     for M in _SPACER_LOSS_LADDER:
-        assert _acted_on_layer_modes(n_orders=M, cell_loss=1e-2,
-                                     spacer_loss=1e-2) == 0, (
-            "loss in BOTH layers does not empty the population at n_orders "
-            "= %d" % M)
+        _a, _c = _acted_on_layer_modes(n_orders=M, cell_loss=1e-2,
+                                       spacer_loss=1e-2)
+        assert _c == 0, (
+            "loss in BOTH layers does not empty the band's jurisdiction at "
+            "n_orders = %d (%d modes on the cut)" % (M, _c))
 
 
 # ==================================================================== GATE 2

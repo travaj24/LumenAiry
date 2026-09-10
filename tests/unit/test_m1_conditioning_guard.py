@@ -929,6 +929,88 @@ class _pre_branch_cut:
         return False
 
 
+# ------------------------------------------------------------------ ROUND 3
+# THE FAIL-BEFORE QUANTITY for the ladder test below.  Until 2026-09-11 its
+# engineered arm closed on ``worst pre-fix sum(R) is 152x the converged
+# value``.  That ratio is AMPLIFIED ROUNDING -- how far a singular mode-match
+# throws the answer depends on where the singularity falls relative to the
+# arithmetic -- so it is a per-kernel fact by its nature, and on CI's AMD
+# runners it read 0.68x and the test failed for reproducing nothing.
+#
+# The two quantities below are decisions rather than readings.
+#
+#   THE SIGN CENSUS.  Count the modes the selector returns numerically ON THE
+#   CUT (``|Re(lam)| <= _CUT_BAND_REL * max(max|lam|, 1)`` -- propagating and
+#   lossless) but carrying the INCOMING root (``Im(lam) < 0``).  The S-matrix
+#   recursion requires a layer's FORWARD set to carry the OUTGOING root
+#   ``+i|kz|``; the incoming root IS the defect.  Post-fix the count is ZERO BY
+#   CONSTRUCTION.  Pre-fix the sign is the eigensolver's backward error -- a
+#   coin flip per mode -- so over 25 truncations "at least one" survives every
+#   kernel.  Measured on the TE ladder, pre-arm: 413 (WIN-HASWELL) / 426
+#   (WIN-PRESCOTT) / 444 (WIN-SANDYBRIDGE) / 413 (WSL-HASWELL) / 426
+#   (WSL-PRESCOTT) of 2505 on-cut modes.
+#
+#   THE CONDITIONING.  Worst ``rcond(a+b)`` over the ladder, read from the M1
+#   census this file already arms.  Measured over five (build x core-type)
+#   samples:
+#
+#     arm     WIN-HAS    WIN-PRE    WIN-SAND   WSL-HAS    WSL-PRE
+#     POST   6.2504e-02 6.2504e-02 6.2504e-02 6.2504e-02 6.2504e-02
+#     PRE    3.331e-19  4.676e-21  6.217e-20  3.614e-19  2.712e-21
+#
+#   The POST row does not move a digit on any of the five.  The bar below sits
+#   6.4 decades above the worst PRE reading and 10.2 decades below the POST
+#   one -- seventeen decades of empty gap between the two populations.
+_X1_PRE_RCOND = 1e-12
+
+
+class _root_sign_census:
+    """Wrap whatever ``_sqrt_decay`` is installed and count the on-cut modes it
+    returns on the INCOMING root."""
+
+    def __init__(self):
+        self.incoming = 0
+        self.oncut = 0
+
+    def __enter__(self):
+        import importlib
+        self._saved = []
+
+        def _wrap(inner):
+            def wrapped(x, xp=None, band=_rc._CUT_BAND_REL):
+                out = inner(x, xp, band)
+                try:
+                    lam = np.asarray(out)
+                    if lam.size > 4 and np.all(np.isfinite(lam)):
+                        scale = max(float(np.max(np.abs(lam))), 1.0)
+                        on = np.abs(lam.real) <= _rc._CUT_BAND_REL * scale
+                        self.oncut += int(on.sum())
+                        self.incoming += int((on & (lam.imag < 0)).sum())
+                except Exception:                    # instrument only
+                    pass
+                return out
+            return wrapped
+
+        for name in _pre_branch_cut._MODULES:
+            mod = importlib.import_module(name)
+            if hasattr(mod, "_sqrt_decay"):
+                self._saved.append((mod, mod._sqrt_decay))
+                mod._sqrt_decay = _wrap(mod._sqrt_decay)
+        return self
+
+    def __exit__(self, *a):
+        for mod, fn in self._saved:
+            mod._sqrt_decay = fn
+        return False
+
+
+def _worst_rcond(rows):
+    """Worst LAPACK reciprocal condition the M1 census recorded over a scan --
+    i.e. the mode-match ``a + b`` at its worst interface on the whole ladder."""
+    vals = [c[2] for r in rows for c in r["census"] if np.isfinite(c[2])]
+    return min(vals) if vals else float("nan")
+
+
 def _thin_scan_uncached(pol):
     """The ladder, solved fresh -- never through ``_THIN_SCAN``, whose entries
     would otherwise carry an engineered arm's readings into every later test in
@@ -1001,6 +1083,19 @@ def test_x1_is_closed_across_the_whole_thin_ladder_and_reopens_pre_fix():
     PRE (engineered, this process): 7-8 raising cells and 14 flagged of 25 in
     TE, worst closure 3.196e-02 and a ``sum(R)`` 152.60x the converged value at
     M = 21 -- on both builds, at every thread count measured.
+
+    RESTATED 2026-09-11 (branch-cut ROUND 3).  That last figure was the
+    fail-before's closing assertion (``worst_ratio > 10.0``) and it is a
+    per-kernel fact by its nature: it is amplified rounding, so how far the
+    singular mode-match throws ``sum(R)`` depends on where the singularity
+    falls relative to the arithmetic.  On CI's AMD runners it read 0.68x, and
+    the test failed for reproducing nothing rather than for anything being
+    wrong.  The engineered arm now closes on the two BUILD-INDEPENDENT
+    quantities defined at :data:`_X1_PRE_RCOND` -- a sign census on the root
+    the selector returns, and the worst ``rcond(a+b)`` over the ladder -- which
+    are decisions, and which separate by seventeen decades rather than by a
+    ratio that has to be lucky.  The counting claims above (``n_bad``,
+    ``n_flag``) are unchanged; they held on every CI shard.
     """
     for pol in ("te", "tm"):
         rows = _thin_scan(pol)
@@ -1016,8 +1111,11 @@ def test_x1_is_closed_across_the_whole_thin_ladder_and_reopens_pre_fix():
             f"flagged.\n    " + _thin_table((pol,)))
 
     # ---- the fail-before, ENGINEERED: put the pre-round-1 branch back.
+    with _root_sign_census() as post_census:
+        post = _thin_scan_uncached("te")
     with _pre_branch_cut():
-        pre = _thin_scan_uncached("te")
+        with _root_sign_census() as pre_census:
+            pre = _thin_scan_uncached("te")
     n_bad = sum(1 for r in pre
                 if r["raised"] is not None or r["close"] > 1e-6)
     n_flag = sum(1 for r in pre if r["flagged"])
@@ -1026,14 +1124,27 @@ def test_x1_is_closed_across_the_whole_thin_ladder_and_reopens_pre_fix():
         f"({n_bad} bad cells, {n_flag} flagged of {len(pre)}): the "
         f"fail-before has stopped demonstrating anything, so the POST claims "
         f"above are no longer two-sided")
-    # ... and the answer really is WRONG there, not merely non-conserving.
-    ref = _thin_converged_sumR("te")
-    worst_ratio = max((abs(r["sumR"] / ref - 1.0) for r in pre
-                       if np.isfinite(r["sumR"])), default=0.0)
-    assert worst_ratio > 10.0, (
-        f"the worst pre-fix sum(R) is only {worst_ratio:.2f}x from the "
-        f"converged {ref:.6e}: the engineered arm is not reproducing the "
-        f"152x error the defect is documented at")
+    # ... and the CAUSE really is present there, on quantities no kernel moves.
+    assert post_census.oncut > 0, (
+        "no on-cut modes on this ladder -- wrong fixture")
+    assert post_census.incoming == 0, (
+        f"the SHIPPED selector returned {post_census.incoming} of "
+        f"{post_census.oncut} on-cut modes on the INCOMING root: the branch "
+        f"cut has reopened in the tree, not just in the engineered arm")
+    assert pre_census.incoming >= 1, (
+        f"the pre-round-1 branch body mis-rooted NOTHING on this build "
+        f"({pre_census.incoming} of {pre_census.oncut} on-cut modes on the "
+        f"incoming root), so the engineered arm is not reproducing the cause")
+    pre_rcond = _worst_rcond(pre)
+    post_rcond = _worst_rcond(post)
+    assert pre_rcond <= _X1_PRE_RCOND, (
+        f"the pre-round-1 arm's worst rcond(a+b) over the ladder is "
+        f"{pre_rcond:.3e}, above the {_X1_PRE_RCOND:.0e} bar: the mis-rooted "
+        f"modes are not collapsing the mode-match, so the engineered arm is "
+        f"not reproducing the defect")
+    assert post_rcond > 1e-4, (
+        f"the SHIPPED tree's worst rcond(a+b) over the ladder is "
+        f"{post_rcond:.3e}, so the two arms are not separated")
 
 
 def test_thin_grating_clean_truncations_are_untouched():

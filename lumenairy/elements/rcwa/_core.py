@@ -1338,11 +1338,53 @@ def _sqrt_decay(x, xp=None, band: float = _CUT_BAND_REL):
     band separates by fourteen decades with nothing in between -- see
     ``_CUT_BAND_REL`` for the measured populations.
 
-    On the cut the exact root is PURE IMAGINARY, so the retained real part is
-    noise either way; the conjugate root is taken rather than ``-r`` because it
-    keeps ``Re(lam) >= 0`` -- ``-r`` would hand back ``Re(lam) = -1e-16`` and
-    give up the ``|X| <= 1`` guarantee this function exists to provide.  The
-    two differ by ``2 |Re(r)| ~ 1e-15`` in a quantity of size ``|kz|``.
+    THE FLIP IS ``-r``, NOT ``conj(r)`` (round 3, 2026-09-11).  On the cut the
+    exact root is PURE IMAGINARY, so the retained real part is noise either
+    way, and rounds 1 and 2 took ``conj(r)`` on the argument that it keeps
+    ``Re(lam) >= 0`` and so preserves ``|X| <= 1``.  That argument costs more
+    than it buys, for two INDEPENDENT reasons, both measured:
+
+    * ``-r`` IS THE INVOLUTION THE ASSEMBLY IS INVARIANT UNDER.  Flipping an
+      on-cut mode's root re-labels it from the layer's BACKWARD mode set to its
+      FORWARD set.  Under ``lam -> -lam`` that re-labelling is EXACT: the
+      propagator pair ``exp(-lam k0 L)`` / ``exp(+lam k0 L)`` swaps, and
+      ``V = Q W diag(1/lam)`` changes sign with it, which is precisely the
+      ``(W, -V)`` backward partner, so the assembled S-matrix does not move.
+      ``conj(r) = -r + 2 Re(r)`` is that involution PLUS a ``2 Re(r)``
+      perturbation, and ``Re(r)`` is the eigensolver's backward error, which
+      this band deliberately lets run as high as ``band * scale`` (measured to
+      2.8530e-08 on the near-normal hybrid fixture below).  Because the flip
+      SET itself moves with the incidence angle -- 9 distinct flip masks over
+      41 thetas spanning +/-4e-06 rad -- the broken invariance appears as a
+      STEP in the forward answer every time a mode enters or leaves the band:
+      worst step 1.7287e-07 against a smooth increment of 1.2558e-08 (13.8x),
+      and a departure from the local linear fit of 1.5935e-07 where BOTH ``-r``
+      and the pre-round-1 rule sit at 6.9e-12.  The forward answer was
+      DISCONTINUOUS in theta at the 1.6e-07 level, which is 5 decades above
+      the ``2 Re(r) ~ 1e-16`` the round-1 note assumed.
+    * ``conj`` IS NOT HOLOMORPHIC, so reverse-mode AD conjugates the cotangent
+      of every flipped mode and the JAX twins' angle gradient at near-normal
+      incidence came out three to four orders wrong (``|AD - FD| / |FD|``
+      6.18 and 0.71 against a 1e-04 gate; oblique theta=0.3 was unaffected at
+      7.9e-09).  ``r * where(flip, -1.0, 1.0)`` multiplies by a REAL constant
+      whose sign is a piecewise-constant boolean predicate -- non-differentiable
+      but of zero measure, and holomorphic on each piece -- so the derivative
+      is the analytic ``-1 / (2 sqrt(x))`` of the branch actually taken.
+
+    THE PRICE, stated exactly: ``Re(-r) = -|Re(r)|``, so ``|X| = exp(-Re(lam)
+    k0 L)`` exceeds 1 for a flipped mode.  Censused over the round-1/round-2
+    fixture sets: worst ``|Re(r)|`` of a flipped mode 6.1378e-10 (2.0807e-10 of
+    the spectrum scale, i.e. 48x inside the 1e-08 band), ``k0 L`` up to
+    1.1424e+07, worst ``|X| - 1 = 1.752949e-09`` against ``-2.220446e-16``
+    (that is, exactly 1 to rounding) under ``conj``.  A flipped mode is by
+    construction a PROPAGATING one -- ``|X| = 1`` in exact arithmetic -- so this
+    is not the evanescent ``exp(+|gamma| k0 L)`` blow-up the ``Re(lam) >= 0``
+    rule exists to prevent; it is a 2e-09 amplitude excess on a unit-modulus
+    phase, two decades below the 1.6e-07 forward discontinuity it buys off.
+    The obvious mitigation -- keeping ``-r`` but zeroing the noise real part,
+    ``where(flip, 1j * imag(r_flipped), r_flipped)`` -- was measured and
+    REJECTED: ``imag()`` is itself non-holomorphic, and it scored WORSE than
+    ``conj`` on both gates (relative gradient error 18.1 and 0.38).
 
     THE ONE DEFINITION (round 2, 2026-09-11).  Until round 2 this function had
     SIX independent bodies: this one and five private copies inside
@@ -1383,8 +1425,13 @@ def _sqrt_decay(x, xp=None, band: float = _CUT_BAND_REL):
     # an absolute band).  Pin Im >= 0 there so propagating modes use the
     # outgoing root deterministically, on every build.
     scale = xp.maximum(xp.max(xp.abs(r)), 1.0) if r.size else 1.0
-    on_cut = xp.abs(r.real) <= band * scale
-    return xp.where(on_cut & (r.imag < 0), xp.conj(r), r)
+    flip = (xp.abs(r.real) <= band * scale) & (r.imag < 0)
+    # ROUND 3: the flip is ``-r``, NOT ``conj(r)``.  ``-r`` is the EXACT
+    # forward/backward involution the S-matrix assembly is invariant under,
+    # and multiplying by a real +/-1 whose sign is a piecewise-constant
+    # predicate is HOLOMORPHIC, so reverse-mode AD carries the right
+    # cotangent.  See the docstring for both measurements.
+    return r * xp.where(flip, -1.0, 1.0)
 
 
 

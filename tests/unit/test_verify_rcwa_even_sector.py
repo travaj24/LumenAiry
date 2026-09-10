@@ -109,50 +109,114 @@ def _spectrum():
     return np.concatenate([z, corners])
 
 
-def test_sqrt_decay_never_returns_a_growing_root():
-    """``|X| = |exp(-lam k0 L)| <= 1`` for every mode, i.e. ``Re(lam) >= 0``.
+def test_a_growing_root_can_only_come_from_the_band_and_only_by_the_band():
+    """``|X| = |exp(-lam k0 L)|`` may exceed 1 ONLY for a mode the band
+    actually flipped, and ONLY by the band's own width.
 
-    This is the guarantee the principal branch exists to provide and the reason
-    the on-cut flip takes ``conj(r)`` and not ``-r`` (``-r`` hands back
-    ``Re(lam) = -1e-16`` and gives it up).  A DECISION on a sign, so no build
-    can move it; the count of violations must be exactly zero.
+    RESTATED 2026-09-11 (branch-cut ROUND 3).  Until round 3 this test asserted
+    ``Re(lam) >= 0`` with a violation count of exactly zero, because the on-cut
+    flip took ``conj(r)``.  Round 3 replaced that flip with ``-r`` -- the exact
+    ``lam -> -lam`` involution the S-matrix assembly is invariant under, and
+    the only flip that is HOLOMORPHIC; ``conj`` is neither (see
+    ``docs/audits/FIX_BRANCH_CUT_ROUND3_2026_09_11.md``).  ``-r`` therefore
+    returns ``Re(lam) = -|Re(r)|`` for a flipped mode, so the old claim is
+    false BY CONSTRUCTION.  It is NOT relaxed into a tolerance: what replaces
+    it is the exact statement of WHICH modes may go negative and BY HOW MUCH,
+    and both halves are decisions.
+
+      (a) A root may have ``Re(lam) < 0`` ONLY if the band flipped it.  The
+          flipped set is recomputed here from the published predicate and the
+          two sets must match EXACTLY -- a boolean array equality, which no
+          build can move.
+      (b) A flipped root's ``|Re(lam)|`` is bounded by the band itself,
+          ``_CUT_BAND_REL * max(max|r|, 1)``.  That is the predicate that
+          admitted the mode, so the bound is derived rather than fitted, and it
+          is the complete statement of the price.  Measured over the
+          round-1/round-2 fixture SOLVES: worst ``|Re(r)|`` of a flipped mode
+          6.1378e-10 against a band of 2.9e-08 there (48x inside it), giving a
+          worst ``|X| - 1`` of 1.752949e-09 at ``k0 L`` up to 1.1424e+07.
+      (c) An UNFLIPPED root still satisfies ``Re(lam) >= 0`` exactly -- the
+          principal branch, untouched.  This is the half of the old claim that
+          survives verbatim, and it is the half that guards the catastrophe
+          the function exists to prevent: an EVANESCENT mode turning into
+          ``exp(+|gamma| k0 L)``.  A flipped mode is by construction a
+          PROPAGATING one (its ``lam^2`` is a negative real to within the
+          eigensolver's backward error), so it can never be that mode.
     """
     z = _spectrum()
     lam = np.asarray(_rc._sqrt_decay(z))
-    assert np.all(np.isfinite(lam)), "non-finite root returned"
-    bad = int(np.sum(lam.real < 0.0))
-    assert bad == 0, (
-        "%d of %d roots have Re(lam) < 0, i.e. a GROWING propagator "
-        "exp(+|Re lam| k0 L); worst %.3e" % (bad, lam.size,
-                                             float(np.min(lam.real))))
-    # ... and it is still a square root.  Where the on-cut flip fires the
-    # returned root squares to conj(lam^2) rather than to lam^2 -- that IS the
-    # flip, and on a mode genuinely on the cut the two differ only by the
-    # rounding-level imaginary part the flip exists to discard.  So the
-    # residual is taken against the nearer of the two.
-    resid = np.minimum(np.abs(lam ** 2 - z), np.abs(lam ** 2 - np.conj(z)))
-    allow = _ROOT_RESIDUAL_C * _EPS * np.abs(z) + 8.0 * 5e-324
-    worst = int(np.argmax(resid - allow))
+    r = np.sqrt(z)
+    fin = np.isfinite(r) & np.isfinite(lam)
+    assert np.all(np.isfinite(lam[np.isfinite(z)])), "non-finite root returned"
+    band = _rc._CUT_BAND_REL * max(float(np.max(np.abs(r[fin]))), 1.0)
+    flipped = np.zeros(z.shape, bool)
+    flipped[fin] = (np.abs(r.real[fin]) <= band) & (r.imag[fin] < 0)
+    # (a) the negative real parts are EXACTLY the band's doing.  ``r.real`` is
+    # >= 0 on the principal branch, so a flip drives it strictly negative only
+    # where it was strictly positive; a root exactly ON the axis stays there.
+    neg = np.zeros(z.shape, bool)
+    neg[fin] = lam.real[fin] < 0.0
+    expect = flipped & (r.real > 0.0)
+    assert np.array_equal(neg, expect), (
+        "%d roots have Re(lam) < 0 but %d were flipped with Re(r) > 0: the "
+        "negative real parts are not exactly the band's doing"
+        % (int(neg.sum()), int(expect.sum())))
+    # (c) every UNFLIPPED root keeps the principal branch's Re >= 0
+    assert np.all(lam.real[fin & ~flipped] >= 0.0), (
+        "an UNFLIPPED root came back with Re(lam) < 0, i.e. a GROWING "
+        "propagator exp(+|Re lam| k0 L) on a mode the band never touched")
+    # (b) a flipped root's excursion is bounded BY THE BAND that admitted it
+    if flipped.any():
+        worst = float(np.max(np.abs(lam.real[flipped])))
+        assert worst <= band, (
+            "a flipped root's |Re(lam)| = %.3e exceeds the band %.3e that "
+            "admitted it" % (worst, band))
+    # ... and it is still a square root -- EXACTLY so, which round 3 TIGHTENED:
+    # ``(-r)**2 == r**2 == z`` bit for bit, where round 1/2's ``conj(r)``
+    # squared to ``conj(z)`` and needed a two-sided residual here.
+    resid = np.abs(lam[fin] ** 2 - z[fin])
+    allow = _ROOT_RESIDUAL_C * _EPS * np.abs(z[fin]) + 8.0 * 5e-324
+    bad = int(np.argmax(resid - allow)) if resid.size else 0
     assert np.all(resid <= allow), (
         "root residual %.3e exceeds the derived floor %.3e at lam^2 = %r"
-        % (resid[worst], allow[worst], z[worst]))
+        % (resid[bad], allow[bad], z[fin][bad]))
 
 
-def test_the_flip_only_ever_moves_a_root_along_the_imaginary_axis():
-    """Whatever the band does, it may not change ``|lam|`` or ``Re(lam)``.
+def test_the_flip_is_the_exact_minus_r_involution():
+    """The flip may change NOTHING about a root except WHICH of the two roots
+    it is: ``|lam|`` unmoved bit-for-bit, and ``lam`` bit-for-bit equal to
+    ``+sqrt(lam^2)`` or ``-sqrt(lam^2)``.
 
-    ``conj`` is an isometry that fixes the real part, so this holds by
-    construction -- which is exactly why it is worth pinning: a future
-    "simplification" back to ``-r`` breaks both halves at once, and the
-    ``Re(lam) >= 0`` gate above would catch only one of them.
+    RESTATED 2026-09-11 (ROUND 3).  The old form asserted that the flip fixes
+    ``Re(lam)`` -- true of ``conj``, false of ``-r`` -- and its own docstring
+    warned against "a future simplification back to ``-r``".  Round 3 IS that
+    change, and it was made because ``-r`` is the involution the assembly is
+    invariant under: ``lam -> -lam`` swaps the propagator pair
+    ``exp(-lam k0 L)`` / ``exp(+lam k0 L)`` and flips the sign of
+    ``V = Q W diag(1/lam)``, which is exactly the ``(W, -V)`` backward partner,
+    so the assembled S-matrix does not move.  ``conj(r) = -r + 2 Re(r)`` is
+    that involution PLUS a ``2 Re(r)`` perturbation, and ``Re(r)`` is the
+    eigensolver's backward error -- measured to make the FORWARD answer
+    DISCONTINUOUS in the incidence angle at the 1.6e-07 level (round-3 audit,
+    GATE 1), five decades above the ``2 Re(r) ~ 1e-16`` round 1 assumed.
+
+    What is pinned now is the EXACTNESS of the involution, which is a STRONGER
+    claim than the old one, not a weaker one: the old form could only require
+    ``|lam|`` to be preserved (``conj`` is an isometry), while this one
+    requires the returned value to be bit-identical to one of the two roots.
     """
     z = _spectrum()
     lam = np.asarray(_rc._sqrt_decay(z))
     principal = np.sqrt(z)
-    assert np.array_equal(np.abs(lam), np.abs(principal)), (
-        "the selector changed |lam|; conj() is an isometry and must not")
-    assert np.array_equal(lam.real, principal.real), (
-        "the selector changed Re(lam); conj() fixes the real part and must")
+    fin = np.isfinite(principal) & np.isfinite(lam)
+    assert np.array_equal(np.abs(lam[fin]), np.abs(principal[fin])), (
+        "the selector changed |lam|; a +/-1 factor is an isometry and must not")
+    assert np.all((lam[fin] == principal[fin])
+                  | (lam[fin] == -principal[fin])), (
+        "the selector returned a value that is NEITHER root of sqrt(lam^2) "
+        "bit-for-bit -- the flip is no longer the exact -r involution")
+    assert np.array_equal(lam[fin] ** 2, principal[fin] ** 2), (
+        "the flipped root does not square back to lam^2 bit-for-bit")
     assert not np.array_equal(lam, principal), (
         "the selector never fired on this spectrum -- wrong fixture")
 

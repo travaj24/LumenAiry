@@ -141,6 +141,100 @@ class _pre_arm:
         return False
 
 
+# ------------------------------------------------------------------ ROUND 3
+# THE FAIL-BEFORE QUANTITY.  Until 2026-09-11 the fail-befores in this file
+# asserted that the pre-round-1 arm's LOSSLESS-CLOSURE READING exceeded the
+# post arm's by three decades.  That reading is AMPLIFIED ROUNDING: how far a
+# singular mode-match throws the answer depends on where the singularity falls
+# relative to the arithmetic, so it is a per-kernel fact by its nature.  On
+# CI's AMD runners it did not reopen at all
+# (``{3: '4.441e-15', 4: '1.776e-15', 5: '1.110e-15'}`` against a detuned
+# control at the same floor), and the test failed for reproducing nothing.
+#
+# What replaces it are two quantities that are decisions rather than readings:
+#
+#   THE SIGN CENSUS.  During a solve, count the modes the selector returns
+#   numerically ON THE CUT (``|Re(lam)| <= _CUT_BAND_REL * max(max|lam|, 1)``,
+#   i.e. propagating and lossless) but carrying the INCOMING root
+#   (``Im(lam) < 0``).  The S-matrix recursion requires a layer's FORWARD set
+#   to carry the OUTGOING root ``+i|kz|``; the incoming root ``-i|kz|`` IS the
+#   defect.  Post-fix the count is ZERO BY CONSTRUCTION -- that is what the
+#   selector does.  Pre-fix the sign is the eigensolver's backward error, a
+#   coin flip per mode, so over a ladder with tens of modes per rung "at least
+#   one" survives every BLAS kernel.  Measured pre-arm on this fixture: 31
+#   (WIN-HASWELL) / 23 (WIN-PRESCOTT) / 34 (WIN-SANDYBRIDGE) / 26
+#   (WSL-HASWELL) / 17 (WSL-PRESCOTT) of 192 on-cut modes.
+#
+#   THE CONDITIONING.  ``rcond(a + b)`` at the mode-match, from the library's
+#   own ``_INV_CENSUS`` instrument, is what the coincidence actually does: a
+#   forward mode on the incoming root is exactly the neighbouring uniform
+#   layer's BACKWARD mode, so ``a + b`` becomes singular.  Measured worst over
+#   the three truncations, five (build x core-type) samples:
+#
+#     arm                        WIN-HAS   WIN-PRE   WIN-SAND  WSL-HAS  WSL-PRE
+#     POST coincident           1.828e-03 1.828e-03 1.828e-03 1.828e-03 1.828e-03
+#     POST detuned              1.834e-03 1.834e-03 1.834e-03 1.834e-03 1.834e-03
+#     PRE  coincident           2.303e-07 9.887e-08 5.160e-08 1.579e-07 2.737e-07
+#     PRE  detuned              8.700e-05 1.167e-05 1.200e-04 3.369e-04 3.388e-05
+#
+#   The POST rows do not move a digit across any of the five.  The bar below
+#   sits 0.56 decades above the worst PRE-coincident reading and 1.07 decades
+#   below the best PRE-detuned one, inside a gap the measurement leaves empty.
+_RCOND_COINCIDENT = 1e-6
+
+#: The POST mode-match is healthy on BOTH arms and they agree; 1e-4 is two
+#: decades below the 1.828e-03 measured identically on all five samples.
+_RCOND_HEALTHY = 1e-4
+
+
+class _root_census:
+    """Wrap whatever ``_sqrt_decay`` is installed and count the on-cut modes it
+    returns on the INCOMING root, plus the worst ``rcond(a+b)`` the guarded
+    inverse records.  Both are read from the solve itself, so neither needs a
+    reference run."""
+
+    def __init__(self):
+        self.incoming = 0
+        self.oncut = 0
+
+    def __enter__(self):
+        import importlib
+        self._saved = []
+        self._prev_census = _rc._INV_CENSUS
+        _rc._INV_CENSUS = []
+
+        def _wrap(inner):
+            def wrapped(x, xp=None, band=_rc._CUT_BAND_REL):
+                out = inner(x, xp, band)
+                try:
+                    lam = np.asarray(out)
+                    if lam.size > 4 and np.all(np.isfinite(lam)):
+                        scale = max(float(np.max(np.abs(lam))), 1.0)
+                        on = np.abs(lam.real) <= _rc._CUT_BAND_REL * scale
+                        self.oncut += int(on.sum())
+                        self.incoming += int((on & (lam.imag < 0)).sum())
+                except Exception:                    # instrument only
+                    pass
+                return out
+            return wrapped
+
+        for name in _BOUND:
+            mod = importlib.import_module(name)
+            if hasattr(mod, "_sqrt_decay"):
+                self._saved.append((mod, mod._sqrt_decay))
+                mod._sqrt_decay = _wrap(mod._sqrt_decay)
+        return self
+
+    def __exit__(self, *a):
+        for mod, fn in self._saved:
+            mod._sqrt_decay = fn
+        rows = [c for c in (_rc._INV_CENSUS or []) if np.isfinite(c[2])]
+        self.rcond = min((c[2] for c in rows), default=float("nan"))
+        self.n_inv = len(rows)
+        _rc._INV_CENSUS = self._prev_census
+        return False
+
+
 # ==================================================================== GATE 1
 # The consolidation itself, asserted the way the library's other multi-copy
 # regressions are pinned: on the SOURCE, so a copy cannot come back.
@@ -259,11 +353,30 @@ def _round1_body(x):
     return xp.where(on_cut & (r.imag < 0), xp.conj(r), r)
 
 
-def test_the_shared_body_is_bit_identical_to_the_round_one_body():
-    """Measured over 4,010 values spanning fifteen decades plus every corner
-    (signed zeros, a denormal, ``lam^2`` exactly on the cut, ``nan``): zero
-    differing bits, and the same at five array SIZES because the band is
-    relative to the array."""
+def test_the_shared_body_keeps_the_round_one_SELECTOR_and_changes_only_the_value():
+    """The round-2 consolidation and the round-3 flip touch DIFFERENT halves of
+    this function, and this test pins the split.
+
+    RESTATED 2026-09-11 (ROUND 3).  The old form asserted the shared body was
+    BIT-IDENTICAL to the round-1 body over 4,010 values.  Round 3 changed the
+    on-cut flip from ``conj(r)`` to ``-r``, so the VALUES differ wherever the
+    flip fires -- and that is the whole of the change, which is what makes it
+    reviewable.  The two claims below are each stronger than a bit-comparison
+    against a body that is no longer the contract:
+
+      (a) THE SELECTOR IS UNCHANGED.  Which modes the band flips is decided by
+          exactly the round-1 predicate, over the same 4,010 values and the
+          same five array SIZES (the band is relative to the array, so size is
+          a real axis).  Nothing about WHEN the flip fires moved in round 2 or
+          round 3, so the round-1/round-2 population measurements -- the
+          fourteen decades of separation recorded at ``_CUT_BAND_REL`` -- carry
+          forward unchanged.
+      (b) WHERE IT FIRES, THE VALUE MOVED BY EXACTLY ``2 Re(r)``.  That is an
+          identity, not a tolerance: ``conj(r) - (-r) == 2 Re(r)`` in exact
+          arithmetic, and in binary floating point too, because ``2a`` is
+          exact and ``2a - a == a``.  Anywhere the flip does NOT fire the two
+          bodies still agree bit for bit.
+    """
     rng = np.random.default_rng(20260911)
     mags = 10.0 ** rng.uniform(-15.0, 6.0, 4000)
     ang = rng.uniform(-np.pi, np.pi, 4000)
@@ -272,12 +385,45 @@ def test_the_shared_body_is_bit_identical_to_the_round_one_body():
              -2.25 - 0j, -2.25 - 2.911e-15j, 2.25 - 2.911e-15j,
              complex("nan"), 1e300 + 1e300j]
     z = np.array(vals, dtype=complex)
+    fired = 0
     for n in (1, 2, 7, 64, 243, z.size):
-        a = np.nan_to_num(np.asarray(_rc._sqrt_decay(z[:n])), nan=-7.0)
-        b = np.nan_to_num(np.asarray(_round1_body(z[:n])), nan=-7.0)
-        assert np.array_equal(a, b), (
-            "the shared body differs from the round-1 body at n = %d "
-            "(max |d| = %.3e)" % (n, float(np.max(np.abs(a - b)))))
+        zz = z[:n]
+        a = np.asarray(_rc._sqrt_decay(zz))
+        b = np.asarray(_round1_body(zz))
+        r = np.sqrt(zz)
+        fin = np.isfinite(r) & np.isfinite(a) & np.isfinite(b)
+        # The scale is taken over the WHOLE array exactly as the function does,
+        # NaN included -- a NaN anywhere makes ``scale`` NaN, every ``<=``
+        # comparison False, and the band inert.  That is a real property of the
+        # selector (a NaN modal eigenvalue disarms the pin for the whole
+        # spectrum), and reproducing it here is what makes (a) a statement
+        # about the predicate rather than about the fixture.
+        with np.errstate(invalid="ignore"):
+            band = _rc._CUT_BAND_REL * max(float(np.max(np.abs(r))), 1.0)
+            flip = (np.abs(r.real) <= band) & (r.imag < 0)
+        fired += int(flip.sum())
+        # (a) the SELECTOR: round-1 flipped exactly where the shared body does
+        sel_round1 = np.zeros(zz.shape, bool)
+        sel_round1[fin] = b[fin] != r[fin]
+        sel_shared = np.zeros(zz.shape, bool)
+        sel_shared[fin] = a[fin] != r[fin]
+        assert np.array_equal(sel_round1, sel_shared), (
+            "the shared body flips a DIFFERENT set of modes than the round-1 "
+            "body at n = %d (%d vs %d)"
+            % (n, int(sel_round1.sum()), int(sel_shared.sum())))
+        assert np.array_equal(sel_shared, flip), (
+            "the shared body's flip set is not the published predicate at "
+            "n = %d" % n)
+        # (b) UNFLIPPED entries are still bit-identical to the round-1 body
+        keep = fin & ~flip
+        assert np.array_equal(a[keep], b[keep]), (
+            "the shared body differs from the round-1 body OFF the flip set "
+            "at n = %d" % n)
+        # ... and on the flip set it differs by exactly 2 Re(r), bit for bit
+        assert np.array_equal(b[flip] - a[flip], 2.0 * r.real[flip] + 0j), (
+            "the round-1 and round-3 flips do not differ by exactly 2 Re(r) "
+            "at n = %d" % n)
+    assert fired > 0, "the flip never fired on this fixture -- wrong values"
 
 
 def test_the_band_parameter_is_live_and_defaults_to_the_module_constant():
@@ -343,30 +489,73 @@ def test_the_spacer_coincidence_is_what_breaks_the_pre_round_one_branch():
         WIN       4.893e-06   1.665e-04   4.419e-05
         WSL       2.161e-05   2.220e-15   7.690e-06
 
-    ``n_orders = 4`` is broken on Windows and clean on WSL.  So this test scans
-    the three truncations and asserts on the WORST -- the claim that survives
-    every build is that the coincidence breaks the pre-round-1 branch SOMEWHERE
-    on the ladder while the detuned control is clean EVERYWHERE on it.
+    RESTATED 2026-09-11 (ROUND 3).  This test used to make that claim on the
+    lossless-closure READING -- ``worst > 1e3 x control``.  A closure reading is
+    AMPLIFIED ROUNDING: how far a singular mode-match throws the answer depends
+    on where the singularity falls relative to the arithmetic, so WHICH
+    truncation manifests, and whether any does, is a per-kernel fact by its
+    nature.  On CI's AMD runners none did, and the test failed for reproducing
+    nothing rather than for anything being wrong.  ``docs/TESTING_STANDARDS.md``
+    calls that a defect in the test.
+
+    The claim is now made on the two quantities defined at :class:`_root_census`
+    -- a SIGN CENSUS and a CONDITIONING number, both decisions -- and it is
+    made in three parts, which together say "the coincidence is the cause":
+
+      (a) the pre-round-1 arm MIS-ROOTS: at least one propagating lossless mode
+          comes back on the INCOMING root (17..31 of 192 measured across five
+          build x core-type samples), where the shipped selector returns
+          EXACTLY ZERO on the same fixture;
+      (b) on the COINCIDENT spacer that mis-rooting collapses the mode-match --
+          ``rcond(a+b) <= 1e-06`` -- because a forward mode carrying the
+          incoming root IS the neighbouring uniform layer's backward mode;
+      (c) on the DETUNED spacer, with the mis-rooting just as present, the
+          mode-match stays healthy -- ``rcond(a+b) > 1e-06``.  Nothing about
+          the cell, the substrate or the truncation differs between (b) and
+          (c); only the spacer index does.
 
     The DETUNE LADDER is in the report: a relative 1e-6 -- the detune the
     library's own remedy text used to recommend -- does NOT cure it here
     (8.1e-05 on Windows, 2.3e-04 on WSL); 1e-3 does (8.7e-14 / 1.3e-12).
     """
     ladder = (3, 4, 5)
+    with _root_census() as post_c:
+        for M in ladder:
+            _pmm_stack(M)
     with _pre_arm():
-        bad = {M: abs(_closure(_pmm_stack(M))) for M in ladder}
-        good = {M: abs(_closure(_pmm_stack(M, spacer=_HOST * 1.01)))
-                for M in ladder}
-    worst = max(bad.values())
-    control = max(good.values())
-    assert worst > 1e3 * max(control, 1e-15), (
-        "the pre-round-1 arm does not reproduce the defect at any truncation "
-        "on this build: coincident spacer %s against detuned %s"
-        % ({M: "%.3e" % v for M, v in bad.items()},
-           {M: "%.3e" % v for M, v in good.items()}))
-    assert control < _CLOSURE_BAR, (
-        "the DETUNED control is not clean on the pre-round-1 arm (%.3e), so "
-        "it cannot show that the coincidence is what breaks it" % control)
+        with _root_census() as pre_c:
+            for M in ladder:
+                _pmm_stack(M)
+        with _root_census() as pre_d:
+            for M in ladder:
+                _pmm_stack(M, spacer=_HOST * 1.01)
+
+    # (a) the mis-rooting is present on the pre arm and absent on the shipped one
+    assert post_c.incoming == 0, (
+        "the SHIPPED selector returned %d of %d on-cut modes on the INCOMING "
+        "root: the branch cut has reopened" % (post_c.incoming, post_c.oncut))
+    assert pre_c.oncut > 0, "no on-cut modes in this fixture -- wrong fixture"
+    assert pre_c.incoming >= 1, (
+        "the pre-round-1 arm mis-rooted NOTHING (%d of %d on-cut modes on the "
+        "incoming root), so it is not reproducing the defect"
+        % (pre_c.incoming, pre_c.oncut))
+    # (b) and on the COINCIDENT spacer it collapses the mode-match ...
+    assert pre_c.rcond <= _RCOND_COINCIDENT, (
+        "the pre-round-1 arm's worst rcond(a+b) on the COINCIDENT spacer is "
+        "%.3e, above the %.0e bar: the mis-rooted mode is not meeting a "
+        "coincident partner" % (pre_c.rcond, _RCOND_COINCIDENT))
+    # (c) ... while the DETUNED control, mis-rooted just as much, stays healthy
+    assert pre_d.incoming >= 1, (
+        "the DETUNED control is not mis-rooted (%d on-cut modes incoming), so "
+        "it is not a control for the coincidence" % pre_d.incoming)
+    assert pre_d.rcond > _RCOND_COINCIDENT, (
+        "the DETUNED control's worst rcond(a+b) is %.3e, at or below the "
+        "coincident bar: it cannot show that the coincidence is what breaks it"
+        % pre_d.rcond)
+    # ... and the SHIPPED tree is healthy on both, to the same number
+    assert post_c.rcond > _RCOND_HEALTHY, (
+        "the shipped tree's worst rcond(a+b) on the coincident spacer is "
+        "%.3e" % post_c.rcond)
 
 
 def _pixel_stack(n_orders=3, spacer=_HOST, S=32):

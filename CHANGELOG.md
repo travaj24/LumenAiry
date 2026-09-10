@@ -244,6 +244,80 @@ without an explicit `jnp`; a NaN eigenvalue disarms the pin silently; the
 `_PASSIVITY_BAR` floor has 1.05 decades of headroom over one fixture's
 truncation error.
 
+
+**ROUND 3, 2026-09-11 -- the on-cut flip is `-r`, not `conj(r)`.**  Rounds 1 and
+2 flipped the on-cut root by CONJUGATION, on the argument that it keeps
+`Re(lam) >= 0` and with it the `|X| <= 1` contraction guarantee, the two roots
+differing only by a "`2 Re(r) ~ 1e-15`" real part.  Both halves of that argument
+were wrong, and the release CI matrix found it: the JAX job failed
+`test_pmm2d_near_normal_angle_gradient_improved` and
+`test_gate_angle_grad_at_normal_offcenter_is_genuine`, the hybrid 2-D PMM's
+angle gradient at near-normal incidence coming out three to four orders past its
+finite-difference reference (relative error **6.18** and **0.71** against a 1e-04
+gate; oblique `theta = 0.3` was untouched at 7.9e-09).
+
+`conj` IS NOT HOLOMORPHIC, so reverse-mode AD conjugates the cotangent of every
+flipped mode -- that is the gradient failure.  But the forward answer was wrong
+too, and by more than the round-1 note allowed for.  `conj(r) = -r + 2 Re(r)`,
+and `-r` is the EXACT involution the S-matrix assembly is invariant under:
+`lam -> -lam` swaps the propagator pair `exp(-lam k0 L)` / `exp(+lam k0 L)` and
+flips the sign of `V = Q W diag(1/lam)`, which is precisely the `(W, -V)`
+backward partner, so re-labelling an on-cut mode from the backward set to the
+forward set does not move the assembled S-matrix at all.  `conj` is that
+involution PLUS a `2 Re(r)` perturbation, and `Re(r)` is not `1e-16`: the band
+admits it up to `_CUT_BAND_REL * max(max|r|, 1)`, measured to **2.8530e-08** on
+the near-normal hybrid fixture.  Because the flip SET itself moves with the
+incidence angle -- **9 distinct flip masks over 41 thetas spanning +/-4e-06 rad**
+-- that broken invariance appeared as a STEP in the forward answer each time a
+mode entered or left the band: worst step **1.7287e-07** against a smooth
+increment of 1.2558e-08 (**13.8x**), and a departure from the local linear fit of
+**1.5935e-07** where both `-r` and the pre-round-1 rule sit at **6.9e-12**.  The
+forward answer was DISCONTINUOUS in `theta` at the 1.6e-07 level, five decades
+above what round 1 assumed.  The two failing gates were reading that step: their
+`h = 1e-6` central difference divided a band-level jump by 2e-06.
+
+**What ships.**  `r * where(flip, -1.0, 1.0)`.  The selector is UNCHANGED --
+which modes flip, and the fourteen-decade population separation behind
+`_CUT_BAND_REL`, are exactly as round 2 measured; only the VALUE moves, by
+exactly `2 Re(r)`.  Multiplying by a real `+/-1` whose sign is a piecewise-constant
+boolean is holomorphic, so the derivative is the analytic `-1 / (2 sqrt(x))` of
+the branch actually taken, and the returned root now squares back to `lam^2`
+BIT-FOR-BIT (round 1/2's `conj(r)` squared to `conj(lam^2)`).
+
+**The price, stated exactly.**  `Re(-r) = -|Re(r)|`, so `|X|` exceeds 1 for a
+flipped mode.  Censused over the round-1/round-2 fixture sets: 33 flipped modes
+in 24 arrays, worst `|Re(r)|` **6.1378e-10** (2.0807e-10 of the spectrum scale,
+48x inside the band), `k0 L` up to 1.1424e+07, worst **`|X| - 1 = 1.752949e-09`**
+against `-2.220446e-16` under `conj`.  A flipped mode is by construction a
+PROPAGATING one, so this is not the evanescent `exp(+|gamma| k0 L)` blow-up the
+`Re(lam) >= 0` rule exists to prevent -- it is a 2e-09 amplitude excess on a
+unit-modulus phase, two decades below the 1.6e-07 forward discontinuity it buys
+off.  The obvious mitigation (keep `-r`, zero the noise real part with
+`where(flip, 1j * imag(r), r)`) was measured and REJECTED: `imag()` is itself
+non-holomorphic and it scored WORSE than `conj` on both gates (18.1 and 0.38).
+
+Post-fix, `jax.grad` matches central finite differences to **8.14e-06** worst
+over 12 fixtures (near-normal, oblique, conical, lossy, high-index, rectangular,
+deeper degree; gate 1e-04) with JAX/NumPy forward parity at **7.71e-15**.  The
+exact-index-coincidence fixture of `test_audit_s1_2_rcwa_lossless_tripwire.py`
+now closes at **<= 6.772e-13** over five (build x core-type) samples, against
+7.289e-04 .. 5.001e-02 on the pre-round-1 arm.  Four tests that pinned the
+`conj` contract are RESTATED, and two ENGINEERED fail-befores whose claims rested
+on amplified rounding -- and which therefore did not reproduce on CI's AMD
+kernel -- are restated onto build-independent quantities: a SIGN CENSUS on the
+root the selector returns, and `rcond(a + b)` at the mode match.
+
+One further build-dependent claim was found by the core-type sweep and is
+repaired in passing: `test_verify_branch_cut_round2.py`'s lossy-spacer gate
+counted the modes the band ACTS ON, which needs the backward-error SIGN as well
+as the band's reach, and read `{3: 8, 4: 0, 5: 8}` on the Katmai kernel against
+`{3: 8, 4: 8, 5: 8}` everywhere else — identically on `59105d6`, so pre-existing.
+It is restated onto the band's REACH (8 on-cut modes at every truncation on
+every kernel), which is also the quantity its scope statement is about.
+
+Evidence: `docs/audits/FIX_BRANCH_CUT_ROUND3_2026_09_11.md`; probes in
+`validation/probe_fix_branch_cut_round3/`.
+
 ### Fixed -- `PMMStack` REFUSES a near-coincident-wall SLIVER instead of returning a wrong answer (O-11)
 
 Two adjacent layers whose wall sets differ by `delta` of the period put a SLIVER
