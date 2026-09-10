@@ -32,7 +32,10 @@ wsl.exe -e bash -lc "cd /mnt/c/tmp/lum_vsliver2 && OMP_NUM_THREADS=1 \
 | `w5_census.py` | my own 648-configuration false-positive box and my own 660-row false-negative grid, round 1 vs round 2, plus bit-identity of every RETURNED row |
 | `w6_resonant.py` | the R2-D counter-fixture: guided-mode-resonance and Fabry-Perot stacks with `dR/dx` dialed, hunting a false refusal and a false `truncation` |
 | `w7_lc_within.py` | the anisotropic classes on MY tensors, the pol-0 evidence, the within-layer liner ladder, and whether an OWNED liner can be refused through the cross-layer path |
-| `w8_lc_exact.py` | the round-2 report's OWN director convention, so its stated `move` = 38.9 / 290.4 / 22.2 / 316.5 and the 0.01x / 316x pol split are checked as numbers; plus a CO-OCCURRING cross-layer sliver and broken owned liner |
+| `w8_lc_exact.py` | the round-2 report's OWN director convention, so its stated `move` = 38.9 / 290.4 / 22.2 / 316.5 and the 0.01x / 316x pol split are checked as numbers; plus a CO-OCCURRING cross-layer sliver and broken owned liner (defect D-1) |
+| `w9_r2d_attack.py` | the exhaustive directed R2-D search: 1,458 configurations of the census box's mount crossed with the geometry, 40 deltas each, keeping only rows the shipped arbiter REFUSES |
+| `w10_rcwa_oracle.py` | the resonant refusals adjudicated by `RCWAStack` with ANALYTIC rectangle form factors -- a package with no union grid at all -- with its own `n_orders` 31/41/51/61 convergence ladder per row |
+| `w11_closure_absolute.py` | defect D-5's reproducer: a mount whose sliver-free truncation floor (3.73e-05) sits between the closure bar and the trigger, so a snap that removes a 5,181x super-unity is still read as `truncation` |
 
 The `_wsl` JSONs are the second build's.  `w1_bitid_tip*.json` are the
 pre-round-2 arm, produced from a read-only `git worktree add C:/tmp/lum_prer2
