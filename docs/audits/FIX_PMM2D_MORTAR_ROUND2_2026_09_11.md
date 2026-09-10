@@ -257,12 +257,15 @@ _STAG_SEG_CENSUS         = None      # instrument
 ```
 
 A non-uniform wall array whose narrowest segment is below the bar raises,
-naming the width (absolute and as a fraction), the spurious spectrum in units
-of `G = 2 pi / d`, both grids the mortar would couple, and FOUR remedies:
+naming the offending SEGMENT INDEX, its width (absolute and as a fraction of
+the period), the whole wall array, the spurious spectrum in units of
+`G = 2 pi / d`, and FOUR remedies:
 merge the walls; carry the fine feature on `layer_grids='shared'`; use
 `PMM2DStackHybrid` (Fourier-projected, no element grid); or lower `n_slices` /
 stop a taper before its tip closes.  **"Raise `n_modes`" is explicitly NOT
-offered**, and the message says so -- S2.3 reading 2.
+offered**, and the message says so -- S2.3 reading 2.  (Naming the OTHER
+grid is the conditioning backstop's job, S4.4: `Basis1D` is built before its
+mortar partner exists.)
 
 The INTEGER path is EXEMPT and that costs nothing: a uniform lattice's
 segments are all `d/N`, so reaching the bar needs `N > 1000`, i.e. `q >= 3000`
