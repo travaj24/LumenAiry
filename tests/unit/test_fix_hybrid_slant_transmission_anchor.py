@@ -37,6 +37,16 @@ WSL print identically, to every digit, on all of them.  The bars are therefore
 set from the SIGNAL separation (the ratios below run 12x .. 176x), never from
 the spread, exactly as TESTING_STANDARDS rule 5 asks.
 
+The independent verification (2026-09-11,
+``validation/probe_verify_hybrid_anchor/q6_durability.py``) re-measured 49 of
+this file's bar quantities on both builds THROUGH THIS MODULE'S OWN FIXTURES
+and puts a number on that gap: the worst WIN <-> WSL RELATIVE spread over
+every physically meaningful row is **7.0e-08** (the only larger row is
+``||P_0| - 1|``, 1.1e-16 against 0.0, which is machine epsilon against zero).
+Four bars were restated as a result -- ``a1``'s ``conj > none`` ordering,
+``a5``'s lower closure bar, ``a6``'s non-vacuity check and ``d2``'s round-trip
+comparison -- each noted at its site.
+
 Shapes used, per ``docs/TESTING_STANDARDS.md``:
 
   * DECISIONS, not readings -- "the un-anchored arm does not improve when the
@@ -241,8 +251,16 @@ def test_a1_transmitted_amplitudes_are_lab_referenced(mount):
     assert none / shipped > 20.0, (none, shipped)
     assert conj / shipped > 20.0, (conj, shipped)
     # and the conjugate is WORSE than doing nothing -- so the factor cannot be
-    # a fudge absorbing an arbitrary residual (1.116x / 1.458x measured).
-    assert conj > none
+    # a fudge absorbing an arbitrary residual.  RESTATED 2026-09-11
+    # (verification, durability): the ORDERING carried no bar at all and its
+    # smallest separation is 11.5%, so the number that matters is the ratio.
+    # MEASURED conj/none = 1.1150 (oblique) / 1.4581 (conical) on WIN, and the
+    # WIN<->WSL spread on this fixture's ratios is <= 7.0e-08 RELATIVE
+    # (49 quantities re-measured on both builds,
+    # validation/probe_verify_hybrid_anchor/q6_durability.py), so a 1.05 bar
+    # sits 1.06x below the smallest reading and ~2e6 x the cross-build spread
+    # above 1.0.
+    assert conj / none > 1.05, (conj, none)
 
 
 @pytest.mark.parametrize("mount", list(MOUNTS))
@@ -321,26 +339,53 @@ def test_a5_the_fixture_closes_where_it_is_documented_to():
     reading here instead.  A genuine instability on this geometry is 26 decades
     away (``sum R + T = 2.6e+27`` -- the fixture that was rejected while
     choosing this one), so the 1.05 bar cannot confuse the two, and the lower
-    bar of 1.0 keeps a silently-lossy answer from passing."""
+    bar keeps a silently-lossy answer from passing.
+
+    RESTATED 2026-09-11 (verification, durability).  The lower bar was
+    ``1.0``, i.e. it pinned the SIGN of the truncation residue with only
+    ``8.6e-03 .. 1.2e-02`` of room -- measured 1.011002 / 1.008581 (slanted,
+    oblique / conical), 1.012042 / 1.010179 (staircase) and 1.011813 /
+    1.009474 (with the film).  Nothing in the physics says the residue must
+    land above one, so the bar is now ``0.99``: it still refuses a
+    silently-lossy answer (a real loss on a lossless stack is percent-scale)
+    without asserting the sign of a truncation term.  The UPPER bar is
+    unchanged and carries 4.2x .. 5.8x of room."""
     for mount in MOUNTS:
         for st in (_slanted(mount), _stair(mount, 15),
                    _slanted(mount, film=True)):
             _o, R, T, _J = st._RTJ
             tot = float(np.max(R.sum(axis=1) + T.sum(axis=1)))
-            assert 1.0 <= tot < 1.05, (mount, tot)
+            assert 0.99 <= tot < 1.05, (mount, tot)
 
 
 def test_a6_the_anchor_is_unimodular_on_every_order():
     """The factor cannot move an efficiency, PROPAGATING OR EVANESCENT, because
     ``alpha_m`` is real for every order.  That is the structural reason ``R``,
     ``T`` and every energy check were blind to the defect.  MEASURED
-    ``max ||P_m| - 1|`` = 2.2e-16 (both builds, 121 orders)."""
+    ``max ||P_m| - 1|`` = 2.2e-16 (both builds, 121 orders).
+
+    RESTATED 2026-09-11 (verification, durability).  The non-vacuity check was
+    ``ptp(arg P_m) > 3.0``, which read 3.14159 -- EXACTLY ``pi``, a 4.7%
+    margin -- and for a reason the comment did not say: at this file's HALF
+    walk ``P_m = exp(i arg P_0) * exp(i pi m)``, so over all 121 orders it
+    takes exactly TWO values, ``pi`` apart.  ``ptp`` was therefore measuring
+    the half-walk degeneracy, not a spread.  Both facts are now asserted
+    directly, and a QUARTER walk -- where ``P_m = exp(i arg P_0) i^m`` takes
+    FOUR values -- is evaluated on the SAME solve (the factor depends only on
+    ``kx`` and the walk), so the genuine spread costs no extra solve."""
     s = _slanted("conical25_40")
     a = s.per_order_amplitudes("transmission")
     P = np.exp(1j * K0 * (a["kx"] * WALK))
     assert np.max(np.abs(np.abs(P) - 1.0)) < 1e-13
-    # not vacuous: the orders really do span a wide range of phases
-    assert np.ptp(np.angle(P)) > 3.0
+    # the HALF walk is exactly two-valued -- that IS the degeneracy this
+    # fixture's oracle lives with, stated rather than read as a spread
+    assert len(np.unique(np.round(np.angle(P), 9))) == 2
+    assert np.ptp(np.angle(P)) == pytest.approx(np.pi, abs=1e-12)
+    # ... and at a QUARTER walk the same orders take FOUR distinct phases:
+    # the correction really is per-order, not a two-valued sign
+    Pq = np.exp(1j * K0 * (a["kx"] * (WALK / 2)))
+    assert len(np.unique(np.round(np.angle(Pq), 9))) == 4
+    assert np.ptp(np.angle(Pq)) > 3.0
     # and some of them are EVANESCENT in the substrate (kz imaginary)
     assert np.any(np.abs(np.imag(a["kz"])) > 1e-9)
 
@@ -597,8 +642,19 @@ def test_d2_a_uniform_film_below_needs_no_round_trip_phase(mount):
     | closure sum R + T | 1.011813 | 1.009474 |
 
     Barred: the reflection as returned is inside the oracle's own step (2.9x /
-    3.6x below it) while EITHER round-trip factor is 55x .. 83x above it; the
-    transmitted arm is barred at 5x (measured 147x / 14.3x)."""
+    3.6x below it) while EITHER round-trip factor is far outside it; the
+    transmitted arm is barred at 5x (measured 147x / 14.3x).
+
+    RESTATED 2026-09-11 (verification, durability).  Two things: the
+    "55x .. 83x above it" in the line above had the wrong antecedent -- 56x ..
+    83x is the round-trip arms' ratio to the AS-RETURNED reflection, while
+    against the oracle's own K5 -> K15 step they are 15.8x .. 23.4x, which is
+    what the ``10 step_J`` bars actually test and leaves the conical ``x P0``
+    row only 1.58x of margin.  The ratio to the as-returned reading is both
+    the better-margined statement and the one the physics makes, so it is now
+    asserted beside them: MEASURED ``x P0`` / as-returned = 58.4x (oblique) /
+    56.2x (conical) and ``x P0^2`` / as-returned = 66.1x / 83.2x, barred at
+    10x."""
     s, k15, k5 = (_slanted(mount, film=True), _stair(mount, 15, film=True),
                   _stair(mount, 5, film=True))
     oA, RA, TA, JA = s._RTJ
@@ -608,9 +664,16 @@ def test_d2_a_uniform_film_below_needs_no_round_trip_phase(mount):
     _x, i3 = _align(oA, oC)
     step_J = float(np.max(np.abs(JB - JC)))
     P0 = _P0(s)
-    assert float(np.max(np.abs(JA - JB))) < step_J
-    assert float(np.max(np.abs(JA * P0 - JB))) > 10.0 * step_J
-    assert float(np.max(np.abs(JA * P0 * P0 - JB))) > 10.0 * step_J
+    as_returned = float(np.max(np.abs(JA - JB)))
+    one_way = float(np.max(np.abs(JA * P0 - JB)))
+    full = float(np.max(np.abs(JA * P0 * P0 - JB)))
+    assert as_returned < step_J
+    assert one_way > 10.0 * step_J
+    assert full > 10.0 * step_J
+    # ... and against the as-returned reading, which is the better-margined
+    # form of the same statement (see the docstring's restatement note)
+    assert one_way / as_returned > 10.0, (one_way, as_returned)
+    assert full / as_returned > 10.0, (full, as_returned)
     # the film is homogeneous -> it contributes NOTHING to the sum
     assert _s2d._slant_frame_walk(s._layers) == (TSL * DEP, 0.0)
     assert _dT(s, k15, 0.0) / _dT(s, k15) > 5.0
