@@ -508,15 +508,31 @@ pass the dtype of the field the factor multiplies.
   | N | carrier | complex128 arm | complex64 before | complex64 after |
   |---|---|---|---|---|
   | 2048 | scalar | 224.03 MiB | 224.03 MiB | **189.03 MiB** (-15.6 %) |
-  | 2048 | astigmatic | 128.00 | 128.00 | **64.00** (-50 %) |
+  | 2048 | astigmatic | 128.00 | 96.00 | **64.00** (-33.3 %) |
   | 4096 | scalar | 896.06 | 896.06 | **640.06** (-28.6 %) |
-  | 4096 | astigmatic | 512.00 | 512.00 | **256.00** (-50 %) |
+  | 4096 | astigmatic | 512.00 | 384.00 | **256.00** (-33.3 %) |
 
-  The complex64 arm's peak was EXACTLY the complex128 arm's before the fix, on
-  every case -- the audit's "requesting complex64 saved 0.0 GB", still true of
-  this call site at 5.44.0.  Below N ~ 1414 the `_PHASOR_BAND_BYTES` = 32 MB
-  band IS the grid, so there is no transient saving there, only the narrower
-  output.
+  On the SCALAR carrier the complex64 arm's peak was EXACTLY the complex128
+  arm's before the fix -- the audit's "requesting complex64 saved 0.0 GB",
+  still true of that call site at 5.44.0; on the ASTIGMATIC carrier it sat one
+  grid under (96.00 / 384.00 MiB), so that saving is 33.3 %, not 50 % (the
+  astigmatic "before" cells were corrected 2026-09-11 from the builder's own
+  `p1_before.json`, confirmed by the independent verification).  Below the
+  crossover the `_PHASOR_BAND_BYTES` = 32 MB band IS the grid and the change
+  is a PENALTY, not zero: the complex64 scalar per-call peak rises 14.3 %
+  against v5.44.0 (56.017 -> 64.017 MiB at N=1024), break-even lies between
+  N=1600 and N=1700, and below it the complex64 call peaks above the
+  complex128 one.  The cost is `_phasor_rows`'s and predates this entry (its
+  four `dtype=` helpers read the same ratios on both versions); it is an old
+  cost newly reaching the public call path.
+  Verified 2026-09-11 (`docs/audits/VERIFY_LENS_5440_FOLLOWUPS_2026_09_11.md`,
+  `validation/probe_verify_lens_followups/`): 395 + 2503 leaves bit-identical
+  to v5.44.0 on the verification's own fixtures; D1 6 -> 0 library-attributed
+  notices; D2 transients reproduced to the byte; D6 pass-2 mask calls
+  32 / 2.000 grids -> 16 / 1.000 at N=4096 with every mask hashed equal; D7
+  present and bit-equal on 15 banded routes; complex128 phasor bits are NOT
+  portable across numpy 2.4.4 / 2.4.6, which is direct evidence for the
+  narrowing boundary D2 draws.
 * **Nothing moved.**  All 16 probe cases return the same field hash on both
   dtypes; the complex128 carrier chain is bit-identical on all 9 fixtures the
   verification hashed (`577e209a…`, `ae7983bc…`, `c6dda90c…`, `4cd9552c…`,
@@ -1022,6 +1038,16 @@ gone.
   4. On the RAY-DENSITY branch the 7/4 evaluation costs 0.84 s; the rest of
      that branch's banded penalty was the duplicated domain mask fixed under
      `[Unreleased]` above.
+  5. **QUALIFICATION 2026-09-11 (independent verification of items 2 and
+     3).**  The ~1.6x and the 8.9 s are ONE fixture's measurement, not the
+     feature's cost: a second fixture at the same N / sub / dx reads the
+     evaluator call at **0.954x** the same-build incumbent control, with
+     `domain_mask` at **0.41 s** of a 13 s call.  Which branch `domain_mask`
+     takes (the separable screened-hull test or the whole-grid signed
+     distance) is a property of the exit-support geometry.  Item 2's
+     bit-identity control and item 3's mechanism stand as written;
+     `inverse_map=False` remains the named way to buy the incumbent's speed
+     back at the old answer.
 
   `apply_real_lens_traced`'s `sag_chunk_rows` docstring now carries this cost
   and names `inverse_map=False` as the way to buy the old speed back at the

@@ -7529,14 +7529,19 @@ def apply_real_lens_traced(
         dx=1.5 um, AUTO band height, inverse-map cache cleared per call):
         banding itself is free -- the banded call is 0.97x-1.08x the
         whole-grid call at the SAME inversion -- but a banded SCREEN call
-        at the shipped default costs about 1.6x what it did on v5.43.0,
-        because it now runs the evaluator instead of the incumbent it used
-        to select silently (18.5 s vs 11.9 s for the same call forced back
-        onto the incumbent with ``inverse_map=False``, which returns
-        v5.43.0's bits exactly).  That price is the evaluator's whole-grid
-        DOMAIN TEST (~8.9 s), not its channel evaluations (~0.9 s); pass
-        ``inverse_map=False`` to buy the old speed back at the old, less
-        faithful, answer.
+        at the shipped default now runs the evaluator instead of the
+        incumbent it used to select silently, and what that costs depends
+        on the exit-support geometry.  On one fixture it was about 1.6x
+        (18.5 s vs 11.9 s for the same call forced back onto the incumbent
+        with ``inverse_map=False``, which returns v5.43.0's bits exactly),
+        and the price there was the evaluator's whole-grid DOMAIN TEST
+        (~8.9 s), not its channel evaluations (~0.9 s).  On a second
+        fixture at the same N / sub / dx the evaluator call was 0.954x the
+        incumbent control, with the domain test at 0.41 s of 13 s -- which
+        branch the domain test takes (the separable screened-hull test or
+        the whole-grid signed distance) is a property of the geometry.
+        Pass ``inverse_map=False`` to buy the incumbent's speed back at
+        the old, less faithful, answer.
     amplitude_model : {'screen', 'ray_density'}, default 'screen'
         Which model supplies the exit-plane AMPLITUDE (the phase is the
         ray-traced OPL either way).

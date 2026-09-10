@@ -42,7 +42,7 @@ returns v5.43.0's banded FIELD HASH bit for bit and lands on v5.43.0's time.
 
 | id | what shipped | headline number |
 |---|---|---|
-| **D2** | `dtype=` threaded through `_build_carrier_phase`; new `_narrow_rows` for the astigmatic product; both public helpers pass the field's dtype | per-call transient at N=4096 on a complex64 field: **896.06 -> 640.06 MiB** (scalar carrier) and **512.00 -> 256.00 MiB** (astigmatic); full-grid complex128 phasors per two-group chain **5 -> 0**; every field hash unchanged |
+| **D2** | `dtype=` threaded through `_build_carrier_phase`; new `_narrow_rows` for the astigmatic product; both public helpers pass the field's dtype | per-call transient at N=4096 on a complex64 field: **896.06 -> 640.06 MiB** (scalar carrier) and **384.00 -> 256.00 MiB** (astigmatic; the complex64 arm's own pre-fix peak -- the complex128 arm's is 512.00; CORRECTED 2026-09-11 by the verification, which measured 96.00 / 384.00 for the complex64 BEFORE column three ways); full-grid complex128 phasors per two-group chain **5 -> 0**; every field hash unchanged |
 | **D1** | `stacklevel=2 -> 3` on the three ray-density self-check warnings | warnings attributed to the library **6 of 9 -> 0 of 9**; field hash unchanged |
 | **D6** (attribution) | CHANGELOG bullet corrected with a dated addendum; `apply_real_lens_traced` docstring priced | the doubling IS the route change, **confirmed by a same-build control that reproduces v5.43.0's exact bits**; but the *reason* the bullet gives is wrong -- the screen branch evaluates **3/3 in ONE pass** and the evaluations are **0.88 s of 18.52 s**, while the evaluator's whole-grid DOMAIN TEST is 8.9 s |
 | **D6** (the part that was not the evaluator) | the banded ray-density branch's pass 2 stopped recomputing pass 1's domain mask | `domain_mask` **2.00 -> 1.00 grids** of pixels, 32 -> 16 calls, **15.05 -> 6.61 s**; banded/whole **1.285 -> 1.110** at N=4096 and **1.130 -> 1.023** at N=2048; 864 byte-identity comparisons, 0 mismatches |
@@ -80,24 +80,38 @@ script after it.  One `c64 grid` = `8 N^2` bytes.
 |---|---|---|---|---|---|---|
 | 2048 | scalar | envelope | 224.03 MiB (7.00 grids) | 224.03 (7.00) | **189.03 (5.91)** | 35.00 MiB, -15.6 % |
 | 2048 | scalar | reconstruct | 224.03 | 224.03 | **189.03** | 35.00 MiB |
-| 2048 | astigmatic | envelope | 128.00 (4.00) | 128.00 (4.00) | **64.00 (2.00)** | 64.00 MiB, -50.0 % |
-| 2048 | astigmatic | reconstruct | 128.00 | 128.00 | **64.00** | 64.00 MiB |
+| 2048 | astigmatic | envelope | 128.00 (4.00) | 96.00 (3.00) | **64.00 (2.00)** | 32.00 MiB, -33.3 % |
+| 2048 | astigmatic | reconstruct | 128.00 | 96.00 | **64.00** | 32.00 MiB |
 | 4096 | scalar | envelope | 896.06 (7.00) | 896.06 (7.00) | **640.06 (5.00)** | 256.00 MiB, -28.6 % |
 | 4096 | scalar | reconstruct | 896.06 | 896.06 | **640.06** | 256.00 MiB |
-| 4096 | astigmatic | envelope | 512.00 (4.00) | 512.00 (4.00) | **256.00 (2.00)** | 256.00 MiB, -50.0 % |
-| 4096 | astigmatic | reconstruct | 512.00 | 512.00 | **256.00** | 256.00 MiB |
+| 4096 | astigmatic | envelope | 512.00 (4.00) | 384.00 (3.00) | **256.00 (2.00)** | 128.00 MiB, -33.3 % |
+| 4096 | astigmatic | reconstruct | 512.00 | 384.00 | **256.00** | 128.00 MiB |
 
 Two readings worth keeping:
 
-* the complex64 arm's peak was EXACTLY the complex128 arm's before the fix, on
-  every case -- which is the audit's "requesting complex64 saved 0.0 GB", still
-  true of this call site at 5.44.0;
+* on the SCALAR carrier the complex64 arm's peak was EXACTLY the complex128
+  arm's before the fix -- which is the audit's "requesting complex64 saved
+  0.0 GB", still true of that call site at 5.44.0.  On the ASTIGMATIC carrier
+  it was NOT: the complex64 BEFORE column reads 96.00 / 384.00 MiB, one grid
+  under the complex128 arm, so the astigmatic saving is 33.3 %, not 50 %.
+  (CORRECTED 2026-09-11: the table above originally copied the complex128
+  column into the complex64 BEFORE column for the astigmatic rows; the
+  builder's own `p1_before.json`, a re-run of the probe on the v5.44.0
+  worktree, and the verification's independent probe all read 96.00 /
+  384.00.)
 * the scalar saving at N=2048 is 35 MiB rather than 64 because
   `_PHASOR_BAND_BYTES` = 32 MB of complex128 scratch replaces the full-grid
   phasor with a 32 MB band; at N=4096 the band is 32 MB against a 256 MiB
-  phasor, so the saving approaches the whole factor.  Below N ~ 1414 the band
-  IS the grid and there is no transient saving at all (only the narrower
-  output) -- which is why the shipped memory pin for this item runs at N=2048.
+  phasor, so the saving approaches the whole factor.  Below the crossover the
+  band IS the grid and the change is a PENALTY, not zero (CORRECTED
+  2026-09-11 by the verification, `q5b_band_crossover.py`): the complex64
+  scalar per-call peak RISES 14.3 % against v5.44.0 (56.017 -> 64.017 MiB at
+  N=1024), break-even lies between N=1600 and N=1700, and below it the
+  complex64 call peaks ABOVE the complex128 one.  The cost is inherited from
+  `_phasor_rows`, whose four helpers that already took `dtype=` read the same
+  ratios on both versions, so it is an old cost newly reaching the public
+  call path.  That is why the shipped memory pin for this item runs at
+  N=2048, inside the win regime.
 
 ### 1b. Values: nothing moved
 
@@ -330,7 +344,11 @@ list are compared alongside the hash in every row.
 The 5.44.0 "Measured" bullet is left as written and a dated **CORRECTION**
 bullet is appended under it (history is not rewritten): banding is free
 (0.97x-1.08x at the same inversion), the banded SCREEN call at the shipped
-default costs ~1.6x what it did on v5.43.0 because it runs the evaluator, the
+default cost ~1.6x what it did on v5.43.0 ON THIS FIXTURE because it runs the
+evaluator (the verification's second fixture at the same N / sub / dx reads
+0.954x with `domain_mask` at 0.41 s of a 13 s call -- which `domain_mask`
+branch runs is a property of the exit-support geometry, so the 1.6x and the
+8.9 s are one geometry's measurement, not the feature's cost), the
 control that proves it returns v5.43.0's bits, the price is the whole-grid
 domain test and not the 7/4 evaluation, and the ray-density branch's remaining
 penalty was the duplicated mask now fixed.  `apply_real_lens_traced`'s
