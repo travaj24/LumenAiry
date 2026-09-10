@@ -525,7 +525,7 @@ verification's own grid (S2.6 there).  **BEFORE** is the shipped fixed rule;
 
 | longest segment | `M`=4, `m`<=3 | `M`=4, `m`<=7 | `M`=6, `m`<=3 | `M`=6, `m`<=7 | `M`=8, `m`<=7 |
 |---|---|---|---|---|---|
-| 0.33 d (uniform `N`=3) BEFORE | 7.7e-15 | 7.7e-15 | 6.3e-15 | 6.3e-15 | 6.7e-15 |
+| 0.33 d (three EQUAL segments, spelled as an ARRAY) BEFORE | 7.7e-15 | 7.7e-15 | 6.3e-15 | 6.3e-15 | 6.7e-15 |
 | 0.33 d AFTER | 7.0e-15 | 8.9e-15 | 6.2e-15 | 6.4e-15 | 1.1e-14 |
 | 0.62 d BEFORE | 7.1e-15 | 2.2e-08 | 6.0e-15 | 2.0e-12 | -- |
 | 0.62 d AFTER | 6.2e-15 | **6.0e-15** | 6.1e-15 | **3.5e-15** | 1.3e-14 |
@@ -534,10 +534,15 @@ verification's own grid (S2.6 there).  **BEFORE** is the shipped fixed rule;
 | **0.96 d BEFORE** | 4.6e-13 | **7.5e-04** | 6.7e-15 | 1.4e-06 | 5.6e-11 |
 | **0.96 d AFTER** | 9.3e-15 | **4.7e-15** | 5.3e-15 | **2.3e-15** | 8.6e-15 |
 
-`nq` at the worst cell goes 16 -> 29.  Every cell is back at round-off, and
-the uniform `N` = 3 row moves by nothing that is not the reordering of a
-16-point rule into an 18-point one on a NON-uniform basis (the integer-`N`
-grid itself is byte-identical, S6).
+`nq` at the worst cell goes **16 -> 29** (identical on both builds).  Every
+cell is back at round-off.
+
+The first row needs its label read carefully: those three segments are EQUAL,
+but they are spelled as an explicit ARRAY, so they take the formula, which
+hands out `nq` = 18 rather than 16 at `m <= 7` -- and the row moves by nothing
+but that reordering.  **The INTEGER spelling of the same lattice is byte-
+identical**, because it never reaches the formula; that is proved separately
+and unconditionally in S6.
 
 ---
 
