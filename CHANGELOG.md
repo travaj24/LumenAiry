@@ -2,7 +2,7 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.44.0] — 2026-09-10
 
 ### Added -- a NATIVE constant-shear SLANT for the PURE staggered 2-D PMM (roadmap Phase D)
 
