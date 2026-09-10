@@ -85,6 +85,11 @@ from ..rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carr
 from ..rcwa._core import (
     _grazing_safe_wavelength,
     _require_propagating_incidence,
+    # THE one modal branch selector -- round 2 (2026-09-11) deleted this
+    # module's private copy, which still carried the exact ``r.real == 0`` pin
+    # round 1 removed from the shared body.  See its docstring for what that
+    # cost (2.4e-03 in per-order efficiency on a uniform-spacer stack).
+    _sqrt_decay,
     _symmetry_on,
 )
 from ._core import (
@@ -407,12 +412,6 @@ def _assemble_2d(ax, ay, eps_tile, k0):
 # =========================================================================== #
 # decay-branch helpers + plane-wave kz
 # =========================================================================== #
-
-def _sqrt_decay(x):
-    r = np.sqrt(np.asarray(x, dtype=_C))
-    on_cut = r.real == 0
-    return np.where(on_cut & (r.imag < 0), -r, r)
-
 
 def _inv_lam(lam):
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)

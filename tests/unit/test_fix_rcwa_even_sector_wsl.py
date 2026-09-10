@@ -190,13 +190,30 @@ def test_a_physically_signed_root_is_returned_bit_for_bit():
 # the smallest pre-fix reading.  It is NOT a tolerance on agreement between
 # two code paths -- it is a physical conservation law with an arithmetic error
 # floor, so it stays meaningful if either path changes.
+#
+# QUALIFICATION (2026-09-11, verification defect D2).  The pre-fix envelope
+# above is a FULL-path list, and this test is parametrized over both paths.
+# Re-measured over 14 (build, thread) samples, the EVEN path's pre-fix closure
+# reaches the arithmetic floor at three of them -- -3.109e-15 (WIN, 6 threads),
+# -3.753e-14 (WSL, 4 threads) and -4.174e-14 (WSL, unpinned) -- so the
+# ``[True]`` arm's FAIL-BEFORE is thread-conditional.  The POST-fix assertion,
+# which is what gates the release, is not: it reads <= 1.5e-14 at every one of
+# the 14 samples on both paths.  Thread-INDEPENDENT fail-befores for the same
+# defect, each firing at every setting on both builds, are BAR 5 below (the
+# on-cut mode census, 5..13 of 16 pre-fix), gate 2 of
+# ``tests/unit/test_verify_rcwa_even_sector.py`` (the uniform-spacer stack,
+# REFUSED at ``sum R + T = 26`` pre-fix) and gate 3 of
+# ``tests/unit/test_fix_branch_cut_round2.py``.
 _CLOSURE_BAR = 1e-9
 
 
 @pytest.mark.parametrize("symmetry", [False, True])
 def test_coincident_layer_and_region_permittivity_closes_energy(symmetry):
     """With the layer background permittivity EXACTLY equal to the substrate's,
-    a lossless cell must still conserve energy."""
+    a lossless cell must still conserve energy.
+
+    The ``[True]`` (even-fold) arm's fail-before is THREAD-CONDITIONAL -- see
+    the qualification above ``_CLOSURE_BAR``; the assertion below is not."""
     d = _closure_defect(_solve(symmetry))
     assert abs(d) < _CLOSURE_BAR, (
         "lossless closure defect %+.3e on the symmetry=%s path" % (d, symmetry))

@@ -837,88 +837,203 @@ def test_anisotropic_cascade_is_not_falsely_refused():
 
 
 # ---------------------------------------------------------------------------
-# X-1 on the library's own documented instability class
+# X-1 on the library's own documented instability class -- CLOSED 2026-09-11
 # ---------------------------------------------------------------------------
+#
+# X-1 WAS the RCWA modal branch-cut defect, and the round-1 fix
+# (`docs/audits/FIX_RCWA_EVEN_SECTOR_WSL_2026_09_11.md`) closes it.  The
+# geometry says why: `THIN`'s groove index equals BOTH half-spaces' (1.5), so
+# it is a permittivity coincidence on the substrate AND the superstrate side at
+# once, and a propagating layer mode handed the INCOMING root is then exactly a
+# half-space BACKWARD mode -- which makes the interface mode-match `a + b`,
+# whose explicit inverse IS `S12`, singular.  That is the near-cancelling
+# denominator this file's census was built to record.
+#
+# Re-measured independently on the whole ladder, both arms in one process, with
+# the census armed exactly as the tests below arm it
+# (`validation/probe_fix_branch_cut_round2/b3_x1.py`, 2026-09-11):
+#
+#   ladder / arm            raises  flagged cells  worst |R+T-1|  worst sum(R)
+#   TE  WIN 1 thr  PRE         7         14          3.1956e-02     152.60x
+#   TE  WIN 1 thr  POST        0          0          1.3323e-15    5.064e-02*
+#   TE  WSL 1 thr  PRE         8         14          3.1956e-02     152.60x
+#   TE  WSL 1 thr  POST        0          0          1.4433e-15    5.064e-02*
+#   TM  WIN 1 thr  PRE         5          9          2.6165e-04       1.2998x
+#   TM  WIN 1 thr  POST        0          0          9.9920e-16    1.887e-02*
+#   TM  WSL 1 thr  PRE         5          9          1.5404e-04       0.7654x
+#   TM  WSL 1 thr  POST        0          0          9.9920e-16    1.887e-02*
+#
+#   (*) the POST "worst" is the COARSEST rung, M = 6 -- ordinary truncation
+#   convergence, not a defect; every finer rung is better.
+#
+# The four historically pinned cells, Windows one thread, sum(R):
+#
+#   M = 12 TE  2.016454e-04 -> 2.015824e-04
+#   M = 19 TE  1.838764e-02 -> 2.053766e-04
+#   M = 20 TE  2.088570e-04 -> 2.053491e-04
+#   M = 21 TE  3.216567e-02 -> 2.095174e-04
+#
+# and M = 19 TE, the cell whose whole point was that it RETURNED 1.018 on
+# Windows and RAISED on WSL, now returns 2.053766e-04 on BOTH builds.
+#
+# The two tests below are therefore restated as DECISIONS ABOUT THE CLOSED
+# STATE.  Their fail-before is ENGINEERED rather than found -- the pre-round-1
+# branch body is reinstalled in-process -- which is strictly stronger than the
+# old form: it fires at every thread count on both builds instead of depending
+# on which truncation a given BLAS reduction order happens to break.
+# ---------------------------------------------------------------------------
+
+
+def _pre_branch_cut_sqrt_decay(x, xp=None, band=1e-8):
+    """The pre-round-1 body: the EXACT ``Re(r) == 0`` pin and the ``-r`` flip.
+
+    An ``eig`` output never satisfies ``Re(sqrt(lam^2)) == 0`` -- its real part
+    is the eigensolver's backward error, ~1e-16 -- so this pin fires only for
+    the REGION modes, built in exact arithmetic, and never for a structured
+    LAYER's.  Reinstalling it is how the tests below keep a fail-before now
+    that the defect no longer occurs in the shipped tree.
+    """
+    from lumenairy.backend.array import array_namespace
+    if xp is None:
+        xp = array_namespace(x)
+    x = xp.asarray(x).astype(complex)
+    r = xp.sqrt(x)
+    on_cut = r.real == 0
+    return xp.where(on_cut & (r.imag < 0), -r, r)
+
+
+class _pre_branch_cut:
+    """Install :func:`_pre_branch_cut_sqrt_decay` at every module binding of
+    the shared selector, for the duration of a ``with`` block."""
+
+    _MODULES = ("lumenairy.elements.rcwa._core",
+                "lumenairy.elements.rcwa.oned",
+                "lumenairy.elements.rcwa.stack",
+                "lumenairy.elements.pmm.twod")
+
+    def __init__(self):
+        self._saved = []
+
+    def __enter__(self):
+        import importlib
+        for name in self._MODULES:
+            mod = importlib.import_module(name)
+            if hasattr(mod, "_sqrt_decay"):
+                self._saved.append((mod, mod._sqrt_decay))
+                mod._sqrt_decay = _pre_branch_cut_sqrt_decay
+        return self
+
+    def __exit__(self, *a):
+        for mod, fn in self._saved:
+            mod._sqrt_decay = fn
+        return False
+
+
+def _thin_scan_uncached(pol):
+    """The ladder, solved fresh -- never through ``_THIN_SCAN``, whose entries
+    would otherwise carry an engineered arm's readings into every later test in
+    the file."""
+    return [_thin_solve(M, pol) for M in _THIN_LADDER]
+
+
+#: The POST-fix closure envelope on the whole THIN ladder: <= 1.5e-15 over
+#: 25 truncations x 2 polarizations x 2 builds.  The bar sits 6.8 decades above
+#: it and 2.4 decades below the smallest PRE reading that manifests (3.5e-06,
+#: 20 TE Windows), inside a gap the measurement leaves empty.
+_X1_CLOSED_CLOSURE = 1e-8
+
 
 @pytest.mark.parametrize("M,pol", [(19, "te"), (21, "te"), (12, "te"),
                                    (20, "te")])
-def test_x1_defect_is_reproduced_and_flagged_but_NOT_closed(M, pol):
-    """X-1 IS REAL AND IS STILL OPEN.  This pins the DEFECT, not a fix.
+def test_x1_is_closed_on_the_cell_it_was_pinned_at(M, pol):
+    """X-1 IS CLOSED.  This pins the FIX, not the defect.
 
-    Measured pre-M1 and unchanged by M1, both builds:
+    Until 2026-09-11 this test asserted the opposite -- that the four cells
+    still returned a wrong answer and that the census still flagged them -- and
+    its own docstring asked for this restatement ("a future fix should make
+    this test fail").  What closed it is the modal branch-cut fix; see the
+    block comment above for the whole ladder on both builds and both arms.
 
-    * 19 TE returns ``R+T`` = 1.018 on Windows/MKL and RAISES on WSL/OpenBLAS
-      -- a literal build-dependent answer on the DEFAULT path;
-    * 21 TE returns ``sum(R)`` = 3.2e-2 on BOTH builds against a converged
-      2.0e-4 -- 160x wrong, agreed to every digit, inside ``_EnergyWarning``'s
-      documented silent window;
-    * 12 TE and 20 TE disagree across builds by 8.9e-04 and 8.3e-02 relative.
+    Three claims, each a decision rather than a reading:
 
-    The M1 census DETECTS all four.  It does not ACT, because the same readings
-    occur on healthy 2-D solves -- see
-    ``test_the_inverse_refusal_was_withdrawn_and_the_instruments_record_instead``.
-    Closing X-1 needs a criterion that survives every method in the library.
+      (a) the cell RETURNS -- nothing is refused, which is the regression guard
+          the old form also carried;
+      (b) it CLOSES energy to ``_X1_CLOSED_CLOSURE``, on a lossless cell where
+          conservation is exact at any truncation under the Laurent rule.  The
+          old form could not make this claim on any cell: 19 TE read
+          ``R+T = 1.018`` on one build and RAISED on the other;
+      (c) the census FLAGS NOTHING there -- the near-cancelling denominator the
+          instrument exists to see is gone, not merely below a screen.
 
-    Pinned here: the solve still RETURNS (nothing is refused) and the
-    instrument still FLAGS it.  A future fix should make this test fail.
-
-    **v5.33.1 -- THE FOUR CELLS ARE A PER-BUILD FACT.**  ``12 TE`` and
-    ``20 TE`` are flagged on Windows (equilibrated rcond 1.3e-10 and 2.3e-11,
-    at 1, 2 and 24 threads) and are NOT flagged on any of the five ubuntu CI
-    images -- the census comes back empty and the test read "the census must
-    still see the conditioning".  ``19 TE`` and ``21 TE`` are flagged in both
-    places.  Nothing about X-1 changed; the near-cancellation simply lands on
-    the other side of a screen that is 1e-8 wide.
-
-    So the parametrization is now a STARTING CELL, not the claim.  If the
-    pinned cell does not manifest on this build the scan SUBSTITUTES the
-    nearest cell that does and says so; only if NOTHING in the ladder
-    manifests -- and the census instrument is separately PROVED alive on a
-    synthetic singular operator -- is the defect declared absent here, with
-    the full probe table printed.  It is never silently skipped, and a build
-    on which the guard REFUSES a manifesting cell still fails, which is the
-    "a future fix should make this test fail" contract."""
+    The fail-before is the sibling test below, which reinstates the pre-fix
+    branch body and re-reads the same ladder.
+    """
     rows = _thin_scan(pol)
-    hit = next((r for r in rows if r["M"] == M and r["flagged"]), None)
-    if hit is None:
-        # WIDEN, do not skip: the nearest manifesting truncation of the same
-        # polarization, then the other one -- preferring cells that RETURN,
-        # because X-1 is about answers that come back rather than about the
-        # ones `_check_energy` already catches.
-        def _rank(r):
-            return (r["raised"] is not None, abs(r["M"] - M))
-        cand = sorted(_thin_flagged(pol), key=_rank)
-        cand += sorted([r for p in ("te", "tm") if p != pol
-                        for r in _thin_flagged(p)], key=_rank)
-        if cand:
-            hit = cand[0]
-            print(f"\nX-1: the pinned cell {M} {pol.upper()} does not manifest "
-                  f"on this build (census flags nothing); substituting "
-                  f"{hit['M']} {hit['pol'].upper()}, which does.\n    "
-                  + _thin_table())
-    if hit is None:
-        alive = _census_instrument_is_alive()
-        assert alive, (
-            "no truncation in the scanned ladder flags the conditioning AND "
-            "the census instrument does not flag a synthetic cond-1e20 "
-            "operator either: the INSTRUMENT is broken, not the defect "
-            "absent.\n    " + _thin_table())
-        pytest.skip(
-            "X-1 does not manifest anywhere in the scanned ladder on this "
-            "build, and this is probe-backed rather than assumed: the census "
-            "instrument still flags a synthetic cond-1e20 operator "
-            "(_census_instrument_is_alive() is True), so the screen is live "
-            "and the thin-grating family simply carries no near-cancelling "
-            "star denominator here.  Scan:\n    " + _thin_table())
-    # the solve still RETURNED or reached the named energy guard -- either way
-    # nothing was refused ...
-    assert not hit["refused"], (
-        f"{hit['M']} {hit['pol'].upper()}: the guard REFUSED a flagged "
-        f"truncation.  X-1 may have been closed -- re-pin this test against "
-        f"the fix rather than restoring the old behaviour.")
-    # ... and the instrument still SEES the conditioning it does not act on.
-    assert hit["flagged"], "the census must still see the conditioning"
-    assert min(c[2] for c in hit["flagged"]) < _rc._INV_RCOND_SCREEN
+    hit = next(r for r in rows if r["M"] == M)
+    assert hit["raised"] is None, (
+        f"{M} {pol.upper()} raised {hit['raised']} on a cell that reads "
+        f"|R+T-1| <= 1.5e-15 on both builds since the branch-cut fix.\n    "
+        + _thin_table())
+    assert not hit["refused"]
+    assert hit["close"] < _X1_CLOSED_CLOSURE, (
+        f"{M} {pol.upper()} closes at {hit['close']:.3e}: X-1 has REOPENED, "
+        f"which on this cell means a propagating layer mode is carrying the "
+        f"incoming root again (the groove index equals BOTH half-spaces').\n"
+        f"    " + _thin_table())
+    assert not hit["flagged"], (
+        f"{M} {pol.upper()}: the census flags "
+        f"{len(hit['flagged'])} near-singular inverse(s) (min equilibrated "
+        f"rcond {min(c[2] for c in hit['flagged']):.3e}) on a cell that is "
+        f"now well conditioned.\n    " + _thin_table())
+
+
+def test_x1_is_closed_across_the_whole_thin_ladder_and_reopens_pre_fix():
+    """The two-sided form of the claim above, on the LADDER rather than four
+    cells -- because which truncation manifests was always a per-build fact
+    (see the partition comment at the top of this file), and the thing that is
+    now build-independent is that NONE of them does.
+
+    POST: 0 raising cells, 0 flagged cells, worst closure <= 1.5e-15 over
+    25 truncations x 2 polarizations on both builds, and every rung's
+    ``sum(R)`` within 5.1e-02 of the converged 2.05e-04 (that worst case is
+    the COARSEST rung, M = 6).
+
+    PRE (engineered, this process): 7-8 raising cells and 14 flagged of 25 in
+    TE, worst closure 3.196e-02 and a ``sum(R)`` 152.60x the converged value at
+    M = 21 -- on both builds, at every thread count measured.
+    """
+    for pol in ("te", "tm"):
+        rows = _thin_scan(pol)
+        assert all(r["raised"] is None for r in rows), (
+            f"{sum(1 for r in rows if r['raised'])} of {len(rows)} "
+            f"{pol.upper()} truncations raise.\n    " + _thin_table((pol,)))
+        worst = max(r["close"] for r in rows)
+        assert worst < _X1_CLOSED_CLOSURE, (
+            f"worst {pol.upper()} closure {worst:.3e} over the ladder.\n    "
+            + _thin_table((pol,)))
+        assert not any(r["flagged"] for r in rows), (
+            f"{sum(1 for r in rows if r['flagged'])} {pol.upper()} cells are "
+            f"flagged.\n    " + _thin_table((pol,)))
+
+    # ---- the fail-before, ENGINEERED: put the pre-round-1 branch back.
+    with _pre_branch_cut():
+        pre = _thin_scan_uncached("te")
+    n_bad = sum(1 for r in pre
+                if r["raised"] is not None or r["close"] > 1e-6)
+    n_flag = sum(1 for r in pre if r["flagged"])
+    assert n_bad >= 5 and n_flag >= 5, (
+        f"the pre-round-1 branch body does not reopen X-1 on this build "
+        f"({n_bad} bad cells, {n_flag} flagged of {len(pre)}): the "
+        f"fail-before has stopped demonstrating anything, so the POST claims "
+        f"above are no longer two-sided")
+    # ... and the answer really is WRONG there, not merely non-conserving.
+    ref = _thin_converged_sumR("te")
+    worst_ratio = max((abs(r["sumR"] / ref - 1.0) for r in pre
+                       if np.isfinite(r["sumR"])), default=0.0)
+    assert worst_ratio > 10.0, (
+        f"the worst pre-fix sum(R) is only {worst_ratio:.2f}x from the "
+        f"converged {ref:.6e}: the engineered arm is not reproducing the "
+        f"152x error the defect is documented at")
 
 
 def test_thin_grating_clean_truncations_are_untouched():
@@ -979,136 +1094,118 @@ def test_thin_grating_clean_truncations_are_untouched():
         f"grating these are the same deep null and must agree")
 
 
-def test_the_refusal_reproduces_the_prior_answer_with_the_switch(guard_off):
-    """Fail-before, verified PER CONFIGURATION on the geometry that changed:
-    with the guard off, 21 TE RETURNS the pre-M1 answer -- the non-conserving
-    one -- instead of raising.
+def test_the_withdrawn_refusal_moves_no_bit_and_the_ladder_carries_no_silent_defect(
+        guard_off):
+    """The refusal switch, and the population it was calibrated on.
 
-    **v5.33.0 -- THE BARS WERE THREAD-COUNT-DEPENDENT.**  They were absolute:
-    ``sum(R)+sum(T) > 1.03`` and ``sum(R) > 3.0e-2``.  Holding the code, the
-    build and the geometry fixed and varying ONLY ``OPENBLAS_NUM_THREADS``
-    [M, BOTH builds]::
+    **WHAT THIS TEST USED TO SAY.**  Its name was
+    ``test_the_refusal_reproduces_the_prior_answer_with_the_switch``, and it
+    asserted that with ``INTERFACE_CONDITIONING_GUARD`` off the ladder RETURNS
+    a silently-wrong answer -- the fail-before for the withdrawn refusal.  Its
+    long v5.33.0 / v5.33.1 docstring recorded the two ways that claim had to be
+    weakened: the absolute bars were BLAS-thread-dependent (``sum(R)`` reading
+    3.216567e-02 at one thread and 6.112765e-03 at two on BOTH builds), and
+    then the two pinned CELLS were per-build too, so both ends of the ratio had
+    to be chosen from a per-build scan.
 
-        threads    sum(R)             sum(R)+sum(T) - 1
-              1    3.216567261e-02    +3.195613251e-02   <- bars calibrated here
-        2 / 4 / 24 6.112765047e-03    +5.903262542e-03   <- BOTH bars fail
+    **WHY IT IS RESTATED (2026-09-11).**  Neither weakening was the whole
+    story: the DEFECT itself was the RCWA modal branch cut.  ``THIN``'s groove
+    index equals both half-spaces' (1.5), so a propagating layer mode handed
+    the INCOMING root -- which the pre-round-1 exact ``Re(r) == 0`` pin could
+    not prevent, because an ``eig`` output never satisfies it -- was exactly a
+    half-space BACKWARD mode, and the interface mode-match ``a + b`` whose
+    explicit inverse IS ``S12`` was then singular.  Round 1 pinned the root;
+    the ladder now closes to <= 1.5e-15 at all 25 truncations x 2
+    polarizations on both builds and the census flags nothing, so there is no
+    silently-wrong cell left for this test to find.  It SKIPPED rather than
+    failed, because its widening path was written for a per-build absence.
 
-    Windows/scipy-openblas 0.3.31 and WSL/OpenBLAS agree to TEN DIGITS at each
-    thread count, so this is not a build difference: it is exactly the
-    near-degenerate draw M1's census exists to record, moving with the BLAS
-    reduction order.  The suite pins the pool nowhere, so the test passed run
-    alone (pool 1) and failed inside a breadth sweep (pool > 1).  Same trap as
-    ``_PAR_TOTAL`` in the v5.20.2 PMM-JAX suite and M3's ``worst_rcond``: an
-    absolute bar on a BLAS-dependent magnitude, which no re-tune can fix.
+    **WHAT IT SAYS NOW.**  Two claims that survive the closure, plus an
+    ENGINEERED fail-before that no longer depends on which truncation a given
+    BLAS reduction order breaks:
 
-    What IS build- and thread-independent is the COMPARISON against a
-    truncation the census scores clean, solved in the same process on the same
-    pool: the clean solves sit at ``sum(R)`` ~ 2.0e-4 with closure ~1e-13 at
-    every thread count on both builds, while the unguarded solve is 30x-160x
-    that in R and eight-plus orders worse in closure.  The ratio is the claim;
-    the constants never were.
+      (a) the ladder carries NO silently-wrong truncation -- every cell that
+          returns closes better than ``_THIN_DEFECT_CLOSURE``, with the guard
+          OFF (the fixture), which is where a wrong answer would come back;
+      (b) THE SWITCH ITSELF is a no-op: the inverse refusal was WITHDRAWN (see
+          the note above ``_INV_RCOND_SCREEN``), so flipping
+          ``INTERFACE_CONDITIONING_GUARD`` must not move a bit on the cell that
+          historically carried the defect.  That was always the assertion this
+          test's name was about, and it is unchanged;
+      (c) with the pre-round-1 branch body reinstated the wrong answer comes
+          BACK -- and comes back through the switch in both positions, which is
+          the withdrawn refusal's fail-before, reproduced on demand.
 
-    **v5.33.1 -- BOTH ENDS OF THAT RATIO WERE STILL HARD-CODED.**  The ratio
-    was right and the two CELLS were not.  On the ubuntu CI images:
+    **THE M1 EQUILIBRATION INSTRUMENT: KEPT (decision, 2026-09-11).**
+    ``_equilibrated_inverse_residual`` / ``_rcond_1_equilibrated`` were chosen
+    over the raw instruments because a measured population of calls existed
+    where the raw residual would have REFUSED a correct answer and the
+    equilibrated one passed it.  That population was the branch-cut defect:
+    re-measured over a 24-fixture sweep it goes from 9 of 106 guarded calls
+    pre-fix (7 unpinned; 9 / 8 / 6 on WSL, i.e. moving with the BLAS pool --
+    the defect's own signature one level up) to **0 of 110 post-fix, on both
+    builds at every thread count**.  The instrument is KEPT anyway: it is
+    behaviour-preserving, it costs nothing on the screened path, the ARMED
+    ``T22`` refusal is a separate population this change does not touch (its
+    minimum equilibrated ``rcond`` reads 2.792e-02 on both arms, eight decades
+    above its own ``1e-10`` bar), and a user's own coincident geometry can
+    still reach it.  Deleting a guard because its found population is empty
+    would repeat, one level up, the mistake this campaign exists to prevent.
+    No library code was removed in round 2.
+    """
+    # (a) with the guard OFF, nothing in the ladder returns a wrong answer.
+    for pol in ("te", "tm"):
+        defects = _thin_defects(pol)
+        assert not defects, (
+            f"{len(defects)} {pol.upper()} truncation(s) return while missing "
+            f"closure by more than {_THIN_DEFECT_CLOSURE:.0e}: X-1 has "
+            f"reopened with the guard off.\n    " + _thin_table((pol,)))
 
-    * the pinned reference ``22 TM`` closes at ``3.760e-03`` -- it is not
-      clean there, and the test said so ("it cannot calibrate the defect");
-    * the pinned defect ``21 TE`` returns ``sum(R)`` = 2.095e-04 against the
-      clean population's 2.014e-04 -- 4 % out, i.e. the defect does not
-      manifest at that truncation there at all.
-
-    Both cells are now CHOSEN from the per-build scan: the reference is a
-    truncation that IS clean here, the defect is the worst silently-wrong
-    truncation that IS wrong here, and every bar is a ratio between them.  The
-    fail-before content -- with the guard off the wrong answer comes BACK
-    instead of being refused -- is unchanged and is what the scan re-proves on
-    whatever cell carries it."""
-    clean = _thin_clean("tm") + _thin_clean("te")
-    assert clean, ("no truncation in the scanned ladder is clean on this "
-                   "build; nothing can calibrate the defect.\n    "
-                   + _thin_table())
-    ref_close = max(r["close"] for r in clean)
-
-    defects = _thin_defects("te") + _thin_defects("tm")
-    scored = [(r, _thin_wrongness(r)) for r in defects]
-    scored = [(r, s) for r, s in scored if np.isfinite(s)]
-    if not scored:
-        alive = _census_instrument_is_alive()
-        assert alive, (
-            "no truncation returns a non-conserving answer AND the census "
-            "instrument does not flag a synthetic cond-1e20 operator: the "
-            "INSTRUMENT is broken, not the defect absent.\n    "
-            + _thin_table())
-        pytest.skip(
-            "the pre-M1 X-1 answer does not reproduce on any truncation of "
-            "the scanned ladder on this build: every cell that returns closes "
-            f"better than {_THIN_DEFECT_CLOSURE:.0e}.  This is probe-backed "
-            "rather than assumed -- the census instrument still flags a "
-            "synthetic cond-1e20 operator, so the screen is live and the "
-            "family simply carries no silently-wrong truncation here.  "
-            "Scan:\n    " + _thin_table())
-    worst, score = max(scored, key=lambda t: t[1])
-    ref_R = _thin_converged_sumR(worst["pol"])
-    spread = _thin_converged_spread(worst["pol"])
-    tail = _thin_converged(worst["pol"])
-    defect_R, defect_closure = worst["sumR"], worst["close"]
-    print(f"\nX-1 fail-before: defect cell {worst['M']} "
-          f"{worst['pol'].upper()} sum(R)={defect_R:.6e} closure="
-          f"{defect_closure:.3e}; its polarization's converged tail "
-          f"{[r['M'] for r in tail]} reads {ref_R:.6e} +/- {spread:.2%} "
-          f"(worst clean closure {ref_close:.3e}); wrongness "
-          f"{score:.1f} spreads")
-
-    # (1) it RETURNED -- that is the fail-before content, and reaching this
-    #     line at all is most of the assertion.
-    assert worst["raised"] is None
-    assert np.isfinite(defect_R) and np.isfinite(defect_closure)
-    # (2) the control really is clean, so the comparison means something.
-    assert ref_close < _THIN_CLEAN_CLOSURE, (
-        f"the reference population is not clean on this build "
-        f"(worst closure {ref_close:.3e}); it cannot calibrate the defect")
-    # (3) and what came back is the WRONG answer, measured in the CONVERGED
-    #     tail's own units.  The defect set was classified on CLOSURE alone,
-    #     so this is a claim and not a definition.  Measured: 1.5e+05 spreads
-    #     (21 TE, 1 thread) down to 170 (the mildest cell that breaks closure
-    #     at all, 26 TE at 24 threads) against the bar of 5; the CI cell that
-    #     broke the sibling test (sum(R) 2.502e-04 against a 2.014e-04 tail)
-    #     would read 240.
-    assert score > 5.0, (
-        f"the worst non-conserving cell {worst['M']} "
-        f"{worst['pol'].upper()} returns sum(R)={defect_R:.6e}, only "
-        f"{score:.2f} spreads from the converged tail's {ref_R:.6e} "
-        f"-- the pre-M1 defect is not being reproduced with the guard off, "
-        f"it is truncation convergence.\n    " + _thin_table())
-    # (4) ... and it is SILENT in the sense the audit means: conservation is
-    #     violated by orders more than any clean truncation, yet not enough
-    #     for `_check_energy` to have raised on it (assertion 1).
-    assert defect_closure > 1.0e3 * max(ref_close, 1e-15), (
-        f"unguarded closure {defect_closure:.3e} is not orders above the "
-        f"clean population's {ref_close:.3e}")
-    # (5) THE SWITCH ITSELF, on the cell that carries the defect: the inverse
-    #     refusal was WITHDRAWN (see the note above `_INV_RCOND_SCREEN`), so
-    #     flipping `INTERFACE_CONDITIONING_GUARD` must not move a bit of this
-    #     path -- which is why the wrong answer comes back either way, and is
-    #     the fail-before this test's name is about.
-    got = []
-    for flag in (False, True):
+    # (b) THE SWITCH: bit-identical in both positions on the historical cell.
+    def solve(M, pol, flag):
         prev = _rc.INTERFACE_CONDITIONING_GUARD
         _rc.INTERFACE_CONDITIONING_GUARD = flag
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                o, R, T = rcwa_efficiency_1d(
+                _o, R, T = rcwa_efficiency_1d(
                     THIN["period"], THIN["n_ridge"], THIN["n_groove"],
                     THIN["n_substrate"], THIN["n_superstrate"], THIN["depth"],
-                    THIN["duty_cycle"], WL, angle=0.0,
-                    polarization=worst["pol"], n_orders=worst["M"],
-                    stabilize=False)
-            got.append((np.asarray(R).copy(), np.asarray(T).copy()))
+                    THIN["duty_cycle"], WL, angle=0.0, polarization=pol,
+                    n_orders=M, stabilize=False)
+            return np.asarray(R).copy(), np.asarray(T).copy()
         finally:
             _rc.INTERFACE_CONDITIONING_GUARD = prev
-    assert float(np.max(np.abs(got[0][0] - got[1][0]))) == 0.0
-    assert float(np.max(np.abs(got[0][1] - got[1][1]))) == 0.0
+
+    off, on = solve(21, "te", False), solve(21, "te", True)
+    assert float(np.max(np.abs(off[0] - on[0]))) == 0.0
+    assert float(np.max(np.abs(off[1] - on[1]))) == 0.0
+
+    # (c) the fail-before, ENGINEERED: reinstate the pre-round-1 branch body
+    #     and the wrong answer comes back -- through the switch either way.
+    ref = _thin_converged_sumR("te")
+    with _pre_branch_cut():
+        bad = [r for r in _thin_scan_uncached("te")
+               if r["raised"] is None and np.isfinite(r["sumR"])
+               and r["close"] > _THIN_DEFECT_CLOSURE]
+        assert bad, (
+            "the pre-round-1 branch body produces no silently-wrong "
+            "truncation on this build: the fail-before demonstrates nothing")
+        worst = max(bad, key=lambda r: abs(r["sumR"] / ref - 1.0))
+        pre_off = solve(worst["M"], worst["pol"], False)
+        pre_on = solve(worst["M"], worst["pol"], True)
+    score = abs(worst["sumR"] / ref - 1.0)
+    print(f"\nX-1 engineered fail-before: {worst['M']} "
+          f"{worst['pol'].upper()} sum(R)={worst['sumR']:.6e} closure="
+          f"{worst['close']:.3e} against the converged {ref:.6e} "
+          f"-- {score:.1f}x wrong")
+    assert score > 1.0, (
+        f"the engineered pre-fix arm's worst cell is only {score:.3f}x from "
+        f"the converged {ref:.6e}: it is not reproducing the documented "
+        f"152x error")
+    # ... and the withdrawn refusal did not act on it in either position.
+    assert float(np.max(np.abs(pre_off[0] - pre_on[0]))) == 0.0
+    assert float(np.max(np.abs(pre_off[1] - pre_on[1]))) == 0.0
 
 
 # ---------------------------------------------------------------------------

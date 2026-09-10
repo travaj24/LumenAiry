@@ -1,0 +1,1660 @@
+{
+ "_stamp": {
+  "arm": "pre",
+  "jax_copies": {
+   "_jax_stack2d": {
+    "band": false,
+    "conj": false,
+    "exact_pin": false
+   },
+   "_jax_twod": {
+    "band": false,
+    "conj": false,
+    "exact_pin": false
+   },
+   "_jax_twod_jones": {
+    "band": false,
+    "conj": false,
+    "exact_pin": false
+   }
+  },
+  "lumenairy_file": "C:\\tmp\\lum_bc2\\lumenairy\\__init__.py",
+  "node": "Tesla_Ryzen",
+  "numpy": "2.4.4",
+  "platform": "Windows",
+  "pmm_cut_band_rel": null,
+  "pmm_twod_has_conj": true,
+  "pmm_twod_has_exact_pin": true,
+  "python": "3.14.6",
+  "rcwa_cut_band_rel": 1e-08,
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "openblas_num_threads": "1",
+ "rows": {
+  "cell_strong_none_M3": {
+   "cls": "none",
+   "installed": {
+    "closure": 0.01659602127915205,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 30.074136441214936,
+     "max_top_weight": 0.4920995995038359,
+     "min_ipr": 2.0645352645860306,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.01659602127915072,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 55.18936236927092,
+     "max_top_weight": 0.8677334357428763,
+     "min_ipr": 1.3235611464561834,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_strong_none_M5": {
+   "cls": "none",
+   "installed": {
+    "closure": 0.0018352796808018823,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 122.87423439538031,
+     "max_top_weight": 0.5032263204345296,
+     "min_ipr": 2.014376696494529,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0018352796808014382,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 205.12967197451385,
+     "max_top_weight": 0.8794615042468585,
+     "min_ipr": 1.2898044239344801,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_strong_none_M7": {
+   "cls": "none",
+   "installed": {
+    "closure": 0.0007334287483728996,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.8242147557780709,
+     "modes": 1350,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 195.24423741085982,
+     "max_top_weight": 0.6444086783008525,
+     "min_ipr": 2.110624036865958,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0007334287483733437,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.8242147557780709,
+     "modes": 1350,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 213.7622135228431,
+     "max_top_weight": 0.6442067625573299,
+     "min_ipr": 2.111708283215153,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_strong_none_M9": {
+   "cls": "none",
+   "installed": {
+    "closure": -0.0002957737817806949,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 9,
+     "incoming_after_exact_pin": 9,
+     "max_band_ratio_neg": 0.9680561377573931,
+     "modes": 2166,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 17184.757125393975,
+     "max_top_weight": 0.25973706582296874,
+     "min_ipr": 5.638166313130584,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": -0.00029577378177436664,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 9,
+     "incoming_after_exact_pin": 9,
+     "max_band_ratio_neg": 0.9680561377573931,
+     "modes": 2166,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 25259.711048701498,
+     "max_top_weight": 0.2597281230063546,
+     "min_ipr": 5.638084682960992,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_strong_region_M3": {
+   "cls": "region",
+   "installed": {
+    "closure": 0.016765090499700097,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 31.7675895223531,
+     "max_top_weight": 0.4921838098238603,
+     "min_ipr": 2.0637620335292453,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.01676509049970054,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 76.01620006405868,
+     "max_top_weight": 0.8677334357428763,
+     "min_ipr": 1.3235611464561834,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_strong_region_M5": {
+   "cls": "region",
+   "installed": {
+    "closure": 0.0016991717659631256,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 122.87423439538031,
+     "max_top_weight": 0.5040066721919576,
+     "min_ipr": 2.0142968781274053,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0016991717659657901,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 205.12967197451385,
+     "max_top_weight": 0.8794615042468585,
+     "min_ipr": 1.2898044239344801,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_strong_region_M7": {
+   "cls": "region",
+   "installed": {
+    "closure": 0.0008100594397171257,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.8242147557780709,
+     "modes": 1350,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 195.24423741085982,
+     "max_top_weight": 0.6447321100513758,
+     "min_ipr": 2.1092675440233633,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0008100594397217886,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.8242147557780709,
+     "modes": 1350,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 213.7622135228431,
+     "max_top_weight": 0.6447087627463277,
+     "min_ipr": 2.1093691595974886,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_strong_region_M9": {
+   "cls": "region",
+   "installed": {
+    "closure": -0.00026491820821639145,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 9,
+     "incoming_after_exact_pin": 9,
+     "max_band_ratio_neg": 0.9680561377573931,
+     "modes": 2166,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 17184.757125393975,
+     "max_top_weight": 0.25765073094721386,
+     "min_ipr": 5.681317297744474,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": -0.00026491820821195056,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 9,
+     "incoming_after_exact_pin": 9,
+     "max_band_ratio_neg": 0.9680561377573931,
+     "modes": 2166,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 25259.711048701498,
+     "max_top_weight": 0.25747275596617925,
+     "min_ipr": 5.682961519585498,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_weak_none_M3": {
+   "cls": "none",
+   "installed": {
+    "closure": 1.3795720121834165e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 19.783285144252936,
+     "max_top_weight": 0.30058104177639283,
+     "min_ipr": 5.3595380652678575,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 1.3795986575360075e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 99.18350221980693,
+     "max_top_weight": 0.9954005803028053,
+     "min_ipr": 1.0092520397571243,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_weak_none_M5": {
+   "cls": "none",
+   "installed": {
+    "closure": 3.379001523029501e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 68.78525984498417,
+     "max_top_weight": 0.47999127008868636,
+     "min_ipr": 2.170856609366455,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 3.379001523029501e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 97.48671545008807,
+     "max_top_weight": 0.9887667288811108,
+     "min_ipr": 1.0227651765903774,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_weak_none_M7": {
+   "cls": "none",
+   "installed": {
+    "closure": 6.806089025701567e-11,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 7,
+     "incoming_after_exact_pin": 7,
+     "max_band_ratio_neg": 0.9999999989642561,
+     "modes": 1350,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 124.39942765223975,
+     "max_top_weight": 0.2617715530892152,
+     "min_ipr": 4.148159351670687,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 6.806399888148462e-11,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 7,
+     "incoming_after_exact_pin": 7,
+     "max_band_ratio_neg": 0.9999999989642561,
+     "modes": 1350,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 186.88650428502976,
+     "max_top_weight": 0.9984669009213731,
+     "min_ipr": 1.0030715871017541,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_weak_none_M9": {
+   "cls": "none",
+   "installed": {
+    "closure": -7.087785913739708e-11,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 3,
+     "incoming_after_exact_pin": 3,
+     "max_band_ratio_neg": 0.9999999966789614,
+     "modes": 2166,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 20311.557138989167,
+     "max_top_weight": 0.3194039898007251,
+     "min_ipr": 5.010821911754217,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": -7.08745284683232e-11,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 3,
+     "incoming_after_exact_pin": 3,
+     "max_band_ratio_neg": 0.9999999966789614,
+     "modes": 2166,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 20311.557280939815,
+     "max_top_weight": 0.31940400457806456,
+     "min_ipr": 5.010821439997732,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_weak_region_M3": {
+   "cls": "region",
+   "installed": {
+    "closure": 1.3204504156760777e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 19.783285144252936,
+     "max_top_weight": 0.30125565217391126,
+     "min_ipr": 5.384027758976537,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 1.3220913253064737e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 655637756.2665145,
+     "max_top_weight": 0.6177620812330283,
+     "min_ipr": 2.0527074378962844,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_weak_region_M5": {
+   "cls": "region",
+   "installed": {
+    "closure": 3.09413605847908e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 68.78525984498417,
+     "max_top_weight": 0.4793034735306736,
+     "min_ipr": 2.1770091389974953,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 3.09413605847908e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 908029.8518251532,
+     "max_top_weight": 0.9868919240290674,
+     "min_ipr": 1.0266208829269228,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_weak_region_M7": {
+   "cls": "region",
+   "installed": {
+    "closure": 5.97315530370679e-11,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 7,
+     "incoming_after_exact_pin": 7,
+     "max_band_ratio_neg": 0.9999999989642561,
+     "modes": 1350,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 124.39942765223975,
+     "max_top_weight": 0.26175155984718806,
+     "min_ipr": 4.148768221982177,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 5.975131500690622e-11,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 7,
+     "incoming_after_exact_pin": 7,
+     "max_band_ratio_neg": 0.9999999989642561,
+     "modes": 1350,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 68021742.50894219,
+     "max_top_weight": 0.9984669009213731,
+     "min_ipr": 1.0030715871017541,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_weak_region_M9": {
+   "cls": "region",
+   "installed": {
+    "closure": -6.208222824710674e-11,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 3,
+     "incoming_after_exact_pin": 3,
+     "max_band_ratio_neg": 0.9999999966789614,
+     "modes": 2166,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 20311.557138989167,
+     "max_top_weight": 0.32237472831872255,
+     "min_ipr": 4.919409091395297,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": -6.207723224349593e-11,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 3,
+     "incoming_after_exact_pin": 3,
+     "max_band_ratio_neg": 0.9999999966789614,
+     "modes": 2166,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 648617788.2630261,
+     "max_top_weight": 0.9867838231811606,
+     "min_ipr": 1.0269452615157837,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "cell_weak_superstrate": {
+   "cls": "region-sup",
+   "installed": {
+    "closure": 2.2968271728984746e-10,
+    "eig": {
+     "exact_zero_real": 28,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 38
+    },
+    "interfaces": {
+     "max_cond": 50.94138757417059,
+     "max_top_weight": 0.4812951412679801,
+     "min_ipr": 2.159233086366639,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 2.2968271728984746e-10,
+    "eig": {
+     "exact_zero_real": 28,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 38
+    },
+    "interfaces": {
+     "max_cond": 11728491.32743011,
+     "max_top_weight": 0.9919391776971108,
+     "min_ipr": 1.0162755266771166,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_strong_both_M3": {
+   "cls": "both",
+   "installed": {
+    "closure": 0.04470343634992613,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 392,
+     "n_calls": 4,
+     "on_cut": 39
+    },
+    "interfaces": {
+     "max_cond": 31.7675895223531,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.04470343634992213,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 392,
+     "n_calls": 4,
+     "on_cut": 39
+    },
+    "interfaces": {
+     "max_cond": 328.6313001900137,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_strong_both_M5": {
+   "cls": "both",
+   "installed": {
+    "closure": 0.0032035020451757212,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 968,
+     "n_calls": 4,
+     "on_cut": 39
+    },
+    "interfaces": {
+     "max_cond": 110.01007548478765,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0032035020451886,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 968,
+     "n_calls": 4,
+     "on_cut": 39
+    },
+    "interfaces": {
+     "max_cond": 1162.5261583401075,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_strong_none_M3": {
+   "cls": "none",
+   "installed": {
+    "closure": 0.03321280391026393,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 30.074136441214936,
+     "max_top_weight": 0.4920995995038359,
+     "min_ipr": 2.0645352645860306,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0332128039102626,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 55.18936236927092,
+     "max_top_weight": 0.8677334357428763,
+     "min_ipr": 1.3235611464561834,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_strong_none_M5": {
+   "cls": "none",
+   "installed": {
+    "closure": 0.003370095226525649,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 122.87423439538031,
+     "max_top_weight": 0.5032263204345296,
+     "min_ipr": 2.014376696494529,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0033700952265274253,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 205.12967197451385,
+     "max_top_weight": 0.8794615042468585,
+     "min_ipr": 1.2898044239344801,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_strong_region_M3": {
+   "cls": "region",
+   "installed": {
+    "closure": 0.03355715338111276,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 31.7675895223531,
+     "max_top_weight": 0.4921838098238603,
+     "min_ipr": 2.0637620335292453,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0335571533811132,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 76.01620006405868,
+     "max_top_weight": 0.8677334357428763,
+     "min_ipr": 1.3235611464561834,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_strong_region_M5": {
+   "cls": "region",
+   "installed": {
+    "closure": 0.0030802240035776585,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 122.87423439538031,
+     "max_top_weight": 0.5040066721919576,
+     "min_ipr": 2.0142968781274053,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0030802240035816553,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 29
+    },
+    "interfaces": {
+     "max_cond": 205.12967197451385,
+     "max_top_weight": 0.8794615042468585,
+     "min_ipr": 1.2898044239344801,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_strong_spacer_M3": {
+   "cls": "spacer",
+   "installed": {
+    "closure": 0.04544879037939786,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 392,
+     "n_calls": 4,
+     "on_cut": 39
+    },
+    "interfaces": {
+     "max_cond": 31.7675895223531,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.045448790379392534,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 0.999681386369696,
+     "modes": 392,
+     "n_calls": 4,
+     "on_cut": 39
+    },
+    "interfaces": {
+     "max_cond": 328.6313001900137,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_strong_spacer_M5": {
+   "cls": "spacer",
+   "installed": {
+    "closure": 0.0032270107634335687,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 968,
+     "n_calls": 4,
+     "on_cut": 39
+    },
+    "interfaces": {
+     "max_cond": 110.01007548478765,
+     "max_top_weight": 0.9999978099339266,
+     "min_ipr": 1.0000043801417395,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0032270107634415623,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 6,
+     "incoming_after_exact_pin": 6,
+     "max_band_ratio_neg": 1.0,
+     "modes": 968,
+     "n_calls": 4,
+     "on_cut": 39
+    },
+    "interfaces": {
+     "max_cond": 1162.5261583401075,
+     "max_top_weight": 0.9999978099339266,
+     "min_ipr": 1.0000043801417395,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_weak_both_M3": {
+   "cls": "both",
+   "installed": {
+    "closure": 1.7673595920086882e-10,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 392,
+     "n_calls": 4,
+     "on_cut": 32
+    },
+    "interfaces": {
+     "max_cond": 14.534311156020111,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 2.3378859662195692,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 392,
+     "n_calls": 4,
+     "on_cut": 32
+    },
+    "interfaces": {
+     "max_cond": 1959334262.5299675,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_weak_both_M5": {
+   "cls": "both",
+   "installed": {
+    "closure": 2.816857858078947e-10,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 968,
+     "n_calls": 4,
+     "on_cut": 32
+    },
+    "interfaces": {
+     "max_cond": 50.94138757417059,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 2.8168534171868487e-10,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 968,
+     "n_calls": 4,
+     "on_cut": 32
+    },
+    "interfaces": {
+     "max_cond": 11728491.32743011,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_weak_both_oblique": {
+   "cls": "both",
+   "installed": {
+    "closure": 1.316377229443333e-09,
+    "eig": {
+     "exact_zero_real": 24,
+     "in_band": 7,
+     "incoming_after_exact_pin": 7,
+     "max_band_ratio_neg": 1.0,
+     "modes": 648,
+     "n_calls": 4,
+     "on_cut": 34
+    },
+    "interfaces": {
+     "max_cond": 15.266167505836023,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 1.2874253468186936e-05,
+    "eig": {
+     "exact_zero_real": 24,
+     "in_band": 7,
+     "incoming_after_exact_pin": 7,
+     "max_band_ratio_neg": 1.0,
+     "modes": 648,
+     "n_calls": 4,
+     "on_cut": 34
+    },
+    "interfaces": {
+     "max_cond": 192019631.88629293,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_weak_none_M3": {
+   "cls": "none",
+   "installed": {
+    "closure": 2.7591395834747345e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 19.783285144252936,
+     "max_top_weight": 0.30058104177639283,
+     "min_ipr": 5.3595380652678575,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 2.759179551503621e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 99.18350221980693,
+     "max_top_weight": 0.9954005803028053,
+     "min_ipr": 1.0092520397571243,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_weak_none_M5": {
+   "cls": "none",
+   "installed": {
+    "closure": 6.757994164274805e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 68.78525984498417,
+     "max_top_weight": 0.47999127008868636,
+     "min_ipr": 2.170856609366455,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 6.757994164274805e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 97.48671545008807,
+     "max_top_weight": 0.9887667288811108,
+     "min_ipr": 1.0227651765903774,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_weak_region_M3": {
+   "cls": "region",
+   "installed": {
+    "closure": 2.6409097131363524e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 19.783285144252936,
+     "max_top_weight": 0.30125565217391126,
+     "min_ipr": 5.384027758976537,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 2.6441915323971443e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 294,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 655637756.2665145,
+     "max_top_weight": 0.6177620812330283,
+     "min_ipr": 2.0527074378962844,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_weak_region_M5": {
+   "cls": "region",
+   "installed": {
+    "closure": 6.18827211695816e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 68.78525984498417,
+     "max_top_weight": 0.4793034735306736,
+     "min_ipr": 2.1770091389974953,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 6.18827211695816e-10,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 726,
+     "n_calls": 3,
+     "on_cut": 22
+    },
+    "interfaces": {
+     "max_cond": 908029.8518251532,
+     "max_top_weight": 0.9868919240290674,
+     "min_ipr": 1.0266208829269228,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_weak_spacer_M3": {
+   "cls": "spacer",
+   "installed": {
+    "closure": 1.6377788014665384e-10,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 392,
+     "n_calls": 4,
+     "on_cut": 32
+    },
+    "interfaces": {
+     "max_cond": 14.534311156020111,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 2.1414427955569133,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 5,
+     "incoming_after_exact_pin": 5,
+     "max_band_ratio_neg": 0.9999999878814831,
+     "modes": 392,
+     "n_calls": 4,
+     "on_cut": 32
+    },
+    "interfaces": {
+     "max_cond": 1959334262.5299675,
+     "max_top_weight": 1.0,
+     "min_ipr": 1.0,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "hyb_weak_spacer_M5": {
+   "cls": "spacer",
+   "installed": {
+    "closure": 2.6131097285997384e-10,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 968,
+     "n_calls": 4,
+     "on_cut": 32
+    },
+    "interfaces": {
+     "max_cond": 50.94138757417059,
+     "max_top_weight": 0.9999978099339266,
+     "min_ipr": 1.0000043801417395,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 2.61310528770764e-10,
+    "eig": {
+     "exact_zero_real": 22,
+     "in_band": 2,
+     "incoming_after_exact_pin": 2,
+     "max_band_ratio_neg": 1.0,
+     "modes": 968,
+     "n_calls": 4,
+     "on_cut": 32
+    },
+    "interfaces": {
+     "max_cond": 11728491.32743011,
+     "max_top_weight": 0.9999978099339266,
+     "min_ipr": 1.0000043801417395,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "jones2d_region": {
+   "cls": "region",
+   "installed": {
+    "closure": 0.0007771014804398568,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 0,
+     "incoming_after_exact_pin": 0,
+     "max_band_ratio_neg": null,
+     "modes": 196,
+     "n_calls": 2,
+     "on_cut": 12
+    },
+    "interfaces": {
+     "n_interfaces": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 0.0007771014804398568,
+    "eig": {
+     "exact_zero_real": 12,
+     "in_band": 0,
+     "incoming_after_exact_pin": 0,
+     "max_band_ratio_neg": null,
+     "modes": 196,
+     "n_calls": 2,
+     "on_cut": 12
+    },
+    "interfaces": {
+     "n_interfaces": 0
+    },
+    "raised": null
+   }
+  },
+  "pure_strong_none": {
+   "cls": "none",
+   "installed": {
+    "closure": -9.080036278419357e-09,
+    "eig": {
+     "n_calls": 0
+    },
+    "interfaces": {
+     "max_cond": 258.699578052306,
+     "max_top_weight": 0.2664086905059305,
+     "min_ipr": 3.9910142101927617,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": -9.080036278419357e-09,
+    "eig": {
+     "n_calls": 0
+    },
+    "interfaces": {
+     "max_cond": 258.699578052306,
+     "max_top_weight": 0.2664086905059305,
+     "min_ipr": 3.9910142101927617,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "pure_weak_both": {
+   "cls": "both",
+   "installed": {
+    "closure": -2.6645352591003757e-15,
+    "eig": {
+     "n_calls": 0
+    },
+    "interfaces": {
+     "max_cond": 65.9043686217406,
+     "max_top_weight": 0.49942203515898864,
+     "min_ipr": 2.1343262703755554,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": -2.6645352591003757e-15,
+    "eig": {
+     "n_calls": 0
+    },
+    "interfaces": {
+     "max_cond": 65.9043686217406,
+     "max_top_weight": 0.49942203515898864,
+     "min_ipr": 2.1343262703755554,
+     "n_interfaces": 4,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "stag_weak_region": {
+   "cls": "region",
+   "installed": {
+    "closure": 9.992007221626409e-15,
+    "eig": {
+     "n_calls": 0
+    },
+    "interfaces": {
+     "max_cond": 83.87130015042521,
+     "max_top_weight": 0.49942203515898864,
+     "min_ipr": 2.1343262703755554,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": 9.992007221626409e-15,
+    "eig": {
+     "n_calls": 0
+    },
+    "interfaces": {
+     "max_cond": 83.87130015042521,
+     "max_top_weight": 0.49942203515898864,
+     "min_ipr": 2.1343262703755554,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  },
+  "stagjones_tensor_region": {
+   "cls": "region",
+   "installed": {
+    "closure": -9.535217060374634e-11,
+    "eig": {
+     "n_calls": 0
+    },
+    "interfaces": {
+     "max_cond": 153.93947278295434,
+     "max_top_weight": 0.6310146418499868,
+     "min_ipr": 2.131120256184843,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   },
+   "numpy_pre": {
+    "closure": -9.535217060374634e-11,
+    "eig": {
+     "n_calls": 0
+    },
+    "interfaces": {
+     "max_cond": 153.93947278295434,
+     "max_top_weight": 0.6310146418499868,
+     "min_ipr": 2.131120256184843,
+     "n_interfaces": 2,
+     "n_tiny_total": 0
+    },
+    "raised": null
+   }
+  }
+ }
+}

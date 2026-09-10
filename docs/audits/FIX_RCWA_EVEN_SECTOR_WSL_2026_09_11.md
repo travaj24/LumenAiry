@@ -523,6 +523,23 @@ The WSL run above includes the originally failing
 All at `OPENBLAS_NUM_THREADS=1` -- the setting that exposes the defect -- and
 `-p no:randomly`.
 
+**THE GATE, corrected 2026-09-11 (round 2).**  `tests/unit/test_m1_conditioning_guard.py`
+belongs in the battery that gates this change and was missing from it.  It is
+the ONLY file this fix turns red, and it turns red for the right reason: two of
+its tests pinned X-1 as a REPRODUCED, OPEN instability class and a third pinned
+a "false positive the equilibration exists for", and all three premises were
+this defect.  Round 2 restates them as decisions about the closed state
+(`docs/audits/FIX_BRANCH_CUT_ROUND2_2026_09_11.md` sections 6 and 7); the file
+now reads 28 passed / 0 skipped on both builds.  The gate is therefore
+
+    tests/unit/test_fix_rcwa_even_sector_wsl.py
+    tests/unit/test_verify_rcwa_even_sector.py
+    tests/unit/test_m1_conditioning_guard.py
+    tests/unit/test_v5_14_2_backlog_batch.py
+    tests/unit/test_fix_branch_cut_round2.py
+
+-- 86 passed on Windows and on WSL, pinned and unpinned.
+
 | suite | Windows py3.14 | WSL py3.12 |
 |---|---|---|
 | `test_v5_14_2_backlog_batch.py` + `test_rcwa*.py` + `test_niche*rcwa*.py` (+ the new file on WSL) | 225 passed, 1 skipped, 175.4 s | 235 passed, 241.7 s |
@@ -601,4 +618,13 @@ exercise ~4 400 distinct tests across every module that calls `_sqrt_decay`.
   `_forward_branch_flip` and then SHOWN to have decades on both sides of the
   measured populations; no attempt was made to find the widest admissible
   value, because the measured gap (14 decades) makes the exact placement
-  inside it immaterial.
+  inside it immaterial.  **Round 2 corrects the margin numbers** (the
+  51-fixture box carried no LAYER-CUTOFF mount, where the noise side reaches
+  6.7e-09) and re-decides the band's SHAPE by measurement against a per-mode
+  alternative; the shape is kept, the margins are replaced.  See
+  `docs/audits/FIX_BRANCH_CUT_ROUND2_2026_09_11.md` section 5.
+* **The blast-radius paragraph in section 6 is WRONG about the PMM half**, and
+  is corrected in the CHANGELOG rather than rewritten here: the five PMM copies
+  of `_sqrt_decay` were NOT reached by this change.  Round 2 consolidated them
+  into one definition and measured what they cost -- up to `sum R + T = 110` on
+  a passive lossless stack.

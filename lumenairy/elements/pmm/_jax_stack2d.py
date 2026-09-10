@@ -113,6 +113,11 @@ def _pmm_stack2d_solve_jax(stack):
         _interface_smatrix,
         _propagation_star,
         _redheffer_star,
+        # THE one modal branch selector, traced with ``jnp`` at its call sites
+        # (round 2, 2026-09-11).  This module carried a private copy with the
+        # exact ``r.real == 0`` pin round 1 removed from the shared body -- see
+        # that body's docstring for what the copies cost.
+        _sqrt_decay,
     )
     _require_jax_x64("PMM2DStack.solve")
     cj = jnp.complex128
@@ -172,11 +177,6 @@ def _pmm_stack2d_solve_jax(stack):
     kxv = kx0 + jnp.asarray(order_x) * (wl_t / stack.period_x)
     kyv = ky0 + jnp.asarray(order_y) * (wl_t / stack.period_y)
 
-    def _sqrt_decay(x):
-        r = jnp.sqrt(x.astype(cj))
-        on_cut = r.real == 0
-        return jnp.where(on_cut & (r.imag < 0), -r, r)
-
     def _inv_lam(lam):
         safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
         return 1.0 / safe
@@ -189,7 +189,7 @@ def _pmm_stack2d_solve_jax(stack):
         Kx = jnp.diag(kxv.astype(cj))
         Ky = jnp.diag(kyv.astype(cj))
         kz = _kz_fwd(eps, kxv, kyv)
-        lam = _sqrt_decay(-jnp.concatenate([kz, kz]) ** 2)
+        lam = _sqrt_decay(-jnp.concatenate([kz, kz]) ** 2, jnp)
         eps_eye = eps * jnp.eye(Nf, dtype=cj)
         Q = jnp.block([[Kx @ Ky, eps_eye - Kx @ Kx],
                        [Ky @ Ky - eps_eye, -Ky @ Kx]])
@@ -207,7 +207,7 @@ def _pmm_stack2d_solve_jax(stack):
         P = jnp.block([[GxF @ EPS_inv @ GyF, eye_F - GxF @ EPS_inv @ GxF],
                        [GyF @ EPS_inv @ GyF - eye_F, -GyF @ EPS_inv @ GxF]])
         lam2, Wl = eig(P @ Q)
-        lam = _sqrt_decay(lam2)
+        lam = _sqrt_decay(lam2, jnp)
         Vl = Q @ Wl @ jnp.diag(_inv_lam(lam))
         return Wl, Vl, lam
 

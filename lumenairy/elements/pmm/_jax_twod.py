@@ -334,14 +334,14 @@ def _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
         _interface_smatrix,
         _propagation_star,
         _redheffer_star,
+        # THE one modal branch selector, traced with ``jnp`` below (round 2,
+        # 2026-09-11).  This module carried a private copy with the exact
+        # ``r.real == 0`` pin round 1 removed from the shared body -- see that
+        # body's docstring for what the copies cost.
+        _sqrt_decay,
     )
     _require_jax_x64("pmm_efficiency_2d")
     cj = jnp.complex128
-
-    def _sqrt_decay(x):
-        r = jnp.sqrt(x.astype(cj))
-        on_cut = r.real == 0
-        return jnp.where(on_cut & (r.imag < 0), -r, r)
 
     def _inv_lam(lam):
         safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
@@ -371,7 +371,7 @@ def _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
         Kx = jnp.diag(kxv.astype(cj))
         Ky = jnp.diag(kyv.astype(cj))
         kz = _kz_fwd(eps, kxv, kyv)
-        lam = _sqrt_decay(-jnp.concatenate([kz, kz]) ** 2)
+        lam = _sqrt_decay(-jnp.concatenate([kz, kz]) ** 2, jnp)
         eps_I = eps * jnp.eye(Nf, dtype=cj)
         Q = jnp.block([[Kx @ Ky, eps_I - Kx @ Kx],
                        [Ky @ Ky - eps_I, -Ky @ Kx]])
@@ -399,7 +399,7 @@ def _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
                    [GyF @ EPS_inv @ GyF - I_F, -GyF @ EPS_inv @ GxF]])
     eig = _jax_eig_stable()
     lam2, Wl = eig(P @ Q)
-    lam_l = _sqrt_decay(lam2)
+    lam_l = _sqrt_decay(lam2, jnp)
     Vl = Q @ Wl @ jnp.diag(_inv_lam(lam_l))
 
     S = _interface_smatrix(Wsup, Vsup, Wl, Vl)

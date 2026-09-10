@@ -914,16 +914,29 @@ def _check_energy(fn_name, R, T, lossless=False):
     ``docs/audits/VERIFY_WOOD_LIST_AND_FFFNV_2026_09_10.md`` follow-up B).
     The (period, n_orders) one above is a near-degeneracy and moves when
     ``n_orders`` moves.  The other is an INDEX coincidence: a layer
-    permittivity exactly EQUAL to a region's -- a groove, or a rotated
-    director's ordinary ``no^2``, equal to ``n_substrate^2`` -- makes a whole
-    block of layer modes EXACTLY degenerate with the region's at EVERY
-    truncation (measured on such a fixture: 21 of 46 layer modes matching a
-    region mode to 2.7e-17 at ``n_orders`` = 11, ``cond(a + b)`` at that
-    interface 1.6e15..7.4e15 against 7..165 once detuned), so the closure
-    defect is a reading of the rounding floor and moves with the LAPACK build
-    and the BLAS thread count instead.  Changing ``n_orders`` does NOT help
-    there (0 of 16 truncations in 11..41 were sound on one build); detuning
-    one of the coincident permittivities by a relative ~1e-6 does.
+    permittivity exactly EQUAL to a MEDIUM THAT IS BUILT IN EXACT ARITHMETIC --
+    a half-space REGION, or a UNIFORM LAYER of the same stack, both of which
+    get their modes from :func:`_homogeneous_eigenmodes` -- makes a whole block
+    of layer modes EXACTLY degenerate with that medium's at EVERY truncation
+    (measured on such a fixture: 21 of 46 layer modes matching a region mode to
+    2.7e-17 at ``n_orders`` = 11, ``cond(a + b)`` at that interface
+    1.6e15..7.4e15 against 7..165 once detuned).  Changing ``n_orders`` does
+    NOT help there (0 of 16 truncations in 11..41 were sound on one build).
+
+    THE CAUSE OF THAT SECOND CLASS WAS REMOVED on 2026-09-11 (rounds 1 and 2 of
+    the modal branch-cut fix, ``docs/audits/FIX_RCWA_EVEN_SECTOR_WSL_2026_09_11.md``
+    and ``docs/audits/FIX_BRANCH_CUT_ROUND2_2026_09_11.md``): what made the
+    mode match singular was a PROPAGATING layer mode handed the INCOMING root,
+    which is the coincident medium's own BACKWARD mode.  With the root pinned,
+    an index coincidence -- against a region OR against a uniform layer, on
+    either side -- closes energy at the arithmetic floor.  The message below no
+    longer recommends detuning, because the two measurements that motivated it
+    now say something different: after the fix the coincident geometry is sound
+    at every truncation, and BEFORE the fix a relative ``1e-6`` detune did not
+    reliably cure the LAYER-LAYER case anyway (measured on the uniform-spacer
+    stack: closure 8.1e-05 at a 1e-6 detune, 8.7e-14 only by 1e-3).  If this
+    guard still fires on a coincident geometry, the branch selector is the
+    place to look, not the permittivity.
 
     Skipped on the JAX path (the sums are traced).  Lossy media give R+T < 1
     (never triggered); the tolerance leaves normal Wood-nudge residue alone.
@@ -948,12 +961,15 @@ def _check_energy(fn_name, R, T, lossless=False):
             f"large period / low index contrast).  Pass stabilize=True to "
             f"auto-retry at a slightly higher n_orders, or reduce n_orders, "
             f"adjust the period, or increase the index contrast.  If instead a "
-            f"LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or "
-            f"a rotated director's ordinary no^2, equal to n_substrate^2 or "
-            f"n_superstrate^2), the layer<->region mode match is exactly -- "
-            f"not nearly -- degenerate at EVERY truncation, and no n_orders "
-            f"helps: DETUNE one of the coincident permittivities by a relative "
-            f"~1e-6 instead.")
+            f"LAYER permittivity is EXACTLY EQUAL to that of a medium built in "
+            f"exact arithmetic -- a half-space REGION (a groove, or a rotated "
+            f"director's ordinary no^2, equal to n_substrate^2 or "
+            f"n_superstrate^2) or a UNIFORM LAYER of the same stack -- the "
+            f"mode match is exactly, not nearly, degenerate at EVERY "
+            f"truncation and no n_orders helps.  That class was repaired on "
+            f"2026-09-11 (the modal branch cut), so reaching this line on such "
+            f"a geometry is a report-worthy regression rather than a modelling "
+            f"choice: please report it with the cell.")
     # Two-sided (audit P1 2026-06-10): a NEGATIVE total is just as
     # non-physical as an excessive one (the gain-superstrate kz_inc flip
     # returned sum T = -392 below the one-sided tripwire).
@@ -978,12 +994,15 @@ def _check_energy(fn_name, R, T, lossless=False):
             f"lossless): the truncation is numerically unstable here and "
             f"the PER-ORDER efficiencies are suspect.  Pass stabilize=True "
             f"(retries nearby truncations) or change n_orders.  If a LAYER "
-            f"permittivity is EXACTLY EQUAL to a REGION's (a groove, or a "
-            f"rotated director's ordinary no^2, equal to n_substrate^2 or "
-            f"n_superstrate^2) the layer<->region mode match is exactly -- not "
-            f"nearly -- degenerate at EVERY truncation and no n_orders helps: "
-            f"DETUNE one of the coincident permittivities by a relative ~1e-6 "
-            f"instead."),
+            f"permittivity is EXACTLY EQUAL to that of a medium built in exact "
+            f"arithmetic -- a half-space REGION (a groove, or a rotated "
+            f"director's ordinary no^2, equal to n_substrate^2 or "
+            f"n_superstrate^2) or a UNIFORM LAYER of the same stack -- the "
+            f"mode match is exactly, not nearly, degenerate at EVERY "
+            f"truncation and no n_orders helps.  That class was repaired on "
+            f"2026-09-11 (the modal branch cut), so seeing this warning on "
+            f"such a geometry is a report-worthy regression rather than a "
+            f"modelling choice: please report it with the cell."),
             stacklevel=3)
 
 
@@ -1207,21 +1226,62 @@ def _inv_lam(lam: np.ndarray) -> np.ndarray:
 #: Same value and same shape (relative to the mode spectrum, floored at 1.0)
 #: as the PMM side's ``_forward_branch_flip`` (audit S1-8), which selects the
 #: forward branch of the same quantity for the scalar-vertical generators.
-#: TWO-SIDED, MEASURED (validation/probe_fix_rcwa_even_sector_wsl/r11_band.py,
-#: 51 fixtures x both builds, 2026-09-11).  The pin acts on exactly one
-#: population -- modes with ``Im(sqrt(lam^2)) < 0`` -- and over 2150 such modes
-#: the discriminating ratio ``|Re(r)| / max(max|r|, 1)`` splits in two with
-#: NOTHING in between: 117 (WIN) / 99 (WSL) modes at <= 2.245e-16 (WIN) /
-#: 1.511e-16 (WSL), every one of them a LOSSLESS cell's PROPAGATING mode whose
-#: negative imaginary part is the eigensolver's backward error; and 2033 (WIN)
-#: / 2036 (WSL) modes at >= 8.267e-02 (WIN) / 7.947e-02 (WSL), where the sign
-#: is physics.  A loss ladder down to Im(eps) = 1e-8 puts NOT ONE mode on the
-#: noise side.  This bar sits 7.6 decades above the noise side and 6.9 decades
-#: below the signal side.
+#:
+#: TWO-SIDED, MEASURED.  The pin acts on exactly one population -- modes with
+#: ``Im(sqrt(lam^2)) < 0`` -- and the discriminating ratio
+#: ``|Re(r)| / max(max|r|, 1)`` splits that population in two: a NOISE side
+#: (a LOSSLESS cell's PROPAGATING mode whose negative imaginary part is the
+#: eigensolver's backward error -- the band must reach it) and a SIGNAL side
+#: (a real decay rate -- the band must not reach it).  Round 2 re-derived both
+#: sides on THREE populations and BOTH builds
+#: (validation/probe_fix_branch_cut_round2/b6_band_scale.py and b6b_cutoff.py,
+#: 2026-09-11), because this function is now SHARED with the hybrid PMM, whose
+#: spectrum is the SEM-projected ``P@Q`` and not the RCWA Fourier one.  Decades
+#: of room this ``1e-8`` has, per population:
+#:
+#:   population                        above the noise      below the signal
+#:   RCWA ordinary (58 fixtures)       6.19 (6.4448e-15)    6.10 (1.2612e-02)
+#:   hybrid PMM P@Q (1463/1642 modes)  6.75 (1.7884e-15)    6.46 (2.8623e-02)
+#:   RCWA at a LAYER CUTOFF (72 mts)   4.04 (9.0475e-13)    3.34 (2.1844e-05)
+#:   ... the verification's deeper cutoff ladder:  0.17 (6.7172e-09)
+#:
+#: The round-1 figure (7.6 / 6.9 decades) was SAMPLE-SCOPED to 51 fixtures that
+#: carried no LAYER-CUTOFF mount; the independent verification re-measured
+#: 2.1 / 6.1 over 75 fixtures and found the noise side reaching 6.7172e-09 at a
+#: cutoff mount, 1.5x under this bar (defect D3).  That last row is the binding
+#: one and it has NO floor, for a structural reason: for ``lam^2 = -s + i eta``
+#: the principal root's real part is ``eta / (2 sqrt(s))``, so at fixed backward
+#: error the ratio grows without limit as ``s -> 0``.  The noise side is set by
+#: ``sqrt(|lam^2|_min)``, not by the backward error alone, and no constant can
+#: be proved safe at an arbitrarily deep cutoff.  What holds there: the mode
+#: that reaches the noise side is no longer cleanly propagating (its ``lam^2``
+#: sits at ~45 degrees, so its imaginary sign is genuinely ambiguous rather than
+#: wrong), it carries no z-directed flux, and :func:`_inv_lam` regularises it --
+#: so no wrong answer follows on any of the 72 + 28 cutoff mounts measured.
+#:
+#: THE SCALE IS THE ARRAY'S LARGEST ROOT, so the verdict on one mode depends on
+#: the others (verification defect D4): a mode whose real part is a fraction
+#: ``rho`` of its OWN magnitude is conjugated once its magnitude falls below
+#: ``_CUT_BAND_REL / rho`` of the spectrum's top.  Worst measured
+#: ``|Re(r)| / |r|`` so conjugated: 6.8698e-08 over the 72 cutoff mounts here,
+#: 2.0751e-03 at the verification's deeper mount.  The alternative -- judging
+#: each mode against its OWN magnitude with a ``sqrt(eps_mach) * max|r|`` floor
+#: -- was measured against this one and is WORSE on all three populations
+#: (gaps 12.09 / 12.58 / 7.16 against 12.35 / 13.71 / 7.38), because at a cutoff
+#: the mode's own magnitude has collapsed and judging its real part against it
+#: is judging noise against noise: that shape's noise side reaches 6.8698e-08,
+#: already ABOVE this bar.  The spectrum's top is the only stable scale there.
+#:
+#: ``band`` is a PARAMETER of :func:`_sqrt_decay` so a caller whose population
+#: differs can carry its own derived value; the table above is why every
+#: in-tree caller uses this one.  (The PURE STAGGERED PMM and the 1-D PMM do
+#: NOT call this function -- they select through
+#: ``pmm/_core._forward_branch_flip``, which thresholds ``|Im(q)|`` on the
+#: OPPOSITE convention and carries its own ``1e-8``.)
 _CUT_BAND_REL = 1e-8
 
 
-def _sqrt_decay(x: np.ndarray) -> np.ndarray:
+def _sqrt_decay(x, xp=None, band: float = _CUT_BAND_REL):
     """Square root on the ``Re(result) >= 0`` (principal) branch, used for
     the LAYER modal eigenvalue ``lam`` that drives the propagator
     ``X = exp(-lam k0 L)``.
@@ -1275,8 +1335,39 @@ def _sqrt_decay(x: np.ndarray) -> np.ndarray:
     keeps ``Re(lam) >= 0`` -- ``-r`` would hand back ``Re(lam) = -1e-16`` and
     give up the ``|X| <= 1`` guarantee this function exists to provide.  The
     two differ by ``2 |Re(r)| ~ 1e-15`` in a quantity of size ``|kz|``.
+
+    THE ONE DEFINITION (round 2, 2026-09-11).  Until round 2 this function had
+    SIX independent bodies: this one and five private copies inside
+    ``lumenairy/elements/pmm/`` (``twod.py``, ``twod_staggered.py``,
+    ``_jax_twod.py``, ``_jax_stack2d.py``, ``_jax_twod_jones.py``), each still
+    carrying the EXACT ``r.real == 0`` pin that round 1 removed from this one.
+    That is the same multi-copy shape as the six-copy factor-i defect (audit
+    S1-8) and it had the same consequence: a three-layer ``PMM2DStackHybrid``
+    (uniform ``eps = 2.25`` spacer / weakly modulated ``eps = 2.25`` cell /
+    uniform spacer) returned per-order efficiencies **2.4e-03** wrong -- a
+    lossless closure defect of ``-1.665e-04`` where the same stack without the
+    spacers reads ``4.9e-15`` -- because a uniform LAYER's modes are built by
+    the analytic Rayleigh helper in EXACT arithmetic exactly as a half-space
+    REGION's are, so a mis-rooted mode of the neighbouring STRUCTURED layer is
+    that uniform layer's own BACKWARD mode.  The substrate index is irrelevant
+    to it (the worst row has ``n_substrate = 1.63``, coinciding with nothing).
+    Evidence: ``docs/audits/FIX_BRANCH_CUT_ROUND2_2026_09_11.md`` and
+    ``validation/probe_fix_branch_cut_round2/``.
+
+    ``xp`` selects the array module.  ``None`` (the default) DETECTS it from
+    ``x`` via :func:`array_namespace`, which is what every NumPy and CuPy
+    caller wants; the JAX twins pass ``jax.numpy`` explicitly so the traced
+    body is the same object the eager path executes, in the shape
+    :func:`lumenairy.elements.pmm._core._forward_branch_flip` already uses.
+    Only ``r.size`` is read as a Python value, and that is static under
+    tracing, so the whole body is ``jit``- and ``grad``-safe.
+
+    ``band`` is the relative half-width of the on-cut band; see
+    ``_CUT_BAND_REL`` for the populations it was derived against and why one
+    value serves the RCWA, hybrid-PMM and staggered-PMM spectra alike.
     """
-    xp = array_namespace(x)
+    if xp is None:
+        xp = array_namespace(x)
     x = xp.asarray(x).astype(_C)
     r = xp.sqrt(x)  # principal branch: Re(r) >= 0 by construction
     # Numerically ON the cut: |Re(r)| below the eigensolver's backward error,
@@ -1284,7 +1375,7 @@ def _sqrt_decay(x: np.ndarray) -> np.ndarray:
     # an absolute band).  Pin Im >= 0 there so propagating modes use the
     # outgoing root deterministically, on every build.
     scale = xp.maximum(xp.max(xp.abs(r)), 1.0) if r.size else 1.0
-    on_cut = xp.abs(r.real) <= _CUT_BAND_REL * scale
+    on_cut = xp.abs(r.real) <= band * scale
     return xp.where(on_cut & (r.imag < 0), xp.conj(r), r)
 
 

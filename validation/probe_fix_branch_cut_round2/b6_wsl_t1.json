@@ -1,0 +1,201 @@
+{
+ "_stamp": {
+  "arm": "pre",
+  "jax_copies": {
+   "_jax_stack2d": {
+    "band": false,
+    "conj": false,
+    "exact_pin": false
+   },
+   "_jax_twod": {
+    "band": false,
+    "conj": false,
+    "exact_pin": false
+   },
+   "_jax_twod_jones": {
+    "band": false,
+    "conj": false,
+    "exact_pin": false
+   }
+  },
+  "lumenairy_file": "/mnt/c/tmp/lum_bc2/lumenairy/__init__.py",
+  "node": "TeslaRyzen",
+  "numpy": "2.4.6",
+  "platform": "Linux",
+  "pmm_cut_band_rel": null,
+  "pmm_twod_has_conj": true,
+  "pmm_twod_has_exact_pin": true,
+  "python": "3.12.3",
+  "rcwa_cut_band_rel": 1e-08,
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "cutoff_min_abs_lam2": 1.6870896908447634e-05,
+ "openblas_num_threads": "1",
+ "rcwa_per_fixture": {
+  "aniso_conical": 77,
+  "aniso_oblique": 71,
+  "aniso_t0.0_M3_ns1.5": 45,
+  "aniso_t0.0_M3_ns1.6": 45,
+  "aniso_t0.0_M4_ns1.5": 72,
+  "aniso_t0.0_M4_ns1.6": 72,
+  "aniso_t0.0_M5_ns1.5": 78,
+  "aniso_t0.0_M5_ns1.6": 78,
+  "aniso_t0.4_M3_ns1.5": 56,
+  "aniso_t0.4_M3_ns1.6": 56,
+  "aniso_t0.4_M4_ns1.5": 76,
+  "aniso_t0.4_M4_ns1.6": 76,
+  "aniso_t0.4_M5_ns1.5": 121,
+  "aniso_t0.4_M5_ns1.6": 121,
+  "aniso_t0.7_M3_ns1.5": 59,
+  "aniso_t0.7_M3_ns1.6": 59,
+  "aniso_t0.7_M4_ns1.5": 76,
+  "aniso_t0.7_M4_ns1.6": 76,
+  "aniso_t0.7_M5_ns1.5": 122,
+  "aniso_t0.7_M5_ns1.6": 122,
+  "aniso_t1.1_M3_ns1.5": 53,
+  "aniso_t1.1_M3_ns1.6": 53,
+  "aniso_t1.1_M4_ns1.5": 81,
+  "aniso_t1.1_M4_ns1.6": 81,
+  "aniso_t1.1_M5_ns1.5": 119,
+  "aniso_t1.1_M5_ns1.6": 119,
+  "lossy1d_0.0001": 2,
+  "lossy1d_0.01": 2,
+  "lossy1d_1e-06": 2,
+  "lossy1d_1e-08": 2,
+  "lossy1d_1e-10": 2,
+  "lossy1d_1e-12": 2,
+  "lossy1d_1e-14": 2,
+  "lossy2d_0.0001": 1,
+  "lossy2d_0.01": 0,
+  "lossy2d_1e-06": 1,
+  "lossy2d_1e-08": 1,
+  "lossy2d_1e-10": 1,
+  "lossy2d_1e-12": 1,
+  "lossy2d_1e-14": 2,
+  "metal_-10": 6,
+  "metal_-100": 0,
+  "metal_-2": 9,
+  "metal_-50": 0,
+  "oned_highcontrast_21": 29,
+  "oned_highcontrast_31": 38,
+  "oned_te_d0.2": 20,
+  "oned_te_d0.5": 14,
+  "oned_te_d0.8": 15,
+  "oned_tm_d0.2": 15,
+  "oned_tm_d0.5": 11,
+  "oned_tm_d0.8": 22,
+  "scalar2d_12.25": 58,
+  "scalar2d_2.25": 62,
+  "scalar2d_4": 61,
+  "wood_0.201": 13,
+  "wood_0.430": 15,
+  "wood_0.616": 12
+ },
+ "sqrt_eps_mach": 1.4901161193847656e-08,
+ "summary": {
+  "pmm_hybrid": {
+   "array_max": {
+    "gap_decades": 13.336387403000995,
+    "n_noise": 70,
+    "n_signal": 1572,
+    "noise_max": 1.7884213947587026e-15,
+    "signal_min": 0.03880228128840274
+   },
+   "min_rel_abs_r": 0.009645213146590078,
+   "own": {
+    "gap_decades": 11.848773477719487,
+    "n_noise": 70,
+    "n_signal": 1572,
+    "noise_max": 1.197251523924281e-13,
+    "signal_min": 0.08451988086622149
+   },
+   "per_mode": {
+    "gap_decades": 11.848773477719487,
+    "n_noise": 70,
+    "n_signal": 1572,
+    "noise_max": 1.197251523924281e-13,
+    "signal_min": 0.08451988086622149
+   },
+   "worst_own_ratio_caught_by_array_max": 1.197251523924281e-13
+  },
+  "pmm_staggered": {
+   "array_max": {
+    "gap_decades": 1.6695940274168983,
+    "n_noise": 8600,
+    "n_signal": 867,
+    "noise_max": 1.2894175501359448e-09,
+    "signal_min": 6.025423882097073e-08
+   },
+   "min_rel_abs_r": 0.005602276512197286,
+   "own": {
+    "gap_decades": 1.5435857314667538,
+    "n_noise": 8600,
+    "n_signal": 867,
+    "noise_max": 1.6997863891327963e-08,
+    "signal_min": 5.942648989275557e-07
+   },
+   "per_mode": {
+    "gap_decades": 1.5435857314667538,
+    "n_noise": 8600,
+    "n_signal": 867,
+    "noise_max": 1.6997863891327963e-08,
+    "signal_min": 5.942648989275557e-07
+   },
+   "worst_own_ratio_caught_by_array_max": 1.6997863891327963e-08
+  },
+  "rcwa_cutoff": {
+   "array_max": {
+    "gap_decades": 10.933252881050427,
+    "n_noise": 145,
+    "n_signal": 407,
+    "noise_max": 2.2381969120798037e-14,
+    "signal_min": 0.001919336725068827
+   },
+   "min_rel_abs_r": 0.000633768328297869,
+   "own": {
+    "gap_decades": 10.452032239894523,
+    "n_noise": 145,
+    "n_signal": 407,
+    "noise_max": 3.531569521769884e-11,
+    "signal_min": 1.0
+   },
+   "per_mode": {
+    "gap_decades": 10.452032239894523,
+    "n_noise": 145,
+    "n_signal": 407,
+    "noise_max": 3.531569521769884e-11,
+    "signal_min": 1.0
+   },
+   "worst_own_ratio_caught_by_array_max": 3.531569521769884e-11
+  },
+  "rcwa_ordinary": {
+   "array_max": {
+    "gap_decades": 12.29157237020052,
+    "n_noise": 169,
+    "n_signal": 2316,
+    "noise_max": 6.44484808467768e-15,
+    "signal_min": 0.012612031738742324
+   },
+   "min_rel_abs_r": 0.006858391440442935,
+   "own": {
+    "gap_decades": 12.023587775052944,
+    "n_noise": 169,
+    "n_signal": 2316,
+    "noise_max": 9.39702573211752e-13,
+    "signal_min": 0.992151951958881
+   },
+   "per_mode": {
+    "gap_decades": 12.023587775052944,
+    "n_noise": 169,
+    "n_signal": 2316,
+    "noise_max": 9.39702573211752e-13,
+    "signal_min": 0.992151951958881
+   },
+   "worst_own_ratio_caught_by_array_max": 9.39702573211752e-13
+  }
+ }
+}
