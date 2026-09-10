@@ -498,7 +498,43 @@ gap); the rest of the changes are recorded numbers and stated margins.
 
 ### 8b. The run
 
-<!-- TESTS-RUN -->
+The nine files the task names, plus every test file that mentions
+`_build_carrier_phase` / `_fourier_upsample_crop` / `ray_density`, plus the
+census / walker / dispatcher-pin / public-API / doc-consistency sweep -- **61
+files, 2083 collected** (the list is `validation/probe_fix_lens_5440/results/
+_testfiles.txt`):
+
+```
+OMP/OPENBLAS/MKL/NUMEXPR_NUM_THREADS=1 python -m pytest <61 files> -q -p no:randomly
+-> 2071 passed, 12 skipped, 92 warnings in 2159.72s (0:35:59)
+```
+
+Zero failures.  All 12 skips are pre-existing "nothing to verify" /
+lock-registry skips, none of them touched by this branch: 4 in
+`test_v4_14_2_dispatcher_pin_cache_locks.py` (locks on other registries) and 8
+in the CHANGELOG walkers reporting that the `## [5.44.0]` block cites no audit
+IDs, has no audit-closure bullets, and carries no "N files touched" /
+"CHANGELOG.md: X -> Y lines" / source-file:line claim to check.  The 92
+warnings are the aperture:beam and evaluator-refusal notices these fixtures
+have always raised; none is new.
+
+The CHANGELOG walkers are in that list on purpose.  The topmost `## [X.Y.Z]`
+block is `## [5.44.0]` -- `## [Unreleased]` does not match their version
+pattern -- so the dated CORRECTION this branch appends there is inside what
+V12 checks, and `test_v12_cited_file_paths_exist` RAN and passed: every file
+path the correction cites resolves.
+
+SECOND BUILD, the changed files (`test_banded_ray_density_and_inverse_map.py`,
+`test_mixed_precision_carrier_helpers.py`,
+`test_niche_perf_round2_2026_08_10.py`, `test_lens_chunked_sag.py`,
+`test_niche_s10_sibling_patterns.py`):
+
+```
+wsl.exe -e bash -lc "cd /mnt/c/tmp/lum_lensfix && OMP_NUM_THREADS=1 \
+  OPENBLAS_NUM_THREADS=1 PYTHONPATH=/mnt/c/tmp/lum_lensfix \
+  ~/lumvenv/bin/python -m pytest <5 files> -q -p no:randomly"
+-> 105 passed in 142.17s        (py 3.12.3, numpy 2.4.6)
+```
 
 ### 8c. Lint
 
