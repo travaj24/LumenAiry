@@ -9,14 +9,18 @@ than assumed.
 
 Usage:  python v17_numpy_fft_dtype.py
 """
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import numpy as np
 import _fix
+import numpy as np
+
 la = _fix.banner()
 
 from lumenairy.propagators import fft_infra as FI
-from lumenairy.propagators.fft_infra import _fft2, _ifft2
+from lumenairy.propagators.fft_infra import _fft2
+
 print('fft backend attrs:', [a for a in dir(FI) if 'backend' in a.lower() or 'PYFFTW' in a or 'SCIPY' in a][:20])
 for f in ('_FFT_BACKEND', 'FFT_BACKEND', '_HAVE_PYFFTW', '_HAVE_SCIPY', 'get_fft_backend'):
     if hasattr(FI, f):

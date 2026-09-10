@@ -24,15 +24,15 @@ import warnings
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _fix                                                    # noqa: E402
+import _fix  # noqa: E402
 
 N, DX, W, SUB = 384, 13e-6, 1.0e-3, 4
 
 
 def main():
     la = _fix.banner()
-    from lumenairy.elements import _lens_traced as LT
     from lumenairy.elements import _lens_imap as IM
+    from lumenairy.elements import _lens_traced as LT
     LT._ORIGIN_AMP_SUPPORT_TOL = -1.0
     LT.ORIGIN_AMP_SUPPORT_CHECK = 'warn'
     out = {'version': la.__version__, 'printed': {}}

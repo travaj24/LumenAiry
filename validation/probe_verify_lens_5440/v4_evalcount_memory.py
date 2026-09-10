@@ -23,7 +23,7 @@ import warnings
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _fix                                                    # noqa: E402
+import _fix  # noqa: E402
 
 
 def _kw(dx, sub, model='ray_density', **over):

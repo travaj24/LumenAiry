@@ -16,15 +16,15 @@ import warnings
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _fix                                                    # noqa: E402
+import _fix  # noqa: E402
 
 N, DX, W, SUB = 384, 13e-6, 1.0e-3, 4
 
 
 def main():
     la = _fix.banner()
-    from lumenairy.elements import _lens_traced as LT
     from lumenairy.elements import _lens_imap as IM
+    from lumenairy.elements import _lens_traced as LT
     LT._RAY_DENSITY_CAUSTIC_FLOOR_REL = 0.999
     LT._RAY_DENSITY_CAUSTIC_MAXMIN = 1.0000001
     E = _fix.gauss(N, DX, W)

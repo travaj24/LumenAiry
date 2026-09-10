@@ -16,7 +16,7 @@ import time
 import numpy as np
 
 sys.path.insert(0, __import__('os').path.dirname(__import__('os').path.abspath(__file__)))
-import _fix                                                    # noqa: E402
+import _fix  # noqa: E402
 
 N, DX = 320, 14e-6
 W = 0.9e-3

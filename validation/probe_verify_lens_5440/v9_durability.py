@@ -22,7 +22,7 @@ import warnings
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import _fix                                                    # noqa: E402
+import _fix  # noqa: E402
 
 # ---- the shipped fixtures, copied verbatim from the two test files --------
 _WL = 1.31e-6
@@ -104,8 +104,8 @@ def _singlet(R1, R2, d, glass, ap, name='s'):
 
 def main():
     la = _fix.banner()
-    from lumenairy.propagators import carrier as C
     from lumenairy.elements import _lens_imap as IM
+    from lumenairy.propagators import carrier as C
     prev = la.get_fft_auto_promote()
     la.set_fft_auto_promote(False)
     out = {'version': la.__version__, 'numpy': np.__version__,
