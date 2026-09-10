@@ -211,19 +211,22 @@ def test_the_minimum_segment_bar_clears_every_geometry_the_library_builds():
     # confirm that what ``Basis1D`` is actually handed agrees, and that
     # nothing was refused -- the guard is where the grid is BUILT, so this is
     # the arm that proves it sees the same geometry.
+    st = PMM2DStackPure(_P, n_modes=4, n_orders=1, layer_grids="per-layer")
+    st.add_layer(0.10, eps_cell=_tile(), x_walls=[0.2371 * _P, 0.6183 * _P],
+                 y_walls=[0.2371 * _P, 0.6183 * _P])
+    st.add_layer(0.10, eps_cell=_tile(), x_walls=[0.3117 * _P, 0.7402 * _P],
+                 y_walls=[0.3117 * _P, 0.7402 * _P])
+    st.set_source(_WL, theta=_TH, phi=_PH)
     seen = _ts._STAG_SEG_CENSUS
     _ts._STAG_SEG_CENSUS = []
     try:
-        st = _shipped_geometry_battery()["nested"]
-        st.set_source(_WL, theta=_TH, phi=_PH)
         st.solve(jones=False)
         rows = list(_ts._STAG_SEG_CENSUS)
     finally:
         _ts._STAG_SEG_CENSUS = seen
     assert rows, "the census recorded nothing -- is the guard still on the "                 "path the solve takes?"
     assert not any(r[4] for r in rows), rows          # nothing refused
-    assert min(r[3] for r in rows) == pytest.approx(census["nested"],
-                                                    rel=1e-12), (rows, census)
+    assert min(r[3] for r in rows) == pytest.approx(_narrowest(st), rel=1e-12),         (rows, _narrowest(st))
 
 
 def test_a_requested_sliver_is_refused_and_the_message_names_the_cure():
