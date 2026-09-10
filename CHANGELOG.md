@@ -176,7 +176,7 @@ builds, and **0 / 39 differing WARNING sets** with them (round 2 adds two new
 warnings, so silence-identity is the other half of "nothing changes").
 `PMM_SLIVER_GUARD = False` still disarms everything, now including the
 arbiter's solve and the within-layer warning.
-`tests/unit/test_fix_pmmstack_sliver_walls_round2.py`, 18 tests; the round-1
+`tests/unit/test_fix_pmmstack_sliver_walls_round2.py`, 19 tests; the round-1
 file's margin test is RESTATED as a decision test (its bars were a property of
 its 13-row ladder and fail by 42x on a 120-row grid) and the verification's
 V-1 pinning test is re-pinned against the improvement it asked for.

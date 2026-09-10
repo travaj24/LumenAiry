@@ -634,6 +634,42 @@ def test_the_conical_path_carries_the_arbiter_too():
     assert seen[3e-5][2] <= 1.0 + ps._STACK_SUPERUNITY_BAR, seen[3e-5]
 
 
+def test_the_per_layer_window_path_is_arbitrated_on_its_OWN_grid():
+    """Remedy (3) of the refusal is ``layer_grids='per-layer'`` above
+    ``2 * window_halfwidth + 1`` layers, where the windows are NOT the union --
+    so the geometric screen (which reads the union) and the grid the cascade
+    actually ran on are different objects there.  The arbiter does not care:
+    its evidence is a re-solve on the SAME path, so the attribution is measured
+    on the answer the caller got.  Two-sided on a 5-layer staircase."""
+    def _st(delta):
+        st = PMMStack(_P, degree=14, min_feature=_NO_SNAP,
+                      layer_grids="per-layer")
+        for k in range(5):
+            d = delta * (k % 2)
+            a, b = _A0 - d, _B0 + d
+            st.add_layer(_DZ, segments=[(a, _EH), (b - a, _EP), (1.0 - b, _EH)])
+        st.set_source(_WL, theta=_THETA)
+        return st
+
+    ref = _raw(_st(0.0))
+    seen = []
+    for d in (3e-3, 1e-4, 3e-5):
+        cur = _raw(_st(d))
+        c = np.intersect1d(cur[0], ref[0])
+        ia, ib = np.searchsorted(cur[0], c), np.searchsorted(ref[0], c)
+        e = float(max(np.abs(cur[1][:, ia] - ref[1][:, ib]).max(),
+                      np.abs(cur[2][:, ia] - ref[2][:, ib]).max()))
+        refused, msg, out, _w = _guarded(_st(d))
+        seen.append((d, e / d, refused))
+        if e > 100.0 * d:
+            assert refused, (d, e / d, cur[3])
+            assert "NEAR-COINCIDENT-WALL SLIVER" in msg
+        elif e <= 10.0 * d:
+            assert not refused, (d, e / d, (msg or "")[:200])
+            assert out is not None
+    assert any(v[2] for v in seen) and any(not v[2] for v in seen), seen
+
+
 # ==========================================================================
 # THE SWITCH still restores the pre-fix path, bit for bit
 # ==========================================================================

@@ -32,7 +32,7 @@ README, and the JSON every table below is read from, on both builds).
 | **Within-layer liners** | Never refused -- it is the geometry the caller asked for -- but WARNED with the mechanism and the per-layer / mortar / 2-D routes when the trigger super-unity is met and the owned cell's spurious-`\|q\|` predictor is past the stack's index ceiling by `_SLIVER_Q_EXCESS`. |
 | **Cost** | One extra solve, **0.20x** (Windows) / **0.27x** (WSL) of the solve it guards, paid ONLY on a stack that already carries a manufactured sliver, is provably passive, and reads super-unity above the trigger. Fires on **0 of 600** converged correct rows. |
 | **Bit-identity** | **39 / 39** -- the round-1 fix's 18 fixtures and the verification's 21 -- hashed against a read-only copy of the pre-round-2 tip `bb0527a`. |
-| **Tests** | `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (18), plus the round-1 file's margin test RESTATED as a decision test and the verification's V-1 pinning test re-pinned against the improvement. |
+| **Tests** | `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (19), plus the round-1 file's margin test RESTATED as a decision test and the verification's V-1 pinning test re-pinned against the improvement. |
 
 ---
 
@@ -404,6 +404,15 @@ does fire the caller was already being told their answer is unreliable.
 | `solve()` `layer_grids='per-layer'`, 5 layers | returned, 0x | **REFUSED (attributed)**, 1x | **REFUSED (attributed)**, 1x |
 | `solve(stabilize='slices')` | -- | REFUSED, 1x (the guard raises before the consensus probe) | -- |
 
+The per-layer row is worth one more sentence, because it is the path where the
+geometric screen (which reads the UNION) and the grid the cascade actually ran
+on are different objects.  The arbiter does not depend on that: its evidence is
+a re-solve on the SAME path, so what it measures is the answer the caller got.
+Scored against that stack's own exact `delta -> 0` limit, the two refusals are
+correct by **7,062x** and **564,414x** the physical shift (`R+T` = 2.426 and
+52.00), and the returned row is correct at 4.1x --
+`test_the_per_layer_window_path_is_arbitrated_on_its_OWN_grid`.
+
 | path | measured |
 |---|---|
 | `solve_vs_wavelength` | the sweep never writes `stack._src`, so round 2 passes the sweep's own `(wl, angle)` EXPLICITLY. Asserted by spying on the probe: with a STALE `set_source(4e-07)` on the stack and a sweep at 8.5e-07, the arbiter is handed **[8.5e-07]** and the solve is REFUSED. Without the explicit `src` the re-solve would have run at a different physics. |
@@ -466,7 +475,7 @@ within-layer warning fires
 
 | file | tests | Windows | WSL |
 |---|---|---|---|
-| `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (new) | 18 | 25.95 s | 26.64 s |
+| `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (new) | 19 | 24.66 s | 27.94 s |
 | `tests/unit/test_fix_pmmstack_sliver_walls.py` (round 1, one test restated) | 19 | 17.52 s | 17.22 s |
 | `tests/unit/test_verify_pmmstack_sliver_walls.py` (verification, one test re-pinned) | 15 | 32.40 s | 30.78 s |
 
@@ -491,6 +500,7 @@ within-layer warning fires
 | `test_the_sweep_arbitrates_the_same_way_at_any_worker_count` | the thread-pool sweep at 1 / 2 / 4 workers, plus the healthy sweep's byte-identity across worker counts |
 | `test_the_prepared_path_arbitrates_at_the_wavelength_it_was_given` | the same for `prepare()` |
 | `test_the_conical_path_carries_the_arbiter_too` | the conical map, two-sided, including the row that is below round 1's bar |
+| `test_the_per_layer_window_path_is_arbitrated_on_its_OWN_grid` | the per-layer window path, where the screened grid and the solved grid differ, two-sided on a 5-layer staircase |
 | `test_the_fail_before_switch_still_disarms_everything_round_2_added` | `PMM_SLIVER_GUARD = False` |
 
 ### S6.2 The two tests that had to change, and why
@@ -546,18 +556,18 @@ All with `PYTHONPATH` on the worktree and one BLAS thread.
 
 | run | Windows | WSL |
 |---|---|---|
-| `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (new) | **18 passed**, 25.95 s | **18 passed**, 26.64 s |
+| `tests/unit/test_fix_pmmstack_sliver_walls_round2.py` (new) | **19 passed**, 24.66 s | **19 passed**, 27.94 s |
 | `tests/unit/test_fix_pmmstack_sliver_walls.py` (round 1) | **19 passed**, 17.52 s | **19 passed**, 17.22 s |
 | `tests/unit/test_verify_pmmstack_sliver_walls.py` (verification) | **15 passed**, 32.40 s | **15 passed**, 30.78 s |
 | `tests/unit/test_m1_conditioning_guard.py` | **27 passed**, 4.9 s | **27 passed**, 4.85 s |
-| all four in one process | **79 passed**, 73.48 s | **79 passed**, 78.58 s |
+| all four in one process | **80 passed**, 76.03 s | **80 passed**, 77.05 s |
 | every test file importing `PMMStack` (`grep tests/ --include='*.py' -l PMMStack`, **42** files incl. this round's), slow markers included | see below | -- |
 | `ruff check lumenairy/ tests/ validation/probe_pmmstack_sliver_round2/` | **All checks passed** | -- |
 
 REGRESSION_RESULT
 
-`.test_durations` spliced with the 52 measured Windows timings of the three
-sliver files (12,571 -> 12,589 entries; the two renamed tests' stale entries
+`.test_durations` spliced with the 53 measured Windows timings of the three
+sliver files (12,571 -> 12,590 entries; the two renamed tests' stale entries
 dropped).
 
 `test_m1_conditioning_guard.py` prints two
