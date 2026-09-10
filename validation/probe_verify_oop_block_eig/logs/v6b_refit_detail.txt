@@ -1,0 +1,201 @@
+
+################################################################################################
+# fit A (power law, scanned p) -- NO-JONES set (reproduces the study's 32/28/36/40)
+################################################################################################
+
+=== corner/normal   observables: 32
+    staggered        sound  21/32   sigma 3.55e-07 .. 3.46e-05  median 2.72e-06
+    hybrid-laurent   sound  18/32   sigma 1.37e-05 .. 1.75e-03  median 9.32e-05
+    hybrid-li        sound  18/32   sigma 1.40e-05 .. 8.67e-04  median 1.02e-04
+    rcwa             sound  13/32   sigma 7.02e-06 .. 7.03e-04  median 3.36e-04
+    staggered vs hybrid-laurent      both-sound  10/32   within   9/10    ALL-live within  29/32
+    staggered vs hybrid-li           both-sound  11/32   within   9/11    ALL-live within  29/32
+    staggered vs rcwa                both-sound   8/32   within   6/8     ALL-live within  24/32
+    hybrid-laurent vs hybrid-li      both-sound  17/32   within  17/17    ALL-live within  32/32
+    hybrid-laurent vs rcwa           both-sound   3/32   within   1/3     ALL-live within  29/32
+    hybrid-li vs rcwa                both-sound   3/32   within   0/3     ALL-live within  28/32
+
+=== corner/conical20_35   observables: 28
+    staggered        sound  12/28   sigma 1.23e-06 .. 5.56e-05  median 4.67e-06
+    hybrid-laurent   sound  12/28   sigma 2.86e-05 .. 2.47e-03  median 2.35e-04
+    hybrid-li        sound  14/28   sigma 7.11e-06 .. 3.73e-03  median 2.67e-04
+    rcwa             sound  10/28   sigma 7.39e-06 .. 1.01e-03  median 1.64e-04
+    staggered vs hybrid-laurent      both-sound   6/28   within   6/6     ALL-live within  28/28
+    staggered vs hybrid-li           both-sound   7/28   within   7/7     ALL-live within  24/28
+    staggered vs rcwa                both-sound   4/28   within   3/4     ALL-live within  23/28
+    hybrid-laurent vs hybrid-li      both-sound  11/28   within  10/11    ALL-live within  27/28
+    hybrid-laurent vs rcwa           both-sound   3/28   within   3/3     ALL-live within  25/28
+    hybrid-li vs rcwa                both-sound   3/28   within   3/3     ALL-live within  25/28
+
+=== chiral/conical25_40   observables: 36
+    staggered        sound  10/36   sigma 4.67e-08 .. 2.33e-05  median 1.18e-06
+    hybrid-laurent   sound  24/36   sigma 3.95e-06 .. 5.86e-03  median 1.17e-04
+    hybrid-li        sound  21/36   sigma 1.17e-05 .. 3.79e-03  median 2.20e-04
+    rcwa             sound   6/36   sigma 1.54e-06 .. 1.43e-03  median 1.54e-05
+    staggered vs hybrid-laurent      both-sound   6/36   within   5/6     ALL-live within  31/36
+    staggered vs hybrid-li           both-sound   5/36   within   5/5     ALL-live within  34/36
+    staggered vs rcwa                both-sound   4/36   within   3/4     ALL-live within  30/36
+    hybrid-laurent vs hybrid-li      both-sound  19/36   within  19/19    ALL-live within  36/36
+    hybrid-laurent vs rcwa           both-sound   3/36   within   3/3     ALL-live within  34/36
+    hybrid-li vs rcwa                both-sound   1/36   within   1/1     ALL-live within  36/36
+
+=== chiral/normal   observables: 40
+    staggered        sound   8/40   sigma 2.26e-07 .. 2.84e-05  median 3.61e-06
+    hybrid-laurent   sound  15/40   sigma 1.74e-06 .. 1.83e-03  median 3.76e-04
+    hybrid-li        sound  13/40   sigma 1.57e-06 .. 1.95e-03  median 3.35e-04
+    rcwa             sound   7/40   sigma 1.15e-05 .. 1.49e-03  median 1.23e-04
+    staggered vs hybrid-laurent      both-sound   1/40   within   1/1     ALL-live within  36/40
+    staggered vs hybrid-li           both-sound   1/40   within   1/1     ALL-live within  36/40
+    staggered vs rcwa                both-sound   1/40   within   1/1     ALL-live within  28/40
+    hybrid-laurent vs hybrid-li      both-sound  13/40   within  12/13    ALL-live within  39/40
+    hybrid-laurent vs rcwa           both-sound   0/40   within   0/0     ALL-live within  35/40
+    hybrid-li vs rcwa                both-sound   0/40   within   0/0     ALL-live within  38/40
+
+pair                                     sound-only   unsound INCLUDED
+staggered vs hybrid-laurent           21/23    ( 91.3%)    124/136   ( 91.2%)
+staggered vs hybrid-li                22/24    ( 91.7%)    123/136   ( 90.4%)
+staggered vs rcwa                     13/17    ( 76.5%)    105/136   ( 77.2%)
+hybrid-laurent vs hybrid-li           58/60    ( 96.7%)    134/136   ( 98.5%)
+hybrid-laurent vs rcwa                 7/9     ( 77.8%)    123/136   ( 90.4%)
+hybrid-li vs rcwa                      4/7     ( 57.1%)    127/136   ( 93.4%)
+
+################################################################################################
+# fit B (pure Aitken/Shanks) -- NO-JONES set
+################################################################################################
+
+=== corner/normal   observables: 32
+    staggered        sound  32/32   sigma 1.30e-08 .. 1.16e-05  median 9.62e-07
+    hybrid-laurent   sound  32/32   sigma 4.10e-07 .. 4.76e-02  median 1.95e-04
+    hybrid-li        sound  32/32   sigma 5.11e-06 .. 8.55e-03  median 2.37e-04
+    rcwa             sound  32/32   sigma 1.20e-06 .. 1.61e-03  median 9.82e-05
+    staggered vs hybrid-laurent      both-sound  32/32   within  21/32    ALL-live within  21/32
+    staggered vs hybrid-li           both-sound  32/32   within  20/32    ALL-live within  20/32
+    staggered vs rcwa                both-sound  32/32   within  20/32    ALL-live within  20/32
+    hybrid-laurent vs hybrid-li      both-sound  32/32   within  22/32    ALL-live within  22/32
+    hybrid-laurent vs rcwa           both-sound  32/32   within  19/32    ALL-live within  19/32
+    hybrid-li vs rcwa                both-sound  32/32   within  22/32    ALL-live within  22/32
+
+=== corner/conical20_35   observables: 28
+    staggered        sound  28/28   sigma 1.07e-08 .. 2.76e-05  median 2.27e-06
+    hybrid-laurent   sound  28/28   sigma 8.15e-06 .. 7.27e-03  median 2.29e-04
+    hybrid-li        sound  28/28   sigma 1.63e-06 .. 7.33e-02  median 2.72e-04
+    rcwa             sound  28/28   sigma 1.50e-06 .. 1.40e-02  median 1.77e-04
+    staggered vs hybrid-laurent      both-sound  28/28   within  24/28    ALL-live within  24/28
+    staggered vs hybrid-li           both-sound  28/28   within  23/28    ALL-live within  23/28
+    staggered vs rcwa                both-sound  28/28   within  18/28    ALL-live within  18/28
+    hybrid-laurent vs hybrid-li      both-sound  28/28   within  26/28    ALL-live within  26/28
+    hybrid-laurent vs rcwa           both-sound  28/28   within  22/28    ALL-live within  22/28
+    hybrid-li vs rcwa                both-sound  28/28   within  21/28    ALL-live within  21/28
+
+=== chiral/conical25_40   observables: 36
+    staggered        sound  36/36   sigma 1.49e-09 .. 2.18e-05  median 1.47e-06
+    hybrid-laurent   sound  36/36   sigma 1.54e-07 .. 8.43e-02  median 2.96e-04
+    hybrid-li        sound  36/36   sigma 2.56e-06 .. 4.35e-03  median 5.85e-04
+    rcwa             sound  36/36   sigma 1.18e-06 .. 1.87e+00  median 1.21e-04
+    staggered vs hybrid-laurent      both-sound  36/36   within  28/36    ALL-live within  28/36
+    staggered vs hybrid-li           both-sound  36/36   within  27/36    ALL-live within  27/36
+    staggered vs rcwa                both-sound  36/36   within  17/36    ALL-live within  17/36
+    hybrid-laurent vs hybrid-li      both-sound  36/36   within  31/36    ALL-live within  31/36
+    hybrid-laurent vs rcwa           both-sound  36/36   within  28/36    ALL-live within  28/36
+    hybrid-li vs rcwa                both-sound  36/36   within  30/36    ALL-live within  30/36
+
+=== chiral/normal   observables: 40
+    staggered        sound  40/40   sigma 2.50e-09 .. 9.13e-05  median 3.13e-07
+    hybrid-laurent   sound  40/40   sigma 1.23e-07 .. 8.91e-03  median 2.58e-04
+    hybrid-li        sound  40/40   sigma 2.51e-08 .. 4.31e-03  median 1.65e-04
+    rcwa             sound  40/40   sigma 3.09e-07 .. 2.89e-03  median 8.75e-05
+    staggered vs hybrid-laurent      both-sound  40/40   within  32/40    ALL-live within  32/40
+    staggered vs hybrid-li           both-sound  40/40   within  27/40    ALL-live within  27/40
+    staggered vs rcwa                both-sound  40/40   within  22/40    ALL-live within  22/40
+    hybrid-laurent vs hybrid-li      both-sound  40/40   within  32/40    ALL-live within  32/40
+    hybrid-laurent vs rcwa           both-sound  40/40   within  29/40    ALL-live within  29/40
+    hybrid-li vs rcwa                both-sound  40/40   within  28/40    ALL-live within  28/40
+
+pair                                     sound-only   unsound INCLUDED
+staggered vs hybrid-laurent          105/136   ( 77.2%)    105/136   ( 77.2%)
+staggered vs hybrid-li                97/136   ( 71.3%)     97/136   ( 71.3%)
+staggered vs rcwa                     77/136   ( 56.6%)     77/136   ( 56.6%)
+hybrid-laurent vs hybrid-li          111/136   ( 81.6%)    111/136   ( 81.6%)
+hybrid-laurent vs rcwa                98/136   ( 72.1%)     98/136   ( 72.1%)
+hybrid-li vs rcwa                    101/136   ( 74.3%)    101/136   ( 74.3%)
+
+################################################################################################
+# C4 detail -- 'the Fourier ladders move TOWARD the staggered limit'
+################################################################################################
+
+=== corner/normal   observables (no Jones): 32
+    engine              closer  monotone    worst-FIRST obs                 d0 -> d1    worst-LAST obs                 d0 -> d1
+    hybrid-laurent     30/32      3/32            T(0, 0)p0   2.27e-03 ->   2.39e-04        T(0, -1)p0   1.50e-03 ->   2.66e-04
+    hybrid-li          28/32      4/32            T(1, 0)p0   1.35e-03 ->   3.95e-04         T(0, 0)p0   3.46e-04 ->   5.34e-04
+    rcwa               30/32     14/32            T(0, 0)p0   3.06e-03 ->   9.40e-04         T(0, 0)p0   3.06e-03 ->   9.40e-04
+    ratio d(first)/d(last) over all observables: 0.03x .. 82.74x   (a ratio < 1 means the ladder moved AWAY)
+
+=== corner/conical20_35   observables (no Jones): 28
+    engine              closer  monotone    worst-FIRST obs                 d0 -> d1    worst-LAST obs                 d0 -> d1
+    hybrid-laurent     27/28      3/28            T(0, 0)p0   3.63e-03 ->   5.51e-04         T(0, 1)p0   3.13e-03 ->   5.83e-04
+    hybrid-li          26/28      3/28            T(0, 1)p0   3.25e-03 ->   6.55e-04         T(0, 1)p0   3.25e-03 ->   6.55e-04
+    rcwa               24/28      8/28            T(0, 0)p0   3.76e-03 ->   1.43e-03         T(0, 0)p0   3.76e-03 ->   1.43e-03
+    ratio d(first)/d(last) over all observables: 0.28x .. 156.60x   (a ratio < 1 means the ladder moved AWAY)
+
+=== chiral/conical25_40   observables (no Jones): 36
+    engine              closer  monotone    worst-FIRST obs                 d0 -> d1    worst-LAST obs                 d0 -> d1
+    hybrid-laurent     36/36      6/36            T(1, 0)p1   3.83e-03 ->   8.74e-04         T(1, 0)p1   3.83e-03 ->   8.74e-04
+    hybrid-li          33/36      3/36           T(-1, 0)p1   3.80e-03 ->   7.06e-04         T(1, 0)p1   3.65e-03 ->   8.23e-04
+    rcwa               33/36      9/36            T(0, 0)p1   6.49e-03 ->   2.16e-03         T(0, 0)p1   6.49e-03 ->   2.16e-03
+    ratio d(first)/d(last) over all observables: 0.47x .. 456.54x   (a ratio < 1 means the ladder moved AWAY)
+
+=== chiral/normal   observables (no Jones): 40
+    engine              closer  monotone    worst-FIRST obs                 d0 -> d1    worst-LAST obs                 d0 -> d1
+    hybrid-laurent     39/40      3/40                sumT0   4.20e-03 ->   8.60e-05        T(-1, 0)p1   3.59e-03 ->   6.15e-04
+    hybrid-li          40/40      2/40                sumT0   3.99e-03 ->   2.94e-05         T(0, 0)p0   1.05e-03 ->   7.97e-04
+    rcwa               35/40     16/40            T(0, 0)p1   6.72e-03 ->   2.15e-03         T(0, 0)p1   6.72e-03 ->   2.15e-03
+    ratio d(first)/d(last) over all observables: 0.15x .. 1172.93x   (a ratio < 1 means the ladder moved AWAY)
+
+'last rung closer than first' over the 12 (case, engine) rows: 86% .. 100%   (study claims 86 - 100%)
+worst-FIRST-distance rows fall by 2.63x .. 135.83x   (study claims 'worst-case distance falling by 1.3x to 5.4x')
+worst-LAST-distance rows change by 0.65x .. 5.84x   (< 1 = it got WORSE)
+
+################################################################################################
+# p-SCAN RESOLUTION -- staggered sound-fit counts vs scan points
+################################################################################################
+     points           corner/normal     corner/conical20_35     chiral/conical25_40           chiral/normal
+        400                   21/32                   12/28                   10/36                    8/40
+       1201                   21/32                   12/28                   11/36                    8/40
+       4001                   21/32                   12/28                   11/36                    8/40
+    (the study's C2 staggered row reads 21/32, 12/28, 10/36, 8/40)
+
+################################################################################################
+# C1 / S2 spot-checks straight out of the committed ladder JSON
+################################################################################################
+
+corner/normal  staggered sumR (incident Ex), M = 5..10
+   0.035512527 0.035502494 0.035504778 0.035504936 0.035505566 0.035505597
+   steps: 1.00e-05 2.28e-06 1.58e-07 6.30e-07 3.08e-08
+   per-order dR, top step: 7.77e-07
+
+corner/conical20_35  staggered sumR (incident Ex), M = 5..10
+   0.024448245 0.024442796 0.024444527 0.024445428 0.024446033 0.024446388
+   steps: 5.45e-06 1.73e-06 9.01e-07 6.05e-07 3.55e-07
+   per-order dR, top step: 5.59e-07
+
+chiral/conical25_40  staggered sumR (incident Ex), M = 5..10
+   0.036170178 0.036187108 0.036188678 0.036183416 0.036181855 0.036179916
+   steps: 1.69e-05 1.57e-06 5.26e-06 1.56e-06 1.94e-06
+   per-order dR, top step: 2.09e-06
+
+chiral/normal  staggered sumR (incident Ex), M = 5..10
+   0.031973041 0.031932920 0.031930427 0.031931239 0.031931174 0.031931401
+   steps: 4.01e-05 2.49e-06 8.12e-07 6.56e-08 2.28e-07
+   per-order dR, top step: 1.39e-06
+
+S2 example table: corner/normal, T(-1, 1)p0
+   staggered        0.0046053 0.0046128 0.0046144 0.0046152 0.0046157 0.0046160   -> f_inf 0.0046159 +/- 7.0e-07, p = 6.4 
+   hybrid-laurent   0.0050560 0.0050910 0.0048012 0.0047313   -> f_inf 0.0025667 +/- 2.1e-03, p = 0.2 (UNSOUND)
+   hybrid-li        0.0049696 0.0049991 0.0046742 0.0046932   -> f_inf 0.0026485 +/- 2.0e-03, p = 0.2 (UNSOUND)
+   rcwa             0.0051060 0.0050321 0.0049310 0.0048501   -> f_inf 0.0036914 +/- 8.3e-04, p = 0.2 (UNSOUND)
+
+C4 note: hybrid-laurent sum R steps on chiral/conical
+   values 0.0364907 0.0361779 0.0360295 0.0361936
+   steps  3.13e-04 1.48e-04 1.64e-04
+
+Section 5 test claim: corner/normal per-order T steps, M = 4..7 -- NOT in the JSON (the ladder starts at M = 5); re-measured in v7_tests.py

@@ -1,0 +1,969 @@
+{
+ "fitA_nojones": {
+  "cases": [
+   {
+    "case": "corner/normal",
+    "n": 32,
+    "sound": {
+     "staggered": 21,
+     "hybrid-laurent": 18,
+     "hybrid-li": 18,
+     "rcwa": 13
+    },
+    "pairs": {
+     "staggered|hybrid-laurent": {
+      "sound": [
+       9,
+       10
+      ],
+      "all": [
+       29,
+       32
+      ]
+     },
+     "staggered|hybrid-li": {
+      "sound": [
+       9,
+       11
+      ],
+      "all": [
+       29,
+       32
+      ]
+     },
+     "staggered|rcwa": {
+      "sound": [
+       6,
+       8
+      ],
+      "all": [
+       24,
+       32
+      ]
+     },
+     "hybrid-laurent|hybrid-li": {
+      "sound": [
+       17,
+       17
+      ],
+      "all": [
+       32,
+       32
+      ]
+     },
+     "hybrid-laurent|rcwa": {
+      "sound": [
+       1,
+       3
+      ],
+      "all": [
+       29,
+       32
+      ]
+     },
+     "hybrid-li|rcwa": {
+      "sound": [
+       0,
+       3
+      ],
+      "all": [
+       28,
+       32
+      ]
+     }
+    }
+   },
+   {
+    "case": "corner/conical20_35",
+    "n": 28,
+    "sound": {
+     "staggered": 12,
+     "hybrid-laurent": 12,
+     "hybrid-li": 14,
+     "rcwa": 10
+    },
+    "pairs": {
+     "staggered|hybrid-laurent": {
+      "sound": [
+       6,
+       6
+      ],
+      "all": [
+       28,
+       28
+      ]
+     },
+     "staggered|hybrid-li": {
+      "sound": [
+       7,
+       7
+      ],
+      "all": [
+       24,
+       28
+      ]
+     },
+     "staggered|rcwa": {
+      "sound": [
+       3,
+       4
+      ],
+      "all": [
+       23,
+       28
+      ]
+     },
+     "hybrid-laurent|hybrid-li": {
+      "sound": [
+       10,
+       11
+      ],
+      "all": [
+       27,
+       28
+      ]
+     },
+     "hybrid-laurent|rcwa": {
+      "sound": [
+       3,
+       3
+      ],
+      "all": [
+       25,
+       28
+      ]
+     },
+     "hybrid-li|rcwa": {
+      "sound": [
+       3,
+       3
+      ],
+      "all": [
+       25,
+       28
+      ]
+     }
+    }
+   },
+   {
+    "case": "chiral/conical25_40",
+    "n": 36,
+    "sound": {
+     "staggered": 10,
+     "hybrid-laurent": 24,
+     "hybrid-li": 21,
+     "rcwa": 6
+    },
+    "pairs": {
+     "staggered|hybrid-laurent": {
+      "sound": [
+       5,
+       6
+      ],
+      "all": [
+       31,
+       36
+      ]
+     },
+     "staggered|hybrid-li": {
+      "sound": [
+       5,
+       5
+      ],
+      "all": [
+       34,
+       36
+      ]
+     },
+     "staggered|rcwa": {
+      "sound": [
+       3,
+       4
+      ],
+      "all": [
+       30,
+       36
+      ]
+     },
+     "hybrid-laurent|hybrid-li": {
+      "sound": [
+       19,
+       19
+      ],
+      "all": [
+       36,
+       36
+      ]
+     },
+     "hybrid-laurent|rcwa": {
+      "sound": [
+       3,
+       3
+      ],
+      "all": [
+       34,
+       36
+      ]
+     },
+     "hybrid-li|rcwa": {
+      "sound": [
+       1,
+       1
+      ],
+      "all": [
+       36,
+       36
+      ]
+     }
+    }
+   },
+   {
+    "case": "chiral/normal",
+    "n": 40,
+    "sound": {
+     "staggered": 8,
+     "hybrid-laurent": 15,
+     "hybrid-li": 13,
+     "rcwa": 7
+    },
+    "pairs": {
+     "staggered|hybrid-laurent": {
+      "sound": [
+       1,
+       1
+      ],
+      "all": [
+       36,
+       40
+      ]
+     },
+     "staggered|hybrid-li": {
+      "sound": [
+       1,
+       1
+      ],
+      "all": [
+       36,
+       40
+      ]
+     },
+     "staggered|rcwa": {
+      "sound": [
+       1,
+       1
+      ],
+      "all": [
+       28,
+       40
+      ]
+     },
+     "hybrid-laurent|hybrid-li": {
+      "sound": [
+       12,
+       13
+      ],
+      "all": [
+       39,
+       40
+      ]
+     },
+     "hybrid-laurent|rcwa": {
+      "sound": [
+       0,
+       0
+      ],
+      "all": [
+       35,
+       40
+      ]
+     },
+     "hybrid-li|rcwa": {
+      "sound": [
+       0,
+       0
+      ],
+      "all": [
+       38,
+       40
+      ]
+     }
+    }
+   }
+  ],
+  "totals": {
+   "staggered|hybrid-laurent": {
+    "sound": [
+     21,
+     23
+    ],
+    "all": [
+     124,
+     136
+    ]
+   },
+   "staggered|hybrid-li": {
+    "sound": [
+     22,
+     24
+    ],
+    "all": [
+     123,
+     136
+    ]
+   },
+   "staggered|rcwa": {
+    "sound": [
+     13,
+     17
+    ],
+    "all": [
+     105,
+     136
+    ]
+   },
+   "hybrid-laurent|hybrid-li": {
+    "sound": [
+     58,
+     60
+    ],
+    "all": [
+     134,
+     136
+    ]
+   },
+   "hybrid-laurent|rcwa": {
+    "sound": [
+     7,
+     9
+    ],
+    "all": [
+     123,
+     136
+    ]
+   },
+   "hybrid-li|rcwa": {
+    "sound": [
+     4,
+     7
+    ],
+    "all": [
+     127,
+     136
+    ]
+   }
+  }
+ },
+ "fitB_nojones": {
+  "cases": [
+   {
+    "case": "corner/normal",
+    "n": 32,
+    "sound": {
+     "staggered": 32,
+     "hybrid-laurent": 32,
+     "hybrid-li": 32,
+     "rcwa": 32
+    },
+    "pairs": {
+     "staggered|hybrid-laurent": {
+      "sound": [
+       21,
+       32
+      ],
+      "all": [
+       21,
+       32
+      ]
+     },
+     "staggered|hybrid-li": {
+      "sound": [
+       20,
+       32
+      ],
+      "all": [
+       20,
+       32
+      ]
+     },
+     "staggered|rcwa": {
+      "sound": [
+       20,
+       32
+      ],
+      "all": [
+       20,
+       32
+      ]
+     },
+     "hybrid-laurent|hybrid-li": {
+      "sound": [
+       22,
+       32
+      ],
+      "all": [
+       22,
+       32
+      ]
+     },
+     "hybrid-laurent|rcwa": {
+      "sound": [
+       19,
+       32
+      ],
+      "all": [
+       19,
+       32
+      ]
+     },
+     "hybrid-li|rcwa": {
+      "sound": [
+       22,
+       32
+      ],
+      "all": [
+       22,
+       32
+      ]
+     }
+    }
+   },
+   {
+    "case": "corner/conical20_35",
+    "n": 28,
+    "sound": {
+     "staggered": 28,
+     "hybrid-laurent": 28,
+     "hybrid-li": 28,
+     "rcwa": 28
+    },
+    "pairs": {
+     "staggered|hybrid-laurent": {
+      "sound": [
+       24,
+       28
+      ],
+      "all": [
+       24,
+       28
+      ]
+     },
+     "staggered|hybrid-li": {
+      "sound": [
+       23,
+       28
+      ],
+      "all": [
+       23,
+       28
+      ]
+     },
+     "staggered|rcwa": {
+      "sound": [
+       18,
+       28
+      ],
+      "all": [
+       18,
+       28
+      ]
+     },
+     "hybrid-laurent|hybrid-li": {
+      "sound": [
+       26,
+       28
+      ],
+      "all": [
+       26,
+       28
+      ]
+     },
+     "hybrid-laurent|rcwa": {
+      "sound": [
+       22,
+       28
+      ],
+      "all": [
+       22,
+       28
+      ]
+     },
+     "hybrid-li|rcwa": {
+      "sound": [
+       21,
+       28
+      ],
+      "all": [
+       21,
+       28
+      ]
+     }
+    }
+   },
+   {
+    "case": "chiral/conical25_40",
+    "n": 36,
+    "sound": {
+     "staggered": 36,
+     "hybrid-laurent": 36,
+     "hybrid-li": 36,
+     "rcwa": 36
+    },
+    "pairs": {
+     "staggered|hybrid-laurent": {
+      "sound": [
+       28,
+       36
+      ],
+      "all": [
+       28,
+       36
+      ]
+     },
+     "staggered|hybrid-li": {
+      "sound": [
+       27,
+       36
+      ],
+      "all": [
+       27,
+       36
+      ]
+     },
+     "staggered|rcwa": {
+      "sound": [
+       17,
+       36
+      ],
+      "all": [
+       17,
+       36
+      ]
+     },
+     "hybrid-laurent|hybrid-li": {
+      "sound": [
+       31,
+       36
+      ],
+      "all": [
+       31,
+       36
+      ]
+     },
+     "hybrid-laurent|rcwa": {
+      "sound": [
+       28,
+       36
+      ],
+      "all": [
+       28,
+       36
+      ]
+     },
+     "hybrid-li|rcwa": {
+      "sound": [
+       30,
+       36
+      ],
+      "all": [
+       30,
+       36
+      ]
+     }
+    }
+   },
+   {
+    "case": "chiral/normal",
+    "n": 40,
+    "sound": {
+     "staggered": 40,
+     "hybrid-laurent": 40,
+     "hybrid-li": 40,
+     "rcwa": 40
+    },
+    "pairs": {
+     "staggered|hybrid-laurent": {
+      "sound": [
+       32,
+       40
+      ],
+      "all": [
+       32,
+       40
+      ]
+     },
+     "staggered|hybrid-li": {
+      "sound": [
+       27,
+       40
+      ],
+      "all": [
+       27,
+       40
+      ]
+     },
+     "staggered|rcwa": {
+      "sound": [
+       22,
+       40
+      ],
+      "all": [
+       22,
+       40
+      ]
+     },
+     "hybrid-laurent|hybrid-li": {
+      "sound": [
+       32,
+       40
+      ],
+      "all": [
+       32,
+       40
+      ]
+     },
+     "hybrid-laurent|rcwa": {
+      "sound": [
+       29,
+       40
+      ],
+      "all": [
+       29,
+       40
+      ]
+     },
+     "hybrid-li|rcwa": {
+      "sound": [
+       28,
+       40
+      ],
+      "all": [
+       28,
+       40
+      ]
+     }
+    }
+   }
+  ],
+  "totals": {
+   "staggered|hybrid-laurent": {
+    "sound": [
+     105,
+     136
+    ],
+    "all": [
+     105,
+     136
+    ]
+   },
+   "staggered|hybrid-li": {
+    "sound": [
+     97,
+     136
+    ],
+    "all": [
+     97,
+     136
+    ]
+   },
+   "staggered|rcwa": {
+    "sound": [
+     77,
+     136
+    ],
+    "all": [
+     77,
+     136
+    ]
+   },
+   "hybrid-laurent|hybrid-li": {
+    "sound": [
+     111,
+     136
+    ],
+    "all": [
+     111,
+     136
+    ]
+   },
+   "hybrid-laurent|rcwa": {
+    "sound": [
+     98,
+     136
+    ],
+    "all": [
+     98,
+     136
+    ]
+   },
+   "hybrid-li|rcwa": {
+    "sound": [
+     101,
+     136
+    ],
+    "all": [
+     101,
+     136
+    ]
+   }
+  }
+ },
+ "c4": [
+  {
+   "case": "corner/normal",
+   "engine": "hybrid-laurent",
+   "closer": 30,
+   "n": 32,
+   "monotone": 3,
+   "worst_first": [
+    0.0022732416325904614,
+    0.00023903829428839618
+   ],
+   "worst_first_key": "T(0, 0)p0",
+   "worst_last": [
+    0.0015044713859894282,
+    0.0002663480766969331
+   ],
+   "worst_last_key": "T(0, -1)p0",
+   "ratio_min": 0.4443377570932841,
+   "ratio_max": 82.73568871377786
+  },
+  {
+   "case": "corner/normal",
+   "engine": "hybrid-li",
+   "closer": 28,
+   "n": 32,
+   "monotone": 4,
+   "worst_first": [
+    0.001348068024240666,
+    0.00039455248433901274
+   ],
+   "worst_first_key": "T(1, 0)p0",
+   "worst_last": [
+    0.00034632339811058177,
+    0.0005336617960933765
+   ],
+   "worst_last_key": "T(0, 0)p0",
+   "ratio_min": 0.025972195799799345,
+   "ratio_max": 47.74572093849748
+  },
+  {
+   "case": "corner/normal",
+   "engine": "rcwa",
+   "closer": 30,
+   "n": 32,
+   "monotone": 14,
+   "worst_first": [
+    0.0030612519895839574,
+    0.0009401871939187512
+   ],
+   "worst_first_key": "T(0, 0)p0",
+   "worst_last": [
+    0.0030612519895839574,
+    0.0009401871939187512
+   ],
+   "worst_last_key": "T(0, 0)p0",
+   "ratio_min": 0.22214549573660075,
+   "ratio_max": 27.401165255161875
+  },
+  {
+   "case": "corner/conical20_35",
+   "engine": "hybrid-laurent",
+   "closer": 27,
+   "n": 28,
+   "monotone": 3,
+   "worst_first": [
+    0.0036296224753855633,
+    0.0005510380066364728
+   ],
+   "worst_first_key": "T(0, 0)p0",
+   "worst_last": [
+    0.003131378427749326,
+    0.0005828575041948586
+   ],
+   "worst_last_key": "T(0, 1)p0",
+   "ratio_min": 0.30234309809831267,
+   "ratio_max": 54.49564906611757
+  },
+  {
+   "case": "corner/conical20_35",
+   "engine": "hybrid-li",
+   "closer": 26,
+   "n": 28,
+   "monotone": 3,
+   "worst_first": [
+    0.0032533211072424822,
+    0.0006554844281300432
+   ],
+   "worst_first_key": "T(0, 1)p0",
+   "worst_last": [
+    0.0032533211072424822,
+    0.0006554844281300432
+   ],
+   "worst_last_key": "T(0, 1)p0",
+   "ratio_min": 0.3373776057897983,
+   "ratio_max": 61.12574875831565
+  },
+  {
+   "case": "corner/conical20_35",
+   "engine": "rcwa",
+   "closer": 24,
+   "n": 28,
+   "monotone": 8,
+   "worst_first": [
+    0.0037557979722073753,
+    0.0014259307061634807
+   ],
+   "worst_first_key": "T(0, 0)p0",
+   "worst_last": [
+    0.0037557979722073753,
+    0.0014259307061634807
+   ],
+   "worst_last_key": "T(0, 0)p0",
+   "ratio_min": 0.279054827030846,
+   "ratio_max": 156.6013490386078
+  },
+  {
+   "case": "chiral/conical25_40",
+   "engine": "hybrid-laurent",
+   "closer": 36,
+   "n": 36,
+   "monotone": 6,
+   "worst_first": [
+    0.0038314191129282804,
+    0.0008742035519301722
+   ],
+   "worst_first_key": "T(1, 0)p1",
+   "worst_last": [
+    0.0038314191129282804,
+    0.0008742035519301722
+   ],
+   "worst_last_key": "T(1, 0)p1",
+   "ratio_min": 1.0134339366564782,
+   "ratio_max": 173.0675956267807
+  },
+  {
+   "case": "chiral/conical25_40",
+   "engine": "hybrid-li",
+   "closer": 33,
+   "n": 36,
+   "monotone": 3,
+   "worst_first": [
+    0.0038034246643069147,
+    0.0007064864907167234
+   ],
+   "worst_first_key": "T(-1, 0)p1",
+   "worst_last": [
+    0.0036482072031050056,
+    0.0008231549515405473
+   ],
+   "worst_last_key": "T(1, 0)p1",
+   "ratio_min": 0.470961849405861,
+   "ratio_max": 456.5372741334881
+  },
+  {
+   "case": "chiral/conical25_40",
+   "engine": "rcwa",
+   "closer": 33,
+   "n": 36,
+   "monotone": 9,
+   "worst_first": [
+    0.006493854341781291,
+    0.0021556931853620176
+   ],
+   "worst_first_key": "T(0, 0)p1",
+   "worst_last": [
+    0.006493854341781291,
+    0.0021556931853620176
+   ],
+   "worst_last_key": "T(0, 0)p1",
+   "ratio_min": 0.47167171885338455,
+   "ratio_max": 5.289696164147826
+  },
+  {
+   "case": "chiral/normal",
+   "engine": "hybrid-laurent",
+   "closer": 39,
+   "n": 40,
+   "monotone": 3,
+   "worst_first": [
+    0.004196612875032035,
+    8.597837825863319e-05
+   ],
+   "worst_first_key": "sumT0",
+   "worst_last": [
+    0.0035881856749502145,
+    0.0006147854523244622
+   ],
+   "worst_last_key": "T(-1, 0)p1",
+   "ratio_min": 0.14505493392594482,
+   "ratio_max": 1172.9343868174851
+  },
+  {
+   "case": "chiral/normal",
+   "engine": "hybrid-li",
+   "closer": 40,
+   "n": 40,
+   "monotone": 2,
+   "worst_first": [
+    0.0039881453890231455,
+    2.9360780465559344e-05
+   ],
+   "worst_first_key": "sumT0",
+   "worst_last": [
+    0.0010513263578142418,
+    0.0007973108204614165
+   ],
+   "worst_last_key": "T(0, 0)p0",
+   "ratio_min": 1.1802820270528596,
+   "ratio_max": 716.3424978463939
+  },
+  {
+   "case": "chiral/normal",
+   "engine": "rcwa",
+   "closer": 35,
+   "n": 40,
+   "monotone": 16,
+   "worst_first": [
+    0.006722915461306211,
+    0.0021515264492125707
+   ],
+   "worst_first_key": "T(0, 0)p1",
+   "worst_last": [
+    0.006722915461306211,
+    0.0021515264492125707
+   ],
+   "worst_last_key": "T(0, 0)p1",
+   "ratio_min": 0.34990352178068757,
+   "ratio_max": 193.3118506473146
+  }
+ ],
+ "scan_resolution": [
+  {
+   "points": 400,
+   "staggered": [
+    "21/32",
+    "12/28",
+    "10/36",
+    "8/40"
+   ]
+  },
+  {
+   "points": 1201,
+   "staggered": [
+    "21/32",
+    "12/28",
+    "11/36",
+    "8/40"
+   ]
+  },
+  {
+   "points": 4001,
+   "staggered": [
+    "21/32",
+    "12/28",
+    "11/36",
+    "8/40"
+   ]
+  }
+ ]
+}

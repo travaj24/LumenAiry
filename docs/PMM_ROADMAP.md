@@ -117,6 +117,23 @@ no-floor property intact (`2.6e-15` movement over `n_orders` 3→8).
 (a `2q²` eig instead of `4q²`), measured to HOLD on the staggered generator
 (`2.6e-15`) and to FAIL on an off-centre pillar (`0.36–0.73`) — documented
 future work, gated the same verify-then-use way `_generator_block_eig` is.
+**MAGNETIC (permeability): SHIPPED 2026-09-10**
+(`docs/audits/BUILD_PMM2D_STAGGERED_MAGNETIC_2026_09_10.md`). The one-line
+follow-on the Stage-A plan predicted, made explicit: `R = C[χ_t]C` with
+`χ_t = [μ_t]⁻¹` (Eq. 24 / A39), `K_tz = C[χ_t][∂₂; −∂₁]` (Eq. 21 / A43) and
+the `χ₃₃`-weighted curl-curl `S_tt` (Eq. 20 / A42), on the SAME `2q²` pencil.
+`mu_cell` (scalar or block-form) on `pmm_jones_2d_staggered`, `mu` / `mu_cell`
+on `PMM2DStackPure.add_layer`; `mu_cell=None` stays bit-identical. **The trap:**
+with `χ_t = I` the pencil's `−R` IS the block field Gram, so one object served
+both roles; with `χ_t ≠ I` the Eq.-25 H recovery (which carries no `χ_t`) must
+still project with the PLAIN Gram — collapsing them reads 2.1e-01 against the
+analytic oracle vs 1.9e-14 correct. Oracles: the analytic Airy formula with the
+wave impedance (4.3e-14 at M=8, 7.9e+05× convergence from M=5, lossy arms
+included) and electromagnetic DUALITY `(ε,μ) ↔ (μ,ε)`, which also carries the
+1-D check (no 1-D diffraction engine in the library takes a permeability).
+Cost: assembly +~25%, the eig unchanged, peak +4.2%. Out of scope and raising:
+out-of-plane `μ`, `μ` with an out-of-plane `ε`, and magnetic HALF-SPACES.
+
 *(2-D multi-region is already supported via the `eps_cell` grid — only needs a
 multi-region test.)*
 

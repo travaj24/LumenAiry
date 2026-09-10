@@ -641,6 +641,15 @@ gets no unity claim at all.  It WARNS, never raises.
    every shipped scalar result); tensor layers DO contribute their diagonals,
    which makes the rule inconsistent between the scalar and tensor paths.
    Worth unifying in a separate change, behind its own measurement.
+   *CLOSED 2026-09-10* -- unified on branch `fix/wood-list-fffnv`
+   (`docs/audits/FIX_WOOD_LIST_AND_FFFNV_2026_09_10.md`, Task G).  Both paths
+   now list every region's real permittivity (half-spaces, every distinct
+   scalar cell value, every uniform scalar layer, every tensor diagonal).  The
+   fear that it would "move every shipped scalar result" was measured and is
+   unfounded: the guard's trigger band is `|eps - kt^2| <= 1e-9` (a relative
+   wavelength window of ~1.2e-10), so 11 scalar and tensor fixtures came out
+   BIT-IDENTICAL to `fb3fd93`, nudged wavelengths included, and only the exact
+   coincidence moved (4.591e-08 / 7.561e-09 / 4.977e-08 -> exact 0).
 7. **The tripwire's fail-before margin is 1.82x**, not decades (T11).  The
    staggered basis simply does not blow up when under-resolved.  If a future
    improvement pushes the `M = 3` closure below 5e-2, the fail-before test
@@ -663,6 +672,22 @@ gets no unity claim at all.  It WARNS, never raises.
     inherited, not caused here.  Not investigated further: it is an
     `rcwa_jones_1d_segments` truncation-ladder problem, out of this build's
     scope.
+    *CLOSED 2026-09-10* on branch `fix/wood-list-fffnv`
+    (`docs/audits/FIX_WOOD_LIST_AND_FFFNV_2026_09_10.md`, Task H).  It was
+    indeed the truncation ladder, but the ladder was only the symptom: the
+    FIXTURE sits on an exact index coincidence (`no^2 = eps_groove = n_sub^2 =
+    2.25`), so the layer carries modes EXACTLY degenerate with the region's and
+    the interface inverse amplifies the rounding floor by ~1e14.  The ladder
+    then hunts for a truncation where that floor happens to land below 1e-9 --
+    0 of 16 on this box at 1 BLAS thread, 1 of 16 at 4 threads (the same code
+    on the same box PASSES at 4 and FAILS at 1), 0 of 16 on WSL.  No library
+    defect: the solver detects and warns, and detuning any one of the three
+    coincident permittivities restores machine-precision closure at every
+    truncation.  Fixed in the test (non-degenerate groove 2.10, converged
+    reference, and a new two-sided test for the degeneracy itself); green on
+    Windows at 1 and 4 threads and on WSL.  The PMM sibling
+    `test_pmm_fff_nv_stripe_reduces_to_rigorous_1d` shares the fixture and is
+    latent (passing today) -- see that report's open items.
 
 ---
 

@@ -1,0 +1,230 @@
+
+####################################################################################################
+# EXTRAPOLANT: A -- power law, rate SCANNED on [0.25, 10]
+####################################################################################################
+
+=== corner/normal   live observables: 40
+    engine             sound   sigma min   sigma max   sigma med  top step max
+    staggered         25/40     3.55e-07    1.86e-04    2.72e-06      6.39e-06
+    hybrid-laurent    20/40     1.37e-05    1.75e-03    1.09e-04      2.44e-03
+    hybrid-li         18/40     1.40e-05    8.67e-04    1.02e-04      2.46e-03
+    rcwa              15/40     7.02e-06    6.93e-03    4.21e-04      3.50e-04
+    pair                            both sound   within  ALL live within  worst z (sound)
+    staggered vs hybrid-laurent      12/40     11/12         37/40         1.37 (R(0, -1)p0)
+    staggered vs hybrid-li           11/40      9/11         37/40         3.96 (T(-1, -1)p1)
+    staggered vs rcwa                10/40      8/10         30/40         1.67 (R(0, 0)p0)
+    hybrid-laurent vs hybrid-li      17/40     17/17         40/40         0.51 (T(0, -1)p1)
+    hybrid-laurent vs rcwa            5/40      3/5          37/40         1.35 (T(1, -1)p0)
+    hybrid-li vs rcwa                 3/40      0/3          36/40         1.57 (T(-1, -1)p1)
+    engine            last closer than first    worst |first-stag| -> |last-stag|
+    hybrid-laurent          38/40              T(0, 0)p0  2.27e-03 -> 2.39e-04
+    hybrid-li               36/40                  Jim00  1.62e-03 -> 4.90e-04
+    rcwa                    38/40              T(0, 0)p0  3.06e-03 -> 9.40e-04
+
+=== corner/conical20_35   live observables: 36
+    engine             sound   sigma min   sigma max   sigma med  top step max
+    staggered         17/36     1.23e-06    1.36e-04    6.99e-06      4.42e-06
+    hybrid-laurent    14/36     2.86e-05    2.47e-03    2.04e-04      2.02e-03
+    hybrid-li         16/36     7.11e-06    3.73e-03    2.17e-04      2.55e-03
+    rcwa              11/36     7.39e-06    1.01e-03    2.05e-04      4.70e-04
+    pair                            both sound   within  ALL live within  worst z (sound)
+    staggered vs hybrid-laurent       7/36      7/7          36/36         0.93 (T(0, -1)p0)
+    staggered vs hybrid-li            8/36      7/8          30/36         1.12 (Jre01)
+    staggered vs rcwa                 5/36      4/5          29/36         2.30 (T(-1, 1)p1)
+    hybrid-laurent vs hybrid-li      13/36     12/13         35/36         1.00 (T(0, 0)p0)
+    hybrid-laurent vs rcwa            4/36      4/4          33/36         0.63 (sumR1)
+    hybrid-li vs rcwa                 4/36      4/4          33/36         0.92 (T(1, -1)p0)
+    engine            last closer than first    worst |first-stag| -> |last-stag|
+    hybrid-laurent          33/36              T(0, 0)p0  3.63e-03 -> 5.51e-04
+    hybrid-li               34/36              T(0, 1)p0  3.25e-03 -> 6.55e-04
+    rcwa                    32/36              T(0, 0)p0  3.76e-03 -> 1.43e-03
+
+=== chiral/conical25_40   live observables: 44
+    engine             sound   sigma min   sigma max   sigma med  top step max
+    staggered         12/44     4.67e-08    2.33e-05    1.18e-06      6.65e-06
+    hybrid-laurent    28/44     3.95e-06    5.86e-03    1.92e-04      3.85e-03
+    hybrid-li         25/44     1.17e-05    4.87e-03    3.05e-04      3.83e-03
+    rcwa               6/44     1.54e-06    1.43e-03    1.54e-05      6.62e-04
+    pair                            both sound   within  ALL live within  worst z (sound)
+    staggered vs hybrid-laurent       7/44      6/7          39/44         1.01 (R(-1, 1)p0)
+    staggered vs hybrid-li            6/44      6/6          42/44         0.94 (Jim01)
+    staggered vs rcwa                 4/44      3/4          38/44         5.68 (R(-1, 1)p0)
+    hybrid-laurent vs hybrid-li      23/44     23/23         43/44         0.84 (T(-1, -1)p0)
+    hybrid-laurent vs rcwa            3/44      3/3          41/44         0.70 (R(-1, 1)p0)
+    hybrid-li vs rcwa                 1/44      1/1          44/44         0.84 (R(-1, 1)p0)
+    engine            last closer than first    worst |first-stag| -> |last-stag|
+    hybrid-laurent          44/44              T(1, 0)p1  3.83e-03 -> 8.74e-04
+    hybrid-li               41/44             T(-1, 0)p1  3.80e-03 -> 7.06e-04
+    rcwa                    40/44              T(0, 0)p1  6.49e-03 -> 2.16e-03
+
+=== chiral/normal   live observables: 48
+    engine             sound   sigma min   sigma max   sigma med  top step max
+    staggered          9/48     2.26e-07    1.12e-04    6.44e-06      1.08e-05
+    hybrid-laurent    18/48     1.74e-06    1.83e-03    3.50e-04      3.59e-03
+    hybrid-li         15/48     1.57e-06    1.95e-03    3.35e-04      3.69e-03
+    rcwa              11/48     1.15e-05    1.49e-03    4.25e-04      6.23e-04
+    pair                            both sound   within  ALL live within  worst z (sound)
+    staggered vs hybrid-laurent       1/48      1/1          43/48         0.48 (R(-1, 1)p1)
+    staggered vs hybrid-li            1/48      1/1          44/48         0.89 (R(-1, 1)p1)
+    staggered vs rcwa                 1/48      1/1          36/48         0.07 (R(-1, -1)p0)
+    hybrid-laurent vs hybrid-li      14/48     13/14         47/48         1.92 (R(-1, 0)p0)
+    hybrid-laurent vs rcwa            2/48      2/2          42/48         0.48 (Jim00)
+    hybrid-li vs rcwa                 1/48      1/1          46/48         0.26 (Jre10)
+    engine            last closer than first    worst |first-stag| -> |last-stag|
+    hybrid-laurent          47/48                  sumT0  4.20e-03 -> 8.60e-05
+    hybrid-li               48/48                  sumT0  3.99e-03 -> 2.94e-05
+    rcwa                    43/48              T(0, 0)p1  6.72e-03 -> 2.15e-03
+
+--- summed over the four cases (A -- power law, rate SCANNED on [0.25, 10]) ---
+pair                                   sound-only       ALL live
+staggered vs hybrid-laurent           25/27    ( 92.6%)   155/168   ( 92.3%)
+staggered vs hybrid-li                23/26    ( 88.5%)   153/168   ( 91.1%)
+staggered vs rcwa                     16/20    ( 80.0%)   133/168   ( 79.2%)
+hybrid-laurent vs hybrid-li           65/67    ( 97.0%)   165/168   ( 98.2%)
+hybrid-laurent vs rcwa                12/14    ( 85.7%)   153/168   ( 91.1%)
+hybrid-li vs rcwa                      6/9     ( 66.7%)   159/168   ( 94.6%)
+
+####################################################################################################
+# EXTRAPOLANT: B -- pure Aitken/Shanks (no model)
+####################################################################################################
+
+=== corner/normal   live observables: 40
+    engine             sound   sigma min   sigma max   sigma med  top step max
+    staggered         40/40     1.30e-08    1.16e-05    8.75e-07      6.39e-06
+    hybrid-laurent    40/40     4.10e-07    4.76e-02    2.72e-04      2.44e-03
+    hybrid-li         40/40     5.11e-06    8.55e-03    2.67e-04      2.46e-03
+    rcwa              38/40     1.20e-06    4.02e-03    1.02e-04      3.50e-04
+    pair                            both sound   within  ALL live within  worst z (sound)
+    staggered vs hybrid-laurent      40/40     27/40         27/40        34.05 (R(0, 1)p0)
+    staggered vs hybrid-li           40/40     26/40         26/40        26.56 (R(0, 0)p1)
+    staggered vs rcwa                38/40     22/38         24/40        78.86 (T(-1, -1)p0)
+    hybrid-laurent vs hybrid-li      40/40     28/40         28/40        17.49 (R(0, 0)p1)
+    hybrid-laurent vs rcwa           38/40     25/38         27/40         7.22 (R(0, 1)p0)
+    hybrid-li vs rcwa                38/40     28/38         28/40         4.94 (T(-1, -1)p1)
+    engine            last closer than first    worst |first-stag| -> |last-stag|
+    hybrid-laurent          38/40              T(0, 0)p0  2.26e-03 -> 2.26e-04
+    hybrid-li               36/40                  Jim00  1.62e-03 -> 4.92e-04
+    rcwa                    38/40              T(0, 0)p0  3.05e-03 -> 9.27e-04
+
+=== corner/conical20_35   live observables: 36
+    engine             sound   sigma min   sigma max   sigma med  top step max
+    staggered         36/36     1.07e-08    2.76e-05    1.55e-06      4.42e-06
+    hybrid-laurent    36/36     8.15e-06    7.27e-03    3.65e-04      2.02e-03
+    hybrid-li         36/36     1.63e-06    7.33e-02    3.34e-04      2.55e-03
+    rcwa              35/36     1.50e-06    1.40e-02    1.79e-04      4.70e-04
+    pair                            both sound   within  ALL live within  worst z (sound)
+    staggered vs hybrid-laurent      36/36     30/36         30/36       259.24 (sumT0)
+    staggered vs hybrid-li           36/36     31/36         31/36        16.03 (sumT0)
+    staggered vs rcwa                35/36     20/35         21/36        15.29 (Jim10)
+    hybrid-laurent vs hybrid-li      36/36     32/36         32/36         8.63 (T(1, 0)p0)
+    hybrid-laurent vs rcwa           35/36     28/35         28/36         9.94 (sumT1)
+    hybrid-li vs rcwa                35/36     26/35         27/36        13.47 (R(-1, 0)p1)
+    engine            last closer than first    worst |first-stag| -> |last-stag|
+    hybrid-laurent          32/36              T(0, 0)p0  3.63e-03 -> 5.54e-04
+    hybrid-li               34/36              T(0, 1)p0  3.25e-03 -> 6.56e-04
+    rcwa                    32/36              T(0, 0)p0  3.76e-03 -> 1.43e-03
+
+=== chiral/conical25_40   live observables: 44
+    engine             sound   sigma min   sigma max   sigma med  top step max
+    staggered         44/44     1.49e-09    4.34e-05    1.47e-06      6.65e-06
+    hybrid-laurent    44/44     1.54e-07    8.43e-02    3.81e-04      3.85e-03
+    hybrid-li         44/44     2.56e-06    4.35e-03    6.16e-04      3.83e-03
+    rcwa              44/44     1.18e-06    1.87e+00    1.23e-04      6.62e-04
+    pair                            both sound   within  ALL live within  worst z (sound)
+    staggered vs hybrid-laurent      44/44     36/44         36/44        15.45 (R(-1, -1)p1)
+    staggered vs hybrid-li           44/44     35/44         35/44        15.03 (sumT1)
+    staggered vs rcwa                44/44     19/44         19/44        24.23 (R(0, 1)p0)
+    hybrid-laurent vs hybrid-li      44/44     39/44         39/44         8.24 (R(0, -1)p0)
+    hybrid-laurent vs rcwa           44/44     35/44         35/44         6.29 (R(-1, -1)p1)
+    hybrid-li vs rcwa                44/44     36/44         36/44         6.55 (sumT0)
+    engine            last closer than first    worst |first-stag| -> |last-stag|
+    hybrid-laurent          43/44              T(1, 0)p1  3.84e-03 -> 8.79e-04
+    hybrid-li               41/44             T(-1, 0)p1  3.80e-03 -> 7.01e-04
+    rcwa                    40/44              T(0, 0)p1  6.49e-03 -> 2.15e-03
+
+=== chiral/normal   live observables: 48
+    engine             sound   sigma min   sigma max   sigma med  top step max
+    staggered         48/48     2.50e-09    9.13e-05    1.75e-06      1.08e-05
+    hybrid-laurent    48/48     1.23e-07    8.91e-03    2.40e-04      3.59e-03
+    hybrid-li         48/48     2.51e-08    4.51e-03    1.56e-04      3.69e-03
+    rcwa              48/48     3.09e-07    3.40e-03    1.13e-04      6.23e-04
+    pair                            both sound   within  ALL live within  worst z (sound)
+    staggered vs hybrid-laurent      48/48     39/48         39/48        16.60 (sumT0)
+    staggered vs hybrid-li           48/48     29/48         29/48        86.26 (T(-1, 1)p0)
+    staggered vs rcwa                48/48     23/48         23/48        37.27 (R(-1, -1)p1)
+    hybrid-laurent vs hybrid-li      48/48     36/48         36/48        11.66 (Jim10)
+    hybrid-laurent vs rcwa           48/48     32/48         32/48        15.16 (sumT0)
+    hybrid-li vs rcwa                48/48     29/48         29/48        45.58 (T(-1, 1)p0)
+    engine            last closer than first    worst |first-stag| -> |last-stag|
+    hybrid-laurent          47/48                  sumT0  4.20e-03 -> 8.67e-05
+    hybrid-li               46/48                  sumT0  3.99e-03 -> 3.01e-05
+    rcwa                    42/48              T(0, 0)p1  6.74e-03 -> 2.17e-03
+
+--- summed over the four cases (B -- pure Aitken/Shanks (no model)) ---
+pair                                   sound-only       ALL live
+staggered vs hybrid-laurent          132/168   ( 78.6%)   132/168   ( 78.6%)
+staggered vs hybrid-li               121/168   ( 72.0%)   121/168   ( 72.0%)
+staggered vs rcwa                     84/165   ( 50.9%)    87/168   ( 51.8%)
+hybrid-laurent vs hybrid-li          135/168   ( 80.4%)   135/168   ( 80.4%)
+hybrid-laurent vs rcwa               120/165   ( 72.7%)   122/168   ( 72.6%)
+hybrid-li vs rcwa                    119/165   ( 72.1%)   120/168   ( 71.4%)
+
+####################################################################################################
+# C5  TOP-OF-LADDER per-order bound (no extrapolation)
+####################################################################################################
+
+=== corner/normal
+    pair                                   max|dR|     max|dT|
+    staggered vs hybrid-laurent          3.144e-05   2.674e-04
+    staggered vs hybrid-li               6.167e-05   5.326e-04
+    staggered vs rcwa                    6.146e-05   9.413e-04
+    hybrid-laurent vs hybrid-li          4.118e-05   7.727e-04
+    hybrid-laurent vs rcwa               3.002e-05   7.011e-04
+    hybrid-li vs rcwa                    5.435e-05   1.474e-03
+    Fourier mutual   R 3.002e-05 .. 5.435e-05   T 7.011e-04 .. 1.474e-03
+    ratio stag/Fourier   R 1.13x   T 0.64x
+    staggered vs NEAREST Fourier arm on R: 3.144e-05;  vs rcwa: 6.146e-05
+
+=== corner/conical20_35
+    pair                                   max|dR|     max|dT|
+    staggered vs hybrid-laurent          7.039e-05   5.833e-04
+    staggered vs hybrid-li               8.079e-05   6.559e-04
+    staggered vs rcwa                    1.319e-04   1.429e-03
+    hybrid-laurent vs hybrid-li          2.538e-05   6.732e-04
+    hybrid-laurent vs rcwa               6.155e-05   8.749e-04
+    hybrid-li vs rcwa                    5.896e-05   1.548e-03
+    Fourier mutual   R 2.538e-05 .. 6.155e-05   T 6.732e-04 .. 1.548e-03
+    ratio stag/Fourier   R 2.14x   T 0.92x
+    staggered vs NEAREST Fourier arm on R: 7.039e-05;  vs rcwa: 1.319e-04
+
+=== chiral/conical25_40
+    pair                                   max|dR|     max|dT|
+    staggered vs hybrid-laurent          5.927e-05   8.725e-04
+    staggered vs hybrid-li               1.203e-04   8.215e-04
+    staggered vs rcwa                    1.099e-04   2.159e-03
+    hybrid-laurent vs hybrid-li          6.101e-05   1.017e-03
+    hybrid-laurent vs rcwa               5.699e-05   1.521e-03
+    hybrid-li vs rcwa                    3.691e-05   2.538e-03
+    Fourier mutual   R 3.691e-05 .. 6.101e-05   T 1.017e-03 .. 2.538e-03
+    ratio stag/Fourier   R 1.97x   T 0.85x
+    staggered vs NEAREST Fourier arm on R: 5.927e-05;  vs rcwa: 1.099e-04
+
+=== chiral/normal
+    pair                                   max|dR|     max|dT|
+    staggered vs hybrid-laurent          1.215e-04   6.355e-04
+    staggered vs hybrid-li               5.893e-05   7.855e-04
+    staggered vs rcwa                    2.540e-04   2.169e-03
+    hybrid-laurent vs hybrid-li          6.254e-05   1.098e-03
+    hybrid-laurent vs rcwa               1.326e-04   1.595e-03
+    hybrid-li vs rcwa                    1.951e-04   2.567e-03
+    Fourier mutual   R 6.254e-05 .. 1.951e-04   T 1.098e-03 .. 2.567e-03
+    ratio stag/Fourier   R 1.30x   T 0.84x
+    staggered vs NEAREST Fourier arm on R: 5.893e-05;  vs rcwa: 2.540e-04
+
+####################################################################################################
+# the ORIGINAL bound restated from the same data (M=7 vs rcwa n=9)
+####################################################################################################
+corner/normal               M=7 vs n=9: 7.5794e-05   M=10 vs n=11: 6.1458e-05
+corner/conical20_35         M=7 vs n=9: 1.6280e-04   M=10 vs n=11: 1.3194e-04
+chiral/conical25_40         M=7 vs n=9: 1.3410e-04   M=10 vs n=11: 1.0986e-04
+chiral/normal               M=7 vs n=9: 3.4211e-04   M=10 vs n=11: 2.5403e-04

@@ -1,0 +1,96 @@
+================================================================================================
+test_pmm2d_staggered_oop_block_eig.py
+================================================================================================
+
+test_parity_map_is_an_exact_involution... (J^2)
+   bar        np.array_equal(P @ P, I)  -- EXACT, no tolerance
+   quantity   |P^2 - I|
+   MEASURED   0.0 on 12/12 (Nx, M)
+   other side n/a (exact equality of a signed permutation squared)
+
+test_parity_map_is_an_exact_involution... (masses)
+   bar        <= 1e-12 * max|M|
+   quantity   max|P^T M P - M| / max|M| for Mtt and Mbb
+   MEASURED   8.02e-17 .. 1.80e-16  (12 combos)
+   other side the assembled generator reads 2.4e-02 .. 1.0e+00 when the parity genuinely fails (V2/V4)
+   note       gap above the measurement: 3.7 decades
+
+test_parity_map_is_an_exact_involution... (derivative ODD)
+   bar        <= 1e-12 * max|C|  and  > 1e-3 * max|C| for the WRONG sign
+   quantity   max|Pb^T C Pt +/- C| / max|C|
+   MEASURED   ODD 6.59e-17 .. 1.39e-16;  EVEN(wrong) 2.00e+00 .. 2.00e+00
+   other side the wrong-sign reading is 2.00 exactly
+   note       gaps: 3.9 decades above the ODD envelope; 3.3 decades above the 1e-3 bar
+
+test_reduction_engages_and_splits_into_two_equal_sectors
+   bar        struct_dA <= 1e-10  (== the shipped _STAG_BLOCK_TOL)
+   quantity   max|R A R + A| / max|A| on the assembled pencil
+   MEASURED   carrying 2.31e-15 .. 4.28e-15 (4 fixtures, M=6)
+   other side the file's own violating fixtures 6.17e-02 .. 6.95e-01; an ENGINEERED 1e-7-relative parity break reads 2.5e-09 (V2)
+   note       gap above 4.4 decades; gap below 8.8 decades on the file's fixtures but only 1.4 decades on the engineered one
+
+test_reduction_engages_..._sectors (sector counts)
+   bar        pairs + fixed(+) == 2 q^2  and  sum(r[fixed]) == 0.0 -- EXACT
+   quantity   counted from the SIGNED PERMUTATION, not from an eig
+   MEASURED   exact on every fixture (V3 confirms tr R = 0 by construction: the E1/G2 and E2/G1 blocks carry the same permutation with opposite signs)
+   other side n/a -- deterministic integer arithmetic, no build dependence
+
+test_reduction_matches_the_dense_path_on_R_T_and_jones
+   bar        dR, dT, dJones <= 1e-11
+   quantity   max|ON - OFF| per order, both polarizations, through the entry point
+   MEASURED   dR 2.32e-15  dT 4.25e-14  dJones 1.20e-14  (the file's own 6 params)
+   other side a FORCED reduction on a structure-violating cell reads 2.4e-04 .. 3.4e-01 (V4)
+   note       gap above 2.4 decades; gap below 7.4 decades
+
+test_reduction_reproduces_the_dense_eigenvalue_set_and_flux_split
+   bar        symmetric Hausdorff <= 1e-9;  counts == 2 q^2 EXACT
+   quantity   set distance between the ON and OFF spectra on the same pencil
+   MEASURED   1.94e-12 (the file's 2 params)
+   other side a FORCED reduction moves the set by 7.7e-02 .. 1.1e+01 (V4)
+   note       gap above 2.7 decades; gap below 7.9 decades.  The COUNT is not a fragile census: _region_modes_oop RAISES if the split is not 2q^2/2q^2, so the assertion restates an invariant the library enforces
+
+test_factored_eigenpair_residual_is_at_the_dense_solve_own_scale
+   bar        bf <= 1e2 * bd   and   bd <= 1e3 * 4 q^2 * eps
+   quantity   normwise eigenpair backward error, factored vs dense, same pencil
+   MEASURED   ratio 1.22 .. 3.56 (the file's 2 params); 19 of my own combinations give 0.44 .. 5.39 (V4); bd 1.47e-15 .. 4.62e-15 against its own bar 8.88e-11 .. 2.00e-10
+   other side FORCING the reduction on a structure-violating cell gives a ratio 5849585182875.9 .. 20332347556532.2
+   note       gap above the measured ratio 1.27 decades; gap BELOW to the smallest forced (structure-violating) ratio 10.8 decades -- so the bar IS two-sided: a forced reduction blows the eigenpair backward error up by ~12 decades
+
+test_structure_bar_has_a_gap_on_both_sides_measured_through_the_gate
+   bar        engages at tol/1e2; refused at tol*1e3; engages at tol=1.0
+   quantity   the SHIPPED gate walked through its own call-time tol
+   MEASURED   struct_dA(ok) 4.28e-15 < 1e-10 < struct_dA(bad) 2.89e-01
+   other side the tol=1.0 arm requires struct_dA(bad) < 1; my off-centre METAL fixture reads 1.033 and is still REFUSED at tol=1.0 (V4)
+   note       not a defect -- the assertion would FAIL LOUDLY, not pass vacuously -- but ``tol=1.0`` is not a full disarm; ``np.inf`` is
+
+test_forcing_the_reduction_without_the_structure_is_wrong_by_decades
+   bar        > 1e-4
+   quantity   max(dR, dT, dJones) with _STAG_BLOCK_TOL monkeypatched to 1.0
+   MEASURED   1.71e-02 .. 2.22e-01 (the file's 2 params)
+   other side the ACCEPTED agreement is <= 1e-11 (bar) / <= 4.9e-14 (measured)
+   note       gap below the measurement 2.2 decades; gap above the accepted agreement 7 decades
+
+================================================================================================
+test_pmm2d_staggered_oop_corner_convergence.py
+================================================================================================
+
+test_..._corner_ladder_steps_shrink_and_start_above_the_floor (a)
+   bar        steps[0] > 1e-5
+   quantity   max per-order |T(M=5) - T(M=4)|
+   MEASURED   2.512e-04  (25x the bar)
+   other side a CONVERGED fixture would read ~1e-09
+   note       gap above the bar 1.40 decades; gap to the converged floor 4 decades
+
+test_..._corner_ladder_steps_shrink_and_start_above_the_floor (b)
+   bar        steps[i+1] <= 0.5 * steps[i]   -- SUB-DECADE BAR
+   quantity   successive step ratios of the per-order T ladder
+   MEASURED   0.254 and 0.145  (steps 2.512e-04, 6.385e-05, 9.257e-06)
+   other side the cross-build spread of a fixed-M solve is ~1e-15 absolute, i.e. ~1e-10 RELATIVE on these steps
+   note       headroom 1.97x = 0.29 decades -- sub-decade, but the quantity's own build spread is ~10 decades below the headroom, so the bar is not per-build; it is a convergence-rate assumption about THIS fixture
+
+test_..._corner_ladder_steps_shrink_and_start_above_the_floor (c)
+   bar        steps[-1] <= 0.1 * steps[0]
+   quantity   end-to-end fall of the ladder
+   MEASURED   0.0368  (27x)
+   other side same as (b)
+   note       headroom 2.71x

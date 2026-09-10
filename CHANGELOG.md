@@ -2,6 +2,190 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Fixed -- a MAGNETIC layer's Wood-anomaly cut-offs sit at `Re(eps*mu)`
+
+`PMM2DStackPure.solve` listed a magnetic layer's PERMITTIVITY on the
+`_grazing_safe_wavelength` nudge list.  A layer mode goes grazing where its own
+longitudinal wavenumber vanishes, i.e. at `kt^2 = Re(eps mu)` -- the layer
+index is `sqrt(eps mu)` -- so a magnetic layer sitting exactly on its own
+cut-off was never nudged.  The branch now contributes the per-cell,
+per-component PRODUCT of the eps and mu principal diagonals
+(`_wood_cutoff_products`).
+
+* NOTHING nonmagnetic moves.  `mu = 1` multiplies by exactly `1.0`, so the
+  product IS the permittivity bit for bit; R/T/Jones were confirmed
+  BIT-IDENTICAL across 15 fixtures spanning both scalar entries, both tensor
+  entries, the uniform / patterned / uniform-tensor stack branches, a magnetic
+  layer with `mu = 1` in all four spellings, and three magnetic layers off any
+  cut-off.
+* Measured on a layer with `eps = 4.0`, `mu = 2.25` at `wl = px sqrt(eps mu)`
+  (where `eps`, `mu` and both half-spaces are each ~1-2 away from every
+  `kt^2`): the solve at the cut-off is now BIT-IDENTICAL to the solve at the
+  nudged wavelength (it was off by 7.712e-09 before), and the same layer with
+  `mu = 1` is correctly left alone.
+* The componentwise product is a heuristic for an anisotropic pair, and
+  over-listing is numerically inert off an EXACT coincidence (the guard's
+  trigger band is `|eps - kt^2| <= 1e-9`).
+* `tests/unit/test_pmm2d_staggered_magnetic.py` G10 (3 tests).
+
+### Fixed -- ONE Wood-anomaly permittivity list for the pure staggered 2-D PMM
+
+`_grazing_safe_wavelength` nudges the wavelength off an EXACT Rayleigh
+coincidence in any medium on its list.  The TENSOR path of the pure staggered
+2-D PMM listed the layer tensors' diagonals; the SCALAR path
+(`pmm_efficiency_2d_staggered`, and a scalar layer of `PMM2DStackPure.solve`)
+listed only the two half-spaces.  A scalar `(Nx, Ny)` cell and its `e * I`
+promotion -- the same discretization everywhere else -- therefore took
+DIFFERENT nudges, and gave different answers, when a diffraction order sat
+exactly on a LAYER's own Rayleigh cut-off (measured 4.591e-08 on the
+verification report's reproducer, 7.561e-09 on a patterned cell, 4.977e-08 on
+a uniform scalar layer).
+
+Both paths now list the real parts of EVERY region's permittivity: the two
+half-spaces, every distinct scalar cell value, every uniform scalar layer, and
+every tensor's principal diagonal.  Listing the layer is the more robust
+convention on its own merits -- the staggered solver degrades like
+`~1/sqrt(distance)` near a cut-off INSIDE a layer exactly as it does near a
+half-space one, and an exactly grazing layer mode is what crashes the interface
+S-matrix.
+
+* NOTHING moves off an exact coincidence.  The guard's trigger band is
+  `|eps - kt^2| <= 1e-9`, a relative wavelength window of ~1.2e-10 around the
+  cut-off; R/T and the nudged wavelength were confirmed BIT-IDENTICAL to 5.43.0
+  across 11 scalar and tensor fixtures (single-layer, stack, oblique, conical,
+  lossy, tensor control) on one build.
+* The cut-off WARNING is unchanged: it still keys on the half-spaces, which are
+  the media whose orders a caller sees in the far field.
+* Side effect: the nudge list is now DEDUPLICATED (`_wood_eps_reals`).  The
+  guard evaluates a Python-level `min` per candidate wavelength, so a fine
+  tensor cell used to push `3*Nx*Ny` entries through it -- 46.9 ms per call at
+  64x64, now 0.02 ms, at an identical wavelength.
+* `tests/unit/test_pmm2d_staggered_wood_list.py` (18 tests).
+
+### Tests -- the fff_nv stripe reduction is no longer a per-build test
+
+`test_v5_20_12_rcwa_jones_2d_fff_nv.py::test_fff_nv_stripe_reduces_to_rigorous_1d`
+failed on Windows and was believed to be a platform split.  It is not: its
+fixture sits on an EXACT index coincidence -- the director's ordinary
+permittivity, the isotropic groove and the substrate are all 2.25 -- so the
+layer carries modes exactly degenerate with the region's and the interface
+inverse amplifies the rounding floor by ~1e14.  The test then hunted for a
+truncation where that floor happened to fall below 1e-9: **0 of 16 on this box
+at `OPENBLAS_NUM_THREADS=1`, 1 of 16 at 4 threads -- the same code on the same
+box passing at 4 and failing at 1** -- and 0 of 16 on WSL, where the Jones
+ratio it asserts also read 1.1773 against 0.0200 on Windows.
+
+NO LIBRARY DEFECT.  The Li in-plane operator is Hermitian to 1.7e-16 here, the
+modal conditioning is `cond([W; V]) <= 2.5e3`, the solver converges, warns on
+every poisoned truncation and raises on the worst; detuning any one of the
+three coincident permittivities by 1e-6 restores machine-precision closure at
+every truncation.  Fixed in the test: a non-degenerate groove (2.10), a
+CONVERGED reference whose energy theorem is asserted instead of searched for,
+closure and ratio bars derived from measurements that now agree to five
+figures across Windows-1-thread / Windows-4-threads / WSL, and a new two-sided
+`test_stripe_fixture_is_free_of_the_mode_match_degeneracy` that reconstructs
+the coincidence through the public API.  11 passed on all three.  Library
+untouched; `docs/audits/FIX_WOOD_LIST_AND_FFFNV_2026_09_10.md` Task H carries
+the diagnosis, the probes (`validation/probe_fffnv_1d_degeneracy/`) and the
+open items (the PMM sibling shares the fixture and is latent).
+
+### Added -- MAGNETIC (permeability-tensor) anisotropy for the PURE (no-floor) staggered 2-D PMM
+
+A layer of the no-floor 2-D engine may now carry a relative PERMEABILITY --
+scalar or a Granet BLOCK-FORM tensor `[[m11, m12, 0], [m21, m22, 0],
+[0, 0, m33]]` -- through `pmm_jones_2d_staggered(..., mu_cell=)` and
+`PMM2DStackPure.add_layer(..., mu=/mu_cell=)`.
+
+Granet 2023's equations are ALREADY the magnetic ones; the shipped solver
+implemented their `chi_t = I`, `chi33 = 1` reduction.  With
+`[chi_t] = [mu_t]^-1` taken POINTWISE per cell (exact for the piecewise-constant
+cells this basis is built on) and `chi33 = 1/m33`, three operators gain weights
+on the SAME `2 q^2` second-order pencil: `R = C[chi_t]C` (Eq. 24 / A39, whose
+C-rotation swaps the transverse indices and adds two mixed blocks),
+`K_tz = C[chi_t][d2; -d1]` (Eq. 21 / A43) and the `chi33`-weighted curl-curl
+`S_tt` (Eq. 20 / A42).  `[eps_t]`, `Meps33` and `K_zt` are untouched, the
+pencil keeps its dimension, and the cascade, the far field and the union grid
+are unchanged.  `mu_cell = None` is a DISPATCH: every operator and every result
+on the nonmagnetic path is bit-identical.
+
+THE TRAP, handled explicitly: with `chi_t = I` the code used ONE object
+(`-Rmat`) both as the pencil's right-hand matrix and as the block field Gram
+that recovers the Eq.-25 H partners.  With `chi_t != I` these are different
+operators -- Eq. 25 carries no `chi_t` -- so the plain Gram is now retained
+separately and `_region_modes` projects with it.  Collapsing the two applies
+`[chi_t]^-1` to every H partner: an error invisible to the eigenvalues and to
+any renormalised energy check, measured at 2.1e-01 against the analytic oracle
+where the correct separation reads 1.9e-14.
+
+Verified (`docs/audits/BUILD_PMM2D_STAGGERED_MAGNETIC_2026_09_10.md`) against
+two oracles that need no external engine: the ANALYTIC Airy formula with the
+wave impedance `Z = sqrt(mu/eps)` (uniform slabs, lossless and lossy, normal
+and oblique, R / T / Jones to 4.3e-14 at M=8, converging 7.9e+05x from M=5),
+and electromagnetic DUALITY `(eps, mu) <-> (mu, eps)` with vacuum half-spaces,
+which also routes a y-uniform MAGNETIC stripe onto `pmm_jones_1d` and
+`rcwa_jones_1d` per order (7.6e-06 at M=8 against their own 8.7e-07 mutual
+spread) -- no 1-D diffraction engine in the library takes a permeability
+directly.  Lossless closure now means Hermitian eps AND Hermitian mu (a
+gyrotropic `m12 = -m21 = i b` absorbs nothing), and the closure tripwire's
+predicate was extended accordingly.
+
+Out of scope, and raising: OUT-OF-PLANE mu, mu together with an out-of-plane
+eps (the first-order generator has no permeability blocks), and MAGNETIC
+HALF-SPACES (`mu_superstrate` / `mu_substrate` exist only to raise -- a
+magnetic half-space changes the Rayleigh flux normalisation).  A uniform
+magnetic layer takes its own region eig; `_homog_geom_cache` raises on one.
+
+Cost at (3,3) M=8: assembly 0.32-0.39 s -> 0.42-0.44 s, the region eig
+unchanged within the machine's own scatter (the pencil dimension does not
+move), peak working set +4.2% (142.7 -> 148.7 MiB -- exactly the two retained
+`q^2` Gram blocks).
+
+### Added -- normal-incidence PARITY block reduction for the PURE staggered OUT-OF-PLANE eig
+
+`pmm_jones_2d_staggered` and `PMM2DStackPure` take a new `symmetry`
+(`'auto'` / `True` / `False`, default `'auto'` = on), mirroring
+`pmm_jones_2d` / `PMM2DStackHybrid`.  At NORMAL incidence on an out-of-plane
+cell that is its own PARITY image (`eps[i, j] == eps[N-1-i, N-1-j]` in every
+tensor component, on a mirror-symmetric wall layout) the `4 q^2` first-order
+staggered pencil carries an anti-commuting involution
+`R = diag(I, I, -I, -I) . blkdiag(P1, P2, P2, P1)`, built from the EXACT
+parity `x -> d - x` of the modified-Legendre sets, so ONE `2 q^2` eig yields
+all `4 q^2` eigenpairs.  MEASURED (2026-09-09/10, tesla-ryzen, 1 BLAS thread):
+**3.3-4.2x on the region solve**, **1.49-1.55x** on a single-layer
+`pmm_jones_2d_staggered` and **1.80-1.87x** on a three-layer out-of-plane
+stack, at `(2,2)`/`(3,3)` grids and `M = 6..8`.
+
+It is a pure accelerator, gated the way the hybrid's Fourier twin
+(`rcwa._core._generator_block_eig`) is: the structure is verified on the
+ASSEMBLED pencil every call (`max|R A R + A| / max|A| <= 1e-10`; carrying
+cells read 5.8e-16 .. 1.5e-14, violating cells 6.2e-02 .. 6.9e-01) and every
+refusal -- oblique or conical incidence, an off-centre or unmirrored cell, a
+parity-breaking tensor, and every in-plane or scalar layer -- runs the dense
+path BIT-FOR-BIT (sha256-identical to `symmetry=False`).
+
+### Documented -- a converged-reference study for the two bounded OUT-OF-PLANE 2-D cases
+
+`docs/audits/EXPERIMENT_PMM2D_STAGGERED_OOP_REFERENCE_2026_09_10.md` closes out
+open item 1 of the out-of-plane build as far as the current engine suite can:
+four fixture x mount cases, three truncation ladders each, every ladder fitted
+and Richardson-extrapolated with an uncertainty derived from its own residual.
+The bound TIGHTENS (per-order `dR` on the chiral conical cell falls from
+`1.341e-04` to `1.099e-04` against rcwa and `5.93e-05` against the nearest
+Fourier arm) and all three Fourier ladders are measured moving TOWARD the
+staggered limit, but no Fourier arm converges, so it stays a BOUND.  One test
+(`tests/unit/test_pmm2d_staggered_oop_corner_convergence.py`) and no library
+change.
+
+### Added -- BOR SEM basis, JAX twin and mortar/PML (pre-5.43 work, previously unlogged)
+
+* `BORStack(basis="sem")` -- a spectral-element radial basis for the
+  body-of-revolution stack, with mortar coupling, PML and a DPW=8 cap.
+* the BOR SEM path's JAX twin, and the deferred-item closure that went with it.
+* `LUMENAIRY_DISABLE_JAX=1` forces the JAX path off even when `jax` is
+  installed (an escape hatch for backend-parity debugging).
+
 ## [5.43.0] — 2026-09-09
 
 ### Changed -- deprecation horizon slipped 5.44 -> 5.46 (fourth deliberate one-line slip)

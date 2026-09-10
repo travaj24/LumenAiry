@@ -65,10 +65,63 @@ formulations sit behind one entry, dispatched on the cell itself:
   1.3-2.0x the in-plane region solve in wall time and ~3x its peak working
   set at equal ``M`` (measured; the dimension doubles but the pencil is
   Cholesky-whitened to a standard eig while the in-plane path pays a QZ).
+  At NORMAL incidence on a cell that is its own PARITY image, ``symmetry``
+  (on by default) takes that ``4 q^2`` eig down to ONE ``2 q^2`` eig
+  (:func:`_stag_block_eig`): MEASURED 3.3-4.2x on the region solve and
+  1.5x (single layer) to 1.9x (a three-layer stack) end to end, with the
+  structure verified on the assembled pencil every call and a BIT-IDENTICAL
+  dense fallback everywhere it does not hold.
 
 Both routes keep the ISOTROPIC half-spaces (the Rayleigh match is scalar), as
 the hybrid does, and a cell whose out-of-plane entries are float noise stays
 BIT-IDENTICAL to the in-plane path (the dispatch floor is relative).
+
+MAGNETIC media -- a block-form PERMEABILITY tensor
+--------------------------------------------------
+``mu_cell`` (``None`` = nonmagnetic, and then every operator below is
+BIT-IDENTICAL to the nonmagnetic path) carries a scalar ``(Nx, Ny)`` or
+BLOCK-FORM ``(Nx, Ny, 3, 3)`` relative permeability, Granet Eq. 6
+``[[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]``.  The paper's equations are
+ALREADY the magnetic ones: with ``[chi_t] = [mu_t]^-1`` (the POINTWISE 2x2
+inverse -- exact for the piecewise-constant cells this basis is built on) and
+``chi33 = 1/m33``,
+
+  * ``R = C[chi_t]C`` (Eq. 24, Appendix-A Eq. 39) -- the C-rotation SWAPS the
+    transverse indices, so ``R11`` carries ``chi22`` and ``R22`` ``chi11``,
+    and the two MIXED blocks (``chi21`` in V1xV2, ``chi12`` in V2xV1) are
+    kron'd from the UNLIKE-set 1-D masses exactly like the Eq. 40 eps blocks;
+  * ``K_tz = C[chi_t][d2; -d1]`` (Eq. 21, A43) -- row 1 becomes
+    ``-chi22 d1 + chi21 d2`` and row 2 ``-chi11 d2 + chi12 d1``;
+  * ``S_tt`` is the ``chi33``-weighted curl-curl (Eq. 20, A42): the Vw-space
+    inner product between the two curls becomes ``chi33``-weighted, i.e. the
+    mimetic middle operator ``Gw^-1 -> Gw^-1 Gw_chi Gw^-1``.
+
+``[eps_t]``, ``Meps33`` and ``K_zt`` are untouched (they carry permittivity
+only), the pencil keeps its ``2 q^2`` dimension, and ``G = -R`` stays Hermitian
+positive definite for a Hermitian positive-definite ``[mu_t]``.
+
+THE ONE TRAP.  With ``chi_t = I`` the shipped code uses a SINGLE object
+(``-Rmat``) for two roles: the pencil's right-hand matrix AND the block field
+Gram that recovers the Eq.-25 H partners.  With ``chi_t != I`` they are
+DIFFERENT operators -- Eq. 25 (``gamma C [H1;H2] = [k^2 eps_t + S_tt][E1;E2]``)
+carries no ``chi_t`` at all -- so the plain Gram is retained separately
+(``Ggram_blocks``, the two ``q^2`` diagonal blocks) and :func:`_region_modes`
+projects with it.  Collapsing the two applies ``[chi_t]^-1`` to every H partner:
+an interface error invisible to the eigenvalues and to any renormalised energy
+check, and measured at 2.1e-01 against the analytic oracle (build doc
+``BUILD_PMM2D_STAGGERED_MAGNETIC_2026_09_10.md`` M1b) where the correct
+separation reads 1.9e-14.
+
+Scope of the magnetic route: IN-PLANE (block-form) only -- an out-of-plane
+``mu``, or a ``mu`` together with an out-of-plane ``eps``, raises
+``NotImplementedError`` (the first-order out-of-plane generator has no
+permeability blocks).  Half-spaces stay NONMAGNETIC: the Rayleigh flux
+normalisation and the incident-amplitude overlap both assume the vacuum wave
+impedance, so ``mu_superstrate`` / ``mu_substrate`` exist only to RAISE.  A
+uniform magnetic layer cannot ride the shared eps-free geometric eig
+(:func:`_homog_geom_cache` raises) and takes its own region eig, deduped by
+``(eps bytes, mu bytes)``.  Losslessness now means Hermitian eps AND Hermitian
+mu (a gyrotropic ``m12 = -m21 = i b`` absorbs nothing).
 
 ACCURACY NOTE for out-of-plane cells with a RE-ENTRANT (270-degree) corner:
 the uniform, straight-walled and convex regimes are machine-exact to
@@ -110,8 +163,10 @@ Eigenvalue ``gamma^2/k0^2 = n_eff^2``; derivatives are ``(1/k0) d/dx``.
 
 Equations implemented (Granet 2023, verified against the paper):
   Eq.23-24 :  -gamma^2 R [E1;E2] = L [E1;E2];  R = C[chi_t]C (nonmagnetic
-              chi_t=I -> R=C@C=-I);  L = k^2[eps_t] + S_tt - K_tz(eps33)^-1 K_zt
-  Eq.20-22 :  S_tt = [d2;-d1] chi33 [d2,-d1];  K_tz = C[d2;-d1];
+              chi_t=I -> R=C@C=-I; magnetic -> the four chi-weighted blocks
+              of Appendix-A Eq.39);  L = k^2[eps_t] + S_tt - K_tz(eps33)^-1 K_zt
+  Eq.20-22 :  S_tt = [d2;-d1] chi33 [d2,-d1];  K_tz = C[chi_t][d2;-d1]
+              (nonmagnetic C[d2;-d1]);
               K_zt = [d1 e11 + d2 e21, d2 e22 + d1 e12]  (isotropic
               reduction: [d1 eps, d2 eps])
   Eq.16-18 :  E3 slaved by div(D)=0 (the Schur term)
@@ -193,6 +248,33 @@ _OOP_ROT_SIGN = -1.0
 #: a pure out-of-plane stack; that was refuted by the measurement above.)
 _OOP_H_GAUGE = -1j
 
+#: Structural gate for the OUT-OF-PLANE generator's PARITY-sign block
+#: reduction (:func:`_stag_block_eig`).  The quantity is exactly what that
+#: function computes: ``max|R A R + A| / max|A|`` (and ``max|R B R - B| /
+#: max|B|``) on the ASSEMBLED pencil.  MEASURED 2026-09-09 (py3.14.6 /
+#: numpy 2.4.4 / scipy 1.17.1 / scipy-openblas, tesla-ryzen), see
+#: docs/audits/BUILD_PMM2D_STAGGERED_OOP_BLOCK_EIG_2026_09_10.md table B2:
+#: cells that carry the structure (uniform tilted uniaxial, centro-symmetric
+#: pillar, non-reciprocal, lossy; (2,2) and (3,3) grids, M 5..8) read
+#: 5.8e-16 .. 1.5e-14 on ``A`` and 5.8e-17 .. 2.0e-16 on ``B``; cells that do
+#: not (an off-centre pillar, a parity-breaking tensor -- oblique and conical
+#: incidence never reach here, the gauge itself refuses) read
+#: 6.2e-02 .. 6.9e-01.  1e-10 sits 3.8 decades above the satisfied envelope
+#: and 8.8 below the smallest real violation -- the same bar the hybrid's
+#: :data:`~lumenairy.elements.rcwa._core._OOP_BLOCK_TOL` uses for the same
+#: structure in the Fourier basis.
+_STAG_BLOCK_TOL = 1e-10
+
+#: Reconstruction floor for :func:`_stag_block_eig`: the factored eigenvector
+#: is ``[up; +/- Yh up / q]``, so a ``q`` at the scale of the spectrum's own
+#: roundoff is not reconstructible.  MEASURED 2026-09-09 over the same fixture
+#: set: ``min|q| / max|q|`` reads 4.1e-03 .. 9.5e-02 (a staggered region
+#: spectrum has no null mode away from a Rayleigh cutoff, which the entry
+#: points already warn about), so 1e-13 fires only on a genuinely null mode
+#: -> dense fallback.  Mirrors
+#: :data:`~lumenairy.elements.rcwa._core._OOP_GAM_FLOOR`.
+_STAG_GAM_FLOOR = 1e-13
+
 
 def _tile_needs_oop(fn_name, tile33):
     """Dispatch gate for a ``(..., 3, 3)`` tensor cell: ``True`` when the cell
@@ -242,6 +324,123 @@ def _validate_stag_cell(fn_name, eps_cell):
             f"{cell.shape}.  Pad the uniform axis into equal segments (e.g. "
             f"tile a (2, 1) cell to (2, 2)).")
     return cell
+
+
+def _wood_eps_reals(*eps_arrays):
+    """The DISTINCT real permittivities a Rayleigh cut-off can sit on, for the
+    Wood-anomaly nudge list of :func:`~lumenairy.elements.rcwa._core._grazing_safe_wavelength`.
+
+    ONE rule for both staggered paths (scalar and tensor, 2026-09-10).  The
+    nudge exists because the staggered solver degrades like
+    ``~1/sqrt(cut-off distance)`` and an EXACT grazing mode crashes the
+    interface S-matrix -- and that is true of a cut-off inside a LAYER, not
+    just in a half-space, so every region's permittivity belongs on the list.
+    Callers pass already-scalar quantities: half-space ``eps``, a scalar
+    ``(Nx, Ny)`` cell, or a tensor's principal DIAGONAL (the off-diagonals are
+    not cut-offs) -- this helper never sniffs a shape, because a scalar
+    ``(3, 3)`` cell is a legal 3x3 segmentation grid.
+
+    Deduplication is numerically inert -- ``_grazing_safe_wavelength`` takes a
+    MIN over the list -- and it is what keeps the list O(materials) instead of
+    O(Nx*Ny*3) on a fine cell, where the min is evaluated per candidate
+    wavelength in a Python loop.
+    """
+    if not eps_arrays:
+        return []
+    vals = np.concatenate([np.real(np.asarray(a, dtype=_C)).ravel()
+                           for a in eps_arrays])
+    return [float(v) for v in np.unique(vals)]
+def _require_inplane_mu(fn_name, tile33):
+    """Block-form gate for a ``(..., 3, 3)`` PERMEABILITY tile (Granet Eq. 6,
+    ``[[m11, m12, 0], [m21, m22, 0], [0, 0, m33]]``).
+
+    Magnetic anisotropy is IN-PLANE only in this engine: the paper's
+    ``R = C[chi_t]C`` / ``K_tz = C[chi_t][d2;-d1]`` / ``S_tt(chi33)`` route
+    generalizes the SECOND-ORDER pencil, while the out-of-plane FIRST-ORDER
+    generator (:meth:`Granet2DTransverseE._assemble_oop`) carries no ``mu``
+    blocks at all (its ``G3``/``E3`` eliminations assume ``mu = 1``).  So an
+    out-of-plane ``mu`` raises, at the SAME RELATIVE ``1e-12 * scale`` floor
+    the permittivity uses (:func:`~lumenairy.elements.pmm.twod_jones._tile_is_offplane`):
+    a physically in-plane tensor built by ROTATING a diagonal one carries
+    ~1e-16 float noise in the xz/yz/zx/zy slots and must NOT be rejected.
+
+    ``m33 != 0`` (``chi33 = 1/m33`` enters ``S_tt``) and an INVERTIBLE ``[mu_t]``
+    (``chi_t = [mu_t]^-1``, the 2x2 inverse taken pointwise per cell) are the
+    two preconditions; both are checked relative to the tile scale."""
+    tile33 = np.asarray(tile33, dtype=_C)
+    if float(np.min(np.abs(tile33[..., 2, 2]))) < 1e-300:
+        raise ValueError(
+            f"{fn_name}: m_zz must be nonzero in every region (chi33 = 1/m33 "
+            f"weights the S_tt curl-curl operator).")
+    if _tile_is_offplane(tile33):
+        raise NotImplementedError(
+            f"{fn_name}: OUT-OF-PLANE permeability (m_xz / m_yz / m_zx / "
+            f"m_zy above the relative 1e-12 floor) is not implemented -- the "
+            f"magnetic route generalizes the SECOND-ORDER (2 q^2) block-form "
+            f"pencil (Granet Eq. 6: [[m11, m12, 0], [m21, m22, 0], "
+            f"[0, 0, m33]]), and the out-of-plane first-order generator has "
+            f"no mu blocks.  Pass a BLOCK-FORM mu.")
+    det = (tile33[..., 0, 0] * tile33[..., 1, 1]
+           - tile33[..., 0, 1] * tile33[..., 1, 0])
+    scale = max(float(np.max(np.abs(tile33))), 1.0)
+    if float(np.min(np.abs(det))) <= 1e-14 * scale ** 2:
+        raise ValueError(
+            f"{fn_name}: the transverse block [mu_t] = [[m11, m12], "
+            f"[m21, m22]] is SINGULAR in at least one cell "
+            f"(min |det| = {float(np.min(np.abs(det))):.3g} vs the relative "
+            f"floor {1e-14 * scale ** 2:.3g}); chi_t = [mu_t]^-1 does not "
+            f"exist there.")
+
+
+def _validate_stag_mu(fn_name, mu_cell):
+    """Shape + SQUARE-grid + block-form validation for a PERMEABILITY cell,
+    the mirror of :func:`_validate_stag_cell`.  Accepts a ``(Nx, Ny)`` SCALAR
+    map (isotropic magnetic: ``chi_t = (1/mu) I``, ``chi33 = 1/mu``) or a
+    ``(Nx, Ny, 3, 3)`` BLOCK-FORM tensor map, and returns it as complex."""
+    cell = np.asarray(mu_cell, dtype=_C)
+    if cell.ndim == 4:
+        if cell.shape[2:] != (3, 3):
+            raise ValueError(
+                f"{fn_name}: a tensor mu_cell must be (Nx, Ny, 3, 3), got "
+                f"shape {cell.shape}.")
+        _require_inplane_mu(fn_name, cell)
+    elif cell.ndim == 2:
+        if float(np.min(np.abs(cell))) < 1e-300:
+            raise ValueError(
+                f"{fn_name}: a scalar mu_cell must be nonzero in every cell "
+                f"(chi = 1/mu).")
+    else:
+        raise ValueError(
+            f"{fn_name}: mu_cell must be a 2-D (Nx, Ny) scalar grid or a "
+            f"(Nx, Ny, 3, 3) block-form tensor grid, got shape {cell.shape}.")
+    if cell.shape[0] != cell.shape[1]:
+        raise ValueError(
+            f"{fn_name}: mu_cell must be SQUARE (Nx == Ny; the staggered "
+            f"tensor-product basis requires Nx*(M-1) == Ny*(M-1)), got "
+            f"{cell.shape}.")
+    return cell
+
+
+def _require_nonmagnetic_halfspace(fn_name, mu_sup, mu_sub):
+    """The half-spaces of this engine are NONMAGNETIC (mu = 1) and isotropic.
+
+    The Rayleigh far field normalises each order's power with the ELECTRIC
+    flux factor ``Re(kz)`` and reconstructs ``E_z`` from ``k . E = 0``; a
+    magnetic half-space changes the wave impedance ``Z = sqrt(mu/eps)``, hence
+    both the flux normalisation and the incident-amplitude overlap.  Rather
+    than silently returning efficiencies normalised for vacuum, raise."""
+    for name, val in (("mu_superstrate", mu_sup), ("mu_substrate", mu_sub)):
+        if val is None:
+            continue
+        v = np.asarray(val, dtype=_C)
+        if v.ndim == 0 and v == 1.0:
+            continue
+        raise NotImplementedError(
+            f"{fn_name}: {name}={val!r} -- MAGNETIC HALF-SPACES are not "
+            f"implemented.  The half-spaces are nonmagnetic and isotropic "
+            f"(mu = 1): the Rayleigh flux normalisation and the incident "
+            f"overlap both assume the vacuum wave impedance.  A magnetic "
+            f"medium must be a LAYER (add_layer(..., mu=...) / mu_cell=).")
 
 
 # === 1-D modified-Legendre staggered basis + 2-D transverse-E eigensolver ===
@@ -526,7 +725,7 @@ class Granet2DTransverseE:
     """
 
     def __init__(self, px, py, Nx, Ny, M, eps_cell,
-                 alpha0x=0.0, alpha0y=0.0, k0=2.0 * np.pi):
+                 alpha0x=0.0, alpha0y=0.0, k0=2.0 * np.pi, mu_cell=None):
         self.k0 = float(k0)
         self.alpha0x = float(alpha0x)
         self.alpha0y = float(alpha0y)
@@ -550,6 +749,42 @@ class Granet2DTransverseE:
         # a branch, at exactly the same floor.
         self.offplane = (self.eps_cell.ndim == 4
                          and _tile_is_offplane(self.eps_cell))
+        # MAGNETIC dispatch (chi_t = [mu_t]^-1 != I).  ``mu_cell=None`` -- the
+        # nonmagnetic default -- leaves every operator below untouched, so the
+        # shipped isotropic and Stage-A tensor paths stay BIT-IDENTICAL (gate
+        # G1); a mu present routes the SAME second-order pencil through the
+        # paper's general R / K_tz / S_tt weights (Eqs. 24, 21, 20).
+        self.mu_cell = None
+        self.magnetic = False
+        self.Ggram_blocks = None
+        if mu_cell is not None:
+            mu = np.asarray(mu_cell, dtype=_C)
+            if mu.ndim not in (2, 4) or (mu.ndim == 4
+                                         and mu.shape[2:] != (3, 3)):
+                raise ValueError(
+                    f"Granet2DTransverseE: mu_cell must be (Nx, Ny) scalar or "
+                    f"(Nx, Ny, 3, 3) block-form tensor, got shape {mu.shape}.")
+            if mu.shape[:2] != self.eps_cell.shape[:2]:
+                raise ValueError(
+                    f"Granet2DTransverseE: mu_cell grid {mu.shape[:2]} must "
+                    f"match the eps_cell grid {self.eps_cell.shape[:2]}.")
+            if mu.ndim == 4:
+                _require_inplane_mu("Granet2DTransverseE", mu)
+            elif float(np.min(np.abs(mu))) < 1e-300:
+                raise ValueError(
+                    "Granet2DTransverseE: a scalar mu_cell must be nonzero in "
+                    "every cell (chi = 1/mu).")
+            if self.offplane:
+                raise NotImplementedError(
+                    "Granet2DTransverseE: mu_cell together with an "
+                    "OUT-OF-PLANE eps_cell (e_xz / e_yz / e_zx / e_zy above "
+                    "the relative 1e-12 floor) is not implemented -- the "
+                    "out-of-plane FIRST-ORDER generator carries no "
+                    "permeability blocks (it eliminates G3 assuming mu = 1).  "
+                    "Magnetic anisotropy is available on the IN-PLANE "
+                    "(block-form) second-order pencil only.")
+            self.mu_cell = mu
+            self.magnetic = True
         if self.offplane:
             self._assemble_oop()
         else:
@@ -597,6 +832,27 @@ class Granet2DTransverseE:
             out += np.kron(Wy, Gx[sx])
         return out
 
+    def _chi_maps(self):
+        """Per-cell inverse-permeability maps ``(chi11, chi12, chi21, chi22,
+        chi33)`` -- Granet Eqs. 11-12 -- or ``None`` when nonmagnetic.
+
+        ``[chi_t] = [mu_t]^-1`` is the POINTWISE 2x2 inverse (exact for the
+        piecewise-constant cells this basis is built on: the walls are element
+        boundaries, so inverting per cell and discretizing commute) and
+        ``chi33 = 1/m33``.  A SCALAR ``mu`` gives ``chi_t = (1/mu) I``."""
+        mu = self.mu_cell
+        if mu is None:
+            return None
+        if mu.ndim == 2:
+            inv = 1.0 / mu
+            zero = np.zeros_like(inv)
+            return inv, zero, zero, inv, inv
+        m11, m12 = mu[..., 0, 0], mu[..., 0, 1]
+        m21, m22 = mu[..., 1, 0], mu[..., 1, 1]
+        det = m11 * m22 - m12 * m21
+        return (m22 / det, -m12 / det, -m21 / det, m11 / det,
+                1.0 / mu[..., 2, 2])
+
     def _assemble(self):
         """Build R (Eq. 24) and L = k^2[eps_t] + S_tt - K_tz eps33^-1 K_zt.
 
@@ -639,6 +895,12 @@ class Granet2DTransverseE:
             e33 = self.eps_cell[..., 2, 2]
         else:
             e11 = e12 = e21 = e22 = e33 = None
+        # MAGNETIC (chi_t = [mu_t]^-1 != I).  None on the nonmagnetic path, and
+        # every branch below is skipped -> the shipped arithmetic, unchanged.
+        chi = self._chi_maps()
+        magnetic = chi is not None
+        if magnetic:
+            chi11, chi12, chi21, chi22, chi33 = chi
 
         # ----- per-axis 1-D primitive matrices (real inner product) -----
         # Mass (no deriv) between set pairs:
@@ -657,8 +919,40 @@ class Granet2DTransverseE:
         G1 = np.kron(Mtt_y, Mbb_x)                  # <V1|V1>, V1=B(x1)til(x2)
         G2 = np.kron(Mbb_y, Mtt_x)                  # <V2|V2>, V2=til(x1)B(x2)
         Rmat = np.zeros((2 * qq, 2 * qq), dtype=_C)
-        Rmat[:qq, :qq] = -G1
-        Rmat[qq:, qq:] = -G2
+        if magnetic:
+            # Eq. 24 / Appendix-A Eq. 39: R = C[chi_t]C with C = [[0,1],[-1,0]],
+            # i.e. R = [[-chi22, chi21], [chi12, -chi11]] -- the C-rotation
+            # SWAPS the transverse indices (R11 carries chi22, R22 chi11) and
+            # the two MIXED blocks (chi21 in V1 x V2, chi12 in V2 x V1) are
+            # kron'd from the UNLIKE-set 1-D masses exactly like the Eq. 40
+            # eps12 / eps21 blocks.  For a Hermitian positive-definite [mu_t]
+            # this R is Hermitian NEGATIVE definite, so G = -R stays the
+            # Hermitian PD right-hand matrix of the pencil (chi_t = I gives
+            # back -blockdiag(G1, G2) to ~1e-16 -- summation order only).
+            Rmat[:qq, :qq] = -self._eps_weighted(
+                (bx, bx.m_ref, bx.B, bx.B),
+                (by, by.m_ref, by.Btilde, by.Btilde), chi22)
+            Rmat[:qq, qq:] = self._eps_weighted(
+                (bx, bx.m_ref, bx.B, bx.Btilde),
+                (by, by.m_ref, by.Btilde, by.B), chi21)
+            Rmat[qq:, :qq] = self._eps_weighted(
+                (bx, bx.m_ref, bx.Btilde, bx.B),
+                (by, by.m_ref, by.B, by.Btilde), chi12)
+            Rmat[qq:, qq:] = -self._eps_weighted(
+                (bx, bx.m_ref, bx.Btilde, bx.Btilde),
+                (by, by.m_ref, by.B, by.B), chi11)
+            # THE PLAIN BLOCK GRAM, kept SEPARATELY.  On the nonmagnetic path
+            # -R IS blockdiag(G1, G2) and the shipped code uses the one object
+            # for both roles; with chi_t != I they are DIFFERENT operators.
+            # The Eq.-25 H recovery (gamma C [H1;H2] = [k^2 eps_t + S_tt] E)
+            # carries NO chi_t, so it must project with THIS Gram, not with
+            # the pencil's R (see :func:`_region_modes`).  Stored as the two
+            # q^2 diagonal blocks (the off-diagonal blocks are zero), so the
+            # magnetic path retains q^2 x 2, not 4 q^2.
+            self.Ggram_blocks = (G1, G2)
+        else:
+            Rmat[:qq, :qq] = -G1
+            Rmat[qq:, qq:] = -G2
 
         # ============ L = [eps_t] + S_tt - K_tz eps33^-1 K_zt  (/k0^2) ========
         # --- [eps_t] : eps-weighted component masses (k^2[eps]/k0^2 = [eps]) ---
@@ -713,7 +1007,21 @@ class Granet2DTransverseE:
         Curl = np.concatenate([Cw_E1, -Cw_E2], axis=1)     # (q^2, 2q^2)
         Gw_inv = np.linalg.inv(Gw)
         # IBP: <t,[d2;-d1] w> = -<Curl(t), w>  -> S_tt = -Curl^dag Gw^{-1} Curl.
-        Stt = -Curl.conj().T @ Gw_inv @ Curl        # (2q^2,2q^2), neg-semidef
+        #
+        # Eq. 20/42 with chi33 != 1.  ``Curl`` is the WEAK matrix <Vw | curl E>,
+        # so ``Gw^-1 Curl`` are the EXACT Vw coefficients of curl E (the de Rham
+        # property puts curl E in Vw strongly).  The bilinear form is then
+        # -<curl v, chi33 curl E> = -(Gw^-1 Curl v)^dag Gw_chi (Gw^-1 Curl E),
+        # i.e. the middle operator Gw^-1 -> Gw^-1 Gw_chi Gw^-1 with
+        # Gw_chi = <Vw| chi33 |Vw>.  chi33 = 1 gives Gw_chi = Gw and the middle
+        # collapses back to Gw^-1 -- the expression below is then the shipped
+        # matmul chain object-for-object (bit-identical, gate G1).
+        Sw = Gw_inv
+        if magnetic:
+            Gw_chi = self._eps_weighted((bx, bx.m_ref, bx.B, bx.B),
+                                        (by, by.m_ref, by.B, by.B), chi33)
+            Sw = Gw_inv @ Gw_chi @ Gw_inv
+        Stt = -Curl.conj().T @ Sw @ Curl            # (2q^2,2q^2), neg-semidef
 
         # === K_tz eps33^-1 K_zt : the div(D)=0 Schur term (Eq.16-18) ===
         # MIMETIC GRADIENT (the dual de Rham map).  K_tz = C[chi_t][d2;-d1] acts
@@ -731,9 +1039,28 @@ class Granet2DTransverseE:
         # Build the eps-free mimetic gradient blocks (V1<-V3, V2<-V3):
         #   <t1 | -d1 V3> : t1 in V1=B(x1)Btil(x2), V3=Btil(x1)Btil(x2)
         #     x1: <B | d Btil> = dbt_x ; x2: <Btil|Btil> = Mtt_y
-        Grad1 = -np.kron(Mtt_y, dbt_x)              # V1 <- V3   (=<t1|-d1 V3>)
-        Grad2 = -np.kron(dbt_y, Mtt_x)              # V2 <- V3   (=<t2|-d2 V3>)
-        Ktz = np.concatenate([Grad1, Grad2], axis=0)       # (2q^2, q^2)
+        if not magnetic:
+            Grad1 = -np.kron(Mtt_y, dbt_x)          # V1 <- V3   (=<t1|-d1 V3>)
+            Grad2 = -np.kron(dbt_y, Mtt_x)          # V2 <- V3   (=<t2|-d2 V3>)
+            Ktz = np.concatenate([Grad1, Grad2], axis=0)   # (2q^2, q^2)
+        else:
+            # Eq. 21 / Appendix-A Eq. 43: K_tz = C[chi_t][d2; -d1], i.e.
+            #   row 1 (tested in V1) = -chi22 d1 + chi21 d2
+            #   row 2 (tested in V2) = -chi11 d2 + chi12 d1
+            # -- the same C-rotation index swap as R (row 1 carries chi22 /
+            # chi21, row 2 chi11 / chi12), and chi_t = I reproduces Grad1 /
+            # Grad2 above exactly (to summation order).  The derivative sits on
+            # the V3 TRIAL function ("d"), as the eps-free gradient has it.
+            Ktz = np.concatenate([
+                (-self._eps_dir(bx, "B", "d", "Btilde",
+                                by, "Btilde", "m", "Btilde", wmap=chi22)
+                 + self._eps_dir(bx, "B", "m", "Btilde",
+                                 by, "Btilde", "d", "Btilde", wmap=chi21)) / k0,
+                (-self._eps_dir(bx, "Btilde", "m", "Btilde",
+                                by, "B", "d", "Btilde", wmap=chi11)
+                 + self._eps_dir(bx, "Btilde", "d", "Btilde",
+                                 by, "B", "m", "Btilde", wmap=chi12)) / k0,
+            ], axis=0)
 
         # eps33 mass in V3 (Eq.41): <V3| eps | V3>
         Meps33 = self._eps_weighted(
@@ -1124,7 +1451,12 @@ def _region_modes(solver: Granet2DTransverseE):
             "and DISTINCT forward/backward modes -- call _region_modes_oop, "
             "whose 6-tuple feeds the generalized S-matrix cascade.")
     L = solver.Lmat
-    G = -solver.Rmat                  # block field Gram (Hermitian PD)
+    # The pencil's right-hand matrix is -R = -C[chi_t]C (Hermitian PD).  For a
+    # NONMAGNETIC region chi_t = I, so -R IS the block field Gram
+    # blockdiag(G1, G2) and the one object serves both roles below; for a
+    # MAGNETIC region the two are DIFFERENT operators and the Gram is carried
+    # separately on ``solver.Ggram_blocks`` (see the H recovery below).
+    G = -solver.Rmat
     g2, W = sla.eig(L, G)
     # q = kz/k0 = gamma/k0 = sqrt(g2).  FORWARD branch chosen ROBUSTLY (the
     # naive _sqrt_decay flips degenerate real-g2 pairs inconsistently on QZ
@@ -1154,8 +1486,25 @@ def _region_modes(solver: Granet2DTransverseE):
     Lhh = Lhh + solver.Stt
     # block C^{-1} = -C = [[0,-1],[1,0]] acting on the 2-block coeff vector:
     #   (-C) [a;b] = [-b; a]  (a = top block, b = bottom block).
-    Ginv = np.linalg.inv(G)
-    Dual = Ginv @ (Lhh @ W)          # G^{-1} Lhh W  (back to coefficients)
+    #
+    # THE R-vs-GRAM SEPARATION.  Eq. 25 is a WEAK statement tested in V1 / V2:
+    # <v, gamma C [H1;H2]> = <v, (k^2[eps_t] + S_tt)[E1;E2]>, and its left side
+    # is gamma times the PLAIN block Gram blockdiag(G1, G2) applied to the
+    # C-rotated H coefficients -- NO chi_t appears in Eq. 25 (only chi33, which
+    # is already inside S_tt).  On the nonmagnetic path -R is that Gram, so the
+    # shipped single inverse is right; on the magnetic path -R = -C[chi_t]C is
+    # a DIFFERENT operator and using it here would silently apply [chi_t]^-1 to
+    # every H partner (an interface-match error invisible to the eigenvalues
+    # and to any energy check that renormalises).  Solve blockwise against the
+    # two retained Gram blocks instead.
+    if solver.Ggram_blocks is None:
+        Ginv = np.linalg.inv(G)
+        Dual = Ginv @ (Lhh @ W)      # G^{-1} Lhh W  (back to coefficients)
+    else:
+        G1g, G2g = solver.Ggram_blocks
+        LW = Lhh @ W
+        Dual = np.concatenate([np.linalg.solve(G1g, LW[:qq, :]),
+                               np.linalg.solve(G2g, LW[qq:, :])], axis=0)
     top = Dual[:qq, :]
     bot = Dual[qq:, :]
     rot = np.concatenate([-bot, top], axis=0)     # (-C) Dual
@@ -1164,7 +1513,273 @@ def _region_modes(solver: Granet2DTransverseE):
     return W, V, lam, g2
 
 
-def _region_modes_oop(solver: Granet2DTransverseE):
+def _stag_parity_1d(basis: Basis1D):
+    """The exact PARITY ``x -> d - x`` of one axis' two staggered global sets,
+    as SIGNED PERMUTATIONS ``(perm_t, sign_t, perm_b, sign_b)`` -- or ``None``
+    when the Bloch glue ``tau != 1`` (oblique incidence), where the map is not
+    a signed permutation of the set at all.
+
+    Derivation (all three pieces are properties of the shipped
+    :class:`Basis1D`, not new discretization).  Segment ``n`` of the uniform
+    wall grid maps to ``N-1-n`` and the reference coordinate to ``-u``, so the
+    local modified-Legendre functions permute::
+
+        Ltilde_1(-u) = (1+u)/2 = Ltilde_2(u)      (the two HALF-HATS swap)
+        Ltilde_2(-u) = Ltilde_1(u)
+        (L_a - L_{a-2})(-u) = (-1)^a (L_a - L_{a-2})(u)   (BUBBLES: a sign)
+
+    Lifting that through the two global stencils of
+    :meth:`Basis1D._build_sets`:
+
+    * ``Btilde`` -- the continuous set.  Its hat at node ``j`` glues
+      ``Ltilde_2`` of segment ``j-1`` to ``Ltilde_1`` of segment ``j``, and the
+      half-hat swap turns that into the hat at node ``(N - j) mod N``, sign
+      ``+1``.  The seam hat ``j = 0`` carries ``tau`` on the ``Ltilde_2`` leg
+      while its image carries ``tau`` on the other leg, so it is fixed ONLY
+      when ``tau = 1`` -- which is why the gauge is normal-incidence-only.  Its
+      bubbles ``(seg, a)`` go to ``(N-1-seg, a)`` with sign ``(-1)^a``.
+    * ``B`` -- the discontinuous partner.  Its two per-segment half-hats are
+      INDEPENDENT dofs, so ``(seg, 0) <-> (N-1-seg, 1)`` with sign ``+1``, and
+      its bubbles ``(seg, a)``, ``a = 2 .. M-2``, go to ``(N-1-seg, a)`` with
+      sign ``(-1)^a`` exactly as above.
+
+    Both maps are involutions (``J^2 = I`` EXACTLY -- a permutation composed
+    with itself, signs squared) and the sign is constant on every orbit, which
+    is what lets :func:`_stag_block_eig` use the same ``(perm, sign)`` algebra
+    :func:`~lumenairy.elements.rcwa._core._generator_block_eig` uses for the
+    Fourier order flip.
+    """
+    if basis.tau != 1.0:
+        return None
+    N, M = basis.N, basis.M
+    seg = np.arange(N)
+    # --- Btilde: N hats (node j) then bubbles at N + seg*(M-2) + (a-2)
+    perm_t = np.empty(N + N * (M - 2), dtype=np.intp)
+    sign_t = np.empty(perm_t.size)
+    perm_t[:N] = (N - seg) % N
+    sign_t[:N] = 1.0
+    a_t = np.arange(2, M)
+    perm_t[N:] = (N + (N - 1 - seg)[:, None] * (M - 2)
+                  + (a_t - 2)[None, :]).ravel()
+    sign_t[N:] = np.broadcast_to((-1.0) ** a_t, (N, M - 2)).ravel()
+    # --- B: per segment [half-hat a=0, half-hat a=1, bubbles a=2..M-2];
+    #     local slot l carries degree a = l for l >= 2, and 0 <-> 1 swap
+    loc = np.arange(M - 1)
+    swap = loc.copy()
+    swap[0], swap[1] = 1, 0
+    s_loc = np.where(loc >= 2, (-1.0) ** loc, 1.0)
+    perm_b = ((N - 1 - seg)[:, None] * (M - 1) + swap[None, :]).ravel()
+    sign_b = np.broadcast_to(s_loc, (N, M - 1)).ravel().copy()
+    return perm_t, sign_t, perm_b.astype(np.intp), sign_b
+
+
+def _stag_parity_gauge(solver: Granet2DTransverseE):
+    """``(perm, r)`` -- the signed permutation ``R = S . blkdiag(P1, P2, P2,
+    P1)`` on the out-of-plane state ``[E1; E2; G1; G2]``, or ``None`` when the
+    necessary conditions fail.
+
+    ``P1`` and ``P2`` are the 2-D parities of ``V1 = B(x) (x) Btilde(y)`` and
+    ``V2 = Btilde(x) (x) B(y)`` (krons of :func:`_stag_parity_1d`, in the
+    module's ``kron(y, x)`` index order), and ``S = diag(I, I, -I, -I)`` is the
+    E/H SIGN flip -- the staggered analogue of the Fourier
+    ``R = S (I4 (x) F)`` of
+    :func:`~lumenairy.elements.rcwa._core._generator_block_eig`.
+
+    WHY THAT SIGN PATTERN (derived on THIS state ordering, not inherited).
+    With every component map ``e11 .. e33`` parity-EVEN on the grid, every
+    eps-weighted mass of :meth:`Granet2DTransverseE._assemble_oop` is
+    parity-EVEN (``P_i A_ij P_j = A_ij``) while each of the four
+    SINGLE-DERIVATIVE blocks is parity-ODD (``P13, P23, CwE1, CwE2 -> -``,
+    because ``d/dx -> -d/dx``).  Feeding ``e1 -> P1 e1``, ``e2 -> P2 e2``,
+    ``g1 -> -P2 g1``, ``g2 -> -P1 g2`` through the two eliminations then gives
+    ``e3 -> +P3 e3`` (its eps terms and its derivative terms each pick up two
+    flips) and ``g3 -> -Pw g3``, after which every one of the four pencil rows
+    has its ``B`` side EVEN and its ``A`` side ODD: ``R A R = -A`` and
+    ``R B R = B``, i.e. ``(q, x)`` a solution implies ``(-q, R x)``.  Neither
+    factor works alone -- the parity alone is broken by the derivative blocks
+    and the sign alone by the eps blocks, exactly as in the Fourier case.
+
+    Necessary conditions only, and both are free of the assembly: NORMAL
+    incidence (``tau = 1`` on both axes, else the hats do not permute) and
+    matching per-axis dimensions.  Everything else -- a cell whose eps grid is
+    not its own parity image, a wall layout that is not mirror-symmetric, a
+    tensor that breaks the symmetry -- is decided by :func:`_stag_block_eig` on
+    the ASSEMBLED pencil, which is where the condition actually lives.
+    """
+    if solver.alpha0x != 0.0 or solver.alpha0y != 0.0:
+        return None
+    px = _stag_parity_1d(solver.bx)
+    py = _stag_parity_1d(solver.by)
+    if px is None or py is None:
+        return None
+    ptx, stx, pbx, sbx = px
+    pty, sty, pby, sby = py
+    q = solver.q
+    if ptx.size != q or pbx.size != q or pty.size != q or pby.size != q:
+        return None
+    qq = q * q
+    # V1 = B(x) (x) Btilde(y): flat index iy*q + ix (the module's kron order)
+    p1 = (pty[:, None] * q + pbx[None, :]).ravel()
+    s1 = (sty[:, None] * sbx[None, :]).ravel()
+    # V2 = Btilde(x) (x) B(y)
+    p2 = (pby[:, None] * q + ptx[None, :]).ravel()
+    s2 = (sby[:, None] * stx[None, :]).ravel()
+    perm = np.concatenate([p1, p2 + qq, p2 + 2 * qq, p1 + 3 * qq])
+    r = np.concatenate([s1, s2, -s2, -s1])
+    return perm.astype(np.intp), r
+
+
+def _stag_block_eig(Amat, Bmat, qq, parity, *, tol=None):
+    """All ``4 q^2`` eigenpairs of the OUT-OF-PLANE staggered PENCIL from ONE
+    ``2 q^2`` eig, or ``None`` when the structural precondition fails (-> the
+    dense Cholesky-whitened ``4 q^2`` solve, bit-for-bit).
+
+    THE STRUCTURE.  ``R`` (:func:`_stag_parity_gauge`) is a real signed
+    permutation with ``R^2 = I`` that ANTI-commutes with the generator and
+    COMMUTES with the block Gram::
+
+        R A R = -A        R B R = +B
+
+    so in the orthogonal eigenbasis ``U = [U+ | U-]`` of ``R`` (each sector
+    exactly ``2 q^2``-dimensional: ``tr R = 0``, because on a square grid the
+    two ``E`` blocks and the two ``G`` blocks contribute equal and opposite
+    parity traces) the pencil is block-ANTI-diagonal against a block-DIAGONAL
+    Gram::
+
+        U^T A U = [[0, X], [Y, 0]]        U^T B U = blkdiag(Bp, Bm)
+
+    Whitening each sector by its own Cholesky (``Bp = Lp Lp^H``,
+    ``Bm = Lm Lm^H``) and writing ``Xh = Lp^-1 X Lm^-H``,
+    ``Yh = Lm^-1 Y Lp^-H`` reduces the pencil to ONE standard ``2 q^2`` eig::
+
+        Xh Yh up = q^2 up ,    um = Yh up / q ,
+        x = U+ Lp^-H up  +/-  U- Lm^-H um     for the +/- q pair
+
+    -- the out-of-plane analogue of what ``eig(P Q)`` does for an in-plane
+    layer, and the staggered twin of the Fourier reduction in
+    :func:`~lumenairy.elements.rcwa._core._generator_block_eig`.  ``U`` is a
+    real orthogonal signed pairing, so forming ``X, Y, Bp, Bm`` and expanding
+    the ``4 q^2`` vectors are ``O(n^2)``; the only cubic work is at ``2 q^2``.
+
+    VERIFY THEN USE.  The condition is on the ASSEMBLED pencil, never on
+    ``eps``: a cell whose permittivity is its own parity image but whose
+    spectral-element WALLS are not mirror-symmetric breaks it at the
+    discretisation level.  Both residuals are measured here, row-blocked so no
+    second ``4 q^2 x 4 q^2`` transient is allocated, and anything above
+    :data:`_STAG_BLOCK_TOL` returns ``None``.  ``tol`` is read at CALL time
+    (never bound as a default) so a test can walk the bar's own two-sided gap
+    through the shipped code.
+    """
+    perm, r = parity
+    tol = _STAG_BLOCK_TOL if tol is None else float(tol)
+    n2, n4 = 2 * qq, 4 * qq
+    if Amat.shape != (n4, n4) or Bmat.shape != (n4, n4) or perm.size != n4:
+        return None
+    sA = float(np.max(np.abs(Amat)))
+    sB = float(np.max(np.abs(Bmat)))
+    if not (np.isfinite(sA) and np.isfinite(sB)) or sA == 0.0 or sB == 0.0:
+        return None
+    # ---- structural test.  r is real +/-1 and constant on every orbit, so
+    # (R M R)[i, j] = r_i M[perm_i, perm_j] r_j and no gauge division arises.
+    for i0 in range(0, n4, 256):
+        i1 = min(i0 + 256, n4)
+        rr = r[i0:i1, None] * r[None, :]
+        pi = perm[i0:i1]
+        if float(np.max(np.abs(
+                rr * Amat[np.ix_(pi, perm)] + Amat[i0:i1]))) > tol * sA:
+            return None
+        if float(np.max(np.abs(
+                rr * Bmat[np.ix_(pi, perm)] - Bmat[i0:i1]))) > tol * sB:
+            return None
+
+    # ---- the R eigenbasis as (index, index, coeff, coeff) columns
+    plus, minus = [], []
+    seen = np.zeros(n4, dtype=bool)
+    inv2 = 1.0 / np.sqrt(2.0)
+    for i in range(n4):
+        if seen[i]:
+            continue
+        j = int(perm[i])
+        seen[i] = True
+        if j == i:                                   # self-paired dof
+            (plus if r[i] > 0 else minus).append((i, i, 1.0, 0.0))
+            continue
+        seen[j] = True
+        # R e_i = r_i e_j, so R(e_i +/- e_j) = r_i (e_j +/- e_i)
+        if r[i] > 0:
+            plus.append((i, j, inv2, inv2))
+            minus.append((i, j, inv2, -inv2))
+        else:
+            plus.append((i, j, inv2, -inv2))
+            minus.append((i, j, inv2, inv2))
+    if len(plus) != n2 or len(minus) != n2:
+        return None
+
+    def _desc(cols):
+        return (np.array([c[0] for c in cols], dtype=np.intp),
+                np.array([c[1] for c in cols], dtype=np.intp),
+                np.array([c[2] for c in cols], dtype=_C),
+                np.array([c[3] for c in cols], dtype=_C))
+
+    dp, dm = _desc(plus), _desc(minus)
+
+    def _cols(desc, Mm):                              # Mm @ U
+        i, j, ci, cj = desc
+        return Mm[:, i] * ci[None, :] + Mm[:, j] * cj[None, :]
+
+    def _rows(desc, Mm):                              # U^T @ Mm  (U is REAL)
+        i, j, ci, cj = desc
+        return ci[:, None] * Mm[i, :] + cj[:, None] * Mm[j, :]
+
+    def _expand(desc, Cc):                            # U @ Cc
+        # i and j are all-distinct and disjoint apart from the self-paired
+        # dofs, where i == j and cj == 0 -- so assign-then-add is exact and
+        # avoids np.add.at's unbuffered slow path.
+        i, j, ci, cj = desc
+        out = np.zeros((n4, Cc.shape[1]), dtype=_C)
+        out[i] = ci[:, None] * Cc
+        out[j] += cj[:, None] * Cc
+        return out
+
+    Xb = _rows(dp, _cols(dm, Amat))                   # U+^T A U-
+    Yb = _rows(dm, _cols(dp, Amat))                   # U-^T A U+
+    Bp = _rows(dp, _cols(dp, Bmat))                   # U+^T B U+  (HPD)
+    Bm = _rows(dm, _cols(dm, Bmat))                   # U-^T B U-  (HPD)
+    try:
+        Lp = np.linalg.cholesky(Bp)
+        Lm = np.linalg.cholesky(Bm)
+    except np.linalg.LinAlgError:                     # not PD -> dense path
+        return None
+    Xh = sla.solve_triangular(Lp, Xb, lower=True)
+    Xh = sla.solve_triangular(Lm, Xh.conj().T, lower=True).conj().T
+    Yh = sla.solve_triangular(Lm, Yb, lower=True)
+    Yh = sla.solve_triangular(Lp, Yh.conj().T, lower=True).conj().T
+    mu, up = np.linalg.eig(Xh @ Yh)
+    qv = np.sqrt(np.asarray(mu, dtype=_C))
+    gmax = float(np.max(np.abs(qv)))
+    if not np.isfinite(gmax) or gmax == 0.0:
+        return None
+    if float(np.min(np.abs(qv))) <= _STAG_GAM_FLOOR * gmax:
+        return None                                   # null mode: 1/q
+    um = (Yh @ up) / qv[None, :]
+    # np.linalg.eig returns unit-norm ``up``, and ``[up; +/- um]`` is the
+    # whitened vector in the (U, Cholesky) factorization of B -- unitarily
+    # equivalent to the dense path's, so normalising it here reproduces that
+    # path's scaling convention, which _select_forward_flux's RELATIVE noise
+    # ceilings read.
+    nrm = np.sqrt(1.0 + np.sum(np.abs(um) ** 2, axis=0))
+    Cp = sla.solve_triangular(Lp.conj().T, up, lower=False)
+    Cm = sla.solve_triangular(Lm.conj().T, um, lower=False)
+    Xp = _expand(dp, Cp)
+    Xm = _expand(dm, Cm)
+    Xfull = np.concatenate([Xp + Xm, Xp - Xm], axis=1)
+    Xfull = Xfull / np.concatenate([nrm, nrm])[None, :]
+    if not np.all(np.isfinite(Xfull)):
+        return None
+    return np.concatenate([qv, -qv]), Xfull
+
+
+def _region_modes_oop(solver: Granet2DTransverseE, *, symmetry=False):
     """Forward AND backward modes of an OUT-OF-PLANE region, as the 6-tuple
     ``(Wf, Vf, lam_f, Wb, Vb, lam_b)`` -- the shape
     ``rcwa._core._layer_eigenmodes_tensor`` returns on its generator branch and
@@ -1222,6 +1837,15 @@ def _region_modes_oop(solver: Granet2DTransverseE):
     (verified 2026-09-09: 16 stressors -- a lossy metal in an out-of-plane
     host, an on-cutoff walk, high contrast at M=8, 60-degree incidence -- all
     split ``2 q^2 / 2 q^2`` BEFORE the rebalance, ``min Re(lam_f) >= -1.5e-14``).
+
+    ``symmetry`` opts into the PARITY-sign block reduction
+    (:func:`_stag_block_eig`) -- ONE ``2 q^2`` eig instead of the ``4 q^2``
+    one, measured 1.5-1.9x on the whole out-of-plane solve.  It is a pure
+    accelerator: the structure is verified on the ASSEMBLED pencil every call
+    and any failure (oblique incidence, an off-centre or unmirrored cell, a
+    tensor whose component grid is not its own parity image) falls back to the
+    dense branch below, which is then executed BIT-FOR-BIT as if the keyword
+    had never been passed.
     """
     if not solver.offplane:
         raise ValueError(
@@ -1230,11 +1854,19 @@ def _region_modes_oop(solver: Granet2DTransverseE):
             "Granet2DTransverseE.offplane.")
     Amat, Bmat = solver.Agen, solver.Bgen
     qq = solver.q * solver.q
-    Lc = np.linalg.cholesky(Bmat)                 # Bmat HPD (block Gram)
-    Ah = sla.solve_triangular(Lc, Amat, lower=True)
-    Ah = sla.solve_triangular(Lc, Ah.conj().T, lower=True).conj().T
-    qv, Y = np.linalg.eig(Ah)
-    X = sla.solve_triangular(Lc.conj().T, Y, lower=False)
+    fac = None
+    if symmetry:
+        gauge = _stag_parity_gauge(solver)
+        if gauge is not None:
+            fac = _stag_block_eig(Amat, Bmat, qq, gauge)
+    if fac is None:
+        Lc = np.linalg.cholesky(Bmat)             # Bmat HPD (block Gram)
+        Ah = sla.solve_triangular(Lc, Amat, lower=True)
+        Ah = sla.solve_triangular(Lc, Ah.conj().T, lower=True).conj().T
+        qv, Y = np.linalg.eig(Ah)
+        X = sla.solve_triangular(Lc.conj().T, Y, lower=False)
+    else:
+        qv, X = fac
     W = X[:2 * qq, :]                              # [E1; E2]
     Gst = X[2 * qq:, :]                            # [G1; G2] = i Z0 [H1; H2]
     # flux split on the whitened blocks (see 2. above)
@@ -1301,12 +1933,15 @@ def _homog_geom_cache(solver: Granet2DTransverseE):
     ``(3, 3)`` uniform layer).  A tensor assembly here RAISES rather than
     silently returning a wrong geometric basis.
     """
-    if solver.eps_cell.ndim == 4 or solver.offplane:
+    if solver.eps_cell.ndim == 4 or solver.offplane or solver.magnetic:
         raise ValueError(
             "_homog_geom_cache: the shared eps-free geometric eig is defined "
-            "for a uniform SCALAR region only -- a uniform TENSOR region's "
-            "div(D)=0 Schur term is not eps-free (K_zt mixes e11/e21 while "
-            "Meps33 carries e33), so it needs its own _region_modes eig.")
+            "for a uniform SCALAR region only, and never for a MAGNETIC "
+            "region -- a uniform TENSOR region's div(D)=0 Schur term is not "
+            "eps-free (K_zt mixes e11/e21 while Meps33 carries e33), and a "
+            "MAGNETIC region's L0_geom is not geometric at all (chi_t and "
+            "chi33 weight R, K_tz and S_tt), so either needs its own "
+            "_region_modes eig.")
     G = -solver.Rmat                       # block field Gram (Hermitian PD)
     Stt = solver.Stt
     L0_geom = Stt - solver.Schur           # = Lmat - eps*G, manifestly eps-free
@@ -1512,8 +2147,19 @@ def pmm_efficiency_2d_staggered(
     _require_propagating_incidence("pmm_efficiency_2d_staggered",
                                    np.conj(eps_sup),
                                    _kx0n ** 2 + _ky0n ** 2)
+    # The nudge list carries the LAYER's permittivities as well as the two
+    # half-spaces' (unified with the tensor path 2026-09-10; before that this
+    # scalar entry listed only the half-spaces, so a scalar cell and its
+    # ``e * I`` promotion through pmm_jones_2d_staggered took DIFFERENT nudges
+    # -- and therefore different answers, by a measured 4.59e-08 -- when an
+    # order sat exactly on a layer's own cut-off).  A cut-off INSIDE the layer
+    # degrades this solver just as a half-space one does, so listing it is the
+    # more robust convention, and it moves nothing off an EXACT coincidence:
+    # the guard's trigger band is |eps - kt^2| <= 1e-9, i.e. a relative
+    # wavelength window of ~1.2e-10 around the cut-off.
     wl = _grazing_safe_wavelength(float(wavelength), _kx0n, _ky0n, _mx, _my,
-                                  period_x, period_y, [eps_sup, eps_sub])
+                                  period_x, period_y,
+                                  _wood_eps_reals(eps_sup, eps_sub, eps_cell))
     _kt2 = ((_kx0n + _mx * (wl / period_x)) ** 2
             + (_ky0n + _my * (wl / period_y)) ** 2)
     _gap = min(float(np.min(np.abs(float(np.real(e)) - _kt2)))
@@ -1630,11 +2276,15 @@ def pmm_jones_2d_staggered(
     depth: float,
     wavelength: float,
     *,
+    mu_cell=None,
     degree: int = 8,
     n_modes: int | None = None,
     n_orders: int = 7,
     theta: float = 0.0,
     phi: float = 0.0,
+    mu_superstrate=None,
+    mu_substrate=None,
+    symmetry="auto",
 ):
     """Rigorous 2-D crossed grating with a FULL ``(3, 3)`` ANISOTROPIC cell --
     in-plane OR out-of-plane -- by the canonical NO-FLOOR staggered PMM: the
@@ -1665,10 +2315,25 @@ def pmm_jones_2d_staggered(
         (``Nx == Ny``) and the walls are the segment boundaries (exact ``eps``
         per element, Eq. 26).
     n_substrate, n_superstrate : complex
-        Half-space refractive indices.  The half-spaces are ISOTROPIC (the
-        Rayleigh match is scalar); an anisotropic half-space is out of scope.
+        Half-space refractive indices.  The half-spaces are ISOTROPIC and
+        NONMAGNETIC (the Rayleigh match is scalar and the flux normalisation
+        assumes the vacuum wave impedance); an anisotropic or magnetic
+        half-space is out of scope (``mu_superstrate`` / ``mu_substrate``
+        exist only to RAISE on one).
     depth, wavelength : float
         Layer thickness / vacuum wavelength (metres).
+    mu_cell : (Nx, Ny, 3, 3) or (Nx, Ny) array_like of complex, optional
+        Per-segment RELATIVE PERMEABILITY over the same unit cell (default
+        ``None`` = nonmagnetic, ``mu = 1``, which leaves every operator and
+        every result BIT-IDENTICAL to the nonmagnetic path).  A ``(Nx, Ny)``
+        scalar map is the isotropic magnetic case; a ``(Nx, Ny, 3, 3)`` map
+        must be BLOCK-FORM (Granet Eq. 6, ``[[m11, m12, 0], [m21, m22, 0],
+        [0, 0, m33]]``) with ``m33 != 0`` and an invertible ``[mu_t]``.  The
+        paper's ``chi_t = [mu_t]^-1`` then weights ``R = C[chi_t]C`` (Eq. 24),
+        ``K_tz = C[chi_t][d2; -d1]`` (Eq. 21) and -- through ``chi33`` --
+        ``S_tt`` (Eq. 20), on the SAME ``2 q^2`` second-order pencil.
+        OUT-OF-PLANE ``mu``, and ``mu`` together with an out-of-plane
+        ``eps_cell``, raise ``NotImplementedError``.
     degree : int, optional
         Modified-Legendre function count ``M`` per segment per axis (the modal
         convergence knob).  Default 8.  ``n_modes`` is the clearer alias.
@@ -1680,6 +2345,17 @@ def pmm_jones_2d_staggered(
         floor) as long as it covers the propagating orders.  Default 7.
     theta, phi : float, optional
         Conical incidence polar / azimuth angles (radians).
+    symmetry : {'auto', True, False}, optional
+        Opt into the PARITY-sign block reduction of the OUT-OF-PLANE region
+        solve (:func:`_stag_block_eig`): one ``2 q^2`` eig instead of the
+        ``4 q^2`` one, measured 1.5-1.9x on the whole out-of-plane solve.  It
+        engages ONLY at NORMAL incidence on an out-of-plane cell whose
+        ASSEMBLED pencil carries the structure (the cell is its own parity
+        image on a mirror-symmetric wall layout); every other case -- oblique
+        or conical incidence, an off-centre or unmirrored cell, a
+        parity-breaking tensor, and every in-plane or scalar cell -- runs the
+        dense path BIT-FOR-BIT, which is what ``symmetry=False`` forces
+        everywhere.  Default ``'auto'`` (equivalent to ``True``).
 
     Returns
     -------
@@ -1722,13 +2398,30 @@ def pmm_jones_2d_staggered(
     # Validate HERE so the message names this entry, then hand the checked cell
     # to the single-layer pure cascade (one implementation of the physics).
     cell = _validate_stag_cell("pmm_jones_2d_staggered", eps_cell)
+    _require_nonmagnetic_halfspace("pmm_jones_2d_staggered", mu_superstrate,
+                                   mu_substrate)
+    mu = None
+    if mu_cell is not None:
+        mu = _validate_stag_mu("pmm_jones_2d_staggered", mu_cell)
+        if mu.shape[:2] != cell.shape[:2]:
+            raise ValueError(
+                f"pmm_jones_2d_staggered: mu_cell grid {mu.shape[:2]} must "
+                f"match the eps_cell grid {cell.shape[:2]}.")
+        if cell.ndim == 4 and _tile_needs_oop("pmm_jones_2d_staggered", cell):
+            raise NotImplementedError(
+                "pmm_jones_2d_staggered: mu_cell together with an "
+                "OUT-OF-PLANE eps_cell is not implemented -- the out-of-plane "
+                "first-order generator carries no permeability blocks.")
     M = int(degree if n_modes is None else n_modes)
     if M < 3:
         raise ValueError("pmm_jones_2d_staggered: degree / n_modes (the "
                          "modified-Legendre count M) must be >= 3.")
     stack = PMM2DStackPure(period_x, period_y, n_superstrate=n_superstrate,
                            n_substrate=n_substrate, n_modes=M,
-                           n_orders=int(n_orders))
-    stack.add_layer(float(depth), eps_cell=cell)
+                           n_orders=int(n_orders), symmetry=symmetry)
+    if mu is None:
+        stack.add_layer(float(depth), eps_cell=cell)
+    else:
+        stack.add_layer(float(depth), eps_cell=cell, mu_cell=mu)
     stack.set_source(float(wavelength), theta=float(theta), phi=float(phi))
     return stack.solve(jones=True)

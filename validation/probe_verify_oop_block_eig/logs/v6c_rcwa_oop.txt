@@ -1,0 +1,14 @@
+============================================================================================
+1. REPRODUCING committed ladder rungs of corner / normal on THIS build
+============================================================================================
+staggered M=7 (11.2 s): 48/48 observables matched by key; worst |mine - committed| = 4.441e-16 on T(0, 0)p1
+   sumR0 mine 0.035504778182  committed 0.035504778182
+rcwa n=5, upsample x7 (0.5 s): 48/48 observables matched by key; worst |mine - committed| = 0.000e+00 on R(0, 0)p0
+   sumR0 mine 0.035210646789  committed 0.035210646789
+
+============================================================================================
+2. DOES rcwa_jones_2d CONSUME the out-of-plane tensor entries?
+============================================================================================
+n_orders =  5 (upsample x7):  dR 7.627e-04   dT 1.257e-02   dJones 2.406e-03   bit-identical False
+n_orders =  7 (upsample x10):  dR 7.462e-04   dT 1.236e-02   dJones 2.417e-03   bit-identical False
+staggered M = 6, same knock-out:  dR 7.400e-04   dT 1.247e-02   dJones 2.420e-03
