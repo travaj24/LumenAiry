@@ -1,0 +1,209 @@
+{
+ "oblique25": {
+  "A_slanted_over_uniform_film": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 1.0613772148975913,
+    "times_P": 0.006185429753296933,
+    "times_conj_P": 1.18536877081225,
+    "dJonesT_raw": 1.0613772148975913,
+    "dJonesT_times_P": 0.0042033320453459715
+   },
+   "dR": 0.0010037749800359957,
+   "dJones_reflection": 0.0033662829133143807,
+   "staircase_own_step_dR": 0.0019174803553519935,
+   "staircase_own_step_dJones_reflection": 0.00921267716754547
+  },
+  "B_uniform_film_above": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 1.0026387136031054,
+    "times_P": 0.006198850929849544,
+    "times_conj_P": 1.1210878882466635,
+    "dJonesT_raw": 1.0026387136031054,
+    "dJonesT_times_P": 0.002240187600593342
+   }
+  },
+  "C_sum_rule": {
+   "split_identity_dJonesT": 0.0,
+   "two_halves_vs_staircase": {
+    "raw": 1.1111538071102582,
+    "times_P": 0.005872472927361209,
+    "times_conj_P": 1.2407616649769106,
+    "dJonesT_raw": 1.1111538071102582,
+    "dJonesT_times_P": 0.004488229533870498
+   },
+   "only_one_half_in_the_sum": {
+    "raw": 1.1111538071102582,
+    "times_P": 0.6313248572455302,
+    "times_conj_P": 1.331451321667497,
+    "dJonesT_raw": 1.1111538071102582,
+    "dJonesT_times_P": 0.6313248572455302
+   },
+   "single_layer_vs_staircase": {
+    "raw": 1.1111538071102582,
+    "times_P": 0.005872472927361209,
+    "times_conj_P": 1.2407616649769106,
+    "dJonesT_raw": 1.1111538071102582,
+    "dJonesT_times_P": 0.004488229533870498
+   }
+  },
+  "E_slanted_uniform_below_contributes_nothing": {
+   "dJonesT_vs_vertical_film": 0.0,
+   "if_it_were_in_the_sum": 0.42917455665102344
+  },
+  "F_constant_tile_below_contributes_nothing": {
+   "dJonesT_vs_uniform_film": 0.0,
+   "if_it_were_in_the_sum": 0.42917455665102344
+  },
+  "D_patterned_layer_below": {
+   "anchor_walk_m": 2.5e-07,
+   "roll_px": 3,
+   "cell_px": 12,
+   "as_written": {
+    "transmission": {
+     "raw": 0.5617799662520779,
+     "times_P": 0.3752277099869374,
+     "times_conj_P": 0.9194647693672791,
+     "dJonesT_raw": 0.5617799662520779,
+     "dJonesT_times_P": 0.18834650068956393
+    },
+    "dR": 0.010823409982945802,
+    "dJones_reflection": 0.05054002656358473
+   },
+   "walk_plus": {
+    "transmission": {
+     "raw": 0.5458869759504138,
+     "times_P": 0.012901814910979007,
+     "times_conj_P": 0.9574536600898619,
+     "dJonesT_raw": 0.5458869759504138,
+     "dJonesT_times_P": 0.00784379736217127
+    },
+    "dR": 0.0010367545430799083,
+    "dJones_reflection": 0.009283587276460425
+   },
+   "walk_minus": {
+    "transmission": {
+     "raw": 0.5659622432741805,
+     "times_P": 0.16368867696618541,
+     "times_conj_P": 0.9378567994421817,
+     "dJonesT_raw": 0.5659622432741805,
+     "dJonesT_times_P": 0.10556077764376284
+    },
+    "dR": 0.008368725022953768,
+    "dJones_reflection": 0.02771449723431904
+   }
+  }
+ },
+ "conical25_40": {
+  "A_slanted_over_uniform_film": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 0.8547524787789529,
+    "times_P": 0.02904044939853563,
+    "times_conj_P": 1.2488359506654023,
+    "dJonesT_raw": 0.8547524787789529,
+    "dJonesT_times_P": 0.004550594206039333
+   },
+   "dR": 0.0013959902969049448,
+   "dJones_reflection": 0.0034057935546507605,
+   "staircase_own_step_dR": 0.0035173743621902016,
+   "staircase_own_step_dJones_reflection": 0.011720648051754979
+  },
+  "B_uniform_film_above": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 0.8224458718339397,
+    "times_P": 0.005908724537771525,
+    "times_conj_P": 1.2021160949360445,
+    "dJonesT_raw": 0.8224458718339397,
+    "dJonesT_times_P": 0.0038730874281189456
+   }
+  },
+  "C_sum_rule": {
+   "split_identity_dJonesT": 0.0,
+   "two_halves_vs_staircase": {
+    "raw": 0.8918866109375959,
+    "times_P": 0.006122862852133072,
+    "times_conj_P": 1.303093734648618,
+    "dJonesT_raw": 0.8918866109375959,
+    "dJonesT_times_P": 0.004743017794956986
+   },
+   "only_one_half_in_the_sum": {
+    "raw": 0.8918866109375959,
+    "times_P": 0.4815625003422699,
+    "times_conj_P": 1.1789544224239106,
+    "dJonesT_raw": 0.8918866109375959,
+    "dJonesT_times_P": 0.4815625003422699
+   },
+   "single_layer_vs_staircase": {
+    "raw": 0.8918866109375959,
+    "times_P": 0.006122862852133072,
+    "times_conj_P": 1.303093734648618,
+    "dJonesT_raw": 0.8918866109375959,
+    "dJonesT_times_P": 0.004743017794956986
+   }
+  },
+  "E_slanted_uniform_below_contributes_nothing": {
+   "dJonesT_vs_vertical_film": 0.0,
+   "if_it_were_in_the_sum": 0.3241711786877324
+  },
+  "F_constant_tile_below_contributes_nothing": {
+   "dJonesT_vs_uniform_film": 0.0,
+   "if_it_were_in_the_sum": 0.3241711786877324
+  },
+  "D_patterned_layer_below": {
+   "anchor_walk_m": 2.5e-07,
+   "roll_px": 3,
+   "cell_px": 12,
+   "as_written": {
+    "transmission": {
+     "raw": 0.49364812386171886,
+     "times_P": 0.34927249147976847,
+     "times_conj_P": 0.7033575449308176,
+     "dJonesT_raw": 0.4262638167608316,
+     "dJonesT_times_P": 0.11611437401300093
+    },
+    "dR": 0.011164610801258582,
+    "dJones_reflection": 0.058441675955859036
+   },
+   "walk_plus": {
+    "transmission": {
+     "raw": 0.6954163096783172,
+     "times_P": 0.015212302708196491,
+     "times_conj_P": 0.7236463108695831,
+     "dJonesT_raw": 0.3920546589425252,
+     "dJonesT_times_P": 0.007858502520682126
+    },
+    "dR": 0.0014443490893084037,
+    "dJones_reflection": 0.008528743741804132
+   },
+   "walk_minus": {
+    "transmission": {
+     "raw": 0.582772951427109,
+     "times_P": 0.14430679198629992,
+     "times_conj_P": 0.7203826533387993,
+     "dJonesT_raw": 0.3981443142888707,
+     "dJonesT_times_P": 0.04881680198038499
+    },
+    "dR": 0.00640718992962017,
+    "dJones_reflection": 0.037949935449032926
+   }
+  }
+ },
+ "_env": {
+  "lumenairy": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "arm": "base",
+  "stage": "pre",
+  "tag": "win",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

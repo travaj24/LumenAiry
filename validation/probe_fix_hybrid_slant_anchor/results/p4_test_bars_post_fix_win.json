@@ -1,0 +1,169 @@
+{
+ "oblique25": {
+  "three_arms_vs_K15": {
+   "shipped": 0.007778243665243861,
+   "none": 1.1134523470130278,
+   "conjugate": 1.2415272600261211,
+   "best_single_global_phase_on_the_pre_fix_arm": 0.3821497999260667,
+   "scale": 0.6694449398053687
+  },
+  "staircase_own_ladder": {
+   "K3_vs_K15": 0.041184647131410713,
+   "K5_vs_K15": 0.009655003606215457
+  },
+  "shipped_vs_ladder": {
+   "K3": 0.03887034480892317,
+   "K5": 0.014897031149661195,
+   "K15": 0.007778243665243861
+  },
+  "none_vs_ladder": {
+   "K3": 1.1134875864459568,
+   "K5": 1.1144076330811101,
+   "K15": 1.1134523470130278
+  },
+  "jones_transmission": {
+   "shipped": 0.0059795663877718706,
+   "none": 1.1134523470130278,
+   "argP0": 1.952491803466867
+  },
+  "reflection_and_efficiency": {
+   "dR": 0.000977271927492189,
+   "dT": 0.0024134567221136827,
+   "dJones_reflection": 0.002471363876523759,
+   "staircase_step_dR": 0.0020060496474409023,
+   "staircase_step_dJones_reflection": 0.008332677883670023,
+   "closure": 1.0110022736988626,
+   "staircase_closure": 1.0120420161046835
+  },
+  "pure_vs_hybrid": {
+   "shipped": 0.012991113969870363,
+   "hybrid_pre_fix": 1.113405946121161,
+   "hybrid_own_n_orders_step": 0.005981219722627117,
+   "pure_jones_vs_hybrid_jones": 0.010438501483456068,
+   "pure_jones_vs_hybrid_pre_fix": 1.113405946121161
+  },
+  "composition": {
+   "split_identity_dJonesT": 0.0,
+   "full_sum": 0.007778243665243861,
+   "half_sum": 0.6336493281632405,
+   "no_sum": 1.1134523470130278,
+   "single_layer": 0.007778243665243861
+  },
+  "film_below": {
+   "dR": 0.0008570475531365709,
+   "dJones_reflection": 0.003908810217141812,
+   "staircase_step_dR": 0.0019227028801120025,
+   "staircase_step_dJones_reflection": 0.011542615687926236,
+   "reflection_times_P0": 0.22821859321243884,
+   "reflection_times_P0_squared": 0.258249342848917,
+   "T_shipped": 0.007240715568172099,
+   "T_none": 1.0632378575806514,
+   "T_conjugate": 1.1860593535283177,
+   "closure": 1.0118131176683576
+  }
+ },
+ "conical25_40": {
+  "three_arms_vs_K15": {
+   "shipped": 0.00738064513824359,
+   "none": 0.8935924581377027,
+   "conjugate": 1.302941556012767,
+   "best_single_global_phase_on_the_pre_fix_arm": 0.4475821463336184,
+   "scale": 0.6526614531241269
+  },
+  "staircase_own_ladder": {
+   "K3_vs_K15": 0.02629097945593148,
+   "K5_vs_K15": 0.010387397319113607
+  },
+  "shipped_vs_ladder": {
+   "K3": 0.026771631232877006,
+   "K5": 0.01274840142085652,
+   "K15": 0.00738064513824359
+  },
+  "none_vs_ladder": {
+   "K3": 0.8905180875920111,
+   "K5": 0.8944237645333535,
+   "K15": 0.8935924581377027
+  },
+  "jones_transmission": {
+   "shipped": 0.00738064513824359,
+   "none": 0.8935924581377027,
+   "argP0": 1.4956954962811453
+  },
+  "reflection_and_efficiency": {
+   "dR": 0.0011960334445535355,
+   "dT": 0.002932251207799136,
+   "dJones_reflection": 0.001888709588766724,
+   "staircase_step_dR": 0.0018211794013210242,
+   "staircase_step_dJones_reflection": 0.0076857011484042495,
+   "closure": 1.0085812146624251,
+   "staircase_closure": 1.0101787985002852
+  },
+  "pure_vs_hybrid": {
+   "shipped": 0.009954954138476536,
+   "hybrid_pre_fix": 0.8912274973517842,
+   "hybrid_own_n_orders_step": 0.00456804523455372,
+   "pure_jones_vs_hybrid_jones": 0.005749581183682859,
+   "pure_jones_vs_hybrid_pre_fix": 0.8912274973517842
+  },
+  "composition": {
+   "split_identity_dJonesT": 0.0,
+   "full_sum": 0.00738064513824359,
+   "half_sum": 0.48390398383218114,
+   "no_sum": 0.8935924581377027,
+   "single_layer": 0.00738064513824359
+  },
+  "film_below": {
+   "dR": 0.0016635304330315098,
+   "dJones_reflection": 0.0038593963259570324,
+   "staircase_step_dR": 0.003568439099418494,
+   "staircase_step_dJones_reflection": 0.01373848042079309,
+   "reflection_times_P0": 0.21690274926879918,
+   "reflection_times_P0_squared": 0.3210883042006428,
+   "T_shipped": 0.05971303997515868,
+   "T_none": 0.8563874287750614,
+   "T_conjugate": 1.2486549257540647,
+   "closure": 1.0094741023682925
+  }
+ },
+ "patterned_below_oblique25": {
+  "as_written": {
+   "T": 0.37152575038007957,
+   "dR": 0.01056457138713176,
+   "dJ": 0.049951272426679044
+  },
+  "plus": {
+   "T": 0.015539895812094091,
+   "dR": 0.001297241490834761,
+   "dJ": 0.0074616845328168025
+  },
+  "minus": {
+   "T": 0.16491320369385032,
+   "dR": 0.008377935998859855,
+   "dJ": 0.027654853613612057
+  },
+  "roll_px": 3,
+  "closure": 1.0135754128115735
+ },
+ "nulls": {
+  "uniform_sha_equal": true,
+  "constant_tile_sha_equal": true,
+  "if_anchored": 1.3710359027197125,
+  "argP0": 1.952491803466867
+ },
+ "_wall_s": 55.64354705810547,
+ "_env": {
+  "lumenairy": "C:\\tmp\\lum_hyb\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "arm": "fix",
+  "stage": "post",
+  "tag": "win",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}
