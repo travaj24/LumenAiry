@@ -216,15 +216,22 @@ a tightening, and a `sliver` verdict can never become a `truncation` one.
   sample-scoped numbers corrected (the D-5 drop floor is 3.669 on the family,
   inside the correct population -- the structural R3-A floor, one such row
   returned silently below the warning bar; the correct `move / w_wide`
-  envelope reaches 161 and 907, so the move bar is inside the correct
-  population and the closure arm carries the decision; the finite-drop
+  envelope reaches 161 (ladder box) and 907 (tapered family), so the move
+  bar is inside the correct population and the closure arm carries the
+  decision; the finite-drop
   correct envelope 36.611 stays binding).  OPEN, inherited from round 2:
   **V-4** (MEDIUM) three CORRECT degree-4 answers on one dense mount are
   refused with both arms degenerate (`su_snapped` = 0, `move / w_wide`
   115 .. 257) and the named remedy makes them slightly worse -- a false
   refusal, not a wrong answer; **R3-B** an owned liner (2 nm) beside a 37 pm
-  wall mismatch silences the screen (`R+T` 2.92 returned); **R3-C** a keyed
-  `prepare()` stack is outside the guard (`R+T` 2.76 returned).
+  wall mismatch silences the screen (`R+T` 2.92 returned on the verification's
+  fixture; the round-3 reproducer test's own fixture reads 23.30); **R3-C** a
+  keyed `prepare()` stack is outside the guard (`R+T` 2.76 returned on the
+  verification's fixture; 23.42 on the reproducer test's).  The three
+  `move / w_wide` envelopes quoted in this entry are three different boxes:
+  79.032 is the round-3 build's 576-configuration box, 833.78 the round-2
+  verification's resonant counter-fixture, and 161 / 907 the round-3
+  verification's ladder box and tapered family.
 
 The constant is sized on the super-unity DROP factor `(max(R+T) - 1) /
 su_snapped`, and the sizing rule is not the obvious one.  The closure has never
