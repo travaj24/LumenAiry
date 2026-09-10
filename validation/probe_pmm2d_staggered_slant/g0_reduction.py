@@ -17,13 +17,17 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from slant_lib import (  # noqa: E402
-    SlantSolver, assert_worktree, cov_tensor, solve_slant_stack,
+    SlantSolver,
+    assert_worktree,
+    cov_tensor,
+    solve_slant_stack,
     tensor_uniaxial,
 )
+
+from lumenairy.elements.pmm import PMM2DStackPure  # noqa: E402
 from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
     Granet2DTransverseE,
 )
-from lumenairy.elements.pmm import PMM2DStackPure  # noqa: E402
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
 res = {"lumenairy": assert_worktree()}

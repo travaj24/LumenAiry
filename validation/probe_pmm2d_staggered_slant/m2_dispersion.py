@@ -36,10 +36,13 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "probe_pmm2d_staggered_oop"))
 
-from slant_lib import (  # noqa: E402
-    SlantSolver, assert_worktree, cov_tensor, tensor_uniaxial,
-)
 import probe_common as pc  # noqa: E402
+from slant_lib import (  # noqa: E402
+    SlantSolver,
+    assert_worktree,
+    cov_tensor,
+    tensor_uniaxial,
+)
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
 res = {"lumenairy": assert_worktree(), "rows": []}
@@ -56,7 +59,7 @@ def gen_spectrum(cell33, slant, kx0, ky0, M, *, blocks=True, congruence=True):
     c[:, :] = cell33
     sol = SlantSolver.__new__(SlantSolver)
     # explicit construction so the two CONTROL ablations can be driven
-    from lumenairy.elements.pmm.twod_staggered import Basis1D, _OOP_ROT_SIGN
+    from lumenairy.elements.pmm.twod_staggered import _OOP_ROT_SIGN, Basis1D
     sol.k0 = K0
     sol.alpha0x, sol.alpha0y = kx0 * K0, ky0 * K0
     sol.bx = Basis1D(PX, 2, M, np.exp(-1j * kx0 * K0 * PX))

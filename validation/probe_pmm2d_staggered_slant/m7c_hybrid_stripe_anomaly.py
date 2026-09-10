@@ -2,11 +2,16 @@
 IN-PLANE tensor stripe + slant.  Is the SLANT implicated, or is it the y-uniform
 tensor cell on its own?  Four arms: {stripe, pillar} x {slant, no slant}.
 """
-import json, os, sys, time
+import json
+import os
+import sys
+
 import numpy as np
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from slant_lib import assert_worktree, tensor_uniaxial            # noqa: E402
-from lumenairy.elements.pmm import PMM2DStackHybrid               # noqa: E402
+from slant_lib import assert_worktree, tensor_uniaxial  # noqa: E402
+
+from lumenairy.elements.pmm import PMM2DStackHybrid  # noqa: E402
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
 PX = PY = 0.75

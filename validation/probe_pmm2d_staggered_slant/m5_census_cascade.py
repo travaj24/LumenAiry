@@ -29,11 +29,17 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from slant_lib import (  # noqa: E402
-    SlantSolver, assert_worktree, slant_region_modes, solve_slant_stack,
+    SlantSolver,
+    assert_worktree,
+    slant_region_modes,
+    solve_slant_stack,
     tensor_uniaxial,
 )
+
 from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
-    Granet2DTransverseE, _region_modes, _region_modes_oop,
+    Granet2DTransverseE,
+    _region_modes,
+    _region_modes_oop,
 )
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")

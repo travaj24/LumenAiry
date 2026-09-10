@@ -86,6 +86,10 @@ if not os.path.abspath(lumenairy.__file__).lower().startswith(_ROOT.lower()):
         f"probe_pmm2d_staggered_slant: lumenairy resolved to "
         f"{lumenairy.__file__!r}, outside the worktree {_ROOT!r}.")
 
+from lumenairy.elements.pmm._core import (  # noqa: E402
+    _guarded_lstsq,
+    _redheffer_star,
+)
 from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
     _C,
     _OOP_H_GAUGE,
@@ -99,10 +103,6 @@ from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
     _pmm2d_project_orders,
     _region_modes,
     _region_modes_oop,
-)
-from lumenairy.elements.pmm._core import (  # noqa: E402
-    _guarded_lstsq,
-    _redheffer_star,
 )
 from lumenairy.elements.rcwa._core import (  # noqa: E402
     _interface_smatrix_general,

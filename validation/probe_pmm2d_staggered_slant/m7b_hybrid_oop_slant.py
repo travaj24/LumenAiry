@@ -17,10 +17,14 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from slant_lib import (  # noqa: E402
-    assert_worktree, solve_slant_stack, tensor_uniaxial,
+    assert_worktree,
+    solve_slant_stack,
+    tensor_uniaxial,
 )
+
 from lumenairy.elements.pmm import (  # noqa: E402
-    PMM2DStackHybrid, pmm_jones_1d_slanted,
+    PMM2DStackHybrid,
+    pmm_jones_1d_slanted,
 )
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
