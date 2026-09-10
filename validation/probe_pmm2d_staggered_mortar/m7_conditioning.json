@@ -1,0 +1,381 @@
+{
+ "rows": [
+  {
+   "cfg": "M3 pillar (2,3)",
+   "M": 4,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 162,
+   "rcond": 4.5728534707248185e-05
+  },
+  {
+   "cfg": "M3 pillar (2,3)",
+   "M": 4,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 72,
+   "rcond": 0.00016021806518893889
+  },
+  {
+   "cfg": "M3 pillar (2,3)",
+   "M": 4,
+   "site": "mortar interface (I + BA)",
+   "n": 72,
+   "rcond": 0.0058230458287270226
+  },
+  {
+   "cfg": "M3 pillar (2,3)",
+   "M": 5,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 288,
+   "rcond": 1.4789093362296605e-05
+  },
+  {
+   "cfg": "M3 pillar (2,3)",
+   "M": 5,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 128,
+   "rcond": 4.0768512279328136e-05
+  },
+  {
+   "cfg": "M3 pillar (2,3)",
+   "M": 5,
+   "site": "mortar interface (I + BA)",
+   "n": 128,
+   "rcond": 0.003014939263140559
+  },
+  {
+   "cfg": "M3 pillar (2,3)",
+   "M": 6,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 450,
+   "rcond": 5.29150432390397e-06
+  },
+  {
+   "cfg": "M3 pillar (2,3)",
+   "M": 6,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 200,
+   "rcond": 8.700306349770809e-06
+  },
+  {
+   "cfg": "M3 pillar (2,3)",
+   "M": 6,
+   "site": "mortar interface (I + BA)",
+   "n": 200,
+   "rcond": 0.0012056798193685546
+  },
+  {
+   "cfg": "M3 pillar (2,6)",
+   "M": 4,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 648,
+   "rcond": 1.2831192687132852e-05
+  },
+  {
+   "cfg": "M3 pillar (2,6)",
+   "M": 4,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 72,
+   "rcond": 0.00016021806518893889
+  },
+  {
+   "cfg": "M3 pillar (2,6)",
+   "M": 4,
+   "site": "mortar interface (I + BA)",
+   "n": 72,
+   "rcond": 0.005841257153586841
+  },
+  {
+   "cfg": "M3 pillar (2,6)",
+   "M": 5,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 1152,
+   "rcond": 2.8968943028079e-06
+  },
+  {
+   "cfg": "M3 pillar (2,6)",
+   "M": 5,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 128,
+   "rcond": 4.0768512279328136e-05
+  },
+  {
+   "cfg": "M3 pillar (2,6)",
+   "M": 5,
+   "site": "mortar interface (I + BA)",
+   "n": 128,
+   "rcond": 0.0032756073981245575
+  },
+  {
+   "cfg": "M3 pillar (2,6)",
+   "M": 6,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 1800,
+   "rcond": 1.082745643299317e-06
+  },
+  {
+   "cfg": "M3 pillar (2,6)",
+   "M": 6,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 200,
+   "rcond": 8.700306349770809e-06
+  },
+  {
+   "cfg": "M3 pillar (2,6)",
+   "M": 6,
+   "site": "mortar interface (I + BA)",
+   "n": 200,
+   "rcond": 0.0013587149842366416
+  },
+  {
+   "cfg": "M4 stripe (2,3)",
+   "M": 4,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 162,
+   "rcond": 2.009713593538841e-05
+  },
+  {
+   "cfg": "M4 stripe (2,3)",
+   "M": 4,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 72,
+   "rcond": 0.00038773819651314207
+  },
+  {
+   "cfg": "M4 stripe (2,3)",
+   "M": 4,
+   "site": "mortar interface (I + BA)",
+   "n": 72,
+   "rcond": 0.018503454643142465
+  },
+  {
+   "cfg": "M4 stripe (2,3)",
+   "M": 5,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 288,
+   "rcond": 3.2979375137702786e-05
+  },
+  {
+   "cfg": "M4 stripe (2,3)",
+   "M": 5,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 128,
+   "rcond": 0.00029339413993910776
+  },
+  {
+   "cfg": "M4 stripe (2,3)",
+   "M": 5,
+   "site": "mortar interface (I + BA)",
+   "n": 128,
+   "rcond": 0.010543501204837213
+  },
+  {
+   "cfg": "M4 stripe (2,3)",
+   "M": 6,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 450,
+   "rcond": 1.8950492842500266e-05
+  },
+  {
+   "cfg": "M4 stripe (2,3)",
+   "M": 6,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 200,
+   "rcond": 3.414412986981533e-05
+  },
+  {
+   "cfg": "M4 stripe (2,3)",
+   "M": 6,
+   "site": "mortar interface (I + BA)",
+   "n": 200,
+   "rcond": 0.007068363450357043
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 4,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 162,
+   "rcond": 0.00010132525005261736
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 4,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 72,
+   "rcond": 0.0002501204549143183
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 4,
+   "site": "mortar interface (I + BA)",
+   "n": 72,
+   "rcond": 0.0026654411298116746
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 4,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 648,
+   "rcond": 3.2672306945006496e-05
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 4,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 162,
+   "rcond": 4.567978375532107e-05
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 4,
+   "site": "mortar interface (I + BA)",
+   "n": 162,
+   "rcond": 0.001192350313314857
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 5,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 288,
+   "rcond": 2.6240664300590752e-05
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 5,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 128,
+   "rcond": 6.0933114758113e-05
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 5,
+   "site": "mortar interface (I + BA)",
+   "n": 128,
+   "rcond": 0.002276952258797272
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 5,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 1152,
+   "rcond": 1.086611971689138e-05
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 5,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 288,
+   "rcond": 2.3329611407024056e-05
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 5,
+   "site": "mortar interface (I + BA)",
+   "n": 288,
+   "rcond": 0.0006480808106126089
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 6,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 450,
+   "rcond": 1.1426464955496917e-05
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 6,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 200,
+   "rcond": 1.603047209780543e-05
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 6,
+   "site": "mortar interface (I + BA)",
+   "n": 200,
+   "rcond": 0.0011275872604681251
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 6,
+   "site": "mortar E-row (MassE_B W_B)",
+   "n": 1800,
+   "rcond": 4.393284679188041e-06
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 6,
+   "site": "mortar H-row (MassH_A V_A)",
+   "n": 450,
+   "rcond": 7.004677588169598e-06
+  },
+  {
+   "cfg": "M6 taper (2,3,6)",
+   "M": 6,
+   "site": "mortar interface (I + BA)",
+   "n": 450,
+   "rcond": 0.00034184478402082325
+  }
+ ],
+ "summary": {
+  "mortar E-row (MassE_B W_B)": {
+   "n": 15,
+   "lo": 1.082745643299317e-06,
+   "hi": 0.00010132525005261736,
+   "below_screen": 0
+  },
+  "mortar H-row (MassH_A V_A)": {
+   "n": 15,
+   "lo": 7.004677588169598e-06,
+   "hi": 0.00038773819651314207,
+   "below_screen": 0
+  },
+  "mortar interface (I + BA)": {
+   "n": 15,
+   "lo": 0.00034184478402082325,
+   "hi": 0.018503454643142465,
+   "below_screen": 0
+  }
+ },
+ "separable": [
+  {
+   "Na": 2,
+   "Nb": 3,
+   "M": 6,
+   "rel": 3.2469440997187203e-16,
+   "dense_MB": 0.34332275390625,
+   "factors_MB": 0.00457763671875,
+   "t_sep": 0.0002060999977402389,
+   "t_dense": 0.00041850000707199797
+  },
+  {
+   "Na": 3,
+   "Nb": 6,
+   "M": 6,
+   "rel": 3.7344922044500164e-16,
+   "dense_MB": 3.08990478515625,
+   "factors_MB": 0.01373291015625,
+   "t_sep": 0.0002575999969849363,
+   "t_dense": 0.0017508999953861348
+  },
+  {
+   "Na": 4,
+   "Nb": 6,
+   "M": 8,
+   "rel": 4.3260481387711704e-16,
+   "dense_MB": 21.1025390625,
+   "factors_MB": 0.035888671875,
+   "t_sep": 0.0004085000036866404,
+   "t_dense": 0.014851100000669248
+  },
+  {
+   "Na": 6,
+   "Nb": 12,
+   "M": 6,
+   "rel": 3.7544389253840666e-16,
+   "dense_MB": 49.4384765625,
+   "factors_MB": 0.054931640625,
+   "t_sep": 0.000814499995613005,
+   "t_dense": 0.040063000000372995
+  }
+ ]
+}

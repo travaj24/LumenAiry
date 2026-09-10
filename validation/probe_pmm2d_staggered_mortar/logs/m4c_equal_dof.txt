@@ -1,0 +1,15 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+q= 18 (union M=4 | mortar M_A=10, M_B=7; every region eig is 648x648)
+    union  err  7.01e-03  closure  6.3e-05     23.6s
+    mortar err  9.17e-04  closure  3.7e-07     29.2s
+    h-vs-p penalty (mortar/union)     0.13x
+q= 24 (union M=5 | mortar M_A=13, M_B=9; every region eig is 1152x1152)
+    union  err  5.56e-04  closure  2.1e-07    191.2s
+    mortar err  7.58e-05  closure  2.9e-10    218.8s
+    h-vs-p penalty (mortar/union)     0.14x
+q= 30 (union M=6 | mortar M_A=16, M_B=11; every region eig is 1800x1800)
+    union  err  2.17e-05  closure  1.0e-08    592.7s
+    mortar err  3.22e-05  closure  3.0e-12    749.3s
+    h-vs-p penalty (mortar/union)     1.48x
+
+[exited with code 0]

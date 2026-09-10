@@ -1,0 +1,42 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+
+=== the wall-SEPARATION threshold, with the conditioning census ===
+    2 slices; slice 2's walls offset by +/- delta * period.  The roadmap's
+    headline taper moves a wall ~1.8 nm on a 700 nm period = 2.6e-03 of the period.
+  delta= 1.00e-01  M=5  err  1.06e-01  closure  3.1e-04  worst mortar rcond  8.96e-06  (mortar calls 3)
+  delta= 1.00e-01  M=7  err  6.80e-03  closure  3.5e-06  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 1.00e-02  M=5  err  6.16e-03  closure  3.0e-05  worst mortar rcond  1.04e-05  (mortar calls 3)
+  delta= 1.00e-02  M=7  err  4.08e-04  closure  7.0e-08  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 2.60e-03  M=5  err  3.27e-03  closure  2.6e-05  worst mortar rcond  1.04e-05  (mortar calls 3)
+  delta= 2.60e-03  M=7  err  2.46e-04  closure  2.7e-08  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 1.00e-03  M=5  err  2.65e-03  closure  2.6e-05  worst mortar rcond  1.04e-05  (mortar calls 3)
+  delta= 1.00e-03  M=7  err  2.20e-04  closure  2.0e-08  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 3.00e-04  M=5  err  2.38e-03  closure  2.5e-05  worst mortar rcond  1.04e-05  (mortar calls 3)
+  delta= 3.00e-04  M=7  err  2.09e-04  closure  1.7e-08  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 1.00e-04  M=5  err  4.80e-01  closure  2.5e-05  worst mortar rcond  1.04e-05  (mortar calls 3)
+  delta= 1.00e-04  M=7  err  4.79e-01  closure  1.6e-08  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 3.00e-05  M=5  err  8.62e+00  closure  2.5e-05  worst mortar rcond  1.04e-05  (mortar calls 3)
+  delta= 3.00e-05  M=7  err  8.62e+00  closure  1.6e-08  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 1.00e-05  M=5  err  9.31e-01  closure  2.5e-05  worst mortar rcond  1.04e-05  (mortar calls 3)
+  delta= 1.00e-05  M=7  err  9.31e-01  closure  1.6e-08  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 3.00e-06  M=5  err  2.26e-03  closure  2.5e-05  worst mortar rcond  1.04e-05  (mortar calls 3)
+  delta= 3.00e-06  M=7  err  2.05e-04  closure  1.6e-08  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 1.00e-06  M=5  err  2.26e-03  closure  2.5e-05  worst mortar rcond  1.04e-05  (mortar calls 3)
+  delta= 1.00e-06  M=7  err  2.05e-04  closure  1.6e-08  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 1.00e-08  M=5  err  2.26e-03  closure  2.5e-05  worst mortar rcond  1.04e-05  (mortar calls 3)
+  delta= 1.00e-08  M=7  err  2.05e-04  closure  1.6e-08  worst mortar rcond  6.95e-07  (mortar calls 3)
+  delta= 0.00e+00  M=5  err  2.26e-03  closure  2.5e-05  worst mortar rcond       nan  (mortar calls 0)
+  delta= 0.00e+00  M=7  err  2.05e-04  closure  1.6e-08  worst mortar rcond       nan  (mortar calls 0)
+
+=== the REMEDY: weld walls closer than a tolerance ===
+    Same sweep, but slice 2's walls are SNAPPED onto slice 1's when they agree to
+    1e-4 of the period -- the two grids then compare EQUAL and the interface takes
+    the plain square match (the identical-grid bypass).
+  delta= 1.00e-03  snapped=False  err vs the TRUE (un-snapped) geometry  2.20e-04  closure  2.0e-08
+  delta= 3.00e-04  snapped=False  err vs the TRUE (un-snapped) geometry  2.09e-04  closure  1.7e-08
+  delta= 1.00e-04  snapped=True   err vs the TRUE (un-snapped) geometry  4.79e-01  closure  1.6e-08
+  delta= 3.00e-05  snapped=True   err vs the TRUE (un-snapped) geometry  8.62e+00  closure  1.6e-08
+  delta= 1.00e-05  snapped=True   err vs the TRUE (un-snapped) geometry  9.30e-01  closure  1.6e-08
+  delta= 1.00e-06  snapped=True   err vs the TRUE (un-snapped) geometry  2.04e-04  closure  1.6e-08
+
+wrote C:\tmp\lum_mortarp\validation\probe_pmm2d_staggered_mortar\f5e_nearwall.json

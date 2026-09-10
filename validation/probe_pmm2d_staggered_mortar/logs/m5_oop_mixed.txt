@@ -1,0 +1,24 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+(a) uniform OOP slab split across grids vs berreman_jones_1d
+  th= 0.0deg M=5 grids(2,2) dJones  2.34e-14  |R+T-1|  1.6e-14
+  th= 0.0deg M=5 grids(2,3) dJones  1.49e-13  |R+T-1|  2.4e-14
+  th= 0.0deg M=5 grids(3,4) dJones  1.56e-13  |R+T-1|  2.1e-14
+  th= 0.0deg M=7 grids(2,2) dJones  8.62e-14  |R+T-1|  2.2e-14
+  th= 0.0deg M=7 grids(2,3) dJones  1.57e-13  |R+T-1|  1.1e-13
+  th= 0.0deg M=7 grids(3,4) dJones  3.54e-13  |R+T-1|  2.3e-13
+  th=25.0deg M=5 grids(2,2) dJones  2.73e-09  |R+T-1|  6.2e-10
+  th=25.0deg M=5 grids(2,3) dJones  4.10e-08  |R+T-1|  1.9e-08
+  th=25.0deg M=5 grids(3,4) dJones  1.84e-09  |R+T-1|  6.9e-10
+  th=25.0deg M=7 grids(2,2) dJones  1.37e-13  |R+T-1|  1.6e-14
+  th=25.0deg M=7 grids(2,3) dJones  2.18e-13  |R+T-1|  1.2e-13
+  th=25.0deg M=7 grids(3,4) dJones  3.23e-13  |R+T-1|  8.5e-14
+
+(b nested (2,4) -> union 4)
+  M=4  dJones vs union  3.21e-01 | closure ref  6.5e-04 mortar  8.4e-03 | t_ref    1.9s t_mortar    1.0s (1.95x)
+  M=5  dJones vs union  6.15e-02 | closure ref  3.6e-05 mortar  8.8e-05 | t_ref   10.7s t_mortar    6.5s (1.65x)
+
+(c non-conf (2,3) -> union 6)
+  M=4  dJones vs union  2.23e-01 | closure ref  2.8e-05 mortar  7.7e-04 | t_ref   18.3s t_mortar    0.2s (78.38x)
+  M=5  dJones vs union  3.24e-02 | closure ref  4.0e-07 mortar  1.4e-04 | t_ref  158.2s t_mortar    1.2s (133.05x)
+
+[exited with code 0]

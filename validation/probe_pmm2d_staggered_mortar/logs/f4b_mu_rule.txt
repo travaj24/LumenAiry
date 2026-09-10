@@ -1,0 +1,19 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+neighbours: q_A = 14, q_B = 18  ->  target q_u = 18
+  theta=0.00
+     grid=1 M_u= 7 (q_u= 6, eig   72): 5.00e-02 [  7.4s]
+     grid=1 M_u=19 (q_u=18, eig  648): 3.46e-03 [ 11.0s]
+     grid=2 M_u=10 (q_u=18, eig  648): 3.54e-03 [ 11.1s]
+     grid=3 M_u= 7 (q_u=18, eig  648): 3.45e-03 [  8.6s]
+  theta=0.20
+     grid=1 M_u= 7 (q_u= 6, eig   72): 6.23e-02 [  7.7s]
+     grid=1 M_u=19 (q_u=18, eig  648): 1.21e-02 [ 11.3s]
+     grid=2 M_u=10 (q_u=18, eig  648): 1.24e-02 [ 11.4s]
+     grid=3 M_u= 7 (q_u=18, eig  648): 1.18e-02 [  8.8s]
+  theta=0.40
+     grid=1 M_u= 7 (q_u= 6, eig   72): 2.13e-01 [  7.8s]
+     grid=1 M_u=19 (q_u=18, eig  648): 2.50e-02 [ 11.6s]
+     grid=2 M_u=10 (q_u=18, eig  648): 2.53e-02 [ 11.6s]
+     grid=3 M_u= 7 (q_u=18, eig  648): 2.47e-02 [  8.7s]
+
+wrote f4b_mu_rule.json
