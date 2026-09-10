@@ -700,11 +700,22 @@ nothing on a healthy path.
 
 ### 7.2 The PMMStack-importing sweep, and what it found
 
-`_core.py` is shared, so every test file that imports `PMMStack` was run even
-though the plain 1-D interface was deliberately left alone (S4.5).  **That
-sweep is what found the two-sided item in S3.2b** -- a shipped gate whose
-premise the width contract supersedes, and, behind it, the at-threshold defect
-in the bar itself.  Result after both were fixed:
+`_core.py` is shared, so every test file that imports `PMMStack` -- **42
+files, 810 tests** -- was run, even though the plain 1-D interface was
+deliberately left alone (S4.5).  **That sweep is what found the two-sided item
+in S3.2b**: a shipped gate whose premise the width contract supersedes, and,
+behind it, the at-threshold defect in the bar itself.  Neither would have been
+found by the twelve required suites, none of which contains that file.
+
+After both were fixed, the three files the contract touches were re-run to
+green on both builds (`test_verify_pmmstack_sliver_walls.py`,
+`test_fix_pmmstack_sliver_walls.py`, `test_m1_conditioning_guard.py`: 15 + 19
++ 27 = **61 passed, 0 failed** on WSL in 35.9 s, and 15 passed standalone on
+WIN), and the full 42-file sweep was re-run on WIN against the final code --
+its log is `validation/probe_pmm2d_mortar_round2/suite_pmmstack_win.log`.
+Note for anyone repeating it: **half its wall time is one file**
+(`test_audit_dynameta_consumer_api_2.py`, 857 s of the 1719 s the durations
+file predicts), which touches `PMMStack` in one line.
 
 ## S8. What was NOT done, and why
 
