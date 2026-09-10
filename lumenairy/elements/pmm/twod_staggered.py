@@ -643,6 +643,139 @@ def _modleg_value_deriv(M, u):
     return np.array(vals), np.array(ders)
 
 
+#: FAIL-BEFORE switch for the MINIMUM-SEGMENT contract (round-2 D1).
+#: ``False`` restores the pre-2026-09-11 acceptance -- any strictly increasing
+#: wall array -- bit for bit.  It exists so a test can demonstrate the
+#: behaviour it prevents; it is not a supported user knob.
+PMM2D_STAG_MIN_SEG_GUARD = True
+
+#: MINIMUM SEGMENT WIDTH of a NON-UNIFORM element grid, as a fraction of the
+#: period.  This is a CONTRACT of the ``x_walls`` / ``y_walls`` /
+#: ``add_tapered_pillar(s)`` surface, not a tolerance.
+#:
+#: WHY THERE IS ONE.  The staggered stiffness carries the per-segment ``1/J_n``
+#: (Granet Eq. 31), so a segment of width ``w`` acquires spurious modal
+#: wavenumbers ``|gamma|/k0 = c(M) M (M+1) / (4 k0 J)`` with ``J = w/2`` -- the
+#: same ``1/w`` spectrum the 1-D nodal SEM has
+#: (``docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md`` S3).  MEASURED here
+#: 2026-09-11 (``validation/probe_pmm2d_mortar_round2/r1_onset.py``): the
+#: constant reads **0.9165 (M = 4) / 0.9536 (M = 6)** and is stable to four
+#: digits over ``delta`` from 3e-01 to 1e-06, i.e. the spectrum is a pure
+#: function of the WALL ARRAY and ``M`` and carries no information the walls do
+#: not -- which is why the guard is a WIDTH bar and not a spectral one (a
+#: spectral bar would additionally refuse legitimately fine UNIFORM lattices,
+#: whose ``|gamma|max`` is just as large and whose mortars are healthy: the
+#: same overlap that defeated the 1-D ``|q|max`` bar, S3.3 there).
+#:
+#: Inside ONE grid those modes are harmless -- they are evanescent to machine
+#: zero and the plain square modal match sees the SAME set on both sides
+#: (measured ``delta``-independent to 4.1e-13).  Across a MORTAR they are not:
+#: the cross-grid projection conditions as ``1/w^2`` on the E row and
+#: ``1/w^3.2`` on the H row (fitted exponents 1.995 / 3.218 and 1.994 / 3.214
+#: on two fixtures), and the damage is ENERGY-INVISIBLE -- the lossless closure
+#: stays pinned at 8.0e-08 across the whole ladder, so ``_warn_stag_closure``
+#: and the 1-D fix's ``R+T`` screen have nothing to see.
+#:
+#: WHAT THE DAMAGE IS, measured against an EXACT oracle (a y-uniform 3-layer
+#: stack whose middle layer is ALL HOST, so the device cannot depend on the
+#: wall separation at all, scored per order against ``PMMStack`` at degree 14
+#: whose own self-gap is 1.7e-06; probe ``r5_conv.py``).  There is no onset and
+#: no wandering: the sliver puts a FLOOR under the ``M`` ladder.
+#:
+#:   ``delta``   err at ``M`` = 4 / 5 / 6 / 7 / 8            7->8
+#:   3e-01   2.37e-02 2.42e-02 4.94e-03 1.38e-03 1.18e-04   11.71x
+#:   1e-02   2.41e-02 3.73e-02 8.09e-03 1.54e-03 4.05e-04    3.81x
+#:   1e-03   2.44e-02 4.00e-02 9.13e-03 1.65e-03 5.31e-04    3.11x
+#:   1e-04   2.45e-02 4.32e-02 1.01e-02 1.69e-03 6.36e-04    2.66x
+#:
+#: Raising ``M`` still helps in absolute terms but does NOT remove the floor
+#: (the spurious spectrum grows as ``M (M + 1)``), so "raise the modal count"
+#: is not a remedy for a sliver -- that is a measurement, and it is why the
+#: message does not offer it.
+#:
+#: THE BAR, with the gap on both sides measured.  ``1e-3`` of the period sits
+#:
+#:   * **2.27 decades BELOW** the narrowest segment any ORDINARY shipped
+#:     geometry asks for -- 0.1873 of the period, the mortar suite's taper.
+#:     The ONE surface that walks toward the bar is a taper whose tip CLOSES:
+#:     the midpoint rule's narrowest sampled segment is
+#:     ``~ w_bottom / (2 n_slices)``, measured 3.14e-02 / 8.01e-03 / 4.11e-03
+#:     at ``n_slices`` = 8 / 32 / 64, so a fully closing taper crosses the bar
+#:     at about 250 slices.  Both halves are re-measured on the running build
+#:     by ``tests/unit/test_fix_pmm2d_mortar_round2.py`` rather than pinned
+#:     here.
+#:   * **AT** the width where the mortar operator runs out of float64, and that
+#:     is a consistency check rather than a coincidence: the H-row operator
+#:     with the sliver in the ``A`` slot reads LAPACK ``rcond`` = **7.34e-13**
+#:     at exactly ``w/d`` = 1e-03, ``M`` = 6, against the 1e-12 refusal of
+#:     :data:`~lumenairy.elements.pmm._core._MORTAR_RCOND_REFUSE`.  The two
+#:     bars were derived INDEPENDENTLY -- one from accuracy against an exact
+#:     oracle, the other from how many digits the operator can carry -- and
+#:     they land on the same width.  Below it the operator collapses fast
+#:     (2.06e-14 at 3e-04, 2.15e-17 at 3e-05) and the unguarded ``solve``
+#:     raised outright at 1e-07.
+#:
+#: THIS BAR IS ``M``-INDEPENDENT AND THE CONDITIONING IS NOT, and the layering
+#: is deliberate.  ``rcond`` falls about 3x per modal rung (measured on the
+#: shipped taper: 1.62e-05 / 5.98e-07 / 2.64e-07 / 4.67e-08 at ``M`` = 4 / 6 /
+#: 7 / 8), so above ``M ~ 6`` the conditioning backstop is the one that fires
+#: first on a marginal grid.  A fixed WIDTH contract cannot know ``M``, the
+#: wavelength or the contrast; it is the simple, documented, cheap half, and
+#: the backstop names the same remedies.
+#:
+#: THE INTEGER PATH IS EXEMPT, and that costs nothing: a uniform lattice's
+#: segments are all ``d/N``, so reaching this bar needs ``N > 1000``, i.e.
+#: ``q >= 2000`` and a ``2 q^2 = 8e+06``-dimension region eigenproblem.  The
+#: exemption is what keeps gate N1 (integer walls BIT-IDENTICAL to the
+#: pre-2026-09-11 library) unconditional.
+_STAG_MIN_SEG_FRAC = 1.0e-3
+
+#: Census hook for the minimum-segment contract.  When set to a list, every
+#: NON-UNIFORM :class:`Basis1D` appends
+#: ``(d, N, M, min_segment_fraction, refused)``.  ``None`` (the default) costs
+#: one ``is None`` test per basis.  This is the instrument the false-positive
+#: census is measured with; it is NOT a behaviour switch.
+_STAG_SEG_CENSUS = None
+
+
+def _raise_stag_sliver(xb, w, d, frac, M):
+    """The minimum-segment refusal, naming the width, the bar, what the width
+    does to the solve, and the remedies."""
+    n = int(np.argmin(w))
+    # |gamma| ~ 0.93 M (M + 1) / (4 J), MEASURED (see _STAG_MIN_SEG_FRAC),
+    # quoted in units of the reciprocal lattice vector G = 2 pi / d so the
+    # number is dimensionless without knowing k0: it is the number of
+    # oscillations per period the spurious modes carry.
+    spur = 0.93 * M * (M + 1) * d / (8.0 * np.pi * (0.5 * float(w[n])))
+    raise ValueError(
+        f"Basis1D: segment {n} of this NON-UNIFORM element grid is "
+        f"{float(w[n]):.6g} wide -- {frac:.3e} of the period {d:.6g}, below "
+        f"the minimum {_STAG_MIN_SEG_FRAC:.0e} this basis contracts for "
+        f"(walls {np.array2string(np.asarray(xb), precision=6, threshold=12)}"
+        f").\n"
+        f"  WHY.  The staggered stiffness carries the per-segment 1/J_n "
+        f"(Granet Eq. 31), so a segment this narrow carries spurious modal "
+        f"wavenumbers |gamma| ~ {spur:.2e} x G (G = 2 pi / period) -- modes "
+        f"oscillating that many times per period, against the handful a "
+        f"physical mode of this cell can.  Inside one grid they are "
+        f"harmless; across an L2 MORTAR (layer_grids='per-layer' with "
+        f"neighbours on other grids) the cross-grid projection conditions as "
+        f"1/w^2 on the E row and 1/w^3.2 on the H row, and the damage is "
+        f"ENERGY-INVISIBLE -- the lossless closure stays pinned, so no "
+        f"tripwire fires.  MEASURED: a device that cannot depend on this wall "
+        f"separation at all reads a 3.4-5.4x FLOOR under its n_modes ladder "
+        f"(docs/audits/FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md).\n"
+        f"  REMEDIES.  (1) MERGE the two walls -- a feature this fine is "
+        f"below what the method resolves; (2) carry the fine feature on the "
+        f"SHARED lattice (PMM2DStackPure(..., layer_grids='shared') with an N "
+        f"that resolves it), where every cell is period/N and this cannot "
+        f"form; (3) use PMM2DStackHybrid, which is Fourier-projected and has "
+        f"no element grid; (4) on a TAPER, lower n_slices or stop the taper "
+        f"before its tip closes (the midpoint rule's narrowest sampled width "
+        f"is ~w_bottom / (2 n_slices)).  Raising n_modes is NOT a remedy: the "
+        f"spurious spectrum grows as M (M + 1).")
+
+
 class Basis1D:
     """One-period 1-D staggered modified-Legendre basis on [0, d], N segments,
     M modified-Legendre functions per segment.  Builds BOTH global sets:
@@ -669,6 +802,18 @@ class Basis1D:
     implementation choice, and lifting it is what makes arbitrary tapers (walls
     that move a few nm per z-slice) representable at all -- on a uniform
     lattice a 1.8 nm wall offset on a 700 nm period needs ``N ~ 390``.
+
+    MINIMUM SEGMENT WIDTH -- a CONTRACT, not a tolerance.  A wall array whose
+    narrowest segment is below :data:`_STAG_MIN_SEG_FRAC` (1e-3 of the period)
+    is REFUSED, naming the width and the remedies.  The reason is the
+    per-segment ``1/J_n`` stiffness: a narrow segment carries spurious modal
+    wavenumbers ``~ 0.93 M (M + 1) / (4 k0 J)``, which are harmless inside one
+    grid and corrupt the L2 MORTAR that couples per-layer grids -- with the
+    lossless closure PINNED, so nothing downstream can see it.  See
+    :data:`_STAG_MIN_SEG_FRAC` for the derivation, both gaps and the measured
+    ladder.  The INTEGER path is exempt (all segments are ``d/N``; reaching the
+    bar needs ``N > 1000``), which is what keeps the bit-identity claim below
+    unconditional.
 
     ``self.J`` (the ONE scalar jacobian) survives only on the uniform path and
     is ``None`` on a non-uniform basis ON PURPOSE, so that any un-migrated
@@ -719,10 +864,19 @@ class Basis1D:
                 raise ValueError(
                     f"Basis1D: walls must run 0 .. d = {self.d!r}, got "
                     f"{xb[0]!r} .. {xb[-1]!r}.")
-            if np.any(np.diff(xb) <= 0.0):
+            w = np.diff(xb)
+            if np.any(w <= 0.0):
                 raise ValueError(
                     "Basis1D: walls must be STRICTLY increasing (a zero-width "
                     f"segment has no affine map), got {xb!r}.")
+            frac = float(np.min(w)) / self.d
+            refuse = bool(PMM2D_STAG_MIN_SEG_GUARD
+                          and frac < _STAG_MIN_SEG_FRAC)
+            if _STAG_SEG_CENSUS is not None:
+                _STAG_SEG_CENSUS.append((self.d, int(xb.size - 1), self.M,
+                                         frac, refuse))
+            if refuse:
+                _raise_stag_sliver(xb, w, self.d, frac, self.M)
             self.N = int(xb.size - 1)
             self.xb = xb
             self.Jn = 0.5 * np.diff(xb)
@@ -1927,14 +2081,75 @@ def _kz_forward2(eps, kx, ky):
 # modified-Legendre function exactly by Gauss-Legendre quadrature on its segment.
 # This is the staggered-basis analogue of pmm._sem_fourier_projection.
 # =========================================================================== #
+#: MEASURED cost of the OSCILLATORY factor in the projection kernel, in Gauss
+#: nodes per unit of a segment's own HALF-PHASE
+#: ``omega_n = |m G + alpha0| J_n`` -- the slope of the smallest ``nq`` that
+#: reproduces a refined rule to the refined rule's OWN floor.
+#:
+#: MEASURED 2026-09-11 (``validation/probe_pmm2d_mortar_round2/r2_quad.py``,
+#: section ``need``; identical on both builds) over ``M = 3..12`` x
+#: ``omega = 0..128``, with the bar derived at each point from the reference
+#: rule's own 37-node self-drift rather than pinned: the slope reads
+#: **0.6341 .. 0.6455** across all eight ``M`` (a spread of 1.8 %, which is
+#: what makes it a predictor and not a fit) and the intercept
+#: **9.38 + 0.47 (M - 3)**.  The shipped constants below are an UPPER envelope
+#: of that measurement -- ``0.72`` against a measured 0.645, and
+#: ``0.5 M + 10`` against a measured ``0.47 M + 8.0`` -- so the rule clears
+#: every measured requirement (worst margin re-measured in the probe) while
+#: still fitting UNDER the ``2 M + 8`` reserve on every lattice the uniform
+#: path can build.
+_STAG_QUAD_OMEGA = 0.72
+_STAG_QUAD_M = 0.5
+_STAG_QUAD_CONST = 10.0
+
+
+def _stag_quad_order(M, omega):
+    """Gauss nodes for ONE segment carrying half-phase ``omega`` (D3).
+
+    ``2 M + 8`` -- the historical rule, sized for a segment of length ``d/N``
+    -- is kept as a FLOOR, and topped up only when the segment's own phase
+    outruns it.  On an INTEGER-``N`` lattice the caller does not reach this
+    function at all (see :func:`_stag_fourier_projection`), so the uniform path
+    is bit-identical by construction; on an explicitly-passed uniform ARRAY the
+    formula returns the same ``2 M + 8`` for every ``(M, N)`` the shipped order
+    cap allows with ``|alpha0| <= G/2``, which is what keeps the two spellings
+    ULP-close (gate N2)."""
+    base = 2 * int(M) + 8
+    need = (_STAG_QUAD_OMEGA * float(omega) + _STAG_QUAD_M * int(M)
+            + _STAG_QUAD_CONST)
+    if need <= base:
+        return base
+    return int(np.ceil(need))
+
+
 def _stag_fourier_projection(basis: Basis1D, orders, alpha0=0.0):
     d, N, M = basis.d, basis.N, basis.M
     G = 2.0 * np.pi / d
     xb = basis.xb
-    nq = 2 * M + 8
+    orders = np.asarray(orders)
+    # D3 (VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11 S2.6 / S11): the rule is
+    # sized PER SEGMENT from that segment's own half-phase.  ``2 M + 8`` was
+    # sized for a segment of length ``d/N``, on which the phase a segment
+    # carries is bounded by the far-field order cap; with arbitrary walls one
+    # segment can be almost the whole period and the kernel is then
+    # under-resolved (measured 7.5e-04 relative at longest segment 0.96 d,
+    # ``M = 4``, orders to 7, against 6-8e-15 on a uniform ``N = 3`` lattice).
+    # The INTEGER path keeps the historical single rule EXACTLY -- one
+    # ``leggauss`` call, one ``_modleg_value_deriv``, the same doubles -- so
+    # every integer-``N`` projector is bit-identical to the pre-2026-09-11
+    # library (hashed in the probe and in the shipped gate).
+    kvec = orders * G + alpha0
+    if basis.uniform:
+        nq_of = None
+        nq0 = 2 * M + 8
+    else:
+        kmax = float(np.max(np.abs(kvec))) if np.size(kvec) else 0.0
+        nq_of = [_stag_quad_order(M, kmax * basis.Jn[s]) for s in range(N)]
+        nq0 = nq_of[0]
+    nq = nq0
     xg, wg = leggauss(nq)                       # on [-1,1]
     Vref, _ = _modleg_value_deriv(M, xg)        # (M, nq) modified-Legendre values
-    orders = np.asarray(orders)
+    _rules = {nq: (xg, wg, Vref)}
     # per-segment contribution of local function a to Rayleigh order m.  The
     # modal field is a BLOCH mode: the tau-glued basis carries the transverse
     # momentum (tau = exp(-i alpha0 d)), so the physical field is
@@ -1959,8 +2174,17 @@ def _stag_fourier_projection(basis: Basis1D, orders, alpha0=0.0):
     T_local = np.zeros((len(orders), N, M), dtype=_C)
     for seg in range(N):
         J = basis.Jn[seg]
+        if nq_of is not None and nq_of[seg] != nq:
+            nq = nq_of[seg]
+            hit = _rules.get(nq)
+            if hit is None:
+                xg, wg = leggauss(nq)
+                Vref, _ = _modleg_value_deriv(M, xg)
+                _rules[nq] = (xg, wg, Vref)
+            else:
+                xg, wg, Vref = hit
         xphys = 0.5 * (xb[seg] + xb[seg + 1]) + J * xg     # physical x at quad pts
-        phase = np.exp(1j * np.outer(orders * G + alpha0, xphys))   # (nO, nq)
+        phase = np.exp(1j * np.outer(kvec, xphys))         # (nO, nq)
         # contribution[m,a] = (J/d) sum_q phase[m,q] wg[q] Vref[a,q]
         T_local[:, seg, :] = (J / d) * (phase * wg) @ Vref.T
     # assemble onto the global dofs of a chosen set (list of (N,M) stencils)
