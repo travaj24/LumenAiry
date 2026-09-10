@@ -141,8 +141,8 @@ _STACK_SUPERUNITY_BAR = 1.0e-2
 #: fixture: the WIDEST cross-layer cell that ever produced a wrong answer sits
 #: at ratio 3.17e+03 (``w`` = 8.79e-05 against an own-scale 0.2786, degree 20)
 #: -- 1.5 decades above this bar -- while an ordinary NON-CONFORMING stack (two
-#: layers whose walls differ by a real 5% feature) reads ratio 2-10, i.e.
-#: 1.0-1.7 decades below it.  It is an ATTRIBUTION filter, not the pathology
+#: layers whose walls differ by a real 5% feature: 0.30/0.50 vs 0.35/0.55) reads
+#: 1.33 / 4.0 / 4.0 on its three cross-layer cells, i.e. 1.4-1.9 decades below.  It is an ATTRIBUTION filter, not the pathology
 #: detector: the detector is (b), which is the conjunct with the decades.
 _SLIVER_OWN_SCALE_RATIO = 100.0
 

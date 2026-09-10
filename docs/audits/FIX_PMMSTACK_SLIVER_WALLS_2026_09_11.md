@@ -258,7 +258,7 @@ widths on one grid), so it carries no period, wavelength or degree.
 | population | ratio | distance to 100 |
 |---|---|---|
 | the WIDEST cross-layer cell that ever produced a wrong answer (`w` = 8.786e-05 against own-scale 0.27865, degree 20) | 3.172e+03 | **1.50 decades** above |
-| an ordinary NON-CONFORMING stack (two layers whose walls differ by a real 5% feature: walls 0.30/0.50 vs 0.35/0.55) | 2 – 10 | **1.0 – 1.7 decades** below |
+| an ordinary NON-CONFORMING stack (two layers whose walls differ by a real 5% feature: walls 0.30/0.50 vs 0.35/0.55) — its three cross-layer cells read | 1.33 / 4.0 / 4.0 | **1.4 – 1.9 decades** below |
 | the M2 audit-class 2° coated taper (1.2 nm collisions against ~200 nm features) | ~1.7e+02 | 0.23 decades above |
 
 It is an **ATTRIBUTION filter, not the pathology detector** — its job is to
