@@ -1,0 +1,632 @@
+{
+ "mounts": [
+  {
+   "pol": "te",
+   "M": 9,
+   "duty": 0.4,
+   "n_ridge": 2.59670979509289,
+   "min_abs_lam2": 4.344414398827171e-16,
+   "arms": {
+    "shipped": {
+     "closure": 0.00879534575105212,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ]
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 4.003e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -0.03538976442682262,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 0.06330121672163444
+    },
+    "prepin": {
+     "closure": -0.03538976451650089,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 0.0633012166972699
+    }
+   }
+  },
+  {
+   "pol": "te",
+   "M": 9,
+   "duty": 0.5,
+   "n_ridge": 3.3965684611437523,
+   "min_abs_lam2": 4.018489499204473e-16,
+   "arms": {
+    "shipped": {
+     "closure": 5.74515324203162e-09,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "closure": 0.04473210826653018,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 0.09510350836159742
+    },
+    "permode": {
+     "closure": -3.9543956997789564e-09,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 9.358289053407187e-09
+    },
+    "prepin": {
+     "closure": 2.6987567736114215e-10,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 4.790583797709136e-09
+    }
+   }
+  },
+  {
+   "pol": "te",
+   "M": 9,
+   "duty": 0.62,
+   "n_ridge": 2.69675817627416,
+   "min_abs_lam2": 4.0439932789410933e-16,
+   "arms": {
+    "shipped": {
+     "closure": -0.061492808739892935,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ]
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 4.883e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -0.020961461345010757,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 0.02088363156360684
+    },
+    "prepin": {
+     "closure": -0.020961460915296604,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 0.02088363166730689
+    }
+   }
+  },
+  {
+   "pol": "te",
+   "M": 11,
+   "duty": 0.4,
+   "n_ridge": 2.5946415610363123,
+   "min_abs_lam2": 1.8488600914603344e-15,
+   "arms": {
+    "shipped": {
+     "closure": 0.013700350526175908,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ]
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 4.265e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": 0.013700350526175908,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 0.0
+    },
+    "prepin": {
+     "closure": 0.013700350723540256,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 2.2123080450908716e-10
+    }
+   }
+  },
+  {
+   "pol": "te",
+   "M": 11,
+   "duty": 0.5,
+   "n_ridge": 3.391267369957905,
+   "min_abs_lam2": 4.2802672379451485e-16,
+   "arms": {
+    "shipped": {
+     "closure": 1.0968337349481772e-10,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "closure": 0.04855530215263837,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 0.06815605121264695
+    },
+    "permode": {
+     "closure": 1.8280643665491425e-10,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 1.6918710876723253e-10
+    },
+    "prepin": {
+     "closure": 7.645950539370006e-11,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 1.9112478266691824e-10
+    }
+   }
+  },
+  {
+   "pol": "te",
+   "M": 11,
+   "duty": 0.62,
+   "n_ridge": 2.6957380046991664,
+   "min_abs_lam2": 3.4599078471555528e-15,
+   "arms": {
+    "shipped": {
+     "closure": -0.018219548422705567,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ]
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 5.127e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -0.018219548422705567,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 0.0
+    },
+    "prepin": {
+     "closure": -0.018219548437814703,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 4.198907888053327e-11
+    }
+   }
+  },
+  {
+   "pol": "te",
+   "M": 15,
+   "duty": 0.4,
+   "n_ridge": 2.5931045969721,
+   "min_abs_lam2": 3.1721911239154816e-16,
+   "arms": {
+    "shipped": {
+     "closure": -0.08437526691647046,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ]
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 4.705e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -0.1554169529914281,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 0.06156622660274677
+    },
+    "prepin": {
+     "closure": -0.15541695099016228,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ],
+     "vs_shipped_max_per_order": 0.06156622618351146
+    }
+   }
+  },
+  {
+   "pol": "te",
+   "M": 15,
+   "duty": 0.5,
+   "n_ridge": 3.3888314353928295,
+   "min_abs_lam2": 1.7487744580541442e-15,
+   "arms": {
+    "shipped": {
+     "closure": -6.397415930337047e-11,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 2.466e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -1.6476098263495942e-10,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 9.954345681073562e-11
+    },
+    "prepin": {
+     "closure": 2.917797115031817e-10,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 2.1707979858121007e-10
+    }
+   }
+  },
+  {
+   "pol": "te",
+   "M": 15,
+   "duty": 0.62,
+   "n_ridge": 2.6944316408426756,
+   "min_abs_lam2": 1.990615311816517e-15,
+   "arms": {
+    "shipped": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 1.067e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 4.909e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -0.0418086713965633,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ]
+    },
+    "prepin": {
+     "closure": -0.0418086738683342,
+     "status": "warned",
+     "warnings": [
+      "_EnergyWarning"
+     ]
+    }
+   }
+  },
+  {
+   "pol": "tm",
+   "M": 9,
+   "duty": 0.4,
+   "n_ridge": 2.5967097950928912,
+   "min_abs_lam2": 9.136309065567315e-16,
+   "arms": {
+    "shipped": {
+     "closure": -3.6637359812630166e-15,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 5.365e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -3.774758283725532e-15,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 3.544484150630467e-11
+    },
+    "prepin": {
+     "closure": -1.3766765505351941e-14,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 2.633826490239244e-11
+    }
+   }
+  },
+  {
+   "pol": "tm",
+   "M": 9,
+   "duty": 0.5,
+   "n_ridge": 3.3965684611437523,
+   "min_abs_lam2": 1.2119943951600364e-15,
+   "arms": {
+    "shipped": {
+     "closure": -3.420363992034936e-11,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 1.719e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": 2.496580719935082e-11,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 8.754286184853299e-11
+    },
+    "prepin": {
+     "closure": -1.0931255900459291e-11,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 5.744535402918416e-11
+    }
+   }
+  },
+  {
+   "pol": "tm",
+   "M": 9,
+   "duty": 0.62,
+   "n_ridge": 2.69675817627416,
+   "min_abs_lam2": 1.1196967697223395e-15,
+   "arms": {
+    "shipped": {
+     "closure": -2.6645352591003757e-15,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 5.819e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -2.4424906541753444e-15,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 3.516228974653757e-11
+    },
+    "prepin": {
+     "closure": -1.1102230246251565e-15,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 5.741879194332e-12
+    }
+   }
+  },
+  {
+   "pol": "tm",
+   "M": 11,
+   "duty": 0.4,
+   "n_ridge": 2.5946415610363123,
+   "min_abs_lam2": 7.702375925142983e-16,
+   "arms": {
+    "shipped": {
+     "closure": -5.995204332975845e-15,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 5.355e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -5.773159728050814e-15,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 5.311218131964779e-11
+    },
+    "prepin": {
+     "closure": 1.5543122344752192e-15,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 2.8009983221721768e-11
+    }
+   }
+  },
+  {
+   "pol": "tm",
+   "M": 11,
+   "duty": 0.5,
+   "n_ridge": 3.391267369957901,
+   "min_abs_lam2": 2.175874142963435e-15,
+   "arms": {
+    "shipped": {
+     "closure": 3.2401858973685194e-11,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 1.712e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": 3.085087740828385e-12,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 5.3401949529074955e-11
+    },
+    "prepin": {
+     "closure": -6.07942585162391e-11,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 9.665512834544643e-11
+    }
+   }
+  },
+  {
+   "pol": "tm",
+   "M": 11,
+   "duty": 0.62,
+   "n_ridge": 2.6957380046991677,
+   "min_abs_lam2": 7.835197183683982e-16,
+   "arms": {
+    "shipped": {
+     "closure": -2.220446049250313e-16,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 5.770e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -2.220446049250313e-16,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 0.0
+    },
+    "prepin": {
+     "closure": 6.661338147750939e-16,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 4.66874872095957e-11
+    }
+   }
+  },
+  {
+   "pol": "tm",
+   "M": 15,
+   "duty": 0.4,
+   "n_ridge": 2.5931045969720996,
+   "min_abs_lam2": 5.785887940511154e-16,
+   "arms": {
+    "shipped": {
+     "closure": -1.765254609153999e-14,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 5.335e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -1.7541523789077473e-14,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 5.109634937383589e-11
+    },
+    "prepin": {
+     "closure": 8.08242361927114e-14,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 1.5563994537615145e-11
+    }
+   }
+  },
+  {
+   "pol": "tm",
+   "M": 15,
+   "duty": 0.5,
+   "n_ridge": 3.3888314353928295,
+   "min_abs_lam2": 6.1708346192474804e-15,
+   "arms": {
+    "shipped": {
+     "closure": -2.75669487237451e-11,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 1.700e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -3.517630631222346e-12,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 8.535094853101555e-11
+    },
+    "prepin": {
+     "closure": -6.6165961598585454e-12,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 3.688738203777575e-11
+    }
+   }
+  },
+  {
+   "pol": "tm",
+   "M": 15,
+   "duty": 0.62,
+   "n_ridge": 2.6944316408426756,
+   "min_abs_lam2": 2.138391090069801e-15,
+   "arms": {
+    "shipped": {
+     "closure": -8.43769498715119e-15,
+     "status": "returned",
+     "warnings": []
+    },
+    "band0": {
+     "status": "raised",
+     "error": "_EnergyError",
+     "message_head": "rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 5.798e+00 exceeds 1); the solve is numerically unstable ",
+     "warnings": []
+    },
+    "permode": {
+     "closure": -8.43769498715119e-15,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 0.0
+    },
+    "prepin": {
+     "closure": -8.659739592076221e-15,
+     "status": "returned",
+     "warnings": [],
+     "vs_shipped_max_per_order": 1.2356310419292527e-11
+    }
+   }
+  }
+ ],
+ "_stamp": {
+  "lumenairy_file": "C:\\tmp\\lum_vbc2\\lumenairy\\__init__.py",
+  "tree": "C:\\tmp\\lum_vbc2",
+  "arm": "post",
+  "n_sqrt_decay_definitions": 1,
+  "sqrt_decay_sites": [
+   "lumenairy/elements/rcwa/_core.py"
+  ],
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ }
+}

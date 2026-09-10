@@ -1,0 +1,92 @@
+{
+ "CLOSURE_BAR": {
+  "bar": 1e-09,
+  "post": {
+   "3": 3.9968028886505635e-15,
+   "4": -6.661338147750939e-15,
+   "5": -6.661338147750939e-16
+  },
+  "pre_engineered": {
+   "3": 3.9968028886505635e-15,
+   "4": 5.599435600522895e-06,
+   "5": 1.2670556337468497e-07
+  },
+  "pre_detuned_control": {
+   "3": 3.552713678800501e-15,
+   "4": 3.197442310920451e-14,
+   "5": -2.7533531010703882e-14
+  },
+  "post_envelope": 6.661338147750939e-15,
+  "pre_worst": 5.599435600522895e-06,
+  "pre_smallest": 3.9968028886505635e-15,
+  "control_worst": 3.197442310920451e-14
+ },
+ "PASSIVITY_BAR": {
+  "bar": 1e-08,
+  "ladder": {
+   "post_spacer_M2": 2.000000000164035,
+   "post_nospacer_M2": 2.0000000003394782,
+   "post_spacer_M3": 2.000000000163778,
+   "post_nospacer_M3": 2.0000000002759144,
+   "post_spacer_M4": 2.0000000004505187,
+   "post_nospacer_M4": 2.000000000885393,
+   "post_spacer_M5": 2.0000000002613088,
+   "post_nospacer_M5": 2.0000000006757963,
+   "post_spacer_M6": 2.000000000160435,
+   "post_nospacer_M6": 2.00000000043917,
+   "pre_spacer_M2": 2.0000000001640346,
+   "pre_nospacer_M2": 2.000000000339478,
+   "pre_spacer_M3": 2.000016404594804,
+   "pre_nospacer_M3": 2.000000000275916,
+   "pre_spacer_M4": 1.999985079457872,
+   "pre_nospacer_M4": 2.000000000885395,
+   "pre_spacer_M5": 1.999999996723801,
+   "pre_nospacer_M5": 2.0000000006757985,
+   "pre_spacer_M6": 1.999999997534235,
+   "pre_nospacer_M6": 2.000000000439169
+  },
+  "post_envelope": 8.853930921759456e-10,
+  "pre_nospacer_envelope": 8.85394868532785e-10,
+  "pre_spacer_smallest": 1.6403456370994718e-10,
+  "pre_spacer_worst": 1.640459480389822e-05
+ },
+ "REFERENCE_BAR": {
+  "bar": 1e-09,
+  "reference_self_convergence_6_vs_8": 6.661338147750939e-16,
+  "post": {
+   "3": 4.6629367034256575e-15,
+   "4": 6.661338147750939e-15,
+   "5": 4.553451292456461e-16
+  },
+  "pre_engineered": {
+   "3": 3.9968028886505635e-15,
+   "4": 3.215818993948516e-05,
+   "5": 2.651383047558298e-07
+  },
+  "post_envelope": 6.661338147750939e-15,
+  "pre_smallest": 3.9968028886505635e-15
+ },
+ "X1_CLOSED_CLOSURE": {
+  "bar": 1e-08,
+  "post_worst_closure": 1.3322676295501878e-15,
+  "pre_n_bad_te": 11,
+  "pre_n_flagged_te": 14,
+  "pre_worst_relative_sumR_te": 90.05166538214,
+  "pre_smallest_manifesting_closure_te": 1.8610028416077284e-06
+ },
+ "_stamp": {
+  "lumenairy_file": "C:\\tmp\\lum_vbc2\\lumenairy\\__init__.py",
+  "tree": "C:\\tmp\\lum_vbc2",
+  "arm": "post",
+  "n_sqrt_decay_definitions": 1,
+  "sqrt_decay_sites": [
+   "lumenairy/elements/rcwa/_core.py"
+  ],
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "OMP_NUM_THREADS": "2",
+  "OPENBLAS_NUM_THREADS": "2",
+  "MKL_NUM_THREADS": "2"
+ }
+}

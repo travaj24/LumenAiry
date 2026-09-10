@@ -1,0 +1,1317 @@
+{
+ "x1_post": {
+  "te": {
+   "arm": "shipped",
+   "n_raising": 0,
+   "n_flagged_cells": 0,
+   "worst_closure": 1.3322676295501878e-15,
+   "converged_sumR": 0.00020305964420071288,
+   "worst_relative_sumR": 0.031802120517490984,
+   "worst_relative_sumR_at_M": 21,
+   "min_equilibrated_rcond": 0.06250359657093173,
+   "rows": [
+    {
+     "M": 6,
+     "pol": "te",
+     "raised": null,
+     "close": 6.661338147750939e-16,
+     "sumR": 0.00019880432129570422,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.0950536611038095
+    },
+    {
+     "M": 7,
+     "pol": "te",
+     "raised": null,
+     "close": 8.881784197001252e-16,
+     "sumR": 0.00020040682168772874,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.07946337362747544
+    },
+    {
+     "M": 8,
+     "pol": "te",
+     "raised": null,
+     "close": 9.992007221626409e-16,
+     "sumR": 0.00020044059914194813,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.07483808234671326
+    },
+    {
+     "M": 9,
+     "pol": "te",
+     "raised": null,
+     "close": 0.0,
+     "sumR": 0.00020117278641083525,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.07081341008635783
+    },
+    {
+     "M": 10,
+     "pol": "te",
+     "raised": null,
+     "close": 1.3322676295501878e-15,
+     "sumR": 0.00020121646723941322,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06979732886969651
+    },
+    {
+     "M": 11,
+     "pol": "te",
+     "raised": null,
+     "close": 3.3306690738754696e-16,
+     "sumR": 0.00020152953925922363,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06883877578373852
+    },
+    {
+     "M": 12,
+     "pol": "te",
+     "raised": null,
+     "close": 8.881784197001252e-16,
+     "sumR": 0.0002015823847993931,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06741822196944987
+    },
+    {
+     "M": 13,
+     "pol": "te",
+     "raised": null,
+     "close": 0.0,
+     "sumR": 0.00020174253402163175,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06598853917531243
+    },
+    {
+     "M": 14,
+     "pol": "te",
+     "raised": null,
+     "close": 1.1102230246251565e-15,
+     "sumR": 0.000201800507193875,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06525051769544746
+    },
+    {
+     "M": 15,
+     "pol": "te",
+     "raised": null,
+     "close": 7.771561172376096e-16,
+     "sumR": 0.00020209410182031555,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06486040895858063
+    },
+    {
+     "M": 16,
+     "pol": "te",
+     "raised": null,
+     "close": 2.220446049250313e-16,
+     "sumR": 0.00020214548503493432,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06419817417956943
+    },
+    {
+     "M": 17,
+     "pol": "te",
+     "raised": null,
+     "close": 0.0,
+     "sumR": 0.00020303969103565688,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06387585768341106
+    },
+    {
+     "M": 18,
+     "pol": "te",
+     "raised": null,
+     "close": 1.2212453270876722e-15,
+     "sumR": 0.00020305964420071288,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06366479414821927
+    },
+    {
+     "M": 19,
+     "pol": "te",
+     "raised": null,
+     "close": 1.1102230246251565e-15,
+     "sumR": 0.00020537661174397878,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06335210184943929
+    },
+    {
+     "M": 20,
+     "pol": "te",
+     "raised": null,
+     "close": 4.440892098500626e-16,
+     "sumR": 0.00020534906005700257,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06327026267805787
+    },
+    {
+     "M": 21,
+     "pol": "te",
+     "raised": null,
+     "close": 5.551115123125783e-16,
+     "sumR": 0.0002095173714778228,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06290227990086314
+    },
+    {
+     "M": 22,
+     "pol": "te",
+     "raised": null,
+     "close": 7.771561172376096e-16,
+     "sumR": 0.00020943080142547216,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.0628351180313144
+    },
+    {
+     "M": 23,
+     "pol": "te",
+     "raised": null,
+     "close": 0.0,
+     "sumR": 0.00020940523795997276,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06268336117046532
+    },
+    {
+     "M": 24,
+     "pol": "te",
+     "raised": null,
+     "close": 6.661338147750939e-16,
+     "sumR": 0.00020941171194880162,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06266321028599049
+    },
+    {
+     "M": 25,
+     "pol": "te",
+     "raised": null,
+     "close": 3.3306690738754696e-16,
+     "sumR": 0.00020940715102527415,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06259434849676963
+    },
+    {
+     "M": 26,
+     "pol": "te",
+     "raised": null,
+     "close": 5.551115123125783e-16,
+     "sumR": 0.0002094094353617043,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06258438691340032
+    },
+    {
+     "M": 27,
+     "pol": "te",
+     "raised": null,
+     "close": 0.0,
+     "sumR": 0.00020940795113142074,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06254211682459071
+    },
+    {
+     "M": 28,
+     "pol": "te",
+     "raised": null,
+     "close": 3.3306690738754696e-16,
+     "sumR": 0.00020940897501727009,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06253623300998454
+    },
+    {
+     "M": 29,
+     "pol": "te",
+     "raised": null,
+     "close": 4.440892098500626e-16,
+     "sumR": 0.0002094085708007856,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06250739399792979
+    },
+    {
+     "M": 30,
+     "pol": "te",
+     "raised": null,
+     "close": 4.440892098500626e-16,
+     "sumR": 0.00020940910008040355,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06250359657093173
+    }
+   ],
+   "pinned_cells": {
+    "12": 0.0002015823847993931,
+    "19": 0.00020537661174397878,
+    "20": 0.00020534906005700257,
+    "21": 0.0002095173714778228
+   },
+   "pinned_raised": {
+    "12": null,
+    "19": null,
+    "20": null,
+    "21": null
+   }
+  },
+  "tm": {
+   "arm": "shipped",
+   "n_raising": 0,
+   "n_flagged_cells": 0,
+   "worst_closure": 9.992007221626409e-16,
+   "converged_sumR": 0.00020071226005871948,
+   "worst_relative_sumR": 0.015600593576970745,
+   "worst_relative_sumR_at_M": 6,
+   "min_equilibrated_rcond": 0.05603172280870804,
+   "rows": [
+    {
+     "M": 6,
+     "pol": "tm",
+     "raised": null,
+     "close": 4.440892098500626e-16,
+     "sumR": 0.00019758102966362814,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.09406281047373405
+    },
+    {
+     "M": 7,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.661338147750939e-16,
+     "sumR": 0.0001990123087658722,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.07565093350856802
+    },
+    {
+     "M": 8,
+     "pol": "tm",
+     "raised": null,
+     "close": 5.551115123125783e-16,
+     "sumR": 0.0001990886841977422,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.0723589374871475
+    },
+    {
+     "M": 9,
+     "pol": "tm",
+     "raised": null,
+     "close": 5.551115123125783e-16,
+     "sumR": 0.00019968542824294402,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.07062196130882681
+    },
+    {
+     "M": 10,
+     "pol": "tm",
+     "raised": null,
+     "close": 4.440892098500626e-16,
+     "sumR": 0.00019974108150968214,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.069022889407458
+    },
+    {
+     "M": 11,
+     "pol": "tm",
+     "raised": null,
+     "close": 8.881784197001252e-16,
+     "sumR": 0.0001999809227117652,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06814481859090683
+    },
+    {
+     "M": 12,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.661338147750939e-16,
+     "sumR": 0.00020001906935145772,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06649686969010578
+    },
+    {
+     "M": 13,
+     "pol": "tm",
+     "raised": null,
+     "close": 3.3306690738754696e-16,
+     "sumR": 0.00020015398756517862,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06521629514653744
+    },
+    {
+     "M": 14,
+     "pol": "tm",
+     "raised": null,
+     "close": 7.771561172376096e-16,
+     "sumR": 0.0002001761109678988,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06453124401945644
+    },
+    {
+     "M": 15,
+     "pol": "tm",
+     "raised": null,
+     "close": 0.0,
+     "sumR": 0.00020036765460532919,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06422092921787224
+    },
+    {
+     "M": 16,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.661338147750939e-16,
+     "sumR": 0.00020037835427843683,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06374333393646155
+    },
+    {
+     "M": 17,
+     "pol": "tm",
+     "raised": null,
+     "close": 8.881784197001252e-16,
+     "sumR": 0.0002007021222930889,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06350575368345891
+    },
+    {
+     "M": 18,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.661338147750939e-16,
+     "sumR": 0.00020071226005871948,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06342365322142945
+    },
+    {
+     "M": 19,
+     "pol": "tm",
+     "raised": null,
+     "close": 1.1102230246251565e-16,
+     "sumR": 0.00020110807842741203,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06322687334797211
+    },
+    {
+     "M": 20,
+     "pol": "tm",
+     "raised": null,
+     "close": 0.0,
+     "sumR": 0.00020112397229230002,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06319602430013944
+    },
+    {
+     "M": 21,
+     "pol": "tm",
+     "raised": null,
+     "close": 2.220446049250313e-16,
+     "sumR": 0.00020138499766625238,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06311068009291468
+    },
+    {
+     "M": 22,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.661338147750939e-16,
+     "sumR": 0.00020137500702097525,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.06310193892502605
+    },
+    {
+     "M": 23,
+     "pol": "tm",
+     "raised": null,
+     "close": 4.440892098500626e-16,
+     "sumR": 0.0002013708437990762,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.061868656724946555
+    },
+    {
+     "M": 24,
+     "pol": "tm",
+     "raised": null,
+     "close": 8.881784197001252e-16,
+     "sumR": 0.00020137020492809539,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.060640301584215885
+    },
+    {
+     "M": 25,
+     "pol": "tm",
+     "raised": null,
+     "close": 1.1102230246251565e-16,
+     "sumR": 0.0002013774893106716,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.05805472799699046
+    },
+    {
+     "M": 26,
+     "pol": "tm",
+     "raised": null,
+     "close": 9.992007221626409e-16,
+     "sumR": 0.00020137719523676822,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.05785060665220661
+    },
+    {
+     "M": 27,
+     "pol": "tm",
+     "raised": null,
+     "close": 4.440892098500626e-16,
+     "sumR": 0.00020138481836362907,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.056777330198489295
+    },
+    {
+     "M": 28,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.661338147750939e-16,
+     "sumR": 0.00020138466119764767,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.05669934037637785
+    },
+    {
+     "M": 29,
+     "pol": "tm",
+     "raised": null,
+     "close": 5.551115123125783e-16,
+     "sumR": 0.0002013914371047229,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.056079959010427644
+    },
+    {
+     "M": 30,
+     "pol": "tm",
+     "raised": null,
+     "close": 2.220446049250313e-16,
+     "sumR": 0.0002013913416054248,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.05603172280870804
+    }
+   ],
+   "pinned_cells": {
+    "12": 0.00020001906935145772,
+    "19": 0.00020110807842741203,
+    "20": 0.00020112397229230002,
+    "21": 0.00020138499766625238
+   },
+   "pinned_raised": {
+    "12": null,
+    "19": null,
+    "20": null,
+    "21": null
+   }
+  }
+ },
+ "n_pre_arm_bindings": 6,
+ "x1_pre": {
+  "te": {
+   "arm": "pre-round-1 engineered",
+   "n_raising": 7,
+   "n_flagged_cells": 14,
+   "worst_closure": 0.03195613251346385,
+   "converged_sumR": 0.00020194730450688958,
+   "worst_relative_sumR": 158.27755358380375,
+   "worst_relative_sumR_at_M": 21,
+   "min_equilibrated_rcond": 3.3310402622998193e-19,
+   "rows": [
+    {
+     "M": 6,
+     "pol": "te",
+     "raised": null,
+     "close": 2.220446049250313e-15,
+     "sumR": 0.00019880432130028658,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.0018621904292668117
+    },
+    {
+     "M": 7,
+     "pol": "te",
+     "raised": null,
+     "close": 1.5543122344752192e-15,
+     "sumR": 0.00020040682168789704,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 3.098704553928256e-07
+    },
+    {
+     "M": 8,
+     "pol": "te",
+     "raised": null,
+     "close": 3.5860203695392556e-14,
+     "sumR": 0.00020044059910705777,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.0005060084328979421
+    },
+    {
+     "M": 9,
+     "pol": "te",
+     "raised": null,
+     "close": 9.736655925962623e-14,
+     "sumR": 0.00020117278630870603,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.0014185538510676661
+    },
+    {
+     "M": 10,
+     "pol": "te",
+     "raised": null,
+     "close": 4.087452110113077e-08,
+     "sumR": 0.000201257339729832,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 1.007326735061999e-07
+    },
+    {
+     "M": 11,
+     "pol": "te",
+     "raised": null,
+     "close": 2.725975001283132e-11,
+     "sumR": 0.00020152951216345072,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 8.809049801892614e-06
+    },
+    {
+     "M": 12,
+     "pol": "te",
+     "raised": null,
+     "close": 6.271641095345615e-08,
+     "sumR": 0.00020164543436341448,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 1.267139718340512e-10
+    },
+    {
+     "M": 13,
+     "pol": "te",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 1.137e+00 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 4.256606287815676e-12
+    },
+    {
+     "M": 14,
+     "pol": "te",
+     "raised": null,
+     "close": 6.661338147750939e-16,
+     "sumR": 0.00020180050719346634,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.004260848320724058
+    },
+    {
+     "M": 15,
+     "pol": "te",
+     "raised": null,
+     "close": 9.992007221626409e-16,
+     "sumR": 0.0002020941018203128,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 2.0194002844478377e-07
+    },
+    {
+     "M": 16,
+     "pol": "te",
+     "raised": null,
+     "close": 3.173554752322616e-10,
+     "sumR": 0.00020214580234732455,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 2.565525558024623e-06
+    },
+    {
+     "M": 17,
+     "pol": "te",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 5.610e+10 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 2.1394957035158956e-15
+    },
+    {
+     "M": 18,
+     "pol": "te",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 4.375e+07 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 4,
+     "n_refused": 0,
+     "min_rcond": 7.432749567698992e-18
+    },
+    {
+     "M": 19,
+     "pol": "te",
+     "raised": null,
+     "close": 0.01818225558096298,
+     "sumR": 0.018387638394786444,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 2.2959888502115338e-11
+    },
+    {
+     "M": 20,
+     "pol": "te",
+     "raised": null,
+     "close": 3.508017435205346e-06,
+     "sumR": 0.00020885698587143418,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 2.301572615306547e-11
+    },
+    {
+     "M": 21,
+     "pol": "te",
+     "raised": null,
+     "close": 0.03195613251346385,
+     "sumR": 0.03216567261470084,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 3.961875118757533e-11
+    },
+    {
+     "M": 22,
+     "pol": "te",
+     "raised": null,
+     "close": 1.0881007206364757e-10,
+     "sumR": 0.0002094309155586515,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 2.28929295410046e-09
+    },
+    {
+     "M": 23,
+     "pol": "te",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 7.829e+29 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 4,
+     "n_refused": 0,
+     "min_rcond": 3.3310402622998193e-19
+    },
+    {
+     "M": 24,
+     "pol": "te",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 1.895e+00 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 3.3518418887215917e-12
+    },
+    {
+     "M": 25,
+     "pol": "te",
+     "raised": null,
+     "close": 2.3606128163322637e-10,
+     "sumR": 0.0002094069144284556,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 8.999624080984179e-09
+    },
+    {
+     "M": 26,
+     "pol": "te",
+     "raised": null,
+     "close": 2.4100524742554086e-06,
+     "sumR": 0.0002069975364689555,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 4.676498559876766e-10
+    },
+    {
+     "M": 27,
+     "pol": "te",
+     "raised": null,
+     "close": 2.5717206142417126e-11,
+     "sumR": 0.0002094079255310376,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 5.995756315823215e-08
+    },
+    {
+     "M": 28,
+     "pol": "te",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 6.224e+01 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 1.5581220609521055e-13
+    },
+    {
+     "M": 29,
+     "pol": "te",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 2.460e+13 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 4,
+     "n_refused": 0,
+     "min_rcond": 1.8861463207057933e-16
+    },
+    {
+     "M": 30,
+     "pol": "te",
+     "raised": null,
+     "close": 5.495159882684675e-12,
+     "sumR": 0.00020940910556089968,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 1.3449291586771177e-08
+    }
+   ],
+   "pinned_cells": {
+    "12": 0.00020164543436341448,
+    "19": 0.018387638394786444,
+    "20": 0.00020885698587143418,
+    "21": 0.03216567261470084
+   },
+   "pinned_raised": {
+    "12": null,
+    "19": null,
+    "20": null,
+    "21": null
+   }
+  },
+  "tm": {
+   "arm": "pre-round-1 engineered",
+   "n_raising": 5,
+   "n_flagged_cells": 9,
+   "worst_closure": 0.0002616492806202242,
+   "converged_sumR": 0.00020053488820929045,
+   "worst_relative_sumR": 1.3095091161906236,
+   "worst_relative_sumR_at_M": 28,
+   "min_equilibrated_rcond": 3.4022422238822645e-19,
+   "rows": [
+    {
+     "M": 6,
+     "pol": "tm",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 1.837e+09 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 4.250798102759031e-14
+    },
+    {
+     "M": 7,
+     "pol": "tm",
+     "raised": null,
+     "close": 5.802025526691068e-13,
+     "sumR": 0.00019901230933644755,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 5.87530732332262e-09
+    },
+    {
+     "M": 8,
+     "pol": "tm",
+     "raised": null,
+     "close": 2.3065993559612252e-12,
+     "sumR": 0.00019908868190772838,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 3.895182109610627e-05
+    },
+    {
+     "M": 9,
+     "pol": "tm",
+     "raised": null,
+     "close": 0.0,
+     "sumR": 0.00019968542824346476,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 3.527533749396177e-07
+    },
+    {
+     "M": 10,
+     "pol": "tm",
+     "raised": null,
+     "close": 1.0325074129013956e-14,
+     "sumR": 0.00019974108150013574,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.001145946318774662
+    },
+    {
+     "M": 11,
+     "pol": "tm",
+     "raised": null,
+     "close": 3.1086244689504383e-15,
+     "sumR": 0.00019998092270405755,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 3.230576930650603e-08
+    },
+    {
+     "M": 12,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.661338147750939e-16,
+     "sumR": 0.00020001906935139763,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 2.938442653099974e-06
+    },
+    {
+     "M": 13,
+     "pol": "tm",
+     "raised": null,
+     "close": 9.992007221626409e-16,
+     "sumR": 0.00020015398756490977,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.005491119342388585
+    },
+    {
+     "M": 14,
+     "pol": "tm",
+     "raised": null,
+     "close": 0.0,
+     "sumR": 0.00020017611096795787,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 5.146963259501743e-07
+    },
+    {
+     "M": 15,
+     "pol": "tm",
+     "raised": null,
+     "close": 3.432809592140984e-13,
+     "sumR": 0.00020036765413138872,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 4.5041151696432564e-07
+    },
+    {
+     "M": 16,
+     "pol": "tm",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 2.343e+18 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 4,
+     "n_refused": 0,
+     "min_rcond": 2.1908966345437894e-18
+    },
+    {
+     "M": 17,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.8833827526759706e-15,
+     "sumR": 0.00020070212228719218,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 2.3173926991016663e-06
+    },
+    {
+     "M": 18,
+     "pol": "tm",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 7.287e+32 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 4,
+     "n_refused": 0,
+     "min_rcond": 3.784670518182231e-19
+    },
+    {
+     "M": 19,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.287792508885559e-11,
+     "sumR": 0.00020110814136563328,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 7.549039565280768e-09
+    },
+    {
+     "M": 20,
+     "pol": "tm",
+     "raised": null,
+     "close": 8.881784197001252e-16,
+     "sumR": 0.00020112397229239053,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 6.683774195947741e-07
+    },
+    {
+     "M": 21,
+     "pol": "tm",
+     "raised": null,
+     "close": 1.0429235253184288e-10,
+     "sumR": 0.00020138489325395497,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 2.635819797459199e-06
+    },
+    {
+     "M": 22,
+     "pol": "tm",
+     "raised": null,
+     "close": 3.4705571749782393e-13,
+     "sumR": 0.00020137500668390837,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 0.00010188754253396821
+    },
+    {
+     "M": 23,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.88116230662672e-12,
+     "sumR": 0.00020137083675796273,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 4.5648637845939226e-07
+    },
+    {
+     "M": 24,
+     "pol": "tm",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 2.774e+22 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 4,
+     "n_refused": 0,
+     "min_rcond": 3.4022422238822645e-19
+    },
+    {
+     "M": 25,
+     "pol": "tm",
+     "raised": null,
+     "close": 1.59547930422832e-11,
+     "sumR": 0.00020137747354401808,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 7.079581950634671e-07
+    },
+    {
+     "M": 26,
+     "pol": "tm",
+     "raised": null,
+     "close": 6.8839782763063795e-09,
+     "sumR": 0.00020137039300694717,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 2.64610883052057e-10
+    },
+    {
+     "M": 27,
+     "pol": "tm",
+     "raised": null,
+     "close": 1.6644241540575422e-11,
+     "sumR": 0.00020138483483703878,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 1.3777276107958901e-05
+    },
+    {
+     "M": 28,
+     "pol": "tm",
+     "raised": null,
+     "close": 0.0002616492806202242,
+     "sumR": 0.00046313715243362385,
+     "n_census": 4,
+     "n_flagged": 3,
+     "n_refused": 0,
+     "min_rcond": 5.010325106305647e-15
+    },
+    {
+     "M": 29,
+     "pol": "tm",
+     "raised": "_EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 2.520e+01 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+     "close": NaN,
+     "sumR": NaN,
+     "n_census": 4,
+     "n_flagged": 2,
+     "n_refused": 0,
+     "min_rcond": 7.952543711902244e-13
+    },
+    {
+     "M": 30,
+     "pol": "tm",
+     "raised": null,
+     "close": 5.473399511402022e-14,
+     "sumR": 0.00020139134155372019,
+     "n_census": 4,
+     "n_flagged": 0,
+     "n_refused": 0,
+     "min_rcond": 1.1746470190323553e-06
+    }
+   ],
+   "pinned_cells": {
+    "12": 0.00020001906935139763,
+    "19": 0.00020110814136563328,
+    "20": 0.00020112397229239053,
+    "21": 0.00020138489325395497
+   },
+   "pinned_raised": {
+    "12": null,
+    "19": null,
+    "20": null,
+    "21": null
+   }
+  }
+ },
+ "m1_post": {
+  "arm": "shipped",
+  "bar": 1e-08,
+  "n_calls": 106,
+  "n_motivating": 0,
+  "max_raw": 8.314929473124578e-13,
+  "max_eq": 2.165451908830975e-14,
+  "max_ratio": 473.72047843080264,
+  "motivating": [],
+  "sites": [
+   "pmm interface mode-match (a+b)",
+   "rcwa Redheffer star (I - A22 B11)",
+   "rcwa Redheffer star (I - B11 A22)",
+   "rcwa interface mode-match (a+b)"
+  ],
+  "errors": [
+   "aniso_coinc: ValueError: rcwa_jones_2d: the unit-cell sampling (6, 6) is too coarse for n_orders_x=3, n_orders_y=3; the Fourier convolution would alias.  Need at least (13, 13) samples (>= 4*n_orders + 1 per axis).",
+   "aniso_coinc_lossy: ValueError: rcwa_jones_2d: the unit-cell sampling (6, 6) is too coarse for n_orders_x=3, n_orders_y=3; the Fourier convolution would alias.  Need at least (13, 13) samples (>= 4*n_orders + 1 per axis)."
+  ]
+ },
+ "m1_pre": {
+  "arm": "pre-round-1 engineered",
+  "bar": 1e-08,
+  "n_calls": 106,
+  "n_motivating": 1,
+  "max_raw": 4.525344258147684,
+  "max_eq": 1.0136039788992601,
+  "max_ratio": 327989.76126879,
+  "motivating": [
+   {
+    "site": "rcwa interface mode-match (a+b)",
+    "n": 37,
+    "raw": 2.465671139183056e-07,
+    "eq": 3.000743649403462e-09,
+    "rcond_eq": 7.945833794174492e-10,
+    "cond": 13037509232.597607
+   }
+  ],
+  "sites": [
+   "pmm interface mode-match (a+b)",
+   "rcwa Redheffer star (I - A22 B11)",
+   "rcwa Redheffer star (I - B11 A22)",
+   "rcwa interface mode-match (a+b)"
+  ],
+  "errors": [
+   "thin_18: _EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 4.375e+07 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+   "thin_24: _EnergyError: rcwa_efficiency_1d: energy non-conservation detected (sum R+T = 1.895e+00 exceeds 1); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the index contrast.  If instead a LAYER permittivity is EXACTLY EQUAL to that of a medium built in exact arithmetic -- a half-space REGION (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) or a UNIFORM LAYER of the same stack -- the mode match is exactly, not nearly, degenerate at EVERY truncation and no n_orders helps.  That class was repaired on 2026-09-11 (the modal branch cut), so reaching this line on such a geometry is a report-worthy regression rather than a modelling choice: please report it with the cell.",
+   "aniso_coinc: ValueError: rcwa_jones_2d: the unit-cell sampling (6, 6) is too coarse for n_orders_x=3, n_orders_y=3; the Fourier convolution would alias.  Need at least (13, 13) samples (>= 4*n_orders + 1 per axis).",
+   "aniso_coinc_lossy: ValueError: rcwa_jones_2d: the unit-cell sampling (6, 6) is too coarse for n_orders_x=3, n_orders_y=3; the Fourier convolution would alias.  Need at least (13, 13) samples (>= 4*n_orders + 1 per axis)."
+  ]
+ },
+ "m1_reachability": {
+  "scaled_1e10": {
+   "raw_residual": 3.856796225118257e-08,
+   "equilibrated_residual": 8.420015189677955e-16,
+   "ratio": 45805098.188495904,
+   "rcond_equilibrated": 0.007001623845230028,
+   "rcond_raw": 1.0130193816923158e-19,
+   "raw_would_refuse": true,
+   "equilibrated_rescues": true
+  },
+  "scaled_1e14": {
+   "raw_residual": 0.0012569908226756751,
+   "equilibrated_residual": 8.303946305937906e-16,
+   "ratio": 1513727059840.0164,
+   "rcond_equilibrated": 0.006720854878856638,
+   "rcond_raw": 1.4051502071587071e-27,
+   "raw_would_refuse": true,
+   "equilibrated_rescues": true
+  },
+  "scaled_1e16": {
+   "raw_residual": 0.11363491252552922,
+   "equilibrated_residual": 8.124494729008608e-16,
+   "ratio": 139867051817751.05,
+   "rcond_equilibrated": 0.006553523545499049,
+   "rcond_raw": 1.5543361859075197e-31,
+   "raw_would_refuse": true,
+   "equilibrated_rescues": true
+  },
+  "census_rows_from_near_singular_operand": [
+   [
+    "verification synthetic near-singular operand",
+    24,
+    2.8481007801325674e-16,
+    0.0022875323768713684,
+    false
+   ]
+  ],
+  "screen_bar": 1e-08,
+  "census_rows_from_synthetic_operand": [
+   [
+    "verification synthetic operand",
+    24,
+    0.006720854878856638,
+    null,
+    false
+   ]
+  ]
+ },
+ "_stamp": {
+  "lumenairy_file": "C:\\tmp\\lum_vbc2\\lumenairy\\__init__.py",
+  "tree": "C:\\tmp\\lum_vbc2",
+  "arm": "post",
+  "n_sqrt_decay_definitions": 1,
+  "sqrt_decay_sites": [
+   "lumenairy/elements/rcwa/_core.py"
+  ],
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ }
+}

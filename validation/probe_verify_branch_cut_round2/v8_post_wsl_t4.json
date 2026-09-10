@@ -1,0 +1,92 @@
+{
+ "CLOSURE_BAR": {
+  "bar": 1e-09,
+  "post": {
+   "3": 4.440892098500626e-15,
+   "4": -4.440892098500626e-15,
+   "5": -1.1102230246251565e-15
+  },
+  "pre_engineered": {
+   "3": 0.00011302103105137462,
+   "4": -1.7763568394002505e-15,
+   "5": -4.553593524558863e-05
+  },
+  "pre_detuned_control": {
+   "3": 1.9095836023552692e-14,
+   "4": -3.3306690738754696e-15,
+   "5": 0.0
+  },
+  "post_envelope": 4.440892098500626e-15,
+  "pre_worst": 0.00011302103105137462,
+  "pre_smallest": 1.7763568394002505e-15,
+  "control_worst": 1.9095836023552692e-14
+ },
+ "PASSIVITY_BAR": {
+  "bar": 1e-08,
+  "ladder": {
+   "post_spacer_M2": 2.000000000164036,
+   "post_nospacer_M2": 2.0000000003394796,
+   "post_spacer_M3": 2.0000000001637774,
+   "post_nospacer_M3": 2.0000000002759166,
+   "post_spacer_M4": 2.0000000004505205,
+   "post_nospacer_M4": 2.000000000885394,
+   "post_spacer_M5": 2.000000000261309,
+   "post_nospacer_M5": 2.0000000006757976,
+   "post_spacer_M6": 2.000000000160435,
+   "post_nospacer_M6": 2.000000000439166,
+   "pre_spacer_M2": 1.999999999203433,
+   "pre_nospacer_M2": 2.0000000003394818,
+   "pre_spacer_M3": 2.0002424304888162,
+   "pre_nospacer_M3": 2.0000000002759157,
+   "pre_spacer_M4": 13.022384982756,
+   "pre_nospacer_M4": 2.0000000008853966,
+   "pre_spacer_M5": 2.0003280675962807,
+   "pre_nospacer_M5": 2.000000000675798,
+   "pre_spacer_M6": 2.000108037684906,
+   "pre_nospacer_M6": 2.000000000439173
+  },
+  "post_envelope": 8.853939803543653e-10,
+  "pre_nospacer_envelope": 8.853966448896244e-10,
+  "pre_spacer_smallest": 7.965670345555509e-10,
+  "pre_spacer_worst": 11.022384982756
+ },
+ "REFERENCE_BAR": {
+  "bar": 1e-09,
+  "reference_self_convergence_6_vs_8": 1.1102230246251565e-15,
+  "post": {
+   "3": 5.10702591327572e-15,
+   "4": 4.440892098500626e-15,
+   "5": 8.881784197001252e-16
+  },
+  "pre_engineered": {
+   "3": 0.0006294137364326186,
+   "4": 1.7763568394002505e-15,
+   "5": 0.0006362701661116604
+  },
+  "post_envelope": 5.10702591327572e-15,
+  "pre_smallest": 1.7763568394002505e-15
+ },
+ "X1_CLOSED_CLOSURE": {
+  "bar": 1e-08,
+  "post_worst_closure": 1.4432899320127035e-15,
+  "pre_n_bad_te": 11,
+  "pre_n_flagged_te": 14,
+  "pre_worst_relative_sumR_te": 29.269109367326468,
+  "pre_smallest_manifesting_closure_te": 3.5638920732328216e-06
+ },
+ "_stamp": {
+  "lumenairy_file": "/mnt/c/tmp/lum_vbc2/lumenairy/__init__.py",
+  "tree": "/mnt/c/tmp/lum_vbc2",
+  "arm": "post",
+  "n_sqrt_decay_definitions": 1,
+  "sqrt_decay_sites": [
+   "lumenairy/elements/rcwa/_core.py"
+  ],
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "OMP_NUM_THREADS": "4",
+  "OPENBLAS_NUM_THREADS": "4",
+  "MKL_NUM_THREADS": "4"
+ }
+}

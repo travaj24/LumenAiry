@@ -1,0 +1,137 @@
+{
+ "lossless_M3": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 5,
+  "acted_on_exact_modes": 0
+ },
+ "lossless_M4": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 6,
+  "acted_on_exact_modes": 0
+ },
+ "lossless_M5": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 7,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_cell_1e-2_M3": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_cell_1e-2_M4": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_cell_1e-2_M5": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_cell_1e-6_M3": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_cell_1e-6_M4": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_cell_1e-6_M5": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_spacer_1e-2_M3": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 5,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_spacer_1e-2_M4": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 6,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_spacer_1e-2_M5": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 7,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_spacer_1e-6_M3": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 5,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_spacer_1e-6_M4": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 6,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_spacer_1e-6_M5": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 7,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_both_1e-2_M3": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_both_1e-2_M4": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_both_1e-2_M5": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_cell_conical_M3": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_cell_conical_M4": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_cell_conical_M5": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 0,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_spacer_conical_M3": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 6,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_spacer_conical_M4": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 6,
+  "acted_on_exact_modes": 0
+ },
+ "lossy_spacer_conical_M5": {
+  "n_arrays": 4,
+  "acted_on_layer_modes": 6,
+  "acted_on_exact_modes": 0
+ },
+ "_stamp": {
+  "lumenairy_file": "C:\\tmp\\lum_vbc2\\lumenairy\\__init__.py",
+  "tree": "C:\\tmp\\lum_vbc2",
+  "arm": "post",
+  "n_sqrt_decay_definitions": 1,
+  "sqrt_decay_sites": [
+   "lumenairy/elements/rcwa/_core.py"
+  ],
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "OMP_NUM_THREADS": "1",
+  "OPENBLAS_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ }
+}
