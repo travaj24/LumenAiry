@@ -559,7 +559,7 @@ pushed, tagged or version-bumped.
 | `02c6ab3` | `docs(pmm2d pure)`: D3 / D4 in the module docstring |
 | `81a01f3` | `test(probes)`: `validation/probe_fix_hybrid_slant_anchor/` -- five probes, the README, every JSON, both builds |
 | `5dba5ee` | `fix(pmm2d hybrid)`: refuse a SLANTED patterned layer on the JAX dispatch (S4.1) + its three-arm gate |
-| (this one) | `docs`: this document + the CHANGELOG `[Unreleased]` section |
+| `4400df7` | `docs`: this document + the CHANGELOG `[Unreleased]` section + the `.test_durations` re-splice |
 
 ---
 
