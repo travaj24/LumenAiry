@@ -327,6 +327,32 @@ fixed WIDTH contract cannot know `M`, the wavelength or the contrast; it is
 the cheap, documented, solve-free half, and the backstop names the same
 remedies.
 
+### 3.2b ONE SHIPPED TEST'S PREMISE CHANGES, and the boundary needed a slack
+
+Running EVERY test file that imports `PMMStack` (42 of them, because `_core.py`
+is shared) turned up the one place the contract bites a shipped gate:
+`tests/unit/test_verify_pmmstack_sliver_walls.py::
+test_the_mortar_carries_a_within_layer_sliver_without_a_silent_wrong_answer`.
+That gate's premise -- a within-layer sliver at `d` = 1e-3 and 1e-5 is CARRIED
+-- is TRUE, and is now refused anyway, because its fixture is a SINGLE layer
+between the two half-spaces, and `Basis1D` is built before it knows whether it
+will be mortared.  It is restated to keep both halves: the original continuity
+claim re-measured on the narrowest widths the guard ACCEPTS (`err/d` = 0.481 /
+0.440 / 0.430 at 1.5e-3 / 1.1e-3 / 1.0e-3, `|R+T-1|` <= 1.68e-06 -- the same
+0.43-0.48 slope it had), the refusal below the contract, and the ORIGINAL
+readings preserved behind the fail-before switch (`err/d` = 0.35 at 3e-4 and
+0.34 at 1e-5).
+
+**And it exposed a real defect in the bar itself.**  That fixture's walls are
+`0.2371` and `0.2371 + 1e-3` of a 1.2 um period -- EXACTLY the contract -- and
+`(0.28572 - 0.28452) / 1.2` evaluates to **9.999999999999824e-04**, 1.8e-16
+BELOW 1e-3.  A caller asking for exactly the documented minimum was getting a
+coin flip on their own arithmetic: the at-threshold shape
+`TESTING_STANDARDS.md` calls S4.  The comparison now carries a **1e-9 relative
+slack** -- nine decades tighter than any real feature, nine decades looser
+than a rounding of the bar -- so `frac == 1e-3` is deterministically ACCEPTED
+and 9.99999990e-04 is refused.
+
 ### 3.2a WHAT THE GUARD DOES NOT DO, stated plainly
 
 The accuracy cost is CONTINUOUS in the wall width (S2.3), so a bar that
