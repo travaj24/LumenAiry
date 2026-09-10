@@ -1,0 +1,292 @@
+{
+ "_arm": {
+  "lumenairy_file": "/mnt/c/tmp/lum_vlens2/lumenairy/__init__.py",
+  "lumenairy_version": "5.44.0",
+  "numpy": "2.4.6",
+  "platform": "linux",
+  "python": "3.12.3",
+  "tag": "wsl_new"
+ },
+ "band_bytes": 32000000.0,
+ "census": {
+  "complex128": {
+   "by_signature": {
+    "_radial_carrier_phase|caller=_build_carrier_phase|dtype_kw=complex128|out=complex128|full_grid=True": 5,
+    "_sphere_parab_conversion|caller=propagate_traced_carrier_chain|dtype_kw=complex128|out=complex128|full_grid=True": 5
+   },
+   "bytes_full_grid_c128": 13271040,
+   "field_dtype": "complex128",
+   "field_hash": "3b54de37d0f0a907dc8e4f1a",
+   "n_full_grid_c128": 10,
+   "n_helper_returns": 10
+  },
+  "complex64": {
+   "by_signature": {
+    "_phasor_rows|caller=_radial_carrier_phase|dtype_kw=positional|out=complex64|full_grid=True": 5,
+    "_phasor_rows|caller=_sphere_parab_conversion|dtype_kw=positional|out=complex64|full_grid=True": 5,
+    "_radial_carrier_phase|caller=_build_carrier_phase|dtype_kw=complex64|out=complex64|full_grid=True": 5,
+    "_sphere_parab_conversion|caller=propagate_traced_carrier_chain|dtype_kw=complex64|out=complex64|full_grid=True": 5
+   },
+   "bytes_full_grid_c128": 0,
+   "field_dtype": "complex64",
+   "field_hash": "7c8b17fe122627857b8d4ddc",
+   "n_full_grid_c128": 0,
+   "n_helper_returns": 20
+  }
+ },
+ "free_gb": 77.28,
+ "transient": {
+  "N=1024|astig|_envelope|complex128": {
+   "hash": "34804847106c72f6eeb6e583",
+   "out_dtype": "complex128",
+   "peak_MiB": 32.0,
+   "peak_bytes": 33554624,
+   "peak_c64_grids": 4.0
+  },
+  "N=1024|astig|_envelope|complex64": {
+   "hash": "0752751c92cb7451af102252",
+   "out_dtype": "complex64",
+   "peak_MiB": 24.28,
+   "peak_bytes": 25462856,
+   "peak_c64_grids": 3.035
+  },
+  "N=1024|astig|_reconstruct|complex128": {
+   "hash": "8435a186d597545788215bf6",
+   "out_dtype": "complex128",
+   "peak_MiB": 32.0,
+   "peak_bytes": 33554624,
+   "peak_c64_grids": 4.0
+  },
+  "N=1024|astig|_reconstruct|complex64": {
+   "hash": "91606aa397b1e194d3287d7e",
+   "out_dtype": "complex64",
+   "peak_MiB": 24.28,
+   "peak_bytes": 25462856,
+   "peak_c64_grids": 3.035
+  },
+  "N=1024|one_axis|_envelope|complex128": {
+   "hash": "4666074f8a57c57718ee4309",
+   "out_dtype": "complex128",
+   "peak_MiB": 16.14,
+   "peak_bytes": 16926064,
+   "peak_c64_grids": 2.018
+  },
+  "N=1024|one_axis|_envelope|complex64": {
+   "hash": "061eb859b70d599109ff8c19",
+   "out_dtype": "complex64",
+   "peak_MiB": 8.07,
+   "peak_bytes": 8463632,
+   "peak_c64_grids": 1.009
+  },
+  "N=1024|one_axis|_reconstruct|complex128": {
+   "hash": "3f65ca60035def8354cf53b5",
+   "out_dtype": "complex128",
+   "peak_MiB": 16.14,
+   "peak_bytes": 16926064,
+   "peak_c64_grids": 2.018
+  },
+  "N=1024|one_axis|_reconstruct|complex64": {
+   "hash": "43f4210270b5d045ff316c77",
+   "out_dtype": "complex64",
+   "peak_MiB": 8.07,
+   "peak_bytes": 8463632,
+   "peak_c64_grids": 1.009
+  },
+  "N=1024|scalar|_envelope|complex128": {
+   "hash": "5531e512f33968abb59ad5a9",
+   "out_dtype": "complex128",
+   "peak_MiB": 56.02,
+   "peak_bytes": 58737770,
+   "peak_c64_grids": 7.002
+  },
+  "N=1024|scalar|_envelope|complex64": {
+   "hash": "b761812f6ce28addcc69591e",
+   "out_dtype": "complex64",
+   "peak_MiB": 64.02,
+   "peak_bytes": 67126674,
+   "peak_c64_grids": 8.002
+  },
+  "N=1024|scalar|_reconstruct|complex128": {
+   "hash": "e57e94190a9b59ba5989c282",
+   "out_dtype": "complex128",
+   "peak_MiB": 56.02,
+   "peak_bytes": 58737770,
+   "peak_c64_grids": 7.002
+  },
+  "N=1024|scalar|_reconstruct|complex64": {
+   "hash": "4a2b03fcfa95ea31b8237ad5",
+   "out_dtype": "complex64",
+   "peak_MiB": 64.02,
+   "peak_bytes": 67126674,
+   "peak_c64_grids": 8.002
+  },
+  "N=2048|astig|_envelope|complex128": {
+   "hash": "d6e17155f3eb945e3b0e386c",
+   "out_dtype": "complex128",
+   "peak_MiB": 128.0,
+   "peak_bytes": 134217920,
+   "peak_c64_grids": 4.0
+  },
+  "N=2048|astig|_envelope|complex64": {
+   "hash": "b8e9c3830669118a1011bca6",
+   "out_dtype": "complex64",
+   "peak_MiB": 64.0,
+   "peak_bytes": 67109056,
+   "peak_c64_grids": 2.0
+  },
+  "N=2048|astig|_reconstruct|complex128": {
+   "hash": "c3c457a55cb2fdc0189095ef",
+   "out_dtype": "complex128",
+   "peak_MiB": 128.0,
+   "peak_bytes": 134217920,
+   "peak_c64_grids": 4.0
+  },
+  "N=2048|astig|_reconstruct|complex64": {
+   "hash": "29e74b3e18d904de88c250e1",
+   "out_dtype": "complex64",
+   "peak_MiB": 64.0,
+   "peak_bytes": 67109056,
+   "peak_c64_grids": 2.0
+  },
+  "N=2048|one_axis|_envelope|complex128": {
+   "hash": "95acc2d8ac4b87890b1c2937",
+   "out_dtype": "complex128",
+   "peak_MiB": 64.16,
+   "peak_bytes": 67274096,
+   "peak_c64_grids": 2.005
+  },
+  "N=2048|one_axis|_envelope|complex64": {
+   "hash": "cedbec854bda685d594ebb64",
+   "out_dtype": "complex64",
+   "peak_MiB": 32.08,
+   "peak_bytes": 33637648,
+   "peak_c64_grids": 1.002
+  },
+  "N=2048|one_axis|_reconstruct|complex128": {
+   "hash": "bf094adf312825a0861e8813",
+   "out_dtype": "complex128",
+   "peak_MiB": 64.16,
+   "peak_bytes": 67274096,
+   "peak_c64_grids": 2.005
+  },
+  "N=2048|one_axis|_reconstruct|complex64": {
+   "hash": "435b0cc73b2b9cc104c9fd19",
+   "out_dtype": "complex64",
+   "peak_MiB": 32.08,
+   "peak_bytes": 33637648,
+   "peak_c64_grids": 1.002
+  },
+  "N=2048|scalar|_envelope|complex128": {
+   "hash": "5bbf2109e0ae6bd0c333ba2a",
+   "out_dtype": "complex128",
+   "peak_MiB": 224.03,
+   "peak_bytes": 234914922,
+   "peak_c64_grids": 7.001
+  },
+  "N=2048|scalar|_envelope|complex64": {
+   "hash": "45abacb9a65ea2542a486483",
+   "out_dtype": "complex64",
+   "peak_MiB": 189.03,
+   "peak_bytes": 198215154,
+   "peak_c64_grids": 5.907
+  },
+  "N=2048|scalar|_reconstruct|complex128": {
+   "hash": "6dd487358bf7c3c57071b639",
+   "out_dtype": "complex128",
+   "peak_MiB": 224.03,
+   "peak_bytes": 234914922,
+   "peak_c64_grids": 7.001
+  },
+  "N=2048|scalar|_reconstruct|complex64": {
+   "hash": "d1fe88302ea7d9f202006107",
+   "out_dtype": "complex64",
+   "peak_MiB": 189.03,
+   "peak_bytes": 198215154,
+   "peak_c64_grids": 5.907
+  },
+  "N=4096|astig|_envelope|complex128": {
+   "hash": "cedbe80ed17cdb70c69c4bdd",
+   "out_dtype": "complex128",
+   "peak_MiB": 512.0,
+   "peak_bytes": 536871104,
+   "peak_c64_grids": 4.0
+  },
+  "N=4096|astig|_envelope|complex64": {
+   "hash": "28f5ba8fae32c0eb3f384f4e",
+   "out_dtype": "complex64",
+   "peak_MiB": 256.0,
+   "peak_bytes": 268435648,
+   "peak_c64_grids": 2.0
+  },
+  "N=4096|astig|_reconstruct|complex128": {
+   "hash": "3b5fa74ab4df0f75c9a46726",
+   "out_dtype": "complex128",
+   "peak_MiB": 512.0,
+   "peak_bytes": 536871104,
+   "peak_c64_grids": 4.0
+  },
+  "N=4096|astig|_reconstruct|complex64": {
+   "hash": "dfeb5715593e2347c7b1d77c",
+   "out_dtype": "complex64",
+   "peak_MiB": 256.0,
+   "peak_bytes": 268435648,
+   "peak_c64_grids": 2.0
+  },
+  "N=4096|one_axis|_envelope|complex128": {
+   "hash": "b6e4ee4febe8c151e984ebd6",
+   "out_dtype": "complex128",
+   "peak_MiB": 256.19,
+   "peak_bytes": 268633456,
+   "peak_c64_grids": 2.001
+  },
+  "N=4096|one_axis|_envelope|complex64": {
+   "hash": "781c7f8471763fdcfbec8059",
+   "out_dtype": "complex64",
+   "peak_MiB": 128.09,
+   "peak_bytes": 134317328,
+   "peak_c64_grids": 1.001
+  },
+  "N=4096|one_axis|_reconstruct|complex128": {
+   "hash": "77fa3868e3ed00134b81dc63",
+   "out_dtype": "complex128",
+   "peak_MiB": 256.19,
+   "peak_bytes": 268633456,
+   "peak_c64_grids": 2.001
+  },
+  "N=4096|one_axis|_reconstruct|complex64": {
+   "hash": "2faf7a8d07ddf0aa6b3c510f",
+   "out_dtype": "complex64",
+   "peak_MiB": 128.09,
+   "peak_bytes": 134317328,
+   "peak_c64_grids": 1.001
+  },
+  "N=4096|scalar|_envelope|complex128": {
+   "hash": "ceb597d224dba7f950980315",
+   "out_dtype": "complex128",
+   "peak_MiB": 896.06,
+   "peak_bytes": 939590762,
+   "peak_c64_grids": 7.0
+  },
+  "N=4096|scalar|_envelope|complex64": {
+   "hash": "7ee423a08e6c2d09361cb4d8",
+   "out_dtype": "complex64",
+   "peak_MiB": 573.06,
+   "peak_bytes": 600901106,
+   "peak_c64_grids": 4.477
+  },
+  "N=4096|scalar|_reconstruct|complex128": {
+   "hash": "c514dc75e1542c9839c0061f",
+   "out_dtype": "complex128",
+   "peak_MiB": 896.06,
+   "peak_bytes": 939590762,
+   "peak_c64_grids": 7.0
+  },
+  "N=4096|scalar|_reconstruct|complex64": {
+   "hash": "f9834923fa2ed1653f20edcc",
+   "out_dtype": "complex64",
+   "peak_MiB": 573.06,
+   "peak_bytes": 600901106,
+   "peak_c64_grids": 4.477
+  }
+ }
+}
