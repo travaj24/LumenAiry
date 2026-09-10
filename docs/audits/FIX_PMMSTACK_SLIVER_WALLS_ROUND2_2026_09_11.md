@@ -606,5 +606,13 @@ not the other.
 | `9a2be42` | `probe(pmm)` -- the round-2 measurements: both populations on three fixtures, the arbiter's two bars, the false-positive / false-negative censuses, the ratio, within-layer and anisotropic classes |
 | `4e513cf` | `fix(pmm)` -- the arbiter, the anti-Hermitian passivity extension, the within-layer warning, the `src` wiring on the sweep and prepared paths |
 | `9642a03` | `test(pmm)` -- the round-2 gates, the re-pinned verification test, the round-1 margin test restated as a decision test |
-| COMMIT_4 | `probe(pmm)` -- bit-identity and the per-path arbiter probe, both builds |
-| COMMIT_5 | `docs(pmm)` -- this report, the probe README, the `[Unreleased]` round-2 paragraph, `.test_durations` |
+| `1b80a57` | `probe(pmm)` -- bit-identity against the pre-round-2 tip and the per-path arbiter probe, both builds; the `[Unreleased]` round-2 paragraph and the first draft of this report |
+| `d90cdb9` | `fix(pmm)` -- drop the unused `stack` argument from `_segment_passive`; docstring numbers re-measured |
+| `c7413e0` | `test(pmm)` -- the thread-pool sweep arm, and every bar's justification re-measured against the SHIPPED two-criterion arbiter |
+| `84e15e7` | `docs(pmm)` -- this report, the WARNING-identity arm of the bit-identity probe, the per-row residual analysis |
+| `1b6aa6b` | `test(pmm)` -- the out-of-plane director's refusal is polarization-0 evidence, re-derived in the LC gate |
+
+Probes: `validation/probe_pmmstack_sliver_round2/` -- `r_fixtures.py`,
+`r1_populations.py`, `r2_falseneg.py`, `r3_trigger.py`, `r4_falsepos.py`,
+`r5_within_layer.py`, `r6_ratio.py`, `r7_anisotropic.py`, `r8_bitid.py`,
+`r9_paths.py`, a README, and their JSON on both builds.

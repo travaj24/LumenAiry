@@ -172,7 +172,9 @@ delta that is catastrophic on the bare fixture, the same delta at ratio
 
 BIT-IDENTITY: **39 / 39** -- the round-1 fix's 18 fixtures and the
 verification's 21 -- against a read-only copy of the pre-round-2 tip, on both
-builds.  `PMM_SLIVER_GUARD = False` still disarms everything, now including the
+builds, and **0 / 39 differing WARNING sets** with them (round 2 adds two new
+warnings, so silence-identity is the other half of "nothing changes").
+`PMM_SLIVER_GUARD = False` still disarms everything, now including the
 arbiter's solve and the within-layer warning.
 `tests/unit/test_fix_pmmstack_sliver_walls_round2.py`, 18 tests; the round-1
 file's margin test is RESTATED as a decision test (its bars were a property of
