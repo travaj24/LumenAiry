@@ -527,7 +527,7 @@ All at `OPENBLAS_NUM_THREADS=1` -- the setting that exposes the defect -- and
 |---|---|---|
 | `test_v5_14_2_backlog_batch.py` + `test_rcwa*.py` + `test_niche*rcwa*.py` (+ the new file on WSL) | 225 passed, 1 skipped, 175.4 s | 235 passed, 241.7 s |
 | `test_fix_rcwa_even_sector_wsl.py` | 9 passed, 1.3 s | included above |
-| census / walker sweep (`walker\|census\|dispatcher_pin\|public_api\|doc_consistency`, `-x`) | 1282 passed, 12 skipped, 258.9 s | (in flight) |
+| census / walker sweep (`walker\|census\|dispatcher_pin\|public_api\|doc_consistency`, `-x`) | 1282 passed, 12 skipped, 258.9 s | see below |
 | `ruff check lumenairy/ tests/ validation/probe_fix_rcwa_even_sector_wsl/` | All checks passed! | All checks passed! |
 
 The Windows figure excludes the new file (run separately); 225 + 9 = 234 plus
@@ -538,10 +538,41 @@ the one Windows-only `threadpoolctl` skip matches the WSL 235.
 roots come back `+1.5j` / `+0.9j` on the same eigenvalue array that pre-fix
 returned `-1.5j` / `-0.9j`).
 
-**Wider runs in flight at the time of this commit** (recorded in a
-follow-up commit on this branch): the FULL `tests/unit` gate on Windows,
-the `pmm` + `berreman` files on both builds, and the jax-guarded selection
--- the blast-radius coverage `_sqrt_decay` being shared calls for.
+### Wider blast-radius runs
+
+`_sqrt_decay` is shared, so the change was carried past the files the brief
+names.  All at one thread, `-p no:randomly`:
+
+| suite | Windows py3.14 | WSL py3.12 |
+|---|---|---|
+| every `tests/unit/*pmm*` + `*berreman*` file | **1915 passed**, 3875 s | **1915 passed**, 3829 s |
+| jax-guarded selection (`-k jax`) | **699 passed**, 10 skipped, 1286 s | (not run; jax 0.10.2 present) |
+| every `tests/unit/test_fix_*` file | 288 passed, 1 skipped, **1 pre-existing failure** (below) | (not run) |
+| census / walker sweep | 1282 passed, 12 skipped | 1225 passed, 5 skipped, **1 pre-existing failure** (below) |
+
+Two failures appear, and NEITHER is this change's.  Both were re-run against the
+read-only `48c8747` archive / an untouched worktree and fail identically there:
+
+* `test_fix_slant_anchor_v1_v2_o2.py::test_o2_the_mortar_interfaces_take_no_
+  explicit_inverse` (Windows) is a SOURCE-INSPECTION assertion -- it greps
+  `pmm/_core._interface_smatrix_general_mortar_2d` for the literal string
+  `np.linalg.solve`, which that function no longer contains (it now ends in a
+  guarded helper).  `git diff 48c8747 HEAD -- lumenairy/elements/pmm/` is EMPTY
+  on this branch, and the test fails identically against the pre-fix archive.
+  It belongs to the concurrent slant-anchor work.
+* `test_v5_2_3_walker_changelog_content.py::test_v16_synthetic_fabrication_is_
+  caught` (WSL) needs real `git` plumbing.  A Windows-created LINKED worktree
+  carries a `.git` file pointing at a `D:/...` path, which Linux cannot resolve
+  (`fatal: not a git repository: /mnt/c/tmp/lum_wslfix/D:/...`), so the walker
+  cannot diff and returns the wrong code.  It fails identically in the
+  UNTOUCHED `9af9376` worktree under WSL.  It is a mount artifact of running a
+  Windows worktree from WSL, not a repository or CHANGELOG defect -- the same
+  test passes on Windows against the same CHANGELOG.
+
+STILL RUNNING at the time of this commit: the FULL Windows `tests/unit` fast
+gate (`-m "not integration and not slow"`, single-threaded, ~13 000 tests) --
+131 CPU-minutes in and not yet finished.  The four batteries above already
+exercise ~4 400 distinct tests across every module that calls `_sqrt_decay`.
 
 ---
 
