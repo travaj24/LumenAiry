@@ -1,0 +1,45 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+union-grid reference (N=6): ladder M=5 then M=6
+  union M=5 (q=24)    100.4s
+  union M=6 (q=30)    384.5s
+  reference = union M=6; its own uncertainty (M=5 gap) 8.71e-04
+
+=== (1) each layer's OWN single-layer residual (the rule's input) ===
+  layer A (N=2)  M= 5 (q= 8)  own residual  2.03e-01
+  layer A (N=2)  M= 7 (q=12)  own residual  5.25e-02
+  layer A (N=2)  M= 9 (q=16)  own residual  8.55e-04
+  layer A (N=2)  M=11 (q=20)  own residual  8.49e-05
+  layer B (N=3)  M= 4 (q= 9)  own residual  5.18e-02
+  layer B (N=3)  M= 5 (q=12)  own residual  2.42e-03
+  layer B (N=3)  M= 6 (q=15)  own residual  1.84e-03
+  layer B (N=3)  M= 7 (q=18)  own residual  7.30e-05
+
+=== (2) the two-knob convergence SURFACE (error vs the reference) ===
+        M_B=4           M_B=5           M_B=6           M_B=7         
+  M_A= 5  3.42e-01    2.28e-01    2.18e-01    2.14e-01   
+  M_A= 7  2.82e-01    1.19e-01    5.43e-02    4.24e-02   
+  M_A= 9  2.68e-01    8.92e-02    1.60e-02    4.90e-03   
+  M_A=11  2.79e-01    9.02e-02    1.80e-02    6.81e-03   
+
+=== (3) THE RULE: raise M on the layer with the larger OWN residual ==
+    At each interior surface point, compare the error DROP from one rung of M_A
+    against one rung of M_B, and check the rule's prediction.
+  (M_A= 5, M_B=4)  own A  2.0e-01 vs B  5.2e-02 -> predict raise A ; err 3.42e-01 -> A 2.82e-01 / B 2.28e-01 -> actual B   MISS
+  (M_A= 5, M_B=5)  own A  2.0e-01 vs B  2.4e-03 -> predict raise A ; err 2.28e-01 -> A 1.19e-01 / B 2.18e-01 -> actual A   HIT
+  (M_A= 5, M_B=6)  own A  2.0e-01 vs B  1.8e-03 -> predict raise A ; err 2.18e-01 -> A 5.43e-02 / B 2.14e-01 -> actual A   HIT
+  (M_A= 7, M_B=4)  own A  5.2e-02 vs B  5.2e-02 -> predict raise A ; err 2.82e-01 -> A 2.68e-01 / B 1.19e-01 -> actual B   MISS
+  (M_A= 7, M_B=5)  own A  5.2e-02 vs B  2.4e-03 -> predict raise A ; err 1.19e-01 -> A 8.92e-02 / B 5.43e-02 -> actual B   MISS
+  (M_A= 7, M_B=6)  own A  5.2e-02 vs B  1.8e-03 -> predict raise A ; err 5.43e-02 -> A 1.60e-02 / B 4.24e-02 -> actual A   HIT
+  (M_A= 9, M_B=4)  own A  8.6e-04 vs B  5.2e-02 -> predict raise B ; err 2.68e-01 -> A 2.79e-01 / B 8.92e-02 -> actual B   HIT
+  (M_A= 9, M_B=5)  own A  8.6e-04 vs B  2.4e-03 -> predict raise B ; err 8.92e-02 -> A 9.02e-02 / B 1.60e-02 -> actual B   HIT
+  (M_A= 9, M_B=6)  own A  8.6e-04 vs B  1.8e-03 -> predict raise B ; err 1.60e-02 -> A 1.80e-02 / B 4.90e-03 -> actual B   HIT
+
+  rule hit rate: 6/9
+
+=== (4) the PLATEAU, both ways ===
+  hold M_B=4, walk M_A (5, 7, 9, 11):  3.42e-01   2.82e-01   2.68e-01   2.79e-01
+  hold M_B=7, walk M_A (5, 7, 9, 11):  2.14e-01   4.24e-02   4.90e-03   6.81e-03
+  hold M_A=5, walk M_B (4, 5, 6, 7):  3.42e-01   2.28e-01   2.18e-01   2.14e-01
+  hold M_A=11, walk M_B (4, 5, 6, 7):  2.79e-01   9.02e-02   1.80e-02   6.81e-03
+
+wrote C:\tmp\lum_mortarp\validation\probe_pmm2d_staggered_mortar\f3_perlayer_M_recipe.json

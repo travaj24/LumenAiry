@@ -1,0 +1,9 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+
+=== the DEEP rung: the 4-slice taper at M=11 (q=30) ===
+  4-slice taper                    M= 9 (q=24)  err vs EXACT 1-D  1.15e-02  closure  2.9e-08    189.1s
+  4-slice taper                    M=11 (q=30)  err vs EXACT 1-D  1.20e-04  closure  4.9e-11    716.8s
+  4 identical slices (no mortar)   M= 9 (q=24)  err vs EXACT 1-D  2.00e-06  closure  9.7e-12     74.0s
+  4 identical slices (no mortar)   M=11 (q=30)  err vs EXACT 1-D  6.48e-07  closure  4.9e-15    280.1s
+
+wrote C:\tmp\lum_mortarp\validation\probe_pmm2d_staggered_mortar\f5e_nearwall.json

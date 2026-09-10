@@ -1000,3 +1000,588 @@ corrections S-1 and S-2 already deleted two of those. On a uniform lattice a
 | **O-8** | Grids are held per `(N, M)` AND per Bloch phase (`tau = exp(-i alpha0 d)`), so an angle sweep re-builds every basis. The 1-D geometry cache is keyed on content and has the same property; if angle sweeps become hot, split `Basis1D` into a tau-free part (the elementary matrices, which are tau-independent) and the tau-dependent glue. Not measured. |
 | **O-10** | **Per-layer `M` needs a per-layer convergence procedure.** §7.2 measures the failure mode directly: walking `M_A` alone plateaus at 5.9e-04 because layer B's own `M_B = 7` is the limiting error, while the union grid's single `M` walks past it to 2.17e-05. The build must ship a documented recipe (raise each `M_i` in turn, take the answer stationary in ALL of them) and the docstring must say that a per-layer solve can be stationary in one knob and wrong. |
 | **O-9** | The probe's `MortarStack2D` clamps `n_orders` silently and reports `n_orders_used`. The shipped version should RAISE above capacity (the classical/JAX siblings' behaviour) rather than clamp, so a user asking for orders the end grids cannot carry is told, not quietly served fewer. |
+
+---
+
+# FOLLOW-UP 2026-09-09 -- open items O-1, O-2, O-10, O-6 closed; roadmap item N-1 (non-uniform segments) GO
+
+**Class:** prototype + measurement, **no library code**.  Everything in this
+section comes from a committed script in
+`validation/probe_pmm2d_staggered_mortar/` (commands in that directory's
+`README.md`).  Evidence tags as above.
+
+**BUILD CORRECTION [M].**  The Build note at the top of this document says
+"numpy 2.4.4 + MKL".  That is **wrong** and it is corrected here: the Windows
+arm's numpy and scipy are both linked against **scipy-openblas 0.3.31.188.0**
+(`np.__config__.CONFIG['Build Dependencies']['blas']`, measured
+2026-09-09 by `f1_crossbuild.py`).  No MKL was ever in this campaign.  The
+consequence is stated in F1 below: the second arm had to be chosen to differ in
+something real.
+
+## F1 (O-1) -- the second and third build, and the spread envelope [M]
+
+`f1_crossbuild.py` runs the six decisive tables in ONE process so every arm
+measures exactly the same fixtures; `f1_compare.py` diffs them.  Three arms:
+
+| arm | OS / toolchain | python | numpy | BLAS |
+|---|---|---|---|---|
+| `win` | Windows 11, MSVC-built wheels | 3.14.6 | 2.4.4 | scipy-openblas 0.3.31, DYNAMIC_ARCH (Haswell build target) |
+| `wsl` | WSL2 Ubuntu, gcc 14.2 wheels, glibc 2.39 | 3.12.3 | 2.4.6 | scipy-openblas 0.3.31, DYNAMIC_ARCH (SkylakeX build target) |
+| `win_nehalem` | Windows 11, `OPENBLAS_CORETYPE=NEHALEM` | 3.14.6 | 2.4.4 | the SAME library forced onto its SSE kernels instead of the CPU's AVX2 ones (1.5x slower on a 600-dim complex eig, measured -- i.e. a genuinely different code path, not a relabel) |
+
+**Why three.**  Both PyPI wheel families link scipy-openblas, and OpenBLAS's
+`DYNAMIC_ARCH` picks its kernels from the CPU -- which is the SAME CPU under
+WSL.  So `win` vs `wsl` varies OS, libm, compiler, python and numpy but very
+likely NOT the BLAS kernel; `win_nehalem` varies the kernel and nothing else.
+Between them the three arms do vary every layer, but this is still not an MKL /
+Accelerate / reference-LAPACK arm, so **every spread below is a LOWER BOUND on
+the true cross-build envelope** and a bar derived from it needs the usual
+decades on top, not a factor of two.
+
+### F1.1 The envelope, by family
+
+93 quantities compared.
+
+| family | n | worst spread | median spread | reading |
+|---|---|---|---|---|
+| M1 conforming identity (`dR`/`dT`/`dJones`) | 16 | **8.04e-01** | 4.35e-01 | pure round-off; the VALUE is meaningless across builds |
+| isolated mortar vs analytic Fresnel (`dR`, closure) | 24 | **9.51e-01** | 6.16e-01 | same |
+| OOP twin vs `berreman_jones_1d` (`dJones`, closure) | 16 | **8.46e-01** | 5.31e-01 | same |
+| **M4 vs the exact 1-D oracle** (err, mirror, closure) | 12 | **8.37e-05** | 3.73e-10 | DISCRETISATION, not round-off -- reproducible to 4-9 decades |
+| **M4c equal-DOF** (errors, closures, ratio) | 10 | **2.35e-03** | 2.20e-08 | same; the one 2.35e-03 is the `q=24` mortar CLOSURE at 2.85e-10, i.e. round-off again |
+| conditioning `rcond` (per config, per site) | 14 | **1.06e-01** | 3.60e-11 | build-sensitive at the 10 % level on ONE configuration |
+
+**The dividing line is not the quantity, it is what limits it.**  Anything whose
+magnitude is set by DISCRETISATION reproduces across all three arms to
+1e-4..1e-10 relative.  Anything whose magnitude is set by ROUND-OFF has an O(1)
+cross-build spread -- 3.9e-15 vs 3.3e-16 vs 2.7e-15 for one closure reading, a
+factor of 12.  That is not a defect; it is what a residual at `eps` does.
+
+### F1.2 What this means for each gate bar in S12.4
+
+| gate | quantity | measured spread | bar that survives it |
+|---|---|---|---|
+| G1 identical-grid bypass | `0.000e+00` on every arm | exact | **`== 0` stands** -- it is a bypass, not an arithmetic claim |
+| G2 forced-mortar identity | worst reading 2.31e-13 / 1.07e-13 / 1.36e-13 (spread 5.4e-01) | O(1) | a MAGNITUDE bar only, and it must be **derived at runtime** from `eps * cond_2(G)` as S3 already says: the bar is 1.6e-12 on that grid, the worst reading over three builds is 2.3e-13, so the gap is 7x. That is ONE decade, not the usual three -- **raise the multiplier to `10 * eps * cond_2(G)`** and the gap becomes 70x with the reading's own build spread (2.2x) inside it |
+| G3 H-row swap fail-before | 7.28e+01 vs 3.71e-02 | the claim is ">= 2 orders"; both numbers are discretisation-scale | **stands** |
+| G4 transparent interface | 4.7e-16 / 3.2e-13 class | O(1) spread | magnitude bar with decades; do NOT pin 4.7e-16 |
+| G5 M4 per order vs the 1-D oracle | 3.33e-04, spread 8.4e-05 relative across arms at the `M=9` rung | 1e-4 relative | **a tight bar is sound here** -- e.g. `err(M=9) < 3e-03` has 3 decades of gap on both sides |
+| G6 equal-DOF non-regression | ratios 1.3078e-01 / 1.3078e-01 / 1.3078e-01 at `q=18` (spread 5.2e-09) | 1e-8 | **the RATIO is the most reproducible quantity in the whole document** -- bar it, not the errors |
+| G7 two-sided closure | closure readings, spread up to 9.1e-01 | O(1) | magnitude bar; the CONVERGENCE (each rung tighter than the last by >= 1 decade) is the build-free restatement |
+| G9 conditioning census | `M4 stripe (2,3)` M=4: 2.0097e-05 / 2.0100e-05 / **2.2434e-05** (spread 1.06e-01) | 10 % | M1's `1e-8` screen sits **2.0 decades** below the worst reading anywhere (1.08e-06); with a 10 % build spread that margin is real but it is now MEASURED rather than assumed |
+
+**The one number that moved materially between arms is a conditioning
+reading**, and it moved on the NEHALEM-kernel arm, not between operating
+systems -- exactly the shape `TESTING_STANDARDS.md` S5 warns about (a census
+quantity downstream of a near-degenerate operator).
+
+
+## F2 (O-2) -- THE DEVICE REGIME: a corner-dominated 2-D pillar pair [M]
+
+`f2_device_regime.py`.  O-2 named the one case most likely to REVERSE the
+equal-DOF sign: a crossed 2-D pillar, whose four corners cap the convergence at
+ALGEBRAIC, so h-refinement (all the union grid buys) should do relatively
+better than p-refinement (all the own-walls grid buys).  Fixture: layer A a
+pillar 1/2 of the period wide on its own `N = 2`, layer B a pillar 1/3 wide on
+`N = 3`, common refinement `N = 6`; CONICAL incidence (`theta = 0.18`,
+`phi = 0.35`), period 1.2 um, `wl` 0.85 um.
+
+### F2.1 The reference and its own uncertainty
+
+Because there is no exact oracle for a crossed 2-D pillar pair, the reference
+is the union grid at the top of its OWN ladder, and that ladder is reported so
+every statement below is bounded by it:
+
+| union `M` | `q` | eig dim | `R(0,0)` | gap vs previous | closure | wall |
+|---|---|---|---|---|---|---|
+| 3 | 12 | 288 | 0.002640980 | -- | 5.6e-04 | 2.2 s |
+| 4 | 18 | 648 | 0.004992238 | 2.12e-01 | 1.3e-05 | 14.6 s |
+| 5 | 24 | 1152 | 0.005324533 | 2.75e-02 | 1.5e-07 | 86.0 s |
+| 6 | 30 | 1800 | 0.005346876 | 8.71e-04 | 2.3e-09 | 376.7 s |
+| **7** | **36** | **2592** | **0.005351023** | **4.45e-04** | 1.7e-11 | 1028.3 s |
+
+**Reference = union `M = 7`; its own uncertainty is 4.45e-04.**  The ladder is
+algebraic, as the corner cap requires -- the gap falls by 8.5x, 32x, 2.0x per
+rung, nothing like the stripe pair's spectral collapse.
+
+### F2.2 Equal DOF, scalar pillar pair
+
+Per axis `q = 6(M-1)` on the union and `q_A = 2(M_A-1)`, `q_B = 3(M_B-1)` on
+the own-walls grids, so `M_A = 3M-2`, `M_B = 2M-1` puts every region
+eigenproblem in both arms at the same `2 q^2`:
+
+| `q` | eig dim | union err | union closure | mortar err | mortar closure | mortar/union | readable? |
+|---|---|---|---|---|---|---|---|
+| 12 | 288 | 2.24e-01 | 5.6e-04 | **1.19e-01** | **5.6e-05** | **0.529x** | yes |
+| 18 | 648 | 2.68e-02 | 1.3e-05 | **4.92e-03** | **5.4e-08** | **0.183x** | yes |
+| 24 | 1152 | **1.15e-03** | 1.5e-07 | 2.75e-03 | **2.9e-11** | 2.399x | **NO** -- 1.15e-03 is 2.6x the reference's own 4.45e-04 uncertainty |
+
+Wall time 1.7 / 18.0 / 103.6 s (mortar) against 2.2 / 14.6 / 86.0 s (union).
+
+### F2.3 Equal DOF with an IN-PLANE LC TENSOR in layer A
+
+Layer A's pillar replaced by a rotated-uniaxial director lying IN the plane
+(`uniaxial_tensor(1.5, 1.9, theta = pi/2, phi = 35 deg)`, so `e13 = e23 = 0`
+and the block-form Eq.-7 path runs).  Union ladder gaps 8.02e-02, 4.95e-03,
+1.27e-03; reference = union `M = 6`, uncertainty **1.27e-03**:
+
+| `q` | union err | union closure | mortar err | mortar closure | mortar/union |
+|---|---|---|---|---|---|
+| 12 | 8.91e-02 | 1.9e-04 | **4.40e-02** | **2.2e-05** | **0.494x** |
+| 18 | 6.21e-03 | 2.7e-06 | **4.10e-03** | **1.7e-08** | **0.660x** |
+
+### F2.4 VERDICT on O-2
+
+**The equal-DOF advantage SURVIVES the corner cap in the under-converged
+regime, and the crossing point moves EARLIER.**
+
+* Scalar 2-D pillar pair: **0.53x at `q = 12`, 0.18x at `q = 18`** -- the
+  mortar is 1.9x and 5.5x more accurate at identical eigenproblem sizes.  The
+  `q = 24` point reads 2.40x the other way, but it is **not resolvable against
+  this reference** (both arms sit inside 2.6x of the reference's own
+  uncertainty), so the honest statement is *the advantage is gone somewhere
+  between `q = 18` and `q = 24`*, against `q ~ 30` on the stripe pair (S7.3).
+  The corner cap does what O-2 predicted -- it brings the crossing forward --
+  but it does **not reverse the sign at working `q`**.
+* Tensor arm: **0.49x and 0.66x**, same sign, and the advantage decays with `q`
+  the same way.  The mortar carries no material dependence, as S6.1 already
+  measured for the Hermitian gyrotropic cell.
+* **The closure advantage does not decay and is LARGER here than on stripes**:
+  10x / **249x** / **5142x** (scalar) and 8.6x / **160x** (tensor).  S7.3's
+  "the closure half is the durable one" reproduces on the device class.
+
+**So the accuracy ratio quoted in a campaign must be regime-qualified**: *below
+`q ~ 18` on a corner-dominated 2-D pillar pair the mortar is 2-5x more accurate
+at equal DOF; by `q ~ 24` the two arms are within a factor of a few of each
+other and of the reference, and only the lossless closure still separates them
+(by 3-4 decades).*  O-2 is CLOSED with that qualification.
+
+## F3 (O-10) -- the per-layer `M` recipe, as a surface [M]
+
+`f3_perlayer_M_recipe.py`, on the F2 pillar pair, scored against the union grid
+at `M = 6` (`q = 30`, its own uncertainty 8.71e-04).
+
+### F3.1 Each layer's OWN single-layer residual
+
+The quantity a recipe would actually have a user compute: the layer ALONE
+between the half-spaces on its own grid, against the same layer alone at the
+top of its own ladder (`M_A = 13`, `M_B = 9`, both `q = 24`).
+
+| layer A (`N=2`) | `q_A` | own residual | layer B (`N=3`) | `q_B` | own residual |
+|---|---|---|---|---|---|
+| `M_A = 5` | 8 | 2.03e-01 | `M_B = 4` | 9 | 5.18e-02 |
+| `M_A = 7` | 12 | 5.25e-02 | `M_B = 5` | 12 | 2.42e-03 |
+| `M_A = 9` | 16 | 8.55e-04 | `M_B = 6` | 15 | 1.84e-03 |
+| `M_A = 11` | 20 | 8.49e-05 | `M_B = 7` | 18 | 7.30e-05 |
+
+### F3.2 The two-knob surface (pair error vs the reference)
+
+| | `M_B = 4` | `M_B = 5` | `M_B = 6` | `M_B = 7` |
+|---|---|---|---|---|
+| **`M_A = 5`** | 3.42e-01 | 2.28e-01 | 2.18e-01 | 2.14e-01 |
+| **`M_A = 7`** | 2.82e-01 | 1.19e-01 | 5.43e-02 | 4.24e-02 |
+| **`M_A = 9`** | 2.68e-01 | 8.92e-02 | 1.60e-02 | **4.90e-03** |
+| **`M_A = 11`** | 2.79e-01 | 9.02e-02 | 1.80e-02 | 6.81e-03 |
+
+**The plateau is real in BOTH directions, and it is the whole finding:**
+
+* hold `M_B = 4`, walk `M_A` 5 -> 11: 3.42e-01, 2.82e-01, 2.68e-01, 2.79e-01
+  -- **stationary at ~2.7e-01, and NOT MONOTONE**, so a user watching only
+  `M_A` sees a converged answer that is wrong by 27 %;
+* hold `M_A = 5`, walk `M_B` 4 -> 7: 3.42e-01, 2.28e-01, 2.18e-01, 2.14e-01
+  -- stationary at ~2.1e-01, the mirror failure;
+* only the DIAGONAL descends: (5,4) 3.42e-01 -> (7,5) 1.19e-01 -> (9,6)
+  1.60e-02 -> (11,7) 6.81e-03.
+
+The `(11,7)` cell reading 6.81e-03 against `(9,7)`'s 4.90e-03 is a genuine
+non-monotonicity (both are 6-8x the reference's uncertainty), consistent with
+S6.1: at corner-capped resolutions this basis is not yet in its asymptotic
+regime and neither arm is monotone.
+
+### F3.3 The RULE, tested two ways
+
+**Candidate rule (greedy):** *raise `M` on the layer whose own single-layer
+residual is larger.*  Tested at the 9 interior points by comparing the error
+drop from one rung of `M_A` against one rung of `M_B`: **6 hits / 9**.  All
+three misses are cells where layer A's own residual is larger but raising `M_B`
+helps more -- at `(M_A=7, M_B=4)` the two own residuals are 5.25e-02 and
+5.18e-02, a tie the rule cannot resolve, and the two rungs are not DOF-matched
+(one rung of `M_B` on `N=3` is `+3` in `q`, one rung of this `M_A` ladder is
+`+4`).  **A greedy rule on the raw residual is NOT reliable enough to ship.**
+
+**What IS reliable -- the FLOOR rule:**
+`pair_error >= max(own_residual_A, own_residual_B)` holds at **15 of 16**
+surface points; the single exception (`M_A=7, M_B=7`: 4.24e-02 against
+5.25e-02) misses by 1.2x.  The ratio `pair_error / max(own residual)` runs
+1.03-80 and is smallest exactly where the plateau is (1.05, 1.07, 1.12 down the
+`M_A = 5` row -- there the pair error IS layer A's own residual).
+
+### F3.4 VERDICT on O-10: the recipe the build must ship
+
+1. **The stopping criterion is stationarity in EVERY `M_i`, never in one.**
+   Measured failure: stationary to 4 % across four rungs of `M_A` while 27 %
+   wrong (F3.2, the `M_B = 4` column).  Stationarity in one knob is not
+   evidence.
+2. **Screen with the per-layer own residual first, because it is a measured
+   LOWER BOUND on the pair error (15/16) and it costs one single-layer solve
+   per layer per rung** -- one region eig instead of the stack's.  A layer whose
+   own residual is 5e-02 makes a 1e-03 stack answer impossible, and that is
+   knowable before the stack is ever assembled.
+3. **Do NOT ship the greedy "raise the worse layer" rule as an auto-refiner**
+   (6/9).  Ship it as a HINT and the floor as the gate.
+4. The docstring must say, in these words, that *a per-layer solve can be
+   stationary in one knob and wrong*, and must point at the floor screen.
+
+## F5 (roadmap item N-1) -- NON-UNIFORM SEGMENT BOUNDARIES: **GO**
+
+`nonuniform.py` (the generalized basis), `f5_nonuniform.py` (gates a-d, c3, d2),
+`f5d_diag.py`, `f5e_nearwall.py`, `f5f_attrib.py`.
+
+This is the item S0 named as the one thing this experiment does NOT deliver:
+*"the enabling change for arbitrary tapers is still non-uniform segment
+boundaries in `Basis1D` (campaign item N-1)"*.  It turns out to be a
+**four-line-family change**, and the paper already contains it.
+
+### F5.0 The paper has non-uniform segments; the implementation chose uniform [A]
+
+Granet 2023 Eq. 31, verbatim from page 655:
+
+> *"consider a line `I` of length `d` divided by `N` adjacent segments
+> `I_n = [x_n, x_{n+1}]`, `n = 1, 2, ... N`, and `I = U I_n`.  Each segment is
+> mapped to the reference interval `[-1, 1]` by the change of variable*
+> `x = 0.5 (x_{n+1} - x_n) u + 0.5 (x_{n+1} + x_n)`."
+
+Nothing there requires `x_{n+1} - x_n` to be constant.  `Basis1D.__init__`
+(`twod_staggered.py:324-327`) chooses it to be:
+
+```python
+self.h  = self.d / self.N            # ONE segment length
+self.J  = 0.5 * self.h               # ONE scalar jacobian
+self.xb = np.linspace(0.0, self.d, self.N + 1)
+```
+
+and that single choice is what forces S1.1's conclusion (*"the only lattice
+containing two layers' walls is the LCM lattice"*) and S1.3's (*"a 1.8 nm wall
+offset on a 700 nm period needs `N ~ 390`"*).  **Remove the choice and both
+conclusions go away**: a taper slice with two walls is THREE segments wherever
+those walls are.
+
+**What has to change is exactly one thing, applied in four places: the scalar
+`J` becomes a per-segment `J_n`.**
+
+| # | site | change |
+|---|---|---|
+| 1 | `Basis1D._global_matrix` | mass `* J` -> `* J_n`; stiffness `/ J` -> `/ J_n`; **mixed unchanged** |
+| 2 | `_global_pair_segmat` (module level) | the same, per segment |
+| 3 | `Granet2DTransverseE._eps_dir`'s inline `segmat` | the same (`op == 'm'` only) |
+| 4 | `_stag_fourier_projection` | `xphys = mid_n + J_n * u` and the `J_n / d` weight |
+
+**And what does NOT change, which is why this is cheap:**
+
+* `Basis1D.mixed` was **already correct**: one derivative contributes `1/J_n`
+  and the measure contributes `J_n`, so the scale is `1` on every segment
+  regardless of the partition.  It needs no edit at all.
+* `_build_elementary` -- `m_ref`, `s_ref`, `c_ref` live on the reference
+  interval and never saw `J`.
+* `_build_sets` -- the hats (Eq. 32) glue `Ltilde_2` of one segment to
+  `Ltilde_1` of the next **by value** (`Ltilde_1(-1) = Ltilde_2(+1) = 1`,
+  `Ltilde_1(+1) = Ltilde_2(-1) = 0`), which is a statement about the reference
+  interval alone; the Bloch periodic hat (Eq. 33, the `tau` glue) is likewise
+  unchanged.  Segment lengths never enter.
+* **The de Rham property `d(Btilde) subset span(B)`** -- the thing that makes
+  this basis spurious-free -- is per-segment and scale-free: on segment `n` a
+  `Btilde` member is a polynomial of degree `<= M-1`, its derivative has degree
+  `<= M-2`, and `B`'s local span IS every polynomial of degree `<= M-2`
+  (two half-hats spanning degree `<= 1` plus bubbles `2..M-2`).  Multiplying by
+  `1/J_n` does not leave that span. **[A]**
+* **The mortar cross-mass `cross_mass_1d` is already general**: it integrates on
+  the UNION of the two partitions and maps each union sub-interval into each
+  side's own segment with that segment's own affine map.  Not one character
+  changes.
+
+### F5.1 GATE (a) -- uniform boundaries reproduce the shipped basis BIT-IDENTICALLY [M]
+
+`f5_nonuniform.py a`.  `Basis1DNU(d, walls, M, tau)` accepts `walls` as an
+`int N` (the uniform lattice) or an `(N+1,)` boundary array.
+
+| arm | what is compared | result |
+|---|---|---|
+| 1-D, `walls = N` (int), `N, M` = (2,5), (3,6), (4,4), (6,4) | `mass<til\|til>`, `mass<B\|B>`, eps-weighted mass, `stiff`, `mixed<B\|d til>`, `_global_pair_segmat(m_ref)`, `_stag_fourier_projection` at `alpha0 = 0.31` -- **7 matrix families x 4 grids** | **BIT-IDENTICAL, worst `\|d\| = 0.0e+00`** |
+| 2-D scalar `3x3` cell | `Rmat`, `Lmat`, `Stt`, `Schur` | **BIT-IDENTICAL** |
+| 2-D IN-PLANE TENSOR `2x2` cell (gyrotropic pillar in a biaxial host) | `Rmat`, `Lmat`, `Stt`, `Schur` | **BIT-IDENTICAL** |
+| 2-D OUT-OF-PLANE `2x2` cell (tilted LC director) | `Agen`, `Bgen` (the `4 q^2` first-order generator) | **BIT-IDENTICAL** |
+
+The ULP question the gate had to answer: `walls` given EXPLICITLY as
+`np.linspace(0, d, N+1)` is bit-identical too at `d = 1.2 um` for
+`N = 2, 3, 4, 6` -- but at `d = 0.9 um, N = 4` it differs by **1.96e-16
+relative**.  The reason is arithmetic, not physics: `np.linspace` computes
+`start + i*step` and pins the last element, so `linspace[i+1] - linspace[i]` is
+not always the same double as `d/N`.  **Therefore the integer path must stay a
+distinct path in the implementation** (`walls = N` -> `h = d/N`,
+`J_n = 0.5*h` for all `n`), which is what makes the bit-identity claim
+unconditional and what a `G1`-class gate would assert.
+
+**GATE (a): PASS**, unconditionally on the integer path, at ULP level
+(1.96e-16, explained) on the explicit-boundary path.
+
+### F5.2 GATE (b) -- 2 non-uniform segments == 3 uniform segments [M]
+
+Two exact-wall representations of ONE device (a pillar occupying `[0, P/3]` per
+axis): a NON-uniform 2-segment grid with its wall at `P/3`, and the uniform
+3-segment grid.  They must converge to the same answer.
+
+**(b1) 2-D pillar**, `theta = 0.18`, single layer, gap relative to `max(R, T)`:
+
+| `M` | NU 2 seg, `q = 2(M-1)` | uniform 3 seg, `q = 3(M-1)` | relative gap | closure NU / uniform |
+|---|---|---|---|---|
+| 4 | 6 | 9 | 9.34e-02 | 1.1e-02 / 4.4e-04 |
+| 5 | 8 | 12 | 2.18e-02 | 1.4e-03 / 3.6e-05 |
+| 6 | 10 | 15 | 4.67e-02 | 2.5e-04 / 1.3e-06 |
+| 7 | 12 | 18 | **3.82e-03** | 3.6e-05 / 2.3e-08 |
+
+**(b2) the STRIPE twin, both arms against the EXACT 1-D `PMMStack`** (degree 14;
+its own degree-12-vs-14 self-gap **1.39e-06**, three decades below every entry
+below).  The derived bar is the triangle inequality: two representations of one
+device may disagree by at most the SUM of their own distances to truth.
+
+| `M` | NU (`q`) err vs EXACT | uniform (`q`) err vs EXACT | their gap | **derived bar** = sum | inside? |
+|---|---|---|---|---|---|
+| 4 | 1.02e-01 (6) | 2.50e-01 (9) | 1.48e-01 | 3.52e-01 | yes |
+| 5 | 1.27e-02 (8) | 1.17e-02 (12) | 9.59e-04 | 2.44e-02 | yes |
+| 6 | 1.44e-02 (10) | 1.36e-02 (15) | 7.53e-04 | 2.80e-02 | yes |
+| 7 | 1.55e-04 (12) | 5.90e-05 (18) | 9.56e-05 | 2.14e-04 | yes |
+| 9 | 1.65e-05 (16) | 1.98e-06 (24) | 1.46e-05 | 1.85e-05 | yes |
+
+**GATE (b): PASS at all five rungs against a derived, not fitted, bar** -- and
+note the NU arm reaches 1.65e-05 on `q = 16` where the uniform arm needs
+`q = 24` for 1.98e-06, i.e. the two are on the same accuracy-per-DOF curve.
+
+### F5.3 GATE (c) -- ARBITRARY walls on their own `3x3` non-uniform grid [M]
+
+Three sub-gates, because the two hybrid oracles have a floor on this cell class
+and the third sub-gate does not.
+
+**(c1) walls at `19/80` and `49/80` of the period** (exactly representable on an
+80-pixel cell, so BOTH hybrids are exact-wall too; utterly unreachable for the
+uniform lattice, which would need `N = 80`, `q >= 240`).  `theta = 0.18`,
+`phi = 0.35`.  The two oracles' OWN ladders first:
+
+| oracle | setting | `R(0,0)` | own self-gap |
+|---|---|---|---|
+| hybrid PMM | degree 11, `n_orders` 7 | 0.107991438 | -- |
+| hybrid PMM | degree 11, `n_orders` 11 | 0.105229909 | 7.87e-03 |
+| hybrid PMM | degree 13, `n_orders` 11 | 0.106776687 | 1.55e-03 |
+| RCWA | `n_orders` 11 | 0.122451909 | -- |
+| RCWA | `n_orders` 15 | 0.119468096 | 5.03e-03 |
+
+**The two oracles disagree with each other by 1.27e-02 on `R(0,0)`** -- the
+corner-dominated crossed pillar is exactly the regime `twod_staggered`'s own
+docstring flags (*"neither Fourier arm is converged there"*).  Against that:
+
+| pure NU `3x3` | `q` | vs hybrid PMM | vs RCWA | own closure | wall |
+|---|---|---|---|---|---|
+| `M = 4` | 9 | 2.04e-01 | 2.16e-01 | 1.1e-04 | 0.2 s |
+| `M = 5` | 12 | 8.30e-02 | 7.48e-02 | 2.0e-05 | 0.9 s |
+| `M = 6` | 15 | 7.12e-03 | 1.62e-02 | 1.9e-06 | 3.2 s |
+| `M = 7` | 18 | **4.29e-03** | 1.07e-02 | **4.2e-08** | 10.7 s |
+
+By `M = 7` the pure non-uniform arm sits **inside the two oracles' own mutual
+spread** (4.3e-03 and 1.07e-02 against their 1.27e-02 disagreement) with an
+energy closure of 4.2e-08 -- four decades tighter than either oracle's
+convergence gap.  That is agreement AT the oracles' floor, which is all this
+sub-gate can assert.
+
+**(c2) walls at 0.2371 and 0.6183** -- genuinely arbitrary, driven through the
+hybrid's `_pmm2d_solve_core` at those EXACT walls (its own degree-11-to-13
+self-gap 1.50e-03): pure NU reads 1.79e-01 / 7.81e-02 / 9.29e-03 / 9.68e-03 at
+`M = 4..7`, closure 2.2e-04 -> **4.0e-08**.  Same reading, same floor.
+
+**(c3) THE DECISIVE ONE -- the same arbitrary walls made y-uniform, so the
+EXACT 1-D `PMMStack` applies** (it takes arbitrary segment widths natively;
+degree-12-vs-14 self-gap **4.87e-08**):
+
+| pure NU `3x3` @ walls (0.2371, 0.6183) | `q` | **err vs the EXACT answer** | closure | wall |
+|---|---|---|---|---|
+| `M = 4` | 9 | 4.48e-02 | 3.2e-03 | 0.2 s |
+| `M = 5` | 12 | 2.36e-02 | 3.6e-05 | 0.8 s |
+| `M = 6` | 15 | 3.14e-03 | 1.4e-05 | 3.1 s |
+| `M = 7` | 18 | 2.67e-03 | 5.4e-08 | 10.5 s |
+| `M = 9` | 24 | **4.05e-05** | **2.0e-10** | 56.4 s |
+
+**Three decades of convergence against an exact independent oracle, at walls
+that the shipped uniform lattice cannot represent at any affordable `q`, and
+seven decades of lossless closure.**  The oracle's own self-gap (4.87e-08) sits
+three decades below the last reading, so the measurement is readable
+throughout.
+
+**GATE (c): PASS.**
+
+### F5.4 GATE (d) -- a 4-SLICE TAPER as a per-layer non-uniform MORTAR cascade [M]
+
+Four slices, walls interpolated between `x in [0.1873 P, 0.7241 P]` at the
+bottom and `[0.2917 P, 0.6109 P]` at the top with the hybrid's own midpoint
+rule, so the four wall pairs are
+`0.2787-0.6250`, `0.2525-0.6533`, `0.2264-0.6816`, `0.2004-0.7099` -- **no two
+slices share a single wall**, and each slice sits on its own 3-segment
+non-uniform grid.  Five mortar interfaces, every one of them non-conforming.
+
+**(d1) 2-D pillar taper vs the hybrid's `add_tapered_pillar` staircase** with
+the identical slices:
+
+| arm | setting | err vs hybrid | closure | wall |
+|---|---|---|---|---|
+| hybrid staircase | degree 9, `n_orders` 9 | -- | 4.1e-03 | 10.9 s |
+| hybrid staircase | degree 11, `n_orders` 9 | (self-gap 8.69e-03) | 2.4e-03 | 11.3 s |
+| NU mortar cascade | `M = 4` (`q = 9`) | 2.78e-01 | 3.4e-03 | 0.5 s |
+| NU mortar cascade | `M = 5` (`q = 12`) | 1.43e-01 | 3.5e-04 | 2.7 s |
+| NU mortar cascade | `M = 6` (`q = 15`) | 4.16e-02 | 1.3e-05 | 10.4 s |
+| NU mortar cascade | `M = 7` (`q = 18`) | **3.18e-02** | **2.1e-06** | 30.1 s |
+
+The hybrid's own degree self-gap is 8.69e-03 and its lossless closure is
+2.4e-03 -- **the pure arm's closure is 1100x tighter than the oracle it is
+being scored against**, so 3.18e-02 is the oracle's floor showing, not the pure
+arm's error.
+
+**(d2) THE DECISIVE ONE -- the same taper made y-uniform, exact 1-D oracle**
+(self-gap 2.89e-08):
+
+| NU mortar cascade, 4 slices, 5 non-conforming interfaces | `q` | **err vs the EXACT answer** | closure | wall |
+|---|---|---|---|---|
+| `M = 4` | 9 | 3.13e-01 | 2.0e-02 | 0.5 s |
+| `M = 5` | 12 | 1.08e-01 | 4.2e-04 | 2.5 s |
+| `M = 6` | 15 | 1.19e-01 | 1.0e-05 | 8.8 s |
+| `M = 7` | 18 | 1.24e-01 | 7.8e-06 | 34.3 s |
+| `M = 9` | 24 | 1.15e-02 | 2.9e-08 | 188.4 s |
+| **`M = 11`** | **30** | **1.20e-04** | **4.9e-11** | 716.8 s |
+
+The `M = 5..7` PLATEAU at ~1.2e-01 is real and it is alarming until it is
+attributed, so it was: **it is the device, not the mortar** (F5.5).
+
+### F5.5 The plateau, attributed -- three controls and one oracle defect [M]
+
+`f5d_diag.py`, `f5f_attrib.py`.
+
+| control | what it isolates | reading |
+|---|---|---|
+| **[A]** 4 IDENTICAL slices (a straight pillar at the same arbitrary walls) -- all four grids equal, so the identical-grid BYPASS fires and **no mortar exists in the run** | the multi-layer machinery, mortar-free | 3.08e-01, 2.73e-02, **2.51e-02**, 1.45e-04, 2.00e-06, 6.48e-07 at `M = 4,5,6,7,9,11` -- **the SAME non-monotone plateau shape** |
+| **[B]** the same 4 identical slices with `force_mortar=True` -- 5 FORCED mortar interfaces between identical NON-UNIFORM grids | the M1 conforming identity, on non-uniform grids, through five interfaces | bypass vs forced differ by **2.08e-16** (`M=5`) and **3.61e-16** (`M=7`); closures identical to 2 digits |
+| **[C]** the taper truncated to 1 / 2 / 3 / 4 slices | how the error scales with the number of non-conforming interfaces | at `M = 9`: 1.13e-06, 1.90e-05, 2.74e-04, 1.15e-02 -- it grows with the STACK, and the 1-slice arm is at 1e-06 |
+| **[E]** per-order breakdown at `M = 7` | whether one order carries it | spread across `m = -1, 0, +1` (`dT` = -1.24e-01, -1.80e-02, +5.44e-02), i.e. under-resolution, not an order-slot artefact |
+
+**[B] is the load-bearing one: the S3 conforming identity holds on NON-UNIFORM
+grids to 2e-16 through five forced mortar interfaces.**  Combined with [A] --
+which reproduces the plateau with no mortar in the process at all -- the
+plateau is the four-slice device's corner-capped convergence, and `M = 11`
+walks past it to 1.20e-04.
+
+**And one finding that is NOT about this item.**  A wall-separation sweep (two
+slices whose wall sets differ by `delta` as a fraction of the period) appeared
+to show the non-uniform mortar EXPLODING at `delta = 1e-4 .. 1e-5`, with the
+lossless closure staying at 1.6e-08 -- the energy-invisible shape.  It is the
+**1-D `PMMStack` ORACLE**, not the mortar (`f5f_attrib.py`, which measures the
+oracle's own degree-12-vs-14 self-gap alongside every comparison):
+
+| `delta` (fraction of period) | 1-D oracle's OWN self-gap | oracle(delta) - oracle(0) | pure NU `M=7` - oracle(0) |
+|---|---|---|---|
+| 1.00e-02 | 2.84e-08 | 9.26e-03 | 9.32e-03 |
+| 2.60e-03 | 3.53e-08 | 2.83e-03 | 2.86e-03 |
+| 1.00e-03 | 4.34e-08 | 1.13e-03 | 1.18e-03 |
+| 3.00e-04 | 6.43e-08 | 3.44e-04 | 4.99e-04 |
+| **1.00e-04** | **4.79e-01** | 4.79e-01 | 3.03e-04 |
+| **3.00e-05** | **8.17e+00** | 8.62e+00 | 2.34e-04 |
+| **1.00e-05** | 1.18e-04 | **9.30e-01** | 2.15e-04 |
+| 3.00e-06 | 5.47e-08 | 3.46e-06 | 2.08e-04 |
+| 1.00e-06 | 5.47e-08 | 1.15e-06 | 2.06e-04 |
+| 0 | 5.47e-08 | 0 | 2.05e-04 |
+
+The last column is the whole answer: **the pure non-uniform mortar arm is
+smooth and MONOTONE in `delta` all the way to zero** (9.32e-03 -> 2.05e-04,
+no discontinuity anywhere), while the oracle's own self-gap blows to 4.8e-01
+and 8.2e+00 at `delta = 1e-4` and `3e-5`, and at `delta = 1e-5` **both of its
+degrees agree on an answer 9.3e-01 away from the `delta -> 0` limit** -- a
+converged-looking wrong answer.  Both spellings of the 1-D oracle
+(`layer_grids` default and `'per-layer'`) read identically.  This is a
+suspected sliver-element defect in the shipped 1-D `PMMStack` at near-coincident
+LAYER walls; it is logged as **O-11** below and it is not this item's.
+
+The taper regime the roadmap actually cares about is far from it: roadmap
+correction S-1's 2-degree sidewall moves a wall 1.8 nm on a 700 nm period,
+`delta = 2.57e-03` of the period, where the sweep reads 2.46e-04 at `M = 7`
+and everything is monotone.
+
+**GATE (d): PASS** -- 1.20e-04 against an exact oracle on a four-slice
+arbitrary-wall taper, with the plateau attributed to the device by two
+controls and the conforming identity re-established on non-uniform grids at
+2e-16.
+
+### F5.6 What the arithmetic becomes
+
+Roadmap correction S-1, restated with non-uniform segments:
+
+| | uniform lattice (today) | non-uniform segments |
+|---|---|---|
+| a 2-deg sidewall over 310 nm, 6 slices, 700 nm period (wall moves 1.8 nm/slice) | `N ~ 390` per slice -> `q = 390 (M-1) >= 1170`, eig `2 q^2 >= 2.7e+06` | **3 segments** per slice -> `q = 3 (M-1)`; at `M = 9`, `q = 24`, eig **1152** |
+| the measured 4-slice arbitrary-wall taper | unreachable | **1.20e-04** vs the exact oracle at `M = 11` (717 s), 1.15e-02 at `M = 9` (188 s) |
+
+**S0's scope statement is superseded**: with non-uniform segments this item
+delivers the ARBITRARY taper, not only the low-order-rational staircase.
+
+### F5.7 VERDICT: **GO**, and the integration route
+
+The change composes with the mortar build rather than competing with it -- **a
+per-layer own-walls NON-UNIFORM grid is exactly what the mortar cascade was
+built to carry**, and every mortar-side ingredient (the cross-mass, the
+separable apply, the V1/V2 swap, `_redheffer_star_rect`) is untouched.
+
+**The API.**  Today `eps_cell`'s grid IS the wall set, which is why arbitrary
+walls are inexpressible.  Add the wall set as an input, spelled as the hybrid
+already spells it (`PMM2DStackHybrid._append_patterned(kind, t, xw, yw, tile)`
+and `pmm_efficiency_2d_cell`'s internal `x_walls, y_walls, tile =
+_cell_to_walls_tile(...)`):
+
+```python
+Basis1D(d, walls, M, tau)          # walls: int N (uniform, BIT-IDENTICAL) or
+                                   #        an (N+1,) increasing array
+Granet2DTransverseE(px, py, wx, wy, M, eps_cell, ...)   # wx/wy: int or array
+
+PMM2DStackPure.add_layer(thickness, *, eps=None, eps_cell=None,
+                         x_walls=None, y_walls=None,     # NEW
+                         grid=None, n_modes=None)
+```
+
+* `x_walls` / `y_walls` are the layer's own INTERIOR wall positions in metres
+  (a full `0..period` boundary array is also accepted).  **`None` is today's
+  behaviour, bit-identical**: the uniform lattice implied by `eps_cell.shape`.
+* With walls given, `eps_cell` becomes the STRIP TILE of shape
+  `(len(x_walls)+1, len(y_walls)+1)` -- literally the hybrid's `tile`, so the
+  two 2-D stacks take the same geometry description and
+  `add_tapered_pillar` (`stack2d.py:605-646`) transplants **verbatim**, its
+  `_append_patterned("scalar", dz, xw, yw, tile)` becoming
+  `add_layer(dz, eps_cell=tile, x_walls=xw, y_walls=yw)`.
+* Keep `Nx == Ny`.  That constraint is `bx.dim == by.dim`, i.e. equal SEGMENT
+  COUNTS per axis; the wall POSITIONS may differ freely between the axes (gate
+  (c) and (d) both exercise that).
+* `Basis1D.J` must be `None` (not a mean, not a NaN) on a non-uniform basis, so
+  any un-migrated reader raises a `TypeError` immediately instead of applying
+  one segment's scaling to all of them.  The prototype does this and it caught
+  nothing after the four sites above were changed -- which is itself the
+  evidence that there are only four.
+* Validation: strictly increasing, `walls[0] == 0`, `walls[-1] == period`, and
+  `eps_cell.shape[:2] == (len(wx)-1, len(wy)-1)`.
+
+**Cost of the build: 1-2 days on top of the mortar build**, and the two should
+ship together -- the mortar without non-uniform segments serves low-order
+rationals only (S0), and non-uniform segments without the mortar cannot cascade
+two slices with different walls.
+
+**Gates for the non-uniform half** (in the S12.4 numbering):
+
+| gate | claim | measured here |
+|---|---|---|
+| **N1** | `walls = N` (int) reproduces the shipped `Basis1D` and `Granet2DTransverseE` BIT-FOR-BIT, on the scalar, in-plane-tensor AND out-of-plane paths | `0.0e+00` over 7 matrix families x 4 grids and 3 cell kinds (F5.1) |
+| **N2** | an explicit `linspace` wall array is NOT required to be bit-identical; the difference is ULP-level and explained | 1.96e-16 relative at `(d = 0.9 um, N = 4)`; 0.0 at `d = 1.2 um` (F5.1) |
+| **N3** | two exact-wall representations of one device converge to the same answer, bounded by the TRIANGLE INEQUALITY against an exact oracle -- not by a fitted constant | 5/5 rungs inside `err_NU + err_uniform` (F5.2) |
+| **N4** | a cell with arbitrary walls converges to the EXACT 1-D answer on its own 3-segment grid | 4.48e-02 -> **4.05e-05** over `q = 9..24`, oracle self-gap 4.87e-08 (F5.3 c3) |
+| **N5** | a multi-slice arbitrary-wall taper converges through NON-CONFORMING mortar interfaces | **1.20e-04** at `q = 30`, closure 4.9e-11 (F5.4 d2) |
+| **N6** | the conforming identity survives non-uniform grids: forcing the mortar on identical NON-UNIFORM grids reproduces the bypass | **2.08e-16 / 3.61e-16** through 5 forced interfaces (F5.5 [B]) |
+| **N7** | FAIL-BEFORE for the four `J_n` sites: reverting any one of them to the scalar `J` must break a NON-uniform solve while leaving every uniform solve bit-identical | not run; the four sites are identified and each is 1-3 lines. The build must run it -- a uniform-only gate cannot see any of them, exactly as G3 cannot see the V1/V2 swap |

@@ -5,3 +5,23 @@ lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
   union M=3 (q=12, eig   288)  R(0,0)=0.002640980  gap vs prev    --     closure  5.6e-04      2.2s
   union M=4 (q=18, eig   648)  R(0,0)=0.004992238  gap vs prev 2.12e-01  closure  1.3e-05     14.6s
   union M=5 (q=24, eig  1152)  R(0,0)=0.005324533  gap vs prev 2.75e-02  closure  1.5e-07     86.0s
+  union M=6 (q=30, eig  1800)  R(0,0)=0.005346876  gap vs prev 8.71e-04  closure  2.3e-09    376.7s
+  union M=7 (q=36, eig  2592)  R(0,0)=0.005351023  gap vs prev 4.45e-04  closure  1.7e-11   1028.3s
+  -> reference = union M=7; its OWN uncertainty (last ladder gap) = 4.45e-04
+-- EQUAL-DOF: union(M) vs mortar(M_A = 3M-2 on N=2, M_B = 2M-1 on N=3) --
+  q=12 (eig   288)  union M=3 err  2.24e-01 (clo  5.6e-04,    2.2s) | mortar M_A=7 M_B=5 err  1.19e-01 (clo  5.6e-05,    1.7s) | mortar/union   0.529x
+  q=18 (eig   648)  union M=4 err  2.68e-02 (clo  1.3e-05,   14.6s) | mortar M_A=10 M_B=7 err  4.92e-03 (clo  5.4e-08,   18.0s) | mortar/union   0.183x
+  q=24 (eig  1152)  union M=5 err  1.15e-03 (clo  1.5e-07,   86.0s) | mortar M_A=13 M_B=9 err  2.75e-03 (clo  2.9e-11,  103.6s) | mortar/union   2.399x
+
+===== in-plane LC tensor in layer A =====
+-- union-grid REFERENCE ladder (N=6, the common refinement) --
+  union M=3 (q=12, eig   288)  R(0,0)=0.021443130  gap vs prev    --     closure  1.9e-04      1.2s
+  union M=4 (q=18, eig   648)  R(0,0)=0.007226722  gap vs prev 8.02e-02  closure  2.7e-06     14.4s
+  union M=5 (q=24, eig  1152)  R(0,0)=0.006859743  gap vs prev 4.95e-03  closure  9.0e-08     87.8s
+  union M=6 (q=30, eig  1800)  R(0,0)=0.006757147  gap vs prev 1.27e-03  closure  8.9e-11    362.2s
+  -> reference = union M=6; its OWN uncertainty (last ladder gap) = 1.27e-03
+-- EQUAL-DOF: union(M) vs mortar(M_A = 3M-2 on N=2, M_B = 2M-1 on N=3) --
+  q=12 (eig   288)  union M=3 err  8.91e-02 (clo  1.9e-04,    1.2s) | mortar M_A=7 M_B=5 err  4.40e-02 (clo  2.2e-05,    1.7s) | mortar/union   0.494x
+  q=18 (eig   648)  union M=4 err  6.21e-03 (clo  2.7e-06,   14.4s) | mortar M_A=10 M_B=7 err  4.10e-03 (clo  1.7e-08,   19.7s) | mortar/union   0.660x
+
+wrote C:\tmp\lum_mortarp\validation\probe_pmm2d_staggered_mortar\f2_device_regime.json

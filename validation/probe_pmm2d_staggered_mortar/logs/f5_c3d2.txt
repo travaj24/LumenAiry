@@ -6,3 +6,15 @@ lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
   pure NU 3x3 arbitrary walls  M=5 (q=12)  err vs EXACT 1-D  2.36e-02  closure  3.6e-05     0.8s
   pure NU 3x3 arbitrary walls  M=6 (q=15)  err vs EXACT 1-D  3.14e-03  closure  1.4e-05     3.1s
   pure NU 3x3 arbitrary walls  M=7 (q=18)  err vs EXACT 1-D  2.67e-03  closure  5.4e-08    10.5s
+  pure NU 3x3 arbitrary walls  M=9 (q=24)  err vs EXACT 1-D  4.05e-05  closure  2.0e-10    56.4s
+
+=== GATE (d2) -- 4-slice STRIPE taper vs the EXACT 1-D oracle ===
+  slice x-walls (fraction of period): ['0.2787-0.6250', '0.2525-0.6533', '0.2264-0.6816', '0.2004-0.7099']
+  1-D oracle deg12-vs-deg14 self-gap 2.89e-08
+  NU mortar taper M=4 (q= 9, 4 slices, 5 interfaces)  err vs EXACT 1-D  3.13e-01  closure  2.0e-02     0.5s
+  NU mortar taper M=5 (q=12, 4 slices, 5 interfaces)  err vs EXACT 1-D  1.08e-01  closure  4.2e-04     2.5s
+  NU mortar taper M=6 (q=15, 4 slices, 5 interfaces)  err vs EXACT 1-D  1.19e-01  closure  1.0e-05     8.8s
+  NU mortar taper M=7 (q=18, 4 slices, 5 interfaces)  err vs EXACT 1-D  1.24e-01  closure  7.8e-06    34.3s
+  NU mortar taper M=9 (q=24, 4 slices, 5 interfaces)  err vs EXACT 1-D  1.15e-02  closure  2.9e-08   188.4s
+
+wrote f5_nonuniform.json

@@ -1,0 +1,43 @@
+lumenairy: c:\tmp\lum_mortarp\lumenairy\__init__.py
+
+[A] 4 IDENTICAL slices (straight pillar, mortar BYPASSED)
+  M=4  err vs EXACT 1-D  3.08e-01  closure  3.0e-03
+  M=5  err vs EXACT 1-D  2.73e-02  closure  9.1e-05
+  M=6  err vs EXACT 1-D  2.51e-02  closure  1.5e-05
+  M=7  err vs EXACT 1-D  1.45e-04  closure  2.7e-08
+  M=9  err vs EXACT 1-D  2.00e-06  closure  9.7e-12
+
+[B] the SAME 4 identical slices, mortar FORCED (M1 identity, non-uniform grids)
+  M=5  bypass  2.73e-02 | forced mortar  2.73e-02  |difference|  2.08e-16   closure  9.1e-05/ 9.1e-05
+  M=7  bypass  1.45e-04 | forced mortar  1.45e-04  |difference|  3.61e-16   closure  2.7e-08/ 2.7e-08
+
+[C] taper truncated to 1 / 2 / 3 / 4 slices (1..4 non-conforming interfaces)
+  slices=1 M=5  err  2.22e-03  closure  3.5e-05
+  slices=1 M=7  err  2.53e-05  closure  4.1e-08
+  slices=1 M=9  err  1.13e-06  closure  1.5e-11
+  slices=2 M=5  err  1.71e-02  closure  4.8e-05
+  slices=2 M=7  err  1.32e-03  closure  2.8e-07
+  slices=2 M=9  err  1.90e-05  closure  4.0e-10
+  slices=3 M=5  err  2.56e-02  closure  1.5e-06
+  slices=3 M=7  err  6.98e-03  closure  7.1e-07
+  slices=3 M=9  err  2.74e-04  closure  2.8e-09
+  slices=4 M=5  err  1.08e-01  closure  4.2e-04
+  slices=4 M=7  err  1.24e-01  closure  7.8e-06
+  slices=4 M=9  err  1.15e-02  closure  2.9e-08
+
+[D] wall SEPARATION sweep: 2 slices, second slice's walls offset by delta
+  delta=  0.10000 (thin union sub-interval) M=7  err  6.80e-03  closure  3.5e-06
+  delta=  0.02610 (thin union sub-interval) M=7  err  1.20e-03  closure  2.6e-07
+  delta=  0.00500 (thin union sub-interval) M=7  err  2.91e-04  closure  3.9e-08
+  delta=  0.00100 (thin union sub-interval) M=7  err  2.20e-04  closure  2.0e-08
+  delta=  0.00001 (thin union sub-interval) M=7  err  9.31e-01  closure  1.6e-08
+
+[E] per-order breakdown of the 4-slice taper error
+  M=7: orders [np.int64(-2), np.int64(-1), np.int64(0), np.int64(1), np.int64(2)]
+        dR ['0.00e+00', '-1.56e-02', '9.98e-02', '3.49e-03', '0.00e+00']
+        dT ['0.00e+00', '-1.24e-01', '-1.80e-02', '5.44e-02', '0.00e+00']
+  M=9: orders [np.int64(-2), np.int64(-1), np.int64(0), np.int64(1), np.int64(2)]
+        dR ['0.00e+00', '-9.11e-03', '3.58e-03', '1.15e-02', '0.00e+00']
+        dT ['0.00e+00', '-7.61e-03', '3.66e-03', '-2.02e-03', '0.00e+00']
+
+wrote f5d_diag.json
