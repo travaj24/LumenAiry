@@ -2,7 +2,7 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.44.0] — 2026-09-10
 
 ### Fixed -- a MAGNETIC layer's Wood-anomaly cut-offs sit at `Re(eps*mu)`
 
