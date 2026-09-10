@@ -36,9 +36,17 @@ _K = 2 * np.pi / _WL
 
 #: max |c64 - c128| of a UNIT phasor narrowed from a float64 build: each
 #: component rounds by at most eps32/2 = 5.96e-8, so |dz| <= sqrt(2) * 5.96e-8
-#: = 8.4e-8.  Measured 4.2e-8 on all four helpers (validate_mixed_precision.py,
-#: 2026-09-09).  Bar 2.5e-7: 3x above the analytic ceiling, 60x below the
-#: naive control at the SMALLEST argument tested.
+#: = 8.43e-8.  Bar 2.5e-7 = 2.97x that analytic ceiling.
+#:
+#: RE-MEASURED 2026-09-11 on the two fixtures below, on BOTH builds -- Windows
+#: py 3.14.6 / numpy 2.4.4 and WSL py 3.12.3 / numpy 2.4.6, IDENTICAL to every
+#: figure: 4.2032e-08 at R=45.9 mm and 4.2117e-08 at R=5 mm, so the bar sits
+#: 5.94x above the measurement.  TWO-SIDED: the naive float32-ARGUMENT control
+#: on the SMALLER of the two arguments reads 9.8719e-07, which is 3.95x ABOVE
+#: this bar -- so the bar separates the two builds of the phasor at both
+#: fixtures.  (This line used to claim "60x below the naive control at the
+#: SMALLEST argument tested"; it is 3.95x.
+#: VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D4.)
 _C64_PHASOR_TOL = 2.5e-7
 
 
@@ -88,8 +96,10 @@ def test_dtype_none_and_complex128_are_byte_identical(name):
 # 2.  complex64: one float32 rounding, flat in the phase argument
 # ===========================================================================
 @pytest.mark.parametrize('R, N, dx', [
-    (45.9e-3, 512, 1.806e-6),       # max |k r^2 / 2R| ~ 3.6e+02 rad
-    (5.0e-3, 1024, 1.806e-6),       # ~1.3e+04 rad
+    # the TRUE max |k r^2 / (2R)| of each fixture, re-measured 2026-09-11 on
+    # both builds (D4: these comments read 3.6e+02 and 1.3e+04 rad, 16x off).
+    (45.9e-3, 512, 1.806e-6),       # max |k r^2 / (2R)| = 22.34 rad
+    (5.0e-3, 1024, 1.806e-6),       # 820.2 rad
 ])
 def test_complex64_phasors_are_one_float32_rounding_from_complex128(R, N, dx):
     for name, fn in _helpers(N, dx, R).items():
@@ -104,12 +114,30 @@ def test_complex64_phasors_are_one_float32_rounding_from_complex128(R, N, dx):
 
 def test_the_float32_argument_control_grows_with_the_argument():
     """WHY the boundary sits after ``exp``: building the ARGUMENT in float32
-    loses ~7 digits of ``k r^2 / 2R``, so its phasor error scales with the
-    argument (measured 1.5e-05 at 3.6e+02 rad, 4.9e-04 at 1.3e+04 rad,
-    2026-09-09) while the float64-argument build stays at the float32
-    phasor floor.  Bar: the control must exceed the shipped complex64 error
-    by at least 10x at the SMALL argument and 100x at the large one --
-    both decades below the measured ratios (360x and 11 600x)."""
+    loses ~7 digits of ``k r^2 / (2R)``, so its phasor error scales with the
+    argument, while the float64-argument build stays flat at the float32
+    phasor floor.
+
+    RE-MEASURED 2026-09-11 on BOTH builds (Windows py 3.14.6 / numpy 2.4.4 and
+    WSL py 3.12.3 / numpy 2.4.6 -- identical to every figure).  The numbers
+    this docstring used to carry -- "1.5e-05 at 3.6e+02 rad, 4.9e-04 at
+    1.3e+04 rad", ratios "360x and 11 600x" -- do not reproduce on these
+    fixtures and are corrected here
+    (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D4)::
+
+        fixture             max argument   control     shipped c64   ratio
+        R=45.9 mm, N=512      22.34 rad    9.872e-07    4.203e-08     23.5x
+        R=5 mm,    N=1024    820.19 rad    3.052e-05    4.198e-08    727.0x
+
+    The bars stay 10x and 100x, and the margins they actually carry are 2.35x
+    and 7.27x -- thin at the small argument, and that is the honest reading:
+    the control only SEPARATES above ~2e+03 rad (an independent ladder over
+    2.0e+02 .. 2.0e+05 rad reads ratios 1.0, 1.0, 1.0, 5.8e+03, 2.3e+04,
+    4.6e+04, 1.9e+05 -- verification V5), and these two shipped fixtures sit
+    BELOW that, at 22.34 and 820.19 rad.  What the test pins two-sidedly at
+    these arguments is the DIRECTION and the decade: a float32 argument is
+    already 23x worse at 22 rad and 727x at 820, while the shipped build is
+    flat at the 4.2e-08 float32 phasor floor either way."""
     for R, N, dx, ratio in ((45.9e-3, 512, 1.806e-6, 10.0),
                             (5.0e-3, 1024, 1.806e-6, 100.0)):
         x = (np.arange(N) - N / 2) * dx
@@ -252,8 +280,17 @@ def test_the_complex64_carrier_call_no_longer_pays_a_full_grid_complex128():
 def test_fourier_upsample_crop_keeps_complex64():
     """Bar derivation: the c64 round trip differs from the c128 one by the
     float32 rounding of the envelope samples propagated through two FFTs --
-    ~N * eps32 relative at worst, measured 2.0e-07 rel L2 at N=2048
-    (2026-09-09).  Bar 1e-5, 50x above the measurement."""
+    ~sqrt(log2 N) * eps32 relative, since BOTH transforms of the pair run in
+    single precision on numpy >= 2.0 (D3, and the docstring of
+    ``test_niche_perf_round2_2026_08_10::
+    test_upsample_crop_keeps_the_envelope_dtype``).
+
+    RE-MEASURED 2026-09-11 on THIS test's own fixture -- N=512, the 256->512
+    branch -- on both builds: 1.7151e-07 rel L2 (Windows and WSL agree to 12
+    figures).  The number this docstring used to record, "2.0e-07 at N=2048",
+    was measured on a grid the test does not run
+    (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D4).  Bar 1e-5 = 58.3x above the
+    measurement."""
     N, dx = 512, 1.806e-6
     rng = np.random.default_rng(1)
     x = (np.arange(N) - N / 2) * dx
@@ -284,9 +321,18 @@ def test_exact_focus_readout_keeps_complex64():
 
     Bar derivation: the complex64 arm differs from the complex128 arm by the
     float32 rounding of the input and of each phasor (~1e-7 relative per
-    stage, four stages) plus the Bluestein zoom in complex64 -- measured
-    end to end on this fixture (recorded in the assertion message on first
-    run, 2026-09-09).  Bar 1e-4 on the relative L2 of the readout field."""
+    stage, four stages) plus the Bluestein zoom in complex64.
+
+    MEASURED end to end on this fixture, 2026-09-11 -- the docstring used to
+    record NO number at all ("recorded in the assertion message on first run"
+    is not a derivation; VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D5):
+    **9.8995e-08** on Windows (py 3.14.6 / numpy 2.4.4) and **9.8841e-08** on
+    WSL (py 3.12.3 / numpy 2.4.6) -- the two builds agree to three figures.
+    Bar **1e-6**, TIGHTENED from the 1e-4 that shipped, which sat three
+    decades above the measurement and would have passed a 1000x precision
+    regression.  1e-6 is 10.1x above BOTH builds' readings, so it is
+    two-sided: it fails on any real widening of the complex64 path and passes
+    on the build spread (0.16 % between the two)."""
     N, dx, R = 256, 2.0e-6, -2.0e-3
     kw = dict(dx_out=0.1e-6, N_out=64, window_factor=4.0)
     with warnings.catch_warnings():
@@ -298,7 +344,7 @@ def test_exact_focus_readout_keeps_complex64():
     assert a.dtype == np.complex128
     assert b.dtype == np.complex64, b.dtype
     rel = float(np.linalg.norm(a - b) / np.linalg.norm(a))
-    assert rel <= 1e-4, rel
+    assert rel <= 1e-6, rel
 
 
 def _singlet(R1, R2, d, glass, ap, name='s'):
@@ -319,10 +365,20 @@ def test_one_group_chain_keeps_complex64_end_to_end():
 
     The dtype claim is exact: every stage the audit listed as a leak now
     follows the field, so the returned field IS complex64.  The accuracy bar
-    is the float32 floor compounded over the chain's ~8 phasor multiplies
-    and one element (measured on the synthetic 6-leg prototype chain:
-    2.8e-7 relative per leg, 1.1e-6 after six; validate_mixed_precision.py
-    2026-09-09) -- 1e-4 on relative L2 leaves two decades."""
+    is the float32 floor compounded over the chain's ~8 phasor multiplies and
+    one element.
+
+    MEASURED on this fixture, 2026-09-11: **9.4427e-08** on Windows (py 3.14.6
+    / numpy 2.4.4) and **9.4427e-08** on WSL (py 3.12.3 / numpy 2.4.6) -- the
+    two builds agree to 10 figures.  Bar **1e-6**, TIGHTENED from the 1e-4
+    that shipped, which sat three decades above the measurement, so a 1000x
+    precision regression passed it
+    (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D5).  1e-6 is 10.6x above both
+    builds: it fails on any real widening and passes on the build spread.
+    (An independent six-leg synthetic chain grows LINEARLY at 4.58e-08 per
+    leg, 2.75e-07 after six -- verification V6 -- which is the shape this
+    single-group bar is set against; the "2.8e-7 per leg, 1.1e-6 after six"
+    this docstring used to cite is the prototypes' different chain.)"""
     N, dx = 512, 30e-6
     w, R_in = 4.5e-3, 60e-3
     presc = _singlet(60.0e-3, -60.0e-3, 3.0e-3, 'N-BK7', 14.0e-3, 'sph')
@@ -345,4 +401,4 @@ def test_one_group_chain_keeps_complex64_end_to_end():
     assert a.dtype == np.complex128
     assert b.dtype == np.complex64, b.dtype
     rel = float(np.linalg.norm(a - b) / np.linalg.norm(a))
-    assert rel <= 1e-4, rel
+    assert rel <= 1e-6, rel
