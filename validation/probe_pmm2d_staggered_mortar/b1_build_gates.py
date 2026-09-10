@@ -197,7 +197,7 @@ def gate_g4():
 def _oracle_1d(duties, ts, M1d=14, theta=0.20, per=0.9, wl=0.6):
     st = PMMStack(per, degree=M1d, far_field_orders=5)
     for duty, t in zip(duties, ts):
-        st.add_layer(t, widths=[duty * per, (1 - duty) * per], eps=[6.0, 2.25])
+        st.add_layer(t, segments=[(duty, 6.0), (1 - duty, 2.25)])
     st.set_source(wl, theta=theta)
     return st.solve()
 
@@ -211,8 +211,7 @@ def gate_g5_g6():
     def _oracle(deg):
         st = PMMStack(per, degree=deg, far_field_orders=5)
         for duty, t in zip(duties, ts):
-            st.add_layer(t, widths=[duty * per, (1 - duty) * per],
-                         eps=[6.0, 2.25])
+            st.add_layer(t, segments=[(duty, 6.0), (1 - duty, 2.25)])
         st.set_source(wl, theta=theta)
         return st.solve()
 
@@ -296,7 +295,7 @@ def gate_nonuniform():
     # ---- N3: a stripe at duty 1/3 as 2 NON-uniform segments vs 3 uniform ---
     def _oracle(deg):
         st = PMMStack(per, degree=deg, far_field_orders=5)
-        st.add_layer(0.30, widths=[per / 3.0, 2.0 * per / 3.0], eps=[6.0, 2.25])
+        st.add_layer(0.30, segments=[(1 / 3.0, 6.0), (2 / 3.0, 2.25)])
         st.set_source(wl, theta=theta)
         return st.solve()
 
@@ -350,8 +349,8 @@ def gate_nonuniform():
 
     def _oracle_arb(deg):
         st = PMMStack(per, degree=deg, far_field_orders=5)
-        st.add_layer(0.30, widths=[w0, w1 - w0, per - w1],
-                     eps=[2.25, 6.0, 2.25])
+        st.add_layer(0.30, segments=[(w0 / per, 2.25), ((w1 - w0) / per, 6.0),
+                                     ((per - w1) / per, 2.25)])
         st.set_source(wl, theta=theta)
         return st.solve()
 

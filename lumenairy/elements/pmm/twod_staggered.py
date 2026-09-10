@@ -34,6 +34,40 @@ Why this over the FMM-floored hybrid
   boundaries (Eq. 26), so ``eps`` is exact per element (no Gibbs); the total
   efficiencies are invariant to the pillar's position in the cell.
 
+Segment boundaries -- UNIFORM or ARBITRARY (Eq. 31)
+----------------------------------------------------
+Granet Eq. 31 maps EACH segment individually,
+``x = 0.5 (x_{n+1} - x_n) u + 0.5 (x_{n+1} + x_n)``, so nothing in the
+formulation requires the segments to be equal.  :class:`Basis1D` and
+:class:`Granet2DTransverseE` therefore take their per-axis segmentation as
+EITHER an ``int N`` -- the uniform lattice, and then every matrix they build is
+BIT-IDENTICAL to the pre-2026-09-11 library -- or an increasing ``(N + 1,)``
+array of wall positions.  The generalization is the scalar jacobian ``J``
+becoming a per-segment ``J_n``, at exactly four sites
+(:meth:`Basis1D._global_matrix`, :func:`_global_pair_segmat`,
+:meth:`Granet2DTransverseE._eps_dir` and :func:`_stag_fourier_projection`);
+everything else -- the reference-interval elementary matrices, the hat glue of
+Eqs. 32-33 including the Bloch ``tau`` hat, and the de Rham property
+``d(Btilde) subset span(B)`` that makes this basis spurious-free -- is
+per-segment and scale-free.
+
+This is what makes an arbitrary TAPER representable: a wall that moves 1.8 nm
+per z-slice on a 700 nm period needs ``N ~ 390`` uniform segments (``q >= 1170``,
+an eigenproblem above 2.7e+06) and THREE non-uniform ones.
+
+Per-layer element grids (the L2 mortar)
+----------------------------------------
+:class:`StagGridOps` / :class:`StagCrossOps`, :func:`_stag_cross_mass_1d` and
+:func:`_stag_kron_apply` are the basis-level ingredients of
+``PMM2DStackPure(..., layer_grids='per-layer')``, where each layer keeps its own
+segmentation and adjacent grids are coupled weakly.  The cross-mass between two
+partitions is EXACT by Gauss-Legendre on their UNION (on each union
+sub-interval both sides are polynomials of degree ``<= M-1``), it is COMPLEX
+(the Bloch ``tau`` glue lives in the basis), and its 2-D form factors exactly
+as a Kronecker product -- which is why it is never materialised (900x memory at
+``N = (6, 12), M = 6``).  The interface algebra itself lives beside its 1-D
+sibling in :mod:`lumenairy.elements.pmm._core`.
+
 Anisotropy -- FULL ``(3, 3)`` tensors, in-plane AND out-of-plane
 ----------------------------------------------------------------
 ``eps_cell`` may be a scalar ``(Nx, Ny)`` map (the isotropic solver

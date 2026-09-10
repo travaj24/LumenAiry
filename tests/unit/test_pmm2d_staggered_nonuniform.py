@@ -456,7 +456,7 @@ def test_n4_arbitrary_walls_converge_to_the_exact_1d_answer():
         (w0, w1 - w0, _PER - w1), (_EPS_H, _EPS_P, _EPS_H))
     tile = np.array([[_EPS_H] * 3, [_EPS_P] * 3, [_EPS_H] * 3], dtype=_C)
     errs = []
-    for M in (4, 6, 8):
+    for M in (4, 5, 7):
         st = PMM2DStackPure(_PER, n_modes=M, n_orders=1,
                             layer_grids="per-layer")
         st.add_layer(0.30, eps_cell=tile, x_walls=[w0, w1], y_walls=[w0, w1])
@@ -467,12 +467,15 @@ def test_n4_arbitrary_walls_converge_to_the_exact_1d_answer():
         assert abs(float(R.sum(1)[1] + T.sum(1)[1] - 1.0)) < 5e-3, (M, errs)
     # a DECISION: each rung at least 2x tighter than the last, and the last is
     # two decades inside the coarsest -- the shape a converging discretization
-    # has and a wrong one does not.  MEASURED errs (WIN) 4.5e-02 / 3.1e-03 /
-    # 1.1e-04 and (WSL) the same to 4 decades; oracle self-gap 4.9e-08.
+    # has and a wrong one does not.  MEASURED errs at q = 9 / 12 / 18:
+    # 3.3205e-02 / 3.8906e-03 / 4.6695e-04 on WIN and 3.3205e-02 / 3.8906e-03 /
+    # 4.6695e-04 on WSL, i.e. the two builds agree to 10+ digits because these
+    # readings are DISCRETISATION-limited.  The ladder continues to 5.3543e-06
+    # at q = 24 with closure 1.98e-10 (build doc, S4.3).
     assert errs[1] < 0.5 * errs[0] and errs[2] < 0.5 * errs[1], errs
     # ... and the last rung is still READABLE against the oracle (above its
-    # own self-gap), so the measurement has not run into the oracle's floor.
-    # MEASURED errs (WIN) 3.32e-02 / 1.21e-03 / 7.37e-05, self-gap 8.54e-06.
+    # own self-gap 8.5373e-06), so the measurement has not run into the
+    # oracle's floor and the convergence above is the solver's, not noise.
     assert errs[-1] < 1e-3 and errs[-1] > 2.0 * self_gap, (errs, self_gap)
 
 

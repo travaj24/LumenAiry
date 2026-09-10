@@ -24,11 +24,14 @@ vs PMM2DStackHybrid
 * **No Fourier floor.**  Patterned-layer energy/accuracy is ``n_orders``-
   independent; raise the modal degree ``n_modes`` (``M``) to converge.
 * **Exact sidewalls + position invariance** (walls land on the ``eps_cell`` grid).
-* **UNION-GRID constraint.**  All patterned layers share ONE common SQUARE
-  ``(Nx, Ny)`` segmentation (the 1-D :class:`PMMStack` union grid lifted to 2-D):
-  the modal matrices must be conformable across interfaces.  The hybrid decouples
-  layers through the Fourier projection, so it has NO union-grid constraint (walls
-  may differ per layer).  Re-express each layer's pattern on a common grid.
+* **Union grid by DEFAULT, not by necessity.**  ``layer_grids='shared'`` (the
+  default) puts all patterned layers on ONE common SQUARE ``(Nx, Ny)``
+  segmentation -- the 1-D :class:`PMMStack` union grid lifted to 2-D -- so the
+  modal matrices are conformable across every interface.
+  ``layer_grids='per-layer'`` lifts that: each layer keeps its OWN grid and its
+  own modal count, and adjacent grids are coupled by an L2 MORTAR (see
+  "Per-layer element grids" below).  The hybrid decouples layers through its
+  Fourier projection and so never had the constraint at all.
 
 Scope
 -----
@@ -88,8 +91,51 @@ slant, and ``retain_internal`` on a slanted stack.  See
 :mod:`lumenairy.elements.pmm.twod_staggered`, "SLANT".
 
 A shear is NOT a TAPER -- a taper shrinks the cross-section and no shear
-absorbs a dilation.  Tapered (z-staircase) helpers remain hybrid-only: use
-:class:`PMM2DStackHybrid`.
+absorbs a dilation, so a tapered feature still needs a z-staircase.  That
+staircase is now available on THIS engine too:
+:meth:`PMM2DStackPure.add_tapered_pillar` / :meth:`add_tapered_pillars` with
+``layer_grids='per-layer'`` put each slice on its own NON-UNIFORM grid at
+exact walls (see below).
+
+Per-layer element grids (``layer_grids='per-layer'``)
+-----------------------------------------------------
+Every layer carries its OWN segmentation and its own ``n_modes``, and adjacent
+grids are coupled WEAKLY: tangential E is tested against the lower layer's
+trace space and tangential H against the upper layer's (the classic
+mode-matching pairing, which keeps the interface system square for unequal
+mode counts), with the resulting rectangular S-matrices cascaded by
+``_redheffer_star_rect``.  Two layers whose grids COINCIDE bypass the mortar
+entirely and reproduce ``layer_grids='shared'`` BIT-EXACTLY.
+
+* ``add_layer(..., x_walls=, y_walls=)`` gives a PATTERNED layer arbitrary wall
+  POSITIONS (``eps_cell`` is then the strip TILE, exactly the hybrid's
+  geometry description); its segment COUNT always comes from that cell and is
+  never a free parameter, because a pillar 1/2 of the period wide exists on
+  ``N in {2,4,...}`` and one 1/3 wide on ``N in {3,6,...}`` -- accepting a free
+  ``N`` would silently change the DEVICE.
+* ``add_layer(..., grid=)`` applies to UNIFORM layers, which have no walls of
+  their own; it defaults to ``1``, the cheapest region the engine can express.
+* ``add_layer(..., n_modes=)`` is the per-layer modal count and is the lever
+  that makes the mode pay.  A uniform layer's default is NOT the stack's ``M``
+  but the measured neighbour rule ``M_u = max(q_prev, q_next) / N_u + 1``:
+  ``N = 1`` is cheap, ``N = 1`` at the stack's ``M`` is a trap.
+* The far-field order capacity is set by the END grids (the half-spaces ride
+  them), ``n_orders <= (q - 1) // 2`` with ``q = N (M - 1)``; asking for more
+  RAISES rather than silently retaining aliased order slots.
+* ``window_halfwidth`` RAISES.  On a segment partition the only partition
+  carrying two layers' walls is their common refinement -- the union grid
+  itself -- so there is no local enrichment to widen.  Per-layer grids here are
+  own-walls-only, and own-walls-only works.
+
+**A per-layer solve can be STATIONARY IN ONE KNOB AND WRONG.**  Measured on a
+two-layer pillar pair: walking one layer's ``n_modes`` across four rungs gave
+an answer stationary to 4 % and wrong by 27 %, because the OTHER layer was the
+limiting error the whole time -- and it was not even monotone.  The stopping
+criterion is therefore stationarity in EVERY ``n_modes``, screened first by
+:meth:`convergence_floor`, whose per-layer own-residual is a measured LOWER
+BOUND on the stack's error (15 of 16 surface points) and costs one region eig
+per layer instead of the stack's.  The union grid's single ``M`` is
+*convenient* precisely because it cannot be mis-set per layer.
 Uniform SCALAR layers route through the shared eps-free geometric eig
 (:func:`~lumenairy.elements.pmm.twod_staggered._homog_region_modes`) -- all
 uniform regions share the SAME eigenvectors, so a uniform<->uniform interface is
@@ -476,6 +522,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         Half-width of the retained Rayleigh order set for the once-only forward
         far-field projection.  The result is independent of this (no floor) as
         long as it covers the propagating orders.  Default 7.
+    layer_grids : {'shared', 'per-layer'}, optional
+        ``'shared'`` (default) solves ONE union grid at ONE modal count and is
+        the pre-2026-09-11 path unchanged.  ``'per-layer'`` gives every layer
+        its own element grid and its own ``n_modes``, coupled by an L2 mortar;
+        see "Per-layer element grids" in the module docstring, and note that
+        it makes ``n_modes`` a PER-LAYER knob whose convergence must be checked
+        per layer (:meth:`convergence_floor`).  A per-layer stack whose grids
+        happen to coincide is BIT-EXACT against ``'shared'``.
+    window_halfwidth : optional
+        Accepted only to RAISE.  The 1-D per-layer surface enriches each
+        layer's grid with its neighbours' walls; in this basis that means their
+        common refinement, i.e. the union grid, so there is nothing to widen.
     symmetry : {'auto', True, False}, optional
         Opt into the PARITY-sign block reduction of the OUT-OF-PLANE region
         solve (``lumenairy.elements.pmm.twod_staggered._stag_block_eig``): one
@@ -569,8 +627,27 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
         ``eps_cell`` is a PATTERNED layer: a SQUARE ``(Nx, Ny)`` scalar grid, or
         a ``(Nx, Ny, 3, 3)`` block-form tensor grid (walls on the segment
-        boundaries).  All patterned layers must share one common ``(Nx, Ny)``
-        grid (union-grid constraint).
+        boundaries).  With ``layer_grids='shared'`` all patterned layers must
+        share one common ``(Nx, Ny)`` grid (the union-grid constraint); with
+        ``'per-layer'`` each keeps its own.
+
+        ``x_walls`` / ``y_walls`` (``layer_grids='per-layer'`` only) place a
+        patterned layer's walls FREELY -- the INTERIOR wall positions in metres
+        (a full ``0 .. period`` boundary array is also accepted), so
+        ``eps_cell`` becomes the STRIP TILE of shape
+        ``(len(x_walls) + 1, len(y_walls) + 1)``: literally the hybrid's
+        ``tile``, which is what lets a taper staircase move between the two
+        2-D engines unchanged.  ``None`` is the uniform lattice implied by
+        ``eps_cell.shape`` and is BIT-IDENTICAL to the pre-2026-09-11 library.
+        The two axes may carry DIFFERENT wall positions; only the segment
+        COUNTS must match.
+
+        ``grid`` (``'per-layer'`` only) is a UNIFORM layer's segment count --
+        uniform layers have no walls of their own -- and defaults to 1.
+        ``n_modes`` (``'per-layer'`` only) overrides the stack's modal count
+        for this layer; for a UNIFORM layer it defaults to the measured
+        neighbour rule ``max(q_prev, q_next) / N_u + 1`` rather than to the
+        stack's ``M``.
 
         OUT-OF-PLANE tensor coupling (``e_xz``/``e_yz``/``e_zx``/``e_zy``
         above a RELATIVE ``1e-12`` floor) routes that layer to the first-order
@@ -1044,11 +1121,18 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         out = []
         for L, Mi in zip(self._layers, Ms):
             vals = []
+            # the ISOLATED layer's end grids are its OWN, so its Rayleigh
+            # capacity is q = N (M - 1) and the stack's n_orders may exceed it.
+            # CLAMP rather than raise -- this is an internal residual probe --
+            # and clamp on the LOWER rung so both rungs retain the same order
+            # set and the two vectors are comparable.
+            _nq = _stag_walls_n(L["wx"]) * (Mi - 1)
+            _nord = max(0, min(self.n_orders, (_nq - 1) // 2))
             for M in (Mi, Mi + 2 if n_modes is None else int(n_modes)):
                 st = PMM2DStackPure(
                     self.period_x, self.period_y,
                     n_superstrate=self.n_sup, n_substrate=self.n_sub,
-                    n_modes=M, n_orders=self.n_orders,
+                    n_modes=M, n_orders=_nord,
                     symmetry=self.symmetry, layer_grids="per-layer")
                 kw = dict(thickness=L["thickness"], n_modes=M)
                 if L["kind"] == "patterned":
