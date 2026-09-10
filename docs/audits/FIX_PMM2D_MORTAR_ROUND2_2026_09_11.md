@@ -699,6 +699,21 @@ python -m pytest -q tests/unit/test_fix_pmm2d_mortar_round2.py \
   tests/unit/test_v5_21_pmm2d_staggered_oblique.py \
   tests/unit/test_v5_14_0_pmm2d_stack.py \
   tests/unit/test_p2c_pmm2d_stack_cascade.py
+
+# and, because _core.py is SHARED, every file that imports PMMStack
+python -m pytest -q $(grep -rl 'PMMStack' --include='*.py' tests/unit/)
 ```
+
+### 9.1 Commits on `fix/pmm2d-mortar-round2`
+
+| commit | what |
+|---|---|
+| `3386d74`, `b82995f` | the seven probes, the bit-identity harness, the README |
+| `9989d77` | **D1** the minimum-segment contract + **D3** the per-segment quadrature order (`twod_staggered.py`) |
+| `e5f7982`, `bc6e005` | **D2** `_guarded_mortar_solve` at the three sites (`_core.py`) |
+| `726c81d`, `da54888`, `69652ae`, `3514c22` | the 15 gates |
+| `86fdec6` | this doc, the **D4** corrections to the build doc, the CHANGELOG and the public-surface contracts |
+| `a9c6367` | `.test_durations` |
+| the remainder | corrections made by re-measuring: the census (125x not 187x), the D3 after-reading (4.7e-15 not 5.6e-15), the two-build exponents and populations, and what the guard does NOT do |
 
 No merge, push, tag or version bump was made on this branch.
