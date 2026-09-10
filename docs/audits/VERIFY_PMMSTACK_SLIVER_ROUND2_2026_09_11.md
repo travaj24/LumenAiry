@@ -1104,8 +1104,17 @@ on this branch (the round-2 report's 42 plus
 `tests/unit/test_verify_pmmstack_sliver_round2.py`); the list is in
 `validation/probe_verify_sliver_round2/_pmmstack_test_files.txt`.
 
-**NOT COMPLETED HERE, and this is the one gap in this verification.**  The
-43-file run was launched on this branch and was still executing when this
+**COMPLETED AFTER THIS REPORT WAS CLOSED (addendum 2026-09-11): 819 passed,
+1 skipped, 0 failed, 76 warnings in 2628.77 s (43:48)** -- the full transcript
+replaces the partial one at
+`validation/probe_verify_sliver_round2/_regression_win.txt`.  The count is
+ONE MORE than the 818 the paragraph below arrives at by arithmetic; it is a
+collection difference (one more test collected on the final run than the
+812 + 6 sum assumed), not a decision -- zero failures, and the single skip is
+the same pre-existing `test_niche_audit_m4_m5_m6_rcwa.py:387` threadpoolctl
+skip.  The paragraph below is kept as it was written.
+
+The 43-file run was launched on this branch and was still executing when this
 report was written.  The reason is the box, not the tests: 24 logical CPUs
 shared with several other agents' pytest suites and probe sweeps (one of them
 holding 14 GB), so the run accumulated 1,324 s of CPU over 3 h of wall time --
@@ -1181,7 +1190,7 @@ version-bumped.
 
 | | why | what stands in for it |
 |---|---|---|
-| the 43-file `PMMStack` regression | starved on a shared 24-CPU box (12 % of one core over 3 h); nothing failed, it did not finish | the 86-test five-file set green on both builds, and `git diff 24651c8 HEAD -- lumenairy/` EMPTY |
+| the 43-file `PMMStack` regression | starved on a shared 24-CPU box (12 % of one core over 3 h) at the time of writing; **it finished after the report closed: 819 passed, 1 skipped, 0 failed in 43:48** (S11 addendum) | the 86-test five-file set green on both builds, and `git diff 24651c8 HEAD -- lumenairy/` EMPTY; now also the completed run itself |
 | an RCWA adjudication of the 11 `w9` candidates | the two packages disagree by 9.7e-02 on this mount's `delta` = 0 reference itself (a dense superstrate at 1.22 rad, where the PMM family's `kz_inc = Re(kz_sup)` normalization and the RCWA one need convention work I did not do) | the internal adjudication is decisive anyway: the SNAPPED answer tracks the exact `delta -> 0` limit to **1.20x** and its `R+T` matches the reference to six digits, so the refused answer is the wrong one |
 | the report's "the snapped grid resolves a different order count on 359 of 637 arbitrated rows" | not reproducible without their exact grids | measured on mine instead: 0 of 100 on clean fixtures, **69 of 69** on the census box -- the CONTRACT is confirmed, the count is theirs |
 | the report's own 110 / 648 false-positive count | their box's specific substrates and angles | my own 648-configuration box: **77 / 648 -> 0 / 648**, same character |
