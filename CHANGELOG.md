@@ -415,22 +415,24 @@ banded field bit-identical in the first place.
 * **Measured** (N=4096, sub=32, dx=1.5 um, AUTO band height, per-stage
   instrumentation, inverse-map cache cleared per call):
 
-  | ray-density route | `domain_mask` | pixels tested | `eval_into` | banded / whole-grid |
-  |---|---|---|---|---|
-  | whole-grid | 8.83 s | 1.00 grids | 1.03 s (4.00 ch/px) | -- |
-  | banded, BEFORE | **15.05 s** (32 calls) | **2.00 grids** | 1.87 s (7.00 ch/px) | **1.261** |
-  | banded, AFTER | **6.61 s** (16 calls) | **1.00 grids** | 1.87 s (7.00 ch/px) | **1.056** |
+  | run | ray-density route | `domain_mask` | pixels tested | `eval_into` | total | banded / whole |
+  |---|---|---|---|---|---|---|
+  | BEFORE | whole-grid | 8.83 s (1 call) | 1.00 grids | 1.03 s (4.00 ch/px) | 24.747 s | -- |
+  | BEFORE | banded | **15.05 s** (32 calls) | **2.00 grids** | 1.87 s (7.00 ch/px) | 31.208 s | **1.261** |
+  | AFTER | whole-grid | 6.81 s (1 call) | 1.00 grids | 0.93 s (4.00 ch/px) | 20.179 s | -- |
+  | AFTER | banded | **6.61 s** (16 calls) | **1.00 grids** | 1.87 s (7.00 ch/px) | 21.306 s | **1.056** |
 
   The redundant pass cost **6.22 s of the banded route's 6.46 s penalty** at
-  this size; the 7/4 evaluation the CHANGELOG named cost 0.84 s of it.  (The
-  before and after runs sit in different box-load regimes -- the unchanged
-  whole-grid arm reads 24.747 s and 20.179 s across them -- so the ratio, and
-  the pixel count, are the comparable quantities, not the seconds.)
-* **Byte-identical, checked against the verification's own fixtures**: its
-  `v2_banded_claim.py` re-run in all four regimes (plain, `--forced`,
-  `--fold`, `--medianbite`) gives **864 comparisons, 0 mismatches**, and every
-  band hash equals the value the verification recorded -- including
-  `--medianbite`, where the caustic census median reaches every pixel.
+  this size; the 7/4 evaluation the CHANGELOG named cost 0.84 s of it.  The
+  two runs sit in different box-load regimes -- the UNCHANGED whole-grid arm
+  reads 24.747 s and 20.179 s across them -- so the pixel count and the ratio
+  are the comparable quantities, not the seconds.
+* **Byte-identical, checked against the verification's own fixtures**:
+  `validation/probe_verify_lens_5440/v2_banded_claim.py` re-run in all four
+  regimes (plain, `--forced`, `--fold`, `--medianbite`) gives **864
+  comparisons, 0 mismatches**, and every band hash equals the value the
+  verification recorded -- including `--medianbite`, where the caustic census
+  median reaches every pixel.
 * The three post-swap self-checks, `n_out_of_domain`, `gate_open` / `engaged`
   and the full warning list are equal at every band height, as before.
 
@@ -838,7 +840,8 @@ gone.
   | screen, 5.44.0 (evaluator) | 19.006 s | 18.524 s | **0.975** |
   | screen, v5.43.0 (banded = incumbent) | 18.148 s | **10.950 s** | 0.603 |
   | screen, 5.44.0 forced to the incumbent (`inverse_map=False`) | -- | **11.856 s** | -- |
-  | ray-density, 5.44.0 | 24.747 s | 31.208 s -> **21.306 s** after the D6 fix above | 1.261 -> **1.056** |
+  | ray-density, 5.44.0 before the D6 fix above | 24.747 s | 31.208 s | 1.261 |
+  | ray-density, 5.44.0 after it (own run, quieter box) | 20.179 s | 21.306 s | **1.056** |
 
   1. **Banding is free.**  The banded call is 0.97x-1.08x the whole-grid call
      at the SAME inversion (1.081 at N=2048, which is where the "~10 %" came

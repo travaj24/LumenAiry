@@ -440,6 +440,7 @@ changes:
 
 | verification probe | what it hashes | result |
 |---|---|---|
+| `v2_banded_claim` (all four regimes) | the banded field hash + `sum |E|^2`, `engaged`, `gate_open`, `n_out_of_domain` and the full warning list at band heights 0 / 1 / 3 / 7 / 32 / 128 / N, on 9 fixtures x 2 inversion routes | **864 comparisons, 0 mismatches**, every band hash equal to the verification's record |
 | `v14_c128_chain_identity` | 9 complex128 carrier-chain / readout / crop fixtures + every per-stage `dx`, `R` | **identical**, full JSON diff = wall-clock only |
 | `v6_c64_chain` | the complex64 two-group chain's rel L2 / rel power, the six-leg ladder, the crop's double rounding | **identical to 16 digits**; the only change is the upcast list, 5 -> 0 |
 | `v7_c64_memory` | whole-chain peak and every complex128 phasor return by caller frame | complex128 arm identical (376.9 MiB, 10 returns); complex64 arm 5 -> 0 returns |
@@ -459,4 +460,45 @@ changes:
 
 ## 9. Open items
 
-<!-- OPEN -->
+Recorded, not fixed:
+
+1. **The evaluator route's dominant cost is untouched.**
+   `InverseCharacteristic.domain_mask` -- the screened landing-hull test plus
+   the entrance-radius test -- is 8.9-10.0 s of a ~20 s call at N=4096, i.e.
+   ~45 % of every whole-grid evaluator call, banded or not.  It is not banding's
+   and not this branch's, but it is where the traced element's time goes at
+   production N, and nothing has profiled it below the `hull_mask_grid` level
+   (the ring reduction against the screened interior).  A separate item.
+2. **The banded ray-density branch still evaluates `CH_X_IN` / `CH_Y_IN`
+   twice** -- 0.84 s at N=4096, the residual 7/4.  Caching them would cost TWO
+   full float64 grids (2.1 GB at N=16384), which is precisely what the band
+   assembly exists to avoid, so it is left as it is.  The bool mask was worth
+   caching at 1/8 of one grid; these are not.
+3. **The D6 wall times were taken on a box ~80 % busy** with three other
+   agents' work.  Ratios and pixel counts are load-free and are what the
+   conclusions rest on; the verification's idle-box absolute seconds (V15)
+   were not re-taken and remain the reference for those.
+4. **Two of the three ray-density self-checks could not be made to fire on the
+   shipped test fixture.**  The energy check fires and is pinned in
+   `test_banded_ray_density_and_inverse_map.py`; the halo and support-band
+   checks need a different exit-support geometry, and their attribution is
+   measured only in `p2_d1_attr.py` (which does fire the support-band one on
+   both routes).  All three sit in one closure at one frame depth, so the
+   pinned one covers the contract, but the test is one fixture short of
+   pinning all three directly.
+5. **`_PHASOR_BAND_BYTES = 32e6` is still an untested magic constant** (the
+   verification's own note).  `_narrow_rows` inherits it.  Its VALUE-inertness
+   is pinned for `_phasor_rows` (V16: identical hashes at 16 / 61 / 1024 rows
+   per band); the new sibling's band size is inert for the same reason -- an
+   elementwise product on a row slice -- but that is argued, not measured at
+   several band sizes.
+6. **A plain traced carrier chain never calls `_fourier_upsample_crop`**
+   (measured: 0 calls).  The crop is reached from
+   `carrier_referenced_exact_focus_readout` and `_fine_trace_group_exit`, i.e.
+   only under `final_leg='exact'` or a fine retrace.  D3's decision therefore
+   rests on the exact-readout chain, which is the production shape for a
+   high-NA final leg; a `final_leg='paraxial'` chain never sees the
+   single-precision transform at all.
+7. Everything in the verification's own section 12 ("what could not be
+   verified") is unchanged: the prototypes' figures, the design-121 `.zmx`
+   arms, and the GPU / JAX arms of either path.
