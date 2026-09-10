@@ -36,10 +36,13 @@ def main():
     assert lines[0] == '{', lines[0]
     body = [ln for ln in lines[1:] if ln.strip() not in ('}', '')]
 
+    dec = json.JSONDecoder()
     kept = []
     dropped = 0
     for ln in body:
-        key = json.loads(ln.strip().rstrip(',').split(': ')[0])
+        # the key can contain ': ' (parametrized ids), so decode it as JSON
+        # from the start of the line rather than splitting on a separator.
+        key, _ = dec.raw_decode(ln.strip())
         if key.split('::', 1)[0] in touched_files:
             dropped += 1
             continue

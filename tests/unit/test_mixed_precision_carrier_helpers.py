@@ -245,14 +245,21 @@ def test_the_complex64_carrier_call_no_longer_pays_a_full_grid_complex128():
     ``_phasor_rows`` / ``_narrow_rows`` band at ``_PHASOR_BAND_BYTES`` = 32 MB
     of complex128 scratch, so the transient is a full grid until
     ``16 N^2 > 32e6`` (N > 1414); N=2048 is the first power of two past it.
-    Measured (2026-09-11, numpy 2.4 / py 3.14, whole-call tracemalloc peak,
-    warm): complex128 arm 224.03 MiB both before and after; complex64 arm
-    224.03 MiB before the fix (the leak: the SAME peak, hence the audit's
-    "requesting complex64 saved 0.0 GB"), 189.03 MiB after -- a gap of
-    35.0 MiB = 8.75 * N^2 bytes, where the removed complex128 phasor is
-    16 N^2 = 64 MiB minus the 32 MB band that replaces it.  The bar is
-    4 * N^2 bytes (16.8 MiB), 2.2x under the measurement and infinitely above
-    the pre-fix gap of exactly 0."""
+
+    Measured 2026-09-11, whole-call tracemalloc peak, warm, on BOTH builds
+    (Windows py 3.14.6 / numpy 2.4.4 and WSL py 3.12.3 / numpy 2.4.6 -- the
+    same figures to the byte, because tracemalloc counts REQUESTED sizes and
+    those are fixed by shapes and dtypes):
+
+    * complex128 arm 224.03 MiB, before AND after the fix;
+    * complex64 arm 224.03 MiB BEFORE -- the leak, and the same peak as the
+      complex128 arm, which is the audit's "requesting complex64 saved 0.0 GB";
+    * complex64 arm 189.03 MiB AFTER -- a gap of **35.00 MiB = 8.75 * N^2
+      bytes**, the full-grid complex128 phasor (16 N^2 = 64 MiB) traded for a
+      complex64 one plus one 32 MB band.
+
+    Bar ``4 * N^2`` bytes = 16.00 MiB: **2.19x under** the measurement on both
+    builds, and infinitely above the pre-fix gap of exactly 0."""
     import tracemalloc
 
     N, dx, R = 2048, 3.0e-6, 55e-3

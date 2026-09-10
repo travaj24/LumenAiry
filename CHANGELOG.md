@@ -377,8 +377,8 @@ pass the dtype of the field the factor multiplies.
   a complex64 field AND the complex64 factor equals the whole-grid complex128
   factor narrowed once (`np.array_equal`, both branches); `dtype=None`,
   `complex128` and the public helper stay `np.array_equal`; and a
-  `tracemalloc` bar at N=2048 (`p128 - p64 >= 4 N^2` bytes = 16.8 MiB against
-  a measured 35.0 MiB and a pre-fix gap of exactly 0).
+  `tracemalloc` bar at N=2048 (`p128 - p64 >= 4 N^2` bytes = 16.00 MiB
+  against a measured 35.00 MiB on BOTH builds and a pre-fix gap of exactly 0).
 
 ### Fixed -- the three ray-density self-check warnings name the CALLER again
 

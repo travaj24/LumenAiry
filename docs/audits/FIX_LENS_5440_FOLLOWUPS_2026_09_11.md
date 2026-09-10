@@ -159,8 +159,10 @@ the audit said it was: 4.29 GB per call at N=16384.
   (3 cases) -- `dtype=None`, `dtype=complex128` and the public helper are all
   `np.array_equal`;
 * `test_the_complex64_carrier_call_no_longer_pays_a_full_grid_complex128` --
-  the memory teeth at N=2048, bar `p128 - p64 >= 4 N^2` bytes (16.8 MiB)
-  against the measured 35.0 MiB and a pre-fix gap of exactly 0.
+  the memory teeth at N=2048, bar `p128 - p64 >= 4 N^2` bytes (16.00 MiB)
+  against a measured 35.00 MiB on BOTH builds (identical to the byte:
+  tracemalloc counts REQUESTED sizes, fixed by shapes and dtypes) and a
+  pre-fix gap of exactly 0.
 
 ---
 
@@ -290,6 +292,23 @@ The **pixel count** is the load-free statement: 2.00 grids -> 1.00, 32
 1.87 s.  The seconds moved between the two runs because the box got quieter
 (the UNCHANGED whole-grid arm reads 24.747 s and 20.179 s across them), which
 is exactly why the ratio is quoted: **1.261 -> 1.056**.
+
+The same comparison on the UN-instrumented best-of-3 wall clock (`p3`), which
+is the number a caller sees:
+
+| N, sub | ray-density banded / whole-grid, BEFORE | AFTER |
+|---|---|---|
+| 4096, 32 | 32.486 / 25.285 = **1.285** | 21.000 / 18.914 = **1.110** |
+| 2048, 16 | 7.462 / 6.604 = **1.130** | 5.760 / 5.628 = **1.023** |
+
+and the SCREEN branch, which the fix does not touch, stays where it was:
+15.819 / 15.287 = 1.035 at N=4096 and 4.871 / 5.630 = 0.865 at N=2048 (the
+0.97x-1.08x band, now with a sub-unity reading -- this box's run-to-run spread
+on a ~5 s call).  Every field hash in both runs is unchanged
+(`91da5e59c46beb1d967b28b3` / `08f9aa00b567ed87658cf8ca` at N=4096,
+`218be92f7c6d9087c27b4369` / `14a892c7b3ccb66ad600cae0` at N=2048, and the
+incumbent controls `66b9384477cf8a9ca1844c6a` / `b0a55957c3feaadc66f87bba` /
+`f7393dea35d4d3af77cf37a1` / `c0d2d94647d54c8c6329b905`).
 
 Byte-identity, checked against the verification's OWN fixtures rather than a
 re-derivation -- `v2_banded_claim.py` re-run in all four regimes on this tree:
