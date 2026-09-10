@@ -296,7 +296,7 @@ def _cross_layer_sliver(layer_segments, min_feature_frac):
             float(own), len(hits))
 
 
-def _segment_passive(stack, eps):
+def _segment_passive(eps):
     """True when ONE segment's permittivity is PROVABLY passive, for the
     guard's purposes -- the union of two EXACT sufficient conditions:
 
@@ -361,7 +361,7 @@ def _stack_provably_passive(stack):
         return False
     for layer in stack._layers:
         for seg in layer[1]:
-            if not _segment_passive(stack, seg[1]):
+            if not _segment_passive(seg[1]):
                 return False
     return True
 
@@ -539,7 +539,8 @@ def _sliver_arbiter(stack, worst, R_eff, T_eff, src):
     Costs ONE solve, and only on a stack that already carries a manufactured
     sliver, is provably passive, and reads super-unity above
     ``_SLIVER_TRIGGER_BAR`` -- measured: 0 of 600 converged correct rows, and
-    13 ms mean on the 2-4 layer staircase box where it does fire."""
+    11 ms (Windows) / 10 ms (WSL) mean on the 2-4 layer staircase box where it
+    does fire, i.e. 0.20x / 0.27x of the solve it guards."""
     scr = _sliver_screen(stack)
     if scr is None:
         return None
@@ -564,10 +565,10 @@ def _sliver_arbiter(stack, worst, R_eff, T_eff, src):
 
 
 def _within_layer_hazard(stack, src):
-    """The WITHIN-LAYER arm (verification defect V-6): the narrowest cell of
-    the grid is one a SINGLE layer owns, and it is thin enough that the same
-    ``1/w^2`` mechanism is already injecting spurious modal wavenumbers far
-    past anything the stack's materials can support.
+    """The WITHIN-LAYER arm (verification defect V-6): the narrowest cell a
+    SINGLE layer OWNS is thin enough that the same ``1/w^2`` mechanism is
+    already injecting spurious modal wavenumbers far past anything the stack's
+    materials can support.
 
     Returns ``(w, q_pred, n_max)`` or ``None``.  This is the caller's OWN
     geometry, so it is never refused -- the warning names it and names the

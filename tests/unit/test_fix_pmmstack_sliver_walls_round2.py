@@ -401,19 +401,19 @@ def test_a_rotated_uniaxial_director_is_provably_passive():
     for axis in ("xy", "xz"):
         for th in (0.0, np.pi / 6.0, np.pi / 4.0, 1.1):
             M = _uniaxial(th, axis)
-            assert ps._segment_passive(None, M) is True, (axis, th)
-            assert ps._segment_passive(None, _uniaxial(th, axis, kappa=0.2)) \
+            assert ps._segment_passive(M) is True, (axis, th)
+            assert ps._segment_passive(_uniaxial(th, axis, kappa=0.2)) \
                 is True, ("lossy", axis, th)
-            assert ps._segment_passive(None, _uniaxial(th, axis, kappa=-1e-3))\
+            assert ps._segment_passive(_uniaxial(th, axis, kappa=-1e-3))\
                 is False, ("gain", axis, th)
     # gyrotropic: Hermitian, lossless, passive
     G = np.eye(3, dtype=complex) * 4.0
     G[0, 1], G[1, 0] = 0.35j, -0.35j
-    assert ps._segment_passive(None, G) is True
+    assert ps._segment_passive(G) is True
     # a NON-Hermitian off-diagonal has no exact passivity argument
     N = np.eye(3, dtype=complex) * 4.0
     N[0, 1] = 0.2
-    assert ps._segment_passive(None, N) is False
+    assert ps._segment_passive(N) is False
     # the deadband is round-off sized, not a licence: it must be far below
     # the smallest gain that could matter
     assert ps._PASSIVE_ANTIHERM_DEADBAND < 1e-13

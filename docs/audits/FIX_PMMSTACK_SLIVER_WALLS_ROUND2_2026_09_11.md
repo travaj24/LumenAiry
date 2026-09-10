@@ -351,7 +351,7 @@ How often it fires:
 | population | arbiter runs on |
 |---|---|
 | 600 CONVERGED CORRECT rows (r1 + r2 + r3, three fixtures) | **0** |
-| 634 correct rows of the deliberately UNDER-CONVERGED staircase box (degree 6-10, lossy substrate, 1.2-1.45 rad -- built to read super-unity) | 345 (54.4 %), at 13 ms mean / 41 ms max, 4.8 s over 359 runs |
+| 634 correct rows of the deliberately UNDER-CONVERGED staircase box (degree 6-10, lossy substrate, 1.2-1.45 rad -- built to read super-unity) | 345 (54.4 %), at 11 ms mean / 28 ms max, 4.0 s over 359 runs (Windows); 10 ms / 26 ms / 3.9 s (WSL) |
 | any stack with no manufactured sliver, or not provably passive, or below the trigger | never (the screen is pure geometry and runs first) |
 
 So the honest statement is: it never fires on a converged solve, and where it
