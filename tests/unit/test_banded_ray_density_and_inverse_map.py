@@ -249,7 +249,19 @@ def test_the_c15_probe_is_filled_on_the_band_path(mode, imap):
 
     The band path gathers the same pixels band by band, so the pin is
     EQUALITY with the whole-grid arm's values -- ``np.array_equal``, the same
-    bar the field carries -- and the field must be unmoved by asking."""
+    bar the field carries -- and the field must be unmoved by asking.
+
+    ONE CAVEAT ON THE FIXTURE (2026-09-11, VERIFY_LENS_5440_FOLLOWUPS):
+    ``np.array_equal`` without ``equal_nan=True`` is FALSE wherever the probe
+    lands out of the model's domain, where the finalised OPL is NaN by
+    construction.  These four pixels are interior and finite (the
+    ``np.isfinite(...).any()`` below is what keeps the pin from being vacuous
+    if that ever changed), so moving them outward would fail this test for a
+    reason that is not the defect.  The NaN-bearing case IS covered, on 5
+    routes x 3 band heights with 112 probe pixels straddling every band
+    boundary and 82 of them out of domain, in
+    ``validation/probe_verify_lens_followups/q4_d7_probe_rc.py``: NaN pattern
+    and values both equal the whole-grid arm's."""
     kw = _base_kw(inverse_map=imap, **mode)
     whole, rec_w = _run_with_probe(0, **kw)
     assert 'probe_opl' in rec_w
@@ -300,7 +312,18 @@ def test_band_path_lowers_the_peak_on_the_ray_density_inverse_map_route():
     the band loop never materialises.  The bar of 6 grids is 2x below the
     measurement and above anything a build can move: tracemalloc counts
     REQUESTED sizes, fixed by shapes and dtypes, and the resident grids
-    common to both arms cancel in the difference."""
+    common to both arms cancel in the difference.
+
+    THE BUILD SPREAD, measured rather than argued (2026-09-11,
+    VERIFY_LENS_5440_FOLLOWUPS): 12.414612 grids on Windows (py 3.14.6 /
+    numpy 2.4.4) and 12.290180 on WSL (py 3.12.3 / numpy 2.4.6) -- a spread of
+    **1.00 %**, against a margin of 2.07x.  The bar therefore sits 200 build
+    spreads above the measurement, and the two arms of the difference are
+    themselves stable to ~500 bytes across versions (v5.44.0 reads 12.414694
+    on the same box).  Independent re-measurement on a SECOND fixture (an
+    N-BAF10 meniscus at 1.55 um, N=512 / sub=16) gives 10.78 grids, still
+    1.80x above the bar -- so the bar is a property of the route, not of this
+    prescription."""
     import tracemalloc
 
     N, dx, sub = 512, 12e-6, 16
