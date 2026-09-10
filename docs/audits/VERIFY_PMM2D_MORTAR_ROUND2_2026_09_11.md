@@ -933,6 +933,17 @@ With V1 fixed and re-run, **ship**.
    `RuntimeWarning: invalid value encountered in multiply` and the LAPACK
    `DLASCL` stderr) were observed on WIN in the gate run and NOT checked against
    the pristine tree by me; the fix doc states it did check them.
+7. **The integration branch moved again while this audit was being written.**
+   Every verdict above is against this branch's HEAD (`fbf493c` plus the two
+   commits of this audit).  `wave2/pmm2d` has since taken 1-D sliver ROUND-3
+   work touching `lumenairy/elements/pmm/stack.py` (+149),
+   `pmm/twod_jones.py` (+76), `pmm/_jax_twod_jones.py` (+16) and
+   `rcwa/_core.py` (+152).  None of it touches `twod_staggered.py` or the
+   `_core.py` mortar sites, but the `rcwa/_core.py` delta DOES change
+   `_guarded_inverse`'s signature (a new `rcond_refuse` parameter) and the
+   `_ConditioningError` it raises -- shared machinery the round-2 D2 fix sits
+   next to.  **The combined-tree run in S2 predates it and must be repeated on
+   the merged result before 5.45.0.**
 
 ---
 
