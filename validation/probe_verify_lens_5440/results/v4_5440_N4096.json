@@ -1,0 +1,32 @@
+{
+ "version": "5.44.0",
+ "N": 4096,
+ "sub": 32,
+ "dx": 1.5e-06,
+ "peaks": {
+  "rd_whole": {
+   "peak_bytes": 2989038898,
+   "grids": 22.27007521688938,
+   "engaged": true,
+   "secs": 20.66
+  },
+  "rd_band": {
+   "peak_bytes": 1214567808,
+   "grids": 9.049235343933105,
+   "engaged": true,
+   "secs": 30.09
+  },
+  "screen_whole": {
+   "peak_bytes": 2298598908,
+   "grids": 17.1258964240551,
+   "engaged": true,
+   "secs": 16.6
+  },
+  "screen_band": {
+   "peak_bytes": 1214567592,
+   "grids": 9.049233734607697,
+   "engaged": true,
+   "secs": 17.1
+  }
+ }
+}

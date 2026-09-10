@@ -1,0 +1,1549 @@
+{
+ "lumenairy_file": "C:\\tmp\\lum_vlens\\lumenairy\\__init__.py",
+ "version": "5.44.0",
+ "forced": true,
+ "N": 384,
+ "rows": [
+  0,
+  7,
+  32,
+  128,
+  384
+ ],
+ "cases": {
+  "g01_rd_preserve.default": {
+   "bands": {
+    "0": {
+     "hash": "eecefe42276fe6b7b4c67d2a",
+     "sum_abs2": 9293.54688459894,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.92
+    },
+    "7": {
+     "hash": "eecefe42276fe6b7b4c67d2a",
+     "sum_abs2": 9293.54688459894,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.4
+    },
+    "32": {
+     "hash": "eecefe42276fe6b7b4c67d2a",
+     "sum_abs2": 9293.54688459894,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.42
+    },
+    "128": {
+     "hash": "eecefe42276fe6b7b4c67d2a",
+     "sum_abs2": 9293.54688459894,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.41
+    },
+    "384": {
+     "hash": "eecefe42276fe6b7b4c67d2a",
+     "sum_abs2": 9293.54688459894,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.43
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g01_rd_preserve.noinv": {
+   "bands": {
+    "0": {
+     "hash": "6bd918bc340591460ca8c503",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.18
+    },
+    "7": {
+     "hash": "6bd918bc340591460ca8c503",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.19
+    },
+    "32": {
+     "hash": "6bd918bc340591460ca8c503",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.15
+    },
+    "128": {
+     "hash": "6bd918bc340591460ca8c503",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.14
+    },
+    "384": {
+     "hash": "6bd918bc340591460ca8c503",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.16
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g02_rd_remap_lattice.default": {
+   "bands": {
+    "0": {
+     "hash": "421b7776705f3668c27144c3",
+     "sum_abs2": 9293.546884598938,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.4
+    },
+    "7": {
+     "hash": "421b7776705f3668c27144c3",
+     "sum_abs2": 9293.546884598938,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.45
+    },
+    "32": {
+     "hash": "421b7776705f3668c27144c3",
+     "sum_abs2": 9293.546884598938,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.4
+    },
+    "128": {
+     "hash": "421b7776705f3668c27144c3",
+     "sum_abs2": 9293.546884598938,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.4
+    },
+    "384": {
+     "hash": "421b7776705f3668c27144c3",
+     "sum_abs2": 9293.546884598938,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.43
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g02_rd_remap_lattice.noinv": {
+   "bands": {
+    "0": {
+     "hash": "5f190506fd3cd37fdbfcf2e2",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.16
+    },
+    "7": {
+     "hash": "5f190506fd3cd37fdbfcf2e2",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.16
+    },
+    "32": {
+     "hash": "5f190506fd3cd37fdbfcf2e2",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.17
+    },
+    "128": {
+     "hash": "5f190506fd3cd37fdbfcf2e2",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.15
+    },
+    "384": {
+     "hash": "5f190506fd3cd37fdbfcf2e2",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.17
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g03_rd_remap_full.default": {
+   "bands": {
+    "0": {
+     "hash": "4da384eec1ee92020afb1efe",
+     "sum_abs2": 9293.54688459894,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.4
+    },
+    "7": {
+     "hash": "4da384eec1ee92020afb1efe",
+     "sum_abs2": 9293.54688459894,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.45
+    },
+    "32": {
+     "hash": "4da384eec1ee92020afb1efe",
+     "sum_abs2": 9293.54688459894,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.4
+    },
+    "128": {
+     "hash": "4da384eec1ee92020afb1efe",
+     "sum_abs2": 9293.54688459894,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.41
+    },
+    "384": {
+     "hash": "4da384eec1ee92020afb1efe",
+     "sum_abs2": 9293.54688459894,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.43
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g03_rd_remap_full.noinv": {
+   "bands": {
+    "0": {
+     "hash": "5f190506fd3cd37fdbfcf2e2",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.19
+    },
+    "7": {
+     "hash": "5f190506fd3cd37fdbfcf2e2",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.18
+    },
+    "32": {
+     "hash": "5f190506fd3cd37fdbfcf2e2",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.17
+    },
+    "128": {
+     "hash": "5f190506fd3cd37fdbfcf2e2",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.18
+    },
+    "384": {
+     "hash": "5f190506fd3cd37fdbfcf2e2",
+     "sum_abs2": 9284.90378083365,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.18
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g04_rd_origin.default": {
+   "bands": {
+    "0": {
+     "hash": "a78a7ff1533ade9e24e9f84a",
+     "sum_abs2": 9263.888897523022,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAV"
+     ],
+     "secs": 0.44
+    },
+    "7": {
+     "hash": "a78a7ff1533ade9e24e9f84a",
+     "sum_abs2": 9263.888897523022,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAV"
+     ],
+     "secs": 0.46
+    },
+    "32": {
+     "hash": "a78a7ff1533ade9e24e9f84a",
+     "sum_abs2": 9263.888897523022,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAV"
+     ],
+     "secs": 0.41
+    },
+    "128": {
+     "hash": "a78a7ff1533ade9e24e9f84a",
+     "sum_abs2": 9263.888897523022,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAV"
+     ],
+     "secs": 0.41
+    },
+    "384": {
+     "hash": "a78a7ff1533ade9e24e9f84a",
+     "sum_abs2": 9263.888897523022,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAV"
+     ],
+     "secs": 0.44
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g04_rd_origin.noinv": {
+   "bands": {
+    "0": {
+     "hash": "88f2d4a9128cd24e968b9a65",
+     "sum_abs2": 9253.677784508222,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAV"
+     ],
+     "secs": 0.19
+    },
+    "7": {
+     "hash": "88f2d4a9128cd24e968b9a65",
+     "sum_abs2": 9253.677784508222,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAV"
+     ],
+     "secs": 0.18
+    },
+    "32": {
+     "hash": "88f2d4a9128cd24e968b9a65",
+     "sum_abs2": 9253.677784508222,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAV"
+     ],
+     "secs": 0.18
+    },
+    "128": {
+     "hash": "88f2d4a9128cd24e968b9a65",
+     "sum_abs2": 9253.677784508222,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAV"
+     ],
+     "secs": 0.16
+    },
+    "384": {
+     "hash": "88f2d4a9128cd24e968b9a65",
+     "sum_abs2": 9253.677784508222,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAV"
+     ],
+     "secs": 0.19
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g05_rd_carrier_sph.default": {
+   "bands": {
+    "0": {
+     "hash": "c1e05c510bc37f865b08d090",
+     "sum_abs2": 9275.657729825338,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 1,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.2
+    },
+    "7": {
+     "hash": "c1e05c510bc37f865b08d090",
+     "sum_abs2": 9275.657729825338,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 1,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.23
+    },
+    "32": {
+     "hash": "c1e05c510bc37f865b08d090",
+     "sum_abs2": 9275.657729825338,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 1,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.2
+    },
+    "128": {
+     "hash": "c1e05c510bc37f865b08d090",
+     "sum_abs2": 9275.657729825338,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 1,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.21
+    },
+    "384": {
+     "hash": "c1e05c510bc37f865b08d090",
+     "sum_abs2": 9275.657729825338,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 1,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.23
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g05_rd_carrier_sph.noinv": {
+   "bands": {
+    "0": {
+     "hash": "93372299ce57c9da8b8dd654",
+     "sum_abs2": 9285.373008443006,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.18
+    },
+    "7": {
+     "hash": "93372299ce57c9da8b8dd654",
+     "sum_abs2": 9285.373008443006,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.18
+    },
+    "32": {
+     "hash": "93372299ce57c9da8b8dd654",
+     "sum_abs2": 9285.373008443006,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.15
+    },
+    "128": {
+     "hash": "93372299ce57c9da8b8dd654",
+     "sum_abs2": 9285.373008443006,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.14
+    },
+    "384": {
+     "hash": "93372299ce57c9da8b8dd654",
+     "sum_abs2": 9285.373008443006,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.18
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g06_rd_tilted.default": {
+   "bands": {
+    "0": {
+     "hash": "a9f6859e87c692dbfab625c8",
+     "sum_abs2": 9291.012484762778,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.52
+    },
+    "7": {
+     "hash": "a9f6859e87c692dbfab625c8",
+     "sum_abs2": 9291.012484762778,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.54
+    },
+    "32": {
+     "hash": "a9f6859e87c692dbfab625c8",
+     "sum_abs2": 9291.012484762778,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.52
+    },
+    "128": {
+     "hash": "a9f6859e87c692dbfab625c8",
+     "sum_abs2": 9291.012484762778,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.53
+    },
+    "384": {
+     "hash": "a9f6859e87c692dbfab625c8",
+     "sum_abs2": 9291.012484762778,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.5
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g06_rd_tilted.noinv": {
+   "bands": {
+    "0": {
+     "hash": "32619c0d69085edea8dc585c",
+     "sum_abs2": 9282.133519414801,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.23
+    },
+    "7": {
+     "hash": "32619c0d69085edea8dc585c",
+     "sum_abs2": 9282.133519414801,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.24
+    },
+    "32": {
+     "hash": "32619c0d69085edea8dc585c",
+     "sum_abs2": 9282.133519414801,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.21
+    },
+    "128": {
+     "hash": "32619c0d69085edea8dc585c",
+     "sum_abs2": 9282.133519414801,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.22
+    },
+    "384": {
+     "hash": "32619c0d69085edea8dc585c",
+     "sum_abs2": 9282.133519414801,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.27
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g07_screen.default": {
+   "bands": {
+    "0": {
+     "hash": "203aee7468521ed5bbee545d",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.35
+    },
+    "7": {
+     "hash": "203aee7468521ed5bbee545d",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.39
+    },
+    "32": {
+     "hash": "203aee7468521ed5bbee545d",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.37
+    },
+    "128": {
+     "hash": "203aee7468521ed5bbee545d",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.37
+    },
+    "384": {
+     "hash": "203aee7468521ed5bbee545d",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.4
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g07_screen.noinv": {
+   "bands": {
+    "0": {
+     "hash": "5395ed2a786566e1e2279cf9",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.14
+    },
+    "7": {
+     "hash": "5395ed2a786566e1e2279cf9",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.13
+    },
+    "32": {
+     "hash": "5395ed2a786566e1e2279cf9",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.12
+    },
+    "128": {
+     "hash": "5395ed2a786566e1e2279cf9",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.12
+    },
+    "384": {
+     "hash": "5395ed2a786566e1e2279cf9",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.15
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g08_screen_carrier.default": {
+   "bands": {
+    "0": {
+     "hash": "4ac9f5315d23abdab412f1e5",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.19
+    },
+    "7": {
+     "hash": "4ac9f5315d23abdab412f1e5",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.2
+    },
+    "32": {
+     "hash": "4ac9f5315d23abdab412f1e5",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.18
+    },
+    "128": {
+     "hash": "4ac9f5315d23abdab412f1e5",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.17
+    },
+    "384": {
+     "hash": "4ac9f5315d23abdab412f1e5",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.19
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g08_screen_carrier.noinv": {
+   "bands": {
+    "0": {
+     "hash": "9e1c11e73fa158d10e474df3",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.14
+    },
+    "7": {
+     "hash": "9e1c11e73fa158d10e474df3",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.14
+    },
+    "32": {
+     "hash": "9e1c11e73fa158d10e474df3",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.13
+    },
+    "128": {
+     "hash": "9e1c11e73fa158d10e474df3",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.12
+    },
+    "384": {
+     "hash": "9e1c11e73fa158d10e474df3",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.14
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g09_rd_caustic.default": {
+   "bands": {
+    "0": {
+     "hash": "7c16dcd7d33a95a83effe641",
+     "sum_abs2": 25865.667916662904,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 0.19
+    },
+    "7": {
+     "hash": "7c16dcd7d33a95a83effe641",
+     "sum_abs2": 25865.667916662904,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 0.18
+    },
+    "32": {
+     "hash": "7c16dcd7d33a95a83effe641",
+     "sum_abs2": 25865.667916662904,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 0.18
+    },
+    "128": {
+     "hash": "7c16dcd7d33a95a83effe641",
+     "sum_abs2": 25865.667916662904,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 0.18
+    },
+    "384": {
+     "hash": "7c16dcd7d33a95a83effe641",
+     "sum_abs2": 25865.667916662904,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 0.2
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g09_rd_caustic.noinv": {
+   "bands": {
+    "0": {
+     "hash": "7c16dcd7d33a95a83effe641",
+     "sum_abs2": 25865.667916662904,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.21
+    },
+    "7": {
+     "hash": "7c16dcd7d33a95a83effe641",
+     "sum_abs2": 25865.667916662904,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.19
+    },
+    "32": {
+     "hash": "7c16dcd7d33a95a83effe641",
+     "sum_abs2": 25865.667916662904,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.18
+    },
+    "128": {
+     "hash": "7c16dcd7d33a95a83effe641",
+     "sum_abs2": 25865.667916662904,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.18
+    },
+    "384": {
+     "hash": "7c16dcd7d33a95a83effe641",
+     "sum_abs2": 25865.667916662904,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND sel",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.18
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  }
+ }
+}

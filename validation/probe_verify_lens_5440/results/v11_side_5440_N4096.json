@@ -1,0 +1,104 @@
+{
+ "version": "5.44.0",
+ "warning_attribution": {
+  "0": {
+   "hash": "a78a7ff1533ade9e24e9f84a",
+   "warnings": [
+    {
+     "msg": "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAVE GRID, but the analytic amplitude leg (",
+     "file": "v11_side_effects.py",
+     "line": 52
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / aperture-transm",
+     "file": "_lens_traced.py",
+     "line": 12350
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND self-check FAILED -- the field's maximum in",
+     "file": "_lens_traced.py",
+     "line": 12350
+    }
+   ]
+  },
+  "32": {
+   "hash": "a78a7ff1533ade9e24e9f84a",
+   "warnings": [
+    {
+     "msg": "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAVE GRID, but the analytic amplitude leg (",
+     "file": "v11_side_effects.py",
+     "line": 52
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / aperture-transm",
+     "file": "_lens_traced.py",
+     "line": 12236
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND self-check FAILED -- the field's maximum in",
+     "file": "_lens_traced.py",
+     "line": 12236
+    }
+   ]
+  },
+  "7": {
+   "hash": "a78a7ff1533ade9e24e9f84a",
+   "warnings": [
+    {
+     "msg": "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAVE GRID, but the analytic amplitude leg (",
+     "file": "v11_side_effects.py",
+     "line": 52
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit power / aperture-transm",
+     "file": "_lens_traced.py",
+     "line": 12236
+    },
+    {
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND self-check FAILED -- the field's maximum in",
+     "file": "_lens_traced.py",
+     "line": 12236
+    }
+   ]
+  }
+ },
+ "d9_fraction_text": {
+  "0": "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAVE GRID, but the analytic amplitude leg (",
+  "32": "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAVE GRID, but the analytic amplitude leg (",
+  "7": "apply_real_lens_traced: origin=(+0.3000, -0.2200) mm decentres the WAVE GRID, but the analytic amplitude leg ("
+ },
+ "timing": {
+  "N": 4096,
+  "sub": 32,
+  "dx": 1.5e-06,
+  "whole": {
+   "rows": 0,
+   "best": 20.686868699995102,
+   "all": [
+    21.12786129998858,
+    20.686868699995102,
+    23.179484299995238
+   ]
+  },
+  "band32": {
+   "rows": 32,
+   "best": 31.683078499991097,
+   "all": [
+    31.683078499991097,
+    33.96297410000989,
+    33.75246650000918
+   ]
+  },
+  "band_auto": {
+   "rows": 256,
+   "best": 32.626455400008126,
+   "all": [
+    32.626455400008126,
+    33.33991299998888,
+    33.42557649999799
+   ]
+  },
+  "band32_over_whole": 1.531555063236738,
+  "auto_over_whole": 1.5771577551519844
+ }
+}

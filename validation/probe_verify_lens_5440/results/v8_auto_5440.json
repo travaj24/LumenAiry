@@ -1,0 +1,50 @@
+{
+ "version": "5.44.0",
+ "auto": true,
+ "cases": {
+  "auto_screen_N4096": {
+   "whole": {
+    "rows": 0,
+    "hash": "91da5e59c46beb1d967b28b3",
+    "engaged": true,
+    "gate_open": true,
+    "n_out_of_domain": 3232321,
+    "nwarn": 0,
+    "secs": 21.01
+   },
+   "band": {
+    "rows": null,
+    "hash": "91da5e59c46beb1d967b28b3",
+    "engaged": true,
+    "gate_open": true,
+    "n_out_of_domain": 3232321,
+    "nwarn": 0,
+    "secs": 19.08
+   },
+   "rel_band_vs_whole": 0.0,
+   "bit_equal": true
+  },
+  "auto_rd_N4096": {
+   "whole": {
+    "rows": 0,
+    "hash": "08f9aa00b567ed87658cf8ca",
+    "engaged": true,
+    "gate_open": true,
+    "n_out_of_domain": 3232321,
+    "nwarn": 0,
+    "secs": 24.48
+   },
+   "band": {
+    "rows": null,
+    "hash": "08f9aa00b567ed87658cf8ca",
+    "engaged": true,
+    "gate_open": true,
+    "n_out_of_domain": 3232321,
+    "nwarn": 0,
+    "secs": 30.73
+   },
+   "rel_band_vs_whole": 0.0,
+   "bit_equal": true
+  }
+ }
+}

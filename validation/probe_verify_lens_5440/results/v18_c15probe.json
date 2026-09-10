@@ -1,0 +1,21 @@
+{
+ "version": "5.44.0",
+ "cases": {
+  "0": {
+   "engaged": true,
+   "has_probe_opl": true,
+   "probe_opl": [
+    -7.064440854777966e-05,
+    -1.4704248941185464e-05,
+    -5.333147337716495e-07
+   ],
+   "n_out_of_domain": 4125
+  },
+  "32": {
+   "engaged": true,
+   "has_probe_opl": false,
+   "probe_opl": null,
+   "n_out_of_domain": 4125
+  }
+ }
+}

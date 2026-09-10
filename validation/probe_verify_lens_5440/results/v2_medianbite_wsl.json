@@ -1,0 +1,2102 @@
+{
+ "lumenairy_file": "/mnt/c/tmp/lum_vlens/lumenairy/__init__.py",
+ "version": "5.44.0",
+ "forced": false,
+ "fold": false,
+ "medianbite": true,
+ "N": 384,
+ "rows": [
+  0,
+  1,
+  3,
+  7,
+  32,
+  128,
+  384
+ ],
+ "cases": {
+  "g01_rd_preserve.default": {
+   "bands": {
+    "0": {
+     "hash": "4dd60fa4ce67309dc582a535",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 3.51
+    },
+    "1": {
+     "hash": "4dd60fa4ce67309dc582a535",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 11.16
+    },
+    "3": {
+     "hash": "4dd60fa4ce67309dc582a535",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 4.09
+    },
+    "7": {
+     "hash": "4dd60fa4ce67309dc582a535",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 2.88
+    },
+    "32": {
+     "hash": "4dd60fa4ce67309dc582a535",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 2.19
+    },
+    "128": {
+     "hash": "4dd60fa4ce67309dc582a535",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.81
+    },
+    "384": {
+     "hash": "4dd60fa4ce67309dc582a535",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 2.16
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g01_rd_preserve.noinv": {
+   "bands": {
+    "0": {
+     "hash": "3799fc913427e2ebd7123610",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.43
+    },
+    "1": {
+     "hash": "3799fc913427e2ebd7123610",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.5
+    },
+    "3": {
+     "hash": "3799fc913427e2ebd7123610",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.49
+    },
+    "7": {
+     "hash": "3799fc913427e2ebd7123610",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.46
+    },
+    "32": {
+     "hash": "3799fc913427e2ebd7123610",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.42
+    },
+    "128": {
+     "hash": "3799fc913427e2ebd7123610",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.46
+    },
+    "384": {
+     "hash": "3799fc913427e2ebd7123610",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.47
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g02_rd_remap_lattice.default": {
+   "bands": {
+    "0": {
+     "hash": "6b48aa96ada8e0d20eff0a34",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.87
+    },
+    "1": {
+     "hash": "6b48aa96ada8e0d20eff0a34",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 9.1
+    },
+    "3": {
+     "hash": "6b48aa96ada8e0d20eff0a34",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 4.29
+    },
+    "7": {
+     "hash": "6b48aa96ada8e0d20eff0a34",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 2.91
+    },
+    "32": {
+     "hash": "6b48aa96ada8e0d20eff0a34",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.96
+    },
+    "128": {
+     "hash": "6b48aa96ada8e0d20eff0a34",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.82
+    },
+    "384": {
+     "hash": "6b48aa96ada8e0d20eff0a34",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.84
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g02_rd_remap_lattice.noinv": {
+   "bands": {
+    "0": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.43
+    },
+    "1": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.46
+    },
+    "3": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.47
+    },
+    "7": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.61
+    },
+    "32": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.57
+    },
+    "128": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.4
+    },
+    "384": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.48
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g03_rd_remap_full.default": {
+   "bands": {
+    "0": {
+     "hash": "ba11bba78822ef54e6847b35",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.67
+    },
+    "1": {
+     "hash": "ba11bba78822ef54e6847b35",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 9.27
+    },
+    "3": {
+     "hash": "ba11bba78822ef54e6847b35",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 4.24
+    },
+    "7": {
+     "hash": "ba11bba78822ef54e6847b35",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 2.84
+    },
+    "32": {
+     "hash": "ba11bba78822ef54e6847b35",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.97
+    },
+    "128": {
+     "hash": "ba11bba78822ef54e6847b35",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.61
+    },
+    "384": {
+     "hash": "ba11bba78822ef54e6847b35",
+     "sum_abs2": 6199.603930587342,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 2.06
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g03_rd_remap_full.noinv": {
+   "bands": {
+    "0": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.48
+    },
+    "1": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.55
+    },
+    "3": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.46
+    },
+    "7": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.45
+    },
+    "32": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.44
+    },
+    "128": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.44
+    },
+    "384": {
+     "hash": "d17fb1153af2eb761f00be8e",
+     "sum_abs2": 6193.759173163956,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.48
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g04_rd_origin.default": {
+   "bands": {
+    "0": {
+     "hash": "5a47dcdb7cccf0ab06152c7a",
+     "sum_abs2": 6179.231153453524,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.89
+    },
+    "1": {
+     "hash": "5a47dcdb7cccf0ab06152c7a",
+     "sum_abs2": 6179.231153453524,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 9.42
+    },
+    "3": {
+     "hash": "5a47dcdb7cccf0ab06152c7a",
+     "sum_abs2": 6179.231153453524,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 4.33
+    },
+    "7": {
+     "hash": "5a47dcdb7cccf0ab06152c7a",
+     "sum_abs2": 6179.231153453524,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 3.39
+    },
+    "32": {
+     "hash": "5a47dcdb7cccf0ab06152c7a",
+     "sum_abs2": 6179.231153453524,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.75
+    },
+    "128": {
+     "hash": "5a47dcdb7cccf0ab06152c7a",
+     "sum_abs2": 6179.231153453524,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.64
+    },
+    "384": {
+     "hash": "5a47dcdb7cccf0ab06152c7a",
+     "sum_abs2": 6179.231153453524,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 6324,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.78
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g04_rd_origin.noinv": {
+   "bands": {
+    "0": {
+     "hash": "3c1312c4bbb8a432b75bc16e",
+     "sum_abs2": 6172.372371693708,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.5
+    },
+    "1": {
+     "hash": "3c1312c4bbb8a432b75bc16e",
+     "sum_abs2": 6172.372371693708,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.59
+    },
+    "3": {
+     "hash": "3c1312c4bbb8a432b75bc16e",
+     "sum_abs2": 6172.372371693708,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.48
+    },
+    "7": {
+     "hash": "3c1312c4bbb8a432b75bc16e",
+     "sum_abs2": 6172.372371693708,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.43
+    },
+    "32": {
+     "hash": "3c1312c4bbb8a432b75bc16e",
+     "sum_abs2": 6172.372371693708,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.42
+    },
+    "128": {
+     "hash": "3c1312c4bbb8a432b75bc16e",
+     "sum_abs2": 6172.372371693708,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.46
+    },
+    "384": {
+     "hash": "3c1312c4bbb8a432b75bc16e",
+     "sum_abs2": 6172.372371693708,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.46
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g05_rd_carrier_sph.default": {
+   "bands": {
+    "0": {
+     "hash": "4071a5ac2a514e13b9a17c54",
+     "sum_abs2": 6179.730870492094,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.46
+    },
+    "1": {
+     "hash": "4071a5ac2a514e13b9a17c54",
+     "sum_abs2": 6179.730870492094,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 8.17
+    },
+    "3": {
+     "hash": "4071a5ac2a514e13b9a17c54",
+     "sum_abs2": 6179.730870492094,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 3.02
+    },
+    "7": {
+     "hash": "4071a5ac2a514e13b9a17c54",
+     "sum_abs2": 6179.730870492094,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.53
+    },
+    "32": {
+     "hash": "4071a5ac2a514e13b9a17c54",
+     "sum_abs2": 6179.730870492094,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.63
+    },
+    "128": {
+     "hash": "4071a5ac2a514e13b9a17c54",
+     "sum_abs2": 6179.730870492094,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.44
+    },
+    "384": {
+     "hash": "4071a5ac2a514e13b9a17c54",
+     "sum_abs2": 6179.730870492094,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91507,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.84
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g05_rd_carrier_sph.noinv": {
+   "bands": {
+    "0": {
+     "hash": "4b830a97979308ba943e82d5",
+     "sum_abs2": 6176.8158282005425,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.45
+    },
+    "1": {
+     "hash": "4b830a97979308ba943e82d5",
+     "sum_abs2": 6176.8158282005425,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.64
+    },
+    "3": {
+     "hash": "4b830a97979308ba943e82d5",
+     "sum_abs2": 6176.8158282005425,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.55
+    },
+    "7": {
+     "hash": "4b830a97979308ba943e82d5",
+     "sum_abs2": 6176.8158282005425,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.53
+    },
+    "32": {
+     "hash": "4b830a97979308ba943e82d5",
+     "sum_abs2": 6176.8158282005425,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.48
+    },
+    "128": {
+     "hash": "4b830a97979308ba943e82d5",
+     "sum_abs2": 6176.8158282005425,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.46
+    },
+    "384": {
+     "hash": "4b830a97979308ba943e82d5",
+     "sum_abs2": 6176.8158282005425,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.48
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g06_rd_tilted.default": {
+   "bands": {
+    "0": {
+     "hash": "eef68dba28d36fbb87f16e87",
+     "sum_abs2": 6197.784756627896,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.84
+    },
+    "1": {
+     "hash": "eef68dba28d36fbb87f16e87",
+     "sum_abs2": 6197.784756627896,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 9.42
+    },
+    "3": {
+     "hash": "eef68dba28d36fbb87f16e87",
+     "sum_abs2": 6197.784756627896,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 4.45
+    },
+    "7": {
+     "hash": "eef68dba28d36fbb87f16e87",
+     "sum_abs2": 6197.784756627896,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 2.87
+    },
+    "32": {
+     "hash": "eef68dba28d36fbb87f16e87",
+     "sum_abs2": 6197.784756627896,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 2.15
+    },
+    "128": {
+     "hash": "eef68dba28d36fbb87f16e87",
+     "sum_abs2": 6197.784756627896,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.91
+    },
+    "384": {
+     "hash": "eef68dba28d36fbb87f16e87",
+     "sum_abs2": 6197.784756627896,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 2.0
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g06_rd_tilted.noinv": {
+   "bands": {
+    "0": {
+     "hash": "7cdac91c440934a9a15664f1",
+     "sum_abs2": 6191.787041279608,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.49
+    },
+    "1": {
+     "hash": "7cdac91c440934a9a15664f1",
+     "sum_abs2": 6191.787041279608,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.63
+    },
+    "3": {
+     "hash": "7cdac91c440934a9a15664f1",
+     "sum_abs2": 6191.787041279608,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.51
+    },
+    "7": {
+     "hash": "7cdac91c440934a9a15664f1",
+     "sum_abs2": 6191.787041279608,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.41
+    },
+    "32": {
+     "hash": "7cdac91c440934a9a15664f1",
+     "sum_abs2": 6191.787041279608,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.45
+    },
+    "128": {
+     "hash": "7cdac91c440934a9a15664f1",
+     "sum_abs2": 6191.787041279608,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.45
+    },
+    "384": {
+     "hash": "7cdac91c440934a9a15664f1",
+     "sum_abs2": 6191.787041279608,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 0.55
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g07_screen.default": {
+   "bands": {
+    "0": {
+     "hash": "a5cc2dbf15fd9e1d85bb3a55",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 1.74
+    },
+    "1": {
+     "hash": "a5cc2dbf15fd9e1d85bb3a55",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 6.37
+    },
+    "3": {
+     "hash": "a5cc2dbf15fd9e1d85bb3a55",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 3.08
+    },
+    "7": {
+     "hash": "a5cc2dbf15fd9e1d85bb3a55",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 2.35
+    },
+    "32": {
+     "hash": "a5cc2dbf15fd9e1d85bb3a55",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 1.8
+    },
+    "128": {
+     "hash": "a5cc2dbf15fd9e1d85bb3a55",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 1.68
+    },
+    "384": {
+     "hash": "a5cc2dbf15fd9e1d85bb3a55",
+     "sum_abs2": 9293.933873319438,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 4125,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 1.7
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g07_screen.noinv": {
+   "bands": {
+    "0": {
+     "hash": "c98828102ea98c45e8655d0c",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.24
+    },
+    "1": {
+     "hash": "c98828102ea98c45e8655d0c",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.31
+    },
+    "3": {
+     "hash": "c98828102ea98c45e8655d0c",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.28
+    },
+    "7": {
+     "hash": "c98828102ea98c45e8655d0c",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.29
+    },
+    "32": {
+     "hash": "c98828102ea98c45e8655d0c",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.28
+    },
+    "128": {
+     "hash": "c98828102ea98c45e8655d0c",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.28
+    },
+    "384": {
+     "hash": "c98828102ea98c45e8655d0c",
+     "sum_abs2": 9293.933873319438,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.23
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g08_screen_carrier.default": {
+   "bands": {
+    "0": {
+     "hash": "e7cfa7026507b50d5c948450",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.32
+    },
+    "1": {
+     "hash": "e7cfa7026507b50d5c948450",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 4.24
+    },
+    "3": {
+     "hash": "e7cfa7026507b50d5c948450",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 1.72
+    },
+    "7": {
+     "hash": "e7cfa7026507b50d5c948450",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.99
+    },
+    "32": {
+     "hash": "e7cfa7026507b50d5c948450",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.51
+    },
+    "128": {
+     "hash": "e7cfa7026507b50d5c948450",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.36
+    },
+    "384": {
+     "hash": "e7cfa7026507b50d5c948450",
+     "sum_abs2": 9276.716248731822,
+     "engaged": true,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": 91311,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.36
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g08_screen_carrier.noinv": {
+   "bands": {
+    "0": {
+     "hash": "f03dbf686f51687b1760fff7",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.22
+    },
+    "1": {
+     "hash": "f03dbf686f51687b1760fff7",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.42
+    },
+    "3": {
+     "hash": "f03dbf686f51687b1760fff7",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.28
+    },
+    "7": {
+     "hash": "f03dbf686f51687b1760fff7",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.24
+    },
+    "32": {
+     "hash": "f03dbf686f51687b1760fff7",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.2
+    },
+    "128": {
+     "hash": "f03dbf686f51687b1760fff7",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.2
+    },
+    "384": {
+     "hash": "f03dbf686f51687b1760fff7",
+     "sum_abs2": 9294.06364386098,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 0,
+     "warnings": [],
+     "secs": 0.37
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g09_rd_caustic.default": {
+   "bands": {
+    "0": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 2.2
+    },
+    "1": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 1.81
+    },
+    "3": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 1.73
+    },
+    "7": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 1.8
+    },
+    "32": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 1.66
+    },
+    "128": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 1.76
+    },
+    "384": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": "G2",
+     "n_out_of_domain": null,
+     "nwarn": 3,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec",
+      "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+     ],
+     "secs": 1.75
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  },
+  "g09_rd_caustic.noinv": {
+   "bands": {
+    "0": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.26
+    },
+    "1": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.29
+    },
+    "3": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.37
+    },
+    "7": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.21
+    },
+    "32": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.24
+    },
+    "128": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.28
+    },
+    "384": {
+     "hash": "43aed67b51526bd13019bd0e",
+     "sum_abs2": 17383.798943674446,
+     "engaged": false,
+     "gate_open": true,
+     "refused": null,
+     "n_out_of_domain": null,
+     "nwarn": 2,
+     "warnings": [
+      "apply_real_lens_traced: amplitude_model='ray_density' detected a fold ",
+      "apply_real_lens_traced: amplitude_model='ray_density' energy self-chec"
+     ],
+     "secs": 1.28
+    }
+   },
+   "field_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   },
+   "diag_equal": {
+    "0": true,
+    "1": true,
+    "3": true,
+    "7": true,
+    "32": true,
+    "128": true,
+    "384": true
+   }
+  }
+ }
+}
