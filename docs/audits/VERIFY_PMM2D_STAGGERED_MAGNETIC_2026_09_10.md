@@ -943,3 +943,7 @@ No library defect was found in the magnetic build.
 | `93c0701` | probe V6 (closure, transpose, guards, composition) |
 | `5a4e78b` | **library**: a magnetic layer's Wood cut-offs sit at `Re(eps*mu)`; G10 tests; CHANGELOG |
 | `431a2ea` | probes V7 (the follow-up's hashes) and V8 (the durability re-measure) |
+| `8ba7b48` | this report + the `.test_durations` splice (3 added, 0 outside the file changed) |
+
+Nothing was pushed, tagged or version-bumped.  The only library edit is
+`5a4e78b`, the named follow-up.
