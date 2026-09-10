@@ -1,0 +1,184 @@
+{
+ "v1": {
+  "fixtures": 66,
+  "decisions_differing": 0,
+  "decision_diffs": [],
+  "max_rel_spread": 0.014444304913926516,
+  "at": [
+   "D_oop_d0.0001.drop",
+   11759.951597520267,
+   11932.305455850683
+  ],
+  "n_compared": 624
+ },
+ "v1_compare": {
+  "identical_int_fields": [
+   "n",
+   "returned_by_both",
+   "returned_bit_identical",
+   "returned_bit_broken",
+   "unguarded_identical",
+   "unguarded_broken",
+   "warning_sets_identical_after_note_excision",
+   "warning_sets_differing",
+   "truncation_notes_added",
+   "truncation_notes_removed",
+   "refused_before",
+   "refused_after",
+   "refused_by_both",
+   "refusal_message_identical",
+   "refusal_message_reworded",
+   "flips_truncation_to_sliver",
+   "flips_sliver_to_truncation",
+   "flips_wrong_by_delta0",
+   "flips_right_by_delta0",
+   "flips_snapped_right"
+  ],
+  "differing": [
+   "mildest_flip_err_d"
+  ],
+  "max_rel_spread": 4.76726591459938e-10,
+  "at": [
+   "mildest_flip_err_d",
+   52048.140453787935,
+   52048.1404289752
+  ]
+ },
+ "v2": {
+  "integer_or_boolean_fields_differing": [],
+  "max_rel_spread": 4.05151253112976e-08,
+  "at": [
+   "correct_move_w_envelope",
+   161.0728624620898,
+   161.07286898797727
+  ],
+  "n_compared": 12
+ },
+ "v3": {
+  "integer_or_boolean_fields_differing": [],
+  "max_rel_spread": 1.2350949799983906e-08,
+  "at": [
+   "d5_drop_floor",
+   3.6687581141756778,
+   3.6687581594883256
+  ],
+  "n_compared": 11
+ },
+ "v4": {
+  "integer_or_boolean_fields_differing": [],
+  "max_rel_spread": 0.017621204412313348,
+  "at": [
+   "grey_finite_drop_envelope",
+   22706252298.923767,
+   22306140785.72687
+  ],
+  "n_compared": 8
+ },
+ "v8": {
+  "integer_or_boolean_fields_differing": [],
+  "max_rel_spread": 2.447467243037168e-07,
+  "at": [
+   "closest_approach_grey",
+   0.07779726415754407,
+   0.0777972451169185
+  ],
+  "n_compared": 5
+ },
+ "v5": {
+  "decisions_differing": [
+   [
+    "v5.build.lumenairy",
+    "C:\\tmp\\lum_vsliver3\\lumenairy\\elements\\pmm\\stack.py",
+    "/mnt/c/tmp/lum_vsliver3/lumenairy/elements/pmm/stack.py"
+   ],
+   [
+    "v5.build.numpy",
+    "2.4.4",
+    "2.4.6"
+   ],
+   [
+    "v5.build.platform",
+    "Windows-11-10.0.26200-SP0",
+    "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39"
+   ],
+   [
+    "v5.build.python",
+    "3.14.6",
+    "3.12.3"
+   ]
+  ],
+  "max_rel_spread": 0.6799999999922282,
+  "at": [
+   "v5.round2.sliver[4].drop",
+   210814485213545.44,
+   658795266276329.2
+  ],
+  "n_compared": 105
+ },
+ "v6": {
+  "decisions_differing": [
+   [
+    "v6.build.lumenairy",
+    "C:\\tmp\\lum_vsliver3\\lumenairy\\elements\\pmm\\stack.py",
+    "/mnt/c/tmp/lum_vsliver3/lumenairy/elements/pmm/stack.py"
+   ],
+   [
+    "v6.build.numpy",
+    "2.4.4",
+    "2.4.6"
+   ],
+   [
+    "v6.build.platform",
+    "Windows-11-10.0.26200-SP0",
+    "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39"
+   ],
+   [
+    "v6.build.python",
+    "3.14.6",
+    "3.12.3"
+   ]
+  ],
+  "max_rel_spread": 8.456799830671542e-08,
+  "at": [
+   "v6.r3b[22].err_d",
+   1.195620226522963,
+   1.1956203276341808
+  ],
+  "n_compared": 150
+ },
+ "v9": {
+  "decisions_differing": [
+   [
+    "v9.build.lumenairy",
+    "C:\\tmp\\lum_vsliver3\\lumenairy\\elements\\pmm\\stack.py",
+    "/mnt/c/tmp/lum_vsliver3/lumenairy/elements/pmm/stack.py"
+   ],
+   [
+    "v9.build.numpy",
+    "2.4.4",
+    "2.4.6"
+   ],
+   [
+    "v9.build.platform",
+    "Windows-11-10.0.26200-SP0",
+    "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39"
+   ],
+   [
+    "v9.build.python",
+    "3.14.6",
+    "3.12.3"
+   ]
+  ],
+  "max_rel_spread": 1.4284963150851994e-05,
+  "at": [
+   "v9.rows[2].err_d",
+   0.9790815652143214,
+   0.9790955515581966
+  ],
+  "n_compared": 55
+ },
+ "decision_margin_min": 0.7894098486686618,
+ "decision_margin_rows": 859,
+ "overall_max_rel_spread": 0.6799999999922282,
+ "decision_headroom": 1.160896836290712
+}

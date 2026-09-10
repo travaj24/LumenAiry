@@ -1,0 +1,132 @@
+{
+ "build": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "lumenairy": "C:\\tmp\\lum_vsliver3\\lumenairy\\elements\\pmm\\stack.py",
+  "guard": true,
+  "closure_fraction": 0.01,
+  "attrib_closure": 1e-05,
+  "move_factor": 100.0,
+  "trigger": 0.001
+ },
+ "cfg": {
+  "period": 1.02e-06,
+  "wl": 6.33e-07,
+  "nsup": 3.1,
+  "nsub": [
+   2.9,
+   1.1
+  ],
+  "theta": 1.35,
+  "e_hi": 12.25,
+  "nl": 3
+ },
+ "degree": 4,
+ "ladder": {
+  "4": {
+   "worst": 0.992604094698055,
+   "abs_err_vs_converged": 0.059262101750361174
+  },
+  "6": {
+   "worst": 1.0011778560079205,
+   "abs_err_vs_converged": 0.06388798648336824
+  },
+  "8": {
+   "worst": 1.003619262359811,
+   "abs_err_vs_converged": 0.051349374918365595
+  },
+  "10": {
+   "worst": 1.0019893226630256,
+   "abs_err_vs_converged": 0.10746775415995213
+  },
+  "12": {
+   "worst": 1.0010623198954105,
+   "abs_err_vs_converged": 0.022519725085777154
+  },
+  "16": {
+   "worst": 1.000002744875053,
+   "abs_err_vs_converged": null
+  }
+ },
+ "rows": [
+  {
+   "delta": 1.6622244079925e-05,
+   "worst": 1.00304169827214,
+   "su_snap": 0.0,
+   "drop": "inf",
+   "move": 0.0009536182631081881,
+   "w_wide": 8.311122040027819e-06,
+   "move_w": 114.74001446680671,
+   "err_d": 1.0505124586920043,
+   "kind": "right",
+   "err_snap_d": 2.042378257547962,
+   "kind_snap": "right",
+   "lib_refused": true,
+   "n_warns": 0,
+   "verdict_round2": "sliver",
+   "verdict_round3": "sliver",
+   "abs_err_returned": 0.059245684270199994,
+   "abs_err_snapped": 0.059272442268378286,
+   "abs_err_reference": 0.059262101750361174,
+   "snapped_closer_to_truth": false,
+   "msg_head": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 4 cell(s) no single layer asked for; ",
+   "msg_names_min_feature": true,
+   "msg_attribution": true
+  },
+  {
+   "delta": 1.2689610031679234e-05,
+   "worst": 1.0030433579983415,
+   "su_snap": 0.0,
+   "drop": "inf",
+   "move": 0.0009516741225554428,
+   "w_wide": 6.344805015878752e-06,
+   "move_w": 149.99265070774385,
+   "err_d": 1.0649217064008574,
+   "kind": "right",
+   "err_snap_d": 2.042335018461772,
+   "kind_snap": "right",
+   "lib_refused": true,
+   "n_warns": 0,
+   "verdict_round2": "sliver",
+   "verdict_round3": "sliver",
+   "abs_err_returned": 0.05924973935837491,
+   "abs_err_snapped": 0.05926999579049705,
+   "abs_err_reference": 0.059262101750361174,
+   "snapped_closer_to_truth": false,
+   "msg_head": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 4 cell(s) no single layer asked for; ",
+   "msg_names_min_feature": true,
+   "msg_attribution": true
+  },
+  {
+   "delta": 7.395465531108587e-06,
+   "worst": 1.003045373277416,
+   "su_snap": 0.0,
+   "drop": "inf",
+   "move": 0.0009483200568432438,
+   "w_wide": 3.697732765595152e-06,
+   "move_w": 256.4598679673952,
+   "err_d": 0.9790815652143214,
+   "kind": "right",
+   "err_snap_d": 2.04227681302082,
+   "kind_snap": "right",
+   "lib_refused": true,
+   "n_warns": 0,
+   "verdict_round2": "sliver",
+   "verdict_round3": "sliver",
+   "abs_err_returned": 0.05925510615227428,
+   "abs_err_snapped": 0.05926670234995894,
+   "abs_err_reference": 0.059262101750361174,
+   "snapped_closer_to_truth": false,
+   "msg_head": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carries 4 cell(s) no single layer asked for; ",
+   "msg_names_min_feature": true,
+   "msg_attribution": true
+  }
+ ],
+ "library_refusals": 3,
+ "round2_would_attribute": 3,
+ "round3_attributes": 3,
+ "all_correct_by_continuity": true,
+ "snapped_closer_count": 0,
+ "wall": 7.4410066999989795
+}

@@ -1,0 +1,267 @@
+........................................................................ [  8%]
+........................................................................ [ 17%]
+........................................................................ [ 26%]
+.............................................................s.......... [ 35%]
+........................................................................ [ 43%]
+........................................................................ [ 52%]
+........................................................................ [ 61%]
+........................................................................ [ 70%]
+........................................................................ [ 79%]
+........................................................................ [ 87%]
+........................................................................ [ 96%]
+............................                                             [100%]
+============================== warnings summary ===============================
+tests/unit/test_audit_p1_stack_stale_internal.py::test_2d_resolve_without_retain_invalidates_internals
+tests/unit/test_audit_p1_stack_stale_internal.py::test_2d_retained_resolve_serves_the_new_solve
+tests/unit/test_audit_p1_stack_stale_internal.py::test_never_retained_still_raises
+tests/unit/test_audit_p1_stack_stale_internal.py::test_2d_superseding_paths_invalidate_retained
+  C:\tmp\lum_vsliver3\tests\unit\test_audit_p1_stack_stale_internal.py:35: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(P, n_substrate=1.5, n_superstrate=1.0, degree=7,
+
+tests/unit/test_audit_w3_entry_validation.py::TestP330StackThickness::test_message_mirrors_2d_sibling
+  C:\tmp\lum_vsliver3\tests\unit\test_audit_w3_entry_validation.py:103: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    PMM2DStack(period_x=1.0e-6, period_y=1.0e-6).add_layer(
+
+tests/unit/test_audit_w6_pmm_rcwa.py::test_p33_cell_rot90_symmetry[laurent]
+  C:\tmp\lum_vsliver3\tests\unit\test_audit_w6_pmm_rcwa.py:83: UserWarning: pmm_efficiency_2d_cell: lossless energy closure violated (sum R+T = 1.05, off by +0.0542, min per-order efficiency = 0; the structure is provably lossless so R+T=1 is exact).  The Fourier projection is ill-conditioned at this (n_orders, degree) coincidence and the PER-ORDER efficiencies are unreliable -- pass stabilize=True (retries nearby degrees) or lower n_orders / raise degree.
+    res_x = pmm_efficiency_2d_cell(1.0, 1.0, cell_x, 1.5, 1.0, 0.5, 0.6,
+
+tests/unit/test_audit_w6_pmm_rcwa.py::test_p33_cell_rot90_symmetry[laurent]
+  C:\tmp\lum_vsliver3\tests\unit\test_audit_w6_pmm_rcwa.py:85: UserWarning: pmm_efficiency_2d_cell: lossless energy closure violated (sum R+T = 1.05, off by +0.0542, min per-order efficiency = 0; the structure is provably lossless so R+T=1 is exact).  The Fourier projection is ill-conditioned at this (n_orders, degree) coincidence and the PER-ORDER efficiencies are unreliable -- pass stabilize=True (retries nearby degrees) or lower n_orders / raise degree.
+    res_y = pmm_efficiency_2d_cell(1.0, 1.0, cell_y, 1.5, 1.0, 0.5, 0.6,
+
+tests/unit/test_audit_w6_pmm_rcwa.py::test_p33_x_uniform_li_tracks_staggered_reference
+  C:\tmp\lum_vsliver3\tests\unit\test_audit_w6_pmm_rcwa.py:103: UserWarning: pmm_efficiency_2d_staggered: a diffraction order is within 4.5e-07 (kt^2 units) of a Rayleigh cutoff; the staggered solver's accuracy DEGRADES like ~1/sqrt(distance) near cutoffs (energy errors of several % to >100% measured inside 1e-6).  Use pmm_efficiency_2d_cell (clean there) or detune the wavelength.
+    o_s, R_s, T_s = pmm_efficiency_2d_staggered(
+
+tests/unit/test_fix_pmmstack_sliver_walls.py::test_return_owners_is_additive_and_warn_false_is_silent
+  C:\Users\Tesla\AppData\Local\Programs\Python\Python314\Lib\site-packages\_pytest\python.py:166: UserWarning: _pmm_union_grid: snapped 2 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.001 (period fractions): (0.3, 0.3001), (0.7, 0.7001).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 5e-05 of a period).  Single-layer thin features are never merged.
+    result = testfunction(**testargs)
+
+tests/unit/test_niche_audit_w7_pmm.py::test_w7_offplane_router_floor_separates_noise_from_physics
+  C:\tmp\lum_vsliver3\tests\unit\test_niche_audit_w7_pmm.py:854: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = -1.105e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    _o, R, T, _J = P.pmm_jones_2d(PER, PER, cell, 1.5, 1.0, DEPTH, WL,
+
+tests/unit/test_niche_audit_w7_pmm.py::test_w7_even_parity_fold_reproduces_the_full_solve[(1.5+0j)-0.0-False]
+  C:\tmp\lum_vsliver3\tests\unit\test_niche_audit_w7_pmm.py:877: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = -1.105e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    _o, R, T, J = P.pmm_jones_2d(PER, PER, cell, n_sub, 1.0, DEPTH, WL,
+
+tests/unit/test_niche_audit_w7_pmm.py::test_w7_even_parity_fold_reproduces_the_full_solve[(1.5+0.3j)-0.0-False]
+  C:\tmp\lum_vsliver3\tests\unit\test_niche_audit_w7_pmm.py:877: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.187e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    _o, R, T, J = P.pmm_jones_2d(PER, PER, cell, n_sub, 1.0, DEPTH, WL,
+
+tests/unit/test_niche_audit_w7_pmm.py::test_w7_even_parity_fold_reproduces_the_full_solve[(1.5+0j)-0.3-False]
+  C:\tmp\lum_vsliver3\tests\unit\test_niche_audit_w7_pmm.py:877: _EnergyWarning: pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = -1.091e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    _o, R, T, J = P.pmm_jones_2d(PER, PER, cell, n_sub, 1.0, DEPTH, WL,
+
+tests/unit/test_niche_audit_w8_raster.py::test_w8_shear_convergence_outlier_vanishes_at_the_coincident_nx
+  C:\tmp\lum_vsliver3\lumenairy\elements\rcwa\stack.py:2766: _EnergyWarning: RCWAStack.solve: lossless energy closure violated (sum R+T - 2 = +6.282e-05, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return self._solve_once(retain_internal=retain_internal,
+
+tests/unit/test_niche_audit_w8_raster.py::test_w8_shear_convergence_outlier_vanishes_at_the_coincident_nx
+  C:\tmp\lum_vsliver3\lumenairy\elements\rcwa\stack.py:2766: _EnergyWarning: RCWAStack.solve: lossless energy closure violated (sum R+T - 2 = +6.204e-05, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return self._solve_once(retain_internal=retain_internal,
+
+tests/unit/test_niche_audit_w9_pmm_taper.py::test_staircase_error_law_is_second_order
+  C:\tmp\lum_vsliver3\lumenairy\elements\rcwa\stack.py:2766: _EnergyWarning: RCWAStack.solve: lossless energy closure violated (sum R+T - 2 = -2.866e-06, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return self._solve_once(retain_internal=retain_internal,
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_cache_returns_the_uncached_bytes_and_is_hit
+tests/unit/test_pmm_m3_efficiency.py::test_the_mortar_still_reduces_to_the_plain_interface_on_identical_grids
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:201: UserWarning: _pmm_union_grid: snapped 4 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.251289, 0.253866), (0.258432, 0.261009), (0.738991, 0.741568), (0.746134, 0.748711).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00129 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(ns)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_cache_returns_the_uncached_bytes_and_is_hit
+tests/unit/test_pmm_m3_efficiency.py::test_the_mortar_still_reduces_to_the_plain_interface_on_identical_grids
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:201: UserWarning: _pmm_union_grid: snapped 8 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.251289, 0.253866), (0.252577, 0.256444), (0.258432, 0.261009), (0.25972, 0.263587), (0.736413, 0.738991), (0.737702, 0.741568) (+2 more).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00193 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(ns)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_cache_returns_the_uncached_bytes_and_is_hit
+tests/unit/test_pmm_m3_efficiency.py::test_the_mortar_still_reduces_to_the_plain_interface_on_identical_grids
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:201: UserWarning: _pmm_union_grid: snapped 8 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.253866, 0.256444), (0.255155, 0.259021), (0.261009, 0.263587), (0.262298, 0.266164), (0.733836, 0.736413), (0.735125, 0.738991) (+2 more).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00193 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(ns)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_cache_returns_the_uncached_bytes_and_is_hit
+tests/unit/test_pmm_m3_efficiency.py::test_the_mortar_still_reduces_to_the_plain_interface_on_identical_grids
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:201: UserWarning: _pmm_union_grid: snapped 8 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.256444, 0.259021), (0.257732, 0.261599), (0.263587, 0.266164), (0.264875, 0.268742), (0.731258, 0.733836), (0.732547, 0.736413) (+2 more).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00193 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(ns)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_cache_returns_the_uncached_bytes_and_is_hit
+tests/unit/test_pmm_m3_efficiency.py::test_the_mortar_still_reduces_to_the_plain_interface_on_identical_grids
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:201: UserWarning: _pmm_union_grid: snapped 8 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.259021, 0.261599), (0.26031, 0.264176), (0.266164, 0.268742), (0.267453, 0.271319), (0.728681, 0.731258), (0.72997, 0.733836) (+2 more).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00193 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(ns)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_cache_returns_the_uncached_bytes_and_is_hit
+tests/unit/test_pmm_m3_efficiency.py::test_the_mortar_still_reduces_to_the_plain_interface_on_identical_grids
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:201: UserWarning: _pmm_union_grid: snapped 4 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.261599, 0.264176), (0.268742, 0.271319), (0.728681, 0.731258), (0.735824, 0.738401).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00129 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(ns)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:219: UserWarning: _pmm_union_grid: snapped 4 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.251289, 0.253866), (0.258432, 0.261009), (0.738991, 0.741568), (0.746134, 0.748711).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00129 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(6)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:219: UserWarning: _pmm_union_grid: snapped 8 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.251289, 0.253866), (0.252577, 0.256444), (0.258432, 0.261009), (0.25972, 0.263587), (0.736413, 0.738991), (0.737702, 0.741568) (+2 more).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00193 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(6)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:219: UserWarning: _pmm_union_grid: snapped 8 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.253866, 0.256444), (0.255155, 0.259021), (0.261009, 0.263587), (0.262298, 0.266164), (0.733836, 0.736413), (0.735125, 0.738991) (+2 more).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00193 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(6)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:219: UserWarning: _pmm_union_grid: snapped 8 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.256444, 0.259021), (0.257732, 0.261599), (0.263587, 0.266164), (0.264875, 0.268742), (0.731258, 0.733836), (0.732547, 0.736413) (+2 more).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00193 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(6)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:219: UserWarning: _pmm_union_grid: snapped 8 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.259021, 0.261599), (0.26031, 0.264176), (0.266164, 0.268742), (0.267453, 0.271319), (0.728681, 0.731258), (0.72997, 0.733836) (+2 more).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00193 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(6)._layers],
+
+tests/unit/test_pmm_m3_efficiency.py::test_geometry_fingerprint_covers_exactly_what_the_two_builders_read
+  C:\tmp\lum_vsliver3\tests\unit\test_pmm_m3_efficiency.py:219: UserWarning: _pmm_union_grid: snapped 4 pair(s) of NEAR-COINCIDENT cross-layer walls closer than min_feature=0.00429 (period fractions): (0.261599, 0.264176), (0.268742, 0.271319), (0.728681, 0.731258), (0.735824, 0.738401).  These near-zero-width union elements are the staircase wall-collision pathology (passive-but-wrong / blow-up); the snap moves each pair to its midpoint (max wall displacement 0.00129 of a period).  Single-layer thin features are never merged.
+    gof = PC._perlayer_window_grids([L[1] for L in build(6)._layers],
+
+tests/unit/test_v5_14_1_device_geometry.py::test_pmm2d_tapered_pillars_single_equals_legacy
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_1_device_geometry.py:102: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    pa = PMM2DStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_1_device_geometry.py::test_pmm2d_tapered_pillars_single_equals_legacy
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_1_device_geometry.py:107: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    pb = PMM2DStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_1_device_geometry.py::test_pmm2d_tapered_pillars_single_equals_legacy
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_1_device_geometry.py:112: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    oa, Ra, Ta, _ = pa.set_source(_WL).solve()
+
+tests/unit/test_v5_14_1_device_geometry.py::test_pmm2d_tapered_pillars_single_equals_legacy
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_1_device_geometry.py:113: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    ob, Rb, Tb, _ = pb.set_source(_WL).solve()
+
+tests/unit/test_v5_14_1_device_geometry.py::test_pmm2d_stack_dispersive_sweep
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_1_device_geometry.py:233: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_1_device_geometry.py::test_pmm2d_stack_dispersive_sweep
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_1_device_geometry.py:255: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    ctl = PMM2DStack(P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_1_device_geometry.py::test_plot_geometry_smoke
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_1_device_geometry.py:484: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    s2 = PMM2DStack(_P, n_substrate=1.5, degree=9, n_orders=4)
+
+tests/unit/test_v5_14_2_backlog_batch.py::test_jones_2d_even_sector_matches_full
+  C:\tmp\lum_vsliver3\lumenairy\elements\rcwa\_core.py:313: _EnergyWarning: rcwa_jones_2d: lossless energy closure violated (sum R+T - 2 = -3.200e-03, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return fn(*args, **kwargs)
+
+tests/unit/test_v5_14_2_backlog_batch.py::test_jones_2d_even_sector_matches_full
+  C:\tmp\lum_vsliver3\lumenairy\elements\rcwa\_core.py:313: _EnergyWarning: rcwa_jones_2d: lossless energy closure violated (sum R+T - 2 = -3.381e-04, structure is provably lossless): the truncation is numerically unstable here and the PER-ORDER efficiencies are suspect.  Pass stabilize=True (retries nearby truncations) or change n_orders.  If a LAYER permittivity is EXACTLY EQUAL to a REGION's (a groove, or a rotated director's ordinary no^2, equal to n_substrate^2 or n_superstrate^2) the layer<->region mode match is exactly -- not nearly -- degenerate at EVERY truncation and no n_orders helps: DETUNE one of the coincident permittivities by a relative ~1e-6 instead.
+    return fn(*args, **kwargs)
+
+tests/unit/test_v5_14_2_backlog_batch.py::test_pmm2d_stack_layer_absorption_closes
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_2_backlog_batch.py:250: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(0.6e-6, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_2_backlog_batch.py::test_pmm2d_stack_layer_absorption_closes
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_2_backlog_batch.py:264: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st2 = PMM2DStack(0.6e-6, degree=9, n_orders=4)
+
+tests/unit/test_v5_14_2_jax_stacks.py::test_pmm2d_stack_jax_forward_matches_numpy
+tests/unit/test_v5_14_2_jax_stacks.py::test_pmm2d_stack_jax_forward_oblique
+tests/unit/test_v5_14_2_jax_stacks.py::test_pmm2d_stack_jax_grads
+tests/unit/test_v5_14_2_jax_stacks.py::test_pmm2d_stack_jax_guards
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_2_jax_stacks.py:157: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(P2, n_substrate=1.5, n_superstrate=1.0, degree=7,
+
+tests/unit/test_v5_14_2_jax_stacks.py::test_pmm2d_stack_jax_guards
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_2_jax_stacks.py:216: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st2 = PMM2DStack(P2, degree=7, n_orders=3)
+
+tests/unit/test_v5_14_2_jax_stacks.py::test_pmm2d_stack_jax_guards
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_2_jax_stacks.py:223: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    PMM2DStack(P2, degree=7, n_orders=3).add_layer(
+
+tests/unit/test_v5_14_2_jax_stacks.py::test_pmm2d_stack_jax_guards
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_2_jax_stacks.py:226: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    PMM2DStack(P2, degree=7, n_orders=3).add_layer(
+
+tests/unit/test_v5_14_3_pmm_internal_field.py::test_uniform_film_co_registers_with_rcwa_2d_conical
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_3_pmm_internal_field.py:207: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    pst = PMM2DStack(P2, n_substrate=1.5, n_superstrate=1.0, degree=7,
+
+tests/unit/test_v5_14_3_pmm_internal_field.py::test_patterned_2d_matches_nodal_exact_1d_oracle
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_3_pmm_internal_field.py:234: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    p2 = PMM2DStack(P2, n_substrate=1.5, n_superstrate=1.0, degree=17,
+
+tests/unit/test_v5_14_3_pmm_internal_field.py::test_internal_interface_continuity_2d
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_3_pmm_internal_field.py:259: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    pst = PMM2DStack(P2, n_substrate=1.5, n_superstrate=1.0, degree=9,
+
+tests/unit/test_v5_14_3_pmm_internal_field.py::test_absorption_volume_identity_2d_uniform
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_3_pmm_internal_field.py:278: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    pst = PMM2DStack(P2, n_substrate=1.5, n_superstrate=1.0, degree=7,
+
+tests/unit/test_v5_14_3_pmm_internal_field.py::test_internal_field_api_2d
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_3_pmm_internal_field.py:296: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    pst = PMM2DStack(P2, n_substrate=1.5, n_superstrate=1.0, degree=7,
+
+tests/unit/test_v5_14_3_pmm_internal_field.py::test_internal_field_api_2d
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_14_3_pmm_internal_field.py:307: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st2 = PMM2DStack(P2, degree=7, n_orders=3)
+
+tests/unit/test_v5_20_0_pmm_conical.py::test_conical_uniform_slab_matches_berreman
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_20_0_pmm_conical.py:58: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = la.PMM2DStack(period_x=_P, period_y=_P, n_substrate=1.5,
+
+tests/unit/test_v5_20_0_pmm_conical.py::test_native_conical_grating_converges_to_path_a
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_20_0_pmm_conical.py:125: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = la.PMM2DStack(period_x=_P, period_y=_P, n_substrate=1.5,
+
+tests/unit/test_v5_20_0_pmm_conical.py::test_native_conical_grating_converges_to_path_a
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_20_0_pmm_conical.py:128: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    _o2, _R2, _T2, J2 = st.set_source(_WL, theta=_TH, phi=_PHI).solve()
+
+tests/unit/test_v5_20_0_pmm_conical.py::test_conical_uniform_slab_energy_closes
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_20_0_pmm_conical.py:138: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = la.PMM2DStack(period_x=_P, period_y=_P, n_substrate=1.5,
+
+tests/unit/test_v5_20_0_pmm_stack_conical.py::test_stack_conical_multilayer_matches_path_a
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_20_0_pmm_stack_conical.py:107: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st2 = la.PMM2DStack(period_x=Pp, period_y=Pp, n_substrate=1.5,
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_21_pmm_threaded_sweep.py:70: DeprecationWarning: PMM2DStack is a TRANSITIONAL alias for PMM2DStackHybrid and is scheduled to be repointed to the no-floor pure stack (PMM2DStackPure) in a future release -- a silent results change (Fourier floor -> no floor, different convergence knobs).  Import PMM2DStackHybrid to keep the current behaviour, or PMM2DStackPure for the pure method.
+    st = PMM2DStack(0.7e-6, n_substrate=1.5, n_superstrate=1.0, degree=7,
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vsliver3\lumenairy\elements\pmm\stack2d.py:1955: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o, R1, T1, j1 = sub.solve()
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vsliver3\lumenairy\elements\pmm\stack2d.py:1955: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o, R1, T1, j1 = sub.solve()
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vsliver3\lumenairy\elements\pmm\stack2d.py:1955: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    o, R1, T1, j1 = sub.solve()
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_21_pmm_threaded_sweep.py:90: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    out = st.set_source(float(w), theta=0.1, phi=0.2).solve()
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_21_pmm_threaded_sweep.py:90: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    out = st.set_source(float(w), theta=0.1, phi=0.2).solve()
+
+tests/unit/test_v5_21_pmm_threaded_sweep.py::test_2d_threaded_sweep_byte_identical
+  C:\tmp\lum_vsliver3\tests\unit\test_v5_21_pmm_threaded_sweep.py:90: UserWarning: PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is unreliable; reduce n_slices or raise degree.
+    out = st.set_source(float(w), theta=0.1, phi=0.2).solve()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_niche_audit_m4_m5_m6_rcwa.py:387: threadpoolctl installed: the cap is effective here
+819 passed, 1 skipped, 76 warnings in 4649.90s (1:17:29)
