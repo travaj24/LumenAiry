@@ -28,8 +28,8 @@ which `lumenairy` it imported.
 | **D3** | `_stag_fourier_projection`'s Gauss rule is now sized PER SEGMENT from that segment's own half-phase.  Long-segment kernel error **7.5e-04 -> 4.7e-15**; the INTEGER path bypasses the formula and is bit-identical by construction. |
 | **the ~1850 site** | **LEFT UNGUARDED, by measurement.**  Reachable with a near-singular operand, but every reading below the bar is already refused by the shipped 1-D sliver guard, and the CORRECT 1-D population comes within **1.0 decade** of a 1e-12 bar against 5.4 decades on the mortar path. |
 | **Bit-identity** | **33 fixtures / 87 sha256 hashes**, each build against a pristine `git archive HEAD` tree of the SAME build: **0 mismatches on WIN, 0 on WSL**. |
-| **Tests** | `tests/unit/test_fix_pmm2d_mortar_round2.py`, **15 tests**, 80.2 s (WIN); with `test_pmm2d_staggered_nonuniform.py`, 31 passed in 188.5 s (WSL). |
-| **Regression** | see S7.1. |
+| **Tests** | `tests/unit/test_fix_pmm2d_mortar_round2.py`, **15 tests**, 83.5 s (WIN, uncontended); with `test_pmm2d_staggered_nonuniform.py`, 31 passed in 188.5 s (WSL). |
+| **Regression** | the twelve required suites: **310 passed, 0 failed on BOTH builds** (S7.1). |
 
 ---
 
@@ -52,7 +52,7 @@ is a LOWER bound -- the same caveat the build and the verification carry.
 
 ## S2. D1 -- what the defect actually is
 
-### 2.1 The instrument the verification used cannot separate the two hypotheses
+### 2.1 The verification's instrument confirms the defect but not its shape
 
 The verification's reproducer (S6.3 there) is a 2-D pillar sandwich at
 `n_orders = 1`, scored against its own `delta = 3e-1` reading.  Re-run here
@@ -616,7 +616,7 @@ what makes it a statement about the SHIPPED library.
 
 | suite | WIN | WSL |
 |---|---|---|
-| `test_fix_pmm2d_mortar_round2.py` | **15 passed**, 80.2 s | included below |
+| `test_fix_pmm2d_mortar_round2.py` | **15 passed**, 83.5 s | included below |
 | `test_fix_pmm2d_mortar_round2.py` + `test_pmm2d_staggered_nonuniform.py` | -- | **31 passed**, 188.5 s |
 | `test_pmm2d_staggered_mortar.py` + `test_verify_pmm2d_perlayer_slant.py` | **35 passed**, 298.5 s | -- |
 | `test_pmm2d_staggered_nonuniform.py` | **16 passed**, 74.7 s | included above |
