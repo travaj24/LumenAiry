@@ -1,0 +1,3233 @@
+{
+ "DX": 1.1e-05,
+ "N": 288,
+ "SUB": 4,
+ "_arm": {
+  "lumenairy_file": "C:/tmp/lum_vlens2/lumenairy/__init__.py",
+  "lumenairy_version": "5.44.0",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "python": "3.14.6",
+  "tag": "new"
+ },
+ "cases": {
+  "g01_screen_preserve|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "a8525393a055f5076e33ddb2",
+    "max_abs": 1.072503742624537,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.7049064357
+   },
+   "rec": {
+    "build_budget_gb": 43.48695552,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.4247289000049932,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.575,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g01_screen_preserve|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "a8525393a055f5076e33ddb2",
+    "max_abs": 1.072503742624537,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.7049064357
+   },
+   "rec": {
+    "build_budget_gb": 43.53458176,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.36661219999950845,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.514,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g01_screen_preserve|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "a8525393a055f5076e33ddb2",
+    "max_abs": 1.072503742624537,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.7049064357
+   },
+   "rec": {
+    "build_budget_gb": 43.507775488,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.46754860000510234,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.619,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g01_screen_preserve|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "a8525393a055f5076e33ddb2",
+    "max_abs": 1.072503742624537,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.7049064357
+   },
+   "rec": {
+    "build_budget_gb": 43.402489856,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.3818362000019988,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 2.156,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g01_screen_preserve|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "a8525393a055f5076e33ddb2",
+    "max_abs": 1.072503742624537,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.7049064357
+   },
+   "rec": {
+    "build_budget_gb": 43.508381696,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 1.00759829999879,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 4.461,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g02_screen_carrier|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "3ed7baf54b0afc82e678f41b",
+    "max_abs": 1.034596643982248,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.119778993689
+   },
+   "rec": {
+    "build_budget_gb": 43.464720384,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.1360034999961499,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.0069181733938035,
+    "det_j_range_all_samples": 1.0069181733938035,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[1.5764000874013147, 1.5764000874013147]",
+    "fit_resid_amp_rel_max": 1.4193121830083964e-15,
+    "fit_resid_det_j_rel_max": 2.8386243660167928e-15,
+    "fit_resid_opl_rms_waves": 1.2342296970891342e-12,
+    "fit_resid_opl_waves": 3.860284348002824e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.6020852139652106e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11281,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.082759157524059e-08,
+    "parity_incumbent_opl_waves": 1.5081294406978868e-07,
+    "parity_incumbent_opl_waves_all": 1.5081294406978868e-07,
+    "parity_incumbent_pos_m": 5.455793640214007e-12,
+    "parity_map_opl_rms_waves": 1.2006880467264678e-12,
+    "parity_map_opl_waves": 3.6141666295385306e-12,
+    "parity_map_opl_waves_all": 3.6141666295385306e-12,
+    "parity_map_pos_m": 2.168404344971009e-18,
+    "parity_ratio_opl": 2.396456518921927e-05,
+    "parity_ratio_opl_all": 2.396456518921927e-05,
+    "parity_ratio_opl_rms": 2.9408740520824914e-05,
+    "parity_ratio_pos": 3.9744984652424497e-07,
+    "refused": null
+   },
+   "secs": 0.254,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g02_screen_carrier|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "3ed7baf54b0afc82e678f41b",
+    "max_abs": 1.034596643982248,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.119778993689
+   },
+   "rec": {
+    "build_budget_gb": 43.466776576,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.0920375999994576,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.0069181733938035,
+    "det_j_range_all_samples": 1.0069181733938035,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[1.5764000874013147, 1.5764000874013147]",
+    "fit_resid_amp_rel_max": 1.4193121830083964e-15,
+    "fit_resid_det_j_rel_max": 2.8386243660167928e-15,
+    "fit_resid_opl_rms_waves": 1.2342296970891342e-12,
+    "fit_resid_opl_waves": 3.860284348002824e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.6020852139652106e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11281,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.082759157524059e-08,
+    "parity_incumbent_opl_waves": 1.5081294406978868e-07,
+    "parity_incumbent_opl_waves_all": 1.5081294406978868e-07,
+    "parity_incumbent_pos_m": 5.455793640214007e-12,
+    "parity_map_opl_rms_waves": 1.2006880467264678e-12,
+    "parity_map_opl_waves": 3.6141666295385306e-12,
+    "parity_map_opl_waves_all": 3.6141666295385306e-12,
+    "parity_map_pos_m": 2.168404344971009e-18,
+    "parity_ratio_opl": 2.396456518921927e-05,
+    "parity_ratio_opl_all": 2.396456518921927e-05,
+    "parity_ratio_opl_rms": 2.9408740520824914e-05,
+    "parity_ratio_pos": 3.9744984652424497e-07,
+    "refused": null
+   },
+   "secs": 0.2,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g02_screen_carrier|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "3ed7baf54b0afc82e678f41b",
+    "max_abs": 1.034596643982248,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.119778993689
+   },
+   "rec": {
+    "build_budget_gb": 43.46498048,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.09999030000471976,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.0069181733938035,
+    "det_j_range_all_samples": 1.0069181733938035,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[1.5764000874013147, 1.5764000874013147]",
+    "fit_resid_amp_rel_max": 1.4193121830083964e-15,
+    "fit_resid_det_j_rel_max": 2.8386243660167928e-15,
+    "fit_resid_opl_rms_waves": 1.2342296970891342e-12,
+    "fit_resid_opl_waves": 3.860284348002824e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.6020852139652106e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11281,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.082759157524059e-08,
+    "parity_incumbent_opl_waves": 1.5081294406978868e-07,
+    "parity_incumbent_opl_waves_all": 1.5081294406978868e-07,
+    "parity_incumbent_pos_m": 5.455793640214007e-12,
+    "parity_map_opl_rms_waves": 1.2006880467264678e-12,
+    "parity_map_opl_waves": 3.6141666295385306e-12,
+    "parity_map_opl_waves_all": 3.6141666295385306e-12,
+    "parity_map_pos_m": 2.168404344971009e-18,
+    "parity_ratio_opl": 2.396456518921927e-05,
+    "parity_ratio_opl_all": 2.396456518921927e-05,
+    "parity_ratio_opl_rms": 2.9408740520824914e-05,
+    "parity_ratio_pos": 3.9744984652424497e-07,
+    "refused": null
+   },
+   "secs": 0.21,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g02_screen_carrier|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "3ed7baf54b0afc82e678f41b",
+    "max_abs": 1.034596643982248,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.119778993689
+   },
+   "rec": {
+    "build_budget_gb": 43.463202816,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.0964018000086071,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.0069181733938035,
+    "det_j_range_all_samples": 1.0069181733938035,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[1.5764000874013147, 1.5764000874013147]",
+    "fit_resid_amp_rel_max": 1.4193121830083964e-15,
+    "fit_resid_det_j_rel_max": 2.8386243660167928e-15,
+    "fit_resid_opl_rms_waves": 1.2342296970891342e-12,
+    "fit_resid_opl_waves": 3.860284348002824e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.6020852139652106e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11281,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.082759157524059e-08,
+    "parity_incumbent_opl_waves": 1.5081294406978868e-07,
+    "parity_incumbent_opl_waves_all": 1.5081294406978868e-07,
+    "parity_incumbent_pos_m": 5.455793640214007e-12,
+    "parity_map_opl_rms_waves": 1.2006880467264678e-12,
+    "parity_map_opl_waves": 3.6141666295385306e-12,
+    "parity_map_opl_waves_all": 3.6141666295385306e-12,
+    "parity_map_pos_m": 2.168404344971009e-18,
+    "parity_ratio_opl": 2.396456518921927e-05,
+    "parity_ratio_opl_all": 2.396456518921927e-05,
+    "parity_ratio_opl_rms": 2.9408740520824914e-05,
+    "parity_ratio_pos": 3.9744984652424497e-07,
+    "refused": null
+   },
+   "secs": 0.229,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g02_screen_carrier|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "3ed7baf54b0afc82e678f41b",
+    "max_abs": 1.034596643982248,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.119778993689
+   },
+   "rec": {
+    "build_budget_gb": 43.540303872,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.12361299998883624,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.0069181733938035,
+    "det_j_range_all_samples": 1.0069181733938035,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[1.5764000874013147, 1.5764000874013147]",
+    "fit_resid_amp_rel_max": 1.4193121830083964e-15,
+    "fit_resid_det_j_rel_max": 2.8386243660167928e-15,
+    "fit_resid_opl_rms_waves": 1.2342296970891342e-12,
+    "fit_resid_opl_waves": 3.860284348002824e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.6020852139652106e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11281,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.082759157524059e-08,
+    "parity_incumbent_opl_waves": 1.5081294406978868e-07,
+    "parity_incumbent_opl_waves_all": 1.5081294406978868e-07,
+    "parity_incumbent_pos_m": 5.455793640214007e-12,
+    "parity_map_opl_rms_waves": 1.2006880467264678e-12,
+    "parity_map_opl_waves": 3.6141666295385306e-12,
+    "parity_map_opl_waves_all": 3.6141666295385306e-12,
+    "parity_map_pos_m": 2.168404344971009e-18,
+    "parity_ratio_opl": 2.396456518921927e-05,
+    "parity_ratio_opl_all": 2.396456518921927e-05,
+    "parity_ratio_opl_rms": 2.9408740520824914e-05,
+    "parity_ratio_pos": 3.9744984652424497e-07,
+    "refused": null
+   },
+   "secs": 0.248,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g03_screen_speckled|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "11bee54403289b39429c5164",
+    "max_abs": 1.8848953577546008,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9436.581960019834
+   },
+   "rec": {
+    "build_budget_gb": 43.49350912,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.3552934999897843,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.498,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235",
+    "q2_traced_identity.py:86"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input"
+   ]
+  },
+  "g03_screen_speckled|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "11bee54403289b39429c5164",
+    "max_abs": 1.8848953577546008,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9436.581960019834
+   },
+   "rec": {
+    "build_budget_gb": 43.364390912,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.3909131999971578,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.524,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235",
+    "q2_traced_identity.py:86"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input"
+   ]
+  },
+  "g03_screen_speckled|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "11bee54403289b39429c5164",
+    "max_abs": 1.8848953577546008,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9436.581960019834
+   },
+   "rec": {
+    "build_budget_gb": 43.400206336,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.38424729999678675,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.52,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235",
+    "q2_traced_identity.py:86"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input"
+   ]
+  },
+  "g03_screen_speckled|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "11bee54403289b39429c5164",
+    "max_abs": 1.8848953577546008,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9436.581960019834
+   },
+   "rec": {
+    "build_budget_gb": 43.436238848,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.3808718000072986,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.537,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235",
+    "q2_traced_identity.py:86"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input"
+   ]
+  },
+  "g03_screen_speckled|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "11bee54403289b39429c5164",
+    "max_abs": 1.8848953577546008,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9436.581960019834
+   },
+   "rec": {
+    "build_budget_gb": 43.460677632,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.44034250000549946,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.606,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235",
+    "q2_traced_identity.py:86"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "apply_real_lens_traced: tilt_aware_rays=False with a non-trivial input"
+   ]
+  },
+  "g04_rd_carrier|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "4e66f690c0e467e67f982422",
+    "max_abs": 1.0345773387360406,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.38312435406
+   },
+   "rec": {
+    "build_budget_gb": 43.43428096,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.0902154000068549,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.0069181733938035,
+    "det_j_range_all_samples": 1.0069181733938035,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[1.5764000874013147, 1.5764000874013147]",
+    "fit_resid_amp_rel_max": 1.4193121830083964e-15,
+    "fit_resid_det_j_rel_max": 2.8386243660167928e-15,
+    "fit_resid_opl_rms_waves": 1.2342296970891342e-12,
+    "fit_resid_opl_waves": 3.860284348002824e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.6020852139652106e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.082759157524059e-08,
+    "parity_incumbent_opl_waves": 1.5081294406978868e-07,
+    "parity_incumbent_opl_waves_all": 1.5081294406978868e-07,
+    "parity_incumbent_pos_m": 5.455793640214007e-12,
+    "parity_map_opl_rms_waves": 1.2006880467264678e-12,
+    "parity_map_opl_waves": 3.6141666295385306e-12,
+    "parity_map_opl_waves_all": 3.6141666295385306e-12,
+    "parity_map_pos_m": 2.168404344971009e-18,
+    "parity_ratio_opl": 2.396456518921927e-05,
+    "parity_ratio_opl_all": 2.396456518921927e-05,
+    "parity_ratio_opl_rms": 2.9408740520824914e-05,
+    "parity_ratio_pos": 3.9744984652424497e-07,
+    "refused": null
+   },
+   "secs": 0.222,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g04_rd_carrier|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "4e66f690c0e467e67f982422",
+    "max_abs": 1.0345773387360406,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.38312435406
+   },
+   "rec": {
+    "build_budget_gb": 43.42019072,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.09761709999293089,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.0069181733938035,
+    "det_j_range_all_samples": 1.0069181733938035,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[1.5764000874013147, 1.5764000874013147]",
+    "fit_resid_amp_rel_max": 1.4193121830083964e-15,
+    "fit_resid_det_j_rel_max": 2.8386243660167928e-15,
+    "fit_resid_opl_rms_waves": 1.2342296970891342e-12,
+    "fit_resid_opl_waves": 3.860284348002824e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.6020852139652106e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.082759157524059e-08,
+    "parity_incumbent_opl_waves": 1.5081294406978868e-07,
+    "parity_incumbent_opl_waves_all": 1.5081294406978868e-07,
+    "parity_incumbent_pos_m": 5.455793640214007e-12,
+    "parity_map_opl_rms_waves": 1.2006880467264678e-12,
+    "parity_map_opl_waves": 3.6141666295385306e-12,
+    "parity_map_opl_waves_all": 3.6141666295385306e-12,
+    "parity_map_pos_m": 2.168404344971009e-18,
+    "parity_ratio_opl": 2.396456518921927e-05,
+    "parity_ratio_opl_all": 2.396456518921927e-05,
+    "parity_ratio_opl_rms": 2.9408740520824914e-05,
+    "parity_ratio_pos": 3.9744984652424497e-07,
+    "refused": null
+   },
+   "secs": 0.227,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g04_rd_carrier|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "4e66f690c0e467e67f982422",
+    "max_abs": 1.0345773387360406,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.38312435406
+   },
+   "rec": {
+    "build_budget_gb": 43.427534848,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.1450561999954516,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.0069181733938035,
+    "det_j_range_all_samples": 1.0069181733938035,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[1.5764000874013147, 1.5764000874013147]",
+    "fit_resid_amp_rel_max": 1.4193121830083964e-15,
+    "fit_resid_det_j_rel_max": 2.8386243660167928e-15,
+    "fit_resid_opl_rms_waves": 1.2342296970891342e-12,
+    "fit_resid_opl_waves": 3.860284348002824e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.6020852139652106e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.082759157524059e-08,
+    "parity_incumbent_opl_waves": 1.5081294406978868e-07,
+    "parity_incumbent_opl_waves_all": 1.5081294406978868e-07,
+    "parity_incumbent_pos_m": 5.455793640214007e-12,
+    "parity_map_opl_rms_waves": 1.2006880467264678e-12,
+    "parity_map_opl_waves": 3.6141666295385306e-12,
+    "parity_map_opl_waves_all": 3.6141666295385306e-12,
+    "parity_map_pos_m": 2.168404344971009e-18,
+    "parity_ratio_opl": 2.396456518921927e-05,
+    "parity_ratio_opl_all": 2.396456518921927e-05,
+    "parity_ratio_opl_rms": 2.9408740520824914e-05,
+    "parity_ratio_pos": 3.9744984652424497e-07,
+    "refused": null
+   },
+   "secs": 0.282,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g04_rd_carrier|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "4e66f690c0e467e67f982422",
+    "max_abs": 1.0345773387360406,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.38312435406
+   },
+   "rec": {
+    "build_budget_gb": 43.443908608,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.09137159999227151,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.0069181733938035,
+    "det_j_range_all_samples": 1.0069181733938035,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[1.5764000874013147, 1.5764000874013147]",
+    "fit_resid_amp_rel_max": 1.4193121830083964e-15,
+    "fit_resid_det_j_rel_max": 2.8386243660167928e-15,
+    "fit_resid_opl_rms_waves": 1.2342296970891342e-12,
+    "fit_resid_opl_waves": 3.860284348002824e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.6020852139652106e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.082759157524059e-08,
+    "parity_incumbent_opl_waves": 1.5081294406978868e-07,
+    "parity_incumbent_opl_waves_all": 1.5081294406978868e-07,
+    "parity_incumbent_pos_m": 5.455793640214007e-12,
+    "parity_map_opl_rms_waves": 1.2006880467264678e-12,
+    "parity_map_opl_waves": 3.6141666295385306e-12,
+    "parity_map_opl_waves_all": 3.6141666295385306e-12,
+    "parity_map_pos_m": 2.168404344971009e-18,
+    "parity_ratio_opl": 2.396456518921927e-05,
+    "parity_ratio_opl_all": 2.396456518921927e-05,
+    "parity_ratio_opl_rms": 2.9408740520824914e-05,
+    "parity_ratio_pos": 3.9744984652424497e-07,
+    "refused": null
+   },
+   "secs": 0.25,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g04_rd_carrier|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "4e66f690c0e467e67f982422",
+    "max_abs": 1.0345773387360406,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.38312435406
+   },
+   "rec": {
+    "build_budget_gb": 43.330783232,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.08765210000274237,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.0069181733938035,
+    "det_j_range_all_samples": 1.0069181733938035,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[1.5764000874013147, 1.5764000874013147]",
+    "fit_resid_amp_rel_max": 1.4193121830083964e-15,
+    "fit_resid_det_j_rel_max": 2.8386243660167928e-15,
+    "fit_resid_opl_rms_waves": 1.2342296970891342e-12,
+    "fit_resid_opl_waves": 3.860284348002824e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.6020852139652106e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.082759157524059e-08,
+    "parity_incumbent_opl_waves": 1.5081294406978868e-07,
+    "parity_incumbent_opl_waves_all": 1.5081294406978868e-07,
+    "parity_incumbent_pos_m": 5.455793640214007e-12,
+    "parity_map_opl_rms_waves": 1.2006880467264678e-12,
+    "parity_map_opl_waves": 3.6141666295385306e-12,
+    "parity_map_opl_waves_all": 3.6141666295385306e-12,
+    "parity_map_pos_m": 2.168404344971009e-18,
+    "parity_ratio_opl": 2.396456518921927e-05,
+    "parity_ratio_opl_all": 2.396456518921927e-05,
+    "parity_ratio_opl_rms": 2.9408740520824914e-05,
+    "parity_ratio_pos": 3.9744984652424497e-07,
+    "refused": null
+   },
+   "secs": 0.222,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g05_rd_remap_lattice|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "4d552d371ea0c5036488e9d2",
+    "max_abs": 1.0345773385528263,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.38206866672
+   },
+   "rec": {
+    "build_budget_gb": 43.373205504,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.12062750000040978,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.006979995924294,
+    "det_j_range_all_samples": 1.006979995924294,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[-2.1684043449710089e-16, -2.1684043449710089e-16]",
+    "exit_half_mm": "[1.5764252449306058, 1.5764252449306058]",
+    "fit_resid_amp_rel_max": 1.361885944897037e-15,
+    "fit_resid_det_j_rel_max": 2.723771889794074e-15,
+    "fit_resid_opl_rms_waves": 1.1903555933632766e-12,
+    "fit_resid_opl_waves": 3.846895762707514e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.168404344971009e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.132327516863506e-08,
+    "parity_incumbent_opl_waves": 1.5293254182986604e-07,
+    "parity_incumbent_opl_waves_all": 1.5293254182986604e-07,
+    "parity_incumbent_pos_m": 5.635685223614323e-12,
+    "parity_map_opl_rms_waves": 1.2207320913288773e-12,
+    "parity_map_opl_waves": 3.6214757041640312e-12,
+    "parity_map_opl_waves_all": 3.6214757041640312e-12,
+    "parity_map_pos_m": 2.6020852139652106e-18,
+    "parity_ratio_opl": 2.368021652443886e-05,
+    "parity_ratio_opl_all": 2.368021652443886e-05,
+    "parity_ratio_opl_rms": 2.9541029512961496e-05,
+    "parity_ratio_pos": 4.617158536573518e-07,
+    "refused": null
+   },
+   "secs": 0.318,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g05_rd_remap_lattice|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "4d552d371ea0c5036488e9d2",
+    "max_abs": 1.0345773385528263,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.38206866672
+   },
+   "rec": {
+    "build_budget_gb": 43.36719872,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.09817270000348799,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.006979995924294,
+    "det_j_range_all_samples": 1.006979995924294,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[-2.1684043449710089e-16, -2.1684043449710089e-16]",
+    "exit_half_mm": "[1.5764252449306058, 1.5764252449306058]",
+    "fit_resid_amp_rel_max": 1.361885944897037e-15,
+    "fit_resid_det_j_rel_max": 2.723771889794074e-15,
+    "fit_resid_opl_rms_waves": 1.1903555933632766e-12,
+    "fit_resid_opl_waves": 3.846895762707514e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.168404344971009e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.132327516863506e-08,
+    "parity_incumbent_opl_waves": 1.5293254182986604e-07,
+    "parity_incumbent_opl_waves_all": 1.5293254182986604e-07,
+    "parity_incumbent_pos_m": 5.635685223614323e-12,
+    "parity_map_opl_rms_waves": 1.2207320913288773e-12,
+    "parity_map_opl_waves": 3.6214757041640312e-12,
+    "parity_map_opl_waves_all": 3.6214757041640312e-12,
+    "parity_map_pos_m": 2.6020852139652106e-18,
+    "parity_ratio_opl": 2.368021652443886e-05,
+    "parity_ratio_opl_all": 2.368021652443886e-05,
+    "parity_ratio_opl_rms": 2.9541029512961496e-05,
+    "parity_ratio_pos": 4.617158536573518e-07,
+    "refused": null
+   },
+   "secs": 0.281,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g05_rd_remap_lattice|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "4d552d371ea0c5036488e9d2",
+    "max_abs": 1.0345773385528263,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.38206866672
+   },
+   "rec": {
+    "build_budget_gb": 43.375650816,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.09348350000800565,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.006979995924294,
+    "det_j_range_all_samples": 1.006979995924294,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[-2.1684043449710089e-16, -2.1684043449710089e-16]",
+    "exit_half_mm": "[1.5764252449306058, 1.5764252449306058]",
+    "fit_resid_amp_rel_max": 1.361885944897037e-15,
+    "fit_resid_det_j_rel_max": 2.723771889794074e-15,
+    "fit_resid_opl_rms_waves": 1.1903555933632766e-12,
+    "fit_resid_opl_waves": 3.846895762707514e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.168404344971009e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.132327516863506e-08,
+    "parity_incumbent_opl_waves": 1.5293254182986604e-07,
+    "parity_incumbent_opl_waves_all": 1.5293254182986604e-07,
+    "parity_incumbent_pos_m": 5.635685223614323e-12,
+    "parity_map_opl_rms_waves": 1.2207320913288773e-12,
+    "parity_map_opl_waves": 3.6214757041640312e-12,
+    "parity_map_opl_waves_all": 3.6214757041640312e-12,
+    "parity_map_pos_m": 2.6020852139652106e-18,
+    "parity_ratio_opl": 2.368021652443886e-05,
+    "parity_ratio_opl_all": 2.368021652443886e-05,
+    "parity_ratio_opl_rms": 2.9541029512961496e-05,
+    "parity_ratio_pos": 4.617158536573518e-07,
+    "refused": null
+   },
+   "secs": 0.278,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g05_rd_remap_lattice|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "4d552d371ea0c5036488e9d2",
+    "max_abs": 1.0345773385528263,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.38206866672
+   },
+   "rec": {
+    "build_budget_gb": 43.39330048,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.0908013000007486,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.006979995924294,
+    "det_j_range_all_samples": 1.006979995924294,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[-2.1684043449710089e-16, -2.1684043449710089e-16]",
+    "exit_half_mm": "[1.5764252449306058, 1.5764252449306058]",
+    "fit_resid_amp_rel_max": 1.361885944897037e-15,
+    "fit_resid_det_j_rel_max": 2.723771889794074e-15,
+    "fit_resid_opl_rms_waves": 1.1903555933632766e-12,
+    "fit_resid_opl_waves": 3.846895762707514e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.168404344971009e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.132327516863506e-08,
+    "parity_incumbent_opl_waves": 1.5293254182986604e-07,
+    "parity_incumbent_opl_waves_all": 1.5293254182986604e-07,
+    "parity_incumbent_pos_m": 5.635685223614323e-12,
+    "parity_map_opl_rms_waves": 1.2207320913288773e-12,
+    "parity_map_opl_waves": 3.6214757041640312e-12,
+    "parity_map_opl_waves_all": 3.6214757041640312e-12,
+    "parity_map_pos_m": 2.6020852139652106e-18,
+    "parity_ratio_opl": 2.368021652443886e-05,
+    "parity_ratio_opl_all": 2.368021652443886e-05,
+    "parity_ratio_opl_rms": 2.9541029512961496e-05,
+    "parity_ratio_pos": 4.617158536573518e-07,
+    "refused": null
+   },
+   "secs": 0.306,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g05_rd_remap_lattice|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "4d552d371ea0c5036488e9d2",
+    "max_abs": 1.0345773385528263,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.38206866672
+   },
+   "rec": {
+    "build_budget_gb": 43.426041856,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.09769199999573175,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.006979995924294,
+    "det_j_range_all_samples": 1.006979995924294,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[-2.1684043449710089e-16, -2.1684043449710089e-16]",
+    "exit_half_mm": "[1.5764252449306058, 1.5764252449306058]",
+    "fit_resid_amp_rel_max": 1.361885944897037e-15,
+    "fit_resid_det_j_rel_max": 2.723771889794074e-15,
+    "fit_resid_opl_rms_waves": 1.1903555933632766e-12,
+    "fit_resid_opl_waves": 3.846895762707514e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.168404344971009e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.132327516863506e-08,
+    "parity_incumbent_opl_waves": 1.5293254182986604e-07,
+    "parity_incumbent_opl_waves_all": 1.5293254182986604e-07,
+    "parity_incumbent_pos_m": 5.635685223614323e-12,
+    "parity_map_opl_rms_waves": 1.2207320913288773e-12,
+    "parity_map_opl_waves": 3.6214757041640312e-12,
+    "parity_map_opl_waves_all": 3.6214757041640312e-12,
+    "parity_map_pos_m": 2.6020852139652106e-18,
+    "parity_ratio_opl": 2.368021652443886e-05,
+    "parity_ratio_opl_all": 2.368021652443886e-05,
+    "parity_ratio_opl_rms": 2.9541029512961496e-05,
+    "parity_ratio_pos": 4.617158536573518e-07,
+    "refused": null
+   },
+   "secs": 0.285,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g06_rd_remap_full|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "3211db328db5646a0b73d5b2",
+    "max_abs": 1.0345773385528263,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.382068666724
+   },
+   "rec": {
+    "build_budget_gb": 43.318120448,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.13256790000014007,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.006979995924294,
+    "det_j_range_all_samples": 1.006979995924294,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[-2.1684043449710089e-16, -2.1684043449710089e-16]",
+    "exit_half_mm": "[1.5764252449306058, 1.5764252449306058]",
+    "fit_resid_amp_rel_max": 1.361885944897037e-15,
+    "fit_resid_det_j_rel_max": 2.723771889794074e-15,
+    "fit_resid_opl_rms_waves": 1.1903555933632766e-12,
+    "fit_resid_opl_waves": 3.846895762707514e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.168404344971009e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.132327516863506e-08,
+    "parity_incumbent_opl_waves": 1.5293254182986604e-07,
+    "parity_incumbent_opl_waves_all": 1.5293254182986604e-07,
+    "parity_incumbent_pos_m": 5.635685223614323e-12,
+    "parity_map_opl_rms_waves": 1.2207320913288773e-12,
+    "parity_map_opl_waves": 3.6214757041640312e-12,
+    "parity_map_opl_waves_all": 3.6214757041640312e-12,
+    "parity_map_pos_m": 2.6020852139652106e-18,
+    "parity_ratio_opl": 2.368021652443886e-05,
+    "parity_ratio_opl_all": 2.368021652443886e-05,
+    "parity_ratio_opl_rms": 2.9541029512961496e-05,
+    "parity_ratio_pos": 4.617158536573518e-07,
+    "refused": null
+   },
+   "secs": 0.329,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g06_rd_remap_full|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "3211db328db5646a0b73d5b2",
+    "max_abs": 1.0345773385528263,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.382068666724
+   },
+   "rec": {
+    "build_budget_gb": 43.483680768,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.09617650001018774,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.006979995924294,
+    "det_j_range_all_samples": 1.006979995924294,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[-2.1684043449710089e-16, -2.1684043449710089e-16]",
+    "exit_half_mm": "[1.5764252449306058, 1.5764252449306058]",
+    "fit_resid_amp_rel_max": 1.361885944897037e-15,
+    "fit_resid_det_j_rel_max": 2.723771889794074e-15,
+    "fit_resid_opl_rms_waves": 1.1903555933632766e-12,
+    "fit_resid_opl_waves": 3.846895762707514e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.168404344971009e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.132327516863506e-08,
+    "parity_incumbent_opl_waves": 1.5293254182986604e-07,
+    "parity_incumbent_opl_waves_all": 1.5293254182986604e-07,
+    "parity_incumbent_pos_m": 5.635685223614323e-12,
+    "parity_map_opl_rms_waves": 1.2207320913288773e-12,
+    "parity_map_opl_waves": 3.6214757041640312e-12,
+    "parity_map_opl_waves_all": 3.6214757041640312e-12,
+    "parity_map_pos_m": 2.6020852139652106e-18,
+    "parity_ratio_opl": 2.368021652443886e-05,
+    "parity_ratio_opl_all": 2.368021652443886e-05,
+    "parity_ratio_opl_rms": 2.9541029512961496e-05,
+    "parity_ratio_pos": 4.617158536573518e-07,
+    "refused": null
+   },
+   "secs": 0.282,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g06_rd_remap_full|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "3211db328db5646a0b73d5b2",
+    "max_abs": 1.0345773385528263,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.382068666724
+   },
+   "rec": {
+    "build_budget_gb": 43.460098048,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.10159770000609569,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.006979995924294,
+    "det_j_range_all_samples": 1.006979995924294,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[-2.1684043449710089e-16, -2.1684043449710089e-16]",
+    "exit_half_mm": "[1.5764252449306058, 1.5764252449306058]",
+    "fit_resid_amp_rel_max": 1.361885944897037e-15,
+    "fit_resid_det_j_rel_max": 2.723771889794074e-15,
+    "fit_resid_opl_rms_waves": 1.1903555933632766e-12,
+    "fit_resid_opl_waves": 3.846895762707514e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.168404344971009e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.132327516863506e-08,
+    "parity_incumbent_opl_waves": 1.5293254182986604e-07,
+    "parity_incumbent_opl_waves_all": 1.5293254182986604e-07,
+    "parity_incumbent_pos_m": 5.635685223614323e-12,
+    "parity_map_opl_rms_waves": 1.2207320913288773e-12,
+    "parity_map_opl_waves": 3.6214757041640312e-12,
+    "parity_map_opl_waves_all": 3.6214757041640312e-12,
+    "parity_map_pos_m": 2.6020852139652106e-18,
+    "parity_ratio_opl": 2.368021652443886e-05,
+    "parity_ratio_opl_all": 2.368021652443886e-05,
+    "parity_ratio_opl_rms": 2.9541029512961496e-05,
+    "parity_ratio_pos": 4.617158536573518e-07,
+    "refused": null
+   },
+   "secs": 0.287,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g06_rd_remap_full|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "3211db328db5646a0b73d5b2",
+    "max_abs": 1.0345773385528263,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.382068666724
+   },
+   "rec": {
+    "build_budget_gb": 43.30021888,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.10150439999415539,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.006979995924294,
+    "det_j_range_all_samples": 1.006979995924294,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[-2.1684043449710089e-16, -2.1684043449710089e-16]",
+    "exit_half_mm": "[1.5764252449306058, 1.5764252449306058]",
+    "fit_resid_amp_rel_max": 1.361885944897037e-15,
+    "fit_resid_det_j_rel_max": 2.723771889794074e-15,
+    "fit_resid_opl_rms_waves": 1.1903555933632766e-12,
+    "fit_resid_opl_waves": 3.846895762707514e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.168404344971009e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.132327516863506e-08,
+    "parity_incumbent_opl_waves": 1.5293254182986604e-07,
+    "parity_incumbent_opl_waves_all": 1.5293254182986604e-07,
+    "parity_incumbent_pos_m": 5.635685223614323e-12,
+    "parity_map_opl_rms_waves": 1.2207320913288773e-12,
+    "parity_map_opl_waves": 3.6214757041640312e-12,
+    "parity_map_opl_waves_all": 3.6214757041640312e-12,
+    "parity_map_pos_m": 2.6020852139652106e-18,
+    "parity_ratio_opl": 2.368021652443886e-05,
+    "parity_ratio_opl_all": 2.368021652443886e-05,
+    "parity_ratio_opl_rms": 2.9541029512961496e-05,
+    "parity_ratio_pos": 4.617158536573518e-07,
+    "refused": null
+   },
+   "secs": 0.315,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g06_rd_remap_full|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "3211db328db5646a0b73d5b2",
+    "max_abs": 1.0345773385528263,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9374.382068666724
+   },
+   "rec": {
+    "build_budget_gb": 43.31890688,
+    "build_projected_gb": 0.02828448,
+    "build_seconds": 0.08998170000268146,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 4209,
+    "det_j_range": 1.006979995924294,
+    "det_j_range_all_samples": 1.006979995924294,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[-2.1684043449710089e-16, -2.1684043449710089e-16]",
+    "exit_half_mm": "[1.5764252449306058, 1.5764252449306058]",
+    "fit_resid_amp_rel_max": 1.361885944897037e-15,
+    "fit_resid_det_j_rel_max": 2.723771889794074e-15,
+    "fit_resid_opl_rms_waves": 1.1903555933632766e-12,
+    "fit_resid_opl_waves": 3.846895762707514e-12,
+    "fit_resid_x_in_m": 1.951563910473908e-18,
+    "fit_resid_y_in_m": 2.168404344971009e-18,
+    "gate_open": true,
+    "n_alive": 4421,
+    "n_dead": 18380,
+    "n_detj_census": 4209,
+    "n_fit_samples": 4209,
+    "n_hull_facets": 40,
+    "n_launch": 151,
+    "n_out_of_domain": 11437,
+    "n_parity": 1016,
+    "n_parity_all": 1016,
+    "n_probe_requested": 1016,
+    "n_probe_traced": 1016,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 4.132327516863506e-08,
+    "parity_incumbent_opl_waves": 1.5293254182986604e-07,
+    "parity_incumbent_opl_waves_all": 1.5293254182986604e-07,
+    "parity_incumbent_pos_m": 5.635685223614323e-12,
+    "parity_map_opl_rms_waves": 1.2207320913288773e-12,
+    "parity_map_opl_waves": 3.6214757041640312e-12,
+    "parity_map_opl_waves_all": 3.6214757041640312e-12,
+    "parity_map_pos_m": 2.6020852139652106e-18,
+    "parity_ratio_opl": 2.368021652443886e-05,
+    "parity_ratio_opl_all": 2.368021652443886e-05,
+    "parity_ratio_opl_rms": 2.9541029512961496e-05,
+    "parity_ratio_pos": 4.617158536573518e-07,
+    "refused": null
+   },
+   "secs": 0.271,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g07_rd_origin|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "297d48b5ec8ddb7b9da4879a",
+    "max_abs": 1.0717110495209894,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9357.773918832241
+   },
+   "rec": {
+    "build_budget_gb": 44.518893568,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.3528457999927923,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.492,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g07_rd_origin|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "297d48b5ec8ddb7b9da4879a",
+    "max_abs": 1.0717110495209894,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9357.773918832241
+   },
+   "rec": {
+    "build_budget_gb": 44.442236928,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.3603201999940211,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.512,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g07_rd_origin|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "297d48b5ec8ddb7b9da4879a",
+    "max_abs": 1.0717110495209894,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9357.773918832241
+   },
+   "rec": {
+    "build_budget_gb": 44.489191424,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.3554739000101108,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.502,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g07_rd_origin|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "297d48b5ec8ddb7b9da4879a",
+    "max_abs": 1.0717110495209894,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9357.773918832241
+   },
+   "rec": {
+    "build_budget_gb": 44.532004864,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.4725957000046037,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.792,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g07_rd_origin|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "297d48b5ec8ddb7b9da4879a",
+    "max_abs": 1.0717110495209894,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9357.773918832241
+   },
+   "rec": {
+    "build_budget_gb": 43.632478208,
+    "build_projected_gb": 0.15322272,
+    "build_seconds": 0.42114660001243465,
+    "bytes": 5760,
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 0,
+    "det_j_n_pos": 22801,
+    "det_j_range": 1.0558124982585706,
+    "det_j_range_all_samples": 1.0558124982585706,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "engaged": true,
+    "exit_centre_mm": "[0.0, 0.0]",
+    "exit_half_mm": "[3.1187221115779056, 3.1187221115779056]",
+    "fit_resid_amp_rel_max": 4.533627424814694e-15,
+    "fit_resid_det_j_rel_max": 9.067254849629388e-15,
+    "fit_resid_opl_rms_waves": 1.17790664810384e-12,
+    "fit_resid_opl_waves": 3.558631324206454e-12,
+    "fit_resid_x_in_m": 1.5612511283791264e-17,
+    "fit_resid_y_in_m": 2.905661822261152e-17,
+    "gate_open": true,
+    "n_alive": 22801,
+    "n_dead": 0,
+    "n_detj_census": 22801,
+    "n_fit_samples": 22801,
+    "n_hull_facets": 4,
+    "n_launch": 151,
+    "n_out_of_domain": 0,
+    "n_parity": 694,
+    "n_parity_all": 694,
+    "n_probe_requested": 900,
+    "n_probe_traced": 900,
+    "n_terms": 120,
+    "parity_incumbent_opl_rms_waves": 3.8208933991732896e-05,
+    "parity_incumbent_opl_waves": 0.00011680965171272957,
+    "parity_incumbent_opl_waves_all": 0.00011680965171272957,
+    "parity_incumbent_pos_m": 1.3381743929098688e-09,
+    "parity_map_opl_rms_waves": 1.2261621920909093e-12,
+    "parity_map_opl_waves": 3.7422462082564184e-12,
+    "parity_map_opl_waves_all": 3.7422462082564184e-12,
+    "parity_map_pos_m": 3.0357660829594124e-18,
+    "parity_ratio_opl": 3.203713180705083e-08,
+    "parity_ratio_opl_all": 3.203713180705083e-08,
+    "parity_ratio_opl_rms": 3.209098145361e-08,
+    "parity_ratio_pos": 2.268587785750495e-09,
+    "refused": null
+   },
+   "secs": 0.571,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g08_screen_noinv|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "ab900ba4dfde84625848431c",
+    "max_abs": 1.0345966439822483,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.704905211456
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "secs": 0.121,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g08_screen_noinv|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "ab900ba4dfde84625848431c",
+    "max_abs": 1.0345966439822483,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.704905211456
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "secs": 0.112,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g08_screen_noinv|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "ab900ba4dfde84625848431c",
+    "max_abs": 1.0345966439822483,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.704905211456
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "secs": 0.123,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g08_screen_noinv|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "ab900ba4dfde84625848431c",
+    "max_abs": 1.0345966439822483,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.704905211456
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "secs": 0.127,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g08_screen_noinv|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "ab900ba4dfde84625848431c",
+    "max_abs": 1.0345966439822483,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9375.704905211456
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "secs": 0.117,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g09_rd_noinv|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "e8eb00cddb73faa63c7e73b7",
+    "max_abs": 1.0345773156288651,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9365.936644479298
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "secs": 0.152,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g09_rd_noinv|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "e8eb00cddb73faa63c7e73b7",
+    "max_abs": 1.0345773156288651,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9365.936644479298
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "secs": 0.133,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g09_rd_noinv|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "e8eb00cddb73faa63c7e73b7",
+    "max_abs": 1.0345773156288651,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9365.936644479298
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "secs": 0.14,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g09_rd_noinv|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "e8eb00cddb73faa63c7e73b7",
+    "max_abs": 1.0345773156288651,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9365.936644479298
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "secs": 0.158,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g09_rd_noinv|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "e8eb00cddb73faa63c7e73b7",
+    "max_abs": 1.0345773156288651,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9365.936644479298
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": true
+   },
+   "secs": 0.135,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g10_rd_caustic|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "c2d96852500f049a062bdf6d",
+    "max_abs": 1.3471648570109616,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 24210.7801336271
+   },
+   "rec": {
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 380,
+    "det_j_n_pos": 22381,
+    "det_j_range": 284.1173949378577,
+    "det_j_range_all_samples": 284.1173949378577,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "detail": "'det J changes sign over the retained launch nodes (22381 positive, 380 negative) -- the exit map is folded and has no single-valued inverse'",
+    "engaged": false,
+    "gate_open": true,
+    "n_alive": 22777,
+    "n_dead": 24,
+    "n_detj_census": 22761,
+    "n_fit_samples": 22761,
+    "n_launch": 151,
+    "refused": "'G2'"
+   },
+   "secs": 0.178,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+   ]
+  },
+  "g10_rd_caustic|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "c2d96852500f049a062bdf6d",
+    "max_abs": 1.3471648570109616,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 24210.7801336271
+   },
+   "rec": {
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 380,
+    "det_j_n_pos": 22381,
+    "det_j_range": 284.1173949378577,
+    "det_j_range_all_samples": 284.1173949378577,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "detail": "'det J changes sign over the retained launch nodes (22381 positive, 380 negative) -- the exit map is folded and has no single-valued inverse'",
+    "engaged": false,
+    "gate_open": true,
+    "n_alive": 22777,
+    "n_dead": 24,
+    "n_detj_census": 22761,
+    "n_fit_samples": 22761,
+    "n_launch": 151,
+    "refused": "'G2'"
+   },
+   "secs": 0.179,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+   ]
+  },
+  "g10_rd_caustic|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "c2d96852500f049a062bdf6d",
+    "max_abs": 1.3471648570109616,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 24210.7801336271
+   },
+   "rec": {
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 380,
+    "det_j_n_pos": 22381,
+    "det_j_range": 284.1173949378577,
+    "det_j_range_all_samples": 284.1173949378577,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "detail": "'det J changes sign over the retained launch nodes (22381 positive, 380 negative) -- the exit map is folded and has no single-valued inverse'",
+    "engaged": false,
+    "gate_open": true,
+    "n_alive": 22777,
+    "n_dead": 24,
+    "n_detj_census": 22761,
+    "n_fit_samples": 22761,
+    "n_launch": 151,
+    "refused": "'G2'"
+   },
+   "secs": 0.217,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+   ]
+  },
+  "g10_rd_caustic|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "c2d96852500f049a062bdf6d",
+    "max_abs": 1.3471648570109616,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 24210.7801336271
+   },
+   "rec": {
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 380,
+    "det_j_n_pos": 22381,
+    "det_j_range": 284.1173949378577,
+    "det_j_range_all_samples": 284.1173949378577,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "detail": "'det J changes sign over the retained launch nodes (22381 positive, 380 negative) -- the exit map is folded and has no single-valued inverse'",
+    "engaged": false,
+    "gate_open": true,
+    "n_alive": 22777,
+    "n_dead": 24,
+    "n_detj_census": 22761,
+    "n_fit_samples": 22761,
+    "n_launch": 151,
+    "refused": "'G2'"
+   },
+   "secs": 0.202,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+   ]
+  },
+  "g10_rd_caustic|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "c2d96852500f049a062bdf6d",
+    "max_abs": 1.3471648570109616,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 24210.7801336271
+   },
+   "rec": {
+    "cached": false,
+    "caller": "'apply_real_lens_traced'",
+    "degree": 14,
+    "det_j_n_neg": 380,
+    "det_j_n_pos": 22381,
+    "det_j_range": 284.1173949378577,
+    "det_j_range_all_samples": 284.1173949378577,
+    "det_j_sign": 1.0,
+    "det_j_source": "'analytic_inverse'",
+    "detail": "'det J changes sign over the retained launch nodes (22381 positive, 380 negative) -- the exit map is folded and has no single-valued inverse'",
+    "engaged": false,
+    "gate_open": true,
+    "n_alive": 22777,
+    "n_dead": 24,
+    "n_detj_census": 22761,
+    "n_fit_samples": 22761,
+    "n_launch": 151,
+    "refused": "'G2'"
+   },
+   "secs": 0.275,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_lens_traced.py:8930",
+    "_vf.py:235",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati",
+    "apply_real_lens_traced: the inverse-characteristic per-pixel evaluator"
+   ]
+  },
+  "g11_rd_tilt_nosub|rows=0": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "a3740c5ffb45225b46f3823d",
+    "max_abs": 1.072243329218176,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9359.532836536902
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": false
+   },
+   "secs": 1.629,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g11_rd_tilt_nosub|rows=128": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "a3740c5ffb45225b46f3823d",
+    "max_abs": 1.072243329218176,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9359.532836536902
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": false
+   },
+   "secs": 1.616,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g11_rd_tilt_nosub|rows=32": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "a3740c5ffb45225b46f3823d",
+    "max_abs": 1.072243329218176,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9359.532836536902
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": false
+   },
+   "secs": 1.65,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g11_rd_tilt_nosub|rows=7": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "a3740c5ffb45225b46f3823d",
+    "max_abs": 1.072243329218176,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9359.532836536902
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": false
+   },
+   "secs": 1.639,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  },
+  "g11_rd_tilt_nosub|rows=None": {
+   "field": {
+    "dtype": "complex128",
+    "hash": "a3740c5ffb45225b46f3823d",
+    "max_abs": 1.072243329218176,
+    "n_nonfinite": 0,
+    "shape": [
+     288,
+     288
+    ],
+    "sum_abs2": 9359.532836536902
+   },
+   "rec": {
+    "engaged": false,
+    "gate_open": false
+   },
+   "secs": 1.675,
+   "w_attr": [
+    "_lens_traced.py:8901",
+    "_vf.py:235"
+   ],
+   "w_msgs": [
+    "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid",
+    "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulati"
+   ]
+  }
+ },
+ "free_gb": 82.58,
+ "rows": [
+  "None",
+  "0",
+  "7",
+  "32",
+  "128"
+ ]
+}

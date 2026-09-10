@@ -1,0 +1,132 @@
+{
+ "DX": 1.2e-05,
+ "N": 352,
+ "SUB": 4,
+ "_arm": {
+  "lumenairy_file": "C:/tmp/lum_vlens2/lumenairy/__init__.py",
+  "lumenairy_version": "5.44.0",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "python": "3.14.6",
+  "tag": "new"
+ },
+ "cases": {
+  "_dedup": {
+   "cumulative_notices_after_each_caller": [
+    5,
+    10
+   ],
+   "files": [
+    "_lens_traced.py",
+    "q3_caller1.py",
+    "q3_caller2.py"
+   ],
+   "n_distinct_msgs": 5,
+   "n_total": 10
+  },
+  "_totals": {
+   "attributed_to_library": 3,
+   "total": 15
+  },
+  "rows=0": {
+   "hash": "314e073156398b735b904b85",
+   "n_from_caller": 4,
+   "n_from_library": 1,
+   "n_total": 5,
+   "warnings": [
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=352, dx=1"
+    },
+    {
+     "file": "_lens_traced.py",
+     "line": 8901,
+     "msg": "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=352, dx=12.000 u"
+    },
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: origin=(+0.2800, -0.2000) mm decentres the WAVE GRID, but the anal"
+    },
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit pow"
+    },
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND self-check FAILED -- th"
+    }
+   ]
+  },
+  "rows=32": {
+   "hash": "314e073156398b735b904b85",
+   "n_from_caller": 4,
+   "n_from_library": 1,
+   "n_total": 5,
+   "warnings": [
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=352, dx=1"
+    },
+    {
+     "file": "_lens_traced.py",
+     "line": 8901,
+     "msg": "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=352, dx=12.000 u"
+    },
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: origin=(+0.2800, -0.2000) mm decentres the WAVE GRID, but the anal"
+    },
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit pow"
+    },
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND self-check FAILED -- th"
+    }
+   ]
+  },
+  "rows=7": {
+   "hash": "314e073156398b735b904b85",
+   "n_from_caller": 4,
+   "n_from_library": 1,
+   "n_total": 5,
+   "warnings": [
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: 1 prescription aperture(s) exceed the simulation grid (N=352, dx=1"
+    },
+    {
+     "file": "_lens_traced.py",
+     "line": 8901,
+     "msg": "apply_real_lens: 1 prescription aperture(s) exceed the simulation grid (N=352, dx=12.000 u"
+    },
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: origin=(+0.2800, -0.2000) mm decentres the WAVE GRID, but the anal"
+    },
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' energy self-check FAILED -- exit pow"
+    },
+    {
+     "file": "q3_d1_warn_attr.py",
+     "line": 67,
+     "msg": "apply_real_lens_traced: amplitude_model='ray_density' SUPPORT-BAND self-check FAILED -- th"
+    }
+   ]
+  }
+ },
+ "free_gb": 82.83
+}

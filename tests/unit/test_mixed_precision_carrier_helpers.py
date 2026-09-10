@@ -259,7 +259,21 @@ def test_the_complex64_carrier_call_no_longer_pays_a_full_grid_complex128():
       complex64 one plus one 32 MB band.
 
     Bar ``4 * N^2`` bytes = 16.00 MiB: **2.19x under** the measurement on both
-    builds, and infinitely above the pre-fix gap of exactly 0."""
+    builds, and infinitely above the pre-fix gap of exactly 0.
+
+    N=2048 IS THE REGIME, and the bar is not scale-free (independently
+    re-measured 2026-09-11, VERIFY_LENS_5440_FOLLOWUPS, on v5.44.0 and on this
+    build, same fixture, tracemalloc peaks identical to the byte between runs):
+    the saving is a saving only above the band/grid crossover.  On the SCALAR
+    branch the complex64 peak reads 14.009 / 56.017 / 122.056 / 189.033 MiB at
+    N = 512 / 1024 / 1414 / 2048 against 14.009 / 56.017 / 106.802 / 224.032 on
+    v5.44.0 -- i.e. **higher** than v5.44.0 by a flat 14.3 % for every N where
+    one ``_PHASOR_BAND_BYTES`` band IS the grid, break-even between N=1600 and
+    N=1700, and a saving only past it.  That penalty is inherited, not new:
+    the four helpers that already took ``dtype=`` in 5.44.0 read the same
+    c64/c128 peak ratios (1.143 / 1.250 / 1.091 / 1.166 at N=1024) on BOTH
+    builds and on both versions.  A bar asserted below N ~ 1640 would have to
+    be a bar on the OUTPUT dtype, not on the transient."""
     import tracemalloc
 
     N, dx, R = 2048, 3.0e-6, 55e-3

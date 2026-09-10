@@ -1,0 +1,77 @@
+{
+ "_arm": {
+  "lumenairy_file": "C:/tmp/lum_v5440c/lumenairy/__init__.py",
+  "lumenairy_version": "5.44.0",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "python": "3.14.6",
+  "tag": "win_v5440"
+ },
+ "cases": {
+  "band_memory": {
+   "band_grids": 13.412507057189941,
+   "bar": 6.0,
+   "saving_grids": 10.777660369873047,
+   "whole_grids": 24.19016742706299
+  },
+  "chain_rel_l2": {
+   "bar": 1e-06,
+   "dtype_a": "complex128",
+   "dtype_b": "complex64",
+   "margin": 10.590233169596148,
+   "value": 9.442662725037378e-08
+  },
+  "crop_rel_l2": {
+   "bar": 1e-05,
+   "margin": 58.30485019590084,
+   "values": {
+    "256->512": 1.6888985312107878e-07,
+    "512->256": 1.715123178672202e-07
+   }
+  },
+  "phasor_R=45.9mm_N=512": {
+   "control_over_tol": 3.948770840060176,
+   "control_ratio": 23.486449277985308,
+   "e_good": 4.203243744214564e-08,
+   "e_naive_control": 9.87192710015044e-07,
+   "max_argument_rad": 22.33630389488161,
+   "phasor_err": {
+    "_radial_carrier_phase": 4.203243744214564e-08,
+    "_sphere_parab_conversion": 2.999698413565884e-08,
+    "_tilt_exactness_phase": 3.3267373551205287e-08,
+    "_tilt_ramp": 4.203053863230494e-08
+   },
+   "phasor_err_max": 4.203243744214564e-08,
+   "ratio_bar": 10.0,
+   "ratio_margin": 2.3486449277985306,
+   "tol_bar": 2.5e-07,
+   "tol_margin": 5.947787356945583
+  },
+  "phasor_R=5mm_N=1024": {
+   "control_over_tol": 122.0933241586532,
+   "control_ratio": 727.0378990011739,
+   "e_good": 4.198313606704293e-08,
+   "e_naive_control": 3.05233310396633e-05,
+   "max_argument_rad": 820.1890790200528,
+   "phasor_err": {
+    "_radial_carrier_phase": 4.198313606704293e-08,
+    "_sphere_parab_conversion": 4.211664652595496e-08,
+    "_tilt_exactness_phase": 4.210988902810014e-08,
+    "_tilt_ramp": 4.203053863230494e-08
+   },
+   "phasor_err_max": 4.211664652595496e-08,
+   "ratio_bar": 100.0,
+   "ratio_margin": 7.270378990011738,
+   "tol_bar": 2.5e-07,
+   "tol_margin": 5.935895201103774
+  },
+  "readout_rel_l2": {
+   "bar": 1e-06,
+   "dtype_a": "complex128",
+   "dtype_b": "complex64",
+   "margin": 10.101499849740653,
+   "value": 9.899520020541048e-08
+  }
+ },
+ "free_gb": 81.35
+}

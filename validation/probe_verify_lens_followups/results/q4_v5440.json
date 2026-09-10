@@ -1,0 +1,322 @@
+{
+ "DX": 1.2e-05,
+ "N": 320,
+ "SUB": 4,
+ "_arm": {
+  "lumenairy_file": "C:/tmp/lum_v5440c/lumenairy/__init__.py",
+  "lumenairy_version": "5.44.0",
+  "numpy": "2.4.4",
+  "platform": "win32",
+  "python": "3.14.6",
+  "tag": "v5440"
+ },
+ "cases": {
+  "rd_eval": {
+   "rows=128": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "525d24c0420e251fbe542410",
+    "field_hash_without_probe": "525d24c0420e251fbe542410",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "rows=32": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "525d24c0420e251fbe542410",
+    "field_hash_without_probe": "525d24c0420e251fbe542410",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "rows=7": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "525d24c0420e251fbe542410",
+    "field_hash_without_probe": "525d24c0420e251fbe542410",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "whole": {
+    "ard_hash": "2c63e7d8d94ac3e557180fa9",
+    "field_hash": "525d24c0420e251fbe542410",
+    "field_hash_without_probe": "525d24c0420e251fbe542410",
+    "first8": [
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN
+    ],
+    "n": 112,
+    "n_nan": 82,
+    "opl_hash": "c76e8c7fef6ed3a7fc532c44",
+    "piston": 0.0051052847380917065,
+    "present": true
+   }
+  },
+  "rd_newton": {
+   "rows=128": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "f7b76cc9598996d72069809a",
+    "field_hash_without_probe": "f7b76cc9598996d72069809a",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "rows=32": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "f7b76cc9598996d72069809a",
+    "field_hash_without_probe": "f7b76cc9598996d72069809a",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "rows=7": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "f7b76cc9598996d72069809a",
+    "field_hash_without_probe": "f7b76cc9598996d72069809a",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "whole": {
+    "ard_hash": "63092d209f0034fd4999f6bc",
+    "field_hash": "f7b76cc9598996d72069809a",
+    "field_hash_without_probe": "f7b76cc9598996d72069809a",
+    "first8": [
+     -3.0300050269821713e-05,
+     -2.975155986618819e-05,
+     -1.869228697528109e-05,
+     -1.4888457467058872e-05,
+     -1.4889049257021236e-05,
+     -1.8692286976404435e-05,
+     -2.955881609417003e-05,
+     -3.0165272017135166e-05
+    ],
+    "n": 112,
+    "n_nan": 0,
+    "opl_hash": "c90ff105e68386e0e2bcc39a",
+    "piston": 0.0051052847380917065,
+    "present": true
+   }
+  },
+  "rd_remap_eval": {
+   "rows=128": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "eea9fa1bf760d03e344b0fcf",
+    "field_hash_without_probe": "eea9fa1bf760d03e344b0fcf",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "rows=32": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "eea9fa1bf760d03e344b0fcf",
+    "field_hash_without_probe": "eea9fa1bf760d03e344b0fcf",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "rows=7": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "eea9fa1bf760d03e344b0fcf",
+    "field_hash_without_probe": "eea9fa1bf760d03e344b0fcf",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "whole": {
+    "ard_hash": "9178403a11a66aeb72089afb",
+    "field_hash": "eea9fa1bf760d03e344b0fcf",
+    "field_hash_without_probe": "eea9fa1bf760d03e344b0fcf",
+    "first8": [
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN
+    ],
+    "n": 112,
+    "n_nan": 82,
+    "opl_hash": "6944a6b11257ca81a0392e90",
+    "piston": 0.0051052847380917065,
+    "present": true
+   }
+  },
+  "screen_eval": {
+   "rows=128": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "c910cb78d06561ee566c0267",
+    "field_hash_without_probe": "c910cb78d06561ee566c0267",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "rows=32": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "c910cb78d06561ee566c0267",
+    "field_hash_without_probe": "c910cb78d06561ee566c0267",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "rows=7": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "c910cb78d06561ee566c0267",
+    "field_hash_without_probe": "c910cb78d06561ee566c0267",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "whole": {
+    "ard_hash": null,
+    "field_hash": "c910cb78d06561ee566c0267",
+    "field_hash_without_probe": "c910cb78d06561ee566c0267",
+    "first8": [
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN,
+     NaN
+    ],
+    "n": 112,
+    "n_nan": 82,
+    "opl_hash": "c76e8c7fef6ed3a7fc532c44",
+    "piston": 0.0051052847380917065,
+    "present": true
+   }
+  },
+  "screen_newton": {
+   "rows=128": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "a4cb0cc08cdb625316807434",
+    "field_hash_without_probe": "a4cb0cc08cdb625316807434",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "rows=32": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "a4cb0cc08cdb625316807434",
+    "field_hash_without_probe": "a4cb0cc08cdb625316807434",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "rows=7": {
+    "ard_hash": null,
+    "equal_to_whole_ard": null,
+    "equal_to_whole_opl": null,
+    "field_hash": "a4cb0cc08cdb625316807434",
+    "field_hash_without_probe": "a4cb0cc08cdb625316807434",
+    "max_abs_diff_opl": null,
+    "nan_pattern_equal": null,
+    "opl_hash": null,
+    "piston": null,
+    "present": false,
+    "probe_moved_the_field": false
+   },
+   "whole": {
+    "ard_hash": null,
+    "field_hash": "a4cb0cc08cdb625316807434",
+    "field_hash_without_probe": "a4cb0cc08cdb625316807434",
+    "first8": [
+     -3.0300050269821713e-05,
+     -2.975155986618819e-05,
+     -1.869228697528109e-05,
+     -1.4888457467058872e-05,
+     -1.4889049257021236e-05,
+     -1.8692286976404435e-05,
+     -2.955881609417003e-05,
+     -3.0165272017135166e-05
+    ],
+    "n": 112,
+    "n_nan": 0,
+    "opl_hash": "c90ff105e68386e0e2bcc39a",
+    "piston": 0.0051052847380917065,
+    "present": true
+   }
+  }
+ },
+ "free_gb": 77.11,
+ "n_probe_px": 112
+}
