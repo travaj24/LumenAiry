@@ -467,7 +467,13 @@ of the census box's mount (dense superstrate 2.4 / 3.2, theta 1.22-1.44,
 lossy substrate, degrees 6 / 8 / 10) crossed with three periods, three
 wavelengths, three duty geometries, three ridge permittivities and two slice
 thicknesses, 40 deltas each, keeping only rows the shipped arbiter REFUSES.
-W9_STATUS
+**NOT COMPLETED.**  `w9_r2d_attack.py` was still running after ~4 h on the
+contended box and produced no JSON.  Its question -- does a directed sweep of
+the census box's mount crossed with the geometry find a false refusal? -- was
+already answered by `w6` + `w10` below, which found the candidate rows and
+adjudicated them against an independent package; `w9` would have widened the
+search, not changed its verdict.  The script and its command line are in the
+probe directory for whoever picks it up.
 
 ### S5.3 Outcome -- the mechanism is REAL, the published bound is REFUTED, the DECISION holds
 
@@ -1060,7 +1066,41 @@ All with `PYTHONPATH` on the worktree and one BLAS thread.
 | every test file importing `PMMStack` (`grep tests/ --include='*.py' -l PMMStack`, **43** files incl. this round's) | see below | -- |
 | `ruff check lumenairy/ tests/ validation/probe_verify_sliver_round2/` | **All checks passed** | -- |
 
-REGRESSION_RESULT_PLACEHOLDER
+**REGRESSION.**  `grep tests/ --include='*.py' -l PMMStack` reads **43** files
+on this branch (the round-2 report's 42 plus
+`tests/unit/test_verify_pmmstack_sliver_round2.py`); the list is in
+`validation/probe_verify_sliver_round2/_pmmstack_test_files.txt`.
+
+**NOT COMPLETED HERE, and this is the one gap in this verification.**  The
+43-file run was launched on this branch and was still executing when this
+report was written.  The reason is the box, not the tests: 24 logical CPUs
+shared with several other agents' pytest suites and probe sweeps (one of them
+holding 14 GB), so the run accumulated 1,324 s of CPU over 3 h of wall time --
+about 12 % of one core.  Nothing failed; it did not finish.
+
+What IS green on this branch, on BOTH builds:
+
+| | Windows | WSL |
+|---|---|---|
+| the three sliver files + `test_m1_conditioning_guard.py` + the new file | **86 passed**, 1 warning, 77.78 s | **86 passed**, 1 warning, 76.55 s |
+| `test_fix_pmmstack_sliver_walls_round2.py` after the D-3 restatement | **19 passed**, 28.02 s | **19 passed**, 26.17 s |
+
+and for the wider gate the reference point is the round-2 report's own run on
+the same library (**812 passed, 1 skipped, 0 failed in 43:19**, 42 files),
+which this branch cannot have moved: `git diff 24651c8 HEAD -- lumenairy/` is
+EMPTY, so the only file this branch adds to that gate is
+`tests/unit/test_verify_pmmstack_sliver_round2.py`, whose 6 tests pass on both
+builds in 4.05 / 3.41 s, and the one restated assertion in
+`test_fix_pmmstack_sliver_walls_round2.py`, whose file passes on both.  The
+expected reading is therefore **818 passed, 1 skipped** -- but I did not
+observe it, and it should be observed before the tag.
+
+The rerun command, for the record:
+
+```
+cd /c/tmp/lum_vsliver2
+PYTHONPATH=/c/tmp/lum_vsliver2 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1   MKL_NUM_THREADS=1 python -m pytest   $(cat validation/probe_verify_sliver_round2/_pmmstack_test_files.txt)   -q --no-header -p no:randomly
+```
 
 `.test_durations` spliced with the six measured Windows timings of the new
 file (12,612 -> 12,618 entries; a 6-line diff, nothing reformatted).
@@ -1087,10 +1127,24 @@ file (12,612 -> 12,618 entries; a 6-line diff, nothing reformatted).
 | | |
 |---|---|
 | `f50bf23` | `probe(verify sliver r2)` -- the independent re-measurement suite: 31 bit-identity fixtures and the probes `w1`-`w8`, both builds |
-| `57abd4d` | `test(pmm)` -- `tests/unit/test_verify_pmmstack_sliver_round2.py`, six tests, four of them pinning a known limitation with the re-pin instruction; `.test_durations` spliced |
-| COMMIT3 | `probe(verify sliver r2)` -- the resonant counter-fixture's RCWA adjudication and the D-5 reproducer |
-| COMMIT4 | `docs(audits)` -- this report |
+| `57abd4d` | `test(pmm)` -- `tests/unit/test_verify_pmmstack_sliver_round2.py`, six tests, four of them pinning a known limitation with the re-pin instruction; `.test_durations` spliced (12,612 -> 12,618) |
+| `64e8e94` | `probe(verify sliver r2)` -- the resonant counter-fixture (`w6`), its RCWA adjudication (`w10`), the directed R2-D scan (`w9`) and the D-5 reproducer (`w11`) |
+| `667f416` | `test(pmm)` -- the round-2 file's move bar restated as a population SEPARATION (D-3) |
+| `dc95864` | `docs(audits)` -- this report |
+| `dae9f58` | `docs(audits)` -- D-5 reproduces digit for digit on the second build; the call-site diff, the fail-before arm, the centred-overlap measurement |
+| `6ceaaa1` | `docs(audits)` -- the runs, the ship recommendation, and the two items this verification did not complete |
 
-No `lumenairy/` file was changed on this branch
-(`git diff bb0527a..HEAD -- lumenairy/` is unchanged from the merge base's own
-diff), and nothing was merged, pushed, tagged or version-bumped.
+No `lumenairy/` file was changed on this branch -- `git diff 24651c8 HEAD --
+lumenairy/` is EMPTY -- and nothing was merged, pushed, tagged or
+version-bumped.
+
+### S12.1 What this verification did NOT complete
+
+| | why | what stands in for it |
+|---|---|---|
+| the 43-file `PMMStack` regression | starved on a shared 24-CPU box (12 % of one core over 3 h); nothing failed, it did not finish | the 86-test five-file set green on both builds, and `git diff 24651c8 HEAD -- lumenairy/` EMPTY |
+| `w9_r2d_attack.py`, the exhaustive directed R2-D scan | ~4 h without finishing, same contention | `w6` + `w10`, which found the candidate rows and adjudicated them against RCWA |
+| the report's "the snapped grid resolves a different order count on 359 of 637 arbitrated rows" | not reproducible without their exact grids | measured on mine instead: 0 of 100 on clean fixtures, **69 of 69** on the census box -- the CONTRACT is confirmed, the count is theirs |
+| the report's own 110 / 648 false-positive count | their box's specific substrates and angles | my own 648-configuration box: **77 / 648 -> 0 / 648**, same character |
+| the arbiter's 0.20x Windows cost | a timing measurement on a contended box | **0.260x / 0.254x**, i.e. the claim "cheaper than the solve it guards" holds |
+| `w6` / `w10` on the second build | Windows only (each is a ~20-minute run) | the D-5 reproducer `w11` IS cross-build, digit for digit |
