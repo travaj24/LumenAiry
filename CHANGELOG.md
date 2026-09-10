@@ -4,6 +4,73 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed -- the RCWA modal BRANCH CUT: a propagating layer mode could be handed the INCOMING root, decided by a last bit
+
+`_sqrt_decay` maps a layer eigenvalue `lam^2` to its modal decay constant.  A
+PROPAGATING mode of a LOSSLESS layer has `lam^2` exactly real NEGATIVE -- on the
+principal square root's branch cut, where the outgoing root `+i|kz|` (the branch
+the region modes are built on) and the incoming root `-i|kz|` are separated ONLY
+by the sign of `Im(lam^2)`.  The pin meant to force the outgoing root tested
+`Re(sqrt(lam^2)) == 0` EXACTLY, which an `eig` output never satisfies -- its real
+part is the eigensolver's backward error, ~1e-16, not zero.  So the pin fired for
+the REGION modes (exact arithmetic, a signed zero) and NEVER for a structured
+LAYER's, whose root was then decided by the last bit of `Im(lam^2)`: a quantity
+with no physical content that changes with the BLAS kernel, the thread count and
+the platform.
+
+A forward mode carrying the incoming root IS a backward mode.  Against a region
+of the SAME permittivity it is exactly that region's own backward mode, so the
+interface mode-match `a + b` -- whose explicit inverse IS `S12` -- is exactly
+singular.  Measured on the reproducer (layer background `2.25`, `n_substrate =
+1.5`, so `eps_sub = 2.25` exactly): `cond(a + b) = 1.97e+15` at the
+layer->substrate interface against `1.54e+04` at the layer->superstrate one,
+while `cond(M) = 1.6e+02` and `cond(W) = 5.6e+03` -- the singularity was CREATED
+at the mode match, not inherited from the eigenproblem.  This is the whole of the
+library's long-standing "a LAYER permittivity EXACTLY EQUAL to a REGION's ...
+degenerate at EVERY truncation, DETUNE by ~1e-6 instead" warning: a detune ladder
+makes the defect fall as `1/d` (`defect * d` flat at ~1e-17 over five decades)
+and return as `d -> 0`.
+
+**What it cost.**  `sum R + T - 2` on a provably lossless cell reached
+**3.2e-03**, and moved THREE AND A HALF DECADES AND CHANGED SIGN with
+`OPENBLAS_NUM_THREADS` alone (`-3.200e-03 / -1.003e-03 / -1.084e-06 / +1.264e-03 / +4.939e-06` at
+1 / 2 / 4 / 8 / 16 threads on one build).  `test_jones_2d_even_sector_matches_full`
+read `1.625072e-02` on WSL at one thread and `2.006728e-14` on Windows unpinned
+-- twelve decades on one quantity across settings a build is entitled to choose.
+Release CI was green because its fast `unit` lane deliberately leaves BLAS
+unpinned; the same tree, same interpreter and same numpy 2.4.6 FAILS at one
+thread and PASSES unpinned.
+
+**What ships.**  The on-cut test becomes a band relative to the mode spectrum,
+`|Re(r)| <= _CUT_BAND_REL * max(max|r|, 1)` with `_CUT_BAND_REL = 1e-8` -- the
+same value and the same shape as the PMM side's `_forward_branch_flip`, which
+solved this identical problem for the scalar-vertical generators (audit S1-8).
+The flipped entry takes `conj(r)` rather than `-r`, which keeps `Re(lam) >= 0`
+and with it the `|X| <= 1` contraction guarantee.
+
+The bar is TWO-SIDED and measured: over 2150 (WIN) / 2135 (WSL) `Im(r) < 0` modes
+on 51 fixtures, `|Re(r)| / max(max|r|, 1)` splits into 117 / 99 modes at
+`<= 2.245e-16` / `1.511e-16` -- every one a lossless PROPAGATING mode -- and 2033
+/ 2036 modes at `>= 8.267e-02` / `7.947e-02`, with a LOSS LADDER down to
+`Im(eps) = 1e-8` contributing nothing to the low side.  Fourteen decades of gap;
+the bar sits 7.6 decades above the noise and 6.9 below the signal.
+
+After the fix `cond(a + b)` reads `5.63e+03`, the closure defect `<= 6.0e-15` on
+both builds at every thread count (WSL reads `2.000000000000000` exactly), and
+the two lossy census fixtures are BIT-IDENTICAL to the pre-fix arm -- the change
+touches nothing where the sign of `Im(r)` is physics.  A lossless solve away from
+the coincidence moves by 1.04e-17 .. 5.54e-15; one on the coincidence moves by
+up to 1.81e-02, which is the fix.  `_sqrt_decay` is shared, so `rcwa/oned.py`,
+`rcwa/stack.py`, `pmm/twod.py`, the three PMM JAX twins and `elements/berreman.py`
+all gain the same correction.
+
+Evidence: `docs/audits/FIX_RCWA_EVEN_SECTOR_WSL_2026_09_11.md`; probes (both
+builds, both arms) in `validation/probe_fix_rcwa_even_sector_wsl/`; DECISION test
+`tests/unit/test_fix_rcwa_even_sector_wsl.py` (7 of its 9 assertions fail on the
+pre-fix tree on BOTH builds; the 2 that pass are the guards the fix must not
+cost).
+
+
 ### Fixed -- `PMMStack` REFUSES a near-coincident-wall SLIVER instead of returning a wrong answer (O-11)
 
 Two adjacent layers whose wall sets differ by `delta` of the period put a SLIVER

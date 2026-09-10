@@ -1,0 +1,81 @@
+{
+ "_arm": {
+  "build": "win",
+  "tree": "prefix(48c8747)",
+  "tag": "win.prefix",
+  "lumenairy": "C:\\tmp\\lum_wslfix_pre\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "blas": {
+   "blas": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24"
+   },
+   "lapack": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24"
+   }
+  },
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ },
+ "cut_rel": 1e-08,
+ "before": {
+  "dR": 2.812110960759284e-10,
+  "dT": 0.004286540256806859,
+  "dJ": 7.097420349126422e-10,
+  "defect_full": -0.003199526886658699,
+  "defect_even": -0.00033812522680864987,
+  "cond_full": [
+   15405.582553503156,
+   1973495911638795.5
+  ],
+  "cond_even": [
+   9964.189890171408,
+   1073944508994840.8
+  ],
+  "R_full": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "passes": true
+ },
+ "after": {
+  "dR": 2.7755575615628914e-16,
+  "dT": 5.773159728050814e-15,
+  "dJ": 6.9434514773e-16,
+  "defect_full": -5.995204332975845e-15,
+  "defect_even": 0.0,
+  "cond_full": [
+   7679.405122408988,
+   5633.226622495844
+  ],
+  "cond_even": [
+   5359.058202084931,
+   3928.2226704690884
+  ],
+  "R_full": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "passes": true
+ }
+}

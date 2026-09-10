@@ -1202,6 +1202,25 @@ def _inv_lam(lam: np.ndarray) -> np.ndarray:
 
 
 
+#: Relative half-width of the "numerically on the branch cut" band used by
+#: :func:`_sqrt_decay` to pin the OUTGOING root of a propagating mode.
+#: Same value and same shape (relative to the mode spectrum, floored at 1.0)
+#: as the PMM side's ``_forward_branch_flip`` (audit S1-8), which selects the
+#: forward branch of the same quantity for the scalar-vertical generators.
+#: TWO-SIDED, MEASURED (validation/probe_fix_rcwa_even_sector_wsl/r11_band.py,
+#: 51 fixtures x both builds, 2026-09-11).  The pin acts on exactly one
+#: population -- modes with ``Im(sqrt(lam^2)) < 0`` -- and over 2150 such modes
+#: the discriminating ratio ``|Re(r)| / max(max|r|, 1)`` splits in two with
+#: NOTHING in between: 117 (WIN) / 99 (WSL) modes at <= 2.245e-16 (WIN) /
+#: 1.511e-16 (WSL), every one of them a LOSSLESS cell's PROPAGATING mode whose
+#: negative imaginary part is the eigensolver's backward error; and 2033 (WIN)
+#: / 2036 (WSL) modes at >= 8.267e-02 (WIN) / 7.947e-02 (WSL), where the sign
+#: is physics.  A loss ladder down to Im(eps) = 1e-8 puts NOT ONE mode on the
+#: noise side.  This bar sits 7.6 decades above the noise side and 6.9 decades
+#: below the signal side.
+_CUT_BAND_REL = 1e-8
+
+
 def _sqrt_decay(x: np.ndarray) -> np.ndarray:
     """Square root on the ``Re(result) >= 0`` (principal) branch, used for
     the LAYER modal eigenvalue ``lam`` that drives the propagator
@@ -1215,16 +1234,58 @@ def _sqrt_decay(x: np.ndarray) -> np.ndarray:
     would flip ``lam`` to a NEGATIVE real, turning the decaying propagator
     into ``exp(+|gamma| k0 L)`` -- a catastrophic high-order blow-up.  The
     principal branch is immune (it never flips the sign of a positive-real
-    root).  For propagating modes (``lam^2`` negative real) both branches
-    agree on ``+i|kz|``, so physics is unchanged.
+    root).
+
+    ON THE CUT the two roots are ``+i|kz|`` (outgoing -- the branch the region
+    modes are built on, and the one the S-matrix recursion requires of the
+    layer's FORWARD set) and ``-i|kz|`` (incoming), and which one
+    ``sqrt`` returns is decided by the SIGN OF ``Im(lam^2)``.  For a value that
+    comes out of ``eig`` that sign is not physics: it is the eigensolver's
+    backward error, ``|Im(lam^2)| ~ eps_mach * ||M||`` (measured 5.7e-20 ..
+    2.9e-15 on the on-cut modes of the fixture below, against
+    ``max|M| = 72.4``), and it flips with the BLAS kernel, the thread count and
+    the platform.  So the outgoing root must be pinned by a test that
+    a rounding-level real part cannot defeat.
+
+    The test this line used until 2026-09-11 was the EXACT ``Re(r) == 0``,
+    which an ``eig`` output never satisfies: for ``lam^2 = -s + i eta`` the
+    root is ``r = eta / (2|r|) + i sign(eta) sqrt(s)``, whose real part is
+    ~1e-16, not zero.  The pin therefore never fired for a structured layer,
+    and a propagating layer mode kept whichever root the last bit of ``eta``
+    chose.  A forward mode carrying the INCOMING root is, at an interface with
+    a region of the SAME permittivity, exactly the region's BACKWARD mode --
+    so the mode-match ``a + b`` (whose explicit inverse IS ``S12``) is exactly
+    singular.  That is the whole of the library's documented "a LAYER
+    permittivity EXACTLY EQUAL to a REGION's ... degenerate at EVERY
+    truncation" failure class: measured ``cond(a + b) = 1.97e15`` and a
+    lossless-closure defect that ran from -3.200e-03 to -1.084e-06 to
+    +1.264e-03 -- three and a half decades, and a sign change -- with the BLAS
+    thread count alone (see
+    ``docs/audits/FIX_RCWA_EVEN_SECTOR_WSL_2026_09_11.md``).
+
+    The on-cut band is therefore RELATIVE to the mode spectrum, in the same
+    shape and with the same 1e-8 factor as the PMM side's
+    :func:`lumenairy.elements.pmm._core._forward_branch_flip`, which solved
+    this same problem for the scalar-vertical generators (audit S1-8).  The
+    band separates by fourteen decades with nothing in between -- see
+    ``_CUT_BAND_REL`` for the measured populations.
+
+    On the cut the exact root is PURE IMAGINARY, so the retained real part is
+    noise either way; the conjugate root is taken rather than ``-r`` because it
+    keeps ``Re(lam) >= 0`` -- ``-r`` would hand back ``Re(lam) = -1e-16`` and
+    give up the ``|X| <= 1`` guarantee this function exists to provide.  The
+    two differ by ``2 |Re(r)| ~ 1e-15`` in a quantity of size ``|kz|``.
     """
     xp = array_namespace(x)
     x = xp.asarray(x).astype(_C)
     r = xp.sqrt(x)  # principal branch: Re(r) >= 0 by construction
-    # On the cut (pure-imaginary r, i.e. lam^2 real negative) pin Im >= 0
-    # so propagating modes use the outgoing root deterministically.
-    on_cut = r.real == 0
-    return xp.where(on_cut & (r.imag < 0), -r, r)
+    # Numerically ON the cut: |Re(r)| below the eigensolver's backward error,
+    # scaled by the mode spectrum (floor 1.0 so a sub-unit spectrum still gets
+    # an absolute band).  Pin Im >= 0 there so propagating modes use the
+    # outgoing root deterministically, on every build.
+    scale = xp.maximum(xp.max(xp.abs(r)), 1.0) if r.size else 1.0
+    on_cut = xp.abs(r.real) <= _CUT_BAND_REL * scale
+    return xp.where(on_cut & (r.imag < 0), xp.conj(r), r)
 
 
 
