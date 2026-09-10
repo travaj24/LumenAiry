@@ -461,13 +461,26 @@ with `omega_n = max_m |m G + alpha0| . J_n` -- the segment's OWN half-phase.
 The constants are an UPPER ENVELOPE of S5.1 (0.72 against a measured 0.645,
 `0.5 M + 10` against a measured `0.47 M + 8.0`).
 
-**The INTEGER path does not reach the function at all** -- `_stag_fourier_projection`
-branches on `basis.uniform` and keeps the single `2 M + 8` rule, one
-`leggauss`, one `_modleg_value_deriv`, the same doubles.  So the bit-identity
-is structural.  The FORMULA additionally returns exactly `2 M + 8` on every
-uniform lattice `M = 3..14 x N = 1..60` the shipped order cap allows with
-`|alpha0| <= G/2` -- **720 cells, 0 violations** -- which is what keeps an
-explicitly-passed uniform ARRAY ULP-close to the integer spelling (gate N2).
+Scored two-sided in the probe (`r2_quad.py rule`):
+
+* it clears the MEASURED requirement of S5.1 everywhere, **worst margin 2
+  nodes** over the 112 `(omega, M)` cells;
+* **the INTEGER path does not reach the function at all** --
+  `_stag_fourier_projection` branches on `basis.uniform` and keeps the single
+  `2 M + 8` rule, one `leggauss`, one `_modleg_value_deriv`, the same doubles,
+  so the bit-identity is structural.  The FORMULA additionally returns exactly
+  `2 M + 8` on every uniform lattice `M = 3..14 x N = 1..60` the shipped order
+  cap allows with `|alpha0| <= G/2` -- **720 cells, 0 violations** -- which is
+  what keeps an explicitly-passed uniform ARRAY ULP-close to the integer
+  spelling (gate N2).
+
+**A REJECTED candidate, kept in the probe because its failure is the design
+argument.**  `max(2M + 8, ceil(0.75 omega) + M + 8)` also clears the
+requirement (worst margin 1 node) but returns something other than `2 M + 8`
+on **457 of the same 720 cells**: its `M`-linear term is too large relative to
+its constant, so the `2 M + 8` reserve runs out at large `N`, where
+`omega -> pi (M - 1) / 2`.  The shipped form carries `0.5 M` and a larger
+constant, which is exactly what lets it fit under the reserve everywhere.
 
 ### 5.3 The result
 

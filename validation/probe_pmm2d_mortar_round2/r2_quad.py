@@ -36,6 +36,7 @@ from lumenairy.elements.pmm.twod_staggered import (
     Basis1D,
     _modleg_value_deriv,
     _stag_fourier_projection,
+    _stag_quad_order,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -117,13 +118,21 @@ def sec_need():
 
 # --------------------------------------------------------------- the rule
 def _nq_rule(M, omega):
-    """CANDIDATE.  ``2M + 8`` unless the segment's own half-phase needs more.
+    """THE SHIPPED RULE, read from the library so this probe scores what
+    actually runs (``twod_staggered._stag_quad_order``)."""
+    return _stag_quad_order(M, omega)
 
-    The oscillatory factor ``e^{i omega u}`` costs a Gauss rule about
-    ``omega / 2`` nodes beyond what the polynomial factor alone needs (the
-    measured slope, ``sec_need``); the shipped ``2M + 8`` already carries the
-    polynomial factor and a large constant reserve, so the rule only has to
-    top it up once ``omega`` outruns that reserve."""
+
+def _nq_rule_rejected(M, omega):
+    """A REJECTED candidate, kept because its failure is the design argument.
+
+    ``max(2M + 8, ceil(0.75 omega) + M + 8)`` clears the measured requirement
+    with a worst margin of ONE node, but it returns something other than
+    ``2 M + 8`` on **457 of 720** integer-N lattices ``M = 3..14 x N = 1..60``
+    -- the ``M``-linear term is too small, so the reserve runs out at large
+    ``N`` where ``omega -> pi (M - 1) / 2``.  The shipped form carries a
+    ``0.5 M`` term instead of ``1.0 M`` and a larger constant, which is what
+    lets it fit under the reserve everywhere."""
     return max(2 * M + 8, int(math.ceil(0.75 * omega)) + M + 8)
 
 
@@ -154,6 +163,7 @@ def sec_rule():
     #     |alpha0| <= G/2.
     ident = {}
     bad = []
+    bad_rejected = []
     for M in range(3, 15):
         for N in range(1, 61):
             q = N * (M - 1)
@@ -165,11 +175,16 @@ def sec_rule():
                                    "shipped": 2 * M + 8}
             if r != 2 * M + 8:
                 bad.append((M, N, om, r))
+            if _nq_rule_rejected(M, om) != 2 * M + 8:
+                bad_rejected.append((M, N, om))
     out["uniform_identity"] = {"cells": len(ident), "violations": len(bad),
-                               "worst": bad[:10]}
+                               "worst": bad[:10],
+                               "violations_rejected_candidate":
+                                   len(bad_rejected)}
     _log(f"(b) integer-N grids M=3..14 x N=1..60: {len(ident)} cells, "
-         f"{len(bad)} where the rule != 2M+8"
-         + (f"   WORST {bad[:3]}" if bad else ""))
+         f"{len(bad)} where the SHIPPED rule != 2M+8"
+         + (f"   WORST {bad[:3]}" if bad else "")
+         + f"   (the REJECTED candidate: {len(bad_rejected)})")
     RES["rule"] = out
 
 
