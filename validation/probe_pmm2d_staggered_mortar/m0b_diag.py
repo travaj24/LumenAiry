@@ -11,10 +11,10 @@ layer is under-resolved':
     error, with no resolution confound at normal incidence (the excited mode
     is the constant, which lies exactly in every grid's basis)."""
 import numpy as np
-from mortar2d import guard, MortarStack2D, refine_cell
+from mortar2d import MortarStack2D, guard, refine_cell
+
 print("lumenairy:", guard(), flush=True)
 from lumenairy.elements.pmm.twod_staggered import pmm_efficiency_2d_staggered
-from lumenairy.elements.pmm.stack2d_pure import PMM2DStackPure
 
 PX = PY = 0.9e-6
 WL = 0.60e-6

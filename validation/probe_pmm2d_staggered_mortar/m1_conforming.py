@@ -4,8 +4,10 @@ must reduce to the plain square modal match, so the two must agree to solver
 round-off (~1e-14 relative); bit identity is NOT required (the mortar
 associates the same algebra differently)."""
 import json
+
 import numpy as np
-from mortar2d import guard, MortarStack2D
+from mortar2d import MortarStack2D, guard
+
 print("lumenairy:", guard())
 from lumenairy.elements.pmm.stack2d_pure import PMM2DStackPure
 

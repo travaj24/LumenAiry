@@ -2,7 +2,8 @@
 apply is exact, and the block Grams built from 1-D factors ARE the eigensolver's
 ``-Rmat`` blocks."""
 import numpy as np
-from mortar2d import guard, cross_mass_1d, GridOps, kron_apply
+from mortar2d import GridOps, cross_mass_1d, guard, kron_apply
+
 print("lumenairy:", guard())
 from lumenairy.elements.pmm.twod_staggered import Granet2DTransverseE
 

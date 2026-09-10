@@ -21,7 +21,6 @@ shipped anchor out returns the pre-fix reading to every printed digit).
 import time
 
 import numpy as np
-
 from _lib import align, arm, dump, mx, sha  # noqa: I001
 
 from lumenairy.elements.pmm import PMM2DStackHybrid, PMM2DStackPure

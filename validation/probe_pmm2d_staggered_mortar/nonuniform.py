@@ -61,10 +61,8 @@ from __future__ import annotations
 import time
 
 import numpy as np
+from mortar2d import CrossOps, guard, interface_general_mortar_2d, interface_mortar_2d, kron_apply
 from numpy.polynomial.legendre import leggauss
-
-from mortar2d import (CrossOps, guard, interface_general_mortar_2d,
-                      interface_mortar_2d, kron_apply)
 
 guard()
 
@@ -73,12 +71,6 @@ from lumenairy.elements.pmm._core import (  # noqa: E402
     _interface_smatrix,
     _propagation_smatrix,
     _redheffer_star_rect,
-)
-from lumenairy.elements.rcwa._core import (  # noqa: E402
-    _interface_smatrix_general,
-    _modes_to_M,
-    _project_efficiency,
-    _propagation_smatrix_general,
 )
 from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
     _C,
@@ -93,6 +85,12 @@ from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
     _region_modes,
     _region_modes_oop,
     _tile_needs_oop,
+)
+from lumenairy.elements.rcwa._core import (  # noqa: E402
+    _interface_smatrix_general,
+    _modes_to_M,
+    _project_efficiency,
+    _propagation_smatrix_general,
 )
 
 __all__ = ["Basis1DNU", "Granet2DTransverseE_NU", "MortarStackNU",

@@ -29,7 +29,6 @@ Scope of the defect, measured here:
 The PURE engine is measured on the same fixture, per order, as the control.
 """
 import numpy as np
-
 from _lib import arm, dump, mx  # noqa: I001
 
 from lumenairy.elements.pmm import PMM2DStackHybrid, PMM2DStackPure

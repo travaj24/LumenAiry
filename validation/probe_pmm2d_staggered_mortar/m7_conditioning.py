@@ -16,9 +16,11 @@ materialised."""
 import json
 import time
 import warnings
-import numpy as np
+
 import mortar2d
-from mortar2d import guard, MortarStack2D, GridOps, CrossOps, kron_apply
+import numpy as np
+from mortar2d import CrossOps, GridOps, MortarStack2D, guard, kron_apply
+
 print("lumenairy:", guard(), flush=True)
 from lumenairy.elements.rcwa import _core as _rc
 

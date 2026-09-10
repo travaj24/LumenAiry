@@ -30,11 +30,13 @@ import sys
 import time
 import warnings
 
-import numpy as np
 import mortar2d
+import numpy as np
 from mortar2d import guard
+
 print("lumenairy:", guard(), flush=True)
 from nonuniform import MortarStackNU
+
 from lumenairy import PMMStack
 
 warnings.simplefilter("ignore")

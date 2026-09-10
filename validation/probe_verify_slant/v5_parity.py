@@ -36,7 +36,6 @@ for byte against the un-shimmed solver's.
 """
 import numpy as np
 import scipy.linalg as sla
-
 from _lib import arm, dump, mx, sha  # noqa: I001
 
 from lumenairy.elements.pmm import PMM2DStackPure
@@ -44,7 +43,6 @@ from lumenairy.elements.pmm import stack2d_pure as _sp
 from lumenairy.elements.pmm.twod_staggered import (
     _STAG_BLOCK_TOL,
     Granet2DTransverseE,
-    _region_modes_oop,
     _stag_block_eig,
     _stag_parity_gauge,
 )
@@ -108,7 +106,7 @@ class _Shim:
 
 def struct_residual(A, B, parity):
     perm, r = parity
-    n4 = A.shape[0]
+    _n4 = A.shape[0]
     rr = r[:, None] * r[None, :]
     ra = float(np.max(np.abs(rr * A[np.ix_(perm, perm)] + A)))
     rb = float(np.max(np.abs(rr * B[np.ix_(perm, perm)] - B)))

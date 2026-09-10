@@ -24,7 +24,6 @@ Run:
     python validation/probe_verify_slant/v1_without_identity.py
 """
 import numpy as np
-
 from _lib import arm, dump, sha  # noqa: I001  (probe-local)
 
 from lumenairy.elements.pmm import PMM2DStackPure

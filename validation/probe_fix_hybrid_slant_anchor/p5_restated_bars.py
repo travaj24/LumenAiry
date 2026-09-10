@@ -26,7 +26,6 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
 import numpy as np  # noqa: E402
-
 from _lib import arm, dump  # noqa: I001,E402
 
 sys.path.insert(0, os.path.join(
@@ -36,8 +35,7 @@ import test_pmm2d_staggered_slant as TS  # noqa: E402
 
 
 def cost_ratios(reps=3):
-    from lumenairy.elements.pmm.stack2d_pure import (Granet2DTransverseE,
-                                                     _region_modes_oop)
+    from lumenairy.elements.pmm.stack2d_pure import Granet2DTransverseE, _region_modes_oop
     k0 = 2.0 * np.pi
     a0 = (0.25 * k0, 0.18 * k0)
     out = {}

@@ -16,7 +16,6 @@ the non-(0,0) orders (a uniform layer must diffract nothing).
 The M-ladder (4..8) on the worst row is the "is it discretization?" arm.
 """
 import numpy as np
-
 from _lib import arm, dump, mx  # noqa: I001
 
 from lumenairy.elements.pmm import PMM2DStackPure

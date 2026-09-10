@@ -15,7 +15,6 @@ whose ``jones_transmission`` hash is EXPECTED to change (that is the fix); its
 ``R`` / ``T`` / ``jones_reflection`` hashes must not.
 """
 import numpy as np
-
 from _lib import arm, dump, sha  # noqa: I001
 
 from lumenairy.elements.pmm import PMM2DStackHybrid

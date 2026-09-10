@@ -18,11 +18,12 @@ slice's own lattice.
     arm has a FLOOR here: M >= 3 forces q >= 2 * N_LCM = 24, while the
     per-layer arm can run the whole stack at q = 12."""
 import json
-import sys
 import time
 import warnings
+
 import numpy as np
-from mortar2d import guard, MortarStack2D
+from mortar2d import MortarStack2D, guard
+
 print("lumenairy:", guard(), flush=True)
 from lumenairy import PMMStack
 from lumenairy.elements.pmm.stack2d_pure import PMM2DStackPure

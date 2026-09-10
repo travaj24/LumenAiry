@@ -20,7 +20,6 @@ metal's modes are exactly the ones a flux-sign rule can misclassify.
 """
 import numpy as np
 import scipy.linalg as sla
-
 from _lib import arm, dump  # noqa: I001
 
 from lumenairy.elements.pmm.twod_staggered import Granet2DTransverseE

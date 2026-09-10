@@ -27,7 +27,6 @@ matching is the shear-CONTINUED solid -- the lower layer riding along with the
 walk -- and case D measures which geometry the cascade actually solves.
 """
 import numpy as np
-
 from _lib import align, arm, dump, mx  # noqa: I001
 
 from lumenairy.elements.pmm import PMM2DStackHybrid

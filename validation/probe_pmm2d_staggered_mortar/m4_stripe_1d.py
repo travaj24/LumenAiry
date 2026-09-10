@@ -11,8 +11,10 @@ matched modal count, both scored against the same exact 1-D answer."""
 import json
 import sys
 import time
+
 import numpy as np
-from mortar2d import guard, MortarStack2D, refine_cell
+from mortar2d import MortarStack2D, guard, refine_cell
+
 print("lumenairy:", guard(), flush=True)
 from lumenairy import PMMStack
 from lumenairy.elements.pmm.stack2d_pure import PMM2DStackPure

@@ -28,7 +28,8 @@ import time
 import warnings
 
 import numpy as np
-from mortar2d import guard, MortarStack2D, refine_cell
+from mortar2d import MortarStack2D, guard, refine_cell
+
 print("lumenairy:", guard(), flush=True)
 from lumenairy.elements.pmm.stack2d_pure import PMM2DStackPure
 from lumenairy.elements.rcwa._core import uniaxial_tensor

@@ -15,7 +15,6 @@ import pathlib
 import sys
 
 import numpy as np
-
 from _lib import arm, dump, mx, sha  # noqa: I001
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]

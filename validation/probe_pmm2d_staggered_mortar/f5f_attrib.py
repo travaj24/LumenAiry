@@ -17,8 +17,10 @@ import warnings
 
 import numpy as np
 from mortar2d import guard
+
 print("lumenairy:", guard(), flush=True)
 from nonuniform import MortarStackNU
+
 from lumenairy import PMMStack
 
 warnings.simplefilter("ignore")

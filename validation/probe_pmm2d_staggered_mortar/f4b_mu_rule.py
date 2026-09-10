@@ -18,7 +18,8 @@ import time
 import warnings
 
 import numpy as np
-from mortar2d import guard, MortarStack2D
+from mortar2d import MortarStack2D, guard
+
 print("lumenairy:", guard(), flush=True)
 from lumenairy import PMMStack
 

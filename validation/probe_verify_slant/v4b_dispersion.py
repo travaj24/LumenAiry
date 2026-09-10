@@ -31,7 +31,6 @@ the attributes it reads and re-assembling (no monkeypatching of any function):
 """
 import numpy as np
 import scipy.linalg as sla
-
 from _lib import arm, dump  # noqa: I001
 
 from lumenairy.elements.pmm.twod_staggered import (
@@ -46,6 +45,7 @@ K0 = 2.0 * np.pi / WL
 PX = PY = 0.85
 NXG = 2
 import os as _os
+
 CORE = int(_os.environ.get("VSLANT_CORE", "2"))
 #: |m|, |n| <= CORE are the compared harmonics.  CORE = 0 is the
 #: FUNDAMENTAL only -- the statement the build makes (its 1.4e-14);

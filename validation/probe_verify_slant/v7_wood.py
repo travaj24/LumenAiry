@@ -28,7 +28,6 @@ slanted stack sitting exactly on its lab cut-off comes out clean.
 """
 import numpy as np
 import scipy.linalg as sla
-
 from _lib import arm, dump  # noqa: I001
 
 from lumenairy.elements.pmm import PMM2DStackPure

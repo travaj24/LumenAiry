@@ -26,7 +26,6 @@ formulation but the physics) against the pure slanted layer, both signs, on an
 ``n_orders`` ladder, on a genuinely 2-D pillar.
 """
 import numpy as np
-
 from _lib import arm, dump  # noqa: I001
 
 from lumenairy.elements.pmm import PMM2DStackHybrid, PMM2DStackPure, PMMStack

@@ -16,11 +16,9 @@ import warnings
 
 import numpy as np
 import scipy.linalg as sla
-
 from _lib import arm, dump  # noqa: I001
 
 import tests.unit.test_pmm2d_staggered_slant as TT  # noqa: E402
-
 from lumenairy.elements.pmm import (  # noqa: E402
     PMM2DStackHybrid,
     PMM2DStackPure,

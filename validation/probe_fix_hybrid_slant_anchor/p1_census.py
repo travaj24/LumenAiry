@@ -28,11 +28,9 @@ CONSTANT-tile slanted PATTERNED layer (which does, and whose truth is the plain
 vertical slab).
 """
 import numpy as np
-
 from _lib import align, arm, dump, mx, sha  # noqa: I001
 
-from lumenairy.elements.pmm import (PMM2DStackHybrid, PMM2DStackPure,
-                                    pmm_jones_2d)
+from lumenairy.elements.pmm import PMM2DStackHybrid, PMM2DStackPure, pmm_jones_2d
 
 WL = 0.68e-6
 K0 = 2.0 * np.pi / WL

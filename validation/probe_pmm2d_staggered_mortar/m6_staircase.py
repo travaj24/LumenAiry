@@ -14,8 +14,10 @@ import json
 import sys
 import time
 import warnings
+
 import numpy as np
-from mortar2d import guard, MortarStack2D
+from mortar2d import MortarStack2D, guard
+
 print("lumenairy:", guard(), flush=True)
 from lumenairy.elements.pmm.stack2d_pure import PMM2DStackPure
 

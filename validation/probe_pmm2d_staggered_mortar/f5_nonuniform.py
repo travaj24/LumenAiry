@@ -26,16 +26,26 @@ import warnings
 
 import numpy as np
 from mortar2d import guard
+
 print("lumenairy:", guard(), flush=True)
-from nonuniform import (Basis1DNU, Granet2DTransverseE_NU, MortarStackNU,
-                        global_pair_segmat_nu, stag_fourier_projection_nu)
+from nonuniform import (
+    Basis1DNU,
+    Granet2DTransverseE_NU,
+    MortarStackNU,
+    global_pair_segmat_nu,
+    stag_fourier_projection_nu,
+)
+
 from lumenairy import PMMStack
 from lumenairy.elements.pmm.stack2d import PMM2DStackHybrid
 from lumenairy.elements.pmm.stack2d_pure import PMM2DStackPure
 from lumenairy.elements.pmm.twod import pmm_efficiency_2d_cell
 from lumenairy.elements.pmm.twod_staggered import (
-    Basis1D, Granet2DTransverseE, _global_pair_segmat,
-    _stag_fourier_projection)
+    Basis1D,
+    Granet2DTransverseE,
+    _global_pair_segmat,
+    _stag_fourier_projection,
+)
 from lumenairy.elements.rcwa import rcwa_efficiency_2d
 from lumenairy.elements.rcwa._core import uniaxial_tensor
 
@@ -285,8 +295,7 @@ if "c" in WHICH:
 
     # -- (c2) TRULY arbitrary walls (0.2371, 0.6183): the pure NU solver's
     #         own M-ladder, plus the hybrid at the SAME exact walls.
-    from lumenairy.elements.pmm.twod import (_axis_elem_counts,
-                                             _pmm2d_solve_core)
+    from lumenairy.elements.pmm.twod import _axis_elem_counts, _pmm2d_solve_core
     FA = (0.2371, 0.6183)
     xw = [FA[0] * PX, FA[1] * PX]
     yw = [FA[0] * PY, FA[1] * PY]

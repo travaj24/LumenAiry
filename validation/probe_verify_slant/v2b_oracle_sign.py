@@ -19,7 +19,6 @@ Measured here, both arms every time:
     two close identically, energy carries zero information about the sign.
 """
 import numpy as np
-
 from _lib import arm, dump  # noqa: I001
 
 from lumenairy.elements.pmm import (

@@ -25,9 +25,10 @@ import sys
 import time
 import warnings
 
-import numpy as np
 import mortar2d
-from mortar2d import guard, MortarStack2D, refine_cell
+import numpy as np
+from mortar2d import MortarStack2D, guard, refine_cell
+
 print("lumenairy:", guard(), flush=True)
 from lumenairy import PMMStack, berreman_jones_1d
 from lumenairy.elements.pmm.stack2d_pure import PMM2DStackPure
@@ -39,6 +40,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, f"f1_crossbuild_{TAG}.json")
 
 import scipy  # noqa: E402
+
 try:
     _blas = np.__config__.CONFIG["Build Dependencies"]["blas"]["name"]
 except Exception:                                          # noqa: BLE001

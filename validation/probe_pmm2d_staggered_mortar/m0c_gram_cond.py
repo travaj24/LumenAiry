@@ -5,7 +5,8 @@ plain interface does not, so the conforming identity is exact algebraically and
 rounds at ``eps * cond(G)``.  This measures ``cond_2(G1)`` / ``cond_2(G2)`` on
 the grids M1 uses, so the M1 bar is DERIVED and not fitted to the reading."""
 import numpy as np
-from mortar2d import guard, GridOps
+from mortar2d import GridOps, guard
+
 print("lumenairy:", guard())
 PX = PY = 0.9e-6
 taux, tauy = np.exp(-1j * 0.31), 1.0 + 0j

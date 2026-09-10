@@ -55,13 +55,6 @@ from lumenairy.elements.pmm._core import (  # noqa: E402
     _propagation_smatrix,
     _redheffer_star_rect,
 )
-from lumenairy.elements.rcwa._core import (  # noqa: E402
-    _interface_smatrix_general,
-    _modes_to_M,
-    _project_efficiency,
-    _propagation_smatrix_general,
-    _rcond_1_equilibrated,
-)
 from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
     _C,
     Basis1D,
@@ -76,6 +69,13 @@ from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
     _region_modes,
     _region_modes_oop,
     _tile_needs_oop,
+)
+from lumenairy.elements.rcwa._core import (  # noqa: E402
+    _interface_smatrix_general,
+    _modes_to_M,
+    _project_efficiency,
+    _propagation_smatrix_general,
+    _rcond_1_equilibrated,
 )
 
 __all__ = ["guard", "cross_mass_1d", "GridOps", "CrossOps",
