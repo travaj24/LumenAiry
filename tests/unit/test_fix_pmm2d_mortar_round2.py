@@ -621,10 +621,11 @@ def test_the_mortar_rcond_bar_has_decades_of_gap_on_both_sides():
     assert len(healthy) >= 6, healthy
     worst_healthy = min(healthy)
     bar = _pc._MORTAR_RCOND_REFUSE
-    # measured 2.5e-06 on this fixture (2.61e-07 over the full 106-solve
-    # census); the bar is 1e-12, so at least four decades below.  Four is the
-    # DECISION; the measured 5.4 decades over the full census is in the fix
-    # doc.
+    # MEASURED on this fixture (WIN / WSL): 6 solves, rcond 3.5506e-06 ..
+    # 1.7876e-05, and 2.61e-07 as the worst over the full 106-solve census in
+    # the probe.  The bar is 1e-12, so at least FOUR decades below -- four is
+    # the DECISION; the measured 5.4 decades over the full census is in the
+    # fix doc.
     assert worst_healthy > 1e4 * bar, (worst_healthy, bar, healthy)
 
     # the WRONG side, measured on the same operator family
