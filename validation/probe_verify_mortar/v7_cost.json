@@ -1,0 +1,124 @@
+{
+ "device": {
+  "q12": {
+   "MA": 7,
+   "MB": 5,
+   "Mu": 3,
+   "delta_rss_perlayer_MB": 1.34375,
+   "delta_rss_union_MB": 212.0,
+   "eig_dim": 288,
+   "rss_base_perlayer_MB": 288.8046875,
+   "rss_base_union_MB": 76.8046875,
+   "rss_peak_perlayer_MB": 290.1484375,
+   "rss_peak_union_MB": 288.8046875,
+   "wall_perlayer": 3.049555399993551,
+   "wall_ratio": 1.2397079180092727,
+   "wall_union": 2.4598982999887085
+  },
+  "q18": {
+   "MA": 10,
+   "MB": 7,
+   "Mu": 4,
+   "delta_rss_perlayer_MB": 1.83984375,
+   "delta_rss_union_MB": 0.73046875,
+   "eig_dim": 648,
+   "rss_base_perlayer_MB": 290.87890625,
+   "rss_base_union_MB": 290.1484375,
+   "rss_peak_perlayer_MB": 292.71875,
+   "rss_peak_union_MB": 290.87890625,
+   "wall_perlayer": 39.25549499999033,
+   "wall_ratio": 1.2291026534715452,
+   "wall_union": 31.938337200001115
+  },
+  "q24": {
+   "MA": 13,
+   "MB": 9,
+   "Mu": 5,
+   "delta_rss_perlayer_MB": 3.28125,
+   "delta_rss_union_MB": 0.59765625,
+   "eig_dim": 1152,
+   "rss_base_perlayer_MB": 293.31640625,
+   "rss_base_union_MB": 292.71875,
+   "rss_peak_perlayer_MB": 296.59765625,
+   "rss_peak_union_MB": 293.31640625,
+   "wall_perlayer": 229.70959399999992,
+   "wall_ratio": 1.249941493400688,
+   "wall_union": 183.77627689999645
+  },
+  "staircase_arithmetic": {
+   "sibling union N=12 vs 2/3/4": {
+    "N_union": 12,
+    "eig_dim_union": 14112,
+    "eig_dims_perlayer": [
+     392,
+     882,
+     1568
+    ],
+    "eig_work_ratio_cubed": 610.7555737369605,
+    "perlayer_matrix_GB": 0.0366363525390625,
+    "q_union": 84,
+    "union_matrix_GB": 2.9675445556640625
+   },
+   "union N=6 vs per-layer 2/3/6": {
+    "N_union": 6,
+    "eig_dim_union": 3528,
+    "eig_dims_perlayer": [
+     392,
+     882,
+     3528
+    ],
+    "eig_work_ratio_cubed": 0.9832873190162069,
+    "perlayer_matrix_GB": 0.1854715347290039,
+    "q_union": 42,
+    "union_matrix_GB": 0.1854715347290039
+   }
+  }
+ },
+ "xmass": {
+  "N2x3_M6": {
+   "apply_speedup_factored_over_dense": 0.4924193902884329,
+   "dense_MB": 0.34332275390625,
+   "dense_dim": 100,
+   "factors_MB": 0.00457763671875,
+   "identity_rel": 5.077844404871691e-16,
+   "memory_ratio": 75.0,
+   "nrep": 888
+  },
+  "N3x6_M6": {
+   "apply_speedup_factored_over_dense": 3.040386912660906,
+   "dense_MB": 3.08990478515625,
+   "dense_dim": 225,
+   "factors_MB": 0.01373291015625,
+   "identity_rel": 4.3803004213966153e-16,
+   "memory_ratio": 225.0,
+   "nrep": 98
+  },
+  "N4x6_M8": {
+   "apply_speedup_factored_over_dense": 15.573698327451032,
+   "dense_MB": 21.1025390625,
+   "dense_dim": 784,
+   "factors_MB": 0.035888671875,
+   "identity_rel": 4.515187086162348e-16,
+   "memory_ratio": 588.0,
+   "nrep": 14
+  },
+  "N6x12_M6": {
+   "apply_speedup_factored_over_dense": 40.349842918051884,
+   "dense_MB": 49.4384765625,
+   "dense_dim": 900,
+   "factors_MB": 0.054931640625,
+   "identity_rel": 2.7348091826419356e-16,
+   "memory_ratio": 900.0,
+   "nrep": 6
+  },
+  "N8x16_M6": {
+   "apply_speedup_factored_over_dense": 66.58870363256332,
+   "dense_MB": 156.25,
+   "dense_dim": 1600,
+   "factors_MB": 0.09765625,
+   "identity_rel": 3.420726725861311e-16,
+   "memory_ratio": 1600.0,
+   "nrep": 3
+  }
+ }
+}
