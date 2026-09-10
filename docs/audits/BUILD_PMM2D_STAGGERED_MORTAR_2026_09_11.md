@@ -263,10 +263,16 @@ shows is the device, not the interface.
 Against a scalar-`J` reimplementation of each of the four sites, SAME BUILD,
 by sha256 of the raw bytes.
 
-| arm | what | WIN | WSL |
-|---|---|---|---|
+| arm | what | count | WIN | WSL |
+|---|---|---|---|---|
 | 1-D, `walls = N` over 6 grids `(d, N, M)` x 8 families (`mass<til\|til>`, `mass<B\|B>`, eps-weighted mass, `stiff`, `mixed`, both `_global_pair_segmat` refs, `_stag_fourier_projection` at `alpha0 = 0.31`) | 48 hashes | **0 mismatches, worst `|d| = 0.0e+00`** | same |
-| 2-D assembled pencils `Rmat / Lmat / Stt / Schur / Agen / Bgen`, 3 grids x 5 cell kinds (scalar, in-plane tensor, out-of-plane, magnetic, slanted) | 34 hashes | **all equal** | same |
+| 2-D assembled pencils `Rmat / Lmat / Stt / Schur / Agen / Bgen`, 3 grids x 5 cell kinds (scalar, in-plane tensor, out-of-plane, MAGNETIC, SLANTED), against the PRE-CHANGE module swapped in on disk | 34 hashes | **all equal** | -- |
+| the same pencils, 2 grids x 3 cell kinds, against an IN-PROCESS scalar-`J` reimplementation -- what the shipped test runs, so the claim stays live | 12 hashes | **all equal** | same |
+
+The first 2-D row was a one-off check made by swapping `twod_staggered.py` for
+its `git show HEAD:` version and re-hashing; it is the wider net (it is the only
+arm that covers the magnetic and slanted assemblies) but it cannot live in the
+suite.  The second row is the durable form.
 
 ### 4.2 N2 -- the ULP case, explained
 
@@ -645,7 +651,8 @@ Regression suite re-run at the end of the build, all green:
 | suite | result |
 |---|---|
 | `test_pmm2d_staggered_slant.py`, `..._oop.py`, `..._oop_block_eig.py`, `..._anisotropic.py`, `..._magnetic.py`, `..._wood_list.py`, `test_v5_12_0_pmm2d_staggered.py`, `test_v5_21_pmm2d_staggered_oblique.py`, `test_v5_14_0_pmm2d_stack.py`, `test_p2c_pmm2d_stack_cascade.py` | **299 passed** in 960 s |
-| `test_audit_dynameta_consumer_api_2.py` (the `PMM2DStackPure` consumer gate) | see S13 |
+| `test_audit_dynameta_consumer_api_2.py` (the `PMM2DStackPure` consumer gate; heavy, run once) | **12 passed** in 1391 s |
+| the two NEW files on the **WSL** build | **47 passed** in 273 s -- every derived bar holds on both arms |
 | `ruff check lumenairy/ tests/` | clean |
 
 ---
