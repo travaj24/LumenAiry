@@ -12,10 +12,15 @@ import warnings
 
 import numpy as np
 
-from lumenairy import PMMStack
-
-assert os.environ.get("PYTHONPATH", "").replace("\\", "/").startswith("/c/tmp/lum_sliver") or True
 import lumenairy
+from lumenairy import PMMStack
+from lumenairy.elements.pmm import stack as _ps
+
+# Every probe that imports this one MEASURES THE PRE-FIX BEHAVIOUR, so the
+# shipped O-11 refusal is DISARMED at import through its own fail-before
+# switch.  p8_guard.py toggles it back on, deliberately, per row.
+_ps.PMM_SLIVER_GUARD = False
+
 print("lumenairy:", lumenairy.__file__, lumenairy.__version__, flush=True)
 
 warnings.simplefilter("ignore")

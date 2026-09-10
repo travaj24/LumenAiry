@@ -16,12 +16,17 @@ import os
 import warnings
 
 import numpy as np
+from p1_repro import A0, B0, EPS_H, EPS_P, PX, THETA, WL, dz  # noqa: F401
 
 import lumenairy
 from lumenairy.elements.pmm._core import (
-    _build_sem_tensor_segments, _interface_smatrix, _pmm_union_grid,
-    _sem_modes_tensor, _sem_modes_uniform, _uniform_geo_eig)
-from p1_repro import A0, B0, EPS_H, EPS_P, PX, THETA, WL, dz  # noqa: F401
+    _build_sem_tensor_segments,
+    _interface_smatrix,
+    _pmm_union_grid,
+    _sem_modes_tensor,
+    _sem_modes_uniform,
+    _uniform_geo_eig,
+)
 
 print("lumenairy:", lumenairy.__file__, flush=True)
 warnings.simplefilter("ignore")

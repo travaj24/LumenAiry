@@ -35,10 +35,17 @@ def cell(N, i0, i1):
     return c
 
 
+# The pure staggered cascade solves an eig of size ~ (4 M^2 Nx Ny), so the
+# grid here is deliberately COARSE: the claim being measured is GEOMETRIC (the
+# common (Nx, Ny) lattice is uniform, so its aspect ratio is 1 and the finest
+# expressible wall offset is one whole cell), and the solve is the confirming
+# arm, not the claim.
+
+
 def pure(N, off, M):
     s = PMM2DStackPure(PX, n_modes=M, n_orders=5)
-    s.add_layer(DZ, eps_cell=cell(N, 4, N - 4))
-    s.add_layer(DZ, eps_cell=cell(N, 4 - off, N - 4 + off))
+    s.add_layer(DZ, eps_cell=cell(N, 1, N - 1))
+    s.add_layer(DZ, eps_cell=cell(N, 1 - off, N - 1 + off))
     s.set_source(WL, theta=0.15, phi=0.0)
     o, R, T = s.solve(jones=False)[:3]
     return np.asarray(R), np.asarray(T)
@@ -67,11 +74,11 @@ if __name__ == "__main__":
               f"expressible wall offset {1.0 / N:.4g}", flush=True)
     # (2) the answer + closure at a ONE-CELL wall offset (the tightest either
     #     API can express), at two modal counts.
-    for name, fn, Ms in (("hybrid", hybrid, (7, 9)), ("pure", pure, (5, 6))):
+    for name, fn, Ms in (("hybrid", hybrid, (7, 9)), ("pure", pure, (4, 5))):
         res = []
         for M in Ms:
             t0 = time.time()
-            R, T = fn(12, 1, M)
+            R, T = fn(*(4, 1, M) if name == "pure" else (12, 1, M))
             tot = float(np.real(R).sum(-1).max() + np.real(T).sum(-1).max())
             res.append((M, R, T, tot))
             print(f"{name} M={M}: R+T = {tot:.10f}  ({time.time() - t0:.1f} s)",

@@ -12,10 +12,10 @@ import os
 import warnings
 
 import numpy as np
+from p1_repro import PX, frames, orc
 
 import lumenairy
 from lumenairy.elements.pmm import _core as pc
-from p1_repro import PX, frames, orc
 
 print("lumenairy:", lumenairy.__file__, flush=True)
 warnings.simplefilter("ignore")

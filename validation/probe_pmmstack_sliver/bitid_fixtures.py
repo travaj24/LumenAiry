@@ -17,7 +17,6 @@ hashes their raw bytes.
 """
 import numpy as np
 
-import lumenairy as la
 from lumenairy.elements.pmm import PMMStack
 from lumenairy.elements.rcwa import uniaxial_tensor
 

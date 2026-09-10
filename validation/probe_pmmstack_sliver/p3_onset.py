@@ -11,10 +11,10 @@ import sys
 import warnings
 
 import numpy as np
-
-import lumenairy
 from p1_repro import PX, frames, orc
 from p2_mech import diag
+
+import lumenairy
 
 print("lumenairy:", lumenairy.__file__, flush=True)
 warnings.simplefilter("ignore")

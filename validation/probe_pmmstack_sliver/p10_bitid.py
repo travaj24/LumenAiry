@@ -11,10 +11,9 @@ import time
 import traceback
 
 import numpy as np
+from bitid_fixtures import FIXTURES
 
 import lumenairy
-
-from bitid_fixtures import FIXTURES
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
