@@ -7524,6 +7524,19 @@ def apply_real_lens_traced(
         evaluator on a large-N call.  The three post-swap ray-density
         self-checks are whole-grid reductions and run on the finished
         field on either path.
+
+        **COST** (v5.44.1, re-measured 2026-09-11 at N=4096 / sub=32 /
+        dx=1.5 um, AUTO band height, inverse-map cache cleared per call):
+        banding itself is free -- the banded call is 0.97x-1.08x the
+        whole-grid call at the SAME inversion -- but a banded SCREEN call
+        at the shipped default costs about 1.6x what it did on v5.43.0,
+        because it now runs the evaluator instead of the incumbent it used
+        to select silently (18.5 s vs 11.9 s for the same call forced back
+        onto the incumbent with ``inverse_map=False``, which returns
+        v5.43.0's bits exactly).  That price is the evaluator's whole-grid
+        DOMAIN TEST (~8.9 s), not its channel evaluations (~0.9 s); pass
+        ``inverse_map=False`` to buy the old speed back at the old, less
+        faithful, answer.
     amplitude_model : {'screen', 'ray_density'}, default 'screen'
         Which model supplies the exit-plane AMPLITUDE (the phase is the
         ray-traced OPL either way).
@@ -12130,17 +12143,33 @@ def apply_real_lens_traced(
             _ch_all = [_CH.CH_X_IN, _CH.CH_Y_IN, _CH.CH_OPL, _CH.CH_DET_J]
             _ch_p2 = [_CH.CH_X_IN, _CH.CH_Y_IN, _CH.CH_OPL]
 
-            def _eval_band(r0, r1, chans):
+            def _eval_band(r0, r1, chans, ok=None):
                 """The model's channels and its domain mask on rows
                 ``r0:r1``.  ``domain_mask(axes=(x, _y_ax[r0:r1]))`` is the
                 screened hull test on the band's own axis pair -- a per-pixel
                 test whose radial screens are global constants, so a band
-                slice is bit-identical to the full evaluation."""
+                slice is bit-identical to the full evaluation.
+
+                ``ok`` (v5.44.1, VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D6)
+                hands back a mask ALREADY computed for these very rows, which
+                is what the two-pass ray-density branch has: pass 1 evaluates
+                CH_X_IN / CH_Y_IN and takes the mask, pass 2 evaluates the
+                same two channels again (``eval_into`` writes each channel
+                independently, which is what makes the banded field
+                bit-identical in the first place) and used to recompute the
+                IDENTICAL mask.  MEASURED at N=4096, sub=32: the domain test
+                ran over 2.00 grids of pixels instead of 1.00 and cost
+                15.05 s of the call's 31.2 s, against 8.83 s for the
+                whole-grid arm -- 6.2 s of the banded route's 6.5 s penalty,
+                and none of it the 7/4 evaluation (that is 0.84 s).  The cache
+                is one bool grid, N^2 bytes = 1/8 of a float64 grid."""
                 Xb = np.broadcast_to(x[None, :], (r1 - r0, N))
                 Yb = np.broadcast_to(_y_ax[r0:r1, None], (r1 - r0, N))
                 outs = [np.empty((r1 - r0, N), dtype=np.float64)
                         for _ in chans]
                 _imap.eval_into(Xb, Yb, outs, channels=chans)
+                if ok is not None:
+                    return Xb, Yb, outs, ok
                 ok_b = _imap.domain_mask(Xb, Yb, outs[0], outs[1],
                                          axes=(x, _y_ax[r0:r1]),
                                          relax=_im_relax)
@@ -12154,6 +12183,8 @@ def apply_real_lens_traced(
                 # ---- pass 1: |det J|, the finite mask, and the census --------
                 _absdet = np.empty((N, N), dtype=np.float64)
                 _fin = np.empty((N, N), dtype=bool)
+                # the domain mask pass 2 would otherwise recompute (D6).
+                _okall = np.empty((N, N), dtype=bool)
                 _any_fin = False
                 _amin = np.inf
                 _amax = -np.inf
@@ -12164,6 +12195,7 @@ def apply_real_lens_traced(
                     r1 = min(N, r0 + cr)
                     _Xb, _Yb, _outs, _ok_b = _eval_band(r0, r1, _ch_all)
                     _opl_b, _detj_b = _outs[2], _outs[3]
+                    _okall[r0:r1] = _ok_b
                     _n_out += int(_ok_b.size - _ok_b.sum())
                     _opl_b = np.where(_ok_b, _opl_b, np.nan)
                     _absdet_b = np.abs(_detj_b)
@@ -12209,7 +12241,9 @@ def apply_real_lens_traced(
             # ---- pass 2 (or the only pass): entrance, OPL, Step 3, swap ------
             for r0 in range(0, N, cr):
                 r1 = min(N, r0 + cr)
-                _Xb, _Yb, _outs, _ok_b = _eval_band(r0, r1, _ch_p2)
+                _Xb, _Yb, _outs, _ok_b = _eval_band(
+                    r0, r1, _ch_p2,
+                    ok=(_okall[r0:r1] if _rd_swap_band else None))
                 _xin_b, _yin_b, _opl_b = _outs
                 if not _rd_swap_band:
                     _n_out += int(_ok_b.size - _ok_b.sum())
@@ -12266,7 +12300,7 @@ def apply_real_lens_traced(
                 del _outs, _xin_b, _yin_b, _opl_b, _ok_b
                 E_out[r0:r1] = band
             if _rd_swap_band:
-                del _absdet, _absin
+                del _absdet, _absin, _okall
             _imap_rec['n_out_of_domain'] = int(_n_out)
             if _imap_out is not None:
                 _imap_out['n_out_of_domain'] = int(_n_out)

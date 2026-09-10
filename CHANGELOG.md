@@ -331,6 +331,132 @@ anchor, so a CONSTANT-tile slanted layer (a genuine no-op) still solves, and the
 VERTICAL control on the same traced thickness still solves -- the refusal is
 about the shear, not about the API.
 
+### Fixed -- a complex64 carrier chain no longer builds a full-grid complex128 phasor per call
+
+`carrier._build_carrier_phase` -- the SEVENTH reference-phase construction, and
+the one the 5.44.0 "complex64 THROUGH the carrier chain" change did not give a
+`dtype=` -- is reached from `carrier_referenced_envelope` and
+`carrier_referenced_reconstruct`, so a complex64 chain still materialised one
+FULL-GRID complex128 phasor per call: 5 per two-group chain, 16 MiB each at
+N=1024 and **4.29 GB each at N=16384**.  Reported as D2 of
+`docs/audits/VERIFY_LENS_BANDED_COMPLEX64_2026_09_10.md`; it is the residual of
+the very leak the audit's row 12 was declared closed on.
+
+`dtype=None` / `complex128` is the shipped whole-grid `np.exp`,
+BYTE-IDENTICAL; `complex64` takes the `_phasor_rows` route on the radial
+branch, and on the ASTIGMATIC branch a new `_narrow_rows` stores the SAME
+per-axis product `px[j] * py[i]` one row band at a time.  Both public helpers
+pass the dtype of the field the factor multiplies.
+
+* **Measured** (whole-call `tracemalloc` peak of ONE helper call, warm, this
+  box, numpy 2.4 / py 3.14):
+
+  | N | carrier | complex128 arm | complex64 before | complex64 after |
+  |---|---|---|---|---|
+  | 2048 | scalar | 224.03 MiB | 224.03 MiB | **189.03 MiB** (-15.6 %) |
+  | 2048 | astigmatic | 128.00 | 128.00 | **64.00** (-50 %) |
+  | 4096 | scalar | 896.06 | 896.06 | **640.06** (-28.6 %) |
+  | 4096 | astigmatic | 512.00 | 512.00 | **256.00** (-50 %) |
+
+  The complex64 arm's peak was EXACTLY the complex128 arm's before the fix, on
+  every case -- the audit's "requesting complex64 saved 0.0 GB", still true of
+  this call site at 5.44.0.  Below N ~ 1414 the `_PHASOR_BAND_BYTES` = 32 MB
+  band IS the grid, so there is no transient saving there, only the narrower
+  output.
+* **Nothing moved.**  All 16 probe cases return the same field hash on both
+  dtypes; the complex128 carrier chain is bit-identical on all 9 fixtures the
+  verification hashed (`577e209a…`, `ae7983bc…`, `c6dda90c…`, `4cd9552c…`,
+  `ab751a22…`, `65b759ba…`, `5baf422b…`, `4c5d9fd1…`, `b3d0a0b2…`) including
+  every per-stage `dx` / `R_out`; and the complex64 two-group chain's field is
+  unchanged to all 16 digits (rel L2 vs the complex128 arm
+  `1.157936782559319e-07` before and after, against a 2e-05 field bar; rel
+  power `7.688986734224147e-09` against the campaign's 4e-05 energy bar).
+  Full-grid complex128 phasor returns on a complex64 chain: **5 -> 0**.
+* `tests/unit/test_mixed_precision_carrier_helpers.py`, 10 new cases,
+  two-sided: no reference-phase helper returns a full-grid complex128 array on
+  a complex64 field AND the complex64 factor equals the whole-grid complex128
+  factor narrowed once (`np.array_equal`, both branches); `dtype=None`,
+  `complex128` and the public helper stay `np.array_equal`; and a
+  `tracemalloc` bar at N=2048 (`p128 - p64 >= 4 N^2` bytes = 16.8 MiB against
+  a measured 35.0 MiB and a pre-fix gap of exactly 0).
+
+### Fixed -- the three ray-density self-check warnings name the CALLER again
+
+The energy / halo / retained-band notices moved into the nested
+`_ray_density_self_checks` closure in 5.44.0 and kept `stacklevel=2`, which is
+one frame short there: on BOTH the banded and the whole-grid path they were
+attributed to `_lens_traced.py` instead of to the caller of
+`apply_real_lens_traced`, which is what v5.43.0 reported, what
+`warnings.filterwarnings(module=...)` selects on, and what the default filter's
+per-location dedup registry is keyed by (so a second call from a different
+caller module no longer re-warned).  `2 -> 3`; the two sibling closures already
+carried 3.  Reported as D1 of the same verification.
+
+Measured with every notice driven over its threshold, at band heights 0 / 32 /
+7: **6 of 9 warnings attributed to the library -> 0 of 9**, field hash
+`a78a7ff1533ade9e24e9f84a` unchanged on every arm.  Pinned by
+`tests/unit/test_banded_ray_density_and_inverse_map.py` (3 cases; fail-before
+verified -- 3 fail at `stacklevel=2`, 3 pass at 3).
+
+### Fixed -- the banded RAY-DENSITY route stopped evaluating the domain mask twice
+
+Pricing the 5.44.0 banded route (verification D6) turned up one cost that is
+NOT the route change and not the evaluator: the two-pass band loop on the
+ray-density branch was computing `InverseCharacteristic.domain_mask` TWICE per
+band.  Pass 1 evaluates `CH_X_IN` / `CH_Y_IN` and takes the mask for the
+caustic census; pass 2 evaluates the same two channels again and re-derived
+the IDENTICAL mask from them.
+
+Pass 1 now stores its mask in one bool grid (`N^2` bytes = 1/8 of a float64
+grid) and pass 2 takes it.  Byte-identical by construction -- `eval_into`
+writes each channel independently, which is the same property that makes the
+banded field bit-identical in the first place.
+
+* **Measured** (N=4096, sub=32, dx=1.5 um, AUTO band height, per-stage
+  instrumentation, inverse-map cache cleared per call):
+
+  | ray-density route | `domain_mask` | pixels tested | `eval_into` | banded / whole-grid |
+  |---|---|---|---|---|
+  | whole-grid | 8.83 s | 1.00 grids | 1.03 s (4.00 ch/px) | -- |
+  | banded, BEFORE | **15.05 s** (32 calls) | **2.00 grids** | 1.87 s (7.00 ch/px) | **1.261** |
+  | banded, AFTER | **6.61 s** (16 calls) | **1.00 grids** | 1.87 s (7.00 ch/px) | **1.056** |
+
+  The redundant pass cost **6.22 s of the banded route's 6.46 s penalty** at
+  this size; the 7/4 evaluation the CHANGELOG named cost 0.84 s of it.  (The
+  before and after runs sit in different box-load regimes -- the unchanged
+  whole-grid arm reads 24.747 s and 20.179 s across them -- so the ratio, and
+  the pixel count, are the comparable quantities, not the seconds.)
+* **Byte-identical, checked against the verification's own fixtures**: its
+  `v2_banded_claim.py` re-run in all four regimes (plain, `--forced`,
+  `--fold`, `--medianbite`) gives **864 comparisons, 0 mismatches**, and every
+  band hash equals the value the verification recorded -- including
+  `--medianbite`, where the caustic census median reaches every pixel.
+* The three post-swap self-checks, `n_out_of_domain`, `gate_open` / `engaged`
+  and the full warning list are equal at every band height, as before.
+
+### Fixed -- niche C15's private `probe_rc` diagnostic is filled on the row-band path
+
+`_imap_out['probe_rc'] = (rows, cols)` asks for the finalised `opl_map` -- and
+`ard_map` where one was built -- sampled at exactly those pixels; it is C15's
+independent oracle for deciding which INVERSION is faithful.  The block that
+fills it sits AFTER the row-band assembly's `return`, so a banded call filled
+nothing (D7).  That was inert before v5.44 -- a banded call was always the
+coarse-Newton incumbent, and the probe exists to compare inversions -- but at
+the shipped default a banded call IS the evaluator now, so a C15-style
+comparison at `N >= 4096` with AUTO banding got silence exactly where it needed
+the model's OPL.
+
+The band path has no full-grid map to sample, so the same M pixels are gathered
+band by band, in probe order, and handed back under the same three keys.  Same
+contract as the whole-grid block: opt-in, diagnostic-only, nothing reads it
+back, only the M values retained -- a call that does not ask pays one
+`is None` test per band.  Measured at N=384: `probe_opl` absent on a banded
+call before, present after and `np.array_equal` to the whole-grid arm's
+(`[-7.064440854777966e-05, -1.4704248941185464e-05, -5.333147337716495e-07]`),
+with the whole-grid values unchanged.  Pinned on three routes
+(screen+evaluator, ray-density+evaluator, ray-density+coarse-Newton), each
+also asserting the returned FIELD is unmoved by asking.
+
 ### Documentation
 
 * `PMM2DStackPure`'s module docstring now records the two measured SCOPE costs
@@ -346,6 +472,45 @@ about the shear, not about the API.
   margin; the cross-engine ladder is first-to-last rather than rung-by-rung; the
   `conj / none` range `1.7878 .. 1.9920` is stated so the 1.5 bar's origin is
   visible).  No assertion loosened; three tightened into decisions.
+* **`_fourier_upsample_crop`'s recorded rationale was wrong, and the behaviour
+  it describes is KEPT** (verification D3).  "numpy's FFT is still double-only,
+  so a complex64 input is transformed in complex128 and NARROWED back on
+  return" has been false since numpy 2.0, which has a single-precision FFT:
+  BOTH transforms of the pair run in complex64 for a complex64 envelope.
+  DECIDED BY MEASUREMENT on a real two-group traced carrier chain with an exact
+  focus readout -- the stage that actually calls the crop: the shipped
+  single-precision pair lands at rel L2 **3.112e-07** and rel total power
+  **2.520e-07** against the complex128 chain (64x and 159x under the 2e-05
+  field / 4e-05 energy bars), while forcing the pair into complex128 and
+  narrowing ONCE lands at 3.156e-07 / 2.334e-07 -- **not better**, because on a
+  complex64 chain the error is dominated by the complex64 STORAGE of the
+  envelope.  Directly on the crop the cost is 2.6 x `eps32 x peak` against a
+  narrow-once reference and grows only as `~sqrt(log2 N)` (rel L2 1.454e-07 /
+  1.472e-07 / 1.545e-07 / 1.674e-07 at `n_fine` = 256 / 512 / 1024 / 2048).
+  Two rationale comments in `lumenairy/propagators/carrier.py` and the
+  docstring of `test_upsample_crop_keeps_the_envelope_dtype` are corrected; no
+  behaviour changed.
+* **`tests/unit/test_mixed_precision_carrier_helpers.py`: four recorded
+  measurements that did not reproduce, and two bars three decades above their
+  measurements** (verification D4 / D5).  Re-measured on BOTH builds (Windows
+  py 3.14.6 / numpy 2.4.4 and WSL py 3.12.3 / numpy 2.4.6, identical to every
+  figure): the two fixtures' phase arguments are **22.34** and **820.19 rad**
+  (recorded 3.6e+02 / 1.3e+04), the float32-argument control errors are
+  **9.8719e-07** and **3.0523e-05** (recorded 1.5e-05 / 4.9e-04), and the
+  ratios are **23.5x** and **727.0x** (recorded 360x and 11 600x) -- so the 10x
+  bar carries a 2.35x margin, not the 36x the docstring implied, and the
+  docstring now says so together with the reason (the control only SEPARATES
+  above ~2e+03 rad, and both shipped fixtures sit below that).  The two 1e-4
+  bars are tightened to **1e-6**: the exact focus readout measures 9.8995e-08
+  (Win) / 9.8841e-08 (WSL) and the one-group chain 9.4427e-08 on both, so the
+  margins go 1010x / 1059x -> **10.1x / 10.6x**, two-sided against a build
+  spread of 0.16 % and 4e-08 %.  The readout test, whose docstring recorded no
+  number at all, now records both builds'.  The crop test cited 2.0e-07 "at
+  N=2048" for a test that runs N=512; it now cites the 1.7151e-07 it measures
+  there.
+* `docs/audits/FIX_LENS_5440_FOLLOWUPS_2026_09_11.md` records all seven
+  follow-ups with both builds' tables, the probes
+  (`validation/probe_fix_lens_5440/`) and the bit-identity ledger.
 
 ## [5.44.0] — 2026-09-10
 
@@ -658,6 +823,48 @@ gone.
   coarse route and ~10 % higher on the evaluator route (the 7/4 evaluation).
   Scaled to the audit's 16384 fine leg the route's transient drops from
   ~64 GB to ~8 GB.
+* **CORRECTION 2026-09-11 to the wall-time sentence in the bullet above.**
+  (`docs/audits/VERIFY_LENS_BANDED_COMPLEX64_2026_09_10.md` D6, re-measured in
+  `docs/audits/FIX_LENS_5440_FOLLOWUPS_2026_09_11.md` sec 3.  The memory
+  numbers stand -- 22.6 -> 10.2 grids reproduces on both builds.)
+  "Wall time is neutral on the coarse route and ~10 % higher on the evaluator
+  route (the 7/4 evaluation)" is right about the ~10 % for the SCREEN branch
+  only, it does not price the call the change actually alters, and the REASON
+  it gives is wrong.  Re-measured at N=4096 / sub=32 / dx=1.5 um, AUTO band
+  height, cache cleared per call:
+
+  | | whole-grid | AUTO-banded | banded / whole |
+  |---|---|---|---|
+  | screen, 5.44.0 (evaluator) | 19.006 s | 18.524 s | **0.975** |
+  | screen, v5.43.0 (banded = incumbent) | 18.148 s | **10.950 s** | 0.603 |
+  | screen, 5.44.0 forced to the incumbent (`inverse_map=False`) | -- | **11.856 s** | -- |
+  | ray-density, 5.44.0 | 24.747 s | 31.208 s -> **21.306 s** after the D6 fix above | 1.261 -> **1.056** |
+
+  1. **Banding is free.**  The banded call is 0.97x-1.08x the whole-grid call
+     at the SAME inversion (1.081 at N=2048, which is where the "~10 %" came
+     from).  What costs is the INVERSION, and the entry does not price it.
+  2. **The banded SCREEN call at the shipped default is ~1.6x what it was**,
+     because it now runs the evaluator instead of the incumbent it used to
+     select silently.  The control that proves this is not a model: forcing
+     5.44.0's banded call back onto the incumbent returns v5.43.0's banded
+     field **bit for bit** (`66b9384477cf8a9ca1844c6a`) and lands on
+     v5.43.0's time.  (The verification's idle-box reading of the same change
+     was 10.529 -> 21.890 s, +108 %; this box was ~80 % busy with other work,
+     so read the ratios, not the seconds.)
+  3. **The 7/4 evaluation is not the price.**  The screen branch evaluates
+     3.000 channels per exit pixel in ONE pass, banded and whole-grid alike,
+     and `eval_into` is 0.88 s of the banded call's 18.52 s.  The evaluator
+     route's cost is its whole-grid DOMAIN TEST -- the screened landing-hull
+     plus entrance-radius test over every exit pixel -- at 8.9 s, plus 0.4 s
+     of model build; the coarse-Newton incumbent runs no domain test at all
+     and pays 1.7 s of `map_coordinates` instead.
+  4. On the RAY-DENSITY branch the 7/4 evaluation costs 0.84 s; the rest of
+     that branch's banded penalty was the duplicated domain mask fixed under
+     `[Unreleased]` above.
+
+  `apply_real_lens_traced`'s `sag_chunk_rows` docstring now carries this cost
+  and names `inverse_map=False` as the way to buy the old speed back at the
+  old, less faithful, answer.
 * **Not this change's, but visible next to it:** `preserve_input_phase=
   'remap'`'s residual builder de-chirps by the niche-C6 eikonal in bands of
   `4194304 // N` rows -- the WHOLE grid below N=2048 -- and
