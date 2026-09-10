@@ -21,6 +21,7 @@ PYTHONPATH=$PWD OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 | `r5_conv.py` | `conv nomortar` | the DECIDING D1 measurement: the `M = 4..8` ladder at six wall separations -- does it stop converging? |
 | `r6_bitid.py` + `r6_compare.py` | -- | 33 fixtures / 87 sha256 hashes, run twice (this tree and a pristine `git archive HEAD` tree) |
 | `r7_allhost.py` | `pure nomortar taper` | the mortar's OWN error: three ALL-HOST layers on three different grids against the ANALYTIC slab, plus the no-mortar control and the narrowest segment `add_tapered_pillar` actually builds |
+| `r8_twobuild.py` | -- | bookkeeping honesty: re-measures, on BOTH builds, every number the SHIPPED gates quote in a comment.  24 scalars, agreeing to better than 1e-11 relative.  Run it when a gate's stated reading changes |
 
 `r1_onset.json` is the `cond`/`shared` run; `r1_onset_ladder.json` is a
 superseded first cut of the onset instrument (its reference's own `M`-ladder
