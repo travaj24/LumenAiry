@@ -105,6 +105,8 @@ def test_fail_before_the_pre_fix_path_returns_a_wrong_energy_violating_answer():
     physical shift nor energy-conserving.  The MAGNITUDE is derived from this
     build's own continuity slope, not pinned."""
     ref = _solve(0.0, 14, guard=False)
+    # the reference closes at 3.2e-14 on both builds; 1e-6 is 8 decades of
+    # headroom and is a PREMISE check, not the claim.
     assert abs(_total(ref) - 1.0) < 1e-6, "the delta -> 0 reference must close"
 
     # the continuity slope, measured here: three deltas far above the hazard.
@@ -385,8 +387,13 @@ def test_the_spurious_wavenumber_predictor_matches_the_measured_spectrum():
         _W, _V, _lam, q = _sem_modes_tensor(m, k0, kx0, True)
         consts.append(float(np.abs(q).max()) * k0 * J
                       / (deg * (deg + 1) / 4.0))
-    assert 0.55 < min(consts) and max(consts) < 0.80, consts
-    assert max(consts) / min(consts) < 1.15, consts
+    # MEASURED here, at this fixture's w = 1e-4, both builds 2026-09-11:
+    # 0.6736 / 0.6518 / 0.6478 / 0.6453 / 0.6424, spread 1.0485.  The band is
+    # +-20% of the quoted 0.65 (3.4x the observed 5.8% span) and the spread bar
+    # is 2x the observed one -- it is the CONSTANCY across degree that makes
+    # this a predictor, so the spread is the load-bearing half.
+    assert 0.52 < min(consts) and max(consts) < 0.78, consts
+    assert max(consts) / min(consts) < 1.10, consts
 
 
 def test_the_wavenumber_the_message_quotes_is_the_one_the_solve_actually_has():

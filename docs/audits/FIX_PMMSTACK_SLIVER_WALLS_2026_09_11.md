@@ -120,8 +120,11 @@ asymmetric snap of S2 note 3.
 So `|q|max ≈ 0.65 · N(N+1)/4 / (k0 J)` predicts the sliver's spurious spectrum
 from geometry and degree alone, with no eig. It is what the refusal quotes,
 and `test_the_spurious_wavenumber_predictor_matches_the_measured_spectrum`
-re-derives it on the running build (it requires 0.55–0.80 with a
-max/min spread under 1.15 — measured 1.048).
+re-derives it on the running build at the guard's own `w` = 1e-4 — measured
+there, both builds, 0.6736 / 0.6518 / 0.6478 / 0.6453 / 0.6424, spread
+**1.0485** — against a ±20% band and a spread bar of 1.10 (3.4× and 2× the
+observed). The CONSTANCY across degree is the load-bearing half: that is what
+makes it a predictor rather than a fit.
 
 `N(N+1)/4` is the largest entry of the GLL differentiation matrix, so the
 constant says the extreme eigenvalue of the sliver element's `1/J`-scaled
