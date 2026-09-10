@@ -943,15 +943,26 @@ class PMMStack:
         # one it did not snap.  There are two reports, neither of them that:
         #   * `_pmm_union_grid`'s warning -- fires when the snap MERGES pairs,
         #     and names the pairs and the max wall displacement;
-        #   * `_sliver_refusal` (O-11, below) -- RAISES on a sliver LEFT in the
-        #     grid, but only in CONJUNCTION with super-unity above
-        #     `_STACK_SUPERUNITY_BAR` on a provably passive stack.  A sliver
-        #     left in the grid whose answer still closes is not reported at
+        #   * `_sliver_refusal` (O-11, below) -- RAISES on a sliver LEFT in
+        #     the grid, but only when super-unity above `_SLIVER_TRIGGER_BAR`
+        #     on a provably passive stack is ATTRIBUTED to it by
+        #     `_sliver_arbiter`: one re-solve on the `min_feature` grid the
+        #     refusal prescribes, which must both clear the super-unity and
+        #     move the answer far past the snap's own displacement (round 2,
+        #     2026-09-11).  Where the arbiter says the sliver is NOT the cause
+        #     the solve returns under the plain super-unity warning, which
+        #     then says so; where the arbiter cannot run the round-1 decision
+        #     stands.  A sliver whose answer still closes is not reported at
         #     all: that is the deliberate trade of S4.2 of
         #     docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md (a plain
-        #     report would fire on correct solves), and its measured cost is
-        #     the false-negative census in
-        #     docs/audits/VERIFY_PMMSTACK_SLIVER_WALLS_2026_09_11.md S4.
+        #     report would fire on correct solves), and its measured cost --
+        #     8 rows in 660 under round 1, 4 under round 2 -- is the
+        #     false-negative census in
+        #     docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md S4;
+        #   * the WITHIN-LAYER warning (`_within_layer_hazard`) -- a
+        #     sliver-thin feature ONE layer owns is the geometry the caller
+        #     asked for and no `min_feature` removes it, so it is warned
+        #     about, never refused.
         self.min_feature = (float(period) * 1e-5 if min_feature is None
                             else float(min_feature))
         # 'per-layer' (audit R-6, 2026-07-28): each layer is assembled on its

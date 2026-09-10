@@ -40,6 +40,8 @@ A0, B0 = 0.27865, 0.62505
 DZ = 0.32e-6 / 4
 NO_SNAP = P * 1e-12
 TRIG = 1e-3
+CLOSURE = 1e-5
+MOVE = 100.0
 
 
 def build(d, deg, nsub, nsup, th, nl=2, eps=EP, mf=NO_SNAP):
@@ -143,10 +145,19 @@ def main():
                 row["move0"] = None if snap is None else err0(cur, snap)
                 row["same_shape"] = (None if snap is None
                                      else bool(len(cur[0]) == len(snap[0])))
-                row["attributed"] = bool(snap is not None
-                                         and snap[3] <= 1.0 + TRIG)
+                # the CLOSURE criterion alone (the verification's measured
+                # discriminator) ...
+                row["closure_only"] = bool(snap is not None
+                                           and snap[3] <= 1.0 + TRIG)
+                # ... and the SHIPPED decision, which is closure AND move.
+                row["attributed"] = bool(
+                    snap is not None
+                    and max(snap[3] - 1.0, 0.0) <= CLOSURE
+                    and row["move_both"] is not None
+                    and row["move_both"] > MOVE * row["w_wide"])
             else:
                 row["attributed"] = False
+                row["closure_only"] = False
             rows.append(row)
         if tried % 162 == 0:
             print(f"  {tried} configs ({time.time() - t0:.0f} s)", flush=True)
@@ -160,7 +171,9 @@ def main():
     print(f"  ROUND 1 false positives : {len(fp1)} "
           f"({100.0 * len(fp1) / max(len(rows), 1):.1f}% of scored, "
           f"{100.0 * len(fp1) / max(len(right), 1):.1f}% of correct)")
-    print(f"  ROUND 2 false positives : {len(fp2)}")
+    fp_c = [r for r in right if r["closure_only"]]
+    print(f"  ROUND 2 false positives : {len(fp2)}  (closure criterion alone "
+          f"would leave {len(fp_c)})")
     print(f"  arbiter FIRED on        : {len(trig_right)} of {len(right)} "
           f"correct rows ({100.0 * len(trig_right) / max(len(right), 1):.1f}%)"
           f", {sum(1 for r in rows if r['triggers'])} of {len(rows)} total")
@@ -183,6 +196,7 @@ def main():
                        rows=rows, tried=tried,
                        n_right=len(right), n_fp_round1=len(fp1),
                        n_fp_round2=len(fp2),
+                       n_fp_closure_only=len(fp_c),
                        arbiter_fired_on_correct=len(trig_right),
                        arbiter_mean_s=float(np.mean(arb_times))
                        if arb_times else None,

@@ -1,0 +1,144 @@
+{
+ "meta": {
+  "lumenairy": "C:\\tmp\\lum_sliver2\\lumenairy\\__init__.py",
+  "python": "3.14.6",
+  "numpy": "2.4.4"
+ },
+ "solve_paths": [
+  {
+   "path": "classical",
+   "delta": 0.0001,
+   "probed": 1,
+   "refused": true,
+   "sliver": true,
+   "attributed": true,
+   "msg": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carri"
+  },
+  {
+   "path": "classical",
+   "delta": 3e-05,
+   "probed": 1,
+   "refused": true,
+   "sliver": true,
+   "attributed": true,
+   "msg": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carri"
+  },
+  {
+   "path": "classical",
+   "delta": 0.003,
+   "probed": 0,
+   "refused": false,
+   "warned": []
+  },
+  {
+   "path": "conical phi=0.62",
+   "delta": 0.0001,
+   "probed": 0,
+   "refused": false,
+   "warned": []
+  },
+  {
+   "path": "conical phi=0.62",
+   "delta": 3e-05,
+   "probed": 1,
+   "refused": true,
+   "sliver": true,
+   "attributed": true,
+   "msg": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carri"
+  },
+  {
+   "path": "conical phi=0.62",
+   "delta": 0.003,
+   "probed": 0,
+   "refused": false,
+   "warned": []
+  },
+  {
+   "path": "slant 0.17",
+   "delta": 0.0001,
+   "probed": 0,
+   "refused": false,
+   "warned": []
+  },
+  {
+   "path": "slant 0.17",
+   "delta": 3e-05,
+   "probed": 0,
+   "refused": false,
+   "warned": []
+  },
+  {
+   "path": "slant 0.17",
+   "delta": 0.003,
+   "probed": 0,
+   "refused": false,
+   "warned": []
+  },
+  {
+   "path": "per-layer grids, 5 layers",
+   "delta": 0.0001,
+   "probed": 1,
+   "refused": true,
+   "sliver": true,
+   "attributed": true,
+   "msg": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carri"
+  },
+  {
+   "path": "per-layer grids, 5 layers",
+   "delta": 3e-05,
+   "probed": 1,
+   "refused": true,
+   "sliver": true,
+   "attributed": true,
+   "msg": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carri"
+  },
+  {
+   "path": "per-layer grids, 5 layers",
+   "delta": 0.003,
+   "probed": 0,
+   "refused": false,
+   "warned": []
+  },
+  {
+   "path": "stabilize='slices'",
+   "delta": 0.0001,
+   "probed": 1,
+   "refused": true,
+   "sliver": true,
+   "attributed": true,
+   "msg": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carri"
+  }
+ ],
+ "sweep": {
+  "handed": [
+   8.5e-07
+  ],
+  "stale_src": 4e-07,
+  "refused": true,
+  "sliver": true,
+  "attributed": true,
+  "msg": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carri"
+ },
+ "sweep_dispersive": {
+  "probed": 0,
+  "provably_passive": false,
+  "refused": false,
+  "warned": [
+   "PMMStack.solve: energy not conserved (max R+T = 2.17 > 1) -- a near-si"
+  ]
+ },
+ "prepared": {
+  "handed": [
+   8.5e-07
+  ],
+  "refused": true,
+  "sliver": true,
+  "attributed": true,
+  "msg": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union grid.  The union of the layers' walls carri"
+ },
+ "cost": {
+  "solve_s": 0.07517014000040945,
+  "arbiter_s": 0.022795960000075867,
+  "ratio": 0.30325818203812976
+ }
+}

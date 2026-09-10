@@ -88,6 +88,98 @@ the strongest available evidence its conjunction is real.
 Full write-up, both builds' tables and every bar's derivation:
 `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md`.
 
+**ROUND 2 (2026-09-11) -- the refusal now ATTRIBUTES, and the guard reaches the
+anisotropic and within-layer classes.**  The verification of the fix above
+(`docs/audits/VERIFY_PMMSTACK_SLIVER_WALLS_2026_09_11.md`) refuted its margins
+in BOTH directions, and both refutations are the same missing step: super-unity
+DETECTS a violation but does not ATTRIBUTE it to the sliver.  On a passive stack
+it is just as often ordinary under-convergence -- **110 of 648** realistic
+staircase configurations (lossy substrate, theta 1.2-1.45, degree 6-10, wall
+steps 0.36-3.6 nm) were refused although their answer tracks the exact
+`delta -> 0` limit to 0.35-8.8x the physical wall shift, and the remedy the
+message named FIRST silenced the refusal while returning the same number
+(1.03559 vs 1.03557).  And the wrong population is not bounded away from the
+bar: on a 120-delta grid it reaches DOWN to `R+T-1` = +7.14e-03, so **8 of 660**
+wrong solves returned unwarned, with errors to 2.8e-03.
+
+What ships is an **ARBITER**.  When a manufactured sliver is present on a
+provably passive stack and the solve reads super-unity above a new
+`_SLIVER_TRIGGER_BAR` = 1e-3, the library re-solves ONCE on the grid the
+`min_feature` it is about to prescribe would produce:
+
+* the super-unity **VANISHES** (`<= _SLIVER_ATTRIB_CLOSURE` = 1e-5, one-sided
+  because `R+T <= 1` is what the theorem says) **AND** the answer **MOVES** more
+  than `_SLIVER_MOVE_FACTOR` = 100 x the widest manufactured cell -> the sliver
+  caused it, REFUSE, and the message states what was measured;
+* it **SURVIVES** -> the sliver did not, RETURN under the plain super-unity
+  warning, which now says a sliver is present, is not the cause, and that
+  raising `min_feature` will silence nothing;
+* the one solve cannot be run (dispersive / keyed materials, no resolved
+  source) -> the round-1 decision, unchanged, and the message says so.
+
+Both bars are measured, on 1,133 arbitrated rows over four grids and three
+fixtures, IDENTICAL to five significant figures on both builds: the SLIVER
+population's residual super-unity after the snap is 0 ... 1.5368e-06 (6.5x
+below the closure bar) while the TRUNCATION population's best is 3.860e-05
+(3.9x above it); the correct population moves at most 26.58 cell widths (3.8x
+below the move bar) while the wrong one moves at least 466.2 (4.7x above).  The
+trigger is derived as a FAMILY property rather than a sample's -- 600 CORRECT
+rows over three fixtures whose continuity slopes differ by 4x reach
+`|R+T-1|` = 1.0979e-04, so 1e-3 carries 9.11x; at 1e-4 the ladder starts
+refusing correct solves (1 of 391), which is what makes the guard's floor a
+property of the theorem rather than a choice.
+
+MEASURED RESULT, both builds: false positives **110/648 -> 0/648**, false
+negatives **8/660 -> 4/660** (the four that remain are exactly the rows whose
+super-unity is below the trigger).  Cost: one extra solve at **0.20x / 0.27x**
+of the solve it guards, paid only on a stack that already carries a sliver, is
+provably passive and reads super-unity -- it fires on **0 of 600** converged
+correct rows.
+
+Two more classes the round-1 guard could not see:
+
+* **ANISOTROPIC / liquid-crystal (verification V-5).**  `_tensor_is_passive`
+  accepts DIAGONAL tensors only, so the guard was structurally silent on every
+  birefringent stack -- measured, the same sliver on an `eps_xy` layer read
+  `R+T` = 2.183 and only warned.  `_stack_provably_passive` now accepts any
+  tensor whose ANTI-HERMITIAN part `(eps - eps^H)/2i` is positive semi-definite
+  (one 3x3 `eigvalsh`, on the trigger path only), with a 16-ULP round-off
+  deadband sized on 200,000 random rotated uniaxial directors (worst spurious
+  `-lam_min/max|eps|` = 0.77 ULP; a gain of `Im(n)` = 1e-6 reads 5.8e+09 ULP).
+  The deadband is load-bearing: the SAME 45-degree director tests exactly
+  Hermitian on Windows and not on WSL.  A rotated in-plane director, an
+  out-of-plane one and a gyrotropic layer are now refused on the O-11 sliver;
+  a NON-Hermitian payload keeps exactly the behaviour it had.
+* **WITHIN-LAYER liners (verification V-6).**  A sliver-thin feature ONE layer
+  owns is the geometry the caller asked for and no `min_feature` removes it, so
+  it is never refused -- but the same `1/w^2` mechanism is already catastrophic
+  there (measured: a liner at 1e-6 of a period costs err 1.06e-03; at 1e-7, err
+  1.05 with `R+T` from 0.571 to 4.19).  It is now WARNED, with the mechanism
+  and the per-layer / mortar / 2-D routes, when the trigger super-unity is met
+  and the owned cell's spurious-`|q|` predictor is past the stack's index
+  ceiling by `_SLIVER_Q_EXCESS` = 1e6 (ordinary owned cells read <= 3.3e+03,
+  2.5 decades below; the liners that break and read super-unity start at
+  8.8e+06).
+
+`_SLIVER_OWN_SCALE_RATIO` stays at 100, re-measured: 4,192 random ORDINARY
+non-conforming two-layer stacks (every cross-layer wall gap a real 1-8 %
+feature) top out at 25.4, so the bar carries 3.9x -- and the verification's M2
+coated-taper class, whose ratio is 12.11 rather than the ~1.7e+02 the round-1
+audit stated, sits INSIDE that ordinary population, so no bar can admit it
+without admitting ordinary geometry.  It also does not carry the defect: at the
+delta that is catastrophic on the bare fixture, the same delta at ratio
+100 / 300 / 1000 reads 1.0 / 0.8 / 4.1 x the physical shift.
+
+BIT-IDENTITY: **39 / 39** -- the round-1 fix's 18 fixtures and the
+verification's 21 -- against a read-only copy of the pre-round-2 tip, on both
+builds.  `PMM_SLIVER_GUARD = False` still disarms everything, now including the
+arbiter's solve and the within-layer warning.
+`tests/unit/test_fix_pmmstack_sliver_walls_round2.py`, 17 tests; the round-1
+file's margin test is RESTATED as a decision test (its bars were a property of
+its 13-row ladder and fail by 42x on a 120-row grid) and the verification's
+V-1 pinning test is re-pinned against the improvement it asked for.
+Full write-up: `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md`.
+
 ### Fixed -- the `min_feature` wall-snap treats a SYMMETRIC pair symmetrically
 
 `_pmm_union_grid` merges a cross-layer wall pair when `d < min_feature`, and `d`
