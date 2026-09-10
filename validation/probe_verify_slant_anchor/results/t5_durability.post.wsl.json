@@ -1,0 +1,287 @@
+{
+ "rows": {
+  "t10_v2_conj_over_none_J": {
+   "bar": 1.3,
+   "margin_x": 1.2835319983777995,
+   "note": "",
+   "reading": 1.6685915978911394,
+   "sense": ">"
+  },
+  "t10_v2_conj_over_shipped_J": {
+   "bar": 20.0,
+   "margin_x": 8.3045643561887,
+   "note": "",
+   "reading": 166.091287123774,
+   "sense": ">"
+  },
+  "t10_v2_flatness_J": {
+   "bar": [
+    0.8,
+    1.25
+   ],
+   "margin_x": null,
+   "reading": 1.011032040602641,
+   "sense": "in"
+  },
+  "t10_v2_flatness_amps": {
+   "bar": [
+    0.8,
+    1.25
+   ],
+   "margin_x": null,
+   "reading": 0.9993894295332032,
+   "sense": "in"
+  },
+  "t10_v2_none_over_shipped_J": {
+   "bar": 20.0,
+   "margin_x": 4.976990395183867,
+   "note": "",
+   "reading": 99.53980790367733,
+   "sense": ">"
+  },
+  "t10_v2_none_over_shipped_amps": {
+   "bar": 20.0,
+   "margin_x": 6.7580985895139944,
+   "note": "",
+   "reading": 135.1619717902799,
+   "sense": ">"
+  },
+  "t11_v2_refl12_vs_2xstep": {
+   "bar": 1.0,
+   "margin_x": 2.3142550235076764,
+   "note": "",
+   "reading": 0.43210449576309756,
+   "sense": "<"
+  },
+  "t11_v2_refl_ratio": {
+   "bar": 2.0,
+   "margin_x": 1.5705351596898367,
+   "note": "",
+   "reading": 3.1410703193796734,
+   "sense": ">"
+  },
+  "t18_o2_cure_M9_sumRT": {
+   "bar": 1.1,
+   "margin_x": 1.092887222576607,
+   "note": "",
+   "reading": 1.006508244653665,
+   "sense": "<"
+  },
+  "t18_o2_cure_degree7_sumRT": {
+   "bar": 1.1,
+   "margin_x": 1.0534504127098503,
+   "note": "",
+   "reading": 1.0441877346370843,
+   "sense": "<"
+  },
+  "t18_o2_cure_slant0.25_sumRT": {
+   "bar": 1.1,
+   "margin_x": 1.054058361777389,
+   "note": "",
+   "reading": 1.0435854786495338,
+   "sense": "<"
+  },
+  "t19_o2_benign_rows": {
+   "bar": [
+    1.0,
+    1.1
+   ],
+   "margin_x": null,
+   "reading": {
+    "theta0": 1.0349819662357276,
+    "theta0_warned": true,
+    "theta40": 1.0726292370875958,
+    "theta40_warned": true
+   },
+   "sense": "in"
+  },
+  "t1_v1_defect_gap": {
+   "bar": 0.001,
+   "margin_x": 55.135402311189246,
+   "note": "max over dR/dT/dJones",
+   "reading": 0.05513540231118925,
+   "sense": ">"
+  },
+  "t20_o2_broken_rcond_max": {
+   "bar": 1e-15,
+   "margin_x": 14.035383190510453,
+   "note": "_ConditioningError",
+   "reading": 7.124850005350164e-17,
+   "sense": "<"
+  },
+  "t20_o2_broken_resid_min": {
+   "bar": 0.001,
+   "margin_x": 45.08933119288667,
+   "note": "",
+   "reading": 0.04508933119288667,
+   "sense": ">"
+  },
+  "t20_o2_healthy_rcond_min": {
+   "bar": 1e-05,
+   "margin_x": 72.91349769201221,
+   "note": "n_healthy_rows=6 (bar >= 4)",
+   "reading": 0.0007291349769201223,
+   "sense": ">"
+  },
+  "t20_o2_n_healthy_rows": {
+   "bar": 4.0,
+   "margin_x": 1.5,
+   "note": "",
+   "reading": 6.0,
+   "sense": ">"
+  },
+  "t3_v1_vertical_control_dJ": {
+   "bar": 1e-11,
+   "margin_x": 599.2904571806093,
+   "note": "",
+   "reading": 1.6686399524940675e-14,
+   "sense": "<"
+  },
+  "t3_v1_vertical_control_dR": {
+   "bar": 1e-11,
+   "margin_x": 4290.738759236498,
+   "note": "",
+   "reading": 2.3306009899748403e-15,
+   "sense": "<"
+  },
+  "t3_v1_vertical_control_dT": {
+   "bar": 1e-11,
+   "margin_x": 338.6165133361275,
+   "note": "",
+   "reading": 2.9531932455029164e-14,
+   "sense": "<"
+  },
+  "t4_v1_const_noop_dJ": {
+   "bar": 1e-11,
+   "margin_x": 48402.362018843116,
+   "note": "",
+   "reading": 2.0660148767341112e-16,
+   "sense": "<"
+  },
+  "t4_v1_const_noop_dR": {
+   "bar": 1e-11,
+   "margin_x": 120095.99006321322,
+   "note": "",
+   "reading": 8.326672684688674e-17,
+   "sense": "<"
+  },
+  "t4_v1_const_noop_dT": {
+   "bar": 1e-11,
+   "margin_x": 422.87320444793386,
+   "note": "",
+   "reading": 2.3647750424515834e-14,
+   "sense": "<"
+  },
+  "t5_v1_ad_vs_fd_rel": {
+   "bar": 1e-05,
+   "margin_x": 655.684380738086,
+   "note": "|g|=3.321e+05 fd_floor~4.44e-05",
+   "reading": 1.525124022131391e-08,
+   "sense": "<"
+  },
+  "t5_v1_grad_magnitude": {
+   "bar": 1.0,
+   "margin_x": 332100.245583714,
+   "note": "",
+   "reading": 332100.245583714,
+   "sense": ">"
+  },
+  "t6_v2_opposite_cancels_exactly": {
+   "bar": 0.0,
+   "margin_x": null,
+   "note": "exact float equality; tan(-phi)+tan(phi)=np.float64(0.0)",
+   "reading": 0.0,
+   "sense": "=="
+  },
+  "t6_v2_walk_one_abs_err": {
+   "bar": 1e-18,
+   "margin_x": Infinity,
+   "note": "W=2.4e-07 one=2.4e-07",
+   "reading": 0.0,
+   "sense": "<"
+  },
+  "t6_v2_walk_two_abs_err": {
+   "bar": 1e-18,
+   "margin_x": Infinity,
+   "note": "",
+   "reading": 0.0,
+   "sense": "<"
+  },
+  "t7_v2_unimodular_dev": {
+   "bar": 1e-14,
+   "margin_x": 90.07199254740992,
+   "note": "",
+   "reading": 1.1102230246251565e-16,
+   "sense": "<"
+  },
+  "t8_v2_uniform_film_amps": {
+   "bar": 1e-11,
+   "margin_x": 851.3098940141333,
+   "note": "",
+   "reading": 1.1746603757707508e-14,
+   "sense": "<"
+  },
+  "t8_v2_uniform_film_ratio": {
+   "bar": 1000000.0,
+   "margin_x": 151777681.26206937,
+   "note": "",
+   "reading": 151777681262069.38,
+   "sense": ">"
+  },
+  "t8_v2_uniform_film_shipped": {
+   "bar": 1e-11,
+   "margin_x": 1386.1318427175274,
+   "note": "",
+   "reading": 7.214320955497915e-15,
+   "sense": "<"
+  },
+  "t9_v2_J12_vs_2xstep": {
+   "bar": 1.0,
+   "margin_x": 2.0475426619922845,
+   "note": "J12=1.1010e-02 step=1.1272e-02",
+   "reading": 0.4883903122326094,
+   "sense": "<"
+  },
+  "t9_v2_amps12_vs_2xstep": {
+   "bar": 1.0,
+   "margin_x": 2.070317894838409,
+   "note": "",
+   "reading": 0.48301760927302007,
+   "sense": "<"
+  },
+  "t9_v2_converge_J_ratio": {
+   "bar": 3.0,
+   "margin_x": 2.020420804380689,
+   "note": "",
+   "reading": 6.0612624131420665,
+   "sense": ">"
+  },
+  "t9_v2_converge_amps_ratio": {
+   "bar": 3.0,
+   "margin_x": 1.8998745352931605,
+   "note": "",
+   "reading": 5.699623605879482,
+   "sense": ">"
+  }
+ },
+ "stamp": {
+  "arm": "post",
+  "build": "wsl",
+  "jax": "0.10.2",
+  "jax_x64": true,
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "/mnt/c/tmp/lum_vslant/lumenairy/__init__.py",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "scipy": "1.17.1",
+  "threads": {
+   "MKL_NUM_THREADS": null,
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  },
+  "tree": "/mnt/c/tmp/lum_vslant",
+  "utc": "2026-09-10T11:03:48Z"
+ },
+ "total_secs": 58.3
+}

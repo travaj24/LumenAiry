@@ -1,0 +1,2941 @@
+{
+ "census": {
+  "berreman_lossy": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0000000000000002,
+   "rcond_min": 1.0000000000000002,
+   "resid_max": null,
+   "secs": 0.0,
+   "sha": "75e9c565e0426dec",
+   "sizes": [
+    2
+   ],
+   "sumRT": 0.44728097808804634,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "berreman_th0": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0,
+   "rcond_min": 1.0,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "66a7b09a2fc82b81",
+   "sizes": [
+    2
+   ],
+   "sumRT": 0.9467456407485527,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "berreman_th20": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0,
+   "rcond_min": 1.0,
+   "resid_max": null,
+   "secs": 0.01,
+   "sha": "f8b66ce356210946",
+   "sizes": [
+    2
+   ],
+   "sumRT": 0.938149644988886,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "berreman_th45": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0,
+   "rcond_min": 1.0,
+   "resid_max": null,
+   "secs": 0.0,
+   "sha": "09c47d30d37dea9e",
+   "sizes": [
+    2
+   ],
+   "sumRT": 0.9408602021235626,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "berreman_th70": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0,
+   "rcond_min": 1.0,
+   "resid_max": null,
+   "secs": 0.0,
+   "sha": "b3fc42acdc95e172",
+   "sizes": [
+    2
+   ],
+   "sumRT": 1.0669249484287344,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "berreman_thick": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0,
+   "rcond_min": 1.0,
+   "resid_max": null,
+   "secs": 0.0,
+   "sha": "71308a0209e7db58",
+   "sizes": [
+    2
+   ],
+   "sumRT": 0.9303372234007746,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "hyb_oop_vert_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00023939906451721682,
+   "rcond_min": 0.00013372148791337745,
+   "resid_max": null,
+   "secs": 49.15,
+   "sha": "7dd8e4b8f294673f",
+   "sizes": [
+    1058
+   ],
+   "sumRT": 1.0091419406407465,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_oop_vert_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.001735617375500474,
+   "rcond_min": 0.0015170426479082677,
+   "resid_max": null,
+   "secs": 0.22,
+   "sha": "496d6bf1793779a4",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0207380734421057,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_oop_vert_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0007902681915464831,
+   "rcond_min": 0.0007196976951791546,
+   "resid_max": null,
+   "secs": 1.11,
+   "sha": "9dc29dbb4942d371",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0268797295446515,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_oop_vert_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0007494912660614518,
+   "rcond_min": 0.0005145800961768071,
+   "resid_max": null,
+   "secs": 4.9,
+   "sha": "505d174f537fd5e3",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0083675477823881,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_oop_vert_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0003440330646590073,
+   "rcond_min": 0.00027184926397265955,
+   "resid_max": null,
+   "secs": 17.61,
+   "sha": "8e872107bcce1096",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0007016432181457,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_slant0.25_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003440876020428688,
+   "rcond_min": 0.0015757618139042014,
+   "resid_max": null,
+   "secs": 0.17,
+   "sha": "d51ed994e46897dc",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0292246163573546,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.25_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0011378394788410654,
+   "rcond_min": 0.0010835057289965725,
+   "resid_max": null,
+   "secs": 1.16,
+   "sha": "1da9f7b2de211732",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0342649575650082,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.25_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0018350113408762837,
+   "rcond_min": 0.0008713678323068151,
+   "resid_max": null,
+   "secs": 4.84,
+   "sha": "dfb74de47da7aad3",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.011434417722683,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.25_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0009779191522993778,
+   "rcond_min": 0.0007173574134511239,
+   "resid_max": null,
+   "secs": 16.35,
+   "sha": "5b0c8dcdad4ee8cd",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.002246490733275,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_slant0.35_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003755097535523386,
+   "rcond_min": 0.0025455806700242518,
+   "resid_max": null,
+   "secs": 0.09,
+   "sha": "3718876b12577e9b",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0354829650654411,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.35_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002473388451803897,
+   "rcond_min": 0.0011924876085890154,
+   "resid_max": null,
+   "secs": 0.85,
+   "sha": "5ef97e9dc29aab32",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0382444391752388,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.35_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0008600578017047482,
+   "rcond_min": 0.0006346597841190246,
+   "resid_max": null,
+   "secs": 4.64,
+   "sha": "f6a398ecde268726",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0126703436076456,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.35_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.001660344534286904,
+   "rcond_min": 0.0007320453487774218,
+   "resid_max": null,
+   "secs": 17.09,
+   "sha": "fddff5026e40ea3b",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0031320631668605,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_slant0.5_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.001335762740049271,
+   "rcond_min": 0.0006823216636603697,
+   "resid_max": null,
+   "secs": 48.67,
+   "sha": "ccad5324e4cfd284",
+   "sizes": [
+    1058
+   ],
+   "sumRT": 1.0132485509082665,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00408638192478169,
+   "rcond_min": 0.003335367671332978,
+   "resid_max": null,
+   "secs": 0.15,
+   "sha": "de3b0b3f3cc1a11f",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0460151086871023,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.05 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003073554859193207,
+   "rcond_min": 0.0016278283843314263,
+   "resid_max": null,
+   "secs": 0.98,
+   "sha": "d3e3b67fc7b81448",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0435568384155003,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.001336652596224796,
+   "rcond_min": 0.0009554444347653978,
+   "resid_max": null,
+   "secs": 4.12,
+   "sha": "8c276818cb9630bf",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0141954840220861,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0017834568635974265,
+   "rcond_min": 0.0007838814559346503,
+   "resid_max": null,
+   "secs": 16.85,
+   "sha": "6348714379d99b03",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0045266489422626,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_slant0.5_deg15_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0030693461510839172,
+   "rcond_min": 0.001622181071767567,
+   "resid_max": null,
+   "secs": 1.2,
+   "sha": "8298fabbabd1d44c",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.043936939558603,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_deg7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0030861006188718653,
+   "rcond_min": 0.0016442156221335052,
+   "resid_max": null,
+   "secs": 0.88,
+   "sha": "251c8855b42c9397",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0424176898896749,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_densesup_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.006491422088112645,
+   "rcond_min": 0.001516468588620176,
+   "resid_max": null,
+   "secs": 4.26,
+   "sha": "2a32135b8cd937d5",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0225527092205238,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_grazing_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002936365656944718,
+   "rcond_min": 0.0028558079535582043,
+   "resid_max": null,
+   "secs": 4.68,
+   "sha": "e864a752c3dee88f",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0162254412801293,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_hicontrast_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0015337016120975024,
+   "rcond_min": 0.001336652596224796,
+   "resid_max": null,
+   "secs": 4.75,
+   "sha": "9f8b850992462b4d",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0160493396095036,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_theta15_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.000962279063013105,
+   "rcond_min": 2.078724731587064e-05,
+   "resid_max": null,
+   "secs": 0.97,
+   "sha": "13e13c9675e07947",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0317713311934746,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_theta22_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.006325273046928047,
+   "rcond_min": 0.004282903358498877,
+   "resid_max": null,
+   "secs": 0.95,
+   "sha": "3963df3510940e55",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0433157899665666,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_theta30_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.006262810798139663,
+   "rcond_min": 0.005962209992481211,
+   "resid_max": null,
+   "secs": 0.95,
+   "sha": "57886ba33c94f39b",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.043735554694215,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_tree_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003073554859193207,
+   "rcond_min": 0.0016278283843314263,
+   "resid_max": null,
+   "secs": 1.07,
+   "sha": "389314e6dc7bf173",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0435568384154998,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slantxy_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0024149131073467577,
+   "rcond_min": 0.0021322559117915303,
+   "resid_max": null,
+   "secs": 0.96,
+   "sha": "7be2d8e70c8ac282",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0395154200873855,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slanty0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0020513997565343297,
+   "rcond_min": 0.0018251932832082868,
+   "resid_max": null,
+   "secs": 0.93,
+   "sha": "102a15c29213f3bd",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0292721199405372,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "j2d_oop_vert_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0006987171164452774,
+   "rcond_min": 0.0005925388647747192,
+   "resid_max": null,
+   "secs": 1.23,
+   "sha": "f0473094892f0ab4",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0275629156341972,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +5.369e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2d_oop_vert_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00021979420328813228,
+   "rcond_min": 0.00021210967666896957,
+   "resid_max": null,
+   "secs": 18.25,
+   "sha": "e13977bbf560e078",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0008375470244444,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +1.305e-03, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2d_slant0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003795282763740175,
+   "rcond_min": 0.001485027119805384,
+   "resid_max": null,
+   "secs": 0.13,
+   "sha": "e42e237399fa87fc",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0462442767480966,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +6.224e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2d_slant0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002099272206212009,
+   "rcond_min": 0.000869659738347566,
+   "resid_max": null,
+   "secs": 1.02,
+   "sha": "caa1fcad6de8c23c",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0436225403012689,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +7.225e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2d_slant0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0008692076163732334,
+   "rcond_min": 0.0005815728928355811,
+   "resid_max": null,
+   "secs": 4.64,
+   "sha": "998ddb4d452a5afb",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0140993778317415,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.198e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2d_slant0.5_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0005361238754667816,
+   "rcond_min": 4.098226187549681e-05,
+   "resid_max": null,
+   "secs": 16.79,
+   "sha": "6a48b7ee461356de",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0045469219969059,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +5.489e-03, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2dscalA_sl0.5_M3": {
+   "message": "pmm_jones_2d: energy non-conservation detected (sum R+T = 8.613e+29 exceeds 2); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the ind",
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "_EnergyError",
+   "rcond_max": 8.378633145736191e-17,
+   "rcond_min": 8.810862195167402e-18,
+   "resid_max": 0.3796858990029188,
+   "secs": 0.14,
+   "sizes": [
+    98
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "j2dscalA_sl0.5_M5": {
+   "message": "pmm_jones_2d: energy non-conservation detected (sum R+T = 1.712e+29 exceeds 2); the solve is numerically unstable at this geometry (a near-degenerate layer<->region mode-match at a measure-zero period / n_orders coincidence, common at very large period / low index contrast).  Pass stabilize=True to auto-retry at a slightly higher n_orders, or reduce n_orders, adjust the period, or increase the ind",
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "_EnergyError",
+   "rcond_max": 5.192188014730108e-17,
+   "rcond_min": 2.646035356252805e-17,
+   "resid_max": 0.08877796707652726,
+   "secs": 0.89,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "j2dscalA_sl0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0025095453948306584,
+   "rcond_min": 0.0012318917966762236,
+   "resid_max": null,
+   "secs": 4.44,
+   "sha": "1af72e126df1e89e",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0279141259487836,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +4.949e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2dscalA_sl0.5_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0025882128779038654,
+   "rcond_min": 0.0011425088859981622,
+   "resid_max": null,
+   "secs": 17.0,
+   "sha": "41ce199463fbc97f",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0049333980554265,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +9.210e-03, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2dscalA_vert_M5": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 0.29,
+   "sha": "82d4143fbe36bb52",
+   "sumRT": 1.0328049861402362,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +6.346e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "pmm1d_conical_M3": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 0.01,
+   "sha": "186ff1f9df15a1be",
+   "sumRT": 0.9999999815045695,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_conical_M5": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 0.02,
+   "sha": "186ff1f9df15a1be",
+   "sumRT": 0.9999999815045695,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_conical_M7": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 0.01,
+   "sha": "186ff1f9df15a1be",
+   "sumRT": 0.9999999815045695,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_conical_oop_M3": {
+   "message": "PMMStack.solve (conical, phi != 0): a stack containing a PATTERNED layer together with an out-of-plane tensor (eps_xz/yz/zx/zy) is not supported -- the previous projected route returned silently-wrong retardance for patterned cells (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12) and the nodal conical cascade is in-plane only.  Use the classical mount (phi=0) or PMM2DStackPure.",
+   "n_interfaces": 0,
+   "outcome": "NotImplementedError",
+   "secs": 0.0,
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_conical_oop_M5": {
+   "message": "PMMStack.solve (conical, phi != 0): a stack containing a PATTERNED layer together with an out-of-plane tensor (eps_xz/yz/zx/zy) is not supported -- the previous projected route returned silently-wrong retardance for patterned cells (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12) and the nodal conical cascade is in-plane only.  Use the classical mount (phi=0) or PMM2DStackPure.",
+   "n_interfaces": 0,
+   "outcome": "NotImplementedError",
+   "secs": 0.0,
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_conical_oop_M7": {
+   "message": "PMMStack.solve (conical, phi != 0): a stack containing a PATTERNED layer together with an out-of-plane tensor (eps_xz/yz/zx/zy) is not supported -- the previous projected route returned silently-wrong retardance for patterned cells (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12) and the nodal conical cascade is in-plane only.  Use the classical mount (phi=0) or PMM2DStackPure.",
+   "n_interfaces": 0,
+   "outcome": "NotImplementedError",
+   "secs": 0.0,
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_oop_vert_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.03174182097793472,
+   "rcond_min": 0.017924535937184842,
+   "resid_max": null,
+   "secs": 0.01,
+   "sha": "8bea073f50dd4672",
+   "sizes": [
+    44
+   ],
+   "sumRT": 1.0000006406302884,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_oop_vert_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.03174182097793472,
+   "rcond_min": 0.017924535937184842,
+   "resid_max": null,
+   "secs": 0.01,
+   "sha": "8bea073f50dd4672",
+   "sizes": [
+    44
+   ],
+   "sumRT": 1.0000006406302884,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_oop_vert_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.03174182097793472,
+   "rcond_min": 0.017924535937184842,
+   "resid_max": null,
+   "secs": 0.01,
+   "sha": "8bea073f50dd4672",
+   "sizes": [
+    44
+   ],
+   "sumRT": 1.0000006406302884,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_oop_vert_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.03174182097793472,
+   "rcond_min": 0.017924535937184842,
+   "resid_max": null,
+   "secs": 0.01,
+   "sha": "8bea073f50dd4672",
+   "sizes": [
+    44
+   ],
+   "sumRT": 1.0000006406302884,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_oop_vert_perlayer_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.03174182097793472,
+   "rcond_min": 0.017924535937184842,
+   "resid_max": null,
+   "secs": 0.01,
+   "sha": "8bea073f50dd4672",
+   "sizes": [
+    44
+   ],
+   "sumRT": 1.0000006406302884,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.2_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00799778297879042,
+   "rcond_min": 0.006135389128111017,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "973914eb5d1547cb",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000008843113,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.2_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00799778297879042,
+   "rcond_min": 0.006135389128111017,
+   "resid_max": null,
+   "secs": 0.06,
+   "sha": "973914eb5d1547cb",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000008843113,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.2_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00799778297879042,
+   "rcond_min": 0.006135389128111017,
+   "resid_max": null,
+   "secs": 0.06,
+   "sha": "973914eb5d1547cb",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000008843113,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.2_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00799778297879042,
+   "rcond_min": 0.006135389128111017,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "973914eb5d1547cb",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000008843113,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.2_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00799778297879042,
+   "rcond_min": 0.006135389128111017,
+   "resid_max": null,
+   "secs": 0.05,
+   "sha": "973914eb5d1547cb",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000008843113,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0032332496336529826,
+   "rcond_min": 0.002532995534118572,
+   "resid_max": null,
+   "secs": 0.03,
+   "sha": "7f480b67c039c1d0",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.999999998956075,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0032332496336529826,
+   "rcond_min": 0.002532995534118572,
+   "resid_max": null,
+   "secs": 0.05,
+   "sha": "7f480b67c039c1d0",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.999999998956075,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0032332496336529826,
+   "rcond_min": 0.002532995534118572,
+   "resid_max": null,
+   "secs": 0.05,
+   "sha": "7f480b67c039c1d0",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.999999998956075,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0032332496336529826,
+   "rcond_min": 0.002532995534118572,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "7f480b67c039c1d0",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.999999998956075,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0032332496336529826,
+   "rcond_min": 0.002532995534118572,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "7f480b67c039c1d0",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.999999998956075,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_bigperiod_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.01195779267829466,
+   "rcond_min": 0.007819929050918408,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "4eaaf9003800c943",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9995919502793886,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_cov_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.04545078351493914,
+   "rcond_min": 0.041545565837556905,
+   "resid_max": null,
+   "secs": 0.05,
+   "sha": "e000b4f37444b125",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999602461278,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_deg15_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0021089858146795286,
+   "rcond_min": 0.0020813006700159957,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "bde15a26bad69b78",
+   "sizes": [
+    90
+   ],
+   "sumRT": 0.9999999999999545,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_deg7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.007551578589868219,
+   "rcond_min": 0.00740218589342936,
+   "resid_max": null,
+   "secs": 0.01,
+   "sha": "c3799b2f94bf49dd",
+   "sizes": [
+    42
+   ],
+   "sumRT": 0.9997499378726554,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_densesup_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002805384263240839,
+   "rcond_min": 0.0014238711667641348,
+   "resid_max": null,
+   "secs": 0.06,
+   "sha": "ff0a04e5d385e8af",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.000003317894961,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_grazing_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0024805289325108186,
+   "rcond_min": 0.0023941753571958715,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "57ce7087f9fc09a2",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.000000008007116,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_hicontrast_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003824888608957617,
+   "rcond_min": 0.002532995534118572,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "02961678f64ca3db",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.000000306149985,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_perlayer_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0032332496336529826,
+   "rcond_min": 0.002532995534118572,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "7f480b67c039c1d0",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.999999998956075,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_perlayer_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0032332496336529826,
+   "rcond_min": 0.002532995534118572,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "7f480b67c039c1d0",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.999999998956075,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.5_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0023511756638285104,
+   "rcond_min": 0.002301003536365298,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "80b1a58e4be4dc73",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999987921707,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0023511756638285104,
+   "rcond_min": 0.002301003536365298,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "80b1a58e4be4dc73",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999987921707,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0023511756638285104,
+   "rcond_min": 0.002301003536365298,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "80b1a58e4be4dc73",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999987921707,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0023511756638285104,
+   "rcond_min": 0.002301003536365298,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "80b1a58e4be4dc73",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999987921707,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.5_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0023511756638285104,
+   "rcond_min": 0.002301003536365298,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "80b1a58e4be4dc73",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999987921707,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.7_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.010353123588253734,
+   "rcond_min": 0.009507170029042004,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "3c1358bf0412de64",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.000000291951225,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.7_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.010353123588253734,
+   "rcond_min": 0.009507170029042004,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "3c1358bf0412de64",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.000000291951225,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.010353123588253734,
+   "rcond_min": 0.009507170029042004,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "3c1358bf0412de64",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.000000291951225,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.7_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.010353123588253734,
+   "rcond_min": 0.009507170029042004,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "3c1358bf0412de64",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.000000291951225,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.7_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.010353123588253734,
+   "rcond_min": 0.009507170029042004,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "3c1358bf0412de64",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.000000291951225,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pure_magnetic_nm4_M2": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 1.84,
+   "sha": "4e72ee12d5112926",
+   "sumRT": 0.9725987492363443,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pure_oop_vert_nm4_M2": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002479462534404736,
+   "rcond_min": 0.0017845805864579053,
+   "resid_max": null,
+   "secs": 2.22,
+   "sha": "cbb522ebddf7f70a",
+   "sizes": [
+    288
+   ],
+   "sumRT": 0.972205448301014,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pure_slant0.5_nm4_M2": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0029027006814219282,
+   "rcond_min": 0.0020501345848321804,
+   "resid_max": null,
+   "secs": 2.19,
+   "sha": "05ee7b44df3a6b08",
+   "sizes": [
+    288
+   ],
+   "sumRT": 0.9720220526647555,
+   "warned_energy": false,
+   "warnings": [
+    "PMM2DStackPure.solve: lossless energy closure violated for incident E_x (sum R+T = 0.9386, off by -0.0614; every permittivity in this stack is real or Hermitian"
+   ]
+  },
+  "pure_slant0.5_nm6_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0020491418151899706,
+   "rcond_min": 0.0012452428436035053,
+   "resid_max": null,
+   "secs": 38.62,
+   "sha": "f75839f507348f01",
+   "sizes": [
+    800
+   ],
+   "sumRT": 0.9999978314190032,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.15_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002666372711606607,
+   "rcond_min": 0.0010163604206843049,
+   "resid_max": null,
+   "secs": 1.3,
+   "sha": "daf6152738020b0e",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.042022295279818,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.25_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0021820693162665637,
+   "rcond_min": 0.0011475645090337707,
+   "resid_max": null,
+   "secs": 0.78,
+   "sha": "4ae244a8aba301ab",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0435854786495544,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.35_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0034601715409205702,
+   "rcond_min": 0.002614074775808537,
+   "resid_max": null,
+   "secs": 0.11,
+   "sha": "2b85613a081af0b7",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.065153234642819,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.07 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.35_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.6809043789242283e-16,
+   "rcond_min": 8.437487703735369e-17,
+   "resid_max": 0.04468844420236742,
+   "secs": 0.87,
+   "sha": "f1d1270087a59b8e",
+   "sizes": [
+    242
+   ],
+   "sumRT": 7.627807419645026e+27,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 7.63e+27 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalA_sl0.35_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 8.4820353650944e-17,
+   "rcond_min": 5.508271025035173e-17,
+   "resid_max": 0.05910680512547968,
+   "secs": 4.7,
+   "sha": "c4cc8ccdf8ff5c89",
+   "sizes": [
+    450
+   ],
+   "sumRT": 2.2379058616276826e+28,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 2.24e+28 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalA_sl0.5_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00028122832409710653,
+   "rcond_min": 2.971097058726919e-05,
+   "resid_max": null,
+   "secs": 48.41,
+   "sha": "c4d00b39d303a7cb",
+   "sizes": [
+    1058
+   ],
+   "sumRT": 1.0006307018964744,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 2.5632069820771977e-16,
+   "rcond_min": 1.0830784931846511e-16,
+   "resid_max": 0.08362237269215113,
+   "secs": 0.1,
+   "sha": "bb9465cfb8a090c1",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.921188515853815e+29,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.92e+29 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalA_sl0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 6.669325176030719e-17,
+   "rcond_min": 3.95733265416818e-17,
+   "resid_max": 0.07474284664263764,
+   "secs": 0.9,
+   "sha": "b821580ba20e313e",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.5473011813196337e+29,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.55e+29 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalA_sl0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 2.7824624636266513e-16,
+   "rcond_min": 9.846353663722807e-17,
+   "resid_max": 0.013040320051069929,
+   "secs": 4.13,
+   "sha": "b6aea9d619d74da8",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.1199598214120691e+30,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.12e+30 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalA_sl0.5_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.001337945396323536,
+   "rcond_min": 0.0011214646693378492,
+   "resid_max": null,
+   "secs": 17.32,
+   "sha": "f836b6db63b556d4",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0065082446536584,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_deg15_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 5.849465269370976e-16,
+   "rcond_min": 4.0528809360861983e-16,
+   "resid_max": 0.007646754378001725,
+   "secs": 0.74,
+   "sha": "d1afea5a50906ff6",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.6580429157560612e+27,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.66e+27 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalA_sl0.5_deg7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00220990220969492,
+   "rcond_min": 0.001592053100165749,
+   "resid_max": null,
+   "secs": 0.74,
+   "sha": "62d9061a1ac22b0b",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.044187734637096,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_densesup_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.004950960375872097,
+   "rcond_min": 0.0008709873150479487,
+   "resid_max": null,
+   "secs": 0.64,
+   "sha": "57a0262dc5494edd",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0811646457435589,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.08 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_ground2.1_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.001438013901425501,
+   "rcond_min": 0.0009688527285306727,
+   "resid_max": null,
+   "secs": 0.65,
+   "sha": "d959912ffa676d10",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0324499004697074,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_hicontrast_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 7.829360407277398e-17,
+   "rcond_min": 6.669325176030719e-17,
+   "resid_max": 0.04898550497718536,
+   "secs": 0.69,
+   "sha": "b810a7dae601a6fc",
+   "sizes": [
+    242
+   ],
+   "sumRT": 5.866962771373356e+28,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 5.87e+28 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalA_sl0.5_normal_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0037075931635993176,
+   "rcond_min": 0.0007291349769196217,
+   "resid_max": null,
+   "secs": 1.16,
+   "sha": "f6dc98cecca6a856",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0349819662357276,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_th40_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003859682296780248,
+   "rcond_min": 0.0034766004325283402,
+   "resid_max": null,
+   "secs": 0.85,
+   "sha": "3c8289126e666e63",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0726292370875834,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.07 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_th70_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 9.571055906393667e-17,
+   "rcond_min": 5.762619313894512e-18,
+   "resid_max": 0.5510070205081143,
+   "secs": 0.73,
+   "sha": "141b07405b41468d",
+   "sizes": [
+    242
+   ],
+   "sumRT": 6.731724245100784e+32,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 6.73e+32 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalA_sl0.5_th80_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0014679157442009632,
+   "rcond_min": 0.0004115714007870153,
+   "resid_max": null,
+   "secs": 4.01,
+   "sha": "102846d533142f29",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0263284568827902,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_wood_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.009803425185364392,
+   "rcond_min": 0.002549961855774781,
+   "resid_max": null,
+   "secs": 4.29,
+   "sha": "07b3f41007de0415",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.009967617014694,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_woodx0.997_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.009812692335502625,
+   "rcond_min": 0.002574544082202546,
+   "resid_max": null,
+   "secs": 4.45,
+   "sha": "b6076740e46158af",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0099796370366017,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.7_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 3.595817842330367e-16,
+   "rcond_min": 2.2795735630127073e-16,
+   "resid_max": 0.02349554712989293,
+   "secs": 0.1,
+   "sha": "bf58af552b25d16f",
+   "sizes": [
+    98
+   ],
+   "sumRT": 2.7709833893703242e+26,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 2.77e+26 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalA_sl0.7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 6.293455599734604e-17,
+   "rcond_min": 3.976299232478616e-17,
+   "resid_max": 0.04121218696016925,
+   "secs": 0.81,
+   "sha": "1eb2451f1926e6ec",
+   "sizes": [
+    242
+   ],
+   "sumRT": 7.789599351133432e+28,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 7.79e+28 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalA_sl0.7_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0011652862768886652,
+   "rcond_min": 0.000655453165371443,
+   "resid_max": null,
+   "secs": 3.88,
+   "sha": "1ab570459ac3eab5",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0235813901201996,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_vert_M5": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 0.72,
+   "sha": "5e56531ce1a7a4ed",
+   "sumRT": 1.0381658644140843,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalB_sl0.35_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0014487459523619098,
+   "rcond_min": 0.000936041571515396,
+   "resid_max": null,
+   "secs": 0.08,
+   "sha": "024e55f1df7bd884",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.035037688755292,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalB_sl0.35_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0005626000125577527,
+   "rcond_min": 0.0005010518581160132,
+   "resid_max": null,
+   "secs": 0.77,
+   "sha": "1ea06eb875514e1e",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0097660148378558,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalB_sl0.35_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 5.597841053806007e-17,
+   "rcond_min": 2.1600823327384714e-17,
+   "resid_max": 0.06619339869958278,
+   "secs": 4.34,
+   "sha": "c3b1664da2c3156e",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.1769002295530612e+28,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.18e+28 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalB_sl0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0029682148379202057,
+   "rcond_min": 0.0011675470469085646,
+   "resid_max": null,
+   "secs": 0.09,
+   "sha": "3235dfc95d1cc592",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0172419200241392,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalB_sl0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 2.1655536340349402e-16,
+   "rcond_min": 1.2265237007292674e-16,
+   "resid_max": 0.03925561415363695,
+   "secs": 0.89,
+   "sha": "0afbb3851a10e74f",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.018373352377996e+28,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02e+28 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalB_sl0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0002561824432551394,
+   "rcond_min": 0.00016684181930140424,
+   "resid_max": null,
+   "secs": 4.04,
+   "sha": "404374a12cf18446",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0300571146613475,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalB_sl0.7_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 3.120722231712701e-16,
+   "rcond_min": 1.4695619726628994e-16,
+   "resid_max": 0.0530866439041109,
+   "secs": 0.11,
+   "sha": "7d700d5bc2ea34e2",
+   "sizes": [
+    98
+   ],
+   "sumRT": 2.0521973997981294e+27,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 2.05e+27 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalB_sl0.7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 2.520559678510209e-16,
+   "rcond_min": 3.708422167356992e-17,
+   "resid_max": 0.044525859583481465,
+   "secs": 0.85,
+   "sha": "a85d294c2aa389bc",
+   "sizes": [
+    242
+   ],
+   "sumRT": 6.499757682777979e+27,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 6.5e+27 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result i"
+   ]
+  },
+  "scalB_sl0.7_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0003361117748600283,
+   "rcond_min": 0.0002133254848713303,
+   "resid_max": null,
+   "secs": 4.0,
+   "sha": "58f6894cab2cb033",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0313026457065462,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalC_sl0.35_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 4.524240934001101e-16,
+   "rcond_min": 3.54321029269008e-17,
+   "resid_max": 0.044588629158365506,
+   "secs": 0.1,
+   "sha": "2774b3b75025f443",
+   "sizes": [
+    98
+   ],
+   "sumRT": 3.2992261378488366e+26,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 3.3e+26 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result i"
+   ]
+  },
+  "scalC_sl0.35_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 6.286057149725505e-17,
+   "rcond_min": 4.9954839341599414e-17,
+   "resid_max": 0.06274918051529438,
+   "secs": 0.79,
+   "sha": "4017129b254d7de2",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.122628832999926e+32,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.12e+32 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalC_sl0.35_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.011030424637846838,
+   "rcond_min": 0.004104046894856339,
+   "resid_max": null,
+   "secs": 4.26,
+   "sha": "5912b5014d23892c",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0178341711272973,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalC_sl0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0021600807681229186,
+   "rcond_min": 0.0018050543961649764,
+   "resid_max": null,
+   "secs": 0.1,
+   "sha": "3921aa45bf4c5a9f",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0808212390258047,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.08 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalC_sl0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 5.580852185285174e-17,
+   "rcond_min": 1.9867653022834473e-17,
+   "resid_max": 0.11535748323106834,
+   "secs": 0.88,
+   "sha": "906b55adf2509b5c",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.137165985360398e+31,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.14e+31 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalC_sl0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00037512382797447267,
+   "rcond_min": 0.0002646882018832388,
+   "resid_max": null,
+   "secs": 3.96,
+   "sha": "b49b359db2c8ed08",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0216397198658902,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalC_sl0.7_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0012758371127838618,
+   "rcond_min": 0.0004367023396859987,
+   "resid_max": null,
+   "secs": 0.09,
+   "sha": "4642b12ee53b245d",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0952038180417365,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.1 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is un"
+   ]
+  },
+  "scalC_sl0.7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 8.920420928676866e-17,
+   "rcond_min": 4.34946580434934e-17,
+   "resid_max": 0.04154085697781416,
+   "secs": 0.88,
+   "sha": "d8d2aacf3b436dcd",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.2929044313765376e+33,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.29e+33 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "scalC_sl0.7_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.2021126289610864e-17,
+   "rcond_min": 3.850987939815151e-18,
+   "resid_max": 0.7180710258342822,
+   "secs": 4.2,
+   "sha": "c893fb5dbb864433",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.514339406519451e+26,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.51e+26 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result "
+   ]
+  },
+  "stag_slant0.5_nm4_M2": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0029027006814219282,
+   "rcond_min": 0.0020501345848321804,
+   "resid_max": null,
+   "secs": 2.31,
+   "sha": "05ee7b44df3a6b08",
+   "sizes": [
+    288
+   ],
+   "sumRT": 0.9720220526647555,
+   "warned_energy": false,
+   "warnings": [
+    "PMM2DStackPure.solve: lossless energy closure violated for incident E_x (sum R+T = 0.9386, off by -0.0614; every permittivity in this stack is real or Hermitian"
+   ]
+  }
+ },
+ "guard": {
+  "INV_RCOND_SCREEN": 1e-08,
+  "INV_RESID_REFUSE": 1e-08,
+  "INV_T22_RCOND_REFUSE": null,
+  "has_rcond_refuse_kw": false
+ },
+ "no_census": {
+  "berreman_lossy": {
+   "outcome": "SOLVED",
+   "sha": "75e9c565e0426dec",
+   "sumRT": 0.44728097808804634
+  },
+  "berreman_th0": {
+   "outcome": "SOLVED",
+   "sha": "66a7b09a2fc82b81",
+   "sumRT": 0.9467456407485527
+  },
+  "berreman_th20": {
+   "outcome": "SOLVED",
+   "sha": "f8b66ce356210946",
+   "sumRT": 0.938149644988886
+  },
+  "berreman_th45": {
+   "outcome": "SOLVED",
+   "sha": "09c47d30d37dea9e",
+   "sumRT": 0.9408602021235626
+  },
+  "berreman_th70": {
+   "outcome": "SOLVED",
+   "sha": "b3fc42acdc95e172",
+   "sumRT": 1.0669249484287344
+  },
+  "berreman_thick": {
+   "outcome": "SOLVED",
+   "sha": "71308a0209e7db58",
+   "sumRT": 0.9303372234007746
+  },
+  "hyb_oop_vert_M11": {
+   "outcome": "SOLVED",
+   "sha": "7dd8e4b8f294673f",
+   "sumRT": 1.0091419406407465
+  },
+  "hyb_oop_vert_M3": {
+   "outcome": "SOLVED",
+   "sha": "496d6bf1793779a4",
+   "sumRT": 1.0207380734421057
+  },
+  "hyb_oop_vert_M5": {
+   "outcome": "SOLVED",
+   "sha": "9dc29dbb4942d371",
+   "sumRT": 1.0268797295446515
+  },
+  "hyb_oop_vert_M7": {
+   "outcome": "SOLVED",
+   "sha": "505d174f537fd5e3",
+   "sumRT": 1.0083675477823881
+  },
+  "hyb_oop_vert_M9": {
+   "outcome": "SOLVED",
+   "sha": "8e872107bcce1096",
+   "sumRT": 1.0007016432181457
+  },
+  "hyb_slant0.25_M3": {
+   "outcome": "SOLVED",
+   "sha": "d51ed994e46897dc",
+   "sumRT": 1.0292246163573546
+  },
+  "hyb_slant0.25_M5": {
+   "outcome": "SOLVED",
+   "sha": "1da9f7b2de211732",
+   "sumRT": 1.0342649575650082
+  },
+  "hyb_slant0.25_M7": {
+   "outcome": "SOLVED",
+   "sha": "dfb74de47da7aad3",
+   "sumRT": 1.011434417722683
+  },
+  "hyb_slant0.25_M9": {
+   "outcome": "SOLVED",
+   "sha": "5b0c8dcdad4ee8cd",
+   "sumRT": 1.002246490733275
+  },
+  "hyb_slant0.35_M3": {
+   "outcome": "SOLVED",
+   "sha": "3718876b12577e9b",
+   "sumRT": 1.0354829650654411
+  },
+  "hyb_slant0.35_M5": {
+   "outcome": "SOLVED",
+   "sha": "5ef97e9dc29aab32",
+   "sumRT": 1.0382444391752388
+  },
+  "hyb_slant0.35_M7": {
+   "outcome": "SOLVED",
+   "sha": "f6a398ecde268726",
+   "sumRT": 1.0126703436076456
+  },
+  "hyb_slant0.35_M9": {
+   "outcome": "SOLVED",
+   "sha": "fddff5026e40ea3b",
+   "sumRT": 1.0031320631668605
+  },
+  "hyb_slant0.5_M11": {
+   "outcome": "SOLVED",
+   "sha": "ccad5324e4cfd284",
+   "sumRT": 1.0132485509082665
+  },
+  "hyb_slant0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "de3b0b3f3cc1a11f",
+   "sumRT": 1.0460151086871023
+  },
+  "hyb_slant0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "d3e3b67fc7b81448",
+   "sumRT": 1.0435568384155003
+  },
+  "hyb_slant0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "8c276818cb9630bf",
+   "sumRT": 1.0141954840220861
+  },
+  "hyb_slant0.5_M9": {
+   "outcome": "SOLVED",
+   "sha": "6348714379d99b03",
+   "sumRT": 1.0045266489422626
+  },
+  "hyb_slant0.5_deg15_M5": {
+   "outcome": "SOLVED",
+   "sha": "8298fabbabd1d44c",
+   "sumRT": 1.043936939558603
+  },
+  "hyb_slant0.5_deg7_M5": {
+   "outcome": "SOLVED",
+   "sha": "251c8855b42c9397",
+   "sumRT": 1.0424176898896749
+  },
+  "hyb_slant0.5_densesup_M7": {
+   "outcome": "SOLVED",
+   "sha": "2a32135b8cd937d5",
+   "sumRT": 1.0225527092205238
+  },
+  "hyb_slant0.5_grazing_M7": {
+   "outcome": "SOLVED",
+   "sha": "e864a752c3dee88f",
+   "sumRT": 1.0162254412801293
+  },
+  "hyb_slant0.5_hicontrast_M7": {
+   "outcome": "SOLVED",
+   "sha": "9f8b850992462b4d",
+   "sumRT": 1.0160493396095036
+  },
+  "hyb_slant0.5_theta15_M5": {
+   "outcome": "SOLVED",
+   "sha": "13e13c9675e07947",
+   "sumRT": 1.0317713311934746
+  },
+  "hyb_slant0.5_theta22_M5": {
+   "outcome": "SOLVED",
+   "sha": "3963df3510940e55",
+   "sumRT": 1.0433157899665666
+  },
+  "hyb_slant0.5_theta30_M5": {
+   "outcome": "SOLVED",
+   "sha": "57886ba33c94f39b",
+   "sumRT": 1.043735554694215
+  },
+  "hyb_slant0.5_tree_M5": {
+   "outcome": "SOLVED",
+   "sha": "389314e6dc7bf173",
+   "sumRT": 1.0435568384154998
+  },
+  "hyb_slantxy_M5": {
+   "outcome": "SOLVED",
+   "sha": "7be2d8e70c8ac282",
+   "sumRT": 1.0395154200873855
+  },
+  "hyb_slanty0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "102a15c29213f3bd",
+   "sumRT": 1.0292721199405372
+  },
+  "j2d_oop_vert_M5": {
+   "outcome": "SOLVED",
+   "sha": "f0473094892f0ab4",
+   "sumRT": 1.0275629156341972
+  },
+  "j2d_oop_vert_M9": {
+   "outcome": "SOLVED",
+   "sha": "e13977bbf560e078",
+   "sumRT": 1.0008375470244444
+  },
+  "j2d_slant0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "e42e237399fa87fc",
+   "sumRT": 1.0462442767480966
+  },
+  "j2d_slant0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "caa1fcad6de8c23c",
+   "sumRT": 1.0436225403012689
+  },
+  "j2d_slant0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "998ddb4d452a5afb",
+   "sumRT": 1.0140993778317415
+  },
+  "j2d_slant0.5_M9": {
+   "outcome": "SOLVED",
+   "sha": "6a48b7ee461356de",
+   "sumRT": 1.0045469219969059
+  },
+  "j2dscalA_sl0.5_M3": {
+   "outcome": "_EnergyError",
+   "sumRT": null
+  },
+  "j2dscalA_sl0.5_M5": {
+   "outcome": "_EnergyError",
+   "sumRT": null
+  },
+  "j2dscalA_sl0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "1af72e126df1e89e",
+   "sumRT": 1.0279141259487836
+  },
+  "j2dscalA_sl0.5_M9": {
+   "outcome": "SOLVED",
+   "sha": "41ce199463fbc97f",
+   "sumRT": 1.0049333980554265
+  },
+  "j2dscalA_vert_M5": {
+   "outcome": "SOLVED",
+   "sha": "82d4143fbe36bb52",
+   "sumRT": 1.0328049861402362
+  },
+  "pmm1d_conical_M3": {
+   "outcome": "SOLVED",
+   "sha": "186ff1f9df15a1be",
+   "sumRT": 0.9999999815045695
+  },
+  "pmm1d_conical_M5": {
+   "outcome": "SOLVED",
+   "sha": "186ff1f9df15a1be",
+   "sumRT": 0.9999999815045695
+  },
+  "pmm1d_conical_M7": {
+   "outcome": "SOLVED",
+   "sha": "186ff1f9df15a1be",
+   "sumRT": 0.9999999815045695
+  },
+  "pmm1d_conical_oop_M3": {
+   "outcome": "NotImplementedError",
+   "sumRT": null
+  },
+  "pmm1d_conical_oop_M5": {
+   "outcome": "NotImplementedError",
+   "sumRT": null
+  },
+  "pmm1d_conical_oop_M7": {
+   "outcome": "NotImplementedError",
+   "sumRT": null
+  },
+  "pmm1d_oop_vert_M3": {
+   "outcome": "SOLVED",
+   "sha": "8bea073f50dd4672",
+   "sumRT": 1.0000006406302884
+  },
+  "pmm1d_oop_vert_M5": {
+   "outcome": "SOLVED",
+   "sha": "8bea073f50dd4672",
+   "sumRT": 1.0000006406302884
+  },
+  "pmm1d_oop_vert_M7": {
+   "outcome": "SOLVED",
+   "sha": "8bea073f50dd4672",
+   "sumRT": 1.0000006406302884
+  },
+  "pmm1d_oop_vert_M9": {
+   "outcome": "SOLVED",
+   "sha": "8bea073f50dd4672",
+   "sumRT": 1.0000006406302884
+  },
+  "pmm1d_oop_vert_perlayer_M5": {
+   "outcome": "SOLVED",
+   "sha": "8bea073f50dd4672",
+   "sumRT": 1.0000006406302884
+  },
+  "pmm1d_slant0.2_M11": {
+   "outcome": "SOLVED",
+   "sha": "973914eb5d1547cb",
+   "sumRT": 1.0000000008843113
+  },
+  "pmm1d_slant0.2_M3": {
+   "outcome": "SOLVED",
+   "sha": "973914eb5d1547cb",
+   "sumRT": 1.0000000008843113
+  },
+  "pmm1d_slant0.2_M5": {
+   "outcome": "SOLVED",
+   "sha": "973914eb5d1547cb",
+   "sumRT": 1.0000000008843113
+  },
+  "pmm1d_slant0.2_M7": {
+   "outcome": "SOLVED",
+   "sha": "973914eb5d1547cb",
+   "sumRT": 1.0000000008843113
+  },
+  "pmm1d_slant0.2_M9": {
+   "outcome": "SOLVED",
+   "sha": "973914eb5d1547cb",
+   "sumRT": 1.0000000008843113
+  },
+  "pmm1d_slant0.35_M11": {
+   "outcome": "SOLVED",
+   "sha": "7f480b67c039c1d0",
+   "sumRT": 0.999999998956075
+  },
+  "pmm1d_slant0.35_M3": {
+   "outcome": "SOLVED",
+   "sha": "7f480b67c039c1d0",
+   "sumRT": 0.999999998956075
+  },
+  "pmm1d_slant0.35_M5": {
+   "outcome": "SOLVED",
+   "sha": "7f480b67c039c1d0",
+   "sumRT": 0.999999998956075
+  },
+  "pmm1d_slant0.35_M7": {
+   "outcome": "SOLVED",
+   "sha": "7f480b67c039c1d0",
+   "sumRT": 0.999999998956075
+  },
+  "pmm1d_slant0.35_M9": {
+   "outcome": "SOLVED",
+   "sha": "7f480b67c039c1d0",
+   "sumRT": 0.999999998956075
+  },
+  "pmm1d_slant0.35_bigperiod_M11": {
+   "outcome": "SOLVED",
+   "sha": "4eaaf9003800c943",
+   "sumRT": 0.9995919502793886
+  },
+  "pmm1d_slant0.35_cov_M7": {
+   "outcome": "SOLVED",
+   "sha": "e000b4f37444b125",
+   "sumRT": 0.9999999602461278
+  },
+  "pmm1d_slant0.35_deg15_M5": {
+   "outcome": "SOLVED",
+   "sha": "bde15a26bad69b78",
+   "sumRT": 0.9999999999999545
+  },
+  "pmm1d_slant0.35_deg7_M5": {
+   "outcome": "SOLVED",
+   "sha": "c3799b2f94bf49dd",
+   "sumRT": 0.9997499378726554
+  },
+  "pmm1d_slant0.35_densesup_M7": {
+   "outcome": "SOLVED",
+   "sha": "ff0a04e5d385e8af",
+   "sumRT": 1.000003317894961
+  },
+  "pmm1d_slant0.35_grazing_M7": {
+   "outcome": "SOLVED",
+   "sha": "57ce7087f9fc09a2",
+   "sumRT": 1.000000008007116
+  },
+  "pmm1d_slant0.35_hicontrast_M7": {
+   "outcome": "SOLVED",
+   "sha": "02961678f64ca3db",
+   "sumRT": 1.000000306149985
+  },
+  "pmm1d_slant0.35_perlayer_M5": {
+   "outcome": "SOLVED",
+   "sha": "7f480b67c039c1d0",
+   "sumRT": 0.999999998956075
+  },
+  "pmm1d_slant0.35_perlayer_M9": {
+   "outcome": "SOLVED",
+   "sha": "7f480b67c039c1d0",
+   "sumRT": 0.999999998956075
+  },
+  "pmm1d_slant0.5_M11": {
+   "outcome": "SOLVED",
+   "sha": "80b1a58e4be4dc73",
+   "sumRT": 0.9999999987921707
+  },
+  "pmm1d_slant0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "80b1a58e4be4dc73",
+   "sumRT": 0.9999999987921707
+  },
+  "pmm1d_slant0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "80b1a58e4be4dc73",
+   "sumRT": 0.9999999987921707
+  },
+  "pmm1d_slant0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "80b1a58e4be4dc73",
+   "sumRT": 0.9999999987921707
+  },
+  "pmm1d_slant0.5_M9": {
+   "outcome": "SOLVED",
+   "sha": "80b1a58e4be4dc73",
+   "sumRT": 0.9999999987921707
+  },
+  "pmm1d_slant0.7_M11": {
+   "outcome": "SOLVED",
+   "sha": "3c1358bf0412de64",
+   "sumRT": 1.000000291951225
+  },
+  "pmm1d_slant0.7_M3": {
+   "outcome": "SOLVED",
+   "sha": "3c1358bf0412de64",
+   "sumRT": 1.000000291951225
+  },
+  "pmm1d_slant0.7_M5": {
+   "outcome": "SOLVED",
+   "sha": "3c1358bf0412de64",
+   "sumRT": 1.000000291951225
+  },
+  "pmm1d_slant0.7_M7": {
+   "outcome": "SOLVED",
+   "sha": "3c1358bf0412de64",
+   "sumRT": 1.000000291951225
+  },
+  "pmm1d_slant0.7_M9": {
+   "outcome": "SOLVED",
+   "sha": "3c1358bf0412de64",
+   "sumRT": 1.000000291951225
+  },
+  "pure_magnetic_nm4_M2": {
+   "outcome": "SOLVED",
+   "sha": "4e72ee12d5112926",
+   "sumRT": 0.9725987492363443
+  },
+  "pure_oop_vert_nm4_M2": {
+   "outcome": "SOLVED",
+   "sha": "cbb522ebddf7f70a",
+   "sumRT": 0.972205448301014
+  },
+  "pure_slant0.5_nm4_M2": {
+   "outcome": "SOLVED",
+   "sha": "05ee7b44df3a6b08",
+   "sumRT": 0.9720220526647555
+  },
+  "pure_slant0.5_nm6_M3": {
+   "outcome": "SOLVED",
+   "sha": "f75839f507348f01",
+   "sumRT": 0.9999978314190032
+  },
+  "scalA_sl0.15_M5": {
+   "outcome": "SOLVED",
+   "sha": "daf6152738020b0e",
+   "sumRT": 1.042022295279818
+  },
+  "scalA_sl0.25_M5": {
+   "outcome": "SOLVED",
+   "sha": "4ae244a8aba301ab",
+   "sumRT": 1.0435854786495544
+  },
+  "scalA_sl0.35_M3": {
+   "outcome": "SOLVED",
+   "sha": "2b85613a081af0b7",
+   "sumRT": 1.065153234642819
+  },
+  "scalA_sl0.35_M5": {
+   "outcome": "SOLVED",
+   "sha": "f1d1270087a59b8e",
+   "sumRT": 7.627807419645026e+27
+  },
+  "scalA_sl0.35_M7": {
+   "outcome": "SOLVED",
+   "sha": "c4cc8ccdf8ff5c89",
+   "sumRT": 2.2379058616276826e+28
+  },
+  "scalA_sl0.5_M11": {
+   "outcome": "SOLVED",
+   "sha": "c4d00b39d303a7cb",
+   "sumRT": 1.0006307018964744
+  },
+  "scalA_sl0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "bb9465cfb8a090c1",
+   "sumRT": 1.921188515853815e+29
+  },
+  "scalA_sl0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "b821580ba20e313e",
+   "sumRT": 1.5473011813196337e+29
+  },
+  "scalA_sl0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "b6aea9d619d74da8",
+   "sumRT": 1.1199598214120691e+30
+  },
+  "scalA_sl0.5_M9": {
+   "outcome": "SOLVED",
+   "sha": "f836b6db63b556d4",
+   "sumRT": 1.0065082446536584
+  },
+  "scalA_sl0.5_deg15_M5": {
+   "outcome": "SOLVED",
+   "sha": "d1afea5a50906ff6",
+   "sumRT": 1.6580429157560612e+27
+  },
+  "scalA_sl0.5_deg7_M5": {
+   "outcome": "SOLVED",
+   "sha": "62d9061a1ac22b0b",
+   "sumRT": 1.044187734637096
+  },
+  "scalA_sl0.5_densesup_M5": {
+   "outcome": "SOLVED",
+   "sha": "57a0262dc5494edd",
+   "sumRT": 1.0811646457435589
+  },
+  "scalA_sl0.5_ground2.1_M5": {
+   "outcome": "SOLVED",
+   "sha": "d959912ffa676d10",
+   "sumRT": 1.0324499004697074
+  },
+  "scalA_sl0.5_hicontrast_M5": {
+   "outcome": "SOLVED",
+   "sha": "b810a7dae601a6fc",
+   "sumRT": 5.866962771373356e+28
+  },
+  "scalA_sl0.5_normal_M5": {
+   "outcome": "SOLVED",
+   "sha": "f6dc98cecca6a856",
+   "sumRT": 1.0349819662357276
+  },
+  "scalA_sl0.5_th40_M5": {
+   "outcome": "SOLVED",
+   "sha": "3c8289126e666e63",
+   "sumRT": 1.0726292370875834
+  },
+  "scalA_sl0.5_th70_M5": {
+   "outcome": "SOLVED",
+   "sha": "141b07405b41468d",
+   "sumRT": 6.731724245100784e+32
+  },
+  "scalA_sl0.5_th80_M7": {
+   "outcome": "SOLVED",
+   "sha": "102846d533142f29",
+   "sumRT": 1.0263284568827902
+  },
+  "scalA_sl0.5_wood_M7": {
+   "outcome": "SOLVED",
+   "sha": "07b3f41007de0415",
+   "sumRT": 1.009967617014694
+  },
+  "scalA_sl0.5_woodx0.997_M7": {
+   "outcome": "SOLVED",
+   "sha": "b6076740e46158af",
+   "sumRT": 1.0099796370366017
+  },
+  "scalA_sl0.7_M3": {
+   "outcome": "SOLVED",
+   "sha": "bf58af552b25d16f",
+   "sumRT": 2.7709833893703242e+26
+  },
+  "scalA_sl0.7_M5": {
+   "outcome": "SOLVED",
+   "sha": "1eb2451f1926e6ec",
+   "sumRT": 7.789599351133432e+28
+  },
+  "scalA_sl0.7_M7": {
+   "outcome": "SOLVED",
+   "sha": "1ab570459ac3eab5",
+   "sumRT": 1.0235813901201996
+  },
+  "scalA_vert_M5": {
+   "outcome": "SOLVED",
+   "sha": "5e56531ce1a7a4ed",
+   "sumRT": 1.0381658644140843
+  },
+  "scalB_sl0.35_M3": {
+   "outcome": "SOLVED",
+   "sha": "024e55f1df7bd884",
+   "sumRT": 1.035037688755292
+  },
+  "scalB_sl0.35_M5": {
+   "outcome": "SOLVED",
+   "sha": "1ea06eb875514e1e",
+   "sumRT": 1.0097660148378558
+  },
+  "scalB_sl0.35_M7": {
+   "outcome": "SOLVED",
+   "sha": "c3b1664da2c3156e",
+   "sumRT": 1.1769002295530612e+28
+  },
+  "scalB_sl0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "3235dfc95d1cc592",
+   "sumRT": 1.0172419200241392
+  },
+  "scalB_sl0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "0afbb3851a10e74f",
+   "sumRT": 1.018373352377996e+28
+  },
+  "scalB_sl0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "404374a12cf18446",
+   "sumRT": 1.0300571146613475
+  },
+  "scalB_sl0.7_M3": {
+   "outcome": "SOLVED",
+   "sha": "7d700d5bc2ea34e2",
+   "sumRT": 2.0521973997981294e+27
+  },
+  "scalB_sl0.7_M5": {
+   "outcome": "SOLVED",
+   "sha": "a85d294c2aa389bc",
+   "sumRT": 6.499757682777979e+27
+  },
+  "scalB_sl0.7_M7": {
+   "outcome": "SOLVED",
+   "sha": "58f6894cab2cb033",
+   "sumRT": 1.0313026457065462
+  },
+  "scalC_sl0.35_M3": {
+   "outcome": "SOLVED",
+   "sha": "2774b3b75025f443",
+   "sumRT": 3.2992261378488366e+26
+  },
+  "scalC_sl0.35_M5": {
+   "outcome": "SOLVED",
+   "sha": "4017129b254d7de2",
+   "sumRT": 1.122628832999926e+32
+  },
+  "scalC_sl0.35_M7": {
+   "outcome": "SOLVED",
+   "sha": "5912b5014d23892c",
+   "sumRT": 1.0178341711272973
+  },
+  "scalC_sl0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "3921aa45bf4c5a9f",
+   "sumRT": 1.0808212390258047
+  },
+  "scalC_sl0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "906b55adf2509b5c",
+   "sumRT": 1.137165985360398e+31
+  },
+  "scalC_sl0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "b49b359db2c8ed08",
+   "sumRT": 1.0216397198658902
+  },
+  "scalC_sl0.7_M3": {
+   "outcome": "SOLVED",
+   "sha": "4642b12ee53b245d",
+   "sumRT": 1.0952038180417365
+  },
+  "scalC_sl0.7_M5": {
+   "outcome": "SOLVED",
+   "sha": "d8d2aacf3b436dcd",
+   "sumRT": 1.2929044313765376e+33
+  },
+  "scalC_sl0.7_M7": {
+   "outcome": "SOLVED",
+   "sha": "c893fb5dbb864433",
+   "sumRT": 1.514339406519451e+26
+  },
+  "stag_slant0.5_nm4_M2": {
+   "outcome": "SOLVED",
+   "sha": "05ee7b44df3a6b08",
+   "sumRT": 0.9720220526647555
+  }
+ },
+ "stamp": {
+  "arm": "rev",
+  "build": "wsl",
+  "jax": "0.10.2",
+  "jax_x64": false,
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "/mnt/c/tmp/lum_vslant_rev/lumenairy/__init__.py",
+  "numpy": "2.4.6",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "scipy": "1.17.1",
+  "threads": {
+   "MKL_NUM_THREADS": null,
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  },
+  "tree": "/mnt/c/tmp/lum_vslant_rev",
+  "utc": "2026-09-10T11:37:46Z"
+ },
+ "total_secs": 924.4,
+ "unarmed_control": {
+  "armed": "TypeError: _guarded_inverse() got an unexpected keyword argument 'rcond_refuse'",
+  "plain_sha": "5b657dd91fb04d81",
+  "unarmed": "RETURNED",
+  "unarmed_identical": true,
+  "unarmed_sha": "5b657dd91fb04d81"
+ }
+}
