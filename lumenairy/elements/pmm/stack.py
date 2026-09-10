@@ -255,6 +255,113 @@ _PASSIVE_ANTIHERM_DEADBAND = 16.0 * float(np.finfo(float).eps)
 #: err = 1.0 / 0.8 / 4.1 x delta, i.e. CORRECT.
 _SLIVER_OWN_SCALE_RATIO = 100.0
 
+#: A layer is solved IN A SHEARED FRAME exactly when the cascade routes it to
+#: the metric generator, i.e. ``abs(slant_angle) > 1e-12`` -- the SAME literal
+#: :meth:`PMMStack.solve` uses to promote the stack to the general
+#: forward/backward cascade and to pick ``_layer_modes_metric`` per layer.  It
+#: is repeated as a named constant so the anchor below and the routing can
+#: never drift apart.
+_SLANT_FRAME_MIN = 1e-12
+
+
+def _layer_enters_slant_frame_1d(layer):
+    """Does the 1-D layer ``(thickness, segments, slant_angle)`` actually get
+    SOLVED IN A SHEARED FRAME?
+
+    UNLIKE the 2-D hybrid, where a UNIFORM (or constant-tile) slanted layer is
+    short-circuited to ``_homogeneous_modes`` BEFORE the slant is read and
+    therefore never enters a frame, the 1-D metric generator has NO such
+    short-circuit: ``_build_generator_metric`` adds the convection
+    ``tan_conv * Dopx`` whenever ``abs(tan_conv) > 1e-14``, patterned or not.
+
+    MEASURED, and this is the two-sided proof that the 1-D rule differs from
+    the 2-D one: a UNIFORM ``eps = 2.60`` layer of ``d = 0.40 um`` at
+    ``tan(slant) = 0.60`` (walk ``0.30 P``), oblique 25, against the VERTICAL
+    film of the same ``eps`` -- which is the same physical solid, a shear of a
+    homogeneous medium being a pure coordinate change:
+
+        transmission Jones as returned   1.0950
+        transmission Jones ``x P``       2.87e-14   <- machine precision
+        transmission Jones ``x conj(P)`` 1.8326
+        REFLECTION Jones as returned     1.51e-14   (already lab-referenced)
+        ``dR`` / ``dT``                  1.9e-15 / 7.4e-15
+
+    So a uniform slanted 1-D layer IS frame-referenced and MUST contribute to
+    the walk sum."""
+    return abs(float(layer[2])) > _SLANT_FRAME_MIN
+
+
+def _slant_frame_walk_1d(layers):
+    """The accumulated lateral frame offset ``W = sum_j tan(phi_j) d_j``
+    (metres) over the 1-D layers that actually enter a sheared frame.
+
+    Each sheared region is solved in ``u = x - z tan(phi)`` anchored at ITS OWN
+    TOP face, and the cascade matches successive layers' FRAME coefficients
+    directly (``_interface_smatrix_general(Mls[i], Mls[i+1])`` with no
+    re-referencing), so the frames CONTINUE downward and the offsets ADD --
+    the 1-D specialisation of :func:`lumenairy.elements.pmm.stack2d
+    ._slant_frame_walk`.
+
+    ``add_sheared_grating`` fixes the SIGN: it stores
+    ``slant_angle = arctan(shear * period / thickness)`` and lays the lab ridge
+    centre at ``centre + shear * (zeta - 0.5)`` with ``zeta = 0`` at the TOP,
+    so a POSITIVE ``slant_angle`` walks the structure toward ``+x`` with depth
+    and ``tan(phi) d = shear * period``.
+
+    Returns ``0.0`` for a stack with no sheared region -- the signal to skip
+    the anchor entirely and stay bit-identical to the pre-anchor path."""
+    return float(sum(np.tan(float(sl)) * float(t) for t, _segs, sl in layers
+                     if _layer_enters_slant_frame_1d((t, _segs, sl))))
+
+
+def _anchor_transmission_to_lab_1d(modal, wavelength, walk):
+    """Re-reference the TRANSMITTED per-order amplitudes from the sheared FRAME
+    to the LAB basis: ``A_lab(m) = exp(+i k0 alpha_m W) A_frame(m)``.
+
+    A sheared region is solved in ``u = x - t z``, in which the structure is
+    ``z``-invariant, so the state the cascade carries is the FRAME Fourier
+    coefficient of ``sum_m F_m(z) exp(i k0 alpha_m u)``.  At the stack's TOP
+    (``z = 0``) frame and lab coincide, which is why ``R``, ``T``, the
+    reflection Jones and the REFLECTED per-order amplitudes need nothing and
+    stay BIT-IDENTICAL.  At the bottom of the sheared run the same plane is
+    ``u = x - W``, so against the substrate's own lab basis
+    ``exp(i k0 alpha_m x)`` every transmitted amplitude carries the extra
+    ``exp(+i k0 alpha_m W)``.
+
+    ``alpha_m = kx_m / k0`` is REAL for every order, propagating or evanescent,
+    so the factor is UNIMODULAR: no efficiency can move, which is exactly why
+    the omission was silent (defect V2 of
+    ``docs/audits/VERIFY_HYBRID_SLANT_TRANSMISSION_ANCHOR_2026_09_11.md``).
+    MEASURED on the ``|P_m| - 1`` of a nine-order solve: ``1.11e-16``.
+
+    Against the engine's OWN z-staircase of the identical parallelogram --
+    which is lab-referenced by construction -- at ``P = 0.80 um``,
+    ``wl = 0.55 um``, ``d = 0.40 um``, ``eps 4.20 / 1.45``, duty 0.45,
+    ``shear = 0.30`` (a 0.30-PERIOD walk, neither the half- nor the
+    quarter-period degeneracy), oblique 25, ``n_slices`` 6 / 12 / 24:
+
+        transmission Jones, as returned  1.0862 / 1.0878 / 1.0936   (FLAT)
+        transmission Jones, ``x P``      3.66e-02 / 1.43e-02 / 5.10e-03
+        transmission Jones, ``x conj(P)``1.8189 / 1.8228 / 1.8292
+        per-order amps, as returned      1.4703 / 1.4715 / 1.4724   (FLAT)
+        per-order amps, ``x P``          3.49e-02 / 1.37e-02 / 5.08e-03
+        the staircase's OWN last step    --       / 2.45e-02 / 1.04e-02
+        the REFLECTION Jones, as ret.    1.92e-02 / 9.30e-03 / 4.62e-03
+
+    -- the shipped arm converges through the oracle's own step (2.04x below it
+    at ``n_slices`` = 24) while the un-anchored one is flat to 0.7% over a 4x
+    refinement, and the conjugate is WORSE than applying nothing at all.  The
+    reflection converges AS RETURNED, exactly as the derivation says it must.
+
+    Modifies ``modal`` in place and returns it."""
+    if modal is None or walk == 0.0:
+        return modal
+    k0 = 2.0 * np.pi / float(wavelength)
+    ph = np.exp(1j * k0 * np.real(np.asarray(modal["kx"])) * walk)
+    modal["tx"] = modal["tx"] * ph
+    modal["ty"] = modal["ty"] * ph
+    return modal
+
 
 def _cross_layer_sliver(layer_segments, min_feature_frac):
     """The union cells that NO SINGLE LAYER asked for and that are far finer
@@ -1933,6 +2040,14 @@ class PMMStack:
             S11, S21, order_x, order_y, kxv, kyv, kx0, ky0, eps_sup, eps_sub,
             return_modal=True)
         modal["wavelength"] = float(wl)          # the grazing-safe-nudged wl
+        # NO frame anchor here, and that is structural rather than an omission:
+        # the conical dispatch above REFUSES any layer with
+        # ``abs(slant_angle) > 1e-12`` ("conical incidence (phi != 0) is not
+        # available for SLANTED layers"), so this cascade never solves in a
+        # sheared frame and ``_slant_frame_walk_1d`` would return 0.0.  If that
+        # refusal is ever lifted, the 2-D rule (BOTH alpha components against
+        # BOTH walk components) has to be applied here -- this dict's ``kx``
+        # and ``ky`` are the 2-D pair, not the 1-D one.
         self._modal = modal                      # B: public-gauge amplitudes
         # Energy tripwire (audit review): the conical path must warn on R+T > 1
         # like every classical PMMStack return, so an under-resolved solve is not
@@ -2393,6 +2508,12 @@ class PMMStack:
             Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc, kx0n, N,
             return_modal=True)
         modal["wavelength"] = float(wl)
+        # FRAME ANCHOR (2026-09-11, defect V2).  A sheared layer is solved in
+        # u = x - z tan(phi); the TRANSMITTED amplitudes come out referenced to
+        # that frame and must be brought back to the substrate's lab basis.
+        # No-op (and bit-identical) on every stack with no sheared layer.
+        _anchor_transmission_to_lab_1d(
+            modal, wl, _slant_frame_walk_1d(self._layers))
         self._modal = modal          # AUDIT_DYNAMETA_CONSUMER_API_GAPS B
         if retain_internal and getattr(self, "_internal", None) is not None:
             m0 = np.where(orders == 0)[0][0]
@@ -2602,6 +2723,10 @@ class PMMStack:
             Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
             kx0 / k0, N, return_modal=True)
         modal["wavelength"] = float(wl)
+        # NO frame anchor: this is the ALL-VERTICAL IN-PLANE per-layer cascade
+        # (``solve`` routes any ``abs(slant_angle) > 1e-12`` or out-of-plane
+        # layer to ``_solve_general_perlayer`` instead), so the walk is 0.0 by
+        # construction and the transmitted amplitudes are already lab-referenced.
         self._modal = modal
         if retain_internal and getattr(self, "_internal", None) is not None:
             m0 = np.where(orders == 0)[0][0]
@@ -2737,6 +2862,10 @@ class PMMStack:
             Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
             kx0 / k0, N, return_modal=True)
         modal["wavelength"] = float(wl)
+        # FRAME ANCHOR (2026-09-11, defect V2) -- the per-layer twin of the
+        # shared-grid site above; same walk sum, same no-op on vertical stacks.
+        _anchor_transmission_to_lab_1d(
+            modal, wl, _slant_frame_walk_1d(self._layers))
         self._modal = modal
         _warn_stack_energy(R_eff, T_eff, stack=self)
         return orders, R_eff, T_eff, jones
@@ -2766,7 +2895,19 @@ class PMMStack:
         field: the classical mount (all-vertical in-plane, convection-slant
         and generalized out-of-plane cascades) and the native conical path
         (patterned nodal + uniform Fourier).  The covariant (uniform-slant)
-        cascade and the JAX twin do not retain amplitudes."""
+        cascade and the JAX twin do not retain amplitudes.
+
+        SLANTED STACKS -- the frame anchor (2026-09-11).  A sheared layer is
+        solved in ``u = x - z tan(phi)``, so the cascade's transmitted state is
+        the FRAME Fourier coefficient.  The ``'transmission'`` port is
+        re-referenced to the substrate's LAB basis on the way out,
+        ``A_lab(m) = exp(+i k0 alpha_m W) A_frame(m)`` with
+        ``W = sum_j tan(phi_j) d_j`` over the sheared layers
+        (:func:`_slant_frame_walk_1d`); the ``'reflection'`` port needs
+        nothing, because the frame is anchored at the stack's TOP, which is
+        where the reflected wave leaves it.  The factor is unimodular, so
+        ``R`` / ``T`` are untouched, and it is EXACTLY ``1`` on every surface
+        of a stack with no sheared layer."""
         if port not in ("reflection", "transmission"):
             raise ValueError(
                 f"PMMStack.per_order_amplitudes: port must be 'reflection' "
@@ -2794,7 +2935,11 @@ class PMMStack:
         ``[E_x; E_y]``, PUBLIC ``exp(-iwt)`` convention) -- the phase-bearing
         modulator observable, previously unavailable from any PMM-family
         solve (AUDIT_DYNAMETA_CONSUMER_API_GAPS B minimal cut).  Same
-        availability as :meth:`per_order_amplitudes`."""
+        availability as :meth:`per_order_amplitudes`, and -- on a stack holding
+        a SHEARED layer -- the same LAB re-referencing: this is
+        ``exp(+i k0 alpha_0 W)`` times the cascade's frame answer, which is the
+        identity at NORMAL incidence (``alpha_0 = 0``, so ``P_0 = 1`` for any
+        walk) and a genuine phase at every oblique mount."""
         m = self._modal
         if m is None:
             raise ValueError(

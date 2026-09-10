@@ -1,0 +1,119 @@
+{
+ "_arm": {
+  "arm": "slfix",
+  "build": "wsl",
+  "tag": "slfix.wsl",
+  "tree": "prefix(4a987e3)",
+  "lumenairy": "/mnt/c/tmp/lum_slfix_pre/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "fixture": {
+  "period_um": 0.7999999999999999,
+  "wl_um": 0.55,
+  "d_um": 0.39999999999999997,
+  "eps_ridge": 4.2,
+  "eps_groove": 1.45,
+  "duty": 0.45,
+  "shear": 0.3,
+  "walk_um": 0.24,
+  "walk_periods": 0.3,
+  "theta_deg": 25.0,
+  "degree": 12,
+  "n_orders": 7,
+  "n_sup": 1.0,
+  "n_sub": 1.6
+ },
+ "transmission_surface": {
+  "auto": "NO per-order amplitudes retained",
+  "convection": "retained",
+  "covariant": "NO per-order amplitudes retained"
+ },
+ "P0": {
+  "re": 0.40051716700908824,
+  "im": 0.9162892550559644,
+  "arg": 1.158715135730155,
+  "alpha0": 0.42261826174069944,
+  "walk_um": 0.24,
+  "n_orders_retained": 9,
+  "max_abs_dev": 1.1102230246251565e-16,
+  "ptp_arg": 5.654866776461628
+ },
+ "ladder_vs_staircase": {
+  "ns6": {
+   "J_as_returned": 1.086242967618172,
+   "J_x_P": 0.036570729453886106,
+   "J_x_conj_P": 1.818849024065647,
+   "J_div_P": 1.818849024065647,
+   "amps_as_returned": 1.470318507502329,
+   "amps_x_P": 0.034931427353644295,
+   "amps_x_conj_P": 1.2925201254198297,
+   "amps_div_P": 1.2925201254198297,
+   "J_reflection": 0.01924241211044133,
+   "dR": 0.0029715783443486424,
+   "dT": 0.007328739248536192,
+   "stair_step_J": null,
+   "stair_step_amps": null
+  },
+  "ns12": {
+   "J_as_returned": 1.087829740126047,
+   "J_x_P": 0.01428894229961832,
+   "J_x_conj_P": 1.8228361166746003,
+   "J_div_P": 1.8228361166746003,
+   "amps_as_returned": 1.4714989449113458,
+   "amps_x_P": 0.013729276821554419,
+   "amps_x_conj_P": 1.2954790356527022,
+   "amps_div_P": 1.2954790356527022,
+   "J_reflection": 0.009304179297275873,
+   "dR": 0.0009970634398423078,
+   "dT": 0.0048258708319796895,
+   "stair_step_J": 0.024457185008161988,
+   "stair_step_amps": 0.02221080881214523
+  },
+  "ns24": {
+   "J_as_returned": 1.0936395826827763,
+   "J_x_P": 0.005098694023120842,
+   "J_x_conj_P": 1.829160473775683,
+   "J_div_P": 1.8291604737756828,
+   "amps_as_returned": 1.4724135042380584,
+   "amps_x_P": 0.0050829724792686775,
+   "amps_x_conj_P": 1.2960790443264807,
+   "amps_div_P": 1.2960790443264807,
+   "J_reflection": 0.004622035445131966,
+   "dR": 0.000511154618831465,
+   "dT": 0.002091993450150126,
+   "stair_step_J": 0.010378903753584317,
+   "stair_step_amps": 0.008972826882664662
+  }
+ },
+ "uniform_slanted_film": {
+  "J_as_returned": 1.0949729065058205,
+  "J_x_P": 1.257883218626227e-14,
+  "J_x_conj_P": 1.8325785101119252,
+  "amps_as_returned": 1.0949729065058202,
+  "amps_x_P": 2.823487792926701e-14,
+  "amps_x_conj_P": 1.8325785101119247,
+  "J_reflection": 1.0745325304299141e-14,
+  "dR": 1.2281842209915794e-15,
+  "dT": 3.1086244689504383e-15
+ },
+ "normal_incidence": {
+  "alpha0": 0.0,
+  "P0_minus_1": 0.0,
+  "n_distinct_P": 9,
+  "J_as_returned": 0.03151182920236196,
+  "J_x_P0": 0.03151182920236196,
+  "amps_as_returned": 1.6886134503066936,
+  "amps_x_P": 0.01098258686180168,
+  "amps_x_conj_P": 1.564791501769713
+ },
+ "seconds": 380.6
+}

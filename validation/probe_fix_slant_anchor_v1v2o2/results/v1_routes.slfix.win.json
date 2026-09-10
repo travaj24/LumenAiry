@@ -1,0 +1,100 @@
+{
+ "_arm": {
+  "arm": "slfix",
+  "build": "win",
+  "tag": "slfix.win",
+  "lumenairy": "C:\\tmp\\lum_slfix\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "numpy_slanted_vs_vertical": {
+  "dR": 0.0036700921434802886,
+  "dT": 0.05513540231118866,
+  "dJones": 0.01545725310244281
+ },
+ "routes": {
+  "eps_tensor_cell": {
+   "outcome": "REFUSED",
+   "msg": "pmm_jones_2d: a SLANTED patterned cell is not differentiable -- the traced input(s) [eps_tensor_cell] route this call to the jnp twin (_pmm_jones_2d_cell_jax), which has no notion of a slant and would SILENTLY return the VERTICAL answer (measured: dR 1.3e-15 / dT 4.2e-15 / dJones 1.5e-14 against the NumPy VERTICAL call, dR 3.7e-03 / dT 5.5e-02 / dJones 1.5e-02 against the correct NumPy SLANTED one"
+  },
+  "n_substrate": {
+   "outcome": "REFUSED",
+   "msg": "pmm_jones_2d: a SLANTED patterned cell is not differentiable -- the traced input(s) [n_substrate] route this call to the jnp twin (_pmm_jones_2d_cell_jax), which has no notion of a slant and would SILENTLY return the VERTICAL answer (measured: dR 1.3e-15 / dT 4.2e-15 / dJones 1.5e-14 against the NumPy VERTICAL call, dR 3.7e-03 / dT 5.5e-02 / dJones 1.5e-02 against the correct NumPy SLANTED one, wi"
+  },
+  "n_superstrate": {
+   "outcome": "REFUSED",
+   "msg": "pmm_jones_2d: a SLANTED patterned cell is not differentiable -- the traced input(s) [n_superstrate] route this call to the jnp twin (_pmm_jones_2d_cell_jax), which has no notion of a slant and would SILENTLY return the VERTICAL answer (measured: dR 1.3e-15 / dT 4.2e-15 / dJones 1.5e-14 against the NumPy VERTICAL call, dR 3.7e-03 / dT 5.5e-02 / dJones 1.5e-02 against the correct NumPy SLANTED one, "
+  },
+  "depth": {
+   "outcome": "REFUSED",
+   "msg": "pmm_jones_2d: a SLANTED patterned cell is not differentiable -- the traced input(s) [depth] route this call to the jnp twin (_pmm_jones_2d_cell_jax), which has no notion of a slant and would SILENTLY return the VERTICAL answer (measured: dR 1.3e-15 / dT 4.2e-15 / dJones 1.5e-14 against the NumPy VERTICAL call, dR 3.7e-03 / dT 5.5e-02 / dJones 1.5e-02 against the correct NumPy SLANTED one, with no "
+  },
+  "wavelength": {
+   "outcome": "REFUSED",
+   "msg": "pmm_jones_2d: a SLANTED patterned cell is not differentiable -- the traced input(s) [wavelength] route this call to the jnp twin (_pmm_jones_2d_cell_jax), which has no notion of a slant and would SILENTLY return the VERTICAL answer (measured: dR 1.3e-15 / dT 4.2e-15 / dJones 1.5e-14 against the NumPy VERTICAL call, dR 3.7e-03 / dT 5.5e-02 / dJones 1.5e-02 against the correct NumPy SLANTED one, wit"
+  },
+  "theta": {
+   "outcome": "REFUSED",
+   "msg": "pmm_jones_2d: a SLANTED patterned cell is not differentiable -- the traced input(s) [theta] route this call to the jnp twin (_pmm_jones_2d_cell_jax), which has no notion of a slant and would SILENTLY return the VERTICAL answer (measured: dR 1.3e-15 / dT 4.2e-15 / dJones 1.5e-14 against the NumPy VERTICAL call, dR 3.7e-03 / dT 5.5e-02 / dJones 1.5e-02 against the correct NumPy SLANTED one, with no "
+  },
+  "phi": {
+   "outcome": "REFUSED",
+   "msg": "pmm_jones_2d: a SLANTED patterned cell is not differentiable -- the traced input(s) [phi] route this call to the jnp twin (_pmm_jones_2d_cell_jax), which has no notion of a slant and would SILENTLY return the VERTICAL answer (measured: dR 1.3e-15 / dT 4.2e-15 / dJones 1.5e-14 against the NumPy VERTICAL call, dR 3.7e-03 / dT 5.5e-02 / dJones 1.5e-02 against the correct NumPy SLANTED one, with no wa"
+  }
+ },
+ "controls": {
+  "vertical_traced_depth": {
+   "outcome": "SOLVED",
+   "hashes": {
+    "orders": "6da240d455a94db8",
+    "R": "7bf932e277ce3d1f",
+    "T": "da1070f2f9628e04",
+    "J": "2ad8e937c0a2159c"
+   },
+   "vs_numpy": {
+    "dR": 1.3444106938820255e-15,
+    "dT": 4.2396641752873165e-15,
+    "dJones": 1.4969116971858813e-14
+   }
+  },
+  "const_tile_numpy_slant_is_a_noop": {
+   "dR": 4.85722573273506e-17,
+   "dT": 2.0761170560490427e-14,
+   "dJones": 5.360924007855342e-16
+  },
+  "const_tile_numpy_hashes_equal": false,
+  "const_tile_traced_depth": {
+   "outcome": "SOLVED",
+   "hashes": {
+    "orders": "6da240d455a94db8",
+    "R": "15963161d3b37b94",
+    "T": "7b52c8caf31ef55c",
+    "J": "e6e4a72551b16853"
+   },
+   "vs_numpy_slanted": {
+    "dR": 1.829179068982742e-12,
+    "dT": 2.784136311302725e-08,
+    "dJones": 9.12993819441064e-16
+   },
+   "vs_numpy_vertical": {
+    "dR": 1.829179068982742e-12,
+    "dT": 2.784136311302725e-08,
+    "dJones": 4.895457958845573e-16
+   }
+  },
+  "grad_vertical_traced_depth": {
+   "ad": -332100.24558372184,
+   "fd": -332100.24054097786,
+   "rel": 1.518440329138798e-08
+  }
+ },
+ "jax_version": "0.11.0"
+}

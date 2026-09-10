@@ -361,6 +361,38 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
                                     slant=slant, sym_gauge=gauge, **oop)
 
 
+#: Absolute tolerance on "is this cell CONSTANT-valued?", mirroring
+#: :func:`lumenairy.elements.pmm.stack2d._layer_enters_slant_frame`'s own
+#: uniform-tile test (``max|tile - tile.flat[0]| < 1e-12``) so the two entry
+#: points can never disagree about which slanted cells are genuine no-ops.
+_SLANT_NOOP_TOL = 1e-12
+
+
+def _slanted_cell_is_a_frame_noop(cell):
+    """Is a slanted ``eps_tensor_cell`` a genuine NO-OP -- i.e. CONSTANT-valued
+    over the cell, so the shear is a pure coordinate change of a UNIFORM
+    medium and the lab answer is the vertical film's?
+
+    MEASURED on a constant-tile ``(6, 4, 3, 3)`` cell at ``slant = (0.5, 0)``,
+    oblique 25, against the same call with ``slant=None``: ``dR 4.9e-17 /
+    dT 2.1e-14 / dJones 5.4e-16`` (WIN) and ``8.3e-17 / 2.4e-14 / 2.1e-16``
+    (WSL) -- a machine-precision no-op on all four returns, which is why such a
+    cell must keep SOLVING on the JAX dispatch below rather than be swept up by
+    the refusal.
+
+    A TRACED cell cannot be inspected (that is data-dependent control flow), so
+    it answers ``False`` -- the same "be loud, not silently anchor-free" policy
+    ``_layer_enters_slant_frame`` takes for its own traced tiles.
+    """
+    if is_jax_array(cell):
+        return False
+    c = np.asarray(cell)
+    if c.size == 0:
+        return False
+    return bool(np.all(np.abs(c - c.reshape(-1, *c.shape[2:])[0])
+                       < _SLANT_NOOP_TOL))
+
+
 def pmm_jones_2d(
     period_x: float,
     period_y: float,
@@ -516,6 +548,50 @@ def pmm_jones_2d(
                 "pmm_jones_2d: stabilize=True is not differentiable "
                 "(host-side degree-scan consensus); pass stabilize=False on "
                 "the JAX path.")
+        # SLANT (2026-09-11, defect V1 of
+        # docs/audits/VERIFY_HYBRID_SLANT_TRANSMISSION_ANCHOR_2026_09_11.md).
+        # This branch NEVER READ ``slant``: it hands off to
+        # ``_pmm_jones_2d_cell_jax`` without it, and the
+        # ``slant = _norm_slant_pair(...)`` normalization below is not even
+        # reached until after the branch.  The jnp twin takes no ``slant``
+        # argument at all (``_pmm_jones_2d_cell_jax``'s signature has none, and
+        # before this fix the string did not occur in that module once), so
+        # EVERY ONE of the seven members of ``_jx`` silently returned the
+        # VERTICAL answer.  MEASURED before this guard (jax 0.11.0 / 0.10.2, x64), a
+        # slanted patterned (6, 4, 3, 3) cell at slant = (0.5, 0), oblique 25,
+        # n_orders 3, degree 5, all seven traced routes reading identically:
+        # ``dR 1.3e-15 / dT 4.2e-15 / dJones 1.5e-14`` against the NumPy
+        # VERTICAL call and ``dR 3.670e-03 / dT 5.514e-02 / dJones 1.546e-02``
+        # against the correct NumPy SLANTED one, with ZERO warnings -- i.e. it
+        # WAS the vertical answer, not merely close to it.  Unlike the 2-D
+        # hybrid's frame anchor this is not a unimodular phase: ``R`` and ``T``
+        # are wrong here too, so nothing protects it.
+        #
+        # Same shape, and same remedy, as the ``PMM2DStackHybrid.solve``
+        # refusal (stack2d.py, 2026-09-11): the decision is
+        # "does the cell actually get SOLVED IN A SHEARED FRAME", so a
+        # CONSTANT-tile slanted cell -- a measured no-op, see
+        # :func:`_slanted_cell_is_a_frame_noop` -- and every VERTICAL traced
+        # call still solve, bit for bit.
+        if not _slant_is_zero(slant) and not _slanted_cell_is_a_frame_noop(
+                eps_tensor_cell):
+            _traced = ", ".join(
+                nm for nm, a in zip(
+                    ("eps_tensor_cell", "n_substrate", "n_superstrate",
+                     "depth", "wavelength", "theta", "phi"), _jx)
+                if is_jax_array(a))
+            raise NotImplementedError(
+                f"pmm_jones_2d: a SLANTED patterned cell is not "
+                f"differentiable -- the traced input(s) [{_traced}] route this "
+                f"call to the jnp twin (_pmm_jones_2d_cell_jax), which has no "
+                f"notion of a slant and would SILENTLY return the VERTICAL "
+                f"answer (measured: dR 1.3e-15 / dT 4.2e-15 / dJones 1.5e-14 "
+                f"against the NumPy VERTICAL call, dR 3.7e-03 / dT 5.5e-02 / "
+                f"dJones 1.5e-02 against the correct NumPy SLANTED one, with "
+                f"no warning).  Use NumPy inputs for slanted cells, or "
+                f"z-staircase the slanted layer into vertical ones "
+                f"(PMMStack.add_tapered_grating / PMM2DStackHybrid).  A "
+                f"CONSTANT-valued cell is a genuine no-op and still solves.")
         if region_layout is None:
             raise ValueError(
                 "pmm_jones_2d: a traced eps_tensor_cell cannot define the "
