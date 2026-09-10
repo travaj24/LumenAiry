@@ -1,0 +1,113 @@
+{
+ "lumenairy": "/mnt/c/tmp/lum_vsliver2/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "A_no_mutation": {
+  "delta=0.0001": {
+   "verdict": "REFUSED",
+   "probes": 1,
+   "changed_with_guard": [
+    "_modal"
+   ],
+   "changed_without_guard": [
+    "_modal"
+   ],
+   "state_identical_modulo_solve": true,
+   "src_object_replaced": false,
+   "layers_object_replaced": false,
+   "src_value_identical": true,
+   "has_sliver_probe_attr": false,
+   "min_feature": 1.2e-18,
+   "n_warnings": 0
+  },
+  "delta=3e-05": {
+   "verdict": "REFUSED",
+   "probes": 1,
+   "changed_with_guard": [
+    "_modal"
+   ],
+   "changed_without_guard": [
+    "_modal"
+   ],
+   "state_identical_modulo_solve": true,
+   "src_object_replaced": false,
+   "layers_object_replaced": false,
+   "src_value_identical": true,
+   "has_sliver_probe_attr": false,
+   "min_feature": 1.2e-18,
+   "n_warnings": 0
+  },
+  "prepared": {
+   "verdict": "returned",
+   "probes": 0,
+   "probe_src": [],
+   "eig_cache": 2,
+   "mats_cache": 1,
+   "src_on_stack": false
+  },
+  "prepared_healthy": {
+   "probes": 0,
+   "eig_cache": 1,
+   "mats_cache": 1
+  }
+ },
+ "B_no_recursion": {
+  "delta=0.003": {
+   "verdict": "returned",
+   "probes": 0
+  },
+  "delta=0.0001": {
+   "verdict": "REFUSED",
+   "probes": 1
+  },
+  "delta=3e-05": {
+   "verdict": "REFUSED",
+   "probes": 1
+  },
+  "marked_probe": {
+   "verdict": "returned",
+   "probes": 0,
+   "screen": false,
+   "hazard": false
+  }
+ },
+ "C_cost": {
+  "guarded_solve_ms": 61.110999999982596,
+  "arbiter_ms": 15.51500000005035,
+  "ratio": 0.25388227978685945,
+  "reps": 7
+ },
+ "D_firing_rate": {
+  "n_rows": 600,
+  "n_arbiter_fired": 1,
+  "n_right": 599,
+  "n_arbiter_fired_on_right": 0,
+  "worst_superunity_among_right": 1.1231841112735452e-06,
+  "fixtures": 3
+ },
+ "E_unknown": {
+  "dispersive_sweep": {
+   "verdict": "raised",
+   "probes": 0,
+   "worst": null,
+   "passive": false,
+   "screen": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 23.4 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "no_source": {
+   "verdict": "REFUSED",
+   "probes": 0,
+   "says_could_not_be_run": true,
+   "arbiter_verdict": "unknown",
+   "warnings": []
+  },
+  "no_source_below_round1_bar": {
+   "verdict": "REFUSED",
+   "worst": 2.172979352144298,
+   "above_round1_bar": true,
+   "n_warnings": 0
+  }
+ }
+}

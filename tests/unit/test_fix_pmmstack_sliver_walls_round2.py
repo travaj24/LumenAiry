@@ -272,8 +272,11 @@ def test_the_arbiter_separates_the_two_causes_on_this_build():
       the answer must MOVE far past the snap's own displacement;
     * TRUNCATION rows -- it must SURVIVE.
 
-    Asserted as the verdict, plus one decade of separation on the quantity
-    that carries the decision in each population."""
+    Asserted as the verdict, plus a decade of SEPARATION between the two
+    populations on the quantity that carries each decision -- not as a
+    multiple of either bar (RESTATED 2026-09-11; see the comment on the move
+    assertions below and D-3 of
+    ``docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND2_2026_09_11.md``)."""
     sliver, trunc = [], []
     for deg, d in ((14, 1e-4), (14, 3e-5), (12, 3e-5), (20, 3e-5),
                    (16, 1e-5)):
@@ -297,9 +300,24 @@ def test_the_arbiter_separates_the_two_causes_on_this_build():
     # the closure bar sits between the two populations, with decades
     assert max(s[0] for s in sliver) <= ps._SLIVER_ATTRIB_CLOSURE / 10.0, sliver
     assert min(t[0] for t in trunc) >= ps._SLIVER_ATTRIB_CLOSURE * 10.0, trunc
-    # and the move bar likewise
-    assert min(s[1] for s in sliver) >= ps._SLIVER_MOVE_FACTOR * 3.0, sliver
-    assert max(t[1] for t in trunc) <= ps._SLIVER_MOVE_FACTOR / 3.0, trunc
+    # and the move bar likewise -- but as a SEPARATION between the two
+    # populations THIS test measured, not as a multiple of the bar.
+    #
+    # RESTATED 2026-09-11 by the independent verification
+    # (docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND2_2026_09_11.md, D-3).  This
+    # used to assert `min(sliver move) >= 3 * _SLIVER_MOVE_FACTOR` = 300.  It
+    # holds on these five rows with 16x to spare (4789.5 / 287271.7 / 15956.0
+    # / 15956.5 / 47742.9) and IS FALSE OF THE FAMILY: on a 2,250-row grid
+    # over five fixtures the WRONG population reaches DOWN to 147.41 (pol 1
+    # 134.17), i.e. 2.0x BELOW the multiple this line demanded.  A margin that
+    # holds only on the sample that was chosen is what rule 5 forbids, so what
+    # is asserted now is the DECISION the bar makes -- each population on its
+    # own side of it -- plus the separation between them, which is a property
+    # of the two populations rather than of the constant.
+    assert min(s[1] for s in sliver) > ps._SLIVER_MOVE_FACTOR, sliver
+    assert max(t[1] for t in trunc) < ps._SLIVER_MOVE_FACTOR, trunc
+    assert min(s[1] for s in sliver) > 10.0 * max(t[1] for t in trunc), \
+        (sliver, trunc)
 
 
 def test_the_trigger_sits_above_the_correct_populations_envelope():

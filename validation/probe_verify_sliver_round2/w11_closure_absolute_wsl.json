@@ -1,0 +1,68 @@
+{
+ "lumenairy": "/mnt/c/tmp/lum_vsliver2/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "degree_ladder_no_sliver": {
+  "6": 0.00020778003249821708,
+  "8": 3.729516002604072e-05,
+  "10": 9.83157214817787e-06,
+  "12": 2.9610407814573136e-07,
+  "14": 3.152685446039527e-09
+ },
+ "reference_super_unity": 3.729516002604072e-05,
+ "provably_passive": true,
+ "rows": {
+  "1.194300e-05": {
+   "verdict": "returned",
+   "super_unity": 3.91665317680534e-05,
+   "super_unity_snapped": 3.729394203655367e-05,
+   "drop_factor": 1.050211633022444,
+   "move_ratio": 0.33433110876135197,
+   "err_over_delta": 0.03241388754249111,
+   "err_snapped_over_delta": 0.001931228870385047,
+   "truncation_note": false,
+   "says_min_feature_silences_nothing": false,
+   "closure_bar": 1e-05,
+   "move_bar": 100.0
+  },
+  "6.872600e-06": {
+   "verdict": "returned",
+   "super_unity": 0.19267488903608276,
+   "super_unity_snapped": 3.729445957167954e-05,
+   "drop_factor": 5166.314011489127,
+   "move_ratio": 13664.573463658302,
+   "err_over_delta": 1811.1401639021462,
+   "err_snapped_over_delta": 0.0019313046765956137,
+   "truncation_note": true,
+   "says_min_feature_silences_nothing": true,
+   "closure_bar": 1e-05,
+   "move_bar": 100.0
+  },
+  "5.213400e-06": {
+   "verdict": "returned",
+   "super_unity": 0.19323193795548343,
+   "super_unity_snapped": 3.7294628764561466e-05,
+   "drop_factor": 5181.227011947053,
+   "move_ratio": 18251.025824770404,
+   "err_over_delta": 2399.427507582444,
+   "err_snapped_over_delta": 0.0019313324229230614,
+   "truncation_note": true,
+   "says_min_feature_silences_nothing": true,
+   "closure_bar": 1e-05,
+   "move_bar": 100.0
+  },
+  "3.000000e-06": {
+   "verdict": "returned",
+   "super_unity": 0.023157039021001635,
+   "super_unity_snapped": 3.729485441206215e-05,
+   "drop_factor": 620.9178018271612,
+   "move_ratio": 3500.597780029291,
+   "err_over_delta": 3500.5958486711656,
+   "err_snapped_over_delta": 0.0019313616261840139,
+   "truncation_note": true,
+   "says_min_feature_silences_nothing": true,
+   "closure_bar": 1e-05,
+   "move_bar": 100.0
+  }
+ }
+}
