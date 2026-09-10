@@ -389,6 +389,33 @@ def test_the_spurious_wavenumber_predictor_matches_the_measured_spectrum():
     assert max(consts) / min(consts) < 1.15, consts
 
 
+def test_the_wavenumber_the_message_quotes_is_the_one_the_solve_actually_has():
+    """Right-conclusion-wrong-numbers is the dangerous shape, and a refusal
+    message is exactly where it hides.  The ``|q| ~ ...`` the message prints
+    must agree with the spectrum the layer's own eig carries."""
+    from lumenairy.elements.pmm._core import (
+        _build_sem_tensor_segments,
+        _sem_modes_tensor,
+    )
+
+    def _t3(e):
+        return dict(exx=complex(e), exy=0.0, eyx=0.0, eyy=complex(e),
+                    ezz=complex(e))
+
+    with pytest.raises(ValueError) as ei:
+        _solve(1e-4, 14, guard=True)
+    quoted = float(str(ei.value).split("|q| ~ ")[1].split(" ")[0])
+
+    uw, leps = _pmm_union_grid([_segs([_A0, _B0]),
+                                _segs([_A0 - 1e-4, _B0 + 1e-4])], 1e-9)
+    m = _build_sem_tensor_segments(_P, uw, [_t3(e) for e in leps[1]],
+                                   14, 1, True)
+    k0 = 2.0 * np.pi / _WL
+    _W, _V, _lam, q = _sem_modes_tensor(m, k0, np.sin(_THETA) * k0, True)
+    measured = float(np.abs(q).max())
+    assert 0.9 < quoted / measured < 1.1, (quoted, measured)
+
+
 def test_per_layer_grids_is_not_a_second_opinion_on_a_two_layer_stack():
     """The caveat the refusal states: at ``window_halfwidth = 1`` a 2-layer
     window IS the whole union, so the per-layer path rebuilds the same grid and

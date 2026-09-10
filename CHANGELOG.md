@@ -72,7 +72,7 @@ BIT-IDENTITY: 18 shipped fixtures -- shared and per-layer grids, taper with the
 snap dormant and active, Bragg, conical, slant, out-of-plane, lossy, sweep,
 `prepare()`, `stabilize='slices'`, `internal_field`, `layer_absorption` --
 hashed against the read-only main clone: **18 / 18 identical**.
-`tests/unit/test_fix_pmmstack_sliver_walls.py`, 17 tests, 6.1 s / 6.4 s.
+`tests/unit/test_fix_pmmstack_sliver_walls.py`, 18 tests, 6.6 s / 7.3 s.
 Full write-up, both builds' tables and every bar's derivation:
 `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md`.
 

@@ -24,7 +24,7 @@ a README, and the JSON every table below is read from).
 | **What ships** | A **screen-and-REFUSE** guard: the CONJUNCTION of (a) a union cell the union manufactured, ≥ 100× finer than any wall spacing the input geometry asked for, and (b) super-unity above the library's own 1e-2 bar on a PROVABLY PASSIVE stack with a lossless propagating incidence medium — where `R+T ≤ 1` is a theorem. The refusal names the exact `min_feature` that removes the cell. Fail-before switch `PMM_SLIVER_GUARD`. |
 | **Separation** | max `\|R+T-1\|` among CORRECT rows **4.125e-06**; min `R+T-1` among WRONG rows **1.159e+00**. The bar at 1e-2 sits **3.39 decades** above the first and **2.06 decades** below the second — **identical on both builds**. |
 | **Bit-identity** | 18 shipped fixtures, hashed against the READ-ONLY main clone at `D:/…/Lumenairy` — **18/18 identical**. |
-| **Tests** | `tests/unit/test_fix_pmmstack_sliver_walls.py`, **17 tests**, 6.14 s (Windows) / 6.41 s (WSL). |
+| **Tests** | `tests/unit/test_fix_pmmstack_sliver_walls.py`, **18 tests**, 6.63 s (Windows) / 7.25 s (WSL). |
 | **2-D stacks** | Neither can form this hazard: `PMM2DStackHybrid` is Fourier-projected (no union grid at all) and `PMM2DStackPure`'s union IS the caller-supplied common `(Nx, Ny)` PIXEL lattice — aspect ratio exactly **1.0**. No reproducer to report. See S7 for the caveat that matters to the in-flight mortar work. |
 
 ---
@@ -407,13 +407,13 @@ list) that must carry a screen of this shape.
 
 ## S8. Tests
 
-`tests/unit/test_fix_pmmstack_sliver_walls.py` — **17 tests**, OMP/OPENBLAS/MKL
+`tests/unit/test_fix_pmmstack_sliver_walls.py` — **18 tests**, OMP/OPENBLAS/MKL
 capped at file top before numpy is imported.
 
 | | Windows | WSL |
 |---|---|---|
-| result | **17 passed** | **17 passed** |
-| wall | 6.14 s | 6.41 s |
+| result | **18 passed** | **18 passed** |
+| wall | 6.63 s | 7.25 s |
 
 | test | what it pins |
 |---|---|
@@ -433,6 +433,7 @@ capped at file top before numpy is imported.
 | `test_a_lossy_but_passive_stack_still_satisfies_the_theorem` | loss does not disable the theorem |
 | `test_return_owners_is_additive_and_warn_false_is_silent` | the helper's contract: the 2-tuple is unchanged, owners are additive, `warn=False` is silent and `warn=True` still reports |
 | `test_the_spurious_wavenumber_predictor_matches_the_measured_spectrum` | the MECHANISM claim, re-derived across five degrees |
+| `test_the_wavenumber_the_message_quotes_is_the_one_the_solve_actually_has` | the refusal's own `\|q\| ~ ...` against the layer's measured spectrum (7.69e+04 quoted vs 7.66e+04 measured, 0.4%) -- right-conclusion-wrong-numbers is the shape that hides in a message |
 | `test_per_layer_grids_is_not_a_second_opinion_on_a_two_layer_stack` | the caveat the refusal states |
 
 `.test_durations` spliced with the measured Windows timings.

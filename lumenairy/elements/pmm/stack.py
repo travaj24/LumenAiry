@@ -247,7 +247,14 @@ def _sliver_refusal(stack, worst):
         return None
     w, x_l, x_r, w_wide, own, n_hit = hit
     mf_fix = 2.0 * w_wide * period
-    q_hat = 0.65 * (degree * (degree + 1) / 4.0) / (np.pi * w)
+    # |q|max ~ 0.65 N(N+1)/4 / (k0 J) with J = w P / 2 and k0 = 2 pi / wl --
+    # the MEASURED predictor (S3.2 of the fix audit; the constant reads
+    # 0.680 / 0.660 / 0.653 / 0.651 / 0.649 at degree 8 / 12 / 14 / 16 / 20).
+    try:
+        wl = float(stack._src["wl"])
+    except (AttributeError, KeyError, TypeError, ValueError):
+        wl = float("nan")
+    q_hat = 0.65 * (degree * (degree + 1) / 4.0) * wl / (np.pi * w * period)
     return (
         f"PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the "
         f"shared union grid.  The union of the layers' walls carries {n_hit} "
