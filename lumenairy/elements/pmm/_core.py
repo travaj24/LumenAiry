@@ -5142,6 +5142,169 @@ def _interface_smatrix_general_mortar(Ma, Mb, Mass_a, Mass_b, Cab):
     return (S11, S12, S21, S22)
 
 
+#: FAIL-BEFORE switch for the one genuinely 2-D piece of the mortar: the
+#: Eq.-25 dual places ``H2`` in the V1 slot and ``H1`` in the V2 slot, so the
+#: H row of the 2-D mortar must be tested with the V1/V2 block operators
+#: SWAPPED relative to the E row.  ``False`` restores the naive (1-D-looking)
+#: same-order blocks -- the control that shows the swap is load-bearing rather
+#: than cosmetic, and it is the ONLY way to see it: on a CONFORMING interface
+#: ``C1 = G1`` and ``C2 = G2``, the swap cancels identically, and every
+#: identity-class gate passes either way.  MEASURED on a non-conforming pair
+#: (experiment doc S5.3): swap on -> 3.71e-02 vs the reference and closure
+#: 1.75e-07; swap off -> 7.28e+01 and 8.22e+01.  Never flip this in library
+#: code; it exists so a test can demonstrate the failure.
+PMM2D_MORTAR_H_SWAP = True
+
+
+def _stag_h_blocks(ga, cr):
+    """The H-row block operators ``(mass_pair, cross_pair)`` for grid ``ga``.
+
+    With :data:`PMM2D_MORTAR_H_SWAP` (the physics) the V1/V2 spaces are
+    EXCHANGED relative to the E row; with it off they are not, which is the
+    fail-before control."""
+    if PMM2D_MORTAR_H_SWAP:
+        return (ga.V2, ga.V1), (cr.C2, cr.C1)
+    return (ga.V1, ga.V2), (cr.C1, cr.C2)
+
+
+def _stag_blk2_apply(op_top, op_bot, X, qq_in, kron_apply):
+    """Apply ``blkdiag(op_top, op_bot)`` to a 2-block stacked matrix, both
+    blocks SEPARABLY.
+
+    ``op_top`` / ``op_bot`` are ``(Ky, Kx)`` Kronecker FACTOR pairs and
+    ``kron_apply`` is the separable applier
+    (:func:`~lumenairy.elements.pmm.twod_staggered._stag_kron_apply`, passed in
+    so this module keeps no import of the 2-D staggered basis).  ``qq_in`` is
+    the INPUT block height, which differs from the output one whenever the two
+    grids differ -- that is the whole point.
+
+    This is the 2-D replacement for the 1-D mortar's ``_kron2_apply``, and the
+    replacement is NOT cosmetic: in 1-D both transverse components live in the
+    SAME nodal space, so one operator applies ``kron(I_2, M)``; in 2-D they
+    live in DIFFERENT tensor-product spaces (V1 and V2), so the two blocks take
+    DIFFERENT operators."""
+    return np.concatenate(
+        (kron_apply(op_top[0], op_top[1], X[:qq_in]),
+         kron_apply(op_bot[0], op_bot[1], X[qq_in:])), axis=0)
+
+
+def _interface_smatrix_mortar_2d(Wa, Va, Wb, Vb, ga, gb, cr, kron_apply):
+    """SQUARE (in-plane, symmetric ``+/-q``) interface S-matrix between 2-D
+    STAGGERED mode sets living on DIFFERENT element grids -- the 2-D twin of
+    :func:`_interface_smatrix_mortar`.
+
+    ``ga`` / ``gb`` are the two grids' operator holders
+    (:class:`~lumenairy.elements.pmm.twod_staggered.StagGridOps`: ``.V1``,
+    ``.V2`` Kronecker factor pairs and ``.qq``) and ``cr`` their cross-mass
+    factors (:class:`~lumenairy.elements.pmm.twod_staggered.StagCrossOps`).
+    ``kron_apply`` is the separable applier; nothing dense is ever built.
+
+    Continuity is imposed WEAKLY, in the 1-D mortar's pairing (tangential E
+    tested on grid ``b``'s trace space, tangential H on grid ``a``'s -- the
+    classic mode-matching pairing, which keeps the system square for
+    ``q_a != q_b``).  With ``<u, v> = INT conj(u) v``::
+
+        MassE_B  W_B (cb+ + cb-) = CrossE^H W_A (ca+ + ca-)   [2 qq_B eqs]
+        MassH_A  V_A (ca+ - ca-) = CrossH   V_B (cb+ - cb-)   [2 qq_A eqs]
+
+    THE ONE GENUINELY 2-D PIECE -- the block operator is NOT ``kron(I_2, .)``::
+
+        MassE_X = blkdiag(G1_X, G2_X) = -Rmat_X    CrossE = blkdiag(C1, C2)
+        MassH_X = blkdiag(G2_X, G1_X)  (SWAPPED)   CrossH = blkdiag(C2, C1)
+
+    The Eq.-25 dual puts ``H2`` in the V1 placement and ``H1`` in the V2 one
+    (read off ``_region_modes``' ``rot = [-Dual[qq:]; Dual[:qq]]``, and
+    confirmed by ``PMM2DStackPure._flux_at``, which pairs ``H[qq:]`` with
+    ``G1``), so testing H against grid A's traces means testing its FIRST block
+    in A's V2 space and its second in A's V1 space.  The swap is SILENT on a
+    conforming interface -- there ``C1 = G1``, ``C2 = G2`` and it cancels
+    identically -- so a conforming-parity gate CANNOT see it.  Measured on a
+    genuinely non-conforming pair: with the swap 3.71e-02 against the reference
+    and ``|R+T-1| = 1.75e-07``; without it **7.28e+01** and **8.22e+01**.
+
+    Then, verbatim from the 1-D mortar, with
+    ``A = (MassE_B W_B)^-1 CrossE^H W_A`` and ``B = (MassH_A V_A)^-1 CrossH V_B``::
+
+        S11 = (I + BA)^-1 (I - BA)     S12 = 2 (I + BA)^-1 B
+        S21 = A (I + S11)              S22 = A S12 - I
+
+    ``A`` is ``(2 qq_B) x (2 qq_A)`` and ``B`` its transpose shape, so ``BA`` is
+    square and :func:`_redheffer_star_rect` cascades the result unchanged.
+
+    CONDITIONING (M1 / N-2, transplanted with its instruments).  The two
+    ``solve``s stay ``solve``s -- LAPACK ``gesv`` is backward stable, so a
+    residual screen on them measures nothing -- and the ONE explicit inverse,
+    ``I + BA``, carries the compounded exposure of both and is where the guard
+    goes.  Measured census over 45 site-calls on four non-conforming
+    configurations at ``M = 4, 5, 6`` (equilibrated reciprocal 1-condition):
+    ``MassE_B W_B`` [1.08e-06, 1.01e-04], ``MassH_A V_A`` [7.00e-06, 3.88e-04],
+    ``I + BA`` [3.42e-04, 1.85e-02] -- the guarded site is the BEST conditioned
+    of the three, the same ordering M1 measured in 1-D, and nothing screened
+    in."""
+    lhsE = _stag_blk2_apply(gb.V1, gb.V2, Wb, gb.qq, kron_apply)
+    rhsE = _stag_blk2_apply(cr.C1H(), cr.C2H(), Wa, ga.qq, kron_apply)
+    A = np.linalg.solve(lhsE, rhsE)
+    # the V1/V2 SWAP on the H row (see the docstring) -- load-bearing, and
+    # invisible to any conforming-grid identity test
+    hb_a, hb_c = _stag_h_blocks(ga, cr)
+    lhsH = _stag_blk2_apply(hb_a[0], hb_a[1], Va, ga.qq, kron_apply)
+    rhsH = _stag_blk2_apply(hb_c[0], hb_c[1], Vb, gb.qq, kron_apply)
+    B = np.linalg.solve(lhsH, rhsH)
+    BA = B @ A
+    I_a = np.eye(BA.shape[0], dtype=_C)
+    # ONE factorisation for both right-hand sides, and ``.copy()`` on the S11
+    # slice is load-bearing exactly as in the 1-D twin (a view pins the whole
+    # stacked-RHS buffer for the life of the cascade).
+    X = _guarded_solve(I_a + BA,
+                       np.concatenate((I_a - BA, B), axis=1),
+                       "pmm2d staggered mortar interface (I + BA)",
+                       hint="Raise n_modes, or use layer_grids='shared'.")
+    nc = I_a.shape[1]
+    S11 = X[:, :nc].copy()
+    S12 = 2.0 * X[:, nc:]
+    del X
+    S21 = A @ (I_a + S11)
+    S22 = A @ S12 - np.eye(A.shape[0], dtype=_C)
+    return (S11, S12, S21, S22)
+
+
+def _interface_smatrix_general_mortar_2d(six_a, six_b, ga, gb, cr, kron_apply):
+    """GENERAL (explicit forward/backward) mortar interface between 2-D
+    STAGGERED mode sets on DIFFERENT element grids -- the twin of
+    :func:`_interface_smatrix_general_mortar`, and what an OUT-OF-PLANE or
+    SLANTED layer needs (both return DISTINCT forward/backward sets and put the
+    whole stack on the generalized cascade).
+
+    ``six_x = (Wf, Vf, lam_f, Wb, Vb, lam_b)``.  The scattering system, with
+    the SAME weak pairing and the SAME V1/V2 swap on the H rows::
+
+        [ CrossE^H Wb_a  -MassE_B Wf_b ] [ca-]   [ -CrossE^H Wf_a  MassE_B Wb_b ] [ca+]
+        [ MassH_A  Vb_a  -CrossH  Vf_b ] [cb+] = [ -MassH_A  Vf_a  CrossH  Vb_b ] [cb-]
+
+    ``2 qq_B + 2 qq_A`` rows against ``m_a + m_b`` unknowns -- square for both
+    the in-plane pencil (``m = 2 qq`` by the ``[W; -V] <-> -lam`` symmetry that
+    ``_modes_as_general`` writes out) and the ``4 q^2`` out-of-plane generator
+    after its flux split.  Measured against ``berreman_jones_1d`` through a
+    NON-conforming interface at conical incidence: 3.2e-13."""
+    Wf_a, Vf_a, _lf_a, Wb_a, Vb_a, _lb_a = six_a[:6]
+    Wf_b, Vf_b, _lf_b, Wb_b, Vb_b, _lb_b = six_b[:6]
+    ma = Wf_a.shape[1]
+    ceh, cE = (cr.C1H(), cr.C2H()), (gb.V1, gb.V2)
+    E1 = _stag_blk2_apply(ceh[0], ceh[1], Wb_a, ga.qq, kron_apply)
+    E2 = -_stag_blk2_apply(cE[0], cE[1], Wf_b, gb.qq, kron_apply)
+    E3 = -_stag_blk2_apply(ceh[0], ceh[1], Wf_a, ga.qq, kron_apply)
+    E4 = _stag_blk2_apply(cE[0], cE[1], Wb_b, gb.qq, kron_apply)
+    hb_a, hb_c = _stag_h_blocks(ga, cr)
+    H1 = _stag_blk2_apply(hb_a[0], hb_a[1], Vb_a, ga.qq, kron_apply)
+    H2 = -_stag_blk2_apply(hb_c[0], hb_c[1], Vf_b, gb.qq, kron_apply)
+    H3 = -_stag_blk2_apply(hb_a[0], hb_a[1], Vf_a, ga.qq, kron_apply)
+    H4 = _stag_blk2_apply(hb_c[0], hb_c[1], Vb_b, gb.qq, kron_apply)
+    A = np.block([[E1, E2], [H1, H2]])
+    B = np.block([[E3, E4], [H3, H4]])
+    X = np.linalg.solve(A, B)
+    return (X[:ma, :ma], X[:ma, ma:], X[ma:, :ma], X[ma:, ma:])
+
+
 def _redheffer_star_rect(SA, SB):
     """Redheffer star tolerating RECTANGULAR off-diagonal blocks (adjacent
     per-layer grids carry different mode counts).  Identity blocks are sized

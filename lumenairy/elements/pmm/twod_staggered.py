@@ -233,6 +233,7 @@ import numpy as np
 import scipy.linalg as sla
 from numpy.polynomial.legendre import leggauss
 
+from ...cache import ByteBudgetedLRU as _ByteBudgetedLRU
 from ..rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
 from ..rcwa._core import (  # shared flux projection + the OOP mode selector
     _norm_slant_pair,
@@ -887,6 +888,225 @@ def _global_pair_segmat(basis: Basis1D, ref, setL, setR):
     return G                       # (N, dimL, dimR)
 
 
+def _stag_axis_masses(bx: Basis1D, by: Basis1D):
+    """The four 1-D masses that FACTOR the V1 / V2 block field Grams:
+    ``(Mtt_x, Mbb_x, Mtt_y, Mbb_y)``.
+
+    ``G1 = kron(Mtt_y, Mbb_x)`` and ``G2 = kron(Mbb_y, Mtt_x)`` -- and these
+    are not merely LIKE the eigensolver's ``-Rmat`` blocks, they ARE them, bit
+    for bit (measured 0.0 in the probe's algebra smoke), which is why the
+    mortar reads its E-row mass operator off the same factors the assembly
+    already builds instead of rebuilding a second one.  Factored out of
+    :meth:`Granet2DTransverseE._axis_mats` so the per-layer-grid cascade
+    (:class:`~lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure` with
+    ``layer_grids='per-layer'``) shares one definition with the assembly."""
+    return (bx.mass(bx.Btilde, bx.Btilde), bx.mass(bx.B, bx.B),
+            by.mass(by.Btilde, by.Btilde), by.mass(by.B, by.B))
+
+
+# --------------------------------------------------------------------------- #
+# L2 MORTAR ingredients for PER-LAYER element grids (2-D pure staggered PMM).
+# Design + measurements: docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md
+# --------------------------------------------------------------------------- #
+def _stag_basis_fingerprint(b: Basis1D):
+    """Exact content fingerprint of a :class:`Basis1D` -- the geometry the
+    cross-mass consumes and nothing else.
+
+    The WALL ARRAY is part of the key (not an integer ``N``): with non-uniform
+    segments two bases can share ``N`` and ``M`` and be different grids.  So is
+    ``tau``: the Bloch glue (Eq. 33) is IN the basis, so an angle sweep is a
+    different basis and must not hit a cached cross-mass (open item O-8 in the
+    experiment doc proposes splitting the tau-free part; not done here)."""
+    return (float(b.d), int(b.M), complex(b.tau),
+            np.asarray(b.xb, dtype=float).tobytes())
+
+
+def _stag_cross_mass_1d(ba: Basis1D, bb: Basis1D, which: str):
+    """``C[i, j] = INT_0^d conj(phi^a_i(x)) phi^b_j(x) dx`` between the SAME
+    named global set (``'B'`` or ``'Btilde'``) on two :class:`Basis1D` objects
+    covering the same period but on DIFFERENT segmentations.
+
+    EXACT by Gauss-Legendre on the UNION of the two segment partitions: on
+    every union sub-interval both sides are polynomials of degree ``<= M-1``,
+    so ``M_a + M_b + 2`` points integrate the product exactly.  Near-coincident
+    walls of the two lattices therefore appear only in this INTEGRATION mesh
+    and NEVER as spectral elements -- the property the 1-D
+    :func:`~lumenairy.elements.pmm._core._sem_cross_mass` docstring calls the
+    decisive difference from a shared union grid, and the reason the shipped
+    1-D sliver defect at near-coincident LAYER walls has no analogue here (the
+    probe measured the pure arm smooth and monotone in the wall separation all
+    the way to zero while the 1-D oracle's own self-gap blew up).
+
+    The LEFT set is CONJUGATED, and unlike the 1-D nodal SEM's real cross-mass
+    this one is COMPLEX: :class:`Basis1D` glues its periodic hat with
+    ``tau = exp(-i alpha0 d)`` (Eq. 33), so the basis itself carries the Bloch
+    phase and both the mass and the cross-mass are complex.  ``Cab^T`` in the
+    1-D mortar algebra is therefore ``Cab^H`` here -- using the transpose is a
+    silent error at normal incidence (``tau = 1``) and O(1) at oblique.
+
+    Reduces to ``ba.mass(set, set)`` to quadrature round-off when
+    ``ba is bb`` (measured 9.8e-16)."""
+    if abs(ba.d - bb.d) > 1e-13 * max(ba.d, 1.0):
+        raise ValueError(
+            f"_stag_cross_mass_1d: the two bases must span ONE period, got "
+            f"{ba.d!r} and {bb.d!r}.")
+    Sa = np.asarray(getattr(ba, which))          # (dimA, Na, Ma)
+    Sb = np.asarray(getattr(bb, which))          # (dimB, Nb, Mb)
+    Ma, Mb = ba.M, bb.M
+    xg, wg = leggauss(Ma + Mb + 2)
+    cuts = np.unique(np.concatenate([ba.xb, bb.xb]))
+    tol = 1e-12 * ba.d
+    merged = [float(cuts[0])]
+    for x in cuts[1:]:
+        if float(x) - merged[-1] > tol:
+            merged.append(float(x))
+    C = np.zeros((Sa.shape[0], Sb.shape[0]), dtype=_C)
+    for u0, u1 in zip(merged[:-1], merged[1:]):
+        mid = 0.5 * (u0 + u1)
+        ea = min(max(int(np.searchsorted(ba.xb, mid, side="right") - 1), 0),
+                 ba.N - 1)
+        eb = min(max(int(np.searchsorted(bb.xb, mid, side="right") - 1), 0),
+                 bb.N - 1)
+        axl, axr = ba.xb[ea], ba.xb[ea + 1]
+        bxl, bxr = bb.xb[eb], bb.xb[eb + 1]
+        J = 0.5 * (u1 - u0)
+        xphys = mid + J * xg
+        Va, _ = _modleg_value_deriv(Ma, (2.0 * xphys - (axl + axr)) / (axr - axl))
+        Vb, _ = _modleg_value_deriv(Mb, (2.0 * xphys - (bxl + bxr)) / (bxr - bxl))
+        Ce = (Va * (wg * J)) @ Vb.T              # (Ma, Mb)
+        C += np.conj(Sa[:, ea, :]) @ Ce @ Sb[:, eb, :].T
+    return C
+
+
+#: Retained staggered 1-D cross-masses.  An entry is ``q_a x q_b`` complex128,
+#: i.e. KILOBYTES (0.014 MB at ``N = (3, 6), M = 6``) against the 3.09 MB the
+#: dense 2-D Kronecker product it factors would take -- see
+#: :func:`_stag_kron_apply`.  ``max_bytes=None`` = bounded by the collective
+#: ``LUMENAIRY_CACHE_BUDGET_MB`` ceiling only; ``clear_asm_caches`` drains it
+#: through the registry and ``cache_report()`` shows it by name.
+_STAG_GEO_CACHE = _ByteBudgetedLRU("pmm2d_staggered_geometry")
+
+
+def _stag_cross_mass_1d_cached(ba: Basis1D, bb: Basis1D, which: str):
+    """:func:`_stag_cross_mass_1d`, memoized on the two bases' fingerprints.
+
+    A hit returns the stored (read-only) array by identity; a miss computes the
+    identical bytes the uncached function computes."""
+    key = ("stag_cross", which, _stag_basis_fingerprint(ba),
+           _stag_basis_fingerprint(bb))
+    hit = _STAG_GEO_CACHE.get(key)
+    if hit is not None:
+        return hit
+    C = _stag_cross_mass_1d(ba, bb, which)
+    C.setflags(write=False)
+    _STAG_GEO_CACHE.put(key, C)
+    return C
+
+
+def _stag_kron_apply(Ky, Kx, X):
+    """``kron(Ky, Kx) @ X`` WITHOUT materialising the Kronecker product.
+
+    The eigensolver's index convention is ``I = jx + qx*jy`` (y slow, x fast),
+    i.e. ``np.kron(Ky, Kx)``.  ``X`` has ``qyB * qxB`` rows
+    (``qxB = Kx.shape[1]``, ``qyB = Ky.shape[1]``); the result has
+    ``qyA * qxA``.
+
+    This is an IDENTITY, not an approximation -- both 2-D field spaces are
+    tensor products and both segment partitions are rectangular, so every 2-D
+    mass and cross-mass factors exactly (measured 3.2e-16 .. 4.3e-16, i.e. BLAS
+    reassociation only).  Materialising the dense operator is a REJECTED
+    design and the measurement is not close: at ``N = (6, 12), M = 6`` the
+    dense ``C1`` is 49.4 MB against 0.055 MB for its two factors (900x) and the
+    separable apply is 49x faster -- per COMPONENT per INTERFACE, of which a
+    staircase has two and ``nlay + 1``."""
+    qxA, qxB = Kx.shape
+    qyA, qyB = Ky.shape
+    n = X.shape[1] if X.ndim == 2 else 1
+    Xr = X.reshape(qyB, qxB, n)
+    T = np.einsum("bx,yxn->ybn", Kx, Xr, optimize=True)      # (qyB, qxA, n)
+    Y = np.einsum("ay,ybn->abn", Ky, T, optimize=True)       # (qyA, qxA, n)
+    return Y.reshape(qyA * qxA, n)
+
+
+class StagGridOps:
+    """One layer's own element grid: the two :class:`Basis1D` axes and the
+    FACTORS of its V1 / V2 block field Grams.
+
+    ``V1 (E1 = Ex) = B(x) (x) Btilde(y)``  with Gram ``G1 = kron(Mtt_y, Mbb_x)``
+    ``V2 (E2 = Ey) = Btilde(x) (x) B(y)``  with Gram ``G2 = kron(Mbb_y, Mtt_x)``
+
+    and ``G = -Rmat = blkdiag(G1, G2)`` is exactly what the eigensolver
+    assembles, so ``.V1`` / ``.V2`` are the same operators bit for bit
+    (:func:`_stag_axis_masses`).  Each is held as its ``(Ky, Kx)`` FACTOR PAIR
+    and applied through :func:`_stag_kron_apply`; the dense form is never
+    built.
+
+    ``key()`` fingerprints the grid CONTENT (wall arrays, ``M``, ``tau``), so
+    two layers whose walls coincide share one grid object and their interface
+    takes the plain square modal match rather than a mortar."""
+
+    __slots__ = ("bx", "by", "M", "q", "qq", "Mtt_x", "Mbb_x", "Mtt_y",
+                 "Mbb_y", "V1", "V2", "_key")
+
+    def __init__(self, period_x, period_y, wx, wy, M, taux, tauy):
+        self.M = int(M)
+        self.bx = Basis1D(period_x, wx, M, taux)
+        self.by = Basis1D(period_y, wy, M, tauy)
+        if self.bx.dim != self.by.dim:
+            raise ValueError(
+                f"StagGridOps: the staggered tensor basis needs equal SEGMENT "
+                f"COUNTS per axis (Nx == Ny); got Nx = {self.bx.N}, "
+                f"Ny = {self.by.N}.  The wall POSITIONS may differ freely.")
+        self.q = self.bx.dim
+        self.qq = self.q * self.q
+        (self.Mtt_x, self.Mbb_x,
+         self.Mtt_y, self.Mbb_y) = _stag_axis_masses(self.bx, self.by)
+        self.V1 = (self.Mtt_y, self.Mbb_x)      # (Ky, Kx)
+        self.V2 = (self.Mbb_y, self.Mtt_x)
+        self._key = (_stag_basis_fingerprint(self.bx),
+                     _stag_basis_fingerprint(self.by))
+
+    def key(self):
+        return self._key
+
+    @property
+    def N(self):
+        return self.bx.N
+
+
+class StagCrossOps:
+    """The cross-mass between two :class:`StagGridOps`, as EXACT Kronecker
+    FACTORS::
+
+        C1 = kron( Ctt_y(A,B), Cbb_x(A,B) )      (the V1 = E1 / H2 space)
+        C2 = kron( Cbb_y(A,B), Ctt_x(A,B) )      (the V2 = E2 / H1 space)
+
+    Both factor exactly because both spaces are tensor products and both
+    partitions are rectangular.  ``C1H()`` / ``C2H()`` are the CONJUGATE
+    transposes -- the staggered basis is complex (the Bloch ``tau`` glue lives
+    IN it), so the 1-D mortar's ``Cab^T`` is ``Cab^H`` here."""
+
+    __slots__ = ("C1", "C2")
+
+    def __init__(self, ga: "StagGridOps", gb: "StagGridOps"):
+        Cbb_x = _stag_cross_mass_1d_cached(ga.bx, gb.bx, "B")
+        Ctt_x = _stag_cross_mass_1d_cached(ga.bx, gb.bx, "Btilde")
+        Cbb_y = _stag_cross_mass_1d_cached(ga.by, gb.by, "B")
+        Ctt_y = _stag_cross_mass_1d_cached(ga.by, gb.by, "Btilde")
+        self.C1 = (Ctt_y, Cbb_x)
+        self.C2 = (Cbb_y, Ctt_x)
+
+    @staticmethod
+    def _H(pair):
+        return (pair[0].conj().T, pair[1].conj().T)
+
+    def C1H(self):
+        return self._H(self.C1)
+
+    def C2H(self):
+        return self._H(self.C2)
+
+
 class Granet2DTransverseE:
     """Faithful Granet staggered transverse-E eigensolver for a rectangular
     (or separable) 2-D unit cell, isotropic nonmagnetic media.
@@ -1051,15 +1271,16 @@ class Granet2DTransverseE:
     # --- per-axis 1-D ingredient matrices between set pairs (no eps) ---------
     def _axis_mats(self):
         bx, by = self.bx, self.by
+        # the four MASSES -- shared with the per-layer-grid mortar, which needs
+        # exactly these as the FACTORS of the V1 / V2 block field Grams
+        # (:func:`_stag_axis_masses`; ``-Rmat``'s blocks bit for bit)
+        (self.Mtt_x, self.Mbb_x,
+         self.Mtt_y, self.Mbb_y) = _stag_axis_masses(bx, by)
         # x-axis
-        self.Mtt_x = bx.mass(bx.Btilde, bx.Btilde)        # <til|til>
-        self.Mbb_x = bx.mass(bx.B, bx.B)                  # <B|B>
         self.Ctb_x = bx.mixed(bx.Btilde, bx.B)            # <til| d B>
         self.Cbt_x = bx.mixed(bx.B, bx.Btilde)            # <B  | d til>
         self.Ctt_x = bx.mixed(bx.Btilde, bx.Btilde)       # <til| d til>
         # y-axis
-        self.Mtt_y = by.mass(by.Btilde, by.Btilde)
-        self.Mbb_y = by.mass(by.B, by.B)
         self.Ctb_y = by.mixed(by.Btilde, by.B)
         self.Cbt_y = by.mixed(by.B, by.Btilde)
         self.Ctt_y = by.mixed(by.Btilde, by.Btilde)
