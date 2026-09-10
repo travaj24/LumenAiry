@@ -1,0 +1,131 @@
+{
+ "version": "5.44.0",
+ "N": 1024,
+ "shipped_PHASOR_BAND_BYTES": 32000000.0,
+ "helpers": {
+  "_radial_carrier_phase": {
+   "band_size_invariant": true,
+   "equals_whole_grid_exp_narrowed": true,
+   "by_band_size": {
+    "1row_floor16": {
+     "rows_per_band": 16,
+     "hash": "11421d6a085d84ce071ceb3f",
+     "equals_whole_narrow": true
+    },
+    "shipped_32MB": {
+     "rows_per_band": 1024,
+     "hash": "11421d6a085d84ce071ceb3f",
+     "equals_whole_narrow": true
+    },
+    "tiny_1MB": {
+     "rows_per_band": 61,
+     "hash": "11421d6a085d84ce071ceb3f",
+     "equals_whole_narrow": true
+    },
+    "huge_1GB": {
+     "rows_per_band": 1024,
+     "hash": "11421d6a085d84ce071ceb3f",
+     "equals_whole_narrow": true
+    },
+    "whole_grid": {
+     "rows_per_band": 1024,
+     "hash": "11421d6a085d84ce071ceb3f",
+     "equals_whole_narrow": true
+    }
+   }
+  },
+  "_tilt_ramp": {
+   "band_size_invariant": true,
+   "equals_whole_grid_exp_narrowed": true,
+   "by_band_size": {
+    "1row_floor16": {
+     "rows_per_band": 16,
+     "hash": "644f9d2587b7f56932abf8c3",
+     "equals_whole_narrow": true
+    },
+    "shipped_32MB": {
+     "rows_per_band": 1024,
+     "hash": "644f9d2587b7f56932abf8c3",
+     "equals_whole_narrow": true
+    },
+    "tiny_1MB": {
+     "rows_per_band": 61,
+     "hash": "644f9d2587b7f56932abf8c3",
+     "equals_whole_narrow": true
+    },
+    "huge_1GB": {
+     "rows_per_band": 1024,
+     "hash": "644f9d2587b7f56932abf8c3",
+     "equals_whole_narrow": true
+    },
+    "whole_grid": {
+     "rows_per_band": 1024,
+     "hash": "644f9d2587b7f56932abf8c3",
+     "equals_whole_narrow": true
+    }
+   }
+  },
+  "_tilt_exactness_phase": {
+   "band_size_invariant": true,
+   "equals_whole_grid_exp_narrowed": true,
+   "by_band_size": {
+    "1row_floor16": {
+     "rows_per_band": 16,
+     "hash": "4cd56cc5098082d0577a5e7f",
+     "equals_whole_narrow": true
+    },
+    "shipped_32MB": {
+     "rows_per_band": 1024,
+     "hash": "4cd56cc5098082d0577a5e7f",
+     "equals_whole_narrow": true
+    },
+    "tiny_1MB": {
+     "rows_per_band": 61,
+     "hash": "4cd56cc5098082d0577a5e7f",
+     "equals_whole_narrow": true
+    },
+    "huge_1GB": {
+     "rows_per_band": 1024,
+     "hash": "4cd56cc5098082d0577a5e7f",
+     "equals_whole_narrow": true
+    },
+    "whole_grid": {
+     "rows_per_band": 1024,
+     "hash": "4cd56cc5098082d0577a5e7f",
+     "equals_whole_narrow": true
+    }
+   }
+  },
+  "_sphere_parab_conversion": {
+   "band_size_invariant": true,
+   "equals_whole_grid_exp_narrowed": true,
+   "by_band_size": {
+    "1row_floor16": {
+     "rows_per_band": 16,
+     "hash": "da4865e6775189991f1a8315",
+     "equals_whole_narrow": true
+    },
+    "shipped_32MB": {
+     "rows_per_band": 1024,
+     "hash": "da4865e6775189991f1a8315",
+     "equals_whole_narrow": true
+    },
+    "tiny_1MB": {
+     "rows_per_band": 61,
+     "hash": "da4865e6775189991f1a8315",
+     "equals_whole_narrow": true
+    },
+    "huge_1GB": {
+     "rows_per_band": 1024,
+     "hash": "da4865e6775189991f1a8315",
+     "equals_whole_narrow": true
+    },
+    "whole_grid": {
+     "rows_per_band": 1024,
+     "hash": "da4865e6775189991f1a8315",
+     "equals_whole_narrow": true
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,50 @@
+{
+ "version": "5.43.0",
+ "auto": true,
+ "cases": {
+  "auto_screen_N4096": {
+   "whole": {
+    "rows": 0,
+    "hash": "91da5e59c46beb1d967b28b3",
+    "engaged": true,
+    "gate_open": true,
+    "n_out_of_domain": 3232321,
+    "nwarn": 0,
+    "secs": 21.45
+   },
+   "band": {
+    "rows": null,
+    "hash": "66b9384477cf8a9ca1844c6a",
+    "engaged": false,
+    "gate_open": false,
+    "n_out_of_domain": null,
+    "nwarn": 0,
+    "secs": 11.62
+   },
+   "rel_band_vs_whole": 0.11908810410583,
+   "bit_equal": false
+  },
+  "auto_rd_N4096": {
+   "whole": {
+    "rows": 0,
+    "hash": "08f9aa00b567ed87658cf8ca",
+    "engaged": true,
+    "gate_open": true,
+    "n_out_of_domain": 3232321,
+    "nwarn": 0,
+    "secs": 21.98
+   },
+   "band": {
+    "rows": null,
+    "hash": "08f9aa00b567ed87658cf8ca",
+    "engaged": true,
+    "gate_open": true,
+    "n_out_of_domain": 3232321,
+    "nwarn": 0,
+    "secs": 22.15
+   },
+   "rel_band_vs_whole": 0.0,
+   "bit_equal": true
+  }
+ }
+}

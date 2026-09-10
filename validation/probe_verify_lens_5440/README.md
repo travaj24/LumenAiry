@@ -59,6 +59,7 @@ PYTHONPATH=/c/tmp/lum_v5430 ... python \
 | `v11_side_effects.py` | warning attribution (`stacklevel`), the D9 fraction, and wall time without `tracemalloc` |
 | `v12_d9_sum_order.py` | the one non-bit-identical quantity: the D9 origin sums, band-accumulated vs whole-grid |
 | `v13_sign_scan.py` | the two-row-halo `det J` sign scan, both algorithms transcribed and run against each other on 489 fields x 12 band heights, engineered to put flips ON band boundaries |
+| `v18_c15_probe_on_band.py` | whether the niche-C15 private `_imap_out['probe_rc']` diagnostic is filled on a banded call |
 | `v14_c128_chain_identity.py` | the complex128 carrier chain, readout and crop hashed for the cross-release identity claim |
 
 `results/` holds the JSON and the pytest / probe logs.

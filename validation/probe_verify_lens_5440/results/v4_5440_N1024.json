@@ -1,0 +1,117 @@
+{
+ "version": "5.44.0",
+ "N": 1024,
+ "sub": 16,
+ "dx": 6e-06,
+ "eval_counts": {
+  "rd_whole": {
+   "calls": 1,
+   "channel_evals_per_pixel": 4.0,
+   "total_pixels_visited": 1.0,
+   "channel_sets": [
+    [
+     0,
+     1,
+     2,
+     3
+    ]
+   ],
+   "engaged": true,
+   "hash": "c3c6a59d2d5d4d64c1081cb1"
+  },
+  "rd_band32": {
+   "calls": 64,
+   "channel_evals_per_pixel": 7.0,
+   "total_pixels_visited": 2.0,
+   "channel_sets": [
+    [
+     0,
+     1,
+     2
+    ],
+    [
+     0,
+     1,
+     2,
+     3
+    ]
+   ],
+   "engaged": true,
+   "hash": "c3c6a59d2d5d4d64c1081cb1"
+  },
+  "rd_band7": {
+   "calls": 294,
+   "channel_evals_per_pixel": 7.0,
+   "total_pixels_visited": 2.0,
+   "channel_sets": [
+    [
+     0,
+     1,
+     2
+    ],
+    [
+     0,
+     1,
+     2,
+     3
+    ]
+   ],
+   "engaged": true,
+   "hash": "c3c6a59d2d5d4d64c1081cb1"
+  },
+  "screen_whole": {
+   "calls": 1,
+   "channel_evals_per_pixel": 3.0,
+   "total_pixels_visited": 1.0,
+   "channel_sets": [
+    [
+     0,
+     1,
+     2
+    ]
+   ],
+   "engaged": true,
+   "hash": "3fc15c420d2db791ff76ad99"
+  },
+  "screen_band32": {
+   "calls": 32,
+   "channel_evals_per_pixel": 3.0,
+   "total_pixels_visited": 1.0,
+   "channel_sets": [
+    [
+     0,
+     1,
+     2
+    ]
+   ],
+   "engaged": true,
+   "hash": "3fc15c420d2db791ff76ad99"
+  }
+ },
+ "peaks": {
+  "rd_whole": {
+   "peak_bytes": 394791183,
+   "grids": 47.06277644634247,
+   "engaged": true,
+   "secs": 1.19
+  },
+  "rd_band": {
+   "peak_bytes": 169037408,
+   "grids": 20.150829315185547,
+   "engaged": true,
+   "secs": 1.52
+  },
+  "screen_whole": {
+   "peak_bytes": 386367508,
+   "grids": 46.05859613418579,
+   "engaged": true,
+   "secs": 0.91
+  },
+  "screen_band": {
+   "peak_bytes": 95734381,
+   "grids": 11.412427544593811,
+   "engaged": true,
+   "secs": 0.83
+  }
+ }
+}
