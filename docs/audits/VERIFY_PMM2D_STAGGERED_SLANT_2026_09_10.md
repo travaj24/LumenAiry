@@ -623,8 +623,7 @@ The check still DISCRIMINATES: an OFF-CENTRE pillar (not its own parity image)
 reads `resid_A = 5.768e-01`, nine decades above the bar, and the reduction
 refuses -- slanted and vertical alike.
 
-### 5.2 Why -- derived, because a coincidence and a symmetry warrant different
-decisions
+### 5.2 Why the shear does not break it -- derived
 
 `R` is a 180-degree ROTATION about `z` and the pencil relation is `R A R = -A`
 with `R B R = +B`, i.e. `(q, x)` pairs with `(-q, R x)`.  That is the algebraic
@@ -832,6 +831,13 @@ the right exception TYPE and a message that names the offending construction:
 | `symmetry='auto'` on a slanted cell | **sha256-IDENTICAL** to `symmetry=False`; on the VERTICAL control they DIFFER, so the equality is not vacuous; the slant is worth `dJones 2.11e-02` on that cell |
 | `_stag_parity_gauge` on a slanted solver | returns `None`; on the vertical control it returns a gauge |
 
+**Nothing gets past a refusal silently.**  The one behaviour worth a note is
+the third row: a float-noise slant (`tan(0)` computed as `1e-17`, say) is
+treated as SLANTED everywhere -- it costs the `4 q^2` path (a `1.9x .. 3.0x`
+region solve) and it makes the scalar efficiency entry raise.  That is the loud
+side of the exact-zero test and is arguably correct, but a caller who
+constructs `slant` arithmetically will meet it.
+
 ### 6.3 The eig cache key, exercised rather than read
 
 The build's `test_b11_slant_is_in_the_eig_cache_key` asserts the key's contents
@@ -854,13 +860,6 @@ Spectral, to `1e-12`.  And the genuine cache HIT (two uniform layers at the
 SAME slant and the same `eps`) also reproduces the vertical stack
 (`dR 2.96e-10`, `dJones 7.79e-10` at `M = 6`), so the hit path is right too.
 **CONFIRMED.**
-
-**Nothing gets past a refusal silently.**  The one behaviour worth a note is
-the third row: a float-noise slant (`tan(0)` computed as `1e-17`, say) is
-treated as SLANTED everywhere -- it costs the `4 q^2` path (a `1.9x .. 3.0x`
-region solve) and it makes the scalar efficiency entry raise.  That is the loud
-side of the exact-zero test and is arguably correct, but a caller who
-constructs `slant` arithmetically will meet it.
 
 ---
 
