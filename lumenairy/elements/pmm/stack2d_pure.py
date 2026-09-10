@@ -185,6 +185,46 @@ def _spec_is_lossless(spec, uniform):
     return not bool(np.any(np.imag(spec) != 0.0))
 
 
+def _principal_diag(spec, uniform):
+    """A layer's ``eps`` / ``mu`` specification as its PRINCIPAL DIAGONAL with
+    the component on the LAST axis -- ``(3,)`` for a uniform spec, ``(Nx, Ny,
+    3)`` for a patterned one -- so that an eps side and a mu side of any two
+    kinds broadcast against each other componentwise.
+
+    A scalar is repeated over the three components (it IS isotropic), and a
+    tensor's OFF-diagonals are dropped: only the principal indices set a
+    Rayleigh cut-off.  Used only by the Wood-anomaly nudge list."""
+    a = np.asarray(spec, dtype=_C)
+    if uniform:
+        if a.ndim == 0:
+            return np.full(3, a, dtype=_C)
+        return np.ascontiguousarray(np.diag(a))
+    if a.ndim == 4:
+        return a[..., [0, 1, 2], [0, 1, 2]]
+    return np.repeat(a[..., None], 3, axis=-1)
+
+
+def _wood_cutoff_products(layer):
+    """The permittivities a Rayleigh cut-off can sit on INSIDE a MAGNETIC
+    layer: the per-cell, per-component PRODUCT ``eps_ii * mu_ii``.
+
+    A layer mode goes grazing where its longitudinal wavenumber vanishes, i.e.
+    at ``kt^2 = Re(eps mu)`` -- the layer index is ``n = sqrt(eps mu)``, not
+    ``sqrt(eps)``.  Listing the permittivity alone (as this branch did until
+    2026-09-10) therefore misses a magnetic layer's own cut-offs entirely; a
+    ``mu = 1`` layer is UNAFFECTED, because multiplying by exactly ``1.0`` is
+    exact in float64 and the product is the permittivity bit for bit.
+
+    The componentwise product is a HEURISTIC for an anisotropic pair (the true
+    cut-offs of a biaxial magnetic layer are the roots of its own dispersion
+    relation, not products of principal values); the guard is a warning /
+    nudge heuristic, and over-listing is numerically inert off an EXACT
+    coincidence -- ``_grazing_safe_wavelength`` takes a MIN over the list and
+    only fires inside a ``|eps - kt^2| <= 1e-9`` band."""
+    return (_principal_diag(layer["eps"], layer["eps_uniform"])
+            * _principal_diag(layer["mu"], layer["mu_uniform"]))
+
+
 def _tensor_is_hermitian(t):
     """True if every ``(3, 3)`` tensor in ``t`` is Hermitian, i.e. LOSSLESS.
 
@@ -687,18 +727,13 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             elif _L["kind"] == "uniform_tensor":
                 _eps_src.append(np.diag(_L["eps33"]))
             elif _L["kind"] == "magnetic":
-                # merge repair 2026-09-10: the magnetic layer record carries
-                # ``eps`` (scalar / (3,3) uniform / (Nx,Ny) / (Nx,Ny,3,3)),
-                # not ``eps_cell``.  Permittivity only for now -- a magnetic
-                # cut-off sits at Re(eps*mu); the eps*mu products are the
-                # documented follow-up (BUILD_PMM2D_STAGGERED_MAGNETIC open 3).
-                _e = np.asarray(_L["eps"], dtype=_C)
-                if _L["eps_uniform"]:
-                    _eps_src.append(np.diag(_e) if _e.ndim == 2 else _e)
-                elif _e.ndim == 4:
-                    _eps_src.append(_e[..., [0, 1, 2], [0, 1, 2]])
-                else:
-                    _eps_src.append(_e)
+                # A MAGNETIC layer's cut-offs sit at Re(eps*mu), not Re(eps):
+                # its index is sqrt(eps mu).  The magnetic record carries
+                # ``eps`` / ``mu`` (scalar / (3,3) uniform / (Nx,Ny) /
+                # (Nx,Ny,3,3)), not ``eps_cell``.  ``mu = 1`` reproduces the
+                # permittivity BIT FOR BIT, so a nonmagnetic-equivalent layer
+                # takes exactly the nudge it took before.
+                _eps_src.append(_wood_cutoff_products(_L))
             elif _L["eps_cell"].ndim == 4:
                 _eps_src.append(_L["eps_cell"][..., [0, 1, 2], [0, 1, 2]])
             else:

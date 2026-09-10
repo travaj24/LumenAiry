@@ -47,7 +47,10 @@ from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
     pmm_jones_2d_staggered,
 )
 from lumenairy.elements.rcwa import rcwa_jones_1d  # noqa: E402
-from lumenairy.elements.rcwa._core import uniaxial_tensor  # noqa: E402
+from lumenairy.elements.rcwa._core import (  # noqa: E402
+    _grazing_safe_wavelength,
+    uniaxial_tensor,
+)
 
 # --------------------------------------------------------------------------- #
 # fixtures (grids <= (3,3), M <= 8 -- the test-cost rule)
@@ -404,7 +407,8 @@ def test_g3_duality_patterned_cell_ladder():
     discretization error, not build noise -- it is the same shape as the
     shipped G4 stripe ladder, whose BLAS-path sensitivity was measured at
     ~2e-09 relative), and a ladder drop of at least 5x (measured 21.9x at
-    worst, so 4.4x of headroom).
+    worst in the build table above, 23.85x on the verify re-measure through
+    this file's helpers, so >= 4.4x of headroom).
     """
     ec = _cell(_LC, 4.0 * _EYE)
     d5 = max(_duality(ec, None, th, ph, 5)[0]
@@ -774,10 +778,12 @@ def test_failbefore_the_r_vs_gram_separation_is_load_bearing(monkeypatch):
     Collapsing them applies ``[chi_t]^-1`` to every H partner -- an interface
     error that no eigenvalue and no renormalised energy check can see.
 
-    MEASURED 2026-09-10 (build doc M1b): intact 1.88e-14 against the analytic
-    oracle; with the Gram collapsed onto R, 2.15e-01.  Bars: intact < 1e-12,
-    collapsed > 1e-4 (3 decades under the measured break, 8 decades over the
-    intact arm).
+    MEASURED 2026-09-10 (verify re-measure through this file's own helpers,
+    max over {R, T, Jones} -- the build doc's M1b caption claimed that set but
+    its probe excluded the Jones): intact 3.0641e-14 against the analytic
+    oracle; with the Gram collapsed onto R, 3.2580e-01.  Bars: intact < 1e-12,
+    collapsed > 1e-4 (3.5 decades under the measured break, 8.5 decades over
+    the intact arm).
     """
     assert _slab_residual(4.0, 2.0, 0.35, 8) < 1e-12
     assert _knockout_residual(monkeypatch, "gram") > 1e-4
@@ -794,11 +800,13 @@ def test_failbefore_each_chi_weight_is_load_bearing(monkeypatch, kind, eq):
     MEASURED 2026-09-10 (build doc M1b), uniform eps=4 mu=2 slab at
     theta=0.35, M=8, against the analytic Airy oracle:
 
-        intact                       1.876e-14
-        chi33 -> 1   (S_tt)          7.232e-03
-        chi_t -> I   (R, K_tz)       2.747e-02
+        intact                       3.064e-14
+        chi33 -> 1   (S_tt)          2.336e-02
+        chi_t -> I   (R, K_tz)       2.229e-01
 
-    Bar 1e-4: 72x under the smaller break and 10 decades over the intact arm.
+    (verify re-measure 2026-09-10, max over {R, T, Jones}; the build doc's
+    M1b R/T-only readings were 1.876e-14 / 7.232e-03 / 2.747e-02.)
+    Bar 1e-4: 234x under the smaller break and 9.5 decades over the intact arm.
     (The MIXED chi12 / chi21 blocks cannot be seen by an isotropic mu; they
     are gated by the duality test below, which reads 3.402e-02 with them
     zeroed against 4.219e-14 intact.)
@@ -1039,3 +1047,96 @@ def test_api_two_identical_magnetic_layers_share_one_eig(monkeypatch):
         warnings.simplefilter("ignore")
         st2.solve()
     assert len(calls) == 2, len(calls)
+
+
+# =========================================================================== #
+# G10 -- the WOOD-ANOMALY nudge list carries a MAGNETIC layer's OWN cut-offs
+#        (follow-up, VERIFY_PMM2D_STAGGERED_MAGNETIC_2026_09_10.md V7)
+# =========================================================================== #
+#: NORMAL incidence with ``px == py``, so ``kt^2(m, n) = (m^2 + n^2)(wl/px)^2``.
+#: ``wl = px sqrt(eps mu)`` puts the ``(+/-1, 0)`` and ``(0, +/-1)`` orders
+#: EXACTLY on the magnetic layer's own cut-off, while ``eps``, ``mu`` and both
+#: half-spaces are far from every ``kt^2`` -- so a permittivity-only list
+#: cannot see the coincidence and the fixture isolates the ``eps*mu`` rule.
+_WPX, _WEPS, _WMU = 0.50e-6, 4.0, 2.25
+_WL_CUT = _WPX * np.sqrt(_WEPS * _WMU)
+
+
+def _wood_stack(wl, *, mu=None, n_modes=5):
+    st = PMM2DStackPure(_WPX, _WPX, n_superstrate=1.0, n_substrate=1.5,
+                        n_modes=n_modes, n_orders=3)
+    cell = np.full((2, 2), _WEPS + 0j)
+    if mu is None:
+        st.add_layer(0.28e-6, eps_cell=cell)
+    else:
+        st.add_layer(0.28e-6, eps_cell=cell, mu=mu)
+    st.set_source(float(wl))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return st.solve(jones=True)[1:]
+
+
+def _wood_nudged_wl():
+    """The wavelength the ``eps*mu`` rule lands on, from the library's OWN
+    guard driven with an explicit list -- never a recorded constant."""
+    mo = np.arange(-3, 4)
+    return _grazing_safe_wavelength(
+        float(_WL_CUT), 0.0, 0.0, np.tile(mo, len(mo)), np.repeat(mo, len(mo)),
+        _WPX, _WPX, [1.0, 2.25, _WEPS * _WMU])
+
+
+def test_g10_the_fixture_is_on_the_eps_mu_cutoff_and_only_that_rule_sees_it():
+    """FAIL-BEFORE, as a decision about the RULES.
+
+    Both arms are the library's own ``_grazing_safe_wavelength`` called with
+    two explicit lists, so neither references pre-change code.  The coincidence
+    is exact in float64, and ``eps``, ``mu`` and the two half-spaces are each
+    O(1) away from every ``kt^2`` -- the ONLY thing on the cut-off is the
+    PRODUCT.
+    """
+    mo = np.arange(-3, 4)
+    mx, my = np.tile(mo, len(mo)), np.repeat(mo, len(mo))
+    assert (_WL_CUT / _WPX) ** 2 - _WEPS * _WMU == 0.0
+    kt2 = np.unique((mx ** 2 + my ** 2) * (_WL_CUT / _WPX) ** 2)
+    for lone in (1.0, 2.25, _WEPS, _WMU):
+        # 1e-9 is the guard's own trigger band; these sit 1.0-2.25 away
+        assert float(np.min(np.abs(lone - kt2))) > 0.9, lone
+
+    def nudge(lst):
+        return _grazing_safe_wavelength(float(_WL_CUT), 0.0, 0.0, mx, my,
+                                        _WPX, _WPX, list(lst))
+    assert nudge([1.0, 2.25]) == _WL_CUT
+    assert nudge([1.0, 2.25, _WEPS]) == _WL_CUT          # the eps-only rule
+    assert nudge([1.0, 2.25, _WEPS, _WMU]) == _WL_CUT    # eps and mu SEPARATE
+    assert nudge([1.0, 2.25, _WEPS * _WMU]) != _WL_CUT   # only the PRODUCT
+
+
+def test_g10_a_magnetic_layer_on_its_cutoff_is_nudged():
+    """The PUBLIC-surface proof that the guard fired and landed exactly where
+    the ``eps*mu`` rule says: the solve AT the cut-off is BIT-IDENTICAL to the
+    same solve at the nudged wavelength (which is itself off every cut-off, so
+    it is not nudged again).  MEASURED: max|dR| = 0.0 on R, T and the Jones.
+    """
+    a = _wood_stack(_WL_CUT, mu=_WMU)
+    b = _wood_stack(_wood_nudged_wl(), mu=_WMU)
+    for x, y in zip(a, b):
+        assert np.array_equal(x, y), float(np.max(np.abs(x - y)))
+
+
+def test_g10_the_same_layer_with_unit_mu_is_not_nudged():
+    """The OTHER side: with ``mu = 1`` the product IS the permittivity, which
+    is off every cut-off here, so the guard must NOT fire -- the two solves
+    must DIFFER.  And a ``mu = 1`` magnetic layer must still agree with the
+    NONMAGNETIC layer to re-summation only (both take the same, empty nudge).
+
+    MEASURED 2026-09-10: the two wavelengths differ by 3.9e-08 in R (bar 1e-10,
+    ~400x, and decades above the 4.4e-15 re-summation floor of the last
+    assertion), and mu = 1 vs nonmagnetic reads 4.4e-15 (bar 1e-12).
+    """
+    c = _wood_stack(_WL_CUT, mu=1.0)
+    d = _wood_stack(_wood_nudged_wl(), mu=1.0)
+    assert float(np.max(np.abs(c[0] - d[0]))) > 1e-10
+    e = _wood_stack(_WL_CUT)
+    for x, y in zip(c, e):
+        assert float(np.max(np.abs(x - y))) < 1e-12, float(
+            np.max(np.abs(x - y)))

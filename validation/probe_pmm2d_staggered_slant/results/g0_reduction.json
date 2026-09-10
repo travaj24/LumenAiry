@@ -1,0 +1,50 @@
+{
+ "lumenairy": "C:\\tmp\\lum_slantp\\lumenairy\\__init__.py",
+ "G0c_roundtrip": 1.2412670766236366e-16,
+ "G0c_t0_identity": 0.0,
+ "G0c_detA": 0.0,
+ "G0a_offplane_dispatch": true,
+ "G0a_dA_bits": 0,
+ "G0a_dB_bits": 0,
+ "G0a_dA_max": 0.0,
+ "G0a_dB_max": 0.0,
+ "G0b": {
+  "scalar/normal": {
+   "dR": 2.983724378680108e-16,
+   "dT": 1.4432899320127035e-15,
+   "dJ": 4.220693465512385e-15,
+   "bits_R": 10
+  },
+  "scalar/conical": {
+   "dR": 5.282232984349378e-16,
+   "dT": 3.858025010572419e-15,
+   "dJ": 1.8628321403342975e-15,
+   "bits_R": 6
+  },
+  "inplane/normal": {
+   "dR": 1.6306400674181987e-16,
+   "dT": 6.106226635438361e-16,
+   "dJ": 9.210711918752953e-16,
+   "bits_R": 10
+  },
+  "inplane/conical": {
+   "dR": 1.6306400674181987e-16,
+   "dT": 3.1086244689504383e-15,
+   "dJ": 8.538664203712611e-16,
+   "bits_R": 6
+  },
+  "oop/normal": {
+   "dR": 0.0,
+   "dT": 0.0,
+   "dJ": 0.0,
+   "bits_R": 0
+  },
+  "oop/conical": {
+   "dR": 0.0,
+   "dT": 0.0,
+   "dJ": 0.0,
+   "bits_R": 0
+  }
+ },
+ "wall_s": 1.9924488067626953
+}
