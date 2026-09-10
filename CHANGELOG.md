@@ -73,6 +73,9 @@ snap dormant and active, Bragg, conical, slant, out-of-plane, lossy, sweep,
 `prepare()`, `stabilize='slices'`, `internal_field`, `layer_absorption` --
 hashed against the read-only main clone: **18 / 18 identical**.
 `tests/unit/test_fix_pmmstack_sliver_walls.py`, 19 tests, 7.8 s / 7.6 s.
+Regression: every test file that imports `PMMStack` (37) plus this one --
+731 passed / 1 skipped / 0 failed with the slow markers included (36:49),
+697 / 1 / 0 without (10:36).
 One shipped file needed the switch, and it is the right one:
 `tests/unit/test_m1_conditioning_guard.py` drives the audit staircase (2 nm
 cross-layer cells at ratio 157) deliberately past capacity and HARVESTS pre-fix

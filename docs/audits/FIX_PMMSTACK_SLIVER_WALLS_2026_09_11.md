@@ -443,7 +443,14 @@ capped at file top before numpy is imported.
 `.test_durations` spliced with the measured Windows timings.
 
 **Regression.** Every test file that imports `PMMStack`
-(`grep tests/ --include='*.py' -l PMMStack`, 37 files) plus this one: green.
+(`grep tests/ --include='*.py' -l PMMStack`, 37 files) plus this one, Windows,
+one BLAS thread:
+
+| run | result | wall |
+|---|---|---|
+| full (slow markers included) | **731 passed, 1 skipped, 0 failed** | 36 min 49 s |
+| `-m "not slow"` | **697 passed, 1 skipped, 0 failed** | 10 min 36 s |
+
 `ruff check lumenairy/ tests/`: clean.
 
 **One shipped test file needed a switch, and it is the right one.**
