@@ -149,7 +149,10 @@ __all__ = [
 # precedents) -- 5.43.0 ships one minor below the horizon with both
 # registries still empty tombstones; slipped now so the NEXT release
 # cannot collide at tag-verify.  Recorded in the CHANGELOG's 5.43.0 block.
-NEXT_REMOVAL_VERSION = '5.46'
+# v5.45.0 (2026-09-10): fifth proactive slip, 5.46 -> 5.48 -- 5.45.0 ships
+# one minor below the horizon with both registries still empty, and a
+# 5.45.1 is scheduled behind it.  Recorded in the CHANGELOG's 5.45.0 block.
+NEXT_REMOVAL_VERSION = '5.48'
 
 #: Re-scheduled horizons: ``{version as written at the shim call site:
 #: live removal version}``.  Keys are the ORIGINAL (now shipped) schedule

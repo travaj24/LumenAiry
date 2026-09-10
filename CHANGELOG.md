@@ -2,7 +2,7 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.45.0] — 2026-09-10
 
 ### Fixed -- the RCWA modal BRANCH CUT: a propagating layer mode could be handed the INCOMING root, decided by a last bit
 
@@ -1350,6 +1350,14 @@ Gate for all three: `tests/unit/test_fix_slant_anchor_v1_v2_o2.py`.  Evidence:
   property (the family reaches 4.78e-16) and is restated to 1e-13.  The screen
   is free for unarmed callers and costs 1.10x-1.51x of the inverse at the
   armed site (n = 66..722).
+
+### Deprecation horizon
+
+* `NEXT_REMOVAL_VERSION` slipped `5.46` -> `5.48` (fifth proactive one-line
+  slip; v5.32.0 / v5.36.1 / v5.40.0 / v5.43.0 precedents).  5.45.0 ships one
+  minor below the old horizon with both registries still empty tombstones, and
+  a 5.45.1 (the BOR multilayer guards) is already scheduled behind it, so the
+  horizon is moved now rather than at that tag's verify step.
 
 ## [5.44.0] — 2026-09-10
 
