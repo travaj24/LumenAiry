@@ -1,0 +1,8 @@
+....                                                                     [100%]
+============================= slowest 10 durations =============================
+13.25s call     tests/unit/test_verify_pmm2d_mortar_round3.py::test_ordinary_geometries_sit_closer_to_the_band_edge_than_3x
+2.30s call     tests/unit/test_verify_pmm2d_mortar_round3.py::test_a_generalized_mortar_with_both_sides_promoted_is_not_rank_deficient
+1.39s call     tests/unit/test_verify_pmm2d_mortar_round3.py::test_the_band_warning_fires_on_an_axis_that_carries_no_mortar
+
+(7 durations < 0.005s hidden.  Use -vv to show these durations.)
+4 passed in 17.29s

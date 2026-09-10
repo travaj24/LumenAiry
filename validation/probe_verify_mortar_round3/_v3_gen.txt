@@ -1,0 +1,6 @@
+  M=4 n=324 a0102648f1a8cdc0 1.7s
+  M=5 n=576 3f2a0389564e8be2 2.7s
+  M=6 n=900 e146f4ea1bec712b 12.3s
+  M=7 n=1296 440fbcedf6e75df5 34.1s
+  M=8 n=1764 0969041c94aa32ad 91.8s
+wrote C:\tmp\vmortar3_operands.npz and v3_operand_hashes_gen.json

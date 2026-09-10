@@ -1,0 +1,24 @@
+SLIVER
+  SLIVER d=1.0e-01 M=5 R00=0.0110371848 move=0.00e+00 accepted
+  SLIVER d=5.0e-02 M=5 R00=0.0110372630 move=7.08e-06 accepted
+  SLIVER d=3.0e-02 M=5 R00=0.0110372368 move=4.71e-06 accepted
+  SLIVER d=1.0e-02 M=5 R00=0.0110373936 move=1.89e-05 accepted
+  SLIVER d=3.0e-03 M=5 R00=0.0110375456 move=3.27e-05 accepted
+  SLIVER d=1.0e-03 M=5 R00=0.0110371111 move=6.68e-06 accepted
+  SLIVER d=1.0e-03 M=5 R00=0.0110372087 move=2.16e-06 accepted
+  SLIVER d=3.0e-04 M=5 R00=0.0110375293 move=3.12e-05 refused: ValueError
+  SLIVER d=1.0e-04 M=5 R00=0.0110375669 move=3.46e-05 refused: ValueError
+  SLIVER d=1.0e-05 M=5 R00=0.0110375872 move=3.65e-05 refused: ValueError
+  SLIVER d=1.0e-06 M=5 ERROR _ConditioningError
+  SLIVER d=1.0e-07 M=5 ERROR _ConditioningError
+  SLIVER d=1.0e-08 M=5 ERROR _ConditioningError
+  SLIVER d=1.0e-09 M=5 ERROR _ConditioningError
+{
+ "bar": 1e-06,
+ "n_healthy_operands": 0,
+ "healthy_exact_min": null,
+ "healthy_exact_max": null,
+ "healthy_decades_below_bar": null,
+ "healthy_probe_max": null
+}
+wrote v2_populations_win_sliver.json (14 rows, 0 healthy operands)

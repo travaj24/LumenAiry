@@ -1,0 +1,38 @@
+  shared_scalar                       3 hashes  0 warn  
+  shared_scalar_jones                 4 hashes  0 warn  
+  shared_scalar_M6_N3                 3 hashes  0 warn  
+  shared_tensor_uniform               3 hashes  0 warn  
+  shared_oop                          3 hashes  0 warn  
+  shared_oop_normal_incidence         3 hashes  0 warn  
+  shared_magnetic                     3 hashes  0 warn  
+  shared_slant                        3 hashes  0 warn  
+  shared_retain_internal              4 hashes  0 warn  
+  shared_per_order_amplitudes        10 hashes  0 warn  
+  shared_lossy_metal                  3 hashes  0 warn  
+  perlayer_conforming                 3 hashes  0 warn  
+  perlayer_non_conforming             3 hashes  0 warn  
+  perlayer_non_conforming_M6          3 hashes  0 warn  
+  perlayer_nested                     3 hashes  0 warn  
+  perlayer_union                      3 hashes  0 warn  
+  perlayer_per_layer_n_modes          3 hashes  0 warn  
+  perlayer_uniform_spacer             3 hashes  0 warn  
+  perlayer_uniform_lattice_N5         3 hashes  0 warn  
+  perlayer_magnetic                   3 hashes  0 warn  
+  perlayer_slant_both                 3 hashes  0 warn  
+  perlayer_slant_conforming           3 hashes  0 warn  
+  perlayer_oop_both                   3 hashes  0 warn  
+  perlayer_oop_conforming             3 hashes  0 warn  
+  taper_midpoint_4                    3 hashes  0 warn  
+  taper_midpoint_8                    3 hashes  0 warn  
+  taper_bottom_8                      3 hashes  0 warn  
+  taper_midpoint_16                   3 hashes  0 warn  
+  tapered_pillars_8                   3 hashes  0 warn  
+  pmmstack_1d_deg8                    3 hashes  0 warn  
+  pmmstack_1d_deg12                   3 hashes  0 warn  
+  MIXED_spacer_M4                     3 hashes  0 warn  
+  MIXED_spacer_M5                     0 hashes  0 warn  ERR _ConditioningError: pmm2d staggered GENERALIZED mortar inter
+  MIXED_spacer_M6                     0 hashes  0 warn  ERR _ConditioningError: pmm2d staggered GENERALIZED mortar inter
+  MIXED_pattern_M4                    3 hashes  0 warn  
+  MIXED_pattern_M5                    0 hashes  0 warn  ERR _ConditioningError: pmm2d staggered GENERALIZED mortar inter
+  MIXED_pattern_M6                    0 hashes  0 warn  ERR _ConditioningError: pmm2d staggered GENERALIZED mortar inter
+wrote v6_bitid_pre.json  (37 fixtures, 108 hashes)

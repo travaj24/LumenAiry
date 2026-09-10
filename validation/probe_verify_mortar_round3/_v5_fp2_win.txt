@@ -1,0 +1,16 @@
+FP2 conforming-axis sliver
+  FP2 fy=3.0e-01 xconf=0 R00=0.247088457739 move=0.000e+00 warn=0 axis=None
+  FP2 fy=3.0e-01 xconf=1 R00=0.247088457861 move=nan warn=0 axis=None
+  FP2 fy=1.0e-01 xconf=0 R00=0.247088457739 move=1.719e-14 warn=0 axis=None
+  FP2 fy=1.0e-01 xconf=1 R00=0.247088457861 move=nan warn=0 axis=None
+  FP2 fy=5.0e-02 xconf=0 R00=0.247088457739 move=8.479e-13 warn=0 axis=None
+  FP2 fy=5.0e-02 xconf=1 R00=0.247088457861 move=nan warn=0 axis=None
+  FP2 fy=3.0e-02 xconf=0 R00=0.247088457739 move=2.759e-13 warn=0 axis=None
+  FP2 fy=3.0e-02 xconf=1 R00=0.247088457861 move=nan warn=0 axis=None
+  FP2 fy=1.0e-02 xconf=0 R00=0.247088457739 move=4.153e-13 warn=1 axis=y
+  FP2 fy=1.0e-02 xconf=1 R00=0.247088457861 move=nan warn=0 axis=None
+  FP2 fy=3.0e-03 xconf=0 R00=0.247088457739 move=3.130e-13 warn=1 axis=y
+  FP2 fy=3.0e-03 xconf=1 R00=0.247088457861 move=nan warn=0 axis=None
+  FP2 fy=1.2e-03 xconf=0 R00=0.247088457739 move=3.889e-13 warn=1 axis=y
+  FP2 fy=1.2e-03 xconf=1 R00=0.247088457861 move=nan warn=0 axis=None
+wrote v5_falsepos_win_fp2.json (14 rows)

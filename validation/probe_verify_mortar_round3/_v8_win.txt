@@ -1,0 +1,24 @@
+  just_above_band        per M=4 R00=0.001691117 clo=1.00e-02 warn=0 res=1.19e-14 2s
+  just_above_band        per M=5 R00=0.000143918 clo=1.29e-03 warn=0 res=1.79e-14 3s
+  just_above_band        per M=6 R00=0.012992754 clo=1.95e-04 warn=0 res=2.92e-14 14s
+  just_above_band        per M=7 R00=0.013906507 clo=4.53e-06 warn=0 res=4.54e-14 38s
+  just_above_band        uni M=4 R00=0.000845611 clo=2.80e-04 sites=0 9s
+  just_above_band        uni M=5 R00=0.017060150 clo=2.64e-04 sites=0 50s
+  just_above_band        uni M=6 R00=0.014115258 clo=3.05e-05 sites=0 203s
+  -> just_above_band: |dR| to union ['2.349e-02', '2.993e-02', '1.139e-02', '9.156e-04']  per-layer steps ['6.434e-03', '1.853e-02', '1.048e-02']  union steps ['2.010e-02', '6.401e-03']
+  just_above_contract    per M=4 R00=0.001523891 clo=8.54e-03 warn=1 res=7.52e-15 1s
+  just_above_contract    per M=5 R00=0.000042496 clo=1.36e-03 warn=1 res=9.51e-15 3s
+  just_above_contract    per M=6 R00=0.013183756 clo=2.89e-04 warn=1 res=1.46e-14 14s
+  just_above_contract    per M=7 R00=0.012753392 clo=1.31e-05 warn=1 res=3.21e-14 36s
+  just_above_contract    uni M=4 R00=0.001531687 clo=2.03e-04 sites=0 9s
+  just_above_contract    uni M=5 R00=0.017058136 clo=4.52e-04 sites=0 47s
+  -> just_above_contract: |dR| to union ['1.967e-02', '1.939e-02', '3.875e-03', '5.014e-03']  per-layer steps ['5.909e-03', '1.552e-02', '8.889e-03']  union steps ['1.847e-02']
+  ordinary_post          per M=4 R00=0.001845555 clo=8.04e-05 warn=0 res=1.07e-14 1s
+  ordinary_post          per M=5 R00=0.014029986 clo=7.81e-04 warn=0 res=1.65e-14 4s
+  ordinary_post          per M=6 R00=0.013218629 clo=7.84e-05 warn=0 res=3.73e-14 13s
+  ordinary_post          per M=7 R00=0.015257331 clo=9.16e-06 warn=0 res=4.66e-14 38s
+  ordinary_post          uni M=4 R00=0.016308222 clo=1.14e-03 sites=0 8s
+  ordinary_post          uni M=5 R00=0.015130914 clo=4.06e-05 sites=0 48s
+  ordinary_post          uni M=6 R00=0.015145995 clo=1.12e-05 sites=0 185s
+  -> ordinary_post: |dR| to union ['2.658e-02', '1.620e-02', '5.314e-03', '3.015e-04']  per-layer steps ['1.973e-02', '1.089e-02', '5.602e-03']  union steps ['7.014e-03', '1.583e-03']
+wrote v8_hunt_ladder_win.json (23 rows)

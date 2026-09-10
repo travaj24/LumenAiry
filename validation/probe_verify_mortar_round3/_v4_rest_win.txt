@@ -1,0 +1,45 @@
+CENSUS
+  census uniform_lattice_N1         narrowest=1.0000e+00 
+  census uniform_lattice_N2         narrowest=5.0000e-01 
+  census uniform_lattice_N3         narrowest=3.3333e-01 
+  census uniform_lattice_N4         narrowest=2.5000e-01 
+  census uniform_lattice_N6         narrowest=1.6667e-01 
+  census uniform_lattice_N8         narrowest=1.2500e-01 
+  census uniform_lattice_N12        narrowest=8.3333e-02 
+  census uniform_lattice_N16        narrowest=6.2500e-02 
+  census duty_0.100                 narrowest=1.0000e-01 
+  census duty_0.200                 narrowest=2.0000e-01 
+  census duty_0.333                 narrowest=3.3333e-01 
+  census duty_0.500                 narrowest=2.5000e-01 
+  census duty_0.700                 narrowest=1.5000e-01 
+  census duty_0.900                 narrowest=5.0000e-02 
+  census nested_refinement          narrowest=1.2500e-01 
+  census two_pillars                narrowest=1.0000e-01 
+  census taper_straight_4           narrowest=2.5625e-01 
+  census taper_closing_4            narrowest=6.2500e-02 
+  census taper_straight_8           narrowest=2.5312e-01 
+  census taper_closing_8            narrowest=3.1250e-02 
+  census taper_straight_16          narrowest=2.5156e-01 
+  census taper_closing_16           narrowest=1.5625e-02 IN BAND
+  census taper_straight_32          narrowest=2.5078e-01 
+  census taper_closing_32           narrowest=7.8125e-03 IN BAND
+  census taper_straight_64          narrowest=2.5039e-01 
+  census taper_closing_64           narrowest=3.9062e-03 IN BAND
+  census taper_straight_128         narrowest=2.5020e-01 
+  census taper_closing_128          narrowest=1.9531e-03 IN BAND
+  census tapered_pillars_4          narrowest=1.4750e-01 
+  census tapered_pillars_8          narrowest=1.4375e-01 
+  census tapered_pillars_16         narrowest=1.4187e-01 
+  census tapered_pillars_32         narrowest=1.4094e-01 
+MESSAGE / SWITCH / COUNT
+  message tokens: 15/15; missing []
+  two-sided frac=6.0e-02 expected=silent got=silent n=0
+  two-sided frac=2.9e-02 expected=warn got=warn n=1
+  two-sided frac=1.2e-03 expected=warn got=warn n=1
+  two-sided frac=9.0e-04 expected=refused got=refused n=0
+  switch: off=0 on=1
+  once_per_solve: 1 band warning(s) for 4 banded layers
+  conforming[conforming]: 0
+  conforming[non_conforming]: 1
+  y_axis_shared_sliver: 1 warning(s)
+wrote v4_band_win_rest.json (42 rows)

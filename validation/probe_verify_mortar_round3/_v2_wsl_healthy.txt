@@ -1,0 +1,45 @@
+HEALTHY
+  HEALTHY base/spacer/M4/no2: 1 operand(s)   1.0s
+  HEALTHY base/spacer/M5/no2: 1 operand(s)   1.8s
+  HEALTHY base/spacer/M6/no2: 1 operand(s)  11.9s
+  HEALTHY base/spacer/M7/no2: 1 operand(s)  26.5s
+  HEALTHY base/spacer/M8/no2: 1 operand(s)  81.1s
+  HEALTHY base/pattern/M4/no1: 1 operand(s)   0.7s
+  HEALTHY base/pattern/M5/no3: 1 operand(s)   3.4s
+  HEALTHY base/pattern/M6/no2: 1 operand(s)  14.4s
+  HEALTHY base/pattern/M7/no2: 1 operand(s)  40.7s
+  HEALTHY base/magnetic/M4/no2: 1 operand(s)   0.6s
+  HEALTHY base/magnetic/M6/no2: 1 operand(s)  13.3s
+  HEALTHY base/oop_both/M4/no2: 1 operand(s)   0.7s
+  HEALTHY base/oop_both/M6/no2: 1 operand(s)  14.0s
+  HEALTHY base/slant_both/M4/no2: 1 operand(s)   0.9s
+  HEALTHY base/slant_both/M6/no2: 1 operand(s)  14.0s
+  HEALTHY base/slant_spacer/M5/no2: 1 operand(s)   2.6s
+  HEALTHY base/deep/M4/no2: 5 operand(s)   1.5s
+  HEALTHY base/deep/M5/no2: 5 operand(s)   6.2s
+  HEALTHY longwave/pattern/M4/no2: 1 operand(s)   0.7s
+  HEALTHY longwave/spacer/M5/no2: 1 operand(s)   2.9s
+  HEALTHY longwave/oop_both/M5/no1: 1 operand(s)   3.7s
+  HEALTHY shortwave/pattern/M5/no2: 1 operand(s)   2.8s
+  HEALTHY shortwave/spacer/M4/no3: 1 operand(s)   0.6s
+  HEALTHY shortwave/magnetic/M5/no2: 1 operand(s)   3.5s
+  HEALTHY normal_incidence/pattern/M4/no2: 1 operand(s)   0.6s
+  HEALTHY normal_incidence/spacer/M6/no2: 1 operand(s)  11.2s
+  HEALTHY normal_incidence/slant_both/M4/no2: 1 operand(s)   0.9s
+  HEALTHY high_contrast/pattern/M4/no2: 1 operand(s)   0.8s
+  HEALTHY high_contrast/pattern/M6/no2: 1 operand(s)  15.8s
+  HEALTHY high_contrast/spacer/M5/no2: 1 operand(s)   2.7s
+  HEALTHY high_contrast/oop_both/M5/no2: 1 operand(s)   3.8s
+  HEALTHY wide_angle/pattern/M4/no2: 1 operand(s)   0.7s
+  HEALTHY wide_angle/pattern/M7/no2: 1 operand(s)  41.5s
+  HEALTHY wide_angle/spacer/M5/no2: 1 operand(s)   3.3s
+  HEALTHY wide_angle/magnetic/M4/no2: 1 operand(s)   0.7s
+{
+ "bar": 1e-06,
+ "n_healthy_operands": 43,
+ "healthy_exact_min": 3.4148993768140224e-15,
+ "healthy_exact_max": 4.4802030202513687e-13,
+ "healthy_decades_below_bar": 6.348702305515889,
+ "healthy_probe_max": 4.696524424046533e-13
+}
+wrote v2_populations_wsl_healthy.json (43 rows, 43 healthy operands)

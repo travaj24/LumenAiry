@@ -1,0 +1,14 @@
+LADDER
+  oracle self-gap deg12->14: 4.0144485994e-05
+  M=7 frac=3.0e-01 err=4.518999e-04 ratio=1.000 warn=0 56.5s
+  M=7 frac=2.0e-01 err=2.285745e-03 ratio=5.058 warn=0 55.6s
+  M=7 frac=1.5e-01 err=3.478636e-03 ratio=7.698 warn=0 55.2s
+  M=7 frac=1.0e-01 err=3.955687e-03 ratio=8.753 warn=0 55.4s
+  M=7 frac=7.0e-02 err=4.535996e-03 ratio=10.038 warn=0 54.2s
+  M=7 frac=5.0e-02 err=5.147249e-03 ratio=11.390 warn=0 53.2s
+  M=7 frac=3.0e-02 err=6.097384e-03 ratio=13.493 warn=0 54.5s
+  M=7 frac=2.0e-02 err=6.667443e-03 ratio=14.754 warn=1 61.0s
+  M=7 frac=1.0e-02 err=7.234924e-03 ratio=16.010 warn=1 61.0s
+  M=7 frac=3.0e-03 err=7.565496e-03 ratio=16.742 warn=1 52.0s
+  M=7 frac=1.0e-03 err=7.564537e-03 ratio=16.739 warn=1 48.6s
+wrote v4_band_wsl_ladder.json (12 rows)

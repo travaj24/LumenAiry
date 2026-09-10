@@ -1,0 +1,36 @@
+LADDER
+  oracle self-gap deg12->14: 4.0144485987e-05
+  M=6 frac=3.0e-01 err=4.989262e-03 ratio=1.000 warn=0 20.4s
+  M=6 frac=2.0e-01 err=2.884153e-03 ratio=0.578 warn=0 18.4s
+  M=6 frac=1.5e-01 err=9.000427e-04 ratio=0.180 warn=0 15.4s
+  M=6 frac=1.0e-01 err=4.300904e-03 ratio=0.862 warn=0 17.8s
+  M=6 frac=7.0e-02 err=5.939173e-03 ratio=1.190 warn=0 22.1s
+  M=6 frac=5.0e-02 err=6.748332e-03 ratio=1.353 warn=0 19.5s
+  M=6 frac=3.0e-02 err=7.209529e-03 ratio=1.445 warn=0 18.7s
+  M=6 frac=2.0e-02 err=7.246841e-03 ratio=1.452 warn=1 18.0s
+  M=6 frac=1.0e-02 err=7.052083e-03 ratio=1.413 warn=1 16.3s
+  M=6 frac=3.0e-03 err=6.462934e-03 ratio=1.295 warn=1 18.8s
+  M=6 frac=1.0e-03 err=5.785387e-03 ratio=1.160 warn=1 20.0s
+  M=7 frac=3.0e-01 err=4.518999e-04 ratio=1.000 warn=0 52.2s
+  M=7 frac=2.0e-01 err=2.285745e-03 ratio=5.058 warn=0 51.4s
+  M=7 frac=1.5e-01 err=3.478636e-03 ratio=7.698 warn=0 54.4s
+  M=7 frac=1.0e-01 err=3.955687e-03 ratio=8.753 warn=0 53.9s
+  M=7 frac=7.0e-02 err=4.535996e-03 ratio=10.038 warn=0 53.5s
+  M=7 frac=5.0e-02 err=5.147249e-03 ratio=11.390 warn=0 53.7s
+  M=7 frac=3.0e-02 err=6.097384e-03 ratio=13.493 warn=0 52.6s
+  M=7 frac=2.0e-02 err=6.667443e-03 ratio=14.754 warn=1 53.2s
+  M=7 frac=1.0e-02 err=7.234924e-03 ratio=16.010 warn=1 52.0s
+  M=7 frac=3.0e-03 err=7.565496e-03 ratio=16.742 warn=1 50.5s
+  M=7 frac=1.0e-03 err=7.564537e-03 ratio=16.739 warn=1 52.1s
+  M=8 frac=3.0e-01 err=1.860558e-04 ratio=1.000 warn=0 193.1s
+  M=8 frac=2.0e-01 err=1.154914e-03 ratio=6.207 warn=0 200.0s
+  M=8 frac=1.5e-01 err=1.188765e-03 ratio=6.389 warn=0 196.5s
+  M=8 frac=1.0e-01 err=1.944357e-03 ratio=10.450 warn=0 199.1s
+  M=8 frac=7.0e-02 err=2.926981e-03 ratio=15.732 warn=0 209.2s
+  M=8 frac=5.0e-02 err=3.639507e-03 ratio=19.561 warn=0 170.6s
+  M=8 frac=3.0e-02 err=4.264295e-03 ratio=22.919 warn=0 164.4s
+  M=8 frac=2.0e-02 err=4.511525e-03 ratio=24.248 warn=1 158.3s
+  M=8 frac=1.0e-02 err=4.700163e-03 ratio=25.262 warn=1 164.9s
+  M=8 frac=3.0e-03 err=4.778574e-03 ratio=25.684 warn=1 173.9s
+  M=8 frac=1.0e-03 err=4.766214e-03 ratio=25.617 warn=1 173.2s
+wrote v4_band_win_ladder.json (34 rows)

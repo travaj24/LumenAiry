@@ -1,0 +1,32 @@
+........................................................................ [ 38%]
+........................................................................ [ 77%]
+.........................................                                [100%]
+============================== warnings summary ===============================
+tests/unit/test_fix_pmm2d_mortar_round2.py::test_the_mortars_own_algebra_is_exact_at_every_wall_separation
+  C:\tmp\lum_vmortar3\lumenairy\elements\pmm\stack2d_pure.py:1340: UserWarning: PMM2DStackPure.solve: layer 1's element grid has a segment 1.000e-02 of the period wide on the x axis (walls [0.    0.594 0.606 1.2  ]).  That is ABOVE the 1e-03 minimum this basis contracts for, so the solve proceeds -- but it is inside the MEASURED degradation band 1e-03 .. 3e-02, where the per-segment 1/J_n stiffness puts spurious modal wavenumbers into the L2 MORTAR that couples this layer to neighbours on other grids.  MEASURED cost on a device that cannot depend on the wall separation at all: about 4-5x the error of the same device on an ordinary partition, and it is a FLOOR -- raising n_modes does NOT remove it, and the n_modes ladder FLATTENS here, so a convergence study will read the floor as convergence.  The lossless closure stays pinned, so no energy tripwire can see this.
+    REMEDIES.  (1) MERGE the two walls if the feature is finer than the device needs; (2) carry the fine feature on the SHARED lattice (PMM2DStackPure(..., layer_grids='shared') with an N that resolves it), where every cell is period/N and no mortar forms; (3) put the NEIGHBOURS on this layer's wall array too -- a CONFORMING per-layer stack takes the plain square modal match and no mortar at all; (4) use PMM2DStackHybrid, which is Fourier-projected and has no element grid; (5) on a TAPER, lower n_slices.  To silence this warning after reading the measurement, set lumenairy.elements.pmm.twod_staggered.PMM2D_STAG_SLIVER_BAND_WARN = False.
+    return self._solve_per_layer(jones=jones,
+
+tests/unit/test_fix_pmm2d_mortar_round2.py::test_the_mortar_rcond_bar_has_decades_of_gap_on_both_sides
+tests/unit/test_fix_pmm2d_mortar_round2.py::test_a_singular_mortar_operator_is_refused_by_name_not_by_LinAlgError
+  C:\tmp\lum_vmortar3\lumenairy\elements\pmm\twod_staggered.py:2510: RuntimeWarning: invalid value encountered in multiply
+    lam = -1j * q                     # forward propagator exp(-lam k0 z) decays
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================ slowest 15 durations =============================
+81.28s call     tests/unit/test_fix_pmm2d_mortar_round2.py::test_fail_before_the_sliver_the_guard_refuses_is_measurably_wrong
+65.85s call     tests/unit/test_pmm2d_staggered_oop.py::test_g5_no_fourier_floor_two_sided
+48.54s call     tests/unit/test_fix_pmm2d_mortar_round3.py::test_no_ordinary_geometry_the_library_builds_lands_in_the_band
+38.63s call     tests/unit/test_pmm2d_staggered_mortar.py::test_taper_agrees_with_the_hybrid_staircase_at_the_same_slices
+38.52s call     tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_across_non_conforming_grids_matches_the_1d_oracle[28.0-22.0]
+38.27s call     tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_per_layer_on_coinciding_grids_is_bit_exact_vs_shared
+36.46s call     tests/unit/test_fix_pmm2d_mortar_round3.py::test_the_band_the_warning_names_carries_a_measurable_cost
+35.89s call     tests/unit/test_pmm2d_staggered_mortar.py::test_g3_h_row_v1_v2_swap_is_load_bearing
+34.67s call     tests/unit/test_verify_pmm2d_perlayer_slant.py::test_slanted_split_across_non_conforming_grids_matches_the_1d_oracle[15.0-0.0]
+33.46s call     tests/unit/test_pmm2d_staggered_mortar.py::test_g5_stripe_pair_per_order_vs_the_exact_1d_oracle
+30.53s call     tests/unit/test_fix_pmm2d_mortar_round3.py::test_the_mixed_stack_solves_at_the_modal_count_round_2_refused_hardest
+26.93s call     tests/unit/test_fix_pmm2d_mortar_round3.py::test_an_out_of_plane_layer_beside_a_uniform_spacer_solves_and_converges
+25.54s call     tests/unit/test_pmm2d_staggered_nonuniform.py::test_n3_two_exact_wall_representations_agree_inside_the_triangle_bar
+24.97s call     tests/unit/test_pmm2d_staggered_mortar.py::test_g4_generalized_mortar_reproduces_berreman_through_a_split[grids1]
+24.38s call     tests/unit/test_pmm2d_staggered_mortar.py::test_g4_transparent_interface_reproduces_the_analytic_fresnel_slab[grids2]
+185 passed, 3 warnings in 1225.73s (0:20:25)

@@ -1,0 +1,135 @@
+{
+ "env": {
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "/mnt/c/tmp/lum_vmortar3/lumenairy/__init__.py",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39"
+ },
+ "tag": "wsl",
+ "what": "ladder",
+ "band_edge": 0.03,
+ "contract": 0.001,
+ "rows": [
+  {
+   "what": "oracle_self_gap",
+   "value": 4.014448599426457e-05,
+   "R14_row1": [
+    0.29208717755511465,
+    0.24329688345827563,
+    0.0
+   ]
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.3,
+   "err": 0.00045189991211219693,
+   "ratio": 1.0,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 56.45
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.2,
+   "err": 0.002285745009612955,
+   "ratio": 5.058078013180614,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 55.59
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.15,
+   "err": 0.003478636136086316,
+   "ratio": 7.697802196568355,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 55.24
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.1,
+   "err": 0.0039556868565345515,
+   "ratio": 8.753457901873723,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 55.36
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.07,
+   "err": 0.00453599556138462,
+   "ratio": 10.037611072290785,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 54.24
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.05,
+   "err": 0.005147248829613149,
+   "ratio": 11.390240829113504,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 53.15
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.03,
+   "err": 0.006097383847793514,
+   "ratio": 13.49277502466003,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 54.52
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.02,
+   "err": 0.00666744316789758,
+   "ratio": 14.754247542854575,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 61.01
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.01,
+   "err": 0.007234923954618333,
+   "ratio": 16.010014077679347,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 61.01
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.003,
+   "err": 0.007565496461575727,
+   "ratio": 16.74153116386838,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 52.03
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.001,
+   "err": 0.007564537245768055,
+   "ratio": 16.73940853498096,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 48.63
+  }
+ ]
+}

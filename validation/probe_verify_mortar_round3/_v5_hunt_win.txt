@@ -1,0 +1,18 @@
+HUNT silent wrong answer
+  HUNT baseline               R00=0.020272701 union=0.017900684 rel=1.325e-01 resid=2.09e-14 warn=0 clo=4.2e-05 85s
+  HUNT extreme_contrast       R00=0.057582806 union=0.015480584 rel=2.720e+00 resid=1.92e-14 warn=0 clo=1.6e-03 79s
+  HUNT lossy_metal            R00=0.045084252 union=0.010689186 rel=3.218e+00 resid=3.18e-14 warn=0 clo=1.3e-01 81s
+  HUNT many_orders            R00=0.016839265 union=0.017898008 rel=5.915e-02 resid=3.50e-14 warn=0 clo=6.7e-05 353s
+  HUNT M8                     R00=0.017747329 union=0.017878435 rel=7.333e-03 resid=1.21e-13 warn=0 clo=9.9e-05 2477s
+  HUNT dense_superstrate      R00=0.106684857 union=0.108399248 rel=1.582e-02 resid=2.32e-14 warn=0 clo=1.7e-02 74s
+C:\tmp\lum_vmortar3\lumenairy\elements\pmm\stack2d_pure.py:1681: UserWarning: PMM2DStackPure.solve: a diffraction order is within 2e-06 (kt^2 units) of a Rayleigh cutoff; the staggered basis accuracy degrades like ~1/sqrt(distance) near cutoffs.  Detune the wavelength or use PMM2DStackHybrid.
+  eps_sup, eps_sub) = self._source_prep()
+  HUNT near_Wood              R00=0.009926886 union=0.008028536 rel=2.365e-01 resid=1.78e-14 warn=0 clo=9.7e-05 72s
+C:\tmp\lum_vmortar3\lumenairy\elements\pmm\stack2d_pure.py:1340: UserWarning: PMM2DStackPure.solve: layer 0's element grid has a segment 1.100e-03 of the period wide on the x axis (walls [0.00000e+00 2.61000e-07 2.61957e-07 8.70000e-07]).  That is ABOVE the 1e-03 minimum this basis contracts for, so the solve proceeds -- but it is inside the MEASURED degradation band 1e-03 .. 3e-02, where the per-segment 1/J_n stiffness puts spurious modal wavenumbers into the L2 MORTAR that couples this layer to neighbours on other grids.  MEASURED cost on a device that cannot depend on the wall separation at all: about 6x, its floor the error of the same device on an ordinary partition, and it is a FLOOR -- raising n_modes does NOT remove it, and the n_modes ladder FLATTENS here, so a convergence study will read the floor as convergence.  The lossless closure stays pinned, so no energy tripwire can see this.
+  REMEDIES.  (1) MERGE the two walls if the feature is finer than the device needs; (2) carry the fine feature on the SHARED lattice (PMM2DStackPure(..., layer_grids='shared') with an N that resolves it), where every cell is period/N and no mortar forms; (3) put the NEIGHBOURS on this layer's wall array too -- a CONFORMING per-layer stack takes the plain square modal match and no mortar at all; (4) use PMM2DStackHybrid, which is Fourier-projected and has no element grid; (5) on a TAPER, lower n_slices.  To silence this warning after reading the measurement, set lumenairy.elements.pmm.twod_staggered.PMM2D_STAG_SLIVER_BAND_WARN = False.
+  return self._solve_per_layer(jones=jones,
+  HUNT just_above_contract    R00=0.000042496 union=0.017058136 rel=9.975e-01 resid=9.51e-15 warn=1 clo=1.4e-03 56s
+  HUNT just_above_band        R00=0.000143918 union=0.017060150 rel=9.916e-01 resid=1.79e-14 warn=0 clo=1.3e-03 55s
+  HUNT deep6                  R00=0.002314015 union=0.004914188 rel=5.291e-01 resid=8.60e-15 warn=0 clo=2.5e-03 28s
+  HUNT strong_oop             R00=0.019262603 union=0.018348423 rel=4.982e-02 resid=2.09e-14 warn=0 clo=9.1e-06 69s
+wrote v5_falsepos_win_hunt.json (11 rows)

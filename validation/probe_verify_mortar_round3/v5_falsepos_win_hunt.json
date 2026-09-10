@@ -1,0 +1,342 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "C:\\tmp\\lum_vmortar3\\lumenairy\\__init__.py",
+  "platform": "Windows-11-10.0.26200-SP0"
+ },
+ "tag": "win",
+ "what": "hunt",
+ "bar": 1e-06,
+ "band_edge": 0.03,
+ "rows": [
+  {
+   "what": "hunt",
+   "name": "baseline",
+   "per_layer": {
+    "R00": 0.020272700979704347,
+    "closure": 4.2393189240153006e-05,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "union": {
+    "R00": 0.01790068405876522,
+    "closure": 0.00010099553427256325,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 0.13250984784448225,
+   "worst_residual": 2.0874624407883776e-14,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 576,
+     "screen": "residual",
+     "exact": 2.0874624407883776e-14,
+     "probe": 2.134151588299622e-14
+    }
+   ],
+   "seconds": 84.87
+  },
+  {
+   "what": "hunt",
+   "name": "extreme_contrast",
+   "per_layer": {
+    "R00": 0.05758280639511628,
+    "closure": 0.001636605319068285,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "union": {
+    "R00": 0.015480584137694452,
+    "closure": 2.9159378250320778e-05,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 2.719679172500023,
+   "worst_residual": 1.915926763148569e-14,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 576,
+     "screen": "residual",
+     "exact": 1.915926763148569e-14,
+     "probe": 1.7048205017238225e-14
+    }
+   ],
+   "seconds": 78.57
+  },
+  {
+   "what": "hunt",
+   "name": "lossy_metal",
+   "per_layer": {
+    "R00": 0.04508425203042254,
+    "closure": 0.13417575008398142,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "union": {
+    "R00": 0.010689185826235155,
+    "closure": 0.03730616464164438,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 3.217744247627295,
+   "worst_residual": 3.182371915528083e-14,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 576,
+     "screen": "residual",
+     "exact": 3.182371915528083e-14,
+     "probe": 3.1121860569707764e-14
+    }
+   ],
+   "seconds": 81.08
+  },
+  {
+   "what": "hunt",
+   "name": "many_orders",
+   "per_layer": {
+    "R00": 0.01683926498600275,
+    "closure": 6.715451561323249e-05,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "union": {
+    "R00": 0.017898008253927986,
+    "closure": 0.00010490319813305504,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 0.05915425073585369,
+   "worst_residual": 3.503899775291874e-14,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 900,
+     "screen": "residual",
+     "exact": 3.503899775291874e-14,
+     "probe": 3.159838521067434e-14
+    }
+   ],
+   "seconds": 352.72
+  },
+  {
+   "what": "hunt",
+   "name": "M8",
+   "per_layer": {
+    "R00": 0.017747329198775995,
+    "closure": 9.890881749985425e-05,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "union": {
+    "R00": 0.01787843472175643,
+    "closure": 0.00010491107868637606,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 0.007333165627799208,
+   "worst_residual": 1.2118033155078255e-13,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 1764,
+     "screen": "residual",
+     "exact": 1.2118033155078255e-13,
+     "probe": 1.0162872740429881e-13
+    }
+   ],
+   "seconds": 2476.63
+  },
+  {
+   "what": "hunt",
+   "name": "dense_superstrate",
+   "per_layer": {
+    "R00": 0.106684857216869,
+    "closure": 0.017190983451967123,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "union": {
+    "R00": 0.10839924776830653,
+    "closure": 0.023027918552407933,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 0.015815520741452777,
+   "worst_residual": 2.3207471855839987e-14,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 576,
+     "screen": "residual",
+     "exact": 2.3207471855839987e-14,
+     "probe": 2.4662113800638953e-14
+    }
+   ],
+   "seconds": 74.29
+  },
+  {
+   "what": "hunt",
+   "name": "near_Wood",
+   "per_layer": {
+    "R00": 0.009926885562659967,
+    "closure": 9.684619277683382e-05,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "union": {
+    "R00": 0.008028536343909353,
+    "closure": 0.00012090567243039363,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 0.23645022422932024,
+   "worst_residual": 1.7773759859118806e-14,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 576,
+     "screen": "residual",
+     "exact": 1.7773759859118806e-14,
+     "probe": 1.867961102806331e-14
+    }
+   ],
+   "seconds": 71.52
+  },
+  {
+   "what": "hunt",
+   "name": "just_above_contract",
+   "per_layer": {
+    "R00": 4.2495892906995554e-05,
+    "closure": 0.0013592572467114872,
+    "n_band_warnings": 1,
+    "band_axis": "x"
+   },
+   "union": {
+    "R00": 0.01705813580114057,
+    "closure": 0.00045248506375394904,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 0.997508761015717,
+   "worst_residual": 9.513944933122029e-15,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 576,
+     "screen": "residual",
+     "exact": 9.513944933122029e-15,
+     "probe": 9.146060024693737e-15
+    }
+   ],
+   "seconds": 55.62
+  },
+  {
+   "what": "hunt",
+   "name": "just_above_band",
+   "per_layer": {
+    "R00": 0.00014391766533297093,
+    "closure": 0.0012940259335356696,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "union": {
+    "R00": 0.017060150269888084,
+    "closure": 0.00026388871646310097,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 0.9915641033017751,
+   "worst_residual": 1.790184462616343e-14,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 576,
+     "screen": "residual",
+     "exact": 1.790184462616343e-14,
+     "probe": 2.02582648655333e-14
+    }
+   ],
+   "seconds": 54.58
+  },
+  {
+   "what": "hunt",
+   "name": "deep6",
+   "per_layer": {
+    "R00": 0.0023140152456430124,
+    "closure": 0.0024518613798462097,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "union": {
+    "R00": 0.004914188428691248,
+    "closure": 0.00012990261136847092,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 0.5291154828063271,
+   "worst_residual": 8.597799078007813e-15,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 324,
+     "screen": "residual",
+     "exact": 8.597799078007813e-15,
+     "probe": 1.0557284260508132e-14
+    },
+    {
+     "n": 324,
+     "screen": "residual",
+     "exact": 5.39736917112561e-15,
+     "probe": 4.962186578282719e-15
+    },
+    {
+     "n": 324,
+     "screen": "residual",
+     "exact": 3.648594728297695e-15,
+     "probe": 3.5600407274236876e-15
+    },
+    {
+     "n": 324,
+     "screen": "residual",
+     "exact": 6.395353660449091e-15,
+     "probe": 5.507913879019969e-15
+    }
+   ],
+   "seconds": 27.77
+  },
+  {
+   "what": "hunt",
+   "name": "strong_oop",
+   "per_layer": {
+    "R00": 0.019262603080626908,
+    "closure": 9.123515571474172e-06,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "union": {
+    "R00": 0.01834842307032882,
+    "closure": 7.924437990403099e-05,
+    "n_band_warnings": 0,
+    "band_axis": null
+   },
+   "rel_vs_union": 0.04982335576164074,
+   "worst_residual": 2.0929967232199796e-14,
+   "residual_under_bar": true,
+   "residuals": [
+    {
+     "n": 576,
+     "screen": "residual",
+     "exact": 2.0929967232199796e-14,
+     "probe": 2.030044399419362e-14
+    }
+   ],
+   "seconds": 68.63
+  }
+ ]
+}

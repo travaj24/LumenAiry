@@ -1,0 +1,156 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "C:\\tmp\\lum_vmortar3\\lumenairy\\__init__.py",
+  "platform": "Windows-11-10.0.26200-SP0"
+ },
+ "tag": "win",
+ "what": "fp2",
+ "bar": 1e-06,
+ "band_edge": 0.03,
+ "rows": [
+  {
+   "what": "fp2",
+   "fy": 0.3,
+   "x_conforming": false,
+   "rel_vs_widest": 0.0,
+   "R00": 0.24708845773919108,
+   "closure": 4.854985302671366e-10,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp2",
+   "fy": 0.3,
+   "x_conforming": true,
+   "rel_vs_widest": NaN,
+   "R00": 0.24708845786097297,
+   "closure": 2.630118345336996e-11,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp2",
+   "fy": 0.1,
+   "x_conforming": false,
+   "rel_vs_widest": 1.718656997597854e-14,
+   "R00": 0.24708845773919533,
+   "closure": 4.854016077970869e-10,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp2",
+   "fy": 0.1,
+   "x_conforming": true,
+   "rel_vs_widest": NaN,
+   "R00": 0.24708845786099431,
+   "closure": 2.622535522078806e-11,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp2",
+   "fy": 0.05,
+   "x_conforming": false,
+   "rel_vs_widest": 8.47870785481608e-13,
+   "R00": 0.24708845773898158,
+   "closure": 4.860549740470788e-10,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp2",
+   "fy": 0.05,
+   "x_conforming": true,
+   "rel_vs_widest": NaN,
+   "R00": 0.24708845786080808,
+   "closure": 2.6825874854807807e-11,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp2",
+   "fy": 0.03,
+   "x_conforming": false,
+   "rel_vs_widest": 2.758837637974072e-13,
+   "R00": 0.2470884577391229,
+   "closure": 4.856361979221901e-10,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp2",
+   "fy": 0.03,
+   "x_conforming": true,
+   "rel_vs_widest": NaN,
+   "R00": 0.2470884578609341,
+   "closure": 2.6428192967387076e-11,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp2",
+   "fy": 0.01,
+   "x_conforming": false,
+   "rel_vs_widest": 4.152859424914553e-13,
+   "R00": 0.24708845773908847,
+   "closure": 4.857237945188331e-10,
+   "n_band_warnings": 1,
+   "band_axis": "y"
+  },
+  {
+   "what": "fp2",
+   "fy": 0.01,
+   "x_conforming": true,
+   "rel_vs_widest": NaN,
+   "R00": 0.2470884578608999,
+   "closure": 2.651612263093739e-11,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp2",
+   "fy": 0.003,
+   "x_conforming": false,
+   "rel_vs_widest": 3.1295283629461576e-13,
+   "R00": 0.24708845773911375,
+   "closure": 4.856490765092758e-10,
+   "n_band_warnings": 1,
+   "band_axis": "y"
+  },
+  {
+   "what": "fp2",
+   "fy": 0.003,
+   "x_conforming": true,
+   "rel_vs_widest": NaN,
+   "R00": 0.24708845786091765,
+   "closure": 2.645306196313868e-11,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp2",
+   "fy": 0.0012,
+   "x_conforming": false,
+   "rel_vs_widest": 3.88888269652534e-13,
+   "R00": 0.247088457739095,
+   "closure": 4.857174662475927e-10,
+   "n_band_warnings": 1,
+   "band_axis": "y"
+  },
+  {
+   "what": "fp2",
+   "fy": 0.0012,
+   "x_conforming": true,
+   "rel_vs_widest": NaN,
+   "R00": 0.2470884578609085,
+   "closure": 2.6503133021549274e-11,
+   "n_band_warnings": 0,
+   "band_axis": null
+  }
+ ]
+}

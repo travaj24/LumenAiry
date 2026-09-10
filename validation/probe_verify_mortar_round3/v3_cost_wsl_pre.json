@@ -1,0 +1,120 @@
+{
+ "tag": "wsl_pre",
+ "root": "/mnt/c/tmp/lum_vmortar3_pre",
+ "has_screen_kwarg": false,
+ "lumenairy": "/mnt/c/tmp/lum_vmortar3_pre/lumenairy/__init__.py",
+ "python": "3.12.3",
+ "numpy": "2.4.6",
+ "rows": [
+  {
+   "M": 4,
+   "n": 324,
+   "sha_A": "54c3fc268fe16483",
+   "sha_B": "50f22021070f8fd9",
+   "reps": 9,
+   "seconds": {
+    "bare": 0.01373710000001438,
+    "gecon": 0.015090899999989915,
+    "guarded": 0.014226500000006581
+   },
+   "ratio_vs_bare": {
+    "bare": 1.0,
+    "gecon": 1.0985506402351384,
+    "guarded": 1.0356261510793172
+   },
+   "ratio_vs_gecon": {
+    "bare": 0.9102903074053608,
+    "gecon": 1.0,
+    "guarded": 0.9427204474230224
+   }
+  },
+  {
+   "M": 5,
+   "n": 576,
+   "sha_A": "f2d1e119574f2d7b",
+   "sha_B": "e91cb076faa65108",
+   "reps": 9,
+   "seconds": {
+    "bare": 0.06223600000001284,
+    "gecon": 0.06689249999999447,
+    "guarded": 0.06824900000000866
+   },
+   "ratio_vs_bare": {
+    "bare": 1.0,
+    "gecon": 1.0748200398480088,
+    "guarded": 1.0966161064334885
+   },
+   "ratio_vs_gecon": {
+    "bare": 0.9303883096014947,
+    "gecon": 1.0,
+    "guarded": 1.020278805546426
+   }
+  },
+  {
+   "M": 6,
+   "n": 900,
+   "sha_A": "4ae3068c9a953806",
+   "sha_B": "042596ef0a7c7c15",
+   "reps": 9,
+   "seconds": {
+    "bare": 0.256149999999991,
+    "gecon": 0.2694025000000124,
+    "guarded": 0.22467740000001868
+   },
+   "ratio_vs_bare": {
+    "bare": 1.0,
+    "gecon": 1.0517372633223576,
+    "guarded": 0.8771321491314721
+   },
+   "ratio_vs_gecon": {
+    "bare": 0.9508078061635626,
+    "gecon": 1.0,
+    "guarded": 0.8339840944312258
+   }
+  },
+  {
+   "M": 7,
+   "n": 1296,
+   "sha_A": "6ea0807c2526660a",
+   "sha_B": "d04db007a380127e",
+   "reps": 9,
+   "seconds": {
+    "bare": 0.6060145000000148,
+    "gecon": 0.6812213999999983,
+    "guarded": 0.7758036000000175
+   },
+   "ratio_vs_bare": {
+    "bare": 1.0,
+    "gecon": 1.1241008259703056,
+    "guarded": 1.2801733291860153
+   },
+   "ratio_vs_gecon": {
+    "bare": 0.8895999156808877,
+    "gecon": 1.0,
+    "guarded": 1.1388420857008006
+   }
+  },
+  {
+   "M": 8,
+   "n": 1764,
+   "sha_A": "b959a92e23ba38c2",
+   "sha_B": "e763911679e06901",
+   "reps": 9,
+   "seconds": {
+    "bare": 1.7303660000000036,
+    "gecon": 1.781850899999995,
+    "guarded": 1.8899767000000054
+   },
+   "ratio_vs_bare": {
+    "bare": 1.0,
+    "gecon": 1.0297537630767082,
+    "guarded": 1.092241005660075
+   },
+   "ratio_vs_gecon": {
+    "bare": 0.9711059438250466,
+    "gecon": 1.0,
+    "guarded": 1.0606817326859452
+   }
+  }
+ ]
+}

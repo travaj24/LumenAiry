@@ -1,0 +1,6 @@
+FP1 uniform lattice
+  FP1 conforming twin R00=0.071556138525
+  FP1 N=   1 cell=1.0000e+00 R00=0.071226910313 rel=4.601e-03 warn=0 resid=2.98e-15
+  FP1 N=   2 cell=5.0000e-01 R00=0.071201591007 rel=4.955e-03 warn=0 resid=3.02e-15
+  FP1 N=   4 cell=2.5000e-01 R00=0.071051877936 rel=7.047e-03 warn=0 resid=3.24e-15
+  FP1 N=   8 cell=1.2500e-01 R00=0.071318935598 rel=3.315e-03 warn=0 resid=8.02e-15

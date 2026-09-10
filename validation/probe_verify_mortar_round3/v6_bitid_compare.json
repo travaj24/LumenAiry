@@ -1,0 +1,35 @@
+{
+ "a": "post",
+ "b": "pre",
+ "identical": 33,
+ "differing": 4,
+ "n_fixtures": 37,
+ "n_hashes_a": 120,
+ "n_hashes_b": 108,
+ "report": [
+  [
+   "MIXED_pattern_M5",
+   "ERROR CHANGED: pre=_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 576x576 mortar operator is numerically singular -- LAPACK reciprocal 1-condition 3.263e-13 against a 1e-12 bar post=None",
+   "identical",
+   "pre_warn=[] post_warn=[]"
+  ],
+  [
+   "MIXED_pattern_M6",
+   "ERROR CHANGED: pre=_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 900x900 mortar operator is numerically singular -- LAPACK reciprocal 1-condition 1.443e-13 against a 1e-12 bar post=None",
+   "identical",
+   "pre_warn=[] post_warn=[]"
+  ],
+  [
+   "MIXED_spacer_M5",
+   "ERROR CHANGED: pre=_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 576x576 mortar operator is numerically singular -- LAPACK reciprocal 1-condition 8.853e-14 against a 1e-12 bar post=None",
+   "identical",
+   "pre_warn=[] post_warn=[]"
+  ],
+  [
+   "MIXED_spacer_M6",
+   "ERROR CHANGED: pre=_ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 900x900 mortar operator is numerically singular -- LAPACK reciprocal 1-condition 6.870e-15 against a 1e-12 bar post=None",
+   "identical",
+   "pre_warn=[] post_warn=[]"
+  ]
+ ]
+}

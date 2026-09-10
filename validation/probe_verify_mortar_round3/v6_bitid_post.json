@@ -1,0 +1,354 @@
+{
+ "tag": "post",
+ "root": "C:\\tmp\\lum_vmortar3",
+ "lumenairy": "C:\\tmp\\lum_vmortar3\\lumenairy\\__init__.py",
+ "version": "5.44.0",
+ "python": "3.14.6",
+ "numpy": "2.4.4",
+ "n_fixtures": 37,
+ "n_hashes": 120,
+ "rows": {
+  "shared_scalar": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "06712ea807f879379a7127e67a1fd5eb142e7bdd84930f0cebcfd1d97639a470",
+    "0a885ab309145687537d45b0feab747c44cf608354438859acd916455b7700d9"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_scalar_jones": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "06712ea807f879379a7127e67a1fd5eb142e7bdd84930f0cebcfd1d97639a470",
+    "0a885ab309145687537d45b0feab747c44cf608354438859acd916455b7700d9",
+    "508f2092e39cd3244e7118abb6983b0f285b66883cc00fe2101e81cff465cb18"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_scalar_M6_N3": {
+   "hashes": [
+    "432e423431e83f9b158082c95714494ce0fc8b3f98d4f93aa94ffb84491089b9",
+    "d5f9d6fe8da0b849592c407a85ce2eaeca5b38baec1c73d9d9debd3e45945cc2",
+    "ab7770d045f0689921d905470ce5da731897293d06ba8d6b8d53c7f963ebbae2"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_tensor_uniform": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "0c810009b8e4ee29352d4437b7d2839251705c9370208c1eafb1857a24ec91fe",
+    "952342d839582ba085aa1766efe49491761e56f796a162bf59ffd4271650c5b6"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_oop": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "0257e65780178cca4a65e37daa7671fff069146f66316cac1f1de11dd64bc90c",
+    "4a1c7e81c47d1e80f87460f39165da091b5b9eff305d17a2cee155c373ce0f35"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_oop_normal_incidence": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "5289c8b43c8d2300b48f820ec213b390bed4d182878ea1d45614a9942e637260",
+    "f4a3ac20c7f63efed71a455567ca0e3a8d453ad569909baa53958cdeba352803"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_magnetic": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "d656315b48bdbdbae845b3887734dd36b39353f6d8b78215de6110cf46e27974",
+    "a217574ece63682e773b85bdd4845a905e14360bd6b24290ddb0be824683b98e"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_slant": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "8e5623cddf9009896f862cb2df20eea790462d140cf6f7a7e5ade73d299b2bb6",
+    "27675fb3e5f483a44476bce9afffe1819e0195e5c15b43a197397dc8b4b26063"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_retain_internal": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "06712ea807f879379a7127e67a1fd5eb142e7bdd84930f0cebcfd1d97639a470",
+    "0a885ab309145687537d45b0feab747c44cf608354438859acd916455b7700d9",
+    "4f9a7309675568fa2535075798466eaed775e0ebe9540716ab6ae73c5ca812d3"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_per_order_amplitudes": {
+   "hashes": [
+    "19ac9636392cc35e3567b6195ab715c72a60a36615065369a7806e7f38c415d6",
+    "810256ffbc197156eceafc33399c8291c1ca13f04c158769f213fb2b2c3fd6c7",
+    "23f99bfbf50f4fdffc98a3e90183daa4589c6e91ac46e57dbc85eef7f2fa13a2",
+    "a67be8edfb25a0ee177d04724752f60dfcf04a6ef6a3855364c6a9abbc376210",
+    "32d8da3672b33cad5a68aff552c5fff478772b5754b2e780955345e12fc5a7dc",
+    "7ff951c29481b3d9211704d7eff5ab79e87f71bbfeff2f7bb22a717631eeb98c",
+    "cf946dc6cace525f63bb340dbf32a7c5a6ad3d8422c294f40ccd5f5c329c1dfc",
+    "79f69a8fcf8608c420fb12b45ba71e5d156cd38a87a536cc84c3b991142c90ef",
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "c03875eef5d0dc35eaa29b4d41cac15f685d585105146ade8b245f9127446863"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "shared_lossy_metal": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "e24eca3ec29eb4779f4d4175d5dddbcdd39c2b238575d170ce71104ddd781fe4",
+    "ee445ae1f2ca86801b694675042b5edbff4b86d2179f02cce0b5e10c67048379"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_conforming": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "f071e8b29df5a20c16d6d285ba4365c7aa5ba12136fefeefdc129e0f19639723",
+    "8f935cf01a5920f7c07d82b4ed081c07eefd73536cfdb48d6417b15a3d90b18a"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_non_conforming": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "ea625aa58289777cbaea3c9b93b8891bb788e7efe1bdf955ea412b4c9f5f85de",
+    "8904d63c54e017fc78a56710615d5105a4d9f9328377db04c11cfb1989d4b536"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_non_conforming_M6": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "3d874028715d22a107cd45ca2443ea19a8e01a1227cd70bcb6a3ab39e4b3b209",
+    "be23ef20d3ba05bcc95c482b87ca2c801bd7b2e508f0270c98fadfcfe3db10fa"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_nested": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "adb54871de29f0e90e948943d7154b64c7ccd8b63add0908a1a2ce1716e55e62",
+    "2c740b2c1cd48cf791e5bf2b12eb18d2d6f1edccc884c85f2965aee3a0560916"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_union": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "e2fe3743a6c66610b8919de63c91e7f8b43e4c0373795f95b485e8591d46897e",
+    "4928ad656c20c36cd5f67c3505d45b2099b856754efff01a0bf9b505dde534f3"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_per_layer_n_modes": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "47f7a5427aea8bc8d2d3da7a5954f8b9d2249b364c1a9f5be5b8fe6ad8c5135b",
+    "b4adb213a2d7287912034c96f4d0a7dc3ffa2145b681e9ca0e93d803dd8343b4"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_uniform_spacer": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "d2ad1d8b0cf0d4120feb6fcad37de0af04d97b707923e622bcb64b7e6b1bd98b",
+    "6d12c7ee1257f93b4abcce42202abd47bb8348363397c9fc120bea4827bc55ef"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_uniform_lattice_N5": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "725429ee287c0394e205cfe79379537ea6d35dbea138922c1dfc4316fc03a160",
+    "c557db79ccb9ee18bf9b5f161609d458def066a54b9d1bded7d60a6af675efec"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_magnetic": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "a41d7dc66b11a069359f42b49b33b8f93f80ec2c95353e1b0da1c2cc63ce9bfe",
+    "29693c2cdd3f4415a77a527e1097b99e6dc0d244730a3fd78f09cdf6d009955a"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_slant_both": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "1458f70c0910803df0b3b484da521129b540d41f15d83eef871465b46b62f1ff",
+    "0ed0ed8cffa9733bfcd4844efbbdbc54d5746c74ab0bd0ddd691487b5146de2f"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_slant_conforming": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "4aed00e6b513b742d0c7ef5746c34272ee28b0b27ca7ee41f9859867521944b9",
+    "a029e45a34aee7d85e5328c7929468b8ed935bd79cfd933e7469e2bc72ec71b1"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_oop_both": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "4b8d34a8b9388bb6b035b898c7ad05aabfffa4cad6934040ccf1f6aef4565716",
+    "7ec7c73eb45bbd398175fd71a0f65076aec9abba36574240b4f90e182d19499a"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "perlayer_oop_conforming": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "411dd0561f8085304aaa989518d7a5141d62e87b31d0ba40f52f65cef638d1b5",
+    "01c0b723b8011ce1c8c37e22af85d4757800557dd5614834efd5cbd6078a064a"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "taper_midpoint_4": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "ac99c4e5d0efd42b534d652607c599e379605bf604a463d4b30ced8c5317f556",
+    "3eefde83f09b44bf9e4592223532ad093941e8ac3066ae2901e439abdd0ceee3"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "taper_midpoint_8": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "da656c532da5f614a57cf66dd26c7d80539aa679e6a26d0ceb692f5cd2303d39",
+    "b1bb0f37b8d9c8b9248e5d9756b0a1ef6cae3c1edb4a234733267e1dd60c3c22"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "taper_bottom_8": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "33cd9098dd04b822eeeef7ed09a21023fd44b6aeb1c946c3da17a7f064c41b29",
+    "1d3d2f46ae7dca87d6086e0832dc28261fae15333436b78cdb9bdc5d5c06c9e3"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "taper_midpoint_16": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "6ec271b8cd21682d1118c5b9646b40935ca6383e002df155e248f9b9d57893b0",
+    "ebc587bd33609119b8e12f4bab8a4b663d91c5234652b45e84a0ff3cc25e5cef"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "tapered_pillars_8": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "9f7bb78ae64130c7421fe33ac61a03dd94aaeb0ee740cbca443d5e355d42a211",
+    "8355c612c39f22ddf2aa884609b9087fa235d1e180b4b2927937217938fdef76"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "pmmstack_1d_deg8": {
+   "hashes": [
+    "8849c4fd0fdcf22bfee03d397dd3bcab31f64ed3fecc1062a6c7cf5863d05a25",
+    "5795b6f6665e699bc37064161a5dfbcb81045e4f81885bad76707815ebfae954",
+    "1132fd979d7c4ef7366fb0b45adffe2facea66bcdbb6ac7286647b5e201e0abb"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "pmmstack_1d_deg12": {
+   "hashes": [
+    "8849c4fd0fdcf22bfee03d397dd3bcab31f64ed3fecc1062a6c7cf5863d05a25",
+    "1d4033cb1d62b4cac285b543898d22e36e56e4cc844fc62a8e318dcd522d4014",
+    "4ed43b27546918a5fa79d8b7ff9f2221944689cefe6211270fd7cd68c7fe4217"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "MIXED_spacer_M4": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "532803c670fb27ae7c07ef6a9174247b84478832db3bd393a2b3180638f7db75",
+    "830b676ed3129bce5dd9590b2960944675ca33e73af98a4a3212e5544b46c7d1"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "MIXED_spacer_M5": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "374248ddb6d6057860e92be0a15efd55dd7ae5bd628cb00f3b418600c68c620e",
+    "9e9aa3af3028ae8d16adcca2125311ae26a99ce335133be17418bb98c34612e5"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "MIXED_spacer_M6": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "85743f06d0bccf77408ca76e48199b5bcd4bcc69d5713d2a89273ba8200e1e9f",
+    "0a778206e6a6d86136a24062be064ee89e41066e551f0cad01edeb9b2a576b26"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "MIXED_pattern_M4": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "f04129f46c3d4f092c559952b154472f33a316bfc188f38c9ab050395a5eb193",
+    "bd41cf7e6d83885a19b8f5b835f0b9ffd9b4321f2397f47ee75c9b9131ec0e47"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "MIXED_pattern_M5": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "8fcf837aea38ff5eb3e88e0c2fe25f8299028a6d1024b20ca17cc2703a94e5f5",
+    "d7a5e598550c62526680afa31745b0af782827d9c839e626d15d08d404641186"
+   ],
+   "error": null,
+   "warnings": []
+  },
+  "MIXED_pattern_M6": {
+   "hashes": [
+    "5c22089ec21f1d72bd6dbc4988031c17a1222809d108acc2e8bbb368de6f8117",
+    "57968ae0682b46fef7527e2657cb05f63101b0340df2bd91b0a7681780f61c25",
+    "d0c023117c072051742dd1d2e48e384c1ecca6db65bbe20aa3d1656773b7d405"
+   ],
+   "error": null,
+   "warnings": []
+  }
+ }
+}

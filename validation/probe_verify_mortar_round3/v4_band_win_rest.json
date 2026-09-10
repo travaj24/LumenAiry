@@ -1,0 +1,318 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "C:\\tmp\\lum_vmortar3\\lumenairy\\__init__.py",
+  "platform": "Windows-11-10.0.26200-SP0"
+ },
+ "tag": "win",
+ "what": "rest",
+ "band_edge": 0.03,
+ "contract": 0.001,
+ "rows": [
+  {
+   "what": "census",
+   "name": "uniform_lattice_N1",
+   "narrowest": 1.0,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "uniform_lattice_N2",
+   "narrowest": 0.5,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "uniform_lattice_N3",
+   "narrowest": 0.3333333333333333,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "uniform_lattice_N4",
+   "narrowest": 0.25,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "uniform_lattice_N6",
+   "narrowest": 0.16666666666666666,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "uniform_lattice_N8",
+   "narrowest": 0.125,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "uniform_lattice_N12",
+   "narrowest": 0.08333333333333333,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "uniform_lattice_N16",
+   "narrowest": 0.0625,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "duty_0.100",
+   "narrowest": 0.10000000000000003,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "duty_0.200",
+   "narrowest": 0.20000000000000007,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "duty_0.333",
+   "narrowest": 0.33333333333333326,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "duty_0.500",
+   "narrowest": 0.25,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "duty_0.700",
+   "narrowest": 0.15000000000000002,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "duty_0.900",
+   "narrowest": 0.04999999999999999,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "nested_refinement",
+   "narrowest": 0.125,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "two_pillars",
+   "narrowest": 0.1,
+   "in_band": false,
+   "n_layers": 2
+  },
+  {
+   "what": "census",
+   "name": "taper_straight_4",
+   "narrowest": 0.25625,
+   "in_band": false,
+   "n_layers": 4
+  },
+  {
+   "what": "census",
+   "name": "taper_closing_4",
+   "narrowest": 0.0625,
+   "in_band": false,
+   "n_layers": 4
+  },
+  {
+   "what": "census",
+   "name": "taper_straight_8",
+   "narrowest": 0.253125,
+   "in_band": false,
+   "n_layers": 8
+  },
+  {
+   "what": "census",
+   "name": "taper_closing_8",
+   "narrowest": 0.03125,
+   "in_band": false,
+   "n_layers": 8
+  },
+  {
+   "what": "census",
+   "name": "taper_straight_16",
+   "narrowest": 0.2515625,
+   "in_band": false,
+   "n_layers": 16
+  },
+  {
+   "what": "census",
+   "name": "taper_closing_16",
+   "narrowest": 0.015625,
+   "in_band": true,
+   "n_layers": 16
+  },
+  {
+   "what": "census",
+   "name": "taper_straight_32",
+   "narrowest": 0.25078124999999996,
+   "in_band": false,
+   "n_layers": 32
+  },
+  {
+   "what": "census",
+   "name": "taper_closing_32",
+   "narrowest": 0.0078125,
+   "in_band": true,
+   "n_layers": 32
+  },
+  {
+   "what": "census",
+   "name": "taper_straight_64",
+   "narrowest": 0.250390625,
+   "in_band": false,
+   "n_layers": 64
+  },
+  {
+   "what": "census",
+   "name": "taper_closing_64",
+   "narrowest": 0.00390625,
+   "in_band": true,
+   "n_layers": 64
+  },
+  {
+   "what": "census",
+   "name": "taper_straight_128",
+   "narrowest": 0.2501953125,
+   "in_band": false,
+   "n_layers": 128
+  },
+  {
+   "what": "census",
+   "name": "taper_closing_128",
+   "narrowest": 0.001953125,
+   "in_band": true,
+   "n_layers": 128
+  },
+  {
+   "what": "census",
+   "name": "tapered_pillars_4",
+   "narrowest": 0.14749999999999996,
+   "in_band": false,
+   "n_layers": 4
+  },
+  {
+   "what": "census",
+   "name": "tapered_pillars_8",
+   "narrowest": 0.14375000000000004,
+   "in_band": false,
+   "n_layers": 8
+  },
+  {
+   "what": "census",
+   "name": "tapered_pillars_16",
+   "narrowest": 0.14187499999999997,
+   "in_band": false,
+   "n_layers": 16
+  },
+  {
+   "what": "census",
+   "name": "tapered_pillars_32",
+   "narrowest": 0.14093749999999994,
+   "in_band": false,
+   "n_layers": 32
+  },
+  {
+   "what": "message",
+   "n_band_warnings": 1,
+   "tokens": {
+    "names_the_width": true,
+    "names_the_layer": true,
+    "names_the_axis": true,
+    "names_the_wall_array": true,
+    "names_the_contract": true,
+    "names_the_band_edges": true,
+    "names_degradation_class": true,
+    "says_floor_not_removed_by_n_modes": true,
+    "says_energy_blind": true,
+    "remedy_merge": true,
+    "remedy_shared": true,
+    "remedy_conforming": true,
+    "remedy_hybrid": true,
+    "remedy_slices": true,
+    "names_the_switch": true
+   },
+   "text": "PMM2DStackPure.solve: layer 1's element grid has a segment 2.000e-02 of the period wide on the x axis (walls [0.      0.61525 0.63665 1.07   ]).  That is ABOVE the 1e-03 minimum this basis contracts for, so the solve proceeds -- but it is inside the MEASURED degradation band 1e-03 .. 3e-02, where the per-segment 1/J_n stiffness puts spurious modal wavenumbers into the L2 MORTAR that couples this layer to neighbours on other grids.  MEASURED cost on a device that cannot depend on the wall separation at all: about 4-5x the error of the same device on an ordinary partition, and it is a FLOOR -- raising n_modes does NOT remove it, and the n_modes ladder FLATTENS here, so a convergence study will read the floor as convergence.  The lossless closure stays pinned, so no energy tripwire can see this.\n  REMEDIES.  (1) MERGE the two walls if the feature is finer than the device needs; (2) carry the fine feature on the SHARED lattice (PMM2DStackPure(..., layer_grids='shared') with an N that resolves it), where every cell is period/N and no mortar forms; (3) put the NEIGHBOURS on this layer's wall array too -- a CONFORMING per-layer stack takes the plain square modal match and no mortar at all; (4) use PMM2DStackHybrid, which is Fourier-projected and has no element grid; (5) on a TAPER, lower n_slices.  To silence this warning after reading the measurement, set lumenairy.elements.pmm.twod_staggered.PMM2D_STAG_SLIVER_BAND_WARN = False."
+  },
+  {
+   "what": "two_sided",
+   "frac": 0.06,
+   "expected": "silent",
+   "got": "silent",
+   "n_band_warnings": 0
+  },
+  {
+   "what": "two_sided",
+   "frac": 0.029,
+   "expected": "warn",
+   "got": "warn",
+   "n_band_warnings": 1
+  },
+  {
+   "what": "two_sided",
+   "frac": 0.0012,
+   "expected": "warn",
+   "got": "warn",
+   "n_band_warnings": 1
+  },
+  {
+   "what": "two_sided",
+   "frac": 0.0009,
+   "expected": "refused",
+   "got": "refused",
+   "n_band_warnings": 0
+  },
+  {
+   "what": "switch",
+   "with_switch_off": 0,
+   "with_switch_on": 1
+  },
+  {
+   "what": "once_per_solve",
+   "n_layers": 4,
+   "n_band_warnings": 1,
+   "which_layer": [
+    "3"
+   ]
+  },
+  {
+   "what": "conforming",
+   "name": "conforming",
+   "n_band_warnings": 0
+  },
+  {
+   "what": "conforming",
+   "name": "non_conforming",
+   "n_band_warnings": 1
+  },
+  {
+   "what": "y_axis_shared_sliver",
+   "n_band_warnings": 1,
+   "axis_named": true
+  }
+ ]
+}

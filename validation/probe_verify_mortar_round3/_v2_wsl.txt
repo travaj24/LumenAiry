@@ -1,0 +1,47 @@
+Traceback (most recent call last):
+  File "/mnt/c/tmp/lum_vmortar3/validation/probe_verify_mortar_round3/v2_populations.py", line 379, in <module>
+    main(sys.argv[1] if len(sys.argv) > 1 else "win")
+  File "/mnt/c/tmp/lum_vmortar3/validation/probe_verify_mortar_round3/v2_populations.py", line 355, in main
+    broken(rows, A, B)
+  File "/mnt/c/tmp/lum_vmortar3/validation/probe_verify_mortar_round3/v2_populations.py", line 327, in broken
+    rows.append(_facts(A2, B, "broken/zero_column", pop="broken"))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/tmp/lum_vmortar3/validation/probe_verify_mortar_round3/v2_populations.py", line 58, in _facts
+    X = np.linalg.solve(A, B)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/travaj/lumvenv/lib/python3.12/site-packages/numpy/linalg/_linalg.py", line 451, in solve
+    r = gufunc(a, b, signature=signature)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/travaj/lumvenv/lib/python3.12/site-packages/numpy/linalg/_linalg.py", line 144, in _raise_linalgerror_singular
+    raise LinAlgError("Singular matrix")
+numpy.linalg.LinAlgError: Singular matrix
+d(s)   6.5s
+  HEALTHY shortwave/spacer/M4/no3: 1 operand(s)   0.9s
+  HEALTHY shortwave/magnetic/M5/no2: 1 operand(s)   5.5s
+  HEALTHY normal_incidence/pattern/M4/no2: 1 operand(s)   1.2s
+  HEALTHY normal_incidence/spacer/M6/no2: 1 operand(s)  16.6s
+  HEALTHY normal_incidence/slant_both/M4/no2: 1 operand(s)   1.3s
+  HEALTHY high_contrast/pattern/M4/no2: 1 operand(s)   1.1s
+  HEALTHY high_contrast/pattern/M6/no2: 1 operand(s)  21.4s
+  HEALTHY high_contrast/spacer/M5/no2: 1 operand(s)   3.9s
+  HEALTHY high_contrast/oop_both/M5/no2: 1 operand(s)   5.3s
+  HEALTHY wide_angle/pattern/M4/no2: 1 operand(s)   0.9s
+  HEALTHY wide_angle/pattern/M7/no2: 1 operand(s)  61.9s
+  HEALTHY wide_angle/spacer/M5/no2: 1 operand(s)   5.8s
+  HEALTHY wide_angle/magnetic/M4/no2: 1 operand(s)   1.8s
+SLIVER
+  SLIVER d=1.0e-01 M=5 R00=0.0110371848 move=0.00e+00 accepted
+  SLIVER d=5.0e-02 M=5 R00=0.0110372630 move=7.08e-06 accepted
+  SLIVER d=3.0e-02 M=5 R00=0.0110372368 move=4.71e-06 accepted
+  SLIVER d=1.0e-02 M=5 R00=0.0110373936 move=1.89e-05 accepted
+  SLIVER d=3.0e-03 M=5 R00=0.0110375456 move=3.27e-05 accepted
+  SLIVER d=1.0e-03 M=5 R00=0.0110371111 move=6.68e-06 accepted
+  SLIVER d=1.0e-03 M=5 R00=0.0110372087 move=2.16e-06 accepted
+  SLIVER d=3.0e-04 M=5 R00=0.0110375293 move=3.12e-05 refused: ValueError
+  SLIVER d=1.0e-04 M=5 R00=0.0110375669 move=3.46e-05 refused: ValueError
+  SLIVER d=1.0e-05 M=5 R00=0.0110375872 move=3.65e-05 refused: ValueError
+  SLIVER d=1.0e-06 M=5 ERROR _ConditioningError
+  SLIVER d=1.0e-07 M=5 ERROR _ConditioningError
+  SLIVER d=1.0e-08 M=5 ERROR _ConditioningError
+  SLIVER d=1.0e-09 M=5 ERROR _ConditioningError
+BROKEN

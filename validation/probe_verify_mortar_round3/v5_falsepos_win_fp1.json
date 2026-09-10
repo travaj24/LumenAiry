@@ -1,0 +1,148 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "C:\\tmp\\lum_vmortar3\\lumenairy\\__init__.py",
+  "platform": "Windows-11-10.0.26200-SP0"
+ },
+ "tag": "win",
+ "what": "fp1",
+ "bar": 1e-06,
+ "band_edge": 0.03,
+ "rows": [
+  {
+   "what": "fp1_conforming_reference",
+   "R00": 0.07155613852486532,
+   "closure": 2.861587989566594e-06,
+   "n_band_warnings": 0,
+   "band_axis": null
+  },
+  {
+   "what": "fp1",
+   "N": 1,
+   "cell_fraction": 1.0,
+   "rel_vs_conforming": 0.004600977903902657,
+   "residuals": [
+    {
+     "n": 288,
+     "screen": "rcond",
+     "exact": 1.3116322201965443e-15,
+     "probe": 1.542734088570526e-15
+    },
+    {
+     "n": 288,
+     "screen": "rcond",
+     "exact": 2.98303836913952e-15,
+     "probe": 2.576058328765442e-15
+    }
+   ],
+   "R00": 0.07122691031262382,
+   "closure": 3.0100233895380413e-06,
+   "n_band_warnings": 0,
+   "band_axis": null,
+   "seconds": 3.98
+  },
+  {
+   "what": "fp1",
+   "N": 2,
+   "cell_fraction": 0.5,
+   "rel_vs_conforming": 0.004954816254131104,
+   "residuals": [
+    {
+     "n": 288,
+     "screen": "rcond",
+     "exact": 2.065507762273367e-15,
+     "probe": 2.4816052441638017e-15
+    },
+    {
+     "n": 288,
+     "screen": "rcond",
+     "exact": 3.024762451284869e-15,
+     "probe": 3.0761190752968856e-15
+    }
+   ],
+   "R00": 0.07120159100661946,
+   "closure": 2.948093516086381e-06,
+   "n_band_warnings": 0,
+   "band_axis": null,
+   "seconds": 4.14
+  },
+  {
+   "what": "fp1",
+   "N": 4,
+   "cell_fraction": 0.25,
+   "rel_vs_conforming": 0.007047062618453922,
+   "residuals": [
+    {
+     "n": 288,
+     "screen": "rcond",
+     "exact": 3.1574182145414547e-15,
+     "probe": 3.299993000054894e-15
+    },
+    {
+     "n": 288,
+     "screen": "rcond",
+     "exact": 3.2419359122908697e-15,
+     "probe": 3.216852210728681e-15
+    }
+   ],
+   "R00": 0.07105187793594583,
+   "closure": 2.1403436166744783e-06,
+   "n_band_warnings": 0,
+   "band_axis": null,
+   "seconds": 4.09
+  },
+  {
+   "what": "fp1",
+   "N": 6,
+   "cell_fraction": 0.16666666666666666,
+   "rel_vs_conforming": 0.008428518457489018,
+   "residuals": [
+    {
+     "n": 288,
+     "screen": "rcond",
+     "exact": 5.904832844802129e-15,
+     "probe": 6.125835894157418e-15
+    },
+    {
+     "n": 288,
+     "screen": "rcond",
+     "exact": 3.450323494407286e-15,
+     "probe": 4.146635445448939e-15
+    }
+   ],
+   "R00": 0.07095302629056185,
+   "closure": 7.472108923378684e-06,
+   "n_band_warnings": 0,
+   "band_axis": null,
+   "seconds": 4.61
+  },
+  {
+   "what": "fp1",
+   "N": 8,
+   "cell_fraction": 0.125,
+   "rel_vs_conforming": 0.0033149207299681457,
+   "residuals": [
+    {
+     "n": 512,
+     "screen": "rcond",
+     "exact": 8.017501463094825e-15,
+     "probe": 8.359714152030376e-15
+    },
+    {
+     "n": 288,
+     "screen": "rcond",
+     "exact": 3.825372414393176e-15,
+     "probe": 4.150386218321883e-15
+    }
+   ],
+   "R00": 0.07131893559791277,
+   "closure": 3.5574436625385175e-06,
+   "n_band_warnings": 0,
+   "band_axis": null,
+   "seconds": 12.94
+  }
+ ]
+}

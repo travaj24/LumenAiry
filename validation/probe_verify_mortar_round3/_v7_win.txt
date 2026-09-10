@@ -1,0 +1,24 @@
+  mix_pattern            M=4 R00=0.003821212074 clo=1.34e-04 res=8.597799078007813e-15 8s
+  mix_pattern            M=5 R00=0.020272700980 clo=4.24e-05 res=2.0874624407883776e-14 7s
+  mix_pattern            M=6 R00=0.016839264993 clo=6.72e-05 res=3.503899775291874e-14 26s
+  mix_pattern            M=7 R00=0.017820258205 clo=1.04e-04 res=6.205864808106011e-14 55s
+  mix_pattern_union      M=4 R00=0.019561145264 clo=1.04e-04 sites=0 12s
+  mix_pattern_union      M=5 R00=0.017900684059 clo=1.01e-04 sites=0 88s
+  -> mix_pattern: gaps ['1.408e-02', '2.372e-03', '1.061e-03', '8.043e-05']  steps ['1.645e-02', '3.433e-03', '9.810e-04']
+  mix_spacer             M=4 R00=0.011033294620 clo=8.53e-06 res=1.05090412937442e-14 1s
+  mix_spacer             M=5 R00=0.011030019343 clo=5.79e-06 res=2.4142550594829642e-14 5s
+  mix_spacer             M=6 R00=0.011035832627 clo=7.12e-06 res=3.4289900348777504e-14 20s
+  mix_spacer             M=7 R00=0.011036268903 clo=7.13e-06 res=5.848242459985017e-14 47s
+  mix_spacer_conf        M=4 R00=0.011040360807 clo=1.01e-05 sites=0 1s
+  mix_spacer_conf        M=5 R00=0.011039876067 clo=5.74e-06 sites=0 4s
+  mix_spacer_conf        M=6 R00=0.011039894480 clo=7.12e-06 sites=0 12s
+  mix_spacer_conf        M=7 R00=0.011039685009 clo=7.14e-06 sites=0 46s
+  -> mix_spacer: gaps ['6.390e-06', '9.666e-06', '3.852e-06', '3.416e-06']  steps ['3.275e-06', '5.813e-06', '4.363e-07']
+  mix_slant_inplane      M=4 R00=0.017193227626 clo=2.96e-05 res=9.479990916409327e-15 2s
+  mix_slant_inplane      M=5 R00=0.015930308257 clo=1.15e-05 res=1.8735714479304745e-14 6s
+  mix_slant_inplane      M=6 R00=0.015990791591 clo=2.45e-07 res=2.9208385704647526e-14 16s
+  mix_slant_inplane_conf M=4 R00=0.017384501383 clo=8.76e-05 sites=0 1s
+  mix_slant_inplane_conf M=5 R00=0.015980574539 clo=3.36e-05 sites=0 4s
+  mix_slant_inplane_conf M=6 R00=0.015987867734 clo=2.93e-07 sites=0 13s
+  -> mix_slant_inplane: gaps ['1.205e-03', '5.756e-05', '2.924e-06']  steps ['1.263e-03', '6.048e-05']
+wrote v7_convergence_win.json (23 rows)

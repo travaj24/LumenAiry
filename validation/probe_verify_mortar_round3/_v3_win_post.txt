@@ -1,0 +1,19 @@
+  n=  324 bare=0.0111s(1.000x)  guarded=0.0121s(1.088x)  residual=0.0124s(1.114x)  exact=0.0169s(1.520x)
+Traceback (most recent call last):
+  File "C:\tmp\lum_vmortar3\validation\probe_verify_mortar_round3\v3_cost.py", line 132, in <module>
+    bench(sys.argv[2], sys.argv[3])
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\tmp\lum_vmortar3\validation\probe_verify_mortar_round3\v3_cost.py", line 110, in bench
+    fn()
+    ~~^^
+  File "C:\tmp\lum_vmortar3\validation\probe_verify_mortar_round3\v3_cost.py", line 94, in <lambda>
+    "guarded": lambda A=A, B=B: _pc._guarded_mortar_solve(
+                                ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        A, B, site)}
+        ^^^^^^^^^^^
+  File "C:\tmp\lum_vmortar3\lumenairy\elements\pmm\_core.py", line 5414, in _guarded_mortar_solve
+    raise _ConditioningError(
+    ...<8 lines>...
+                    "or lower n_slices on a closing taper."))
+lumenairy.elements.rcwa._core._ConditioningError: pmm2d staggered GENERALIZED mortar interface: the 576x576 mortar operator is numerically singular -- LAPACK reciprocal 1-condition 8.853e-14 against a 1e-12 bar, i.e. it cannot deliver a single correct digit of the interface S-matrix.  Every healthy mortar the shipped fixtures build reads 2.6e-07 or better (measured over 106 solves), so this is 5+ decades outside that population and the answer would be a build-dependent number rather than a solution.
+  The usual cause is a near-degenerate element grid: two walls of ONE layer far closer than the rest of that layer's partition, whose 1/J_n stiffness puts spurious wavenumbers into the cross-grid projection.  Merge the walls, carry the fine feature on layer_grids='shared', or lower n_slices on a closing taper.

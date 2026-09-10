@@ -1,0 +1,355 @@
+{
+ "env": {
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "C:\\tmp\\lum_vmortar3\\lumenairy\\__init__.py",
+  "platform": "Windows-11-10.0.26200-SP0"
+ },
+ "tag": "win",
+ "what": "ladder",
+ "band_edge": 0.03,
+ "contract": 0.001,
+ "rows": [
+  {
+   "what": "oracle_self_gap",
+   "value": 4.0144485986742806e-05,
+   "R14_row1": [
+    0.29208717755512786,
+    0.24329688345824624,
+    0.0
+   ]
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.3,
+   "err": 0.004989262310178419,
+   "ratio": 1.0,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 20.43
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.2,
+   "err": 0.0028841534377814226,
+   "ratio": 0.5780721193787631,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 18.4
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.15,
+   "err": 0.0009000427124415677,
+   "ratio": 0.18039594963877167,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 15.4
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.1,
+   "err": 0.004300903628095265,
+   "ratio": 0.862031972005389,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 17.8
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.07,
+   "err": 0.0059391725309599075,
+   "ratio": 1.1903909158762027,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 22.13
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.05,
+   "err": 0.006748332221796605,
+   "ratio": 1.3525711422367128,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 19.46
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.03,
+   "err": 0.007209529274745552,
+   "ratio": 1.445009066778799,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 18.74
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.02,
+   "err": 0.007246841416346184,
+   "ratio": 1.452487555437235,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 17.99
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.01,
+   "err": 0.007052083338240034,
+   "ratio": 1.4134521097143613,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 16.34
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.003,
+   "err": 0.006462934432206302,
+   "ratio": 1.2953687399881735,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 18.79
+  },
+  {
+   "what": "ladder",
+   "M": 6,
+   "frac": 0.001,
+   "err": 0.005785387496942074,
+   "ratio": 1.1595677150787418,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 19.99
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.3,
+   "err": 0.0004518999206811203,
+   "ratio": 1.0,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 52.21
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.2,
+   "err": 0.002285745018267671,
+   "ratio": 5.058077936421213,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 51.44
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.15,
+   "err": 0.0034786361447814718,
+   "ratio": 7.69780206984401,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 54.38
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.1,
+   "err": 0.0039556868652532995,
+   "ratio": 8.753457755184249,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 53.86
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.07,
+   "err": 0.004535995570099316,
+   "ratio": 10.037610901242239,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 53.48
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.05,
+   "err": 0.005147248838380997,
+   "ratio": 11.39024063253402,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 53.74
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.03,
+   "err": 0.006097383862421812,
+   "ratio": 13.49277480118078,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 52.63
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.02,
+   "err": 0.006667443182515109,
+   "ratio": 14.754247295431458,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 53.2
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.01,
+   "err": 0.007234923969264007,
+   "ratio": 16.010013806506674,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 52.03
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.003,
+   "err": 0.007565496476236888,
+   "ratio": 16.741530878858956,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 50.47
+  },
+  {
+   "what": "ladder",
+   "M": 7,
+   "frac": 0.001,
+   "err": 0.007564537260375315,
+   "ratio": 16.73940824989251,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 52.1
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.3,
+   "err": 0.00018605578175764914,
+   "ratio": 1.0,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 193.13
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.2,
+   "err": 0.0011549142629707077,
+   "ratio": 6.207354869923179,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 200.01
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.15,
+   "err": 0.0011887649877924122,
+   "ratio": 6.389293450395769,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 196.52
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.1,
+   "err": 0.0019443567502789305,
+   "ratio": 10.450396821376899,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 199.14
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.07,
+   "err": 0.0029269805726605536,
+   "ratio": 15.731736713633298,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 209.25
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.05,
+   "err": 0.003639507032819733,
+   "ratio": 19.56137561777279,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 170.62
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.03,
+   "err": 0.004264294646999761,
+   "ratio": 22.919441721807427,
+   "warned": false,
+   "n_warn": 0,
+   "seconds": 164.36
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.02,
+   "err": 0.004511525340309408,
+   "ratio": 24.248240488360583,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 158.33
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.01,
+   "err": 0.004700162833907201,
+   "ratio": 25.26211649810215,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 164.9
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.003,
+   "err": 0.0047785737523134975,
+   "ratio": 25.68355418558252,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 173.86
+  },
+  {
+   "what": "ladder",
+   "M": 8,
+   "frac": 0.001,
+   "err": 0.004766214325021362,
+   "ratio": 25.617125573822232,
+   "warned": true,
+   "n_warn": 1,
+   "seconds": 173.16
+  }
+ ]
+}
