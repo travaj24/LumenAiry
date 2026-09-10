@@ -71,7 +71,8 @@ the two builds agree on every DECISION.
 answers are refused), **V-1** (LOW, doc-only -- three published population
 bounds are sample-scoped and two are refuted), **V-2** (LOW, message wording),
 **V-3** (LOW, probe methodology -- an editable install can silently substitute
-a different checkout), plus the two open items round 3 carries forward,
+a different checkout), **V-5** (LOW, message -- the refusal's per-layer remedy
+is qualified by stack length, which is not the property that decides it), plus the two open items round 3 carries forward,
 **R3-B** and **R3-C**, both REPRODUCED here on my own devices, with R3-B shown
 to bite at PHYSICALLY realistic feature widths.  **V-4 is the only defect that
 changes a decision the library makes, it is present in round 2 as well as
@@ -187,16 +188,32 @@ intended behaviour of a relative bar, and the continuity rule confirms the
 decision, but it is the regime in which the closure is most permissive and it
 is worth knowing that it is reachable on an ordinary lossy staircase.
 
-### S2.4 The per-layer route
+### S2.4 The per-layer route, and what remedy (3) is worth on it
 
 `layer_grids='per-layer'` does NOT put a stack outside the guard: the screen
-builds a union grid regardless of the route, and on a 6-layer stack the route's
-own 3-layer windows are unions too.  Measured: at `delta` = 1e-5 and 3e-6 the
-per-layer answer is WRONG by the continuity rule (`R+T` = 12.82 and 19.28) and
-is REFUSED on both trees; at `delta` = 1e-3 it is GREY and returned.  The
-refusal is therefore correct on that route rather than incidental, which is
-the opposite of what the refusal message's remedy (3) might suggest for a long
-stack, and is worth stating because no previous round measured it.
+builds a union grid regardless of the route, and on a 6-layer stack the
+route's own 3-layer windows are unions too.  Measured on both trees: at
+`delta` = 1e-5 and 3e-6 the per-layer answer is WRONG by the continuity rule
+(`R+T` = 12.82 and 19.28) and is REFUSED; at `delta` = 1e-3 it is GREY and
+returned.  The refusal is correct on that route rather than incidental.
+
+That also puts a number on the refusal's third remedy.  It reads
+*"layer_grids='per-layer', but ONLY on a stack with more than
+2*window_halfwidth+1 layers -- a window IS a union, so on a shorter stack it
+rebuilds this same grid and returns this same answer"*, which reads as an
+endorsement once the stack is long enough.  The same 6-layer geometry -- 6 > 3,
+so the precondition is met -- solved both ways:
+
+| `delta` | `layer_grids='shared'` | `layer_grids='per-layer'` |
+|---|---|---|
+| 1e-3 | `R+T` 1.0000, `err/delta` **13.16** (grey), returned | `R+T` 1.00008, `err/delta` **13.14** (grey), returned |
+| 1e-5 | `R+T` 3.8273, `err/delta` **1.136e+05** (wrong), refused | `R+T` 12.817, `err/delta` **3.014e+05** (wrong), refused |
+| 3e-6 | `R+T` 207.62, `err/delta` **2.129e+07** (wrong), refused | `R+T` 19.280, `err/delta` **5.290e+05** (wrong), refused |
+
+Per-layer is 40x closer at the finest step and 2.7x FARTHER at the middle one,
+and it is wrong and refused at both.  The stack LENGTH is not the property
+that decides whether the route helps; whether adjacent layers INSIDE a window
+share their walls is.  Recorded as defect **V-5** (LOW, message).
 
 ---
 
@@ -880,6 +897,32 @@ directly in the headline.
 `tests/unit/test_verify_pmmstack_sliver_round3.py::test_the_truncation_note_is_never_false_on_a_returned_row`
 pins the decision half.
 
+### V-5 (LOW, message) -- the refusal's third remedy is qualified by stack LENGTH, and length is not what decides it
+
+Remedy (3) of the refusal reads *"layer_grids='per-layer', but ONLY on a stack
+with more than 2*window_halfwidth+1 layers -- a window IS a union, so on a
+shorter stack it rebuilds this same grid and returns this same answer
+(measured identical to 16 digits on the 2-layer reproducer)"*.  The caveat is
+correct and its measurement is sound; what is missing is that meeting it is
+not sufficient.
+
+Measured on a 6-layer staircase (S2.4), which satisfies the stated
+precondition with room: the per-layer route returns an answer that is WRONG by
+3.01e+05 times the wall shift at `delta` = 1e-5 and 5.29e+05 at 3e-6, and is
+refused at both -- because each 3-layer window still unions three different
+wall sets and manufactures the same cell.  The route helps only when adjacent
+layers INSIDE a window share their walls, which is a property of the geometry
+rather than of the layer count.
+
+Severity LOW: the caller who follows the remedy is not silently misled -- the
+guard refuses the per-layer solve too, with the same message.  The repair is
+one clause: name the condition as "adjacent layers within a window share their
+walls" rather than as a layer count.
+
+**Reproducer**: the `B_perlayer_*` fixtures of
+`validation/probe_verify_sliver_round3/v1_bitid.py`, plus the shared /
+per-layer pair in S2.4.
+
 ### V-3 (LOW, probe methodology, NOT a library defect) -- an editable install can silently substitute a different checkout
 
 This box carries an EDITABLE install of `lumenairy` (a `sys.meta_path` finder
@@ -1018,7 +1061,7 @@ measurement here supports that reading on devices the fix did not use:
    a smallest decision margin of 0.789 over the ladder box's 859 arbitrated
    rows (54.6x).
 
-Of the four defects raised, three -- V-1, V-2, V-3 -- are documentation,
+Of the five defects raised, four -- V-1, V-2, V-3, V-5 -- are documentation,
 message wording and probe methodology, and none changes a number the library
 returns.  The fourth, **V-4**, does change a decision: three CORRECT answers
 are refused.  It is nevertheless not a reason to hold this release, for one
