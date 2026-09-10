@@ -534,8 +534,11 @@ verification's own grid (S2.6 there).  **BEFORE** is the shipped fixed rule;
 | **0.96 d BEFORE** | 4.6e-13 | **7.5e-04** | 6.7e-15 | 1.4e-06 | 5.6e-11 |
 | **0.96 d AFTER** | 9.3e-15 | **4.7e-15** | 5.3e-15 | **2.3e-15** | 8.6e-15 |
 
-`nq` at the worst cell goes **16 -> 29** (identical on both builds).  Every
-cell is back at round-off.
+`nq` at the worst cell goes **16 -> 29**.  Every cell is back at round-off,
+and the two builds agree closely enough that the ladder is a statement about
+the rule rather than about a machine: over all **36 cells**, `nq` matches
+EXACTLY (0 mismatches) and the kernel errors agree to **1.24e-16**, with the
+worst reading on either build **1.27e-14**.
 
 The first row needs its label read carefully: those three segments are EQUAL,
 but they are spelled as an explicit ARRAY, so they take the formula, which
