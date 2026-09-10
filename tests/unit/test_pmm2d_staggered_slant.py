@@ -608,10 +608,12 @@ def test_b5_wrong_slant_sign_conserves_energy():
     off by 4.15e-01 per order against the 1-D oracle -- still closes energy.
 
     MEASURED (phi = 35 deg, normal incidence, M = 7, lossless cell): the
-    wrong-sign arm's |sum R + sum T - 1| is <= 1e-05 on both builds while it
-    sits 4.2e-01 from the truth.  This is why B4 and B5 cannot be replaced by
-    an energy check, and it is asserted here so the claim is not merely
-    written down.
+    wrong-sign arm's |sum R + sum T - 1| is 3.850e-07 -- and the RIGHT-sign
+    arm's is 3.850e-07 too, the same number to four digits, while the two sit
+    4.2e-01 apart per order.  Energy carries literally ZERO information about
+    the sign here.  That is why B4 and B5 cannot be replaced by an energy
+    check, and it is asserted rather than merely written down.  Bar 1e-04,
+    260x above the reading.
     """
     t = float(np.tan(np.deg2rad(35.0)))
     st = PMM2DStackPure(_SPX, _SPX, n_superstrate=NSUP, n_substrate=NSUB,

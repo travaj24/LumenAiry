@@ -337,10 +337,11 @@ on both builds:
 
 A slanted grating is not x-mirror symmetric, so `R_{+1} != R_{-1}` and the sign
 is observable PER ORDER -- which is why this, not an energy check, is where it
-is pinned. **The wrong-sign arm conserves energy to `<= 1e-05`** while sitting
-`4.2e-01` from the truth; that is asserted in the test file
-(`test_b5_wrong_slant_sign_conserves_energy`), so the lossless trap is
-demonstrated rather than merely written down.
+is pinned. **The wrong-sign arm conserves energy to `3.850e-07` -- and so does the RIGHT
+one, the same number to four digits** -- while the two sit `4.2e-01` apart per
+order. Energy carries literally ZERO information about the sign on this cell.
+That is asserted in the test file (`test_b5_wrong_slant_sign_conserves_energy`),
+so the lossless trap is demonstrated rather than merely written down.
 
 **Table B5b -- the per-order ladder at M = 8** (winning sign; `yleak` = worst
 amplitude into any `n != 0` order):
