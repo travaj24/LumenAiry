@@ -1,0 +1,47 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "lumenairy": "C:\\tmp\\lum_vhyb\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "walk_um": 0.22499999999999998,
+ "half_walk_pixels": 6,
+ "oblique25": {
+  "jones_sha_equal": true,
+  "per_order_sha_equal": true,
+  "jones_gap": 0.0,
+  "per_order_gap": 0.0,
+  "one_layer_vs_oracle": 0.019668813227105335,
+  "two_halves_vs_oracle": 0.019668813227105335,
+  "two_halves_ROLLED_vs_oracle": 0.3679319239598744,
+  "oracle_step_K5_K15": 0.015488375504004193,
+  "one_layer_half_sum": 0.6105517937972166,
+  "two_halves_half_sum": 0.6105517937972166,
+  "one_layer_no_sum": 1.1029476850470474,
+  "two_halves_no_sum": 1.1029476850470474
+ },
+ "conical25_40": {
+  "jones_sha_equal": true,
+  "per_order_sha_equal": true,
+  "jones_gap": 0.0,
+  "per_order_gap": 0.0,
+  "one_layer_vs_oracle": 0.014496136235239807,
+  "two_halves_vs_oracle": 0.014496136235239807,
+  "two_halves_ROLLED_vs_oracle": 0.3552933181159098,
+  "oracle_step_K5_K15": 0.015584226026755976,
+  "one_layer_half_sum": 0.561888773106018,
+  "two_halves_half_sum": 0.561888773106018,
+  "one_layer_no_sum": 0.9873431733593959,
+  "two_halves_no_sum": 0.9873431733593959
+ },
+ "seconds": 17.6
+}

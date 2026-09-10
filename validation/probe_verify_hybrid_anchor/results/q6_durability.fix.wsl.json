@@ -1,0 +1,411 @@
+{
+ "_arm": {
+  "arm": "fix",
+  "lumenairy": "/mnt/c/tmp/lum_vhyb/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "rows": [
+  {
+   "test": "a1",
+   "quantity": "shipped vs oracle K3->K15 step [oblique25]",
+   "bar": "shipped < step",
+   "measured": 0.007778244054864127,
+   "margin": 5.294851452492752,
+   "note": "step=4.1185e-02"
+  },
+  {
+   "test": "a1",
+   "quantity": "none/shipped [oblique25]",
+   "bar": "> 20x",
+   "measured": 143.1495770959502,
+   "margin": 7.15747885479751,
+   "note": ""
+  },
+  {
+   "test": "a1",
+   "quantity": "conj/shipped [oblique25]",
+   "bar": "> 20x",
+   "measured": 159.61536451069608,
+   "margin": 7.9807682255348045,
+   "note": ""
+  },
+  {
+   "test": "a1",
+   "quantity": "conj/none [oblique25]",
+   "bar": "conj > none (1x)",
+   "measured": 1.1150250510604667,
+   "margin": 1.1150250510604667,
+   "note": "SUB-DECADE ORDERING"
+  },
+  {
+   "test": "a2",
+   "quantity": "shipped first/last [oblique25]",
+   "bar": "> 2x",
+   "measured": 4.997316172488789,
+   "margin": 2.4986580862443946,
+   "note": "ladder ['3.8870e-02', '1.4897e-02', '7.7782e-03']"
+  },
+  {
+   "test": "a2",
+   "quantity": "none first/last [oblique25]",
+   "bar": "in (0.9, 1.1)",
+   "measured": 1.0000316488111656,
+   "margin": 0.9996835118883451,
+   "note": "ladder ['1.1135e+00', '1.1144e+00', '1.1135e+00']"
+  },
+  {
+   "test": "a3",
+   "quantity": "best global / shipped [oblique25]",
+   "bar": "> 10x",
+   "measured": 49.130600178429056,
+   "margin": 4.913060017842906,
+   "note": ""
+  },
+  {
+   "test": "a4",
+   "quantity": "||P0|-1| [oblique25]",
+   "bar": "< 1e-14",
+   "measured": 0.0,
+   "margin": 1e+286,
+   "note": ""
+  },
+  {
+   "test": "a4",
+   "quantity": "|arg P0| [oblique25]",
+   "bar": "> 1.0 rad",
+   "measured": 1.952491803466867,
+   "margin": 1.952491803466867,
+   "note": "SUB-DECADE"
+  },
+  {
+   "test": "a4",
+   "quantity": "jones none/shipped [oblique25]",
+   "bar": "> 20x",
+   "measured": 186.20954863451826,
+   "margin": 9.310477431725912,
+   "note": ""
+  },
+  {
+   "test": "c2",
+   "quantity": "dR vs 2*step_R [oblique25]",
+   "bar": "< 2 step_R",
+   "measured": 0.0009772718918427854,
+   "margin": 4.105407265335144,
+   "note": "step_R=2.0060e-03"
+  },
+  {
+   "test": "c2",
+   "quantity": "dJones(refl) vs step_J [oblique25]",
+   "bar": "< step_J",
+   "measured": 0.002471364044105672,
+   "margin": 3.3716916619536508,
+   "note": "step_J=8.3327e-03"
+  },
+  {
+   "test": "d2",
+   "quantity": "refl as returned vs step_J [oblique25]",
+   "bar": "< step_J",
+   "measured": 0.0039088102112750656,
+   "margin": 2.952973872922468,
+   "note": "step_J=1.1543e-02"
+  },
+  {
+   "test": "d2",
+   "quantity": "refl x P0 vs 10 step_J [oblique25]",
+   "bar": "> 10 step_J",
+   "measured": 0.2282185955400802,
+   "margin": 1.9771828727496708,
+   "note": "xP0/step = 19.77x, xP0/asret = 58.39x"
+  },
+  {
+   "test": "d2",
+   "quantity": "refl x P0^2 vs 10 step_J [oblique25]",
+   "bar": "> 10 step_J",
+   "measured": 0.2582493453147409,
+   "margin": 2.2373557301357048,
+   "note": "xP0^2/step = 22.37x, xP0^2/asret = 66.07x"
+  },
+  {
+   "test": "d2",
+   "quantity": "T none/shipped, film [oblique25]",
+   "bar": "> 5x",
+   "measured": 146.84155484781988,
+   "margin": 29.368310969563975,
+   "note": ""
+  },
+  {
+   "test": "d1",
+   "quantity": "half-sum/full [oblique25]",
+   "bar": "> 20x",
+   "measured": 81.46431555201474,
+   "margin": 4.073215777600737,
+   "note": ""
+  },
+  {
+   "test": "d1",
+   "quantity": "no-sum/full [oblique25]",
+   "bar": "> 20x",
+   "measured": 143.1495770959502,
+   "margin": 7.15747885479751,
+   "note": ""
+  },
+  {
+   "test": "a5",
+   "quantity": "closure slanted [oblique25]",
+   "bar": "1.0 <= x < 1.05",
+   "measured": 1.0110022736988822,
+   "margin": 0.22004547397764362,
+   "note": "LOWER margin 1.10e-02"
+  },
+  {
+   "test": "a5",
+   "quantity": "closure stair15 [oblique25]",
+   "bar": "1.0 <= x < 1.05",
+   "measured": 1.0120420162351595,
+   "margin": 0.24084032470319094,
+   "note": "LOWER margin 1.20e-02"
+  },
+  {
+   "test": "a5",
+   "quantity": "closure film [oblique25]",
+   "bar": "1.0 <= x < 1.05",
+   "measured": 1.0118131176683753,
+   "margin": 0.23626235336750678,
+   "note": "LOWER margin 1.18e-02"
+  },
+  {
+   "test": "a1",
+   "quantity": "shipped vs oracle K3->K15 step [conical25_40]",
+   "bar": "shipped < step",
+   "measured": 0.007380645130291113,
+   "margin": 3.562151951353416,
+   "note": "step=2.6291e-02"
+  },
+  {
+   "test": "a1",
+   "quantity": "none/shipped [conical25_40]",
+   "bar": "> 20x",
+   "measured": 121.0724052381852,
+   "margin": 6.05362026190926,
+   "note": ""
+  },
+  {
+   "test": "a1",
+   "quantity": "conj/shipped [conical25_40]",
+   "bar": "> 20x",
+   "measured": 176.5349143623494,
+   "margin": 8.82674571811747,
+   "note": ""
+  },
+  {
+   "test": "a1",
+   "quantity": "conj/none [conical25_40]",
+   "bar": "conj > none (1x)",
+   "measured": 1.4580937251147614,
+   "margin": 1.4580937251147614,
+   "note": "SUB-DECADE ORDERING"
+  },
+  {
+   "test": "a2",
+   "quantity": "shipped first/last [conical25_40]",
+   "bar": "> 2x",
+   "measured": 3.6272752259844747,
+   "margin": 1.8136376129922374,
+   "note": "ladder ['2.6772e-02', '1.2748e-02', '7.3806e-03']"
+  },
+  {
+   "test": "a2",
+   "quantity": "none first/last [conical25_40]",
+   "bar": "in (0.9, 1.1)",
+   "measured": 0.9965595383959966,
+   "margin": 0.9655953839599662,
+   "note": "ladder ['8.9052e-01', '8.9442e-01', '8.9359e-01']"
+  },
+  {
+   "test": "a3",
+   "quantity": "best global / shipped [conical25_40]",
+   "bar": "> 10x",
+   "measured": 60.6426861650025,
+   "margin": 6.06426861650025,
+   "note": ""
+  },
+  {
+   "test": "a4",
+   "quantity": "||P0|-1| [conical25_40]",
+   "bar": "< 1e-14",
+   "measured": 0.0,
+   "margin": 1e+286,
+   "note": ""
+  },
+  {
+   "test": "a4",
+   "quantity": "|arg P0| [conical25_40]",
+   "bar": "> 1.0 rad",
+   "measured": 1.4956954962811453,
+   "margin": 1.4956954962811453,
+   "note": "SUB-DECADE"
+  },
+  {
+   "test": "a4",
+   "quantity": "jones none/shipped [conical25_40]",
+   "bar": "> 20x",
+   "measured": 121.0724052381852,
+   "margin": 6.05362026190926,
+   "note": ""
+  },
+  {
+   "test": "c2",
+   "quantity": "dR vs 2*step_R [conical25_40]",
+   "bar": "< 2 step_R",
+   "measured": 0.0011960334569116465,
+   "margin": 3.045365318100737,
+   "note": "step_R=1.8212e-03"
+  },
+  {
+   "test": "c2",
+   "quantity": "dJones(refl) vs step_J [conical25_40]",
+   "bar": "< step_J",
+   "measured": 0.0018887095889926313,
+   "margin": 4.0692868901625925,
+   "note": "step_J=7.6857e-03"
+  },
+  {
+   "test": "d2",
+   "quantity": "refl as returned vs step_J [conical25_40]",
+   "bar": "< step_J",
+   "measured": 0.003859396321490671,
+   "margin": 3.5597485421865174,
+   "note": "step_J=1.3738e-02"
+  },
+  {
+   "test": "d2",
+   "quantity": "refl x P0 vs 10 step_J [conical25_40]",
+   "bar": "> 10 step_J",
+   "measured": 0.2169027493117688,
+   "margin": 1.5787972362038372,
+   "note": "xP0/step = 15.79x, xP0/asret = 56.20x"
+  },
+  {
+   "test": "d2",
+   "quantity": "refl x P0^2 vs 10 step_J [conical25_40]",
+   "bar": "> 10 step_J",
+   "measured": 0.32108830422748524,
+   "margin": 2.3371456973239253,
+   "note": "xP0^2/step = 23.37x, xP0^2/asret = 83.20x"
+  },
+  {
+   "test": "d2",
+   "quantity": "T none/shipped, film [conical25_40]",
+   "bar": "> 5x",
+   "measured": 14.341715473069046,
+   "margin": 2.868343094613809,
+   "note": ""
+  },
+  {
+   "test": "d1",
+   "quantity": "half-sum/full [conical25_40]",
+   "bar": "> 20x",
+   "measured": 65.56391416787592,
+   "margin": 3.2781957083937963,
+   "note": ""
+  },
+  {
+   "test": "d1",
+   "quantity": "no-sum/full [conical25_40]",
+   "bar": "> 20x",
+   "measured": 121.0724052381852,
+   "margin": 6.05362026190926,
+   "note": ""
+  },
+  {
+   "test": "a5",
+   "quantity": "closure slanted [conical25_40]",
+   "bar": "1.0 <= x < 1.05",
+   "measured": 1.008581214662424,
+   "margin": 0.17162429324848016,
+   "note": "LOWER margin 8.58e-03"
+  },
+  {
+   "test": "a5",
+   "quantity": "closure stair15 [conical25_40]",
+   "bar": "1.0 <= x < 1.05",
+   "measured": 1.0101787984572355,
+   "margin": 0.2035759691447092,
+   "note": "LOWER margin 1.02e-02"
+  },
+  {
+   "test": "a5",
+   "quantity": "closure film [conical25_40]",
+   "bar": "1.0 <= x < 1.05",
+   "measured": 1.0094741023682912,
+   "margin": 0.1894820473658232,
+   "note": "LOWER margin 9.47e-03"
+  },
+  {
+   "test": "a6",
+   "quantity": "max||P|-1|",
+   "bar": "< 1e-13",
+   "measured": 0.0,
+   "margin": 1e+287,
+   "note": ""
+  },
+  {
+   "test": "a6",
+   "quantity": "ptp(arg P)",
+   "bar": "> 3.0 rad",
+   "measured": 3.1415926535897976,
+   "margin": 1.0471975511965992,
+   "note": "SUB-DECADE"
+  },
+  {
+   "test": "c3",
+   "quantity": "cost of anchoring a uniform film",
+   "bar": "> 1.0",
+   "measured": 1.3710359027197125,
+   "margin": 1.3710359027197125,
+   "note": "SUB-DECADE; |J| scale 8.2752e-01"
+  },
+  {
+   "test": "b1",
+   "quantity": "cross-engine / own n_orders step [oblique25]",
+   "bar": "< 10x",
+   "measured": 2.171984075423959,
+   "margin": 4.60408532141197,
+   "note": "own_step=5.9812e-03"
+  },
+  {
+   "test": "b1",
+   "quantity": "pre-fix/shipped [oblique25]",
+   "bar": "> 20x",
+   "measured": 85.70519410570293,
+   "margin": 4.285259705285147,
+   "note": ""
+  },
+  {
+   "test": "b1",
+   "quantity": "cross-engine / own n_orders step [conical25_40]",
+   "bar": "< 10x",
+   "measured": 2.179259068697216,
+   "margin": 4.588715561008589,
+   "note": "own_step=4.5680e-03"
+  },
+  {
+   "test": "b1",
+   "quantity": "pre-fix/shipped [conical25_40]",
+   "bar": "> 20x",
+   "measured": 89.52602865178032,
+   "margin": 4.4763014325890165,
+   "note": ""
+  }
+ ],
+ "seconds": 82.4
+}

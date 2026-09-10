@@ -1,0 +1,334 @@
+{
+ "_arm": {
+  "arm": "v5440",
+  "lumenairy": "C:\\tmp\\lum_v5440\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "fixtures": {
+  "vert_scalar_normal": {
+   "orders": "60008369cacf6e1d",
+   "R": "15c2c8a9ebf03df6",
+   "T": "ace6d9f85a63e136",
+   "jones_reflection": "84d5cccb6f262e09",
+   "jones_transmission": "2f72ff1beed0585e",
+   "per_order_transmission": "81e8a9c16de300ff",
+   "per_order_reflection": "51ba1239625538a0",
+   "_R_sum": 0.050175853850072456,
+   "_T_sum": 1.965031604054225
+  },
+  "vert_scalar_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "29c5e02dd82a73ab",
+   "T": "49054fb3c85b6cd6",
+   "jones_reflection": "9981997e894915c2",
+   "jones_transmission": "a449228f5488e813",
+   "per_order_transmission": "70edb4b67b2a8585",
+   "per_order_reflection": "f91f1cc630a75c4a",
+   "_R_sum": 0.039804378141671495,
+   "_T_sum": 1.981511639199515
+  },
+  "vert_scalar_conical25_40": {
+   "orders": "60008369cacf6e1d",
+   "R": "bf470722fd772134",
+   "T": "5a6bc2d4403732a4",
+   "jones_reflection": "100a9a6c0926674c",
+   "jones_transmission": "a2fa4e0730a30787",
+   "per_order_transmission": "ddce9123b4925f62",
+   "per_order_reflection": "47c0b54025673c90",
+   "_R_sum": 0.02414910768874664,
+   "_T_sum": 1.9985208180748184
+  },
+  "vert_tensor_inplane_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "5c9aceba667d9b47",
+   "T": "5c03f47ebf00387e",
+   "jones_reflection": "631e05f6ab151439",
+   "jones_transmission": "e4dcfe13a15a4655",
+   "per_order_transmission": "d030e81111583466",
+   "per_order_reflection": "80e6a06f936d06c0",
+   "_R_sum": 0.038342765909830386,
+   "_T_sum": 1.9829486092069488
+  },
+  "vert_tensor_oop_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "6a999744da77fcad",
+   "T": "deabb7c4269dc28b",
+   "jones_reflection": "e8425fa781b6ef01",
+   "jones_transmission": "88a37a0ecb697f3b",
+   "per_order_transmission": "2bbc5cc59721ae81",
+   "per_order_reflection": "d7be45b8a5ecd26e",
+   "_R_sum": 0.03878413249168801,
+   "_T_sum": 1.9821616197244543
+  },
+  "vert_three_layer_conical": {
+   "orders": "60008369cacf6e1d",
+   "R": "70220c71b5ad5e32",
+   "T": "ee1ec63072e4418b",
+   "jones_reflection": "d783ece0409b6e13",
+   "jones_transmission": "60d240ca6f396f92",
+   "per_order_transmission": "ae2ef0ea72af3108",
+   "per_order_reflection": "92cfe6f5cdd500b2",
+   "_R_sum": 0.19074440313843063,
+   "_T_sum": 1.814892114916662
+  },
+  "uniform_films_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "2d77bc52adff9cd0",
+   "T": "7d5d953e7a2f06ed",
+   "jones_reflection": "36b5761d4b87f022",
+   "jones_transmission": "7694fe93af207297",
+   "per_order_transmission": "db65e4bfcc810692",
+   "per_order_reflection": "bdc3d09220d601b6",
+   "_R_sum": 0.3509407969435475,
+   "_T_sum": 1.649059203056452
+  },
+  "centro_symmetry_auto_normal": {
+   "orders": "60008369cacf6e1d",
+   "R": "f4589bebbd14012e",
+   "T": "074a5206633490a5",
+   "jones_reflection": "aa35fa4434d6556d",
+   "jones_transmission": "b2aea4f62521796e",
+   "per_order_transmission": "95a9723aa0b69565",
+   "per_order_reflection": "1fcb6021f5c00711",
+   "_R_sum": 0.04360631754141905,
+   "_T_sum": 1.9729022807182974
+  },
+  "centro_symmetry_false_normal": {
+   "orders": "60008369cacf6e1d",
+   "R": "152b8f9debeeaf1b",
+   "T": "c3e3b4ec6423096c",
+   "jones_reflection": "4d63bdd4074f3df2",
+   "jones_transmission": "1ec589b7d8e30ca6",
+   "per_order_transmission": "083cd452e5af9e2c",
+   "per_order_reflection": "7178da93a36ff6d9",
+   "_R_sum": 0.04360631754142815,
+   "_T_sum": 1.9729022807182979
+  },
+  "tapered_pillar_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "6210385486334060",
+   "T": "967b512e12ec1dab",
+   "jones_reflection": "489203538961d0d6",
+   "jones_transmission": "9c6939ed8556a368",
+   "per_order_transmission": "18014ba227e125ff",
+   "per_order_reflection": "61176f2790fe4e7b",
+   "_R_sum": 0.04227741975175886,
+   "_T_sum": 1.9902072162368007
+  },
+  "tapered_pillars_normal": {
+   "orders": "60008369cacf6e1d",
+   "R": "3d3e85ee60e5660d",
+   "T": "85964c16358a5494",
+   "jones_reflection": "c3eb2aa087d8bfd3",
+   "jones_transmission": "8020d0ef89560d13",
+   "per_order_transmission": "59b762307a2ea19c",
+   "per_order_reflection": "c62a851ed4f1f7bd",
+   "_R_sum": 0.025799941709220404,
+   "_T_sum": 1.9909634223488166
+  },
+  "cascade_fused_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "8bea7916dec1d0fc",
+   "T": "cfdb892924c3dffc",
+   "jones_reflection": "5ef04c0d91391328",
+   "jones_transmission": "36128fad04eb01b8",
+   "per_order_transmission": "8e4b9b98ee45914d",
+   "per_order_reflection": "eeffd8e46fa93d54",
+   "_R_sum": 0.05520676921427527,
+   "_T_sum": 1.94909168761502
+  },
+  "cascade_tree_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "f653d6d20b9ce8cb",
+   "T": "023deeadecb1d7c6",
+   "jones_reflection": "dd7c1122fd0bd3aa",
+   "jones_transmission": "845ea865f3359e8a",
+   "per_order_transmission": "7e03da38028965cc",
+   "per_order_reflection": "b4f3f2976929f648",
+   "_R_sum": 0.05520676921408849,
+   "_T_sum": 1.949091687609689
+  },
+  "cascade_monolithic_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "9bd9a2126e2bf50d",
+   "T": "04111debc2d44962",
+   "jones_reflection": "a870814af3193fcb",
+   "jones_transmission": "df1855387a0145f9",
+   "per_order_transmission": "e881bf00b21abc03",
+   "per_order_reflection": "7d4ac8e9ee01425c",
+   "_R_sum": 0.05520676921402318,
+   "_T_sum": 1.9490916876136484
+  },
+  "slanted_uniform_x_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "d8de8a91122a4108",
+   "T": "5c96a0228ad2d111",
+   "jones_reflection": "075400b056d2a630",
+   "jones_transmission": "11acdc562e8314fc",
+   "per_order_transmission": "8098ff255606cb74",
+   "per_order_reflection": "5179d29de8a071e0",
+   "_R_sum": 0.08103762416112684,
+   "_T_sum": 1.9189623758388719
+  },
+  "slanted_uniform_diag_conical": {
+   "orders": "60008369cacf6e1d",
+   "R": "d8d23df3e4ff571e",
+   "T": "ed662034f0f1837c",
+   "jones_reflection": "f34fd33c115c7aa6",
+   "jones_transmission": "76f15d6e7ceed570",
+   "per_order_transmission": "bc10cdc026c875c4",
+   "per_order_reflection": "b59a070187ed4b73",
+   "_R_sum": 0.07896347176186419,
+   "_T_sum": 1.9210365282381345
+  },
+  "vertical_film_2p20_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "d8de8a91122a4108",
+   "T": "5c96a0228ad2d111",
+   "jones_reflection": "075400b056d2a630",
+   "jones_transmission": "11acdc562e8314fc",
+   "per_order_transmission": "8098ff255606cb74",
+   "per_order_reflection": "5179d29de8a071e0",
+   "_R_sum": 0.08103762416112684,
+   "_T_sum": 1.9189623758388719
+  },
+  "slanted_consttile_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "d8de8a91122a4108",
+   "T": "5c96a0228ad2d111",
+   "jones_reflection": "075400b056d2a630",
+   "jones_transmission": "11acdc562e8314fc",
+   "per_order_transmission": "8098ff255606cb74",
+   "per_order_reflection": "5179d29de8a071e0",
+   "_R_sum": 0.08103762416112684,
+   "_T_sum": 1.9189623758388719
+  },
+  "vert_pattern_over_slanted_film_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "d6fbcf11933a84f7",
+   "T": "c438a4e376bd105e",
+   "jones_reflection": "0eabc1ac9574863f",
+   "jones_transmission": "5f9004e52ec0172a",
+   "per_order_transmission": "6f9d470dc31dc177",
+   "per_order_reflection": "d9ecb6b2aa54195f",
+   "_R_sum": 0.056922580813610436,
+   "_T_sum": 1.9508345020662008
+  },
+  "slanted_patterned_quarter_normal": {
+   "orders": "60008369cacf6e1d",
+   "R": "ed5376ffd800a6fc",
+   "T": "a717b121ad0aea02",
+   "jones_reflection": "a0df069cf74d9058",
+   "jones_transmission": "c29c80636778476b",
+   "per_order_transmission": "4e39605b4502fa18",
+   "per_order_reflection": "5abec5b7f79afa2f",
+   "_R_sum": 0.05628988820012927,
+   "_T_sum": 1.9599343912919989
+  },
+  "slanted_patterned_quarter_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "047ca5448796b402",
+   "T": "d8bb93d7854e8cd3",
+   "jones_reflection": "f0f5b132c2a7e9ed",
+   "jones_transmission": "c4637bb8ac7c8bdc",
+   "per_order_transmission": "0fedc373430fc808",
+   "per_order_reflection": "2e74fd98254a3b55",
+   "_R_sum": 0.053274495957486054,
+   "_T_sum": 1.981770600479932
+  },
+  "slanted_patterned_quarter_conical25_40": {
+   "orders": "60008369cacf6e1d",
+   "R": "db278dad4610982c",
+   "T": "00f79baed3499600",
+   "jones_reflection": "5741655ef0faaf3e",
+   "jones_transmission": "0c05cc1e9abab75d",
+   "per_order_transmission": "381ebbb2c335ad28",
+   "per_order_reflection": "8f61bd3e73537adb",
+   "_R_sum": 0.03663536196938356,
+   "_T_sum": 1.9893303036655645
+  },
+  "slanted_patterned_half_normal": {
+   "orders": "60008369cacf6e1d",
+   "R": "bfa9931f4a39e76c",
+   "T": "9e69350c0ff6991c",
+   "jones_reflection": "1a8aecdebed6e38d",
+   "jones_transmission": "85f8973c962ba9e8",
+   "per_order_transmission": "53a1642fe17638f6",
+   "per_order_reflection": "e1908bdca35ed24d",
+   "_R_sum": 0.06733218496897628,
+   "_T_sum": 1.9460043300281886
+  },
+  "slanted_tensor_inplane_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "16004b4f37aa16b5",
+   "T": "83ed22e835b7e0b1",
+   "jones_reflection": "5753bf0b6e048bfd",
+   "jones_transmission": "104df378784174f5",
+   "per_order_transmission": "cf44182e7f7ad008",
+   "per_order_reflection": "4bc401bcba96907a",
+   "_R_sum": 0.05228041011080664,
+   "_T_sum": 1.9840659604669217
+  },
+  "two_slanted_layers_conical": {
+   "orders": "60008369cacf6e1d",
+   "R": "c1902d442d852362",
+   "T": "29cd7da7fc484d8a",
+   "jones_reflection": "a04b190d7e6348d9",
+   "jones_transmission": "0b43e937030dbc95",
+   "per_order_transmission": "645ca087bf63aaec",
+   "per_order_reflection": "55659d1a96a88cd9",
+   "_R_sum": 0.05275940635529827,
+   "_T_sum": 1.9583551074456078
+  },
+  "vert_lossy_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "c7c2cb6f6ca3282c",
+   "T": "14f795dd3dc456e7",
+   "jones_reflection": "1f8b7d20cb38c977",
+   "jones_transmission": "78b5e25d518d8eda",
+   "per_order_transmission": "63ae503766e20d5d",
+   "per_order_reflection": "e6545ca722778f87",
+   "_R_sum": 0.030343448196613967,
+   "_T_sum": 1.0985332263120322
+  },
+  "slanted_over_film_oblique25": {
+   "orders": "60008369cacf6e1d",
+   "R": "7231288700c2807f",
+   "T": "ffa398d2ce642ab4",
+   "jones_reflection": "369980649a19fa46",
+   "jones_transmission": "cb93761c054e8f5f",
+   "per_order_transmission": "4b24218414bb4e0b",
+   "per_order_reflection": "192f4dacee4a57e3",
+   "_R_sum": 0.20474633570429188,
+   "_T_sum": 1.8550884235638951
+  },
+  "slanted_patterned_xy_conical": {
+   "orders": "60008369cacf6e1d",
+   "R": "2d92d2e51e684432",
+   "T": "147462c0870d8045",
+   "jones_reflection": "6ab0d5f9ffdab5f4",
+   "jones_transmission": "577d6b7d02b4569e",
+   "per_order_transmission": "98749e23d3b502b0",
+   "per_order_reflection": "9cf423a4a5af8039",
+   "_R_sum": 0.039356092716639535,
+   "_T_sum": 1.988309052403018
+  },
+  "sweep_3wl": {
+   "orders": "60008369cacf6e1d",
+   "R": "9fed115ab4a88eb4",
+   "T": "11058f1bf39233ab",
+   "jones": "91732228f320bbdf"
+  }
+ },
+ "n_fixtures": 29,
+ "n_hashed_keys": 200
+}
