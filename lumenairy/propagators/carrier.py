@@ -3377,18 +3377,45 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     if n_fine == n_crop:
         out = ec
     else:
-        # DTYPE PARITY with the raw ``np.fft`` this replaced: numpy's FFT is
-        # double-only and returns complex128 for EVERY input dtype, while the
-        # dispatcher's pyFFTW / scipy backends preserve complex64.  Promote
-        # here so a non-complex128 caller keeps the historical output dtype
-        # instead of silently acquiring a narrower one (the shipped chain is
-        # complex128, where ``asarray`` is a no-op and no copy is made).
+        # DTYPE PARITY with the raw ``np.fft`` this replaced.  Promote here so
+        # a non-complex128 caller keeps the historical output dtype instead of
+        # silently acquiring a narrower one (the shipped chain is complex128,
+        # where ``asarray`` is a no-op and no copy is made).
+        #
+        # CORRECTION 2026-09-11 (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D3):
+        # the parity this was written for -- "numpy's FFT is double-only and
+        # returns complex128 for EVERY input dtype, while the dispatcher's
+        # pyFFTW / scipy backends preserve complex64" -- has not held since
+        # numpy 2.0, which has a single-precision FFT: ``np.fft.fft2`` of a
+        # complex64 array RETURNS complex64.  So on numpy >= 2 every backend
+        # preserves complex64 and this promotion is what makes the OTHER
+        # dtypes (real, float32, complex256) land on complex128, which is
+        # still the historical answer for them.  The complex64 branch below is
+        # therefore not a narrowing of a complex128 transform: BOTH transforms
+        # of the pair run in single precision.  MEASURED and accepted -- see
+        # the ``_cdt`` note.
         _ecs = np.fft.ifftshift(ec)
         # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 sec 3.3): a complex64 envelope
         # stays complex64 through the transform pair -- this hard complex128
         # pad was the leak the audit found sitting directly on the
         # memory-dominant stage.  Every other input is promoted to complex128
         # exactly as before, so the shipped chain is byte-identical.
+        #
+        # PRECISION, measured 2026-09-11 (D3,
+        # ``validation/probe_fix_lens_5440/p4_d3_fft.py``), and KEPT as it is:
+        # on a REAL two-group traced carrier chain with an exact focus readout
+        # (the stage that calls this) a complex64 envelope lands at rel L2
+        # 3.112e-07 and rel total power 2.520e-07 against the complex128 chain
+        # -- 64x and 159x under the campaign's 2e-05 field / 4e-05 energy bars
+        # -- while forcing the transform pair into complex128 and narrowing
+        # ONCE on return lands at 3.156e-07 / 2.334e-07, i.e. NOT better: on a
+        # complex64 chain the error is dominated by the complex64 STORAGE of
+        # the envelope, not by the transform.  The transform's own share is
+        # rel L2 2.662e-07 between the two arms.  Directly on the crop the
+        # single-precision pair costs 2.6 x eps32 x peak against a narrow-once
+        # reference (a narrow-once is <= 0.5x), growing slowly with N: rel L2
+        # 1.454e-07 / 1.472e-07 / 1.545e-07 / 1.674e-07 at n_fine = 256 / 512 /
+        # 1024 / 2048, the ~sqrt(log2 N) an FFT accumulates.
         _cdt = (np.dtype(np.complex64) if _ecs.dtype == np.complex64
                 else np.dtype(np.complex128))
         if _ecs.dtype != _cdt:
@@ -5293,8 +5320,12 @@ def _shift_envelope(env, sx, sy, dx):
     :func:`_fourier_upsample_crop`.  Same dispatcher, same accuracy statement
     (bounded at FFT round-off, NOT bit-identical -- see that function's note
     and ``FIX_PERF_ROUND2_2026_08_10.md`` sec 5), and the same dtype-parity
-    promotion so a non-complex128 caller keeps the complex128 numpy's
-    double-only FFT always returned.
+    promotion, which here is UNCONDITIONAL: this transform pair always runs in
+    complex128 and the result is narrowed back to the input's dtype on return.
+    (2026-09-11, D3: the historical justification for the promotion -- that
+    numpy's FFT was double-only -- lapsed at numpy 2.0, but the promotion
+    itself is what this function does and is left as it is; the crop, which
+    does NOT promote a complex64 input, carries the measured cost note.)
 
     BUFFER OWNERSHIP: ``_fft2``'s result is consumed by the ``* ramp``
     multiply (a fresh array) before any other FFT is issued, and ``_ifft2``'s
