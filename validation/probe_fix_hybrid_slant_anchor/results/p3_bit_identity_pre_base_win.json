@@ -1,0 +1,245 @@
+{
+ "vertical_scalar_normal": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "258db1ade5c826a30fa2a8c2a12e97aba14aae58883bc2a6e3b6d39903ac8e67",
+  "T": "4589d97abff5afd34929846aba0c1ad247a9103948134321733353e23ffd722c",
+  "jones_reflection": "79d1d5b779fbe1dd80f05541cdfdf8ed053d0da5b4ca89728ccbf5a4d38872dd",
+  "R_sum": 0.07291597877562161,
+  "T_sum": 1.9981920260803068,
+  "jones_transmission": "d6a47342bd0f50782fd3ea516906e5f416dcb6591e638a3cdffbf495b4d1a1b7",
+  "per_order_transmission": "99a302b241272bdb6b58b6d5eaf361ec29e55c05d2a31e9342ef4ddcae747fca",
+  "per_order_reflection": "56f6038fc3d7273375c18ee7653693acfe64dc9fc1a802e30ed4253051f2bcbd"
+ },
+ "vertical_scalar_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "035479956bb94465c70dd1939b5a8aaff16e429a8af966f7853f8ccc8b235a55",
+  "T": "29e733bb6a44a8cd0fdcb4015cf149cece90ef00b91c31f78b7e4e779befef16",
+  "jones_reflection": "2bab620c43902e71492e240a1a1e3813ad82adbe97501535d9069774bc12149f",
+  "R_sum": 0.08193889044770217,
+  "T_sum": 1.9919964735726658,
+  "jones_transmission": "ebce71d93e94f2ca1b0ebf18d031469ddf9103454552fe698d06d5f07ad820e3",
+  "per_order_transmission": "845153edb9355a7c121190e3c6860e6166b120aed8be1eee1a3bf0c5317c1509",
+  "per_order_reflection": "8afc0b57525883fcdbf74028cf07f123f7096e6ce5fb0330b532a02e0f48bbc6"
+ },
+ "vertical_scalar_conical": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "79d1fc227a29b1b10c5fce475eb63635063c95a42d8c1fdcf2d8ba467d3d3018",
+  "T": "ee95db504142e3dbde29ac428975564ec64f9eaa8e545181e6f8afd8ccb83233",
+  "jones_reflection": "8dae025087f40589185261380080cb5e1c42c1c74ea03a3e90e1865eb42ccc45",
+  "R_sum": 0.113661552256969,
+  "T_sum": 1.9567781990728017,
+  "jones_transmission": "87cb74b9dfa2b2bb3665b88cd8b96302cb15b74e75877cd0ef5c28769ba4ecdb",
+  "per_order_transmission": "f42bb82baaee725b9e1ee97452e67e8abc22eeb82bc62373cb048747a58ebd66",
+  "per_order_reflection": "109aef41085b324e5cdb4a202e263ef7e48e04d2bfec3b92183acc497bae6b22"
+ },
+ "vertical_inplane_tensor_conical": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "a7cc991cf501dfa955eea7d1686af1049d29ccef0ddb020d9edbcd9a54299193",
+  "T": "eefdf69e023ae0e2c9523be113eab3de8b4e354fc000991149807389d3c2f460",
+  "jones_reflection": "3bd8da9fbc09a9b7a31f3ae3e3c9d127a97e71877af8c9a6fb0e93007eabcac2",
+  "R_sum": 0.2477090912176087,
+  "T_sum": 1.789497288036877,
+  "jones_transmission": "4b9cb2537fcab85205101664b69119122851c371ee97e523f3dcc0aa85158811",
+  "per_order_transmission": "6517101d7a640734e9207b26ce4f5d9dc7154a01425d528bcf76069d46d4c9b7",
+  "per_order_reflection": "a05d910dbdd26e8af5f4c1a24a8df72d297bffb90ccf8e469813b6449d4fda70"
+ },
+ "vertical_oop_tensor_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "fc611ab79997442127b72bc35e2fd4fbbbcc627287c9f86e9b25b26988d8393a",
+  "T": "f5bb6a2d5cf9eb4ec563ec98f620ee7734f68d73c6f7b2e01491aba85495c67d",
+  "jones_reflection": "6a4c231b1d48b6a75182cf482bdac80b76bfb3126065995b8c34ca07dc04301e",
+  "R_sum": 0.2766330251596831,
+  "T_sum": 1.757359688783899,
+  "jones_transmission": "8cde9a498351f1df99e686a64599a6e304f10563babeff589044d163fcdea35f",
+  "per_order_transmission": "4d89901a10a3538f9e2ac636b3b28af752ed43b3d8c47adc8e211ac34a20be06",
+  "per_order_reflection": "02e8e048fa5204a5fa1ee385fdcf53f792e1506cf67c79c0652b9d361168b501"
+ },
+ "vertical_three_layer_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "ce0471ab9bfd0a31f5c365dee0e3773b7bc0b54d1eb8eb02f38123663aef8879",
+  "T": "e870e2c08e93721d3f70f0eace5de6f0f7a0793a6f82501d436a0bd48aff9f59",
+  "jones_reflection": "44161bb86f3eb78bdb927d3c2ec211698ffbe80a6fbc24fc6c2d1a115a4b1174",
+  "R_sum": 0.2786498332711906,
+  "T_sum": 1.827222576552943,
+  "jones_transmission": "17e3ed286962a46341312040b38273241a285ad92dc38b50968f012de3507a9a",
+  "per_order_transmission": "1305997ec008551efceed9995297cb029ace59fa05b26ff1069d8fcc8a301b1b",
+  "per_order_reflection": "9ed50c5300ef177f86f20fa1d9962770438fb7fe99423baef0df1f4ff605a013"
+ },
+ "uniform_films_conical": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "aa6572f5ee2e194125f15c13b64f5b69028ade3bed1b9758177e0c8157a2b474",
+  "T": "8255a47e32f661bb4e070549a26f8b937eca37d480eb617e814c331dd449c186",
+  "jones_reflection": "3b2ac2246ca888063b3619ff889febef94d1d2b2e1c1f4c02809cde647e1b03a",
+  "R_sum": 0.0829245278803717,
+  "T_sum": 1.9170754721196266,
+  "jones_transmission": "34ad166a50f7a9bb64a3244a7bb50af29ab0204e8715c19c87204f5c2fde230a",
+  "per_order_transmission": "204d4a512270d6cc2d5f372f186134a1bb54d667daacd5f8fce037d046e51ae4",
+  "per_order_reflection": "09a8100d97043c088159530e49459f8cd2934f7fef0a15eca7f10af7cf219c95"
+ },
+ "centro_symmetry_auto_normal": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "19ca7ecf62f870b030aec28bfd2947a627ebdaaa3b0cce32ed883c50fb774268",
+  "T": "aada7140986a433589ac765c4e1578125223abb19d90d544c511d92310fc5686",
+  "jones_reflection": "fecf75bd69ff0df99522867b72d2b4a00e9fd92750d1e08f0772858ced781a89",
+  "R_sum": 0.1747460743923724,
+  "T_sum": 1.8829304630092194,
+  "jones_transmission": "963247c051b604ce187480a3e50533a98ef91d1ef5dd72e66de861d8e410eec2",
+  "per_order_transmission": "7f23e335b7a5b4d2b42338fa7cc3c71e1cc882f046145f3d5228d7b6c3ff0371",
+  "per_order_reflection": "01b07aa939c58ea304d5a1e5a60f886218dc89ea8b5c0b7a2c597175bd94dd18"
+ },
+ "centro_symmetry_off_normal": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "bc4143ce98a47efa662c58e48cb63c93e401fd227be14d0da4e37345e60a6973",
+  "T": "15f6adc0e5d5b998ba0e77769ded910a525bb6ce8112b2bca37ce5944b47e465",
+  "jones_reflection": "60f4f9add4ff32ccc25a1e58ca6bd8c62f08f08d96c2b7c5a94a484c39252a6e",
+  "R_sum": 0.17474607436713668,
+  "T_sum": 1.8829304630091814,
+  "jones_transmission": "a1c05f939ee56a66b796246aaa17f1883b1a92d0fe0b92582347afc0225488c3",
+  "per_order_transmission": "c4e3c8cabf4f9fba348e1dd60de74bb1e206a64c688372ccb62d5d9bdae204a4",
+  "per_order_reflection": "d52adb4217c9743767fe6852e5b72f47154a5f6a21a97f12108e999c2e7821f8"
+ },
+ "tapered_pillars_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "d76fb272a92eada1a716613cf47b230ac82f8f133d68d2dd7ee1a99c54c3bd4f",
+  "T": "090d791fd6e54aeded3aafdcefbb82d249f5c4c5ee5fe669945978d89e7d412d",
+  "jones_reflection": "449f094a575f6f7c063dcbe224304f833d7d2904b94d45be40b2f83e10e4cda2",
+  "R_sum": 0.1543743111914591,
+  "T_sum": 1.8912698078533028,
+  "jones_transmission": "23d9ede3fed49bcad07c68ce2c76aec87a4bd1f7e03a054a7598470a89ccfd3a",
+  "per_order_transmission": "7c639360df70a926a77aa32f859b52086fdaf6363ded11fc175c3753f15798b9",
+  "per_order_reflection": "090a74327cc019070a433a0c30f6bda5d1f4c7a5e9d44047b6aae1abc26f0604"
+ },
+ "cascade_fused_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "82116451ffbb81138940429ecaa30ba759943263805eb93e3f8b34cfdfbc21bc",
+  "T": "b2a860cac2870116e56884c8f13b836a2ccb60eba54714f600aea5475ccdf094",
+  "jones_reflection": "a9e5caa96d0b52b143166ea785504a3fb8f65012ef814e70d2ade89fe5731bd7",
+  "R_sum": 0.2786498332711921,
+  "T_sum": 1.8272225765529386,
+  "jones_transmission": "86b447e8fd2bd54f661a933f1c74d6fa735a7cf401db0ef27c2b7fe66d062823",
+  "per_order_transmission": "e3f35f666e5324318051fae37e31b4af228e7fb3a82487559ed657a782e187f3",
+  "per_order_reflection": "31c2b6f680940137b94b15b8b223a5dc51373a515ba91be3b65b195f4157d69d"
+ },
+ "cascade_tree_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "d1673e0c79100d9891bc266b1297f36c7a6906b8f195f75ca521c4b287405e9c",
+  "T": "74100c2495030167d121870930d578b3ae00843c9a0386f9aef5c32201cfe7db",
+  "jones_reflection": "a0813281a30f94ccd6257432bd3719546e519cc0225be08fb3ad547d5c78788a",
+  "R_sum": 0.278649833271178,
+  "T_sum": 1.8272225765529457,
+  "jones_transmission": "99fc989dd9c355d4f7f3348d78d9566e4d1b6d9d26e14c5b14cf77df698c6d84",
+  "per_order_transmission": "8eee6d42cbd61573a9d0a3a513e46121c572a06fb93293f0ce527caf8581f981",
+  "per_order_reflection": "cd572998109c2316e006f5a6b46172374404296a9fcf8304efa0d3cf3b9c99d7"
+ },
+ "slanted_uniform_x_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "9b1bf95aa7058117345c0a6da46f9468f59d29d2ce647d20adc775f831cebd13",
+  "T": "b1217d80fa65828c3e58e012993992f68e67b60ef7e32d9793c56a98b847f1f5",
+  "jones_reflection": "cd0d829e7ed2059b8ada92a4e52d82c0cba6e9f90592da7fc998c8ffeed84f1b",
+  "R_sum": 0.0813728380651966,
+  "T_sum": 1.9186271619348036,
+  "jones_transmission": "878a0c7e0766b209be87b6bc1246196666fce731355c855457804d1f9ef334eb",
+  "per_order_transmission": "4424abccdf7d7f0bbeb8e3fd2707ec77016fceda2630028784d0067f9f9fb7fa",
+  "per_order_reflection": "d1372dc0ba0070648f139188f0f6eb85b10f4f2a23db1d732aaec38ff165eaa4"
+ },
+ "slanted_uniform_diag_conical": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "a85d1953622aeac2dba2477136797c2577eb90db14555ee540887aada2749a86",
+  "T": "d67fecc65eca9ea0959ebc19d4c24bfa0551f27274495ab75f8e5da59600a118",
+  "jones_reflection": "fda0329a61cd5e133804760467d5ba48c11960dfd923f71cc66cb3b88e2af6a4",
+  "R_sum": 0.07929192832326162,
+  "T_sum": 1.9207080716767382,
+  "jones_transmission": "a0d674eb0a02250caa23183b8338174d9391f289e3724e2d6f25db756773a2fa",
+  "per_order_transmission": "df186a108f61813886425fb37ef630ca8838fba91f4af6b30a7402252a90312d",
+  "per_order_reflection": "178f7cdf1dbe9d2e1a4921d10d74484c5c4a137c3f7b3d3da707e56327c67d36"
+ },
+ "slanted_constant_tile_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "9b1bf95aa7058117345c0a6da46f9468f59d29d2ce647d20adc775f831cebd13",
+  "T": "b1217d80fa65828c3e58e012993992f68e67b60ef7e32d9793c56a98b847f1f5",
+  "jones_reflection": "cd0d829e7ed2059b8ada92a4e52d82c0cba6e9f90592da7fc998c8ffeed84f1b",
+  "R_sum": 0.0813728380651966,
+  "T_sum": 1.9186271619348036,
+  "jones_transmission": "878a0c7e0766b209be87b6bc1246196666fce731355c855457804d1f9ef334eb",
+  "per_order_transmission": "4424abccdf7d7f0bbeb8e3fd2707ec77016fceda2630028784d0067f9f9fb7fa",
+  "per_order_reflection": "d1372dc0ba0070648f139188f0f6eb85b10f4f2a23db1d732aaec38ff165eaa4"
+ },
+ "vertical_pattern_over_slanted_uniform_conical": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "22cee465e553bfe1999e7c988272f8a5231f98563e70f557c0eeee4c8985fc99",
+  "T": "ce0acc5b6f93097c48ac94a613495d3c3f5e3099afbe1c1e7ab63b26f37ae394",
+  "jones_reflection": "fe45545c6f4a948e8907c6900a6fbe8ecd34a79d9bd4cfb823ccfedb48484f01",
+  "R_sum": 0.2629367951138546,
+  "T_sum": 1.808771914736059,
+  "jones_transmission": "cb3b6cc5646440451fda4442ccf3b6b2eebfdf43b755565b0079f213ef96dad1",
+  "per_order_transmission": "325841644260c98d3adbf07cd739edf607a51876b2357f9a8e7581b5ea1963ba",
+  "per_order_reflection": "f6fde82fcd428faaa2061b985328b442f7c2d9b33897833b190d22b85ee2b5f2"
+ },
+ "slanted_patterned_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "e2f4cbad7f6fbc440b77633a2a4d965df0d75493a985d1e5533e5efdfa593d81",
+  "T": "97c949d55630aabf90aa8fd059a5904b94330eefaca9382f6437b67464415680",
+  "jones_reflection": "a0ac7c388b73ca18bb07cb912724886b5e967b579fa7d05b054baedade4664c2",
+  "R_sum": 8.962018317530831e+30,
+  "T_sum": 1.4152204988927264,
+  "jones_transmission": "3f9d8fae37ed1fcbc88d92e4109d22366a317fdc06435b926d9d3591ba70e5e7",
+  "per_order_transmission": "76a393bb17dc86ccaa3753fd7ff8165fd252cd0aee0c24a2203338d575ef599f",
+  "per_order_reflection": "e3d5a94f3099a8e4d5fce4e2fc9cb69f27b1a27ab71c0e7c90b4570ffec42007"
+ },
+ "slanted_patterned_conical": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "f89eb5443bfcf0562e284a2e9b7e8ec7690da414bd43aeed760ebad32cd6ac48",
+  "T": "00e021082e25b175601799f273257e5099901e185b653f8e6dd56684fecab1d3",
+  "jones_reflection": "09a1f7db4a6f687d82f9d9062213d6c785f05624f829a9f6012fd530b85bc69b",
+  "R_sum": 0.14312932796035185,
+  "T_sum": 1.9441688069118337,
+  "jones_transmission": "05ac8fa79b3713610c92fb229cfa9dfabe2b6a9d9004a1f7f3194e309b55caab",
+  "per_order_transmission": "219b60fb1ffe0ecbe6a0a3e94f902c5940f93a52d526d09d4f65319492798910",
+  "per_order_reflection": "909ff20066834a471de79af9be6aae003ce81e9236038358c6e9241a54b10f93"
+ },
+ "slanted_patterned_normal": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "9990329d1f129ac9ea97bec348e252d68a97c5f8271eec0173a0145c3f267358",
+  "T": "95a6225dbf1c47159799ded6eb4dc4cf9f80407f6a30fcc15984ac782d0267b4",
+  "jones_reflection": "3a3c8dd18a97d518e6241e6677157794b538c7c651e3ccfd8bd94f6f80f44ab4",
+  "R_sum": 0.0905410644745571,
+  "T_sum": 1.981145186466794,
+  "jones_transmission": "ead24a92912d5a709e92b94c5c758fe07daa8b010e402f4502d16f635de4d117",
+  "per_order_transmission": "a2543b439413c6c16e7b86c9d6e8a40aee0f623b8c8eb710dcca88516ebf495e",
+  "per_order_reflection": "c23ab7bb544b0306243c2f68aaf35e8efe0fce828a0b8fefdbd87e8e1f576555"
+ },
+ "slanted_tensor_inplane_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "4097dc8bbeed4d054ad417b71875b30746fdf55f0fd84f2710b664b074f412dd",
+  "T": "56fad0524c052cdd2e0ad299fe238361ae01787176c4fd1a31c797f52421cdea",
+  "jones_reflection": "80289505da7ef37242f7ce3d20252ff2b765834d2a56bd3527fd63d819b55139",
+  "R_sum": 4.986485072834578e+25,
+  "T_sum": 1.8087723860645892,
+  "jones_transmission": "df4fcc6406b868ec36b5b6c3d0e7beaebbb6c5b1485ceafd96baaaeac68f45c1",
+  "per_order_transmission": "fceeb11254b2952c34ca403047861cf37b908821233657bf6145e19d9f16b5ad",
+  "per_order_reflection": "bfe8bc9cb11f2336afcb239759ad37b87bab545a9b92582fdbb7562208826c89"
+ },
+ "sweep_three_wavelengths_oblique": {
+  "orders": "70e79099e0312160e11f24a2ca05ead29a32d3db8acc1eb00a54c6a68e3f54ac",
+  "R": "36695a39855cfd3bbb923af912a910bf737fe0ab7a37c803ca984927d362e3c9",
+  "T": "7f6421c2e70f2ca5b8c8b130077a83f25235191e2353bb2bd683d583aa8d015d",
+  "jones_reflection": "f8852960363cf32e3cd7e2135287f24a5e6e555c35d9fd8f34bf977529b65942",
+  "R_sum": 0.26250135602687064,
+  "T_sum": 5.972457432563399
+ },
+ "_env": {
+  "lumenairy": "D:\\Metacept\\Neurophos\\Python_Test_Scripts\\Free_Space_Optics\\Lumenairy\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "arm": "base",
+  "stage": "pre",
+  "tag": "win",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ }
+}

@@ -89,6 +89,18 @@ need nothing.  Out of scope, all raising: MIXED slants between PATTERNED
 layers, a mix of vertical and slanted layers ABOVE a pattern, ``mu`` with a
 slant, and ``retain_internal`` on a slanted stack.  See
 :mod:`lumenairy.elements.pmm.twod_staggered`, "SLANT".
+Two ACCURACY notes on that scope, measured 2026-09-10
+(``docs/audits/VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10.md`` D3/D4): the
+uniform-null residual is spectral but not free -- the ``< 1e-04`` bar at
+``n_modes = 5`` is a statement about slants ``<= 35 deg`` (a 60-degree slant
+reads ``1.471e-04`` at that rung and falls to ``7.0e-11`` by ``n_modes = 8``),
+so steep tilt costs ``M``; and a slanted UNIFORM layer is MATERIALISED as a
+constant cell on the union grid and takes its OWN ``4 q^2`` solve, while a
+vertical one rides the shared eps-free geometric eig -- two different
+discretizations of the same homogeneous medium, so slanting a uniform spacer
+costs about TWO DECADES of accuracy at fixed ``M`` (``3.4e-04`` against the
+single-layer null's ``4.1e-06`` at ``M = 5``) and converges only algebraically.
+Leave a spacer vertical unless the shear is physical.
 
 A shear is NOT a TAPER -- a taper shrinks the cross-section and no shear
 absorbs a dilation, so a tapered feature still needs a z-staircase.  That

@@ -1,0 +1,209 @@
+{
+ "oblique25": {
+  "A_slanted_over_uniform_film": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 1.061377214891819,
+    "times_P": 0.006185429745839857,
+    "times_conj_P": 1.1853687708024327,
+    "dJonesT_raw": 1.061377214891819,
+    "dJonesT_times_P": 0.004203332052798572
+   },
+   "dR": 0.0010037749831653085,
+   "dJones_reflection": 0.003366282934725135,
+   "staircase_own_step_dR": 0.0019174803715580196,
+   "staircase_own_step_dJones_reflection": 0.009212677209402808
+  },
+  "B_uniform_film_above": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 1.0026387136028443,
+    "times_P": 0.0061988509297898845,
+    "times_conj_P": 1.1210878882465944,
+    "dJonesT_raw": 1.0026387136028443,
+    "dJonesT_times_P": 0.0022401876004333214
+   }
+  },
+  "C_sum_rule": {
+   "split_identity_dJonesT": 0.0,
+   "two_halves_vs_staircase": {
+    "raw": 1.1111538071055496,
+    "times_P": 0.005872472908844437,
+    "times_conj_P": 1.240761664973706,
+    "dJonesT_raw": 1.1111538071055496,
+    "dJonesT_times_P": 0.0044882295339004
+   },
+   "only_one_half_in_the_sum": {
+    "raw": 1.1111538071055496,
+    "times_P": 0.6313248572417008,
+    "times_conj_P": 1.3314513216630155,
+    "dJonesT_raw": 1.1111538071055496,
+    "dJonesT_times_P": 0.6313248572417008
+   },
+   "single_layer_vs_staircase": {
+    "raw": 1.1111538071055496,
+    "times_P": 0.005872472908844437,
+    "times_conj_P": 1.240761664973706,
+    "dJonesT_raw": 1.1111538071055496,
+    "dJonesT_times_P": 0.0044882295339004
+   }
+  },
+  "E_slanted_uniform_below_contributes_nothing": {
+   "dJonesT_vs_vertical_film": 0.0,
+   "if_it_were_in_the_sum": 0.42917455665102977
+  },
+  "F_constant_tile_below_contributes_nothing": {
+   "dJonesT_vs_uniform_film": 0.0,
+   "if_it_were_in_the_sum": 0.42917455665102977
+  },
+  "D_patterned_layer_below": {
+   "anchor_walk_m": 2.5e-07,
+   "roll_px": 3,
+   "cell_px": 12,
+   "as_written": {
+    "transmission": {
+     "raw": 0.5617799662490409,
+     "times_P": 0.37522771024685525,
+     "times_conj_P": 0.9194647693646891,
+     "dJonesT_raw": 0.5617799662490409,
+     "dJonesT_times_P": 0.1883465010356604
+    },
+    "dR": 0.010823409983402095,
+    "dJones_reflection": 0.05054002650141064
+   },
+   "walk_plus": {
+    "transmission": {
+     "raw": 0.5458869759498833,
+     "times_P": 0.012901815011645664,
+     "times_conj_P": 0.9574536600911241,
+     "dJonesT_raw": 0.5458869759498833,
+     "dJonesT_times_P": 0.007843797361770497
+    },
+    "dR": 0.0010367546636131427,
+    "dJones_reflection": 0.009283587288278203
+   },
+   "walk_minus": {
+    "transmission": {
+     "raw": 0.5659622432725657,
+     "times_P": 0.16368867815939853,
+     "times_conj_P": 0.9378567994414568,
+     "dJonesT_raw": 0.5659622432725657,
+     "dJonesT_times_P": 0.10556077788404698
+    },
+    "dR": 0.008368725023292008,
+    "dJones_reflection": 0.027714497234794015
+   }
+  }
+ },
+ "conical25_40": {
+  "A_slanted_over_uniform_film": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 0.8547524787100952,
+    "times_P": 0.029040449368379052,
+    "times_conj_P": 1.2488359506125977,
+    "dJonesT_raw": 0.8547524787100952,
+    "dJonesT_times_P": 0.004550594166180859
+   },
+   "dR": 0.0013959903037798968,
+   "dJones_reflection": 0.0034057935528295233,
+   "staircase_own_step_dR": 0.003517374364910772,
+   "staircase_own_step_dJones_reflection": 0.011720648069415671
+  },
+  "B_uniform_film_above": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 0.822445871841892,
+    "times_P": 0.005908724543824001,
+    "times_conj_P": 1.2021160949406409,
+    "dJonesT_raw": 0.822445871841892,
+    "dJonesT_times_P": 0.003873087434623282
+   }
+  },
+  "C_sum_rule": {
+   "split_identity_dJonesT": 0.0,
+   "two_halves_vs_staircase": {
+    "raw": 0.8918866109103579,
+    "times_P": 0.006122862881148964,
+    "times_conj_P": 1.3030937346358566,
+    "dJonesT_raw": 0.8918866109103579,
+    "dJonesT_times_P": 0.004743017769759034
+   },
+   "only_one_half_in_the_sum": {
+    "raw": 0.8918866109103579,
+    "times_P": 0.48156250031305003,
+    "times_conj_P": 1.178954422402425,
+    "dJonesT_raw": 0.8918866109103579,
+    "dJonesT_times_P": 0.48156250031305003
+   },
+   "single_layer_vs_staircase": {
+    "raw": 0.8918866109103579,
+    "times_P": 0.006122862881148964,
+    "times_conj_P": 1.3030937346358566,
+    "dJonesT_raw": 0.8918866109103579,
+    "dJonesT_times_P": 0.004743017769759034
+   }
+  },
+  "E_slanted_uniform_below_contributes_nothing": {
+   "dJonesT_vs_vertical_film": 0.0,
+   "if_it_were_in_the_sum": 0.3241711786877348
+  },
+  "F_constant_tile_below_contributes_nothing": {
+   "dJonesT_vs_uniform_film": 0.0,
+   "if_it_were_in_the_sum": 0.3241711786877348
+  },
+  "D_patterned_layer_below": {
+   "anchor_walk_m": 2.5e-07,
+   "roll_px": 3,
+   "cell_px": 12,
+   "as_written": {
+    "transmission": {
+     "raw": 0.4936481239427029,
+     "times_P": 0.349272491243054,
+     "times_conj_P": 0.7033575439569165,
+     "dJonesT_raw": 0.4262638165482374,
+     "dJonesT_times_P": 0.11611437397994749
+    },
+    "dR": 0.01116461094162833,
+    "dJones_reflection": 0.05844167653820245
+   },
+   "walk_plus": {
+    "transmission": {
+     "raw": 0.6954163095081217,
+     "times_P": 0.015212302665264441,
+     "times_conj_P": 0.7236463108560365,
+     "dJonesT_raw": 0.39205465950577584,
+     "dJonesT_times_P": 0.007858502667353927
+    },
+    "dR": 0.001444349096432847,
+    "dJones_reflection": 0.00852874413468412
+   },
+   "walk_minus": {
+    "transmission": {
+     "raw": 0.582772951530593,
+     "times_P": 0.14430679189428908,
+     "times_conj_P": 0.7203826534487957,
+     "dJonesT_raw": 0.3981443144627915,
+     "dJonesT_times_P": 0.04881680202709876
+    },
+    "dR": 0.006407190033285597,
+    "dJones_reflection": 0.03794993587075946
+   }
+  }
+ },
+ "_env": {
+  "lumenairy": "/mnt/d/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "arm": "base",
+  "stage": "pre",
+  "tag": "wsl",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ }
+}

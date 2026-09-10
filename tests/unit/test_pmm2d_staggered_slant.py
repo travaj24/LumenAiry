@@ -225,6 +225,18 @@ def test_b2_uniform_layer_at_any_slant_is_a_noop(tname):
     non-(0,0) order LEAK is 1.766e-07.  1e-04 sits 24x above the worst reading
     and is the M = 5 rung of a ladder that reaches 2.0e-12 by M = 8
     (test_b2_null_residual_is_discretization_and_spectral).
+
+    SCOPE (D3 of VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10 S4.1, recorded
+    2026-09-11).  ``_NULL_SLANTS`` here reaches 35 degrees, and the ``1e-04``
+    bar is a statement about that range: the verification extended the same
+    measurement to a **60-degree** slant and read **1.471e-04** on the
+    TRANSMISSION Jones (out-of-plane uniaxial, oblique 25), which would cross
+    it.  Nothing is wrong there -- its M-ladder falls 6.88e-03 -> 1.47e-04 ->
+    1.59e-06 -> 1.21e-08 -> 7.01e-11 over M 4..8, the same spectral sequence
+    this bar's own ladder shows -- but "exact at any slant magnitude" costs
+    ``M`` at steep tilt, and no row in this file exercises 60 degrees end to
+    end.  Raising the bar would hide the M-dependence; the honest statement is
+    that this fixture is a ``<= 35 deg`` fixture.
     """
     tv = _NULL_TENSORS[tname]
     worst = 0.0
@@ -299,10 +311,24 @@ def test_b3_frame_anchor_phase_two_sided(tname, tv, theta, phi, mount):
 
         shipped (-i)  9.86e-08 .. 2.64e-05
         no factor     1.43e-01 .. 7.42e-01
-        conjugate(+i) 2.86e-01 .. 1.33e+00   -- about TWICE the "none" arm
+        conjugate(+i) 2.86e-01 .. 1.33e+00
 
-    Bars: shipped < 1e-03 (38x above the worst shipped reading, and 143x below
-    the SMALLEST wrong reading), none > 1e-02, and the conjugate arm strictly
+    RESTATED 2026-09-11 (VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10 S8.2 item 4;
+    re-measured by ``validation/probe_fix_hybrid_slant_anchor/
+    p5_restated_bars.py`` on both builds).  The docstring used to say the
+    conjugate arm is "about TWICE" the "none" arm, which reads as the bar's
+    origin while the bar is 1.5.  The RATIO over all 12 rows of this
+    parametrization is
+
+        conj / none = 1.7878 .. 1.9920     (WIN == WSL to every printed digit)
+
+    so the SMALLEST row is 1.79, not 2, and the 1.5 bar sits 19% below it --
+    which is twelve decades above the measured cross-build spread of that ratio
+    (7e-14, S8.1), so the bar is safe; what was wrong was the stated origin.
+    The other two readings over the same 12 rows: shipped worst 2.637e-05
+    (bar 1e-03, 38x) and "none" smallest 1.434e-01 (bar 1e-02, 14x).
+
+    Bars: shipped < 1e-03, none > 1e-02, and the conjugate arm at least 1.5x
     worse than doing nothing -- the correction is not a fudge that could absorb
     an arbitrary residual.
     """
@@ -1154,9 +1180,25 @@ def test_m4_slanted_pillar_vs_independent_hybrid_metric(theta, phi, mount):
     (conical) from the slanted answer -- so the slant is a 4e-01 effect and the
     two engines agree to 1.2e-02.
 
-    Bars are all DECISIONS: the correct sign improves monotonically and ends
-    below 5e-02; the wrong sign ends above 1e-01 and does NOT improve by more
-    than 20% over the ladder.
+    Bars are all DECISIONS: the correct sign IMPROVES ACROSS THE LADDER and
+    ends below 5e-02; the wrong sign ends above 1e-01 and does NOT improve by
+    more than 20% over the ladder.
+
+    RESTATED 2026-09-11 (VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10 S8.2 item 3).
+    The ``+t`` arm used to be asserted RUNG BY RUNG (``a > b > c``) on a
+    CROSS-ENGINE ladder whose rungs are 0.7e-02 apart while the hybrid's own
+    ``n_orders`` step at these sizes is 1.26e-02 .. 1.73e-02 -- the strictness
+    was finer than the noise it rides on, and two builds agreeing does not
+    cover a third BLAS.  It is now FIRST-TO-LAST improvement plus the endpoint
+    floor, which is the claim the physics actually makes.  Re-measured on both
+    builds (``p5_restated_bars.py``, WIN == WSL to every printed digit):
+
+        mount     +t first/last   per-rung steps
+        normal    2.1777          1.396, 1.560
+        conical   2.1957          1.492, 1.472
+
+    Bar 1.5x on first/last (margin 1.45x), against a measured cross-build
+    spread of 1e-12 on those readings (S8.1) -- eleven decades of envelope.
     """
     ref = _pure_pillar([_pillar3()], [(_PT, 0.0)], [_PDEP], 4, theta, phi)
     vert = _pure_pillar([_pillar3()], [None], [_PDEP], 4, theta, phi)
@@ -1177,8 +1219,9 @@ def test_m4_slanted_pillar_vs_independent_hybrid_metric(theta, phi, mount):
                 oh, Rh, Th, Jh = hs.solve()
             got[lab].append(float(np.max(np.abs(_pvec(oh, Rh, Th) - ref))))
     plus, minus = got["+t"], got["-t"]
-    assert plus[0] > plus[1] > plus[2], (
-        f"the correct sign does not walk toward the pure answer: {plus}")
+    assert plus[0] / plus[-1] > 1.5, (
+        f"the correct sign does not walk toward the pure answer across the "
+        f"ladder: {plus} (first/last {plus[0] / plus[-1]:.3f})")
     assert plus[-1] < 5e-02, f"correct sign ends at {plus[-1]:.2e}"
     assert minus[-1] > 1e-01, f"wrong sign ends at {minus[-1]:.2e}"
     assert minus[-1] > 0.8 * minus[0], (
@@ -1213,8 +1256,25 @@ def test_m4_pure_staircase_converges_toward_the_metric_layer(theta, phi,
         normal    3.698e-01  1.324e-01           3.698e-01  3.236e-01
         conical   4.869e-01  2.205e-01           4.869e-01  4.800e-01
 
-    Bars are DECISIONS: the correct direction more than halves the gap while
-    the wrong one improves by less than 20%.
+    Bars are DECISIONS: the correct direction more than halves the gap, and
+    the wrong one improves DECIDEDLY LESS than the correct one does.
+
+    RESTATED 2026-09-11 (VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10 S8.2 item 2).
+    The AGAINST arm used to be barred at ``against[1] > 0.8 * against[0]`` --
+    0.87511 / 0.98581 against 0.8, a 9% margin on a STAIRCASE's geometric error
+    ratio, exactly the quantity an intentional basis or grid change moves by
+    tens of percent.  It is now stated as the comparison the claim is really
+    about, which needs no constant of its own: the AGAINST direction's
+    improvement ratio must EXCEED the WITH direction's (i.e. it improves less).
+    Re-measured on both builds (``p5_restated_bars.py``, WIN == WSL to every
+    printed digit):
+
+        mount     with ratio   against ratio   separation
+        normal    0.35814      0.87511         2.443
+        conical   0.45288      0.98581         2.177
+
+    Bars: the ordering itself (no constant), plus a 1.5x separation (margin
+    1.63x / 1.45x) against a measured cross-build spread of 6e-14 (S8.1).
     """
     base = _pure_pillar([_pillar3()], [(_PT, 0.0)], [_PDEP], 3, theta, phi)
     got = {}
@@ -1230,9 +1290,16 @@ def test_m4_pure_staircase_converges_toward_the_metric_layer(theta, phi,
     assert got["with"][1] < 0.5 * got["with"][0], (
         f"the staircase marching WITH the slant does not converge toward the "
         f"metric layer: {got['with']}")
-    assert got["against"][1] > 0.8 * got["against"][0], (
-        f"the staircase marching AGAINST the slant improved ({got['against']})"
-        f" -- then the direction is not being pinned")
+    with_ratio = got["with"][1] / got["with"][0]
+    against_ratio = got["against"][1] / got["against"][0]
+    assert against_ratio > with_ratio, (
+        f"the staircase marching AGAINST the slant improved at least as much "
+        f"as the one marching WITH it ({against_ratio:.5f} vs "
+        f"{with_ratio:.5f}) -- then the direction is not being pinned")
+    assert against_ratio > 1.5 * with_ratio, (
+        f"the two marching directions are not separated: against "
+        f"{against_ratio:.5f} vs with {with_ratio:.5f} "
+        f"({against_ratio / with_ratio:.3f}x)")
 
 
 # =========================================================================== #
@@ -1244,15 +1311,32 @@ def test_cost_slant_is_free_against_the_out_of_plane_solve_it_must_use():
     baseline the congruence and the six extra Kronecker blocks must be free.
 
     MEASURED (per-region assembly + eig, (2,2) grid, conical Bloch shift,
-    median of three): slant / vertical-out-of-plane = 0.96x .. 1.07x across
-    M = 4..7 on WIN, and the campaign's own reading is 0.86x .. 1.07x.  The
-    ``1.8x .. 2.3x`` against the ``2 q^2`` in-plane pencil is the price of
+    median of three), slant / vertical-out-of-plane across M = 4..7:
+
+        arm                            M4      M5      M6      M7
+        WIN, box otherwise IDLE        0.969   0.932   0.937   1.094
+        WSL, box otherwise IDLE        0.986   0.869   0.915   0.939
+        WIN, a second suite running    1.006   0.905   0.929   0.922
+        WIN / WSL under heavy load       --      --     1.167 / 1.105  (S8.1)
+
+    i.e. the LOAD-MEASURED ENVELOPE is 0.87x .. 1.17x, not the ``0.96x ..
+    1.07x`` this docstring used to cite.
+
+    RESTATED 2026-09-11 (VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10 D2 / S8.2
+    item 1; re-measured by ``validation/probe_fix_hybrid_slant_anchor/
+    p5_restated_bars.py`` on both builds, idle and under a co-running suite).
+    The cited range was an UNLOADED snapshot of the one quantity in this file a
+    runner is entitled to move, and the verification already found it 9-16%
+    outside on a loaded box.  The ASSERTION never depended on it -- it takes
+    the MIN over two rungs against a 2.0x bar, which the loaded envelope clears
+    by 1.7x -- so only the stated envelope changes.
+
+    The ``1.8x .. 2.3x`` against the ``2 q^2`` in-plane pencil is the price of
     needing the first-order generator at all -- the SHIPPED Stage-B number, not
     something the slant adds.
 
-    Bar 2.0x, which is ~2x above the worst measured ratio.  A wall clock is the
-    one quantity a runner is entitled to move, so this asserts only that the
-    slant does not COST A FACTOR against the path it already has to take; it is
+    Bar 2.0x on the MIN of two rungs.  This asserts only that the slant does
+    not COST A FACTOR against the path it already has to take; it is
     deliberately not a performance pin.
     """
     k0 = 2.0 * np.pi

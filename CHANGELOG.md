@@ -196,6 +196,106 @@ surface points, at one region eig per layer instead of the stack's.
 
 Experiment: `docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md`.
 Build: `docs/audits/BUILD_PMM2D_STAGGERED_MORTAR_2026_09_11.md`.
+### Fixed -- `PMM2DStackHybrid`'s TRANSMITTED amplitudes on a SLANTED PATTERNED layer were FRAME-referenced (silent-wrong)
+
+`PMM2DStackHybrid.jones_transmission()` and
+`per_order_amplitudes('transmission')` omitted the per-order **frame-anchor
+phase** that maps a sheared layer's exit plane back to the lab.  A slanted
+PATTERNED layer is solved in the frame `u = x - t z` anchored at the layer's own
+TOP face, so the cascade's state is the FRAME Fourier coefficient; at the
+layer's bottom that plane sits at `u = x - t d`, and the transmitted amplitude
+of order `m` needs
+
+```
+    A_lab(m) = exp(+i k0 (alpha_m . slant) d) A_frame(m)
+```
+
+accumulated over the sheared layers -- exactly what `PMM2DStackPure.solve`
+applies.  `alpha_m` is real for every order, propagating or evanescent, so the
+factor is UNIMODULAR: **`R`, `T` and the REFLECTION Jones were always exact**,
+no energy or efficiency check could see the omission, and no existing test
+covered it.  It was introduced with the 2026-08-16 hybrid slant metric and
+found by the 2026-09-10 verification of the *pure* engine's slant
+(`docs/audits/VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10.md` defect D1).
+
+**Size of the error.** Measured PER ORDER against the hybrid's OWN fine
+z-staircase of the same solid, at a HALF-period walk (where the factor is not a
+global phase), identical on both builds to every printed digit:
+
+| arm | oblique 25 | conical 25-40 | normal |
+|---|---|---|---|
+| as returned before this fix | 5.914e-01 | 5.610e-01 | 8.156e-01 |
+| **as returned now** | **3.122e-02** | **1.636e-02** | **2.380e-02** |
+| the best possible SINGLE GLOBAL phase | 4.631e-01 | 4.447e-01 | 6.404e-01 |
+
+so the correction is genuinely per-order and there is nothing else it could
+be.  The zeroth-order transmission Jones alone moved by `4.909e-01` (oblique) /
+`1.368e-01` (conical); at NORMAL incidence the zeroth order is unaffected
+(`P_0 = 1` there) while the other orders are not, which is one more reason the
+defect survived.
+
+**What did NOT change.** `R`, `T`, the reflection Jones, `per_order_amplitudes
+('reflection')` and every vertical answer are BIT-IDENTICAL: 137 of 144 sha256
+hashes over 21 fixtures match the pre-fix library exactly, and the 7 that move
+are `jones_transmission` / `per_order_amplitudes('transmission')` on the four
+slanted PATTERNED rows.
+
+**Which layers count.** The walk sums only the layers that ACTUALLY enter a
+sheared frame.  A UNIFORM layer never stores a slant (`add_layer` drops it), and
+a PATTERNED layer whose cell is CONSTANT-VALUED is short-circuited to the
+homogeneous modal build BEFORE the slant is read -- both are solved as the plain
+vertical film, both stay byte-identical, and anchoring either would have cost
+`1.371e+00` on an answer that is exact at `0.000e+00`.
+
+**Scope, now documented on `add_layer`.** The far-field factor is exact while
+every region BELOW a sheared one is homogeneous (a lateral offset is a gauge
+there) or continues the same shear.  Put a PATTERNED layer below a slanted one
+and the cascade solves the shear-CONTINUED solid -- that layer riding along with
+the walk -- which `PMM2DStackPure` refuses outright and the hybrid accepts;
+measured and pinned by test.
+
+Gate: `tests/unit/test_fix_hybrid_slant_transmission_anchor.py` (27 tests,
+two-sided throughout, with the fail-before executed on this build's own bytes
+through the shipped decision point).  Evidence:
+`docs/audits/FIX_HYBRID_SLANT_TRANSMISSION_ANCHOR_2026_09_11.md`, probes in
+`validation/probe_fix_hybrid_slant_anchor/`.
+
+### Fixed -- a SLANTED patterned layer reached the JAX dispatch and silently got the VERTICAL answer
+
+Found while censusing the blast radius of the defect above.
+`PMM2DStackHybrid.add_layer` already refused `slant=` on a TRACED `eps_cell`,
+because "the slanted layer runs the 4N generator and the generalized cascade,
+which the 2-D JAX surface does not implement" -- but **six other traced inputs
+reach the same dispatch** (a layer thickness, the wavelength, `theta`/`phi`, a
+half-space index, a traced uniform `eps`), and `pmm/_jax_stack2d.py` has no
+notion of a slant at all.
+
+Measured before the guard (jax 0.11.0, x64), a slanted patterned layer with a
+TRACED THICKNESS: `solve()` RETURNED, energy-conserving and unwarned,
+**bit-identical to the vertical stack** (`dR = dJones = 0.000e+00`) and wrong
+against the correct NumPy slanted answer by `dR 1.839e-02` / `dJones 3.227e-02`.
+It now raises `NotImplementedError`.
+
+The guard uses the same "does this layer enter a sheared frame" decision as the
+anchor, so a CONSTANT-tile slanted layer (a genuine no-op) still solves, and the
+VERTICAL control on the same traced thickness still solves -- the refusal is
+about the shear, not about the API.
+
+### Documentation
+
+* `PMM2DStackPure`'s module docstring now records the two measured SCOPE costs
+  of its slant that nothing documented (verification D3/D4): the uniform-null
+  bar is a `<= 35 deg` statement (60 degrees reads `1.471e-04` at `n_modes = 5`
+  and `7.0e-11` by 8), and a slanted UNIFORM layer is materialised on the union
+  grid and takes its own `4 q^2` solve, costing about two decades of accuracy at
+  fixed `M` against leaving the spacer vertical.
+* `tests/unit/test_pmm2d_staggered_slant.py`: the four thin bars the
+  verification flagged are restated, each with its own two-build re-measurement
+  (the COST range is now a load-measured envelope `0.87x .. 1.17x`; the
+  staircase-direction bar is an ordering plus a separation rather than a 9%
+  margin; the cross-engine ladder is first-to-last rather than rung-by-rung; the
+  `conj / none` range `1.7878 .. 1.9920` is stated so the 1.5 bar's origin is
+  visible).  No assertion loosened; three tightened into decisions.
 
 ## [5.44.0] — 2026-09-10
 

@@ -89,6 +89,55 @@ _CASCADES = ("monolithic", "fast", "fused", "tree")
 _TREE_BUDGET_FRACTION = 0.25
 
 
+def _layer_enters_slant_frame(L):
+    """Does layer ``L`` actually get SOLVED IN A SHEARED FRAME?
+
+    This is NOT "does the layer carry a slant keyword".  Two shapes carry one
+    and are nonetheless solved as plain VERTICAL homogeneous films, so they
+    never enter a frame and must contribute NOTHING to the frame anchor below:
+
+    * a UNIFORM layer -- ``add_layer``'s ``eps=`` branch does not even STORE
+      the slant, because a shear of a homogeneous medium is a pure coordinate
+      change (:meth:`PMM2DStackHybrid._mode_key`, SLANT 2026-08-16);
+    * a PATTERNED layer whose tile is CONSTANT-VALUED -- both
+      :meth:`_mode_key` and :meth:`_build_layer_modes` short-circuit it to
+      ``_homogeneous_modes`` on the single value BEFORE the slant is read, so
+      it is byte-identical to the vertical film of the same ``eps``.
+
+    The test below MIRRORS ``_build_layer_modes``'s own uniform-tile test
+    exactly (``max|tile - tile.flat[0]| < 1e-12``, on the same array), because
+    the two must never disagree: anchoring a layer the modal build solved
+    vertically would corrupt an answer that is currently exact (measured:
+    applying the anchor to a slanted uniform film costs ``1.525e+00`` on its
+    transmission Jones, against ``0.000e+00`` as shipped)."""
+    if _slant_is_zero(L.get("slant")):
+        return False
+    tile = L.get("tile")
+    if tile is None:                       # traced cells (slant already
+        return True                        # refused at add_layer) -- be loud,
+    if L.get("kind") == "scalar":          # not silently anchor-free
+        eps0 = tile.flat[0]
+        if bool(np.all(np.abs(tile - eps0) < 1e-12)):
+            return False
+    return True
+
+
+def _slant_frame_walk(layers):
+    """The accumulated lateral frame offset ``(sum_j t_x,j d_j, sum_j t_y,j
+    d_j)`` in metres, over the layers that actually enter a sheared frame.
+
+    Each such region is solved in a frame ``u = x - t z`` anchored at ITS OWN
+    TOP face and the frames simply continue downward, so the offsets ADD --
+    exactly the sum ``PMM2DStackPure.solve`` takes over ITS layers.  Returns
+    ``(0.0, 0.0)`` for a stack with no sheared region, which is the signal to
+    skip the anchor entirely and stay bit-identical to the pre-fix path."""
+    sx = sum(L["slant"][0] * L["t"] for L in layers
+             if _layer_enters_slant_frame(L))
+    sy = sum(L["slant"][1] * L["t"] for L in layers
+             if _layer_enters_slant_frame(L))
+    return float(sx), float(sy)
+
+
 def _tree_peak_extra_bytes(n_leaves, block_n):
     """PEAK extra live bytes the balanced-tree reduction holds over the
     sequential fold, for ``n_leaves`` layer blocks of ``block_n`` square
@@ -379,6 +428,26 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         z-invariant and ``det J = 1``, so one eigensolve does the whole layer
         (derivation: ``docs/audits/BUILD_PMM2D_SLANT_METRIC_2026_08_16.md``).
         It is the 2-D analogue of ``PMMStack.add_sheared_grating``.
+
+        FRAME ANCHOR (2026-09-11).  A slanted PATTERNED layer is solved in the
+        sheared frame, whose exit plane sits a lateral ``t * thickness`` from
+        the lab one, so :meth:`solve` maps the TRANSMITTED amplitudes back with
+        one unimodular per-order phase ``exp(+i k0 (alpha_m . t) d)``,
+        accumulated over the sheared layers.  ``R``, ``T`` and the REFLECTION
+        Jones never carry it (the frame is anchored on the superstrate side),
+        which is why omitting it was invisible to every energy check until
+        2026-09-10.  :meth:`jones_transmission` and
+        :meth:`per_order_amplitudes` are therefore LAB-referenced, matching
+        :class:`~lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure`.  A
+        slanted UNIFORM layer -- and a patterned layer whose cell is
+        CONSTANT-VALUED -- is solved as the plain vertical film (a shear of a
+        homogeneous medium is a coordinate change) and contributes nothing to
+        that sum.  SCOPE: the far-field factor is exact while every region
+        BELOW a sheared one is homogeneous or continues the SAME shear; put a
+        PATTERNED layer below a slanted one and the cascade solves the
+        shear-CONTINUED solid -- that layer riding along with the walk, i.e.
+        translated by ``t * (depth above it)`` -- which is the shape
+        ``PMM2DStackPure`` refuses outright.
 
         RESTRICTIONS, all raising: a slanted layer promotes the whole stack to
         the generalized forward/backward cascade (as an out-of-plane layer
@@ -1187,6 +1256,32 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                     "PMM2DStackHybrid: tensor layers are not differentiable (the "
                     "2-D JAX surface is scalar in-plane); use NumPy inputs "
                     "for tensor stacks.")
+            # SLANT (2026-09-11).  ``add_layer`` already refuses slant on a
+            # TRACED eps_cell, on exactly this ground -- "the slanted layer
+            # runs the 4N generator and the generalized cascade, which the 2-D
+            # JAX surface does not implement".  But the JAX dispatch is
+            # reached by SIX other traced inputs (a thickness, the wavelength,
+            # theta/phi, a half-space index, a traced uniform eps), and the
+            # jnp twin has no slant at all: it silently returned the VERTICAL
+            # answer, energy-conserving and unwarned.  MEASURED before this
+            # guard, a slanted patterned layer with a TRACED THICKNESS:
+            # bit-identical to the vertical stack (dR = dJones = 0.000e+00)
+            # and wrong against the NumPy slanted answer by dR 1.839e-02 /
+            # dJones 3.227e-02.  Same silent shape as the frame-anchor defect
+            # this file's 2026-09-11 fix closes, so it is refused here rather
+            # than left to a caller to notice.
+            if any(_layer_enters_slant_frame(L) for L in self._layers):
+                raise NotImplementedError(
+                    "PMM2DStackHybrid.solve: a SLANTED patterned layer is not "
+                    "differentiable -- the slant runs the 4N generator and the "
+                    "generalized cascade, which the 2-D JAX surface does not "
+                    "implement, and the jnp twin would silently return the "
+                    "VERTICAL answer (measured: dR = dJones = 0.0 against the "
+                    "vertical stack, 1.8e-02 / 3.2e-02 against the correct "
+                    "NumPy slanted answer).  Use NumPy inputs for slanted "
+                    "stacks (a traced THICKNESS, wavelength, theta/phi or "
+                    "half-space index is enough to route here), or z-staircase "
+                    "the slanted layer into vertical ones.")
             from ._jax_stack2d import _pmm_stack2d_solve_jax
             return _pmm_stack2d_solve_jax(self)
 
@@ -1431,6 +1526,52 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         kz_trn_f = _kz_forward2(np.conj(eps_sub), kxv, kyv)
         safe_r = np.where(np.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
         safe_t = np.where(np.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
+
+        # ---- THE FRAME-ANCHOR PHASE (fix, 2026-09-11; defect D1 of
+        # docs/audits/VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10.md S3.4).
+        # A SLANTED PATTERNED layer is solved in the sheared frame
+        # ``u = x - t z`` anchored at its own TOP face, so the state this
+        # cascade carries is the FRAME Fourier coefficient.  At the layer's
+        # BOTTOM the frame plane sits at ``u = x - t d``, so against the
+        # substrate's own lab basis ``exp(i alpha_m . x)``
+        #
+        #     A_lab(m) = exp(-i alpha_m . t d) A_frame(m)
+        #
+        # -- one UNIMODULAR diagonal phase per order on the TRANSMITTED
+        # amplitudes alone.  ``alpha_m`` is real for every order, propagating
+        # or evanescent, so R, T and the REFLECTION Jones are exact WITHOUT it
+        # (the frame is anchored on the superstrate side) and no efficiency or
+        # energy check can see it missing: that is exactly why omitting it was
+        # a silent-wrong for the whole life of the 2026-08-16 slant metric.
+        # This cascade runs in the INTERNAL conj gauge and ``amp`` below is
+        # its PUBLIC conjugate, so the factor applied to the public amplitudes
+        # is the conjugate one, ``exp(+i k0 (alpha_m . slant) d)`` -- the SAME
+        # public expression ``PMM2DStackPure.solve`` applies (that engine
+        # spells the same number ``exp(-i k0 (kx _shx + ky _shy))`` with
+        # ``_shx = -sum(slant_x d)``), so a layer moves between the engines
+        # unchanged -- measured below at 5.5e-02.  MEASURED per order
+        # against this engine's OWN fine z-staircase of the same solid, at a
+        # HALF-period walk (where the factor is NOT a global phase): shipped
+        # 3.12e-02 / 1.64e-02 (oblique 25 / conical 25-40) against 5.91e-01 /
+        # 5.61e-01 without it and 4.84e-01 / 6.96e-01 with the conjugate,
+        # while the best possible SINGLE GLOBAL phase reaches only 4.63e-01 /
+        # 4.45e-01 -- so the correction is genuinely per-order.
+        #
+        # The sum runs over the layers that REALLY enter a frame
+        # (:func:`_layer_enters_slant_frame`), not over every layer carrying a
+        # slant keyword: a uniform film and a constant-tile patterned cell are
+        # both solved as the plain VERTICAL film here, and anchoring them
+        # would break answers that are currently exact.  SCOPE: the far-field
+        # factor is exact while every region BELOW a sheared one is
+        # homogeneous (a lateral offset is a gauge there) or continues the
+        # same shear; with a PATTERNED layer below a slanted one the cascade
+        # solves the shear-CONTINUED solid (that layer riding along with the
+        # walk) -- see the fix doc S4 and ``add_layer``'s docstring.
+        tphase = None
+        _shx, _shy = _slant_frame_walk(self._layers)
+        if _shx != 0.0 or _shy != 0.0:
+            tphase = np.exp(1j * k0 * (kxv * _shx + kyv * _shy))
+
         R_rows, T_rows, j_cols = [], [], []
         amp = {k: np.zeros((2, Nf), dtype=_C)
                for k in ("rx", "ry", "tx", "ty")}
@@ -1456,9 +1597,16 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             T_rows.append(np.where(np.real(kz_trn_f) > 0, np.real(Te), 0.0))
             j_cols.append(np.stack([np.conj(rx[p0]), np.conj(ry[p0])]))
             # PUBLIC exp(-iwt) amplitudes = conj of this INTERNAL-gauge
-            # cascade (the same map the Jones takes above).
+            # cascade (the same map the Jones takes above), and the TRANSMITTED
+            # pair additionally carries the frame anchor derived above.  R, T,
+            # rz/tz and the reflection Jones are computed from the untouched
+            # cascade output, so a slanted patterned layer's efficiencies and
+            # reflection stay BIT-IDENTICAL to the pre-fix library.
             amp["rx"][ip], amp["ry"][ip] = np.conj(rx), np.conj(ry)
             amp["tx"][ip], amp["ty"][ip] = np.conj(tx), np.conj(ty)
+            if tphase is not None:
+                amp["tx"][ip] = amp["tx"][ip] * tphase
+                amp["ty"][ip] = amp["ty"][ip] * tphase
         R_eff = np.stack(R_rows)
         T_eff = np.stack(T_rows)
         jones = np.stack(j_cols, axis=1)

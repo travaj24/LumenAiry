@@ -1,0 +1,161 @@
+{
+ "fixture": {
+  "wl": 6.8e-07,
+  "px": 1.2e-06,
+  "depth": 1.2e-06,
+  "slant": [
+   0.5,
+   0.0
+  ],
+  "n_orders": 9,
+  "cell": 6,
+  "fine": 60,
+  "walk_periods": 0.5
+ },
+ "normal": {
+  "solve_outputs": {
+   "dR": 0.0017315876804626608,
+   "dT": 0.012067016885888363,
+   "dJones_reflection": 0.005849712866836026,
+   "staircase_own_step_dR": 0.017989369936264925,
+   "staircase_own_step_dJones_reflection": 0.08149415300492688
+  },
+  "per_order_transmission": {
+   "raw": 0.023802011128039213,
+   "times_Pm": 0.8155998122614007,
+   "times_conj_Pm": 0.8155998122614007,
+   "best_single_global_phase": 0.02373266541907373,
+   "amplitude_scale": 0.523486306704736
+  },
+  "jones_transmission": {
+   "raw": 0.008389626660241503,
+   "times_P0": 0.008389626660241503,
+   "times_conj_P0": 0.008389626660241503,
+   "best_single_global_phase": 0.008389626660241503,
+   "argP0": 0.0
+  },
+  "per_order_reflection": {
+   "raw": 0.020073095818806876,
+   "times_Pm": 0.16797824669005848
+  },
+  "pure_per_order_transmission": {
+   "shipped": 0.06251963775491133,
+   "divide_out_Pm": 0.8272550137292168
+  }
+ },
+ "oblique25": {
+  "solve_outputs": {
+   "dR": 0.003885917794418591,
+   "dT": 0.010245428355022998,
+   "dJones_reflection": 0.005928195734415674,
+   "staircase_own_step_dR": 0.013544606346910272,
+   "staircase_own_step_dJones_reflection": 0.0799722868212595
+  },
+  "per_order_transmission": {
+   "raw": 0.031220568379850572,
+   "times_Pm": 0.5841120722498896,
+   "times_conj_Pm": 0.5913808036209691,
+   "best_single_global_phase": 0.030276948988307236,
+   "amplitude_scale": 0.337738826067056
+  },
+  "jones_transmission": {
+   "raw": 0.014213884677072753,
+   "times_P0": 0.4877078217673307,
+   "times_conj_P0": 0.4908771288526335,
+   "best_single_global_phase": 0.013627762197523565,
+   "argP0": 2.3429901641602404
+  },
+  "per_order_reflection": {
+   "raw": 0.01864227584390589,
+   "times_Pm": 0.28846140256270997
+  },
+  "pure_per_order_transmission": {
+   "shipped": 0.0784789472519469,
+   "divide_out_Pm": 0.596249548049289
+  }
+ },
+ "conical25_40": {
+  "solve_outputs": {
+   "dR": 0.0017962571739881215,
+   "dT": 0.00992690322100101,
+   "dJones_reflection": 0.0052693837708241795,
+   "staircase_own_step_dR": 0.01338767037554773,
+   "staircase_own_step_dJones_reflection": 0.060385939998504036
+  },
+  "per_order_transmission": {
+   "raw": 0.016359959466453942,
+   "times_Pm": 0.5557425445936514,
+   "times_conj_Pm": 0.5609809651260421,
+   "best_single_global_phase": 0.014721075886742513,
+   "amplitude_scale": 0.33069829791351424
+  },
+  "jones_transmission": {
+   "raw": 0.00905309595752405,
+   "times_P0": 0.13895273819069895,
+   "times_conj_P0": 0.13684033873232737,
+   "best_single_global_phase": 0.006506908988850935,
+   "argP0": 1.7948345955373743
+  },
+  "per_order_reflection": {
+   "raw": 0.01749077252102272,
+   "times_Pm": 0.16071755626588183
+  },
+  "pure_per_order_transmission": {
+   "shipped": 0.04914880520437049,
+   "divide_out_Pm": 0.5896719536554905
+  }
+ },
+ "normal_quarter_walk": {
+  "per_order_transmission": {
+   "raw": 0.017250249570626874,
+   "times_Pm": 0.8162567552105265,
+   "times_conj_Pm": 0.8162567552105265,
+   "best_single_global_phase": 0.014339961531336773,
+   "amplitude_scale": 0.45422305032695753
+  },
+  "jones_transmission": {
+   "raw": 0.011748744847964152,
+   "times_P0": 0.011748744847964152,
+   "times_conj_P0": 0.011748744847964152,
+   "best_single_global_phase": 0.011670271993870397,
+   "argP0": 0.0
+  }
+ },
+ "null_uniform_slanted": {
+  "sha_vertical": "937f83e5fd75e6e70dfb5194fe7927cf69deab3055316684b4dbee8a4db43a1d",
+  "sha_slanted": "937f83e5fd75e6e70dfb5194fe7927cf69deab3055316684b4dbee8a4db43a1d",
+  "dJones_transmission": 0.0,
+  "if_anchor_were_applied": 1.5248428708812323,
+  "stores_slant_key": [
+   false
+  ]
+ },
+ "null_constant_tile_patterned": {
+  "raw": 0.0,
+  "times_P0": 1.5248428708812323,
+  "times_conj_P0": 1.5248428708812323,
+  "modal_key": "('uniform', b'\\x00\\x00\\x00\\x00\\x00\\x00\\x02@\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x80', 6.8e-07, 1.0"
+ },
+ "reachability": {
+  "solve(retain_internal=True)": "NotImplementedError: PMM2DStackHybrid.solve(retain_internal=True): symmetric (in-plane, ver",
+  "internal_field": "ValueError: PMM2DStackHybrid.internal_field: no internal data retained; the MOST R",
+  "layer_absorption": "ValueError: PMM2DStackHybrid.layer_absorption: no internal data retained; the MOST",
+  "solve_vs_wavelength -> jones_transmission": "ValueError: PMM2DStackHybrid.jones_transmission: no per-order amplitudes retained ",
+  "pmm_jones_2d returns": "_EnergyError: pmm_jones_2d: energy non-conservation detected (sum R+T = 4.541e+27 ex"
+ },
+ "_env": {
+  "lumenairy": "/mnt/c/tmp/lum_hyb/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "arm": "fix",
+  "stage": "post",
+  "tag": "wsl",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ }
+}

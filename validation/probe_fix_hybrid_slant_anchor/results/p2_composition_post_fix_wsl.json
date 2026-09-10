@@ -1,0 +1,209 @@
+{
+ "oblique25": {
+  "A_slanted_over_uniform_film": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 0.006185429745839857,
+    "times_P": 1.0572739243659108,
+    "times_conj_P": 1.0613772148918188,
+    "dJonesT_raw": 0.004203332052798418,
+    "dJonesT_times_P": 1.0572739243659108
+   },
+   "dR": 0.0010037749831653085,
+   "dJones_reflection": 0.003366282934725135,
+   "staircase_own_step_dR": 0.0019174803715580196,
+   "staircase_own_step_dJones_reflection": 0.009212677209402808
+  },
+  "B_uniform_film_above": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 0.006198850929789914,
+    "times_P": 1.000240313365774,
+    "times_conj_P": 1.0026387136028443,
+    "dJonesT_raw": 0.002240187600433126,
+    "dJonesT_times_P": 1.000240313365774
+   }
+  },
+  "C_sum_rule": {
+   "split_identity_dJonesT": 0.0,
+   "two_halves_vs_staircase": {
+    "raw": 0.005872472908844478,
+    "times_P": 1.1066354269855814,
+    "times_conj_P": 1.1111538071055493,
+    "dJonesT_raw": 0.004488229533900267,
+    "dJonesT_times_P": 1.1066354269855814
+   },
+   "only_one_half_in_the_sum": {
+    "raw": 0.005872472908844478,
+    "times_P": 0.6242003666956736,
+    "times_conj_P": 0.6313248572417007,
+    "dJonesT_raw": 0.004488229533900267,
+    "dJonesT_times_P": 0.6242003666956736
+   },
+   "single_layer_vs_staircase": {
+    "raw": 0.005872472908844478,
+    "times_P": 1.1066354269855814,
+    "times_conj_P": 1.1111538071055493,
+    "dJonesT_raw": 0.004488229533900267,
+    "dJonesT_times_P": 1.1066354269855814
+   }
+  },
+  "E_slanted_uniform_below_contributes_nothing": {
+   "dJonesT_vs_vertical_film": 0.0,
+   "if_it_were_in_the_sum": 0.4291745566510297
+  },
+  "F_constant_tile_below_contributes_nothing": {
+   "dJonesT_vs_uniform_film": 0.0,
+   "if_it_were_in_the_sum": 0.4291745566510297
+  },
+  "D_patterned_layer_below": {
+   "anchor_walk_m": 2.5e-07,
+   "roll_px": 3,
+   "cell_px": 12,
+   "as_written": {
+    "transmission": {
+     "raw": 0.37522771024685525,
+     "times_P": 0.5486032828125595,
+     "times_conj_P": 0.5617799662490409,
+     "dJonesT_raw": 0.18834650103566036,
+     "dJonesT_times_P": 0.4466529791664722
+    },
+    "dR": 0.010823409983402095,
+    "dJones_reflection": 0.05054002650141064
+   },
+   "walk_plus": {
+    "transmission": {
+     "raw": 0.012901815011645664,
+     "times_P": 0.5344352545444115,
+     "times_conj_P": 0.5458869759498833,
+     "dJonesT_raw": 0.007843797361770396,
+     "dJonesT_times_P": 0.5338748796969165
+    },
+    "dR": 0.0010367546636131427,
+    "dJones_reflection": 0.009283587288278203
+   },
+   "walk_minus": {
+    "transmission": {
+     "raw": 0.16368867815939853,
+     "times_P": 0.5194799788215304,
+     "times_conj_P": 0.5659622432725657,
+     "dJonesT_raw": 0.10556077788404694,
+     "dJonesT_times_P": 0.4625377552590803
+    },
+    "dR": 0.008368725023292008,
+    "dJones_reflection": 0.027714497234794015
+   }
+  }
+ },
+ "conical25_40": {
+  "A_slanted_over_uniform_film": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 0.029040449368379052,
+    "times_P": 0.8481619950600777,
+    "times_conj_P": 0.8547524787100952,
+    "dJonesT_raw": 0.004550594166180768,
+    "dJonesT_times_P": 0.8481619950600777
+   },
+   "dR": 0.0013959903037798968,
+   "dJones_reflection": 0.0034057935528295233,
+   "staircase_own_step_dR": 0.003517374364910772,
+   "staircase_own_step_dJones_reflection": 0.011720648069415671
+  },
+  "B_uniform_film_above": {
+   "anchor_walk_m": 5e-07,
+   "transmission": {
+    "raw": 0.005908724543824001,
+    "times_P": 0.8168106482138678,
+    "times_conj_P": 0.8224458718418919,
+    "dJonesT_raw": 0.003873087434623191,
+    "dJonesT_times_P": 0.8168106482138678
+   }
+  },
+  "C_sum_rule": {
+   "split_identity_dJonesT": 0.0,
+   "two_halves_vs_staircase": {
+    "raw": 0.006122862881148934,
+    "times_P": 0.8850141444105134,
+    "times_conj_P": 0.8918866109103578,
+    "dJonesT_raw": 0.00474301776975888,
+    "dJonesT_times_P": 0.8850141444105134
+   },
+   "only_one_half_in_the_sum": {
+    "raw": 0.006122862881148934,
+    "times_P": 0.47283639328931626,
+    "times_conj_P": 0.4815625003130499,
+    "dJonesT_raw": 0.00474301776975888,
+    "dJonesT_times_P": 0.47283639328931626
+   },
+   "single_layer_vs_staircase": {
+    "raw": 0.006122862881148934,
+    "times_P": 0.8850141444105134,
+    "times_conj_P": 0.8918866109103578,
+    "dJonesT_raw": 0.00474301776975888,
+    "dJonesT_times_P": 0.8850141444105134
+   }
+  },
+  "E_slanted_uniform_below_contributes_nothing": {
+   "dJonesT_vs_vertical_film": 0.0,
+   "if_it_were_in_the_sum": 0.32417117868773476
+  },
+  "F_constant_tile_below_contributes_nothing": {
+   "dJonesT_vs_uniform_film": 0.0,
+   "if_it_were_in_the_sum": 0.32417117868773476
+  },
+  "D_patterned_layer_below": {
+   "anchor_walk_m": 2.5e-07,
+   "roll_px": 3,
+   "cell_px": 12,
+   "as_written": {
+    "transmission": {
+     "raw": 0.349272491243054,
+     "times_P": 0.4729691097637723,
+     "times_conj_P": 0.4936481239427029,
+     "dJonesT_raw": 0.11611437397994741,
+     "dJonesT_times_P": 0.31997592451814794
+    },
+    "dR": 0.01116461094162833,
+    "dJones_reflection": 0.05844167653820245
+   },
+   "walk_plus": {
+    "transmission": {
+     "raw": 0.015212302665264441,
+     "times_P": 0.7060242797506254,
+     "times_conj_P": 0.6954163095081217,
+     "dJonesT_raw": 0.007858502667353908,
+     "dJonesT_times_P": 0.38043103565042924
+    },
+    "dR": 0.001444349096432847,
+    "dJones_reflection": 0.00852874413468412
+   },
+   "walk_minus": {
+    "transmission": {
+     "raw": 0.14430679189428908,
+     "times_P": 0.6423977500509528,
+     "times_conj_P": 0.582772951530593,
+     "dJonesT_raw": 0.04881680202709873,
+     "dJonesT_times_P": 0.3671370973179754
+    },
+    "dR": 0.006407190033285597,
+    "dJones_reflection": 0.03794993587075946
+   }
+  }
+ },
+ "_env": {
+  "lumenairy": "/mnt/c/tmp/lum_hyb/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "arm": "fix",
+  "stage": "post",
+  "tag": "wsl",
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ }
+}
