@@ -1,0 +1,2885 @@
+{
+ "census": {
+  "berreman_lossy": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0000000000000002,
+   "rcond_min": 1.0000000000000002,
+   "resid_max": null,
+   "secs": 0.01,
+   "sha": "75e9c565e0426dec",
+   "sizes": [
+    2
+   ],
+   "sumRT": 0.44728097808804634,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "berreman_th0": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0,
+   "rcond_min": 1.0,
+   "resid_max": null,
+   "secs": 0.0,
+   "sha": "66a7b09a2fc82b81",
+   "sizes": [
+    2
+   ],
+   "sumRT": 0.9467456407485527,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "berreman_th20": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0,
+   "rcond_min": 1.0,
+   "resid_max": null,
+   "secs": 0.0,
+   "sha": "679b8a052ffcec94",
+   "sizes": [
+    2
+   ],
+   "sumRT": 0.938149644988886,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "berreman_th45": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0,
+   "rcond_min": 1.0,
+   "resid_max": null,
+   "secs": 0.0,
+   "sha": "86a7a636eabad2f4",
+   "sizes": [
+    2
+   ],
+   "sumRT": 0.9408602021235628,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "berreman_th70": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0,
+   "rcond_min": 1.0,
+   "resid_max": null,
+   "secs": 0.0,
+   "sha": "b3fc42acdc95e172",
+   "sizes": [
+    2
+   ],
+   "sumRT": 1.0669249484287344,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "berreman_thick": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 1.0,
+   "rcond_min": 1.0,
+   "resid_max": null,
+   "secs": 0.0,
+   "sha": "7ce95887350deb9c",
+   "sizes": [
+    2
+   ],
+   "sumRT": 0.9303372234007746,
+   "warned_energy": false,
+   "warnings": [
+    "Casting complex values to real discards the imaginary part"
+   ]
+  },
+  "hyb_oop_vert_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0002393990645163803,
+   "rcond_min": 0.00013372148791336192,
+   "resid_max": null,
+   "secs": 39.39,
+   "sha": "3852fd001f92f2fa",
+   "sizes": [
+    1058
+   ],
+   "sumRT": 1.0091419406406519,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_oop_vert_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0017356173755000992,
+   "rcond_min": 0.0015170426479083246,
+   "resid_max": null,
+   "secs": 0.21,
+   "sha": "1b79e57ea94285e0",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0207380734421057,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_oop_vert_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0007902681915464936,
+   "rcond_min": 0.0007196976951795471,
+   "resid_max": null,
+   "secs": 1.41,
+   "sha": "cab0998ca635a1a3",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0268797295446632,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_oop_vert_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.000749491266062195,
+   "rcond_min": 0.0005145800961767757,
+   "resid_max": null,
+   "secs": 5.27,
+   "sha": "e80ddab1c5f33b62",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.008367547782384,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_oop_vert_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0003440330646572335,
+   "rcond_min": 0.0002718492639726099,
+   "resid_max": null,
+   "secs": 16.01,
+   "sha": "07c5d9dd9d7ae525",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0007016432181624,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_slant0.25_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0034408760204286968,
+   "rcond_min": 0.0015757618139043204,
+   "resid_max": null,
+   "secs": 0.15,
+   "sha": "a165875cd78941e5",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0292246163573542,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.25_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0011378394788407113,
+   "rcond_min": 0.0010835057289965099,
+   "resid_max": null,
+   "secs": 0.98,
+   "sha": "775a7f791e65d99b",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.034264957565017,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.25_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0018350113408760686,
+   "rcond_min": 0.0008713678323067462,
+   "resid_max": null,
+   "secs": 4.9,
+   "sha": "a4a02cfe5d096f16",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0114344177226875,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.25_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0009779191526173014,
+   "rcond_min": 0.0007173574134512093,
+   "resid_max": null,
+   "secs": 15.49,
+   "sha": "2d23710762b95944",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0022464907332698,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_slant0.35_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0037550975355232245,
+   "rcond_min": 0.0025455806700243736,
+   "resid_max": null,
+   "secs": 0.12,
+   "sha": "91aece00785c3fee",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.035482965065438,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.35_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0024733884517821425,
+   "rcond_min": 0.001192487608588929,
+   "resid_max": null,
+   "secs": 0.84,
+   "sha": "95f014f6ca3bc402",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0382444391752257,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.35_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0008600578017047473,
+   "rcond_min": 0.0006346597841183146,
+   "resid_max": null,
+   "secs": 4.09,
+   "sha": "fd66b2765c37385d",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0126703436076516,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.35_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0016603445344677828,
+   "rcond_min": 0.0007320453487775321,
+   "resid_max": null,
+   "secs": 13.15,
+   "sha": "e2653b232b72d128",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.003132063166849,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_slant0.5_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0013357627397688999,
+   "rcond_min": 0.0006823216636602383,
+   "resid_max": null,
+   "secs": 41.78,
+   "sha": "0eefdcbb1790aec0",
+   "sizes": [
+    1058
+   ],
+   "sumRT": 1.0132485509082771,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.004086381924781867,
+   "rcond_min": 0.003335367671333211,
+   "resid_max": null,
+   "secs": 0.18,
+   "sha": "541a71ee1566802d",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.046015108687099,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.05 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003073554859193171,
+   "rcond_min": 0.0016278283843314905,
+   "resid_max": null,
+   "secs": 0.9,
+   "sha": "8ebc79277b67d6c1",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0435568384154912,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.001336652596223084,
+   "rcond_min": 0.0009554444347653848,
+   "resid_max": null,
+   "secs": 4.35,
+   "sha": "5871c63425430ffd",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0141954840220846,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.01 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0017834568635294852,
+   "rcond_min": 0.0007838814559348511,
+   "resid_max": null,
+   "secs": 14.93,
+   "sha": "404bab6ed2f2d0da",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.004526648942243,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "hyb_slant0.5_deg15_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003069346151084002,
+   "rcond_min": 0.0016221810717675185,
+   "resid_max": null,
+   "secs": 1.13,
+   "sha": "aea04ba0a08c06ab",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0439369395586098,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_deg7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0030861006188719394,
+   "rcond_min": 0.0016442156221333696,
+   "resid_max": null,
+   "secs": 0.82,
+   "sha": "7a060ebe42dea95d",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0424176898896833,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_densesup_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.006491422088102826,
+   "rcond_min": 0.001516468588619571,
+   "resid_max": null,
+   "secs": 4.57,
+   "sha": "b5bcee69c7ea5832",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0225527092205229,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_grazing_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0029363656569443785,
+   "rcond_min": 0.002855807953555076,
+   "resid_max": null,
+   "secs": 4.27,
+   "sha": "d8ee3a131cfe9ca1",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0162254412801317,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_hicontrast_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.001533701612124078,
+   "rcond_min": 0.001336652596223084,
+   "resid_max": null,
+   "secs": 4.44,
+   "sha": "6e8179a52ac18b7e",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0160493396095027,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_theta15_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0009622790630133378,
+   "rcond_min": 2.0787247315881102e-05,
+   "resid_max": null,
+   "secs": 0.88,
+   "sha": "817841622715749c",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0317713311935726,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_theta22_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.006325273046924212,
+   "rcond_min": 0.004282903358499419,
+   "resid_max": null,
+   "secs": 0.99,
+   "sha": "036d8b34adf53ae0",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0433157899665677,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_theta30_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.006262810798145813,
+   "rcond_min": 0.005962209992481488,
+   "resid_max": null,
+   "secs": 0.92,
+   "sha": "a467fea175c1c10d",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0437355546942204,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slant0.5_tree_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003073554859193171,
+   "rcond_min": 0.0016278283843314905,
+   "resid_max": null,
+   "secs": 1.0,
+   "sha": "999c277690ece4cf",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0435568384154914,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slantxy_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002414913107346766,
+   "rcond_min": 0.0021322559117913573,
+   "resid_max": null,
+   "secs": 0.75,
+   "sha": "941258a3110ac26d",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0395154200873846,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "hyb_slanty0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0020513997565355063,
+   "rcond_min": 0.0018251932832084436,
+   "resid_max": null,
+   "secs": 0.87,
+   "sha": "0948cb589016737f",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.029272119940536,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "j2d_oop_vert_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0006987171164444521,
+   "rcond_min": 0.0005925388647744892,
+   "resid_max": null,
+   "secs": 1.17,
+   "sha": "4199e76df950e4f0",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.027562915634187,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +5.369e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2d_oop_vert_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00021979420328805573,
+   "rcond_min": 0.00021210967666934733,
+   "resid_max": null,
+   "secs": 18.77,
+   "sha": "b9ea34634497aee3",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0008375470244228,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +1.305e-03, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2d_slant0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003795282763740051,
+   "rcond_min": 0.001485027119805167,
+   "resid_max": null,
+   "secs": 0.12,
+   "sha": "1e290d67bab21330",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0462442767480984,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +6.224e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2d_slant0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0020992722062130693,
+   "rcond_min": 0.00086965973834754,
+   "resid_max": null,
+   "secs": 0.93,
+   "sha": "d3c1c977a207394c",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0436225403012733,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +7.225e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2d_slant0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0008692076163732236,
+   "rcond_min": 0.0005815728928355399,
+   "resid_max": null,
+   "secs": 4.73,
+   "sha": "48a29afbbe4f4e4e",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0140993778317393,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +2.198e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2d_slant0.5_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0005361238754667028,
+   "rcond_min": 4.098226187551391e-05,
+   "resid_max": null,
+   "secs": 16.44,
+   "sha": "9f9aad2e9662b7e1",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0045469219968708,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +5.489e-03, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2dscalA_sl0.5_M3": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 9.98e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0322 > 1e-08 in the same scaling, on a 98 x 98 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->region",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 9.983097054275695e-17,
+   "rcond_min": 9.983097054275695e-17,
+   "resid_max": 0.03224154753336732,
+   "secs": 0.11,
+   "sizes": [
+    98
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "j2dscalA_sl0.5_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.08e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.796 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regio",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 1.082640210111559e-17,
+   "rcond_min": 1.082640210111559e-17,
+   "resid_max": 0.7964506316297819,
+   "secs": 0.78,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "j2dscalA_sl0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002509545394830307,
+   "rcond_min": 0.0012318917966760894,
+   "resid_max": null,
+   "secs": 4.09,
+   "sha": "c019f3214efa9fa8",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0279141259487807,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +4.949e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2dscalA_sl0.5_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0025882128779034243,
+   "rcond_min": 0.001142508885998237,
+   "resid_max": null,
+   "secs": 15.57,
+   "sha": "ff0e4c3e147edc80",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0049333980554207,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +9.210e-03, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "j2dscalA_vert_M5": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 0.33,
+   "sha": "e986989f5c218565",
+   "sumRT": 1.0328049861407724,
+   "warned_energy": false,
+   "warnings": [
+    "pmm_jones_2d: lossless energy closure violated (sum R+T - 2 = +6.346e-02, structure is provably lossless): the truncation is numerically unstable here and the P"
+   ]
+  },
+  "pmm1d_conical_M3": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 0.02,
+   "sha": "698a46dae773bccf",
+   "sumRT": 0.9999999815045576,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_conical_M5": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 0.02,
+   "sha": "698a46dae773bccf",
+   "sumRT": 0.9999999815045576,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_conical_M7": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 0.01,
+   "sha": "698a46dae773bccf",
+   "sumRT": 0.9999999815045576,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_conical_oop_M3": {
+   "message": "PMMStack.solve (conical, phi != 0): a stack containing a PATTERNED layer together with an out-of-plane tensor (eps_xz/yz/zx/zy) is not supported -- the previous projected route returned silently-wrong retardance for patterned cells (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12) and the nodal conical cascade is in-plane only.  Use the classical mount (phi=0) or PMM2DStackPure.",
+   "n_interfaces": 0,
+   "outcome": "NotImplementedError",
+   "secs": 0.0,
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_conical_oop_M5": {
+   "message": "PMMStack.solve (conical, phi != 0): a stack containing a PATTERNED layer together with an out-of-plane tensor (eps_xz/yz/zx/zy) is not supported -- the previous projected route returned silently-wrong retardance for patterned cells (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12) and the nodal conical cascade is in-plane only.  Use the classical mount (phi=0) or PMM2DStackPure.",
+   "n_interfaces": 0,
+   "outcome": "NotImplementedError",
+   "secs": 0.0,
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_conical_oop_M7": {
+   "message": "PMMStack.solve (conical, phi != 0): a stack containing a PATTERNED layer together with an out-of-plane tensor (eps_xz/yz/zx/zy) is not supported -- the previous projected route returned silently-wrong retardance for patterned cells (AUDIT_PMM_CONICAL_PATTERNED_TENSOR_BUG_2026_07_12) and the nodal conical cascade is in-plane only.  Use the classical mount (phi=0) or PMM2DStackPure.",
+   "n_interfaces": 0,
+   "outcome": "NotImplementedError",
+   "secs": 0.0,
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_oop_vert_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.031741820977934335,
+   "rcond_min": 0.017924535937184925,
+   "resid_max": null,
+   "secs": 0.03,
+   "sha": "cd0258c562647ad0",
+   "sizes": [
+    44
+   ],
+   "sumRT": 1.0000006406302944,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_oop_vert_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.031741820977934335,
+   "rcond_min": 0.017924535937184925,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "cd0258c562647ad0",
+   "sizes": [
+    44
+   ],
+   "sumRT": 1.0000006406302944,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_oop_vert_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.031741820977934335,
+   "rcond_min": 0.017924535937184925,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "cd0258c562647ad0",
+   "sizes": [
+    44
+   ],
+   "sumRT": 1.0000006406302944,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_oop_vert_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.031741820977934335,
+   "rcond_min": 0.017924535937184925,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "cd0258c562647ad0",
+   "sizes": [
+    44
+   ],
+   "sumRT": 1.0000006406302944,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_oop_vert_perlayer_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.031741820977934335,
+   "rcond_min": 0.017924535937184925,
+   "resid_max": null,
+   "secs": 0.02,
+   "sha": "cd0258c562647ad0",
+   "sizes": [
+    44
+   ],
+   "sumRT": 1.0000006406302944,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.2_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.007997782978790358,
+   "rcond_min": 0.006135389128110681,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "65e6e8b4d2140b9f",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000008843157,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.2_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.007997782978790358,
+   "rcond_min": 0.006135389128110681,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "65e6e8b4d2140b9f",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000008843157,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.2_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.007997782978790358,
+   "rcond_min": 0.006135389128110681,
+   "resid_max": null,
+   "secs": 0.03,
+   "sha": "65e6e8b4d2140b9f",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000008843157,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.2_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.007997782978790358,
+   "rcond_min": 0.006135389128110681,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "65e6e8b4d2140b9f",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000008843157,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.2_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.007997782978790358,
+   "rcond_min": 0.006135389128110681,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "65e6e8b4d2140b9f",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000008843157,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003233249633652912,
+   "rcond_min": 0.0025329955341183517,
+   "resid_max": null,
+   "secs": 0.03,
+   "sha": "b56a0e489758f621",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999989560737,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003233249633652912,
+   "rcond_min": 0.0025329955341183517,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "b56a0e489758f621",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999989560737,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003233249633652912,
+   "rcond_min": 0.0025329955341183517,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "b56a0e489758f621",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999989560737,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003233249633652912,
+   "rcond_min": 0.0025329955341183517,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "b56a0e489758f621",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999989560737,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003233249633652912,
+   "rcond_min": 0.0025329955341183517,
+   "resid_max": null,
+   "secs": 0.03,
+   "sha": "b56a0e489758f621",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999989560737,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_bigperiod_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.011957792678294839,
+   "rcond_min": 0.007819929050918243,
+   "resid_max": null,
+   "secs": 0.03,
+   "sha": "a7cea3018f06fb91",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9995919502793879,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_cov_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.034882472126366235,
+   "rcond_min": 0.03185310375353628,
+   "resid_max": null,
+   "secs": 0.08,
+   "sha": "c16bce0928dff350",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.999999960246134,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_deg15_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0021089858146794583,
+   "rcond_min": 0.0020813006700159007,
+   "resid_max": null,
+   "secs": 0.07,
+   "sha": "63461005ac08e1db",
+   "sizes": [
+    90
+   ],
+   "sumRT": 0.9999999999999346,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_deg7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.007551578589868314,
+   "rcond_min": 0.007402185893429333,
+   "resid_max": null,
+   "secs": 0.03,
+   "sha": "e0dea48dd63e2d4a",
+   "sizes": [
+    42
+   ],
+   "sumRT": 0.9997499378726593,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_densesup_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0028053842632407276,
+   "rcond_min": 0.0014238711667640582,
+   "resid_max": null,
+   "secs": 0.05,
+   "sha": "6832efa35d7c25a7",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000033178949619,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_grazing_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002480528932510853,
+   "rcond_min": 0.002394175357195848,
+   "resid_max": null,
+   "secs": 0.05,
+   "sha": "9f01a2f79f2a07fa",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000000080071065,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_hicontrast_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003824888608957504,
+   "rcond_min": 0.0025329955341183517,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "28e3b7d6d9ccc54f",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.000000306149983,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_perlayer_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003233249633652912,
+   "rcond_min": 0.0025329955341183517,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "b56a0e489758f621",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999989560737,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.35_perlayer_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.003233249633652912,
+   "rcond_min": 0.0025329955341183517,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "b56a0e489758f621",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999989560737,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.5_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002351175663828402,
+   "rcond_min": 0.0023010035363652827,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "7372b223a8d46cfd",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999987921735,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002351175663828402,
+   "rcond_min": 0.0023010035363652827,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "7372b223a8d46cfd",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999987921735,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.5_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002351175663828402,
+   "rcond_min": 0.0023010035363652827,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "7372b223a8d46cfd",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999987921735,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002351175663828402,
+   "rcond_min": 0.0023010035363652827,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "7372b223a8d46cfd",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999987921735,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.5_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002351175663828402,
+   "rcond_min": 0.0023010035363652827,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "7372b223a8d46cfd",
+   "sizes": [
+    66
+   ],
+   "sumRT": 0.9999999987921735,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.7_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.010353123588253615,
+   "rcond_min": 0.009507170029041945,
+   "resid_max": null,
+   "secs": 0.05,
+   "sha": "5ef1732d93093da6",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000002919512259,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.7_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.010353123588253615,
+   "rcond_min": 0.009507170029041945,
+   "resid_max": null,
+   "secs": 0.05,
+   "sha": "5ef1732d93093da6",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000002919512259,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.010353123588253615,
+   "rcond_min": 0.009507170029041945,
+   "resid_max": null,
+   "secs": 0.05,
+   "sha": "5ef1732d93093da6",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000002919512259,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.7_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.010353123588253615,
+   "rcond_min": 0.009507170029041945,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "5ef1732d93093da6",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000002919512259,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pmm1d_slant0.7_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.010353123588253615,
+   "rcond_min": 0.009507170029041945,
+   "resid_max": null,
+   "secs": 0.04,
+   "sha": "5ef1732d93093da6",
+   "sizes": [
+    66
+   ],
+   "sumRT": 1.0000002919512259,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pure_magnetic_nm4_M2": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 1.94,
+   "sha": "2b7060c6ca203c42",
+   "sumRT": 0.9725987492155255,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pure_oop_vert_nm4_M2": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00251210522667116,
+   "rcond_min": 0.0017825256276775298,
+   "resid_max": null,
+   "secs": 2.35,
+   "sha": "f3b4e6206fe082cd",
+   "sizes": [
+    288
+   ],
+   "sumRT": 0.972205448300069,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "pure_slant0.5_nm4_M2": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002905408677695365,
+   "rcond_min": 0.002075200198881279,
+   "resid_max": null,
+   "secs": 2.4,
+   "sha": "0472cb87da883449",
+   "sizes": [
+    288
+   ],
+   "sumRT": 0.9720220526671085,
+   "warned_energy": false,
+   "warnings": [
+    "PMM2DStackPure.solve: lossless energy closure violated for incident E_x (sum R+T = 0.9386, off by -0.0614; every permittivity in this stack is real or Hermitian"
+   ]
+  },
+  "pure_slant0.5_nm6_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0020598059236752856,
+   "rcond_min": 0.0012449453441309346,
+   "resid_max": null,
+   "secs": 37.1,
+   "sha": "45bfa3c3eb216eae",
+   "sizes": [
+    800
+   ],
+   "sumRT": 0.9999978314190001,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.15_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002666372711606211,
+   "rcond_min": 0.0010163604206842821,
+   "resid_max": null,
+   "secs": 0.91,
+   "sha": "dc89e8229c39a02c",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0420222952798415,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.25_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002182069316265843,
+   "rcond_min": 0.0011475645090337325,
+   "resid_max": null,
+   "secs": 0.9,
+   "sha": "a41c9b63ac6fdcdb",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.043585478649517,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.35_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0034601715409205078,
+   "rcond_min": 0.0026140747758085785,
+   "resid_max": null,
+   "secs": 0.1,
+   "sha": "5b4969de7c82d190",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0651532346428265,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.07 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.35_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.54e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0232 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 1.5417412094933611e-16,
+   "rcond_min": 1.5417412094933611e-16,
+   "resid_max": 0.023153906080902762,
+   "secs": 0.62,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.35_M7": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 8.19e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0449 > 1e-08 in the same scaling, on a 450 x 450 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 8.186489777434469e-17,
+   "rcond_min": 8.186489777434469e-17,
+   "resid_max": 0.044897989560349,
+   "secs": 3.42,
+   "sizes": [
+    450
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_M11": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0002812283240971516,
+   "rcond_min": 2.9710970587299424e-05,
+   "resid_max": null,
+   "secs": 42.96,
+   "sha": "6f324a0e2e6e898a",
+   "sizes": [
+    1058
+   ],
+   "sumRT": 1.0006307018964724,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_M3": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.87e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0149 > 1e-08 in the same scaling, on a 98 x 98 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->region",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 1.8715195267033051e-16,
+   "rcond_min": 1.8715195267033051e-16,
+   "resid_max": 0.014909167830517116,
+   "secs": 0.13,
+   "sizes": [
+    98
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.22e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0259 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 1.2214604807041131e-16,
+   "rcond_min": 1.2214604807041131e-16,
+   "resid_max": 0.025906461280426316,
+   "secs": 0.83,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_M7": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.8e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.00652 > 1e-08 in the same scaling, on a 450 x 450 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 1.7996188714560429e-16,
+   "rcond_min": 1.7996188714560429e-16,
+   "resid_max": 0.006519382786282443,
+   "secs": 3.41,
+   "sizes": [
+    450
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_M9": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.001337945396323317,
+   "rcond_min": 0.0011214646693378304,
+   "resid_max": null,
+   "secs": 15.03,
+   "sha": "4dca944120c0ebb4",
+   "sizes": [
+    722
+   ],
+   "sumRT": 1.0065082446536535,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_deg15_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.31e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0135 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 2.314788770640071e-16,
+   "rcond_min": 2.314788770640071e-16,
+   "resid_max": 0.013467602089051199,
+   "secs": 0.72,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_deg7_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0022099022096953697,
+   "rcond_min": 0.0015920531001655963,
+   "resid_max": null,
+   "secs": 0.93,
+   "sha": "1f7a69681bc08cd9",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0441877346370898,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_densesup_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0049509603758736385,
+   "rcond_min": 0.0008709873150476821,
+   "resid_max": null,
+   "secs": 0.8,
+   "sha": "4eb34f8289ec47f1",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.081164645743572,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.08 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_ground2.1_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0014380139014258616,
+   "rcond_min": 0.0009688527285296454,
+   "resid_max": null,
+   "secs": 0.76,
+   "sha": "56980b42b8db19ff",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0324499004697265,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_hicontrast_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 1.22e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.0259 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 1.2214604807041131e-16,
+   "rcond_min": 1.2214604807041131e-16,
+   "resid_max": 0.025906461280426316,
+   "secs": 0.61,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_normal_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0037075931635993206,
+   "rcond_min": 0.0007291349769199137,
+   "resid_max": null,
+   "secs": 0.86,
+   "sha": "41bd2ecae1606396",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0349819662356992,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_th40_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0038596822967802125,
+   "rcond_min": 0.0034766004325283,
+   "resid_max": null,
+   "secs": 0.93,
+   "sha": "17d7adee822abd30",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.072629237087588,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.07 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_th70_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.58e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0784 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 2.5760926589653607e-17,
+   "rcond_min": 2.5760926589653607e-17,
+   "resid_max": 0.07837325707542542,
+   "secs": 0.67,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_th80_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0014679157442010098,
+   "rcond_min": 0.00041157140078705443,
+   "resid_max": null,
+   "secs": 4.56,
+   "sha": "c0a4838788e21f0d",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.026328456882737,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_sl0.5_wood_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.009803425185360056,
+   "rcond_min": 0.0025499618557947093,
+   "resid_max": null,
+   "secs": 4.08,
+   "sha": "01b62b0a828baa6f",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0099676170147083,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.5_woodx0.997_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00981269233549268,
+   "rcond_min": 0.0025745440822894637,
+   "resid_max": null,
+   "secs": 4.29,
+   "sha": "f2b35bb21105ffa7",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.009979637036626,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.7_M3": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3.71e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.00789 > 1e-08 in the same scaling, on a 98 x 98 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regio",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 3.7066631144297706e-16,
+   "rcond_min": 3.7066631144297706e-16,
+   "resid_max": 0.007892699336673012,
+   "secs": 0.07,
+   "sizes": [
+    98
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.7_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0581 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->region ",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 2.995162105881358e-17,
+   "rcond_min": 2.995162105881358e-17,
+   "resid_max": 0.05805644013295431,
+   "secs": 0.68,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalA_sl0.7_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.001165286276888616,
+   "rcond_min": 0.0006554531653714359,
+   "resid_max": null,
+   "secs": 4.35,
+   "sha": "dd07347910f51bb2",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.023581390120199,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalA_vert_M5": {
+   "n_interfaces": 0,
+   "outcome": "SOLVED",
+   "secs": 0.33,
+   "sha": "13299b8f044a4bff",
+   "sumRT": 1.0381658644144014,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalB_sl0.35_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0014487459523619963,
+   "rcond_min": 0.00093604157151538,
+   "resid_max": null,
+   "secs": 0.09,
+   "sha": "a81d40f42b2ee56f",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0350376887552755,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.04 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalB_sl0.35_M5": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0005626000125577457,
+   "rcond_min": 0.0005010518581159525,
+   "resid_max": null,
+   "secs": 0.89,
+   "sha": "2ef63983915f2eac",
+   "sizes": [
+    242
+   ],
+   "sumRT": 1.0097660148378615,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalB_sl0.35_M7": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 6.01e-18 < 1e-10, and the inverse misses its own equation A X = I by 0.239 > 1e-08 in the same scaling, on a 450 x 450 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regio",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 6.012109918395169e-18,
+   "rcond_min": 6.012109918395169e-18,
+   "resid_max": 0.23871135902532936,
+   "secs": 3.75,
+   "sizes": [
+    450
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalB_sl0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0029682148379200756,
+   "rcond_min": 0.0011675470469085548,
+   "resid_max": null,
+   "secs": 0.11,
+   "sha": "bc4f14fc74e787e9",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.017241920024128,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalB_sl0.5_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 3.88e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0706 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 3.88244434576268e-17,
+   "rcond_min": 3.88244434576268e-17,
+   "resid_max": 0.07061892345642626,
+   "secs": 0.66,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalB_sl0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00025618244325510925,
+   "rcond_min": 0.0001668418193014382,
+   "resid_max": null,
+   "secs": 4.3,
+   "sha": "2c29198275cdeff5",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0300571146613615,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalB_sl0.7_M3": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 2.99e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.00912 > 1e-08 in the same scaling, on a 98 x 98 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regio",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 2.9886386826532493e-16,
+   "rcond_min": 2.9886386826532493e-16,
+   "resid_max": 0.009122217698373482,
+   "secs": 0.11,
+   "sizes": [
+    98
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalB_sl0.7_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 8.15e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0201 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 8.145123206450896e-17,
+   "rcond_min": 8.145123206450896e-17,
+   "resid_max": 0.020079088560638305,
+   "secs": 0.64,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalB_sl0.7_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00033611177486002895,
+   "rcond_min": 0.00021332548487132717,
+   "resid_max": null,
+   "secs": 4.23,
+   "sha": "b1bbf8cb2a3d8667",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.031302645706539,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.03 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalC_sl0.35_M3": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 4.78e-16 < 1e-10, and the inverse misses its own equation A X = I by 0.00857 > 1e-08 in the same scaling, on a 98 x 98 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regio",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 4.7798657394935425e-16,
+   "rcond_min": 4.7798657394935425e-16,
+   "resid_max": 0.008569510017486286,
+   "secs": 0.08,
+   "sizes": [
+    98
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalC_sl0.35_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 8.84e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0355 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 8.841884413641829e-17,
+   "rcond_min": 8.841884413641829e-17,
+   "resid_max": 0.03552586673018327,
+   "secs": 0.59,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalC_sl0.35_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.011144234588685057,
+   "rcond_min": 0.004100976025541819,
+   "resid_max": null,
+   "secs": 4.43,
+   "sha": "8fcf990a86ffccdc",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.0178341711272847,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalC_sl0.5_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0021600807681228956,
+   "rcond_min": 0.0018050543961654006,
+   "resid_max": null,
+   "secs": 0.14,
+   "sha": "969c2eadc19f6960",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0808212390258438,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.08 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalC_sl0.5_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 7.22e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0297 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 7.216111948247652e-17,
+   "rcond_min": 7.216111948247652e-17,
+   "resid_max": 0.029693058558952278,
+   "secs": 0.7,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalC_sl0.5_M7": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.00037380821863435373,
+   "rcond_min": 0.0002646877501438964,
+   "resid_max": null,
+   "secs": 4.43,
+   "sha": "12c22218d58b9318",
+   "sizes": [
+    450
+   ],
+   "sumRT": 1.021639719865899,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.02 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is u"
+   ]
+  },
+  "scalC_sl0.7_M3": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.0012758371127838957,
+   "rcond_min": 0.00043670233968595517,
+   "resid_max": null,
+   "secs": 0.09,
+   "sha": "7f9b7cdbbf524e56",
+   "sizes": [
+    98
+   ],
+   "sumRT": 1.0952038180442145,
+   "warned_energy": false,
+   "warnings": [
+    "PMMStack.solve: energy not conserved (max R+T = 1.1 > 1) -- a near-singular interface mode-match in the cascade (e.g. too many tapered slices). The result is un"
+   ]
+  },
+  "scalC_sl0.7_M5": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 4.19e-17 < 1e-10, and the inverse misses its own equation A X = I by 0.0789 > 1e-08 in the same scaling, on a 242 x 242 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regi",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 4.193048861083046e-17,
+   "rcond_min": 4.193048861083046e-17,
+   "resid_max": 0.07887226132916707,
+   "secs": 0.67,
+   "sizes": [
+    242
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "scalC_sl0.7_M7": {
+   "message": "rcwa generalized interface (T22): the explicit inverse is numerically singular (equilibrated rcond = 4.68e-18 < 1e-10, and the inverse misses its own equation A X = I by 0.659 > 1e-08 in the same scaling, on a 450 x 450 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.  This is the GENERALIZED (4N) cascade's layer<->regio",
+   "n_interfaces": 1,
+   "n_refused_rows": 1,
+   "outcome": "_ConditioningError",
+   "rcond_max": 4.678402691316201e-18,
+   "rcond_min": 4.678402691316201e-18,
+   "resid_max": 0.6588715333385516,
+   "secs": 3.48,
+   "sizes": [
+    450
+   ],
+   "sumRT": null,
+   "warned_energy": false,
+   "warnings": []
+  },
+  "stag_slant0.5_nm4_M2": {
+   "n_interfaces": 2,
+   "n_refused_rows": 0,
+   "outcome": "SOLVED",
+   "rcond_max": 0.002905408677695365,
+   "rcond_min": 0.002075200198881279,
+   "resid_max": null,
+   "secs": 2.27,
+   "sha": "0472cb87da883449",
+   "sizes": [
+    288
+   ],
+   "sumRT": 0.9720220526671085,
+   "warned_energy": false,
+   "warnings": [
+    "PMM2DStackPure.solve: lossless energy closure violated for incident E_x (sum R+T = 0.9386, off by -0.0614; every permittivity in this stack is real or Hermitian"
+   ]
+  }
+ },
+ "guard": {
+  "INV_RCOND_SCREEN": 1e-08,
+  "INV_RESID_REFUSE": 1e-08,
+  "INV_T22_RCOND_REFUSE": 1e-10,
+  "has_rcond_refuse_kw": true
+ },
+ "no_census": {
+  "berreman_lossy": {
+   "outcome": "SOLVED",
+   "sha": "75e9c565e0426dec",
+   "sumRT": 0.44728097808804634
+  },
+  "berreman_th0": {
+   "outcome": "SOLVED",
+   "sha": "66a7b09a2fc82b81",
+   "sumRT": 0.9467456407485527
+  },
+  "berreman_th20": {
+   "outcome": "SOLVED",
+   "sha": "679b8a052ffcec94",
+   "sumRT": 0.938149644988886
+  },
+  "berreman_th45": {
+   "outcome": "SOLVED",
+   "sha": "86a7a636eabad2f4",
+   "sumRT": 0.9408602021235628
+  },
+  "berreman_th70": {
+   "outcome": "SOLVED",
+   "sha": "b3fc42acdc95e172",
+   "sumRT": 1.0669249484287344
+  },
+  "berreman_thick": {
+   "outcome": "SOLVED",
+   "sha": "7ce95887350deb9c",
+   "sumRT": 0.9303372234007746
+  },
+  "hyb_oop_vert_M11": {
+   "outcome": "SOLVED",
+   "sha": "3852fd001f92f2fa",
+   "sumRT": 1.0091419406406519
+  },
+  "hyb_oop_vert_M3": {
+   "outcome": "SOLVED",
+   "sha": "1b79e57ea94285e0",
+   "sumRT": 1.0207380734421057
+  },
+  "hyb_oop_vert_M5": {
+   "outcome": "SOLVED",
+   "sha": "cab0998ca635a1a3",
+   "sumRT": 1.0268797295446632
+  },
+  "hyb_oop_vert_M7": {
+   "outcome": "SOLVED",
+   "sha": "e80ddab1c5f33b62",
+   "sumRT": 1.008367547782384
+  },
+  "hyb_oop_vert_M9": {
+   "outcome": "SOLVED",
+   "sha": "07c5d9dd9d7ae525",
+   "sumRT": 1.0007016432181624
+  },
+  "hyb_slant0.25_M3": {
+   "outcome": "SOLVED",
+   "sha": "a165875cd78941e5",
+   "sumRT": 1.0292246163573542
+  },
+  "hyb_slant0.25_M5": {
+   "outcome": "SOLVED",
+   "sha": "775a7f791e65d99b",
+   "sumRT": 1.034264957565017
+  },
+  "hyb_slant0.25_M7": {
+   "outcome": "SOLVED",
+   "sha": "a4a02cfe5d096f16",
+   "sumRT": 1.0114344177226875
+  },
+  "hyb_slant0.25_M9": {
+   "outcome": "SOLVED",
+   "sha": "2d23710762b95944",
+   "sumRT": 1.0022464907332698
+  },
+  "hyb_slant0.35_M3": {
+   "outcome": "SOLVED",
+   "sha": "91aece00785c3fee",
+   "sumRT": 1.035482965065438
+  },
+  "hyb_slant0.35_M5": {
+   "outcome": "SOLVED",
+   "sha": "95f014f6ca3bc402",
+   "sumRT": 1.0382444391752257
+  },
+  "hyb_slant0.35_M7": {
+   "outcome": "SOLVED",
+   "sha": "fd66b2765c37385d",
+   "sumRT": 1.0126703436076516
+  },
+  "hyb_slant0.35_M9": {
+   "outcome": "SOLVED",
+   "sha": "e2653b232b72d128",
+   "sumRT": 1.003132063166849
+  },
+  "hyb_slant0.5_M11": {
+   "outcome": "SOLVED",
+   "sha": "0eefdcbb1790aec0",
+   "sumRT": 1.0132485509082771
+  },
+  "hyb_slant0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "541a71ee1566802d",
+   "sumRT": 1.046015108687099
+  },
+  "hyb_slant0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "8ebc79277b67d6c1",
+   "sumRT": 1.0435568384154912
+  },
+  "hyb_slant0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "5871c63425430ffd",
+   "sumRT": 1.0141954840220846
+  },
+  "hyb_slant0.5_M9": {
+   "outcome": "SOLVED",
+   "sha": "404bab6ed2f2d0da",
+   "sumRT": 1.004526648942243
+  },
+  "hyb_slant0.5_deg15_M5": {
+   "outcome": "SOLVED",
+   "sha": "aea04ba0a08c06ab",
+   "sumRT": 1.0439369395586098
+  },
+  "hyb_slant0.5_deg7_M5": {
+   "outcome": "SOLVED",
+   "sha": "7a060ebe42dea95d",
+   "sumRT": 1.0424176898896833
+  },
+  "hyb_slant0.5_densesup_M7": {
+   "outcome": "SOLVED",
+   "sha": "b5bcee69c7ea5832",
+   "sumRT": 1.0225527092205229
+  },
+  "hyb_slant0.5_grazing_M7": {
+   "outcome": "SOLVED",
+   "sha": "d8ee3a131cfe9ca1",
+   "sumRT": 1.0162254412801317
+  },
+  "hyb_slant0.5_hicontrast_M7": {
+   "outcome": "SOLVED",
+   "sha": "6e8179a52ac18b7e",
+   "sumRT": 1.0160493396095027
+  },
+  "hyb_slant0.5_theta15_M5": {
+   "outcome": "SOLVED",
+   "sha": "817841622715749c",
+   "sumRT": 1.0317713311935726
+  },
+  "hyb_slant0.5_theta22_M5": {
+   "outcome": "SOLVED",
+   "sha": "036d8b34adf53ae0",
+   "sumRT": 1.0433157899665677
+  },
+  "hyb_slant0.5_theta30_M5": {
+   "outcome": "SOLVED",
+   "sha": "a467fea175c1c10d",
+   "sumRT": 1.0437355546942204
+  },
+  "hyb_slant0.5_tree_M5": {
+   "outcome": "SOLVED",
+   "sha": "999c277690ece4cf",
+   "sumRT": 1.0435568384154914
+  },
+  "hyb_slantxy_M5": {
+   "outcome": "SOLVED",
+   "sha": "941258a3110ac26d",
+   "sumRT": 1.0395154200873846
+  },
+  "hyb_slanty0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "0948cb589016737f",
+   "sumRT": 1.029272119940536
+  },
+  "j2d_oop_vert_M5": {
+   "outcome": "SOLVED",
+   "sha": "4199e76df950e4f0",
+   "sumRT": 1.027562915634187
+  },
+  "j2d_oop_vert_M9": {
+   "outcome": "SOLVED",
+   "sha": "b9ea34634497aee3",
+   "sumRT": 1.0008375470244228
+  },
+  "j2d_slant0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "1e290d67bab21330",
+   "sumRT": 1.0462442767480984
+  },
+  "j2d_slant0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "d3c1c977a207394c",
+   "sumRT": 1.0436225403012733
+  },
+  "j2d_slant0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "48a29afbbe4f4e4e",
+   "sumRT": 1.0140993778317393
+  },
+  "j2d_slant0.5_M9": {
+   "outcome": "SOLVED",
+   "sha": "9f9aad2e9662b7e1",
+   "sumRT": 1.0045469219968708
+  },
+  "j2dscalA_sl0.5_M3": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "j2dscalA_sl0.5_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "j2dscalA_sl0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "c019f3214efa9fa8",
+   "sumRT": 1.0279141259487807
+  },
+  "j2dscalA_sl0.5_M9": {
+   "outcome": "SOLVED",
+   "sha": "ff0e4c3e147edc80",
+   "sumRT": 1.0049333980554207
+  },
+  "j2dscalA_vert_M5": {
+   "outcome": "SOLVED",
+   "sha": "e986989f5c218565",
+   "sumRT": 1.0328049861407724
+  },
+  "pmm1d_conical_M3": {
+   "outcome": "SOLVED",
+   "sha": "698a46dae773bccf",
+   "sumRT": 0.9999999815045576
+  },
+  "pmm1d_conical_M5": {
+   "outcome": "SOLVED",
+   "sha": "698a46dae773bccf",
+   "sumRT": 0.9999999815045576
+  },
+  "pmm1d_conical_M7": {
+   "outcome": "SOLVED",
+   "sha": "698a46dae773bccf",
+   "sumRT": 0.9999999815045576
+  },
+  "pmm1d_conical_oop_M3": {
+   "outcome": "NotImplementedError",
+   "sumRT": null
+  },
+  "pmm1d_conical_oop_M5": {
+   "outcome": "NotImplementedError",
+   "sumRT": null
+  },
+  "pmm1d_conical_oop_M7": {
+   "outcome": "NotImplementedError",
+   "sumRT": null
+  },
+  "pmm1d_oop_vert_M3": {
+   "outcome": "SOLVED",
+   "sha": "cd0258c562647ad0",
+   "sumRT": 1.0000006406302944
+  },
+  "pmm1d_oop_vert_M5": {
+   "outcome": "SOLVED",
+   "sha": "cd0258c562647ad0",
+   "sumRT": 1.0000006406302944
+  },
+  "pmm1d_oop_vert_M7": {
+   "outcome": "SOLVED",
+   "sha": "cd0258c562647ad0",
+   "sumRT": 1.0000006406302944
+  },
+  "pmm1d_oop_vert_M9": {
+   "outcome": "SOLVED",
+   "sha": "cd0258c562647ad0",
+   "sumRT": 1.0000006406302944
+  },
+  "pmm1d_oop_vert_perlayer_M5": {
+   "outcome": "SOLVED",
+   "sha": "cd0258c562647ad0",
+   "sumRT": 1.0000006406302944
+  },
+  "pmm1d_slant0.2_M11": {
+   "outcome": "SOLVED",
+   "sha": "65e6e8b4d2140b9f",
+   "sumRT": 1.0000000008843157
+  },
+  "pmm1d_slant0.2_M3": {
+   "outcome": "SOLVED",
+   "sha": "65e6e8b4d2140b9f",
+   "sumRT": 1.0000000008843157
+  },
+  "pmm1d_slant0.2_M5": {
+   "outcome": "SOLVED",
+   "sha": "65e6e8b4d2140b9f",
+   "sumRT": 1.0000000008843157
+  },
+  "pmm1d_slant0.2_M7": {
+   "outcome": "SOLVED",
+   "sha": "65e6e8b4d2140b9f",
+   "sumRT": 1.0000000008843157
+  },
+  "pmm1d_slant0.2_M9": {
+   "outcome": "SOLVED",
+   "sha": "65e6e8b4d2140b9f",
+   "sumRT": 1.0000000008843157
+  },
+  "pmm1d_slant0.35_M11": {
+   "outcome": "SOLVED",
+   "sha": "b56a0e489758f621",
+   "sumRT": 0.9999999989560737
+  },
+  "pmm1d_slant0.35_M3": {
+   "outcome": "SOLVED",
+   "sha": "b56a0e489758f621",
+   "sumRT": 0.9999999989560737
+  },
+  "pmm1d_slant0.35_M5": {
+   "outcome": "SOLVED",
+   "sha": "b56a0e489758f621",
+   "sumRT": 0.9999999989560737
+  },
+  "pmm1d_slant0.35_M7": {
+   "outcome": "SOLVED",
+   "sha": "b56a0e489758f621",
+   "sumRT": 0.9999999989560737
+  },
+  "pmm1d_slant0.35_M9": {
+   "outcome": "SOLVED",
+   "sha": "b56a0e489758f621",
+   "sumRT": 0.9999999989560737
+  },
+  "pmm1d_slant0.35_bigperiod_M11": {
+   "outcome": "SOLVED",
+   "sha": "a7cea3018f06fb91",
+   "sumRT": 0.9995919502793879
+  },
+  "pmm1d_slant0.35_cov_M7": {
+   "outcome": "SOLVED",
+   "sha": "c16bce0928dff350",
+   "sumRT": 0.999999960246134
+  },
+  "pmm1d_slant0.35_deg15_M5": {
+   "outcome": "SOLVED",
+   "sha": "63461005ac08e1db",
+   "sumRT": 0.9999999999999346
+  },
+  "pmm1d_slant0.35_deg7_M5": {
+   "outcome": "SOLVED",
+   "sha": "e0dea48dd63e2d4a",
+   "sumRT": 0.9997499378726593
+  },
+  "pmm1d_slant0.35_densesup_M7": {
+   "outcome": "SOLVED",
+   "sha": "6832efa35d7c25a7",
+   "sumRT": 1.0000033178949619
+  },
+  "pmm1d_slant0.35_grazing_M7": {
+   "outcome": "SOLVED",
+   "sha": "9f01a2f79f2a07fa",
+   "sumRT": 1.0000000080071065
+  },
+  "pmm1d_slant0.35_hicontrast_M7": {
+   "outcome": "SOLVED",
+   "sha": "28e3b7d6d9ccc54f",
+   "sumRT": 1.000000306149983
+  },
+  "pmm1d_slant0.35_perlayer_M5": {
+   "outcome": "SOLVED",
+   "sha": "b56a0e489758f621",
+   "sumRT": 0.9999999989560737
+  },
+  "pmm1d_slant0.35_perlayer_M9": {
+   "outcome": "SOLVED",
+   "sha": "b56a0e489758f621",
+   "sumRT": 0.9999999989560737
+  },
+  "pmm1d_slant0.5_M11": {
+   "outcome": "SOLVED",
+   "sha": "7372b223a8d46cfd",
+   "sumRT": 0.9999999987921735
+  },
+  "pmm1d_slant0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "7372b223a8d46cfd",
+   "sumRT": 0.9999999987921735
+  },
+  "pmm1d_slant0.5_M5": {
+   "outcome": "SOLVED",
+   "sha": "7372b223a8d46cfd",
+   "sumRT": 0.9999999987921735
+  },
+  "pmm1d_slant0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "7372b223a8d46cfd",
+   "sumRT": 0.9999999987921735
+  },
+  "pmm1d_slant0.5_M9": {
+   "outcome": "SOLVED",
+   "sha": "7372b223a8d46cfd",
+   "sumRT": 0.9999999987921735
+  },
+  "pmm1d_slant0.7_M11": {
+   "outcome": "SOLVED",
+   "sha": "5ef1732d93093da6",
+   "sumRT": 1.0000002919512259
+  },
+  "pmm1d_slant0.7_M3": {
+   "outcome": "SOLVED",
+   "sha": "5ef1732d93093da6",
+   "sumRT": 1.0000002919512259
+  },
+  "pmm1d_slant0.7_M5": {
+   "outcome": "SOLVED",
+   "sha": "5ef1732d93093da6",
+   "sumRT": 1.0000002919512259
+  },
+  "pmm1d_slant0.7_M7": {
+   "outcome": "SOLVED",
+   "sha": "5ef1732d93093da6",
+   "sumRT": 1.0000002919512259
+  },
+  "pmm1d_slant0.7_M9": {
+   "outcome": "SOLVED",
+   "sha": "5ef1732d93093da6",
+   "sumRT": 1.0000002919512259
+  },
+  "pure_magnetic_nm4_M2": {
+   "outcome": "SOLVED",
+   "sha": "2b7060c6ca203c42",
+   "sumRT": 0.9725987492155255
+  },
+  "pure_oop_vert_nm4_M2": {
+   "outcome": "SOLVED",
+   "sha": "f3b4e6206fe082cd",
+   "sumRT": 0.972205448300069
+  },
+  "pure_slant0.5_nm4_M2": {
+   "outcome": "SOLVED",
+   "sha": "0472cb87da883449",
+   "sumRT": 0.9720220526671085
+  },
+  "pure_slant0.5_nm6_M3": {
+   "outcome": "SOLVED",
+   "sha": "45bfa3c3eb216eae",
+   "sumRT": 0.9999978314190001
+  },
+  "scalA_sl0.15_M5": {
+   "outcome": "SOLVED",
+   "sha": "dc89e8229c39a02c",
+   "sumRT": 1.0420222952798415
+  },
+  "scalA_sl0.25_M5": {
+   "outcome": "SOLVED",
+   "sha": "a41c9b63ac6fdcdb",
+   "sumRT": 1.043585478649517
+  },
+  "scalA_sl0.35_M3": {
+   "outcome": "SOLVED",
+   "sha": "5b4969de7c82d190",
+   "sumRT": 1.0651532346428265
+  },
+  "scalA_sl0.35_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalA_sl0.35_M7": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalA_sl0.5_M11": {
+   "outcome": "SOLVED",
+   "sha": "6f324a0e2e6e898a",
+   "sumRT": 1.0006307018964724
+  },
+  "scalA_sl0.5_M3": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalA_sl0.5_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalA_sl0.5_M7": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalA_sl0.5_M9": {
+   "outcome": "SOLVED",
+   "sha": "4dca944120c0ebb4",
+   "sumRT": 1.0065082446536535
+  },
+  "scalA_sl0.5_deg15_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalA_sl0.5_deg7_M5": {
+   "outcome": "SOLVED",
+   "sha": "1f7a69681bc08cd9",
+   "sumRT": 1.0441877346370898
+  },
+  "scalA_sl0.5_densesup_M5": {
+   "outcome": "SOLVED",
+   "sha": "4eb34f8289ec47f1",
+   "sumRT": 1.081164645743572
+  },
+  "scalA_sl0.5_ground2.1_M5": {
+   "outcome": "SOLVED",
+   "sha": "56980b42b8db19ff",
+   "sumRT": 1.0324499004697265
+  },
+  "scalA_sl0.5_hicontrast_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalA_sl0.5_normal_M5": {
+   "outcome": "SOLVED",
+   "sha": "41bd2ecae1606396",
+   "sumRT": 1.0349819662356992
+  },
+  "scalA_sl0.5_th40_M5": {
+   "outcome": "SOLVED",
+   "sha": "17d7adee822abd30",
+   "sumRT": 1.072629237087588
+  },
+  "scalA_sl0.5_th70_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalA_sl0.5_th80_M7": {
+   "outcome": "SOLVED",
+   "sha": "c0a4838788e21f0d",
+   "sumRT": 1.026328456882737
+  },
+  "scalA_sl0.5_wood_M7": {
+   "outcome": "SOLVED",
+   "sha": "01b62b0a828baa6f",
+   "sumRT": 1.0099676170147083
+  },
+  "scalA_sl0.5_woodx0.997_M7": {
+   "outcome": "SOLVED",
+   "sha": "f2b35bb21105ffa7",
+   "sumRT": 1.009979637036626
+  },
+  "scalA_sl0.7_M3": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalA_sl0.7_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalA_sl0.7_M7": {
+   "outcome": "SOLVED",
+   "sha": "dd07347910f51bb2",
+   "sumRT": 1.023581390120199
+  },
+  "scalA_vert_M5": {
+   "outcome": "SOLVED",
+   "sha": "13299b8f044a4bff",
+   "sumRT": 1.0381658644144014
+  },
+  "scalB_sl0.35_M3": {
+   "outcome": "SOLVED",
+   "sha": "a81d40f42b2ee56f",
+   "sumRT": 1.0350376887552755
+  },
+  "scalB_sl0.35_M5": {
+   "outcome": "SOLVED",
+   "sha": "2ef63983915f2eac",
+   "sumRT": 1.0097660148378615
+  },
+  "scalB_sl0.35_M7": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalB_sl0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "bc4f14fc74e787e9",
+   "sumRT": 1.017241920024128
+  },
+  "scalB_sl0.5_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalB_sl0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "2c29198275cdeff5",
+   "sumRT": 1.0300571146613615
+  },
+  "scalB_sl0.7_M3": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalB_sl0.7_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalB_sl0.7_M7": {
+   "outcome": "SOLVED",
+   "sha": "b1bbf8cb2a3d8667",
+   "sumRT": 1.031302645706539
+  },
+  "scalC_sl0.35_M3": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalC_sl0.35_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalC_sl0.35_M7": {
+   "outcome": "SOLVED",
+   "sha": "8fcf990a86ffccdc",
+   "sumRT": 1.0178341711272847
+  },
+  "scalC_sl0.5_M3": {
+   "outcome": "SOLVED",
+   "sha": "969c2eadc19f6960",
+   "sumRT": 1.0808212390258438
+  },
+  "scalC_sl0.5_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalC_sl0.5_M7": {
+   "outcome": "SOLVED",
+   "sha": "12c22218d58b9318",
+   "sumRT": 1.021639719865899
+  },
+  "scalC_sl0.7_M3": {
+   "outcome": "SOLVED",
+   "sha": "7f9b7cdbbf524e56",
+   "sumRT": 1.0952038180442145
+  },
+  "scalC_sl0.7_M5": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "scalC_sl0.7_M7": {
+   "outcome": "_ConditioningError",
+   "sumRT": null
+  },
+  "stag_slant0.5_nm4_M2": {
+   "outcome": "SOLVED",
+   "sha": "0472cb87da883449",
+   "sumRT": 0.9720220526671085
+  }
+ },
+ "stamp": {
+  "arm": "post",
+  "build": "win",
+  "jax": "0.11.0",
+  "jax_x64": false,
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "C:\\tmp/lum_vslant\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.6",
+  "scipy": "1.17.1",
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  },
+  "tree": "C:\\tmp/lum_vslant",
+  "utc": "2026-09-10T11:20:50Z"
+ },
+ "total_secs": 861.2,
+ "unarmed_control": {
+  "armed": "_ConditioningError",
+  "armed_message": "verify armed: the explicit inverse is numerically singular (equilibrated rcond = 1.59e-18 < 1e-10, and the inverse misses its own equation A X = I by 1.13 > 1e-08 in the same scaling, on a 24 x 24 block).  Returning it would give a number no build agrees on -- measured on this failure class, sum R + T from 1e+27 to 1e+31.",
+  "plain_sha": "5b657dd91fb04d81",
+  "unarmed": "RETURNED",
+  "unarmed_identical": true,
+  "unarmed_sha": "5b657dd91fb04d81"
+ }
+}

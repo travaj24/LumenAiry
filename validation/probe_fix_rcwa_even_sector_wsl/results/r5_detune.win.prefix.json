@@ -1,0 +1,124 @@
+{
+ "_arm": {
+  "build": "win",
+  "tree": "prefix(48c8747)",
+  "tag": "win.prefix",
+  "lumenairy": "C:\\tmp\\lum_wslfix_pre\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "blas": {
+   "blas": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24"
+   },
+   "lapack": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24"
+   }
+  },
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ },
+ "rows": [
+  {
+   "detune": 0.0,
+   "n_sub": 1.5,
+   "dR": 2.812110960759284e-10,
+   "dT": 0.004286540256806859,
+   "dJ": 7.097420349126422e-10,
+   "defect_full": -0.003199526886658699,
+   "defect_even": -0.00033812522680864987
+  },
+  {
+   "detune": 1e-13,
+   "n_sub": 1.5000000000001499,
+   "dR": 5.937730862548563e-11,
+   "dT": 0.00018865292102132614,
+   "dJ": 3.48663494066989e-10,
+   "defect_full": 0.00023318866475685596,
+   "defect_even": -3.703873053773066e-05
+  },
+  {
+   "detune": 1e-11,
+   "n_sub": 1.500000000015,
+   "dR": 1.9272523160696053e-10,
+   "dT": 1.8148261211603511e-06,
+   "dJ": 5.177270367703928e-10,
+   "defect_full": -3.30324556663264e-06,
+   "defect_even": -1.7573521682301418e-07
+  },
+  {
+   "detune": 1e-09,
+   "n_sub": 1.5000000015000001,
+   "dR": 1.0328050914498732e-11,
+   "dT": 1.4255056357548312e-08,
+   "dJ": 1.6198069174101937e-10,
+   "defect_full": -7.943485202943634e-09,
+   "defect_even": 1.1190387283477321e-08
+  },
+  {
+   "detune": 1e-07,
+   "n_sub": 1.50000015,
+   "dR": 6.337056573935129e-11,
+   "dT": 2.5383584123517267e-10,
+   "dJ": 1.5997071035890532e-10,
+   "defect_full": -9.421663449415973e-11,
+   "defect_even": 3.0963320796217886e-10
+  },
+  {
+   "detune": 1e-06,
+   "n_sub": 1.5000014999999998,
+   "dR": 1.2091348755571829e-11,
+   "dT": 7.131073509469843e-12,
+   "dJ": 3.065244515627789e-11,
+   "defect_full": 1.3893775019369059e-11,
+   "defect_even": 2.3567814366742823e-12
+  },
+  {
+   "detune": 1e-05,
+   "n_sub": 1.500015,
+   "dR": 2.8042707045372595e-12,
+   "dT": 2.9023450309750842e-12,
+   "dJ": 3.340369249541823e-11,
+   "defect_full": -7.808642621398576e-12,
+   "defect_even": -8.570921750106208e-14
+  },
+  {
+   "detune": 0.0001,
+   "n_sub": 1.50015,
+   "dR": 2.501610030236634e-13,
+   "dT": 9.947598300641403e-14,
+   "dJ": 6.610590408885579e-13,
+   "defect_full": 5.027089855502709e-13,
+   "defect_even": -2.4868995751603507e-14
+  },
+  {
+   "detune": 0.001,
+   "n_sub": 1.5014999999999998,
+   "dR": 5.793976409762536e-15,
+   "dT": 3.697042672001771e-14,
+   "dJ": 1.3136242887768084e-13,
+   "defect_full": -4.8627768478581856e-14,
+   "defect_even": 8.881784197001252e-15
+  },
+  {
+   "detune": 0.01,
+   "n_sub": 1.5150000000000001,
+   "dR": 7.098488463697095e-15,
+   "dT": 6.8833827526759706e-15,
+   "dJ": 3.6959118194410474e-14,
+   "defect_full": 2.4868995751603507e-14,
+   "defect_even": 2.6645352591003757e-15
+  }
+ ]
+}

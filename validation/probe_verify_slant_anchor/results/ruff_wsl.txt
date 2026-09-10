@@ -1,0 +1,5 @@
+$ ruff check lumenairy/ tests/ validation/probe_verify_slant_anchor/
+All checks passed!
+
+$ ruff --version
+ruff 0.15.16

@@ -1,0 +1,87 @@
+{
+ "_arm": {
+  "build": "win",
+  "tree": "prefix(48c8747)",
+  "tag": "win.prefix",
+  "lumenairy": "C:\\tmp\\lum_wslfix_pre\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "blas": {
+   "blas": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24"
+   },
+   "lapack": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24"
+   }
+  },
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ },
+ "detune": 0.0,
+ "n_sub": 1.5,
+ "full": {
+  "eig": [
+   {
+    "n": 242,
+    "cond_M": 159.69976692095443,
+    "cond_W": 5633.781531738555,
+    "eval_absmax": 76.13980483169135,
+    "eval_absmin": 0.48089898486328586,
+    "min_gap": 1.0464838560047563e-15,
+    "n_gaps_below_1e_8": 101,
+    "n_gaps_below_1e_12": 99
+   }
+  ],
+  "iface": [],
+  "defect": -0.003199526886658699,
+  "R_max": 0.039764469796907925
+ },
+ "even": {
+  "eig": [
+   {
+    "n": 122,
+    "cond_M": 159.00542556846568,
+    "cond_W": 3928.8076168854977,
+    "eval_absmax": 76.1398048316912,
+    "eval_absmin": 0.48242158349758235,
+    "min_gap": 3.5685461052242454e-15,
+    "n_gaps_below_1e_8": 41,
+    "n_gaps_below_1e_12": 40
+   }
+  ],
+  "iface": [
+   {
+    "n": 122,
+    "cond_Wb": 3928.8076168854977,
+    "cond_Vb": 8305.831872346116,
+    "cond_apb": 9964.189890171408,
+    "cond_amb": 16591.799040777398,
+    "amax_a": 902.6506951473197,
+    "amax_b": 849.6346268635621
+   },
+   {
+    "n": 122,
+    "cond_Wb": 1.0,
+    "cond_Vb": 30.99999999999992,
+    "cond_apb": 1073944508994840.8,
+    "cond_amb": 4.9867622166250394e+17,
+    "amax_a": 0.9666131829480883,
+    "amax_b": 0.9664484441901595
+   }
+  ],
+  "defect": -0.00033812522680864987,
+  "R_max": 0.03976446965427984
+ }
+}

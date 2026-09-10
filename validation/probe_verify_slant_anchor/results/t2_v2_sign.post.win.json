@@ -1,0 +1,471 @@
+{
+ "breakage": {
+  "conical": {
+   "auto/per-layer": "NotImplementedError: PMMStack: conical incidence (phi != 0) is not available for SLANTED layers; use PMM2DStack with y-invariant ce",
+   "auto/shared": "NotImplementedError: PMMStack: conical incidence (phi != 0) is not available for SLANTED layers; use PMM2DStack with y-invariant ce",
+   "convection/per-layer": "NotImplementedError: PMMStack: conical incidence (phi != 0) is not available for SLANTED layers; use PMM2DStack with y-invariant ce",
+   "convection/shared": "NotImplementedError: PMMStack: conical incidence (phi != 0) is not available for SLANTED layers; use PMM2DStack with y-invariant ce",
+   "covariant/per-layer": "NotImplementedError: PMMStack: conical incidence (phi != 0) is not available for SLANTED layers; use PMM2DStack with y-invariant ce",
+   "covariant/shared": "NotImplementedError: PMMStack: conical incidence (phi != 0) is not available for SLANTED layers; use PMM2DStack with y-invariant ce",
+   "vertical_conical_max_abs_ky": 0.3099576509761806,
+   "vertical_conical_walk": 0.0
+  },
+  "layer_order_walk": {
+   "shear_below": {
+    "expected": 1.584e-07,
+    "walk": 1.584e-07
+   },
+   "shear_on_top": {
+    "expected": 1.584e-07,
+    "walk": 1.584e-07
+   }
+  },
+  "lossy_superstrate": {
+   "(1+0.02j)": {
+    "max_abs_imag_alpha": 0.0,
+    "max_unimodular_dev": 1.1102230246251565e-16,
+    "outcome": "SOLVED"
+   },
+   "(1+0.4j)": {
+    "max_abs_imag_alpha": 0.0,
+    "max_unimodular_dev": 1.1102230246251565e-16,
+    "outcome": "SOLVED"
+   },
+   "1.0": {
+    "max_abs_imag_alpha": 0.0,
+    "max_unimodular_dev": 1.1102230246251565e-16,
+    "outcome": "SOLVED"
+   }
+  },
+  "retain_internal": {
+   "auto/per-layer": "NotImplementedError: PMMStack.solve(retain_internal=True): all-vertical in-plane stacks only (the symmetric cascade).",
+   "auto/shared": "NotImplementedError: PMMStack.solve(retain_internal=True): all-vertical in-plane stacks only (the symmetric cascade).",
+   "convection/per-layer": "NotImplementedError: PMMStack.solve(retain_internal=True): the general (slant/out-of-plane) per-layer cascade keeps no partial casc",
+   "convection/shared": "NotImplementedError: PMMStack.solve(retain_internal=True): all-vertical in-plane stacks only (the symmetric cascade).",
+   "mixed_vertical_plus_sheared": "NotImplementedError: PMMStack.solve(retain_internal=True): all-vertical in-plane stacks only (the symmetric cascade)."
+  },
+  "routing_literal": {
+   "0.0000000e+00": {
+    "enters_frame": false,
+    "walk": 0.0
+   },
+   "1.0000000e-09": {
+    "enters_frame": true,
+    "walk": 3.4000000000000005e-16
+   },
+   "1.0000000e-12": {
+    "enters_frame": false,
+    "walk": 0.0
+   },
+   "1.0000001e-12": {
+    "enters_frame": true,
+    "walk": 3.4000003400000003e-19
+   },
+   "2.0000000e-12": {
+    "enters_frame": true,
+    "walk": 6.8e-19
+   },
+   "5.0000000e-13": {
+    "enters_frame": false,
+    "walk": 0.0
+   }
+  },
+  "solve_vs_wavelength": {
+   "outcome": "NotImplementedError: PMMStack.solve_vs_wavelength: all-vertical in-plane stacks only (the symmetric cascade); call solve() per wavelength for slanted / out-of-plane stacks"
+  },
+  "wood": {
+   "0.985": {
+    "alpha_dtype": "float64",
+    "max_abs_imag_alpha": 0.0,
+    "max_unimodular_dev": 1.1102230246251565e-16,
+    "min_abs_kz": 0.29087857770128595,
+    "n_distinct_P": 9,
+    "n_evanescent": 6,
+    "ptp_arg_P": 5.026548245743671
+   },
+   "0.997": {
+    "alpha_dtype": "float64",
+    "max_abs_imag_alpha": 0.0,
+    "max_unimodular_dev": 1.1102230246251565e-16,
+    "min_abs_kz": 0.13061806490679728,
+    "n_distinct_P": 7,
+    "n_evanescent": 4,
+    "ptp_arg_P": 5.026548245743671
+   },
+   "1.000": {
+    "alpha_dtype": "float64",
+    "max_abs_imag_alpha": 0.0,
+    "max_unimodular_dev": 1.1102230246251565e-16,
+    "min_abs_kz": 3.650024149988857e-08,
+    "n_distinct_P": 7,
+    "n_evanescent": 4,
+    "ptp_arg_P": 5.026548245743671
+   },
+   "1.003": {
+    "alpha_dtype": "float64",
+    "max_abs_imag_alpha": 0.0,
+    "max_unimodular_dev": 1.1102230246251565e-16,
+    "min_abs_kz": 0.1308838554728551,
+    "n_distinct_P": 7,
+    "n_evanescent": 5,
+    "ptp_arg_P": 5.026548245743671
+   },
+   "1.020": {
+    "alpha_dtype": "float64",
+    "max_abs_imag_alpha": 0.0,
+    "max_unimodular_dev": 1.1102230246251565e-16,
+    "min_abs_kz": 0.3398775635418154,
+    "n_distinct_P": 7,
+    "n_evanescent": 5,
+    "ptp_arg_P": 5.026548245743671
+   }
+  }
+ },
+ "cross_engine": {
+  "nm4_minus": {
+   "energy": 1.9885153107139186,
+   "jones0": {
+    "conj": 2.375867095323584,
+    "double": 1.2371307296787015,
+    "half": 2.1506469157551176,
+    "none": 2.338110943316093,
+    "shipped": 1.873965624449215
+   },
+   "outcome": "SOLVED",
+   "refl_vs_1d": 0.12225929785423169
+  },
+  "nm4_plus": {
+   "energy": 1.9999267240518233,
+   "jones0": {
+    "conj": 1.6162147913189935,
+    "double": 1.022697251358323,
+    "half": 0.4110341949235045,
+    "none": 0.8710298411574054,
+    "shipped": 0.12018630026243485
+   },
+   "outcome": "SOLVED",
+   "refl_vs_1d": 0.09898700822368338
+  },
+  "nm6_minus": {
+   "energy": 1.999884049070252,
+   "jones0": {
+    "conj": 2.3208359594730656,
+    "double": 1.5806746142810617,
+    "half": 2.3244105111051114,
+    "none": 2.4284834970340543,
+    "shipped": 2.1272819679202724
+   },
+   "outcome": "SOLVED",
+   "refl_vs_1d": 0.015007862112493203
+  },
+  "nm6_plus": {
+   "energy": 1.999985897179125,
+   "jones0": {
+    "conj": 1.6683112437215455,
+    "double": 0.945018784243639,
+    "half": 0.4894329417327432,
+    "none": 0.9477348537228877,
+    "shipped": 0.003571329342386002
+   },
+   "outcome": "SOLVED",
+   "refl_vs_1d": 0.013861277606588904
+  },
+  "pure_own_step_6_to_8": 0.0015565161330790478,
+  "shipped_vs_pure_nm8": {
+   "conj": 1.6691071319155413,
+   "double": 0.9442963519342475,
+   "half": 0.4904546455399758,
+   "none": 0.948741948328579,
+   "shipped": 0.003453648043019829
+  }
+ },
+ "fixture": {
+  "degree": 11,
+  "duty": 0.38,
+  "eps_groove": 1.25,
+  "eps_ridge": 3.8,
+  "ladder": [
+   4,
+   8,
+   16
+  ],
+  "n_orders": 7,
+  "n_sub": 1.45,
+  "n_sup": 1.0,
+  "period": 6.6e-07,
+  "shear": 0.24,
+  "theta_deg": 31.0,
+  "thickness": 3.4000000000000003e-07,
+  "wavelength": 5.2e-07
+ },
+ "ladder": {
+  "neg": {
+   "16": {
+    "jones0": {
+     "conj": 1.666681115918435,
+     "double": 0.9463698252755434,
+     "half": 0.4875489436336385,
+     "none": 0.9457877074717796,
+     "shipped": 0.011106145334803641
+    },
+    "oracle_own_step": 0.011797427224170366,
+    "oracle_own_step_jones": 0.014909636006713887,
+    "per_order": {
+     "conj": 1.2873770880180837,
+     "double": 1.5360012107630805,
+     "half": 0.9809647215390382,
+     "none": 1.537252466776468,
+     "shipped": 0.006131782544745988
+    },
+    "reflection_as_returned": 0.009886209435327113
+   },
+   "4": {
+    "jones0": {
+     "conj": 1.6930140577118238,
+     "double": 0.9428149917102049,
+     "half": 0.5127575357967517,
+     "none": 0.9718019962789787,
+     "shipped": 0.06911789815717304
+    },
+    "oracle_own_step": null,
+    "oracle_own_step_jones": null,
+    "per_order": {
+     "conj": 1.2732073692376653,
+     "double": 1.5227764027690451,
+     "half": 0.9907495745121188,
+     "none": 1.539936476299067,
+     "shipped": 0.05582125796903101
+    },
+    "reflection_as_returned": 0.11711681969323726
+   },
+   "8": {
+    "jones0": {
+     "conj": 1.6710508494480234,
+     "double": 0.9450878057790039,
+     "half": 0.49198332905725756,
+     "none": 0.9503299582854505,
+     "shipped": 0.025557959122965147
+    },
+    "oracle_own_step": 0.039108285216480326,
+    "oracle_own_step_jones": 0.0446867487116673,
+    "per_order": {
+     "conj": 1.2843135089687985,
+     "double": 1.5334302515386002,
+     "half": 0.9826186055030262,
+     "none": 1.537769171111294,
+     "shipped": 0.017436500256839724
+    },
+    "reflection_as_returned": 0.03252605536082863
+   },
+   "library_taper_ns16": {
+    "conj": 1.2873860663966181,
+    "double": 1.5360010805168147,
+    "half": 0.9809562113484166,
+    "none": 1.5372575730788425,
+    "shipped": 0.006149206734428848
+   },
+   "oracle_shared_vs_perlayer": 2.3847923852263195e-05,
+   "shipped_vs_shared_grid_oracle": {
+    "conj": 1.2732097740395445,
+    "double": 1.522774616519061,
+    "half": 0.9907440083905641,
+    "none": 1.539935605051683,
+    "shipped": 0.05582362266315574
+   }
+  },
+  "pos": {
+   "16": {
+    "jones0": {
+     "conj": 1.6670314744134291,
+     "double": 0.9445143013875543,
+     "half": 0.48890203886811323,
+     "none": 0.9469002670650901,
+     "shipped": 0.0026179277721879424
+    },
+    "oracle_own_step": 0.009684737567274502,
+    "oracle_own_step_jones": 0.0013259244053297548,
+    "per_order": {
+     "conj": 1.5131619790606068,
+     "double": 1.139361742501715,
+     "half": 0.6633757368010036,
+     "none": 1.1405982908298387,
+     "shipped": 0.006297490842072473
+    },
+    "reflection_as_returned": 0.010474657078434127
+   },
+   "4": {
+    "jones0": {
+     "conj": 1.6762732753839686,
+     "double": 0.941565792959442,
+     "half": 0.49718694908593225,
+     "none": 0.9560553923539077,
+     "shipped": 0.010192295036841544
+    },
+    "oracle_own_step": null,
+    "oracle_own_step_jones": null,
+    "per_order": {
+     "conj": 1.5120664983603622,
+     "double": 1.1340529527025471,
+     "half": 0.6626509737415301,
+     "none": 1.142709140199158,
+     "shipped": 0.045180613991773894
+    },
+    "reflection_as_returned": 0.10473231542459603
+   },
+   "8": {
+    "jones0": {
+     "conj": 1.6672001014590219,
+     "double": 0.9444082727144063,
+     "half": 0.48909057932012284,
+     "none": 0.9470930407696083,
+     "shipped": 0.00310316916383777
+    },
+    "oracle_own_step": 0.03199118054057514,
+    "oracle_own_step_jones": 0.00955920901976026,
+    "per_order": {
+     "conj": 1.5132308088949125,
+     "double": 1.1380798064364566,
+     "half": 0.6626499299356615,
+     "none": 1.140710042292807,
+     "shipped": 0.015361505786132865
+    },
+    "reflection_as_returned": 0.03163551214651724
+   },
+   "library_taper_ns16": {
+    "conj": 1.5131687492544077,
+    "double": 1.1393488131638358,
+    "half": 0.6633857150882486,
+    "none": 1.1406072664525035,
+    "shipped": 0.006320117464611085
+   },
+   "oracle_shared_vs_perlayer": 2.1558986763393804e-05,
+   "shipped_vs_shared_grid_oracle": {
+    "conj": 1.5120641225348075,
+    "double": 1.134048724151699,
+    "half": 0.6626520687605292,
+    "none": 1.1427080606679836,
+    "shipped": 0.04518231487768272
+   }
+  }
+ },
+ "opposite": {
+  "net_zero": {
+   "P_net_max_dev": 0.0,
+   "P_one_max_dev": 1.999850704046003,
+   "P_one_ptp_arg": 5.654866776461625,
+   "walk_net": 0.0,
+   "walk_net_is_exactly_zero": true,
+   "walk_one_layer": 1.9799999999999995e-07
+  },
+  "opposite_pair": {
+   "rows": {
+    "12": {
+     "conj_sum": 1.3203466173234937,
+     "full": 1.1421689393761094,
+     "no_sum": 1.1066777556911376,
+     "only_layer1": 1.0622901879775242,
+     "only_layer2": 1.1926722511534205,
+     "oracle_own_step": 0.012335511332508983
+    },
+    "6": {
+     "conj_sum": 1.318730597792378,
+     "full": 1.1392730289943802,
+     "no_sum": 1.1052327031554614,
+     "only_layer1": 1.0614358968327509,
+     "only_layer2": 1.191810149827586,
+     "oracle_own_step": null
+    }
+   },
+   "walk_expected": 1.188e-07,
+   "walk_shipped": 1.1879999999999998e-07
+  }
+ },
+ "stamp": {
+  "arm": "post",
+  "build": "win",
+  "jax": "0.11.0",
+  "jax_x64": false,
+  "lumenairy": "5.44.0",
+  "lumenairy_file": "C:\\tmp/lum_vslant\\lumenairy\\__init__.py",
+  "numpy": "2.4.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.14.6",
+  "scipy": "1.17.1",
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  },
+  "tree": "C:\\tmp/lum_vslant",
+  "utc": "2026-09-10T10:54:48Z"
+ },
+ "total_secs": 225.8,
+ "uniform_film": {
+  "tan-0.6": {
+   "dJrefl": 1.0849580201885626e-14,
+   "dR": 5.132043235613223e-15,
+   "dT": 2.4533548110972663e-15,
+   "jones0": {
+    "conj": 1.9099283048723557,
+    "double": 1.1859838152358007,
+    "half": 0.6241659736454067,
+    "none": 1.1859838152358,
+    "shipped": 1.6866304740142053e-14
+   },
+   "orders_same": true,
+   "per_order": {
+    "conj": 1.9099283048723557,
+    "double": 1.1859838152358007,
+    "half": 0.6241659736454067,
+    "none": 1.1859838152358,
+    "shipped": 3.683374218462358e-14
+   },
+   "reflection_as_returned": 6.387136508895491e-14,
+   "walk_m": -2.04e-07
+  },
+  "tan0.6": {
+   "dJrefl": 5.3280619579399305e-15,
+   "dR": 5.3785817336352584e-15,
+   "dT": 2.62671091960631e-15,
+   "jones0": {
+    "conj": 1.909928304872356,
+    "double": 1.1859838152358015,
+    "half": 0.6241659736454063,
+    "none": 1.1859838152357998,
+    "shipped": 5.978840480421917e-15
+   },
+   "orders_same": true,
+   "per_order": {
+    "conj": 1.909928304872356,
+    "double": 1.1859838152358015,
+    "half": 0.6241659736454063,
+    "none": 1.1859838152357998,
+    "shipped": 3.6879001845219375e-14
+   },
+   "reflection_as_returned": 4.8666008524788204e-14,
+   "walk_m": 2.04e-07
+  },
+  "tan1.35": {
+   "dJrefl": 1.0208435772233993e-14,
+   "dR": 1.211659400078572e-14,
+   "dT": 2.6144056260194023e-14,
+   "jones0": {
+    "conj": 0.5625644603282902,
+    "double": 1.9797096184462697,
+    "half": 1.3098987977249663,
+    "none": 1.979709618446273,
+    "shipped": 1.9899185549567104e-14
+   },
+   "orders_same": true,
+   "per_order": {
+    "conj": 0.5625644603282902,
+    "double": 1.9797096184462697,
+    "half": 1.3098987977249663,
+    "none": 1.979709618446273,
+    "shipped": 3.4210434805840206e-14
+   },
+   "reflection_as_returned": 1.0386121934649962e-13,
+   "walk_m": 4.5900000000000007e-07
+  }
+ }
+}

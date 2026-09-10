@@ -1,0 +1,84 @@
+{
+ "_stamp": {
+  "arm": "post",
+  "cut_band_rel": 1e-08,
+  "lumenairy_file": "C:\\tmp\\lum_vrcwa\\lumenairy\\__init__.py",
+  "node": "Tesla_Ryzen",
+  "numpy": "2.4.4",
+  "platform": "Windows",
+  "python": "3.14.6",
+  "sqrt_decay_has_conj": true,
+  "sqrt_decay_has_exact_pin": false,
+  "threads": {
+   "MKL_NUM_THREADS": null,
+   "OMP_NUM_THREADS": null,
+   "OPENBLAS_NUM_THREADS": null
+  }
+ },
+ "bar1_min_Re": 0.0,
+ "bar1_n_incoming": 0,
+ "bar1_n_total": 60,
+ "bar1_root_residual_rel": 2.6423569824283266e-14,
+ "bar1b_min_Re": 0.5,
+ "bar2_signal_side": {
+  "0.0001": {
+   "imag_still_negative": true,
+   "untouched": true
+  },
+  "0.0079": {
+   "imag_still_negative": true,
+   "untouched": true
+  },
+  "0.0126": {
+   "imag_still_negative": true,
+   "untouched": true
+  },
+  "0.079": {
+   "imag_still_negative": true,
+   "untouched": true
+  },
+  "1e-06": {
+   "imag_still_negative": true,
+   "untouched": true
+  },
+  "1e-07": {
+   "imag_still_negative": true,
+   "untouched": true
+  },
+  "2e-08": {
+   "imag_still_negative": true,
+   "untouched": true
+  },
+  "5e-08": {
+   "imag_still_negative": true,
+   "untouched": true
+  }
+ },
+ "bar5_post": {
+  "incoming": 0,
+  "on_cut": 16
+ },
+ "bar5_pre": {
+  "incoming": 5,
+  "on_cut": 16
+ },
+ "openblas_num_threads": "unpinned",
+ "post": {
+  "closure_even": 1.3322676295501878e-15,
+  "closure_full": -4.884981308350689e-15,
+  "closure_obl_02_07": 9.769962616701378e-15,
+  "closure_obl_03": -3.7969627442180354e-14,
+  "dJ": 2.8716092858869885e-16,
+  "dR": 2.7755575615628914e-17,
+  "fold_bit_identical": false
+ },
+ "pre": {
+  "closure_even": 2.6410335562943033e-06,
+  "closure_full": -0.00011696030146213232,
+  "closure_obl_02_07": 2.1752947172437587e-06,
+  "closure_obl_03": -4.137638312728953e-05,
+  "dJ": 3.1887105991445276e-13,
+  "dR": 2.0067281170099704e-14,
+  "fold_bit_identical": false
+ }
+}

@@ -1,0 +1,87 @@
+{
+ "_arm": {
+  "build": "wsl",
+  "tree": "prefix(48c8747)",
+  "tag": "wsl.prefix",
+  "lumenairy": "/mnt/c/tmp/lum_wslfix_pre/lumenairy/__init__.py",
+  "version": "5.44.0",
+  "python": "3.12.3",
+  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "blas": {
+   "blas": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64"
+   },
+   "lapack": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY SkylakeX MAX_THREADS=64"
+   }
+  },
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ },
+ "detune": 0.0,
+ "n_sub": 1.5,
+ "full": {
+  "eig": [
+   {
+    "n": 242,
+    "cond_M": 159.69976692095378,
+    "cond_W": 5286.2483360362885,
+    "eval_absmax": 76.13980483169098,
+    "eval_absmin": 0.48089898486317767,
+    "min_gap": 7.962445519222636e-16,
+    "n_gaps_below_1e_8": 101,
+    "n_gaps_below_1e_12": 99
+   }
+  ],
+  "iface": [],
+  "defect": -0.000851550068377005,
+  "R_max": 0.03976446965327195
+ },
+ "even": {
+  "eig": [
+   {
+    "n": 122,
+    "cond_M": 159.00542556846497,
+    "cond_W": 4521.2905360731775,
+    "eval_absmax": 76.13980483169127,
+    "eval_absmin": 0.48242158349763126,
+    "min_gap": 7.125154777912479e-15,
+    "n_gaps_below_1e_8": 41,
+    "n_gaps_below_1e_12": 40
+   }
+  ],
+  "iface": [
+   {
+    "n": 122,
+    "cond_Wb": 4521.2905360731775,
+    "cond_Vb": 9190.457374992651,
+    "cond_apb": 9964.596342210689,
+    "cond_amb": 20322.156329546247,
+    "amax_a": 902.7243050452095,
+    "amax_b": 849.7039133448231
+   },
+   {
+    "n": 122,
+    "cond_Wb": 1.0,
+    "cond_Vb": 30.99999999999992,
+    "cond_apb": 2943347832996483.0,
+    "cond_amb": 2.6241532129431834e+17,
+    "amax_a": 0.9666131829480924,
+    "amax_b": 0.966448444190141
+   }
+  ],
+  "defect": 0.00495187272473796,
+  "R_max": 0.056015188874237155
+ }
+}

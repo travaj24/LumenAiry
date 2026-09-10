@@ -773,7 +773,15 @@ def test_o2_the_threshold_sits_in_the_measured_gap_on_both_sides():
                  slant 0.25, normal)    rcond >= 2.97e-05
 
     ``_INV_T22_RCOND_REFUSE`` = 1e-10 is the geometric middle of the measured
-    11.10-decade gap (8.4e-11).  The bars below give each side five decades."""
+    11.10-decade gap (8.4e-11).  The bars below give each side five decades.
+
+    RESTATED 2026-09-11 (verification, durability flag): the broken-side bar
+    was 1e-15 -- a SAMPLE property of this one fixture (3.90e-17).  The
+    verification's wider population of 134 solves / 229 interfaces reads the
+    broken rcond up to 4.78e-16 (0.32 decades under 1e-15, i.e. inside
+    build noise), so the bar is now 1e-13: 2.3 decades above the family's
+    broken envelope and 3.0 decades below the refusal bar 1e-10, with the
+    healthy side (>= 2.08e-05) untouched."""
     rows = []
     _rc._INV_CENSUS = rows
     try:
@@ -781,7 +789,7 @@ def test_o2_the_threshold_sits_in_the_measured_gap_on_both_sides():
             _o2_hybrid(M=5, slant=0.5).solve()
         broken = [r for r in rows if r[4]]
         assert broken, "the census recorded no refused row"
-        assert max(r[2] for r in broken) < 1e-15
+        assert max(r[2] for r in broken) < 1e-13
         assert min(r[3] for r in broken) > 1e-3
         rows.clear()
         with warnings.catch_warnings():
@@ -832,17 +840,28 @@ def test_o2_the_mortar_interfaces_take_no_explicit_inverse():
     OUT-OF-PLANE pure stack on per-layer grids whose two layers carry different
     grids -- the only route to the 2-D general mortar): ``cond(A) = 3.14e+03``
     on a 936 x 936 solve at ``sum R + T = 0.9997``, i.e. twelve decades below
-    the singular ``T22`` readings the refusal exists for."""
+    the singular ``T22`` readings the refusal exists for.
+
+    RESTATED 2026-09-11 at the merge with mortar round 2 (D2): the 2-D twin
+    no longer spells its solve ``np.linalg.solve`` -- it goes through
+    ``_guarded_mortar_solve``, which is ``lu_factor`` + ``lu_solve`` (the
+    same ``getrf`` + ``getrs`` pair, bit-identical, measured 60/60 solves by
+    the round-2 verification).  The DECISION this test pins is unchanged:
+    every mortar interface ends in a SOLVE and never forms an explicit
+    inverse, so there is nothing for ``_guarded_inverse`` to screen.  The
+    assertion now names both solve spellings and forbids both inverse
+    spellings, on the mortar functions AND on the guarded solve itself."""
     from lumenairy.elements.pmm import _core as _pc
-    assert "np.linalg.solve" in _mortar_source(_pc,
-                                               "_interface_smatrix_general_"
-                                               "mortar_2d")
-    assert "_guarded_inverse" not in _mortar_source(
-        _pc, "_interface_smatrix_general_mortar_2d")
-    assert "np.linalg.solve" in _mortar_source(
-        _pc, "_interface_smatrix_general_mortar")
-    assert "_guarded_inverse" not in _mortar_source(
-        _pc, "_interface_smatrix_general_mortar")
+    solve_spellings = ("np.linalg.solve", "_guarded_mortar_solve")
+    inverse_spellings = ("_guarded_inverse", "np.linalg.inv", "linalg.inv(")
+    for name in ("_interface_smatrix_general_mortar_2d",
+                 "_interface_smatrix_general_mortar"):
+        src = _mortar_source(_pc, name)
+        assert any(sp in src for sp in solve_spellings), name
+        assert not any(sp in src for sp in inverse_spellings), name
+    guarded = _mortar_source(_pc, "_guarded_mortar_solve")
+    assert "lu_factor" in guarded and "lu_solve" in guarded
+    assert not any(sp in guarded for sp in inverse_spellings)
 
 
 def _mortar_source(mod, name):

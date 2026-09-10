@@ -1,0 +1,54 @@
+{
+ "_arm": {
+  "build": "win",
+  "tree": "branch(fix tip)",
+  "tag": "win.branch",
+  "lumenairy": "C:\\tmp\\lum_wslfix\\lumenairy\\__init__.py",
+  "version": "5.44.0",
+  "python": "3.14.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "blas": {
+   "blas": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24"
+   },
+   "lapack": {
+    "name": "scipy-openblas",
+    "version": "0.3.31.188.0",
+    "detection method": "pkgconfig",
+    "openblas configuration": "OpenBLAS 0.3.31.188.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=24"
+   }
+  },
+  "threads": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": null
+  }
+ },
+ "n_total": 2150,
+ "split": 0.0001,
+ "n_below": 117,
+ "below_max": 2.245163748744029e-16,
+ "n_above": 2033,
+ "above_min": 0.08267265753420326,
+ "below_all_lossless_propagating": true,
+ "above_by_tag": {
+  "loss1e-02": 2,
+  "loss1e-04": 2,
+  "loss1e-06": 2,
+  "loss1e-08": 2,
+  "lossless": 2025
+ },
+ "below_by_tag": {
+  "loss1e-02": 0,
+  "loss1e-04": 0,
+  "loss1e-06": 0,
+  "loss1e-08": 0,
+  "lossless": 117
+ },
+ "bar": 1e-08
+}

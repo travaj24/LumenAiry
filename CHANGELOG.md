@@ -4,6 +4,95 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed -- the RCWA modal BRANCH CUT: a propagating layer mode could be handed the INCOMING root, decided by a last bit
+
+`_sqrt_decay` maps a layer eigenvalue `lam^2` to its modal decay constant.  A
+PROPAGATING mode of a LOSSLESS layer has `lam^2` exactly real NEGATIVE -- on the
+principal square root's branch cut, where the outgoing root `+i|kz|` (the branch
+the region modes are built on) and the incoming root `-i|kz|` are separated ONLY
+by the sign of `Im(lam^2)`.  The pin meant to force the outgoing root tested
+`Re(sqrt(lam^2)) == 0` EXACTLY, which an `eig` output never satisfies -- its real
+part is the eigensolver's backward error, ~1e-16, not zero.  So the pin fired for
+the REGION modes (exact arithmetic, a signed zero) and NEVER for a structured
+LAYER's, whose root was then decided by the last bit of `Im(lam^2)`: a quantity
+with no physical content that changes with the BLAS kernel, the thread count and
+the platform.
+
+A forward mode carrying the incoming root IS a backward mode.  Against a region
+of the SAME permittivity it is exactly that region's own backward mode, so the
+interface mode-match `a + b` -- whose explicit inverse IS `S12` -- is exactly
+singular.  Measured on the reproducer (layer background `2.25`, `n_substrate =
+1.5`, so `eps_sub = 2.25` exactly): `cond(a + b) = 1.97e+15` at the
+layer->substrate interface against `1.54e+04` at the layer->superstrate one,
+while `cond(M) = 1.6e+02` and `cond(W) = 5.6e+03` -- the singularity was CREATED
+at the mode match, not inherited from the eigenproblem.  This is the whole of the
+library's long-standing "a LAYER permittivity EXACTLY EQUAL to a REGION's ...
+degenerate at EVERY truncation, DETUNE by ~1e-6 instead" warning: a detune ladder
+makes the defect fall as `1/d` (`defect * d` flat at ~1e-17 over five decades)
+and return as `d -> 0`.
+
+**What it cost.**  `sum R + T - 2` on a provably lossless cell reached
+**3.2e-03**, and moved THREE AND A HALF DECADES AND CHANGED SIGN with
+`OPENBLAS_NUM_THREADS` alone (`-3.200e-03 / -1.003e-03 / -1.084e-06 / +1.264e-03 / +4.939e-06` at
+1 / 2 / 4 / 8 / 16 threads on one build).  `test_jones_2d_even_sector_matches_full`
+read `1.625072e-02` on WSL at one thread and `2.006728e-14` on Windows unpinned
+-- twelve decades on one quantity across settings a build is entitled to choose.
+Release CI was green because its fast `unit` lane deliberately leaves BLAS
+unpinned; the same tree, same interpreter and same numpy 2.4.6 FAILS at one
+thread and PASSES unpinned.
+
+**What ships.**  The on-cut test becomes a band relative to the mode spectrum,
+`|Re(r)| <= _CUT_BAND_REL * max(max|r|, 1)` with `_CUT_BAND_REL = 1e-8` -- the
+same value and the same shape as the PMM side's `_forward_branch_flip`, which
+solved this identical problem for the scalar-vertical generators (audit S1-8).
+The flipped entry takes `conj(r)` rather than `-r`, which keeps `Re(lam) >= 0`
+and with it the `|X| <= 1` contraction guarantee.
+
+The bar is TWO-SIDED and measured: over 2150 (WIN) / 2135 (WSL) `Im(r) < 0` modes
+on 51 fixtures, `|Re(r)| / max(max|r|, 1)` splits into 117 / 99 modes at
+`<= 2.245e-16` / `1.511e-16` -- every one a lossless PROPAGATING mode -- and 2033
+/ 2036 modes at `>= 8.267e-02` / `7.947e-02`, with a LOSS LADDER down to
+`Im(eps) = 1e-8` contributing nothing to the low side.  Fourteen decades of gap;
+the bar sits 7.6 decades above the noise and 6.9 below the signal.
+
+After the fix `cond(a + b)` reads `5.63e+03`, the closure defect `<= 6.0e-15` on
+both builds at every thread count (WSL reads `2.000000000000000` exactly), and
+the two lossy census fixtures are BIT-IDENTICAL to the pre-fix arm -- the change
+touches nothing where the sign of `Im(r)` is physics.  A lossless solve away from
+the coincidence moves by 1.04e-17 .. 5.54e-15; one on the coincidence moves by
+up to 1.81e-02, which is the fix.  `_sqrt_decay` is shared, so `rcwa/oned.py`,
+`rcwa/stack.py`, `pmm/twod.py`, the three PMM JAX twins and `elements/berreman.py`
+all get the pinned root -- though whether that CHANGES an answer needs a second
+condition: a LAYER MODE that numerically equals a REGION MODE, which an equal
+material index only makes possible.  The 1-D binary grating the warning text
+names (`n_groove = n_substrate = 1.5`, ridge 2.1, duty 0.5) has one mis-rooted
+TE mode pre-fix but no region mode within 0.165 of any layer mode, and its
+closure defect reads 8.2e-15 before and 8.1e-15 after on both builds.
+
+Evidence: `docs/audits/FIX_RCWA_EVEN_SECTOR_WSL_2026_09_11.md`; probes (both
+builds, both arms) in `validation/probe_fix_rcwa_even_sector_wsl/`; DECISION test
+`tests/unit/test_fix_rcwa_even_sector_wsl.py` (7 of its 9 assertions fail on the
+pre-fix tree on BOTH builds; the 2 that pass are the guards the fix must not
+cost).
+
+
+**A second reproducer, found by the merged-tree run (2026-09-11).**  The
+uniaxial cascade that `tests/unit/test_m1_conditioning_guard.py` had recorded
+since v5.33.1 as the FALSE POSITIVE the equilibrated inverse residual exists
+for -- raw `T22` residual 1e-2 .. 5e-1 "while the answer is right", an
+`|R+T-2|` ladder that "jitters with the BLAS reduction order over more than
+two decades" -- was this defect: its groove permittivity equals the substrate's
+(2.25), so a mis-rooted propagating layer mode duplicated a substrate backward
+mode.  Pre-fix at `M` = 5 / 9 / 15 / 19 / 25: raw residual 5.2e-01 / 2.8e-01 /
+1.2e-02 / 1.7e-02 / 1.1e-02, `rcond` 1.7e-03 .. 1.2e-05, `|R+T-2|` 2.0e-02 ..
+1.3e-04 at one thread and a different ladder at four.  Post-fix: raw residual
+<= 5.5e-16, equilibrated <= 5.4e-16, `rcond` >= 2.3e-02, `|R+T-2|` <= 2.1e-14
+at 1 / 4 / 8 threads on both builds, `J00` unchanged to six figures.  The
+test is RESTATED to assert the well-conditioned state and a closure bar of
+1e-10 (6.7 decades above the measurement, 8.3 below the old symptom); whether
+the equilibrated instrument retains any motivating population is under
+verification.
+
 ### Fixed -- `PMMStack` REFUSES a near-coincident-wall SLIVER instead of returning a wrong answer (O-11)
 
 Two adjacent layers whose wall sets differ by `delta` of the period put a SLIVER
@@ -184,6 +273,120 @@ Regression: every test file importing `PMMStack` (42) -- **812 passed,
 1 skipped, 0 failed** with the slow markers included (43:19), against 793 / 1
 on the pre-round-2 tip.
 Full write-up: `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md`.
+
+**ROUND 3 (2026-09-11) -- the arbiter's CLOSURE is now RELATIVE.**  The
+independent verification of round 2
+(`docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND2_2026_09_11.md`, defect **D-5**)
+found the one case round 2's criterion cannot express, and it is the one place
+round 2 was worse than round 1.  `_SLIVER_ATTRIB_CLOSURE` asked the re-solve on
+the prescribed `min_feature` grid to reach an ABSOLUTE 1e-5, so on a stack whose
+SLIVER-FREE truncation super-unity already sits above that bar the criterion can
+NEVER be met -- however completely the snap restores the answer.  Measured on a
+guided-mode grating in a dense-superstrate grazing mount (period 1.0 um,
+`n_sup` 2.4, `n_sub` 1.45+0.05i, `wl` 0.93 um, theta 1.22, degree 8, whose
+sliver-free degree ladder 2.078e-04 / 3.7295e-05 / 9.832e-06 / 2.961e-07 /
+3.153e-09 at degrees 6/8/10/12/14 is clean truncation): the snap removes a
+**621x-5,181x** super-unity and puts the answer back on the sliver-free
+reference to `err/delta` = **0.0019**, and round 2 returned all three rows --
+off by **1,811x-3,501x** the physical wall shift at `R+T` = 1.19 -- under a
+warning saying the prescribed remedy would "silence nothing here".  The closure
+now asks the snap to REMOVE most of the violation instead:
+`su_snapped <= max(_SLIVER_ATTRIB_CLOSURE, (max(R+T) - 1) *
+_SLIVER_CLOSURE_FRACTION)` with `_SLIVER_CLOSURE_FRACTION` = **1e-2**, the
+round-2 value kept as the LOWER arm -- so the criterion is a widening and never
+a tightening, and a `sliver` verdict can never become a `truncation` one.
+* **Round 3 verified 2026-09-11** (`docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND3_2026_09_11.md`,
+  own 576-mount / 2,304-row box, six D-5 mounts over four mechanisms, both
+  builds agreeing on every decision): 42/42 returned answers bit-identical to
+  round 2, 13/13 round-2 refusals preserved, 11 one-way `truncation -> sliver`
+  flips all wrong (`err/delta` 5.2e+04 .. 7.6e+07) and all restored by the
+  prescribed grid, 0 false positives, analytic == library on 859/859, 100/102
+  D-5 rows recovered, the 43-file regression 819 passed / 1 skipped.  Three
+  sample-scoped numbers corrected (the D-5 drop floor is 3.669 on the family,
+  inside the correct population -- the structural R3-A floor, one such row
+  returned silently below the warning bar; the correct `move / w_wide`
+  envelope reaches 161 (ladder box) and 907 (tapered family), so the move
+  bar is inside the correct population and the closure arm carries the
+  decision; the finite-drop
+  correct envelope 36.611 stays binding).  OPEN, inherited from round 2:
+  **V-4** (MEDIUM) three CORRECT degree-4 answers on one dense mount are
+  refused with both arms degenerate (`su_snapped` = 0, `move / w_wide`
+  115 .. 257) and the named remedy makes them slightly worse -- a false
+  refusal, not a wrong answer; **R3-B** an owned liner (2 nm) beside a 37 pm
+  wall mismatch silences the screen (`R+T` 2.92 returned on the verification's
+  fixture; the round-3 reproducer test's own fixture reads 23.30); **R3-C** a
+  keyed `prepare()` stack is outside the guard (`R+T` 2.76 returned on the
+  verification's fixture; 23.42 on the reproducer test's).  The three
+  `move / w_wide` envelopes quoted in this entry are three different boxes:
+  79.032 is the round-3 build's 576-configuration box, 833.78 the round-2
+  verification's resonant counter-fixture, and 161 / 907 the round-3
+  verification's ladder box and tapered family.
+
+The constant is sized on the super-unity DROP factor `(max(R+T) - 1) /
+su_snapped`, and the sizing rule is not the obvious one.  The closure has never
+been a separator on its own -- round 2 says as much about its own bar -- and a
+576-configuration box (three periods, two wavelengths, two superstrate indices,
+three lossy substrates, two angles, two degrees, two ridge permittivities, two
+slice counts, four wall steps) makes that plain: of its **1,078** arbitrated
+CORRECT rows, **21** have an INFINITE drop because their snapped solve leaves
+the super-unity regime, and those 21 are exactly the rows the ABSOLUTE bar
+admits too.  So what the constant must not do is admit a correct row the
+round-2 closure did not already admit, and **1e-2 is the coarsest value on the
+1e-1 / 3e-2 / 1e-2 / 3e-3 / 1e-3 ladder that admits none** (3e-2 and 1e-1 admit
+one more, a correct row with a finite drop of 36.611; 1e-2 clears that envelope
+by 2.73x).  Against it, the D-5 population runs **49.107 .. 5,304.6** over 88
+rows on five mounts, of which 1e-2 recovers **85** -- 3e-3 and 1e-3 would
+recover 60 and 32, the worst row they leave returned being off by 6,439x and
+11,582x the physical wall shift.  The CONJUNCTION is where the decision lives:
+over **1,369** arbitrated CORRECT rows on two independent boxes (and the 615
+further arbitrated rows of an eight-device scan, none of which the continuity
+rule calls correct), **0** are attributed at any fraction from 1e-1 to 1e-3,
+because the move criterion holds every one out (their `move / w_wide` envelope is 79.032 against the 100x bar,
+and 37.007 among the rows the closure admits).
+
+MEASURED RESULT, both builds, agreeing to 10 significant figures: both censuses
+are unchanged row for row -- false positives **0/648** with all **648/648**
+returned answers still bit-identical to the unguarded ones, false negatives
+**4/660** -- and over 615 arbitrated rows of eight devices (five staircases
+with continuity slopes 0.47 .. 31.4, five D-5 mounts, four points on a
+guided-mode resonance flank with `dR/d(duty)` 128-174) the ONLY verdicts that
+move are **85** rows of the D-5 class, every one WRONG by both the absolute and
+the slope-normalised continuity rule and the mildest off by **517.7x** the wall
+shift, with **0** moving the other way.  Both messages are rewritten to be true
+under the new criterion: the `truncation` note names WHICH of the two criteria
+was not met and quotes the measured drop and the residue the prescribed grid
+leaves (the unconditional "raising min_feature will silence nothing here" is
+gone), and the refusal's ATTRIBUTION paragraph quotes the drop and the closure
+actually applied rather than the absolute bar.
+
+Also in this round, from the same verification: the round-2 report's four
+SAMPLE-scoped numbers are corrected in a new S0.1 table (trigger headroom
+9.11x -> **8.03x**; the wrong population's `move / w_wide` floor 466.2 ->
+**147.411**, so that bar carries 1.47x and not 4.66x; "one sub-unity wrong row"
+-> at least **11**, worst -1.13511e-03; and "CORRECT rows move at most 26.58"
+-> **833.78** on a resonant device, which refutes the published bound by 31x
+without changing the decision -- the move criterion's correctness rests on the
+CLOSURE arm, not on a universal `dR/dx` = O(1)), and the verification's D-5
+pinning test is re-pinned against the repair it asked for.
+
+Three OPEN items are recorded rather than fixed.  **R3-A** is a limit rather
+than a defect: a row's drop is at least the trigger divided by the mount's own
+truncation floor, so a mount whose floor is within `_SLIVER_CLOSURE_FRACTION`
+of the trigger cannot be attributed at any setting -- R2-A one level deeper,
+and the three D-5 rows 1e-2 leaves returned (drop 49.107, degree 6) are its
+visible edge.  **R3-B** (pre-existing, MEDIUM): one thin OWNED feature lowers
+the GLOBAL own-scale and disarms the cross-layer refusal for the whole stack --
+reproducer
+`tests/unit/test_verify_pmmstack_sliver_round2.py::test_an_owned_liner_anywhere_disarms_the_cross_layer_refusal`,
+measured `own / w` 9,287.3 -> 0.03 and `R+T` = 23.30 RETURNED.  **R3-C**
+(pre-existing, LOW): a KEYED `prepare()` stack is not `_stack_provably_passive`,
+so the screen is never reached -- reproducer
+`tests/unit/test_verify_pmmstack_sliver_round2.py::test_a_keyed_prepared_stack_is_outside_the_guard_entirely`,
+measured `R+T` = 23.42 returned under the plain warning.  Both R3-B and R3-C are
+changes to the SCREEN rather than to the arbiter and need their own
+bit-identity and census arms.
+`tests/unit/test_fix_pmmstack_sliver_round3.py`, 6 tests, 3.64 s (Windows) / 3.21 s (WSL).
+Full write-up: `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md`.
 
 ### Fixed -- the `min_feature` wall-snap treats a SYMMETRIC pair symmetrically
 
@@ -919,6 +1122,34 @@ ladders step `n_orders` around it unchanged.
 Gate for all three: `tests/unit/test_fix_slant_anchor_v1_v2_o2.py`.  Evidence:
 `docs/audits/FIX_SLANT_ANCHOR_V1_V2_O2_2026_09_11.md`; probes in
 `validation/probe_fix_slant_anchor_v1v2o2/` (both builds, pre- and post-fix).
+
+* **Verified 2026-09-11** (`docs/audits/VERIFY_SLANT_ANCHOR_V1_V2_O2_2026_09_11.md`,
+  `validation/probe_verify_slant_anchor/`, three trees: pre-fix, tip, and the
+  tip with only the three fix commits reverted).  V1: the seven traced routes
+  reproduce (one shared digest, `dR` 2.88e-02 from the correct slanted call)
+  and refuse post-fix; no eighth route among 22 candidates; the constant-tile
+  no-op holds to 1.97e-14 at conical incidence and on an anisotropic tile.
+  V2: the sign confirmed by five independent means (own ladder 4.52e-02 ->
+  6.30e-03 vs a flat 1.14; analytic film 3.4-4.1e-14 at three slants both
+  signs; `PMM2DStackPure` 275x; `RCWAStack` 58.6x); census 585 identical /
+  55 moved / 0 unexpected on both builds against both trees.  O2: re-derived on
+  134 solves / 229 interfaces -- refused rcond <= 4.78e-16, healthy >= 2.08e-05,
+  gap 10.6 decades, refused == broken 21/21, 110/110 bit-identical; no healthy
+  solve within two decades of the bar was found (grazing, dense superstrate,
+  high contrast, `n_orders` 11, near-Wood).  Three findings, none silent-wrong:
+  (D1, P2, PRE-EXISTING) `add_sheared_grating`'s `centre` is a LAB position
+  for the FIRST sheared layer and a FRAME position (`+ sum of the walks
+  above`) for later ones -- the cascade matches frame coefficients directly;
+  measured 142x against a hand-built staircase, a convergence statement; now
+  documented in `add_sheared_grating` and `add_layer`; (D2, P3) on the default
+  `factorization='auto'` a single in-plane sheared grating takes the covariant
+  cascade, which retains no per-order amplitudes, so the anchored surface is
+  reachable only on the factorizations that retain them; (D3, P4) a CONCRETE
+  (non-tracer) `jnp` constant cell is refused although it is a measured
+  no-op.  Durability: the O2 test's broken-side bar 1e-15 was a sample
+  property (the family reaches 4.78e-16) and is restated to 1e-13.  The screen
+  is free for unarmed callers and costs 1.10x-1.51x of the inverse at the
+  armed site (n = 66..722).
 
 ## [5.44.0] — 2026-09-10
 
