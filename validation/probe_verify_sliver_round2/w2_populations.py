@@ -36,9 +36,9 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import lumenairy                                              # noqa: E402
-from w_fixtures import (classify, prescribed, shared_move,     # noqa: E402
-                        snapped, unguarded, wbuild)
+from w_fixtures import classify, prescribed, shared_move, snapped, unguarded, wbuild  # noqa: E402
+
+import lumenairy  # noqa: E402
 
 TRIG = 1.0e-3
 

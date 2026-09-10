@@ -1,0 +1,6 @@
+1.18s call     tests/unit/test_verify_pmmstack_sliver_round2.py::test_every_returned_row_of_the_staircase_box_is_bit_identical
+0.91s call     tests/unit/test_verify_pmmstack_sliver_round2.py::test_an_owned_liner_anywhere_disarms_the_cross_layer_refusal
+0.42s call     tests/unit/test_verify_pmmstack_sliver_round2.py::test_the_closure_criterion_is_absolute_not_relative
+0.36s call     tests/unit/test_verify_pmmstack_sliver_round2.py::test_the_within_layer_arm_is_silent_where_the_theorem_lets_it_be
+0.29s call     tests/unit/test_verify_pmmstack_sliver_round2.py::test_the_move_criterion_is_bounded_by_the_devices_own_dR_dx
+0.11s call     tests/unit/test_verify_pmmstack_sliver_round2.py::test_a_keyed_prepared_stack_is_outside_the_guard_entirely

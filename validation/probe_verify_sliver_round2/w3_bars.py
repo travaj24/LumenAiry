@@ -29,10 +29,11 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import lumenairy                                               # noqa: E402
-from lumenairy.elements.pmm import PMMStack                    # noqa: E402
-from lumenairy.elements.pmm import stack as ps                 # noqa: E402
-from w_fixtures import shared_move, unguarded, uniaxial        # noqa: E402
+from w_fixtures import shared_move, unguarded, uniaxial  # noqa: E402
+
+import lumenairy  # noqa: E402
+from lumenairy.elements.pmm import PMMStack  # noqa: E402
+from lumenairy.elements.pmm import stack as ps  # noqa: E402
 
 ULP = float(np.finfo(float).eps)
 

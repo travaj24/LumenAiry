@@ -32,11 +32,17 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import lumenairy                                              # noqa: E402
-from lumenairy.elements.pmm import PMMStack                   # noqa: E402
-from lumenairy.elements.pmm import stack as ps                # noqa: E402
-from w_fixtures import classify, prescribed, shared_move      # noqa: E402
-from w_fixtures import snapped, unguarded                     # noqa: E402
+from w_fixtures import (  # noqa: E402  # noqa: E402
+    classify,
+    prescribed,
+    shared_move,
+    snapped,
+    unguarded,
+)
+
+import lumenairy  # noqa: E402
+from lumenairy.elements.pmm import PMMStack  # noqa: E402
+from lumenairy.elements.pmm import stack as ps  # noqa: E402
 
 BAR1 = 1.0e-2                    # round 1's refusal bar
 TRIG = 1.0e-3                    # round 2's trigger

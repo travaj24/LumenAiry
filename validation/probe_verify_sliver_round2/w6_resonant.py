@@ -46,11 +46,15 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import lumenairy                                              # noqa: E402
-from lumenairy.elements.pmm import PMMStack                   # noqa: E402
-from lumenairy.elements.pmm import stack as ps                # noqa: E402
-from w_fixtures import prescribed, shared_move, snapped       # noqa: E402
-from w_fixtures import unguarded                              # noqa: E402
+from w_fixtures import (  # noqa: E402
+    prescribed,
+    shared_move,
+    snapped,
+    unguarded,  # noqa: E402
+)
+
+import lumenairy  # noqa: E402
+from lumenairy.elements.pmm import PMMStack  # noqa: E402
 
 TRIG, CLOSURE, MOVE = 1.0e-3, 1.0e-5, 100.0
 

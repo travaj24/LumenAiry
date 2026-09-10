@@ -32,11 +32,19 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import lumenairy                                              # noqa: E402
-from lumenairy.elements.pmm import PMMStack                   # noqa: E402
-from lumenairy.elements.pmm import stack as ps                # noqa: E402
-from w_fixtures import (gyrotropic, non_hermitian, prescribed,  # noqa: E402
-                        shared_move, snapped, uniaxial, unguarded)
+from w_fixtures import (  # noqa: E402
+    gyrotropic,
+    non_hermitian,
+    prescribed,
+    shared_move,
+    snapped,
+    unguarded,
+    uniaxial,
+)
+
+import lumenairy  # noqa: E402
+from lumenairy.elements.pmm import PMMStack  # noqa: E402
+from lumenairy.elements.pmm import stack as ps  # noqa: E402
 
 P, WL, TH = 1.2e-6, 0.85e-6, 0.15
 A0, B0 = 0.27865, 0.62505

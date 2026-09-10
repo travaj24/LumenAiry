@@ -67,8 +67,9 @@ def main():
         print(f"A: {A['lumenairy']}\nB: {B['lumenairy']}")
         return 0 if (diff == 0 and err == 0 and wdiff == 0) else 1
 
-    import lumenairy
     from w_fixtures import BITID
+
+    import lumenairy
     rows = {}
     for name, fn in BITID.items():
         try:

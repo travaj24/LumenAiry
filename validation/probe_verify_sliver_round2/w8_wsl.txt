@@ -1,0 +1,35 @@
+lumenairy: /mnt/c/tmp/lum_vsliver2/lumenairy/__init__.py
+== lc_in_plane_45: hermitian=False passive=True lam/scale=-4.263e-17
+   d=0.003    returned  R+T=1 err/d p1=0.03185 p0=0.03161 move=None move_p1=None su_snap=None
+   d=0.0001   returned  R+T=1.00478 err/d p1=38.53 p0=38.82 move=38.85577785953981 move_p1=38.56621250977169 su_snap=1.509903313490213e-14
+   d=3e-05    REFUSED   R+T=1.01054 err/d p1=288.4 p0=290.3 move=290.3503852181881 move_p1=288.3840045446553 su_snap=0.0
+== lc_out_of_plane_30: hermitian=False passive=True lam/scale=-2.994e-17
+   d=0.003    returned  R+T=1 err/d p1=3.771e-08 p0=0.06241 move=None move_p1=None su_snap=None
+   d=0.0001   returned  R+T=1.00326 err/d p1=0.002428 p0=22.12 move=22.181034393781385 move_p1=0.002427655058090662 su_snap=4.107825191113079e-14
+   d=3e-05    REFUSED   R+T=1.0133 err/d p1=0.01055 p0=316.4 move=316.45551327642096 move_p1=0.010551042584081662 su_snap=0.0
+== gyrotropic: hermitian=True passive=True lam/scale=0.000e+00
+   d=0.003    returned  R+T=1 err/d p1=0.6974 p0=0.2155 move=None move_p1=None su_snap=None
+   d=0.0001   REFUSED   R+T=1.08424 err/d p1=685.4 p0=386.5 move=685.5719321871468 move_p1=685.5719321871468 su_snap=7.549516567451064e-15
+   d=3e-05    REFUSED   R+T=1.09767 err/d p1=2680 p0=2469 move=2679.8159576510798 move_p1=2679.8159576510798 su_snap=1.7763568394002505e-15
+== non_hermitian: hermitian=False passive=False lam/scale=-2.500e-02
+   d=0.003    returned  R+T=1.00064 err/d p1=0.6567 p0=0.2089 move=None move_p1=None su_snap=None
+   d=0.0001   returned  R+T=1.08218 err/d p1=661.4 p0=366.6 move=661.6869208996197 move_p1=661.6869208996197 su_snap=0.0006314809153851186
+   d=3e-05    returned  R+T=1.0931 err/d p1=2535 p0=2441 move=2535.1410783963393 move_p1=2535.1410783963393 su_snap=0.0006313758831097971
+== lossy_in_plane: hermitian=False passive=True lam/scale=2.269e-01
+   d=0.003    returned  R+T=0.880715 err/d p1=0.2914 p0=0.3221 move=None move_p1=None su_snap=None
+   d=0.0001   returned  R+T=0.880862 err/d p1=50.82 p0=45.9 move=None move_p1=None su_snap=None
+   d=3e-05    REFUSED   R+T=1.16847 err/d p1=8005 p0=7905 move=8005.404698981327 move_p1=8005.404698981327 su_snap=0.0
+== B: co-occurring cross-layer sliver + owned liner
+   liner=None_d=0.0001_deg=12       R+T=1 returned  trunc_note=False within=False r1_would_refuse=False su_snap=None move=None
+   liner=None_d=0.0001_deg=14       R+T=2.17298 REFUSED   trunc_note=False within=False r1_would_refuse=True su_snap=0.0 move=4789.51984060418
+   liner=None_d=3e-05_deg=12        R+T=2.17259 REFUSED   trunc_note=False within=False r1_would_refuse=True su_snap=1.1213252548714081e-13 move=15956.015410297394
+   liner=None_d=3e-05_deg=14        R+T=23.4225 REFUSED   trunc_note=False within=False r1_would_refuse=True su_snap=3.042011087472929e-14 move=287271.6533234297
+   liner=1e-06_d=0.0001_deg=12      R+T=3.57311 returned  trunc_note=False within=True r1_would_refuse=False su_snap=None move=None
+   liner=1e-06_d=0.0001_deg=14      R+T=3.57632 returned  trunc_note=False within=True r1_would_refuse=False su_snap=None move=None
+   liner=1e-06_d=3e-05_deg=12       R+T=23.3037 returned  trunc_note=False within=True r1_would_refuse=False su_snap=None move=None
+   liner=1e-06_d=3e-05_deg=14       R+T=3.53559 returned  trunc_note=False within=True r1_would_refuse=False su_snap=None move=None
+   liner=1e-07_d=0.0001_deg=12      R+T=2.00316 returned  trunc_note=False within=True r1_would_refuse=False su_snap=None move=None
+   liner=1e-07_d=0.0001_deg=14      R+T=61.1644 returned  trunc_note=False within=True r1_would_refuse=False su_snap=None move=None
+   liner=1e-07_d=3e-05_deg=12       R+T=2.29594 returned  trunc_note=False within=True r1_would_refuse=False su_snap=None move=None
+   liner=1e-07_d=3e-05_deg=14       R+T=4.54448 returned  trunc_note=False within=True r1_would_refuse=False su_snap=None move=None
+-> validation/probe_verify_sliver_round2/w8_lc_exact_wsl.json

@@ -30,11 +30,11 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-import lumenairy                                               # noqa: E402
-from lumenairy.elements.pmm import PMMStack                    # noqa: E402
-from lumenairy.elements.pmm import stack as ps                 # noqa: E402
-from w_fixtures import (classify, shared_move, unguarded,      # noqa: E402
-                        wbuild)
+from w_fixtures import classify, shared_move, unguarded, wbuild  # noqa: E402
+
+import lumenairy  # noqa: E402
+from lumenairy.elements.pmm import PMMStack  # noqa: E402
+from lumenairy.elements.pmm import stack as ps  # noqa: E402
 
 O11 = dict(period=1.2e-6, wl=0.85e-6, th=0.15, a0=0.27865, b0=0.62505,
            eh=2.25, ep=9.0, dz=0.32e-6 / 4)
