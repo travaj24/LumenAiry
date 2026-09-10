@@ -229,6 +229,31 @@ def test_a_requested_sliver_is_refused_and_the_message_names_the_cure():
     st.set_source(_WL, theta=_TH, phi=_PH)
     with pytest.raises(ValueError, match="minimum"):
         st.solve(jones=False)
+    # ... and through the OTHER two routes the verification names.
+    # (a) ``add_tapered_pillars`` with two features whose edges nearly meet
+    st = PMM2DStackPure(_P, n_modes=4, n_orders=1, layer_grids="per-layer")
+    st.add_tapered_pillars(
+        0.20, eps_host=_EPS_H, n_slices=2,
+        pillars=[((0.30 * _P, 0.30 * _P), (0.20 * _P, 0.20 * _P),
+                  (0.20 * _P, 0.20 * _P), 9.0),
+                 ((0.4001 * _P, 0.4001 * _P), (2e-4 * _P, 2e-4 * _P),
+                  (2e-4 * _P, 2e-4 * _P), 9.0)])
+    st.set_source(_WL, theta=_TH, phi=_PH)
+    with pytest.raises(ValueError, match="minimum"):
+        st.solve(jones=False)
+    # (b) ``add_tapered_pillar`` on a taper closed far enough that the
+    # midpoint rule's narrowest SAMPLED width crosses the contract
+    st = PMM2DStackPure(_P, n_modes=4, n_orders=1, layer_grids="per-layer")
+    st.add_tapered_pillar(0.24, eps_pillar=_EPS_P, eps_host=_EPS_H,
+                          x_bounds_bottom=[0.25 * _P, 0.75 * _P],
+                          y_bounds_bottom=[0.25 * _P, 0.75 * _P],
+                          x_bounds_top=[0.49999 * _P, 0.50001 * _P],
+                          y_bounds_top=[0.49999 * _P, 0.50001 * _P],
+                          n_slices=400)
+    st.set_source(_WL, theta=_TH, phi=_PH)
+    with pytest.raises(ValueError, match="n_slices"):
+        st.solve(jones=False)
+
     # a HEALTHY grid at the same shape is untouched
     ok = Basis1D(d, np.array([0.0, 0.2371 * d, 0.6183 * d, d]), 5)
     assert ok.N == 3 and not ok.uniform
