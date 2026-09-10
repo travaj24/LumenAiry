@@ -50,6 +50,7 @@ with — never let a two-arm comparison run twice against the same tree).
 | `v7_durability.py` | the quantity behind EVERY bar in `test_fix_pmmstack_sliver_walls.py`, both builds | `v7_durability[_wsl].json` |
 | `v9_falsepos.py` | A: conjunct (b)'s premise attacked on 960 sliver-free passive stacks; B: the 648-configuration false-positive census; C: what the prescribed remedy actually does | `v9_falsepos[_wsl].json` |
 | `v10_paths.py` | open item E: the onset mapped on the CONICAL and SLANT cascades against their own `δ → 0` limits | `v10_paths[_wsl].json` |
+| `v11_discriminator.py` | a CANDIDATE fix for open item F, scored two-sided: does the super-unity survive the prescribed `min_feature`? | `v11_discriminator[_wsl].json` |
 
 ## Traps
 

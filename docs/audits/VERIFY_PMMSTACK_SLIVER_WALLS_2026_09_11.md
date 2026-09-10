@@ -483,12 +483,24 @@ remedy (4). The measurement says (i) no taper is needed, (ii) the affected
 population is 17 % of an ordinary oblique-incidence-with-lossy-substrate
 parameter box, and (iii) the first-named remedy actively hides the problem.
 
-**Suggested change (not made here — it is not a one-line fix).** Order the
-remedies by what the measurement supports: name the degree/`n_slices` check
-FIRST when the stack has more than one interface, and have the message report
-whether the super-unity SURVIVES the prescribed `min_feature` — a second solve
-on the snapped grid is affordable at the point where the library is about to
-raise, and it separates the two causes exactly.
+**Suggested change (not made here — it is a behaviour change, not a
+follow-up), and it is MEASURED.** One extra solve, at the point where the
+library is about to raise anyway, separates the two causes exactly:
+
+> re-solve on the grid the prescribed `min_feature` would produce.
+> If the super-unity VANISHES, the sliver was the cause. If it SURVIVES, it
+> was not — name `degree` / `n_slices` instead.
+
+Scored two-sided in `v11_discriminator.py`, identical on both builds:
+
+| arm | rows | discriminator correct |
+|---|---|---|
+| TRUE POSITIVES — the O-11 hazard band, degrees 12/14/20 (`R+T` 2.17 … 23.4) | 8 | **8 / 8** (`R+T` → exactly 1 after the snap) |
+| TRUNCATION — the S4.5 family (lossy substrate, large angle, low degree, a harmless sliver) | 63 | **63 / 63** (`R+T` stays above the bar) |
+
+Cost: 205 solves in **19 s** (Windows) / 20 s (WSL), i.e. ~0.1 s for the one
+extra solve — paid only on a stack that is already being refused. With it, the
+message can name the operative cause and order its remedies by it.
 
 ---
 
@@ -775,7 +787,7 @@ All on Windows unless stated, one BLAS thread, `PYTHONPATH=/c/tmp/lum_vsliver`.
 
 | # | Defect | Where | Status |
 |---|---|---|---|
-| **V-1** | The guard REFUSES correct solves whenever super-unity comes from truncation rather than the sliver — **110 of 648** ordinary staircase configurations; and its FIRST-named remedy silences the refusal without changing the number (1.03559 vs 1.03557) while the operative cause is degree. | `v9_falsepos.py`, `test_the_refusal_fires_when_the_super_unity_is_TRUNCATION_not_the_sliver` | OPEN — this is open item F, quantified and wider than stated. Suggested change in S4.5. |
+| **V-1** | The guard REFUSES correct solves whenever super-unity comes from truncation rather than the sliver — **110 of 648** ordinary staircase configurations; and its FIRST-named remedy silences the refusal without changing the number (1.03559 vs 1.03557) while the operative cause is degree. | `v9_falsepos.py`, `test_the_refusal_fires_when_the_super_unity_is_TRUNCATION_not_the_sliver` | OPEN — this is open item F, quantified and wider than stated. A MEASURED discriminator (one extra solve, 8/8 and 63/63 two-sided) is in S4.5 / `v11_discriminator.py`. |
 | **V-2** | The fix's separation claim ("3.39 decades below / 2.06 above") is a property of its 46-point sample. A 120-point grid of the same family reads 9.87e-05 / 7.14e-03, the latter BELOW the bar. `test_the_bar_has_decades_of_gap_on_both_sides_measured_here` re-derives its bars on the sample that makes them hold. | S4.1, S7 | OPEN — re-derive the bars on a denser ladder or restate the claim. |
 | **V-3** | The M2 audit-class coated taper's attribution ratio is **12.11**, not ~1.7e+02; `_cross_layer_sliver` returns `None` on it. The audit's S4.2 row is wrong and the risk it implies is inverted. | S4.2 | OPEN — documentation correction; the device class is outside conjunct (a). |
 | **V-4** | The remedy's `err ≤ 2 δ` bar (and its `closure < 1e-6` companion) are fixture properties. Measured `err/δ` = 3.51 and closure 1.54e-06 on fixtures of mine. The audit's derivation compares a wall displacement with an efficiency error. | S5.1 | OPEN — restate as `err ≤ 2 · slope_measured · δ` (my test does). |
