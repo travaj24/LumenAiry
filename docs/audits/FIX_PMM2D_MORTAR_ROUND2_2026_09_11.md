@@ -11,9 +11,16 @@ merge) · **Scope** `lumenairy/elements/pmm/twod_staggered.py`,
 audit's **D4** corrections to `BUILD_PMM2D_STAGGERED_MORTAR_2026_09_11.md`.
 **D5** was already closed on the verification branch.
 
-**Reproducers** `validation/probe_pmm2d_mortar_round2/` (seven probes, a
+**Reproducers** `validation/probe_pmm2d_mortar_round2/` (eight probes, a
 README and the JSON every table below is read from).  Every script asserts
-which `lumenairy` it imported.
+which `lumenairy` it imported.  `r8_twobuild.py` is the last of them and its
+only job is bookkeeping honesty: it re-measures, on BOTH builds, every number
+the SHIPPED gates quote in a comment, so that a "WIN / WSL" label in a test is
+a measurement rather than a habit.  **24 scalars; the two builds agree to
+better than 1e-11 relative on all of them**, the two loosest being the
+fail-before ratio (6.841625743683 / 6.841625743694) and a 1-D `R+T`
+(0.9999999898157 / 0.9999999898125).  Three constants the gates stated were
+WRONG and are corrected from it -- see the commits.
 
 **Binding** `docs/TESTING_STANDARDS.md`.
 
@@ -676,18 +683,25 @@ what makes it a statement about the SHIPPED library.
 |---|---|---|
 | `test_fix_pmm2d_mortar_round2.py` | **15 passed**, 83.5 s | included below |
 | `test_fix_pmm2d_mortar_round2.py` + `test_pmm2d_staggered_nonuniform.py` | -- | **31 passed**, 188.5 s |
-| `test_pmm2d_staggered_mortar.py` + `test_verify_pmm2d_perlayer_slant.py` | **35 passed**, 298.5 s | -- |
+| `test_pmm2d_staggered_mortar.py` + `test_verify_pmm2d_perlayer_slant.py` | **35 passed**, 298.5 s | included below |
 | `test_pmm2d_staggered_nonuniform.py` | **16 passed**, 74.7 s | included above |
-| **the twelve required suites together** | **310 passed, 0 failed**, 1333.8 s | **310 passed, 0 failed** (31 + 279, split across the two runs above and below), 188.5 + 1217.4 s |
-| the ten of those not in the rows above | -- | **279 passed, 0 failed**, 1217.4 s |
-| every test file that imports `PMMStack` (42 files) | -- | (see below) |
-
-The two builds agree on the count exactly (310 = 310), which is the reading
-that matters for a change whose whole claim is that it moves nothing on a
-healthy path.
+| **the twelve required suites together** | **310 passed, 0 failed**, 1333.8 s | **310 passed, 0 failed**, 188.5 + 1217.4 s (split 31 + 279 across two runs) |
+| the ten of those not already in the rows above | -- | **279 passed, 0 failed**, 1217.4 s |
+| the three files the round-2 contract touches -- `test_verify_pmmstack_sliver_walls.py`, `test_fix_pmmstack_sliver_walls.py`, `test_m1_conditioning_guard.py` | see S7.2 | **61 passed, 0 failed**, 35.9 s |
+| every test file that imports `PMMStack` (42 files, run because `_core.py` is SHARED) | see S7.2 | -- |
 | `ruff check lumenairy/ tests/` | **clean** (also over `validation/probe_pmm2d_mortar_round2/`) | -- |
 
----
+The two builds agree on the required suites' count exactly (310 = 310), which
+is the reading that matters for a change whose whole claim is that it moves
+nothing on a healthy path.
+
+### 7.2 The PMMStack-importing sweep, and what it found
+
+`_core.py` is shared, so every test file that imports `PMMStack` was run even
+though the plain 1-D interface was deliberately left alone (S4.5).  **That
+sweep is what found the two-sided item in S3.2b** -- a shipped gate whose
+premise the width contract supersedes, and, behind it, the at-threshold defect
+in the bar itself.  Result after both were fixed:
 
 ## S8. What was NOT done, and why
 

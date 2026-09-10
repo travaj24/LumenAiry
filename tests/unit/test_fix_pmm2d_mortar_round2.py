@@ -525,9 +525,10 @@ def test_the_mortars_own_algebra_is_exact_at_every_wall_separation():
                               abs(float(R[0, p0]) - an["TM"]))
     finally:
         _ts.PMM2D_STAG_MIN_SEG_GUARD = prev
-    # measured 1.17e-10 (0.30) and 5.5e-10 (1e-02) at M = 5 on both builds;
-    # the bar is 1e-6, decades above the reading and decades below the 5e-02
-    # scale on which the patterned fixture's damage lives
+    # MEASURED at M = 5: 1.1694e-10 (0.30) and 5.5288e-10 (1e-02) on WIN,
+    # 1.1694e-10 and 5.5288e-10 on WSL (agreeing to 6 significant figures);
+    # the bar is 1e-6, four decades above the reading and decades below the
+    # 5e-02 scale on which the patterned fixture's damage lives
     for delta, e in errs.items():
         assert e < 1e-6, (delta, e, an)
 
@@ -641,7 +642,14 @@ def test_the_mortar_rcond_bar_has_decades_of_gap_on_both_sides():
             rcs[delta] = float(rc)
     finally:
         _ts.PMM2D_STAG_MIN_SEG_GUARD = prev
-    # measured 3.6e-13 and 2.6e-16 at M = 5 on both builds
+    # MEASURED at M = 5, both builds agreeing to 12 significant figures:
+    # 9.1385e-13 at 1e-05 and 6.1491e-17 at 1e-07
+    # (validation/probe_pmm2d_mortar_round2/r8_twobuild_{win,wsl}.json).
+    # NOTE the asymmetry, and it is the honest reading: the 1e-05 row is only
+    # 1.09x UNDER the bar at this modal count -- the decisive separation is
+    # the 1e-07 row, 4.2 decades under, which is why the bar's derivation
+    # (S4.3 of the fix doc) rests on the HEALTHY population's 5.4 decades and
+    # not on a comfortable margin here.
     assert rcs[1e-7] < 0.01 * bar, rcs
     assert rcs[1e-5] < bar, rcs
 
@@ -750,8 +758,9 @@ def test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why():
                 out[delta] = (min(seen), None, 0, str(exc)[:60])
     finally:
         _st1d._interface_smatrix = real
-    # the CORRECT row sits within ~1 decade of a 1e-12 bar -- measured
-    # 9.697e-11 with R+T = 1.000000 and no warning, on both builds
+    # the CORRECT row sits within ~1 decade of a 1e-12 bar -- MEASURED
+    # 9.6969e-11 (identical on both builds) with R+T = 0.99999999 and no
+    # warning
     rc_ok, tot_ok, nwarn, _e = out[1e-4]
     assert tot_ok is not None and abs(tot_ok - 1.0) < 1e-6, out
     assert nwarn == 0, out
