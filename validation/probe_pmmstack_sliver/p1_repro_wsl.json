@@ -1,0 +1,82 @@
+[
+ {
+  "delta": 0.01,
+  "sliver_m": 1.2e-08,
+  "selfgap_shared": 2.8417078579145993e-08,
+  "selfgap_perlayer": 2.8417078579145993e-08,
+  "shift_vs_delta0": 0.009264004347885935,
+  "closure": 2.750466521206363e-12
+ },
+ {
+  "delta": 0.0026,
+  "sliver_m": 3.1199999999999996e-09,
+  "selfgap_shared": 3.5311686630290495e-08,
+  "selfgap_perlayer": 3.5311686630290495e-08,
+  "shift_vs_delta0": 0.0028285784652750667,
+  "closure": 3.039054563558352e-10
+ },
+ {
+  "delta": 0.001,
+  "sliver_m": 1.2e-09,
+  "selfgap_shared": 4.335988190717899e-08,
+  "selfgap_perlayer": 4.335988190717899e-08,
+  "shift_vs_delta0": 0.0011277153186416422,
+  "closure": 1.7051879908080991e-09
+ },
+ {
+  "delta": 0.0003,
+  "sliver_m": 3.5999999999999995e-10,
+  "selfgap_shared": 6.429054827394864e-08,
+  "selfgap_perlayer": 6.429054827394864e-08,
+  "shift_vs_delta0": 0.0003437321978685959,
+  "closure": 1.059347831677826e-08
+ },
+ {
+  "delta": 0.0001,
+  "sliver_m": 1.2e-10,
+  "selfgap_shared": 0.47892582012319623,
+  "selfgap_perlayer": 0.47892582012319623,
+  "shift_vs_delta0": 0.4789426860170594,
+  "closure": 1.1729793521442984
+ },
+ {
+  "delta": 3e-05,
+  "sliver_m": 3.6e-11,
+  "selfgap_shared": 8.172317241458694,
+  "selfgap_perlayer": 8.172317241458694,
+  "shift_vs_delta0": 8.618115059495839,
+  "closure": 22.422521145763433
+ },
+ {
+  "delta": 1e-05,
+  "sliver_m": 1.2e-11,
+  "selfgap_shared": 0.00011812738356331565,
+  "selfgap_perlayer": 0.00011812738356331565,
+  "shift_vs_delta0": 0.9304787933306415,
+  "closure": 2.6128533119734287
+ },
+ {
+  "delta": 3e-06,
+  "sliver_m": 3.6e-12,
+  "selfgap_shared": 5.4682672556705114e-08,
+  "selfgap_perlayer": 5.4682672556705114e-08,
+  "shift_vs_delta0": 3.460599021898325e-06,
+  "closure": 2.9976021664879227e-15
+ },
+ {
+  "delta": 1e-06,
+  "sliver_m": 1.2e-12,
+  "selfgap_shared": 5.4684100414537085e-08,
+  "selfgap_perlayer": 5.4684100414537085e-08,
+  "shift_vs_delta0": 1.1535567598919272e-06,
+  "closure": 3.9968028886505635e-15
+ },
+ {
+  "delta": 0.0,
+  "sliver_m": 0.0,
+  "selfgap_shared": 5.468478697645551e-08,
+  "selfgap_perlayer": 5.468478697645551e-08,
+  "shift_vs_delta0": 0.0,
+  "closure": 3.219646771412954e-14
+ }
+]
