@@ -705,11 +705,16 @@ healthy path.
    a contract a user can state in one number is worth more than one they have
    to compute, and the conditioning backstop covers the remainder with an
    actionable message.  Logged as **open item A**.
-4. **The `RuntimeWarning: invalid value encountered in multiply`** that the
-   `4 q^2` generator emits on a grid inside the refused band (reachable only
-   with the guard disarmed).  It is pre-existing, it is not silent, and the
-   round-2 guards mean no supported input reaches it.  Logged as **open
-   item B**.
+4. **Two pre-existing noises on the deliberately-degenerate paths**, both
+   CHECKED against the pristine tree rather than assumed:
+   the `RuntimeWarning: invalid value encountered in multiply` the `4 q^2`
+   generator emits on a grid inside the refused band (reachable only with the
+   guard disarmed), and the LAPACK stderr
+   `** On entry to DLASCL parameter number 4 had an illegal value` that
+   `test_fix_pmmstack_sliver_walls.py` / `test_m1_conditioning_guard.py`
+   produce on WSL -- **the pristine tree prints the identical two lines on the
+   identical files**, so neither is a regression.  Both are on paths that
+   exist to be singular; neither is silent.  Logged as **open item B**.
 5. **The verification's own S12 items** (JAX per-layer, `prepare()`,
    `tau`-keyed cache cost) are untouched -- they are the build's open items,
    not defects.
