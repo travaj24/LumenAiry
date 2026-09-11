@@ -72,6 +72,7 @@ CASES = [
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     rows = []
     for n_sub, sym, sp, reg in CASES:
         post = observe(n_sub, sym, sp)

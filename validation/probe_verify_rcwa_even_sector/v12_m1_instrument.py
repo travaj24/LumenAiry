@@ -245,6 +245,7 @@ def measure(call):
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     res = {}
     for name, call in fixtures():
         post = measure(call)

@@ -276,6 +276,7 @@ def run_one(fn):
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     rows = []
     for name, cls, fn in surfaces():
         row = dict(name=name, cls=cls)

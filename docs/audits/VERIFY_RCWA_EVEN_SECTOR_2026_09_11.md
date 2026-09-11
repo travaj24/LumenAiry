@@ -506,15 +506,19 @@ eigenvalues by `_layer_modes_projected` (line 669) and `_symmetric_solve_2d`
 | `pmm_cell_oblique_coinc` (theta 0.3) | 726 | 28 | 14 | 14 | 2.68e-15 | **9** |
 | `pmm_cell_conical_coinc` (0.2, 0.7) | 726 | 26 | 14 | 12 | 5.94e-15 | **8** |
 
+WSL reads the same six fixtures at `incomingAfterOldPin` = **6 / 5 / 6 / 7 / 5
+/ 7** with `max|Im(lam^2)|` 9.58e-16 .. 7.62e-15 -- the same defect with its own
+digits, which is the point: the COUNT is build-dependent because the sign is.
+
 That is the identical defect, unrepaired: five to nine propagating modes per
 solve come back on the INCOMING root, chosen by the last bit of the
 eigensolver's backward error.  By contrast `pmm_jones_2d`, whose layer goes
-through the FIXED function, shows `noisyIm = 0` and `incomingAfterOldPin = 0` --
-its PMM-copy calls are region-only and exact.
+through the FIXED function, shows `noisyIm = 0` and `incomingAfterOldPin = 0` on
+BOTH builds -- its PMM-copy calls are region-only and exact.
 
 **What it costs today, measured.**  Installing the fixed body in the two NumPy
-PMM copies moves those six fixtures by 2.429e-15 .. 8.660e-15 in per-order
-efficiency -- rounding level.  I could not build a PMM fixture where the
+PMM copies moves those six fixtures by 2.429e-15 .. 8.660e-15 (WIN) /
+2.442e-15 .. 1.203e-14 (WSL) in per-order efficiency -- rounding level.  I could not build a PMM fixture where the
 mis-rooting meets a matching region mode and corrupts the answer the way the
 RCWA one does; the PMM 2-D solves' own truncation error at degree 5 is ~1e-3,
 which would mask a smaller effect anyway.  So this is a LATENT defect of the
@@ -523,6 +527,9 @@ arithmetic in shipped code, and the audit states it is fixed when it is not.
 
 `pmm/twod_staggered.py:2084` defines `_sqrt_decay` and never calls it (the only
 other mention is a comment at line 2302): DEAD CODE carrying the old pattern.
+Confirmed at runtime rather than only by reading -- three
+`pmm_jones_2d_staggered` fixtures record `modes = 0` handed to that copy on both
+builds, so nothing reaches it.
 
 No other exact-zero branch pin exists anywhere in the library: a regex for
 `.real == 0` / `.imag == 0` (with or without a sign or a decimal point) over

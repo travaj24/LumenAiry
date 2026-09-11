@@ -59,6 +59,7 @@ def one_pass():
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     reps = [one_pass() for _ in range(REPEATS)]
     keys = sorted(reps[0])
     identical = {k: all(

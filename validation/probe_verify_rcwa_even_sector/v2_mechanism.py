@@ -182,6 +182,7 @@ def measure(spec):
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     rows = {}
     for name, spec in fixtures().items():
         try:

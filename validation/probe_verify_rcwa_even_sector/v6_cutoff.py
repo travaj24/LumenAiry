@@ -111,6 +111,7 @@ def ladder(pol):
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     rows = []
     for pol in ("te", "tm"):
         rows.extend(ladder(pol))

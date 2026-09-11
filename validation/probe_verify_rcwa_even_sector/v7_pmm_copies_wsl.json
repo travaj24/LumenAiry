@@ -1,0 +1,409 @@
+{
+ "_stamp": {
+  "arm": "post",
+  "cut_band_rel": 1e-08,
+  "lumenairy_file": "/mnt/c/tmp/lum_vrcwa2/lumenairy/__init__.py",
+  "node": "TeslaRyzen",
+  "numpy": "2.4.6",
+  "platform": "Linux",
+  "python": "3.12.3",
+  "sqrt_decay_has_conj": true,
+  "sqrt_decay_has_exact_pin": false,
+  "threads": {
+   "MKL_NUM_THREADS": "1",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1"
+  }
+ },
+ "fixtures": {
+  "pmm_cell_coinc": {
+   "bit_identical": false,
+   "closure_as_shipped": -0.0012491286945769398,
+   "closure_pmm_fixed": -0.001249128694577828,
+   "coincident": true,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 2.4424906541753444e-15,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 6,
+    "max_abs_imag_on_cut": 9.583729510977547e-16,
+    "modes": 606,
+    "on_cut": 18,
+    "on_cut_exact_zero_imag": 12,
+    "on_cut_rounding_imag": 6,
+    "tags": [
+     "lumenairy.elements.pmm.twod"
+    ]
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_cell_conical_coinc": {
+   "bit_identical": false,
+   "closure_as_shipped": -0.0015784307608461834,
+   "closure_pmm_fixed": -0.001578430760853733,
+   "coincident": true,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 5.773159728050814e-15,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 7,
+    "max_abs_imag_on_cut": 5.456826648907124e-15,
+    "modes": 726,
+    "on_cut": 26,
+    "on_cut_exact_zero_imag": 14,
+    "on_cut_rounding_imag": 12,
+    "tags": [
+     "lumenairy.elements.pmm.twod"
+    ]
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_cell_full_coinc": {
+   "bit_identical": false,
+   "closure_as_shipped": -0.0012491286945723878,
+   "closure_pmm_fixed": -0.0012491286945756075,
+   "coincident": true,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 3.1086244689504383e-15,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 7,
+    "max_abs_imag_on_cut": 1.2601300089402204e-15,
+    "modes": 726,
+    "on_cut": 22,
+    "on_cut_exact_zero_imag": 12,
+    "on_cut_rounding_imag": 10,
+    "tags": [
+     "lumenairy.elements.pmm.twod"
+    ]
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_cell_oblique_coinc": {
+   "bit_identical": false,
+   "closure_as_shipped": -0.0023397793140226275,
+   "closure_pmm_fixed": -0.002339779314039281,
+   "coincident": true,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 1.2032042029375134e-14,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 5,
+    "max_abs_imag_on_cut": 7.62040265974139e-15,
+    "modes": 726,
+    "on_cut": 28,
+    "on_cut_exact_zero_imag": 14,
+    "on_cut_rounding_imag": 14,
+    "tags": [
+     "lumenairy.elements.pmm.twod"
+    ]
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_cell_offcoinc": {
+   "bit_identical": false,
+   "closure_as_shipped": -0.0013833505819423886,
+   "closure_pmm_fixed": -0.001383350581944609,
+   "coincident": false,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 2.9976021664879227e-15,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 6,
+    "max_abs_imag_on_cut": 9.583729510977547e-16,
+    "modes": 606,
+    "on_cut": 18,
+    "on_cut_exact_zero_imag": 12,
+    "on_cut_rounding_imag": 6,
+    "tags": [
+     "lumenairy.elements.pmm.twod"
+    ]
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_cell_weakmod_coinc": {
+   "bit_identical": false,
+   "closure_as_shipped": 2.007177455354281e-07,
+   "closure_pmm_fixed": 2.0071774842200796e-07,
+   "coincident": true,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 3.9968028886505635e-15,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 5,
+    "max_abs_imag_on_cut": 2.1062362303560042e-15,
+    "modes": 606,
+    "on_cut": 18,
+    "on_cut_exact_zero_imag": 12,
+    "on_cut_rounding_imag": 6,
+    "tags": [
+     "lumenairy.elements.pmm.twod"
+    ]
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_eff_2d_coinc": {
+   "bit_identical": null,
+   "closure_as_shipped": NaN,
+   "closure_pmm_fixed": NaN,
+   "coincident": true,
+   "error_as_shipped": "ValueError('pmm_efficiency_2d: x_bounds must satisfy 0 < lo < hi < period (strictly interior, non-degenerate walls); got (0.25, 0.75) with period 5e-0",
+   "error_pmm_fixed": "ValueError('pmm_efficiency_2d: x_bounds must satisfy 0 < lo < hi < period (strictly interior, non-degenerate walls); got (0.25, 0.75) with period 5e-0",
+   "max_move_when_pmm_copies_are_fixed": null,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 0,
+    "max_abs_imag_on_cut": 0.0,
+    "modes": 0,
+    "on_cut": 0,
+    "on_cut_exact_zero_imag": 0,
+    "on_cut_rounding_imag": 0,
+    "tags": []
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_eff_2d_offcoinc": {
+   "bit_identical": null,
+   "closure_as_shipped": NaN,
+   "closure_pmm_fixed": NaN,
+   "coincident": false,
+   "error_as_shipped": "ValueError('pmm_efficiency_2d: x_bounds must satisfy 0 < lo < hi < period (strictly interior, non-degenerate walls); got (0.25, 0.75) with period 5e-0",
+   "error_pmm_fixed": "ValueError('pmm_efficiency_2d: x_bounds must satisfy 0 < lo < hi < period (strictly interior, non-degenerate walls); got (0.25, 0.75) with period 5e-0",
+   "max_move_when_pmm_copies_are_fixed": null,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 0,
+    "max_abs_imag_on_cut": 0.0,
+    "modes": 0,
+    "on_cut": 0,
+    "on_cut_exact_zero_imag": 0,
+    "on_cut_rounding_imag": 0,
+    "tags": []
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_eff_2d_weakmod_coinc": {
+   "bit_identical": null,
+   "closure_as_shipped": NaN,
+   "closure_pmm_fixed": NaN,
+   "coincident": true,
+   "error_as_shipped": "ValueError('pmm_efficiency_2d: x_bounds must satisfy 0 < lo < hi < period (strictly interior, non-degenerate walls); got (0.25, 0.75) with period 5e-0",
+   "error_pmm_fixed": "ValueError('pmm_efficiency_2d: x_bounds must satisfy 0 < lo < hi < period (strictly interior, non-degenerate walls); got (0.25, 0.75) with period 5e-0",
+   "max_move_when_pmm_copies_are_fixed": null,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 0,
+    "max_abs_imag_on_cut": 0.0,
+    "modes": 0,
+    "on_cut": 0,
+    "on_cut_exact_zero_imag": 0,
+    "on_cut_rounding_imag": 0,
+    "tags": []
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_jones_2d_coinc": {
+   "bit_identical": true,
+   "closure_as_shipped": -0.00021008556289592306,
+   "closure_pmm_fixed": -0.00021008556289592306,
+   "coincident": true,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 0.0,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 0,
+    "max_abs_imag_on_cut": 0.0,
+    "modes": 484,
+    "on_cut": 12,
+    "on_cut_exact_zero_imag": 12,
+    "on_cut_rounding_imag": 0,
+    "tags": [
+     "lumenairy.elements.pmm.twod"
+    ]
+   },
+   "warnings_as_shipped": [
+    "_EnergyWarning"
+   ],
+   "warnings_pmm_fixed": [
+    "_EnergyWarning"
+   ]
+  },
+  "pmm_jones_2d_offcoinc": {
+   "bit_identical": true,
+   "closure_as_shipped": -0.00025210409678577683,
+   "closure_pmm_fixed": -0.00025210409678577683,
+   "coincident": false,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 0.0,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 0,
+    "max_abs_imag_on_cut": 0.0,
+    "modes": 484,
+    "on_cut": 12,
+    "on_cut_exact_zero_imag": 12,
+    "on_cut_rounding_imag": 0,
+    "tags": [
+     "lumenairy.elements.pmm.twod"
+    ]
+   },
+   "warnings_as_shipped": [
+    "_EnergyWarning"
+   ],
+   "warnings_pmm_fixed": [
+    "_EnergyWarning"
+   ]
+  },
+  "pmm_jones_2d_weakmod_coinc": {
+   "bit_identical": true,
+   "closure_as_shipped": -0.0002128704153157024,
+   "closure_pmm_fixed": -0.0002128704153157024,
+   "coincident": true,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 0.0,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 0,
+    "max_abs_imag_on_cut": 0.0,
+    "modes": 484,
+    "on_cut": 12,
+    "on_cut_exact_zero_imag": 12,
+    "on_cut_rounding_imag": 0,
+    "tags": [
+     "lumenairy.elements.pmm.twod"
+    ]
+   },
+   "warnings_as_shipped": [
+    "_EnergyWarning"
+   ],
+   "warnings_pmm_fixed": [
+    "_EnergyWarning"
+   ]
+  },
+  "pmm_stag_coinc": {
+   "bit_identical": true,
+   "closure_as_shipped": -4.066307688610493e-05,
+   "closure_pmm_fixed": -4.066307688610493e-05,
+   "coincident": true,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 0.0,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 0,
+    "max_abs_imag_on_cut": 0.0,
+    "modes": 0,
+    "on_cut": 0,
+    "on_cut_exact_zero_imag": 0,
+    "on_cut_rounding_imag": 0,
+    "tags": []
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_stag_offcoinc": {
+   "bit_identical": true,
+   "closure_as_shipped": -2.982587568989281e-05,
+   "closure_pmm_fixed": -2.982587568989281e-05,
+   "coincident": false,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 0.0,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 0,
+    "max_abs_imag_on_cut": 0.0,
+    "modes": 0,
+    "on_cut": 0,
+    "on_cut_exact_zero_imag": 0,
+    "on_cut_rounding_imag": 0,
+    "tags": []
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  },
+  "pmm_stag_weakmod_coinc": {
+   "bit_identical": true,
+   "closure_as_shipped": -1.1102230246251565e-15,
+   "closure_pmm_fixed": -1.1102230246251565e-15,
+   "coincident": true,
+   "error_as_shipped": null,
+   "error_pmm_fixed": null,
+   "max_move_when_pmm_copies_are_fixed": 0.0,
+   "pmm_copy_census": {
+    "incoming_after_old_pin": 0,
+    "max_abs_imag_on_cut": 0.0,
+    "modes": 0,
+    "on_cut": 0,
+    "on_cut_exact_zero_imag": 0,
+    "on_cut_rounding_imag": 0,
+    "tags": []
+   },
+   "warnings_as_shipped": [],
+   "warnings_pmm_fixed": []
+  }
+ },
+ "source_audit": {
+  "elements/pmm/_jax_stack2d.py": {
+   "defines": true,
+   "has_exact_zero_pin": true,
+   "has_relative_band": false
+  },
+  "elements/pmm/_jax_twod.py": {
+   "defines": true,
+   "has_exact_zero_pin": true,
+   "has_relative_band": false
+  },
+  "elements/pmm/_jax_twod_jones.py": {
+   "defines": true,
+   "has_exact_zero_pin": true,
+   "has_relative_band": false
+  },
+  "lumenairy.elements.berreman": {
+   "defined_in": "lumenairy.elements.rcwa._core",
+   "defines": true,
+   "flips_with_conj": true,
+   "has_exact_zero_pin": false,
+   "has_relative_band": true
+  },
+  "lumenairy.elements.pmm.twod": {
+   "defined_in": "lumenairy.elements.pmm.twod",
+   "defines": true,
+   "flips_with_conj": false,
+   "has_exact_zero_pin": true,
+   "has_relative_band": false
+  },
+  "lumenairy.elements.pmm.twod_staggered": {
+   "defined_in": "lumenairy.elements.pmm.twod_staggered",
+   "defines": true,
+   "flips_with_conj": false,
+   "has_exact_zero_pin": true,
+   "has_relative_band": false
+  },
+  "lumenairy.elements.rcwa._core": {
+   "defined_in": "lumenairy.elements.rcwa._core",
+   "defines": true,
+   "flips_with_conj": true,
+   "has_exact_zero_pin": false,
+   "has_relative_band": true
+  },
+  "lumenairy.elements.rcwa.oned": {
+   "defined_in": "lumenairy.elements.rcwa._core",
+   "defines": true,
+   "flips_with_conj": true,
+   "has_exact_zero_pin": false,
+   "has_relative_band": true
+  },
+  "lumenairy.elements.rcwa.stack": {
+   "defined_in": "lumenairy.elements.rcwa._core",
+   "defines": true,
+   "flips_with_conj": true,
+   "has_exact_zero_pin": false,
+   "has_relative_band": true
+  }
+ }
+}
