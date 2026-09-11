@@ -167,18 +167,52 @@ def test_a_genuinely_lossy_root_is_still_put_on_the_decaying_branch():
     assert np.allclose(out, np.array([-2.0 + 0.5j, 3.0 + 0.5j]))
 
 
-def test_the_band_is_relative_to_the_spectrum_and_floored_at_one():
-    """``ky`` in the EME modules is DIMENSIONLESS, so the floor is a literal
-    1.0 -- unlike the BOR peer, whose ``q`` carries units of inverse length and
-    is floored at ``k0``.  A sub-unit spectrum must still get an absolute
-    band, or a nearly-degenerate strip's band collapses onto its own backward
-    error."""
-    assert _eb.cut_band(np.array([1e-6 + 0j]), xp=np) == pytest.approx(1e-9)
-    assert _eb.cut_band(np.array([1e4 + 0j]), xp=np) == pytest.approx(1e-5)
+def test_the_band_is_relative_to_the_spectrum_and_floored_at_k0():
+    """ROUND 2 (D13).  ``ky`` in the EME modules is NOT dimensionless -- it
+    carries units of inverse length, exactly like the BOR peer's ``q`` -- so
+    the band's floor must carry them too.  It is ``|k0|``, which is what
+    ``elements/bor/_orient.orient_band_scale`` floors at and for the same
+    reason (audit P2-06).
+
+    As first built this gate asserted the floor was a literal 1.0, which made
+    the band -- and therefore the BRANCH DECISION -- depend on whether the
+    caller wrote a cell in micrometres or nanometres.
+
+    THE PROPERTY, STATED AS A DECISION AND NOT AS A READING: rescaling the
+    whole problem (lengths x s, wavenumbers / s) must scale the band by exactly
+    1/s.  A dimensioned literal anywhere in the expression breaks that, and
+    nothing else does.
+    """
+    # the floor is k0 when the spectrum is below it, the spectrum when above
+    assert _eb.cut_band(np.array([1e-6 + 0j]), k0=2.0,
+                        xp=np) == pytest.approx(2e-9)
+    assert _eb.cut_band(np.array([1e4 + 0j]), k0=2.0,
+                        xp=np) == pytest.approx(1e-5)
+    # with no k0 in scope the scale is the spectrum alone -- also unit-free,
+    # and in particular NOT a literal 1.0
+    assert _eb.cut_band(np.array([1e-6 + 0j]),
+                        xp=np) == pytest.approx(1e-15)
+
+    # THE INVARIANCE, over twelve decades of unit scaling in both directions
+    z = np.array([3.0 - 1e-4j, 1e-3 + 0j, -7.5 + 2e-2j])
+    k0 = 4.05
+    base = float(_eb.cut_band(z, k0=k0, xp=np))
+    for s in (1e-6, 1e-3, 1e-1, 1e1, 1e3, 1e6):
+        got = float(_eb.cut_band(z / s, k0=k0 / s, xp=np))
+        assert got == pytest.approx(base / s, rel=1e-12), (
+            "the band is not unit-invariant: scaling every wavenumber by "
+            "1/%g changed it by %.6gx instead of %gx"
+            % (s, got / base, 1.0 / s))
+        got = float(_eb.cut_band(z / s, xp=np))
+        assert got == pytest.approx(float(_eb.cut_band(z, xp=np)) / s,
+                                    rel=1e-12)
+
     # and the band parameter is LIVE, not decorative
     z = np.array([5.0 - 1e-3j])
-    assert _eb.forward_decaying_root(z, xp=np, band=1e-9)[0].real < 0.0
-    assert _eb.forward_decaying_root(z, xp=np, band=1e-2)[0].real > 0.0
+    assert _eb.forward_decaying_root(z, k0=1.0, xp=np,
+                                     band=1e-9)[0].real < 0.0
+    assert _eb.forward_decaying_root(z, k0=1.0, xp=np,
+                                     band=1e-2)[0].real > 0.0
 
 
 def test_exactly_one_definition_of_each_eme_branch_helper():

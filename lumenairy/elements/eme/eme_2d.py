@@ -113,7 +113,7 @@ def strip_x_modes(eps_x, Lx, Nx, k0, kx0=0.0):
     return lam, Phi.astype(complex)
 
 
-def _ky_forward(lam, qz2):
+def _ky_forward(lam, qz2, k0=None):
     """The strip's FORWARD lateral wavenumber ``ky`` from ``ky^2 = lam - qz2``,
     on the DECAYING branch ``Im(ky) >= 0`` (so ``_prop``'s ``exp(i ky h)`` never
     grows -- the whole premise of the S-matrix cascade).
@@ -137,14 +137,14 @@ def _ky_forward(lam, qz2):
     (WSL) on the same geometry under an infinitesimal ``Im(eps)``, with the
     mode lists differing between builds.  See ``_branch``'s module docstring."""
     ky = np.sqrt(np.asarray(lam) - qz2 + 0j)
-    return forward_decaying_root(ky, xp=np)
+    return forward_decaying_root(ky, k0=k0, xp=np)
 
 
-def _wv(lam, Phi, qz2):
+def _wv(lam, Phi, qz2, k0=None):
     """The strip's forward modal field matrices: ``W = Phi`` (psi), ``V = Phi
     diag(i ky)`` (d psi/dy), with ``ky`` on the decaying-forward branch
     (:func:`_ky_forward`).  Backward modes are ``[W; -V]``."""
-    ky = _ky_forward(lam, qz2)
+    ky = _ky_forward(lam, qz2, k0)
     return Phi, Phi @ np.diag(1j * ky), ky
 
 
@@ -172,11 +172,11 @@ def _star(SA, SB):
             B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
 
 
-def cell_smatrix(strip_modes, qz2):
+def cell_smatrix(strip_modes, qz2, *, k0=None):
     """Unit-cell (one y-period) lateral S-matrix, in the FIRST strip's basis.
     ``strip_modes`` = list of ``((lam, Phi), height)``.  Cascade
     ``prop(0) * iface(0->1) * prop(1) * ... * iface(n-1->0)``."""
-    wv = [(_wv(lam, Phi, qz2), h) for (lam, Phi), h in strip_modes]
+    wv = [(_wv(lam, Phi, qz2, k0), h) for (lam, Phi), h in strip_modes]
     (W0, V0, ky0), h0 = wv[0]
     S = _prop(ky0, h0)
     for s in range(len(wv)):
@@ -227,9 +227,9 @@ def _bloch_residual_M(S, t):
 # --------------------------------------------------------------------------- #
 #  The solver: 2-D Bloch layer modes via sigma_min(M) root-finding            #
 # --------------------------------------------------------------------------- #
-def dispersion(strip_modes, qz2, ky0, Ly):
+def dispersion(strip_modes, qz2, ky0, Ly, *, k0=None):
     """``sigma_min(M(qz^2))`` -- zero at a 2-D Bloch layer mode."""
-    S = cell_smatrix(strip_modes, qz2)
+    S = cell_smatrix(strip_modes, qz2, k0=k0)
     M = _bloch_residual_M(S, np.exp(1j * ky0 * Ly))
     return svdvals(M)[-1]
 
@@ -267,7 +267,7 @@ def layer_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
 
         def f(q, sm=sm):
             try:
-                return dispersion(sm, q, ky0, Ly)
+                return dispersion(sm, q, ky0, Ly, k0=k0)
             except np.linalg.LinAlgError:
                 # a scan sample landing EXACTLY on a strip band edge (ky = 0,
                 # e.g. hi = max(eps)*k0^2 for an x-uniform strip) makes the
@@ -297,7 +297,7 @@ def layer_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
 # --------------------------------------------------------------------------- #
 #  Mode field reconstruction (the eigenvector psi(x,y) at a found mode)         #
 # --------------------------------------------------------------------------- #
-def _global_lateral_nullspace(strip_modes, qz2, t):
+def _global_lateral_nullspace(strip_modes, qz2, t, k0=None):
     """Per-strip modal amplitudes ``(a_s, b_s)`` of the layer mode -- the null
     vector of the GLOBAL lateral interface system.
 
@@ -312,7 +312,7 @@ def _global_lateral_nullspace(strip_modes, qz2, t):
     Nx = strip_modes[0][0][1].shape[0]
     wv = []
     for (lam, Phi), h in strip_modes:
-        ky = _ky_forward(lam, qz2)          # decaying branch (same as _wv)
+        ky = _ky_forward(lam, qz2, k0)      # decaying branch (same as _wv)
         wv.append((Phi, ky, h, np.exp(1j * ky * h), np.exp(-1j * ky * h)))
     n = 2 * Nx * S
     G = np.zeros((n, n), dtype=complex)
@@ -351,7 +351,7 @@ def _global_lateral_nullspace(strip_modes, qz2, t):
     return c, s[-1]
 
 
-def mode_field(strip_modes, qz2, ky0, Ly, Ny):
+def mode_field(strip_modes, qz2, ky0, Ly, Ny, *, k0=None):
     """Reconstruct the 2-D Bloch mode field ``psi(x, y)`` at a layer mode ``qz2``.
 
     ``strip_modes`` = ``[((lam, Phi), height), ...]`` (as built inside
@@ -360,7 +360,8 @@ def mode_field(strip_modes, qz2, ky0, Ly, Ny):
     ``(psi, sigma)`` with ``sigma = sigma_min(G)`` (small confirms a true mode).
     """
     Nx = strip_modes[0][0][1].shape[0]
-    c, sigma = _global_lateral_nullspace(strip_modes, qz2, np.exp(1j * ky0 * Ly))
+    c, sigma = _global_lateral_nullspace(strip_modes, qz2,
+                                        np.exp(1j * ky0 * Ly), k0)
     S = len(strip_modes)
     edges = np.concatenate([[0.0], np.cumsum([h for _, h in strip_modes])])
     yc = (np.arange(Ny) + 0.5) / Ny * Ly
@@ -368,7 +369,7 @@ def mode_field(strip_modes, qz2, ky0, Ly, Ny):
     for j, y in enumerate(yc):
         s = min(int(np.searchsorted(edges, y, side="right")) - 1, S - 1)
         (lam, Phi), _ = strip_modes[s]
-        ky = _ky_forward(lam, qz2)          # decaying branch (same as _wv)
+        ky = _ky_forward(lam, qz2, k0)      # decaying branch (same as _wv)
         a = c[2 * Nx * s:2 * Nx * s + Nx]
         b = c[2 * Nx * s + Nx:2 * Nx * (s + 1)]
         eta = y - edges[s]
