@@ -127,7 +127,26 @@ def orient_band_scale(q, k0, *, xp=None):
     unit-system-dependent -- exactly the failure audit P2-06 fixed for the
     channel gate ("absolute thresholds on q silently returned empty R/T for
     small-k0 unit systems").  ``k0`` is the natural non-zero floor of the
-    problem and is what was measured.
+    problem.
+
+    ROUND 2 RESTATEMENT -- THE FLOOR IS A UNIT-SAFETY FLOOR, NOT A MEASURED
+    BAR, AND IT NEVER BINDS.  ``max|q|`` over a layer's spectrum is dominated
+    by the largest transverse eigenvalue, ``~ N / Rbig``, which exceeds ``k0``
+    on any grid that resolves the wavelength.  Over the 122 layers the
+    verification measured, and over the 135 measured again in round 2
+    (``validation/probe_fix_bor_round2/r8_band_sides.py``, which includes an
+    nm-unit arm six orders of magnitude away), the floor binds on ZERO of them;
+    the closest approach is ``max|q| / k0 = 2.057`` in round 2 and 2.42 in the
+    verification -- a factor of two ABOVE the floor in both, never below it.
+    So the unit-system invariance the probes measure comes from ``max|q|``
+    scaling, not from the floor, and the floor CANNOT be exercised through
+    ``BORStack``.  It is kept
+    because the alternative -- a dimensioned literal -- is a defect whether or
+    not it is reachable here: the EME peer shipped exactly that literal in this
+    same wave and it moved 3 of 96 roots between a micrometre and a nanometre
+    statement of one cell (verification D13, fixed in
+    ``elements/eme/_branch.cut_band``).  Recorded as BOUNDED rather than
+    measured, so nobody re-derives a margin for it.
 
     THE TWO-SIDED BAR at ``band = 1e-8``, in the discriminating ratio this
     scale defines, ``sigma = |Im q| / max(max|q|, k0)``.  Measured on THIS
@@ -136,19 +155,39 @@ def orient_band_scale(q, k0, *, xp=None):
     ``test_fix_bor_multilayer_guards.py::test_band_two_sided_population``:
 
     =========================================  ===  ==============  ==========
-    population                                   n  worst ``sigma``  room
+    population                                   n  ``sigma``        room
     =========================================  ===  ==============  ==========
-    NOISE, ordinary lossless geometry             27  1.3024e-15     6.89 dec
-    NOISE, deep cutoff (qn to 1.4e-13)            36  8.7301e-10     1.06 dec
-    SIGNAL, genuinely lossy Im(n) = 1e-3           6  9.4570e-05     3.98 dec
-    SIGNAL, thin end     Im(n) = 1e-6              6  9.4570e-08     0.98 dec
+    NOISE, ordinary lossless geometry             27  max 1.3024e-15  6.89 dec
+    NOISE, deep cutoff (qn to 1.4e-13)            36  max 8.7301e-10  1.06 dec
+    SIGNAL, genuinely lossy Im(n) = 1e-3           6  MIN 9.4570e-05  3.98 dec
+    SIGNAL, thin end     Im(n) = 1e-6              6  MIN 9.4570e-08  0.98 dec
     =========================================  ===  ==============  ==========
 
     The NOISE rows are the worst ``sigma`` the band must REACH; the SIGNAL rows
-    the smallest it must NOT.  The binding side is the deep cutoff at 1.06
-    decades: that population is backward error and grows with ``||K||``, so a
-    much finer radial grid would eat into it -- which is why the test
-    re-measures rather than pins.
+    the smallest it must NOT.
+
+    ROUND 2 RESTATEMENT -- THE SIGNAL MARGINS ARE SAMPLE-SCOPED, AND THE THIN
+    END IS 0.38 DECADES, NOT 0.98.  Re-measured
+    (``validation/probe_fix_bor_round2/r8_band_sides.py``), the two SIGNAL rows
+    ARE the minima OF THE POPULATION THE GATE SWEEPS -- ``m`` = 0/1/2 x ``k0``
+    = 2.0/3.5, 359 and 362 physically propagating modes -- reproduced here to
+    all seven digits.  What they are not is a property of the BAND: widening
+    the population by ONE ``k0`` rung (adding 0.8, giving 407 and 410 modes)
+    lowers the minimum to **3.7752e-05 and 3.7752e-08**, i.e. 3.58 and **0.58
+    decades**, and the independent verification's own lossy population reaches
+    **2.3820e-08**, i.e. **0.38 decades**.  The minimum over a union of
+    populations is the smaller of the two, so the honest figure for the thin
+    end is 0.38 decades.
+
+    That is the 2-D peer's round-4 correction in this module: a margin measured
+    on one fixture family is a SAMPLE property, not a library one.  The
+    decision is unchanged and still right, for the reason below and re-measured
+    on every arm; what changed is that the gate now sweeps the wider ``k0``
+    population and its floor is derived from the measured envelope over it.
+
+    The binding side is the deep cutoff at 1.06 decades: that population is
+    backward error and grows with ``||K||``, so a much finer radial grid would
+    eat into it -- which is why the test re-measures rather than pins.
 
     WHY THE THIN SIGNAL END IS ACCEPTABLE.  ``sigma`` is exactly linear in the
     imaginary index, so this band calls media with ``Im(n)`` between ~4e-07 and
