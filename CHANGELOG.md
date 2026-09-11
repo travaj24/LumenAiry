@@ -4,6 +4,315 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed -- BOR: the forward-orientation band was scaled by the MODE'S OWN collapsing magnitude, so near a radial cutoff the R/T CHANNEL COUNT moved with the BLAS kernel and the thread count
+
+An axisymmetric layer's modal solve returns a squared axial wavenumber `q^2`;
+which of `+q` and `-q` is the FORWARD (`+z`) mode decides the whole S-matrix
+bookkeeping.  The BOR engines pick it by physics -- a PROPAGATING mode by the
+sign of its own `r dr` z-flux, an EVANESCENT one by decay in `+z` -- but the
+CLASSIFIER that chooses between those two rules was a band scaled by **the
+mode's own `|Re q|`**:
+
+    prop = |Im q| < 1e-9 * max(|Re q|, 1e-300)
+
+Every other band of this shape in the library scales by the SPECTRUM's largest
+element (`rcwa/_core._CUT_BAND_REL`, `elements/berreman.py:188` and `:350`,
+`elements/_berreman_jax.py:76`, `elements/eme/eme_2d_vector.py:255`,
+`elements/pmm/_core.py:6603`), and `_CUT_BAND_REL`'s own docstring records that
+the per-mode choice was measured against it and REJECTED: *"at a cutoff the
+mode's own magnitude has collapsed and judging its real part against it is
+judging noise against noise."*
+
+**The mechanism, end to end.**  A radial order approaching its own cutoff has
+`q^2 = k0^2 eps - gamma_j^2 -> 0`, so the discriminating ratio
+`|Im q| / |Re q| ~ 1/qn^2` grows without limit at FIXED backward error.  (1) The
+ratio crosses the band.  (2) The order is called EVANESCENT, so it is oriented
+by `sign(Im q)`.  (3) At those `qn`, `Im q` IS the eigensolver's backward error,
+so the sign is arbitrary; when it picks the `Re q < 0` root the order ships
+BACKWARD while its own z-flux -- five to eight decades above the normalizer's
+noise floor -- says forward.  (4) `solve()`'s channel gate `qn.real > 1e-6` then
+DROPS that order from the R/T set.  (5) The closure of the survivors degrades
+and the channel count becomes a function of the arithmetic.
+
+**What it cost.**  On a 39-rung near-cutoff ladder (Rbig = 24, N = 120,
+n = 1.41, m = 0/1/2, `qn` from 1.4e-02 to 1.4e-05) a PROVABLY LOSSLESS stack's
+closure reached **1.2167e-04**, a physically propagating order was called
+evanescent on 32 of 39 rungs, the shipped FORWARD mode carried BACKWARD z-flux
+on 10 of 39, and the solve reported **2 diffraction channels on some rungs and
+3 on others**.  The scoping measured the CLASS verdict moving with the BLAS
+kernel on 7 of 24 rungs, the CHANNEL COUNT on 21 of 24, and 35 of 39 rungs with
+the THREAD COUNT alone (`sum R` spread by a full 1.0000 at one rung).
+
+**What ships.**  The band becomes `1e-8 * max(max|q| over the layer's spectrum,
+k0)` -- the shape every other engine already uses.  The floor is `k0` and not a
+literal 1.0 because `q` carries units of inverse length here; a literal 1.0
+would make the band unit-system-dependent, which is the failure audit P2-06
+fixed for the channel gate.  Measured after: worst closure **1.9655e-07**
+(619x better) and the channel count fixed at 3 on every rung, on **all twelve
+arms** of a kernel x thread ladder (HASWELL / NEHALEM / KATMAI via
+`OPENBLAS_CORETYPE`, each confirmed by reading `threadpoolctl` back, x 1 / 2 / 4
+threads; worst closure over all twelve 1.2716e-06).
+
+**The bar is two-sided and re-measured on the running build** (the
+discriminating ratio becomes `sigma = |Im q| / max(max|q|, k0)`): the NOISE side
+reads 1.3024e-15 on ordinary geometry (27 populations, 6.89 decades of room) and
+8.7301e-10 at a deep cutoff (36 populations, 1.06 decades -- the binding side,
+and it IS backward error, which is why the gate re-measures rather than pins);
+the SIGNAL side reads 9.4570e-05 at `Im(n) = 1e-3` (3.98 decades) and 9.4570e-08
+at `Im(n) = 1e-6` (0.98 decades).  WSL/py3.12 reads 6.4173e-16 and 2.3089e-10 on
+the two noise sides.
+
+The widening is HARMLESS where it was measured: it calls media with `Im(n)`
+between ~4e-07 and ~1e-09 propagating and orients them by flux rather than
+decay, and over **645** physically propagating modes at `Im(n)` from 1e-06 down
+to 1e-10 the two verdicts agree on every one, with the flux at `|P|/fnrm >=
+0.1197` -- eleven decades above its own noise fallback.
+
+**Bit-identical on ordinary geometry.**  A 30-fixture battery (both bases x
+`m` = 0,1,2,5 x `k0` = 0.8/2.0/3.5 x four geometry families) hashed to the
+SHA-256 of the exact IEEE-754 bytes of `R` and `T`: 30 of 30 unchanged on
+Windows and 30 of 30 on WSL, and all 148 BOR gates pass unchanged.
+
+### Fixed -- BOR: FIVE copies of the forward-orientation rule become ONE `xp=`-parametrized kernel
+
+`zcascade.py:86` (staggered FD), `zcascade.py:227` (legacy nodal),
+`sem_radial.py:428` (SEM), `_jax_bor.py:98` and `_jax_sem.py:247` (the traced
+`jnp` twins) each carried their own body of the rule above; two companion
+decisions travelled with it (the flux normalizer's fallback threshold, SIX
+copies, and the R/T channel gate's `{imag, real-floor}` core, FIVE).  Five
+bodies of one decision is the shape that bred the six-copy factor-`i` defect
+(audit S1-8) and the six-copy branch-cut defect (round 2): a fix lands in the
+copy the author was looking at and the rest keep the defect, silently, because
+nothing imports them.
+
+`lumenairy/elements/bor/_orient.py` is now the one definition --
+`forward_orient(q, flux, k0, *, xp=None, band=..., scale=None)` plus
+`orient_band_scale`, `flux_is_strong` and `channel_core`, in the shape round 2
+gave `_sqrt_decay`.  The JAX twins pass `xp=jnp` EXPLICITLY, so the traced body
+is the same object the eager path runs rather than a second body believed to
+agree; only `q.size` is read as a Python value and that is static under
+tracing, so the body stays `jit`- and `grad`-safe.  A grep over the package
+pins that exactly one definition of each helper exists.
+
+Two consolidations are DELIBERATELY PARTIAL and the module says so.  The flux
+normalizer's five sites share the PREDICATE but keep their own fallback scale,
+because they normalize against genuinely different measures (a two-grid `r dr`
+norm on SEM, a column 2-norm on FD) and folding them would change numbers rather
+than deduplicate a decision.  The channel gate shares its `{imag, real-floor}`
+core and each site keeps its one basis-specific leg -- `reldiv` for the legacy
+nodal basis, the index ceiling for the staggered twins -- the split audit S1-16
+already documented and justified.
+
+The consolidation landed in its own commit with the band UNCHANGED, so the band
+change above is a one-line diff against a population already proved not to move:
+162 gates on Windows (148 BOR + 14 JAX) and 156 on WSL, plus 30 of 30
+bit-identical hashed fixtures on both builds.
+
+### Fixed -- BOR: the legacy nodal cascade returned `R + T` up to 6899 on a provably passive lossless stack, and below four vacuum wavelengths returned it UNWARNED
+
+`bor_solve.solve(..., basis='nodal')` reaches the historical nodal FD basis,
+which is not divergence-conforming: a large fraction of its modal basis is a
+spurious divergence-violating sea whose modes carry ZERO z-flux, so their
+forward/backward orientation is decided by the sign of noise, adjacent layers
+orient near-identical spurious modes OPPOSITELY, and the interface transmission
+block acquires a null vector.  The only guard was a PROXY -- a `UserWarning`
+past `Rbig/lambda > 4` -- and the measurement shows how badly it missed its own
+population: the same five-layer stack reads `max(R + T)` = **3.05, 114.4 and
+37.9** at 1, 2 and 4 vacuum wavelengths with the proxy silent, while a UNIFORM
+nodal stack at 12 wavelengths, which the proxy DOES warn about, reads 1.035.
+
+**What separates is passivity, not conditioning.**  The Cartesian guard
+(`rcwa/_core._guarded_inverse`) refuses on a conjunction of an equilibrated
+`rcond` AND the inverse missing `A X = I` by more than `_INV_RESID_REFUSE =
+1e-8`.  The nodal `inv(a+b)`'s equilibrated residual is **5.998e-13** -- four to
+five decades BELOW that bar -- so the conjunction as written refuses 0 of 6
+broken rows on every kernel.  The operator is not singular; it AMPLIFIES.
+
+**The bar, measured over 132 solves BEFORE it was chosen**, with the guard
+disarmed so the population is the numbers the solver RETURNED:
+
+| population | `R + T - 1` |
+|---|---|
+| STAGGERED, every row, every family | 3.7406e-12 (WIN) / 1.9959e-11 (WSL) |
+| NODAL, the family that is accurate (UNIFORM layers, small cell) | 4.4336e-09, both builds |
+| NODAL, everything else | **2.8819e-02 .. 6899.3** |
+
+A **6.81-decade gap with nothing in it, identical on both builds**.
+`_BOR_NODAL_SUPERUNITY_BAR = 1e-3` sits 5.35 decades above the healthy ceiling
+and 1.46 below the mildest broken row, and the armed verdict agrees with that
+bar on 66 of 66 nodal rows on EACH build.  A warning edge at 1e-6 catches
+anything in between, so a mildly damaged nodal solve is never silent.  The bar
+is deliberately NOT the 1-D peer's `_STACK_SUPERUNITY_BAR = 1e-2`, which carries
+only 0.46 decades here.
+
+`bor_solve.solve` now raises `BORNodalPassivityError` -- naming the basis,
+quoting the measured violation, naming the remedy (`basis='staggered'`, the
+default) and naming the switch -- instead of returning the number.  The
+precondition is PROVABLE PASSIVITY and the screen is one-sided for the same
+reason (`R + T <= 1` is what passivity gives; an absorbing substrate reads below
+unity legitimately), so a layer with real loss DISARMS the screen entirely
+rather than widening it.  The blow-up is a DETERMINISTIC discretisation defect,
+not an arithmetic one -- every nodal row reads the same `max(R+T)` to four
+significant figures on both builds -- so the screen is kernel-stable by
+construction.
+
+**Behaviour change on a documented escape hatch**, with a fail-before switch:
+`lumenairy.elements.bor.bor_solve.BOR_NODAL_PASSIVITY_GUARD = False` restores
+the previous behaviour bit for bit.  One shipped gate moves and it is the point:
+`test_bor_solve::test_structured_stack_energy_floor_nodal` was the library's
+demonstration of the nodal basis's "~1-4% floor"; a 2.9 % energy violation on a
+stack of LOSSLESS media, where `R + T <= 1` is a theorem, is not a floor, and
+that gate now asserts the refusal (with a sibling asserting the switch returns
+the pre-fix number and the pre-fix assertion exactly, and a third that the
+STAGGERED twin of the same geometry still returns and closes to 1e-9).
+
+### Fixed -- EME: an exact-zero branch pin gave a PROPAGATING strip mode its own BACKWARD partner, and the layer mode COUNT differed between Windows and WSL
+
+`eme_2d._ky_forward` and `eme_diffraction.mode_match` chose the forward
+(decaying) square root with the EXACT-ZERO pin `np.where(ky.imag < 0.0, -ky,
+ky)` -- the same pin round 1 removed from `rcwa/_core._sqrt_decay`.  For a
+PROPAGATING strip mode of a lossless layer `ky^2` is exactly real positive, so
+`Im(ky)` is not physics: it is the eigensolver's backward error, which grows
+with `||A|| ~ 4 Nx^2 / Lx^2`.  And negating does not perturb such a mode --
+`-ky` IS its backward partner, so the forward set silently acquires a backward
+member and the mode match conditions on it.
+
+**What it cost.**  On the strip spectrum at `Nx = 96`, `Lx = 1`, `k0 = 20 pi`,
+`eps = 2.25 | 12.0`: adding `i 1e-30` to one region -- a physical no-op thirteen
+decades below any real material loss, which merely switches `strip_x_modes` from
+`eigh` to `eig` -- moved **29 of 96** modes onto a different root (worst
+`|d ky| = 432.6`).  Downstream, `eme_2d.layer_modes` over the window
+`(26055.8, 35530.6)` returned **62 modes** with real `eps` against **69 on
+Windows and 71 on WSL** with the infinitesimal loss -- a 2.55 % / 3.64 % gap
+with the mode LISTS differing between builds (first mode 26137.93 WIN against
+26065.96 WSL).  The deciding `|Im ky| / |ky|` was 1.34e-16 against a physical
+1.81e-29.  The onset is a RESOLUTION, not a material: 0 flips at `Nx <= 64`,
+flips from 96 up.
+
+**What ships.**  `lumenairy/elements/eme/_branch.py` is the one definition all
+three EME sites read -- including `eme_2d_vector._strip_split_forward`, which
+has carried the CORRECT relative band since it was written and is what the two
+scalar sites now adopt.  OFF the cut the forward root is still the decaying one;
+ON the cut (`|Im z| <= 1e-9 * max(1.0, max|z|)`) the root is CONJUGATED rather
+than negated, which keeps `Re z >= 0` -- the vector sibling's own on-cut
+tie-break -- while also putting `Im z >= 0`, so the `|exp(i z h)| <= 1`
+guarantee the cascade rests on survives.  The two differ by `2|Im z| ~ 1e-16` in
+a quantity of size `|z|`; the negation differed by `2|z|`.  The floor is a
+literal 1.0 and not `k0`, because `ky` in these modules is DIMENSIONLESS.
+
+Measured after: 0 of 96 strip modes flip (worst `|d ky| = 4.551e-13`), the layer
+mode count and positions agree under the infinitesimal loss, and 136 EME gates
+pass on Windows and 135 on WSL with nothing moved.
+
+### Fixed -- BOR SEM: the `+-1` enrichment window MANUFACTURED radial elements no layer asked for, moving the per-order answer by up to 5,428x the physical wall shift with ZERO warnings
+
+`BORStack._solve_sem` meshes layer `i` not on layer `i`'s own ring walls but on
+the **union of the walls of layers `i-1`, `i` and `i+1`**.  That union is what
+makes the mortar between neighbours nearly conforming, and it is also this error
+class: two neighbouring layers whose walls differ by a small `delta` manufacture
+an element of width exactly `delta` in BOTH meshes, in neither of which any
+single layer asked for it.  Because the window reaches both neighbours, a
+WALL-FREE uniform spacer placed between two ring layers inherits both wall sets
+and carries the sliver in a mesh that has no walls of its own -- a spacer is not
+a refuge.
+
+**What it cost.**  The spectral-element Jacobian makes the nodal stiffness scale
+as `1/w^2`, so the layer's spectrum acquires axial wavenumbers far above
+anything the medium can support.  At `delta/Rbig = 1e-7` (Rbig = 24, k0 = 2,
+m = 1) the per-order `R` had moved **586x (degree 12) to 5,428x (degree 8)** the
+physical wall shift the `delta` represents -- against the 1-D guard's
+attribution bar of 100x -- with `|q|max / (n_max k0)` at **5.014e+06**, the
+interface `rcond` at 6.7e-10, and **zero** warnings anywhere on the ladder.  A
+control that keeps the same geometry but places the two walls THREE layers apart
+is clean on every quantity (narrowest element 1.500 against 2.400e-06,
+`|q|max`/ceiling 27.22 against 5.014e+06): the geometry is harmless, the
+window's union of it is not.
+
+**What ships: a CONJUNCTION, and neither conjunct is the energy.**
+`BORStack.solve(basis='sem')` now raises `BORSemMeshError` when (a) the
+POST-window, POST-DPW, POST-`equalize_meshes` breakpoint set of a layer contains
+a cell narrower than `_BOR_MIN_ELEM_FRAC = 1e-6` of `Rbig` **whose two enclosing
+walls come from DIFFERENT layers**, AND (b) that layer's spectrum reads
+`|q|max / (n_max k0) > _BOR_Q_EXCESS = 1e4`.  Between the geometric floor and
+`_BOR_SLIVER_BAND_FRAC = 1e-4` the answer is returned under a `UserWarning` and
+never refused.  A narrow element the CALLER prescribed inside one layer's own
+segment list is never refused -- the library did not manufacture it -- but is
+warned about once it trips the same spectral screen with a cell below the same
+width floor (measured: silent to `w/Rbig = 1e-5`, warned at 1e-6 and 1e-7 at
+every degree 6..16, which is exactly where the degree ladder INVERTS and degree
+16 becomes 144x worse than degree 6).  `basis='fd'` puts every layer on one
+uniform radial grid and is structurally immune; no contract is applied there,
+and its per-order `R` is measured BIT-IDENTICAL at every `delta`.
+
+**The false-positive census was measured FIRST, and it moved the warn edge a
+decade.**  86 ordinary geometry families over degrees 6/8/12/16 -- uniform,
+uniform-anisotropic, multi-segment, coincident walls, ring gratings at three
+periods and duties, hp-refined and graded meshes, a wall-free spacer between two
+ring layers, `m` = 0/1/2/5, `k0` = 0.8/2/3.5/8, an nm-unit fixture whose `Rbig`
+and wavelength differ from the rest by six orders of magnitude, a lossy metal
+ring -- plus a taper staircase walked out to 256 slices, whose manufactured cell
+halves with every doubling of the slice count:
+
+| slices | 4 | 8 | 16 | 32 | 64 | 128 | 256 |
+|---|---|---|---|---|---|---|---|
+| cell / `Rbig` | 3.13e-2 | 3.13e-2 | 1.56e-2 | 7.81e-3 | 3.91e-3 | 1.95e-3 | **9.766e-04** |
+
+The scoping's candidate warn edge of 1e-3 is **REFUTED** by that last column: a
+256-slice taper lands at 0.977x, INSIDE the band it would have warned on.  At
+1e-4 it carries 9.77x (0.99 decades) and all 86 families land outside.  The Q
+bar's ordinary margin shrank the same way -- the widened census reaches 1134.2
+(256 slices, degree 8, `k0` = 0.8; a LOWER `k0` RAISES this ratio, so the
+low-`k0` arms are the demanding ones), so the honest margins for 1e4 are **0.95
+decades (8.82x) above ordinary** and **1.20 decades (15.9x) below the mildest
+rung it must refuse**, identical on both builds to sixteen digits.
+
+**The decision table does not move with the arithmetic, and the energy does.**
+The delta ladder `1e-1 .. 1e-7` at degrees 6/8/12 was run on SEVENTEEN arms --
+kernels {HASWELL, NEHALEM, KATMAI} x threads {1, 2, 4} on Windows, the same
+kernels x {1, 4} on WSL, plus an UNPINNED arm on each build, every kernel read
+back from `threadpoolctl` rather than assumed -- and all seventeen return
+`[ok, ok, ok, warn, warn, refuse, refuse]` at every degree, with the geometric
+conjunct reading `1.000000e-07 .. 1.000000e-01` EXACTLY.  On the SAME runs the
+closure of a single rung spreads **1,129x** (degree 8, `delta/Rbig = 1e-7`:
+4.6613e-03 to 5.2624e+00), against the scoping's 70.90x over three kernels.
+That is why no Class-C decision may be keyed on super-unity.  The damage is also
+energy-invisible where it starts: at the first warned rung the closure sits at
+1.4e-08 .. 1.4e-07, its healthy baseline.
+
+Switch: `lumenairy.elements.bor._sem_contract.BOR_SEM_MESH_GUARD = False`.
+`BORSemMeshError` is exported from `lumenairy.elements.bor` so it can be caught
+by name.
+
+### Fixed -- BOR: every cascade inverse gains a census HOOK, and nothing is armed, because the population was measured
+
+The production FD and SEM cascades form fourteen explicit inverses and linear
+solves.  Measured over **2,031 inverses on 132 fixtures** built to contain every
+candidate broken family (coincident uniform layers, a 1e-6 detune, exactly
+degenerate twin layers, thin layers to 1e-12, near-cutoff `k0`, `m` up to 10,
+many rings, SEM degrees 6/8/12/16, a lossy metal ring): equilibrated `rcond`
+**1.986e-07 .. 1.000**, residual at most **3.408e-13**.  Re-measured THROUGH THE
+SHIPPED HOOK on this tree -- 749 inverses over 14 named sites, both bases x
+`m` = 0,1,2,5 x `k0` = 0.8/2/3.5 plus a coincident and a 1e-6-detuned half-space
+pair -- `rcond` **1.6076e-06 .. 1.0000**, residual at most **7.9518e-13**.  ONE
+population, no second mode, and therefore no bar -- `_INV_T22_RCOND_REFUSE = 1e-10` sits three
+decades below the healthy floor, `_MORTAR_RCOND_REFUSE = 1e-12` five, and
+`_MORTAR_RESID_REFUSE = 1e-6` seven decades ABOVE the worst residual.  An armed
+conjunction here would be dormant on every fixture ever measured, which is not a
+guard but an untested decision waiting to fire.
+
+What ships is the instrument: `lumenairy/elements/bor/_inv_census.py`'s
+`_BOR_INV_CENSUS` is `None` by default, costs exactly one `is None` test per
+inverse, and records `(site, n, rcond, residual)` when a list is assigned to it.
+`sem_radial`'s `inv(Mz)` keeps its own, different and correct remedy (an
+LU-pivot-ratio detector falling back to an unreduced QZ pencil -- a REPAIR, not
+a refusal); nothing was ported there.
+
+**Bit-identity, end to end.**  A 30-fixture R/T battery hashed to the SHA-256 of
+the exact IEEE-754 bytes, at 5.45.0 and after ALL FIVE of the fixes above:
+**30 of 30 identical on Windows and 30 of 30 on WSL, 0 moved.**
+
+## [5.45.0] — not yet tagged
+
 ### Fixed -- the RCWA modal BRANCH CUT: a propagating layer mode could be handed the INCOMING root, decided by a last bit
 
 `_sqrt_decay` maps a layer eigenvalue `lam^2` to its modal decay constant.  A

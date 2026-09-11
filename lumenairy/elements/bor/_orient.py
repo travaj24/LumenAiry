@@ -168,9 +168,12 @@ def orient_band_scale(q, k0, *, xp=None):
     """
     if xp is None:
         xp = array_namespace(q)
+    # An empty spectrum cannot arise from a real layer, but the fallback stays
+    # inside ``xp`` rather than coercing to a Python float: under JAX tracing
+    # ``float(k0)`` would raise, and a dead branch that raises is still a trap.
     if getattr(q, "size", 1) == 0:
-        return abs(float(k0))
-    return xp.maximum(xp.max(xp.abs(q)), abs(k0))
+        return xp.abs(k0)
+    return xp.maximum(xp.max(xp.abs(q)), xp.abs(k0))
 
 
 def forward_orient(q, flux, k0, *, xp=None, band=_BOR_CUT_BAND_REL,
