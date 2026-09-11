@@ -22,6 +22,7 @@ from collections import OrderedDict
 import numpy as np
 
 from ...backend import is_jax_array as _is_jax_array
+from ._inv_census import census_solve
 from ._orient import channel_core
 from ._sem_contract import enforce as _sem_enforce
 from ._sem_contract import measure_layer as _sem_measure
@@ -1006,7 +1007,8 @@ class BORStack:
             # S_below[i] = prop(i) * S_below_bot[i]; only its 11 block enters
             Xf = np.exp(1j * L["q"] * thk)
             Sb11 = Xf[:, None] * Sb_bot[0] * Xf[None, :]
-            c_fwd = np.linalg.solve(eye - Sa[3] @ Sb11, Sa[2] @ cinc)
+            c_fwd = census_solve(eye - Sa[3] @ Sb11, Sa[2] @ cinc,
+                                 "bor_stack.layer_absorption")
             c_bwd = Sb_bot[0] @ (Xf[:, None] * c_fwd)     # at layer BOTTOM
             W, V, qL = L["W"], L["V"], L["q"]
             Xd = np.exp(1j * qL * thk)

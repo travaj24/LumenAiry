@@ -1041,3 +1041,143 @@ def test_the_contract_is_bit_identical_where_it_does_not_fire():
     assert np.array_equal(a, b), (
         "arming the contract moved an ordinary answer by %.4e"
         % (float(np.max(np.abs(a - b))),))
+
+
+# =========================================================================== #
+#  STEP 5 -- the explicit-inverse census HOOKS (instrument, not guard)         #
+# =========================================================================== #
+_INV_SITES = (
+    "zcascade.layer_modes:Ez_elimination",
+    "zcascade.interface:solve(Wb,Wa)",
+    "zcascade.interface:solve(Vb,Va)",
+    "zcascade.interface:inv(a+b)",
+    "zcascade.star:inv(I-B11.A22)",
+    "zcascade.star:inv(I-A22.B11)",
+    "sem_radial.assemble:inv(Mz)",
+    "sem_radial.mortar:M1b",
+    "sem_radial.mortar:M0b",
+    "sem_radial.mortar:M1a",
+    "sem_radial.mortar:M0a",
+    "sem_radial.mortar:alpha",
+    "sem_radial.mortar:gamma",
+    "sem_radial.mortar:inv(I+gamma.alpha)",
+    "coupled_radial.staggered:inv(Mz)",
+    "coupled_radial.nodal:Ez_elimination",
+    "bor_stack.layer_absorption",
+)
+
+
+def test_the_inverse_census_is_disarmed_by_default():
+    """THE WHOLE POINT of this step: nothing is armed.  The production FD and
+    SEM cascades have ONE inverse population -- 2,031 inverses over 132
+    fixtures, equilibrated rcond 1.986e-07 .. 1.000, residual at most
+    3.408e-13 -- three to seven decades clear of every Cartesian bar.  A
+    conjunction guard armed on that would be dormant on every fixture ever
+    measured, which is not a guard but an untested decision waiting to fire.
+
+    What ships is the instrument, ``None`` by default."""
+    from lumenairy.elements.bor import _inv_census as _ic
+    assert _ic._BOR_INV_CENSUS is None
+
+
+def test_every_bor_inverse_goes_through_the_census_hook():
+    """No bare ``np.linalg.inv`` / ``np.linalg.solve`` may survive on the BOR
+    cascade paths, or the census would measure a population that is not the
+    one the solver runs -- which is exactly how a census stops being evidence.
+    """
+    bad = []
+    for name in ("zcascade.py", "sem_radial.py",
+                 "coupled_radial_eigensolver.py", "bor_stack.py"):
+        path = _PKG / "elements" / "bor" / name
+        for i, line in enumerate(
+                path.read_text(encoding="utf-8", errors="replace")
+                .splitlines(), 1):
+            code = line.split("#", 1)[0]
+            if re.search(r"np\.linalg\.(inv|solve)\s*\(", code):
+                bad.append("%s:%d  %s" % (name, i, line.strip()))
+    assert not bad, ("a BOR cascade inverse bypasses the census hook:\n  "
+                     + "\n  ".join(bad))
+
+
+def test_the_census_records_every_site_and_reproduces_the_population():
+    """RE-MEASURES the scoping's 2,031-inverse population through the shipped
+    hook, on whatever build runs this.
+
+    The assertion is not on the scoping's exact numbers -- those are a
+    measurement, not a contract -- but on the shape the decision rests on:
+    ONE population, whose worst reciprocal condition and worst residual both
+    sit decades clear of the Cartesian refusal bars, so arming nothing is the
+    right call."""
+    from lumenairy.elements.bor import _inv_census as _ic
+    rec = []
+    prev = _ic._BOR_INV_CENSUS
+    _ic._BOR_INV_CENSUS = rec
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for basis in ("fd", "sem"):
+                for m in (0, 1, 2):
+                    st = _sem_stack(m=m, degree=8, basis=basis)
+                    st.add_layer(0.5, segments=[(6.0, 4.0), (24.0, 2.25)])
+                    st.add_layer(0.4, segments=[(9.0, 2.25), (24.0, 4.0)])
+                    st.solve()
+                # a coincident-wall pair, the Cartesian killer fixture's peer
+                st = _sem_stack(degree=8, basis=basis)
+                st.add_layer(0.5, eps=1.0)            # equals the superstrate
+                st.add_layer(0.4, segments=[(6.0, 4.0), (24.0, 2.25)])
+                st.solve()
+    finally:
+        _ic._BOR_INV_CENSUS = prev
+    assert len(rec) > 200, "the census recorded only %d inverses" % (len(rec),)
+    sites = {r[0] for r in rec}
+    assert sites, "the census recorded no sites"
+    assert sites <= set(_INV_SITES), (
+        "unexpected census site(s): %s" % (sites - set(_INV_SITES),))
+    rconds = [r[2] for r in rec if np.isfinite(r[2])]
+    resids = [r[3] for r in rec if np.isfinite(r[3])]
+    assert len(rconds) == len(rec) and len(resids) == len(rec)
+    # ONE population: the worst rcond stays decades above the Cartesian
+    # _INV_T22_RCOND_REFUSE = 1e-10 and the worst residual decades below
+    # _INV_RESID_REFUSE = 1e-8.
+    assert min(rconds) > 1e-9, (
+        "worst equilibrated rcond %.4e -- within a decade of the Cartesian "
+        "1e-10 refusal bar; the population has changed and the 'arm nothing' "
+        "decision must be re-taken" % (min(rconds),))
+    assert max(resids) < 1e-9, (
+        "worst equilibrated inverse residual %.4e -- within a decade of the "
+        "Cartesian 1e-8 refusal bar" % (max(resids),))
+
+
+def test_arming_the_census_changes_no_number():
+    """The hook reads the operand; it never repairs it.  Armed and disarmed
+    must return bit-identical R."""
+    from lumenairy.elements.bor import _inv_census as _ic
+
+    def solve_R(armed):
+        prev = _ic._BOR_INV_CENSUS
+        _ic._BOR_INV_CENSUS = [] if armed else None
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                st = _sem_stack(degree=8)
+                st.add_layer(0.5, segments=[(6.0, 4.0), (24.0, 2.25)])
+                st.add_layer(0.4, segments=[(9.0, 2.25), (24.0, 4.0)])
+                return np.asarray(st.solve()["R"])
+        finally:
+            _ic._BOR_INV_CENSUS = prev
+
+    a, b = solve_R(False), solve_R(True)
+    assert np.array_equal(a, b), (
+        "arming the census moved the answer by %.4e"
+        % (float(np.max(np.abs(a - b))),))
+
+
+def test_the_sem_Ez_elimination_keeps_its_own_repair():
+    """``sem_radial``'s ``inv(Mz)`` already carries a correct and DIFFERENT
+    remedy -- an LU-pivot-ratio detector with a fallback to the unreduced QZ
+    pencil.  That is a REPAIR, not a refusal, it is right for its site, and
+    nothing was ported there.  This pins that it survived the census wiring."""
+    src = (_PKG / "elements" / "bor" / "sem_radial.py").read_text(
+        encoding="utf-8")
+    assert "lu_factor" in src
+    assert "census_inv(Mz" in src

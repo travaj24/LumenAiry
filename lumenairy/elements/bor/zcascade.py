@@ -28,6 +28,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.linalg import eig
 
+from ._inv_census import census_inv, census_solve
 from ._orient import flux_is_strong, forward_orient
 from .coupled_radial_eigensolver import (
     _assemble_staggered,
@@ -182,7 +183,8 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
     A = D + ir
     Lm = (D @ D if Lap is None else Lap) + ir @ D - m2r2
     dA = D @ A
-    Lei = np.linalg.inv(Lm + k0 ** 2 * np.diag(eps))
+    Lei = census_inv(Lm + k0 ** 2 * np.diag(eps),
+                     "zcascade.layer_modes:Ez_elimination")
     Phi_r = Lei @ (1j * A)
     Phi_p = Lei @ (-mr)
     B = np.block([[Im + 1j * D @ Phi_r, 1j * D @ Phi_p],
@@ -246,11 +248,11 @@ def _nodal_zflux(qq, Er, Ephi, D, mr, Lei, A, k0, wq):
 # --------------------------------------------------------------------------- #
 def interface_smatrix(Wa, Va, Wb, Vb):
     """Interface a -> b.  Tangential E,H continuity, backward modes = [W; -V]."""
-    a = np.linalg.solve(Wb, Wa)
-    b = np.linalg.solve(Vb, Va)
+    a = census_solve(Wb, Wa, "zcascade.interface:solve(Wb,Wa)")
+    b = census_solve(Vb, Va, "zcascade.interface:solve(Vb,Va)")
     apb = a + b
     amb = a - b
-    iapb = np.linalg.inv(apb)
+    iapb = census_inv(apb, "zcascade.interface:inv(a+b)")
     return (-iapb @ amb, 2.0 * iapb,
             0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
 
@@ -269,8 +271,8 @@ def redheffer_star(SA, SB):
     B11, B12, B21, B22 = SB
     n = A11.shape[0]
     I = np.eye(n, dtype=complex)
-    D = np.linalg.inv(I - B11 @ A22)
-    F = np.linalg.inv(I - A22 @ B11)
+    D = census_inv(I - B11 @ A22, "zcascade.star:inv(I-B11.A22)")
+    F = census_inv(I - A22 @ B11, "zcascade.star:inv(I-A22.B11)")
     return (A11 + A12 @ D @ B11 @ A21,
             A12 @ D @ B12,
             B21 @ F @ A21,
