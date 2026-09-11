@@ -1,0 +1,202 @@
+{
+ "arm": {
+  "kernel": "Sandybridge",
+  "loaded": [
+   {
+    "api": "openblas",
+    "arch": "Sandybridge",
+    "threads": 1,
+    "version": "0.3.31.188.0"
+   },
+   {
+    "api": "openblas",
+    "arch": "Sandybridge",
+    "threads": 1,
+    "version": "0.3.30"
+   }
+  ],
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas_threads": "1",
+  "platform": "win32",
+  "python": "3.14.6",
+  "requested_coretype": "SANDYBRIDGE",
+  "threads": 1,
+  "tree": "C:\\tmp\\lum_bor2_pre\\lumenairy\\__init__.py",
+  "version": "5.44.0"
+ },
+ "broken": [
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 1.02882 on a PROVABLY PASSIVE lossless stack (cell radius 1.27 vacuum wavelengths), where R + ",
+   "nodal_excess_disarmed": 0.028818691529632012,
+   "rel_im": 0.0,
+   "staggered_max": 1.0000000000003422,
+   "staggered_min": 0.9999999999997257
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 1.02882 on a PROVABLY PASSIVE lossless stack (cell radius 1.27 vacuum wavelengths), where R + ",
+   "nodal_excess_disarmed": 0.02881869152954275,
+   "rel_im": 1e-14,
+   "staggered_max": 1.0000000000004325,
+   "staggered_min": 0.9999999999997213
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 1.02882 on a PROVABLY PASSIVE lossless stack (cell radius 1.27 vacuum wavelengths), where R + ",
+   "nodal_excess_disarmed": 0.028818691529693075,
+   "rel_im": 1e-13,
+   "staggered_max": 1.000000000000136,
+   "staggered_min": 0.9999999999995598
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 1.02882 on a PROVABLY PASSIVE lossless stack (cell radius 1.27 vacuum wavelengths), where R + ",
+   "nodal_excess_disarmed": 0.02881869152286165,
+   "rel_im": 1e-12,
+   "staggered_max": 0.999999999999146,
+   "staggered_min": 0.9999999999981486
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.03822427600608669,
+   "excess": 0.028818691528381457,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "nodal_excess_disarmed": 0.028818691528381457,
+   "rel_im": 3e-12,
+   "staggered_max": 0.9999999999971785,
+   "staggered_min": 0.9999999999950022
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.038224276016897374,
+   "excess": 0.02881869149995664,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "nodal_excess_disarmed": 0.02881869149995664,
+   "rel_im": 1e-11,
+   "staggered_max": 0.999999999990525,
+   "staggered_min": 0.999999999984005
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.038224277371451953,
+   "excess": 0.028818689726002322,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "nodal_excess_disarmed": 0.028818689726002322,
+   "rel_im": 1e-09,
+   "staggered_max": 0.9999999990703566,
+   "staggered_min": 0.9999999984274939
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.03822428938365352,
+   "excess": 0.028818672597931805,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "nodal_excess_disarmed": 0.028818672597931805,
+   "rel_im": 1e-08,
+   "staggered_max": 0.9999999907023701,
+   "staggered_min": 0.9999999842796303
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.038225614343570635,
+   "excess": 0.028816797749064538,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "nodal_excess_disarmed": 0.028816797749064538,
+   "rel_im": 1e-06,
+   "staggered_max": 0.9999990702550529,
+   "staggered_min": 0.9999984279920934
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.038358703104639735,
+   "excess": 0.02863013638113987,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "nodal_excess_disarmed": 0.02863013638113987,
+   "rel_im": 0.0001,
+   "staggered_max": 0.9999070313728622,
+   "staggered_min": 0.9998428155793142
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.03956087996001789,
+   "excess": 0.026964809363476228,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "nodal_excess_disarmed": 0.026964809363476228,
+   "rel_im": 0.001,
+   "staggered_max": 0.9990708463361023,
+   "staggered_min": 0.9984296429474746
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.051410763157049844,
+   "excess": 0.010462811745060474,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "nodal_excess_disarmed": 0.010462811745060474,
+   "rel_im": 0.01,
+   "staggered_max": 0.9907622246039473,
+   "staggered_min": 0.984446427219121
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.16741646317833347,
+   "excess": -0.03866776723065657,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "nodal_excess_disarmed": -0.03866776723065657,
+   "rel_im": 0.1,
+   "staggered_max": 0.9132729342012161,
+   "staggered_min": 0.8599182777469235
+  }
+ ],
+ "fast": true,
+ "gain": [
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 1.02882 on a PROVABLY PASSIVE lossless stack (cell radius 1.27 vacuum wavelengths), where R + ",
+   "rel_im": -1e-12
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.03822427599747913,
+   "excess": 0.028818691530358542,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "rel_im": -3e-12
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.038224262609882986,
+   "excess": 0.02881871040948747,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "rel_im": -1e-08
+  },
+  {
+   "decision": "returned",
+   "deficit": 556002822.1023818,
+   "excess": 4.9391997032219816e+16,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "rel_im": -0.0001
+  },
+  {
+   "decision": "returned",
+   "deficit": 163284252682.15512,
+   "excess": 2.0074395165492796e+22,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "rel_im": -0.01
+  }
+ ],
+ "healthy": []
+}

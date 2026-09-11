@@ -36,6 +36,8 @@ import warnings
 import numpy as np
 from scipy.linalg import eig, lu_factor, lu_solve
 
+from ._inv_census import census_inv
+
 
 def _fd_grid(Rbig, N):
     """Cell-centered grid + 2nd-order differentiation matrix on (0, Rbig)."""
@@ -239,7 +241,7 @@ def _assemble_staggered(m, Rbig, N, eps_profile, k0):
             f"discretization.  The modal basis loses ~8-10 digits here; "
             f"detune k0 by ~1e-8 relative (or change N) to restore "
             f"machine-precision energy.", stacklevel=2)
-    Lei = np.linalg.inv(Mz)
+    Lei = census_inv(Mz, "coupled_radial.staggered:inv(Mz)")
     Phi_r = Lei @ (1j * A_f2n)                  # E_r[faces]  -> Phi[nodes]
     Phi_p = Lei @ (-diag(mrn))                  # E_phi[nodes]-> Phi[nodes]
     I = np.eye(N)
@@ -438,7 +440,9 @@ def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
     A = D + ir
     Lm = (D @ D if Lap is None else Lap) + ir @ D - m2r2
     dA = D @ A
-    Lei = np.linalg.inv(Lm + k0 ** 2 * np.diag(eps_zz))  # E_z elimination
+    # E_z elimination
+    Lei = census_inv(Lm + k0 ** 2 * np.diag(eps_zz),
+                     "coupled_radial.nodal:Ez_elimination")
     Phi_r = Lei @ (1j * A)
     Phi_p = Lei @ (-mr)
     B = np.block([[I + 1j * D @ Phi_r, 1j * D @ Phi_p],

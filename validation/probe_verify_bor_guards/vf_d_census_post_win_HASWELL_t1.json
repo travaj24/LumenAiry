@@ -1,0 +1,673 @@
+{
+ "arm": {
+  "platform": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "requested_coretype": "HASWELL",
+  "loaded_kernel": "Haswell",
+  "blas_threads": 1,
+  "env_threads": "1",
+  "tree": "C:\\tmp\\lum_vbor"
+ },
+ "build": "post",
+ "tag": "win_HASWELL_t1",
+ "SLIVER_BAND_FRAC": 0.0001,
+ "Q_EXCESS": 10000.0,
+ "groups": [
+  "base",
+  "mesh",
+  "sweep"
+ ],
+ "degrees": [
+  6,
+  8,
+  12
+ ],
+ "ordinary_census": [
+  {
+   "group": "base",
+   "degree": 6,
+   "n_families": 4,
+   "bad": [],
+   "narrowest": Infinity,
+   "worst_q": 16.860593819922244,
+   "narrowest_over_bar": Infinity,
+   "worst_q_over_bar": 0.0016860593819922243,
+   "assert_narrow_bar": 0.00030000000000000003,
+   "assert_q_bar": 1000.0,
+   "per": [
+    {
+     "label": "uniform|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 14.980195452779212
+    },
+    {
+     "label": "uniaxial|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 14.833757061163073
+    },
+    {
+     "label": "segments3|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 16.058172730504157
+    },
+    {
+     "label": "coincident_walls|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 16.860593819922244
+    }
+   ]
+  },
+  {
+   "group": "base",
+   "degree": 8,
+   "n_families": 4,
+   "bad": [],
+   "narrowest": Infinity,
+   "worst_q": 17.802189047779784,
+   "narrowest_over_bar": Infinity,
+   "worst_q_over_bar": 0.0017802189047779783,
+   "assert_narrow_bar": 0.00030000000000000003,
+   "assert_q_bar": 1000.0,
+   "per": [
+    {
+     "label": "uniform|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 17.44136533296866
+    },
+    {
+     "label": "uniaxial|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 16.964276300262007
+    },
+    {
+     "label": "segments3|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 17.802189047779784
+    },
+    {
+     "label": "coincident_walls|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 17.441365341051153
+    }
+   ]
+  },
+  {
+   "group": "base",
+   "degree": 12,
+   "n_families": 4,
+   "bad": [],
+   "narrowest": Infinity,
+   "worst_q": 27.215079011527394,
+   "narrowest_over_bar": Infinity,
+   "worst_q_over_bar": 0.0027215079011527394,
+   "assert_narrow_bar": 0.00030000000000000003,
+   "assert_q_bar": 1000.0,
+   "per": [
+    {
+     "label": "uniform|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 22.213517719170213
+    },
+    {
+     "label": "uniaxial|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 23.147520208238927
+    },
+    {
+     "label": "segments3|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 27.215079011527394
+    },
+    {
+     "label": "coincident_walls|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 24.995521343539473
+    }
+   ]
+  },
+  {
+   "group": "mesh",
+   "degree": 6,
+   "n_families": 6,
+   "bad": [],
+   "narrowest": 0.03125,
+   "worst_q": 34.469036692739564,
+   "narrowest_over_bar": 312.5,
+   "worst_q_over_bar": 0.0034469036692739564,
+   "assert_narrow_bar": 0.00030000000000000003,
+   "assert_q_bar": 1000.0,
+   "per": [
+    {
+     "label": "grating_p3_d0.5|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 18.36381907493456
+    },
+    {
+     "label": "grating_p1.5_d0.3|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 30.569201112931225
+    },
+    {
+     "label": "grating_p0.8_d0.5|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 34.469036692739564
+    },
+    {
+     "label": "hp3|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 20.662014259527247
+    },
+    {
+     "label": "hp3_graded|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 18.36052852280894
+    },
+    {
+     "label": "spacer_between_rings|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": 0.03125,
+     "q_excess": 30.010314812871496
+    }
+   ]
+  },
+  {
+   "group": "mesh",
+   "degree": 8,
+   "n_families": 6,
+   "bad": [],
+   "narrowest": 0.041666666666666664,
+   "worst_q": 53.49179189538644,
+   "narrowest_over_bar": 416.66666666666663,
+   "worst_q_over_bar": 0.005349179189538644,
+   "assert_narrow_bar": 0.00030000000000000003,
+   "assert_q_bar": 1000.0,
+   "per": [
+    {
+     "label": "grating_p3_d0.5|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 28.51634139306596
+    },
+    {
+     "label": "grating_p1.5_d0.3|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 47.48879157211863
+    },
+    {
+     "label": "grating_p0.8_d0.5|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 53.49179189538644
+    },
+    {
+     "label": "hp3|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 21.37291996347591
+    },
+    {
+     "label": "hp3_graded|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 28.51075106077465
+    },
+    {
+     "label": "spacer_between_rings|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": 0.041666666666666664,
+     "q_excess": 34.92567576225074
+    }
+   ]
+  },
+  {
+   "group": "mesh",
+   "degree": 12,
+   "n_families": 6,
+   "bad": [],
+   "narrowest": 0.0625,
+   "worst_q": 102.14073833602734,
+   "narrowest_over_bar": 625.0,
+   "worst_q_over_bar": 0.010214073833602734,
+   "assert_narrow_bar": 0.00030000000000000003,
+   "assert_q_bar": 1000.0,
+   "per": [
+    {
+     "label": "grating_p3_d0.5|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 27.220543021465655
+    },
+    {
+     "label": "grating_p1.5_d0.3|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 90.74536217416143
+    },
+    {
+     "label": "grating_p0.8_d0.5|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 102.14073833602734
+    },
+    {
+     "label": "hp3|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 40.83792283980653
+    },
+    {
+     "label": "hp3_graded|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 27.215079011858982
+    },
+    {
+     "label": "spacer_between_rings|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": 0.0625,
+     "q_excess": 44.46078070560554
+    }
+   ]
+  },
+  {
+   "group": "sweep",
+   "degree": 6,
+   "n_families": 8,
+   "bad": [],
+   "narrowest": Infinity,
+   "worst_q": 60.63013764645489,
+   "narrowest_over_bar": Infinity,
+   "worst_q_over_bar": 0.006063013764645489,
+   "assert_narrow_bar": 0.00030000000000000003,
+   "assert_q_bar": 1000.0,
+   "per": [
+    {
+     "label": "ring_m0|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 8.933284605690739
+    },
+    {
+     "label": "ring_m2|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 26.7101975516883
+    },
+    {
+     "label": "ring_m5|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 60.63013764645489
+    },
+    {
+     "label": "ring_k0.8|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 21.089061611931367
+    },
+    {
+     "label": "ring_k3.5|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 14.442761149962887
+    },
+    {
+     "label": "ring_k8|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 14.74507905007673
+    },
+    {
+     "label": "nm_units|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 18.112937205367427
+    },
+    {
+     "label": "lossy_metal_ring|d6",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 15.306775865034021
+    }
+   ]
+  },
+  {
+   "group": "sweep",
+   "degree": 8,
+   "n_families": 8,
+   "bad": [],
+   "narrowest": Infinity,
+   "worst_q": 65.07879790154229,
+   "narrowest_over_bar": Infinity,
+   "worst_q_over_bar": 0.006507879790154229,
+   "assert_narrow_bar": 0.00030000000000000003,
+   "assert_q_bar": 1000.0,
+   "per": [
+    {
+     "label": "ring_m0|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 9.482940083696247
+    },
+    {
+     "label": "ring_m2|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 28.270564581225706
+    },
+    {
+     "label": "ring_m5|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 65.07879790154229
+    },
+    {
+     "label": "ring_k0.8|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 21.814486844990306
+    },
+    {
+     "label": "ring_k3.5|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 17.44136533296864
+    },
+    {
+     "label": "ring_k8|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 17.44136533296866
+    },
+    {
+     "label": "nm_units|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 21.08493002797222
+    },
+    {
+     "label": "lossy_metal_ring|d8",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 23.48321349284223
+    }
+   ]
+  },
+  {
+   "group": "sweep",
+   "degree": 12,
+   "n_families": 8,
+   "bad": [],
+   "narrowest": Infinity,
+   "worst_q": 97.14380712157153,
+   "narrowest_over_bar": Infinity,
+   "worst_q_over_bar": 0.009714380712157153,
+   "assert_narrow_bar": 0.00030000000000000003,
+   "assert_q_bar": 1000.0,
+   "per": [
+    {
+     "label": "ring_m0|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 14.281986724295168
+    },
+    {
+     "label": "ring_m2|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 41.502231048092156
+    },
+    {
+     "label": "ring_m5|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 97.14380712157153
+    },
+    {
+     "label": "ring_k0.8|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 41.680450653782124
+    },
+    {
+     "label": "ring_k3.5|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 23.803305577982673
+    },
+    {
+     "label": "ring_k8|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 22.909075535831164
+    },
+    {
+     "label": "nm_units|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 26.848627555790866
+    },
+    {
+     "label": "lossy_metal_ring|d12",
+     "verdicts": [
+      "ok"
+     ],
+     "w_min_union_frac": Infinity,
+     "q_excess": 22.43501789205564
+    }
+   ]
+  }
+ ],
+ "taper": [
+  {
+   "n_slices": 8,
+   "degree": 8,
+   "k0": 2.0,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.03125,
+   "q": 22.063854049536214,
+   "w_over_bar": 312.5,
+   "assert_w_bar": 0.00030000000000000003,
+   "q_over_bar": 0.0022063854049536214,
+   "assert_q_bar": 3333.3333333333335
+  },
+  {
+   "n_slices": 16,
+   "degree": 8,
+   "k0": 2.0,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.015625,
+   "q": 28.751803829176207,
+   "w_over_bar": 156.25,
+   "assert_w_bar": 0.00030000000000000003,
+   "q_over_bar": 0.0028751803829176205,
+   "assert_q_bar": 3333.3333333333335
+  },
+  {
+   "n_slices": 32,
+   "degree": 8,
+   "k0": 2.0,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.0078125,
+   "q": 57.08536862635465,
+   "w_over_bar": 78.125,
+   "assert_w_bar": 0.00030000000000000003,
+   "q_over_bar": 0.005708536862635465,
+   "assert_q_bar": 3333.3333333333335
+  },
+  {
+   "n_slices": 64,
+   "degree": 8,
+   "k0": 2.0,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.00390625,
+   "q": 113.76737832830567,
+   "w_over_bar": 39.0625,
+   "assert_w_bar": 0.00030000000000000003,
+   "q_over_bar": 0.011376737832830566,
+   "assert_q_bar": 3333.3333333333335
+  },
+  {
+   "n_slices": 128,
+   "degree": 6,
+   "k0": 0.8,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.001953125,
+   "q": 345.4403566436275,
+   "w_over_bar": 19.53125,
+   "assert_w_bar": 0.00030000000000000003,
+   "q_over_bar": 0.03454403566436275,
+   "assert_q_bar": 3333.3333333333335
+  },
+  {
+   "n_slices": 256,
+   "degree": 6,
+   "k0": 0.8,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.0009765625,
+   "q": 690.1726129457073,
+   "w_over_bar": 9.765625,
+   "assert_w_bar": 0.00030000000000000003,
+   "q_over_bar": 0.06901726129457074,
+   "assert_q_bar": 3333.3333333333335
+  }
+ ]
+}

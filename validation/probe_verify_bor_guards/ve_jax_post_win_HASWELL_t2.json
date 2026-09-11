@@ -1,0 +1,68 @@
+{
+ "task": "E",
+ "claim": "3-jax",
+ "build": "post",
+ "tag": "post_win_HASWELL_t2",
+ "arm": {
+  "platform": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "requested_coretype": "(unset)",
+  "loaded_kernel": "Haswell",
+  "blas_threads": 2,
+  "env_threads": "2",
+  "tree": "C:\\tmp\\lum_vbor"
+ },
+ "jax": "0.11.0",
+ "twin": [
+  {
+   "Nx": 6,
+   "Ny": 6,
+   "k0": 8.0,
+   "scalar_max_abs": 0.0,
+   "scalar_hash_np": "6f188fdbd999fcd4f6a7d0a99cd0b1d7e8939a51c9999c433d0bfc11774963dc",
+   "scalar_hash_jx": "6f188fdbd999fcd4f6a7d0a99cd0b1d7e8939a51c9999c433d0bfc11774963dc",
+   "vector_max_abs": 0.0,
+   "vector_hash_np": "cbbcf59bb45db83969aaa9314393f7014109c65448241ba098b3424038202df1"
+  },
+  {
+   "Nx": 8,
+   "Ny": 8,
+   "k0": 12.0,
+   "scalar_max_abs": 0.0,
+   "scalar_hash_np": "6edc750f5f56476cd0b97166b27119dbd6c47518145544d8592dabdaad366bda",
+   "scalar_hash_jx": "6edc750f5f56476cd0b97166b27119dbd6c47518145544d8592dabdaad366bda",
+   "vector_max_abs": 0.0,
+   "vector_hash_np": "551d62e11006693f097d5b18eebf9cbabca8b4a3e54b726d7b590ee0b60eee2c"
+  },
+  {
+   "Nx": 10,
+   "Ny": 6,
+   "k0": 20.0,
+   "scalar_max_abs": 0.0,
+   "scalar_hash_np": "79154dee08939132bfdd49128f73ad6021b45a1baad9964357ef31ed61826aa5",
+   "scalar_hash_jx": "79154dee08939132bfdd49128f73ad6021b45a1baad9964357ef31ed61826aa5",
+   "vector_max_abs": 0.0,
+   "vector_hash_np": "c6e209c0faf15ddf28bb2f5b33083fb6f5a8bef62b973d9f99456e30dbe2ba11"
+  }
+ ],
+ "selector_jax": {
+  "ok": true,
+  "max_abs": 0.0,
+  "jax_result": [
+   [
+    100.0,
+    1e-13
+   ],
+   [
+    -2.0,
+    0.5
+   ],
+   [
+    200.0,
+    0.0
+   ]
+  ]
+ }
+}

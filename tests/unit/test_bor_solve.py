@@ -29,7 +29,13 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 import numpy as np
 import pytest
 
-from lumenairy.elements.bor.bor_solve import _physical_propagating, build_layer, solve
+import lumenairy.elements.bor.bor_solve as _bs
+from lumenairy.elements.bor.bor_solve import (
+    BORNodalPassivityError,
+    _physical_propagating,
+    build_layer,
+    solve,
+)
 from lumenairy.elements.bor.coupled_radial_eigensolver import _fd_grid, _pec_wall_ops
 from lumenairy.elements.bor.zcascade import interface_smatrix
 
@@ -60,18 +66,71 @@ def test_structured_stack_energy_staggered_default():
     assert np.max(np.abs(res["energy"] - 1.0)) < 1e-9
 
 
-def test_structured_stack_energy_floor_nodal():
-    """The legacy nodal basis conserves R+T only to the FD spurious-mode floor
-    (~1-4%) -- and ONLY at small cells (it blows up beyond Rbig ~ several
-    lambda; the staggered default is the fix)."""
+def _nodal_floor_stack():
     m, R, N, k0 = 1, 4.0, 200, 2.0
-    layers = [build_layer(m, R, N, _uni(2.0), k0, basis="nodal"),
-              build_layer(m, R, N, _ring(0.8, 2.0, 6.0), k0, thickness=0.5,
-                          basis="nodal"),
-              build_layer(m, R, N, _uni(2.0), k0, basis="nodal")]
-    res = solve(layers, k0)
+    return k0, [build_layer(m, R, N, _uni(2.0), k0, basis="nodal"),
+                build_layer(m, R, N, _ring(0.8, 2.0, 6.0), k0, thickness=0.5,
+                            basis="nodal"),
+                build_layer(m, R, N, _uni(2.0), k0, basis="nodal")]
+
+
+def test_structured_stack_energy_floor_nodal_is_now_REFUSED():
+    """5.45.1 -- THE BEHAVIOUR CHANGE, and this gate is the one that moves.
+
+    This stack used to be the library's demonstration that "the legacy nodal
+    basis conserves R+T only to the FD spurious-mode floor (~1-4%)", and it
+    asserted that the floor held (``< 0.05``).  It reads ``R + T = 1.02882``:
+    a 2.9 % energy violation on a stack of LOSSLESS media, where ``R + T <= 1``
+    is a theorem.  That is not a floor, it is a wrong answer, and 5.45.1
+    refuses it rather than returning it.
+
+    WHY THE BAR SITS BELOW THIS ROW.  The population was measured before the
+    bar was chosen (93 solves,
+    ``validation/probe_fix_bor_guards/s3_nodal_passivity.py``): the STAGGERED
+    twin of every row reads ``R + T - 1 <= 3.7406e-12``, nodal UNIFORM stacks
+    at ``Rbig <= 2`` wavelengths reach 1.9552e-10, and every other nodal row --
+    this one included, at 2.8819e-02 -- runs from there to 6899.  An 8.17-decade
+    gap with nothing in it; the bar at 1e-3 sits 6.71 decades above the healthy
+    ceiling and 1.46 below this row.
+    """
+    k0, layers = _nodal_floor_stack()
+    with pytest.raises(BORNodalPassivityError) as ei:
+        solve(layers, k0)
+    msg = str(ei.value)
+    assert "basis='nodal'" in msg                  # names the basis
+    assert "staggered" in msg                      # names the remedy
+    assert "1.02882" in msg or "1.0288" in msg     # quotes the measurement
+    assert "BOR_NODAL_PASSIVITY_GUARD" in msg      # names the switch
+
+
+def test_the_nodal_refusal_switch_restores_the_previous_number_exactly():
+    """``BOR_NODAL_PASSIVITY_GUARD = False`` is a FAIL-BEFORE SWITCH, not a
+    policy: it must hand back the pre-5.45.1 number bit for bit, including the
+    old gate's own assertion (multiple physical channels, within the documented
+    ~4% floor)."""
+    k0, layers = _nodal_floor_stack()
+    prev = _bs.BOR_NODAL_PASSIVITY_GUARD
+    _bs.BOR_NODAL_PASSIVITY_GUARD = False
+    try:
+        res = solve(layers, k0)
+    finally:
+        _bs.BOR_NODAL_PASSIVITY_GUARD = prev
     assert len(res["inc"]) >= 4                       # multiple physical channels
-    assert np.max(np.abs(res["energy"] - 1.0)) < 0.05  # within the ~4% floor
+    assert np.max(np.abs(res["energy"] - 1.0)) < 0.05  # the pre-fix assertion
+
+
+def test_the_staggered_twin_of_that_stack_is_untouched():
+    """The screen must be invisible on the production basis: the same geometry
+    on ``basis='staggered'`` returns, and closes energy to machine
+    precision."""
+    m, R, N, k0 = 1, 4.0, 200, 2.0
+    layers = [build_layer(m, R, N, _uni(2.0), k0, basis="staggered"),
+              build_layer(m, R, N, _ring(0.8, 2.0, 6.0), k0, thickness=0.5,
+                          basis="staggered"),
+              build_layer(m, R, N, _uni(2.0), k0, basis="staggered")]
+    res = solve(layers, k0)
+    assert len(res["inc"]) >= 4
+    assert np.max(np.abs(res["energy"] - 1.0)) < 1e-9
 
 
 def _pol_fraction_nodal(m, R, N, k0, eps_val, L):

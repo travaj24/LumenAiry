@@ -1,0 +1,500 @@
+{
+ "arm": {
+  "kernel": "Sandybridge",
+  "loaded": [
+   {
+    "api": "openblas",
+    "arch": "Sandybridge",
+    "threads": 1,
+    "version": "0.3.31.188.0"
+   },
+   {
+    "api": "openblas",
+    "arch": "Sandybridge",
+    "threads": 1,
+    "version": "0.3.30"
+   }
+  ],
+  "numpy": "2.4.6",
+  "omp": "1",
+  "openblas_threads": "1",
+  "platform": "linux",
+  "python": "3.12.3",
+  "requested_coretype": "SANDYBRIDGE",
+  "threads": 1,
+  "tree": "/mnt/c/tmp/lum_bor2/lumenairy/__init__.py",
+  "version": "5.44.0"
+ },
+ "match_gain6": {
+  "m": {
+   "R00": 0.1246132682625872,
+   "T00": 0.7389866061082164,
+   "dT00": 3.3306690738754696e-16,
+   "energy": 0.8635998743708037
+  },
+  "nm": {
+   "R00": 0.12461326826258724,
+   "T00": 0.7389866061082166,
+   "dT00": 5.551115123125783e-16,
+   "energy": 0.8635998743708039
+  },
+  "um": {
+   "R00": 0.12461326826258717,
+   "T00": 0.7389866061082161,
+   "dT00": 0.0,
+   "energy": 0.8635998743708033
+  }
+ },
+ "match_real": {
+  "m": {
+   "R00": 0.12461326269319747,
+   "T00": 0.7389865758844332,
+   "dT00": 5.88418203051333e-15,
+   "energy": 0.8635998385776307
+  },
+  "nm": {
+   "R00": 0.12461326269319754,
+   "T00": 0.73898657588443,
+   "dT00": 2.6645352591003757e-15,
+   "energy": 0.8635998385776275
+  },
+  "um": {
+   "R00": 0.1246132626931963,
+   "T00": 0.7389865758844273,
+   "dT00": 0.0,
+   "energy": 0.8635998385776236
+  }
+ },
+ "scalar_gain5": {
+  "m": {
+   "band_in_own_units": 0.19191913820849432,
+   "band_unit_free": 1.919191382084943e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191919138.2084943,
+   "n_diff": 0,
+   "worst_dky": 1.3024248481734467e-11
+  },
+  "nm": {
+   "band_in_own_units": 1.9191913820849382e-10,
+   "band_unit_free": 1.919191382084938e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 0.19191913820849382,
+   "n_diff": 0,
+   "worst_dky": 9.630518796069687e-12
+  },
+  "um": {
+   "band_in_own_units": 1.9191913820849426e-07,
+   "band_unit_free": 1.9191913820849426e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191.91913820849425,
+   "n_diff": 0,
+   "worst_dky": 0.0
+  }
+ },
+ "scalar_gain6": {
+  "m": {
+   "band_in_own_units": 0.19191913820849407,
+   "band_unit_free": 1.9191913820849407e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191919138.20849407,
+   "n_diff": 0,
+   "worst_dky": 1.3254289529895723e-11
+  },
+  "nm": {
+   "band_in_own_units": 1.9191913820849444e-10,
+   "band_unit_free": 1.9191913820849444e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 0.19191913820849443,
+   "n_diff": 0,
+   "worst_dky": 5.5113724779268425e-12
+  },
+  "um": {
+   "band_in_own_units": 1.91919138208494e-07,
+   "band_unit_free": 1.91919138208494e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191.919138208494,
+   "n_diff": 0,
+   "worst_dky": 0.0
+  }
+ },
+ "scalar_gain7": {
+  "m": {
+   "band_in_own_units": 0.19191913820849385,
+   "band_unit_free": 1.9191913820849384e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 3,
+    "negated": 93,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191919138.20849383,
+   "n_diff": 0,
+   "worst_dky": 3.169255726381098e-12
+  },
+  "nm": {
+   "band_in_own_units": 1.919191382084941e-10,
+   "band_unit_free": 1.919191382084941e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 3,
+    "negated": 93,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 0.1919191382084941,
+   "n_diff": 0,
+   "worst_dky": 3.5620515157615903e-12
+  },
+  "um": {
+   "band_in_own_units": 1.9191913820849397e-07,
+   "band_unit_free": 1.9191913820849397e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 3,
+    "negated": 93,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191.91913820849396,
+   "n_diff": 0,
+   "worst_dky": 0.0
+  }
+ },
+ "scalar_loss6": {
+  "m": {
+   "band_in_own_units": 0.19191913820849407,
+   "band_unit_free": 1.9191913820849407e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191919138.20849407,
+   "n_diff": 0,
+   "worst_dky": 1.3254289529895723e-11
+  },
+  "nm": {
+   "band_in_own_units": 1.9191913820849444e-10,
+   "band_unit_free": 1.9191913820849444e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 0.19191913820849443,
+   "n_diff": 0,
+   "worst_dky": 5.5113724779268425e-12
+  },
+  "um": {
+   "band_in_own_units": 1.91919138208494e-07,
+   "band_unit_free": 1.91919138208494e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191.919138208494,
+   "n_diff": 0,
+   "worst_dky": 0.0
+  }
+ },
+ "scalar_real": {
+  "m": {
+   "band_in_own_units": 0.19191913820849393,
+   "band_unit_free": 1.9191913820849391e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191919138.20849392,
+   "n_diff": 0,
+   "worst_dky": 2.5059954111839033e-12
+  },
+  "nm": {
+   "band_in_own_units": 1.91919138208494e-10,
+   "band_unit_free": 1.91919138208494e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 0.191919138208494,
+   "n_diff": 0,
+   "worst_dky": 3.7769787297747826e-13
+  },
+  "um": {
+   "band_in_own_units": 1.9191913820849391e-07,
+   "band_unit_free": 1.9191913820849391e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191.9191382084939,
+   "n_diff": 0,
+   "worst_dky": 0.0
+  }
+ },
+ "vector": {
+  "m": {
+   "fwd": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63
+   ],
+   "n_forward": 64,
+   "same_as_um": true
+  },
+  "nm": {
+   "fwd": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63
+   ],
+   "n_forward": 64,
+   "same_as_um": true
+  },
+  "um": {
+   "fwd": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63
+   ],
+   "n_forward": 64,
+   "same_as_um": true
+  }
+ }
+}

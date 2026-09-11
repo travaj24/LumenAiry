@@ -28,6 +28,8 @@ from __future__ import annotations
 import numpy as np
 from scipy.linalg import eig
 
+from ._inv_census import census_inv, census_solve
+from ._orient import flux_is_strong, forward_orient
 from .coupled_radial_eigensolver import (
     _assemble_staggered,
     _check_wall,
@@ -78,22 +80,27 @@ def _layer_modes_staggered(m, Rbig, N, eps_profile, k0):
     W = np.zeros((2 * N, nm), dtype=complex)
     V = np.zeros((2 * N, nm), dtype=complex)
     qf = np.zeros(nm, dtype=complex)
+    # Pass 1: the z-flux of every mode at its UN-oriented root, which is what
+    # the orientation kernel classifies on.  Hoisted out of the field loop so
+    # the WHOLE spectrum is available to the classifier's scale -- the per-mode
+    # arithmetic is unchanged (each mode's flux is the same expression on the
+    # same inputs), only its position in the loop nest moved.
+    P0 = np.empty(nm, dtype=float)
+    for j in range(nm):
+        Er, Ephi = Vm[:N, j], Vm[N:, j]
+        _hr, _hphi = hfields(Er, Ephi, q[j])
+        P0[j] = flux(Er, Ephi, _hr, _hphi)
+    q = forward_orient(q, P0, k0, xp=np)
     for j in range(nm):
         Er, Ephi = Vm[:N, j], Vm[N:, j]
         qj = q[j]
-        hr, hphi = hfields(Er, Ephi, qj)
-        P = flux(Er, Ephi, hr, hphi)
-        if abs(qj.imag) < 1e-9 * max(abs(qj.real), 1e-300):
-            qj = qj if P >= 0 else -qj
-        else:
-            qj = qj if qj.imag > 0 else -qj
         hr, hphi = hfields(Er, Ephi, qj)
         P = flux(Er, Ephi, hr, hphi)
         # propagating-vs-evanescent split by flux RELATIVE to the mode's own
         # r*dr field norm (both scale as field^2*length^2 -> unit-invariant;
         # an absolute threshold silently mis-normalized meter-scale inputs)
         fnrm = np.sum(np.abs(Er) ** 2 * r_f * h) + np.sum(np.abs(Ephi) ** 2 * r_n * h)
-        s = (1.0 / np.sqrt(abs(P)) if abs(P) > 1e-10 * fnrm
+        s = (1.0 / np.sqrt(abs(P)) if flux_is_strong(P, fnrm, xp=np)
              else 1.0 / np.sqrt(np.sum(np.abs(Er) ** 2 + np.abs(Ephi) ** 2) + 1e-300))
         W[:N, j] = Er * s
         W[N:, j] = Ephi * s
@@ -176,7 +183,8 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
     A = D + ir
     Lm = (D @ D if Lap is None else Lap) + ir @ D - m2r2
     dA = D @ A
-    Lei = np.linalg.inv(Lm + k0 ** 2 * np.diag(eps))
+    Lei = census_inv(Lm + k0 ** 2 * np.diag(eps),
+                     "zcascade.layer_modes:Ez_elimination")
     Phi_r = Lei @ (1j * A)
     Phi_p = Lei @ (-mr)
     B = np.block([[Im + 1j * D @ Phi_r, 1j * D @ Phi_p],
@@ -191,10 +199,17 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
     V = np.zeros((2 * N, nm), dtype=complex)
     qf = np.zeros(nm, dtype=complex)
     reldiv = np.zeros(nm) if with_reldiv else None
+    # Pass 1: the z-flux at the UN-oriented root of every mode (see the
+    # staggered twin -- the classifier needs the whole spectrum's scale, so the
+    # flux evaluation is hoisted out of the field loop; the per-mode arithmetic
+    # is identical).
+    P0 = np.array([_nodal_zflux(q[j], Vm[:N, j], Vm[N:, j], D, mr, Lei, A,
+                                k0, wq) for j in range(nm)])
+    q_or = forward_orient(q, P0, k0, xp=np)
     for j in range(nm):
         Er = Vm[:N, j]
         Ephi = Vm[N:, j]
-        qj = _orient_forward(q[j], Er, Ephi, D, mr, Lei, A, k0, wq)
+        qj = q_or[j]
         Ez = qj * (Lei @ (1j * A @ Er - mr @ Ephi))
         hr = (1.0 / k0) * (mr @ Ez - qj * Ephi)
         hphi = (1.0 / k0) * (qj * Er + 1j * (D @ Ez))
@@ -216,17 +231,16 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
     return out
 
 
-def _orient_forward(q, Er, Ephi, D, mr, Lei, A, k0, wq):
-    """Orient q so the mode is forward (+z): propagating by r*dr flux sign,
-    evanescent by Im(q) > 0."""
-    def flux(qq):
-        Ez = qq * (Lei @ (1j * A @ Er - mr @ Ephi))
-        hr = (1.0 / k0) * (mr @ Ez - qq * Ephi)
-        hphi = (1.0 / k0) * (qq * Er + 1j * (D @ Ez))
-        return np.real(np.sum((Er * np.conj(hphi) - Ephi * np.conj(hr)) * wq))
-    if abs(q.imag) < 1e-9 * max(abs(q.real), 1e-300):     # propagating
-        return q if flux(q) >= 0 else -q
-    return q if q.imag > 0 else -q                         # evanescent: decay +z
+def _nodal_zflux(qq, Er, Ephi, D, mr, Lei, A, k0, wq):
+    """The ``r dr``-weighted axial Poynting flux of ONE nodal-basis mode at the
+    root ``qq``.  The orientation DECISION it feeds lives in
+    :func:`lumenairy.elements.bor._orient.forward_orient` -- this function is
+    only the basis-specific quantity that decision reads, which is why it
+    survived the 5.45.1 consolidation while ``_orient_forward`` did not."""
+    Ez = qq * (Lei @ (1j * A @ Er - mr @ Ephi))
+    hr = (1.0 / k0) * (mr @ Ez - qq * Ephi)
+    hphi = (1.0 / k0) * (qq * Er + 1j * (D @ Ez))
+    return np.real(np.sum((Er * np.conj(hphi) - Ephi * np.conj(hr)) * wq))
 
 
 # --------------------------------------------------------------------------- #
@@ -234,11 +248,11 @@ def _orient_forward(q, Er, Ephi, D, mr, Lei, A, k0, wq):
 # --------------------------------------------------------------------------- #
 def interface_smatrix(Wa, Va, Wb, Vb):
     """Interface a -> b.  Tangential E,H continuity, backward modes = [W; -V]."""
-    a = np.linalg.solve(Wb, Wa)
-    b = np.linalg.solve(Vb, Va)
+    a = census_solve(Wb, Wa, "zcascade.interface:solve(Wb,Wa)")
+    b = census_solve(Vb, Va, "zcascade.interface:solve(Vb,Va)")
     apb = a + b
     amb = a - b
-    iapb = np.linalg.inv(apb)
+    iapb = census_inv(apb, "zcascade.interface:inv(a+b)")
     return (-iapb @ amb, 2.0 * iapb,
             0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
 
@@ -257,8 +271,8 @@ def redheffer_star(SA, SB):
     B11, B12, B21, B22 = SB
     n = A11.shape[0]
     I = np.eye(n, dtype=complex)
-    D = np.linalg.inv(I - B11 @ A22)
-    F = np.linalg.inv(I - A22 @ B11)
+    D = census_inv(I - B11 @ A22, "zcascade.star:inv(I-B11.A22)")
+    F = census_inv(I - A22 @ B11, "zcascade.star:inv(I-A22.B11)")
     return (A11 + A12 @ D @ B11 @ A21,
             A12 @ D @ B12,
             B21 @ F @ A21,

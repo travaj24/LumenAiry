@@ -43,6 +43,7 @@ import numpy as np
 
 from ...backend import is_jax_array as _is_jax_array
 from ._jax_bor import _jbor_ismat, _jbor_psmat, _jbor_star
+from ._orient import channel_core, flux_is_strong, forward_orient
 from .radial_eigensolver import _lagrange_vals_derivs
 from .sem_radial import SemRadialMesh, _assemble, _keeps, _overlap
 
@@ -244,15 +245,15 @@ def _jsem_layer_modes(st, tri_list, m, k0, eig, jnp):
 
     hr, hphi = _hfields(q)
     Pz = _flux(hr, hphi)
-    prop = jnp.abs(jnp.imag(q)) < 1e-9 * jnp.maximum(
-        jnp.abs(jnp.real(q)), 1e-300)
-    flip = jnp.where(prop, Pz < 0.0, jnp.imag(q) < 0.0)
-    q = jnp.where(flip, -q, q)                    # orient forward (+z)
+    # orient forward (+z) -- THE shared kernel, with xp=jnp passed EXPLICITLY
+    # so the traced body is the same object the eager NumPy path runs
+    # (5.45.1; see lumenairy/elements/bor/_orient.py).
+    q = forward_orient(q, Pz, k0, xp=jnp)
     hr, hphi = _hfields(q)
     Pz = _flux(hr, hphi)
     fnrm = (jnp.sum(jnp.abs(Er) ** 2 * w1[:, None], axis=0)
             + jnp.sum(jnp.abs(Ephi_full) ** 2 * w0[:, None], axis=0))
-    s = jnp.where(jnp.abs(Pz) > 1e-10 * fnrm,
+    s = jnp.where(flux_is_strong(Pz, fnrm, xp=jnp),
                   1.0 / jnp.sqrt(jnp.abs(Pz) + 1e-300),
                   1.0 / (jnp.sqrt(fnrm) + 1e-300)).astype(cj)
     W = jnp.concatenate([Er * s[None, :], (Ephi_full * s[None, :])[ip]],
@@ -387,7 +388,7 @@ def _jax_sem_stack_solve(stack):
     def _mask(q, eps):
         # the _solve_sem prop() gate (P2-06 + the 2026-07-13 cutoff audit)
         qn = q / k0
-        return ((jnp.abs(jnp.imag(qn)) < 5e-5) & (jnp.real(qn) > 1e-6)
+        return (channel_core(qn, xp=jnp)
                 & (np.sqrt(eps).real - jnp.real(qn) > -5e-10))
 
     inc = _mask(q_sup, eps_sup).astype(jnp.complex128)

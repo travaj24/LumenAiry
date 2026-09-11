@@ -1,0 +1,91 @@
+{
+ "arm": {
+  "platform": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "requested_coretype": "PRESCOTT",
+  "loaded_kernel": "Katmai",
+  "blas_threads": 1,
+  "env_threads": "1",
+  "tree": "C:\\tmp\\lum_vbor"
+ },
+ "build": "post",
+ "tag": "win_PRESCOTT_t1",
+ "which": "ncount",
+ "ncount": [
+  {
+   "m": 0,
+   "N": 120,
+   "lo": 8,
+   "hi": 21,
+   "counts": {
+    "3": 13
+   },
+   "n_distinct": 1,
+   "worst": 3.7830923838022557e-08,
+   "would_pass": true
+  },
+  {
+   "m": 0,
+   "N": 120,
+   "lo": 2,
+   "hi": 27,
+   "counts": {
+    "3": 22,
+    "2": 3
+   },
+   "n_distinct": 2,
+   "worst": 2.474188508405639e-06,
+   "would_pass": false
+  },
+  {
+   "m": 0,
+   "N": 100,
+   "lo": 8,
+   "hi": 21,
+   "counts": {
+    "3": 13
+   },
+   "n_distinct": 1,
+   "worst": 1.4045015750419054e-07,
+   "would_pass": true
+  },
+  {
+   "m": 0,
+   "N": 140,
+   "lo": 8,
+   "hi": 21,
+   "counts": {
+    "3": 13
+   },
+   "n_distinct": 1,
+   "worst": 2.649710277857764e-07,
+   "would_pass": true
+  },
+  {
+   "m": 1,
+   "N": 120,
+   "lo": 8,
+   "hi": 21,
+   "counts": {
+    "3": 13
+   },
+   "n_distinct": 1,
+   "worst": 3.238458323728821e-08,
+   "would_pass": true
+  },
+  {
+   "m": 2,
+   "N": 120,
+   "lo": 8,
+   "hi": 21,
+   "counts": {
+    "3": 13
+   },
+   "n_distinct": 1,
+   "worst": 1.271612841247105e-06,
+   "would_pass": false
+  }
+ ]
+}

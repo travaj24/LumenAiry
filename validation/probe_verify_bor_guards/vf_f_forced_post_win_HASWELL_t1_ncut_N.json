@@ -1,0 +1,50 @@
+{
+ "arm": {
+  "platform": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "requested_coretype": "HASWELL",
+  "loaded_kernel": "Haswell",
+  "blas_threads": 1,
+  "env_threads": "1",
+  "tree": "C:\\tmp\\lum_vbor"
+ },
+ "build": "post",
+ "tag": "win_HASWELL_t1",
+ "which": "ncut_N",
+ "ncut_N": [
+  {
+   "N": 120,
+   "n": 18,
+   "worst": 8.73011864003635e-10,
+   "bar": 5e-09,
+   "margin": 5.727299027839078,
+   "would_pass": true
+  },
+  {
+   "N": 180,
+   "n": 18,
+   "worst": 3.223168810933167e-11,
+   "bar": 5e-09,
+   "margin": 155.12684234966918,
+   "would_pass": true
+  },
+  {
+   "N": 240,
+   "n": 18,
+   "worst": 9.510220576230849e-10,
+   "bar": 5e-09,
+   "margin": 5.257501610947527,
+   "would_pass": true
+  },
+  {
+   "N": 360,
+   "n": 18,
+   "worst": 1.0984260651663266e-09,
+   "bar": 5e-09,
+   "margin": 4.5519677277895685,
+   "would_pass": true
+  }
+ ]
+}

@@ -22,6 +22,10 @@ from collections import OrderedDict
 import numpy as np
 
 from ...backend import is_jax_array as _is_jax_array
+from ._inv_census import census_solve
+from ._orient import channel_core
+from ._sem_contract import enforce as _sem_enforce
+from ._sem_contract import measure_layer as _sem_measure
 from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
 
 # v5.17.1 (audit P3-12): bound on the per-instance modal-basis LRU.  Each
@@ -689,7 +693,7 @@ class BORStack:
             # (see the solve() docstring).  Only bor_solve's optional NODAL
             # basis needs the reldiv leg to reject its spurious sea.
             qn = L["q"] / k0
-            return np.where((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
+            return np.where(channel_core(qn, xp=np)
                             & (np.sqrt(eps).real - qn.real > -5e-10))[0]
         inc = prop(sup, self.eps_sup)
         out = prop(sub, self.eps_sub)
@@ -852,6 +856,21 @@ class BORStack:
         mids = [(thk, modes(meshes[1 + i]))
                 for i, (thk, _fn, _key) in enumerate(self._layers)]
         nlay = len(mids)
+        # THE MANUFACTURED-ELEMENT CONTRACT (5.45.1).  Measured on the
+        # POST-window, POST-DPW, POST-equalize_meshes breakpoint set -- the
+        # user's wall list cannot be used, because a WALL-FREE spacer between
+        # two ring layers inherits both neighbours' walls and carries the
+        # sliver in a mesh that has no walls of its own.  See
+        # lumenairy/elements/bor/_sem_contract.py for the two conjuncts, their
+        # measured populations, and why neither of them is the energy.
+        self._sem_mesh_report = [
+            _sem_measure(meshes[1 + i].b, i, walls, self.Rbig,
+                         mids[i][1]["q"],
+                         max(max(abs(np.sqrt(complex(t)).real) for t in tri)
+                             for _rs, tri in sem_layers[i][1]),
+                         k0)
+            for i in range(nlay)]
+        _sem_enforce(self._sem_mesh_report)
         if mids:
             ifc = [sem_interface_smatrix(sup, mids[0][1])]
             for i in range(1, nlay):
@@ -887,7 +906,7 @@ class BORStack:
             # same dimensionless propagating gate as the FD path (P2-06 +
             # AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13)
             qn = L["q"] / k0
-            return np.where((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
+            return np.where(channel_core(qn, xp=np)
                             & (np.sqrt(eps).real - qn.real > -5e-10))[0]
 
         inc = prop(sup, self.eps_sup)
@@ -988,7 +1007,8 @@ class BORStack:
             # S_below[i] = prop(i) * S_below_bot[i]; only its 11 block enters
             Xf = np.exp(1j * L["q"] * thk)
             Sb11 = Xf[:, None] * Sb_bot[0] * Xf[None, :]
-            c_fwd = np.linalg.solve(eye - Sa[3] @ Sb11, Sa[2] @ cinc)
+            c_fwd = census_solve(eye - Sa[3] @ Sb11, Sa[2] @ cinc,
+                                 "bor_stack.layer_absorption")
             c_bwd = Sb_bot[0] @ (Xf[:, None] * c_fwd)     # at layer BOTTOM
             W, V, qL = L["W"], L["V"], L["q"]
             Xd = np.exp(1j * qL * thk)

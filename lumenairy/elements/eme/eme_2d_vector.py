@@ -79,6 +79,7 @@ from scipy.optimize import minimize_scalar
 from scipy.sparse.linalg import eigs, splu
 
 from ...backend.array import is_jax_array
+from ._branch import cut_band
 from .eme_2d import _check_n_scan, _check_strip_heights
 
 
@@ -248,11 +249,27 @@ def _strip_vector_generator_tensor(eps_t, Lx, Nx, k0, kx0, qz, mu_x=1.0):
     ])
 
 
-def _strip_split_forward(ky):
+def _strip_split_forward(ky, k0=None):
     """Indices of the ``2Nx`` FORWARD (+y) modes (mirrors
     ``berreman._split_fwd_bwd``): ``exp(i ky y)`` decays forward when
-    ``Im(ky) > 0``; a real propagating ``ky`` is forward when ``Re(ky) > 0``."""
-    tol = 1e-9 * max(1.0, float(np.max(np.abs(ky))))
+    ``Im(ky) > 0``; a real propagating ``ky`` is forward when ``Re(ky) > 0``.
+
+    This site has ALWAYS carried the correct relative band; 5.45.1 made that
+    band THE one definition (:func:`lumenairy.elements.eme._branch.cut_band`)
+    and moved the module's two scalar siblings onto it, which until then
+    carried an exact-zero pin instead.
+
+    ROUND 2 (D13): the band's FLOOR moved from a literal 1.0 to ``|k0|``, so
+    the split no longer depends on the caller's unit system, and ``k0`` is
+    passed in from :func:`strip_vector_modes`, which has it.  On a spectrum
+    whose top already exceeds ``|k0|`` -- every ordinary strip -- the two
+    floors give the identical number and this site's answer does not move; the
+    floor is what decides on a sub-``k0`` spectrum, which is where the literal
+    was wrong.  (The earlier claim here that ``cut_band`` "computes the
+    identical quantity this line always did" was also false for an EMPTY ``ky``
+    array, where the pre-5.45.1 inline expression raised ``ValueError``:
+    verification D16.)"""
+    tol = float(cut_band(np.asarray(ky), k0=k0, xp=np))
     fwd = []
     for i, v in enumerate(ky):
         if v.imag > tol:
@@ -303,7 +320,7 @@ def strip_vector_modes(eps_x, Lx, Nx, k0, kx0=0.0, qz2=0.0, mu_x=1.0):
         kys = np.concatenate([mu / 1j, -mu / 1j])
         Us = np.concatenate([U, U], axis=1)
         mus = np.concatenate([mu, -mu])
-        fwd = _strip_split_forward(kys)
+        fwd = _strip_split_forward(kys, k0)
         if fwd.shape[0] != n2:           # degenerate-real fallback (Berreman-style)
             fwd = np.lexsort((-kys.real, -kys.imag))[:n2]
         ky_f, U_f, mu_f = kys[fwd], Us[:, fwd], mus[fwd]
@@ -331,7 +348,7 @@ def strip_vector_modes(eps_x, Lx, Nx, k0, kx0=0.0, qz2=0.0, mu_x=1.0):
     # general fallback: full 4Nx eig(A), then re-split E/H from the eigenvectors.
     mu_all, Psi = np.linalg.eig(A)       # mu = i ky
     kys = mu_all / 1j
-    fwd = _strip_split_forward(kys)
+    fwd = _strip_split_forward(kys, k0)
     if fwd.shape[0] != n2:
         fwd = np.lexsort((-kys.real, -kys.imag))[:n2]
     ky_f = kys[fwd]

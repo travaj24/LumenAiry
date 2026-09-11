@@ -1,0 +1,84 @@
+=== ARM census/walker sweep, Windows POST, HASWELL, t1
+=== cwd=/c/tmp/lum_vbor
+=== git: c1189e3f fix(bor): the last ladder arms -- the near-cutoff channel count is 3 on SEVENTEEN kernel x thread x build arms, including UNPINNED on both
+=== file list:
+tests/unit/test_eme_census_determinacy.py
+tests/unit/test_public_api.py
+tests/unit/test_v4_14_0_dispatcher_pin_apply_lens.py
+tests/unit/test_v4_14_0_dispatcher_pin_hfpi.py
+tests/unit/test_v4_14_0_dispatcher_pin_welford_mirror.py
+tests/unit/test_v4_14_1_dispatcher_pin_cache_clears.py
+tests/unit/test_v4_14_2_dispatcher_pin_cache_locks.py
+tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py
+tests/unit/test_v4_15_3_dispatcher_pin_2d_scalar_field.py
+tests/unit/test_v4_15_dispatcher_pin_validate_grid_params.py
+tests/unit/test_v4_16_0_walker_all_symmetry.py
+tests/unit/test_v4_16_0_walker_dy_threading.py
+tests/unit/test_v4_16_0_walker_sentinel_propagation.py
+tests/unit/test_v4_16_0_walker_xp_of_dispatch.py
+tests/unit/test_v4_16_1_dispatcher_pin_cache_registry_enrollment.py
+tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py
+tests/unit/test_v5_2_3_walker_changelog_content.py
+tests/unit/test_v5_2_walker_changelog_changeset.py
+tests/unit/test_v5_2_walker_pep562_forwarding.py
+tests/unit/test_v5_2_walker_sentinel_reduce.py
+tests/unit/test_v5_2_walker_shell_vs_canonical.py
+tests/unit/test_v5_3_2_walker_source_line_citation.py
+tests/unit/test_v5_3_walker_changelog_self_citation.py
+tests/unit/test_v5_4_1_walker_scope_the_workaround.py
+tests/unit/test_v5_4_7_walker_v20_cross_backend_parity.py
+LIBFILE C:\tmp\lum_vbor\lumenairy\__init__.py
+KERNEL [('Haswell', 1), ('Haswell', 1)]
+........................................................................ [  5%]
+........................................................................ [ 11%]
+........................................................................ [ 16%]
+........................................................................ [ 22%]
+........................................................................ [ 27%]
+........................................................................ [ 33%]
+........................................................................ [ 38%]
+........................................................................ [ 44%]
+........................................................................ [ 49%]
+........................................................................ [ 55%]
+........................................................................ [ 60%]
+........................................................................ [ 66%]
+........s..........s...........s..s..................................... [ 72%]
+........................................................................ [ 77%]
+........................................................................ [ 83%]
+........................................................................ [ 88%]
+........................................................................ [ 94%]
+.........s....sss..............................s........sss............. [ 99%]
+....                                                                     [100%]
+============================== warnings summary ===============================
+tests/unit/test_v4_14_0_dispatcher_pin_apply_lens.py::TestDyNoneAcceptanceDispatcherPin::test_variant_accepts_dy_none[apply_real_lens_traced]
+  C:\tmp\lum_vbor\tests\unit\test_v4_14_0_dispatcher_pin_apply_lens.py:295: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.1789, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 1.77 um but the grid has dx = 125.00 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 1.77 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    out = fn(E_in, prescription=rx, wavelength=wavelength,
+
+tests/unit/test_v4_14_0_dispatcher_pin_apply_lens.py::TestDtypePreservationDispatcherPin::test_complex64_input_preserves_complex64_output[apply_real_lens_traced]
+  C:\tmp\lum_vbor\tests\unit\test_v4_14_0_dispatcher_pin_apply_lens.py:485: RuntimeWarning: apply_real_lens_traced: the exit beam converges at NA_exit=0.1789, so the exit wavefront needs dx <= lambda/(2*NA_exit) = 1.77 um but the grid has dx = 125.00 um.  The beyond-Nyquist annulus of the exit phase ALIASES: far-halo energy lands at wrong radii, so r^2-weighted spot metrics (r2m / second moments) read low while EE50/EE80 stay plausible.  Use a finer grid (dx <= 1.77 um) for halo-faithful results, or pass on_undersample="silent" to suppress.
+    out = fn(E_in, prescription=rx, wavelength=wavelength,
+
+tests/unit/test_v4_14_0_dispatcher_pin_hfpi.py::TestSpawnRngIndependenceDispatcherPin::test_freespace_aperture_independence[scalar_freespace_aperture]
+  C:\tmp\lum_vbor\tests\unit\test_v4_14_0_dispatcher_pin_hfpi.py:178: RuntimeWarning: accumulate_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 256 paths only 0 landed on the 16x16 grid (0.00%), i.e. 0 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    out_a = propagate_hfpi_freespace_aperture(
+
+tests/unit/test_v4_14_0_dispatcher_pin_hfpi.py::TestSpawnRngIndependenceDispatcherPin::test_freespace_aperture_independence[scalar_freespace_aperture]
+  C:\tmp\lum_vbor\tests\unit\test_v4_14_0_dispatcher_pin_hfpi.py:185: RuntimeWarning: accumulate_to_grid: HFPI is UNDER-SAMPLED for this output grid: of 256 paths only 0 landed on the 16x16 grid (0.00%), i.e. 0 landed paths per output pixel.  Below 1 per pixel most pixels are EXACTLY ZERO and the returned array is the Monte-Carlo sampling envelope plus shot noise, not a propagated field -- measured on a 128^2 probe at the default cone, two seeds of the same physics agreed to an intensity-shape fidelity of 0.005.  The docstring's guarantee that 'fringe positions and interference contrast are correct' does NOT hold here.  Two levers: raise n_paths, and -- usually far more effective -- narrow ``cone_half_angle`` from its ~90-degree default (a full forward hemisphere) toward the angle the output grid actually subtends, so paths are not spent where they cannot land.  NOTE one path per pixel is necessary, not sufficient: the same probe still only reached seed-to-seed fidelity 0.44 at ~12 paths per pixel.  Pass on_undersampled='silent' to acknowledge.
+    out_b = propagate_hfpi_freespace_aperture(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:415: _REGISTRY_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:415: _PERSISTENT_POOL_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:415: _BLAS_CONTROLLER_LOCK is on the exemption list -- it guards an operation or non-cache state and is allowed to exist without a paired cache.
+SKIPPED [1] tests\unit\test_v4_14_2_dispatcher_pin_cache_locks.py:422: _ZARR_MKDIR_PATCH_LOCK matches ``_<X>_PATCH_LOCK`` -- guards a monkey-patch operation, not a cache.  Documented exemption per AUDIT_V4_14_1 spec.
+SKIPPED [1] tests\unit\test_v5_2_3_walker_changelog_content.py:113: No audit-closure bullets in latest CHANGELOG block OR no PREV_TAG resolvable; nothing to verify.  (script exit 2)
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:207: No audit IDs cited in CHANGELOG.md ``## [5.45.0]`` block; V12.2 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:246: CHANGELOG top block is for v5.45.0; library is v5.44.0.  Skipping the current-version self-consistency check.
+SKIPPED [1] tests\unit\test_v5_2_walker_changelog_changeset.py:307: CHANGELOG ``## [5.45.0]`` block declares no audit closures; V12.4 has no enforcement to apply.
+SKIPPED [1] tests\unit\test_v5_3_2_walker_source_line_citation.py:120: No source-file:line citations in latest CHANGELOG block; nothing to verify.  (script exit 2)
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:152: CHANGELOG ``## [5.45.0]`` block has no canonical ``X pass + Y skip + Z xfail`` self-citation; V17.1 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:289: CHANGELOG ``## [5.45.0]`` block has no ``N files touched`` claim; V17.2 has nothing to verify.
+SKIPPED [1] tests\unit\test_v5_3_walker_changelog_self_citation.py:365: CHANGELOG ``## [5.45.0]`` block has no ``CHANGELOG.md: X -> Y lines`` claim; V17.3 has nothing to verify.
+1288 passed, 12 skipped, 4 warnings in 185.79s (0:03:05)
+=== PYTEST_RC 0
+=== WALL_SECONDS 199

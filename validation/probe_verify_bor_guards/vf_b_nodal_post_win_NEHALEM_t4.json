@@ -1,0 +1,195 @@
+{
+ "arm": {
+  "platform": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "requested_coretype": "NEHALEM",
+  "loaded_kernel": "Nehalem",
+  "blas_threads": 4,
+  "env_threads": "4",
+  "tree": "C:\\tmp\\lum_vbor"
+ },
+ "build": "post",
+ "tag": "win_NEHALEM_t4",
+ "bar": 0.001,
+ "warn_edge": 1e-06,
+ "nodal_five_layer_disarmed": [
+  {
+   "n_lambda": 1,
+   "max_RT": 3.050450462941906,
+   "violation": 2.050450462941906,
+   "n": 5
+  },
+  {
+   "n_lambda": 2,
+   "max_RT": 114.37160361743224,
+   "violation": 113.37160361743224,
+   "n": 12
+  },
+  {
+   "n_lambda": 4,
+   "max_RT": 37.91033771530932,
+   "violation": 36.91033771530932,
+   "n": 25
+  },
+  {
+   "n_lambda": 8,
+   "max_RT": 16.967367185952344,
+   "violation": 15.967367185952344,
+   "n": 52
+  },
+  {
+   "n_lambda": 14,
+   "max_RT": 788.9729274173224,
+   "violation": 787.9729274173224,
+   "n": 86
+  }
+ ],
+ "nodal_five_layer_armed": [
+  {
+   "n_lambda": 1,
+   "raised": "BORNodalPassivityError",
+   "proxy_warned": false,
+   "msg": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 3.05045 on a PROVABLY PASSIVE lossless stack (cell radius 1.00 vacuum wavelengths), where R + T <= 1 is a theorem -- a violation of 2.05 against the bar 1e-03.  This is the legacy NODAL FD basis's spurious divergence-violating mode sea: those modes carry zero z-flux, so their forward/backward orientation is decided by the sign of no"
+  },
+  {
+   "n_lambda": 2,
+   "raised": "BORNodalPassivityError",
+   "proxy_warned": false,
+   "msg": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 114.372 on a PROVABLY PASSIVE lossless stack (cell radius 2.00 vacuum wavelengths), where R + T <= 1 is a theorem -- a violation of 113.4 against the bar 1e-03.  This is the legacy NODAL FD basis's spurious divergence-violating mode sea: those modes carry zero z-flux, so their forward/backward orientation is decided by the sign of n"
+  },
+  {
+   "n_lambda": 4,
+   "raised": "BORNodalPassivityError",
+   "proxy_warned": false,
+   "msg": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 37.9103 on a PROVABLY PASSIVE lossless stack (cell radius 4.00 vacuum wavelengths), where R + T <= 1 is a theorem -- a violation of 36.91 against the bar 1e-03.  This is the legacy NODAL FD basis's spurious divergence-violating mode sea: those modes carry zero z-flux, so their forward/backward orientation is decided by the sign of n"
+  },
+  {
+   "n_lambda": 8,
+   "raised": "BORNodalPassivityError",
+   "proxy_warned": true,
+   "msg": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 16.9674 on a PROVABLY PASSIVE lossless stack (cell radius 8.00 vacuum wavelengths), where R + T <= 1 is a theorem -- a violation of 15.97 against the bar 1e-03.  This is the legacy NODAL FD basis's spurious divergence-violating mode sea: those modes carry zero z-flux, so their forward/backward orientation is decided by the sign of n"
+  },
+  {
+   "n_lambda": 14,
+   "raised": "BORNodalPassivityError",
+   "proxy_warned": true,
+   "msg": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 788.973 on a PROVABLY PASSIVE lossless stack (cell radius 14.00 vacuum wavelengths), where R + T <= 1 is a theorem -- a violation of 788 against the bar 1e-03.  This is the legacy NODAL FD basis's spurious divergence-violating mode sea: those modes carry zero z-flux, so their forward/backward orientation is decided by the sign of no"
+  }
+ ],
+ "staggered_twin": {
+  "rows": [
+   {
+    "n_lambda": 1,
+    "closure": 1.944666649933424e-12,
+    "n": 5
+   },
+   {
+    "n_lambda": 2,
+    "closure": 1.9315660182428473e-12,
+    "n": 10
+   },
+   {
+    "n_lambda": 4,
+    "closure": 2.786659791809143e-13,
+    "n": 22
+   },
+   {
+    "n_lambda": 8,
+    "closure": 3.348432642269472e-13,
+    "n": 45
+   },
+   {
+    "n_lambda": 14,
+    "closure": 1.3999912340523224e-13,
+    "n": 81
+   }
+  ],
+  "bar": 1e-09,
+  "worst": 1.944666649933424e-12
+ },
+ "healthy_uniform_small_cell": {
+  "n": 9,
+  "worst": 4.433627243116689e-09,
+  "bar": 1e-05,
+  "rows": [
+   {
+    "m": 0,
+    "rl": 0.5,
+    "violation": 1.0658141036401503e-14,
+    "n": 3
+   },
+   {
+    "m": 0,
+    "rl": 1.0,
+    "violation": 1.9984014443252818e-15,
+    "n": 6
+   },
+   {
+    "m": 0,
+    "rl": 2.0,
+    "violation": 2.6645352591003757e-15,
+    "n": 11
+   },
+   {
+    "m": 1,
+    "rl": 0.5,
+    "violation": 1.5610408521382624e-09,
+    "n": 2
+   },
+   {
+    "m": 1,
+    "rl": 1.0,
+    "violation": 8.014322538940633e-10,
+    "n": 5
+   },
+   {
+    "m": 1,
+    "rl": 2.0,
+    "violation": 7.5343065120137e-10,
+    "n": 12
+   },
+   {
+    "m": 2,
+    "rl": 0.5,
+    "violation": 4.555740229506e-10,
+    "n": 1
+   },
+   {
+    "m": 2,
+    "rl": 1.0,
+    "violation": 2.8373707827711314e-09,
+    "n": 4
+   },
+   {
+    "m": 2,
+    "rl": 2.0,
+    "violation": 4.433627243116689e-09,
+    "n": 11
+   }
+  ]
+ },
+ "mildest_broken_row": {
+  "max_RT": 1.0288186917587985,
+  "violation": 0.028818691758798476,
+  "bar": 0.01,
+  "max_abs_dev": 0.0382242759875131,
+  "n_inc": 8
+ },
+ "bor_solve_floor_stack": {
+  "raised_msg_head": "bor_solve.solve(basis='nodal'): the cascade returned max(R + T) = 1.02882 on a PROVABLY PASSIVE lossless stack (cell radius 1.27 vacuum wavelengths), where R + T <= 1 is a theorem -- a violation of 0.02882 against the bar 1e-03.  This is the legacy NODAL FD ba",
+  "msg_contains_1_02882": true,
+  "msg_contains_1_0288": true,
+  "max_RT_printed": "1.02882",
+  "max_RT": 1.0288186917587985,
+  "max_abs_dev": 0.0382242759875131,
+  "pre_fix_bar": 0.05,
+  "n_inc": 8
+ },
+ "bor_solve_staggered_twin": {
+  "closure": 5.809797087863444e-13,
+  "n_inc": 6,
+  "bar": 1e-09
+ }
+}

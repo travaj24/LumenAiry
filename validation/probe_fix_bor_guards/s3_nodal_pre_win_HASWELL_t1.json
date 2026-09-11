@@ -1,0 +1,1747 @@
+{
+ "broken": [
+  {
+   "family": "five_layer_ring",
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "N": 140,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 5,
+    "max_energy": 3.0504504656039497,
+    "min_energy": 1.5480950300659524,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 5,
+    "max_energy": 1.0000000000003686,
+    "min_energy": 0.9999999999991827,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "five_layer_ring",
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "N": 140,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 12,
+    "max_energy": 114.3716036273068,
+    "min_energy": 4.911548781416536,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 10,
+    "max_energy": 1.000000000001016,
+    "min_energy": 0.9999999999986947,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "five_layer_ring",
+   "Rbig_over_lambda": 4.0,
+   "Rbig": 12.566370614359172,
+   "N": 140,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 25,
+    "max_energy": 37.9103377164336,
+    "min_energy": 2.705531255310838,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 22,
+    "max_energy": 1.0000000000001428,
+    "min_energy": 0.9999999999997896,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "five_layer_ring",
+   "Rbig_over_lambda": 6.0,
+   "Rbig": 18.84955592153876,
+   "N": 140,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 37,
+    "max_energy": 110.80623743280401,
+    "min_energy": 2.6389937839525635,
+    "refused_when_armed": true,
+    "warned": [
+     "build_layer(basis='nodal'): the cell radius Rbig is 6.0 vacu",
+     "build_layer(basis='nodal'): the cell radius Rbig is 6.0 vacu",
+     "build_layer(basis='nodal'): the cell radius Rbig is 6.0 vacu",
+     "build_layer(basis='nodal'): the cell radius Rbig is 6.0 vacu",
+     "build_layer(basis='nodal'): the cell radius Rbig is 6.0 vacu"
+    ],
+    "n_warn": 5
+   },
+   "staggered": {
+    "n_inc": 33,
+    "max_energy": 1.000000000000174,
+    "min_energy": 0.9999999999998218,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "five_layer_ring",
+   "Rbig_over_lambda": 8.0,
+   "Rbig": 25.132741228718345,
+   "N": 140,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 52,
+    "max_energy": 16.96736718549573,
+    "min_energy": 1.0456094185796605,
+    "refused_when_armed": true,
+    "warned": [
+     "build_layer(basis='nodal'): the cell radius Rbig is 8.0 vacu",
+     "build_layer(basis='nodal'): the cell radius Rbig is 8.0 vacu",
+     "build_layer(basis='nodal'): the cell radius Rbig is 8.0 vacu",
+     "build_layer(basis='nodal'): the cell radius Rbig is 8.0 vacu",
+     "build_layer(basis='nodal'): the cell radius Rbig is 8.0 vacu"
+    ],
+    "n_warn": 5
+   },
+   "staggered": {
+    "n_inc": 45,
+    "max_energy": 1.0000000000001283,
+    "min_energy": 0.9999999999998457,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "five_layer_ring",
+   "Rbig_over_lambda": 10.0,
+   "Rbig": 31.41592653589793,
+   "N": 140,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 79,
+    "max_energy": 63.631625896943696,
+    "min_energy": 1.0467285103456054,
+    "refused_when_armed": true,
+    "warned": [
+     "build_layer(basis='nodal'): the cell radius Rbig is 10.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 10.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 10.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 10.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 10.0 vac"
+    ],
+    "n_warn": 5
+   },
+   "staggered": {
+    "n_inc": 57,
+    "max_energy": 1.0000000000001859,
+    "min_energy": 0.9999999999997702,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "five_layer_ring",
+   "Rbig_over_lambda": 12.0,
+   "Rbig": 37.69911184307752,
+   "N": 140,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 82,
+    "max_energy": 6899.278304722152,
+    "min_energy": 10.070934804879473,
+    "refused_when_armed": true,
+    "warned": [
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac"
+    ],
+    "n_warn": 5
+   },
+   "staggered": {
+    "n_inc": 69,
+    "max_energy": 1.000000000000164,
+    "min_energy": 0.9999999999998773,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "five_layer_ring",
+   "Rbig_over_lambda": 14.0,
+   "Rbig": 43.982297150257104,
+   "N": 140,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 86,
+    "max_energy": 788.9729275996233,
+    "min_energy": 2.2499659950807085,
+    "refused_when_armed": true,
+    "warned": [
+     "build_layer(basis='nodal'): the cell radius Rbig is 14.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 14.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 14.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 14.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 14.0 vac"
+    ],
+    "n_warn": 5
+   },
+   "staggered": {
+    "n_inc": 81,
+    "max_energy": 1.0000000000001557,
+    "min_energy": 0.9999999999998421,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "five_layer_ring",
+   "Rbig_over_lambda": 16.0,
+   "Rbig": 50.26548245743669,
+   "N": 140,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 88,
+    "max_energy": 3272.0945277515157,
+    "min_energy": 1.5780770808008087,
+    "refused_when_armed": true,
+    "warned": [
+     "build_layer(basis='nodal'): the cell radius Rbig is 16.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 16.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 16.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 16.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 16.0 vac"
+    ],
+    "n_warn": 5
+   },
+   "staggered": {
+    "n_inc": 94,
+    "max_energy": 1.000000000000207,
+    "min_energy": 0.9999999999997748,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  }
+ ],
+ "refinement": [
+  {
+   "family": "refinement",
+   "N": 140,
+   "Rbig": 37.69911184307752,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 82,
+    "max_energy": 6899.278304722152,
+    "min_energy": 10.070934804879473,
+    "refused_when_armed": true,
+    "warned": [
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac"
+    ],
+    "n_warn": 5
+   },
+   "staggered": {
+    "n_inc": 69,
+    "max_energy": 1.000000000000164,
+    "min_energy": 0.9999999999998773,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "refinement",
+   "N": 200,
+   "Rbig": 37.69911184307752,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 94,
+    "max_energy": 22.27288484059554,
+    "min_energy": 1.4810341374262719,
+    "refused_when_armed": true,
+    "warned": [
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac"
+    ],
+    "n_warn": 5
+   },
+   "staggered": {
+    "n_inc": 68,
+    "max_energy": 1.0000000000001585,
+    "min_energy": 0.9999999999995075,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "refinement",
+   "N": 300,
+   "Rbig": 37.69911184307752,
+   "m": 1,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 76,
+    "max_energy": 295.544872127134,
+    "min_energy": 1.6665604856926266,
+    "refused_when_armed": true,
+    "warned": [
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac"
+    ],
+    "n_warn": 5
+   },
+   "staggered": {
+    "n_inc": 67,
+    "max_energy": 1.0000000000003273,
+    "min_energy": 0.999999999999771,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  }
+ ],
+ "shipped": [
+  {
+   "family": "shipped",
+   "label": "test_structured_stack_energy_floor_nodal",
+   "m": 1,
+   "Rbig": 4.0,
+   "N": 200,
+   "k0": 2.0,
+   "Rbig_over_lambda": 1.2732395447351628,
+   "nodal": {
+    "n_inc": 8,
+    "max_energy": 1.0288186916046063,
+    "min_energy": 0.9617757240023803,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 6,
+    "max_energy": 1.0000000000004368,
+    "min_energy": 0.9999999999991591,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "shipped",
+   "label": "uniform_small_cell",
+   "m": 1,
+   "Rbig": 4.0,
+   "N": 120,
+   "k0": 2.0,
+   "Rbig_over_lambda": 1.2732395447351628,
+   "nodal": {
+    "n_inc": 8,
+    "max_energy": 1.0000000007684007,
+    "min_energy": 0.9999998425430432,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 6,
+    "max_energy": 1.0000000000000193,
+    "min_energy": 0.9999999999999714,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "shipped",
+   "label": "uniform_2lambda",
+   "m": 1,
+   "Rbig": 6.283185307179586,
+   "N": 120,
+   "k0": 2.0,
+   "Rbig_over_lambda": 2.0,
+   "nodal": {
+    "n_inc": 12,
+    "max_energy": 1.000000000753426,
+    "min_energy": 0.99999892523303,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 10,
+    "max_energy": 1.0000000000000475,
+    "min_energy": 0.999999999999936,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "shipped",
+   "label": "ring_2lambda",
+   "m": 2,
+   "Rbig": 6.283185307179586,
+   "N": 160,
+   "k0": 2.0,
+   "Rbig_over_lambda": 2.0,
+   "nodal": {
+    "n_inc": 11,
+    "max_energy": 2.068783245228009,
+    "min_energy": 1.0316363189424562,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 9,
+    "max_energy": 1.0000000000000244,
+    "min_energy": 0.9999999999999716,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "shipped",
+   "label": "uniform_12lambda",
+   "m": 1,
+   "Rbig": 37.69911184307752,
+   "N": 140,
+   "k0": 2.0,
+   "Rbig_over_lambda": 12.0,
+   "nodal": {
+    "n_inc": 82,
+    "max_energy": 1.035349489855498,
+    "min_energy": 0.9962499601716138,
+    "refused_when_armed": true,
+    "warned": [
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac",
+     "build_layer(basis='nodal'): the cell radius Rbig is 12.0 vac"
+    ],
+    "n_warn": 3
+   },
+   "staggered": {
+    "n_inc": 69,
+    "max_energy": 1.000000000000004,
+    "min_energy": 0.9999999999999954,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "shipped",
+   "label": "m0_small",
+   "m": 0,
+   "Rbig": 4.0,
+   "N": 140,
+   "k0": 2.0,
+   "Rbig_over_lambda": 1.2732395447351628,
+   "nodal": {
+    "n_inc": 7,
+    "max_energy": 1.0635309236689303,
+    "min_energy": 0.9971818528853711,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 7,
+    "max_energy": 1.0000000000000862,
+    "min_energy": 0.9999999999999203,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  }
+ ],
+ "floor": [
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 0,
+   "N": 120,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 3,
+    "max_energy": 1.000000000000003,
+    "min_energy": 0.999999999999999,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 3,
+    "max_energy": 1.0000000000000469,
+    "min_energy": 0.9999999999999825,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 0,
+   "N": 120,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 3,
+    "max_energy": 2.928999324016548,
+    "min_energy": 1.4696822224029205,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 3,
+    "max_energy": 1.0000000000000855,
+    "min_energy": 0.9999999999998979,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 0,
+   "N": 120,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 6,
+    "max_energy": 1.0000000000000067,
+    "min_energy": 0.9999999999999966,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 6,
+    "max_energy": 1.000000000000005,
+    "min_energy": 0.9999999999999729,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 0,
+   "N": 120,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 6,
+    "max_energy": 168.24076625587148,
+    "min_energy": 16.56052751164457,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 6,
+    "max_energy": 1.0000000000000488,
+    "min_energy": 0.9999999999999284,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 0,
+   "N": 120,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 8,
+    "max_energy": 1.0000000000000058,
+    "min_energy": 0.9999999999999996,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 8,
+    "max_energy": 1.0000000000000027,
+    "min_energy": 0.9999999999999938,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 0,
+   "N": 120,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 8,
+    "max_energy": 1.4200530351008025,
+    "min_energy": 1.024855897303243,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 8,
+    "max_energy": 1.000000000000034,
+    "min_energy": 0.9999999999999886,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 0,
+   "N": 120,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 11,
+    "max_energy": 1.000000000000003,
+    "min_energy": 0.9999999999999931,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 11,
+    "max_energy": 1.0000000000000056,
+    "min_energy": 0.9999999999999958,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 0,
+   "N": 120,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 11,
+    "max_energy": 5.963709824933652,
+    "min_energy": 1.1616918963351137,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 11,
+    "max_energy": 1.0000000000000175,
+    "min_energy": 0.9999999999999881,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 0,
+   "N": 200,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 3,
+    "max_energy": 1.0000000000006206,
+    "min_energy": 0.9999999999994491,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 3,
+    "max_energy": 1.0000000000000004,
+    "min_energy": 0.9999999999999296,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 0,
+   "N": 200,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 3,
+    "max_energy": 1.6264911808914273,
+    "min_energy": 1.1048151267154345,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 3,
+    "max_energy": 1.0000000000002,
+    "min_energy": 0.9999999999997992,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 0,
+   "N": 200,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 6,
+    "max_energy": 1.000000000000235,
+    "min_energy": 0.9999999999998723,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 6,
+    "max_energy": 1.000000000000108,
+    "min_energy": 0.9999999999999997,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 0,
+   "N": 200,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 6,
+    "max_energy": 10.458264065817746,
+    "min_energy": 2.18587227515203,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 6,
+    "max_energy": 1.0000000000000655,
+    "min_energy": 0.9999999999999433,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 0,
+   "N": 200,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 8,
+    "max_energy": 1.0000000000000626,
+    "min_energy": 0.9999999999999368,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 8,
+    "max_energy": 1.0000000000000695,
+    "min_energy": 0.9999999999999696,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 0,
+   "N": 200,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 8,
+    "max_energy": 4.41996293763418,
+    "min_energy": 1.3522091426922616,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 8,
+    "max_energy": 1.0000000000001694,
+    "min_energy": 0.9999999999998604,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 0,
+   "N": 200,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 11,
+    "max_energy": 1.000000000000051,
+    "min_energy": 0.9999999999999695,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 11,
+    "max_energy": 1.0000000000000133,
+    "min_energy": 0.9999999999999545,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 0,
+   "N": 200,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 11,
+    "max_energy": 1951.8263379185344,
+    "min_energy": 11.740346142163839,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 11,
+    "max_energy": 1.0000000000000298,
+    "min_energy": 0.999999999999955,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 1,
+   "N": 120,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 2,
+    "max_energy": 1.0000000015610462,
+    "min_energy": 0.9999999859506856,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 2,
+    "max_energy": 1.0000000000000435,
+    "min_energy": 1.0000000000000078,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 1,
+   "N": 120,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 2,
+    "max_energy": 1.2636567626873483,
+    "min_energy": 1.2016481307276827,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 2,
+    "max_energy": 1.000000000000743,
+    "min_energy": 0.9999999999995494,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 1,
+   "N": 120,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 5,
+    "max_energy": 1.0000000008014278,
+    "min_energy": 0.9999999609324564,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 5,
+    "max_energy": 1.0000000000000413,
+    "min_energy": 0.9999999999999049,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 1,
+   "N": 120,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 5,
+    "max_energy": 3.556180009858887,
+    "min_energy": 0.8321642639579119,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 5,
+    "max_energy": 1.000000000000067,
+    "min_energy": 0.9999999999999671,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 1,
+   "N": 120,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 10,
+    "max_energy": 1.0000000008061234,
+    "min_energy": 0.9997903661791144,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 8,
+    "max_energy": 1.0000000000000264,
+    "min_energy": 0.9999999999998659,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 1,
+   "N": 120,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 10,
+    "max_energy": 2.225725473641907,
+    "min_energy": 1.0056361764310442,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 8,
+    "max_energy": 1.0000000000002311,
+    "min_energy": 0.9999999999998166,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 1,
+   "N": 120,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 12,
+    "max_energy": 1.000000000753426,
+    "min_energy": 0.99999892523303,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 10,
+    "max_energy": 1.0000000000000475,
+    "min_energy": 0.999999999999936,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 1,
+   "N": 120,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 12,
+    "max_energy": 1.8982233758723353,
+    "min_energy": 1.0319781715740342,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 10,
+    "max_energy": 1.00000000000002,
+    "min_energy": 0.9999999999999616,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 1,
+   "N": 200,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 2,
+    "max_energy": 1.0000000004369187,
+    "min_energy": 0.999999996625833,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 2,
+    "max_energy": 0.9999999999997244,
+    "min_energy": 0.9999999999990824,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 1,
+   "N": 200,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 2,
+    "max_energy": 1.6726135177240482,
+    "min_energy": 1.212433564867371,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 2,
+    "max_energy": 1.0000000000037406,
+    "min_energy": 0.9999999999959528,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 1,
+   "N": 200,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 5,
+    "max_energy": 1.0000000001955245,
+    "min_energy": 0.9999999916793945,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 5,
+    "max_energy": 1.0000000000006297,
+    "min_energy": 0.9999999999999997,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 1,
+   "N": 200,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 5,
+    "max_energy": 1.7911399743362915,
+    "min_energy": 1.122121888304309,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 5,
+    "max_energy": 1.0000000000000764,
+    "min_energy": 0.9999999999997561,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 1,
+   "N": 200,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 10,
+    "max_energy": 1.0000000001665452,
+    "min_energy": 0.9998958940356404,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 8,
+    "max_energy": 1.0000000000019855,
+    "min_energy": 0.9999999999999245,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 1,
+   "N": 200,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 10,
+    "max_energy": 7.524287852156771,
+    "min_energy": 1.1526762828206638,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 8,
+    "max_energy": 1.000000000002802,
+    "min_energy": 0.9999999999938223,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 1,
+   "N": 200,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 12,
+    "max_energy": 1.0000000001508356,
+    "min_energy": 0.9999998467646048,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 10,
+    "max_energy": 1.0000000000000093,
+    "min_energy": 0.9999999999999568,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 1,
+   "N": 200,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 12,
+    "max_energy": 21.159494299648337,
+    "min_energy": 2.325815209960699,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 10,
+    "max_energy": 1.000000000000563,
+    "min_energy": 0.9999999999996949,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 2,
+   "N": 120,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 1,
+    "max_energy": 1.0000000004555378,
+    "min_energy": 1.0000000004555378,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 1,
+    "max_energy": 0.9999999999999508,
+    "min_energy": 0.9999999999999508,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 2,
+   "N": 120,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 1,
+    "max_energy": 0.9782695071831077,
+    "min_energy": 0.9782695071831077,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 1,
+    "max_energy": 0.9999999999998577,
+    "min_energy": 0.9999999999998577,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 2,
+   "N": 120,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 4,
+    "max_energy": 1.0000000028373905,
+    "min_energy": 0.9999999245038663,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 4,
+    "max_energy": 1.0000000000000535,
+    "min_energy": 0.9999999999999466,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 2,
+   "N": 120,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 4,
+    "max_energy": 1.3327019328626917,
+    "min_energy": 1.0428137219563487,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 4,
+    "max_energy": 1.00000000000003,
+    "min_energy": 0.9999999999999412,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 2,
+   "N": 120,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 7,
+    "max_energy": 1.000000002090312,
+    "min_energy": 0.9999998419705581,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 7,
+    "max_energy": 1.0000000000002027,
+    "min_energy": 0.999999999999999,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 2,
+   "N": 120,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 7,
+    "max_energy": 1.1583876521983762,
+    "min_energy": 0.9721690551963383,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 7,
+    "max_energy": 1.0000000000001343,
+    "min_energy": 0.9999999999999132,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 2,
+   "N": 120,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 11,
+    "max_energy": 1.0000000044336295,
+    "min_energy": 0.9999993216600684,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 9,
+    "max_energy": 1.0000000000000056,
+    "min_energy": 0.9999999999999853,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 2,
+   "N": 120,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 11,
+    "max_energy": 18.706668351018035,
+    "min_energy": 1.0622882216146567,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 9,
+    "max_energy": 1.0000000000000588,
+    "min_energy": 0.9999999999999499,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 2,
+   "N": 200,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 1,
+    "max_energy": 1.0000000001135383,
+    "min_energy": 1.0000000001135383,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 1,
+    "max_energy": 0.9999999999989837,
+    "min_energy": 0.9999999999989837,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 2,
+   "N": 200,
+   "Rbig_over_lambda": 0.5,
+   "Rbig": 1.5707963267948966,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 1,
+    "max_energy": 0.5373485766915896,
+    "min_energy": 0.5373485766915896,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 1,
+    "max_energy": 1.0000000000019609,
+    "min_energy": 1.0000000000019609,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 2,
+   "N": 200,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 4,
+    "max_energy": 1.0000000006131617,
+    "min_energy": 0.999999986835805,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 4,
+    "max_energy": 1.0000000000000058,
+    "min_energy": 0.9999999999999375,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 2,
+   "N": 200,
+   "Rbig_over_lambda": 1.0,
+   "Rbig": 3.141592653589793,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 4,
+    "max_energy": 5.600311680638459,
+    "min_energy": 1.1700992860196338,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 4,
+    "max_energy": 1.0000000000000775,
+    "min_energy": 0.9999999999995792,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 2,
+   "N": 200,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 7,
+    "max_energy": 1.0000000004315506,
+    "min_energy": 0.999999975500327,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 7,
+    "max_energy": 1.0000000000000906,
+    "min_energy": 0.9999999999999057,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 2,
+   "N": 200,
+   "Rbig_over_lambda": 1.5,
+   "Rbig": 4.71238898038469,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 7,
+    "max_energy": 3.7887222906008833,
+    "min_energy": 1.150552809068833,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 7,
+    "max_energy": 1.0000000000005111,
+    "min_energy": 0.9999999999990293,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "uniform",
+   "m": 2,
+   "N": 200,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 11,
+    "max_energy": 1.0000000005551404,
+    "min_energy": 0.9999999533855605,
+    "refused_when_armed": false,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 9,
+    "max_energy": 1.0000000000000606,
+    "min_energy": 0.9999999999998292,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  },
+  {
+   "family": "floor",
+   "label": "ring",
+   "m": 2,
+   "N": 200,
+   "Rbig_over_lambda": 2.0,
+   "Rbig": 6.283185307179586,
+   "k0": 2.0,
+   "nodal": {
+    "n_inc": 11,
+    "max_energy": 9.467715873071304,
+    "min_energy": 1.1858087196950309,
+    "refused_when_armed": true,
+    "warned": [],
+    "n_warn": 0
+   },
+   "staggered": {
+    "n_inc": 9,
+    "max_energy": 1.0000000000001041,
+    "min_energy": 0.9999999999999178,
+    "refused_when_armed": null,
+    "warned": [],
+    "n_warn": 0
+   }
+  }
+ ],
+ "summary": {
+  "staggered_max": 1.0000000000037406,
+  "staggered_worst_violation": 3.7405634145670774e-12,
+  "nodal_broken_min": 3.0504504656039497,
+  "nodal_broken_max": 6899.278304722152,
+  "nodal_shipped_max": 1951.8263379185344,
+  "nodal_floor_violations_top5": [
+   1950.826338,
+   167.240766,
+   20.159494,
+   17.706668,
+   9.458264
+  ],
+  "n_floor_rows": 54,
+  "n_rows": 66
+ },
+ "_build": {
+  "python": "3.14.6",
+  "platform": "Windows",
+  "numpy": "2.4.4",
+  "threads_env": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  },
+  "kernel": {
+   "requested": null,
+   "loaded": [
+    {
+     "api": "openblas",
+     "arch": "Haswell",
+     "nthreads": 1,
+     "version": "0.3.31.188.0"
+    },
+    {
+     "api": "openblas",
+     "arch": "Haswell",
+     "nthreads": 1,
+     "version": "0.3.30"
+    }
+   ]
+  }
+ },
+ "_tree": "C:\\tmp\\lum_bor1\\lumenairy\\__init__.py"
+}

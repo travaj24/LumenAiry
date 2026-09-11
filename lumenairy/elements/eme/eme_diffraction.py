@@ -52,6 +52,7 @@ import warnings
 
 import numpy as np
 
+from ._branch import forward_decaying_root
 from .eme_2d import layer_modes, mode_field, ref_2d_modes, strip_x_modes
 
 
@@ -173,7 +174,20 @@ def mode_match(qz2, Psi, orders, *, kx0, ky0, k0, eps_sup, eps_sub, depth,
     # for a lossy layer, whose complex qz^2 can come back with a roundoff-negative
     # imaginary part from eig -- np.sqrt alone guarantees only Re(qz) >= 0 and
     # would put exp(i qz depth) on the GROWING branch.
-    qz = np.where(qz.imag < 0.0, -qz, qz)
+    #
+    # 5.45.1: THE shared selector, whose band (relative to the spectrum's top,
+    # floored at |k0|) keeps a PROPAGATING layer mode -- whose Im(qz) is the
+    # eigensolver's backward error and not physics -- from being negated into
+    # its own BACKWARD partner.  See elements/eme/_branch.py.
+    #
+    # ROUND 2 (D13): the floor is ``k0`` and not the literal 1.0 it was first
+    # built with.  ``qz`` here carries units of inverse length (the caller's
+    # ``qz2`` is 1/length^2 and ``depth`` is a length), so a literal floor made
+    # the branch decision depend on whether the same cell was written in
+    # micrometres or nanometres: measured T00 = 0.738986606108 against
+    # 0.738986551923 on one slab in two unit systems, where the metre arm and
+    # the real-``eps`` arms agree to 1e-15.
+    qz = forward_decaying_root(qz, k0=k0, xp=np)
     kz_sup = _kz(eps_sup, k0, kx, ky)
     kz_sub = _kz(eps_sub, k0, kx, ky)
     Ksup, Ksub, Qz = np.diag(kz_sup), np.diag(kz_sub), np.diag(qz)

@@ -95,6 +95,8 @@ import numpy as np
 from numpy.polynomial.legendre import leggauss
 from scipy.linalg import lu_factor
 
+from ._inv_census import census_inv, census_solve
+from ._orient import flux_is_strong, forward_orient
 from .coupled_radial_eigensolver import _fast_geig
 from .radial_eigensolver import _gll_nodes_weights, _lagrange_vals_derivs
 
@@ -345,7 +347,7 @@ def sem_layer_modes(mesh, m, k0):
             "elimination.", stacklevel=2)
         Lei = None
     else:
-        Lei = np.linalg.inv(Mz)
+        Lei = census_inv(Mz, "sem_radial.assemble:inv(Mz)")
     Dzr = ops["D_zr"][iz, :]
     Qzp = ops["Q"][np.ix_(iz, ip)]
     K = np.block([
@@ -424,16 +426,15 @@ def sem_layer_modes(mesh, m, k0):
 
     hr, hphi = hfields(q)
     flux = zflux(hr, hphi)
-    # forward orientation -- the zcascade branch rule, vectorized
-    prop = np.abs(q.imag) < 1e-9 * np.maximum(np.abs(q.real), 1e-300)
-    flip = np.where(prop, flux < 0.0, q.imag < 0.0)
-    q = np.where(flip, -q, q)
+    # forward orientation -- THE shared kernel (5.45.1: one implementation,
+    # five call sites; see lumenairy/elements/bor/_orient.py)
+    q = forward_orient(q, flux, k0, xp=np)
     hr, hphi = hfields(q)
     flux = zflux(hr, hphi)
     # unit-flux normalization (audit-P1-01 relative threshold)
     fnrm = (np.sum(np.abs(Er) ** 2 * w1[:, None], axis=0)
             + np.sum(np.abs(Ephi_full) ** 2 * w0[:, None], axis=0))
-    s = np.where(np.abs(flux) > 1e-10 * fnrm,
+    s = np.where(flux_is_strong(flux, fnrm, xp=np),
                  1.0 / np.sqrt(np.abs(flux) + 1e-300),
                  1.0 / (np.sqrt(fnrm) + 1e-300))
     Er = Er * s[None, :]
@@ -520,21 +521,26 @@ def sem_interface_smatrix(La, Lb):
     # A -> B projections (E tested in B)
     G1_ba = _overlap(ma, mb, "v1")
     G0_ba = _overlap(ma, mb, "v0")
-    P1_ba = np.linalg.solve(_overlap(mb, mb, "v1"), G1_ba)
+    P1_ba = census_solve(_overlap(mb, mb, "v1"), G1_ba,
+                         "sem_radial.mortar:M1b")
     M0b = _overlap(mb, mb, "v0")[np.ix_(ipb, ipb)]
-    P0_ba = np.linalg.solve(M0b, G0_ba[np.ix_(ipb, ipa)])
+    P0_ba = census_solve(M0b, G0_ba[np.ix_(ipb, ipa)],
+                         "sem_radial.mortar:M0b")
     # B -> A projections (H tested in A); overlap transposes swap the roles
-    P1_ab = np.linalg.solve(_overlap(ma, ma, "v1"), G1_ba.T)
+    P1_ab = census_solve(_overlap(ma, ma, "v1"), G1_ba.T,
+                         "sem_radial.mortar:M1a")
     M0a = _overlap(ma, ma, "v0")[np.ix_(ipa, ipa)]
-    P0_ab = np.linalg.solve(M0a, G0_ba[np.ix_(ipb, ipa)].T)
+    P0_ab = census_solve(M0a, G0_ba[np.ix_(ipb, ipa)].T,
+                         "sem_radial.mortar:M0a")
     Wa_b = np.vstack([P1_ba @ La["W"][:n1a], P0_ba @ La["W"][n1a:]])
     Vb_a = np.vstack([P0_ab @ Lb["V"][:Lb["n0p"]], P1_ab @ Lb["V"][Lb["n0p"]:]])
-    alpha = np.linalg.solve(Lb["W"], Wa_b)
-    gamma = np.linalg.solve(La["V"], Vb_a)
+    alpha = census_solve(Lb["W"], Wa_b, "sem_radial.mortar:alpha")
+    gamma = census_solve(La["V"], Vb_a, "sem_radial.mortar:gamma")
     n = alpha.shape[0]
     eye = np.eye(n, dtype=complex)
     ga = gamma @ alpha
-    inv_iga = np.linalg.inv(eye + ga)
+    inv_iga = census_inv(eye + ga,
+                         "sem_radial.mortar:inv(I+gamma.alpha)")
     S11 = inv_iga @ (eye - ga)
     S12 = 2.0 * (inv_iga @ gamma)
     S21 = alpha @ (eye + S11)

@@ -1,0 +1,18 @@
+KERNEL [('Katmai', 1), ('Katmai', 1)]
+GAMMA 0.17159104282945289
+CLOSURE_SINGLE 7.433905e-10  (bar 1e-8, margin x13.5)  nchan=3
+LADDER_COUNTS [3]
+LADDER_WORST 3.783092e-08  (bar 1e-6, margin x26.43)
+   rung e= 8 nchan=3 closure=3.4077e-10
+   rung e= 9 nchan=3 closure=6.8470e-10
+   rung e=10 nchan=3 closure=1.2677e-10
+   rung e=11 nchan=3 closure=7.4339e-10
+   rung e=12 nchan=3 closure=2.3906e-09
+   rung e=13 nchan=3 closure=5.3404e-10
+   rung e=14 nchan=3 closure=1.6607e-09
+   rung e=15 nchan=3 closure=1.2567e-09
+   rung e=16 nchan=3 closure=4.3383e-09
+   rung e=17 nchan=3 closure=2.9482e-08
+   rung e=18 nchan=3 closure=3.7831e-08
+   rung e=19 nchan=3 closure=3.4553e-08
+   rung e=20 nchan=3 closure=3.5508e-08

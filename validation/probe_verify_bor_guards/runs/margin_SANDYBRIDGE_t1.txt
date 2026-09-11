@@ -1,0 +1,18 @@
+KERNEL [('Sandybridge', 1), ('Sandybridge', 1)]
+GAMMA 0.17159104282943735
+CLOSURE_SINGLE 1.569908e-10  (bar 1e-8, margin x63.7)  nchan=3
+LADDER_COUNTS [3]
+LADDER_WORST 3.212530e-08  (bar 1e-6, margin x31.13)
+   rung e= 8 nchan=3 closure=1.5160e-10
+   rung e= 9 nchan=3 closure=2.9861e-10
+   rung e=10 nchan=3 closure=1.7185e-10
+   rung e=11 nchan=3 closure=1.5699e-10
+   rung e=12 nchan=3 closure=1.3571e-09
+   rung e=13 nchan=3 closure=1.4154e-09
+   rung e=14 nchan=3 closure=1.8411e-09
+   rung e=15 nchan=3 closure=1.1149e-09
+   rung e=16 nchan=3 closure=9.7058e-09
+   rung e=17 nchan=3 closure=2.0200e-09
+   rung e=18 nchan=3 closure=1.6487e-08
+   rung e=19 nchan=3 closure=3.2125e-08
+   rung e=20 nchan=3 closure=1.2765e-08

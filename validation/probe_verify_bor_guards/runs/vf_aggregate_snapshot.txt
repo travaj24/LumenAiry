@@ -1,0 +1,142 @@
+##############################################################################
+# PROBE A -- orientation kernel / classifier band
+arms: 16
+arm                         closure  ladderworst    noise_ord    noise_cut      sig1e-6   counts
+win/Haswell/t1           2.1013e-09   1.9655e-07   1.3024e-15   8.7301e-10   9.4570e-08      [3]
+win/Haswell/t4           3.1104e-10   6.1976e-08   1.2511e-15   5.3506e-12   9.4570e-08      [3]
+win/Nehalem/t1           1.1073e-09   2.9240e-07   1.3010e-15   3.0297e-10   9.4570e-08      [3]
+win/Nehalem/t4           1.1681e-09   1.0955e-07   1.1272e-15   7.0546e-10   9.4570e-08      [3]
+win/Katmai/t1            7.4339e-10   3.7831e-08   2.8227e-15   4.8365e-10   9.4570e-08      [3]
+win/Katmai/t4            9.7335e-10   1.8389e-07   1.9770e-15   3.7373e-10   9.4570e-08      [3]
+win/Sandybridge/t1       1.5699e-10   3.2125e-08   1.1380e-15   8.6253e-11   9.4570e-08      [3]
+win/Sandybridge/t4       1.4786e-09   2.4651e-08   8.3561e-16   1.0333e-09   9.4570e-08      [3]
+wsl/Haswell/t1           2.5843e-11   1.0818e-07   6.4173e-16   2.3089e-10   9.4570e-08      [3]
+wsl/Haswell/t4           1.0601e-09   4.3513e-07   1.1569e-15   1.3874e-10   9.4570e-08      [3]
+wsl/Nehalem/t1           2.4954e-09   1.2197e-07   1.3997e-15   4.6064e-10   9.4570e-08      [3]
+wsl/Nehalem/t4           3.5914e-10   1.8832e-07   1.1236e-15   6.9410e-10   9.4570e-08      [3]
+wsl/Katmai/t1            1.8952e-09   5.1081e-08   2.3338e-15   9.6935e-10   9.4570e-08      [3]
+wsl/Katmai/t4            3.4336e-10   4.2060e-07   1.9420e-15   6.3895e-10   9.4570e-08      [3]
+wsl/Sandybridge/t1       1.7526e-09   7.7303e-08   1.4008e-15   1.5022e-10   9.4570e-08      [3]
+wsl/Sandybridge/t4       1.7309e-10   2.6250e-07   1.0308e-15   8.2053e-10   9.4570e-08      [3]
+  near_cutoff closure   (bar 1e-8)   env 2.5843e-11 .. 2.4954e-09 (96.6x)  worst margin 4.01x = 0.60 dec
+  ladder worst closure  (bar 1e-6)   env 2.4651e-08 .. 4.3513e-07 (17.7x)  worst margin 2.30x = 0.36 dec
+  noise ordinary sigma  (bar 1e-11)  env 6.4173e-16 .. 2.8227e-15 (4.4x)  worst margin 3542.71x = 3.55 dec
+  noise cutoff sigma    (bar 5e-9)   env 5.3506e-12 .. 1.0333e-09 (193.1x)  worst margin 4.84x = 0.68 dec
+  signal Im(n)=1e-6     (bar 2e-8)   env 9.4570e-08 .. 9.4570e-08 (1.0x)  worst margin 4.73x = 0.67 dec
+  ladder channel counts seen across all arms: [3]
+  widening total env (387, 387) disagree {0} relmin (0.11967609435187902, 0.11967609435204153)
+
+##############################################################################
+# PROBE B -- nodal passivity
+arms: 16
+arm                     stag_twin    healthy       mild    floorRT floormaxdev  refusals
+win/Haswell/t1         1.3053e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+win/Haswell/t4         1.6334e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+win/Nehalem/t1         3.8518e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+win/Nehalem/t4         1.9447e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+win/Katmai/t1          2.4396e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+win/Katmai/t4          1.9820e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+win/Sandybridge/t1     1.6813e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+win/Sandybridge/t4     1.0016e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+wsl/Haswell/t1         1.6984e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+wsl/Haswell/t4         2.5292e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+wsl/Nehalem/t1         9.5479e-13 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+wsl/Nehalem/t4         2.5276e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+wsl/Katmai/t1          1.2303e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+wsl/Katmai/t4          2.3607e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+wsl/Sandybridge/t1     9.8699e-13 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+wsl/Sandybridge/t4     5.1436e-12 4.4336e-09 2.8819e-02    1.02882  0.0382243     5/5
+  staggered twin closure (bar 1e-9)    env 9.54792e-13 .. 5.14355e-12 (5.387x)  worst margin 194x = 2.29 dec
+  healthy nodal          (bar 1e-5)    env 4.43361e-09 .. 4.43364e-09 (1x)  worst margin 2.26e+03x = 3.35 dec
+  mildest broken row     (bar 1e-2)    env 0.0288187 .. 0.0288187 (1x)  worst margin 2.88x = 0.46 dec
+  floor stack max|E-1|   (bar 0.05)    env 0.0382243 .. 0.0382243 (1x)  worst margin 1.31x = 0.12 dec
+  message contains '1.0288' on every arm: {True}
+  max(R+T) env: (1.028818691529632, 1.0288186918431719)
+  bor_solve staggered twin closure env 1.5410e-13 .. 1.7495e-12 (11.4x) bar 1e-9 -> 2.76 dec
+  five-layer nodal: mildest violation across all arms 2.05045 (refusal bar 1e-3 -> 3.31 dec below it)
+  proxy warned pattern: {(False, False, False, True, True)}
+
+##############################################################################
+# PROBE C -- SEM contract (delta ladder / census hook)
+arms: 16
+arm                    verdicts   fu(1e-6)      q(1e-6)      q(1e-7)  n_inv  min_rcond  max_resid
+win/Haswell/t1          ooowwRR      1e-06       281867  2.52144e+06    210 2.0336e-05 1.1048e-13
+win/Haswell/t4          ooowwRR      1e-06       365365  2.52144e+06    210 2.0336e-05 1.0661e-13
+win/Nehalem/t1          ooowwRR      1e-06       265565  2.52144e+06    210 2.0336e-05 1.1842e-13
+win/Nehalem/t4          ooowwRR      1e-06       455645  2.52144e+06    210 2.0336e-05 1.2040e-13
+win/Katmai/t1           ooowwRR      1e-06       567444  2.52144e+06    210 2.0336e-05 1.1216e-13
+win/Katmai/t4           ooowwRR      1e-06       302486  2.52144e+06    210 2.0336e-05 1.1601e-13
+win/Sandybridge/t1      ooowwRR      1e-06       252149  2.52144e+06    210 2.0336e-05 1.1561e-13
+win/Sandybridge/t4      ooowwRR      1e-06   1.0131e+06  2.52144e+06    210 2.0336e-05 1.1801e-13
+wsl/Haswell/t1          ooowwRR      1e-06       281867  2.52144e+06    210 2.0336e-05 1.1048e-13
+wsl/Haswell/t4          ooowwRR      1e-06       365365  2.52144e+06    210 2.0336e-05 1.0661e-13
+wsl/Nehalem/t1          ooowwRR      1e-06       265565  2.52144e+06    210 2.0336e-05 1.1842e-13
+wsl/Nehalem/t4          ooowwRR      1e-06       455645  2.52144e+06    210 2.0336e-05 1.2040e-13
+wsl/Katmai/t1           ooowwRR      1e-06       567444  2.52144e+06    210 2.0336e-05 1.1216e-13
+wsl/Katmai/t4           ooowwRR      1e-06       302486  2.52144e+06    210 2.0336e-05 1.1601e-13
+wsl/Sandybridge/t1      ooowwRR      1e-06       252149  2.52144e+06    210 2.0336e-05 1.1561e-13
+wsl/Sandybridge/t4      ooowwRR      1e-06   1.0131e+06  2.52144e+06    210 2.0336e-05 1.1801e-13
+  distinct verdict tables (1e-1..1e-7): {'ooowwRR'}
+  n inverses env: (210.0, 210.0)  (bar > 200)
+  min rcond env 2.0336e-05 .. 2.0336e-05 (1x)  worst margin 4.31 dec above 1e-9
+  max resid env 1.0661e-13 .. 1.2040e-13 (1.13x)  worst margin 3.92 dec below 1e-9
+  q_excess at delta=1e-6 env 252149 .. 1.0131e+06 (4.02x), bar 1e4 -> 25.2x
+
+##############################################################################
+# PROBE D -- SEM ordinary census + taper
+-- win/Haswell/t1 vf_d_census_post_win_HASWELL_t1.json
+   census base   d6   fams=4 narrowest=inf (infx; assert > 3.0e-04) worst_q=16.8606 (assert < 1000) bad=[]
+   census base   d8   fams=4 narrowest=inf (infx; assert > 3.0e-04) worst_q=17.8022 (assert < 1000) bad=[]
+   census base   d12  fams=4 narrowest=inf (infx; assert > 3.0e-04) worst_q=27.2151 (assert < 1000) bad=[]
+   census mesh   d6   fams=6 narrowest=3.1250e-02 (312.5x; assert > 3.0e-04) worst_q=34.469 (assert < 1000) bad=[]
+   census mesh   d8   fams=6 narrowest=4.1667e-02 (416.7x; assert > 3.0e-04) worst_q=53.4918 (assert < 1000) bad=[]
+   census mesh   d12  fams=6 narrowest=6.2500e-02 (625x; assert > 3.0e-04) worst_q=102.141 (assert < 1000) bad=[]
+   census sweep  d6   fams=8 narrowest=inf (infx; assert > 3.0e-04) worst_q=60.6301 (assert < 1000) bad=[]
+   census sweep  d8   fams=8 narrowest=inf (infx; assert > 3.0e-04) worst_q=65.0788 (assert < 1000) bad=[]
+   census sweep  d12  fams=8 narrowest=inf (infx; assert > 3.0e-04) worst_q=97.1438 (assert < 1000) bad=[]
+   taper n=8    d8   k0=2    v=['ok'] w=3.125000e-02 (assert > 3.0e-04, 104x) q=22.0639 (assert < 3333.3, 151x)
+   taper n=16   d8   k0=2    v=['ok'] w=1.562500e-02 (assert > 3.0e-04, 52.1x) q=28.7518 (assert < 3333.3, 116x)
+   taper n=32   d8   k0=2    v=['ok'] w=7.812500e-03 (assert > 3.0e-04, 26x) q=57.0854 (assert < 3333.3, 58.4x)
+   taper n=64   d8   k0=2    v=['ok'] w=3.906250e-03 (assert > 3.0e-04, 13x) q=113.767 (assert < 3333.3, 29.3x)
+   taper n=128  d6   k0=0.8  v=['ok'] w=1.953125e-03 (assert > 3.0e-04, 6.51x) q=345.44 (assert < 3333.3, 9.65x)
+   taper n=256  d6   k0=0.8  v=['ok'] w=9.765625e-04 (assert > 3.0e-04, 3.26x) q=690.173 (assert < 3333.3, 4.83x)
+-- win/Katmai/t1 vf_d_census_post_win_PRESCOTT_t1_taper.json
+   census none   d8   fams=0 narrowest=inf (infx; assert > 3.0e-04) worst_q=0 (assert < 1000) bad=[]
+   taper n=64   d8   k0=2    v=['ok'] w=3.906250e-03 (assert > 3.0e-04, 13x) q=113.767 (assert < 3333.3, 29.3x)
+   taper n=128  d6   k0=0.8  v=['ok'] w=1.953125e-03 (assert > 3.0e-04, 6.51x) q=345.44 (assert < 3333.3, 9.65x)
+   taper n=256  d6   k0=0.8  v=['ok'] w=9.765625e-04 (assert > 3.0e-04, 3.26x) q=690.173 (assert < 3333.3, 4.83x)
+-- wsl/Haswell/t1 vf_d_census_post_wsl_HASWELL_t1_taper.json
+   census none   d8   fams=0 narrowest=inf (infx; assert > 3.0e-04) worst_q=0 (assert < 1000) bad=[]
+   taper n=64   d8   k0=2    v=['ok'] w=3.906250e-03 (assert > 3.0e-04, 13x) q=113.767 (assert < 3333.3, 29.3x)
+   taper n=128  d6   k0=0.8  v=['ok'] w=1.953125e-03 (assert > 3.0e-04, 6.51x) q=345.44 (assert < 3333.3, 9.65x)
+   taper n=256  d6   k0=0.8  v=['ok'] w=9.765625e-04 (assert > 3.0e-04, 3.26x) q=690.173 (assert < 3333.3, 4.83x)
+
+##############################################################################
+# PROBE E -- EME branch cut
+win/Haswell/t1         flip=0/96 worst/tol=1.129e-08 | modes 16 vs 16 dqz2=4.1837e-10 (atol 1e-6) | prefix-pin 16 vs 18
+win/Haswell/t4         flip=0/96 worst/tol=1.129e-08 | modes 16 vs 16 dqz2=1.5280e-10 (atol 1e-6) | prefix-pin 16 vs 18
+win/Nehalem/t1         flip=0/96 worst/tol=1.750e-08 | modes 16 vs 16 dqz2=3.1287e-10 (atol 1e-6) | prefix-pin 16 vs 18
+win/Nehalem/t4         flip=0/96 worst/tol=1.750e-08 | modes 16 vs 16 dqz2=2.2919e-10 (atol 1e-6) | prefix-pin 16 vs 18
+win/Katmai/t1          flip=0/96 worst/tol=1.623e-08 | modes 16 vs 16 dqz2=1.8554e-10 (atol 1e-6) | prefix-pin 16 vs 21
+win/Katmai/t4          flip=0/96 worst/tol=1.623e-08 | modes 16 vs 16 dqz2=1.8554e-10 (atol 1e-6) | prefix-pin 16 vs 21
+win/Sandybridge/t1     flip=0/96 worst/tol=3.768e-08 | modes 16 vs 16 dqz2=2.6921e-10 (atol 1e-6) | prefix-pin 16 vs 18
+win/Sandybridge/t4     flip=0/96 worst/tol=3.768e-08 | modes 16 vs 16 dqz2=3.1650e-10 (atol 1e-6) | prefix-pin 16 vs 18
+wsl/Haswell/t1         flip=0/96 worst/tol=6.614e-09 | modes 16 vs 16 dqz2=2.1464e-10 (atol 1e-6) | prefix-pin 16 vs 19
+
+##############################################################################
+# PROBE F -- forced premise
+-- win/Haswell/t1 vf_f_forced_post_win_HASWELL_t1_ncut_N.json
+   ncut_N    {'N': 120, 'n': 18, 'worst': 8.73011864003635e-10, 'bar': 5e-09, 'margin': 5.727299027839078, 'would_pass': True}
+   ncut_N    {'N': 180, 'n': 18, 'worst': 3.223168810933167e-11, 'bar': 5e-09, 'margin': 155.12684234966918, 'would_pass': True}
+   ncut_N    {'N': 240, 'n': 18, 'worst': 9.510220576230849e-10, 'bar': 5e-09, 'margin': 5.257501610947527, 'would_pass': True}
+   ncut_N    {'N': 360, 'n': 18, 'worst': 1.0984260651663266e-09, 'bar': 5e-09, 'margin': 4.5519677277895685, 'would_pass': True}
+-- win/Haswell/t1 vf_f_forced_post_win_HASWELL_t1_taper512.json
+   taper512  {'n_slices': 256, 'degree': 6, 'k0': 0.8, 'verdicts': ['ok'], 'w': 0.0009765625, 'q': 690.1726129457073, 'would_pass': True}
+   taper512  {'n_slices': 512, 'degree': 6, 'k0': 0.8, 'verdicts': ['ok'], 'w': 0.00048828125, 'q': 1379.6196674637627, 'would_pass': True}
+-- win/Katmai/t1 vf_f_forced_post_win_PRESCOTT_t1_ncount.json
+   ncount    {'m': 0, 'N': 120, 'lo': 8, 'hi': 21, 'counts': {'3': 13}, 'n_distinct': 1, 'worst': 3.7830923838022557e-08, 'would_pass': True}
+   ncount    {'m': 0, 'N': 120, 'lo': 2, 'hi': 27, 'counts': {'3': 22, '2': 3}, 'n_distinct': 2, 'worst': 2.474188508405639e-06, 'would_pass': False}
+   ncount    {'m': 0, 'N': 100, 'lo': 8, 'hi': 21, 'counts': {'3': 13}, 'n_distinct': 1, 'worst': 1.4045015750419054e-07, 'would_pass': True}
+   ncount    {'m': 0, 'N': 140, 'lo': 8, 'hi': 21, 'counts': {'3': 13}, 'n_distinct': 1, 'worst': 2.649710277857764e-07, 'would_pass': True}
+   ncount    {'m': 1, 'N': 120, 'lo': 8, 'hi': 21, 'counts': {'3': 13}, 'n_distinct': 1, 'worst': 3.238458323728821e-08, 'would_pass': True}
+   ncount    {'m': 2, 'N': 120, 'lo': 8, 'hi': 21, 'counts': {'3': 13}, 'n_distinct': 1, 'worst': 1.271612841247105e-06, 'would_pass': False}

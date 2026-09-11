@@ -1,0 +1,716 @@
+{
+ "ordinary": [
+  {
+   "label": "uniform",
+   "n_layers": 1,
+   "w_min_frac": 0.08333333333333333,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 17.44136533296866,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 7.805484059097978e-08,
+   "R0": 0.5959763506613459,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "uniform_uniaxial",
+   "n_layers": 1,
+   "w_min_frac": 0.07142857142857133,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 16.964276300262007,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.5846794543250553e-08,
+   "R0": 0.39456822186032475,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "segments_3",
+   "n_layers": 1,
+   "w_min_frac": 0.04999999999999999,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 17.802189047779784,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.5339502890121537e-08,
+   "R0": 0.434429270978579,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "coincident_walls",
+   "n_layers": 2,
+   "w_min_frac": 0.041666666666666664,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 17.441365341051153,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.0959773089069813e-09,
+   "R0": 0.439647592824918,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "ring_grating_p3_d0.5",
+   "n_layers": 1,
+   "w_min_frac": 0.03125,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 28.51634139306596,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 7.111255473368772e-09,
+   "R0": 0.11177855094687328,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "ring_grating_p1.5_d0.3",
+   "n_layers": 1,
+   "w_min_frac": 0.01874999999999997,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 47.48879157211863,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 2.003730987798491e-07,
+   "R0": 0.63849170665377,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "ring_grating_p0.8_d0.5",
+   "n_layers": 1,
+   "w_min_frac": 0.016666666666666313,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 53.49179189538644,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 2.265174825488714e-09,
+   "R0": 0.13352501335977038,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "eps_per_seg_3",
+   "n_layers": 1,
+   "w_min_frac": 0.041666666666666664,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 21.37291996347591,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 9.065744155378752e-09,
+   "R0": 0.579721753514102,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "eps_per_seg_3_graded",
+   "n_layers": 1,
+   "w_min_frac": 0.03124999999999999,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 28.51075106077465,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.7883485803338317e-09,
+   "R0": 0.5797190912810738,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "spacer_between_rings",
+   "n_layers": 3,
+   "w_min_frac": 0.041666666666666664,
+   "w_min_union_frac": 0.041666666666666664,
+   "q_excess_max": 34.92567576225074,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.438222541061407e-09,
+   "R0": 0.2752591239399116,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "ring_m0",
+   "n_layers": 1,
+   "w_min_frac": 0.0625,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 9.482940083696247,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 3.824046768130529e-08,
+   "R0": 0.08688169313378419,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "ring_m2",
+   "n_layers": 1,
+   "w_min_frac": 0.0625,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 28.270564581225706,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 29,
+   "closure": 3.6589705487699575e-08,
+   "R0": 0.8004027016947671,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "ring_m5",
+   "n_layers": 1,
+   "w_min_frac": 0.0625,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 65.07879790154229,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 26,
+   "closure": 3.6645577794480744e-08,
+   "R0": 0.04097456532634333,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "ring_k0.8",
+   "n_layers": 1,
+   "w_min_frac": 0.125,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 21.814486844990306,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 11,
+   "closure": 1.2707730423500152e-09,
+   "R0": 0.05145866418341669,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "ring_k3.5",
+   "n_layers": 1,
+   "w_min_frac": 0.0357142857142857,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 17.44136533296864,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 52,
+   "closure": 1.8981940241857842e-08,
+   "R0": 0.20363994826954004,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "ring_k8",
+   "n_layers": 1,
+   "w_min_frac": 0.015625,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 17.44136533296866,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 121,
+   "closure": 4.285448462759689e-08,
+   "R0": 0.07360068551880469,
+   "n_warn": 0,
+   "degree": 8
+  },
+  {
+   "label": "nm_units_ring",
+   "error": "MemoryError: Unable to allocate 608. GiB for an array with shape (201936, 201936) and data type complex128",
+   "degree": 8
+  },
+  {
+   "label": "lossy_metal_ring",
+   "n_layers": 1,
+   "w_min_frac": 0.0625,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 23.48321349284223,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 0.03681371216184848,
+   "R0": 0.5559257612168055,
+   "n_warn": 0,
+   "degree": 8
+  }
+ ],
+ "taper": [
+  {
+   "label": "taper",
+   "n_slices": 4,
+   "degree": 8,
+   "n_layers": 4,
+   "wall_delta": 1.5,
+   "w_min_frac": 0.03125,
+   "w_min_union_frac": 0.03125,
+   "q_excess_max": 23.319987293296087,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 4.472565506841164e-08,
+   "R0": 0.0704796473487498,
+   "n_warn": 0
+  },
+  {
+   "label": "taper",
+   "n_slices": 8,
+   "degree": 8,
+   "n_layers": 8,
+   "wall_delta": 0.75,
+   "w_min_frac": 0.03125,
+   "w_min_union_frac": 0.03125,
+   "q_excess_max": 22.063854049536214,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.2482388123125077e-07,
+   "R0": 0.5679844439262764,
+   "n_warn": 0
+  },
+  {
+   "label": "taper",
+   "n_slices": 16,
+   "degree": 8,
+   "n_layers": 16,
+   "wall_delta": 0.375,
+   "w_min_frac": 0.015625,
+   "w_min_union_frac": 0.015625,
+   "q_excess_max": 28.751803829176207,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.0632834368529132e-07,
+   "R0": 0.56797207441479,
+   "n_warn": 0
+  },
+  {
+   "label": "taper",
+   "n_slices": 32,
+   "degree": 8,
+   "n_layers": 32,
+   "wall_delta": 0.1875,
+   "w_min_frac": 0.0078125,
+   "w_min_union_frac": 0.0078125,
+   "q_excess_max": 57.08536862635465,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.0359052193820162e-07,
+   "R0": 0.5680705599614428,
+   "n_warn": 0
+  }
+ ],
+ "adjacent": [
+  {
+   "delta_frac": 0.1,
+   "delta": 2.4000000000000004,
+   "degree": 8,
+   "separated": false,
+   "n_layers": 2,
+   "w_min_frac": 0.04062499999999999,
+   "w_min_union_frac": 0.05000000000000001,
+   "q_excess_max": 17.802189047826616,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.3125070807973316e-08,
+   "R0": 0.6452732029079805,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 0.01,
+   "delta": 0.24,
+   "degree": 8,
+   "separated": false,
+   "n_layers": 2,
+   "w_min_frac": 0.010000000000000009,
+   "w_min_union_frac": 0.010000000000000009,
+   "q_excess_max": 29.520907197982723,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 8.797891681844305e-08,
+   "R0": 0.6772838046652949,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 0.001,
+   "delta": 0.024,
+   "degree": 8,
+   "separated": false,
+   "n_layers": 2,
+   "w_min_frac": 0.0010000000000000009,
+   "w_min_union_frac": 0.0010000000000000009,
+   "q_excess_max": 255.41710578022287,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 5.3947752043370656e-08,
+   "R0": 0.06162095585324297,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 0.0001,
+   "delta": 0.0024000000000000002,
+   "degree": 8,
+   "separated": false,
+   "n_layers": 2,
+   "w_min_frac": 9.999999999998899e-05,
+   "w_min_union_frac": 9.999999999998899e-05,
+   "q_excess_max": 2525.912963840359,
+   "verdicts": [
+    "warn_manufactured"
+   ],
+   "n_orders": 30,
+   "closure": 3.716709773282645e-08,
+   "R0": 0.060891453457155416,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 1e-05,
+   "delta": 0.00024000000000000003,
+   "degree": 8,
+   "separated": false,
+   "n_layers": 2,
+   "w_min_frac": 9.999999999991497e-06,
+   "w_min_union_frac": 9.999999999991497e-06,
+   "q_excess_max": 25218.874431677777,
+   "verdicts": [
+    "warn_manufactured"
+   ],
+   "n_orders": 30,
+   "closure": 4.1915829140926064e-08,
+   "R0": 0.060841663089478575,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 1e-06,
+   "delta": 2.4e-05,
+   "degree": 8,
+   "separated": false,
+   "n_layers": 2,
+   "w_min_frac": 9.999999999917482e-07,
+   "w_min_union_frac": 9.999999999917482e-07,
+   "q_excess_max": 281867.33166716195,
+   "verdicts": [
+    "refuse"
+   ],
+   "n_orders": 30,
+   "closure": 1.5652767894502873e-05,
+   "R0": 0.06083844172783868,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 1e-07,
+   "delta": 2.4e-06,
+   "degree": 8,
+   "separated": false,
+   "n_layers": 2,
+   "w_min_frac": 9.999999998437185e-08,
+   "w_min_union_frac": 9.999999998437185e-08,
+   "q_excess_max": 2521444.7763187676,
+   "verdicts": [
+    "refuse"
+   ],
+   "n_orders": 30,
+   "closure": 5.262443734110555,
+   "R0": 0.06621289985694225,
+   "n_warn": 0
+  }
+ ],
+ "separated": [
+  {
+   "delta_frac": 0.1,
+   "delta": 2.4000000000000004,
+   "degree": 8,
+   "separated": true,
+   "n_layers": 4,
+   "w_min_frac": 0.04062500000000006,
+   "w_min_union_frac": 0.041666666666666664,
+   "q_excess_max": 37.04595515549164,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 6.440686428632603e-09,
+   "R0": 0.5623543147772598,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 0.01,
+   "delta": 0.24,
+   "degree": 8,
+   "separated": true,
+   "n_layers": 4,
+   "w_min_frac": 0.041666666666666664,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 37.04595515549164,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.0125928540105633e-08,
+   "R0": 0.5453639972829929,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 0.001,
+   "delta": 0.024,
+   "degree": 8,
+   "separated": true,
+   "n_layers": 4,
+   "w_min_frac": 0.04161111111111112,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 37.0459551554917,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 6.832994836614148e-09,
+   "R0": 0.5436394037279619,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 0.0001,
+   "delta": 0.0024000000000000002,
+   "degree": 8,
+   "separated": true,
+   "n_layers": 4,
+   "w_min_frac": 0.04166111111111107,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 37.0459551554917,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 5.807784475564404e-09,
+   "R0": 0.5435467230444179,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 1e-05,
+   "delta": 0.00024000000000000003,
+   "degree": 8,
+   "separated": true,
+   "n_layers": 4,
+   "w_min_frac": 0.041666111111111105,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 37.0459551554917,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 5.67661606609704e-09,
+   "R0": 0.5435384025415723,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 1e-06,
+   "delta": 2.4e-05,
+   "degree": 8,
+   "separated": true,
+   "n_layers": 4,
+   "w_min_frac": 0.041666611111111106,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 37.0459551554917,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 9.088192420847463e-10,
+   "R0": 0.5435383516008533,
+   "n_warn": 0
+  },
+  {
+   "delta_frac": 1e-07,
+   "delta": 2.4e-06,
+   "degree": 8,
+   "separated": true,
+   "n_layers": 4,
+   "w_min_frac": 0.04166666111111109,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 37.0459551554917,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 5.653538526217972e-09,
+   "R0": 0.543537497452301,
+   "n_warn": 0
+  }
+ ],
+ "within_layer": [
+  {
+   "w_frac": 0.01,
+   "w": 0.24,
+   "degree": 8,
+   "n_layers": 1,
+   "w_min_frac": 0.010000000000000009,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 28.546484613005056,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 4.8446653799771866e-08,
+   "R0": 0.5797184952167218,
+   "n_warn": 0
+  },
+  {
+   "w_frac": 0.001,
+   "w": 0.024,
+   "degree": 8,
+   "n_layers": 1,
+   "w_min_frac": 0.0010000000000000009,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 255.4146442945429,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 2.8739767898855462e-08,
+   "R0": 0.5797210818993984,
+   "n_warn": 0
+  },
+  {
+   "w_frac": 0.0001,
+   "w": 0.0024000000000000002,
+   "degree": 8,
+   "n_layers": 1,
+   "w_min_frac": 9.999999999998899e-05,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 2524.6952773654166,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 6.387057605028446e-08,
+   "R0": 0.5797207415899914,
+   "n_warn": 0
+  },
+  {
+   "w_frac": 1e-05,
+   "w": 0.00024000000000000003,
+   "degree": 8,
+   "n_layers": 1,
+   "w_min_frac": 9.999999999991497e-06,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 25239.86684949277,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 1.0803492100919243e-07,
+   "R0": 0.5797239327266778,
+   "n_warn": 0
+  },
+  {
+   "w_frac": 1e-06,
+   "w": 2.4e-05,
+   "degree": 8,
+   "n_layers": 1,
+   "w_min_frac": 9.999999999917482e-07,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 252147.28372994674,
+   "verdicts": [
+    "warn_own"
+   ],
+   "n_orders": 30,
+   "closure": 0.013996694767473672,
+   "R0": 0.5810137193150547,
+   "n_warn": 0
+  },
+  {
+   "w_frac": 1e-07,
+   "w": 2.4e-06,
+   "degree": 8,
+   "n_layers": 1,
+   "w_min_frac": 9.999999998437185e-08,
+   "w_min_union_frac": Infinity,
+   "q_excess_max": 2521443.558319837,
+   "verdicts": [
+    "warn_own"
+   ],
+   "n_orders": 24,
+   "closure": 5.7007077207806915,
+   "R0": 5.396908592353896,
+   "n_warn": 0
+  }
+ ],
+ "summary": {
+  "n_ordinary": 21,
+  "ordinary_narrowest_w_min_frac": 0.0078125,
+  "ordinary_narrowest_union_frac": 0.0078125,
+  "ordinary_worst_q_excess": 65.07879790154229,
+  "ordinary_non_ok": [],
+  "errors": [
+   {
+    "label": "nm_units_ring",
+    "error": "MemoryError: Unable to allocate 608. GiB for an array with shape (201936, 201936) and data type complex128",
+    "degree": 8
+   }
+  ]
+ },
+ "_build": {
+  "python": "3.14.6",
+  "platform": "Windows",
+  "numpy": "2.4.4",
+  "threads_env": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  },
+  "kernel": {
+   "requested": null,
+   "loaded": [
+    {
+     "api": "openblas",
+     "arch": "Haswell",
+     "nthreads": 1,
+     "version": "0.3.31.188.0"
+    },
+    {
+     "api": "openblas",
+     "arch": "Haswell",
+     "nthreads": 1,
+     "version": "0.3.30"
+    }
+   ]
+  }
+ },
+ "_tree": "C:\\tmp\\lum_bor1\\lumenairy\\__init__.py"
+}
