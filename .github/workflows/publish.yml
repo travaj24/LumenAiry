@@ -183,7 +183,7 @@ jobs:
         run: |
           # v5.15.0: ``slow`` runs in the unit-tests sharded slow job; excluded here.
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
-            -p no:cacheprovider --maxfail=5 \
+            -p no:cacheprovider --maxfail=50 \
             --splits 7 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --durations-path .test_durations
