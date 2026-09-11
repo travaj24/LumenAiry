@@ -69,7 +69,9 @@ jobs:
         # heaviest shard ran 1652 s against the 1800 s step cap (8 % headroom)
         # and 5.45.0 adds ~70 tests (slant/sliver/mortar/verify gates, several
         # hundred seconds).  7 shards ~= 1400-1500 s heaviest: real headroom.
-        shard: [1, 2, 3, 4, 5, 6, 7]
+        # v5.45.1 (2026-09-11): 7 -> 8.  On the v5.45.1 tag the heaviest verify
+        # shard ran 1719 s against the 1800 s step cap (5 % headroom).
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       # v5.2.5: fetch full history + tags so the V16
       # verify_changelog_closures step below can resolve PREV_TAG
@@ -161,7 +163,7 @@ jobs:
       - name: Library import sanity
         run: python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
 
-      - name: Run unit tests (release tag verification, shard ${{ matrix.shard }}/7)
+      - name: Run unit tests (release tag verification, shard ${{ matrix.shard }}/8)
         # v5.23.0: mirror unit-tests.yml -- this shard runs a slice of the fast
         # gate serially on its own runner (pytest-split --splits N --group).
         # v5.32.0 (retag 2): N went 3 -> 5 here after two release attempts hit
@@ -184,7 +186,7 @@ jobs:
           # v5.15.0: ``slow`` runs in the unit-tests sharded slow job; excluded here.
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
             -p no:cacheprovider --maxfail=50 \
-            --splits 7 --group ${{ matrix.shard }} \
+            --splits 8 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --durations-path .test_durations
         # v5.23.0: 40 -> 20 (fast gate now sharded 3 ways across parallel jobs).
