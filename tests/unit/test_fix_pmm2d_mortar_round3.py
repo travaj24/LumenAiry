@@ -444,12 +444,33 @@ def test_the_in_plane_rcond_bar_would_refuse_this_ordinary_stack():
             A, B, "pmm2d staggered GENERALIZED mortar interface",
             screen="rcond")
     assert "reciprocal 1-condition" in str(ei.value)
-    # and the shipped spelling returns, on the same operand
+    # and the shipped spelling returns, on the same operand.
+    # RESTATED 2026-09-11 (CI premise gates): the guarded answer was pinned
+    # bit-for-bit to ``np.linalg.solve``; that is a property of ONE LAPACK
+    # and is not portable -- numpy and scipy ship different scipy-openblas
+    # builds (0.3.31 vs 0.3.30) and the py3.12 / py3.13 CI wheels read a
+    # different hash on this very row.  The portable contract (the same as
+    # ``test_the_guarded_mortar_solve_returns_the_numpy_solve_bit_for_bit``
+    # in the round-2 file): bit-identical to its OWN unguarded
+    # ``lu_factor`` + ``lu_solve`` path, a valid solve by residual, and
+    # agreement with numpy inside the bound two backward-stable solves are
+    # entitled to differ by.
+    import scipy.linalg as _sla
     X = _pc._guarded_mortar_solve(
         A, B, "pmm2d staggered GENERALIZED mortar interface",
         screen="residual")
     assert np.all(np.isfinite(X))
-    assert _h(X) == _h(np.linalg.solve(A, B))
+    x_sp = _sla.lu_solve(_sla.lu_factor(A), B)
+    assert _h(X) == _h(x_sp), "the screen changed its own lu path's bits"
+    eps = float(np.finfo(np.float64).eps)
+    n = int(A.shape[0])
+    resid = float(np.linalg.norm(A @ X - B) / max(np.linalg.norm(B), 1e-300))
+    assert resid <= 16.0 * n * eps, (resid, n)
+    x_np = np.linalg.solve(A, B)
+    cond = float(np.linalg.cond(A))
+    agree = float(np.max(np.abs(X - x_np)))
+    assert agree <= 64.0 * cond * eps * float(np.max(np.abs(x_np)) + 1e-300), (
+        agree, cond)
 
 
 def test_the_generalized_residual_bar_has_decades_of_gap_on_both_sides():
