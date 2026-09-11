@@ -243,19 +243,90 @@ def test_near_cutoff_closure():
         "per-mode band read 1.2167e-04 here)" % (closure,))
 
 
-def test_near_cutoff_channel_count_is_stable_over_the_ladder():
+#: ROUND 2 (verification D9) -- THE NEAR-CUTOFF LADDER'S BAR, re-derived from
+#: the measured envelope over the FAMILY and over the arms.
+#:
+#: WHY IT MOVED.  As first written the gate claimed a property of "the whole
+#: near-cutoff ladder", asserted it on ``m = 0`` alone, and barred the worst
+#: lossless closure at 1e-6.  The 5.45.1 build's own report already recorded
+#: the same ladder reaching **1.2716e-06 on Windows / PRESCOTT -> Katmai / 1
+#: thread** -- above that bar.  The gate passed only because it hardcoded
+#: ``m = 0``, where the same arm reads 3.78e-08.  That is shape S1 in
+#: ``docs/TESTING_STANDARDS.md``: a bar whose pass/fail boundary sits inside
+#: the cross-arm spread of the quantity it reads, kept green by a sample.
+#:
+#: RE-MEASURED over the family and TEN ARMS
+#: (``validation/probe_fix_bor_round2/r6_cutoff_family.py`` ->
+#: ``r9_cutoff_envelope.py``; m = 0/1/2 x the LOADED kernels {Haswell, Nehalem,
+#: Katmai, Sandybridge} x {1, 4} threads x two builds), on the rungs the ladder
+#: is entitled to (see :data:`_CUTOFF_LADDER_FLOOR_MULT`).  The channel count
+#: is ``{3}`` for every ``m`` on every one of the ten; the worst closure is
+#:
+#:   win/Haswell/t1     1.9655e-07     wsl/Haswell/t1      1.0818e-07
+#:   win/Haswell/t4     6.1976e-08     wsl/Haswell/t4      4.3513e-07
+#:   win/Nehalem/t1     2.9240e-07     wsl/Nehalem/t1      2.7766e-07
+#:   win/Katmai/t1      **1.2716e-06** wsl/Katmai/t1       1.7132e-07
+#:   win/Sandybridge/t1 3.6490e-08     wsl/Sandybridge/t1  7.7303e-08
+#:
+#: -- a 34.9x cross-arm spread whose top is the build's own published Katmai
+#: number, reproduced here independently.  The bar is 1e-5: **7.86x (0.90
+#: decades)** above that envelope, where 1e-6 sat 0.786x BELOW it.
+#:
+#: The channel COUNT claim is unchanged and is the stronger half of the gate:
+#: it is an INTEGER, it must be ONE number per ``m``, and it is on every arm.
+_CUTOFF_LADDER_BAR = 1.0e-5
+
+#: How far above the R/T channel gate's OWN floor the ladder must stop, as a
+#: multiple of ``_orient._BOR_CHANNEL_REAL_FLOOR``.
+#:
+#: THE BOUND THE SHIPPED GATE DID NOT STATE.  ``channel_core`` keeps a channel
+#: only while ``Re qn > _BOR_CHANNEL_REAL_FLOOR`` (1e-6).  The ladder places
+#: its cutoff order at ``qn = n sqrt(delta)``, so a deep enough rung puts that
+#: order under the CHANNEL gate and the count legitimately falls -- the channel
+#: gate working, not the orientation band failing.  Measured over the same
+#: arms: the count reads ``{2, 3}`` once rungs down to 1x the floor are
+#: included, and ``{3}`` on every arm and every ``m`` from 3x up.  10x is
+#: taken, 3.3x inside the measured onset of the ambiguity, and it is also where
+#: the shipped ladder happened to stop (``e = 20``, ``qn`` = 1.41e-05) -- so
+#: the stopping rung is now DERIVED from the library's own constant instead of
+#: being a literal that agreed with it by accident.
+_CUTOFF_LADDER_FLOOR_MULT = 10.0
+
+
+def _cutoff_ladder_rungs():
+    """The rungs of the near-cutoff ladder, bounded BELOW by the R/T channel
+    gate's own floor rather than by a hardcoded stop."""
+    floor = _or._BOR_CHANNEL_REAL_FLOOR * _CUTOFF_LADDER_FLOOR_MULT
+    out = []
+    for e_ in range(8, 40):
+        dl = 10.0 ** (-e_ / 2.0)
+        if _NREF * np.sqrt(dl) < floor:
+            break
+        out.append(dl)
+    return out
+
+
+@pytest.mark.parametrize("m", [0, 1, 2])
+def test_near_cutoff_channel_count_is_stable_over_the_ladder(m):
     """The shipped band did not merely degrade the closure -- it changed HOW
     MANY diffraction channels the solve reported, and which number came back
     depended on the BLAS kernel (21 of 24 rungs) and on the thread count (35 of
     39).  A channel count that moves with the arithmetic is a defect, not
-    noise.  Over the whole near-cutoff ladder the count must now be ONE
-    number."""
-    m = 0
+    noise.  Over the near-cutoff ladder the count must be ONE number.
+
+    ROUND 2 (D9): the claim is now made over the FAMILY it was always phrased
+    for -- ``m`` = 0, 1 and 2 -- and its energy bar comes from the measured
+    envelope over that family and the arms rather than from one sample.  See
+    :data:`_CUTOFF_LADDER_BAR` for the measurement and
+    :data:`_CUTOFF_LADDER_FLOOR_MULT` for why the ladder stops where it does.
+    """
     g = _gamma_of(m)
     counts = set()
     worst = 0.0
-    for e_ in range(8, 21):
-        dl = 10.0 ** (-e_ / 2.0)
+    rungs = _cutoff_ladder_rungs()
+    assert len(rungs) >= 12, (
+        "the ladder collapsed to %d rungs -- re-derive it" % (len(rungs),))
+    for dl in rungs:
         k0 = g / (_NREF * np.sqrt(1.0 - dl))
         res = _cutoff_stack(m, k0)
         counts.add(int(np.size(res["R"])))
@@ -263,12 +334,57 @@ def test_near_cutoff_channel_count_is_stable_over_the_ladder():
         if en.size:
             worst = max(worst, float(np.max(np.abs(en - 1.0))))
     assert len(counts) == 1, (
-        "the R/T channel count moves over the near-cutoff ladder: %s "
+        "m=%d: the R/T channel count moves over the near-cutoff ladder: %s "
         "(the shipped band read 2 on some rungs and 3 on others)"
-        % (sorted(counts),))
-    assert worst < 1e-6, (
-        "worst lossless closure over the ladder %.4e (bar 1e-6; the shipped "
-        "band read 1.2167e-04)" % (worst,))
+        % (m, sorted(counts),))
+    assert worst < _CUTOFF_LADDER_BAR, (
+        "m=%d: worst lossless closure over the ladder %.4e (bar %.0e; "
+        "measured envelope 1.2716e-06 over the kernel x thread x build arms, "
+        "and the shipped per-mode band read 1.2167e-04)"
+        % (m, worst, _CUTOFF_LADDER_BAR))
+
+
+def test_the_pre_fix_band_would_have_reclassified_a_propagating_mode():
+    """THE CONTRAST, premise-gated -- because the pathology belongs to the
+    pre-fix rule, and an arm that does not exhibit it has nothing to report.
+
+    The pre-fix rule scaled the band by the mode's OWN ``|Re q|``; near a
+    cutoff that collapses, so the ratio ``|Im q| / |Re q|`` grows without limit
+    at FIXED backward error and the order is called EVANESCENT.  This gate
+    re-derives both classifications from the SAME spectrum and asserts that
+    every mode the two rules disagree about is PHYSICALLY PROPAGATING
+    (``|Re q| > |Im q|``), i.e. that the old rule is the one that is wrong.
+
+    That they disagree AT ALL is the premise: the CI pool is a random per-job
+    mix of EPYC 9V74 and 7763 whose LAPACK can return a spectrum clean enough
+    that the collapsing ratio never crosses, and on such an arm this contrast
+    is simply absent.  The gate SKIPS there rather than reporting a defect that
+    is not present.
+    """
+    disagree_prop, disagree_evan = 0, 0
+    for m in (0, 1, 2):
+        g = _gamma_of(m)
+        for dl in _cutoff_ladder_rungs():
+            k0 = g / (_NREF * np.sqrt(1.0 - dl))
+            L = _fd_modes(m, k0)
+            q = np.asarray(L["q"])
+            scale = max(float(np.max(np.abs(q))), float(k0))
+            new_prop = np.abs(q.imag) <= _or._BOR_CUT_BAND_REL * scale
+            old_prop = np.abs(q.imag) < 1e-9 * np.maximum(np.abs(q.real),
+                                                          1e-300)
+            phys = np.abs(q.real) > np.abs(q.imag)
+            d = new_prop != old_prop
+            disagree_prop += int(np.count_nonzero(d & phys))
+            disagree_evan += int(np.count_nonzero(d & ~phys))
+    if disagree_prop + disagree_evan == 0:
+        pytest.skip("premise absent on this arm: the pre-fix and current "
+                    "bands classify every mode of the near-cutoff ladder "
+                    "identically, so there is nothing to attribute")
+    assert disagree_evan == 0, (
+        "%d physically EVANESCENT modes are classified differently by the two "
+        "bands -- the widening is supposed to touch only modes whose |Re q| "
+        "has collapsed" % (disagree_evan,))
+    assert disagree_prop > 0
 
 
 def test_no_forward_mode_of_a_lossless_layer_carries_backward_flux():
@@ -348,19 +464,49 @@ def test_band_two_sided_population():
         % (worst_cut, band))
 
     # --- SIGNAL: genuinely lossy media must stay OUT of the band.
-    for imn, floor in ((1e-3, 1e2), (1e-6, 2.0)):
+    #
+    # ROUND 2 (verification D6): this leg swept k0 = 2.0/3.5 only, and the
+    # 9.4570e-05 / 9.4570e-08 minima it reads there -- which the build quoted as
+    # 3.98 and 0.98 decades -- are a SAMPLE property, not a property of the
+    # band.  Adding ONE k0 rung (0.8) lowers the minimum to 3.7752e-05 and
+    # 3.7752e-08, i.e. 3.58 and 0.58 decades, and the independent
+    # verification's own lossy population reaches 2.3820e-08, i.e. 0.38
+    # decades.  The minimum over a union of populations is the smaller of the
+    # two, so the honest figure for the thin end is 0.38 decades.  The wider
+    # k0 is swept here and the floors below are re-derived from the measured
+    # envelope over it (2026-09-12, Windows py3.14 / Haswell / 1 thread,
+    # validation/probe_fix_bor_round2/r8_band_sides.py).
+    #
+    # TWO ASSERTIONS, and only the first is a correctness claim: the band must
+    # not REACH the signal at all (a decision), and the margin it does have
+    # must not have silently shrunk (an envelope bar with its measurement
+    # dated, which a real change is supposed to fire).
+    for imn, floor, meas in ((1e-3, 1e2, 3.7752e-05), (1e-6, 2.0, 3.7752e-08)):
         smallest = np.inf
+        n_sig = 0
         for m in (0, 1, 2):
-            for k0 in (2.0, 3.5):
+            for k0 in (0.8, 2.0, 3.5):
                 L = _fd_modes(m, k0, eps=(_NREF + 1j * imn) ** 2)
                 q, sig = _sigma(L, k0)
                 phys = np.abs(q.real) > 10.0 * np.abs(q.imag)
                 if phys.any():
                     smallest = min(smallest, float(np.min(sig[phys])))
+                    n_sig += int(phys.sum())
+        assert n_sig >= 300, (
+            "the SIGNAL population collapsed to %d modes at Im(n)=%g -- it "
+            "cannot bound the band" % (n_sig, imn))
+        assert smallest > band, (
+            "SIGNAL side at Im(n)=%g: a genuinely lossy mode sits INSIDE the "
+            "band (sigma %.4e against band %.0e) over %d modes -- the band is "
+            "orienting real loss by flux" % (imn, smallest, band, n_sig))
         assert smallest > floor * band, (
-            "SIGNAL side at Im(n)=%g: smallest sigma %.4e is only %.3gx the "
-            "band %.0e (measured 9.4570e-05 and 9.4570e-08, i.e. 3.98 and "
-            "0.98 decades)" % (imn, smallest, smallest / band, band))
+            "SIGNAL side at Im(n)=%g: smallest sigma %.4e over %d modes is "
+            "only %.3gx the band %.0e.  Measured 2026-09-12 on this population "
+            "(m = 0/1/2 x k0 = 0.8/2.0/3.5): %.4e.  The verification's own "
+            "lossy population reaches 2.3820e-08 at Im(n) = 1e-6, so the thin "
+            "end of this side is 0.38 decades and it is the tightest bar in "
+            "this file -- re-derive it from a measurement, not from one arm"
+            % (imn, smallest, n_sig, smallest / band, band, meas))
 
 
 def test_widening_the_band_is_harmless_because_the_two_rules_agree_there():
@@ -530,28 +676,85 @@ def test_the_nodal_passivity_bar_is_two_sided_on_this_build():
         % (mild, mild / bar, bar))
 
 
-def test_a_lossy_nodal_stack_is_never_judged_by_the_passivity_screen():
-    """``R + T <= 1`` is a theorem only for a PASSIVE stack, and the screen is
-    one-sided for the same reason: an absorbing substrate reads BELOW unity
-    legitimately.  A layer with real loss therefore DISARMS the screen
-    entirely -- there is no theorem left to violate -- rather than widening
-    it."""
+def _lossy_nodal_stack(im_eps=0.3, N=140):
+    """The five-layer nodal stack with a genuinely ABSORBING ring."""
+    from lumenairy.elements.bor.bor_solve import build_layer
+    R = 2.0 * 2.0 * np.pi / 2.0
+    return R, [build_layer(1, R, N, _nuni(2.0), 2.0, basis="nodal"),
+               build_layer(1, R, N, _nring(0.8, 2.0, complex(6.0, im_eps)),
+                           2.0, thickness=0.5, basis="nodal"),
+               build_layer(1, R, N, _nuni(2.0), 2.0, thickness=0.3,
+                           basis="nodal"),
+               build_layer(1, R, N, _nring(1.2, 6.0, 2.0), 2.0,
+                           thickness=0.4, basis="nodal"),
+               build_layer(1, R, N, _nuni(2.0), 2.0, basis="nodal")]
+
+
+def test_a_lossy_nodal_stack_is_judged_by_the_SUPER_UNITY_HALF_ONLY():
+    """RESTATED IN ROUND 2 (verification D1, P1).  This gate used to assert
+    that a layer with real loss DISARMS the screen entirely -- "there is no
+    theorem left to violate" -- and that reasoning is wrong in one direction.
+
+    For a stack of PASSIVE media energy conservation reads ``R + T + A = 1``
+    with the absorbed fraction ``A >= 0``, so ``R + T <= 1`` is a theorem on
+    EVERY passive stack, absorbing or not.  What loss removes is the EQUALITY,
+    not the inequality: only the BELOW-unity half has to disarm, because there
+    a deficit is the absorption and not damage.
+
+    The fixture this gate has always built is the proof.  Its ring absorbs
+    (``Im eps = 0.3``), and the legacy nodal cascade returns
+    ``max(R + T) = 99.88`` on it -- a hundredfold super-unity that no amount of
+    absorption can excuse, and which the pre-round-2 predicate handed back in
+    silence because one layer was lossy.  It is now refused.
+
+    TWO CLAIMS.
+
+    * The SUPER-UNITY half is armed on a lossy PASSIVE stack: this fixture is
+      refused, and the message says the theorem it broke.
+    * The DEFICIT half is NOT: the same geometry made lossless-enough-to-close
+      is the control in
+      ``test_verify_bor_multilayer_guards.py::
+      test_a_lossy_nodal_stack_keeps_its_deficit_half_disarmed``, which sweeps
+      ``Im/Re`` from 1e-6 to 1e-1 on uniform stacks and asserts that not one of
+      them is refused or warned -- their deficits reach 0.1546 legitimately.
+
+    PREMISE-GATED: that this arm's nodal cascade blows up here at all.
+    """
     import warnings as _w
 
-    from lumenairy.elements.bor.bor_solve import build_layer, solve
-    R = 2.0 * 2.0 * np.pi / 2.0
+    import lumenairy.elements.bor.bor_solve as _bs
+    from lumenairy.elements.bor.bor_solve import BORNodalPassivityError, solve
+
     with _w.catch_warnings():
         _w.simplefilter("ignore")
-        layers = [build_layer(1, R, 140, _nuni(2.0), 2.0, basis="nodal"),
-                  build_layer(1, R, 140, _nring(0.8, 2.0, 6.0 + 0.3j), 2.0,
-                              thickness=0.5, basis="nodal"),
-                  build_layer(1, R, 140, _nuni(2.0), 2.0, thickness=0.3,
-                              basis="nodal"),
-                  build_layer(1, R, 140, _nring(1.2, 6.0, 2.0), 2.0,
-                              thickness=0.4, basis="nodal"),
-                  build_layer(1, R, 140, _nuni(2.0), 2.0, basis="nodal")]
-        res = solve(layers, 2.0)                  # must NOT raise
-    assert np.asarray(res["energy"]).size
+        _R, layers = _lossy_nodal_stack()
+
+        # what the solver RETURNS here, with the guard off
+        prev = _bs.BOR_NODAL_PASSIVITY_GUARD
+        _bs.BOR_NODAL_PASSIVITY_GUARD = False
+        try:
+            raw = solve(layers, 2.0)
+        finally:
+            _bs.BOR_NODAL_PASSIVITY_GUARD = prev
+        E = np.asarray(raw["energy"])
+        assert E.size, "the lossy nodal stack returned no channels at all"
+        excess = float(np.max(E)) - 1.0
+
+        if excess <= _bs._BOR_NODAL_SUPERUNITY_BAR:
+            pytest.skip("premise absent on this arm: the lossy nodal stack "
+                        "closes to max(R+T) = %.9g, so there is no super-unity "
+                        "for the screen to refuse" % (float(np.max(E)),))
+
+        _R, layers = _lossy_nodal_stack()
+        with pytest.raises(BORNodalPassivityError) as ei:
+            solve(layers, 2.0)
+    msg = str(ei.value)
+    assert "PROVABLY PASSIVE" in msg and "R + T <= 1 is a theorem" in msg, (
+        "a lossy PASSIVE stack returning max(R+T) = %.6g was refused, but "
+        "the message does not name the theorem it broke: %s"
+        % (excess + 1.0, msg[:400]))
+    assert "LOSSLESS" not in msg, (
+        "the refusal calls an ABSORBING stack LOSSLESS: %s" % (msg[:400],))
 
 
 def test_the_rbig_over_lambda_proxy_no_longer_decides_anything():
@@ -905,7 +1108,15 @@ def test_a_within_layer_liner_is_warned_and_never_refused(w_frac):
         % ([r["w_min_union_frac"] for r in recs],))
     from lumenairy.elements.bor import _sem_contract as _sc
     q = max(r["q_excess"] for r in recs if np.isfinite(r["q_excess"]))
-    narrow = min(r["w_min_frac"] for r in recs)
+    # ROUND 2 (verification D4): the OWN arm reads ``w_min_own_frac`` -- the
+    # narrowest cell BOTH of whose enclosing walls THIS layer's own segment
+    # list asked for -- not ``w_min_frac``, the narrowest cell of the
+    # post-window mesh whoever asked for it.  The verification's finding was
+    # that the two differ exactly on the layer the message blamed wrongly: the
+    # liner's NEIGHBOUR inherits the narrow cell from the +-1 window, its own
+    # segment list is a single full-radius entry, and it received the identical
+    # "the LAYER'S OWN segment list asked for" message.
+    narrow = min(r["w_min_own_frac"] for r in recs)
     # The OWN-geometry warning is the same CONJUNCTION as the refusal, minus
     # the union attribution: the cell must be below the resolvable width AND
     # the spectrum must show it.  At w/Rbig = 1e-5 the spectrum is already hot
@@ -915,13 +1126,28 @@ def test_a_within_layer_liner_is_warned_and_never_refused(w_frac):
     # demanding a warning the bars do not license.
     if q > _sc._BOR_Q_EXCESS and narrow < _sc._BOR_MIN_ELEM_FRAC:
         assert "warn_own" in v, (
-            "w/Rbig = %.0e drives |q|max/(n_max k0) to %.4g with a cell at "
-            "%.3e of Rbig -- past BOTH screens -- and said nothing"
+            "w/Rbig = %.0e drives |q|max/(n_max k0) to %.4g with an OWNED "
+            "cell at %.3e of Rbig -- past BOTH screens -- and said nothing"
             % (w_frac, q, narrow))
+        # ATTRIBUTION, asserted rather than restated (D4).  Exactly the layers
+        # whose own segment list mentions the cell may carry the verdict.
+        owners = sorted(i for i, r in enumerate(recs)
+                        if r["w_min_own_frac"] < _sc._BOR_MIN_ELEM_FRAC)
+        blamed = sorted(r["layer"] for r in recs
+                        if _sc.verdict(r) == "warn_own")
+        assert blamed == owners, (
+            "warn_own was attributed to layers %s, but only %s have a segment "
+            "list that asked for a cell below %.0e of Rbig"
+            % (blamed, owners, _sc._BOR_MIN_ELEM_FRAC))
+        # (the ATTRIBUTION claim with a NEIGHBOUR present -- the population
+        # that was blamed wrongly -- is
+        # test_verify_bor_multilayer_guards.py::
+        # test_warn_own_is_only_reported_for_the_layer_that_prescribed_the_cell;
+        # this fixture has one layer, so it pins the identity instead.)
     else:
         assert v == ["ok"], (
-            "w/Rbig = %.0e (cell %.3e of Rbig, q_excess %.4g) is inside both "
-            "bars but the contract said %s" % (w_frac, narrow, q, v))
+            "w/Rbig = %.0e (owned cell %.3e of Rbig, q_excess %.4g) is inside "
+            "both bars but the contract said %s" % (w_frac, narrow, q, v))
 
 
 def test_the_fd_basis_is_structurally_immune_and_is_not_contracted():
