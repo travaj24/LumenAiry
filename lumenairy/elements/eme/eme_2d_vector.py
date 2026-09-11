@@ -79,6 +79,7 @@ from scipy.optimize import minimize_scalar
 from scipy.sparse.linalg import eigs, splu
 
 from ...backend.array import is_jax_array
+from ._branch import cut_band
 from .eme_2d import _check_n_scan, _check_strip_heights
 
 
@@ -251,8 +252,14 @@ def _strip_vector_generator_tensor(eps_t, Lx, Nx, k0, kx0, qz, mu_x=1.0):
 def _strip_split_forward(ky):
     """Indices of the ``2Nx`` FORWARD (+y) modes (mirrors
     ``berreman._split_fwd_bwd``): ``exp(i ky y)`` decays forward when
-    ``Im(ky) > 0``; a real propagating ``ky`` is forward when ``Re(ky) > 0``."""
-    tol = 1e-9 * max(1.0, float(np.max(np.abs(ky))))
+    ``Im(ky) > 0``; a real propagating ``ky`` is forward when ``Re(ky) > 0``.
+
+    This site has ALWAYS carried the correct relative band; 5.45.1 made that
+    band THE one definition (:func:`lumenairy.elements.eme._branch.cut_band`)
+    and moved the module's two scalar siblings onto it, which until then
+    carried an exact-zero pin instead.  Nothing here changes: ``cut_band``
+    computes the identical quantity this line always did."""
+    tol = float(cut_band(np.asarray(ky), xp=np))
     fwd = []
     for i, v in enumerate(ky):
         if v.imag > tol:

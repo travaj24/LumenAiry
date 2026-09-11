@@ -41,6 +41,7 @@ from scipy.linalg import svdvals
 from scipy.optimize import minimize_scalar
 
 from ...backend.array import is_jax_array
+from ._branch import forward_decaying_root
 
 
 # --------------------------------------------------------------------------- #
@@ -125,9 +126,18 @@ def _ky_forward(lam, qz2):
     ``Im(ky) > 0`` first, ties by ``Re(ky) > 0``).  Behaviour change: a GAIN
     medium (``Im(eps) < 0`` in the ``exp(-i omega t)`` convention) now also takes
     the decaying branch -- gain is out of scope for both the scalar and the
-    vector cascade."""
+    vector cascade.
+
+    5.45.1: the selection is THE shared
+    :func:`lumenairy.elements.eme._branch.forward_decaying_root`, which is the
+    rule above with its EXACT-ZERO pin replaced by a band relative to the
+    spectrum's top.  For a PROPAGATING strip mode ``Im(ky)`` is the
+    eigensolver's backward error, not physics, and negating on its sign handed
+    back that mode's BACKWARD partner: measured 62 modes against 69 (WIN) / 71
+    (WSL) on the same geometry under an infinitesimal ``Im(eps)``, with the
+    mode lists differing between builds.  See ``_branch``'s module docstring."""
     ky = np.sqrt(np.asarray(lam) - qz2 + 0j)
-    return np.where(ky.imag < 0.0, -ky, ky)
+    return forward_decaying_root(ky, xp=np)
 
 
 def _wv(lam, Phi, qz2):

@@ -52,6 +52,7 @@ import warnings
 
 import numpy as np
 
+from ._branch import forward_decaying_root
 from .eme_2d import layer_modes, mode_field, ref_2d_modes, strip_x_modes
 
 
@@ -173,7 +174,12 @@ def mode_match(qz2, Psi, orders, *, kx0, ky0, k0, eps_sup, eps_sub, depth,
     # for a lossy layer, whose complex qz^2 can come back with a roundoff-negative
     # imaginary part from eig -- np.sqrt alone guarantees only Re(qz) >= 0 and
     # would put exp(i qz depth) on the GROWING branch.
-    qz = np.where(qz.imag < 0.0, -qz, qz)
+    #
+    # 5.45.1: THE shared selector, whose band (relative to the spectrum's top,
+    # floored at 1.0) keeps a PROPAGATING layer mode -- whose Im(qz) is the
+    # eigensolver's backward error and not physics -- from being negated into
+    # its own BACKWARD partner.  See elements/eme/_branch.py.
+    qz = forward_decaying_root(qz, xp=np)
     kz_sup = _kz(eps_sup, k0, kx, ky)
     kz_sub = _kz(eps_sub, k0, kx, ky)
     Ksup, Ksub, Qz = np.diag(kz_sup), np.diag(kz_sub), np.diag(qz)
