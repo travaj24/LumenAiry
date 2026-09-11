@@ -1,0 +1,65 @@
+{
+ "pre_prov": {
+  "tag": "PRE_win_Haswell_t1",
+  "lumenairy_file": "C:\\tmp\\lum_vbor2_pre\\lumenairy\\__init__.py",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "blas_arch": [
+   "Haswell"
+  ],
+  "blas_threads": [
+   1
+  ],
+  "env": {
+   "OPENBLAS_CORETYPE": "HASWELL",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "post_prov": {
+  "tag": "POST_win_Haswell_t1",
+  "lumenairy_file": "C:\\tmp\\lum_vbor2\\lumenairy\\__init__.py",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "blas_arch": [
+   "Haswell"
+  ],
+  "blas_threads": [
+   1
+  ],
+  "env": {
+   "OPENBLAS_CORETYPE": "HASWELL",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "n_common": 65,
+ "identical": 58,
+ "moved": 7,
+ "newly_refused": [
+  "BOR:nodal_ring_lossy_0.01",
+  "BOR:nodal_ring_lossy_1e-06",
+  "BOR:nodal_ring_lossy_3e-12",
+  "BOR:nodal_segment_m1_rbl0.5",
+  "BOR:nodal_uniform_m1_rbl2",
+  "BOR:nodal_uniform_m2_rbl2"
+ ],
+ "illegal": [
+  "EME:strip_nmunits"
+ ],
+ "identical_bor": 40,
+ "identical_eme": 18,
+ "moved_names": [
+  "BOR:nodal_ring_lossy_0.01",
+  "BOR:nodal_ring_lossy_1e-06",
+  "BOR:nodal_ring_lossy_3e-12",
+  "BOR:nodal_segment_m1_rbl0.5",
+  "BOR:nodal_uniform_m1_rbl2",
+  "BOR:nodal_uniform_m2_rbl2",
+  "EME:strip_nmunits"
+ ]
+}
