@@ -242,6 +242,7 @@ def hunt_c():
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     print("HUNT A -- near-cutoff layer mode (lossless, PROPAGATING?)")
     a_tm = hunt_a(pol="tm")
     a_te = hunt_a(pol="te")

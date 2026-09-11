@@ -60,6 +60,7 @@ def one(symmetry):
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     res = {}
     for sym in (False, True):
         res["post_sym%s" % sym] = one(sym)

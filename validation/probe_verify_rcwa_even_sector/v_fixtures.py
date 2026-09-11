@@ -51,6 +51,29 @@ def arm_stamp():
     )
 
 
+def claim_output(path):
+    """Open the output file NOW, before the compute, and fail loudly if it
+    cannot be written.
+
+    Learned the hard way, twice, during this verification: ``dump()`` runs at
+    the END of a probe, so a mistyped or mis-rooted output path throws away the
+    whole run.  It cost a 20-minute PMM census -- twice, the second time because
+    a Git-Bash path (``/c/tmp/...``) handed to a WINDOWS interpreter resolves to
+    a Windows drive path that does not exist.  Claiming the file first turns
+    that into a one-second failure with the RESOLVED path in the message.
+    """
+    full = os.path.abspath(path)
+    try:
+        with open(full, "w", encoding="cp1252") as fh:
+            fh.write("{}")
+    except OSError as exc:
+        raise SystemExit(
+            "REFUSED: cannot write the output file %r (resolved to %r): %s.  "
+            "On Windows pass a WINDOWS path (C:/tmp/...), not a Git-Bash one "
+            "(/c/tmp/...)." % (path, full, exc)) from None
+    return full
+
+
 def require_local_tree():
     """HARD GUARD.  ``python some/dir/probe.py`` puts the SCRIPT's directory on
     ``sys.path``, never the working directory, so a probe run without an

@@ -267,6 +267,7 @@ def run(fn, kind):
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     audit = source_audit()
     print("WHICH MODULES CARRY THE OLD EXACT-ZERO PIN")
     for k, v in audit.items():

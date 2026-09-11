@@ -113,6 +113,7 @@ def bars():
 def main():
     V.require_local_tree()
     o = sys.argv[1]
+    V.claim_output(o)
     b = bars()
     b["openblas_num_threads"] = os.environ.get("OPENBLAS_NUM_THREADS",
                                                "unpinned")

@@ -240,6 +240,7 @@ def census(name, cls, call):
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     rows = []
     for name, cls, call in fixtures():
         try:

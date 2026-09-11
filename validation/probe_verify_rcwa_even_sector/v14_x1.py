@@ -99,6 +99,7 @@ def summarise(rows):
 def main():
     V.require_local_tree()
     out = sys.argv[1]
+    V.claim_output(out)
     res = {}
     for pol in ("te", "tm"):
         post = ladder(pol)
