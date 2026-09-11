@@ -1,0 +1,40 @@
+{
+ "groups": {
+  "bor": {
+   "identical": 58,
+   "missing": [],
+   "moved": [],
+   "newly_raised": [],
+   "no_longer_raised": []
+  },
+  "eme": {
+   "identical": 15,
+   "missing": [],
+   "moved": [],
+   "newly_raised": [],
+   "no_longer_raised": []
+  }
+ },
+ "post": {
+  "blas_threads": 1,
+  "env_threads": "1",
+  "loaded_kernel": "Haswell",
+  "numpy": "2.4.6",
+  "platform": "wsl",
+  "python": "3.12.3",
+  "requested_coretype": "(unset)",
+  "scipy": "1.17.1",
+  "tree": "/mnt/c/tmp/lum_bor2"
+ },
+ "pre": {
+  "blas_threads": 1,
+  "env_threads": "1",
+  "loaded_kernel": "Haswell",
+  "numpy": "2.4.6",
+  "platform": "wsl",
+  "python": "3.12.3",
+  "requested_coretype": "(unset)",
+  "scipy": "1.17.1",
+  "tree": "/mnt/c/tmp/lum_bor2_pre"
+ }
+}

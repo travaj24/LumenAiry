@@ -15,6 +15,17 @@
 > up in any of my solvers for multilayers."* Three of the five steps end in a
 > refusal or a warning; the other two exist so that those three are one line
 > each and so that a future population can be measured rather than assumed.
+>
+> **ROUND 2 (2026-09-12) — four numbers in this report are RESTATED and two
+> guards changed.** The independent verification
+> `docs/audits/VERIFY_BOR_MULTILAYER_GUARDS_2026_09_12.md` and the remediation
+> `docs/audits/FIX_BOR_GUARDS_ROUND2_2026_09_12.md` supersede this report
+> wherever they disagree with it. The restatements are marked **ROUND 2** in
+> place below: the band's SIGNAL-side margins (§4), the `k0` floor (§4), the
+> SEM warn edge's ordinary margin (§7) and `_BOR_Q_EXCESS`'s two-sided claim
+> (§7). The guards that changed are the nodal passivity screen (§6 — its
+> predicate was disarmed by any loss, and it was one-sided on a lossless stack)
+> and the EME branch band (§5 — its floor was a dimensioned literal).
 
 ---
 
@@ -224,6 +235,30 @@ The binding side is the deep cutoff at 1.06 decades. That population IS backward
 error and grows with `||K||`, so a much finer radial grid would eat into it —
 which is why the gate re-measures rather than pins.
 
+> **ROUND 2 RESTATEMENT — the SIGNAL margins are SAMPLE-SCOPED, and the thin
+> end is 0.38 decades, not 0.98.** Re-measured
+> (`validation/probe_fix_bor_round2/r8_band_sides.py`), the two SIGNAL entries
+> above ARE the minima of the population this gate sweeps — `m` = 0/1/2 x
+> `k0` = 2.0/3.5, 359 and 362 physically propagating modes — reproduced to all
+> seven digits. What they are not is a property of the BAND. Widening the
+> population by ONE `k0` rung (adding 0.8, giving 407 and 410 modes) lowers the
+> minimum to **3.7752e-05 and 3.7752e-08**, i.e. 3.58 and **0.58 decades**, and
+> the verification's own lossy population reaches **2.3820e-08**, i.e. **0.38
+> decades**. The minimum over a union of populations is the smaller of the two.
+> This is the 2-D peer's round-4 correction applied here: a margin measured on
+> one fixture family is a SAMPLE property, not a library one. The gate now
+> sweeps the wider `k0` population and derives its floor from the measured
+> envelope over it.
+>
+> **ROUND 2 — the `k0` floor is a UNIT-SAFETY floor, not a measured bar.** It
+> binds on ZERO of the 135 layers measured; `max|q|` is dominated by the
+> largest transverse eigenvalue `~ N / Rbig`, and the closest approach is
+> `max|q| / k0 = 2.057`. It cannot be exercised through `BORStack` and no
+> margin should be derived for it. It is right, and it is kept, because the
+> alternative is a dimensioned literal — which the EME peer shipped in this
+> same wave (§5) and which moved 3 of 96 roots between a micrometre and a
+> nanometre statement of one cell.
+
 **Why the widening is harmless, measured.** `sigma` is exactly linear in the
 imaginary index, so the new band calls media with `Im(n)` between ~4e-07 and
 ~1e-09 "propagating" and orients them by flux rather than decay. Over **645**
@@ -253,6 +288,21 @@ read. OFF the cut the forward root is the decaying one, unchanged; ON the cut
 negated, keeping `Re z >= 0` (the vector sibling's own on-cut tie-break) while
 also putting `Im z >= 0`. The floor is a literal 1.0 and not `k0`, because `ky`
 in these modules is dimensionless.
+
+> **ROUND 2 — THE LAST SENTENCE IS FALSE AND WAS A REGRESSION (D13).** `ky` is
+> NOT dimensionless: `strip_x_modes` assembles `d2/dx2 + eps k0^2` on a spacing
+> `Lx/Nx`, so `lam` carries 1/length² and `ky` carries 1/length, and `k0` is a
+> free argument carrying units rather than a normalisation. The literal floor
+> engaged whenever `max|ky| < 1` in the caller's units — the ordinary case for a
+> sub-micron cell written in nanometres — so the branch DECISION moved with the
+> unit system, which the exact-zero pin it replaced (having no scale at all) did
+> not. Measured on one 1 µm cell at 1550 nm with `eps_hi = 12 - 1e-6i`: the
+> nanometre band was **5.2x wider in physical terms**, **3 of 96** modes came
+> back on a different root, and `mode_match` returned `T00` = 0.738986606108 in
+> µm against 0.738986551923 in nm. The floor is now `|k0|` — what
+> `_orient.orient_band_scale` does, for the same reason (audit P2-06) — and `k0`
+> is threaded from every production site that has it. After: 0 of 96 roots
+> differ and `mode_match`'s worst cross-unit spread is 2.220e-15.
 
 **Runs.** 136 EME gates pass on Windows (1158 s) and 135 on WSL (827 s), nothing
 moved. Seven new gates, 44 s; the expensive one (the `layer_modes` observable)
@@ -302,6 +352,22 @@ SHIPPED `test_structured_stack_energy_floor_nodal` fixture at 2.8819e-02.
 The three unwarned rows are the retired `Rbig/lambda > 4` proxy missing the
 small end of its own population; a UNIFORM nodal stack at 12 wavelengths, which
 the proxy DOES warn about, reads 1.035.
+
+> **ROUND 2 — THIS SCREEN HAD TWO HOLES (D1, P1 and D2, P2).** The predicate
+> `_stack_is_provably_passive` disarmed the WHOLE screen unless every layer was
+> lossless to 1e-12, on the reasoning that "on a lossy stack there is no theorem
+> to violate" — which covers the below-unity direction only. `R + T <= 1` holds
+> on EVERY passive stack. Measured: this very fixture was REFUSED at `Im/Re` = 0
+> / 1e-14 / 1e-13 / 1e-12 and RETURNED from 3e-12 out to 1e-01, with the
+> violation pinned at the same 2.881869e-02 excess throughout. And the screen
+> read only `max(R+T) - 1`: on a LOSSLESS stack `R + T = 1` is an EQUALITY, and
+> a lossless nodal row returning **0.537349** came back silently. Round 2
+> replaces the predicate with `Im(eps) >= 0` everywhere (16-ULP deadband,
+> mirroring `pmm/stack`) plus a lossless INCIDENCE medium, makes the screen
+> two-sided where the stack is lossless, and adds a deterministic conjunct —
+> the index ceiling — because no scalar energy bar separates the two
+> populations (they overlap by 9.97 decades against a channel-SET definition of
+> damage). See `FIX_BOR_GUARDS_ROUND2_2026_09_12.md` §3-§4.
 
 **What moved.** Exactly one shipped gate:
 `test_bor_solve::test_structured_stack_energy_floor_nodal`, which asserted the
@@ -357,6 +423,16 @@ as the slice count). The honest margins for `_BOR_Q_EXCESS = 1e4` are
 * **0.95 decades (8.82x)** above the worst ordinary geometry measured, and
 * **1.20 decades (15.9x)** below the mildest rung it must refuse (the union
   ladder at `delta/Rbig` = 1e-6, degree 6, `|q|max`/ceiling = 1.5934e+05).
+
+> **ROUND 2 RESTATEMENT — the first of those two protects nothing.** The
+> refusal is a CONJUNCTION, `w_min_union_frac < _BOR_MIN_ELEM_FRAC` **and**
+> `q_excess > _BOR_Q_EXCESS`. Ordinary geometry has no cross-layer cell at all
+> (`w_min_union_frac = inf`), so it can never be refused **whatever its
+> `q_excess`** — the "0.95 decades above ordinary geometry" describes a
+> comparison the conjunction cannot reach. The bar's only operative role is the
+> other direction: it SUPPRESSES refusals on manufactured cells, so its failure
+> mode is a MISS and the honest statement of its margin is the one-sided second
+> bullet. The constant's own comment in `_sem_contract.py` now says this.
 
 Both numbers come out **identical on Windows and WSL to sixteen digits**
 (`s4_deep_taper_win_HASWELL_t1.json` against `s4_deep_taper_wsl_HASWELL_t1.json`:

@@ -1,0 +1,529 @@
+{
+ "arm": {
+  "kernel": "Haswell",
+  "loaded": [
+   {
+    "api": "openblas",
+    "arch": "Haswell",
+    "threads": 1,
+    "version": "0.3.31.188.0"
+   },
+   {
+    "api": "openblas",
+    "arch": "Haswell",
+    "threads": 1,
+    "version": "0.3.30"
+   }
+  ],
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas_threads": "1",
+  "platform": "win32",
+  "python": "3.14.6",
+  "requested_coretype": "(unset)",
+  "threads": 1,
+  "tree": "C:\\tmp\\lum_bor2\\lumenairy\\__init__.py",
+  "version": "5.44.0"
+ },
+ "broken": [
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.02881869160460626,
+   "rel_im": 0.0,
+   "staggered_max": 1.0000000000004368,
+   "staggered_min": 0.9999999999991591
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.02881869160274131,
+   "rel_im": 1e-14,
+   "staggered_max": 1.0000000000005054,
+   "staggered_min": 0.9999999999991483
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.028818691593089252,
+   "rel_im": 1e-13,
+   "staggered_max": 1.000000000000367,
+   "staggered_min": 0.9999999999990117
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.028818691591321555,
+   "rel_im": 1e-12,
+   "staggered_max": 0.9999999999995011,
+   "staggered_min": 0.9999999999976006
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.028818691594000967,
+   "rel_im": 3e-12,
+   "staggered_max": 0.9999999999976108,
+   "staggered_min": 0.9999999999944382
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.028818691579056033,
+   "rel_im": 1e-11,
+   "staggered_max": 0.9999999999911549,
+   "staggered_min": 0.9999999999834466
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.02881868973577406,
+   "rel_im": 1e-09,
+   "staggered_max": 0.9999999990706565,
+   "staggered_min": 0.9999999984274113
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.028818672558639236,
+   "rel_im": 1e-08,
+   "staggered_max": 0.9999999907029,
+   "staggered_min": 0.9999999842790719
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.028816797810981676,
+   "rel_im": 1e-06,
+   "staggered_max": 0.9999990702556141,
+   "staggered_min": 0.9999984279915443
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.02863013654766533,
+   "rel_im": 0.0001,
+   "staggered_max": 0.9999070313734214,
+   "staggered_min": 0.999842815578753
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.026964813844259083,
+   "rel_im": 0.001,
+   "staggered_max": 0.9990708463366764,
+   "staggered_min": 0.998429642946913
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": 0.010462811949000672,
+   "rel_im": 0.01,
+   "staggered_max": 0.9907622246045985,
+   "staggered_min": 0.9844464272187383
+  },
+  {
+   "decision": "refused",
+   "message": "bor_solve.solve(basis='nodal'): the cascade returned a incidence channel at axial index Re(q/k0) = 1.41422086 on a medium whose largest index is 1.41421356 (cel",
+   "nodal_excess_disarmed": -0.03866776748906986,
+   "rel_im": 0.1,
+   "staggered_max": 0.9132729342018681,
+   "staggered_min": 0.8599182777462577
+  }
+ ],
+ "gain": [
+  {
+   "decision": "returned",
+   "deficit": -0.03822427599626377,
+   "excess": 0.02881869159824957,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "rel_im": -1e-12
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.03822427599284328,
+   "excess": 0.02881869160636419,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "rel_im": -3e-12
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.03822426259104594,
+   "excess": 0.028818710517541923,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "rel_im": -1e-08
+  },
+  {
+   "decision": "returned",
+   "deficit": 25717319.71770189,
+   "excess": 2312031838728210.0,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "rel_im": -0.0001
+  },
+  {
+   "decision": "returned",
+   "deficit": 717641836.0846342,
+   "excess": 1.941546033424811e+19,
+   "n_channels": 8,
+   "n_warnings": 0,
+   "rel_im": -0.01
+  }
+ ],
+ "healthy": [
+  {
+   "decision": "returned",
+   "deficit": -7.16093850883226e-14,
+   "excess": 2.0294876890147862e-13,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 0.0
+  },
+  {
+   "decision": "returned",
+   "deficit": -1.162403506782539e-13,
+   "excess": 3.099742684753437e-13,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 1e-14
+  },
+  {
+   "decision": "returned",
+   "deficit": -2.5712765250318625e-13,
+   "excess": 1.8496315590255108e-13,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 1e-13
+  },
+  {
+   "decision": "returned",
+   "deficit": -1.780575686893826e-12,
+   "excess": -1.0663692151524629e-12,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 1e-12
+  },
+  {
+   "decision": "returned",
+   "deficit": -5.348499421131692e-12,
+   "excess": -3.84481335657938e-12,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 3e-12
+  },
+  {
+   "decision": "returned",
+   "deficit": -1.7820411812863313e-11,
+   "excess": -1.3579914970307527e-11,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 1e-11
+  },
+  {
+   "decision": "returned",
+   "deficit": -1.782240577341554e-09,
+   "excess": -1.3899462691924214e-09,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 1e-09
+  },
+  {
+   "decision": "returned",
+   "deficit": -1.7822415543378156e-08,
+   "excess": -1.3902370588070312e-08,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 1e-08
+  },
+  {
+   "decision": "returned",
+   "deficit": -1.7822394492439386e-06,
+   "excess": -1.3902674438348583e-06,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 1e-06
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.0001781983274184995,
+   "excess": -0.00013900953521583936,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 0.0001
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.0017796558938775187,
+   "excess": -0.0013885262161670298,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 0.001
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.017565307282398912,
+   "excess": -0.013726670437205546,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 0.01
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.154082988418635,
+   "excess": -0.12039942232537348,
+   "m": 0,
+   "n_channels": 6,
+   "n_warnings": 0,
+   "rel_im": 0.1
+  },
+  {
+   "decision": "returned",
+   "deficit": -3.848541951789741e-08,
+   "excess": 1.178950714830762e-09,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 0.0
+  },
+  {
+   "decision": "returned",
+   "deficit": -3.8485434505908245e-08,
+   "excess": 1.1789502707415522e-09,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 1e-14
+  },
+  {
+   "decision": "returned",
+   "deficit": -3.848559115837702e-08,
+   "excess": 1.1788101605958445e-09,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 1e-13
+  },
+  {
+   "decision": "returned",
+   "deficit": -3.8487161679867654e-08,
+   "excess": 1.1774359265359635e-09,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 1e-12
+  },
+  {
+   "decision": "returned",
+   "deficit": -3.8490640896782224e-08,
+   "excess": 1.1744285544068589e-09,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 3e-12
+  },
+  {
+   "decision": "returned",
+   "deficit": -3.85028262606113e-08,
+   "excess": 1.1637972807676533e-09,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 1e-11
+  },
+  {
+   "decision": "returned",
+   "deficit": -4.0225725195242035e-08,
+   "excess": -3.3441904800923794e-10,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 1e-09
+  },
+  {
+   "decision": "returned",
+   "deficit": -5.588833218439504e-08,
+   "excess": -1.3954922661874036e-08,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 1e-08
+  },
+  {
+   "decision": "returned",
+   "deficit": -1.7919859656156945e-06,
+   "excess": -1.512201568409921e-06,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 1e-06
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.0001770976815995695,
+   "excess": -0.00015132108106319375,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 0.0001
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.0017683386061451145,
+   "excess": -0.0015117852553394595,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 0.001
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.01743885194714334,
+   "excess": -0.014975107981743285,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 0.01
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.15167023303681204,
+   "excess": -0.13632559946564027,
+   "m": 1,
+   "n_channels": 5,
+   "n_warnings": 0,
+   "rel_im": 0.1
+  },
+  {
+   "decision": "returned",
+   "deficit": -4.7292785687602645e-08,
+   "excess": 2.9933591161324102e-09,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 0.0
+  },
+  {
+   "decision": "returned",
+   "deficit": -4.7292805005483274e-08,
+   "excess": 2.99337488129936e-09,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 1e-14
+  },
+  {
+   "decision": "returned",
+   "deficit": -4.729296709804487e-08,
+   "excess": 2.9932254452802454e-09,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 1e-13
+  },
+  {
+   "decision": "returned",
+   "deficit": -4.729459868180186e-08,
+   "excess": 2.9918452160160314e-09,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 1e-12
+  },
+  {
+   "decision": "returned",
+   "deficit": -4.729821401205925e-08,
+   "excess": 2.988774561174523e-09,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 3e-12
+  },
+  {
+   "decision": "returned",
+   "deficit": -4.731087654974431e-08,
+   "excess": 2.9780662380574086e-09,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 1e-11
+  },
+  {
+   "decision": "returned",
+   "deficit": -4.910099660193623e-08,
+   "excess": 1.460002119202386e-09,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 1e-09
+  },
+  {
+   "decision": "returned",
+   "deficit": -6.537486552105065e-08,
+   "excess": -1.2340303334745784e-08,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 1e-08
+  },
+  {
+   "decision": "returned",
+   "deficit": -1.8554988741037448e-06,
+   "excess": -1.5303708509328828e-06,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 1e-06
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.00018084040775701027,
+   "excess": -0.0001533170353760216,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 0.0001
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.0018054810656684683,
+   "excess": -0.001531705477386902,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 0.001
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.017805837918293488,
+   "excess": -0.015168814559399668,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 0.01
+  },
+  {
+   "decision": "returned",
+   "deficit": -0.15461092487971806,
+   "excess": -0.13776231888046409,
+   "m": 2,
+   "n_channels": 4,
+   "n_warnings": 0,
+   "rel_im": 0.1
+  }
+ ]
+}

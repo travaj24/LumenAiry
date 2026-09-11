@@ -1,0 +1,500 @@
+{
+ "arm": {
+  "kernel": "Haswell",
+  "loaded": [
+   {
+    "api": "openblas",
+    "arch": "Haswell",
+    "threads": 1,
+    "version": "0.3.31.188.0"
+   },
+   {
+    "api": "openblas",
+    "arch": "Haswell",
+    "threads": 1,
+    "version": "0.3.30"
+   }
+  ],
+  "numpy": "2.4.6",
+  "omp": "1",
+  "openblas_threads": "1",
+  "platform": "linux",
+  "python": "3.12.3",
+  "requested_coretype": "HASWELL",
+  "threads": 1,
+  "tree": "/mnt/c/tmp/lum_bor2/lumenairy/__init__.py",
+  "version": "5.44.0"
+ },
+ "match_gain6": {
+  "m": {
+   "R00": 0.12461326826258685,
+   "T00": 0.7389866061082164,
+   "dT00": 1.4432899320127035e-15,
+   "energy": 0.8635998743708033
+  },
+  "nm": {
+   "R00": 0.12461326826258701,
+   "T00": 0.7389866061082163,
+   "dT00": 1.3322676295501878e-15,
+   "energy": 0.8635998743708033
+  },
+  "um": {
+   "R00": 0.12461326826258724,
+   "T00": 0.738986606108215,
+   "dT00": 0.0,
+   "energy": 0.8635998743708022
+  }
+ },
+ "match_real": {
+  "m": {
+   "R00": 0.12461326269319771,
+   "T00": 0.7389865758844305,
+   "dT00": 1.887379141862766e-15,
+   "energy": 0.8635998385776282
+  },
+  "nm": {
+   "R00": 0.12461326269319715,
+   "T00": 0.7389865758844314,
+   "dT00": 2.7755575615628914e-15,
+   "energy": 0.8635998385776286
+  },
+  "um": {
+   "R00": 0.12461326269319668,
+   "T00": 0.7389865758844286,
+   "dT00": 0.0,
+   "energy": 0.8635998385776253
+  }
+ },
+ "scalar_gain5": {
+  "m": {
+   "band_in_own_units": 0.19191913820849393,
+   "band_unit_free": 1.9191913820849391e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191919138.20849392,
+   "n_diff": 0,
+   "worst_dky": 8.175471286590222e-12
+  },
+  "nm": {
+   "band_in_own_units": 1.91919138208494e-10,
+   "band_unit_free": 1.91919138208494e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 0.191919138208494,
+   "n_diff": 0,
+   "worst_dky": 1.0053741131102808e-11
+  },
+  "um": {
+   "band_in_own_units": 1.919191382084936e-07,
+   "band_unit_free": 1.919191382084936e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191.9191382084936,
+   "n_diff": 0,
+   "worst_dky": 0.0
+  }
+ },
+ "scalar_gain6": {
+  "m": {
+   "band_in_own_units": 0.1919191382084936,
+   "band_unit_free": 1.919191382084936e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191919138.2084936,
+   "n_diff": 0,
+   "worst_dky": 1.4580559518902886e-11
+  },
+  "nm": {
+   "band_in_own_units": 1.9191913820849367e-10,
+   "band_unit_free": 1.9191913820849368e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 0.19191913820849366,
+   "n_diff": 0,
+   "worst_dky": 4.807489362985595e-12
+  },
+  "um": {
+   "band_in_own_units": 1.9191913820849378e-07,
+   "band_unit_free": 1.9191913820849378e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 0,
+    "negated": 96,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191.91913820849376,
+   "n_diff": 0,
+   "worst_dky": 0.0
+  }
+ },
+ "scalar_gain7": {
+  "m": {
+   "band_in_own_units": 0.19191913820849388,
+   "band_unit_free": 1.9191913820849386e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 3,
+    "negated": 93,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191919138.20849386,
+   "n_diff": 0,
+   "worst_dky": 9.507283851278308e-12
+  },
+  "nm": {
+   "band_in_own_units": 1.9191913820849395e-10,
+   "band_unit_free": 1.9191913820849394e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 3,
+    "negated": 93,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 0.19191913820849393,
+   "n_diff": 0,
+   "worst_dky": 1.2612799707645457e-11
+  },
+  "um": {
+   "band_in_own_units": 1.9191913820849384e-07,
+   "band_unit_free": 1.9191913820849384e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 3,
+    "negated": 93,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191.91913820849382,
+   "n_diff": 0,
+   "worst_dky": 0.0
+  }
+ },
+ "scalar_loss6": {
+  "m": {
+   "band_in_own_units": 0.1919191382084936,
+   "band_unit_free": 1.919191382084936e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191919138.2084936,
+   "n_diff": 0,
+   "worst_dky": 1.4580559518902886e-11
+  },
+  "nm": {
+   "band_in_own_units": 1.9191913820849367e-10,
+   "band_unit_free": 1.9191913820849368e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 0.19191913820849366,
+   "n_diff": 0,
+   "worst_dky": 4.807489362985595e-12
+  },
+  "um": {
+   "band_in_own_units": 1.9191913820849378e-07,
+   "band_unit_free": 1.9191913820849378e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191.91913820849376,
+   "n_diff": 0,
+   "worst_dky": 0.0
+  }
+ },
+ "scalar_real": {
+  "m": {
+   "band_in_own_units": 0.19191913820849393,
+   "band_unit_free": 1.9191913820849391e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191919138.20849392,
+   "n_diff": 0,
+   "worst_dky": 3.0118130212031247e-12
+  },
+  "nm": {
+   "band_in_own_units": 1.91919138208494e-10,
+   "band_unit_free": 1.91919138208494e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 0.191919138208494,
+   "n_diff": 0,
+   "worst_dky": 1.7430501486614958e-12
+  },
+  "um": {
+   "band_in_own_units": 1.9191913820849397e-07,
+   "band_unit_free": 1.9191913820849397e-07,
+   "census": {
+    "conjugated": 0,
+    "kept": 96,
+    "negated": 0,
+    "other": 0
+   },
+   "census_same_as_um": true,
+   "max_abs_ky": 191.91913820849396,
+   "n_diff": 0,
+   "worst_dky": 0.0
+  }
+ },
+ "vector": {
+  "m": {
+   "fwd": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63
+   ],
+   "n_forward": 64,
+   "same_as_um": true
+  },
+  "nm": {
+   "fwd": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63
+   ],
+   "n_forward": 64,
+   "same_as_um": true
+  },
+  "um": {
+   "fwd": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63
+   ],
+   "n_forward": 64,
+   "same_as_um": true
+  }
+ }
+}

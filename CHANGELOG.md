@@ -75,6 +75,28 @@ to 1e-10 the two verdicts agree on every one, with the flux at `|P|/fnrm >=
 SHA-256 of the exact IEEE-754 bytes of `R` and `T`: 30 of 30 unchanged on
 Windows and 30 of 30 on WSL, and all 148 BOR gates pass unchanged.
 
+**ROUND 2 (`docs/audits/FIX_BOR_GUARDS_ROUND2_2026_09_12.md`) -- two of the
+numbers above are RESTATED, and the decision is unchanged.**  The SIGNAL
+margins are SAMPLE-SCOPED: 9.4570e-05 and 9.4570e-08 ARE the minima of the
+population the gate sweeps (`m` = 0/1/2 x `k0` = 2.0/3.5, 359 and 362
+physically propagating modes), reproduced to all seven digits -- but widening
+it by ONE `k0` rung (adding 0.8, giving 407 and 410 modes) lowers the minimum
+to **3.7752e-05 and 3.7752e-08**, i.e. 3.58 and **0.58 decades**, and the
+independent verification's own lossy population reaches **2.3820e-08**, i.e.
+**0.38 decades**.  The minimum over a union of populations is the smaller of
+the two, so the honest figure for the thin end is **0.38 decades, not 0.98**,
+and the gate now sweeps the wider `k0` population with its floor derived from
+the measured envelope over it.  That is the 2-D peer's round-4 correction
+applied here: a margin measured on one fixture family is a SAMPLE property, not
+a library one.  And the `k0` floor **binds on ZERO of the 135 layers
+measured** -- the closest approach is `max|q| / k0 = 2.057`, because `max|q|`
+is dominated by the largest transverse eigenvalue `~ N / Rbig` -- so it is a
+UNIT-SAFETY floor, not a measured bar, and cannot be exercised through
+`BORStack`.  It is kept because the alternative is a dimensioned literal, which
+is a defect whether or not it is reachable here: the EME peer shipped exactly
+that literal in this same wave and it moved 3 of 96 roots between a micrometre
+and a nanometre statement of one cell.
+
 ### Fixed -- BOR: FIVE copies of the forward-orientation rule become ONE `xp=`-parametrized kernel
 
 `zcascade.py:86` (staggered FD), `zcascade.py:227` (legacy nodal),
@@ -168,6 +190,62 @@ that gate now asserts the refusal (with a sibling asserting the switch returns
 the pre-fix number and the pre-fix assertion exactly, and a third that the
 STAGGERED twin of the same geometry still returns and closes to 1e-9).
 
+**ROUND 2 -- the screen had two holes and both are closed.**
+
+*A negligible LOSS took the whole guard out (P1).*  The predicate required every
+layer to be lossless to 1e-12 and disarmed otherwise, on the reasoning that "on
+a lossy stack there is no theorem to violate".  That covers the below-unity
+direction only: `R + T + A = 1` with `A >= 0` makes `R + T <= 1` a theorem on
+EVERY passive stack.  Measured on the refused fixture with a relative loss on
+the ring: **REFUSED at 0 / 1e-14 / 1e-13 / 1e-12, RETURNED from 3e-12 out to
+1e-01** -- with the violation pinned at the same 2.881869e-02 excess and
+3.822431e-02 deficit on every rung, and the staggered twin absorbing 2e-12 of
+the incident power at the threshold.  The predicate is now `Im(eps) >= 0` on
+every layer (to a 16-ULP deadband, mirroring
+`pmm/stack._PASSIVE_ANTIHERM_DEADBAND`) plus a LOSSLESS incidence medium, which
+is where the theorem needs it -- `R` and `T` come from a unit-`|z-flux|` basis,
+and in an absorbing incidence medium a mode's flux is not a conserved power.
+**4 of 13 rungs refused -> 13 of 13**, with healthy lossy stacks at 0 of 39
+refused and 0 warned before and after.  GAIN (`Im eps < 0`) is not passive and
+is now outside the screen entirely (5 rungs, 1 refused -> 0).
+
+**Behaviour change on a documented escape hatch, and one shipped gate moves
+with it.**  `test_a_lossy_nodal_stack_is_never_judged_by_the_passivity_screen`
+asserted the old reasoning, and the fixture it builds is the counter-example:
+its ring absorbs (`Im eps = 0.3`) and the nodal cascade returns
+**`max(R + T) = 99.8789`** on it, a hundredfold super-unity no absorption can
+excuse.  That gate is now
+`test_a_lossy_nodal_stack_is_judged_by_the_SUPER_UNITY_HALF_ONLY` and asserts
+the refusal; the fail-before switch
+`bor_solve.BOR_NODAL_PASSIVITY_GUARD = False` still restores the previous
+behaviour bit for bit.
+
+*The screen was ONE-SIDED on a stack it had already proved lossless (P2).*
+Inside a PEC wall a lossless passive stack has no absorption and no other exit,
+so `R + T = 1` is an EQUALITY and a DEFICIT is damage of the same kind.  A
+lossless nodal row returning **0.537349** was returned silently; it is now
+refused, and the message names which half decided it.  The screen is two-sided
+where the stack is lossless and one-sided where it absorbs -- the second is not
+a convenience, since a legitimately absorbing stack's deficit reaches 0.1546.
+
+*And a DETERMINISTIC conjunct that reads no energy at all.*  Re-deriving the bar
+on 160 solves showed that no scalar energy bar separates accurate nodal answers
+from damaged ones: scored against a channel-SET definition of damage the two
+populations OVERLAP by 9.97 decades.  So the refusal gains a second detector
+keyed on a contradiction rather than a magnitude -- a returned channel whose
+axial index exceeds its own medium's index has `gamma^2 < 0`, which the
+Rayleigh quotient forbids wherever the transverse operator is negative
+semi-definite.  Measured: it fires on **40 of 44** rows whose channel set is
+wrong and on **0 of 116** rows that are not damaged (80 staggered + 36
+nodal-with-the-right-set), with the two populations on OPPOSITE SIDES OF ZERO
+(worst non-firing -3.027306e-05, mildest firing +5.026594e-06) and 4.15 decades
+of room above the 5e-10 slack -- which is the same slack the div-conforming
+twins already apply as their own index ceiling.  Corroborated on the rows where
+a closed-form Bessel-zero count exists: where it fires, the count is wrong on 4
+of 4.  `_BOR_NODAL_SUPERUNITY_BAR` is unchanged at 1e-3; what changed is the
+population it is justified against (4.90 decades with nothing in it, on the rows
+neither conjunct can see) and the direction it looks.
+
 ### Fixed -- EME: an exact-zero branch pin gave a PROPAGATING strip mode its own BACKWARD partner, and the layer mode COUNT differed between Windows and WSL
 
 `eme_2d._ky_forward` and `eme_diffraction.mode_match` chose the forward
@@ -205,6 +283,28 @@ literal 1.0 and not `k0`, because `ky` in these modules is DIMENSIONLESS.
 Measured after: 0 of 96 strip modes flip (worst `|d ky| = 4.551e-13`), the layer
 mode count and positions agree under the infinitesimal loss, and 136 EME gates
 pass on Windows and 135 on WSL with nothing moved.
+
+**ROUND 2 -- the shared band's FLOOR was a dimensioned literal, and that was a
+REGRESSION.**  `_branch.cut_band` floored the spectrum scale at a literal 1.0,
+justified by "`ky` here is DIMENSIONLESS".  It is not: `strip_x_modes` assembles
+`d2/dx2 + eps k0^2` on a spacing `Lx/Nx`, so `lam` carries 1/length^2 and `ky`
+carries 1/length, and `k0` is a free argument carrying units rather than a
+normalisation.  The floor engaged whenever `max|ky| < 1` in the caller's units
+-- the ordinary case for a sub-micron cell written in nanometres -- so the
+branch DECISION moved with the unit system, which the exact-zero pin it replaced
+(having no scale at all) did not.  Measured on one 1 um cell at 1550 nm,
+`eps_hi = 12 - 1e-6i`, written in um / nm / m: the nanometre band was **5.2x
+wider in physical terms**, **3 of 96 modes** came back on a different root, and
+`mode_match` inherited it -- `T00` = 0.738986606108 against 0.738986551923 on
+the same slab.  The floor is now `|k0|`, which is exactly what the BOR peer
+`_orient.orient_band_scale` does and for the same reason (audit P2-06), and
+`k0` is threaded from every production site that has it.  After: the band is
+1.919e-07 in unit-free terms in all three unit systems, **0 of 96** roots
+differ, and `mode_match`'s worst cross-unit spread is **2.220e-15** (from
+5.418e-08).  Sites without `k0` in scope -- the public `cell_smatrix`,
+`dispersion` and `mode_field`, whose signatures predate the band -- get
+`max|z|` alone, which is unit-invariant too; what is gone from every path is the
+dimensioned literal.
 
 ### Fixed -- BOR SEM: the `+-1` enrichment window MANUFACTURED radial elements no layer asked for, moving the per-order answer by up to 5,428x the physical wall shift with ZERO warnings
 
@@ -284,6 +384,27 @@ energy-invisible where it starts: at the first warned rung the closure sits at
 Switch: `lumenairy.elements.bor._sem_contract.BOR_SEM_MESH_GUARD = False`.
 `BORSemMeshError` is exported from `lumenairy.elements.bor` so it can be caught
 by name.
+
+**ROUND 2 -- the `warn_own` message now describes the quantity it fires on, and
+two of the contract's stated margins are restated.**  `verdict`'s `warn_own`
+branch read `w_min_frac`, the narrowest cell of the POST-WINDOW mesh whoever
+asked for it, and then told the caller that "the LAYER'S OWN segment list asked
+for" it.  For the NEIGHBOUR of a liner that is false -- its own segment list is
+a single full-radius entry, and it has the cell only because the `+-1` window
+put it there -- and it received the identical message (measured: two messages,
+blaming layers `[0, 1]`, where layer 1 is `add_layer(0.5, eps=1.21)`).  The
+branch now reads `w_min_own_frac`, the narrowest cell BOTH of whose enclosing
+walls that layer asked for, so the stated reason for never REFUSING a
+`warn_own` cell ("you prescribed the geometry") holds for every layer that
+receives one.  `w_min_frac` is still measured and reported for the census.
+
+`_BOR_Q_EXCESS`'s two-sided margin is **half vacuous** and its comment now says
+so: the refusal is a CONJUNCTION with the geometric attribution, and ordinary
+geometry has no cross-layer cell at all (`w_min_union_frac = inf`), so it can
+never be refused at ANY `q_excess`.  The bar's only operative role is the other
+direction -- it SUPPRESSES refusals -- so its failure mode is a miss and the
+honest statement of its margin is the one-sided 1.20 decades below the mildest
+rung it must refuse.
 
 ### Fixed -- BOR: every cascade inverse gains a census HOOK, and nothing is armed, because the population was measured
 
