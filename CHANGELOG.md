@@ -638,6 +638,177 @@ bit-identity and census arms.
 `tests/unit/test_fix_pmmstack_sliver_round3.py`, 6 tests, 3.64 s (Windows) / 3.21 s (WSL).
 Full write-up: `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md`.
 
+**ROUND 4 (2026-09-11) -- the guard no longer DECIDES on an energy reading, and
+rounds 1-3's trigger and attribution were both a property of the BLAS kernel.**
+The 5.45.0 release CI matrix was RED on twenty distinct tests of this family,
+on different pythons for different tests, and every failure traces to the same
+quantity: `max R+T`.  It is amplified rounding through a
+`1/w^2`-conditioned interface, so its magnitude -- and its SIGN -- are a
+property of the arithmetic.  Measured on one box with `OPENBLAS_CORETYPE`, the
+SAME O-11 fixture row (degree 14, `delta` = 1e-4 of the period) reads
+`R+T` = **2.17298** and is WRONG by 4,789x the physical wall shift on the
+Haswell and Prescott kernels, **3.61242** and wrong by 9,301x on Nehalem, and
+**1.00000** and CORRECT (1.155x the shift) on Sandybridge; CI's own kernel read
+it correct at **1.000115**, which is why `test_fail_before_..._only_warns_it_does_not_refuse`
+captured no warning at all there and three sibling tests failed with DID NOT
+RAISE.  The library half of that is worse than the test half: two D-5 rows were
+RETURNED at **1475x** the physical shift because the round-3 DROP factor
+`(max(R+T) - 1) / su_snapped` fell under its 100x bar on CI's kernel (it reads
+5,166 here), and on another shard a CORRECT row read a drop of **272.8**, above
+the bar the correct population is supposed to sit below.  So the closure
+crosses BOTH populations, in one matrix.
+
+Round 4 keys on neither reading.
+
+* **The trigger is the GEOMETRY.**  `_warn_stack_energy` no longer returns
+  early below `_SLIVER_TRIGGER_BAR`.  What decides whether the guard
+  arbitrates is the geometric screen -- a manufactured union cell at least
+  `_SLIVER_OWN_SCALE_RATIO` = 100x finer than the input geometry -- which is a
+  deterministic function of the wall coordinates and `min_feature`.  The
+  within-layer arm loses the same gate, which closes open item **R2-B** (the
+  measured liner that is 1.06e-03 wrong reads `R+T` = 0.999221, i.e.
+  SUB-unity, and the arm was silent on it), and so does **R2-A** as a gate.
+* **The attribution is a comparison of ANSWERS.**  Three extra solves instead
+  of one: the prescribed `min_feature = 2 w_wide P` grid, the colliding walls
+  CLOSED onto one coordinate, and that closed wall DISPLACED by one widest
+  manufactured cell.  `d0` is the shipped move against the first;
+  `d12 = |A_closed - A_displaced|` is THIS DEVICE's own answer change for a
+  wall displacement of exactly the sliver's size, on two grids that carry no
+  sliver at all.  The sliver is attributed when `d0` passes BOTH the geometric
+  floor (`_SLIVER_MOVE_FACTOR` = 100 widest cells, unchanged) and
+  `_SLIVER_WALL_RATIO` = **100** times `d12`.
+
+`_SLIVER_WALL_RATIO` is the campaign's own `err > 100 delta` WRONG rule with
+`delta` replaced by a MEASURED answer change rather than by a period fraction,
+and it is what closes open item **R2-D**: the move bar compares an efficiency
+difference with a period fraction, i.e. assumes `dR/dx` = O(1), and both
+earlier verifications refuted that (CORRECT rows at `move / w_wide` = 833.78 on
+a guided-mode resonance and 906.56 on a many-slice taper).  Measured, `d12 /
+w_wide` -- the device's own `dR/dx` -- spans **0.0193 to 29.65** over the
+fourteen devices of the round-4 population, and on the many-slice taper it
+tracks `w_wide` the way the move does (2.73 at `nl` = 8, 45.1 at `nl` = 16), so
+that family's CORRECT rows read `d0 / d12` = 0.63 - 1.34 at both slice counts
+while `d0 / w_wide` climbs from 3.6 to 25.6.
+
+**A third verdict, `wall`.**  A move the device's own measured wall sensitivity
+explains is neither the sliver nor truncation: the answer is RETURNED with a
+warning saying the number is only as well defined as that wall position is.
+That is the class rounds 2 and 3 refused on the move arm alone.
+
+**BARS, two-sided, 558 screened rows over fourteen devices** (five staircases
+x three degrees x 18 wall steps, the realistic staircase box, five D-5 mounts,
+two LC directors, the degree-4 V-4 mount, the round-2 guided-mode resonance AT
+its resonance, and the many-slice tapers; 258 RIGHT / 78 GREY / 222 WRONG),
+Windows and WSL agreeing to five to six significant figures with **0 of 357
+common rows differing in class or verdict**: the CORRECT population reaches
+`d0 / w_wide` = **13.5531** and `d0 / d12` = **35.1773**, the ATTRIBUTED
+population starts at **128.57** and **110.649**, and the two bars sit between
+them at 7.38x / 2.84x above the correct envelope.  Result: **0 false
+positives** -- 0/258 RIGHT and 0/78 GREY, including both classes the earlier
+verifications built to break the move bar (six correct-or-grey rows DO pass the
+geometric floor at `d0/w_wide` = 114.7 .. 224.0 and every one is held out by
+the measured slope) -- and 34 false negatives in 222 WRONG rows, 30 of them on
+the two deliberately steep counter-fixtures.  The margin is stated for what it
+is: the WRONG population reaches DOWN to `d0 / d12` = 3.973 and GREY up to
+83.120, so the two populations OVERLAP and the gap between their envelopes is
+**1.33x** against CORRECT+GREY and **3.15x** against CORRECT alone -- not
+decades (open item R4-A).
+
+**The classification is now taken on BOTH incident polarizations**, which is
+what `_sliver_answer_move` has always compared, and that MOVES A PUBLISHED
+CONCLUSION.  Verification defect **V-4** -- "three CORRECT degree-4 answers are
+refused and the named remedy makes them slightly worse" -- does not survive it:
+those rows read 1.051 / 1.065 / 0.979x the physical shift on polarization 1 and
+**57.4 / 75.0 / 128.3x on both**, i.e. two GREY and one WRONG, while the
+prescribed grid reads 2.042x on all three.  Round 4 returns the two grey rows
+under the `wall` warning and REFUSES the wrong one.  The "slightly worse"
+finding came from scoring against a DEGREE-16 solve, across a truncation error
+this degree-4 mount carries anyway (returned 0.05925 and snapped 0.05927 from
+it, so what separates them is 2,000x smaller than what separates both from it).
+**V-4 is CLOSED** as a false-refusal finding and restated as a scoring
+correction.  **R3-A is CLOSED** too: its limit was arithmetic in the drop
+(`drop >= trigger / floor`), and the grazing row round 3 returned SILENTLY at
+`R+T` = 1.0023512 while 741x the physical shift is now refused.  **R3-C is half
+closed**: the screen no longer requires passivity -- round 4's arbitration
+needs no theorem -- so a keyed `prepare()` stack IS now arbitrated, while the
+REFUSAL still requires passivity and a stack that is not provably passive gets
+the same attribution as a WARNING.
+
+**What was refuted along the way**, and is kept in the probes as the record: a
+SECOND `min_feature` snap is not a second grid (snapping at `2 w_wide P` and at
+`4 w_wide P` merges the same walls to the same midpoints -- `|A1 - A2|` is
+exactly **0.0** on all 309 screened rows), and closing the walls LEFT versus
+RIGHT is a pure TRANSLATION on any symmetric wall opening, which leaves every
+efficiency unchanged (the two closed answers agree to 1.99e-09 while the
+displacement moves the answer by 4.52e-04 -- a factor 2.3e+05).  The
+displacement has to change a ridge WIDTH, not a position.
+
+Round 3's closure is KEPT, and demoted: `_SLIVER_ATTRIB_CLOSURE`,
+`_SLIVER_CLOSURE_FRACTION` and the drop are still measured, still carried in
+the arbiter's evidence and still quoted in the refusal as CORROBORATION where
+the reading is real -- the message says in as many words that it is not the
+criterion, and why.  All SIX existing sliver test files are restated so that
+no test names a row and asserts a reading, a verdict or a refusal; the ladder
+is classified at run time, on BOTH polarizations, and the assertion is on the
+PAIRING -- a RIGHT row is never refused, and a WRONG row is refused, or warned,
+or is RIGHT by the SLOPE-NORMALISED rule (its error within 10x of what
+displacing that wall by one sliver width does to this device anyway; measured
+worst 4.03 over the 21 such rows, all on the two deliberately steep
+counter-fixtures, against an attributed floor of 15.34 on the same quantity).
+A seventh file, `tests/unit/test_fix_pmmstack_sliver_round4.py`, reads per-arm
+decision tables committed under `validation/probe_fix_sliver_round4/` and pins
+the same three statements ACROSS ARMS: no arm returns a wrong answer outside
+that slope-normalised allowance, no arm refuses a right one, and wherever the
+arms agree about the ANSWER they agree about the DECISION.  The unconditional
+form of that last claim is not achievable and is not claimed: in the
+conditioning-collapse band the answer itself is a property of the build, so a
+guard that decided identically there would have to be ignoring it.
+
+**THE RUNNERS ARE NOT ON THIS BOX'S CURVE AT ALL**, which is the strongest
+form of the premise.  A CI-conditions sweep of the two-layer fixture this
+family is named after -- `PMMStack(1.2e-6, degree=12, far_field_orders=5)`,
+walls differing by `delta` = 1e-5, source 0.85 um at `theta` = 0.15, guard
+disarmed -- reads `max R+T` = **2.1713 / 2.1716 / 2.1729 / 3.6116** on
+Katmai / Nehalem / Haswell / Sandybridge, identical on both local builds and
+at one and four threads, and **1.0000010 on CI** (py3.10-3.13, EPYC 7763,
+unpinned) where the answer is (near) CORRECT.  The interface `rcond` agrees
+to **0.03 %** across every arm, CI included, so the divergence is in the
+ANSWER and not in the conditioning, and no local arm reproduces it.  Three
+consequences, all of which the repair satisfies: the trigger must be
+GEOMETRIC, because a wrong answer of this class can read 1.000001; the
+arbiter must RETURN when the sliver answer agrees with the sliver-free grids,
+which is what CI will measure here, so no test may assert this fixture is
+refused; and every sliver test must be a decision-consistency claim rather
+than a refusal at a named row.  The sixteen refusal assertions in the seven
+files were audited one by one: ten were already conditional on the row being
+measured WRONG on the running build, and the six that went through a
+search-and-raise helper now assert the GEOMETRIC SCREEN fired on every row
+they searched and then SKIP, naming the reason.  A new test,
+`test_an_answer_that_agrees_with_the_sliver_free_grids_is_returned`, pins the
+contract directly: every screened row whose move is under the geometric floor
+is `truncation` and comes back from `solve()`, and the verdict on every
+screened row is identical when the arbiter is handed a reading of 0.5, of
+exactly 1.0, and the one actually measured.
+
+**AN ARM IS TWO AXES.**  The kernel is the axis the CI matrix made visible; it
+is not the axis that reaches CI.  CI's runners are AMD EPYC 7763 (Zen 3, no
+AVX-512), which dispatches to the same Haswell-class OpenBLAS kernel this
+box's default does -- `OPENBLAS_CORETYPE=ZEN` is measurably NOT a distinct arm
+here (bit-identical GEMM / `eigvals` / `solve` hashes against HASWELL), and
+`SKYLAKEX` cannot run at all on a CPU without AVX-512.  What CI does
+differently is leave BLAS UNPINNED on a four-core runner while every file in
+this family pins one thread -- and the thread count has bitten this module
+before (`test_m1_conditioning_guard.py` records a closure moving from
+`6.65e-06` to `2.14e+01` on the same cell between one and two threads).  So
+every decision is measured on BOTH ladders: kernels {Haswell, Katmai,
+Nehalem, Sandybridge} x threads {1, 2, 4, unpinned} x two builds.  The thread
+axis turns out to be the LARGER one: at a fixed build and kernel the energy
+reading rounds 1-3 decided on moves by up to **452.6x** across the thread
+ladder alone on rows round 4 decides identically, and `err/delta` spreads to
+**3.4e+04** in the collapse band -- while the decision does not move at all
+wherever the arms agree about the answer.
+Full write-up: `docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND4_2026_09_11.md`.
+
 ### Fixed -- the `min_feature` wall-snap treats a SYMMETRIC pair symmetrically
 
 `_pmm_union_grid` merges a cross-layer wall pair when `d < min_feature`, and `d`

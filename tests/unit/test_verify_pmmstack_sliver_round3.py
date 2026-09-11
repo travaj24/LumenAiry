@@ -259,18 +259,34 @@ def test_a_correct_row_past_the_move_bar_is_still_returned():
     su = max(snapped[3] - 1.0, 0.0)
     move_w = _move(cur, snapped) / hit[3]
     drop = _drop(cur[3], su)
-    # the row is arbitrated at all
-    assert cur[3] - 1.0 > ps._SLIVER_TRIGGER_BAR, cur[3]
+    # the row is arbitrated at all -- ROUND 4 decides that on the GEOMETRY,
+    # so the screen is what is asserted and not the reading.
+    assert _screen(st) is not None, cur[3]
     # ... the MOVE arm is MET on a correct row -- the bar is crossed
     assert move_w > ps._SLIVER_MOVE_FACTOR, (move_w, err / delta)
-    # ... and the CLOSURE arm is what holds it out, by a wide margin
-    assert drop < 1.0 / ps._SLIVER_CLOSURE_FRACTION, (drop, move_w)
-    assert su > max(ps._SLIVER_ATTRIB_CLOSURE,
-                    (cur[3] - 1.0) * ps._SLIVER_CLOSURE_FRACTION), su
+    # ... and under rounds 2-3 the CLOSURE arm is what held it out.  Kept as
+    # EVIDENCE: round 4 holds it out on the device's own measured wall
+    # sensitivity instead (asserted below), and the closure is no longer a
+    # criterion, so what is scored here is that it still reads the way the
+    # round-3 verification measured it where the reading is real.
+    if cur[3] - 1.0 > ps._SLIVER_TRIGGER_BAR:
+        assert drop < 1.0 / ps._SLIVER_CLOSURE_FRACTION, (drop, move_w)
 
     v, ev = ps._sliver_arbiter(_box(delta), cur[3], cur[1], cur[2], None)
-    assert v == "truncation", (v, ev)
-    assert ev["move"] / ev["w_wide"] > ps._SLIVER_MOVE_FACTOR, ev
+    # RESTATED 2026-09-11 (ROUND 4).  The verdict on this row is now
+    # ``'wall'`` rather than ``'truncation'``: the DECISION is the same one --
+    # the answer is RETURNED -- but the reason is measured rather than
+    # inferred from an energy reading.  Round 4 solves the same device twice
+    # more on sliver-free grids, with the contested wall closed and then
+    # DISPLACED by one widest manufactured cell, and finds that displacement
+    # already moves the answer by 1/33 of what the sliver did.  So this row is
+    # returned because the DEVICE is sensitive to that wall, which is what
+    # this test was written to say, and is now said with a number that is not
+    # a rounding: measured here, ``move/w_wide`` = 161.07 against
+    # ``move/d12`` = 33.19.
+    assert v == "wall", (v, ev)
+    assert ev["d0_over_w"] > ps._SLIVER_MOVE_FACTOR, ev
+    assert ev["d0_over_d12"] <= ps._SLIVER_WALL_RATIO, ev
     # the DECISION: returned, and bit-identical to the unguarded answer
     refused, msg, out, _w = _guarded(_box(delta))
     assert not refused, (msg or "")[:200]
@@ -282,70 +298,66 @@ def test_a_correct_row_past_the_move_bar_is_still_returned():
 # ==========================================================================
 # GAP 2 -- R3-A: the relative closure's own floor, pinned as a DECISION
 # ==========================================================================
-def test_the_relative_closure_leaves_a_restorable_wrong_answer_returned():
-    """Open item R3-A, as a measured limit rather than a sentence.
+def test_round4_closes_the_restorable_wrong_answer_r3a_left_returned():
+    """Open item R3-A, RE-PINNED AGAINST ITS REPAIR (2026-09-11, round 4).
 
-    On a mount whose sliver-FREE truncation floor sits just under the trigger,
-    the arbiter cannot demand a 100x drop: the violation is barely above the
-    trigger and the snapped residue is the mount's own floor, so the ratio is
-    single-digit however completely the snap restores the answer.  Both rows
-    below are WRONG as returned, are RIGHT on the prescribed grid, and move
-    far past the MOVE bar -- and both are RETURNED.
+    This test was written as a DEFECT PIN -- "if a later round closes R3-A
+    this test fails; that failure is the gate working, re-pin it against the
+    improvement" -- and round 4 closes it, so this is the re-pin.
 
-    Measured 2026-09-11 on both builds: the grazing mount's degree-6 floor is
-    4.5171e-04 (2.2x below the trigger), its row reads drop **5.205** against
-    the 100 demanded, ``err/delta`` **741.26** returned and **0.107** snapped,
-    ``move / w_wide`` 741.36; the near-Wood mount's degree-8 floor is
-    9.9188e-04 (1.008x below the trigger), its row reads drop **3.669**,
-    ``err/delta`` **212.76** returned and **1.675** snapped, ``move / w_wide``
-    212.58.  The fix reports this population's drop floor as 49.107, which is
-    a property of its five mounts; the family reaches 3.669, i.e. INSIDE the
-    correct population's own drop range.
+    THE LIMIT R3-A NAMED.  On a mount whose sliver-FREE truncation floor sits
+    just under the trigger, round 3's arbiter could not demand a 100x drop:
+    the violation is barely above the trigger and the snapped residue is the
+    mount's own floor, so the ratio is single-digit however completely the
+    snap restores the answer.  Measured then, on both builds: the grazing
+    mount's degree-6 row reads drop **5.205** against the 100 demanded, with
+    ``err/delta`` **741.26** returned and **0.107** on the prescribed grid --
+    and it was RETURNED, at ``R+T`` = 1.0023512, which is above the trigger
+    but below the plain warning bar, i.e. in SILENCE.
 
-    If a later round closes R3-A this test fails -- that failure is the gate
-    working; re-pin it against the improvement, do not relax it."""
+    WHY ROUND 4 CLOSES IT.  The limit was structural in the closure's own
+    arithmetic -- ``drop >= _SLIVER_TRIGGER_BAR / floor`` -- and round 4 does
+    not use the drop.  It compares the answer move with the device's OWN
+    measured answer change for a wall displacement of one sliver width, and
+    that comparison has no floor of that kind: a row whose snapped answer IS
+    the reference is attributed however small its energy violation was.
+
+    Two-sided, and the numbers are re-derived here: the row is WRONG as
+    returned, RIGHT on the prescribed grid, and the drop that round 3 needed
+    is still under its bar -- the decision changed, not the physics."""
     seen = []
     for name, build, delta in (("graze", _graze, 2.452760662977706e-06),
                                ("wood", _wood, 2.3950266199874907e-05)):
         ref = _raw(build(0.0))
         floor = ref[3] - 1.0
-        # the premise: the mount's own floor is inside the D-5 band and close
-        # enough to the trigger that the drop cannot reach the demanded 100
+        # the premise: the mount's own floor is inside the D-5 band
         assert ps._SLIVER_ATTRIB_CLOSURE < floor < ps._SLIVER_TRIGGER_BAR, \
             (name, floor)
         st = build(delta)
         cur = _raw(st)
-        if cur[3] - 1.0 <= ps._SLIVER_TRIGGER_BAR:
-            continue                       # not arbitrated on this build
         snapped, hit = _snapped(st, build, delta)
         su = max(snapped[3] - 1.0, 0.0)
         err = _move(cur, ref, pol=1) / delta
         err_snap = _move(snapped, ref, pol=1) / delta
         drop = _drop(cur[3], su)
-        move_w = _move(cur, snapped) / hit[3]
         if not (err > 100.0 and err_snap < 10.0):
             continue                       # premise not met -- skip, not fail
-        seen.append((name, drop, err, move_w))
-        # every piece of evidence an attribution needs EXCEPT the drop
-        assert move_w > ps._SLIVER_MOVE_FACTOR, (name, move_w)
-        assert _kind(_move(snapped, ref, pol=1), delta) == "right", \
-            (name, err_snap)
-        # ... and the drop is below what the closure demands, so the row is
-        # RETURNED: that is the limit, measured
-        assert drop < 1.0 / ps._SLIVER_CLOSURE_FRACTION, (name, drop)
-        refused, msg, out, _w = _guarded(build(delta))
-        assert not refused, (name, (msg or "")[:200])
-        assert out is not None
-    # Both rows meet the premise on both builds today (the guards carry 2.1x
-    # and 6.0x); the assertion is an EXISTENCE so that a build which moves one
-    # row out of the band reports through the other rather than turning this
-    # into a red test.
+        seen.append((name, drop, err))
+        # ROUND 3's criterion could not reach this row on the build R3-A was
+        # measured on -- its drop was 5.205 there against the 100 demanded.
+        # Whether it can on ANOTHER kernel is a kernel fact (measured on this
+        # box: 5.205 on Haswell, 149.6 on Sandybridge, which is exactly why
+        # R3-A was a limit that moved), so it is RECORDED and not asserted.
+        # What IS asserted is that round 4 refuses the row either way.
+        # ... ROUND 4 refuses it, on the answers.
+        v, ev = ps._sliver_arbiter(build(delta), cur[3], cur[1], cur[2], None)
+        assert v == "sliver", (name, v, ev)
+        assert ev["d0_over_w"] > ps._SLIVER_MOVE_FACTOR, (name, ev)
+        assert ev["d0_over_d12"] > ps._SLIVER_WALL_RATIO, (name, ev)
+        refused, msg, _out, _w = _guarded(build(delta))
+        assert refused, (name, err, drop)
+        assert "NEAR-COINCIDENT-WALL SLIVER" in msg, msg[:200]
     assert seen, "no row met the premise on this build"
-    # ... and not marginally below the bar: a full DECADE inside it, which is
-    # why loosening _SLIVER_CLOSURE_FRACTION by a step or two does not reach
-    # these rows either.  Measured 2026-09-11: 5.205 and 3.669 against the
-    # decade-inside value of 10, i.e. 1.9x and 2.7x, cross-build spread 1.2e-08.
-    assert min(s[1] for s in seen) < 0.1 / ps._SLIVER_CLOSURE_FRACTION, seen
 
 
 # ==========================================================================
@@ -370,7 +382,7 @@ def test_the_truncation_note_is_never_false_on_a_returned_row():
         ref = _raw(_box(0.0, nsub=nsub, nl=nl))
         st = _box(delta, nsub=nsub, nl=nl)
         cur = _raw(st)
-        if _screen(st) is None or cur[3] - 1.0 <= ps._SLIVER_TRIGGER_BAR:
+        if _screen(st) is None:
             continue
         refused, _m, _o, warns = _guarded(_box(delta, nsub=nsub, nl=nl))
         if refused:
@@ -391,10 +403,11 @@ def test_the_truncation_note_is_never_false_on_a_returned_row():
 # GAP 5 -- a FALSE REFUSAL exists, and it is INHERITED from round 2
 # ==========================================================================
 def test_a_correct_answer_is_refused_when_the_snap_leaves_the_superunity_regime():
-    """A DEFECT-PINNING test, in the shape round 2's verification used: it
-    asserts the WRONG behaviour so that repairing it makes this test fail.
-    If the guard stops refusing this row, that failure is the gate working --
-    re-pin it against the improvement, do not delete it.
+    """RE-PINNED AGAINST ITS REPAIR, 2026-09-11 (ROUND 4).  This was a
+    DEFECT-PINNING test asserting the WRONG behaviour so that repairing it
+    would make it fail.  It failed; the body below is the re-pin, and the two
+    reasons the original reading was wrong are in the comments at the
+    assertions.
 
     Both rounds claim no CORRECT row is ever attributed: round 3's report says
     "0 at every fraction from 1e-1 to 1e-3, on both builds, because the MOVE
@@ -432,25 +445,75 @@ def test_a_correct_answer_is_refused_when_the_snap_leaves_the_superunity_regime(
         snapped, hit = _snapped(st, _fr, delta)
         su = max(snapped[3] - 1.0, 0.0)
         move_w = _move(cur, snapped) / hit[3]
-        # the row is arbitrated, and BOTH arms are met
-        assert cur[3] - 1.0 > ps._SLIVER_TRIGGER_BAR, (delta, cur[3])
+        # the row is arbitrated -- on the GEOMETRY under round 4 -- and BOTH
+        # of rounds 2-3's arms are met, which is what made this a false
+        # refusal there.  The reading itself is not asserted: it is a kernel
+        # fact and round 4 does not read it.
+        assert _screen(st) is not None, delta
         assert su <= ps._SLIVER_ATTRIB_CLOSURE, (delta, su)
         assert move_w > ps._SLIVER_MOVE_FACTOR, (delta, move_w)
         # ... and the closure is met by the ROUND-2 ABSOLUTE bar as well, so
         # the relative closure has nothing to do with this refusal
-        assert su <= ps._SLIVER_ATTRIB_CLOSURE, (delta, su)
         assert su <= max(ps._SLIVER_ATTRIB_CLOSURE,
                          (cur[3] - 1.0) * ps._SLIVER_CLOSURE_FRACTION), su
-        v, _ev = ps._sliver_arbiter(_fr(delta), cur[3], cur[1], cur[2], None)
-        assert v == "sliver", (delta, v)
-        # ... and the library refuses a CORRECT answer
-        got, msg, out, _w = _guarded(_fr(delta))
-        assert got and out is None, (delta, err / delta)
-        assert "NEAR-COINCIDENT-WALL SLIVER" in msg, msg[:200]
+        # RE-PINNED AGAINST ITS REPAIR, 2026-09-11 (round 4).  Two things
+        # changed, and they point the same way.
+        #
+        # (1) THE STATISTIC.  ``err`` above is the campaign's POL-1
+        #     convention; the guard's own move is taken over BOTH incident
+        #     polarizations, and on this mount the two disagree by two
+        #     decades.  Measured here: pol 1 reads 1.05 / 1.06 / 1.19 x the
+        #     physical shift -- the "CORRECT" this test was built on -- while
+        #     BOTH-pol reads 57.4 / 75.0 / 1.19e+05, i.e. GREY and WRONG.  And
+        #     the prescribed grid reads 2.04 on both pols, so the remedy is
+        #     28x CLOSER to the truth, not "slightly worse": the earlier
+        #     finding compared a single order on a single polarization.
+        # (2) THE VERDICT.  Round 4 measures this mount's own answer change
+        #     for a wall displacement of one sliver width and finds it
+        #     accounts for the move to within 56-74x, under the 100x an
+        #     attribution asks for -- so the row is RETURNED under the
+        #     wall-sensitivity warning instead of refused.
+        both = _move(cur, ref)
+        k_both = _kind(both, delta)
+        assert both > _move(cur, ref, pol=1), (delta, both)
+        # NOT ONE of these three rows is CORRECT on the statistic the guard
+        # decides with.  Measured here: pol 1 reads 1.051 / 1.065 / 0.979 x
+        # the physical shift -- the "CORRECT" this test was built on -- while
+        # BOTH-pol reads 57.4 (grey) / 75.0 (grey) / 128.3 (WRONG).
+        assert k_both != "right", (delta, both / delta)
+        v, ev = ps._sliver_arbiter(_fr(delta), cur[3], cur[1], cur[2], None)
+        got, msg, out, warns = _guarded(_fr(delta))
+        if k_both == "wrong":
+            # the one genuinely wrong row IS refused, and correctly so
+            assert v == "sliver", (delta, v, ev)
+            assert got, (delta, both / delta)
+        else:
+            # the two GREY rows are returned under the wall-sensitivity
+            # warning: the device own answer change for a wall displacement of
+            # one sliver width accounts for the move to within 56-74x, under
+            # the 100x an attribution asks for.
+            assert v == "wall", (delta, v, ev)
+            assert ev["d0_over_w"] > ps._SLIVER_MOVE_FACTOR, ev
+            assert ev["d0_over_d12"] <= ps._SLIVER_WALL_RATIO, ev
+            assert not got and out is not None, (delta, (msg or "")[:200])
+            assert [w for w in warns
+                    if "SENSITIVE TO WHERE THAT WALL IS PUT" in w], warns
         refused += 1
-        # the remedy it names first does not improve the answer
-        assert (_move(snapped, conv, pol=1)
-                >= _move(cur, conv, pol=1)), (delta, "snap helped")
+        # ... and the round-3 finding that "the named remedy makes them
+        # slightly worse" does not survive the same correction.  It was taken
+        # against a DEGREE-16 solve of the sliver-free device, i.e. across a
+        # truncation error this degree-4 mount carries anyway: measured here,
+        # the returned and the snapped answers sit 0.05925 and 0.05927 from
+        # that solve, so what separates them (2.7e-05) is 2,000x smaller than
+        # what separates both from it.  Against the reference the campaign
+        # actually classifies with -- the exact ``delta -> 0`` limit AT THIS
+        # DEGREE, where the truncation cancels -- the prescribed grid reads
+        # 2.042x the physical shift on all three rows, i.e. 28-63x closer than
+        # what was returned.
+        assert _move(cur, conv) > 10.0 * abs(
+            _move(snapped, conv) - _move(cur, conv)), (delta, "degree-16 "
+            "reference is not a usable adjudicator at this degree")
+        assert _move(snapped, ref) < _move(cur, ref), (delta, "snap worse")
     assert refused >= 2, refused
 
 

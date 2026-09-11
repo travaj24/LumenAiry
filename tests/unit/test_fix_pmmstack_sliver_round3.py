@@ -27,8 +27,28 @@ be pinned, the DECISION is asserted instead, and the one bar test states each
 population's envelope and the margin it carries, per
 ``docs/TESTING_STANDARDS.md`` rule 5.
 
-Evidence: ``docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md`` and
-``validation/probe_fix_sliver_round3/``.
+RESTATED 2026-09-11 (ROUND 4).  Round 4 keeps this closure and DEMOTES it: it
+is still measured, still carried in the arbiter's evidence and still quoted in
+the refusal, but no verdict depends on it any more.  The reason is the one the
+5.45.0 release CI matrix made unarguable -- the closure's numerator is
+``max R+T - 1`` of the sliver solve and its denominator is the same reading on
+a second grid, and that reading is amplified rounding through a
+``1/w^2``-conditioned interface.  Three tests in this file failed the matrix:
+two D-5 rows were RETURNED at ``err/delta`` = 1475 because the drop factor
+fell under 100 on that kernel; a CORRECT row read a drop of 272.79 and was
+admitted by the closure on another; and five named O-11 rows arbitrated
+``truncation`` on four shards because the sliver had not moved those answers
+at all there.
+
+So what this file asserts now is (a) the D-5 DECISION, which round 4 reaches
+by a different route -- the answer move against the device's own measured
+sensitivity to the contested wall -- and (b) the reason the closure could not
+be the criterion, measured on both populations rather than asserted.
+
+Evidence: ``docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md``,
+``docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND4_2026_09_11.md`` and
+``validation/probe_fix_sliver_round3/`` +
+``validation/probe_fix_sliver_round4/``.
 """
 import itertools
 import os
@@ -42,6 +62,7 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 import warnings  # noqa: E402
 
 import numpy as np  # noqa: E402
+import pytest  # noqa: E402
 
 from lumenairy.elements.pmm import PMMStack  # noqa: E402
 from lumenairy.elements.pmm import stack as ps  # noqa: E402
@@ -187,17 +208,18 @@ def test_the_d5_rows_are_refused_and_the_refusal_names_min_feature():
         if not (err > 100.0 and err_snapped < 1.0):
             continue
         found.append((delta, err, err_snapped))
-        # the snap removes essentially all of the violation, but LANDS ON the
-        # mount's own truncation floor -- above the ABSOLUTE bar
-        su = max(snapped[3] - 1.0, 0.0)
-        assert su > ps._SLIVER_ATTRIB_CLOSURE, (delta, su)
-        assert _drop(cur[3], su) > 1.0 / ps._SLIVER_CLOSURE_FRACTION, \
-            (delta, _drop(cur[3], su))
-        # the arbiter attributes it, and the library refuses
+        # ROUND 4: the DECISION is what is asserted, and it no longer goes
+        # through the energy reading at all.  The two criteria are the answer
+        # move against the geometric floor, and the same move against the
+        # device's OWN measured answer change for a wall displacement of one
+        # sliver width.  The closure is still recorded (below), and on this
+        # class it still reads the way round 3 measured -- but the CI matrix
+        # put two of these rows under a drop of 100 on its kernel, and round 4
+        # refuses them anyway.
         v, ev = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
         assert v == "sliver", (delta, v, ev)
-        assert ev["move"] / ev["w_wide"] > ps._SLIVER_MOVE_FACTOR, ev
-        assert ev["closure"] > ps._SLIVER_ATTRIB_CLOSURE, ev
+        assert ev["d0_over_w"] > ps._SLIVER_MOVE_FACTOR, ev
+        assert ev["d0_over_d12"] > ps._SLIVER_WALL_RATIO, ev
         refused, msg, out, warns = _guarded(_gmr(delta))
         assert refused and out is None, (delta, (msg or "")[:200])
         assert "NEAR-COINCIDENT-WALL SLIVER" in msg, msg[:200]
@@ -207,7 +229,26 @@ def test_the_d5_rows_are_refused_and_the_refusal_names_min_feature():
         # and the round-2 sentence that D-5 showed to be false is gone
         assert "will silence nothing here" not in msg
         assert not [w for w in warns if "will silence nothing here" in w]
-    assert len(found) >= 2, found
+        # the closure evidence is still MEASURED and still reported, and on
+        # this class it lands where round 3 said: the snap leaves the mount's
+        # own truncation floor, above the ABSOLUTE bar, so round 2's criterion
+        # would have returned the row.
+        su = max(snapped[3] - 1.0, 0.0)
+        assert ev["closure"] >= ps._SLIVER_ATTRIB_CLOSURE, ev
+        assert su > 0.0, (delta, su)
+    # The premise -- "off by more than 100x as returned and back within 1x on
+    # the prescribed grid" -- is a statement about the ANSWER, and which of
+    # the three rows meets it is a kernel fact: measured on this box, three
+    # rows meet it on Haswell and one on Sandybridge (the other two read 24.4x
+    # and 61.4x there).  The existence is asserted; the count is not.
+    if not found:
+        pytest.skip(
+            "no delta of the D-5 mount is both WRONG as returned and RIGHT "
+            "on the prescribed grid on this build: round 4 decides on the "
+            "ANSWER, and this arithmetic does not put this mount in that "
+            "class. The premise of the assertions below is measured, not "
+            "assumed. See S4.2 and R4-G of the round-4 audit.")
+    assert len(found) >= 1, found
 
 
 def test_the_correct_rows_of_the_staircase_box_are_still_returned_bit_identical():
@@ -233,10 +274,11 @@ def test_the_correct_rows_of_the_staircase_box_are_still_returned_bit_identical(
             assert np.array_equal(np.real(np.asarray(out[1]))[:, i], cur[1])
             assert np.array_equal(np.real(np.asarray(out[2]))[:, i], cur[2])
             n_rows += 1
-            # the arbiter RAN on this row (screen + trigger), and returning it
-            # is therefore its ``truncation`` verdict -- no second probe solve
-            # is spent to read what the decision already says
-            if _screen(st) is not None and cur[3] - 1.0 > ps._SLIVER_TRIGGER_BAR:
+            # ROUND 4: the arbiter runs on the GEOMETRY, so every screened row
+            # is arbitrated whatever it reads -- which is the cost this round
+            # buys the decision's build-independence with, and it is counted
+            # rather than described.
+            if _screen(st) is not None:
                 n_arb += 1
     assert n_rows == 24, n_rows
     assert n_arb >= 8, n_arb
@@ -245,65 +287,98 @@ def test_the_correct_rows_of_the_staircase_box_are_still_returned_bit_identical(
 # ==========================================================================
 # (b) THE BAR: the two DROP populations, each measured here
 # ==========================================================================
-def test_the_closure_fraction_separates_the_two_drop_populations():
-    """``_SLIVER_CLOSURE_FRACTION`` is a bar on the super-unity DROP factor
-    ``(worst - 1) / su_snapped``: the snap must remove ``1 / fraction`` of the
-    violation.  Both populations are measured HERE, on this build.
+def test_the_closure_fraction_is_evidence_and_is_not_a_separator():
+    """RENAMED and RESTATED 2026-09-11 (ROUND 4) from
+    ``test_the_closure_fraction_separates_the_two_drop_populations``.
 
-    * BELOW it, the CORRECT population: rows whose answer already tracks the
-      exact ``delta -> 0`` limit have little for the snap to remove.  Measured
-      2026-09-11 on both builds, agreeing to 10 significant figures: the 291
-      arbitrated correct rows of the 648-configuration census box reach
-      **2.2893**, and over a wider 576-configuration box's 1,078 arbitrated
-      correct rows the FINITE envelope is **36.611**, so the shipped 100x
-      carries **2.73x** (``validation/probe_fix_sliver_round3/s1_census.py``
-      and ``s4_lower_envelope.py``).  21 of those 1,078 have an INFINITE drop
-      because their snapped solve leaves the super-unity regime -- which is
-      the set the ROUND-2 ABSOLUTE bar admits too, so the relative closure
-      adds no correct row to what the closure already let through, and the
-      MOVE criterion holds all of them out (their ``move / w_wide`` reaches
-      37.007 against the 100x bar).
-    * ABOVE it, the D-5 population: rows whose snapped answer IS the
-      sliver-free reference but whose residue is the mount's own truncation
-      floor.  Measured over 88 such rows on five mounts and two degrees: drop
-      **49.107 .. 5,304.6**, of which the shipped bar recovers 85
-      (``s3_dropgap.py``); the three it does not are open item R3-A.
+    ``_SLIVER_CLOSURE_FRACTION`` is a bar on the super-unity DROP factor
+    ``(worst - 1) / su_snapped``.  Round 3 sized it so that the CORRECT
+    population sits below 100 and the D-5 population above, and measured
+    2.2893 / 36.611 on two boxes against a D-5 floor of 49.107.  The 5.45.0
+    release CI matrix refuted both sides of that on its own kernels: it
+    measured a CORRECT row at a drop of **272.79** (so the correct population
+    crosses the bar) and returned two D-5 rows at ``err/delta`` = 1475 because
+    their drop fell UNDER it (so the D-5 population crosses it the other way).
 
-    This test re-measures both statistics on subsets of the same two
-    families, and asserts each population on its own side of the bar plus the
-    SEPARATION between the two populations it measured -- a property of the
-    populations, not a multiple of the constant."""
-    corr = []
+    Neither is surprising once the quantity is named.  ``worst - 1`` is
+    amplified rounding through a ``1/w^2``-conditioned interface -- the same
+    fixture reads 1.000115 on one BLAS kernel and 3.61242 on another -- and
+    ``su_snapped`` is the same reading on a different grid, so the ratio is a
+    ratio of two roundings.  Round 4 therefore keeps the closure as ATTRIBUTION
+    EVIDENCE, which is what it is good for (it makes the refusal message
+    concrete where the reading is real), and takes it out of the decision.
+
+    What is asserted here is that DEMOTION, two ways:
+
+    * the arbiter still MEASURES and reports it -- ``closure``, ``drop`` and
+      ``snapped_super_unity`` are all in the evidence on every arbitrated row;
+      and
+    * the decision does not read it: a row is attributed exactly when the two
+      answer-move criteria say so, whatever the drop reads.  Re-derived here
+      by evaluating both expressions on the same evidence."""
+    seen = 0
+    disagree = 0
     for nsub, nsup, theta in itertools.product(
             (1.45 + 0.08j, 3.4 + 1.7j), (2.4, 3.2), (1.22, 1.33, 1.44)):
-        ref = _raw(_box(0.0, 6, nsub, nsup, theta, 2, 10.5))
         for d in (3e-3, 1e-3, 3e-4):
             st = _box(d, 6, nsub, nsup, theta, 2, 10.5)
+            if _screen(st) is None:
+                continue
             cur = _raw(st)
-            if _screen(st) is None or cur[3] - 1.0 <= ps._SLIVER_TRIGGER_BAR:
+            got = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
+            if got is None or got[1] is None:
                 continue
-            if _kind(_move(cur, ref, pol=1), d) != "right":
-                continue
-            snapped, _hit = _snapped(st, _box, d, 6, nsub, nsup, theta, 2,
-                                     10.5)
-            corr.append(_drop(cur[3], max(snapped[3] - 1.0, 0.0)))
-    d5 = []
-    ref5 = _raw(_gmr(0.0))
+            v, ev = got
+            seen += 1
+            # (1) the evidence is still there, and is internally consistent
+            for key in ("closure", "drop", "snapped_super_unity", "violation",
+                        "d0_over_w", "d0_over_d12", "d12"):
+                assert key in ev, (key, ev)
+            assert ev["closure"] >= ps._SLIVER_ATTRIB_CLOSURE, ev
+            assert (ev["closure"] == max(
+                ps._SLIVER_ATTRIB_CLOSURE,
+                ev["violation"] * ps._SLIVER_CLOSURE_FRACTION)), ev
+            # (2) the DECISION is the two move criteria and nothing else
+            expect = ("truncation"
+                      if ev["d0_over_w"] <= ps._SLIVER_MOVE_FACTOR
+                      else "sliver"
+                      if ev["d0_over_d12"] > ps._SLIVER_WALL_RATIO
+                      else "wall")
+            assert v == expect, (v, expect, ev)
+            # (3) ... and the round-3 criterion, evaluated on the same
+            # evidence, does not always agree -- which is the demotion's whole
+            # point.  Counted, not asserted per row.
+            r3 = ("sliver"
+                  if (ev["snapped_super_unity"] <= ev["closure"]
+                      and ev["d0_over_w"] > ps._SLIVER_MOVE_FACTOR)
+                  else "truncation")
+            if (r3 == "sliver") != (v == "sliver"):
+                disagree += 1
+    assert seen >= 12, seen
+
+
+def test_the_d5_class_is_reached_without_reading_an_energy_total_at_all():
+    """ROUND 4, NEW.  The D-5 class is the one round 3 exists for, and round 4
+    must still refuse it -- but by a route that never looks at ``R+T``.
+
+    Asserted by handing the arbiter a reading of exactly 1.0 on the D-5 rows:
+    with no violation to remove, round 3's closure is vacuous (its relative
+    arm collapses to the absolute one) and its drop is infinite, so round 3's
+    criterion cannot say anything.  Round 4's still refuses, because the
+    answer has still moved."""
+    ref = _raw(_gmr(0.0))
+    got_any = []
     for delta in _D5_DELTAS:
         st = _gmr(delta)
         cur = _raw(st)
-        snapped, _hit = _snapped(st, _gmr, delta)
-        if _move(cur, ref5, pol=1) / delta <= 100.0:
+        if _move(cur, ref, pol=1) / delta <= 100.0:
             continue
-        d5.append(_drop(cur[3], max(snapped[3] - 1.0, 0.0)))
-    assert len(corr) >= 12, corr
-    assert len(d5) >= 2, d5
-    bar = 1.0 / ps._SLIVER_CLOSURE_FRACTION
-    # each population on its own side of the bar -- the DECISION
-    assert max(corr) < bar, (max(corr), bar)
-    assert min(d5) > bar, (min(d5), bar)
-    # and the separation between the two populations THIS test measured
-    assert min(d5) > 10.0 * max(corr), (min(d5), max(corr))
+        v, ev = ps._sliver_arbiter(st, 1.0, cur[1], cur[2], None)
+        assert ev["violation"] == 0.0, ev
+        assert ev["closure"] == ps._SLIVER_ATTRIB_CLOSURE, ev
+        assert v == "sliver", (delta, v, ev)
+        got_any.append(delta)
+    assert len(got_any) >= 1, got_any
 
 
 def test_the_relative_closure_can_only_widen_the_absolute_one():
@@ -361,35 +436,54 @@ def _o11(delta, degree=14, *, n_sup=1.0, n_sub=1.0, eps=_O_EP, theta=0.15,
 
 
 def test_the_round2_fixtures_arbitrate_identically_under_the_relative_closure():
-    """The verdicts the round-2 file pins, re-read under the new criterion.
+    """The verdicts the round-2 file pins, re-read under round 4's criteria.
 
-    The five SLIVER rows must still be ``sliver`` (they are the rows whose
-    snapped super-unity vanishes outright, so the widened closure cannot move
-    them), the three TRUNCATION rows must still be ``truncation`` (they are
-    held out by the MOVE criterion, which round 3 does not touch), and the
-    returned answers must still be BIT-identical to the unguarded solve."""
-    sliver, trunc = [], []
-    for deg, d in ((14, 1e-4), (14, 3e-5), (12, 3e-5), (20, 3e-5), (16, 1e-5)):
-        st = _o11(d, deg)
-        cur = _raw(st)
-        v, ev = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
-        assert v == "sliver", (deg, d, v, ev)
-        sliver.append((ev["snapped_super_unity"], ev["move"] / ev["w_wide"],
-                       ev["drop"]))
+    RESTATED 2026-09-11 (ROUND 4).  This used to name five O-11 rows and
+    assert ``'sliver'`` of each.  Four shards of the 5.45.0 release CI matrix
+    read ``(14, 1e-4)`` as ``truncation`` with ``move/w_wide`` = 0.312 --
+    correctly, because on those kernels the sliver had not moved that answer:
+    ``err/delta`` there is 1.15.  A named row cannot carry a verdict.
+
+    So the rows are CLASSIFIED here and the pairing is asserted: an O-11 row
+    the continuity rule calls WRONG is attributed or is at least warned, a row
+    it calls RIGHT is never attributed, and the census rows -- which are the
+    ``truncation`` population -- are returned BIT-identical to the unguarded
+    solve."""
+    sliver, right_rows = [], []
+    for deg in (12, 14, 16, 20):
+        ref = _raw(_o11(0.0, deg))
+        for d in (1e-4, 3e-5, 1e-5, 3e-6):
+            st = _o11(d, deg)
+            cur = _raw(st)
+            kind = _kind(_move(cur, ref), d)
+            got = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
+            if got is None or got[1] is None:
+                continue
+            v, ev = got
+            if kind == "wrong":
+                assert v in ("sliver", "wall"), (deg, d, v, ev)
+                if v == "sliver":
+                    sliver.append((deg, d, ev["d0_over_w"],
+                                   ev["d0_over_d12"]))
+            elif kind == "right":
+                assert v != "sliver", (deg, d, v, ev)
+                right_rows.append((deg, d, ev["d0_over_w"]))
+    assert len(sliver) >= 4, sliver
+
+    trunc = []
     for nsub, th, deg, d in ((1.5 + 0.05j, 1.2, 6, 1e-3),
                              (3.0 + 2.0j, 1.45, 6, 1e-3),
                              (1.5 + 0.05j, 1.3, 8, 3e-4)):
         st = _o11(d, deg, n_sup=2.5, n_sub=nsub, eps=12.0, theta=th, ffo=31)
         cur = _raw(st)
         got = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
-        if got is None or cur[3] <= 1.0 + ps._SLIVER_TRIGGER_BAR:
+        if got is None or got[1] is None:
             continue
         v, ev = got
         assert v == "truncation", (nsub, th, deg, d, v, ev)
-        trunc.append((ev["snapped_super_unity"], ev["move"] / ev["w_wide"],
-                      ev["drop"]))
-        # and it is the MOVE criterion that holds it out, not the closure
-        assert ev["move"] < ps._SLIVER_MOVE_FACTOR * ev["w_wide"], ev
+        trunc.append((ev["d0_over_w"], ev["d0_over_d12"]))
+        # and it is the MOVE FLOOR that holds it out
+        assert ev["d0_over_w"] < ps._SLIVER_MOVE_FACTOR, ev
         # RETURNED, and bit-identical to the unguarded answer
         refused, msg, out, _w = _guarded(
             _o11(d, deg, n_sup=2.5, n_sub=nsub, eps=12.0, theta=th, ffo=31))
@@ -397,26 +491,32 @@ def test_the_round2_fixtures_arbitrate_identically_under_the_relative_closure():
         i = np.argsort(np.asarray(out[0]).ravel())
         assert np.array_equal(np.real(np.asarray(out[1]))[:, i], cur[1])
         assert np.array_equal(np.real(np.asarray(out[2]))[:, i], cur[2])
-    assert sliver and trunc, (sliver, trunc)
-    # the sliver rows close outright, so the widened bar cannot reach them
-    assert max(s[0] for s in sliver) <= ps._SLIVER_ATTRIB_CLOSURE / 10.0, sliver
-    assert min(s[2] for s in sliver) > 1.0 / ps._SLIVER_CLOSURE_FRACTION, sliver
-    assert min(s[1] for s in sliver) > ps._SLIVER_MOVE_FACTOR, sliver
-    assert max(t[1] for t in trunc) < ps._SLIVER_MOVE_FACTOR, trunc
+    assert trunc, trunc
+    # each population on its own side of both bars, measured here
+    assert min(x[2] for x in sliver) > ps._SLIVER_MOVE_FACTOR, sliver
+    assert min(x[3] for x in sliver) > ps._SLIVER_WALL_RATIO, sliver
+    assert max(t[0] for t in trunc) < ps._SLIVER_MOVE_FACTOR, trunc
 
 
-def test_the_truncation_note_states_the_measured_drop_and_promises_nothing():
-    """The warning round 3 changed.  Round 2 ended every ``truncation`` note
-    with "Raising min_feature will silence nothing here", which D-5 measured
-    to be false on a reachable class.  The note now quotes the measured DROP
-    factor and the residue the prescribed grid leaves, and says which of the
-    two criteria was not met -- and the sentence that was false is gone from
-    the library entirely."""
+def test_the_truncation_note_states_what_was_measured_and_promises_nothing():
+    """The warning round 3 changed and round 4 changed again.
+
+    Round 2 ended every ``truncation`` note with "Raising min_feature will
+    silence nothing here", which D-5 measured to be false on a reachable
+    class; round 3 replaced it with a sentence quoting the measured DROP.
+    Round 4 removes the drop from the note as well, because the note must
+    quote what the DECISION used and the decision no longer uses it: what it
+    quotes now is the answer move in units of the widest manufactured cell,
+    against the criterion's own bar.
+
+    The sentence that was false is still gone from the library entirely, and
+    the detector phrase three test files and four probes key on --
+    ``is NOT what moved this answer`` -- is unchanged."""
     import inspect
     # comments stripped: the round-3 comment block QUOTES the sentence it
     # removed, and the claim here is about what the library SAYS
     src = "\n".join(ln for ln in inspect.getsource(ps).splitlines()
-                    if not ln.lstrip().startswith("#"))
+                     if not ln.lstrip().startswith("#"))
     assert "will silence nothing here" not in src
 
     found = None
@@ -444,19 +544,12 @@ def test_the_truncation_note_states_the_measured_drop_and_promises_nothing():
     assert found is not None, "no truncation-noted row in the box subset"
     assert not [w for w in said if "will silence nothing here" in w], said
     ev, text = found
-    # the note quotes the measured drop and the residue, to the library's own
-    # formatting -- so the sentence cannot drift from what was measured
-    assert f"{ev['drop']:.4g}x drop" in text, (text, ev)
-    assert f"1+{ev['snapped_super_unity']:.3g}" in text, (text, ev)
+    # the note quotes the MOVE it measured, to the library's own formatting,
+    # so the sentence cannot drift from the decision
+    assert f"{ev['d0_over_w']:.3g}x the widest manufactured cell" in text, \
+        (text, ev)
+    assert f"{ps._SLIVER_MOVE_FACTOR:g}x an attribution asks for" in text, text
+    assert "removes the cell without moving the answer" in text, text
     assert "reduce n_slices or raise degree" in text, text
-    # and it names WHICH of the two criteria was not met, with that
-    # criterion's own bar -- neither branch may promise anything about
-    # min_feature that was not measured on this call
-    if ev["snapped_super_unity"] <= ev["closure"]:
-        assert f"{ps._SLIVER_MOVE_FACTOR:g}x an attribution asks" in text, text
-        assert "removes the cell without moving the answer" in text, text
-    else:
-        assert (f"{1.0 / ps._SLIVER_CLOSURE_FRACTION:.3g}x an attribution "
-                f"asks") in text, text
-        assert f"leaves 1+{ev['snapped_super_unity']:.3g} standing" in text, \
-            text
+    # ... and it does not quote a drop factor the decision did not use
+    assert "x drop" not in text, text
