@@ -1,0 +1,30 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_vbor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "python": "3.14.6",
+  "requested_coretype": "",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "summary": {
+  "base_slack": 5e-10,
+  "derived_term_at_n_1": 1.25e-09,
+  "examples": [],
+  "rows": 19542,
+  "rows_with_a_positive_excess": 0,
+  "worst_at_eps_a_gamma": [
+   1.0,
+   0.0,
+   0.0
+  ],
+  "worst_excess_over_the_exact_uniform_spectrum": 0.0
+ }
+}

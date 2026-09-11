@@ -1,0 +1,125 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_vbor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "4",
+  "numpy": "2.4.4",
+  "omp": "4",
+  "openblas": "4",
+  "python": "3.14.6",
+  "requested_coretype": "HASWELL",
+  "scipy": "1.17.1",
+  "threads": 4
+ },
+ "summary": {
+  "deadband": 3.552713678800501e-15,
+  "deadband_in_ulp_of_bar": 16.777216,
+  "every_x_within_16_ulp_decides_below": true,
+  "nonfinite_is_not_below": [
+   false,
+   false
+  ],
+  "rows": [
+   {
+    "below": true,
+    "strict": true,
+    "ulp": -64,
+    "x": 9.999999999999864e-07
+   },
+   {
+    "below": true,
+    "strict": true,
+    "ulp": -33,
+    "x": 9.99999999999993e-07
+   },
+   {
+    "below": true,
+    "strict": true,
+    "ulp": -32,
+    "x": 9.999999999999932e-07
+   },
+   {
+    "below": true,
+    "strict": true,
+    "ulp": -17,
+    "x": 9.999999999999964e-07
+   },
+   {
+    "below": true,
+    "strict": true,
+    "ulp": -16,
+    "x": 9.999999999999966e-07
+   },
+   {
+    "below": true,
+    "strict": true,
+    "ulp": -8,
+    "x": 9.999999999999983e-07
+   },
+   {
+    "below": true,
+    "strict": true,
+    "ulp": -1,
+    "x": 9.999999999999997e-07
+   },
+   {
+    "below": true,
+    "strict": false,
+    "ulp": 0,
+    "x": 1e-06
+   },
+   {
+    "below": true,
+    "strict": false,
+    "ulp": 1,
+    "x": 1.0000000000000002e-06
+   },
+   {
+    "below": true,
+    "strict": false,
+    "ulp": 8,
+    "x": 1.0000000000000016e-06
+   },
+   {
+    "below": true,
+    "strict": false,
+    "ulp": 16,
+    "x": 1.0000000000000033e-06
+   },
+   {
+    "below": false,
+    "strict": false,
+    "ulp": 17,
+    "x": 1.0000000000000036e-06
+   },
+   {
+    "below": false,
+    "strict": false,
+    "ulp": 32,
+    "x": 1.0000000000000067e-06
+   },
+   {
+    "below": false,
+    "strict": false,
+    "ulp": 33,
+    "x": 1.000000000000007e-06
+   },
+   {
+    "below": false,
+    "strict": false,
+    "ulp": 64,
+    "x": 1.0000000000000135e-06
+   }
+  ],
+  "ulps_where_below_differs_from_strict": [
+   0,
+   1,
+   8,
+   16
+  ],
+  "widest_ulp_above_bar_still_below": 16
+ }
+}

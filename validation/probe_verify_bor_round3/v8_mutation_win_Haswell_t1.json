@@ -1,0 +1,70 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_vbor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "python": "3.14.6",
+  "requested_coretype": "",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "summary": {
+  "gate_is_live": true,
+  "intact_rc": 0,
+  "intact_summary": "1 passed in 3.82s",
+  "mutated_rc": 1,
+  "mutated_summary": "1 failed in 3.69s",
+  "retired_gate_channels_at_its_own_loss": 0,
+  "retired_gate_premise": [
+   {
+    "im_rel": 0.001,
+    "media_passive": true,
+    "n_channels": 0,
+    "predicate_reachable": false,
+    "provably_passive": false
+   },
+   {
+    "im_rel": 1e-05,
+    "media_passive": true,
+    "n_channels": 12,
+    "predicate_reachable": true,
+    "provably_passive": false
+   },
+   {
+    "im_rel": 1e-07,
+    "media_passive": true,
+    "n_channels": 12,
+    "predicate_reachable": true,
+    "provably_passive": false
+   },
+   {
+    "im_rel": 1e-09,
+    "media_passive": true,
+    "n_channels": 12,
+    "predicate_reachable": true,
+    "provably_passive": false
+   },
+   {
+    "im_rel": 1e-11,
+    "media_passive": true,
+    "n_channels": 12,
+    "predicate_reachable": true,
+    "provably_passive": false
+   },
+   {
+    "im_rel": 0.0,
+    "media_passive": true,
+    "n_channels": 12,
+    "predicate_reachable": true,
+    "provably_passive": true
+   }
+  ],
+  "retired_gate_was_vacuous": true
+ }
+}

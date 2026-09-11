@@ -1,0 +1,36 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_vbor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "",
+  "python": "3.14.6",
+  "requested_coretype": "",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "summary": {
+  "collected_tests_matched": 5,
+  "entries_after": 12899,
+  "entries_before": 12894,
+  "json_valid": true,
+  "keys": [
+   "tests/unit/test_verify_bor_guards_round3.py::test_a_manufactured_sliver_on_a_blown_up_spectrum_is_refused_not_returned",
+   "tests/unit/test_verify_bor_guards_round3.py::test_the_liner_verdict_agrees_at_all_three_positions_at_a_second_rbig",
+   "tests/unit/test_verify_bor_guards_round3.py::test_the_near_cutoff_populations_separate_on_a_second_fixture[0-1]",
+   "tests/unit/test_verify_bor_guards_round3.py::test_the_near_cutoff_populations_separate_on_a_second_fixture[1-1]",
+   "tests/unit/test_verify_bor_guards_round3.py::test_the_width_deadband_does_not_reach_the_meshs_reproduction_error"
+  ],
+  "keys_added": 5,
+  "keys_dropped": 0,
+  "over_the_60s_shard_cap": [],
+  "slowest": 3.61,
+  "slowest_key": "tests/unit/test_verify_bor_guards_round3.py::test_the_near_cutoff_populations_separate_on_a_second_fixture[1-1]",
+  "sorted_after": true
+ }
+}
