@@ -2,7 +2,7 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.45.1] — 2026-09-12
 
 ### Fixed -- BOR: the forward-orientation band was scaled by the MODE'S OWN collapsing magnitude, so near a radial cutoff the R/T CHANNEL COUNT moved with the BLAS kernel and the thread count
 
