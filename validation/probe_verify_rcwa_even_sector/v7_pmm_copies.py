@@ -193,8 +193,13 @@ def _pmm_eff_2d(n_sub, eps_pillar=4.0, eps_host=2.25):
 
 def _pmm_stag(n_sub, blk=4.0, bg=2.25):
     from lumenairy.elements.pmm import pmm_jones_2d_staggered
-    return pmm_jones_2d_staggered(P, P, V.scalar_cell(S=16, bg=bg, blk=blk),
-                                  n_sub, 1.0, DEPTH, WL, degree=4, n_orders=3)
+    # degree 4 / n_orders 3 / S = 16 stalls for tens of minutes on both builds
+    # (the staggered generator's dense operator); these are the sizes v5_scope
+    # completed at, and the staggered copy is DEAD CODE anyway -- its
+    # _sqrt_decay is defined and never called (only mentioned in a comment at
+    # twod_staggered.py:2302), so these rows are a control, not the finding.
+    return pmm_jones_2d_staggered(P, P, V.scalar_cell(S=8, bg=bg, blk=blk),
+                                  n_sub, 1.0, DEPTH, WL, degree=3, n_orders=2)
 
 
 def _pmm_cell(n_sub, blk=4.0, bg=2.25, theta=0.0, phi=0.0, sym="auto"):

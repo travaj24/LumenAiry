@@ -527,6 +527,9 @@ arithmetic in shipped code, and the audit states it is fixed when it is not.
 
 `pmm/twod_staggered.py:2084` defines `_sqrt_decay` and never calls it (the only
 other mention is a comment at line 2302): DEAD CODE carrying the old pattern.
+Confirmed at runtime rather than only by reading -- three
+`pmm_jones_2d_staggered` fixtures record `modes = 0` handed to that copy on both
+builds, so nothing reaches it.
 
 No other exact-zero branch pin exists anywhere in the library: a regex for
 `.real == 0` / `.imag == 0` (with or without a sign or a decimal point) over
