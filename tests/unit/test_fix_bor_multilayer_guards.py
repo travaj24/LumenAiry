@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import warnings
 
 import numpy as np
 import pytest
@@ -390,4 +391,187 @@ def test_widening_the_band_is_harmless_because_the_two_rules_agree_there():
         "the flux that governs these modes is only %.3e of the field norm; "
         "the normalizer's own noise floor is 1e-10, so a flux this small "
         "would be a decision made on noise" % (relmin,))
+
+
+# =========================================================================== #
+#  STEP 3 -- the passivity refusal on the legacy nodal cascade                 #
+# =========================================================================== #
+def _nuni(v):
+    return lambda r: np.full_like(r, v, dtype=complex)
+
+
+def _nring(period, lo, hi, duty=0.5):
+    """The shipped suite's own radial-grating profile
+    (``test_bor_solve._ring``), verbatim."""
+    def f(r):
+        e = np.full_like(r, lo, dtype=complex)
+        e[(r % period) < duty * period] = hi
+        return e
+    return f
+
+
+def _nodal_five_layer(basis, n_lambda, N=140, m=1, k0=2.0):
+    from lumenairy.elements.bor.bor_solve import build_layer
+    R = n_lambda * 2.0 * np.pi / k0
+    return [build_layer(m, R, N, _nuni(2.0), k0, basis=basis),
+            build_layer(m, R, N, _nring(0.8, 2.0, 6.0), k0, thickness=0.5,
+                        basis=basis),
+            build_layer(m, R, N, _nuni(2.0), k0, thickness=0.3, basis=basis),
+            build_layer(m, R, N, _nring(1.2, 6.0, 2.0), k0, thickness=0.4,
+                        basis=basis),
+            build_layer(m, R, N, _nuni(2.0), k0, basis=basis)]
+
+
+@pytest.mark.parametrize("n_lambda", [1, 2, 4, 8, 14])
+def test_the_legacy_nodal_cascade_is_refused_at_every_cell_radius(n_lambda):
+    """THE DEFECT: ``bor_solve.solve`` on ``basis='nodal'`` returned ``R + T``
+    from 3.05 to 6899 on a PROVABLY PASSIVE lossless stack -- and below four
+    vacuum wavelengths it returned it with NO warning at all, because the only
+    guard was a ``Rbig/lambda > 4`` PROXY that misses the small end of its own
+    population entirely (measured: 3.05 at 1 wavelength, 114.4 at 2 and 37.9 at
+    4, all unwarned).
+
+    The refusal must fire at EVERY radius, including the three the proxy
+    missed."""
+    import warnings as _w
+
+    from lumenairy.elements.bor.bor_solve import BORNodalPassivityError, solve
+    with _w.catch_warnings():
+        _w.simplefilter("ignore")
+        layers = _nodal_five_layer("nodal", n_lambda)
+        with pytest.raises(BORNodalPassivityError) as ei:
+            solve(layers, 2.0)
+    msg = str(ei.value)
+    assert "basis='nodal'" in msg
+    assert "staggered" in msg
+    assert "BOR_NODAL_PASSIVITY_GUARD" in msg
+
+
+@pytest.mark.parametrize("n_lambda", [1, 2, 4, 8, 14])
+def test_the_staggered_twin_returns_and_closes_energy_at_the_same_radii(
+        n_lambda):
+    """The screen must be INVISIBLE on the production basis.  Every one of the
+    five refused rows has a staggered twin that returns and reads
+    ``R + T = 1`` to twelve decimal places -- which is what makes the refusal
+    an attribution and not a blanket."""
+    from lumenairy.elements.bor.bor_solve import solve
+    res = solve(_nodal_five_layer("staggered", n_lambda), 2.0)
+    e = np.asarray(res["energy"])
+    assert e.size
+    assert float(np.max(np.abs(e - 1.0))) < 1e-9, (
+        "the STAGGERED twin at %d wavelengths reads max|R+T-1| = %.4e"
+        % (n_lambda, float(np.max(np.abs(e - 1.0)))))
+
+
+def test_the_nodal_passivity_bar_is_two_sided_on_this_build():
+    """RE-MEASURED, not pinned.  The refusal bar must sit above every healthy
+    row and below every broken one ON THE RUNNING BUILD.
+
+    Healthy here means the nodal basis's one genuinely accurate family --
+    UNIFORM layers on a small cell -- plus the staggered twin of everything.
+    Measured over 132 solves with the guard disarmed: staggered 3.7406e-12
+    (WIN) / 1.9959e-11 (WSL), nodal-uniform-small 4.4336e-09 on BOTH builds,
+    and the mildest broken row 2.8819e-02 on both.  A 6.81-decade gap with
+    nothing in it, and the bar's two margins (5.35 decades / 1.46 decades)
+    come out identical on the two builds.  The assertions below demand two
+    decades above the healthy side and one below the broken side, which is
+    inside both measured populations.
+    """
+    import warnings as _w
+
+    from lumenairy.elements.bor import bor_solve as _bs
+    from lumenairy.elements.bor.bor_solve import build_layer, solve
+    bar = _bs._BOR_NODAL_SUPERUNITY_BAR
+
+    # --- HEALTHY: uniform nodal layers on a small cell ----------------------
+    worst_ok = 0.0
+    n_ok = 0
+    prev = _bs.BOR_NODAL_PASSIVITY_GUARD
+    _bs.BOR_NODAL_PASSIVITY_GUARD = False
+    try:
+        for m in (0, 1, 2):
+            for rl in (0.5, 1.0, 2.0):
+                R = rl * 2.0 * np.pi / 2.0
+                with _w.catch_warnings():
+                    _w.simplefilter("ignore")
+                    layers = [build_layer(m, R, 120, _nuni(2.0), 2.0,
+                                          basis="nodal"),
+                              build_layer(m, R, 120, _nuni(2.5), 2.0,
+                                          thickness=0.5, basis="nodal"),
+                              build_layer(m, R, 120, _nuni(2.0), 2.0,
+                                          basis="nodal")]
+                    e = np.asarray(solve(layers, 2.0)["energy"])
+                if e.size:
+                    worst_ok = max(worst_ok, float(np.max(e)) - 1.0)
+                    n_ok += 1
+    finally:
+        _bs.BOR_NODAL_PASSIVITY_GUARD = prev
+    assert n_ok >= 9
+    assert worst_ok < bar / 1e2, (
+        "HEALTHY side: a uniform small-cell nodal stack reads R+T-1 = %.4e "
+        "against the %.0e bar -- less than two decades of room (measured "
+        "4.4336e-09, 5.35 decades)" % (worst_ok, bar))
+
+    # --- BROKEN: the mildest row the refusal must still catch ---------------
+    _bs.BOR_NODAL_PASSIVITY_GUARD = False
+    try:
+        with _w.catch_warnings():
+            _w.simplefilter("ignore")
+            layers = [build_layer(1, 4.0, 200, _nuni(2.0), 2.0, basis="nodal"),
+                      build_layer(1, 4.0, 200, _nring(0.8, 2.0, 6.0), 2.0,
+                                  thickness=0.5, basis="nodal"),
+                      build_layer(1, 4.0, 200, _nuni(2.0), 2.0, basis="nodal")]
+            mild = float(np.max(np.asarray(solve(layers, 2.0)["energy"]))) - 1.0
+    finally:
+        _bs.BOR_NODAL_PASSIVITY_GUARD = prev
+    assert mild > 10.0 * bar, (
+        "BROKEN side: the mildest broken row reads R+T-1 = %.4e, only %.3gx "
+        "the %.0e bar (measured 2.8819e-02, 1.46 decades)"
+        % (mild, mild / bar, bar))
+
+
+def test_a_lossy_nodal_stack_is_never_judged_by_the_passivity_screen():
+    """``R + T <= 1`` is a theorem only for a PASSIVE stack, and the screen is
+    one-sided for the same reason: an absorbing substrate reads BELOW unity
+    legitimately.  A layer with real loss therefore DISARMS the screen
+    entirely -- there is no theorem left to violate -- rather than widening
+    it."""
+    import warnings as _w
+
+    from lumenairy.elements.bor.bor_solve import build_layer, solve
+    R = 2.0 * 2.0 * np.pi / 2.0
+    with _w.catch_warnings():
+        _w.simplefilter("ignore")
+        layers = [build_layer(1, R, 140, _nuni(2.0), 2.0, basis="nodal"),
+                  build_layer(1, R, 140, _nring(0.8, 2.0, 6.0 + 0.3j), 2.0,
+                              thickness=0.5, basis="nodal"),
+                  build_layer(1, R, 140, _nuni(2.0), 2.0, thickness=0.3,
+                              basis="nodal"),
+                  build_layer(1, R, 140, _nring(1.2, 6.0, 2.0), 2.0,
+                              thickness=0.4, basis="nodal"),
+                  build_layer(1, R, 140, _nuni(2.0), 2.0, basis="nodal")]
+        res = solve(layers, 2.0)                  # must NOT raise
+    assert np.asarray(res["energy"]).size
+
+
+def test_the_rbig_over_lambda_proxy_no_longer_decides_anything():
+    """The old guard was a PROXY -- a ``UserWarning`` past four vacuum
+    wavelengths -- and the measurement shows how badly it misses its own
+    population: the same five-layer stack reads 3.05, 114.4 and 37.9 at 1, 2
+    and 4 wavelengths with the proxy silent, while a UNIFORM nodal stack at 12
+    wavelengths, which the proxy DOES warn about, reads 1.035.
+
+    The proxy's text survives as an early hint; nothing keys on it.  This test
+    pins that: a cell BELOW the proxy's threshold is still refused."""
+    import warnings as _w
+
+    from lumenairy.elements.bor.bor_solve import BORNodalPassivityError, solve
+    with _w.catch_warnings(record=True) as w:
+        _w.simplefilter("always")
+        layers = _nodal_five_layer("nodal", 1)            # 1 wavelength
+        assert not any("vacuum wavelengths" in str(x.message) for x in w), (
+            "the Rbig/lambda proxy fired at ONE wavelength; the fixture is "
+            "supposed to be below its threshold")
+        with pytest.raises(BORNodalPassivityError):
+            solve(layers, 2.0)
 
