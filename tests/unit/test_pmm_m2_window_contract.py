@@ -42,6 +42,7 @@ import pytest
 
 from lumenairy.elements.pmm import PMMStack
 from lumenairy.elements.pmm import _core as PC
+from lumenairy.elements.pmm import stack as _PS
 from lumenairy.elements.pmm._core import (
     _perlayer_window_grids,
     _pmm_union_grid,
@@ -195,6 +196,41 @@ _RULE_SEPARATION = 20.0
 #: taper, which pins its own.  A different DEVICE, so a different ladder.
 _UNCOATED_CURED = ((6, 3.0e-9), (12, 1.5e-9))
 _UNCOATED_DEGREES = (8, 10, 12, 14, 16)
+
+
+# ---------------------------------------------------------------------------
+# THE O-11 SLIVER REFUSAL IS OFF FOR THIS WHOLE FILE (2026-09-11, round 4).
+#
+# This file's subject IS the near-coincident-wall collision: its window's only
+# cross-layer separation is the per-slice taper offset itself (3.61 / 1.80 /
+# 0.90 nm at n_slices = 3 / 6 / 12), and several arms deliberately leave that
+# window UNSNAPPED so the silent-wrong draw can be measured.  That is exactly
+# the geometry ``PMMStack``'s sliver guard refuses, so with the guard armed
+# those harvests become raises instead of numbers.
+#
+# Rounds 1-3 did not reach them only by accident: the guard was gated on
+# ``max R+T`` and these solves read exactly 1, so the gate never opened.
+# ROUND 4 decides on the GEOMETRY, so the accident is gone -- and the guard is
+# right about the draw it now refuses, which is the point.  Measured on the
+# uncoated ns = 6 ladder: 10 manufactured cells, the narrowest at own-scale
+# ratio 100, ``move`` 0.536 in per-order efficiency = 207.9x the widest
+# manufactured cell, against a measured device wall sensitivity of 0.00217
+# (ratio 247.2x, bar 100x).
+#
+# ``tests/unit/test_m1_conditioning_guard.py`` throws the same switch for the
+# same reason and states the same caveat: nothing here asserts the sliver
+# behaviour, and ``tests/unit/test_fix_pmmstack_sliver_walls.py`` and its
+# round-2/3/4 siblings own it.  The switch is thrown for the MODULE rather
+# than per arm because which arms carry a manufactured cell is a property of
+# the taper geometry each one builds, not of the assertion it makes.
+@pytest.fixture(autouse=True)
+def _sliver_guard_off():
+    prev = _PS.PMM_SLIVER_GUARD
+    _PS.PMM_SLIVER_GUARD = False
+    try:
+        yield
+    finally:
+        _PS.PMM_SLIVER_GUARD = prev
 
 
 @pytest.fixture

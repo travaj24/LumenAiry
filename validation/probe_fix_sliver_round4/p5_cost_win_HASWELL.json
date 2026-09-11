@@ -1,0 +1,62 @@
+{
+ "arm": {
+  "build": "win",
+  "kernel": "Haswell",
+  "numpy": "2.4.4",
+  "python": "3.14.6",
+  "requested": "HASWELL"
+ },
+ "census_deg6_nl4": {
+  "extra_s": 0.03470249997917563,
+  "guard_off_s": 0.10279110001283698,
+  "guard_on_s": 0.1374935999920126,
+  "ratio": 1.3376021851584605,
+  "screened": true
+ },
+ "firing_rate_census_box": {
+  "fraction": 0.8333333333333334,
+  "n": 144,
+  "screened": 120
+ },
+ "firing_rate_ordinary": {
+  "fraction": 0.0,
+  "n": 400,
+  "screened": 0
+ },
+ "o11_deg14_d0": {
+  "extra_s": 0.0018604000215418637,
+  "guard_off_s": 0.025397199991857633,
+  "guard_on_s": 0.027257600013399497,
+  "ratio": 1.0732521704021825,
+  "screened": false
+ },
+ "o11_deg14_d1e-4": {
+  "extra_s": 0.08664190000854433,
+  "guard_off_s": 0.09340599999995902,
+  "guard_on_s": 0.18004790000850335,
+  "ratio": 1.9275838812130093,
+  "screened": true
+ },
+ "o11_deg14_d3e-3": {
+  "extra_s": -0.0062342999735847116,
+  "guard_off_s": 0.1027534999884665,
+  "guard_on_s": 0.09651920001488179,
+  "ratio": 0.9393276143947946,
+  "screened": false
+ },
+ "o11_deg20_d1e-5": {
+  "extra_s": 0.16798809997271746,
+  "guard_off_s": 0.2558582000201568,
+  "guard_on_s": 0.42384629999287426,
+  "ratio": 1.6565671921380014,
+  "screened": true
+ },
+ "reps": 5,
+ "taper16_deg8": {
+  "extra_s": -4.264720800012583,
+  "guard_off_s": 25.114768400002504,
+  "guard_on_s": 20.85004759998992,
+  "ratio": 0.8301907175854284,
+  "screened": true
+ }
+}

@@ -329,6 +329,43 @@ _SLIVER_CLOSURE_FRACTION = 1.0e-2
 #: truncation super-unity happens to fall BELOW unity on the snapped grid.
 _SLIVER_MOVE_FACTOR = 100.0
 
+#: ROUND-4 ARBITER (2026-09-11): how many times the DEVICE'S OWN answer
+#: change between two sliver-free grids the sliver's answer move must exceed
+#: before the sliver is the attributed cause.
+#:
+#: WHY A SECOND SOLVE-FREE DENOMINATOR EXISTS AT ALL.  ``_SLIVER_MOVE_FACTOR``
+#: above compares an EFFICIENCY DIFFERENCE to a PERIOD FRACTION.  That is only
+#: a criterion if ``dR/dx`` -- the device's far-field derivative with respect
+#: to a wall coordinate -- is of order one, and it is not: the round-2
+#: verification measured a guided-mode resonance at ``dR/d(duty)`` = 169.2
+#: whose CORRECT rows reach ``move/w_wide`` = 833.78, and the round-3
+#: verification measured a many-slice taper whose CORRECT rows reach 906.56
+#: because ``move`` saturates while ``w_wide`` vanishes.  Both rounds kept the
+#: bar and deleted its published margin; the bar is INSIDE the correct
+#: population and only the closure arm was holding those rows out -- and the
+#: closure arm reads the super-unity of the solve, which the release CI matrix
+#: showed to be a property of the BLAS kernel.
+#:
+#: So round 4 MEASURES ``dR/dx`` instead of assuming it.  ``d12`` is the
+#: answer change between the two sliver-free grids the refusal already
+#: prescribes as remedies (1) and (2) -- the midpoint snap and the wall
+#: closure -- which differ by a real displacement of the sliver's own size on
+#: geometry that carries no sliver at all.  ``d0 > _SLIVER_WALL_RATIO * d12``
+#: then asks the campaign's OWN question, "is the answer further from a
+#: sliver-free answer than a hundred times what moving that wall does?",
+#: against a denominator that is a property of the device rather than of the
+#: period.
+#:
+#: THE VALUE IS THE CAMPAIGN'S OWN 100x WRONG RULE, not a new fit: every
+#: probe and test in this family classifies with ``err > 100 delta`` = WRONG
+#: and ``err <= 10 delta`` = RIGHT, and this is that rule with ``delta``
+#: replaced by the measured answer change rather than by the wall step.
+#: MEASURED two-sided (``validation/probe_fix_sliver_round4/``, eight
+#: (build, kernel) arms) -- see
+#: ``docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND4_2026_09_11.md`` S4 for the
+#: populations and the margins this bar carries on each arm.
+_SLIVER_WALL_RATIO = 100.0
+
 #: The WITHIN-LAYER arm (verification defect V-6).  A sliver-thin feature a
 #: single layer OWNS is the geometry the caller asked for, so it is never
 #: refused -- but the same ``1/w^2`` mechanism is already catastrophic there
@@ -657,14 +694,190 @@ def _sliver_q_predictor(w_frac, period, degree, wl):
     return 0.65 * (degree * (degree + 1) / 4.0) * wl / (np.pi * w_frac * period)
 
 
-def _sliver_screen(stack):
-    """``(hit, period, degree, wl)`` when this stack trips the GEOMETRIC half
-    of the guard on a stack for which ``R + T <= 1`` is a theorem, else
-    ``None``.  Pure geometry -- it never solves and never raises."""
+def _sliver_collapsed_segments(layer_segments, min_feature_frac, side,
+                               shift=0.0):
+    """The same layers with every MANUFACTURED sliver cell CLOSED -- the
+    refusal's remedy (2), "place the colliding walls at the SAME coordinate".
+
+    ``side`` is ``'left'`` or ``'right'``: every group of walls joined by
+    flagged cells collapses onto its leftmost, respectively rightmost, member.
+
+    ``shift`` (a fraction of the period, ROUND 4) then DISPLACES the closed
+    wall of the WIDEST flagged group -- the one that sizes the prescribed
+    ``min_feature`` -- by that much, in every layer at once.  The result is
+    still sliver-free (the walls stay coincident), and it is a real change to
+    the device: displacing ONE of the two contested walls changes the RIDGE
+    WIDTH rather than translating the structure.
+
+    That distinction is the whole point.  On a SYMMETRIC wall opening -- which
+    is the whole staircase / guided-mode-resonance family -- closing to the
+    LEFT and closing to the RIGHT widen the contested region by the same
+    amount and differ only by a TRANSLATION, and a translation leaves every
+    efficiency unchanged.  Measured (``validation/probe_fix_sliver_round4/``,
+    57 rows matched between the two probes): the side choice moves the answer
+    by 1.31e-06 .. 7.50e-06 of what the SHIFT moves it on the O-11 fixture and
+    by 2.80e-06 on the round-2 guided-mode resonance, and never by more than
+    0.445 of it anywhere (the multi-slice census box, where a chain of flagged
+    walls does change width with the side).  So the side is not a
+    sensitivity; the shift is.  One widest cell is the smallest displacement
+    of that wall the sliver's own ambiguity spans, so
+    ``|A_closed - A_shifted|`` is this device's answer change per sliver width
+    -- the ``dR/dx`` the move bar has always assumed and never measured.
+
+    Returns ``None`` when nothing is flagged, or when the shift would cross a
+    neighbouring wall.  The period ends can never be flagged (``owners[0]`` is
+    every layer), so the collapse never moves them and the widths still sum
+    to 1.
+    """
+    if len(layer_segments) < 2:
+        return None
+    uw, _eps, owners = _pmm_union_grid(layer_segments, min_feature_frac,
+                                       return_owners=True, warn=False)
+    own = float("inf")
+    for segs in layer_segments:
+        for seg in segs:
+            w = abs(float(seg[0]))
+            if 0.0 < w < own:
+                own = w
+    if not np.isfinite(own) or own <= 0.0:
+        return None
+    uw = np.asarray(uw, dtype=float)
+    walls = np.concatenate([[0.0], np.cumsum(uw)])
+    walls[-1] = 1.0
+    parent = list(range(walls.size))
+
+    def _find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    flagged = False
+    for i, w in enumerate(uw):
+        w = float(w)
+        if w <= 0.0 or (owners[i] & owners[i + 1]):
+            continue
+        if own / w >= _SLIVER_OWN_SCALE_RATIO:
+            a, b = _find(i), _find(i + 1)
+            if a != b:
+                parent[max(a, b)] = min(a, b)
+            flagged = True
+    if not flagged:
+        return None
+    groups = {}
+    for i in range(walls.size):
+        groups.setdefault(_find(i), []).append(i)
+    live = [m for m in groups.values() if len(m) > 1]
+    if not live:
+        return None
+    # the group carrying the WIDEST flagged cell -- the one ``mf_fix`` is
+    # sized on, so the shift is expressed in the same units as the bar
+    widest = max(live, key=lambda m: float(walls[m[-1]] - walls[m[0]]))
+    target = {}
+    for members in live:
+        k = members[0] if side == "left" else members[-1]
+        x = float(walls[k])
+        if members is widest and shift:
+            x = x + float(shift)
+            lo = float(walls[members[0] - 1]) if members[0] > 0 else 0.0
+            hi = (float(walls[members[-1] + 1])
+                  if members[-1] + 1 < walls.size else 1.0)
+            if not (lo < x < hi):
+                return None
+        for m in members:
+            target[m] = x
+    out = []
+    for segs in layer_segments:
+        w = np.asarray([float(s[0]) for s in segs], dtype=float)
+        cw = np.concatenate([[0.0], np.cumsum(w)])
+        cw[-1] = 1.0
+        moved = []
+        for x in cw:
+            j = int(np.argmin(np.abs(walls - float(x))))
+            moved.append(target.get(j, float(x)))
+        moved[0], moved[-1] = 0.0, 1.0
+        moved = np.maximum.accumulate(np.asarray(moved, dtype=float))
+        new = [(float(moved[k + 1] - moved[k]), segs[k][1])
+               for k in range(len(segs))]
+        new = [seg for seg in new if seg[0] > 0.0]
+        if not new:
+            return None
+        out.append(new)
+    return out
+
+
+def _sliver_collapse_solve(stack, side, src, shift=0.0):
+    """ONE re-solve of this stack with the sliver CLOSED to ``side``, and the
+    widest closed wall optionally DISPLACED by ``shift`` of a period.
+
+    Returns ``(super_unity, R, T)`` or ``None`` on any path the re-solve
+    cannot be run (a keyed or dispersive payload, an unresolved source, a
+    solve that raises for its own reasons) -- the same contract, and the same
+    narrowed exception surface, as :func:`_sliver_probe_solve`."""
+    import warnings as _warnings
+    try:
+        segs = _sliver_collapsed_segments(
+            [L[1] for L in stack._layers],
+            float(stack.min_feature) / float(stack.period), side,
+            float(shift))
+    except (AttributeError, TypeError, ValueError):   # pragma: no cover
+        return None
+    if segs is None:
+        return None
+    try:
+        clone = stack._min_feature_clone(float(stack.min_feature))
+    except (AttributeError, TypeError, ValueError):   # pragma: no cover
+        return None
+    clone._layers = [(L[0], segs[i], L[2])
+                     for i, L in enumerate(stack._layers)]
+    clone._src = dict(src)
+    clone._sliver_probe = True
+    try:
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("ignore")
+            _o, R, T, _J = clone.solve()
+    except (ValueError, NotImplementedError, RuntimeError):
+        return None
+    tot = (np.real(np.asarray(R)).sum(axis=-1)
+           + np.real(np.asarray(T)).sum(axis=-1))
+    if not np.size(tot) or not np.all(np.isfinite(tot)):
+        return None
+    return (max(float(np.max(tot)) - 1.0, 0.0), R, T)
+
+
+def _sliver_screen(stack, *, require_passive=True):
+    """``(hit, period, degree)`` when this stack carries a MANUFACTURED
+    cross-layer sliver, else ``None``.  Pure geometry -- it never solves and
+    never raises.
+
+    ``require_passive`` (the default, and rounds 1-3's only behaviour) also
+    demands that ``R + T <= 1`` be a THEOREM for the stack.  ROUND 4 calls it
+    with ``False`` from the arbiter, because the round-4 arbitration is a
+    comparison of ANSWERS and never reads an energy total: it is meaningful on
+    a stack the theorem says nothing about, and the passivity requirement is
+    applied where it belongs -- to the REFUSAL, whose scope this round does
+    not widen.  A non-provably-passive stack that the arbiter attributes is
+    WARNED instead (verification defect R3-C, the keyed ``prepare()`` case).
+
+    The geometric test runs FIRST because it is the cheaper of the two and
+    answers ``None`` on almost every stack: round 4 reaches this function on
+    every solve rather than only above the super-unity trigger."""
     if not PMM_SLIVER_GUARD or stack is None:
         return None
     if getattr(stack, "_sliver_probe", False):
         return None            # the arbiter's own re-solve is never arbitrated
+    try:
+        if stack._holds_traced():
+            # A TRACED stack is outside the guard entirely.  Rounds 1-3 got
+            # this for free: ``_stack_provably_passive`` cannot resolve a
+            # traced index and answered False, so the screen never fired.
+            # ROUND 4 asks the geometric question WITHOUT passivity, so the
+            # exclusion has to be explicit -- the arbiter's three re-solves
+            # would otherwise be run under a JAX trace, where they are neither
+            # cheap nor meaningful.
+            return None
+    except (AttributeError, TypeError, ValueError):   # pragma: no cover
+        return None
     try:
         layers = list(stack._layers)
         period = float(stack.period)
@@ -672,10 +885,14 @@ def _sliver_screen(stack):
         degree = int(stack.degree)
     except (AttributeError, TypeError, ValueError):  # pragma: no cover
         return None
-    if not layers or not _stack_provably_passive(stack):
+    if not layers:
         return None
     hit = _cross_layer_sliver([L[1] for L in layers], mf_frac)
-    return None if hit is None else (hit, period, degree)
+    if hit is None:
+        return None
+    if require_passive and not _stack_provably_passive(stack):
+        return None
+    return (hit, period, degree)
 
 
 def _sliver_source(stack, src):
@@ -758,30 +975,77 @@ def _sliver_probe_solve(stack, mf_fix, src):
 
 
 def _sliver_arbiter(stack, worst, R_eff, T_eff, src):
-    """WHICH cause moved this answer -- the sliver, or the truncation the
-    plain super-unity warning has always named?
+    """WHICH cause moved this answer -- the sliver, the DEVICE's own
+    sensitivity to where the contested wall sits, or the truncation the plain
+    super-unity warning has always named?
 
-    Returns ``None`` when the stack does not trip the geometric screen at all
-    (nothing changes), else ``(verdict, evidence)`` with ``verdict`` one of
+    ROUND 4 (2026-09-11).  Rounds 1-3 asked this question only of a solve that
+    READ super-unity, and answered it with a criterion whose first arm was the
+    super-unity of the re-solve.  Both are properties of an amplified rounding
+    -- the release CI matrix measured the SAME fixture reading ``R+T`` =
+    1.000115 on one BLAS kernel, 2.17298 on a second and 3.61242 on a third,
+    with the returned answer CORRECT on the first and WRONG by 4,789 x the
+    physical wall shift on the others -- so both the trigger and the
+    attribution were a property of the kernel.  Round 4 keys on neither:
 
-    ``'sliver'``      the super-unity FALLS AWAY on the prescribed
-                      ``min_feature`` grid -- to ``_SLIVER_ATTRIB_CLOSURE``
-                      outright, or by ``1 / _SLIVER_CLOSURE_FRACTION`` of
-                      itself, whichever is the weaker demand (ROUND 3) -- AND
-                      the answer moves far past the geometric perturbation
-                      that snap describes -> REFUSE.
-    ``'truncation'``  it SURVIVES (or the answer barely moves): the sliver is
-                      present and is not what moved the number -> WARN, and
-                      name ``degree`` / ``n_slices``.
-    ``'unknown'``     the one extra solve could not be run on this path -> the
-                      caller keeps ROUND 1's behaviour exactly.
+    * the guard ARBITRATES whenever the geometric screen finds a manufactured
+      sliver, whatever the solve reads (the screen is a deterministic fact
+      about the wall coordinates and the ``min_feature``); and
+    * it arbitrates by comparing the sliver ANSWER against sliver-free
+      answers of the same device, so what the criterion compares is an
+      efficiency against an efficiency.
 
-    Costs ONE solve, and only on a stack that already carries a manufactured
-    sliver, is provably passive, and reads super-unity above
-    ``_SLIVER_TRIGGER_BAR`` -- measured: 0 of 600 converged correct rows, and
-    11 ms (Windows) / 10 ms (WSL) mean on the 2-4 layer staircase box where it
-    does fire, i.e. 0.20x / 0.27x of the solve it guards."""
-    scr = _sliver_screen(stack)
+    THE THREE SLIVER-FREE SOLVES.  ``A_M`` is the grid the prescribed
+    ``min_feature = 2 w_wide P`` produces -- the refusal's remedy (1), which
+    snaps each colliding pair to its MIDPOINT; ``d0 = |A_sliver - A_M|`` is
+    the shipped ``_sliver_answer_move``, unchanged.  ``A_L`` is remedy (2),
+    "place the colliding walls at the SAME coordinate", and ``A_L'`` is that
+    same closed geometry with the contested wall DISPLACED by one widest
+    manufactured cell.  ``d12 = |A_L - A_L'|`` is therefore THIS DEVICE's own
+    answer change for a wall displacement of exactly the sliver's size,
+    measured on two grids that carry no sliver at all.
+
+    THE DENOMINATOR IS THE POINT.  The shipped move bar compares an efficiency
+    difference to a PERIOD FRACTION, i.e. it assumes ``dR/dx = O(1)``, and the
+    round-2 and round-3 verifications both refuted that (a correct row on a
+    guided-mode resonance reaches ``move/w_wide`` = 833.78, a correct row on a
+    many-slice taper 906.56, against a bar of 100).  ``d12`` measures that
+    derivative instead of assuming it.  It must be a displacement that changes
+    the device and not merely its position: closing the walls to the LEFT and
+    to the RIGHT produces two geometries of the SAME ridge width differing by
+    a pure TRANSLATION, and a translation leaves every efficiency unchanged
+    (measured: the two closed answers agree to 2e-7 of a widest cell on the
+    O-11 fixture and to 1e-7 on the round-2 guided-mode resonance), which is
+    why the displacement is applied to ONE wall group.
+
+    THE VERDICTS.
+
+    ``'sliver'``      ``d0`` is past BOTH the geometric floor
+                      (``_SLIVER_MOVE_FACTOR`` widest manufactured cells, the
+                      campaign's own ``err > 100 delta`` WRONG rule) and
+                      ``_SLIVER_WALL_RATIO`` times the device's own ``d12``
+                      -> the sliver moved this answer -> REFUSE on a provably
+                      passive stack, WARN otherwise.
+    ``'wall'``        ``d0`` is past the floor but NOT past the device's own
+                      wall sensitivity: the answer depends on where that wall
+                      is put, and the sliver is not distinguishable from that
+                      dependence -> RETURN, with a warning that names it.
+                      This is the guided-mode-resonance / tapered class that
+                      rounds 2 and 3 refused on the move arm alone.
+    ``'truncation'``  ``d0`` is under the floor: the sliver is present and did
+                      not move this answer -> RETURN, and (above the plain
+                      warning bar) name ``degree`` / ``n_slices``.
+    ``'unknown'``     one of the two extra solves could not be run on this
+                      path -> the caller keeps ROUND 1's behaviour exactly.
+
+    The super-unity evidence (``snapped_super_unity``, ``drop``, ``closure``)
+    is still MEASURED and still carried in ``evidence`` because it makes the
+    refusal message concrete where it is present -- but no verdict depends on
+    it any more.
+
+    Costs THREE solves, and only on a stack that carries a manufactured
+    sliver at all."""
+    scr = _sliver_screen(stack, require_passive=False)
     if scr is None:
         return None
     hit, period, _degree = scr
@@ -793,24 +1057,39 @@ def _sliver_arbiter(stack, worst, R_eff, T_eff, src):
     probe = _sliver_probe_solve(stack, mf_fix, rec)
     if probe is None:
         return ("unknown", None)
-    su, R2, T2 = probe
-    move = _sliver_answer_move(R_eff, T_eff, R2, T2)
-    if move is None:                                 # pragma: no cover
+    su, R1, T1 = probe
+    alt = _sliver_collapse_solve(stack, "left", rec)
+    if alt is None:
         return ("unknown", None)
-    # ROUND 3 (verification defect D-5): the closure is RELATIVE -- the
-    # prescribed snap has to REMOVE most of the violation rather than reach a
-    # fixed floor, which a stack whose own truncation floor sits above that
-    # floor can never do.  The round-2 absolute value is kept as the lower arm
-    # of the max, so this criterion is never STRICTER than round 2's: every
-    # solve round 2 attributed is still attributed, and only a ``truncation``
-    # verdict can become a ``sliver`` one.
+    su2, R2, T2 = alt
+    # The displacement is applied OUTWARD first and INWARD as the fallback:
+    # a flagged group that already sits against its neighbour cannot be moved
+    # one way, and a verdict of ``unknown`` there would put the caller back on
+    # round 1's behaviour -- which is the false-positive-prone one -- for a
+    # purely geometric reason.
+    sens = _sliver_collapse_solve(stack, "left", rec, w_wide)
+    if sens is None:
+        sens = _sliver_collapse_solve(stack, "left", rec, -w_wide)
+    if sens is None:
+        return ("unknown", None)
+    _su3, R3, T3 = sens
+    d0 = _sliver_answer_move(R_eff, T_eff, R1, T1)
+    d12 = _sliver_answer_move(R2, T2, R3, T3)
+    if d0 is None or d12 is None:                    # pragma: no cover
+        return ("unknown", None)
     violation = max(worst - 1.0, 0.0)
     closure = max(_SLIVER_ATTRIB_CLOSURE, violation * _SLIVER_CLOSURE_FRACTION)
-    drop = (violation / su) if su > 0.0 else float("inf")
-    ev = dict(snapped_super_unity=su, move=move, w_wide=w_wide, mf_fix=mf_fix,
-              hit=hit, closure=closure, drop=drop, violation=violation)
-    attributed = (su <= closure and move > _SLIVER_MOVE_FACTOR * w_wide)
-    return ("sliver" if attributed else "truncation", ev)
+    ev = dict(snapped_super_unity=su, closed_super_unity=su2, move=d0,
+              d12=d12, w_wide=w_wide, mf_fix=mf_fix, hit=hit,
+              closure=closure, violation=violation,
+              drop=(violation / su) if su > 0.0 else float("inf"),
+              d0_over_w=(d0 / w_wide) if w_wide > 0.0 else float("inf"),
+              d0_over_d12=(d0 / d12) if d12 > 0.0 else float("inf"))
+    if d0 <= _SLIVER_MOVE_FACTOR * w_wide:
+        return ("truncation", ev)
+    if d0 > _SLIVER_WALL_RATIO * d12:
+        return ("sliver", ev)
+    return ("wall", ev)
 
 
 def _within_layer_hazard(stack, src):
@@ -848,16 +1127,23 @@ def _within_layer_hazard(stack, src):
     return (w, q, n_max)
 
 
-def _sliver_refusal(stack, worst, *, evidence=None):
+def _sliver_refusal(stack, worst, *, evidence=None, refuse=True):
     """The refusal message when a stack trips the guard, else ``None``.
 
     Never raises and never changes a number; :func:`_warn_stack_energy` raises
-    on the message.  Costs nothing on a healthy solve: its only caller reaches
-    it after the super-unity test has already fired.  ``evidence`` is the
-    ARBITER's record when the one extra solve could be run -- the message then
-    states what it measured; without it the message says so, and the caller is
-    on round 1's behaviour."""
-    scr = _sliver_screen(stack)
+    on the message.  ``evidence`` is the ARBITER's record when its two extra
+    solves could be run -- the message then states what they measured; without
+    it the message says so, and the caller is on round 1's behaviour.
+
+    ``refuse=False`` (ROUND 4) renders the same attribution as a WARNING
+    rather than a refusal: it is the wording for a stack the arbiter
+    attributes but which is NOT provably passive, where this round declines to
+    widen the refusal's scope (verification defect R3-C)."""
+    # ``refuse=True`` is a REFUSAL, and this round does not widen the
+    # refusal's scope past the stacks for which ``R + T <= 1`` is a theorem;
+    # ``refuse=False`` is the warning that carries the same attribution on a
+    # stack the theorem says nothing about (verification defect R3-C).
+    scr = _sliver_screen(stack, require_passive=refuse)
     if scr is None:
         return None
     hit, period, degree = scr
@@ -877,34 +1163,72 @@ def _sliver_refusal(stack, worst, *, evidence=None):
              if np.isfinite(wl) else "0.65 N(N+1)/4 / (k0 J)")
     if evidence is None:
         attrib = (
-            "  ATTRIBUTION: the one-solve arbiter could NOT be run on this "
+            "  ATTRIBUTION: the three-solve arbiter could NOT be run on this "
             "path (no resolved source, or dispersive / keyed materials the "
             "re-solve cannot materialise), so the sliver is named from the "
             "geometry and the theorem alone -- which is exactly the 2026-09-11 "
             "round-1 behaviour.  ")
     else:
-        drop = evidence.get("drop", float("inf"))
         viol = evidence.get("violation", max(worst - 1.0, 0.0))
-        drop_txt = (f"ALL of the 1+{viol:.3g} this solve reads"
-                    if not np.isfinite(drop) else
-                    f"a {drop:.4g}x drop from the 1+{viol:.3g} this solve "
-                    f"reads")
+        su = evidence.get("snapped_super_unity", 0.0)
+        drop = evidence.get("drop", float("inf"))
+        corrob = ""
+        if viol > _SLIVER_TRIGGER_BAR:
+            drop_txt = ("removing ALL of it" if not np.isfinite(drop)
+                        else f"a {drop:.4g}x drop")
+            corrob = (
+                f"  CORROBORATION (not a criterion, and not what this "
+                f"refusal turns on): this solve also reads max R+T = "
+                f"1+{viol:.3g} on a passive stack, and the same re-solve puts "
+                f"that at 1+{su:.3g}, {drop_txt}.  Rounds 1-3 keyed BOTH the "
+                f"trigger and the attribution on that reading; it is an "
+                f"amplified rounding through a 1/w^2-conditioned interface "
+                f"and its magnitude, and even its sign, are a property of the "
+                f"BLAS kernel, so round 4 records it and decides on the "
+                f"answers instead.  ")
         attrib = (
-            f"  ATTRIBUTION, MEASURED ON THIS CALL (one extra solve): "
-            f"re-solved on the min_feature={evidence['mf_fix']:.4g} grid the "
-            f"cell is gone and the super-unity GOES WITH IT -- max R+T there "
-            f"is 1+{evidence['snapped_super_unity']:.3g}, i.e. {drop_txt} "
-            f"(bar: the snap must remove {1.0 / _SLIVER_CLOSURE_FRACTION:.3g}x "
-            f"of the violation, or reach {_SLIVER_ATTRIB_CLOSURE:g} outright, "
-            f"whichever is the weaker demand -- here "
-            f"{evidence.get('closure', _SLIVER_ATTRIB_CLOSURE):.3g}) -- while "
-            f"the answer MOVES {evidence['move']:.3g} in per-order "
-            f"efficiency, {evidence['move'] / evidence['w_wide']:.4g}x the "
-            f"widest manufactured cell (bar {_SLIVER_MOVE_FACTOR:g}x).  So "
-            f"the SLIVER moved this answer, not degree / n_slices: this "
-            f"refusal is an attribution, not a guess.  ")
+            f"  ATTRIBUTION, MEASURED ON THIS CALL (three extra solves): "
+            f"re-solved on the min_feature={evidence['mf_fix']:.4g} grid that "
+            f"snaps the colliding walls to their midpoints, the answer MOVES "
+            f"{evidence['move']:.3g} in per-order efficiency -- "
+            f"{evidence['d0_over_w']:.4g}x the widest manufactured cell (bar "
+            f"{_SLIVER_MOVE_FACTOR:g}x).  And this device's OWN sensitivity to "
+            f"where that wall sits was MEASURED, not assumed: solved twice "
+            f"more with the colliding walls CLOSED onto one coordinate and "
+            f"then that closed wall DISPLACED by one widest manufactured cell "
+            f"-- two grids carrying no sliver at all -- the answer changes by "
+            f"only {evidence['d12']:.3g}.  So moving that wall by a whole "
+            f"sliver width is worth {evidence['d12']:.3g} to this device "
+            f"while the sliver is worth {evidence['move']:.3g}: the ratio is "
+            f"{evidence['d0_over_d12']:.4g}x against a bar of "
+            f"{_SLIVER_WALL_RATIO:g}x.  So the SLIVER moved this answer, not "
+            f"degree / n_slices and not the device's own wall sensitivity: "
+            f"this is an attribution, not a guess.  " + corrob)
+    head = ("REFUSED" if refuse else
+            "WARNING (the answer is RETURNED, see below)")
+    theorem = (
+        f"and this solve returned max R+T = {worst:.6g}, super-unity by more "
+        f"than {_SLIVER_TRIGGER_BAR:g} on a PROVABLY PASSIVE stack with a "
+        f"lossless propagating incidence medium, where R+T <= 1 is a theorem"
+        if (refuse and worst > 1.0 + _SLIVER_TRIGGER_BAR) else
+        f"and this solve returned max R+T = {worst:.6g}"
+        + (" on a PROVABLY PASSIVE stack with a lossless propagating "
+           "incidence medium, where R+T <= 1 is a theorem -- which this "
+           "reading does NOT violate, and does not have to: ROUND 4 attributes "
+           "on the ANSWER, not on the energy reading (the release CI matrix "
+           "measured this same class reading 1.000115 on one BLAS kernel and "
+           "3.61242 on another, wrong on both)" if refuse else
+           " on a stack for which R+T <= 1 is NOT provable, so the guard "
+           "WARNS here instead of refusing: this round does not widen the "
+           "refusal's scope"))
+    verdict_txt = (
+        "The answer is WRONG (measured 0.48 to 8.6 in absolute per-order "
+        "efficiency on the reproducer), so it is refused rather than returned."
+        if refuse else
+        "The answer is RETURNED unchanged and is very probably wrong: on a "
+        "provably passive stack this same evidence is a refusal.")
     return (
-        f"PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the "
+        f"PMMStack.solve: {head} -- a NEAR-COINCIDENT-WALL SLIVER on the "
         f"shared union grid.  The union of the layers' walls carries {n_hit} "
         f"cell(s) no single layer asked for; the narrowest is {w:.3g} of a "
         f"period ({w * period:.4g} m) between walls {x_l:.10g} and "
@@ -913,12 +1237,7 @@ def _sliver_refusal(stack, worst, *, evidence=None):
         f"spectral-element Jacobian scales the nodal Kx^2 as 1/w^2 and injects "
         f"spurious modal wavenumbers |q| ~ {q_txt} against a physical "
         f"index ceiling of a few, conditioning the interface mode-match as "
-        f"1/w^2 -- and this solve returned max R+T = {worst:.6g}, super-unity "
-        f"by more than {_SLIVER_TRIGGER_BAR:g} on a PROVABLY PASSIVE stack "
-        f"with a lossless propagating incidence medium, where R+T <= 1 is a "
-        f"theorem.  The answer is WRONG (measured 0.48 to 8.6 in absolute "
-        f"per-order efficiency on the reproducer), so it is refused rather "
-        f"than returned.  REMEDIES, in order: (1) pass "
+        f"1/w^2 -- {theorem}.  {verdict_txt}  REMEDIES, in order: (1) pass "
         f"min_feature={mf_fix:.4g} (metres) so the colliding cross-layer walls "
         f"snap to their midpoints -- the snap moves each wall by at most "
         f"{0.5 * mf_fix:.4g} m and the snapped answer was measured to land "
@@ -935,9 +1254,10 @@ def _sliver_refusal(stack, worst, *, evidence=None):
         f"for this solve (see ATTRIBUTION below), and where it could not, it "
         f"says so.  Choose min_feature where the answer is stationary in "
         f"BOTH degree and min_feature.  " + attrib
-        + "See docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md and "
-        "docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md and "
-        "docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md; set "
+        + "See docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md, "
+        "docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md, "
+        "docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md and "
+        "docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND4_2026_09_11.md; set "
         "lumenairy.elements.pmm.stack.PMM_SLIVER_GUARD = False to restore "
         "the pre-fix warn-and-return behaviour.")
 
@@ -962,35 +1282,48 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
       many-interface tapered z-staircase can hit it at large ``n_slices``).
       Kept a WARNING (not a raise) so it never breaks an existing working
       solve; reduce ``n_slices`` / raise ``degree`` to clear it.
-    * ``R+T > 1`` AND the caller passed the ``stack`` it came from AND that
-      stack carries a manufactured near-coincident-wall sliver on a provably
-      passive geometry -> ask :func:`_sliver_arbiter` WHICH cause moved the
-      answer, and act on its verdict (O-11 round 1 2026-09-11, round 2
-      2026-09-11):
+    * the caller passed the ``stack`` it came from AND that stack carries a
+      MANUFACTURED near-coincident-wall sliver -> ask :func:`_sliver_arbiter`
+      WHICH cause moved the answer, and act on its verdict.
 
-      - ``'sliver'`` -> **raise**.  The super-unity falls away on the
-        prescribed ``min_feature`` grid -- to ``_SLIVER_ATTRIB_CLOSURE``
-        outright or by ``1 / _SLIVER_CLOSURE_FRACTION`` of itself, whichever
-        is the weaker demand (ROUND 3, defect D-5) -- and the answer moves far
-        past the geometric perturbation that snap describes, so the number is
-        not merely unreliable, it is wrong -- and the refusal names the
-        ``min_feature`` that removes the cell AND what the arbiter measured.
-      - ``'truncation'`` -> **warn** (this bar's ordinary warning, with one
-        sentence saying a sliver is present and is NOT the cause).  Round 1
-        refused 110 of 648 realistic staircases here whose answers were
-        within 0.35-8.8x the physical wall shift.
-      - ``'unknown'`` (the arbiter could not run: keyed / dispersive
-        materials, no resolved source) -> ROUND 1's behaviour, unchanged:
-        raise above ``_STACK_SUPERUNITY_BAR``, warn below it.
+      ROUND 4 (2026-09-11) removed the super-unity PRECONDITION on this arm.
+      Rounds 1-3 asked the question only when the solve read above
+      ``_SLIVER_TRIGGER_BAR``, so a sliver-corrupted answer that happened to
+      read 1+1.15e-04 on the running BLAS kernel was returned silently while
+      the SAME row on another kernel read 1+2.17 and was refused -- the
+      release CI matrix for 5.45.0 measured exactly that.  What decides
+      whether the arbiter runs is now the GEOMETRIC screen, which is a
+      deterministic fact about the wall coordinates and the ``min_feature``.
+
+      - ``'sliver'`` -> **raise** on a provably passive stack; on one that is
+        not provably passive, **warn** with the same attribution rather than
+        widen the refusal's scope (verification defect R3-C).
+      - ``'wall'`` -> **warn**.  The answer does move with the sliver, but the
+        device's own measured sensitivity to that wall's position accounts
+        for the move; the number is returned and the warning says it is only
+        as well defined as the wall is.  This is the guided-mode-resonance /
+        many-slice-taper class rounds 2 and 3 refused on the move arm alone.
+      - ``'truncation'`` -> **warn** above ``_STACK_SUPERUNITY_BAR`` (this
+        bar's ordinary warning, with one sentence saying a sliver is present
+        and is NOT the cause), silent below it.  Round 1 refused 110 of 648
+        realistic staircases here whose answers were within 0.35-8.8x the
+        physical wall shift.
+      - ``'unknown'`` (the three extra solves could not be run: keyed /
+        dispersive materials, no resolved source) -> ROUND 1's behaviour,
+        unchanged: raise above ``_STACK_SUPERUNITY_BAR`` on a provably
+        passive stack, warn below it.
 
       ``stack=None`` (the 2-D caller, and any caller that has not opted in)
       keeps the warning exactly as it was.
 
-    * ``R+T > 1`` AND the narrowest cell a SINGLE layer OWNS is
-      thin enough to inject spurious ``|q|`` past ``_SLIVER_Q_EXCESS`` times
-      the stack's index ceiling -> **warn** with the mechanism and the
-      per-layer / mortar / 2-D routes (verification defect V-6).  Never
-      refused: that cell is the geometry the caller ASKED for.
+    * the narrowest cell a SINGLE layer OWNS is thin enough to inject
+      spurious ``|q|`` past ``_SLIVER_Q_EXCESS`` times the stack's index
+      ceiling -> **warn** with the mechanism and the per-layer / mortar / 2-D
+      routes (verification defect V-6).  Never refused: that cell is the
+      geometry the caller ASKED for.  ROUND 4 removed the super-unity
+      precondition here too (defect R2-B: the measured liner that is
+      1.06e-03 wrong reads ``R+T`` = 0.999221, i.e. SUB-unity, and the arm
+      was silent on it).
 
     ``src`` is the ``(wl, angle, phi)`` record the arbiter must re-solve at,
     and is passed explicitly by the callers whose wavelength is not
@@ -1013,52 +1346,62 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
             f"{least:.3e}); the efficiency normalisation is non-physical -- a "
             "gain or non-propagating incidence medium slipped past the entry "
             "guards (kz_inc < 0 negates every order).")
-    if worst <= 1.0 + _SLIVER_TRIGGER_BAR:
-        return
+    import warnings
+    # ROUND 4 (2026-09-11): the arbiter is NOT gated on the super-unity
+    # reading any more.  Rounds 1-3 returned here whenever the solve read
+    # below the trigger, so a sliver-corrupted answer that happened to read
+    # 1+1.15e-04 on the running BLAS kernel was returned silently while the
+    # SAME row on another kernel read 1+2.17 and was refused.  The screen
+    # inside the arbiter is a deterministic fact about the wall coordinates,
+    # so it is what decides whether the three extra solves are paid.
     verdict = _sliver_arbiter(stack, worst, R_eff, T_eff, src)
     note = ""
     if verdict is not None:
         kind, ev = verdict
+        passive = _stack_provably_passive(stack)
         if kind == "sliver":
-            raise ValueError(_sliver_refusal(stack, worst, evidence=ev))
-        if kind == "unknown" and worst > 1.0 + _STACK_SUPERUNITY_BAR:
-            raise ValueError(_sliver_refusal(stack, worst))
-        if kind == "truncation":
-            # ROUND 3: say WHICH of the two criteria was not met, and quote
-            # what was MEASURED.  Round 2 ended this note with "raising
-            # min_feature will silence nothing here" unconditionally, which is
-            # false on every row whose snap DOES remove the violation and
-            # whose verdict turns on the move criterion instead -- and false
-            # by 621x-5,181x on the class of verification defect D-5.
-            su_snap = ev["snapped_super_unity"]
-            drop = ev.get("drop", float("inf"))
-            mv = ev["move"] / ev["w_wide"]
-            if su_snap <= ev.get("closure", _SLIVER_ATTRIB_CLOSURE):
-                why = (
-                    f"the super-unity DOES fall away there -- to "
-                    f"1+{su_snap:.3g}, a {drop:.4g}x drop -- but the answer "
-                    f"moves only {mv:.3g}x the widest manufactured cell "
-                    f"against the {_SLIVER_MOVE_FACTOR:g}x an attribution "
-                    f"asks for, so this number does not depend on that cell.  "
-                    f"Raising min_feature removes the cell without moving the "
-                    f"answer")
-            else:
-                why = (
-                    f"the super-unity SURVIVES at 1+{su_snap:.3g} -- a "
-                    f"{drop:.4g}x drop from the "
-                    f"1+{ev.get('violation', max(worst - 1.0, 0.0)):.3g} here, "
-                    f"against the {1.0 / _SLIVER_CLOSURE_FRACTION:.3g}x an "
-                    f"attribution asks for -- and the answer moves {mv:.3g}x "
-                    f"the widest manufactured cell (bar "
-                    f"{_SLIVER_MOVE_FACTOR:g}x).  Raising min_feature leaves "
-                    f"1+{su_snap:.3g} standing")
+            if passive:
+                raise ValueError(_sliver_refusal(stack, worst, evidence=ev))
+            # NOT provably passive: round 4 declines to widen the refusal's
+            # scope, so the same attribution is delivered as a warning
+            # (verification defect R3-C, the keyed prepare() class).
+            msg = _sliver_refusal(stack, worst, evidence=ev, refuse=False)
+            if msg is not None:
+                warnings.warn(msg, stacklevel=3)
+        elif kind == "wall":
+            warnings.warn(
+                f"PMMStack.solve: a near-coincident-wall SLIVER "
+                f"({ev['hit'][0]:.3g} of a period) IS present on the union "
+                f"grid and this answer DOES move with it -- {ev['move']:.3g} "
+                f"in per-order efficiency, {ev['d0_over_w']:.4g}x the widest "
+                f"manufactured cell -- but SO DOES THE SAME DEVICE WITH THE "
+                f"SLIVER REMOVED: with the colliding walls CLOSED onto one "
+                f"coordinate, DISPLACING that closed wall by one widest "
+                f"manufactured cell already moves the answer by "
+                f"{ev['d12']:.3g}, only {ev['d0_over_d12']:.4g}x less (bar "
+                f"{_SLIVER_WALL_RATIO:g}x)."
+                f"  This device's far field is SENSITIVE TO WHERE THAT WALL "
+                f"IS PUT, so the move cannot be attributed to the sliver and "
+                f"the answer is RETURNED -- but it is only as well defined as "
+                f"that wall position is.  Place the colliding walls at the "
+                f"SAME coordinate, or pass min_feature={ev['mf_fix']:.4g} "
+                f"(metres), and check the answer is stationary in BOTH "
+                f"min_feature and degree.", stacklevel=3)
+        elif kind == "unknown":
+            if passive and worst > 1.0 + _STACK_SUPERUNITY_BAR:
+                raise ValueError(_sliver_refusal(stack, worst))
+        elif kind == "truncation" and worst > 1.0 + _STACK_SUPERUNITY_BAR:
+            # ROUND 4: the note no longer quotes a closure the decision does
+            # not use.  It says what it measured, which is the move.
             note = (
                 f"  A near-coincident-wall SLIVER ({ev['hit'][0]:.3g} of a "
                 f"period) IS present on the union grid but is NOT what moved "
-                f"this answer: re-solved on the min_feature={ev['mf_fix']:.4g} "
-                f"grid that removes it, {why} -- reduce n_slices or raise "
-                f"degree.")
-    import warnings
+                f"this answer: re-solved on the min_feature="
+                f"{ev['mf_fix']:.4g} grid that removes it, the answer moves "
+                f"only {ev['d0_over_w']:.3g}x the widest manufactured cell "
+                f"against the {_SLIVER_MOVE_FACTOR:g}x an attribution asks "
+                f"for.  Raising min_feature removes the cell without moving "
+                f"the answer -- reduce n_slices or raise degree.")
     if worst > 1.0 + _STACK_SUPERUNITY_BAR:
         warnings.warn(
             f"PMMStack.solve: energy not conserved (max R+T = {worst:.3g} > 1) "
@@ -1078,8 +1421,8 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
             f"|q| ~ {q_l:.3g} against this stack's physical index ceiling of "
             f"{n_max:.3g} ({q_l / n_max:.3g}x, bar {_SLIVER_Q_EXCESS:g}x), and "
             f"this solve read max R+T = {worst:.6g} on a PROVABLY PASSIVE "
-            f"stack where R+T <= 1 is a theorem -- i.e. the SAME mechanism as "
-            f"the cross-layer sliver refusal, on a cell nobody can snap away "
+            f"stack -- i.e. the SAME mechanism as the cross-layer sliver "
+            f"refusal, on a cell nobody can snap away "
             f"(measured: a liner at 1e-6 of a period costs err 1.06e-03, at "
             f"1e-7 err 1.05 with R+T from 0.571 to 4.19).  Keep the feature "
             f"OFF the shared grid: layer_grids='per-layer' (measured err/d = "
