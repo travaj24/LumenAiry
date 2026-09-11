@@ -26,7 +26,7 @@ import warnings
 
 import numpy as np
 
-from ._orient import channel_core, flux_is_strong
+from ._orient import _BOR_CHANNEL_IMAG_BAR, channel_core, flux_is_strong
 from .zcascade import (
     interface_smatrix,
     layer_modes,
@@ -180,6 +180,68 @@ _BOR_PASSIVE_DEADBAND = 16.0 * float(np.finfo(float).eps)
 _BOR_INDEX_CEILING_SLACK = 5.0e-10
 
 
+def _index_ceiling_slack(L, n_max):
+    """The index-ceiling slack for ONE half-space: the base
+    :data:`_BOR_INDEX_CEILING_SLACK` where the medium is lossless, widened by a
+    DERIVED term where it absorbs.
+
+    ROUND 3 (verification round 2, GAP 2) -- WHY THE CONJUNCT CAN BE ARMED ON A
+    LOSSY HALF-SPACE AT ALL, and what it costs.
+
+    Until round 3 the conjunct was silent wherever ``_layer_is_lossless`` was
+    false, on the reasoning that with a complex ``eps`` the transverse operator
+    is complex-symmetric and ``Re q <= n k0`` is "only approximate".  The first
+    half is right; the second is not a statement, it is the absence of one.
+    The bound, stated:
+
+      * ``q^2`` is an eigenvalue of ``eps k0^2 + D`` with ``D`` real symmetric
+        NEGATIVE SEMI-DEFINITE.  An eigenvalue lies in the numerical range, and
+        for any unit ``x``, ``Re(x* (eps k0^2 + D) x) = k0^2 sum Re(eps_i)
+        |x_i|^2 + x* D x <= k0^2 max(Re eps)``.  So
+        ``Re(q^2) <= max(Re eps) k0^2`` EXACTLY, on a passive medium, lossy or
+        not -- the Rayleigh argument applies to the REAL PART and needs no
+        losslessness.
+      * In the dimensionless index, ``Re(qn)^2 - Im(qn)^2 = Re(qn^2) <= n^2``.
+        The R/T channel gate returns only modes with
+        ``|Im qn| < _BOR_CHANNEL_IMAG_BAR``, so
+        ``Re qn < sqrt(n^2 + imag_bar^2) <= n + imag_bar^2 / (2 n)``.
+
+    So the ceiling holds on an absorbing half-space with ONE extra term, and
+    that term is not calibrated: it is ``_BOR_CHANNEL_IMAG_BAR^2 / (2 n)``, two
+    library constants and the medium's own index.  At ``imag_bar`` = 5e-5 it is
+    **1.25e-09 / n** -- for ``n = 1`` the largest it can ever be.
+
+    MEASURED, 640 solves with the loss on ``layers[0]`` and on BOTH half-spaces
+    over ``Im/Re`` = 1e-12 .. 1e-1, 2 families x m 0..3 x N 120/200 x
+    Rbig/lambda 0.5/1/2/4, both bases
+    (``validation/probe_fix_bor_round3/g2_lossy_ceiling.py``; 384 rows return
+    channels, the rest are emptied by the channel gate at ``Im/Re >= 1e-3``):
+
+        NODAL, channel set RIGHT, 216 rows   worst ``Re qn - n`` = -1.999276e-03
+        STAGGERED, all 384 rows              worst ``Re qn - n`` = -1.712581e-04
+        --------------------------------     ----------------------------------
+        NODAL, channel set WRONG, 168 rows   fires on 144, mildest +7.108677e-06
+
+    **Zero false positives on 600 undamaged rows**, the two populations on
+    OPPOSITE SIDES OF ZERO, the mildest violation **4.15 decades above the base
+    slack** and **3.75 decades above the widened one**, and the closest
+    undamaged approach **2.70 decades below zero** (nodal) / 3.77 (staggered).
+    The derived term is therefore 5.1 decades inside the nearest measurement on
+    either side: it can only ever decide a case neither population reaches.
+
+    WHAT IT BUYS.  Of the 168 set-wrong rows in that census, **72** are refused
+    ONLY because the conjunct is armed on a lossy half-space -- the rows where
+    BOTH half-spaces absorb, which a ``_layer_is_lossless`` gate silences on
+    both sides at once.
+    """
+    if _layer_is_lossless(L):
+        return _BOR_INDEX_CEILING_SLACK
+    n = float(n_max)
+    if not np.isfinite(n) or n <= 0.0:
+        return float("inf")          # cannot bound it: refuse nothing
+    return _BOR_INDEX_CEILING_SLACK + _BOR_CHANNEL_IMAG_BAR ** 2 / (2.0 * n)
+
+
 class BORNodalPassivityError(ValueError):
     """Raised by :func:`solve` when the LEGACY NODAL cascade returns
     non-physical ``R + T`` on a stack that is provably passive.
@@ -216,14 +278,25 @@ def _stack_is_provably_passive(layers):
     ``n = 1.5 + 1e-8i``, or any dispersion fit with a residual imaginary part,
     took the whole guard out.
 
-    WHAT STAYS.  The LOSSLESS requirement on the INCIDENCE half-space is kept,
-    because that is where the theorem actually needs it: ``R`` and ``T`` are
-    formed from a basis normalised to unit ``|z-flux|`` per mode, and in an
-    absorbing incidence medium a mode's flux is not a conserved power, so the
-    sums are not power fractions and there is nothing for a bar to mean.  The
-    1-D peer ``pmm/stack._stack_provably_passive`` excludes an absorbing
-    superstrate for the same reason and records the measured 1.00026 / 1.0152 /
-    1.0303 super-unity ladder it legitimately produces.
+    WHAT STAYS, AND WHAT IT IS NO LONGER ALLOWED TO REACH.  The LOSSLESS
+    requirement on the INCIDENCE half-space is kept, because that is where the
+    ENERGY theorem actually needs it: ``R`` and ``T`` are formed from a basis
+    normalised to unit ``|z-flux|`` per mode, and in an absorbing incidence
+    medium a mode's flux is not a conserved power, so the sums are not power
+    fractions and there is nothing for a bar to mean.  The 1-D peer
+    ``pmm/stack._stack_provably_passive`` excludes an absorbing superstrate for
+    the same reason and records the measured 1.00026 / 1.0152 / 1.0303
+    super-unity ladder it legitimately produces.
+
+    ROUND 3 (verification round 2, GAP 2) -- THIS PREDICATE NO LONGER GATES THE
+    INDEX CEILING.  Until round 3 it was the single early return
+    :func:`_check_nodal_passivity` took for BOTH detectors, so the conjunct
+    above -- an energy argument -- disarmed the ceiling too, and D1's own
+    discontinuity at ``Im(eps) = 0+`` survived on ``layers[0]``.  Measured: a
+    3e-12 loss there walked a returned ``max(R + T) = 2.41297`` past both
+    detectors against a twin closing to 1 exactly.  The media half is now
+    :func:`_stack_media_are_passive`, which gates both; THIS predicate gates
+    the energy detector alone.
 
     GAIN IS NOT PASSIVE and stays outside the screen entirely: a stack with
     ``Im eps < 0`` has no energy theorem in either direction, so both halves
@@ -242,15 +315,43 @@ def _stack_is_provably_passive(layers):
     nodal cascade accepts; a layer that could not produce the fact answers
     ``None`` and disarms.
     """
+    return (_stack_media_are_passive(layers)
+            and _layer_is_lossless(layers[0]))
+
+
+def _stack_media_are_passive(layers):
+    """``Im eps >= 0`` on every layer, to :data:`_BOR_PASSIVE_DEADBAND` --
+    :func:`_stack_is_provably_passive` WITHOUT its incidence-lossless conjunct.
+
+    ROUND 3 (verification round 2, GAP 2) -- WHY THE TWO ARE NOW SEPARATE.
+    The incidence-lossless conjunct is about the ENERGY: ``R`` and ``T`` are
+    formed from a unit-``|z-flux|`` basis, so in an absorbing incidence medium
+    they are not power fractions and no energy bar can mean anything.  It is
+    NOT about the INDEX CEILING, whose Rayleigh argument concerns one
+    half-space's own ``eps`` and is untouched by whether the incidence medium's
+    flux is conserved.  Until round 3 the two detectors shared one early
+    return, so a loss of ANY size on ``layers[0]`` -- 3e-12 included, the exact
+    rung defect D1 was named for -- disarmed BOTH.
+
+    MEASURED, the hole that left (ladder D of
+    ``validation/probe_verify_bor_round2/v3_ladders.py``, reproduced by
+    ``validation/probe_fix_bor_round3/g2_ladder_d.py``): a damaging ring stack
+    whose ONLY loss is ``Im/Re`` = 1e-6 on the incidence half-space returns
+    ``max(R + T) = 2.41297`` in silence while the div-conforming twin on the
+    identical geometry closes to 8.75e-07 -- 6.2 decades of excess the flux
+    bookkeeping cannot account for, and more at every rung below it.
+
+    GAIN still disarms everything: a stack with ``Im eps < 0`` has no energy
+    theorem in either direction AND no Rayleigh bound (the transverse operator
+    is not negative semi-definite), so both detectors stay off.
+    """
     if not layers:
         return False
-    for i, L in enumerate(layers):
+    for L in layers:
         rel = L.get("min_rel_im_eps")
         if rel is None or not np.isfinite(float(rel)):
             return False
         if float(rel) < -_BOR_PASSIVE_DEADBAND:      # GAIN
-            return False
-        if i == 0 and not _layer_is_lossless(L):     # the incidence medium
             return False
     return True
 
@@ -302,16 +403,45 @@ def _channel_index_excess(L, qn):
 
 def _check_nodal_passivity(layers, energy, channels=()):
     """Refuse (or warn about) a non-physical answer from the legacy nodal
-    cascade.  No-op on the staggered basis, on a stack with GAIN, on a stack
-    with an absorbing incidence medium, and when
+    cascade.  No-op on the staggered basis, on a stack with GAIN, and when
     :data:`BOR_NODAL_PASSIVITY_GUARD` is ``False``.
+
+    ROUND 3 (verification round 2, GAP 2) -- THE TWO DETECTORS ARE GATED
+    SEPARATELY, AND THAT IS THE WHOLE OF THE ROUND-3 CHANGE HERE.
+
+        GAIN, or a payload that cannot answer          -> BOTH detectors off
+          (:func:`_stack_media_are_passive`)
+        absorbing INCIDENCE medium                     -> the ENERGY detector
+          (``not _layer_is_lossless(layers[0])``)         off, the CEILING on
+        absorbing EXIT medium                          -> that side's ceiling
+          (``not _layer_is_lossless(L)`` per side)        conjunct off
+
+    Until round 3 the incidence-lossless conjunct lived inside
+    :func:`_stack_is_provably_passive`, which BOTH detectors shared as one
+    early return -- so a loss of any size on ``layers[0]`` took the index
+    ceiling out with the energy screen.  That is defect D1's own shape,
+    relocated rather than removed, and it is what GAP 2 measured: a damaging
+    ring stack whose ONLY loss is ``Im/Re`` = 1e-6 on the incidence half-space
+    returned ``max(R + T) = 2.41297`` in silence while its div-conforming twin
+    closed to 8.75e-07.  The conjunct is about the ENERGY -- ``R`` and ``T``
+    come from a unit-``|z-flux|`` basis, so in an absorbing incidence medium
+    they are not power fractions -- and says nothing about the ceiling, whose
+    Rayleigh bound concerns one half-space's own ``eps``.
+
+    MEASURED after the split (``validation/probe_fix_bor_round3/
+    g2_ladder_d.py``, both builds, four loaded kernels): ladder D reads
+    **4 of 13 -> 13 of 13** refused (4 by the energy detector, 9 by the
+    ceiling), and **0 of 52** rows of healthy stacks -- geometries SCREENED to
+    return the same channel counts as their staggered twins -- are refused or
+    warned while carrying the same loss on the same layer.
 
     TWO DETECTORS, ROUND 2, and they are independent:
 
-    1. THE ENERGY SCREEN.  ``R + T <= 1`` on any provably passive stack, and
-       ``R + T = 1`` on a provably LOSSLESS one -- so the screen is ONE-SIDED
-       where the stack absorbs and TWO-SIDED where it cannot (defects D1 and
-       D2).  See :func:`_stack_is_provably_passive`,
+    1. THE ENERGY SCREEN.  ``R + T <= 1`` on any provably passive stack with a
+       LOSSLESS incidence medium, and ``R + T = 1`` on a provably LOSSLESS one
+       -- so the screen is ONE-SIDED where the stack absorbs and TWO-SIDED
+       where it cannot (defects D1 and D2).  See
+       :func:`_stack_is_provably_passive`,
        :func:`_stack_is_provably_lossless` and
        :data:`_BOR_NODAL_SUPERUNITY_BAR`.
 
@@ -342,24 +472,29 @@ def _check_nodal_passivity(layers, energy, channels=()):
     if not any(L.get("basis") == "nodal" for L in layers):
         return
     e = np.asarray(energy, dtype=float)
-    if e.size == 0 or not _stack_is_provably_passive(layers):
+    # ROUND 3 (GAP 2): GAIN (or a payload that cannot answer) disarms
+    # EVERYTHING -- neither the energy theorem nor the Rayleigh bound survives
+    # it.  Everything below is gated on THIS, and the incidence-lossless
+    # conjunct now gates detector 1 ALONE.
+    if not _stack_media_are_passive(layers):
         return
+    energy_armed = e.size > 0 and _layer_is_lossless(layers[0])
     nlam = [float(np.real(L.get("Rbig_over_lambda", float("nan"))))
             for L in layers if L.get("Rbig_over_lambda") is not None]
     where = (" (cell radius %.2f vacuum wavelengths)" % (nlam[0],)
              if nlam else "")
 
     # ---- detector 1: the energy, one- or two-sided ----
-    excess = float(np.max(e)) - 1.0
+    excess = (float(np.max(e)) - 1.0) if e.size else 0.0
     two_sided = _stack_is_provably_lossless(layers)
-    deficit = 1.0 - float(np.min(e))
+    deficit = (1.0 - float(np.min(e))) if e.size else 0.0
     worst = max(excess, deficit) if two_sided else excess
     sense = ("a DEFICIT" if (two_sided and deficit > excess) else "an EXCESS")
     law = ("R + T = 1 is an EQUALITY (no absorption, and a PEC wall leaves no "
            "other exit)" if two_sided else
            "R + T <= 1 is a theorem (R + T + A = 1 with the absorbed "
            "fraction A >= 0)")
-    if worst > _BOR_NODAL_SUPERUNITY_BAR:
+    if energy_armed and worst > _BOR_NODAL_SUPERUNITY_BAR:
         raise BORNodalPassivityError(
             "bor_solve.solve(basis='nodal'): the cascade returned "
             "max(R + T) = %.6g on a PROVABLY PASSIVE %sstack%s -- a violation "
@@ -389,25 +524,35 @@ def _check_nodal_passivity(layers, energy, channels=()):
     #      only where the energy is silent, which is the population it was
     #      measured to add. ----
     for side, (L, qn) in zip(("incidence", "exit"), channels):
-        # The Rayleigh bound is AIRTIGHT only where the half-space is lossless:
-        # there ``eps k0^2 + D`` is real symmetric, its spectrum is real, and
-        # ``q^2 <= max(eps) k0^2`` exactly.  With a complex ``eps`` the operator
-        # is complex-symmetric and the same statement about ``Re q`` is only
-        # approximate, so the conjunct stays silent rather than refusing on a
-        # bound it cannot prove.  Every half-space of the 160-solve census is
-        # lossless, so nothing measured is given up by this.
-        exc = _channel_index_excess(L, qn) if _layer_is_lossless(L) else None
-        if exc is None or exc <= _BOR_INDEX_CEILING_SLACK:
+        # ROUND 3 (GAP 2): the conjunct is armed on a LOSSY half-space too, at
+        # a slack widened by a DERIVED term rather than gated off.  The
+        # Rayleigh argument bounds ``Re(q^2) <= max(Re eps) k0^2`` on any
+        # PASSIVE medium -- losslessness is not what it needs -- and the R/T
+        # channel gate then bounds ``Re qn`` by
+        # ``sqrt(n^2 + _BOR_CHANNEL_IMAG_BAR^2)``.  See
+        # :func:`_index_ceiling_slack` for the derivation and for the 640-solve
+        # census that measures the two populations on a lossy half-space:
+        # 0 false positives on 600 undamaged rows, mildest violation
+        # +7.108677e-06, and 72 set-wrong rows that a lossless-only gate
+        # silences.
+        exc = _channel_index_excess(L, qn)
+        if exc is None:
             continue
         n_max = float(np.real(np.sqrt(complex(L["eps_ceiling"]))))
+        slack = _index_ceiling_slack(L, n_max)
+        if exc <= slack:
+            continue
         raise BORNodalPassivityError(
             "bor_solve.solve(basis='nodal'): the cascade returned a %s "
             "channel at axial index Re(q/k0) = %.9g on a medium whose largest "
-            "index is %.9g%s -- an excess of %.4g against the %.0e slack.  An "
+            "index is %.9g%s -- an excess of %.4g against the %.4g slack "
+            "(%s).  An "
             "axial index above the medium's own means gamma^2 < 0, a "
             "transverse eigenvalue this PEC-walled cylinder does not have: "
             "q^2 is an eigenvalue of eps k0^2 + D, and wherever D is negative "
-            "semi-definite the Rayleigh quotient bounds q^2 <= max(eps) k0^2.  "
+            "semi-definite the numerical range bounds Re(q^2) <= "
+            "max(Re eps) k0^2, which with the channel gate's own |Im qn| bar "
+            "bounds Re(q/k0) by the medium's index.  "
             "The legacy NODAL FD basis is NOT divergence-conforming, so its D "
             "is not, and the channel SET it returns contains modes the medium "
             "cannot carry.  This is refused independently of the energy "
@@ -420,10 +565,12 @@ def _check_nodal_passivity(layers, energy, channels=()):
             "of that census.  To restore the previous behaviour and receive "
             "the channel set instead of this error, set lumenairy.elements."
             "bor.bor_solve.BOR_NODAL_PASSIVITY_GUARD = False."
-            % (side, n_max + exc, n_max, where, exc,
-               _BOR_INDEX_CEILING_SLACK))
+            % (side, n_max + exc, n_max, where, exc, slack,
+               "lossless medium" if _layer_is_lossless(L) else
+               "an ABSORBING medium, so the slack carries the derived "
+               "imag-bar term _BOR_CHANNEL_IMAG_BAR**2 / (2 n)"))
 
-    if worst <= _BOR_NODAL_SUPERUNITY_WARN:
+    if not energy_armed or worst <= _BOR_NODAL_SUPERUNITY_WARN:
         return
     warnings.warn(
         "bor_solve.solve(basis='nodal'): R + T spans [%.9g, %.9g] on a "

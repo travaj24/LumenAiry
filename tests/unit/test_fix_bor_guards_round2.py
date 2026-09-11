@@ -353,34 +353,127 @@ def test_the_index_ceiling_agrees_with_the_bessel_zero_oracle():
         % (checked, agreed))
 
 
-def test_the_screen_disarms_on_an_absorbing_incidence_medium():
-    """THE REQUIREMENT ROUND 2 KEPT, and why.
-
-    ``R`` and ``T`` are formed from a basis normalised to unit ``|z-flux|`` per
-    mode.  In an ABSORBING incidence medium a mode's flux is not a conserved
-    power, so the sums are not power fractions and there is no theorem for a
-    bar to enforce -- the 1-D peer ``pmm/stack._stack_provably_passive``
-    excludes an absorbing superstrate for exactly this reason and records the
-    1.00026 / 1.0152 / 1.0303 super-unity ladder it legitimately produces.
-
-    UNCONDITIONAL on every arm: with a lossy superstrate the guard is silent,
-    even on the geometry it refuses when the superstrate is lossless.
-    """
-    k0 = 2.0
+def _lossy_incidence_stack(im_rel, m=1, N=200, rbl=2.0, k0=2.0, basis="nodal",
+                           e_out=2.0):
+    """The damaging ring stack of ``_stack``, with a RELATIVE loss
+    ``Im(eps)/Re(eps) = im_rel`` on the INCIDENCE half-space ALONE.  Every
+    other layer stays exactly lossless, so the only thing the loss can change
+    is the screen's verdict."""
+    Rbig = float(rbl) * 2.0 * np.pi / k0
+    sup = complex(e_out, e_out * float(im_rel))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        layers = [build_layer(1, 4.0, 200, _uni(complex(2.0, 2e-3)), k0,
-                              basis="nodal"),
-                  build_layer(1, 4.0, 200, _ring(0.8, 2.0 + 0j, 6.0 + 0j), k0,
-                              thickness=0.5, basis="nodal"),
-                  build_layer(1, 4.0, 200, _uni(2.0 + 0j), k0, basis="nodal")]
+        return k0, [build_layer(m, Rbig, N, _uni(sup), k0, basis=basis),
+                    build_layer(m, Rbig, N, _ring(0.8, e_out + 0j, 6.0 + 0j),
+                                k0, thickness=0.5, basis=basis),
+                    build_layer(m, Rbig, N, _uni(e_out + 0j), k0,
+                                basis=basis)]
+
+
+def _verdict(layers, k0):
+    """``(verdict, which detector, n energy warnings)`` as a caller sees it.
+
+    The two detectors are told apart by their own messages: the ENERGY one
+    quotes ``max(R + T)``, the INDEX CEILING one quotes an ``axial index``.
+    """
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        solve(layers, k0)                  # must not raise
-    assert not [x for x in w if "R + T" in str(x.message)], (
-        "the passivity screen spoke about a stack whose INCIDENCE medium "
-        "absorbs, where its flux normalisation makes R + T not a power "
-        "fraction: %s" % ([str(x.message)[:160] for x in w],))
+        try:
+            solve(layers, k0)
+            v, det = "returned", ""
+        except BORNodalPassivityError as exc:
+            v = "REFUSED"
+            det = "ceiling" if "axial index" in str(exc) else "energy"
+        nw = len([x for x in w if "R + T" in str(x.message)])
+    return v, det, nw
+
+
+def test_the_energy_screen_disarms_on_an_absorbing_incidence_medium_but_the_ceiling_does_not():
+    """THE REQUIREMENT ROUND 2 KEPT, THE SCOPE ROUND 3 GAVE IT, and a gate that
+    can actually fail.
+
+    WHAT THE REQUIREMENT IS.  ``R`` and ``T`` are formed from a basis
+    normalised to unit ``|z-flux|`` per mode.  In an ABSORBING incidence medium
+    a mode's flux is not a conserved power, so the sums are not power fractions
+    and there is no theorem for an ENERGY bar to enforce -- the 1-D peer
+    ``pmm/stack._stack_provably_passive`` excludes an absorbing superstrate for
+    exactly this reason and records the 1.00026 / 1.0152 / 1.0303 super-unity
+    ladder it legitimately produces.
+
+    WHAT IT IS NOT.  That reasoning is about the ENERGY and says nothing about
+    the INDEX CEILING, whose Rayleigh argument concerns one half-space's own
+    ``eps``.  Until round 3 the two detectors shared one early return, so a
+    loss of any size on ``layers[0]`` disarmed BOTH -- verification round 2's
+    GAP 2, which is defect D1's own shape relocated rather than removed.
+    Round 3 splits them: :func:`bor_solve._stack_media_are_passive` (GAIN
+    disarms everything) gates both, and the incidence-lossless conjunct now
+    gates the energy detector alone.
+
+    WHY THE GATE THIS REPLACES COULD NOT FAIL.  It built its superstrate at
+    ``eps = 2 + 2e-3j``, i.e. ``Im/Re = 1e-3``.  ``_orient.channel_core`` drops
+    any mode whose ``|Im qn|`` exceeds ``_BOR_CHANNEL_IMAG_BAR`` (5e-5), and a
+    1e-3 relative loss puts EVERY mode of that half-space past it -- so the
+    incidence set was EMPTY, ``R + T`` was empty, and
+    ``_check_nodal_passivity`` returned at its ``e.size == 0`` line WITHOUT
+    ever calling the predicate.  Measured by the round-2 verification by
+    deleting the incidence conjunct and re-running that gate: it still passed.
+    Measured channel counts on its fixture: ``Im(eps_sup)`` = 2e-3 -> 0
+    channels; 2e-5 .. 2e-11 -> 7-8 channels.  This gate runs at ``Im/Re =
+    1e-7``, two decades INSIDE the channel gate, and asserts its own premise.
+
+    UNCONDITIONAL on every arm, all four clauses.
+    """
+    k0, lossy = _lossy_incidence_stack(1e-7)
+    prev = _bs.BOR_NODAL_PASSIVITY_GUARD
+    _bs.BOR_NODAL_PASSIVITY_GUARD = False
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            raw = solve(lossy, k0)
+    finally:
+        _bs.BOR_NODAL_PASSIVITY_GUARD = prev
+    n_ch = int(np.size(raw["R"]))
+    assert n_ch > 0, (
+        "the premise of this gate is gone: a 1e-7 relative loss on the "
+        "incidence medium emptied the channel set, so the predicate is "
+        "unreachable here too and the conjunct would have no live gate at all")
+
+    # (a) the ENERGY theorem is off -- the predicate says so ...
+    assert not _bs._stack_is_provably_passive(lossy), (
+        "the predicate called a stack with an ABSORBING incidence medium "
+        "provably passive; R and T come from a unit-|z-flux| basis there, so "
+        "they are not power fractions and no energy bar can mean anything")
+    # (b) ... while the stack's MEDIA are still passive, which is what keeps
+    #     the ceiling armed.  Deleting the incidence conjunct collapses (a)
+    #     into (b) and flips this gate.
+    assert _bs._stack_media_are_passive(lossy), (
+        "Im eps >= 0 on every layer of this stack, so the Rayleigh bound the "
+        "index ceiling reads is intact; the media predicate denied it")
+
+    # (c) the caller never receives an ENERGY verdict on this stack
+    v, det, nw = _verdict(lossy, k0)
+    assert nw == 0 and det != "energy", (
+        "the ENERGY screen spoke about a stack whose incidence medium absorbs "
+        "(verdict %s via %s, %d warning(s)) on %d channels"
+        % (v, det or "-", nw, n_ch))
+
+    # (d) and the index ceiling is still ARMED there.  Premise-gated on this
+    #     arm's nodal cascade actually returning a channel above the ceiling --
+    #     whether it does is an arm property, whether the guard then speaks is
+    #     not.
+    exc = _bs._channel_index_excess(
+        lossy[-1], np.asarray(lossy[-1]["q"])[raw["out"]] / k0)
+    if exc is None or exc <= _bs._BOR_INDEX_CEILING_SLACK:
+        pytest.skip("premise absent on this arm: the exit half-space's worst "
+                    "returned channel sits %s the index ceiling, so there is "
+                    "no contradiction for the conjunct to refuse"
+                    % ("at" if exc is None else "%.4e below" % (-exc,)))
+    assert (v, det) == ("REFUSED", "ceiling"), (
+        "the exit half-space returned a channel %.4e ABOVE its own index "
+        "ceiling -- gamma^2 < 0, which this PEC-walled cylinder does not have "
+        "-- and the guard answered %r (%s).  The incidence medium's loss must "
+        "not reach this detector: its Rayleigh bound is about the exit "
+        "half-space's own eps" % (exc, v, det or "no detector"))
 
 
 # --------------------------------------------------------------------------- #
@@ -488,9 +581,10 @@ def test_the_sem_warn_edge_s_binding_ordinary_margin_is_graded_hp_refinement():
 
 
 def test_a_caller_prescribed_liner_is_warned_wherever_it_sits_in_r():
-    """THE COVERAGE D4'S FIX HAD TO KEEP, and nearly did not.
+    """THE COVERAGE D4'S FIX HAD TO KEEP, and nearly did not -- now stated over
+    a LADDER, which is where round 2's version of it was false.
 
-    ``warn_own`` now fires on ``w_min_own_frac`` -- the narrowest cell BOTH of
+    ``warn_own`` fires on ``w_min_own_frac`` -- the narrowest cell BOTH of
     whose enclosing boundaries THIS layer asked for -- instead of on
     ``w_min_frac``, so a liner's NEIGHBOUR stops being blamed for a cell it
     never prescribed.  But a layer's segment list holds only its INTERIOR walls
@@ -498,17 +592,35 @@ def test_a_caller_prescribed_liner_is_warned_wherever_it_sits_in_r():
     layer's list ends at ``Rbig`` and starts at the axis.  Reading ownership
     from interior walls alone therefore leaves a liner hard against EITHER
     DOMAIN END with no owner at all -- and the message that exists to tell that
-    caller would never fire.
+    caller would never fire.  Measured while building the fix: a
+    ``1e-6``-of-``Rbig`` liner at the outer wall and at the axis drove
+    ``|q|max / (n_max k0)`` to **2.521e+05** and **8.895e+05** -- 1.4 and 1.9
+    decades past the spectral screen -- and read ``ok``.
 
-    Measured while building the fix: a ``1e-6``-of-``Rbig`` liner at the outer
-    wall and at the axis drove ``|q|max / (n_max k0)`` to **2.521e+05** and
-    **8.895e+05** -- 1.4 and 1.9 decades past the spectral screen -- and read
-    ``ok``.  The two domain ends now count for every layer, and this gate pins
-    that the three positions behave the SAME.
+    ROUND 3 -- WHAT ROUND 2 CLAIMED HERE AND DID NOT HAVE.  Round 2 asserted
+    two rungs (1e-7 and 1e-4) and its report generalised them to *"the three
+    positions behave identically over a width ladder"*.  The verification
+    refuted that: over a ladder the three positions disagreed at **4 of 9
+    rungs**, for TWO reasons, both now fixed in ``_sem_contract``:
 
-    Stated as a decision over a ladder, not as a magnitude: at a width the
-    contract must speak about, all three positions warn; at a width it must not,
-    none of them does.
+      * at ``1e-9``, ``3e-9`` and ``1e-8`` of ``Rbig`` the AXIS liner drives
+        ``q_excess`` NON-FINITE, and ``verdict`` read a non-finite ratio as NOT
+        hot -- so the axis read ``ok`` while the interior and the outer wall
+        read ``warn_own``.  Worse, ``inf`` is a backward-error outcome, so on
+        Sandybridge the same geometry gave 8.89487e+07 and read ``warn_own``:
+        a KERNEL-DEPENDENT verdict (verification GAP 3);
+      * at the edge itself the axis liner's walls (``0``, ``w``) difference to
+        ``1.000000000000e-06`` EXACTLY while the other two lose 38,968 ULP to
+        the subtraction, and a STRICT ``<`` decided them oppositely
+        (verification GAP 4).
+
+    SO THE CLAIM IS NOW THE LADDER ONE, and it is a DECISION rather than a
+    magnitude: over widths derived from ``_BOR_MIN_ELEM_FRAC`` itself -- three
+    decades below it, the edge, and two decades above -- the three positions
+    must return the SAME verdict at every rung, and that verdict must be
+    ``warn_own`` where the contract has to speak and ``ok`` where it must not.
+    Re-measured after the fix: 0 of the rungs disagree, on every arm
+    (``validation/probe_fix_bor_round3/g3_sem_ladder.py``).
     """
     import warnings as _w
 
@@ -541,32 +653,52 @@ def test_a_caller_prescribed_liner_is_warned_wherever_it_sits_in_r():
             out[label] = dict(own=min(r["w_min_own_frac"] for r in recs),
                               union=min(r["w_min_union_frac"] for r in recs),
                               q=max(r["q_excess"] for r in recs),
+                              finite=all(np.isfinite(r["q_excess"])
+                                         for r in recs),
                               verdicts=sorted({C.verdict(r) for r in recs}))
         return out
 
-    # (a) a liner the contract MUST speak about, at all three positions
-    deep = verdicts(1e-7)
-    for label, got in deep.items():
-        assert np.isfinite(got["own"]), (
-            "the %s liner has NO owner (w_min_own_frac = inf): a cell the "
-            "caller prescribed against a domain end must still be attributed "
-            "to the layer that prescribed it" % (label,))
-        assert got["verdicts"] == ["warn_own"], (
-            "a caller-prescribed liner at the %s of the domain, %.0e of Rbig "
-            "wide, drove |q|max/(n_max k0) to %.4g -- past the %.0e screen -- "
-            "and the contract said %s"
-            % (label, 1e-7, got["q"], C._BOR_Q_EXCESS, got["verdicts"]))
-        assert not np.isfinite(got["union"]), (
-            "the %s liner was attributed to the UNION (%.4e); the library did "
-            "not manufacture it, the caller asked for it, and it must never be "
-            "refusable" % (label, got["union"]))
-
-    # (b) a liner the contract must NOT speak about -- the same three positions
-    shallow = verdicts(1e-4)
-    for label, got in shallow.items():
-        assert got["verdicts"] == ["ok"], (
-            "a %s liner at 1e-4 of Rbig (q_excess %.4g) is inside both bars "
-            "and the contract said %s" % (label, got["q"], got["verdicts"]))
+    edge = float(C._BOR_MIN_ELEM_FRAC)
+    #: the ladder, derived from the edge rather than written down: three
+    #: decades below it (where GAP 3's non-finite spectra live), the edge
+    #: itself (GAP 4's tie), and two decades above (where the contract must be
+    #: silent).
+    ladder = ((1e-3 * edge, "warn_own"), (1e-2 * edge, "warn_own"),
+              (1e-1 * edge, "warn_own"), (edge, "warn_own"),
+              (3.0 * edge, "ok"), (100.0 * edge, "ok"))
+    for w_frac, expect in ladder:
+        got = verdicts(w_frac)
+        # (a) the three positions AGREE -- the ladder claim round 2 did not have
+        seen = {label: g["verdicts"] for label, g in got.items()}
+        assert len({tuple(v) for v in seen.values()}) == 1, (
+            "the same %.3e-of-Rbig liner (%.4gx the %.0e edge) gets different "
+            "verdicts depending on which end of the domain it sits against: "
+            "%s.  Widths measured: %s; q_excess: %s"
+            % (w_frac, w_frac / edge, edge, seen,
+               {k: "%.12e" % g["own"] for k, g in got.items()},
+               {k: "%.4g" % g["q"] for k, g in got.items()}))
+        # (b) and it is the RIGHT verdict
+        for label, g in got.items():
+            assert g["verdicts"] == [expect], (
+                "a %s liner %.3e of Rbig wide (%.4gx the edge) drove "
+                "|q|max/(n_max k0) to %.4g and the contract said %s, not %r"
+                % (label, w_frac, w_frac / edge, g["q"], g["verdicts"],
+                   expect))
+            # (c) the caller ASKED for this cell, so it is never the union's
+            assert not np.isfinite(g["union"]), (
+                "the %s liner at %.3e of Rbig was attributed to the UNION "
+                "(%.4e); the library did not manufacture it, the caller asked "
+                "for it, and it must never be refusable"
+                % (label, w_frac, g["union"]))
+        # (d) a liner the contract must speak about has an OWNER at every
+        #     position -- the domain-end half of D4
+        if expect == "warn_own":
+            for label, g in got.items():
+                assert np.isfinite(g["own"]), (
+                    "the %s liner at %.3e of Rbig has NO owner "
+                    "(w_min_own_frac = inf): a cell the caller prescribed "
+                    "against a domain end must still be attributed to the "
+                    "layer that prescribed it" % (label, w_frac))
 
 
 # --------------------------------------------------------------------------- #

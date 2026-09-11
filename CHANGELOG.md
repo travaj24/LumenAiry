@@ -97,6 +97,48 @@ is a defect whether or not it is reachable here: the EME peer shipped exactly
 that literal in this same wave and it moved 3 of 96 roots between a micrometre
 and a nanometre statement of one cell.
 
+**ROUND 3 -- the near-cutoff ladder's margin was a property of an axis nobody
+swept, and the gate that reads it is now scoped by the MECHANISM rather than by
+a wider bar.**
+
+`_gamma_of(m, idx=2)` fixed the RADIAL cutoff index by a default no caller
+overrode and no docstring mentioned, so `_CUTOFF_LADDER_BAR = 1e-5`'s "7.86x
+over the family" was a statement about `m` alone.  Swept over `m` 0..3 x `idx`
+1..3 on the shipped fixture -- 12 ladders, 156 solves -- the worst lossless
+closure is **1.787437e-04** at `(m=1, idx=1)`, **17.9x above the bar**, with 5
+of the 12 combinations over it.  (The round-2 verification's number, reproduced
+to seven digits on an independently written fixture.)
+
+**The bar could not simply be widened, and that is the interesting part.**  The
+PRE-fix per-mode band's own defect reads **1.2167e-04** at `qn ~ 2.5e-03`, where
+this tree reads 2.3e-11 -- SMALLER than the residual.  No scalar sits between
+them.  What separates the two populations is the rung's own distance from
+cutoff, `qn = n sqrt(delta)`, in units of the R/T channel gate's floor
+`_BOR_CHANNEL_REAL_FLOOR`: at `qn >= 100x` the floor the whole 12-ladder family
+closes to **6.889470e-07** (108 rows), and below it the envelope is
+**1.787437e-04** (48 rows) -- 2.41 decades apart, with the knee measured rather
+than chosen (the first row over 1e-06 anywhere in the grid is at 79x).
+
+**And the deep residual is not the orientation band failing.**  At the worst
+rung: the CHANNEL COUNT is one number over the whole ladder on **12 of 12**
+combinations and it is the right number, `idx + 1`; **zero** modes inside the
+classifier band carry BACKWARD flux (the 5.45.1 defect's own signature); and the
+marginal channel's in-band `|flux|` has collapsed to **5.5399e-08** against
+4.5564e-03 for the strongest -- five decades.  The mechanism is that channel's
+own flux NORMALISATION (`P/fnrm ~ qn`, and the basis divides by `sqrt|P|`), and
+the excess lands on its own row of `R + T` on 17 of the 28 rows whose closure
+exceeds 1e-07.  It is the same population `_CUTOFF_LADDER_FLOOR_MULT` keeps the
+gate away from, one effect earlier: the COUNT survives to 10x the channel floor,
+the CLOSURE leaves its round-off floor at about 100x.
+
+So the gate now runs all twelve ladders, asserts the count is `idx + 1`
+unconditionally, keeps `_CUTOFF_LADDER_BAR` at 1e-5 SCOPED to the rungs where it
+is two-sided (**14.5x / 1.16 decades above** the measured family envelope and
+**12.2x / 1.09 decades below** the pre-fix defect), and bounds the deep rungs
+with `_CUTOFF_DEEP_BAR = 2e-3` -- 11.2x above their measured envelope, declared
+one-sided by construction, because on those rungs the pre-fix failure shows up in
+the COUNT and the COUNT is asserted unconditionally.
+
 ### Fixed -- BOR: FIVE copies of the forward-orientation rule become ONE `xp=`-parametrized kernel
 
 `zcascade.py:86` (staggered FD), `zcascade.py:227` (legacy nodal),
@@ -245,6 +287,77 @@ a closed-form Bessel-zero count exists: where it fires, the count is wrong on 4
 of 4.  `_BOR_NODAL_SUPERUNITY_BAR` is unchanged at 1e-3; what changed is the
 population it is justified against (4.90 decades with nothing in it, on the rows
 neither conjunct can see) and the direction it looks.
+
+**ROUND 3 -- the hole round 2 RELOCATED is now closed, and the index ceiling is
+armed on an absorbing half-space at a DERIVED slack.**
+
+Round 2 put the incidence-lossless requirement inside the ONE predicate both
+detectors shared, so a loss of any size on `layers[0]` disarmed the INDEX
+CEILING along with the energy screen -- defect D1's own discontinuity at
+`Im(eps) = 0+`, relocated rather than removed.  Measured on that tree: a
+damaging ring stack whose ONLY loss is `Im/Re = 1e-6` on the incidence
+half-space returns **`max(R + T) = 2.41297` in silence** while its
+div-conforming twin on the identical geometry closes to **8.75e-07** -- 6.2
+decades the flux bookkeeping cannot account for, and at `Im/Re = 3e-12` the twin
+closes to 1 exactly, so the whole 1.413 is unexplained.
+
+The two detectors are now gated separately.  GAIN (or a payload that cannot
+answer the question) disarms BOTH, because neither the energy theorem nor the
+Rayleigh bound survives it.  The incidence-lossless conjunct gates the ENERGY
+detector ALONE: it is an argument about `R` and `T` being power fractions, and
+it says nothing about a contradiction in one half-space's own channel set.
+Measured after: the same 13-rung ladder reads **4 of 13 refused -> 13 of 13**
+(4 by the energy detector, 9 by the ceiling), with **0 refusals and 0 warnings
+on 52 rows** of healthy stacks -- geometries SCREENED to return the same channel
+counts as their staggered twins -- carrying the same loss on the same layer.
+
+**And the ceiling's own per-half-space gate moves from `lossless` to `passive`,
+on a derivation plus a 640-solve census.**  `Re(q^2) <= max(Re eps) k0^2` holds
+on ANY passive medium -- for any unit `x`,
+`Re(x* (eps k0^2 + D) x) = k0^2 sum Re(eps_i) |x_i|^2 + x* D x <= k0^2 max(Re eps)`
+with `D` real symmetric negative semi-definite -- so the Rayleigh argument never
+needed losslessness.  What losslessness bought was the step from `Re(q^2)` to
+`Re q`: with `Re(qn)^2 - Im(qn)^2 <= n^2` and the R/T channel gate returning
+only modes with `|Im qn| < _BOR_CHANNEL_IMAG_BAR`, `Re qn` is bounded by
+`sqrt(n^2 + imag_bar^2) <= n + imag_bar^2 / (2 n)`.  That term -- **1.25e-09 / n**,
+two library constants and the medium's own index, calibrated against nothing --
+is the slack the conjunct now carries on an absorbing half-space.
+
+Measured over 640 solves with the loss on `layers[0]` and on BOTH half-spaces,
+`Im/Re` from 1e-12 to 1e-1, 2 families x `m` 0..3 x `N` 120/200 x
+`Rbig/lambda` 0.5/1/2/4, both bases (384 rows return channels; the channel gate
+empties the rest at `Im/Re >= 1e-3`):
+
+    NODAL, channel set RIGHT, 216 rows    worst Re qn - n = -1.999276e-03
+    STAGGERED, all 384 rows               worst Re qn - n = -1.712581e-04
+    ----------------------------------    --------------------------------
+    NODAL, channel set WRONG, 168 rows    fires on 144, mildest +7.108677e-06
+
+**Zero false positives on 600 undamaged rows**, the two populations on OPPOSITE
+SIDES OF ZERO, the mildest violation **4.15 decades above the base slack and
+3.75 above the widened one**, and the closest undamaged approach **2.70 decades
+below zero**.  The derived term is 5.1 decades inside the nearest measurement on
+either side, so it can only ever decide a case neither population reaches.  It
+buys **72 of the 168 set-wrong rows** -- the ones where BOTH half-spaces absorb,
+which a `lossless` gate silences on both sides at once.
+
+**Bit identity.**  On the round-2 verification's own 65-fixture battery, **65 of
+65 identical on both builds** -- but that battery puts its `im_rel` on the
+MIDDLE layer only, so it contains no row of the population round 3 changed and
+is not probative here.  On a battery that IS that population (96 legacy-nodal
+fixtures with the loss on the incidence half-space and on both half-spaces over
+four decades) every move is a `HASH -> BORNodalPassivityError`; no answer
+changed value.
+
+**The gate that protected the conjunct could not fail, and is replaced.**
+`test_the_screen_disarms_on_an_absorbing_incidence_medium` built its superstrate
+at `Im/Re = 1e-3`, which puts every mode of that half-space past
+`_orient._BOR_CHANNEL_IMAG_BAR` (5e-5) -- so the channel set was EMPTY and
+`_check_nodal_passivity` returned at its `e.size == 0` line without ever calling
+the predicate.  (Measured by mutation: deleting the incidence conjunct left that
+gate passing.)  It is retired in favour of one that runs at `Im/Re = 1e-7`, two
+decades inside the channel gate, asserts its own premise, and asserts BOTH
+halves of the split -- the energy screen silent, the index ceiling armed.
 
 ### Fixed -- EME: an exact-zero branch pin gave a PROPAGATING strip mode its own BACKWARD partner, and the layer mode COUNT differed between Windows and WSL
 
@@ -405,6 +518,47 @@ never be refused at ANY `q_excess`.  The bar's only operative role is the other
 direction -- it SUPPRESSES refusals -- so its failure mode is a miss and the
 honest statement of its margin is the one-sided 1.20 decades below the mildest
 rung it must refuse.
+
+**ROUND 3 -- the contract's verdict was KERNEL-DEPENDENT at the worst geometry
+on the ladder, and its edge was decided by the representation of the width.**
+
+*A NON-FINITE `q_excess` was the most benign reading there is.*  `verdict`
+computed `hot = np.isfinite(excess) and excess > _BOR_Q_EXCESS`, so a spectrum
+that had actually blown up made `hot` FALSE and the contract fell silent exactly
+where the damage is worst.  Measured on one geometry -- a caller-prescribed
+liner `1e-8` of `Rbig` wide AT THE AXIS, `BORStack(Rbig=24, m=1, N=120,
+basis='sem', degree=8)` -- on both builds: `q_excess = inf` and verdict `ok` on
+Haswell, Nehalem and Katmai, `q_excess = 8.89487e+07` and verdict `warn_own` on
+Sandybridge.  A mesh-contract decision that moves with the BLAS kernel for a
+geometry the caller wrote once is the shape `docs/TESTING_STANDARDS.md` exists
+to forbid.  `verdict` now reads a ratio that was FORMED from a real spectrum and
+came back non-finite as HOT -- it is past every bar there is -- while a ratio
+that was never formed (no modes, or a zero `n_max k0` denominator, flagged by
+the new `q_measurable` field) stays cold, because it is evidence in neither
+direction.  Conflating those two was the defect.  After: `warn_own` on all four
+kernels.
+
+*The `warn_own` edge was a STRICT comparison at the representation limit.*  The
+same physical liner, exactly `_BOR_MIN_ELEM_FRAC` of `Rbig` wide, produces
+`w_min_own_frac = 1.000000000000e-06` at the AXIS (walls `0` and `w`, whose
+difference is `w` exactly) and `9.999999999917e-07` at the outer wall and in the
+interior (walls of order `Rbig`, losing 8.2518e-12 relative -- 38,968 ULP -- to
+the subtraction), so one warned and the other did not.  The three width
+comparisons now go through `_below`, which treats a width within
+`_BOR_FRAC_DEADBAND` (**16 ULP, relative** -- the sizing constant
+`pmm/stack._PASSIVE_ANTIHERM_DEADBAND` and `bor_solve._BOR_PASSIVE_DEADBAND`
+already use) of the bar as AT the bar, resolving to the informative side.  It
+does not need to span the 38,968-ULP spread, only the exact tie the strict
+comparison excluded, and it sits **14.4 decades** inside the closest width any
+rung of the ladder asks for (`3e-7` below, `3e-6` above), so it can only ever
+decide a tie.
+
+**Both together settle a claim round 2 made and did not have.**  Round 2's
+report generalised two passing rungs into "the three positions behave
+identically over a width ladder".  Over a 9-rung ladder from `1e-9` to `1e-5` of
+`Rbig` the three positions disagreed at **4 rungs** -- three of them the
+non-finite reading, one the edge -- identically on both builds.  After round 3:
+**0 of 9**, and the shipped gate asserts the ladder rather than two rungs.
 
 ### Fixed -- BOR: every cascade inverse gains a census HOOK, and nothing is armed, because the population was measured
 

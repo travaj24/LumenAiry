@@ -11,11 +11,20 @@ here is the five places where the re-measurement found a gate that cannot fail,
 a decision the physics does not support, or a margin quoted over a family the
 gate does not sweep.
 
-THREE OF THEM ARE ``xfail(strict=True)``.  They assert the behaviour the
-physics requires, which the tree does not have; the strict marker fires the
-moment the gap closes, which is what it is for.  That is the convention
-``test_verify_bor_multilayer_guards.py`` established in round 1 and which round
-2 then cleared.
+ROUND 3 CLEARED ALL FIVE.  Three of these gates were ``xfail(strict=True)``
+when this file was written -- they asserted the behaviour the physics requires,
+which the tree did not have, and the strict marker was there to fire the moment
+the gap closed.  It did:
+``docs/audits/FIX_BOR_GUARDS_ROUND3_2026_09_12.md`` closes GAP 2 (the index
+ceiling stays armed when only the incidence medium absorbs), GAP 3 (a
+non-finite ``q_excess`` formed from a real spectrum is HOT) and GAP 4 (the
+width comparisons carry the library's 16-ULP deadband), so the three markers
+are gone and the gates are live.  GAP 1's replacement moved to
+``tests/unit/test_fix_bor_guards_round2.py``, which is where the conjunct it
+protects is measured, and the vacuous gate it replaces is retired.  GAP 5's
+bound is restated below against round 3's own sweep.  That is the convention
+``test_verify_bor_multilayer_guards.py`` established in round 1, which round 2
+then cleared for round 1's defects and round 3 clears for these.
 
 PREMISE GATING, IN ONE DIRECTION ONLY.  The claim that a pathology REPRODUCES
 on the running arm is gated (the CI pool is a random per-job mix of EPYC 9V74
@@ -112,71 +121,23 @@ def _armed(layers, k0):
 
 # --------------------------------------------------------------------------- #
 #  GAP 1 -- the gate that protects the incidence-lossless conjunct cannot fail
+#
+#  MOVED, ROUND 3.  ``test_the_absorbing_incidence_gate_needs_a_non_empty_
+#  channel_set`` is now ``tests/unit/test_fix_bor_guards_round2.py::
+#  test_the_energy_screen_disarms_on_an_absorbing_incidence_medium_but_the_
+#  ceiling_does_not``, which is the file that owns the conjunct's populations,
+#  and the VACUOUS gate it replaces (``test_the_screen_disarms_on_an_
+#  absorbing_incidence_medium``, which still passed with the conjunct deleted
+#  because its 1e-3 loss emptied the channel set) is retired.  Round 3 also
+#  restated it: with the incidence medium absorbing the ENERGY screen is
+#  silent, but the INDEX CEILING is not -- that is GAP 2's fix, and the two
+#  gates had to move together.
 # --------------------------------------------------------------------------- #
-def test_the_absorbing_incidence_gate_needs_a_non_empty_channel_set():
-    """``test_the_screen_disarms_on_an_absorbing_incidence_medium`` is VACUOUS
-    at the loss its fixture uses, and this is the live replacement.
-
-    THE MECHANISM.  That gate builds its superstrate at ``eps = 2 + 2e-3j``,
-    i.e. ``Im/Re = 1e-3``.  ``_orient.channel_core`` drops any mode whose
-    ``|Im qn|`` exceeds ``_BOR_CHANNEL_IMAG_BAR`` (5e-5), and a 1e-3 relative
-    loss puts EVERY mode of that half-space past it -- so ``inc`` is empty,
-    ``R + T`` is empty, and ``_check_nodal_passivity`` returns at its
-    ``e.size == 0`` line WITHOUT ever calling the predicate.  Measured by
-    deleting the incidence conjunct from ``_stack_is_provably_passive`` and
-    re-running that gate: it still passes.
-
-    WHAT THIS GATE DOES INSTEAD.  It runs the same geometry at ``Im/Re =
-    1e-7`` -- two decades INSIDE the channel gate, so the channels survive and
-    the predicate is actually reached -- and asserts the DECISION on both
-    sides: silent with the absorbing superstrate, refusing with a lossless one.
-    Deleting the conjunct flips the first assertion.
-    """
-    k0 = 2.0
-    lossy = _nodal_stack(1e-7, k0=k0)
-    res = _disarmed(lossy, k0)
-    n_ch = int(np.size(res["R"]))
-    assert n_ch > 0, (
-        "the premise of this gate is gone: a 1e-7 relative loss on the "
-        "incidence medium emptied the channel set, so the passivity predicate "
-        "is unreachable here too and the conjunct has no live gate at all")
-    assert not _bs._stack_is_provably_passive(lossy), (
-        "the predicate called a stack with an ABSORBING incidence medium "
-        "provably passive; R and T are formed from a unit-|z-flux| basis "
-        "there, so they are not power fractions and no bar can mean anything")
-    v, nw = _armed(lossy, k0)
-    assert (v, nw) == ("returned", 0), (
-        "the screen spoke about a stack whose incidence medium absorbs "
-        "(verdict %s, %d warning(s)) on %d channels" % (v, nw, n_ch))
-
-    # the SAME geometry with a lossless superstrate -- premise-gated, because
-    # whether THIS arm's nodal cascade is damaged is an arm property
-    clean = _nodal_stack(0.0, k0=k0)
-    raw = _disarmed(clean, k0)
-    e = np.asarray(raw["energy"], float)
-    worst = float(np.max(np.abs(e - 1.0))) if e.size else 0.0
-    if worst <= _bs._BOR_NODAL_SUPERUNITY_BAR:
-        pytest.skip("premise absent on this arm: the lossless twin of the "
-                    "fixture closes to %.4e, inside the bar, so there is no "
-                    "refusal for the absorbing arm to be contrasted with"
-                    % (worst,))
-    v2, _ = _armed(clean, k0)
-    assert v2 == "REFUSED", (
-        "the lossless twin returns |R+T-1| = %.4e, above the %.0e bar, and "
-        "was not refused -- so the absorbing arm's silence above proves "
-        "nothing about the conjunct"
-        % (worst, _bs._BOR_NODAL_SUPERUNITY_BAR))
 
 
 # --------------------------------------------------------------------------- #
 #  GAP 2 -- D1's hole is closed on every layer EXCEPT the one it is keyed on
 # --------------------------------------------------------------------------- #
-@pytest.mark.xfail(strict=True, reason=(
-    "VERIFY round 2, GAP 2: a negligible loss on the INCIDENCE half-space "
-    "still disarms both detectors, which is defect D1's own shape relocated "
-    "rather than removed.  Measured: Im/Re = 1e-6 on the superstrate, the "
-    "div-conforming twin closing to 8.75e-07, the nodal cascade returning "
-    "R + T = 2.41297 in silence."))
 def test_a_negligible_loss_on_the_incidence_medium_must_not_disarm_the_screen():
     """D1 SAID: ``R + T <= 1`` is a theorem on EVERY passive stack, so a
     negligible loss must not take the guard out.  Round 2 implemented that for
@@ -196,6 +157,18 @@ def test_a_negligible_loss_on_the_incidence_medium_must_not_disarm_the_screen():
     twin's own excess is, a nodal excess THREE DECADES above it is not flux
     bookkeeping, and the caller must be told.  Premise-gated on the arm
     actually producing that separation.
+
+    CLOSED IN ROUND 3, and this was an ``xfail(strict=True)`` until it was.
+    ``_check_nodal_passivity`` now gates the two detectors separately: GAIN (or
+    a payload that cannot answer) disarms both, and the incidence-lossless
+    conjunct disarms the ENERGY detector alone, because the index ceiling's
+    Rayleigh bound is about a half-space's own ``eps`` and does not depend on
+    the incidence medium's flux being conserved.  Re-measured on the
+    verification's own ladder D (13 rungs, loss on ``layers[0]`` only):
+    **4 of 13 refused -> 13 of 13**, 4 of them by the energy detector and 9 by
+    the ceiling, with 0 refusals and 0 warnings on 52 rows of healthy
+    channel-set-agreeing stacks carrying the same loss
+    (``validation/probe_fix_bor_round3/g2_ladder_d.py``).
     """
     k0, im = 2.0, 1e-6
     lossy = _nodal_stack(im, k0=k0)
@@ -252,15 +225,6 @@ def _liner_record(position, w_frac, Rbig=24.0, N=120, degree=8, k0=2.0):
     return recs[0]
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "VERIFY round 2, GAP 3: _sem_contract.verdict reads a NON-FINITE q_excess "
-    "as not hot, so the most damaged geometry on the ladder -- an axis liner "
-    "at 1e-8 of Rbig, whose spectrum blows up to inf -- is the one reading "
-    "'ok'.  Measured identically on the pre-round-2 tree, so it is inherited, "
-    "not introduced; the round-2 gate's two rungs (1e-7, 1e-4) both miss it.  "
-    "And because inf is a backward-error outcome the VERDICT moves with the "
-    "kernel: ok on Haswell / Nehalem / Katmai (q_excess = inf), warn_own on "
-    "Sandybridge (8.89487e+07), identically on both builds."))
 def test_a_non_finite_q_excess_is_not_a_benign_sem_verdict():
     """``verdict`` computes ``hot = np.isfinite(excess) and excess >
     _BOR_Q_EXCESS``.  A spectrum that has actually blown up gives
@@ -283,6 +247,14 @@ def test_a_non_finite_q_excess_is_not_a_benign_sem_verdict():
     the liner's spectrum non-finite, THEN the verdict must not be ``ok``.  On
     Sandybridge the premise is genuinely absent and this gate SKIPS with the
     reading rather than reporting a defect that is not there.
+
+    CLOSED IN ROUND 3, and this was an ``xfail(strict=True)`` until it was.
+    ``verdict`` now reads ``hot = excess > bar if finite else q_measurable`` --
+    a ratio FORMED from a real spectrum that comes back non-finite is past
+    every bar there is, while one that was never formed (no modes, or a zero
+    ``n_max k0``) stays cold because it is evidence in neither direction.  The
+    axis liner now reads ``warn_own`` on every kernel, which is what
+    Sandybridge already read.
     """
     rec = _liner_record("axis", 1e-8)
     if np.isfinite(rec["q_excess"]):
@@ -300,12 +272,6 @@ def test_a_non_finite_q_excess_is_not_a_benign_sem_verdict():
 # --------------------------------------------------------------------------- #
 #  GAP 4 -- the warn_own edge is decided by the representation of the width
 # --------------------------------------------------------------------------- #
-@pytest.mark.xfail(strict=True, reason=(
-    "VERIFY round 2, GAP 4: _BOR_MIN_ELEM_FRAC is a STRICT inequality against "
-    "a quantity the geometry reproduces only to round-off, so the SAME "
-    "nominal liner width warns at the outer wall (9.999999999917e-07) and "
-    "does not at the axis (1.0e-06 exactly).  Inherited from before round 2; "
-    "the round-2 gate's ladder (1e-7 and 1e-4) straddles the tie."))
 def test_the_warn_own_edge_is_not_decided_by_the_representation_of_the_width():
     """``test_a_caller_prescribed_liner_is_warned_wherever_it_sits_in_r``
     asserts that the three positions behave the SAME.  Over a ladder they do
@@ -320,6 +286,15 @@ def test_the_warn_own_edge_is_not_decided_by_the_representation_of_the_width():
     the verdict must not depend on which domain end the liner sits against --
     with the widths that reach the tie derived from the constant itself rather
     than pinned.
+
+    CLOSED IN ROUND 3, and this was an ``xfail(strict=True)`` until it was.
+    The three width comparisons in ``verdict`` go through ``_sem_contract.
+    _below``, which treats a width within ``_BOR_FRAC_DEADBAND`` (16 ULP,
+    relative -- the sizing constant ``pmm/stack._PASSIVE_ANTIHERM_DEADBAND``
+    and ``bor_solve._BOR_PASSIVE_DEADBAND`` already use) of the bar as AT the
+    bar, resolving to the informative side.  The measured spread between the
+    two representations is 38,968 ULP, but only the exact tie at the bar ever
+    needed deciding: the other representation was already below it.
     """
     w_frac = float(_sc._BOR_MIN_ELEM_FRAC)          # the edge itself
     got = {p: _sc.verdict(_liner_record(p, w_frac))
@@ -368,6 +343,26 @@ _CUT_EPS = _CUT_NREF ** 2
 #: 2e-3 sits **11.2x (1.05 decades)** above that measured envelope, which is
 #: the margin this file can defend; it is a BOUND on the family, not a
 #: statement that the family is as good as the swept index.
+#:
+#: ROUND 3 -- RE-DERIVED, KEPT AT THE SAME VALUE, AND NOW WITH ITS MECHANISM.
+#: Round 3 swept ``m`` 0..3 x ``idx`` 1..3 over the full 13-rung ladder, 156
+#: solves (``validation/probe_fix_bor_round3/g5_cutoff_family.py``,
+#: ``g5b_cutoff_mechanism.py``), and reproduced 1.787437e-04 at ``(m=1,
+#: idx=1)`` EXACTLY on an independently written fixture.  What that sweep adds
+#: is the axis the two populations separate on: the rung's own distance from
+#: cutoff, ``qn = n sqrt(delta)``, in units of
+#: ``_orient._BOR_CHANNEL_REAL_FLOOR``.  At ``qn >= 100x`` the floor the whole
+#: 12-ladder family closes to **6.889470e-07**; below it the envelope is
+#: 1.787437e-04, 2.41 decades worse, and the mechanism is the MARGINAL
+#: channel's own flux normalisation (``P/fnrm ~ qn``, the basis divides by
+#: ``sqrt|P|``) and NOT the orientation band -- measured at that rung: **0**
+#: in-band modes carry backward flux and the channel count is one number,
+#: ``idx + 1``, on 12 of 12 combinations.
+#:
+#: So 2e-3 stands, as a ONE-SIDED bound on a conditioning residual, and the
+#: shipped gate now carries the same statement per-rung:
+#: ``test_fix_bor_multilayer_guards._CUTOFF_ENERGY_FLOOR_MULT`` and
+#: ``_CUTOFF_DEEP_BAR`` (also 2e-3, the same measurement).
 _CUT_FAMILY_BAR = 2.0e-3
 
 
@@ -461,6 +456,16 @@ def test_the_near_cutoff_bar_is_scoped_to_one_radial_cutoff_index():
     over the ladder at BOTH indices, so the library is not regressing at the
     index nobody swept.  And the closure at the un-swept index is bounded by
     :data:`_CUT_FAMILY_BAR`, which is the FAMILY bar the 1e-5 one is not.
+
+    ROUND 3 -- THE SHIPPED GATE NOW SWEEPS ``idx`` TOO, so this one is a
+    cross-check on an independently written fixture rather than the only place
+    the axis is exercised.  ``test_fix_bor_multilayer_guards::
+    test_near_cutoff_channel_count_is_stable_over_the_ladder`` is parametrized
+    over ``m`` 0..3 x ``idx`` 1..3, asserts the channel count is ``idx + 1``,
+    and scopes its energy bar to the rungs where it has a two-sided gap --
+    which is what round 3 found this ladder actually needs, because the PRE-fix
+    defect (1.2167e-04) is SMALLER than the deep residual (1.787437e-04) and no
+    scalar bar can sit between them.  See :data:`_CUT_FAMILY_BAR`.
     """
     m = 1
     counts_swept, worst_swept = _cut_ladder(m, 2)      # the gate's own index
