@@ -1,0 +1,8352 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_vbor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "python": "3.14.6",
+  "requested_coretype": "HASWELL",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "rows": [
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.03061518917161843,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    -0.011244379807032301,
+    -0.011244379807788807
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.25642774891567766,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 6.6984195967734195e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.03061518917161843,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    -0.01124437980787607,
+    -0.011244379807788807
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.2564277487853177,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.2068857024871704e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.03061518917160644,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    -0.011244379806390814,
+    -0.011244379807788807
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.25642761843049167,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.1409786460081506e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    null,
+    -0.011244379807788807
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 3,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 3,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    null,
+    -0.011244379807788807
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 3,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 3,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.03061518917161843,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    -0.011244379807032301,
+    -0.011244379807032301
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.256427748915925,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 6.724509837852111e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.03061518917161843,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    -0.01124437980787607,
+    -0.01124437980787607
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.2564277490346525,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.5848711232280266e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.03061518917160644,
+    -0.03061518917160644
+   ],
+   "exc_staggered": [
+    -0.011244379806390814,
+    -0.011244379806390814
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.25642786776903526,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.5192338398417604e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.0075949173989646734,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    -0.0028031778805750474,
+    -0.002803177879876717
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.16688008622718153,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 1.351696532481128e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.0075949173989646734,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    -0.002803177880752017,
+    -0.002803177879876717
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.16688008631230256,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 9.227907327158391e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.007594917398961343,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    -0.002803177880054797,
+    -0.002803177879876717
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.1668801714420154,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 9.224931118989588e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    null,
+    -0.002803177879876717
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 6,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 6,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    null,
+    -0.002803177879876717
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 6,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 6,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.0075949173989646734,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    -0.0028031778805750474,
+    -0.0028031778805750474
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.16688008622749195,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 1.709299368712891e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.0075949173989646734,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    -0.002803177880752017,
+    -0.002803177880752017
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.1668800866256146,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 1.494189105777366e-09,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.007594917398961343,
+    -0.007594917398961343
+   ],
+   "exc_staggered": [
+    -0.002803177880054797,
+    -0.002803177880054797
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.16688048476027006,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 1.4939833419269632e-06,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.0018951196116652191,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    -0.0007003031277492688,
+    -0.0007003031276329175
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 0.14842563305560907,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 1.976130370451301e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.0018951196116652191,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    -0.000700303127720403,
+    -0.0007003031276329175
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 0.14842563296330535,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 1.9560349118208364e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.001895119611664331,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    -0.0007003031277412752,
+    -0.0007003031276329175
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 0.1484255406575432,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 1.9559973450711254e-05,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    null,
+    -0.0007003031276329175
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 13,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 12,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    null,
+    -0.0007003031276329175
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 13,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 12,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.0018951196116652191,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    -0.0007003031277492688,
+    -0.0007003031277492688
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 0.14842563305558842,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 3.5931702058178416e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.0018951196116652191,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    -0.000700303127720403,
+    -0.000700303127720403
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 0.1484256329536402,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 3.5913104490248315e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.001895119611664331,
+    -0.001895119611664331
+   ],
+   "exc_staggered": [
+    -0.0007003031277412752,
+    -0.0007003031277412752
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 0.1484255309908291,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 3.5911859951220926e-05,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    2.162936703720142e-05,
+    2.162936703631324e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268376363,
+    -0.00017504512684229923
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.14757826637378058,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 5.600298003116677e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1629367036091196e-05,
+    2.162936703631324e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268038855,
+    -0.00017504512684229923
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.14757826628869886,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 5.6720578234248364e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1629367036979374e-05,
+    2.162936703631324e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268396347,
+    -0.00017504512684229923
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.14757818122289912,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 5.672097115105856e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    2.162936703631324e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.00017504512684229923
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 27,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 24,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    2.162936703631324e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.00017504512684229923
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 27,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 24,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    2.162936703720142e-05,
+    2.162936703720142e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268376363,
+    -0.0001750451268376363
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.14757826637376392,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 1.0956680007723207e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1629367036091196e-05,
+    2.1629367036091196e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268038855,
+    -0.0001750451268038855
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.14757826628117754,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 1.0973072894771008e-08,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1629367036979374e-05,
+    2.1629367036979374e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268396347,
+    -0.0001750451268396347
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.14757817369189796,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 1.0973064804020716e-05,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.1041794489509511,
+    -0.10417944895019238
+   ],
+   "exc_staggered": [
+    -0.1192301572880925,
+    -0.11923015728833741
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 1.4108882197739145,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 1.439293129124053e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.10417944894993769,
+    -0.10417944895019238
+   ],
+   "exc_staggered": [
+    -0.11923015728790576,
+    -0.11923015728833741
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 1.4108882010502777,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 2.702549295463541e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.10417944894884235,
+    -0.10417944895019238
+   ],
+   "exc_staggered": [
+    -0.11923015728790354,
+    -0.11923015728833741
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 1.4108694523329843,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 2.706396934337718e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.10417944895019238
+   ],
+   "exc_staggered": [
+    null,
+    -0.11923015728833741
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 2,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 2,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.10417944895019238
+   ],
+   "exc_staggered": [
+    null,
+    -0.11923015728833741
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 2,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 2,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.1041794489509511,
+    -0.1041794489509511
+   ],
+   "exc_staggered": [
+    -0.1192301572880925,
+    -0.1192301572880925
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 1.4108882197667438,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 4.547473508864641e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.10417944894993769,
+    -0.10417944894993769
+   ],
+   "exc_staggered": [
+    -0.11923015728790576,
+    -0.11923015728790576
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 1.4108881827713553,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 3.9554259867458086e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.10417944894884235,
+    -0.10417944894884235
+   ],
+   "exc_staggered": [
+    -0.11923015728790354,
+    -0.11923015728790354
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 1.41085116638601,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 3.956355034695491e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.02533856282115554,
+    -0.025338562821108912
+   ],
+   "exc_staggered": [
+    -0.028901315466827615,
+    -0.0289013154665847
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08698558816903357,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 2.7688962234151404e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.025338562821028976,
+    -0.025338562821108912
+   ],
+   "exc_staggered": [
+    -0.028901315466587363,
+    -0.0289013154665847
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08698558813567203,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 5.156501892145116e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.02533856282175284,
+    -0.025338562821108912
+   ],
+   "exc_staggered": [
+    -0.028901315466744126,
+    -0.0289013154665847
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08698555500771032,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 5.162234582023473e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.025338562821108912
+   ],
+   "exc_staggered": [
+    null,
+    -0.0289013154665847
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 5,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 5,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.025338562821108912
+   ],
+   "exc_staggered": [
+    null,
+    -0.0289013154665847
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 5,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 5,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.02533856282115554,
+    -0.02533856282115554
+   ],
+   "exc_staggered": [
+    -0.028901315466827615,
+    -0.028901315466827615
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08698558816800328,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 6.007416786246722e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.025338562821028976,
+    -0.025338562821028976
+   ],
+   "exc_staggered": [
+    -0.028901315466587363,
+    -0.028901315466587363
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08698558848970439,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 1.0531825411774776e-09,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.02533856282175284,
+    -0.02533856282175284
+   ],
+   "exc_staggered": [
+    -0.028901315466744126,
+    -0.028901315466744126
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08698590875392065,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 1.0535830986535544e-06,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    2.177692168126022e-05,
+    2.1776921584226727e-05
+   ],
+   "exc_staggered": [
+    -0.0071728717265977515,
+    -0.007172871726623065
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 0.17917267330371778,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 2.3559820760965522e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.177692171789758e-05,
+    2.1776921584226727e-05
+   ],
+   "exc_staggered": [
+    -0.007172871726619512,
+    -0.007172871726623065
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 0.17917267321572594,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 2.378177055284425e-08,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1776921544702788e-05,
+    2.1776921584226727e-05
+   ],
+   "exc_staggered": [
+    -0.007172871726604413,
+    -0.007172871726623065
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 0.17917258365402655,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 2.3781362376906756e-05,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    2.1776921584226727e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.007172871726623065
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 12,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 11,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    2.1776921584226727e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.007172871726623065
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 12,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 11,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    2.177692168126022e-05,
+    2.177692168126022e-05
+   ],
+   "exc_staggered": [
+    -0.0071728717265977515,
+    -0.0071728717265977515
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 0.17917267330341757,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 4.9987791683747673e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.177692171789758e-05,
+    2.177692171789758e-05
+   ],
+   "exc_staggered": [
+    -0.007172871726619512,
+    -0.007172871726619512
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 0.1791726732052512,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 4.999419678242134e-08,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1776921544702788e-05,
+    2.1776921544702788e-05
+   ],
+   "exc_staggered": [
+    -0.007172871726604413,
+    -0.007172871726604413
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 0.17917259278326414,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 4.9991622610656705e-05,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0001749041953147401,
+    0.00017490419532628643
+   ],
+   "exc_staggered": [
+    -0.0017899984557510074,
+    -0.001789998455723918
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 0.21102028008249785,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 5.111466805374221e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017490419531540624,
+    0.00017490419532628643
+   ],
+   "exc_staggered": [
+    -0.0017899984557261384,
+    -0.001789998455723918
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 0.2110202800011245,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 5.366954769492338e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017490419531984713,
+    0.00017490419532628643
+   ],
+   "exc_staggered": [
+    -0.001789998455734354,
+    -0.001789998455723918
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 0.21102020385617082,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 5.3669143569301525e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.00017490419532628643
+   ],
+   "exc_staggered": [
+    null,
+    -0.001789998455723918
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 26,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 23,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.00017490419532628643
+   ],
+   "exc_staggered": [
+    null,
+    -0.001789998455723918
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 26,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 23,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0001749041953147401,
+    0.0001749041953147401
+   ],
+   "exc_staggered": [
+    -0.0017899984557510074,
+    -0.0017899984557510074
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 0.21102028005268836,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 1.0499046076972718e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017490419531540624,
+    0.00017490419531540624
+   ],
+   "exc_staggered": [
+    -0.0017899984557261384,
+    -0.0017899984557261384
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 0.21102027999434192,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 1.076414724021646e-08,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017490419531984713,
+    0.00017490419531984713
+   ],
+   "exc_staggered": [
+    -0.001789998455734354,
+    -0.001789998455734354
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 0.21102022025729594,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 1.0763785999734488e-05,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.26291399806917126,
+    -0.2629139980696902
+   ],
+   "exc_staggered": [
+    -0.3577047573606944,
+    -0.35770475736151996
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.015131180946965195,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 9.32032229172819e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.26291399806870297,
+    -0.2629139980696902
+   ],
+   "exc_staggered": [
+    -0.35770475735949625,
+    -0.35770475736151996
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.015131180735818983,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 3.2082803080868416e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.2629139980681918,
+    -0.2629139980696902
+   ],
+   "exc_staggered": [
+    -0.3577047573608252,
+    -0.35770475736151996
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.01513097192059032,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 3.198855057506833e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.2629139980696902
+   ],
+   "exc_staggered": [
+    null,
+    -0.35770475736151996
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 2,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 1,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.2629139980696902
+   ],
+   "exc_staggered": [
+    null,
+    -0.35770475736151996
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 2,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 1,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.26291399806917126,
+    -0.26291399806917126
+   ],
+   "exc_staggered": [
+    -0.3577047573606944,
+    -0.3577047573606944
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.015131180945251232,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 9.938716516444401e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.26291399806870297,
+    -0.26291399806870297
+   ],
+   "exc_staggered": [
+    -0.35770475735949625,
+    -0.35770475735949625
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.01513118079662279,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 3.5007019505428616e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.2629139980681918,
+    -0.2629139980681918
+   ],
+   "exc_staggered": [
+    -0.3577047573608252,
+    -0.3577047573608252
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.01513103021656903,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 3.4941443527447547e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.06119956498136392,
+    -0.061199564981397
+   ],
+   "exc_staggered": [
+    -0.08094763826750961,
+    -0.08094763826772322
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.06554238767120779,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 1.905342550401201e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.06119956498113921,
+    -0.061199564981397
+   ],
+   "exc_staggered": [
+    -0.08094763826726803,
+    -0.08094763826772322
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.06554238717794414,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 2.377541807874195e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.061199564981701204,
+    -0.061199564981397
+   ],
+   "exc_staggered": [
+    -0.08094763826753737,
+    -0.08094763826772322
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.06554189326310889,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 2.3778119703887768e-05,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.061199564981397
+   ],
+   "exc_staggered": [
+    null,
+    -0.08094763826772322
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 5,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 4,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.061199564981397
+   ],
+   "exc_staggered": [
+    null,
+    -0.08094763826772322
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 5,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 4,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.06119956498136392,
+    -0.06119956498136392
+   ],
+   "exc_staggered": [
+    -0.08094763826750961,
+    -0.08094763826750961
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.06554238766984288,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 4.5524695124754544e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.06119956498113921,
+    -0.06119956498113921
+   ],
+   "exc_staggered": [
+    -0.08094763826726803,
+    -0.08094763826726803
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.06554238714379546,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 4.7492808463722724e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.061199564981701204,
+    -0.061199564981701204
+   ],
+   "exc_staggered": [
+    -0.08094763826753737,
+    -0.08094763826753737
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.06554186005755858,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 4.749237280698981e-05,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    8.268610230310891e-05,
+    8.268610225892203e-05
+   ],
+   "exc_staggered": [
+    -0.01982183459732134,
+    -0.019821834597402832
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 0.08880402650455355,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 3.570366224892041e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    8.268610213724159e-05,
+    8.268610225892203e-05
+   ],
+   "exc_staggered": [
+    -0.019821834597427923,
+    -0.019821834597402832
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 0.08880402639354945,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 3.48368367486529e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    8.268610220985018e-05,
+    8.268610225892203e-05
+   ],
+   "exc_staggered": [
+    -0.019821834597299137,
+    -0.019821834597402832
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 0.08880391572537949,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 3.4834944623307607e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    8.268610225892203e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.019821834597402832
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 11,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 10,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    8.268610225892203e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.019821834597402832
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 11,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 10,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    8.268610230310891e-05,
+    8.268610230310891e-05
+   ],
+   "exc_staggered": [
+    -0.01982183459732134,
+    -0.01982183459732134
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 0.08880402649800767,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 6.958433829140631e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    8.268610213724159e-05,
+    8.268610213724159e-05
+   ],
+   "exc_staggered": [
+    -0.019821834597427923,
+    -0.019821834597427923
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 0.08880402639694251,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 6.92435409010983e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    8.268610220985018e-05,
+    8.268610220985018e-05
+   ],
+   "exc_staggered": [
+    -0.019821834597299137,
+    -0.019821834597299137
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 0.08880390874098287,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 6.92437828830883e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0003736185711846751,
+    0.0003736185711782358
+   ],
+   "exc_staggered": [
+    -0.004930820886999809,
+    -0.004930820886979381
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.1063334153112403,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 6.380451722520775e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0003736185711895601,
+    0.0003736185711782358
+   ],
+   "exc_staggered": [
+    -0.004930820886993592,
+    -0.004930820886979381
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.10633341521354245,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 6.252380502225208e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0003736185711824547,
+    0.0003736185711782358
+   ],
+   "exc_staggered": [
+    -0.004930820886982934,
+    -0.004930820886979381
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.10633331853914174,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 6.2523315971230176e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.0003736185711782358
+   ],
+   "exc_staggered": [
+    null,
+    -0.004930820886979381
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 27,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 22,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.0003736185711782358
+   ],
+   "exc_staggered": [
+    null,
+    -0.004930820886979381
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 27,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 22,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0003736185711846751,
+    0.0003736185711846751
+   ],
+   "exc_staggered": [
+    -0.004930820886999809,
+    -0.004930820886999809
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.10633341532201124,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 1.2038370300615497e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0003736185711895601,
+    0.0003736185711895601
+   ],
+   "exc_staggered": [
+    -0.004930820886993592,
+    -0.004930820886993592
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.10633341521717443,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 1.2022400630584684e-08,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0003736185711824547,
+    0.0003736185711824547
+   ],
+   "exc_staggered": [
+    -0.004930820886982934,
+    -0.004930820886982934
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 0.10633331198763929,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 1.202227295049596e-05,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.5512700565543693,
+    -0.551270056552413
+   ],
+   "exc_staggered": [
+    -0.8205296751811412,
+    -0.8205296751783017
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.020536432699157614,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 8.135714324453147e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.5512700565536388,
+    -0.551270056552413
+   ],
+   "exc_staggered": [
+    -0.8205296751742677,
+    -0.8205296751783017
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.02053643316774756,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 6.904465887913602e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.5512700565541849,
+    -0.551270056552413
+   ],
+   "exc_staggered": [
+    -0.8205296751808974,
+    -0.8205296751783017
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.02053689956738247,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 6.902324709567864e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.551270056552413
+   ],
+   "exc_staggered": [
+    null,
+    -0.8205296751783017
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 1,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 1,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.551270056552413
+   ],
+   "exc_staggered": [
+    null,
+    -0.8205296751783017
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 1,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 1,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.5512700565543693,
+    -0.5512700565543693
+   ],
+   "exc_staggered": [
+    -0.8205296751811412,
+    -0.8205296751811412
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.020536432702481844,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 6.200595592531499e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.5512700565536388,
+    -0.5512700565536388
+   ],
+   "exc_staggered": [
+    -0.8205296751742677,
+    -0.8205296751742677
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.020536433100850737,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 6.969704813286626e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.5512700565541849,
+    -0.5512700565541849
+   ],
+   "exc_staggered": [
+    -0.8205296751808974,
+    -0.8205296751808974
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.020536831134021494,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 6.970144494911068e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.11704233415888865,
+    -0.11704233415872345
+   ],
+   "exc_staggered": [
+    -0.15727144195938303,
+    -0.1572714419592831
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.07759343800739771,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.8925083722365343e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.11704233415905363,
+    -0.11704233415872345
+   ],
+   "exc_staggered": [
+    -0.1572714419590655,
+    -0.1572714419592831
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.07759343837157973,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.627806356374606e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.11704233415875609,
+    -0.11704233415872345
+   ],
+   "exc_staggered": [
+    -0.1572714419586514,
+    -0.1572714419592831
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.07759380262097926,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.6277427070110484e-05,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.11704233415872345
+   ],
+   "exc_staggered": [
+    null,
+    -0.1572714419592831
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 4,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 3,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.11704233415872345
+   ],
+   "exc_staggered": [
+    null,
+    -0.1572714419592831
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 4,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 3,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.11704233415888865,
+    -0.11704233415888865
+   ],
+   "exc_staggered": [
+    -0.15727144195938303,
+    -0.15727144195938303
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.0775934380075114,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 3.3921865316699495e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.11704233415905363,
+    -0.11704233415905363
+   ],
+   "exc_staggered": [
+    -0.1572714419590655,
+    -0.1572714419590655
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.07759343862435975,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 3.376831803070246e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.11704233415875609,
+    -0.11704233415875609
+   ],
+   "exc_staggered": [
+    -0.1572714419586514,
+    -0.1572714419586514
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.0775940554832919,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 3.3767698760844844e-05,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.028370815855800258,
+    -0.02837081585580359
+   ],
+   "exc_staggered": [
+    -0.037731216518476884,
+    -0.037731216518456456
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 0.06764894889829698,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 2.779421137688587e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.02837081585574719,
+    -0.02837081585580359
+   ],
+   "exc_staggered": [
+    -0.03773121651857503,
+    -0.037731216518456456
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 0.0676489344784228,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 2.754495365131504e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.028370815855800258,
+    -0.02837081585580359
+   ],
+   "exc_staggered": [
+    -0.037731216518486654,
+    -0.037731216518456456
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 0.06763451467849646,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 2.7544531704393194e-05,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.02837081585580359
+   ],
+   "exc_staggered": [
+    null,
+    -0.037731216518456456
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 10,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 9,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.02837081585580359
+   ],
+   "exc_staggered": [
+    null,
+    -0.037731216518456456
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 10,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 9,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.028370815855800258,
+    -0.028370815855800258
+   ],
+   "exc_staggered": [
+    -0.037731216518476884,
+    -0.037731216518476884
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 0.06764894888762907,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 5.762257337948995e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.02837081585574719,
+    -0.02837081585574719
+   ],
+   "exc_staggered": [
+    -0.03773121651857503,
+    -0.03773121651857503
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 0.06764892381617726,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 5.744586295541865e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.028370815855800258,
+    -0.028370815855800258
+   ],
+   "exc_staggered": [
+    -0.037731216518486654,
+    -0.037731216518486654
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 0.06762385442322327,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 5.7442683065622724e-05,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0001796600681880367,
+    0.00017966006820602232
+   ],
+   "exc_staggered": [
+    -0.009343265944130597,
+    -0.009343265944110168
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 0.07020620835304925,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 4.28834745491713e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017966006819958302,
+    0.00017966006820602232
+   ],
+   "exc_staggered": [
+    -0.009343265944107948,
+    -0.009343265944110168
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 0.07020620481784823,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 4.242601714388172e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0001796600682109073,
+    0.00017966006820602232
+   ],
+   "exc_staggered": [
+    -0.00934326594411572,
+    -0.009343265944110168
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 0.070202670033644,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 4.242588266256675e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.00017966006820602232
+   ],
+   "exc_staggered": [
+    null,
+    -0.009343265944110168
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 25,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 21,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.00017966006820602232
+   ],
+   "exc_staggered": [
+    null,
+    -0.009343265944110168
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 25,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 21,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0001796600681880367,
+    0.0001796600681880367
+   ],
+   "exc_staggered": [
+    -0.009343265944130597,
+    -0.009343265944130597
+   ],
+   "family": "para",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 0.07020620834582236,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 8.543721286002892e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017966006819958302,
+    0.00017966006819958302
+   ],
+   "exc_staggered": [
+    -0.009343265944107948,
+    -0.009343265944107948
+   ],
+   "family": "para",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 0.07020619765700076,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 8.498270309686973e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0001796600682109073,
+    0.0001796600682109073
+   ],
+   "exc_staggered": [
+    -0.00934326594411572,
+    -0.00934326594411572
+   ],
+   "family": "para",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 0.07019550600714486,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 8.498226903186357e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "para",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.03061518917161843,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    -0.011244379807032301,
+    -0.011244379807788807
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.02419108956143945,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 3.0186964039558006e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.03061518917161843,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    -0.01124437980787607,
+    -0.011244379807788807
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.024191089474033145,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.3644096963361108e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.03061518917160644,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    -0.011244379806390814,
+    -0.011244379807788807
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.024191002064251288,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.3657803521471834e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    null,
+    -0.011244379807788807
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 3,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 3,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    null,
+    -0.011244379807788807
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 3,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 3,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.03061518917161843,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    -0.011244379807032301,
+    -0.011244379807032301
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.02419108956143523,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 3.7214675785435247e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.03061518917161843,
+    -0.03061518917161843
+   ],
+   "exc_staggered": [
+    -0.01124437980787607,
+    -0.01124437980787607
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.024191089470841254,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.3666234810472133e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.03061518917160644,
+    -0.03061518917160644
+   ],
+   "exc_staggered": [
+    -0.011244379806390814,
+    -0.011244379806390814
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 3,
+   "n_out": 3,
+   "nodal_closure": 0.024190998879739967,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.3701260770382362e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.0075949173989646734,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    -0.0028031778805750474,
+    -0.002803177879876717
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.9792833542736901,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 5.642153411145046e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.0075949173989646734,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    -0.002803177880752017,
+    -0.002803177879876717
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.9792833493608155,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 5.184201956609513e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.007594917398961343,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    -0.002803177880054797,
+    -0.002803177879876717
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.9792784365138545,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 5.183175550982355e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    null,
+    -0.002803177879876717
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 6,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 6,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    null,
+    -0.002803177879876717
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 6,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 6,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.0075949173989646734,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    -0.0028031778805750474,
+    -0.0028031778805750474
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.979283354272793,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 3.780309398848658e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.0075949173989646734,
+    -0.0075949173989646734
+   ],
+   "exc_staggered": [
+    -0.002803177880752017,
+    -0.002803177880752017
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.9792833484592909,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 3.979492291250608e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.007594917398961343,
+    -0.007594917398961343
+   ],
+   "exc_staggered": [
+    -0.002803177880054797,
+    -0.002803177880054797
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 6,
+   "n_out": 6,
+   "nodal_closure": 0.9792775350091159,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 6,
+   "t_out": 6,
+   "twin_closure": 3.9798302631233184e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.0018951196116652191,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    -0.0007003031277492688,
+    -0.0007003031276329175
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 4.522924556227194,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 3.5849101465146305e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.0018951196116652191,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    -0.000700303127720403,
+    -0.0007003031276329175
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 4.5229245624790515,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 3.739554887971508e-09,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.001895119611664331,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    -0.0007003031277412752,
+    -0.0007003031276329175
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 4.522930814223519,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 3.7395862626521392e-06,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    null,
+    -0.0007003031276329175
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 13,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 12,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    null,
+    -0.0007003031276329175
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 13,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 12,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.0018951196116652191,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    -0.0007003031277492688,
+    -0.0007003031277492688
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 4.522924556236219,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 7.333911256068859e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.0018951196116652191,
+    -0.0018951196116652191
+   ],
+   "exc_staggered": [
+    -0.000700303127720403,
+    -0.000700303127720403
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 4.5229245713731245,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 7.4162398444599376e-09,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.001895119611664331,
+    -0.001895119611664331
+   ],
+   "exc_staggered": [
+    -0.0007003031277412752,
+    -0.0007003031277412752
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 13,
+   "n_out": 13,
+   "nodal_closure": 4.52293970840564,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 12,
+   "t_out": 12,
+   "twin_closure": 7.41617319199861e-06,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    2.162936703720142e-05,
+    2.162936703631324e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268376363,
+    -0.00017504512684229923
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 9.200770466599417,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 6.6275873678023345e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1629367036091196e-05,
+    2.162936703631324e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268038855,
+    -0.00017504512684229923
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 9.200770451395051,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 6.625893278489059e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1629367036979374e-05,
+    2.162936703631324e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268396347,
+    -0.00017504512684229923
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 9.2007552473226,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 6.6257940902758605e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    2.162936703631324e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.00017504512684229923
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 27,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 24,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    2.162936703631324e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.00017504512684229923
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 27,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 24,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    2.162936703720142e-05,
+    2.162936703720142e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268376363,
+    -0.0001750451268376363
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 9.200770466590871,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 1.3932854869835865e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1629367036091196e-05,
+    2.1629367036091196e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268038855,
+    -0.0001750451268038855
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 9.200770441558113,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 1.3935053777558437e-08,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1629367036979374e-05,
+    2.1629367036979374e-05
+   ],
+   "exc_staggered": [
+    -0.0001750451268396347,
+    -0.0001750451268396347
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 0,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 9.200745407987352,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 24,
+   "t_out": 24,
+   "twin_closure": 1.3934602298704135e-05,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 0,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.1041794489509511,
+    -0.10417944895019238
+   ],
+   "exc_staggered": [
+    -0.1192301572880925,
+    -0.11923015728833741
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.08685711261862172,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 2.2248869413488137e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.10417944894993769,
+    -0.10417944895019238
+   ],
+   "exc_staggered": [
+    -0.11923015728790576,
+    -0.11923015728833741
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.08685711268715834,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 5.952027759548173e-11,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.10417944894884235,
+    -0.10417944895019238
+   ],
+   "exc_staggered": [
+    -0.11923015728790354,
+    -0.11923015728833741
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.086857137741981,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 5.945636016857492e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.10417944895019238
+   ],
+   "exc_staggered": [
+    null,
+    -0.11923015728833741
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 2,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 2,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.10417944895019238
+   ],
+   "exc_staggered": [
+    null,
+    -0.11923015728833741
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 2,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 2,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.1041794489509511,
+    -0.1041794489509511
+   ],
+   "exc_staggered": [
+    -0.1192301572880925,
+    -0.1192301572880925
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.08685711266863705,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 3.601563491884008e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.10417944894993769,
+    -0.10417944894993769
+   ],
+   "exc_staggered": [
+    -0.11923015728790576,
+    -0.11923015728790576
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.08685711272447971,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 8.480460778059751e-11,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.10417944894884235,
+    -0.10417944894884235
+   ],
+   "exc_staggered": [
+    -0.11923015728790354,
+    -0.11923015728790354
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.08685716932540055,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 2,
+   "t_out": 2,
+   "twin_closure": 8.475869794910551e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.02533856282115554,
+    -0.025338562821108912
+   ],
+   "exc_staggered": [
+    -0.028901315466827615,
+    -0.0289013154665847
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08245897301528515,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 4.1810999107383395e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.025338562821028976,
+    -0.025338562821108912
+   ],
+   "exc_staggered": [
+    -0.028901315466587363,
+    -0.0289013154665847
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08245897311468842,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 1.7802137541877983e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.02533856282175284,
+    -0.025338562821108912
+   ],
+   "exc_staggered": [
+    -0.028901315466744126,
+    -0.0289013154665847
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08245901968941571,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 1.7749632097441292e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.025338562821108912
+   ],
+   "exc_staggered": [
+    null,
+    -0.0289013154665847
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 5,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 5,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.025338562821108912
+   ],
+   "exc_staggered": [
+    null,
+    -0.0289013154665847
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 5,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 5,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.02533856282115554,
+    -0.02533856282115554
+   ],
+   "exc_staggered": [
+    -0.028901315466827615,
+    -0.028901315466827615
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08245897304924166,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 3.6481928589182644e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.025338562821028976,
+    -0.025338562821028976
+   ],
+   "exc_staggered": [
+    -0.028901315466587363,
+    -0.028901315466587363
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08245897317355333,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 2.4027602130161085e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.02533856282175284,
+    -0.02533856282175284
+   ],
+   "exc_staggered": [
+    -0.028901315466744126,
+    -0.028901315466744126
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 0.08245909564185272,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 5,
+   "t_out": 5,
+   "twin_closure": 2.39928530598732e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    2.177692168126022e-05,
+    2.1776921584226727e-05
+   ],
+   "exc_staggered": [
+    -0.0071728717265977515,
+    -0.007172871726623065
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 7.098770024498609,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 5.316858064929875e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.177692171789758e-05,
+    2.1776921584226727e-05
+   ],
+   "exc_staggered": [
+    -0.007172871726619512,
+    -0.007172871726623065
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 7.098769991769974,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 4.736953052031367e-10,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1776921544702788e-05,
+    2.1776921584226727e-05
+   ],
+   "exc_staggered": [
+    -0.007172871726604413,
+    -0.007172871726623065
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 7.0987371427798465,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 4.7363506749942275e-07,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    2.1776921584226727e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.007172871726623065
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 12,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 11,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    2.1776921584226727e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.007172871726623065
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 12,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 11,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    2.177692168126022e-05,
+    2.177692168126022e-05
+   ],
+   "exc_staggered": [
+    -0.0071728717265977515,
+    -0.0071728717265977515
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 7.098770024299647,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 1.028066520802895e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.177692171789758e-05,
+    2.177692171789758e-05
+   ],
+   "exc_staggered": [
+    -0.007172871726619512,
+    -0.007172871726619512
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 7.0987699769695425,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 9.086217334086655e-10,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    2.1776921544702788e-05,
+    2.1776921544702788e-05
+   ],
+   "exc_staggered": [
+    -0.007172871726604413,
+    -0.007172871726604413
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 12,
+   "n_out": 12,
+   "nodal_closure": 7.098722270311377,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 11,
+   "t_out": 11,
+   "twin_closure": 9.085681395015754e-07,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0001749041953147401,
+    0.00017490419532628643
+   ],
+   "exc_staggered": [
+    -0.0017899984557510074,
+    -0.001789998455723918
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 11.053519666584773,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 1.2986722808250306e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017490419531540624,
+    0.00017490419532628643
+   ],
+   "exc_staggered": [
+    -0.0017899984557261384,
+    -0.001789998455723918
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 11.053519656252417,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 1.3071863480540458e-08,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017490419531984713,
+    0.00017490419532628643
+   ],
+   "exc_staggered": [
+    -0.001789998455734354,
+    -0.001789998455723918
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 11.053509313922971,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 1.307139536688151e-05,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.00017490419532628643
+   ],
+   "exc_staggered": [
+    null,
+    -0.001789998455723918
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 26,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 23,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.00017490419532628643
+   ],
+   "exc_staggered": [
+    null,
+    -0.001789998455723918
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 26,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 23,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0001749041953147401,
+    0.0001749041953147401
+   ],
+   "exc_staggered": [
+    -0.0017899984557510074,
+    -0.0017899984557510074
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 11.05351966736584,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 2.9036884008348807e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017490419531540624,
+    0.00017490419531540624
+   ],
+   "exc_staggered": [
+    -0.0017899984557261384,
+    -0.0017899984557261384
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 11.053519665744762,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 2.9912318844083075e-08,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017490419531984713,
+    0.00017490419531984713
+   ],
+   "exc_staggered": [
+    -0.001789998455734354,
+    -0.001789998455734354
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 1,
+   "n_inc": 26,
+   "n_out": 26,
+   "nodal_closure": 11.053518001693886,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 23,
+   "t_out": 23,
+   "twin_closure": 2.9910270762378843e-05,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 1,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.26291399806917126,
+    -0.2629139980696902
+   ],
+   "exc_staggered": [
+    -0.3577047573606944,
+    -0.35770475736151996
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.12861395450923097,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 7.205347429817266e-14,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.26291399806870297,
+    -0.2629139980696902
+   ],
+   "exc_staggered": [
+    -0.35770475735949625,
+    -0.35770475736151996
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.12861395361009442,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 3.2442049047176624e-11,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.2629139980681918,
+    -0.2629139980696902
+   ],
+   "exc_staggered": [
+    -0.3577047573608252,
+    -0.35770475736151996
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.1286130502571201,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 3.288904470988285e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.2629139980696902
+   ],
+   "exc_staggered": [
+    null,
+    -0.35770475736151996
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 2,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 1,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.2629139980696902
+   ],
+   "exc_staggered": [
+    null,
+    -0.35770475736151996
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 2,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 1,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.26291399806917126,
+    -0.26291399806917126
+   ],
+   "exc_staggered": [
+    -0.3577047573606944,
+    -0.3577047573606944
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.12861395451203583,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 1.871836019518014e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.26291399806870297,
+    -0.26291399806870297
+   ],
+   "exc_staggered": [
+    -0.35770475735949625,
+    -0.35770475735949625
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.1286139540159752,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 6.732425728017688e-11,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.2629139980681918,
+    -0.2629139980681918
+   ],
+   "exc_staggered": [
+    -0.3577047573608252,
+    -0.3577047573608252
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 2,
+   "n_out": 2,
+   "nodal_closure": 0.12861345148882986,
+   "rbl": 0.5,
+   "set_right": false,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 6.726106038801305e-08,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.06119956498136392,
+    -0.061199564981397
+   ],
+   "exc_staggered": [
+    -0.08094763826750961,
+    -0.08094763826772322
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 4.605175583254397,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 1.3657963648938676e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.06119956498113921,
+    -0.061199564981397
+   ],
+   "exc_staggered": [
+    -0.08094763826726803,
+    -0.08094763826772322
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 4.605175487326866,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 4.867193315050145e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.061199564981701204,
+    -0.061199564981397
+   ],
+   "exc_staggered": [
+    -0.08094763826753737,
+    -0.08094763826772322
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 4.605079566442814,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 4.860047628785225e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.061199564981397
+   ],
+   "exc_staggered": [
+    null,
+    -0.08094763826772322
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 5,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 4,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.061199564981397
+   ],
+   "exc_staggered": [
+    null,
+    -0.08094763826772322
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 5,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 4,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.06119956498136392,
+    -0.06119956498136392
+   ],
+   "exc_staggered": [
+    -0.08094763826750961,
+    -0.08094763826750961
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 4.605175583166485,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 1.2652101588628284e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.06119956498113921,
+    -0.06119956498113921
+   ],
+   "exc_staggered": [
+    -0.08094763826726803,
+    -0.08094763826726803
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 4.6051753903205785,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 7.879350505390903e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.061199564981701204,
+    -0.061199564981701204
+   ],
+   "exc_staggered": [
+    -0.08094763826753737,
+    -0.08094763826753737
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 5,
+   "n_out": 5,
+   "nodal_closure": 4.604982541264917,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 4,
+   "t_out": 4,
+   "twin_closure": 7.877019965185639e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    8.268610230310891e-05,
+    8.268610225892203e-05
+   ],
+   "exc_staggered": [
+    -0.01982183459732134,
+    -0.019821834597402832
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 4.635401831679699,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 3.269384762916161e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    8.268610213724159e-05,
+    8.268610225892203e-05
+   ],
+   "exc_staggered": [
+    -0.019821834597427923,
+    -0.019821834597402832
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 4.63540184707545,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 2.5923813096184745e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    8.268610220985018e-05,
+    8.268610225892203e-05
+   ],
+   "exc_staggered": [
+    -0.019821834597299137,
+    -0.019821834597402832
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 4.635417258402164,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 2.5908787534278943e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    8.268610225892203e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.019821834597402832
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 11,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 10,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    8.268610225892203e-05
+   ],
+   "exc_staggered": [
+    null,
+    -0.019821834597402832
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 11,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 10,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    8.268610230310891e-05,
+    8.268610230310891e-05
+   ],
+   "exc_staggered": [
+    -0.01982183459732134,
+    -0.01982183459732134
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 4.635401831743878,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 6.934453011808728e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    8.268610213724159e-05,
+    8.268610213724159e-05
+   ],
+   "exc_staggered": [
+    -0.019821834597427923,
+    -0.019821834597427923
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 4.635401864322869,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 5.467235331124698e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    8.268610220985018e-05,
+    8.268610220985018e-05
+   ],
+   "exc_staggered": [
+    -0.019821834597299137,
+    -0.019821834597299137
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 11,
+   "n_out": 11,
+   "nodal_closure": 4.635434513732344,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 10,
+   "t_out": 10,
+   "twin_closure": 5.466104864959576e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0003736185711846751,
+    0.0003736185711782358
+   ],
+   "exc_staggered": [
+    -0.004930820886999809,
+    -0.004930820886979381
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 24.16911743337449,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 2.8821389719269064e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0003736185711895601,
+    0.0003736185711782358
+   ],
+   "exc_staggered": [
+    -0.004930820886993592,
+    -0.004930820886979381
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 24.169117460675253,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 3.145386506808734e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0003736185711824547,
+    0.0003736185711782358
+   ],
+   "exc_staggered": [
+    -0.004930820886982934,
+    -0.004930820886979381
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 24.169144840220028,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 3.145538276849713e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.0003736185711782358
+   ],
+   "exc_staggered": [
+    null,
+    -0.004930820886979381
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 27,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 22,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.0003736185711782358
+   ],
+   "exc_staggered": [
+    null,
+    -0.004930820886979381
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 27,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 22,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0003736185711846751,
+    0.0003736185711846751
+   ],
+   "exc_staggered": [
+    -0.004930820886999809,
+    -0.004930820886999809
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 24.169117433528587,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 6.355138637559321e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0003736185711895601,
+    0.0003736185711895601
+   ],
+   "exc_staggered": [
+    -0.004930820886993592,
+    -0.004930820886993592
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 24.16911744271178,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 6.602472901739986e-09,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0003736185711824547,
+    0.0003736185711824547
+   ],
+   "exc_staggered": [
+    -0.004930820886982934,
+    -0.004930820886982934
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 2,
+   "n_inc": 27,
+   "n_out": 27,
+   "nodal_closure": 24.16912736382464,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 22,
+   "t_out": 22,
+   "twin_closure": 6.602601567262667e-06,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 2,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.5512700565543693,
+    -0.551270056552413
+   ],
+   "exc_staggered": [
+    -0.8205296751811412,
+    -0.8205296751783017
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.04855365827136049,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 8.069100942975638e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.5512700565536388,
+    -0.551270056552413
+   ],
+   "exc_staggered": [
+    -0.8205296751742677,
+    -0.8205296751783017
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.048553658633264885,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 2.1236723490858367e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.5512700565541849,
+    -0.551270056552413
+   ],
+   "exc_staggered": [
+    -0.8205296751808974,
+    -0.8205296751783017
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.0485540184253217,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 2.1172489494958313e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.551270056552413
+   ],
+   "exc_staggered": [
+    null,
+    -0.8205296751783017
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 1,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 1,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.551270056552413
+   ],
+   "exc_staggered": [
+    null,
+    -0.8205296751783017
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 1,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 1,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.5512700565543693,
+    -0.5512700565543693
+   ],
+   "exc_staggered": [
+    -0.8205296751811412,
+    -0.8205296751811412
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.048553658277243894,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 8.151257446797899e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.5512700565536388,
+    -0.5512700565536388
+   ],
+   "exc_staggered": [
+    -0.8205296751742677,
+    -0.8205296751742677
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.048553658681614764,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 1.736470967017567e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.5512700565541849,
+    -0.5512700565541849
+   ],
+   "exc_staggered": [
+    -0.8205296751808974,
+    -0.8205296751808974
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 1,
+   "n_out": 1,
+   "nodal_closure": 0.04855406540607998,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 1,
+   "t_out": 1,
+   "twin_closure": 1.7292577614291815e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 0.5,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.11704233415888865,
+    -0.11704233415872345
+   ],
+   "exc_staggered": [
+    -0.15727144195938303,
+    -0.1572714419592831
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.12505207365649051,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 5.10924635932497e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.11704233415905363,
+    -0.11704233415872345
+   ],
+   "exc_staggered": [
+    -0.1572714419590655,
+    -0.1572714419592831
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.12505207397192508,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 6.11908301806352e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.11704233415875609,
+    -0.11704233415872345
+   ],
+   "exc_staggered": [
+    -0.1572714419586514,
+    -0.1572714419592831
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.12505238925981854,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 6.116061828098651e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.11704233415872345
+   ],
+   "exc_staggered": [
+    null,
+    -0.1572714419592831
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 4,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 3,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.11704233415872345
+   ],
+   "exc_staggered": [
+    null,
+    -0.1572714419592831
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 4,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 3,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.11704233415888865,
+    -0.11704233415888865
+   ],
+   "exc_staggered": [
+    -0.15727144195938303,
+    -0.15727144195938303
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.12505207365722115,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.3341550086920506e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.11704233415905363,
+    -0.11704233415905363
+   ],
+   "exc_staggered": [
+    -0.1572714419590655,
+    -0.1572714419590655
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.1250520743128728,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.0696062924253624e-09,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.11704233415875609,
+    -0.11704233415875609
+   ],
+   "exc_staggered": [
+    -0.1572714419586514,
+    -0.1572714419586514
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 4,
+   "n_out": 4,
+   "nodal_closure": 0.12505273026800678,
+   "rbl": 1.0,
+   "set_right": false,
+   "t_inc": 3,
+   "t_out": 3,
+   "twin_closure": 1.0697354102529033e-06,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 1.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.028370815855800258,
+    -0.02837081585580359
+   ],
+   "exc_staggered": [
+    -0.037731216518476884,
+    -0.037731216518456456
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 1.7874361333859285,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 7.384093336781916e-13,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.02837081585574719,
+    -0.02837081585580359
+   ],
+   "exc_staggered": [
+    -0.03773121651857503,
+    -0.037731216518456456
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 1.7874361512327743,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 6.00897887004237e-10,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.028370815855800258,
+    -0.02837081585580359
+   ],
+   "exc_staggered": [
+    -0.037731216518486654,
+    -0.037731216518456456
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 1.7874539976616042,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 6.008186619332889e-07,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.02837081585580359
+   ],
+   "exc_staggered": [
+    null,
+    -0.037731216518456456
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 10,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 9,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    -0.02837081585580359
+   ],
+   "exc_staggered": [
+    null,
+    -0.037731216518456456
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 10,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 9,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    -0.028370815855800258,
+    -0.028370815855800258
+   ],
+   "exc_staggered": [
+    -0.037731216518476884,
+    -0.037731216518476884
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 1.7874361334117128,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 1.230016088982211e-12,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.02837081585574719,
+    -0.02837081585574719
+   ],
+   "exc_staggered": [
+    -0.03773121651857503,
+    -0.03773121651857503
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 1.7874361735650863,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 1.1576546388170073e-09,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    -0.028370815855800258,
+    -0.028370815855800258
+   ],
+   "exc_staggered": [
+    -0.037731216518486654,
+    -0.037731216518486654
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 10,
+   "n_out": 10,
+   "nodal_closure": 1.787476325002495,
+   "rbl": 2.0,
+   "set_right": false,
+   "t_inc": 9,
+   "t_out": 9,
+   "twin_closure": 1.1576666174573091e-06,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 2.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0001796600681880367,
+    0.00017966006820602232
+   ],
+   "exc_staggered": [
+    -0.009343265944130597,
+    -0.009343265944110168
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 19.476618187546997,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 2.6945001785350087e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017966006819958302,
+    0.00017966006820602232
+   ],
+   "exc_staggered": [
+    -0.009343265944107948,
+    -0.009343265944110168
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 19.476618203674366,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 2.6886930015734833e-08,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0001796600682109073,
+    0.00017966006820602232
+   ],
+   "exc_staggered": [
+    -0.00934326594411572,
+    -0.009343265944110168
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 19.476634333150294,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 2.688524800242842e-05,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.00017966006820602232
+   ],
+   "exc_staggered": [
+    null,
+    -0.009343265944110168
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 25,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 21,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    null,
+    0.00017966006820602232
+   ],
+   "exc_staggered": [
+    null,
+    -0.009343265944110168
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 25,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 0,
+   "t_out": 21,
+   "twin_closure": null,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "inc"
+  },
+  {
+   "N": 120,
+   "detector": "energy",
+   "exc_nodal": [
+    0.0001796600681880367,
+    0.0001796600681880367
+   ],
+   "exc_staggered": [
+    -0.009343265944130597,
+    -0.009343265944130597
+   ],
+   "family": "grate",
+   "im": 1e-12,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 19.47661818751965,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 5.891820364922751e-11,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.00017966006819958302,
+    0.00017966006819958302
+   ],
+   "exc_staggered": [
+    -0.009343265944107948,
+    -0.009343265944107948
+   ],
+   "family": "grate",
+   "im": 1e-09,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 19.476618206907244,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 5.881572362476106e-08,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "ceiling",
+   "exc_nodal": [
+    0.0001796600682109073,
+    0.0001796600682109073
+   ],
+   "exc_staggered": [
+    -0.00934326594411572,
+    -0.00934326594411572
+   ],
+   "family": "grate",
+   "im": 1e-06,
+   "m": 3,
+   "n_inc": 25,
+   "n_out": 25,
+   "nodal_closure": 19.476637933922067,
+   "rbl": 4.0,
+   "set_right": false,
+   "t_inc": 21,
+   "t_out": 21,
+   "twin_closure": 5.880892708454155e-05,
+   "verdict": "REFUSED",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.001,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  },
+  {
+   "N": 120,
+   "detector": "",
+   "exc_nodal": [
+    null,
+    null
+   ],
+   "exc_staggered": [
+    null,
+    null
+   ],
+   "family": "grate",
+   "im": 0.1,
+   "m": 3,
+   "n_inc": 0,
+   "n_out": 0,
+   "nodal_closure": null,
+   "rbl": 4.0,
+   "set_right": true,
+   "t_inc": 0,
+   "t_out": 0,
+   "twin_closure": null,
+   "verdict": "returned",
+   "warnings": 0,
+   "where": "both"
+  }
+ ],
+ "summary": {
+  "false_positives_on_set_right": 0,
+  "nodal_set_right_worst_excess": -0.007594917398961343,
+  "rows": 320,
+  "seconds": 411.39094972610474,
+  "set_right": 60,
+  "set_wrong": 132,
+  "set_wrong_fires": 48,
+  "set_wrong_mildest_positive": 2.1629367036091196e-05,
+  "solves": 640,
+  "staggered_worst_excess": -0.0001750451268038855,
+  "undamaged_rows": 380
+ }
+}

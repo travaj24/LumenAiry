@@ -1,0 +1,129 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_vbor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "python": "3.14.6",
+  "requested_coretype": "HASWELL",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "rows": [
+  {
+   "a": 1e-09,
+   "b": 2e-09,
+   "caller_sees": "BORSemMeshError",
+   "q_excess": Infinity,
+   "q_finite": false,
+   "q_measurable": true,
+   "verdicts": [
+    "refuse",
+    "refuse"
+   ],
+   "w_min_union_frac": 1e-09
+  },
+  {
+   "a": 2e-09,
+   "b": 3e-09,
+   "caller_sees": "BORSemMeshError",
+   "q_excess": Infinity,
+   "q_finite": false,
+   "q_measurable": true,
+   "verdicts": [
+    "refuse",
+    "refuse"
+   ],
+   "w_min_union_frac": 1e-09
+  },
+  {
+   "a": 1e-08,
+   "b": 1.1e-08,
+   "caller_sees": "BORSemMeshError",
+   "q_excess": 186871033.5428773,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdicts": [
+    "refuse",
+    "refuse"
+   ],
+   "w_min_union_frac": 9.999999999999988e-10
+  },
+  {
+   "a": 3e-08,
+   "b": 3.3e-08,
+   "caller_sees": "BORSemMeshError",
+   "q_excess": 62290345.40370685,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdicts": [
+    "refuse",
+    "refuse"
+   ],
+   "w_min_union_frac": 3.0000000000000012e-09
+  },
+  {
+   "a": 1e-07,
+   "b": 1.1e-07,
+   "caller_sees": "BORSemMeshError",
+   "q_excess": 18687105.502450917,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdicts": [
+    "refuse",
+    "refuse"
+   ],
+   "w_min_union_frac": 1.0000000000000017e-08
+  },
+  {
+   "a": 1e-06,
+   "b": 1.1e-06,
+   "caller_sees": "BORSemMeshError",
+   "q_excess": 1868713.1618809784,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdicts": [
+    "refuse",
+    "refuse"
+   ],
+   "w_min_union_frac": 1.0000000000000004e-07
+  },
+  {
+   "a": 1e-05,
+   "b": 1.1e-05,
+   "caller_sees": "BORSemMeshError",
+   "q_excess": 186886.48449832405,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdicts": [
+    "refuse",
+    "refuse"
+   ],
+   "w_min_union_frac": 9.99999999999999e-07
+  }
+ ],
+ "summary": {
+  "non_finite_rows_that_raise": [
+   1e-09,
+   2e-09
+  ],
+  "non_finite_rows_that_return": [],
+  "raising": [
+   1e-09,
+   2e-09,
+   1e-08,
+   3e-08,
+   1e-07,
+   1e-06,
+   1e-05
+  ],
+  "returning": [],
+  "rows": 7,
+  "rows_with_a_non_finite_ratio": 2
+ }
+}

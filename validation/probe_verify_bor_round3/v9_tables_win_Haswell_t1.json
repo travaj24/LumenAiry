@@ -1,0 +1,950 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_vbor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "",
+  "python": "3.14.6",
+  "requested_coretype": "",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "gap2_ladder": [
+  {
+   "build": "win",
+   "by_where": {
+    "both": {
+     "ceiling": 0,
+     "energy": 18,
+     "n": 78,
+     "refused": 18
+    },
+    "exit": {
+     "ceiling": 8,
+     "energy": 62,
+     "n": 78,
+     "refused": 70
+    },
+    "inc": {
+     "ceiling": 0,
+     "energy": 18,
+     "n": 78,
+     "refused": 18
+    }
+   },
+   "file": "v1_ladder_BASE_win_Haswell_t1.json",
+   "loaded": "Haswell",
+   "requested": "HASWELL",
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "build": "win",
+   "by_where": {
+    "both": {
+     "ceiling": 24,
+     "energy": 18,
+     "n": 78,
+     "refused": 42
+    },
+    "exit": {
+     "ceiling": 8,
+     "energy": 62,
+     "n": 78,
+     "refused": 70
+    },
+    "inc": {
+     "ceiling": 40,
+     "energy": 18,
+     "n": 78,
+     "refused": 58
+    }
+   },
+   "file": "v1_ladder_win_Haswell_t1.json",
+   "loaded": "Haswell",
+   "requested": "HASWELL",
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "build": "win",
+   "by_where": {
+    "both": {
+     "ceiling": 24,
+     "energy": 18,
+     "n": 78,
+     "refused": 42
+    },
+    "exit": {
+     "ceiling": 8,
+     "energy": 62,
+     "n": 78,
+     "refused": 70
+    },
+    "inc": {
+     "ceiling": 40,
+     "energy": 18,
+     "n": 78,
+     "refused": 58
+    }
+   },
+   "file": "v1_ladder_win_Haswell_t4.json",
+   "loaded": "Haswell",
+   "requested": "HASWELL",
+   "threads": 4,
+   "tree": "ROUND3"
+  },
+  {
+   "build": "win",
+   "by_where": {
+    "both": {
+     "ceiling": 24,
+     "energy": 18,
+     "n": 78,
+     "refused": 42
+    },
+    "exit": {
+     "ceiling": 8,
+     "energy": 62,
+     "n": 78,
+     "refused": 70
+    },
+    "inc": {
+     "ceiling": 40,
+     "energy": 18,
+     "n": 78,
+     "refused": 58
+    }
+   },
+   "file": "v1_ladder_win_Katmai_t1.json",
+   "loaded": "Katmai",
+   "requested": "KATMAI",
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "build": "win",
+   "by_where": {
+    "both": {
+     "ceiling": 24,
+     "energy": 18,
+     "n": 78,
+     "refused": 42
+    },
+    "exit": {
+     "ceiling": 8,
+     "energy": 62,
+     "n": 78,
+     "refused": 70
+    },
+    "inc": {
+     "ceiling": 40,
+     "energy": 18,
+     "n": 78,
+     "refused": 58
+    }
+   },
+   "file": "v1_ladder_win_Sandybridge_t1.json",
+   "loaded": "Sandybridge",
+   "requested": "SANDYBRIDGE",
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "build": "wsl",
+   "by_where": {
+    "both": {
+     "ceiling": 24,
+     "energy": 18,
+     "n": 78,
+     "refused": 42
+    },
+    "exit": {
+     "ceiling": 8,
+     "energy": 62,
+     "n": 78,
+     "refused": 70
+    },
+    "inc": {
+     "ceiling": 40,
+     "energy": 18,
+     "n": 78,
+     "refused": 58
+    }
+   },
+   "file": "v1_ladder_wsl_Haswell_t1.json",
+   "loaded": "Haswell",
+   "requested": "HASWELL",
+   "threads": 1,
+   "tree": "ROUND3"
+  }
+ ],
+ "gap34_ladder": [
+  {
+   "Rbig": 17.0,
+   "build": "win",
+   "disagreeing": 3,
+   "edge": {
+    "axis": "ok",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_BASE_win_Haswell_t1.json",
+   "geom": "A",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 2,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "win",
+   "disagreeing": 2,
+   "edge": {
+    "axis": "ok",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_BASE_win_Haswell_t1.json",
+   "geom": "B",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 2,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "win",
+   "disagreeing": 2,
+   "edge": {
+    "axis": "ok",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_BASE_win_Katmai_t1.json",
+   "geom": "A",
+   "loaded": "Katmai",
+   "nonfinite": 1,
+   "nonfinite_read_ok": 1,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "win",
+   "disagreeing": 2,
+   "edge": {
+    "axis": "ok",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_BASE_win_Katmai_t1.json",
+   "geom": "B",
+   "loaded": "Katmai",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 2,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "win",
+   "disagreeing": 3,
+   "edge": {
+    "axis": "ok",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_BASE_win_Sandybridge_t1.json",
+   "geom": "A",
+   "loaded": "Sandybridge",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 2,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "win",
+   "disagreeing": 2,
+   "edge": {
+    "axis": "ok",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_BASE_win_Sandybridge_t1.json",
+   "geom": "B",
+   "loaded": "Sandybridge",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 2,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "wsl",
+   "disagreeing": 3,
+   "edge": {
+    "axis": "ok",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_BASE_wsl_Haswell_t1.json",
+   "geom": "A",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 2,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "wsl",
+   "disagreeing": 2,
+   "edge": {
+    "axis": "ok",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_BASE_wsl_Haswell_t1.json",
+   "geom": "B",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 2,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "wsl",
+   "disagreeing": 2,
+   "edge": {
+    "axis": "ok",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_BASE_wsl_Katmai_t1.json",
+   "geom": "A",
+   "loaded": "Katmai",
+   "nonfinite": 1,
+   "nonfinite_read_ok": 1,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "wsl",
+   "disagreeing": 2,
+   "edge": {
+    "axis": "ok",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_BASE_wsl_Katmai_t1.json",
+   "geom": "B",
+   "loaded": "Katmai",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 2,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "wsl",
+   "disagreeing": 3,
+   "edge": {
+    "axis": "ok",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_BASE_wsl_Sandybridge_t1.json",
+   "geom": "A",
+   "loaded": "Sandybridge",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 2,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "wsl",
+   "disagreeing": 2,
+   "edge": {
+    "axis": "ok",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_BASE_wsl_Sandybridge_t1.json",
+   "geom": "B",
+   "loaded": "Sandybridge",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 2,
+   "threads": 1,
+   "tree": "BASE"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "win",
+   "disagreeing": 0,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_win_Haswell_t1.json",
+   "geom": "A",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "win",
+   "disagreeing": 1,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_win_Haswell_t1.json",
+   "geom": "B",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "win",
+   "disagreeing": 0,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_win_Haswell_t4.json",
+   "geom": "A",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 4,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "win",
+   "disagreeing": 1,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_win_Haswell_t4.json",
+   "geom": "B",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 4,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "win",
+   "disagreeing": 0,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_win_Katmai_t1.json",
+   "geom": "A",
+   "loaded": "Katmai",
+   "nonfinite": 1,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "win",
+   "disagreeing": 1,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_win_Katmai_t1.json",
+   "geom": "B",
+   "loaded": "Katmai",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "win",
+   "disagreeing": 0,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_win_Sandybridge_t1.json",
+   "geom": "A",
+   "loaded": "Sandybridge",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "win",
+   "disagreeing": 1,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_win_Sandybridge_t1.json",
+   "geom": "B",
+   "loaded": "Sandybridge",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "wsl",
+   "disagreeing": 0,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_wsl_Haswell_t1.json",
+   "geom": "A",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "wsl",
+   "disagreeing": 1,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_wsl_Haswell_t1.json",
+   "geom": "B",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "wsl",
+   "disagreeing": 0,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_wsl_Haswell_t4.json",
+   "geom": "A",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 4,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "wsl",
+   "disagreeing": 1,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_wsl_Haswell_t4.json",
+   "geom": "B",
+   "loaded": "Haswell",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 4,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "wsl",
+   "disagreeing": 0,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_wsl_Katmai_t1.json",
+   "geom": "A",
+   "loaded": "Katmai",
+   "nonfinite": 1,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "wsl",
+   "disagreeing": 1,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_wsl_Katmai_t1.json",
+   "geom": "B",
+   "loaded": "Katmai",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 17.0,
+   "build": "wsl",
+   "disagreeing": 0,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "warn_own",
+    "outer": "warn_own"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": -80088.0,
+    "outer": -80088.0
+   },
+   "file": "v3_ladder_wsl_Sandybridge_t1.json",
+   "geom": "A",
+   "loaded": "Sandybridge",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  },
+  {
+   "Rbig": 12.5,
+   "build": "wsl",
+   "disagreeing": 1,
+   "edge": {
+    "axis": "warn_own",
+    "middle": "ok",
+    "outer": "ok"
+   },
+   "edge_ulp": {
+    "axis": 0.0,
+    "middle": 156767.0,
+    "outer": 156767.0
+   },
+   "file": "v3_ladder_wsl_Sandybridge_t1.json",
+   "geom": "B",
+   "loaded": "Sandybridge",
+   "nonfinite": 2,
+   "nonfinite_read_ok": 0,
+   "threads": 1,
+   "tree": "ROUND3"
+  }
+ ],
+ "gap5_family": [
+  {
+   "bar_deep": 69.25104064098711,
+   "bar_shallow": 21.241552886211124,
+   "build": "win",
+   "count_is_idx_plus_one": true,
+   "count_one_number": true,
+   "deep": 2.888043243087779e-05,
+   "file": "v4_family_win_Haswell_t1.json",
+   "highest_offending_rung": [
+    91.6616360060269,
+    1.3382775272408054e-06,
+    0,
+    1
+   ],
+   "loaded": "Haswell",
+   "shallow": 4.707753737953624e-07,
+   "threads": 1
+  },
+  {
+   "bar_deep": 256.4215522263241,
+   "bar_shallow": 61.54811377374627,
+   "build": "win",
+   "count_is_idx_plus_one": true,
+   "count_one_number": true,
+   "deep": 7.799656396412225e-06,
+   "file": "v4_family_win_Sandybridge_t1.json",
+   "highest_offending_rung": [
+    51.54512586074459,
+    2.219644651857422e-06,
+    0,
+    1
+   ],
+   "loaded": "Sandybridge",
+   "shallow": 1.6247451606332675e-07,
+   "threads": 1
+  },
+  {
+   "bar_deep": 45.63591747382005,
+   "bar_shallow": 151.74807241487946,
+   "build": "wsl",
+   "count_is_idx_plus_one": true,
+   "count_one_number": true,
+   "deep": 4.382512965028784e-05,
+   "file": "v4_family_wsl_Haswell_t1.json",
+   "highest_offending_rung": [
+    51.54512586074459,
+    2.2538887072265368e-06,
+    0,
+    1
+   ],
+   "loaded": "Haswell",
+   "shallow": 6.589869538942139e-08,
+   "threads": 1
+  }
+ ],
+ "identity": [
+  {
+   "bor": 54,
+   "build": "win/Haswell/t1",
+   "common": 66,
+   "eme": 12,
+   "identical": 50,
+   "illegal": 0,
+   "illegal_rows": [],
+   "legal": 16,
+   "moved": 16,
+   "movers": [
+    "nodal_bilayer_m1_both_1e-06",
+    "nodal_bilayer_m1_inc_1e-09",
+    "nodal_bilayer_m2_both_1e-06",
+    "nodal_bilayer_m2_inc_1e-09",
+    "nodal_core_m1_both_1e-06",
+    "nodal_core_m1_inc_1e-09",
+    "nodal_core_m2_both_1e-06",
+    "nodal_core_m2_inc_1e-09",
+    "nodal_grate_m1_both_1e-06",
+    "nodal_grate_m1_inc_1e-09",
+    "nodal_grate_m2_both_1e-06",
+    "nodal_grate_m2_inc_1e-09",
+    "nodal_para_m1_both_1e-06",
+    "nodal_para_m1_inc_1e-09",
+    "nodal_para_m2_both_1e-06",
+    "nodal_para_m2_inc_1e-09"
+   ]
+  },
+  {
+   "bor": 54,
+   "build": "win/Katmai/t1",
+   "common": 66,
+   "eme": 12,
+   "identical": 50,
+   "illegal": 0,
+   "illegal_rows": [],
+   "legal": 16,
+   "moved": 16,
+   "movers": [
+    "nodal_bilayer_m1_both_1e-06",
+    "nodal_bilayer_m1_inc_1e-09",
+    "nodal_bilayer_m2_both_1e-06",
+    "nodal_bilayer_m2_inc_1e-09",
+    "nodal_core_m1_both_1e-06",
+    "nodal_core_m1_inc_1e-09",
+    "nodal_core_m2_both_1e-06",
+    "nodal_core_m2_inc_1e-09",
+    "nodal_grate_m1_both_1e-06",
+    "nodal_grate_m1_inc_1e-09",
+    "nodal_grate_m2_both_1e-06",
+    "nodal_grate_m2_inc_1e-09",
+    "nodal_para_m1_both_1e-06",
+    "nodal_para_m1_inc_1e-09",
+    "nodal_para_m2_both_1e-06",
+    "nodal_para_m2_inc_1e-09"
+   ]
+  },
+  {
+   "bor": 54,
+   "build": "wsl/Haswell/t1",
+   "common": 66,
+   "eme": 12,
+   "identical": 50,
+   "illegal": 0,
+   "illegal_rows": [],
+   "legal": 16,
+   "moved": 16,
+   "movers": [
+    "nodal_bilayer_m1_both_1e-06",
+    "nodal_bilayer_m1_inc_1e-09",
+    "nodal_bilayer_m2_both_1e-06",
+    "nodal_bilayer_m2_inc_1e-09",
+    "nodal_core_m1_both_1e-06",
+    "nodal_core_m1_inc_1e-09",
+    "nodal_core_m2_both_1e-06",
+    "nodal_core_m2_inc_1e-09",
+    "nodal_grate_m1_both_1e-06",
+    "nodal_grate_m1_inc_1e-09",
+    "nodal_grate_m2_both_1e-06",
+    "nodal_grate_m2_inc_1e-09",
+    "nodal_para_m1_both_1e-06",
+    "nodal_para_m1_inc_1e-09",
+    "nodal_para_m2_both_1e-06",
+    "nodal_para_m2_inc_1e-09"
+   ]
+  }
+ ]
+}

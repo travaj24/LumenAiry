@@ -1,0 +1,290 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Katmai",
+  "lumenairy_file": "C:\\tmp\\lum_vbor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "python": "3.14.6",
+  "requested_coretype": "KATMAI",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "fixtures": {
+  "eme_layer_modes_0": {
+   "kind": "hash",
+   "value": "5653e841f892ba0a4029bd36ead5c9e2edb23d6790915b8a2cc3c9e17c3cbc1c"
+  },
+  "eme_layer_modes_1": {
+   "kind": "hash",
+   "value": "c54eae9a02f0cfc7dc72d8be736639a81647918a4f5bbc0e3bbc85d24d4d3cdf"
+  },
+  "eme_layer_modes_2": {
+   "kind": "hash",
+   "value": "f174c567ccdb0252090bd5cd5ab9caebe89764a47f9b52a63a0a69ad41dfacb0"
+  },
+  "eme_layer_modes_3": {
+   "kind": "hash",
+   "value": "f82cf05bd57fa41287a6c121419af4d9a10afe66daf4376d6d659e05d406d7eb"
+  },
+  "eme_layer_modes_4": {
+   "kind": "hash",
+   "value": "5fa6712a940d36921f4b65641f2e17e8e60345bd59a61e9c2055dd93f922c095"
+  },
+  "eme_layer_modes_5": {
+   "kind": "hash",
+   "value": "d8e53191bc2a327fd8f80c997c917bd0b870b98602fe0096166a02bae041f7ea"
+  },
+  "eme_ref2d_0": {
+   "kind": "hash",
+   "value": "3626878139904b1f70ec699fcd3f9b3b499d8aa4b8f77408a94e5398f234f97f"
+  },
+  "eme_ref2d_1": {
+   "kind": "hash",
+   "value": "4247e0e204ab31f1a917bc2d13288c3f514016c01c082af3767f518896e30a2b"
+  },
+  "eme_strip_x_0": {
+   "kind": "hash",
+   "value": "a15799f413e63bf1c1c30aa53436346692be6f4313d07ccfe88eda6f7bf12e9c"
+  },
+  "eme_strip_x_1": {
+   "kind": "hash",
+   "value": "1a1c580457700c099451c19532eed50b246dafc1e7efabb8d5c06a0e2a265005"
+  },
+  "eme_strip_x_2": {
+   "kind": "hash",
+   "value": "675258109706290cb4e8fbb2dffd6a976e2bf20f6fd5a8a30d1714093a6621b4"
+  },
+  "eme_strip_x_3": {
+   "kind": "hash",
+   "value": "5b6f5e1022624b8b4f870780883290aed4d6eb5bb81934a3e8cdb001bba0d9ed"
+  },
+  "nodal_bilayer_lossless": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_bilayer_m0_both_1e-06": {
+   "kind": "hash",
+   "value": "cd3714fb67e9b577b186b3e3c9bc4b86be47a2e118ae37703ae055bf2cddd268"
+  },
+  "nodal_bilayer_m0_inc_1e-09": {
+   "kind": "hash",
+   "value": "8c3bc68a2481dfd2b39c5be47df09cc3ca93e7c3ac2f7e255fd8da978be30fe1"
+  },
+  "nodal_bilayer_m1_both_1e-06": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_bilayer_m1_inc_1e-09": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_bilayer_m2_both_1e-06": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_bilayer_m2_inc_1e-09": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_bilayer_m3_both_1e-06": {
+   "kind": "hash",
+   "value": "3d9747f815ad55575faf837871126ff48ce93e3fae7e72614972407d691c5298"
+  },
+  "nodal_bilayer_m3_inc_1e-09": {
+   "kind": "hash",
+   "value": "c8ecda724b6ddc85c3d3e777be11fbb0ce34d7fc40956621646bd6c63ea42f3c"
+  },
+  "nodal_bilayer_mid1e-6": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_core_lossless": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_core_m0_both_1e-06": {
+   "kind": "hash",
+   "value": "6b50f5afc7ac4c711c442592ff090abaf274612172305a9618bde5108c2d0c66"
+  },
+  "nodal_core_m0_inc_1e-09": {
+   "kind": "hash",
+   "value": "31ed1fa52947d9fba9aec2042f9d8dc0c17f1993c8b98dd041c71ad365a2f860"
+  },
+  "nodal_core_m1_both_1e-06": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_core_m1_inc_1e-09": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_core_m2_both_1e-06": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_core_m2_inc_1e-09": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_core_m3_both_1e-06": {
+   "kind": "hash",
+   "value": "cc2411ac2e23f344ac9d54d98582f11acdfed564a73b856a306dce6e38ceeb09"
+  },
+  "nodal_core_m3_inc_1e-09": {
+   "kind": "hash",
+   "value": "faede6c35c63222913f383c655ba884c8f61de3ec7e7dc9e1662f4bbed6802c0"
+  },
+  "nodal_core_mid1e-6": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_grate_lossless": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_grate_m0_both_1e-06": {
+   "kind": "hash",
+   "value": "d636410ac4e1fac1abde76ebea39efb53d60a5a6c4f56b8cc1248a956b72fb6c"
+  },
+  "nodal_grate_m0_inc_1e-09": {
+   "kind": "hash",
+   "value": "379ca536565d4cb56a3db4ce62583edfe144f4ffd44646dc4f13b0139c037cc4"
+  },
+  "nodal_grate_m1_both_1e-06": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_grate_m1_inc_1e-09": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_grate_m2_both_1e-06": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_grate_m2_inc_1e-09": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_grate_m3_both_1e-06": {
+   "kind": "hash",
+   "value": "cabc0e3e1844dfc3280e4e7552bf35e1d5d187ba8fe0f3ac21b73dfe4379432f"
+  },
+  "nodal_grate_m3_inc_1e-09": {
+   "kind": "hash",
+   "value": "f816c6e81bcc33dfd9dfd09403b4baaa3ac57660c0f1a8b00babe3608dfe7efc"
+  },
+  "nodal_grate_mid1e-6": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_para_lossless": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_para_m0_both_1e-06": {
+   "kind": "hash",
+   "value": "9c80bc9e0bfa2b070334e9b93e5aab0b7195471dc228faa53104b68ff0314a40"
+  },
+  "nodal_para_m0_inc_1e-09": {
+   "kind": "hash",
+   "value": "bd44294cf7bbae36868020856031a552d002171971023776963034137d347aa8"
+  },
+  "nodal_para_m1_both_1e-06": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_para_m1_inc_1e-09": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_para_m2_both_1e-06": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_para_m2_inc_1e-09": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "nodal_para_m3_both_1e-06": {
+   "kind": "hash",
+   "value": "924194ba1e0d1be2b5e035033478c10ab076170116e73b7e23ce5ae61b6ef2c1"
+  },
+  "nodal_para_m3_inc_1e-09": {
+   "kind": "hash",
+   "value": "d19b36ff840ec12453ef3b8ba5cd4f7942522c1ab72536c1b8b5ea1ce42c458e"
+  },
+  "nodal_para_mid1e-6": {
+   "kind": "raise",
+   "value": "BORNodalPassivityError"
+  },
+  "stack_fd_m0": {
+   "kind": "hash",
+   "value": "974a7455d3d95e72dd4e624269ae99c5d6aee229b2d7375af55cb53e59b3e1b9"
+  },
+  "stack_fd_m2": {
+   "kind": "hash",
+   "value": "fb6bb427b799d13428bff353ce03e9749b26ce18ca790670adaf9434ee55c604"
+  },
+  "stack_sem_m0": {
+   "kind": "hash",
+   "value": "6e4bce711bff835e4c82b39b1244dc20e5b26ad949eeaf78cafc02b30b463bc7"
+  },
+  "stack_sem_m2": {
+   "kind": "hash",
+   "value": "01c75c971305223ca146fbaf4cd0ab28b2c17266eebb77ac463b278f8a057246"
+  },
+  "stack_staggered_m0": {
+   "kind": "raise",
+   "value": "ValueError"
+  },
+  "stack_staggered_m2": {
+   "kind": "raise",
+   "value": "ValueError"
+  },
+  "stag_grate_both_1e-06": {
+   "kind": "hash",
+   "value": "f68e00673d0ccdbadce5deaa36380dc0bfc7e79dd800ee1b1e4f7564cb8aed77"
+  },
+  "stag_grate_inc_1e-09": {
+   "kind": "hash",
+   "value": "2ef29cf66b0a80a78e5c7a72ea3fb93152e5fd0ec619c784e022de5ef8582ddd"
+  },
+  "stag_grate_mid_1e-06": {
+   "kind": "hash",
+   "value": "bd92a7cda3772789ca7529db5469fb978599bc1c0a2bf4e6aa3ca66778fd1a80"
+  },
+  "stag_grate_none_0": {
+   "kind": "hash",
+   "value": "7a479275b8098eaedd61c159f640cc95a15e69921a42665d133040f3340889c1"
+  },
+  "stag_para_both_1e-06": {
+   "kind": "hash",
+   "value": "42de53a0ea1100645cdb7de99a7f3156dad8fc2fee12c4acfe03ba3d1908ae0d"
+  },
+  "stag_para_inc_1e-09": {
+   "kind": "hash",
+   "value": "d6740a712d505fd1c28d7f7b7cda43bc846663fe01a04f5c55974f20edfd71c8"
+  },
+  "stag_para_mid_1e-06": {
+   "kind": "hash",
+   "value": "660ed870dd9c708cdf961ac6d320dac30ad8b7ae0d0cfe9c7cffc2e7d77fcdd1"
+  },
+  "stag_para_none_0": {
+   "kind": "hash",
+   "value": "514fae8f0e4a08ce61424f2ce6bc54a6dbd8bc458c11d902a2710a7d577df84a"
+  }
+ },
+ "summary": {
+  "n": 66,
+  "n_bor": 54,
+  "n_eme": 12,
+  "raising": 26,
+  "seconds": 62.38993167877197
+ }
+}

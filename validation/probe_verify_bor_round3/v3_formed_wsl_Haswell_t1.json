@@ -1,0 +1,82 @@
+{
+ "arm": {
+  "build": "wsl",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "/mnt/c/tmp/lum_vbor3/lumenairy/__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "x86_64",
+  "mkl": "1",
+  "numpy": "2.4.6",
+  "omp": "1",
+  "openblas": "1",
+  "python": "3.12.3",
+  "requested_coretype": "HASWELL",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "summary": {
+  "cases": {
+   "formed_huge": {
+    "hot_expected": true,
+    "q_excess": 333333333333.3333,
+    "q_measurable": true,
+    "verdict": "warn_own",
+    "w_min_own_frac": 1e-07
+   },
+   "formed_inf": {
+    "hot_expected": true,
+    "q_excess": Infinity,
+    "q_measurable": true,
+    "verdict": "warn_own",
+    "w_min_own_frac": 1e-07
+   },
+   "formed_nan": {
+    "hot_expected": true,
+    "q_excess": NaN,
+    "q_measurable": true,
+    "verdict": "warn_own",
+    "w_min_own_frac": 1e-07
+   },
+   "formed_small": {
+    "hot_expected": false,
+    "q_excess": 0.3333333333333333,
+    "q_measurable": true,
+    "verdict": "ok",
+    "w_min_own_frac": 1e-07
+   },
+   "legacy_record_no_key": {
+    "hot_expected": false,
+    "q_excess": Infinity,
+    "q_measurable": null,
+    "verdict": "ok"
+   },
+   "no_modes": {
+    "hot_expected": false,
+    "q_excess": NaN,
+    "q_measurable": false,
+    "verdict": "ok",
+    "w_min_own_frac": 1e-07
+   },
+   "zero_ceiling": {
+    "hot_expected": false,
+    "q_excess": NaN,
+    "q_measurable": false,
+    "verdict": "ok",
+    "w_min_own_frac": 1e-07
+   },
+   "zero_k0": {
+    "hot_expected": false,
+    "q_excess": NaN,
+    "q_measurable": false,
+    "verdict": "ok",
+    "w_min_own_frac": 1e-07
+   }
+  },
+  "derived": {
+   "formed_finite_below_bar_stays_cold": true,
+   "formed_nonfinite_is_hot": true,
+   "legacy_record_reverts_to_the_pre_round_reading": true,
+   "never_formed_stays_cold": true
+  }
+ }
+}

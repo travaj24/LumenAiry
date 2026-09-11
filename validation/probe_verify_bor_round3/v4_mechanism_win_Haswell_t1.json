@@ -1,0 +1,678 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_vbor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "python": "3.14.6",
+  "requested_coretype": "HASWELL",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "rows": [
+  {
+   "backward_total": 112,
+   "closure": 2.888043243087779e-05,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    1.0000288804324309,
+    1.0000000000000024
+   ],
+   "idx": 1,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000004,
+   "in_band_flux_min": 0.9999999999999994,
+   "m": 0,
+   "marginal_row": 0,
+   "n_channels": 2,
+   "n_in_band": 2,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    2.8977857830354494e-05,
+    1.5807298991911702
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 93,
+   "closure": 4.4617261145685205e-06,
+   "delta": 1e-10,
+   "energy_rows": [
+    1.0000044617261146,
+    1.0000000000000095
+   ],
+   "idx": 1,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000004,
+   "in_band_flux_min": 1.0000000000000002,
+   "m": 0,
+   "marginal_row": 0,
+   "n_channels": 2,
+   "n_in_band": 2,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.6435558868367245e-05,
+    1.580729899181196
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 86,
+   "closure": 2.2409268929379778e-07,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    0.9999999999999911,
+    1.0000000000000147,
+    1.0000002240926893
+   ],
+   "idx": 2,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 0.9999999999999998,
+   "m": 0,
+   "marginal_row": 2,
+   "n_channels": 3,
+   "n_in_band": 3,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    1.3251406359335245,
+    1.6134620801456683,
+    2.906731827433413e-05
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 2
+  },
+  {
+   "backward_total": 91,
+   "closure": 3.337920695400953e-08,
+   "delta": 1e-10,
+   "energy_rows": [
+    0.9999999999999863,
+    0.9999999999999992,
+    1.000000033379207
+   ],
+   "idx": 2,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000004,
+   "in_band_flux_min": 0.9999999999999999,
+   "m": 0,
+   "marginal_row": 2,
+   "n_channels": 3,
+   "n_in_band": 3,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.325140635860958,
+    1.6134620801428308,
+    1.650978568578207e-05
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 2
+  },
+  {
+   "backward_total": 86,
+   "closure": 5.084356013984603e-07,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    0.9999994915643986,
+    0.9999999758442458,
+    1.000000000000006,
+    1.000000000000001
+   ],
+   "idx": 3,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000004,
+   "in_band_flux_min": 0.9999999999999994,
+   "m": 0,
+   "marginal_row": 1,
+   "n_channels": 4,
+   "n_in_band": 4,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    1.4671507281416456,
+    2.899660237334837e-05,
+    1.0814063481206917,
+    1.6207620692613462
+   ],
+   "worst_is_marginal": false,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 92,
+   "closure": 8.721480840856444e-07,
+   "delta": 1e-10,
+   "energy_rows": [
+    0.9999991278519159,
+    0.9999999428762896,
+    0.9999999999999909,
+    0.9999999999999909
+   ],
+   "idx": 3,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000002,
+   "in_band_flux_min": 0.9999999999999998,
+   "m": 0,
+   "marginal_row": 1,
+   "n_channels": 4,
+   "n_in_band": 4,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.467151110148173,
+    1.6304910695256215e-05,
+    1.0814063479735387,
+    1.6207620692588711
+   ],
+   "worst_is_marginal": false,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 89,
+   "closure": 3.5740145631901754e-07,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    0.999999652773368,
+    0.9999996425985437
+   ],
+   "idx": 1,
+   "in_band_backward": 0,
+   "in_band_flux_max": 0.9999999999999998,
+   "in_band_flux_min": 0.9999999999999998,
+   "m": 1,
+   "marginal_row": 1,
+   "n_channels": 2,
+   "n_in_band": 2,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    1.429473676211498,
+    2.9128469236560208e-05
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 1
+  },
+  {
+   "backward_total": 84,
+   "closure": 4.0100325020553385e-06,
+   "delta": 1e-10,
+   "energy_rows": [
+    1.000004010032502,
+    1.0000015319586693
+   ],
+   "idx": 1,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 1.0,
+   "m": 1,
+   "marginal_row": 0,
+   "n_channels": 2,
+   "n_in_band": 2,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.6031948106496463e-05,
+    1.429473684607183
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 86,
+   "closure": 2.7196263907569573e-08,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    0.9999999999999967,
+    0.9999999999999932,
+    1.000000027196264
+   ],
+   "idx": 2,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 0.9999999999999998,
+   "m": 1,
+   "marginal_row": 2,
+   "n_channels": 3,
+   "n_in_band": 3,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    1.5296996361199464,
+    1.1333234546718138,
+    2.8956373157957085e-05
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 2
+  },
+  {
+   "backward_total": 99,
+   "closure": 1.884192756262948e-07,
+   "delta": 1e-10,
+   "energy_rows": [
+    0.999999999999999,
+    1.0,
+    0.9999998115807244
+   ],
+   "idx": 2,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000002,
+   "in_band_flux_min": 0.9999999999999998,
+   "m": 1,
+   "marginal_row": 2,
+   "n_channels": 3,
+   "n_in_band": 3,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.5296996360976245,
+    1.1333234545408657,
+    1.6268555839244993e-05
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 2
+  },
+  {
+   "backward_total": 95,
+   "closure": 2.7603259011854675e-08,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    1.000000027603259,
+    0.9999999895253449,
+    1.0000000088799634,
+    1.0000000013518753
+   ],
+   "idx": 3,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 0.9999999999999997,
+   "m": 1,
+   "marginal_row": 0,
+   "n_channels": 4,
+   "n_in_band": 4,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    2.8973513550605197e-05,
+    1.572846365576657,
+    1.3653383497729747,
+    1.0593671807653664
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 97,
+   "closure": 5.359233772317396e-07,
+   "delta": 1e-10,
+   "energy_rows": [
+    0.9999999667268037,
+    1.0000001138331,
+    1.0000005359233772,
+    0.9999999145296518
+   ],
+   "idx": 3,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000004,
+   "in_band_flux_min": 1.0,
+   "m": 1,
+   "marginal_row": 0,
+   "n_channels": 4,
+   "n_in_band": 4,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.6252700103193954e-05,
+    1.5728463194163607,
+    1.3653384303070615,
+    1.059367174831728
+   ],
+   "worst_is_marginal": false,
+   "worst_row": 2
+  },
+  {
+   "backward_total": 92,
+   "closure": 3.963939032569641e-08,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    0.9999999603606097,
+    0.9999999938635471
+   ],
+   "idx": 1,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 1.0,
+   "m": 2,
+   "marginal_row": 1,
+   "n_channels": 2,
+   "n_in_band": 2,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    1.3103834748020702,
+    2.903504614074929e-05
+   ],
+   "worst_is_marginal": false,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 87,
+   "closure": 3.327355990734304e-07,
+   "delta": 1e-10,
+   "energy_rows": [
+    1.000000332735599,
+    0.9999997594262044
+   ],
+   "idx": 1,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 0.9999999999999998,
+   "m": 2,
+   "marginal_row": 1,
+   "n_channels": 2,
+   "n_in_band": 2,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.3103833149393556,
+    1.634347184548266e-05
+   ],
+   "worst_is_marginal": false,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 97,
+   "closure": 2.26485616705574e-07,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    1.0000002264856167,
+    1.0000000000000209,
+    1.0000000000000073
+   ],
+   "idx": 2,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000002,
+   "in_band_flux_min": 0.9999999999999998,
+   "m": 2,
+   "marginal_row": 0,
+   "n_channels": 3,
+   "n_in_band": 3,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    2.902403899463354e-05,
+    1.0481319037119199,
+    1.4511006904160504
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 90,
+   "closure": 1.0987516951832532e-07,
+   "delta": 1e-10,
+   "energy_rows": [
+    0.9999998901248305,
+    1.0000000000000053,
+    0.9999999999999867
+   ],
+   "idx": 2,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000004,
+   "in_band_flux_min": 0.9999999999999999,
+   "m": 2,
+   "marginal_row": 0,
+   "n_channels": 3,
+   "n_in_band": 3,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.6368759933781992e-05,
+    1.4511006903743302,
+    1.0481319035508676
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 100,
+   "closure": 8.737058077024074e-09,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    0.9999999995857924,
+    1.0000000003228668,
+    1.000000000092973,
+    0.9999999912629419
+   ],
+   "idx": 3,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000004,
+   "in_band_flux_min": 0.9999999999999998,
+   "m": 2,
+   "marginal_row": 3,
+   "n_channels": 4,
+   "n_in_band": 4,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    1.5188678547737395,
+    1.291348717237622,
+    0.9849540340703966,
+    2.8977657612150116e-05
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 3
+  },
+  {
+   "backward_total": 97,
+   "closure": 1.3767138096199005e-07,
+   "delta": 1e-10,
+   "energy_rows": [
+    0.999999949146111,
+    1.000000137671381,
+    0.9999998804161744,
+    0.9999999950913973
+   ],
+   "idx": 3,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000002,
+   "in_band_flux_min": 1.0,
+   "m": 2,
+   "marginal_row": 3,
+   "n_channels": 4,
+   "n_in_band": 4,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.5188678194480496,
+    1.2913490703227193,
+    0.9849540054672256,
+    1.6318409469506965e-05
+   ],
+   "worst_is_marginal": false,
+   "worst_row": 1
+  },
+  {
+   "backward_total": 97,
+   "closure": 9.436351700031764e-10,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    1.000000000011801,
+    1.0000000009436352
+   ],
+   "idx": 1,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 1.0,
+   "m": 3,
+   "marginal_row": 1,
+   "n_channels": 2,
+   "n_in_band": 2,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    1.2266921209299695,
+    2.893712323899215e-05
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 1
+  },
+  {
+   "backward_total": 98,
+   "closure": 6.538643437803415e-08,
+   "delta": 1e-10,
+   "energy_rows": [
+    0.9999999346135656,
+    1.000000047862627
+   ],
+   "idx": 1,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 0.9999999999999999,
+   "m": 3,
+   "marginal_row": 1,
+   "n_channels": 2,
+   "n_in_band": 2,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.2266921043037449,
+    1.6260476497019657e-05
+   ],
+   "worst_is_marginal": false,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 87,
+   "closure": 1.803755056428713e-08,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    1.0000000180375506,
+    0.99999999999999,
+    1.0000000000000024
+   ],
+   "idx": 2,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 0.9999999999999999,
+   "m": 3,
+   "marginal_row": 0,
+   "n_channels": 3,
+   "n_in_band": 3,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    2.898236796582135e-05,
+    1.3880971577617565,
+    0.9865393805864973
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 109,
+   "closure": 3.60391116949188e-08,
+   "delta": 1e-10,
+   "energy_rows": [
+    1.0000000360391117,
+    0.9999999999999986,
+    1.000000000000006
+   ],
+   "idx": 2,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 0.9999999999999998,
+   "m": 3,
+   "marginal_row": 0,
+   "n_channels": 3,
+   "n_in_band": 3,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.6250381431617647e-05,
+    1.388097157704372,
+    0.9865393804008508
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 0
+  },
+  {
+   "backward_total": 92,
+   "closure": 1.174259356417906e-08,
+   "delta": 3.1622776601683795e-10,
+   "energy_rows": [
+    1.0000000000128597,
+    1.0000000000863,
+    0.9999999999011694,
+    1.0000000117425936
+   ],
+   "idx": 3,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0000000000000002,
+   "in_band_flux_min": 0.9999999999999993,
+   "m": 3,
+   "marginal_row": 3,
+   "n_channels": 4,
+   "n_in_band": 4,
+   "n_modes": 192,
+   "qn_marginal": 2.898595438363444e-05,
+   "qn_real": [
+    1.4712324945016761,
+    1.2334675666637789,
+    0.9300910509741902,
+    2.8968399381530998e-05
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 3
+  },
+  {
+   "backward_total": 88,
+   "closure": 6.812831498947958e-08,
+   "delta": 1e-10,
+   "energy_rows": [
+    1.0000000092190082,
+    0.9999999489538438,
+    1.0000000583804975,
+    0.999999931871685
+   ],
+   "idx": 3,
+   "in_band_backward": 0,
+   "in_band_flux_max": 1.0,
+   "in_band_flux_min": 0.9999999999999998,
+   "m": 3,
+   "marginal_row": 3,
+   "n_channels": 4,
+   "n_in_band": 4,
+   "n_modes": 192,
+   "qn_marginal": 1.63e-05,
+   "qn_real": [
+    1.471232443707303,
+    1.2334675331244565,
+    0.9300910603226037,
+    1.6283808747526376e-05
+   ],
+   "worst_is_marginal": true,
+   "worst_row": 3
+  }
+ ],
+ "summary": {
+  "rows": 24,
+  "rows_with_any_in_band_backward_mode": 0,
+  "seconds": 9.130417585372925,
+  "strongest_in_band_flux": 1.0000000000000004,
+  "total_backward_modes": 2244,
+  "total_in_band_backward_modes": 0,
+  "weakest_in_band_flux": 0.9999999999999993,
+  "worst_row_is_the_marginal_channel": 17,
+  "worst_row_is_the_marginal_channel_frac": 0.7083333333333334
+ }
+}
