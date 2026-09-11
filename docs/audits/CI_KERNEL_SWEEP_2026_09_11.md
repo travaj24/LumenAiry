@@ -151,7 +151,20 @@ least_duration --durations-path .test_durations`):
 |---|---|---|---|---|
 | **SLOW gate, 3 shards** | Sandybridge | WIN | complete -- 245 tests | **1 failure**, and it is the stripe test above (the shard collected the module before that fix landed).  Shards 2 and 3: 82 + 82 passed, zero failures.  Wall 1:14 / 1:21 / 1:23. |
 | FAST gate, 4 shards | Katmai (`PRESCOTT`) | WIN | partial -- ~5,800 of 12,931 at the time of writing | **zero failures** |
-| FAST gate, 2 shards, numerics files only (144 files matching pmm/rcwa/bor/eme/slant/staggered/mortar/conditioning/branch/sliver/jones/berreman/emt) | Nehalem | WSL | partial -- ~1,900 | **zero failures** |
+| FAST gate, 2 shards, numerics files only (144 files matching pmm/rcwa/bor/eme/slant/staggered/mortar/conditioning/branch/sliver/jones/berreman/emt) | Nehalem | WSL | partial -- ~1,900 (stopped by an over-broad `pkill` of this sweep's own, not by a failure) | **zero failures** |
+| FAST gate, 4 shards, the CI-FAITHFUL arm (default kernel, `OMP/OPENBLAS/MKL_NUM_THREADS=4`, i.e. a 4-core runner's width) | Haswell | WSL | partial -- still running when the sweep closed | **zero failures so far** |
+
+### Cross-kernel verification of everything this sweep touched
+
+Run one kernel at a time, at one thread, after the changes:
+
+| files | WIN HAS / SBR / NEH / KAT | WSL HAS / SBR / NEH / KAT |
+|---|---|---|
+| mortar rounds 2/3/4 + both mortar verify files + the `fff_nv` file + the new consistency gate (58 tests) | 58 / 58 / 58 / 58 | 58 / 58 / 58 / (in flight) |
+| `test_niche_d1_tilted_carrier.py` (33 tests) | 33 / 33 / 33 / 33 | 33 / 33 / 33 / 33 |
+| `test_ci_kernel_consistency.py` (5 tests, 4.5 s) | pass | pass |
+
+All eight arms, both witnesses, zero failures.
 
 **The Katmai fast gate found failures CI never reported**, which is the whole
 point of running a sweep rather than reading a log.  Six, from the ~8,100 tests
