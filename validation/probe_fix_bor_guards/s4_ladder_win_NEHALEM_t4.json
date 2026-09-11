@@ -1,0 +1,252 @@
+{
+ "rows": [
+  {
+   "delta_frac": 0.1,
+   "degree": 6,
+   "verdict": "ok",
+   "w_min_union_frac": 0.05000000000000001,
+   "q_excess": 16.058172730504175,
+   "closure": 9.635721642808903e-08,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.01,
+   "degree": 6,
+   "verdict": "ok",
+   "w_min_union_frac": 0.010000000000000009,
+   "q_excess": 18.691578223736034,
+   "closure": 9.504130216164697e-08,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.001,
+   "degree": 6,
+   "verdict": "ok",
+   "w_min_union_frac": 0.0010000000000000009,
+   "q_excess": 161.90808519996202,
+   "closure": 8.954951602468952e-08,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.0001,
+   "degree": 6,
+   "verdict": "warn",
+   "w_min_union_frac": 9.999999999998899e-05,
+   "q_excess": 1596.7793075311947,
+   "closure": 1.4335925768715896e-07,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 1e-05,
+   "degree": 6,
+   "verdict": "warn",
+   "w_min_union_frac": 9.999999999991497e-06,
+   "q_excess": 15936.606443881747,
+   "closure": 1.1356419726826772e-07,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 1e-06,
+   "degree": 6,
+   "verdict": "refuse",
+   "w_min_union_frac": 9.999999999917482e-07,
+   "q_excess": 173252.04721960472,
+   "closure": 4.945993494764878e-07,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 1e-07,
+   "degree": 6,
+   "verdict": "refuse",
+   "w_min_union_frac": 9.999999998437185e-08,
+   "q_excess": 1593348.0289644366,
+   "closure": 0.03175966074369785,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.1,
+   "degree": 8,
+   "verdict": "ok",
+   "w_min_union_frac": 0.05000000000000001,
+   "q_excess": 17.80218904782661,
+   "closure": 1.3125067477304242e-08,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.01,
+   "degree": 8,
+   "verdict": "ok",
+   "w_min_union_frac": 0.010000000000000009,
+   "q_excess": 29.520907197982723,
+   "closure": 8.797876771549085e-08,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.001,
+   "degree": 8,
+   "verdict": "ok",
+   "w_min_union_frac": 0.0010000000000000009,
+   "q_excess": 255.4171057802223,
+   "closure": 5.3947676326160376e-08,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.0001,
+   "degree": 8,
+   "verdict": "warn",
+   "w_min_union_frac": 9.999999999998899e-05,
+   "q_excess": 2525.9129638397,
+   "closure": 3.7153984666637996e-08,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 1e-05,
+   "degree": 8,
+   "verdict": "warn",
+   "w_min_union_frac": 9.999999999991497e-06,
+   "q_excess": 25218.874431726537,
+   "closure": 4.134830366986364e-08,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 1e-06,
+   "degree": 8,
+   "verdict": "refuse",
+   "w_min_union_frac": 9.999999999917482e-07,
+   "q_excess": 455644.5790192944,
+   "closure": 0.0002322151084563906,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 1e-07,
+   "degree": 8,
+   "verdict": "refuse",
+   "w_min_union_frac": 9.999999998437185e-08,
+   "q_excess": 2521444.7763187625,
+   "closure": 0.004661312994233002,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.1,
+   "degree": 12,
+   "verdict": "ok",
+   "w_min_union_frac": 0.10000000000000002,
+   "q_excess": 27.215079011777146,
+   "closure": 3.212461185952975e-09,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.01,
+   "degree": 12,
+   "verdict": "ok",
+   "w_min_union_frac": 0.010000000000000009,
+   "q_excess": 55.88213360527173,
+   "closure": 2.361149253893302e-08,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.001,
+   "degree": 12,
+   "verdict": "ok",
+   "w_min_union_frac": 0.0010000000000000009,
+   "q_excess": 506.85946242106365,
+   "closure": 9.999745920197256e-09,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 0.0001,
+   "degree": 12,
+   "verdict": "warn",
+   "w_min_union_frac": 9.999999999998899e-05,
+   "q_excess": 5020.566083331511,
+   "closure": 1.4249956548084697e-08,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 1e-05,
+   "degree": 12,
+   "verdict": "warn",
+   "w_min_union_frac": 9.999999999991497e-06,
+   "q_excess": 50277.28431290981,
+   "closure": 1.4283126144043479e-06,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 1e-06,
+   "degree": 12,
+   "verdict": "refuse",
+   "w_min_union_frac": 9.999999999917482e-07,
+   "q_excess": 501532.85928114876,
+   "closure": 0.0010926621479114829,
+   "n_orders": 30
+  },
+  {
+   "delta_frac": 1e-07,
+   "degree": 12,
+   "verdict": "refuse",
+   "w_min_union_frac": 9.999999998437185e-08,
+   "q_excess": 5015282.794912683,
+   "closure": 3.2730408842403564,
+   "n_orders": 30
+  }
+ ],
+ "verdicts": {
+  "6": [
+   "ok",
+   "ok",
+   "ok",
+   "warn",
+   "warn",
+   "refuse",
+   "refuse"
+  ],
+  "8": [
+   "ok",
+   "ok",
+   "ok",
+   "warn",
+   "warn",
+   "refuse",
+   "refuse"
+  ],
+  "12": [
+   "ok",
+   "ok",
+   "ok",
+   "warn",
+   "warn",
+   "refuse",
+   "refuse"
+  ]
+ },
+ "closure_min": 3.212461185952975e-09,
+ "closure_max": 3.2730408842403564,
+ "_build": {
+  "python": "3.14.6",
+  "platform": "Windows",
+  "numpy": "2.4.4",
+  "threads_env": {
+   "OMP_NUM_THREADS": "4",
+   "OPENBLAS_NUM_THREADS": "4",
+   "MKL_NUM_THREADS": "4"
+  },
+  "kernel": {
+   "requested": "NEHALEM",
+   "loaded": [
+    {
+     "api": "openblas",
+     "arch": "Nehalem",
+     "nthreads": 4,
+     "version": "0.3.31.188.0"
+    },
+    {
+     "api": "openblas",
+     "arch": "Nehalem",
+     "nthreads": 4,
+     "version": "0.3.30"
+    }
+   ]
+  }
+ },
+ "_tree": "C:\\tmp\\lum_bor1\\lumenairy\\__init__.py"
+}

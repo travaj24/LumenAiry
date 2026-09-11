@@ -1,0 +1,122 @@
+{
+ "rows": [
+  {
+   "n_slices": 128,
+   "degree": 6,
+   "k0": 0.8,
+   "wall_delta": 0.046875,
+   "w_min_frac": 0.001953125,
+   "w_min_union_frac": 0.001953125,
+   "q_excess_max": 345.4403566436275,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 11,
+   "closure": 5.182936597680765e-07,
+   "n_warn": 0,
+   "secs": 18.7
+  },
+  {
+   "n_slices": 256,
+   "degree": 6,
+   "k0": 0.8,
+   "wall_delta": 0.0234375,
+   "w_min_frac": 0.0009765625,
+   "w_min_union_frac": 0.0009765625,
+   "q_excess_max": 690.1726129457073,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 11,
+   "closure": 4.828421722447018e-07,
+   "n_warn": 0,
+   "secs": 36.0
+  },
+  {
+   "n_slices": 128,
+   "degree": 8,
+   "k0": 0.8,
+   "wall_delta": 0.046875,
+   "w_min_frac": 0.001953125,
+   "w_min_union_frac": 0.001953125,
+   "q_excess_max": 567.4486580555483,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 11,
+   "closure": 1.051805709195719e-08,
+   "n_warn": 0,
+   "secs": 36.6
+  },
+  {
+   "n_slices": 256,
+   "degree": 8,
+   "k0": 0.8,
+   "wall_delta": 0.0234375,
+   "w_min_frac": 0.0009765625,
+   "w_min_union_frac": 0.0009765625,
+   "q_excess_max": 1134.2240762063623,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 11,
+   "closure": 1.087910705965811e-08,
+   "n_warn": 0,
+   "secs": 72.9
+  },
+  {
+   "n_slices": 256,
+   "degree": 6,
+   "k0": 2.0,
+   "wall_delta": 0.0234375,
+   "w_min_frac": 0.0009765625,
+   "w_min_union_frac": 0.0009765625,
+   "q_excess_max": 276.2948723909052,
+   "verdicts": [
+    "ok"
+   ],
+   "n_orders": 30,
+   "closure": 2.4581610924556685e-07,
+   "n_warn": 0,
+   "secs": 92.1
+  }
+ ],
+ "summary": {
+  "n_arms": 5,
+  "narrowest_union_frac": 0.0009765625,
+  "worst_q_excess": 1134.2240762063623,
+  "all_ok": true,
+  "warn_edge": 0.0001,
+  "q_bar": 10000.0,
+  "width_margin_x": 9.765625,
+  "q_margin_x": 8.816600008568841
+ },
+ "_build": {
+  "python": "3.14.6",
+  "platform": "Windows",
+  "numpy": "2.4.4",
+  "threads_env": {
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  },
+  "kernel": {
+   "requested": null,
+   "loaded": [
+    {
+     "api": "openblas",
+     "arch": "Haswell",
+     "nthreads": 1,
+     "version": "0.3.31.188.0"
+    },
+    {
+     "api": "openblas",
+     "arch": "Haswell",
+     "nthreads": 1,
+     "version": "0.3.30"
+    }
+   ]
+  }
+ },
+ "_tree": "C:\\tmp\\lum_bor1\\lumenairy\\__init__.py"
+}

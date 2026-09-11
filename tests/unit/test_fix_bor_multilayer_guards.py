@@ -575,3 +575,469 @@ def test_the_rbig_over_lambda_proxy_no_longer_decides_anything():
         with pytest.raises(BORNodalPassivityError):
             solve(layers, 2.0)
 
+
+# =========================================================================== #
+#  STEP 4 -- the SEM manufactured-element contract                             #
+# =========================================================================== #
+def _sem_stack(Rbig=24.0, m=1, k0=2.0, degree=8, N=160,
+               elements_per_segment=1, grade=False, basis="sem"):
+    st = BORStack(Rbig, m, basis=basis, degree=degree, N=N,
+                  n_superstrate=1.0, n_substrate=1.5,
+                  elements_per_segment=elements_per_segment, grade=grade)
+    st.set_source(k0=k0)
+    return st
+
+
+def _measure(st):
+    """Solve with the contract DISARMED and return its own measurement.
+
+    The census must read the numbers the SOLVER computes, not a parallel
+    re-implementation of them -- otherwise it certifies the wrong thing."""
+    from lumenairy.elements.bor import _sem_contract as _sc
+    prev = _sc.BOR_SEM_MESH_GUARD
+    _sc.BOR_SEM_MESH_GUARD = False
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            res = st.solve()
+        recs = list(getattr(st, "_sem_mesh_report", []) or [])
+    finally:
+        _sc.BOR_SEM_MESH_GUARD = prev
+    return recs, res
+
+
+def _verdicts(st):
+    from lumenairy.elements.bor import _sem_contract as _sc
+    recs, _res = _measure(st)
+    return sorted({_sc.verdict(r) for r in recs}), recs
+
+
+def _taper(n_slices, degree=8, k0=2.0, r_top=8.0, r_bot=2.0, H=1.2):
+    st = _sem_stack(degree=degree, k0=k0)
+    for i in range(n_slices):
+        r = r_top + (r_bot - r_top) * (i + 0.5) / n_slices
+        st.add_layer(H / n_slices, segments=[(r, 6.0), (24.0, 2.0)])
+    return st
+
+
+def _ordinary_families(degrees=(6, 8, 12), group="all"):
+    """Every BOR SEM geometry family the shipped test suite builds, as
+    ``(label, stack)``.  Uniform, uniform-anisotropic, multi-segment,
+    coincident walls, ring gratings at three periods and duties, hp-refined and
+    graded meshes, a wall-free spacer between two ring layers, m = 0/2/5,
+    k0 = 0.8/3.5/8, an nm-unit fixture whose Rbig and wavelength differ from
+    the others by six orders of magnitude, and a lossy metal ring."""
+    out = []
+    base = group in ("all", "base")
+    mesh = group in ("all", "mesh")
+    sweep = group in ("all", "sweep")
+    for deg in degrees:
+      if base:
+        st = _sem_stack(degree=deg)
+        st.add_layer(0.5, eps=2.25)
+        out.append(("uniform|d%d" % deg, st))
+        st = _sem_stack(degree=deg)
+        st.add_layer(0.5, eps_tensor=(2.25, 2.25, 3.24))
+        out.append(("uniaxial|d%d" % deg, st))
+        st = _sem_stack(degree=deg)
+        st.add_layer(0.5, segments=[(6.0, 6.0), (12.0, 2.25), (24.0, 2.0)])
+        out.append(("segments3|d%d" % deg, st))
+        st = _sem_stack(degree=deg)
+        st.add_layer(0.5, segments=[(6.0, 4.0), (24.0, 2.25)])
+        st.add_layer(0.4, segments=[(6.0, 2.25), (24.0, 4.0)])
+        out.append(("coincident_walls|d%d" % deg, st))
+      if mesh:
+        for period, duty in ((3.0, 0.5), (1.5, 0.3), (0.8, 0.5)):
+            st = _sem_stack(degree=deg)
+            st.add_layer(0.5, rings=(period, duty, 2.449, 1.414))
+            out.append(("grating_p%g_d%g|d%d" % (period, duty, deg), st))
+        st = _sem_stack(degree=deg, elements_per_segment=3)
+        st.add_layer(0.5, segments=[(6.0, 6.0), (24.0, 2.0)])
+        out.append(("hp3|d%d" % deg, st))
+        st = _sem_stack(degree=deg, elements_per_segment=3, grade=True)
+        st.add_layer(0.5, segments=[(6.0, 6.0), (24.0, 2.0)])
+        out.append(("hp3_graded|d%d" % deg, st))
+        st = _sem_stack(degree=deg)
+        st.add_layer(0.4, segments=[(6.0, 4.0), (24.0, 2.25)])
+        st.add_layer(0.3, eps=2.25)
+        st.add_layer(0.4, segments=[(9.0, 2.25), (24.0, 4.0)])
+        out.append(("spacer_between_rings|d%d" % deg, st))
+      if sweep:
+        for mm in (0, 2, 5):
+            st = _sem_stack(m=mm, degree=deg)
+            st.add_layer(0.5, segments=[(6.0, 4.0), (24.0, 2.25)])
+            out.append(("ring_m%d|d%d" % (mm, deg), st))
+        for kk in (0.8, 3.5, 8.0):
+            st = _sem_stack(k0=kk, degree=deg)
+            st.add_layer(0.5, segments=[(6.0, 4.0), (24.0, 2.25)])
+            out.append(("ring_k%g|d%d" % (kk, deg), st))
+        sc = 1e-6
+        st = _sem_stack(Rbig=20.0 * sc, k0=2.0 * np.pi / (1.55 * sc),
+                        degree=deg)
+        st.add_layer(0.5 * sc, rings=(3.0 * sc, 0.5, 2.45, 1.41))
+        out.append(("nm_units|d%d" % deg, st))
+        st = _sem_stack(degree=deg)
+        st.add_layer(0.5, segments=[(6.0, -20.0 + 2.0j), (24.0, 2.25)])
+        out.append(("lossy_metal_ring|d%d" % deg, st))
+    return out
+
+
+@pytest.mark.parametrize("degree", [6, 8, 12])
+@pytest.mark.parametrize("group", ["base", "mesh", "sweep"])
+def test_ordinary_geometry_census(group, degree):
+    """THE BINDING CONSTRAINT ON THE WARN EDGE, and it is re-measured on the
+    running build rather than pinned from a report.
+
+    The 2-D Cartesian peer's round-4 correction was exactly this: a census
+    margin measured on four geometry families is a SAMPLE property, not a
+    library one ("the census margin is sample-scoped, and it is 1.67x, not
+    3.6x").  So every BOR SEM geometry family the shipped suite builds must
+    land OUTSIDE the degradation band on whatever build runs this, and with a
+    stated margin.
+    """
+    from lumenairy.elements.bor import _sem_contract as _sc
+    bad = []
+    narrowest = np.inf
+    worst_q = 0.0
+    fams = _ordinary_families((degree,), group=group)
+    for label, st in fams:
+        try:
+            v, recs = _verdicts(st)
+        except Exception as exc:                       # noqa: BLE001
+            bad.append("%s: raised %s" % (label, type(exc).__name__))
+            continue
+        for r in recs:
+            if np.isfinite(r["w_min_union_frac"]):
+                narrowest = min(narrowest, r["w_min_union_frac"])
+            if np.isfinite(r["q_excess"]):
+                worst_q = max(worst_q, r["q_excess"])
+        if v != ["ok"]:
+            bad.append("%s -> %s (narrowest union cell %.4e of Rbig, "
+                       "q_excess %.4g)"
+                       % (label, v,
+                          min(r["w_min_union_frac"] for r in recs),
+                          max(r["q_excess"] for r in recs)))
+    assert len(fams) >= 4, "the census shrank to %d families" % (len(fams),)
+    assert not bad, ("ORDINARY geometry tripped the manufactured-element "
+                     "contract:\n  " + "\n  ".join(bad))
+    # ...and with margin, not merely on the right side of the edge.
+    assert narrowest > 3.0 * _sc._BOR_SLIVER_BAND_FRAC, (
+        "the narrowest ORDINARY manufactured cell is %.4e of Rbig against the "
+        "%.0e warn edge -- only %.3gx of margin"
+        % (narrowest, _sc._BOR_SLIVER_BAND_FRAC,
+           narrowest / _sc._BOR_SLIVER_BAND_FRAC))
+    assert worst_q < _sc._BOR_Q_EXCESS / 10.0, (
+        "ORDINARY geometry reaches |q|max/(n_max k0) = %.4g against the %.0e "
+        "screen -- less than one decade of margin" % (worst_q,
+                                                      _sc._BOR_Q_EXCESS))
+
+
+@pytest.mark.parametrize("n_slices,degree,k0", [
+    (8, 8, 2.0), (16, 8, 2.0), (32, 8, 2.0), (64, 8, 2.0),
+    # The deep arms are swept at a lower degree and k0 purely for runtime (a
+    # 256-slice taper is one SEM modal eigensolve per slice: 170 s at
+    # degree 8 / k0 = 2.0, 36 s here).  Neither knob touches the GEOMETRIC
+    # conjunct -- w/Rbig is (r_top - r_bot) / (N Rbig) exactly -- and a LOWER
+    # k0 RAISES |q|max / (n_max k0), so these arms are the DEMANDING ones for
+    # the spectral screen, not the lenient ones.
+    (128, 6, 0.8), (256, 6, 0.8),
+])
+def test_the_taper_staircase_is_ordinary_at_every_slice_count(
+        n_slices, degree, k0):
+    """THE FAMILY THAT WALKS INTO THE CONTRACT, and the one that BINDS the warn
+    edge.  A cone sliced into layers makes ADJACENT slices' walls differ by
+    ``(r_top - r_bot) / n_slices``, so the manufactured cell HALVES with every
+    doubling of the slice count while ``|q|max / ceiling`` DOUBLES.
+
+    The census runs to 256 slices and not to the scoping's 64 because a margin
+    measured at 64 says nothing about 256 -- and it did not: the scoping's
+    candidate warn edge of 1e-3 carried 3.9x at 64 slices and is REFUTED at
+    256, where the manufactured cell is 9.766e-04, i.e. 0.977x, INSIDE the band
+    it would have warned on.  That measurement moved the edge a decade.
+    """
+    from lumenairy.elements.bor import _sem_contract as _sc
+    v, recs = _verdicts(_taper(n_slices, degree=degree, k0=k0))
+    w = min(r["w_min_union_frac"] for r in recs)
+    q = max(r["q_excess"] for r in recs if np.isfinite(r["q_excess"]))
+    assert v == ["ok"], (
+        "a %d-slice taper is ORDINARY geometry but the contract says %s "
+        "(narrowest manufactured cell %.4e of Rbig, |q|max/ceiling %.4g)"
+        % (n_slices, v, w, q))
+    assert w > 3.0 * _sc._BOR_SLIVER_BAND_FRAC, (
+        "a %d-slice taper leaves only %.3gx of margin above the %.0e warn edge "
+        "(measured 9.766e-04, 9.77x, at 256 slices)"
+        % (n_slices, w / _sc._BOR_SLIVER_BAND_FRAC, _sc._BOR_SLIVER_BAND_FRAC))
+    assert q < _sc._BOR_Q_EXCESS / 3.0, (
+        "a %d-slice taper reaches |q|max/(n_max k0) = %.4g against the %.0e "
+        "screen -- only %.3gx (the widened census's worst ordinary reading is "
+        "1134.2, i.e. 8.82x)"
+        % (n_slices, q, _sc._BOR_Q_EXCESS, _sc._BOR_Q_EXCESS / q))
+
+
+@pytest.mark.parametrize("degree", [6, 8, 12])
+def test_the_delta_ladder_is_decided_the_same_way_at_every_degree(degree):
+    """THE LADDER, decided.  Two ADJACENT ring layers whose walls differ by
+    ``delta``: the ``+-1`` enrichment window unions both wall sets, so a cell
+    of exactly ``delta`` appears in BOTH meshes and no single layer asked for
+    it.
+
+    The verdict per rung must be the SAME at every degree and -- checked
+    separately, under both kernel and thread ladders on both builds -- the same
+    on every arm.  That is possible only because both conjuncts are
+    kernel-stable: the geometry is kernel-EXACT (spread 1.0000x) and the
+    spectral excess kernel-stable (1.1895x), where the energy violation moves
+    70.90x with the kernel alone and could not be used.
+    """
+    from lumenairy.elements.bor._sem_contract import BORSemMeshError
+    expect = {1e-1: "ok", 1e-2: "ok", 1e-3: "ok",
+              1e-4: "warn", 1e-5: "warn",
+              1e-6: "refuse", 1e-7: "refuse"}
+    from lumenairy.elements.bor import _sem_contract as _sc
+    for dl, want in expect.items():
+        d = dl * 24.0
+        st = _sem_stack(degree=degree, N=200)
+        st.add_layer(0.5, segments=[(6.0, 6.0), (24.0, 2.0)])
+        st.add_layer(0.5, segments=[(6.0 + d, 2.0), (24.0, 6.0)])
+        # ONE solve per rung: the measurement is attached BEFORE the contract
+        # is enforced, so the ARMED run yields both the verdict and the
+        # caller-visible outcome.
+        err = None
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            try:
+                st.solve()
+            except BORSemMeshError as exc:
+                err = exc
+        recs = list(getattr(st, "_sem_mesh_report", []) or [])
+        assert recs, "no mesh report at delta/Rbig = %.0e" % (dl,)
+        v = sorted({_sc.verdict(r) for r in recs})
+        got = ("refuse" if "refuse" in v
+               else "warn" if any(x.startswith("warn") for x in v) else "ok")
+        assert got == want, (
+            "delta/Rbig = %.0e at degree %d: contract says %r, expected %r "
+            "(%s)" % (dl, degree, got, want, v))
+        warned = any("MANUFACTURED" in str(x.message) for x in w)
+        if want == "refuse":
+            assert err is not None, (
+                "delta/Rbig = %.0e at degree %d was classified 'refuse' but "
+                "the solve RETURNED" % (dl, degree))
+            msg = str(err)
+            assert "MANUFACTURED" in msg
+            assert "BOR_SEM_MESH_GUARD" in msg
+            assert "basis='fd'" in msg
+        else:
+            assert err is None, (
+                "delta/Rbig = %.0e at degree %d raised but should not"
+                % (dl, degree))
+            assert warned == (want == "warn"), (
+                "delta/Rbig = %.0e at degree %d: warned=%s, expected %s"
+                % (dl, degree, warned, want == "warn"))
+
+
+@pytest.mark.parametrize("delta_frac", [1e-2, 1e-4, 1e-6, 1e-7])
+def test_the_separated_control_is_clean_at_every_rung(delta_frac):
+    """THE ATTRIBUTION CONTROL.  The same two walls, the same ``delta``, but
+    THREE layers apart with TWO wall-free spacers between them -- so the ``+-1``
+    window never spans both wall sets while the geometry is unchanged.
+
+    ONE spacer is not enough and the scoping's first attempt at this control
+    was invalid for exactly that reason: because ``win[i] = walls[i-1] |
+    walls[i] | walls[i+1]``, a wall-free layer BETWEEN the two ring layers
+    inherits both of their walls and carries the sliver itself.
+    """
+    d = delta_frac * 24.0
+    st = _sem_stack(degree=8, N=200)
+    st.add_layer(0.5, segments=[(6.0, 6.0), (24.0, 2.0)])
+    st.add_layer(0.3, eps=2.0)
+    st.add_layer(0.3, eps=2.0)
+    st.add_layer(0.5, segments=[(6.0 + d, 2.0), (24.0, 6.0)])
+    v, recs = _verdicts(st)
+    assert v == ["ok"], (
+        "the SEPARATED control at delta/Rbig = %.0e is not clean: %s"
+        % (delta_frac, v))
+    assert all(not np.isfinite(r["w_min_union_frac"]) for r in recs), (
+        "the separated control manufactured a cross-layer cell after all: %s"
+        % ([r["w_min_union_frac"] for r in recs],))
+
+
+def test_a_wall_free_spacer_inherits_both_neighbours_walls():
+    """PINS THE WINDOW'S REACH, so a future change to ``win[i]`` is caught.
+
+    ``win[i] = walls[i-1] | walls[i] | walls[i+1]`` means a layer with NO walls
+    of its own, placed between two ring layers, gets BOTH of their wall sets.
+    That is why a spacer is not a refuge and why the contract is applied to the
+    post-window breakpoint set rather than to the caller's wall list."""
+    d = 1e-6 * 24.0
+    st = _sem_stack(degree=8, N=200)
+    st.add_layer(0.5, segments=[(6.0, 6.0), (24.0, 2.0)])
+    st.add_layer(0.3, eps=2.0)                       # ONE wall-free spacer
+    st.add_layer(0.5, segments=[(6.0 + d, 2.0), (24.0, 6.0)])
+    _v, recs = _verdicts(st)
+    spacer = recs[1]
+    assert np.isfinite(spacer["w_min_union_frac"]), (
+        "the wall-free spacer shows no manufactured cell -- the +-1 window's "
+        "reach has changed and this contract's scope with it")
+    assert spacer["w_min_union_frac"] < 1e-5, (
+        "the wall-free spacer's narrowest manufactured cell is %.4e of Rbig; "
+        "it inherits BOTH neighbours' walls, so it should carry the full "
+        "1e-6 sliver" % (spacer["w_min_union_frac"],))
+
+
+@pytest.mark.parametrize("w_frac", [1e-5, 1e-6, 1e-7])
+def test_a_within_layer_liner_is_warned_and_never_refused(w_frac):
+    """A narrow element the CALLER asked for -- an annular liner inside ONE
+    layer's own segment list -- is not something the library manufactured, so
+    it is never REFUSED.  It is warned about once it drives the spectrum past
+    the same screen, because it is the same damage: the scoping measured the
+    degree ladder INVERTING from ``w/Rbig = 1e-06`` (degree 16 becomes 144x
+    WORSE than degree 6) while the energy closure stays at its healthy
+    baseline."""
+    w = w_frac * 24.0
+    st = _sem_stack(degree=8, N=200)
+    st.add_layer(0.5, segments=[(6.0, 6.0), (6.0 + w, 2.0), (24.0, 2.0)])
+    v, recs = _verdicts(st)
+    assert "refuse" not in v, (
+        "a liner the CALLER prescribed was REFUSED at w/Rbig = %.0e -- the "
+        "contract must only refuse what the enrichment window manufactured"
+        % (w_frac,))
+    assert all(not np.isfinite(r["w_min_union_frac"]) for r in recs), (
+        "the within-layer liner was attributed to the union: %s"
+        % ([r["w_min_union_frac"] for r in recs],))
+    from lumenairy.elements.bor import _sem_contract as _sc
+    q = max(r["q_excess"] for r in recs if np.isfinite(r["q_excess"]))
+    narrow = min(r["w_min_frac"] for r in recs)
+    # The OWN-geometry warning is the same CONJUNCTION as the refusal, minus
+    # the union attribution: the cell must be below the resolvable width AND
+    # the spectrum must show it.  At w/Rbig = 1e-5 the spectrum is already hot
+    # (q_excess ~ 2.5e4) but the cell is still an order of magnitude above the
+    # measured onset, and the measured per-order error there is 1.8e-05 -- so
+    # the contract is deliberately silent, and this gate says so rather than
+    # demanding a warning the bars do not license.
+    if q > _sc._BOR_Q_EXCESS and narrow < _sc._BOR_MIN_ELEM_FRAC:
+        assert "warn_own" in v, (
+            "w/Rbig = %.0e drives |q|max/(n_max k0) to %.4g with a cell at "
+            "%.3e of Rbig -- past BOTH screens -- and said nothing"
+            % (w_frac, q, narrow))
+    else:
+        assert v == ["ok"], (
+            "w/Rbig = %.0e (cell %.3e of Rbig, q_excess %.4g) is inside both "
+            "bars but the contract said %s" % (w_frac, narrow, q, v))
+
+
+def test_the_fd_basis_is_structurally_immune_and_is_not_contracted():
+    """``basis='fd'`` puts every layer on ONE uniform radial grid that does not
+    know where the walls are, so no cell is ever manufactured by a wall
+    coincidence.  The scoping measured the FD per-order R at
+    ``delta/Rbig <= 1e-3`` to be BIT-IDENTICAL to the ``delta = 0`` answer --
+    the uniform grid cannot resolve the shift at all.
+
+    No contract is applied there, and none should be."""
+    from lumenairy.elements.bor import _sem_contract as _sc
+
+    def fd(delta):
+        st = _sem_stack(degree=8, N=200, basis="fd")
+        st.add_layer(0.5, segments=[(6.0, 6.0), (24.0, 2.0)])
+        st.add_layer(0.5, segments=[(6.0 + delta, 2.0), (24.0, 6.0)])
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            res = st.solve()
+        return (np.asarray(res["R"]),
+                [str(x.message) for x in w],
+                getattr(st, "_sem_mesh_report", None))
+
+    base, wb, rep_b = fd(0.0)
+    assert rep_b is None, "the FD path ran the SEM mesh contract"
+    assert not any("MANUFACTURED" in m for m in wb)
+    for dl in (1e-4, 1e-6, 1e-7):
+        r, w, rep = fd(dl * 24.0)
+        assert rep is None
+        assert not any("MANUFACTURED" in m for m in w), (
+            "the FD basis warned at delta/Rbig = %.0e" % (dl,))
+        assert r.shape == base.shape
+        assert np.array_equal(r, base), (
+            "the FD answer MOVED at delta/Rbig = %.0e (worst |dR| = %.4e); it "
+            "is supposed to be structurally blind to the wall shift"
+            % (dl, float(np.max(np.abs(r - base)))))
+    # the guard's own constants must be unreachable from the FD path
+    assert _sc.BOR_SEM_MESH_GUARD is True          # armed, and still immune
+
+
+def test_no_class_c_decision_is_keyed_on_the_energy_violation():
+    """THE RULE THIS CONTRACT IS BUILT AROUND.  On this ladder the closure's
+    spread across three OpenBLAS kernels is 70.90x, straddling the 1-D
+    ``_SLIVER_TRIGGER_BAR`` of 1e-3 -- the same solve would be arbitrated on
+    one kernel and pass silently on another.  Independently the damage is
+    ENERGY-INVISIBLE over four decades of the ladder.
+
+    So neither conjunct may read ``R``, ``T`` or the closure.  Checked by
+    inspecting what the contract module can even see: its measurement takes a
+    breakpoint array, a wall list, a spectrum and an index, and nothing else.
+    """
+    import inspect
+
+    from lumenairy.elements.bor import _sem_contract as _sc
+    params = set(inspect.signature(_sc.measure_layer).parameters)
+    assert params == {"bnd", "layer_index", "walls", "Rbig", "q", "n_max",
+                      "k0"}, params
+    src = inspect.getsource(_sc.measure_layer) + inspect.getsource(_sc.verdict)
+    code = "\n".join(ln.split("#", 1)[0] for ln in src.splitlines())
+    body = code.split('"""')
+    body = "".join(body[::2])          # drop docstrings
+    for token in ("energy", "closure", "R + T", "sum(R)", "superunity",
+                  "super_unity"):
+        assert token not in body, (
+            "the Class-C decision reads %r -- the energy violation moves "
+            "70.90x with the BLAS kernel alone and must not decide anything"
+            % (token,))
+
+
+def test_the_contract_switch_restores_the_previous_behaviour():
+    """``BOR_SEM_MESH_GUARD = False`` is a FAIL-BEFORE SWITCH: the refused
+    solve returns its pre-5.45.1 number, and no warning is emitted anywhere."""
+    from lumenairy.elements.bor import _sem_contract as _sc
+    d = 1e-7 * 24.0
+
+    def build():
+        st = _sem_stack(degree=8, N=200)
+        st.add_layer(0.5, segments=[(6.0, 6.0), (24.0, 2.0)])
+        st.add_layer(0.5, segments=[(6.0 + d, 2.0), (24.0, 6.0)])
+        return st
+
+    with pytest.raises(_sc.BORSemMeshError):
+        build().solve()
+    prev = _sc.BOR_SEM_MESH_GUARD
+    _sc.BOR_SEM_MESH_GUARD = False
+    try:
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            res = build().solve()
+        assert np.asarray(res["R"]).size
+        assert not any("MANUFACTURED" in str(x.message) for x in w)
+    finally:
+        _sc.BOR_SEM_MESH_GUARD = prev
+
+
+def test_the_contract_is_bit_identical_where_it_does_not_fire():
+    """Everywhere the contract is silent the answer must be EXACTLY what it was
+    -- the contract computes a measurement and either raises, warns or returns;
+    it never touches the mesh, the modes or the cascade."""
+    from lumenairy.elements.bor import _sem_contract as _sc
+
+    def solve_R(armed):
+        prev = _sc.BOR_SEM_MESH_GUARD
+        _sc.BOR_SEM_MESH_GUARD = armed
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                st = _sem_stack(degree=8)
+                st.add_layer(0.5, segments=[(6.0, 4.0), (24.0, 2.25)])
+                st.add_layer(0.4, segments=[(9.0, 2.25), (24.0, 4.0)])
+                return np.asarray(st.solve()["R"])
+        finally:
+            _sc.BOR_SEM_MESH_GUARD = prev
+
+    a, b = solve_R(True), solve_R(False)
+    assert a.shape == b.shape
+    assert np.array_equal(a, b), (
+        "arming the contract moved an ordinary answer by %.4e"
+        % (float(np.max(np.abs(a - b))),))

@@ -27,8 +27,12 @@ import warnings
 import numpy as np
 
 from ._orient import channel_core, flux_is_strong
-from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
-
+from .zcascade import (
+    interface_smatrix,
+    layer_modes,
+    propagation_smatrix,
+    redheffer_star,
+)
 
 #: FAIL-BEFORE SWITCH for the nodal passivity refusal (5.45.1).  ``False``
 #: restores the pre-fix behaviour bit for bit: the ``Rbig/lambda`` warning

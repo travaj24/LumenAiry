@@ -23,6 +23,8 @@ import numpy as np
 
 from ...backend import is_jax_array as _is_jax_array
 from ._orient import channel_core
+from ._sem_contract import enforce as _sem_enforce
+from ._sem_contract import measure_layer as _sem_measure
 from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
 
 # v5.17.1 (audit P3-12): bound on the per-instance modal-basis LRU.  Each
@@ -853,6 +855,21 @@ class BORStack:
         mids = [(thk, modes(meshes[1 + i]))
                 for i, (thk, _fn, _key) in enumerate(self._layers)]
         nlay = len(mids)
+        # THE MANUFACTURED-ELEMENT CONTRACT (5.45.1).  Measured on the
+        # POST-window, POST-DPW, POST-equalize_meshes breakpoint set -- the
+        # user's wall list cannot be used, because a WALL-FREE spacer between
+        # two ring layers inherits both neighbours' walls and carries the
+        # sliver in a mesh that has no walls of its own.  See
+        # lumenairy/elements/bor/_sem_contract.py for the two conjuncts, their
+        # measured populations, and why neither of them is the energy.
+        self._sem_mesh_report = [
+            _sem_measure(meshes[1 + i].b, i, walls, self.Rbig,
+                         mids[i][1]["q"],
+                         max(max(abs(np.sqrt(complex(t)).real) for t in tri)
+                             for _rs, tri in sem_layers[i][1]),
+                         k0)
+            for i in range(nlay)]
+        _sem_enforce(self._sem_mesh_report)
         if mids:
             ifc = [sem_interface_smatrix(sup, mids[0][1])]
             for i in range(1, nlay):
