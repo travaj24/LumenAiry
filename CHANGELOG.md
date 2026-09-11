@@ -134,7 +134,7 @@ bit-identical hashed fixtures on both builds.
 
 ### Fixed -- BOR: the legacy nodal cascade returned `R + T` up to 6899 on a provably passive lossless stack, and below four vacuum wavelengths returned it UNWARNED
 
-`bor_solve.solve(..., basis='nodal')` reaches the historical nodal FD basis,
+`bor_solve.solve` on layers built with `build_layer(..., basis='nodal')` reaches the historical nodal FD basis,
 which is not divergence-conforming: a large fraction of its modal basis is a
 spurious divergence-violating sea whose modes carry ZERO z-flux, so their
 forward/backward orientation is decided by the sign of noise, adjacent layers
@@ -331,7 +331,7 @@ is clean on every quantity (narrowest element 1.500 against 2.400e-06,
 window's union of it is not.
 
 **What ships: a CONJUNCTION, and neither conjunct is the energy.**
-`BORStack.solve(basis='sem')` now raises `BORSemMeshError` when (a) the
+`BORStack(basis='sem').solve()` now raises `BORSemMeshError` when (a) the
 POST-window, POST-DPW, POST-`equalize_meshes` breakpoint set of a layer contains
 a cell narrower than `_BOR_MIN_ELEM_FRAC = 1e-6` of `Rbig` **whose two enclosing
 walls come from DIFFERENT layers**, AND (b) that layer's spectrum reads
