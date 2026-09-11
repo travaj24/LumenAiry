@@ -587,12 +587,20 @@ def test_the_band_documents_that_no_warning_is_not_no_degradation():
         assert token in block, (token, block[-2500:])
 
     # and the CHANGELOG says it too, inside the round-3 paragraph rather than
-    # under a second header
+    # under a second header.  RESTATED 2026-09-12: the note was looked for in
+    # the FIRST block (then ``## [Unreleased]``); once 5.45.0 was folded and
+    # 5.45.1 opened above it, that block no longer held the per-layer entry
+    # and the gate failed on every CI shard.  The gate now finds the block
+    # that carries the per-layer mortar entry, wherever the release history
+    # has moved it, and asserts the round-4 note sits INSIDE that block.
     ch = pathlib.Path(_ts.__file__).parents[3] / "CHANGELOG.md"
     if ch.exists():
         txt = ch.read_text(encoding="utf-8", errors="replace")
-        unrel = txt.split("## [", 2)[1]
-        assert "ROUND 4" in unrel, "the round-4 note must sit inside the " \
-                                   "existing Unreleased block"
+        blocks = txt.split("\n## [")
+        owners = [b for b in blocks if "PER-LAYER element grids" in b]
+        assert owners, "no CHANGELOG block carries the per-layer mortar entry"
+        unrel = owners[0]
+        assert "ROUND 4" in unrel, ("the round-4 note must sit inside the "
+                                   "block that carries the per-layer entry")
         for token in ("13.5x", "1.24x", "5.0000e-02", "EXACTLY ONE"):
             assert token in unrel, token

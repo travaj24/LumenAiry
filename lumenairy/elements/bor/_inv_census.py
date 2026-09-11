@@ -72,14 +72,20 @@ def _record(site, A, X):
     A = np.asarray(A)
     if A.ndim != 2 or A.shape[0] != A.shape[1]:
         return
+    # The census is an INSTRUMENT: a failed reading leaves NaN and never
+    # masks a real error.  What the two instruments can raise: LinAlgError
+    # (a singular inverse), ValueError / TypeError (shape or dtype), and
+    # FloatingPointError / ZeroDivisionError from the equilibration scale.
+    _READ_ERRORS = (np.linalg.LinAlgError, ValueError, TypeError,
+                    FloatingPointError, ZeroDivisionError)
     try:
         Xi = X if X is not None else np.linalg.inv(A)
         rc = float(_rcond_1_equilibrated(A, Xi))
-    except Exception:                                  # noqa: BLE001
+    except _READ_ERRORS:
         rc = float("nan")
     try:
         rs = float(_equilibrated_inverse_residual(A))
-    except Exception:                                  # noqa: BLE001
+    except _READ_ERRORS:
         rs = float("nan")
     _BOR_INV_CENSUS.append((str(site), int(A.shape[0]), rc, rs))
 
