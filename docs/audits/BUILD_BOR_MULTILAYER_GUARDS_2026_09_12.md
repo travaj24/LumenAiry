@@ -178,29 +178,36 @@ putting the order at `qn = n sqrt(delta)` exactly):
 | worst lossless closure | **1.2167e-04** | **1.9655e-07** (619x) |
 | distinct R/T channel counts over the ladder | **{2, 3}** | **{3}** |
 
-**The full kernel x thread ladder, Windows** (`s2_band.py`, `--fast`; each
-kernel read back from `threadpoolctl`):
+**The full kernel x thread ladder, SEVENTEEN arms** (`s2_band.py --fast`; the
+`loaded` column is read back from `threadpoolctl` in every run, never inferred
+from the request):
 
-| requested | loaded | threads | worst closure | channel counts |
-|---|---|---|---|---|
-| HASWELL | Haswell | 1 | 1.9655e-07 | {3} |
-| HASWELL | Haswell | 2 | 4.1679e-07 | {3} |
-| HASWELL | Haswell | 4 | 6.1976e-08 | {3} |
-| NEHALEM | Nehalem | 1 | 2.9240e-07 | {3} |
-| NEHALEM | Nehalem | 2 | 3.1596e-07 | {3} |
-| NEHALEM | Nehalem | 4 | 1.1285e-07 | {3} |
-| PRESCOTT | **Katmai** | 1 | 1.2716e-06 | {3} |
-| PRESCOTT | **Katmai** | 2 | 3.8318e-07 | {3} |
-| PRESCOTT | **Katmai** | 4 | 1.8389e-07 | {3} |
-| ZEN | **Haswell** | 1 | 1.9655e-07 | {3} |
-| ZEN | **Haswell** | 2 | 4.1679e-07 | {3} |
-| ZEN | **Haswell** | 4 | 6.1976e-08 | {3} |
+| build | requested | loaded | threads | worst closure | channel counts |
+|---|---|---|---|---|---|
+| Windows | HASWELL | Haswell | 1 | 1.9655e-07 | **{3}** |
+| Windows | HASWELL | Haswell | 2 | 4.1679e-07 | **{3}** |
+| Windows | HASWELL | Haswell | 4 | 6.1976e-08 | **{3}** |
+| Windows | NEHALEM | Nehalem | 1 | 2.9240e-07 | **{3}** |
+| Windows | NEHALEM | Nehalem | 2 | 3.1596e-07 | **{3}** |
+| Windows | NEHALEM | Nehalem | 4 | 1.1285e-07 | **{3}** |
+| Windows | PRESCOTT | **Katmai** | 1 | **1.2716e-06** | **{3}** |
+| Windows | PRESCOTT | **Katmai** | 2 | 3.8318e-07 | **{3}** |
+| Windows | PRESCOTT | **Katmai** | 4 | 1.8389e-07 | **{3}** |
+| Windows | ZEN | **Haswell** | 1 | 1.9655e-07 | **{3}** |
+| Windows | ZEN | **Haswell** | 2 | 4.1679e-07 | **{3}** |
+| Windows | ZEN | **Haswell** | 4 | 6.1976e-08 | **{3}** |
+| Windows | *(unset)* | Haswell | **24, unpinned** | 3.2670e-07 | **{3}** |
+| WSL | *(unset)* | Haswell | 1 | 1.0818e-07 | **{3}** |
+| WSL | *(unset)* | Haswell | 2 | 5.1030e-08 | **{3}** |
+| WSL | *(unset)* | Haswell | 4 | 4.3513e-07 | **{3}** |
+| WSL | *(unset)* | Haswell | **24, unpinned** | 1.9729e-07 | **{3}** |
 
-WSL / Haswell / 1 thread: worst closure 1.0818e-07, channel counts {3}. **The
-channel count is 3 on every one of the thirteen arms**, where the shipped band
-gave 2 on some rungs and 3 on others and moved that verdict with the kernel on
-21 of 24 rungs and with the thread count on 35 of 39. The ZEN rows being
-bit-identical to the HASWELL rows is the alias measured, not assumed.
+**The channel count is 3 on every one of the seventeen arms** and the worst
+closure anywhere is 1.2716e-06, where the shipped band gave 2 on some rungs and
+3 on others, moved that verdict with the kernel on 21 of 24 rungs and with the
+thread count on 35 of 39, and reached 1.2167e-04. The unpinned arms matter
+because CI's fast lane runs unpinned; the ZEN rows coming out bit-identical to
+their HASWELL twins is the alias MEASURED, not assumed.
 
 **The two-sided bar at `band = 1e-8`, re-measured on this build** (and
 re-measured again by `test_band_two_sided_population` on whatever build runs
@@ -543,6 +550,22 @@ separately rather than re-running every file twelve times.
 | NEW | `test_fix_bor_multilayer_guards` (61), `test_fix_eme_branch_cut` (7) | in the 368 below | in the 346 below |
 | **TOTAL, one command** | all of the above | **368 passed**, 1093.9 s | **346 passed**, 1631.0 s |
 
+The two NEW gate files were additionally run across the thread ladder on
+Windows, to check that the gates themselves are arithmetic-independent and not
+merely the quantities they measure:
+
+| arm | result |
+|---|---|
+| `OPENBLAS_NUM_THREADS=1`, default kernel | **68 passed**, 435 s + 44 s |
+| `OPENBLAS_NUM_THREADS=4`, default kernel | **68 passed**, 399.1 s |
+| `OPENBLAS_CORETYPE=NEHALEM`, 2 threads | **68 passed**, 825.9 s |
+| unpinned (24 threads, Haswell) | **68 passed**, 3367.6 s |
+
+The unpinned arm is **8.4x slower** than the 1-thread arm and is worth recording
+as such: these gates are hundreds of small modal eigensolves, and letting
+OpenBLAS spread each one over 24 threads costs far more in pool overhead than it
+saves. It is a cost, not a correctness difference — the same 68 gates pass.
+
 Plus, on Windows, the census / walker / dispatcher / public-API sweep the
 release gate runs:
 
@@ -580,7 +603,7 @@ HARDER, not easier).
 | path | before 5.45.1 | after |
 |---|---|---|
 | `BORStack.solve()`, ordinary geometry, either basis | a number | **the same number, bit for bit** |
-| `BORStack.solve(basis='fd')` near a radial cutoff | 2 or 3 R/T channels depending on the BLAS kernel and thread count; closure to 1.2e-04 | 3 channels on all 13 arms; closure <= 1.3e-06 |
+| `BORStack.solve(basis='fd')` near a radial cutoff | 2 or 3 R/T channels depending on the BLAS kernel and thread count; closure to 1.2e-04 | 3 channels on all 17 arms; closure <= 1.2716e-06 |
 | `BORStack.solve(basis='sem')` with two layers' walls `< 1e-6` of `Rbig` apart | a per-order answer moved up to 5,428x the physical wall shift, silently | `BORSemMeshError`, naming the layer, both walls and their owners, the spectral excess and three remedies |
 | ... `1e-6` to `1e-4` of `Rbig` apart | the same, silently | the answer, under a `UserWarning` |
 | `BORStack.solve(basis='sem')` with a caller-prescribed liner below `1e-6` of `Rbig` | silent | the answer, under a `UserWarning` — never refused |

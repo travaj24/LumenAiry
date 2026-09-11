@@ -48,10 +48,12 @@ k0)` -- the shape every other engine already uses.  The floor is `k0` and not a
 literal 1.0 because `q` carries units of inverse length here; a literal 1.0
 would make the band unit-system-dependent, which is the failure audit P2-06
 fixed for the channel gate.  Measured after: worst closure **1.9655e-07**
-(619x better) and the channel count fixed at 3 on every rung, on **all twelve
-arms** of a kernel x thread ladder (HASWELL / NEHALEM / KATMAI via
-`OPENBLAS_CORETYPE`, each confirmed by reading `threadpoolctl` back, x 1 / 2 / 4
-threads; worst closure over all twelve 1.2716e-06).
+(619x better) and the channel count fixed at 3 on every rung, on **all
+SEVENTEEN arms** of a kernel x thread ladder -- HASWELL / NEHALEM / KATMAI (via
+`OPENBLAS_CORETYPE=PRESCOTT`) / ZEN x 1 / 2 / 4 threads plus an UNPINNED arm on
+Windows, and 1 / 2 / 4 / unpinned on WSL, each kernel confirmed by reading
+`threadpoolctl` back rather than inferred from the request.  Worst closure over
+all seventeen: **1.2716e-06**.
 
 **The bar is two-sided and re-measured on the running build** (the
 discriminating ratio becomes `sigma = |Im q| / max(max|q|, k0)`): the NOISE side
