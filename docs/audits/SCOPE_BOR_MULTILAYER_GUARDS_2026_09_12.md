@@ -499,6 +499,14 @@ The separated arm's `dR` falls **linearly with `delta` on every rung**, from 3.1
 8) / 1.500 (degree 12), and its `|q|max` never leaves 19.60 / 27.22.  The geometry is
 harmless; the window's union of it is not.
 
+**Cross-build.** The whole attribution reproduces on WSL / py3.12 to every digit printed:
+continuity slope 7.7761e-02 (degree 8) and 7.7770e-02 (degree 12) against the Windows
+7.7726e-02 / 7.7770e-02, and worst move / physical shift **5,428x (degree 8)** and **586x
+(degree 12)** -- identical.  That is expected and is itself a finding: the move factor is a
+discretisation quantity, not an arithmetic one, so it is the right thing to build a bar on.
+What is NOT reproducible is the super-unity: a ported 1-D screen would fire on 4 of 60
+rungs on Windows and 1 of 40 on WSL.
+
 ### 4.4 The within-layer thin annular liner
 
 `c2_within_layer.py` places an annulus of width `w` inside ONE layer's own segment list —
