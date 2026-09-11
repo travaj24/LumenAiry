@@ -391,6 +391,42 @@ types (WIN and WSL x HASWELL / ZEN / PRESCOTT / SANDYBRIDGE).
 
 ---
 
+## 7c. A THIRD test asserting the cured coincidence still bites
+
+`test_v5_20_12_rcwa_jones_2d_fff_nv.py::test_stripe_fixture_is_free_of_the_mode_match_degeneracy`
+is the same expired contract as S1-2 in a third file. It asserts that the
+index-coincident groove (`eps = 2.25 = no^2 = n_sub^2`) still violates the 1-D
+lossless theorem by at least `1e5` x the clean fixture's closure, and that a
+closure warning fires while it does. Its own docstring anticipated the
+outcome exactly:
+
+> If the solver is ever made degeneracy-robust this test fails, and that is the
+> gate working: it must then be re-derived (durability rule), not widened.
+
+It PASSED on every CI shard at `59105d6` and FAILS on this host at the same
+commit with the round-3 body reverted, on both builds — so it is the THREAD
+COUNT that decided it, not round 3: CI's fast unit lane leaves BLAS unpinned on
+4-core runners, and this is amplified rounding.
+
+Measured over `n_orders` 11..41 on **sixteen** configurations —
+(Windows py3.14.6 / numpy 2.4.4, WSL py3.12.3 / numpy 2.4.6) x
+(HASWELL, NEHALEM, KATMAI, SANDYBRIDGE) x (1, 4) BLAS threads:
+
+| arm | worst `\|sum R + T − 2\|` | degen/clean | warned |
+|---|---|---|---|
+| POST clean (2.10) | 1.52e-13 .. 5.36e-13 | — | 0/16 |
+| **POST degen (2.25)** | **1.39e-13 .. 5.19e-13** | **0.72 .. 2.49** | **0/16** |
+| PRE degen (2.25) | 7.29e-04 .. 7.19e-02 | 3.1e+09 .. 2.7e+11 | 11..16 of 16 |
+
+The re-derivation asserts what is now true and is TIGHTER than what it
+replaces: the coincident groove holds the theorem (`< 1e-09`), is
+INDISTINGUISHABLE from the clean fixture (ratio `< 10`, measured `<= 2.49`),
+and fires no warning — with the ENGINEERED pre-round-1 arm keeping the original
+`> 1e5` claim alive on the arm where it is still true. The 2.10 fixture stays;
+the move off 2.25 is now belt-and-braces rather than load-bearing.
+
+---
+
 ## 8. Two fail-befores moved off amplified rounding
 
 `test_fix_branch_cut_round2.py::test_the_spacer_coincidence_is_what_breaks_the_pre_round_one_branch`
@@ -442,26 +478,102 @@ Every number above is one BLAS thread with `OMP_NUM_THREADS`,
 and `OPENBLAS_CORETYPE` pinned per run. Builds: **WIN** = Windows 11, py3.14.6,
 numpy 2.4.4, jax 0.11.0; **WSL** = Ubuntu, py3.12.3, numpy 2.4.6.
 
-**The core-type tool has two hard limits on this hardware, both verified rather
-than assumed.**
+**The core-type ladder in the repair brief had to be corrected, and every
+correction is verified rather than assumed.** Each `OPENBLAS_CORETYPE` below
+was confirmed through `threadpoolctl.threadpool_info()['architecture']` AND
+through a real LAPACK call (a 200x200 `eigvals`), because the banner and the
+kernel can disagree.
 
 1. **There is no Zen kernel.** The bundled `libscipy_openblas` is DYNAMIC_ARCH
    over `Atom, Barcelona, Bulldozer, Cooperlake, Core2, Dunnington, Excavator,
    Haswell, Katmai, Nehalem, Northwood, Opteron, Penryn, Piledriver, Prescott,
    Sandybridge, SapphireRapids, SkylakeX, Steamroller` — **no `Zen`**.
-   `OPENBLAS_CORETYPE=ZEN` reports `architecture = Haswell` on BOTH builds, i.e.
-   the override is a no-op. The consequence is load-bearing and favourable: an
-   AMD Zen/EPYC CPU has no Zen target to select either, so **CI's AMD runners
-   are already executing the Haswell kernel**, and the HASWELL rows above ARE
-   the CI kernel.
+   `OPENBLAS_CORETYPE=ZEN` reports `architecture = Haswell` on BOTH builds and
+   returns a bit-identical `eigvals`, i.e. the override is a silent no-op. The
+   consequence is load-bearing and favourable: CI's **AMD EPYC 7763 (Zen 3, no
+   AVX-512)** has no Zen target to select either, so **CI is already executing
+   the Haswell kernel**, and the HASWELL rows above ARE the CI kernel.
 2. **`SKYLAKEX` is not runnable here.** The measuring host is an AMD Ryzen 9
    5950X (Zen 3), which has no AVX-512. Forcing that kernel aborts the process
-   with **`Illegal instruction` (exit 132)** on Windows, and on WSL survives the
-   `threadpool_info()` banner but dies on the first real `eigvals`. This is a
-   hardware limit, not a defect. **SANDYBRIDGE** (AVX, pre-FMA) is run in its
-   place so the sweep still carries three genuinely distinct kernels —
-   Haswell (FMA3/AVX2), Sandybridge (AVX), Katmai (SSE2-era) — plus ZEN as the
-   documented alias.
+   with **`Illegal instruction` (exit 132)** on Windows; on WSL it survives the
+   `threadpool_info()` banner — reporting `SkylakeX` — and then dies on the
+   first real `eigvals`, which is why the banner alone is not sufficient
+   confirmation.
+3. **`PRESCOTT` and `KATMAI` are the same kernel.** Both report
+   `architecture = Katmai` and return a bit-identical `eigvals`.
+
+So the four genuinely DISTINCT kernels available here are **Haswell**
+(FMA3/AVX2 — CI's), **Sandybridge** (AVX, pre-FMA), **Nehalem** (SSE4.2) and
+**Katmai** (SSE2-era), and those are what the matrix in section 9.1 sweeps.
+
+### 9.1 Every decision over kernel x thread count, both builds
+
+Because CI's fast unit lane leaves BLAS **unpinned** on 4-core runners, the
+thread count is the axis on which this host and CI actually differ — and it is
+the axis on which two of the failures in this repair turned out to hinge. The
+thirteen DECISION tests (the two gradient gates plus the clean-zero sibling,
+the two restated engineered fail-befores, the two halves of the tripwire
+restatement, the four even-sector / selector restatements, the jurisdiction
+restatement and the fff_nv re-derivation) were therefore run over the full
+product.
+
+THE THIRTEEN DECISIONS, all in one pytest invocation per configuration:
+
+| # | decision |
+|---|---|
+| 1 | `test_niche_audit_w9_eig_vjp::test_pmm2d_near_normal_angle_gradient_improved` |
+| 2 | `test_v5_14_0_pmm2d_autodiff::test_gate_angle_grad_at_normal_offcenter_is_genuine` |
+| 3 | `test_v5_14_0_pmm2d_autodiff::test_gate_degen_angle_grad_centered_square_is_clean_zero` |
+| 4 | `test_fix_branch_cut_round2::test_the_spacer_coincidence_is_what_breaks_the_pre_round_one_branch` |
+| 5 | `test_fix_branch_cut_round2::test_the_shared_body_keeps_the_round_one_SELECTOR_and_changes_only_the_value` |
+| 6 | `test_m1_conditioning_guard::test_x1_is_closed_across_the_whole_thin_ladder_and_reopens_pre_fix` |
+| 7 | `test_audit_s1_2_rcwa_lossless_tripwire::test_the_exact_index_coincidence_now_closes_and_the_warning_is_silent` |
+| 8 | `test_audit_s1_2_rcwa_lossless_tripwire::test_the_pre_round_one_branch_reopens_it_and_the_message_names_the_cause` |
+| 9 | `test_verify_rcwa_even_sector::test_a_growing_root_can_only_come_from_the_band_and_only_by_the_band` |
+| 10 | `test_verify_rcwa_even_sector::test_the_flip_is_the_exact_minus_r_involution` |
+| 11 | `test_fix_rcwa_even_sector_wsl::test_sqrt_decay_pins_the_outgoing_root_through_eigensolver_noise` |
+| 12 | `test_verify_branch_cut_round2::test_a_lossy_spacer_alone_does_not_empty_the_bands_jurisdiction` |
+| 13 | `test_v5_20_12_rcwa_jones_2d_fff_nv::test_stripe_fixture_is_free_of_the_mode_match_degeneracy` |
+
+Every cell below is **13 passed**. No decision changes with the kernel or with
+the thread count, on either build.
+
+| kernel (verified arch) | threads | WIN py3.14 | WSL py3.12 |
+|---|---|---|---|
+| HASWELL (Haswell — CI's) | 1 | 13 passed, 87.7s | 13 passed, 94.3s |
+| HASWELL (Haswell — CI's) | 2 | 13 passed, 27.6s | 13 passed, 52.1s |
+| HASWELL (Haswell — CI's) | 4 | 13 passed, 98.7s | 13 passed, 115.2s |
+| NEHALEM (Nehalem) | 1 | 13 passed, 119.2s | 13 passed, 155.1s |
+| NEHALEM (Nehalem) | 4 | 13 passed, 42.8s | **DID NOT COMPLETE** |
+| KATMAI (Katmai, = PRESCOTT) | 1 | 13 passed, 71.4s | 13 passed, 239.2s |
+| KATMAI (Katmai, = PRESCOTT) | 4 | 13 passed, 188.1s | 13 passed, 112.8s |
+| SANDYBRIDGE (Sandybridge) | 1 | 13 passed, 55.1s | 13 passed, 214.5s |
+| SANDYBRIDGE (Sandybridge) | 4 | 13 passed, 51.9s | 13 passed, 143.4s |
+| HASWELL | unpinned | **DID NOT COMPLETE** | **NOT RUN** |
+
+**SIXTEEN of the nineteen cells completed, and all sixteen are 13/13.** Three
+did not, and none of the three is a failure -- each was still running when the
+session closed, on a host shared with other work:
+
+* WSL x NEHALEM x 4 threads exceeded a 500 s cap in the batch run and was
+  still running 30 minutes into a re-run with no cap.  Its siblings
+  (WIN x NEHALEM x 4, and WSL x NEHALEM x 1) are both green.
+* WIN x HASWELL x unpinned was still running after 21 minutes.
+* WSL x HASWELL x unpinned was not started, because the two unpinned arms
+  starve each other on this host (see below).
+
+The WIN threads=2 row is from the first pass of this matrix; the rest are from
+a second pass, and the wall times are therefore not comparable between rows.
+They are reported only to show which cells were actually executed.
+
+**UNPINNED is 20x slower on this host and that is a property of the host, not
+of the library.** Leaving BLAS unpinned on a 16-core / 32-thread desktop makes
+this batch thrash — it spends its time in thread barriers on the many SMALL
+solves the engineered pre-arm tests perform — where a single decision
+(`test_x1_is_closed_...`) run alone takes 13.6s unpinned against 14.0s at one
+thread, i.e. the slowdown is contention between the batch's tests, not any one
+of them. CI does not see this because its runners have 4 cores.
+
 
 Other limits:
 

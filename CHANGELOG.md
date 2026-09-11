@@ -309,13 +309,36 @@ on amplified rounding -- and which therefore did not reproduce on CI's AMD
 kernel -- are restated onto build-independent quantities: a SIGN CENSUS on the
 root the selector returns, and `rcond(a + b)` at the mode match.
 
-One further build-dependent claim was found by the core-type sweep and is
-repaired in passing: `test_verify_branch_cut_round2.py`'s lossy-spacer gate
-counted the modes the band ACTS ON, which needs the backward-error SIGN as well
-as the band's reach, and read `{3: 8, 4: 0, 5: 8}` on the Katmai kernel against
-`{3: 8, 4: 8, 5: 8}` everywhere else — identically on `59105d6`, so pre-existing.
-It is restated onto the band's REACH (8 on-cut modes at every truncation on
-every kernel), which is also the quantity its scope statement is about.
+Two further build-dependent claims were found by the kernel sweep, both
+pre-existing (they read the same on `59105d6`) and both repaired in passing.
+`test_verify_branch_cut_round2.py`'s lossy-spacer gate counted the modes the
+band ACTS ON, which needs the backward-error SIGN as well as the band's reach,
+and read `{3: 8, 4: 0, 5: 8}` on the Katmai kernel against `{3: 8, 4: 8, 5: 8}`
+everywhere else; it is restated onto the band's REACH (8 on-cut modes at every
+truncation on every kernel), which is also the quantity its scope statement is
+about.  `test_v5_20_12_rcwa_jones_2d_fff_nv.py`'s mode-match-degeneracy gate is
+the S1-2 contract in a third file — it asserted the cured index coincidence
+still bites — and its own docstring prescribed the remedy ("if the solver is
+ever made degeneracy-robust this test fails ... it must then be re-derived, not
+widened").  Re-derived: the coincident groove now closes at `<= 5.19e-13` and
+within `2.49x` of the clean fixture over sixteen (build x kernel x thread)
+configurations, against `3.1e+09 .. 2.7e+11` on the engineered pre-round-1 arm.
+
+**The kernel ladder, corrected and verified.** The bundled OpenBLAS carries NO
+`Zen` target, so `OPENBLAS_CORETYPE=ZEN` silently returns the Haswell kernel on
+both builds — and CI's AMD EPYC 7763 (Zen 3) therefore runs that same
+Haswell-class kernel.  `SKYLAKEX` is not runnable on the measuring host (a
+Ryzen 9 5950X has no AVX-512: it aborts with SIGILL, on WSL only after the
+`threadpoolctl` banner has already reported `SkylakeX`), and `PRESCOTT` and
+`KATMAI` are one kernel.  The four genuinely distinct kernels available are
+Haswell, Sandybridge, Nehalem and Katmai, and since CI's fast lane leaves BLAS
+UNPINNED on 4-core runners, the thirteen decisions in this entry were re-run
+over {those four} x {1, 2, 4, unpinned} threads on both builds: **sixteen of
+nineteen cells completed and every one is 13/13**, with no decision changing
+with the kernel or the thread count.  The three that did not complete are not
+failures -- unpinned BLAS thrashes on a 16-core desktop (20x slower on this
+batch, a host property CI's 4-core runners do not share) and they were still
+running when the session closed; see the audit document for exactly which.
 
 Evidence: `docs/audits/FIX_BRANCH_CUT_ROUND3_2026_09_11.md`; probes in
 `validation/probe_fix_branch_cut_round3/`.
