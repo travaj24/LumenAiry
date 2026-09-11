@@ -38,7 +38,10 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
 import hashlib  # noqa: E402
+import inspect  # noqa: E402
+import json  # noqa: E402
 import math  # noqa: E402
+import pathlib  # noqa: E402
 import warnings  # noqa: E402
 
 import numpy as np  # noqa: E402
@@ -705,23 +708,73 @@ def test_the_free_lower_bound_on_the_condition_number_is_refuted_here():
     assert g_bad / g_ok < 10.0, rows
 
 
+def _ci_kernel_table():
+    """The committed per-(build, kernel) decision census.
+
+    ``validation/probe_ci_kernel_sweep/decisions.json`` is produced by
+    ``probe_decisions.py`` on each arm and merged; see
+    ``docs/audits/CI_KERNEL_SWEEP_2026_09_11.md``.  It is READ here, never
+    written -- a test that regenerates its own reference proves nothing.
+    """
+    path = (pathlib.Path(__file__).resolve().parents[2] / "validation"
+            / "probe_ci_kernel_sweep" / "decisions.json")
+    assert path.is_file(), (
+        "the CI kernel census is missing: %s.  Regenerate it with "
+        "validation/probe_ci_kernel_sweep/probe_decisions.py on each arm." % path)
+    with path.open(encoding="cp1252") as fh:
+        return json.load(fh)
+
+
 def test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why():
-    """The DECISION on ``_interface_smatrix``'s two solves (the ``~1850``
-    site), recorded as a measurement rather than an omission.
+    """The DECISION on ``_interface_smatrix``'s two bare ``np.linalg.solve``
+    calls (the ``~1850`` site), recorded as a measurement rather than an
+    omission.
 
     They ARE reachable with a near-singular operand from the 1-D
     ``PMMStack``: on a two-layer stack whose walls differ by ``delta``, the
-    LAPACK reciprocal condition of ``Wb`` / ``Vb`` reads 9.70e-11 at
-    ``delta`` = 1e-04 (answer CORRECT, ``R+T`` = 1.000000, no warning) and
-    9.73e-13 at 1e-05.  But 1e-05 is already REFUSED by the shipped 1-D
-    sliver guard, which names ``min_feature`` and the exact cell -- the better
-    refusal -- while the CORRECT population comes within **1.0 decade** of a
-    1e-12 bar, against 5.4 decades on the 2-D mortar path.
+    LAPACK reciprocal condition of ``Wb`` / ``Vb`` reads ~1e-10 at ``delta``
+    = 1e-04 (answer CORRECT, ``R+T`` closes) and ~1e-12 at 1e-05 (answer
+    WRONG).  The site nevertheless ships UNGUARDED, and the two paragraphs
+    below are the whole reason.
 
-    A bar with one decade of margin on a site the 1-D stack, the 2-D shared
-    path and the 2-D conforming bypass all share is the S4 shape
-    ``docs/TESTING_STANDARDS.md`` forbids.  So it stays unguarded, and this
-    test pins the two readings that say so."""
+    **RESTATED 2026-09-11 (CI KERNEL SWEEP,**
+    ``docs/audits/CI_KERNEL_SWEEP_2026_09_11.md`` **).**  Until this date the
+    test closed on the sentence "and the row that WOULD trip such a bar is
+    already refused by the 1-D sliver guard, which names ``min_feature``".
+    That sentence is a claim about a DIFFERENT guard, and it is FALSE on some
+    builds: the sliver guard triggers on the solve's own energy closure, and
+    at ``delta`` = 1e-05 that closure is itself the build-dependent quantity
+    -- ``max(R+T)`` reads 2.1716 / 2.1729 / 3.6116 on the Katmai / Haswell /
+    Sandybridge kernels HERE and **1.0000010** on the CI runner, where the
+    guard therefore stays silent and this assertion failed (py3.11 shard 4 of
+    the 5.45.0 matrix).  That divergence is a real defect and it belongs to
+    the sliver guard, not to this site; it is handed off in the audit above.
+    This test no longer asserts anything about it.  The sliver guard is
+    DISARMED for the measurement below, so the site is reached at BOTH wall
+    separations on every build and the population measured is the same object
+    everywhere.
+
+    WHAT THE DECISION NOW RESTS ON, in a shape no kernel can move.  A bar is
+    only a decision if its verdict is the same everywhere.  At this site it is
+    not: the CORRECT and the WRONG populations sit **under 2.1 decades apart**
+    (re-measured below), and a 1e-12 bar -- the value the 2-D IN-PLANE mortar
+    sites use, where the same populations are 5.4 decades apart -- lands
+    INSIDE that gap, so its verdict flips with the BLAS micro-kernel alone.
+    That is measured, not argued: ``validation/probe_ci_kernel_sweep`` ran the
+    identical fixture on eight (build, kernel) arms at one thread and the
+    committed census records ``refuse`` on Haswell / Sandybridge / Nehalem and
+    ``accept`` on Katmai, on BOTH builds.  A guard here would refuse a correct
+    answer on one runner and pass a wrong one on the next, which is the S4
+    shape ``docs/TESTING_STANDARDS.md`` forbids.  So the site stays unguarded,
+    and this test pins the two readings and the non-unanimous census that say
+    so."""
+    # ---- 1. the site is STRUCTURALLY unguarded: two bare solves, no screen
+    src = inspect.getsource(_pc._interface_smatrix)
+    assert src.count("np.linalg.solve(") == 2, src
+    for banned in ("gecon", "_guarded_mortar_solve", "rcond"):
+        assert banned not in src, (banned, src)
+
+    # ---- 2. the two populations, re-measured on the RUNNING build
     seen = []
     real = _pc._interface_smatrix
     import lumenairy.elements.pmm.stack as _st1d
@@ -736,6 +789,9 @@ def test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why():
 
     a0, a1 = 0.27865, 0.62505
     _st1d._interface_smatrix = _patched
+    # DISARMED on purpose -- see the docstring.  Function-scoped and restored.
+    prev_sliver = _st1d.PMM_SLIVER_GUARD
+    _st1d.PMM_SLIVER_GUARD = False
     try:
         out = {}
         for delta in (1e-4, 1e-5):
@@ -747,28 +803,57 @@ def test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why():
             st.add_layer(0.08, segments=[(b0, _EPS_H), (b1 - b0, _EPS_P),
                                          (1 - b1, _EPS_H)])
             st.set_source(_WL, theta=_TH)
-            try:
-                with warnings.catch_warnings(record=True) as w:
-                    warnings.simplefilter("always")
-                    _o, R, T = st.solve()[:3]
-                tot = float(np.max(np.atleast_2d(R).sum(1)
-                                   + np.atleast_2d(T).sum(1)))
-                out[delta] = (min(seen), tot, len(w), None)
-            except ValueError as exc:
-                out[delta] = (min(seen), None, 0, str(exc)[:60])
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                _o, R, T = st.solve()[:3]
+            tot = float(np.max(np.atleast_2d(R).sum(1)
+                               + np.atleast_2d(T).sum(1)))
+            out[delta] = (min(seen), tot, len(w))
     finally:
         _st1d._interface_smatrix = real
-    # the CORRECT row sits within ~1 decade of a 1e-12 bar -- MEASURED
-    # 9.6969e-11 (identical on both builds) with R+T = 0.99999999 and no
-    # warning
-    rc_ok, tot_ok, nwarn, _e = out[1e-4]
-    assert tot_ok is not None and abs(tot_ok - 1.0) < 1e-6, out
-    assert nwarn == 0, out
-    assert rc_ok < 1e-9, out            # it really is that ill-conditioned
-    assert rc_ok / _pc._MORTAR_RCOND_REFUSE < 1e3, out    # ... within 3 decades
-    # ... and the row that WOULD trip such a bar is already refused, by the
-    # guard that can say more
-    assert out[1e-5][3] is not None and "SLIVER" in out[1e-5][3], out
+        _st1d.PMM_SLIVER_GUARD = prev_sliver
+
+    rc_ok, tot_ok, nwarn_ok = out[1e-4]
+    rc_bad, tot_bad, _nw = out[1e-5]
+    # the CORRECT row: the answer closes and the site is SILENT, yet the
+    # operand is already ill-conditioned enough to tempt a guard.  MEASURED
+    # 9.6940e-11 .. 9.6969e-11 over the eight committed arms (and 9.6940e-11
+    # on the CI runner that failed the old assertion -- the READING was never
+    # the problem).
+    #
+    # The two closure bars below are placed by the GAP, not by one build's
+    # residual: the correct row's worst |R+T - 1| is 3.66e-07 (the CI runner;
+    # 1.02e-08 here) and the wrong row's BEST is 1.17 (Katmai), so anything
+    # between 1e-06 and 1e-01 separates them.  Taking 1e-04 and 1e-01 leaves
+    # 273x below and 11.7x above, worst arm of nine.
+    assert abs(tot_ok - 1.0) < 1e-4, out
+    assert nwarn_ok == 0, out
+    assert rc_ok < 1e-9, out
+    # the WRONG row: the site RETURNS -- unguarded is a real property, not a
+    # figure of speech -- and what it returns does not close energy.
+    assert abs(tot_bad - 1.0) > 1e-1, out
+
+    # ---- 3. the gap between them is UNDER 2.1 decades, on any kernel.
+    # MEASURED 1.965 .. 1.999 decades over the eight arms; asserted at 2.1,
+    # i.e. with the measured spread stated and 0.1 decade of slack.  (The 2-D
+    # in-plane mortar sites, where a 1e-12 bar IS shipped, separate by 5.4.)
+    gap = math.log10(rc_ok / rc_bad)
+    assert gap < 2.1, (gap, out)
+
+    # ---- 4. and the census says a 1e-12 bar is NOT DECIDABLE here.  This is
+    # the assertion that replaces the old sliver-guard sentence: it is a
+    # statement about the committed per-kernel table, so it reads the same on
+    # every build INCLUDING the ones that are not in the table.
+    table = _ci_kernel_table()
+    verdicts = {arm: d["pmm1d_interface/bar_1e-12_would@1e-05"]
+                for arm, d in table["hypothetical"].items()
+                if "pmm1d_interface/bar_1e-12_would@1e-05" in d}
+    assert len(verdicts) >= 4, verdicts
+    assert set(verdicts.values()) == {"refuse", "accept"}, verdicts
+    # ... and the running build's own verdict is one of the two, whichever it
+    # is -- which is precisely why it cannot be asserted.
+    here = "refuse" if rc_bad < _pc._MORTAR_RCOND_REFUSE else "accept"
+    assert here in verdicts.values(), (here, verdicts, rc_bad)
 
 
 # ==========================================================================
