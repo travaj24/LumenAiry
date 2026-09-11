@@ -26,6 +26,7 @@ import warnings
 
 import numpy as np
 
+from ._orient import channel_core, flux_is_strong
 from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
 
 
@@ -48,7 +49,7 @@ def _flux_normalize(L):
         # measure as the flux -> unit-invariant; absolute 1e-10 silently
         # mis-normalized meter-scale inputs)
         fnrm = np.sum((np.abs(W[:N, j]) ** 2 + np.abs(W[N:, j]) ** 2) * wq)
-        s = (1.0 / np.sqrt(abs(P)) if abs(P) > 1e-10 * fnrm
+        s = (1.0 / np.sqrt(abs(P)) if flux_is_strong(P, fnrm, xp=np)
              else 1.0 / np.sqrt(np.sum(np.abs(W[:, j]) ** 2) + 1e-300))
         W[:, j] *= s
         V[:, j] *= s
@@ -177,8 +178,7 @@ def _physical_propagating(L, k0, reldiv_tol=0.5):
     # twins: index-ceiling) -- rather than forcing a numeric lockstep the bases
     # do not physically share.
     qn = L["q"] / k0
-    keep = ((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
-            & (L["reldiv"] < reldiv_tol))
+    keep = channel_core(qn, xp=np) & (L["reldiv"] < reldiv_tol)
     return keep
 
 

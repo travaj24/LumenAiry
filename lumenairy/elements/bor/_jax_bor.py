@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ._orient import channel_core, flux_is_strong, forward_orient
 from .coupled_radial_eigensolver import _fd_grid_staggered
 
 
@@ -95,17 +96,17 @@ def _jbor_layer_modes(static, eps_node, k0, eig, jnp):
 
     hr, hphi = _hfields(q)
     Pz = _flux(hr, hphi)
-    propagating = jnp.abs(jnp.imag(q)) < 1e-9 * jnp.maximum(
-        jnp.abs(jnp.real(q)), 1e-300)
-    flip = jnp.where(propagating, Pz < 0.0, jnp.imag(q) < 0.0)
-    q = jnp.where(flip, -q, q)                    # orient forward (+z)
+    # orient forward (+z) -- THE shared kernel, with xp=jnp passed EXPLICITLY
+    # so the traced body is the same object the eager NumPy path runs
+    # (5.45.1; see lumenairy/elements/bor/_orient.py).
+    q = forward_orient(q, Pz, k0, xp=jnp)
     hr, hphi = _hfields(q)
     Pz = _flux(hr, hphi)
 
     # flux-normalize (propagating), else field-norm (evanescent) -- safe divides
     fnrm = (jnp.sum(jnp.abs(Er) ** 2 * wq_f[:, None], axis=0)
             + jnp.sum(jnp.abs(Ephi) ** 2 * wq_n[:, None], axis=0))
-    strong = jnp.abs(Pz) > 1e-10 * jnp.real(fnrm)
+    strong = flux_is_strong(Pz, fnrm, xp=jnp)
     s_flux = 1.0 / jnp.sqrt(jnp.where(strong, jnp.abs(Pz), 1.0))
     s_norm = 1.0 / jnp.sqrt(jnp.sum(jnp.abs(Er) ** 2 + jnp.abs(Ephi) ** 2,
                                     axis=0) + 1e-300)
@@ -192,7 +193,7 @@ def _jax_bor_stack_solve(stack):
         # (div-conforming, spurious-free), so reldiv is structurally 0; only
         # bor_solve's optional NODAL basis needs it.
         qn = q / k0
-        return ((jnp.abs(jnp.imag(qn)) < 5e-5) & (jnp.real(qn) > 1e-6)
+        return (channel_core(qn, xp=jnp)
                 & (jnp.real(jnp.sqrt(eps)) - jnp.real(qn) > -5e-10))
 
     inc = _mask(q_sup, eps_sup).astype(jnp.complex128)     # propagating in super

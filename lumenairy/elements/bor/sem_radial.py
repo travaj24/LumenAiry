@@ -95,6 +95,7 @@ import numpy as np
 from numpy.polynomial.legendre import leggauss
 from scipy.linalg import lu_factor
 
+from ._orient import flux_is_strong, forward_orient
 from .coupled_radial_eigensolver import _fast_geig
 from .radial_eigensolver import _gll_nodes_weights, _lagrange_vals_derivs
 
@@ -424,16 +425,15 @@ def sem_layer_modes(mesh, m, k0):
 
     hr, hphi = hfields(q)
     flux = zflux(hr, hphi)
-    # forward orientation -- the zcascade branch rule, vectorized
-    prop = np.abs(q.imag) < 1e-9 * np.maximum(np.abs(q.real), 1e-300)
-    flip = np.where(prop, flux < 0.0, q.imag < 0.0)
-    q = np.where(flip, -q, q)
+    # forward orientation -- THE shared kernel (5.45.1: one implementation,
+    # five call sites; see lumenairy/elements/bor/_orient.py)
+    q = forward_orient(q, flux, k0, xp=np)
     hr, hphi = hfields(q)
     flux = zflux(hr, hphi)
     # unit-flux normalization (audit-P1-01 relative threshold)
     fnrm = (np.sum(np.abs(Er) ** 2 * w1[:, None], axis=0)
             + np.sum(np.abs(Ephi_full) ** 2 * w0[:, None], axis=0))
-    s = np.where(np.abs(flux) > 1e-10 * fnrm,
+    s = np.where(flux_is_strong(flux, fnrm, xp=np),
                  1.0 / np.sqrt(np.abs(flux) + 1e-300),
                  1.0 / (np.sqrt(fnrm) + 1e-300))
     Er = Er * s[None, :]

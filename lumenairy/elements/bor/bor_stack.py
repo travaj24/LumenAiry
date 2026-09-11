@@ -22,6 +22,7 @@ from collections import OrderedDict
 import numpy as np
 
 from ...backend import is_jax_array as _is_jax_array
+from ._orient import channel_core
 from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
 
 # v5.17.1 (audit P3-12): bound on the per-instance modal-basis LRU.  Each
@@ -689,7 +690,7 @@ class BORStack:
             # (see the solve() docstring).  Only bor_solve's optional NODAL
             # basis needs the reldiv leg to reject its spurious sea.
             qn = L["q"] / k0
-            return np.where((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
+            return np.where(channel_core(qn, xp=np)
                             & (np.sqrt(eps).real - qn.real > -5e-10))[0]
         inc = prop(sup, self.eps_sup)
         out = prop(sub, self.eps_sub)
@@ -887,7 +888,7 @@ class BORStack:
             # same dimensionless propagating gate as the FD path (P2-06 +
             # AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13)
             qn = L["q"] / k0
-            return np.where((np.abs(qn.imag) < 5e-5) & (qn.real > 1e-6)
+            return np.where(channel_core(qn, xp=np)
                             & (np.sqrt(eps).real - qn.real > -5e-10))[0]
 
         inc = prop(sup, self.eps_sup)
