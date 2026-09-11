@@ -1,0 +1,18 @@
+KERNEL [('Haswell', 4), ('Haswell', 4)]
+GAMMA 0.17159104282948134
+CLOSURE_SINGLE 3.110412e-10  (bar 1e-8, margin x32.2)  nchan=3
+LADDER_COUNTS [3]
+LADDER_WORST 6.197577e-08  (bar 1e-6, margin x16.14)
+   rung e= 8 nchan=3 closure=1.2819e-11
+   rung e= 9 nchan=3 closure=5.1467e-11
+   rung e=10 nchan=3 closure=3.9693e-10
+   rung e=11 nchan=3 closure=3.1104e-10
+   rung e=12 nchan=3 closure=5.2718e-10
+   rung e=13 nchan=3 closure=1.4774e-09
+   rung e=14 nchan=3 closure=4.3085e-09
+   rung e=15 nchan=3 closure=4.9643e-10
+   rung e=16 nchan=3 closure=1.2432e-08
+   rung e=17 nchan=3 closure=2.1657e-09
+   rung e=18 nchan=3 closure=4.0860e-08
+   rung e=19 nchan=3 closure=3.3746e-08
+   rung e=20 nchan=3 closure=6.1976e-08

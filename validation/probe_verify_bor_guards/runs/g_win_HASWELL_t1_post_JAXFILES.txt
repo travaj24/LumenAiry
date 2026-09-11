@@ -1,0 +1,24 @@
+=== ARM tree=/c/tmp/lum_vbor requested_coretype=HASWELL threads=1 ===
+=== cwd=/c/tmp/lum_vbor
+=== git: c1189e3f fix(bor): the last ladder arms -- the near-cutoff channel count is 3 on SEVENTEEN kernel x thread x build arms, including UNPINNED on both
+=== started 2026-09-11T08:35:52Z
+LIBFILE C:\tmp\lum_vbor\lumenairy\__init__.py
+PYVER 3.14.6
+KERNEL [('Haswell', 1, '0.3.31.188.0'), ('Haswell', 1, '0.3.30')]
+=== PYTEST ARGS: tests/unit/test_bor_sem_jax.py tests/unit/test_v5_20_11_bor_jax.py tests/unit/test_eme_jax_modes.py -rs -v ===
+============================= test session starts =============================
+platform win32 -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: C:\tmp\lum_vbor
+configfile: pyproject.toml
+plugins: anyio-4.13.0, benchmark-5.2.3, cov-7.1.0, split-0.11.0, timeout-2.4.0, xdist-3.8.0, zarr-3.1.6
+collected 22 items
+
+tests\unit\test_bor_sem_jax.py ........                                  [ 36%]
+tests\unit\test_v5_20_11_bor_jax.py ......                               [ 63%]
+tests\unit\test_eme_jax_modes.py ........                                [100%]
+
+======================== 22 passed in 63.53s (0:01:03) ========================
+=== PYTEST_RC 0
+=== WALL_SECONDS 71
+=== finished 2026-09-11T08:37:04Z

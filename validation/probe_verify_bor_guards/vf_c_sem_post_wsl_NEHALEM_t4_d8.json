@@ -1,0 +1,295 @@
+{
+ "arm": {
+  "platform": "wsl",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "requested_coretype": "NEHALEM",
+  "loaded_kernel": "Nehalem",
+  "blas_threads": 4,
+  "env_threads": "4",
+  "tree": "/mnt/c/tmp/lum_vbor"
+ },
+ "build": "post",
+ "tag": "wsl_NEHALEM_t4",
+ "degree": 8,
+ "SLIVER_BAND_FRAC": 0.0001,
+ "MIN_ELEM_FRAC": 1e-06,
+ "Q_EXCESS": 10000.0,
+ "delta_ladder": [
+  {
+   "delta_frac": 0.1,
+   "verdict": "ok",
+   "verdicts": [
+    "ok"
+   ],
+   "raised": null,
+   "warned": false,
+   "w_min_union_frac": 0.05000000000000001,
+   "q_excess": 17.80218904782661,
+   "fu_over_sliver": 500.00000000000006,
+   "fu_over_minelem": 50000.000000000015,
+   "ulps_to_sliver": 4000,
+   "ulps_to_minelem": 4000,
+   "q_over_bar": 0.0017802189047826608
+  },
+  {
+   "delta_frac": 0.01,
+   "verdict": "ok",
+   "verdicts": [
+    "ok"
+   ],
+   "raised": null,
+   "warned": false,
+   "w_min_union_frac": 0.010000000000000009,
+   "q_excess": 29.520907197982723,
+   "fu_over_sliver": 100.00000000000009,
+   "fu_over_minelem": 10000.00000000001,
+   "ulps_to_sliver": 4000,
+   "ulps_to_minelem": 4000,
+   "q_over_bar": 0.0029520907197982723
+  },
+  {
+   "delta_frac": 0.001,
+   "verdict": "ok",
+   "verdicts": [
+    "ok"
+   ],
+   "raised": null,
+   "warned": false,
+   "w_min_union_frac": 0.0010000000000000009,
+   "q_excess": 255.4171057802223,
+   "fu_over_sliver": 10.000000000000009,
+   "fu_over_minelem": 1000.0000000000009,
+   "ulps_to_sliver": 4000,
+   "ulps_to_minelem": 4000,
+   "q_over_bar": 0.02554171057802223
+  },
+  {
+   "delta_frac": 0.0001,
+   "verdict": "warn",
+   "verdicts": [
+    "warn_manufactured"
+   ],
+   "raised": null,
+   "warned": true,
+   "w_min_union_frac": 9.999999999998899e-05,
+   "q_excess": 2525.9129638397,
+   "fu_over_sliver": 0.9999999999998899,
+   "fu_over_minelem": 99.99999999998899,
+   "ulps_to_sliver": -813,
+   "ulps_to_minelem": 4000,
+   "q_over_bar": 0.25259129638397
+  },
+  {
+   "delta_frac": 1e-05,
+   "verdict": "warn",
+   "verdicts": [
+    "warn_manufactured"
+   ],
+   "raised": null,
+   "warned": true,
+   "w_min_union_frac": 9.999999999991497e-06,
+   "q_excess": 25218.874431726537,
+   "fu_over_sliver": 0.09999999999991496,
+   "fu_over_minelem": 9.999999999991497,
+   "ulps_to_sliver": -4000,
+   "ulps_to_minelem": 4000,
+   "q_over_bar": 2.5218874431726537
+  },
+  {
+   "delta_frac": 1e-06,
+   "verdict": "refuse",
+   "verdicts": [
+    "refuse"
+   ],
+   "raised": "BORSemMeshError",
+   "warned": false,
+   "w_min_union_frac": 9.999999999917482e-07,
+   "q_excess": 455644.5790192944,
+   "fu_over_sliver": 0.009999999999917481,
+   "fu_over_minelem": 0.9999999999917482,
+   "ulps_to_sliver": -4000,
+   "ulps_to_minelem": -4000,
+   "q_over_bar": 45.564457901929444
+  },
+  {
+   "delta_frac": 1e-07,
+   "verdict": "refuse",
+   "verdicts": [
+    "refuse"
+   ],
+   "raised": "BORSemMeshError",
+   "warned": false,
+   "w_min_union_frac": 9.999999998437185e-08,
+   "q_excess": 2521444.7763187625,
+   "fu_over_sliver": 0.0009999999998437186,
+   "fu_over_minelem": 0.09999999998437185,
+   "ulps_to_sliver": -4000,
+   "ulps_to_minelem": -4000,
+   "q_over_bar": 252.14447763187624
+  }
+ ],
+ "separated_control": [
+  {
+   "delta_frac": 0.01,
+   "verdicts": [
+    "ok"
+   ],
+   "all_union_inf": true,
+   "union": [
+    Infinity,
+    Infinity,
+    Infinity,
+    Infinity
+   ]
+  },
+  {
+   "delta_frac": 0.0001,
+   "verdicts": [
+    "ok"
+   ],
+   "all_union_inf": true,
+   "union": [
+    Infinity,
+    Infinity,
+    Infinity,
+    Infinity
+   ]
+  },
+  {
+   "delta_frac": 1e-06,
+   "verdicts": [
+    "ok"
+   ],
+   "all_union_inf": true,
+   "union": [
+    Infinity,
+    Infinity,
+    Infinity,
+    Infinity
+   ]
+  },
+  {
+   "delta_frac": 1e-07,
+   "verdicts": [
+    "ok"
+   ],
+   "all_union_inf": true,
+   "union": [
+    Infinity,
+    Infinity,
+    Infinity,
+    Infinity
+   ]
+  }
+ ],
+ "wall_free_spacer": {
+  "spacer_union_frac": 9.999999999917482e-07,
+  "finite": true,
+  "bar": 1e-05,
+  "all_union": [
+   Infinity,
+   9.999999999917482e-07,
+   Infinity
+  ]
+ },
+ "liner": [
+  {
+   "w_frac": 1e-05,
+   "verdicts": [
+    "ok"
+   ],
+   "q_excess": 25217.656462199786,
+   "narrow": 9.999999999991497e-06,
+   "branch_hot": false,
+   "ulps_narrow_to_minelem": 4000,
+   "all_union_inf": true
+  },
+  {
+   "w_frac": 1e-06,
+   "verdicts": [
+    "warn_own"
+   ],
+   "q_excess": 572787.4231317873,
+   "narrow": 9.999999999917482e-07,
+   "branch_hot": true,
+   "ulps_narrow_to_minelem": -4000,
+   "all_union_inf": true
+  },
+  {
+   "w_frac": 1e-07,
+   "verdicts": [
+    "warn_own"
+   ],
+   "q_excess": 2521443.558319831,
+   "narrow": 9.999999998437185e-08,
+   "branch_hot": true,
+   "ulps_narrow_to_minelem": -4000,
+   "all_union_inf": true
+  }
+ ],
+ "fd_immunity": [
+  {
+   "delta_frac": 0.0,
+   "hash": "e2c49c88975e672fb7b0971f46cb4dcffce22dbcf574cecc1213f34f31ebc068",
+   "n": 30,
+   "report_is_none": true
+  },
+  {
+   "delta_frac": 0.0001,
+   "hash": "e2c49c88975e672fb7b0971f46cb4dcffce22dbcf574cecc1213f34f31ebc068",
+   "n": 30,
+   "report_is_none": true,
+   "bit_identical": true,
+   "max_dR": 0.0,
+   "warned": false
+  },
+  {
+   "delta_frac": 1e-06,
+   "hash": "e2c49c88975e672fb7b0971f46cb4dcffce22dbcf574cecc1213f34f31ebc068",
+   "n": 30,
+   "report_is_none": true,
+   "bit_identical": true,
+   "max_dR": 0.0,
+   "warned": false
+  },
+  {
+   "delta_frac": 1e-07,
+   "hash": "e2c49c88975e672fb7b0971f46cb4dcffce22dbcf574cecc1213f34f31ebc068",
+   "n": 30,
+   "report_is_none": true,
+   "bit_identical": true,
+   "max_dR": 0.0,
+   "warned": false
+  }
+ ],
+ "inv_census": {
+  "n": 210,
+  "n_finite_rcond": 210,
+  "n_finite_resid": 210,
+  "sites": [
+   "coupled_radial.staggered:inv(Mz)",
+   "sem_radial.assemble:inv(Mz)",
+   "sem_radial.mortar:M0a",
+   "sem_radial.mortar:M0b",
+   "sem_radial.mortar:M1a",
+   "sem_radial.mortar:M1b",
+   "sem_radial.mortar:alpha",
+   "sem_radial.mortar:gamma",
+   "sem_radial.mortar:inv(I+gamma.alpha)",
+   "zcascade.interface:inv(a+b)",
+   "zcascade.interface:solve(Vb,Va)",
+   "zcascade.interface:solve(Wb,Wa)",
+   "zcascade.star:inv(I-A22.B11)",
+   "zcascade.star:inv(I-B11.A22)"
+  ],
+  "min_rcond": 2.0335678327158262e-05,
+  "max_resid": 1.2040084018469945e-13,
+  "min_rcond_site": "sem_radial.assemble:inv(Mz)",
+  "max_resid_site": "sem_radial.assemble:inv(Mz)",
+  "bar_rcond": 1e-09,
+  "bar_resid": 1e-09,
+  "census_default_is_none": true
+ }
+}

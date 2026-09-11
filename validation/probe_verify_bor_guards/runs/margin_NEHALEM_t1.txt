@@ -1,0 +1,18 @@
+KERNEL [('Nehalem', 1), ('Nehalem', 1)]
+GAMMA 0.17159104282951759
+CLOSURE_SINGLE 1.107294e-09  (bar 1e-8, margin x9.0)  nchan=3
+LADDER_COUNTS [3]
+LADDER_WORST 2.923983e-07  (bar 1e-6, margin x3.42)
+   rung e= 8 nchan=3 closure=2.7467e-10
+   rung e= 9 nchan=3 closure=8.0553e-12
+   rung e=10 nchan=3 closure=8.2182e-10
+   rung e=11 nchan=3 closure=1.1073e-09
+   rung e=12 nchan=3 closure=8.9867e-10
+   rung e=13 nchan=3 closure=1.1969e-09
+   rung e=14 nchan=3 closure=6.2999e-09
+   rung e=15 nchan=3 closure=6.5611e-09
+   rung e=16 nchan=3 closure=3.8504e-09
+   rung e=17 nchan=3 closure=2.3890e-08
+   rung e=18 nchan=3 closure=2.3295e-08
+   rung e=19 nchan=3 closure=5.4503e-08
+   rung e=20 nchan=3 closure=2.9240e-07

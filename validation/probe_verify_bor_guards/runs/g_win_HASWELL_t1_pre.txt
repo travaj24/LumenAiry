@@ -1,0 +1,25 @@
+=== ARM tree=/c/tmp/lum_vbor_pre requested_coretype=HASWELL threads=1 ===
+=== cwd=/c/tmp/lum_vbor_pre
+=== git: 352173e3 test(pmm2d-mortar): the ladder gate asserts only at the rung its precondition certifies (round-4 verification DEFECT 1); doc nit
+=== started 2026-09-11T08:34:49Z
+LIBFILE C:\tmp\lum_vbor_pre\lumenairy\__init__.py
+PYVER 3.14.6
+KERNEL [('Haswell', 1, '0.3.31.188.0'), ('Haswell', 1, '0.3.30')]
+=== PYTEST ARGS: tests/unit/test_audit_bor_grazing_cutoff.py tests/unit/test_audit_p1_bor_flux.py tests/unit/test_audit_v5_24_2_b2_bor_exports.py tests/unit/test_audit_w6_bor.py tests/unit/test_bor_anisotropic.py tests/unit/test_bor_sem.py tests/unit/test_bor_sem_jax.py tests/unit/test_bor_solve.py tests/unit/test_eme_2d.py tests/unit/test_eme_2d_vector.py tests/unit/test_eme_census_determinacy.py tests/unit/test_eme_diffraction.py tests/unit/test_eme_jax_modes.py tests/unit/test_niche_audit_w6_bor.py ===
+........................................................................ [ 35%]
+........................................................................ [ 71%]
+.........................................................                [100%]
+============================== warnings summary ===============================
+tests/unit/test_bor_sem.py::test_anisotropic_uniaxial_dispersion_and_slot_swap
+  C:\tmp\lum_vbor_pre\tests\unit\test_bor_sem.py:99: UserWarning: SemRadialMesh: the axis-containing element carries eps_rr=(3.24+0j) != eps_phiphi=(2.25+0j); transverse anisotropy is undefined AT r = 0 (the cylindrical frame is singular there).  Keep the axis element transversely isotropic, or add an isotropic core element.
+    mesh = SemRadialMesh(np.linspace(0, RBIG, 5), [tri] * 4, 12)
+
+tests/unit/test_eme_diffraction.py::test_structured_layer_does_not_converge
+  C:\tmp\lum_vbor_pre\tests\unit\test_eme_diffraction.py:91: UserWarning: diffraction_fd: the layer is STRUCTURED (spatially non-uniform); mode-matched diffraction does NOT converge for structured layers -- the efficiencies wander and R+T strays from 1 as the order/mode count grows (the real-space modes are not an order-space basis; see the eme_diffraction module docstring).  These efficiencies are UNRELIABLE; use lumenairy.rcwa_efficiency_2d or pmm_efficiency_2d instead.
+    res = diffraction_fd(eps_xy, Lx, Ly, Nx, 96, k0, eps_sup, eps_sub, depth,
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+201 passed, 2 warnings in 785.93s (0:13:05)
+=== PYTEST_RC 0
+=== WALL_SECONDS 794
+=== finished 2026-09-11T08:48:04Z

@@ -1,0 +1,40 @@
+{
+ "arm": {
+  "platform": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "requested_coretype": "HASWELL",
+  "loaded_kernel": "Haswell",
+  "blas_threads": 1,
+  "env_threads": "1",
+  "tree": "C:\\tmp\\lum_vbor"
+ },
+ "build": "post",
+ "tag": "win_HASWELL_t1",
+ "which": "taper512",
+ "taper512": [
+  {
+   "n_slices": 256,
+   "degree": 6,
+   "k0": 0.8,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.0009765625,
+   "q": 690.1726129457073,
+   "would_pass": true
+  },
+  {
+   "n_slices": 512,
+   "degree": 6,
+   "k0": 0.8,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.00048828125,
+   "q": 1379.6196674637627,
+   "would_pass": true
+  }
+ ]
+}

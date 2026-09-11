@@ -1,0 +1,116 @@
+{
+ "arm": {
+  "platform": "win",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "requested_coretype": "HASWELL",
+  "loaded_kernel": "Haswell",
+  "blas_threads": 4,
+  "env_threads": "4",
+  "tree": "C:\\tmp\\lum_vbor"
+ },
+ "build": "post",
+ "tag": "win_HASWELL_t4",
+ "window": [
+  26055.8,
+  28500.0
+ ],
+ "nscan": 60,
+ "strip_flip": {
+  "n": 96,
+  "flipped": 0,
+  "worst_ratio_to_tol": 1.1288638427378538e-08,
+  "worst_abs_diff": 4.550783130455086e-13,
+  "all_imag_nonneg": true,
+  "min_imag": 2.0335955798019854e-33,
+  "max_imag": 167.16487282608577,
+  "hash_real": "570c759b5860bab0aa17a75f307413d43706a70eaf2c0ff2edad25066b21354e",
+  "hash_tiny": "6f110813cf11238151101e20fbcddfb793fea5578e01687f121cc5d6f9fb1a78"
+ },
+ "layer_modes_narrowed": {
+  "n_real": 16,
+  "n_tiny": 16,
+  "same_count": true,
+  "worst_dqz2": 1.5279510989785194e-10,
+  "atol_bar": 1e-06,
+  "bar_n_modes": 10,
+  "scan_resolution": 40.73666666666668,
+  "real": [
+   26144.970282286853,
+   26289.05377856563,
+   26483.479309884147,
+   26639.495768792873,
+   26756.848225649923,
+   26875.068566763333,
+   27022.048103586676,
+   27153.88848656181,
+   27300.68410570921,
+   27449.627101683036,
+   27641.816210606325,
+   27754.088731329568,
+   27946.124483675525,
+   28128.9408061509,
+   28323.231901450763,
+   28415.645385897587
+  ],
+  "tiny": [
+   26144.97028228696,
+   26289.0537785655,
+   26483.479309884155,
+   26639.49576879295,
+   26756.84822564988,
+   26875.068566763373,
+   27022.048103586727,
+   27153.888486561882,
+   27300.68410570924,
+   27449.627101683087,
+   27641.816210606365,
+   27754.08873132965,
+   27946.12448367556,
+   28128.94080615105,
+   28323.231901450836,
+   28415.6453858977
+  ]
+ },
+ "prefix_pin_narrowed": {
+  "n_real": 16,
+  "n_tiny": 18,
+  "decisive": true,
+  "strip_flipped": 29,
+  "note": "pre-5.45.1 exact-zero pin restored by monkeypatch; the file's docstring claims 16 vs 18 here"
+ },
+ "synthetic_roots": {
+  "ky_real": [
+   10.0,
+   20.0,
+   50.0
+  ],
+  "ky_imag": [
+   5e-15,
+   7.5e-16,
+   4.9999999999999995e-14
+  ],
+  "all_re_pos": true,
+  "all_im_nonneg": true,
+  "band": 5.0000000000000004e-08,
+  "worst_abs_imag": 4.9999999999999995e-14
+ },
+ "cut_band": {
+  "at_1e_minus_6": 1e-09,
+  "at_1e4": 1e-05,
+  "const": 1e-09,
+  "live_low": -5.0,
+  "live_high": 5.0
+ },
+ "lossy_root": {
+  "out_real": [
+   -2.0,
+   3.0
+  ],
+  "out_imag": [
+   0.5,
+   0.5
+  ]
+ }
+}

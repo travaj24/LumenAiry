@@ -1,0 +1,9 @@
+16.97s call     tests/unit/test_verify_bor_multilayer_guards.py::test_the_sem_warn_edge_is_reached_by_a_shallow_taper_at_32_slices
+5.69s call     tests/unit/test_verify_bor_multilayer_guards.py::test_a_negligible_loss_must_not_defeat_the_nodal_passivity_screen
+5.33s call     tests/unit/test_verify_bor_multilayer_guards.py::test_the_nodal_passivity_screen_must_be_two_sided_on_a_lossless_stack
+2.89s call     tests/unit/test_verify_bor_multilayer_guards.py::test_the_nodal_channel_count_is_wrong_where_the_passivity_screen_says_ok[1]
+2.86s call     tests/unit/test_verify_bor_multilayer_guards.py::test_the_nodal_channel_count_is_wrong_where_the_passivity_screen_says_ok[2]
+1.54s call     tests/unit/test_verify_bor_multilayer_guards.py::test_the_staggered_channel_count_is_the_closed_form_count[1]
+1.49s call     tests/unit/test_verify_bor_multilayer_guards.py::test_the_staggered_channel_count_is_the_closed_form_count[2]
+0.84s call     tests/unit/test_verify_bor_multilayer_guards.py::test_warn_own_is_only_reported_for_the_layer_that_prescribed_the_cell
+0.12s call     tests/unit/test_verify_bor_multilayer_guards.py::test_the_eme_branch_band_is_unit_system_invariant

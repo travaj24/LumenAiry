@@ -1,0 +1,82 @@
+{
+ "arm": {
+  "platform": "wsl",
+  "python": "3.12.3",
+  "numpy": "2.4.6",
+  "scipy": "1.17.1",
+  "requested_coretype": "HASWELL",
+  "loaded_kernel": "Haswell",
+  "blas_threads": 1,
+  "env_threads": "1",
+  "tree": "/mnt/c/tmp/lum_vbor"
+ },
+ "build": "post",
+ "tag": "wsl_HASWELL_t1_taper",
+ "SLIVER_BAND_FRAC": 0.0001,
+ "Q_EXCESS": 10000.0,
+ "groups": [
+  "none"
+ ],
+ "degrees": [
+  8
+ ],
+ "ordinary_census": [
+  {
+   "group": "none",
+   "degree": 8,
+   "n_families": 0,
+   "bad": [],
+   "narrowest": Infinity,
+   "worst_q": 0.0,
+   "narrowest_over_bar": Infinity,
+   "worst_q_over_bar": 0.0,
+   "assert_narrow_bar": 0.00030000000000000003,
+   "assert_q_bar": 1000.0,
+   "per": []
+  }
+ ],
+ "taper": [
+  {
+   "n_slices": 64,
+   "degree": 8,
+   "k0": 2.0,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.00390625,
+   "q": 113.76737832830567,
+   "w_over_bar": 39.0625,
+   "assert_w_bar": 0.00030000000000000003,
+   "q_over_bar": 0.011376737832830566,
+   "assert_q_bar": 3333.3333333333335
+  },
+  {
+   "n_slices": 128,
+   "degree": 6,
+   "k0": 0.8,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.001953125,
+   "q": 345.4403566436276,
+   "w_over_bar": 19.53125,
+   "assert_w_bar": 0.00030000000000000003,
+   "q_over_bar": 0.03454403566436276,
+   "assert_q_bar": 3333.3333333333335
+  },
+  {
+   "n_slices": 256,
+   "degree": 6,
+   "k0": 0.8,
+   "verdicts": [
+    "ok"
+   ],
+   "w": 0.0009765625,
+   "q": 690.1726129457073,
+   "w_over_bar": 9.765625,
+   "assert_w_bar": 0.00030000000000000003,
+   "q_over_bar": 0.06901726129457074,
+   "assert_q_bar": 3333.3333333333335
+  }
+ ]
+}
