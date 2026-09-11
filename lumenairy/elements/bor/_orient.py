@@ -32,21 +32,25 @@ rather than two bodies that are believed to agree.
 ``tests/unit/test_fix_bor_multilayer_guards.py`` pins that with a grep over the
 package.
 
-THE CLASSIFIER BAND IS A SEPARATE QUESTION FROM THE NUMBER OF COPIES, and this
-module is introduced carrying the SHIPPED band unchanged so that the
-consolidation can be proved to move nothing -- 148 BOR gates plus 30 hashed
-R/T fixtures, bit-identical on both builds.  What is wrong with the shipped
-band, and the measurement that replaces it, is in :func:`orient_band_scale`.
+THE CLASSIFIER BAND IS A SEPARATE QUESTION FROM THE NUMBER OF COPIES.  The
+module was introduced carrying the SHIPPED band unchanged, so the consolidation
+could be proved to move nothing (148 BOR gates plus 30 hashed R/T fixtures,
+bit-identical on both builds); the band then moved in its own commit, to the
+shape every other engine in the library uses.  What was wrong with the shipped
+band, and the two-sided measurement that replaced it, is in
+:func:`orient_band_scale`.
 """
 from __future__ import annotations
 
 from ...backend.array import array_namespace
 
-#: THE CLASSIFIER BAND.  ``|Im q| < band * scale`` calls a mode PROPAGATING and
-#: hands its orientation to the flux; outside the band the mode is EVANESCENT
-#: and is oriented by decay.  The SCALE this multiplies is where the defect
-#: lives -- see :func:`orient_band_scale`.
-_BOR_CUT_BAND_REL = 1e-9
+#: THE CLASSIFIER BAND.  ``|Im q| <= band * scale`` calls a mode PROPAGATING
+#: and hands its orientation to the flux; outside the band the mode is
+#: EVANESCENT and is oriented by decay.  1e-8 is the same factor
+#: ``rcwa/_core._CUT_BAND_REL`` and ``pmm/_core._forward_branch_flip`` carry;
+#: the SCALE it multiplies is what 5.45.1 fixed -- see
+#: :func:`orient_band_scale` for the populations and their margins.
+_BOR_CUT_BAND_REL = 1e-8
 
 #: The flux-normalizer's FALLBACK threshold: a mode whose ``|z-flux|`` is below
 #: this fraction of its own ``r dr`` field norm is normalized by the field norm
@@ -67,18 +71,13 @@ _BOR_FLUX_FALLBACK_REL = 1e-10
 _BOR_CHANNEL_IMAG_BAR = 5e-5
 _BOR_CHANNEL_REAL_FLOOR = 1e-6
 
-#: The floor under the SHIPPED per-mode scale, so a mode with ``Re q`` exactly
-#: zero does not divide by zero.  It is not a physical quantity -- its presence
-#: is part of why the per-mode scale is the wrong one.
-_BOR_SCALE_FLOOR = 1e-300
-
-
 def orient_band_scale(q, k0, *, xp=None):
     """The scale the propagating/evanescent classifier band is taken RELATIVE
-    to, for a layer's spectrum ``q`` at vacuum wavenumber ``k0``.
+    to, for a layer's spectrum ``q`` at vacuum wavenumber ``k0``:
+    ``max(max|q| over the layer's spectrum, k0)``.
 
-    THIS IS THE SHIPPED SCALE, AND IT IS A KNOWN DEFECT.  It returns **the
-    mode's OWN** ``max(|Re q|, 1e-300)``, elementwise::
+    WHAT THE FIVE COPIES DID UNTIL 5.45.1, AND WHY IT WAS A DEFECT.  They
+    scaled the band by **the mode's OWN** ``|Re q|``, floored at 1e-300::
 
         prop = |Im q| < 1e-9 * max(|Re q|, 1e-300)
 
@@ -95,24 +94,83 @@ def orient_band_scale(q, k0, *, xp=None):
     The cylindrical peer of that cutoff is a radial order approaching its own
     cutoff, ``q^2 = k0^2 eps - gamma_j^2 -> 0``, where the discriminating ratio
     ``rho = |Im q| / |Re q| ~ 1 / qn^2`` grows without limit at FIXED backward
-    error.  Measured on a 39-rung near-cutoff ladder (Rbig = 24, N = 120,
-    n = 1.41, m = 0/1/2; ``validation/probe_scope_bor_guards/a4_*``,
-    ``docs/audits/SCOPE_BOR_MULTILAYER_GUARDS_2026_09_12.md`` section 2.3):
-    a physically propagating order is called evanescent on 32 of 39 rungs, the
-    mode shipped FORWARD carries BACKWARD z-flux on 10 of 39, a lossless
-    stack's closure degrades to 1.2167e-04, and -- because the R/T gate then
-    drops the mis-oriented order -- the channel count itself moves on 21 of 24
-    rungs with the BLAS KERNEL and on 35 of 39 with the THREAD COUNT alone.
+    error.  So near a cutoff the classifier reads the eigensolver's backward
+    error, the order is called EVANESCENT, and its direction is then taken from
+    ``sign(Im q)`` -- which is that same backward error.  When that picks the
+    ``Re q < 0`` root the order is shipped BACKWARD, the R/T gate's
+    ``qn.real > 1e-6`` leg drops it, and the channel count itself becomes a
+    function of the arithmetic.
 
-    THIS COMMIT DOES NOT CHANGE THAT.  It is the consolidation only: five
-    copies of the rule become one, with the band bit-identical, so that the
-    band change is a one-line diff against a population already proved not to
-    move.  The replacement scale and its two-sided measurement land in the
-    next commit.
+    MEASURED ON A 39-RUNG NEAR-CUTOFF LADDER (Rbig = 24, N = 120, n = 1.41,
+    m = 0/1/2, ``qn`` from 1.4e-02 down to 1.4e-05;
+    ``validation/probe_fix_bor_guards/s2_band.py``, re-measuring
+    ``validation/probe_scope_bor_guards/a4_*``):
+
+    ==================================  =================  ================
+    quantity                            SHIPPED per-mode   THIS spectrum
+    ==================================  =================  ================
+    worst lossless closure              1.2167e-04         1.9655e-07
+    distinct R/T channel counts         {2, 3}             {3}
+    ==================================  =================  ================
+
+    619x better on the closure, and the channel count stops moving.  The
+    scoping measured the same ladder across three OpenBLAS kernels and two
+    builds: the shipped rule's CLASS verdict moved with the kernel on 7 of 24
+    rungs and its CHANNEL COUNT on 21 of 24, against 0 of 24 for this scale;
+    worst closure over all kernels 2.1579e-04 against 1.2716e-06, 170x.  Under
+    the THREAD count alone the shipped rule moved 35 of 39 rungs.  Per
+    ``docs/TESTING_STANDARDS.md`` that is a defect, not noise.
+
+    THE FLOOR IS ``k0``, NOT 1.0.  Every Cartesian peer floors its spectrum
+    scale at a literal 1.0 because its eigenvalue is dimensionless.  ``q`` here
+    carries units of inverse length, so a literal 1.0 would make the band
+    unit-system-dependent -- exactly the failure audit P2-06 fixed for the
+    channel gate ("absolute thresholds on q silently returned empty R/T for
+    small-k0 unit systems").  ``k0`` is the natural non-zero floor of the
+    problem and is what was measured.
+
+    THE TWO-SIDED BAR at ``band = 1e-8``, in the discriminating ratio this
+    scale defines, ``sigma = |Im q| / max(max|q|, k0)``.  Measured on THIS
+    build (Windows py3.14 / numpy 2.4.4 / Haswell, ``OPENBLAS_NUM_THREADS=1``)
+    and re-measured on every running build by
+    ``test_fix_bor_multilayer_guards.py::test_band_two_sided_population``:
+
+    =========================================  ===  ==============  ==========
+    population                                   n  worst ``sigma``  room
+    =========================================  ===  ==============  ==========
+    NOISE, ordinary lossless geometry             27  1.3024e-15     6.89 dec
+    NOISE, deep cutoff (qn to 1.4e-13)            36  8.7301e-10     1.06 dec
+    SIGNAL, genuinely lossy Im(n) = 1e-3           6  9.4570e-05     3.98 dec
+    SIGNAL, thin end     Im(n) = 1e-6              6  9.4570e-08     0.98 dec
+    =========================================  ===  ==============  ==========
+
+    The NOISE rows are the worst ``sigma`` the band must REACH; the SIGNAL rows
+    the smallest it must NOT.  The binding side is the deep cutoff at 1.06
+    decades: that population is backward error and grows with ``||K||``, so a
+    much finer radial grid would eat into it -- which is why the test
+    re-measures rather than pins.
+
+    WHY THE THIN SIGNAL END IS ACCEPTABLE.  ``sigma`` is exactly linear in the
+    imaginary index, so this band calls media with ``Im(n)`` between ~4e-07 and
+    ~1e-09 "propagating" where the old one did not, and orients them by flux
+    instead of by decay.  That is a HARMLESSNESS boundary, not a correctness
+    one, and it was measured: over **645** physically propagating modes at
+    ``Im(n)`` from 1e-06 down to 1e-10 (m = 0, 1, 2) the flux verdict and the
+    decay verdict agree on EVERY one -- 0 disagreements -- with the flux at
+    ``|P|/fnrm >= 0.1197``, eleven decades above the normalizer's own noise
+    fallback.  Where the two rules agree, which one governs cannot matter.
+
+    WHAT IT COST ON ORDINARY GEOMETRY: nothing, measured.  A 30-fixture battery
+    (both bases x m = 0,1,2,5 x k0 = 0.8/2.0/3.5 x four geometry families),
+    hashed to the SHA-256 of the exact IEEE-754 bytes of R and T: **30 of 30
+    bit-identical** across this change on both builds, and all 148 BOR gates
+    unchanged.
     """
     if xp is None:
         xp = array_namespace(q)
-    return xp.maximum(xp.abs(xp.real(q)), _BOR_SCALE_FLOOR)
+    if getattr(q, "size", 1) == 0:
+        return abs(float(k0))
+    return xp.maximum(xp.max(xp.abs(q)), abs(k0))
 
 
 def forward_orient(q, flux, k0, *, xp=None, band=_BOR_CUT_BAND_REL,
@@ -124,7 +182,7 @@ def forward_orient(q, flux, k0, *, xp=None, band=_BOR_CUT_BAND_REL,
     need the caller's grid weights and field blocks, which differ per basis).
     ``k0`` is the vacuum wavenumber and floors the classifier scale.
 
-    Propagating modes (``|Im q| < band * scale``, :func:`orient_band_scale`)
+    Propagating modes (``|Im q| <= band * scale``, :func:`orient_band_scale`)
     are oriented by ``flux >= 0``; the rest by ``Im q > 0``.  Returns the
     oriented ``q``; the caller re-evaluates its fields at the returned root.
 
@@ -146,7 +204,7 @@ def forward_orient(q, flux, k0, *, xp=None, band=_BOR_CUT_BAND_REL,
     # strictly positive (its floor is 1e-300 times 1e-9, a subnormal but not a
     # zero), so ``|Im q| == 0`` always classifies PROPAGATING.  The vectorized
     # shape is kept.
-    prop = xp.abs(xp.imag(q)) < band * scale
+    prop = xp.abs(xp.imag(q)) <= band * scale
     flip = xp.where(prop, flux < 0.0, xp.imag(q) < 0.0)
     return xp.where(flip, -q, q)
 

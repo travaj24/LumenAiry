@@ -156,3 +156,238 @@ def test_the_kernel_accepts_an_explicit_namespace_and_does_not_sniff():
     flux = np.array([1.0, 1.0])
     assert np.array_equal(_or.forward_orient(q, flux, 2.0, xp=np),
                           _or.forward_orient(q, flux, 2.0))
+
+
+# =========================================================================== #
+#  STEP 2 -- the classifier band, and the near-cutoff population it fixes      #
+# =========================================================================== #
+_RBIG = 24.0
+_NFD = 120
+_NREF = 1.41
+_EPS = _NREF ** 2
+
+
+def _fd_modes(m, k0, eps=_EPS, N=_NFD):
+    from lumenairy.elements.bor.zcascade import layer_modes
+    return layer_modes(m, _RBIG, N,
+                       lambda r: np.full_like(r, eps, dtype=complex),
+                       float(k0), staggered=True)
+
+
+def _flux_and_norm(L):
+    W, V = L["W"], L["V"]
+    wq_f = np.real(np.asarray(L["wq_face"]))
+    wq_n = np.real(np.asarray(L["wq_node"]))
+    N = len(wq_f)
+    flux = np.real(np.sum(W[:N] * np.conj(V[N:]) * wq_f[:, None], axis=0)
+                   - np.sum(W[N:] * np.conj(V[:N]) * wq_n[:, None], axis=0))
+    fnrm = (np.sum(np.abs(W[:N]) ** 2 * wq_f[:, None], axis=0)
+            + np.sum(np.abs(W[N:]) ** 2 * wq_n[:, None], axis=0))
+    return flux, fnrm
+
+
+def _sigma(L, k0):
+    """The band's discriminating ratio ``|Im q| / max(max|q|, k0)``."""
+    q = np.asarray(L["q"])
+    scale = max(float(np.max(np.abs(q))) if q.size else 0.0, float(k0))
+    return q, np.abs(q.imag) / scale
+
+
+def _gamma_of(m, idx=2):
+    """The cutoff wavenumber of one named radial order.
+
+    The PEC-walled cylindrical spectrum is DISCRETE, so no ordinary ``k0``
+    sweep reaches a cutoff: the ladder must solve for ``gamma_j`` first and
+    then approach it geometrically with ``k0 = gamma_j / (n sqrt(1 - delta))``,
+    which puts the order at ``qn = n sqrt(delta)`` exactly.
+    """
+    L = _fd_modes(m, 2.0)
+    q = np.asarray(L["q"])
+    g = np.sqrt(2.0 ** 2 * _EPS - q ** 2)
+    g = np.real(g[np.abs(g.imag) < 1e-9 * np.maximum(np.abs(g.real), 1e-300)])
+    return float(np.sort(g[g > 1e-6])[idx])
+
+
+def _cutoff_stack(m, k0):
+    """A lossless three-layer stack whose superstrate is COINCIDENT with its
+    first layer -- the coincidence that makes the mis-oriented near-cutoff
+    order visible in the closure."""
+    s = BORStack(_RBIG, m, n_substrate=_NREF, n_superstrate=_NREF, N=_NFD,
+                 basis="fd")
+    s.add_layer(0.4, eps=_EPS)
+    s.add_layer(0.5, rings=(3.0, 0.5, 2.45, 1.41))
+    s.add_layer(0.4, eps=_EPS)
+    s.set_source(k0=float(k0))
+    return s.solve()
+
+
+def test_near_cutoff_closure():
+    """THE DEFECT IN ONE NUMBER.  At ``qn ~ 2.5e-03`` -- an order a quarter of
+    a percent above its own radial cutoff, on a PROVABLY LOSSLESS stack -- the
+    shipped per-mode band read ``|R + T - 1| = 1.2167e-04``.  The bar is 1e-08,
+    four decades tighter, which is where the spectrum-scaled band puts it
+    (measured 1.9655e-07 as the WORST rung of the whole 39-rung ladder; this
+    single rung is far better).
+    """
+    m = 0
+    g = _gamma_of(m)
+    dl = 3.1622776601683795e-06          # qn = 1.41 * sqrt(delta) ~ 2.5e-03
+    k0 = g / (_NREF * np.sqrt(1.0 - dl))
+    res = _cutoff_stack(m, k0)
+    e = np.asarray(res["energy"])
+    assert e.size, "the cutoff rung returned no channels at all"
+    closure = float(np.max(np.abs(e - 1.0)))
+    assert closure < 1e-8, (
+        "lossless closure %.4e at qn ~ 2.5e-03 (bar 1e-8; the shipped "
+        "per-mode band read 1.2167e-04 here)" % (closure,))
+
+
+def test_near_cutoff_channel_count_is_stable_over_the_ladder():
+    """The shipped band did not merely degrade the closure -- it changed HOW
+    MANY diffraction channels the solve reported, and which number came back
+    depended on the BLAS kernel (21 of 24 rungs) and on the thread count (35 of
+    39).  A channel count that moves with the arithmetic is a defect, not
+    noise.  Over the whole near-cutoff ladder the count must now be ONE
+    number."""
+    m = 0
+    g = _gamma_of(m)
+    counts = set()
+    worst = 0.0
+    for e_ in range(8, 21):
+        dl = 10.0 ** (-e_ / 2.0)
+        k0 = g / (_NREF * np.sqrt(1.0 - dl))
+        res = _cutoff_stack(m, k0)
+        counts.add(int(np.size(res["R"])))
+        en = np.asarray(res["energy"])
+        if en.size:
+            worst = max(worst, float(np.max(np.abs(en - 1.0))))
+    assert len(counts) == 1, (
+        "the R/T channel count moves over the near-cutoff ladder: %s "
+        "(the shipped band read 2 on some rungs and 3 on others)"
+        % (sorted(counts),))
+    assert worst < 1e-6, (
+        "worst lossless closure over the ladder %.4e (bar 1e-6; the shipped "
+        "band read 1.2167e-04)" % (worst,))
+
+
+def test_no_forward_mode_of_a_lossless_layer_carries_backward_flux():
+    """The orientation contract itself, over ordinary geometry: a mode the
+    solver ships FORWARD and calls PROPAGATING must carry power in ``+z``.
+
+    Only modes whose flux is SIGNAL are checked -- a mode whose ``|P|/fnrm``
+    is at the normalizer's own fallback floor has no flux to have a sign."""
+    bad = []
+    for eps in (1.41 ** 2, 2.00 ** 2):
+        for m in (0, 1, 2):
+            for k0 in (0.8, 2.0, 3.5):
+                L = _fd_modes(m, k0, eps=eps)
+                q, sig = _sigma(L, k0)
+                flux, fnrm = _flux_and_norm(L)
+                rel = np.abs(flux) / np.maximum(fnrm, 1e-300)
+                prop = sig <= _or._BOR_CUT_BAND_REL
+                signal = rel > 1e-10
+                for j in np.where(prop & signal & (flux < 0.0))[0]:
+                    bad.append("eps=%g m=%d k0=%g mode=%d flux=%.3e"
+                               % (eps, m, k0, j, flux[j]))
+    assert not bad, ("forward-oriented propagating modes carrying BACKWARD "
+                     "z-flux:\n  " + "\n  ".join(bad[:10]))
+
+
+def test_band_two_sided_population():
+    """BOTH sides of the bar, RE-MEASURED on the running build.
+
+    The band must REACH the noise side (or a propagating mode is mistaken for
+    an evanescent one and oriented by its own backward error) and must NOT
+    reach the signal side (or a genuinely lossy mode is oriented by flux).
+    The margins asserted are inside each measured population by a stated
+    factor, so the gate fails on a real change rather than on a rounding one.
+    """
+    band = _or._BOR_CUT_BAND_REL
+
+    # --- NOISE, ordinary geometry.  Measured worst 1.3024e-15 = 6.89 decades
+    #     of room; assert 3 decades, which no arithmetic difference can eat.
+    worst_ord = 0.0
+    n_ord = 0
+    for eps in (1.41 ** 2, 1.50 ** 2, 2.00 ** 2):
+        for m in (0, 1, 2):
+            for k0 in (0.8, 2.0, 3.5):
+                L = _fd_modes(m, k0, eps=eps)
+                q, sig = _sigma(L, k0)
+                phys = np.abs(q.real) > 10.0 * np.abs(q.imag)
+                if phys.any():
+                    worst_ord = max(worst_ord, float(np.max(sig[phys])))
+                    n_ord += 1
+    assert n_ord >= 27
+    assert worst_ord < band / 1e3, (
+        "NOISE side (ordinary): worst sigma %.4e against band %.0e -- less "
+        "than 3 decades of room (measured 1.3024e-15, 6.89 decades)"
+        % (worst_ord, band))
+
+    # --- NOISE at a deep cutoff: the BINDING side.  Measured worst 8.7301e-10
+    #     = 1.06 decades.  Assert the band still covers it, with a 2x margin:
+    #     this population IS backward error, so it grows with ||K|| and a much
+    #     finer radial grid would eat the decade.
+    worst_cut = 0.0
+    n_cut = 0
+    for m in (0, 1, 2):
+        g = _gamma_of(m)
+        for e_ in range(4, 27, 4):
+            dl = 10.0 ** (-e_)
+            k0 = g / (_NREF * np.sqrt(1.0 - dl))
+            L = _fd_modes(m, k0)
+            q, sig = _sigma(L, k0)
+            phys = np.abs(q.real) > 10.0 * np.abs(q.imag)
+            if phys.any():
+                worst_cut = max(worst_cut, float(np.max(sig[phys])))
+                n_cut += 1
+    assert n_cut >= 18
+    assert worst_cut < band / 2.0, (
+        "NOISE side (deep cutoff, the binding one): worst sigma %.4e against "
+        "band %.0e (measured 8.7301e-10, 1.06 decades of room)"
+        % (worst_cut, band))
+
+    # --- SIGNAL: genuinely lossy media must stay OUT of the band.
+    for imn, floor in ((1e-3, 1e2), (1e-6, 2.0)):
+        smallest = np.inf
+        for m in (0, 1, 2):
+            for k0 in (2.0, 3.5):
+                L = _fd_modes(m, k0, eps=(_NREF + 1j * imn) ** 2)
+                q, sig = _sigma(L, k0)
+                phys = np.abs(q.real) > 10.0 * np.abs(q.imag)
+                if phys.any():
+                    smallest = min(smallest, float(np.min(sig[phys])))
+        assert smallest > floor * band, (
+            "SIGNAL side at Im(n)=%g: smallest sigma %.4e is only %.3gx the "
+            "band %.0e (measured 9.4570e-05 and 9.4570e-08, i.e. 3.98 and "
+            "0.98 decades)" % (imn, smallest, smallest / band, band))
+
+
+def test_widening_the_band_is_harmless_because_the_two_rules_agree_there():
+    """The band now calls media with ``Im(n)`` between ~4e-07 and ~1e-09
+    "propagating" where the shipped one did not, and orients them by FLUX
+    rather than by DECAY.  That is only acceptable if the two verdicts agree
+    there -- which is a measurement, not an argument."""
+    total = 0
+    disagree = 0
+    relmin = np.inf
+    for imn in (1e-6, 1e-8, 1e-10):
+        for m in (0, 1, 2):
+            L = _fd_modes(m, 2.0, eps=(_NREF + 1j * imn) ** 2)
+            q = np.asarray(L["q"])
+            flux, fnrm = _flux_and_norm(L)
+            rel = np.abs(flux) / np.maximum(fnrm, 1e-300)
+            for j in np.where(np.abs(q.real) > 10.0 * np.abs(q.imag))[0]:
+                total += 1
+                relmin = min(relmin, float(rel[j]))
+                if (flux[j] >= 0.0) != (q[j].imag > 0.0):
+                    disagree += 1
+    assert total >= 300
+    assert disagree == 0, (
+        "%d of %d weakly-lossy propagating modes have a FLUX verdict that "
+        "disagrees with their DECAY verdict -- the widening is NOT harmless"
+        % (disagree, total))
+    assert relmin > 1e-3, (
+        "the flux that governs these modes is only %.3e of the field norm; "
+        "the normalizer's own noise floor is 1e-10, so a flux this small "
+        "would be a decision made on noise" % (relmin,))
+
