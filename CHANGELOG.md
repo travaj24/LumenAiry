@@ -1434,8 +1434,16 @@ gone: scanning the decentre finds it on every kernel, at 5.60 mm (Haswell),
 added and walked historical-rung-first, requiring both a loud ghost and a fold
 warning at the rung it stops on, and raising with the whole scanned ladder if
 nothing reproduces.  The fixture helpers take the decentre as an argument so
-the sibling witness recomputes its spline oracle at the rung actually found;
-both PASS-AFTER halves are untouched.
+the scan can move it; both PASS-AFTER halves are untouched.  BOTH witnesses in
+the file are red on Nehalem at 59105d6 -- verified against the original file --
+so the sibling is a second class-(a) failure, not a casualty of fixing the
+first.  It is stricter (it compares against a spline ORACLE and needs that
+oracle UNFOLDED at the same decentre), so the scan takes a `quiet_oracle` flag
+and pays an extra oracle solve only at rungs that already clear the ghost bar.
+A 5.50 .. 6.00 mm ladder EXHAUSTS on Nehalem for it -- ten rungs at ~1e-03 and
+one loud rung whose oracle folds -- so the reach is widened and it lands at
+5.30 mm (3.00e-01, clean oracle); near rungs stay first, so the other three
+kernels still stop at the historical 5.60 mm.
 
 The census carries BOTH axes.  CI's fast lane -- six of the eight red lanes --
 leaves BLAS unpinned, so thread width is a first-class axis beside the kernel:

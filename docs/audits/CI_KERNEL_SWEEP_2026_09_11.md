@@ -444,9 +444,38 @@ which costs one or two extra solves), `_first_reproducing_rung` walks it
 requiring BOTH a loud ghost and a fold warning, and it raises with the whole
 scanned ladder if nothing reproduces -- the "ladder exhausted" case, which
 means re-derive.  The fixture helpers are parameterised by the decentre so the
-sibling witness can recompute its spline ORACLE at whichever rung was found,
-keeping that comparison like-for-like.  Both witnesses' PASS-AFTER halves are
-untouched and still run at the shipped decentre.
+scan can move it.  The PASS-AFTER half is untouched and still runs at the
+shipped decentre.
+
+**The SIBLING witness fails on Nehalem too, and it needs a wider ladder.**
+Both witnesses in this file are red on Nehalem at `59105d6` -- verified by
+running the ORIGINAL file from that commit -- so the sibling
+(`test_off_centre_fit_disc_does_not_ghost_the_exit_field`) is a second
+class-(a) failure the sweep found, not a casualty of fixing the first.
+
+It is the STRICTER of the two: it compares the broken arm against a spline
+ORACLE and needs that oracle UNFOLDED at the same decentre, so a rung must
+satisfy three conditions, not two.  `_first_reproducing_rung` takes a
+`quiet_oracle` flag for that, and pays the extra oracle solve only at rungs
+that already clear the ghost bar -- opt-in, because the fold-warning witness
+does not need it.
+
+The first attempt at this ran a 5.50 .. 6.00 mm ladder and EXHAUSTED on
+Nehalem: ten rungs leave the ghost at ~1e-03, and the single loud one
+(5.95 mm, 2.34e-02) has a folded oracle.  Widening the reach finds it at
+**5.30 mm (3.00e-01, clean oracle)**; 6.60 mm is loud there too (2.44e-02) but
+its oracle folds as well.  The ladder is therefore near-rungs-first with the
+wide rungs appended, so Haswell, Sandybridge and Katmai still stop at the
+historical 5.60 mm and only Nehalem walks to rung 4.
+
+Two lessons worth keeping, because both cost a round here.  First, a ladder is
+the right instrument for a witness whose state has MOVED and the wrong one for
+a witness that never moved -- adding one "for symmetry" can convert a passing
+test into a kernel-dependent one, which is what the first attempt did before
+the wider reach fixed it properly.  Second, the qualifying CONDITIONS have to
+be the ones the test actually depends on: a rung that reproduces the ghost is
+not automatically a rung the comparison is valid at, and the difference is not
+visible until a kernel forces the scan off the historical rung.
 
 ---
 
