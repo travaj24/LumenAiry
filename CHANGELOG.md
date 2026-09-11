@@ -359,6 +359,28 @@ gate passing.)  It is retired in favour of one that runs at `Im/Re = 1e-7`, two
 decades inside the channel gate, asserts its own premise, and asserts BOTH
 halves of the split -- the energy screen silent, the index ceiling armed.
 
+**Round 3 verified 2026-09-12** (`docs/audits/VERIFY_BOR_GUARDS_ROUND3_2026_09_12.md`,
+own fixtures, 6 arms): the split closes the incidence-loss hole in kind (loss on
+the incidence layer alone: 18/78 -> 58/78 refused on the verifier's battery,
+{energy 18, ceiling 40}; headline row nodal `max(R+T)` = 8.098737 against a
+staggered twin at 4.7e-07, returned before, refused now); the lossy-half-space
+census reproduces to the digit (0 ceiling false positives; 0 rows where loss
+alone flips a decision); the derived lossy-ceiling term is correct where derived
+and VACUOUS in practice (a uniform passive half-space's excess is at most 0.0 at
+any loss over 19,542 exact combinations); gain media stay disarmed; the switch
+restores round-2 bytes on 72/72 hashes.  SCOPE, stated plainly (verification
+D-V2): both ceiling arguments are functions of ONE half-space, so a refusal
+judges that half-space's returned channel set, not the cascade -- a stack that
+scatters nothing is refused on 90 of 180 lossy half-space rows while closing
+`R + T` to 4e-14, 60 of them only because the ceiling is now armed on an
+absorbing half-space, and about 130 lossy half-space rows that 5.45.0 returned
+now refuse (boundary near `Rbig` = 2 wavelengths).  The nodal basis is the
+LEGACY path (`build_layer(..., basis='nodal')`); `basis='staggered'` is the
+production basis and is untouched.  The energy screen is disarmed by an
+absorbing INCIDENCE medium but not by an absorbing EXIT medium (inherited).
+`_CUTOFF_ENERGY_FLOOR_MULT` = 100 is a READING with 1.09x headroom on an
+independent near-cutoff fixture; the bar it scopes keeps 21x.
+
 ### Fixed -- EME: an exact-zero branch pin gave a PROPAGATING strip mode its own BACKWARD partner, and the layer mode COUNT differed between Windows and WSL
 
 `eme_2d._ky_forward` and `eme_diffraction.mode_match` chose the forward
@@ -559,6 +581,19 @@ identically over a width ladder".  Over a 9-rung ladder from `1e-9` to `1e-5` of
 `Rbig` the three positions disagreed at **4 rungs** -- three of them the
 non-finite reading, one the edge -- identically on both builds.  After round 3:
 **0 of 9**, and the shipped gate asserts the ladder rather than two rungs.
+
+**Round 3 verified 2026-09-12**: GAP 3's non-finite-ratio change is confirmed
+on 8 arms (every non-finite ratio reads `warn_own`, none `ok`), and its cost is
+RESTATED: it also reaches the REFUSE arm -- a manufactured union sliver on a
+blown-up spectrum was RETURNED by 5.45.0 and raises `BORSemMeshError` now, i.e.
+a returned answer where the contract had to refuse, not only a missing warning.
+GAP 4's deadband closes the case it measured and OPENS the mirror case (D-V1,
+P3, open): the deadband is 16 ULP of the bar, but the mesh's reproduction error
+of a requested width is sized by `Rbig / w` and reaches 156,767 ULP, so at
+`Rbig` = 12.5 the axis reads `warn_own` and the interior/outer positions read
+`ok` on all 8 arms (5.45.0 read `ok` on all three).  Remedy recorded: size the
+deadband from `np.spacing(r_wall) / w`; pinned by a strict xfail in
+`tests/unit/test_verify_bor_guards_round3.py`.
 
 ### Fixed -- BOR: every cascade inverse gains a census HOOK, and nothing is armed, because the population was measured
 
