@@ -15,7 +15,7 @@ on:
 
 jobs:
   unit:
-    name: Unit tests (Python ${{ matrix.python-version }}, shard ${{ matrix.shard }}/4)
+    name: Unit tests (Python ${{ matrix.python-version }}, shard ${{ matrix.shard }}/5)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -34,7 +34,10 @@ jobs:
         # second cap hit in three matrices after ~200 tests joined the gate.
         # Sharding (not a cap raise) is the documented remedy (see the jax-unit
         # job note); 4 shards put the expected wall at ~27-34 min.
-        shard: [1, 2, 3, 4]
+        # v5.45.1 (2026-09-11): 4 -> 5.  On the 5.45.0 matrix the heaviest
+        # fast shard ran 2442 s against the 2700 s step cap (10 % headroom) and
+        # 5.45.1 adds ~70 BOR/EME gates.  Kept in sync with --splits below.
+        shard: [1, 2, 3, 4, 5]
     # v5.24.3: 25 -> 35.  The fast gate is now duration-BALANCED (complete
     # .test_durations regenerated to cover ALL fast files incl. test_fga's ~7min
     # -- previously the file only held the slow/eig timings, so the fast tests
@@ -107,7 +110,7 @@ jobs:
           grep -m1 'model name' /proc/cpuinfo || true; nproc || true
           python -c "import threadpoolctl; print(threadpoolctl.threadpool_info())" 2>/dev/null || echo 'threadpoolctl absent'
 
-      - name: Run unit tests (shard ${{ matrix.shard }}/4)
+      - name: Run unit tests (shard ${{ matrix.shard }}/5)
         # ``-p no:cacheprovider`` avoids writing the pytest cache to the readonly
         # CI filesystem layout.  Output tee'd to a file so the artifact upload
         # (next step) has something to surface on failure.
@@ -140,7 +143,7 @@ jobs:
         run: |
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
             -p no:cacheprovider --maxfail=50 -v \
-            --splits 4 --group ${{ matrix.shard }} \
+            --splits 5 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --durations-path .test_durations 2>&1 \
             | tee unit_test_output.txt
