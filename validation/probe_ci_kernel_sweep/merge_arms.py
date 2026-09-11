@@ -19,6 +19,15 @@ an ERROR here for exactly that reason.
 ``tN`` is the thread width, ``tauto`` meaning the caps were left unset -- the
 configuration CI's fast lane runs.  Both axes belong in the table; see
 ``tests/unit/test_ci_kernel_consistency.py`` for why.
+
+SYNTHETIC ARMS (2026-09-11).  An arm JSON may carry ``"synthetic": true`` and
+a ``"provenance"`` string.  That is an arm nobody can run here -- today, the
+CI runner, transcribed from the 5.45.0 matrix logs -- and it is carried
+because it is the ONLY evidence of the one machine whose arithmetic solves
+these fixtures correctly.  It is marked so that no reader mistakes a
+transcription for a measurement, and the consistency gate exempts it from the
+"every arm answered every row" check, because a transcription covers only the
+rows the logs printed.
 """
 from __future__ import annotations
 
@@ -40,7 +49,13 @@ def main(argv=None):
         "_what": "CI kernel sweep census -- one arm per (build, OpenBLAS "
                  "kernel), thread caps pinned to 1.  See "
                  "docs/audits/CI_KERNEL_SWEEP_2026_09_11.md.",
-        "_decisions": "library guard OUTCOMES; every arm must agree.",
+        "_decisions": "library guard OUTCOMES.  Arms must agree where the "
+                      "ANSWER CLASS agrees; a row whose class differs is the "
+                      "guard following the answer and is reported, not "
+                      "failed.  See probe_decisions.py, THE CONTRACT.",
+        "_classes": "the answer class each guard row is deciding about -- "
+                    "correct / grey / wrong by the campaign's own closure "
+                    "rule -- measured WITH THE GUARD DISARMED.",
         "_hypothetical": "verdicts of bars the library does NOT ship, at "
                          "sites it deliberately leaves unguarded; recorded to "
                          "be shown NON-unanimous.",
@@ -48,6 +63,7 @@ def main(argv=None):
         "generated": _dt.date.today().isoformat(),
         "arms": {},
         "decisions": {},
+        "classes": {},
         "hypothetical": {},
         "readings": {},
     }
@@ -63,6 +79,10 @@ def main(argv=None):
             return 2
         out["arms"][arm] = {
             "source": os.path.basename(p),
+            "synthetic": bool(d.get("synthetic", False)),
+            "provenance": d.get("provenance", "measured by probe_decisions.py "
+                                "on this machine"),
+            "provenance_detail": d.get("provenance_detail", {}),
             "build": d["build"],
             "kernel": d["kernel"],
             "thread_arm": d.get("thread_arm", "t1"),
@@ -74,7 +94,10 @@ def main(argv=None):
             "scipy": d["scipy"],
             "threads": d["threads"],
         }
+        if out["arms"][arm]["synthetic"]:
+            print("  (synthetic arm %r: %s)" % (arm, d.get("provenance", "")))
         out["decisions"][arm] = d["decisions"]
+        out["classes"][arm] = d.get("classes", {})
         out["hypothetical"][arm] = d.get("hypothetical", {})
         out["readings"][arm] = d["readings"]
 

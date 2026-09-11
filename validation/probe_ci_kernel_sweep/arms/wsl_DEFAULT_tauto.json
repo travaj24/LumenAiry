@@ -1,8 +1,18 @@
 {
- "arm": "WSL-Katmai-t1",
- "blas_threads": 1,
+ "arm": "WSL-Haswell-tauto",
+ "blas_threads": 24,
  "build": "WSL",
- "coretype_requested": "PRESCOTT",
+ "classes": {
+  "pmm1d_interface/answer@1e-04": "correct",
+  "pmm1d_interface/answer@1e-05": "wrong",
+  "pmm1d_interface/returns@1e-04": "correct",
+  "pmm1d_interface/returns@1e-05": "wrong",
+  "pmm1d_interface/warned@1e-04": "correct",
+  "pmm1d_interface/warned@1e-05": "wrong",
+  "sliver/pmm1d@1e-04": "correct",
+  "sliver/pmm1d@1e-05": "wrong"
+ },
+ "coretype_requested": "",
  "decisions": {
   "band/1.2e-03": "warn",
   "band/2.0e-02": "warn",
@@ -61,11 +71,11 @@
  },
  "hypothetical": {
   "pmm1d_interface/bar_1e-12_would@1e-04": "accept",
-  "pmm1d_interface/bar_1e-12_would@1e-05": "accept",
+  "pmm1d_interface/bar_1e-12_would@1e-05": "refuse",
   "pmm1d_interface/rcond_decade@1e-04": "1e-11",
-  "pmm1d_interface/rcond_decade@1e-05": "1e-12"
+  "pmm1d_interface/rcond_decade@1e-05": "1e-13"
  },
- "kernel": "Katmai",
+ "kernel": "Haswell",
  "numpy": "2.4.6",
  "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
  "python": "3.12.3",
@@ -79,27 +89,27 @@
   "branch_cut/lossless_propagating/min_ratio": 2.8262402467562398e-18,
   "branch_cut/lossy/max_ratio": 0.009998500387383162,
   "branch_cut/lossy/min_ratio": 0.004999250193691581,
-  "mortar/pattern@M4/worst_rcond": 1.9190112916143167e-11,
-  "mortar/pattern@M4/worst_resid": 9.447282538412266e-15,
-  "mortar/slant_both@M4/worst_rcond": 0.00010383703077368334,
-  "mortar/slant_both@M4/worst_resid": 6.540287737147253e-15,
-  "mortar/spacer@M5/worst_rcond": 4.381833299780851e-14,
-  "mortar/spacer@M5/worst_resid": 3.301000341710273e-14,
-  "pmm1d_interface/R+T@1e-04": 1.000000135522677,
-  "pmm1d_interface/R+T@1e-05": 2.1713155727368934,
-  "pmm1d_interface/rcond@1e-04": 9.693991669376072e-11,
-  "pmm1d_interface/rcond@1e-05": 1.0537743860295542e-12,
-  "sliver/R+T@1e-04": 1.000000135522677,
+  "mortar/pattern@M4/worst_rcond": 1.919011291618939e-11,
+  "mortar/pattern@M4/worst_resid": 7.352545480113977e-15,
+  "mortar/slant_both@M4/worst_rcond": 0.00010383703077369078,
+  "mortar/slant_both@M4/worst_resid": 6.928107264337549e-15,
+  "mortar/spacer@M5/worst_rcond": 4.3644245944935234e-14,
+  "mortar/spacer@M5/worst_resid": 2.6912875659647883e-14,
+  "pmm1d_interface/R+T@1e-04": 0.9999998748939813,
+  "pmm1d_interface/R+T@1e-05": 2.1728466466919945,
+  "pmm1d_interface/rcond@1e-04": 9.696854913500438e-11,
+  "pmm1d_interface/rcond@1e-05": 9.730884764326217e-13,
+  "sliver/R+T@1e-04": 0.9999998748939813,
   "sliver/msg@1e-05": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union gri",
-  "t22/pattern@M4/worst_rcond_eq": 0.00229810161035786,
-  "t22/slant_both@M4/worst_rcond_eq": 0.0030385655579129736,
-  "t22/spacer@M5/worst_rcond_eq": 0.003949087953458145
+  "t22/pattern@M4/worst_rcond_eq": 0.002325544071800011,
+  "t22/slant_both@M4/worst_rcond_eq": 0.0030762922171143495,
+  "t22/spacer@M5/worst_rcond_eq": 0.004393899185964937
  },
  "scipy": "1.17.1",
- "thread_arm": "t1",
+ "thread_arm": "tauto",
  "threads": {
-  "MKL_NUM_THREADS": "1",
-  "OMP_NUM_THREADS": "1",
-  "OPENBLAS_NUM_THREADS": "1"
+  "MKL_NUM_THREADS": "",
+  "OMP_NUM_THREADS": "",
+  "OPENBLAS_NUM_THREADS": ""
  }
 }

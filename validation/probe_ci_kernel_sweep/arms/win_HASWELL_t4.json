@@ -2,7 +2,17 @@
  "arm": "WIN-Haswell-t4",
  "blas_threads": 4,
  "build": "WIN",
- "coretype_requested": "",
+ "classes": {
+  "pmm1d_interface/answer@1e-04": "correct",
+  "pmm1d_interface/answer@1e-05": "wrong",
+  "pmm1d_interface/returns@1e-04": "correct",
+  "pmm1d_interface/returns@1e-05": "wrong",
+  "pmm1d_interface/warned@1e-04": "correct",
+  "pmm1d_interface/warned@1e-05": "wrong",
+  "sliver/pmm1d@1e-04": "correct",
+  "sliver/pmm1d@1e-05": "wrong"
+ },
+ "coretype_requested": "HASWELL",
  "decisions": {
   "band/1.2e-03": "warn",
   "band/2.0e-02": "warn",

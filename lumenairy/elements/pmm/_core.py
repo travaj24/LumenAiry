@@ -5084,9 +5084,17 @@ def _guarded_solve(A, B, site, hint=None):
 #: WHAT IT COSTS: NOTHING.  ``scipy.linalg.lu_factor`` + ``lu_solve`` is the
 #: same LAPACK ``getrf`` + ``getrs`` pair ``np.linalg.solve``'s ``gesv`` calls,
 #: and it was MEASURED BIT-IDENTICAL to ``np.linalg.solve`` on all 106 mortar
-#: solves plus five synthetic shapes; ``gecon`` is then O(n^2) on the factors
-#: that already exist (measured 0.96x the wall time of ``np.linalg.solve`` on a
-#: 450x450 complex pair).
+#: solves plus five synthetic shapes -- ON THE BUILDS MEASURED.  CORRECTED
+#: 2026-09-11: that identity holds only where numpy and scipy resolve to ONE
+#: LAPACK, which is a property of the wheel pairing and not of this code (the
+#: local builds link numpy against scipy-openblas 0.3.31.188.0 and scipy
+#: against 0.3.30, and the 5.45.0 CI matrix read two answers for one
+#: well-conditioned operand on the py3.13 runner wheel).  The portable
+#: statement is that the SCREEN moves nothing -- the guarded answer is
+#: bit-for-bit its own unguarded ``lu_factor`` + ``lu_solve`` -- and that the
+#: answer is a valid solve inside the conditioning bar.  ``gecon`` is then
+#: O(n^2) on the factors that already exist (measured 0.96x the wall time of
+#: ``np.linalg.solve`` on a 450x450 complex pair).
 #:
 #: THE BAR, with both gaps measured over the same 106 solves.  ``rcond`` on the
 #: HEALTHY population -- every grid pair the shipped fixtures build (the
@@ -5322,10 +5330,25 @@ def _guarded_mortar_solve(A, B, site, ga=None, gb=None, hint=None,
     """``inv(A) @ B`` for a 2-D per-layer MORTAR interface, with a FREE
     screen and a named refusal (round-2 D2, round-3 V1).
 
-    The answer returned is BIT-IDENTICAL to ``np.linalg.solve(A, B)`` --
-    ``lu_factor`` + ``lu_solve`` is the same ``getrf`` + ``getrs`` pair, and
-    that is measured, not assumed (see :data:`_MORTAR_RCOND_REFUSE`).  The
-    ``gecon`` estimate rides the factors that already exist.
+    The answer returned is BIT-IDENTICAL to ``np.linalg.solve(A, B)``
+    WHEREVER NUMPY AND SCIPY SHARE ONE LAPACK, and everywhere else it is a
+    valid solve of the same system inside the conditioning bar
+    (``cond(A) * eps`` times a documented constant, with a relative residual
+    of a few ``n * eps``).  ``lu_factor`` + ``lu_solve`` is the same ``getrf``
+    + ``getrs`` pair ``gesv`` calls -- but *which* ``getrf`` is a property of
+    the wheel pairing, not of this code: MEASURED 2026-09-11, numpy ships
+    ``scipy-openblas 0.3.31.188.0`` (USE64BITINT) while scipy ships
+    ``scipy-openblas 0.3.30``, two distinct shared libraries in one process,
+    on both local builds; and the 5.45.0 release matrix read two different
+    answers for one well-conditioned mortar operand on the py3.13 runner
+    wheel alone.  What this function does guarantee, on every arm, is that
+    the SCREEN moves nothing: the returned answer is bit-for-bit the answer
+    its own ``lu_factor`` + ``lu_solve`` returns unguarded.  Gated by
+    ``tests/unit/test_fix_pmm2d_mortar_round2.py::
+    test_the_guarded_mortar_solve_returns_the_numpy_solve_bit_for_bit``; see
+    also :data:`_MORTAR_RCOND_REFUSE` and
+    ``docs/audits/CI_PREMISE_GATES_2026_09_11.md``.  The ``gecon`` estimate
+    rides the factors that already exist.
 
     ``screen`` names WHICH quantity takes the refusal decision, and the two
     are not interchangeable -- each has a two-sided gap only on its own site:
@@ -5699,9 +5722,11 @@ def _interface_smatrix_mortar_2d(Wa, Va, Wb, Vb, ga, gb, cr, kron_apply):
     ordering inverts.  On a mortared sliver ``MassE_B W_B`` reaches ``cond_2``
     5.5e+07 at a 1e-03 wall separation and raises a bare ``LinAlgError`` at
     1e-07, while ``I + BA``'s guarded ``rcond`` still reads 2.5e-07.  Both now
-    go through :func:`_guarded_mortar_solve`, which is BIT-IDENTICAL to
-    ``np.linalg.solve`` (same LAPACK pair, measured on 106 solves) and screens
-    on the ``gecon`` estimate the factors already carry."""
+    go through :func:`_guarded_mortar_solve`, which runs the same LAPACK
+    ``getrf``/``getrs`` pair (bit-identical to ``np.linalg.solve`` wherever
+    numpy and scipy share one LAPACK -- see that function's docstring -- and a
+    valid solve inside the conditioning bar everywhere) and screens on the
+    ``gecon`` estimate the factors already carry."""
     lhsE = _stag_blk2_apply(gb.V1, gb.V2, Wb, gb.qq, kron_apply)
     rhsE = _stag_blk2_apply(cr.C1H(), cr.C2H(), Wa, ga.qq, kron_apply)
     A = _guarded_mortar_solve(

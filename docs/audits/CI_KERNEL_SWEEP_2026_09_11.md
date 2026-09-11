@@ -1,5 +1,15 @@
 # CI KERNEL SWEEP -- 2026-09-11
 
+> **SUPERSEDED IN PART, same day -- see
+> `docs/audits/CI_PREMISE_GATES_2026_09_11.md`.**  This sweep's census asserted
+> that every arm takes the same guard OUTCOME.  A later matrix pass showed that
+> to be the wrong invariant: the CI runner arm SOLVES the ill-conditioned
+> fixtures of this campaign CORRECTLY where all ten arms censused below solve
+> them wrong, so the guards correctly take different outcomes there.  The
+> census now records the ANSWER CLASS beside each decision and asserts RULE
+> conformance instead; the kernel-ladder measurements below, including the ZEN
+> and SKYLAKEX findings, are unchanged and still stand.
+
 Preventive sweep of the fast unit gate for **kernel-dependent decisions**,
 prompted by the RED release-CI matrix on `main` `59105d6` (the 5.45.0 release
 commit; not tagged).  Working tree: `fix/ci-kernel-sweep` off `59105d6`.

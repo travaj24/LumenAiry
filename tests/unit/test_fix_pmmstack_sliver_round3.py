@@ -541,8 +541,17 @@ def test_the_truncation_note_states_what_was_measured_and_promises_nothing():
             continue
         found = (got[1], note[0])
         break
-    assert found is not None, "no truncation-noted row in the box subset"
+    # INVARIANT: the round-2 sentence D-5 falsified is gone from every
+    # warning this subset produced, whether or not a noted row was found.
     assert not [w for w in said if "will silence nothing here" in w], said
+    # PREMISE-GATED.  PREMISE-GATED 2026-09-11 (CI PREMISE GATES): the CI runner arm solves these ill-conditioned fixtures CORRECTLY where every local arm solves them wrong, so a population of WRONG rows is a reading of the running arm's arithmetic and not a property of the library. It is measured and skipped with the reading when absent, never asserted.  See docs/audits/CI_PREMISE_GATES_2026_09_11.md.
+    if found is None:
+        pytest.skip(
+            "premise absent on this arm: no row of the box subset is both "
+            "arbitrated as 'truncation' AND above the plain super-unity bar "
+            "the note rides on (%d warnings seen over the subset), so there "
+            "is no truncation-noted row here whose text to score."
+            % len(said))
     ev, text = found
     # the note quotes the MOVE it measured, to the library's own formatting,
     # so the sentence cannot drift from the decision

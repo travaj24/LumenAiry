@@ -1730,6 +1730,51 @@ oversubscription while passing when re-run alone -- on Katmai, the very kernel
 the gate flagged, and failing instead on Nehalem.  Widening a speed bar to
 survive a self-inflicted load is the move the standards forbid.
 
+**PREMISE GATES, and the CI-arm finding behind them (2026-09-11).**  A second
+matrix pass then went red on twelve tests across six families, and the twelve
+turned out to be one fact seen twelve times: **on the CI runner the
+ill-conditioned solves that read WRONG on every local kernel, thread width and
+build come out CORRECT** -- the plain 1-D interface at a 1e-05 wall separation
+reads `R+T` = 1.0000010472 there against 1.17--3.62 here, all three anisotropic
+slivers come out `right`, the engineered M1 X-1 pre-fix arm reproduces 0.267x
+and 0.677x of the converged value instead of 152x, and the branch-cut
+spacer-detune pre-fix ladder is as flat as the repaired one (5.551e-15 against
+3.331e-15).  The guards then take different decisions there, which is what a
+guard that refuses wrong answers and returns correct ones is supposed to do.
+So every assertion in those families whose premise is a *numerical reading of a
+pathology* -- "the pre-fix arm reproduces X", "this fixture is wrong on this
+build", "the hazard band contains this row", "there is a super-unity here",
+"bit-identical to `np.linalg.solve`" -- is now split: the library-facing half
+(the repaired path agrees with the sliver-free / analytic / converged
+reference within its derived bar; a refused row was measured wrong; a warned
+row is in the band by geometry; the screen reaches the path; the switch moves
+no bit) stays UNCONDITIONAL on every arm, while the pathology's reproduction is
+MEASURED on the running arm first and `pytest.skip`s with the reading when it
+is absent.  No bar is relaxed, no fail-before arm is deleted, and no premise is
+asserted -- a skip carrying "premise absent on this arm: pre-fix closure
+5.55e-15, no error to withdraw" is a measurement in the matrix summary, where a
+false assertion is a red shard.  The census itself moves from OUTCOME equality
+to RULE conformance: `probe_decisions.py` now records the ANSWER CLASS each
+decision is about (measured with the guard DISARMED), asserts per arm that the
+decision is what the rule permits for that class, and across arms compares only
+rows taken at the same class -- a row whose class differs is REPORTED, because
+that is the guard following the answer.  A transcribed CI arm is carried in the
+census, marked `"synthetic"` with per-key provenance, and a new test pins the
+divergence so the gates cannot start skipping for a stale reason.  One library
+edit, comments only: `_guarded_mortar_solve`'s docstring no longer promises
+bit-identity to `np.linalg.solve` unconditionally -- numpy ships
+`scipy-openblas 0.3.31.188.0` and scipy ships `0.3.30`, two distinct LAPACK
+builds in one process on both local builds, and the py3.13 CI wheel read two
+different byte sequences for one well-conditioned mortar solve.  What is
+asserted instead is portable and stronger where it matters: the guarded answer
+is bit-for-bit its own unguarded `lu_factor`/`lu_solve`, its relative residual
+is under `16 n eps`, and it agrees with numpy's answer within
+`64 cond(A) eps max|x|`.  Full evidence, the twelve tests and their new shapes,
+the local ladder and the skips to expect on CI:
+`docs/audits/CI_PREMISE_GATES_2026_09_11.md`.  WHY the CI arm's arithmetic
+differs is OPEN -- the BLAS micro-kernel, the thread width, the numpy version
+and the OS are each ruled out by measurement in that document.
+
 ### Deprecation horizon
 
 * `NEXT_REMOVAL_VERSION` slipped `5.46` -> `5.48` (fifth proactive one-line

@@ -2,6 +2,16 @@
  "arm": "WIN-Nehalem-t1",
  "blas_threads": 1,
  "build": "WIN",
+ "classes": {
+  "pmm1d_interface/answer@1e-04": "correct",
+  "pmm1d_interface/answer@1e-05": "wrong",
+  "pmm1d_interface/returns@1e-04": "correct",
+  "pmm1d_interface/returns@1e-05": "wrong",
+  "pmm1d_interface/warned@1e-04": "correct",
+  "pmm1d_interface/warned@1e-05": "wrong",
+  "sliver/pmm1d@1e-04": "correct",
+  "sliver/pmm1d@1e-05": "wrong"
+ },
  "coretype_requested": "NEHALEM",
  "decisions": {
   "band/1.2e-03": "warn",

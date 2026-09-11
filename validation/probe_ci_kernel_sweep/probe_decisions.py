@@ -65,9 +65,35 @@ WHAT IS RECORDED.  Two blocks per arm:
                     the consistency gate asserts they stay that way rather
                     than asserting they agree.  Promoting one of these to a
                     real guard is exactly the mistake the audit forbids.
+  ``classes``       the ANSWER CLASS each guard row is deciding about, as
+                    measured WITH THE GUARD DISARMED: ``correct`` / ``grey`` /
+                    ``wrong`` by the campaign's own closure rule.  Added
+                    2026-09-11 -- see THE CONTRACT below.
   ``readings``      the underlying floats, for the audit document only.  They
                     are NOT asserted anywhere; they move with the kernel by
                     design and that is the whole point.
+
+THE CONTRACT, CORRECTED 2026-09-11 (CI PREMISE GATES).  The first version of
+this census asserted that every arm takes the same OUTCOME on every row.  That
+is the wrong invariant, and the 5.45.0 CI matrix proved it: the runner arm
+(ubuntu, AMD EPYC 7763, unpinned BLAS, pip wheels of numpy 2.4.6 / scipy
+1.17.1) solves the ill-conditioned 1-D interface fixture CORRECTLY at a 1e-05
+wall separation where every local arm -- four OpenBLAS kernels x one and four
+threads x two builds -- solves it wrong.  The guards then, CORRECTLY, took
+different outcomes there: ``closes`` where the census said ``open``, ``silent``
+where it said ``warn``, ``return`` where it said ``refuse``.  A guard whose
+job is to refuse wrong answers and return correct ones MUST follow the answer;
+demanding outcome equality across arms demands that the guard ignore it.
+
+So the census now records, beside every decision, the ANSWER CLASS that
+decision is about, and the contract is RULE conformance:
+
+  * per arm -- the decision is what :data:`_RULES` says that class permits;
+  * across arms -- rows with the SAME class must take the SAME decision.  A
+    row whose CLASS differs between arms is REPORTED, not failed: that is the
+    guard following the answer.  A row whose decision differs while the class
+    does NOT, or which has no class at all (the kernel-independent sections),
+    is still a P1.
 
 Every fixture below is cheap (the whole probe is a few seconds) so the
 consistency gate can re-run it on the current arm inside its 30 s budget.
@@ -156,6 +182,88 @@ def _decade(x):
     return "1e%+03d" % math.floor(math.log10(x))
 
 
+#: The closure bars that turn a solve into an ANSWER CLASS.  They are placed
+#: by the GAP between the two populations this fixture produces, not by one
+#: build's residual: the CORRECT rows read |R+T - 1| = 1.02e-08 (WIN Haswell)
+#: up to 3.66e-07 (the CI runner), and the WRONG rows read 1.17 (Katmai) up to
+#: 3.6.  1e-05 therefore leaves 27x of slack above the worst correct reading
+#: and 1e-02 leaves 117x below the best wrong one, with five decades of empty
+#: band between them that nothing in this fixture has ever landed in.
+#: ``grey`` exists so that a future arm landing in the band is reported rather
+#: than forced into a class it does not belong to.
+_CLASS_CORRECT = 1.0e-5
+_CLASS_WRONG = 1.0e-2
+
+
+def _answer_class(tot):
+    """``correct`` / ``grey`` / ``wrong`` from a lossless closure reading.
+
+    Measured with the guard DISARMED, so it is a property of the ARITHMETIC
+    and not of the decision the guard then takes on it.
+    """
+    d = abs(float(tot) - 1.0)
+    if not math.isfinite(d):
+        return "wrong"
+    if d < _CLASS_CORRECT:
+        return "correct"
+    if d > _CLASS_WRONG:
+        return "wrong"
+    return "grey"
+
+
+#: THE RULE each answer-following guard row must obey, keyed by decision-key
+#: PREFIX and read as ``class -> the decisions that class permits``.
+#:
+#: These are the pairings the sliver and energy gates assert everywhere else
+#: in the suite ("a WRONG row is never returned in silence; a CORRECT row is
+#: never refused"), written once, in the one place that compares arms.  A
+#: ``grey`` row permits everything the two sides do, because the grey band is
+#: by construction the band where the campaign declines to classify.
+_RULES = {
+    # what the UNGUARDED site answers.  This row IS the class, restated as a
+    # decision so a reader of the table can see the two side by side.
+    "pmm1d_interface/answer@": {
+        "correct": ("closes",),
+        "grey": ("open",),
+        "wrong": ("open",),
+    },
+    # whether anything was said.  The 1-D site shipped UNGUARDED, so the only
+    # voice here is the stack's own energy tripwire: silent on a correct
+    # answer, loud on a wrong one.
+    "pmm1d_interface/warned@": {
+        "correct": ("silent",),
+        "grey": ("silent", "warn"),
+        "wrong": ("warn",),
+    },
+    # the site RETURNS whatever it computed, on every class.  Unguarded is a
+    # property of the code, not of the answer.
+    "pmm1d_interface/returns@": {
+        "correct": ("return",),
+        "grey": ("return",),
+        "wrong": ("return",),
+    },
+    # the 1-D SLIVER guard: it must never refuse a correct answer, and must
+    # never return a wrong one in silence.  Which of WARN and REFUSE it picks
+    # on a wrong row is the arbiter's business and not this census's.
+    "sliver/pmm1d@": {
+        "correct": ("return", "warn"),
+        "grey": ("return", "warn", "refuse"),
+        "wrong": ("warn", "refuse"),
+    },
+}
+
+
+def rule_for(key):
+    """The ``class -> permitted decisions`` table for a decision key, or
+    ``None`` when the key is not an answer-following guard row (the band,
+    branch-cut, mortar and T22 sections, which decide on geometry or on a
+    fixed spectrum and are compared across arms for plain equality)."""
+    for prefix, table in _RULES.items():
+        if key.startswith(prefix):
+            return table
+    return None
+
+
 # ======================================================================
 # A -- the plain 1-D ``_interface_smatrix`` site (the mortar round-2
 #      rationale test's subject)
@@ -180,7 +288,7 @@ def _pmm1d_two_layer(delta):
     return st
 
 
-def _interface_site_population(dec, hyp, rea):
+def _interface_site_population(dec, hyp, rea, cls=None):
     """The ``_interface_smatrix`` rcond population, WITH THE SLIVER GUARD
     DISARMED.
 
@@ -205,6 +313,8 @@ def _interface_site_population(dec, hyp, rea):
 
     _st1d._interface_smatrix = _patched
     _st1d.PMM_SLIVER_GUARD = False
+    if cls is None:
+        cls = {}
     try:
         for delta in (1e-4, 1e-5):
             seen.clear()
@@ -223,6 +333,17 @@ def _interface_site_population(dec, hyp, rea):
             dec["pmm1d_interface/warned@%s" % tag] = (
                 "warn" if len(w) else "silent")
             dec["pmm1d_interface/returns@%s" % tag] = "return"
+            # the ANSWER CLASS this row's guards are deciding about, taken
+            # here because here is where the guard is DISARMED.  The sliver
+            # section (B) runs the same fixture with the guard ARMED and may
+            # get no reading at all (it can refuse), so its class is the one
+            # measured here.
+            klass = _answer_class(tot)
+            for k in ("pmm1d_interface/answer@%s" % tag,
+                      "pmm1d_interface/warned@%s" % tag,
+                      "pmm1d_interface/returns@%s" % tag,
+                      "sliver/pmm1d@%s" % tag):
+                cls[k] = klass
             # HYPOTHETICAL, not shipped: what a 1e-12 rcond bar -- the value
             # the 2-D IN-PLANE mortar sites use -- would decide here.  It is
             # in the ``hypothetical`` block precisely because its verdict is
@@ -238,7 +359,7 @@ def _interface_site_population(dec, hyp, rea):
 # ======================================================================
 # B -- the 1-D SLIVER guard's refusal (NOT owned here: handed off)
 # ======================================================================
-def _sliver_decisions(dec, rea):
+def _sliver_decisions(dec, rea, cls=None):
     for delta in (1e-4, 1e-5):
         tag = "%.0e" % delta
         try:
@@ -468,9 +589,9 @@ def main(argv=None):
     ap.add_argument("--out", default=None, help="write the arm JSON here")
     args = ap.parse_args(argv)
 
-    dec, hyp, rea = {}, {}, {}
-    _interface_site_population(dec, hyp, rea)
-    _sliver_decisions(dec, rea)
+    dec, hyp, rea, cls = {}, {}, {}, {}
+    _interface_site_population(dec, hyp, rea, cls)
+    _sliver_decisions(dec, rea, cls)
     _mortar_decisions(dec, rea)
     _band_decisions(dec, rea)
     _t22_decisions(dec, rea)
@@ -492,6 +613,7 @@ def main(argv=None):
                     for v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
                               "MKL_NUM_THREADS")},
         "decisions": dec,
+        "classes": cls,
         "hypothetical": hyp,
         "readings": rea,
     }

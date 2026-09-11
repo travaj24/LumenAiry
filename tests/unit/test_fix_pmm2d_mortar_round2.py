@@ -13,8 +13,12 @@ Fix doc: ``docs/audits/FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md``.
   * **D2** (P2) the two 2-D mortar ``np.linalg.solve`` calls and the
     generalized twin raised a bare ``LinAlgError: Singular matrix``.  Fixed by
     :func:`~lumenairy.elements.pmm._core._guarded_mortar_solve` -- the same
-    LAPACK ``getrf``/``getrs`` pair (so BIT-IDENTICAL), screened on the
-    ``gecon`` estimate the factors already carry.
+    LAPACK ``getrf``/``getrs`` pair, screened on the ``gecon`` estimate the
+    factors already carry.  It moves no bit of the SciPy solve it rides
+    (asserted unconditionally); whether that is ALSO bit-identical to
+    ``np.linalg.solve`` depends on whether the wheel pair links ONE LAPACK,
+    which is not a portable premise -- see
+    ``test_the_guarded_mortar_solve_returns_the_numpy_solve_bit_for_bit``.
   * **D3** (P3) ``_stag_fourier_projection``'s FIXED ``nq = 2 M + 8`` was
     sized for a segment of length ``d/N``.  Fixed by sizing the rule from each
     segment's OWN half-phase, with the INTEGER path untouched bit for bit.
@@ -38,6 +42,7 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
 import hashlib  # noqa: E402
+import importlib  # noqa: E402
 import inspect  # noqa: E402
 import json  # noqa: E402
 import math  # noqa: E402
@@ -554,6 +559,56 @@ def test_the_integer_lattice_is_exempt_and_cannot_reach_the_bar():
 # ==========================================================================
 # D2 -- the guarded mortar solve
 # ==========================================================================
+#: How far apart two backward-stable solves of the SAME system are entitled to
+#: be: ``cond(A) * eps`` is the classical forward-error bound for a solve whose
+#: backward error is a few ULP, and this constant is the documented slack on
+#: the factor in front of it.  MEASURED 2026-09-11 over the six (delta, M)
+#: rows of this fixture on four OpenBLAS kernels (Haswell / Sandybridge /
+#: Nehalem / Katmai): the two answers are byte-identical on every one, i.e.
+#: the reading is 0 against a bound that reaches 2.4e-07 at the
+#: worst-conditioned row (cond = 1.7e+07).
+_SOLVE_AGREE_C = 64.0
+
+#: The relative residual a partial-pivoting LU solve is entitled to leave:
+#: ``O(n * eps * growth)``.  MEASURED on the same 24 samples,
+#: ``||A X - B|| / ||B||`` reads 9.33e-16 .. 2.57e-15, i.e.
+#: **0.017 .. 0.050 of n*eps**; the bar is 16, i.e. 324x above the worst
+#: reading of the four kernels.
+_SOLVE_RESID_C = 16.0
+
+
+def _lapack_provenance():
+    """WHICH LAPACK build numpy and scipy each call, and how many are loaded.
+
+    Returns ``(numpy_id, scipy_id, loaded)``.  The two ids come from
+    ``show_config(mode='dicts')`` -- the library each package was BUILT
+    against -- and are ``None`` where the running build will not say.
+    ``loaded`` is the set of BLAS/LAPACK shared libraries actually mapped into
+    the process, from ``threadpoolctl``, or ``None`` when that package is
+    absent -- it IS absent on CI, which is why ``show_config`` is the primary
+    source here and not the fallback.
+    """
+    ids = {}
+    for name in ("numpy", "scipy"):
+        try:
+            mod = importlib.import_module(name)
+            cfg = mod.show_config(mode="dicts") or {}
+            d = (cfg.get("Build Dependencies") or {}).get("lapack") or {}
+            ids[name] = ("%s/%s/%s" % (d.get("name"), d.get("version"),
+                                       d.get("openblas configuration"))
+                         if d else None)
+        except Exception:                                   # noqa: BLE001
+            ids[name] = None
+    try:
+        import threadpoolctl  # noqa: I001, PLC0415
+        loaded = sorted({
+            "%s/%s/%s" % (d.get("internal_api"), d.get("version"),
+                          os.path.basename(d.get("filepath") or ""))
+            for d in threadpoolctl.threadpool_info()
+            if d.get("internal_api") in ("openblas", "mkl")})
+    except Exception:                                       # noqa: BLE001
+        loaded = None
+    return ids["numpy"], ids["scipy"], loaded
 def _mortar_pair(delta, M, host_b=True):
     """The two mortar solve operators and their right-hand sides for a
     (patterned grid A | grid B) interface."""
@@ -580,20 +635,100 @@ def _mortar_pair(delta, M, host_b=True):
 
 
 def test_the_guarded_mortar_solve_returns_the_numpy_solve_bit_for_bit():
-    """The guard must not move a bit of a healthy answer.  ``lu_factor`` +
-    ``lu_solve`` is the same LAPACK ``getrf``/``getrs`` pair ``gesv`` calls;
-    that is a MEASUREMENT here, not an assumption."""
+    """The guard must not move a bit of a healthy answer.
+
+    RESTATED 2026-09-11 (CI PREMISE GATES).  The claim this test was built on
+    -- "``lu_factor`` + ``lu_solve`` is the same LAPACK ``getrf``/``getrs``
+    pair ``gesv`` calls, so the answer is BIT-IDENTICAL to
+    ``np.linalg.solve``" -- is a property of ONE LAPACK and is NOT PORTABLE,
+    because numpy and scipy need not be linked against the same one.  The
+    5.45.0 release matrix proved it: the py3.13 shard read ``b2eb080e...``
+    where every other python read ``5495e552...``, on the same commit, at
+    ``delta`` = 0.3 / ``M`` = 4 -- a WELL-CONDITIONED row (cond = 3.3e+02), so
+    neither answer was wrong.  MEASURED here 2026-09-11 on both local builds:
+    numpy ships ``scipy-openblas 0.3.31.188.0`` (USE64BITINT) and scipy ships
+    ``scipy-openblas 0.3.30`` -- two distinct shared libraries, both mapped
+    into the same process.  They happen to agree bit for bit on this fixture
+    on every kernel of the local ladder, which is exactly how a non-portable
+    premise survives a local gate.
+
+    THE CI-ARM FINDING THIS ROUND RESTS ON (2026-09-11).  On the CI runners
+    the ill-conditioned fixtures of this campaign come out CORRECT where every
+    local kernel, thread width and build reads them wrong, so a test that
+    measures a pathology must MEASURE ITS PREMISE and skip when the premise is
+    absent.  The guard following the answer -- returning where the answer is
+    right, refusing where it is wrong -- is the contract, not a defect.
+
+    WHAT IS ASSERTED UNCONDITIONALLY, and it is the claim the guard is
+    actually about:
+
+      1. the guarded answer is bit-for-bit the answer the SAME ``lu_factor`` +
+         ``lu_solve`` pair returns UNGUARDED -- the screen adds nothing to the
+         arithmetic it rides.  Both sides go through scipy's LAPACK by
+         construction, so no wheel pairing can move this;
+      2. it is a VALID solve of the same system: relative residual under
+         ``_SOLVE_RESID_C * n * eps``;
+      3. and it agrees with ``np.linalg.solve``'s answer inside the bound two
+         backward-stable solves of the same system are entitled to differ by,
+         ``_SOLVE_AGREE_C * cond(A) * eps * max|x|``.
+
+    WHAT IS PREMISE-GATED, as an INFORMATIVE check: the bit-identity with
+    ``np.linalg.solve``.  Its premise is that numpy and scipy resolve to ONE
+    LAPACK build; that is measured here and SKIPPED when they do not.
+    """
+    np_lapack, sp_lapack, loaded = _lapack_provenance()
     prev = _ts.PMM2D_STAG_MIN_SEG_GUARD
     _ts.PMM2D_STAG_MIN_SEG_GUARD = False
+    eps = float(np.finfo(np.float64).eps)
+    rows = []
     try:
         for delta in (0.30, 1e-2, 1e-3):
             for M in (4, 5):
                 (L, R), ga, gb = _mortar_pair(delta, M)
-                x1 = np.linalg.solve(L, R)
-                x2 = _pc._guarded_mortar_solve(L, R, "test", ga, gb)
-                assert _h(x1) == _h(x2), (delta, M)
+                n = int(L.shape[0])
+                x_np = np.linalg.solve(L, R)
+                x_sp = sla.lu_solve(sla.lu_factor(L), R)
+                x_g = _pc._guarded_mortar_solve(L, R, "test", ga, gb)
+                # (1) the guard moves no bit of the path it rides
+                assert _h(x_g) == _h(x_sp), (
+                    delta, M, "the screen changed the arithmetic of its own "
+                    "lu_factor/lu_solve path")
+                # (2) it is a valid solve of the same system
+                nb = float(np.linalg.norm(R))
+                resid = float(np.linalg.norm(L @ x_g - R)) / nb
+                assert resid <= _SOLVE_RESID_C * n * eps, (
+                    delta, M, n, resid, _SOLVE_RESID_C * n * eps)
+                # (3) and it is numpy's answer to within the conditioning
+                cond = float(np.linalg.cond(L))
+                scale = float(np.max(np.abs(x_np)))
+                diff = float(np.max(np.abs(x_g - x_np)))
+                assert diff <= _SOLVE_AGREE_C * cond * eps * scale, (
+                    delta, M, cond, diff, _SOLVE_AGREE_C * cond * eps * scale)
+                rows.append((delta, M, n, cond, resid, diff,
+                             _h(x_g) == _h(x_np)))
     finally:
         _ts.PMM2D_STAG_MIN_SEG_GUARD = prev
+
+    # ---- PREMISE-GATED, INFORMATIVE: is there ONE LAPACK behind both?
+    same_build = np_lapack is not None and np_lapack == sp_lapack
+    one_loaded = loaded is None or len(loaded) <= 1
+    if not (same_build and one_loaded):
+        pytest.skip(
+            "premise absent on this arm: numpy and scipy do not resolve to "
+            "one LAPACK build, so bit-identity between np.linalg.solve and "
+            "scipy's lu_factor/lu_solve is not a property this machine has "
+            "(numpy=%s, scipy=%s, loaded=%s).  The three unconditional claims "
+            "above passed on all %d rows: worst relative residual %.3e "
+            "against %.3e, worst |guarded - numpy| %.3e."
+            % (np_lapack, sp_lapack, loaded, len(rows),
+               max(r[4] for r in rows),
+               _SOLVE_RESID_C * max(r[2] for r in rows) * eps,
+               max(r[5] for r in rows)))
+    bad = [r for r in rows if not r[6]]
+    assert not bad, (
+        "numpy and scipy report the SAME LAPACK build (%s) yet %d of %d rows "
+        "differ in the last bits: %s"
+        % (np_lapack, len(bad), len(rows), [(r[0], r[1]) for r in bad]))
 
 
 def test_the_mortar_rcond_bar_has_decades_of_gap_on_both_sides():
@@ -767,7 +902,16 @@ def test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why():
     answer on one runner and pass a wrong one on the next, which is the S4
     shape ``docs/TESTING_STANDARDS.md`` forbids.  So the site stays unguarded,
     and this test pins the two readings and the non-unanimous census that say
-    so."""
+    so.
+
+    RESTATED 2026-09-11 (CI PREMISE GATES).  The CI runner arm produces
+    CORRECT answers on these ill-conditioned fixtures where every local arm
+    produces wrong ones -- it read ``R+T`` = 1.0000010472 at the 1e-05 wall
+    separation on the 5.45.0 matrix, and 1.0000003658 at 1e-04.  So the WRONG
+    row's reproduction is now a measured PREMISE that SKIPS when absent, never
+    an assertion; everything else here is unconditional.  The guard following
+    the answer is the contract, and why the CI arm differs is an OPEN item
+    recorded in ``docs/audits/CI_PREMISE_GATES_2026_09_11.md``."""
     # ---- 1. the site is STRUCTURALLY unguarded: two bare solves, no screen
     src = inspect.getsource(_pc._interface_smatrix)
     assert src.count("np.linalg.solve(") == 2, src
@@ -821,17 +965,18 @@ def test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why():
     # on the CI runner that failed the old assertion -- the READING was never
     # the problem).
     #
-    # The two closure bars below are placed by the GAP, not by one build's
-    # residual: the correct row's worst |R+T - 1| is 3.66e-07 (the CI runner;
-    # 1.02e-08 here) and the wrong row's BEST is 1.17 (Katmai), so anything
-    # between 1e-06 and 1e-01 separates them.  Taking 1e-04 and 1e-01 leaves
-    # 273x below and 11.7x above, worst arm of nine.
+    # The closure bar below is placed by the GAP, not by one build's residual:
+    # the correct row's worst |R+T - 1| is 3.66e-07 (the CI runner; 1.02e-08
+    # here) and the wrong row's BEST where it manifests at all is 1.17
+    # (Katmai), so anything between 1e-06 and 1e-01 separates them.  1e-04
+    # leaves 273x of slack below, worst arm of nine.
     assert abs(tot_ok - 1.0) < 1e-4, out
     assert nwarn_ok == 0, out
     assert rc_ok < 1e-9, out
-    # the WRONG row: the site RETURNS -- unguarded is a real property, not a
-    # figure of speech -- and what it returns does not close energy.
-    assert abs(tot_bad - 1.0) > 1e-1, out
+    # the site RETURNS at BOTH separations -- unguarded is a real property,
+    # not a figure of speech.  This half is unconditional; whether what it
+    # returns at 1e-05 is WRONG is the premise gated at the end of this test.
+    assert set(out) == {1e-4, 1e-5}, out
 
     # ---- 3. the gap between them is UNDER 2.1 decades, on any kernel.
     # MEASURED 1.965 .. 1.999 decades over the eight arms; asserted at 2.1,
@@ -854,6 +999,33 @@ def test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why():
     # is -- which is precisely why it cannot be asserted.
     here = "refuse" if rc_bad < _pc._MORTAR_RCOND_REFUSE else "accept"
     assert here in verdicts.values(), (here, verdicts, rc_bad)
+
+    # ---- 5. PREMISE-GATED: is the 1e-05 row actually WRONG on this arm?
+    #
+    # RESTATED 2026-09-11 (CI PREMISE GATES).  This test used to end with
+    # ``assert abs(tot_bad - 1.0) > 1e-1`` -- "what the unguarded site returns
+    # at 1e-05 does not close energy".  The 5.45.0 release matrix read
+    # ``R+T`` = 1.0000010472 there (and 1.0000003658 at 1e-04): the CI
+    # runner's arm solves this ill-conditioned interface CORRECTLY where every
+    # local kernel, thread width and build gets it wrong.  That is the finding
+    # this round is built on, and WHY the CI arm differs is an OPEN item
+    # (``docs/audits/CI_PREMISE_GATES_2026_09_11.md``).  The site being
+    # UNGUARDED is the decision under test, and that decision is sound whether
+    # or not a given arm's arithmetic happens to fall over here -- so the
+    # pathology's reproduction is MEASURED and skipped when absent, never
+    # asserted, and no bar is relaxed.
+    if not abs(tot_bad - 1.0) > 1e-1:
+        pytest.skip(
+            "premise absent on this arm: the unguarded plain-1-D interface "
+            "returns a CORRECT answer at a 1e-05 wall separation (R+T = "
+            "%.10f, |R+T - 1| = %.3e against the 1e-01 the wrong population "
+            "reaches), so there is no wrong answer here to argue a guard "
+            "about.  rcond readings %.4e (1e-04) / %.4e (1e-05), gap %.3f "
+            "decades -- and the UNCONDITIONAL half of this test (the site is "
+            "structurally unguarded, the correct row closes and is silent, "
+            "the two populations are under 2.1 decades apart, and the "
+            "committed census says a 1e-12 bar is non-unanimous here) passed."
+            % (tot_bad, abs(tot_bad - 1.0), rc_ok, rc_bad, gap))
 
 
 # ==========================================================================

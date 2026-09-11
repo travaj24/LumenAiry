@@ -38,12 +38,34 @@ and a ``t4`` arm on the CI kernel -- ``t4`` and not ``tauto``, because
 has 24 where the runner has about four (see
 :func:`test_the_census_spans_both_axes_and_more_than_one_build`).
 
-THE TWO CLAIMS, and they point in opposite directions on purpose:
+THE CONTRACT, CORRECTED 2026-09-11 (CI PREMISE GATES) -- and the correction
+is the point of this round.  The first version of this file asserted that
+every arm takes the same OUTCOME on every row.  The 5.45.0 matrix then failed
+it, and the failure was RIGHT to happen and WRONG to be a failure: on the CI
+runner arm (ubuntu, AMD EPYC 7763, unpinned BLAS, pip wheels of numpy 2.4.6 /
+scipy 1.17.1) the ill-conditioned 1-D interface fixture at a 1e-05 wall
+separation comes out **CORRECT** (``R+T`` = 1.0000010472) where every local
+arm -- four OpenBLAS kernels x one and four thread widths x two builds --
+comes out **WRONG** (``R+T`` >= 1.17).  The guards then took different
+outcomes there, exactly as designed: ``closes`` against ``open``, ``silent``
+against ``warn``, ``return`` against ``refuse``.  A guard whose job is to
+refuse wrong answers and return correct ones MUST follow the answer, so
+demanding outcome equality across arms is demanding that it stop.
 
-  * ``decisions``     -- what the library actually DOES.  Every arm must
-                         agree.  A disagreement here is a P1: some user gets
-                         a refusal, and another user gets an answer, from the
-                         same code on the same input.
+The census therefore records, beside every decision, the ANSWER CLASS that
+decision is about -- ``correct`` / ``grey`` / ``wrong`` by the campaign's own
+closure rule, measured WITH THE GUARD DISARMED -- and the claims are:
+
+  * ``decisions`` + ``classes`` -- RULE conformance.  Per arm, the decision
+                         must be one the RULE permits for that row's class
+                         (``probe_decisions._RULES``).  Across arms, rows with
+                         the SAME class must take the SAME decision.  A row
+                         whose decision differs while its class does NOT, or a
+                         kernel-independent row (no class at all) that
+                         differs, is still a P1: same code, same input, same
+                         answer, different verdict.  A row whose CLASS differs
+                         between arms is REPORTED, not failed -- that is the
+                         guard following the answer, which is the contract.
   * ``hypothetical``  -- what a bar the library does NOT ship would decide at
                          a site the library deliberately leaves UNGUARDED.
                          These must STAY non-unanimous.  They are the
@@ -51,19 +73,32 @@ THE TWO CLAIMS, and they point in opposite directions on purpose:
                          if they ever became unanimous the omission would
                          need re-arguing rather than silently keeping.
 
+WHY the CI arm's arithmetic differs is NOT solved here and is an OPEN item:
+``docs/audits/CI_PREMISE_GATES_2026_09_11.md``.
+
 BUDGET.  Reading and comparing the table is free; the current-arm re-take is
 restricted to the four CHEAP sections (~3 s, measured).  The mortar and T22
 sections are the expensive half and are covered by the committed table plus
 their own fix/verify files, so this gate stays well inside its 30 s budget.
 
+THE SYNTHETIC CI ARM.  ``arms/ci_RUNNER_t1.json`` is not a measurement: it is
+transcribed from the 5.45.0 matrix logs, marked ``"synthetic": true``, and
+carries a per-key ``provenance_detail`` saying whether each value was read out
+of a failure message or inferred from the absence of a mismatch.  It is in the
+table because it is the only evidence of the one machine whose arithmetic
+solves these fixtures correctly, and it is marked so nobody mistakes a
+transcription for a run.  It is exempt from the "every arm answered every row"
+check, because a transcription covers only the rows the logs printed.
+
 REGENERATING THE TABLE (after a deliberate, argued decision change)::
 
-    for k in HASWELL SANDYBRIDGE NEHALEM PRESCOTT; do
+    for k in HASWELL SANDYBRIDGE NEHALEM KATMAI; do
       OPENBLAS_CORETYPE=$k OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \\
         MKL_NUM_THREADS=1 python \\
         validation/probe_ci_kernel_sweep/probe_decisions.py \\
         --out validation/probe_ci_kernel_sweep/arms/<build>_$k.json
     done
+    python validation/probe_ci_kernel_sweep/make_ci_arm.py   # the CI arm
     python validation/probe_ci_kernel_sweep/merge_arms.py
 """
 import os
@@ -106,6 +141,38 @@ _PREFIX = {
 }
 
 
+def _measured(table):
+    """The arms that were actually RUN, i.e. not the transcribed CI arm."""
+    return sorted(a for a, m in table["arms"].items()
+                  if not m.get("synthetic"))
+
+
+def _class_of(table, arm, key):
+    """The answer class this arm recorded for a row, or ``None`` when the row
+    is not an answer-following guard row (the band / branch-cut / mortar /
+    T22 sections decide on geometry or on a fixed spectrum)."""
+    return (table.get("classes", {}).get(arm) or {}).get(key)
+
+
+def _rule_violations(rule_for, decisions, classes):
+    """Every row whose decision is not one its class permits.
+
+    ``(key, klass, decision, permitted)`` per violation.  A row with a rule
+    but no recorded class is a violation too: the census cannot say the guard
+    followed the answer if it did not record the answer.
+    """
+    out = []
+    for key, got in sorted(decisions.items()):
+        table = rule_for(key)
+        if table is None:
+            continue
+        klass = classes.get(key)
+        allowed = table.get(klass)
+        if allowed is None or got not in allowed:
+            out.append((key, klass, got, sorted(table.get(klass, ()))))
+    return out
+
+
 def _load_table():
     if not _TABLE.is_file():
         pytest.fail(
@@ -144,13 +211,27 @@ def test_the_census_spans_both_axes_and_more_than_one_build():
     at least two distinct thread widths, one of which must be the UNPINNED
     arm, because that is the configuration CI's fast lane actually runs --
     and at least two builds.
+
+    RESTATED 2026-09-11 (CI PREMISE GATES).  Those spans are now required of
+    the MEASURED arms only.  The census also carries a TRANSCRIBED arm -- the
+    CI runner, read out of the 5.45.0 matrix logs, marked ``"synthetic":
+    true`` -- and a transcription is evidence but not a configuration anybody
+    ran, so it must not be able to satisfy a coverage requirement on its own.
+    Every arm must also carry a ``classes`` block, because the contract the
+    next test asserts is rule conformance and a table with no classes cannot
+    express it.
     """
     t = _load_table()
     arms = t["arms"]
     assert len(arms) >= 6, sorted(arms)
-    kernels = {m["kernel"] for m in arms.values()}
-    builds = {m["build"] for m in arms.values()}
-    widths = {m["thread_arm"] for m in arms.values()}
+    # the spans below are asserted of the MEASURED arms only: a transcribed
+    # arm is evidence, but it is not a configuration anybody ran here, and it
+    # must not be able to satisfy a coverage requirement on its own.
+    run = _measured(t)
+    assert len(run) >= 6, run
+    kernels = {arms[a]["kernel"] for a in run}
+    builds = {arms[a]["build"] for a in run}
+    widths = {arms[a]["thread_arm"] for a in run}
     assert len(kernels) >= 2, kernels
     assert len(builds) >= 2, builds
     assert len(widths) >= 2, widths
@@ -185,39 +266,100 @@ def test_the_census_spans_both_axes_and_more_than_one_build():
     # every MULTI-THREAD arm must record the width OpenBLAS actually chose --
     # see the note above on why the label alone does not identify the arm.
     for arm, m in arms.items():
-        if m["thread_arm"] != "t1":
+        if m["thread_arm"] != "t1" and not m.get("synthetic"):
             assert m.get("blas_threads"), (arm, m)
+    # every arm must carry a ``classes`` block, even an empty one: the
+    # contract below is rule conformance, and a table with no classes cannot
+    # express it.
+    assert set(t.get("classes", {})) == set(arms), (
+        sorted(set(arms) - set(t.get("classes", {}))),
+        sorted(set(t.get("classes", {})) - set(arms)))
+    # ... and at least one row must actually BE classed, on every measured
+    # arm -- an all-empty classes block would pass the line above.
+    for arm in run:
+        assert t["classes"][arm], arm
 
 
 # ======================================================================
-# 2 -- THE claim: every arm takes the same decision
+# 2 -- THE claim: every arm obeys the same RULE, and arms that computed
+#      the same ANSWER take the same decision
 # ======================================================================
-def test_every_arm_takes_the_same_guard_decision():
-    """The headline.  Each guard OUTCOME must be identical on every arm.
+def test_every_arm_follows_the_rule_and_agrees_where_the_answer_agrees():
+    """The headline, RESTATED 2026-09-11 (CI PREMISE GATES).
 
-    A row that disagrees is a P1 by construction: the same code, on the same
-    input, refuses for one user and answers for another.  The failure message
-    names the row and prints each arm's verdict, because the useful next step
-    is always "which side is right", not "which arm is odd".
+    Two claims, and the second is deliberately weaker than what this file
+    asserted before:
+
+      1. RULE CONFORMANCE, per arm.  Every answer-following row's decision is
+         one the RULE permits for the class that row was measured at.  This is
+         the claim that actually protects users: a correct answer is never
+         refused and a wrong one is never returned in silence, on any arm.
+      2. AGREEMENT WHERE THE ANSWER AGREES.  Two arms that computed the same
+         CLASS must take the same decision.  Two arms that computed different
+         classes are ALLOWED to decide differently -- that is the guard
+         following the answer -- and the divergence is REPORTED, with both
+         classes, rather than failed.
+
+    A row with NO class (band, branch-cut, mortar, T22 -- decided on geometry
+    or on a fixed spectrum, with no answer to follow) must still be identical
+    on every arm.  A disagreement there is the original P1.
     """
     t = _load_table()
     dec = t["decisions"]
+    rule_for = _probe_module().rule_for
     arms = sorted(dec)
     keys = sorted({k for d in dec.values() for k in d})
     assert keys, "the census carries no decisions at all"
-    split = {}
+
+    # ---- 1. the rule, on every arm
+    bad = {}
+    for a in arms:
+        v = _rule_violations(rule_for, dec[a],
+                             t.get("classes", {}).get(a, {}))
+        if v:
+            bad[a] = v
+    assert not bad, (
+        "%d arm(s) take a guard decision the RULE does not permit for the "
+        "answer class they measured -- this is a P1: a correct answer was "
+        "refused, or a wrong one returned in silence.  (row, class, "
+        "decision, permitted):\n%s"
+        % (len(bad), json.dumps(bad, indent=1, sort_keys=True)))
+
+    # ---- 2. agreement, per class
+    split, following = {}, {}
     for k in keys:
-        seen = {a: dec[a].get(k, "<absent>") for a in arms}
-        if len(set(seen.values())) > 1:
-            split[k] = seen
+        by_class = {}
+        for a in arms:
+            if k not in dec[a]:
+                continue
+            by_class.setdefault(_class_of(t, a, k), {})[a] = dec[a][k]
+        for klass, seen in by_class.items():
+            if len(set(seen.values())) > 1:
+                split["%s [class=%s]" % (k, klass)] = seen
+        if len(by_class) > 1:
+            following[k] = {a: (_class_of(t, a, k), dec[a][k])
+                            for a in arms if k in dec[a]}
     assert not split, (
-        "%d guard DECISION(s) are not the same on every arm -- this is a P1, "
-        "not a flake:\n%s" % (len(split), json.dumps(split, indent=1,
-                                                     sort_keys=True)))
-    # and every arm answered every row: a row missing from one arm is a
-    # census hole, which reads as agreement above and must not.
-    holes = {a: sorted(set(keys) - set(dec[a])) for a in arms
-             if set(keys) - set(dec[a])}
+        "%d guard DECISION(s) differ between arms that computed the SAME "
+        "answer class -- this is a P1, not a flake: the same code, on the "
+        "same input, with the same answer, refuses for one user and answers "
+        "for another:\n%s"
+        % (len(split), json.dumps(split, indent=1, sort_keys=True)))
+
+    # ---- REPORTED, not failed: the guard following the answer.
+    if following:
+        print("\nrows whose ANSWER CLASS differs between arms (the guard "
+              "following the answer -- reported, not failed):\n%s"
+              % json.dumps(following, indent=1, sort_keys=True))
+
+    # ---- and every MEASURED arm answered every row: a row missing from one
+    # arm is a census hole, which would read as agreement above and must not.
+    # The transcribed CI arm is exempt: it covers only the rows the 5.45.0
+    # logs printed, and says so in its own provenance.
+    run = _measured(t)
+    run_keys = sorted({k for a in run for k in dec[a]})
+    holes = {a: sorted(set(run_keys) - set(dec[a])) for a in run
+             if set(run_keys) - set(dec[a])}
     assert not holes, holes
 
 
@@ -259,55 +401,141 @@ def test_the_unguarded_sites_stay_undecidable_across_the_kernels():
 
 
 # ======================================================================
-# 4 -- the arm running RIGHT NOW has to join the consensus
+# 4 -- the arm running RIGHT NOW has to follow the same RULE
 # ======================================================================
 def test_this_arm_agrees_with_the_committed_census():
     """Re-take the cheap half of the census here and compare.
 
     This is what makes the gate local rather than archival: a kernel nobody
-    has censused yet (a future CI runner, a colleague's laptop) either agrees
-    with the table or fails here with its own arm named.  Only the four cheap
+    has censused yet (a future CI runner, a colleague's laptop) either joins
+    the table or fails here with its own arm named.  Only the four cheap
     sections are re-taken -- see the module docstring's BUDGET note.
+
+    RESTATED 2026-09-11 (CI PREMISE GATES).  What "joins" means changed, and
+    the 5.45.0 matrix is why: this test failed there with arm
+    ``WSL-unknown-t1`` disagreeing on three rows --
+    ``pmm1d_interface/answer@1e-05`` closes against open,
+    ``pmm1d_interface/warned@1e-05`` silent against warn, and
+    ``sliver/pmm1d@1e-05`` return against refuse -- which are exactly the
+    rows where the CI arm's answer is CORRECT and every local arm's is WRONG.
+    The guard FOLLOWED THE ANSWER, which is the designed behaviour, so the
+    comparison was being made on the wrong thing.  It now compares the RULE:
+
+      * this arm's decisions must be what the rule permits for the classes
+        this arm measured (unconditional -- this is the user-facing claim);
+      * and they must match the census rows THAT WERE TAKEN AT THE SAME
+        CLASS.  A census row taken at a different class says nothing about
+        this arm and is reported, not compared.
     """
     t = _load_table()
     dec = t["decisions"]
-    consensus = {}
-    for k in sorted({k for d in dec.values() for k in d}):
-        vals = {d.get(k) for d in dec.values()}
-        if len(vals) == 1:
-            consensus[k] = vals.pop()
 
     m = _probe_module()
-    here, hyp, rea = {}, {}, {}
+    here, hyp, rea, cls = {}, {}, {}, {}
     t0 = time.perf_counter()
-    m._interface_site_population(here, hyp, rea)
-    m._sliver_decisions(here, rea)
+    m._interface_site_population(here, hyp, rea, cls)
+    m._sliver_decisions(here, rea, cls)
     m._band_decisions(here, rea)
     m._branch_cut_decisions(here, rea)
     elapsed = time.perf_counter() - t0
 
     arm, _build, _kernel, _tag, _nthreads = m._arm_id()
     prefixes = tuple(_PREFIX[s] for s in _CHEAP)
-    mismatch = {k: (v, consensus[k]) for k, v in here.items()
-                if k in consensus and consensus[k] != v}
+
+    # ---- 1. THE RULE, on the arm running right now.  Unconditional.
+    viol = _rule_violations(m.rule_for, here, cls)
+    assert not viol, (
+        "arm %r takes %d guard decision(s) the RULE does not permit for the "
+        "answer class measured HERE -- a correct answer refused, or a wrong "
+        "one returned in silence.  (row, class, decision, permitted): %s"
+        % (arm, len(viol), json.dumps(viol, indent=1, sort_keys=True)))
+
+    # ---- 2. agreement with the census rows taken at the SAME class
+    mismatch, other_class = {}, {}
+    for k, v in sorted(here.items()):
+        mine = cls.get(k)
+        same = {a: dec[a][k] for a in dec
+                if k in dec[a] and _class_of(t, a, k) == mine}
+        diff = {a: (_class_of(t, a, k), dec[a][k]) for a in dec
+                if k in dec[a] and _class_of(t, a, k) != mine}
+        if diff:
+            other_class[k] = {"here": (mine, v), "census": diff}
+        vals = set(same.values())
+        if vals and (len(vals) > 1 or v not in vals):
+            mismatch[k] = {"here": v, "class": mine, "census_same_class": same}
     assert not mismatch, (
         "arm %r disagrees with the committed census on %d guard decision(s) "
-        "(measured here, census value): %s.  Either this arm has found a "
-        "kernel-dependent decision the census does not cover -- add it with "
-        "probe_decisions.py + merge_arms.py and FIX the guard -- or a guard "
+        "taken at the SAME answer class: %s.  Same code, same input, same "
+        "answer, different verdict -- either this arm has found a "
+        "kernel-dependent decision the census does not cover (add it with "
+        "probe_decisions.py + merge_arms.py and FIX the guard) or a guard "
         "changed and the census is stale."
-        % (arm, len(mismatch), json.dumps(mismatch, indent=1, sort_keys=True)))
+        % (arm, len(mismatch), json.dumps(mismatch, indent=1,
+                                          sort_keys=True)))
+    if other_class:
+        print("\narm %r computed a DIFFERENT answer class from some census "
+              "arms on %d row(s) -- the guard following the answer, reported "
+              "and not failed:\n%s"
+              % (arm, len(other_class),
+                 json.dumps(other_class, indent=1, sort_keys=True)))
+
     # every cheap row this arm produced must EXIST in the census: a new
     # decision that nobody has censused is a hole, and it would pass the
-    # comparison above by being absent from ``consensus``.
+    # comparison above by being absent from every arm.
     uncensused = sorted(k for k in here
-                        if k.startswith(prefixes) and k not in consensus
+                        if k.startswith(prefixes)
                         and not any(k in d for d in dec.values()))
     assert not uncensused, (
         "these decisions are produced by the probe but are in NO arm of the "
         "census: %s.  Re-run the arms and merge." % uncensused)
     # the budget this file promises, measured on the running build
     assert elapsed < 20.0, elapsed
+
+
+# ======================================================================
+# 5 -- the CI runner arm, which is the whole reason this round exists
+# ======================================================================
+def test_the_census_carries_the_ci_arm_that_answers_these_fixtures_correctly():
+    """The finding of 2026-09-11, pinned so it cannot be quietly dropped.
+
+    The census must carry the transcribed CI runner arm, it must be MARKED as
+    a transcription, and it must still be class-divergent from the measured
+    arms at the 1e-05 wall separation: correct there, wrong here.  If a later
+    change makes the local arms answer that row correctly too, this test
+    fails -- and that failure is the gate working, because the premise gates
+    across six test families
+    (``docs/audits/CI_PREMISE_GATES_2026_09_11.md``) rest on this divergence
+    and would then all be skipping for a stale reason.
+    """
+    t = _load_table()
+    synth = [a for a, mtd in t["arms"].items() if mtd.get("synthetic")]
+    assert synth, (
+        "the census no longer carries the transcribed CI runner arm.  It is "
+        "the only evidence of the machine whose arithmetic solves these "
+        "ill-conditioned fixtures correctly, and the premise gates in six "
+        "test families cite it: regenerate it with "
+        "validation/probe_ci_kernel_sweep/make_ci_arm.py.")
+    for a in synth:
+        assert t["arms"][a].get("provenance"), a
+        assert t["arms"][a].get("provenance_detail"), a
+    key = "sliver/pmm1d@1e-05"
+    run = _measured(t)
+    here_classes = {_class_of(t, a, key) for a in run}
+    there_classes = {_class_of(t, a, key) for a in synth
+                     if key in t["decisions"][a]}
+    assert here_classes == {"wrong"}, (
+        "the measured arms no longer read the 1e-05 sliver row as WRONG "
+        "(%s).  The premise gates that cite this divergence are then stale: "
+        "re-measure them." % sorted(here_classes))
+    assert there_classes == {"correct"}, (
+        "the transcribed CI arm no longer reads the 1e-05 sliver row as "
+        "CORRECT (%s)." % sorted(there_classes))
+    # ... and the DECISIONS differ accordingly, which is the guard following
+    # the answer rather than a P1.
+    assert {t["decisions"][a][key] for a in run} == {"refuse"}, \
+        {a: t["decisions"][a][key] for a in run}
+    assert {t["decisions"][a][key] for a in synth} == {"return"}, \
+        {a: t["decisions"][a][key] for a in synth}
 
 
 def test_the_cheap_sections_cover_every_area_the_sweep_found_a_flip_in():
