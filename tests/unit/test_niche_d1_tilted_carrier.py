@@ -1222,29 +1222,64 @@ _GHOST_AP, _GHOST_N, _GHOST_DX = 12e-3, 1024, 20e-6
 _GHOST_W, _GHOST_XC, _GHOST_RIN = 0.40e-3, 5.6e-3, 60e-3
 
 
-def _ghost_geometry():
+#: The DECENTRE LADDER the fail-before arms scan (metres), first rung first.
+#:
+#: WHY A LADDER AND NOT THE ONE VALUE (2026-09-11, CI KERNEL SWEEP,
+#: ``docs/audits/CI_KERNEL_SWEEP_2026_09_11.md``).  The witness below
+#: reconstructs a pre-D1 ghost by driving a deliberately near-singular fit
+#: into a fold.  WHETHER a given decentre folds is a rounding-level property
+#: of that fit, so it is decided by the BLAS micro-kernel: at the historical
+#: 5.60 mm the ghost reads ``bad_rel`` **0.490 on Haswell** and **1.00e-03 on
+#: Sandybridge, Nehalem and Katmai alike** -- three decades under the 0.02 bar,
+#: i.e. the witness simply does not reproduce there.  It is not gone; it has
+#: MOVED.  Measured 2026-09-11 at one thread, the first rung of this ladder
+#: that reproduces:
+#:
+#:     kernel        rung      bad_rel     (5.60 mm reads)
+#:     Haswell       5.60 mm   4.900e-01   --
+#:     Nehalem       5.80 mm   1.329e-01   1.003e-03
+#:     Katmai        5.80 mm   9.608e-01   1.003e-03
+#:     Sandybridge   5.85 mm   1.495e-01   1.003e-03
+#:
+#: ``docs/TESTING_STANDARDS.md`` restatement 3 is explicit about this shape:
+#: "Scan a ladder if needed; hard-fail only when the ladder is exhausted AND
+#: the fixed path misbehaves -- the fixed-path claim stays unconditional on
+#: every arm."  The ladder is ordered so the historical rung is tried first
+#: (Haswell stops at rung 1, Nehalem and Katmai at rung 2, Sandybridge at
+#: rung 3), which keeps the cost at one or two extra solves.
+_GHOST_XC_LADDER = (5.60e-3, 5.80e-3, 5.85e-3, 5.65e-3, 5.50e-3, 5.95e-3,
+                    5.55e-3, 5.70e-3, 5.75e-3, 5.90e-3, 6.00e-3)
+
+
+def _ghost_geometry(xc=None):
     """``(radius from the beam centre, input envelope, 3w beam-disc mask,
-    input power)`` for the decentred-ghost fixture."""
+    input power)`` for the decentred-ghost fixture.
+
+    ``xc`` defaults to the shipped ``_GHOST_XC``; the fail-before arms pass a
+    rung of :data:`_GHOST_XC_LADDER`.
+    """
+    xc = _GHOST_XC if xc is None else float(xc)
     x = (np.arange(_GHOST_N) - _GHOST_N // 2) * _GHOST_DX
-    r2 = (x[None, :] - _GHOST_XC) ** 2 + x[:, None] ** 2
+    r2 = (x[None, :] - xc) ** 2 + x[:, None] ** 2
     env = np.exp(-r2 / _GHOST_W ** 2).astype(np.complex128)
     return (np.sqrt(r2), env, r2 <= (3 * _GHOST_W) ** 2,
             float(np.sum(np.abs(env) ** 2)))
 
 
-def _ghost_field(**kw):
+def _ghost_field(xc=None, **kw):
     """``(|E_out|, warning messages)`` for one decentred beam through one fast
     singlet.  ``kw`` overrides any ``apply_real_lens_traced`` argument -- used
     for the ``newton_fit='spline'`` oracle.
 
     ``x_c = 5.6 mm`` puts the beam disc wholly outside the aperture-relative
     ``_CARRIER_FIT_RADIUS_FRAC`` disc, i.e. the beam-disc-alone tier."""
-    _, env, _, _ = _ghost_geometry()
+    xc = _GHOST_XC if xc is None else float(xc)
+    _, env, _, _ = _ghost_geometry(xc)
     call = dict(
         prescription=_singlet(32e-3, -32e-3, 1.6e-3, 'N-BK7',
                               _GHOST_AP, 'ghost'),
         wavelength=_WL, dx=_GHOST_DX, ray_subsample=8, n_workers=1,
-        carrier=la.TiltedCarrier(_GHOST_RIN, 0.0, 0.0, _GHOST_XC, 0.0),
+        carrier=la.TiltedCarrier(_GHOST_RIN, 0.0, 0.0, xc, 0.0),
         fit_radius_beam_factor=2.0, amplitude_model='ray_density',
         preserve_input_phase='remap', remap_sampling='full',
         on_aperture_beam='silent')
@@ -1256,11 +1291,11 @@ def _ghost_field(**kw):
     return np.abs(out), [str(m.message) for m in rec]
 
 
-def _ghost_metrics(**kw):
+def _ghost_metrics(xc=None, **kw):
     """(off-beam power / input power, max off-beam amplitude / on-beam peak,
     warning messages)."""
-    _, _, near, p_in = _ghost_geometry()
-    amp, msgs = _ghost_field(**kw)
+    _, _, near, p_in = _ghost_geometry(xc)
+    amp, msgs = _ghost_field(xc, **kw)
     peak = float(amp[near].max())
     assert peak > 0.0
     off_p = float(np.sum(amp[~near] ** 2)) / p_in
@@ -1270,6 +1305,55 @@ def _ghost_metrics(**kw):
 def _folds(msgs):
     """How many 'fold caustic' warnings a run emitted."""
     return sum('fold caustic' in m for m in msgs)
+
+
+def _pin_the_pre_d1_era(monkeypatch, _lt):
+    """Pin every flag whose SHIPPED value independently cures the D1 ghost.
+
+    A fail-before that inherits a default is not a fail-before.  Four separate
+    later fixes each suppress this witness on their own -- the pre-C6 ray
+    launch, the pre-D1 weighted restriction, the C13 conditioning step-down
+    and the D15 deterministic Gram -- and the long comments at the two call
+    sites record what each of them measures when left on.
+    """
+    monkeypatch.setattr(_lt, 'REMAP_STATIONARY_PHASE_LAUNCH', False)
+    monkeypatch.setattr(_lt, '_FIT_DISC_OUTSIDE_WEIGHT_REL', 0.0)
+    monkeypatch.setattr(_lt, 'DECENTRED_FIT_PREDICTOR', False)
+    monkeypatch.setattr(_lt, 'DECENTRED_FIT_ARBITER', False)
+    monkeypatch.setattr(_lt, 'LSTSQ_CONDITIONING_STEPDOWN', False)
+    monkeypatch.setattr(_lt, 'DETERMINISTIC_TRACED_FIT', False)
+
+
+def _first_reproducing_rung(bar):
+    """Walk :data:`_GHOST_XC_LADDER` until the pre-D1 ghost reproduces.
+
+    Call with the pre-D1 era already pinned.  Returns
+    ``(xc, amplitude, rel, msgs, scanned)`` for the FIRST rung whose off-beam
+    relative amplitude clears ``bar`` AND whose run trips the fold detector --
+    both, because a loud halo that the detector misses is a different defect
+    from the one this witness is about.
+
+    Raises with the whole scanned ladder if no rung reproduces: that is the
+    "ladder exhausted" case of ``docs/TESTING_STANDARDS.md`` restatement 3,
+    and it means the witness needs re-deriving rather than widening.
+    """
+    scanned = []
+    for xc in _GHOST_XC_LADDER:
+        _, _, near, p_in = _ghost_geometry(xc)
+        amp, msgs = _ghost_field(xc)
+        peak = float(amp[near].max())
+        assert peak > 0.0, xc
+        rel = float(amp[~near].max()) / peak
+        nf = _folds(msgs)
+        scanned.append((xc, rel, nf))
+        if rel > bar and nf >= 1:
+            return xc, amp, rel, msgs, scanned
+    raise AssertionError(
+        'the pre-D1 ghost reproduces at NO rung of the decentre ladder '
+        '(bar %.3e): %s.  The witness must be re-derived, not widened -- see '
+        '_GHOST_XC_LADDER and docs/audits/CI_KERNEL_SWEEP_2026_09_11.md.'
+        % (bar, ['x_c=%.2f mm rel=%.4e folds=%d' % (x * 1e3, r, f)
+                 for x, r, f in scanned]))
 
 
 def _off_beam_peak(amp, near, rad):
@@ -1354,9 +1438,22 @@ def test_off_centre_fit_disc_does_not_ghost_the_exit_field(monkeypatch):
     #     for the same defect -- and a fail-before that inherits a
     #     default is not a fail-before.
     monkeypatch.setattr(_lt, 'DETERMINISTIC_TRACED_FIT', False)
-    bad, bad_msgs = _ghost_field()
+    # LADDER, not the one decentre (2026-09-11, CI KERNEL SWEEP,
+    # docs/audits/CI_KERNEL_SWEEP_2026_09_11.md).  WHICH decentre folds is a
+    # rounding-level property of the near-singular fit, so it is decided by
+    # the BLAS micro-kernel: at the historical 5.60 mm the ghost reads 0.490
+    # on Haswell and 1.003e-03 on Sandybridge, Nehalem and Katmai alike.  The
+    # defect has MOVED, not gone -- see _GHOST_XC_LADDER for the per-kernel
+    # table -- so the rung is re-found here and EVERY reference below is
+    # recomputed at that rung, which keeps the comparison like-for-like.
+    xc_bad, bad, bad_rel, bad_msgs, _scan = _first_reproducing_rung(
+        max(5.0 * ref_rel, 0.02))
+    rad, _env2, near, p_in = _ghost_geometry(xc_bad)
+    ref, ref_msgs = _ghost_field(xc_bad, newton_fit='spline')
+    ref_peak = float(ref[near].max())
+    ref_off_p = float(np.sum(ref[~near] ** 2)) / p_in
+    ref_rel = float(ref[~near].max()) / ref_peak
     bad_p = float(np.sum(bad[~near] ** 2)) / p_in
-    bad_rel = float(bad[~near].max()) / float(bad[near].max())
 
     # ==================================================================
     # 2026-08-15 (docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md).
@@ -1493,7 +1590,11 @@ def test_the_fold_warning_on_an_off_centre_disc_was_a_true_positive(monkeypatch)
     #     for the same defect -- and a fail-before that inherits a
     #     default is not a fail-before.
     monkeypatch.setattr(_lt, 'DETERMINISTIC_TRACED_FIT', False)
-    _, bad_rel, bad_msgs = _ghost_metrics()
+    # LADDER, not the one decentre -- see _GHOST_XC_LADDER and the note at the
+    # sibling witness.  The first rung that reproduces is Haswell 5.60 mm,
+    # Nehalem / Katmai 5.80 mm, Sandybridge 5.85 mm.
+    _xc_bad, _bad, bad_rel, bad_msgs, _scan = _first_reproducing_rung(
+        max(5.0 * good_rel, 0.02))
     # ENVELOPE, not an absolute pin (2026-08-02): the broken configuration's
     # ghost magnitude is BLAS-build-dependent -- measured > 0.1 on local
     # builds and CPython 3.12/3.13 CI, but 0.0283 on 3.11 CI, which failed

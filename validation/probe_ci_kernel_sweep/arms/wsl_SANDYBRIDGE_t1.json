@@ -1,5 +1,6 @@
 {
- "arm": "WSL-Sandybridge",
+ "arm": "WSL-Sandybridge-t1",
+ "blas_threads": 1,
  "build": "WSL",
  "coretype_requested": "SANDYBRIDGE",
  "decisions": {
@@ -95,6 +96,7 @@
   "t22/spacer@M5/worst_rcond_eq": 0.003864409501840409
  },
  "scipy": "1.17.1",
+ "thread_arm": "t1",
  "threads": {
   "MKL_NUM_THREADS": "1",
   "OMP_NUM_THREADS": "1",

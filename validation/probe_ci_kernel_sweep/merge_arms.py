@@ -10,11 +10,15 @@ The merged file is what ``tests/unit/test_ci_kernel_consistency.py`` and the
 mortar round-2 rationale test READ.  Neither of them writes it: a gate that
 regenerates its own reference proves nothing.
 
-The arm KEY is ``BUILD-Kernel`` as the probe measured it, not as it was
+The arm KEY is ``BUILD-Kernel-tN`` as the probe MEASURED it, not as it was
 requested -- ``OPENBLAS_CORETYPE=ZEN`` and ``=BOGUSCORE`` both land on
 ``Haswell`` in these wheels, and recording the request would let one arm
 appear twice and look like independent evidence.  A duplicate measured key is
 an ERROR here for exactly that reason.
+
+``tN`` is the thread width, ``tauto`` meaning the caps were left unset -- the
+configuration CI's fast lane runs.  Both axes belong in the table; see
+``tests/unit/test_ci_kernel_consistency.py`` for why.
 """
 from __future__ import annotations
 
@@ -61,6 +65,8 @@ def main(argv=None):
             "source": os.path.basename(p),
             "build": d["build"],
             "kernel": d["kernel"],
+            "thread_arm": d.get("thread_arm", "t1"),
+            "blas_threads": d.get("blas_threads"),
             "coretype_requested": d.get("coretype_requested", ""),
             "platform": d["platform"],
             "python": d["python"],

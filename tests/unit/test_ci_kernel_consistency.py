@@ -8,20 +8,35 @@ DECISION -- a guard that refuses on one machine and returns on another, or a
 test whose bar was pinned on a build-dependent reading.  Nothing in the gate
 could have caught that locally, because the gate only ever ran on one BLAS
 micro-kernel.  This file is the missing instrument: it reads a committed
-census of every guard decision on eight (build, kernel) arms and asserts they
-AGREE, then re-takes the cheap half of that census on whatever arm is running
+census of every guard decision on twelve (build, kernel, thread-width) arms
+and asserts they AGREE, then re-takes the cheap half of that census on whatever arm is running
 now and asserts it joins the consensus.
 
-WHAT AN ARM IS, AND WHY THE KERNEL IS THE AXIS.  The bundled scipy-openblas
-is DYNAMIC_ARCH, so ``OPENBLAS_CORETYPE`` re-dispatches the whole BLAS/LAPACK
-kernel set at import time -- a different reduction order and blocking for the
-same arithmetic, which is exactly the axis that moves a rounding-level guard
-reading.  The census was taken at ONE thread on every arm, so the kernel is
-the only thing that varies.  Two measured caveats are recorded in
+WHAT AN ARM IS, AND WHY THERE ARE TWO AXES.  An arm is a
+``(build, kernel, thread-width)`` triple.
+
+The KERNEL axis: the bundled scipy-openblas is DYNAMIC_ARCH, so
+``OPENBLAS_CORETYPE`` re-dispatches the whole BLAS/LAPACK kernel set at import
+time -- a different reduction order and blocking for the same arithmetic,
+which is exactly what moves a rounding-level guard reading.  Two measured
+caveats are recorded in
 ``validation/probe_ci_kernel_sweep/probe_decisions.py``: ``ZEN`` is not a
 distinct kernel in these wheels (it resolves to ``Haswell``, which is also
-what auto-detection gives on a Zen CPU, so the default arm ALREADY IS the CI
-Zen arm), and ``SKYLAKEX`` is unreachable on a non-AVX-512 host (SIGILL).
+what auto-detection gives on a Zen CPU -- and CI's runners are AMD EPYC 7763,
+Zen 3, no AVX-512 -- so the default local arm IS the CI kernel), and
+``SKYLAKEX`` is unreachable on a non-AVX-512 host (SIGILL).
+
+The THREAD axis, and it is not optional: CI's FAST lane deliberately leaves
+BLAS UNPINNED (``unit-tests.yml``: "this job deliberately does NOT pin BLAS at
+run time") while the SLOW and JAX lanes pin to one thread.  A reduction split
+across four threads is a different summation order from the same reduction on
+one, in the same way a different kernel is, so a census taken only at one
+thread cannot speak about the lane where most of the 5.45.0 red appeared.  The
+committed table therefore carries ``t1`` arms across the whole kernel ladder
+and a ``t4`` arm on the CI kernel -- ``t4`` and not ``tauto``, because
+"unpinned" means "as many threads as the machine has" and this workstation
+has 24 where the runner has about four (see
+:func:`test_the_census_spans_both_axes_and_more_than_one_build`).
 
 THE TWO CLAIMS, and they point in opposite directions on purpose:
 
@@ -53,6 +68,15 @@ REGENERATING THE TABLE (after a deliberate, argued decision change)::
 """
 import os
 
+# The current-arm re-take is pinned to ONE thread, deliberately, and the
+# THREAD axis is carried by the committed ``t4`` arms instead.  Two reasons,
+# both measured.  (1) An unpinned re-take is not reproducible as a gate: this
+# probe is a few hundred SMALL solves, and on a 24-thread workstation the
+# per-solve thread spawn and sync dominate so hard that the re-take blows the
+# budget below -- the same effect AUDIT_CI_TEST_TIME_2026_08_03 S1 measured
+# when it declined to pin the fast lane.  (2) It would buy nothing anyway:
+# every decision is identical at t1 and t4 on both builds, which is the
+# claim the table already records.
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
@@ -113,31 +137,56 @@ def _probe_module():
 # ======================================================================
 # 1 -- the table itself has to be worth reading
 # ======================================================================
-def test_the_census_spans_more_than_one_kernel_and_more_than_one_build():
-    """A census taken on one machine proves nothing about another.
+def test_the_census_spans_both_axes_and_more_than_one_build():
+    """A census taken on one machine in one configuration proves nothing.
 
-    The table must carry at least two distinct BLAS kernels and at least two
-    distinct builds, and every arm must have been taken at ONE thread -- an
-    arm with threads unpinned is measuring the reduction order of a thread
-    split, not of a kernel, and cannot be compared with the others.
+    The table must span BOTH axes -- at least two distinct BLAS kernels and
+    at least two distinct thread widths, one of which must be the UNPINNED
+    arm, because that is the configuration CI's fast lane actually runs --
+    and at least two builds.
     """
     t = _load_table()
     arms = t["arms"]
-    assert len(arms) >= 4, sorted(arms)
+    assert len(arms) >= 6, sorted(arms)
     kernels = {m["kernel"] for m in arms.values()}
     builds = {m["build"] for m in arms.values()}
+    widths = {m["thread_arm"] for m in arms.values()}
     assert len(kernels) >= 2, kernels
     assert len(builds) >= 2, builds
-    for arm, m in arms.items():
-        for var, val in m["threads"].items():
-            assert val == "1", (arm, var, val)
-    # the arm KEY is the MEASURED kernel, not the requested one: several
+    assert len(widths) >= 2, widths
+    assert "t1" in widths, sorted(widths)
+    # A MULTI-THREAD arm is required, because CI's fast lane runs BLAS
+    # unpinned and a table of one-thread arms cannot speak about it.
+    #
+    # ``t4`` is the faithful stand-in for that lane, NOT ``tauto``, and the
+    # distinction is measured rather than assumed: "unpinned" means "OpenBLAS
+    # picks from the core count", so on the 2-4 core runner it means about
+    # four threads, while on the 16-core/24-thread workstation this census was
+    # taken on it means TWENTY-FOUR -- a different arm wearing the same label.
+    # (It is also pathologically slow there: this probe is a few hundred SMALL
+    # solves, and spawning and syncing 24 BLAS threads per solve dominates,
+    # which is the same effect AUDIT_CI_TEST_TIME_2026_08_03 S1 measured when
+    # it declined to pin the fast lane.)  A ``tauto`` arm is welcome in the
+    # table and is compared like any other; it is just not what satisfies
+    # this requirement.
+    assert widths - {"t1"}, (
+        "the census has no MULTI-THREAD arm.  CI's fast lane runs BLAS "
+        "unpinned on a 2-4 core runner, so a table of one-thread arms cannot "
+        "speak about it: take one at OMP/OPENBLAS/MKL_NUM_THREADS=4.  Widths "
+        "present: %s" % sorted(widths))
+    # the arm KEY is what was MEASURED, not what was requested: several
     # requested coretypes resolve to the same kernel (``ZEN`` and an
     # unrecognised name both land on ``Haswell``), and two arms that ran
     # identical code must not look like independent evidence.
     for arm, m in arms.items():
-        assert arm == "%s-%s" % (m["build"], m["kernel"]), (arm, m)
+        assert arm == "%s-%s-%s" % (m["build"], m["kernel"], m["thread_arm"]), \
+            (arm, m)
     assert len(set(arms)) == len(arms)
+    # every MULTI-THREAD arm must record the width OpenBLAS actually chose --
+    # see the note above on why the label alone does not identify the arm.
+    for arm, m in arms.items():
+        if m["thread_arm"] != "t1":
+            assert m.get("blas_threads"), (arm, m)
 
 
 # ======================================================================
@@ -237,7 +286,7 @@ def test_this_arm_agrees_with_the_committed_census():
     m._branch_cut_decisions(here, rea)
     elapsed = time.perf_counter() - t0
 
-    arm, _build, _kernel = m._arm_id()
+    arm, _build, _kernel, _tag, _nthreads = m._arm_id()
     prefixes = tuple(_PREFIX[s] for s in _CHEAP)
     mismatch = {k: (v, consensus[k]) for k, v in here.items()
                 if k in consensus and consensus[k] != v}

@@ -153,8 +153,26 @@ least_duration --durations-path .test_durations`):
 | FAST gate, 4 shards | Katmai (`PRESCOTT`) | WIN | partial -- ~5,800 of 12,931 at the time of writing | **zero failures** |
 | FAST gate, 2 shards, numerics files only (144 files matching pmm/rcwa/bor/eme/slant/staggered/mortar/conditioning/branch/sliver/jones/berreman/emt) | Nehalem | WSL | partial -- ~1,900 | **zero failures** |
 
-The completed one is the most informative: **the entire slow gate runs clean
-on a second kernel**, save the one test that is red on every kernel anyway.
+**The Katmai fast gate found failures CI never reported**, which is the whole
+point of running a sweep rather than reading a log.  Six, from the ~8,100 tests
+it reached before being stopped to make room for the CI-faithful run:
+
+| test | on Katmai | also on CI? | class |
+|---|---|---|---|
+| `test_audit_s1_2_rcwa_lossless_tripwire::test_closure_warning_names_the_exact_index_coincidence_and_the_detune` | FAIL | yes | (b), branch-cut agent -- **now reproduced locally**, so it is kernel-decided, not runner-specific |
+| `test_fix_pmmstack_sliver_walls_round2::test_the_round1_misses_are_refused_or_are_below_the_trigger` | FAIL | yes | (b), sliver agent -- **now reproduced locally** |
+| `test_verify_pmmstack_sliver_walls::test_the_guard_has_a_measured_floor_the_theorem_cannot_reach` | FAIL | no | (b), sliver agent |
+| `test_niche_audit_w9_eig_vjp::test_pmm2d_near_normal_angle_gradient_improved` | FAIL | yes (jax lane) | (a), branch-cut agent |
+| **`test_niche_d1_tilted_carrier::test_the_fold_warning_on_an_off_centre_disc_was_a_true_positive`** | **FAIL** | **no** | **(a), this sweep -- restated, §4** |
+| **`test_niche_r1_cosgrid_cache::test_structured_cold_speedup`** | **FAIL** | **no** | **(c), contention -- §6** |
+
+Two of those reproduce a CI failure on a LOCAL kernel for the first time,
+which upgrades them from "the runner does something odd" to "this is a
+kernel-decided guard" and hands the owners a reproducer they can run.
+
+The completed slow gate is the other informative one: **the entire slow gate
+runs clean on a second kernel**, save the one test that is red on every kernel
+anyway.
 The slow gate is where the eig-heavy, conditioning-sensitive work lives (the
 EME vector convergence files, the FFF-NV RCWA files), so a clean pass there on
 an AVX-no-FMA kernel is real evidence that nothing else in that population is
@@ -180,7 +198,7 @@ runs the next one:
 
 ---
 
-## 3. The census: eight arms, 56 decisions
+## 3. The census: ten arms on two axes, 54 decisions
 
 `validation/probe_ci_kernel_sweep/probe_decisions.py` takes the library's guard
 **decisions** -- not readings -- on one arm and writes them as JSON;
@@ -190,9 +208,25 @@ refuse/return, the two 2-D mortar screens (rcond and residual), the per-layer
 width band's warn/silent/refuse, the RCWA generalized interface's `T22`
 refuse/accept, and the modal branch-cut orientation census.
 
-Result over the eight arms: **54 of 56 decisions are unanimous.**  The two that
-are not are both the same site, and they are the subject of the failing test
-this sweep owns.
+An arm is a `(build, kernel, thread-width)` triple, and the THREAD width is a
+first-class axis because CI's fast lane -- where six of the eight red lanes
+were -- leaves BLAS unpinned.  The committed table carries ten arms: the four
+kernels x two builds at one thread, plus a `t4` arm on the CI kernel on each
+build.
+
+Result: **all 54 decisions are unanimous on all ten arms**, at one thread and
+at four alike.  The only rows that move are the two `hypothetical` ones -- the
+verdict a bar the library does NOT ship would return at the one site it
+deliberately leaves unguarded, which is the subject of the failing test this
+sweep owns.
+
+`t4` and not `tauto`, deliberately: "unpinned" means "as many threads as the
+machine has", and this workstation has 24 where the runner has about four, so
+a `tauto` arm here is a different arm wearing CI's label.  It is also
+pathologically slow -- this probe is a few hundred SMALL solves and the
+per-solve spawn/sync of 24 BLAS threads dominates, the same effect
+`AUDIT_CI_TEST_TIME_2026_08_03` S1 measured when it declined to pin the fast
+lane.
 
 ### The one site where a bar's verdict flips with the kernel
 
@@ -370,6 +404,50 @@ calibrated on the widest kernel available has its smallest margin on the
 oldest one -- which is the opposite of where a developer looks.
 
 
+### `test_niche_d1_tilted_carrier.py` (two witnesses) -- class (a)
+
+Found by the Katmai gate, never seen on CI.  The fail-before arm of both
+decentred-ghost witnesses reconstructs a pre-D1 ghost by driving a
+deliberately near-singular fit into a fold, at ONE decentre (5.60 mm).
+Whether a given decentre folds is a rounding-level property of that fit, so it
+is decided by the kernel:
+
+| kernel | `bad_rel` at the historical 5.60 mm | verdict |
+|---|---|---|
+| Haswell | 4.900e-01 | reproduces |
+| Sandybridge | 1.003e-03 | **does not** |
+| Nehalem | 1.003e-03 | **does not** |
+| Katmai | 1.003e-03 | **does not** |
+
+against a 0.02 bar.  Three decades under it on three of four kernels -- the
+witness simply was not there.  Note that the three non-Haswell readings agree
+to five figures with each other AND with the reading this test's own comment
+records for the *cured* path, which is what makes it a disappeared witness
+rather than a smaller one.
+
+**The defect has moved, not gone.**  Scanning the decentre finds it on every
+kernel, at a different rung:
+
+| kernel | first reproducing rung | `bad_rel` there |
+|---|---|---|
+| Haswell | 5.60 mm | 4.900e-01 |
+| Nehalem | 5.80 mm | 1.329e-01 |
+| Katmai | 5.80 mm | 9.608e-01 |
+| Sandybridge | 5.85 mm | 1.495e-01 |
+
+`docs/TESTING_STANDARDS.md` restatement 3 prescribes exactly this: "Scan a
+ladder if needed; hard-fail only when the ladder is exhausted AND the fixed
+path misbehaves -- the fixed-path claim stays unconditional on every arm."  So
+`_GHOST_XC_LADDER` is added (ordered so the historical rung is tried first:
+Haswell stops at rung 1, Nehalem and Katmai at rung 2, Sandybridge at rung 3,
+which costs one or two extra solves), `_first_reproducing_rung` walks it
+requiring BOTH a loud ghost and a fold warning, and it raises with the whole
+scanned ladder if nothing reproduces -- the "ladder exhausted" case, which
+means re-derive.  The fixture helpers are parameterised by the decentre so the
+sibling witness can recompute its spline ORACLE at whichever rung was found,
+keeping that comparison like-for-like.  Both witnesses' PASS-AFTER halves are
+untouched and still run at the shipped decentre.
+
 ---
 
 ## 5. Class (b) hand-offs -- kernel-dependent LIBRARY decisions
@@ -439,7 +517,33 @@ the cost of a truncated one is a second full CI cycle.
 
 ---
 
-## 6. The new local instrument
+## 6. Class (c) -- and a caution about how this sweep was run
+
+`test_niche_r1_cosgrid_cache.py::test_structured_cold_speedup` asserts a
+WALL-CLOCK ratio (`structured < 0.7 x delaunay`, best of three) between two
+implementations in the same process.  It failed on the Katmai gate at ratio
+0.87.  It is **not** kernel-dependent, and the evidence is two-sided in the
+most direct way available: re-run one at a time, it PASSES on Katmai (and on
+Haswell and Sandybridge) and FAILS on Nehalem at ratio 1.18 -- the opposite
+pattern from the gate run.  The same test took 16.9 s, 21.9 s, 41.9 s and
+43.6 s on the four kernels, which is not a kernel signal; it is the box.
+
+Both failures were produced by THIS SWEEP's own methodology: up to eleven
+concurrent pytest processes plus another agent's probes on one workstation.
+The test is left exactly as it is.  Widening a speed bar until it survives a
+self-inflicted 11-process load is precisely the move
+`docs/TESTING_STANDARDS.md` forbids, and it is not red on CI, where each shard
+has a runner to itself.
+
+**The caution for the next sweep:** a kernel ladder oversubscribes the machine
+by construction, so wall-clock assertions inside it are measuring the sweep
+and not the tree.  Either exclude the timing files from a laddered run
+(`--deselect`, or a `-m "not perf"` marker if one is ever added) or re-run any
+timing failure alone before believing it.
+
+---
+
+## 7. The new local instrument
 
 `tests/unit/test_ci_kernel_consistency.py` (5 tests, **5.3 s** measured) closes
 the hole that made this sweep necessary: nothing in the gate compared a decision
@@ -465,47 +569,64 @@ It asserts, in this order:
 
 ---
 
-## 7. Axes that were ruled OUT, and what could not be run
+## 8. Which axis is it, then?  What was ruled out, and what is left
 
-### Ruled out by measurement (so the CI divergence is none of these)
+**Correction, 2026-09-11 (coordinator).**  CI's runners are **AMD EPYC 7763 --
+Zen 3, no AVX-512**.  That is the same microarchitecture generation as this
+host (Ryzen 9 5950X, Zen 3), which settles two things at once and invalidates
+one hypothesis this document carried in an earlier revision:
 
-* **BLAS thread count.**  The fast `unit` lane runs BLAS unpinned; the sweep
-  pinned every arm to one thread.  So the whole 56-decision census was re-taken
-  at **2 and 4 threads** on WIN-Haswell: **zero decisions and zero hypothetical
-  verdicts differ** from the 1-thread arm, and `max(R+T)` at the B1 fixture
-  moves from 2.172858 to 2.172861 -- six figures, not two decades.  A separate
-  1/2/4/8-thread ladder on the sliver decision alone also stays `refuse`
-  throughout.  Threading is not the explanation for B1 on this host.
-* **The build (interpreter + numpy version + OS).**  WIN py3.14.6 / numpy 2.4.4
-  and WSL py3.12.3 / numpy 2.4.6 produce **bit-identical readings at every
-  kernel** across all 56 decisions and every float in the census.  On this host
-  the build is not an independent axis; the kernel is.
+* the runner's OpenBLAS kernel is the **same Haswell-class kernel** this
+  workstation selects by default -- so the CI-vs-local divergence is not a
+  BLAS kernel difference at all;
+* numpy's own SIMD dispatch is likewise the same tier (**X86_V3**: AVX2, no
+  AVX-512).  An earlier revision of this document proposed X86_V4 ufunc loops
+  on the runner as the leading explanation for B1.  **That is withdrawn**: a
+  Zen 3 EPYC cannot report X86_V4.
+
+### Ruled out by measurement
+
+* **BLAS micro-kernel.**  Same kernel on both sides (above), and in any case
+  the full 54-decision census is unanimous across Haswell / Sandybridge /
+  Nehalem / Katmai except at the one deliberately-unguarded site in §3.
+* **The build (interpreter + numpy version + OS).**  WIN py3.14.6 / numpy
+  2.4.4 and WSL py3.12.3 / numpy 2.4.6 produce **bit-identical readings at
+  every kernel** across the whole census.
 * **A Zen-specific BLAS kernel.**  Does not exist in these wheels (§1).
+* **numpy SIMD tier.**  Same on both sides (above).  It could not be driven
+  DOWN either -- `NPY_DISABLE_CPU_FEATURES="AVX2 FMA3 F16C AVX"` did not change
+  numpy 2.4.4's reported dispatch -- but with the runner on the same tier that
+  no longer matters.
+
+### What is left: the THREAD WIDTH, and the census now carries it
+
+CI's fast lane deliberately leaves BLAS **unpinned** on a 2-4 core runner
+(`unit-tests.yml`: "this job deliberately does NOT pin BLAS at run time"),
+while the slow and jax lanes pin to one.  Six of the eight red lanes are fast
+lanes.  A reduction split across four threads is a different summation order
+from the same reduction on one, in exactly the way a different kernel is -- so
+the thread width is a first-class axis, and the committed census now carries
+`t1`, `t4` and `tauto` (unpinned) arms alongside the kernel ladder, with the
+width OpenBLAS actually chose recorded beside the label.
+
+The honest statement of where this leaves B1: **on this host the thread width
+does not move any decision** (the full census at `t4` and unpinned is
+identical to `t1`), but this host has 16 cores and the runner has 4, and an
+unpinned OpenBLAS picks its blocking from the core count.  The remaining
+untested difference between this workstation and the runner is therefore
+narrow and specific -- unpinned OpenBLAS on a **4-core** machine -- and the
+cheapest way to close it is on the runner, not here: add
+`python -c "import numpy, threadpoolctl; print(threadpoolctl.threadpool_info())"`
+to a CI step and compare the reported `architecture` and `num_threads` against
+the arms in `decisions.json`.
 
 ### Could not be run here
 
-* **`SKYLAKEX`** -- unreachable on this host (AVX-512 SIGILL on both builds).
-  A true SkylakeX arm needs Intel hardware.
-* **numpy's OWN SIMD dispatch above X86_V3.**  OpenBLAS is not the only
-  CPU-dispatched arithmetic in the stack: numpy dispatches its ufunc loops
-  separately, and this host reports `baseline X86_V2, found X86_V3` -- i.e. AVX2
-  but no AVX-512.  A CI EPYC of the Zen 4 generation or later reports
-  **X86_V4** and therefore runs *different numpy loops* for every reduction,
-  `abs`, `sum` and comparison in the closure computation -- including the
-  `sum R + sum T` that the sliver guard's trigger is taken from.  This axis was
-  NOT reachable here in either direction: the host cannot go up, and
-  `NPY_DISABLE_CPU_FEATURES="AVX2 FMA3 F16C AVX"` did not change numpy 2.4.4's
-  reported dispatch (still `found: X86_V3`), so it could not be driven down
-  either.
-
-  **This is now the leading hypothesis for B1**, having ruled out threads,
-  build and BLAS kernel above.  It is also testable cheaply by whoever owns the
-  runner image: print `np.show_runtime()`'s `simd_extensions` from a CI step and
-  compare against `X86_V3`.  If the runner reports `X86_V4`, the sliver guard's
-  energy trigger is being computed by a different set of ufunc kernels than any
-  arm in this census, which is exactly the shape B1 needs.
-* **A complete FAST-gate arm on a second kernel.**  The SLOW gate finished on
-  Sandybridge (clean); the fast gate reached ~45 % on Katmai and the numerics
-  subset ~68 % on Nehalem, both with zero failures, before the sweep's window
-  closed.  See "The local full-gate sweeps" in §2 for the numbers and for why
-  a full SSE2 fast gate needs a day.
+* **`SKYLAKEX`** -- unreachable on this host (AVX-512 SIGILL on both builds),
+  and moot: the runner has no AVX-512 either.
+* **A 4-core unpinned arm** -- needs a 4-core machine, or a cgroup/affinity
+  restriction this sweep did not set up.
+* **A complete FAST-gate arm on the Katmai kernel.**  It reached ~82 % on
+  three of four shards (finding the failures in §2) before it was stopped to
+  make room for the CI-faithful run; the fourth shard was still inside one
+  file.  The SLOW gate did finish, on Sandybridge, clean.

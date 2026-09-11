@@ -1,7 +1,8 @@
 {
- "arm": "WIN-Sandybridge",
- "build": "WIN",
- "coretype_requested": "SANDYBRIDGE",
+ "arm": "WSL-Haswell-t4",
+ "blas_threads": 4,
+ "build": "WSL",
+ "coretype_requested": "",
  "decisions": {
   "band/1.2e-03": "warn",
   "band/2.0e-02": "warn",
@@ -64,10 +65,10 @@
   "pmm1d_interface/rcond_decade@1e-04": "1e-11",
   "pmm1d_interface/rcond_decade@1e-05": "1e-13"
  },
- "kernel": "Sandybridge",
- "numpy": "2.4.4",
- "platform": "Windows-11-10.0.26200-SP0",
- "python": "3.14.6",
+ "kernel": "Haswell",
+ "numpy": "2.4.6",
+ "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
+ "python": "3.12.3",
  "readings": {
   "band/9.0e-04/msg": "Basis1D: segment 1 of this NON-UNIFORM element grid is 9e-10 wide -- 9.000e-04 o",
   "branch_cut/at_cutoff/max_ratio": 9.316949905111799e-14,
@@ -78,26 +79,27 @@
   "branch_cut/lossless_propagating/min_ratio": 2.8262402467562398e-18,
   "branch_cut/lossy/max_ratio": 0.009998500387383162,
   "branch_cut/lossy/min_ratio": 0.004999250193691581,
-  "mortar/pattern@M4/worst_rcond": 1.9190112916181127e-11,
-  "mortar/pattern@M4/worst_resid": 8.98277729696896e-15,
-  "mortar/slant_both@M4/worst_rcond": 0.00010383703077367551,
-  "mortar/slant_both@M4/worst_resid": 8.304962502827252e-15,
-  "mortar/spacer@M5/worst_rcond": 4.33763716906458e-14,
-  "mortar/spacer@M5/worst_resid": 2.92384981141664e-14,
-  "pmm1d_interface/R+T@1e-04": 1.000000063411917,
-  "pmm1d_interface/R+T@1e-05": 3.6115933312657242,
-  "pmm1d_interface/rcond@1e-04": 9.69692446810235e-11,
-  "pmm1d_interface/rcond@1e-05": 9.729670302663931e-13,
-  "sliver/R+T@1e-04": 1.000000063411917,
+  "mortar/pattern@M4/worst_rcond": 1.9190112916339112e-11,
+  "mortar/pattern@M4/worst_resid": 9.221532154035817e-15,
+  "mortar/slant_both@M4/worst_rcond": 0.00010383703077367461,
+  "mortar/slant_both@M4/worst_resid": 7.201229656653306e-15,
+  "mortar/spacer@M5/worst_rcond": 4.328079001154272e-14,
+  "mortar/spacer@M5/worst_resid": 3.216773183724531e-14,
+  "pmm1d_interface/R+T@1e-04": 0.9999999852273196,
+  "pmm1d_interface/R+T@1e-05": 2.1728612863773282,
+  "pmm1d_interface/rcond@1e-04": 9.693991669335193e-11,
+  "pmm1d_interface/rcond@1e-05": 9.730884764326219e-13,
+  "sliver/R+T@1e-04": 0.9999999852273196,
   "sliver/msg@1e-05": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union gri",
-  "t22/pattern@M4/worst_rcond_eq": 0.002397740832691987,
-  "t22/slant_both@M4/worst_rcond_eq": 0.003041565403630177,
-  "t22/spacer@M5/worst_rcond_eq": 0.003864411172509296
+  "t22/pattern@M4/worst_rcond_eq": 0.002318711778038449,
+  "t22/slant_both@M4/worst_rcond_eq": 0.0028860026303790193,
+  "t22/spacer@M5/worst_rcond_eq": 0.0037420787801499406
  },
  "scipy": "1.17.1",
+ "thread_arm": "t4",
  "threads": {
-  "MKL_NUM_THREADS": "1",
-  "OMP_NUM_THREADS": "1",
-  "OPENBLAS_NUM_THREADS": "1"
+  "MKL_NUM_THREADS": "4",
+  "OMP_NUM_THREADS": "4",
+  "OPENBLAS_NUM_THREADS": "4"
  }
 }

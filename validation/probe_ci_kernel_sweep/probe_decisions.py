@@ -8,16 +8,27 @@ reading.  ``docs/TESTING_STANDARDS.md`` ("flakiness is bad math") forbids
 re-running such a thing to green: the decision itself has to be made
 build-independent, and that requires MEASURING it on more than one BLAS kernel.
 
-WHAT AN "ARM" IS.  One (build, kernel) pair.  ``build`` is the interpreter +
-numpy + OS (``WIN`` = Windows/CPython 3.14, ``WSL`` = Ubuntu/CPython 3.12);
-``kernel`` is the OpenBLAS micro-kernel family, selected on the command line
-with ``OPENBLAS_CORETYPE``.  The bundled scipy-openblas is DYNAMIC_ARCH, so
-the variable re-dispatches the whole BLAS/LAPACK kernel set without rebuilding
-anything.  Thread caps are pinned to 1 on every arm so the ONLY axis that
-moves is the kernel.
+WHAT AN "ARM" IS.  One (build, kernel, thread-width) triple.  ``build`` is the
+interpreter + numpy + OS (``WIN`` = Windows/CPython 3.14, ``WSL`` =
+Ubuntu/CPython 3.12); ``kernel`` is the OpenBLAS micro-kernel family, selected
+on the command line with ``OPENBLAS_CORETYPE`` (the bundled scipy-openblas is
+DYNAMIC_ARCH, so the variable re-dispatches the whole BLAS/LAPACK kernel set
+without rebuilding anything); ``thread-width`` is what the thread caps were
+set to, ``tauto`` meaning no cap at all.
 
+BOTH axes are real and the second is not optional.  CI's FAST lane
+deliberately leaves BLAS unpinned (``unit-tests.yml``: "this job deliberately
+does NOT pin BLAS at run time") while the SLOW and JAX lanes pin to one, so a
+census taken only at one thread cannot speak about the lane where most of the
+red appeared.  A reduction split across four threads is a different summation
+order from the same reduction on one, in exactly the way a different kernel
+is.
+
+    # a kernel arm
     OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
         OPENBLAS_CORETYPE=NEHALEM python probe_decisions.py --out arm.json
+    # the CI-faithful arm: default kernel, caps UNSET
+    python probe_decisions.py --out arm.json
 
 MEASURED CAVEAT (2026-09-11, this host = AMD Ryzen 9 5950X, Zen 3):
 
@@ -71,9 +82,11 @@ import platform
 import sys
 import warnings
 
-for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
-    os.environ.setdefault(_v, "1")
-
+# NOTE: no ``setdefault`` here, deliberately.  The THREAD COUNT is one of this
+# probe's two axes (see the module docstring), and a probe that quietly pins
+# itself to one thread cannot measure the unpinned arm -- which is the arm CI's
+# fast lane actually runs.  Pass the caps on the command line; leaving them
+# unset IS the "auto" arm.
 import numpy as np  # noqa: E402
 import scipy.linalg as sla  # noqa: E402
 
@@ -416,26 +429,38 @@ def _branch_cut_decisions(dec, rea):
 
 # ======================================================================
 def _arm_id():
-    """``BUILD-KERNEL`` -- the arm's identity, both halves MEASURED.
+    """``BUILD-KERNEL-tN`` -- the arm's identity, all three parts MEASURED.
 
-    The kernel half is read back from the loaded OpenBLAS (via
+    The kernel part is read back from the loaded OpenBLAS (via
     ``threadpoolctl``) rather than from ``OPENBLAS_CORETYPE``, because the
     request and the result are NOT the same thing: ``ZEN`` and ``BOGUSCORE``
     both resolve to ``Haswell`` in these wheels (see the module docstring).
     Recording the REQUEST would let two arms that ran identical code look
     like independent evidence.
+
+    The thread part is likewise read back from the loaded library, not from
+    the environment: ``tauto`` is an arm with NO cap set, where OpenBLAS
+    picked its own width from the core count -- which is exactly what CI's
+    fast lane does, and what the SLOW and JAX lanes deliberately do not.  An
+    unpinned arm on a 16-core workstation and an unpinned arm on a 4-core
+    runner are different arms, so the width OpenBLAS actually chose is
+    recorded in ``blas_threads`` beside the label.
     """
     build = "WSL" if sys.platform.startswith("linux") else "WIN"
-    arch = "unknown"
+    arch, nthreads = "unknown", None
     try:
         import threadpoolctl  # noqa: I001, PLC0415
         for d in threadpoolctl.threadpool_info():
             if d.get("internal_api") in ("openblas", "mkl"):
                 arch = str(d.get("architecture") or "unknown")
+                nthreads = d.get("num_threads")
                 break
     except Exception:                                   # noqa: BLE001
         pass
-    return "%s-%s" % (build, arch), build, arch
+    cap = os.environ.get("OPENBLAS_NUM_THREADS", "") \
+        or os.environ.get("OMP_NUM_THREADS", "")
+    tag = ("t%s" % cap) if cap else "tauto"
+    return "%s-%s-%s" % (build, arch, tag), build, arch, tag, nthreads
 
 
 def main(argv=None):
@@ -451,11 +476,13 @@ def main(argv=None):
     _t22_decisions(dec, rea)
     _branch_cut_decisions(dec, rea)
 
-    arm, build, arch = _arm_id()
+    arm, build, arch, tag, nthreads = _arm_id()
     doc = {
         "arm": arm,
         "build": build,
         "kernel": arch,
+        "thread_arm": tag,
+        "blas_threads": nthreads,
         "coretype_requested": os.environ.get("OPENBLAS_CORETYPE", ""),
         "platform": platform.platform(),
         "python": sys.version.split()[0],

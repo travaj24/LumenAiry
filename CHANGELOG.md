@@ -1421,6 +1421,37 @@ withdrawn in favour of the reading, whose coincident worst never falls below
 7.289e-04 -- seven decades above the clean population and 73x above the bar --
 on any of the eight arms.
 
+RESTATED (3), class (a), found by the sweep and never seen on CI: both
+decentred-ghost witnesses in `test_niche_d1_tilted_carrier.py` reconstruct a
+pre-D1 ghost at ONE decentre, and whether a given decentre folds is a
+rounding-level property of the near-singular fit.  At the historical 5.60 mm
+the ghost reads 0.490 on Haswell and 1.003e-03 on Sandybridge, Nehalem and
+Katmai alike -- three decades under the 0.02 bar, and to five figures the same
+as the reading the test's own comment records for the CURED path, so the
+witness had simply disappeared on three of four kernels.  It has moved, not
+gone: scanning the decentre finds it on every kernel, at 5.60 mm (Haswell),
+5.80 mm (Nehalem, Katmai) and 5.85 mm (Sandybridge).  `_GHOST_XC_LADDER` is
+added and walked historical-rung-first, requiring both a loud ghost and a fold
+warning at the rung it stops on, and raising with the whole scanned ladder if
+nothing reproduces.  The fixture helpers take the decentre as an argument so
+the sibling witness recomputes its spline oracle at the rung actually found;
+both PASS-AFTER halves are untouched.
+
+The census carries BOTH axes.  CI's fast lane -- six of the eight red lanes --
+leaves BLAS unpinned, so thread width is a first-class axis beside the kernel:
+the table is ten arms (four kernels x two builds at one thread, plus a `t4`
+arm on the CI kernel on each build) and all 54 decisions are unanimous across
+every one of them.  `t4` and not `tauto` on purpose -- "unpinned" means "as
+many threads as the machine has", 24 here against about four on the runner, so
+an unpinned local arm wears CI's label without being CI's arm.
+
+One failure is class (c) and is deliberately left alone:
+`test_niche_r1_cosgrid_cache::test_structured_cold_speedup` asserts a
+wall-clock ratio, and it fails under the sweep's own eleven-way
+oversubscription while passing when re-run alone -- on Katmai, the very kernel
+the gate flagged, and failing instead on Nehalem.  Widening a speed bar to
+survive a self-inflicted load is the move the standards forbid.
+
 ### Deprecation horizon
 
 * `NEXT_REMOVAL_VERSION` slipped `5.46` -> `5.48` (fifth proactive one-line
