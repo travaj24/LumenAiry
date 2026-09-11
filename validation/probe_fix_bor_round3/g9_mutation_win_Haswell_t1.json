@@ -1,0 +1,23 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_bor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "python": "3.14.6",
+  "requested_coretype": "HASWELL",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "summary": {
+  "gate": "test_the_energy_screen_disarms_on_an_absorbing_incidence_medium_but_the_ceiling_does_not",
+  "intact": "PASS",
+  "mutated": "FAIL: the predicate called a stack with an ABSORBING incidence medium provably passive; R and T come from a unit-|z-",
+  "verdict": "LIVE"
+ }
+}

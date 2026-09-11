@@ -1,0 +1,347 @@
+{
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_bor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "python": "3.14.6",
+  "requested_coretype": "HASWELL",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "rows": [
+  {
+   "position": "axis",
+   "q_excess": Infinity,
+   "q_finite": false,
+   "q_measurable": true,
+   "verdict": "ok",
+   "w_frac": 1e-09,
+   "w_min_own_frac": 1e-09,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "middle",
+   "q_excess": 252144031.5213246,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 1e-09,
+   "w_min_own_frac": 1.0000000087255028e-09,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "outer",
+   "q_excess": 252144048.05586398,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 1e-09,
+   "w_min_own_frac": 9.999999347106343e-10,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "axis",
+   "q_excess": Infinity,
+   "q_finite": false,
+   "q_measurable": true,
+   "verdict": "ok",
+   "w_frac": 3e-09,
+   "w_min_own_frac": 3e-09,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "middle",
+   "q_excess": 84048013.71273673,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 3e-09,
+   "w_min_own_frac": 2.999999989169074e-09,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "outer",
+   "q_excess": 84048012.61935471,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 3e-09,
+   "w_min_own_frac": 2.9999999521616396e-09,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "axis",
+   "q_excess": Infinity,
+   "q_finite": false,
+   "q_measurable": true,
+   "verdict": "ok",
+   "w_frac": 1e-08,
+   "w_min_own_frac": 1.0000000000000002e-08,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "middle",
+   "q_excess": 25214406.266674764,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 1e-08,
+   "w_min_own_frac": 1.0000000013240159e-08,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "outer",
+   "q_excess": 25214404.325431142,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 1e-08,
+   "w_min_own_frac": 9.99999993922529e-09,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "axis",
+   "q_excess": 29649561.274780605,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 3e-08,
+   "w_min_own_frac": 3e-08,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "middle",
+   "q_excess": 8404804.26808832,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 3e-08,
+   "w_min_own_frac": 3.0000000002713044e-08,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "outer",
+   "q_excess": 8404802.148274167,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 3e-08,
+   "w_min_own_frac": 2.9999999965705605e-08,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "axis",
+   "q_excess": 8894868.42299599,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 1e-07,
+   "w_min_own_frac": 1e-07,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "middle",
+   "q_excess": 2521443.558319837,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 1e-07,
+   "w_min_own_frac": 9.999999998437185e-08,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "outer",
+   "q_excess": 2521441.4304524967,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 1e-07,
+   "w_min_own_frac": 9.999999998437185e-08,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "axis",
+   "q_excess": 2964956.179630644,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 3e-07,
+   "w_min_own_frac": 3e-07,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "middle",
+   "q_excess": 840483.3548358121,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 3e-07,
+   "w_min_own_frac": 2.99999999990123e-07,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "outer",
+   "q_excess": 840808.8224268542,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 3e-07,
+   "w_min_own_frac": 2.9999999995311555e-07,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "axis",
+   "q_excess": 889486.8944495746,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "ok",
+   "w_frac": 1e-06,
+   "w_min_own_frac": 1e-06,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "middle",
+   "q_excess": 252147.28372994674,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 1e-06,
+   "w_min_own_frac": 9.999999999917482e-07,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "outer",
+   "q_excess": 252147.08762131166,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "warn_own",
+   "w_frac": 1e-06,
+   "w_min_own_frac": 9.999999999917482e-07,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "axis",
+   "q_excess": 296495.69014694326,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "ok",
+   "w_frac": 3e-06,
+   "w_min_own_frac": 3e-06,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "middle",
+   "q_excess": 84051.26345000844,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "ok",
+   "w_frac": 3e-06,
+   "w_min_own_frac": 3.000000000012252e-06,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "outer",
+   "q_excess": 84051.59456795933,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "ok",
+   "w_frac": 3e-06,
+   "w_min_own_frac": 2.9999999999752447e-06,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "axis",
+   "q_excess": 88948.74158555307,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "ok",
+   "w_frac": 1e-05,
+   "w_min_own_frac": 1e-05,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "middle",
+   "q_excess": 25239.86684949277,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "ok",
+   "w_frac": 1e-05,
+   "w_min_own_frac": 9.999999999991497e-06,
+   "w_min_union_frac": Infinity
+  },
+  {
+   "position": "outer",
+   "q_excess": 25217.80555288609,
+   "q_finite": true,
+   "q_measurable": true,
+   "verdict": "ok",
+   "w_frac": 1e-05,
+   "w_min_own_frac": 1.0000000000065512e-05,
+   "w_min_union_frac": Infinity
+  }
+ ],
+ "summary": {
+  "edge_rel_spread": 8.251794972151394e-12,
+  "edge_ulps": 38968.0,
+  "edge_verdicts": {
+   "axis": "ok",
+   "middle": "warn_own",
+   "outer": "warn_own"
+  },
+  "edge_w_min_own_frac": {
+   "axis": 1e-06,
+   "middle": 9.999999999917482e-07,
+   "outer": 9.999999999917482e-07
+  },
+  "n_disagreeing_rungs": 4,
+  "nonfinite_q_excess": [
+   [
+    "axis",
+    1e-09,
+    "ok"
+   ],
+   [
+    "axis",
+    3e-09,
+    "ok"
+   ],
+   [
+    "axis",
+    1e-08,
+    "ok"
+   ]
+  ],
+  "nonfinite_reading_ok": [
+   [
+    "axis",
+    1e-09,
+    "ok"
+   ],
+   [
+    "axis",
+    3e-09,
+    "ok"
+   ],
+   [
+    "axis",
+    1e-08,
+    "ok"
+   ]
+  ],
+  "positions_disagree_at": [
+   1e-09,
+   3e-09,
+   1e-08,
+   1e-06
+  ],
+  "rows": 27,
+  "rungs": 9,
+  "seconds": 27.200843334197998
+ }
+}

@@ -138,6 +138,15 @@ BOR_SEM_MESH_GUARD = True
 #: widened census reaches 1134.2.  A LOWER k0 RAISES this ratio, so the low-k0
 #: taper arm is the demanding one and is why the census sweeps k0 as well as the
 #: slice count.  Kernel spread of the quantity itself: 1.1895x.
+#:
+#: ROUND 3 (verification round 2, GAP 3) -- WHAT A NON-FINITE RATIO MEANS.
+#: This bar is now reached only when the ratio is FINITE.  A ratio FORMED
+#: from a real spectrum that comes back ``inf`` or ``nan`` is PAST every bar
+#: there is, and :func:`verdict` now reads it as HOT rather than as benign; a
+#: ratio that was never formed (no modes, or a zero ``n_max k0`` denominator,
+#: flagged by ``q_measurable``) stays cold, because it is evidence in neither
+#: direction.  See :func:`verdict` for the kernel-dependence that reading
+#: removed.
 _BOR_Q_EXCESS = 1.0e+04
 
 #: CONJUNCT (a), THE ATTRIBUTION: a cell narrower than this fraction of
@@ -236,6 +245,58 @@ _BOR_SLIVER_BAND_FRAC = 1.0e-4
 #: builder itself merges breakpoints closer than ``1e-12 * Rbig``, so a wall
 #: that survives into the mesh survives at this tolerance.
 _BOR_WALL_ATOL_FRAC = 1.0e-12
+
+#: ROUND 3 (verification round 2, GAP 4) -- THE WIDTH-COMPARISON DEADBAND.
+#:
+#: WHAT WENT WRONG.  ``_BOR_MIN_ELEM_FRAC`` and ``_BOR_SLIVER_BAND_FRAC`` were
+#: compared with a STRICT ``<`` against a quantity the geometry reproduces only
+#: to round-off, so ONE physical liner width decided TWO ways depending on
+#: which domain end it sat against.  Measured (``Rbig`` = 24, ``m`` = 1,
+#: ``N`` = 120, degree 8, a liner exactly ``_BOR_MIN_ELEM_FRAC`` of ``Rbig``
+#: wide; ``validation/probe_fix_bor_round3/g3_sem_ladder.py``, 2026-09-12):
+#:
+#:     position   walls                  w_min_own_frac        PRE verdict
+#:     axis       ``0``, ``w``           1.000000000000e-06    **ok**
+#:     middle     ``6``, ``6 + w``       9.999999999917e-07    warn_own
+#:     outer      ``Rbig - w``, ``Rbig`` 9.999999999917e-07    warn_own
+#:
+#: The axis liner's two walls DIFFERENCE EXACTLY to ``w`` (``w - 0``); the
+#: other two lose 8.2518e-12 relative -- 38,968 ULP -- to the subtraction of
+#: two numbers of order ``Rbig``.  Neither reading is wrong about the geometry;
+#: the EDGE was wrong to be a strict comparison at the representation limit.
+#:
+#: WHY 16 ULP, and why that is enough.  16 ULP is the sizing constant the
+#: library's other at-the-limit bars already use -- ``pmm/stack``'s
+#: ``_PASSIVE_ANTIHERM_DEADBAND`` and ``_WALL_SNAP_DEADBAND``, and
+#: ``bor_solve._BOR_PASSIVE_DEADBAND``.  It is applied RELATIVELY (a fraction
+#: of the bar) and SYMMETRICALLY: a width within 16 ULP of the bar on EITHER
+#: side is treated AS the bar, and the bar itself resolves to the INFORMATIVE
+#: side (the narrow one), so the three positions above decide identically.  It
+#: does not need to span the 38,968-ULP spread -- only the exact tie at the
+#: bar, which is the one representation the strict comparison excluded; the
+#: other two representations were already below it.
+#:
+#: TWO-SIDED, measured on the same ladder: the nearest rung above the edge is
+#: 3e-6 of ``Rbig`` (3.0x) and the nearest below is 3e-7 (0.30x), so the
+#: deadband -- 3.55e-15 relative -- sits **14.4 decades** inside the closest
+#: width any rung of the ladder actually asks for.  It can only ever decide a
+#: tie.
+_BOR_FRAC_DEADBAND = 16.0 * float(np.finfo(float).eps)
+
+
+def _below(x, bar):
+    """``x < bar``, with :data:`_BOR_FRAC_DEADBAND` closing the tie.
+
+    ROUND 3 (GAP 4).  ``x`` is a width fraction the geometry reproduces only
+    to round-off; ``bar`` is an exact decimal literal.  A value within the
+    deadband of the bar counts as AT the bar, and at the bar the contract
+    speaks -- so the same physical width decides identically at the axis, in
+    the interior and at the outer wall."""
+    x = float(x)
+    bar = float(bar)
+    if not np.isfinite(x):
+        return False
+    return x < bar * (1.0 + _BOR_FRAC_DEADBAND)
 
 
 class BORSemMeshError(ValueError):
@@ -352,9 +413,16 @@ def measure_layer(bnd, layer_index, walls, Rbig, q, n_max, k0):
             w_own = min(w_own, float(widths[j]))
     qa = np.asarray(q)
     den = float(np.real(n_max)) * float(np.real(k0))
+    # ROUND 3 (GAP 3).  ``q_measurable`` separates the TWO ways ``q_excess``
+    # can come back non-finite, which ``verdict`` must read differently: a
+    # spectrum that BLEW UP (``qa.size`` and ``den > 0``, ratio ``inf``/``nan``
+    # -- past every bar there is) from a ratio that was never FORMED (no modes,
+    # or a zero ceiling -- no evidence in either direction).  The old
+    # ``isfinite`` test conflated them and read both as benign.
+    q_measurable = bool(qa.size and den > 0.0)
     q_excess = (float(np.max(np.abs(qa))) / den
-                if qa.size and den > 0.0 else float("nan"))
-    return dict(layer=int(layer_index), Rbig=Rbig,
+                if q_measurable else float("nan"))
+    return dict(layer=int(layer_index), Rbig=Rbig, q_measurable=q_measurable,
                 w_min=w_min, w_min_frac=w_min / Rbig if Rbig > 0 else float("inf"),
                 w_min_own=w_own,
                 w_min_own_frac=(w_own / Rbig if (Rbig > 0
@@ -373,7 +441,26 @@ def verdict(rec):
     layer.  Pure function of the record, so a census can tabulate the same
     verdicts the solve would reach."""
     excess = rec["q_excess"]
-    hot = np.isfinite(excess) and excess > _BOR_Q_EXCESS
+    # ROUND 3 (verification round 2, GAP 3).  A NON-FINITE ``q_excess`` used to
+    # read as NOT hot -- ``np.isfinite(excess) and excess > bar`` -- so the
+    # contract fell SILENT exactly where the damage is worst, and because
+    # ``inf`` is a backward-error outcome the VERDICT moved with the BLAS
+    # kernel.  Measured on one geometry (a caller-prescribed liner 1e-8 of
+    # ``Rbig`` wide AT THE AXIS; ``BORStack(Rbig=24, m=1, N=120, basis='sem',
+    # degree=8)``), both builds, 2026-09-12:
+    #
+    #     Haswell / Nehalem / Katmai   q_excess = inf          verdict = ok
+    #     Sandybridge                  q_excess = 8.89487e+07  verdict = warn_own
+    #
+    # A mesh-contract decision that reads ``ok`` on three kernels and
+    # ``warn_own`` on a fourth, for a geometry the caller wrote once, is the
+    # shape ``docs/TESTING_STANDARDS.md`` exists to forbid.  A ratio that has
+    # gone non-finite is PAST every bar, so it is HOT -- but only when it was
+    # actually formed from a spectrum (``q_measurable``): a ratio that was
+    # never formed is no evidence in either direction and stays cold, which is
+    # the conservative reading and the pre-round-3 behaviour for that case.
+    hot = (excess > _BOR_Q_EXCESS if np.isfinite(excess)
+           else bool(rec.get("q_measurable", False)))
     fu = rec["w_min_union_frac"]
     # ROUND 2 (D4): the OWN arm reads ``w_min_own_frac`` -- the narrowest cell
     # BOTH of whose walls this layer's own segment list asked for -- and not
@@ -383,11 +470,15 @@ def verdict(rec):
     # and its own segment list mentions neither wall.  ``w_min_frac`` is still
     # measured and reported, because the census reads it.
     fa = rec.get("w_min_own_frac", rec["w_min_frac"])
-    if fu < _BOR_MIN_ELEM_FRAC and hot:
+    # ROUND 3 (GAP 4): the three width comparisons go through ``_below``, which
+    # closes the tie at the bar with a 16-ULP relative deadband, so the same
+    # physical width decides identically at the axis, in the interior and at
+    # the outer wall.  See :data:`_BOR_FRAC_DEADBAND`.
+    if _below(fu, _BOR_MIN_ELEM_FRAC) and hot:
         return "refuse"
-    if fu < _BOR_SLIVER_BAND_FRAC:
+    if _below(fu, _BOR_SLIVER_BAND_FRAC):
         return "warn_manufactured"
-    if fa < _BOR_MIN_ELEM_FRAC and hot:
+    if _below(fa, _BOR_MIN_ELEM_FRAC) and hot:
         return "warn_own"
     return "ok"
 

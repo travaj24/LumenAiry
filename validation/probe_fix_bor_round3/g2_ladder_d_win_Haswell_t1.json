@@ -1,0 +1,2182 @@
+{
+ "D": {
+  "N": 200,
+  "family": "ring",
+  "label": "D(ring)",
+  "m": 1,
+  "n": 13,
+  "rbl": 2.0,
+  "refused": 13,
+  "rows": [
+   {
+    "detector": "energy",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": 7.311843735813284e-06,
+    "im": 0.0,
+    "n_channels": 12,
+    "nodal_max": 2.41296601535247,
+    "nodal_min": 1.0917168655478202,
+    "twin_excess": 7.607248164731573e-13,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "energy",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": 7.311843185586753e-06,
+    "im": 1e-14,
+    "n_channels": 12,
+    "nodal_max": 2.412966017489785,
+    "nodal_min": 1.0917168655605496,
+    "twin_excess": 1.0458300891968975e-12,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "energy",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": 7.3118433554508755e-06,
+    "im": 1e-13,
+    "n_channels": 12,
+    "nodal_max": 2.412966016570163,
+    "nodal_min": 1.09171686544873,
+    "twin_excess": 1.3673506771283428e-12,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "energy",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": 7.311843197133072e-06,
+    "im": 1e-12,
+    "n_channels": 12,
+    "nodal_max": 2.4129660169401466,
+    "nodal_min": 1.091716865495889,
+    "twin_excess": 1.0325074129013956e-12,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "ceiling",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": 7.311843420509945e-06,
+    "im": 3e-12,
+    "n_channels": 12,
+    "nodal_max": 2.4129660160312465,
+    "nodal_min": 1.0917168655131895,
+    "twin_excess": 1.9977353105105067e-12,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "ceiling",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": 7.311843621460312e-06,
+    "im": 1e-11,
+    "n_channels": 12,
+    "nodal_max": 2.412966015245815,
+    "nodal_min": 1.091716865536066,
+    "twin_excess": 9.457767902176784e-12,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "ceiling",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": 7.311843160495712e-06,
+    "im": 1e-09,
+    "n_channels": 12,
+    "nodal_max": 2.4129660176817134,
+    "nodal_min": 1.091716871624945,
+    "twin_excess": 8.750606905749692e-10,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "ceiling",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": 7.311842477264463e-06,
+    "im": 1e-06,
+    "n_channels": 12,
+    "nodal_max": 2.4129652324415867,
+    "nodal_min": 1.0917229200730398,
+    "twin_excess": 8.751499089854065e-07,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "ceiling",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": null,
+    "im": 0.0001,
+    "n_channels": 0,
+    "nodal_max": null,
+    "nodal_min": null,
+    "twin_excess": null,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "ceiling",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": null,
+    "im": 0.001,
+    "n_channels": 0,
+    "nodal_max": null,
+    "nodal_min": null,
+    "twin_excess": null,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "ceiling",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": null,
+    "im": 0.01,
+    "n_channels": 0,
+    "nodal_max": null,
+    "nodal_min": null,
+    "twin_excess": null,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "ceiling",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": null,
+    "im": 0.05,
+    "n_channels": 0,
+    "nodal_max": null,
+    "nodal_min": null,
+    "twin_excess": null,
+    "verdict": "REFUSED",
+    "warnings": 0
+   },
+   {
+    "detector": "ceiling",
+    "exc_exit": 7.311843735813284e-06,
+    "exc_inc": null,
+    "im": 0.1,
+    "n_channels": 0,
+    "nodal_max": null,
+    "nodal_min": null,
+    "twin_excess": null,
+    "verdict": "REFUSED",
+    "warnings": 0
+   }
+  ]
+ },
+ "H": [
+  {
+   "N": 120,
+   "family": "uniform",
+   "label": "H(uniform,m=0,N=120,rbl=0.5)",
+   "m": 0,
+   "n": 13,
+   "rbl": 0.5,
+   "refused": 0,
+   "rows": [
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": -0.0325147086813764,
+     "im": 0.0,
+     "n_channels": 3,
+     "nodal_max": 1.000000000000006,
+     "nodal_min": 0.9999999999999991,
+     "twin_excess": 5.3512749786932545e-14,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": -0.0325147086813764,
+     "im": 1e-14,
+     "n_channels": 3,
+     "nodal_max": 1.0000000000000098,
+     "nodal_min": 1.0000000000000016,
+     "twin_excess": 6.428191312579656e-14,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": -0.0325147086813764,
+     "im": 1e-13,
+     "n_channels": 3,
+     "nodal_max": 1.0000000000001146,
+     "nodal_min": 1.0000000000000098,
+     "twin_excess": 1.9095836023552692e-13,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": -0.0325147086813764,
+     "im": 1e-12,
+     "n_channels": 3,
+     "nodal_max": 1.00000000000114,
+     "nodal_min": 1.000000000000066,
+     "twin_excess": 1.7412737918220955e-12,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": -0.0325147086813764,
+     "im": 3e-12,
+     "n_channels": 3,
+     "nodal_max": 1.0000000000034244,
+     "nodal_min": 1.000000000000185,
+     "twin_excess": 5.214495502059435e-12,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": -0.0325147086813764,
+     "im": 1e-11,
+     "n_channels": 3,
+     "nodal_max": 1.0000000000114169,
+     "nodal_min": 1.0000000000006235,
+     "twin_excess": 1.73820957627413e-11,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": -0.0325147086813764,
+     "im": 1e-09,
+     "n_channels": 3,
+     "nodal_max": 1.000000001141859,
+     "nodal_min": 1.0000000000619715,
+     "twin_excess": 1.7379262473582457e-09,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": -0.032514708681363746,
+     "im": 1e-06,
+     "n_channels": 3,
+     "nodal_max": 1.0000011418643187,
+     "nodal_min": 1.000000061963251,
+     "twin_excess": 1.7379353050017698e-06,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": null,
+     "im": 0.0001,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": null,
+     "im": 0.001,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": null,
+     "im": 0.01,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": null,
+     "im": 0.05,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.0325147086813764,
+     "exc_inc": null,
+     "im": 0.1,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    }
+   ]
+  },
+  {
+   "N": 200,
+   "family": "uniform",
+   "label": "H(uniform,m=0,N=200,rbl=1)",
+   "m": 0,
+   "n": 13,
+   "rbl": 1.0,
+   "refused": 0,
+   "rows": [
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": -0.008014160391901726,
+     "im": 0.0,
+     "n_channels": 6,
+     "nodal_max": 1.0000000000002984,
+     "nodal_min": 0.9999999999999436,
+     "twin_excess": 4.085620730620576e-14,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": -0.008014160391886627,
+     "im": 1e-14,
+     "n_channels": 6,
+     "nodal_max": 1.0000000000008438,
+     "nodal_min": 0.9999999999996141,
+     "twin_excess": 1.8207657603852567e-14,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": -0.008014160391902614,
+     "im": 1e-13,
+     "n_channels": 6,
+     "nodal_max": 1.0000000000002223,
+     "nodal_min": 0.9999999999998879,
+     "twin_excess": 5.022648963404208e-13,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": -0.008014160391899727,
+     "im": 1e-12,
+     "n_channels": 6,
+     "nodal_max": 1.0000000000038063,
+     "nodal_min": 0.9999999999999337,
+     "twin_excess": 4.4924064468432334e-12,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": -0.008014160391899505,
+     "im": 3e-12,
+     "n_channels": 6,
+     "nodal_max": 1.0000000000122586,
+     "nodal_min": 1.0000000000001183,
+     "twin_excess": 1.325695109244407e-11,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": -0.008014160391902836,
+     "im": 1e-11,
+     "n_channels": 6,
+     "nodal_max": 1.000000000041804,
+     "nodal_min": 1.0000000000004017,
+     "twin_excess": 4.4173331659180803e-11,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": -0.008014160391893954,
+     "im": 1e-09,
+     "n_channels": 6,
+     "nodal_max": 1.0000000042238082,
+     "nodal_min": 1.0000000000547702,
+     "twin_excess": 4.42159864277869e-09,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": -0.008014160391889291,
+     "im": 1e-06,
+     "n_channels": 6,
+     "nodal_max": 1.0000042242702456,
+     "nodal_min": 1.0000000549730743,
+     "twin_excess": 4.421738803550568e-06,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": null,
+     "im": 0.0001,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": null,
+     "im": 0.001,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": null,
+     "im": 0.01,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": null,
+     "im": 0.05,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.008014160391901726,
+     "exc_inc": null,
+     "im": 0.1,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    }
+   ]
+  },
+  {
+   "N": 200,
+   "family": "uniform",
+   "label": "H(uniform,m=1,N=200,rbl=0.5)",
+   "m": 1,
+   "n": 13,
+   "rbl": 0.5,
+   "refused": 0,
+   "rows": [
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": -0.11103211214965425,
+     "im": 0.0,
+     "n_channels": 2,
+     "nodal_max": 1.0000000020568367,
+     "nodal_min": 0.999999985615758,
+     "twin_excess": 5.616618281578667e-12,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": -0.11103211215427455,
+     "im": 1e-14,
+     "n_channels": 2,
+     "nodal_max": 1.0000000023054072,
+     "nodal_min": 0.9999999856247157,
+     "twin_excess": 5.565770067050835e-12,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": -0.1110321121521185,
+     "im": 1e-13,
+     "n_channels": 2,
+     "nodal_max": 1.0000000021963036,
+     "nodal_min": 0.9999999856228186,
+     "twin_excess": 5.573763672828136e-12,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": -0.1110321121395117,
+     "im": 1e-12,
+     "n_channels": 2,
+     "nodal_max": 1.0000000019818835,
+     "nodal_min": 0.9999999856271184,
+     "twin_excess": 5.3719251269512824e-12,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": -0.11103211215530306,
+     "im": 3e-12,
+     "n_channels": 2,
+     "nodal_max": 1.0000000023349485,
+     "nodal_min": 0.9999999856105033,
+     "twin_excess": 5.788258761185716e-12,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": -0.11103211215038189,
+     "im": 1e-11,
+     "n_channels": 2,
+     "nodal_max": 1.0000000022067352,
+     "nodal_min": 0.9999999856359443,
+     "twin_excess": 6.281197784119286e-12,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": -0.11103211215537434,
+     "im": 1e-09,
+     "n_channels": 2,
+     "nodal_max": 1.0000000022799023,
+     "nodal_min": 0.9999999859972517,
+     "twin_excess": 9.077871787610547e-11,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": -0.11103211214122566,
+     "im": 1e-06,
+     "n_channels": 2,
+     "nodal_max": 1.000000369750116,
+     "nodal_min": 1.0000000906042603,
+     "twin_excess": 9.502154396656692e-08,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": null,
+     "im": 0.0001,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": null,
+     "im": 0.001,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": null,
+     "im": 0.01,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": null,
+     "im": 0.05,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.11103211214965425,
+     "exc_inc": null,
+     "im": 0.1,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    }
+   ]
+  },
+  {
+   "N": 200,
+   "family": "uniform",
+   "label": "H(uniform,m=2,N=200,rbl=0.5)",
+   "m": 2,
+   "n": 13,
+   "rbl": 0.5,
+   "refused": 0,
+   "rows": [
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": -0.2826871617282867,
+     "im": 0.0,
+     "n_channels": 1,
+     "nodal_max": 1.0000000007682182,
+     "nodal_min": 1.0000000007682182,
+     "twin_excess": 1.7896795156957523e-13,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": -0.28268716174386643,
+     "im": 1e-14,
+     "n_channels": 1,
+     "nodal_max": 1.0000000008781735,
+     "nodal_min": 1.0000000008781735,
+     "twin_excess": 1.7219559111936178e-13,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": -0.2826871617387572,
+     "im": 1e-13,
+     "n_channels": 1,
+     "nodal_max": 1.0000000007992813,
+     "nodal_min": 1.0000000007992813,
+     "twin_excess": 1.2578826869003024e-13,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": -0.28268716173136976,
+     "im": 1e-12,
+     "n_channels": 1,
+     "nodal_max": 1.0000000007708005,
+     "nodal_min": 1.0000000007708005,
+     "twin_excess": 9.614531393253856e-14,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": -0.2826871617472879,
+     "im": 3e-12,
+     "n_channels": 1,
+     "nodal_max": 1.0000000008922196,
+     "nodal_min": 1.0000000008922196,
+     "twin_excess": 6.077360836798107e-13,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": -0.28268716174641684,
+     "im": 1e-11,
+     "n_channels": 1,
+     "nodal_max": 1.000000000873416,
+     "nodal_min": 1.000000000873416,
+     "twin_excess": 2.4098500972513648e-12,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": -0.2826871617433231,
+     "im": 1e-09,
+     "n_channels": 1,
+     "nodal_max": 1.0000000010425696,
+     "nodal_min": 1.0000000010425696,
+     "twin_excess": 2.6511748352220366e-10,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": -0.2826871617325095,
+     "im": 1e-06,
+     "n_channels": 1,
+     "nodal_max": 1.0000001791603477,
+     "nodal_min": 1.0000001791603477,
+     "twin_excess": 2.652736141861567e-07,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": null,
+     "im": 0.0001,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": null,
+     "im": 0.001,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": null,
+     "im": 0.01,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": null,
+     "im": 0.05,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    },
+    {
+     "detector": "",
+     "exc_exit": -0.2826871617282867,
+     "exc_inc": null,
+     "im": 0.1,
+     "n_channels": 0,
+     "nodal_max": null,
+     "nodal_min": null,
+     "twin_excess": null,
+     "verdict": "returned",
+     "warnings": 0
+    }
+   ]
+  }
+ ],
+ "H_screen": [
+  {
+   "N": 120,
+   "closure": 5.995204332975845e-15,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.0325147086813764,
+   "exc_inc": -0.0325147086813764,
+   "family": "uniform",
+   "healthy": true,
+   "m": 0,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 4.773959005888173e-15,
+   "count_nodal": [
+    6,
+    6
+   ],
+   "count_stag": [
+    6,
+    6
+   ],
+   "exc_exit": -0.008058190241799768,
+   "exc_inc": -0.008058190241799768,
+   "family": "uniform",
+   "healthy": true,
+   "m": 0,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 8.770761894538737e-15,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    11,
+    11
+   ],
+   "exc_exit": -0.0020102368412038274,
+   "exc_inc": -0.0020102368412038274,
+   "family": "uniform",
+   "healthy": true,
+   "m": 0,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 3.100852907778062e-13,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.03233548073059689,
+   "exc_inc": -0.03233548073059689,
+   "family": "uniform",
+   "healthy": true,
+   "m": 0,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 2.984279490192421e-13,
+   "count_nodal": [
+    6,
+    6
+   ],
+   "count_stag": [
+    6,
+    6
+   ],
+   "exc_exit": -0.008014160391901726,
+   "exc_inc": -0.008014160391901726,
+   "family": "uniform",
+   "healthy": true,
+   "m": 0,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 3.3084646133829665e-14,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    11,
+    11
+   ],
+   "exc_exit": -0.0019992763905538613,
+   "exc_inc": -0.0019992763905538613,
+   "family": "uniform",
+   "healthy": true,
+   "m": 0,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 5.9567069721211396e-08,
+   "count_nodal": [
+    2,
+    2
+   ],
+   "count_stag": [
+    2,
+    2
+   ],
+   "exc_exit": -0.11102210200259077,
+   "exc_inc": -0.11102210200259077,
+   "family": "uniform",
+   "healthy": true,
+   "m": 1,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 1.7455636280860887e-07,
+   "count_nodal": [
+    5,
+    5
+   ],
+   "count_stag": [
+    5,
+    5
+   ],
+   "exc_exit": -0.02690707235749823,
+   "exc_inc": -0.02690707235749823,
+   "family": "uniform",
+   "healthy": true,
+   "m": 1,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 3.637375568521506e-06,
+   "count_nodal": [
+    12,
+    12
+   ],
+   "count_stag": [
+    10,
+    10
+   ],
+   "exc_exit": 2.0508081576053883e-05,
+   "exc_inc": 2.0508081576053883e-05,
+   "family": "uniform",
+   "healthy": false,
+   "m": 1,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 1.4384242019715998e-08,
+   "count_nodal": [
+    2,
+    2
+   ],
+   "count_stag": [
+    2,
+    2
+   ],
+   "exc_exit": -0.11103211214965425,
+   "exc_inc": -0.11103211214965425,
+   "family": "uniform",
+   "healthy": true,
+   "m": 1,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 3.6765996913601384e-08,
+   "count_nodal": [
+    5,
+    5
+   ],
+   "count_stag": [
+    5,
+    5
+   ],
+   "exc_exit": -0.026919055321007912,
+   "exc_inc": -0.026919055321007912,
+   "family": "uniform",
+   "healthy": true,
+   "m": 1,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 5.167933675442882e-07,
+   "count_nodal": [
+    12,
+    12
+   ],
+   "count_stag": [
+    10,
+    10
+   ],
+   "exc_exit": 7.311843735813284e-06,
+   "exc_inc": 7.311843735813284e-06,
+   "family": "uniform",
+   "healthy": false,
+   "m": 1,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 3.4655118774651328e-09,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.28267736491637896,
+   "exc_inc": -0.28267736491637896,
+   "family": "uniform",
+   "healthy": true,
+   "m": 2,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 2.489916894887756e-07,
+   "count_nodal": [
+    4,
+    4
+   ],
+   "count_stag": [
+    4,
+    4
+   ],
+   "exc_exit": -0.06508824883017894,
+   "exc_inc": -0.06508824883017894,
+   "family": "uniform",
+   "healthy": true,
+   "m": 2,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 1.3275525703182467e-06,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    9,
+    9
+   ],
+   "exc_exit": 7.788410073095164e-05,
+   "exc_inc": 7.788410073095164e-05,
+   "family": "uniform",
+   "healthy": false,
+   "m": 2,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 7.682181557555623e-10,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.2826871617282867,
+   "exc_inc": -0.2826871617282867,
+   "family": "uniform",
+   "healthy": true,
+   "m": 2,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 4.323311075804526e-08,
+   "count_nodal": [
+    4,
+    4
+   ],
+   "count_stag": [
+    4,
+    4
+   ],
+   "exc_exit": -0.06510109779509321,
+   "exc_inc": -0.06510109779509321,
+   "family": "uniform",
+   "healthy": true,
+   "m": 2,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 1.922587521407948e-07,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    9,
+    9
+   ],
+   "exc_exit": 2.7904520906618657e-05,
+   "exc_inc": 2.7904520906618657e-05,
+   "family": "uniform",
+   "healthy": false,
+   "m": 2,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 6.13988970776802e-09,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.6079374843779122,
+   "exc_inc": -0.6079374843779122,
+   "family": "uniform",
+   "healthy": true,
+   "m": 3,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 6.127944107703343e-08,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.12480883850537428,
+   "exc_inc": -0.12480883850537428,
+   "family": "uniform",
+   "healthy": true,
+   "m": 3,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 1.6559780036118354e-06,
+   "count_nodal": [
+    9,
+    9
+   ],
+   "count_stag": [
+    8,
+    8
+   ],
+   "exc_exit": -0.03013078030391325,
+   "exc_inc": -0.03013078030391325,
+   "family": "uniform",
+   "healthy": false,
+   "m": 3,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 1.439858898777402e-09,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.6079355949041506,
+   "exc_inc": -0.6079355949041506,
+   "family": "uniform",
+   "healthy": true,
+   "m": 3,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 1.182440867442125e-08,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.12481951598897334,
+   "exc_inc": -0.12481951598897334,
+   "family": "uniform",
+   "healthy": true,
+   "m": 3,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 2.4437702594859445e-07,
+   "count_nodal": [
+    9,
+    9
+   ],
+   "count_stag": [
+    8,
+    8
+   ],
+   "exc_exit": -0.030143417695206898,
+   "exc_inc": -0.030143417695206898,
+   "family": "uniform",
+   "healthy": false,
+   "m": 3,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 6.598513609502281,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.0325147086813764,
+   "exc_inc": -0.0325147086813764,
+   "family": "ring",
+   "healthy": false,
+   "m": 0,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 1.2889633870689803,
+   "count_nodal": [
+    6,
+    6
+   ],
+   "count_stag": [
+    6,
+    6
+   ],
+   "exc_exit": -0.008058190241799768,
+   "exc_inc": -0.008058190241799768,
+   "family": "ring",
+   "healthy": false,
+   "m": 0,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 1.6384726932715101,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    11,
+    11
+   ],
+   "exc_exit": -0.0020102368412038274,
+   "exc_inc": -0.0020102368412038274,
+   "family": "ring",
+   "healthy": false,
+   "m": 0,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 6.490504317126131,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.03233548073059689,
+   "exc_inc": -0.03233548073059689,
+   "family": "ring",
+   "healthy": false,
+   "m": 0,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 1.2828922402393759,
+   "count_nodal": [
+    6,
+    6
+   ],
+   "count_stag": [
+    6,
+    6
+   ],
+   "exc_exit": -0.008014160391901726,
+   "exc_inc": -0.008014160391901726,
+   "family": "ring",
+   "healthy": false,
+   "m": 0,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 1.427116217013165,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    11,
+    11
+   ],
+   "exc_exit": -0.0019992763905538613,
+   "exc_inc": -0.0019992763905538613,
+   "family": "ring",
+   "healthy": false,
+   "m": 0,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 2.306795103697804,
+   "count_nodal": [
+    2,
+    2
+   ],
+   "count_stag": [
+    2,
+    2
+   ],
+   "exc_exit": -0.11102210200259077,
+   "exc_inc": -0.11102210200259077,
+   "family": "ring",
+   "healthy": false,
+   "m": 1,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 1.4175055594409565,
+   "count_nodal": [
+    5,
+    5
+   ],
+   "count_stag": [
+    5,
+    5
+   ],
+   "exc_exit": -0.02690707235749823,
+   "exc_inc": -0.02690707235749823,
+   "family": "ring",
+   "healthy": false,
+   "m": 1,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 1.3906980497849561,
+   "count_nodal": [
+    12,
+    12
+   ],
+   "count_stag": [
+    10,
+    10
+   ],
+   "exc_exit": 2.0508081576053883e-05,
+   "exc_inc": 2.0508081576053883e-05,
+   "family": "ring",
+   "healthy": false,
+   "m": 1,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 2.238276081152225,
+   "count_nodal": [
+    2,
+    2
+   ],
+   "count_stag": [
+    2,
+    2
+   ],
+   "exc_exit": -0.11103211214965425,
+   "exc_inc": -0.11103211214965425,
+   "family": "ring",
+   "healthy": false,
+   "m": 1,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 1.4090839520572498,
+   "count_nodal": [
+    5,
+    5
+   ],
+   "count_stag": [
+    5,
+    5
+   ],
+   "exc_exit": -0.026919055321007912,
+   "exc_inc": -0.026919055321007912,
+   "family": "ring",
+   "healthy": false,
+   "m": 1,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 1.41296601535247,
+   "count_nodal": [
+    12,
+    12
+   ],
+   "count_stag": [
+    10,
+    10
+   ],
+   "exc_exit": 7.311843735813284e-06,
+   "exc_inc": 7.311843735813284e-06,
+   "family": "ring",
+   "healthy": false,
+   "m": 1,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 1.1379919876116222,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.28267736491637896,
+   "exc_inc": -0.28267736491637896,
+   "family": "ring",
+   "healthy": false,
+   "m": 2,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 0.8291544637706658,
+   "count_nodal": [
+    4,
+    4
+   ],
+   "count_stag": [
+    4,
+    4
+   ],
+   "exc_exit": -0.06508824883017894,
+   "exc_inc": -0.06508824883017894,
+   "family": "ring",
+   "healthy": false,
+   "m": 2,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 1.1444238763480161,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    9,
+    9
+   ],
+   "exc_exit": 7.788410073095164e-05,
+   "exc_inc": 7.788410073095164e-05,
+   "family": "ring",
+   "healthy": false,
+   "m": 2,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 1.1108773480269196,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.2826871617282867,
+   "exc_inc": -0.2826871617282867,
+   "family": "ring",
+   "healthy": false,
+   "m": 2,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 0.8191523402050991,
+   "count_nodal": [
+    4,
+    4
+   ],
+   "count_stag": [
+    4,
+    4
+   ],
+   "exc_exit": -0.06510109779509321,
+   "exc_inc": -0.06510109779509321,
+   "family": "ring",
+   "healthy": false,
+   "m": 2,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 1.1336574966699557,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    9,
+    9
+   ],
+   "exc_exit": 2.7904520906618657e-05,
+   "exc_inc": 2.7904520906618657e-05,
+   "family": "ring",
+   "healthy": false,
+   "m": 2,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 0.16587203656572136,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.6079374843779122,
+   "exc_inc": -0.6079374843779122,
+   "family": "ring",
+   "healthy": false,
+   "m": 3,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 0.688032141908058,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.12480883850537428,
+   "exc_inc": -0.12480883850537428,
+   "family": "ring",
+   "healthy": false,
+   "m": 3,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 0.5617193816362067,
+   "count_nodal": [
+    9,
+    9
+   ],
+   "count_stag": [
+    8,
+    8
+   ],
+   "exc_exit": -0.03013078030391325,
+   "exc_inc": -0.03013078030391325,
+   "family": "ring",
+   "healthy": false,
+   "m": 3,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 0.1616110482178419,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.6079355949041506,
+   "exc_inc": -0.6079355949041506,
+   "family": "ring",
+   "healthy": false,
+   "m": 3,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 0.6600807563629882,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.12481951598897334,
+   "exc_inc": -0.12481951598897334,
+   "family": "ring",
+   "healthy": false,
+   "m": 3,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 0.4724697811013301,
+   "count_nodal": [
+    9,
+    9
+   ],
+   "count_stag": [
+    8,
+    8
+   ],
+   "exc_exit": -0.030143417695206898,
+   "exc_inc": -0.030143417695206898,
+   "family": "ring",
+   "healthy": false,
+   "m": 3,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 0.12490735055253288,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.0325147086813764,
+   "exc_inc": -0.0325147086813764,
+   "family": "seg",
+   "healthy": false,
+   "m": 0,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 0.5377872271753439,
+   "count_nodal": [
+    6,
+    6
+   ],
+   "count_stag": [
+    6,
+    6
+   ],
+   "exc_exit": -0.008058190241799768,
+   "exc_inc": -0.008058190241799768,
+   "family": "seg",
+   "healthy": false,
+   "m": 0,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 1.0669880774409406,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    11,
+    11
+   ],
+   "exc_exit": -0.0020102368412038274,
+   "exc_inc": -0.0020102368412038274,
+   "family": "seg",
+   "healthy": false,
+   "m": 0,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 0.12521471329412015,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.03233548073059689,
+   "exc_inc": -0.03233548073059689,
+   "family": "seg",
+   "healthy": false,
+   "m": 0,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 0.5360188604455227,
+   "count_nodal": [
+    6,
+    6
+   ],
+   "count_stag": [
+    6,
+    6
+   ],
+   "exc_exit": -0.008014160391901726,
+   "exc_inc": -0.008014160391901726,
+   "family": "seg",
+   "healthy": false,
+   "m": 0,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 1.0370299873041122,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    11,
+    11
+   ],
+   "exc_exit": -0.0019992763905538613,
+   "exc_inc": -0.0019992763905538613,
+   "family": "seg",
+   "healthy": false,
+   "m": 0,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 0.12700362108335828,
+   "count_nodal": [
+    2,
+    2
+   ],
+   "count_stag": [
+    2,
+    2
+   ],
+   "exc_exit": -0.11102210200259077,
+   "exc_inc": -0.11102210200259077,
+   "family": "seg",
+   "healthy": false,
+   "m": 1,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 2.71367177653444,
+   "count_nodal": [
+    5,
+    5
+   ],
+   "count_stag": [
+    5,
+    5
+   ],
+   "exc_exit": -0.02690707235749823,
+   "exc_inc": -0.02690707235749823,
+   "family": "seg",
+   "healthy": false,
+   "m": 1,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 1.6143920130080458,
+   "count_nodal": [
+    12,
+    12
+   ],
+   "count_stag": [
+    10,
+    10
+   ],
+   "exc_exit": 2.0508081576053883e-05,
+   "exc_inc": 2.0508081576053883e-05,
+   "family": "seg",
+   "healthy": false,
+   "m": 1,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 0.12868162666297422,
+   "count_nodal": [
+    2,
+    2
+   ],
+   "count_stag": [
+    2,
+    2
+   ],
+   "exc_exit": -0.11103211214965425,
+   "exc_inc": -0.11103211214965425,
+   "family": "seg",
+   "healthy": false,
+   "m": 1,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 2.8287580737111067,
+   "count_nodal": [
+    5,
+    5
+   ],
+   "count_stag": [
+    5,
+    5
+   ],
+   "exc_exit": -0.026919055321007912,
+   "exc_inc": -0.026919055321007912,
+   "family": "seg",
+   "healthy": false,
+   "m": 1,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 1.7674047690285608,
+   "count_nodal": [
+    12,
+    12
+   ],
+   "count_stag": [
+    10,
+    10
+   ],
+   "exc_exit": 7.311843735813284e-06,
+   "exc_inc": 7.311843735813284e-06,
+   "family": "seg",
+   "healthy": false,
+   "m": 1,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 0.036028957103816595,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.28267736491637896,
+   "exc_inc": -0.28267736491637896,
+   "family": "seg",
+   "healthy": false,
+   "m": 2,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 0.06512960166781046,
+   "count_nodal": [
+    4,
+    4
+   ],
+   "count_stag": [
+    4,
+    4
+   ],
+   "exc_exit": -0.06508824883017894,
+   "exc_inc": -0.06508824883017894,
+   "family": "seg",
+   "healthy": false,
+   "m": 2,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 0.36466384883990344,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    9,
+    9
+   ],
+   "exc_exit": 7.788410073095164e-05,
+   "exc_inc": 7.788410073095164e-05,
+   "family": "seg",
+   "healthy": false,
+   "m": 2,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 0.03590264059991499,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.2826871617282867,
+   "exc_inc": -0.2826871617282867,
+   "family": "seg",
+   "healthy": false,
+   "m": 2,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 0.06467062895096021,
+   "count_nodal": [
+    4,
+    4
+   ],
+   "count_stag": [
+    4,
+    4
+   ],
+   "exc_exit": -0.06510109779509321,
+   "exc_inc": -0.06510109779509321,
+   "family": "seg",
+   "healthy": false,
+   "m": 2,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 0.3631083513797546,
+   "count_nodal": [
+    11,
+    11
+   ],
+   "count_stag": [
+    9,
+    9
+   ],
+   "exc_exit": 2.7904520906618657e-05,
+   "exc_inc": 2.7904520906618657e-05,
+   "family": "seg",
+   "healthy": false,
+   "m": 2,
+   "rbl": 2.0
+  },
+  {
+   "N": 120,
+   "closure": 0.004814134006012494,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.6079374843779122,
+   "exc_inc": -0.6079374843779122,
+   "family": "seg",
+   "healthy": false,
+   "m": 3,
+   "rbl": 0.5
+  },
+  {
+   "N": 120,
+   "closure": 0.03058418351663006,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.12480883850537428,
+   "exc_inc": -0.12480883850537428,
+   "family": "seg",
+   "healthy": false,
+   "m": 3,
+   "rbl": 1.0
+  },
+  {
+   "N": 120,
+   "closure": 0.2937441453286538,
+   "count_nodal": [
+    9,
+    9
+   ],
+   "count_stag": [
+    8,
+    8
+   ],
+   "exc_exit": -0.03013078030391325,
+   "exc_inc": -0.03013078030391325,
+   "family": "seg",
+   "healthy": false,
+   "m": 3,
+   "rbl": 2.0
+  },
+  {
+   "N": 200,
+   "closure": 0.004937243892158438,
+   "count_nodal": [
+    1,
+    1
+   ],
+   "count_stag": [
+    1,
+    1
+   ],
+   "exc_exit": -0.6079355949041506,
+   "exc_inc": -0.6079355949041506,
+   "family": "seg",
+   "healthy": false,
+   "m": 3,
+   "rbl": 0.5
+  },
+  {
+   "N": 200,
+   "closure": 0.02953141694005068,
+   "count_nodal": [
+    3,
+    3
+   ],
+   "count_stag": [
+    3,
+    3
+   ],
+   "exc_exit": -0.12481951598897334,
+   "exc_inc": -0.12481951598897334,
+   "family": "seg",
+   "healthy": false,
+   "m": 3,
+   "rbl": 1.0
+  },
+  {
+   "N": 200,
+   "closure": 0.2919401138682334,
+   "count_nodal": [
+    9,
+    9
+   ],
+   "count_stag": [
+    8,
+    8
+   ],
+   "exc_exit": -0.030143417695206898,
+   "exc_inc": -0.030143417695206898,
+   "family": "seg",
+   "healthy": false,
+   "m": 3,
+   "rbl": 2.0
+  }
+ ],
+ "arm": {
+  "build": "win",
+  "loaded_kernel": "Haswell",
+  "lumenairy_file": "C:\\tmp\\lum_bor3\\lumenairy\\__init__.py",
+  "lumenairy_version": "5.44.0",
+  "machine": "AMD64",
+  "mkl": "1",
+  "numpy": "2.4.4",
+  "omp": "1",
+  "openblas": "1",
+  "python": "3.14.6",
+  "requested_coretype": "HASWELL",
+  "scipy": "1.17.1",
+  "threads": 1
+ },
+ "summary": {
+  "ladder_D": {
+   "by_detector": {
+    "ceiling": 9,
+    "energy": 4
+   },
+   "n": 13,
+   "refused": 13,
+   "refused_where_channels": 8,
+   "rows_with_channels": 8
+  },
+  "ladder_H": {
+   "geometries": [
+    "H(uniform,m=0,N=120,rbl=0.5)",
+    "H(uniform,m=0,N=200,rbl=1)",
+    "H(uniform,m=1,N=200,rbl=0.5)",
+    "H(uniform,m=2,N=200,rbl=0.5)"
+   ],
+   "n_healthy_candidates": 18,
+   "refused": 0,
+   "refused_by": {
+    "ceiling": 0,
+    "energy": 0
+   },
+   "rows": 52,
+   "screened": 72,
+   "warnings": 0
+  },
+  "seconds": 468.7407810688019
+ }
+}

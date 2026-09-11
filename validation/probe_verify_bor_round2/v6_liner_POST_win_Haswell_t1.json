@@ -1,0 +1,1855 @@
+{
+ "provenance": {
+  "tag": "POST_win_Haswell_t1",
+  "lumenairy_file": "C:\\tmp\\lum_vbor2\\lumenairy\\__init__.py",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "blas_arch": [
+   "Haswell"
+  ],
+  "env": {
+   "OPENBLAS_CORETYPE": "HASWELL",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "Rbig": 24.0,
+ "has_w_min_own": true,
+ "rows": [
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 1e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.99999993922529e-09,
+     "w_min_own_frac": 9.99999993922529e-09,
+     "w_min_union_frac": Infinity,
+     "q_excess": 25214404.325431142,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 25214404.325431142,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-08 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+07 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 3e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 2.9999999965705605e-08,
+     "w_min_own_frac": 2.9999999965705605e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8404802.148274167,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 8404802.148274167,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-08 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 8.405e+06 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 1e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999998437185e-08,
+     "w_min_own_frac": 9.999999998437185e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2521441.4304524967,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 2521441.4304524967,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+06 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 3e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 2.9999999995311555e-07,
+     "w_min_own_frac": 2.9999999995311555e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 840808.8224268542,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 840808.8224268542,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 8.408e+05 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 1e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999999917482e-07,
+     "w_min_own_frac": 9.999999999917482e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 252147.08762131166,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 252147.08762131166,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-06 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+05 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 3e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 2.9999999999752447e-06,
+     "w_min_own_frac": 2.9999999999752447e-06,
+     "w_min_union_frac": Infinity,
+     "q_excess": 84051.59456795933,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 84051.59456795933,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 1e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1.0000000000065512e-05,
+     "w_min_own_frac": 1.0000000000065512e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 25217.80555288609,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 25217.80555288609,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 3e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3.0000000000048505e-05,
+     "w_min_own_frac": 3.0000000000048505e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8408.175813690972,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 8408.175813690972,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 0.0001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.000100000000000063,
+     "w_min_own_frac": 0.000100000000000063,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2524.8299678558456,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 2524.8299678558456,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 0.0003,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.00030000000000004096,
+     "w_min_own_frac": 0.00030000000000004096,
+     "w_min_union_frac": Infinity,
+     "q_excess": 847.4415927284089,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 847.4415927284089,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "outer",
+   "w_frac": 0.001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.001000000000000038,
+     "w_min_own_frac": 0.001000000000000038,
+     "w_min_union_frac": Infinity,
+     "q_excess": 255.719171286418,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 255.719171286418,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 1e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1.0000000000000002e-08,
+     "w_min_own_frac": 1.0000000000000002e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": Infinity,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": Infinity,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 3e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3e-08,
+     "w_min_own_frac": 3e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 29649561.274780605,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 29649561.274780605,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-08 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.965e+07 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 1e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1e-07,
+     "w_min_own_frac": 1e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8894868.42299599,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 8894868.42299599,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 8.895e+06 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 3e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3e-07,
+     "w_min_own_frac": 3e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2964956.179630644,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 2964956.179630644,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.965e+06 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 1e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1e-06,
+     "w_min_own_frac": 1e-06,
+     "w_min_union_frac": Infinity,
+     "q_excess": 889486.8944495746,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 889486.8944495746,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 3e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3e-06,
+     "w_min_own_frac": 3e-06,
+     "w_min_union_frac": Infinity,
+     "q_excess": 296495.69014694326,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 296495.69014694326,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 1e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1e-05,
+     "w_min_own_frac": 1e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 88948.74158555307,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 88948.74158555307,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 3e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3e-05,
+     "w_min_own_frac": 3e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 29649.619132277592,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 29649.619132277592,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 0.0001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.0001,
+     "w_min_own_frac": 0.0001,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8894.926227874645,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 8894.926227874645,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 0.0003,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.0003,
+     "w_min_own_frac": 0.0003,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2965.0139764748815,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 2965.0139764748815,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "axis",
+   "w_frac": 0.001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.001,
+     "w_min_own_frac": 0.001,
+     "w_min_union_frac": Infinity,
+     "q_excess": 889.5466063832606,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 889.5466063832606,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 1e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1.0000000013240159e-08,
+     "w_min_own_frac": 1.0000000013240159e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 25214406.266674764,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 25214406.266674764,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-08 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+07 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 3e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3.0000000002713044e-08,
+     "w_min_own_frac": 3.0000000002713044e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8404804.26808832,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 8404804.26808832,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-08 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 8.405e+06 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 1e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999998437185e-08,
+     "w_min_own_frac": 9.999999998437185e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2521443.558319837,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 2521443.558319837,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+06 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 3e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 2.99999999990123e-07,
+     "w_min_own_frac": 2.99999999990123e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 840483.3548358121,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 840483.3548358121,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 8.405e+05 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 1e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999999917482e-07,
+     "w_min_own_frac": 9.999999999917482e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 252147.28372994674,
+     "verdict": "warn_own"
+    }
+   ],
+   "verdicts": [
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 252147.28372994674,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-06 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+05 against "
+   ]
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 3e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3.000000000012252e-06,
+     "w_min_own_frac": 3.000000000012252e-06,
+     "w_min_union_frac": Infinity,
+     "q_excess": 84051.26345000844,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 84051.26345000844,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 1e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999999991497e-06,
+     "w_min_own_frac": 9.999999999991497e-06,
+     "w_min_union_frac": Infinity,
+     "q_excess": 25239.86684949277,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 25239.86684949277,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 3e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3.00000000000115e-05,
+     "w_min_own_frac": 3.00000000000115e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8408.054776638008,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 8408.054776638008,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 0.0001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999999998899e-05,
+     "w_min_own_frac": 9.999999999998899e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2524.6952773654166,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 2524.6952773654166,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 0.0003,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.000300000000000004,
+     "w_min_own_frac": 0.000300000000000004,
+     "w_min_union_frac": Infinity,
+     "q_excess": 843.7385400040936,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 843.7385400040936,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 1,
+   "position": "middle",
+   "w_frac": 0.001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.0010000000000000009,
+     "w_min_own_frac": 0.0010000000000000009,
+     "w_min_union_frac": Infinity,
+     "q_excess": 255.4146442945429,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 255.4146442945429,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 1e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.99999993922529e-09,
+     "w_min_own_frac": 9.99999993922529e-09,
+     "w_min_union_frac": Infinity,
+     "q_excess": 25214404.323116582,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 9.99999993922529e-09,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 56147658.42035027,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 56147658.42035027,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-08 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+07 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 3e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 2.9999999965705605e-08,
+     "w_min_own_frac": 2.9999999965705605e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8975016.89105099,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 2.9999999965705605e-08,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 18715889.448784553,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 18715889.448784553,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-08 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 8.975e+06 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 1e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999998437185e-08,
+     "w_min_own_frac": 9.999999998437185e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2521441.4281379753,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 9.999999998437185e-08,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 5614767.652509272,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 5614767.652509272,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+06 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 3e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 2.9999999995311555e-07,
+     "w_min_own_frac": 2.9999999995311555e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 840481.2247584795,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 2.9999999995311555e-07,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 1871590.58324254,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 1871590.58324254,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 8.405e+05 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 1e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999999917482e-07,
+     "w_min_own_frac": 9.999999999917482e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 252145.15355187075,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 9.999999999917482e-07,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 561478.6131361233,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 561478.6131361233,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-06 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+05 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 3e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 2.9999999999752447e-06,
+     "w_min_own_frac": 2.9999999999752447e-06,
+     "w_min_union_frac": Infinity,
+     "q_excess": 84051.40131437745,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 2.9999999999752447e-06,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 187160.9021157059,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 187160.9021157059,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 1e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1.0000000000065512e-05,
+     "w_min_own_frac": 1.0000000000065512e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 25217.77414232498,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 1.0000000000065512e-05,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 56149.70916577004,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 56149.70916577004,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 3e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3.0000000000048505e-05,
+     "w_min_own_frac": 3.0000000000048505e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8408.176072951144,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 3.0000000000048505e-05,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 18717.94142219005,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 18717.94142219005,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 0.0001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.000100000000000063,
+     "w_min_own_frac": 0.000100000000000063,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2524.8299690996537,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 0.000100000000000063,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 5616.817511534618,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 5616.817511534618,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 0.0003,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.00030000000000004096,
+     "w_min_own_frac": 0.00030000000000004096,
+     "w_min_union_frac": Infinity,
+     "q_excess": 843.9103442345075,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 0.00030000000000004096,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 1873.6474551459687,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 1873.6474551459687,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "outer",
+   "w_frac": 0.001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.001000000000000038,
+     "w_min_own_frac": 0.001000000000000038,
+     "w_min_union_frac": Infinity,
+     "q_excess": 255.71141096970166,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 0.001000000000000038,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 565.6984575280302,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 565.6984575280302,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 1e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1.0000000000000002e-08,
+     "w_min_own_frac": 1.0000000000000002e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": Infinity,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 1.0000000000000002e-08,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": Infinity,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": Infinity,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 3e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3e-08,
+     "w_min_own_frac": 3e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 29649561.274780538,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 3e-08,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": Infinity,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": Infinity,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-08 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.965e+07 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 1e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1e-07,
+     "w_min_own_frac": 1e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8894868.42299599,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 1e-07,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 19807171.125209913,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 19807171.125209913,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 8.895e+06 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 3e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3e-07,
+     "w_min_own_frac": 3e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2964956.1796287782,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 3e-07,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 6602390.446608779,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 6602390.446608779,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.965e+06 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 1e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1e-06,
+     "w_min_own_frac": 1e-06,
+     "w_min_union_frac": Infinity,
+     "q_excess": 889486.8944495744,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 1e-06,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 1980717.2076880236,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 1980717.2076880236,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 3e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3e-06,
+     "w_min_own_frac": 3e-06,
+     "w_min_union_frac": Infinity,
+     "q_excess": 296495.67011073435,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 3e-06,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 660239.0918640035,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 660239.0918640035,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 1e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1e-05,
+     "w_min_own_frac": 1e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 88948.7415855531,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 1e-05,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 198071.81548002097,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 198071.81548002097,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 3e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3e-05,
+     "w_min_own_frac": 3e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 29649.619132277574,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 3e-05,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 66024.00865453182,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 66024.00865453182,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 0.0001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.0001,
+     "w_min_own_frac": 0.0001,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8894.926227874646,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 0.0001,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 19807.2762054921,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 19807.2762054921,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 0.0003,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.0003,
+     "w_min_own_frac": 0.0003,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2965.0139764748815,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 0.0003,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 6602.591534752973,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 6602.591534752973,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "axis",
+   "w_frac": 0.001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.001,
+     "w_min_own_frac": 0.001,
+     "w_min_union_frac": Infinity,
+     "q_excess": 889.5466063832611,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 0.001,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 1980.8240581574987,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 1980.8240581574987,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 1e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 1.0000000013240159e-08,
+     "w_min_own_frac": 1.0000000013240159e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 25214406.266674764,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 1.0000000013240159e-08,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 56147662.900159225,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 56147662.900159225,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-08 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+07 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 3e-08,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3.0000000002713044e-08,
+     "w_min_own_frac": 3.0000000002713044e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8404804.26808832,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 3.0000000002713044e-08,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 18715892.285789814,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 18715892.285789814,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-08 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 8.405e+06 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 1e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999998437185e-08,
+     "w_min_own_frac": 9.999999998437185e-08,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2521443.558319837,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 9.999999998437185e-08,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 5614772.547906105,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 5614772.547906105,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+06 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 3e-07,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 2.99999999990123e-07,
+     "w_min_own_frac": 2.99999999990123e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 840483.3548358121,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 2.99999999990123e-07,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 1871595.4783950183,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 1871595.4783950183,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 3.000e-07 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 8.405e+05 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 1e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999999917482e-07,
+     "w_min_own_frac": 9.999999999917482e-07,
+     "w_min_union_frac": Infinity,
+     "q_excess": 252147.28372994674,
+     "verdict": "warn_own"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 9.999999999917482e-07,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 561483.5042880779,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok",
+    "warn_own"
+   ],
+   "warn_own_layers": [
+    0
+   ],
+   "q_max": 561483.5042880779,
+   "n_messages": 1,
+   "messages": [
+    "BORStack.solve(basis='sem'): layer 0's radial mesh contains an element of 1.000e-06 of Rbig that the LAYER'S OWN segment list asked for, and its spectrum reads |q|max / (n_max k0) = 2.521e+05 against "
+   ]
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 3e-06,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3.000000000012252e-06,
+     "w_min_own_frac": 3.000000000012252e-06,
+     "w_min_union_frac": Infinity,
+     "q_excess": 84051.26345000844,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 3.000000000012252e-06,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 196210.22530638584,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 196210.22530638584,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 1e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999999991497e-06,
+     "w_min_own_frac": 9.999999999991497e-06,
+     "w_min_union_frac": Infinity,
+     "q_excess": 25239.86684949277,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 9.999999999991497e-06,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 56229.60369072291,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 56229.60369072291,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 3e-05,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 3.00000000000115e-05,
+     "w_min_own_frac": 3.00000000000115e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 8408.054776638008,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 3.00000000000115e-05,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 18723.63888708451,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 18723.63888708451,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 0.0001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 9.999999999998899e-05,
+     "w_min_own_frac": 9.999999999998899e-05,
+     "w_min_union_frac": Infinity,
+     "q_excess": 2524.6952773654166,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 9.999999999998899e-05,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 5619.605401018213,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 5619.605401018213,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 0.0003,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.000300000000000004,
+     "w_min_own_frac": 0.000300000000000004,
+     "w_min_union_frac": Infinity,
+     "q_excess": 843.7385400040936,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 0.000300000000000004,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 1878.5422935647573,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 1878.5422935647573,
+   "n_messages": 0,
+   "messages": []
+  },
+  {
+   "n_layers": 2,
+   "position": "middle",
+   "w_frac": 0.001,
+   "per_layer": [
+    {
+     "layer": 0,
+     "w_min_frac": 0.0010000000000000009,
+     "w_min_own_frac": 0.0010000000000000009,
+     "w_min_union_frac": Infinity,
+     "q_excess": 255.4146442945429,
+     "verdict": "ok"
+    },
+    {
+     "layer": 1,
+     "w_min_frac": 0.0010000000000000009,
+     "w_min_own_frac": Infinity,
+     "w_min_union_frac": Infinity,
+     "q_excess": 568.4532279264205,
+     "verdict": "ok"
+    }
+   ],
+   "verdicts": [
+    "ok"
+   ],
+   "warn_own_layers": [],
+   "q_max": 568.4532279264205,
+   "n_messages": 0,
+   "messages": []
+  }
+ ]
+}

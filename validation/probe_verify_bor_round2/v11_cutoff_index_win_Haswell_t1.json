@@ -1,0 +1,248 @@
+{
+ "provenance": {
+  "tag": "win_Haswell_t1",
+  "lumenairy_file": "C:\\tmp\\lum_vbor2\\lumenairy\\__init__.py",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "blas_arch": [
+   "Haswell"
+  ],
+  "blas_threads": [
+   1
+  ],
+  "env": {
+   "OPENBLAS_CORETYPE": "HASWELL",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "n_rungs": 13,
+ "bar": 1e-05,
+ "envelope_swept_index": 1.9654859373385847e-07,
+ "envelope_all": 0.00017874368162384968,
+ "rows": [
+  {
+   "m": 0,
+   "idx": 0,
+   "gamma": 0.02399670359196968,
+   "counts": [
+    0,
+    1
+   ],
+   "count_stable": false,
+   "worst_closure": 1.1684547026824532e-05,
+   "over_bar": true
+  },
+  {
+   "m": 0,
+   "idx": 1,
+   "gamma": 0.10019911453636157,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 5.548884401740395e-05,
+   "over_bar": true
+  },
+  {
+   "m": 0,
+   "idx": 2,
+   "gamma": 0.17159104282940887,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 1.9654859373385847e-07,
+   "over_bar": false
+  },
+  {
+   "m": 0,
+   "idx": 3,
+   "gamma": 0.2299824839541973,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 7.091522072444345e-05,
+   "over_bar": true
+  },
+  {
+   "m": 0,
+   "idx": 4,
+   "gamma": 0.30533971042463226,
+   "counts": [
+    5
+   ],
+   "count_stable": true,
+   "worst_closure": 3.209016141703103e-08,
+   "over_bar": false
+  },
+  {
+   "m": 1,
+   "idx": 0,
+   "gamma": 0.07671600351985013,
+   "counts": [
+    1
+   ],
+   "count_stable": true,
+   "worst_closure": 1.3532483841061094e-05,
+   "over_bar": true
+  },
+  {
+   "m": 1,
+   "idx": 1,
+   "gamma": 0.15965055115181542,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 0.00017874368162384968,
+   "over_bar": true
+  },
+  {
+   "m": 1,
+   "idx": 2,
+   "gamma": 0.22213227991929527,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 3.6267194136740954e-08,
+   "over_bar": false
+  },
+  {
+   "m": 1,
+   "idx": 3,
+   "gamma": 0.2922862802654786,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 2.760940790769162e-06,
+   "over_bar": false
+  },
+  {
+   "m": 1,
+   "idx": 4,
+   "gamma": 0.3556241842551979,
+   "counts": [
+    5
+   ],
+   "count_stable": true,
+   "worst_closure": 2.8737643265053237e-07,
+   "over_bar": false
+  },
+  {
+   "m": 2,
+   "idx": 0,
+   "gamma": 0.12725992427688274,
+   "counts": [
+    1
+   ],
+   "count_stable": true,
+   "worst_closure": 2.191661913863996e-05,
+   "over_bar": true
+  },
+  {
+   "m": 2,
+   "idx": 1,
+   "gamma": 0.21397822803587413,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 2.0689685156893844e-05,
+   "over_bar": true
+  },
+  {
+   "m": 2,
+   "idx": 2,
+   "gamma": 0.27940618846982596,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 5.527032365115758e-08,
+   "over_bar": false
+  },
+  {
+   "m": 2,
+   "idx": 3,
+   "gamma": 0.3506789669676088,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 1.8958894016929406e-05,
+   "over_bar": true
+  },
+  {
+   "m": 2,
+   "idx": 4,
+   "gamma": 0.4153236388520616,
+   "counts": [
+    5
+   ],
+   "count_stable": true,
+   "worst_closure": 1.505406688195876e-08,
+   "over_bar": false
+  },
+  {
+   "m": 3,
+   "idx": 0,
+   "gamma": 0.17504965421206525,
+   "counts": [
+    1
+   ],
+   "count_stable": true,
+   "worst_closure": 2.836727137633943e-07,
+   "over_bar": false
+  },
+  {
+   "m": 3,
+   "idx": 1,
+   "gamma": 0.26583163519563635,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 8.507884123321041e-06,
+   "over_bar": false
+  },
+  {
+   "m": 3,
+   "idx": 2,
+   "gamma": 0.3339468995611159,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 6.914638417399033e-09,
+   "over_bar": false
+  },
+  {
+   "m": 3,
+   "idx": 3,
+   "gamma": 0.40665942597950716,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 9.329586854067706e-06,
+   "over_bar": false
+  },
+  {
+   "m": 3,
+   "idx": 4,
+   "gamma": 0.47265999709735584,
+   "counts": [
+    5
+   ],
+   "count_stable": true,
+   "worst_closure": 5.610223174912221e-09,
+   "over_bar": false
+  }
+ ]
+}

@@ -1,0 +1,496 @@
+{
+ "provenance": {
+  "tag": "win_Haswell_t1",
+  "lumenairy_file": "C:\\tmp\\lum_vbor2\\lumenairy\\__init__.py",
+  "python": "3.14.6",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "blas_arch": [
+   "Haswell"
+  ],
+  "blas_threads": [
+   1
+  ],
+  "env": {
+   "OPENBLAS_CORETYPE": "HASWELL",
+   "OMP_NUM_THREADS": "1",
+   "OPENBLAS_NUM_THREADS": "1",
+   "MKL_NUM_THREADS": "1"
+  }
+ },
+ "n_rungs": 13,
+ "floor": 1e-06,
+ "floor_mult": 10.0,
+ "envelope_all": 0.00019344709725310771,
+ "envelope_gate_scope": 8.598765643963446e-08,
+ "rows": [
+  {
+   "geom": "G1_coincident",
+   "m": 0,
+   "idx": 1,
+   "gamma": 0.8016046022220293,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 3.978508255064739e-07,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 0,
+   "idx": 2,
+   "gamma": 1.3624165766931329,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 3.210628019001405e-08,
+   "worst_delta": 3.1622776601683795e-10
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 0,
+   "idx": 3,
+   "gamma": 1.8399843216428968,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 3.2358471540039346e-06,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 1,
+   "idx": 1,
+   "gamma": 1.2772275625246063,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 0.00010540565059158347,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 1,
+   "idx": 2,
+   "gamma": 1.777125161299524,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 8.598765643963446e-08,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 1,
+   "idx": 3,
+   "gamma": 2.3384689777524192,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 2.0177587999770097e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 2,
+   "idx": 1,
+   "gamma": 1.7118619814865448,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 3.012245173250605e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 2,
+   "idx": 2,
+   "gamma": 2.2353455431940534,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 1.4161634087628272e-08,
+   "worst_delta": 1e-09
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 2,
+   "idx": 3,
+   "gamma": 2.8056686426869275,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 6.285129023675395e-06,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 3,
+   "idx": 1,
+   "gamma": 2.1267036745315453,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 5.602235443169512e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 3,
+   "idx": 2,
+   "gamma": 2.6717027739592285,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 3.480334465066903e-08,
+   "worst_delta": 1e-09
+  },
+  {
+   "geom": "G1_coincident",
+   "m": 3,
+   "idx": 3,
+   "gamma": 3.253574226009363,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 4.2484892881278213e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 0,
+   "idx": 1,
+   "gamma": 0.8016046022220293,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 1.3245016428076184e-07,
+   "worst_delta": 1e-09
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 0,
+   "idx": 2,
+   "gamma": 1.3624165766931329,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 2.6861256441357284e-08,
+   "worst_delta": 3.1622776601683795e-10
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 0,
+   "idx": 3,
+   "gamma": 1.8399843216428968,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 6.7920217383665715e-06,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 1,
+   "idx": 1,
+   "gamma": 1.2772275625246063,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 6.690779661511215e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 1,
+   "idx": 2,
+   "gamma": 1.777125161299524,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 6.728044743553596e-08,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 1,
+   "idx": 3,
+   "gamma": 2.3384689777524192,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 1.7160196402632444e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 2,
+   "idx": 1,
+   "gamma": 1.7118619814865448,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 1.7219315619598774e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 2,
+   "idx": 2,
+   "gamma": 2.2353455431940534,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 1.8694850445477584e-08,
+   "worst_delta": 1e-09
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 2,
+   "idx": 3,
+   "gamma": 2.8056686426869275,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 5.444011301092289e-06,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 3,
+   "idx": 1,
+   "gamma": 2.1267036745315453,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 3.149176686356725e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 3,
+   "idx": 2,
+   "gamma": 2.6717027739592285,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 3.775778867343149e-08,
+   "worst_delta": 1e-09
+  },
+  {
+   "geom": "G2_noncoincident",
+   "m": 3,
+   "idx": 3,
+   "gamma": 3.253574226009363,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 2.6507220003635368e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 0,
+   "idx": 1,
+   "gamma": 0.687091125968073,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 4.202169907596698e-07,
+   "worst_delta": 1e-09
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 0,
+   "idx": 2,
+   "gamma": 1.1646375090116592,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 5.947812611317715e-07,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 0,
+   "idx": 3,
+   "gamma": 1.577145040733814,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 5.086748223182003e-05,
+   "worst_delta": 3.1622776601683795e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 1,
+   "idx": 1,
+   "gamma": 1.0947693885913465,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 3.89845240990061e-05,
+   "worst_delta": 3.1622776601683795e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 1,
+   "idx": 2,
+   "gamma": 1.52325853829177,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 2.4000214260411212e-08,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 1,
+   "idx": 3,
+   "gamma": 2.0044244178153345,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 2.4833347625818902e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 2,
+   "idx": 1,
+   "gamma": 1.467314808459392,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 0.00019344709725310771,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 2,
+   "idx": 2,
+   "gamma": 1.9160225201037455,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 1.4764560196667276e-07,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 2,
+   "idx": 3,
+   "gamma": 2.4048885735014984,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 2.8019150045688335e-05,
+   "worst_delta": 1e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 3,
+   "idx": 1,
+   "gamma": 1.8228952144491304,
+   "n_rungs": 13,
+   "counts": [
+    2
+   ],
+   "count_stable": true,
+   "worst_closure": 3.743079852125408e-05,
+   "worst_delta": 3.1622776601683795e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 3,
+   "idx": 2,
+   "gamma": 2.290046962399297,
+   "n_rungs": 13,
+   "counts": [
+    3
+   ],
+   "count_stable": true,
+   "worst_closure": 1.114125458556714e-09,
+   "worst_delta": 3.1622776601683795e-10
+  },
+  {
+   "geom": "G3_fine_grid",
+   "m": 3,
+   "idx": 3,
+   "gamma": 2.7888154147407707,
+   "n_rungs": 13,
+   "counts": [
+    4
+   ],
+   "count_stable": true,
+   "worst_closure": 1.134545054803926e-05,
+   "worst_delta": 1e-10
+  }
+ ]
+}

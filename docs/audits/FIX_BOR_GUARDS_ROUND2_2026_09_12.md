@@ -225,6 +225,35 @@ the conservative direction, and it is the 1-D peer's convention
 * anything the predicate cannot resolve answers `False`, which leaves the solve
   exactly as it was.
 
+> **RESTATEMENT AND FIX, 2026-09-12 (round 3, verification GAP 2).** The
+> incidence-lossless conjunct above is correct about the ENERGY and was wrong
+> about its SCOPE: until round 3 it lived in the ONE predicate both detectors
+> shared, so a loss of any size on `layers[0]` — 3e-12 included, the exact rung
+> D1 was named for — disarmed the INDEX CEILING as well. That is D1's own shape
+> relocated rather than removed, and it is measurable: on the verification's
+> ladder D the nodal cascade returns `max(R + T) = 2.41297` in silence while
+> the div-conforming twin on the identical geometry closes to 8.75e-07.
+> `_check_nodal_passivity` now gates the two separately —
+> `_stack_media_are_passive` (`Im eps >= 0` everywhere; GAIN disarms
+> everything) gates BOTH, and the incidence-lossless conjunct gates the energy
+> detector ALONE — because the ceiling's Rayleigh bound concerns a half-space's
+> own `eps` and is untouched by whether the incidence medium's flux is
+> conserved. Re-measured: ladder D **4 of 13 → 13 of 13 refused** (4 energy, 9
+> ceiling), with **0 refusals and 0 warnings on 52 rows** of healthy
+> channel-set-agreeing stacks carrying the same loss.
+>
+> The gate named above, `test_the_screen_disarms_on_an_absorbing_incidence_
+> medium`, was **VACUOUS** (verification GAP 1): its superstrate at `Im/Re =
+> 1e-3` put every mode past `_orient._BOR_CHANNEL_IMAG_BAR`, so the channel set
+> was empty and `_check_nodal_passivity` returned at its `e.size == 0` line
+> without ever calling the predicate — the round-2 verification measured that
+> it still passed with the conjunct deleted. It is retired. Its live
+> replacement is `test_fix_bor_guards_round2.py::
+> test_the_energy_screen_disarms_on_an_absorbing_incidence_medium_but_the_
+> ceiling_does_not`, which runs at `Im/Re = 1e-7` (two decades inside the
+> channel gate), asserts its own premise, and asserts both halves of the
+> round-3 split.
+
 **On the tensor arm.** The peer's general statement is that the anti-Hermitian
 part `(eps - eps^H) / 2i` is positive semi-definite. On this path that statement
 is not approximated, it is *reduced*: `bor_solve.build_layer`'s permittivity
@@ -538,9 +567,29 @@ are **maxima** of the lossy population. The statistic that decides is the
 **minimum** — the closest approach to the band from above — because the band
 must not reach ANY genuinely lossy mode. (The build's own gate already read the
 minimum; the number written beside it was the maximum.) Re-measured,
-`r8_band_sides.py`: MIN `sigma` = 2.3820e-05 at `Im(n)` = 1e-3 and
-**2.3820e-08** at 1e-6, i.e. **3.38 and 0.38 decades**. The docstring table in
+`r8_band_sides.py`: MIN `sigma` = **3.7752e-05** at `Im(n)` = 1e-3 and
+**3.7752e-08** at 1e-6, i.e. **3.58 and 0.58 decades**. The docstring table in
 `_orient.orient_band_scale` now says so, and labels each row MIN or max.
+
+> **CORRECTION, 2026-09-12 (round 3, verification GAP 6).** As first written
+> this paragraph read *"MIN `sigma` = 2.3820e-05 ... and **2.3820e-08** ...
+> i.e. **3.38 and 0.38 decades**"* and attributed those numbers to
+> `r8_band_sides.py`. That probe's own JSON
+> (`validation/probe_fix_bor_round2/r8_band_sides_win_Haswell_t1.json`,
+> `summary.signal`) reports minima of **3.7752e-05** and **3.7752e-08**, i.e.
+> **3.577 and 0.577 decades** — which is what the text above now says, and what
+> `_orient.orient_band_scale`'s docstring has said all along. 2.3820e-08 is the
+> ROUND-1 verification's own number, measured on ITS battery
+> (`VERIFY_BOR_MULTILAYER_GUARDS_2026_09_12.md`, §5 table), not this probe's.
+> **The conclusion is unchanged**: the minimum over the union of the two
+> batteries is the smaller of the two, so 2.3820e-08 / 0.38 decades remains the
+> figure the band must carry, and the shipped code comment
+> (`_orient.py`, `orient_band_scale`) already attributes both numbers to their
+> own probes correctly. Only this paragraph's prose conflated them. Recorded
+> because it is the right-conclusion-wrong-numbers shape
+> `docs/TESTING_STANDARDS.md` names as the most dangerous: it reads as
+> authoritative, the artefact that matters is right, and nothing catches it
+> except re-reading the JSON.
 
 ### 6.3 The `k0` floor binds on zero layers
 
@@ -660,6 +709,38 @@ for every layer, and the three positions behave identically over a width
 ladder: all `warn_own` at `1e-7` of `Rbig`, all `ok` at `1e-4`. Pinned by
 `test_fix_bor_guards_round2.py::
 test_a_caller_prescribed_liner_is_warned_wherever_it_sits_in_r`.
+
+> **RESTATEMENT, 2026-09-12 (round 3).** The literal claim above — all
+> `warn_own` at `1e-7`, all `ok` at `1e-4` — is true and was re-measured by the
+> round-2 verification. The GENERALISATION of it, *"the three positions behave
+> identically over a width ladder"*, was **REFUTED as a ladder claim** by that
+> verification and independently re-measured here
+> (`validation/probe_fix_bor_round3/g3_sem_ladder.py`, 9 rungs from `1e-9` to
+> `1e-5` of `Rbig` x 3 positions): on the round-2 tree the three positions
+> disagreed at **4 of the 9 rungs**, identically on both builds —
+>
+> * `1e-9`, `3e-9`, `1e-8`: the AXIS liner's `q_excess` goes **non-finite** and
+>   `verdict` read a non-finite ratio as NOT hot, so the axis read `ok` while
+>   the interior and outer wall read `warn_own` (verification GAP 3), and on
+>   Sandybridge the axis ratio is finite (8.89487e+07) so the axis read
+>   `warn_own` there — a **kernel-dependent verdict**;
+> * `1e-6`, the edge itself: the axis liner's walls (`0`, `w`) difference to
+>   `1.000000000000e-06` EXACTLY and the other two (`Rbig - w`, `Rbig` and
+>   `6`, `6 + w`) to `9.999999999917e-07`, 38,968 ULP lower, so a STRICT `<`
+>   against `_BOR_MIN_ELEM_FRAC` decided them oppositely (verification GAP 4).
+>
+> **Round 3 closes both**, and the generalised claim is now true as stated:
+> `_sem_contract.verdict` reads a non-finite `q_excess` that was FORMED from a
+> spectrum as HOT, and its three width comparisons go through `_below`, which
+> closes the tie at the bar with the library's 16-ULP deadband. Re-measured
+> after the fix: **0 of the 9 rungs disagree**, on every arm of the round-3
+> matrix. The ladder claim is pinned by
+> `test_fix_bor_guards_round2.py::
+> test_a_caller_prescribed_liner_is_warned_wherever_it_sits_in_r` (extended to
+> the full ladder) and by `test_verify_bor_guards_round2.py::
+> test_the_warn_own_edge_is_not_decided_by_the_representation_of_the_width` and
+> `::test_a_non_finite_q_excess_is_not_a_benign_sem_verdict`, both of which
+> were strict xfails and are now live gates.
 
 ### 6.7 `.test_durations`
 

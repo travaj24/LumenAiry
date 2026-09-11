@@ -195,12 +195,28 @@ def _sigma(L, k0):
 
 
 def _gamma_of(m, idx=2):
-    """The cutoff wavenumber of one named radial order.
+    """The cutoff wavenumber of the ``idx``-th radial order at azimuthal order
+    ``m``, counting from the axis outwards over the orders with ``gamma > 0``.
 
     The PEC-walled cylindrical spectrum is DISCRETE, so no ordinary ``k0``
     sweep reaches a cutoff: the ladder must solve for ``gamma_j`` first and
     then approach it geometrically with ``k0 = gamma_j / (n sqrt(1 - delta))``,
     which puts the order at ``qn = n sqrt(delta)`` exactly.
+
+    ROUND 3 (verification round 2, GAP 5) -- ``idx`` IS A SWEPT AXIS NOW, AND
+    ITS DEFAULT IS NO LONGER LOAD-BEARING.  Until round 3 every caller took
+    ``idx=2`` and nothing said so, which made
+    :data:`_CUTOFF_LADDER_BAR`'s margin a property of ONE radial cutoff:
+    swept over ``m`` in 0..3 x ``idx`` in 1..3 the worst closure is
+    **1.787437e-04** at ``(m=1, idx=1)`` against **1.9655e-07** at
+    ``(m=0, idx=2)``, a factor of 909
+    (``validation/probe_fix_bor_round3/g5_cutoff_family.py``).  ``idx``
+    selects HOW MANY channels the stack has -- ``idx + 1``, measured on every
+    combination -- so the ladder at ``idx`` drives the ``(idx+1)``-th channel
+    to cutoff.  The gate below now parametrizes over the whole grid; the
+    default is kept only so the two single-rung gates
+    (:func:`test_near_cutoff_closure` and the pre-fix contrast) keep the
+    fixture their published numbers were measured on.
     """
     L = _fd_modes(m, 2.0)
     q = np.asarray(L["q"])
@@ -274,7 +290,81 @@ def test_near_cutoff_closure():
 #:
 #: The channel COUNT claim is unchanged and is the stronger half of the gate:
 #: it is an INTEGER, it must be ONE number per ``m``, and it is on every arm.
+#:
+#: ROUND 3 (verification round 2, GAP 5) -- THIS BAR IS NOW SCOPED TO THE RUNGS
+#: IT HAS A TWO-SIDED GAP ON, AND THE SCOPE IS A MEASUREMENT.
+#:
+#: The margin above was quoted over ``m`` and never over ``idx``, the RADIAL
+#: cutoff index ``_gamma_of`` defaulted to 2 and no caller overrode.  Swept over
+#: ``m`` in 0..3 x ``idx`` in 1..3 -- 12 ladders, 156 solves
+#: (``validation/probe_fix_bor_round3/g5_cutoff_family.py``,
+#: ``g5b_cutoff_mechanism.py``; Windows / Haswell / 1 thread, 2026-09-12) -- the
+#: worst closure is **1.787437e-04**, 17.9x ABOVE this bar, at ``(m=1, idx=1)``
+#: and at the DEEPEST rung of the ladder.
+#:
+#: WIDENING THE BAR IS NOT AVAILABLE, and that is the whole of why this scope
+#: exists.  The PRE-fix per-mode band's own defect reads **1.2167e-04** at
+#: ``qn ~ 2.5e-03`` (:func:`test_near_cutoff_closure`), which is SMALLER than
+#: the residual.  No scalar separates them; the axis that does is the rung's
+#: own distance from cutoff, ``qn_marginal = n sqrt(delta)``, measured in units
+#: of the R/T channel gate's floor ``_orient._BOR_CHANNEL_REAL_FLOOR``:
+#:
+#:   qn >= 100x the channel floor   9 rungs x 12 ladders = 108 rows
+#:                                  worst closure **6.889470e-07**
+#:   qn <  100x the channel floor   4 rungs x 12 ladders =  48 rows
+#:                                  worst closure **1.787437e-04**
+#:                                  -- 2.41 decades worse
+#:
+#: SO THE ENERGY BAR APPLIES AT ``qn >= _CUTOFF_ENERGY_FLOOR_MULT`` x the
+#: channel floor, where it is TWO-SIDED: **14.5x (1.16 decades) above** the
+#: measured family envelope 6.8895e-07 and **12.2x (1.09 decades) below** the
+#: pre-fix defect 1.2167e-04 it must refuse.  Below that the closure is bounded
+#: by :data:`_CUTOFF_DEEP_BAR` and the claim that carries the rungs is the
+#: INTEGER one.
 _CUTOFF_LADDER_BAR = 1.0e-5
+
+#: ROUND 3 (GAP 5) -- WHERE THE ENERGY BAR STOPS MEANING ANYTHING, in units of
+#: ``_orient._BOR_CHANNEL_REAL_FLOOR`` on the marginal channel's own ``qn``.
+#:
+#: THE MECHANISM, MEASURED RATHER THAN ARGUED.  The ladder drives one channel to
+#: cutoff, so its ``qn`` -> 0 and its ``r dr`` z-flux goes with it (``P/fnrm ~
+#: qn`` for the limiting polarization family).  The modal basis is normalized by
+#: ``1/sqrt(|P|)``, so that ONE column's amplitude diverges and the cascade's
+#: energy bookkeeping loses digits in it.  At the worst rung (``m=1``,
+#: ``idx=1``, ``qn`` = 1.410e-05) the superstrate spectrum's weakest in-band
+#: flux is **5.5399e-08** against the strongest **4.5564e-03** -- five decades
+#: -- and the excess lands on the marginal channel's own row of ``R + T`` on
+#: 17 of the 28 rows where the closure exceeds 1e-07.
+#:
+#: IT IS NOT THE ORIENTATION BAND FAILING, which is what this file's gates are
+#: about, and that is measured two ways at that same rung: **0** modes inside
+#: the classifier band carry BACKWARD flux (the 5.45.1 defect's signature), and
+#: the CHANNEL COUNT is one number -- ``idx + 1`` -- over the whole ladder on
+#: **12 of 12** ``(m, idx)`` combinations.  It is the same population
+#: :data:`_CUTOFF_LADDER_FLOOR_MULT` exists to keep this gate away from, one
+#: effect earlier: the COUNT survives down to 10x the channel floor, the
+#: CLOSURE leaves its round-off floor at about 100x.
+#:
+#: 100 is the measured knee, not a chosen round number: at 100x the floor
+#: (``qn`` = 1.41e-04, ``delta`` = 1e-08) the family reads 6.889e-07 and at the
+#: next rung down (79x, ``qn`` = 7.93e-05) it reads 2.604e-06, the first row
+#: over 1e-06 anywhere in the grid.
+_CUTOFF_ENERGY_FLOOR_MULT = 100.0
+
+#: ROUND 3 (GAP 5) -- THE BOUND ON THE DEEP RUNGS, where the energy bar above
+#: does not apply.
+#:
+#: ONE-SIDED BY CONSTRUCTION, and it says so.  There is no defect population
+#: above it to separate from: on the deep rungs the PRE-fix band's failure shows
+#: up in the CHANNEL COUNT (it reclassified a propagating order as evanescent
+#: and ``solve``'s channel gate then dropped it), which this gate asserts
+#: UNCONDITIONALLY at every rung and every ``(m, idx)``.  What this bar does is
+#: keep the residual from growing silently: 2e-3 is **11.2x (1.05 decades)**
+#: above the measured envelope 1.787437e-04 over the 48 deep rows, which is the
+#: margin a bound on a conditioning residual can honestly carry.  If it ever
+#: fires, the closure at the marginal channel has moved and the mechanism above
+#: is the place to start.
+_CUTOFF_DEEP_BAR = 2.0e-3
 
 #: How far above the R/T channel gate's OWN floor the ladder must stop, as a
 #: multiple of ``_orient._BOR_CHANNEL_REAL_FLOOR``.
@@ -306,23 +396,51 @@ def _cutoff_ladder_rungs():
     return out
 
 
-@pytest.mark.parametrize("m", [0, 1, 2])
-def test_near_cutoff_channel_count_is_stable_over_the_ladder(m):
+@pytest.mark.parametrize("m,idx", [(m, i) for m in (0, 1, 2, 3)
+                                   for i in (1, 2, 3)])
+def test_near_cutoff_channel_count_is_stable_over_the_ladder(m, idx):
     """The shipped band did not merely degrade the closure -- it changed HOW
     MANY diffraction channels the solve reported, and which number came back
     depended on the BLAS kernel (21 of 24 rungs) and on the thread count (35 of
     39).  A channel count that moves with the arithmetic is a defect, not
     noise.  Over the near-cutoff ladder the count must be ONE number.
 
-    ROUND 2 (D9): the claim is now made over the FAMILY it was always phrased
-    for -- ``m`` = 0, 1 and 2 -- and its energy bar comes from the measured
-    envelope over that family and the arms rather than from one sample.  See
-    :data:`_CUTOFF_LADDER_BAR` for the measurement and
-    :data:`_CUTOFF_LADDER_FLOOR_MULT` for why the ladder stops where it does.
+    ROUND 2 (D9): the claim is made over the FAMILY it was always phrased for,
+    and its energy bar comes from the measured envelope over that family and
+    the arms rather than from one sample.
+
+    ROUND 3 (verification round 2, GAP 5): the family is the WHOLE grid.  The
+    dominant axis was never ``m`` -- it is ``idx``, WHICH radial cutoff the
+    ladder approaches, which ``_gamma_of`` used to fix at 2 by an undocumented
+    default that no caller overrode.  Sweeping it moves the worst closure by a
+    factor of 909 and takes it 17.9x past the old bar, so this gate now runs
+    all twelve ladders and states its energy claim on the axis that actually
+    separates the populations.  See :data:`_CUTOFF_LADDER_BAR` for why the bar
+    could not simply be widened, :data:`_CUTOFF_ENERGY_FLOOR_MULT` for the
+    scope and the mechanism, :data:`_CUTOFF_DEEP_BAR` for the bound below it,
+    and :data:`_CUTOFF_LADDER_FLOOR_MULT` for why the ladder stops where it
+    does.
+
+    THREE CLAIMS, in decreasing strength:
+
+    1. the CHANNEL COUNT is ONE number over the whole ladder -- an integer, and
+       the property the orientation band exists for.  Unconditional, every
+       rung, every ``(m, idx)``;
+    2. it is the RIGHT number, ``idx + 1``: the ladder drives the
+       ``(idx+1)``-th channel to cutoff and the other ``idx`` stay open;
+    3. the lossless CLOSURE is inside :data:`_CUTOFF_LADDER_BAR` wherever the
+       marginal channel is at least
+       :data:`_CUTOFF_ENERGY_FLOOR_MULT` x ``_BOR_CHANNEL_REAL_FLOOR``, and
+       inside :data:`_CUTOFF_DEEP_BAR` below that.
     """
-    g = _gamma_of(m)
+    g = _gamma_of(m, idx)
+    assert g is not None, (
+        "the m=%d spectrum has no radial cutoff at index %d -- the fixture's "
+        "grid changed and the ladder must be re-derived" % (m, idx))
     counts = set()
-    worst = 0.0
+    worst_shallow = 0.0
+    worst_deep = 0.0
+    deep_knee = _or._BOR_CHANNEL_REAL_FLOOR * _CUTOFF_ENERGY_FLOOR_MULT
     rungs = _cutoff_ladder_rungs()
     assert len(rungs) >= 12, (
         "the ladder collapsed to %d rungs -- re-derive it" % (len(rungs),))
@@ -332,16 +450,34 @@ def test_near_cutoff_channel_count_is_stable_over_the_ladder(m):
         counts.add(int(np.size(res["R"])))
         en = np.asarray(res["energy"])
         if en.size:
-            worst = max(worst, float(np.max(np.abs(en - 1.0))))
+            c = float(np.max(np.abs(en - 1.0)))
+            if _NREF * np.sqrt(dl) >= deep_knee:
+                worst_shallow = max(worst_shallow, c)
+            else:
+                worst_deep = max(worst_deep, c)
     assert len(counts) == 1, (
-        "m=%d: the R/T channel count moves over the near-cutoff ladder: %s "
-        "(the shipped band read 2 on some rungs and 3 on others)"
-        % (m, sorted(counts),))
-    assert worst < _CUTOFF_LADDER_BAR, (
-        "m=%d: worst lossless closure over the ladder %.4e (bar %.0e; "
-        "measured envelope 1.2716e-06 over the kernel x thread x build arms, "
-        "and the shipped per-mode band read 1.2167e-04)"
-        % (m, worst, _CUTOFF_LADDER_BAR))
+        "m=%d, radial cutoff index %d: the R/T channel count moves over the "
+        "near-cutoff ladder: %s (the shipped band read 2 on some rungs and 3 "
+        "on others)" % (m, idx, sorted(counts),))
+    assert counts == {idx + 1}, (
+        "m=%d, radial cutoff index %d: the ladder drives the %d-th channel to "
+        "cutoff, so the solve must report %d channels; it reports %s"
+        % (m, idx, idx + 1, idx + 1, sorted(counts)))
+    assert worst_shallow < _CUTOFF_LADDER_BAR, (
+        "m=%d, radial cutoff index %d: worst lossless closure %.4e on the "
+        "rungs at qn >= %.0ex the channel floor (bar %.0e; measured family "
+        "envelope 6.8895e-07 over 12 ladders x 9 rungs, and the shipped "
+        "per-mode band read 1.2167e-04 at qn ~ 2.5e-03)"
+        % (m, idx, worst_shallow, _CUTOFF_ENERGY_FLOOR_MULT,
+           _CUTOFF_LADDER_BAR))
+    assert worst_deep < _CUTOFF_DEEP_BAR, (
+        "m=%d, radial cutoff index %d: worst lossless closure %.4e on the "
+        "DEEP rungs (qn < %.0ex the channel floor), past the bound %.0e.  "
+        "Measured envelope there 1.7874e-04 over 12 ladders x 4 rungs; the "
+        "residual is the marginal channel's flux normalisation, so start at "
+        "its own |flux| census" % (m, idx, worst_deep,
+                                   _CUTOFF_ENERGY_FLOOR_MULT,
+                                   _CUTOFF_DEEP_BAR))
 
 
 def test_the_pre_fix_band_would_have_reclassified_a_propagating_mode():
