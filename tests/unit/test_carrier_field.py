@@ -40,6 +40,7 @@ THREE RULES, NOT ONE
    right to 1e-9.  That is the fail-before this guard exists for.
 """
 
+import dataclasses
 import json
 import math
 import warnings
@@ -556,10 +557,52 @@ def test_aggregate_ledger_is_clean_when_the_window_contains_the_beam():
 
 def test_aggregate_refuses_mixed_wavelengths():
     a = _gauss_field(64, 1e-6, 10e-6, -1e-3)
-    b = _gauss_field(64, 1e-6, 10e-6, -1e-3)
-    b.wavelength = 1.55e-6
+    b0 = _gauss_field(64, 1e-6, 10e-6, -1e-3)
+    # Assigning to a built CarrierField is deprecated (C5), so the second
+    # wavelength is CONSTRUCTED rather than assigned -- which is also the only
+    # form that will still work once the class is frozen.
+    b = CarrierField(b0.envelope, b0.grid, b0.carrier, 1.55e-6)
     with pytest.raises(ValueError, match='different wavelengths'):
         aggregate([a, b], a.carrier, a.grid)
+
+
+def test_mutating_a_built_carrier_field_is_deprecated():
+    """C5: ``CarrierField`` is the one MUTABLE dataclass among frozen siblings
+    (``CarrierSpec``, ``FieldGrid``), so ``field.envelope = ...`` bypasses
+    every ``__post_init__`` invariant -- shape-vs-grid, complexity, wavelength,
+    provenance canonicalisation -- and can leave a field whose grid no longer
+    describes its array.  Pre-fix each assignment below was SILENT.
+
+    The announcement half of the cycle: the assignment still takes effect
+    (nothing breaks on the warning) and the class freezes at
+    ``_CARRIER_FIELD_FROZEN_IN``."""
+    f = _gauss_field(16, 1e-6, 4e-6, -1e-3)
+    for name, value in (('envelope', np.zeros((3, 3), complex)),
+                        ('grid', FieldGrid((3, 3), 1e-6)),
+                        ('carrier', CarrierSpec(R=1.0)),
+                        ('wavelength', 1.55e-6),
+                        ('provenance', {'x': 1})):
+        with pytest.warns(DeprecationWarning, match='built CarrierField'):
+            setattr(f, name, value)
+    # ... and CONSTRUCTION is silent: the gate arms only after __post_init__.
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', DeprecationWarning)
+        g = _gauss_field(16, 1e-6, 4e-6, -1e-3)
+        g.with_provenance(tag='x')
+        dataclasses.replace(g, wavelength=1.55e-6)
+    # ... and the in-place accumulate idiom the migration note prescribes is
+    # already frozen-safe AND bit-identical to the rebinding one.
+    a = _gauss_field(16, 1e-6, 4e-6, -1e-3)
+    b = _gauss_field(16, 1e-6, 4e-6, -1e-3)
+    want = a.envelope + b.envelope
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', DeprecationWarning)
+        np.add(a.envelope, b.envelope, out=a.envelope)
+    assert np.array_equal(a.envelope, want)
+    # ... and the horizon it advertises is in the future.
+    from lumenairy._deprecation import resolve_removal_version
+    from lumenairy.propagators.carrier_field import _CARRIER_FIELD_FROZEN_IN
+    assert resolve_removal_version(_CARRIER_FIELD_FROZEN_IN)
 
 
 # ---------------------------------------------------------------------------

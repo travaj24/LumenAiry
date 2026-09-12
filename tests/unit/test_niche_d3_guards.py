@@ -536,7 +536,18 @@ _TKW = dict(on_undersample='silent', on_noncollimated='silent')
 # Nothing here reads the outer window: every assertion in this file is about
 # a GUARD firing or not firing, not about field values.  Waived at the fixture
 # so the guards under test are the ones this file is about.
-_RO = dict(dx_out=1.4e-6, N_out=256, on_replica='ignore')
+# ``on_focus_containment='ignore'`` (WP-A6 / C1, 2026-09-12): the FAN fixture
+# is two well-separated congruences on one grid, so the readout's beam-vs-grid
+# containment guard measures its second moment across the SEPARATION and
+# refuses (containment 0.867 on an input the guard reads as 0.72 beam radii
+# wide).  That refusal is not wrong -- a multiplexed fan is exactly the
+# "populated, credible-looking, scrambled" answer this file's own D3 gate
+# exists to catch -- but it would pre-empt the subject of these tests, which
+# is the D3 WARNING and its wording.  Waived here, deliberately, so the D3
+# gate is what is being measured; the containment guard's own default refusal
+# is pinned in ``test_audit2609_a6_carrier.py``.
+_RO = dict(dx_out=1.4e-6, N_out=256, on_replica='ignore',
+           on_focus_containment='ignore')
 
 
 def _chain(field, *, groups=None, quiet=False, **kw):

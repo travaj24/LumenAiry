@@ -128,9 +128,26 @@ def test_r9_exact_leg_focuses_highna_sphere(w, R):
     # replicas in the outer window are not read.  Waived here, not silenced
     # globally; the default refusal is pinned in
     # test_niche_tight_focus_readout.
+    #
+    # WP-A6 / C1 (2026-09-12): the same waiver, for the same reason, on the
+    # containment guard.  That guard refuses a readout whose beam does not fit
+    # the co-moving stop grid -- and this arm's beam does not: measured
+    # containment 1.055 (NA 0.30) and 0.919 (NA 0.455) against the 1.0 floor,
+    # on an input grid holding only 2.56 / 2.19 beam radii.  That is not a
+    # false positive, it IS the failure this test asserts one line below
+    # (``ee_par < 0.10``): the guard and the assertion are measuring the same
+    # thing from two directions.  Keeping the arm therefore means waiving the
+    # refusal explicitly, exactly as the replica one is waived.
     E_par = np.asarray(carrier_referenced_focus_readout(
         carrier_referenced_envelope(E, R, _WL, dx), R, zf, _WL, dx,
-        dx_out=dx_out, N_out=N_out, on_replica='ignore'))
+        dx_out=dx_out, N_out=N_out, on_replica='ignore',
+        on_focus_containment='ignore'))
+    # ... and that the waiver is load-bearing: without it the default refuses
+    # this arm outright, so a caller cannot reach the ~5 % answer by accident.
+    with pytest.raises(RuntimeError, match='does not fit the co-moving'):
+        carrier_referenced_focus_readout(
+            carrier_referenced_envelope(E, R, _WL, dx), R, zf, _WL, dx,
+            dx_out=dx_out, N_out=N_out, on_replica='ignore')
     E_ex = np.asarray(carrier_referenced_exact_focus_readout(
         E, R, zf, _WL, dx, dx_out=dx_out, N_out=N_out))
     assert np.isfinite(E_ex).all()

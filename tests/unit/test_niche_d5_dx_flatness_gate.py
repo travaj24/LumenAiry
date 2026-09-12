@@ -374,9 +374,18 @@ def _run(N, rs, tag='defaults', chain_kwargs=None, traced_kwargs=None):
               # replicas in the outer window are not read.  Waived here rather
               # than shrinking _NOUT, which would move every rung of the
               # ladder this file is calibrated on.
+              # WP-A6 / C1 (2026-09-12): same waiver, same reason, for the
+              # readout's beam-vs-grid containment guard.  The ``paraxial_leg``
+              # TEETH arm is a deliberately reverted configuration (measured
+              # FWHM 8.58 um / EE2 8.4 % / window 82 %, against 2.755 um /
+              # 63.9 % / 99.9 % on the defaults) and its envelope reaches the
+              # stop plane at a containment of 0.963 beam radii -- the guard
+              # and this file's gate are detecting the same breakage, so the
+              # guard must not pre-empt the gate that is under test.
               focus_readout={'dx_out': _DXO, 'N_out': _NOUT,
                              'n_fine_cap': _NFC, 'window_factor': _WFAC,
-                             'on_replica': 'ignore'},
+                             'on_replica': 'ignore',
+                             'on_focus_containment': 'ignore'},
               final_leg='auto')
     if chain_kwargs:
         kw.update(chain_kwargs)

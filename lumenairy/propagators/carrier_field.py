@@ -113,6 +113,7 @@ from __future__ import annotations
 
 import json
 import math
+import warnings
 from dataclasses import dataclass
 from dataclasses import field as _dc_field
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
@@ -125,6 +126,7 @@ from .carrier import (
     _exact_sphere_eikonal,
     _exact_tilt_reference,
     _guard_dispose,
+    _phasor_rows,
     _tilt_exactness_phase,
     _tilt_ramp,
 )
@@ -429,7 +431,8 @@ class CarrierSpec:
         return (sgn * u / den + L, sgn * v / den + M)
 
     # -- the whole-grid phasor -------------------------------------------
-    def phasor_on(self, grid, wavelength, sign=1, *, with_piston=True):
+    def phasor_on(self, grid, wavelength, sign=1, *, with_piston=True,
+                  dtype=None):
         """``exp(sign * i * k0 * C)`` on ``grid`` (a :class:`FieldGrid`).
 
         Built from the LIBRARY'S OWN three lines --
@@ -442,29 +445,48 @@ class CarrierSpec:
 
         ``with_piston=False`` returns the SHAPE only, which is what a caller
         who intends to handle the constant separately (or who is comparing
-        two carriers that share it) wants."""
+        two carriers that share it) wants.
+
+        ``dtype`` (default ``None`` = ``complex128``, the historical answer):
+        pass ``np.complex64`` -- normally the dtype of the envelope this
+        phasor will multiply -- and the sphere is assembled in row bands
+        through ``_phasor_rows`` and the ramp / exactness factors are asked
+        for the same dtype, so a complex64 field keeps its dtype and no
+        whole-grid complex128 transient is built.  The PRECISION BOUNDARY is
+        the one ``_phasor_rows`` documents: the ARGUMENT (``k S``, up to ~1e6
+        rad) stays float64 and only the finished unit phasor is narrowed
+        (measured max ``|c64 - c128|`` = 4.2e-08, flat in the argument).  At
+        N = 16384 each avoided complex128 grid is 4.29 GB."""
         shape = grid.shape
         dx, dy = grid.dx, grid.dy
         cx = self.centre[0] - grid.origin[0]
         cy = self.centre[1] - grid.origin[1]
         k = 2.0 * np.pi / float(wavelength)
+        c64 = dtype is not None and np.dtype(dtype) == np.dtype(np.complex64)
         S = _exact_sphere_eikonal(shape, dx, dy, wavelength, self.R,
                                   centre=(cx, cy))
-        ph = np.exp((sign * 1j * k) * S)
+        if c64:
+            ph = _phasor_rows(lambda r0, r1: (sign * 1j * k) * S[r0:r1],
+                              shape, np.complex64)
+        else:
+            ph = np.exp((sign * 1j * k) * S)
         del S
         rp = _tilt_ramp(shape, dx, wavelength, self.tilt[0], self.tilt[1],
-                        cx, cy, sign)
+                        cx, cy, sign, dtype=dtype)
         if rp is not None:
             ph *= rp
             del rp
         xf = _tilt_exactness_phase(shape, dx, dy, wavelength, self.R,
                                    self.tilt[0], self.tilt[1], sign,
-                                   centre=(cx, cy))
+                                   centre=(cx, cy), dtype=dtype)
         if xf is not None:
             ph *= xf
             del xf
         if with_piston and self.piston != 0.0:
-            ph *= np.exp(1j * (sign * _piston_phase(self.piston, wavelength)))
+            # weak Python complex: a numpy complex128 scalar is strong under
+            # NEP 50 and would undo the complex64 build above.
+            ph *= complex(np.exp(
+                1j * (sign * _piston_phase(self.piston, wavelength))))
         return ph
 
     def to_dict(self) -> Dict[str, Any]:
@@ -617,6 +639,15 @@ class FieldGrid:
 # ---------------------------------------------------------------------------
 # The field
 # ---------------------------------------------------------------------------
+#: Version in which :class:`CarrierField` attribute assignment became
+#: deprecated, and the horizon at which the class becomes hard-``frozen``
+#: like its :class:`CarrierSpec` and :class:`FieldGrid` members.  The horizon
+#: is resolved through ``_deprecation.resolve_removal_version``, so it can
+#: never advertise a version the running library has already passed.
+_CARRIER_FIELD_FROZEN_SINCE = '5.46'
+_CARRIER_FIELD_FROZEN_IN = '5.48'
+
+
 @dataclass
 class CarrierField:
     """An ENVELOPE, the grid it lives on, the CARRIER it is referenced to,
@@ -629,7 +660,29 @@ class CarrierField:
     is analytic and can simply be re-evaluated anywhere.
 
     Nothing here propagates.  A :class:`CarrierField` is a value; the verbs
-    are :func:`re_reference` and :func:`aggregate`."""
+    are :func:`re_reference` and :func:`aggregate`.
+
+    BECOMING FROZEN, like its :class:`CarrierSpec` and :class:`FieldGrid`
+    members.  Every invariant this class has -- envelope 2-D and complex,
+    shape matched to the grid, wavelength finite and positive, provenance
+    canonicalised and JSON round-trippable -- is established once in
+    ``__post_init__`` and is the object's identity for the storage round
+    trip, and a plain ``field.envelope = <anything>`` bypasses all of them,
+    leaving a field whose grid no longer describes its array.  Since v5.46
+    assigning to a field of a BUILT ``CarrierField`` emits a
+    ``DeprecationWarning`` and the class becomes hard-``frozen`` at the
+    horizon :data:`_CARRIER_FIELD_FROZEN_IN`; the assignment still takes
+    effect until then, so no caller breaks on the announcement.
+
+    Migration: build a changed field instead of mutating one --
+    ``with_provenance(...)``, :func:`re_reference`, ``dataclasses.replace``,
+    or a fresh ``CarrierField(...)``.  For the in-place ACCUMULATION idiom
+    (``acc.envelope += other``, which mutates the array and then rebinds the
+    attribute for no reason) write ``np.add(acc.envelope, other,
+    out=acc.envelope)``: it does the same arithmetic, bit for bit, and is
+    already frozen-safe.  The freeze is shallow, as it is for every frozen
+    dataclass -- the envelope ARRAY stays writable in place, which is what
+    the band-limited in-place screens in :func:`re_reference` rely on."""
 
     envelope: np.ndarray
     grid: FieldGrid
@@ -645,7 +698,13 @@ class CarrierField:
                 f"{env.shape!r}.")
         if not np.iscomplexobj(env):
             env = env.astype(np.complex128)
-        self.envelope = env
+        # ``object.__setattr__`` throughout ``__post_init__``: these are this
+        # object's OWN canonicalisations, not a caller mutating a built field,
+        # so they must not trip the deprecation gate below -- and they are
+        # already written the way the hard freeze at
+        # :data:`_CARRIER_FIELD_FROZEN_IN` will require, so that step is a
+        # one-word change to the decorator.
+        object.__setattr__(self, 'envelope', env)
         if not isinstance(self.grid, FieldGrid):
             raise TypeError(
                 f"CarrierField: grid must be a FieldGrid, got "
@@ -660,12 +719,41 @@ class CarrierField:
             raise TypeError(
                 f"CarrierField: carrier must be a CarrierSpec, got "
                 f"{type(self.carrier).__name__}.")
-        self.wavelength = float(self.wavelength)
+        object.__setattr__(self, 'wavelength', float(self.wavelength))
         if not (self.wavelength > 0.0 and math.isfinite(self.wavelength)):
             raise ValueError(
                 f"CarrierField: wavelength must be finite and positive (m), "
                 f"got {self.wavelength!r}.")
-        self.provenance = _canonical_provenance(self.provenance)
+        object.__setattr__(self, 'provenance',
+                           _canonical_provenance(self.provenance))
+        # Arm the deprecation gate LAST: everything above is this object's
+        # own canonicalisation, not a caller mutating a built field.
+        object.__setattr__(self, '_built', True)
+
+    def __setattr__(self, name, value):
+        """Announce a post-construction field assignment (deprecated).
+
+        The assignment still happens -- this is the announcement half of the
+        cycle, not the removal.  See the class docstring for the migration
+        and :data:`_CARRIER_FIELD_FROZEN_IN` for the horizon."""
+        if getattr(self, '_built', False):
+            from .._deprecation import resolve_removal_version
+            warnings.warn(
+                f"CarrierField.{name}: assigning to a built CarrierField is "
+                f"deprecated since v{_CARRIER_FIELD_FROZEN_SINCE} and will "
+                f"raise in v"
+                f"{resolve_removal_version(_CARRIER_FIELD_FROZEN_IN)} (the "
+                f"class becomes frozen, like CarrierSpec and FieldGrid).  It "
+                f"bypasses every __post_init__ invariant -- envelope shape vs "
+                f"the grid, complexity, wavelength, provenance "
+                f"canonicalisation -- so it can leave a field whose grid no "
+                f"longer describes its array.  Build a changed field instead "
+                f"(with_provenance, re_reference, dataclasses.replace, or a "
+                f"fresh CarrierField); for in-place accumulation use "
+                f"np.add(acc.envelope, other, out=acc.envelope), which is the "
+                f"same arithmetic bit for bit and needs no rebind.",
+                DeprecationWarning, stacklevel=2)
+        object.__setattr__(self, name, value)
 
     # -- basic accessors --------------------------------------------------
     @property
@@ -696,9 +784,14 @@ class CarrierField:
         return float((np.abs(self.envelope) ** 2).sum()) * self.dx * self.dy
 
     def full_field(self) -> np.ndarray:
-        """Reconstruct ``envelope * exp(i k0 C)`` on this field's own grid."""
+        """Reconstruct ``envelope * exp(i k0 C)`` on this field's own grid.
+
+        The phasor is built in the ENVELOPE's own dtype, so a complex64 field
+        round-trips at complex64 instead of being promoted by the reference
+        phase (C3)."""
         return self.envelope * self.carrier.phasor_on(
-            self.grid, self.wavelength, sign=+1)
+            self.grid, self.wavelength, sign=+1,
+            dtype=self.envelope.dtype)
 
     def total_opl_at(self, ix, iy) -> float:
         """TOTAL optical path in RADIANS at grid sample ``(iy, ix)``:
@@ -763,7 +856,10 @@ class CarrierField:
         congruence' -- packaged, and it is where a traced chain's aperture
         field enters this module."""
         E = np.asarray(E)
-        ph = carrier.phasor_on(grid, wavelength, sign=-1)
+        # Build the de-chirp phasor in the FIELD's dtype so a complex64 input
+        # is not promoted by its own reference phase (C3).
+        ph = carrier.phasor_on(grid, wavelength, sign=-1,
+                               dtype=(E.dtype if np.iscomplexobj(E) else None))
         env = E * ph
         del ph
         return cls(envelope=env, grid=grid, carrier=carrier,
@@ -1384,9 +1480,14 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
                                 piston=0.0)
         shape_dst = CarrierSpec(R=to_carrier.R, centre=to_carrier.centre,
                                 tilt=to_carrier.tilt, piston=0.0)
-        ph = shape_src.phasor_on(target_grid, lam, sign=+1, with_piston=False)
+        # Both phasors in the resampled envelope's own dtype (C3): at
+        # design-121 scale this pair was ~2 whole-grid complex128 arrays
+        # (1.07 GB each) regardless of what the field was stored as.
+        _pdt = np.asarray(env).dtype if np.iscomplexobj(env) else None
+        ph = shape_src.phasor_on(target_grid, lam, sign=+1,
+                                 with_piston=False, dtype=_pdt)
         ph *= shape_dst.phasor_on(target_grid, lam, sign=-1,
-                                  with_piston=False)
+                                  with_piston=False, dtype=_pdt)
         env *= ph
         del ph
 
@@ -1550,7 +1651,14 @@ def aggregate(fields: Sequence[CarrierField], common_carrier: CarrierSpec,
                 f"different wavelengths is not a field; aggregate each "
                 f"wavelength separately.")
 
-    acc = np.zeros(grid.shape, dtype=np.complex128)
+    # Accumulator dtype from the STORED envelopes, floored at complex64 --
+    # the same rule ``propagate_traced_carrier_chain_multi`` uses for its own
+    # accumulator (C3).  An all-complex64 fan sums at complex64 (4.29 GB
+    # saved per grid at N = 16384) instead of being widened here; any
+    # complex128 member widens the sum, as ``np.result_type`` requires.
+    acc = np.zeros(grid.shape,
+                   dtype=np.result_type(np.complex64,
+                                        *[f.envelope.dtype for f in fields]))
     rows: List[FieldLedgerRow] = []
     for i, (f, w) in enumerate(zip(fields, ws)):
         rr = re_reference(f, common_carrier, grid,

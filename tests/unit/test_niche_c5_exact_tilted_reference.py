@@ -20,6 +20,7 @@ import pytest
 import lumenairy as la
 from lumenairy.elements import _lens_traced as LT
 from lumenairy.elements._lens_traced import TiltedCarrier
+from lumenairy.propagators import carrier as C
 from lumenairy.propagators.carrier import (
     _exact_sphere_eikonal,
     _radial_carrier_phase,
@@ -481,6 +482,24 @@ def test_the_sphere_parabola_conversion_is_untouched():
     tp = np.clip((np.sqrt(r2) - 0.75 * r_safe) / (0.25 * r_safe), 0.0, 1.0)
     ref = np.exp(1j * K0 * diff * np.cos(0.5 * np.pi * tp) ** 2)
     assert np.array_equal(cf, ref)
-    # and the parabola screen the chain reconstructs against
+    # and the parabola screen the chain reconstructs against.
+    #
+    # WP-A6 / C4 (2026-09-12): this screen is now built as the exact outer
+    # product ``exp(i a x^2) (x) exp(i a y^2)`` rather than one whole-grid
+    # ``exp(i a (x^2+y^2))``, so the two agree to the float64 REGROUPING and
+    # no longer bit for bit.  The bar below is the module's own error floor,
+    # not a loosened pin: the arguments these screens carry reach ~1e5-1e6 rad,
+    # whose float64 representation noise is ~1e-11 rad, and the measured
+    # regrouping difference is 1.1e-13 at N = 2048 / 5.7e-13 at N = 4096 --
+    # two decades under it.  Byte-identity with the historical build is still
+    # pinned, behind the fail-before switch the change ships with.
     ph = _radial_carrier_phase((n, n), dx, dx, LAM, R, +1)
-    assert np.array_equal(ph, np.exp(1j * K0 * r2 / (2.0 * R)))
+    whole = np.exp(1j * K0 * r2 / (2.0 * R))
+    assert float(np.abs(ph - whole).max()) < 1e-11
+    _sep = C._SEPARABLE_CARRIER_PHASE
+    try:
+        C._SEPARABLE_CARRIER_PHASE = False
+        assert np.array_equal(
+            _radial_carrier_phase((n, n), dx, dx, LAM, R, +1), whole)
+    finally:
+        C._SEPARABLE_CARRIER_PHASE = _sep
