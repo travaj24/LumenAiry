@@ -219,8 +219,13 @@ def test_the_header_names_a_real_module_and_two_fingerprints(name, md, header):
         assert key in header, f"{md.name}: header is missing `{key}`"
     src_path = REPO_ROOT / header["module"]
     assert src_path.is_file(), f"{md.name}: `module:` does not resolve"
-    assert src_path.stem == name, (
-        f"{md.name}: document name and `module:` disagree ({src_path.stem})")
+    # A document is named either by the module's basename (the three part-1 documents) or, because basenames
+    # collide across packages (``pmm/stack.py`` vs ``rcwa/stack.py``), by the dotted module path
+    # (``lumenairy.elements.pmm.stack``) -- the convention for the library-wide sweep.
+    dotted = ".".join(src_path.with_suffix("").parts)
+    assert name in (src_path.stem, dotted), (
+        f"{md.name}: document name must be the module basename or its dotted path "
+        f"({src_path.stem!r} or {dotted!r})")
     for key in ("ast_sha256", "token_sha256"):
         assert re.fullmatch(r"[0-9a-f]{64}", header[key]), (
             f"{md.name}: `{key}` is not a sha-256 hex digest")
