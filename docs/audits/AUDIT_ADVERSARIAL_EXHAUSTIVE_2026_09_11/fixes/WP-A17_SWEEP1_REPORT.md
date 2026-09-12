@@ -557,19 +557,20 @@ for doomed in reversed(fn.body):
    block matching the strict pattern is ADDED to a module that already has a
    `docs/history/` document would stop the backlog re-accumulating.
    `CONTRIBUTING.md` and the CI config are not in my ownership.
-4. **`lumenairy/propagators/asymptotic_jax_twin.py:524`** --
-   `safe_bquad = jnp.where(ok_bquad, b_quad, 0.0 + 0.0j)` is a live
-   P1-NEW-4-class site: the `0.0 + 0.0j` literal forces a complex128 promotion
-   regardless of the iterate's dtype, which on the JAX twin's float32 path is
-   exactly the silent upcast the pin exists to catch.
-   `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` fails on it
-   today.  The fix the pin itself prescribes is one line --
-   `jnp.where(ok_bquad, b_quad, jnp.zeros((), dtype=b_quad.dtype))`, or a
-   trailing `.astype(...)` on the same line.  This is EXECUTABLE code, so
-   under the WP rules I report it rather than changing it; the sibling
-   `safe_phi = jnp.where(..., 0.0 + 0.0j)` two lines below wants the same
-   treatment and is only missed by the pin because its literal falls on a
-   continuation line.
+4. **`lumenairy/propagators/asymptotic_jax_twin.py:524`** -- **RESOLVED by
+   another WP after this report was filed; recorded here for the trail.**
+   `safe_bquad = jnp.where(ok_bquad, b_quad, 0.0 + 0.0j)` was a live
+   P1-NEW-4-class site and
+   `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` failed on it.
+   This is EXECUTABLE code, so under the WP rules I reported it rather than
+   changing it, and flagged that the sibling
+   `safe_phi = jnp.where(..., 0.0 + 0.0j)` two lines below wanted the same
+   treatment while escaping the pin on a continuation line.  Both were fixed
+   to `jnp.zeros((), x.dtype)` fills, and the fixing WP's diagnosis is sharper
+   than mine: `phi_star` is REAL, so jnp's weak-typing promoted the whole
+   `where` to complex and the literal silently returned a complex phase with
+   an always-zero imaginary part -- and cost a complex64 array where a float32
+   one was asked for.  See sec. 13.
 
 ---
 
@@ -817,3 +818,47 @@ and guarantees).  **The partition is closed.**
 Running totals for the whole sweep: **38 modules, 226 blocks, 2 074 prose
 lines moved into 38 documents; strict-history 8 901 -> 5 662 (-36 %); all 38
 modules byte-identical under both fingerprints.**
+
+---
+
+# 13. Post-delivery: one module's fingerprints legitimately re-recorded
+
+Added after the sweep was committed (`9a4c5919` for the 29, `61f0e4a6` for the
+nine follow-ups), because a claim made twice above -- "all 38 modules
+byte-identical under both fingerprints" -- has since been superseded for
+exactly one module, and the record should say so rather than quietly go stale.
+
+**`lumenairy/propagators/asymptotic_jax_twin.py`** now carries a deliberate
+CODE change: the two `jnp.where(..., 0.0 + 0.0j)` sites reported in sec. 9
+item 4 were fixed to dtype-matched `jnp.zeros((), x.dtype)` fills.  Its
+document's header was re-recorded in the same change, with a provenance line:
+
+```
+ast_sha256:   cf539c38... -> 6c9e1419...
+token_sha256: 9847abd8... -> c0a2a51c...
+re_recorded: 2026-09-12 -- P1-NEW-4: safe_bquad and safe_phi take dtype-matched
+             zeros((), x.dtype) fills instead of the 0.0+0.0j literal, which
+             promoted the real phi_star to complex (WP-A22 follow-up)
+```
+
+That is exactly the procedure sec. 11 anticipated ("a deliberate code change to
+one of these modules must re-record the two hashes in the same commit"), and it
+is the first time the mechanism has been exercised -- so it is worth noting
+that it worked: the checker is green (`697 passed`) against the new hashes, and
+the `re_recorded:` line means a reader can still see that the fingerprints no
+longer describe the pre-relocation file and why.
+
+**Corrected standing claim.**  Re-measured against my own pre-relocation
+copies:
+
+* **37 of 38** modules remain byte-identical under BOTH fingerprints -- the
+  relocation itself changed nothing executable anywhere.
+* **1 of 38** (`asymptotic_jax_twin.py`) differs, by a change that is not
+  mine, that this report asked for, and that is documented in the header.
+
+The sec. 1 and sec. 12 statements should be read with that one exception.
+Everything else in this report is unaffected: no other module moved, no
+document's table of contents or block text changed, and
+`tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` now passes, so the
+"four non-checker failures" list in sec. 12.4 is down to three (all of them
+other WPs' files).
