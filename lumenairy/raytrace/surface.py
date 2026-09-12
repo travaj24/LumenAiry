@@ -305,12 +305,71 @@ class TraceResult:
 
     @property
     def image_rays(self) -> RayBundle:
-        """Rays at the final (image) surface."""
+        """Rays at the final (image) surface.
+
+        These sit at ``z = sag(rho)`` of the last surface, NOT on its
+        vertex plane -- use :meth:`at_exit_vertex` whenever the exit OPL
+        or the exit transverse coordinate is what you actually want.
+        """
         return self.ray_history[-1]
 
     def rays_at(self, surface_index: int) -> RayBundle:
         """Return the ray bundle after the given surface."""
         return self.ray_history[surface_index]
+
+    def at_exit_vertex(self, n_exit: Optional[float] = None) -> RayBundle:
+        """Return :attr:`image_rays` transferred to the exit VERTEX plane.
+
+        ``trace`` leaves every ray on the last surface, i.e. at
+        ``z = sag(rho)``.  Anything that reads ``image_rays.opd`` / ``.x``
+        / ``.y`` as an exit-plane quantity is therefore short by
+        ``n_exit * sag(rho) / N`` -- a pure ``rho**2`` term on a curved
+        last surface, which downstream polynomial fits happily absorb as
+        defocus.  This method applies the signed straight-line transfer
+
+        .. math::
+            t = -z / N, \\quad \\mathrm{opd} \\mathrel{+}= n_{exit} t,
+            \\quad (x, y) \\mathrel{+}= (L, M) t, \\quad z = 0
+
+        on ALIVE rays only, and is the single supported way to read an
+        exit-vertex-plane quantity out of a trace.
+
+        Parameters
+        ----------
+        n_exit : float, optional
+            Refractive index of the medium after the last surface.  When
+            omitted it is resolved from ``surfaces[-1].glass_after`` at
+            ``self.wavelength`` (``glass_before`` when the last surface
+            is a mirror, since the reflected ray goes back the way it
+            came).  Pass it explicitly when the last surface carries a
+            glass name the registry cannot resolve -- an unresolvable
+            name raises ``ValueError`` rather than guessing 1.0.
+
+        Returns
+        -------
+        RayBundle
+            A NEW bundle; ``self`` and ``image_rays`` are untouched.
+            Rays that were already dead keep their state exactly, and
+            grazing rays (``|N| <= 1e-30``) are KILLED with
+            ``error_code = RAY_MISSED_SURFACE`` rather than teleported to
+            the vertex plane with zero optical path.  Applying the
+            transform twice is a no-op.
+
+        See Also
+        --------
+        lumenairy.raytrace.exit_vertex.exit_vertex_transfer :
+            the functional form, for callers holding a bare bundle.
+        lumenairy.raytrace.refocus :
+            transfer to an arbitrary image plane ``delta_z`` past the
+            vertex (``refocus(result, 0.0)`` is this operator without the
+            grazing-ray kill).
+        """
+        from .exit_vertex import exit_vertex_transfer, resolve_exit_index
+        n = resolve_exit_index(self.surfaces, self.wavelength,
+                               fn_name='TraceResult.at_exit_vertex',
+                               n_exit=n_exit)
+        return exit_vertex_transfer(self.image_rays, n,
+                                    fn_name='TraceResult.at_exit_vertex')
 
 
 # ============================================================================

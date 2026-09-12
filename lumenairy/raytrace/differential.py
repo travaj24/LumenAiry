@@ -984,6 +984,17 @@ def ray_transfer_jacobian_analytic(
                 'polynomial departures, freeforms, biconic (radius_y / '
                 'conic_y) and field-frame decenter / tilt surfaces are not yet '
                 'supported -- use ray_transfer_jacobian (FD) for those.')
+    # NB (R2, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): ``_adrt_step``
+    # starts every ray at ``opd = 0`` on the ``z = 0`` launch PLANE and
+    # accumulates only the surface legs -- the same convention as
+    # ``_make_bundle``'s default ``opd_seed='plane'``, which is what the
+    # finite-difference twin :func:`ray_transfer_jacobian` launches with.
+    # The two therefore stay OPL-identical (pinned to 1e-12 m by
+    # ``tests/unit/test_analytic_ray_transfer.py``).  A caller that wants
+    # the ENTRANCE-EIKONAL convention (OPL measured from the incident
+    # wavefront -- the only one under which cross-ray OPL differences are
+    # a wavefront error for a TILTED bundle) must add the same term to
+    # BOTH primitives' ``opd``; see ``trace.seed_entrance_eikonal``.
     if is_jax_array(x) or is_jax_array(y) or is_jax_array(ux) \
             or is_jax_array(uy):
         return _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface)
@@ -1026,15 +1037,21 @@ def _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface):
                'val': lambda a: a, 'pwhere': jnp.where, 'dwhere': jnp.where}
     nsurf = len(surfaces)
 
-    def _state(s4):
-        xx, yy, uxx, uyy = s4[0], s4[1], s4[2], s4[3]
-        for si, s in enumerate(surfaces):
-            xx, yy, uxx, uyy, _dopd, _dead = _adrt_step(
-                xx, yy, uxx, uyy, s, wavelength, si < nsurf - 1, jnp_ops,
-                compute_dead=False)
-        return jnp.stack([xx, yy, uxx, uyy])
-
     def _full(s4):
+        """State + accumulated OPL.  ``opd`` rides as ``jacfwd`` AUX so
+        one forward pass yields the Jacobian, the exit state AND the OPL.
+
+        R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): this path used to
+        walk the whole prescription TWICE -- ``jax.jacfwd(_state)`` for
+        the Jacobian and a second ``vmap(_full)`` for the state and OPL.
+        ``jax.jacfwd(..., has_aux=True)`` returns the primal outputs of
+        the same forward pass alongside the Jacobian, so the second walk
+        was pure waste (a free ~2x on the JAX ADRT path).  ``jacfwd``
+        differentiates only the FIRST return value, so the exit state is
+        returned as aux as well and the derivative target is the same
+        ``jnp.stack([xx, yy, uxx, uyy])`` as before -- the Jacobian is
+        bit-identical.
+        """
         xx, yy, uxx, uyy = s4[0], s4[1], s4[2], s4[3]
         opd = jnp.zeros(())
         for si, s in enumerate(surfaces):
@@ -1042,15 +1059,16 @@ def _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface):
                 xx, yy, uxx, uyy, s, wavelength, si < nsurf - 1, jnp_ops,
                 compute_dead=False)
             opd = opd + dopd
-        return jnp.stack([xx, yy, uxx, uyy]), opd
+        state = jnp.stack([xx, yy, uxx, uyy])
+        return state, (state, opd)
 
     s4 = jnp.stack([jnp.reshape(jnp.asarray(x), (-1,)),
                     jnp.reshape(jnp.asarray(y), (-1,)),
                     jnp.reshape(jnp.asarray(ux), (-1,)),
                     jnp.reshape(jnp.asarray(uy), (-1,))], axis=0)
     n = s4.shape[1]
-    jac = jax.vmap(jax.jacfwd(_state), in_axes=1, out_axes=0)(s4)
-    st, opd = jax.vmap(_full, in_axes=1, out_axes=(0, 0))(s4)
+    jac, (st, opd) = jax.vmap(jax.jacfwd(_full, has_aux=True),
+                              in_axes=1, out_axes=(0, (0, 0)))(s4)
     return DifferentialTransfer(
         jacobian=jac, x=st[:, 0], y=st[:, 1], ux=st[:, 2], uy=st[:, 3],
         opd=opd, alive=jnp.ones((n,), dtype=bool))

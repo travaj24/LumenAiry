@@ -239,13 +239,53 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
         # surface and never intersects it.
         miss = miss | (jnp.abs(state.N) <= eps)
     else:
-        # Spherical initial guess (also exact for conic == 0 / no asph).
-        dx = state.x
-        dy = state.y
-        dz = state.z - R_safe
-        b_q = 2.0 * (state.L * dx + state.M * dy + state.N * dz)
-        c_q = dx ** 2 + dy ** 2 + dz ** 2 - R_safe ** 2
-        disc = b_q ** 2 - 4.0 * c_q
+        # Initial guess / miss test.
+        #
+        # R4 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11), JAX twin of the
+        # ``intersection.py`` fix: use the EXACT CONIC quadratic, not the
+        # ray-SPHERE one.  This kernel's ``miss |= ~disc_ok`` used the
+        # sphere discriminant, which only has a real root for h <= |R|,
+        # so every ray with h > |R| on a paraboloid / hyperboloid /
+        # flattened ellipsoid was killed although it genuinely hits the
+        # conic.  Both backends were consistently wrong (measured
+        # ``trace_jax`` alive = [T T T F F] at h = 8/10/10.8/10.9/11.4 mm
+        # on R = 10.84 mm, k = -0.6 -- identical to the NumPy result),
+        # while ``differential._adrt_step``, which already solves the
+        # exact implicit conic, kept all five alive.
+        #
+        # Implicit conic F = c(x^2+y^2) - 2z + (1+k) c z^2 = 0 gives the
+        # t-quadratic below; ``t = e/q`` with
+        # ``q = -(b + sign(b) sqrt(disc))/2`` is the Spencer & Murty
+        # (JOSA 52, 672 (1962)) near-root form -- no vertex cancellation
+        # and no direction-blind root choice (|e/q| <= |q/a| always, so
+        # it IS the ``min(|t1|, |t2|)`` the P1-1 fix asked for).
+        #
+        # For conic == 0 the conic quadratic is exactly ``R`` times the
+        # sphere quadratic (same roots, same sign of disc), so a
+        # PURE-SPHERICAL surface is kept on the legacy ``(-b +- sqrt)/2``
+        # arithmetic below to preserve the audited bit-level NumPy<->JAX
+        # parity (6.9e-18 m position, 2.8e-17 m OPL) -- ``conic`` and
+        # ``asph_items`` are Python-static here, so this is a trace-time
+        # branch with no runtime cost.
+        _use_conic_quadratic = (float(conic) != 0.0) or bool(asph_items)
+        cc = 1.0 / R_safe
+        k1 = 1.0 + float(conic)
+        if _use_conic_quadratic:
+            a_q = cc * (state.L * state.L + state.M * state.M) \
+                + (k1 * cc) * (state.N * state.N)
+            b_q = 2.0 * (cc * (state.x * state.L + state.y * state.M
+                                + k1 * state.z * state.N) - state.N)
+            e_q = cc * (state.x * state.x + state.y * state.y) \
+                + (k1 * cc) * state.z * state.z - 2.0 * state.z
+        else:
+            # Legacy ray-SPHERE quadratic (a == 1 by |d| == 1).
+            _dx = state.x
+            _dy = state.y
+            _dz = state.z - R_safe
+            a_q = 1.0
+            b_q = 2.0 * (state.L * _dx + state.M * _dy + state.N * _dz)
+            e_q = _dx ** 2 + _dy ** 2 + _dz ** 2 - R_safe ** 2
+        disc = b_q ** 2 - 4.0 * a_q * e_q
         # 4.11.1 (H-RT-7): double-where on the sqrt-of-disc.  Single
         # ``sqrt(maximum(disc, 0))`` has gradient 1/(2 sqrt(0)) -> inf
         # at the tangent-ray (disc=0) boundary, which poisons
@@ -256,13 +296,20 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
         # v5.17.1 (audit P3-58): acceptance is disc >= 0, matching the
         # NumPy path (intersection.py, v5.4.6 audit P3-3) which keeps
         # the tangent case disc == 0 as a real single-point
-        # intersection (t = -b/2; sqrt_disc is 0 there via the
-        # double-where above, so t1 == t2 already equals it).  The
-        # sqrt guard stays on the STRICT disc > 0 so the disc = 0
-        # gradient singularity keeps being masked (H-RT-7).
+        # intersection.  The sqrt guard stays on the STRICT disc > 0 so
+        # the disc = 0 gradient singularity keeps being masked (H-RT-7).
         disc_ok = disc >= 0
-        t1 = (-b_q - sqrt_disc) / 2.0
-        t2 = (-b_q + sqrt_disc) / 2.0
+        if _use_conic_quadratic:
+            q_q = -0.5 * (b_q + jnp.where(b_q >= 0.0, 1.0, -1.0) * sqrt_disc)
+            # q == 0 only when b == 0 AND disc == 0, which forces e == 0
+            # (the ray starts on the surface) -> t = 0.  The double-where
+            # keeps the gradient finite there.
+            q_ok = q_q != 0.0
+            t_near = jnp.where(q_ok, e_q / jnp.where(q_ok, q_q, 1.0), 0.0)
+        else:
+            t1 = (-b_q - sqrt_disc) / 2.0
+            t2 = (-b_q + sqrt_disc) / 2.0
+            t_near = jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)
         if R_is_inf:
             # Flat-with-aspherics: start from z = 0 and let Newton run.
             N_safe = jnp.where(jnp.abs(state.N) > eps, state.N, eps)
@@ -280,14 +327,12 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
             miss = miss | (jnp.abs(state.N) <= eps)
         else:
             # v5.4.6 (audit P1-1): direction-AWARE root pick, mirroring the
-            # v5.4.1 NumPy fix in intersection.py.  The old direction-blind
-            # ``t1 if R_safe > 0 else t2`` picks the near root only on the
-            # forward leg; a backward-propagating ray (N < 0 after a mirror
-            # reflection) lands on the diametrically-opposite FAR root.  The
-            # near root is min(|t1|, |t2|) regardless of curvature sign.
-            t_pick = jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)
-            t0 = jnp.where(disc_ok, t_pick, 0.0)
-            # disc < 0 means the ray missed the sphere entirely
+            # v5.4.1 NumPy fix in intersection.py.  The Spencer-Murty
+            # ``e/q`` form above IS that near root (|e/q| <= |q/a|), so a
+            # backward-propagating ray (N < 0 after a mirror reflection)
+            # no longer lands on the diametrically-opposite FAR root.
+            t0 = jnp.where(disc_ok, t_near, 0.0)
+            # disc < 0 means the ray missed the CONIC entirely
             # (disc == 0 tangency is accepted -- audit P3-58).
             miss = miss | (~disc_ok)
 
@@ -434,13 +479,28 @@ def _apply_aperture_jax(state, semi_diameter):
 # ----------------------------------------------------------------------
 
 def _apply_doe_kick_jax(state, order_x, order_y, period_x, period_y,
-                         wavelength):
+                         wavelength, n_medium=1.0):
     """Apply a thin-grating diffraction-order kick at the current surface.
 
-    Direction cosines are shifted by ``m * wavelength / period`` along
-    each axis, and the corresponding linear OPL is added at the
+    Direction cosines are shifted by ``m * wavelength / (n_medium *
+    period)`` along each axis, and the corresponding linear OPL --
+    ``m * wavelength / period``, index-INDEPENDENT -- is added at the
     intersection point ``(x, y)``.  Use ``np.inf`` (or ``jnp.inf``) for
     ``period_y`` to disable the y-axis grating (1-D grating along x).
+
+    R5 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the grating equation
+    conserves the TANGENTIAL WAVEVECTOR,
+    ``n2 L' = n1 L + m lambda_vac / Lambda``, so the kick applied to the
+    post-refraction direction cosines carries a ``1 / n2``.  Pre-fix all
+    four sites in the library (this one, ``trace``, ``trace_world``,
+    ``apply_doe_phase_traced``) omitted it: exact in air, high by exactly
+    ``n2`` into glass (measured ratio 1.503583 == n(N-BK7) at
+    Lambda = 5 um, lambda = 1.31 um, m = 1 -- a 50 % direction error).
+    The OPL term is the grating's own phase screen and must NOT carry the
+    ``1 / n2``: its transverse gradient is exactly ``n2 L' - n1 L``.
+    ``n_medium`` defaults to 1.0 so a caller that omits it reproduces the
+    pre-fix (air-correct) behaviour; both trace bodies pass the surface's
+    post-refraction index.
 
     Rays whose post-kick transverse direction cosines exceed unity
     (evanescent orders) are marked dead.
@@ -490,8 +550,13 @@ def _apply_doe_kick_jax(state, order_x, order_y, period_x, period_y,
             return float(order) * wavelength / p
         return 0.0
 
-    dL = _kick(order_x, period_x)
-    dM = _kick(order_y, period_y)
+    # ``_gL`` / ``_gM`` are the grating PHASE-SCREEN gradients
+    # ``m lambda_vac / Lambda`` (index-independent, used for the OPL);
+    # the DIRECTION kick divides them by the post-refraction index (R5).
+    gL = _kick(order_x, period_x)
+    gM = _kick(order_y, period_y)
+    dL = gL / n_medium
+    dM = gM / n_medium
 
     L_new = state.L + dL
     M_new = state.M + dM
@@ -506,8 +571,9 @@ def _apply_doe_kick_jax(state, order_x, order_y, period_x, period_y,
     # Preserve the sign of the longitudinal cosine.
     N_new = jnp.where(state.N < 0, -N_mag, N_mag)
 
-    # Linear OPL contribution from the grating phase gradient.
-    new_opd = state.opd + dL * state.x + dM * state.y
+    # Linear OPL contribution from the grating phase gradient (R5: the
+    # PHASE-SCREEN gradient ``gL``/``gM``, not the direction kick).
+    new_opd = state.opd + gL * state.x + gM * state.y
 
     new_alive = state.alive & propagating
     return JaxRayState(state.x, state.y, state.z,
@@ -993,8 +1059,10 @@ def _trace_body_static(state, jp, wavelength):
 
         if i in diff_lookup:
             ox, oy, px, py = diff_lookup[i]
+            # R5: the DOE kick is applied AFTER refraction, so the
+            # tangential-wavevector form divides by the POST-surface index.
             state = _apply_doe_kick_jax(
-                state, ox, oy, px, py, float(wavelength))
+                state, ox, oy, px, py, float(wavelength), n_medium=n2)
 
         if i < n_surf - 1:
             t = thicks_py[i] if i < len(thicks_py) else 0.0
@@ -1036,8 +1104,9 @@ def _trace_body_traced(state, jp, wavelength):
 
         if i in diff_lookup:
             ox, oy, px, py = diff_lookup[i]
+            # R5: post-refraction index in the tangential-wavevector form.
             state = _apply_doe_kick_jax(
-                state, ox, oy, px, py, float(wavelength))
+                state, ox, oy, px, py, float(wavelength), n_medium=n2)
 
         if i < n_surf - 1:
             t = jp.thicks[i]
@@ -1263,6 +1332,75 @@ def trace_jax(
     return kernel(initial_state, jp)
 
 
+def exit_vertex_transfer_jax(state, n_exit):
+    """JAX-traceable twin of
+    :func:`lumenairy.raytrace.exit_vertex.exit_vertex_transfer`.
+
+    ``trace_jax`` leaves every ray on the LAST surface, i.e. at
+    ``z = sag(rho)``.  This applies the signed straight-line transfer to
+    that surface's VERTEX plane::
+
+        t    = -z / N          (alive, non-grazing rays only)
+        opd += n_exit * t
+        x   += L * t
+        y   += M * t
+        z    = 0
+
+    Parameters
+    ----------
+    state : JaxRayState
+        Output of :func:`trace_jax` / :func:`trace_jax_with_params`.
+    n_exit : float or JAX scalar
+        Refractive index of the medium after the last surface at the
+        trace wavelength.  A traced value keeps ``jax.grad`` flowing.
+
+    Returns
+    -------
+    JaxRayState
+        New state (NamedTuples are immutable, so the input is untouched).
+        Grazing rays (``|N| <= 1e-30``) are marked dead and frozen --
+        ``JaxRayState`` has no ``error_code`` field, so the kill shows up
+        only in ``alive``, which is the JAX backend's whole diagnostic
+        vocabulary.
+
+    Notes
+    -----
+    R6 / §15.1 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the two
+    hand-written JAX copies this replaces (``_lens_jax.py:556, :829``)
+    masked on ``alive`` only and CLAMPED ``N`` to ``1e-30``, so a grazing
+    ray got ``t = -z / 1e-30`` (~1e26 m of phantom optical path) where
+    the NumPy copies produced ``t = 0`` -- a cross-backend divergence in
+    the same primitive.  This twin matches the NumPy helper exactly:
+    double-``where`` so no NaN/Inf ever enters the graph (``jax.grad``
+    stays clean at the ``N = 0`` boundary), ``t = 0`` for grazing and
+    dead rays, and their state frozen.  Idempotent, like the NumPy twin.
+    """
+    if not JAX_AVAILABLE:
+        raise ImportError(
+            "exit_vertex_transfer_jax: JAX is not installed; use "
+            "lumenairy.raytrace.exit_vertex_transfer on a NumPy RayBundle.")
+    import jax.numpy as jnp
+
+    from .exit_vertex import EXIT_VERTEX_GRAZING_TOL
+
+    propagating = jnp.abs(state.N) > EXIT_VERTEX_GRAZING_TOL
+    move = state.alive & propagating
+    # Double-where: the division is evaluated on BOTH branches of a
+    # single ``where``, so the denominator must be finite even where the
+    # result is discarded (the H-RT-7 pattern used throughout this file).
+    N_safe = jnp.where(propagating, state.N, 1.0)
+    t = jnp.where(move, -state.z / N_safe, 0.0)
+    new_alive = move
+    return JaxRayState(
+        state.x + state.L * t,
+        state.y + state.M * t,
+        jnp.where(move, jnp.zeros_like(state.z), state.z),
+        state.L, state.M, state.N,
+        state.opd + n_exit * t,
+        new_alive,
+    )
+
+
 def jax_state_to_raybundle(state, wavelength=0.0):
     """Convert a :class:`JaxRayState` to a NumPy
     :class:`lumenairy.raytrace.RayBundle`.
@@ -1369,13 +1507,24 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
     R_finite = jnp.where(jnp.abs(R_finite) < 1e-30, 1e-30, R_finite)
     is_flat = jnp.isinf(R) | (jnp.abs(R) > 1e15)
 
-    # Spherical initial guess for the curved branch.
-    dx = state.x
-    dy = state.y
-    dz = state.z - R_finite
-    b_q = 2.0 * (state.L * dx + state.M * dy + state.N * dz)
-    c_q = dx ** 2 + dy ** 2 + dz ** 2 - R_finite ** 2
-    disc = b_q ** 2 - 4.0 * c_q
+    # R4 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11), differentiable twin:
+    # the EXACT CONIC quadratic, not the ray-SPHERE one.  The sphere
+    # discriminant only has a real root for h <= |R|, so rays that
+    # genuinely hit a paraboloid / hyperboloid / flattened ellipsoid
+    # beyond that radius were killed as missed.  Implicit conic
+    # F = c(x^2+y^2) - 2z + (1+k) c z^2 = 0.  For conic == 0 this is
+    # exactly ``R`` times the sphere quadratic, so a spherical
+    # prescription keeps the same roots and the same miss mask.  ``conic``
+    # here may be a TRACER, hence no Python branch on its value.
+    cc = 1.0 / R_finite
+    k1 = 1.0 + conic
+    a_q = cc * (state.L * state.L + state.M * state.M) \
+        + (k1 * cc) * (state.N * state.N)
+    b_q = 2.0 * (cc * (state.x * state.L + state.y * state.M
+                        + k1 * state.z * state.N) - state.N)
+    e_q = cc * (state.x * state.x + state.y * state.y) \
+        + (k1 * cc) * state.z * state.z - 2.0 * state.z
+    disc = b_q ** 2 - 4.0 * a_q * e_q
     # 4.11.1 (H-RT-7): double-where on sqrt(disc) so the disc=0
     # gradient singularity doesn't NaN-poison jax.grad on tangent rays.
     disc_pos = disc > 0
@@ -1383,18 +1532,18 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
     sqrt_disc = jnp.where(disc_pos, jnp.sqrt(disc_safe), 0.0)
     # v5.17.1 (audit P3-58): acceptance is disc >= 0 (NumPy parity,
     # v5.4.6 audit P3-3 tangency semantics); the sqrt guard stays on
-    # the strict disc > 0 for the H-RT-7 gradient mask.  At disc == 0
-    # both roots equal -b/2, the tangent intersection.
+    # the strict disc > 0 for the H-RT-7 gradient mask.
     disc_ok = disc >= 0
-    t1 = (-b_q - sqrt_disc) / 2.0
-    t2 = (-b_q + sqrt_disc) / 2.0
     # v5.4.6 (audit P3-1): direction-aware near-root pick (min |t|), matching
     # the v5.4.1 NumPy fix and the static-branch JAX kernel (P1-1).  The old
     # ``R_finite > 0`` selector is direction-blind and lands a backward leg
     # (post-mirror N<0) on the far root, corrupting jax.grad of mirror/folded
-    # prescriptions.  As a bonus this removes the dependence on the sign of a
-    # (possibly traced) curvature, improving JAX traceability.
-    t_sphere = jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)
+    # prescriptions.  The Spencer-Murty ``t = e/q`` form below is that near
+    # root by construction (|e/q| <= |q/a|), with no vertex cancellation and
+    # no dependence on the sign of a (possibly traced) curvature.
+    q_q = -0.5 * (b_q + jnp.where(b_q >= 0.0, 1.0, -1.0) * sqrt_disc)
+    q_ok = q_q != 0.0
+    t_sphere = jnp.where(q_ok, e_q / jnp.where(q_ok, q_q, 1.0), 0.0)
     t_sphere = jnp.where(disc_ok, t_sphere, 0.0)
 
     # Flat initial guess.
@@ -1624,8 +1773,9 @@ def trace_jax_with_params(initial_state, prescription, wavelength,
         state = _apply_aperture_jax(state, sd)
         if i in diff:
             ox, oy, px, py = diff[i]
+            # R5: post-refraction index in the tangential-wavevector form.
             state = _apply_doe_kick_jax(
-                state, ox, oy, px, py, float(wavelength))
+                state, ox, oy, px, py, float(wavelength), n_medium=n2)
         if i < n_surf - 1:
             t = thicknesses_list[i]
             state = _transfer_jax(state, t, n_medium=n2)
@@ -1639,6 +1789,7 @@ __all__ = [
     'make_jax_ray_state',
     'trace_jax',
     'trace_jax_with_params',
+    'exit_vertex_transfer_jax',
     'jax_state_to_raybundle',
     'raybundle_to_jax_state',
 ]

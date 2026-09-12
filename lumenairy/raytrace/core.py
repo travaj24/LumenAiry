@@ -24,6 +24,7 @@ reorganisation -- see ``docs/release_notes/.release_notes_v5_1_0_agent_b.md``.
 
 from __future__ import annotations
 
+from .exit_vertex import *  # noqa: F401,F403
 from .intersection import *  # noqa: F401,F403
 from .layout import *  # noqa: F401,F403
 from .ray_fan import *  # noqa: F401,F403

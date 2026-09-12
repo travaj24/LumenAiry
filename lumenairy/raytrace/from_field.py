@@ -26,27 +26,33 @@ Math reference
   ``>=`` consistency fix that aligned ``_place_cdf`` and
   ``_place_uniform`` with the ``_place_rejection`` convention.
 * Direction: ``k_perp`` is computed from the *phase ratio* of
-  adjacent field samples
-  ``k_x = arg(E[i,j+1] * conj(E[i,j-1])) / (2 dx)``
+  adjacent field samples, symmetrised over the two ONE-PIXEL steps
+  ``k_x = arg(E[i,j+1]*conj(E[i,j]) + E[i,j]*conj(E[i,j-1])) / dx``
   (the singularity-safe ``complex_gradient`` mode, default) or from
   the gradient of the unwrapped phase ``k_perp = grad(unwrap(angle
   E))`` (the ``unwrap_gradient`` mode).  The phase-ratio form is the
   *discrete analogue* of the continuous Madelung formula
   ``k_perp = Im(grad E / E)`` (CLUSTER_B_SPEC.md §4.4) but is exact
-  for plane waves whenever ``|k_x dx| < pi`` whereas the literal
-  central-difference ``Im(grad E / E)`` carries a
+  for plane waves up to the FULL grid Nyquist ``|L| < lambda/(2 dx)``,
+  whereas the literal central-difference ``Im(grad E / E)`` carries a
   ``sinc(k_x dx / pi)`` discretisation bias.  The phase-ratio form
   is also automatically singularity-safe because ``np.angle(.)`` is
   bounded in ``(-pi, pi]`` regardless of how small either factor is.
-  See the inline docstring on :func:`_angle_complex_gradient` for
-  the full derivation and the spec-deviation rationale.
+  v5.x / R6: the estimator was a TWO-pixel difference
+  ``arg(E[j+1] conj(E[j-1]))/(2 dx)`` until the 2026-09-11 audit, which
+  wrapped silently above HALF the grid Nyquist and gave boundary rays
+  exactly half the correct direction cosine.  See the inline docstring
+  on :func:`_angle_complex_gradient` for the measurements.
   Direction cosines follow from ``L = k_x / k0``, ``M = k_y / k0``,
   ``N = sqrt(1 - L^2 - M^2)``.  Rays whose ``L^2 + M^2 > 1`` correspond
   to evanescent k-vectors and are marked ``alive = False`` /
   ``error_code = RAY_EVANESCENT``.
 * OPD: initialised to ``phi(x_ray, y_ray) / k0`` so subsequent
   geometric-ray OPD accumulation continues correctly from the
-  wave-optical state.
+  wave-optical state.  ``np.angle`` is WRAPPED, so this seed lives in
+  ``(-lambda/2, +lambda/2]``; pass ``opd_phase='unwrapped'`` when the
+  consumer treats ``RayBundle.opd`` as a geometric path rather than a
+  phase (R7).
 
 Time convention: ``exp(-i omega t)``, matching the rest of the
 library.  Wavelength is the vacuum wavelength in metres; the field is
@@ -96,6 +102,7 @@ def rays_from_field(
     intensity_threshold: float = 1e-4,
     z0: float = 0.0,
     random_state: Optional[Union[int, np.random.Generator]] = None,
+    opd_phase: str = 'wrapped',
 ) -> RayBundle:
     """Sample a coherent field into a geometric :class:`RayBundle`.
 
@@ -190,6 +197,24 @@ def rays_from_field(
         Seed or generator used for the random placement.  ``None``
         uses :func:`numpy.random.default_rng()` with fresh entropy.
         Pass an int (or a fixed Generator) for reproducibility.
+    opd_phase : {'wrapped', 'unwrapped'}, default 'wrapped'
+        How the returned ``opd`` is seeded from the field phase (R7).
+
+        * ``'wrapped'`` (default, backward compatible) --
+          ``np.angle(E) / k0``, therefore confined to
+          ``(-lambda/2, +lambda/2]``.  Correct mod 2 pi, so any consumer
+          that exponentiates it (``bundles.ray_to_beamlet``, HFPI) is
+          unaffected; a consumer that treats ``opd`` as a GEOMETRIC path
+          (an OPD fan, a wavefront fit, ``np.unwrap``, differencing
+          across rays) sees a sawtooth.  Measured on a converging
+          spherical wave with 0.8 waves of true spread: the returned
+          ``opd`` covered the whole [-494.6, +498.3] nm wrap interval at
+          lambda = 1 um.
+        * ``'unwrapped'`` -- ``np.unwrap`` the phase along x then y over
+          the whole grid before sampling, giving a continuous path
+          (defined up to one global piston).  Exact for a smooth phase
+          sampled above Nyquist; unreliable across a vortex core or a
+          disconnected support, hence opt-in.
 
     Returns
     -------
@@ -205,7 +230,9 @@ def rays_from_field(
           1`` for living rays; ``N = 0`` for evanescent rays.
         * ``alive`` -- ``True`` for non-evanescent rays, ``False``
           otherwise.
-        * ``opd`` -- ``phi(x_ray, y_ray) / k0``  [m].
+        * ``opd`` -- ``phi(x_ray, y_ray) / k0``  [m].  WRAPPED into
+          ``(-lambda/2, +lambda/2]`` unless ``opd_phase='unwrapped'``
+          (see that parameter).
         * ``error_code`` -- ``RAY_OK`` (0) or ``RAY_EVANESCENT`` (5).
         * ``wavelength`` -- vacuum wavelength [m].
 
@@ -307,6 +334,11 @@ def rays_from_field(
             f'rays_from_field: intensity_threshold must be in [0, 1); '
             f'got {intensity_threshold!r}.'
         )
+    if opd_phase not in ('wrapped', 'unwrapped'):
+        raise ValueError(
+            f"rays_from_field: opd_phase must be one of "
+            f"{{'wrapped', 'unwrapped'}}; got {opd_phase!r}."
+        )
 
     # Normalise random_state -> Generator.
     if isinstance(random_state, np.random.Generator):
@@ -392,7 +424,24 @@ def rays_from_field(
     # ------------------------------------------------------------------
     # 3. Initialise OPD from the wave-optical phase at each ray origin.
     # ------------------------------------------------------------------
+    # R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): ``np.angle`` is
+    # WRAPPED into (-pi, pi], so the default ``opd`` is a sawtooth, not a
+    # geometric path -- measured on a converging spherical wave with
+    # 0.8 waves of true OPL spread, the returned ``opd`` covered the full
+    # wrap interval [-494.6, +498.3] nm at lambda = 1 um.  Consumers that
+    # exponentiate (``bundles.ray_to_beamlet``, HFPI) are unaffected
+    # mod 2 pi; anything that treats ``opd`` as a path (an OPD fan, a
+    # wavefront fit, ``np.unwrap``, differencing across rays) is not.
+    # ``opd_phase='unwrapped'`` removes the sawtooth over the sampled
+    # support.
     phi = np.angle(E)
+    if opd_phase == 'unwrapped':
+        # Unwrap along each axis independently (the same two-pass scheme
+        # ``angle_method='unwrap_gradient'`` uses), then read the ray
+        # pixels.  Exact for a smooth phase sampled above Nyquist;
+        # unreliable across a vortex core or a disconnected support,
+        # which is why it is opt-in.
+        phi = np.unwrap(np.unwrap(phi, axis=1), axis=0)
     opd_init = phi[iy_arr, ix_arr] / k0
 
     # ------------------------------------------------------------------
@@ -691,54 +740,74 @@ def _angle_complex_gradient(
     """Singularity-safe complex-gradient angle estimator.
 
     Computes the local k-vector from the *phase ratio* of adjacent
-    field samples:
+    field samples, symmetrised over the two ONE-PIXEL steps that
+    straddle the sample (R6, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11):
 
     .. math::
 
-        k_x(i,j) = \\frac{1}{2 \\Delta x}\\,
-                  \\arg\\!\\bigl( E_{i,j+1}\\,E_{i,j-1}^*\\bigr)
+        k_x(i,j) = \\frac{1}{\\Delta x}\\,
+                  \\arg\\!\\bigl( E_{i,j+1}E_{i,j}^{*}
+                                 + E_{i,j}E_{i,j-1}^{*}\\bigr)
 
     (and analogously for ``k_y``).  This is the discrete analogue of
     the Madelung formula :math:`k_\\perp = \\operatorname{Im}(\\nabla E
-    / E)` but is *exact* for plane waves with :math:`|k_x \\Delta x|
-    < \\pi/2` (whereas :math:`\\operatorname{Im}(\\nabla E / E)`
-    computed with central differences carries an
-    :math:`\\operatorname{sinc}(k_x \\Delta x / \\pi)` discretisation
-    bias).  It is also automatically singularity-safe -- ``np.angle``
-    on a complex product is bounded in :math:`(-\\pi, \\pi]`
-    regardless of how small either factor is.
+    / E)`, is *exact* for plane waves, is centred, and is unambiguous
+    over the FULL grid Nyquist :math:`|L| < \\lambda / (2 \\Delta x)`.
+    It is also automatically singularity-safe -- ``np.angle`` on a
+    complex sum is bounded in :math:`(-\\pi, \\pi]` regardless of how
+    small either factor is.
+
+    Pre-R6 the estimator used the TWO-pixel step
+    :math:`\\arg(E_{j+1}E_{j-1}^{*}) / (2\\Delta x)`, valid only to
+    :math:`|L| < \\lambda / (4\\Delta x)` -- half the grid's own Nyquist
+    -- and wrapping silently above it (measured at
+    :math:`\\lambda = 1\\,\\mu m`, :math:`\\Delta x = 2\\,\\mu m`:
+    ``L_true`` 0.150 recovered as -0.100, 0.200 as -0.050, 0.300 as
+    +0.050, 0.490 as -0.010).  That also falsified the old claim that
+    the form "can detect evanescent rays whose tangential k exceeds
+    :math:`\\pi/\\Delta x`": an evanescent ``L = 0.49`` came back as a
+    benign ``L = -0.01``, so no evanescent ray was ever flagged.
+
+    Boundary samples have one real neighbour only; the missing side is
+    dropped (one-sided one-pixel difference), which is still exact for a
+    plane wave.  Pre-R6 the clipped self-reference was kept while the
+    divisor stayed at :math:`2\\Delta x`, so edge rays got exactly HALF
+    the correct direction cosine (measured 0.5000 over 128 edge rays).
 
     The denominator clamp from ``intensity_threshold`` is still
-    applied for the rare case where both neighbouring pixels are
+    applied for the rare case where the neighbouring pixels are
     identically zero (e.g. far outside a hard aperture): there the
-    product :math:`E_{j+1} E_{j-1}^*` is zero and ``np.angle`` returns
-    0, which we accept as "no useful gradient information here".
+    product sum is zero and ``np.angle`` returns 0, which we accept as
+    "no useful gradient information here".
 
     Deviates from CLUSTER_B_SPEC.md §4.4's literal
     ``Im(grad E / E)`` formula in favour of this phase-ratio form
     because the literal formula is biased by
     :math:`\\operatorname{sinc}(k_x \\Delta x / \\pi)` under central
-    differences and therefore (a) fails the 5-deg tilted-plane-wave
-    test at the spec's tolerance for the spec's sampling, and (b)
-    cannot detect evanescent rays whose tangential :math:`k` exceeds
-    :math:`\\pi / \\Delta x` because the central-difference output
-    rolls back through zero.  The phase-ratio form is the standard
-    "computational k-vector" used in quantum-mechanics literature
-    (Madelung continuity equation discretisation) and matches the
-    spec's stated intent: recover the local k-vector with no
+    differences and fails the 5-deg tilted-plane-wave test at the
+    spec's tolerance for the spec's sampling.  The phase-ratio form is
+    the standard "computational k-vector" used in quantum-mechanics
+    literature (Madelung continuity equation discretisation) and
+    matches the spec's stated intent: recover the local k-vector with no
     explicit unwrap.
     """
     Ny, Nx = E.shape
 
-    # Phase-ratio neighbours: pad the array with the boundary value so
-    # edge pixels still get a sensible value.  Use np.roll with
-    # boundary trimming via clip on the neighbour indices.
+    # Neighbour indices, clipped at the array boundary.  ``have_*``
+    # records whether the neighbour is a REAL neighbour rather than the
+    # clipped self-reference -- see the symmetrised-difference block
+    # below (R6: the clipped self-reference used to halve the baseline
+    # while the divisor stayed at 2 dx).
     ix = np.asarray(ix, dtype=np.intp)
     iy = np.asarray(iy, dtype=np.intp)
     ix_plus = np.clip(ix + 1, 0, Nx - 1)
     ix_minus = np.clip(ix - 1, 0, Nx - 1)
     iy_plus = np.clip(iy + 1, 0, Ny - 1)
     iy_minus = np.clip(iy - 1, 0, Ny - 1)
+    have_xp = ix_plus != ix
+    have_xm = ix_minus != ix
+    have_yp = iy_plus != iy
+    have_ym = iy_minus != iy
 
     max_abs = np.abs(E).max()
     clamp_floor = threshold * max_abs
@@ -757,15 +826,65 @@ def _angle_complex_gradient(
                           clamp_floor / np.maximum(abs_v, 1e-300))
         return v * scale
 
+    E_c = _safe_sample(E, iy, ix)
     Ex_plus = _safe_sample(E, iy, ix_plus)
     Ex_minus = _safe_sample(E, iy, ix_minus)
     Ey_plus = _safe_sample(E, iy_plus, ix)
     Ey_minus = _safe_sample(E, iy_minus, ix)
 
-    # arg(E[i,j+1] * conj(E[i,j-1])) / (2 dx)  -- exact for plane waves
-    # when 2*dx < lambda (i.e. |kx*dx| < pi).
-    kx = np.angle(Ex_plus * np.conj(Ex_minus)) / (2.0 * dx)
-    ky = np.angle(Ey_plus * np.conj(Ey_minus)) / (2.0 * dy)
+    # R6 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): SYMMETRISED ONE-PIXEL
+    # difference,
+    #
+    #     kx = arg( E[j+1] conj(E[j]) + E[j] conj(E[j-1]) ) / dx
+    #
+    # replacing the two-pixel form ``arg(E[j+1] conj(E[j-1])) / (2 dx)``.
+    # Both are centred and both are exact for a plane wave, but the
+    # two-pixel form is unambiguous only for ``|kx * 2 dx| < pi``, i.e.
+    # ``|L| < lambda / (4 dx)`` -- HALF of what the grid itself supports
+    # (``lambda / (2 dx)``) -- and silently WRAPS above it.  Measured at
+    # lambda = 1 um, dx = 2 um (grid Nyquist |L| <= 0.25): L_true 0.150
+    # came back -0.100, 0.200 -> -0.050, 0.300 -> +0.050, 0.490 -> -0.010.
+    # The one-pixel products each carry the phase step ``kx dx``, so the
+    # sum's argument is unambiguous to the FULL grid Nyquist, and an
+    # evanescent tangential k now genuinely reads out of range instead of
+    # rolling back through zero into a benign-looking value.  Summing the
+    # two products (rather than averaging their angles) keeps the
+    # amplitude weighting and cannot wrap.
+    #
+    # Boundary columns/rows have only ONE real neighbour: the clipped
+    # index collapses onto the pixel itself, whose product ``E conj(E)``
+    # is a real positive number carrying no phase.  Including it used to
+    # halve the recovered direction cosine exactly -- measured on a
+    # uniform-amplitude tilted plane wave with L_true = 0.05 on a 64x64
+    # grid: interior pixels +0.050000, edge columns +0.025000, ratio
+    # 0.5000 over 128 edge rays.  Dropping the missing side leaves a
+    # one-sided one-pixel difference, which is still exact for a plane
+    # wave (only noisier), so edge rays now read the right angle.
+    #
+    # The two one-pixel phasors are NORMALISED before they are summed,
+    # i.e. the estimator is the circular MEAN of the two half-step phase
+    # increments.  Summing the raw products would weight each half-step
+    # by its amplitude, which biases the result wherever |E| varies
+    # across the pixel: measured on the converging-spherical-wave probe
+    # (repro/RAYTRACE/p7_fromfield.py test 4) the amplitude-weighted sum
+    # focused to 16.3 nm rms while the circular mean focuses to 0.002 nm
+    # -- the central two-pixel difference is exact for a quadratic phase
+    # and the circular mean inherits that, because for a quadratic the
+    # mean of the two half-step derivatives IS the centre derivative.
+    # Normalising also cannot wrap: the bisector of two unit phasors is
+    # always the correct mean direction.
+    def _unit(prod, have):
+        mag = np.abs(prod)
+        ok = have & (mag > 0.0)
+        return np.where(ok, prod / np.where(ok, mag, 1.0), 0.0)
+
+    px_plus = _unit(Ex_plus * np.conj(E_c), have_xp)
+    px_minus = _unit(E_c * np.conj(Ex_minus), have_xm)
+    py_plus = _unit(Ey_plus * np.conj(E_c), have_yp)
+    py_minus = _unit(E_c * np.conj(Ey_minus), have_ym)
+
+    kx = np.angle(px_plus + px_minus) / dx
+    ky = np.angle(py_plus + py_minus) / dy
 
     L = kx / k0
     M = ky / k0

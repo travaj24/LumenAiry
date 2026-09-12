@@ -19,6 +19,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._conic_core import reflect_mirror, refract_snell
+from .exit_vertex import _kill_grazing, vertex_plane_transfer_t
 from .surface import (
     RAY_APERTURE,
     RAY_MISSED_SURFACE,
@@ -30,6 +31,62 @@ from .surface import (
     _surface_sag_derivatives_xy,
     _surface_sag_xy,
 )
+
+# ============================================================================
+# Shared in-place update kernel (R6 performance)
+# ============================================================================
+
+def _inplace_capable(*arrays) -> bool:
+    """True when every array can take an ``out=`` write safely.
+
+    Requires float64 (so ``np.add(..., out=)`` never has to cast) and a
+    writeable buffer.  ``trace`` / ``trace_world`` always operate on a
+    private ``rays.copy()``, so this is the normal case; a caller who
+    hands ``_intersect_surface`` a read-only or non-float64 bundle simply
+    takes the allocating path instead of hitting a ``ValueError``.
+    """
+    for a in arrays:
+        if (not isinstance(a, np.ndarray) or a.dtype != np.float64
+                or not a.flags.writeable):
+            return False
+    return True
+
+
+def _advance_along_rays(rays, t, n_medium, *, update_z=True):
+    """``x += L t``, ``y += M t``, (``z += N t``), ``opd += n_medium t``.
+
+    R6 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11) measured the trace hot
+    path allocating ~4 full bundles of transient per call (peak 257.5 MiB
+    at N = 1e6 x 7 surfaces with ``output_filter='last'``, where ONE
+    ``RayBundle`` is ~65 MiB), because every update read
+    ``rays.x = rays.x + rays.L * t`` -- two N-sized temporaries per line,
+    eight per surface for the position/OPL block alone.
+
+    This writes through a SINGLE reusable buffer with ``out=``.  It is
+    BIT-IDENTICAL to the allocating form, not merely close: both compute
+    ``tmp = d * t`` and then ``a + tmp`` in that order, so the two
+    roundings are the same two roundings.  (Verified on a 7-surface
+    300k-ray trace: ``max |dx| = max |dy| = max |dopd| = 0.0``.)
+    """
+    xs = (rays.x, rays.y, rays.z) if update_z else (rays.x, rays.y)
+    ds = (rays.L, rays.M, rays.N) if update_z else (rays.L, rays.M)
+    if not _inplace_capable(*xs, rays.opd, t):
+        for i, (a, d) in enumerate(zip(xs, ds)):
+            if i == 0:
+                rays.x = rays.x + d * t
+            elif i == 1:
+                rays.y = rays.y + d * t
+            else:
+                rays.z = rays.z + d * t
+        rays.opd = rays.opd + n_medium * t
+        return
+    buf = np.empty_like(t)
+    for a, d in zip(xs, ds):
+        np.multiply(d, t, out=buf)
+        np.add(a, buf, out=a)
+    np.multiply(t, n_medium, out=buf)
+    np.add(rays.opd, buf, out=rays.opd)
+
 
 # ============================================================================
 # Ray-surface intersection (Newton iteration)
@@ -135,11 +192,13 @@ def _intersect_surface(rays, surface, n_medium=1.0):
                      and not getattr(surface, 'aspheric_coeffs_y', None)))
     if (np.isinf(R) and not asph and not field_frame
             and freeform is None and flat_in_y):
-        # Flat surface: intersect at z = 0
-        # t such that z + N*t = 0  =>  t = -z / N
-        with np.errstate(divide='ignore', invalid='ignore'):
-            t = np.where(rays.alive & (np.abs(rays.N) > 1e-30),
-                         -rays.z / rays.N, 0.0)
+        # Flat surface: intersect at z = 0.
+        # t such that z + N*t = 0  =>  t = -z / N.  Shares the
+        # ``vertex_plane_transfer_t`` kernel with ``_transfer`` and
+        # ``exit_vertex_transfer`` so all three "advance to a z = const
+        # plane" primitives use the SAME arithmetic and the same
+        # grazing-ray definition (audit 2026-09-11 §15.1).
+        t, graze = vertex_plane_transfer_t(rays.z, rays.N, rays.alive)
         # R-4 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): a ray parallel to
         # this plane (|N| <= 1e-30) never reaches it, so the t = 0 fallback
         # above must not be reported as a hit.  Pre-fix it stayed alive with
@@ -156,14 +215,7 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         # had N = 1), so the design case is untouched.  Only a SUBSEQUENT
         # flat surface (which the grazing order provably cannot reach, and
         # which trace_jax likewise kills) now ends the ray.
-        graze = rays.alive & ~(np.abs(rays.N) > 1e-30)
-        if graze.any():
-            rays.alive = rays.alive & ~graze
-            if rays.error_code is not None:
-                first_failure = graze & (rays.error_code == RAY_OK)
-                rays.error_code = np.where(
-                    first_failure, RAY_MISSED_SURFACE, rays.error_code
-                )
+        _kill_grazing(rays, graze)
     elif is_pure_spherical:
         # ---- v4.12.1 Track C: Newton-skip fast path -----------------
         # For a sphere ``x^2 + y^2 + (z - R)^2 = R^2`` the ray-surface
@@ -228,10 +280,66 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         # z + N*t = sag(x + L*t, y + M*t).
         t = np.zeros(rays.n_rays)
 
-        # Initial guess: paraxial approximation for a sphere
-        if not np.isinf(R):
-            # For a sphere: x^2 + y^2 + (z-R)^2 = R^2
-            # Approximate t from the ray-sphere intersection
+        # Initial guess and miss test.
+        #
+        # R4 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): for a
+        # rotationally-symmetric surface the seed AND the miss test come
+        # from the EXACT CONIC quadratic, not from the ray-SPHERE one.
+        # A sphere of radius R only exists for h <= |R|; a paraboloid
+        # (k = -1), hyperboloid (k < -1) or flattened prolate ellipsoid
+        # extends to h = |R| / sqrt(1+k) (unbounded for k <= -1).  Using
+        # the sphere discriminant as the miss test therefore killed every
+        # ray with h > |R| as RAY_MISSED_SURFACE even though it hits the
+        # conic: measured on a Thorlabs-class condenser (R = 10.84 mm,
+        # k = -0.6, conic valid to h = 17.14 mm) rays at h >= 10.9 mm
+        # came back alive=False / error_code=3 / t=0 against a true sag of
+        # 6.186 mm, and a parabola R = 50 mm at h = 60 mm returned t = 0
+        # where brentq on the sag gives t = 36.000000 mm.
+        #
+        # The implicit conic is F = c(x^2+y^2) - 2z + (1+k) c z^2 = 0
+        # (``differential._adrt_step`` already solves exactly this form,
+        # which is why ``ray_transfer_jacobian_analytic`` never had the
+        # false miss).  Substituting the ray gives a t-quadratic whose
+        # smaller-magnitude root is the near intersection; the
+        # Spencer & Murty (JOSA 52, 672 (1962)) form ``t = e/q`` with
+        # ``q = -(b + sign(b) sqrt(disc)) / 2`` evaluates it without the
+        # near-vertex cancellation of ``(-b - sqrt(disc)) / 2`` and picks
+        # that root by construction (|e/q| <= |q/a| always), so the
+        # v5.4.1 direction-aware ``min(|t1|, |t2|)`` behaviour is
+        # preserved for backward-propagating (post-mirror) rays.
+        #
+        # For conic == 0 the conic quadratic is exactly ``R`` times the
+        # sphere quadratic, so the roots and the sign of ``disc`` are
+        # identical -- an asphere on a spherical base is unaffected.
+        # Anamorphic / freeform / field-frame surfaces are NOT
+        # rotationally symmetric, so their conic discriminant is not a
+        # valid miss test; those keep the legacy sphere seed.
+        rot_sym = (radius_y is None and freeform is None and not field_frame)
+        if (not np.isinf(R)) and rot_sym:
+            x0, y0, z0 = rays.x, rays.y, rays.z
+            Ld, Md, Nd = rays.L, rays.M, rays.N
+            cc = 1.0 / R
+            k1 = 1.0 + kc
+            a = cc * (Ld * Ld + Md * Md) + (k1 * cc) * (Nd * Nd)
+            b = 2.0 * (cc * (x0 * Ld + y0 * Md + k1 * z0 * Nd) - Nd)
+            e = cc * (x0 * x0 + y0 * y0) + (k1 * cc) * z0 * z0 - 2.0 * z0
+            disc = b * b - 4.0 * a * e
+            disc_ok = disc >= 0
+            sqrt_disc = np.sqrt(np.maximum(disc, 0.0))
+            sgn_b = np.where(b >= 0.0, 1.0, -1.0)
+            q = -0.5 * (b + sgn_b * sqrt_disc)
+            # q == 0 only when b == 0 and disc == 0, which forces e == 0
+            # (the ray starts exactly on the surface) -> t = 0.
+            with np.errstate(divide='ignore', invalid='ignore'):
+                t = np.where(np.abs(q) > 0.0, e / np.where(q != 0.0, q, 1.0),
+                             0.0)
+            t = np.where(disc_ok, t, 0.0)
+            missed_init = (~disc_ok) & rays.alive
+        elif not np.isinf(R):
+            # Anamorphic / freeform / field-frame base: legacy ray-SPHERE
+            # seed.  Its discriminant remains the miss test here because
+            # no cheap exact test exists for these surfaces; Newton then
+            # refines (and its own non-convergence kill catches the rest).
             x0, y0, z0 = rays.x, rays.y, rays.z
             Ld, Md, Nd = rays.L, rays.M, rays.N
 
@@ -312,20 +420,18 @@ def _intersect_surface(rays, surface, n_medium=1.0):
                     first_failure, RAY_MISSED_SURFACE, rays.error_code
                 )
 
-    # Update ray positions
+    # Update ray positions AND accumulate the OPL for the
+    # vertex-plane -> actual-sag-intersection leg.  ``t`` is the
+    # parametric distance along the ray (with |(L,M,N)| = 1 by
+    # construction), so |t| is the geometric path length.  Use the
+    # SIGNED contribution: a negative t (which happens when the surface
+    # is concave and the ray has already passed it after the previous
+    # transfer) corresponds to back-tracking, and we should subtract the
+    # over-counted OPL.  ``_advance_along_rays`` does all four updates
+    # through one reusable buffer (R6); bit-identical to the four
+    # ``a = a + d * t`` statements it replaces.
     t = np.where(rays.alive, t, 0.0)
-    rays.x = rays.x + rays.L * t
-    rays.y = rays.y + rays.M * t
-    rays.z = rays.z + rays.N * t
-
-    # Accumulate OPL for the vertex-plane -> actual-sag-intersection
-    # leg.  ``t`` is the parametric distance along the ray (with
-    # |(L,M,N)| = 1 by construction), so |t| is the geometric path
-    # length.  Use the SIGNED contribution: a negative t (which
-    # happens when the surface is concave and the ray has already
-    # passed it after the previous transfer) corresponds to back-
-    # tracking, and we should subtract the over-counted OPL.
-    rays.opd = rays.opd + n_medium * t
+    _advance_along_rays(rays, t, n_medium, update_z=True)
 
     # Vignette rays outside the clear aperture
     if np.isfinite(surface.semi_diameter):
@@ -406,7 +512,15 @@ def _refract(rays, surface, n1, n2):
     rays.alive = rays.alive & ~tir
     if newly_tir.any() and rays.error_code is not None:
         # First-failure-wins: RAY_TIR overwrites only RAY_OK entries.
-        rays.error_code = np.where(newly_tir, RAY_TIR, rays.error_code)
+        # R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the ``np.where``
+        # below used to be UNCONDITIONAL, i.e. it relabelled any code a
+        # ray was already carrying -- the exact defect the aperture block
+        # 50 lines down documents having fixed.  Harmless while the
+        # ``alive => error_code == RAY_OK`` invariant holds (``newly_tir``
+        # is already AND-ed with ``alive``), but a live trap for any
+        # caller that stamps a code without clearing ``alive``.
+        first_failure = newly_tir & (rays.error_code == RAY_OK)
+        rays.error_code = np.where(first_failure, RAY_TIR, rays.error_code)
 
     # Refracted direction: d_t = mu * d_i + (mu * cos_i - cos_t) * n̂
     rays.L = np.where(rays.alive, Lp, rays.L)
@@ -482,18 +596,31 @@ def _transfer(rays, thickness, n_medium):
 
     Translates ray positions so they arrive at the next surface vertex
     plane (z = 0) and accumulates OPD.
+
+    Grazing rays (``|N| <= 1e-30``) are KILLED with
+    ``RAY_MISSED_SURFACE``.  R6 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11):
+    pre-fix ``t`` was masked to 0 for them but ``rays.z`` was reset to the
+    next vertex plane UNCONDITIONALLY, so a ray parallel to the axis-normal
+    planes was TELEPORTED one gap downstream with zero OPL and stayed
+    ``alive=True, error_code=0`` -- the "immortal phantom" that R-4 removed
+    from ``_intersect_surface``'s flat branch but not from here.  Measured
+    pre-fix on a bundle at ``z = 1e-4`` with ``N = 0``:
+    ``_transfer(10 mm, n=1)`` returned ``z=[0 0], alive=[T T], opd=[0 0],
+    error_code=[0 0]``.  The state is reachable: ``trace``'s DOE branch
+    keeps an ``N == 0`` diffraction order alive BY DESIGN.
     """
     if thickness == 0:
         return
 
     # Transfer: advance each ray along its direction until it reaches
-    # z = thickness (the next surface vertex plane).
-    # t = (thickness - z) / N
-    with np.errstate(divide='ignore', invalid='ignore'):
-        t = np.where(rays.alive & (np.abs(rays.N) > 1e-30),
-                     (thickness - rays.z) / rays.N, 0.0)
+    # z = thickness (the next surface vertex plane).  t = (thickness - z)/N,
+    # via the shared ``vertex_plane_transfer_t`` kernel.
+    t, graze = vertex_plane_transfer_t(rays.z, rays.N, rays.alive,
+                                       z_target=thickness)
+    _kill_grazing(rays, graze)
 
-    # Accumulate OPD: geometric path * refractive index.
+    # Accumulate OPD: geometric path * refractive index, and advance the
+    # transverse position, through one reusable buffer (R6).
     # RT-1: use the SIGNED path (n*t), matching ``_intersect_surface``'s
     # vertex->sag leg convention -- a negative t means the ray already
     # crossed the next vertex plane (overlapping-sag geometry), and the
@@ -502,11 +629,14 @@ def _transfer(rays, thickness, n_medium):
     # post-mirror back-propagation uses negative thicknesses that still
     # yield t > 0), but the two primitives now implement the same
     # convention for the telescoping-OPL model to hold.
-    rays.opd = rays.opd + n_medium * t
+    _advance_along_rays(rays, t, n_medium, update_z=False)
 
-    rays.x = rays.x + rays.L * t
-    rays.y = rays.y + rays.M * t
-    rays.z = np.zeros_like(rays.z)  # reset to vertex of next surface
+    # Only rays that actually made the trip land on the next vertex
+    # plane.  Rays that were already dead, and the grazing rays killed
+    # above, keep the z they had -- freezing a dead ray's state is the
+    # same policy ``_transfer_jax`` adopted in S3-12 and what stops the
+    # teleport described in the docstring.
+    rays.z = np.where(rays.alive, np.zeros_like(rays.z), rays.z)
 
 
 def _apply_coord_break(rays, surface):
@@ -650,4 +780,5 @@ __all__ = [
     '_reflect',
     '_transfer',
     '_apply_coord_break',
+    '_advance_along_rays',
 ]

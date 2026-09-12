@@ -16,6 +16,11 @@ from .bundles import (
     ray_to_beamlet,
     ray_to_path,
 )
+# The single shared exit-vertex transfer (audit 2026-09-11 §15.1).
+from .exit_vertex import (  # noqa: E402
+    EXIT_VERTEX_GRAZING_TOL,
+    exit_vertex_transfer,
+)
 from .core import (  # noqa: E402  (continuation of the .core import list)
     RAY_APERTURE,
     RAY_EVANESCENT,
@@ -83,6 +88,7 @@ from .from_field import rays_from_field
 # jax.grad and JIT-able via jax.jit).
 from .jax_trace import (
     JaxRayState,
+    exit_vertex_transfer_jax,
     jax_state_to_raybundle,
     make_jax_ray_state,
     trace_jax,
@@ -145,6 +151,8 @@ __all__ = [
     'opd_fan_data',
     'through_focus_rms',
     'refocus',
+    'exit_vertex_transfer',
+    'EXIT_VERTEX_GRAZING_TOL',
     'find_stop',
     'compute_pupils',
     'lens_abcd',
@@ -171,6 +179,7 @@ __all__ = [
     'JaxRayState',
     'make_jax_ray_state',
     'trace_jax',
+    'exit_vertex_transfer_jax',
     'jax_state_to_raybundle',
     # paraxial helpers
     'field_of_view',

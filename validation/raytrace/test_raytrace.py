@@ -246,13 +246,39 @@ H.run('Ray fan: on-axis tangential is antisymmetric',
 
 
 def t_opd_fan_small_for_singlet():
+    """OPD fan of a well-corrected singlet AT ITS IMAGE PLANE.
+
+    R1 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): ``opd_fan_data`` now
+    returns the reference-sphere WAVEFRONT ERROR, which is defined
+    relative to an IMAGE POINT -- so the prescription must end at (or
+    near) the image plane.  Pre-R1 this check passed a bare singlet with
+    NO image surface, so the "OPD" it measured was the lens's own
+    converging curvature at its rear face (6.0 waves at f/40), not any
+    aberration -- and it could not have failed for an aberrated lens
+    either.  With the image plane appended, this f/40 BK7 singlet
+    measures 0.0001 waves of real wavefront error, so the bar drops from
+    10 waves to 1.0 -- four decades of headroom over the measurement and
+    tight enough that the 6.0-wave pre-fix reading would fail it.
+    """
     pres = la.make_singlet(200e-3, np.inf, 3e-3, 'N-BK7',
                            aperture=5e-3)
     surfs = surfaces_from_prescription(pres)
+    bfl = find_paraxial_focus(surfs, 1.31e-6)
+    surfs[-1] = Surface(
+        radius=surfs[-1].radius, conic=surfs[-1].conic,
+        aspheric_coeffs=surfs[-1].aspheric_coeffs,
+        semi_diameter=surfs[-1].semi_diameter,
+        glass_before=surfs[-1].glass_before,
+        glass_after=surfs[-1].glass_after,
+        is_mirror=surfs[-1].is_mirror, is_stop=surfs[-1].is_stop,
+        thickness=bfl)
+    surfs.append(Surface(radius=np.inf, semi_diameter=np.inf,
+                         glass_before=surfs[-1].glass_after,
+                         glass_after=surfs[-1].glass_after, label='image'))
     py, opd_y, px, opd_x = opd_fan_data(surfs, 1.31e-6,
                                         semi_aperture=2.5e-3)
     opd_pv = np.nanmax(np.abs(opd_y))
-    return opd_pv < 10, f'OPD PV = {opd_pv:.4f} waves'
+    return opd_pv < 1.0, f'OPD PV = {opd_pv:.4f} waves (f/40 singlet)'
 
 
 H.run('OPD fan: small for well-corrected singlet',
@@ -1232,17 +1258,40 @@ H.run('f_number: BK7 singlet 51.5mm/inf gives f/10', t_f_number_singlet)
 
 
 def t_field_of_view_finite_conjugate():
-    """Finite-conjugate FoV from singlet: theta_max = atan(D/2 / obj_d)."""
+    """Finite-conjugate FoV is set by the SENSOR, not by the aperture.
+
+    R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): this branch used to
+    return ``atan((D/2) / obj_d)`` -- the object-space APERTURE
+    half-angle, a numerical aperture that does not depend on the sensor
+    at all.  This check pinned exactly that defect (it asserted the
+    aperture formula); it now pins the Gaussian-imaging field of view
+    ``atan((h_img / |m|) / obj_d)`` with ``m = -f / (obj_d - f)``.  The
+    legacy proxy survives behind a RuntimeWarning when no sensor size is
+    supplied, and that path is checked too.
+    """
+    import warnings as _warnings
     p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
                           glass='N-BK7', aperture=10e-3)
     p['object_distance'] = 200e-3
-    theta, h = la.field_of_view(p, 587.56e-9)
-    expected_theta = float(np.arctan(5e-3 / 200e-3))
-    return abs(theta - expected_theta) < 1e-12 and abs(h - 5e-3) < 1e-12, \
-        f'theta={theta:.6e}, expected={expected_theta:.6e}'
+    _, efl, _, _ = system_abcd(surfaces_from_prescription(p), 587.56e-9)
+    h_img = 3.0e-3
+    theta, h = la.field_of_view(p, 587.56e-9, sensor_half_height_m=h_img)
+    m_t = -efl / (200e-3 - efl)
+    h_expect = abs(h_img / m_t)
+    ok = (abs(h - h_expect) < 1e-12
+          and abs(theta - float(np.arctan(h_expect / 200e-3))) < 1e-12)
+    # ...and it must NOT be the old aperture half-angle.
+    ok = ok and abs(theta - float(np.arctan(5e-3 / 200e-3))) > 1e-3
+    with _warnings.catch_warnings(record=True) as _w:
+        _warnings.simplefilter('always')
+        theta2, _h2 = la.field_of_view(p, 587.56e-9)
+        ok = ok and any('APERTURE half-angle' in str(x.message) for x in _w)
+    ok = ok and abs(theta2 - float(np.arctan(5e-3 / 200e-3))) < 1e-12
+    return ok, (f'theta={theta:.6e} (sensor-driven), h_obj={h*1e3:.4f} mm, '
+                f'legacy proxy={theta2:.6e}')
 
 
-H.run('field_of_view: finite-conjugate atan(D/2 / obj_d)',
+H.run('field_of_view: finite-conjugate is sensor-driven (R7)',
       t_field_of_view_finite_conjugate)
 
 

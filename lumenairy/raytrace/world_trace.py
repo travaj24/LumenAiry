@@ -178,10 +178,20 @@ def trace_world(
             # division, so that case is bit-identical.
             _px_f = float(_px)
             _py_f = float(_py)
-            _dL = (float(_mx) * wavelength / _px_f
+            # R5 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11), world twin of
+            # the ``trace.py`` fix: the grating equation conserves the
+            # TANGENTIAL WAVEVECTOR, ``n2 L' = n1 L + m lambda / Lambda``,
+            # so the direction-cosine kick applied after refracting into
+            # ``glass_after`` carries a ``1 / n2`` (ratio measured at
+            # exactly n(N-BK7) = 1.503583 pre-fix).  The OPL term keeps the
+            # index-INDEPENDENT phase-screen gradient ``m lambda / Lambda``
+            # -- see the long note at the ``trace.py`` site.
+            _gL = (float(_mx) * wavelength / _px_f
                    if (np.isfinite(_px_f) and _px_f != 0.0) else 0.0)
-            _dM = (float(_my) * wavelength / _py_f
+            _gM = (float(_my) * wavelength / _py_f
                    if (np.isfinite(_py_f) and _py_f != 0.0) else 0.0)
+            _dL = _gL / n2
+            _dM = _gM / n2
             r.L = r.L + _dL
             r.M = r.M + _dM
             _sumsq = r.L * r.L + r.M * r.M
@@ -191,7 +201,7 @@ def trace_world(
             np.sqrt(np.maximum(1.0 - _sumsq, 0.0),
                     out=_N_new, where=_propagating)
             r.N = np.where(r.N < 0, -_N_new, _N_new)
-            r.opd = r.opd + _dL * r.x + _dM * r.y
+            r.opd = r.opd + _gL * r.x + _gM * r.y
             if np.any(_evan) and r.alive is not None:
                 r.alive = r.alive & _propagating
                 if r.error_code is not None:

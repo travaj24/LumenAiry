@@ -212,10 +212,29 @@ def trace(
             # that case is bit-identical.
             _px_f = float(_px)
             _py_f = float(_py)
-            _dL = (float(_mx) * wavelength / _px_f
+            # R5 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the grating
+            # equation conserves the TANGENTIAL WAVEVECTOR,
+            # ``n2 L' = n1 L + m lambda_vac / Lambda``, so the kick applied
+            # to the post-refraction DIRECTION COSINES carries a ``1 / n2``.
+            # Pre-fix all four sites applied ``m lambda / Lambda`` directly
+            # to (L, M) AFTER refracting into ``glass_after``: exact in air
+            # (n2 = 1) but high by exactly n2 at any interface into glass.
+            # Measured (Lambda = 5 um, lambda = 1.31 um, m = 1, into
+            # N-BK7): library L = 0.26200000 vs the grating equation's
+            # 0.17425045, ratio 1.503583 == n(N-BK7) exactly -- a 50%
+            # direction error (15.2 deg instead of 10.0 deg).
+            # The OPL term below is the grating's own phase screen
+            # ``m lambda_vac x / Lambda`` and is index-INDEPENDENT: its
+            # transverse gradient must equal ``n2 L' - n1 L``, which is
+            # exactly ``m lambda / Lambda``.  Hence the two separate
+            # quantities: ``_gL`` (the phase-screen gradient, unchanged)
+            # and ``_dL = _gL / n2`` (the direction kick, fixed).
+            _gL = (float(_mx) * wavelength / _px_f
                    if (np.isfinite(_px_f) and _px_f != 0.0) else 0.0)
-            _dM = (float(_my) * wavelength / _py_f
+            _gM = (float(_my) * wavelength / _py_f
                    if (np.isfinite(_py_f) and _py_f != 0.0) else 0.0)
+            _dL = _gL / n2
+            _dM = _gM / n2
             r.L = r.L + _dL
             r.M = r.M + _dM
             _sumsq = r.L * r.L + r.M * r.M
@@ -230,11 +249,11 @@ def trace(
             # only shifts (L, M) so the new N has the same sign.
             r.N = np.where(r.N < 0, -_N_new, _N_new)
             # Add the constant grating-order OPL contribution evaluated
-            # at the ray's DOE-plane intersection (x, y).  The factor
-            # ``m * lambda / period`` is the same gradient applied to
-            # (L, M) above, so this is the integral of that phase
-            # gradient evaluated at the surface.
-            r.opd = r.opd + _dL * r.x + _dM * r.y
+            # at the ray's DOE-plane intersection (x, y).  This is the
+            # integral of the grating's PHASE-SCREEN gradient
+            # ``m * lambda_vac / Lambda`` (``_gL`` / ``_gM``), not of the
+            # direction kick -- see the R5 note above.
+            r.opd = r.opd + _gL * r.x + _gM * r.y
             if np.any(_evan) and r.alive is not None:
                 r.alive = r.alive & _propagating
                 if r.error_code is not None:
@@ -785,8 +804,61 @@ def find_stop(surfaces: List['Surface']) -> int:
 # Ray generation helpers
 # ============================================================================
 
-def _make_bundle(x, y, L, M, wavelength):
-    """Create a RayBundle from position and direction arrays."""
+def _make_bundle(x, y, L, M, wavelength, *, opd_seed='plane'):
+    """Create a RayBundle from position and direction arrays.
+
+    Parameters
+    ----------
+    x, y : array-like
+        Launch positions on the ``z = 0`` plane [m].
+    L, M : array-like
+        Transverse direction cosines; ``N`` follows from
+        ``L**2 + M**2 + N**2 == 1``.
+    wavelength : float
+        Vacuum wavelength [m].
+    opd_seed : {'plane', 'eikonal'}, default 'plane'
+        What ``opd`` starts at.
+
+        * ``'plane'`` (default, the historical behaviour) -- ``0`` for
+          every ray, i.e. OPL is measured from the ``z = 0`` PLANE.
+        * ``'eikonal'`` -- ``L*x + M*y``, the **entrance eikonal**: the
+          optical path each ray has already travelled since crossing the
+          incident WAVEFRONT through the origin (the plane ``d . r = 0``
+          normal to the common direction ``d = (L, M, N)``).
+
+    Notes
+    -----
+    R2 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).  For a TILTED bundle
+    the ``z = 0`` plane is not a wavefront, so with ``opd_seed='plane'``
+    every OPL difference across the bundle carries a spurious
+    ``-(L*x + M*y)`` tilt.  Measured through ``opd_fan_data`` on an f/4
+    plano-convex singlet (25 mm pupil, 587.6 nm): the fitted linear term
+    of the fan was ``-185.64`` waves at 0.5 deg against
+    ``y_max*sin(theta)/lambda = +185.64`` (ratio ``-1.0000``), and
+    ``-1879.86`` waves at 5 deg against 37.6 waves of real (quartic)
+    aberration -- a 50:1 contamination of the off-axis fan.
+
+    The default stays ``'plane'`` because ``_make_bundle`` is the shared
+    launcher for ~20 consumers, several of which add their own entrance
+    eikonal downstream (``elements/_lens_traced.py``'s v5.25.1 H6
+    ``_carrier_W_fn`` term is exactly this quantity for a general
+    carrier) and would double-count it.  :func:`opd_fan_data` /
+    :func:`opd_fan_data_world` -- where the audit measured the defect --
+    opt in.  The two seeds are bit-identical whenever ``L == M == 0``,
+    i.e. for every on-axis bundle in the library.
+
+    A caller that OVERWRITES ``bundle.z`` after construction (to launch
+    from a finite object plane, as ``analysis/image_plane_wfe.py`` and
+    ``propagators/asymptotic_canonical_fit.py`` do) moves the launch
+    plane, and the full eikonal there is ``L*x + M*y + N*z0``; the
+    ``N*z0`` term is NOT constant across a bundle with spread direction
+    cosines.  ``'eikonal'`` seeds the ``z = 0`` form only, so such a
+    caller must add ``N*z0`` itself.
+    """
+    if opd_seed not in ('plane', 'eikonal'):
+        raise ValueError(
+            f"_make_bundle: opd_seed must be one of {{'plane', 'eikonal'}}; "
+            f"got {opd_seed!r}.")
     x = np.atleast_1d(np.asarray(x, dtype=np.float64))
     y = np.atleast_1d(np.asarray(y, dtype=np.float64))
     L = np.atleast_1d(np.asarray(L, dtype=np.float64))
@@ -799,13 +871,38 @@ def _make_bundle(x, y, L, M, wavelength):
     M = np.broadcast_to(M, n).copy()
     N = np.sqrt(np.maximum(1.0 - L ** 2 - M ** 2, 0.0))
 
+    opd = (L * x + M * y) if opd_seed == 'eikonal' else np.zeros(n)
+
     return RayBundle(
         x=x, y=y, z=np.zeros(n),
         L=L, M=M, N=N,
         wavelength=wavelength,
         alive=np.ones(n, dtype=bool),
-        opd=np.zeros(n),
+        opd=opd,
     )
+
+
+def seed_entrance_eikonal(rays: 'RayBundle') -> 'RayBundle':
+    """Add the entrance eikonal ``L*x + M*y + N*z`` to ``rays.opd``.
+
+    The functional form of ``_make_bundle(..., opd_seed='eikonal')``, for
+    callers that build (or reposition) a bundle themselves.  After this
+    call the bundle's OPL is measured from the incident WAVEFRONT through
+    the origin rather than from the ``z = 0`` plane, which is the only
+    convention under which OPL DIFFERENCES across a tilted bundle are a
+    wavefront error (R2, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).
+
+    Unlike the ``_make_bundle`` seed this includes the ``N*z`` term, so it
+    is correct for a bundle launched off the ``z = 0`` plane (e.g. one
+    whose ``z`` was set to ``-object_distance``).
+
+    Modifies and returns ``rays`` in place, like the other
+    underscore-free bundle helpers in this module.  Idempotence is NOT
+    claimed -- calling it twice adds the term twice.
+    """
+    rays.opd = rays.opd + (rays.L * rays.x + rays.M * rays.y
+                           + rays.N * rays.z)
+    return rays
 
 
 def make_ray(
@@ -1062,14 +1159,15 @@ def apply_doe_phase_traced(
     period_x: float,
     period_y: Optional[float] = None,
     wavelength: Optional[float] = None,
+    n_medium: float = 1.0,
 ) -> 'RayBundle':
     """Apply a grating diffraction-order direction shift to a ray bundle.
 
     Each ray's transverse direction cosines are shifted by the grating
     equation::
 
-        L_new = L + order_x * lambda / period_x
-        M_new = M + order_y * lambda / period_y
+        L_new = L + order_x * lambda / (n_medium * period_x)
+        M_new = M + order_y * lambda / (n_medium * period_y)
 
     The longitudinal cosine is recomputed from
     ``L_new**2 + M_new**2 + N_new**2 == 1``.  Orders for which
@@ -1118,6 +1216,21 @@ def apply_doe_phase_traced(
         one axis (1-D grating).
     wavelength : float, optional
         Vacuum wavelength [m].  Defaults to ``rays.wavelength``.
+    n_medium : float, default 1.0
+        Refractive index of the medium the DIFFRACTED rays travel in
+        (i.e. the medium on the output side of the grating).  R5
+        (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the grating equation
+        conserves the tangential wavevector,
+        ``n2 L' = n1 L + m lambda_vac / Lambda``, so the direction-cosine
+        kick is ``m lambda_vac / (n2 Lambda)``.  The default 1.0
+        reproduces the pre-fix behaviour exactly and is correct for a
+        grating in air; pass the glass index for a grating on the glass
+        side of an interface, where the pre-fix kick was high by exactly
+        ``n2`` (measured 0.26200000 vs 0.17425045 into N-BK7 at
+        Lambda = 5 um, lambda = 1.31 um, m = 1 -- a 50 % direction
+        error).  The in-trace kicks (``trace`` / ``trace_world``'s
+        ``surface_diffraction``) resolve this index automatically from
+        the surface's ``glass_after``.
 
     Returns
     -------
@@ -1128,14 +1241,15 @@ def apply_doe_phase_traced(
 
     Notes
     -----
-    The grating equation here is the small-angle / paraxial direction-
-    cosine form: ``sin(theta_diff) - sin(theta_in) = m * lambda / Lambda``
-    expressed as ``L_new = L_in + m * lambda / Lambda``.  This is the
-    standard 1-st-order DOE / Dammann ray-tracing convention; it neglects
-    the cosine factor that distinguishes ``sin`` from the direction
-    cosine for very large grating angles.  For modest deflections
-    (sub-100 mrad) the two are interchangeable to <1% even at the
-    pupil edge.
+    The grating equation here is written in DIRECTION COSINES:
+    ``n2 L_new = n1 L_in + m * lambda_vac / Lambda``.  For in-plane
+    diffraction this form is EXACT -- the pre-R5 docstring's claim that
+    it "neglects the cosine factor that distinguishes ``sin`` from the
+    direction cosine" was itself inaccurate; the real approximation the
+    function made was the missing ``1 / n2``, now exposed as
+    ``n_medium``.  The remaining idealisation is the thin-screen model:
+    the grating is treated as a phase discontinuity at a single plane
+    (no thickness, no Bragg selectivity, no order-dependent efficiency).
 
     See Also
     --------
@@ -1147,6 +1261,12 @@ def apply_doe_phase_traced(
         wavelength = rays.wavelength
     if period_y is None:
         period_y = period_x
+    n_medium = float(n_medium)
+    if not np.isfinite(n_medium) or n_medium <= 0.0:
+        raise ValueError(
+            f"apply_doe_phase_traced: n_medium must be a positive, finite "
+            f"refractive index (the medium the diffracted rays travel in); "
+            f"got {n_medium!r}.")
 
     # Normalize order args; track whether the caller passed scalars
     # (single-order convention) or arrays (multi-order replication).
@@ -1168,9 +1288,10 @@ def apply_doe_phase_traced(
     n_orders = mx.size
     n_rays = len(rays.x)
 
-    # Per-order direction increments.
-    dL = (mx * wavelength / period_x).reshape(n_orders, 1)
-    dM = (my * wavelength / period_y).reshape(n_orders, 1)
+    # Per-order direction increments.  R5: the tangential-wavevector
+    # form carries ``1 / n_medium`` (see the ``n_medium`` parameter doc).
+    dL = (mx * wavelength / (n_medium * period_x)).reshape(n_orders, 1)
+    dM = (my * wavelength / (n_medium * period_y)).reshape(n_orders, 1)
 
     # Broadcast to (n_orders, n_rays); reshape input direction cosines.
     L_new = rays.L.reshape(1, n_rays) + dL
@@ -1562,8 +1683,24 @@ def surfaces_from_elements(
 
 # Thin-lens helper: register a fixed-index "glass" for spherical/aspheric lenses
 def _register_fixed_index(name, n, wavelength):
-    """Register a fixed refractive index as a temporary glass entry."""
-    from ..glass import GLASS_REGISTRY, _glass_cache, _invalidate_glass_name
+    """Register a fixed refractive index as a temporary glass entry.
+
+    R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the two global writes
+    below are now made under ``glass._GLASS_CACHE_LOCK``.  They are a
+    read-modify-write on exactly the two dicts the GL-2 comment says the
+    lock exists to serialise, and ``surfaces_from_elements`` calls this
+    from whatever thread the user's trace runs on; an unlocked write
+    racing a concurrent ``get_glass_index`` LRU ``move_to_end`` could
+    tear the cache.  ``_invalidate_glass_name`` takes the same lock, so
+    it stays OUTSIDE (the lock is not reentrant) -- the ordering
+    (invalidate, then install) is unchanged.
+    """
+    from ..glass import (
+        _GLASS_CACHE_LOCK,
+        GLASS_REGISTRY,
+        _glass_cache,
+        _invalidate_glass_name,
+    )
 
     class _FixedIndex:
         def __init__(self, n_val):
@@ -1587,10 +1724,23 @@ def _register_fixed_index(name, n, wavelength):
     # ('__fixed__', '__fixed__', '__fixed__') tuple fell through to
     # the refractiveindex.info branch and raised ImportError on
     # minimal installs.
-    GLASS_REGISTRY[name] = ('__user__', '__fixed__', '__fixed__')
-    _glass_cache[name] = _FixedIndex(n)
+    with _GLASS_CACHE_LOCK:
+        GLASS_REGISTRY[name] = ('__user__', '__fixed__', '__fixed__')
+        _glass_cache[name] = _FixedIndex(n)
 
-# Also register the thin-lens pseudo-glass
+
+# Also register the thin-lens pseudo-glass.  This runs at IMPORT time
+# and mutates two ``glass`` module globals.  That is deliberate and
+# load-bearing (``surfaces_from_elements``'s ``'lens'`` branch emits
+# ``glass_before/after='__thin_lens__'`` surfaces, ``glass.py`` lists the
+# name among its sentinels, and
+# ``tests/unit/test_audit_p1_glass_registration.py`` pins
+# ``get_glass_index('__thin_lens__', wl) == 1.5`` on a minimal install),
+# so it is NOT made lazy -- but it is now a locked write (see
+# ``_register_fixed_index``).  Note for callers: the registry grows one
+# entry per DISTINCT ``n_lens`` value ever passed to
+# ``surfaces_from_elements``; the names are content-derived (hence
+# idempotent per value) but unbounded in the number of distinct indices.
 _register_fixed_index('__thin_lens__', 1.5, 550e-9)
 
 
@@ -1677,10 +1827,20 @@ def raytrace_system(
         rays = make_rings(semi_aperture, num_rings, rays_per_ring,
                           field_angle, wavelength)
 
-    # Add image plane if we have a distance
+    # Add image plane if we have a distance.
+    # R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): CLONE the last
+    # surface with the new thickness instead of mutating it in place.
+    # ``surfaces_from_elements`` happens to return fresh objects today,
+    # but ``surfaces`` is also RETURNED to the caller, and the in-place
+    # write is exactly the pattern ``trace_prescription`` was moved away
+    # from in v4.13.2 (audit P1-NEW-J).  A caller that passes a
+    # hand-built element list containing a shared ``Surface`` -- or that
+    # calls ``raytrace_system`` twice on the same converted list --
+    # otherwise sees its prescription silently re-thicknessed.
     if image_distance is not None and surfaces:
         last_glass = surfaces[-1].glass_after
-        surfaces[-1].thickness = image_distance
+        surfaces[-1] = _surface_copy_with(surfaces[-1],
+                                          thickness=image_distance)
         surfaces.append(Surface(
             radius=np.inf, semi_diameter=np.inf,
             glass_before=last_glass, glass_after=last_glass,
@@ -1698,7 +1858,7 @@ __all__ = [
     'validate_prescription', 'surfaces_from_prescription', 'find_stop',
     # Ray generators
     '_make_bundle', 'make_ray', 'make_fan', 'make_ring',
-    'make_grid', 'make_rings',
+    'make_grid', 'make_rings', 'seed_entrance_eikonal',
     # DOE / grating helper
     'apply_doe_phase_traced',
     # High-level convenience

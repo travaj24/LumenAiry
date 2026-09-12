@@ -1,21 +1,28 @@
 """
-v5.1.0 split: trace / prescription summary printouts.
+v5.1.0 split: trace / prescription TEXT summaries.
 
-Extracted from ``lumenairy/raytrace/core.py`` as part of the v5.1.0
-6-file split (ROADMAP Agent B).  The ROADMAP topology mentions a
-"layout" slice for 2-D layout figures + spot diagrams; the original
-v5.0 ``core.py`` only contained the textual ``trace_summary`` and
-``prescription_summary`` printouts (the actual matplotlib spot
-diagram lives in :mod:`lumenairy.raytrace.ray_fan`).  This module
-hosts the textual layout / summary helpers; later v5.x agents may
-extend it with 2-D layout figures without breaking the
-``lumenairy.raytrace.layout`` namespace.
+**There is no layout GEOMETRY in this module and never has been.**  The
+name comes from the v5.1.0 6-file split of ``lumenairy/raytrace/core.py``
+(ROADMAP Agent B), whose topology reserved a "layout" slice for 2-D
+layout figures; ``core.py`` only ever held the two textual printouts
+below, so that is all that moved here.  R7
+(AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11) flagged the gap between the
+name (plus the v5.1 ROADMAP's promise of "2-D layout figures") and the
+contents, so it is stated plainly here rather than implied:
+
+* Drawing lives in :mod:`lumenairy.analysis.plotting` --
+  ``plot_lens_layout`` (surface arcs, apertures, ray overlay) and
+  ``plot_opd_fan`` / ``plot_ray_fan``.
+* The matplotlib spot diagram is :func:`lumenairy.raytrace.spot_diagram`
+  in :mod:`lumenairy.raytrace.ray_fan`.
+* This module hosts :func:`trace_summary` and
+  :func:`prescription_summary`, both ``print()``-only.
+
+A future 2-D layout renderer can still be added here without breaking
+the ``lumenairy.raytrace.layout`` namespace.
 
 Every public name here is re-exported from
 ``lumenairy.raytrace.core`` so existing imports continue to resolve.
-
-No physics change: contents are bit-for-bit copies of the original
-implementations.
 """
 
 from __future__ import annotations
@@ -28,6 +35,7 @@ from .ray_fan import spot_geo_radius, spot_rms
 from .seidel import system_abcd
 from .surface import (
     RAY_APERTURE,
+    RAY_EVANESCENT,
     RAY_MISSED_SURFACE,
     RAY_NAN,
     RAY_TIR,
@@ -84,8 +92,22 @@ def trace_summary(result: 'TraceResult', units: str = 'mm') -> None:
         n_ap    = int(np.sum(ec == RAY_APERTURE))
         n_miss  = int(np.sum(ec == RAY_MISSED_SURFACE))
         n_nan   = int(np.sum(ec == RAY_NAN))
+        # R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): include
+        # RAY_EVANESCENT.  Without it the printed breakdown did not sum
+        # to the reported lost count whenever a ``surface_diffraction``
+        # order went evanescent -- a silently incomplete diagnostic on
+        # exactly the DOE path the breakdown exists to diagnose.
+        n_evan  = int(np.sum(ec == RAY_EVANESCENT))
+        n_other = (n_total - n_alive) - (n_tir + n_ap + n_miss + n_nan
+                                         + n_evan)
         loss_detail = (f" [TIR={n_tir}, aperture={n_ap}, "
-                        f"miss={n_miss}, nan={n_nan}]")
+                        f"miss={n_miss}, nan={n_nan}, "
+                        f"evanescent={n_evan}]")
+        if n_other:
+            # Any remaining shortfall means a dead ray carries a code
+            # this breakdown does not know about (or none at all); say so
+            # rather than letting the columns quietly under-sum.
+            loss_detail = loss_detail[:-1] + f", unclassified={n_other}]"
     else:
         loss_detail = ''
 

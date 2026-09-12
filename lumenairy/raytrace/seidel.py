@@ -32,13 +32,14 @@ implementations.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
 from ..glass import get_glass_index
-from .surface import Surface, _surface_copy_with
+from .surface import Surface, _field_frame_active, _surface_copy_with
 from .trace import find_stop, surfaces_from_prescription
 
 # ============================================================================
@@ -1333,6 +1334,33 @@ def seidel_coefficients(
         * ``'stop_index'`` : the stop index used (for diagnostics).
     abcd : ndarray
         System ABCD matrix.
+
+    Notes
+    -----
+    **What the surface geometry contributes (R3).**
+
+    * ``radius`` -- the full spherical Welford/Hopkins per-surface sums.
+    * ``conic`` and ``aspheric_coeffs[4]`` -- the Welford §8.5 aspheric
+      term ``dS_I = 8 (n2 - n1) A4_eff h^4`` with
+      ``A4_eff = conic / (8 R^3) + A4``, plus its
+      ``(y_chief/y_marginal)^{1,2,3}`` scalings into S2 / S3 / S5.  S4
+      (Petzval) is curvature-only and is unaffected.  Validated against
+      real rays to 0.14-0.29 % and to exact cancellation for a parabolic
+      mirror (see :func:`_aspheric_seidel`).
+    * ``aspheric_coeffs[6]``, ``[8]``, ... -- **not** included, and they
+      cannot be: they generate FIFTH- and higher-order aberration, which
+      the third-order Seidel sums do not describe.  A design that leans
+      on A6/A8 needs a real-ray wavefront
+      (:func:`lumenairy.raytrace.opd_fan_data` or
+      :func:`lumenairy.analysis.eval_image_plane_wfe`).
+    * ``aspheric_coeffs[2]``, ``radius_y`` / ``conic_y`` /
+      ``aspheric_coeffs_y`` (biconic), ``freeform``, and the field-frame
+      ``field_decenter`` / ``field_tilt`` / ``field_sag_callable`` --
+      **not** included; a ``RuntimeWarning`` naming the surfaces is
+      emitted, because a rotationally-symmetric third-order expansion
+      simply does not exist for them.
+    * Coordinate breaks contribute no aberration (rays are transferred
+      through their air gap and the surface is skipped).
     """
     if field_angle_deg is not None:
         field_angle = float(np.radians(field_angle_deg))
@@ -1450,6 +1478,112 @@ def seidel_coefficients(
     # beyond the first mirror in any catadioptric / Cassegrain
     # / Schwarzschild design.
     mirror_parity = 0  # 0 = unflipped, 1 = post-odd-mirror (n -> -n)
+
+    # R3 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): warn once when the
+    # prescription carries geometry the rotationally-symmetric
+    # third-order theory below cannot represent at all.  Anamorphic,
+    # freeform and field-frame-decentred/tilted surfaces have no Seidel
+    # sums (the aberration expansion is not rotationally symmetric), and
+    # a power-2 aspheric coefficient changes the PARAXIAL curvature,
+    # which neither this function nor ``system_abcd`` folds in.  Silence
+    # here is what let the conic/aspheric omission below survive.
+    _unrepresentable = []
+    for _i, _s in enumerate(surfaces):
+        _why = []
+        if getattr(_s, 'radius_y', None) is not None:
+            _why.append('radius_y (biconic)')
+        if getattr(_s, 'aspheric_coeffs_y', None):
+            _why.append('aspheric_coeffs_y (biconic)')
+        if getattr(_s, 'freeform', None):
+            _why.append('freeform')
+        if _field_frame_active(_s):
+            _why.append('field_decenter / field_tilt / field_sag_callable')
+        if (getattr(_s, 'aspheric_coeffs', None) or {}).get(2, 0.0):
+            _why.append('aspheric_coeffs[2] (changes the paraxial power)')
+        if _why:
+            _unrepresentable.append(f'surface {_i}: ' + ', '.join(_why))
+    if _unrepresentable:
+        warnings.warn(
+            "seidel_coefficients: the third-order (Seidel) expansion is "
+            "defined only for rotationally-symmetric surfaces whose "
+            "paraxial power comes from radius/conic, so the following are "
+            "IGNORED and the returned sums describe the "
+            "rotationally-symmetric base system only -- "
+            + '; '.join(_unrepresentable)
+            + ".  Use a real-ray wavefront (analysis.eval_image_plane_wfe "
+              "or raytrace.opd_fan_data) for these designs.",
+            RuntimeWarning, stacklevel=2)
+
+    def _aspheric_seidel(surf_i, R_i, n1_i, n2_i, y_marg, y_ch):
+        """Welford aspheric contribution to (S1, S2, S3, S5) at surface i.
+
+        R3 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).  The per-surface
+        loop used to read only ``radius`` / glasses / ``thickness`` /
+        ``is_mirror``: ``grep -n 'conic\\|aspheric' seidel.py`` returned
+        ZERO hits, so a conic or aspheric surface silently reported the
+        sums of its BASE SPHERE, with no warning and no docstring note.
+        Measured pre-fix: a mirror R = -200 mm, h = 25 mm reported
+        ``S1 = +9.765625e-05`` for k = 0, -0.5, -1.0 and -1.5 ALIKE --
+        including k = -1, the parabola, which at infinite conjugate is
+        EXACTLY aberration-free (measured ray spread at focus 0.000 um,
+        OPL constant across the pupil to 1.4e-17 m) yet was reported as
+        -S1/8 = -12.207 um of spherical.  Likewise a 25 mm-pupil N-BK7
+        singlet reported ``S1 = +5.320645e-05`` for
+        A4 = 0, -250, -500, -1000 and -2000 m^-3 alike while the real-ray
+        rho^4 coefficient swung -6.639 um -> -0.333 um -> +18.613 um (a
+        SIGN change; at A4 = -500 the lens is nearly aplanatic and the
+        library still claimed 6.65 um).
+
+        Welford, *Aberrations of Optical Systems*, §8.5: a departure
+        ``z_asph = A4_eff h^4`` from the base sphere adds
+
+            dS_I = 8 (n2 - n1) A4_eff h^4
+
+        (h = marginal-ray height at the surface), and the higher sums
+        scale with powers of the chief/marginal height ratio,
+        ``dS_II = dS_I (y_c/y_m)``, ``dS_III = dS_I (y_c/y_m)^2``,
+        ``dS_V = dS_I (y_c/y_m)^3``.  The Petzval sum ``S_IV`` depends
+        only on the paraxial curvature and is NOT affected.  This module
+        reports ``code = -S_Welford``, and the validation below confirms
+        the terms are added with the module's own sign (not negated).
+
+        The conic constant enters as the 4th-order term of the conic
+        expansion about the base sphere: ``sag_conic - sag_sphere =
+        k h^4 / (8 R^3) + O(h^6)``, hence ``A4_eff = k/(8R^3) + A4``.
+
+        Validated (repro/RAYTRACE/p5_seidel_asph.py) against a real-ray
+        rho^4 fit of the OPL to the paraxial focus:
+        0.14 % / 0.16 % / 0.17 % / 0.20 % / 0.29 % at
+        A4 = +500 / -2000 / 0 / -1000 / -250 m^-3 (the residual is
+        genuine 5th order, consistent with the fitted rho^6 term; the
+        one larger figure, 2.90 % at A4 = -500, is 0.0096 um on a
+        0.33 um total -- the near-aplanatic point, where the rho^4 term
+        has almost cancelled), and to 1.4e-20 (exact cancellation) for
+        the mirror at every k in {0, -0.5, -1, -1.5}.
+
+        NOT included, by construction of third-order theory: A6, A8, ...
+        (they generate 5th- and higher-order aberration, which the
+        Seidel sums do not describe) -- see the ``Notes`` section of
+        :func:`seidel_coefficients`.
+        """
+        asph = getattr(surf_i, 'aspheric_coeffs', None) or {}
+        A4 = float(asph.get(4, 0.0))
+        kc = float(getattr(surf_i, 'conic', 0.0) or 0.0)
+        A4_eff = A4
+        if kc != 0.0 and np.isfinite(R_i) and R_i != 0.0:
+            A4_eff += kc / (8.0 * R_i ** 3)
+        if A4_eff == 0.0:
+            return 0.0, 0.0, 0.0, 0.0
+        dS1 = 8.0 * (n2_i - n1_i) * A4_eff * y_marg ** 4
+        # The chief/marginal height ratio is the standard Welford
+        # scaling.  A marginal height of exactly zero (the surface sits
+        # at an internal image) makes the ratio undefined; the aspheric
+        # departure then contributes nothing to S1 anyway (h^4 = 0), and
+        # the higher sums are left at zero rather than +-inf.
+        if abs(y_marg) <= 1e-30:
+            return 0.0, 0.0, 0.0, 0.0
+        ratio = y_ch / y_marg
+        return dS1, dS1 * ratio, dS1 * ratio ** 2, dS1 * ratio ** 3
 
     for i, surf in enumerate(surfaces):
         sign = 1.0 if mirror_parity == 0 else -1.0
@@ -1639,6 +1773,24 @@ def seidel_coefficients(
 
             nu_val_m = nu_m_after
             nu_val_c = nu_c_after
+
+        # R3: Welford aspheric / conic contribution (§8.5).  Applies to
+        # ALL THREE branches above -- a conic mirror, a conic/aspheric
+        # refracting surface, and an asphere on a FLAT base (a Schmidt
+        # corrector plate is exactly that: R = inf with a pure A4).
+        # ``n1`` / ``n2`` already carry the running mirror parity and the
+        # Welford ``n2 = -n1`` flip at a mirror, so the same expression
+        # serves all three.  ``y_m[i]`` / ``y_c[i]`` are the heights AT
+        # this surface, stored before the refraction above.
+        _dS1, _dS2, _dS3, _dS5 = _aspheric_seidel(
+            surf, R, n1, n2, y_m[i], y_c[i])
+        if _dS1:
+            S1[i] += _dS1
+            S2[i] += _dS2
+            S3[i] += _dS3
+            # S4 (Petzval) depends only on the paraxial curvature and is
+            # unchanged by an aspheric departure.
+            S5[i] += _dS5
 
         # Transfer to next surface
         if i < len(surfaces) - 1:

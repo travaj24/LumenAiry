@@ -35,11 +35,16 @@ def field_of_view(prescription: dict, wavelength: float,
     Two views of the field of view:
 
     * The **angular half-FoV** in object space.  For a finite-conjugate
-      system this is ``arctan(field_half_height / object_distance)``.
-      For an infinite-conjugate (collimated) source the angular FoV is
-      set by the sensor: ``arctan(sensor_half_height / EFL)``.
+      system this is ``arctan(h_obj_max / object_distance)`` with
+      ``h_obj_max`` the object height that fills the sensor.  For an
+      infinite-conjugate (collimated) source the angular FoV is set by
+      the sensor: ``arctan(sensor_half_height / EFL)``.
     * The **object-space half-FoV in metres** -- the linear field height
       at the object plane corresponding to the angular FoV.
+
+    A field of view is set by the SENSOR (the detector's angular
+    subtense as seen from the object), which is why
+    ``sensor_half_height_m`` drives both branches.
 
     Parameters
     ----------
@@ -51,9 +56,10 @@ def field_of_view(prescription: dict, wavelength: float,
     wavelength : float
         Vacuum wavelength [m] -- needed for the EFL computation.
     sensor_half_height_m : float, optional
-        Sensor half-extent at the image plane [m].  Required for the
-        infinite-conjugate (collimated) case; ignored for finite
-        conjugate.
+        Sensor half-extent at the image plane [m].  Needed for BOTH
+        conjugates (R7, see Notes).  When omitted on a finite-conjugate
+        system the function falls back to the historical
+        aperture-half-angle proxy and warns.
 
     Returns
     -------
@@ -62,32 +68,65 @@ def field_of_view(prescription: dict, wavelength: float,
         space linear half-FoV [m].  For a true infinite conjugate
         ``h_obj_max_m`` is ``np.inf``.
 
+    Notes
+    -----
+    R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the finite-conjugate
+    branch used to return ``arctan((aperture/2) / object_distance)`` --
+    the object-space APERTURE half-angle, which is independent of the
+    sensor and is therefore not a field of view at all (it is the
+    marginal-ray cone, i.e. the numerical aperture).  It is now computed
+    from the transverse magnification,
+    ``m = -image_distance / object_distance`` via the Newtonian /
+    Gaussian imaging relation, giving
+    ``h_obj_max = sensor_half_height / |m|`` and
+    ``theta_max = arctan(h_obj_max / object_distance)``.  The old
+    expression survives only as the explicitly-warned fallback when the
+    caller supplies no sensor size, because removing it outright would
+    break callers that relied on the (mislabelled) return value.
+
     Examples
     --------
     >>> import lumenairy as la
     >>> p = la.thorlabs_lens('AC254-100-C')
     >>> p['object_distance'] = 0.5
-    >>> theta_max, h_max = la.field_of_view(p, 1.31e-6)
+    >>> theta_max, h_max = la.field_of_view(p, 1.31e-6,
+    ...                                     sensor_half_height_m=4.8e-3)
     """
+    import warnings
+
     from .core import surfaces_from_prescription, system_abcd
     surfs = surfaces_from_prescription(prescription)
     _, efl, _, _ = system_abcd(surfs, float(wavelength))
 
     obj_d = prescription.get('object_distance', 0.0)
     if obj_d is not None and obj_d > 0:
-        # Finite conjugate: use aperture and object distance.  Field
-        # height grows linearly with field angle; the limiting factor
-        # is typically pupil vignetting, approximated here by the
-        # aperture diameter.
+        obj_d = float(obj_d)
+        if (sensor_half_height_m is not None
+                and np.isfinite(efl) and efl != 0
+                and obj_d != float(efl)):
+            # Gaussian imaging about the principal planes: 1/s' - 1/s =
+            # 1/f with s = -obj_d gives s' = f * obj_d / (obj_d - f),
+            # and the transverse magnification is m = -s'/obj_d
+            # = -f / (obj_d - f).  The FIELD is what the sensor sees:
+            # h_obj = h_img / |m|.
+            m_t = -float(efl) / (obj_d - float(efl))
+            if np.isfinite(m_t) and m_t != 0.0:
+                h_max = abs(float(sensor_half_height_m) / m_t)
+                return float(np.arctan(h_max / obj_d)), float(h_max)
+        # Fallback: the historical aperture-half-angle proxy.  This is
+        # NOT a field of view -- see Notes.
         ap = float(prescription.get('aperture_diameter', 0.0))
-        # An off-axis ray entering the entrance pupil's edge at zero
-        # field angle hits the chief at h = aperture/2.  This is a
-        # rough proxy for the maximum field height; for a real system
-        # vignetting and aperture-stop walk-off set tighter limits.
-        # Users can refine with full ray-trace once the field grid is
-        # in hand.
         h_max = ap / 2.0
-        theta_max = float(np.arctan(h_max / float(obj_d)))
+        warnings.warn(
+            "field_of_view: no usable sensor_half_height_m for this "
+            "finite-conjugate prescription, so the returned value is the "
+            "object-space APERTURE half-angle "
+            "arctan((aperture/2)/object_distance), which is a numerical "
+            "aperture, not a field of view (it does not depend on the "
+            "sensor at all).  Pass sensor_half_height_m to get the real "
+            "field of view.",
+            RuntimeWarning, stacklevel=2)
+        theta_max = float(np.arctan(h_max / obj_d))
         return theta_max, float(h_max)
 
     # Infinite conjugate: need a sensor extent to scale.
