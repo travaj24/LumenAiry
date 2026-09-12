@@ -1305,7 +1305,13 @@ def test_t34_guard_warnings_come_out_in_WAVELENGTH_ORDER_on_the_sweep(
     wl = np.linspace(1250.0, 1370.0, 6) * NM
 
     def run(workers):
-        st = build(2, degree=12)                  # a device that trips T3-4
+        # ``min_feature`` PINNED: what makes this device trip T3-4 is the
+        # cross-layer wall collision the shared/window union leaves in the
+        # grid, and the library default moved to ``period * 1e-3`` (audit
+        # finding G2, 2026-09-12), which snaps this 2-deg taper's ~1.2 nm
+        # collisions away -- the guard then has nothing to speak about and the
+        # ORDERING contract this test owns has no warning stream to check.
+        st = build(2, degree=12, min_feature=PERIOD * 1e-5)   # trips T3-4
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             warnings.filterwarnings("ignore", message=".*_pmm_union_grid.*")

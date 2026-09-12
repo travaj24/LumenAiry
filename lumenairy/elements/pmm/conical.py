@@ -276,7 +276,8 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
         eps_reals.extend(complex(v) for e in eps_u
                          for v in np.diag(np.asarray(e, dtype=_C)))
     wl = _grazing_safe_wavelength(float(wavelength), kx0, ky0, order_x,
-                                  order_y, period, period, eps_reals)
+                                  order_y, period, period, eps_reals,
+                                  fn_name=label)
     k0 = 2.0 * np.pi / wl
     kxv = kx0 + order_x * (wl / period)
     kyv = ky0 + 0.0 * order_x                          # constant ky0
@@ -510,7 +511,8 @@ def pmm_jones_1d_conical(period, eps_ridge, eps_groove, n_substrate,
     eps_reals = [eps_sup, eps_sub] + [complex(e) for e in
                                       np.asarray(eps_tile).ravel()]
     wl = _grazing_safe_wavelength(float(wavelength), kx0, ky0, order_x,
-                                  order_y, period, period, eps_reals)
+                                  order_y, period, period, eps_reals,
+                                  fn_name="pmm_jones_1d_conical")
     k0 = 2.0 * np.pi / wl
     kxv = kx0 + order_x * (wl / period)
     kyv = ky0 + order_y * (wl / period)                  # == ky0 (constant)
@@ -657,7 +659,8 @@ def pmm_jones_1d_conical_tensor(period, eps_tensor_cell, n_substrate,
     eps_reals = ([eps_sup, eps_sub]
                  + [complex(e) for e in np.einsum("...ii->...i", tile).ravel()])
     wl = _grazing_safe_wavelength(float(wavelength), kx0, ky0, order_x,
-                                  order_y, period, period, eps_reals)
+                                  order_y, period, period, eps_reals,
+                                  fn_name="pmm_jones_1d_conical_tensor")
     k0 = 2.0 * np.pi / wl
     kxv = kx0 + order_x * (wl / period)
     kyv = ky0 + order_y * (wl / period)                  # == ky0 (constant)

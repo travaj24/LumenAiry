@@ -52,6 +52,7 @@ import os
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
+import contextlib  # noqa: E402
 import warnings  # noqa: E402
 
 import numpy as np  # noqa: E402
@@ -59,6 +60,27 @@ import pytest  # noqa: E402
 
 from lumenairy.elements.pmm import PMMStack  # noqa: E402
 from lumenairy.elements.pmm import stack as ps  # noqa: E402
+
+
+@contextlib.contextmanager
+def _eager_arbiter():
+    """Run the arbiter EAGERLY -- all three extra solves, every evidence
+    field populated -- through its own fail-before switch.
+
+    The shipped default skips the two ``_sliver_collapse_solve`` calls when
+    the move criterion has already decided ``'truncation'`` (audit finding
+    G3, 2026-09-12: a measured 4 -> 2 solves on that population), so
+    ``d12`` / ``d0_over_d12`` / ``closed_super_unity`` are ``None`` there --
+    they were not measured.  A test whose SUBJECT is that denominator has to
+    ask for it; the switch changes no verdict and no returned number, only
+    how many solves are paid to reach them."""
+    was = ps.PMM_SLIVER_ARBITER_LAZY
+    ps.PMM_SLIVER_ARBITER_LAZY = False
+    try:
+        yield
+    finally:
+        ps.PMM_SLIVER_ARBITER_LAZY = was
+
 
 # ---- the O-11 fixture, verbatim from the round-1 file --------------------
 _P = 1.2e-6
@@ -358,7 +380,8 @@ def test_the_arbiter_runs_on_a_stack_that_reads_no_super_unity_at_all():
     still be computed."""
     st = _stack(1e-4, 14)
     cur = _raw(st)
-    got = ps._sliver_arbiter(st, 1.0, cur[1], cur[2], None)
+    with _eager_arbiter():          # the subject here includes d12
+        got = ps._sliver_arbiter(st, 1.0, cur[1], cur[2], None)
     assert got is not None, "the screen did not fire on the O-11 sliver"
     verdict, ev = got
     assert verdict in ("sliver", "wall", "truncation"), verdict
@@ -421,7 +444,12 @@ def test_the_arbiter_separates_the_two_causes_on_this_build():
             st = _stack(d, deg)
             cur = _raw(st)
             kind = _kind(_err(cur, ref), d)
-            got = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
+            # the SEPARATION is measured on ``move / d12``, so every
+            # row needs the denominator -- including the rows the move
+            # criterion decides without it (see _eager_arbiter)
+            with _eager_arbiter():
+                got = ps._sliver_arbiter(st, cur[3], cur[1], cur[2],
+                                         None)
             if got is None or got[1] is None:
                 continue
             v, ev = got
@@ -492,7 +520,17 @@ def test_the_arbiter_costs_three_solves_and_only_on_a_screened_stack():
     That is the whole cost of making the decision independent of the reading,
     and it is asserted rather than described.
 
-    Two-sided: on a stack with NO manufactured cell nothing is paid at all."""
+    Two-sided: on a stack with NO manufactured cell nothing is paid at all.
+
+    RESTATED 2026-09-12 (audit finding G3).  The two COLLAPSE solves are now
+    LAZY -- skipped when the move criterion has already decided
+    ``'truncation'``, which is the verdict that never reads ``d12``.  The cost
+    is therefore no longer one number: it is ONE probe always, plus TWO
+    collapses exactly when the verdict needs the denominator.  That is what is
+    asserted, per row, against the verdict MEASURED on the running build (which
+    row falls where is a property of the BLAS kernel -- the round-4 finding);
+    and the pre-lazy cost is re-derived through the fail-before switch rather
+    than quoted."""
     snaps, closes = [], []
     real_p, real_c = ps._sliver_probe_solve, ps._sliver_collapse_solve
 
@@ -506,22 +544,33 @@ def test_the_arbiter_costs_three_solves_and_only_on_a_screened_stack():
 
     ps._sliver_probe_solve, ps._sliver_collapse_solve = _cp, _cc
     try:
-        _guarded(_stack(1e-4, 14))            # a manufactured sliver
-        assert len(snaps) == 1 and len(closes) == 2, (snaps, closes)
+        for d in (1e-4, 1e-3):            # manufactured slivers
+            st = _stack(d, 14)
+            cur = _raw(st)
+            snaps.clear()
+            closes.clear()
+            with _eager_arbiter():
+                got = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
+            # the PRE-LAZY cost, measured here and not quoted
+            assert len(snaps) == 1 and len(closes) == 2, (d, snaps, closes)
+            verdict = got[0] if got else None
+            snaps.clear()
+            closes.clear()
+            _guarded(_stack(d, 14))
+            assert len(snaps) == 1, (d, snaps, verdict)
+            # the collapses are paid exactly when the verdict reads d12
+            assert len(closes) == (0 if verdict == "truncation" else 2), \
+                (d, closes, verdict)
         snaps.clear()
         closes.clear()
         # 3e-3 of a period is an own-scale ratio of 92.7, BELOW
         # _SLIVER_OWN_SCALE_RATIO, so nothing is manufactured; 0.0 is the
-        # coincident-wall limit; and the DEFAULT min_feature snaps a 3e-6
-        # collision away before the cascade ever sees it.
+        # coincident-wall limit; and a min_feature of 1e-5 of a period snaps a
+        # 3e-6 collision away before the cascade ever sees it.
         for d in (3e-3, 0.0):
             _guarded(_stack(d, 14))
         _guarded(_stack(3e-6, 14, min_feature=_P * 1e-5))
         assert snaps == [] and closes == [], (snaps, closes)
-        # ... and a CORRECT screened stack IS arbitrated now, which round 2
-        # only did above its trigger.  That is the cost, stated.
-        _guarded(_stack(1e-3, 14))
-        assert len(snaps) == 1 and len(closes) == 2, (snaps, closes)
     finally:
         ps._sliver_probe_solve, ps._sliver_collapse_solve = real_p, real_c
 

@@ -70,6 +70,17 @@ _DZ = 0.32e-6 / 4
 _EH, _EP = 2.25, 9.0
 _A0, _B0 = 0.27865, 0.62505
 
+#: The ``min_feature`` this fixture's hazard band was DERIVED at, in metres.
+#: The band lives between the snap threshold and the width at which the
+#: own-scale ratio stops reaching 100, so the threshold is part of the fixture
+#: and has to be stated rather than inherited: the library default moved from
+#: ``period * 1e-5`` to ``period * 1e-3`` (audit finding G2, 2026-09-12) after
+#: the default was measured to sit at the BOTTOM of this very band, and at the
+#: new default every delta below 1e-3 of a period is snapped away, so the
+#: geometry would carry no sliver for the guard to decide about.  Pinning it
+#: keeps every number below the one it was measured as.
+_MF = _P * 1e-5
+
 
 def _frames(delta):
     return [(_A0, _B0), (_A0 - delta, _B0 + delta)]
@@ -83,7 +94,8 @@ def _screened(delta, degree=14):
     ``min_feature``, identical on every build, while the refusal depends on
     the answer -- and the CI runners solve this fixture correctly where this
     box does not."""
-    st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=degree)
+    st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=degree,
+                  min_feature=_MF)
     for (a, b) in _frames(delta):
         st.add_layer(_DZ, segments=[(a, _EH), (b - a, _EP), (1.0 - b, _EH)])
     st.set_source(_WL, theta=_THETA)
@@ -94,8 +106,7 @@ def _solve(delta, degree=14, *, guard=True, min_feature=None, per_layer=False):
     """One stack solve.  ``guard`` toggles the shipped refusal through its own
     fail-before switch, so the pre-fix arm runs the pre-fix code path."""
     kw = dict(layer_grids="per-layer") if per_layer else {}
-    if min_feature is not None:
-        kw["min_feature"] = min_feature
+    kw["min_feature"] = _MF if min_feature is None else min_feature
     st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=degree, **kw)
     for (a, b) in _frames(delta):
         st.add_layer(_DZ, segments=[(a, _EH), (b - a, _EP), (1.0 - b, _EH)])
@@ -171,10 +182,10 @@ def _classify(delta, degree, ref):
 
 #: The ladder the hazard band is DRAWN on at run time.  Round 4 never names a
 #: row: which (degree, delta) is corrupted is a property of the BLAS kernel.
-#: ``_solve`` builds the stack with the LIBRARY default ``min_feature``
-#: (1e-5 of a period), so a wall step below that is merged by the union snap
-#: and carries no sliver at all.  The band therefore lives between that and
-#: the width at which the own-scale ratio stops reaching 100.
+#: ``_solve`` builds the stack at the fixture's pinned ``min_feature``
+#: (``_MF`` = 1e-5 of a period), so a wall step below that is merged by the
+#: union snap and carries no sliver at all.  The band therefore lives between
+#: that and the width at which the own-scale ratio stops reaching 100.
 _BAND_DEGREES = (12, 14, 20)
 _BAND_DELTAS = [float(x) for x in np.geomspace(3e-4, 1.5e-5, 12)]
 
@@ -251,7 +262,8 @@ def test_fail_before_the_pre_fix_path_only_warns_it_does_not_refuse():
     band = _hazard_band()
     assert band, "the hazard band is empty on this build"
     for deg, d, _e, _tot in band:
-        st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=deg)
+        st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=deg,
+                      min_feature=_MF)
         for (a, b) in _frames(d):
             st.add_layer(_DZ, segments=[(a, _EH), (b - a, _EP),
                                         (1.0 - b, _EH)])
@@ -321,7 +333,8 @@ def _warned(delta, degree):
     """Did the guarded solve of this row say ANYTHING?  Round 4's contract for
     a wrong row it cannot attribute to the sliver is that the answer is
     returned WITH a warning, never in silence."""
-    st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=degree)
+    st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=degree,
+                  min_feature=_MF)
     for (a, b) in _frames(delta):
         st.add_layer(_DZ, segments=[(a, _EH), (b - a, _EP), (1.0 - b, _EH)])
     st.set_source(_WL, theta=_THETA)
@@ -542,7 +555,8 @@ def test_the_snap_removes_the_cell_and_the_screen_then_reads_clean():
 def test_a_gain_layer_is_not_provably_passive_so_the_guard_stays_silent():
     """Super-unity is LEGAL with gain, so the guard must not speak -- even with
     the sliver present.  Negative control for the passivity conjunct."""
-    st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=14)
+    st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=14,
+                  min_feature=_MF)
     for (a, b) in _frames(1e-4):
         st.add_layer(_DZ, segments=[(a, _EH), (b - a, (3.0 - 0.5j) ** 2),
                                     (1.0 - b, _EH)])
@@ -724,7 +738,8 @@ def test_an_unknown_wavelength_prints_the_symbol_not_a_nan():
     """``prepare()`` never requires ``set_source``, so the refusal can be
     reached with no wavelength on the stack.  It must degrade to the SYMBOL,
     not to a ``nan`` the reader would have to interpret."""
-    st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=14)
+    st = PMMStack(_P, n_superstrate=1.0, n_substrate=1.0, degree=14,
+                  min_feature=_MF)
     for (a, b) in _frames(1e-4):
         st.add_layer(_DZ, segments=[(a, _EH), (b - a, _EP), (1.0 - b, _EH)])
     msg = ps._sliver_refusal(st, 2.17)          # _src is None: never sourced

@@ -81,6 +81,7 @@ import os
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
+import contextlib
 import warnings  # noqa: E402
 
 import numpy as np  # noqa: E402
@@ -88,6 +89,27 @@ import pytest  # noqa: E402
 
 from lumenairy.elements.pmm import PMMStack  # noqa: E402
 from lumenairy.elements.pmm import stack as ps  # noqa: E402
+
+
+@contextlib.contextmanager
+def _eager_arbiter():
+    """Run the arbiter EAGERLY -- all three extra solves, every evidence field
+    populated -- through its own fail-before switch.
+
+    The shipped default skips the two ``_sliver_collapse_solve`` calls when the
+    move criterion has already decided ``'truncation'`` (audit finding G3,
+    2026-09-12: a measured 4 -> 2 solves on that population), so ``d12`` /
+    ``d0_over_d12`` / ``closed_super_unity`` are ``None`` there -- they were not
+    measured.  A test whose SUBJECT is that denominator has to ask for it; the
+    switch changes no verdict and no returned number, only how many solves are
+    paid to reach them."""
+    was = ps.PMM_SLIVER_ARBITER_LAZY
+    ps.PMM_SLIVER_ARBITER_LAZY = False
+    try:
+        yield
+    finally:
+        ps.PMM_SLIVER_ARBITER_LAZY = was
+
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PROBE = os.path.abspath(os.path.join(_HERE, os.pardir, os.pardir,
@@ -515,7 +537,10 @@ def test_the_two_bars_are_two_sided_on_the_running_build():
         for d in (1e-3, 3e-4, 1e-4, 3e-5, 1e-5, 3e-6):
             st = _stack(d, deg)
             cur = _raw(st)
-            got = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
+            # both BARS are the subject here, and one of them is measured
+            # against ``d12`` -- see _eager_arbiter
+            with _eager_arbiter():
+                got = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
             if got is None or got[1] is None:
                 continue
             kind = _kind(_move(cur, ref), d)
@@ -590,7 +615,8 @@ def test_the_sensitivity_denominator_is_a_real_measurement_not_round_off():
     assert d_side < 1e-4 * d_shift, (d_side, d_shift)
     # and the arbiter uses the second, not the first
     cur = _raw(st)
-    _v, ev = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
+    with _eager_arbiter():          # ``d12`` IS the subject of this test
+        _v, ev = ps._sliver_arbiter(st, cur[3], cur[1], cur[2], None)
     assert abs(ev["d12"] - d_shift) < 1e-12 * max(d_shift, 1e-30), (ev, d_shift)
 
 

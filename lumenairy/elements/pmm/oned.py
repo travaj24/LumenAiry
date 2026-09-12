@@ -74,9 +74,23 @@ def pmm_jones_1d(
     OUT-OF-PLANE (an off-diagonal-z ``exz/eyz/ezx/ezy`` cell routes to the metric
     generator); the off-diagonal ``exy`` couples ``E_x`` and ``E_y`` in the
     spectral-element modal eigenproblem, so the response is a full Jones matrix (the
-    phase relationship the scalar :func:`pmm_efficiency_1d` cannot carry).  Converges SPECTRALLY in the polynomial ``degree`` with no
-    accuracy floor -- the PMM win on metals where the FMM needs many orders and
-    the ASR stretch plateaus.
+    phase relationship the scalar :func:`pmm_efficiency_1d` cannot carry).
+
+    CONVERGENCE, and it is not the same in both channels.  The ``E_y`` (TE)
+    channel converges SPECTRALLY in the polynomial ``degree`` with no accuracy
+    floor -- the PMM win on metals, where the FMM needs many orders and the ASR
+    stretch plateaus (measured on an Au 0.18 + 3.43j / air lamellar cell:
+    order-0 error 9.4e-6 / 2.6e-7 / 1.8e-8 / 4.9e-9 at degree 8 / 12 / 16 / 20,
+    a local rate ~9 and RISING).  The ``E_x`` (TM) channel is NOT spectral: the
+    field is singular at the wall corner, and the nodal Legendre/GLL basis
+    resolves that ALGEBRAICALLY -- 5.4e-4 / 2.2e-4 / 1.1e-4 / 4.4e-5 / 2.1e-5 /
+    8.0e-6 / 1.9e-6 at degree 8 / 12 / 16 / 24 / 32 / 44 / 60 on the same cell
+    (rate 1.9 rising to 4.7), and on a LOSSLESS high-contrast n = 3.48/1 cell
+    a flat ``O(N^-2.7)`` out to degree 44 with no acceleration at all, so this
+    is the corner and not the metal.  At degree 28 the TM order-0 error is
+    ~2.4e-6 where TE is ~2.8e-11 -- five orders apart on the same cell.  Budget
+    ``degree`` from the TM channel, and read ``degree`` convergence (not energy
+    closure) as the accuracy signal there.
 
     Parameters
     ----------
@@ -361,8 +375,26 @@ def pmm_efficiency_1d(
         (raise it for accuracy, not the element count).  Default 16.
     elements_per_region : int, optional
         Spectral elements per homogeneous subsection (ridge / groove).  Default
-        1.  Raise (e.g. 2-4) with ``grade=True`` to resolve the metal-corner
-        field singularity -- the speed lever for TM (hp-refinement).
+        1.  It buys accuracy per ELEMENT, and MEASURED, it does not buy
+        accuracy per FLOP: on the Au (0.18 + 3.43j) / air corner case it is
+        advertised for (0.6 um pitch, 0.633 um, d = 0.1 um, f = 0.5, 10 deg,
+        TM, order-0 R against an ``R_inf + c/n`` extrapolation of the library's
+        own RCWA at n_orders 401/601/801/1201), single-element p-refinement
+        beats it by 2.5-4x at MATCHED DOF = ``2 * n_el * degree``:
+
+            DOF     eper=1      eper=3,grade  eper=3,plain  eper=6,grade
+             48     4.36e-5     1.07e-4       1.51e-4       --
+             96     ~5.6e-6     2.00e-5       2.94e-5       2.05e-5
+            144     --          5.61e-6       9.40e-6       5.98e-6
+            192     --          9.90e-7       2.97e-6       1.23e-6
+
+        and the eig cost goes as DOF^3, so raising ``degree`` is the cheaper
+        route to a given error.  Grading does beat non-grading at fixed
+        ``elements_per_region`` (1.5-3x), which is why it is the default when
+        this knob is raised at all -- but uniform-degree grading is not
+        hp-refinement, and hp (geometric grading WITH a degree decreasing
+        toward the corner, Babuska-Guo) is what would give ``exp(-c sqrt(DOF))``
+        here.  Raise it when you need a specific element layout, not for speed.
     grade : bool, optional
         When ``elements_per_region > 1``, cluster the elements toward the walls
         (Chebyshev-Lobatto) to resolve the corner singularity.  Default
@@ -783,6 +815,21 @@ def pmm_efficiency_1d_slanted(
     efficiencies at a fraction of the cost (~30-70x fewer DOF*slices in the
     validated dielectric cases).
 
+    ENERGY-CLOSURE FLOOR ON THE TM CHANNEL -- calibrate a tripwire against
+    THIS, not against 1e-10.  On a LOSSLESS slanted cell the inclined-coordinate
+    generator closes ``ΣR + ΣT`` to 1 + 4e-5 .. 9e-5 in TM, DECREASING with
+    ``degree`` (measured 1.0000908 / 1.0000604 / 1.0000432 at degree 16 / 22 /
+    28 on a 20-deg slant), where the VERTICAL cascade on the same solid reads
+    1.0000000000.  It converges, so this is a convergence diagnostic and not an
+    instability -- but it means ``|ΣR + ΣT - 1|`` on a slanted TM stack is a
+    reading of the generator's own residual, not of a numerical fault.  TE is
+    unaffected (``|tot - 1| <= 1.5e-8`` at every degree).  The solver itself is
+    independently validated: at 20 deg it is converged to 8 digits by degree 16,
+    and a vertical z-staircase through the symmetric cascade -- a completely
+    different code path with no slant generator anywhere -- converges as
+    ``O(n_slices^-2)`` and Richardson-extrapolates onto the single slanted
+    layer's TE answer to 2e-8 / 1.8e-7 / 7.1e-7 (R_-1 / R_0 / T_0).
+
     Parameters
     ----------
     period ... wavelength : as in :func:`pmm_efficiency_1d` (metres / PUBLIC
@@ -910,6 +957,12 @@ def pmm_jones_1d_slanted(
     OR out-of-plane) -- the anisotropic-Jones counterpart of
     :func:`pmm_efficiency_1d_slanted`, by the Edee-Granet convection-metric
     spectral-element solver.
+
+    It inherits that function's ENERGY-CLOSURE FLOOR on the ``E_x`` / TM
+    channel: on a LOSSLESS slanted cell ``ΣR + ΣT`` reads 1 + 4e-5 .. 9e-5,
+    decreasing with ``degree``, where the vertical cascade on the same solid
+    closes to 1e-10.  Calibrate any closure tripwire against that floor rather
+    than against machine precision; see :func:`pmm_efficiency_1d_slanted`.
 
     Combines the tilted side-walls of :func:`pmm_efficiency_1d_slanted` with the
     coupled ``(E_x, E_y)`` Jones response of :func:`pmm_jones_1d`.  The tilt

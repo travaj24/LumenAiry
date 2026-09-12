@@ -193,14 +193,23 @@ reasons they differ, are:
   ``theta`` (polar) and ``phi`` (azimuth).  They do NOT accept
   ``angle`` -- passing ``angle=`` raises ``TypeError`` (unexpected
   keyword).  Use ``theta`` for the polar angle.
-* **Jones basis.** The 2-D solvers return the zeroth-order Jones
-  matrix in the lab ``(x, y)`` CARTESIAN basis (columns = response to
-  incident ``E_x`` / ``E_y``).  The 1-D solvers return ``te``/``tm``
-  (``s``/``p``).  The two bases coincide -- up to the ``tm`` <-> ``x``,
-  ``te`` <-> ``y`` identification -- ONLY at ``phi = 0``.  For conical
-  incidence (``phi != 0``) the plane of incidence is rotated, so
-  ``te``/``tm`` no longer align with ``x``/``y`` and the matrices are
-  related by that rotation.
+* **Jones basis.** EVERY solver -- 1-D and 2-D -- returns the
+  zeroth-order Jones matrix in the lab ``(x, y)`` CARTESIAN basis:
+  columns = response to incident ``E_x`` / ``E_y``, index 0 = ``x``,
+  index 1 = ``y``.  At ``phi = 0`` the ``x`` column is the ``p``
+  (``tm``) channel and the ``y`` column the ``s`` (``te``) channel,
+  **up to the sign of the p unit vector**: measured against an
+  independent analytic TMM on a uniform slab at 0 deg / 30 deg /
+  60 deg, ``J[0, 0] = -r_p`` (exactly ``-1.000000`` in ratio at every
+  angle) and ``J[1, 1] = +r_s``.  That sign is the standard Fresnel
+  ``p`` convention and not an error -- at normal incidence the lab
+  basis correctly gives ``J_xx = J_yy`` (isotropy), which a literal
+  ``te``/``tm`` matrix would not -- but a consumer who reads the
+  ``x`` column as ``r_p`` picks up a sign.  PMM and RCWA agree with
+  each other to 1e-15 on both entries.  For conical incidence
+  (``phi != 0``) the plane of incidence is rotated away from
+  ``x``/``y`` entirely and the ``te``/``tm`` matrix is the lab one
+  conjugated by that rotation.
 
 ## 8. Top-level re-exports
 

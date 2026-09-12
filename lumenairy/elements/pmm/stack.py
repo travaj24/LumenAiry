@@ -31,12 +31,14 @@ from ._core import (
     _build_sem_tensor_segments,
     _cov_layer_4n,
     _cov_split,
+    _farfield_order_set,
     _freeze_cached,
     _guarded_lstsq,
     _half_M_sym_metric,
     _interface_smatrix,
     _interface_smatrix_general_mortar,
     _interface_smatrix_mortar,
+    _jpmm_concrete_incidence_guard,
     _kz_forward,
     _layer_modes_metric,
     _lossy_incidence,
@@ -183,6 +185,22 @@ from ._core import (
 #: answer returned.  A switch, not a policy -- the guard changes nothing on any
 #: solve that does not trip BOTH conjuncts.
 PMM_SLIVER_GUARD = True
+
+#: FAIL-BEFORE SWITCH for the arbiter's LAZY collapse solves (2026-09-12, audit
+#: finding G3).  ``False`` restores the eager form bit for bit: all three extra
+#: solves on every screened stack, and ``d12`` / ``d0_over_d12`` /
+#: ``closed_super_unity`` populated in the evidence whatever the verdict.
+#:
+#: ``True`` (the default) skips the two ``_sliver_collapse_solve`` calls when
+#: ``d0`` has NOT cleared the geometric floor -- the ``'truncation'`` verdict,
+#: where the criterion never reads ``d12``.  A switch, not a policy: it changes
+#: no verdict and no returned number, only how many solves are paid to reach
+#: them.  MEASURED by counting ``PMMStack.solve`` invocations on the O-11
+#: taper: 4 -> 2 at ``(n_slices, s)`` = (4, 3e-4) and (8, 3e-4) -- both
+#: ``'truncation'`` -- and 4 -> 4 at (8, 1e-4) and (16, 5e-5), which are
+#: attributed and genuinely need the denominator.  The no-sliver and
+#: single-layer controls stay at 1.
+PMM_SLIVER_ARBITER_LAZY = True
 
 #: BAR (b): the super-unity factor.  NOT a new constant -- it is the one
 #: :func:`_warn_stack_energy` has warned at since v5.14, reused here so the
@@ -417,6 +435,33 @@ _PASSIVE_ANTIHERM_DEADBAND = 16.0 * float(np.finfo(float).eps)
 #: same delta with an owned liner sized to give ratio 100 / 300 / 1000 reads
 #: err = 1.0 / 0.8 / 4.1 x delta, i.e. CORRECT.
 _SLIVER_OWN_SCALE_RATIO = 100.0
+
+#: DEFAULT ``min_feature``, as a FRACTION of the period (audit finding G2,
+#: 2026-09-12).  The wall snap is the only thing that removes a MANUFACTURED
+#: cross-layer sliver before it reaches the solve, and the sliver pathology has
+#: a measured width: a collision of size ``s`` corrupts the answer for ``s`` in
+#: roughly ``[1, 8] * min_feature`` and is harmless outside it, so the default
+#: must sit ABOVE the geometry's collision scale, not below it.
+#:
+#: MEASURED on two independent fixtures (Si/SiO2, 1.0 um pitch, 1.55 um, 12 deg;
+#: and TiO2-like 2.35/1.46, 0.55 um pitch, 0.70 um, 31 deg) over an
+#: ``s``-ladder of 0.3x .. 100x ``min_feature`` at degrees 10/14/18/22/26 with
+#: the refusal disarmed, scoring DEGREE-SCATTER at fixed ``s``: ``1e-5`` leaves
+#: 6 of 11 rungs scattering (T0 up to 55% wrong, and to 22.4 / 147.7 on the
+#: first fixture), ``1e-4`` leaves 1 of 11, and ``1e-3`` leaves **0 of 11** --
+#: every rung degree-independent to 7 digits.  Where two settings both leave a
+#: collision unsnapped they agree EXACTLY (0.19839028 / 0.19755266 / 0.19366045
+#: at ``s`` = 1.5e-4 / 3e-4 / 1e-3 under both), so the larger snap does not
+#: perturb the cases it does not touch.  ``1e-3`` is also the scale the sliver
+#: REFUSAL itself already prescribes as its first remedy
+#: (``mf_fix = 2 * w_wide * P``).
+#:
+#: It is a convenience default and not a derivation -- the collision scale of a
+#: taper is ``(thickness / n_slices) * tan(sidewall)``, which is NANOMETRES and
+#: carries no period.  Any stack with cross-layer wall collisions should pass
+#: ``min_feature`` explicitly, ~10x above its own collision scale, and check the
+#: answer is stationary in BOTH ``degree`` and ``min_feature``.
+_MIN_FEATURE_DEFAULT_FRAC = 1.0e-3
 
 #: A layer is solved IN A SHEARED FRAME exactly when the cascade routes it to
 #: the metric generator, i.e. ``abs(slant_angle) > 1e-12`` -- the SAME literal
@@ -845,7 +890,7 @@ def _sliver_collapse_solve(stack, side, src, shift=0.0):
     return (max(float(np.max(tot)) - 1.0, 0.0), R, T)
 
 
-def _sliver_screen(stack, *, require_passive=True):
+def _sliver_screen(stack, *, require_passive=True, allow_traced=False):
     """``(hit, period, degree)`` when this stack carries a MANUFACTURED
     cross-layer sliver, else ``None``.  Pure geometry -- it never solves and
     never raises.
@@ -859,6 +904,15 @@ def _sliver_screen(stack, *, require_passive=True):
     not widen.  A non-provably-passive stack that the arbiter attributes is
     WARNED instead (verification defect R3-C, the keyed ``prepare()`` case).
 
+    ``allow_traced`` (2026-09-12, audit finding G1) lifts the traced-stack
+    exclusion below.  The exclusion protects the ARBITER, whose three re-solves
+    are neither cheap nor meaningful under a JAX trace -- but the screen itself
+    reads only wall coordinates, ``min_feature``, ``degree`` and ``period``,
+    every one of which is a CONCRETE host value on the differentiable path too
+    (the twin freezes the geometry).  The JAX dispatch in
+    :meth:`PMMStack.solve` therefore asks the geometric question directly, and
+    is the only caller that passes ``True``; the arbiter never does.
+
     The geometric test runs FIRST because it is the cheaper of the two and
     answers ``None`` on almost every stack: round 4 reaches this function on
     every solve rather than only above the super-unity trigger."""
@@ -867,8 +921,8 @@ def _sliver_screen(stack, *, require_passive=True):
     if getattr(stack, "_sliver_probe", False):
         return None            # the arbiter's own re-solve is never arbitrated
     try:
-        if stack._holds_traced():
-            # A TRACED stack is outside the guard entirely.  Rounds 1-3 got
+        if stack._holds_traced() and not allow_traced:
+            # A TRACED stack is outside the ARBITER entirely.  Rounds 1-3 got
             # this for free: ``_stack_provably_passive`` cannot resolve a
             # traced index and answered False, so the screen never fired.
             # ROUND 4 asks the geometric question WITHOUT passivity, so the
@@ -1043,8 +1097,26 @@ def _sliver_arbiter(stack, worst, R_eff, T_eff, src):
     refusal message concrete where it is present -- but no verdict depends on
     it any more.
 
-    Costs THREE solves, and only on a stack that carries a manufactured
-    sliver at all."""
+    COST, and where it goes (2026-09-12, audit finding G3).  The re-solves are
+    paid only on a stack that carries a manufactured sliver at all -- counted
+    by wrapping :meth:`PMMStack.solve`, such a stack cost 4 solves where an
+    identical sliver-free one cost 1, flat in ``n_slices`` from 4 to 16.  The
+    two COLLAPSE solves are now LAZY: ``d12`` is read only on the ``'sliver'``
+    / ``'wall'`` fork, and that fork is reached only after ``d0`` has cleared
+    the geometric floor, so a stack whose answer did NOT move (the
+    ``'truncation'`` verdict) pays 2 solves instead of 4 -- measured 4 -> 2 at
+    ``(n_slices, s)`` = (4, 3e-4) and (8, 3e-4), and unchanged at 4 on the rows
+    that are attributed and therefore genuinely need ``d12``.
+
+    ``ev['d12']``, ``ev['d0_over_d12']`` and ``ev['closed_super_unity']`` are
+    therefore ``None`` on a ``'truncation'`` verdict: they were not measured,
+    and reporting a number nobody computed would be worse than reporting
+    nothing.  Every consumer of those fields is on the other fork.
+
+    :data:`PMM_SLIVER_ARBITER_LAZY` is the fail-before switch: ``False``
+    restores the eager form (all three solves, every field populated) bit for
+    bit, for an A/B or for a diagnostic that wants the device's wall
+    sensitivity on a row the criterion did not need it for."""
     scr = _sliver_screen(stack, require_passive=False)
     if scr is None:
         return None
@@ -1058,6 +1130,23 @@ def _sliver_arbiter(stack, worst, R_eff, T_eff, src):
     if probe is None:
         return ("unknown", None)
     su, R1, T1 = probe
+    d0 = _sliver_answer_move(R_eff, T_eff, R1, T1)
+    if d0 is None:                                   # pragma: no cover
+        return ("unknown", None)
+    violation = max(worst - 1.0, 0.0)
+    closure = max(_SLIVER_ATTRIB_CLOSURE, violation * _SLIVER_CLOSURE_FRACTION)
+    ev = dict(snapped_super_unity=su, closed_super_unity=None, move=d0,
+              d12=None, w_wide=w_wide, mf_fix=mf_fix, hit=hit,
+              closure=closure, violation=violation,
+              drop=(violation / su) if su > 0.0 else float("inf"),
+              d0_over_w=(d0 / w_wide) if w_wide > 0.0 else float("inf"),
+              d0_over_d12=None)
+    trunc = d0 <= _SLIVER_MOVE_FACTOR * w_wide
+    if trunc and PMM_SLIVER_ARBITER_LAZY:
+        # The answer did not move past the geometric floor, so the sliver is
+        # not the attributed cause and the device's own wall sensitivity is not
+        # needed to say so.  The two collapse solves are skipped.
+        return ("truncation", ev)
     alt = _sliver_collapse_solve(stack, "left", rec)
     if alt is None:
         return ("unknown", None)
@@ -1073,19 +1162,13 @@ def _sliver_arbiter(stack, worst, R_eff, T_eff, src):
     if sens is None:
         return ("unknown", None)
     _su3, R3, T3 = sens
-    d0 = _sliver_answer_move(R_eff, T_eff, R1, T1)
     d12 = _sliver_answer_move(R2, T2, R3, T3)
-    if d0 is None or d12 is None:                    # pragma: no cover
+    if d12 is None:                                  # pragma: no cover
         return ("unknown", None)
-    violation = max(worst - 1.0, 0.0)
-    closure = max(_SLIVER_ATTRIB_CLOSURE, violation * _SLIVER_CLOSURE_FRACTION)
-    ev = dict(snapped_super_unity=su, closed_super_unity=su2, move=d0,
-              d12=d12, w_wide=w_wide, mf_fix=mf_fix, hit=hit,
-              closure=closure, violation=violation,
-              drop=(violation / su) if su > 0.0 else float("inf"),
-              d0_over_w=(d0 / w_wide) if w_wide > 0.0 else float("inf"),
-              d0_over_d12=(d0 / d12) if d12 > 0.0 else float("inf"))
-    if d0 <= _SLIVER_MOVE_FACTOR * w_wide:
+    ev["closed_super_unity"] = su2
+    ev["d12"] = d12
+    ev["d0_over_d12"] = (d0 / d12) if d12 > 0.0 else float("inf")
+    if trunc:
         return ("truncation", ev)
     if d0 > _SLIVER_WALL_RATIO * d12:
         return ("sliver", ev)
@@ -1433,6 +1516,134 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
             stacklevel=3)
 
 
+#: ``pol`` spellings :meth:`PMMStack.internal_field` accepts, mapped onto the
+#: ROW of ``R_eff`` / ``T_eff`` they select.  Row 0 is the incident ``E_x``
+#: response and row 1 the incident ``E_y``; at ``phi = 0`` the lab ``x``
+#: channel IS the p / tm channel and ``y`` the s / te one (CONVENTIONS §7.1 --
+#: the Jones is returned in the lab Cartesian basis, so ``x`` is p up to the
+#: sign of the p unit vector).  CONVENTIONS §7 pins that the ``s``/``te`` and
+#: ``p``/``tm`` aliases are accepted everywhere, case-insensitively.
+_INTERNAL_POL_ROW = {"tm": 0, "p": 0, "x": 0, "te": 1, "s": 1, "y": 1}
+
+
+def _resolve_internal_pol(pol):
+    """The ``R_eff`` ROW index for :meth:`PMMStack.internal_field`'s ``pol``.
+
+    Accepts the family's string spellings (case-insensitive) and the original
+    ``0`` / ``1`` index.  ``None`` -> 0 (incident ``E_x``), unchanged."""
+    if pol is None:
+        return 0
+    if isinstance(pol, str):
+        row = _INTERNAL_POL_ROW.get(pol.strip().lower())
+        if row is None:
+            raise ValueError(
+                f"PMMStack.internal_field: pol must be one of 'tm'/'p' "
+                f"(incident E_x, row 0), 'te'/'s' (incident E_y, row 1), or "
+                f"the index 0 / 1 -- got {pol!r}.")
+        return row
+    if pol not in (0, 1):           # ``True``/``False`` compare equal to 1/0
+        raise ValueError(
+            f"PMMStack.internal_field: pol must be one of 'tm'/'p' (incident "
+            f"E_x, row 0), 'te'/'s' (incident E_y, row 1), or the index 0 / 1 "
+            f"-- got {pol!r}.")
+    return int(pol)
+
+
+def _warn_jax_stack_sliver(stack):
+    """The PURE-GEOMETRY half of the sliver guard, for the differentiable
+    (JAX) ``PMMStack.solve`` twin -- a WARNING, never a refusal.
+
+    The twin cannot run the round-4 ARBITER (its three re-solves would run
+    under the caller's trace, where they are neither cheap nor meaningful), and
+    without an attribution this cannot become the NumPy path's ``ValueError``.
+    What it CAN do is say that the union grid manufactured the cell, because
+    that is a deterministic fact about wall coordinates the twin has already
+    frozen to host floats.  Returns ``True`` when it warned.
+
+    The numbers in the message are the 2026-09-11 audit's (repro
+    ``PMM-1D/p11_jax_guards.py``): on a two-layer Si/SiO2 stack with a
+    manufactured sliver 1.5e-5 of the period the twin returns ``T0 = 1.3417``
+    against a correct 0.7659 with ``max R+T = 8.35`` at degrees 14/16/18,
+    while degrees 12 and 20 agree with NumPy to 2e-5 -- so the corruption is
+    DEGREE-DEPENDENT and a spot check at a neighbouring degree does not see
+    it.  That is why the warning fires on the geometry rather than on the
+    answer."""
+    scr = _sliver_screen(stack, require_passive=False, allow_traced=True)
+    if scr is None:
+        return False
+    hit, period, degree = scr
+    w, x_l, x_r, w_wide, own, n_hit = hit
+    mf_fix = 2.0 * w_wide * period
+    warnings.warn(
+        f"PMMStack.solve: the DIFFERENTIABLE (JAX) twin is solving a stack "
+        f"whose shared union grid carries a MANUFACTURED NEAR-COINCIDENT-WALL "
+        f"SLIVER -- {n_hit} cell(s) no single layer asked for; the narrowest "
+        f"is {w:.3g} of a period ({w * period:.4g} m) between walls "
+        f"{x_l:.10g} and {x_r:.10g}, {own / w:.3g}x finer than the finest "
+        f"wall spacing any layer DOES ask for.  Such a cell's spectral-element "
+        f"Jacobian scales the nodal Kx^2 as 1/w^2 and conditions the interface "
+        f"mode-match as 1/w^2.  The NumPy path ARBITRATES this geometry (three "
+        f"sliver-free re-solves) and REFUSES when the sliver is the attributed "
+        f"cause; under a trace those re-solves are not available, so this "
+        f"answer is returned UNARBITRATED and may be badly wrong -- measured "
+        f"on the two-layer reproducer at a sliver 1.5e-5 of the period: "
+        f"T0 = 1.3417 against a correct 0.7659 with max R+T = 8.35 at degree "
+        f"14/16/18, while degree 12 and 20 agree with NumPy to 2e-5, i.e. the "
+        f"corruption is DEGREE-DEPENDENT and invisible to a neighbouring-"
+        f"degree spot check.  REMEDIES, in order: (1) pass "
+        f"min_feature={mf_fix:.4g} (metres) so the colliding cross-layer walls "
+        f"snap to their midpoints; (2) place the colliding walls at the SAME "
+        f"coordinate, which removes the cell exactly; (3) solve the same stack "
+        f"once with NumPy inputs, which runs the full arbiter, before "
+        f"differentiating it.  Choose min_feature where the answer is "
+        f"stationary in BOTH degree and min_feature.  See "
+        f"docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND4_2026_09_11.md.",
+        stacklevel=3)
+    return True
+
+
+def _is_traced_output(x):
+    """True when ``x`` is a JAX **Tracer** (a value that exists only inside an
+    enclosing ``jit`` / ``grad`` trace) rather than a concrete array.
+
+    Typed, not a concretization ``try``: the non-``ui`` broad-except budget
+    (``tests/unit/test_audit_except_budget.py``) only sanctions the
+    concretize-or-skip idiom where the tracer error is untypeable, and here it
+    is not -- ``jax.core.Tracer`` is importable at the point of use, because
+    this is only ever reached from a branch that has already dispatched to the
+    jnp twin."""
+    try:
+        import jax
+    except ImportError:                              # pragma: no cover
+        return False
+    return isinstance(x, jax.core.Tracer)
+
+
+def _warn_stack_energy_concrete(R_eff, T_eff, stack=None, src=None):
+    """Run :func:`_warn_stack_energy` on the differentiable twin's outputs when
+    they are CONCRETE, and do nothing when they are traced.
+
+    An EAGER ``PMMStack.solve()`` on a stack that merely holds a ``jnp`` array
+    returns concrete ``jax.Array``s -- the case the audit measured, and the one
+    where a gain superstrate silently returned ``R+T = -0.85`` and a
+    manufactured sliver ``R+T = 8.35``.  The tripwire is exact there and costs
+    two array sums.  Inside ``jit`` / ``grad`` the outputs are Tracers: a
+    Python ``if`` on their value cannot be taken without severing the trace, so
+    the tripwire is SKIPPED rather than approximated (the pre-dispatch
+    incidence guard and geometric sliver screen still ran, and both are
+    trace-safe).
+
+    The stack is passed through so the message and the within-layer arm are the
+    NumPy path's; the ARBITER cannot fire from here because
+    :func:`_sliver_screen` excludes a traced stack unless asked otherwise, and
+    this caller does not ask."""
+    if _is_traced_output(R_eff) or _is_traced_output(T_eff):
+        return False
+    _warn_stack_energy(np.asarray(R_eff), np.asarray(T_eff), stack=stack,
+                       src=src)
+    return True
+
+
 class PMMStack:
     """Multilayer 1-D grating stack solved by the Polynomial Modal Method -- the
     spectral-element counterpart of :class:`~lumenairy.elements.rcwa.RCWAStack`.
@@ -1474,6 +1685,27 @@ class PMMStack:
         :func:`pmm_jones_1d_slanted`).  ``'covariant'`` forces the spectral
         path (raises on mixed/zero slant; carries out-of-plane with that
         documented limitation); ``'convection'`` forces the general path.
+    min_feature : float, optional
+        Wall-snap threshold in METRES for the shared union grid.  Adjacent
+        union walls closer than this that come from DIFFERENT layers are
+        snapped to their midpoint (a close pair a single layer owns -- an
+        intentional thin liner -- is never touched).  Default
+        ``period * 1e-3``.
+
+        This is an ACCURACY knob, not only a cost knob.  A cross-layer wall
+        collision the snap does NOT remove puts a near-zero-width element on
+        the grid whose ``1/w^2`` nodal conditioning corrupts the solve, and the
+        corruption band is MEASURED at roughly ``[1, 8] * min_feature`` in the
+        collision width -- so the threshold has to sit ABOVE the geometry's own
+        collision scale, not below it.  That scale is not a period fraction:
+        for a staircased taper it is the per-slice wall offset
+        ``(thickness / n_slices) * tan(sidewall)``, in nanometres, independent
+        of the period.  **Rule of thumb: pass** ``min_feature`` **at least ~10x
+        the collision scale** and confirm the answer is stationary in BOTH
+        ``degree`` and ``min_feature``.  The snap moves walls by up to
+        ``min_feature / 2``, so the converged value itself depends on it; where
+        no cross-layer pair falls inside the threshold the grid -- and the
+        answer -- are unchanged.
 
     Notes
     -----
@@ -1491,6 +1723,16 @@ class PMMStack:
     conserves).  The modal forward set uses the z-Poynting-flux
     selector (as the multi-region single-layer solver), so the many-element shared
     grid stays resonance-free.
+
+    CONVERGENCE IS NOT THE SAME IN BOTH CHANNELS.  The physics this class runs
+    is :func:`pmm_jones_1d_segments`, and there the ``E_y`` (TE) channel is
+    SPECTRAL in ``degree`` with no accuracy floor while the ``E_x`` (TM)
+    channel is ALGEBRAIC -- the field is singular at a wall corner and the
+    nodal Legendre/GLL basis resolves that as ``O(N^-2.7)`` on a lossless
+    high-contrast cell, five orders behind TE at degree 28 on the same
+    geometry.  Size ``degree`` from the TM channel, and use its own ``degree``
+    convergence (not ``ΣR + ΣT``) as the accuracy signal there.  See
+    :func:`pmm_jones_1d` for the measured ladders.
     """
 
     def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
@@ -1541,26 +1783,79 @@ class PMMStack:
         self.factorization = factorization
         self.ffo = int(far_field_orders)
         # PHYSICAL wall-snap threshold for the shared union grid (item 3a):
-        # ABSOLUTE metres; default period*1e-5 -- far above float noise, far
-        # below intentional features, and cross-layer-pairs-only either way.
+        # ABSOLUTE metres; default period*1e-3, and cross-layer-pairs-only
+        # (a close wall pair a SINGLE layer owns -- an intentional 1 nm liner
+        # -- is never thinned, whatever this is set to).
+        #
+        # WHY 1e-3 AND NOT 1e-5 (audit finding G2, 2026-09-12).  The snap is
+        # the only thing standing between a staircased stack and the
+        # MANUFACTURED-sliver pathology below, and the pathology has a MEASURED
+        # width: a cross-layer wall collision of size ``s`` corrupts the solve
+        # for ``s`` in roughly ``[1, 8] * min_feature`` and is harmless outside
+        # it.  The old default of ``period*1e-5`` therefore snapped away only
+        # the collisions that were already harmless and left the whole
+        # dangerous decade exposed.  Measured on two independent fixtures (a
+        # Si/SiO2 1.0/1.55 um pair at 12 deg and a TiO2-like 0.55/0.70 um pair
+        # at 31 deg), sweeping ``s`` over a 0.3x..100x ladder of ``min_feature``
+        # at degrees 10/14/18/22/26 with the refusal disarmed, and scoring
+        # DEGREE-SCATTER at fixed ``s`` (a smooth drift with ``s`` is a
+        # genuinely different geometry and is correct physics; an answer that
+        # jumps between branches as ``degree`` changes is the pathology):
+        #
+        #     min_feature      rungs showing degree-scatter
+        #     period*1e-5      6 of 11   (every rung from 1x to 8x; T0 reads
+        #                                 0.2645 / 0.3082 / 0.1939 against a
+        #                                 correct 0.199230 -- up to 55% wrong,
+        #                                 scattering +-5% between adjacent
+        #                                 degrees; on the first fixture the
+        #                                 same band reaches T0 = 22.4 and 147.7)
+        #     period*1e-4      1 of 11   (only the 1.0x rung, one degree of 5)
+        #     period*1e-3      0 of 11   (every rung degree-independent to 7
+        #                                 digits)
+        #
+        # and, decisively, where two settings both leave a collision unsnapped
+        # they agree EXACTLY: s = 1.5e-4 reads 0.19839028 under 1e-5 and 1e-4,
+        # s = 3e-4 reads 0.19755266 under both, s = 1e-3 reads 0.19366045 under
+        # 1e-5 and 1e-3.  Raising the knob does not perturb the cases it does
+        # not touch -- it only removes cells the union manufactured.
+        #
+        # THE COLLISION-SCALE RULE, which is what a caller should actually
+        # reason with: ``min_feature`` must sit at least ~10x ABOVE the
+        # geometry's own cross-layer collision scale, and that scale is NOT a
+        # period fraction.  For a taper it is the per-slice wall offset
+        # ``(thickness / n_slices) * tan(sidewall)``, which is NANOMETRES and
+        # independent of the period; for a staircased free-form profile it is
+        # the smallest wall step between adjacent slices.  The period-scaled
+        # default is a convenience, not a derivation: on a 700 nm pitch it is
+        # now 0.7 nm, the right order for the ~1.2 nm collisions a 2-deg taper
+        # produces, where the old default was 0.007 nm and ~200x too small.
+        # Any stack with cross-layer wall collisions should set this knob
+        # explicitly and check the answer is stationary in BOTH ``degree`` and
+        # ``min_feature``.
+        #
+        # MIGRATION.  A caller who relied on the old value -- e.g. to keep a
+        # deliberate sub-nm cross-layer offset in the grid -- gets it back with
+        # ``min_feature=period*1e-5``.  The snap moves walls by at most
+        # ``min_feature/2``, so the solved geometry now differs from the
+        # requested one by up to 5e-4 of a period where colliding cross-layer
+        # walls exist, and by NOTHING where they do not (no pair inside the
+        # threshold -> byte-identical grid -> byte-identical answer).
         # ALSO THE COST KNOB for dense staircases (application feedback
         # 2026-06-10): snapping colliding cross-layer walls shrinks the
         # union grid -- measured 5.7x (321 s -> 56 s) on an ns8 coated taper
         # at min_feature=1.5e-9, at a ~1.6% geometry-perturbation cost
         # (+-0.75 nm wall moves).
         #
-        # AND IT IS AN ACCURACY KNOB (audit 2026-07-28) -- the one the default
-        # does NOT serve on a TAPERED stack.  The default scales with the
-        # PERIOD, but the collision scale of a taper is the per-slice wall
-        # offset ~ (thickness / n_slices) * tan(sidewall), which is NANOMETRES
-        # and is INDEPENDENT of the period: on a 700 nm pitch the default is
-        # 0.007 nm, ~200x too small to snap the ~1.2 nm collisions a 2-deg
-        # taper produces, so nothing is snapped and the resulting J -> 0
-        # slivers silently corrupt deep resonant nulls (passive-but-wrong;
+        # AND IT IS AN ACCURACY KNOB (audit 2026-07-28), which is the whole
+        # reason the default is sized where it is.  A TAPERED stack whose
+        # collisions sit BELOW the threshold keeps its J -> 0 slivers, and
+        # those silently corrupt deep resonant nulls (passive-but-wrong;
         # raising `degree` restores passivity, NOT accuracy).  MEASURED on a
-        # 2-deg coated pillar taper: in-plane oblique extinction scattered 91%
-        # across degree 6/8/10 at the default and converged to 0.1% (and ran
-        # 2.1x faster) at min_feature=1.5e-9.  The snap also MOVES walls
+        # 2-deg coated pillar taper on a 700 nm pitch, whose collisions are
+        # ~1.2 nm: in-plane oblique extinction scattered 91% across degree
+        # 6/8/10 at a threshold of 0.007 nm and converged to 0.1% (and ran
+        # 2.1x faster) at min_feature=1.5e-9 m, i.e. once the threshold is
+        # ABOVE the collision scale.  The snap also MOVES walls
         # (<= min_feature/2), so the converged value itself depends on it --
         # choose the value where the answer is stationary in BOTH `degree` and
         # `min_feature`, not merely the largest one that runs.  See
@@ -1594,8 +1889,8 @@ class PMMStack:
         #     sliver-thin feature ONE layer owns is the geometry the caller
         #     asked for and no `min_feature` removes it, so it is warned
         #     about, never refused.
-        self.min_feature = (float(period) * 1e-5 if min_feature is None
-                            else float(min_feature))
+        self.min_feature = (float(period) * _MIN_FEATURE_DEFAULT_FRAC
+                            if min_feature is None else float(min_feature))
         # 'per-layer' (audit R-6, 2026-07-28): each layer is assembled on its
         # OWN WINDOW grid (its walls + its ``window_halfwidth`` neighbours' on
         # each side) and adjacent layers are coupled by an exact L2 mortar at
@@ -2494,7 +2789,8 @@ class PMMStack:
                 eps_reals.extend(complex(v) for v in
                                  np.diag(np.asarray(_e, dtype=_C)))
         wl = _grazing_safe_wavelength(float(wl), kx0, ky0, order_x, order_y,
-                                      P, P, eps_reals)
+                                      P, P, eps_reals,
+                                      fn_name="PMMStack.solve (conical)")
         k0 = 2.0 * np.pi / wl
         kxv = kx0 + order_x * (wl / P)
         kyv = ky0 + order_y * (wl / P)                 # == ky0 (constant)
@@ -2621,7 +2917,24 @@ class PMMStack:
         surface is ALL-VERTICAL IN-PLANE stacks with STATIC widths/walls;
         slant, out-of-plane tensors, ``stabilize``, ``retain_internal`` and
         the assemble-once sweep/prepare paths raise.  x64 required;
-        ``jnp.linalg.eig`` is CPU-only."""
+        ``jnp.linalg.eig`` is CPU-only.
+
+        GUARDS ON THE DIFFERENTIABLE PATH -- what runs and what does not.
+        Three of the NumPy branch's guards are trace-safe and run on BOTH
+        branches: the incidence-medium raise (gain / evanescent / metallic
+        ``n_superstrate``) runs BEFORE the dispatch on concrete values; the
+        pure-geometry cross-layer SLIVER screen runs before the twin and
+        WARNS; and the energy tripwire (non-finite -> raise, negative ->
+        raise, ``R+T > 1`` -> warn) runs on the returned arrays whenever they
+        are CONCRETE, i.e. on an ordinary eager call.  What does NOT run:
+        inside ``jit`` / ``grad`` the outputs are Tracers, so the energy
+        tripwire is skipped (its comparison cannot be taken without severing
+        the trace); a TRACED ``n_superstrate`` / ``angle`` skips the incidence
+        raise for the same reason; and the three-solve sliver ARBITER -- the
+        only thing that can turn a screen hit into the NumPy path's
+        ``ValueError`` -- is never available under a trace, so a sliver stack
+        WARNS here where NumPy refuses.  Solve the geometry once with NumPy
+        inputs before differentiating it if you need the refusal."""
         # Invalidate retained internals BEFORE any dispatch/early return
         # (audit P1-04): every solve() supersedes the retained state, so
         # internal_field/layer_absorption can only serve the LAST solve --
@@ -2682,6 +2995,20 @@ class PMMStack:
                     "SLANTED layers; use PMM2DStack with y-invariant cells.")
             return self._solve_conical(self._src["wl"], self._src["angle"], phi)
 
+        # ---- incidence guard, BEFORE any dispatch ---------------------------
+        # The NumPy branch's own ``_require_propagating_incidence`` sits below
+        # the JAX dispatch, so the differentiable twin used to return BEFORE
+        # it: a fully CONCRETE gain superstrate (n_sup = 1 - 1e-3j) reached the
+        # far field and returned R+T = [-0.848, -0.863] -- negative
+        # efficiencies, silently -- which is the audit-M3 2026-07-25 defect the
+        # NumPy path was fixed for, still alive on the twin.  The concrete-only
+        # mirror runs here so BOTH branches refuse it; a TRACED n_sup / angle
+        # skips it exactly as the single-layer twins do (concretizing would
+        # sever the trace), and the NumPy call below is then a no-op repeat of
+        # two float comparisons.
+        _jpmm_concrete_incidence_guard("PMMStack.solve", self.n_sup,
+                                       self._src["angle"])
+
         # ---- differentiable (JAX) dispatch ---------------------------------
         # Any traced input (a layer eps / thickness, a half-space index, the
         # wavelength or the angle) routes the whole solve to the jnp twin.
@@ -2717,11 +3044,25 @@ class PMMStack:
                             "in-plane.  NB a TRACED (3,3) tensor cannot be "
                             "inspected -- its xz/yz/zx/zy entries are "
                             "ignored.")
+            # PURE-GEOMETRY sliver screen, before the twin runs: the wall
+            # coordinates, ``min_feature``, ``degree`` and ``period`` are all
+            # concrete host values on this path (the twin freezes the
+            # geometry), so the screen needs nothing traced.  It WARNS -- the
+            # arbiter that turns a screen hit into the NumPy path's refusal
+            # needs three re-solves that a trace cannot supply.
+            _warn_jax_stack_sliver(self)
             if self.layer_grids == "per-layer":
                 from ._jax_stack import _pmm_stack_solve_jax_perlayer
-                return _pmm_stack_solve_jax_perlayer(self)
-            from ._jax_stack import _pmm_stack_solve_jax
-            return _pmm_stack_solve_jax(self)
+                out = _pmm_stack_solve_jax_perlayer(self)
+            else:
+                from ._jax_stack import _pmm_stack_solve_jax
+                out = _pmm_stack_solve_jax(self)
+            # Energy tripwire on CONCRETE outputs (an eager call): raises on a
+            # non-finite or negative total and warns above the super-unity bar,
+            # exactly as the NumPy branch does.  Skipped under jit / grad,
+            # where the outputs are Tracers and the comparison is not takeable.
+            _warn_stack_energy_concrete(out[1], out[2], stack=self)
+            return out
 
         wl, angle = self._src["wl"], self._src["angle"]
         k0 = 2.0 * np.pi / wl
@@ -3019,21 +3360,10 @@ class PMMStack:
                     + [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))
                        for eps_u in layer_eps_u for e in eps_u]
                     + [np.real(self.n_sup), np.real(self.n_sub)])
-        m_prop = _n_propagating_orders(self.period, wl, n_max)
-        n_proj = max(self.ffo, 2 * m_prop + 5)
-        cap = n_glob if n_glob % 2 else n_glob - 1
-        n_proj = min(n_proj, cap)
-        if n_proj % 2 == 0:
-            n_proj -= 1
-        if 2 * m_prop + 1 > n_proj:               # parity with the single-layer cores
-            raise ValueError(
-                f"PMMStack.solve: degree={self.degree} too low to resolve the "
-                f"{2 * m_prop + 1} propagating orders (n_glob={n_glob}); raise "
-                f"degree or elements_per_region.")
-        half = (n_proj - 1) // 2
-        orders = np.arange(-half, half + 1)
-        G = 2.0 * np.pi / self.period
-        kx = (kx0 + orders * G) / k0
+        # parity with the single-layer cores: ONE order-budget definition
+        orders, kx, half = _farfield_order_set(
+            self.period, wl, n_max, self.ffo, n_glob, "PMMStack.solve",
+            degree=self.degree, kx0=kx0, k0=k0)
         N = len(orders)
         Tp = _sem_fourier_projection(orders, self.period, mats_sup)
 
@@ -3233,23 +3563,11 @@ class PMMStack:
                        for L in self._layers for _w, e in L[1]
                        if np.asarray(e).ndim == 2]
                     + [np.real(self.n_sup), np.real(self.n_sub)])
-        m_prop = _n_propagating_orders(period, wl, n_max)
-        n_proj = max(self.ffo, 2 * m_prop + 5)
         n0, nN = mats_sup["n_glob"], mats_sub["n_glob"]
-        cap = min(n0 if n0 % 2 else n0 - 1, nN if nN % 2 else nN - 1)
-        n_proj = min(n_proj, cap)
-        if n_proj % 2 == 0:
-            n_proj -= 1
-        if 2 * m_prop + 1 > n_proj:
-            raise ValueError(
-                f"PMMStack.solve(layer_grids='per-layer'): degree="
-                f"{self.degree} too low to resolve the {2 * m_prop + 1} "
-                f"propagating orders (half-space n_glob = {n0}/{nN}); raise "
-                f"degree or elements_per_region.")
-        half = (n_proj - 1) // 2
-        orders = np.arange(-half, half + 1)
-        G = 2.0 * np.pi / period
-        kx = (kx0 + orders * G) / k0
+        orders, kx, half = _farfield_order_set(
+            period, wl, n_max, self.ffo, (n0, nN),
+            "PMMStack.solve(layer_grids='per-layer')", degree=self.degree,
+            kx0=kx0, k0=k0)
         N = len(orders)
         Tp_sup = _sem_fourier_projection(orders, period, mats_sup)
         Tp_sub = _sem_fourier_projection(orders, period, mats_sub)
@@ -3373,22 +3691,11 @@ class PMMStack:
                     if np.asarray(e).ndim == 2 else np.asarray(e, _C) * eye3
                 n_max.append(np.real(np.sqrt(M3[0, 0])))
                 n_max.append(np.real(np.sqrt(M3[1, 1])))
-        m_prop = _n_propagating_orders(period, wl, max(n_max))
-        n_proj = max(self.ffo, 2 * m_prop + 5)
         n0g, nNg = mats_sup["n_glob"], mats_sub["n_glob"]
-        cap = min(n0g if n0g % 2 else n0g - 1, nNg if nNg % 2 else nNg - 1)
-        n_proj = min(n_proj, cap)
-        if n_proj % 2 == 0:
-            n_proj -= 1
-        if 2 * m_prop + 1 > n_proj:
-            raise ValueError(
-                f"PMMStack.solve(layer_grids='per-layer', general): degree="
-                f"{self.degree} too low for the {2 * m_prop + 1} propagating "
-                f"orders; raise degree or elements_per_region.")
-        half = (n_proj - 1) // 2
-        orders = np.arange(-half, half + 1)
-        G = 2.0 * np.pi / period
-        kx = (kx0 + orders * G) / k0
+        orders, kx, half = _farfield_order_set(
+            period, wl, max(n_max), self.ffo, (n0g, nNg),
+            "PMMStack.solve(layer_grids='per-layer', general)",
+            degree=self.degree, kx0=kx0, k0=k0)
         N = len(orders)
         Tp_sup = _sem_fourier_projection(orders, period, mats_sup)
         Tp_sub = _sem_fourier_projection(orders, period, mats_sub)
@@ -3680,8 +3987,14 @@ class PMMStack:
         incident : (complex, complex), optional
             Incident Jones vector ``(E_x, E_y)``; default x-polarized.
             Mutually exclusive with ``pol``.
-        pol : {0, 1}, optional
-            Legacy selector (0 = incident ``E_x``, 1 = ``E_y``).
+        pol : {'tm', 'p', 'te', 's', 0, 1}, optional
+            Incident-polarization selector.  The STRING spellings are the
+            ones CONVENTIONS §7 pins as accepted everywhere in this family
+            (case-insensitive): ``'tm'`` / ``'p'`` select the incident ``E_x``
+            row and ``'te'`` / ``'s'`` the incident ``E_y`` row -- the same
+            rows as ``R_eff[0]`` / ``R_eff[1]``.  The integers ``0`` / ``1``
+            are the original index spelling and still work.  Mutually
+            exclusive with ``incident``.
         nx : int, optional
             Resample onto a UNIFORM x grid of ``nx`` points (barycentric
             evaluation of the spectral interpolant).  Default: the exact
@@ -3721,10 +4034,7 @@ class PMMStack:
             raise ValueError(
                 "PMMStack.internal_field: give incident= OR pol=, not both.")
         if incident is None:
-            p = 0 if pol is None else pol
-            if p not in (0, 1):
-                raise ValueError(
-                    "PMMStack.internal_field: pol must be 0 or 1.")
+            p = _resolve_internal_pol(pol)
             ex0, ey0 = (1.0, 0.0) if p == 0 else (0.0, 1.0)
         else:
             ex0, ey0 = complex(incident[0]), complex(incident[1])
@@ -4302,19 +4612,10 @@ class PMMStack:
                 _nmx.append(np.real(_C(self._seg_at(self.n_sup, w))))
                 _nmx.append(np.real(_C(self._seg_at(self.n_sub, w))))
         n_max = max(_nmx)
-        m_prop = _n_propagating_orders(self.period, float(np.min(wl)), n_max)
-        n_proj = max(self.ffo, 2 * m_prop + 5)
-        cap = n_glob if n_glob % 2 else n_glob - 1
-        n_proj = min(n_proj, cap)
-        if n_proj % 2 == 0:
-            n_proj -= 1
-        if 2 * m_prop + 1 > n_proj:
-            raise ValueError(
-                f"PMMStack.solve_vs_wavelength: degree={self.degree} too low to "
-                f"resolve the {2 * m_prop + 1} propagating orders at the shortest "
-                f"wavelength (n_glob={n_glob}); raise degree / elements_per_region.")
-        half = (n_proj - 1) // 2
-        orders = np.arange(-half, half + 1)
+        orders, _kx, half = _farfield_order_set(
+            self.period, float(np.min(wl)), n_max, self.ffo, n_glob,
+            "PMMStack.solve_vs_wavelength", degree=self.degree,
+            when=" at the shortest wavelength")
         N = len(orders)
         G = 2.0 * np.pi / self.period
         Tp = _sem_fourier_projection(orders, self.period, mats_sup)
@@ -4507,20 +4808,10 @@ class PMMStack:
                 _nmx.append(np.real(_C(self._seg_at(self.n_sup, w))))
                 _nmx.append(np.real(_C(self._seg_at(self.n_sub, w))))
         n_max = max(_nmx)
-        m_prop = _n_propagating_orders(self.period, float(np.min(wl)), n_max)
-        n_proj = max(self.ffo, 2 * m_prop + 5)
-        cap = min(n0g if n0g % 2 else n0g - 1, nNg if nNg % 2 else nNg - 1)
-        n_proj = min(n_proj, cap)
-        if n_proj % 2 == 0:
-            n_proj -= 1
-        if 2 * m_prop + 1 > n_proj:
-            raise ValueError(
-                f"PMMStack.solve_vs_wavelength(layer_grids='per-layer'): "
-                f"degree={self.degree} too low for the {2 * m_prop + 1} "
-                f"propagating orders at the shortest wavelength (half-space "
-                f"n_glob = {n0g}/{nNg}); raise degree/elements_per_region.")
-        half = (n_proj - 1) // 2
-        orders = np.arange(-half, half + 1)
+        orders, _kx, half = _farfield_order_set(
+            self.period, float(np.min(wl)), n_max, self.ffo, (n0g, nNg),
+            "PMMStack.solve_vs_wavelength(layer_grids='per-layer')",
+            degree=self.degree, when=" at the shortest wavelength")
         N = len(orders)
         G = 2.0 * np.pi / self.period
         Tp_sup = _sem_fourier_projection(orders, self.period, mats_sup0)
@@ -4762,19 +5053,10 @@ class PMMStack:
                     + [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))
                        for eps_u in layer_eps_u for e in eps_u]
                     + [np.real(self.n_sup), np.real(self.n_sub)])
-        m_prop = _n_propagating_orders(period, wl, n_max)
-        n_proj = max(self.ffo, 2 * m_prop + 5)
-        cap = n_glob if n_glob % 2 else n_glob - 1
-        n_proj = min(n_proj, cap)
-        if n_proj % 2 == 0:
-            n_proj -= 1
-        if 2 * m_prop + 1 > n_proj:               # parity with the single-layer cores
-            raise ValueError(
-                f"PMMStack.solve (covariant): degree={self.degree} too low to "
-                f"resolve the {2 * m_prop + 1} propagating orders "
-                f"(n_glob={n_glob}); raise degree or elements_per_region.")
-        half = (n_proj - 1) // 2
-        orders = np.arange(-half, half + 1)
+        # parity with the single-layer cores: ONE order-budget definition
+        orders, _kx, half = _farfield_order_set(
+            period, wl, n_max, self.ffo, n_glob, "PMMStack.solve (covariant)",
+            degree=self.degree)
         N = len(orders)
         kx = kx0 / k0 + orders * (2.0 * np.pi / period) / k0
         Tp = _sem_fourier_projection(orders, period, mats_s)
@@ -5020,16 +5302,14 @@ class _PreparedPMMStack:
                     + [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))
                        for eps_u in resolved_all for e in eps_u]
                     + [np.real(st.n_sup), np.real(st.n_sub)])
-        m_prop = _n_propagating_orders(st.period, wl, n_max)
-        n_proj = max(st.ffo, 2 * m_prop + 5)
-        cap = n_glob if n_glob % 2 else n_glob - 1
-        n_proj = min(n_proj, cap)
-        if n_proj % 2 == 0:
-            n_proj -= 1
-        half = (n_proj - 1) // 2
-        orders = np.arange(-half, half + 1)
-        G = 2.0 * np.pi / st.period
-        kx = (kx0 + orders * G) / k0
+        # This copy of the order budget CLAMPED to the nodal capacity but did
+        # not refuse when the propagating orders did not fit inside it, so the
+        # prepared path silently returned a far field with orders MISSING --
+        # sub-unity power that the energy tripwire (one-sided, super-unity
+        # only) cannot see.  It now takes the same refusal as every sibling.
+        orders, kx, half = _farfield_order_set(
+            st.period, wl, n_max, st.ffo, n_glob, "PMMStack.prepare().solve",
+            degree=st.degree, kx0=kx0, k0=k0)
         N = len(orders)
         Tp = _sem_fourier_projection(orders, st.period, mats_sup)
 

@@ -2024,8 +2024,16 @@ def _fatcoat_layers(ns):
 
 
 def _mk(layers, degree, hw):
+    # ``min_feature`` is PINNED to the value the T3-1 screen below asserts the
+    # snap is inert at (``PERIOD * 1e-5``).  It has to be stated rather than
+    # inherited: the library default moved to ``period * 1e-3`` (audit finding
+    # G2, 2026-09-12), and at that threshold this 2-deg taper's ~1.2 nm
+    # cross-layer collisions are snapped, so the snap is no longer inert and a
+    # +/-2 window snaps a DIFFERENT pair set than a +/-1 window -- which is
+    # confound 1 this test exists to exclude.  With the default the measurement
+    # would be of the geometry, not of the window.
     st = PMMStack(PERIOD, n_substrate=N_SUB, n_superstrate=N_SUP,
-                  degree=degree, far_field_orders=11,
+                  degree=degree, far_field_orders=11, min_feature=PERIOD * 1e-5,
                   layer_grids="per-layer", window_halfwidth=hw)
     for t, s in layers:
         st.add_layer(t, segments=s)
