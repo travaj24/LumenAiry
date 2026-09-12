@@ -345,6 +345,16 @@ H.run('system: biconic lens + free space',
 
 
 def t_all_optional_features_together():
+    """Every COMPATIBLE optional feature at once.
+
+    ``slant_correction`` and ``seidel_correction`` are no longer among them:
+    both replace the same per-surface coefficient, and the Seidel block's
+    model reference is built from the screen the split step actually applies,
+    so stacking them double-counted the facet obliquity (measured 173.5 ->
+    1488.6 nm rms exit OPD on an 8 mm cemented doublet with both on).  The
+    combination raises as of the 2026-09-11 audit (finding L20), so the pair
+    is exercised one at a time here and the refusal is checked below.
+    """
     N = 256; dx = 16e-6; lam = 1.31e-6
     pres = la.make_doublet(50e-3, -30e-3, -80e-3, 4e-3, 2e-3,
                            'N-BK7', 'N-SF6HT', aperture=3e-3)
@@ -353,15 +363,34 @@ def t_all_optional_features_together():
     pres['surfaces'][1]['form_error'] = np.random.default_rng(0).normal(
         0, 10e-9, (N, N))
     E = np.ones((N, N), dtype=np.complex128)
-    E_out = la.apply_real_lens(
-        E, prescription=pres, wavelength=lam, dx=dx,
-        fresnel=True, absorption=True,
-        slant_correction=True, seidel_correction=True)
-    return (E_out.shape == (N, N) and np.abs(E_out).max() > 0), \
-        f'shape={E_out.shape}, peak={np.abs(E_out).max():.3e}'
+    outs = []
+    for extra in ({'slant_correction': True}, {'seidel_correction': True}):
+        outs.append(la.apply_real_lens(
+            E, prescription=pres, wavelength=lam, dx=dx,
+            fresnel=True, absorption=True, **extra))
+    ok = all(o.shape == (N, N) and np.abs(o).max() > 0 for o in outs)
+    return ok, (f'slant peak={np.abs(outs[0]).max():.3e}, '
+                f'seidel peak={np.abs(outs[1]).max():.3e}')
 
 
 H.run('all optional features together', t_all_optional_features_together)
+
+
+def t_slant_and_seidel_are_mutually_exclusive():
+    N = 64; dx = 16e-6; lam = 1.31e-6
+    pres = la.make_doublet(50e-3, -30e-3, -80e-3, 4e-3, 2e-3,
+                           'N-BK7', 'N-SF6HT', aperture=3e-3)
+    E = np.ones((N, N), dtype=np.complex128)
+    try:
+        la.apply_real_lens(E, prescription=pres, wavelength=lam, dx=dx,
+                           slant_correction=True, seidel_correction=True)
+    except ValueError as exc:
+        return 'mutually exclusive' in str(exc), 'ValueError raised'
+    return False, 'no ValueError for slant_correction + seidel_correction'
+
+
+H.run('apply_real_lens: slant + seidel raise ValueError',
+      t_slant_and_seidel_are_mutually_exclusive)
 
 
 def t_multi_element_system_chain():

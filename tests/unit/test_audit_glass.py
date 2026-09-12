@@ -65,91 +65,305 @@ import lumenairy as lm
 # ============================================================================
 
 class TestAuditFixesV4_11_2_track_a_SeidelCorrectionSignAgainstGroundTruth:
-    """``apply_real_lens(seidel_correction=True)`` adds a small (tens-
-    of-nm) residual correction on top of the analytic phase screen.
-    ``apply_real_lens_traced`` ray-traces every pixel and inherently
-    contains the same correction.  Both should agree to within tens of
-    nm RMS at the exit pupil for a paraxial singlet.
+    """``apply_real_lens(seidel_correction=True)`` fits the residual between
+    an exit-vertex-plane ray trace and the split-step model's OWN exit OPL,
+    from rho**4 up, and imprints it as a radial screen at the exit pupil.
 
-    Pre-v4.11.2 (v4.10 / v4.11.0 / v4.11.1) ``correction`` had the
-    wrong sign and approximately tripled the analytic OPD, producing a
-    field whose phase disagreed with ``apply_real_lens_traced`` by mm-
-    scale OPD -- ~ 10^4 waves at visible wavelengths.
+    WHAT THIS FILE USED TO ASSERT, AND WHY IT COULD NOT FAIL (audit
+    2026-09-11, finding V1).  The single ``seidel_correction=True`` test in
+    the repository compared the corrected field against
+    ``apply_real_lens_traced``, wrapped the phase difference into (-pi, pi]
+    with ``np.angle(np.exp(1j*d))``, divided by 2*pi -- so the quantity was
+    <= 0.5 by construction -- and then asserted it was < 50.0.  A synthetic
+    10**4-wave error scored 0.288 and passed.  The fixture was also
+    plano-REAR (R2 = inf), where the exit-vertex defect is identically zero,
+    and it scored exit-pupil phase, never focus, so the ~90 um*rho**2 of
+    spurious defocus the option injected was invisible on both counts.
 
-    The assertion is intentionally loose (``50 lambda`` RMS at the
-    exit pupil) because:
-      - ``apply_real_lens_traced`` includes the full per-pixel OPL
-        whereas the analytic-screen path approximates each interface
-        as a thin element, so even with the correct sign there's an
-        irreducible ASM / interface-slant residual at the % level.
-      - The point of the test is to lock in the SIGN, not to pin a
-        precise numerical value.  Pre-v4.11.2 the disagreement was
-        ~10^4 waves; post-fix it should be << 100.  50 lambda
-        comfortably distinguishes a sign error from a small physics
-        residual.
+    The three tests below are the replacement, and each is falsifiable:
+
+    * the 5 nm gate SKIPS a well-corrected singlet (whose true model
+      residual is sub-nm), i.e. the corrected field is the uncorrected one;
+    * on a CURVED-REAR cemented doublet the correction improves the exit
+      wavefront against an INDEPENDENT ray oracle (not another model in this
+      library), measured on an UNWRAPPED radial cut;
+    * and it does not move the focus, measured unwrap-free by a
+      through-focus scan of the propagated field.
     """
 
-    def test_seidel_correction_field_matches_traced_within_few_waves(self):
-        # 100 mm-EFL plano-convex BK7 singlet -- a textbook case where
-        # the analytic thin-element model should be accurate to a
-        # fraction of a wave on-axis and the seidel-correction
-        # contribution is genuinely small.
-        wavelength = 0.5876e-6  # d-line
-        N = 96
-        dx = 60e-6  # 5.76 mm half-width, well outside the lens stop
-        aperture = 5e-3  # 5 mm-diameter clear aperture
-        prescription = lm.make_singlet(
-            R1=51.5e-3, R2=float('inf'),
-            d=2e-3, glass='N-BK7', aperture=aperture)
+    # -- fixtures ---------------------------------------------------------
+    LAM = 632.8e-9
 
-        # Flat field at the entrance pupil; both paths should converge
-        # to the same exit-pupil phase (modulo a constant piston).
-        E_in = np.ones((N, N), dtype=np.complex128)
+    @staticmethod
+    def _doublet(ap=8e-3):
+        """AC254-ish cemented doublet -- CURVED rear (R3 = -291 mm), which is
+        the geometry the exit-vertex class is visible in."""
+        return dict(
+            surfaces=[
+                dict(radius=33.3e-3, glass_before='AIR',
+                     glass_after='N-BAF10'),
+                dict(radius=-22.28e-3, glass_before='N-BAF10',
+                     glass_after='N-SF6HT'),
+                dict(radius=-291.07e-3, glass_before='N-SF6HT',
+                     glass_after='AIR')],
+            thicknesses=[9.0e-3, 2.5e-3], aperture_diameter=ap)
 
-        E_corr = lm.apply_real_lens(
-            E_in, prescription=prescription, wavelength=wavelength,
-            dx=dx, seidel_correction=True)
+    @staticmethod
+    def _planoconvex(ap=4e-3):
+        return dict(
+            surfaces=[dict(radius=50e-3, glass_before='AIR',
+                           glass_after='N-BK7'),
+                      dict(radius=float('inf'), glass_before='N-BK7',
+                           glass_after='AIR')],
+            thicknesses=[3e-3], aperture_diameter=ap)
 
-        # Ground truth: ray-traced per-pixel OPD.  Returns the wave at
-        # the exit-pupil plane.  ``ray_subsample=1`` is critical here:
-        # the default subsample factor wants a much larger grid to stay
-        # above the alias gate, but we don't need a high-fidelity PSF
-        # -- just an exit-pupil phase to compare against.
-        E_traced = lm.apply_real_lens_traced(
-            E_in, prescription=prescription, wavelength=wavelength,
-            dx=dx, ray_subsample=1)
+    @classmethod
+    def _oracle_opl(cls, prescription, heights):
+        """INDEPENDENT exit-vertex-plane ray oracle: paraxial-free Newton
+        intersection of the conic + vector Snell + the signed transfer back to
+        the exit vertex plane, written here from the surface equation rather
+        than taken from any model under test.
 
-        # Compare phase inside the lens aperture only -- outside is
-        # zeroed by both paths so any "disagreement" there is trivial.
+        Returns ``(x_exit, opl)`` for a collimated meridional fan.
+        """
+        from lumenairy.elements.lenses import surface_sag_general as _sag
+        from lumenairy.glass import get_glass_index
+
+        surfaces = prescription['surfaces']
+        thick = list(prescription['thicknesses'])
+        x = np.asarray(heights, dtype=np.float64).copy()
+        z = np.zeros_like(x)
+        Lx = np.zeros_like(x)
+        Lz = np.ones_like(x)
+        opl = np.zeros_like(x)
+        zv = 0.0
+        for i, sf in enumerate(surfaces):
+            R = sf['radius']
+            kc = sf.get('conic', 0.0) or 0.0
+            asph = sf.get('aspheric_coeffs')
+            n1 = float(get_glass_index(sf['glass_before'], cls.LAM))
+            n2 = float(get_glass_index(sf['glass_after'], cls.LAM))
+            t = (zv - z) / Lz
+            if np.isfinite(R) and R != 0:
+                for _ in range(60):           # Newton on z - zv - sag(h) = 0
+                    xh = x + t * Lx
+                    sg = np.nan_to_num(_sag(xh * xh, R, kc, asph))
+                    e = np.maximum(1e-12, 1e-7 * np.abs(xh))
+                    sp = np.nan_to_num(_sag((np.abs(xh) + e) ** 2, R, kc, asph))
+                    sm = np.nan_to_num(_sag((np.abs(xh) - e) ** 2, R, kc, asph))
+                    dsdh = (sp - sm) / (2.0 * e)
+                    g = z + t * Lz - zv - sg
+                    dg = Lz - dsdh * np.sign(xh) * Lx
+                    t = t - g / np.where(np.abs(dg) < 1e-30, 1e-30, dg)
+                x = x + t * Lx
+                z = z + t * Lz
+                e = np.maximum(1e-12, 1e-7 * np.abs(x))
+                sp = np.nan_to_num(_sag((np.abs(x) + e) ** 2, R, kc, asph))
+                sm = np.nan_to_num(_sag((np.abs(x) - e) ** 2, R, kc, asph))
+                dsdh = (sp - sm) / (2.0 * e)
+                nx = -dsdh * np.sign(x)
+                nz = np.ones_like(x)
+            else:
+                x = x + t * Lx
+                z = z + t * Lz
+                nx = np.zeros_like(x)
+                nz = np.ones_like(x)
+            nn = np.hypot(nx, nz)
+            nx, nz = nx / nn, nz / nn
+            opl = opl + n1 * t
+            ci = Lx * nx + Lz * nz
+            eta = n1 / n2
+            ct = np.sqrt(np.maximum(1.0 - eta * eta * (1.0 - ci * ci), 0.0))
+            ndx = eta * Lx + (ct - eta * ci) * nx
+            ndz = eta * Lz + (ct - eta * ci) * nz
+            nn2 = np.hypot(ndx, ndz)
+            Lx, Lz = ndx / nn2, ndz / nn2
+            if i < len(surfaces) - 1:
+                zv += thick[i]
+        # signed transfer to the exit vertex plane z = sum(thicknesses)
+        n_exit = float(get_glass_index(surfaces[-1]['glass_after'], cls.LAM))
+        z_exit = float(sum(thick))
+        tf = (z_exit - z) / Lz
+        opl = opl + n_exit * tf
+        return x + tf * Lx, opl
+
+    @classmethod
+    def _exit_wavefront_rms(cls, prescription, **kw):
+        """Exit-plane OPD rms (piston-free, UNWRAPPED radial cut) of
+        ``apply_real_lens`` against the independent oracle, in metres."""
+        ap = prescription['aperture_diameter']
+        k0 = 2.0 * np.pi / cls.LAM
+        h0 = np.linspace(-0.995 * ap / 2, 0.995 * ap / 2, 4001)
+        x_or, opl_or = cls._oracle_opl(prescription, h0)
+        NA = float(np.max(np.abs(np.gradient(opl_or, x_or))))
+        NA = max(NA, 1e-6)
+        dx = 0.30 * cls.LAM / NA
+        N = int(2 ** np.ceil(np.log2(1.45 * ap / dx)))
+        E = np.ones((N, N), dtype=np.complex128)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            Eo = lm.apply_real_lens(E, prescription=prescription,
+                                    wavelength=cls.LAM, dx=dx, **kw)
         x = (np.arange(N) - N / 2) * dx
-        X, Y = np.meshgrid(x, x)
-        ap = (X * X + Y * Y) <= (aperture / 2.0) ** 2
+        # np.unwrap along the FULL row (a Nyquist-sampled exit wavefront is
+        # unwrappable by construction), then window -- unwrapping only the
+        # window would anchor on a wrapped sample.
+        ph = np.unwrap(np.angle(Eo[N // 2]))
+        m = np.abs(x) <= 0.85 * ap / 2
+        order = np.argsort(x_or)
+        d = ph[m] / k0 - np.interp(x[m], x_or[order], opl_or[order])
+        d = d - d.mean()
+        return float(np.sqrt(np.mean(d ** 2)))
 
-        # Remove the piston (mean phase difference) before comparing.
-        if not np.any(ap & (np.abs(E_corr) > 0) & (np.abs(E_traced) > 0)):
-            pytest.skip(
-                "no overlapping non-zero pixels in the aperture; "
-                "grid / aperture geometry chosen too tightly.")
+    @classmethod
+    def _through_focus_peak(cls, prescription, **kw):
+        """(peak |E|**2, best-focus z) from an ASM through-focus scan of the
+        exit field.  No unwrapping, no oracle -- the defocus a rho**2 term
+        injects shows up here as a moved focus and a lost peak.
 
-        # Element-wise phase difference inside the aperture.
-        phase_diff = np.angle(E_corr / np.where(
-            np.abs(E_traced) > 1e-30, E_traced, 1e-30))
-        # Unwrap-ish: piston-subtract using the median to avoid 2-pi
-        # wraparound dominating the RMS.
-        phase_diff = phase_diff - np.median(phase_diff[ap])
-        # Snap phase wraps back to [-pi, pi]:
-        phase_diff = np.angle(np.exp(1j * phase_diff))
+        The scan is 21 planes over +-3 % of the traced focal length and the
+        maximum is refined by the parabola through the three samples around
+        it.  The refinement is not cosmetic: the depth of focus here is
+        ~lambda / NA**2 = 0.54 mm against a 0.15 mm plane spacing, so the
+        SAMPLED maximum of a sharply peaked curve depends on where the plane
+        grid happens to fall relative to each arm's own peak -- two arms whose
+        true peaks differ by 2 % can read 2 % the other way.  The parabolic
+        vertex is exact for a locally quadratic peak, which this is.
+        """
+        from lumenairy.propagators.propagation import (
+            angular_spectrum_propagate as asm,
+        )
+        ap = prescription['aperture_diameter']
+        h0 = np.linspace(-0.995 * ap / 2, 0.995 * ap / 2, 1001)
+        x_or, opl_or = cls._oracle_opl(prescription, h0)
+        slope = np.gradient(opl_or, x_or)
+        NA = max(float(np.max(np.abs(slope))), 1e-6)
+        dx = 0.30 * cls.LAM / NA
+        N = int(2 ** np.ceil(np.log2(1.45 * ap / dx)))
+        f_est = float(np.abs(x_or[-1] / slope[-1]))
+        zs = f_est * np.linspace(0.97, 1.03, 21)
+        E = np.ones((N, N), dtype=np.complex128)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            Eo = lm.apply_real_lens(E, prescription=prescription,
+                                    wavelength=cls.LAM, dx=dx, **kw)
+            pk = np.array([float(np.abs(asm(Eo.copy(), z, cls.LAM, dx)).max()
+                                 ** 2) for z in zs])
+        j = int(np.argmax(pk))
+        if 0 < j < len(zs) - 1:
+            a, b, c = pk[j - 1], pk[j], pk[j + 1]
+            den = a - 2.0 * b + c
+            if den != 0.0:
+                d = 0.5 * (a - c) / den
+                return (float(b - 0.25 * (a - c) * d),
+                        float(zs[j] + d * (zs[1] - zs[0])))
+        return float(pk[j]), float(zs[j])
 
-        rms_waves = float(np.sqrt(np.mean(phase_diff[ap] ** 2))) / (2 * np.pi)
-        # Pre-v4.11.2: rms_waves ~ thousands.  Post-fix: should be O(1)
-        # for a paraxial singlet.  Use 50-wave gate to lock in the
-        # sign without being fragile to small physics-residual changes.
-        assert rms_waves < 50.0, (
-            f"apply_real_lens(seidel_correction=True) phase disagrees "
-            f"with apply_real_lens_traced by {rms_waves:.1f} waves "
-            f"RMS inside the aperture.  Pre-v4.11.2 the sign of "
-            f"opl_wave_rel was flipped (v4.10 'C-LR-1 fix' was wrong); "
-            f"the disagreement should be << 50 waves now.")
+    # -- the tests --------------------------------------------------------
+    def test_seidel_gate_skips_a_well_corrected_singlet(self):
+        """The 5 nm gate must SKIP where the model has no residual to carry.
+
+        DERIVATION OF THE BAR.  The split-step model's own exit-OPD residual
+        on this plano-convex, against the independent ray oracle below, is
+        0.85 nm rms -- so a correctly-referenced correction has at most ~1 nm
+        to fit and the gate (5 nm rms on the fitted rho**4+ part) must not
+        fire.  Measured with the correct reference: 1.405 nm, i.e. 3.6x
+        below the gate.  Pre-fix the same quantity was 158.6 nm (113x wrong
+        side of it) because the reference omitted the in-glass obliquity the
+        ASM legs already carry, and the field it imprinted was 105x worse
+        than leaving the option off.
+
+        The assertion is a BIT-IDENTITY: a skipped gate means the corrected
+        call returns exactly the uncorrected field, which is a two-sided
+        statement no tolerance can soften.
+        """
+        rx = self._planoconvex()
+        N, dx = 256, 3.0e-6
+        E = np.ones((N, N), dtype=np.complex128)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            a = lm.apply_real_lens(E, prescription=rx,
+                                   wavelength=self.LAM, dx=dx)
+            b = lm.apply_real_lens(E, prescription=rx,
+                                   wavelength=self.LAM, dx=dx,
+                                   seidel_correction=True)
+        assert np.array_equal(a.view(np.uint8), b.view(np.uint8)), (
+            "seidel_correction=True changed the field of a singlet whose "
+            "model residual is 0.85 nm rms: the 5 nm gate should have "
+            f"skipped it.  max|d| = {np.max(np.abs(a - b)):.3e}")
+
+    def test_seidel_improves_a_curved_rear_doublet_against_a_ray_oracle(self):
+        """On the geometry the exit-vertex class is visible in.
+
+        DERIVATION OF THE BAR.  Oracle: an independent Newton-intersection +
+        vector-Snell meridional trace back-projected to the exit vertex plane
+        (``_oracle_opl`` above, written from the surface equation -- NOT
+        ``apply_real_lens_traced``, which is another implementation of the
+        same library and was what made the old test self-referential).  Its
+        own error floor is the interpolation of a 4001-ray fan onto the field
+        row, ~1e-12 m, six decades below either number here.  Scored on an
+        UNWRAPPED radial cut, piston removed.
+
+        Measured on this 8 mm doublet: 173.5 nm rms with the correction off,
+        and pre-fix 1430.0 nm with it ON -- 8.2x WORSE, which is what the
+        wrapped assertion this test replaces could not see.  With the
+        exit-vertex transfer, the model-own reference and the rho**4 basis it
+        lands at ~50 nm.  The bar is a 3x improvement: two decades above the
+        oracle floor, and a factor 2.4 below the measured margin, so it fails
+        immediately on any of the three defects returning (each on its own
+        put this number the wrong side of 1.0x).
+        """
+        rx = self._doublet(ap=8e-3)
+        off = self._exit_wavefront_rms(rx)
+        on = self._exit_wavefront_rms(rx, seidel_correction=True)
+        assert off > 100e-9, (
+            f"fixture no longer has a high-order residual to correct "
+            f"({off * 1e9:.1f} nm rms); the test would be vacuous")
+        assert on < off / 3.0, (
+            f"seidel_correction=True gives {on * 1e9:.2f} nm rms against the "
+            f"independent exit-vertex ray oracle, against {off * 1e9:.2f} nm "
+            f"with it OFF -- a {off / on:.2f}x change where >= 3x improvement "
+            f"is required.  Pre-fix this was 0.12x (8.2x WORSE).")
+
+    def test_seidel_does_not_move_the_focus_and_does_not_cost_peak(self):
+        """Unwrap-free, oracle-free confirmation that no DEFOCUS is injected.
+
+        This is the measurement the shipped validation cannot make: it removes
+        piston + tilt + DEFOCUS before reporting rms, so a focus error is
+        invisible to it by construction -- which is why "4.5x better on
+        AC254-100-C" survived alongside a 90 um*rho**2 defect.  Here the exit
+        field is propagated over +-3 % of the traced focal length in 13 planes
+        and the peak is read directly.
+
+        DERIVATION OF THE BARS (both on the parabola-refined scan; see
+        ``_through_focus_peak`` for why the raw sampled maximum is not usable
+        at this depth of focus).
+        * PEAK.  Pre-fix the option cost 26.8 % of the focal peak on this
+          doublet (111 325 -> 81 437 at a 4 mm pupil).  Measured now: -0.27 %
+          (115 929 -> 115 614), i.e. the corrected field focuses as hard as
+          the uncorrected one.  The bar is "must not drop by more than 2 %" --
+          one-sided by design, because a correction that costs intensity is
+          not a correction -- which is 7x above the measurement and 13x below
+          the defect it guards.
+        * FOCUS PLANE.  Pre-fix the best focus moved -2.5 % (50.6291 ->
+          49.3570 mm).  Measured now: +0.146 % (50.7500 -> 50.8239 mm), with
+          the right SIGN for a real correction (removing spherical aberration
+          moves the marginal/paraxial best-focus compromise outward).  The bar
+          is 1.0 %: 6.8x above the measurement and 2.5x below the defect,
+          which a returning rho**2 term crosses immediately.
+        """
+        rx = self._doublet(ap=4e-3)
+        pk_off, z_off = self._through_focus_peak(rx)
+        pk_on, z_on = self._through_focus_peak(rx, seidel_correction=True)
+        assert pk_on >= 0.98 * pk_off, (
+            f"seidel_correction=True dropped the focal peak from {pk_off:.2f} "
+            f"to {pk_on:.2f} ({100 * (pk_on / pk_off - 1):+.1f} %); a "
+            f"correction that costs intensity is not a correction.")
+        assert abs(z_on - z_off) <= 0.010 * z_off, (
+            f"seidel_correction=True moved best focus from "
+            f"{z_off * 1e3:.4f} mm to {z_on * 1e3:.4f} mm "
+            f"({100 * (z_on - z_off) / z_off:+.2f} %), more than two scan "
+            f"steps; a rho**2 term is back in the fit.")
 
 
 # ============================================================================

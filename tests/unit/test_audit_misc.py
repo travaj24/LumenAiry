@@ -2221,10 +2221,23 @@ class TestAuditFixesV4_12_1_coverage_StopIndexWarn:
     stop placement is silently moved to surface 0.
     """
 
-    def test_traced_emits_warning_for_stop_index_2(self):
+    def test_traced_emits_warning_for_a_mid_train_stop(self):
+        """UPDATED 2026-09-12 (audit 2026-09-11, finding L14).  This used
+        ``stop_index = 2`` on a TWO-surface singlet, i.e. an out-of-range
+        index.  That value used to match no surface AND suppress the entrance
+        aperture, silently removing every aperture mask from the call (the
+        measured 3.7x-too-much-energy defect L14 fixes), so ``apply_real_lens``
+        now raises a precise ``ValueError`` for it and the warning this test
+        is about can no longer be reached that way.
+
+        The warning is about a VALID but non-entrance stop, which the traced
+        phase leg cannot honour, so the fixture moves to ``stop_index = 1`` --
+        the last surface of the same singlet, in range and still != 0.  The
+        new out-of-range contract is pinned below.
+        """
         rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=3e-3,
                               glass='N-BK7', aperture=5e-3)
-        rx['stop_index'] = 2
+        rx['stop_index'] = 1
         N = 32
         dx = 1e-5
         wavelength = 1.31e-6
@@ -2243,11 +2256,26 @@ class TestAuditFixesV4_12_1_coverage_StopIndexWarn:
             f"apply_real_lens_traced with stop_index=2 must emit a "
             f"RuntimeWarning mentioning 'stop_index'.  Caught: "
             f"{[(w.category.__name__, str(w.message)[:80]) for w in caught]}")
-        # Also confirm the warning mentions the value 2.
+        # Also confirm the warning mentions the offending value.
         msg = str(stop_warns[0].message)
-        assert '2' in msg, (
+        assert 'stop_index=1' in msg, (
             f"stop_index warning should reference the offending "
-            f"value (2); got: {msg!r}")
+            f"value (1); got: {msg!r}")
+
+    def test_out_of_range_stop_index_now_raises(self):
+        """L14.  An index outside ``[0, len(surfaces))`` -- including the
+        natural Python ``-1`` before it is normalised -- used to match no
+        surface and disable the entrance aperture too, so the element
+        transmitted up to 3.7x the energy with zero warnings.  It is a
+        ``ValueError`` now, at both ``apply_real_lens`` entry points.
+        """
+        rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=3e-3,
+                              glass='N-BK7', aperture=5e-3)
+        rx['stop_index'] = 2                 # only surfaces 0 and 1 exist
+        E_in = np.ones((32, 32), dtype=np.complex128)
+        with pytest.raises(ValueError, match=r"stop_index.*out of range"):
+            la.apply_real_lens(E_in, prescription=rx,
+                               wavelength=1.31e-6, dx=1e-5)
 
     def test_maslov_emits_warning_for_stop_index_2(self):
         rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=3e-3,

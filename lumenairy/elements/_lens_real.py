@@ -185,7 +185,9 @@ def _resolve_sag_real(sag_dtype: Any) -> Any:
 
 
 # Row-band (chunked) lens mode auto-default (v5.17.0).  The banded path is
-# BYTE-IDENTICAL to the whole-grid path and wall-clock neutral, so it is ON
+# BYTE-IDENTICAL to the whole-grid path (wall clock: neutral to +9 % at
+# N >= 1024, +28 % at N = 512 for an explicit band -- see the
+# ``sag_chunk_rows`` docstring), so it is ON
 # by default for grids large enough to benefit; below the threshold the
 # whole-grid path runs exactly as before (band-loop overhead isn't worth it
 # on small grids).  ``sag_chunk_rows=None`` -> auto; an explicit int > 0
@@ -329,13 +331,18 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
     max_field_rel_error : float, default 1e-3
         Field-error gate for ``ok``.
     on_partial_aperture : {'warn', 'error', 'silent'}, default 'warn'
-        What to do when the field check's window does not cover the clear
-        aperture, i.e. when the A/B is a proxy rather than a production-grid
-        measurement.  ``'warn'`` is the default because the shipped default
-        ``field_check_n=512`` is such a proxy on any real lens, and reading
-        its ``ok`` as a production sign-off is the mistake this exists to
-        stop.  Set ``'silent'`` for the gross-failure screen the default
-        arguments describe.
+        What to do when the field check is a PROXY rather than a
+        production-grid measurement -- either because its window does not
+        cover the clear aperture, or because ``field_check_dx`` was left at
+        ``None`` and the pitch was therefore chosen here (to make the aperture
+        span 80 % of the window) rather than by the caller.  The pitch
+        condition is the one that fires on a default call: with an auto pitch
+        the cover is 1.25 by construction, so a cover-only test could never
+        warn, and the shipped default ``field_check_n=512`` IS such a proxy on
+        any real lens -- reading its ``ok`` as a production sign-off is the
+        mistake this exists to stop.  Pass ``field_check_dx=<your production
+        pitch>`` to turn the proxy into a measurement, or ``'silent'`` for the
+        gross-failure screen the default arguments describe.
 
     Returns
     -------
@@ -426,7 +433,19 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
     cover = (window / float(ap)) if n_fc > 0 else 0.0
     n_full = int(np.ceil(float(ap) / dx_fc)) if n_fc > 0 else 0
     covers = bool(n_fc > 0 and cover >= 1.0)
-    if n_fc > 0 and not covers:
+    # WHY THE PITCH MATTERS AS WELL AS THE COVER.  With
+    # ``field_check_dx=None`` the pitch is CHOSEN so the aperture spans
+    # 80 % of the window, so ``cover`` is 1.25 by construction and the
+    # cover test alone can never fire on a default call -- while the
+    # docstring said it warns by default, and the same docstring's
+    # "the field-level error is CONFIG-DEPENDENT" paragraph says the PITCH
+    # is what the error depends on.  An auto-chosen pitch is by
+    # construction not the caller's production sampling (4.88 um here
+    # against a 0.9 um production grid), so it makes the reading a proxy
+    # exactly as a short window does.  Both conditions raise the same
+    # guard, with the message naming which one fired.
+    auto_pitch = bool(n_fc > 0 and not field_check_dx)
+    if n_fc > 0 and (not covers or auto_pitch):
         from ..propagators.carrier import _guard_dispose
         # Validate by VALUE, never by identity: a policy string built at
         # runtime (os.environ, a config file, an f-string) is not the interned
@@ -438,14 +457,22 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
                 f"lens_sag_float32_opd_error: on_partial_aperture must be one "
                 f"of ('warn', 'error', 'silent'), got "
                 f"{on_partial_aperture!r}.")
+        _why = ("its PITCH was chosen automatically"
+                if auto_pitch and covers else
+                "its WINDOW is shorter than the pupil"
+                if covers is False and not auto_pitch else
+                "its PITCH was chosen automatically AND its WINDOW is "
+                "shorter than the pupil")
         _guard_dispose(
             str(on_partial_aperture),
             f"lens_sag_float32_opd_error: the field-level A/B ran on a "
             f"{window * 1e3:.4f} mm window ({n_fc} x "
             f"{dx_fc * 1e6:.4f} um) against a {float(ap) * 1e3:.4f} mm clear "
-            f"aperture -- it saw {cover * 100:.1f} % of the pupil DIAMETER, "
-            f"so 'max_field_rel_error' ({field_rel:.4e}) and 'ok' are a PROXY "
-            f"and not a production-grid measurement.  The float32 sag error "
+            f"aperture -- it saw {cover * 100:.1f} % of the pupil DIAMETER "
+            f"and {_why}, so 'max_field_rel_error' ({field_rel:.4e}) and "
+            f"'ok' are a PROXY and not a production-grid measurement.  Pass "
+            f"field_check_dx=<your production pitch> to make it a "
+            f"measurement.  The float32 sag error "
             f"grows toward the pupil edge, so this reading UNDER-states the "
             f"production one -- measured on design 121 it climbed 109x over "
             f"three window doublings and was still rising at 18 % cover.  "
@@ -609,7 +636,18 @@ def _build_displaced_cos_luts(surfaces, thicknesses, wavelength, r_max,
                 g = pz + t * dz - z_v - sag
                 dgdt = dz - sagp * np.sign(y) * dy
                 dgdt = np.where(np.abs(dgdt) < 1e-30, 1e-30, dgdt)
-                t = t - g / dgdt
+                # Byte-identical early exit (not a tolerance): once ``t`` reaches a
+                # BITWISE fixed point, every remaining sweep reproduces it exactly, so
+                # the loop can stop without changing a single output bit.  The
+                # intersection residual is exactly 0 after 2 sweeps on every fixture
+                # measured, and each sweep costs three ``_surface_sag_general``
+                # evaluations over the whole fan -- ~10x of the geometric traces.
+                _t_new = t - g / dgdt
+                _t_done = np.array_equal(_t_new, t, equal_nan=True)
+                t = _t_new
+                del _t_new
+                if _t_done:
+                    break
             pz = pz + t * dz
             py = py + t * dy
             y = py
@@ -748,11 +786,63 @@ except ImportError:
     pass
 
 
+def _glass_key_value(name, wavelength):
+    """The cache-key entry for a glass: its RESOLVED real index, not its name.
+
+    ``GLASS_REGISTRY`` is a documented, mutable user extension point, so a name
+    is not a stable identifier: re-pointing an entry leaves the key unchanged
+    and the cache returns cosines traced against the OLD glass (measured 1 % of
+    peak amplitude on the public API).  ``get_glass_index`` is memoised by
+    ``_GLASS_VALUE_CACHE`` and invalidated on a registry write, so this costs a
+    dict lookup and is strictly more correct -- two names with the same index
+    at this wavelength then legitimately share an entry.  Falls back to the
+    name only if the glass cannot be resolved at all (the caller will raise
+    later with a better message than a KeyError from here)."""
+    try:
+        return float(get_glass_index(name, wavelength))
+    except Exception:
+        return ('unresolved', str(name))
+
+
+def _sag_callable_fingerprint(cb, r_max):
+    """VALUE fingerprint of a freeform ``sag_callable`` for a cache key.
+
+    Object identity does not imply value equality for a MUTABLE callable, and
+    the cos-grid cache is sold for exactly the workload that mutates one (a
+    design-iteration loop re-using a multi-second trace).  Probing the callable
+    on a FIXED stencil spanning the traced extent turns a state change into a
+    cache MISS instead of a stale hit -- measured 164 % of peak field error
+    before, for microseconds of probe against a ~3.9 s trace.
+
+    Returned alongside (never instead of) the callable object itself, so the
+    entry still holds a reference (no GC, hence no ``id`` reuse) and two
+    distinct callables still miss."""
+    if cb is None:
+        return None
+    r = float(r_max)
+    if not np.isfinite(r) or r <= 0.0:
+        r = 1.0
+    t = np.linspace(-1.0, 1.0, 8) * r
+    z8 = np.zeros(8)
+    xs = np.concatenate([t, z8, 0.5 * t])
+    ys = np.concatenate([z8, t, 0.5 * t])
+    try:
+        v = np.asarray(cb(xs, ys), dtype=np.float64).ravel()
+    except Exception:
+        # Unprobeable callable (e.g. it rejects vector input): fall back to
+        # "never cacheable" rather than to a fingerprint we cannot trust.
+        return 'unprobeable'
+    v = np.where(np.isfinite(v), v, 0.0)
+    return np.ascontiguousarray(v).tobytes()
+
+
 def _displaced_geom_key(surfaces, thicknesses, wavelength, r_max, conjugate):
     """Hashable identity of the FIELD-INDEPENDENT displaced fan (surfaces +
     thicknesses + wavelength + fan extent + scalar conjugate).  Only the
     collimated (``conjugate is None``) and scalar-conjugate congruences are
-    cacheable; returns ``None`` for the field-dependent 'auto'/ndarray cases."""
+    cacheable; returns ``None`` for the field-dependent 'auto'/ndarray cases.
+    Glasses enter by RESOLVED INDEX, not by registry name -- see
+    :func:`_glass_key_value`."""
     if not (conjugate is None
             or (isinstance(conjugate, (int, float))
                 and not isinstance(conjugate, bool))):
@@ -764,7 +854,8 @@ def _displaced_geom_key(surfaces, thicknesses, wavelength, r_max, conjugate):
         (tuple(sorted((int(p), float(a))
                       for p, a in s['aspheric_coeffs'].items()))
          if s.get('aspheric_coeffs') else None),
-        str(s.get('glass_before')), str(s.get('glass_after')))
+        _glass_key_value(s.get('glass_before'), wavelength),
+        _glass_key_value(s.get('glass_after'), wavelength))
         for s in surfaces)
     conj_key = None if conjugate is None else float(conjugate)
     return (surf_key, tuple(float(t) for t in thicknesses),
@@ -981,10 +1072,21 @@ def _build_displaced_cos_grid(surfaces, thicknesses, wavelength, r_max,
     # The per-surface obliquity cosines vary smoothly across the aperture, so
     # the crossing->grid interpolation is done on a COARSE regular grid
     # (bounded resolution) and bilinearly upsampled to the full field grid --
-    # decoupling the cost from N.  ``n_coarse`` samples over the field extent
-    # resolve the aperture-scale cos variation to well under the obliquity tol.
-    _ncx = min(Nx, n_coarse)
-    _ncy = min(Ny, n_coarse)
+    # decoupling the cost from N.  ``n_coarse`` is the sample count across the
+    # TRACED APERTURE, not across the window: the coarse grid spans the whole
+    # field extent (it must, so the upsample has no extrapolation), so a padded
+    # grid spreads a fixed count ever more thinly over the pupil and the
+    # accuracy falls LINEARLY with the pad factor (measured 24x worse over a 16x
+    # pad, which is a numerical artefact of the padding rather than of anything
+    # physical).  Scaling the count by the pad factor keeps the pitch inside the
+    # pupil fixed at the unpadded value; ``min(Nx, ...)`` still caps it at the
+    # field grid itself, where the upsample is a no-op.
+    _pad_x = ((Nx * dx) / (2.0 * r_max)
+              if (r_max and np.isfinite(r_max) and r_max > 0.0) else 1.0)
+    _pad_y = ((Ny * dy) / (2.0 * r_max)
+              if (r_max and np.isfinite(r_max) and r_max > 0.0) else 1.0)
+    _ncx = min(Nx, max(n_coarse, int(np.ceil(n_coarse * max(_pad_x, 1.0)))))
+    _ncy = min(Ny, max(n_coarse, int(np.ceil(n_coarse * max(_pad_y, 1.0)))))
     xcoarse = np.linspace(xax[0], xax[-1], _ncx)
     ycoarse = np.linspace(yax[0], yax[-1], _ncy)
     Xc, Yc = np.meshgrid(xcoarse, ycoarse)
@@ -1112,7 +1214,18 @@ def _build_displaced_cos_grid(surfaces, thicknesses, wavelength, r_max,
                 g = pz + t * dzr - z_v - f
                 dgdt = dzr - (dfdx * dxr + dfdy * dyr)
                 dgdt = np.where(np.abs(dgdt) < 1e-30, 1e-30, dgdt)
-                t = t - g / dgdt
+                # Byte-identical early exit (not a tolerance): once ``t`` reaches a
+                # BITWISE fixed point, every remaining sweep reproduces it exactly, so
+                # the loop can stop without changing a single output bit.  The
+                # intersection residual is exactly 0 after 2 sweeps on every fixture
+                # measured, and each sweep costs three ``_surface_sag_general``
+                # evaluations over the whole fan -- ~10x of the geometric traces.
+                _t_new = t - g / dgdt
+                _t_done = np.array_equal(_t_new, t, equal_nan=True)
+                t = _t_new
+                del _t_new
+                if _t_done:
+                    break
             px = px + t * dxr
             py = py + t * dyr
             pz = pz + t * dzr
@@ -1250,9 +1363,11 @@ def _displaced_cos_grid_key(surfaces, thicknesses, wavelength, r_max,
     plus the fan/interp determinants).  Returns ``None`` for the
     field-DEPENDENT 'auto' / ndarray congruences (they depend on E_in and are
     never cached).  A freeform ``sag_callable`` is keyed by object identity
-    (held in the key so it cannot be GC'd out from under the entry); a fresh
-    callable each call simply misses (correct -- two callables cannot be
-    proven equal)."""
+    (held in the key so it cannot be GC'd out from under the entry) AND by a
+    VALUE fingerprint (:func:`_sag_callable_fingerprint`), so a fresh callable
+    still misses and a MUTATED one misses too instead of returning a stale
+    grid.  Glasses enter by RESOLVED INDEX rather than registry name (see
+    :func:`_glass_key_value`)."""
     if not (conjugate is None
             or (isinstance(conjugate, (int, float))
                 and not isinstance(conjugate, bool))):
@@ -1269,8 +1384,15 @@ def _displaced_cos_grid_key(surfaces, thicknesses, wavelength, r_max,
         tuple(float(v) for v in (s.get('decenter') or (0.0, 0.0))),
         tuple(float(v) for v in (s.get('tilt') or (0.0, 0.0))),
         s.get('sag_callable'),                 # by identity (held -> no GC)
-        str(s.get('glass_before')), str(s.get('glass_after')))
+        _sag_callable_fingerprint(s.get('sag_callable'), r_max),
+        _glass_key_value(s.get('glass_before'), wavelength),
+        _glass_key_value(s.get('glass_after'), wavelength))
         for s in surfaces)
+    if any(sk[6] == 'unprobeable' for sk in surf_key):
+        # A callable the fingerprint could not evaluate has no VALUE identity,
+        # so identity keying would be the stale-hit hazard again: refuse to
+        # cache rather than risk it.
+        return None
     conj_key = None if conjugate is None else float(conjugate)
     return (surf_key, tuple(float(t) for t in thicknesses),
             float(wavelength), float(r_max), conj_key,
@@ -1528,7 +1650,18 @@ def _build_displaced_ray_map(surfaces, thicknesses, wavelength, r_max,
                 gg = pz + t * dz - z_v - sag
                 dgdt = dz - sagp * np.sign(y) * dy
                 dgdt = np.where(np.abs(dgdt) < 1e-30, 1e-30, dgdt)
-                t = t - gg / dgdt
+                # Byte-identical early exit (not a tolerance): once ``t`` reaches a
+                # BITWISE fixed point, every remaining sweep reproduces it exactly, so
+                # the loop can stop without changing a single output bit.  The
+                # intersection residual is exactly 0 after 2 sweeps on every fixture
+                # measured, and each sweep costs three ``_surface_sag_general``
+                # evaluations over the whole fan -- ~10x of the geometric traces.
+                _t_new = t - gg / dgdt
+                _t_done = np.array_equal(_t_new, t, equal_nan=True)
+                t = _t_new
+                del _t_new
+                if _t_done:
+                    break
             pz = pz + t * dz
             py = py + t * dy
             y = py
@@ -1563,13 +1696,51 @@ def _build_displaced_ray_map(surfaces, thicknesses, wavelength, r_max,
     z_exit = float(sum(thicknesses))
     with np.errstate(divide='ignore', invalid='ignore'):
         t_f = (z_exit - pz) / dz
-    opl = opl + 1.0 * t_f                       # exit gap is air (n = 1)
+    # The referencing leg from the last surface's sag back to the exit vertex
+    # plane is travelled in ``surfaces[-1]['glass_after']``, which is not
+    # necessarily air.  ``t_f`` is of order the last surface's sag, so
+    # hard-coding n = 1 costs ``(n_after - 1) * |sag_last| / cos`` -- measured
+    # 15.8 waves on an immersed-exit singlet.  ``idx[-1][1]`` is already
+    # resolved above.
+    opl = opl + idx[-1][1] * t_f
     h_out = py + t_f * dy
     m = alive & np.isfinite(h_out) & np.isfinite(opl) & np.isfinite(heights)
     return heights[m], h_out[m], opl[m]
 
 
-def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl):
+def _residual_input_field(E_in, W_conj, wavelength):
+    """``E_in`` demodulated by the congruence the geometric remap traced,
+    ``F = E_in * exp(-i k0 W_conj)``.
+
+    The remaps rebuild the exit phase from the RAY eikonal, which already
+    carries the entrance eikonal of the ``conjugate=`` congruence.  Whatever
+    phase the caller's field carries BEYOND that congruence -- an upstream
+    element's residual wavefront, a tilt, aberration, or (with the default
+    ``conjugate=None``) the whole of its curvature -- is not in the trace and
+    used to be thrown away with the ``np.abs(E_in)`` sampling: measured
+    identical output (4.7e-16) for a flat and a 35-wave-defocused input, and a
+    150 mm diverging source focusing at the COLLIMATED 21 mm instead of 25 mm.
+
+    ``F`` is smooth wherever the input matches the congruence to within a
+    fraction of a wave per pixel, which is exactly the regime the remap is
+    valid in, so it can be resampled by the same bilinear interpolation the
+    amplitude used -- and it carries ``|E_in|`` in its modulus, so one complex
+    resample replaces the old real one at no extra interpolation.  With
+    ``W_conj = 0`` and a real non-negative ``E_in`` (the collimated,
+    phase-free case) ``F`` is that amplitude exactly, so the legacy path is
+    reproduced bit for bit."""
+    E = np.asarray(E_in)
+    if W_conj is None:
+        return E.astype(np.complex128, copy=False) if np.iscomplexobj(E) \
+            else E.astype(np.complex128)
+    k0 = 2.0 * np.pi / wavelength
+    W = np.asarray(W_conj, dtype=np.float64)
+    W = np.where(np.isfinite(W), W, 0.0)
+    return E * np.exp(-1j * k0 * W)
+
+
+def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl,
+                           eikonal_fn=None):
     """Candidate (a) exit-plane remap: turn the element into a geometric
     transfer ``h_in -> h_out`` with an energy-conserving amplitude Jacobian plus
     the exit-pupil-referenced eikonal OPD.
@@ -1577,12 +1748,15 @@ def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl):
     Captures the transverse ray walk THROUGH the element (``h_out != h_in``)
     that a single fixed-plane screen cannot.  The input amplitude envelope
     ``|E_in|`` is warped from the entrance radius ``h_in`` to the exit radius
-    ``h_out``; the exit phase is rebuilt from the ray eikonal ``k0 * opl`` (which
-    carries the entrance-plane carrier eikonal).  Energy conservation:
+    ``h_out``; the exit phase is the ray eikonal ``k0 * opl`` (which carries the
+    entrance-plane carrier eikonal) PLUS the input field's residual phase
+    against that congruence, transported along the same rays (see
+    :func:`_residual_input_field`).  Energy conservation:
     ``|E_out|^2 r_out dr_out = |E_in|^2 h_in dh_in``.  Rotationally symmetric
-    (meridional-fan) model; assumes the input phase matches the specified
-    congruence.  Returns the exit-vertex-plane field (same reference as the
-    default screen path)."""
+    (meridional-fan) model.  ``eikonal_fn(h) -> W_conj`` is the congruence the
+    fan was launched along (``None`` = collimated); pass the SAME callable the
+    ray map was built with.  Returns the exit-vertex-plane field (same
+    reference as the default screen path)."""
     from scipy.ndimage import map_coordinates
     Ny, Nx = E_in.shape
     k0 = 2.0 * np.pi / wavelength
@@ -1609,8 +1783,20 @@ def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl):
     scale = np.where(r_out > 1e-15, hin_of / np.clip(r_out, 1e-15, None), 1.0)
     cx = (X * scale) / dx + Nx / 2.0
     cy = (Y * scale) / dy + Ny / 2.0
-    amp = map_coordinates(np.abs(E_in), [cy, cx], order=1,
-                          mode='constant', cval=0.0)
+    # Resample the input field DEMODULATED by the traced congruence, so the
+    # phase the caller's field carries beyond that congruence rides along with
+    # the amplitude instead of being discarded.  ``|F| == |E_in|``, so this is
+    # the old amplitude resample plus the residual phase, not an extra pass.
+    _W_in = None
+    if eikonal_fn is not None:
+        # ``r_out`` IS the input grid's radius here (the demodulation happens
+        # on the input grid, before the resample).
+        _W_in = np.asarray(eikonal_fn(r_out), dtype=np.float64)
+    F = _residual_input_field(E_in, _W_in, wavelength)
+    amp = (map_coordinates(F.real, [cy, cx], order=1,
+                           mode='constant', cval=0.0)
+           + 1j * map_coordinates(F.imag, [cy, cx], order=1,
+                                  mode='constant', cval=0.0))
     E_out = amp * jac * np.exp(1j * k0 * (opl_of - float(op[0])))
     E_out = np.where(r_out <= ho[-1], E_out, 0.0)
     out_dtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
@@ -1646,11 +1832,74 @@ def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl):
 # 2026_07_19.md (P10 / N11).
 # ---------------------------------------------------------------------------
 
+#: The 2-D transverse-walk remap's launch-lattice side.
+#:
+#: The exit field is rebuilt by Delaunay-interpolating ``n_side**2`` scattered
+#: exit points onto the whole field grid, so the LAUNCH pitch -- not ``dx`` --
+#: sets the transverse resolution of the result: at 181 the pitch is 11.4 um
+#: for a 2 mm aperture whatever the field sampling, and structure finer than
+#: that (a hard stop edge, an obscuration, an upstream DOE, speckle) is
+#: smoothed to the lattice.  ``_warn_if_remap_lattice_smooths`` says so out
+#: loud, which is the half of that finding this pass fixes.
+#:
+#: RAISING IT IS NOT THE FIX, measured.  On a decentered f/5 singlet at
+#: N = 512, scored by the mirror-symmetry residual of the image-plane intensity
+#: (+d vs -d, an EXACT symmetry of the physics, so any residual is the model's
+#: own artefact): 7.9e-14 at 181, 5.5e-14 at 257, 4.1e-14 at 513 -- but
+#: 4.1e-03 at 512 and 7.4e-03 at 1025.  The instability is QHull's, not the
+#: resolution's: a denser scattered set gives the triangulation more
+#: near-degenerate cells to resolve arbitrarily, and which way it resolves them
+#: is not reflection-stable.  Trading a documented smoothing limit for a
+#: measurable loss of an exact symmetry is a bad trade, so the lattice stays
+#: where it was and the real fix -- the structured Newton inversion this module
+#: already implements at ``_interp2_structured``, which removes the ceiling AND
+#: the triangulation -- is recorded as follow-up work rather than half-done.
+_DISP_REMAP_2D_N_SIDE = 181
+
+
+def _warn_if_remap_lattice_smooths(r_max, dx, dy, n_side):
+    """Warn when the 2-D remap's launch lattice is coarser than the field grid.
+
+    The remap is a geometric transfer: everything the exit field knows comes
+    from ``n_side**2`` launched rays, so input structure finer than the launch
+    pitch is not propagated, it is SMOOTHED AWAY -- and nothing used to say so.
+    Measured: a ripple at 2.2 launch samples per period comes back at 0.51 of
+    its input contrast where the (field-grid) screen path resolves it at 1.26.
+    """
+    try:
+        h = min(float(dx), float(dy))
+        r = float(r_max)
+    except (TypeError, ValueError):
+        return
+    if not (np.isfinite(h) and h > 0.0 and np.isfinite(r) and r > 0.0):
+        return
+    pitch = 2.0 * r / max(int(n_side) - 1, 1)
+    if pitch <= 2.0 * h:
+        return
+    import warnings
+    warnings.warn(
+        f"apply_real_lens: surface_model='displaced' is routing this "
+        f"asymmetric element to the 2-D transverse-walk remap, which rebuilds "
+        f"the exit field from a {int(n_side)}x{int(n_side)} launch lattice -- "
+        f"a {pitch * 1e6:.2f} um pitch across the {2 * r * 1e3:.3f} mm traced "
+        f"aperture, against a {h * 1e6:.2f} um field pitch.  Input structure "
+        f"finer than the LAUNCH pitch (a hard stop edge, an obscuration, an "
+        f"upstream DOE, speckle) is smoothed to that lattice, and the remap "
+        f"carries no in-glass diffraction at all.  Pass "
+        f"displaced_obliquity='pointwise' for the single-plane obliquity "
+        f"screen, which lives on the field grid, or apply_real_lens_traced "
+        f"for a per-pixel ray-traced OPL.",
+        RuntimeWarning, _WARN_STACKLEVEL)
+
+
 def _build_displaced_ray_map_2d(surfaces, thicknesses, wavelength, r_max,
-                                n_side=181, dir_fn=None, eik_fn=None,
+                                n_side=None, dir_fn=None, eik_fn=None,
                                 r_fan_factor=1.03):
     """Pointwise 2-D generalisation of :func:`_build_displaced_ray_map` (the P2
     remap) for decentered / tilted / freeform elements (niche N11 / P10).
+
+    ``n_side=None`` (the default) uses ``_DISP_REMAP_2D_N_SIDE``; see that
+    constant for why it is a fixed 181 and what the caller warns about.
 
     Launch a REGULAR square ray grid (side ``n_side``, spanning
     ``+-r_fan_factor*r_max`` so the illuminated aperture disk has interior
@@ -1671,6 +1920,8 @@ def _build_displaced_ray_map_2d(surfaces, thicknesses, wavelength, r_max,
     on the regular launch grid.  Pure geometric trace; wave-model-independent.
     """
     r_fan = float(r_max) * float(r_fan_factor)
+    if n_side is None:
+        n_side = _DISP_REMAP_2D_N_SIDE
     ax = np.linspace(-r_fan, r_fan, int(n_side))
     dstep = float(ax[1] - ax[0])
     LX, LY = np.meshgrid(ax, ax)
@@ -1728,7 +1979,18 @@ def _build_displaced_ray_map_2d(surfaces, thicknesses, wavelength, r_max,
                 g = pz + t * dzr - z_v - f
                 dgdt = dzr - (dfdx * dxr + dfdy * dyr)
                 dgdt = np.where(np.abs(dgdt) < 1e-30, 1e-30, dgdt)
-                t = t - g / dgdt
+                # Byte-identical early exit (not a tolerance): once ``t`` reaches a
+                # BITWISE fixed point, every remaining sweep reproduces it exactly, so
+                # the loop can stop without changing a single output bit.  The
+                # intersection residual is exactly 0 after 2 sweeps on every fixture
+                # measured, and each sweep costs three ``_surface_sag_general``
+                # evaluations over the whole fan -- ~10x of the geometric traces.
+                _t_new = t - g / dgdt
+                _t_done = np.array_equal(_t_new, t, equal_nan=True)
+                t = _t_new
+                del _t_new
+                if _t_done:
+                    break
             px = px + t * dxr
             py = py + t * dyr
             pz = pz + t * dzr
@@ -1763,7 +2025,9 @@ def _build_displaced_ray_map_2d(surfaces, thicknesses, wavelength, r_max,
     z_exit = float(sum(thicknesses))
     with np.errstate(divide='ignore', invalid='ignore'):
         t_f = (z_exit - pz) / dzr
-    opl = opl + 1.0 * t_f                       # exit gap is air (n = 1)
+    # Exit referencing leg in ``surfaces[-1]['glass_after']``, not air -- see
+    # the 1-D twin :func:`_build_displaced_ray_map` for the measurement.
+    opl = opl + idx[-1][1] * t_f
     x_out = px + t_f * dxr
     y_out = py + t_f * dyr
     alive = alive & np.isfinite(x_out) & np.isfinite(y_out) & np.isfinite(opl)
@@ -1779,7 +2043,8 @@ def _build_displaced_ray_map_2d(surfaces, thicknesses, wavelength, r_max,
             float(r_max))
 
 
-def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy):
+def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy,
+                              eik_fn=None):
     """P10 / niche N11 -- energy-conserving 2-D transverse-walk remap for a
     decentered / tilted / freeform element.
 
@@ -1793,21 +2058,40 @@ def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy):
     with the energy-conserving 2-D Jacobian factor
     ``1/sqrt(|det d(x_out,y_out)/d(x_in,y_in)|)`` (so
     ``|E_out|^2 dA_out = |E_in|^2 dA_in``), and the exit phase is the ray eikonal
-    ``k0 * OPL`` (which carries the entrance-plane carrier eikonal).  Amplitude
-    and OPL are interpolated SEPARATELY from the scattered exit points onto the
-    field grid (phase-safe: the eikonal is smooth even where the amplitude is
-    warped), then combined.  Returns the exit-vertex-plane field (same reference
-    plane as the default screen path)."""
+    ``k0 * OPL`` (which carries the entrance-plane carrier eikonal) PLUS the
+    input field's residual phase against that congruence, transported along the
+    same rays (see :func:`_residual_input_field`).  Amplitude and OPL are
+    interpolated SEPARATELY from the scattered exit points onto the field grid
+    (phase-safe: the eikonal is smooth even where the amplitude is warped), then
+    combined.  ``eik_fn(x, y) -> W_conj`` is the congruence the fan was launched
+    along (``None`` = collimated); pass the SAME callable the ray map was built
+    with.  Returns the exit-vertex-plane field (same reference plane as the
+    default screen path)."""
     from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
     from scipy.ndimage import map_coordinates
     X0, Y0, XO, YO, OPL, ALIVE, dstep, r_ap = ray_map_2d
     Ny, Nx = E_in.shape
     k0 = 2.0 * np.pi / wavelength
-    # Input amplitude envelope at each ray's entrance position (bilinear).
+    # Input field at each ray's entrance position (bilinear), DEMODULATED by
+    # the traced congruence so the residual input phase rides along with the
+    # amplitude instead of being discarded.  ``|F| == |E_in|``, so the modulus
+    # of this sample is exactly the amplitude the legacy code took.
+    _Wg = None
+    if eik_fn is not None:
+        _ax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+        _ay = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+        _Xg0, _Yg0 = np.meshgrid(_ax, _ay)
+        _Wg = np.asarray(eik_fn(_Xg0, _Yg0), dtype=np.float64)
+        del _Xg0, _Yg0
+    _F = _residual_input_field(E_in, _Wg, wavelength)
     cx = X0.ravel() / dx + Nx / 2.0
     cy = Y0.ravel() / dy + Ny / 2.0
-    amp_in = map_coordinates(np.abs(E_in), [cy, cx], order=1,
-                             mode='constant', cval=0.0).reshape(X0.shape)
+    amp_in = (map_coordinates(_F.real, [cy, cx], order=1,
+                              mode='constant', cval=0.0)
+              + 1j * map_coordinates(_F.imag, [cy, cx], order=1,
+                                     mode='constant', cval=0.0)
+              ).reshape(X0.shape)
+    del _F
     # Forward Jacobian det d(x_out,y_out)/d(x_in,y_in) on the regular launch grid
     # (physical spacing).  Fill any dead-ray (TIR / miss) exit position by
     # nearest-alive FIRST so a dead ray does not poison a live neighbour's
@@ -1829,7 +2113,7 @@ def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy):
     # amplitude (else a ``stop_index`` prescription -- whose field is not
     # pre-apertured -- would leak the beyond-aperture ring).
     in_ap = (X0 * X0 + Y0 * Y0) <= (r_ap * (1.0 + 1e-9)) ** 2
-    m = ALIVE & in_ap & np.isfinite(amp_out) & (amp_in > 0.0)
+    m = ALIVE & in_ap & np.isfinite(amp_out) & (np.abs(amp_in) > 0.0)
     if int(m.sum()) < 4:
         return np.zeros_like(E_in, dtype=np.complex128)
     pts = np.column_stack([XO[m].ravel(), YO[m].ravel()])
@@ -1844,16 +2128,20 @@ def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy):
     # ``sum(weight_k * value_k)`` reduction, so this reproduces the two former
     # single-column interps BIT-FOR-BIT while building the Delaunay once and
     # walking the full-grid query once (measured ~1.6x on this 2-D remap).
-    # ``amp_grid`` / ``opl_grid`` are strided VIEWS into the single (Ny, Nx, 2)
-    # result -- no per-column dense copy -- so the peak footprint is the same one
-    # 2-wide grid the two separate (Ny, Nx) grids used before, not more.  Outside
-    # the hull both columns come back NaN: the amplitude is set to 0 (matching the
-    # former ``fill_value=0.0``) and the OPL is nearest-filled, exactly as before.
+    # ``amp_grid`` / ``opl_grid`` are strided VIEWS into the single (Ny, Nx, 3)
+    # result -- no per-column dense copy -- so the peak footprint is one 3-wide
+    # grid.  The transported quantity is now the COMPLEX residual field, carried
+    # as its real and imaginary parts (both smooth wherever the remap is valid,
+    # unlike a wrapped phase), so it takes two of the three columns.  Outside
+    # the hull every column comes back NaN: the amplitude is set to 0 (matching
+    # the former ``fill_value=0.0``) and the OPL is nearest-filled, exactly as
+    # before.
     _opl_flat = OPL[m].ravel()
+    _a_flat = amp_out[m].ravel()
     _q = LinearNDInterpolator(
-        pts, np.column_stack([amp_out[m].ravel(), _opl_flat]))(Xg, Yg)
-    amp_grid = _q[..., 0]
-    opl_grid = _q[..., 1]
+        pts, np.column_stack([_a_flat.real, _a_flat.imag, _opl_flat]))(Xg, Yg)
+    amp_grid = _q[..., 0] + 1j * _q[..., 1]
+    opl_grid = _q[..., 2]
     nan = np.isnan(opl_grid)
     if bool(nan.any()):
         opl_grid[nan] = NearestNDInterpolator(pts, _opl_flat)(
@@ -1863,6 +2151,80 @@ def _apply_displaced_remap_2d(E_in, ray_map_2d, wavelength, dx, dy):
     E_out = amp_grid * np.exp(1j * k0 * (opl_grid - opl_ref))
     out_dtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
     return np.asarray(E_out, dtype=out_dtype)
+
+
+def _split_step_fan_opl(surfaces, thicknesses, wavelength, h_fan):
+    """OPL at the EXIT VERTEX PLANE of the split-step model itself, for a
+    collimated meridional fan launched at heights ``h_fan``.
+
+    This is a thin-screen RAY model of what :func:`apply_real_lens` actually
+    does, not an idealisation of it:
+
+    * at each surface the ray meets the screen on that surface's VERTEX PLANE
+      (no axial motion -- the screen is thin), its OPL changes by
+      ``-(n2 - n1) * sag_i(x)`` (the screen is ``exp(-i k0 OPD)`` under
+      ``phase = exp(+i k0 OPL)``) and its transverse optical momentum is
+      kicked by ``-grad OPD_i = -(n2 - n1) * grad sag_i(x)``, which is exactly
+      the deflection a phase screen imparts;
+    * across each gap the ASM carries a component of transverse momentum
+      ``p`` a distance ``t`` at ``exp(i k0 pz t)`` with
+      ``pz = sqrt(n**2 - |p|**2)``, and stationary phase puts the wavepacket at
+      ``x + (p/pz) t`` with a transported phase of ``k0 n**2 t / pz`` -- i.e.
+      the geometric ``n t / cos(theta)``.  So the gap leg is a straight ray
+      through the glass, including the slab obliquity the in-glass ASM already
+      supplies exactly.
+
+    Returns ``(x_exit, opl)``: the model ray's transverse position on the exit
+    vertex plane (``z = sum(thicknesses)``, where the last screen sits) and its
+    OPL there.
+
+    WHY THIS AND NOT ``sum (n2-n1) sag_i(h)``.  That expression evaluates every
+    surface at the SAME entrance height and adds no propagation at all, so the
+    residual taken against a real ray trace is dominated by the in-glass
+    obliquity ``n t theta**2 / 2`` -- which the split-step model ALREADY has,
+    from its ASM legs.  Fitting that and imprinting it double-counts it:
+    measured 337 nm of "correction" on a plano-convex whose true model residual
+    is 0.85 nm.
+    """
+    n_surf = len(surfaces)
+    x = np.asarray(h_fan, dtype=np.float64).copy()
+    p = np.zeros_like(x)                     # transverse optical momentum
+    opl = np.zeros_like(x)
+    for i, s_i in enumerate(surfaces):
+        R_i = s_i['radius']
+        kc_i = s_i.get('conic', 0.0)
+        asph_i = s_i.get('aspheric_coeffs')
+        R_y_i = s_i.get('radius_y')
+        n1_i = float(get_glass_index(s_i['glass_before'], wavelength))
+        n2_i = float(get_glass_index(s_i['glass_after'], wavelength))
+        dn = n2_i - n1_i
+
+        def _sag_at(xq, _R=R_i, _k=kc_i, _a=asph_i, _Ry=R_y_i, _s=s_i):
+            xq = np.asarray(xq, dtype=np.float64)
+            if _Ry is not None:
+                v = surface_sag_biconic(
+                    xq, np.zeros_like(xq), R_x=_R, R_y=_Ry, conic_x=_k,
+                    conic_y=_s.get('conic_y'), aspheric_coeffs=_a,
+                    aspheric_coeffs_y=_s.get('aspheric_coeffs_y'))
+            else:
+                v = _surface_sag_general(xq * xq, _R, _k, _a)
+            return np.where(np.isnan(v), 0.0, v)
+
+        sag_x = _sag_at(x)
+        # d(sag)/dx by central difference on the same evaluator the screen
+        # uses, so the kick is the gradient of the screen that is applied and
+        # not of an analytic idealisation of it.
+        e = np.maximum(1e-9, 1e-6 * np.abs(x))
+        grad = (_sag_at(x + e) - _sag_at(x - e)) / (2.0 * e)
+        opl = opl - dn * sag_x
+        p = p - dn * grad
+        if i < n_surf - 1:
+            t_i = float(thicknesses[i])
+            pz_sq = n2_i * n2_i - p * p
+            pz = np.sqrt(np.maximum(pz_sq, 1e-12))
+            opl = opl + (n2_i * n2_i) * t_i / pz
+            x = x + (p / pz) * t_i
+    return x, opl
 
 
 def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
@@ -1884,6 +2246,21 @@ def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
             resample_field,
             scalable_angular_spectrum_propagate,
         )
+        # SAS takes a SINGLE pitch and assumes a square grid, while the rest of
+        # this function threads ``dy`` correctly.  An anamorphic gap would be
+        # propagated as if it were square -- wrong physics on the y axis, with
+        # no diagnostic -- so refuse, exactly as ``propagate_through_system``'s
+        # own sas branch does (``_require_square_pitch``).
+        if abs(float(dy) - float(dx)) > abs(float(dx)) * 1e-9:
+            raise ValueError(
+                f"apply_real_lens: wave_propagator='sas' assumes a square "
+                f"grid pitch, but this call is anamorphic (dx={dx:.6g} m, "
+                f"dy={dy:.6g} m) and "
+                f"scalable_angular_spectrum_propagate takes only one pitch, "
+                f"so the in-glass gap would be propagated as if dy == dx.  "
+                f"Use wave_propagator='asm' (or 'rayleigh_sommerfeld'), which "
+                f"thread the y-pitch correctly, or resample to an isotropic "
+                f"grid first.")
         E, dx_new, _ = scalable_angular_spectrum_propagate(
             E, thickness, lam_medium, dx)
         if abs(dx_new - dx) > dx * 1e-6:
@@ -1909,6 +2286,73 @@ def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
     if absorption and n_medium_kappa != 0.0:
         E = E * xp.exp(-k0 * n_medium_kappa * thickness)
     return E
+
+
+def _screen_exp(opd: Any, k0: float, xp: Any) -> Any:
+    """``exp(-1j * k0 * opd)`` built without the complex temporaries.
+
+    ``xp.exp(-1j * k0 * opd)`` materialises a full COMPLEX grid for
+    ``(-1j*k0) * opd`` and a second one for its exponential -- four
+    float-grid-equivalents of transient for a unit-modulus screen, and the
+    single hottest primitive in the element (112 ns/element at N = 2048).
+    numpy's complex ``exp`` of a pure-imaginary argument IS ``cos + i sin``
+    (its real factor is ``exp(0) == 1.0`` exactly), so writing ``cos`` and
+    ``sin`` straight into the two strided views of ONE preallocated complex
+    array is the same arithmetic in the same order: measured BIT-IDENTICAL
+    (max|d| = 0.0) at 1.23x the speed and -17 % of the peak at N = 2048.
+
+    The imaginary part of the argument is ``(-k0) * opd`` in both forms, so the
+    two sines see bitwise-identical inputs (verified: the arguments differ by
+    exactly 0 at both geometry dtypes).
+
+    RESTRICTED TO float64 GEOMETRY, and that is not conservatism.  For a
+    float32 ``opd`` the two forms are NOT the same arithmetic: numpy's
+    ``complex64`` exponential carries more than float32 through its own
+    sine/cosine, while ``np.cos(float32_arg, out=<float32 view>)`` does not, so
+    the results diverge by ~8.4e-08 of unit modulus -- about one float32 ULP,
+    but enough to break the byte-identity ``PreparedAnalyticLens`` is pinned
+    against under ``set_lens_sag_dtype(np.float32)`` (measured 1.2e-07 of peak
+    field).  A float32 screen is half the size anyway, so the saving this
+    exists for is not on that path.  CuPy likewise keeps ``xp.exp`` (its
+    elementwise kernels are already fused, so there is nothing to save)."""
+    if xp is not np or np.asarray(opd).dtype != np.float64:
+        return xp.exp(-1j * k0 * opd)
+    arg = np.multiply(opd, -k0)
+    ph = np.empty(arg.shape, dtype=np.complex128)
+    np.cos(arg, out=ph.real)
+    np.sin(arg, out=ph.imag)
+    return ph
+
+
+def _absorb_local_path(E: Any, sag: Any, kap_face: float, k0: float,
+                       xp: Any) -> Any:
+    """Multiply ``E`` by the per-surface half of the LOCAL-glass-path bulk
+    absorption, ``exp(-k0 * kap_face * sag)``.
+
+    :func:`_propagate_through_glass` attenuates a gap by its AXIAL thickness,
+    ``exp(-k0 kappa t)``, but the glass a pixel actually crosses between
+    surfaces ``i`` and ``i+1`` is ``t_i + sag_{i+1} - sag_i``.  Factorising
+    that exponential puts ``exp(+k0 kappa_i sag_i)`` on surface ``i`` and
+    ``exp(-k0 kappa_i sag_{i+1})`` on surface ``i+1``, so each surface can
+    apply ONE local factor with the sag it has already built -- no second sag
+    grid, no halo, and the product over the element telescopes back to the
+    true local path.  ``kap_face`` is that surface's combined coefficient
+    ``kappa_before - kappa_after`` (either term dropped where there is no gap
+    on that side); it is exactly zero on the default path, on every
+    non-absorbing glass, and for a flat face, so the factor is only built
+    where it changes something.
+
+    A 6 mm-centre / 5.2 mm-edge N-BK7 biconvex recovers ~13 % of its
+    absorption apodisation from this term; the axial factor itself was already
+    exact to 9 digits.  NaN sag (outside the conic domain) contributes a
+    neutral 1.0, matching how the OPD screen zeroes the same pixels."""
+    a = xp.exp(-k0 * kap_face * sag)
+    if bool(xp.any(xp.isnan(a))):
+        a = xp.where(xp.isnan(a), xp.ones((), dtype=a.dtype), a)
+    _rdt = E.real.dtype
+    if a.dtype != _rdt:
+        a = a.astype(_rdt)
+    return E * a
 
 
 def _check_apply_real_lens_kwarg_combination(
@@ -1974,7 +2418,57 @@ def _check_apply_real_lens_kwarg_combination(
             f"apply_real_lens: seidel_poly_order={seidel_poly_order} "
             f"is too large; radial-polynomial fit conditioning "
             f"degrades above 12.")
+    if slant_correction and seidel_correction:
+        raise ValueError(
+            "apply_real_lens: slant_correction=True and "
+            "seidel_correction=True are mutually exclusive.  The Seidel "
+            "block's model reference is built from the screen the split-step "
+            "actually applies, and the two flags replace the SAME per-surface "
+            "coefficient, so stacking them double-counts the facet obliquity "
+            "(measured 173.5 -> 1488.6 nm rms exit OPD on an 8 mm cemented "
+            "doublet with both on).  Pick one, or use "
+            "apply_real_lens_traced for a per-pixel ray-traced OPL.")
     _check_no_silent_fold_drop(prescription, fn_name='apply_real_lens')
+
+
+def _normalise_stop_index(stop_index: Any, n_surfaces: int,
+                          fn_name: str = 'apply_real_lens') -> Optional[int]:
+    """Resolve ``prescription['stop_index']`` to a valid surface index.
+
+    Returns ``None`` unchanged, normalises a negative index the way Python
+    indexing does (``-1`` -> the last surface) and raises a precise
+    ``ValueError`` for anything still outside ``[0, n_surfaces)``.
+
+    The range check is not cosmetic.  ``apply_real_lens`` skips the ENTRANCE
+    aperture whenever ``stop_index is not None`` and applies the stop only at
+    the surface whose loop index equals it, so an out-of-range value matches no
+    surface and removes every aperture mask from the call -- measured 1.000 of
+    the input power transmitted where the 3 mm stop should pass 0.269, with no
+    warning.  ``stop_index=-1`` -- the natural Python spelling for "the last
+    surface" -- was in that class before normalisation.
+
+    Shared by :func:`apply_real_lens` and :func:`prepare_real_lens` so the two
+    entry points read the key the same way (the latter then refuses a
+    mid-train stop outright, which is a separate, documented limitation)."""
+    if stop_index is None:
+        return None
+    if isinstance(stop_index, bool) or not isinstance(
+            stop_index, (int, np.integer)):
+        raise ValueError(
+            f"{fn_name}: prescription['stop_index'] must be an integer "
+            f"surface index or None; got {stop_index!r}.")
+    idx = int(stop_index)
+    if idx < 0:
+        idx += int(n_surfaces)
+    if not (0 <= idx < int(n_surfaces)):
+        raise ValueError(
+            f"{fn_name}: prescription['stop_index']={stop_index!r} is out of "
+            f"range for a prescription with {n_surfaces} surface(s); it must "
+            f"select a surface in [0, {int(n_surfaces) - 1}] (negative "
+            f"indices count from the end).  An out-of-range stop matches no "
+            f"surface AND suppresses the entrance aperture, i.e. it silently "
+            f"removes ALL aperture clipping from the call.")
+    return idx
 
 
 def _check_no_silent_fold_drop(prescription: dict,
@@ -2133,6 +2627,12 @@ def _check_no_silent_fold_drop(prescription: dict,
 # be carried by a screen of the form ``f(x, y) sag(x, y)``; it is 0.0125 w on
 # that element and it is what the guard's residual budget accounts for.
 
+#: The legal ``screen_obliquity`` values, for MESSAGES only.
+#: ``_check_screen_obliquity_support`` validates by hand and deliberately does
+#: NOT test membership here: ``1 in ('auto', True, False)`` is True (``1 ==
+#: True``), so a ``screen_obliquity=1`` would masquerade as ``True``.  The tuple
+#: was dead; it is kept as the single place the accepted set is spelled and is
+#: now read by the error message, so the two cannot drift apart.
 _VALID_SCREEN_OBLIQUITY = ('auto', True, False)
 _VALID_SCREEN_OBLIQUITY_POLICY = ('warn', 'error', 'silent')
 # Documented tolerance for the guard: lambda/20 of piston-and-tilt-free
@@ -2194,6 +2694,33 @@ _SCREEN_OBLIQUITY_RESIDUAL_FRAC = 0.10
 _SCREEN_DRIFT_MIN_PZ_SQ = 1e-12
 
 
+def _carrier_is_geometric(carrier) -> bool:
+    """True when this carrier states DIRECTION COSINES (so the consumer has to
+    multiply by ``n1`` to get the transverse OPTICAL momentum), False when it
+    already states the optical momentum.
+
+    * :class:`~._lens_traced.TiltedCarrier` -- the traced module launches UNIT
+      rays along its ``(L, M)``: direction cosines.
+    * a signed scalar conjugate -- ``W = sign(s)(sqrt(x^2+y^2+s^2) - |s|)`` is
+      a geometric distance, so ``grad W = sin alpha``: a direction cosine.
+    * ``'auto'`` -- fits ``angle(E[:, 1:] conj(E[:, :-1])) / (k0 dx)``, and the
+      field's phase is ``k0 * S`` with ``S`` the OPTICAL path, so the reading
+      IS ``p_x``.
+    * an explicit wavefront ndarray -- documented as "reference phase =
+      k0 * W", so ``grad W`` is likewise optical.
+
+    Scaling the last two by ``n1`` double-counts it -- x1.5168 in N-BK7, which
+    made the "corrected" screen worse than the uncorrected one at 100 mrad
+    (0.0971 vs 0.0784 waves).  Harmless in air (n1 = 1), which is why every
+    shipped fixture missed it.  ONE function so the whole-grid field and the
+    row-banded evaluators cannot drift apart (they did: the banded arm kept the
+    n1 and broke the byte-identity the banded path is pinned on)."""
+    from ._lens_traced import TiltedCarrier
+    return (isinstance(carrier, TiltedCarrier)
+            or (isinstance(carrier, (int, float, np.floating, np.integer))
+                and not isinstance(carrier, bool)))
+
+
 def _screen_obliquity_angle_field(carrier, E_in, wavelength, dx, dy, Nx, Ny,
                                   n_medium=1.0):
     """Transverse OPTICAL MOMENTUM ``(qx, qy) = n1 * (L, M)`` for the input
@@ -2226,7 +2753,10 @@ def _screen_obliquity_angle_field(carrier, E_in, wavelength, dx, dy, Nx, Ny,
     ``n_medium`` is the index of ``surfaces[0]['glass_before']``: the
     transverse optical momentum is conserved across the stack (the facet
     kicks are what ``_obl_p0*`` accumulates), so this is measured once at
-    the medium the carrier is actually defined in and carried forward.
+    the medium the carrier is actually defined in and carried forward.  It
+    multiplies ONLY the two geometric congruences -- see the branch comment in
+    the body; ``'auto'`` and an explicit wavefront ndarray already deliver
+    optical momentum and are passed through unscaled.
 
     Uses the traced path's own carrier vocabulary
     (:func:`~._lens_traced._compute_carrier`): a :class:`TiltedCarrier`, a
@@ -2236,19 +2766,22 @@ def _screen_obliquity_angle_field(carrier, E_in, wavelength, dx, dy, Nx, Ny,
     costs no full-grid momentum arrays in the common case."""
     from ._lens_traced import TiltedCarrier, _compute_carrier
     n1 = float(n_medium)
+    # Only the two GEOMETRIC congruences need the n1 -- see
+    # :func:`_carrier_is_geometric`, which the row-banded evaluators share.
+    _q_scale = n1 if _carrier_is_geometric(carrier) else 1.0
     if (isinstance(carrier, TiltedCarrier)
             and not np.isfinite(float(carrier.R))):
         # A collimated tilt has constant direction cosines everywhere, so take
         # them analytically -- ``_compute_carrier`` would build three full-grid
         # float64 arrays (~1.6 GB at N = 8192) to return two numbers.
-        return n1 * float(carrier.L), n1 * float(carrier.M)
+        return _q_scale * float(carrier.L), _q_scale * float(carrier.M)
     xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Xg, Yg = np.meshgrid(xax, yax)
     _W, grad_fn, _w = _compute_carrier(carrier, E_in, wavelength, dx, Xg, Yg)
     L, M = grad_fn(Xg, Yg)
-    L = np.asarray(L, dtype=np.float64) * n1
-    M = np.asarray(M, dtype=np.float64) * n1
+    L = np.asarray(L, dtype=np.float64) * _q_scale
+    M = np.asarray(M, dtype=np.float64) * _q_scale
     if L.ndim and float(np.ptp(L)) == 0.0 and float(np.ptp(M)) == 0.0:
         return float(L.flat[0]), float(M.flat[0])
     return L, M
@@ -2411,7 +2944,11 @@ def _screen_obliquity_row_evaluator(carrier, dx, dy, Nx, Ny, n_medium=1.0):
         return None
     if not np.isfinite(float(carrier.R)):
         return None
-    n1 = float(n_medium)
+    # A TiltedCarrier always states direction cosines, so the n1 always
+    # applies here -- but take it from the shared predicate anyway, so this
+    # arm cannot drift from the whole-grid field the way it did when the
+    # 'auto' / ndarray scaling was fixed in one place only.
+    n1 = float(n_medium) if _carrier_is_geometric(carrier) else 1.0
     xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
 
     def rows(r0, r1):
@@ -2476,7 +3013,10 @@ def _screen_obliquity_rows_any(carrier, E_in, wavelength, dx, dy, Nx, Ny,
     if (isinstance(carrier, TiltedCarrier)
             and not np.isfinite(float(carrier.R))):
         return None                     # collimated: two floats, already free
-    n1 = float(n_medium)
+    # Same scaling rule as the whole-grid field: ONLY the geometric
+    # congruences.  This band must be byte-identical to the corresponding row
+    # slice of that field, so the two cannot use different rules.
+    n1 = float(n_medium) if _carrier_is_geometric(carrier) else 1.0
     xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     # Zero-copy stand-ins.  With ``need_W=False`` these are read for their
@@ -2917,7 +3457,20 @@ def _tangent_facet_transport(px, py, t, n_gap, dx, dy, xp):
 # the demodulation is a similarity transform (multiply, resample, divide), so it
 # cannot change the physics, only the interpolation error.
 _TF_REMAP_MIN_DET = 1.0e-4
-_TF_REMAP_MAX_ITERS = 64
+#: Hard ceiling on the pull-back fixed-point sweeps.  It exists to stop a
+#: DIVERGING iteration, not to truncate a converging one, so the loop also
+#: refuses the moment the residual stops shrinking (see
+#: ``_TF_REMAP_PROGRESS_FRAC``) -- which catches real divergence in a
+#: handful of sweeps instead of all 64, and lets a slow but genuine
+#: contraction finish.  Normal operation is 8-12 sweeps; a heavily padded
+#: grid at fine sampling has been measured needing ~90.
+_TF_REMAP_MAX_ITERS = 256
+#: The residual must shrink by at least this factor per sweep to count as
+#: progress.  A contraction maps the residual by its own rate, so anything
+#: at or above 1 is a stalled or period-2 iteration and no number of extra
+#: sweeps will help; 0.999 leaves room for a rate that is merely very close
+#: to 1 while still catching the oscillating case in two sweeps.
+_TF_REMAP_PROGRESS_FRAC = 0.999
 #: Floor on ``1 - grad sag . q``, the rate at which the ray closes on the facet.
 #: It vanishes only when the ray runs ALONG the facet -- the grazing limit the
 #: ``ok`` mask declines anyway -- so this exists to keep the arithmetic finite
@@ -2928,6 +3481,19 @@ _TF_REMAP_MIN_CLOSING = 1.0e-12
 #: below 1e-6 rad for any grid coarser than 100 lambda, i.e. far below the
 #: interpolation error it sits inside.
 _TF_REMAP_PULLBACK_TOL_PX = 1.0e-9
+#: Amplitude fraction of the peak below which a pixel is treated as DARK and is
+#: excluded from the fold / pull-back guards.  ``det(I + dW/dx)`` and the walk
+#: itself are evaluated over every pixel of the grid, including the padding
+#: outside the clear aperture where the entrance aperture has already zeroed the
+#: field and where ``sag`` and ``grad sag`` grow without bound -- so a converging
+#: beam's perfectly ordinary 8x pad used to REFUSE on dark corner pixels while
+#: the illuminated pupil sat at ``det = 0.9986``, three orders inside the bar.
+#: Scoring the guards over the support fixes the misdiagnosis (the message said
+#: "change model"; the actual remedy was "shrink the grid").  1e-6 of peak
+#: AMPLITUDE is 1e-12 of peak intensity: a fold there cannot move the answer,
+#: and for a hard-apertured pupil the threshold is exactly the aperture because
+#: the field outside it is identically zero.
+_TF_REMAP_SUPPORT_FRAC = 1.0e-6
 _VALID_REMAP_ORDERS = (1, 3, 5)
 
 
@@ -3104,16 +3670,29 @@ def _tangent_facet_remap_apply(E, wx, wy, pox, poy, dx, dy, k0, order, xp,
     a22 = 1.0 + _wy_y
     del _wx_x, _wx_y, _wy_x, _wy_y
     det = a11 * a22 - a12 * a21
-    d_min = float(np.min(det))
+    # ---- the illuminated support: what the guards are allowed to score ------
+    # Outside it the field is zero (or 1e-12 of the peak intensity) and the sag
+    # that drives the walk is unbounded, so a fold there is unobservable.  See
+    # ``_TF_REMAP_SUPPORT_FRAC``.
+    _a = np.abs(E)
+    _amax = float(_a.max()) if _a.size else 0.0
+    supp = (_a > _TF_REMAP_SUPPORT_FRAC * _amax) if _amax > 0.0 else None
+    del _a
+    if supp is None or not bool(supp.any()):
+        supp = np.ones(E.shape, dtype=bool)
+    d_min_grid = float(np.min(det))
+    d_min = float(np.min(det[supp]))
     if not np.isfinite(d_min) or d_min <= _TF_REMAP_MIN_DET:
         raise ValueError(
             f"apply_real_lens: surface_model='tangent_facet_remap' REFUSES at "
             f"surface {surface_index}: the transverse-walk map folds.  "
-            f"min det(I + dW/dx) = {d_min:.6g} <= {_TF_REMAP_MIN_DET:g}, so the "
-            f"map is not single-valued (or is compressed past a 100x amplitude "
-            f"gain) and the field at some exit pixel is a sum over two or more "
-            f"ray branches that a resampling cannot represent.  This model is "
-            f"for caustic-free element interiors; use "
+            f"min det(I + dW/dx) = {d_min:.6g} <= {_TF_REMAP_MIN_DET:g} over "
+            f"the ILLUMINATED support ({int(supp.sum())} of {E.size} pixels; "
+            f"whole-grid min including dark padding is {d_min_grid:.6g}), so "
+            f"the map is not single-valued (or is compressed past a 100x "
+            f"amplitude gain) and the field at some exit pixel is a sum over "
+            f"two or more ray branches that a resampling cannot represent.  "
+            f"This model is for caustic-free element interiors; use "
             f"surface_model='tangent_facet' (which references the walk away "
             f"instead of representing it), apply_real_lens_traced, or "
             f"apply_real_lens_maslov (caustic-safe) for this prescription.")
@@ -3133,6 +3712,12 @@ def _tangent_facet_remap_apply(E, wx, wy, pox, poy, dx, dy, k0, order, xp,
     # W is a contraction exactly while the map is unfolded, so this iteration
     # converging and the guard above passing are the same statement; a
     # non-convergence is therefore also a refusal rather than a truncation.
+    # NB the walk is NOT clamped outside the support.  Zeroing it there makes
+    # ``W`` discontinuous at the support edge, and the fixed point of
+    # ``x = u - W(x)`` then oscillates with period 2 for every pixel within one
+    # walk of that edge (measured: a 2x-padded grid that converged before
+    # stalled at a 0.303 px step).  The walk stays continuous; only the
+    # CONVERGENCE TEST is restricted to the support, below.
     sx = wx / dx
     sy = wy / dy
     if order > 1:
@@ -3144,30 +3729,43 @@ def _tangent_facet_remap_apply(E, wx, wy, pox, poy, dx, dy, k0, order, xp,
     iy = iv.copy()
     _pf = (order == 1)
     ok_conv = False
-    for _ in range(_TF_REMAP_MAX_ITERS):
+    step = float('inf')
+    _prev_step = float('inf')
+    _n_it = 0
+    for _n_it in range(1, _TF_REMAP_MAX_ITERS + 1):
         crd = np.stack([iy.ravel(), ix.ravel()])
         nix = iu - map_coordinates(sx, crd, order=order, mode='nearest',
                                    prefilter=_pf).reshape(ny, nx)
         niy = iv - map_coordinates(sy, crd, order=order, mode='nearest',
                                    prefilter=_pf).reshape(ny, nx)
         del crd
-        step = max(float(np.max(np.abs(nix - ix))),
-                   float(np.max(np.abs(niy - iy))))
+        # Convergence is scored over the SUPPORT, for the same reason the fold
+        # guard is: a dark padding pixel whose walk never settles cannot move
+        # the answer, and used to abort the whole call.
+        step = max(float(np.max(np.abs((nix - ix)[supp]))),
+                   float(np.max(np.abs((niy - iy)[supp]))))
         ix, iy = nix, niy
         if not np.isfinite(step):
             break
         if step < _TF_REMAP_PULLBACK_TOL_PX:
             ok_conv = True
             break
+        # Stop as soon as the iteration stops contracting: a stalled or
+        # period-2 residual will not improve with more sweeps, and
+        # refusing here reports it in 2-3 sweeps rather than 256.
+        if _n_it > 1 and not (step < _TF_REMAP_PROGRESS_FRAC * _prev_step):
+            break
+        _prev_step = step
     del sx, sy, iu, iv
     if not ok_conv:
         raise ValueError(
             f"apply_real_lens: surface_model='tangent_facet_remap' REFUSES at "
             f"surface {surface_index}: the pull-back x + W(x) = u did not "
-            f"converge in {_TF_REMAP_MAX_ITERS} iterations (last step "
-            f"{step:.3g} px against a {_TF_REMAP_PULLBACK_TOL_PX:g} px bar).  "
-            f"The walk map is not invertible on this grid.  Same remedies as "
-            f"the fold refusal above.")
+            f"converge in {_n_it} of {_TF_REMAP_MAX_ITERS} iterations (last "
+            f"step {step:.3g} px over the illuminated support, against a "
+            f"{_TF_REMAP_PULLBACK_TOL_PX:g} px bar).  The walk map is not "
+            f"invertible on this grid.  Same remedies as the fold refusal "
+            f"above.")
     # ---- resample -----------------------------------------------------------
     # DEMODULATE by the analytic quadratic eikonal first: a lens-interior field
     # runs at a few pixels per fringe, and a spline through that is where the
@@ -3175,8 +3773,19 @@ def _tangent_facet_remap_apply(E, wx, wy, pox, poy, dx, dy, k0, order, xp,
     # pulled-back point is exact and costs no second interpolation.
     x_src = x_ax[0] + ix * dx
     y_src = y_ax[0] + iy * dy
-    jac = 1.0 / np.sqrt(det)
-    del det
+    # Inside the support ``det > _TF_REMAP_MIN_DET`` by the guard above, so the
+    # clamp is a no-op there and ``jac`` is bit-identical.  Outside it a folded
+    # (negative) det would make ``sqrt`` NaN and poison the resample, so the
+    # model declines to represent the field there and hands back a zero -- the
+    # region carries below 1e-12 of the peak intensity by construction.
+    _bad_det = ~(det > _TF_REMAP_MIN_DET)
+    if bool(_bad_det.any()):
+        jac = np.where(_bad_det,
+                       0.0,
+                       1.0 / np.sqrt(np.where(_bad_det, 1.0, det)))
+    else:
+        jac = 1.0 / np.sqrt(det)
+    del det, _bad_det
     # SIGN.  The library's field is ``A exp(+i k0 S)`` with ``p = grad S`` --
     # measured, not assumed: a plane wave ``exp(+i k0 p x)`` propagated through
     # the library's own ASM moves its centroid by ``+p z`` (+200.3 um against a
@@ -3225,8 +3834,8 @@ def _check_screen_obliquity_support(*, carrier, screen_obliquity,
     if not (screen_obliquity is True or screen_obliquity is False
             or screen_obliquity == 'auto'):
         raise ValueError(
-            f"apply_real_lens: screen_obliquity must be 'auto', True or "
-            f"False, got {screen_obliquity!r}.")
+            f"apply_real_lens: screen_obliquity must be one of "
+            f"{list(_VALID_SCREEN_OBLIQUITY)}, got {screen_obliquity!r}.")
     if carrier is None:
         if screen_obliquity is True:
             raise ValueError(
@@ -3834,14 +4443,29 @@ def apply_real_lens(
     compound lenses (doublets, triplets, etc.).
 
     The default behaviour uses the **paraxial** thin-element OPD
-    ``(n2-n1)*sag`` for the per-surface phase screen.  Empirically this
-    gives equally good or better OPD agreement with a geometric ray
-    trace as the slant-corrected formula, because the angular-spectrum
-    propagation between surfaces already encodes most of the obliquity
-    physics.  Pass ``slant_correction=True`` to use the generalised
-    ``(n2*cos(theta_t) - n1*cos(theta_i))*sag`` formula -- helpful in
-    a few specific geometries (asymmetric meniscus, very steep
-    asphere) but not a universal improvement.
+    ``(n2-n1)*sag`` for the per-surface phase screen: the
+    angular-spectrum propagation between surfaces already carries the
+    GAPS' obliquity exactly, so the only angle-blind piece left is the
+    screen's own coefficient.
+
+    ``slant_correction=True`` replaces that coefficient with the
+    eikonal-exact axial-translation identity for a COLLIMATED input,
+    ``(n2*cos(theta_i - theta_t) - n1)*sag`` -- both momenta referenced to
+    the Z-AXIS, which is what a facet displaced along z requires.  On a
+    single refracting face it is 290x-4000x closer to an exact
+    vector-Snell trace than the paraxial screen (rms OPD 0.0007 vs
+    2.99 nm at R = 100 mm, 0.42 vs 120 nm at R = 20 mm).  End to end it
+    helps most where ONE powered face dominates and the input really is
+    collimated -- measured exit-OPD rms against an independent ray
+    oracle: plano-convex curved-first 0.848 -> 0.037 nm (23x),
+    flat-first 1.18 -> 0.017 nm (69x), a parabolic asphere 7.76 -> 0.053
+    nm (147x).  On a thick element whose LATER surfaces see a strongly
+    converging bundle the collimated assumption is what limits it
+    (biconvex R = +-60 1.83 -> 1.64 nm, a fast meniscus R = 20/25
+    unchanged at ~0.9 um); for those, take the ray angle from ``carrier=``
+    (``screen_obliquity``) or ``surface_model='displaced'`` /
+    ``'tangent_facet'``, which implement the same identity at the TRUE
+    local ray angle, or use :func:`apply_real_lens_traced`.
 
     Oblique validity boundary
     -------------------------
@@ -3877,15 +4501,29 @@ def apply_real_lens(
 
     Optional opt-in features add further physical realism:
 
-    * ``fresnel=True`` -- multiply by s/p-averaged Fresnel amplitude
-      transmission at each surface using local angle of incidence derived
-      from the surface normal.  Captures wavelength/index-dependent
-      throughput (~4% loss per uncoated air-glass interface) and works
-      naturally with complex refractive indices.
+    * ``fresnel=True`` -- multiply by the s/p-averaged POWER
+      transmittance ``T = (n2 cos theta_t)/(n1 cos theta_i) *
+      0.5(|t_s|^2 + |t_p|^2)`` at each surface, using the local angle of
+      incidence derived from the surface normal.  The impedance factor
+      ``(n2 cos theta_t)/(n1 cos theta_i)`` is required because this
+      library's ``sum |E|^2 dx dy`` IS the power (the ASM legs are
+      Parseval-unitary and the in-glass propagation adds no impedance
+      term), so a bare ``|t|^2`` would under-read a single air->glass
+      face by 34 %.  With it, each uncoated air-glass interface costs the
+      documented ~4.2 % at normal incidence, a bare cemented N-BK7/N-SF11
+      interface 0.64 %, and an air->glass->air element the product
+      (8.2 % for two faces) as before.  Works with complex refractive
+      indices in the weakly-absorbing sense: the Fresnel coefficients use
+      the complex indices but the refraction ANGLE comes from the real
+      parts (``sin^2 theta_t = (n1r/n2r)^2 sin^2 theta_i``), and
+      ``theta_i`` is the AOI of an AXIAL ray at the local facet normal --
+      so a strongly converging bundle's second surface is given the wrong
+      incidence, the same normal-incidence ceiling the OPD screen has.
     * ``slant_correction=True`` -- replace the paraxial OPD
-      ``(n2-n1)*sag`` with the generalized thin-element OPD
-      ``(n2*cos(theta_t) - n1*cos(theta_i))*sag``, which is accurate at
-      larger angles of incidence (faster lenses, off-axis input).
+      ``(n2-n1)*sag`` with the eikonal-exact axial-translation identity
+      ``(n2*cos(theta_i - theta_t) - n1)*sag`` (equation (3) of the
+      SCREEN OBLIQUITY derivation in this module), exact for a locally
+      planar facet under COLLIMATED illumination.
     * ``absorption=True`` -- apply bulk attenuation
       ``exp(-2*pi*kappa*thickness/wavelength)`` between surfaces using the
       imaginary part of the in-medium index from
@@ -3902,7 +4540,11 @@ def apply_real_lens(
       see ``surface_frame`` for the rigid-body alternative).
     * ``"form_error"`` -- 2D ndarray (same shape as the field) of additive
       sag perturbation [m].  Use to inject measured figure error or
-      synthetic Zernike form error.
+      synthetic Zernike form error.  It is a **FIELD-frame** map: unlike
+      ``decenter`` / ``tilt`` it is added after the surface-frame coordinates
+      are consumed, so it is neither shifted nor rotated with the surface and
+      lands on the field grid pixel for pixel.  The shape must match the field
+      exactly (a mismatch raises).
 
     Field-frame vs surface-frame decenter / tilt (v5.2+)
     ----------------------------------------------------
@@ -3995,14 +4637,41 @@ def apply_real_lens(
     bandlimit : bool
         Apply band-limiting in ASM propagation steps (default True).
     fresnel : bool
-        Apply Fresnel amplitude transmission at each surface.
+        Apply the s/p-averaged POWER transmittance
+        ``T = (n2 cos theta_t)/(n1 cos theta_i) * 0.5(|t_s|^2 + |t_p|^2)`` at
+        each surface (see the "Optional opt-in features" section above for the
+        convention and the measured per-interface numbers).
+
+        KNOWN APPROXIMATION.  ``theta_i`` is the angle between the local
+        surface normal and the Z AXIS -- the AOI of an axial ray -- not the AOI
+        of whatever bundle the field actually carries, so the second surface of
+        a strongly converging element is given the wrong incidence.  No path in
+        this function has BOTH a true local AOI and Fresnel: the angle-true
+        models (``surface_model='displaced'`` / ``'tangent_facet'``) refuse
+        ``fresnel``, and ``slant_correction`` -- which shares this same axial
+        ``cos_ti`` -- refuses ``'displaced'``.  Route polarised or
+        high-NA throughput work through the Jones pipeline or
+        :func:`apply_real_lens_traced` instead.
     slant_correction : bool, default False
-        Use the generalised thin-element OPD with local angle of
-        incidence: ``(n2*cos(theta_t) - n1*cos(theta_i))*sag``.  Off
-        by default because the simple paraxial formula
-        ``(n2-n1)*sag`` typically gives equal or better agreement
-        with geometric ray-traced OPD (see
-        ``validation/real_lens_opd``).
+        Use the eikonal-exact thin-facet OPD
+        ``(n2*cos(theta_i - theta_t) - n1)*sag`` -- the axial-translation
+        identity (3), with both optical momenta referenced to the Z-AXIS,
+        which is what a facet sitting a height ``sag`` above the vertex
+        plane requires.  ``theta_i`` is the local facet tilt and
+        ``theta_t`` its Snell refraction, both taken from the SURFACE
+        NORMAL of an AXIAL ray, so the expression is exact for a
+        collimated input and degrades as the bundle acquires its own
+        angle.  Off by default because it is an approximation of a
+        different kind from the paraxial screen, not a strict superset:
+        use ``carrier=`` (``screen_obliquity``),
+        ``surface_model='displaced'`` / ``'tangent_facet'`` or
+        :func:`apply_real_lens_traced` when the input is not collimated.
+        Measured gains are in the module docstring above and in
+        ``validation/real_lens_opd``.
+
+        Mutually exclusive with ``seidel_correction=True`` (the Seidel
+        reference is built from the PARAXIAL screen, so stacking the two
+        double-counts the obliquity); that combination raises.
     absorption : bool
         Apply bulk attenuation through each glass region using the
         extinction coefficient from :func:`get_glass_index_complex`.
@@ -4076,9 +4745,22 @@ def apply_real_lens(
         whole-grid path; a positive int forces that band size.  The
         banded path is BYTE-IDENTICAL to the whole-grid path (every
         banded op is pointwise, same numexpr complex128-internal
-        phase screen) and wall-clock neutral, while the full-grid
-        coordinate / sag / OPD transients never materialise (~tens of
-        GB reclaimed at N=32768).  Surfaces outside the narrow
+        phase screen), while the full-grid coordinate / sag / OPD
+        transients never materialise (~tens of GB reclaimed at
+        N=32768).
+
+        WALL CLOCK: banding is NOT free on a small grid.  Measured on a
+        three-surface element (best of 3, numexpr absent), an explicit
+        ``sag_chunk_rows=256`` against the whole-grid path: **+28 % at
+        N = 512** (145.0 -> 186.0 ms), +5 % at N = 1024 (1149 -> 1211 ms)
+        and +9 % at N = 2048 (4010 -> 4387 ms).  The memory payoff is the
+        real one and it is large: the tracemalloc peak drops from 16.1 to
+        6.4-6.8 float64 grids (2.4x).  The AUTO default only bands at
+        N >= 4096, where the transients dominate, so the shipped default
+        pays none of that -- but a caller who forces a band on a small
+        grid is buying memory with time, not getting both.
+
+        Surfaces outside the narrow
         chunk-eligible case (decenter / tilt / form error / biconic /
         freeform / clear_aperture / stop surface / fresnel / slant /
         surface-frame, or a non-NumPy backend) fall through to the
@@ -4244,10 +4926,27 @@ def apply_real_lens(
           slope.  For a single divergent source of unknown conjugate.
         * ``ndarray`` -- an explicit input wavefront ``W`` (m, field-shaped).
 
-        The wave field itself (``E_in``) already carries the input curvature in
-        its phase -- ``conjugate`` ONLY informs the per-surface obliquity
-        cosines; it adds no reference phase and does not modify ``E_in``.  The
-        screen is field-independent given the conjugate, so the ``None`` /
+        ON THE SCREEN PATHS (``displaced_mode='screen'`` with a symmetric
+        element, or ``displaced_obliquity='pointwise'``) the wave field itself
+        carries the input curvature in its phase and ``conjugate`` ONLY informs
+        the per-surface obliquity cosines: it adds no reference phase and does
+        not modify ``E_in``.
+
+        ON THE REMAP PATHS (``displaced_mode='remap'``, and the DEFAULT routing
+        for a decentered / tilted / ``sag_callable`` element) the exit phase is
+        rebuilt from the ray eikonal, which carries this congruence's entrance
+        eikonal.  The input field is therefore DEMODULATED by ``W_conj`` before
+        it is resampled and the residual ``angle(E_in) - k0 W_conj`` is
+        transported along the traced rays and re-applied -- so an upstream
+        element's wavefront, a tilt or an aberration reaches the exit plane
+        instead of being replaced by the idealised congruence.  The residual is
+        carried as a COMPLEX field through a bilinear resample, so it must be
+        smooth on the grid: the closer ``conjugate`` is to the field's actual
+        congruence, the better the transport.  (Before this was fixed a flat
+        and a 35-wave-defocused input produced identical output, and a 150 mm
+        diverging source focused at the collimated 21 mm instead of 25 mm.)
+
+        The screen is field-independent given the conjugate, so the ``None`` /
         scalar paths are cached (bounded + registered; ``'auto'`` / ndarray
         rebuild).  Envelope + measured accuracy: see
         ``docs/audit_real_lens_displaced_2026_07_19.md`` (G2 section).
@@ -4374,13 +5073,30 @@ def apply_real_lens(
         and the carrier's own direction cosines, no ray trace, no fit and no
         cache -- but it is not free: it adds a sag gradient and ~20 full-grid
         float operations per POWERED surface (flat faces are skipped by a
-        single reduction), which measured **2.2x / 2.9x / 3.6x** the
-        carrier-free call wall-clock at N = 512 / 1024 / 2048 on a
-        three-surface cemented element.  It also routes the surface loop to
-        the whole-grid path (the row-banded sag path carries no gradient
-        halo), so peak memory is that of the unbanded path plus three float
-        geometry grids -- four more for a non-collimated carrier, whose
-        direction cosines are a field rather than two numbers.
+        single reduction).
+
+        COST, re-measured (N-SSK2 biconvex, ``sag_chunk_rows=0`` on both
+        arms, every path warmed at the same N first,
+        ``on_screen_obliquity='silent'``; peak in units of one float64
+        ``N**2`` grid):
+
+        .. code-block:: text
+
+            N      thin        + collimated carrier   + finite-R carrier
+            512    0.209 s     3.88x, +11.13 grids    3.40x, +13.13
+            1024   0.407 s     5.09x, +11.13          6.14x, +13.13
+            2048   3.084 s     2.38x, +11.13          2.43x, +13.13
+
+        Read the TREND, not the individual numbers (the N = 1024 thin
+        baseline is an FFT-size outlier): a fixed O(N^2) per-surface
+        addition measured against an O(N^2 log N) baseline must FALL with
+        N, which is what these do.  An earlier revision of this docstring
+        quoted 2.2x / 2.9x / 3.6x -- a RISING trend, which cannot be right
+        for this shape of work -- and '+3 float geometry grids', where the
+        peak surcharge measures +11.13 (+12.13 under the default policy,
+        which also builds ``_obl_total``).  The correction also routes the
+        surface loop to the whole-grid path for its gradient halo when the
+        band cannot carry one.
     on_screen_obliquity : {'warn', 'error', 'silent'}, default 'warn'
         Policy for the accuracy guard.  With a ``carrier`` supplied, the same
         closed form is read as an ERROR ESTIMATOR: the piston-and-tilt-free
@@ -4677,10 +5393,17 @@ def _apply_real_lens_impl(
     # hardware would have transmitted.  Issue a UserWarning once per
     # call site (Python's default warning filter dedups by source line).
     try:
-        N_grid = int(np.shape(E_in)[0])
+        # Anamorphic-safe: pass BOTH axes.  ``shape[0]`` is Ny, so pairing it
+        # with ``dx`` (as this used to) describes a semi-extent that exists on
+        # neither axis of a non-square or ``dy != dx`` grid -- both of which
+        # this function supports throughout.  ``dy`` is resolved a few lines
+        # below for the main body; resolve it here the same way.
+        _shape = np.shape(E_in)
+        _dy_chk = dx if dy is None else dy
         _warn_if_aperture_exceeds_grid(
-            prescription, N_grid, dx, source='apply_real_lens',
-            stacklevel=_WARN_STACKLEVEL + 1)
+            prescription, int(_shape[1]), dx, source='apply_real_lens',
+            stacklevel=_WARN_STACKLEVEL + 1,
+            N_y=int(_shape[0]), dy=_dy_chk)
     except (KeyError, ValueError, TypeError, AttributeError, IndexError):
         # Aperture-check failure is informational only.
         pass
@@ -4721,10 +5444,20 @@ def _apply_real_lens_impl(
     aperture = prescription.get('aperture_diameter')
     stop_index = prescription.get('stop_index')
 
-    assert len(thicknesses) == len(surfaces) - 1, (
-        f"Need {len(surfaces) - 1} thicknesses for {len(surfaces)} surfaces, "
-        f"got {len(thicknesses)}"
-    )
+    # Input validation, not an invariant: an ``assert`` here is stripped under
+    # ``python -O``, where a short ``thicknesses`` then surfaces as a bare
+    # IndexError from inside the loop and an over-long one is accepted
+    # silently.  ``prepare_real_lens`` already raises properly for the same
+    # condition; CONVENTIONS SS2 requires the ``f"{fn_name}: ..."`` form.
+    if len(thicknesses) != len(surfaces) - 1:
+        raise ValueError(
+            f"apply_real_lens: prescription needs "
+            f"{len(surfaces) - 1} thickness(es) for {len(surfaces)} "
+            f"surface(s) (the gap AFTER every surface but the last); got "
+            f"{len(thicknesses)}.")
+
+    stop_index = _normalise_stop_index(stop_index, len(surfaces),
+                                       fn_name='apply_real_lens')
 
     Ny, Nx = E_in.shape
     k0 = 2 * np.pi / wavelength
@@ -4765,6 +5498,10 @@ def _apply_real_lens_impl(
     _disp_ray_map_2d = None
     _disp_cos_grid = None
     _disp_pointwise = False
+    # The congruence callable the remap fan was launched along, kept so the
+    # apply step can demodulate ``E_in`` by the SAME wavefront (L3 -- the input
+    # phase beyond the congruence is transported, not discarded).
+    _disp_eik_fn = None
     if _displaced:
         # The pointwise obliquity SCREEN fires only for an EXPLICIT
         # displaced_obliquity='pointwise' (or the symmetric convention gate); the
@@ -4795,8 +5532,12 @@ def _apply_real_lens_impl(
             # single-plane screen drops.
             _dir2, _eik2 = _displaced_carrier_dir_eik_fn(
                 conjugate, E_in, wavelength, dx, dy, Nx, Ny)
+            _disp_eik_fn = _eik2
+            _warn_if_remap_lattice_smooths(
+                _r_max, dx, dy, _DISP_REMAP_2D_N_SIDE)
             _disp_ray_map_2d = _build_displaced_ray_map_2d(
                 surfaces, thicknesses, wavelength, _r_max,
+                n_side=_DISP_REMAP_2D_N_SIDE,
                 dir_fn=_dir2, eik_fn=_eik2)
         elif _disp_pointwise:
             # P3 (N2): 2-D pointwise obliquity SCREEN for decenter / tilt /
@@ -4818,6 +5559,7 @@ def _apply_real_lens_impl(
             # applied just below (after the entrance aperture).
             _disp_eik = _displaced_eikonal_fn(
                 conjugate, E_in, wavelength, dx, dy, Nx, Ny)
+            _disp_eik_fn = _disp_eik
             _disp_ray_map = _build_displaced_ray_map(
                 surfaces, thicknesses, wavelength, _r_max,
                 carrier_slope=_disp_slope, eikonal_fn=_disp_eik)
@@ -5186,10 +5928,15 @@ def _apply_real_lens_impl(
         paths reach it too -- pre-v5.35.3 they ``continue``d past it, which is
         precisely why ``carrier=`` had to disqualify them."""
         nonlocal _obl_ux, _obl_uy, _obl_drift_live
+        # The gap the CARRIER drifts through is always the physical one here.
+        # (There used to be a ``if _split_mode: t/n, n=1`` arm for the
+        # 'displaced' split factorisation's reduced distance.  It was
+        # unreachable: this closure runs only when ``_obl_active``, which needs
+        # ``carrier is not None``, and ``_check_screen_obliquity_support``
+        # raises for a carrier with any ``surface_model != 'thin'`` -- while
+        # ``_split_mode`` requires ``surface_model == 'displaced'``.)
         _t_gap = float(thicknesses[i_surf])
         _n_gap = n2r
-        if _split_mode:
-            _t_gap, _n_gap = _t_gap / n2r, 1.0
         _band_gap = _chunk_grids and (
             getattr(_obl_p0x, 'ndim', 0) or _obl_q_rows_fn is not None
             or getattr(_obl_qx, 'ndim', 0))
@@ -5485,8 +6232,12 @@ def _apply_real_lens_impl(
                 E[_r0:_r1] = xp.where(_h_b <= _r_ap_sq, E[_r0:_r1],
                                       xp.zeros((), dtype=E.dtype))
         else:
-            E = xp.where(h_sq_axis <= (aperture / 2) ** 2, E,
-                         xp.zeros((), dtype=E.dtype))
+            # ``E`` is this function's private copy of the input, so the
+            # mask is applied IN PLACE: ``xp.where`` would allocate a
+            # fresh full complex grid for a result that differs from
+            # ``E`` only on the zeroed pixels.  Same values, one grid
+            # less.
+            E[h_sq_axis > (aperture / 2) ** 2] = 0
 
     # P2 candidate (a): exit-plane geometric-transfer remap.  Replaces the
     # per-surface screen loop entirely -- warp the (apertured) input envelope
@@ -5495,7 +6246,8 @@ def _apply_real_lens_impl(
     if _remap_mode:
         _h_in_map, _h_out_map, _opl_map = _disp_ray_map
         E = _apply_displaced_remap(
-            E, _h_in_map, _h_out_map, wavelength, dx, dy, _opl_map)
+            E, _h_in_map, _h_out_map, wavelength, dx, dy, _opl_map,
+            eikonal_fn=_disp_eik_fn)
         call_progress(progress, 'apply_real_lens', 1.0, 'done')
         return E
 
@@ -5508,7 +6260,7 @@ def _apply_real_lens_impl(
     # correctly.
     if _disp_2d_remap:
         E = _apply_displaced_remap_2d(
-            E, _disp_ray_map_2d, wavelength, dx, dy)
+            E, _disp_ray_map_2d, wavelength, dx, dy, eik_fn=_disp_eik_fn)
         call_progress(progress, 'apply_real_lens', 1.0, 'done')
         return E
 
@@ -5540,6 +6292,14 @@ def _apply_real_lens_impl(
         asph_y = surf.get('aspheric_coeffs_y')
         n1c, n2c = resolved[i]
         n1r, n2r = n1c.real, n2c.real
+        # This surface's share of the LOCAL-glass-path absorption (see
+        # ``_absorb_local_path``).  The first surface has no gap in front of it
+        # and the last none behind it, so those halves are dropped -- which is
+        # what keeps "no attenuation after the last surface" exact.
+        _kap_face = 0.0
+        if absorption:
+            _kap_face = ((n1c.imag if i > 0 else 0.0)
+                         - (n2c.imag if i < n_surf - 1 else 0.0))
 
         # ---- Opt-in row-band (chunked) phase screen -------------------
         # When ``sag_chunk_rows`` is set AND the surface is the plain conic+
@@ -5629,17 +6389,25 @@ def _apply_real_lens_impl(
                     del _d_b, sag_h
                 if bool(np.any(np.isnan(opd_b))):
                     opd_b = np.where(np.isnan(opd_b), 0.0, opd_b)
-                if _use_ne:
+                # Flat-band early-out (see the whole-grid copy): a zero
+                # OPD is a unit screen, so skipping it cannot change a
+                # bit.
+                if not bool(np.any(opd_b)):
+                    pass
+                elif _use_ne:
                     Eb = E[r0:r1]
                     _ne.evaluate('Eb * exp(-1j * k0 * opd_b)',
                                  local_dict={'Eb': Eb, 'k0': k0, 'opd_b': opd_b},
                                  out=Eb)
                     _drop_numexpr_out_retention()
                 else:
-                    ph = np.exp(-1j * k0 * opd_b)
+                    ph = _screen_exp(opd_b, k0, np)
                     if ph.dtype != E.dtype:
                         ph = ph.astype(E.dtype)
-                    E[r0:r1] = E[r0:r1] * ph
+                    E[r0:r1] *= ph
+                if _kap_face != 0.0:
+                    E[r0:r1] = _absorb_local_path(
+                        E[r0:r1], sag_b, _kap_face, k0, xp)
                 del sag_b, opd_b
             if _obl_here:
                 _obl_end_surface()
@@ -5765,20 +6533,20 @@ def _apply_real_lens_impl(
                 cos_tt_safe = xp.maximum(cos_tt, 1e-3)
                 sag_b = sag_halo[_lo:_hi]
                 if slant_correction:
-                    # v5.25.0 (hammer audit H1): the wavefront OPD of a
-                    # locally-tilted refracting facet is
-                    # (n2*cos_tt - n1*cos_ti) * sag -- COSINES IN THE
-                    # NUMERATOR (the plane-parallel-plate result).  The
-                    # historical ``n*sag/cos`` form is the geometric ray
-                    # path-length through a slab, NOT the wavefront OPD;
-                    # it sign-flips the leading obliquity (spherical-
-                    # aberration) term, and on a symmetric biconvex the
-                    # wrong-signed corrections cancelled the pupil SA
-                    # entirely (dual-oracle f/5 case: 3.6 um "perfect"
-                    # spot vs the true 65 um).  Keep byte-identical to
-                    # the whole-grid copy below.
-                    opd = (n2r * cos_tt_safe
-                           - n1r * cos_ti_safe) * sag_b
+                    # The AXIAL-TRANSLATION IDENTITY, equation (3) of the
+                    # SCREEN OBLIQUITY derivation above: a facet sitting a
+                    # height ``sag`` over the vertex plane contributes
+                    # ``(pz2 - pz1) * sag`` with BOTH momenta referenced to
+                    # the Z-AXIS, not to the facet normal.  For the collimated
+                    # (axial) input this screen assumes, pz1 = n1 and the
+                    # refracted ray leaves at ``theta_i - theta_t`` to z, so
+                    # pz2 = n2 cos(theta_i - theta_t), expanded through
+                    # cos(a-b) = cos a cos b + sin a sin b on the cosines the
+                    # refraction pipeline has already materialised.  Keep
+                    # byte-identical to the whole-grid copy below.
+                    opd = (n2r * (cos_ti_safe * cos_tt_safe
+                                  + xp.sqrt(sin2_ti * sin2_tt))
+                           - n1r) * sag_b
                 else:
                     opd = (n2r - n1r) * sag_b
                 if _tf_here:
@@ -5826,10 +6594,13 @@ def _apply_real_lens_impl(
                     )
                     _drop_numexpr_out_retention()
                 else:
-                    ph = xp.exp(-1j * k0 * opd)
+                    ph = _screen_exp(opd, k0, xp)
                     if ph.dtype != E.dtype:
                         ph = ph.astype(E.dtype)
-                    E[r0:r1] = E[r0:r1] * ph
+                    E[r0:r1] *= ph
+                if _kap_face != 0.0:
+                    E[r0:r1] = _absorb_local_path(
+                        E[r0:r1], sag_b, _kap_face, k0, xp)
                 # Fresnel amplitude transmission.  ``E[r0:r1] * sqrt(T_eff)``
                 # promotes the band to result_type(E.dtype, geometry-real)
                 # (complex64 -> complex128 for the default float64 geometry),
@@ -5839,7 +6610,11 @@ def _apply_real_lens_impl(
                     denom_p = n2c * cos_ti_safe + n1c * cos_tt_safe
                     t_s = 2.0 * n1c * cos_ti_safe / denom_s
                     t_p = 2.0 * n1c * cos_ti_safe / denom_p
-                    T_eff = 0.5 * (xp.abs(t_s) ** 2 + xp.abs(t_p) ** 2)
+                    # POWER transmittance, not |t|**2 -- see the whole-grid
+                    # copy below for the convention argument.  Keep the two
+                    # expressions byte-identical.
+                    T_eff = (0.5 * (xp.abs(t_s) ** 2 + xp.abs(t_p) ** 2)
+                             * (n2r * cos_tt_safe) / (n1r * cos_ti_safe))
                     _band = E[r0:r1] * xp.sqrt(T_eff)
                 else:
                     _band = E[r0:r1]
@@ -5925,21 +6700,33 @@ def _apply_real_lens_impl(
         )
         if _sf_active:
             # Inverse rigid-body transform of the field-plane grid into
-            # the surface frame.  R = Rx(tx) @ Ry(ty); the inverse
-            # applied to (x - dcx, y - dcy, 0) gives:
+            # the surface frame.  R = Rx(theta_x) @ Ry(theta_y); the
+            # inverse applied to (x - dcx, y - dcy, 0) gives the
+            # surface-frame FOOTPRINT
             #   x_s = cy*dx_local + sx*sy*dy_local
             #   y_s = cx*dy_local
-            # (z_s is discarded -- the thin-element approximation
-            # evaluates sag at the surface-frame footprint of the
+            # at which the sag is evaluated (the thin-element
+            # approximation: the surface-frame footprint of the
             # field-plane normal, the same simplification the
             # field-frame branch makes when it skips the perpendicular-
-            # foot solve.)
-            tx_f = float(tilt_sf[0])
-            ty_f = float(tilt_sf[1])
-            cx_f = np.cos(tx_f)
-            sx_f = np.sin(tx_f)
-            cy_f = np.cos(ty_f)
-            sy_f = np.sin(ty_f)
+            # foot solve).  The rotated surface's own FIELD-frame height
+            # is restored below -- it is where the tilt lives.
+            #
+            # AXIS CONVENTION: the rotation angles come from the same
+            # ``tilt`` key the field-frame branch, ``_disp_surface_z_grad``
+            # and ``raytrace``'s ``field_tilt`` all read, where
+            # ``tilt = (t0, t1)`` IS the linear sag ramp ``t0*x + t1*y``.
+            # That ramp is the right-hand rotation pair
+            # ``theta_x = t1`` (a +x rotation ramps in y) and
+            # ``theta_y = -t0`` (a +y rotation ramps in -x), so the two
+            # branches deflect the beam about the SAME axis and the wave
+            # model agrees with the ray models on what a tilt means.
+            _sf_thx = float(tilt_sf[1])
+            _sf_thy = -float(tilt_sf[0])
+            cx_f = np.cos(_sf_thx)
+            sx_f = np.sin(_sf_thx)
+            cy_f = np.cos(_sf_thy)
+            sy_f = np.sin(_sf_thy)
             _dx_local = X - decenter[0]
             _dy_local = Y - decenter[1]
             Xs = cy_f * _dx_local + sx_f * sy_f * _dy_local
@@ -6045,20 +6832,67 @@ def _apply_real_lens_impl(
             else:
                 sag = _surface_sag_general(h_sq, R, kc, asph)
 
-        # ---- Tilt (small-angle linear ramp added to sag) --------------
-        # v5.2 (ROADMAP v5.1 off-axis conic in surface frame;
-        # AUDIT_V5_1_0 deferred feature): in the surface-frame branch
-        # the tilt is already encoded in the rotated (Xs, Ys), so the
-        # linear sag ramp is suppressed here to avoid double-counting.
-        # The field-frame branch (default) keeps the historical linear
-        # ramp -- this is the v3.x -> v5.1 contract.
+        # ---- Tilt -----------------------------------------------------
+        # FIELD-frame branch (default): the tilt is the linear sag ramp
+        # ``t0*x + t1*y`` -- the v3.x contract, and the same reading
+        # ``raytrace``'s ``field_tilt`` and ``_disp_surface_z_grad`` use.
+        #
+        # SURFACE-frame branch: the rotated (Xs, Ys) above is only the
+        # FOOTPRINT.  The quantity the screen must imprint is the rotated
+        # surface's height in the FIELD frame,
+        #     z_f = (R @ (x_s, y_s, g(x_s, y_s)))_z
+        #         = R_zx*x_s + R_zy*y_s + R_zz*g(x_s, y_s),
+        # with R_z. = (-cx*sy, sx, cx*cy) for R = Rx(theta_x) @ Ry(theta_y).
+        # Evaluating ``g`` at the rotated footprint and DISCARDING z_s drops
+        # ``R_zx*x_s + R_zy*y_s`` -- to first order the whole ramp, which is
+        # the term that deviates the beam: a rigid rotation RE-EXPRESSES the
+        # ramp, it does not delete it.  Without this a tilted flat face was a
+        # literal no-op (0 mrad deviation where a thin prism gives (n-1)*theta)
+        # and a tilted R = 50 mm sphere lost 8.15 waves of OPD at 5 mrad over
+        # a +-2 mm pupil.
         tilt = surf.get('tilt') or (0.0, 0.0)
-        if (tilt[0] != 0.0 or tilt[1] != 0.0) and not _sf_active:
+        _tilted = (tilt[0] != 0.0 or tilt[1] != 0.0)
+        if _sf_active:
+            if _tilted:
+                sag = ((-cx_f * sy_f) * Xs + sx_f * Ys
+                       + (cx_f * cy_f) * sag)
+        elif _tilted:
             sag = sag + tilt[0] * Xs + tilt[1] * Ys
 
         # ---- Form error map -------------------------------------------
+        # ``form_error`` is a FIELD-FRAME map: it is added AFTER (Xs, Ys) have
+        # been consumed, so it is neither shifted by ``decenter`` nor rotated by
+        # ``surface_frame`` -- it lands on the field grid exactly as supplied.
+        # Shape is validated here because numpy broadcasting is happy to accept
+        # an obviously-wrong figure map: an ``(Nx,)`` row used to be replicated
+        # silently down every row of the grid, and a mismatched 2-D map died
+        # with a raw broadcast error (or, for ``(Ny, Nx, 1)``, survived the lens
+        # and died inside the ASM) where every other input to this function gets
+        # a precise ``apply_real_lens: ...`` message.
         form_err = surf.get('form_error')
         if form_err is not None:
+            _fe_shape = tuple(np.shape(form_err))
+            if _fe_shape != (Ny, Nx):
+                raise ValueError(
+                    f"apply_real_lens: surfaces[{i}]['form_error'] has shape "
+                    f"{_fe_shape}, but it must be a 2-D map with the SAME "
+                    f"shape as the field, ({Ny}, {Nx}).  It is an additive sag "
+                    f"perturbation [m] in the FIELD frame (not shifted by "
+                    f"decenter nor rotated by surface_frame), so it is sampled "
+                    f"on the field grid pixel for pixel; a 1-D array would be "
+                    f"broadcast across every row and a mismatched 2-D one "
+                    f"cannot be aligned.")
+            if not np.issubdtype(np.asarray(form_err).dtype, np.number):
+                raise ValueError(
+                    f"apply_real_lens: surfaces[{i}]['form_error'] has dtype "
+                    f"{np.asarray(form_err).dtype}, but it must be a real "
+                    f"numeric sag perturbation [m].")
+            if np.iscomplexobj(form_err):
+                raise ValueError(
+                    f"apply_real_lens: surfaces[{i}]['form_error'] is complex; "
+                    f"it must be a REAL additive sag perturbation [m].  Pass "
+                    f"an amplitude/phase screen through a separate element if "
+                    f"that is what was meant.")
             sag = sag + form_err
 
         # ---- Local surface normal -> angles of incidence/refraction ---
@@ -6149,11 +6983,12 @@ def _apply_real_lens_impl(
             r_grid = xp.sqrt(h_sq)
             opd = _displaced_opd(sag, r_grid, _disp_luts[i], n1r, n2r)
         elif slant_correction:
-            # v5.25.0 (hammer audit H1): cosines in the NUMERATOR -- the
-            # wavefront OPD of a tilted refracting facet, not the ray
-            # slab path-length.  See the banded-copy comment above for
-            # the full derivation + oracle evidence; keep byte-identical.
-            opd = (n2r * cos_tt_safe - n1r * cos_ti_safe) * sag
+            # The axial-translation identity, equation (3) of the SCREEN
+            # OBLIQUITY derivation above: ``(pz2 - pz1) * sag`` with both
+            # momenta referenced to the Z-AXIS.  See the banded-copy comment
+            # above for the full derivation; keep byte-identical.
+            opd = (n2r * (cos_ti_safe * cos_tt_safe
+                          + xp.sqrt(sin2_ti * sin2_tt)) - n1r) * sag
         else:
             opd = (n2r - n1r) * sag
         # ---- Route 3: the per-pixel tangent-facet screen (v5.36.0) -----
@@ -6167,7 +7002,12 @@ def _apply_real_lens_impl(
         # the field is never resampled, which is what keeps a plate exact.
         _rm_pending = False
         _rm_wx = _rm_wy = None
-        if _tf_active and bool(xp.any(sag)):
+        # ONE reduction over ``sag``, shared by the tangent-facet block,
+        # the obliquity block and the flat-face early-out below (all
+        # three used to take their own, and the default screen took
+        # none).
+        _sag_any = bool(xp.any(sag))
+        if _tf_active and _sag_any:
             # A FLAT face -- a plate, a cemented plano, a stop -- has no facet
             # to tilt and no height to translate, so the identity collapses to
             # the paraxial screen exactly and one reduction skips the block
@@ -6267,7 +7107,7 @@ def _apply_real_lens_impl(
         # displaced choice sets the zero-angle behaviour and this sets how
         # it changes with the carrier's local ray angle.  Zero for a plane
         # plate, zero for a zero carrier.
-        if _obl_active and bool(xp.any(sag)):
+        if _obl_active and _sag_any:
             # (a FLAT surface -- a plate face, a cemented plano, a stop -- has
             # nothing to correct and nothing to deflect, so one reduction skips
             # the whole block including the gradient.)
@@ -6318,7 +7158,20 @@ def _apply_real_lens_impl(
         # neutral.  Tracks both slant-corrected and paraxial OPD branches.
         if bool(xp.any(xp.isnan(opd))):
             opd = xp.where(xp.isnan(opd), 0.0, opd)
-        if (xp is np and NUMEXPR_AVAILABLE
+        # ---- FLAT-FACE EARLY-OUT ---------------------------------
+        # A plano face -- a plate, a cemented plano, a window, the stop
+        # -- has ``sag == 0`` everywhere, hence ``opd == 0``, hence a
+        # screen of ``exp(0) == 1 + 0j``; multiplying a finite field by
+        # that returns it unchanged bit for bit.  The tangent-facet and
+        # obliquity blocks have always skipped on this same reduction;
+        # the default screen did not, and paid a full complex ``exp``
+        # plus a full complex multiply (566 ms and 134 MB of temporaries
+        # at N = 2048) for an identity.  Every other per-surface step --
+        # Fresnel, the TIR mask, the apertures -- still runs: a flat face
+        # refracts and vignettes even though it imprints no OPD.
+        if not _sag_any:
+            pass
+        elif (xp is np and NUMEXPR_AVAILABLE
                 and E.size >= _NUMEXPR_MIN_SIZE
                 and _ensure_numexpr_loaded()):
             # Fused multiply + complex exp in one threaded, chunked pass
@@ -6344,10 +7197,17 @@ def _apply_real_lens_impl(
             # field to complex128.  CuPy's exp is fused at kernel
             # level so the "three temporaries" concern doesn't apply
             # the same way on device.
-            phase_exp = xp.exp(-1j * k0 * opd)
+            phase_exp = _screen_exp(opd, k0, xp)
             if phase_exp.dtype != E.dtype:
                 phase_exp = phase_exp.astype(E.dtype)
-            E = E * phase_exp
+            # In place: ``E`` is private here, and ``E = E * ph``
+            # allocates a third full complex grid to hold a result that
+            # overwrites its own left operand (1.33x on its own).
+            E *= phase_exp
+
+        # ---- Local-glass-path bulk absorption -------------------------
+        if _kap_face != 0.0:
+            E = _absorb_local_path(E, sag, _kap_face, k0, xp)
 
         # ---- Fresnel amplitude transmission ---------------------------
         if fresnel:
@@ -6359,11 +7219,26 @@ def _apply_real_lens_impl(
             # incoherent average power.  Pre-4.10 used 0.5*(t_s+t_p)
             # which only matches 45-deg linear polarisation at low AOI.
             # For polarised inputs route through the Jones pipeline.
+            #
+            # ``t_s`` / ``t_p`` are AMPLITUDE coefficients.  This library
+            # treats ``sum |E|**2 dx dy`` as POWER everywhere (the ASM legs
+            # are Parseval-unitary and ``_propagate_through_glass`` adds no
+            # impedance factor), so crossing an index step needs the POWER
+            # transmittance
+            #     T = (n2 cos theta_t) / (n1 cos theta_i) * |t|**2,
+            # whose extra factor is the ratio of the axial Poynting fluxes on
+            # the two sides.  Without it a single AIR->N-BK7 face transmits
+            # |t|**2 = 0.6323 where the physical value is 0.9581; an
+            # air->glass->air element happens to be right anyway because the
+            # n2/n1 factors telescope to n_last/n_first = 1, which is why the
+            # error survived -- anything ENDING in glass, any bare cemented
+            # interface, and the cos ratio at finite NA did not.
             denom_s = n1c * cos_ti_safe + n2c * cos_tt_safe
             denom_p = n2c * cos_ti_safe + n1c * cos_tt_safe
             t_s = 2.0 * n1c * cos_ti_safe / denom_s
             t_p = 2.0 * n1c * cos_ti_safe / denom_p
-            T_eff = 0.5 * (xp.abs(t_s) ** 2 + xp.abs(t_p) ** 2)
+            T_eff = (0.5 * (xp.abs(t_s) ** 2 + xp.abs(t_p) ** 2)
+                     * (n2r * cos_tt_safe) / (n1r * cos_ti_safe))
             E = E * xp.sqrt(T_eff)
 
         # ---- TIR mask (audit #3.5: was inside `if fresnel:` pre-4.9) --
@@ -6376,15 +7251,23 @@ def _apply_real_lens_impl(
         # fresnel=False users with unphysical residual field amplitude
         # in TIR regions.
         if fresnel or slant_correction:
-            # v4.13.2 (audit C-P1-4): dtype-aware zero.
-            E = xp.where(sin2_tt < 1.0, E, xp.zeros((), dtype=E.dtype))
+            # In-place mask instead of a fresh full complex grid.  The
+            # sense is ``not (sin2_tt < 1.0)`` rather than
+            # ``sin2_tt >= 1.0`` so a NaN still lands on the zeroed side,
+            # exactly where ``xp.where`` put it.
+            _tir = sin2_tt < 1.0
+            xp.logical_not(_tir, out=_tir)
+            E[_tir] = 0
+            del _tir
 
         # ---- Per-surface clear aperture (vignetting) ------------------
         clear_ap = surf.get('clear_aperture')
         if clear_ap is not None:
-            # v4.13.2 (audit C-P1-4): dtype-aware zero.
-            E = xp.where(h_sq <= (clear_ap / 2) ** 2, E,
-                         xp.zeros((), dtype=E.dtype))
+            # In-place mask (NaN-safe sense, as for the TIR mask above).
+            _cm = h_sq <= (clear_ap / 2) ** 2
+            xp.logical_not(_cm, out=_cm)
+            E[_cm] = 0
+            del _cm
 
         # ---- Aperture stop applied at this surface --------------------
         if stop_index is not None and i == stop_index and aperture is not None:
@@ -6402,12 +7285,13 @@ def _apply_real_lens_impl(
             xc_stop = float(_dec[0])
             yc_stop = float(_dec[1])
             if xc_stop == 0.0 and yc_stop == 0.0:
-                E = xp.where(h_sq_axis <= (aperture / 2) ** 2,
-                             E, xp.zeros((), dtype=E.dtype))
+                _sm = h_sq_axis <= (aperture / 2) ** 2
             else:
-                h_sq_stop = (X - xc_stop) ** 2 + (Y - yc_stop) ** 2
-                E = xp.where(h_sq_stop <= (aperture / 2) ** 2,
-                             E, xp.zeros((), dtype=E.dtype))
+                _sm = ((X - xc_stop) ** 2 + (Y - yc_stop) ** 2
+                       <= (aperture / 2) ** 2)
+            xp.logical_not(_sm, out=_sm)
+            E[_sm] = 0
+            del _sm
 
         # ---- The REMAP rung: carry the field to the walked positions ---
         # LAST in the surface block, so the vignetting masks above still act at
@@ -6435,8 +7319,9 @@ def _apply_real_lens_impl(
             # Runs for EVERY gap, powered surface or not: a plate face has no
             # coefficient error of its own but the gap behind it still moves
             # the carrier's ray, and a later powered surface reads that drift.
-            # The gap geometry follows the model's own propagation, so the
-            # 'split' factorisation drifts through its reduced distance.
+            # The gap is always the PHYSICAL one: a carrier is refused with
+            # every non-'thin' surface_model, so the 'displaced' split
+            # factorisation's reduced distance cannot reach this step.
             # v5.35.3: the body is ``_obl_gap_advance`` so the two row-banded
             # surface paths reach the identical step (banded internally when
             # sag_chunk_rows is live; byte-identical either way).
@@ -6482,17 +7367,38 @@ def _apply_real_lens_impl(
         _obl_qx = _obl_qy = None
 
     # ----- Seidel correction ------------------------------------------
-    # Apply a ray-trace-derived radial phase correction that captures
-    # the residual OPD the thin-element model misses.  This is a
-    # generalised "Seidel"-style correction: we ray-trace a 1-D fan,
-    # take the difference between the geometric OPL and the analytic
-    # thin-element OPL at each height, fit a radial even polynomial,
-    # and apply that as an additional phase screen at the exit pupil.
+    # A ray-trace-derived radial phase screen applied at the exit pupil,
+    # carrying the high-order residual the split-step model itself does not
+    # reproduce.  Three things have to be true of it, and all three were not:
     #
-    # Captures all orders of spherical aberration up to
-    # ``seidel_poly_order``, plus any residual caused by the uniform-
-    # slab approximation at each interface.  For rotationally
-    # symmetric on-axis collimated input the correction is radially
+    #   (1) BOTH OPLs must be read on the EXIT VERTEX PLANE.  ``trace`` leaves
+    #       rays at the last surface's sag, so ``image_rays.opd`` is short by
+    #       ``n_exit * sag_last(rho) / N`` -- exactly 0 on a plano rear face
+    #       (which is what every fixture had) and -17.05 um at h = 3.6 mm on a
+    #       cemented doublet's R = -291 mm rear.  Fixed by
+    #       ``TraceResult.at_exit_vertex()``.
+    #
+    #   (2) The MODEL reference must be the model's own exit OPL, not
+    #       ``sum (n2-n1) sag_i(h)``.  That sum evaluates every surface at the
+    #       same entrance height with no propagation, so differencing it
+    #       against a real trace produces the in-glass obliquity term
+    #       ``n t theta**2 / 2`` -- which the split-step's ASM legs ALREADY
+    #       carry exactly.  Fitting it imprints it a second time (measured
+    #       337 nm against a 341 nm prediction on a plano-convex whose true
+    #       model residual is 0.85 nm).  ``_split_step_fan_opl`` replaces it
+    #       with a thin-screen ray model of what the split step does.
+    #
+    #   (3) The fit must start at rho**4.  A basis containing rho**2 IS a
+    #       defocus term, so every reference-frame mismatch above was absorbed
+    #       as focus and imprinted: 420 nm at the rim on a plano-convex,
+    #       -5.5 um on a doublet, moving the doublet's best focus by 2.5 % and
+    #       costing 27 % of its peak intensity.  A "Seidel-style high-order
+    #       residual" starts at rho**4 by definition.
+    #
+    # With all three, the 5 nm gate finally does what it was written for: it
+    # SKIPS the well-corrected singlets whose residual is already sub-nm, and
+    # fires only where there is a real high-order residual to carry.
+    # The fan is collimated and on-axis, so the correction is radially
     # symmetric and applied per pixel via r = sqrt(x^2 + y^2).
     if seidel_correction and aperture is not None:
         # Local imports to avoid circular dep at module load
@@ -6514,76 +7420,53 @@ def _apply_real_lens_impl(
             wavelength=wavelength)
         surfs_fan = _rt_surfaces_from_prescription(prescription)
         res_fan = _rt_trace(fan, surfs_fan, wavelength)
-        final_fan = res_fan.image_rays
+        # (1) The ray OPL must be read on the exit VERTEX plane, not at the
+        # last surface's sag where ``trace`` leaves it.
+        final_fan = res_fan.at_exit_vertex()
         alive_fan = final_fan.alive
         if alive_fan.sum() >= 5:
             opl_ray = final_fan.opd[alive_fan]
+            x_ray = final_fan.x[alive_fan]
+            n_exit_fan = float(get_glass_index(
+                surfaces[-1]['glass_after'], wavelength))
+            p_ray = n_exit_fan * final_fan.L[alive_fan]
             h_alive = h_fan[alive_fan]
-            # Analytic height-dependent OPD deposited by the phase-
-            # screens above: sum over surfaces of (n2-n1)*sag_i(h).
-            # With the sign convention ``phase_screen = exp(-i*k*opd)``
-            # this DECREASES the wave's OPL at edges for a positive
-            # lens -- the wave's height-dependent OPL is therefore
-            # ``-sum (n2-n1)*sag``.  The full wave output includes
-            # further Fresnel ASM contributions we don't try to model
-            # analytically.
-            opl_analytic = np.zeros_like(h_alive)
-            for surf_i in surfaces:
-                R_i = surf_i['radius']
-                kc_i = surf_i.get('conic', 0.0)
-                asph_i = surf_i.get('aspheric_coeffs')
-                R_y_i = surf_i.get('radius_y')
-                n1r_i = get_glass_index(surf_i['glass_before'], wavelength)
-                n2r_i = get_glass_index(surf_i['glass_after'], wavelength)
-                if R_y_i is not None:
-                    sag_fan_i = surface_sag_biconic(
-                        h_alive, np.zeros_like(h_alive),
-                        R_x=R_i, R_y=R_y_i,
-                        conic_x=kc_i,
-                        conic_y=surf_i.get('conic_y'),
-                        aspheric_coeffs=asph_i,
-                        aspheric_coeffs_y=surf_i.get('aspheric_coeffs_y'))
-                else:
-                    sag_fan_i = _surface_sag_general(
-                        h_alive * h_alive, R_i, kc_i, asph_i)
-                opl_analytic = opl_analytic + (
-                    (n2r_i - n1r_i) * sag_fan_i)
+            # (2) The MODEL's own exit-vertex-plane OPL on the SAME fan --
+            # a thin-screen ray walk through the screens this function
+            # applies and the glass gaps its ASM legs propagate.
+            x_model, opl_model = _split_step_fan_opl(
+                surfaces, thicknesses, wavelength, h_alive)
+            # Both OPLs now live on the same PLANE, but not yet at the same
+            # POINT: a ray and its model counterpart launched from the same
+            # entrance height land up to 12.7 um apart on the exit plane of
+            # an 8 mm doublet.  The screen multiplies the field at a fixed
+            # exit COORDINATE, so the ray OPL is carried the short way from
+            # where the ray landed to where the model's ray landed, at the
+            # exit momentum ``p = n_exit * L``:
+            #     OPL_ray(x_model) = OPL_ray(x_ray) + p . (x_model - x_ray)
+            # -- the standard eikonal transfer, exact to second order in a
+            # displacement this small, and the same construction the exact-ray
+            # oracle scores this model with.  Without it the residual is read
+            # across a landing offset and comes out 114 nm where the true one
+            # is 173 nm, so the correction under-corrects by a third and the
+            # exit wavefront gets WORSE (measured 0.60x).
+            # SIGN: the screens are ``exp(-i k0 OPD)`` under
+            # ``phase = exp(+i k0 OPL)``, so the model's OPL is already the
+            # NEGATIVE of the deposited OPD -- ``_split_step_fan_opl`` returns
+            # an OPL directly and the two quantities are differenced as-is.
+            opl_ray_at_model = opl_ray + p_ray * (x_model - x_ray)
             i_ax = int(np.argmin(np.abs(h_alive)))
-            delta_ray = opl_ray - opl_ray[i_ax]
-            # 4.11.2: REVERT THE v4.10 "C-LR-1 fix".
-            # The pre-v4.10 negation here was correct.  Walking the
-            # physics under the library's exp(-i*omega*t) convention
-            # (forward kernel exp(+i*kz*z), phase = exp(+i*k0*OPL)):
-            #   - The thin-element phase screen above is
-            #     exp(-i*k0*(n2-n1)*sag) per surface.  Under
-            #     phase = exp(+i*k0*OPL), this screen deposits
-            #     OPL_screen = -(n2-n1)*sag at each height -- NEGATIVE
-            #     at the rim of a positive lens (the wave "sees" less
-            #     optical path through the thinner glass at the rim).
-            #   - The geometric ray-trace delta_ray = opl_ray - opl_ray
-            #     [axis] is also negative at the rim of a positive lens
-            #     (rim has shorter optical path through the lens than
-            #     the thicker axis).
-            #   - For a paraxial lens both quantities agree at first
-            #     order, leaving only the desired high-order residual.
-            # The v4.10 patch dropped the negation based on the audit's
-            # incorrect sign reasoning; the resulting ``correction`` was
-            # approximately +2*(n-1)*sag at the rim (millimetres for a
-            # 100 mm BK7 singlet), which tripled the lens's analytic OPD
-            # and crashed the effective focal length by a factor of ~3.
-            # v4.11.1's 50nm-->5nm gate did not help because the bogus
-            # correction was mm-scale.  Restored original sign here so
-            # ``correction`` is the small high-order residual the
-            # polynomial fit is meant to capture, not a duplicate of
-            # the lens OPD.  Round-3 audit (AUDIT_ROUND3_2026_05_16.md,
-            # CRIT-1) flagged this; verified by hand against a BK7
-            # plano-convex test case.
-            opl_wave_rel = -(opl_analytic - opl_analytic[i_ax])
-            correction = delta_ray - opl_wave_rel
-            # Fit even-power polynomial in normalised pupil coord.
-            rho = h_alive / r_pupil
-            max_order = max(2, int(seidel_poly_order))
-            even_powers = np.arange(2, max_order + 2, 2)
+            correction = ((opl_ray_at_model - opl_ray_at_model[i_ax])
+                          - (opl_model - opl_model[i_ax]))
+            # The screen multiplies the field at the EXIT-PLANE coordinate, so
+            # the pupil coordinate of the fit is where the model ray LANDS,
+            # not where it entered.
+            rho = x_model / r_pupil
+            # (3) rho**4 and up.  rho**2 is defocus, not a Seidel high-order
+            # residual, and including it lets any residual reference mismatch
+            # be absorbed as a focus shift and imprinted on the field.
+            max_order = max(4, int(seidel_poly_order))
+            even_powers = np.arange(4, max_order + 2, 2)
             A = np.column_stack([rho ** p for p in even_powers])
             coeffs, *_ = np.linalg.lstsq(A, correction, rcond=None)
             # Suppress fitting noise: if the RMS correction across the
@@ -6597,7 +7480,10 @@ def _apply_real_lens_impl(
             # wavelengths so meaningful corrections are still applied,
             # while ~5 nm remains above the lstsq numerical noise floor
             # for a 6th-order even-polynomial fit on ~50 fan samples).
-            corr_rms = float(np.sqrt(np.mean(correction ** 2)))
+            # Score the gate on what will actually be IMPRINTED (the fitted
+            # rho**4+ part), not on the raw residual: the two were the same
+            # quantity only because the old rho**2-up basis could fit anything.
+            corr_rms = float(np.sqrt(np.mean((A @ coeffs) ** 2)))
             if corr_rms > 5e-9:  # > 5 nm RMS to be worth applying
                 # h_sq_axis is in the array backend (xp) already;
                 # coeffs came from a CPU lstsq so scalar-broadcast
@@ -6606,8 +7492,8 @@ def _apply_real_lens_impl(
                 X, Y, h_sq_axis = _ensure_full_grids()
                 rho_map_sq = h_sq_axis / (r_pupil ** 2)
                 corr_map = xp.zeros_like(rho_map_sq)
-                for p, c in zip(even_powers, coeffs):
-                    corr_map = corr_map + float(c) * rho_map_sq ** (p // 2)
+                for _p, c in zip(even_powers, coeffs):
+                    corr_map = corr_map + float(c) * rho_map_sq ** (_p // 2)
                 corr_map = xp.where(rho_map_sq <= 1.0, corr_map, 0.0)
                 E = E * xp.exp(+1j * k0 * corr_map)
 
@@ -6692,6 +7578,19 @@ class PreparedAnalyticLens:
     the defaults at all, so after ``set_default_wave_propagator('fresnel')``
     the prepared object diverged from :func:`apply_real_lens` by 49.6 on a
     singlet with no diagnostic.
+
+    BYTE-IDENTITY WITH :func:`apply_real_lens`, and its one exception.  On a
+    build WITHOUT numexpr this class reproduces :func:`apply_real_lens` bit for
+    bit at complex128 and complex64 (verified).  WITH numexpr installed,
+    :func:`apply_real_lens` routes its phase screen through numexpr once
+    ``E.size >= 2**20`` (N >= 1024 square); numexpr evaluates at complex128
+    internally and narrows only at the ``out=`` store, while this class always
+    takes the cast-then-multiply route (``sc = screen.astype(E.dtype);
+    E = E * sc``).  For a complex64 field the two then differ by about one
+    float32 ULP -- emulated exactly at max relative 1.05e-07, rms 2.4e-08.
+    complex128 is unaffected, and so is any grid below the numexpr gate.  The
+    difference is environment-dependent (whether numexpr is importable), which
+    is why it is stated here rather than left to be discovered.
     """
 
     __slots__ = ('_screens', '_entrance_mask', '_gap', '_N', '_dx', '_dy',
@@ -6775,6 +7674,11 @@ def prepare_real_lens(
         raise ValueError(
             f"prepare_real_lens: need {len(surfaces) - 1} thicknesses for "
             f"{len(surfaces)} surfaces, got {len(thicknesses)}.")
+    # Read the key exactly as apply_real_lens does (so a malformed or
+    # out-of-range stop is diagnosed identically at both entry points), then
+    # refuse the well-formed-but-unsupported case.
+    stop_index = _normalise_stop_index(stop_index, len(surfaces),
+                                       fn_name='prepare_real_lens')
     if stop_index is not None:
         raise NotImplementedError(
             "prepare_real_lens: a decentred / mid-train stop (stop_index) is "
