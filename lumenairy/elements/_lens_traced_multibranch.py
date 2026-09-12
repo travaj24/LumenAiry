@@ -54,6 +54,7 @@ import warnings
 from typing import Any, Dict
 
 import numpy as np
+from scipy.special import airy as _scipy_airy
 
 from .. import raytrace as rt
 
@@ -73,7 +74,82 @@ _EDGE_TOL = 1e-9
 # grid power up ~1e5..1e6x (probe: ~1e6x at the BFL plane).  A well-behaved
 # through-focus field stays within ~1.2x of the input aperture power, so a warn
 # above this multiple flags the catastrophe with no false positives.
-_ENERGY_BLOWUP_FACTOR = 10.0
+_ENERGY_BLOWUP_FACTOR = 2.0
+
+# Lower arm of the same tripwire.  The upper arm alone could only ever see
+# energy GAIN, so the two silent failure modes on the other side were
+# invisible: the total collapse at an axial focus (every mapped triangle
+# degenerate -> an identically ZERO field, measured P/P_in = 0 at the BFL of an
+# f = 25 mm singlet) and the 11 % LOSS a resolved fold shows from the skipped
+# degenerate triangles plus the missing dark-side tail (measured P/P_in = 0.887
+# at N = 4096 against an independent ray-to-wave ASM oracle's 1.000).  0.5 sits
+# below any fold the audit measured (0.887 / 0.888) and far above a collapse.
+_ENERGY_COLLAPSE_FACTOR = 0.5
+
+# The upper arm was 10.0, which is above the 4-8x the reconstructed power
+# reaches in the ~100 um band BEFORE an axial focus (measured 3.99 at
+# z = 24.70 mm, 8.10 at 24.74 mm on a 24.834 mm BFL) -- so that band was
+# silent too.  A well-behaved through-focus field stays within ~1.2x of the
+# input aperture power and a RESOLVED fold within ~1.18x, so 2.0 keeps the
+# legitimate cases quiet while catching the run-up to the catastrophe.
+
+# Entry budget for one rasterisation batch, in array ENTRIES (float64
+# equivalents).  The bucket batch used to be unbounded: at N = 4096 with
+# default arguments the worst bucket held 1 187 616 triangles at 8x8 = 0.61 GB
+# per temporary, ~15-18 of them alive at once -> 7.74 GB traced / 12.2 GB RSS
+# for ONE call, which drove this workstation into swap.  4e6 entries is 32 MB
+# per float64 temporary, i.e. well under 1 GB for the whole working set, and
+# is the same order as the sibling budgets in ``_lens_imap`` and
+# ``_lens_traced`` (``_IMAP_FIT_CHUNK_ENTRIES``, ``_CHEB_FIT_CHUNK_ENTRIES``).
+# Chunking changes no arithmetic -- only ``np.add.at``'s summation order on a
+# multi-branch pixel, which this module already documents as order-dependent.
+_RASTER_CHUNK_ENTRIES = 4_000_000
+
+# Above this many DISTINCT exact bounding-box shapes the per-shape Python loop
+# starts to cost more than the padding it saves, so shapes are coalesced into
+# power-of-two classes (the pre-v5.46 grouping) instead.  Real maps are far
+# below it: a near-identity map has one or two shapes, a compressed near-focus
+# map a handful.
+_RASTER_MAX_SHAPES = 96
+
+
+def _raster_batches(wxs, wys):
+    """Yield ``(idx, wbx, wby, padded)`` rasterisation batches.
+
+    ``idx`` indexes triangles that share the batch box ``wbx x wby``; every
+    batch is capped at :data:`_RASTER_CHUNK_ENTRIES` array entries
+    (``len(idx) * wbx * wby``) so the ``(n, wbx, wby)`` temporaries stay
+    bounded however many triangles a shape holds.
+
+    ``padded`` is False when the box is each triangle's EXACT integer bounding
+    box (so every candidate pixel is inside the clipped grid range and the
+    caller needs no range mask), and True on the coalesced fallback: when a map
+    produces more than :data:`_RASTER_MAX_SHAPES` distinct shapes, they are
+    grouped by rounding each axis UP to the next power of two -- the
+    pre-v5.46 grouping -- which keeps the Python-level loop short at the cost
+    of some padded candidates the caller must mask off.  Either way the
+    contribution SET is the same; only padding work differs.
+    """
+    wxs = np.asarray(wxs, dtype=np.int64)
+    wys = np.asarray(wys, dtype=np.int64)
+    if wxs.size == 0:
+        return
+    bx, by, padded = wxs, wys, False
+    key = bx * (int(by.max()) + 1) + by
+    shapes = np.unique(key)
+    if shapes.size > _RASTER_MAX_SHAPES:
+        bx = (1 << np.ceil(np.log2(np.maximum(wxs, 1))).astype(np.int64))
+        by = (1 << np.ceil(np.log2(np.maximum(wys, 1))).astype(np.int64))
+        padded = True
+        key = bx * (int(by.max()) + 1) + by
+        shapes = np.unique(key)
+    for kk in shapes:
+        s_all = np.nonzero(key == kk)[0]
+        wbx = int(bx[s_all[0]])
+        wby = int(by[s_all[0]])
+        step = max(1, _RASTER_CHUNK_ENTRIES // max(wbx * wby, 1))
+        for b0 in range(0, s_all.size, step):
+            yield s_all[b0:b0 + step], wbx, wby, padded
 
 
 def _top_left(ex, ey):
@@ -111,14 +187,19 @@ def ludwig_fold(k, S_plus, S_minus, A_plus, A_minus):
     replace a coalescing pair in a multi-branch sum (the plain sum is accurate
     outside it, "up to the first Airy peak").  Amplitudes must be COMPLEX
     (real amplitudes without their Maslov phases give wrong interference).
+
+    Fully ELEMENTWISE: pass whole arrays of the four branch quantities and get
+    the array of uniform fields back.  (``scipy.special.airy`` is imported at
+    module scope; the re-import this function used to do cost a sys.modules
+    lookup on every one of the tens of thousands of multi-branch pixels the
+    caustic-band swap visits.)
     """
-    from scipy.special import airy
     phi = 0.5 * (S_plus + S_minus)
     rho = (0.75 * (S_plus - S_minus)) ** (2.0 / 3.0)
     r14 = rho ** 0.25
     g0 = r14 / np.sqrt(2.0) * (A_plus - 1j * A_minus)
     g1 = (A_plus + 1j * A_minus) / (r14 * np.sqrt(2.0) + 1e-300)
-    ai, aip, _, _ = airy(-(k ** (2.0 / 3.0)) * rho)
+    ai, aip, _, _ = _scipy_airy(-(k ** (2.0 / 3.0)) * rho)
     return (np.sqrt(2 * np.pi) * k ** (1.0 / 6.0) * np.exp(1j * np.pi / 4)
             * np.exp(1j * k * phi)
             * (g0 * ai + 1j * k ** (-1.0 / 3.0) * g1 * aip))
@@ -134,6 +215,21 @@ def _trace_launch_grid(prescription, wavelength, launch_radius, n_launch,
     its input phase plane).  The input eikonal on the ``z = 0`` entrance
     plane, ``T_in = L0 x + M0 y``, is included in the returned OPL so the
     branch phases carry the full input carrier exactly.
+
+    THE OUTPUT PLANE IS A PLANE.  ``rt.trace`` leaves every ray at its
+    intersection with the LAST SURFACE, i.e. at ``z = sag(rho)``, so the rays
+    must first be transferred to the exit VERTEX plane (``z = 0``) through the
+    exit medium -- :meth:`lumenairy.raytrace.TraceResult.at_exit_vertex`, the
+    one shared implementation of that signed operator -- before the
+    free-space leg ``t = output_plane_distance / N`` is added.  Advancing
+    ``image_rays`` by ``d / N`` directly evaluates every ray at
+    ``z = sag(rho) + d``: a RAY-DEPENDENT longitudinal position, not a plane,
+    so two branches reaching the same ``(x, y)`` from different ``rho`` are
+    interfered at different ``z``.  Measured on a plano-convex with
+    ``R2 = -25 mm`` over a 20 mm aperture: 477 um of transverse error and
+    3501 waves of OPD, at ``output_plane_distance = 0`` (the DEFAULT) exactly
+    as much as through focus, because the error is the sag, not the
+    propagation.
 
     Returns dict of (n_launch, n_launch) grids: entrance coords, output-plane
     transverse positions, OPL [m], exit direction cosines, alive mask.
@@ -152,7 +248,11 @@ def _trace_launch_grid(prescription, wavelength, launch_radius, n_launch,
         opd=np.zeros(n_rays),
     )
     tr = rt.trace(rays, surfaces, wavelength)
-    ex = tr.image_rays
+    # Signed sag -> exit-vertex transfer (t = -z/N, opd += n_exit*t,
+    # (x, y) += (L, M)*t, z = 0), with ``n_exit`` resolved from the
+    # prescription's own last medium.  Grazing rays (|N| <= 1e-30, which never
+    # reach the plane) are killed rather than teleported.
+    ex = tr.at_exit_vertex()
     alive = ex.alive.copy()
     # Per-surface state (x, y, z, outgoing slopes) on the launch grid -- for the
     # in-glass KMAH count (D3): each surface-to-surface leg is a homogeneous
@@ -169,8 +269,10 @@ def _trace_launch_grid(prescription, wavelength, launch_radius, n_launch,
             'sx': (np.asarray(hb.L, float) / hNz).reshape(shape),
             'sy': (np.asarray(hb.M, float) / hNz).reshape(shape),
         })
-    # advance the exit rays to the output plane a distance d past the exit
-    # vertex (free space, index output_plane_n): path length t = d / N_z.
+    # advance the exit rays -- now ON the vertex plane -- to the output plane
+    # a distance d past it (free space, index output_plane_n): path length
+    # t = d / N_z.  ``ex.z == 0`` for every alive ray after the transfer
+    # above, so this leg really is ``(d - z)/N``.
     Nz = np.where(np.abs(ex.N) > 1e-30, ex.N, 1e-30)
     t = output_plane_distance / Nz
     x_out = ex.x + t * ex.L
@@ -314,17 +416,54 @@ def _kmah_free_leg(g, d_out):
     # fill nodes whose FD Jacobian was NaN-contaminated by a dead neighbour
     # (their own ray may be alive and used by adjacent triangles): nearest
     # valid neighbour, iteratively (KMAH is piecewise constant per sheet).
+    #
+    # EDGE-CLAMPED, not wrapped.  ``np.roll`` makes the lattice a torus, so on
+    # a vignetted rim the "nearest valid neighbour" of a left-edge node is the
+    # RIGHT-edge node -- 2*launch_radius away, on the other side of the pupil
+    # and quite possibly on a different sheet, i.e. a different Maslov index.
+    # ``_shift_clamped`` repeats the boundary row/column instead, so a fill
+    # never crosses the pupil.
     bad = ~(np.isfinite(detQ0) & np.isfinite(detJ_out))
     it = 0
     while bad.any() and it < max(m.shape):
         it += 1
+        progressed = False
         for ax, sh in ((0, 1), (0, -1), (1, 1), (1, -1)):
-            src_m = np.roll(m, sh, axis=ax)
-            src_ok = np.roll(~bad, sh, axis=ax)
+            src_m = _shift_clamped(m, sh, ax)
+            src_ok = _shift_clamped(~bad, sh, ax)
             take = bad & src_ok
-            m[take] = src_m[take]
-            bad[take] = False
+            if take.any():
+                m[take] = src_m[take]
+                bad[take] = False
+                progressed = True
+        if not progressed:
+            # Every remaining bad node is isolated from any valid one (a fully
+            # dead lattice, or a dead block with no live boundary) -- the loop
+            # cannot make progress, so stop rather than spin to the cap.
+            break
     return m, detJ_out
+
+
+def _shift_clamped(a, shift, axis):
+    """``np.roll(a, shift, axis)`` with the boundary REPEATED, not wrapped.
+
+    Used by the KMAH NaN-fill, where a wrapped neighbour is a node on the
+    opposite side of the pupil (up to ``2*launch_radius`` away, potentially on
+    a different sheet) rather than an adjacent one.
+    """
+    if shift == 0:
+        return a
+    out = np.roll(a, shift, axis=axis)
+    sl = [slice(None)] * a.ndim
+    edge = [slice(None)] * a.ndim
+    if shift > 0:
+        sl[axis] = slice(0, shift)
+        edge[axis] = slice(shift, shift + 1)
+    else:
+        sl[axis] = slice(shift, None)
+        edge[axis] = slice(shift - 1, shift)
+    out[tuple(sl)] = out[tuple(edge)]
+    return out
 
 
 def apply_real_lens_traced_multibranch(
@@ -381,11 +520,13 @@ def apply_real_lens_traced_multibranch(
     closest PAIR, so the remaining ring branches keep their divergent
     ``1/sqrt|J|`` ART amplitudes and the reconstructed field DOES blow up at a
     perfect on-axis focus -- geometric optics diverges there (probe: ~1e6x the
-    input power at the BFL plane).  A warning-only energy tripwire fires when
-    the reconstructed grid power grossly exceeds the input aperture power; route
-    those pixels to the Maslov (``'levin'``) or GBD propagator.  A
-    ``det Q-dot``-based fold-vs-point discriminator is a possible future
-    refinement.
+    input power at the BFL plane).  A two-sided energy tripwire fires when the
+    reconstructed grid power departs grossly -- either way -- from the power
+    the launch congruence carries onto the grid, and a field that comes back
+    identically zero is refused outright; route those planes to the wave
+    hand-off (``apply_real_lens_traced(caustic='wave')``) or to the Maslov
+    (``'levin'``) / GBD propagator.  A ``det Q-dot``-based fold-vs-point
+    discriminator is a possible future refinement.
 
     Parameters
     ----------
@@ -538,7 +679,19 @@ def apply_real_lens_traced_multibranch(
     area2 = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
     with np.errstate(invalid='ignore'):
         ratio = np.abs(0.5 * area2) / tri_launch_area
-        good = np.isfinite(area2) & (ratio >= min_area_ratio)
+        finite_tri = np.isfinite(area2)
+        good = finite_tri & (ratio >= min_area_ratio)
+    # Degenerate-triangle census (D5 / audit T2).  The ART amplitude
+    # 1/sqrt|J| is undefined ON a caustic, so a triangle whose mapped area has
+    # collapsed below ``min_area_ratio`` is skipped -- the literature-standard
+    # choice.  At an AXIAL point focus EVERY triangle collapses at once, the
+    # rasteriser writes nothing, and the returned field is IDENTICALLY ZERO;
+    # before this census that outcome reached the caller with no diagnostic at
+    # all (the energy tripwire could only see a GAIN).  Count the skips so the
+    # total collapse can be named and refused.
+    _n_tri = int(area2.size)
+    _n_finite = int(finite_tri.sum())
+    _n_degenerate = int(_n_finite - int(good.sum()))
     if good.any():
         xmn = np.minimum(np.minimum(x0, x1), x2)[good]
         xmx = np.maximum(np.maximum(x0, x1), x2)[good]
@@ -572,13 +725,17 @@ def apply_real_lens_traced_multibranch(
         # is n*(L, M), NOT the bare direction cosines (D4); pn = 1 for a
         # vacuum output plane, so this is byte-identical there.  (The OPL
         # advance already carries the n factor -- output_plane_n * t above.)
+        # Named ``p0x``/``p0y`` etc., NOT ``L0``/``M0``: those two names are
+        # the INPUT congruence's launch direction cosines, live from the top of
+        # this function, and rebinding them here to per-vertex slowness
+        # components silently shadowed them for the rest of the body.
         pn = float(output_plane_n)
-        L0 = pn * _g(L[V0i, V0j])
-        L1 = pn * _g(L[V1i, V1j])
-        L2 = pn * _g(L[V2i, V2j])
-        M0 = pn * _g(M[V0i, V0j])
-        M1 = pn * _g(M[V1i, V1j])
-        M2 = pn * _g(M[V2i, V2j])
+        p0x = pn * _g(L[V0i, V0j])
+        p1x = pn * _g(L[V1i, V1j])
+        p2x = pn * _g(L[V2i, V2j])
+        p0y = pn * _g(M[V0i, V0j])
+        p1y = pn * _g(M[V1i, V1j])
+        p2y = pn * _g(M[V2i, V2j])
         E0 = _g(E_launch[V0i, V0j])
         E1 = _g(E_launch[V1i, V1j])
         E2 = _g(E_launch[V2i, V2j])
@@ -593,16 +750,45 @@ def apply_real_lens_traced_multibranch(
         e1x, e1y = x0k - x2k, y0k - y2k
         e2x, e2y = x1k - x0k, y1k - y0k
 
-        wmax = np.maximum(pxmax - pxmin, pymax - pymin) + 1
-        cls = np.ceil(np.log2(wmax)).astype(np.int64)
-        for c in np.unique(cls):
-            s = np.nonzero(cls == c)[0]
-            wb = int(2 ** c)
-            off = np.arange(wb, dtype=np.int64)
-            gx = pxmin[s, None, None] + off[None, :, None]
-            gy = pymin[s, None, None] + off[None, None, :]
-            vmask = ((gx <= pxmax[s, None, None])
-                     & (gy <= pymax[s, None, None]))
+        # ---- batched rasterisation ------------------------------------
+        # Triangles are grouped so one NumPy batch covers many of them, and
+        # every intermediate below is ``(n_batch, wx, wy)``.  Two properties
+        # of that grouping are load-bearing, and neither was true before:
+        #
+        # * the box is the triangle's EXACT integer bounding box, not the
+        #   next power of two.  At ``output_plane_distance = 0`` -- the
+        #   DEFAULT -- the map is near-identity, so a 5x5-pixel triangle used
+        #   to be padded to 8x8 and ~60 % of the barycentric arithmetic was
+        #   thrown away by ``vmask``.  Measured on an f/2 singlet at N = 2048
+        #   with default arguments, the exit-vertex call took 144 s against
+        #   0.85 s for the SAME grid near focus, where the triangles compress
+        #   into small boxes.  With the exact box there is no padding, so no
+        #   ``vmask`` either.
+        # * the batch is CHUNKED against a named entry budget.  Nothing used
+        #   to bound ``n_batch * wx * wy``: at N = 4096 the worst bucket held
+        #   1 187 616 triangles at 8x8, i.e. 0.61 GB per temporary and ~15-18
+        #   of them alive at once -- 7.74 GB of traced allocation and 12.2 GB
+        #   RSS for one default-argument call, with no warning and no model in
+        #   ``lumenairy.memory.estimate_lens_memory``.  The budget caps the
+        #   working set at ~``_RASTER_CHUNK_ENTRIES`` float64 per temporary
+        #   regardless of grid or prescription.
+        #
+        # Neither changes the CONTRIBUTION SET -- the same pixels enter with
+        # the same values -- only the order in which ``np.add.at`` sums a
+        # multi-branch pixel, which this module already documents as
+        # order-dependent at the ULP level (see the note above).
+        wxs = (pxmax - pxmin + 1).astype(np.int64)
+        wys = (pymax - pymin + 1).astype(np.int64)
+        for s, wbx, wby, _padded in _raster_batches(wxs, wys):
+            gx = pxmin[s, None, None] + np.arange(wbx, dtype=np.int64)[
+                None, :, None]
+            gy = pymin[s, None, None] + np.arange(wby, dtype=np.int64)[
+                None, None, :]
+            # Only the coalesced (power-of-two) fallback can overshoot the
+            # triangle's clipped box; with the exact box every candidate is a
+            # valid grid index and no mask is needed.
+            vmask = (((gx <= pxmax[s, None, None])
+                      & (gy <= pymax[s, None, None])) if _padded else None)
             PX = (gx - N / 2.0) * dx
             PY = (gy - N / 2.0) * dx
             X0 = x0k[s, None, None]
@@ -645,25 +831,26 @@ def apply_real_lens_traced_multibranch(
             inside = (
                 ((a0 > _EDGE_TOL) | ((np.abs(a0) <= _EDGE_TOL) & _top_left(*e0i)))
                 & ((a1 > _EDGE_TOL) | ((np.abs(a1) <= _EDGE_TOL) & _top_left(*e1i)))
-                & ((a2 > _EDGE_TOL) | ((np.abs(a2) <= _EDGE_TOL) & _top_left(*e2i)))
-                & vmask)
+                & ((a2 > _EDGE_TOL) | ((np.abs(a2) <= _EDGE_TOL) & _top_left(*e2i))))
+            if vmask is not None:
+                inside &= vmask
             if not inside.any():
                 continue
             # second-order intrapolated OPL (Kraaijpoel eq. 5.7):
             # T = sum_i a_i [T_i + 1/2 (x - x_i).p_i], p = n*(L, M) (D4)
             T = (a0 * (T0[s, None, None]
-                       + 0.5 * ((PX - X0) * L0[s, None, None]
-                                + (PY - Y0) * M0[s, None, None]))
+                       + 0.5 * ((PX - X0) * p0x[s, None, None]
+                                + (PY - Y0) * p0y[s, None, None]))
                  + a1 * (T1[s, None, None]
                          + 0.5 * ((PX - x1k[s, None, None])
-                                  * L1[s, None, None]
+                                  * p1x[s, None, None]
                                   + (PY - y1k[s, None, None])
-                                  * M1[s, None, None]))
+                                  * p1y[s, None, None]))
                  + a2 * (T2[s, None, None]
                          + 0.5 * ((PX - x2k[s, None, None])
-                                  * L2[s, None, None]
+                                  * p2x[s, None, None]
                                   + (PY - y2k[s, None, None])
-                                  * M2[s, None, None])))
+                                  * p2y[s, None, None])))
             Ein_tri = (a0 * E0[s, None, None] + a1 * E1[s, None, None]
                        + a2 * E2[s, None, None])
             # branch record: complex amplitude WITH its Maslov phase, and
@@ -690,31 +877,62 @@ def apply_real_lens_traced_multibranch(
             # where the branch amplitudes diverge; reduces to the plain sum
             # outside the band by construction).  Grillo & Cordes eq. 47:
             # uniform-Airy for the coalescing pair, plain GO for the rest.
+            #
+            # VECTORISED over pixels.  The per-pixel Python loop this replaces
+            # cost 0.76-1.07 ms for EVERY multi-branch pixel (measured +3.22 s
+            # over 3 004 pixels at N = 2048 and +9.14 s over 12 020 at
+            # N = 4096, i.e. a 1.5 Mpx two-branch ring would have taken ~20
+            # minutes).  Same selection rule, same arithmetic: sort the
+            # branches of each pixel by eikonal, take the closest ADJACENT
+            # pair, and swap it when its split is inside the band.
             order = np.argsort(bi, kind='stable')
             bi_s = bi[order]
             starts = np.flatnonzero(np.r_[True, bi_s[1:] != bi_s[:-1]])
             ends = np.r_[starts[1:], bi_s.size]
             band = np.pi / k0
-            for s, e in zip(starts, ends):
-                if e - s < 2:
-                    continue
-                sel = order[s:e]
-                Ts = bT[sel]
-                # the closest-eikonal pair
-                o2 = np.argsort(Ts)
-                dT = np.diff(Ts[o2])
-                jmin = int(np.argmin(dT))
-                if dT[jmin] > band:
-                    continue
-                ia = sel[o2[jmin]]        # lower-S branch  (S-)
-                ib = sel[o2[jmin + 1]]    # higher-S branch (S+)
-                # floor the eikonal split (removable 0/0 in the g1 term
-                # exactly at coalescence)
-                Sm, Sp = bT[ia], bT[ib]
-                if Sp - Sm < 1e-4 * wavelength:
-                    Sp = Sm + 1e-4 * wavelength
-                uni = ludwig_fold(k0, Sp, Sm, bA[ib], bA[ia])
-                E_flat[bi_s[s]] += uni - (plain[ia] + plain[ib])
+            multi = (ends - starts) >= 2
+            if multi.any():
+                g_start = starts[multi]
+                g_end = ends[multi]
+                n_g = g_start.size
+                n_max = int((g_end - g_start).max())
+                # Ragged -> padded (n_groups, n_max) of the group members'
+                # positions in ``order``; pad slots take the group's own first
+                # member so the sort never sees a sentinel that could become
+                # the minimum gap.
+                col = np.arange(n_max)[None, :]
+                cnt = (g_end - g_start)[:, None]
+                valid = col < cnt
+                pos = np.where(valid, g_start[:, None] + col, g_start[:, None])
+                sel = order[pos]                      # (n_g, n_max)
+                Ts = np.where(valid, bT[sel], np.inf)
+                o2 = np.argsort(Ts, axis=1, kind='stable')
+                rows = np.arange(n_g)[:, None]
+                sel_s = sel[rows, o2]
+                Ts_s = Ts[rows, o2]
+                # gaps between ADJACENT sorted branches; a gap that touches a
+                # padded slot is +inf and can never be the minimum.
+                dT = Ts_s[:, 1:] - Ts_s[:, :-1]
+                dT = np.where(np.isfinite(dT), dT, np.inf)
+                jmin = np.argmin(dT, axis=1)
+                dmin = dT[np.arange(n_g), jmin]
+                hit = np.isfinite(dmin) & (dmin <= band)
+                if hit.any():
+                    hr = np.nonzero(hit)[0]
+                    jh = jmin[hr]
+                    ia = sel_s[hr, jh]            # lower-S branch  (S-)
+                    ib = sel_s[hr, jh + 1]        # higher-S branch (S+)
+                    Sm = bT[ia]
+                    # floor the eikonal split (removable 0/0 in the g1 term
+                    # exactly at coalescence)
+                    Sp = np.maximum(bT[ib], Sm + 1e-4 * wavelength)
+                    uni = ludwig_fold(k0, Sp, Sm, bA[ib], bA[ia])
+                    # Each group owns one pixel, and a pixel appears in at most
+                    # one group, so these writes do not collide -- but use
+                    # ``np.add.at`` anyway so the accumulation rule is the same
+                    # one the plain sum used.
+                    np.add.at(E_flat, bi_s[g_start[hr]],
+                              uni - (plain[ia] + plain[ib]))
     E_out = E_flat.reshape(N, N)
 
     # our accumulation is indexed [x, y]; the library field convention is
@@ -722,35 +940,113 @@ def apply_real_lens_traced_multibranch(
     E_out = E_out.T
     n_branch = n_branch.T
 
-    # ---- axial point-focus catastrophe tripwire (warning-only, D5) ------
+    # ---- axial point-focus catastrophe tripwire (D5 / audit T2) ---------
     # Independent energy oracle: at a rotationally-symmetric on-axis focus a
     # RING of branches coalesces where the fold-uniform 'ludwig' swap
     # regularizes only the closest PAIR, so the residual branch amplitudes
     # diverge and the reconstructed grid power blows up ~1e5..1e6x (a
-    # well-behaved through-focus field stays within ~1.2x of the input aperture
-    # power).  Compare reconstructed power to the power that entered the launch
-    # aperture and warn on a gross excess -- no number change, non-JAX-only.
-    if aperture is not None:
-        ap_r = 0.5 * float(aperture)
-    else:
-        ap_r = 0.5 * N * dx
-    xg = (np.arange(N) - N / 2.0) * dx
-    r2 = xg[None, :] ** 2 + xg[:, None] ** 2
-    p_in = float(np.sum(np.abs(E_in[r2 <= ap_r * ap_r]) ** 2))
-    p_out = float(np.sum(np.abs(E_out) ** 2))
+    # well-behaved through-focus field conserves the launched power).  Compare
+    # in BOTH directions, since a gain-only test cannot see the two failures on
+    # the other side (the total collapse below, and the ~11 % loss a resolved
+    # fold shows from the skipped degenerate triangles plus the missing
+    # dark-side tail).
+    #
+    # The reference is the power the launch congruence actually carries ONTO
+    # THE GRID, not the input power inside the aperture circle.  Two geometry
+    # effects make the aperture-circle sum the wrong normaliser, both of them
+    # present in ordinary use and neither of them a physics failure:
+    #   * the launch sampler CLAMPS E_in at the grid edge, so an aperture wider
+    #     than the E_in grid launches the edge amplitude over the whole rim
+    #     annulus -- far more power than that sum counts;
+    #   * light that legitimately leaves the N x N output grid is not lost
+    #     physics, it is off-screen.
+    # Summing |E_launch|^2 over alive launch nodes whose mapped exit point
+    # lands inside the grid removes both, and puts numerator and denominator in
+    # the same physical units (launch cell area h^2, output pixel area dx^2).
+    with np.errstate(invalid='ignore'):
+        _in_grid = ok & (np.abs(XO) <= 0.5 * N * dx) & (np.abs(YO)
+                                                        <= 0.5 * N * dx)
+    p_in = float(np.sum(np.abs(E_launch[_in_grid]) ** 2)) * (h * h)
+    p_out = float(np.sum(np.abs(E_out) ** 2)) * (dx * dx)
+
+    # TOTAL COLLAPSE.  This is the only outcome of the four that is not merely
+    # inaccurate but EMPTY, and before this census it reached the caller as an
+    # identically-zero field with no diagnostic at all (measured P/P_in = 0.0,
+    # 0 non-zero pixels, 0 warnings at the 24.83 mm BFL of an f = 25 mm
+    # singlet, through the public entry point).  Two mechanisms produce it and
+    # the test covers both: triangles skipped as degenerate, and triangles so
+    # compressed by the map that none contains a pixel CENTRE.  Refuse --
+    # returning zeros invites the caller to read "no light" as a physical
+    # result at the very plane the method cannot represent.
+    if p_in > 0.0 and p_out <= 0.0:
+        raise RuntimeError(
+            "apply_real_lens_traced_multibranch: the reconstructed field is "
+            f"identically ZERO at this output plane, although "
+            f"{_n_finite} launch triangles mapped and the launch congruence "
+            f"carries power onto this grid.  {_n_degenerate} of those "
+            f"triangles "
+            f"({100.0 * _n_degenerate / max(_n_finite, 1):.1f}%) were skipped "
+            f"as degenerate (mapped/launch area ratio below "
+            f"min_area_ratio={min_area_ratio:g}) and the rest are compressed "
+            f"below one pixel, so no pixel centre lies inside any mapped "
+            f"triangle.  This is the axial point-focus catastrophe (Scope note "
+            f"D5): a whole RING of branches coalesces, which is a higher "
+            f"catastrophe than the FOLD the 'ludwig' pair swap can "
+            f"regularize, and geometric optics genuinely diverges there.  Use "
+            f"the wave hand-off -- apply_real_lens_traced(caustic='wave', "
+            f"output_plane_distance=...), which propagates the traced "
+            f"exit-vertex field with the band-limited angular spectrum and is "
+            f"exact through folds, cusps and the axial focus alike -- or "
+            f"apply_real_lens_gbd / apply_real_lens_maslov.  Lowering "
+            f"min_area_ratio does NOT fix it: it only lets the divergent "
+            f"1/sqrt|J| amplitudes through (measured P/P_in = 3.9e+09 at "
+            f"min_area_ratio=1e-12 on the same plane).")
+    if _n_finite > 0 and _n_degenerate > 0.25 * _n_finite:
+        warnings.warn(
+            "apply_real_lens_traced_multibranch: "
+            f"{_n_degenerate}/{_n_finite} mapped launch triangles "
+            f"({100.0 * _n_degenerate / _n_finite:.1f}%) are degenerate at "
+            f"this output plane (area ratio below "
+            f"min_area_ratio={min_area_ratio:g}) and were skipped, so the "
+            f"reconstructed field is missing their contribution.  The output "
+            f"plane is at or near a caustic that the fold-uniform 'ludwig' "
+            f"swap cannot regularize; prefer caustic='wave' (the band-limited "
+            f"ASM hand-off) or the GBD / Maslov propagators here.",
+            RuntimeWarning, stacklevel=2)
+
     if p_in > 0.0 and p_out > _ENERGY_BLOWUP_FACTOR * p_in:
         warnings.warn(
             "apply_real_lens_traced_multibranch: reconstructed grid power is "
-            f"{p_out / p_in:.3g}x the input aperture power (up to "
+            f"{p_out / p_in:.3g}x the launched power that reaches this grid "
+            f"(up to "
             f"{int(n_branch.max())} branches coalesce on one pixel).  This is "
             "the axial point-focus catastrophe (Scope note D5): a RING of "
             "branches coalesces where the fold-uniform 'ludwig' swap "
             "regularizes only the closest PAIR, so the residual ART amplitudes "
-            "diverge.  The near-focus field is unphysical here -- use the "
-            "Maslov ('levin') or GBD propagator at an on-axis point focus.",
+            "diverge.  The near-focus field is unphysical here -- use "
+            "caustic='wave' (the band-limited ASM hand-off), or the Maslov "
+            "('levin') or GBD propagator, at an on-axis point focus.",
+            RuntimeWarning, stacklevel=2)
+    elif p_in > 0.0 and 0.0 < p_out < _ENERGY_COLLAPSE_FACTOR * p_in:
+        warnings.warn(
+            "apply_real_lens_traced_multibranch: reconstructed grid power is "
+            f"only {p_out / p_in:.3g}x the launched power that reaches this "
+            f"grid ({_n_degenerate}/{max(_n_finite, 1)} mapped triangles were "
+            f"skipped as degenerate).  A branch-enumeration field LOSES energy "
+            f"where the ray map is under-covered -- the skipped degenerate "
+            f"triangles and, on the dark side of a fold, the exponential tail "
+            f"no real ray reaches (which this method drops to exactly zero).  "
+            f"Use caustic='uniform' for the fold's Airy tail, or caustic="
+            f"'wave' (the band-limited ASM hand-off) / GBD / Maslov for an "
+            f"energy-conserving answer.",
             RuntimeWarning, stacklevel=2)
 
     if return_diagnostics:
         return E_out, {'kmah': m_grid, 'detJ': detJ, 'n_branch': n_branch,
-                       'input_carrier': (kcx, kcy)}
+                       'input_carrier': (kcx, kcy),
+                       'n_triangles': _n_tri, 'n_triangles_finite': _n_finite,
+                       'n_triangles_degenerate': _n_degenerate,
+                       # reconstructed grid power / launched power reaching
+                       # the grid: 1.0 = energy conserved by the branch sum
+                       'power_ratio': (p_out / p_in) if p_in > 0.0 else None}
     return E_out

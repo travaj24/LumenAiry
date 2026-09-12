@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import re
 import tempfile
 import warnings
 
@@ -399,15 +400,27 @@ def _spot(F, dxo, cx, cy, ee_r=6e-6):
                 ee=float(I[rr <= ee_r].sum() / tot), power=tot * dxo * dxo)
 
 
-def _run_skew(r_in, cx, cy, nout=_S_NOUT):
+def _run_skew(r_in, cx, cy, nout=_S_NOUT, broken=False):
+    """``broken=True`` waives the paraxial readout's beam-vs-grid containment
+    guard (WP-A6 / C1).
+
+    Only the FAIL-BEFORE arms need it, and they need it for the same reason
+    they exist: with ``_tilt_ramp`` disabled the tilted congruence's envelope
+    reaches the stop plane at a measured containment of 0.480 beam radii --
+    the beam's skirt is being wrapped by the periodic transform, which is
+    precisely the "peak intensity collapses to 3e-6 of the shipped path's"
+    this test then asserts.  The shipped arm is unaffected (its containment is
+    the resolver's 3.2), so the waiver stays on the broken arms rather than
+    being pushed into the fixture."""
+    fr = dict(dx_out=_S_DXO, N_out=nout, centre_out=(cx, cy))
+    if broken:
+        fr['on_focus_containment'] = 'ignore'
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         return la.propagate_traced_carrier_chain(
             _gauss(_S_N, _S_DX, _S_W), _S_GROUPS, _WL, _S_DX, r_in=r_in,
             ray_subsample=8, n_workers=1, final_distance=_SK['fd'],
-            focus_readout=dict(dx_out=_S_DXO, N_out=nout,
-                               centre_out=(cx, cy)),
-            traced_kwargs=_TKW)
+            focus_readout=fr, traced_kwargs=_TKW)
 
 
 _SK = _skew_paraxial()
@@ -540,7 +553,8 @@ def test_breaking_the_tilted_path_moves_the_skew_spot_off_the_oracle(
     try:
         setattr(_c, attr, repl)
         broken = _run_skew(la.TiltedCarrier(np.inf, _S_L, _S_M),
-                           _skew_runs['xe'], _skew_runs['ye'], nout=2048)
+                           _skew_runs['xe'], _skew_runs['ye'], nout=2048,
+                           broken=True)
     finally:
         setattr(_c, attr, orig)
     sb = _spot(broken.field, _S_DXO, _skew_runs['xe'], _skew_runs['ye'])
@@ -818,11 +832,24 @@ def test_the_chain_reports_the_measured_na_next_to_the_paraxial_one():
 
 def test_the_measured_na_guard_closes_the_paraxial_pre_checks_blind_spot():
     """The hole, and its closure.  At ``n_fine_cap=192`` the retrace grid
-    carries NA 0.0786 against a MEASURED exit NA 0.3408 -- 23 % of it, with
+    carries NA 0.0786 against a MEASURED exit NA of 0.2205 -- 36 % of it, with
     2.11e-2 of the exit power aliasing -- while the PARAXIAL pre-check is
     silent, because ``lambda/(2 * 0.0520)`` = 12.6 um is coarser than the
     3.13 um... 8.33 um ``dx_fine`` this sweep produces.  So pre-C1 the leg ran
-    with no diagnostic at all."""
+    with no diagnostic at all.
+
+    RESTATED 2026-09-12 (audit T13).  The measured exit NA on this fixture was
+    0.3408 while ``apply_real_lens_traced``'s ``na_exit`` statistic was taken
+    over EVERY launch ray -- including the ones outside the physical aperture,
+    since the trace runs with ``aperture_diameter`` popped and the significance
+    gate looked only at input amplitude.  It is now intersected with the same
+    disc the returned field is masked to, which is the population the Nyquist
+    statement is about, and reads 0.2205 here.  The GUARD's decision is
+    unchanged (the grid still cannot carry the exit NA and 2.110 % of the exit
+    power still aliases), so the assertions below pin the DECISION and the
+    relation ``NA_measured > NA_grid > NA_paraxial`` rather than a digit
+    string -- a bar that moves with a legitimate statistic is the shape
+    ``docs/TESTING_STANDARDS.md`` S5 warns about."""
     _ram_guard()
     # 'warn' first, to read the numbers the refusal is made of
     with warnings.catch_warnings(record=True) as wl:
@@ -833,9 +860,20 @@ def test_the_measured_na_guard_closes_the_paraxial_pre_checks_blind_spot():
     hits = [str(w.message) for w in wl if 'MEASURED exit NA' in str(w.message)]
     assert hits, [str(w.message)[:90] for w in wl]
     # the message must name BOTH NAs, the aliased fraction and the budget
-    assert 'ALIASES' in hits[0] and 'NA=0.34' in hits[0], hits[0]
+    assert 'ALIASES' in hits[0], hits[0]
     assert 'w_in/|R_out| = 0.052' in hits[0], hits[0]
     assert '2.110 %' in hits[0] and 'tolerance 1 %' in hits[0], hits[0]
+    # Both NAs are quoted, and they stand in the order that makes the message
+    # mean something: the MEASURED exit NA exceeds what the grid carries, which
+    # in turn exceeds the paraxial estimate that SIZED the grid.  Read out of
+    # the message rather than string-matched, so a legitimate move of the
+    # statistic (T13 narrowed it from 0.3408 to 0.2205 by excluding rays the
+    # output mask deletes) restates the numbers without breaking the claim.
+    _nas = [float(m) for m in re.findall(r'NA=([0-9.]+)', hits[0])]
+    assert len(_nas) == 2, hits[0]
+    _na_meas, _na_grid = _nas
+    assert _na_meas > _na_grid > 0.0520, (_na_meas, _na_grid)
+    assert _na_meas > 0.1, _na_meas       # a genuinely high-NA leg, not noise
     # the PARAXIAL pre-check cannot see it: its own message never appears
     assert not [w for w in wl
                 if 'merely NYQUIST-sampling the exit sphere' in str(w.message)]
@@ -1021,7 +1059,11 @@ def test_the_focus_readout_whitelist_is_exactly_what_the_chain_consumes():
               # chain through the same whitelist.  'ignore' here because this
               # fixture's window is wider than one period and the subject of
               # the test is the WHITELIST, not the guard.
-              'on_replica': 'ignore'}
+              'on_replica': 'ignore',
+              # WP-A6 / C1 (2026-09-12): the paraxial readout's beam-vs-grid
+              # containment guard, likewise -- and likewise 'ignore', because
+              # this fixture is the whitelist's fixture and not the guard's.
+              'on_focus_containment': 'ignore'}
     assert set(sample) == _FOCUS_READOUT_KEYS
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')

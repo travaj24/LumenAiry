@@ -645,10 +645,13 @@ def _traced_fit_matrices():
     cap = []
     orig = LT._solve_lstsq_thread_safe
 
-    def spy(A, b, deterministic=False):
+    # ``**kw`` pass-through: the solver carries diagnostic-only keywords
+    # (``score_domain``, the full-lattice design the step-down warning scores
+    # over) that must not turn this census into a TypeError.
+    def spy(A, b, deterministic=False, **kw):
         cap.append((np.ascontiguousarray(A, np.float64),
                     np.array(b, dtype=np.float64)))
-        return orig(A, b, deterministic=deterministic)
+        return orig(A, b, deterministic=deterministic, **kw)
 
     LT._solve_lstsq_thread_safe = spy
     try:
@@ -732,9 +735,10 @@ def test_every_least_squares_solve_on_the_traced_path_is_deterministic():
     seen = []
     orig = LT._solve_lstsq_thread_safe
 
-    def spy(A, b, deterministic=False):
+    # ``**kw`` pass-through -- see the note on the other spy in this file.
+    def spy(A, b, deterministic=False, **kw):
         seen.append((np.shape(A), bool(deterministic)))
-        return orig(A, b, deterministic=deterministic)
+        return orig(A, b, deterministic=deterministic, **kw)
 
     LT._solve_lstsq_thread_safe = spy
     try:

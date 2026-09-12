@@ -417,10 +417,19 @@ def test_cusp_or_multiple_fold_detected_and_falls_back(monkeypatch):
     xs = np.linspace(lr / n, lr, n)
     # a TWO-hump meridional height map (two interior dx/dh sign changes)
     xo = 1e-5 * np.sin(3.0 * np.pi * xs / lr)
+    # The stub stands in for a full ``TraceResult``, so it must offer the same
+    # exit-vertex contract the module now uses: rays leave ``trace`` at
+    # ``z = sag(rho)`` and are transferred to ``z = 0`` before the output-plane
+    # leg.  These synthetic rays are already ON the vertex plane (``z = 0``,
+    # ``N = 1``), where the transfer is the identity -- so returning the same
+    # bundle is exactly what ``TraceResult.at_exit_vertex`` would return, and
+    # the fixture keeps testing the turning-point classifier and nothing else.
+    exit_rays = types.SimpleNamespace(
+        x=xo, y=np.zeros(n), z=np.zeros(n), N=np.ones(n), L=np.zeros(n),
+        M=np.zeros(n), opd=1e-3 * xs, alive=np.ones(n, dtype=bool))
     fake = types.SimpleNamespace(
-        image_rays=types.SimpleNamespace(
-            x=xo, y=np.zeros(n), N=np.ones(n), L=np.zeros(n), M=np.zeros(n),
-            opd=1e-3 * xs, alive=np.ones(n, dtype=bool)))
+        image_rays=exit_rays,
+        at_exit_vertex=lambda n_exit=None: exit_rays)
 
     def _fake_trace(rays, surfaces, wavelength, **kw):
         return fake

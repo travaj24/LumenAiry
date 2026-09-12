@@ -546,6 +546,10 @@ def get_lens_parallel_amp() -> bool:
 # NullHandler -- users opt in by attaching a handler to the
 # ``lumenairy`` logger.
 from .._logging import get_logger
+from .._math.chebyshev import (
+    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
+)
+from .._math.chebyshev import chebyshev_vandermonde as _chebyshev_vandermonde
 from ..glass import get_glass_index
 from ..progress import ProgressScaler, call_progress
 from .lenses import _warn_if_aperture_exceeds_grid
@@ -680,6 +684,41 @@ def _newton_worker_payload(key, blob):
             f"does not hold (resident: {sorted(_WORKER_PAYLOADS)}).  The "
             f"parent re-submits this chunk with the payload attached; nothing "
             f"about the ANSWER changes.") from None
+
+
+def _landed_on_filled_node(xe, ye, xs_in, fill_mask):
+    """True where a Newton entrance solution sits on a FILLED launch node.
+
+    ``newton_fit='spline'`` on a vignetting prescription needs a NaN-free
+    tensor grid, so :func:`_fill_dead_launch_nodes` copies each dead node's
+    forward-map value from its nearest live neighbour.  Those values are
+    padding, not ray physics, so any output pixel whose converged entrance
+    coordinate falls in a filled node's cell must be reported as masked --
+    exactly the way an out-of-domain pixel is.
+
+    ``fill_mask is None`` (the polynomial fit, or no vignetting at all) means
+    "nothing was filled": returns ``False``, so the caller's ``|`` is a no-op
+    and the arithmetic is bit-identical to the un-filled path.
+    """
+    if fill_mask is None:
+        return False
+    fill_mask = np.asarray(fill_mask, dtype=bool)
+    if not fill_mask.any():
+        return False
+    xs_in = np.asarray(xs_in, dtype=np.float64)
+    n = xs_in.size
+    if n < 2:
+        return False
+    h = float(xs_in[1] - xs_in[0])
+    x0 = float(xs_in[0])
+    # Nearest node (``rint``, not ``floor``): the cell each solution belongs
+    # to is the one whose CENTRE is closest, and clipping keeps a solution
+    # that escaped the lattice attributable to the rim node.
+    ii = np.clip(np.rint((np.asarray(xe) - x0) / h), 0, n - 1).astype(np.intp)
+    jj = np.clip(np.rint((np.asarray(ye) - x0) / h), 0, n - 1).astype(np.intp)
+    # ``xs_in`` indexes BOTH axes of the ``indexing='ij'`` launch lattice, so
+    # axis 0 is x and axis 1 is y.
+    return fill_mask[ii, jj]
 
 
 def _newton_payload_blob(knot_data):
@@ -884,6 +923,8 @@ def _newton_invert_chunk(args):
 
     opl_flat = So.ev(xe, ye)
     out_of_domain = (xe * xe + ye * ye > (launch_radius * 0.99) ** 2)
+    out_of_domain = out_of_domain | _landed_on_filled_node(
+        xe, ye, xs_in, knot_data.get('spline_fill_mask'))
     # (opl, n_unconverged) -- the count lets the parent emit the serial
     # path's unconverged warning for the pool path too (audit E-H2).
     return (np.where(out_of_domain, np.nan, opl_flat), int(active.sum()))
@@ -1555,18 +1596,142 @@ def _is_main_guard_test(node) -> bool:
         elif isinstance(sub, ast.Constant) and sub.value in ('__main__',
                                                              '__mp_main__'):
             saw_main = True
-    return saw_name and saw_main
+    if not (saw_name and saw_main):
+        return False
+    # An INVERTED guard is not a guard.  ``if __name__ != '__main__': raise
+    # SystemExit`` mentions both names, so the walk above accepts it -- but a
+    # spawn child's ``__name__`` is ``'__mp_main__'``, so the child takes the
+    # branch and DIES.  Treat a test whose only comparison is ``!=`` /
+    # ``not in`` as unguarded, which routes the call to the serial path rather
+    # than to a pool whose workers cannot start.
+    cmps = [c for c in ast.walk(node) if isinstance(c, ast.Compare)]
+    if cmps and all(
+            all(isinstance(op, (ast.NotEq, ast.NotIn)) for op in c.ops)
+            for c in cmps):
+        return False
+    return True
+
+
+#: Module-scope PROCESS-SETUP calls a spawn child can repeat for free.
+#:
+#: The predicate below has to separate "a module doing what a module does at
+#: import" from "a module doing the program's WORK".  Imports, ``def`` /
+#: ``class`` and literal constants are the uncontroversial half; these four
+#: modules are the other half, and they are here by NAME rather than by a
+#: general rule because that is the only honest way to say "idempotent, no
+#: allocation, no I/O worth the name":
+#:
+#:   * ``sys``      -- ``sys.path.insert`` / ``append``, the first two lines of
+#:                     every script that imports a sibling;
+#:   * ``os``       -- ``os.environ.get``, ``os.path.*``: configuration reads;
+#:   * ``warnings`` -- ``filterwarnings`` / ``simplefilter``, which a driver
+#:                     installs at module scope precisely so that its own
+#:                     imports are covered;
+#:   * ``logging``  -- ``getLogger`` and friends.
+#:
+#: Everything else that CALLS at module scope stays unsafe, including
+#: ``np.zeros((4096, 4096))`` (the audit's 134 MB case), ``load_config()`` and
+#: ``main()``.  The limitation is stated plainly: a module could still do real
+#: work through one of these names, and this predicate would not see it.  What
+#: it does see is the shape that actually burned the capstone run.
+_MAIN_GUARD_CHEAP_MODULES = frozenset(('sys', 'os', 'warnings', 'logging'))
+
+#: Builtins that only CONVERT a value, so wrapping a cheap read in one keeps it
+#: cheap (``NW = int(os.environ.get('NW', '1'))``).
+_MAIN_GUARD_CHEAP_BUILTINS = frozenset(
+    ('int', 'float', 'str', 'bool', 'len', 'tuple', 'list', 'dict', 'set',
+     'frozenset', 'abs', 'min', 'max', 'round'))
+
+
+def _expr_is_cheap_setup(node) -> bool:
+    """True when evaluating ``node`` is idempotent process setup.
+
+    Every CALL inside it must target :data:`_MAIN_GUARD_CHEAP_MODULES` by
+    attribute access, or be one of :data:`_MAIN_GUARD_CHEAP_BUILTINS`.  A
+    call-free expression (a literal, a name, an attribute read such as
+    ``_orig = mod.func``) is cheap by construction.
+    """
+    import ast
+
+    def _root_name(fn):
+        while isinstance(fn, ast.Attribute):
+            fn = fn.value
+        return fn.id if isinstance(fn, ast.Name) else None
+
+    for sub in ast.walk(node):
+        if not isinstance(sub, ast.Call):
+            continue
+        fn = sub.func
+        if isinstance(fn, ast.Name):
+            if fn.id not in _MAIN_GUARD_CHEAP_BUILTINS:
+                return False
+        elif isinstance(fn, ast.Attribute):
+            if _root_name(fn) not in _MAIN_GUARD_CHEAP_MODULES:
+                return False
+        else:
+            return False
+    return True
+
+
+def _top_level_statement_is_safe(st) -> bool:
+    """Is this top-level statement cheap and side-effect-free to RE-RUN?
+
+    A spawn worker re-imports the caller's ``__main__`` module, so every
+    top-level statement runs again in every worker.  Imports, constant
+    assignments, ``def`` / ``class`` / decorators, docstrings, ``__future__``
+    statements and the process-setup calls listed at
+    :data:`_MAIN_GUARD_CHEAP_MODULES` are what a module is EXPECTED to do at
+    import; anything else is work the child pays for again.
+    """
+    import ast
+    if isinstance(st, (ast.Import, ast.ImportFrom, ast.FunctionDef,
+                       ast.AsyncFunctionDef, ast.ClassDef, ast.Pass)):
+        return True
+    if isinstance(st, ast.Expr):
+        # a bare docstring / constant expression, or a setup call whose value
+        # is discarded (``sys.path.insert(...)``, ``warnings.filterwarnings``)
+        return (isinstance(st.value, ast.Constant)
+                or _expr_is_cheap_setup(st.value))
+    if isinstance(st, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+        val = getattr(st, 'value', None)
+        if val is None:              # a bare annotation, ``x: int``
+            return True
+        # Literal-only right-hand sides first (numbers, strings, and tuples /
+        # lists / dicts / sets of them), then the cheap-setup expressions.
+        # ``np.zeros((4096, 4096))`` is neither -- which is the whole point.
+        try:
+            ast.literal_eval(val)
+            return True
+        except (ValueError, TypeError, SyntaxError, MemoryError,
+                RecursionError):
+            return _expr_is_cheap_setup(val)
+    return False
 
 
 def _script_has_main_guard(path: str) -> bool:
-    """Does the module at ``path`` have a TOP-LEVEL ``__name__`` guard?
+    """Is the module at ``path`` SAFE for a spawn worker to re-import?
 
-    Top-level only, deliberately: a guard nested inside a function does not
-    protect the module body, and the failure this predicate exists to catch is
-    exactly "the module body re-runs".  A file that cannot be read or parsed
-    returns ``True`` (= "cannot prove it is unguarded"), which preserves the
-    historical pool behaviour rather than silently serialising a caller we know
-    nothing about.
+    True when every top-level statement other than imports, ``def`` / ``class``
+    definitions, docstrings and literal constant assignments sits inside a
+    ``__name__`` guard.  A file that cannot be read or parsed returns ``True``
+    (= "cannot prove it is unguarded"), which preserves the historical pool
+    behaviour rather than silently serialising a caller we know nothing about.
+
+    The predicate used to be "does a top-level ``__name__`` guard EXIST
+    anywhere", which is a proxy that cannot see the module BODY -- the very
+    thing the warning it feeds is about.  The ordinary shape of a real driver
+    script defeats it::
+
+        import numpy as np
+        if __name__ == '__main__':
+            pass                      # decorative
+        BIG = np.zeros((4096, 4096))  # UNGUARDED: 134 MB re-run in EVERY worker
+        main()
+
+    which the old form classified as guarded, so the pool ran and every worker
+    paid the cost -- precisely the 22.1 GB/worker failure the warning exists
+    for.  ``ast.Match`` is accepted as a guard shape alongside ``ast.If``
+    (``match __name__: case '__main__':`` used to read as unguarded).
     """
     import ast
     with _MAIN_GUARD_LOCK:
@@ -1580,7 +1745,22 @@ def _script_has_main_guard(path: str) -> bool:
     except (OSError, ValueError, SyntaxError, MemoryError, RecursionError):
         ok = True
     else:
-        ok = any(isinstance(st, ast.If) and _is_main_guard_test(st.test)
+        _Match = getattr(ast, 'Match', None)
+
+        def _is_guard(st):
+            if isinstance(st, ast.If):
+                return _is_main_guard_test(st.test)
+            if _Match is not None and isinstance(st, _Match):
+                subj = any(isinstance(n, ast.Name) and n.id == '__name__'
+                           for n in ast.walk(st.subject))
+                pat = any(
+                    isinstance(n, ast.Constant)
+                    and n.value in ('__main__', '__mp_main__')
+                    for c in st.cases for n in ast.walk(c.pattern))
+                return subj and pat
+            return False
+
+        ok = all(_is_guard(st) or _top_level_statement_is_safe(st)
                  for st in tree.body)
     # The parse happens OUTSIDE the lock (it is pure, and two threads racing it
     # recompute the same verdict rather than serialising on file I/O); only the
@@ -1853,63 +2033,85 @@ def _get_cheb2d_val_grad_numba():
         fx = np.zeros(N)
         fy = np.zeros(N)
 
-        for i in _prange(N):
-            u = u_flat[i]
-            v = v_flat[i]
-
-            # T_n(u), T_n(v): first kind, by 3-term recurrence
-            # T_0 = 1, T_1 = u, T_{n+1} = 2u T_n - T_{n-1}
+        # BLOCKED loop nest.  The four scratch tables are hoisted to the block
+        # level, so the kernel allocates 4 arrays per BLOCK instead of 4 per
+        # SAMPLE.  Those per-sample NRT heap allocations dominated the cost
+        # below ~order 12: the measured curve has a ~100-200 ns/point floor
+        # with a marginal cost of only 1.8-3.9 ns/point/term and is
+        # NON-MONOTONIC in order (order 4 slower than order 6 and order 10).
+        # Measured over 4 Mpt, 9 interleaved reps, min wall, 20 numba threads:
+        # order 6 (M = 28) 449.5 -> 275.5 ms (1.63x), order 10 (M = 66)
+        # 376.7 -> 293.5 ms (1.28x), with max|diff| = 0.000e+00 on all three
+        # outputs -- the arithmetic, its order and its rounding are untouched,
+        # which is the property the pool/serial byte-identity contracts in
+        # this module depend on.  Block size does not enter the arithmetic.
+        BLK = 512
+        nblocks = (N + BLK - 1) // BLK
+        for b in _prange(nblocks):
+            i0 = b * BLK
+            i1 = i0 + BLK
+            if i1 > N:
+                i1 = N
             Tu = np.empty(max_order + 1)
             Tv = np.empty(max_order + 1)
-            Tu[0] = 1.0
-            Tv[0] = 1.0
-            if max_order >= 1:
-                Tu[1] = u
-                Tv[1] = v
-            for n in range(2, max_order + 1):
-                Tu[n] = 2.0 * u * Tu[n - 1] - Tu[n - 2]
-                Tv[n] = 2.0 * v * Tv[n - 1] - Tv[n - 2]
-
-            # T'_n(u) = n * U_{n-1}(u); U_0 = 1, U_1 = 2u, U_{n+1} = 2u U_n - U_{n-1}
-            # We store dTu[n] = T'_n(u) directly for n = 0..max_order
             dTu = np.zeros(max_order + 1)
             dTv = np.zeros(max_order + 1)
-            if max_order >= 1:
-                dTu[1] = 1.0          # T'_1 = 1 * U_0 = 1
-                dTv[1] = 1.0
-                if max_order >= 2:
-                    U_prev_u = 1.0    # U_0
-                    U_u = 2.0 * u     # U_1
-                    U_prev_v = 1.0
-                    U_v = 2.0 * v
-                    dTu[2] = 2.0 * U_u    # T'_2 = 2 * U_1
-                    dTv[2] = 2.0 * U_v
-                    for n in range(3, max_order + 1):
-                        U_next_u = 2.0 * u * U_u - U_prev_u
-                        U_next_v = 2.0 * v * U_v - U_prev_v
-                        U_prev_u = U_u
-                        U_u = U_next_u
-                        U_prev_v = U_v
-                        U_v = U_next_v
-                        dTu[n] = n * U_u
-                        dTv[n] = n * U_v
+            for i in range(i0, i1):
+                u = u_flat[i]
+                v = v_flat[i]
 
-            # Accumulate coefficient-weighted sum over multi-indices
-            acc_f = 0.0
-            acc_fx = 0.0
-            acc_fy = 0.0
-            for m in range(M):
-                kx = K1[m]
-                ky = K2[m]
-                c = coeffs[m]
-                tu = Tu[kx]
-                tv = Tv[ky]
-                acc_f  += c * tu * tv
-                acc_fx += c * dTu[kx] * tv
-                acc_fy += c * tu * dTv[ky]
-            f[i] = acc_f
-            fx[i] = acc_fx
-            fy[i] = acc_fy
+                # T_n(u), T_n(v): first kind, by 3-term recurrence
+                # T_0 = 1, T_1 = u, T_{n+1} = 2u T_n - T_{n-1}
+                Tu[0] = 1.0
+                Tv[0] = 1.0
+                if max_order >= 1:
+                    Tu[1] = u
+                    Tv[1] = v
+                for n in range(2, max_order + 1):
+                    Tu[n] = 2.0 * u * Tu[n - 1] - Tu[n - 2]
+                    Tv[n] = 2.0 * v * Tv[n - 1] - Tv[n - 2]
+
+                # T'_n(u) = n U_{n-1}(u); U_0 = 1, U_1 = 2u,
+                # U_{n+1} = 2u U_n - U_{n-1}.  dTu[n] = T'_n(u) directly.
+                # dTu[0] is 0 for every sample and is written once per block
+                # by ``np.zeros`` above; every other entry is overwritten here
+                # before it is read.
+                if max_order >= 1:
+                    dTu[1] = 1.0          # T'_1 = 1 * U_0 = 1
+                    dTv[1] = 1.0
+                    if max_order >= 2:
+                        U_prev_u = 1.0    # U_0
+                        U_u = 2.0 * u     # U_1
+                        U_prev_v = 1.0
+                        U_v = 2.0 * v
+                        dTu[2] = 2.0 * U_u    # T'_2 = 2 * U_1
+                        dTv[2] = 2.0 * U_v
+                        for n in range(3, max_order + 1):
+                            U_next_u = 2.0 * u * U_u - U_prev_u
+                            U_next_v = 2.0 * v * U_v - U_prev_v
+                            U_prev_u = U_u
+                            U_u = U_next_u
+                            U_prev_v = U_v
+                            U_v = U_next_v
+                            dTu[n] = n * U_u
+                            dTv[n] = n * U_v
+
+                # Accumulate coefficient-weighted sum over multi-indices
+                acc_f = 0.0
+                acc_fx = 0.0
+                acc_fy = 0.0
+                for m in range(M):
+                    kx = K1[m]
+                    ky = K2[m]
+                    c = coeffs[m]
+                    tu = Tu[kx]
+                    tv = Tv[ky]
+                    acc_f += c * tu * tv
+                    acc_fx += c * dTu[kx] * tv
+                    acc_fy += c * tu * dTv[ky]
+                f[i] = acc_f
+                fx[i] = acc_fx
+                fy[i] = acc_fy
         return f, fx, fy
 
     _NUMBA_KERNELS["cheb2d"] = _cheb2d_val_grad_numba
@@ -2778,11 +2980,72 @@ def _solve_lstsq_qr(A, b):
 def _lstsq_residual(A, b, x):
     """``||b - A x||_F``, the quantity a least-squares fit is defined to
     minimise, and the only one of the two candidates' scores that survives
-    float64 on these matrices (see ``LSTSQ_CONDITIONING_STEPDOWN``)."""
+    float64 on these matrices (see ``LSTSQ_CONDITIONING_STEPDOWN``).
+
+    Measured over the RETAINED rows only, which is what "the quantity the fit
+    is defined by" means -- and is also the criterion's blind spot, since the
+    consumer evaluates the polynomial over a LARGER domain than the fit was
+    restricted to.  :func:`_warn_stepdown_domain_blindness` measures that gap.
+    """
     return float(np.linalg.norm(np.asarray(b) - np.asarray(A) @ np.asarray(x)))
 
 
-def _solve_lstsq_thread_safe(A, b, deterministic=False):
+#: Relative difference (over the FULL evaluation lattice, against the in-fit
+#: peak) above which a residual TIE between the normal-equations and QR
+#: candidates is reported.  The C13 step-down scores ``||b - A x||`` over the
+#: rows the fit retained, while the Newton loop evaluates the chosen
+#: polynomial over the whole launch square -- its iterate is clamped to
+#: ``|u| <= 0.999``, i.e. to the square, not to the fit's disc.  Measured on a
+#: 129^2 lattice with a hard r <= 0.5 R disc, two candidates agreeing IN DISC
+#: to 4.2e-18 differ over the square by 6.3e-16 of peak at order 6, 9.5e-14 at
+#: order 8 and 1.99e-08 at order 10 (det-vs-QR), and 3.9e-08 / 3.7e-05 /
+#: 1.05e-02 for raw-normal-equations-vs-QR at the same orders.  1e-6 therefore
+#: stays silent at the shipped ``newton_poly_order = 6`` (3.9e-08) and fires at
+#: order 10, which is the configuration the file itself records as
+#: measured-harmful on the hard-mask branch.
+_LSTSQ_SCORE_DOMAIN_TOL = 1e-6
+
+
+def _warn_stepdown_domain_blindness(A, b, x_ne, x_qr, A_domain):
+    """Report a C13 residual TIE that hides a large difference OFF the fit.
+
+    Warning-only: it does not change which candidate is returned.  What it
+    closes is the argument, not the arithmetic -- the note at
+    ``LSTSQ_CONDITIONING_STEPDOWN`` chose ``||b - A x||`` as "the quantity the
+    fit is actually defined by", which is true and yet leaves the criterion
+    blind to the region the consumer will evaluate over.
+    """
+    try:
+        A_dom = np.asarray(A_domain)
+        if A_dom.ndim != 2 or A_dom.shape[1] != np.asarray(x_ne).shape[0]:
+            return
+        d = np.abs(A_dom @ (np.asarray(x_qr) - np.asarray(x_ne)))
+        peak = float(np.max(np.abs(np.asarray(A) @ np.asarray(x_ne))))
+        gap = float(np.max(d))
+    except (ValueError, TypeError, MemoryError, np.linalg.LinAlgError):
+        return
+    if not (np.isfinite(gap) and np.isfinite(peak)) or peak <= 0.0:
+        return
+    rel = gap / peak
+    if rel <= _LSTSQ_SCORE_DOMAIN_TOL:
+        return
+    import warnings as _w
+    _w.warn(
+        f"apply_real_lens_traced least-squares step-down (C13): the "
+        f"normal-equations and QR candidates TIE on the retained-row residual "
+        f"(within {_LSTSQ_RESID_MARGIN:g}), so the shipped normal-equations "
+        f"answer is kept -- but they differ by {rel:.3e} of the in-fit peak "
+        f"OVER THE FULL EVALUATION LATTICE, which the residual criterion does "
+        f"not see.  The Newton loop evaluates the chosen polynomial over the "
+        f"whole launch square (|u| <= 0.999), not only over the fit's "
+        f"retained disc.  Lower newton_poly_order (the shipped 6 measures "
+        f"3.9e-08 here), widen the fit domain, or set "
+        f"lumenairy.elements._lens_traced.LSTSQ_CONDITIONING_STEPDOWN = False "
+        f"to pin the normal-equations route explicitly.",
+        RuntimeWarning, stacklevel=3)
+
+
+def _solve_lstsq_thread_safe(A, b, deterministic=False, score_domain=None):
     """Least-squares solve ``A @ x ~= b`` (overdetermined, single or multi RHS)
     via the NORMAL EQUATIONS -- ``G x = A^T b`` with ``G = A^T A`` -- Cholesky
     then LU, with a QR re-solve (:func:`_solve_lstsq_qr`) wherever ``G`` comes
@@ -2846,6 +3109,13 @@ def _solve_lstsq_thread_safe(A, b, deterministic=False):
     refuse, where there is nothing to refine -- and that one still reroutes
     to the threaded QR and still warns.
 
+    ``score_domain`` (optional, ``(n_all, M)``) is the design matrix over the
+    FULL lattice the caller will evaluate the fit on, as distinct from the
+    retained rows ``A``.  Purely diagnostic: when the step-down's residual
+    criterion TIES, the two candidates are differenced over that domain and a
+    material disagreement is reported (:func:`_warn_stepdown_domain_blindness`).
+    Which candidate is returned does not depend on it.
+
     Returns ``x`` with the same trailing shape as ``b`` (1-D for a single RHS).
     """
     A = np.ascontiguousarray(A, dtype=np.float64)
@@ -2903,7 +3173,13 @@ def _solve_lstsq_thread_safe(A, b, deterministic=False):
         return x
     r_ne = _lstsq_residual(A, b, x)
     r_qr = _lstsq_residual(A, b, x_qr)
-    if r_qr < (1.0 - _LSTSQ_RESID_MARGIN) * r_ne:
+    _tie = not (r_qr < (1.0 - _LSTSQ_RESID_MARGIN) * r_ne)
+    if _tie and score_domain is not None:
+        # The criterion above is measured only where the fit was ALLOWED to
+        # look.  Measure, and report, how much the two candidates differ over
+        # the domain the CONSUMER evaluates -- see ``_LSTSQ_SCORE_DOMAIN_TOL``.
+        _warn_stepdown_domain_blindness(A, b, x, x_qr, score_domain)
+    if not _tie:
         return x_qr
     return x
 
@@ -3082,7 +3358,17 @@ class _Cheb2DEvaluator:
         # ``from_state`` on what a worker whose BLAS regime differed from its
         # parent's used to recover here.
         c_np = _solve_lstsq_thread_safe(
-            A, rhs, deterministic=bool(DETERMINISTIC_TRACED_FIT))
+            A, rhs, deterministic=bool(DETERMINISTIC_TRACED_FIT),
+            # C13 scoring blindness (audit T10), surfaced rather than silently
+            # accepted: the step-down compares the two candidate solves on
+            # ``||b - A x||`` over the RETAINED rows, but the Newton loop then
+            # evaluates the polynomial over the WHOLE launch square (its iterate
+            # is clamped to |u| <= 0.999, not to the fit's disc).  Two solves
+            # that agree in-disc to 4e-15 were measured to differ by 1.05 % of
+            # the in-disc peak over the square at order 10.  Passing the full
+            # lattice design lets the solver MEASURE that difference and warn;
+            # it does not change which candidate is chosen.
+            score_domain=A_full)
         # Push coefficients + index arrays onto the target backend
         self.coeffs = xp.asarray(c_np, dtype=xp.float64)
         self._K1 = xp.asarray(K1_np, dtype=xp.int64)
@@ -3230,24 +3516,49 @@ class _Cheb2DEvaluator:
                     fy_v_flat.reshape(shape) * sy)
 
         # Pure-xp fallback (always-on; REQUIRED for CuPy backend).
-        # Build T and T' Vandermondes once, gather by multi-index, and
-        # contract against the coefficient vector with one sum each.
-        Tu = _cheb_vand_2d(u, self.order, xp)
-        Tv = _cheb_vand_2d(v, self.order, xp)
-        dTu = _cheb_deriv_vand_2d(u, self.order, xp)
-        dTv = _cheb_deriv_vand_2d(v, self.order, xp)
-        # Gather per-basis-term arrays: shape (M, ...u.shape)
-        Tu_K = Tu[self._K1]
-        Tv_K = Tv[self._K2]
-        dTu_K = dTu[self._K1]
-        dTv_K = dTv[self._K2]
-        # Broadcast coefficients and sum over the basis-term axis.
-        c_shape = (len(self._mi),) + (1,) * u.ndim
-        c_b = self.coeffs.reshape(c_shape)
-        f    = xp.sum(c_b * Tu_K  * Tv_K , axis=0)
-        fx_u = xp.sum(c_b * dTu_K * Tv_K , axis=0)
-        fy_v = xp.sum(c_b * Tu_K  * dTv_K, axis=0)
-        return f, fx_u * sx, fy_v * sy
+        # Build T and T' Vandermondes, gather by multi-index, and contract
+        # against the coefficient vector with one sum each.
+        #
+        # CHUNKED over the QUERY axis.  Unchunked this path costs 200 float64
+        # per query point (measured tracemalloc peak: 160 MB at n = 1e5 and
+        # 1600 MB at n = 1e6, against the numba kernel's 7.0/point) -- 1.6 GB
+        # at 1 Mpt and 26.9 GB at 4096^2 = 16.8 Mpt.  It is the branch taken on
+        # any box without numba and the REQUIRED branch for CuPy, and it was
+        # the one large-array site in this module not row-blocked against
+        # exactly this failure (``_CHEB_FIT_CHUNK_ENTRIES``, ``_det_block_rows``,
+        # ``_input_beam_amp_radius``'s bands and ``sag_chunk_rows`` all are).
+        # Elementwise products plus a sum over a FIXED axis are
+        # chunk-order-independent, so the bits are preserved.
+        shape = u.shape
+        u_f = u.reshape(-1)
+        v_f = v.reshape(-1)
+        n_q = int(u_f.shape[0])
+        M_terms = len(self._mi)
+        c_b = self.coeffs.reshape((M_terms, 1))
+        f_out = xp.empty(n_q, dtype=xp.float64)
+        fx_out = xp.empty(n_q, dtype=xp.float64)
+        fy_out = xp.empty(n_q, dtype=xp.float64)
+        # 4 gathers of (M, step) + 2 live products: ~6*M float64 per point, so
+        # budget the block on ``4*M`` entries as the fit chunker does.
+        step = max(1, int(_CHEB_FIT_CHUNK_ENTRIES) // max(4 * M_terms, 1))
+        for s0 in range(0, n_q, step):
+            s1 = min(s0 + step, n_q)
+            ub = u_f[s0:s1]
+            vb = v_f[s0:s1]
+            Tu_K = _cheb_vand_2d(ub, self.order, xp)[self._K1]
+            Tv_K = _cheb_vand_2d(vb, self.order, xp)[self._K2]
+            # Each reduction keeps the ORIGINAL left-to-right association
+            # ``(c * A) * B`` -- fusing them through a shared ``Tu_K * Tv_K``
+            # temporary would reassociate the product and move the last bit.
+            f_out[s0:s1] = xp.sum(c_b * Tu_K * Tv_K, axis=0)
+            dTu_K = _cheb_deriv_vand_2d(ub, self.order, xp)[self._K1]
+            fx_out[s0:s1] = xp.sum(c_b * dTu_K * Tv_K, axis=0)
+            del dTu_K, Tv_K
+            dTv_K = _cheb_deriv_vand_2d(vb, self.order, xp)[self._K2]
+            fy_out[s0:s1] = xp.sum(c_b * Tu_K * dTv_K, axis=0)
+            del dTv_K, Tu_K
+        return (f_out.reshape(shape), fx_out.reshape(shape) * sx,
+                fy_out.reshape(shape) * sy)
 
 
 def _cheb_vand_2d(u, max_k, xp=None):
@@ -3255,37 +3566,32 @@ def _cheb_vand_2d(u, max_k, xp=None):
 
     Backend-agnostic: pass ``xp=numpy`` (default) or ``xp=cupy`` to run
     on host or device respectively.
+
+    Thin backend-resolving wrapper over
+    :func:`lumenairy._math.chebyshev.chebyshev_vandermonde`, which exists
+    precisely to be the library's single copy of these recurrences (its header
+    says so).  This module and ``_lens_imap`` each kept a private
+    reimplementation; all three were BITWISE equal, so the only thing the
+    duplication bought was three places for a fix to land in one of.  The
+    wrapper survives because the ``xp is None`` default differs: here it means
+    "follow the array's own backend" (CuPy in, CuPy out), in ``_math`` it
+    means NumPy.
     """
     if xp is None:
         xp = _get_array_module(u)
-    T = xp.empty((max_k + 1,) + u.shape, dtype=xp.float64)
-    T[0] = 1.0
-    if max_k >= 1:
-        T[1] = u
-    for n in range(2, max_k + 1):
-        T[n] = 2.0 * u * T[n - 1] - T[n - 2]
-    return T
+    return _chebyshev_vandermonde(u, max_k, xp=xp)
 
 
 def _cheb_deriv_vand_2d(u, max_k, xp=None):
     """T'_k(u) via T'_n = n U_{n-1}; shape (max_k+1,) + u.shape.
 
-    Backend-agnostic: pass ``xp=numpy`` (default) or ``xp=cupy``.
+    Backend-agnostic: pass ``xp=numpy`` (default) or ``xp=cupy``.  Wrapper
+    over :func:`lumenairy._math.chebyshev.chebyshev_derivative_vandermonde` --
+    see :func:`_cheb_vand_2d` for why the wrapper and not a bare import.
     """
     if xp is None:
         xp = _get_array_module(u)
-    Tp = xp.zeros((max_k + 1,) + u.shape, dtype=xp.float64)
-    if max_k < 1:
-        return Tp
-    U = xp.empty((max_k + 1,) + u.shape, dtype=xp.float64)
-    U[0] = 1.0
-    if max_k >= 1:
-        U[1] = 2.0 * u
-    for n in range(2, max_k + 1):
-        U[n] = 2.0 * u * U[n - 1] - U[n - 2]
-    for n in range(1, max_k + 1):
-        Tp[n] = float(n) * U[n - 1]
-    return Tp
+    return _chebyshev_derivative_vandermonde(u, max_k, xp=xp)
 
 
 def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
@@ -3308,9 +3614,17 @@ def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
 
     For smooth refractive lens prescriptions the omitted correction
     scales as ``t * k_perp^2 / (2k)`` where t is glass thickness and
-    k_perp is the characteristic spatial-frequency of the sag.  On
-    typical F/10+ refractive lenses this is under 10 nm OPL; for
-    faster lenses (F/3 or below) validate before trusting.
+    k_perp is the characteristic spatial-frequency of the sag.  The
+    error is LINEAR IN CENTRE THICKNESS (it is the omitted in-glass ASM
+    leg), not in the f-number: measured against
+    ``angle(apply_real_lens(ones))`` on an N-BK7 biconvex 100/-100 at
+    f/12.1 (8 mm aperture, N = 256, dx = 40 um, 587.6 nm), piston
+    removed, the residual is 0.007 nm rms at 1 um of centre thickness,
+    0.7 nm at 100 um and **14.1 nm rms / 41.6 nm PV at 2 mm** -- so the
+    "under 10 nm on F/10+" rule this docstring used to state holds only
+    for elements thinner than ~1.5 mm, whatever their speed.  Budget
+    ``~7 nm rms per mm of glass`` and validate before trusting a thick
+    or fast element.
 
     Parameters
     ----------
@@ -3329,8 +3643,31 @@ def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
         Analytic geometric phase in radians, wrapped to the [-pi, pi]
         range so it can be used interchangeably with
         ``np.angle(E_analytic_pw)``.
+
+        Grid points OUTSIDE a surface's conic domain (where
+        ``surface_sag_general`` returns NaN, e.g. a steep sphere whose
+        rim falls inside the grid) contribute 0 to the sum rather than
+        NaN, and the affected pixel count is reported once through a
+        ``RuntimeWarning``.  The caller subtracts this array from
+        ``k0 * opl_traced``; a NaN there would silently blank those
+        pixels of the returned field with no diagnostic.
+
+    Notes
+    -----
+    Unlike ``apply_real_lens``, this function applies **no aperture
+    mask**: the geometric phase is finite over the whole grid, including
+    outside ``aperture_diameter``.  On the shipped assembly that is
+    benign (the pixels are multiplied by an amplitude that the analytic
+    leg has already vignetted), but the returned array is therefore not
+    a drop-in replacement for ``angle(apply_real_lens(...))`` outside
+    the clear aperture.
     """
+    # ``_surface_sag_xy`` lives in ``raytrace.surface`` and is NOT
+    # re-exported by the ``raytrace`` package, so it must be imported
+    # from the module that defines it (the package has no lazy
+    # ``__getattr__`` to fall back on).
     from .. import raytrace as _rt
+    from ..raytrace.surface import _surface_sag_xy
     surfaces = _rt.surfaces_from_prescription(lens_prescription)
     x = (np.arange(N) - N / 2) * dx
     X, Y = np.meshgrid(x, x, indexing='xy')
@@ -3351,22 +3688,59 @@ def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
     # This matches the thin-element OPD used inside apply_real_lens's
     # phase-screen model (the default paraxial formula) -- so dropping
     # the ASM step is the only physics difference.
+    n_outside = 0
     for surf in surfaces:
         n1 = get_glass_index(surf.glass_before, wavelength)
         n2 = get_glass_index(surf.glass_after, wavelength)
         if abs(n2 - n1) < 1e-15:
             continue   # no refraction
-        sag = _rt._surface_sag_xy(X, Y, surf)
+        sag = _surface_sag_xy(X, Y, surf)
+        # ``surface_sag_general`` returns NaN outside the conic domain
+        # (``c^2 (1+k) r^2 >= 1``).  Propagating that into ``phase``
+        # makes ``np.angle(np.exp(1j*phase))`` NaN, which the caller
+        # subtracts into ``delta_phase`` and which then blanks those
+        # pixels of the returned field with no diagnostic.  Treat an
+        # undefined sag as no contribution from THAT surface and say so.
+        bad = ~np.isfinite(sag)
+        if bad.any():
+            n_outside = max(n_outside, int(bad.sum()))
+            sag = np.where(bad, 0.0, sag)
         phase = phase + (-k0 * (n2 - n1) * sag)
+    if n_outside:
+        import warnings
+        warnings.warn(
+            f"_geometric_lens_phase: {n_outside} of {N * N} grid points fall "
+            f"outside the conic domain of at least one surface (the sag is "
+            f"undefined there); those points contribute zero phase from that "
+            f"surface instead of NaN.  The grid reaches past the surface's "
+            f"rim -- shrink dx*N, or add a clear aperture -- and the "
+            f"fast_analytic_phase reference is not trustworthy there.",
+            RuntimeWarning, stacklevel=2)
 
     # Also add the bulk glass piston (constant k*n*t_i in each glass)
     # since the full apply_real_lens includes this via the ASM in-glass
     # propagation.  The piston is a rigid offset but keeping it
     # preserves absolute-phase consistency when this function is used
     # for the phase_analytic_lens reference.
+    #
+    # Accumulate it as a float64 SCALAR and fold it modulo 2*pi BEFORE
+    # it touches ``phase``: ``k0*n*t`` is 2.9e4 rad for 4 mm of N-BK7 at
+    # 1.31 um, whose float32 ulp is 1.95e-3 rad (lambda/3220) and grows
+    # linearly with total thickness -- so adding it to a float32 array
+    # (which ``set_default_real_dtype(np.float32)`` selects) would inject
+    # a thickness-proportional phase error into a quantity the caller
+    # subtracts wave-for-wave.  The ASM already uses this discipline.
+    piston = 0.0
     for surf in surfaces[:-1]:
         n_mid = get_glass_index(surf.glass_after, wavelength)
-        phase = phase + k0 * n_mid * float(surf.thickness)
+        piston += float(k0) * float(n_mid) * float(surf.thickness)
+    piston = float(np.remainder(piston, 2.0 * np.pi))
+    if piston:
+        # Added as an array of the accumulator's OWN dtype so the resolved
+        # ``get_default_real_dtype()`` still owns the result (NEP 50 would
+        # otherwise leave a float32 accumulator float32 anyway, but saying it
+        # explicitly keeps the contract independent of the promotion rules).
+        phase = phase + np.asarray(piston, dtype=_real_dtype)
 
     # Wrap to match np.angle convention
     return np.angle(np.exp(1j * phase))
@@ -4557,17 +4931,45 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
                 f"{X.shape}")
         gWy, gWx = np.gradient(W_full, dx, dx)
 
-        # niche D9: ABSOLUTE query position -> grid index.  ``- 0.0`` is the
-        # exact IEEE identity, so the on-axis lookup is unchanged bit for bit.
+        # BILINEAR, not nearest-neighbour.  The launch lattice ``xs_in`` is a
+        # ``linspace`` over +-0.75*aperture with an odd sample count, so its
+        # nodes are NOT wave-grid pixel centres -- a nearest-neighbour lookup
+        # therefore carries a half-pixel error that is LINEAR in dx, in both
+        # the direction cosines and (the larger of the two, and the one the
+        # in-code note used to omit) the H6 entrance eikonal ``W`` itself.
+        # Measured against an independent exact-sphere trace on a diverging
+        # 200 mm conjugate through an f/32 singlet: ``carrier=<float>`` and
+        # ``carrier='auto'``, which are the same wavefront analytically, both
+        # give 1.845e-3 rad rms, while the ndarray branch gave 9.914e-2 rad
+        # rms -- 54x worse at the same cost.  At the source: eikonal error
+        # 301.4 / 150.9 / 69.0 nm rms at N = 256 / 512 / 1024, exactly the
+        # predicted |grad W| dx/2 of 237.3 / 118.6 / 59.3 nm.
+        #
+        # ``.astype(np.int64)`` also TRUNCATED rather than rounded, which on a
+        # non-negative index is ``floor`` -- a systematic -1/2-pixel offset
+        # rather than an unbiased +-1/2-pixel quantisation (measured mean
+        # sampling offset -0.4936 px, against -0.0000 px for ``np.rint``).
+        # Interpolating removes both errors at once; ``mode='nearest'`` keeps
+        # the old clip-to-rim behaviour for a query outside the grid.
+        from scipy.ndimage import map_coordinates as _map_coords
+
+        def _coords(xq, yq):
+            # niche D9: ABSOLUTE query position -> grid index.
+            fx = np.clip((np.asarray(xq, dtype=np.float64) - _org_x) / dx
+                         + N / 2.0, 0.0, N - 1.0)
+            fy = np.clip((np.asarray(yq, dtype=np.float64) - _org_y) / dx
+                         + N / 2.0, 0.0, N - 1.0)
+            return np.vstack([fy.ravel(), fx.ravel()]), np.shape(fx)
+
         def grad_fn(xq, yq):
-            fx = np.clip((xq - _org_x) / dx + N / 2.0, 0, N - 1).astype(np.int64)
-            fy = np.clip((yq - _org_y) / dx + N / 2.0, 0, N - 1).astype(np.int64)
-            return gWx[fy, fx], gWy[fy, fx]
+            c, shp = _coords(xq, yq)
+            return (_map_coords(gWx, c, order=1, mode='nearest').reshape(shp),
+                    _map_coords(gWy, c, order=1, mode='nearest').reshape(shp))
 
         def w_fn(xq, yq):
-            fx = np.clip((xq - _org_x) / dx + N / 2.0, 0, N - 1).astype(np.int64)
-            fy = np.clip((yq - _org_y) / dx + N / 2.0, 0, N - 1).astype(np.int64)
-            return W_full[fy, fx]
+            c, shp = _coords(xq, yq)
+            return _map_coords(W_full, c, order=1,
+                               mode='nearest').reshape(shp)
 
         return W_full, grad_fn, w_fn
 
@@ -6432,28 +6834,52 @@ def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
     k0 = 2.0 * np.pi / wavelength
     N_y, N_x = E_in.shape
 
-    # Phase gradient: d(phi)/dx ~ angle(E[:, 1:] * conj(E[:, :-1])) / dx
-    # Use np.roll so shapes match; the rolled-into-the-boundary pixels
-    # get low weights after the amplitude mask.
-    E_shift_x = np.roll(E_in, -1, axis=1)
-    E_shift_y = np.roll(E_in, -1, axis=0)
-    grad_phi_x = np.angle(E_shift_x * np.conj(E_in)) / dx
-    grad_phi_y = np.angle(E_shift_y * np.conj(E_in)) / dx
-
-    L_grid = grad_phi_x / k0
-    M_grid = grad_phi_y / k0
-
-    # Zero-out noise-floor pixels and boundary wrap
+    # Phase gradient from NEIGHBOUR pairs, on MIDPOINT lattices -- the
+    # construction the two sibling estimators in this file already use
+    # (``_compute_carrier('auto')`` and ``_fit_residual_eikonal``).
+    #
+    # Two things the old ``np.roll`` form got wrong, both measured:
+    #
+    # * WRAP.  ``np.roll(E_in, -1, axis=1)`` differences the LAST column
+    #   against column 0, so on any field that fills the grid -- a plane
+    #   wave, a top hat, a post-DOE multi-order field, i.e. exactly what this
+    #   function exists for -- the rim reads a tilt unrelated to the beam
+    #   (measured L = -0.1175 against a true +0.03, an error 5x the tilt
+    #   itself).  The comment claimed "the rolled-into-the-boundary pixels get
+    #   low weights after the amplitude mask", but the mask is
+    #   ``amp > 1e-3 * amp.max()``, which such a field satisfies at the rim;
+    #   and the shipped sigma = 4 px amplitude-weighted Gaussian then SPREAD
+    #   the bad column 12 columns / 4.7 % of the grid inward rather than
+    #   suppressing it (whole-grid max |L - L0| 1.475e-01 unsmoothed,
+    #   8.111e-02 at sigma = 4).  There is no wrap here: the x estimator has
+    #   N_x - 1 columns and the y estimator N_y - 1 rows, by construction.
+    # * HALF PIXEL.  ``angle(E[i+1] conj(E[i]))/dx`` estimates dphi/dx at
+    #   i + 1/2, and storing it at index ``i`` biases every launch direction
+    #   by dx/(2R) on a converging/diverging field -- coherent across the
+    #   pupil, invisible on the collimated fixtures, and measured exactly at
+    #   +2.0000e-05 for R = 0.10 m / dx = 4 um (+2.326 % of the tilt), with
+    #   the midpoint-referenced value exact to 9.1e-21.  The two lattices are
+    #   therefore sampled at their own midpoints below, per axis: L is
+    #   midpointed in x only and M in y only.
     amp = np.abs(E_in)
     amp_thresh = 1e-3 * float(amp.max()) if amp.size else 0.0
-    mask = (amp > amp_thresh) & np.isfinite(L_grid) & np.isfinite(M_grid)
-    L_grid = np.where(mask, L_grid, 0.0)
-    M_grid = np.where(mask, M_grid, 0.0)
+
+    L_grid = np.angle(E_in[:, 1:] * np.conj(E_in[:, :-1])) / (dx * k0)
+    M_grid = np.angle(E_in[1:, :] * np.conj(E_in[:-1, :])) / (dx * k0)
+    # Amplitude at the same midpoints as the estimate it gates.
+    amp_L = 0.5 * (amp[:, 1:] + amp[:, :-1])
+    amp_M = 0.5 * (amp[1:, :] + amp[:-1, :])
+    mask_L = (amp_L > amp_thresh) & np.isfinite(L_grid)
+    mask_M = (amp_M > amp_thresh) & np.isfinite(M_grid)
+    L_grid = np.where(mask_L, L_grid, 0.0)
+    M_grid = np.where(mask_M, M_grid, 0.0)
 
     # Statistics before smoothing -- for diagnostics and as the "raw"
     # baseline the smoothing is operating on.
-    raw_rms_L = float(np.sqrt(np.mean(L_grid[mask] ** 2))) if mask.any() else 0.0
-    raw_rms_M = float(np.sqrt(np.mean(M_grid[mask] ** 2))) if mask.any() else 0.0
+    raw_rms_L = (float(np.sqrt(np.mean(L_grid[mask_L] ** 2)))
+                 if mask_L.any() else 0.0)
+    raw_rms_M = (float(np.sqrt(np.mean(M_grid[mask_M] ** 2)))
+                 if mask_M.any() else 0.0)
 
     # ---- Amplitude-weighted Gaussian smoothing ---------------------
     # Low-pass the tilt field with an intensity-weighted kernel:
@@ -6473,18 +6899,23 @@ def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
     # numerator and denominator weight them out.
     if smooth_sigma_px > 0:
         from scipy.ndimage import gaussian_filter
-        I = (amp * amp).astype(np.float64)
         sigma = float(smooth_sigma_px)
-        num_L = gaussian_filter(I * L_grid, sigma=sigma, mode='nearest')
-        num_M = gaussian_filter(I * M_grid, sigma=sigma, mode='nearest')
-        den = gaussian_filter(I, sigma=sigma, mode='nearest')
-        # Guard against division by zero far from the field support
-        safe = den > (den.max() * 1e-6)
-        L_grid = np.where(safe, num_L / np.where(safe, den, 1.0), 0.0)
-        M_grid = np.where(safe, num_M / np.where(safe, den, 1.0), 0.0)
 
-    smoothed_rms_L = float(np.sqrt(np.mean(L_grid[mask] ** 2))) if mask.any() else 0.0
-    smoothed_rms_M = float(np.sqrt(np.mean(M_grid[mask] ** 2))) if mask.any() else 0.0
+        def _blur_weighted(g, a):
+            I = (a * a).astype(np.float64)
+            num = gaussian_filter(I * g, sigma=sigma, mode='nearest')
+            den = gaussian_filter(I, sigma=sigma, mode='nearest')
+            # Guard against division by zero far from the field support
+            safe = den > (den.max() * 1e-6)
+            return np.where(safe, num / np.where(safe, den, 1.0), 0.0)
+
+        L_grid = _blur_weighted(L_grid, amp_L)
+        M_grid = _blur_weighted(M_grid, amp_M)
+
+    smoothed_rms_L = (float(np.sqrt(np.mean(L_grid[mask_L] ** 2)))
+                      if mask_L.any() else 0.0)
+    smoothed_rms_M = (float(np.sqrt(np.mean(M_grid[mask_M] ** 2)))
+                      if mask_M.any() else 0.0)
     if multimode_diagnostic is not None:
         multimode_diagnostic['raw_rms_L'] = raw_rms_L
         multimode_diagnostic['raw_rms_M'] = raw_rms_M
@@ -6513,12 +6944,57 @@ def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
     # index is grid-relative, so the grid's centre position is removed first.
     pix_x = (entrance_x - float(origin[0])) / dx + N_x / 2.0
     pix_y = (entrance_y - float(origin[1])) / dx + N_y / 2.0
-    coords = np.vstack([pix_y.ravel(), pix_x.ravel()])
-    L = map_coordinates(L_grid, coords, order=1,
-                        mode='constant', cval=0.0).reshape(entrance_x.shape)
-    M = map_coordinates(M_grid, coords, order=1,
-                        mode='constant', cval=0.0).reshape(entrance_x.shape)
+    # ``L_grid`` sample j sits at the MIDPOINT between pixels j and j+1, i.e.
+    # at pixel coordinate j + 1/2 -- so the lookup index is half a pixel LOWER
+    # than the pixel-centre coordinate.  Applied per axis, because L is
+    # midpointed in x only and M in y only.
+    in_grid = ((pix_x >= 0.0) & (pix_x <= N_x - 1.0)
+               & (pix_y >= 0.0) & (pix_y <= N_y - 1.0)).ravel()
+    coords_L = np.vstack([
+        pix_y.ravel(),
+        np.clip(pix_x.ravel() - 0.5, 0.0, float(N_x - 2))])
+    coords_M = np.vstack([
+        np.clip(pix_y.ravel() - 0.5, 0.0, float(N_y - 2)),
+        pix_x.ravel()])
+    # The clip only moves the OUTERMOST half pixel of each axis onto the
+    # nearest midpoint sample (there is no midpoint beyond it to interpolate
+    # from); genuinely off-grid launches are zeroed by ``in_grid``, which is
+    # the "edge -- no information" policy the docstring states.
+    L = np.where(in_grid,
+                 map_coordinates(L_grid, coords_L, order=1, mode='nearest'),
+                 0.0).reshape(entrance_x.shape)
+    M = np.where(in_grid,
+                 map_coordinates(M_grid, coords_M, order=1, mode='nearest'),
+                 0.0).reshape(entrance_x.shape)
     return L, M
+
+
+def _negate_sag_callable(f):
+    """``g(x, y) = -f(x, y)`` for a prescription ``sag_callable``."""
+    def _neg(x, y, _f=f):
+        return -np.asarray(_f(x, y))
+    _neg.__doc__ = (
+        "Reflected (z -> -z) form of a prescription sag_callable, built by "
+        "lumenairy.elements._lens_traced._reverse_prescription.")
+    return _neg
+
+
+def _negate_freeform(ff):
+    """Negate every coefficient of a ``freeform`` block (z -> -z)."""
+    out = dict(ff)
+    for key, val in ff.items():
+        if val is None or isinstance(val, (str, bool)):
+            continue
+        if isinstance(val, dict):
+            out[key] = {k: -v for k, v in val.items()}
+        elif isinstance(val, (list, tuple)):
+            out[key] = type(val)(-np.asarray(v) if isinstance(v, np.ndarray)
+                                 else -v for v in val)
+        elif isinstance(val, np.ndarray):
+            out[key] = -val
+        elif isinstance(val, (int, float, np.number)):
+            out[key] = -val
+    return out
 
 
 def _reverse_prescription(prescription):
@@ -6526,35 +7002,110 @@ def _reverse_prescription(prescription):
     backward direction.
 
     Used by the experimental backward-trace OPL inversion in
-    :func:`apply_real_lens_traced`.  Reversing amounts to:
+    :func:`apply_real_lens_traced`.
 
-    *   Swap surface order.
-    *   Negate every radius of curvature (curvature direction flips
-        when viewed from the opposite side).  Conic constants and
-        even-power aspheric coefficients are invariant under this
-        reflection.
-    *   Swap ``glass_before`` and ``glass_after`` on each surface.
-    *   Reverse the thickness list (the gap AFTER surface i in the
-        forward prescription is the gap BEFORE surface (N-1-i) in
-        the reversed one, which is the same list read right-to-left).
+    Reversing the propagation direction is the reflection ``z -> -z``, under
+    which ``sag(x, y) -> -sag(x, y)``.  EVERY term of the sag must therefore
+    change sign; the reason the conic constant does not is that the RADIUS
+    flip already supplies the sign for the conic term (``c -> -c`` with ``k``
+    fixed negates ``c r^2 / (1 + sqrt(1 - (1+k) c^2 r^2))``).  A polynomial
+    aspheric departure, a freeform block, a field-frame ``tilt`` ramp and a
+    ``sag_callable`` have no radius to flip, so each has to be negated
+    explicitly -- which is what this does now.  The docstring used to assert
+    the opposite ("even-power aspheric coefficients are invariant"); measured
+    on a 100 mm/plano N-BK7 singlet with ``aspheric_coeffs={4: 1.0e3}`` at
+    h = 5 mm, the reversed sag came out ``-2.500031447e-04 m`` against the
+    correct ``-2.512531447e-04 m`` -- an error of 1.25e-06 m = 2.13 waves at
+    588 nm, i.e. the whole aspheric departure with the wrong sign.
+
+    Concretely:
+
+    *   Swap surface order and swap ``glass_before`` / ``glass_after``.
+    *   Negate ``radius`` and ``radius_y``; keep ``conic`` / ``conic_y``
+        (the radius flip carries their sign) and ``decenter`` (x -> x,
+        y -> y under this reflection).
+    *   Negate ``aspheric_coeffs`` / ``aspheric_coeffs_y``, every ``freeform``
+        coefficient, both components of ``tilt``, and wrap ``sag_callable``.
+    *   Re-pair the thicknesses.  ``validate_prescription`` accepts BOTH
+        ``len(thicknesses) == len(surfaces) - 1`` (gap between consecutive
+        surfaces) and ``== len(surfaces)`` (each surface's forward gap, the
+        last being the back focal distance).  ``list(reversed(...))`` is
+        correct only for the first: under the ``n``-thickness convention it
+        makes the reversed GLASS gap the forward BFD (measured: a 5 mm glass
+        gap and a 100 mm BFD reversed to a 100 mm glass gap, OPL 7.58e-03 m
+        forward vs 1.52e-01 m backward, and a ray launched at +4.000 mm
+        landing at +6.576 mm).  Reverse the PAIRING instead, then re-emit in
+        the caller's own convention.
+    *   Carry every other top-level key: ``stop_index`` remapped to
+        ``len(surfaces) - 1 - i``, ``elements`` reversed (
+        ``surfaces_from_prescription`` reads it for vignetting), and anything
+        else through unchanged.  Only ``aperture_diameter`` used to survive.
     """
     surfaces = prescription['surfaces']
-    thicknesses = prescription.get('thicknesses', [])
+    n_surf = len(surfaces)
+    thicknesses = list(prescription.get('thicknesses', []) or [])
     rev_surfaces = []
     for s in reversed(surfaces):
         rs = dict(s)
         rs['radius'] = -rs['radius']
         if rs.get('radius_y') is not None:
             rs['radius_y'] = -rs['radius_y']
+        for _key in ('aspheric_coeffs', 'aspheric_coeffs_y'):
+            _a = rs.get(_key)
+            if _a is None:
+                continue
+            if isinstance(_a, dict):
+                rs[_key] = {p: -c for p, c in _a.items()}
+            else:
+                rs[_key] = [-c for c in _a]
+        if rs.get('freeform') is not None:
+            rs['freeform'] = _negate_freeform(rs['freeform'])
+        _t = rs.get('tilt')
+        if _t is not None:
+            rs['tilt'] = (-float(_t[0]), -float(_t[1]))
+        if rs.get('sag_callable') is not None:
+            rs['sag_callable'] = _negate_sag_callable(rs['sag_callable'])
         rs['glass_before'], rs['glass_after'] = (
             rs['glass_after'], rs['glass_before'])
         rev_surfaces.append(rs)
+
+    # Normalise to "gap AFTER surface i" (length n_surf, last entry the exit
+    # distance), reverse the PAIRING, then re-emit in the caller's convention.
+    if len(thicknesses) == n_surf:
+        gaps = list(thicknesses)
+        n_emit = n_surf
+    elif len(thicknesses) == max(n_surf - 1, 0):
+        gaps = list(thicknesses) + [0.0]
+        n_emit = n_surf - 1
+    else:
+        # An unrecognised length: leave it to ``validate_prescription`` to
+        # diagnose rather than silently re-pairing something we cannot read.
+        gaps = list(thicknesses) + [0.0] * max(n_surf - len(thicknesses), 0)
+        n_emit = len(thicknesses)
+    # Gap after reversed surface j is the gap after forward surface
+    # (n_surf - 2 - j), i.e. the gap that sits between the same two surfaces.
+    rev_gaps = [gaps[n_surf - 2 - j] if 0 <= n_surf - 2 - j < len(gaps)
+                else 0.0 for j in range(n_surf)]
+    if n_emit == n_surf:
+        # The last reversed gap is the reversed system's exit distance, which
+        # the forward prescription's OWN entrance side does not define; keep
+        # the forward exit distance there so a round trip is the identity.
+        rev_gaps[-1] = gaps[-1]
+
     rev = {
         'surfaces': rev_surfaces,
-        'thicknesses': list(reversed(thicknesses)),
+        'thicknesses': rev_gaps[:n_emit],
     }
-    if 'aperture_diameter' in prescription:
-        rev['aperture_diameter'] = prescription['aperture_diameter']
+    for key, val in prescription.items():
+        if key in ('surfaces', 'thicknesses'):
+            continue
+        if key == 'stop_index' and val is not None:
+            _si = int(val)
+            rev[key] = (n_surf - 1 - _si) if 0 <= _si < n_surf else val
+        elif key == 'elements' and isinstance(val, (list, tuple)):
+            rev[key] = list(reversed(val))
+        else:
+            rev[key] = val
     return rev
 
 
@@ -6572,16 +7123,31 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     **Validation** (2026-04-18):
 
     *   Single-ray forward-vs-backward OPL on a plano-convex singlet:
-        **< 1 pm** (machine-precision agreement) when the exit-vertex
-        correction is applied to both ends.
-    *   End-to-end ``apply_real_lens_traced`` OPD RMS vs the Newton
-        path: **~35-40 nm** on singlets at N=512.  The residual is
-        not a bug in the reversal; it comes from using the
-        finite-difference phase gradient of ``E_analytic`` as the
-        backward-launch direction estimate (Newton uses the
-        forward-trace's exact entrance-plane direction).  For
-        design-verification work at lambda/10 tolerance this is deep
-        in the margin; for sub-nm precision use Newton.
+        **< 1 pm** (re-measured 2026-09: 0.0 / 1.7e-18 / 5.2e-18 m at
+        h = 0 / 2 / 4 mm, with the back-traced ray returning to its launch
+        height exactly) when the exit-vertex correction is applied to both
+        ends.  The REVERSAL ITSELF is sound; what follows is about the launch
+        directions this route derives, not about it.
+    *   End-to-end exit-phase agreement with the Newton path: the
+        "**~35-40 nm** on singlets at N=512" figure this docstring used to
+        quote is **NOT REPRODUCIBLE ON ANY FIXTURE IN THE TREE, and no test
+        pins the one it was measured on**.  Re-measured on an N-BK7 100/-100
+        singlet (2 mm thick, 6 mm aperture, N = 256, dx = 30 um, 587.6 nm,
+        ray_subsample = 8, a 1.5 mm Gaussian): backward-vs-Newton exit phase
+        **1.93 rad rms (180 nm), max 372 nm** inside r < w -- 1.93 rad is the
+        1.81 rad of a UNIFORMLY-DISTRIBUTED wrapped difference and the maximum
+        sits on the wrap boundary, i.e. the two inversions differ by more than
+        a wave, not by tens of nanometres.
+        That fixture is exit-UNDERSAMPLED (grid Nyquist direction cosine
+        ``lambda/(2 dx)`` = 0.0098 against an exit NA ~0.031), which is the
+        regime in which ``_sample_local_tilts`` -- the source of this route's
+        launch directions -- aliases, so the measurement is consistent with
+        the attribution below; but the old claim excluded no such regime, and
+        the two ``_sample_local_tilts`` defects the 2026-09 audit fixed (the
+        ``np.roll`` wrap and the half-pixel storage offset) fed straight into
+        that budget and were not acknowledged in it.  Treat this route as
+        EXPERIMENTAL with an unquantified exit-phase error; use Newton (the
+        default) for anything with a tolerance.
 
     Measured speed at N=512: ~1.7x faster than Newton on a singlet.
     Scales better to large N because the work is ``O(N^2)`` rather
@@ -6629,7 +7195,6 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     # path's ``X[::sub, ::sub]`` slice so the final interpolation
     # grids line up identically).
     idx_c = np.arange(0, N, sub)
-    N_c = idx_c.size
     x_c = (idx_c - N / 2.0) * dx
     Xc, Yc = np.meshgrid(x_c, x_c)
 
@@ -6672,19 +7237,13 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     # marginal rays on a strong-curvature lens it's tens of nm to
     # hundreds of nm.  Missing this is what made the first draft
     # of this function disagree with Newton by ~343 nm RMS.
+    #
+    # One call to the shared operator (``raytrace.exit_vertex``), not a
+    # hand-written copy -- see the note at the forward site.
     rev_surfaces_list = rev_surfaces
     n_exit_backward = get_glass_index(
         rev_surfaces_list[-1].glass_after, wavelength)
-    with np.errstate(divide='ignore', invalid='ignore'):
-        t_to_vertex = np.where(
-            final.alive & (np.abs(final.N) > 1e-30),
-            -final.z / final.N, 0.0)
-    final.opd = final.opd + n_exit_backward * t_to_vertex
-    # (We don't actually need to update x/y/z since we only
-    # consume final.opd downstream, but keep it consistent.)
-    final.x = final.x + final.L * t_to_vertex
-    final.y = final.y + final.M * t_to_vertex
-    final.z = np.zeros_like(final.z)
+    final = result.at_exit_vertex(n_exit_backward)
 
     # OPL: set NaN for dead rays (TIR / vignetted during the
     # reverse trace) so downstream NaN-propagation matches the
@@ -6695,7 +7254,18 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     # Reference to on-axis so the returned OPL has the same origin
     # as the Newton path.  (Forward Newton does this at the spline
     # fit step via ``opl_grid = opl_grid - opl_grid[i_axis, i_axis]``.)
-    i_c = N_c // 2
+    #
+    # The coarse lattice is ``x_c = (idx_c - N/2) * dx`` with
+    # ``idx_c = arange(0, N, sub)``, so x = 0 sits at coarse index
+    # ``N/(2 sub)`` -- which is ``N_c // 2`` only when ``sub`` divides ``N``.
+    # At N = 250, sub = 8 the two are 15.6 and 16, i.e. the "on-axis"
+    # reference was taken 3 FINE pixels off axis.  That is a constant OPL
+    # piston (harmless to the field's shape, and this route deliberately skips
+    # the ``_opl_piston`` restoration) but it is not zero, and the sibling
+    # comment a few lines below fixed exactly this ``sub does not divide N``
+    # class for the upsample while leaving the reference index alone.  Pick
+    # the coarse sample NEAREST x = 0 instead.
+    i_c = int(np.argmin(np.abs(x_c)))
     ref = opl_coarse[i_c, i_c]
     if np.isfinite(ref):
         opl_coarse = opl_coarse - ref
@@ -6726,6 +7296,111 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     del coords
     opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
     return opl_map
+
+
+def _form_error_phase_screen(lens_prescription, wavelength, shape, fn_name):
+    """Additive phase screen [rad] for every surface's ``form_error`` map.
+
+    ``form_error`` is a per-surface ADDITIVE SAG perturbation [m] in the FIELD
+    frame, which :func:`lumenairy.elements.apply_real_lens` folds into the sag
+    before the phase screen, i.e. it contributes
+    ``phi_i = -k0 (n_after - n_before)_i * form_error_i`` (CONVENTIONS §7:
+    forward ``exp(+ikz)``, ``OPD > 0`` is a phase advance, so a positive sag
+    in a denser medium RETARDS).
+
+    The ray model cannot see it: :class:`lumenairy.raytrace.Surface` has no
+    ``form_error`` field and ``surfaces_from_prescription`` never reads the
+    key.  The traced assembly is ``E_analytic * exp(i(k0 opl_traced -
+    phase_analytic_lens))``, and BOTH analytic legs carry ``phi_form`` -- so
+    it cancels out of the answer (measured 254x suppression on a 250 nm PV
+    astigmatic figure error, and up to 800x elsewhere).  Returning it here
+    lets the caller add it back explicitly, which restores exactly the screen
+    ``apply_real_lens`` applies.
+
+    Returns ``None`` when no surface carries the key, so the shipped path on a
+    nominal prescription is untouched.
+    """
+    surfaces = lens_prescription.get('surfaces') or []
+    maps = [(i, s.get('form_error')) for i, s in enumerate(surfaces)
+            if isinstance(s, dict) and s.get('form_error') is not None]
+    if not maps:
+        return None
+    from .. import raytrace as _rt
+    rt_surfaces = _rt.surfaces_from_prescription(lens_prescription)
+    k0 = 2.0 * np.pi / wavelength
+    phi = np.zeros(shape, dtype=np.float64)
+    for i, fe in maps:
+        fe_arr = np.asarray(fe)
+        if tuple(fe_arr.shape) != tuple(shape):
+            raise ValueError(
+                f"{fn_name}: surfaces[{i}]['form_error'] has shape "
+                f"{tuple(fe_arr.shape)}, but it must be a 2-D map with the "
+                f"SAME shape as the field, {tuple(shape)} -- it is an additive "
+                f"sag perturbation [m] in the FIELD frame, sampled on the "
+                f"field grid pixel for pixel.")
+        if np.iscomplexobj(fe_arr) or not np.issubdtype(fe_arr.dtype,
+                                                        np.number):
+            raise ValueError(
+                f"{fn_name}: surfaces[{i}]['form_error'] has dtype "
+                f"{fe_arr.dtype}, but it must be a REAL numeric sag "
+                f"perturbation [m].")
+        if i >= len(rt_surfaces):
+            continue
+        surf = rt_surfaces[i]
+        n1 = get_glass_index(surf.glass_before, wavelength)
+        n2 = get_glass_index(surf.glass_after, wavelength)
+        phi -= k0 * (n2 - n1) * fe_arr.astype(np.float64, copy=False)
+    return phi
+
+
+def _fill_dead_launch_nodes(x_out_grid, y_out_grid, opl_grid, alive_grid):
+    """Extend the three forward-map lattices over their DEAD nodes.
+
+    :class:`scipy.interpolate.RectBivariateSpline` is an interpolating
+    (``s = 0``) FITPACK fit on a strictly regular tensor grid: it does not
+    ignore NaN, so a single dead (vignetted / TIR'd) launch ray turns ~90 % of
+    the spline coefficients into NaN and the whole evaluated map with them.
+    Give it a NaN-free grid by copying each dead node's value from its NEAREST
+    LIVE node (exact Euclidean nearest neighbour, via
+    ``scipy.ndimage.distance_transform_edt``'s index output), and return the
+    mask of nodes that were filled so the caller can reject any Newton
+    solution that lands on one.
+
+    This is a fill, not a model: the filled values carry no ray physics and
+    exist only to keep the banded solve finite.  The POLYNOMIAL fit needs none
+    of this -- its least squares simply drops the NaN samples -- which is why
+    ``newton_fit='polynomial'`` is the default and the accurate choice on a
+    vignetting prescription.
+
+    Parameters
+    ----------
+    x_out_grid, y_out_grid, opl_grid : (n, n) ndarray
+        Forward-map lattices with NaN at the dead nodes.
+    alive_grid : (n, n) ndarray of bool
+        True where the launch ray survived to the exit plane.
+
+    Returns
+    -------
+    (x_filled, y_filled, opl_filled, filled_mask) : tuple
+        New arrays (the inputs are not modified) and the boolean mask of
+        filled nodes, or ``(None, None, None, None)`` when NO node is alive
+        (there is nothing to extend from -- the caller must refuse).
+    """
+    alive_grid = np.asarray(alive_grid, dtype=bool)
+    dead = ~alive_grid
+    if not dead.any():
+        return x_out_grid, y_out_grid, opl_grid, dead
+    if not alive_grid.any():
+        return None, None, None, None
+    from scipy.ndimage import distance_transform_edt
+    # ``distance_transform_edt`` measures distance to the nearest ZERO of its
+    # input, so feed it ``dead`` and ask for the indices of that zero: for
+    # every node it returns the coordinates of the nearest ALIVE node.
+    _, (ii, jj) = distance_transform_edt(dead, return_distances=True,
+                                         return_indices=True)
+    out = tuple(np.asarray(g, dtype=np.float64)[ii, jj]
+                for g in (x_out_grid, y_out_grid, opl_grid))
+    return out[0], out[1], out[2], dead
 
 
 def apply_real_lens_traced(
@@ -6808,8 +7483,16 @@ def apply_real_lens_traced(
       this family -- mind its ``sag*theta^2`` oblique floor on fast /
       asymmetric designs, see its Oblique validity boundary).  A future
       K-carrier decomposition would extend the traced model here.
-    * Genuinely multi-congruence fields, planes at/near a caustic, or
-      JAX-autodiff design loops -> ``apply_real_lens_maslov`` /
+    * A plane at or past a CAUSTIC (through focus, a fold ring, the axial
+      focus itself) -> ``apply_real_lens_traced(caustic='wave',
+      output_plane_distance=z)``: the traced exit-pupil field propagated there
+      with the band-limited ASM.  Exact where geometric optics is not, and the
+      only mode of this function that has an answer AT an axial point focus.
+      Reach for ``caustic='multibranch'``/``'uniform'`` when what you need is
+      the coherent multi-arrival decomposition with its KMAH indices rather
+      than the field.
+    * Genuinely multi-congruence fields, or JAX-autodiff design loops ->
+      ``apply_real_lens_maslov`` /
       ``apply_real_lens_maslov_jax`` (``integration_method='local_quadrature'``
       at production NA).
     * Aberration-free paraxial reference / isolating model vs geometry
@@ -6866,6 +7549,30 @@ def apply_real_lens_traced(
     * Fresnel transmission and absorption are NOT applied here -- if
       you need them, run both this function and
       :func:`apply_real_lens` and combine.
+    * **Phase-only prescription features the RAY model cannot represent.**
+      ``lumenairy.raytrace.Surface`` carries only the geometry the tracer
+      refracts on (``radius``, ``radius_y``, ``conic``, ``conic_y``,
+      ``aspheric_coeffs``, ``freeform``, ``decenter``, ``tilt``,
+      ``sag_callable``, ``semi_diameter``, glasses and thicknesses).  Any
+      prescription key that :func:`apply_real_lens` implements purely as a
+      screen is INVISIBLE to ``opl_traced``, and -- because both analytic legs
+      of the assembly carry it while the ray leg does not -- would otherwise
+      CANCEL out of the answer rather than survive it.  The complete list and
+      how each is handled here:
+
+      - ``form_error`` (additive field-frame sag map [m]): re-applied
+        explicitly at the assembly, so it is honoured with the SAME screen and
+        sign ``apply_real_lens`` uses.  Refused (``ValueError``) under
+        ``caustic='multibranch'``/``'uniform'``, which have no analytic leg to
+        re-apply it onto.
+      - ``fresnel``, ``absorption``, ``coating``: amplitude-only; NOT applied
+        (see the bullet above).
+      - ``stop_index`` other than the entrance: warned about; the traced leg
+        launches from the entrance plane and the exit mask uses the entrance
+        aperture.
+
+      A prescription key not in either list is refracted geometrically and
+      needs no special handling.
 
     Parameters
     ----------
@@ -6886,12 +7593,31 @@ def apply_real_lens_traced(
         evolution.
     ray_subsample : int, default 8
         Compute the ray-trace OPL on every ``ray_subsample``-th pixel
-        and bilinearly interpolate to the full grid.  OPL is a very
-        smooth function of pupil position, so the default ``8`` (and
-        ``ray_subsample=4``) typically loses < 1 nm of fidelity while
-        cutting cost by ``ray_subsample**2``.  Set ``1`` to trace every
-        pixel (no subsampling).  Recommended for production use on large
-        grids.
+        and reconstruct the full grid from it, cutting the Newton cost by
+        ``ray_subsample**2``.  Set ``1`` to trace every pixel.
+
+        **Accuracy depends on WHICH reconstruction runs, not on
+        ``ray_subsample`` alone.**  Two exist:
+
+        - the v5.35 inverse-characteristic evaluator (``inverse_map``, the
+          shipped default) evaluates the exit->entrance map per PIXEL, so the
+          coarse lattice costs nothing in accuracy: measured **0.000 nm rms**
+          (< 5e-17 m) against an independent exact-sphere oracle on an f/7.5
+          biconvex singlet (R = +-60 mm, t = 4 mm, ap 8 mm, N = 768,
+          dx = 13.54 um) at ``sub`` = 4, 8 and 16 alike;
+        - the incumbent order-1 coarse->fine OPL upsample, whose error is
+          ``(sub*dx)^2 * f'' / 8`` and therefore grows as ``sub^2``: on the
+          same fixture **3.40 / 11.63 / 44.18 nm rms** (12.90 / 51.58 /
+          206.3 nm max) at ``sub`` = 4 / 8 / 16, against 0.00035 nm at
+          ``sub = 1``.
+
+        The evaluator is OFF -- so the second row applies -- for
+        ``use_gpu=True``, ``inversion_method != 'newton'``,
+        ``inverse_map=False``, ``sag_chunk_rows`` banding, and whenever one of
+        its internal guards refuses (each refusal names its guard letter in a
+        ``RuntimeWarning``).  The historical "< 1 nm at 4 or 8" claim
+        described the evaluator's numbers as if they were the upsample's; use
+        ``(sub*dx)^2/(8*f_exit)`` as the bound whenever it is off.
     min_coarse_samples_per_aperture : int, default 32
         Guardrail against undersampled Newton inversion.  After
         ``ray_subsample`` is applied, the coarse output grid must have
@@ -7075,10 +7801,18 @@ def apply_real_lens_traced(
         ``RuntimeWarning`` pointing at ``carrier=`` / :func:`apply_real_lens`;
         ``'delegate'`` transparently falls back to :func:`apply_real_lens`
         (a ``RuntimeWarning`` lists any traced-only physics kwargs the
-        analytic model cannot honour); ``'off'`` disables the check (and its
-        one-FFT-free cost).  ``'silent'`` and ``'ignore'`` are accepted
+        analytic model cannot honour); ``'off'`` SUPPRESSES the check.
+        ``'silent'`` and ``'ignore'`` are accepted
         aliases for ``'off'`` (the sibling knobs here spell suppression
-        ``'silent'``).  v5.29.1 (audit E-M3): any OTHER value now raises --
+        ``'silent'``).
+
+        ``'off'`` is a suppression knob, not a cost knob.  It used to be
+        documented as removing "its one-FFT-free cost"; it does not, because
+        the ``else`` branch recomputes the SAME ``_input_tilt_stats`` for the
+        tilt warning.  Measured at N = 1024, ray_subsample = 4, median of 4:
+        ``'warn'`` 4.013 s against ``'off'`` 4.209 s -- no saving.  (cProfile
+        puts ``_input_tilt_stats`` at 0.310 s of a 5.760 s call and
+        ``_input_beam_amp_radius`` at 0.092 s, both for warnings only.)  v5.29.1 (audit E-M3): any OTHER value now raises --
         it used to select ``'warn'`` silently, and ``'silent'`` in particular
         therefore warned instead of suppressing.
     inversion_method : {'newton', 'fit', 'backward_trace'}, default 'newton'
@@ -7309,6 +8043,26 @@ def apply_real_lens_traced(
         reports that spawn workers would re-run the caller's whole program,
         side effects included, which is a correctness hazard rather than a
         resource notice.
+    parallel_amp : bool, optional
+        Run the two analytic amplitude legs (``apply_real_lens`` on ``E_in``
+        and on the plane-wave reference) CONCURRENTLY on a thread pool.
+        ``None`` (default) follows the module default, which
+        :func:`set_lens_parallel_amp` / :func:`lumenairy.set_low_memory`
+        steer.  Numerically inert -- the two fields are bitwise identical to
+        the sequential path -- so this is a pure wall-time / memory trade:
+        measured 1.35x faster for +67 MB peak at N = 1024, ray_subsample = 4.
+    parallel_amp_min_free_gb : float, default 48.0
+        EXPLICIT floor (in GB of free RAM) below which ``parallel_amp`` drops
+        back to sequential.  The gate itself is SIZE-SCALED: the doubled
+        working set is ~6x ``E_in.nbytes`` (floored at 2 GB for fixed
+        overhead), so the requirement follows the grid instead of demanding
+        the 48 GB this default was tuned for at N = 32768.  Passing a value
+        raises the floor to ``max(size-scaled, yours)``; leaving it at the
+        default uses the size-scaled requirement alone.
+
+        Why: as a FLAT threshold, 48 GB was 700x over-conservative at N = 1024
+        (67 MB of extra peak), so the measured 1.35x was unreachable at ANY
+        grid size on a 32 GB workstation or a 12 GB CI runner.
     decentred_fit_poly_order : int, optional
         Minimum tensor-Chebyshev total degree for the ray fit WHEN THAT FIT'S
         DISC IS OFF CENTRE (niche D7).  ``None`` (default) uses
@@ -7607,9 +8361,10 @@ def apply_real_lens_traced(
 
           Requires ``inversion_method='newton'`` and the CPU path
           (``use_gpu=False``); incompatible with ``return_screen=True``.
-    caustic : {None, 'single', 'multibranch', 'uniform'}, default None
+    caustic : {None, 'single', 'multibranch', 'uniform', 'wave'}, default None
         Opt-in MULTIBRANCH (KMAH / Maslov) refinement of the ``ray_density``
-        amplitude (niche N13 / K1).  ``None`` / ``'single'`` (default) is the
+        amplitude (niche N13 / K1), or the ray-to-wave hand-off ``'wave'``.
+        ``None`` / ``'single'`` (default) is the
         single-branch behaviour above -- BYTE-IDENTICAL to prior releases.
 
         ``'uniform'`` (niche N16 / K4; requires ``amplitude_model='ray_density'``
@@ -7660,11 +8415,51 @@ def apply_real_lens_traced(
         one call (finite, no blow-up) rather than an aliasing-sensitive wave
         propagation.  See ``docs/plan_kmah_gpu_perf_2026_07_21.md`` (N13) and
         ``tests/unit/test_niche_k1_kmah_caustic.py`` for the measured envelope.
+
+        **AT an axial point focus the branch sum has no valid answer.**  A
+        whole RING of branches coalesces there, which is a higher catastrophe
+        than the FOLD the ``'ludwig'`` pair swap regularises, so: in a ~40 um
+        band around the paraxial focus every mapped triangle is degenerate and
+        the mode now REFUSES (it used to return an identically-zero field with
+        no diagnostic); in the ~100 um run-up to it the reconstructed power
+        reaches 4-8x the input and the two-sided energy tripwire warns; and
+        with ``caustic_min_area_ratio`` lowered far enough to keep the
+        triangles, the divergent ``1/sqrt|J|`` amplitudes give ~4e9x the input
+        power.  Use ``caustic='wave'`` (below) for those planes.
+
+        ``'wave'`` -- THE RAY-TO-WAVE HAND-OFF.  Take the single-valued traced
+        field at the exit-vertex plane -- where geometric optics is exact,
+        far from any caustic -- and propagate it to ``output_plane_distance``
+        with the library's band-limited angular spectrum.  No branch
+        enumeration, no KMAH index, no ``1/sqrt|J|``, no Ludwig swap and no
+        dark-side completion: the mode is exact through folds, cusps AND the
+        axial point focus alike, and it carries the exponentially-decaying
+        dark-side tail that the branch sum drops to exactly zero (measured by
+        the audit's independent Kirchhoff/ASM oracle at I = 610 / 259 / 140 /
+        31 where the multibranch reads 0).  Measured 2x faster than
+        ``'multibranch'`` and 15x faster than ``'uniform'`` at N = 4096.
+        Requires the CPU path; every other keyword of this function applies
+        verbatim (it is one recursion with ``caustic='single'`` and
+        ``output_plane_distance=0``, then one ASM leg).
+
+        Validity is the ASM's, not geometry's: the pupil must be sampled at
+        ``dx <= lambda/(2 NA_exit)`` (the ``on_undersample`` guard already
+        measures ``NA_exit``) and the grid must hold the beam at the output
+        plane, ``z*tan(theta_max) < N*dx/2``.  Both are easy at a pupil, which
+        is where the multibranch also needs a fine grid.
+
+        NOT the default for ``output_plane_distance != 0``: the existing
+        multibranch/uniform tests pin the branch-sum field, and switching the
+        default would move every one of those numbers.  Prefer ``'wave'`` for
+        new work at any plane the ray map is multi-valued.
     output_plane_distance : float, default 0.0
         Observation-plane distance [m] past the last surface's exit vertex,
-        honoured ONLY by ``caustic='multibranch'`` (the single-branch / screen
-        paths always output at the exit vertex; a non-zero value with any other
-        mode raises).  ``0.0`` = the exit vertex.
+        honoured ONLY by ``caustic='multibranch'`` / ``'uniform'`` / ``'wave'``
+        (the single-branch / screen paths always output at the exit vertex; a
+        non-zero value with any other mode raises).  ``0.0`` = the exit vertex.
+
+        For the two branch-enumeration modes, read the axial-focus caveat
+        under ``caustic`` before reaching for a through-focus plane.
     caustic_ray_subsample : int, default 2
         ``caustic='multibranch'`` launch-grid spacing in units of ``dx`` (one
         ray per ``caustic_ray_subsample`` pixels); smaller = denser ray
@@ -7770,6 +8565,29 @@ def apply_real_lens_traced(
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced', input_kind='field')
+    # ``caustic='wave'`` recurses into this function with the caustic mode off
+    # and the output plane at the exit vertex, so it needs every OTHER keyword
+    # exactly as the caller gave it.  Snapshot them from ``locals()`` HERE --
+    # before any parameter is normalised or rebound -- keyed by the live
+    # signature, so a new keyword is carried through automatically instead of
+    # being dropped by a hand-maintained list (the failure mode audited as T8
+    # in ``apply_real_lens_traced_multi``).
+    _wave_recursion_kwargs = None
+    if caustic == 'wave':
+        import inspect as _inspect
+        _loc0 = locals()
+        _wave_recursion_kwargs = {
+            _k: _loc0[_k]
+            for _k in _inspect.signature(apply_real_lens_traced).parameters
+            if _k != 'E_in' and _k in _loc0}
+    # Complex dtype of the RETURNED field, resolved once at the top so every
+    # leg (the multibranch dispatch, the carrier reference phasor, the banded
+    # and whole-grid assemblies) agrees.  A real ``E_in`` is accepted -- the
+    # analytic sibling promotes it to complex128 -- and must land on a real
+    # ``np.dtype``, never on the ``np.complex128`` scalar type: the latter has
+    # no ``.type`` attribute and the masking sites use ``target_cdtype.type(0)``.
+    target_cdtype_in = np.dtype(
+        E_in.dtype if np.iscomplexobj(E_in) else np.complex128)
     # ``newton_fit='auto'`` resolves to POLYNOMIAL.  Spline was tried as the CPU
     # default (v5.30.2) on the grounds that the two fits are indistinguishable in
     # accuracy -- differences sit in the 4th-5th significant figure and swap
@@ -7941,10 +8759,23 @@ def apply_real_lens_traced(
     # path.  The routing itself happens after the shared square-grid / dy / mirror
     # guards below (so it inherits them), via ``_multibranch``.
     if caustic is not None and caustic not in ('single', 'multibranch',
-                                               'uniform'):
+                                               'uniform', 'wave'):
         raise ValueError(
-            "caustic must be None, 'single', 'multibranch', or 'uniform', got "
-            f"{caustic!r}.")
+            "caustic must be None, 'single', 'multibranch', 'uniform' or "
+            f"'wave', got {caustic!r}.")
+    # ---- 'wave': the ray-to-wave hand-off (audit 15.9) --------------------
+    # Geometric optics is EXACT at the exit pupil and singular at a caustic,
+    # so the honest way to reach a caustic plane is to stop tracing at the
+    # pupil and finish in wave optics: take the single-valued traced field at
+    # the exit-vertex plane and propagate it with the band-limited angular
+    # spectrum.  No branch enumeration, no KMAH bookkeeping, no 1/sqrt|J|, no
+    # Ludwig swap and no dark-side completion -- and it is exact through
+    # folds, cusps and the axial focus alike, where the branch sum is
+    # respectively approximate, unsupported and identically zero.  This is the
+    # commercial-POP pattern (Zemax POP / CODE V BSP); see Goodman,
+    # *Introduction to Fourier Optics* 3rd ed. Sec. 3.10 and Matsushima &
+    # Shimobaba, Opt. Express 17, 19662 (2009) for the band limit.
+    _wave_caustic = (caustic == 'wave')
     _multibranch = (caustic == 'multibranch')
     # ---- N16 (K4): opt-in UNIFORM (Airy) dark-side completion --------------
     # ``caustic='uniform'`` runs the multibranch (bright side) and adds the
@@ -7966,12 +8797,32 @@ def apply_real_lens_traced(
                 f"caustic={_mode_name!r} requires the CPU path "
                 "(use_gpu=amp_use_gpu=False): it reuses the CPU ray-trace "
                 "branch-finder + analytic det-Q KMAH counter.")
-    if float(output_plane_distance) != 0.0 and not _mb_family:
+    if float(output_plane_distance) != 0.0 and not (_mb_family
+                                                    or _wave_caustic):
         raise ValueError(
             "output_plane_distance is only honoured by caustic='multibranch' / "
-            "'uniform' (the single-branch / screen paths output at the exit "
-            f"vertex); got output_plane_distance={output_plane_distance!r} with "
+            "'uniform' / 'wave' (the single-branch / screen paths output at "
+            f"the exit vertex); got "
+            f"output_plane_distance={output_plane_distance!r} with "
             f"caustic={caustic!r}.")
+    if _wave_caustic and (use_gpu or amp_use_gpu):
+        raise ValueError(
+            "caustic='wave' requires the CPU path (use_gpu=amp_use_gpu=False): "
+            "it reuses the CPU traced exit-vertex field and the library's "
+            "band-limited angular-spectrum propagator.")
+    if _wave_caustic and return_screen:
+        # The ASM leg PROPAGATES the field; it is not a multiplier.  A
+        # "screen" for this mode would have to be the exit-vertex screen with
+        # the propagation silently dropped, which is the same
+        # input-dependence trap ``return_screen`` + ``'delegate'`` sets.
+        raise ValueError(
+            "caustic='wave' is incompatible with return_screen=True: the "
+            "hand-off finishes with an angular-spectrum PROPAGATION of the "
+            "field to output_plane_distance, which is not expressible as a "
+            "per-pixel screen.  Ask for the screen at the exit vertex "
+            "(caustic=None, output_plane_distance=0) and propagate the "
+            "product yourself with "
+            "lumenairy.propagators.angular_spectrum_propagate.")
     if _ray_density:
         if return_screen:
             raise ValueError(
@@ -8065,6 +8916,10 @@ def apply_real_lens_traced(
                 f"pattern.  Keep origin=(0, 0) and size the grid to hold both "
                 f"the axis and the beam, or switch to the ray-density remap "
                 f"configuration.")
+        # ``caustic='wave'`` is NOT listed here: it recurses through the
+        # ordinary single-branch path (which is origin-aware) and finishes
+        # with an ASM leg, which propagates whatever grid it is handed and so
+        # carries the origin along with it.
         if _mb_family:
             raise NotImplementedError(
                 f"apply_real_lens_traced: origin={origin!r} is not supported "
@@ -8085,6 +8940,24 @@ def apply_real_lens_traced(
                 "apply_real_lens_traced: ORIGIN_AMP_SUPPORT_CHECK must be "
                 f"'error', 'warn' or 'silent' (got "
                 f"{ORIGIN_AMP_SUPPORT_CHECK!r}).")
+
+    if return_screen and on_noncollimated == 'delegate':
+        # Same class as the ``origin`` refusal above, and the same remedy.  The
+        # delegate branch returns ``apply_real_lens(E_in)`` -- a FIELD with
+        # ``E_in`` baked into it -- where ``return_screen=True`` promises an
+        # input-INDEPENDENT screen the caller may multiply later fields by.
+        # Measured: the returned array is bitwise equal to
+        # ``apply_real_lens(E_in)``, and only a RuntimeWarning distinguished
+        # the two, so a caller who cached it got its own input back as a
+        # multiplier on every subsequent field.
+        raise ValueError(
+            "apply_real_lens_traced: return_screen=True is incompatible with "
+            "on_noncollimated='delegate'.  The delegate fallback returns "
+            "apply_real_lens(E_in), i.e. a FIELD that contains E_in, where "
+            "return_screen promises an input-independent screen -- caching "
+            "that as a screen bakes this call's input into every later one.  "
+            "Use on_noncollimated='warn' (the default) or 'off' with "
+            "return_screen=True, or drop return_screen and accept a field.")
 
     # v5.1.0 (default-knob resolver rollout): resolve ``wave_propagator``
     # / ``dy`` from the library-wide defaults when callers leave them
@@ -8172,13 +9045,25 @@ def apply_real_lens_traced(
         int(_newton_cap_entry), int(ray_subsample))
 
     # Pre-flight grid vs prescription-aperture check.
+    #
+    # The swallow is DELIBERATE and narrow: this is a pre-flight NOTICE about
+    # grid sizing, and the prescription it reads has not been through
+    # ``validate_prescription`` yet (that happens inside the ray trace), so a
+    # malformed key here must not pre-empt the precise diagnostic the real
+    # validator gives a few hundred lines later.  What the swallow must NOT do
+    # is hide a failure silently -- the audit's objection -- so the exception
+    # is logged with its type and message.
     try:
         _warn_if_aperture_exceeds_grid(
-            lens_prescription, int(np.shape(E_in)[0]), dx,
-            source='apply_real_lens_traced')
-    except (KeyError, ValueError, TypeError, AttributeError):
-        # Aperture-check failure is informational only.
-        pass
+            lens_prescription, int(np.shape(E_in)[1]), dx,
+            source='apply_real_lens_traced',
+            N_y=int(np.shape(E_in)[0]), dy=dy)
+    except (KeyError, ValueError, TypeError, AttributeError) as _ap_exc:
+        logger.info(
+            "apply_real_lens_traced: the pre-flight aperture-vs-grid notice "
+            "could not run on this prescription (%s: %s); the ray trace's own "
+            "validate_prescription will report any real defect.",
+            type(_ap_exc).__name__, _ap_exc)
 
     Ny, Nx = E_in.shape
     if Ny != Nx:
@@ -8197,6 +9082,43 @@ def apply_real_lens_traced(
             "apply_real_lens_traced currently requires square pixels "
             f"(dx == dy); got dx={dx!r}, dy={dy!r}.  Use apply_real_lens "
             "for anamorphic grids.")
+
+    # ---- dispatch the RAY-TO-WAVE hand-off (caustic='wave') ---------------
+    # Recurse ONCE with the caustic mode off and the output plane at the exit
+    # vertex -- so every knob of this function (carrier, amplitude_model,
+    # preserve_input_phase, the fits, the guards) applies verbatim -- then
+    # finish in wave optics with the library's own band-limited angular
+    # spectrum.  The traced exit-vertex field IS the pupil field the hand-off
+    # needs; there is nothing to re-derive here, which is the point.
+    if _wave_caustic:
+        _d_wave = float(output_plane_distance)
+        _kw_wave = dict(_wave_recursion_kwargs)
+        _kw_wave.update(caustic='single', output_plane_distance=0.0,
+                        return_screen=False)
+        _E_pupil = apply_real_lens_traced(E_in, **_kw_wave)
+        if _d_wave == 0.0:
+            call_progress(progress, 'real_lens_traced', 1.0, 'done')
+            return _E_pupil
+        # Exit medium: the leg after the last surface runs in whatever the
+        # prescription's ``glass_after`` is, so the ASM (which takes a single
+        # wavelength) is given the IN-MEDIUM wavelength lambda/n -- the same
+        # substitution the in-glass ASM legs of ``apply_real_lens`` make.  n=1
+        # for a prescription ending in air, where this is a no-op.
+        from .. import raytrace as _rt_wave
+        from ..propagators.asm import angular_spectrum_propagate
+        from ..raytrace.exit_vertex import resolve_exit_index
+        _surfs_w = _rt_wave.surfaces_from_prescription(prescription)
+        _n_out = resolve_exit_index(
+            _surfs_w, wavelength,
+            fn_name="apply_real_lens_traced(caustic='wave')")
+        _E_wave = angular_spectrum_propagate(
+            _E_pupil, z=_d_wave, wavelength=float(wavelength) / _n_out,
+            dx=dx, bandlimit=bool(bandlimit))
+        _E_wave = np.asarray(_E_wave)
+        if _E_wave.dtype != target_cdtype_in:
+            _E_wave = _E_wave.astype(target_cdtype_in)
+        call_progress(progress, 'real_lens_traced', 1.0, 'done')
+        return _E_wave
 
     # ---- N13 (K1): dispatch the MULTIBRANCH (KMAH/Maslov) caustic sum ------
     # Route the whole call to the existing multibranch branch-finder (REUSE,
@@ -8223,6 +9145,22 @@ def apply_real_lens_traced(
                 "carrier='auto' only (the launch is one tilted congruence); "
                 f"got carrier={carrier!r}.  Use the single-branch ray_density "
                 "path for a scalar-conjugate / explicit-wavefront carrier.")
+        if any(isinstance(_s, dict) and _s.get('form_error') is not None
+               for _s in (prescription.get('surfaces') or [])):
+            # The caustic modes are a PURE ray construction (branch eikonals
+            # from ``raytrace.trace``), with no analytic leg at all, so there
+            # is no screen to add the figure error back onto -- unlike the
+            # single-valued path, which re-applies it at the assembly.
+            raise ValueError(
+                "apply_real_lens_traced: caustic="
+                f"{caustic!r} cannot honour a surface 'form_error' map.  The "
+                "multi-branch / uniform caustic field is built entirely from "
+                "ray eikonals, and lumenairy.raytrace.Surface carries no "
+                "form_error, so the figure error would be SILENTLY ABSENT "
+                "from the answer (the nominal field returned as if it were "
+                "the perturbed one).  Use caustic='single' (the default, "
+                "which applies the figure error as an explicit screen), or "
+                "apply_real_lens, for figure-error / tolerancing studies.")
         if _uniform:
             # N16 (K4): multibranch bright side + CFU uniform Airy dark tail
             # (rotationally-symmetric fold ring; falls back to plain
@@ -8254,8 +9192,8 @@ def apply_real_lens_traced(
                 caustic_band=caustic_band,
                 input_carrier=_input_carrier,
             ))
-        _target_cdtype = (E_in.dtype if np.iscomplexobj(E_in)
-                          else np.complex128)
+        _target_cdtype = np.dtype(E_in.dtype if np.iscomplexobj(E_in)
+                                  else np.complex128)
         if _mb.dtype != _target_cdtype:
             _mb = _mb.astype(_target_cdtype)
         call_progress(progress, 'real_lens_traced', 1.0, 'done')
@@ -8263,7 +9201,17 @@ def apply_real_lens_traced(
 
     aperture = lens_prescription.get('aperture_diameter')
     thicknesses = lens_prescription['thicknesses']
-    float(sum(thicknesses))
+    # VALIDATION BY EXCEPTION, stated so rather than left as a statement whose
+    # value is discarded: a non-numeric entry in ``thicknesses`` must fail here,
+    # at the top, with the key named -- not four hundred lines later inside the
+    # ray tracer.  (``float(sum(...))`` on its own read as dead code.)
+    try:
+        float(sum(thicknesses))
+    except (TypeError, ValueError) as _exc:
+        raise ValueError(
+            f"apply_real_lens_traced: prescription['thicknesses'] must be a "
+            f"sequence of numbers in metres; got {thicknesses!r} "
+            f"({type(_exc).__name__}: {_exc}).") from _exc
 
     # 4.11.2: warn if the prescription specifies a stop_index other than
     # the entrance (or carries a decentered stop).  ``apply_real_lens``
@@ -8275,7 +9223,19 @@ def apply_real_lens_traced(
     # leg is feature-scope; warn so the silent move-to-entrance is
     # visible to callers who have written a stop_index into their
     # prescription.
+    # Read ``stop_index`` through the shared normaliser so the traced family
+    # diagnoses a malformed key exactly as ``apply_real_lens`` does: a negative
+    # index counts from the end, and anything still outside [0, n_surfaces)
+    # raises -- an out-of-range stop matches no surface AND suppresses the
+    # entrance aperture, i.e. it silently removes all aperture clipping.  A
+    # prescription with no ``surfaces`` at all is left to validate_prescription,
+    # which owns that diagnosis with a better message.
+    from ._lens_real import _normalise_stop_index
+    _surfs = lens_prescription.get('surfaces') or []
     _stop_index = lens_prescription.get('stop_index')
+    if _surfs:
+        _stop_index = _normalise_stop_index(
+            _stop_index, len(_surfs), fn_name='apply_real_lens_traced')
     if _stop_index is not None and int(_stop_index) != 0:
         import warnings
         warnings.warn(
@@ -8292,7 +9252,6 @@ def apply_real_lens_traced(
         # path applies the stop centred at the surface's ``decenter``,
         # but the ray-trace leg's launch geometry is centred on the
         # optical axis.
-        _surfs = lens_prescription.get('surfaces') or []
         if _surfs:
             _stop_surf_idx = int(_stop_index) if _stop_index is not None else 0
             if 0 <= _stop_surf_idx < len(_surfs):
@@ -8308,6 +9267,18 @@ def apply_real_lens_traced(
                         "decentered-stop systems.",
                         RuntimeWarning, stacklevel=2,
                     )
+
+    # ---- form_error: a phase-only feature the RAY model cannot represent ----
+    # ``raytrace.Surface`` has no ``form_error`` field, so ``opl_traced``
+    # carries none of it while BOTH analytic legs do -- and the assembly
+    # ``E_analytic * exp(i(k0 opl - phase_analytic_lens))`` then cancels it out
+    # of the answer.  Build the screen here and add it back explicitly at the
+    # assembly (both the banded and the whole-grid paths), so a figure error
+    # routed through the traced model behaves exactly as it does through
+    # ``apply_real_lens``.  ``None`` on a nominal prescription, where every
+    # expression below is untouched.
+    _form_error_phase = _form_error_phase_screen(
+        lens_prescription, wavelength, (N, N), 'apply_real_lens_traced')
 
     x = (np.arange(N) - N / 2) * dx
     # ---- niche D9: the wave grid's two PHYSICAL axes ----------------------
@@ -8692,37 +9663,65 @@ def apply_real_lens_traced(
                         ('newton_poly_order', newton_poly_order),
                         ('decentred_fit_poly_order', decentred_fit_poly_order),
                         ('ray_subsample', ray_subsample),
+                        # These four CHANGE THE RETURNED FIELD on the traced
+                        # path and were dropped unreported -- which is exactly
+                        # what this list exists to prevent.
+                        ('newton_amp_mask_rel', newton_amp_mask_rel),
+                        ('newton_mask_dilate_coarse_px',
+                         newton_mask_dilate_coarse_px),
+                        ('beam_centre', beam_centre),
+                        ('fast_analytic_phase', fast_analytic_phase),
+                        # ...and the caustic sub-knobs, which shape a field
+                        # this fallback does not build at all.
+                        #
+                        # DELIBERATELY NOT LISTED: the pure POLICY knobs
+                        # (``on_undersample``, ``on_aperture_beam``,
+                        # ``on_fit_domain_basis``, ``on_pool_memory``), the
+                        # resource knobs (``n_workers``, ``parallel_amp*``,
+                        # ``use_gpu``, ``min_coarse_samples_per_aperture``) and
+                        # ``dy`` (which the square-pixel guard has already
+                        # pinned to ``dx``).  None of them changes an answer,
+                        # and a caller who set one to keep the output QUIET
+                        # should not be answered with a warning about it.
+                        ('caustic_ray_subsample', caustic_ray_subsample),
+                        ('caustic_band', caustic_band),
+                        ('caustic_min_area_ratio', caustic_min_area_ratio),
+                        ('origin', origin),
                         # the most dangerous drop: apply_real_lens has no
                         # notion of a reusable screen and returns a FIELD
                         ('return_screen', return_screen),
                     ) if _kwarg_differs_from_default(_v, _tdef.get(_k))]
-                if _dropped or carrier is not None:
-                    import warnings
-                    _kept = (
-                        "  carrier= IS forwarded (it drives the analytic "
-                        "model's screen-obliquity + R1 corrections)."
-                        if _fwd_carrier is not None else
-                        ("  carrier= is NOT forwarded: removing it does not "
-                         "reduce the input's angular spread, so it does not "
-                         "describe this field and the angular correction "
-                         "would be driven by the wrong ray angle."
-                         if carrier is not None else ''))
-                    _drop_txt = (
-                        f"The analytic model has no ray-trace leg, so these "
-                        f"traced-only arguments are DISCARDED: "
-                        f"{', '.join(_dropped)}." if _dropped else
-                        "The analytic model has no ray-trace leg.")
-                    warnings.warn(
-                        f"apply_real_lens_traced: on_noncollimated="
-                        f"'delegate' is handing this call to "
-                        f"apply_real_lens (input residual angular spread "
-                        f"{_resid:.3f} rad > "
-                        f"{_NONCOLLIMATED_RESID_THRESH} rad).  "
-                        f"{_drop_txt}{_kept}  Keep "
-                        f"on_noncollimated='warn' if you need them "
-                        f"honoured, or call apply_real_lens directly to "
-                        f"make the model choice explicit.",
-                        RuntimeWarning, stacklevel=2)
+                # ALWAYS announce the model swap.  The emitter used to be
+                # gated on ``_dropped or carrier is not None``, so a delegating
+                # call that happened to pass only defaults changed model with
+                # ZERO warnings -- the caller asked for the traced model and
+                # silently got the analytic one.
+                import warnings
+                _kept = (
+                    "  carrier= IS forwarded (it drives the analytic "
+                    "model's screen-obliquity + R1 corrections)."
+                    if _fwd_carrier is not None else
+                    ("  carrier= is NOT forwarded: removing it does not "
+                     "reduce the input's angular spread, so it does not "
+                     "describe this field and the angular correction "
+                     "would be driven by the wrong ray angle."
+                     if carrier is not None else ''))
+                _drop_txt = (
+                    f"The analytic model has no ray-trace leg, so these "
+                    f"traced-only arguments are DISCARDED: "
+                    f"{', '.join(_dropped)}." if _dropped else
+                    "The analytic model has no ray-trace leg.")
+                warnings.warn(
+                    f"apply_real_lens_traced: on_noncollimated="
+                    f"'delegate' is handing this call to "
+                    f"apply_real_lens (input residual angular spread "
+                    f"{_resid:.3f} rad > "
+                    f"{_NONCOLLIMATED_RESID_THRESH} rad).  "
+                    f"{_drop_txt}{_kept}  Keep "
+                    f"on_noncollimated='warn' if you need them "
+                    f"honoured, or call apply_real_lens directly to "
+                    f"make the model choice explicit.",
+                    RuntimeWarning, stacklevel=2)
                 # v5.29.1 (audit E-M2): forward the RAW ``sag_chunk_rows``,
                 # matching the four sibling amp-leg call sites -- the
                 # resolver maps the documented force-whole-grid sentinel 0 to
@@ -8764,8 +9763,14 @@ def apply_real_lens_traced(
     # placeholder -- byte-identical to a direct carrier call.)
     def _reference_input():
         if _carrier_W is not None:
-            return np.exp(1j * _k0 * _carrier_W).astype(E_in.dtype)
-        return np.ones_like(E_in)
+            # The reference is a unit-modulus PHASOR, so it must be built in a
+            # COMPLEX dtype even when the caller handed us a real ``E_in``
+            # (which ``_check_2d_scalar_field`` accepts and ``apply_real_lens``
+            # promotes).  Casting to a real ``E_in.dtype`` would discard the
+            # imaginary part behind a bare ``ComplexWarning`` and turn the
+            # phasor into ``cos(k0 W)``, whose modulus runs over [0, 1].
+            return np.exp(1j * _k0 * _carrier_W).astype(target_cdtype_in)
+        return np.ones(E_in.shape, dtype=target_cdtype_in)
 
     # ----- Step 1: amplitude envelope from the ANALYTIC lens model -----
     #
@@ -8837,7 +9842,28 @@ def apply_real_lens_traced(
             from ..memory import get_ram_budget
             _free_gb = min(int(_psutil.virtual_memory().available),
                            get_ram_budget()) / 1e9
-            if _free_gb < parallel_amp_min_free_gb:
+            # The requirement SCALES WITH THE FIELD.  ``parallel_amp_min_free
+            # _gb`` defaults to 48.0, which the docstring itself says is
+            # "tuned for the N=32768 complex128 case" -- and applying that flat
+            # number at every size made the measured win unavailable on any box
+            # with less than 48 GB free, at ANY N.  Measured at N = 1024,
+            # sub = 4, plano-convex, warm caches, median of 4:
+            # parallel_amp=False 5.195 s / 151.0 MB tracemalloc peak vs True
+            # 3.839 s / 218.2 MB -- 1.35x wall for +67 MB, i.e. the flat guard
+            # demanded 48 GB to spend 67 MB (700x over-conservative), so a
+            # 32 GB workstation or a 12 GB CI runner never engaged it.
+            #
+            # The doubled working set is ~6x the field's own bytes (measured
+            # 26.0 vs 18.0 grids of 8N^2 at N = 1024), so that is what is
+            # required, floored at 2 GB for the fixed interpreter/BLAS
+            # overhead.  An explicitly-passed ``parallel_amp_min_free_gb``
+            # still wins outright -- the caller's number is a hard floor.
+            _need_gb = max(2.0, 6.0 * float(np.asarray(E_in).nbytes) / 1e9)
+            _explicit_floor = _kwarg_differs_from_default(
+                parallel_amp_min_free_gb, 48.0)
+            _gate_gb = (max(_need_gb, float(parallel_amp_min_free_gb))
+                        if _explicit_floor else _need_gb)
+            if _free_gb < _gate_gb:
                 _use_parallel_amp = False
         except (ImportError, AttributeError, OSError):
             # psutil missing or virtual_memory query failed --
@@ -8847,6 +9873,27 @@ def apply_real_lens_traced(
 
     amp_cb = ProgressScaler(progress, 'real_lens_traced',
                             lo=0.0, hi=0.50 if _use_parallel_amp else 0.40)
+
+    # ---- |E_analytic|: full grid, or STRIDED where that is all anyone reads --
+    # On the DEFAULT configuration (``preserve_input_phase=True``,
+    # ``ray_subsample=8``) ``amp`` is either deleted unread (the inverse-map
+    # and fit branches) or read EXACTLY ONCE as ``amp[::sub, ::sub]`` to build
+    # the coarse Newton mask -- Step 3 combines with ``E_analytic`` itself, not
+    # with ``amp``.  Taking the modulus of the whole grid to throw 63/64 of it
+    # away cost a full-grid float64 and a full-grid pass: measured 14.17 ms /
+    # 8.4 MB at N = 1024 and 37.29 ms / 33.6 MB at N = 2048 against 0.114 /
+    # 0.853 ms for the strided form, extrapolating to ~9.6 s and 8.59 GB at
+    # N = 32768.  Every other consumer (the ``sub == 1`` full-grid Newton mask,
+    # the ``preserve_input_phase=False`` assemblies, the origin-support
+    # measurement -- which only runs under ``'remap'``, i.e. with
+    # ``preserve_input_phase`` already False) needs the whole grid and gets it.
+    _amp_is_coarse = bool(preserve_input_phase) and max(1, int(ray_subsample)) > 1
+
+    def _abs_analytic(_E, _xp):
+        if _amp_is_coarse:
+            _s = max(1, int(ray_subsample))
+            return _xp.abs(_E[::_s, ::_s])
+        return _xp.abs(_E)
 
     if _use_parallel_amp:
         # Parallel path: run amp and amp(pw) concurrently.  Only the
@@ -8874,7 +9921,7 @@ def apply_real_lens_traced(
             # in recent numpy; but to be explicit, use xp.abs/xp.angle via
             # the module selector below.
             _xp = cp if _is_cupy_array(E_analytic) else np
-            amp = _xp.abs(E_analytic)
+            amp = _abs_analytic(E_analytic, _xp)
             phase_analytic_lens = _geometric_lens_phase(
                 lens_prescription, wavelength, dx, E_in.shape[0])
             if _xp is cp:
@@ -8898,7 +9945,7 @@ def apply_real_lens_traced(
                 E_analytic_pw = fut_pw.result()
             del ones_input
             _xp = cp if _is_cupy_array(E_analytic) else np
-            amp = _xp.abs(E_analytic)
+            amp = _abs_analytic(E_analytic, _xp)
             phase_analytic_lens = _xp.angle(E_analytic_pw)
             del E_analytic_pw  # free ~17 GB at N=32768 before Newton starts
     else:
@@ -8909,7 +9956,7 @@ def apply_real_lens_traced(
             sag_dtype=sag_dtype, sag_chunk_rows=_sag_chunk_rows_raw,
             progress=lambda stage, frac, msg='': amp_cb(frac, f'amp: {msg}'))
         _xp = cp if _is_cupy_array(E_analytic) else np
-        amp = _xp.abs(E_analytic)
+        amp = _abs_analytic(E_analytic, _xp)
         # When preserving input phase (the physically-correct default),
         # we also need to know the *analytic model's lens-only phase* so
         # we can subtract it out before adding the ray-traced OPL back in.
@@ -9180,6 +10227,33 @@ def apply_real_lens_traced(
     # the caustic census), so it no longer has to fall back to the incumbent.
     _imap_domain_gate = (sub > 1 and inversion_method == 'newton'
                          and not use_gpu)
+    # ACCURACY NOTICE when the evaluator is gated OFF by CONFIGURATION.  An
+    # internal refusal already names its guard letter in a RuntimeWarning
+    # (``_lens_imap.report_refusal``), but a configuration that never reaches
+    # the build said nothing at all -- and the difference is not speed.  With
+    # the evaluator ON the coarse lattice costs nothing (measured 0.000 nm rms
+    # against an independent exact-sphere oracle at ray_subsample 4, 8 and 16);
+    # with it OFF the order-1 coarse->fine OPL upsample costs
+    # ``(sub*dx)^2 f''/8``, measured 3.40 / 11.63 / 44.18 nm rms (12.90 /
+    # 51.58 / 206.3 nm max) at sub = 4 / 8 / 16 on an f/7.5 singlet.  A caller
+    # who flips ``use_gpu=True`` for speed used to trade 0 nm for 11.6 nm rms
+    # in silence.
+    if (sub > 1 and _IMAP.imap_enabled(inverse_map)
+            and not _imap_domain_gate and on_undersample != 'silent'):
+        _why = ('use_gpu=True' if use_gpu
+                else f'inversion_method={inversion_method!r}')
+        import warnings as _imw
+        _imw.warn(
+            f"apply_real_lens_traced: the inverse-characteristic per-pixel "
+            f"evaluator is OFF for this configuration ({_why}), so the OPL is "
+            f"reconstructed from the coarse ray lattice by an order-1 "
+            f"upsample whose error is (ray_subsample*dx)^2 * f''/8 -- measured "
+            f"11.63 nm rms / 51.58 nm max at ray_subsample=8 on an f/7.5 "
+            f"singlet, against 0.000 nm with the evaluator on, and scaling as "
+            f"ray_subsample^2.  Lower ray_subsample (1 gives 0.00035 nm "
+            f"without the evaluator), or drop the setting that gates it off, "
+            f"if that matters; pass on_undersample='silent' to suppress.",
+            RuntimeWarning, stacklevel=2)
     #: True when a fit domain must be resolved even though the resolved basis
     #: cannot apply it to its own forward fit.  Scoped to the calls that
     #: actually build the model, so no spline call that does not build one
@@ -9578,15 +10652,17 @@ def apply_real_lens_traced(
     # the vertex and must go backward (t < 0) → subtract OPL.
     # Using abs() forces the wrong sign for convex exits (e.g.
     # negative meniscus lenses), producing ~45x worse OPD.
+    #
+    # ONE implementation of that operator now lives in
+    # ``raytrace.exit_vertex`` and this is a call to it, not a seventh copy
+    # (audit 15.1 found six hand-written ones across this file, ``_lens_jax``
+    # and ``gbd.py``, differing in their grazing-ray policy -- the NumPy
+    # copies masked ``|N| <= 1e-30`` to ``t = 0`` while still writing
+    # ``z = 0``, teleporting the ray with zero OPL and leaving it alive; the
+    # JAX ones produced ``t = -z/1e-30``).  The helper KILLS a grazing ray
+    # instead, which is the only behavioural difference here.
     n_exit = get_glass_index(surfaces[-1].glass_after, wavelength)
-    with np.errstate(divide='ignore', invalid='ignore'):
-        t_to_vertex = np.where(
-            final.alive & (np.abs(final.N) > 1e-30),
-            -final.z / final.N, 0.0)
-    final.opd = final.opd + n_exit * t_to_vertex
-    final.x = final.x + final.L * t_to_vertex
-    final.y = final.y + final.M * t_to_vertex
-    final.z = np.zeros_like(final.z)
+    final = result.at_exit_vertex(n_exit)
 
     # ---- v5.25.1 (hammer audit H6): carrier entrance eikonal -----------
     # The ray tracer accumulates OPL only from the ENTRANCE plane forward.
@@ -9661,6 +10737,25 @@ def apply_real_lens_traced(
     # chain's ``on_tilt_exact_grid`` routing, so this was not merely cosmetic.
     _amp = np.abs(E_in)[np.ix_(_ray_iy, _ray_ix)].T    # (x, y): x-major ravel
     _sig = (_amp >= np.exp(-4.0) * _amp.max()).ravel() & final.alive
+    # ...AND inside the disc the returned field is actually masked to.  The
+    # trace runs on ``pres_no_ap`` (``aperture_diameter`` popped), so
+    # ``surfaces_from_prescription`` gives ``semi_diameter = inf`` unless the
+    # SURFACES carry their own -- while rays are launched out to
+    # ``0.75*aperture``.  Gating on input AMPLITUDE alone does nothing for a
+    # flat / top-hat / wide-Gaussian input, so ``na_exit`` was measured over
+    # rays the output mask deletes: MEASURED 0.78487 against a true marginal
+    # 0.24964 at the 12 mm aperture edge of the file's own f/5 fixture
+    # (3.144x) with ``E_in = ones``, which demands dx <= 0.83 um instead of
+    # 2.62 um -- a 3x finer grid, 9x the memory -- and which
+    # ``_exit_na_out['na_exit']`` then feeds to the chain's
+    # ``on_tilt_exact_grid``, whose DEFAULT action is 'error'.  Gate on the
+    # same disc the output mask uses.
+    if aperture is not None:
+        # ``h_x`` / ``h_y`` are the launch heights on the AXIS-CENTRED launch
+        # lattice (deliberately not origin-shifted -- see the ``origin``
+        # parameter doc), and the aperture is centred on the element axis, so
+        # the disc test needs no origin term.
+        _sig = _sig & (h_x * h_x + h_y * h_y <= (0.5 * float(aperture)) ** 2)
     if _sig.any():
         _na_exit = float(np.sqrt(final.L[_sig] ** 2
                                  + final.M[_sig] ** 2).max())
@@ -9707,22 +10802,70 @@ def apply_real_lens_traced(
                     f'pass on_undersample="silent" to suppress.',
                     RuntimeWarning, stacklevel=2)
 
-    # Reshape final.x, final.y, final.opd onto the regular ENTRANCE
-    # grid.  Dead rays would break RectBivariateSpline (which requires
-    # strictly regular data); vignetting is rare for normal lenses but
-    # we guard against it by filling dead entries with NaN and
-    # extrapolating with the spline's natural extrapolation (OK inside
-    # the entrance disc of interest).
+    # Reshape final.x, final.y, final.opd onto the regular ENTRANCE grid.
+    # Dead (vignetted / TIR'd) rays get NaN, which the POLYNOMIAL fit's
+    # least squares drops sample-by-sample.
+    #
+    # Vignetting is NOT rare here, and the comment that used to sit at this
+    # site ("vignetting is rare for normal lenses but we guard against it by
+    # filling dead entries with NaN and extrapolating with the spline's
+    # natural extrapolation") was wrong twice over.  The launch lattice is a
+    # SQUARE of half-width ``launch_radius = 0.75*aperture``, so its corners
+    # sit at ``sqrt(2)*0.75 = 1.06`` aperture radii -- past any per-surface
+    # ``semi_diameter`` of ``aperture/2``, i.e. past 2.12 clear-aperture radii.
+    # And ``RectBivariateSpline`` is an interpolating (``s = 0``) FITPACK fit
+    # that does not ignore NaN: one NaN sample makes ~90 % of the spline
+    # coefficients NaN, ``So.ev`` NaN everywhere, ``valid = isfinite(opl_map)``
+    # all-False and the returned field IDENTICALLY ZERO -- reported to the
+    # caller only as a 100 %-unconverged Newton warning, which misdiagnoses
+    # both the cause and the outcome.
     x_out_grid = final.x.reshape(n_launch, n_launch)
     y_out_grid = final.y.reshape(n_launch, n_launch)
     opl_grid = final.opd.reshape(n_launch, n_launch)
+    _spline_fill_mask = None
     if not final.alive.all():
         alive_grid = final.alive.reshape(n_launch, n_launch)
-        # Fill NaN into dead entries to make spline fitting fail
-        # cleanly (rare path -- vignetted prescriptions)
         x_out_grid = np.where(alive_grid, x_out_grid, np.nan)
         y_out_grid = np.where(alive_grid, y_out_grid, np.nan)
         opl_grid = np.where(alive_grid, opl_grid, np.nan)
+        if newton_fit == 'spline':
+            # Give FITPACK a NaN-free tensor grid by extending each dead node
+            # from its NEAREST live neighbour (the fill the old comment
+            # claimed the spline would do for itself), and remember which
+            # nodes were filled so the Newton solution can be NaN-ed wherever
+            # it lands on one.  The filled values are not physics -- they only
+            # keep the banded solve finite -- so a pixel whose entrance
+            # solution sits on a filled node must NOT be reported.
+            (x_out_grid, y_out_grid, opl_grid, _spline_fill_mask) = (
+                _fill_dead_launch_nodes(x_out_grid, y_out_grid, opl_grid,
+                                        alive_grid))
+            if _spline_fill_mask is None:
+                raise ValueError(
+                    "apply_real_lens_traced: newton_fit='spline' cannot be "
+                    f"built for this prescription -- every one of the "
+                    f"{alive_grid.size} launch rays is vignetted or lost, so "
+                    f"the RectBivariateSpline (an interpolating s=0 FITPACK "
+                    f"fit, which propagates a single NaN through essentially "
+                    f"every coefficient) has no live data at all.  Use "
+                    f"newton_fit='polynomial' (the default, whose least "
+                    f"squares drops dead samples), or widen the prescription's "
+                    f"semi_diameter / aperture_diameter.")
+            _n_fill = int(_spline_fill_mask.sum())
+            if _n_fill and on_undersample != 'silent':
+                import warnings as _warnings
+                _warnings.warn(
+                    f"apply_real_lens_traced: newton_fit='spline' with "
+                    f"{_n_fill}/{alive_grid.size} vignetted launch rays.  "
+                    f"RectBivariateSpline is an interpolating (s=0) FITPACK "
+                    f"fit and does NOT ignore NaN, so the dead nodes have been "
+                    f"filled from their nearest live neighbour to keep the "
+                    f"solve finite, and every output pixel whose entrance "
+                    f"solution lands on a filled node is returned as an "
+                    f"exactly-zero (masked) pixel rather than as spline "
+                    f"extrapolation.  newton_fit='polynomial' (the default) "
+                    f"handles vignetting natively and is the accurate choice "
+                    f"here; pass on_undersample='silent' to suppress.",
+                    RuntimeWarning, stacklevel=2)
 
     # Reference OPL to on-axis (center of the entrance grid is an
     # exact sample because n_launch is odd).
@@ -10183,11 +11326,30 @@ def apply_real_lens_traced(
             _sh = np.asarray(Xw).shape
             xw = np.asarray(Xw).ravel()
             yw = np.asarray(Yw).ravel()
-            val = _fit_design((xw - _fx_c) / _fx_h,
-                              (yw - _fy_c) / _fy_h) @ _fit_coef
-            inside = _TracedExitSupport.signed_distance(
-                _hA, _hb, xw, yw) <= 1e-12
-            return np.where(inside, val, np.nan).reshape(_sh)
+            out = np.empty(xw.size, dtype=np.float64)
+            # CHUNKED over the output axis.  The design is POINTWISE in the
+            # output pixel, so a block writes exactly the values the whole-grid
+            # form would (bit-identical: the same ``@`` over the same M terms,
+            # per row).  Unchunked it built two ``(N^2, order+1)`` Chebyshev
+            # Vandermondes and an ``(N^2, M)`` product with M = 28 at the
+            # default order -- measured tracemalloc peak 141 full-grid units at
+            # N = 1024 (1.18 GB) and 198 at N = 512, projecting to ~76 GB at
+            # N = 8192 and ~300 GB at N = 16384, i.e. an OOM on exactly the
+            # grids this file's memory work targets.  ``ray_subsample=1``
+            # reaches it on the whole wave grid.  Budget shared with the
+            # evaluator's own design build (``_CHEB_FIT_CHUNK_ENTRIES``).
+            _M_fit = int(_terms.shape[0])
+            _step = max(1, int(_CHEB_FIT_CHUNK_ENTRIES) // max(_M_fit, 1))
+            for _s0 in range(0, xw.size, _step):
+                _s1 = min(_s0 + _step, xw.size)
+                _xb = xw[_s0:_s1]
+                _yb = yw[_s0:_s1]
+                _vb = _fit_design((_xb - _fx_c) / _fx_h,
+                                  (_yb - _fy_c) / _fy_h) @ _fit_coef
+                _in_b = _TracedExitSupport.signed_distance(
+                    _hA, _hb, _xb, _yb) <= 1e-12
+                out[_s0:_s1] = np.where(_in_b, _vb, np.nan)
+            return out.reshape(_sh)
 
     # ----- OPTION B: RectBivariateSpline + Newton-inversion of the
     # entrance->exit mapping ------------------------------------------
@@ -10337,6 +11499,11 @@ def apply_real_lens_traced(
         'newton_fit': newton_fit,
         'fit_poly_order': _fit_poly_order,
         'fit_weights': _fit_weights,
+        # Nodes whose forward-map values were filled from a live neighbour so
+        # the spline could be built at all (None on every non-vignetting call
+        # and on the polynomial fit).  The worker masks the same pixels the
+        # serial closure does, so pool and serial stay bit-identical.
+        'spline_fill_mask': _spline_fill_mask,
     }
 
     # Bound for the clipped Newton update (stay inside fitted domain)
@@ -10355,7 +11522,7 @@ def apply_real_lens_traced(
     # could then be built from a different Newton solution than the OPL.
     _spline_data['newton_max_iters'] = int(MAX_NEWTON_ITERS)
 
-    def _warn_newton_unconverged(n_unconverged, n_total, tol):
+    def _warn_newton_unconverged(n_unconverged, n_total, tol, all_nan=False):
         """Emit the Newton-unconverged RuntimeWarning (shared by the serial
         and process-pool inversion paths so both report identically).
 
@@ -10367,6 +11534,15 @@ def apply_real_lens_traced(
         unconverged pixels were silently kept at their last Newton value; the
         POOL path stayed silent until v5.29.1 (audit E-H2) even though the
         message's own advice is "increase newton_max_iters".
+
+        ``all_nan`` distinguishes a BROKEN FIT from a genuine iteration cap.
+        When the forward map evaluates to NaN at every pixel there is nothing
+        for the iteration to converge to and no ``newton_max_iters`` can help
+        -- the old message said "100.0% did not converge ... increase
+        newton_max_iters ... affected pixels keep their last Newton value,
+        which may carry residual error", which misdiagnoses the cause AND
+        mis-states the outcome (the returned field is exactly zero, not
+        approximate).
         """
         n_unconverged = int(n_unconverged)
         n_total = max(int(n_total), 1)
@@ -10374,6 +11550,20 @@ def apply_real_lens_traced(
                 and on_undersample != 'silent'):
             return
         import warnings as _warnings
+        if all_nan:
+            _warnings.warn(
+                f"apply_real_lens_traced Newton inversion: the forward-map "
+                f"fit evaluates to NaN at ALL {n_total} pixels, so the "
+                f"inversion has nothing to converge to and the returned field "
+                f"will be identically ZERO -- this is a BROKEN FIT, not an "
+                f"iteration cap, and newton_max_iters cannot help.  The usual "
+                f"cause is newton_fit='spline' on a prescription with dead "
+                f"(vignetted / TIR'd) launch rays: RectBivariateSpline is an "
+                f"interpolating s=0 FITPACK fit and one NaN sample poisons "
+                f"essentially every coefficient.  Use newton_fit='polynomial' "
+                f"(the default), whose least squares drops dead samples.",
+                RuntimeWarning, stacklevel=3)
+            return
         _warnings.warn(
             f"apply_real_lens_traced Newton inversion: "
             f"{n_unconverged}/{n_total} pixels "
@@ -10513,9 +11703,22 @@ def apply_real_lens_traced(
         n_unconverged = int(active.sum()) if hasattr(
             active, 'sum') else 0
         n_total = int(active.size) if hasattr(active, 'size') else 1
-        _warn_newton_unconverged(n_unconverged, n_total, tol)
         opl_flat = So.ev(xe, ye)
+        # A fit that returns NaN EVERYWHERE is a broken fit, not a slow one --
+        # tell the caller which of the two they have (see the emitter).
+        _warn_newton_unconverged(
+            n_unconverged, n_total, tol,
+            all_nan=bool(n_unconverged >= n_total
+                         and not bool(xp.any(xp.isfinite(opl_flat)))))
         out_of_domain = (xe * xe + ye * ye > (launch_radius * 0.99) ** 2)
+        if _spline_fill_mask is not None and xp is np:
+            # A spline forward map built over FILLED (vignetted) launch nodes
+            # carries no physics there -- mask those pixels the same way an
+            # out-of-domain pixel is masked.  ``xp is np`` because the GPU
+            # branch never resolves ``newton_fit='spline'`` (validated above),
+            # so ``_spline_fill_mask`` is None there by construction.
+            out_of_domain = out_of_domain | _landed_on_filled_node(
+                xe, ye, xs_in, _spline_fill_mask)
         opl_flat = xp.where(out_of_domain, xp.nan, opl_flat)
         # If we ran on GPU, pull the result back to the host so the
         # rest of apply_real_lens_traced -- which is CPU-only
@@ -11288,7 +12491,9 @@ def apply_real_lens_traced(
                 del amp
             opl_coarse = _invert_fit(Xs, Ys)
         else:
-            amp_coarse = amp[::sub, ::sub]
+            # ``amp`` is ALREADY the coarse lattice on the preserve path (see
+            # ``_abs_analytic``); slicing again would decimate it twice.
+            amp_coarse = amp if _amp_is_coarse else amp[::sub, ::sub]
             mask_coarse = _build_newton_mask(amp_coarse)
             if preserve_input_phase:
                 # v5.17.1 (audit P3-09): on the sub>1 preserve_input_phase
@@ -11401,6 +12606,24 @@ def apply_real_lens_traced(
             # diagonal focus walk (audit
             # AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24; the F-C fine-retrace
             # rescale routinely produces non-divisor ray_subsample values).
+            #
+            # THE TRAILING BAND.  ``coords`` reaches ``(N-1)/sub`` while the
+            # coarse lattice holds ``Ns = ceil(N/sub)`` samples covering fine
+            # indices ``0 .. (Ns-1)*sub``, so the last ``N-1-(Ns-1)*sub`` rows
+            # and columns are EXTRAPOLATED -- and ``mode='nearest'`` makes that
+            # extrapolation a CONSTANT (the edge coarse value).  Measured on an
+            # f = 100 mm defocus at dx = 2 um, sub = 8: interior max error
+            # 0.64 nm against 69.2 nm (N = 256) and 140.8 nm (N = 512) once the
+            # trailing 7 rows/columns are included -- 5.4 % and 2.7 % of the
+            # pixels.  In practice the aperture mask and the Newton
+            # out-of-domain NaN (``xe^2 + ye^2 > (0.99 launch_radius)^2``) kill
+            # those pixels on every shipped configuration, because the launch
+            # radius is 0.75 of the aperture and the band sits at the GRID rim;
+            # what is missing is an enforcement, not a measured defect.  See
+            # the deferred item in the WP-A3 report for the fix (pad the coarse
+            # lattice by one linearly-extrapolated row/column before
+            # interpolating, which removes the leading term of the constant
+            # extension without moving any interior value).
             _idx_ax = np.arange(N, dtype=np.float64) / sub
             _coords = np.empty((2, N, N), dtype=np.float64)
             _coords[0] = _idx_ax[:, None]
@@ -11415,13 +12638,28 @@ def apply_real_lens_traced(
             # (r > w), invisible to the r<w per-group oracle but SCATTERING
             # energy through the composed chain.  Cubic upsampling drops that
             # residual ~2 orders (error ~ f''''*(sub*dx)^4/384) for the smooth
-            # OPL, at negligible cost.  Cubic needs a prefilter so the NaN 0-fill
-            # cannot bleed across the ray-domain boundary; ``map_coordinates``
-            # with ``prefilter=False`` on a 0-filled array plus the separate
-            # order-1 NaN mask (dilated by the > 0.5 threshold below) keeps the
-            # boundary crisp.  Gated on a carrier being set (byte-identical
-            # carrier=None default).  ``_opl_up_order`` is resolved above the
-            # path split so the row-band assembly uses the SAME order.
+            # OPL, at negligible cost.  Gated on a carrier being set
+            # (byte-identical carrier=None default).  ``_opl_up_order`` is
+            # resolved above the path split so the row-band assembly uses the
+            # SAME order.
+            #
+            # THE PREFILTER IS ON FOR THE CUBIC PATH, and the comment that used
+            # to sit here said the opposite ("``map_coordinates`` with
+            # ``prefilter=False`` ... keeps the boundary crisp") while the code
+            # passed ``prefilter=(_opl_up_order > 1)``, i.e. True.  It has to
+            # be on -- an order-3 spline INTERPOLATION is not defined without
+            # it -- but the prefilter is an IIR filter (pole 2 - sqrt(3) ~
+            # 0.268), so the 0-fill and the ``mode='nearest'`` constant
+            # extension DO bleed inward, with a transient decaying 3.73x per
+            # coarse cell.  Measured (N = 256, sub = 8, dx = 2 um), max error
+            # inset by m coarse cells from the lattice edge, f = 100 mm
+            # defocus: order 3 gives 7.09 / 1.90 / 0.509 / 0.0365 / 0.0002 nm
+            # at m = 0 / 1 / 2 / 4 / 8 against order 1's flat 0.64 nm -- so
+            # cubic is the right choice deep inside and WORSE than linear
+            # within the outermost ~2 coarse cells.  ``mode='mirror'`` would
+            # remove the constant-extension half of that; it is not made here
+            # because it would move every carrier-path number, and the band is
+            # inside the aperture mask on every shipped configuration.
             opl_map = map_coordinates(
                 np.where(np.isnan(opl_coarse), 0.0, opl_coarse),
                 _coords, order=_opl_up_order, mode='nearest',
@@ -11694,7 +12932,13 @@ def apply_real_lens_traced(
     # above to build E_analytic / amp) already returns a field in
     # E_in.dtype, but the ``* np.exp(1j * ...)`` multiply here would
     # silently upcast to complex128 unless we cast the exp() result.
-    target_cdtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
+    # The ``np.dtype`` normalisation (done once at the top of the function) is
+    # load-bearing: a REAL ``E_in`` used to select the ``np.complex128`` scalar
+    # TYPE, which has no ``.type`` attribute, so the four
+    # ``target_cdtype.type(0)`` masking sites below (two of them on the banded
+    # path, the shipped default at N >= 4096) raised ``AttributeError`` after
+    # the whole trace, the three fits and the Newton inversion had already run.
+    target_cdtype = target_cdtype_in
     # ---- FIX_TILT_QUADRATIC_OPL_2026_08_11: restore the ABSOLUTE OPL --------
     # ``opl_grid`` (and therefore ``opl_map``) was referenced to the axis
     # launch ray purely to condition the fits -- see the long note at
@@ -11789,16 +13033,28 @@ def apply_real_lens_traced(
         # aperture), which is what the ray-tube map transports; comparing
         # against the whole grid would flag legitimate vignetting (measured:
         # 0.935 vs 0.990 on the same 1.2x aperture:beam cell).
-        _rd_pin = np.abs(np.asarray(E_in, dtype=np.complex128)) ** 2
+        # ``np.abs(E_in).astype(float64)`` squared IN PLACE, not
+        # ``np.abs(np.asarray(E_in, dtype=np.complex128)) ** 2``: for a
+        # complex64 field the old form copied the WHOLE field to complex128
+        # purely to take its modulus (measured 3.0x the field's own bytes at
+        # peak against 1.5x here -- 25.8 vs 12.9 GB at N = 32768).  This is a
+        # DIAGNOSTIC stage that runs after the field is finished, i.e. exactly
+        # where the peak plateau lives.
+        _rd_pin = np.abs(E_in).astype(np.float64)
+        _rd_pin *= _rd_pin
         if aperture is not None:
             # (axes form -- identical to ``X ** 2 + Y ** 2`` on the whole-grid
             # path, where X / Y are broadcast views of these very axes, and
             # the only form available on the band path, where X is None.)
-            _rd_pin = np.where(x[None, :] ** 2 + _y_ax[:, None] ** 2
-                               <= (aperture / 2) ** 2, _rd_pin, 0.0)
+            np.copyto(_rd_pin, 0.0,
+                      where=x[None, :] ** 2 + _y_ax[:, None] ** 2
+                      > (aperture / 2) ** 2)
         _rd_p_in = float(_rd_pin.sum())
         del _rd_pin
-        _rd_p_out = float((np.abs(E_out) ** 2).sum())
+        # ``vdot`` contracts without materialising ``|E|^2``: the old
+        # ``(np.abs(E_out) ** 2).sum()`` built a full-grid float64 (17.2 GB at
+        # N = 32768) for one scalar.  Measured agreement 2.2e-16 relative.
+        _rd_p_out = float(np.vdot(E_out, E_out).real)
         if _rd_p_in > 0.0:
             _rd_ratio = _rd_p_out / _rd_p_in
             _rd_lo = 1.0 - (_RD_ENERGY_DEFICIT_BASE
@@ -12041,6 +13297,10 @@ def apply_real_lens_traced(
                     valid_b, k0 * opl_b - phase_analytic_lens[r0:r1], 0.0)
             else:
                 dp_b = np.where(valid_b, k0 * opl_b, 0.0)
+            if _form_error_phase is not None:
+                # Re-introduce the surface figure error the ray OPL cannot
+                # carry and the two analytic legs cancel (see the build site).
+                dp_b = np.where(valid_b, dp_b + _form_error_phase[r0:r1], 0.0)
             pe_b = np.exp(1j * dp_b)
             if _opl_piston_phasor is not None:
                 pe_b *= _opl_piston_phasor      # absolute-OPL piston (in place)
@@ -12362,6 +13622,10 @@ def apply_real_lens_traced(
     if preserve_input_phase:
         delta_phase = np.where(valid, k0 * opl_map - phase_analytic_lens, 0.0)
         del opl_map
+        if _form_error_phase is not None:
+            # Re-introduce the surface figure error the ray OPL cannot carry
+            # and the two analytic legs cancel (see the build site).
+            delta_phase = np.where(valid, delta_phase + _form_error_phase, 0.0)
         phase_exp = np.exp(1j * delta_phase)
         del delta_phase
         if _opl_piston_phasor is not None:
@@ -12373,6 +13637,8 @@ def apply_real_lens_traced(
     else:
         phase = np.where(valid, k0 * opl_map, 0.0)
         del opl_map
+        if _form_error_phase is not None:
+            phase = np.where(valid, phase + _form_error_phase, 0.0)
         phase_exp = np.exp(1j * phase)
         del phase
         if _opl_piston_phasor is not None:
@@ -12388,15 +13654,25 @@ def apply_real_lens_traced(
     # reads ``amp``, never ``E_analytic``).  4.295 GB complex128 at
     # n_fine = 16384, held to the end of the call.  Pure lifetime.
     del E_analytic
-    # Zero outside the exit-pupil (ray-coverage) region
-    E_out = np.where(valid, E_out, target_cdtype.type(0))
+    # Zero outside the exit-pupil (ray-coverage) region, and outside the
+    # entrance aperture (defensive: in practice the ray-coverage region is a
+    # subset of the entrance aperture, so the second is a no-op except in
+    # pathological configurations).
+    #
+    # IN PLACE, and with the aperture radius built from the 1-D AXES.  The
+    # ``np.where`` pair allocated a fresh complex output while the old one was
+    # still live, and ``X``/``Y`` are ``np.broadcast_to`` VIEWS of the axes (a
+    # deliberate memory choice at their construction), so ``X**2``, ``Y**2``
+    # and their sum each materialised a full ``(N, N)`` float64 array.  In
+    # units of 8N^2 bytes the peak across these two statements was ~7.1
+    # (= 61 GB at N = 32768) where ~3.1 suffices.  The banded path at
+    # ``_step3_band`` already uses this cheap idiom; the values are identical.
+    np.copyto(E_out, 0, where=~valid)
     del valid                  # full-grid bool, 0.268 GB at n_fine=16384
-    # And outside the entrance aperture (defensive: in practice the
-    # ray-coverage region is a subset of the entrance aperture, so
-    # this is a no-op except in pathological configurations)
     if aperture is not None:
-        E_out = np.where(X ** 2 + Y ** 2 <= (aperture / 2) ** 2,
-                         E_out, target_cdtype.type(0))
+        _r2_mask = x[None, :] ** 2 + _y_ax[:, None] ** 2
+        np.copyto(E_out, 0, where=_r2_mask > (aperture / 2) ** 2)
+        del _r2_mask
     # ---- N12 (P11): swap the exit MAGNITUDE to the ray-density amplitude -----
     # The screen-mode ``E_out`` above carries the correct traced OPL phase and
     # the valid / aperture masks (it is 0 outside the ray-covered pupil).  In
@@ -12700,6 +13976,42 @@ def apply_real_lens_traced_multi(
                 + ".  Pass reuse_prepared=False to run a full traced pass per "
                   "emitter (these modes are honoured there), or drop the "
                   "argument to keep the shared prepared screen.")
+        # Everything else the prepared factory cannot take.  DERIVED from the
+        # live signatures rather than enumerated: the hand-maintained
+        # ``_NO_SCREEN`` list closed six of the eighteen keys
+        # ``prepare_real_lens_traced`` does not declare, and the other twelve
+        # (dy, remap_sampling, on_fit_domain_basis, on_pool_memory,
+        # parallel_amp_min_free_gb, newton_mask_dilate_coarse_px,
+        # fast_analytic_phase, output_plane_distance, caustic_ray_subsample,
+        # caustic_band, caustic_min_area_ratio, origin) still produced exactly
+        # the failure this block was written to remove -- an opaque
+        # ``TypeError: prepare_real_lens_traced() got an unexpected keyword
+        # argument`` from three frames down, and only on the DEFAULT reuse
+        # path, so the same call worked or crashed depending on the carrier
+        # kind.  Deriving it means a keyword added to either signature is
+        # handled without editing a list.
+        import inspect as _inspect
+        _prep_sig = _inspect.signature(prepare_real_lens_traced)
+        _prep_params = _prep_sig.parameters
+        _takes_varkw = any(p.kind is _inspect.Parameter.VAR_KEYWORD
+                           for p in _prep_params.values())
+        if not _takes_varkw:
+            _unsupported = sorted(k for k in traced_kwargs
+                                  if k not in _prep_params)
+            if _unsupported:
+                raise ValueError(
+                    "apply_real_lens_traced_multi: "
+                    + ', '.join(f"{k}={traced_kwargs[k]!r}"
+                                for k in _unsupported)
+                    + " cannot be used with reuse_prepared=True -- "
+                      "prepare_real_lens_traced does not take "
+                    + ('these keywords' if len(_unsupported) > 1
+                       else 'this keyword')
+                    + ", so the shared prepared screen cannot honour "
+                    + ('them' if len(_unsupported) > 1 else 'it')
+                    + ".  Pass reuse_prepared=False to run a full traced pass "
+                      "per emitter (where every apply_real_lens_traced "
+                      "keyword applies), or drop the argument.")
 
     N = int(shape0[0])
     prepared_cache = {}
@@ -12783,11 +14095,24 @@ def _spectral_gap_cuts(marginal, freqs, lo, hi, valley_frac, peak_frac):
     inband = (freqs >= lo) & (freqs <= hi)
     idx = np.where(inband)[0]
     cuts = []
+    # The flanking-peak test is restricted to the OCCUPIED band, as the
+    # docstring says.  Scanning the whole marginal let spectral leakage /
+    # noise OUTSIDE the 0.995-power support justify a cut: on a clean two-beam
+    # +-25 mrad field, whose only true gap is a single cut at f = 0, the
+    # whole-marginal form returned three cuts ([-14323, 0, +14323] 1/m) and
+    # carved two empty bins -- harmless at the default min_segment_power=1e-3
+    # (they are dropped) but two extra inverse FFTs at min_segment_power=0,
+    # which is exactly the setting the "segments sum to the input EXACTLY"
+    # contract requires.
     for i in idx:
         if i <= 0 or i >= len(p) - 1:
             continue
         if p[i] <= p[i - 1] and p[i] < p[i + 1] and p[i] < valley_frac:
-            if p[:i].max() > peak_frac and p[i + 1:].max() > peak_frac:
+            lo_side = idx[idx < i]
+            hi_side = idx[idx > i]
+            if (lo_side.size and hi_side.size
+                    and p[lo_side].max() > peak_frac
+                    and p[hi_side].max() > peak_frac):
                 cuts.append(float(freqs[i]))
     # merge cuts that are closer than a few samples (same valley)
     if cuts:
@@ -12861,15 +14186,36 @@ def _segment_field_by_angle(E, dx, dy, segments_x, segments_y,
 
     hwx = _hw(cutx, lox, hix)
     hwy = _hw(cuty, loy, hiy)
-    FX, FY = np.meshgrid(fx, fy)
-    Wx = _flattop_partition_1d(FX, cutx, hwx)
-    Wy = _flattop_partition_1d(FY, cuty, hwy)
+    # The partitions are functions of ONE coordinate each, so build them on
+    # the 1-D axes and form the separable product lazily.  Materialising them
+    # as full ``(Ny, Nx)`` grids through ``meshgrid`` cost ``Kx + Ky + 2``
+    # extra full float64 grids for no information: measured 126 MB of a
+    # 461 MB peak at N = 1024 with 15 bins, and ~2 GB at N = 4096.  The
+    # windows are bit-identical either way (``_flattop_partition_1d`` reads
+    # only the coordinate value), and so is every product below.
+    Wx = _flattop_partition_1d(fx, cutx, hwx)
+    Wy = _flattop_partition_1d(fy, cuty, hwy)
     tot_power = float(np.sum(np.abs(E) ** 2)) + 1e-300
+    # In-band power BEFORE the inverse FFT.  Parseval on the shifted spectrum
+    # gives each bin's power exactly (``sum |w F|^2 / (Ny Nx)`` = ``sum |Ej|^2``
+    # for the unitary-pair convention ``ifft2`` uses here), so a bin below
+    # ``min_segment_power`` can be dropped without transforming it -- on the
+    # audit's two-beam fixture 13 of 15 bins are below the default threshold,
+    # i.e. ~7x less FFT work for an identical segment list.
+    _nrm = 1.0 / float(F.size)
     segments = []
     for wi in Wx:
         for wj in Wy:
-            Ej = np.fft.ifft2(np.fft.ifftshift((wi * wj) * F)).astype(E.dtype)
-            if float(np.sum(np.abs(Ej) ** 2)) / tot_power > min_segment_power:
+            Wij = wi[None, :] * wj[:, None]
+            Fj = Wij * F
+            if min_segment_power > 0.0:
+                p_bin = float(np.sum(np.abs(Fj) ** 2)) * _nrm
+                if p_bin / tot_power <= min_segment_power:
+                    continue
+            Ej = np.fft.ifft2(np.fft.ifftshift(Fj)).astype(E.dtype)
+            if min_segment_power <= 0.0:
+                segments.append(Ej)
+            elif float(np.sum(np.abs(Ej) ** 2)) / tot_power > min_segment_power:
                 segments.append(Ej)
     if not segments:
         segments = [E.copy()]
@@ -12951,6 +14297,21 @@ def apply_real_lens_traced_segmented(
                            input_kind='field')
     if dy is None:
         dy = dx
+    # Square-pixel refusal, raised HERE rather than inherited.  This function
+    # used to hand ``dy`` to the angular partition (so the fy axis was scaled
+    # by the caller's dy) and then call ``apply_real_lens_traced(..., dx=dx)``
+    # WITHOUT it -- so every traced pass ran at dy = dx and the element's own
+    # anamorphic-grid refusal was never reached.  The result was internally
+    # inconsistent (spectral split on one grid, ray trace / exit grid /
+    # aperture mask on another) and completely silent: ``segmented(dy=2*dx)``
+    # returned a field where the direct traced call raises.
+    if abs(float(dy) - float(dx)) > 1e-15 * max(abs(float(dx)), 1.0):
+        raise ValueError(
+            "apply_real_lens_traced_segmented currently requires square "
+            f"pixels (dx == dy); got dx={dx!r}, dy={dy!r}.  The traced passes "
+            "it dispatches share apply_real_lens_traced's square-grid "
+            "restriction, so an anamorphic angular split could not be honoured "
+            "by them.  Use apply_real_lens for anamorphic grids.")
     if isinstance(n_segments, (tuple, list)) and len(n_segments) == 2:
         sx, sy = n_segments
     elif n_segments == 'auto':
@@ -12963,10 +14324,26 @@ def apply_real_lens_traced_segmented(
     if return_segments:
         return segments
     if len(segments) == 1:
-        # single congruence -> the plain traced path (no per-segment overhead)
+        # single congruence -> the plain traced path (no per-segment overhead).
+        # ``carriers`` may legitimately be a per-segment SEQUENCE (the
+        # ``_multi`` branch below accepts one), and the segment count is
+        # DATA-dependent, so the same call would be valid or ill-typed
+        # depending on the input spectrum.  Take the single segment's own
+        # carrier rather than forwarding the list as a scalar ``carrier=``.
+        _carrier_1 = carriers
+        if isinstance(carriers, (list, tuple)):
+            if len(carriers) != 1:
+                raise ValueError(
+                    "apply_real_lens_traced_segmented: carriers is a sequence "
+                    f"of {len(carriers)}, but the angular split produced 1 "
+                    f"segment, so there is no per-segment correspondence.  "
+                    f"The segment count is data-dependent (it follows the "
+                    f"input spectrum), so pass a SCALAR carrier / 'auto' / "
+                    f"None unless you also pin n_segments.")
+            _carrier_1 = carriers[0]
         return apply_real_lens_traced(
             segments[0], prescription=prescription, wavelength=wavelength,
-            dx=dx, carrier=carriers, **traced_kwargs)
+            dx=dx, carrier=_carrier_1, **traced_kwargs)
     return apply_real_lens_traced_multi(
         segments, prescription=prescription, wavelength=wavelength, dx=dx,
         carriers=carriers, **traced_kwargs)
@@ -13042,8 +14419,16 @@ class PreparedTracedLens:
                 f"PreparedTracedLens: E_in shape {E_in.shape} != prepared "
                 f"grid {self.screen.shape}.")
         # Reproduce E_analytic EXACTLY as apply_real_lens_traced's internal
-        # amp leg builds it (same 8 kwargs; note use_gpu=amp_use_gpu and the
-        # raw sag_chunk_rows; dy is intentionally not forwarded there either).
+        # amp leg builds it: the SAME eight amplitude-affecting keywords, in
+        # the same roles (note ``use_gpu=amp_use_gpu`` and the RAW
+        # ``sag_chunk_rows``; ``dy`` is intentionally not forwarded there
+        # either).  The set is
+        # ``PREPARED_AMP_KWARGS`` below and it is checked by
+        # ``tests/unit/test_audit2609_a3_traced_lens.py::
+        # test_t11_prepared_amp_kwargs_match_the_elements_own_leg`` -- a
+        # signature change in the element's ``_amp_call`` used to desynchronise
+        # the prepared screen from its amplitude leg with nothing failing
+        # except by luck (the comment named a COUNT and nothing read it).
         E_analytic = apply_real_lens(
             E_in, prescription=self.prescription, wavelength=self.wavelength,
             dx=self.dx, bandlimit=self.bandlimit, use_gpu=self.amp_use_gpu,

@@ -251,9 +251,27 @@ def test_fit_radius_default_estimator_is_bit_identical_to_pre_v5_29():
 def test_smooth_sigma_px_is_pixel_unit_but_core_tilt_is_dx_invariant():
     """Report-only pin for the F-B suspect ``smooth_sigma_px=4``: on a
     single-mode field the launch tilt at the beam core is dx-invariant to 6
-    digits (the smoothing is the documented no-op), while a two-mode field is
-    strongly dx-dependent -- and so is the raw quantity, with no convergent
-    target for either a pixel or a physical sigma."""
+    digits (the smoothing is the documented no-op), while a two-mode field has
+    NO well-defined local ray direction at all -- the estimator degenerates
+    toward the collimated launch, which is what the function's docstring says
+    it should do, and there is no convergent target for either a pixel or a
+    physical sigma.
+
+    RESTATED 2026-09-12 (audit T7).  The multi-mode arm used to assert a
+    MONOTONE DECAY with finer pitch (``two[0] > 2 * two[-1]``), measured on the
+    pre-fix estimator: 0.0103 / 0.0073 / 0.0024 / 0.0013 at dx = 4 / 2 / 1 /
+    0.5 um.  Those readings carried the ``np.roll`` BOUNDARY WRAP the audit
+    found (the last column differenced against column 0 -- measured 5x the tilt
+    itself on a grid-filling field, and spread 12 columns inward by the shipped
+    sigma = 4 px smoothing), and the estimate was stored half a pixel off its
+    own sample point.  With both fixed the two-mode reading is 5-10x SMALLER at
+    every pitch (measured 9.4e-04 / 1.2e-03 / 2.0e-03 at N = 256 / 512 / 1024
+    on this fixture) and no longer monotone -- the DIRECTION of a trend in a
+    quantity with no limit was never the property worth pinning.  What is
+    pinned instead: the two-mode reading stays at least two decades below the
+    physical fringe tilt at EVERY pitch, i.e. the documented degeneration
+    holds; and the single-mode core arm is unchanged to 6 digits, which is the
+    claim the F-B suspicion was actually about."""
     from lumenairy.elements._lens_traced import _sample_local_tilts
     extent, w, tilt = 1.024e-3, 150e-6, 0.06
     xl = np.linspace(-0.2 * w, 0.2 * w, 5)
@@ -280,8 +298,16 @@ def test_smooth_sigma_px_is_pixel_unit_but_core_tilt_is_dx_invariant():
     for c in core:
         assert c == pytest.approx(tilt, abs=1e-6), core
     assert max(core) - min(core) < 1e-6, core
-    # multi-mode: no dx limit (monotone decay toward the collimated launch)
-    assert two[0] > 2 * two[-1], two
+    # Multi-mode: the documented DEGENERATION toward the collimated launch,
+    # not a trend.  BAR: 0.1 * the physical fringe tilt.  Measured 9.4e-04 /
+    # 1.2e-03 / 2.0e-03 at N = 256 / 512 / 1024, i.e. 0.016 / 0.019 / 0.033 of
+    # ``tilt`` -- 3.0x below the bar at the worst pitch.  An estimator that had
+    # actually RESOLVED the fringe would read O(tilt), 10x above it, and the
+    # pre-fix wrap-contaminated reading was 0.17 of ``tilt`` (1.7x above).
+    assert max(two) < 0.1 * tilt, two
+    # ...and it is a small NUMBER, not a small number because everything was
+    # masked away: the estimator returns finite values on the whole probe.
+    assert all(t > 0.0 for t in two), two
 
 
 # ===========================================================================

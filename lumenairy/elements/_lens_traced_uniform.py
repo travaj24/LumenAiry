@@ -75,6 +75,14 @@ __all__ = ['apply_real_lens_traced_uniform']
 # untouched while preventing any overflow far out on the grid.
 _AIRY_ARG_CAP = 50.0
 
+# Radial extent of the dark-side fill, in Airy lengths ``l_airy`` past the
+# caustic ring.  ``Ai(x)`` decays as ``exp(-2/3 x^{3/2})``: it is 1.1e-10 of
+# its value at the caustic by 15 l_airy and 4.0e-16 by 20, which is below the
+# double-precision resolution of any field this module returns -- so filling
+# past that writes zeros in an expensive way.  20 leaves four decades of
+# margin over the 15 the physical tail needs.
+_AIRY_TAIL_CELLS = 20.0
+
 # Pearcey series (:func:`pearcey`) converges everywhere but SLOWS / overflows
 # for large ``|x|, |y|``; clamp the control coordinates to this box when
 # building the CUSP field (far outside the box geometric optics is exact, so
@@ -221,7 +229,13 @@ def _trace_meridional_fold(prescription, wavelength, output_plane_distance,
         wavelength=wavelength, alive=np.ones(n_fan, dtype=bool),
         opd=np.zeros(n_fan))
     tr = rt.trace(rays, surfaces, wavelength)
-    ex = tr.image_rays
+    # ``rt.trace`` leaves each ray at z = sag(rho) of the LAST surface, so the
+    # fold geometry (r_c, kappa, the mean-eikonal fit) would otherwise be
+    # resolved on the sag SURFACE rather than on the output PLANE -- the same
+    # defect the multibranch rasteriser carried (module: _trace_launch_grid).
+    # Transfer to the exit vertex through the exit medium first, then add the
+    # free-space leg in ``output_plane_n``.
+    ex = tr.at_exit_vertex()
     Nz = np.where(np.abs(ex.N) > 1e-30, ex.N, 1e-30)
     t = output_plane_distance / Nz
     x_out = ex.x + t * ex.L
@@ -233,12 +247,19 @@ def _trace_meridional_fold(prescription, wavelength, output_plane_distance,
     if h.size < 64:
         return {**fail, 'reason': 'too_few_rays'}
 
-    # interior turning points of x_out(h) (fold caustics = dx_out/dh sign change)
+    # interior turning points of x_out(h) (fold caustics = dx_out/dh sign
+    # change).  ``turns`` gives their POSITIONS; the COUNT comes from
+    # :func:`_count_interior_turning_points`, which drops exactly-zero-slope
+    # samples first.  The raw ``diff(sign(diff))`` count double-counts an
+    # isolated flat sample at an extremum (``+ -> 0 -> -`` is two sign
+    # changes), which would misclassify a clean FOLD as a cusp and route it
+    # away from the Airy completion it qualifies for.  The robust counter has
+    # existed since this module was written and was never called.
     dxo = np.diff(xo)
     sgn = np.sign(dxo)
     turns = np.where(np.diff(sgn) != 0)[0] + 1     # index into h of the turn
-    n_turn = int(turns.size)
-    if n_turn == 0:
+    n_turn = _count_interior_turning_points(xo)
+    if n_turn == 0 or turns.size == 0:
         return {**fail, 'reason': 'no_fold', 'n_turn': 0}
     if n_turn > 1:
         # >1 interior turning point -> cusp / multiple rings (Pearcey regime,
@@ -585,7 +606,10 @@ def _trace_meridional_cusp(prescription, wavelength, output_plane_distance,
         wavelength=wavelength, alive=np.ones(n_fan, dtype=bool),
         opd=np.zeros(n_fan))
     tr = rt.trace(rays, surfaces, wavelength)
-    ex = tr.image_rays
+    # Exit-vertex transfer before the free-space leg -- see the note in
+    # :func:`_trace_meridional_fold`; the cusp control map is resolved from
+    # the same ``(x_out, S)`` pair and inherits the same defect without it.
+    ex = tr.at_exit_vertex()
     Nz = np.where(np.abs(ex.N) > 1e-30, ex.N, 1e-30)
     t = output_plane_distance / Nz
     x_out = ex.x + t * ex.L
@@ -646,9 +670,18 @@ def _trace_meridional_cusp(prescription, wavelength, output_plane_distance,
     return geom
 
 
-def _build_pearcey_cusp_field(E_mb, geom, wavelength, dx):
+def _build_pearcey_cusp_field(E_mb, geom, dx):
     """Build the 2-D Pearcey-cusp completed field from the multibranch base
     ``E_mb`` and the resolved cusp geometry.
+
+    LAMBDA-FREE by construction, which is why this function takes no
+    wavelength (it used to accept one and never read it -- exactly the shape
+    of a missing ``k``-scaling, so the ambiguity is worth closing explicitly).
+    The scaling lives upstream: :func:`_solve_pearcey_control` fits the control
+    coordinates to the branch PHASES ``k*OPL`` in radians, so the Pearcey
+    ``k``-scaling is already absorbed into ``(x0, gamma, cP, cb)``; the overall
+    diffraction prefactor is then fixed by matching to ``E_mb`` in a clean
+    single-branch annulus, which carries whatever ``k``-dependence remains.
 
     The Pearcey envelope depends only on the RADIUS (the control map is
     ``x=x0``, ``y=gamma (r - r_sym)``), so it is evaluated on a dense 1-D radial
@@ -831,7 +864,7 @@ def apply_real_lens_traced_uniform(
                 prescription, wavelength, float(output_plane_distance),
                 float(output_plane_n), launch_radius, int(n_fan), E_in, dx)
             if cusp['ok']:
-                E_cusp = _build_pearcey_cusp_field(E_mb, cusp, wavelength, dx)
+                E_cusp = _build_pearcey_cusp_field(E_mb, cusp, dx)
                 if E_cusp is not None and np.all(np.isfinite(E_cusp)):
                     E_out = E_cusp.astype(target_cdtype)
                     if return_diagnostics:
@@ -925,11 +958,25 @@ def apply_real_lens_traced_uniform(
     # 5. fill the DARK side (r > r_c): analytic continuation to zeta < 0 -> the
     #    exponential Airy tail.  Clamp the Airy argument far out (no overflow;
     #    the physical tail -- arg <~ 15 -- is untouched).
+    #
+    # Restricted to the annulus the tail actually occupies.  The dark-side
+    # amplitude is ``Ai((r - r_c)/l_airy)``, which is 6e-19 at 15 l_airy and is
+    # clamped to numerical zero by ``_AIRY_ARG_CAP`` beyond ~50 anyway -- so
+    # evaluating the CFU kernel (a scipy ``airy`` plus a complex ``exp``) on
+    # EVERY pixel outside r_c produced values the caller cannot distinguish
+    # from the zero ``E_mb`` already holds there.  Measured on an f/2
+    # plano-convex at lambda = 1 um, output_plane_distance = 1.9 mm: the
+    # physically non-zero annulus is r_c < r < r_c + 15 l_airy = 21.9..67 um,
+    # ~0.6 % of the pixels at N = 2048, while the fill covered 4 193 535 of
+    # 4 194 304 (100.0 %) and cost 25.4 s against the multibranch's 0.85 s
+    # (93.1 s against 11.9 s at N = 4096).
     E_out = E_mb.astype(np.complex128, copy=True)
-    dark = rgrid > r_c
+    dark = (rgrid > r_c) & (rgrid < r_c + _AIRY_TAIL_CELLS * l_airy)
     rd = rgrid[dark]
     zd = _zeta(rd)
-    # -k0^{2/3} zeta = k0^{2/3} kappa (r - r_c) >= 0 on the dark side; cap it.
+    # -k0^{2/3} zeta = k0^{2/3} kappa (r - r_c) >= 0 on the dark side; cap it
+    # (belt and braces -- the annulus above already bounds the argument at
+    # ``_AIRY_TAIL_CELLS``, well inside the cap).
     zfloor = -_AIRY_ARG_CAP / (k0 ** (2.0 / 3.0))
     zd = np.maximum(zd, zfloor)
     E_out[dark] = _fold_airy_eval(k0, _A(rd), zd, c0, c1)

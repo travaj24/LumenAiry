@@ -311,9 +311,13 @@ def test_the_traced_chain_has_a_second_reduction_this_niche_does_not_own():
     seen = []
     orig = LT._solve_lstsq_thread_safe
 
-    def _spy(A, b, deterministic=False):
+    def _spy(A, b, deterministic=False, **kw):
+        # ``**kw`` so a diagnostic-only keyword the solver grows (v5.46 added
+        # ``score_domain``, the C13 evaluation-domain probe) cannot turn this
+        # census into a TypeError.  The census is about SHAPES and the
+        # deterministic flag; anything else is passed straight through.
         seen.append((np.shape(A), bool(deterministic)))
-        return orig(A, b, deterministic=deterministic)
+        return orig(A, b, deterministic=deterministic, **kw)
 
     # D15's flag OFF, so what is measured is D14's own scope and nothing
     # else.  The two flags are independent by construction and this is the
@@ -348,9 +352,10 @@ def test_the_traced_chain_has_a_second_reduction_this_niche_does_not_own():
     # in full in the D15 file; here it is the other side of the boundary.
     seen2 = []
 
-    def _spy2(A, b, deterministic=False):
+    def _spy2(A, b, deterministic=False, **kw):
+        # ``**kw``: see the note on ``_spy`` above.
         seen2.append((np.shape(A), bool(deterministic)))
-        return orig(A, b, deterministic=deterministic)
+        return orig(A, b, deterministic=deterministic, **kw)
 
     LT.DETERMINISTIC_TRACED_FIT = True
     LT._solve_lstsq_thread_safe = _spy2

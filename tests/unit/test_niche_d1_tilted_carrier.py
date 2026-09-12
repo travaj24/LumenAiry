@@ -341,26 +341,71 @@ def test_tilted_carrier_collimated_is_the_pure_tilted_plane():
 
 
 def test_tilted_carrier_beats_the_equivalent_ndarray_wavefront():
-    """The element already accepted an ``ndarray`` W -- but that branch
-    differentiates by ``np.gradient`` and samples NEAREST-NEIGHBOUR, so the
-    ray-launch cosines are quantised to the grid.  The analytic spec is exact
-    everywhere; the ndarray one is wrong OFF the grid lattice, which is
-    exactly where the Newton entrance heights land."""
-    n, dx, R = 64, 20e-6, -30e-3
-    spec = la.TiltedCarrier(R, 0.046, 0.0)
-    ax = (np.arange(n) - n / 2) * dx
-    Y, X = np.meshgrid(ax, ax, indexing='ij')
-    W, grad_a, _ = _compute_carrier(spec, None, _WL, dx, X, Y)
-    _, grad_n, _ = _compute_carrier(np.asarray(W), None, _WL, dx, X, Y)
+    """The element also accepts an ``ndarray`` W, but that branch can only ever
+    be as good as the grid: it differentiates by ``np.gradient`` (central
+    difference of step ``dx``) and then samples that derivative field
+    BILINEARLY.  The analytic spec is exact everywhere -- including OFF the
+    grid lattice, which is exactly where the Newton entrance heights land.
+
+    Both errors are policed against a DERIVED bar, not a recorded number.  For
+    the tilted sphere the exact gradient is ``g(x) = -uu/s`` with
+    ``uu = x + R L / N`` and ``s = sqrt(uu^2 + R^2)``, so
+    ``g'' = 3 R^2 uu / s^5``, and the two discretisations contribute
+
+        central difference    (dx^2 / 6) |g''|
+        linear interpolation  (dx^2 / 8) |g''|
+
+    i.e. ``|err| <= (7/24) dx^2 max|g''|`` over the query's own cell.  The
+    band is checked on a 4x refinement ladder, which IS the O(dx^2) statement
+    without a fragile measured ratio in it.
+
+    History.  This arm used to read ``err_ndarray > 1e-5`` as a fail-before
+    pin, because the branch sampled NEAREST-NEIGHBOUR through a TRUNCATING
+    index -- a half-pixel error LINEAR in dx (measured 3.324e-04 on this
+    fixture, 4.3 decades worse than the bilinear sampler).  Audit 2026-09-11
+    T12 replaced that lookup, so the pin is restated as the property that now
+    holds: the analytic spec is EXACT, the ndarray spec is discretisation-
+    limited, TiltedCarrier is still no worse, and neither can regress without
+    leaving the derived band (a return to nearest-neighbour overshoots the
+    upper bar by four decades).
+    """
+    n, dx, R, L = 64, 20e-6, -30e-3, 0.046
+    spec = la.TiltedCarrier(R, L, 0.0)
     xq = np.array([0.37 * dx, 4.5 * dx])          # deliberately off-lattice
     yq = np.zeros_like(xq)
     # niche C5: the exact congruence's own gradient (its source projection
     # sits at -R L / N), not the superseded sphere-plus-ramp one
-    _N = np.sqrt(1.0 - 0.046 ** 2)
-    _uu = xq + R * 0.046 / _N
+    _N = np.sqrt(1.0 - L ** 2)
+    _uu = xq + R * L / _N
     exact = -_uu / np.sqrt(_uu ** 2 + R * R)
-    np.testing.assert_allclose(grad_a(xq, yq)[0], exact, rtol=1e-12)
-    assert np.abs(grad_n(xq, yq)[0] - exact).max() > 1e-5
+
+    for k in (1, 2, 4):                           # dx = 20 / 10 / 5 um
+        nk, dxk = n * k, dx / k
+        ax = (np.arange(nk) - nk / 2) * dxk
+        Y, X = np.meshgrid(ax, ax, indexing='ij')
+        W, grad_a, _ = _compute_carrier(spec, None, _WL, dxk, X, Y)
+        _, grad_n, _ = _compute_carrier(np.asarray(W), None, _WL, dxk, X, Y)
+        # the analytic congruence is closed form: exact, at every rung
+        np.testing.assert_allclose(grad_a(xq, yq)[0], exact, rtol=1e-12)
+        err_a = np.abs(grad_a(xq, yq)[0] - exact)
+        err_n = np.abs(grad_n(xq, yq)[0] - exact)
+        # max |g''| over the cell the query sits in (+-1 pixel)
+        xc = np.concatenate([xq - dxk, xq, xq + dxk])
+        uc = xc + R * L / _N
+        g2 = np.abs(3.0 * R * R * uc
+                    / np.sqrt(uc ** 2 + R * R) ** 5).reshape(3, -1).max(0)
+        bar = (7.0 / 24.0) * dxk * dxk * g2
+        assert (err_n <= 1.5 * bar).all(), (
+            f'dx={dxk:g}: ndarray gradient error {err_n} exceeds the derived '
+            f'O(dx^2) discretisation bar {bar} -- the sampler has regressed '
+            f'(nearest-neighbour reads ~3.3e-04 here)')
+        assert (err_n >= 0.3 * bar).all(), (
+            f'dx={dxk:g}: ndarray gradient error {err_n} is BELOW the '
+            f'discretisation floor {bar} that np.gradient + bilinear '
+            f'interpolation must have -- the branch is no longer measuring '
+            f'what this test thinks it measures')
+        # and the analytic spec is still no worse than the sampled one
+        assert err_a.max() <= err_n.max()
 
 
 def test_tilted_carrier_guards():

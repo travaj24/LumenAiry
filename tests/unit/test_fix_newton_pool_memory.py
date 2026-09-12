@@ -450,20 +450,75 @@ def test_a_guarded_main_is_left_alone(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('body,guarded', [
+    # --- canonical guard spellings: safe -------------------------------
     ("if __name__ == '__main__':\n    pass\n", True),
     ('if __name__ == "__main__":\n    pass\n', True),
     ("if '__main__' == __name__:\n    pass\n", True),
     ("if __name__ in ('__main__', '__mp_main__'):\n    pass\n", True),
-    ("def f():\n    if __name__ == '__main__':\n        pass\n", False),
-    ("x = 1\n", False),
-    ("# if __name__ == '__main__':\nx = 1\n", False),
+    # ``match``/``case`` is a guard too (audit T10: ``ast.Match`` is not
+    # ``ast.If``, so the pre-fix predicate read this as UNGUARDED and
+    # needlessly serialised a correctly-written driver).
+    ("match __name__:\n    case '__main__':\n        pass\n", True),
+    # --- bodies that are harmless to re-run: safe, guard or no guard ----
+    # A definition, a literal constant and a comment are what a module is
+    # EXPECTED to do at import; a spawn child re-running them costs nothing,
+    # so refusing the pool over them would be a needless serialisation.
+    ("def f():\n    if __name__ == '__main__':\n        pass\n", True),
+    ("x = 1\n", True),
+    ("# if __name__ == '__main__':\nx = 1\n", True),
+    ("import os\nCFG = {'a': 1, 'b': (2, 3)}\n", True),
+    # The PROCESS-SETUP idioms every real driver in this repository opens
+    # with -- ``sys.path`` surgery, an environment read, the targeted warning
+    # filters a runner installs at module scope so its own imports are
+    # covered, and a plain attribute read.  A spawn child repeats them for
+    # free and idempotently, so refusing the pool over them would cost the
+    # 8-worker Newton path on exactly the drivers it exists for.  Calibrated
+    # against ``validation/repro_traced_carrier_121/capstone_stageB.py`` and
+    # ``focus_scan_121.py``, both of which read True.
+    ("import os\nimport sys\nimport warnings\n"
+     "_HERE = os.path.dirname(os.path.abspath(__file__))\n"
+     "sys.path.insert(0, _HERE)\n"
+     "warnings.filterwarnings('ignore', message='.*aperture.*')\n"
+     "NW = int(os.environ.get('NW', '1'))\n"
+     "def main():\n    return NW\n"
+     "if __name__ == '__main__':\n    main()\n", True),
+    # --- real work at module scope: UNSAFE ------------------------------
+    # The call is the thing the child re-runs.
+    ("def main():\n    return 1\nmain()\n", False),
+    # ...and so is a non-literal assignment: this is the 134 MB allocation
+    # from the audit's own g12 fixture, sitting AFTER a decorative guard.
+    # The pre-fix predicate asked only "does a top-level guard EXIST", so it
+    # answered True here -- and the pool ran with every worker paying the
+    # allocation, which is precisely the 22.1 GB/worker failure the warning
+    # this predicate feeds was written for.
+    ("import numpy as np\n"
+     "if __name__ == '__main__':\n    pass\n"
+     "BIG = np.zeros((4096, 4096))\n"
+     "main()\n", False),
+    ("import numpy as np\nBIG = np.zeros((64, 64))\n", False),
+    ("print('side effect')\n", False),
+    # --- an INVERTED guard is not a guard -------------------------------
+    # A spawn child's ``__name__`` is ``'__mp_main__'``, so it takes this
+    # branch and DIES.  The pre-fix predicate accepted it (both names are
+    # mentioned), which is a false positive in the dangerous direction.
+    ("if __name__ != '__main__':\n    raise SystemExit\nmain()\n", False),
 ])
 def test_the_guard_detector_reads_the_ast_not_the_text(tmp_path, body,
                                                        guarded):
-    """Spelling-tolerant where it must be, and NOT text-matching where that
-    would be wrong: a guard nested inside a function does not protect the
-    module body, and one inside a comment protects nothing at all.  Top-level
-    only, deliberately -- the failure is 'the module body re-runs'."""
+    """Does a spawn child re-running this module body do REAL WORK?
+
+    Spelling-tolerant where it must be, and NOT text-matching where that would
+    be wrong: a guard nested inside a function does not protect the module
+    body, and one inside a comment protects nothing at all.  Top-level only,
+    deliberately -- the failure is 'the module body re-runs'.
+
+    The predicate answers the question above, not the proxy "does a top-level
+    ``__name__`` guard exist somewhere" (audit T10).  The proxy cannot see the
+    BODY, which is the only thing that matters: the ordinary shape of a real
+    driver -- module-level constants, a dataset read, then the guard -- defeats
+    it outright.  The rows below are the classification, and three of them
+    (``match``, the decorative-guard-plus-unguarded-body, and the inverted
+    guard) FAIL on the pre-fix predicate."""
     LT._reset_newton_pool_resource_state()
     p = tmp_path / f'g{abs(hash(body))}.py'
     p.write_text(body)
@@ -505,13 +560,18 @@ def test_the_predicate_mirrors_multiprocessing(tmp_path, monkeypatch,
     ``runpy.run_module(..., run_name='__mp_main__')`` and the body re-runs just
     as it does for a path."""
     LT._reset_newton_pool_resource_state()
+    # A top-level CALL, not ``x = 1``: the predicate now asks whether a spawn
+    # child re-running this body would do real WORK (audit T10), and a literal
+    # assignment is not work.  This row is about the ``__spec__`` / ``__file__``
+    # dispatch, so the body has to be genuinely unguarded to reach it.
+    _unsafe = 'def main():\n    return 1\nmain()\n'
     path = tmp_path / os.path.basename(file_name)
-    path.write_text('x = 1\n')          # unguarded on purpose
+    path.write_text(_unsafe)
     mod = types.ModuleType('__main__')
     mod.__file__ = str(path) if file_name != 'ipython' else str(
         tmp_path / 'ipython')
     if file_name == 'ipython':
-        (tmp_path / 'ipython').write_text('x = 1\n')
+        (tmp_path / 'ipython').write_text(_unsafe)
     mod.__spec__ = (types.SimpleNamespace(name=spec_name)
                     if spec_name is not None else None)
     monkeypatch.setitem(sys.modules, '__main__', mod)

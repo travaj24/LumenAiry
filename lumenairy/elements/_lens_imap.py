@@ -556,19 +556,20 @@ def _fit_row_blocks(n, n_cols):
 
 def _cheb_dvander(u, degree):
     """``dT_n/du`` at every ``u`` -- ``T'_n = n U_{n-1}``, by the second-kind
-    recurrence.  Same relation the shipped ``_cheb2d_val_grad_numba`` uses."""
+    recurrence.  Same relation the shipped ``_cheb2d_val_grad_numba`` uses.
+
+    ``(n, degree + 1)`` -- the ``chebvander`` orientation this module's design
+    matrices use, which is the TRANSPOSE of the shared helper's
+    ``(degree + 1, n)`` stack.  The recurrence itself is
+    :func:`lumenairy._math.chebyshev.chebyshev_derivative_vandermonde`: that
+    module exists to be the library's one copy of it, and the private
+    reimplementation this replaces was bitwise equal to it (as was
+    ``_lens_traced``'s third copy).
+    """
+    from .._math.chebyshev import chebyshev_derivative_vandermonde
     u = np.asarray(u, dtype=np.float64)
-    U = np.zeros((u.size, degree + 1))
-    if degree >= 0:
-        U[:, 0] = 1.0
-    if degree >= 1:
-        U[:, 1] = 2.0 * u
-    for n in range(2, degree + 1):
-        U[:, n] = 2.0 * u * U[:, n - 1] - U[:, n - 2]
-    D = np.zeros((u.size, degree + 1))
-    for n in range(1, degree + 1):
-        D[:, n] = n * U[:, n - 1]
-    return D
+    return np.ascontiguousarray(
+        chebyshev_derivative_vandermonde(u, degree).T)
 
 
 def _td_design_grad(ux, uy, degree, terms):
@@ -1064,6 +1065,27 @@ def _incumbent_fingerprint(parity_invert, x_out_grid, y_out_grid):
     return h.digest()
 
 
+#: ``_lens_traced`` module flags that change the ARITHMETIC of the
+#: least-squares solve :func:`build_inverse_map` runs, and which therefore have
+#: to be part of the cache key (audit S8).  Read by name at key-build time so a
+#: test that flips one through ``traced_flags(...)`` is honoured rather than
+#: served a map built under the other setting.  Keeping the list here, next to
+#: the key, is deliberate: a flag added to the solve without an entry here
+#: re-opens exactly the hole this closes, and the registry in
+#: ``_traced_flags.py`` is the place to cross-check it.
+_IMAP_KEY_TRACED_FLAGS = (
+    'DETERMINISTIC_TRACED_FIT',
+    'LSTSQ_CONDITIONING_STEPDOWN',
+    '_DET_REFINE_STEPS',
+    '_DET_REFINE_MAX_CORRECTION',
+    '_DET_EINSUM_MIN_TERMS',
+    '_DET_EINSUM_BLOCK_ROWS',
+    '_DET_GRAM_TILE_BYTES',
+    '_LSTSQ_GRAM_RCOND_MIN',
+    '_LSTSQ_RESID_MARGIN',
+)
+
+
 def _imap_key(xs_in, x_out_grid, y_out_grid, opl_grid, det_j_grid, weights,
               degree, launch_radius, wavelength, extra=(),
               incumbent_fp=b'<not-probed>', census_amp=None):
@@ -1109,6 +1131,27 @@ def _imap_key(xs_in, x_out_grid, y_out_grid, opl_grid, det_j_grid, weights,
                    float(_IMAP_MIN_SAMPLES_PER_TERM),
                    float(_IMAP_DETJ_MAXMIN),
                    str(_IMAP_DETJ_SOURCE))).encode('ascii'))
+    # ...and every ``_lens_traced`` flag that changes the LEAST-SQUARES
+    # ARITHMETIC of the solve this map is built from.  The solve is
+    # ``_solve_lstsq_thread_safe(A, B, deterministic=_det_traced())``, and
+    # ``_det_traced()`` reads ``_lens_traced.DETERMINISTIC_TRACED_FIT`` at CALL
+    # time -- so without these in the key, ``traced_flags(
+    # DETERMINISTIC_TRACED_FIT=False)``, whose contract
+    # (``_traced_flags.py``) is "restores the G = A.T @ A / rhs = A.T @ b route
+    # for the traced chain EXACTLY, bit for bit, and is the fail-before for the
+    # whole layer", was defeated by a cache HIT on the second and every later
+    # call in a process: measured ``key(det=True) == key(det=False) -> True``
+    # and the SAME OBJECT served, with the two routes differing by 6.2e-14
+    # relative on a well-conditioned 129x129 congruence (and by 1681-2138x in
+    # least-squares residual on the production 120-term fits D15 itself
+    # measured).  The same applies to the C13 step-down and the refinement /
+    # Gram constants, which select branches inside the same solve.  They are
+    # cheap scalars, read HERE at build time for the same reason
+    # ``_det_traced`` reads its flag at call time.
+    from . import _lens_traced as _LT_FLAGS
+    h.update(repr(tuple(
+        (str(_n), repr(getattr(_LT_FLAGS, _n, None)))
+        for _n in _IMAP_KEY_TRACED_FLAGS)).encode('ascii', 'replace'))
     h.update(repr(tuple(extra)).encode('ascii', 'replace'))
     h.update(b'|incumbent|')
     h.update(incumbent_fp)
@@ -1514,16 +1557,31 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
     _budget_b = _IMAP_BUILD_RAM_FRAC * _ram_b
     rec['build_projected_gb'] = _need_b / 1e9
     rec['build_budget_gb'] = _budget_b / 1e9
+    # PROVENANCE (audit S8): whether this threshold came from an explicit
+    # ``set_max_ram`` or from psutil's live AVAILABLE reading is the difference
+    # between a reproducible decision and an environment-dependent one, and it
+    # decides a FIELD, not just a runtime.  Record it so a run can be
+    # reproduced from its own diagnostics.
+    rec['build_ram_budget_gb'] = _ram_b / 1e9
+    try:
+        from .. import memory as _mem
+        rec['build_ram_budget_explicit'] = bool(
+            getattr(_mem, '_MAX_RAM_OVERRIDE', None) is not None)
+    except Exception:                                  # noqa: BLE001
+        rec['build_ram_budget_explicit'] = None
     if _need_b > _budget_b:
         return _guard_fail(
             rec, 'GRAM',
             'building the total-degree-%d fit over %d retained samples '
             'projects to ~%.1f GB peak (%d x %d float64 design, %.1f copies) '
-            'against a %.1f GB share of this box\'s %.1f GB budget -- raise '
-            'the budget (lumenairy.set_max_ram), lower exit_degree, or coarsen '
-            'the launch lattice (ray_subsample) to get the map back'
+            'against a %.1f GB share of this box\'s %.1f GB budget (%s) -- '
+            'raise the budget (lumenairy.set_max_ram), lower exit_degree, or '
+            'coarsen the launch lattice (ray_subsample) to get the map back'
             % (degree, n_good, _need_b / 1e9, n_good, P,
-               _IMAP_BUILD_PEAK_COPIES, _budget_b / 1e9, _ram_b / 1e9))
+               _IMAP_BUILD_PEAK_COPIES, _budget_b / 1e9, _ram_b / 1e9,
+               'explicit set_max_ram' if rec.get('build_ram_budget_explicit')
+               else 'psutil AVAILABLE -- a LIVE reading, so this refusal is '
+                    'not reproducible across boxes or runs'))
 
     ux = (XO[good] - ex_c[0]) / ex_h[0]
     uy = (YO[good] - ex_c[1]) / ex_h[1]
@@ -1813,16 +1871,42 @@ def report_refusal(record, caller='apply_real_lens_traced'):
                action))
     if action == 'silent' or not record.get('refused'):
         return
+    # WHAT A REFUSAL COSTS (audit S8).  This message used to end "so this
+    # costs speed, never accuracy", which contradicts this module's own
+    # measurements three hundred lines above: turning the map ON moves design
+    # 121's banner FWHM from 3.450 to 3.350 um and its peak by 0.8 %, and the
+    # incumbent carries 6.0e-3 to 1.08e-2 waves rms of core wavefront error
+    # against the exact-trace oracle where the model carries ~2e-12.  A
+    # refusal therefore returns a DIFFERENT FIELD, not the same field later --
+    # which matters most for the GRAM guard, whose threshold is priced against
+    # a live RAM reading (see below), so the same call on the same inputs can
+    # answer differently on two boxes or two runs.
+    _budget_note = ''
+    if record.get('refused') == 'GRAM':
+        _budget_note = (
+            '  This guard is priced against the RESOLVED RAM BUDGET '
+            '(%.1f GB here): with no lumenairy.set_max_ram override that is '
+            'psutil\'s live AVAILABLE reading, so the refusal -- and hence '
+            'the returned field -- depends on what else the machine is doing. '
+            ' Call lumenairy.set_max_ram(<bytes>) to make the decision '
+            'reproducible across boxes and runs.'
+            % (float(record.get('build_budget_gb') or 0.0)
+               / max(_IMAP_BUILD_RAM_FRAC, 1e-30),))
     msg = (
         '%s: the inverse-characteristic per-pixel evaluator refused to build '
         '-- guard %s: %s.  The call KEEPS the shipped coarse-Newton + '
-        'map_coordinates upsample path unchanged (refuse, never degrade), so '
-        'this costs speed, never accuracy.  Set '
+        'map_coordinates upsample path unchanged (refuse, never degrade).  '
+        'That is a DIFFERENT ANSWER, not a slower one: the incumbent\'s '
+        'coarse-lattice upsample carries 6.0e-3..1.08e-2 waves rms of core '
+        'wavefront error against the exact-trace oracle where this model '
+        'carries ~2e-12, and on design 121 the two differ by 0.8 %% in peak '
+        'and 3.350 vs 3.450 um in banner FWHM.%s  Set '
         'lumenairy.elements._lens_imap.INVERSE_MAP_GUARD = \'silent\' to stop '
         'reporting it, or TRACED_INVERSE_MAP = False to stop attempting the '
         'build at all (that is the fail-before switch and it is '
         'byte-identical to this outcome).'
-        % (caller, record.get('refused'), record.get('detail', '')))
+        % (caller, record.get('refused'), record.get('detail', ''),
+           _budget_note))
     if action == 'error':
         raise RuntimeError(msg)
     warnings.warn(msg, RuntimeWarning, stacklevel=3)

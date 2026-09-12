@@ -383,7 +383,6 @@ def test_pearcey_cusp_beats_multibranch_vs_rs_truth():
     E2d = ref['E2d']
     N = int(ref['N'])
     dx = float(ref['dx'])
-    wl = float(ref['wavelength'])
     win = float(ref['window'])
     meta = json.loads(str(ref['metrics']))
     sy = _params_from_ref(meta)
@@ -395,7 +394,7 @@ def test_pearcey_cusp_beats_multibranch_vs_rs_truth():
     geom.update(r1=sy.r1, r2=sy.r2)
 
     E_mb, rg = sy.geometric_multibranch_2d(N, dx)
-    E_cusp = _build_pearcey_cusp_field(E_mb, geom, wl, dx)
+    E_cusp = _build_pearcey_cusp_field(E_mb, geom, dx)
     assert E_cusp is not None and np.all(np.isfinite(E_cusp))
 
     zone = (rg >= max(0.0, sy.r1 - 3 * (sy.r2 - sy.r1))) \
@@ -541,10 +540,20 @@ def test_near_axial_cusp_detected_out_of_scope():
     lr = 0.5e-3
     xs = np.linspace(lr / n, lr, n)
     xo = 8e-6 * np.sin(2.0 * np.pi * xs / lr) * (xs / lr)  # straddles the axis
+    # The stub stands in for a full ``TraceResult``, so it must offer the
+    # exit-vertex contract the module uses: ``rt.trace`` leaves rays at
+    # ``z = sag(rho)`` and ``_trace_meridional_cusp`` transfers them to
+    # ``z = 0`` before the output-plane leg.  These synthetic rays are already
+    # ON the vertex plane (``z = 0``, ``N = 1``), where that transfer is the
+    # identity, so returning the same bundle is exactly what
+    # ``TraceResult.at_exit_vertex`` would return -- the fixture keeps testing
+    # the axis-straddling (Bessoid) rejection and nothing else.
+    exit_rays = types.SimpleNamespace(
+        x=xo, y=np.zeros(n), z=np.zeros(n), N=np.ones(n), L=np.zeros(n),
+        M=np.zeros(n), opd=1e-3 * xs, alive=np.ones(n, dtype=bool))
     fake = types.SimpleNamespace(
-        image_rays=types.SimpleNamespace(
-            x=xo, y=np.zeros(n), N=np.ones(n), L=np.zeros(n), M=np.zeros(n),
-            opd=1e-3 * xs, alive=np.ones(n, dtype=bool)))
+        image_rays=exit_rays,
+        at_exit_vertex=lambda n_exit=None: exit_rays)
 
     def _fake_trace(rays, surfaces, wavelength, **kw):
         return fake
