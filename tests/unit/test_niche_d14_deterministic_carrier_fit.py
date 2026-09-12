@@ -216,7 +216,12 @@ def _run_consumer(consumer, deterministic, width, reps=_REPS, save=None):
         env['D14_SAVE'] = str(save)
     proc = subprocess.run(
         [sys.executable, '-c', code, str(int(bool(deterministic)))],
-        env=env, capture_output=True, text=True, timeout=900)
+        # stdin named explicitly (WP-A15a section 2.10): a spawn that names
+        # SOME but not ALL of the three stdio streams raises OSError
+        # [WinError 6] under pytest's default fd-capture on Windows.  This
+        # child reads no stdin.
+        env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+        timeout=900)
     assert proc.returncode == 0, (
         f"{consumer} arm (det={deterministic}, width={width}) failed:\n"
         f"{proc.stdout}\n{proc.stderr}")
@@ -412,9 +417,10 @@ def test_the_shipped_route_is_the_fail_before_wherever_this_build_splits():
     ).format(ladder=', '.join(str(v) for v in ladder))
     rows = {}
     for w in _WIDTHS:
+        # stdin named explicitly -- see the note on the spawn above.
         proc = subprocess.run([sys.executable, '-c', code, '0'],
-                              env=_child_env(w), capture_output=True,
-                              text=True, timeout=900)
+                              env=_child_env(w), stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, timeout=900)
         assert proc.returncode == 0, proc.stdout + proc.stderr
         for ln in proc.stdout.splitlines():
             if not ln.startswith('ROW '):

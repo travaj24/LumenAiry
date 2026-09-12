@@ -23,7 +23,6 @@ from ._core import (
     _EnergyError,
     _forward_flux_kz,
     _fourier_coeffs_1d,
-    _grazing_safe_wavelength,
     _grazing_safe_wavelength_pair,
     _homogeneous_eigenmodes,
     _interface_smatrix,
@@ -54,8 +53,8 @@ from ._core import (
     _traced_grazing_floor,
     _validate_geometry,
     _with_blas_limit,
-    _WoodAnomaly,
     _wood_symmetric,
+    _WoodAnomaly,
 )
 
 

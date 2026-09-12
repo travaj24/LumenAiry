@@ -1239,21 +1239,28 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
         set_lens_parallel_amp(False)
         set_fft_double_buffer(False)
         set_fft_auto_promote(False)
+        flipped_dtype = False
         if aggressive:
+            # ImportError is the ONLY thing this guard exists for, so it is the
+            # only thing it catches.  The module itself is already imported
+            # unguarded above, so the reachable case is narrower still: a
+            # vendored / older `fft_infra` that does not export the two dtype
+            # names.  Of the work that used to sit inside the try,
+            # `get_default_complex_dtype` is a bare global read and
+            # `set_default_complex_dtype(np.complex64)` validates against the
+            # {complex64, complex128} pair it is being handed a member of --
+            # neither can raise -- so nothing else belongs behind an except.
             try:
                 from .propagators.fft_infra import (
                     get_default_complex_dtype,
                     set_default_complex_dtype,
                 )
+            except ImportError:
+                pass
+            else:
                 prior['complex_dtype'] = get_default_complex_dtype()
                 set_default_complex_dtype(np.complex64)
-                warnings.warn(
-                    "set_low_memory(aggressive=True) set the default field "
-                    "dtype to complex64 (~80 dB dynamic range). Validate "
-                    "deep-null / stray-light-sensitive results.",
-                    RuntimeWarning)
-            except Exception:
-                pass
+                flipped_dtype = True
         # Stash the FIRST-enable snapshot: repeated set_low_memory(True)
         # calls must not overwrite the true prior with low-memory values.
         # A later aggressive enable still records the pre-flip dtype
@@ -1263,6 +1270,17 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
         elif 'complex_dtype' in prior:
             _LOW_MEMORY_PRIOR.setdefault('complex_dtype',
                                          prior['complex_dtype'])
+        # The dtype notice is emitted AFTER the restore record is written: a
+        # caller running under `-W error::RuntimeWarning` gets the error it
+        # asked for, and `set_low_memory(False)` still has the prior values to
+        # put back.  (Inside the old `except Exception: pass` the promoted
+        # warning was swallowed instead, so `-W error` saw nothing at all.)
+        if flipped_dtype:
+            warnings.warn(
+                "set_low_memory(aggressive=True) set the default field "
+                "dtype to complex64 (~80 dB dynamic range). Validate "
+                "deep-null / stray-light-sensitive results.",
+                RuntimeWarning)
     else:
         # audit P2-23 / P3-46: restore EXACTLY the values captured at
         # enable time (falling back to the shipped default for any knob
@@ -1286,11 +1304,16 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
         # audit P2-23: revert the aggressive default-dtype flip (only when
         # an aggressive enable actually captured one).
         if stash.get('complex_dtype') is not None:
+            # Same narrowing as the enable arm: only the import can fail.  The
+            # value being restored came out of `get_default_complex_dtype()` at
+            # capture time, so it is already one of the two dtypes the setter
+            # accepts and the call cannot raise ValueError.
             try:
                 from .propagators.fft_infra import set_default_complex_dtype
-                set_default_complex_dtype(stash['complex_dtype'])
-            except Exception:
+            except ImportError:
                 pass
+            else:
+                set_default_complex_dtype(stash['complex_dtype'])
     return prior
 
 

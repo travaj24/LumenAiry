@@ -134,8 +134,18 @@ LENS_KWARG_REGISTRY = {
          {'label': 'Fast analytic phase',
           'tooltip': 'Skip the full ASM-through-glass reference phase '
                      'pass; compute the geometric lens phase analytically '
-                     'from per-surface sag.  ~25% speedup with <10 nm '
-                     'OPL error on typical refractive prescriptions.'}),
+                     'from per-surface sag.  Cost of the approximation is '
+                     '~7 nm rms OPL PER MM OF GLASS: the omitted term is '
+                     'the in-glass ASM leg, so it scales with centre '
+                     'thickness, not with f-number (measured 0.007 nm rms '
+                     'at 1 um, 0.7 nm at 100 um, 14.1 nm rms / 41.6 nm PV '
+                     'at 2 mm, on an N-BK7 100/-100 biconvex at f/12.1).  '
+                     'Speed: little or nothing with "Parallel amp pass" '
+                     'on, which already overlaps the reference leg with '
+                     'the amplitude leg - measured 0.88-0.90x (i.e. '
+                     'slower) with it on and 1.06-1.17x with it off, at '
+                     'N = 512/1024 on a 2 mm singlet.  Take it for '
+                     'thin-element accuracy control, not for speed.'}),
         ('parallel_amp', 'bool', True,
          {'label': 'Parallel amp pass',
           'tooltip': 'Run the apply_real_lens(input) and '

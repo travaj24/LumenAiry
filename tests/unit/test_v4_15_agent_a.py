@@ -25,13 +25,16 @@ full physics rationale and CHANGELOG draft.
 from __future__ import annotations
 
 import math
-import time
 from typing import Dict, Tuple
 
 import numpy as np
 import pytest
 
 import lumenairy as lm
+# The module object, not just its names: the batched-vs-per-pixel pin
+# below counts calls on the kernels the public path resolves out of
+# THIS module's globals at call time.
+from lumenairy.propagators import asymptotic as _asy
 from lumenairy.propagators.asymptotic import (
     CanonicalPolyFit,
     _compute_M_b,
@@ -283,79 +286,114 @@ class TestV415ModalAsymptoticColdStart:
             f'the test grid no longer triggers it).'
         )
 
-    def test_modal_asymptotic_perf_win(self, fit):
-        """v4.15 perf pin: cold-start batched path must be at least
-        5x faster than the warm-start per-pixel reference at N=128
-        on the LG_(0,0) prescription.
+    def test_modal_asymptotic_is_batched_not_per_pixel(self, fit,
+                                                       monkeypatch):
+        """v4.15's win is a VECTORISATION, so pin it as one: the public
+        path issues a FIXED number of kernel calls whatever the grid
+        size, and none of them is the scalar per-pixel kernel.
 
-        The 5x floor is the conservative bound; observed perf wins
-        are typically 10-20x on this size grid.  We don't pin a
-        target (e.g. 20x) because perf varies with machine state /
-        BLAS / NumPy version; the floor is more robust.
+        ORACLE: call counts on the four kernels that do the work.  The
+        pre-v4.15 body -- preserved verbatim as
+        ``_warm_start_reference_propagate_modal`` in this file -- calls
+        the SCALAR ``solve_envelope_stationary`` and ``_compute_M_b``
+        once per in-box pixel; the v4.15 body calls
+        ``_solve_envelope_stationary_batch`` and ``_compute_M_b_batch``
+        ONCE each, for the whole grid.
+
+        MEASURED on this build (LG_(0,0), source box 0.4x half-range,
+        so every pixel is in-box):
+
+            N      pixels   public path              reference
+            16        256   1 batch + 1 batch        256 scalar solves
+            32      1 024   1 batch + 1 batch      1 024 scalar solves
+            64      4 096   1 batch + 1 batch          --
+
+        i.e. the public count is FLAT across a 16x change in pixel
+        count while the reference's is exactly ``N * N``.  Both are
+        integers; there is no tolerance to derive and no clock to read.
+
+        CONVERTED 2026-09-12 (WP-A21, from WP-A15a section 5 item 8;
+        TESTING STANDARDS S1).  This was
+        ``test_modal_asymptotic_perf_win``, a
+        ``t_ref / t_new >= 5.0`` floor at N = 128 whose own docstring
+        conceded "perf varies with machine state / BLAS / NumPy
+        version".  It also cost 35 s of wall clock (measured: 2.25 s
+        batched + 33.45 s reference) to assert something the counts
+        above give exactly in ~3 s.  The ratio it used to assert is
+        recomputed here as a REPORT, not a bar: measured 14.9x / 16.1x
+        / 14.9x at N = 32 / 64 / 128 on this box.
         """
-        # N=128 -- the canonical perf-benchmark size from the v4.15
-        # brief.  16384 pixels; warm-start scalar reference takes
-        # several seconds; cold-start batched should be sub-second.
-        N = 128
-        L = fit.s2x_halfrange * 0.4
-        ax = np.linspace(-L, L, N) + fit.s2x_centre
-        ay = np.linspace(-L, L, N) + fit.s2y_centre
-        S2X, S2Y = np.meshgrid(ax, ay, indexing='xy')
-        source_amps = {(0, 0): 1.0 + 0.0j}
-        pupil_amps = {(0, 0): 1.0 + 0.0j}
+        amps = {(0, 0): 1.0 + 0.0j}
 
-        # Warm up both paths (NumPy / lru_cache hot).
-        _ = propagate_modal_asymptotic(
-            fit, source_point=(0.0, 0.0),
-            source_amplitudes=source_amps,
-            pupil_amplitudes=pupil_amps,
-            w_s=20e-6, w_p=0.02,
-            v2_centre=(fit.v2x_centre, fit.v2y_centre),
-            s2_grid_x=S2X[:8, :8], s2_grid_y=S2Y[:8, :8],
-        )
-        _ = _warm_start_reference_propagate_modal(
-            fit, source_point=(0.0, 0.0),
-            source_amplitudes=source_amps,
-            pupil_amplitudes=pupil_amps,
-            w_s=20e-6, w_p=0.02,
-            v2_centre=(fit.v2x_centre, fit.v2y_centre),
-            s2_grid_x=S2X[:8, :8], s2_grid_y=S2Y[:8, :8],
-        )
+        counts: Dict[str, int] = {}
 
-        # ---- Public path timing
-        t0 = time.perf_counter()
-        new = propagate_modal_asymptotic(
-            fit, source_point=(0.0, 0.0),
-            source_amplitudes=source_amps,
-            pupil_amplitudes=pupil_amps,
-            w_s=20e-6, w_p=0.02,
-            v2_centre=(fit.v2x_centre, fit.v2y_centre),
-            s2_grid_x=S2X, s2_grid_y=S2Y,
-        )
-        t_new = time.perf_counter() - t0
+        def _count(mod, name):
+            real = getattr(mod, name)
 
-        # ---- Warm-start scalar reference timing
-        t0 = time.perf_counter()
-        ref = _warm_start_reference_propagate_modal(
-            fit, source_point=(0.0, 0.0),
-            source_amplitudes=source_amps,
-            pupil_amplitudes=pupil_amps,
-            w_s=20e-6, w_p=0.02,
-            v2_centre=(fit.v2x_centre, fit.v2y_centre),
-            s2_grid_x=S2X, s2_grid_y=S2Y,
-        )
-        t_ref = time.perf_counter() - t0
+            def _counting(*a, **k):
+                counts[name] = counts.get(name, 0) + 1
+                return real(*a, **k)
+            monkeypatch.setattr(mod, name, _counting)
+            return _counting
 
-        speedup = t_ref / max(t_new, 1e-9)
-        # Floor at 5x -- the brief specifies this as the perf bound.
-        assert speedup >= 5.0, (
-            f'v4.15 batched path speedup vs warm-start reference: '
-            f'{speedup:.1f}x (expected >= 5.0x).  '
-            f't_new = {t_new:.3f}s, t_ref = {t_ref:.3f}s.'
-        )
-        # Sanity check: both paths produced non-trivial output.
-        assert np.sum(np.abs(new) ** 2) > 0
-        assert np.sum(np.abs(ref) ** 2) > 0
+        # The public path resolves all four names out of
+        # ``propagators.asymptotic``'s globals; the reference helper
+        # above resolves the two scalar ones out of THIS module's, so
+        # both namespaces are patched.
+        for _name in ('solve_envelope_stationary', '_compute_M_b',
+                      '_solve_envelope_stationary_batch',
+                      '_compute_M_b_batch'):
+            _shim = _count(_asy, _name)
+            if _name in globals():
+                monkeypatch.setitem(globals(), _name, _shim)
+
+        def _grid(N):
+            L = fit.s2x_halfrange * 0.4
+            ax = np.linspace(-L, L, N) + fit.s2x_centre
+            ay = np.linspace(-L, L, N) + fit.s2y_centre
+            S2X, S2Y = np.meshgrid(ax, ay, indexing='xy')
+            return dict(
+                source_point=(0.0, 0.0), source_amplitudes=amps,
+                pupil_amplitudes=amps, w_s=20e-6, w_p=0.02,
+                v2_centre=(fit.v2x_centre, fit.v2y_centre),
+                s2_grid_x=S2X, s2_grid_y=S2Y,
+            )
+
+        # ---- the public path: one batch call each, at every size ----
+        for N in (16, 32, 64):
+            counts.clear()
+            new = propagate_modal_asymptotic(fit, **_grid(N))
+            assert counts.get('_solve_envelope_stationary_batch') == 1, (
+                f'N = {N}: the batched Newton solve must run ONCE for the '
+                f'whole grid; ran {counts.get("_solve_envelope_stationary_batch")}'
+            )
+            assert counts.get('_compute_M_b_batch') == 1, (
+                f'N = {N}: the batched M/b evaluation must run ONCE for the '
+                f'whole grid; ran {counts.get("_compute_M_b_batch")}')
+            assert 'solve_envelope_stationary' not in counts, (
+                f'N = {N}: the v4.15 public path reached the SCALAR '
+                f'per-pixel Newton solve {counts["solve_envelope_stationary"]} '
+                f'times -- the per-pixel loop is back, which is exactly what '
+                f'the retired >= 5x speedup floor was proxying for')
+            assert '_compute_M_b' not in counts, (
+                f'N = {N}: the v4.15 public path reached the SCALAR '
+                f'per-pixel M/b evaluation {counts["_compute_M_b"]} times')
+            assert np.sum(np.abs(new) ** 2) > 0
+
+        # ---- the pre-v4.15 reference: one scalar solve per pixel ----
+        for N in (16, 32):
+            counts.clear()
+            ref = _warm_start_reference_propagate_modal(fit, **_grid(N))
+            assert counts.get('solve_envelope_stationary') == N * N, (
+                f'N = {N}: the warm-start reference must call the scalar '
+                f'Newton solve once per in-box pixel ({N * N}); it called '
+                f'{counts.get("solve_envelope_stationary")}.  If this moved, '
+                f'the reference is no longer the pre-v4.15 body and the '
+                f'comparison above has lost its meaning.')
+            assert '_solve_envelope_stationary_batch' not in counts, (
+                f'N = {N}: the pre-v4.15 reference reached the BATCHED '
+                f'kernel -- it is meant to be the scalar body')
+            assert np.sum(np.abs(ref) ** 2) > 0
 
     def test_modal_asymptotic_row_reset_still_works(self, fit):
         """v4.14.1 P1-NEW-5 regression: the ``row_reset`` Maslov

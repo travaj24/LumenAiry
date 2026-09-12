@@ -421,17 +421,11 @@ ignore = [
 #     ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-A15a_REPORT.md``
 #     as a request to that module's owner; when the owner lands the fix the
 #     line here should be DELETED, not kept.
-# TODO(audit-2609): rcwa/oned.py + rcwa/twod.py import ``_grazing_safe_wavelength``
-# from ``._core`` and no longer call it (WP-A14 routed both entry points through
-# ``_grazing_safe_wavelength_pair``).  Either drop the import or re-export it
-# deliberately with an ``__all__`` entry.  Owner: the RCWA work package.
-"lumenairy/elements/rcwa/oned.py" = ["F401", "I001"]
-"lumenairy/elements/rcwa/twod.py" = ["F401", "I001"]
-# TODO(audit-2609): rcwa/stack.py -- I001 only, same import-with-commentary
-# shape as (a) but introduced by WP-A14 rather than by the convention; resort
-# the block and delete this line.  Owner: the RCWA work package.
-"lumenairy/elements/rcwa/stack.py" = ["I001"]
-# TODO(audit-2609): _lens_real.py:2634-2635 -- two ``f"..."`` continuation
+#     The three ``lumenairy/elements/rcwa/*`` entries that used to sit here
+#     (oned.py/twod.py F401+I001, stack.py I001) are GONE: the dead
+#     ``_grazing_safe_wavelength`` imports were dropped and the three
+#     ``_core`` blocks re-sorted, so those files are gated like the rest.
+# TODO(audit-2609): _lens_real.py:2644-2645 -- two ``f"..."`` continuation
 # lines in the mirror-guard warning carry no placeholders (F541).  Drop the
 # ``f`` prefix on those two lines.  Owner: the analytic-lens work package.
 "lumenairy/elements/_lens_real.py" = ["F541"]
@@ -515,6 +509,29 @@ files = [
     "lumenairy/_cache_registry.py",           # 292
     "lumenairy/analysis/strehl.py",           # 557
     "lumenairy/propagators/asymptotic_modes.py",  # 893
+    # 2026-09-12 (WP-A21, from WP-A15a section 5 item 10 / WP-A15b section
+    # 5.6).  The subpackage `__init__.py` files: each is a re-export surface
+    # with no logic of its own, so `--strict` reaches the `__all__` / import
+    # bookkeeping that a mis-spelled or removed re-export breaks -- the class
+    # of defect that ships as an `ImportError` at a user's first call.  All
+    # eight MEASURED strict-clean on this tree today, AFTER the lazy-loading
+    # rewrite (`mypy --strict --python-version 3.12 --follow-imports silent
+    # --ignore-missing-imports <path>`: 0 errors each).
+    #
+    # The ROOT `lumenairy/__init__.py` is deliberately NOT here yet: it is
+    # measured at 33 errors on this tree, all of them from the in-flight
+    # lens-family work -- an unannotated PEP 562 `__getattr__`/`__dir__` pair
+    # and 31 `does not explicitly export attribute` rows for names re-exported
+    # through `elements.lenses` without an `__all__` entry.  Add it in the
+    # change that fixes those; nothing else stands in the way.
+    "lumenairy/_math/__init__.py",
+    "lumenairy/sources/__init__.py",
+    "lumenairy/io/__init__.py",
+    "lumenairy/analysis/__init__.py",
+    "lumenairy/elements/pmm/__init__.py",
+    "lumenairy/elements/rcwa/__init__.py",
+    "lumenairy/elements/eme/__init__.py",
+    "lumenairy/elements/bor/__init__.py",
 ]
 # v5.0.1 (audit P2-NEW-V4-2): config preparation only -- prevents the
 # ~1889-error cascade into untyped downstream files so the v5.1

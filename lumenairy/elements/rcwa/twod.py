@@ -21,7 +21,6 @@ from ._core import (
     _concrete,
     _EnergyError,
     _forward_flux_kz,
-    _grazing_safe_wavelength,
     _grazing_safe_wavelength_pair,
     _homogeneous_eigenmodes,
     _interface_smatrix,
@@ -51,8 +50,8 @@ from ._core import (
     _validate_geometry,
     _validate_shapes,
     _with_blas_limit,
-    _WoodAnomaly,
     _wood_symmetric,
+    _WoodAnomaly,
 )
 
 
@@ -1298,9 +1297,9 @@ class PreparedRCWA2D:
             wl_eff, _wl_mirror = _grazing_safe_wavelength_pair(
                 float(wavelength), self.kx0, self.ky0, orders[:, 0],
                 orders[:, 1], self.period_x, self.period_y, self.eps_reals,
-                fn_name="RCWA2DPrepared.solve")
+                fn_name="PreparedRCWA2D.solve")
             if _wl_mirror is not None:
-                raise _WoodAnomaly("RCWA2DPrepared.solve", float(wavelength),
+                raise _WoodAnomaly("PreparedRCWA2D.solve", float(wavelength),
                                    _wl_mirror, wl_eff)
         k0 = 2.0 * np.pi / wl_eff
         kx = self.kx0 + orders[:, 0] * (wl_eff / self.period_x)

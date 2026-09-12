@@ -66,6 +66,14 @@ from lumenairy.elements.pmm.twod_staggered import (  # noqa: E402
 )
 from lumenairy.elements.rcwa import _core as _rc  # noqa: E402
 
+# 2026-09-12 (WP-A21, from WP-A15a section 5 item 8 / section 2.6).  229.3 s
+# over 31 ids on the committed ``.test_durations``, i.e. ~2x the slow lane's
+# 2 min/file bar, spread across the file (heaviest id 32.9 s).  Nothing about
+# the tests changes; the marker only moves which CI leg collects them.  Safe
+# module-wide: this file is not jax-guarded, so it is not in the ``jax-unit``
+# leg's ``-m "not integration and not slow"`` selection.
+pytestmark = pytest.mark.slow
+
 _P = 1.2
 _WL = 0.85
 _EPS_P, _EPS_H = 6.0, 2.25

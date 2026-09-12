@@ -752,7 +752,13 @@ def _measure_asm_peak(n_grid, dtype):
     """Fresh-interpreter (cold, first-call) and steady-state ASM peaks."""
     proc = subprocess.run(
         [sys.executable, '-c', _A6_CHILD, str(n_grid), dtype],
-        capture_output=True, text=True, timeout=600)
+        # stdin named explicitly (WP-A15a section 2.10): under pytest's
+        # default fd-capture a spawn that names SOME but not ALL of the
+        # three stdio streams raises OSError [WinError 6] on Windows,
+        # because CPython resolves the unnamed one through a GetStdHandle
+        # that fd-capture has left stale.  This child reads no stdin.
+        stdin=subprocess.DEVNULL, capture_output=True, text=True,
+        timeout=600)
     assert proc.returncode == 0, proc.stderr[-2000:]
     cold, steady, est = (int(v) for v in proc.stdout.split())
     return cold, steady, est

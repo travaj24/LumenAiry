@@ -58,8 +58,8 @@ from ._core import (
     _validate_geometry,
     _validate_shapes,
     _with_blas_limit,
-    _WoodAnomaly,
     _wood_symmetric,
+    _WoodAnomaly,
 )
 from .oned import (
     _resolve_incidence,

@@ -163,19 +163,92 @@ def _focusing_field(N=96, dx=6e-6, wl=1.31e-6, f=20e-3, sigma=60e-6):
 def test_transfer_function_recurrence_engages_only_on_a_uniform_scan():
     """The recurrence ``H(z + dz) = H(z) * H(dz)`` is valid only for
     uniformly spaced z.  On a non-uniform scan the direct ``exp`` must be
-    used, and the result must then be bit-identical to the per-plane
-    propagator.
+    used, and the scan must then agree with the per-plane propagator to the
+    FFT's own rounding floor.
+
+    WHY THIS IS NOT A BIT-EQUALITY (re-derived 2026-09-12, WP-A21; the
+    original ``==`` was red on this build at plane 1, 1 ULP).  Both routes
+    build the SAME transfer function -- measured bit-identical: with the
+    scan's centred ``kz_sq = k*k - kx2 - ky2`` / ``sqrt(where(prop, ., 0))``
+    against the ASM path's natural-layout ``k**2 - ...`` /
+    ``sqrt(maximum(., 0))``, ``max |H_scan - fftshift(H_asm)| = 0.0`` at
+    N = 96, z = 17 mm.  What differs is WHERE the ``fftshift`` pair sits.
+    ``through_focus_scan`` transforms the SHIFTED field and un-shifts the
+    product, ``fftshift(ifft2(ifftshift(fftshift(fft2(ifftshift(E))) * H)))``;
+    ``angular_spectrum_propagate`` uses the identity documented at
+    ``propagators/asm.py:105-117`` -- for even N the two shifts are the same
+    ``(-1)^(kx+ky)`` sign pattern applied twice, so they cancel -- and runs
+    ``ifft2(fft2(E) * H_natural)`` with no shifts at all.  The identity is
+    exact in exact arithmetic; the two are not the same FLOATING-POINT
+    computation, because the sign pattern rides through the butterflies at a
+    different stage.
+
+    MEASURED drift of this fixture's scan against the per-plane propagator,
+    same five planes, worst |ULP| over them:
+
+        N          64    96   128   192   256
+        max |ULP|   0     2     0     4     0
+
+    i.e. exactly zero at every power-of-two N (there the sign pattern
+    commutes through every radix-2 butterfly exactly) and a few ULP at the
+    mixed-radix sizes 96 = 2^5*3 and 192 = 2^6*3.  A bit-equality here was
+    pinning the FFT plan, not the recurrence gate.
+
+    THE BAND, derived (not picked).  A 2-D FFT of an N x N grid runs
+    ``2 log2(N)`` butterfly stages, each contributing at most ``eps`` of
+    relative rounding, so the two routes' fields differ by at most
+    ``2 log2(N) eps``; ``peak_I = |E|^2`` doubles that to ``4 log2(N) eps``;
+    and 1 ULP of a float64 is at least ``eps/2`` in relative terms, so the
+    band in ULPs is ``8 log2(N)`` -- 52.7 at N = 96.  Measured worst 2.0
+    (1.4 decades inside).
+
+    THE OTHER SIDE.  The defect this test exists to catch is the recurrence
+    engaging anyway, which would evaluate the scan on the uniform MODEL grid
+    ``z[0] + mean(diff(z)) * arange(n)`` = 15 / 17.5 / 20 / 22.5 / 25 mm
+    instead of 15 / 17 / 20 / 24 / 25.  Measured in-process below: planes 1
+    and 3 move by 5.6e-02 and 1.0e-01 RELATIVE -- 2.6e14 and 5.0e14 ULP,
+    thirteen decades outside the band.  There is no build on which the two
+    could be confused.
     """
+    import math
     from lumenairy.propagators.propagation import angular_spectrum_propagate
     wl, dx = 1.31e-6, 6e-6
     E = _focusing_field()
+    N = E.shape[0]
+    band = 8.0 * math.log2(N)                # 52.7 at the shipped N = 96
     z = np.array([15e-3, 17e-3, 20e-3, 24e-3, 25e-3])      # NOT uniform
     scan = through_focus_scan(E, dx, wl, z, bandlimit=True, verbose=False)
+
+    refs = []
     for i, zi in enumerate(z):
         Ez = angular_spectrum_propagate(E, float(zi), wl, dx, bandlimit=True)
-        assert scan.peak_I[i] == float((np.abs(Ez) ** 2).max()), (
-            f'non-uniform z must take the direct exp path and stay '
-            f'bit-identical; plane {i} drifted.')
+        ref = float((np.abs(Ez) ** 2).max())
+        refs.append(ref)
+        ulps = (float(scan.peak_I[i]) - ref) / np.spacing(abs(ref))
+        assert abs(ulps) <= band, (
+            f'non-uniform z must take the direct exp path; plane {i} '
+            f'(z = {zi * 1e3:.3f} mm) is {ulps:+.1f} ULP from the per-plane '
+            f'propagator, outside the {band:.1f}-ULP FFT-rounding band.  A '
+            f'recurrence engaging here moves the answer by ~1e14 ULP, not by '
+            f'tens.')
+
+    # The counter-arm, computed here so the band above cannot pass vacuously:
+    # the grid the recurrence WOULD have used is decades outside it.
+    z_model = z[0] + float(np.mean(np.diff(z))) * np.arange(z.size)
+    moved = []
+    for i in range(z.size):
+        if z_model[i] == z[i]:
+            continue                          # planes 0, 2, 4 coincide
+        Ez = angular_spectrum_propagate(E, float(z_model[i]), wl, dx,
+                                        bandlimit=True)
+        wrong = float((np.abs(Ez) ** 2).max())
+        moved.append(abs(wrong - refs[i]) / np.spacing(abs(refs[i])))
+    assert moved, 'the fixture z must be non-uniform for this test to mean anything'
+    assert min(moved) > 1e4 * band, (
+        f'the uniform MODEL grid is only {min(moved):.3e} ULP from the '
+        f'requested one, so the {band:.1f}-ULP band above would not separate '
+        f'a wrongly-engaged recurrence from FFT rounding.  Choose a more '
+        f'strongly non-uniform z.')
 
 
 def test_transfer_function_recurrence_matches_the_direct_form(recwarn):

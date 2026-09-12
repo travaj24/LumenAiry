@@ -108,6 +108,14 @@ from lumenairy.propagators.carrier import (
     carrier_referenced_exact_focus_readout,
 )
 
+# 2026-09-12 (WP-A21, from WP-A15a section 5 item 8 / section 2.6).  124.7 s
+# over 38 ids on the committed ``.test_durations``, just past the slow lane's
+# 2 min/file bar, spread across the file (heaviest id 30.1 s).  Nothing about
+# the tests changes; the marker only moves which CI leg collects them.  Safe
+# module-wide: this file is not jax-guarded, so it is not in the ``jax-unit``
+# leg's ``-m "not integration and not slow"`` selection.
+pytestmark = pytest.mark.slow
+
 # ---------------------------------------------------------------------------
 # The synthetic stand-in (no .zmx, no data file).
 # ---------------------------------------------------------------------------

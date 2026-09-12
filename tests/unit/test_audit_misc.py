@@ -1371,6 +1371,19 @@ class TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples:
         assert np.isfinite(cx) and np.isfinite(cy)
         assert dx_b > 0 and dy_b > 0
 
+    # 2026-09-12 (WP-A21, from WP-A15a section 5 item 8 / section 2.6).  The
+    # marker is on THIS TEST, not on the module, and that is deliberate.  The
+    # file measures 320.7 s over 228 ids on the committed ``.test_durations``
+    # and 308.4 s of it -- 96 % -- is this one id; every other id in the file
+    # is at or under 2.6 s.  A module-level ``pytestmark`` would also have
+    # been wrong rather than merely blunt: this file carries
+    # ``pytest.importorskip('jax')`` guards, so the ``jax-unit`` CI leg
+    # selects it (its selection grep is
+    # ``importorskip.{0,4}jax|skipif\(.{0,40}jax``) and runs it with
+    # ``-m "not integration and not slow"`` -- marking the module would have
+    # deleted the file's ~20 jax ids from the only leg in CI that has jax
+    # installed.  This test reaches no jax path.
+    @pytest.mark.slow
     def test_real_lens_from_zemax_cookbook(self):
         """Cookbook 'Real lens from Zemax file' block (line 2569).
         Pre-4.12.0 broke on ``load_zmx_prescription`` (renamed) and

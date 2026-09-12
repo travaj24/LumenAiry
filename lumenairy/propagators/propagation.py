@@ -276,6 +276,16 @@ _LIVE_FORWARD_NAMES = frozenset({
     # ``propagation._PYFFTW_DOUBLE_BUFFER`` track the current value
     # (V14 walker requirement; caught by the release verify gate).
     '_PYFFTW_DOUBLE_BUFFER',
+    # 2026-09-12 (VERIFY-A5 K4, wired here by WP-A21): the ping-pong
+    # buffer-race latch.  ``fft_infra._note_fft_thread()`` rebinds both
+    # the moment a SECOND thread issues an FFT, after which every pyFFTW
+    # return privatises its buffer.  They are live process STATE, not
+    # configuration -- a caller (or a test) reading
+    # ``propagation._PYFFTW_SHARED_BUFFERS_UNSAFE`` to decide whether a
+    # handed-out view is safe must see the CURRENT value, and an
+    # import-time snapshot would answer ``False`` forever.
+    '_PYFFTW_FIRST_FFT_THREAD',
+    '_PYFFTW_SHARED_BUFFERS_UNSAFE',
     '_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER',
     '_PYFFTW_BAD_SHAPES',
     '_H_CACHE_SIZE',

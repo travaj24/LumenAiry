@@ -87,6 +87,17 @@ from lumenairy.propagators.carrier import (
 from lumenairy.raytrace import Surface, make_ray, trace
 from lumenairy.raytrace.trace import surfaces_from_prescription
 
+# 2026-09-12 (WP-A21, from WP-A15a section 5 item 8 / section 2.6).  This file
+# is 338.8 s over 38 ids on the committed ``.test_durations`` -- 2.8x the slow
+# lane's 2 min/file bar and the third-heaviest unmarked file in the suite --
+# with the weight spread across the chain (heaviest id 59.3 s), so there is no
+# single test to mark instead.  Nothing about the tests changes; the marker
+# only moves which CI leg collects them.  It is safe module-wide here because
+# this file is NOT jax-guarded: the ``jax-unit`` leg selects its files by
+# ``importorskip.{0,4}jax|skipif\(.{0,40}jax`` and this file matches neither,
+# so marking it slow removes it from no leg that was running it.
+pytestmark = pytest.mark.slow
+
 _WL = 1.31e-6
 _K0 = 2.0 * np.pi / _WL
 

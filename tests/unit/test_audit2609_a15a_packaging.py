@@ -119,10 +119,16 @@ def test_the_mypy_whitelist_only_grows():
     of the library behind a config comment that was 43 minor versions stale;
     the remedy only works if the list is not quietly trimmed when a module
     stops type-checking.
+
+    RAISED 2026-09-12 (WP-A21, same day): 17 -> 25 declared paths, adding the
+    eight subpackage `__init__.py` re-export surfaces that measure
+    strict-clean after the lazy-loading rewrite.  The root
+    `lumenairy/__init__.py` is the ninth and is not in yet -- see the
+    `[tool.mypy]` comment for the 33 errors that block it.
     """
     files = _pyproject()['tool']['mypy']['files']
-    assert len(files) >= 17, (
-        f'[tool.mypy] files has shrunk to {len(files)} entries (was 17 on '
+    assert len(files) >= 25, (
+        f'[tool.mypy] files has shrunk to {len(files)} entries (was 25 on '
         f'2026-09-12).  A module that stopped passing --strict should be '
         f'FIXED, not removed from the gate; if a removal is genuinely right, '
         f'lower this number in the same change and say why.')
@@ -257,11 +263,12 @@ def _subprocess_sites():
 # listed in the WP-A15a report as a one-kwarg request to its owner.  The list
 # may shrink, never grow -- a new entry means a new spawn was written without
 # naming its streams.
-_STDIO_EXEMPT = {
-    ('tests/unit/test_niche_audit_w3_infra.py', 753),
-    ('tests/unit/test_niche_d14_deterministic_carrier_fit.py', 217),
-    ('tests/unit/test_niche_d14_deterministic_carrier_fit.py', 415),
-}
+#
+# EMPTY since 2026-09-12 (WP-A21): the last three -- ``test_niche_audit_w3_
+# infra.py`` and ``test_niche_d14_deterministic_carrier_fit.py`` x2 -- took
+# their ``stdin=subprocess.DEVNULL``, so the gate now covers ``tests/``
+# without a hole.  Keep it empty: an exemption is a live WinError-6 flake.
+_STDIO_EXEMPT: set = set()
 
 
 def test_every_subprocess_spawn_names_all_three_stdio_streams():

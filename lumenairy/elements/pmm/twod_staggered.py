@@ -490,7 +490,7 @@ def _stag_minimal_uniform_segments(*cells):
 
 def _validate_stag_cost(fn_name, M, *cells, max_pencil_dof=None,
                         walls_given=False, check=("raise", "warn"),
-                        n_min_joint=None):
+                        n_min_joint=None, stacklevel=3):
     """Cost guard for the staggered family's SEGMENT grid -- the sibling of
     :func:`~lumenairy.elements.pmm.twod._validate_cell_cost`, which the hybrid
     family has had all along and this one had not.
@@ -595,6 +595,34 @@ def _validate_stag_cost(fn_name, M, *cells, max_pencil_dof=None,
     # here (``PMM2DStackPure.add_layer(grid=)``), so it is a deliberate choice
     # rather than the PIXEL-grid mistake this warning is about.  The absolute
     # ``max_pencil_dof`` cap above still guards the extreme.
+    # HOW TO CATCH THIS WARNING IN CI (measured 2026-09-12, WP-A21, after
+    # VERIFY-A13 recorded that ``-W error::UserWarning:...twod_staggered`` did
+    # not reliably catch it).  Filter it BY MESSAGE, not by module:
+    #
+    #     -W "error:.*eps_cell is a SEGMENT grid:UserWarning"
+    #     filterwarnings = ["error:.*eps_cell is a SEGMENT grid:UserWarning"]
+    #
+    # A module-scoped filter on THIS module cannot work, and no choice of
+    # ``stacklevel`` can make it work.  Python matches a filter's ``module``
+    # against the ``__name__`` of the frame ``stacklevel`` selects, and the
+    # whole point of a non-1 stacklevel is to select the CALLER -- so a
+    # correctly attributed warning is never attributed to the module that
+    # raises it.  MEASURED, on a 4x4 segment grid whose walls sit on the 2x2
+    # lattice (M = 3, n_orders = 1):
+    #
+    #   path                                 reported at        module filter
+    #   direct pmm_efficiency_2d_staggered   the caller's line  __main__ only
+    #   deferred PMM2DStackPure.solve        stack2d_pure.py    stack2d_pure only
+    #
+    # and the message filter above catches BOTH.  Pinned by
+    # tests/unit/test_audit2609_a21_pmm_warning_filter.py.
+    #
+    # The deferred row is also one frame SHORT -- it points at
+    # ``stack2d_pure.py``'s own ``self._warn_stag_shared_redundancy()`` line
+    # rather than at the user's ``solve()`` call -- because that path reaches
+    # here through one extra helper.  ``stacklevel=`` exists for that caller to
+    # pass 4; the default 3 is what every other call site needs and is
+    # unchanged.
     if redundant and n_min > 1 and not walls_given and "warn" in check:
         import warnings
         warnings.warn(
@@ -606,7 +634,7 @@ def _validate_stag_cost(fn_name, M, *cells, max_pencil_dof=None,
             f"half-fill pillar that needs 4, against 0.22 s for the "
             f"same array through pmm_efficiency_2d_cell).  Pass the reduced "
             f"grid, or pass max_pencil_dof=... to acknowledge a deliberate "
-            f"h-refinement.", stacklevel=3)
+            f"h-refinement.", stacklevel=stacklevel)
 
 
 def _wood_eps_reals(*eps_arrays):

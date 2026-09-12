@@ -1305,68 +1305,91 @@ def test_m4_pure_staircase_converges_toward_the_metric_layer(theta, phi,
 # =========================================================================== #
 # COST
 # =========================================================================== #
-def test_cost_slant_is_free_against_the_out_of_plane_solve_it_must_use():
-    """COST.  A sheared cell's covariant tensor has out-of-plane entries, so it
-    has to run the ``4 q^2`` first-order generator ANYWAY -- and against that
-    baseline the congruence and the six extra Kronecker blocks must be free.
+def test_cost_slant_adds_no_eigenwork_to_the_solve_it_must_use(monkeypatch):
+    """COST, as an OPERATION COUNT.  A sheared cell's covariant tensor has
+    out-of-plane entries, so it has to run the ``4 q^2`` first-order generator
+    ANYWAY -- and against that baseline the congruence and the six extra
+    Kronecker blocks must add NO eigenwork.
 
-    MEASURED (per-region assembly + eig, (2,2) grid, conical Bloch shift,
-    median of three), slant / vertical-out-of-plane across M = 4..7:
+    ORACLE.  Every dense eigendecomposition the three region solves issue,
+    censused by kind and by matrix dimension (the ONLY two quantities that set
+    the ``O(n^3)`` cost).  ``_region_modes`` pays ``scipy.linalg.eig(L, G)`` --
+    a QZ on a ``2 q^2`` GENERALIZED pencil; ``_region_modes_oop`` Cholesky-
+    whitens its Hermitian-PD Gram and pays ``numpy.linalg.eig`` -- a STANDARD
+    eig on a ``4 q^2`` matrix.  Both facts are stated in those functions'
+    docstrings; this test is what makes them true rather than claimed.
 
-        arm                            M4      M5      M6      M7
-        WIN, box otherwise IDLE        0.969   0.932   0.937   1.094
-        WSL, box otherwise IDLE        0.986   0.869   0.915   0.939
-        WIN, a second suite running    1.006   0.905   0.929   0.922
-        WIN / WSL under heavy load       --      --     1.167 / 1.105  (S8.1)
+    MEASURED on this build, (2,2) grid, conical Bloch shift, covering the same
+    two rungs the retired timing used (``q = 2M - 2``):
 
-    i.e. the LOAD-MEASURED ENVELOPE is 0.87x .. 1.17x, not the ``0.96x ..
-    1.07x`` this docstring used to cite.
+        arm                      M = 5 (q = 8)          M = 6 (q = 10)
+        vertical out-of-plane    1 standard, n = 256    1 standard, n = 400
+        SLANTED                  1 standard, n = 256    1 standard, n = 400
+        vertical in-plane        1 generalized, n = 128 1 generalized, n = 200
 
-    RESTATED 2026-09-11 (VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10 D2 / S8.2
-    item 1; re-measured by ``validation/probe_fix_hybrid_slant_anchor/
-    p5_restated_bars.py`` on both builds, idle and under a co-running suite).
-    The cited range was an UNLOADED snapshot of the one quantity in this file a
-    runner is entitled to move, and the verification already found it 9-16%
-    outside on a loaded box.  The ASSERTION never depended on it -- it takes
-    the MIN over two rungs against a 2.0x bar, which the loaded envelope clears
-    by 1.7x -- so only the stated envelope changes.
+    so the slant census is EQUAL to the vertical out-of-plane census (that is
+    "free": the shear is assembly, not another eig), and the in-plane path it
+    does not take is half the dimension -- a factor 8 in dense flops at equal
+    algorithm, which is why "free against the 4 q^2 solve" must not be read as
+    "free in absolute terms".  No tolerance is derivable and none is needed:
+    both numbers are integers.
 
-    The ``1.8x .. 2.3x`` against the ``2 q^2`` in-plane pencil is the price of
-    needing the first-order generator at all -- the SHIPPED Stage-B number, not
-    something the slant adds.
-
-    Bar 2.0x on the MIN of two rungs.  This asserts only that the slant does
-    not COST A FACTOR against the path it already has to take; it is
-    deliberately not a performance pin.
+    CONVERTED 2026-09-12 (WP-A21, from WP-A15a section 5 item 8; TESTING
+    STANDARDS S1).  This was a ``min(slant / vertical) < 2.0`` bar over
+    ``time.perf_counter`` medians, closed by ``assert ti > 0.0`` on a third
+    timing -- an assertion that cannot fail.  Its own docstring recorded the
+    problem: the measured ratio ran 0.869 .. 1.167 across WIN/WSL, idle and
+    loaded (VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10 D2 / S8.2 item 1), i.e.
+    the quantity asserted on was a property of the runner.  Everything the
+    2.0x bar was standing in for -- a second eig, a QZ where a whitened
+    standard eig belongs, a pencil that grew with the shear -- is an exact
+    integer here.
     """
     k0 = 2.0 * np.pi
     a0 = (0.25 * k0, 0.18 * k0)
-    import time
-    ratios = []
-    for M in (5, 6):
-        def _t(fn, reps=3):
-            ts = []
-            for _ in range(reps):
-                t0 = time.perf_counter()
-                fn()
-                ts.append(time.perf_counter() - t0)
-            return float(np.median(ts))
 
-        to = _t(lambda: _region_modes_oop(Granet2DTransverseE(
+    # (kind, dimension) of every dense eigendecomposition, in call order.
+    seen: list = []
+    _np_eig, _sla_eig = np.linalg.eig, sla.eig
+
+    def _count_np_eig(a, *args, **kw):
+        seen.append(('standard', int(np.shape(a)[-1])))
+        return _np_eig(a, *args, **kw)
+
+    def _count_sla_eig(a, b=None, *args, **kw):
+        seen.append(('generalized' if b is not None else 'standard',
+                     int(np.shape(a)[-1])))
+        return _sla_eig(a, b, *args, **kw)
+
+    monkeypatch.setattr(np.linalg, 'eig', _count_np_eig)
+    monkeypatch.setattr(sla, 'eig', _count_sla_eig)
+
+    def _census(build):
+        seen.clear()
+        build()
+        return list(seen)
+
+    for M in (5, 6):
+        q = Granet2DTransverseE(1.2, 1.2, 2, 2, M, OOPC, alpha0x=a0[0],
+                                alpha0y=a0[1], k0=k0).q
+        vertical = _census(lambda: _region_modes_oop(Granet2DTransverseE(
             1.2, 1.2, 2, 2, M, OOPC, alpha0x=a0[0], alpha0y=a0[1], k0=k0)))
-        ts = _t(lambda: _region_modes_oop(Granet2DTransverseE(
+        slanted = _census(lambda: _region_modes_oop(Granet2DTransverseE(
             1.2, 1.2, 2, 2, M, SCA, alpha0x=a0[0], alpha0y=a0[1], k0=k0,
             slant=(0.75, 0.0))))
-        ratios.append(ts / to)
-    assert min(ratios) < 2.0, (
-        f"the slant costs {ratios} x the vertical out-of-plane region solve")
-    # and the vertical in-plane path is the CHEAPER one it does not take --
-    # asserted as a decision so the comparison above cannot be read as "the
-    # slant is free in absolute terms".
-    ti = 0.0
-    import time as _time
-    t0 = _time.perf_counter()
-    _region_modes(Granet2DTransverseE(1.2, 1.2, 2, 2, 6, SCA, alpha0x=a0[0],
-                                      alpha0y=a0[1], k0=k0))
-    ti = _time.perf_counter() - t0
-    assert ti > 0.0
+        in_plane = _census(lambda: _region_modes(Granet2DTransverseE(
+            1.2, 1.2, 2, 2, M, SCA, alpha0x=a0[0], alpha0y=a0[1], k0=k0)))
+
+        assert vertical == [('standard', 4 * q * q)], (
+            f"M = {M}: the vertical OUT-OF-PLANE region solve must be ONE "
+            f"Cholesky-whitened standard eig on the 4 q^2 = {4 * q * q} "
+            f"generator; censused {vertical}")
+        assert slanted == vertical, (
+            f"M = {M}: the SLANT is not free against the out-of-plane solve "
+            f"it must use -- vertical {vertical} vs slanted {slanted}.  The "
+            f"congruence and the six extra Kronecker blocks are assembly; a "
+            f"second eig, or a pencil that grew with the shear, appears here.")
+        assert in_plane == [('generalized', 2 * q * q)], (
+            f"M = {M}: the vertical IN-PLANE path is the cheaper one the "
+            f"slant does NOT take -- one QZ on the 2 q^2 = {2 * q * q} "
+            f"pencil; censused {in_plane}")
