@@ -270,9 +270,9 @@ class SegmentStackGeometry:
 
         v5.17 (audit P3-39): when the carved-side band at a horizontal
         interface is THINNER than ``t`` the horizontal liner cannot be
-        carved and is omitted there; a ``UserWarning`` is emitted
-        (previously a silent no-op leaving an inconsistent partial
-        liner)."""
+        carved and is omitted there; a ``UserWarning`` is emitted, because
+        omitting it silently leaves an INCONSISTENT PARTIAL liner (see
+        docs/history/lumenairy.elements.segment_geometry.md)."""
         t = float(t)
         a, b = str(mat_a), str(mat_b)
         carve = a if side == "a" else b
@@ -341,9 +341,9 @@ class SegmentStackGeometry:
                     # v5.17 audit (P3-39): when the carved-side band is
                     # THINNER than the liner thickness t, no split plane
                     # was inserted and the exact-equality carve gate
-                    # below can never fire -- previously a silent no-op
-                    # that left an inconsistent partial liner (vertical
-                    # walls lined, this horizontal interface not).
+                    # below can never fire, so without the warning this is a
+                    # silent no-op leaving an inconsistent partial liner
+                    # (vertical walls lined, this horizontal interface not).
                     # Warn once per (band, side).
                     if um == carve and (z1 - zb[i][0]) < t - 1e-15:
                         if (i, 'up') not in warned_thin:

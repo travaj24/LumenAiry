@@ -129,12 +129,12 @@ def orient_band_scale(q, k0, *, xp=None):
     small-k0 unit systems").  ``k0`` is the natural non-zero floor of the
     problem.
 
-    ROUND 2 RESTATEMENT -- THE FLOOR IS A UNIT-SAFETY FLOOR, NOT A MEASURED
-    BAR, AND IT NEVER BINDS.  ``max|q|`` over a layer's spectrum is dominated
+    THE FLOOR IS A UNIT-SAFETY FLOOR, NOT A MEASURED BAR, AND IT NEVER
+    BINDS.  ``max|q|`` over a layer's spectrum is dominated
     by the largest transverse eigenvalue, ``~ N / Rbig``, which exceeds ``k0``
-    on any grid that resolves the wavelength.  Over the 122 layers the
-    verification measured, and over the 135 measured again in round 2
-    (``validation/probe_fix_bor_round2/r8_band_sides.py``, which includes an
+    on any grid that resolves the wavelength.  Over the 122 + 135 layers
+    measured (``validation/probe_fix_bor_round2/r8_band_sides.py``, which
+    includes an
     nm-unit arm six orders of magnitude away), the floor binds on ZERO of them;
     the closest approach is ``max|q| / k0 = 2.057`` in round 2 and 2.42 in the
     verification -- a factor of two ABOVE the floor in both, never below it.
@@ -166,24 +166,20 @@ def orient_band_scale(q, k0, *, xp=None):
     The NOISE rows are the worst ``sigma`` the band must REACH; the SIGNAL rows
     the smallest it must NOT.
 
-    ROUND 2 RESTATEMENT -- THE SIGNAL MARGINS ARE SAMPLE-SCOPED, AND THE THIN
-    END IS 0.38 DECADES, NOT 0.98.  Re-measured
-    (``validation/probe_fix_bor_round2/r8_band_sides.py``), the two SIGNAL rows
-    ARE the minima OF THE POPULATION THE GATE SWEEPS -- ``m`` = 0/1/2 x ``k0``
-    = 2.0/3.5, 359 and 362 physically propagating modes -- reproduced here to
-    all seven digits.  What they are not is a property of the BAND: widening
+    THE SIGNAL ROWS ARE A SAMPLE PROPERTY, AND THE HONEST THIN END IS 0.38
+    DECADES, NOT THE 0.98 IN THE TABLE.  Those two rows are the minima of the
+    population THE GATE SWEEPS -- ``m`` = 0/1/2 x ``k0`` = 2.0/3.5, 359 and 362
+    physically propagating modes -- and not a property of the BAND: widening
     the population by ONE ``k0`` rung (adding 0.8, giving 407 and 410 modes)
     lowers the minimum to **3.7752e-05 and 3.7752e-08**, i.e. 3.58 and **0.58
     decades**, and the independent verification's own lossy population reaches
-    **2.3820e-08**, i.e. **0.38 decades**.  The minimum over a union of
-    populations is the smaller of the two, so the honest figure for the thin
-    end is 0.38 decades.
-
-    That is the 2-D peer's round-4 correction in this module: a margin measured
-    on one fixture family is a SAMPLE property, not a library one.  The
-    decision is unchanged and still right, for the reason below and re-measured
-    on every arm; what changed is that the gate now sweeps the wider ``k0``
-    population and its floor is derived from the measured envelope over it.
+    **2.3820e-08**, i.e. **0.38 decades**
+    (``validation/probe_fix_bor_round2/r8_band_sides.py``).  The minimum over a
+    union of populations is the smaller of the two.  The decision is unchanged
+    and still right, for the reason below and re-measured on every arm; the
+    gate sweeps the wider ``k0`` population and derives its floor from the
+    measured envelope over it.  See
+    docs/history/lumenairy.elements.bor._orient.md.
 
     The binding side is the deep cutoff at 1.06 decades: that population is
     backward error and grows with ``||K||``, so a much finer radial grid would

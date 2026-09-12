@@ -182,9 +182,9 @@ def _jax_bor_stack_solve(stack):
 
     def _mask(q, eps):
         # AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13: real-axis floor at
-        # 1e-6 (guards only the q ~ 0 degenerate point).  The old 0.05 was an
-        # angular cutoff that dropped genuinely propagating near-grazing
-        # orders.
+        # 1e-6 (guards only the q ~ 0 degenerate point), and NOT an angular
+        # cutoff -- an angular one drops genuinely propagating near-grazing
+        # orders.  See docs/history/lumenairy.elements.bor._jax_bor.md.
         #
         # S1-16 (audit AUDIT_V5_24_2): shares the {imag, real-floor,
         # index-ceiling} core with bor_stack.solve's prop() and

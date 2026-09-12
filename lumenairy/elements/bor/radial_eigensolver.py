@@ -98,12 +98,13 @@ def radial_spectrum(m, R, degree, n_el, *, bc="dirichlet", n_low=6,
     (TE, natural psi'(R)=0 -> derivative zeros j'_{m,n}).  Returns the sorted
     eigenvalues, or ``(eigvals, nodal_eigvecs, r_nodes)`` if ``return_modes``.
 
-    Domain validation (audit W6-B12): ``R <= 0`` used to be accepted -- the
-    element Jacobian, the ``r`` measure and the ``1/r`` stiffness all flip sign
-    together, so ``R = -1`` silently returned the ``|R| = 1`` spectrum -- and
-    ``n_el < 1`` died with a bare ``IndexError`` from the local->global map.
-    ``BORStack`` has guarded its own ``Rbig > 0`` since P3-10; this is the
-    sibling gap.
+    Domain validation (audit W6-B12): ``R <= 0`` and ``n_el < 1`` are rejected
+    here.  The element Jacobian, the ``r`` measure and the ``1/r`` stiffness
+    all flip sign together, so an unguarded ``R = -1`` silently returns the
+    ``|R| = 1`` spectrum, and ``n_el < 1`` dies with a bare ``IndexError`` from
+    the local->global map.  ``BORStack`` has guarded its own ``Rbig > 0`` since
+    P3-10; this closes the sibling gap.  See
+    docs/history/lumenairy.elements.bor.radial_eigensolver.md.
     """
     R = float(R)
     if not np.isfinite(R) or R <= 0.0:

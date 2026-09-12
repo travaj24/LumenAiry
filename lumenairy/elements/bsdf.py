@@ -683,8 +683,9 @@ def make_bsdf(spec: Optional[Union[BSDFModel, Dict[str, Any]]]) -> Optional[BSDF
 def _check_bsdf_keys(spec, kind, accepted, aliases=None):
     """Reject dict keys the chosen BSDF kind would silently ignore.
 
-    A spec key that no constructor argument consumes used to leave the
-    corresponding parameter at its default with no diagnostic, so a
+    A spec key that no constructor argument consumes would otherwise leave
+    the corresponding parameter at its default with no diagnostic (see
+    docs/history/lumenairy.elements.bsdf.md), so
     mis-remembered name ('sigma' for 'sigma_rad') produced a plausible but
     wrong lobe.  ``aliases`` maps accepted alternative spellings to their
     canonical parameter; supplying both spellings of one parameter is an

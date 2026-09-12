@@ -130,9 +130,10 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
     ``reldiv`` array -- the per-mode relative-divergence tag -- computed from
     the SAME ``eig(K, B)`` this call already runs, via the shared
     ``coupled_radial_eigensolver._mode_reldiv`` helper.  Audit AUDIT_V5_24_2
-    S1-18: ``bor_solve.build_layer(basis='nodal')`` used to get this tag from a
-    SECOND, byte-identical ``radial_coupled_modes`` eigensolve; harvesting it
-    here dedupes that ~2x cost with NO change to the tag (the two nodal paths
+    S1-18: harvesting the tag here rather than from a SECOND, byte-identical
+    ``radial_coupled_modes`` eigensolve inside
+    ``bor_solve.build_layer(basis='nodal')`` dedupes that ~2x cost with NO
+    change to the tag (the two nodal paths
     assemble byte-identical ``K``/``B`` and ``reldiv`` is q-orientation
     invariant).  Ignored (no-op) on the staggered path, which is div-conforming
     and tags ``reldiv == 0`` at the ``build_layer`` level.
@@ -147,11 +148,12 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
        for ``staggered=False``, where all rows share one cell-centered grid).
 
     .. note:: (audit W6-B3/B4) ``wall`` is validated -- an unrecognized value
-       used to fall through to the leaky ``'natural'`` wall silently -- and the
-       staggered path REJECTS the nodal-only ``R_pml`` / ``wall='natural'``
-       rather than ignoring them (measured bit-identical output, so a caller
-       asking for an open radial boundary got the closed Dirichlet wall with no
-       signal).  ``wall=None`` means "this basis's default": ``'natural'``
+       would otherwise fall through to the leaky ``'natural'`` wall silently --
+       and the staggered path REJECTS the nodal-only ``R_pml`` /
+       ``wall='natural'`` rather than ignoring them (their output is measured
+       bit-identical, so a caller asking for an open radial boundary would get
+       the closed Dirichlet wall with no signal; see
+       docs/history/lumenairy.elements.bor.zcascade.md).
        nodal, built-in closed Dirichlet staggered.
     """
     _check_wall(wall, staggered)

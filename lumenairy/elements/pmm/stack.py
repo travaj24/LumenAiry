@@ -90,100 +90,49 @@ from ._core import (
 # S-matrix stops being bounded (largest entry 3.9 -> 3.9e2 -> 1.5e5) and the
 # cascade returns a deterministic, energy-VIOLATING wrong answer.
 #
-# WHAT SEPARATES, MEASURED, AND WHAT DOES NOT.  Nothing per-layer and free
-# separates the correct solves from the wrong ones on this family: the T3-4
-# residual ``n_grow_post`` reads 0 on every row (the 2026-08-06
-# ``_forward_growth_flip`` repair redirects them all), the T3-4 margin reads
-# 1.0-1.3 on BOTH populations, and ``q_excess`` -- which is the right IDEA, a
-# mode called propagating that no propagating mode can be -- crosses 1 while
-# the answer is still right and then SATURATES across the onset (3.66 on the
-# last correct degree-14 row and 3.66 on the first wrong one).  What DOES
-# separate, by 5.4 decades over 138 dense rows on three degrees, is the
-# assembled answer's PASSIVITY:
+# WHAT SEPARATES, AND WHAT DOES NOT.  Nothing per-layer and free separates the
+# correct solves from the wrong ones on this family: the T3-4 residual
+# ``n_grow_post`` reads 0 on every row, its margin reads 1.0-1.3 on BOTH
+# populations, and ``q_excess`` -- a mode called propagating that no
+# propagating mode can be -- crosses 1 while the answer is still right and then
+# SATURATES across the onset.  What DOES separate is the assembled answer's
+# PASSIVITY, by 5.4 decades over 138 dense rows on three degrees
+# (``_STACK_SUPERUNITY_BAR`` below carries that census).  But passivity is only
+# the DETECTOR: on a passive stack super-unity is as often ordinary
+# under-convergence as this pathology, and a sliver-corrupted answer can read
+# below any absolute bar, so it cannot also be the ATTRIBUTION.
 #
-#     max |R+T-1| among CORRECT rows   4.13e-06     (5.4 decades)
-#     min  (R+T-1) among WRONG rows    1.159e+00
+# SO THE GUARD IS A GEOMETRIC SCREEN PLUS AN ARBITER.
 #
-# so this guard is a CONJUNCTION of that theorem violation with the GEOMETRIC
-# cause -- M1's ``_guarded_lstsq`` lesson (rank AND residual) again:
+#   (a) ``_sliver_screen`` is pure geometry and runs on every solve: did the
+#       union grid MANUFACTURE a cell -- one whose two walls share no owning
+#       layer -- at least ``_SLIVER_OWN_SCALE_RATIO`` times finer than the
+#       finest wall spacing any single layer asked for?  It never solves, and
+#       it is what decides whether the arbiter's extra solves are paid.
+#   (b) ``_sliver_arbiter`` then re-solves on the sliver-free grids the
+#       refusal itself prescribes -- the midpoint snap and the wall closure --
+#       and attributes: ``'sliver'`` when the answer moves far past what
+#       displacing that wall does on sliver-free geometry, ``'wall'`` when the
+#       device's own sensitivity to the wall position accounts for the move,
+#       ``'truncation'`` when the snap does not remove the violation, and
+#       ``'unknown'`` when the extra solves cannot be run.
+#   (c) ``_warn_stack_energy`` acts on the verdict: RAISE on ``'sliver'`` for a
+#       provably passive stack, the same attribution as a WARNING when the
+#       stack is not provably passive, and otherwise the answer returns under
+#       the plain super-unity warning, which then says whether a sliver is
+#       present and whether it is the cause.
 #
-#   (a) the union grid MANUFACTURED a cell -- one whose two walls share no
-#       owning layer -- at least ``_SLIVER_OWN_SCALE_RATIO`` times finer than
-#       the finest wall spacing any single layer asked for; and
-#   (b) the solve reads super-unity above ``_STACK_SUPERUNITY_BAR`` on a
-#       PROVABLY PASSIVE stack with a LOSSLESS propagating incidence medium,
-#       where ``R + T <= 1`` is a theorem and not a tolerance.
-#
-# (b) alone would promote to a refusal every solve that today only warns,
-# including the documented many-slice quasi-resonance the warning was
-# deliberately left a warning for; (a) alone fires on correct solves (it is
-# true from ``delta`` = 3e-3 down, where the answer still tracks the physical
-# shift to 1e-4).  The conjunction confines the behaviour change to stacks that
-# BOTH carry the sliver and violate the theorem.
-#
-# ROUND 2 (2026-09-11) -- THE ARBITER, and why the conjunction alone is not
-# enough.  ``docs/audits/VERIFY_PMMSTACK_SLIVER_WALLS_2026_09_11.md`` measured
-# the conjunction BOTH ways and refuted its margins in both directions:
-#
-#   * FALSE POSITIVES.  On a passive stack, super-unity is just as often
-#     ordinary under-convergence as a theorem violation.  110 of 648 realistic
-#     staircase configurations (lossy substrate, theta 1.2-1.45, degree 6-10,
-#     wall steps 0.36-3.6 nm) were REFUSED although their answer tracks the
-#     exact ``delta -> 0`` limit to 0.35-8.8x the physical wall shift -- and
-#     the first-named remedy silenced the refusal without moving the number
-#     (1.03559 vs 1.03557), because it removes the ATTRIBUTION, not the error.
-#   * FALSE NEGATIVES.  On a 120-delta x 3-degree grid the CORRECT population
-#     reaches ``|R+T-1|`` = 9.87e-05 and the WRONG one reaches DOWN to
-#     +7.14e-03 -- BELOW the 1e-2 bar -- so 8 of 660 wrong solves returned
-#     unwarned, with errors to 2.8e-03.
-#
-# Both are one defect: super-unity is the DETECTOR but not the ATTRIBUTION.
-# What attributes, measured, is ONE extra solve at the point where the library
-# is about to raise anyway --
-#
-#     re-solve on the grid the prescribed ``min_feature`` would produce.
-#     If the super-unity VANISHES and the answer MOVES far past the geometric
-#     perturbation that snap describes, the sliver caused it -> REFUSE.
-#     If it SURVIVES, the sliver did not -> fall through to the WARNING and
-#     name degree / n_slices.
-#
-# so round 2 lowers the trigger to ``_SLIVER_TRIGGER_BAR`` (one decade above
-# the correct population's measured envelope) and gates the refusal on that
-# arbiter.  Measured on the shipped bars, 2026-09-11, both builds: false
-# positives 110/648 -> 0/648, false negatives 8/660 -> 4/660, and the arbiter
-# fires on 0 of 600 CONVERGED correct rows (it can only fire on a stack that
-# already reads super-unity above the trigger).
-#
-# ROUND 3 (2026-09-11) -- "VANISHES" HAD TO BE READ RELATIVELY.  Round 2's
-# verification (``docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND2_2026_09_11.md``,
-# defect D-5) measured the one case the round-2 criterion cannot express: a
-# stack whose SLIVER-FREE truncation super-unity already sits above the
-# ABSOLUTE closure bar.  There the snapped super-unity can never reach that
-# bar, so the arbiter says ``truncation`` however completely the snap restores
-# the answer -- measured, it removed a 621x-5,181x super-unity and put the
-# answer back on the sliver-free reference to err/delta = 0.0019, and round 2
-# returned the wrong number (off by 1,811x-3,501x the physical wall shift, at
-# R+T = 1.19) under a warning saying the prescribed remedy would silence
-# nothing.  Round 1 refused all three rows, so it was a behaviour change.
-#
-# So the closure asks the snap to REMOVE most of the violation rather than to
-# reach a fixed floor:
-#
-#     su_snapped <= max(_SLIVER_ATTRIB_CLOSURE,
-#                       (max(R+T) - 1) * _SLIVER_CLOSURE_FRACTION)
-#
-# with the round-2 value kept as the lower arm, so the criterion is a widening
-# and never a tightening.  Measured on both builds: the two censuses are
-# unchanged row for row (false positives 0/648 with all 648 returned answers
-# bit-identical to the unguarded ones, false negatives 4/660), and over 615
-# arbitrated rows of eight devices the only verdicts that move are 85 rows of
-# the D-5 class, every one of them WRONG by both continuity rules and the
-# mildest of them off by 517.7x the physical wall shift.
+# Every bar below carries its own measured populations and margins.  The four
+# rounds of counter-measurement that produced this shape -- round 1's
+# super-unity conjunction and the 110 of 648 realistic staircases it refused,
+# round 2's arbiter, round 3's relative closure, round 4's removal of the
+# super-unity precondition -- are recorded verbatim in
+# docs/history/lumenairy.elements.pmm.stack.md.
 
 #: FAIL-BEFORE SWITCH for the refusal (2026-09-11).  ``False`` restores the
-#: pre-fix behaviour bit for bit: the super-unity WARNING below, and the wrong
-#: answer returned.  A switch, not a policy -- the guard changes nothing on any
-#: solve that does not trip BOTH conjuncts.
+#: pre-guard behaviour bit for bit: the super-unity WARNING below, and the
+#: wrong answer returned.  A switch, not a policy -- the guard changes nothing
+#: on a stack whose geometry the screen does not hit.
 PMM_SLIVER_GUARD = True
 
 #: FAIL-BEFORE SWITCH for the arbiter's LAZY collapse solves (2026-09-12, audit
@@ -1356,9 +1305,9 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
     internals).  Three severities, matching that model:
 
     * NON-FINITE total -> **raise**.  A NaN/inf half-space index or
-      permittivity used to reach the far field and return ``tot = [nan, nan]``
-      completely silently (audit M3 2026-07-25): a one-sided ``>`` comparison
-      is NaN-blind, so the tripwire never fired.
+      permittivity otherwise reaches the far field and returns
+      ``tot = [nan, nan]`` completely silently (audit M3 2026-07-25): a
+      one-sided ``>`` comparison is NaN-blind, so no tripwire fires.
     * NEGATIVE total -> **raise**.  ``R``/``T`` are flux ratios of non-negative
       numerators, so a negative total means the NORMALISATION is non-physical
       (a gain / non-propagating incidence medium flipping ``kz_inc`` past the
@@ -1374,14 +1323,11 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
       MANUFACTURED near-coincident-wall sliver -> ask :func:`_sliver_arbiter`
       WHICH cause moved the answer, and act on its verdict.
 
-      ROUND 4 (2026-09-11) removed the super-unity PRECONDITION on this arm.
-      Rounds 1-3 asked the question only when the solve read above
-      ``_SLIVER_TRIGGER_BAR``, so a sliver-corrupted answer that happened to
-      read 1+1.15e-04 on the running BLAS kernel was returned silently while
-      the SAME row on another kernel read 1+2.17 and was refused -- the
-      release CI matrix for 5.45.0 measured exactly that.  What decides
-      whether the arbiter runs is now the GEOMETRIC screen, which is a
-      deterministic fact about the wall coordinates and the ``min_feature``.
+      There is no super-unity PRECONDITION on this arm.  What decides whether
+      the arbiter runs is the GEOMETRIC screen, which is a deterministic fact
+      about the wall coordinates and the ``min_feature`` -- where a super-unity
+      total is a property of the running BLAS kernel, and the SAME
+      sliver-corrupted row can read 1+1.15e-04 on one and 1+2.17 on another.
 
       - ``'sliver'`` -> **raise** on a provably passive stack; on one that is
         not provably passive, **warn** with the same attribution rather than
@@ -1393,13 +1339,10 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
         many-slice-taper class rounds 2 and 3 refused on the move arm alone.
       - ``'truncation'`` -> **warn** above ``_STACK_SUPERUNITY_BAR`` (this
         bar's ordinary warning, with one sentence saying a sliver is present
-        and is NOT the cause), silent below it.  Round 1 refused 110 of 648
-        realistic staircases here whose answers were within 0.35-8.8x the
-        physical wall shift.
+        and is NOT the cause), silent below it.
       - ``'unknown'`` (the three extra solves could not be run: keyed /
-        dispersive materials, no resolved source) -> ROUND 1's behaviour,
-        unchanged: raise above ``_STACK_SUPERUNITY_BAR`` on a provably
-        passive stack, warn below it.
+        dispersive materials, no resolved source) -> raise above
+        ``_STACK_SUPERUNITY_BAR`` on a provably passive stack, warn below it.
 
       ``stack=None`` (the 2-D caller, and any caller that has not opted in)
       keeps the warning exactly as it was.
@@ -1408,10 +1351,9 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
       spurious ``|q|`` past ``_SLIVER_Q_EXCESS`` times the stack's index
       ceiling -> **warn** with the mechanism and the per-layer / mortar / 2-D
       routes (verification defect V-6).  Never refused: that cell is the
-      geometry the caller ASKED for.  ROUND 4 removed the super-unity
-      precondition here too (defect R2-B: the measured liner that is
-      1.06e-03 wrong reads ``R+T`` = 0.999221, i.e. SUB-unity, and the arm
-      was silent on it).
+        geometry the caller ASKED for.  It is not conditioned on the
+        super-unity reading either: the measured liner that is 1.06e-03 wrong
+        reads ``R+T`` = 0.999221, i.e. SUB-unity.
 
     ``src`` is the ``(wl, angle, phi)`` record the arbiter must re-solve at,
     and is passed explicitly by the callers whose wavelength is not
@@ -1435,13 +1377,11 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
             "gain or non-propagating incidence medium slipped past the entry "
             "guards (kz_inc < 0 negates every order).")
     import warnings
-    # ROUND 4 (2026-09-11): the arbiter is NOT gated on the super-unity
-    # reading any more.  Rounds 1-3 returned here whenever the solve read
-    # below the trigger, so a sliver-corrupted answer that happened to read
-    # 1+1.15e-04 on the running BLAS kernel was returned silently while the
-    # SAME row on another kernel read 1+2.17 and was refused.  The screen
-    # inside the arbiter is a deterministic fact about the wall coordinates,
-    # so it is what decides whether the three extra solves are paid.
+    # The arbiter is NOT gated on the super-unity reading: the screen inside it
+    # is a deterministic fact about the wall coordinates, whereas a super-unity
+    # total is a property of the running BLAS kernel (the same sliver-corrupted
+    # row reads 1+1.15e-04 on one and 1+2.17 on another).  See
+    # docs/history/lumenairy.elements.pmm.stack.md.
     verdict = _sliver_arbiter(stack, worst, R_eff, T_eff, src)
     note = ""
     if verdict is not None:
@@ -1808,42 +1748,16 @@ class PMMStack:
         # (a close wall pair a SINGLE layer owns -- an intentional 1 nm liner
         # -- is never thinned, whatever this is set to).
         #
-        # WHY 1e-3 AND NOT 1e-5 (audit finding G2, 2026-09-12).  The snap is
-        # the only thing standing between a staircased stack and the
-        # MANUFACTURED-sliver pathology below, and the pathology has a MEASURED
-        # width that is ABSOLUTE rather than a multiple of this knob: an
-        # unsnapped cross-layer wall collision of size ``s`` corrupts the solve
-        # for ``s`` at roughly ``1e-5 .. 1e-4`` of a PERIOD and is harmless
-        # outside that -- which is what makes raising the threshold a cure at
-        # all (a band that scaled WITH the knob could never be cleared by
-        # raising it; the ladder below shows it does not, because at 1e-3 the
-        # rungs at 1x .. 8x of the threshold are clean where at 1e-5 they were
-        # the whole hazard).  The old default of ``period*1e-5`` snapped away only
-        # the collisions that were already harmless and left the whole
-        # dangerous decade exposed.  Measured on two independent fixtures (a
-        # Si/SiO2 1.0/1.55 um pair at 12 deg and a TiO2-like 0.55/0.70 um pair
-        # at 31 deg), sweeping ``s`` over a 0.3x..100x ladder of ``min_feature``
-        # at degrees 10/14/18/22/26 with the refusal disarmed, and scoring
-        # DEGREE-SCATTER at fixed ``s`` (a smooth drift with ``s`` is a
-        # genuinely different geometry and is correct physics; an answer that
-        # jumps between branches as ``degree`` changes is the pathology):
-        #
-        #     min_feature      rungs showing degree-scatter
-        #     period*1e-5      6 of 11   (every rung from 1x to 8x; T0 reads
-        #                                 0.2645 / 0.3082 / 0.1939 against a
-        #                                 correct 0.199230 -- up to 55% wrong,
-        #                                 scattering +-5% between adjacent
-        #                                 degrees; on the first fixture the
-        #                                 same band reaches T0 = 22.4 and 147.7)
-        #     period*1e-4      1 of 11   (only the 1.0x rung, one degree of 5)
-        #     period*1e-3      0 of 11   (every rung degree-independent to 7
-        #                                 digits)
-        #
-        # and, decisively, where two settings both leave a collision unsnapped
-        # they agree EXACTLY: s = 1.5e-4 reads 0.19839028 under 1e-5 and 1e-4,
-        # s = 3e-4 reads 0.19755266 under both, s = 1e-3 reads 0.19366045 under
-        # 1e-5 and 1e-3.  Raising the knob does not perturb the cases it does
-        # not touch -- it only removes cells the union manufactured.
+        # WHY THE DEFAULT IS 1e-3 OF THE PERIOD.  The snap is the only thing
+        # standing between a staircased stack and the MANUFACTURED-sliver
+        # pathology below, and that pathology has a MEASURED width which is
+        # ABSOLUTE rather than a multiple of this knob: an unsnapped
+        # cross-layer wall collision of size ``s`` corrupts the solve for ``s``
+        # at roughly ``1e-5 .. 1e-4`` of a PERIOD and is harmless outside that
+        # -- which is what makes raising the threshold a cure at all.  The
+        # two-fixture degree-scatter ladder that sizes the default, and the
+        # measurement that raising the knob does not perturb the collisions it
+        # does not touch, are on :data:`_MIN_FEATURE_DEFAULT_FRAC`.
         #
         # THE COLLISION-SCALE RULE, which is what a caller should actually
         # reason with: ``min_feature`` must sit at least ~10x ABOVE the
@@ -1887,29 +1801,21 @@ class PMMStack:
         # `min_feature`, not merely the largest one that runs.  See
         # docs/audits/AUDIT_PMM_OBLIQUE_INPLANE_UNION_GRID_2026_07_28.md.
         #
-        # WHAT REPORTS A SLIVER, EXACTLY (open item C, 2026-09-11; corrected
-        # here 2026-09-11 by the verification of that fix).  This block used to
-        # say "a cross-layer sliver left in the grid is now reported by
-        # `_pmm_union_grid`".  It is NOT: `_pmm_union_grid` warns only about
-        # the pairs it SNAPS, and a sliver left in the grid is by definition
-        # one it did not snap.  There are two reports, neither of them that:
+        # WHAT REPORTS A SLIVER, EXACTLY.  Not ``_pmm_union_grid``: it warns
+        # only about the pairs it SNAPS, and a sliver left in the grid is by
+        # definition one it did not snap.  The reports are
         #   * `_pmm_union_grid`'s warning -- fires when the snap MERGES pairs,
         #     and names the pairs and the max wall displacement;
-        #   * `_sliver_refusal` (O-11, below) -- RAISES on a sliver LEFT in
-        #     the grid, but only when super-unity above `_SLIVER_TRIGGER_BAR`
-        #     on a provably passive stack is ATTRIBUTED to it by
-        #     `_sliver_arbiter`: one re-solve on the `min_feature` grid the
-        #     refusal prescribes, which must both clear the super-unity and
-        #     move the answer far past the snap's own displacement (round 2,
-        #     2026-09-11).  Where the arbiter says the sliver is NOT the cause
-        #     the solve returns under the plain super-unity warning, which
-        #     then says so; where the arbiter cannot run the round-1 decision
-        #     stands.  A sliver whose answer still closes is not reported at
-        #     all: that is the deliberate trade of S4.2 of
-        #     docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md (a plain
-        #     report would fire on correct solves), and its measured cost --
-        #     8 rows in 660 under round 1, 4 under round 2 -- is the
-        #     false-negative census in
+        #   * `_sliver_refusal` (O-11, above) -- RAISES on a sliver LEFT in
+        #     the grid when `_sliver_arbiter` attributes the answer's move to
+        #     it and the stack is provably passive, and WARNS with the same
+        #     attribution when it is not.  Where the arbiter says the sliver
+        #     is NOT the cause the solve returns under the plain super-unity
+        #     warning, which then says so.  A sliver whose answer does not
+        #     move is not reported at all: that is the deliberate trade of
+        #     S4.2 of docs/audits/FIX_PMMSTACK_SLIVER_WALLS_2026_09_11.md (a
+        #     plain report would fire on correct solves), and its measured
+        #     cost is the false-negative census in
         #     docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND2_2026_09_11.md S4;
         #   * the WITHIN-LAYER warning (`_within_layer_hazard`) -- a
         #     sliver-thin feature ONE layer owns is the geometry the caller
@@ -2713,7 +2619,7 @@ class PMMStack:
         # every stack containing a patterned layer through the classical
         # nodal machinery generalized to ky0 (exact reduction at ky0=0).
         # IN-PLANE tensors only: a patterned stack carrying ANY out-of-plane
-        # tensor is rejected loudly (the old path was silently wrong for it);
+        # tensor is rejected loudly (an unguarded path is silently wrong for it);
         # all-UNIFORM stacks (incl. out-of-plane tensors) keep the exact
         # Fourier path below (Berreman-validated).
         if any(len(segs) > 1 for (_t, segs, _sl) in self._layers):
@@ -2975,8 +2881,8 @@ class PMMStack:
         if not self._layers:
             raise ValueError("PMMStack.solve: add at least one layer.")
         # Validate ``stabilize`` EAGERLY, before ANY dispatch/early return
-        # (audit P3-31): the covariant (uniform-slant) dispatch used to return
-        # before the late vertical-path check, silently accepting garbage.
+        # (audit P3-31): the covariant (uniform-slant) dispatch returns before
+        # the late vertical-path check, so a late check accepts garbage there.
         if stabilize not in (None, False, "slices"):
             raise ValueError(
                 f"PMMStack.solve: stabilize must be None or 'slices', got "
@@ -3022,12 +2928,11 @@ class PMMStack:
             return self._solve_conical(self._src["wl"], self._src["angle"], phi)
 
         # ---- incidence guard, BEFORE any dispatch ---------------------------
-        # The NumPy branch's own ``_require_propagating_incidence`` sits below
-        # the JAX dispatch, so the differentiable twin used to return BEFORE
-        # it: a fully CONCRETE gain superstrate (n_sup = 1 - 1e-3j) reached the
-        # far field and returned R+T = [-0.848, -0.863] -- negative
-        # efficiencies, silently -- which is the audit-M3 2026-07-25 defect the
-        # NumPy path was fixed for, still alive on the twin.  The concrete-only
+        # The NumPy branch's own ``_require_propagating_incidence`` sits BELOW
+        # the JAX dispatch, so without this mirror the differentiable twin
+        # returns before it and a fully CONCRETE gain superstrate reaches the
+        # far field with negative efficiencies, silently -- the audit-M3
+        # 2026-07-25 defect the NumPy path was fixed for.  The concrete-only
         # mirror runs here so BOTH branches refuse it; a TRACED n_sup / angle
         # skips it exactly as the single-layer twins do (concretizing would
         # sever the trace), and the NumPy call below is then a no-op repeat of
@@ -3134,11 +3039,10 @@ class PMMStack:
             # OUT-OF-PLANE slanted stacks route to CONVECTION (2026-07-14):
             # the covariant layout's discontinuous off-plane TM channel has a
             # ~0.1 per-order factorization defect under the corrected
-            # factor-i physics (the pre-fix covariant-for-OOP routing was
-            # validated against engines sharing the same defect; convection
-            # and the RCWA tensor staircase now agree at ~4e-3 while
-            # covariant is the outlier).  Explicit 'covariant' still solves
-            # OOP (documented limitation; AUDIT_OOP_GENERATOR_FACTOR_I).
+            # factor-i physics -- convection and the RCWA tensor staircase
+            # agree at ~4e-3 while covariant is the outlier.  Explicit
+            # 'covariant' still solves OOP (documented limitation;
+            # AUDIT_OOP_GENERATOR_FACTOR_I).
             _fac = ("covariant" if (_uniform_slant and not _oop)
                     else "convection")
         if _fac == "covariant":
@@ -3442,8 +3346,7 @@ class PMMStack:
         plain :func:`_interface_smatrix`).  Cross-STACK wall ACCUMULATION --
         the shared union grid's O(n_slices) growth -- cannot form; the
         ADJACENT-slice collision can, and ``min_feature`` is the lever on it
-        here exactly as on the shared path (M2 / N-6 -- this docstring used to
-        say "``min_feature`` never enters", which was wrong; see the measured
+        here exactly as on the shared path (M2 / N-6; see the measured
         contract on :func:`_perlayer_window_grids`).  Interfaces between
         IDENTICAL grids
         (repeated layers) also take the plain interface, so a vertical
@@ -3831,10 +3734,9 @@ class PMMStack:
         if not self._taper_recipes:
             # No builder recipe -> the n_slices probe is impossible.  Fall back
             # to the UNION-GRID consensus (audit 2026-07-28, R-1): it needs no
-            # recipe, so the guard is finally reachable on hand-added and
-            # SegmentStackGeometry-built stacks -- previously the ENTIRE
-            # geometry-built path (the documented device route) was silently
-            # unprotected against the very pathology this check exists for.
+            # recipe, so the guard is reachable on hand-added and
+            # SegmentStackGeometry-built stacks -- the documented device route,
+            # which nothing else protects against this pathology.
             self._union_grid_consensus_check(jones, tol=tol)
             return
         deltas = []
@@ -4042,7 +3944,7 @@ class PMMStack:
             fields (envelope x carrier ``exp(i kx0 x)``) in the PUBLIC
             ``exp(-i w t)`` convention, ``H`` in the RCWA-co-registered
             ``-i eta0`` scale (CHANGED in v5.14.3 from the modal-convention
-            envelope the day-one v5.14.2 method returned).  ``E_x`` is the
+            envelope).  ``E_x`` is the
             wall-NORMAL component: at a segment wall the C0 nodal basis
             stores the (convergent) compromise value; ``Ez``/``Hz`` come
             from per-element spectral derivatives, averaged at shared nodes.
@@ -4374,10 +4276,10 @@ class PMMStack:
         # ---- per-material attribution within each layer --------------------
         # Split each layer's exact (flux-based) absorption across its
         # distinct permittivities by the lossy volume density
-        # Im(exx)|Ex|^2 + Im(eyy)|Ey|^2 + Im(ezz)|Ez|^2 (audit P2-13: the
-        # ezz channel used to be omitted, so a segment whose ONLY loss is
-        # Im(ezz) -- a uniaxial absorber with the lossy axis along z -- was
-        # dropped from the dict entirely), GLL-quadratured in x and Gauss-
+        # Im(exx)|Ex|^2 + Im(eyy)|Ey|^2 + Im(ezz)|Ez|^2 -- ALL THREE diagonal
+        # channels (audit P2-13: an ezz-only-lossy segment, a uniaxial
+        # absorber whose lossy axis is along z, is attributed and not
+        # dropped), GLL-quadratured in x and Gauss-
         # sampled in z, then renormalized to the flux total (the split is a
         # RATIO, so the common normalization cancels).  Ez is reconstructed
         # per element from Ampere's law, Ez = (i/k0) (dHy/dx + i kx0 Hy)/ezz
@@ -5090,28 +4992,22 @@ class PMMStack:
         N = len(orders)
         kx = kx0 / k0 + orders * (2.0 * np.pi / period) / k0
         Tp = _sem_fourier_projection(orders, period, mats_s)
-        # W7 F-C (2026-07-26), the Berreman-F-1 twin.  ``_kz_forward`` is a
+        # GAUGE BRIDGE (W7 F-C, the Berreman-F-1 twin).  ``_kz_forward`` is a
         # PUBLIC-gauge helper (``Im(kz) >= 0`` for ``exp(-iwt)``), but
-        # ``eps_sup``/``eps_sub`` are INTERNAL exp(+iwt) here (conjugated at the
-        # top of this method) -- so a LOSSY half-space arrived double-
-        # conjugated, ``sqrt`` landed in the 4th quadrant, the ``Im < 0`` flip
-        # sent ``Re(kz) < 0``, and the ``Re(kz) > 0`` propagating mask inside
-        # _assemble_jones_farfield SILENTLY ZEROED T.  Measured pre-fix on a
-        # HOMOGENEOUS eps=2.25 slab (where the slant is a physical no-op, so
-        # the vertical cascade is the exact oracle), P=0.30 um, 0.22 um deep,
-        # wl 0.55 um, slant 0.35 rad, theta=0.3:
-        #     n_sub 1.5+0.01j  ->  T = [0, 0]   (oracle [0.96586, 0.95613])
-        #     n_sub 1.5+0.30j  ->  T = [0, 0]   (oracle [0.98578, 0.98047])
-        #     n_sub 0.2+3.5j   ->  T = [0, 0]   (oracle [0.08641, 0.08135])
-        # with ZERO warnings -- ``_warn_stack_energy`` only sees super-unity /
-        # negative totals, and 0.014 is "passive".  An absorbing SUPERSTRATE
-        # was worse: ``kz_inc = -1.14651`` tripped the "non-propagating
-        # incidence" raise on a perfectly propagating medium.  Un-conjugating
-        # restores the public gauge (identity for a real eps -> every lossless
-        # solve is BYTE-UNCHANGED); this is exactly the ``kz_ord`` bridge in
-        # ``_core._pmm_jones_oblique_core`` and rcwa's ``_forward_flux_kz``.
-        # (The MODAL kz inside the cascade keeps the internal convention -- that
-        # path is already correct.)
+        # ``eps_sup``/``eps_sub`` are INTERNAL exp(+iwt) here (conjugated at
+        # the top of this method), so they are UN-conjugated for the call.
+        # Without that a LOSSY half-space arrives double-conjugated, ``sqrt``
+        # lands in the 4th quadrant, the ``Im < 0`` flip sends ``Re(kz) < 0``,
+        # and the ``Re(kz) > 0`` propagating mask inside
+        # _assemble_jones_farfield SILENTLY ZEROES T -- with no warning, because
+        # ``_warn_stack_energy`` only sees super-unity / negative totals and a
+        # total of 0.014 is "passive".  An absorbing SUPERSTRATE is worse: it
+        # trips the "non-propagating incidence" raise on a perfectly
+        # propagating medium.  Un-conjugating is the IDENTITY for a real eps,
+        # so every lossless solve is byte-unchanged; this is exactly the
+        # ``kz_ord`` bridge in ``_core._pmm_jones_oblique_core`` and rcwa's
+        # ``_forward_flux_kz``.  (The MODAL kz inside the cascade keeps the
+        # internal convention -- that path is already correct.)
         kz_sup = _kz_forward(np.conj(eps_sup), kx)
         kz_sub = _kz_forward(np.conj(eps_sub), kx)
         kz_inc = float(np.real(

@@ -774,8 +774,8 @@ class RCWAResult:
         """Apply the zeroth-order (specular) TRANSMISSION Jones to an incident
         :class:`~lumenairy.elements.polarization.JonesField` -- the transmissive
         counterpart of :meth:`apply_reflection` (audit S5-11: a transmissive
-        metasurface's observable is the transmitted field, but the RCWAResult
-        field helpers historically defaulted to / only exposed the reflection
+        metasurface's observable is the transmitted field, and the RCWAResult
+        field helpers otherwise expose only the reflection
         port).  Operates on a COPY so the caller's incident field is preserved.
         Carries only the specular 2x2 Jones -- for a strongly diffracting cell
         most power is in non-zero orders, so use :meth:`to_multiorder_field`
@@ -975,8 +975,8 @@ class RCWAResult:
 
         The backward field is then ``c-_bot exp(-lam k0 (L - z))`` -- a DECAYING
         exponential -- so a deep, lossy layer never forms the overflowing
-        ``exp(+lam k0 z)`` (the old top-referenced ``c- exp(+lam k0 z)`` blew up
-        to NaN through high-loss metal layers, silently zeroing
+        ``exp(+lam k0 z)`` (a top-referenced ``c- exp(+lam k0 z)`` overflows
+        to NaN through high-loss metal layers and silently zeroes
         :meth:`layer_absorption`).  Math-identical: ``c- = X c-_bot`` with
         ``X = exp(-lam k0 L)``."""
         N = info["N"]
@@ -1065,10 +1065,10 @@ class RCWAResult:
         # The cascade runs in the INTERNAL (conjugate) gauge and the output
         # is conjugated back, so a PUBLIC incident Jones (ex0, ey0) must enter
         # CONJUGATED: conj(S(conj(inc))) = ex0 F_pub_x + ey0 F_pub_y -- the
-        # public-linear superposition.  Real incidents are unchanged; complex
-        # (circular/elliptical) drives previously returned the field of the
-        # conjugated incident, i.e. the OPPOSITE handedness (bug found by the
-        # PMM internal-field co-registration oracle, 2026-06-11).
+        # public-linear superposition.  Real incidents are unaffected; without
+        # it a complex (circular/elliptical) drive returns the field of the
+        # CONJUGATED incident, i.e. the OPPOSITE handedness (found by the PMM
+        # internal-field co-registration oracle, 2026-06-11).
         ex0, ey0 = np.conj(incident[0]), np.conj(incident[1])
         cinc = np.concatenate([ex0 * delta, ey0 * delta]).astype(_C)
         sigma = self._lanczos_sigma() if filter == "lanczos" else None
@@ -1462,8 +1462,8 @@ class RCWAStack:
     def layers(self) -> tuple:
         """Read-only view (tuple) of the per-layer records, in stack order
         (top / superstrate side first) -- the PUBLIC accessor for what
-        :meth:`add_layer` stored (AUDIT_DYNAMETA_CONSUMER_API_GAPS A2;
-        reverse translators previously had to read the private ``_layers``
+        :meth:`add_layer` stored (AUDIT_DYNAMETA_CONSUMER_API_GAPS A2 --
+        without it a reverse translator has to read the private ``_layers``
         slot under a version ceiling).
 
         Each record carries the PUBLIC fields
@@ -1523,7 +1523,7 @@ class RCWAStack:
         * ``eps`` (scalar) -- uniform isotropic spacer; a ``(3, 3)`` array is a
           spatially-uniform ANISOTROPIC slab (audit S1-14 / S5-11: expanded to a
           uniform tensor cell and solved on the tensor path -- the clean
-          uniform-tensor entry; a bare ``(3, 3)`` formerly crashed at solve);
+          uniform-tensor entry);
         * ``eps_cell`` (``(Sx, Sy)``) -- isotropic patterned, FFT-sampled;
         * ``eps_tensor_cell`` (``(Sx, Sy, 3, 3)``) -- anisotropic patterned;
         * ``shapes`` (with ``eps_background``) -- isotropic patterned using
@@ -1584,13 +1584,13 @@ class RCWAStack:
         polarization).
         """
         # Uniform ANISOTROPIC entry (audit S1-14 / S5-11): a (3, 3) permittivity
-        # tensor passed as ``eps`` is a spatially-uniform tensor layer.  A bare
-        # (3, 3) was formerly accepted into the scalar "uniform" slot and then
-        # crashed OPAQUELY at solve (``complex()`` of a (3, 3) array).  Expand it
-        # to a minimally-sampled uniform tensor CELL and route it through the
-        # validated tensor eigenmode path (its only Fourier harmonic is DC, so it
-        # is exactly a homogeneous anisotropic slab).  Kept BEFORE the one-of
-        # count so the layer registers as an ``eps_tensor_cell``.
+        # tensor passed as ``eps`` is a spatially-uniform tensor layer.  Left in
+        # the scalar "uniform" slot it crashes OPAQUELY at solve (``complex()``
+        # of a (3, 3) array), so expand it to a minimally-sampled uniform tensor
+        # CELL and route it through the validated tensor eigenmode path (its
+        # only Fourier harmonic is DC, so it is exactly a homogeneous
+        # anisotropic slab).  Kept BEFORE the one-of count so the layer
+        # registers as an ``eps_tensor_cell``.
         if eps is not None and not callable(eps):
             _ea = eps if is_jax_array(eps) else np.asarray(eps)
             if getattr(_ea, "ndim", 0) >= 2:
@@ -1899,32 +1899,17 @@ class RCWAStack:
 
         Notes
         -----
-        BOUNDARY COINCIDENCE (audit W8, fixed v5.31).  The wall test used to be
-        the SYMMETRIC ``|x - centre| < duty/2``, which excludes BOTH walls, so a
-        wall landing EXACTLY on a pixel centre lost that pixel.  At
-        ``shear = 0.5, duty = 0.5`` the lower wall of slice ``k`` sits at
+        BOUNDARY COINCIDENCE (audit W8).  The wall test is HALF-OPEN, not the
+        SYMMETRIC ``|x - centre| < duty/2``: the symmetric form excludes BOTH
+        walls, so a wall landing EXACTLY on a pixel centre loses that pixel --
+        and that is a whole coincidence FAMILY rather than one unlucky point.
+        At ``shear = 0.5, duty = 0.5`` the lower wall of slice ``k`` sits at
         ``lo = (k + 0.5)/(2 n_slices)``, which hits a pixel centre
-        ``(i + 0.5)/n_x`` for EVERY slice whenever ``n_x == 2 n_slices`` -- a
-        whole coincidence FAMILY, not one unlucky point.  Measured pre-fix at
-        ``n_slices = 128, n_x = 256``: all 128 slices realised duty
-        ``0.49609375 = 127/256`` (-3.906e-03).
-
-        The physics, on a clean-closure case (``P = 1 um``, ``wl = 633 nm``,
-        ``d = 300 nm``, ``eps_ridge = 4``, ``M = 7``, ``n_slices = 64``, so the
-        coincidence is at ``n_x = 128``; realised duty ``63/128 = 0.4921875``).
-        ``(R0_TE, R0_TM, T0_TE, T0_TM)`` versus ``n_slices`` at ``n_x = 128``::
-
-            n_slices | pre-fix                                | post-fix
-                  16 | 0.067642 0.135155 0.167056 0.571015    | identical
-                  32 | 0.067392 0.135313 0.168182 0.569711    | identical
-                  64 | 0.070403 0.125244 0.161805 0.587247 <- | 0.067328 0.135350 0.168465 0.569385
-                 128 | 0.067270 0.135390 0.168769 0.569466    | identical
-
-        The ``n_slices = 64`` row is the OUTLIER; every other row is BIT-identical
-        pre and post (the fix touches only coincident pixels).  Against the
-        ``n_x = 1024`` answer the coincident point was off by 1.802e-02 and is
-        now off by 1.552e-04 -- the ordinary ``O(1/n_x)`` quantisation, a 116x
-        improvement, achieved AT ``n_x = 128`` rather than by refining.
+        ``(i + 0.5)/n_x`` for EVERY slice whenever ``n_x == 2 n_slices``; all
+        128 slices then realise duty ``127/256`` instead of ``0.5``.  Only
+        coincident pixels are touched, so every other raster is bit-identical
+        either way.  The measured before/after efficiency ladder is in
+        docs/history/lumenairy.elements.rcwa.stack.md.
 
         ``raster`` -- MEASURED, and the recommendation is PER-FORMULATION.
         Convergence of the rasterized cell against the EXACT analytic 1-D oracle
@@ -2248,9 +2233,9 @@ class RCWAStack:
                         if sh["shape"] == "rectangle":
                             wx, wy = sh["size"]
                             # HALF-OPEN + wrap-aware (audit W8, PIXEL CELL
-                            # CONTRACT): the old ``|xs - cx| < wx/2`` excluded
-                            # BOTH walls (an edge exactly on a pixel centre
-                            # dropped the pixel) and silently dropped any
+                            # CONTRACT): a SYMMETRIC ``|xs - cx| < wx/2``
+                            # excludes BOTH walls (an edge exactly on a pixel
+                            # centre drops the pixel) and silently drops any
                             # rectangle crossing the cell edge from the render.
                             m = _raster_cover_1d(
                                 xf, (cx - 0.5 * wx) / self.period_x,
@@ -2414,7 +2399,7 @@ class RCWAStack:
                                     strict_y=not self.is_1d, stacklevel=5)
                 # Mirror the STATIC add_layer tensor contract (audit P3-38):
                 # out-of-plane tensors are supported since v5.14.1, so the
-                # materialised dispersive cell must not re-impose the old
+                # materialised dispersive cell must not impose an
                 # in-plane-only restriction -- only the nonzero-e_zz guard
                 # (the pointwise ezz-Schur fold divides by it) applies.
                 if _tensor_offplane_present(tcell):
@@ -2664,9 +2649,7 @@ class RCWAStack:
           (Li 2003 Sec. 5.2); they are not the same truncated operator.
 
         ``symmetrize=False`` below is what keeps this call on the per-axis
-        rule, and it is the historical operator BIT for BIT (the pre-2026-09-12
-        ``_li_convolutions_2d_tensor`` body is now ``_li_tensor_l2l1``,
-        unchanged)."""
+        rule; the L2L1 operator itself is :func:`_li_tensor_l2l1`."""
         pair = getattr(layer, "normal_cells", None)
         if pair is None:
             return _li_convolutions_2d(cell_c, orders, self.nox, self.noy, xp)

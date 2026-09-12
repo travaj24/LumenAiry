@@ -42,10 +42,9 @@ define ``s3 = 2 a1 a2 sin(delta2 - delta1) = +2 Im(Ex conj(Ey))``, which
 is the OPPOSITE sign (that convention calls the same state
 left-circular, because it names handedness as seen by an observer
 looking INTO the beam).  Measured: ``S3_lib / S3_BW = -1`` exactly
-(audit E-M13, 2026-07-25).  Nothing in the code changed for E-M13 -- the
-whole element/solver family is self-consistent to 1e-16; only the label
-was wrong.  CONVENTIONS.md section 7 still calls this row "Born-Wolf"
-and should be relabelled "IEEE / right-hand-rule".
+(audit E-M13, 2026-07-25); no code sign is involved -- the whole
+element/solver family is self-consistent to 1e-16.  CONVENTIONS.md
+section 7 records the same convention.
 
 One visible consequence of the ``S3`` sign choice: the Mueller matrix
 implied by this module's (Jones, Stokes) pair reproduces the textbook
@@ -139,13 +138,14 @@ class JonesField:
     """
 
     def __init__(self, Ex: np.ndarray, Ey: np.ndarray, dx: float, dy: Optional[float] = None) -> None:
-        # v5.29 (audit E-L15): coerce FIRST.  Pre-fix the shape guard read
-        # ``Ex.shape`` on the raw argument, so a nested list (the natural
-        # hand-written input) died with ``AttributeError: 'list' object has
-        # no attribute 'shape'`` instead of the documented ValueError -- and
-        # a 1-D list never reached the 2-D check at all.  ``np.asarray`` is
-        # a no-op for arrays, so the ndarray path is unchanged (``self.Ex``
-        # is still the caller's object when it is already complex).
+        # v5.29 (audit E-L15): coerce FIRST.  A shape guard that reads
+        # ``Ex.shape`` on the raw argument dies with ``AttributeError:
+        # 'list' object has no attribute 'shape'`` on a nested list -- the
+        # natural hand-written input -- instead of the documented
+        # ValueError, and a 1-D list never reaches the 2-D check at all.
+        # ``np.asarray`` is a no-op for arrays, so the ndarray path is
+        # unchanged (``self.Ex`` is still the caller's object when it is
+        # already complex).
         Ex_arr = np.asarray(Ex)
         Ey_arr = np.asarray(Ey)
         if Ex_arr.shape != Ey_arr.shape:
@@ -242,9 +242,7 @@ class JonesField:
     # falls back to two sequential ASM calls (the second hits the H
     # cache too, so it's essentially free).  Empirically determined on a
     # 6-core CPU; to move the threshold, assign this class (or instance)
-    # attribute directly.  v5.29 (audit E-L12): the pre-fix comment
-    # pointed at a setter function that does not exist anywhere in the
-    # library.
+    # attribute directly.
     _BATCH_PROPAGATE_MIN_N = 512
 
     def propagate(self, z: float, wavelength: float, bandlimit: bool = True) -> 'JonesField':
@@ -322,11 +320,10 @@ class JonesField:
         Returns
         -------
         JonesField
-            ``self``.  v5.46 (audit Z4): this docstring used to read
-            "Returns new grid spacings", which it never did -- the new
-            spacings are written onto ``self.dx`` / ``self.dy`` (Fresnel is
-            pitch-CHANGING: ``dx_out = lambda*z/(N*dx)``) and the method
-            returns ``self``.  Read the new pitch off the returned object.
+            ``self``.  Fresnel is pitch-CHANGING (``dx_out =
+            lambda*z/(N*dx)``), and the new spacings are written onto
+            ``self.dx`` / ``self.dy``: read the new pitch off the
+            returned object.
         """
         self.Ex, dx_out, dy_out = fresnel_propagate(
             self.Ex, z, wavelength, self.dx, self.dy)
@@ -342,10 +339,9 @@ class JonesField:
         Returns
         -------
         JonesField
-            ``self``.  v5.46 (audit Z4): as for :meth:`propagate_fresnel`,
-            the new spacings are written onto ``self.dx`` / ``self.dy``
-            rather than returned; the old "Returns new grid spacings"
-            wording described a return this method never had.
+            ``self``.  As for :meth:`propagate_fresnel`, the new spacings
+            are written onto ``self.dx`` / ``self.dy`` rather than
+            returned.
         """
         self.Ex, dx_out, dy_out = fraunhofer_propagate(
             self.Ex, z, wavelength, self.dx, self.dy)
@@ -780,12 +776,12 @@ def apply_waveplate(
         half/quarter-wave-plate wrappers.
 
         Also if ``retardance`` (or either angle) is not finite.  v5.29
-        (audit W3-T4, sibling of the E-L16 ellipticity guard): pre-fix
-        ``retardance=np.nan`` returned a field whose every pixel was
-        ``nan+nanj`` -- ``exp(+1j*nan)`` is NaN -- with nothing raised,
-        so the NaN only surfaced far downstream (or not at all, since
-        :func:`degree_of_polarization` reads NaN as NaN and intensity
-        plots show blank).
+        (audit W3-T4, sibling of the E-L16 ellipticity guard):
+        ``exp(+1j*nan)`` is NaN, so without the guard a NaN retardance
+        returns a field whose every pixel is ``nan+nanj`` with nothing
+        raised -- and it surfaces only far downstream, or not at all,
+        since :func:`degree_of_polarization` reads NaN as NaN and
+        intensity plots show blank.
 
     Notes
     -----
@@ -804,32 +800,22 @@ def apply_waveplate(
     ``exp(+i omega tau)`` when the carrier is ``exp(-i omega t)``)
     accumulates POSITIVE relative phase ``exp(+i*phi)``.
 
-    BEHAVIOR CHANGE (audit P2-15, post-v5.17.0): from v4.7 through
-    v5.17.0 this function used ``exp(-i*retardance)`` on the slow axis
-    -- the ``exp(+i omega t)`` (EE-convention) sign -- with a docstring
-    that incorrectly attributed it to ``exp(-i omega t)``.  That made
-    the Jones-element family the CONJUGATE of the library's own
-    rigorous solver Jones: ``berreman_jones_1d`` on a uniaxial
-    quarter-wave slab (``eps = diag(no^2, ne^2, no^2)``,
-    ``d = lambda/(4 (ne - no))``, index-matched half-spaces) returns
-    transmission Jones ``diag(e^{i k0 no d}, e^{i k0 ne d})`` --
-    slow-relative-fast phase ``+pi/2`` -- and the same slab with its
-    fast axis at +45 deg maps x-pol to ``Ey/Ex = -i`` (S3 = -1),
-    while the pre-fix ``apply_waveplate`` gave ``Ey/Ex = +i``
-    (S3 = +1): circular handedness flipped between the element and
-    solver families for the same physical device.  The element sign
-    now matches the solver family (``berreman_jones_1d`` /
-    ``BerremanStack`` / ``rcwa_jones_1d``), so solver-derived Jones
-    matrices drop into JonesField pipelines without conjugation.
+    .. versionchanged:: post-v5.17.0 (audit P2-15)
+       The SLOW axis carries ``exp(+i*phi)``, which is the sign the
+       library's ``exp(-i omega t)`` convention requires; v4.7 through
+       v5.17.0 used ``exp(-i*retardance)``, the ``exp(+i omega t)``
+       (EE-convention) sign.  The element family is therefore the SAME
+       Jones as the rigorous solvers (``berreman_jones_1d`` /
+       ``BerremanStack`` / ``rcwa_jones_1d``), and solver-derived Jones
+       matrices drop into JonesField pipelines without conjugation.
 
-    Consequences: a QWP with fast axis at +45 deg on x-pol now yields
-    S3 = -1 (``create_circular_polarized``'s 'left'); use fast axis
-    at -45 deg for S3 = +1 ('right').  Half-wave plates are unaffected
-    (``exp(+-i pi) = -1`` either way), as are all
-    retardance-magnitude / intensity results.  The v5.4.6 (P3-22)
-    "DECOUPLED, mutually consistent" note predates the Berreman /
-    RCWA retarder Jones (v5.14.4) and is superseded by this
-    cross-family alignment; see CONVENTIONS.md section 7.
+       Consequences for a caller: a QWP with fast axis at +45 deg on
+       x-pol yields S3 = -1 (``create_circular_polarized``'s 'left');
+       use fast axis at -45 deg for S3 = +1 ('right').  Half-wave plates
+       are unaffected (``exp(+-i pi) = -1`` either way), as are all
+       retardance-magnitude / intensity results.  See CONVENTIONS.md
+       section 7, and docs/history/lumenairy.elements.polarization.md for
+       the measurement that forced the change.
     """
     angle = _resolve_angle('apply_waveplate', angle, angle_deg)
     _phi = float(retardance)
@@ -1007,12 +993,12 @@ def apply_polarizing_beam_splitter(
     ------
     ValueError
         If both ``angle`` and ``angle_deg`` disagree, or if
-        ``extinction_ratio`` is NaN or ``< 1``.  v5.29 (audit E-H9): the
-        pre-fix guard rejected only ``extinction_ratio <= 0``, so a value
-        in ``(0, 1)`` was accepted and silently SWAPPED the two output
-        ports (``ER=0.1`` on an x-polarized input put 0.909 of the power
-        in the "reflected" port and 0.091 in the "transmitted" one, with
-        power still conserved so nothing flagged it).
+        ``extinction_ratio`` is NaN or ``< 1``.  v5.29 (audit E-H9): a
+        guard that rejects only ``extinction_ratio <= 0`` accepts a value
+        in ``(0, 1)``, which silently SWAPS the two output ports
+        (``ER=0.1`` on an x-polarized input puts 0.909 of the power in the
+        "reflected" port and 0.091 in the "transmitted" one, with power
+        still conserved so nothing flags it).
 
     Notes
     -----
@@ -1024,11 +1010,11 @@ def apply_polarizing_beam_splitter(
     angle = _resolve_angle('apply_polarizing_beam_splitter', angle, angle_deg)
     if extinction_ratio is not None:
         # v5.29 (audit E-H9): ER is defined as the wanted:unwanted POWER
-        # ratio, hence >= 1.  The pre-fix guard rejected only ER <= 0, so
-        # ER in (0, 1) sailed through and inverted the two ports (leak >
-        # 0.5 makes the "wanted" amplitude ``a`` the SMALLER one) -- power
-        # conserved, no warning.  Reject instead of quietly supporting it,
-        # matching the sibling guard's raise-on-bad-input style.
+        # ratio, hence >= 1.  A guard that rejects only ER <= 0 lets ER in
+        # (0, 1) through, and that INVERTS the two ports (leak > 0.5 makes
+        # the "wanted" amplitude ``a`` the SMALLER one) -- power conserved,
+        # no warning.  Reject instead of quietly supporting it, matching
+        # the sibling guard's raise-on-bad-input style.
         _er = float(extinction_ratio)
         if not (_er >= 1.0):        # also catches NaN
             raise ValueError(
@@ -1093,8 +1079,8 @@ def create_linear_polarized(
     ValueError
         If ``angle`` is not finite.  v5.29 (audit W3-T4): sibling of the
         :func:`create_elliptical_polarized` ``orientation`` guard -- this
-        is the same major-axis angle, and pre-fix ``angle=np.nan``
-        returned a field whose every pixel was ``nan+nanj`` with nothing
+        is the same major-axis angle, and without it ``angle=np.nan``
+        returns a field whose every pixel is ``nan+nanj`` with nothing
         raised.
     """
     _angle = float(angle)
@@ -1113,15 +1099,15 @@ def create_linear_polarized(
 
 # v5.29 (audit E-H8): the accepted ``handedness`` spellings for
 # :func:`create_circular_polarized`, mapped to the sign of Ey's imaginary
-# unit (== the sign of the resulting S3).  Pre-fix the parse was
-# ``handedness.lower().startswith('r')`` with NO else-branch, so every
-# unrecognised string ('cw', 'ccw', 'clockwise', 'linear', '', and any
-# typo that does not begin with 'r') silently produced LEFT circular,
-# while the typo 'rihgt' silently produced RIGHT.  Deliberately excluded:
-# 'cw' / 'ccw' / 'clockwise' / 'counterclockwise'.  Rotation-sense names
-# are ambiguous without also stating the viewing direction (from the
-# source vs into the beam), which is exactly the axis on which the
-# IEEE and Born & Wolf conventions disagree -- see the module docstring.
+# unit (== the sign of the resulting S3).  An EXPLICIT table, because a
+# ``handedness.lower().startswith('r')`` parse with no else-branch turns
+# every unrecognised string ('cw', 'ccw', 'clockwise', 'linear', '', and
+# any typo that does not begin with 'r') into LEFT circular, while the typo
+# 'rihgt' becomes RIGHT.  Deliberately excluded: 'cw' / 'ccw' /
+# 'clockwise' / 'counterclockwise'.  Rotation-sense names are ambiguous
+# without also stating the viewing direction (from the source vs into the
+# beam), which is exactly the axis on which the IEEE and Born & Wolf
+# conventions disagree -- see the module docstring.
 _HANDEDNESS_SIGN: Dict[str, float] = {
     'right': +1.0, 'r': +1.0, 'rcp': +1.0, 'rhc': +1.0, 'rhcp': +1.0,
     'left': -1.0, 'l': -1.0, 'lcp': -1.0, 'lhc': -1.0, 'lhcp': -1.0,
@@ -1163,10 +1149,9 @@ def create_circular_polarized(
         ``(1, +i)/sqrt(2)`` up to a global phase under the library's
         ``exp(-i omega t)`` time convention) and the
         ``vector_diffraction.richards_wolf_focus`` circular-pol
-        branch.  (Audit P2-15, post-v5.17.0: ``apply_waveplate`` was
-        realigned to the Berreman/RCWA solver Jones, so a QWP with
-        fast axis at **+45 deg** on x-pol now gives 'left' (S3 = -1);
-        pre-fix it gave 'right'.)
+        branch.  (``apply_waveplate`` carries the Berreman/RCWA solver
+        Jones, so a QWP with fast axis at **+45 deg** on x-pol gives
+        'left', S3 = -1; audit P2-15.)
     dy : float, optional
 
     Returns
@@ -1177,30 +1162,23 @@ def create_circular_polarized(
     ------
     ValueError
         If ``handedness`` is not one of the spellings listed above.
-        v5.29 (audit E-H8): pre-fix the parse was
-        ``handedness.lower().startswith('r')`` with no else-branch, so
-        ``'cw'``, ``'ccw'``, ``'clockwise'``, ``'linear'``, ``''`` and
-        every typo not beginning with 'r' silently returned LEFT
-        circular (and the typo ``'rihgt'`` silently returned RIGHT).
+        v5.29 (audit E-H8): a
+        ``handedness.lower().startswith('r')`` parse with no else-branch
+        turns ``'cw'``, ``'ccw'``, ``'clockwise'``, ``'linear'``, ``''``
+        and every typo not beginning with 'r' into LEFT circular (and the
+        typo ``'rihgt'`` into RIGHT).
         Matches the house rule that unknown enum values raise, naming
         the offending value and the allowed set.
 
     Notes
     -----
-    4.11.1: the 4.10 "fix" to this function flipped the handedness
-    branches so that 'right' produced ``(1, -i)/sqrt(2)``, which gave
-    ``S3 = -1`` under the library's own Stokes formula and contradicted
-    the hard-coded right-circular Jones vector in
-    ``vector_diffraction.py``.  4.11.1 restores the pre-4.10 form
-    where 'right' obeys ``S3 > 0``.
-
-    Audit P2-15 (post-v5.17.0): ``apply_waveplate``'s retarder sign
-    was flipped to match the Berreman/RCWA solver Jones (slow axis
-    ``exp(+i*phi)``), so the QWP recipe that reproduces
-    ``create_circular_polarized('right')`` on x-pol is now fast axis
-    at **-45 deg** (pre-fix: +45 deg).  This function's own Jones
-    vectors and its agreement with ``vector_diffraction.py`` are
-    unchanged.
+    ``'right'`` obeys ``S3 > 0`` under the library's own Stokes formula
+    and agrees with the hard-coded right-circular Jones vector in
+    ``vector_diffraction.py``.  The QWP recipe that reproduces
+    ``create_circular_polarized('right')`` on x-pol is fast axis at
+    **-45 deg**: audit P2-15 aligned ``apply_waveplate``'s retarder sign
+    with the Berreman/RCWA solver Jones, and this function's own Jones
+    vectors were not touched by that.
     """
     key = handedness.strip().lower() if isinstance(handedness, str) else None
     sign = _HANDEDNESS_SIGN.get(key) if key is not None else None
@@ -1251,21 +1229,21 @@ def create_elliptical_polarized(
     Raises
     ------
     ValueError
-        If ``orientation`` is not finite.  v5.29 (audit W3-T4): pre-fix
-        ``orientation=np.nan`` (or ``+-inf``) returned a field whose
-        every pixel was ``nan+nanj`` with nothing raised -- the sibling
-        gap left by the E-L16 ``ellipticity`` guard below.
+        If ``orientation`` is not finite.  v5.29 (audit W3-T4): without
+        it ``orientation=np.nan`` (or ``+-inf``) returns a field whose
+        every pixel is ``nan+nanj`` with nothing raised -- the sibling gap
+        left by the E-L16 ``ellipticity`` guard below.
 
         If ``ellipticity`` is not finite or ``|ellipticity| > pi/4``.
         v5.29 (audit E-L16): the ellipse parameterisation below is only
         one-to-one on ``|chi| <= pi/4``; beyond it ``|sin chi| >
         |cos chi|`` so the minor axis becomes the major one and the
         state silently comes back with a DIFFERENT (chi, psi).  Measured
-        pre-fix: ``chi = 0.9`` round-tripped through
+        with the guard lifted: ``chi = 0.9`` round-trips through
         :func:`polarization_ellipse` as ``chi = 0.6708,
         psi = pi/2`` (axes swapped, orientation rotated 90 deg), and
         ``chi = pi/2`` -- a perfectly reasonable-looking "circular"
-        request -- came back LINEAR (chi = 0) at psi = pi/2.  Reduce
+        request -- comes back LINEAR (chi = 0) at psi = pi/2.  Reduce
         such a request modulo the ellipse symmetry yourself (i.e. pass
         ``chi -> pi/2 - chi`` with ``psi -> psi + pi/2``) if that is
         what was meant.
@@ -1377,16 +1355,14 @@ def degree_of_polarization(field: 'JonesField') -> np.ndarray:
     A :class:`JonesField` stores ONE coherent Jones vector per pixel, so
     algebraically ``S1^2 + S2^2 + S3^2 == S0^2`` exactly and this
     function returns 1.0 at every illuminated pixel (0.0 where the field
-    is dark).  v5.29 (audit E-L17): the pre-fix docstring's "values less
-    than 1 indicate depolarization ... partially coherent / incoherent
-    sources or through depolarizing elements" describes an output this
-    container CANNOT produce -- there is no API to inject a partially
-    polarized ``S = (1, 0, 0, 0)`` state, and no element in this module
-    is depolarizing (measured: DOP = 1 to 4e-16 over every element and
-    500 random pure states).  Partial polarization has to come in as a
-    Stokes/Mueller quantity; use :func:`stokes_to_dop` for that.  The
-    useful content here is therefore the MASK of illuminated pixels plus
-    a numerical self-check of the Stokes algebra.
+    is dark).  v5.29 (audit E-L17): a value BELOW 1 -- "depolarization" --
+    is an output this container CANNOT produce.  There is no API to inject
+    a partially polarized ``S = (1, 0, 0, 0)`` state, and no element in
+    this module is depolarizing (measured: DOP = 1 to 4e-16 over every
+    element and 500 random pure states).  Partial polarization has to come
+    in as a Stokes/Mueller quantity; use :func:`stokes_to_dop` for that.
+    The useful content here is therefore the MASK of illuminated pixels
+    plus a numerical self-check of the Stokes algebra.
 
     Parameters
     ----------
@@ -1401,14 +1377,14 @@ def degree_of_polarization(field: 'JonesField') -> np.ndarray:
     """
     S = stokes_parameters(field)
     S0 = S['S0']
-    # v5.29 (audit E-L13): the background cut used to be the ABSOLUTE
-    # ``S0 > 1e-30``, which has nothing to do with the field's own scale:
-    # a perfectly polarized 1e-15 V/m field (S0 = 1e-30) reported DOP =
-    # 0.0, as did EVERY pixel of any field weaker than that, and a NaN
-    # field reported 0.0 rather than NaN.  DOP is scale-invariant, so the
-    # only defensible "this pixel is dark" test is relative to the
-    # brightest pixel: amplitude rounding noise is ~eps of the peak
-    # amplitude, i.e. ~eps^2 of the peak INTENSITY.
+    # v5.29 (audit E-L13): the background cut is RELATIVE, not absolute.
+    # An absolute ``S0 > 1e-30`` has nothing to do with the field's own
+    # scale: a perfectly polarized 1e-15 V/m field (S0 = 1e-30) reports
+    # DOP = 0.0 under it, as does EVERY pixel of any field weaker than
+    # that, and a NaN field reports 0.0 rather than NaN.  DOP is
+    # scale-invariant, so the only defensible "this pixel is dark" test is
+    # relative to the brightest pixel: amplitude rounding noise is ~eps of
+    # the peak amplitude, i.e. ~eps^2 of the peak INTENSITY.
     finite = np.isfinite(S0)
     s0_max = float(S0[finite].max()) if finite.any() else 0.0
     eps = float(np.finfo(S0.dtype).eps
@@ -1528,11 +1504,11 @@ def jones_pupil_to_stokes_unpolarized(J: np.ndarray) -> Dict[str, np.ndarray]:
         ``(..., 2, 2)`` pupil layout above and the ``(2, 2, Ny, Nx)``
         layout that ``apply_jones_matrix`` calls canonical (the latter is
         moved to trailing axes internally via ``np.moveaxis``).  Anything
-        else raises ``ValueError``.  Pre-fix there was no guard at all:
-        a ``(2, 2, Ny, Nx)`` pupil was silently indexed as if its first
-        two axes were spatial, returning ``(2, 2)``-shaped Stokes maps
-        whose values were wrong by O(0.5) -- and shapes with no 2x2 block
-        anywhere (e.g. ``(3, 3)``, ``(Ny, Nx, 3, 3)``) were accepted too.
+        else raises ``ValueError``: unguarded, a ``(2, 2, Ny, Nx)`` pupil
+        is silently indexed as if its first two axes were spatial,
+        returning ``(2, 2)``-shaped Stokes maps whose values are wrong by
+        O(0.5), and shapes with no 2x2 block anywhere (e.g. ``(3, 3)``,
+        ``(Ny, Nx, 3, 3)``) are accepted too.
         A ``(2, 2, 2, 2)`` input is ambiguous and is read as the
         documented trailing-2x2 pupil.
 
@@ -1582,9 +1558,9 @@ def stokes_to_dop(stokes: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
     ``DOLP = sqrt(S1^2 + S2^2) / S0``, ``DOCP = |S3| / S0``.
 
     Background pixels are set to 0.  v5.29 (audit E-L13, sibling of
-    :func:`degree_of_polarization`): "background" is now RELATIVE to the
-    brightest pixel (``S0 <= eps^2 max(S0)``) instead of the absolute
-    ``S0 <= 1e-30``, which reported every pixel of a uniformly weak but
+    :func:`degree_of_polarization`): "background" is RELATIVE to the
+    brightest pixel (``S0 <= eps^2 max(S0)``) and not the absolute
+    ``S0 <= 1e-30``, which reports every pixel of a uniformly weak but
     perfectly polarized Stokes map as DOP 0.  ``NaN`` propagates.
     Unlike :func:`degree_of_polarization` the results are NOT clipped to
     [0, 1]: this function's input is an arbitrary caller-supplied Stokes
@@ -1642,14 +1618,13 @@ def _order_power_scale(ax, ay, kz_m, kx_m, ky_m, kz_inc, kx0, ky0, incident):
     # v5.29 (audit E-L14): a GRAZING order (|kz| -> 0) is as unusable as an
     # evanescent one -- ``az = -(kx ax + ky ay)/kz`` diverges and the true
     # efficiency ``flux (tang + |az|^2) ~ |kz| / |kz|^2`` has no finite
-    # limit.  Pre-fix the divisor was silently SUBSTITUTED with 1.0 there,
-    # which kept az at its (tiny) tangential scale: measured at
-    # |kz| = 1e-13 the returned amplitude scale was 4.47e-7 against the
-    # honest continuation's 3.16e+6, a factor 7.1e12 too small.  Return 0
-    # like the evanescent branch instead.  (``jones_field_from_orders``
-    # already filters ``Re(kz) > 1e-12`` before calling; the reachable
-    # caller is ``RCWAResult._order_power_scale``, which passes the raw
-    # port kz.)
+    # limit.  SUBSTITUTING 1.0 for the divisor there keeps az at its (tiny)
+    # tangential scale: at |kz| = 1e-13 that returns an amplitude scale of
+    # 4.47e-7 against the honest continuation's 3.16e+6, a factor 7.1e12
+    # too small.  Return 0 like the evanescent branch instead.
+    # (``jones_field_from_orders`` already filters ``Re(kz) > 1e-12``
+    # before calling; the reachable caller is
+    # ``RCWAResult._order_power_scale``, which passes the raw port kz.)
     if tang < 1e-300 or flux <= 0.0 or abs(kz_m) <= 1e-12:
         return 0.0
     az = -(kx_m * ax + ky_m * ay) / kz_m
@@ -1667,12 +1642,12 @@ def _plane_wave_carrier(kx_m, ky_m, wavelength, nx, ny, dx, dy):
 
     The grid is ``(arange(N) - N/2) * d`` -- the package-wide centring used by
     :func:`apply_jones_matrix`'s callable grid, every ``sources/core.py``
-    factory and every ``elements/elements.py`` grid.  v5.46 (audit Z4): this
-    site used the integer ``N // 2``, which agrees for even ``N`` but puts the
-    origin half a pixel off for ODD ``N``, so a :class:`JonesField` built by
-    :func:`jones_field_from_orders` on an odd grid was offset by ``dx/2``
-    relative to every element applied to it afterwards (apertures,
-    spatially-varying Jones callables).
+    factory and every ``elements/elements.py`` grid.  The integer
+    ``N // 2`` agrees for even ``N`` but puts the origin half a pixel off
+    for ODD ``N``, which offsets a :class:`JonesField` built by
+    :func:`jones_field_from_orders` on an odd grid by ``dx/2`` relative to
+    every element applied to it afterwards -- apertures,
+    spatially-varying Jones callables (audit Z4).
     """
     k0 = 2.0 * np.pi / wavelength
     kx = k0 * float(np.real(kx_m))                     # physical [1/m]

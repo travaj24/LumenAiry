@@ -217,9 +217,9 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
 
     nlay = len(segs_layers)
     # ---- PER-LAYER window grids, built BEFORE the far-field budget ---------
-    # T3-3 (M1, 2026-08-04).  This block used to sit AFTER the order cap, and
-    # the cap was computed from ``nU`` -- the FULL-UNION cell count -- on both
-    # paths.  On the per-layer path the half-spaces live on the WINDOW grids,
+    # T3-3 (M1, 2026-08-04).  This block must run BEFORE the order cap.  Taken
+    # from ``nU`` -- the FULL-UNION cell count -- the cap is wrong on the
+    # per-layer path: there the half-spaces live on the WINDOW grids,
     # whose cell count is a fraction of ``nU`` (~nU/6 on the audit device), so
     # the cap OVER-STATED the nodal capacity, the ``m_prop > cap`` raise could
     # not fire, and ``_sem_fourier_projection`` then built a projector with
@@ -574,12 +574,12 @@ def pmm_jones_1d_conical_tensor(period, eps_tensor_cell, n_substrate,
     Berreman 4x4 oracle to Berreman grade (singular values), an isotropic tensor
     reduces byte-exactly to :func:`pmm_jones_1d_conical`, and an OUT-OF-PLANE
     (tilted-director) tensor matches Berreman to MACHINE PRECISION at every
-    incidence -- normal, planar-oblique, AND conical.  (Historical note: the
-    docstring here previously reported a "few-percent OOP-at-conical residual vs
-    Berreman"; that was an artifact of a BUG in the ``berreman_jones_1d`` S-matrix
-    oracle it was graded against -- fixed 2026-07-05 -- NOT of this generator.
-    With the corrected oracle the singular-value agreement is ``~1e-15``; this
-    solver, :func:`pmm_jones_2d`, and ``rcwa_jones_2d`` were all correct.)
+    incidence -- normal, planar-oblique, AND conical.  Against the corrected
+    ``berreman_jones_1d`` S-matrix oracle the singular-value agreement is
+    ``~1e-15``; this solver, :func:`pmm_jones_2d` and ``rcwa_jones_2d`` all
+    reproduce it.  (A retracted "few-percent OOP-at-conical residual" this
+    docstring once reported is in
+    docs/history/lumenairy.elements.pmm.conical.md.)
     """
     if formulation not in ("laurent", "li"):
         raise ValueError(
@@ -607,7 +607,7 @@ def pmm_jones_1d_conical_tensor(period, eps_tensor_cell, n_substrate,
     # below produced a resolution-independent ~3.5 deg retardance error for a
     # patterned anisotropic layer (its ky0=0 limit never reduced to the
     # converged classical tensor solve).  IN-PLANE tensors only -- a PATTERNED
-    # out-of-plane cell is rejected loudly (the old path returned silently
+    # out-of-plane cell is rejected loudly (an unguarded path returns silently
     # wrong numbers for it); a UNIFORM cell of any tensor keeps the exact
     # Fourier path below (Berreman-validated, incl. out-of-plane).
     if len(x_walls) > 0:

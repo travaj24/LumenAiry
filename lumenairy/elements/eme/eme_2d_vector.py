@@ -254,21 +254,15 @@ def _strip_split_forward(ky, k0=None):
     ``berreman._split_fwd_bwd``): ``exp(i ky y)`` decays forward when
     ``Im(ky) > 0``; a real propagating ``ky`` is forward when ``Re(ky) > 0``.
 
-    This site has ALWAYS carried the correct relative band; 5.45.1 made that
-    band THE one definition (:func:`lumenairy.elements.eme._branch.cut_band`)
-    and moved the module's two scalar siblings onto it, which until then
-    carried an exact-zero pin instead.
-
-    ROUND 2 (D13): the band's FLOOR moved from a literal 1.0 to ``|k0|``, so
-    the split no longer depends on the caller's unit system, and ``k0`` is
-    passed in from :func:`strip_vector_modes`, which has it.  On a spectrum
-    whose top already exceeds ``|k0|`` -- every ordinary strip -- the two
-    floors give the identical number and this site's answer does not move; the
-    floor is what decides on a sub-``k0`` spectrum, which is where the literal
-    was wrong.  (The earlier claim here that ``cut_band`` "computes the
-    identical quantity this line always did" was also false for an EMPTY ``ky``
-    array, where the pre-5.45.1 inline expression raised ``ValueError``:
-    verification D16.)"""
+    The band is the ONE definition
+    (:func:`lumenairy.elements.eme._branch.cut_band`), shared with the module's
+    two scalar siblings.  Its FLOOR is ``|k0|`` -- passed in from
+    :func:`strip_vector_modes`, which has it -- and not a literal 1.0, so the
+    split does not depend on the caller's unit system.  On a spectrum whose top
+    already exceeds ``|k0|`` (every ordinary strip) the two floors give the
+    identical number; the floor is what decides on a sub-``k0`` spectrum.  See
+    docs/history/lumenairy.elements.eme.eme_2d_vector.md for what this note
+    said before."""
     tol = float(cut_band(np.asarray(ky), k0=k0, xp=np))
     fwd = []
     for i, v in enumerate(ky):
@@ -525,7 +519,7 @@ _CENSUS_BAND = (1e-2, 3e1)   # x ``ratio_tol``: the AMBIGUITY BAND on gaps.min.
 #   in units of ``ratio_tol``: unambiguous ACCEPTS <= 7.5e-4 (13x under the lower
 #   edge), the ambiguous candidates 1.09x .. 5.3x, the next unambiguous REJECT
 #   68.9x (2.3x over the upper edge).  Everything outside the band keeps the
-#   pre-fix code path exactly.
+#   band-free code path exactly.
 _STRUCTURAL_SAT = 1e-2       # ``sigma_min >= _STRUCTURAL_SAT * bound`` -> the
 #   rank drop is the band-edge column coalescence, not a mode.  Measured
 #   ``sigma_min / bound``: strip band edges 2.10e-1 .. 6.61e-1 (>= 21x OVER the
@@ -636,7 +630,7 @@ def _sigma_min_invpow(Geq, iters=60, tol=1e-14):
     x = rng.standard_normal(n) + 1j * rng.standard_normal(n)
     x /= np.linalg.norm(x)
     prev = 0.0
-    cur = 0.0                # AUDIT W6: iters <= 0 used to raise UnboundLocalError
+    cur = 0.0                # AUDIT W6: pre-set so iters <= 0 cannot UnboundLocal
     for _ in range(iters):
         z = lu.solve(luH.solve(x))
         nz = np.linalg.norm(z)
@@ -742,7 +736,8 @@ def dispersion_vec(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly, solver="dense"):
     ``solver="dense"`` (default, byte-identical) uses ``svdvals``; ``"banded"``
     uses the O(S) inverse-power ``sigma_min`` (same zeros, for fine staircases;
     measured agreement ~2e-5 relative on the reference structured cell).  Any
-    other value raises (it used to fall through to dense silently)."""
+    other value raises (an unrecognised one would fall through to dense
+    silently)."""
     _check_solver(solver)
     Geq, _cn, _wvk = _equilibrated_G(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly)
     if solver == "banded":
@@ -828,8 +823,8 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
     CENSUS DETERMINACY (2026-08-12).  The accepted set is BUILD-INDEPENDENT.
     Bounded Brent is a local minimiser on a function that is not unimodal at the
     detection-cell scale, so where it halts -- and therefore the acceptance
-    reading of a near-threshold candidate -- used to be decided in the last bits
-    of the LAPACK reduction.  A candidate whose rank-drop lands inside
+    reading of a near-threshold candidate -- would otherwise be decided in the
+    last bits of the LAPACK reduction.  A candidate whose rank-drop lands inside
     ``_CENSUS_BAND`` (a factor-band around ``ratio_tol``; everything outside it
     is decided by decades and takes the unchanged path, byte for byte) is
     adjudicated instead by (a) the STRUCTURAL test -- ``sigma_min`` saturating
@@ -919,17 +914,16 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
                 return                                # strip band edge (below)
             # GUARDED IMPROVEMENT (2026-08-13).  The polish is an IMPROVEMENT
             # step, so it is taken only if it improved something: its point is
-            # adopted iff it is a DEEPER zero than the minimiser's stop.  Before
-            # this guard the step was one-way -- a polish that strayed onto a
-            # neighbouring wiggle of the min-of-branches, or landed somewhere
-            # ``_mode_reading`` could not evaluate, discarded a candidate whose
-            # pre-polish reading was a clean accept, and did so SILENTLY.  That
-            # is a build-dependent RECALL loss of exactly the kind this block
-            # exists to remove: measured on the 2026-08-13 ubuntu py3.10 shard,
-            # the genuine Nx=16 mode at 201.8868828456 (FD distance 0.074,
-            # sigma_min 2.7e-15, structural ratio 8.0e-15 -- a mode by every
-            # oracle) was held by the pre-fix path at its stop 201.8862661906
-            # and DROPPED by this branch, while our mounts keep it.
+            # this guard the step would be one-way -- a polish that strays onto
+            # a neighbouring wiggle of the min-of-branches, or lands somewhere
+            # ``_mode_reading`` cannot evaluate, discards a candidate whose
+            # pre-polish reading was a clean accept, and does so SILENTLY.
+            # That is a build-dependent RECALL loss of exactly the kind this
+            # block exists to remove: measured on the 2026-08-13 ubuntu py3.10
+            # shard, the genuine Nx=16 mode at 201.8868828456 (FD distance
+            # 0.074, sigma_min 2.7e-15, structural ratio 8.0e-15 -- a mode by
+            # every oracle) sits at the minimiser stop 201.8862661906, where
+            # an unguarded polish drops it and our mounts keep it.
             # Wherever the polish does what it is for -- every cell measured, by
             # 8 to 11 decades -- the guard takes the polished branch and the
             # returned census is byte-identical.
@@ -1250,7 +1244,7 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
             eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0, return_vecs=return_vecs,
             k=k, sigma=sigma, return_complex=return_complex, mu_xy=mu_xy)
     if sigma is not None and k is None:
-        # AUDIT W6 (sibling of the scalar oracle): sigma was silently INERT
+        # AUDIT W6 (sibling of the scalar oracle): sigma is silently INERT
         # without k -- measured bit-identical results for sigma=1e9.
         raise ValueError(
             "ref_2d_modes_vector: sigma only applies to the SPARSE shift-invert "
@@ -1321,8 +1315,8 @@ def strips_to_eps_xy(strips, Lx, Nx, Ly, Ny):
     anisotropic input).
 
     Enforces the same ``sum(h) == Ly`` contract as the layer finders (AUDIT W6):
-    un-covered y rows used to be left silently at ``eps = 0``, which the vector
-    oracle's ``1/(k0 eps)`` turns into ``inf``/``NaN``."""
+    un-covered y rows would otherwise be left silently at ``eps = 0``, which
+    the vector oracle's ``1/(k0 eps)`` turns into ``inf``/``NaN``."""
     _check_strip_heights("strips_to_eps_xy", strips, Ly)
     edges = np.cumsum([0.0] + [s[1] for s in strips])
     yc = (np.arange(Ny) + 0.5) / Ny * Ly
@@ -1363,8 +1357,9 @@ def eps_xy_to_strips(eps, Nx, S, Lx, Ly):
         return [(np.array([eps(x, y) for x in xc], dtype=complex), h) for y in yc]
     arr = np.asarray(eps, dtype=complex)
     if arr.ndim != 2:
-        # AUDIT W6: a tensor (Nx, Ny, 3, 3) grid used to die on the shape unpack
-        # with a bare "too many values to unpack (expected 2, got 4)".
+        # AUDIT W6: a tensor (Nx, Ny, 3, 3) grid would otherwise die on the
+        # shape unpack with a bare "too many values to unpack (expected 2,
+        # got 4)".
         raise NotImplementedError(
             "eps_xy_to_strips: the GRID input must be a scalar isotropic "
             f"(Nx, Ny) array (got ndim={arr.ndim}).  Tensor eps is supported only "

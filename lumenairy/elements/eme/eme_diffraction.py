@@ -144,7 +144,7 @@ def mode_match(qz2, Psi, orders, *, kx0, ky0, k0, eps_sup, eps_sub, depth,
 
     STABILITY (AUDIT W6 fix -- this was a silent wrong-answer bug).  The layer
     basis always contains EVANESCENT modes (``qz^2 < 0`` -> ``qz = i|qz|``), and
-    the backward amplitudes ``c-`` used to be referenced at ``z = 0``, which put
+    referencing the backward amplitudes ``c-`` at ``z = 0`` would put
     ``Einv = exp(-i qz depth) = exp(+|qz| depth)`` into the matrix -- the
     exponentially GROWING factor that the ``eme_2d`` lateral cascade uses
     S-matrices precisely to avoid.  ``cond(A)`` then grew as
@@ -232,9 +232,11 @@ def diffraction_fd(eps_xy, Lx, Ly, Nx, Ny, k0, eps_sup, eps_sub, depth,
     there (use ``rcwa_efficiency_2d`` / ``pmm_efficiency_2d``).  A UNIFORM layer
     is exact and does not warn.
 
-    LOSSY layers (AUDIT W6 fix).  A complex ``eps_xy`` now keeps the COMPLEX
-    ``qz^2`` (``ref_2d_modes(return_complex=True)``), so absorption is modelled.
-    It previously took the real part, which made an absorbing slab behave as a
+    LOSSY layers (AUDIT W6 fix; see
+    docs/history/lumenairy.elements.eme.eme_diffraction.md).  A complex
+    ``eps_xy`` keeps the COMPLEX ``qz^2``
+    (``ref_2d_modes(return_complex=True)``), so absorption is modelled.
+    Taking the real part instead makes an absorbing slab behave as a
     lossless one: measured, ``n = 1.5 + 0.2j`` at ``depth = 4`` reported
     ``energy = 1.000000`` (and ``R_00 = 0.032``) where the analytic lossy Airy
     slab gives ``R + T = 0.046505`` (``R_00 = 0.046``) -- i.e. it claimed all the

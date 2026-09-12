@@ -52,9 +52,9 @@ def _normalize_coating_pol(fn_name: str, polarization) -> str:
     ------
     ValueError
         If ``polarization`` is not one of ``'s'``, ``'te'``, ``'p'``,
-        ``'tm'``, ``'avg'`` (any case).  An unrecognised string used to fall
-        through to the p branch silently, so a typo -- or the perfectly legal
-        ``'te'`` -- returned the TM coefficient for a TE wave.
+        ``'tm'``, ``'avg'`` (any case).  Unguarded, an unrecognised string
+        falls through to the p branch silently, so a typo -- or the perfectly
+        legal ``'te'`` -- returns the TM coefficient for a TE wave.
     """
     global _RCWA_NORMALIZE_POL
     if isinstance(polarization, str) and polarization.lower() == 'avg':
@@ -139,7 +139,7 @@ def coating_reflectance(
     decaying-evanescent branch ``Im(n_j cos_t_j) >= 0``:
 
     - **Lossy / metallic layers** propagate the correct complex angle
-      (``n.imag`` is no longer dropped), so absorbing-layer phase
+      (``n.imag`` is CARRIED, not dropped), so absorbing-layer phase
       thickness and the resulting R / T are physically accurate for
       metal mirrors and metal-dielectric hybrids.
     - **TIR / frustrated TIR** is handled directly (no
@@ -548,17 +548,15 @@ def broadband_ar_v_coat(
     ``n_H = 1.38 * sqrt(n_substrate)``.
 
     .. versionchanged:: 5.30
-        ``n_substrate`` is now READ (audit E-H6,
-        ``AUDIT_ADVERSARIAL_CODEBASE_2026_07_25``).  Pre-v5.30 this
+        ``n_substrate`` is READ (audit E-H6,
+        ``AUDIT_ADVERSARIAL_CODEBASE_2026_07_25``).  Before 5.30 this
         function returned a hard-coded ``n_H = 2.3`` / ``n_L = 1.38``
         pair for every substrate, so the ``n_substrate`` argument was
         inert -- and by (2) that fixed pair is matched only to a
-        substrate of ``(2.3/1.38)**2 = 2.778``.  Measured with this
-        module's own TMM at 550 nm, the old stack was WORSE THAN BARE
-        GLASS over the whole common range: R = 0.0986 vs 0.0337 bare at
-        n_s=1.45, R = 0.0856 vs 0.0426 bare at n_s=1.52 (N-BK7, i.e.
-        double the uncoated reflectance), R = 0.0515 vs 0.0744 at 1.75,
-        and only R = 0.0 at n_s=2.778.  With (2) the design is exact for
+        substrate of ``(2.3/1.38)**2 = 2.778``, which made the coating
+        worse than bare glass over most of the common range (the measured
+        table is in docs/history/lumenairy.elements.coatings.md).
+        With (2) the design is exact for
         every substrate: R(550 nm) <= 1e-31 for n_s in
         {1.45, 1.52, 1.75, 2.0, 2.35, 2.78, 3.42, 4.0}, and the residual
         over a 450-650 nm band is 0.0202 (n_s=1.52) to 0.0058
@@ -766,7 +764,7 @@ def _coating_sellmeier(
     """
     # v5.4.6 (audit P3-7): share ``glass._guard_wavelength`` so this
     # evaluator and ``glass._sellmeier_index`` handle NaN / negative
-    # wavelength identically (a guard fix in one no longer silently skips
+    # wavelength identically (so a guard fix in one cannot silently skip
     # the other).  Sellmeier is sign-symmetric, so the guard warns on a
     # negative wavelength and returns |lambda|; it also warns on NaN.  The
     # B==0 dummy-pole skip below remains a coatings-only optimisation, and

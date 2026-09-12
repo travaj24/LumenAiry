@@ -62,8 +62,8 @@ def strip_x_modes(eps_x, Lx, Nx, k0, kx0=0.0):
     would silently discard ``Im(eps)`` -- LAPACK ignores the imaginary diagonal),
     and at ``kx0 != 0`` it is neither Hermitian nor symmetric.
 
-    Sending real ``eps`` at ``kx0 != 0`` through ``eig`` (the pre-fix behaviour)
-    was doubly damaging and made ``layer_modes`` return pure garbage there
+    Sending real ``eps`` at ``kx0 != 0`` through ``eig`` is doubly damaging
+    and makes ``layer_modes`` return pure garbage there
     (measured: 68 modes returned, 0/3 real modes recovered, every one spurious):
     (i) ``eig`` returned ``lam`` with ROUNDOFF imaginary parts of arbitrary sign,
     which flipped ``_ky_forward``'s branch and put 8-11 of 16 strip modes on the
@@ -411,9 +411,10 @@ def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0, return_vecs=False
             eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0, return_vecs=return_vecs,
             k=k, sigma=sigma)
     if sigma is not None and k is None:
-        # AUDIT W6: sigma was silently INERT without k (the dense path ignores it
+        # AUDIT W6: sigma is silently INERT without k (the dense path ignores it
         # entirely -- measured bit-identical results for sigma=1e9), so a caller
-        # asking for modes near a shift got the whole dense spectrum instead.
+        # asking for modes near a shift would get the whole dense spectrum.
+        # See docs/history/lumenairy.elements.eme.eme_2d.md.
         raise ValueError(
             "ref_2d_modes: sigma only applies to the SPARSE shift-invert path -- "
             "pass k (the number of modes wanted near sigma) as well, or drop "

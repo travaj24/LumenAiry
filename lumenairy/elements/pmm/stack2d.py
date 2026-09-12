@@ -130,7 +130,8 @@ def _slant_frame_walk(layers):
     TOP face and the frames simply continue downward, so the offsets ADD --
     exactly the sum ``PMM2DStackPure.solve`` takes over ITS layers.  Returns
     ``(0.0, 0.0)`` for a stack with no sheared region, which is the signal to
-    skip the anchor entirely and stay bit-identical to the pre-fix path."""
+    skip the anchor entirely -- and applying a zero anchor would be a no-op
+    anyway."""
     sx = sum(L["slant"][0] * L["t"] for L in layers
              if _layer_enters_slant_frame(L))
     sy = sum(L["slant"][1] * L["t"] for L in layers
@@ -487,22 +488,21 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
     def _geom_key(self, L):
         """Cache key for the per-layer nodal/projected build.
 
-        W7 A11 (2026-07-26): the key used to carry the LAYER geometry only
-        (kind / tile bytes+shape / walls / element counts).  But the cached
-        value is produced by ``_build_axis(self.period_*, ..., self.degree,
-        ..., self.grade)`` and ``_scalar_projected_ops(..., self.period_x,
-        self.period_y)`` over the ``self.n_orders`` order set -- five SOLVER
-        parameters that were absent from the key while ``_geom_cache``
-        persists across ``solve()`` and is dropped only by ``add_layer``.
-        They are plain public attributes with no property guard, so mutating
-        one after a solve served the STALE build with no signal.  Measured
-        pre-fix (4x4 cell + uniform film, ``n_orders=2``): ``degree`` 5 -> 9
-        returned ``sum(R) = 0.237212592`` where a fresh object gives
-        ``0.243068009`` (8.58e-03); ``degree`` 5 -> 7 and 5 -> 11 came back
-        BIT-IDENTICAL to the degree-5 answer (6.24e-03 / 9.48e-03);
-        ``grade`` False -> True drifted 2.03e-02.  Clearing ``_geom_cache``
-        by hand made every one of them bit-identical to the fresh object --
-        the build was right, only the key was wrong."""
+        The key carries the SOLVER parameters as well as the LAYER geometry
+        (kind / tile bytes+shape / walls / element counts), and it has to.
+        The cached value is produced by ``_build_axis(self.period_*, ...,
+        self.degree, ..., self.grade)`` and ``_scalar_projected_ops(...,
+        self.period_x, self.period_y)`` over the ``self.n_orders`` order set --
+        five solver parameters -- while ``_geom_cache`` persists across
+        ``solve()`` and is dropped only by ``add_layer``.  They are plain
+        public attributes with no property guard, so a key without them serves
+        the STALE build with no signal when one is mutated after a solve
+        (audit W7 A11, 2026-07-26; measured drifts of 6.2e-03 to 2.0e-02 in
+        ``sum(R)``, with some ``degree`` changes coming back BIT-IDENTICAL to
+        the old answer -- the table is in
+        docs/history/lumenairy.elements.pmm.stack2d.md).  Clearing
+        ``_geom_cache`` by hand makes every one of them bit-identical to a
+        fresh object: the build is right, only the key would be wrong."""
         return (L["kind"], L["tile"].tobytes(), L["tile"].shape,
                 tuple(np.ravel(L["xw"])), tuple(np.ravel(L["yw"])),
                 tuple(np.ravel(L["el_x"])), tuple(np.ravel(L["el_y"])),
@@ -1832,7 +1832,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             # pair additionally carries the frame anchor derived above.  R, T,
             # rz/tz and the reflection Jones are computed from the untouched
             # cascade output, so a slanted patterned layer's efficiencies and
-            # reflection stay BIT-IDENTICAL to the pre-fix library.
+            # reflection are not affected by the anchor at all.
             amp["rx"][ip], amp["ry"][ip] = np.conj(rx), np.conj(ry)
             amp["tx"][ip], amp["ty"][ip] = np.conj(tx), np.conj(ty)
             if tphase is not None:

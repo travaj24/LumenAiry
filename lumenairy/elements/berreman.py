@@ -177,13 +177,11 @@ def _split_fwd_bwd(gam):
     ``_berreman_jax._layer_modes_jax`` uses -- so numpy and JAX agree in
     EVERY case, not just the physical one.  For a physical (non-bianiso-
     tropic) stack exactly two modes flag forward, and the stable sort
-    keeps them in ascending index order; that reproduces the pre-fix
-    physical partition exactly.  The two implementations previously forked
-    ONLY in the degenerate (not-exactly-two-forward) fallback -- numpy
-    ranked by decay (``argsort(Re gam)``) while JAX kept the flag-then-
-    index order -- a divergence unreachable for the physical media tested
-    but latent for degenerate bianisotropic inputs.  Aligning on the JAX
-    rule removes the fork."""
+    keeps them in ascending index order.  The two implementations can only
+    diverge in the degenerate (not-exactly-two-forward) fallback -- ranking by
+    decay (``argsort(Re gam)``) instead of flag-then-index order -- which is
+    unreachable for the physical media tested but latent for degenerate
+    bianisotropic inputs; sharing the JAX rule removes that fork."""
     g = np.asarray(gam)
     tol = 1e-9 * max(1.0, float(np.max(np.abs(g))))
     is_fwd = np.where(g.real < -tol, True,
@@ -213,10 +211,10 @@ def _freeze(res):
 
     W6 F-5 (2026-07-26).  Both LRUs hand out the STORED arrays, and the
     docstrings assert "the arrays are read-only downstream" -- but nothing
-    enforced it, so a caller that wrote into a returned block silently poisoned
-    every later solve (measured pre-fix:
-    ``_layer_modes_cached(eps, Kx, Ky)[0][0, 0] = 999`` made the very next call
-    return ``Wf[0, 0] = 999``).  No in-tree caller mutates them, so this closes a
+    enforced it, so a caller that writes into a returned block silently poisons
+    every later solve (``_layer_modes_cached(eps, Kx, Ky)[0][0, 0] = 999``
+    makes the very next call return ``Wf[0, 0] = 999``).  No in-tree caller
+    mutates them, so this closes a
     hardening gap rather than a live defect -- the ``pmm/_core.py`` grid cache
     precedent, which freezes its cached arrays the same way."""
     for a in res:
@@ -277,12 +275,12 @@ def _checked_angle(fn_name, angle, theta):
     Routes to the SAME ``_resolve_incidence_checked`` the rcwa 1-D and PMM entry
     points use, so ``|angle| >= pi/2`` is rejected identically across the whole
     solver family.  The angle enters this solve only through
-    ``Kx/Ky ~ sin(angle)``, so a back-side angle previously aliased BYTE-
-    IDENTICALLY onto the supplementary front-side angle ``pi - angle`` and
-    returned a plausible, energy-conserving answer for the WRONG geometry
-    (measured pre-fix: ``angle = 2.0`` rad gave R = [0.01771, 0.19647], the
-    ``pi - 2.0 = 1.1416`` rad answer, and ``angle = 10.0`` rad was accepted too;
-    ``angle = pi/2`` and ``angle = nan`` raised a bare ``LinAlgError`` with no
+    ``Kx/Ky ~ sin(angle)``, so without the guard a back-side angle aliases
+    BYTE-IDENTICALLY onto the supplementary front-side angle ``pi - angle`` and
+    returns a plausible, energy-conserving answer for the WRONG geometry
+    (``angle = 2.0`` rad gives R = [0.01771, 0.19647], the
+    ``pi - 2.0 = 1.1416`` rad answer, and ``angle = 10.0`` rad is accepted too;
+    ``angle = pi/2`` and ``angle = nan`` raise a bare ``LinAlgError`` with no
     context).  A TRACED JAX angle skips the guard (the resolver's tracer
     carve-out); ``theta`` still wins when both are given."""
     from .rcwa.oned import _resolve_incidence_checked
@@ -295,12 +293,12 @@ def _check_inputs(fn_name, eps_sup, eps_sub, eps_layers, thicks, wavelength,
 
     Sibling-identical to the RCWA / PMM entry points: :func:`_validate_geometry`
     for the wavelength, the per-layer thickness rule
-    ``BerremanStack.add_layer`` already enforced (the FUNCTIONAL entry silently
-    accepted ``t = 0`` and ``t < 0``), a finiteness screen on every material
-    value (audit P3's NaN-index class), and
+    ``BerremanStack.add_layer`` already enforces (the FUNCTIONAL entry
+    otherwise accepts ``t = 0`` and ``t < 0``), a finiteness screen on every
+    material value (audit P3's NaN-index class), and
     :func:`_require_propagating_incidence` for an evanescent / metallic / GAIN
-    incidence half-space.  Measured pre-fix: a metallic superstrate
-    ``n_sup = 0.15+3.5j`` at ``theta = 0.5`` returned ``T = [30.78, 30.73]`` -- a
+    incidence half-space.  Unguarded, a metallic superstrate
+    ``n_sup = 0.15+3.5j`` at ``theta = 0.5`` returns ``T = [30.78, 30.73]`` -- a
     3000% energy violation -- silently, where ``rcwa_jones_1d`` raises
     ``the incidence half-space is non-propagating``.  ``eps_sup`` is PUBLIC here;
     the guard takes the INTERNAL gauge, so it is conjugated on the way in."""
@@ -360,8 +358,8 @@ def _check_energy_pols(fn_name, R, T, passive=True):
     reshaped to ``(2, 1)`` so ``n_states = 2`` (two incident polarizations) and a
     lossless stack's exact total of ``2.0`` sits inside the shared 5% band.
 
-    Berreman was the one solver in the family with NO tripwire: measured pre-fix
-    it returned ``R + T = 1.086`` per pol for a lossy superstrate, and
+    Berreman was the one solver in the family with NO tripwire: without it the
+    cascade returns ``R + T = 1.086`` per pol for a lossy superstrate, and
     ``T = [30.78, 30.73]`` for a metallic one, silently, where
     ``rcwa_jones_1d`` raises.
 
@@ -489,12 +487,12 @@ def _farfield(core):
     Everything needed is already in ``core``: the half-space mode blocks give the
     fields and the ``_flux`` Poynting projection carries the ``n cos(theta)`` /
     ``n / cos(theta)`` admittances, so the incident geometry never re-enters.
-    W6 F-4 (2026-07-26): this used to take ``(core, eps_sup, eps_sub, Kx, Ky)``
-    and reference NONE of the four extras (AST-verified) -- inert parameters that
-    invited the reader to think the far field re-derives the flux weights.  The
-    docstring also mislabelled the return gauge as INTERNAL; it is PUBLIC (this
-    cascade runs on raw public eps end to end, and the returned Jones is pinned
-    bit-identical to ``rcwa_jones_1d``'s public-convention Jones)."""
+    Its signature carries nothing else on purpose (W6 F-4): a
+    ``(core, eps_sup, eps_sub, Kx, Ky)`` form referenced none of the four
+    extras and invited the reader to think the far field re-derives the flux
+    weights.  The returned gauge is PUBLIC -- this cascade runs on raw public
+    eps end to end, and the returned Jones is pinned bit-identical to
+    ``rcwa_jones_1d``'s public-convention Jones."""
     Wf_s, Wb_s, Vf_s, Vb_s = (core["Wf_s"], core["Wb_s"],
                               core["Vf_s"], core["Vb_s"])
     Wf_b, Vf_b = core["Wf_b"], core["Vf_b"]
@@ -539,23 +537,22 @@ def _farfield(core):
 # transfer-direction error, single-layer and multilayer; the generalized S-matrix
 # is the independently-cross-checked truth.)
 #
-# HISTORY / CORRECTION (W6 audit, 2026-07-26).  This block used to claim the
-# NATIVE cascade above is "subtly wrong" for an out-of-plane tensor at oblique
-# incidence -- that "the [W; -V] <-> -lam symmetry the native pairing implicitly
-# relies on is BROKEN there, so the reflected amplitudes come out ~2% off".  That
-# claim is REFUTED by measurement and is no longer true of this code: the native
-# ``_solve_core`` / ``_farfield`` and this generalized cascade agree to 3.8e-15 on
-# R, T, jones_r AND jones_t for rotx- / roty- / rotx-then-rotz-rotated biaxial
-# slabs at theta in {0.2, 0.5, 0.9, 1.2} and phi in {0, 0.6, 2.4}, and to 1.0e-11
-# worst over a 4000-config randomized sweep (1-3 fully-rotated biaxial layers,
-# lossy layers, absorbing substrates, n_sup / n_sub in [1, 3.5], all angles and
-# azimuths).  The pairing is restored by the 2026-07-14 FACTOR-i correction to
-# :func:`_berreman_delta` -- which POST-DATES this router -- so the router is now
-# a redundant (but independently cross-validated) second path, not an accuracy
-# requirement.  It is KEPT because it is the path pinned against ``rcwa_jones_1d``
-# and because the two-path agreement is itself a standing cross-family gate
-# (``tests/unit/test_niche_audit_w6_berreman.py``).  Do NOT re-derive the "~2%"
-# figure from this comment: measure it.
+# THE TWO PATHS AGREE, MEASURED (W6 audit, 2026-07-26).  The native
+# ``_solve_core`` / ``_farfield`` and this generalized cascade agree to 3.8e-15
+# on R, T, jones_r AND jones_t for rotx- / roty- / rotx-then-rotz-rotated
+# biaxial slabs at theta in {0.2, 0.5, 0.9, 1.2} and phi in {0, 0.6, 2.4}, and
+# to 1.0e-11 worst over a 4000-config randomized sweep (1-3 fully-rotated
+# biaxial layers, lossy layers, absorbing substrates, n_sup / n_sub in
+# [1, 3.5], all angles and azimuths).  The ``[W; -V]`` <-> ``-lam`` pairing the
+# native cascade relies on holds, because of the 2026-07-14 FACTOR-i correction
+# to :func:`_berreman_delta` -- which POST-DATES this router -- so the router is
+# a redundant (but independently cross-validated) second path rather than an
+# accuracy requirement.  It is KEPT because it is the path pinned against
+# ``rcwa_jones_1d`` and because the two-path agreement is itself a standing
+# cross-family gate (``tests/unit/test_niche_audit_w6_berreman.py``).  A
+# retracted "~2% off" claim this block once carried is recorded in
+# docs/history/lumenairy.elements.berreman.md; do not re-derive that figure
+# from prose -- measure it.
 
 
 def _tensor_is_offplane(eps):
@@ -733,12 +730,12 @@ def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
     kz_inc = float(np.real(_sqrt_forward(_C(eps_sup) - kx0 ** 2 - ky0 ** 2)))
     # W6 F-1 (2026-07-26): ``_forward_flux_kz`` takes the INTERNAL-gauge eps and
     # UN-conjugates it itself (every rcwa call site passes ``eps_sup = conj(n**2)``);
-    # this cascade holds the PUBLIC eps, so feeding it raw conjugated the value
-    # TWICE and returned ``Re(kz) < 0`` for an absorbing half-space -- which the
-    # ``Re(kz) > 0`` propagating mask below read as evanescent and SILENTLY
-    # ZEROED.  Measured pre-fix: a tilted-director slab on
-    # n_sub = 1.5+0.3j at theta = 0.3 returned T = 0.000000 where
-    # ``rcwa_jones_1d`` (this path's own stated reference) gives T = 0.930316.
+    # this cascade holds the PUBLIC eps, so feeding it raw conjugates the value
+    # TWICE and returns ``Re(kz) < 0`` for an absorbing half-space -- which the
+    # ``Re(kz) > 0`` propagating mask below reads as evanescent and SILENTLY
+    # ZEROES (a tilted-director slab on n_sub = 1.5+0.3j at theta = 0.3 then
+    # returns T = 0.000000 where ``rcwa_jones_1d``, this path's own stated
+    # reference, gives T = 0.930316).
     # Conjugating here restores the rcwa call convention exactly; LOSSLESS eps is
     # real so conj is the identity and every lossless result is byte-unchanged.
     kzrf = _forward_flux_kz(np.conj(_C(eps_sup)),

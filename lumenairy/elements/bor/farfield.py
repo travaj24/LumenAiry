@@ -93,12 +93,13 @@ def far_field_angles(kt, eps, k0):
 
     ``eps`` may be complex; the angle is taken in the REAL refractive index
     ``Re sqrt(eps)`` -- the same convention ``BORStack.solve`` uses for its
-    ``angles`` (``eps_sup.real``).  Audit W6-B10: a complex ``eps`` used to make
-    ``s`` complex, so the propagating mask fell back to numpy's LEXICOGRAPHIC
-    complex comparison and ``theta`` was filled from a complex ``arcsin`` whose
-    imaginary part was dropped with only a ``ComplexWarning`` -- silently wrong
-    angles for any lossy half-space (``order_power_fractions`` passes ``eps``
-    straight through).
+    ``angles`` (``eps_sup.real``).  Audit W6-B10: taking a complex ``eps``
+    through unchanged makes ``s`` complex, so the propagating mask falls back
+    to numpy's LEXICOGRAPHIC complex comparison and ``theta`` is filled from a
+    complex ``arcsin`` whose imaginary part is dropped with only a
+    ``ComplexWarning`` -- silently wrong angles for any lossy half-space, and
+    ``order_power_fractions`` passes ``eps`` straight through.  See
+    docs/history/lumenairy.elements.bor.farfield.md.
     """
     with np.errstate(invalid="ignore"):
         n_med = np.sqrt(np.asarray(eps, dtype=complex)).real

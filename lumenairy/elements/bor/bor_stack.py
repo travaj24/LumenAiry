@@ -83,7 +83,7 @@ class BORStack:
     Terminology (mode vs order)
     ---------------------------
     These two words are used deliberately and consistently across the BOR
-    API (audit S5-10 / B2 -- previously mixed):
+    API (audit S5-10 / B2):
 
     * **azimuthal order** ``m`` -- the integer harmonic index of the
       ``exp(i m phi)`` azimuthal dependence fixed at construction.  The
@@ -499,7 +499,7 @@ class BORStack:
     def set_source(self, wavelength=None, *, k0=None):
         # Source validation (audit P3-10): wavelength <= 0 gives k0 = inf /
         # negative, and solve() then silently returns EMPTY R/T.
-        # W6-B7: give BOTH and the wavelength used to be silently discarded.
+        # W6-B7: given BOTH, the wavelength would be silently discarded.
         if wavelength is not None and k0 is not None:
             raise ValueError(
                 "BORStack.set_source: give wavelength OR k0, not both (got "
@@ -670,15 +670,14 @@ class BORStack:
             # absolute thresholds on q (units 1/length) silently returned
             # empty R/T for small-k0 unit systems (e.g. nm-scale).
             #
-            # AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13: the original
-            # P2-06 constant (0.05, chosen to keep k0=2.0 bit-identity with
-            # the pre-fix absolute threshold) was an ANGULAR cutoff -- it
-            # dropped genuinely propagating near-grazing orders (theta up to
+            # AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY_2026_07_13: the floor is on
+            # the REAL AXIS and is NOT an angular cutoff.  An angular cutoff
+            # drops genuinely propagating near-grazing orders (theta up to
             # 88 deg in n=1.41), silently biasing per-order R/T low and
             # leaking energy (2.28e-2 on the ring-grating reproducer).  A
             # propagating mode is real-q up to the q ~ 0 degenerate point,
-            # so the real-axis floor guards ONLY that point (1e-6).  This
-            # floor is compatible with the flux normalizer's fallback branch
+            # so the real-axis floor guards ONLY that point (1e-6).  See
+            # docs/history/lumenairy.elements.bor.bor_stack.md.  This
             # (zcascade: field-norm when |P| <= 1e-10 * fnrm): the modal
             # flux ratio scales as P/fnrm = qn for the limiting polarization
             # family (verified empirically), so every kept mode sits >= 4

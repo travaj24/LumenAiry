@@ -68,8 +68,8 @@ def _layer_modes_jax(eps_tensor, Kx, Ky, jnp, eig):
 
     S1-13 (audit AUDIT_V5_24_2): the numpy twin ``berreman._split_fwd_bwd``
     now uses this identical stable flag-argsort, so the two paths partition
-    modes byte-for-byte in every case (including degenerate bianisotropic
-    inputs, where they previously forked -- numpy ranked by decay)."""
+    inputs, where a decay-ranked partition would fork).  See
+    docs/history/lumenairy.elements._berreman_jax.md."""
     D = _delta_jax(eps_tensor, Kx, Ky, jnp)
     gam, Psi = eig(D)
     re, im = jnp.real(gam), jnp.imag(gam)
@@ -449,9 +449,9 @@ def _offplane_solve_jax(eps_layers, thicks, eps_sup, eps_sub, wl, kx0, ky0, jnp)
     # must be conjugated on the way in or an absorbing half-space comes back with
     # ``Re(kz) < 0`` and the propagating mask silently zeroes the channel.  This
     # twin reached the defect WIDER than NumPy: a concrete out-of-plane tensor
-    # routes here at EVERY incidence (no obliqueness test), so pre-fix the JAX
-    # path returned T = 0 on n_sub = 1.5+0.3j even at NORMAL incidence, where the
-    # NumPy native cascade gives T = 0.988 (a 0.988 twin divergence).
+    # routes here at EVERY incidence (no obliqueness test), so unguarded the
+    # JAX path returns T = 0 on n_sub = 1.5+0.3j even at NORMAL incidence,
+    # where the NumPy native cascade gives T = 0.988 (a 0.988 twin divergence).
     kzrf = _forward_flux_kz(jnp.conj(eps_sup), jnp.reshape(kx0, (1,)),
                             jnp.reshape(ky0, (1,)))[0]
     kztf = _forward_flux_kz(jnp.conj(eps_sub), jnp.reshape(kx0, (1,)),

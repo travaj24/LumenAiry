@@ -1,0 +1,74 @@
+<!-- lumenairy-history-doc
+module: lumenairy/elements/pmm/conical.py
+ast_sha256: c126acdf04867158f10ca454ab81cfeecd6a8816d03edc695f1b79e35fcbc940
+token_sha256: 3c2fbe75fdf979e2fe420431c919b289c9e2f28e1fe5763de543af958ec30ca8
+pre_relocation_lines: 693
+recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
+checker: tests/unit/test_audit2609_a17_history_relocation.py
+-->
+
+# Version history -- `lumenairy/elements/pmm/conical.py`
+
+This file holds the version-history narrative that used to live in
+`lumenairy/elements/pmm/conical.py` -- the T3-3 note recording where the
+per-layer window-grid block used to sit, and the "Historical note" retracting an
+earlier revision of the same docstring's accuracy claim.  Each block is
+reproduced **verbatim** under the source line it came from in the pre-relocation
+file.
+
+What did NOT move: the rank-deficiency mechanism, the sibling survey that makes
+conical the outlier, and the corrected `~1e-15` agreement figure.
+
+Nothing the interpreter executes changed in the move.  The header above records
+the SHA-256 of (a) the module's AST with every docstring removed and source
+positions ignored, and (b) its `tokenize` stream reduced to NAME/OP/NUMBER/
+STRING with comments and docstrings dropped -- both taken from the file as it
+stood BEFORE the relocation.  `tests/unit/test_audit2609_a17_history_relocation.py`
+re-computes both from the live file on every run, so an edit that changes
+behaviour while claiming to be history-only fails there.
+
+Where the rationale is load-bearing for what the code does NOW, the source keeps
+a condensed why-comment plus a pointer to this file; those are noted per block
+below as *Left in the source*.
+
+## Contents
+
+| original line | site | what the block records |
+|---|---|---|
+| L220-222 | `_pmm_jones_conical_core`, the window-grid ordering | T3-3 -- "This block used to sit AFTER the order cap" |
+| L577-582 | `_pmm_jones_conical_core` docstring | a "Historical note" retracting this docstring's own earlier few-percent OOP residual claim |
+| L610-611 | `_pmm_jones_conical_core`, the tensor gate | "the old path returned silently wrong numbers for it" |
+
+---
+
+### L220-222 -- `_pmm_jones_conical_core`, the window-grid ordering -- T3-3 -- "This block used to sit AFTER the order cap"
+
+*Left in the source:* the ordering requirement and the whole silent-failure chain it prevents.
+
+```text
+    # T3-3 (M1, 2026-08-04).  This block used to sit AFTER the order cap, and
+    # the cap was computed from ``nU`` -- the FULL-UNION cell count -- on both
+    # paths.  On the per-layer path the half-spaces live on the WINDOW grids,
+```
+
+### L577-582 -- `_pmm_jones_conical_core` docstring -- a "Historical note" retracting this docstring's own earlier few-percent OOP residual claim
+
+*Left in the source:* the corrected agreement figure and the three solvers it covers.
+
+```text
+    incidence -- normal, planar-oblique, AND conical.  (Historical note: the
+    docstring here previously reported a "few-percent OOP-at-conical residual vs
+    Berreman"; that was an artifact of a BUG in the ``berreman_jones_1d`` S-matrix
+    oracle it was graded against -- fixed 2026-07-05 -- NOT of this generator.
+    With the corrected oracle the singular-value agreement is ``~1e-15``; this
+    solver, :func:`pmm_jones_2d`, and ``rcwa_jones_2d`` were all correct.)
+```
+
+### L610-611 -- `_pmm_jones_conical_core`, the tensor gate -- "the old path returned silently wrong numbers for it"
+
+*Left in the source:* the refusal and the silent-wrong alternative it replaces.
+
+```text
+    # out-of-plane cell is rejected loudly (the old path returned silently
+    # wrong numbers for it); a UNIFORM cell of any tensor keeps the exact
+```

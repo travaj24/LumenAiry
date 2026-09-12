@@ -130,14 +130,13 @@ def _resolve_incidence(angle, theta):
     time or the two suites would stop agreeing, which is the property that test
     file exists to pin.  Pass only one spelling in practice.
 
-    What IS done here (2026-09-12, audit finding G4) is to stop the SILENT
+    What IS done here (2026-09-12, audit finding G4) is to close the SILENT
     half: two DIFFERENT non-zero angles in one call is a caller mistake with no
-    legitimate reading, and it used to resolve to ``theta`` with no signal at
-    all.  It now WARNS, naming both values and the one that won, while still
-    resolving to ``theta`` so nothing downstream moves.  The warning is gated on
-    ``angle != 0`` because a bare ``theta=...`` call leaves ``angle`` at its
-    ``0.0`` default and is the ordinary, correct usage -- indistinguishable
-    here from an explicit ``angle=0.0``."""
+    legitimate reading, so it WARNS, naming both values and the one that won,
+    while still resolving to ``theta`` so nothing downstream moves.  The
+    warning is gated on ``angle != 0`` because a bare ``theta=...`` call leaves
+    ``angle`` at its ``0.0`` default and is the ordinary, correct usage --
+    indistinguishable here from an explicit ``angle=0.0``."""
     if theta is None:
         return angle
     try:
@@ -171,8 +170,7 @@ def _resolve_incidence_checked(fn_name, angle, theta):
     This is the ONE shared checked resolver for the whole PMM suite: the 1-D
     entry points in :mod:`.oned` and the ``PMMStack`` source setters
     (:meth:`PMMStack.set_source` etc.) route through it, so a back-side angle
-    is rejected identically everywhere (audit S1-7: ``set_source`` formerly
-    bypassed this and silently solved the supplementary front-side geometry)."""
+    is rejected identically everywhere (audit S1-7)."""
     angle = _resolve_incidence(angle, theta)
     if is_jax_array(angle):
         try:                                 # concrete JAX array -> inspectable
@@ -772,9 +770,9 @@ def _fast_geig(A, B):
 
 def _forward_branch_flip(q, xp=np):
     """Sign-select each modal ``q`` onto the FORWARD (forward-decaying / +z)
-    branch -- the noise-robust selector formerly COPY-PASTED verbatim across the
-    five scalar-vertical PMM generator sites (audit S1-8: the exact multi-copy
-    pattern that bred the six-copy factor-i defect).
+    branch -- the ONE noise-robust selector every scalar-vertical PMM generator
+    site routes through (audit S1-8 consolidated five verbatim copies here; the
+    multi-copy pattern is what bred the six-copy factor-i defect).
 
     For lossless media the eigen-operator is (near-)Hermitian, so the QZ eig
     leaks ~1e-15 imaginary noise; a naive ``q.imag < 0`` sign test would flip
@@ -785,11 +783,9 @@ def _forward_branch_flip(q, xp=np):
     largest ``|q|`` (floored at 1.0), so the guard scales with the mode spectrum.
 
     ``xp`` selects the array module: NumPy (default) materialises ``tol`` as a
-    concrete Python float via ``max(float(...), 1.0)``, exactly as the historical
-    NumPy copies did; passing ``jax.numpy`` keeps ``tol`` traced through
-    ``jnp.maximum`` so the derivative w.r.t. the incidence angle still flows --
-    reproducing the former JAX copy byte-for-byte.  This is a pure consolidation:
-    every routed call site produces bit-identical output."""
+    concrete Python float via ``max(float(...), 1.0)``; passing ``jax.numpy``
+    keeps ``tol`` traced through ``jnp.maximum`` so the derivative w.r.t. the
+    incidence angle still flows."""
     if xp is np:
         tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
     else:
@@ -804,8 +800,8 @@ def _freeze_cached(obj):
 
     W7 A13 (2026-07-26).  The PMM caches hand out the STORED objects by
     IDENTITY, so a caller that writes into one silently poisons every later
-    solve that hits the same key.  Measured pre-fix (mutate one entry by
-    ``+= 1e-3``, then re-solve): ``PMM2DStackHybrid._geom_cache`` 21 of 23
+    solve that hits the same key.  Measured by mutating one entry by
+    ``+= 1e-3`` and re-solving: ``PMM2DStackHybrid._geom_cache`` had 21 of 23
     arrays writeable -> next solve drifts 1.543e-06;
     ``_PreparedPMMStack._eig_cache`` 12 of 12 -> 7.844e-07;
     ``stack2d._epsF_cache`` -> ``internal_field`` Ez drifts 1.377e-04; and
@@ -837,7 +833,7 @@ def _mass_flux_cut(flux, W2, SVt, SVb, n, xp=np):
     W7 B2 (2026-07-26).  ``flux = Im(E^T S0 conj(H))`` is contracted through
     the nodal mass ``S0``, whose entries carry the element JACOBIAN, so the
     whole flux spectrum scales LINEARLY with the ABSOLUTE period.  The
-    historical floor was ``1e-9 * max(max|flux|, 1.0)`` -- and that ``1.0``
+    floor ``1e-9 * max(max|flux|, 1.0)`` cannot express that: the ``1.0``
     has length units, pinning the cut at an ABSOLUTE ``1e-9``.  Harmless in
     micrometres; in METRES the entire spectrum sinks below it and EVERY
     propagating mode is reclassified evanescent, dropping the selector back to
@@ -977,67 +973,39 @@ _MODE_CUT_CENSUS = None
 # opt-in diagnostic rather than a free guard.  Untested; 1 AC.
 #
 # ---------------------------------------------------------------------------
-# UPDATE 2026-08-05 (PMM_FOURNAME_ADJUDICATION_2026_08_05).  HALF of that is
-# now closed, and the reason the other half is not is unchanged.
+# WHAT THE TWO CHANNELS READ TODAY.  The ``spread`` statistic of the original
+# conjunction is a COIN FLIP rather than a property of the device: on the M3
+# cell ns = 6, degree = 10 -- 411 % wrong at |R+T-1| = 5.0e-07 -- the SAME
+# wrong answer (0.5683670) reads spread = 1 at one BLAS thread and spread = 0
+# at N, because whether a round-off-flux mode lands above or below the cut
+# depends on the reduction order.  So :func:`_mode_cut_verdict` leads with a
+# PHYSICAL invariant instead:
 #
-# The ``spread`` half of the conjunction was measured to be a COIN FLIP, not a
-# property of the device: on the M3 cell ns = 6, degree = 10 -- 411 % wrong at
-# |R+T-1| = 5.0e-07 -- the SAME wrong answer (0.5683670) reads spread = 1 at
-# one BLAS thread and spread = 0 at N, because whether a round-off-flux mode
-# lands above or below the cut depends on the reduction order.  The guard
-# therefore spoke on that cell on one mount and was SILENT on the other.
+# * channel A asks whether the cut has put a GROWING mode in the forward set,
+#   which a passive layer cannot have at any thread count -- and it reads the
+#   RESIDUAL (:func:`_mode_cut_growth_post`), i.e. what the SHIPPED forward set
+#   still grows after :func:`_forward_growth_flip` has repaired the
+#   classification.  Reading the RAW pre-repair count instead is a FALSE ALARM:
+#   on two ubuntu CI images it reported "2 / 4 GROWING mode(s) in the FORWARD
+#   set ... within a factor 1.05 / 1.44 of the cut" on cells whose ANSWER was
+#   right (rel 0.0035 / 0.0057 against the RCWA anchor), because the repair had
+#   redirected exactly those modes -- and whether the pre-repair state is empty
+#   is a BLAS-reduction-order fact, so it cannot be asserted anywhere.  On the
+#   classical family the residual partitions the cells EXACTLY by the
+#   RCWA-anchored error;
+# * channel B is the original conjunction, retained so that no cell the
+#   calibrated guard used to speak on goes quiet.
 #
-# The replacement is a PHYSICAL invariant rather than a second statistic:
-# :func:`_mode_cut_growth` asks whether the cut has put a GROWING mode in the
-# forward set, which a passive layer cannot have at any thread count.  It reads
-# >= 1 on every silent-wrong cell of the classical family on BOTH mounts and 0
-# on every cured cell on both.  It is channel A of :func:`_mode_cut_verdict`;
-# the old conjunction is retained as channel B so nothing goes quiet.
+# The CENSUS still reads the raw ``prop``/``q`` and carries ``n_grow`` next to
+# ``n_grow_post`` (see :func:`_record_mode_cut`'s call sites), so every
+# calibration table in the M3 audit still reads as written: the instrument
+# measures the diagnosis, not the treatment.
 #
-# The CONICAL false positive below is NOT closed by it: those three correct
-# cells carry a growing forward mode too (1-3 of them, at 1.07-2.87 x the cut).
-# So the default stays DISARMED, for the same reason and now on a second
-# instrument.  The remaining lead is still the consensus probe.
-#
-# ---------------------------------------------------------------------------
-# UPDATE 2026-08-06 (FIX_UNION_GRID_2THREAD_2026_08_06).  Channel A's invariant
-# is now also a REPAIR -- :func:`_forward_growth_flip` -- so the condition this
-# guard warns about is FIXED at the classification site rather than merely
-# reported.  Two consequences a reader needs:
-#
-# * the census and the verdict deliberately still read the RAW ``prop``/``q``
-#   (see :func:`_record_mode_cut`'s call sites), i.e. they report what the bare
-#   selector WOULD have done.  So channel A still fires on cells the repair has
-#   since made correct, and every calibration table in the M3 audit still
-#   reads as written.  That is intentional: the instrument measures the
-#   diagnosis, not the treatment;
-# * which makes the DISARMED default less urgent rather than more.  The
-#   conical false positive is unchanged and arming is still gated on the
-#   consensus probe, but a growing forward mode is no longer a wrong answer
-#   waiting to happen -- it is a repaired one that the instrument still names.
-#
-# ---------------------------------------------------------------------------
-# UPDATE 2026-08-08 (FIX_CI_ROUND2_PMM_2026_08_08).  The first bullet above was
-# WRONG, and ubuntu CI proved it: "the instrument still names it" is a FALSE
-# ALARM once the repair exists.  On two images the armed guard reported
-# "2 / 4 GROWING mode(s) in the FORWARD set ... within a factor 1.05 / 1.44 of
-# the cut" on cells whose ANSWER was right (rel 0.0035 / 0.0057 against the
-# RCWA anchor) -- because the repair had redirected exactly those modes, and
-# the verdict was reading the pre-repair state.  Whether the pre-repair state
-# is empty is a BLAS-reduction-order fact, so the old reading could not be
-# asserted anywhere.  TWO changes, both measured in this file's docstrings:
-#
-# * :func:`_mode_cut_verdict` channel A now reads the RESIDUAL
-#   (:func:`_mode_cut_growth_post`) -- what the SHIPPED forward set still
-#   grows.  On the classical family that partitions the cells EXACTLY by the
-#   RCWA-anchored error, which the raw reading never did;
-# * :func:`_forward_growth_flip` drops the cut's decade on a PROVABLY PASSIVE
-#   layer, where a growing forward mode is a contradiction at any distance.
-#   That closes the two cells `FIX_UNION_GRID_2THREAD_2026_08_06` S9 item 3
-#   left open (ns=2, degrees 18 and 20, survivors at 15.8-23.6 x the cut).
-#
-# The CENSUS still carries the raw ``n_grow`` next to ``n_grow_post``, so every
-# calibration table in the M3 audit still reads as written.
+# The DISARMED default is unchanged, and for the same reason on a second
+# instrument: the three CORRECT conical cells carry a growing forward mode too
+# (1-3 of them, at 1.07-2.87 x the cut).  The remaining lead is still the
+# two-degree consensus probe.  The dated rounds that produced this shape are in
+# docs/history/lumenairy.elements.pmm._core.md.
 # ---------------------------------------------------------------------------
 
 #: T3-4 guard, at WARN.  DISARMED by default -- see the block above for the
@@ -1627,13 +1595,12 @@ def _mode_cut_verdict(rows, label, emit=True):
     it is the one that catches the ``ns = 6, degree = 10`` cell channel B
     misses at N BLAS threads (PMM_FOURNAME_ADJUDICATION_2026_08_05 S4).
 
-    **A reads the RESIDUAL, not the DIAGNOSIS** (2026-08-08,
-    ``FIX_CI_ROUND2_PMM_2026_08_08.md``).  Until then it read
+    **A reads the RESIDUAL, not the DIAGNOSIS.**  Reading
     :func:`_mode_cut_growth` on the RAW ``prop``/``q`` -- what the BARE
-    selector would have done -- which was right while the repair did not exist
-    and became a FALSE ALARM once it did: the repair redirects those modes, so
-    the answer is right and the guard was still telling the reader it might be
-    "UNITARY BUT WRONG".  Measured on the M2 coated taper, guard armed,
+    selector would have done -- is a FALSE ALARM now that
+    :func:`_forward_growth_flip` exists: the repair redirects exactly those
+    modes, so the answer is right while the guard would still tell the reader
+    it might be "UNITARY BUT WRONG".  Measured on the M2 coated taper, guard armed,
     per-layer, library default [M, Windows 1 thread] -- ``rel`` against the
     RCWA 141-order anchor, ``raw`` = the diagnosis, ``post`` = the residual::
 
@@ -1811,8 +1778,7 @@ def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
     form is required, not ``2 Cinv``) and the ``kx0^2`` mass.  At ``kx0 == 0``
     the shift vanishes.
 
-    ``robust`` is ACCEPTED AND IGNORED (audit M10 2026-07-25 corrected this
-    docstring, which used to describe it as selecting the branch): the
+    ``robust`` is ACCEPTED AND IGNORED (audit M10 2026-07-25): the
     NOISE-ROBUST forward selector has been UNCONDITIONAL since v5.14
     (robustness audit P1 -- the legacy ``Im(q) >= 0`` test flipped near-real
     propagating modes on ~1e-15 QZ noise and produced dense spurious
@@ -2037,12 +2003,13 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
     """
     safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
     safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
-    # TWO-SIDED + non-finite-aware (audit M3 2026-07-25): the former
-    # ``abs(kz_inc) < 1e-9`` accepted a NEGATIVE kz_inc, which is exactly what a
-    # GAIN superstrate produces (``_kz_forward`` takes its Re < 0 root), and
-    # every efficiency is then silently NEGATED (measured tot = [-0.95, -0.82]
-    # through the classical PMMStack cascade).  ``not (kz_inc > 1e-9)`` covers
-    # grazing, negative AND NaN in one comparison, for all five callers.
+    # TWO-SIDED + non-finite-aware (audit M3 2026-07-25): an
+    # ``abs(kz_inc) < 1e-9`` test accepts a NEGATIVE kz_inc, which is exactly
+    # what a GAIN superstrate produces (``_kz_forward`` takes its Re < 0 root),
+    # and every efficiency is then silently NEGATED (measured
+    # tot = [-0.95, -0.82] through the classical PMMStack cascade).
+    # ``not (kz_inc > 1e-9)`` covers grazing, negative AND NaN in one
+    # comparison, for all five callers.
     if not (kz_inc > 1e-9):
         raise ValueError(
             f"pmm: non-propagating incidence (kz_inc = {kz_inc:.6g}; needs "
@@ -2202,17 +2169,18 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
     else:
         flux_inc = np.real(kz_inc / eps_sup)
         if float(np.imag(_C(eps_sup))) != 0.0:
-            # W7 F-B (2026-07-26): for an ABSORBING SUPERSTRATE the historical
-            # ``Re(kz_inc/eps_sup)`` mixed gauges -- a REAL kz_inc (already
-            # ``Re`` of the complex order-0 root) divided into a COMPLEX
-            # eps_sup, which is the flux of no wave, while the NUMERATORS use
-            # the full complex kz.  It broke the hardest symmetry there is: at
-            # NORMAL incidence on an ISOTROPIC slab, TE and TM must be
-            # identical, and they were not (measured T drift 1.4e-4 at
-            # Im(n_sup)=0.01, 3.4e-3 at 0.05, 5.8e-2 at 0.2), so this ONE
-            # recipe disagreed with every other far field in the family
-            # (rcwa ``_project_efficiency``, ``_assemble_jones_farfield``, the
-            # 2-D/conical sites) on the SAME physical problem.
+            # W7 F-B (2026-07-26): for an ABSORBING SUPERSTRATE the incident
+            # flux cannot be ``Re(kz_inc/eps_sup)`` -- that MIXES GAUGES, a
+            # REAL kz_inc (already ``Re`` of the complex order-0 root) divided
+            # into a COMPLEX eps_sup, which is the flux of no wave, while the
+            # NUMERATORS use the full complex kz.  It breaks the hardest
+            # symmetry there is: at NORMAL incidence on an ISOTROPIC slab TE
+            # and TM must be identical, and under the mixed form they are not
+            # (measured T drift 1.4e-4 at Im(n_sup)=0.01, 3.4e-3 at 0.05,
+            # 5.8e-2 at 0.2), so that ONE recipe disagrees with every other far
+            # field in the family (rcwa ``_project_efficiency``,
+            # ``_assemble_jones_farfield``, the 2-D/conical sites) on the SAME
+            # physical problem.
             #
             # The family normalizes an E-amplitude flux by
             # ``kz_inc * einc_sq``; in the TM channel's Hy gauge that incident
@@ -2220,7 +2188,7 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
             # ``|Ex_inc|^2 = |kz0/eps_sup|^2`` conversion for unit Hy).  For a
             # REAL eps_sup this equals ``kz_inc/eps_sup`` identically, so the
             # branch is skipped and every lossless solve is BYTE-UNCHANGED.
-            # Post-fix: rcwa parity 1.3e-14, TE == TM at normal 2.7e-15.
+            # Measured: rcwa parity 1.3e-14, TE == TM at normal 2.7e-15.
             flux_inc = (((kz_inc ** 2 + (kx0 / k0) ** 2) / kz_inc)
                         * abs(kz0 / _C(eps_sup)) ** 2)
         R = np.real(kz_sup / eps_sup) * np.abs(r_ord) ** 2 / flux_inc
@@ -2699,13 +2667,12 @@ from ...cache import ByteBudgetedLRU as _ByteBudgetedLRU_geo  # noqa: E402
 #: the library (``LUMENAIRY_CACHE_BUDGET_MB``, drained by
 #: ``clear_asm_caches()``, visible in ``cache_report()``).
 #:
-#: It used to be a 64-entry ``OrderedDict`` keyed on the FULL operator bytes,
-#: which at a production ``n_glob`` = 300 is a 1.4 MB complex128 KEY beside a
-#: ~1.4 MB value -- up to ~180 MB retained with nothing bounding it, while the
-#: sibling ``_PERLAYER_GEO_CACHE`` next door was enrolled.  A 32-byte digest
-#: and the shared budget fix both halves; the entry COUNT is no longer capped
-#: because bytes, not entries, are the resource being protected, and the
-#: collective ceiling caps those.
+#: The KEY is a 32-byte digest, not the FULL operator bytes: at a production
+#: ``n_glob`` = 300 the operator is a 1.4 MB complex128 array, so a bytes key
+#: doubles the retained footprint of every entry.  The entry COUNT is
+#: deliberately NOT capped -- bytes, not entries, are the resource being
+#: protected, and the collective ceiling caps those.  See
+#: docs/history/lumenairy.elements.pmm._core.md.
 _GEO_EIG_CACHE = _ByteBudgetedLRU_geo("pmm_geometric_eig")
 
 
@@ -2719,7 +2686,7 @@ def _geo_eig_key(tag, *blocks):
     it: ``(tag, shapes, dtypes, blake2b-32(all the bytes))``.
 
     The digest is taken over the RAW buffers, so it is exact in the same sense
-    the old full-bytes key was -- two pencils collide only on a 256-bit hash
+    a full-bytes key is -- two pencils collide only on a 256-bit hash
     collision -- while the key itself drops from ``n_glob^2`` complex128 (1.4 MB
     at a production ``n_glob`` = 300, RETAINED per entry, plus an ``O(n^2)``
     copy on every lookup) to 32 bytes.  A C-contiguous array is hashed through
@@ -3208,9 +3175,9 @@ def _lossy_incidence(n_superstrate):
     so the stabilizers' super-unity gate is not a resonance discriminator
     there -- ``_require_propagating_incidence``, which every one of these
     entry points already calls, documents exactly this ("R + T != 1 by
-    construction ... treat the sums as indicative"), so the gate was
-    contradicting the contract stated one call earlier.  Measured pre-fix,
-    ``pmm_efficiency_1d`` raised ``RuntimeError: no resonance-free
+    construction ... treat the sums as indicative"), so an unskipped gate
+    contradicts the contract stated one call earlier: measured,
+    ``pmm_efficiency_1d`` raises ``RuntimeError: no resonance-free
     solve in degrees [10, 26); the requested degree sits in a high-degree
     resonance band`` for EVERY degree from ``Im(n_sup) = 0.01`` up, blaming
     the user's degree for a perfectly healthy solve (the ``stabilize=False``
@@ -3248,7 +3215,7 @@ def _stabilize_scalar(solve_at_degree, d0, label, *, passive_tol=None,
             break
         tot = float(np.real(R.sum() + T.sum()))
         # TWO-SIDED passive gate + per-order non-negativity (audit P2-09):
-        # the historical one-sided ``tot <= 1 + tol`` test certified grossly
+        # a ONE-SIDED ``tot <= 1 + tol`` test certifies grossly
         # NEGATIVE totals / per-order efficiencies -- a systematically-wrong
         # solve repeats itself at consecutive degrees and formed a bogus
         # 'converged cluster' with ZERO warnings.
@@ -3517,13 +3484,13 @@ def _require_concrete_wavelength(wl, label, alt):
     ``m_prop = floor(n_max * period / wl)`` -- a DATA-DEPENDENT INTEGER COUNT,
     and an integer count sets array SHAPES, which cannot be materialized from
     a tracer.  Under ``jax.jit`` / ``jax.grad`` the wavelength has no concrete
-    value, so the old code silently fell back to ``wl = inf`` -> ``m_prop = 0``
-    -> the order set COLLAPSED to the bare ``far_field_orders`` floor, DROPPING
+    value, so falling back to ``wl = inf`` gives ``m_prop = 0``
+    -> the order set COLLAPSES to the bare ``far_field_orders`` floor, DROPPING
     propagating orders that the NumPy policy includes.
 
-    It was silent in the worst way: un-jitted the value is concrete, so the
-    forward answer was bit-exact and only the TRACED evaluation was wrong.
-    Measured pre-fix (2-layer stack, degree 24/30, n_sub 1.5, wl 633 nm,
+    That is silent in the worst way: un-jitted the value is concrete, so the
+    forward answer is bit-exact and only the TRACED evaluation is wrong.
+    Measured (2-layer stack, degree 24/30, n_sub 1.5, wl 633 nm,
     ``jax.jit`` over the wavelength):
 
     ========  ===  ======  =====  ============  ============
@@ -5352,10 +5319,8 @@ _MORTAR_RCOND_REFUSE = 1e-12
 #: CONSTRUCTION whenever EXACTLY ONE side of the interface is an IN-PLANE
 #: region promoted to the 6-tuple general form by
 #: :func:`~lumenairy.elements.pmm.twod_staggered._modes_as_general` -- an
-#: ASYMMETRIC interface.  (ROUND 4 CORRECTION, 2026-09-11: this paragraph said
-#: "whenever ONE side ... is promoted", which a reader takes as "either side".
-#: With BOTH sides promoted the operand is HEALTHY -- see the correction at the
-#: end of this docstring.)  MEASURED
+#: ASYMMETRIC interface -- with BOTH sides promoted the operand is HEALTHY, by
+#: five decades, which is measured at the end of this block.  MEASURED
 #: (``validation/probe_fix_mortar_round3/r1_mechanism.py``) on a two-layer
 #: stack with ONE out-of-plane patterned layer and ONE ordinary in-plane
 #: neighbour, ``M`` = 4 / 5 / 6 / 7: the smallest singular value falls to
@@ -5433,11 +5398,9 @@ _MORTAR_RCOND_REFUSE = 1e-12
 #: agree within **1.6x on all 51 real operands measured**
 #: (``r3_residual_screen.py``, ``r4_cost.py``).
 #:
-#: **CORRECTION, ROUND 4 (2026-09-11, DEFECT 1 of**
-#: ``docs/audits/VERIFY_PMM2D_MORTAR_ROUND3_2026_09_11.md`` **S8).**  The
-#: mechanism needs the interface to be ASYMMETRIC -- EXACTLY ONE promoted side
-#: -- not merely to have a promoted side.  With BOTH sides promoted (two
-#: in-plane layers on different grids, an out-of-plane or slanted layer
+#: THE MECHANISM IS SCOPED TO THE ASYMMETRIC INTERFACE -- EXACTLY ONE promoted
+#: side -- and not merely to having a promoted side.  With BOTH sides promoted
+#: (two in-plane layers on different grids, an out-of-plane or slanted layer
 #: ELSEWHERE in the stack putting the whole cascade on this form) the operand
 #: is HEALTHY.  MEASURED on the verification's own three-layer fixture at
 #: ``M`` = 4 / 5 / 6: ``s_min/s_max`` 2.631e-05 / 2.416e-08 / 4.295e-07 with
@@ -5447,8 +5410,7 @@ _MORTAR_RCOND_REFUSE = 1e-12
 #: reading is within 1.5 decades of the both-out-of-plane control (8.105e-04).
 #: Nothing SHIPPED changes: the residual screen accepts all three classes and
 #: the healthy population above already contained a both-promoted interface.
-#: What changes is the prediction a later reader would make from the wording,
-#: which was wrong by five decades.  Gates:
+#: Gates:
 #: ``test_a_generalized_mortar_with_both_sides_promoted_is_not_rank_deficient``
 #: and ``test_the_promoted_side_bar_is_scoped_to_the_asymmetric_interface``.
 _MORTAR_RESID_REFUSE = 1e-6
@@ -6801,11 +6763,7 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
         # on the iZH-rows -- the mirror of the rcwa assignment, matching
         # this generator's state/eigen conventions; pinned empirically
         # against the dispersion-anchored rcwa OOP solver, agreement
-        # restored to the historical 1.5e-3 bar).  The legacy real
-        # coefficients shared the rcwa generator's defect -- they agreed
-        # with the PRE-fix rcwa OOP results for the same reason the
-        # circular oracle did -- and gave the same artificially
-        # +/- symmetric extraordinary dispersion.
+        # restored to the 1.5e-3 bar).
         L[0:n, 0:n] += k0 * (1j * (Kx @ EZZi @ EZX_L))
         L[0:n, n:2 * n] += k0 * (1j * (Kx @ EZZi @ EZY_L))
         L[2 * n:3 * n, 3 * n:4 * n] += k0 * (-1j * (EYZ_L @ EZZi @ Kx))

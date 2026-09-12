@@ -104,45 +104,34 @@ BOR_SEM_MESH_GUARD = True
 #:   DAMAGING, the c5 onset over five (Rbig, k0) cases           2.152e+05 ..
 #:                                                               1.003e+07
 #:
-#: ROUND 2 RESTATEMENT -- THIS BAR'S "ORDINARY" MARGIN PROTECTS NOTHING, AND ITS
-#: ONLY OPERATIVE ROLE IS IN THE OTHER DIRECTION.
+#: WHAT THE BAR ACTUALLY DOES, and it is ONE-SIDED: it SUPPRESSES refusals.
+#: The refusal is a CONJUNCTION -- ``w_min_union_frac < _BOR_MIN_ELEM_FRAC``
+#: **and** ``q_excess > _BOR_Q_EXCESS`` -- so a geometry with no cross-layer
+#: cell at all (``w_min_union_frac = inf``, which is what every ordinary family
+#: above reads) can never be refused **whatever its q_excess**.  A distance
+#: from ordinary geometry UP to this bar therefore describes a comparison the
+#: conjunction cannot reach, and quoting one would be vacuous.
 #:
-#: The build stated the margins two-sidedly: "0.95 decades (8.82x) above the
-#: worst ordinary geometry measured" and "1.20 decades (15.9x) below the
-#: mildest rung it must refuse".  The SECOND is real.  The FIRST is vacuous,
-#: and the verification (section 5.3) is right about why: the refusal is a
-#: CONJUNCTION, ``w_min_union_frac < _BOR_MIN_ELEM_FRAC`` **and**
-#: ``q_excess > _BOR_Q_EXCESS``, so a geometry with no cross-layer cell at all
-#: -- ``w_min_union_frac = inf``, which is what every ordinary family measured
-#: reads -- can never be refused **whatever its q_excess**.  Quoting a distance
-#: from ordinary geometry to this bar therefore describes a comparison the
-#: conjunction cannot reach.
+#: A manufactured cell narrow enough to pass the geometric conjunct is refused
+#: only if its spectrum also shows the damage, and this is the threshold that
+#: decides.  The failure mode is therefore a MISS, not a false positive, and
+#: the honest statement of the margin is the one-sided one: **1.20 decades
+#: (15.9x) below** the mildest rung the ladder measured as damaging (the union
+#: ladder at ``delta/Rbig`` = 1e-6, degree 6, ``|q|max``/ceiling = 1.5934e+05).
 #:
-#: WHAT THE BAR ACTUALLY DOES: it SUPPRESSES refusals.  A manufactured cell
-#: narrow enough to pass the geometric conjunct is refused only if its spectrum
-#: also shows the damage, and this is the threshold that decides.  Its failure
-#: mode is therefore a MISS, not a false positive, and the honest statement of
-#: its margin is the one-sided one: 1.20 decades (15.9x) below the mildest rung
-#: the ladder measured as damaging (the union ladder at ``delta/Rbig`` = 1e-6,
-#: degree 6, ``|q|max``/ceiling = 1.5934e+05).
+#: The ordinary readings above are kept because the number should be RIGHT even
+#: where it is not load-bearing.  hp refinement with GRADING on reads higher
+#: than the non-taper maximum quoted there -- see :data:`_BOR_SLIVER_BAND_FRAC`
+#: and ``validation/probe_fix_bor_round2/r7_sem_hp_census.py``.  A LOWER k0
+#: RAISES this ratio, so the low-k0 taper arm is the demanding one and is why
+#: the census sweeps k0 as well as the slice count.  Kernel spread of the
+#: quantity itself: 1.1895x.  The superseded two-sided margin claims are in
+#: docs/history/lumenairy.elements.bor._sem_contract.md.
 #:
-#: The ordinary readings below are kept because the number should be RIGHT even
-#: where it is not load-bearing, and round 2's census moved it: the build quoted
-#: a non-taper maximum of 164.4, and hp refinement with GRADING on -- a family
-#: the build's census did not sweep -- reads higher (see
-#: ``_BOR_SLIVER_BAND_FRAC`` and
-#: ``validation/probe_fix_bor_round2/r7_sem_hp_census.py``).
-#:
-#: The scoping quoted 1.63 decades of headroom on the ordinary side; that was a
-#: SAMPLE property of a census that stopped at a 64-slice taper (235.8).  The
-#: widened census reaches 1134.2.  A LOWER k0 RAISES this ratio, so the low-k0
-#: taper arm is the demanding one and is why the census sweeps k0 as well as the
-#: slice count.  Kernel spread of the quantity itself: 1.1895x.
-#:
-#: ROUND 3 (verification round 2, GAP 3) -- WHAT A NON-FINITE RATIO MEANS.
-#: This bar is now reached only when the ratio is FINITE.  A ratio FORMED
+#: WHAT A NON-FINITE RATIO MEANS (verification round 2, GAP 3).
+#: This bar is reached only when the ratio is FINITE.  A ratio FORMED
 #: from a real spectrum that comes back ``inf`` or ``nan`` is PAST every bar
-#: there is, and :func:`verdict` now reads it as HOT rather than as benign; a
+#: there is, and :func:`verdict` reads it as HOT rather than as benign; a
 #: ratio that was never formed (no modes, or a zero ``n_max k0`` denominator,
 #: flagged by ``q_measurable``) stays cold, because it is evidence in neither
 #: direction.  See :func:`verdict` for the kernel-dependence that reading
@@ -182,11 +171,8 @@ _BOR_MIN_ELEM_FRAC = 1.0e-6
 #:     slices    4      8     16     32     64    128    256
 #:     w/Rbig  3.1e-2 3.1e-2 1.6e-2 7.8e-3 3.9e-3 2.0e-3 **9.77e-4**
 #:
-#: **THE SCOPING'S CANDIDATE EDGE OF 1e-3 IS REFUTED BY THIS CENSUS**: a
-#: 256-slice taper lands at 9.766e-04, i.e. 0.977x -- INSIDE the band it would
-#: have warned on.  The scoping's own note said its 3.9x margin at 64 slices
-#: was sample-scoped and had to be re-measured before the edge was fixed; this
-#: is that measurement, and it moved the edge a decade.
+#: **A CANDIDATE EDGE OF 1e-3 IS REFUTED BY THIS CENSUS**: a 256-slice taper
+#: lands at 9.766e-04, i.e. 0.977x -- INSIDE the band it would have warned on.
 #:
 #: At 1e-4 the 256-slice taper carries **9.77x (0.99 decades)** and every one of
 #: the 86 ordinary families measured lands outside the band.  The edge still
@@ -195,12 +181,11 @@ _BOR_MIN_ELEM_FRAC = 1.0e-6
 #: one, because the refusal's geometric conjunct is two decades further down at
 #: 1e-6 of Rbig, which a taper reaches only at ~6 million slices.
 #:
-#: ROUND 2 RESTATEMENT -- **9.77x IS NOT THE BINDING ORDINARY MARGIN.  1.003x
-#: IS.**  Both statements above are properties of the census's own two families
-#: (taper staircases and single-layer hp).  The verification found a third the
-#: census did not sweep, and round 2 measured it
-#: (``validation/probe_fix_bor_round2/r7_sem_hp_census.py``): hp refinement with
-#: GRADING ON, on an ORDINARY two-layer ring pair.
+#: **THE BINDING ORDINARY MARGIN IS 1.003x, NOT the 9.77x above**, which is a
+#: property of two families only (taper staircases and single-layer hp).  The
+#: third family -- hp refinement with GRADING ON, on an ORDINARY two-layer ring
+#: pair -- is the binding one, measured in
+#: ``validation/probe_fix_bor_round2/r7_sem_hp_census.py``:
 #:
 #: ``BORStack(elements_per_segment=k, grade=True)`` splits every segment
 #: interval into ``k`` Chebyshev-Lobatto graded sub-elements, so the narrowest
@@ -230,10 +215,9 @@ _BOR_MIN_ELEM_FRAC = 1.0e-6
 #: ``k = 64`` outside) at the cost of a decade of the warn band, which is where
 #: the delta ladder's ``delta/Rbig`` = 1e-5 rung sits with a measured move factor
 #: of 1.22 .. 3.2 -- a real degradation the band should keep speaking about.
-#: Round 2 therefore records the margin honestly rather than trading a true
-#: warning for a false one; the cost is a ``UserWarning``, never a refusal
-#: (``warn_manufactured`` carries no spectral conjunct and cannot escalate), and
-#: the next round has the measurement to decide with.
+#: The margin is therefore recorded honestly rather than trading a true warning
+#: for a false one; the cost is a ``UserWarning``, never a refusal
+#: (``warn_manufactured`` carries no spectral conjunct and cannot escalate).
 #:
 #: The ordinary ``q_excess`` ceiling moves with the same family: 2458 at
 #: ``k = 32`` (degree 6) against the build's quoted non-taper maximum of 164.4.
@@ -344,16 +328,14 @@ def measure_layer(bnd, layer_index, walls, Rbig, q, n_max, k0):
                          from DIFFERENT layers (``inf`` when none does)
     ``w_min_own``        the narrowest element whose two ENCLOSING walls THIS
                          layer's own segment list asked for (``inf`` when none
-                         does).  ROUND 2, verification D4: the ``warn_own``
-                         branch used to read ``w_min``, the narrowest cell of
-                         the POST-WINDOW mesh, and then tell the caller that
-                         "the LAYER'S OWN segment list asked for" it -- which is
+                         does).  It is deliberately NOT ``w_min``, the
+                         narrowest cell of the POST-WINDOW mesh: that would be
                          false for the NEIGHBOUR of a liner, whose own segment
                          list is a single full-radius entry and which has the
                          cell only because the +-1 enrichment window put it
-                         there.  Measured: the liner ladder emitted TWO
-                         warn_own messages, blaming layers [0, 1], where layer 1
-                         is ``add_layer(0.5, eps=1.21)``.  ``w_min_own`` is the
+                         there, so a message saying "the LAYER'S OWN segment
+                         list asked for" it would blame a layer that asked for
+                         nothing (verification D4).  ``w_min_own`` is the
                          quantity the message's own words describe.
     ``attribution``      which layers those two walls came from
     ``q_excess``         ``|q|max / (n_max k0)``
@@ -441,12 +423,12 @@ def verdict(rec):
     layer.  Pure function of the record, so a census can tabulate the same
     verdicts the solve would reach."""
     excess = rec["q_excess"]
-    # ROUND 3 (verification round 2, GAP 3).  A NON-FINITE ``q_excess`` used to
-    # read as NOT hot -- ``np.isfinite(excess) and excess > bar`` -- so the
-    # contract fell SILENT exactly where the damage is worst, and because
-    # ``inf`` is a backward-error outcome the VERDICT moved with the BLAS
-    # kernel.  Measured on one geometry (a caller-prescribed liner 1e-8 of
-    # ``Rbig`` wide AT THE AXIS; ``BORStack(Rbig=24, m=1, N=120, basis='sem',
+    # A NON-FINITE ``q_excess`` reads as HOT (verification round 2, GAP 3).
+    # Reading it as NOT hot -- ``np.isfinite(excess) and excess > bar`` --
+    # falls SILENT exactly where the damage is worst, and because ``inf`` is a
+    # backward-error outcome the VERDICT then moves with the BLAS kernel.
+    # Measured on one geometry (a caller-prescribed liner 1e-8 of ``Rbig``
+    # wide AT THE AXIS; ``BORStack(Rbig=24, m=1, N=120, basis='sem',
     # degree=8)``), both builds, 2026-09-12:
     #
     #     Haswell / Nehalem / Katmai   q_excess = inf          verdict = ok
@@ -458,11 +440,11 @@ def verdict(rec):
     # gone non-finite is PAST every bar, so it is HOT -- but only when it was
     # actually formed from a spectrum (``q_measurable``): a ratio that was
     # never formed is no evidence in either direction and stays cold, which is
-    # the conservative reading and the pre-round-3 behaviour for that case.
+    # the conservative reading.
     hot = (excess > _BOR_Q_EXCESS if np.isfinite(excess)
            else bool(rec.get("q_measurable", False)))
     fu = rec["w_min_union_frac"]
-    # ROUND 2 (D4): the OWN arm reads ``w_min_own_frac`` -- the narrowest cell
+    # THE OWN ARM reads ``w_min_own_frac`` -- the narrowest cell
     # BOTH of whose walls this layer's own segment list asked for -- and not
     # ``w_min_frac``, the narrowest cell of the post-window mesh whoever asked
     # for it.  The two differ exactly on the layer the message was blaming
@@ -470,7 +452,7 @@ def verdict(rec):
     # and its own segment list mentions neither wall.  ``w_min_frac`` is still
     # measured and reported, because the census reads it.
     fa = rec.get("w_min_own_frac", rec["w_min_frac"])
-    # ROUND 3 (GAP 4): the three width comparisons go through ``_below``, which
+    # The three width comparisons go through ``_below`` (GAP 4), which
     # closes the tie at the bar with a 16-ULP relative deadband, so the same
     # physical width decides identically at the axis, in the interior and at
     # the outer wall.  See :data:`_BOR_FRAC_DEADBAND`.

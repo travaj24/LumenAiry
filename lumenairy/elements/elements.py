@@ -22,10 +22,11 @@ from math import factorial
 
 import numpy as np
 
-# v5.2 (ROADMAP "Duplicate `_xp_of`" cleanup): this used to be a
-# 4-line wrapper duplicated in 5 files; consolidated to the canonical
-# backend helper.  The underscore-prefixed alias preserves existing
-# in-module references without touching call sites.
+# v5.2 (ROADMAP "Duplicate `_xp_of`" cleanup): the canonical backend
+# helper, consolidated here from five hand-copied 4-line wrappers.
+# The underscore-prefixed alias preserves existing in-module
+# references without touching call sites.
+# See docs/history/lumenairy.elements.elements.md.
 from ..backend import array_namespace as _xp_of  # noqa: E402
 from .lenses import _surface_sag_general
 
@@ -1066,8 +1067,7 @@ def apply_apodized_pupil(E_in, dx, diameter, *,
           sidelobes, wider core.
         * ``'gaussian'``: ``T(rho) = exp(-(r/sigma)^2 / 2)``.  ``sigma``
           [m] is OPTIONAL and defaults to ``diameter / 6`` (v5.30, audit
-          E-L19: this bullet used to declare sigma mandatory, which
-          contradicted both the ``sigma`` entry below and the code).
+          E-L19).
           Pure Gaussian apodisation (Strehl-optimal for a fixed-area
           aperture).
         * ``'sonine'``: ``T(rho) = (1 - rho^2)^exponent``.  The Sonine /

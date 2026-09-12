@@ -148,9 +148,9 @@ def create_periodic_phase_mask(
 
     The cell-pixel lookup is closed **periodically** (``index % cell_N``),
     so every cell pixel is hit equally often on a grid-native design and
-    the tiling is exactly periodic (v5.30, audit E-M7 -- it used to clamp
-    with ``clip``, which folded the last half-pixel of each cell onto the
-    last column and injected spurious diffraction orders).
+    the tiling is exactly periodic (v5.30, audit E-M7; clamping with
+    ``clip`` instead folds the last half-pixel of each cell onto the last
+    column and injects spurious diffraction orders).
     """
     phase_cell = np.asarray(phase_cell)
     if phase_cell.ndim != 2 or phase_cell.shape[0] != phase_cell.shape[1]:
@@ -180,16 +180,11 @@ def create_periodic_phase_mask(
     # ``clip(..., 0, cell_N - 1)``.  ``in_cell`` lives in ``[0, cell_extent)``
     # so ``round(in_cell / cell_pixel_size)`` reaches ``cell_N`` for any sample
     # in the last HALF pixel of the cell -- and the nearest cell pixel there is
-    # the WRAPPED one, index 0, not the clipped ``cell_N - 1``.  Clipping folded
-    # that whole half-pixel into the last column, breaking the periodicity the
-    # function's own docstring promises: measured on the grid-native
-    # 8-pixel/cell case (N=256, dx = cell_pixel_size) the per-cell-pixel
-    # occupancy was [21, 32, 32, 32, 32, 32, 32, 43] (spread 22 of 32) instead
-    # of a uniform 32, 2816 of 65536 mask pixels carried the wrong phase
-    # (max|dt| = 2.0, a full 0<->pi flip), and the tiled 0/pi 50 %-duty binary
-    # grating leaked 11.3 % of its power OFF the order lattice with 2.95 %
-    # landing in the EVEN (nominally forbidden) orders -- both exactly 0 with
-    # the modulo close.
+    # the WRAPPED one, index 0, not the clipped ``cell_N - 1``.  Clipping folds
+    # that whole half-pixel into the last column and breaks the periodicity
+    # this function's own docstring promises; the measured occupancy spread and
+    # the spurious even-order leak it produces are in
+    # docs/history/lumenairy.elements.doe.md.
     idx = np.round(in_cell / cell_pixel_size).astype(int) % cell_N
     ix = idx
     iy = idx
@@ -502,9 +497,6 @@ def create_fresnel_zone_plate(
     The zone assignment uses ``zone_index = floor(r^2 / (lambda f))``,
     which aligns exactly with the phase-flip boundaries of an ideal
     converging quadratic phase.
-
-    4.7 dropped the historical ``_m`` suffix from ``dx`` /
-    ``focal_length`` / ``wavelength``.
     """
     if focal_length == 0:
         raise ValueError("focal_length must be non-zero")
@@ -520,9 +512,9 @@ def create_fresnel_zone_plate(
     r2 = X * X + Y * Y
 
     # 4.10: enforce positive focal length so the zone-plate behaves
-    # as the docstring says ("Positive = converging").  Negative
-    # focal_length used to silently strip the sign and produce an
-    # identical converging FZP; users wanting a diverging FZP can flip
+    # as the docstring says ("Positive = converging").  Unguarded, a
+    # negative focal_length has its sign silently stripped and produces
+    # an identical CONVERGING FZP; users wanting a diverging FZP can flip
     # the sign of the applied phase elsewhere.
     if focal_length <= 0:
         raise ValueError(
@@ -579,53 +571,26 @@ def makedammann2d(
     the iterations (simulated-annealing style).
 
     .. versionchanged:: 4.14.2
-        Units are now SI metres throughout (was micrometres).  ``periodx``,
-        ``periody`` and ``waveln`` are expected in **metres**; the returned
-        ``cell_pixel_size`` is in metres and matches them directly (no
-        internal ``* 1e-6`` rescale).  Pre-4.14.2 callers passing
-        ``periodx=61.0`` / ``waveln=1.31`` (micrometres) hit a thousand-
-        fold drift in ``samplingx`` that was silently masked by an
-        output ``* 1e-6`` rescale.  v4.14.2 emits a ``DeprecationWarning``
-        when ``periodx``, ``periody`` or ``waveln`` look like micrometres
-        (heuristic: ``periodx > 1e-3 m`` or ``waveln > 1e-3 m``, i.e.
-        larger than 1 mm) and treats the inputs as legacy micrometre
-        values; remove the warning by converting your call sites to SI
-        (multiply old values by ``1e-6``).
-
-    .. versionchanged:: 4.14.3
-        The ``> 1e-3`` legacy-um heuristic silently miscompiled THz / MMW
-        designs where SI-correct ``periodx`` / ``waveln`` legitimately
-        exceed 1 mm (e.g. 5 mm grating period at 1.1 mm far-IR
-        wavelength).  Two guards added: (1) inputs above 1 m are
-        rejected as unambiguously wrong (``ValueError``); (2) an
-        explicit ``_legacy_units`` kwarg (``'auto'`` / ``'um'`` /
-        ``'SI'``) lets THz / MMW users bypass the heuristic.  Pass
-        ``_legacy_units='SI'`` to opt out of the auto rescale and
-        accept mm-scale inputs as SI metres.  Supported wavelength
-        range: 10 nm (``1e-8 m``) -- 1 mm (``1e-3 m``) under the
-        ``'auto'`` mode; up to 1 m under ``'SI'`` mode.
+        Units are SI metres throughout (they were micrometres before).
+        ``periodx``, ``periody`` and ``waveln`` are expected in **metres**,
+        and the returned ``cell_pixel_size`` is in metres and matches them
+        directly (no internal ``* 1e-6`` rescale).  Convert a pre-4.14.2
+        call site by multiplying its values by ``1e-6``.
 
     .. versionchanged:: 5.30
-        ``_legacy_units`` default flipped ``'auto'`` -> ``'SI'`` **and the
-        micrometre auto-detect mode was removed entirely** (audit E-H11,
+        ``_legacy_units`` defaults to ``'SI'`` and the micrometre
+        auto-detect mode is GONE (audit E-H11,
         ``AUDIT_ADVERSARIAL_CODEBASE_2026_07_25``, executed in the W5
-        shim-removal wave).  The ``'auto'`` heuristic silently multiplied
-        any ``periodx`` / ``periody`` / ``waveln`` above 1 mm by ``1e-6``,
-        so a physically correct SI THz / MMW design (8 mm period at 1.1 mm
-        wavelength) came back with 5e-10 m cells -- a factor 1e-6 wrong --
-        and the only diagnostic was a ``DeprecationWarning``, which is
-        suppressed by default outside ``__main__``.  SI metres are now
-        taken at face value: no rescale, no warning.  A shim that
-        SILENTLY REWRITES physical inputs cannot be left reachable once
-        it is known wrong for a legitimate design regime, so ``'auto'``
-        was retired rather than given another cycle: passing
-        ``_legacy_units='auto'`` now raises ``ValueError`` naming the two
-        surviving modes.  Explicit ``_legacy_units='um'`` is unchanged and
-        is the supported migration path for genuine micrometre call
-        sites: ``'auto'``'s per-parameter rescale is reproduced exactly by
-        ``'um'`` whenever every parameter was micrometre-valued (its own
-        documented use case), and a hybrid call must state which values
-        are which rather than have a magnitude heuristic guess.
+        shim-removal wave).  SI metres are taken at face value: no rescale,
+        no warning.  ``_legacy_units='auto'`` raises ``ValueError`` naming
+        the two surviving modes.  Explicit ``_legacy_units='um'`` is
+        unchanged and is the supported migration path for genuine
+        micrometre call sites -- it reproduces the retired ``'auto'``
+        rescale exactly whenever every parameter was micrometre-valued, and
+        a hybrid call must state which values are which rather than have a
+        magnitude heuristic guess.  What ``'auto'`` did to a legitimate THz
+        design, and why it was retired rather than deprecated again, is in
+        docs/history/lumenairy.elements.doe.md.
 
     Parameters
     ----------
@@ -667,7 +632,7 @@ def makedammann2d(
     cell_pixels : int, (int, int), or None, default ``None``
         Force the unit-cell pixel count directly, overriding the
         ``wavsamp``-derived grid size.  ``None`` (default) keeps the
-        historical behaviour: the cell is
+        derived default: the cell is
         ``ndifordersx = ceil(periodx / (wavsamp * waveln) * 0.5) * 2``
         pixels wide (and similarly in y).  An ``int`` sets both axes to
         that many pixels; a ``(nx, ny)`` tuple sets them independently.
@@ -737,7 +702,7 @@ def makedammann2d(
     """
     from numpy.fft import fft2, fftshift, ifft2, ifftshift
 
-    # v4.14.3: dispatch on ``_legacy_units``.  Two modes (v5.30):
+    # Dispatch on ``_legacy_units``.  Two modes:
     #
     #   'SI'   -- pass-through, accept mm-scale inputs as SI metres
     #             (intended for THz / MMW designs).  DEFAULT since
@@ -745,12 +710,10 @@ def makedammann2d(
     #   'um'   -- explicit legacy micrometres; rescale unconditionally
     #             with NO warning.
     #
-    # v5.30 (W5 shim-removal wave): the v4.14.2 ``'auto'`` heuristic is
-    # REMOVED.  It rescaled by 1e-6 whenever a value exceeded 1 mm, which
-    # is exactly wrong for a physical THz / MMW design; retiring it to an
-    # explicit opt-in (v5.30 audit E-H11) was the first step, deleting it
-    # the second.  A shim that silently rewrites physical inputs is not
-    # given another cycle.  Precedent for the explicit named rejection:
+    # There is deliberately no 'auto' mode: rescaling by 1e-6 whenever a
+    # value exceeds 1 mm is exactly wrong for a physical THz / MMW design,
+    # and a shim that silently rewrites physical inputs is not given another
+    # cycle.  Precedent for the explicit named rejection:
     # ``propagators/system.py`` ``_reject_legacy`` (v5.0 aperture schema)
     # -- the mode name INTERCEPTED VALUES, so a bare "not valid" message
     # would leave a migrating caller without the recipe.
@@ -985,9 +948,9 @@ def makedammann2d(
             for ax in axes:
                 ax.clear()
 
-            # v4.14.2: ``rxscal``/``ryscal`` are now in SI metres
-            # (post-SI conversion); scale to micrometres for display
-            # so the plot axes match the historical user expectation.
+            # v4.14.2: ``rxscal``/``ryscal`` are in SI metres
+            # (post-SI conversion); scale to micrometres for display so the
+            # plot axes read in micrometres.
             _um = 1e6
             axes[0].imshow(
                 np.angle(nearfield).T,
@@ -1142,10 +1105,11 @@ def load_fits_field(
             # DOE-1 (AUDIT_DOE_GRATING_FREEFORM): auto-detect the SPLIT
             # amp/phase layout -- which is the DEFAULT of
             # ``save_fits_field`` (2-D real amplitude primary + a second HDU
-            # tagged ``EXTNAME='PHASE'`` / ``BUNIT='radians'``).  Pre-fix the
-            # default save -> default load (``hdu_phase=None``) round-trip
-            # took this "amplitude only" branch and SILENTLY dropped all
-            # phase (mirroring the real/imag-stack auto-detection above).
+            # tagged ``EXTNAME='PHASE'`` / ``BUNIT='radians'``).  Without it
+            # the default save -> default load (``hdu_phase=None``)
+            # round-trip takes this "amplitude only" branch and SILENTLY
+            # drops all phase (mirroring the real/imag-stack auto-detection
+            # above).
             _phase_hdu = None
             for _h in hdul[1:]:
                 _hdr = _h.header

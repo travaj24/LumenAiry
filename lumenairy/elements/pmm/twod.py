@@ -330,14 +330,14 @@ def _warn_lossless_energy_2d(result, eps_values, fn_name, tol=None):
 
     TWO-SIDED about 1.0 (2026-08-17).  Because losslessness has already been
     ESTABLISHED above, ``R+T = 1`` is exact and a DEFICIT is exactly as much a
-    defect as an excess.  This predicate was previously the passivity window
-    ``-tol <= tot <= 1+tol`` inherited from the siblings -- but those siblings
-    never establish losslessness, so they cannot use the deficit side, whereas
-    this one can and must.  The gap was not academic: the same near-singular
+    defect as an excess.  A PASSIVITY window ``-tol <= tot <= 1+tol`` -- what
+    the siblings inherit -- cannot express that: those siblings never establish
+    losslessness, so they cannot use the deficit side, whereas
+    this one can and must.  The gap is not academic: the same near-singular
     Fourier-projection coincidence reaches the deficit side too, and
     ``pmm_efficiency_2d`` returned ``R+T = 0.8953`` -- a 10.5 % energy LOSS on a
     provably lossless pillar, per-order efficiencies wrong by ~2x -- with NO
-    warning, because 0.8953 sits inside the old window (measured: duty-0.25
+    warning, because 0.8953 sits inside a passivity window (measured: duty-0.25
     eps 12.25/1 pillar, degree=11, n_orders=15; the no-floor staggered path
     closes to 2.4e-14 on the same grating and disagrees by 1.6e-02).  The
     message and the docstring both already described a CLOSURE test; only the
@@ -510,7 +510,7 @@ def _cell_to_walls_tile(eps_cell, period_x, period_y, fn_name):
 # FACTORIZED assembly (see _scalar_projected_ops) nothing dense of size N x N
 # is ever materialized -- the binding costs are the (Nf, N) projector pair
 # (~16 * Nf * N bytes each) and the (Tp * vec) @ Tpinv sandwiches
-# (O(Nf^2 N) flops) -- so the ceiling is ~40x higher than the old dense-kron
+# (O(Nf^2 N) flops) -- so the ceiling is ~40x higher than a dense-kron
 # path's 4000.  N = 150_000 at n_orders = 11 (Nf = 529) is ~2.5 GB of
 # projectors; staircased curved cells (a 32-strip-per-axis disk at degree 9 is
 # N ~ 83k) now fit.  The pillar default (degree 11, 3 strips) is N = 1089.
@@ -761,7 +761,7 @@ def _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x, period_y):
         # DIAGONAL, so Minv @ DX = kron(I, Mx^-1 Dx), every eps operator is a
         # diagonal NODAL VECTOR, and pinv(kron(Ty, Tx)) = kron(pinv, pinv) --
         # the dense N x N kron materialization + the O(N^3) LAPACK inversion
-        # OF A DIAGONAL MATRIX the old _assemble_2d path performed are never
+        # OF A DIAGONAL MATRIX that a dense ``_assemble_2d`` form performs are
         # needed.  Measured machine-identical to the dense path (rel ~2.6e-15)
         # and 220-1078x faster / 64-138x less memory at degree 9-11; the dense
         # assembly was 88-97% of the whole solve.
@@ -1317,9 +1317,10 @@ def pmm_efficiency_2d(
     # Pillar-bounds contract BEFORE the JAX dispatch (audit P2-14): the bounds
     # are STATIC concrete geometry on every path (only materials / depth /
     # wavelength / angles are traced -- _static_prep float()-coerces them), so
-    # inverted / degenerate bounds must raise here too; previously the JAX
-    # branch returned first and silently built a negative-width strip (an
+    # inverted / degenerate bounds must raise here too: below the dispatch the
+    # JAX branch returns first and silently builds a negative-width strip (an
     # energy-conserving but geometrically WRONG answer -- the lossless trap).
+    # See docs/history/lumenairy.elements.pmm.twod.md.
     _validate_pillar_bounds("pmm_efficiency_2d", x_bounds, y_bounds,
                             period_x, period_y)
 

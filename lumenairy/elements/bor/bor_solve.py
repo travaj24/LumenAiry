@@ -89,23 +89,22 @@ _BOR_NODAL_SUPERUNITY_BAR = 1.0e-3
 
 #: The WARNING edge.  Between this and the refusal bar the answer is returned
 #: with a ``UserWarning`` quoting the measured violation -- so a mildly damaged
-#: nodal solve is never SILENT, which is what the retired ``Rbig/lambda > 4``
-#: proxy allowed.  3.71 decades above the healthy ceiling measured above.
+#: nodal solve is never SILENT, which is what the ``Rbig/lambda > 4`` proxy it
+#: replaced allowed.
 #:
-#: ROUND 2 RESTATEMENT OF THAT MARGIN.  "3.71 decades" is against the ONE-SIDED
-#: healthy ceiling (4.4336e-09).  On the TWO-SIDED measure this edge now reads
-#: -- ``max(|R+T-1|)`` on the accurate family, which is what D2 armed -- the
-#: ceiling is **2.714107e-07** (uniform nodal rows with the right channel set
-#: and a silent index ceiling; ``r1_passivity_census`` -> ``r4_bars``), so the
-#: edge carries **0.57 decades, not 3.71**.
+#: THE MARGIN, on the TWO-SIDED measure the screen actually arms
+#: (``max(|R+T-1|)`` on the accurate family, which is what D2 armed): the
+#: healthy ceiling is **2.714107e-07** -- uniform nodal rows with the right
+#: channel set and a silent index ceiling, ``r1_passivity_census`` ->
+#: ``r4_bars`` -- so this edge carries **0.57 decades**.  Against the ONE-SIDED
+#: healthy ceiling (4.4336e-09) the same edge reads 3.71 decades; 0.57 is the
+#: binding number.
 #:
-#: It is kept at 1e-6 anyway, and the reason is what this edge COSTS when it is
-#: wrong: one ``UserWarning``, never a refusal.  The quantity is also
-#: kernel-stable by construction -- the nodal blow-up is a deterministic
-#: discretisation defect, not an arithmetic one -- so 3.7x is not the same kind
-#: of thin margin a backward-error-driven bar would have at 3.7x.  The number is
-#: recorded here rather than left at 3.71 so the next round re-derives from the
-#: measurement.
+#: It is kept at 1e-6 on that narrower margin, and the reason is what this edge
+#: COSTS when it is wrong: one ``UserWarning``, never a refusal.  The quantity
+#: is also kernel-stable by construction -- the nodal blow-up is a
+#: deterministic discretisation defect, not an arithmetic one -- so 3.7x is not
+#: the same kind of thin margin a backward-error-driven bar would have at 3.7x.
 _BOR_NODAL_SUPERUNITY_WARN = 1.0e-6
 
 #: How close to real ``eps`` a layer must be for the stack to count as PROVABLY
@@ -122,10 +121,6 @@ _BOR_NODAL_SUPERUNITY_WARN = 1.0e-6
 #: ``staggered`` column) -- nine decades below ``_BOR_NODAL_SUPERUNITY_BAR``,
 #: so a stack this predicate calls lossless cannot absorb its way past the
 #: deficit bar.
-#:
-#: ROUND 2 NOTE.  Until round 2 this ONE constant gated the WHOLE screen, in
-#: both directions, and that was defect D1: see
-#: :func:`_stack_is_provably_passive`.
 _BOR_LOSSLESS_REL_IM = 1.0e-12
 
 #: ROUND 2 (D1).  How far below zero a layer's ``Im(eps)`` may sit, relative to
@@ -260,25 +255,19 @@ def _stack_is_provably_passive(layers):
     convention, to :data:`_BOR_PASSIVE_DEADBAND`), and a LOSSLESS incidence
     half-space.
 
-    ROUND 2 -- WHAT THIS USED TO SAY, AND WHY IT WAS DEFECT D1.  As first built
-    it required every layer to be LOSSLESS to 1e-12 and disarmed otherwise, on
-    the stated reasoning *"on a lossy stack there is no theorem to violate."*
-    That reasoning covers the BELOW-unity direction only.  For a stack of
-    passive media energy conservation reads ``R + T + A = 1`` with the absorbed
+    WHY PASSIVE AND NOT LOSSLESS (round 2, defect D1).  For a stack of passive
+    media energy conservation reads ``R + T + A = 1`` with the absorbed
     fraction ``A >= 0``, so ``R + T <= 1`` holds on EVERY passive stack,
-    absorbing or not -- and the guard had a discontinuity at ``Im(eps) = 0+`` of
-    exactly the shape this same wave removed from the EME module.
-
-    MEASURED (``validation/probe_fix_bor_round2/r2_loss_ladder.py``, ladder A):
-    the shipped refusal fixture with a relative loss on the ring's high region.
-    The returned violation is the SAME 2.9 % across the whole ladder -- the
-    nodal excess reads 2.881869e-02 at ``Im/Re`` = 0, at 1e-12, at 3e-12 and out
-    to 1e-04 -- while the pre-round-2 predicate refused the first four rungs and
-    RETURNED every rung from 3e-12 up.  A "lossless" glass entered as
+    absorbing or not.  Requiring LOSSLESS instead puts a discontinuity at
+    ``Im(eps) = 0+`` into the guard -- a "lossless" glass entered as
     ``n = 1.5 + 1e-8i``, or any dispersion fit with a residual imaginary part,
-    took the whole guard out.
+    takes the whole guard out -- while the violation it exists to catch does
+    not move with the loss at all: MEASURED
+    (``validation/probe_fix_bor_round2/r2_loss_ladder.py``, ladder A) the
+    shipped refusal fixture's nodal excess reads 2.881869e-02 at ``Im/Re`` = 0,
+    at 1e-12, at 3e-12 and out to 1e-04.
 
-    WHAT STAYS, AND WHAT IT IS NO LONGER ALLOWED TO REACH.  The LOSSLESS
+    WHAT THE LOSSLESS REQUIREMENT IS STILL FOR.  The LOSSLESS
     requirement on the INCIDENCE half-space is kept, because that is where the
     ENERGY theorem actually needs it: ``R`` and ``T`` are formed from a basis
     normalised to unit ``|z-flux|`` per mode, and in an absorbing incidence
@@ -288,15 +277,13 @@ def _stack_is_provably_passive(layers):
     the same reason and records the measured 1.00026 / 1.0152 / 1.0303
     super-unity ladder it legitimately produces.
 
-    ROUND 3 (verification round 2, GAP 2) -- THIS PREDICATE NO LONGER GATES THE
-    INDEX CEILING.  Until round 3 it was the single early return
-    :func:`_check_nodal_passivity` took for BOTH detectors, so the conjunct
-    above -- an energy argument -- disarmed the ceiling too, and D1's own
-    discontinuity at ``Im(eps) = 0+`` survived on ``layers[0]``.  Measured: a
-    3e-12 loss there walked a returned ``max(R + T) = 2.41297`` past both
-    detectors against a twin closing to 1 exactly.  The media half is now
-    :func:`_stack_media_are_passive`, which gates both; THIS predicate gates
-    the energy detector alone.
+    THIS PREDICATE GATES THE ENERGY DETECTOR ALONE (round 3, verification
+    round 2, GAP 2).  The media half is :func:`_stack_media_are_passive`,
+    which gates BOTH detectors.  One shared early return would let this
+    conjunct -- an energy argument -- disarm the index ceiling as well, so
+    D1's discontinuity at ``Im(eps) = 0+`` would survive on ``layers[0]``:
+    measured, a 3e-12 loss there walks a returned ``max(R + T) = 2.41297``
+    past both detectors against a twin closing to 1 exactly.
 
     GAIN IS NOT PASSIVE and stays outside the screen entirely: a stack with
     ``Im eps < 0`` has no energy theorem in either direction, so both halves
@@ -323,15 +310,15 @@ def _stack_media_are_passive(layers):
     """``Im eps >= 0`` on every layer, to :data:`_BOR_PASSIVE_DEADBAND` --
     :func:`_stack_is_provably_passive` WITHOUT its incidence-lossless conjunct.
 
-    ROUND 3 (verification round 2, GAP 2) -- WHY THE TWO ARE NOW SEPARATE.
+    WHY THE TWO ARE SEPARATE (round 3, verification round 2, GAP 2).
     The incidence-lossless conjunct is about the ENERGY: ``R`` and ``T`` are
     formed from a unit-``|z-flux|`` basis, so in an absorbing incidence medium
     they are not power fractions and no energy bar can mean anything.  It is
     NOT about the INDEX CEILING, whose Rayleigh argument concerns one
     half-space's own ``eps`` and is untouched by whether the incidence medium's
-    flux is conserved.  Until round 3 the two detectors shared one early
-    return, so a loss of ANY size on ``layers[0]`` -- 3e-12 included, the exact
-    rung defect D1 was named for -- disarmed BOTH.
+    flux is conserved.  Sharing ONE early return lets a loss of ANY size on
+    ``layers[0]`` -- 3e-12 included, the exact rung defect D1 was named for --
+    disarm BOTH.
 
     MEASURED, the hole that left (ladder D of
     ``validation/probe_verify_bor_round2/v3_ladders.py``, reproduced by
@@ -660,8 +647,8 @@ def build_layer(m, Rbig, N, eps_profile, k0, *, wall="pec", thickness=None,
         # Rbig ~ 12 vacuum wavelengths) whose zero-z-flux modes are oriented by
         # the sign of noise, driving the interface transmission block singular
         # (cond ~ 2.6e15) and blowing the cascade energy up to ~1e29 -- silently.
-        # 5.45.1: this ``Rbig/lambda > 4`` test is RETIRED AS A DECISION and
-        # kept only as an early, cheap hint.  It is a PROXY, and the scoping
+        # This ``Rbig/lambda > 4`` test is a HINT and never a decision
+        # (5.45.1).  It is a PROXY, and the scoping
         # measured how badly it misses its own population: at 1, 2 and 4
         # vacuum wavelengths the same five-layer stack reads max(R + T) =
         # 3.05, 114.4 and 37.91 and this warning does not fire, while a
@@ -784,8 +771,11 @@ def solve(layers, k0):
     transmitted power fraction), ``energy`` (R+T per incident mode).
 
     Audit W6-B11: a MIDDLE layer left at the ``build_layer`` default
-    ``thickness=None`` used to die inside ``propagation_smatrix`` with a bare
-    ``TypeError: unsupported operand type(s) for *: 'complex' and 'NoneType'``.
+    ``thickness=None`` is rejected here by name, rather than dying inside
+    ``propagation_smatrix`` with a bare ``TypeError: unsupported operand
+    type(s) for *: 'complex' and 'NoneType'``.  See
+    docs/history/lumenairy.elements.bor.bor_solve.md for the rounds that
+    shaped the passivity screen above.
     """
     if len(layers) < 2:
         raise ValueError(

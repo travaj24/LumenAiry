@@ -1775,9 +1775,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         mortar algebra, which is the only way to score the conforming identity.
         Library code never sets it.
 
-        ROUND 2 (2026-09-11, ``FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md``).  This
-        path carries TWO guards that the shared path does not need, and they
-        are layered on purpose:
+        TWO GUARDS THE SHARED PATH DOES NOT NEED
+        (``FIX_PMM2D_MORTAR_ROUND2_2026_09_11.md``), layered on purpose:
 
         * the MINIMUM SEGMENT WIDTH contract, enforced where the grid is BUILT
           (:class:`~lumenairy.elements.pmm.twod_staggered.Basis1D`), because
@@ -1821,16 +1820,16 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             return g
 
         gof = [_grid(L["wx"], L["wy"], M) for L, M in zip(self._layers, Ms)]
-        # ROUND 3 (VERIFY S5.4): the band ABOVE the width contract is accepted
-        # and measurably degraded, and until now SILENTLY.  This is the one
-        # place where the NEIGHBOURS are known, so the warning is conditioned
-        # on the stack actually building a cross-grid interface -- a fully
-        # CONFORMING per-layer stack takes the plain square match everywhere
-        # and is measured delta-independent, so it must not warn.
-        # ROUND 4 (VERIFY round 3, DEFECT 2): that test is PER AXIS.  Round 3
-        # asked it of the STACK and then scanned both axes, so layers differing
-        # on x while sharing the y wall array warned about a narrow y segment
-        # on which the mortar is the identity.
+        # The band ABOVE the width contract is accepted and measurably
+        # degraded, so it must not be silent.  This is the one place where the
+        # NEIGHBOURS are known, so the warning is conditioned on the stack
+        # actually building a cross-grid interface -- a fully CONFORMING
+        # per-layer stack takes the plain square match everywhere and is
+        # measured delta-independent, so it must not warn.  The test is PER
+        # AXIS (VERIFY round 3, defect 2): asked of the STACK and then scanned
+        # over both axes, it warns about a narrow y segment on which the mortar
+        # is the identity whenever two layers differ on x but share the y wall
+        # array.  See docs/history/lumenairy.elements.pmm.stack2d_pure.md.
         _warn_stag_sliver_band(gof, _stag_mortared_axes(gof, force_mortar))
         # HALF-SPACES ride the grid of the layer they TOUCH -- the 1-D
         # convention, and more strongly motivated here: both end interfaces

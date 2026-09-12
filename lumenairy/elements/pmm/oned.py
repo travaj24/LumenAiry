@@ -43,7 +43,7 @@ from ._core import (
 # ``_resolve_incidence_checked`` is the ONE shared back-side-incidence guard
 # for the whole PMM suite; it now lives in ``._core`` so the ``PMMStack``
 # source setters route through the SAME resolver the 1-D entry points use
-# (audit S1-7 -- ``set_source`` previously bypassed it).  Re-exported here for
+# (audit S1-7).  Re-exported here for
 # the historical ``from ...pmm.oned import _resolve_incidence_checked`` import.
 
 
@@ -410,14 +410,14 @@ def pmm_efficiency_1d(
         FMM ``stabilize`` flag).  When ``True`` (default) the solver scans a
         short UPWARD degree window and returns the CONSENSUS result -- the
         value the converged degrees agree on, with the ENERGY-CLEANEST cluster
-        member preferred on lossless structures (v5.14: two marginal degrees
-        could previously corroborate each other ~1e-3 off).  The consensus is
+        member preferred on lossless structures (v5.14: without that
+        preference two marginal degrees can corroborate each other ~1e-3 off).
         accurate to the scan's per-order tolerance (~3e-3 worst case), so it is
-        NOT strictly monotone in the requested degree.  NB v5.14 also fixed
-        the root cause of the formerly-DENSE normal-incidence resonances (a
-        noise-sensitive legacy forward-mode branch); with that fix
-        ``stabilize=False`` conserves energy at every probed degree, and the
-        consensus is a safety net rather than a necessity.  Set ``False`` to
+        NOT strictly monotone in the requested degree.  With the v5.14
+        forward-mode branch (the root cause of the dense normal-incidence
+        resonances was a noise-sensitive legacy one) ``stabilize=False``
+        conserves energy at every probed degree, so the consensus is a safety
+        net rather than a necessity.  Set ``False`` to
         solve at exactly ``degree``.
 
     Returns
@@ -1148,9 +1148,9 @@ def pmm_jones_1d_slanted(
         # per-order factorization defect vs two independent corrected engines
         # (convection and an RCWA tensor staircase agree at ~4e-3), while the
         # covariant GENERATOR itself is exact (uniform-slab dispersion gates).
-        # The pre-fix 'covariant-for-OOP-too' routing was validated in a world
-        # where all three engines shared the factor-i defect and agreed on the
-        # same symmetrized wrong answer.  Explicit 'covariant' still solves
+        # See docs/history/lumenairy.elements.pmm.oned.md for what the
+        # covariant-for-OOP routing was validated against.
+        # Explicit 'covariant' still solves
         # OOP (documented limitation; see AUDIT_OOP_GENERATOR_FACTOR_I).
         factorization = ("covariant"
                          if (abs(float(slant_angle)) >= _COV_MIN_SLANT_RAD
@@ -1680,7 +1680,7 @@ def pmm_efficiency_1d_vs_wavelength(
 ):
     """DISPERSIVE scalar spectral sweep of the binary PMM grating -- the PMM
     counterpart of :func:`rcwa_efficiency_vs_wavelength` (v5.14 generality
-    audit: the PMM family previously had no dispersive-material sweep).
+    audit).
 
     Each of ``n_ridge``, ``n_groove``, ``n_substrate``, ``n_superstrate`` may
     be a FIXED value or a CALLABLE ``wl -> value`` (material dispersion via

@@ -155,8 +155,9 @@ _WALLS = ("natural", "pec")
 def _check_wall(wall, staggered=False):
     """Validate the ``wall`` kwarg (audit W6-B3).  ``None`` means "the default
     for this basis": ``'natural'`` on the nodal path, the built-in closed
-    Dirichlet wall on the staggered path.  An unrecognized value used to fall
-    through to ``'natural'`` silently -- a typo bought open-boundary physics."""
+    for this basis".  An unrecognized value would otherwise fall
+    through to ``'natural'`` silently, so a typo buys open-boundary physics
+    (see docs/history/lumenairy.elements.bor.coupled_radial_eigensolver.md)."""
     if wall is None:
         return
     if wall not in _WALLS:

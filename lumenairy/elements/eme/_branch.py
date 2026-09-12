@@ -44,18 +44,17 @@ a band RELATIVE to the spectrum's top -- and it is the shape
 definition that all three EME sites read, so the scalar driver, the diffraction
 driver and the vector solver cannot drift apart again.
 
-ROUND 2 (D13) -- THE FLOOR WAS UNIT-DEPENDENT AND IS NOW ``k0``.  As first
-built, :func:`cut_band` floored the spectrum scale at a LITERAL 1.0, justified
-in its own comment by "``ky`` here is DIMENSIONLESS (the EME modules work in
-``k0``-normalized units)".  That is false.  ``strip_x_modes`` assembles
+WHY THE FLOOR IS ``k0`` AND NOT A LITERAL 1.0 (D13).  ``ky`` here is NOT
+dimensionless.  ``strip_x_modes`` assembles
 ``d2/dx2 + eps k0^2`` on a spacing ``Lx / Nx``, so ``lam`` carries
 1/length^2 and ``ky`` carries 1/length; ``mode_match`` forms
 ``exp(i qz depth)``, which is dimensionless only because ``qz`` is 1/length.
 ``k0`` is a FREE ARGUMENT carrying units, not a normalisation.  A literal 1.0
 therefore engages whenever ``max|ky| < 1`` in the caller's units -- the ordinary
 case for a sub-micron cell written in nanometres -- and the BRANCH DECISION
-moves with the unit system, which the pre-5.45.1 exact-zero pin (having no
-scale at all) did not.
+moves with the unit system, which the earlier exact-zero pin (having no
+scale at all) did not.  See docs/history/lumenairy.elements.eme._branch.md
+for the justifying comment this replaces.
 
 MEASURED (``validation/probe_fix_bor_round2/r3_eme_units.py``, both builds):
 one 1 um cell at lambda = 1550 nm, ``Nx`` = 96, ``eps_hi = 12 - 1e-6j`` (weak
@@ -81,8 +80,8 @@ from ...backend.array import array_namespace
 
 #: THE ON-CUT BAND, relative to the spectrum's top and floored at ``|k0|``.
 #: 1e-9 is the same factor ``eme_2d_vector._strip_split_forward`` has carried
-#: since it was written; what ROUND 2 changed is the SCALE it multiplies (see
-#: the module docstring's D13 paragraph and :func:`cut_band`).
+#: since it was written; the SCALE it multiplies is the one :func:`cut_band`
+#: defines (see the module docstring and that function).
 #:
 #: Measured separation on the fixture in the module docstring: the on-cut
 #: population's ``|Im ky| / max(max|ky|, |k0|)`` reaches 1.34e-16 and the
@@ -116,8 +115,8 @@ def cut_band(z, *, k0=None, xp=None, band: float = _EME_CUT_BAND_REL):
     ``dispersion``, ``mode_field``).  Passing nothing gives ``max|z|`` alone,
     which is unit-invariant too -- it scales as 1/length exactly like
     ``|Im z|``, so the ratio test is unchanged by a change of units.  What is
-    NOT allowed on any path, and what ROUND 2 removed, is a DIMENSIONED LITERAL
-    (the floor was 1.0): that made the band 5.2x wider in physical terms for a
+    NOT allowed on any path is a DIMENSIONED LITERAL
+    floor (1.0, say): that makes the band 5.2x wider in physical terms for a
     1 um cell written in nanometres, and moved 3 of 96 roots onto a different
     branch.  See the module docstring.
     """
