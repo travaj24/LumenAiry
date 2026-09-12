@@ -387,7 +387,10 @@ number.
   Airy kernel ran on EVERY pixel outside `r_c` (measured 4 193 535 of
   4 194 304 = 100.0 % at N = 2048) although `Ai` is 4e-16 of its ring value by
   20 Airy lengths and is clamped to numerical zero by `_AIRY_ARG_CAP` anyway:
-  **25.42 s against the multibranch's 0.85 s at N = 2048**, 93.1 s against
+  **25.42 s against the multibranch's 0.85 s at N = 2048** (the saving is
+  grid-size specific -- at N = 384 / 512 it is only 1.1-1.2x, because the
+  dark fill is a small share of the call there; the returned FIELD is
+  unmoved either way, measured 9.7e-27 of peak), 93.1 s against
   11.9 s at N = 4096.
 
 ### Fixed -- inverse map: the cache key omitted the flags that change its arithmetic (audit S8, P2)
@@ -568,3 +571,159 @@ over-filled x: measured 0 warnings on Nx = 64 / Ny = 256 / dx = dy = 20 µm with
 a 2 mm aperture whose x half-width is 0.64 mm.  The traced entry now passes its
 own `N_y` / `dy`, and `_warn_if_aperture_exceeds_grid` checks the smaller
 semi-extent.  Square grids are unchanged by construction.
+
+---
+
+## VERIFY-A3 follow-up (added 2026-09-12 by the verifier)
+
+### Fixed -- traced lens: the exit-NA undersample guard was priced on the entrance disc (VERIFY-A3 OI-1)
+
+`apply_real_lens_traced`'s exit-NA statistic is intersected with the ENTRANCE
+aperture disc (audit T13, which removed a 3.14x overstatement), but the mask the
+returned field carries is applied on the OUTPUT grid.  On a thick fast element
+those sets differ: measured against an independent Newton+Snell trace at
+lambda = 1.0 um, `R = +-20 mm / t = 12 mm / aperture 18 mm` reads 0.49809 on the
+entrance disc against 0.85802 on the output disc, so the guard's advice
+`dx <= lambda/(2*NA_exit)` said 1.00 um where 0.58 um is required -- 1.72x too
+coarse, in the unsafe direction.  The WARNING is now decided on the larger of
+the two, and `_exit_na_out` reports `na_exit_entrance_disc`,
+`na_exit_output_disc`, `na_exit_guard` and `n_exit` alongside the unchanged
+`na_exit` (which `propagators/carrier.py`'s `on_tilt_exact_grid` reads and which
+is therefore deliberately not moved).  Thin elements move by <= 5 %
+(0.246183 -> 0.257506 on the audit's f/5 fixture).
+
+### Fixed -- traced lens: the exit-NA Nyquist test now uses the IN-MEDIUM wavelength (VERIFY-A3 OI-3)
+
+The exit leg runs in the medium after the last surface, whose wavelength is
+`lambda/n_exit`, so a ray at angle theta carries transverse spatial frequency
+`n_exit*sin(theta)/lambda`.  The guard compared the bare direction cosine
+against `lambda/(2*dx)`, i.e. it told a prescription ENDING IN GLASS that it had
+`n_exit` times more room than it has.  Measured on an immersed rear
+(`glass_after='N-SF11'`, n = 1.75588, R = +-30 mm, aperture 16 mm,
+lambda = 1.0 um): the statistic is `sin(theta) = 0.040931` where the criterion
+needs `n_exit*sin(theta) = 0.071870`, so the advised `dx` was **1.76x too
+coarse** (12.216 um quoted against the 6.957 um required); an N-BK7 rear reads
+5.252 -> 3.484 um.  `power_frac_above_nyquist` is compared in the same units.
+
+**Migration.** `n_exit == 1` on every air-ending prescription, where the test,
+the message and the reported fraction are BIT-IDENTICAL to before -- that is
+every fixture in the tree.  A prescription ending in glass (a cemented interface
+left open, an immersed sensor, a sub-assembly handed to another element) will
+now see the undersample `RuntimeWarning` fire where it did not, and will be
+asked for a grid `n_exit` times finer.  That is the physically required
+sampling; pass `on_undersample='silent'` to acknowledge it deliberately.
+The reported `na_exit` / `na_exit_entrance_disc` / `na_exit_output_disc` stay
+bare direction cosines, so nothing calibrated against them moves;
+`na_exit_guard` is the in-medium numerical aperture and `n_exit` is reported so
+the two are convertible.
+
+### Fixed -- caustic siblings: the energy tripwire's gain arm is bracketed against boundary-straddling triangles (VERIFY-A3 OI-2)
+
+The launched-power normaliser counts a launch node only when its own mapped
+point lands on the output grid, while the reconstructed power counts every pixel
+a triangle covers -- including triangles that straddle the grid boundary with
+their nodes outside.  On a coarse launch lattice over a grid much smaller than
+the beam that mismatch alone reached 3.26x: measured on the delta-audit's D3
+fixture (a 6 mm aperture on a 1.2 mm grid) at `ray_subsample=8`,
+z = 100 / 110 / 120 mm gives 3.257 / 2.563 / 2.069 with `n_branch = 1` and ZERO
+degenerate triangles -- three spurious `RuntimeWarning`s with no coalescence
+anywhere, from the same geometry the launched-power normaliser was introduced to
+quieten.  The gain arm now requires the excess to clear a second denominator,
+the launch power of the triangles that rasterise onto the grid, which counts a
+straddling triangle whole and so bounds the launched power from above.  All four
+false positives go silent (bracketed ratios 0.549..0.865) while the real
+blow-up is unmoved: 1.803e+05 / 2.331e+05 / 1.291e+05 at 0.98 / 0.99 / 0.995 of
+the ray-traced BFL on BOTH denominators, and the audit's silent 4-8x pre-focus
+band still warns (3.988 / 8.102 / 13.07).  `return_diagnostics` gains
+`power_ratio_triangles`; `power_ratio` is unchanged.
+
+### Changed -- traced lens: `_spectral_gap_cuts` scores its flanking peaks INSIDE the occupied band (audit T11 / VERIFY-A3 OI-4)
+
+The audit's T11 row recorded that the docstring contradicted the code; WP-A3
+changed the CODE, restricting the "a real gap has a peak on each side" test to
+the 0.995-power support the docstring describes, and that change shipped without
+a changelog line.  It is a real behaviour change to
+`apply_real_lens_traced_segmented`: spectral leakage OUTSIDE the occupied band
+can no longer justify a cut.  Demonstrated on a synthetic marginal with one
+in-band lobe at f = +20 and an out-of-band lobe at f = -80, support declared
+[-40, +40]: the pre-fix predicate cuts at `[-40.0]` on the strength of the
+out-of-band peak, the shipped one returns `[]`; a genuine two-lobe gap is still
+found by both (`[0.0]`).  The exact-reconstruction contract is untouched --
+`max|sum(segments) - E| / peak = 5.55e-16` at `min_segment_power` 0 and 1e-3.
+Pinned by `tests/unit/test_audit2609_a3_verify_traced.py::test_spectral_gap_cuts_only_counts_peaks_inside_the_occupied_band`
+and `::test_the_angular_segmentation_still_sums_back_to_the_input`.
+
+**Migration.** A field whose spectrum has structure outside its own 0.995-power
+support may now be split into FEWER angular segments.  At the default
+`min_segment_power=1e-3` the extra bins were dropped as empty anyway; at
+`min_segment_power=0` they cost two extra inverse FFTs and produced empty
+segments in the returned list.
+
+### Fixed -- traced lens: `_sample_local_tilts` says when it is at its sampling limit (VERIFY-A3 OI-5)
+
+The estimator reads a WRAPPED phase difference `angle(E[i+1] conj(E[i]))`, so it
+cannot return a direction cosine above `lambda/(2*dx)` whatever the field does:
+a steeper launch tilt folds into that band and comes back as a plausible small
+number.  The audit's own repro prints the case and calls it "silently WRONG, no
+warning" (`repro/TR-INFRA/p7_tilts.py` 7c: a 0.8 launch tilt at dx = 4 um,
+lambda = 1.31 um, `max_sin=0.5` returns `max|L| = 0.1450` against a 0.16375
+Nyquist -- nowhere near the 0.5 clip, which can never fire on that grid).  A
+`RuntimeWarning` now fires in two situations: when the `max_sin` clip actually
+bites (naming the clipped fraction), and when `max_sin` is beyond what the grid
+can carry AND the reading has run up to within 20 % of the fold (naming both
+numbers).  Silent below that: measured 0.885 of Nyquist for the aliased case
+against 0.183 (tilt 0.03) and 0.611 (tilt 0.10) for ordinary well-sampled
+tilts, and silent on a collimated field and under the shipped
+`smooth_sigma_px=4`.
+
+### Fixed -- traced lens: a per-surface `semi_diameter` now reaches the DEFAULT (polynomial) answer (VERIFY-A3 OI-11)
+
+`newton_fit='spline'` rejects output pixels whose entrance solution lands on a
+node it had to FILL (audit T3), but the default polynomial fit simply dropped the
+dead samples from its least squares and was then smooth across the hole -- so a
+prescription whose vignetting comes from a per-surface `semi_diameter` returned
+the UN-VIGNETTED field.  Measured on an N-SF11 singlet whose rear semi-diameter
+is 1.4 mm inside a 5 mm aperture (N = 192, dx = 30 um, lambda = 1.064 um):
+`P/P_in = 0.9983` with 21 821 non-zero pixels, identical to the same call with no
+`semi_diameter` at all, while the spline path read 0.8657 / 6 637.  Both fits now
+mask an output pixel whose converged entrance solution lands on a DEAD launch
+node, and the polynomial path reads **0.8840 / 7 093** -- within 2 % of the
+spline.  A `RuntimeWarning` names the count, and only when the vignetting is
+inside the clear aperture (the launch square's corners sit at 1.06 aperture
+radii and die against any `semi_diameter <= aperture/2`, which changes nothing
+the output mask keeps: measured `P/P_in` 0.998312 both ways at
+`semi_diameter = aperture/2`).
+
+**Migration.** A prescription that vignettes rays with `semi_diameter` /
+`clear_aperture` now returns LESS power through `apply_real_lens_traced` -- the
+vignetting is in the answer instead of being fitted over.  Nothing moves when no
+ray dies (the mask is `None` and the arithmetic is bit-identical), nor when the
+dead rays are outside the clear aperture.  The CuPy branch (`use_gpu=True`,
+polynomial only) keeps the historical extrapolating behaviour, because the
+rejection kernel is NumPy.
+
+### Fixed -- analytic lens: the ndarray carrier differentiates and samples with its OWN pitch on each axis (VERIFY-A3 OI-10)
+
+`_compute_carrier`'s `carrier=<ndarray>` / `conjugate=<ndarray>` branch used
+`np.gradient(W, dx, dx)` and a `/dx` lookup index on BOTH axes, and took the
+sample count from `X.shape[0]` for both.  `apply_real_lens_traced` refuses a
+non-square grid, but `apply_real_lens` supports `dy != dx` and forwards the
+carrier straight through, so on an anamorphic grid the y eikonal gradient was
+wrong by `dy/dx`: measured against the closed-form tilted congruence
+(R = -30 mm, L = 0.046, M = 0.031) at dy = 3 dx, the y gradient error was
+**1.051e-01** against a derived discretisation bar of 1.198e-07, and at
+dy = 0.4 dx **1.936e-02** against 5.622e-09.  The branch now takes `dy=None`
+(defaulting to `dx`) and `apply_real_lens`'s six call sites pass their own.
+Bit-identical for `dy is None` and `dy == dx`, i.e. on every square grid and
+every path through `apply_real_lens_traced`.
+
+### Changed -- tests: two resource `pytest.skip`s replaced by asserted preconditions (VERIFY-A3 OI-9)
+
+`tests/unit/test_niche_k4_uniform_caustic.py` skipped its two
+`caustic_fold_ref` gates below `8*N*N*16 + 1.5` GB of free memory, which
+`docs/TESTING_STANDARDS.md` rule 4 forbids ("two skips silently removed five
+tests from the gate on exactly the runners that mattered").  The bound was also
+7x too conservative: the MEASURED tracemalloc peak of the N = 768 uniform call
+is 0.229 GB (24 grid-units of `16 N^2`) against the 1.58 GB the skip demanded.
+Both sites now assert that requirement (doubled for headroom) and fail loudly
+with the number.

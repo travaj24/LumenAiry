@@ -600,6 +600,341 @@ def test_stop_index_spellings_collapse_into_their_equivalence_classes():
         'cannot distinguish them -- the test is vacuous')
 
 
+# ===========================================================================
+# VERIFY-A3 follow-up (coordinator rulings 1-6)
+# ===========================================================================
+def test_the_exit_na_guard_is_priced_on_the_in_medium_numerical_aperture():
+    """OI-3.  The exit leg runs in the medium AFTER the last surface, whose
+    in-medium wavelength is ``lambda/n_exit``, so the Nyquist requirement is
+    ``dx <= lambda/(2 n_exit sin theta)``.  The guard used the bare direction
+    cosine, i.e. it told an immersed design it had ``n_exit`` times more room
+    than it has.
+
+    TWO-SIDED and derived: the immersed arm requires the advised ``dx`` to
+    shrink by EXACTLY ``n_exit`` (rtol 1e-9 -- it is one multiply, so the only
+    error is float64 round-off, ~1e-16, against a 1.76x effect: fifteen
+    decades of gap); the air arm requires it to be bit-identical to the bare
+    statistic, which is the no-op the fix must preserve on every air-ending
+    prescription in the tree.
+    """
+    for last, expect_n1 in (('air', True), ('N-SF11', False), ('N-BK7', False)):
+        presc = {'aperture_diameter': 16e-3, 'surfaces': [
+            {'radius': 30e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': '_A3V'},
+            {'radius': -30e-3, 'conic': 0.0, 'glass_before': '_A3V',
+             'glass_after': last}], 'thicknesses': [4e-3]}
+        N, dx = 512, 16e-3 / 512 * 1.3
+        sink = {}
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            apply_real_lens_traced(
+                np.ones((N, N), dtype=np.complex128), prescription=presc,
+                wavelength=_WL, dx=dx, ray_subsample=4,
+                min_coarse_samples_per_aperture=0, _exit_na_out=sink)
+        n_exit = sink['n_exit']
+        bare = max(sink['na_exit_entrance_disc'], sink['na_exit_output_disc'])
+        assert sink['na_exit_guard'] == pytest.approx(n_exit * bare, rel=1e-9)
+        if expect_n1:
+            assert n_exit == 1.0
+            assert sink['na_exit_guard'] == bare       # bit-identical no-op
+        else:
+            assert n_exit > 1.4, n_exit
+            assert sink['na_exit_guard'] / bare == pytest.approx(n_exit,
+                                                                 rel=1e-9)
+            msgs = [str(w.message) for w in rec if 'NA_exit=' in str(w.message)]
+            assert msgs, 'the guard did not fire on an immersed rear'
+            assert 'medium after the last surface' in msgs[0], msgs[0]
+        # the bare statistics themselves are unmoved: they are what the
+        # traced-carrier chain reads
+        assert sink['na_exit'] == sink['na_exit_entrance_disc']
+
+
+@pytest.mark.parametrize('dx,dy', [(20e-6, 60e-6), (25e-6, 10e-6)])
+def test_the_ndarray_carrier_uses_its_own_pitch_on_each_axis(dx, dy):
+    """OI-10.  ``_compute_carrier``'s ndarray branch differentiated with
+    ``np.gradient(W, dx, dx)`` and indexed with ``/dx`` on both axes.
+    ``apply_real_lens_traced`` refuses a non-square grid, but
+    ``apply_real_lens`` does not and passes ``conjugate=<ndarray>`` straight
+    through, so the y gradient was wrong by ``dy/dx``.
+
+    ORACLE: the closed-form tilted congruence.  BAR: the same
+    ``(7/24) dx^2 max|g''|`` discretisation band the square case obeys, on
+    each axis with ITS OWN pitch.  Two-sided, and the arm that would fail
+    before the fix is the y one: measured at dy = 3 dx the old call reads
+    1.051e-01 against a 1.198e-07 bar (6 decades).
+    """
+    import lumenairy as la
+    from lumenairy.elements._lens_traced import _compute_carrier as CC
+    R, Lc, Mc = -30e-3, 0.046, 0.031
+    spec = la.TiltedCarrier(R, Lc, Mc)
+    Nn = np.sqrt(1.0 - Lc * Lc - Mc * Mc)
+    sg = np.sign(R)
+    Ny, Nx = 128, 128
+    xax = (np.arange(Nx) - Nx / 2) * dx
+    yax = (np.arange(Ny) - Ny / 2) * dy
+    Xg, Yg = np.meshgrid(xax, yax)
+    W, grad_a, _ = CC(spec, None, 1.31e-6, dx, Xg, Yg, dy=dy)
+    _, grad_n, _ = CC(np.asarray(W), None, 1.31e-6, dx, Xg, Yg, dy=dy)
+    _, grad_sq, _ = CC(np.asarray(W), None, 1.31e-6, dx, Xg, Yg)  # dy := dx
+
+    xq = np.array([0.37 * dx, 3.5 * dx])
+    yq = np.array([0.11 * dy, -2.7 * dy])
+    ux, uy = xq + R * Lc / Nn, yq + R * Mc / Nn
+    s = np.sqrt(ux * ux + uy * uy + R * R)
+    ex, ey = sg * ux / s, sg * uy / s
+
+    # DERIVED BAR.  ``g_x = sign(R) u_x / s`` with ``s = |(u, R)|`` gives
+    # ``d2g_x/dx2 = -3 u_x (u_y^2 + R^2) / s^5`` and
+    # ``d2g_x/dy2 = -u_x (s^2 - 3 u_y^2) / s^5`` (and the mirror pair for
+    # ``g_y``).  The ndarray branch makes two discretisations: a central
+    # difference along its OWN axis, ``(h^2/6)|d2g/dh2|``, and a BILINEAR
+    # resample of that derivative field, which errs by ``(h^2/8)|d2g/dh2|``
+    # in each direction separately.  So
+    #     bar_x = (7/24) dx^2 |d2g_x/dx2| + (1/8) dy^2 |d2g_x/dy2|
+    # and likewise for y.  The cross term is what makes this a dy test: at
+    # dy = 3 dx it is the LARGER half.  Measured ratio to the bar 0.855..0.953
+    # over dy/dx = 3, 0.4 and 1 (VERIFY-A3, 2026-09-12), so 1.5x leaves ~1.6x
+    # of headroom above and the dy := dx arm below overshoots by 30x.
+    def _second_derivs(ox, oy):
+        ax_, ay_ = ux + ox, uy + oy
+        ss = np.sqrt(ax_ * ax_ + ay_ * ay_ + R * R)
+        return (np.abs(3.0 * ax_ * (ay_ * ay_ + R * R) / ss ** 5),
+                np.abs(ax_ * (ss * ss - 3.0 * ay_ * ay_) / ss ** 5),
+                np.abs(3.0 * ay_ * (ax_ * ax_ + R * R) / ss ** 5),
+                np.abs(ay_ * (ss * ss - 3.0 * ax_ * ax_) / ss ** 5))
+
+    _nb = [_second_derivs(ox, oy)
+           for ox in (-dx, 0.0, dx) for oy in (-dy, 0.0, dy)]
+    gxx = np.max([t[0] for t in _nb], axis=0)
+    gxy = np.max([t[1] for t in _nb], axis=0)
+    gyy = np.max([t[2] for t in _nb], axis=0)
+    gyx = np.max([t[3] for t in _nb], axis=0)
+    barx = ((7.0 / 24.0) * dx * dx * gxx + 0.125 * dy * dy * gxy).max()
+    bary = ((7.0 / 24.0) * dy * dy * gyy + 0.125 * dx * dx * gyx).max()
+
+    ax_, ay_ = grad_a(xq, yq)
+    np.testing.assert_allclose(ax_, ex, rtol=1e-12, atol=1e-15)
+    np.testing.assert_allclose(ay_, ey, rtol=1e-12, atol=1e-15)
+    nx_, ny_ = grad_n(xq, yq)
+    assert np.abs(nx_ - ex).max() <= 1.5 * barx
+    assert np.abs(ny_ - ey).max() <= 1.5 * bary, (
+        f'y gradient {np.abs(ny_ - ey).max():.3e} above the derived bar '
+        f'{bary:.3e} -- the branch is not using dy')
+    # FAIL-BEFORE: the dy := dx call (what every caller got) is decades out
+    sx_, sy_ = grad_sq(xq, yq)
+    assert np.abs(sy_ - ey).max() > 30.0 * bary, (
+        'the dy := dx call is no longer distinguishable, so this fixture '
+        'cannot demonstrate the defect')
+
+
+def test_the_ndarray_carrier_is_bit_identical_on_a_square_grid():
+    """OI-10 must be a NO-OP where ``dy is None`` or ``dy == dx``: that is
+    every path through ``apply_real_lens_traced`` and every square-grid
+    ``apply_real_lens`` call, i.e. essentially the whole tree."""
+    import lumenairy as la
+    from lumenairy.elements._lens_traced import _compute_carrier as CC
+    spec = la.TiltedCarrier(-30e-3, 0.046, 0.031)
+    n, h = 96, 20e-6
+    ax = (np.arange(n) - n / 2) * h
+    Yg, Xg = np.meshgrid(ax, ax, indexing='ij')
+    W, _, _ = CC(spec, None, 1.31e-6, h, Xg, Yg)
+    q = np.array([0.37 * h, 4.5 * h, -2.3 * h])
+    out = []
+    for kw in ({}, {'dy': None}, {'dy': h}):
+        _, g, w = CC(np.asarray(W), None, 1.31e-6, h, Xg, Yg, **kw)
+        out.append((g(q, q), w(q, q)))
+    for (g1, w1) in out[1:]:
+        assert np.array_equal(g1[0], out[0][0][0])
+        assert np.array_equal(g1[1], out[0][0][1])
+        assert np.array_equal(w1, out[0][1])
+
+
+def test_the_local_tilt_estimator_says_when_it_is_at_its_sampling_limit():
+    """OI-5.  ``_sample_local_tilts`` reads a WRAPPED phase difference, so it
+    cannot return a direction cosine above ``lambda/(2 dx)`` whatever the
+    field does -- a steeper tilt folds in and returns as a plausible small
+    number.  The audit's own repro prints the case and calls it "silently
+    WRONG, no warning": a 0.8 launch tilt at dx = 4 um, lambda = 1.31 um,
+    ``max_sin=0.5`` returns ``max|L| = 0.1450`` against a 0.16375 Nyquist,
+    nowhere near the 0.5 clip.
+
+    TWO-SIDED: it must fire on that case and on a genuine clip
+    (``max_sin`` below the Nyquist), and stay SILENT on ordinary well-sampled
+    tilts.  The bar is 0.8 of the Nyquist fold -- measured 0.885 for the
+    aliased case against 0.183 (tilt 0.03) and 0.611 (tilt 0.10) for the
+    silent ones, so there is 1.4x of gap above and 1.3x below.
+    """
+    from lumenairy.elements._lens_traced import _sample_local_tilts
+    lam, dx, n = 1.31e-6, 4e-6, 256
+    k0 = 2.0 * np.pi / lam
+    ax = (np.arange(n) - n / 2) * dx
+    X, Y = np.meshgrid(ax, ax)
+    sin_nyq = lam / (2.0 * dx)
+
+    def run(tilt, max_sin, sigma):
+        E = (np.exp(1j * k0 * tilt * X)
+             * np.exp(-(X ** 2 + Y ** 2) / (0.2e-3) ** 2)).astype(complex)
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            L, _M = _sample_local_tilts(E, lam, dx, X, Y, max_sin=max_sin,
+                                        smooth_sigma_px=sigma)
+        return L, [str(w.message) for w in rec
+                   if 'local-tilt estimator' in str(w.message)]
+
+    # (a) the audit's aliased case: max_sin beyond the fold, reading at it
+    L, msgs = run(0.8, 0.5, 0.0)
+    assert msgs, 'the aliased 0.8 tilt still returns silently'
+    assert f'{sin_nyq:.5f}' in msgs[0], msgs[0]
+    assert float(np.abs(L).max()) < sin_nyq          # it DID fold
+    # (b) a genuine clip
+    _L2, msgs2 = run(0.8, 0.10, 0.0)
+    assert msgs2 and 'REPLACED by it' in msgs2[0], msgs2
+    # (c) silent where the estimator is within its means
+    for tilt, sigma in ((0.03, 0.0), (0.10, 0.0), (0.03, 4.0), (0.0, 4.0)):
+        _L3, msgs3 = run(tilt, 0.5, sigma)
+        assert not msgs3, (tilt, sigma, msgs3)
+
+
+def test_a_vignetting_semi_diameter_reaches_the_default_polynomial_answer():
+    """OI-11.  The polynomial forward-map fit drops dead launch samples and
+    is then SMOOTH across the hole, so a per-surface ``semi_diameter`` that
+    vignettes the ray trace used to leave the returned field untouched:
+    measured ``P/P_in = 0.9983`` with 21 821 non-zero pixels on an N-SF11
+    singlet whose rear semi-diameter is 1.4 mm inside a 5 mm aperture --
+    identical to the same call with no ``semi_diameter`` at all, while the
+    spline path (which rejects its filled nodes) read 0.8657 / 6 637.
+
+    Output pixels whose converged entrance solution lands on a dead launch
+    node are now masked on BOTH fits.  Two-sided: the vignetted call must
+    lose a decisive fraction of its power AND the un-vignetted call must be
+    bit-identical (the mask is ``None`` there, so the arithmetic is
+    untouched).
+    """
+    presc_v = {'aperture_diameter': 5e-3, 'surfaces': [
+        {'radius': 70e-3, 'conic': 0.0, 'glass_before': 'air',
+         'glass_after': '_A3V'},
+        {'radius': -70e-3, 'conic': 0.0, 'glass_before': '_A3V',
+         'glass_after': 'air', 'semi_diameter': 1.4e-3}],
+        'thicknesses': [3e-3]}
+    presc_0 = {'aperture_diameter': 5e-3, 'surfaces': [
+        {'radius': 70e-3, 'conic': 0.0, 'glass_before': 'air',
+         'glass_after': '_A3V'},
+        {'radius': -70e-3, 'conic': 0.0, 'glass_before': '_A3V',
+         'glass_after': 'air'}], 'thicknesses': [3e-3]}
+    N, dx = 192, 30e-6
+    ax = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(ax, ax)
+    E = np.exp(-(X ** 2 + Y ** 2) / (1.4e-3) ** 2).astype(np.complex128)
+    kw = dict(wavelength=1.064e-6, dx=dx, ray_subsample=4,
+              on_aperture_beam='silent', on_noncollimated='off',
+              min_coarse_samples_per_aperture=0)
+    p_in = float((np.abs(E) ** 2).sum())
+
+    def run(presc, fit):
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            out = apply_real_lens_traced(E, prescription=presc,
+                                         newton_fit=fit, **kw)
+        return out, [str(w.message) for w in rec
+                     if 'vignetted or lost' in str(w.message)]
+
+    poly_v, msg_v = run(presc_v, 'polynomial')
+    spline_v, _ = run(presc_v, 'spline')
+    poly_0, msg_0 = run(presc_0, 'polynomial')
+
+    r_v = float((np.abs(poly_v) ** 2).sum()) / p_in
+    r_s = float((np.abs(spline_v) ** 2).sum()) / p_in
+    r_0 = float((np.abs(poly_0) ** 2).sum()) / p_in
+    # the un-vignetted call is untouched: the transmitted power is the
+    # aperture-limited ~1.0 the screen model always returns
+    assert r_0 == pytest.approx(0.9983, abs=2e-3), r_0
+    assert not msg_0, msg_0
+    # the vignetted call LOSES power, and lands with the spline rather than
+    # with the un-vignetted run.  BAR: within 10 % of the spline's reading
+    # (the residual is the spline's extra filled-node ring), and at least
+    # 5 % below the un-vignetted one -- measured 0.8840 vs 0.8657 vs 0.9983.
+    assert abs(r_v - r_s) / r_s < 0.10, (r_v, r_s)
+    assert r_v < 0.95 * r_0, (r_v, r_0)
+    assert msg_v and 'INSIDE the' in msg_v[0], msg_v
+    # ...and the notice is about pixels, not about the launch square's
+    # corners: a semi_diameter AT the aperture rim vignettes nothing that the
+    # output mask keeps, so it must stay silent.
+    presc_rim = {**presc_v, 'surfaces': [presc_v['surfaces'][0],
+                                         {**presc_v['surfaces'][1],
+                                          'semi_diameter': 2.5e-3}]}
+    poly_rim, msg_rim = run(presc_rim, 'polynomial')
+    assert not msg_rim, msg_rim
+    # The FIELD is not bit-identical to the no-semi_diameter run -- it never
+    # was, because a semi_diameter kills the launch square's corners and so
+    # changes which samples the fit sees -- but nothing the output mask KEEPS
+    # is lost: the transmitted power and the non-zero pixel count are
+    # unchanged (measured 0.998312 vs 0.998312, 21 821 vs 21 821).
+    r_rim = float((np.abs(poly_rim) ** 2).sum()) / p_in
+    assert r_rim == pytest.approx(r_0, rel=1e-4), (r_rim, r_0)
+    assert int((poly_rim != 0).sum()) == int((poly_0 != 0).sum())
+
+
+def test_spectral_gap_cuts_only_counts_peaks_inside_the_occupied_band():
+    """OI-4.  WP-A3 changed ``_spectral_gap_cuts`` (it did not merely correct
+    the docstring): the flanking-peak test is now restricted to the
+    0.995-power support, so spectral leakage OUTSIDE that band can no longer
+    justify a cut.  That is a behaviour change on
+    ``apply_real_lens_traced_segmented`` and it needs a pin.
+
+    Synthetic marginal, so nothing depends on a build: one in-band lobe at
+    f = +20 and an out-of-band lobe at f = -80, with the support declared as
+    [-40, +40].  The pre-fix predicate (re-created here) cuts at the band
+    edge on the strength of the out-of-band peak; the shipped one does not.
+    """
+    from lumenairy.elements._lens_traced import _spectral_gap_cuts
+
+    def prefix(marg, freqs, lo, hi, vf, pf):
+        pp = np.asarray(marg, float)
+        pp = pp / max(pp.max(), 1e-300)
+        cuts = []
+        for i in np.where((freqs >= lo) & (freqs <= hi))[0]:
+            if i <= 0 or i >= len(pp) - 1:
+                continue
+            if pp[i] <= pp[i - 1] and pp[i] < pp[i + 1] and pp[i] < vf:
+                if pp[:i].max() > pf and pp[i + 1:].max() > pf:
+                    cuts.append(float(freqs[i]))
+        return cuts
+
+    f = np.linspace(-100.0, 100.0, 201)
+    asym = (np.exp(-((f - 20) / 6.0) ** 2)
+            + 0.30 * np.exp(-((f + 80) / 4.0) ** 2))
+    assert prefix(asym, f, -40.0, 40.0, 0.05, 0.2) == [-40.0]
+    assert _spectral_gap_cuts(asym, f, -40.0, 40.0, 0.05, 0.2) == []
+    # a REAL two-lobe gap is still found, by both
+    sym = (np.exp(-((f - 20) / 6.0) ** 2) + np.exp(-((f + 20) / 6.0) ** 2)
+           + 0.30 * np.exp(-((f - 80) / 4.0) ** 2)
+           + 0.30 * np.exp(-((f + 80) / 4.0) ** 2))
+    assert _spectral_gap_cuts(sym, f, -40.0, 40.0, 0.05, 0.2) == [0.0]
+    assert prefix(sym, f, -40.0, 40.0, 0.05, 0.2) == [0.0]
+
+
+def test_the_angular_segmentation_still_sums_back_to_the_input():
+    """The contract OI-4's change must not touch: with
+    ``min_segment_power=0`` the flat-top partition is exactly unity, so the
+    segments sum to the input.  BAR 1e-13 relative; measured 5.55e-16 (three
+    decades), at both ``min_segment_power`` settings."""
+    from lumenairy.elements._lens_traced import _segment_field_by_angle
+    n, dx, wl = 384, 2e-6, 1.31e-6
+    ax = (np.arange(n) - n / 2) * dx
+    X, Y = np.meshgrid(ax, ax)
+    k0 = 2.0 * np.pi / wl
+    E = (np.exp(-(X ** 2 + Y ** 2) / (0.12e-3) ** 2)
+         * np.exp(1j * k0 * 0.025 * X)
+         + np.exp(-(X ** 2 + Y ** 2) / (0.12e-3) ** 2)
+         * np.exp(-1j * k0 * 0.025 * X)).astype(np.complex128)
+    for msp in (0.0, 1e-3):
+        segs = _segment_field_by_angle(E, dx, dx, 'auto', 'auto', msp,
+                                       0.995, 0.05, 8)
+        err = (float(np.max(np.abs(sum(segs) - E)))
+               / float(np.abs(E).max()))
+        assert err < 1e-13, (msp, len(segs), err)
+
+
 @pytest.mark.parametrize('bad', [2, 5, -3, 0.0, 1.5, 'first'])
 def test_stop_index_is_refused_up_front_with_this_functions_own_name(bad):
     """Out-of-range or non-integer must raise from ``apply_real_lens_traced``

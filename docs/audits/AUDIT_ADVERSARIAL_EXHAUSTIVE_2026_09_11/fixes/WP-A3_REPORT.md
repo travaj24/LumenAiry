@@ -37,7 +37,7 @@ did not either; the S8 cross-check it should have had is now in the imap key).
 | **T15** (P2) | **partially fixed** | `_lens_traced.py` `parallel_amp` gate; strided `\\|E_analytic\\|` | — (both are perf; bit-identity covered by `::test_t9_final_masking_*` and the whole-file runs) | tracemalloc + wall medians | gate **48 GB flat → max(2 GB, 6·nbytes)**, so the measured 1.35× is reachable; full-grid abs 14.17 ms/8.4 MB → 0.114 ms strided.  `phase_analytic_lens` caching and the `_pip_residual_ri` band are DEFERRED (§6) |
 | **T16** (P3) | **fixed** | `_lens_traced.py` delegate list + always-warn; `return_screen`+delegate refusal; `float(sum(thicknesses))`; the aperture-check swallow; two doc corrections | `::test_t8_*` (partly) | — | delegate with only defaults **0 warnings → always announced**; `return_screen`+delegate returned `E_in` → raises |
 | **S8** (P2) | **fixed** | `_lens_imap.py` `_IMAP_KEY_TRACED_FLAGS` + `report_refusal` + GRAM provenance | `::test_s8_*` (2) | the key itself (`repro/TR-SIBLINGS/imap_cache.py`) | `key(det=True) == key(det=False)` **True → False**; same object served **True → False** |
-| **S9** (P2) | **fixed** | `_lens_traced_multibranch.py` `_raster_batches` + vectorised Ludwig swap; `_lens_traced_uniform.py` dark-fill annulus | `::test_s9_*`; bit-behaviour by the k1/k4 suites | tracemalloc / bucket census; Airy decay | exact bbox + 4e6-entry budget (was unbounded: 7.74 GB traced / 12.2 GB RSS at N=4096); Ludwig swap 0.76–1.07 ms/pixel → one vectorised pass; dark fill 100.0 % of pixels → the 20·l_airy annulus |
+| **S9** (P2) | **fixed** | `_lens_traced_multibranch.py` `_raster_batches` + vectorised Ludwig swap; `_lens_traced_uniform.py` dark-fill annulus | `::test_s9_*`; bit-behaviour by the k1/k4 suites | tracemalloc / bucket census; Airy decay | exact bbox + 4e6-entry budget (was unbounded: 7.74 GB traced / 12.2 GB RSS at N=4096); Ludwig swap 0.76–1.07 ms/pixel → one vectorised pass; dark fill 100.0 % of pixels → the 20·l_airy annulus (the 25.4 s → ~1.5 s headline is an **N = 2048** number; VERIFY-A3 re-measured only 1.1–1.2× at N = 384 / 512, where the dark fill is a small share of the call, and the FIELD is unmoved to 9.7e-27 of peak) |
 | **S10** | **not mine** | `fga.py`, `lenses_maslov.py` | — | — | see §5 |
 | **S11** (P3) | **fixed (4 of 8 items)** | `_lens_traced_multibranch.py` (KMAH roll, `L0`/`M0`, tripwire); `_lens_traced_uniform.py` (dead counter, dead `wavelength`); `_math/chebyshev.py` (round-trip claim) | `::test_s11_*` (3 + 4 rows) | closed-form edge-clamped shift; a flat-slope map | roll → edge-clamped; `n_turn` double-count on a flat sample 2 → 1; the other four items are in `_lens_jax` / `lenses_maslov` / `fga` — §5 |
 | **WP-A2 §5.3** | **done** | `_lens_traced.py` stop-index read | `test_audit2609_a3_traced_lens.py::test_traced_stop_index_is_read_through_the_shared_normaliser` | `_lens_real._normalise_stop_index` (shared with `apply_real_lens`) | out-of-range / non-integer: `apply_real_lens:` from a worker thread, or `invalid literal for int()` → **`apply_real_lens_traced:` ValueError up front**; every in-range spelling bit-identical |
@@ -665,7 +665,12 @@ pre-fix one plus chunking.  I did not construct a map with that many shapes.
   break so a fully dead lattice cannot spin to the iteration cap.  Verified
   against the closed-form clamped shift for four shifts on both axes, and
   asserted to DIFFER from `np.roll` on the fixture (so the test can see it).
-* `_count_interior_turning_points` is now called by both meridional traces.
+* `_count_interior_turning_points` is now called by `_trace_meridional_fold`
+  (CORRECTED 2026-09-12 by VERIFY-A3 OI-6: an earlier draft of this line
+  said "both meridional traces".  `_trace_meridional_cusp` still counts
+  with the raw `np.diff(np.sign(dxo))` form, because it needs the turning
+  POSITIONS and the count together and gates on `turns.size != 2`; that is
+  a separate item, not something this change made).
   Verified: on `[0, 1, 2, 2, 1, 0]` the raw `diff(sign(diff))` form counts 2 and
   the robust counter 1 — the difference between routing a clean FOLD to the
   Airy completion and misrouting it to the Pearcey cusp path.
@@ -760,7 +765,12 @@ already fired — and a non-integer produced a bare `int()` message.
   stop_index='first' : ValueError apply_real_lens_traced: prescription['stop_index'] must be an integer ...
 ```
 
-Every in-range spelling returns a **bit-identical** field.  Two incidental
+Every spelling of the SAME surface returns a **bit-identical** field --
+`None` = `0` = `-2` (the entrance) and `1` = `-1` (the rear) on this
+2-surface lens.  (CORRECTED 2026-09-12 by VERIFY-A3 OI-7: the sentence
+used to read "every in-range spelling", which is over-general -- the two
+CLASSES differ, as they physically must, because the stop moves through
+3 mm of glass.)  Two incidental
 improvements fall out of the normalisation: `-1` now reports the surface it
 actually selects (`stop_index=1`) rather than the raw `-1`, and `-2` — which IS
 the entrance on a 2-surface lens — correctly stops warning.  A prescription with

@@ -924,7 +924,7 @@ def _newton_invert_chunk(args):
     opl_flat = So.ev(xe, ye)
     out_of_domain = (xe * xe + ye * ye > (launch_radius * 0.99) ** 2)
     out_of_domain = out_of_domain | _landed_on_filled_node(
-        xe, ye, xs_in, knot_data.get('spline_fill_mask'))
+        xe, ye, xs_in, knot_data.get('dead_launch_mask'))
     # (opl, n_unconverged) -- the count lets the parent emit the serial
     # path's unconverged warning for the pool path too (audit E-H2).
     return (np.where(out_of_domain, np.nan, opl_flat), int(active.sum()))
@@ -4848,7 +4848,7 @@ def _tilted_carrier_parts(spec, X, Y):
 
 
 def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
-                     origin=(0.0, 0.0), need_W=True):
+                     origin=(0.0, 0.0), need_W=True, dy=None):
     """Build the carrier reference wavefront ``W(x, y)`` (length units;
     reference phase = ``k0 * W``) and a callable giving its transverse
     gradient -- the ray direction cosines ``L = dW/dx``, ``M = dW/dy``.
@@ -4929,7 +4929,19 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
             raise ValueError(
                 f"carrier ndarray shape {W_full.shape} != field shape "
                 f"{X.shape}")
-        gWy, gWx = np.gradient(W_full, dx, dx)
+        # ROW pitch for axis 0, COLUMN pitch for axis 1.  ``dy is None``
+        # means "square pixels" and reproduces the previous ``(dx, dx)``
+        # call bit for bit, which is every caller that does not set it and
+        # every path through ``apply_real_lens_traced`` (which refuses a
+        # non-square grid outright).  ``apply_real_lens`` DOES support
+        # ``dy != dx`` and passes its own; before it did, an anamorphic
+        # analytic call with ``conjugate=<ndarray>`` differentiated and
+        # sampled the y axis with the x pitch, so both the eikonal gradient
+        # and the lookup index were wrong by ``dy/dx`` on that axis
+        # (VERIFY-A3 OI-10).
+        _dy = float(dx) if dy is None else float(dy)
+        _Ny, _Nx = W_full.shape
+        gWy, gWx = np.gradient(W_full, _dy, dx)
 
         # BILINEAR, not nearest-neighbour.  The launch lattice ``xs_in`` is a
         # ``linspace`` over +-0.75*aperture with an odd sample count, so its
@@ -4954,11 +4966,14 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
         from scipy.ndimage import map_coordinates as _map_coords
 
         def _coords(xq, yq):
-            # niche D9: ABSOLUTE query position -> grid index.
+            # niche D9: ABSOLUTE query position -> grid index.  Each axis
+            # uses its OWN pitch and its OWN sample count (``N = X.shape[0]``
+            # is the ROW count, which is not the column count on an
+            # anamorphic grid).
             fx = np.clip((np.asarray(xq, dtype=np.float64) - _org_x) / dx
-                         + N / 2.0, 0.0, N - 1.0)
-            fy = np.clip((np.asarray(yq, dtype=np.float64) - _org_y) / dx
-                         + N / 2.0, 0.0, N - 1.0)
+                         + _Nx / 2.0, 0.0, _Nx - 1.0)
+            fy = np.clip((np.asarray(yq, dtype=np.float64) - _org_y) / _dy
+                         + _Ny / 2.0, 0.0, _Ny - 1.0)
             return np.vstack([fy.ravel(), fx.ravel()]), np.shape(fx)
 
         def grad_fn(xq, yq):
@@ -6928,6 +6943,64 @@ def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
         smoothed_mag = np.hypot(smoothed_rms_L, smoothed_rms_M)
         multimode_diagnostic['smoothing_ratio'] = (
             smoothed_mag / raw_mag if raw_mag > 0 else 1.0)
+
+    # ---- saturation notice (VERIFY-A3 OI-5) --------------------------
+    # The estimator reads ``angle(E[i+1] conj(E[i]))``, which wraps at
+    # +-pi, so it CANNOT return a direction cosine outside
+    # ``sin_nyq = lambda/(2 dx)`` whatever the field does: a steeper tilt
+    # folds into that band and comes back as a plausible small number.
+    # Two things are worth saying out loud, and neither was said before:
+    #
+    #  * the clip below actually BITES (the reading reached ``max_sin``),
+    #    so some launch directions are being replaced rather than
+    #    measured -- report the fraction; and
+    #  * ``max_sin`` is beyond what this grid can represent AND the
+    #    reading has run up to the fold.  Then the clip is dead by
+    #    construction and the value at the fold is not trustworthy.
+    #    Measured on the audit's own fixture
+    #    (``repro/TR-INFRA/p7_tilts.py`` 7c: a 0.8 launch tilt at
+    #    dx = 4 um, lambda = 1.31 um, ``max_sin=0.5``): the returned
+    #    ``max|L|`` is 0.1450, which is 0.885 of the 0.16375 Nyquist and
+    #    nowhere near the 0.5 clip -- a wrong answer with no diagnostic.
+    #    An ordinary well-sampled tilt sits far below: the same fixture
+    #    at 0.03 reads 0.183 of Nyquist and at 0.10 reads 0.611, both
+    #    silent under the 0.8 bar.
+    _sin_nyq = float(wavelength) / (2.0 * float(dx))
+    _sat = min(float(max_sin), _sin_nyq)
+    _raw_max = 0.0
+    _clip_frac = 0.0
+    if mask_L.any() or mask_M.any():
+        _vals = np.concatenate([np.abs(L_grid[mask_L]).ravel(),
+                                np.abs(M_grid[mask_M]).ravel()])
+        if _vals.size:
+            _raw_max = float(_vals.max())
+            _clip_frac = float((_vals > float(max_sin)).mean())
+    _clipped = _clip_frac > 0.0
+    _at_fold = (float(max_sin) > _sin_nyq
+                and _raw_max >= 0.8 * _sin_nyq)
+    if _clipped or _at_fold:
+        import warnings as _tw
+        if _clipped:
+            _why = (f'{100.0 * _clip_frac:.2f} % of the estimated direction '
+                    f'cosines exceed max_sin={max_sin:g} and are REPLACED by '
+                    f'it')
+        else:
+            _why = (f'max_sin={max_sin:g} is beyond the Nyquist '
+                    f'direction cosine lambda/(2 dx) = {_sin_nyq:.5f}, so the '
+                    f'clip can never fire, and the reading has run up to '
+                    f'{_raw_max:.5f} = {_raw_max / _sin_nyq:.3f} of that fold')
+        _tw.warn(
+            f'apply_real_lens_traced: the local-tilt estimator is at its '
+            f'sampling limit -- {_why}.  It reads a WRAPPED phase difference '
+            f'(angle(E[i+1] conj(E[i]))), which folds any true direction '
+            f'cosine above lambda/(2 dx) = {_sin_nyq:.5f} back into that '
+            f'band, so a steeper launch angle returns as a plausible small '
+            f'number instead of an error.  Use a finer dx (dx <= '
+            f'lambda/(2 sin(theta_max))), supply the launch congruence '
+            f'explicitly through carrier= / TiltedCarrier, or lower max_sin '
+            f'to the limit this grid can carry, so that the clip is at '
+            f'least honest.',
+            RuntimeWarning, stacklevel=2)
 
     # Clip to physical range -- rays with |sin(theta)| > max_sin are
     # unphysical for most lens designs and will overwhelm the Newton
@@ -10785,7 +10858,22 @@ def apply_real_lens_traced(
         _na_exit_out = (float(np.sqrt(final.L[_sig_out] ** 2
                                       + final.M[_sig_out] ** 2).max())
                         if _sig_out.any() else _na_exit)
-        _na_guard = max(_na_exit, _na_exit_out)
+        # IN-MEDIUM NUMERICAL APERTURE, not the bare direction cosine
+        # (VERIFY-A3 OI-3).  The exit leg runs in the medium AFTER THE LAST
+        # SURFACE, whose index is ``n_exit`` (resolved from
+        # ``surfaces[-1].glass_after`` a few dozen lines above and used for
+        # the exit-vertex transfer itself), so the transverse spatial
+        # frequency a ray at angle theta carries is ``n_exit sin(theta) /
+        # lambda_vac`` -- the in-medium wavelength is ``lambda/n_exit``.  The
+        # Nyquist test below therefore has to be priced on ``n_exit sin
+        # theta``.  Without the factor a prescription ENDING IN GLASS was
+        # told it had ``n_exit`` times more room than it has: measured on an
+        # immersed rear (``glass_after='N-SF11'``, n = 1.75588, R = +-30 mm,
+        # aperture 16 mm, lambda = 1 um) the statistic reads sin theta =
+        # 0.040931 where the criterion needs 0.071870, i.e. the advised dx
+        # was 1.76x too coarse.  ``n_exit == 1`` on every air-ending
+        # prescription, where this is bit-identical to the previous test.
+        _na_guard = float(n_exit) * max(_na_exit, _na_exit_out)
         _dx_eff = max(dx, _dy_eff)
         # niche C1 item 4: report the MEASURED exit NA (and how much exit
         # power sits above this grid's Nyquist angle) to a caller who asked
@@ -10814,11 +10902,16 @@ def apply_real_lens_traced(
                 # undersample warning is decided on.
                 'na_exit_entrance_disc': _na_exit,
                 'na_exit_output_disc': _na_exit_out,
+                # ``na_exit_guard`` is an in-medium NUMERICAL APERTURE
+                # (``n_exit * sin theta``), which is what the Nyquist test is
+                # priced on; the three statistics above are bare direction
+                # cosines.  ``n_exit`` is reported so the two are convertible.
                 'na_exit_guard': _na_guard,
+                'n_exit': float(n_exit),
                 'dx': float(_dx_eff),
                 'na_nyquist': float(_na_ny),
                 'power_frac_above_nyquist': (
-                    float(_wgt[_na_all > _na_ny].sum()) / _wtot
+                    float(_wgt[float(n_exit) * _na_all > _na_ny].sum()) / _wtot
                     if _wtot > 0.0 else 0.0),
                 'n_rays': int(final.alive.sum())})
         if _na_guard > 0 and _dx_eff > wavelength / (2.0 * _na_guard):
@@ -10827,7 +10920,11 @@ def apply_real_lens_traced(
                 import warnings
                 warnings.warn(
                     f'apply_real_lens_traced: the exit beam converges at '
-                    f'NA_exit={_na_guard:.4f}, so the exit wavefront needs '
+                    f'NA_exit={_na_guard:.4f} '
+                    f'(n_exit={float(n_exit):.5f} x sin(theta)='
+                    f'{max(_na_exit, _na_exit_out):.4f}, measured in the '
+                    f'medium after the last surface), so the exit wavefront '
+                    f'needs '
                     f'dx <= lambda/(2*NA_exit) = {_dx_need*1e6:.2f} um but '
                     f'the grid has dx = {_dx_eff*1e6:.2f} um.  The '
                     f'beyond-Nyquist annulus of the exit phase ALIASES: '
@@ -10858,9 +10955,24 @@ def apply_real_lens_traced(
     x_out_grid = final.x.reshape(n_launch, n_launch)
     y_out_grid = final.y.reshape(n_launch, n_launch)
     opl_grid = final.opd.reshape(n_launch, n_launch)
+    #: Launch nodes whose ray did NOT survive to the exit plane (vignetted by
+    #: a per-surface ``semi_diameter`` / ``clear_aperture``, or TIR'd).  Used
+    #: by BOTH fits to reject an output pixel whose converged entrance
+    #: solution lands on one: the spline needs it because those nodes carry a
+    #: FILL rather than physics, and the polynomial needs it because its
+    #: least squares simply drops the dead samples and then EXTRAPOLATES
+    #: smoothly across the hole -- so a vignetting prescription used to come
+    #: back with the un-vignetted field on the default path (VERIFY-A3 OI-11:
+    #: measured P/P_in 0.9983 with 21 821 non-zero pixels on an N-SF11
+    #: singlet whose rear semi_diameter is 1.4 mm inside a 5 mm aperture,
+    #: identical to the same call with no semi_diameter at all).  ``None``
+    #: when every ray survives, where every expression below is a no-op and
+    #: the arithmetic is bit-identical.
+    _dead_launch_mask = None
     _spline_fill_mask = None
     if not final.alive.all():
         alive_grid = final.alive.reshape(n_launch, n_launch)
+        _dead_launch_mask = ~alive_grid
         x_out_grid = np.where(alive_grid, x_out_grid, np.nan)
         y_out_grid = np.where(alive_grid, y_out_grid, np.nan)
         opl_grid = np.where(alive_grid, opl_grid, np.nan)
@@ -10901,6 +11013,34 @@ def apply_real_lens_traced(
                     f"extrapolation.  newton_fit='polynomial' (the default) "
                     f"handles vignetting natively and is the accurate choice "
                     f"here; pass on_undersample='silent' to suppress.",
+                    RuntimeWarning, stacklevel=2)
+        else:
+            # Only announce vignetting that can REACH the returned field.
+            # The launch lattice is a SQUARE of half-width 0.75*aperture, so
+            # its corners sit at 1.06 aperture radii and die against ANY
+            # per-surface semi_diameter <= aperture/2 -- on every ordinary
+            # prescription, and entirely outside the disc the output is
+            # masked to.  Count only the dead nodes inside that disc.
+            _dead_count = _dead_launch_mask
+            if aperture is not None:
+                _dead_count = _dead_count & (
+                    Xs_in ** 2 + Ys_in ** 2 <= (0.5 * float(aperture)) ** 2)
+            _n_dead = int(_dead_count.sum())
+            if _n_dead and on_undersample != 'silent':
+                import warnings as _warnings
+                _warnings.warn(
+                    f"apply_real_lens_traced: {_n_dead} launch rays INSIDE the "
+                    f"clear aperture (of {alive_grid.size} on the launch "
+                    f"square) are vignetted or lost (a per-surface "
+                    f"semi_diameter / clear_aperture, or TIR).  The "
+                    f"polynomial forward-map fit drops those samples and is "
+                    f"smooth across the hole, so every output pixel whose "
+                    f"entrance solution lands on a dead launch node is "
+                    f"returned as an exactly-zero (masked) pixel rather than "
+                    f"as fit extrapolation -- the vignetting is in the "
+                    f"answer.  Widen semi_diameter / aperture_diameter if "
+                    f"that is not what the design does; pass "
+                    f"on_undersample='silent' to suppress.",
                     RuntimeWarning, stacklevel=2)
 
     # Reference OPL to on-axis (center of the entrance grid is an
@@ -11535,11 +11675,13 @@ def apply_real_lens_traced(
         'newton_fit': newton_fit,
         'fit_poly_order': _fit_poly_order,
         'fit_weights': _fit_weights,
-        # Nodes whose forward-map values were filled from a live neighbour so
-        # the spline could be built at all (None on every non-vignetting call
-        # and on the polynomial fit).  The worker masks the same pixels the
-        # serial closure does, so pool and serial stay bit-identical.
-        'spline_fill_mask': _spline_fill_mask,
+        # Launch nodes whose ray died (None on every non-vignetting call).
+        # On the spline fit these are also the nodes whose forward-map values
+        # were FILLED from a live neighbour so FITPACK could be built at all.
+        # Either way they carry no ray physics, so the worker masks the same
+        # pixels the serial closure does and pool and serial stay
+        # bit-identical.
+        'dead_launch_mask': _dead_launch_mask,
     }
 
     # Bound for the clipped Newton update (stay inside fitted domain)
@@ -11747,14 +11889,19 @@ def apply_real_lens_traced(
             all_nan=bool(n_unconverged >= n_total
                          and not bool(xp.any(xp.isfinite(opl_flat)))))
         out_of_domain = (xe * xe + ye * ye > (launch_radius * 0.99) ** 2)
-        if _spline_fill_mask is not None and xp is np:
-            # A spline forward map built over FILLED (vignetted) launch nodes
-            # carries no physics there -- mask those pixels the same way an
-            # out-of-domain pixel is masked.  ``xp is np`` because the GPU
-            # branch never resolves ``newton_fit='spline'`` (validated above),
-            # so ``_spline_fill_mask`` is None there by construction.
+        if _dead_launch_mask is not None and xp is np:
+            # A forward map over DEAD (vignetted / TIR'd) launch nodes carries
+            # no physics there -- on the spline because those nodes hold a
+            # fill, on the polynomial because its least squares drops them and
+            # then extrapolates smoothly across the hole.  Mask those pixels
+            # the same way an out-of-domain pixel is masked.  ``xp is np``:
+            # ``_landed_on_filled_node`` is a NumPy kernel, so on the CuPy
+            # branch (``use_gpu=True``, polynomial only -- the GPU path never
+            # resolves ``newton_fit='spline'``) the rejection is skipped and
+            # that configuration keeps the historical extrapolating
+            # behaviour; the CPU default is the one this corrects.
             out_of_domain = out_of_domain | _landed_on_filled_node(
-                xe, ye, xs_in, _spline_fill_mask)
+                xe, ye, xs_in, _dead_launch_mask)
         opl_flat = xp.where(out_of_domain, xp.nan, opl_flat)
         # If we ran on GPU, pull the result back to the host so the
         # rest of apply_real_lens_traced -- which is CPU-only

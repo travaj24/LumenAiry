@@ -347,3 +347,199 @@ blow-up is unmoved: 1.803e+05 / 2.331e+05 / 1.291e+05 at 0.98 / 0.99 / 0.995 of
 the ray-traced BFL on BOTH denominators, and the audit's silent 4-8x pre-focus
 band still warns (3.988 / 8.102 / 13.07).  `return_diagnostics` gains
 `power_ratio_triangles`; `power_ratio` is unchanged.
+
+---
+
+# 9. Follow-up (coordinator rulings 1–7, 2026-09-12)
+
+All seven rulings implemented or actioned.  Ownership as granted: the four
+traced modules, the A3 test files, `_lens_real.py`'s six `_compute_carrier`
+call sites (OI-10 only), `test_niche_k4_uniform_caustic.py`, and the two WP-A3
+report/changelog documents.  No git write commands.  `ruff check` clean and
+`import lumenairy` OK on every file touched.
+
+| ruling | item | status | headline measurement |
+|---|---|---|---|
+| 1 | **OI-3** in-medium exit-NA guard | **implemented** | immersed N-SF11 rear: advised `dx` **12.216 → 6.957 µm** (ratio 1.75588 = `n_exit` exactly); N-BK7 rear 5.252 → 3.484 µm; **air rear bit-identical** (`n_exit == 1`) |
+| 2 | **OI-4** `_spectral_gap_cuts` | **documented + pinned** | pre-fix `[-40.0]` → shipped `[]` on an out-of-band-leakage marginal; a real two-lobe gap still `[0.0]` under both; segments still sum to the input at 5.55e-16 |
+| 3 | **OI-5** tilt-saturation warning | **implemented** | fires on the audit's own `p7_tilts` §7c case (reading 0.885 of the 0.16375 Nyquist, `max_sin=0.5` unreachable) and on a genuine clip (50.00 % replaced); silent at 0.183 and 0.611 of Nyquist and on a collimated field |
+| 4 | **OI-9** k4 resource skips | **replaced** | both `pytest.skip`s → asserted preconditions; the bound is now the MEASURED 0.229 GB peak doubled, against the 1.58 GB the skip demanded (7× too conservative); both gates now RUN |
+| 5 | **OI-10** `dy` through the ndarray carrier | **implemented** | y-gradient error at dy = 3 dx **1.051e-01 → 1.198e-07**; at dy = 0.4 dx **1.936e-02 → 5.622e-09**; `dy is None` / `dy == dx` bit-identical |
+| 6 | **OI-11** vignetting on the default path | **implemented (the preferred arm)** | polynomial `P/P_in` **0.9983 / 21 821 px → 0.8840 / 7 093 px**, within 2 % of the spline's 0.8657 / 6 637; un-vignetted call bit-identical; rim case (semi = aperture/2) unmoved to 1e-4 and silent |
+| 7 | **OI-6 / OI-7 / OI-8** | **corrected** | the two WP-A3 report sentences rewritten in place with a dated correction note; the S9 headline now carries its grid size in both the report and the changelog |
+
+## 9.1 What changed, and how each was verified
+
+**Ruling 1 — OI-3, the in-medium Nyquist guard** (`_lens_traced.py`, the `_sig`
+block).  The exit leg runs in the medium after the last surface, so a ray at
+angle θ carries transverse spatial frequency `n_exit·sinθ/λ_vac`; the guard
+compared the bare direction cosine against `λ/(2dx)`.  `_na_guard` is now
+`n_exit · max(entrance-disc, output-disc)`, the message names both factors and
+says which medium, and `power_frac_above_nyquist` is compared in the same
+units.  Measured (λ = 1.0 µm, R = ±30 mm, aperture 16 mm, N = 512):
+
+| rear medium | `n_exit` | bare sin θ | guard NA | advised dx |
+|---|---|---|---|---|
+| air | 1.00000 | 0.257506 | 0.257506 | 1.942 µm (**unchanged**) |
+| N-BK7 | 1.50750 | 0.095201 | 0.143515 | 5.252 → **3.484 µm** |
+| N-SF11 | 1.75588 | 0.040931 | 0.071870 | 12.216 → **6.957 µm** |
+
+Pinned two-sided by `::test_the_exit_na_guard_is_priced_on_the_in_medium_
+numerical_aperture`: the immersed arms require the ratio to be exactly `n_exit`
+(rtol 1e-9 — it is one multiply, so the only error is float64 round-off ~1e-16
+against a 1.76× effect) and the message to name the medium; the air arm
+requires `na_exit_guard == bare` bit-identically, which is the no-op every
+fixture in the tree exercises.  `na_exit` / `na_exit_entrance_disc` /
+`na_exit_output_disc` stay bare direction cosines, so nothing calibrated
+against them (`propagators/carrier.py`'s `on_tilt_exact_grid`,
+`test_niche_c1_consolidation.py`'s NA relation) moves; `n_exit` is now reported
+so the two are convertible.  Migration note in the changelog.
+
+**Ruling 2 — OI-4, `_spectral_gap_cuts`.**  Code kept.  A changelog section was
+added (naming audit T11 as the origin and stating the behaviour change on
+`apply_real_lens_traced_segmented` with a migration note), and two pins:
+`::test_spectral_gap_cuts_only_counts_peaks_inside_the_occupied_band` re-creates
+the pre-fix predicate inline and asserts `[-40.0]` → `[]` on a synthetic
+marginal (one in-band lobe at f = +20, one out-of-band at f = −80, support
+declared [−40, +40]) while a genuine two-lobe gap is `[0.0]` under both; and
+`::test_the_angular_segmentation_still_sums_back_to_the_input` pins the
+contract the change must not touch — `max|Σsegments − E|/peak = 5.55e-16` at
+`min_segment_power` 0 and 1e-3, bar 1e-13.
+
+**Ruling 3 — OI-5, the tilt-estimator saturation notice**
+(`_lens_traced.py::_sample_local_tilts`).  The estimator reads a wrapped phase
+difference, so it cannot return a cosine above `λ/(2dx)`; a steeper tilt folds
+in.  A single `RuntimeWarning` now fires in two situations — the `max_sin` clip
+actually biting (naming the clipped fraction), or `max_sin` being beyond what
+the grid can carry while the reading has run to within 20 % of the fold (naming
+both numbers).  Measured on the audit's own fixture family (λ = 1.31 µm,
+dx = 4 µm, Nyquist sin = 0.16375):
+
+| case | reading | fraction of Nyquist | warns |
+|---|---|---|---|
+| §7c, launch tilt 0.8, `max_sin=0.5` | 0.1450 | **0.885** | **yes** |
+| tilt 0.8, `max_sin=0.10` (a real clip) | 0.1000 | — | **yes** (50.00 % replaced) |
+| tilt 0.10, `max_sin=0.5` | 0.1000 | 0.611 | no |
+| tilt 0.03, `max_sin=0.5`, σ = 0 and σ = 4 | 0.0300 | 0.183 | no |
+| collimated, σ = 4 | 0.0 | 0 | no |
+
+1.4× of gap above the bar and 1.3× below.  Confirmed end to end: running the
+audit's own `repro/TR-INFRA/p7_tilts.py` under `-W always` now emits the
+warning exactly once — on 7c — naming `lambda/(2 dx) = 0.16375`; 7a and 7b stay
+silent.  (The repro's own printed string still reads "silently WRONG, no
+warning"; it is a hard-coded literal, not a measurement, and the script does not
+capture warnings.)  Pinned by
+`::test_the_local_tilt_estimator_says_when_it_is_at_its_sampling_limit`.
+
+**Ruling 4 — OI-9, the k4 resource skips.**  Both sites replaced by asserted
+preconditions.  The skip demanded `8·N²·16 + 1.5` GB = 1.58 GB; the MEASURED
+tracemalloc peak of the N = 768 uniform call is **0.229 GB** (24 grid-units of
+`16N²`; the complex128 field itself is 0.0094 GB).  The requirement is that
+measurement doubled and it fails loudly with the number.  `pytest.skip` no
+longer appears in the file, and all 11 tests — including both
+`caustic_fold_ref` gates — run and pass.
+
+**Ruling 5 — OI-10, `dy` through the ndarray carrier.**
+`_compute_carrier(..., dy=None)`; the ndarray branch differentiates with
+`np.gradient(W, dy, dx)` and indexes each axis with its own pitch AND its own
+sample count (`N = X.shape[0]` was the row count, used for both).
+`_lens_real.py`'s six call sites forward their `dy`.  Verified against the
+closed-form tilted congruence (R = −30 mm, L = 0.046, M = 0.031), with the bar
+extended to carry the cross term the anamorphic case needs —
+`bar_x = (7/24)dx²|∂²g_x/∂x²| + (1/8)dy²|∂²g_x/∂y²|`, and the mirror for y:
+
+| grid | analytic err | ndarray err_x / bar | ndarray err_y / bar | dy := dx err_y |
+|---|---|---|---|---|
+| dx = 20, dy = 60 µm | 0.0 | 3.51e-08 / 4.10e-08 = 0.855 | 1.198e-07 / 1.358e-07 = 0.882 | **1.051e-01** |
+| dx = 25, dy = 10 µm | 0.0 | 2.71e-08 / 2.88e-08 = 0.941 | 5.62e-09 / 5.90e-09 = 0.953 | **1.936e-02** |
+| dx = dy = 20 µm | 0.0 | 1.89e-08 / 2.05e-08 = 0.922 | 1.36e-08 / 1.48e-08 = 0.920 | identical |
+
+Pinned by `::test_the_ndarray_carrier_uses_its_own_pitch_on_each_axis` (two
+anamorphic grids, with a fail-before arm requiring the `dy := dx` call to
+overshoot by > 30×) and `::test_the_ndarray_carrier_is_bit_identical_on_a_
+square_grid` (`{}`, `dy=None` and `dy=dx` give `array_equal` gradients and
+eikonal).  `test_audit2609_a2_analytic_lens.py` passes unchanged.
+
+**Ruling 6 — OI-11, vignetting on the default path.**  Took the preferred arm.
+A `_dead_launch_mask` is now built whenever any launch ray dies, and BOTH fits
+reject an output pixel whose converged entrance solution lands on a dead node
+(the spline already did this for its filled nodes; the helper and the Newton
+payload key are shared, so pool and serial stay bit-identical).  Measured on an
+N-SF11 singlet, N = 192, dx = 30 µm, λ = 1.064 µm, aperture 5 mm:
+
+| rear `semi_diameter` | polynomial before | polynomial after | spline | notice |
+|---|---|---|---|---|
+| none | 0.9983 / 21 821 px | **0.9983 / 21 821** (bit-identical: the mask is `None`) | 0.9983 / 21 821 | silent |
+| 2.5 mm (= aperture/2) | 0.9983 / 21 821 | **0.9983 / 21 821** (unmoved to 1e-4) | 0.9980 / 21 319 | silent |
+| 2.0 mm | 0.9983 / 21 821 | **0.9936 / 17 457** | — | 468 rays |
+| 1.4 mm | 0.9983 / 21 821 | **0.8840 / 7 093** | 0.8657 / 6 637 | 916 rays |
+
+The notice counts only dead nodes INSIDE the clear aperture, because the launch
+square's corners sit at 1.06 aperture radii and die against any
+`semi_diameter ≤ aperture/2` — on every ordinary prescription, and entirely
+outside the disc the output is masked to.  Pinned two-sided by
+`::test_a_vignetting_semi_diameter_reaches_the_default_polynomial_answer`.
+Residual, recorded rather than fixed: the CuPy branch (`use_gpu=True`,
+polynomial only) keeps the historical extrapolating behaviour, because
+`_landed_on_filled_node` is a NumPy kernel — stated in the code and the
+changelog.
+
+**Ruling 7 — the report corrections.**  `WP-A3_REPORT.md`: the S11 sentence now
+reads "called by `_trace_meridional_fold`" with a dated correction note
+explaining why the cusp trace keeps the raw form; the `stop_index` sentence now
+reads "every spelling of the SAME surface", with the equivalence classes spelt
+out and the reason the two classes must differ; the S9 row carries "the
+25.4 s → ~1.5 s headline is an **N = 2048** number" with the 1.1–1.2× measured
+at N = 384/512 and the 9.7e-27 field bound.  `WP-A3_CHANGELOG.md`: the same
+qualification on its S9 line, and my §8 text plus the five new items appended as
+a "VERIFY-A3 follow-up" block (33 `###` sections total).
+
+## 9.2 Tests run after the follow-up
+
+| command | result | duration |
+|---|---|---|
+| `pytest` a3 ×3 + delta-audit + k1 + k4 + r2 + s10 + c1 | **193 passed** | 309 s |
+| `pytest` c9 + s8-sphere + tangent-facet + c15-inverse-map + banded-ray-density + p11 + v5_21_lens_accuracy_extensions + **d1** | **217 passed, 2 deselected** | 313 s |
+| `pytest` newton-pool + d14 + d15 + **test_audit2609_a2_analytic_lens** (the `_lens_real.py` consumer) `-s` | **140 passed, 3 skipped** | 196 s |
+| `pytest tests/unit -k real_lens_traced` | **38 passed, 1 skipped** | 30.7 s |
+| `pytest test_audit2609_a3_verify_traced.py` | **25 passed** (17 → 25) | 6.6 s |
+| `pytest test_niche_k4_uniform_caustic.py` | **11 passed, 0 skipped** (was 11 with 2 resource skips available) | 5.7 s |
+| `python validation/run_all.py test_lenses` | **PASS** | 30.0 s |
+| `repro/TR-SIBLINGS/repro_vertex.py`, `repro/orch/verify_trmain2.py`, `repro/TR-INFRA/p7_tilts.py`, `p8_misc.py` | unchanged numbers; p7_tilts now warns on 7c | — |
+| `ruff check` + `python -c "import lumenairy"` on every file touched | clean / OK | — |
+
+No failures, no new skips, no pre-existing failures.  `test_niche_d1_tilted_
+carrier.py` is included in the second batch and passes (33 tests).
+
+## 9.3 Files touched in the follow-up
+
+Modified:
+
+* `lumenairy/elements/_lens_traced.py` — OI-3 (in-medium guard + `n_exit` key),
+  OI-5 (the saturation notice), OI-10 (`dy=` on `_compute_carrier`), OI-11
+  (`_dead_launch_mask` on both fits + the clear-aperture-gated notice).
+* `lumenairy/elements/_lens_real.py` — OI-10, the six `_compute_carrier` call
+  sites only (granted scope; +17/−6 lines, all of them that call).
+* `tests/unit/test_niche_k4_uniform_caustic.py` — OI-9, both resource skips.
+* `tests/unit/test_audit2609_a3_verify_traced.py` — 8 new tests (17 → 25).
+* `docs/.../fixes/WP-A3_REPORT.md` — OI-6 / OI-7 / OI-8 corrections.
+* `docs/.../fixes/WP-A3_CHANGELOG.md` — the S9 qualification and the appended
+  "VERIFY-A3 follow-up" block (7 new sections).
+* `docs/.../fixes/VERIFY_WP-A3.md` — this section.
+
+`lumenairy/elements/_lens_traced_multibranch.py` and
+`tests/unit/test_audit2609_a3_caustic_siblings.py` carry my §3.2 / §3.3 fixes
+and were committed by the coordinator before this follow-up began; they are
+unchanged since.
+
+## 9.4 Open items after the follow-up
+
+All of §6 is now closed except:
+
+* **OI-11 residual (P3)** — `use_gpu=True` + `newton_fit='polynomial'` +
+  vignetting keeps the extrapolating behaviour, because the rejection kernel is
+  NumPy.  Stated in the code and the changelog; a CuPy twin is a small,
+  separate job for whoever owns the GPU path.
+* **OI-8 (P3, informational)** — I still have not re-run the N = 4096 / 12 GB
+  rasteriser fixture (shared machine, COMMON rule 5), so the S9 memory
+  headline remains the WP's own measurement, now quoted with its grid size.

@@ -293,9 +293,24 @@ def test_fold_truth_dark_tail_closes_gap():
     meta = json.loads(str(ref['metrics']))
     opd = float(ref['output_plane_distance'])
     N, dxc = 768, 2e-6
-    est_gb = (N * N * 16 * 8) / 1e9
-    if available_memory_bytes() / 1e9 < est_gb + 1.5:
-        pytest.skip(f"needs ~{est_gb:.1f} GB; memory-constrained host")
+    # RESOURCE PRECONDITION, ASSERTED -- never skipped.
+    # ``docs/TESTING_STANDARDS.md`` rule 4: "Never ``pytest.skip`` on a
+    # resource check -- two skips silently removed five tests from the gate
+    # on exactly the runners that mattered."  This site used to skip below
+    # ``8 * N*N*16 + 1.5`` GB -- 1.58 GB for a fixture whose MEASURED
+    # tracemalloc peak is 0.229 GB at N = 768 (VERIFY-A3, 2026-09-12; the
+    # complex128 field itself is 0.0094 GB there, so the peak is 24
+    # grid-units of ``16 N^2``).  The requirement below is that measurement
+    # doubled for headroom, and it FAILS LOUDLY with the number instead of
+    # removing the test from the gate.
+    _need_gb = 2.0 * 24.0 * (N * N * 16) / 1e9
+    _have_gb = available_memory_bytes() / 1e9
+    assert _have_gb >= _need_gb, (
+        f"this fixture needs ~{_need_gb:.2f} GB (24 grid-units of 16*N^2 at "
+        f"N={N}, measured peak 0.229 GB at N=768, doubled) and this host "
+        f"reports {_have_gb:.2f} GB available.  Free memory and re-run: "
+        f"skipping a resource precondition is what TESTING_STANDARDS rule 4 "
+        f"forbids.")
     p = _caustic_prescription()
     Ec = _gauss(N, dxc, 0.55e-3)
     x = (np.arange(N) - N / 2) * dxc
@@ -340,9 +355,24 @@ def test_dark_tail_airy_decay_rate():
     ref = np.load(_ROOT / 'caustic_fold_ref.npz', allow_pickle=True)
     opd = float(ref['output_plane_distance'])
     N, dxc = 640, 2e-6
-    est_gb = (N * N * 16 * 8) / 1e9
-    if available_memory_bytes() / 1e9 < est_gb + 1.5:
-        pytest.skip(f"needs ~{est_gb:.1f} GB; memory-constrained host")
+    # RESOURCE PRECONDITION, ASSERTED -- never skipped.
+    # ``docs/TESTING_STANDARDS.md`` rule 4: "Never ``pytest.skip`` on a
+    # resource check -- two skips silently removed five tests from the gate
+    # on exactly the runners that mattered."  This site used to skip below
+    # ``8 * N*N*16 + 1.5`` GB -- 1.58 GB for a fixture whose MEASURED
+    # tracemalloc peak is 0.229 GB at N = 768 (VERIFY-A3, 2026-09-12; the
+    # complex128 field itself is 0.0094 GB there, so the peak is 24
+    # grid-units of ``16 N^2``).  The requirement below is that measurement
+    # doubled for headroom, and it FAILS LOUDLY with the number instead of
+    # removing the test from the gate.
+    _need_gb = 2.0 * 24.0 * (N * N * 16) / 1e9
+    _have_gb = available_memory_bytes() / 1e9
+    assert _have_gb >= _need_gb, (
+        f"this fixture needs ~{_need_gb:.2f} GB (24 grid-units of 16*N^2 at "
+        f"N={N}, measured peak 0.229 GB at N=768, doubled) and this host "
+        f"reports {_have_gb:.2f} GB available.  Free memory and re-run: "
+        f"skipping a resource precondition is what TESTING_STANDARDS rule 4 "
+        f"forbids.")
     p = _caustic_prescription()
     Ec = _gauss(N, dxc, 0.55e-3)
     E, diag = apply_real_lens_traced_uniform(

@@ -746,7 +746,11 @@ def _displaced_carrier_slope_fn(conjugate, E_in, wavelength, dx, dy, Nx, Ny):
     xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Xg, Yg = np.meshgrid(xax, yax)
-    _, grad_fn, _ = _compute_carrier(conjugate, E_in, wavelength, dx, Xg, Yg)
+    # ``dy`` is forwarded: this entry point supports anamorphic grids and
+    # the ndarray-carrier branch differentiates and samples per axis
+    # (VERIFY-A3 OI-10).  Bit-identical when dy == dx.
+    _, grad_fn, _ = _compute_carrier(conjugate, E_in, wavelength, dx, Xg,
+                                     Yg, dy=dy)
 
     def _carrier_slope(h):
         h = np.asarray(h, dtype=np.float64)
@@ -934,7 +938,11 @@ def _displaced_carrier_dir_fn(conjugate, E_in, wavelength, dx, dy, Nx, Ny):
     xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Xg, Yg = np.meshgrid(xax, yax)
-    _, grad_fn, _ = _compute_carrier(conjugate, E_in, wavelength, dx, Xg, Yg)
+    # ``dy`` is forwarded: this entry point supports anamorphic grids and
+    # the ndarray-carrier branch differentiates and samples per axis
+    # (VERIFY-A3 OI-10).  Bit-identical when dy == dx.
+    _, grad_fn, _ = _compute_carrier(conjugate, E_in, wavelength, dx, Xg,
+                                     Yg, dy=dy)
 
     def _auto_dir(x0, y0):
         L, M = grad_fn(np.asarray(x0, dtype=np.float64),
@@ -1517,7 +1525,8 @@ def _displaced_eikonal_fn(conjugate, E_in, wavelength, dx, dy, Nx, Ny):
     xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Xg, Yg = np.meshgrid(xax, yax)
-    _, _, w_fn = _compute_carrier(conjugate, E_in, wavelength, dx, Xg, Yg)
+    _, _, w_fn = _compute_carrier(conjugate, E_in, wavelength, dx, Xg, Yg,
+                                  dy=dy)
 
     def _carrier_eik(h):
         h = np.asarray(h, dtype=np.float64)
@@ -1569,7 +1578,8 @@ def _displaced_carrier_dir_eik_fn(conjugate, E_in, wavelength, dx, dy, Nx, Ny):
     xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Xg, Yg = np.meshgrid(xax, yax)
-    _, grad_fn, w_fn = _compute_carrier(conjugate, E_in, wavelength, dx, Xg, Yg)
+    _, grad_fn, w_fn = _compute_carrier(conjugate, E_in, wavelength, dx, Xg,
+                                        Yg, dy=dy)
 
     def _dir(x0, y0):
         L, M = grad_fn(np.asarray(x0, dtype=np.float64),
@@ -2897,7 +2907,8 @@ def _screen_obliquity_angle_field(carrier, E_in, wavelength, dx, dy, Nx, Ny,
     xax = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     yax = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     Xg, Yg = np.meshgrid(xax, yax)
-    _W, grad_fn, _w = _compute_carrier(carrier, E_in, wavelength, dx, Xg, Yg)
+    _W, grad_fn, _w = _compute_carrier(carrier, E_in, wavelength, dx, Xg, Yg,
+                                       dy=dy)
     L, M = grad_fn(Xg, Yg)
     L = np.asarray(L, dtype=np.float64) * _q_scale
     M = np.asarray(M, dtype=np.float64) * _q_scale
@@ -3145,7 +3156,7 @@ def _screen_obliquity_rows_any(carrier, E_in, wavelength, dx, dy, Nx, Ny,
     _Yb = np.broadcast_to(yax[:, None], (Ny, Nx))
     try:
         _W, grad_fn, _w = _compute_carrier(
-            carrier, E_in, wavelength, dx, _Xb, _Yb, need_W=False)
+            carrier, E_in, wavelength, dx, _Xb, _Yb, need_W=False, dy=dy)
     except (TypeError, ValueError):
         # An unrecognised congruence, or one whose set-up genuinely needs a
         # writable coordinate grid: fall back to the whole-grid field.
