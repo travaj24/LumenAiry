@@ -51,14 +51,51 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
-from scipy.special import airy as _scipy_airy
 
 from .. import raytrace as rt
 
+# Configuration objects (audit 2026-09-11 TESTS-ARCH section 14 item 13).
+# ``lens_config`` is a LEAF -- it imports nothing from lumenairy at module
+# scope -- so this edge is one-way and adds no import cost.
+from .lens_config import (
+    LensConfig,
+    LensGeometry,
+    LensNumerics,
+    LensResources,
+    _wants_config,
+)
+from .lens_config import resolve_entry_point_kwargs as _resolve_lens_config
+
 __all__ = ['apply_real_lens_traced_multibranch', 'ludwig_fold']
+
+#: ``scipy.special.airy``, bound on FIRST USE by :func:`_airy`.  It used to be
+#: a module-level ``from scipy.special import airy``, which made this file the
+#: last module-level ``scipy.special`` importer outside ``backend/scipy.py``:
+#: importing it charged ``scipy.special``'s ~540 ms shared prefix
+#: (``scipy._lib._array_api`` -> ``array_api_compat.numpy`` -> ``numpy.f2py``
+#: -> ``charset_normalizer`` -> ``numpy.testing``) to every ``import
+#: lumenairy``, whether or not a caustic band was ever folded.
+_scipy_airy = None
+
+
+def _airy(z):
+    """Return ``scipy.special.airy(z)``, importing ``scipy.special`` on first use.
+
+    One module-global read and one ``is None`` test per call once bound --
+    strictly cheaper than the in-function ``from scipy.special import airy``
+    this replaced (a ``sys.modules`` lookup plus an attribute fetch), and
+    cheaper still than paying the import for callers who never fold a band.
+    :func:`ludwig_fold` is fully elementwise, so this runs once per fold, not
+    once per pixel.
+    """
+    global _scipy_airy
+    if _scipy_airy is None:
+        from scipy.special import airy as _a
+        _scipy_airy = _a
+    return _scipy_airy(z)
 
 # Half-open (top-left) rasterization tie-break tolerance, in BARYCENTRIC units.
 # A pixel with |a_i| <= _EDGE_TOL is treated as lying ON mapped edge_i (see the
@@ -189,17 +226,19 @@ def ludwig_fold(k, S_plus, S_minus, A_plus, A_minus):
     (real amplitudes without their Maslov phases give wrong interference).
 
     Fully ELEMENTWISE: pass whole arrays of the four branch quantities and get
-    the array of uniform fields back.  (``scipy.special.airy`` is imported at
-    module scope; the re-import this function used to do cost a sys.modules
-    lookup on every one of the tens of thousands of multi-branch pixels the
-    caustic-band swap visits.)
+    the array of uniform fields back -- so ``scipy.special.airy`` is reached
+    ONCE per fold, not once per pixel.  It comes through :func:`_airy`, which
+    binds it to a module global on first use: a per-call ``from scipy.special
+    import airy`` would cost a ``sys.modules`` lookup on every fold, and the
+    module-level import this replaced charged ``scipy.special`` to every
+    ``import lumenairy``.
     """
     phi = 0.5 * (S_plus + S_minus)
     rho = (0.75 * (S_plus - S_minus)) ** (2.0 / 3.0)
     r14 = rho ** 0.25
     g0 = r14 / np.sqrt(2.0) * (A_plus - 1j * A_minus)
     g1 = (A_plus + 1j * A_minus) / (r14 * np.sqrt(2.0) + 1e-300)
-    ai, aip, _, _ = _scipy_airy(-(k ** (2.0 / 3.0)) * rho)
+    ai, aip, _, _ = _airy(-(k ** (2.0 / 3.0)) * rho)
     return (np.sqrt(2 * np.pi) * k ** (1.0 / 6.0) * np.exp(1j * np.pi / 4)
             * np.exp(1j * k * phi)
             * (g0 * ai + 1j * k ** (-1.0 / 3.0) * g1 * aip))
@@ -479,6 +518,10 @@ def apply_real_lens_traced_multibranch(
     caustic_band: str = 'ludwig',
     input_carrier: Any = None,
     return_diagnostics: bool = False,
+    geometry: Optional['LensGeometry'] = None,
+    numerics: Optional['LensNumerics'] = None,
+    resources: Optional['LensResources'] = None,
+    config: Optional['LensConfig'] = None,
 ) -> Any:
     """Multi-branch ray-traced lens field, valid THROUGH focus / caustics.
 
@@ -553,6 +596,22 @@ def apply_real_lens_traced_multibranch(
         neglected -- <0.1% below ~2.5 deg).
     return_diagnostics : bool -- also return a dict with the per-node KMAH
         map, det J, branch-count image, and the resolved ``input_carrier``.
+    geometry, numerics, resources, config : optional
+        :class:`~lumenairy.LensGeometry` / :class:`~lumenairy.LensNumerics` /
+        :class:`~lumenairy.LensResources`, or the
+        :class:`~lumenairy.LensConfig` that holds all three, as an alternative
+        to spelling the settings out as keywords.  Purely ADDITIVE; a call
+        that passes none of the four runs exactly the code it ran before.
+        Two of this signature's keywords are spelled differently here from the
+        config field that carries them, because ``apply_real_lens_traced``
+        owns the family spelling: ``ray_subsample`` here is
+        ``LensNumerics.caustic_ray_subsample`` (both default 2 -- it is the
+        CAUSTIC launch spacing, not the traced OPL spacing, which also
+        defaults to 8 there), and ``min_area_ratio`` is
+        ``LensNumerics.caustic_min_area_ratio``.  ``input_carrier`` is NOT
+        ``LensGeometry.carrier`` -- it is a transverse WAVEVECTOR in rad/m,
+        not a reference congruence -- and stays keyword-only.  See
+        ``docs/lens_configuration.md``.
 
     Returns
     -------
@@ -561,6 +620,16 @@ def apply_real_lens_traced_multibranch(
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced_multibranch',
                            input_kind='field')
+    # Config objects, if any, are merged into the keywords and the call is
+    # re-entered with them -- so the configured path is the SAME code as the
+    # equivalent keyword call, by construction rather than by review.  Four
+    # ``is not None`` tests when nothing is configured; nothing else changes.
+    if _wants_config(geometry, numerics, resources, config):
+        return apply_real_lens_traced_multibranch(
+            E_in, **_resolve_lens_config(
+                apply_real_lens_traced_multibranch, locals(),
+                geometry=geometry, numerics=numerics, resources=resources,
+                config=config))
     E_in = np.asarray(E_in)
     N = E_in.shape[0]
     if E_in.shape[0] != E_in.shape[1]:

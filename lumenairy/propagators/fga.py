@@ -90,20 +90,43 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 from ..backend import array_namespace
+from ..backend._optional import load_numba as _optional_load_numba
+
+# Configuration objects (audit 2026-09-11 TESTS-ARCH section 14 item 13).
+# ``elements.lens_config`` is a LEAF -- it imports nothing from lumenairy at
+# module scope -- so this edge is one-way and adds no import cost.
+from ..elements.lens_config import (
+    LensConfig,
+    LensGeometry,
+    LensNumerics,
+    LensResources,
+    _wants_config,
+)
+from ..elements.lens_config import (
+    resolve_entry_point_kwargs as _resolve_lens_config,
+)
 
 _NUMBA = None
 
 
 def _load_numba():
-    """Lazy numba import (mirrors the Maslov accelerator pattern)."""
+    """Lazy numba probe; True iff numba is importable.
+
+    Delegates the probe and the first-use import to
+    :func:`lumenairy.backend._optional.load_numba` (audit 2026-09-11
+    TESTS-ARCH P2-9 -- five hand-copied loaders became one), keeping the
+    module-level ``_NUMBA`` memo so a second call here is one global read.
+
+    Unlike every other consumer of that helper, THIS module has no pure-NumPy
+    fallback: the phase-space swarm sum is impractically slow without the JIT,
+    so :func:`_kernels` turns a ``False`` here into an ``ImportError`` with the
+    ``pip install lumenairy[numba]`` hint.  That raise is this entry point's
+    contract, not the shared helper's (CONVENTIONS.md section 10).
+    """
     global _NUMBA
     if _NUMBA is not None:
         return _NUMBA
-    try:
-        import numba  # noqa: F401
-        _NUMBA = True
-    except ImportError:
-        _NUMBA = False
+    _NUMBA = _optional_load_numba()
     return _NUMBA
 
 
@@ -1533,6 +1556,10 @@ def apply_real_lens_fga(
     cache_trace: bool = False,
     normalize_output: str = "none",
     momentum_sampling: str = "uniform",
+    geometry: Optional['LensGeometry'] = None,
+    numerics: Optional['LensNumerics'] = None,
+    resources: Optional['LensResources'] = None,
+    config: Optional['LensConfig'] = None,
 ) -> np.ndarray:
     """Propagate ``E_in`` through a real lens ``prescription`` by the
     **Frozen Gaussian Approximation** and return the field at
@@ -1708,6 +1735,20 @@ def apply_real_lens_fga(
         adaptive output is AUTO power-normalized to the input power (as the H5 path
         is).
 
+    geometry, numerics, resources, config : optional
+        :class:`~lumenairy.LensGeometry` / :class:`~lumenairy.LensNumerics` /
+        :class:`~lumenairy.LensResources`, or the
+        :class:`~lumenairy.LensConfig` that holds all three, as an alternative
+        to spelling the settings out as keywords.  Purely ADDITIVE: every
+        keyword above still works with the same default, and a call that
+        passes none of the four runs exactly the code it ran before.  FGA
+        shares only ``dy`` and ``output_plane_distance`` with its siblings --
+        the rest of this signature is swarm-specific tuning and is
+        deliberately keyword-only; see ``docs/lens_configuration.md``.  A set
+        field this function has no parameter for RAISES, so use
+        ``config.narrowed_to('apply_real_lens_fga')`` to reuse a config built
+        for another engine.
+
     Returns
     -------
     (Ny, Nx) complex ndarray
@@ -1715,6 +1756,14 @@ def apply_real_lens_fga(
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_fga', input_kind='field')
+    # Config objects, if any, are merged into the keywords and the call is
+    # re-entered with them -- so the configured path is the SAME code as the
+    # equivalent keyword call, by construction rather than by review.  Four
+    # ``is not None`` tests when nothing is configured; nothing else changes.
+    if _wants_config(geometry, numerics, resources, config):
+        return apply_real_lens_fga(E_in, **_resolve_lens_config(
+            apply_real_lens_fga, locals(), geometry=geometry,
+            numerics=numerics, resources=resources, config=config))
     xp = array_namespace(E_in)
     if xp.__name__ != "numpy":
         raise NotImplementedError(

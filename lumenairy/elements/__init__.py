@@ -91,6 +91,12 @@ from .freeform import (
     surface_sag_xy_polynomial,
     surface_sag_zernike_freeform,
 )
+from .lens_config import (
+    LensConfig,
+    LensGeometry,
+    LensNumerics,
+    LensResources,
+)
 from .lenses import (
     NUMEXPR_AVAILABLE,
     PreparedAnalyticLens,
@@ -257,6 +263,8 @@ __all__ = [
     'apply_real_lens_traced_uniform',
     'prepare_real_lens_traced', 'PreparedTracedLens', 'TiltedCarrier',
     'prepare_real_lens', 'PreparedAnalyticLens',
+    # lens_config -- configuration objects for the apply_real_lens family
+    'LensGeometry', 'LensNumerics', 'LensResources', 'LensConfig',
     'set_lens_parallel_amp', 'get_lens_parallel_amp',
     'set_lens_sag_dtype', 'get_lens_sag_dtype',
     'set_pointwise_cos_grid_cache_budget',

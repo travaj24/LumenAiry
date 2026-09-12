@@ -82,7 +82,6 @@ default, and for the banner re-baseline it carries.
 from __future__ import annotations
 
 import hashlib
-import importlib.util as _ilu
 import math
 import threading
 import warnings
@@ -407,7 +406,15 @@ _IMAP_CACHE_SIZE = 4
 # ---------------------------------------------------------------------------
 # numba
 # ---------------------------------------------------------------------------
-_NUMBA_AVAILABLE = _ilu.find_spec('numba') is not None
+from ..backend._optional import NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE
+from ..backend._optional import numba_handles as _optional_numba_handles
+
+# The MODULE-LEVEL ``_NUMBA_AVAILABLE`` is load-bearing and stays a module
+# attribute: it is read at CALL time and the test suite monkeypatches it to
+# ``False`` to reach the pure-NumPy arm on a box where numba IS installed.  So
+# the availability GATE is local while the import is shared
+# (``backend/_optional.py``; audit 2026-09-11 TESTS-ARCH P2-9).
+_NUMBA_AVAILABLE = _OPTIONAL_NUMBA_AVAILABLE
 _numba = None
 _njit = None
 _prange = None
@@ -416,17 +423,18 @@ _NUMBA_KERNELS: dict = {}
 
 def _load_numba():
     """Import numba + njit/prange on first use; cache the handles.  Returns
-    True iff numba is importable (False -> caller takes the NumPy fallback)."""
+    True iff numba is importable (False -> caller takes the NumPy fallback).
+
+    Honours a monkeypatched module-level ``_NUMBA_AVAILABLE = False`` -- this
+    library's spelling for "pretend the accelerator is absent" -- before
+    consulting the shared loader."""
     global _numba, _njit, _prange
     if _numba is not None:
         return True
     if not _NUMBA_AVAILABLE:
         return False
-    import numba as _nb
-    from numba import njit as _nj
-    from numba import prange as _pr
-    _numba, _njit, _prange = _nb, _nj, _pr
-    return True
+    _numba, _njit, _prange = _optional_numba_handles()
+    return _numba is not None
 
 
 def _get_imap_eval_numba():
@@ -1567,7 +1575,14 @@ def build_inverse_map(xs_in, x_out_grid, y_out_grid, opl_grid,
         from .. import memory as _mem
         rec['build_ram_budget_explicit'] = bool(
             getattr(_mem, '_MAX_RAM_OVERRIDE', None) is not None)
-    except Exception:                                  # noqa: BLE001
+    except ImportError:
+        # The only thing that can fail here is the import itself (the
+        # ``getattr`` has a default), and "is the RAM budget pinned?" is a
+        # diagnostic field, so an unimportable ``memory`` records "unknown"
+        # rather than failing the build.  Narrowed from ``except Exception``
+        # (audit 2026-09-11 TESTS-ARCH except budget, WP-A15a section 5.7):
+        # a broad clause here would have swallowed a real error raised while
+        # ``memory`` was being imported for the first time.
         rec['build_ram_budget_explicit'] = None
     if _need_b > _budget_b:
         return _guard_fail(

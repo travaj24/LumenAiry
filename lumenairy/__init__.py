@@ -137,6 +137,15 @@ from .elements import (
 # path inside apply_real_lens).  Truthy if the package is importable
 # in the current environment.
 # â”€â”€ Lenses â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Configuration objects for the apply_real_lens family (audit 2026-09-11
+# TESTS-ARCH section 14 item 13).  ``elements.lens_config`` is a leaf module,
+# so this import is free.
+from .elements.lens_config import (
+    LensConfig,
+    LensGeometry,
+    LensNumerics,
+    LensResources,
+)
 from .elements.lenses import (
     NUMEXPR_AVAILABLE,
     PreparedAnalyticLens,
@@ -1180,6 +1189,11 @@ __all__ = [
     'TiltedCarrier',
     'prepare_real_lens',
     'PreparedAnalyticLens',
+    # Configuration objects for the apply_real_lens family
+    'LensGeometry',
+    'LensNumerics',
+    'LensResources',
+    'LensConfig',
     'close_worker_pool',
     'apply_real_lens_gbd',
     'apply_real_lens_fga',

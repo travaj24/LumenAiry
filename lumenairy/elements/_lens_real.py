@@ -28,25 +28,46 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
-# Optional CuPy backend (lazy).
-CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
-cp = None  # populated by _ensure_cupy_loaded() on first use
+# Optional CuPy backend (lazy).  The availability probe, the first-use import
+# and the isinstance test live in ONE place for the whole library
+# (``backend/_optional.py``; audit 2026-09-11 TESTS-ARCH P2-9 measured five
+# hand-copied implementations of each).
+from ..backend._optional import CUPY_AVAILABLE
+from ..backend._optional import ensure_cupy as _ensure_cupy
+from ..backend._optional import is_cupy_array as _optional_is_cupy_array
+
+cp = None  # this module's alias for the cupy module; see _ensure_cupy_loaded
 
 
 def _ensure_cupy_loaded():
+    """Load CuPy on first use; return True iff it is available.
+
+    Keeps this module's ``cp`` alias populated because the GPU branches here
+    read the module-level name directly (``xp = cp if _is_cupy_array(E) else
+    np``); the import itself and its cache live in
+    :mod:`lumenairy.backend._optional`.
+    """
     global cp
-    if cp is None and CUPY_AVAILABLE:
-        import cupy as _c
-        cp = _c
+    if cp is None:
+        cp = _ensure_cupy()
     return cp is not None
 
 
 def _is_cupy_array(x):
+    """Reliable CuPy array check -- ``isinstance`` against the real CuPy type.
+
+    ``hasattr(x, 'device')`` is not a usable duck-type test: NumPy 2.x exposes
+    ``ndarray.device`` as part of the Python Array API, so every NumPy array
+    would be routed into the (unusable without CUDA) CuPy branch.
+    """
     if not CUPY_AVAILABLE:
+        # Local short-circuit, not a delegation: the CuPy-absent answer has to
+        # stay one global read on a path the band loop takes per surface.
         return False
-    if cp is None and not _ensure_cupy_loaded():
+    if not _optional_is_cupy_array(x):
         return False
-    return isinstance(x, cp.ndarray)
+    _ensure_cupy_loaded()   # a True answer implies ``cp`` is live -- bind it
+    return True
 
 
 # Optional numexpr fused-expression backend (lazy).
@@ -130,9 +151,22 @@ from .lenses import (
 
 # Private alias used inside the function body (matches lenses.py convention).
 _surface_sag_general = surface_sag_general
+
 from ..glass import get_glass_index, get_glass_index_complex
 from ..progress import call_progress
 from ..propagators.propagation import angular_spectrum_propagate
+
+# Configuration objects (audit 2026-09-11 TESTS-ARCH section 14 item 13).
+# ``lens_config`` is a LEAF -- it imports nothing from lumenairy at module
+# scope -- so this edge is one-way and adds no import cost.
+from .lens_config import (
+    LensConfig,
+    LensGeometry,
+    LensNumerics,
+    LensResources,
+    _wants_config,
+)
+from .lens_config import resolve_entry_point_kwargs as _resolve_lens_config
 
 _VALID_WAVE_PROPAGATORS = ('asm', 'sas', 'fresnel', 'rayleigh_sommerfeld', 'rs')
 
@@ -173,6 +207,24 @@ def get_lens_sag_dtype() -> Any:
     """Return the process-wide geometry dtype (``np.float32`` when set, else
     ``np.float64`` = the default)."""
     return np.float32 if _LENS_SAG_DTYPE is np.float32 else np.float64
+
+
+# Restorable through ``lumenairy.override(lens_sag_dtype=...)`` and through the
+# suite's autouse snapshot/restore fixture (audit 2026-09-11 TESTS-ARCH P2-5:
+# 53 ``set_`` verbs, 0 context-manager forms, 0 resets, in a suite that runs
+# serially).  The getter is a single global read with no side effect, and
+# ``set_lens_sag_dtype(get_lens_sag_dtype())`` is an exact no-op round trip
+# (``np.float64`` maps back to the ``None`` sentinel).
+from .._knobs import register_knob as _register_knob  # noqa: E402
+
+_register_knob(
+    'lens_sag_dtype',
+    getter=get_lens_sag_dtype,
+    setter=set_lens_sag_dtype,
+    doc="Geometry (sag/coordinate) dtype for the real-lens propagators: "
+        "np.float64 (default, byte-identical to prior releases) or np.float32 "
+        "(halves the dtype-independent memory core at ~1e-7 relative surface "
+        "departure -- validate with lens_sag_float32_opd_error first).")
 
 
 def _resolve_sag_real(sag_dtype: Any) -> Any:
@@ -1352,6 +1404,35 @@ def get_pointwise_cos_grid_cache_budget():
     global budget; a positive int -> the local ceiling in bytes.  Mirrors
     :func:`set_pointwise_cos_grid_cache_budget` (which takes megabytes)."""
     return _DISPLACED_COS_GRID_CACHE.max_bytes
+
+
+def _get_pointwise_cos_grid_cache_budget_bytes():
+    """The cos-grid cache's local byte ceiling, for the knob registry.
+
+    Registered instead of :func:`get_pointwise_cos_grid_cache_budget` +
+    :func:`set_pointwise_cos_grid_cache_budget` because those two are not a
+    round trip: the setter takes MEGABYTES and the getter returns BYTES, so
+    ``set(get())`` would inflate the budget by 2**20 every time the test
+    fixture restored it.  Bytes in, bytes out, no conversion, exact -- and
+    ``None`` (bound only by the collective global budget) survives as ``None``.
+    """
+    return _DISPLACED_COS_GRID_CACHE.max_bytes
+
+
+def _set_pointwise_cos_grid_cache_budget_bytes(max_bytes):
+    """Apply a byte ceiling produced by
+    :func:`_get_pointwise_cos_grid_cache_budget_bytes`."""
+    _DISPLACED_COS_GRID_CACHE.set_budget(max_bytes)
+
+
+_register_knob(
+    'pointwise_cos_grid_cache_budget',
+    getter=_get_pointwise_cos_grid_cache_budget_bytes,
+    setter=_set_pointwise_cos_grid_cache_budget_bytes,
+    doc="Local byte ceiling of the OPT-IN pointwise cos-grid cache: 0 "
+        "(default) disables it, None binds it to the collective global cache "
+        "budget, a positive int caps it.  Set in MEGABYTES through the public "
+        "set_pointwise_cos_grid_cache_budget().")
 
 
 def clear_pointwise_cos_grid_cache():
@@ -2641,8 +2722,8 @@ def _unfold_mirror_surfaces(prescription: dict,
         + (f"  DROPPED: the world-frame axis change of the "
            f"decentred/tilted mirror(s) at {sorted(set(shifted))}."
            if shifted else "")
-        + f"  Use lumenairy.io.split_prescription_at_mirrors(rx) with "
-          f"apply_mirror at each fold to carry them.",
+        + "  Use lumenairy.io.split_prescription_at_mirrors(rx) with "
+          "apply_mirror at each fold to carry them.",
         RuntimeWarning, _WARN_STACKLEVEL)
     out = dict(prescription)
     out['surfaces'] = new_surfaces
@@ -4539,6 +4620,10 @@ def apply_real_lens(
     accumulator_store: str = 'ram',
     scratch_dir: Optional[str] = None,
     stream_transfer_function: bool = False,
+    geometry: Optional['LensGeometry'] = None,
+    numerics: Optional['LensNumerics'] = None,
+    resources: Optional['LensResources'] = None,
+    config: Optional['LensConfig'] = None,
 ) -> np.ndarray:
     """
     Propagate a field through a real lens defined by a surface prescription.
@@ -5396,6 +5481,20 @@ def apply_real_lens(
     -> device.  Mixed-dtype callers (e.g. a complex64 host array
     promoted to the device) remain in their starting precision.
 
+    Configuration objects
+    ---------------------
+    geometry, numerics, resources, config : optional
+        :class:`~lumenairy.LensGeometry` / :class:`~lumenairy.LensNumerics` /
+        :class:`~lumenairy.LensResources`, or the
+        :class:`~lumenairy.LensConfig` that holds all three, as an alternative
+        to spelling the settings out as keywords.  Purely ADDITIVE: every
+        keyword above still works with the same default, and a call that
+        passes none of the four runs exactly the code it ran before.  A set
+        field and a keyword for the SAME setting must agree or the call
+        raises; a set field this function has no parameter for also raises
+        (``config.narrowed_to('apply_real_lens')`` drops those deliberately).
+        See ``docs/lens_configuration.md``.
+
     All arguments past ``E_in`` are keyword-only (4.7+).  The
     parameter name is ``prescription`` -- the 4.6 alias
     ``lens_prescription`` was removed in 4.7.
@@ -5408,6 +5507,14 @@ def apply_real_lens(
     # must not displace it.
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens', input_kind='field')
+    # Config objects, if any, are merged into the keywords and the call is
+    # re-entered with them -- so the configured path is the SAME code as the
+    # equivalent keyword call, by construction rather than by review.  Four
+    # ``is not None`` tests when nothing is configured; nothing else changes.
+    if _wants_config(geometry, numerics, resources, config):
+        return apply_real_lens(E_in, **_resolve_lens_config(
+            apply_real_lens, locals(), geometry=geometry, numerics=numerics,
+            resources=resources, config=config))
     with _AccumulatorStore(accumulator_store, scratch_dir) as _store:
         return _apply_real_lens_impl(
             E_in,

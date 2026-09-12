@@ -45,6 +45,18 @@ from .._math.chebyshev import (
 )
 from ..progress import call_progress
 
+# Configuration objects (audit 2026-09-11 TESTS-ARCH section 14 item 13).
+# ``lens_config`` is a LEAF -- it imports nothing from lumenairy at module
+# scope -- so this edge is one-way and adds no import cost.
+from .lens_config import (
+    LensConfig,
+    LensGeometry,
+    LensNumerics,
+    LensResources,
+    _wants_config,
+)
+from .lens_config import resolve_entry_point_kwargs as _resolve_lens_config
+
 # Pixel-band size for the stationary_phase integrator's _opd_and_derivs
 # evaluations.  None -> auto (memory-budgeted from the basis count).  A test
 # seam: setting it to a small int forces maximal banding, which must produce
@@ -1449,6 +1461,10 @@ def apply_real_lens_maslov(
     progress: Optional[Any] = None,
     use_gpu: bool = False,
     fold_split: bool = False,
+    geometry: Optional['LensGeometry'] = None,
+    numerics: Optional['LensNumerics'] = None,
+    resources: Optional['LensResources'] = None,
+    config: Optional['LensConfig'] = None,
 ) -> np.ndarray:
     """
     Phase-space / Maslov propagator through a thick-lens prescription.
@@ -1641,12 +1657,36 @@ def apply_real_lens_maslov(
     back to the host).  GPU results match the CPU integrator to ~1e-6
     (device reduction order, not byte-identical -- like the existing
     numexpr-vs-numpy ULP delta).
+
+    Configuration objects
+    ---------------------
+    geometry, numerics, resources, config : optional
+        :class:`~lumenairy.LensGeometry` / :class:`~lumenairy.LensNumerics` /
+        :class:`~lumenairy.LensResources`, or the
+        :class:`~lumenairy.LensConfig` that holds all three, as an alternative
+        to spelling the settings out as keywords.  Purely ADDITIVE: every
+        keyword above still works with the same default, and a call that
+        passes none of the four runs exactly the code it ran before.  A set
+        field and a keyword for the SAME setting must agree or the call
+        raises; a set field this function has no parameter for also raises
+        (``config.narrowed_to('apply_real_lens_maslov')`` drops those
+        deliberately).  Most of this engine's tuning constants
+        (``levin_tol``, ``poly_order``, ``integration_method``, ...) are
+        deliberately NOT config fields; see ``docs/lens_configuration.md``.
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_maslov', input_kind='field')
+    # Config objects, if any, are merged into the keywords and the call is
+    # re-entered with them -- so the configured path is the SAME code as the
+    # equivalent keyword call, by construction rather than by review.  Four
+    # ``is not None`` tests when nothing is configured; nothing else changes.
+    if _wants_config(geometry, numerics, resources, config):
+        return apply_real_lens_maslov(E_in, **_resolve_lens_config(
+            apply_real_lens_maslov, locals(), geometry=geometry,
+            numerics=numerics, resources=resources, config=config))
 
     # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
     # from ``apply_real_lens_traced``.  Pre-fix a hand-built prescription

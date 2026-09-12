@@ -44,6 +44,18 @@ from ..propagators.gbd import (
     reconstruct_field_from_beamlets,
 )
 
+# Configuration objects (audit 2026-09-11 TESTS-ARCH section 14 item 13).
+# ``lens_config`` is a LEAF -- it imports nothing from lumenairy at module
+# scope -- so this edge is one-way and adds no import cost.
+from .lens_config import (
+    LensConfig,
+    LensGeometry,
+    LensNumerics,
+    LensResources,
+    _wants_config,
+)
+from .lens_config import resolve_entry_point_kwargs as _resolve_lens_config
+
 __all__ = ['apply_real_lens_gbd']
 
 
@@ -264,6 +276,10 @@ def apply_real_lens_gbd(
     diagnostics: Optional[Dict[str, Any]] = None,
     progress: Optional[Any] = None,
     verbose: bool = False,
+    geometry: Optional['LensGeometry'] = None,
+    numerics: Optional['LensNumerics'] = None,
+    resources: Optional['LensResources'] = None,
+    config: Optional['LensConfig'] = None,
 ) -> np.ndarray:
     """Propagate ``E_in`` through a thick-lens ``prescription`` via Gaussian
     beamlet decomposition and return the field at the lens exit plane
@@ -368,9 +384,30 @@ def apply_real_lens_gbd(
         completeness that drove the re-expansion decision) and, when it fired,
         ``'frame_completeness_reexpanded'``.  ``None`` (default) computes no
         metric (zero overhead).
+    geometry, numerics, resources, config : optional
+        :class:`~lumenairy.LensGeometry` / :class:`~lumenairy.LensNumerics` /
+        :class:`~lumenairy.LensResources`, or the
+        :class:`~lumenairy.LensConfig` that holds all three, as an alternative
+        to spelling the settings out as keywords.  Purely ADDITIVE: every
+        keyword above still works with the same default, and a call that
+        passes none of the four runs exactly the code it ran before.  A set
+        field and a keyword for the SAME setting must agree or the call
+        raises; a set field this function has no parameter for also raises
+        (``config.narrowed_to('apply_real_lens_gbd')`` drops those
+        deliberately).  The beamlet-frame constants (``sample_step``,
+        ``waist_factor``, ``window``, ``reexpand*``, ...) are deliberately NOT
+        config fields; see ``docs/lens_configuration.md``.
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_gbd', input_kind='field')
+    # Config objects, if any, are merged into the keywords and the call is
+    # re-entered with them -- so the configured path is the SAME code as the
+    # equivalent keyword call, by construction rather than by review.  Four
+    # ``is not None`` tests when nothing is configured; nothing else changes.
+    if _wants_config(geometry, numerics, resources, config):
+        return apply_real_lens_gbd(E_in, **_resolve_lens_config(
+            apply_real_lens_gbd, locals(), geometry=geometry,
+            numerics=numerics, resources=resources, config=config))
     if roi is not None:
         raise NotImplementedError(
             "apply_real_lens_gbd: roi windowing is not yet supported; "

@@ -18,12 +18,18 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-import importlib.util as _importlib_util
 import threading
 import time as _time
 from typing import Any, Dict, NamedTuple, Optional, Tuple
 
 import numpy as np
+
+# Optional CuPy backend (lazy).  The availability probe, the first-use import
+# and the isinstance test live in ONE place for the whole library
+# (``backend/_optional.py``; audit 2026-09-11 TESTS-ARCH P2-9).
+from ..backend._optional import CUPY_AVAILABLE
+from ..backend._optional import ensure_cupy as _ensure_cupy
+from ..backend._optional import is_cupy_array as _optional_is_cupy_array
 
 # The inverse-characteristic per-pixel evaluator.  Imported as a MODULE, not
 # by name: its flags are read at CALL time (house rule -- see
@@ -32,25 +38,49 @@ import numpy as np
 # into this module only from inside function bodies.
 from . import _lens_imap as _IMAP
 
-# Optional CuPy backend (lazy).
-CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
-cp = None
+# Configuration objects (audit 2026-09-11 TESTS-ARCH section 14 item 13).
+# ``lens_config`` is a LEAF -- it imports nothing from lumenairy at module
+# scope -- so this edge is one-way and adds no import cost.
+from .lens_config import (
+    LensConfig,
+    LensGeometry,
+    LensNumerics,
+    LensResources,
+    _wants_config,
+)
+from .lens_config import resolve_entry_point_kwargs as _resolve_lens_config
+
+cp = None  # this module's alias for the cupy module; see _ensure_cupy_loaded
 
 
 def _ensure_cupy_loaded():
+    """Load CuPy on first use; return True iff it is available.
+
+    Keeps this module's ``cp`` alias populated: the GPU branches here read the
+    module-level name directly (``_get_array_module`` returns ``cp``), so a
+    True answer from :func:`_is_cupy_array` must imply ``cp`` is bound.
+    """
     global cp
-    if cp is None and CUPY_AVAILABLE:
-        import cupy as _c
-        cp = _c
+    if cp is None:
+        cp = _ensure_cupy()
     return cp is not None
 
 
 def _is_cupy_array(x):
+    """Reliable CuPy array check -- ``isinstance`` against the real CuPy type.
+
+    ``hasattr(x, 'device')`` is not a usable duck-type test: NumPy 2.x exposes
+    ``ndarray.device`` as part of the Python Array API, so every NumPy array
+    would be routed into the (unusable without CUDA) CuPy branch.
+    """
     if not CUPY_AVAILABLE:
+        # Local short-circuit, not a delegation: the CuPy-absent answer must
+        # stay one global read on the per-band array-module dispatch.
         return False
-    if cp is None and not _ensure_cupy_loaded():
+    if not _optional_is_cupy_array(x):
         return False
-    return isinstance(x, cp.ndarray)
+    _ensure_cupy_loaded()   # a True answer implies ``cp`` is live -- bind it
+    return True
 
 
 # v5.30 (audit E-L4): the numexpr scaffold that used to sit here
@@ -64,9 +94,15 @@ def _is_cupy_array(x):
 # ``import numba`` cost ~1.8 s of ``import lumenairy`` cold start).  The kernel
 # (``_cheb2d_val_grad_numba``) has a pure-NumPy fallback, so numba is pulled in
 # only when a caller actually hits the fast path AND numba is installed.
-import importlib.util as _ilu
+from ..backend._optional import NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE
+from ..backend._optional import numba_handles as _optional_numba_handles
 
-_NUMBA_AVAILABLE = _ilu.find_spec("numba") is not None
+# The MODULE-LEVEL ``_NUMBA_AVAILABLE`` is load-bearing and stays a module
+# attribute: it is read at CALL time and the test suite monkeypatches it to
+# ``False`` to reach the pure-NumPy arm on a box where numba IS installed.  So
+# the availability GATE is local while the import is shared
+# (``backend/_optional.py``; audit 2026-09-11 TESTS-ARCH P2-9).
+_NUMBA_AVAILABLE = _OPTIONAL_NUMBA_AVAILABLE
 _numba = None                         # populated by _load_numba() on first use
 _njit = None
 _prange = None
@@ -75,17 +111,18 @@ _NUMBA_KERNELS: dict = {}             # kernel-name -> compiled fn (or None)
 
 def _load_numba():
     """Import numba + njit/prange on first use; cache the handles.  Returns True
-    iff numba is importable (False -> caller takes the pure-NumPy fallback)."""
+    iff numba is importable (False -> caller takes the pure-NumPy fallback).
+
+    Honours a monkeypatched module-level ``_NUMBA_AVAILABLE = False`` -- this
+    library's spelling for "pretend the accelerator is absent" -- before
+    consulting the shared loader."""
     global _numba, _njit, _prange
     if _numba is not None:
         return True
     if not _NUMBA_AVAILABLE:
         return False
-    import numba as _nb
-    from numba import njit as _nj
-    from numba import prange as _pr
-    _numba, _njit, _prange = _nb, _nj, _pr
-    return True
+    _numba, _njit, _prange = _optional_numba_handles()
+    return _numba is not None
 
 
 # v5.29.1 (audit E-L22): signature defaults of :func:`apply_real_lens_traced`,
@@ -529,6 +566,22 @@ def set_lens_parallel_amp(enabled: bool) -> None:
 def get_lens_parallel_amp() -> bool:
     """Return the process-wide default for the lens amp/amp(pw) concurrency."""
     return bool(_LENS_PARALLEL_AMP_DEFAULT)
+
+
+# Restorable through ``lumenairy.override(lens_parallel_amp=...)`` and the
+# suite's autouse snapshot/restore fixture (audit 2026-09-11 TESTS-ARCH P2-5).
+# This is also the last of ``lumenairy.set_low_memory``'s four knobs to become
+# restorable, so a test that calls that macro is now fully undone by the
+# fixture.  The getter is one global read with no side effect.
+from .._knobs import register_knob as _register_knob  # noqa: E402
+
+_register_knob(
+    'lens_parallel_amp',
+    getter=get_lens_parallel_amp,
+    setter=set_lens_parallel_amp,
+    doc="Process-wide default for apply_real_lens_traced's concurrent "
+        "amp + amp(pw) execution.  False halves the lens-step peak working "
+        "set (byte-identical output, ~20% slower lens step).")
 
 
 # Helpers shared with lenses.py (aperture warning).
@@ -7526,6 +7579,10 @@ def apply_real_lens_traced(
     _exit_na_out: Optional[dict] = None,
     _remap_launch_out: Optional[dict] = None,
     _imap_out: Optional[dict] = None,
+    geometry: Optional['LensGeometry'] = None,
+    numerics: Optional['LensNumerics'] = None,
+    resources: Optional['LensResources'] = None,
+    config: Optional['LensConfig'] = None,
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -8628,6 +8685,20 @@ def apply_real_lens_traced(
         ``ray_fit_radius`` and ``stride``.  Nothing in this function reads it
         back.
 
+    Configuration objects
+    ---------------------
+    geometry, numerics, resources, config : optional
+        :class:`~lumenairy.LensGeometry` / :class:`~lumenairy.LensNumerics` /
+        :class:`~lumenairy.LensResources`, or the
+        :class:`~lumenairy.LensConfig` that holds all three, as an alternative
+        to spelling the settings out as keywords.  Purely ADDITIVE: every
+        keyword above still works with the same default, and a call that
+        passes none of the four runs exactly the code it ran before.  A set
+        field and a keyword for the SAME setting must agree or the call
+        raises; a set field this function has no parameter for also raises
+        (``config.narrowed_to('apply_real_lens_traced')`` drops those
+        deliberately).  See ``docs/lens_configuration.md``.
+
     Returns
     -------
     E_out : ndarray, complex, shape (N, N)
@@ -8638,6 +8709,16 @@ def apply_real_lens_traced(
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced', input_kind='field')
+    # Config objects, if any, are merged into the keywords and the call is
+    # re-entered with them -- so the configured path is the SAME code as the
+    # equivalent keyword call, by construction rather than by review.  It runs
+    # BEFORE the ``caustic='wave'`` snapshot below so that snapshot sees the
+    # resolved keywords (and four ``None`` config parameters, which the
+    # recursion then carries harmlessly).
+    if _wants_config(geometry, numerics, resources, config):
+        return apply_real_lens_traced(E_in, **_resolve_lens_config(
+            apply_real_lens_traced, locals(), geometry=geometry,
+            numerics=numerics, resources=resources, config=config))
     # ``caustic='wave'`` recurses into this function with the caustic mode off
     # and the output plane at the exit vertex, so it needs every OTHER keyword
     # exactly as the caller gave it.  Snapshot them from ``locals()`` HERE --
@@ -14648,6 +14729,10 @@ def prepare_real_lens_traced(
     amplitude_model: str = 'screen',
     fit_radius_beam_factor: Optional[float] = None,
     inverse_map: Optional[bool] = None,
+    geometry: Optional['LensGeometry'] = None,
+    numerics: Optional['LensNumerics'] = None,
+    resources: Optional['LensResources'] = None,
+    config: Optional['LensConfig'] = None,
 ) -> PreparedTracedLens:
     """Precompute the input-independent traced-lens screen for reuse (T-P1).
 
@@ -14713,7 +14798,24 @@ def prepare_real_lens_traced(
     flip (measured 49.6 on a singlet), and an in-place prescription edit --
     the optimizer / tolerancing pattern this class advertises -- produced a
     stale-OPL x new-amplitude hybrid (measured 0.71 from a correct rebuild).
+
+    Configuration objects
+    ---------------------
+    geometry, numerics, resources, config : optional
+        :class:`~lumenairy.LensGeometry` / :class:`~lumenairy.LensNumerics` /
+        :class:`~lumenairy.LensResources`, or the
+        :class:`~lumenairy.LensConfig` that holds all three, as an alternative
+        to spelling the settings out as keywords.  Purely ADDITIVE; a set
+        field and a keyword for the same setting must agree or this raises.
+        Note that the settings this entry point does NOT take are a smaller
+        set than :func:`apply_real_lens_traced`'s on purpose -- a prepared
+        screen is input-independent, so the caustic and output-plane settings
+        have no meaning here.  See ``docs/lens_configuration.md``.
     """
+    if _wants_config(geometry, numerics, resources, config):
+        return prepare_real_lens_traced(**_resolve_lens_config(
+            prepare_real_lens_traced, locals(), geometry=geometry,
+            numerics=numerics, resources=resources, config=config))
     if isinstance(carrier, str) and carrier == 'auto':
         raise ValueError(
             "prepare_real_lens_traced cannot cache carrier='auto' (the "

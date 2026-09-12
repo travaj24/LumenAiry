@@ -27,7 +27,8 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from . import scipy as scipy
+import importlib as _importlib
+
 from .array import (
     CUPY_AVAILABLE,
     JAX_AVAILABLE,
@@ -50,6 +51,35 @@ from .fft import (
     ifftshift,
 )
 from .random import RandomState
+
+
+def __getattr__(name):
+    """Load :mod:`lumenairy.backend.scipy` on FIRST USE (PEP 562).
+
+    ``backend/scipy.py`` imports ``scipy.linalg`` and ``scipy.special`` at
+    module scope.  Together those cost ~570 ms of a ~745 ms
+    ``import lumenairy`` on this box, and this package has 41 module-level
+    importers (``propagators.rs``, ``elements.elements``, ``analysis.beam_stats``,
+    ...) that want only ``array_namespace`` / ``is_*_array`` -- so every user
+    paid the rigorous-solver's scipy bill at import.  ``la.backend.scipy.jv(x)``
+    and ``from lumenairy.backend import scipy`` behave exactly as before; the
+    submodule is simply imported the first time something asks for it, then
+    cached in this module's globals so the second access is a dict hit.
+
+    Raises ``AttributeError`` (never ``ImportError``) for an unknown name, so
+    ``hasattr`` and ``getattr(..., default)`` keep working.
+    """
+    if name == 'scipy':
+        mod = _importlib.import_module('.scipy', __name__)
+        globals()['scipy'] = mod
+        return mod
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    """``dir()`` still lists ``scipy`` even before anything has loaded it."""
+    return sorted(set(globals()) | {'scipy'})
+
 
 __all__ = [
     'array_namespace',

@@ -41,15 +41,26 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
-cp = None  # populated by _ensure_cupy_loaded() on first use
+# Optional CuPy backend (lazy).  The availability probe, the first-use import
+# and the isinstance test live in ONE place for the whole library
+# (``backend/_optional.py``; audit 2026-09-11 TESTS-ARCH P2-9).
+from ..backend._optional import CUPY_AVAILABLE
+from ..backend._optional import ensure_cupy as _ensure_cupy
+from ..backend._optional import is_cupy_array as _optional_is_cupy_array
+
+cp = None  # this module's alias for the cupy module; see _ensure_cupy_loaded
 
 
 def _ensure_cupy_loaded():
+    """Load CuPy on first use; return True iff it is available.
+
+    Keeps this module's ``cp`` alias populated because the GPU branches here
+    -- and ``_lens_thin``'s PEP 562 ``cp`` forward, which reads
+    ``_lenses_module.cp`` -- resolve the module-level name directly.
+    """
     global cp
-    if cp is None and CUPY_AVAILABLE:
-        import cupy as _c
-        cp = _c
+    if cp is None:
+        cp = _ensure_cupy()
     return cp is not None
 
 
@@ -75,9 +86,15 @@ def _ensure_numexpr_loaded():
 # a pure-NumPy fallback -- so numba is pulled in only when a caller actually hits
 # that fast path AND numba is installed.  ``find_spec`` checks availability
 # WITHOUT importing numba.
-import importlib.util as _ilu
+from ..backend._optional import NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE
+from ..backend._optional import numba_handles as _optional_numba_handles
 
-_NUMBA_AVAILABLE = _ilu.find_spec("numba") is not None
+# The MODULE-LEVEL ``_NUMBA_AVAILABLE`` is load-bearing and stays a module
+# attribute: it is read at CALL time and the test suite monkeypatches it to
+# ``False`` to reach the pure-NumPy arm on a box where numba IS installed.  So
+# the availability GATE is local while the import is shared
+# (``backend/_optional.py``; audit 2026-09-11 TESTS-ARCH P2-9).
+_NUMBA_AVAILABLE = _OPTIONAL_NUMBA_AVAILABLE
 _numba = None                         # populated by _load_numba() on first use
 _njit = None
 _prange = None
@@ -86,17 +103,18 @@ _NUMBA_KERNELS: dict = {}             # kernel-name -> compiled fn (or None)
 
 def _load_numba():
     """Import numba + njit/prange on first use; cache the handles.  Returns True
-    iff numba is importable (False -> callers take the pure-NumPy fallback)."""
+    iff numba is importable (False -> callers take the pure-NumPy fallback).
+
+    Honours a monkeypatched module-level ``_NUMBA_AVAILABLE = False`` -- this
+    library's spelling for "pretend the accelerator is absent" -- before
+    consulting the shared loader."""
     global _numba, _njit, _prange
     if _numba is not None:
         return True
     if not _NUMBA_AVAILABLE:
         return False
-    import numba as _nb
-    from numba import njit as _nj
-    from numba import prange as _pr
-    _numba, _njit, _prange = _nb, _nj, _pr
-    return True
+    _numba, _njit, _prange = _optional_numba_handles()
+    return _numba is not None
 
 
 # v5.30 (audit E-L4/E-L5): two module constants deleted here as dead.
@@ -124,12 +142,19 @@ def _is_cupy_array(x):
     duck-type test for a CuPy device array but broke in NumPy 2.x
     (``ndarray`` now exposes ``.device`` via the Array API standard),
     causing every NumPy array to get routed into the CuPy branch.
+
+    ``_lens_thin._is_cupy_array`` delegates here, so this is also the answer
+    the thin-lens family gets.
     """
     if not CUPY_AVAILABLE:
+        # Local short-circuit, not a delegation: this is the hot per-call
+        # dispatch for the whole thin/spherical/aspheric family and the
+        # CuPy-absent answer must stay one global read.
         return False
-    if cp is None and not _ensure_cupy_loaded():
+    if not _optional_is_cupy_array(x):
         return False
-    return isinstance(x, cp.ndarray)
+    _ensure_cupy_loaded()   # a True answer implies ``cp`` is live -- bind it
+    return True
 
 
 
