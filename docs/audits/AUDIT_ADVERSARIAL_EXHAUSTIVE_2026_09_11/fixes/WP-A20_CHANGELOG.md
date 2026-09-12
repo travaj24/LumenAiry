@@ -87,7 +87,7 @@ alias, not a wrapper), so existing importers — including three audit
 regression files — are unaffected and monkeypatching either name patches
 one function.
 
-Files: `lumenairy/propagators/rs.py:38` (`__all__`), `:180-236` (the
+Files: `lumenairy/propagators/rs.py:40` (`__all__`), `:180-236` (the
 function, its `Examples`/`See Also` block and the alias), `:5-9` (module
 docstring), `:331`, `:541-548` (internal callers).
 Tests: `tests/unit/test_audit2609_a20_user_library_and_rs.py::TestA20RsAliasFreeDistanceIsPublic`

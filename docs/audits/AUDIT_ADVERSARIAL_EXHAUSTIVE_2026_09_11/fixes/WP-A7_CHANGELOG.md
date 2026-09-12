@@ -231,7 +231,7 @@ term an off-`z=0` launch needs); the finite point-source launch keeps
 `opd_seed='plane'`, which is the correct zero for a bundle whose rays all
 leave one point.
 
-The read of `image_rays` at `image_plane_wfe.py:508` is **not** in the
+The read of `image_rays` at `image_plane_wfe.py:530` is **not** in the
 exit-vertex bug class and was left alone: the rays are genuinely left on the
 last surface's sag (measured `image_rays.z` over -242.084 … 0.000 um on a
 prescription that does not end in an image plane), but `_ray_sphere_opd`

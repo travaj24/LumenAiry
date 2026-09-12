@@ -121,10 +121,10 @@ retained per-layer partial S-matrices are not linear in the field, so averaging 
 defined) and says so in its warning.  To restore silence,
 `warnings.filterwarnings('ignore', category=lumenairy.elements.rcwa.WoodNudgeWarning)`.
 
-Files: `lumenairy/elements/rcwa/_core.py:1635-1930` (the warning category, the narrow symmetric
+Files: `lumenairy/elements/rcwa/_core.py:1651-1962` (the warning category, the narrow symmetric
 bracket `_WOOD_PAIR_STEP_REL`, the `_WoodAnomaly` control-flow signal, the `_wood_symmetric`
-decorator and the result combiner), `oned.py:568, :1311, :1521`, `twod.py:1094, :1298, :1814, :2304`,
-`stack.py:642, :647, :2977`.
+decorator and the result combiner), `lumenairy/elements/rcwa/oned.py:603, :1365, :1575`, `lumenairy/elements/rcwa/twod.py:1093, :1297, :1813, :2313`,
+`lumenairy/elements/rcwa/stack.py:642, :647, :2982`.
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h2_the_nudge_announces_itself`,
 `::test_h2_exact_wood_point_beats_the_one_sided_nudge`,
 `::test_h2_wavelength_sweep_is_monotone_through_the_anomaly`,
@@ -173,7 +173,7 @@ normal-vector method's ~50% absorptance mis-split.
 `RCWAStack`'s `_li_blocks` passes `symmetrize=False`: that call wants the Li-1997 PER-AXIS
 rule, whose documented exact reduction to `_li_convolutions_2d` the mean would break.
 
-Files: `lumenairy/elements/rcwa/twod.py:411-540` (the symmetrized entry plus the split-out
+Files: `lumenairy/elements/rcwa/twod.py:410-539` (the symmetrized entry plus the split-out
 single-order `_li_tensor_l2l1`), `:726-772` (`_li_tensor_scope_notice`), `:1861`;
 `lumenairy/elements/rcwa/stack.py:2654-2661`.
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h3_fff_nv_keeps_the_cells_own_symmetry`,
@@ -208,7 +208,7 @@ Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h3_fff_nv_keeps_the_
   natural normalisation for this weak form.  Both existing eigenvector gates normalise, so
   they are unaffected.
 
-Files: `lumenairy/elements/rcwa/twod.py:1840-1900`; `lumenairy/elements/bor/radial_eigensolver.py:165-177`.
+Files: `lumenairy/elements/rcwa/twod.py:1839-1899`; `lumenairy/elements/bor/radial_eigensolver.py:166-178`.
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h4_even_parity_fold_covers_every_in_plane_formulation`,
 `::test_h4_bor_pencil_eigh_accuracy`, `::test_h4_isotropic_cell_builds_the_li_operators_once`.
 
@@ -224,7 +224,7 @@ measured: `inv()` of a 163x163 complex matrix 2.29 s unpinned vs 0.0057 s at one
 The dependency declaration itself is requested from the tests/CI work package (exact line in
 `WP-A14_REPORT.md` section 5).
 
-Files: `lumenairy/elements/rcwa/_core.py:233-247`.
+Files: `lumenairy/elements/rcwa/_core.py:249-263`.
 
 ### Fixed -- RCWA / EME: documentation-vs-behaviour and aliasing hygiene (H6)
 
@@ -255,9 +255,9 @@ Files: `lumenairy/elements/rcwa/_core.py:233-247`.
   APPROXIMATELY Hermitian -- and this is the FD oracle that Hermitian operator is compared
   against).  Bit-identical at `kx0 = ky0 = 0`.
 
-Files: `lumenairy/elements/rcwa/stack.py:736-745, :2349-2365`;
-`_core.py:916-1010, :1785-1815 (docstring)`; `lumenairy/elements/rcwa/oned.py:761`; `twod.py:1236, :1481, :2016, :2380`;
-`eme/eme_2d.py:90-96, :450-454`.
+Files: `lumenairy/elements/rcwa/stack.py:736-745, :2337-2353`;
+`lumenairy/elements/rcwa/_core.py:932-1026, :1801-1831 (docstring)`; `lumenairy/elements/rcwa/oned.py:761`; `lumenairy/elements/rcwa/twod.py:1235, :1480, :2025, :2389`;
+`lumenairy/elements/eme/eme_2d.py:90-96, :451-455`.
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h6_per_order_amplitudes_hands_out_copies`,
 `::test_h6_passive_media_predicate`, `::test_h6_passive_bound_is_armed_on_a_lossy_cell`.
 
@@ -279,7 +279,7 @@ Inert on every population the band was derived against: the worst `|Re r| / |r|`
 flipped there is 2.0751e-03, so `Im^2 / Re^2 > 2e5`, five decades clear of the new edge.
 All RCWA / PMM branch-cut, even-sector and round-2/3 verification gates pass unchanged.
 
-Files: `lumenairy/elements/rcwa/_core.py:1548-1563` and the docstring's PRICE paragraph.
+Files: `lumenairy/elements/rcwa/_core.py:1564-1579` and the docstring's PRICE paragraph.
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_g11_near_zero_evanescent_mode_is_not_flipped`,
 `::test_g11_scale_relative_band_cannot_flip_an_evanescent_mode`,
 `::test_g11_genuine_on_cut_propagating_mode_still_flips`.

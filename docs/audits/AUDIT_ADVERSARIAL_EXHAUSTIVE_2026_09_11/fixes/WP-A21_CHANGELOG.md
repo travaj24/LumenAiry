@@ -180,7 +180,7 @@ operation counts:
   routes build a **bit-identical** transfer function (measured
   `max|H_scan - fftshift(H_asm)| = 0.0`); what differs is where the `fftshift`
   pair sits -- `through_focus_scan` transforms the shifted field,
-  `angular_spectrum_propagate` uses the even-N identity at `asm.py:105-117` and
+  `angular_spectrum_propagate` uses the even-N identity at `asm.py:107-119` and
   runs unshifted.  Measured drift: **0 ULP at N = 64/128/256 and 2 / 4 ULP at
   the mixed-radix 96 / 192**.  The bar is now a derived two-sided band,
   `8 log2(N)` = 52.7 ULP at N = 96 (2-D FFT: `2 log2(N)` stages x `eps`,

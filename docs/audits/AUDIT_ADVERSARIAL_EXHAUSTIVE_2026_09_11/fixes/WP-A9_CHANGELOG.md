@@ -128,7 +128,7 @@ bar showed 178.8 mm; a 50 mm fold mirror was vignetted to 12 mm; a 45° fold's
 coord-break gaps are folded into the surrounding air gap.
 
 Remaining library-side item (reported to the orchestrator, not fixable from
-`ui/`): `raytrace/trace.py:546-552` takes `min(per-surface semi_diameter,
+`ui/`): `lumenairy/raytrace/trace.py:545-586` takes `min(per-surface semi_diameter,
 elements[i] semi_diameter)` with a refracting-only `elements` filter indexed by
 the all-surfaces counter, so a mirror is still clipped to the following lens's
 semi-diameter.  Every refracting surface is now exact.

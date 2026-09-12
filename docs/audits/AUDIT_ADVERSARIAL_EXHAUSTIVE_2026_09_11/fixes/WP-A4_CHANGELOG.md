@@ -253,7 +253,7 @@ linear in the INTEGRATION variable `v2`, so dropping them moves the complex
 saddle `delta* = M^-1 b / 2` and `Re(b^T M^-1 b / 4)` -- an amplitude and
 position error, not a phase reference.  On an off-axis `source_centre` the
 rank-deficient design splits a ~2 700-wave ramp roughly 50/50 between `a1` and
-`a3`, so this is reached by `propagators/subaperture.py:524` for every
+`a3`, so this is reached by `propagators/subaperture.py:514` for every
 off-centre patch of the patch-decomposition propagator.  The identical defect
 was found and fixed in the sibling `lenses_maslov` (audit N4) and never ported.
 

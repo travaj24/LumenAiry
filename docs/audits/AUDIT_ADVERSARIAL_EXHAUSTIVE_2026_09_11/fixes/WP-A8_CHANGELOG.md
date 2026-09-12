@@ -25,7 +25,7 @@ replaced from the SCHOTT Zemax 2017-01-20b catalogue and now reproduce the data
 sheet's n_d to 1.0e-6 and V_d to 0.003.  `N-BK7` and `N-SF11` are unchanged and
 still exact.
 
-Files: `lumenairy/glass.py:126-146`.
+Files: `lumenairy/glass.py:125-145`.
 Tests: `tests/unit/test_audit2609_a8_glass.py::test_e1_bundled_row_reproduces_the_manufacturer_data_sheet`,
 `::test_e1_repaired_rows_are_not_the_pre_fix_rows`.
 
@@ -51,7 +51,7 @@ is **not** run at import (it parses one catalogue YAML per row); the test suite
 runs it.  Injecting the pre-fix coefficients makes it flag exactly those three
 rows and raise.
 
-Files: `lumenairy/glass.py:1079-1253` (new constants, `_bundled_row_catalogue_source`,
+Files: `lumenairy/glass.py:1031-1279` (new constants, `_bundled_row_catalogue_source`,
 `_catalogue_index_fn_from_entry`, `_catalogue_index_fn`, `_nd_vd`,
 `_cross_check_bundled_values`), `:1255` (`check_values` parameter).
 Tests: `tests/unit/test_audit2609_a8_glass.py::test_e1_whole_bundled_table_agrees_with_refractiveindex_info`,
@@ -78,7 +78,7 @@ non-finite κ now takes the same warn-once + κ = 0 path as a missing one.
 `N-BK7`'s real extinction and its sign convention are unchanged
 (1.5006520 + 1.4361e-7 j at 1.55 µm).
 
-Files: `lumenairy/glass.py:1896-1946`.
+Files: `lumenairy/glass.py:1959-2009`.
 Tests: `tests/unit/test_audit2609_a8_glass.py::test_e2_complex_index_never_raises_for_a_catalogue_glass`,
 `::test_e2_extinction_is_finite_and_non_negative`,
 `::test_e2_missing_kappa_warns_once_and_returns_zero`,
@@ -215,7 +215,7 @@ screen cannot do: the rod's back focal distance is `cos(gd)/(n0 g sin(gd))` from
 the exit face while a thin screen focuses a collimated input at `f` past itself,
 so the focus POSITION relative to the rod faces needs a ray/split-step model.
 
-Files: `lumenairy/elements/_lens_thin.py:1186` (`thin_form` kwarg), `:1258-1281`
+Files: `lumenairy/elements/_lens_thin.py:1094` (`thin_form` kwarg), `:1258-1281`
 (guards), `:1305` (the power).
 Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e5_*`.
 
@@ -277,7 +277,7 @@ caller passes an extra key (grepped `lumenairy/`, `tests/`, `validation/`,
 of the spec dict — the alternative, a silently-ignored key, is the defect this
 entry is about.
 
-Files: `lumenairy/elements/bsdf.py:617-703`.
+Files: `lumenairy/elements/bsdf.py:628-715`.
 Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_make_bsdf_*`.
 
 ### Performance -- bsdf: `sample_scatter_rays` vectorised over the bundle (113×–377×), and the Harvey-Shack rejection sampler replaced by its exact inverse CDF (E6)
@@ -350,7 +350,7 @@ Output is bit-identical (`np.array_equal`, several N / pitch / lenslet-count
 combinations).  `|T| = 1` everywhere and the exactly-zero steer at each lenslet
 centre are unchanged.
 
-Files: `lumenairy/elements/doe.py:256-284`.
+Files: `lumenairy/elements/doe.py:251-279`.
 Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_microlens_array_separable_form_is_bit_identical`,
 `::test_e6_microlens_array_allocates_a_handful_of_grids_not_ten`,
 `::test_e6_microlens_array_physics_is_untouched`.
@@ -435,7 +435,7 @@ no `'air'`), and `'vacuum'` / `'__MIRROR__'` still raise as before.
 returns 1.0 — the name is case-folded before the short-circuit, so the registry
 is only ever consulted at `'air'`.  Register ambient models at `'air'`.
 
-Files: `lumenairy/glass.py:1650-1662`, `:1852-1866`.
+Files: `lumenairy/glass.py:1721-1733`, `:1852-1866`.
 Tests: `tests/unit/test_audit2609_a8_glass.py::test_e7_*`.
 
 ### Verified -- glass: the 24 formula-3 polynomial rows the auditor could not reach

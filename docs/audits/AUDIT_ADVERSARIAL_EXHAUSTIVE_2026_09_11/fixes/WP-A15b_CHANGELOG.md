@@ -54,7 +54,7 @@ for all 17).
 `_is_cupy_array` and `_load_numba` hand-copied **five times each** across eight modules, so the
 accelerator-absent path had five implementations and no single place to test it. The three
 NON-lens sites now delegate -- `propagators/fft_infra.py:46-48`, `sources/core.py:26-27`,
-`optimize/_merit_jit.py:45-46` -- while keeping their module-level `cp` alias and their
+`optimize/_merit_jit.py:44-45` -- while keeping their module-level `cp` alias and their
 `_ensure_cupy_loaded` / `_is_cupy_array` / `_NUMBA_AVAILABLE` names, all of which are load-bearing
 (`fft_infra.__all__` exports two of them, `propagation.py` re-exports them, and
 `test_v5_3_multi_field_merit_jit.py` monkeypatches `_merit_jit._NUMBA_AVAILABLE`). Behaviour is
@@ -80,14 +80,15 @@ noise-free interleaved measurement -- the same build, `import lumenairy` against
 
 That is much less than the audit's "~65 % of import time", and the reason is a measurement the
 audit's chain no longer matches: on this HEAD `scipy.linalg` + `scipy.special` are reached through
-`analysis.beam_stats -> lumenairy.backend -> backend.scipy` (`backend/__init__.py:30`,
-`from . import scipy`), not through `elements -> berreman -> rcwa`, and `lumenairy.backend` has
+`analysis.beam_stats -> lumenairy.backend -> backend.scipy` (then a module-level `from . import scipy` in
+`backend/__init__.py`; WP-A16 replaced it with the PEP 562 `__getattr__` at
+`lumenairy/backend/__init__.py:58`), not through `elements -> berreman -> rcwa`, and `lumenairy.backend` has
 **41 module-level importers** including `propagators.rs`, `propagators.hf` and
 `elements.elements`. `backend.scipy` costs 566 ms of the 955 ms total. Deferring it is a ~12-line
 PEP 562 change in `lumenairy/backend/__init__.py` -- outside this work package -- and it is worth
-~47 ms on its own, or ~540 ms (≈70 %) together with `elements/_lens_traced_multibranch.py:57`
-(`from scipy.special import airy`), which is the only other module-level `scipy.special` importer
-left. Both requests are in `WP-A15b_REPORT.md` section 5 with the measured numbers.
+~47 ms on its own, or ~540 ms (≈70 %) together with the module-level
+`from scipy.special import airy` in `elements/_lens_traced_multibranch.py` (WP-A16 binds it on
+first use in `_airy`), which was the only other module-level `scipy.special` importer left. Both requests are in `WP-A15b_REPORT.md` section 5 with the measured numbers.
 
 ### Fixed -- architecture: the library's last import-time layering violation
 
@@ -127,7 +128,7 @@ re-litigated.
 
 ### Fixed -- propagators: `propagate_through_system` forwards `subharmonics` to the turbulence screen
 
-`system.py:1017` now passes `subharmonics=elem.get('subharmonics', 0)` to
+`system.py:1007` now passes `subharmonics=elem.get('subharmonics', 0)` to
 `generate_turbulence_screen`, and the element-dict documentation lists the key. WP-A8 added the
 Lane subharmonic levels (audit section 5, E3) but the element chain was the one caller that could
 not reach them, so `{'type': 'turbulence', ..., 'subharmonics': 3}` was silently discarded -- the
