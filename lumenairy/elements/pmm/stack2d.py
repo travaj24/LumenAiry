@@ -598,7 +598,14 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # this instance, exactly as the pre-P2C ``= {}`` did.
         self._geom_cache = LayerCache(max_bytes=self._cache_max_bytes)
         self._eig_cache = LayerCache(max_bytes=self._cache_max_bytes)
-        self._eig_refusal_warned = False    # fresh caches -> fresh signal
+        # Fresh caches -> fresh signal.  A one-element LIST, not a bool, for
+        # the same reason the caches are rebound rather than cleared: the
+        # ``copy.copy`` sweep clones and the ``_materialized_layers`` probe
+        # share the cache OBJECT, so the "warn once" state has to be shared
+        # with them too or a wavelength sweep emits one warning per POINT --
+        # exactly the case the warning exists to describe (measured: 6 of 6
+        # before this, at every ``max_workers``).
+        self._eig_refusal_warned = [False]
         if is_jax_array(thickness):
             t_store = thickness            # traced: validated only if concrete
             try:
@@ -1328,11 +1335,20 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         few hundred distinct wavelengths at production truncation walk past the
         5 %-of-RAM budget and every subsequent point re-eigs from scratch.
         ``cache_stats()['eig']['refused']`` was the only signal and nothing
-        surfaced it."""
+        surfaced it.
+
+        ONCE per stack, counting the sweep clones as the same stack: the flag
+        is a shared one-element list (see :meth:`add_layer`), so
+        ``solve_vs_wavelength`` -- whose workers each run a ``copy.copy``
+        clone -- reports the loss once instead of once per wavelength."""
         n = self._eig_cache.n_refused - int(before)
-        if n <= 0 or getattr(self, "_eig_refusal_warned", False):
+        flag = getattr(self, "_eig_refusal_warned", None)
+        if not isinstance(flag, list):          # legacy/unpickled state
+            flag = [bool(flag)]
+            self._eig_refusal_warned = flag
+        if n <= 0 or flag[0]:
             return
-        self._eig_refusal_warned = True
+        flag[0] = True
         st = self._eig_cache.stats()
         warnings.warn(
             f"PMM2DStackHybrid.solve: the per-layer modal (eig) cache REFUSED "

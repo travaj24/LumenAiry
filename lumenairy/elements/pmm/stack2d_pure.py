@@ -772,7 +772,11 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                     "The shear's own metric anisotropy is absorbed "
                     "analytically; a MATERIAL mu is not.  Drop mu, or "
                     "z-staircase the slanted magnetic layer.")
-            self._add_magnetic_layer(t, eps, eps_cell, mu, mu_cell)
+            self._add_magnetic_layer(
+                t, eps, eps_cell, mu, mu_cell,
+                max_pencil_dof=max_pencil_dof,
+                M=int(_pl.get("M") or self.M),
+                walls_given=(x_walls is not None or y_walls is not None))
             return self._finish_layer(_pl)
         if eps is not None:
             e = np.asarray(eps, dtype=_C)
@@ -911,14 +915,22 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             self._layers[-1].update(pl)
         return self
 
-    def _add_magnetic_layer(self, t, eps, eps_cell, mu, mu_cell):
+    def _add_magnetic_layer(self, t, eps, eps_cell, mu, mu_cell,
+                            *, max_pencil_dof=None, M=None,
+                            walls_given=False):
         """The ``mu`` / ``mu_cell`` branch of :meth:`add_layer` (kept apart so
         the NONMAGNETIC code path above is untouched, byte for byte).
 
         Stores ONE layer record carrying both specifications plus the two
         ``uniform`` flags that disambiguate a ``(3, 3)`` UNIFORM tensor from a
         ``(3, 3)`` scalar GRID; :meth:`solve` broadcasts each onto the union
-        grid and hands the pair to :class:`Granet2DTransverseE`."""
+        grid and hands the pair to :class:`Granet2DTransverseE`.
+
+        ``max_pencil_dof`` / ``M`` / ``walls_given`` are :meth:`add_layer`'s,
+        forwarded so the SEGMENT-grid cost guard prices and refuses this branch
+        exactly as the nonmagnetic one does: priced at the LAYER's modal count
+        (``n_modes=``, not the stack's), and liftable by the documented
+        keyword."""
         if mu is not None and mu_cell is not None:
             raise ValueError(
                 "PMM2DStackPure.add_layer: pass at most ONE of mu (uniform) "
@@ -965,10 +977,17 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             mu_spec = _validate_stag_mu(fn, mu_cell)
             mu_uni = False
         # SEGMENT-grid cost guard on the patterned side(s); eps and mu merge
-        # JOINTLY (a boundary survives where either changes).
-        _validate_stag_cost(fn, int(self.M),
-                            None if eps_uni else eps_spec,
-                            None if mu_uni else mu_spec)
+        # JOINTLY (a boundary survives where either changes) -- but only when
+        # they are on the SAME grid.  A mismatched pair is the union-grid
+        # error below, and pricing it here first would surface as an internal
+        # IndexError out of the merge scan instead.
+        _cells = [None if eps_uni else eps_spec, None if mu_uni else mu_spec]
+        _shapes = {np.shape(c)[:2] for c in _cells if c is not None}
+        if len(_shapes) > 1:
+            _cells = [_cells[0]]
+        _validate_stag_cost(fn, int(self.M if M is None else M), *_cells,
+                            max_pencil_dof=max_pencil_dof,
+                            walls_given=walls_given)
         # union grid: any PATTERNED side (eps_cell or mu_cell) registers it
         for spec, uni in ((eps_spec, eps_uni), (mu_spec, mu_uni)):
             if uni or self.layer_grids != "shared":

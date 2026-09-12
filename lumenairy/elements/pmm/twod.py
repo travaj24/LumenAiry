@@ -1164,7 +1164,11 @@ def _pmm2d_solve_core(period_x, period_y, x_walls, y_walls, eps_tile,
     orders2d = np.stack([order_x, order_y], axis=1)
     # cross-suite return shape: unpacks as (orders, R, T); .dof = 2*Nf (the modal
     # eigenproblem dimension).  Was a bare 4-tuple (orders, R, T, dof) pre-v5.12.
-    return Efficiency2D(orders2d, R, T, 2 * Nf)
+    # ``wl_eff`` is the wavelength the solve ACTUALLY ran at -- the requested
+    # one, or the Wood-anomaly nudge ``_grazing_safe_wavelength`` substituted --
+    # so a caller can tell a nudged 2-D solve from an exact one without parsing
+    # the warning, exactly as the 1-D and RCWA results already allow.
+    return Efficiency2D(orders2d, R, T, 2 * Nf, wl_eff=float(wl))
 
 
 # =========================================================================== #
@@ -1365,11 +1369,18 @@ def pmm_efficiency_2d(
                 f"pmm_efficiency_2d: degree {deg} needs a {nodes} x {nodes} "
                 f"nodal grid ({nodes * nodes} > max_nodal_dof "
                 f"{_MAX_NODAL_DOF}).")
-        return _pmm2d_solve_core(
+        res = _pmm2d_solve_core(
             period_x, period_y, [x0, x1], [y0, y1], eps_tile, eps_sup,
             eps_sub, depth, wavelength, deg, elements_per_strip,
             elements_per_strip, grade, polarization, theta, phi, n_orders,
             formulation, truncation=truncation, symmetry=symmetry)
+        _wl_seen[0] = res.wl_eff
+        return res
+
+    # The Wood nudge is a function of wavelength / angles / periods / order set
+    # / region eps -- NOT of ``degree`` -- so every scanned degree records the
+    # same ``wl_eff`` and the consensus result carries it too.
+    _wl_seen = [float(wavelength)]
 
     if not stabilize:
         res = _solve_at(degree)
@@ -1382,7 +1393,8 @@ def pmm_efficiency_2d(
                                 per_order_tol=_PER_ORDER_TOL_2D,
                                 super_unity_ok=_lossy_incidence(
                                     n_superstrate))
-    return Efficiency2D(o, R, T, 2 * (2 * n_orders + 1) ** 2)
+    return Efficiency2D(o, R, T, 2 * (2 * n_orders + 1) ** 2,
+                        wl_eff=_wl_seen[0])
 
 
 def _validate_cell_orders(fn_name, n_orders, degree, el_x, el_y):
@@ -1529,11 +1541,18 @@ def pmm_efficiency_2d_cell(
                               el_y)
         _validate_cell_cost("pmm_efficiency_2d_cell", el_x, el_y, deg,
                             max_nodal_dof)
-        return _pmm2d_solve_core(
+        res = _pmm2d_solve_core(
             period_x, period_y, x_walls, y_walls, eps_tile, eps_sup, eps_sub,
             depth, wavelength, deg, el_x, el_y, grade, polarization, theta,
             phi, n_orders, formulation, truncation=truncation,
             symmetry=symmetry, fn_name="pmm_efficiency_2d_cell")
+        _wl_seen[0] = res.wl_eff
+        return res
+
+    # degree-independent, as in pmm_efficiency_2d: the Wood nudge reads the
+    # wavelength / angles / periods / order set / region eps, none of which the
+    # degree scan moves.
+    _wl_seen = [float(wavelength)]
 
     if not stabilize:
         res = _solve_at(degree)
@@ -1549,7 +1568,8 @@ def pmm_efficiency_2d_cell(
                                 per_order_tol=_PER_ORDER_TOL_2D,
                                 super_unity_ok=_lossy_incidence(
                                     n_superstrate))
-    return Efficiency2D(o, R, T, 2 * (2 * n_orders + 1) ** 2)
+    return Efficiency2D(o, R, T, 2 * (2 * n_orders + 1) ** 2,
+                        wl_eff=_wl_seen[0])
 
 
 # =========================================================================== #
@@ -1671,7 +1691,7 @@ class PreparedPMM2D:
         R = np.where(np.real(kz_ref_f) > 0, np.real(R), 0.0)
         T = np.where(np.real(kz_trn_f) > 0, np.real(T), 0.0)
         orders2d = np.stack([order_x, order_y], axis=1)
-        res = Efficiency2D(orders2d, R, T, 2 * Nf)
+        res = Efficiency2D(orders2d, R, T, 2 * Nf, wl_eff=float(wl))
         # The SAME tripwire the direct entries run on their stabilize=False
         # fast path.  Its absence here was measured (degree 7, n_orders 2, a
         # provably lossless eps-12.25 pillar): both paths returned

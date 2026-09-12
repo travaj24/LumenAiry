@@ -706,7 +706,19 @@ def test_the_pure_stacks_shared_grid_cannot_express_a_sliver():
         cell = np.full((N, N), _EH + 0j)
         cell[N // 4:3 * N // 4, N // 4:3 * N // 4] = _EP
         st = PMM2DStackPure(_P2, n_modes=4, n_orders=1)
-        st.add_layer(0.3, eps_cell=cell)
+        # This claim is GEOMETRIC and never solves -- it needs add_layer only
+        # to ACCEPT the lattice.  The SEGMENT-grid cost guard (audit G9) prices
+        # the solve that will not happen, and its arithmetic is right: at
+        # N = 129, M = 4 the generalized pencil really is
+        # 2*(129*3)^2 = 299 538, ~15.7 TB dense, so refusing it by default is
+        # correct.  Acknowledge it explicitly at exactly the fixture's own dof
+        # -- the documented escape hatch -- and ignore the redundancy advice at
+        # N = 8 / 24, which is also correct (3x3 distinct strips sit on a
+        # uniform 4x4 lattice) and is simply not what this test is about.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            st.add_layer(0.3, eps_cell=cell,
+                         max_pencil_dof=2 * (N * (4 - 1)) ** 2)
         w = np.full(N, _P2 / N)
         assert float(w.max() / w.min()) == 1.0, N
     cA = np.full((6, 6), _EH + 0j)

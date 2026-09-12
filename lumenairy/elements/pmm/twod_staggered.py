@@ -444,8 +444,14 @@ def _stag_merged_segments(*cells):
 
 def _stag_wall_indices(arrs, axis):
     """Interior boundary INDICES on ``axis`` where the adjacent row/column of
-    any of ``arrs`` differs."""
-    rolled = [np.moveaxis(a, axis, 0) for a in arrs]
+    any of ``arrs`` differs.
+
+    Arrays whose leading (Nx, Ny) shape differs from the first are DROPPED
+    rather than scanned: a mismatched ``eps_cell`` / ``mu_cell`` pair is the
+    caller's union-grid error, and scanning it here would raise an internal
+    ``IndexError`` before that clearer message could be reached."""
+    rolled = [np.moveaxis(a, axis, 0) for a in arrs
+              if np.shape(a)[:2] == np.shape(arrs[0])[:2]]
     n = rolled[0].shape[0]
     return [i for i in range(1, n)
             if any(not np.array_equal(r[i], r[i - 1]) for r in rolled)]
@@ -3638,7 +3644,9 @@ def pmm_efficiency_2d_staggered(
     orders2d = np.stack([order_x, order_y], axis=1)
     # cross-suite return shape: unpacks as (orders, R, T); .dof = 2*q^2 (the modal
     # eigenproblem dimension).  Was a bare 4-tuple (orders, R, T, dof) pre-v5.12.
-    return Efficiency2D(orders2d, R, T, 2 * qq)
+    # ``wl_eff`` is the wavelength actually solved -- the requested one, or the
+    # Wood-anomaly nudge this entry's ``_grazing_safe_wavelength`` substituted.
+    return Efficiency2D(orders2d, R, T, 2 * qq, wl_eff=float(wl))
 
 
 # =========================================================================== #
