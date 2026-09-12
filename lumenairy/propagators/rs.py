@@ -200,9 +200,18 @@ def rayleigh_sommerfeld_propagate(
         (N = 128, dx = 1 um), 25.70 (N = 128, dx = 2 um) with relative L2
         of 4.50 / 2.08 / 4.95.  The same grids under ``'auto'``:
         relative L2 5.3e-8 / 6.1e-8 / 5.3e-8 with ``P_out/P_in``
-        1.000000.  Above the threshold nothing moves: 6.1e-8 / 6.3e-8 /
-        6.8e-8 at z = 200 um / 300 um / 1 mm on the N = 128 / dx = 1 um
-        probe, byte-for-byte the pre-v5.46 numbers.
+        1.000000.  At and above the threshold nothing moves at all: on
+        the N = 128 / dx = 1 um probe ``z_crit`` is 404.4 um, and at
+        z = 405 um and z = 1 mm the default output is BYTE-IDENTICAL to
+        the pre-v5.46 kernel (re-measured against the pre-v5.46 module
+        itself, five (N, dx, z) points including odd N = 65 and N = 100).
+        Below the threshold the default now takes the transfer branch, so
+        it is NOT byte-identical there -- but where the spatial kernel was
+        still adequately sampled the two agree to round-off: relative L2
+        between the pre-v5.46 output and the current default is 1.7e-13 at
+        z = 200 um and 2.1e-13 at z = 300 um on the same probe, both at
+        the FFT's own floor (each is ~2e-13 from an 8x-zero-padded
+        reference).
 
         The two branches are continuous across the switch, and converge
         onto each other as the grid is refined.  Measured at

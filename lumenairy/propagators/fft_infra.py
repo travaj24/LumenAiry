@@ -635,6 +635,48 @@ _PYFFTW_PLAN_CACHE: 'OrderedDict[tuple, dict]' = OrderedDict()
 _PYFFTW_PLAN_CACHE_SIZE = 8       # # of plans to keep resident
 _PYFFTW_PLAN_LOCK = threading.Lock()
 
+# Ping-pong buffers may only be handed out as VIEWS while ONE thread is
+# issuing FFTs.  The contract above ("your slot stays valid until the call
+# after next") is a single-threaded statement: with T threads issuing calls
+# at the same key in arbitrary order, a caller's slot can be recycled while
+# it still holds the reference, and the caller then multiplies a stale or
+# half-written spectrum -- a silent 100 %-wrong field, not a crash.
+#
+# The per-slot locks (audit K4) removed the entry-wide serialisation that
+# had been masking this: measured on this box, 8 threads x 40 concurrent
+# ``rayleigh_sommerfeld_propagate`` calls at (128, 128) / complex128 /
+# z = 5 mm returned 7 fields with max|out - ref|/max|ref| = 1.14 (i.e.
+# 100 % wrong) with per-slot locks and 0 with one shared lock per entry.
+# ``angular_spectrum_propagate`` measured 0 / 320 either way.
+#
+# Fix: latch the first thread that reaches the plan cache; the instant a
+# SECOND thread issues an FFT, every subsequent pyFFTW return privatises
+# its buffer (``buf.copy()``) for the rest of the process.  Single-threaded
+# callers -- the overwhelmingly common case, and the one the double buffer
+# was built for -- keep the zero-copy path unchanged and bit-identical.
+# The latch is set inside ``_get_or_make_plan``, i.e. BEFORE the second
+# thread executes its plan, and the slot index has already been advanced,
+# so the first thread's outstanding view is on the alternate slot and
+# survives.  It is deliberately one-way: nothing resets it, because a
+# process that has been multi-threaded once may be again.
+_PYFFTW_FIRST_FFT_THREAD = None
+_PYFFTW_SHARED_BUFFERS_UNSAFE = False
+
+
+def _note_fft_thread():
+    """Latch ``_PYFFTW_SHARED_BUFFERS_UNSAFE`` once a second thread issues
+    an FFT.  Returns the flag.  Called from :func:`_get_or_make_plan`."""
+    global _PYFFTW_FIRST_FFT_THREAD, _PYFFTW_SHARED_BUFFERS_UNSAFE
+    if _PYFFTW_SHARED_BUFFERS_UNSAFE:
+        return True
+    ident = threading.get_ident()
+    if _PYFFTW_FIRST_FFT_THREAD is None:
+        _PYFFTW_FIRST_FFT_THREAD = ident
+    elif ident != _PYFFTW_FIRST_FFT_THREAD:
+        _PYFFTW_SHARED_BUFFERS_UNSAFE = True
+        return True
+    return False
+
 # pyFFTW planner flag.  FFTW_ESTIMATE (default) takes ~1 ms to plan
 # and gives "good enough" performance.  FFTW_MEASURE takes
 # ~0.1-1 s to plan but produces ~20% faster execution; worth opting
@@ -1284,6 +1326,11 @@ def _get_or_make_plan(direction, shape, dtype, threads):
     shape_t = tuple(int(s) for s in shape)
     dt = np.dtype(dtype)
     key = (str(direction), shape_t, dt.str, int(threads))
+
+    # Detect multi-threaded FFT use BEFORE this call executes its plan, so
+    # the newcomer's own result is already privatised (see the latch's
+    # comment at ``_PYFFTW_SHARED_BUFFERS_UNSAFE``).
+    _note_fft_thread()
 
     with _PYFFTW_PLAN_LOCK:
         if key in _PYFFTW_PLAN_CACHE:
@@ -2141,7 +2188,12 @@ def _fft2(x):
                 # rather than on the global switch is what makes the byte cap
                 # safe: a capped key hands back a copy even while the global
                 # ping-pong is on.
-                return buf if _nbufs > 1 else buf.copy()
+                # A second thread has issued an FFT in this process, so the
+                # ping-pong slot can be recycled while this caller still holds
+                # its reference -- privatise (see _PYFFTW_SHARED_BUFFERS_UNSAFE).
+                return (buf if (_nbufs > 1
+                                and not _PYFFTW_SHARED_BUFFERS_UNSAFE)
+                        else buf.copy())
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             # pyFFTW failure modes: RuntimeError (planner internal
@@ -2196,7 +2248,12 @@ def _ifft2(x):
                 # rather than on the global switch is what makes the byte cap
                 # safe: a capped key hands back a copy even while the global
                 # ping-pong is on.
-                return buf if _nbufs > 1 else buf.copy()
+                # A second thread has issued an FFT in this process, so the
+                # ping-pong slot can be recycled while this caller still holds
+                # its reference -- privatise (see _PYFFTW_SHARED_BUFFERS_UNSAFE).
+                return (buf if (_nbufs > 1
+                                and not _PYFFTW_SHARED_BUFFERS_UNSAFE)
+                        else buf.copy())
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             # Same pyFFTW failure spectrum as ``_fft2``; see comment
@@ -2241,7 +2298,12 @@ def _fft2_nd(x):
                 # rather than on the global switch is what makes the byte cap
                 # safe: a capped key hands back a copy even while the global
                 # ping-pong is on.
-                return buf if _nbufs > 1 else buf.copy()
+                # A second thread has issued an FFT in this process, so the
+                # ping-pong slot can be recycled while this caller still holds
+                # its reference -- privatise (see _PYFFTW_SHARED_BUFFERS_UNSAFE).
+                return (buf if (_nbufs > 1
+                                and not _PYFFTW_SHARED_BUFFERS_UNSAFE)
+                        else buf.copy())
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             if not PYFFTW_FALLBACK_ON_ERROR:
@@ -2281,7 +2343,12 @@ def _ifft2_nd(x):
                 # rather than on the global switch is what makes the byte cap
                 # safe: a capped key hands back a copy even while the global
                 # ping-pong is on.
-                return buf if _nbufs > 1 else buf.copy()
+                # A second thread has issued an FFT in this process, so the
+                # ping-pong slot can be recycled while this caller still holds
+                # its reference -- privatise (see _PYFFTW_SHARED_BUFFERS_UNSAFE).
+                return (buf if (_nbufs > 1
+                                and not _PYFFTW_SHARED_BUFFERS_UNSAFE)
+                        else buf.copy())
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             if not PYFFTW_FALLBACK_ON_ERROR:

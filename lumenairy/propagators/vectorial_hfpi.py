@@ -323,11 +323,17 @@ def propagate_vector_to_plane(
 ) -> VectorPathBundle:
     """Free-space advance of every alive vector-path to ``z_target``.
 
-    The Jones vector picks up a global phase ``exp(i k OPL)``;
-    polarization-rotation-by-propagation effects (which the
-    full m-theory dipole formalism captures for general directions)
-    are neglected for paraxial advances.  At each diffracting
-    surface, see :func:`apply_vector_aperture_diffraction`.
+    The three-component field picks up a global phase ``exp(i k OPL)``
+    and nothing else: a straight-line advance in a homogeneous medium
+    does not rotate the field relative to its own propagation direction.
+    All rotation happens where the direction changes -- at emission and
+    at each re-emission; see :func:`apply_vector_aperture_diffraction`
+    and :func:`_rigid_rotate`.
+
+    (Audit K15/K17: this paragraph used to attribute the neglected
+    rotation to "the full m-theory dipole formalism".  No such formalism
+    exists in this module or anywhere else in the library -- see the
+    module docstring's ``versionchanged:: 5.46`` note.)
     """
     xp = array_namespace(paths.positions)
     z_curr = paths.positions[..., 2]
@@ -374,10 +380,19 @@ def apply_vector_aperture_diffraction(
     """Vectorial counterpart of :func:`apply_aperture_diffraction`.
 
     Paths landing outside the aperture are killed.  Surviving paths
-    re-emit secondary HF sources at their current position with
-    fresh forward-cone directions; their Jones vector is multiplied
-    by ``cos(theta_new)`` to account for the m-theory dipole
-    obliquity, and the OPL accumulator is reset.
+    re-emit secondary HF sources at their current position with fresh
+    forward-cone directions.  Their three-component field is carried
+    onto the new direction's transverse plane by the rigid rotation
+    :func:`_rigid_rotate` (orthogonal, so it introduces no amplitude
+    factor), multiplied by the SCALAR Kirchhoff obliquity
+    ``0.5*(cos theta_in + cos theta_out)`` and the ``1/(i lambda) dOmega``
+    prefactor, and the OPL accumulator and the leg length are reset.
+
+    (Audit K15/K17: this paragraph used to say the Jones vector is
+    "multiplied by ``cos(theta_new)`` to account for the m-theory dipole
+    obliquity".  There is no such tensor -- see the module docstring --
+    and since v5.46 the obliquity is the symmetric scalar above while the
+    direction change is handled by the rotation, not by a scale factor.)
 
     Parameters
     ----------
