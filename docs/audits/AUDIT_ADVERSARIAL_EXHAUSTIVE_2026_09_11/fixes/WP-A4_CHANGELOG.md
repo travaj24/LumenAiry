@@ -552,3 +552,45 @@ a `clear_maslov_local_window_cache()` clearer, so it participates in
 `clear_asm_caches()` / `lumenairy_context(clear_caches_on_exit=True)` like every
 other module-level cache.  Entries are a few kB each at an LRU cap of 32, so no
 byte-budget hook.
+
+---
+
+## VERIFY-A4 follow-up (independent re-verification pass)
+
+The changes VERIFY-A4 made on top of `32ba3ba2` have their own changelog text
+in `fixes/VERIFY_WP-A4_CHANGELOG.md` (same voice, same assembly).  They are:
+
+* **`### Fixed -- optimize`** — the LG aberration merit is now a DIMENSIONLESS
+  coupling `|L|^2 / |L_ref(0,0)|^2`, referenced to the aberration-free twin of
+  the same optic, on both backends.  **Migration note:** the (0, 0)
+  contribution moves from `-4.79e+14` (32ba3ba2) / `+0.9968` (v5.45) to a
+  Strehl deficit in about `[-3e-03, 1]`; any absolute threshold, logged value
+  or stopping tolerance tuned against either old scale must be re-derived.
+  Relative channel weights keep their meaning (every channel is divided by the
+  same per-field-point constant), so an optimiser converges to the same design.
+  `LGAberrationMerit` gained `strehl_branch` (default `'sigma'`, a real Strehl;
+  `'closed_form'` is the JAX-parity branch and warns that it is not one) and
+  `sigma_grid_n` (default 64); it now costs two `aberration_tensor` calls per
+  field point.
+* **`### Fixed -- lenses_maslov`** — `apply_real_lens_maslov_vector` applies ONE
+  joint `normalize_output` scale to the Jones pair (audit S10, third sub-item,
+  requested in §5 item 6 of the report) and launches its polarization base rays
+  along the input field's own local wavevector.
+* **`### Fixed -- lenses_maslov`** — the S6 saddle warning is gated on the
+  input's WAVEFRONT NA, not on the second moment of its angular spectrum; it
+  used to fire on every collimated beam narrower than ~1 mm.
+* **`### Changed -- tests`** — four oracles that imported
+  `van_vleck_weight` from the module under test now derive it locally.
+* **`### Changed -- validation`** — the three JAX cases in
+  `validation/elements/test_lenses.py` enable x64 for their process, so
+  `validation/run_all.py test_lenses` is green again (46/46).
+* **`### Changed -- tests`** —
+  `test_a1_auto_n_v2_resolves_demanding_default_quadrature` restated against a
+  converged `n_v2 = 512` quadrature oracle.
+* **`### Changed -- tests`** — WP-A15a §5 item 8: three wall-clock
+  assertions (`test_audit_propagation.py` × 2, `test_audit_optimize.py` × 1)
+  replaced by exact operation counts, and `pytestmark = pytest.mark.slow` on
+  `test_audit_lens_models_2026_07.py`.
+* **`### Added`** —
+  `lumenairy.propagators.asymptotic.aberration_free_reference_fit` (the name is
+  final; `lumenairy/__init__.py`'s eager re-export is safe).

@@ -289,12 +289,30 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
         LG channels to penalise; same format as
         :class:`LGAberrationMerit`.  **The JAX path supports only the
         ``(0, 0)`` channel** (``aberration_tensor_lg00_jax`` computes the
-        (0,0) Strehl amplitude only) -- a ``{(0, 0): w}`` target minimises
-        the Strehl DEFICIT ``w*(1 - |Strehl|^2)`` (i.e. maximises the on-axis
-        Strehl / sharpens focus).  For general aberration-channel control
+        (0,0) coupling only) -- a ``{(0, 0): w}`` target minimises
+        ``w*(1 - |L/L_ref|^2)``.  For general aberration-channel control
         (e.g. primary spherical ``(2, 0)``) use the NumPy sibling
         :class:`LGAberrationMerit` (finite-difference path); a non-(0,0)
         target raises ``NotImplementedError`` here.
+
+        .. warning::
+           **This is not a Strehl deficit** (v5.46, audit Y2 follow-up).
+           ``|L|^2`` is dimensional -- ~1e14 on a stock singlet once the Van
+           Vleck normalisation landed -- so the v5.45 ``1 - |L|^2`` was
+           -4.79e+14.  It is now divided by ``|L_ref|^2`` from the
+           aberration-free twin
+           (:func:`~lumenairy.propagators.asymptotic.aberration_free_reference_fit`),
+           which makes it DIMENSIONLESS and exactly 1.0 -- bit-for-bit, the
+           same computation twice -- on an unaberrated optic.  But this twin
+           has only the closed-form point-sampling branch, and a truncated
+           leading-order saddle expansion does not conserve energy: the
+           ratio RISES with aberration (measured 1.000000 -> 1.024914 ->
+           1.095510 as an f/2.5 singlet's cubic+ pupil phase is scaled by
+           0 / 1 / 4), so minimising ``1 - ratio`` rewards aberration.  Use
+           the NumPy :class:`LGAberrationMerit` with its default
+           ``strehl_branch='sigma'`` for a merit you can descend on
+           (1.000000 -> 0.680291 -> 0.286701 on the same ladder); this
+           function's value is kept only for cross-backend parity.
     build_args : callable
         ``build_args(x: ndarray) -> tuple`` mapping the parameter
         vector to differentiable scalars passed positionally to
@@ -350,6 +368,7 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
     import jax.numpy as jnp
 
     from ..propagators.asymptotic import (
+        aberration_free_reference_fit,
         aberration_tensor_lg00_jax,
         fit_canonical_polynomials_jax,
     )
@@ -453,10 +472,31 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
                 fit, s2_img, tuple(src),
                 w_s=w_s_local, w_p=w_p_local,
                 v2_centre=(fit.v2x_centre, fit.v2y_centre))
+            # v5.46 (audit Y2 follow-up): the same coefficient on the
+            # ABERRATION-FREE twin of the same optic, so the ratio below is
+            # dimensionless.  ``w_o`` is pinned to 1.0 on BOTH calls: it
+            # enters only through the output normalisation N_o =
+            # sqrt(2/(pi w_o^2)), which then cancels identically instead of
+            # dragging the (frozen, convention-only) default w_o's dependence
+            # on M into the ratio.
+            fit_ref = aberration_free_reference_fit(fit)
+            # The reference sits at the twin's own chief-ray landing (the
+            # diffraction-limited PEAK), as in the NumPy sibling -- see the
+            # long comment there.
+            s2_ref = (fit.s2x_centre, fit.s2y_centre)
             res = aberration_tensor_lg00_jax(
                 fit, s2_img, v_star,
                 source_point=tuple(src),
+                w_s=w_s_local, w_p=w_p_local, w_o=1.0,
+                v2_centre=(fit.v2x_centre, fit.v2y_centre))
+            v_star_ref = solve_envelope_stationary_jax_ift(
+                fit_ref, s2_ref, tuple(src),
                 w_s=w_s_local, w_p=w_p_local,
+                v2_centre=(fit.v2x_centre, fit.v2y_centre))
+            res_ref = aberration_tensor_lg00_jax(
+                fit_ref, s2_ref, v_star_ref,
+                source_point=tuple(src),
+                w_s=w_s_local, w_p=w_p_local, w_o=1.0,
                 v2_centre=(fit.v2x_centre, fit.v2y_centre))
             # res is a complex scalar (the L_{(0,0),(0,0)} element) -- the
             # leading STREHL AMPLITUDE: |res|^2 -> 1 for a perfect system and
@@ -468,7 +508,12 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
             # aberration), the opposite of every other merit and of
             # optimize_traced_geometry's peak-intensity objective.  Weighted
             # by piston_weight so ``targets={(0, 0): w}`` scales it linearly.
-            total = total + piston_weight * (1.0 - jnp.abs(res) ** 2)
+            #
+            # v5.46: |res|^2 / |res_ref|^2, not |res|^2 -- see the warning in
+            # the docstring for why the raw |L|^2 (1e14 on a stock singlet
+            # after audit Y2) was never a Strehl amplitude.
+            total = total + piston_weight * (
+                1.0 - jnp.abs(res) ** 2 / jnp.abs(res_ref) ** 2)
         return total
 
     return JaxMeritTerm(

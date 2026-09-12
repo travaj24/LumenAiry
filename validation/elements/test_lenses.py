@@ -818,6 +818,14 @@ def t_apply_real_lens_traced_jax_runs():
     """apply_real_lens_traced_jax produces finite output of the same dtype."""
     if not la.JAX_AVAILABLE:
         return True, 'skipped (no jax)'
+    # WP-A4 / audit S7: the JAX real-lens path now RAISES rather than
+    # silently truncating a complex128 field to complex64, so every case
+    # in this section has to enable x64 for its process -- the same
+    # one-liner ``t_apply_real_lens_traced_jax_matches_numpy_opd`` and the
+    # other JAX validation cases already use.  The refusal itself is
+    # pinned in tests/unit/test_audit2609_a4_maslov_gbd.py::test_s7_*.
+    import jax
+    jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
     presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
                              glass='N-BK7', aperture=2e-3)
@@ -866,7 +874,14 @@ def t_apply_real_lens_traced_jax_grad_finite():
     w.r.t. E_in, matching finite differences."""
     if not la.JAX_AVAILABLE:
         return True, 'skipped (no jax)'
+    # WP-A4 / audit S7: the JAX real-lens path now RAISES rather than
+    # silently truncating a complex128 field to complex64, so every case
+    # in this section has to enable x64 for its process -- the same
+    # one-liner ``t_apply_real_lens_traced_jax_matches_numpy_opd`` and the
+    # other JAX validation cases already use.  The refusal itself is
+    # pinned in tests/unit/test_audit2609_a4_maslov_gbd.py::test_s7_*.
     import jax
+    jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
     presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
                              glass='N-BK7', aperture=2e-3)
@@ -897,6 +912,14 @@ def t_apply_real_lens_maslov_jax_no_caustic_matches_traced():
     should equal apply_real_lens_traced_jax."""
     if not la.JAX_AVAILABLE:
         return True, 'skipped (no jax)'
+    # WP-A4 / audit S7: the JAX real-lens path now RAISES rather than
+    # silently truncating a complex128 field to complex64, so every case
+    # in this section has to enable x64 for its process -- the same
+    # one-liner ``t_apply_real_lens_traced_jax_matches_numpy_opd`` and the
+    # other JAX validation cases already use.  The refusal itself is
+    # pinned in tests/unit/test_audit2609_a4_maslov_gbd.py::test_s7_*.
+    import jax
+    jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
     presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
                              glass='N-BK7', aperture=2e-3)

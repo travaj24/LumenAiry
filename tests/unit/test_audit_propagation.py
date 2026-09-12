@@ -2614,7 +2614,7 @@ def test_fused_path_does_the_fused_work(n):
     bundle = _make_bundle(n=n, seed=23)
     Ny, Nx, dx, wavelength = 48, 48, 4e-6, 1.0e-6
 
-    def _fused(chunk=4096):
+    def _fused(chunk=4096, Ny=Ny, Nx=Nx):
         return reconstruct_field_from_beamlets(
             bundle, Ny=Ny, Nx=Nx, dx=dx, centre=(0.0, 0.0),
             wavelength=wavelength, chunk_beamlets=chunk,
@@ -2656,7 +2656,23 @@ def test_fused_path_does_the_fused_work(n):
         f"two chunks of 200 must issue one exp + one einsum EACH; "
         f"got {c_two}")
 
-    # ---- TIME: printed, never asserted against the reference ------------
+    # ---- WORK, not time: the blow-up net is an operation count ----------
+    # v5.46 (VERIFY-A4, request from WP-A15a section 5 item 8; TESTING
+    # STANDARDS S1): this used to end in ``assert t_fused < 60.0`` -- a
+    # wall-clock ceiling standing in for "no accidental O(N^2), no dropped
+    # chunking, no per-pixel Python loop".  Every one of those regressions
+    # shows up in the COUNTS above, which are exact and machine-independent:
+    # a dropped chunking changes the per-chunk 1 -> 2 doubling; a per-pixel
+    # Python loop changes ``einsum``/``sum``; re-splitting the fused
+    # exponential changes ``exp``.  What the timer added was a dependence on
+    # how busy the runner is (measured 2.24-2.73 s on Windows, 3.28-4.10 s
+    # on WSL, 0.64 s for the whole test on CI), which is exactly what
+    # TESTING_STANDARDS S1 forbids.  The timing is still PRINTED because it
+    # is useful when the counts do change.
+    #
+    # The remaining count pin is the one the ceiling could not express: the
+    # fused path must not scale its heavy-call count with the GRID, only
+    # with the chunk count.  Doubling Ny*Nx must leave every count alone.
     t0 = time.perf_counter()
     for _ in range(3):
         _ = _fused()
@@ -2667,20 +2683,16 @@ def test_fused_path_does_the_fused_work(n):
     t_ref = time.perf_counter() - t0
     print(f'[v4.13.1 timing] fused {t_fused:.3f}s vs reference {t_ref:.3f}s '
           f'(ratio {t_fused / t_ref:.3f}x) -- informational, not asserted')
-    # Coarse blow-up net only (2026-08-15,
-    # docs/audits/FIX_RUNNER_PINS_2_2026_08_15.md): 3 fused reconstructions
-    # of a 48x48 grid from 400 beamlets measured 2.24-2.73 s on Windows and
-    # 3.28-4.10 s on WSL, against 0.64 s for the WHOLE test on the CI runner
-    # in ``.test_durations``.  60 s is 14.6x the worst measured sample and
-    # ~90x the CI pace -- it catches an accidental O(N^2), a dropped
-    # chunking or a per-pixel Python loop (all of which cost decades, not
-    # percent) and nothing else.
-    assert t_fused < 60.0, (
-        f"fused reconstruction blew up: {t_fused:.3f}s for 3 passes over a "
-        f"{Ny}x{Nx} grid with {n} beamlets (measured 2.2-4.1 s across both "
-        f"development mounts).  This is a blow-up net, not a speed "
-        f"comparison -- suspect an algorithmic regression, not a busy CI "
-        f"runner.")
+
+    Ny2, Nx2 = 2 * Ny, Nx
+    c_big = _count_numpy_calls(lambda: _fused(Ny=Ny2, Nx=Nx2))
+    assert c_big == c_fused, (
+        f"the fused reconstruction's heavy-call count must depend on the "
+        f"CHUNK count, not on the grid: {Ny}x{Nx} gave {c_fused} and "
+        f"{Ny2}x{Nx2} gave {c_big}.  A per-pixel Python loop or a lost "
+        f"vectorisation shows up here as a count that grows with the grid "
+        f"-- which is what the retired ``t_fused < 60 s`` ceiling was "
+        f"standing in for.")
 
 
 # ============================================================================
@@ -3281,8 +3293,16 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
             # exactly ``1/(lambda sqrt(|det J|))``); the pin's STRENGTH is
             # unchanged -- both tolerances below are relative to the
             # reference's own peak.
-            from lumenairy.propagators.asymptotic import van_vleck_weight
-            amp_lead = (van_vleck_weight(detJ, fit.wavelength)
+            # VERIFY-A4: the weight is written out HERE rather than
+            # imported from the module under test.  WP-A4's version called
+            # ``lumenairy.propagators.asymptotic.van_vleck_weight``, which
+            # makes this reference implementation track the library
+            # automatically -- the exact reason every pre-Y2 pin passed with
+            # ``|det J|`` to the first power.  ``-1j sqrt(|det J|)/lambda``
+            # is the 2-D Van Vleck-Morette kernel's amplitude after the
+            # change of variable s1 -> v2 (d^2 s1 = |det J| d^2 v2 against
+            # |det d2S/ds1 ds2|^(1/2) = |det J|^(-1/2), times k/(2 pi i)).
+            amp_lead = (-1j * np.sqrt(detJ) / fit.wavelength
                           * (math.pi / sqrt_detM) * G0
                           * np.exp(2j * math.pi * phi_star)
                           * np.exp(b_quad))
@@ -3427,8 +3447,16 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
             # exactly ``1/(lambda sqrt(|det J|))``); the pin's STRENGTH is
             # unchanged -- both tolerances below are relative to the
             # reference's own peak.
-            from lumenairy.propagators.asymptotic import van_vleck_weight
-            amp_lead = (van_vleck_weight(detJ, fit.wavelength)
+            # VERIFY-A4: the weight is written out HERE rather than
+            # imported from the module under test.  WP-A4's version called
+            # ``lumenairy.propagators.asymptotic.van_vleck_weight``, which
+            # makes this reference implementation track the library
+            # automatically -- the exact reason every pre-Y2 pin passed with
+            # ``|det J|`` to the first power.  ``-1j sqrt(|det J|)/lambda``
+            # is the 2-D Van Vleck-Morette kernel's amplitude after the
+            # change of variable s1 -> v2 (d^2 s1 = |det J| d^2 v2 against
+            # |det d2S/ds1 ds2|^(1/2) = |det J|^(-1/2), times k/(2 pi i)).
+            amp_lead = (-1j * np.sqrt(detJ) / fit.wavelength
                           * (math.pi / sqrt_detM) * G0
                           * np.exp(2j * math.pi * phi_star)
                           * np.exp(b_quad))
@@ -3747,12 +3775,26 @@ class TestAuditFixesV4_14_0_agent_1_1BDecomposeLgModeStackCache:
                 f'HG mode {k}: {out[k]} vs {ref}, diff {abs(out[k] - ref):.3e}'
             )
 
-    def test_decompose_lg_cache_speedup(self):
-        """Cached call is materially faster than a fresh build.  This
-        is a soft speedup floor, not a precise factor -- timing on
-        CI hosts is noisy.  We pin >= 5x because the einsum reduction
-        is ~50x faster than the per-mode rebuild on typical workloads
-        and we want noise headroom."""
+    def test_decompose_lg_cache_builds_no_modes_on_a_hit(self):
+        """The mode-stack cache does exactly what it claims: a cached
+        ``decompose_lg`` rebuilds ZERO modes and reuses the same array.
+
+        v5.46 (VERIFY-A4, request from WP-A15a section 5 item 8; TESTING
+        STANDARDS S1).  This was ``test_decompose_lg_cache_speedup``, a
+        ``t_uncached / t_cached >= 5.0`` floor whose own docstring conceded
+        it was "a soft speedup floor, not a precise factor -- timing on CI
+        hosts is noisy".  The property underneath it is an OPERATION COUNT:
+        ``_lg_mode_stack`` evaluates one polynomial per mode on a miss and
+        none on a hit, so a cached call must not call ``_evaluate_poly2d``
+        at all.
+
+        Derivation of the counts: ``p in 0..p_max`` x ``ell in -ell_max..
+        +ell_max`` is ``(p_max + 1) * (2 * ell_max + 1)`` modes, i.e.
+        ``4 * 7 = 28`` at ``p_max = ell_max = 3``.  Both numbers are exact
+        and machine-independent; there is no tolerance to derive.
+        """
+        from lumenairy.propagators import asymptotic_modes as _am
+
         clear_lg_mode_stack_cache()
         clear_lg_polynomial_cache()
         N = 128
@@ -3761,34 +3803,54 @@ class TestAuditFixesV4_14_0_agent_1_1BDecomposeLgModeStackCache:
         y = np.linspace(-200e-6, 200e-6, N)
         X, Y = np.meshgrid(x, y, indexing='xy')
         field = np.ones_like(X, dtype=np.complex128)
-        # Warm caches.
-        _ = decompose_lg(field, X, Y, w, p_max=3, ell_max=3)
-        # Time cached path.
-        ts = []
-        for _ in range(5):
-            t0 = time.perf_counter()
-            _ = decompose_lg(field, X, Y, w, p_max=3, ell_max=3)
-            ts.append(time.perf_counter() - t0)
-        t_cached = min(ts)
-        # Time uncached path.
-        ts = []
-        for _ in range(5):
+
+        calls = {'n': 0}
+        real_eval = _am._evaluate_poly2d
+
+        def _counting(*a, **k):
+            calls['n'] += 1
+            return real_eval(*a, **k)
+
+        p_max = ell_max = 3
+        n_modes = (p_max + 1) * (2 * ell_max + 1)
+        _am._evaluate_poly2d = _counting
+        try:
+            calls['n'] = 0
+            _ = decompose_lg(field, X, Y, w, p_max=p_max, ell_max=ell_max)
+            n_cold = calls['n']
+            calls['n'] = 0
+            _ = decompose_lg(field, X, Y, w, p_max=p_max, ell_max=ell_max)
+            n_warm = calls['n']
+            calls['n'] = 0
             clear_lg_mode_stack_cache()
-            t0 = time.perf_counter()
-            _ = decompose_lg(field, X, Y, w, p_max=3, ell_max=3)
-            ts.append(time.perf_counter() - t0)
-        t_uncached = min(ts)
-        # On CI noise, the floor can be much lower than the headline.
-        # The minimum-cached path should still beat the minimum-
-        # uncached path by at least 5x given that the cached path
-        # does only the einsum reduction (~ms) while the uncached
-        # rebuilds 28 modes on a 128x128 grid (>10ms).
-        speedup = t_uncached / max(t_cached, 1e-9)
-        assert speedup >= 5.0, (
-            f'cached decompose_lg should be >=5x faster than uncached; '
-            f'got {speedup:.2f}x (cached={t_cached*1e3:.2f}ms, '
-            f'uncached={t_uncached*1e3:.2f}ms)'
-        )
+            _ = decompose_lg(field, X, Y, w, p_max=p_max, ell_max=ell_max)
+            n_after_clear = calls['n']
+        finally:
+            _am._evaluate_poly2d = real_eval
+
+        assert n_cold == n_modes, (
+            f'a COLD decompose_lg must evaluate one polynomial per mode: '
+            f'{n_cold} against (p_max+1)*(2*ell_max+1) = {n_modes}')
+        assert n_warm == 0, (
+            f'a CACHED decompose_lg must rebuild NO modes; it evaluated '
+            f'{n_warm} polynomials, so the mode-stack cache is not being '
+            f'hit (this is what the retired >=5x speedup floor was '
+            f'proxying)')
+        assert n_after_clear == n_modes, (
+            f'clear_lg_mode_stack_cache() must force the rebuild back: got '
+            f'{n_after_clear}, expected {n_modes}')
+
+        # ... and the hit is served BY IDENTITY, not by a re-derivation
+        # that happens to agree (the v5.30 W6-A13 read-only contract).
+        _keys_a, stack_a = _am._lg_mode_conj_stack(
+            X, Y, w, p_max, ell_max, 0.0, 0.0,
+            float(x[1] - x[0]), float(y[1] - y[0]))
+        _keys_b, stack_b = _am._lg_mode_conj_stack(
+            X, Y, w, p_max, ell_max, 0.0, 0.0,
+            float(x[1] - x[0]), float(y[1] - y[0]))
+        assert stack_a is stack_b, (
+            'the mode-stack cache must hand back the SAME array on a hit '
+            '(the v5.30 W6-A13 read-only contract), not an equal rebuild')
 
 
 # ============================================================================

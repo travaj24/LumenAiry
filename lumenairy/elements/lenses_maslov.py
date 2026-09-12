@@ -2380,18 +2380,34 @@ def apply_real_lens_maslov(
     # to cover a diverging / tilted one (na_proxy = na_lens + na_input).  Say
     # so rather than returning a silently wrong field; 'quadrature' and
     # 'levin' integrate the true integrand and are unaffected.
+    #
+    # VERIFY-A4: the trigger is the WAVEFRONT NA (the spread of the input's
+    # local wavevector), NOT the second moment of |FFT(E_in)|^2 that sizes
+    # the pupil chart.  A COLLIMATED beam of finite width has a real angular
+    # spectrum -- a Gaussian of waist w spreads by lambda/(pi w) -- while its
+    # geometric launch direction is v1 = 0 everywhere, which is precisely the
+    # case this saddle gets RIGHT.  Gating on the spectral moment therefore
+    # fired on every collimated beam narrower than ~1 mm: measured 3-sigma
+    # NA 3.54e-03 / 1.10e-03 at waist 0.25 / 0.8 mm (lambda = 1.31 um), both
+    # above the 1e-3 threshold, where ``_wavefront_na`` returns EXACTLY 0.
+    _na_wf = 0.0
     if (integration_method in ('stationary_phase', 'local_quadrature')
-            and not collimated_input and _na_meas > _SADDLE_FLAT_INPUT_NA):
+            and not collimated_input):
+        _na_wf = _wavefront_na(E_in, dx, dy, wavelength)
+    if (integration_method in ('stationary_phase', 'local_quadrature')
+            and not collimated_input and _na_wf > _SADDLE_FLAT_INPUT_NA):
         import warnings  # function-local, matching this driver
         warnings.warn(
             f"apply_real_lens_maslov: integration_method="
             f"{integration_method!r} solves for the saddle of the OPD alone, "
             f"which selects the v1 = 0 (collimated) launch ray at every "
-            f"pixel; the input field's measured angular spread is "
-            f"NA ~ {_na_meas:.4f} (> {_SADDLE_FLAT_INPUT_NA:g}), so that is "
-            f"NOT the stationary point of the full integrand and the result "
-            f"is a leading-order expansion about the wrong ray.  Use "
-            f"integration_method='quadrature' (exact) or 'levin' "
+            f"pixel; the input field's measured WAVEFRONT spread is "
+            f"NA ~ {_na_wf:.4f} (> {_SADDLE_FLAT_INPUT_NA:g}; its angular "
+            f"spectrum spans {_na_meas:.4f}, which for a collimated beam is "
+            f"just diffraction and is NOT what this gate tests), so the OPD "
+            f"saddle is NOT the stationary point of the full integrand and "
+            f"the result is a leading-order expansion about the wrong ray.  "
+            f"Use integration_method='quadrature' (exact) or 'levin' "
             f"(caustic-uniform) for a diverging / converging / tilted input, "
             f"or pass collimated_input=True if the input really is flat and "
             f"the measured spread is aperture-edge content.",
@@ -2765,8 +2781,12 @@ def apply_real_lens_maslov_vector(
     the input ``(E_x, E_y)`` Jones field, then propagates each mixed component
     through the lens with the scalar :func:`apply_real_lens_maslov` (which keeps
     the field finite through a caustic).  This closes the "Maslov is scalar-only"
-    gap: polarization-resolved study through a focus, which GBD's paraxial
-    beamlets cannot do with caustic fidelity.
+    gap for the TRANSVERSE Jones field: per-surface diattenuation and retardance
+    carried through a caustic, which GBD's paraxial beamlets cannot do with
+    caustic fidelity.  It is NOT a full vector focus -- there is no ``E_z`` and
+    no exit-frame transport of the Jones vector (audit S10; see the Notes) --
+    so do not read it as a "polarization-resolved study through a focus" at
+    high NA.
 
     Parameters
     ----------
@@ -2784,6 +2804,38 @@ def apply_real_lens_maslov_vector(
     Transmission Jones only (the base-ray Fresnel is applied at the input plane
     then the scalar envelope is propagated), matching the GBD vector convention;
     reflection at fold mirrors is handled by ``apply_mirror`` / ``fold_split``.
+
+    **``normalize_output`` is applied ONCE, to the pair** (audit S10, third
+    sub-item).  Before v5.46 the requested mode was forwarded to the two
+    scalar legs, which each normalised INDEPENDENTLY -- so ``'power'`` (the
+    scalar default, hence the default here) rescaled ``E_x`` and ``E_y`` by
+    different factors and forced the output polarization ratio back to the
+    post-Fresnel INPUT ratio, deleting exactly the diattenuation this wrapper
+    exists to compute.  Both legs now run at ``normalize_output='none'`` and a
+    single scale is applied to the pair, as
+    :func:`~lumenairy.propagators.fga.apply_real_lens_fga_vector` already does:
+
+    * ``'power'`` (default) -- one factor so ``sum(|E_x|^2 + |E_y|^2)`` equals
+      the POST-FRESNEL input pair's total power, i.e. the scalar
+      ``normalize_output='power'`` contract applied ONCE to the pair.  The
+      surface Fresnel transmission therefore stays in the absolute scale
+      (``T1*T2`` on a two-surface singlet), unlike
+      :func:`~lumenairy.propagators.fga.apply_real_lens_fga_vector`, which
+      normalises to the RAW input pair under a lossless assumption;
+    * ``'peak'`` -- one factor so ``max sqrt(|E_x|^2 + |E_y|^2)`` matches the
+      post-Fresnel input pair's;
+    * ``'none'`` -- no scale at all (the Van Vleck-normalised absolute field).
+
+    ``P_x / P_y`` is therefore identical under all three modes.
+
+    **Longitudinal field and frame transport are still missing** (audit S10,
+    remaining sub-item): the Jones vector is not parallel-transported /
+    Richards-Wolf-rotated into the exit-ray frame and there is no ``E_z``, so
+    at high NA this wrapper is a TRANSVERSE model with per-surface Fresnel
+    weights -- not a full vector focus.  For the longitudinal component use
+    :func:`~lumenairy.propagators.fga.apply_real_lens_fga_vector`
+    (``return_longitudinal=True``) or GBD's
+    ``reconstruct_vector_field_with_ez``.
     """
     from ..propagators.gbd import _fresnel_jones_matrix_per_beamlet
 
@@ -2795,27 +2847,142 @@ def apply_real_lens_maslov_vector(
     Ny, Nx = E_vec.shape[-2], E_vec.shape[-1]
     if dy is None:
         dy = dx
+    _norm = maslov_kwargs.pop('normalize_output', 'power')
+    if _norm not in ('power', 'peak', 'none'):
+        raise ValueError(
+            f"apply_real_lens_maslov_vector: normalize_output must be one of "
+            f"'power', 'peak', 'none'; got {_norm!r}.")
     ix = np.arange(Nx)
     iy = np.arange(Ny)
     Ix, Iy = np.meshgrid(ix, iy, indexing='xy')
     xb = (Ix.ravel() - Nx / 2.0) * dx
     yb = (Iy.ravel() - Ny / 2.0) * float(dy)
-    zc = np.zeros_like(xb)
+    # S10 (audit): launch the polarization-ray-tracing base rays along the
+    # INPUT FIELD's own local wavevector rather than axially.  The GBD helper
+    # documents ``ux = uy = 0`` as its convention because the GBD vector
+    # driver hands it a collimated frame; this wrapper is offered for
+    # diverging / converging / tilted inputs, where the s/p split and the
+    # per-surface incidence angles genuinely depend on the incoming direction.
+    # The estimator is the same per-pixel conjugate-product local wavevector
+    # the FGA router uses (``_global_mean_tilt`` / ``_tilt_dispersion``), so
+    # the two families read "which way is this pixel going" identically, and
+    # it returns EXACTLY zero on a real, non-negative (flat-phase) input --
+    # the collimated case is bit-identical to the pre-v5.46 behaviour.
+    ux, uy = _input_direction_cosines(E_vec, dx, float(dy), wavelength)
     P, _alive = _fresnel_jones_matrix_per_beamlet(
-        xb, yb, zc, zc, prescription, wavelength)
+        xb, yb, ux.ravel(), uy.ravel(), prescription, wavelength)
     ExS = np.asarray(E_vec[0]).ravel()
     EyS = np.asarray(E_vec[1]).ravel()
     ExM = (P[:, 0, 0] * ExS + P[:, 0, 1] * EyS).reshape(Ny, Nx)
     EyM = (P[:, 1, 0] * ExS + P[:, 1, 1] * EyS).reshape(Ny, Nx)
     out_x = apply_real_lens_maslov(
         ExM, prescription=prescription, wavelength=wavelength, dx=dx, dy=dy,
-        **maslov_kwargs)
+        normalize_output='none', **maslov_kwargs)
     out_y = apply_real_lens_maslov(
         EyM, prescription=prescription, wavelength=wavelength, dx=dx, dy=dy,
-        **maslov_kwargs)
+        normalize_output='none', **maslov_kwargs)
     from ..backend.array import array_namespace
     xp = array_namespace(out_x)
+    # ONE joint scale for the pair -- see the Notes above.  The reference is
+    # the POST-FRESNEL pair (ExM, EyM), i.e. the field the two scalar legs
+    # were actually handed: that is the literal joint form of the scalar
+    # ``normalize_output`` contract ("sum |E_out|^2 == sum |E_in|^2" applied
+    # once to the pair) and it keeps the surface Fresnel TRANSMISSION in the
+    # absolute scale, where dividing by the RAW input power -- the FGA peer's
+    # lossless convention -- would normalise it away.  Only the s/p ratio is
+    # common to both conventions; this one keeps T1*T2 as well.
+    scale = 1.0
+    if _norm == 'power':
+        p_in = float(np.sum(np.abs(ExM) ** 2 + np.abs(EyM) ** 2))
+        p_out = float(xp.sum(xp.abs(out_x) ** 2 + xp.abs(out_y) ** 2))
+        if p_out > 0.0 and np.isfinite(p_out) and p_in > 0.0:
+            scale = float(np.sqrt(p_in / p_out))
+    elif _norm == 'peak':
+        a_in = float(np.max(np.abs(ExM) ** 2 + np.abs(EyM) ** 2)) ** 0.5
+        a_out = float(xp.max(xp.abs(out_x) ** 2 + xp.abs(out_y) ** 2)) ** 0.5
+        if a_out > 0.0 and np.isfinite(a_out) and a_in > 0.0:
+            scale = a_in / a_out
+    if scale != 1.0:
+        out_x = (out_x * scale).astype(out_x.dtype)
+        out_y = (out_y * scale).astype(out_y.dtype)
     return xp.stack([out_x, out_y], axis=0)
+
+
+def _local_direction_cosines(E, dx, dy, wavelength):
+    """Per-pixel local direction cosines ``(ux, uy)`` of a 2-D scalar field.
+
+    ``u = (1/k0) grad(arg E)`` by the conjugate-product forward difference
+    ``arg(E[i+1] conj(E[i])) / (k0 dx)``: no unwrap, and it wraps only at the
+    grid's own Nyquist angle ``lambda / (2 dx)``, the largest direction the
+    grid can carry.  The last column / row repeats its neighbour so an edge
+    pixel is not reported as axial, and a pixel with no amplitude is set to
+    zero.  A real, non-negative field gives EXACTLY ``(0, 0)``.
+    """
+    E = np.asarray(E)
+    k0 = 2.0 * np.pi / float(wavelength)
+    ux = np.zeros(E.shape, dtype=np.float64)
+    uy = np.zeros(E.shape, dtype=np.float64)
+    if E.shape[-1] > 1:
+        ux[:, :-1] = np.angle(E[:, 1:] * np.conj(E[:, :-1])) / (k0 * float(dx))
+        ux[:, -1] = ux[:, -2]
+    if E.shape[-2] > 1:
+        uy[:-1, :] = np.angle(E[1:, :] * np.conj(E[:-1, :])) / (k0 * float(dy))
+        uy[-1, :] = uy[-2, :]
+    dead = np.abs(E) <= 0.0
+    ux[dead] = 0.0
+    uy[dead] = 0.0
+    return ux, uy
+
+
+def _wavefront_na(E, dx, dy, wavelength):
+    """3-sigma intensity-weighted spread of the input's LOCAL WAVEVECTOR.
+
+    ``3 * sqrt(<ux^2 + uy^2>)`` from :func:`_local_direction_cosines`.  This
+    is the quantity the S6 saddle warning has to test, and it is NOT the
+    second moment of ``|FFT(E)|^2``: a COLLIMATED beam of finite width has a
+    genuine angular spectrum (a Gaussian of waist ``w`` spreads by
+    ``lambda / (pi w)``) while its geometric launch direction is ``v1 = 0``
+    everywhere, which is exactly the case the OPD-only saddle gets right.
+
+    MEASURED (lambda = 1.31 um, dx = 10 um) on flat-phase Gaussians of waist
+    0.25 / 0.8 / 2 / 4 mm: the FFT second moment gives 3-sigma NA
+    3.54e-03 / 1.10e-03 / 4.2e-04 / 2.1e-04 -- the first two ABOVE
+    ``_SADDLE_FLAT_INPUT_NA``, i.e. a false alarm on any collimated beam
+    narrower than ~1 mm -- while this estimator gives EXACTLY 0.000e+00 at
+    every width.  On inputs that really are non-flat the two agree: tilt
+    0.002 / 0.01 rad -> 6.00e-03 / 3.00e-02 here against 6.11e-03 /
+    3.00e-02 spectrally; diverging f = -20 mm -> 8.42e-02 both; converging
+    f = +50 mm -> 3.37e-02 both.
+    """
+    ux, uy = _local_direction_cosines(E, dx, dy, wavelength)
+    a2 = np.abs(np.asarray(E)) ** 2
+    tot = float(a2.sum())
+    if not np.isfinite(tot) or tot <= 0.0:
+        return 0.0
+    return 3.0 * float(np.sqrt(float((a2 * (ux * ux + uy * uy)).sum()) / tot))
+
+
+def _input_direction_cosines(E_vec, dx, dy, wavelength):
+    """Per-pixel local direction cosines ``(ux, uy)`` of a Jones field.
+
+    ``u = (1/k0) grad(arg E)`` evaluated by the conjugate-product forward
+    difference ``arg(E[i+1] conj(E[i])) / (k0 dx)`` -- the same estimator
+    :func:`lumenairy.propagators.fga._global_mean_tilt` uses, so the Maslov
+    and FGA vector paths agree on the launch direction by construction.  It
+    needs no unwrap and wraps only at the grid's own Nyquist angle
+    ``lambda / (2 dx)``, which is the largest direction the grid can carry.
+
+    The phase is read from the higher-power Jones component (the two share one
+    base ray per pixel, and the stronger one carries the better-conditioned
+    phase), matching ``apply_real_lens_fga_vector``'s ``_rep`` choice.  The
+    last column / row repeats its neighbour so an edge pixel is not reported
+    as axial.  A real, non-negative input gives EXACTLY ``(0, 0)``.
+    """
+    Ex = np.asarray(E_vec[0])
+    Ey = np.asarray(E_vec[1])
+    E = Ex if float(np.sum(np.abs(Ex) ** 2)) >= float(
+        np.sum(np.abs(Ey) ** 2)) else Ey
+    return _local_direction_cosines(E, dx, dy, wavelength)
 
 
 def _count_multi_indices_4d(max_order: int) -> int:

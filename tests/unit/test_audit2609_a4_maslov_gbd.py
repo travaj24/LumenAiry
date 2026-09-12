@@ -447,35 +447,50 @@ def test_s6_asymptotic_methods_warn_on_a_non_collimated_input():
     sizing (``na_proxy = na_lens + na_input``) is built to cover.
 
     Pre-fix there was no warning and no docstring caveat.
+
+    v5.46 (VERIFY-A4): the fixture is a genuinely DIVERGING input -- a
+    spherical phase ``exp(+i pi r^2 / (lam f))`` at f = -0.5 mm -- not a
+    narrow flat-phase Gaussian.  The original version used
+    ``exp(-r^2/(12 um)^2)`` with the comment "a 12 um waist has NA ~ 0.027",
+    which is its ANGULAR SPECTRUM; a Gaussian AT ITS WAIST has a plane
+    wavefront and ``v1 = 0`` at every ray, which is exactly the case the
+    OPD-only saddle gets RIGHT (for a real ``E_in``, ``arg E_in == 0``, so
+    ``grad_v2[arg E_in + k OPD] = grad_v2 [k OPD]`` identically).  Gating on
+    the spectral moment therefore warned on every collimated beam narrower
+    than ~1 mm; the gate now reads the WAVEFRONT spread, which is exactly
+    zero there.  Both arms are asserted below so the distinction is pinned.
     """
     N, dx, lam = 48, 4.0e-6, 1.0e-6
     ap = 0.30e-3
     x = (np.arange(N) - N / 2) * dx
     X, Y = np.meshgrid(x, x)
     R2 = X ** 2 + Y ** 2
-    # A strongly diverging input: a 12 um waist has NA ~ 0.027 >> 1e-3.
-    E0 = np.exp(-R2 / (12e-6) ** 2).astype(complex)
+    # Flat-phase (collimated) narrow Gaussian: wide angular spectrum
+    # (3-sigma NA 0.0272 measured), ZERO wavefront spread.
+    E_flat = np.exp(-R2 / (12e-6) ** 2).astype(complex)
+    # The same envelope on a strongly DIVERGING wavefront, f = -0.5 mm:
+    # |u| ~ r/|f| across the beam, 3-sigma wavefront NA 0.0357 measured.
+    E0 = E_flat * np.exp(1j * np.pi / lam * R2 / 0.5e-3)
     presc = la.make_singlet(6.0e-3, -6.0e-3, 0.7e-3, 'N-BK7', aperture=ap)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter('always')
-        la.apply_real_lens_maslov(
-            E0, prescription=presc, wavelength=lam, dx=dx,
-            integration_method='stationary_phase', poly_order=4,
-            ray_field_samples=10, ray_pupil_samples=10)
-    msgs = [str(c.message) for c in caught]
-    assert any('saddle of the OPD alone' in m for m in msgs), (
-        f'no S6 warning for a diverging input; warnings were {msgs}')
-    # ... and NOT for a declared-collimated one.
-    with warnings.catch_warnings(record=True) as caught2:
-        warnings.simplefilter('always')
-        la.apply_real_lens_maslov(
-            E0, prescription=presc, wavelength=lam, dx=dx,
-            collimated_input=True,
-            integration_method='stationary_phase', poly_order=4,
-            ray_field_samples=10, ray_pupil_samples=10)
-    assert not any('saddle of the OPD alone' in str(c.message)
-                   for c in caught2), (
+
+    def saddle_msgs(E, **extra):
+        kw = dict(prescription=presc, wavelength=lam, dx=dx,
+                  integration_method='stationary_phase', poly_order=4,
+                  ray_field_samples=10, ray_pupil_samples=10)
+        kw.update(extra)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            la.apply_real_lens_maslov(E, **kw)
+        return [str(c.message) for c in caught
+                if 'saddle of the OPD alone' in str(c.message)]
+
+    assert saddle_msgs(E0), 'no S6 warning for a diverging input'
+    assert not saddle_msgs(E0, collimated_input=True), (
         'collimated_input=True must silence the S6 warning')
+    assert not saddle_msgs(E_flat), (
+        'a flat-phase input must NOT trip it, however narrow: its angular '
+        'spectrum is diffraction, and the OPD-only saddle is the correct '
+        'expansion there')
 
 
 # ===========================================================================

@@ -320,11 +320,12 @@ def _lg_singlet():
     return pres
 
 
-def _lg_merit(pres, targets, image_points=None, w_s=20e-6, weight=1.0):
+def _lg_merit(pres, targets, image_points=None, w_s=20e-6, weight=1.0,
+              branch='sigma'):
     from lumenairy.optimize.core import EvaluationContext, LGAberrationMerit
     m = LGAberrationMerit(targets=targets, field_points=[(0.0, 0.0)],
                           image_points=image_points, w_s=w_s, w_p=0.05,
-                          weight=weight)
+                          weight=weight, strehl_branch=branch)
     ctx = EvaluationContext(prescription=pres, wavelength=_LG_WL, N=64,
                            dx=10e-6, x=np.array([w_s]))
     with warnings.catch_warnings():
@@ -332,20 +333,56 @@ def _lg_merit(pres, targets, image_points=None, w_s=20e-6, weight=1.0):
         return float(m.evaluate(ctx))
 
 
-def _lg_chan_sq(pres, s2, chan=(0, 0), w_s=20e-6):
-    """``|L_{chan, (0,0)}|^2`` straight from the merit's own documented
-    dependency (``asymptotic.aberration_tensor``), so the pin does not
-    re-derive the merit's arithmetic from the merit itself."""
-    from lumenairy.propagators.asymptotic import aberration_tensor, fit_canonical_polynomials
+def _lg_chan_sq(pres, s2, chan=(0, 0), w_s=20e-6, branch='sigma'):
+    """The merit's channel value: ``|L_{chan}|^2 / |L_{(0,0)},ref|^2``,
+    straight from the merit's own documented dependency
+    (``asymptotic.aberration_tensor``), so the pin does not re-derive the
+    merit's arithmetic from the merit itself.
+
+    v5.46 (audit Y2 follow-up, VERIFY-A4): the denominator is the same
+    coefficient on the ABERRATION-FREE twin of the optic, evaluated at the
+    twin's own chief-ray landing.  Without it ``|L|^2`` is dimensional --
+    4.79e+14 on this fixture once the Van Vleck normalisation landed (audit
+    Y2), 3.2e-03 before it -- and ``1 - |L|^2`` is not a Strehl deficit in
+    either scale.  With it the value is dimensionless, exactly 1.0 on an
+    unaberrated optic, and falls monotonically with aberration (measured
+    1.000000 / 0.901312 / 0.811431 / 0.659170 / 0.447292 as an f/2.5
+    singlet's cubic+ pupil phase is scaled by 0 / 0.5 / 1 / 2 / 4).
+    """
+    from lumenairy.propagators.asymptotic import (
+        aberration_free_reference_fit,
+        aberration_tensor,
+        fit_canonical_polynomials,
+    )
+    modes = [tuple(chan)]
+    kw = {}
+    if branch == 'sigma':
+        if all(m == (0, 0) for m in modes):
+            modes = modes + [(1, 0)]
+        elif (0, 0) not in modes:
+            modes = [(0, 0)] + modes
+        kw['sigma_grid_n'] = 64
+    elif (0, 0) not in modes:
+        modes = [(0, 0)] + modes
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         fit = fit_canonical_polynomials(pres, wavelength=_LG_WL)
         t = aberration_tensor(fit, s2_image=s2, source_point=(0.0, 0.0),
                               source_modes=[(0, 0)], pupil_modes=[(0, 0)],
-                              output_modes=[tuple(chan)], w_s=w_s, w_p=0.05,
-                              w_o=None)
-    v = complex(np.asarray(t.L).ravel()[0])
-    return v.real * v.real + v.imag * v.imag
+                              output_modes=modes, w_s=w_s, w_p=0.05,
+                              w_o=None, **kw)
+        tr = aberration_tensor(aberration_free_reference_fit(fit),
+                               s2_image=(fit.s2x_centre, fit.s2y_centre),
+                               source_point=(0.0, 0.0),
+                               source_modes=[(0, 0)], pupil_modes=[(0, 0)],
+                               output_modes=modes, w_s=w_s, w_p=0.05,
+                               w_o=t.w_o, **kw)
+    i = modes.index(tuple(chan))
+    i0 = modes.index((0, 0))
+    v = complex(np.asarray(t.L)[i, 0])
+    r = complex(np.asarray(tr.L)[i0, 0])
+    return (v.real * v.real + v.imag * v.imag) / (r.real * r.real
+                                                  + r.imag * r.imag)
 
 
 def _lg_strehl_sq(pres, s2, w_s=20e-6):
@@ -353,17 +390,26 @@ def _lg_strehl_sq(pres, s2, w_s=20e-6):
 
 
 def test_r5_lg_merit_piston_term_is_strehl_deficit():
-    """R-5: the (0, 0) contribution must be ``w * (1 - |L|^2)``, not
-    ``w * |L|^2`` -- ``design_optimize`` MINIMISES, so the old form drove
-    |Strehl| toward 0."""
+    """R-5: the (0, 0) contribution must be ``w * (1 - S)``, not ``w * S``
+    -- ``design_optimize`` MINIMISES, so the old form drove the coupling
+    toward 0.
+
+    v5.46 (audit Y2 follow-up, VERIFY-A4): ``S`` is now the DIMENSIONLESS
+    coupling ``|L|^2 / |L_ref|^2`` -- see ``_lg_chan_sq``.  The identity
+    pinned here (merit == 1 - S, weight-linear) is unchanged; what changed
+    is that ``S`` is a number a Strehl ratio could be, instead of 4.79e+14.
+    """
     pres = _lg_singlet()
     s_sq = _lg_strehl_sq(pres, (0.0, 0.0))
     got = _lg_merit(pres, {(0, 0): 1.0})
+    assert 0.0 < s_sq < 1.01, (
+        f'the coupling must be dimensionless and near 1 on this weak '
+        f'singlet (measured 1.002838); got {s_sq!r}.  Before v5.46 it was '
+        f'4.79e+14 (post-Y2) / 3.2e-03 (pre-Y2).')
     assert got == pytest.approx(1.0 - s_sq, rel=0.0, abs=1e-12), (
-        f'R-5: LGAberrationMerit (0,0) = {got:.12f}, expected the Strehl '
-        f'DEFICIT 1 - |L|^2 = {1.0 - s_sq:.12f}.  Pre-fix it returned '
-        f'|L|^2 = {s_sq:.12e} (measured 3.205062e-03 on this design), which '
-        f'a minimiser drives to zero == MAXIMUM aberration.')
+        f'R-5: LGAberrationMerit (0,0) = {got:.12f}, expected the deficit '
+        f'1 - S = {1.0 - s_sq:.12f}.  Pre-fix it returned S = {s_sq:.12e}, '
+        f'which a minimiser drives to zero == MAXIMUM aberration.')
     # weight scaling still linear
     assert _lg_merit(pres, {(0, 0): 2.5}) == pytest.approx(
         2.5 * (1.0 - s_sq), rel=1e-12)
@@ -389,8 +435,10 @@ def test_r5_lg_merit_descends_as_aberration_falls():
 
 
 def test_r5_non_piston_channels_unchanged():
-    """R-5 scope guard: every non-(0, 0) channel keeps ``|L|^2`` (driving a
-    named aberration channel to zero IS the intent there)."""
+    """R-5 scope guard: every non-(0, 0) channel keeps ``+|L|^2`` (driving a
+    named aberration channel to zero IS the intent there) -- in the v5.46
+    dimensionless scale ``|L_chan|^2 / |L_(0,0),ref|^2``, like the (0, 0)
+    channel, so a CompositeMerit mixing channels is scale-free."""
     pres = _lg_singlet()
     for chan in ((2, 0), (1, 0)):
         ref = _lg_chan_sq(pres, (0.0, 0.0), chan)
@@ -439,7 +487,14 @@ def test_r5_numpy_lg_merit_matches_jax_twin():
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             jv = float(merit.evaluate(ctx))
-        nv = _lg_merit(pres, {(0, 0): 1.0}, w_s=w_s)
+        # v5.46 (VERIFY-A4): the JAX twin has no sigma branch, so the
+        # cross-backend comparison is made on the branch they SHARE.  The
+        # NumPy merit's default is 'sigma' (a real Strehl); 'closed_form'
+        # here is the parity branch and warns that it is not one.
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            nv = _lg_merit(pres, {(0, 0): 1.0}, w_s=w_s,
+                           branch='closed_form')
         print(f'[R-5] w_s={w_s:.1e} numpy={nv!r} jax={jv!r} '
               f'|L_00|^2={1.0 - jv:.9e}')
         assert np.isfinite(jv) and np.isfinite(nv), (
@@ -482,30 +537,51 @@ def test_r5_numpy_lg_merit_matches_jax_twin():
         # dimensionless overlap the sigma-grid branch returns.  See the
         # W3-T3 branch-scale note in ``asymptotic_aberration_tensor.py``.
         coupling = 1.0 - jv
-        assert 1e13 < coupling < 1.2e16, (
-            f'R-5: w_s={w_s:.1e}: the (0, 0) coupling |L|^2 = '
-            f'{coupling:.6e} left the measured well-conditioned band '
-            f'(7.05e+13 .. 6.01e+14); the equality below would be vacuous '
-            f'if the tensor underflowed to zero.')
-        # v5.46: the tolerance is now RELATIVE-only and re-derived.  Before
-        # audit Y2 the merit was ``1 - |L|^2`` with |L|^2 ~ 1e-3, so the
-        # value was ~1 and the ``abs=1e-6`` term did all the work -- the
-        # measured backend disagreement was 1.9e-10 ABSOLUTE, i.e. 4.0e-07
-        # relative to |L|^2.  With the Van Vleck normalisation the merit IS
-        # (minus) |L|^2 ~ 1e14, so ``abs=1e-6`` is inert and the same
-        # physical disagreement has to be gated relatively.
+        # v5.46 RE-PIN (audit Y2 follow-up, VERIFY-A4).  The coupling is now
+        # ``|L|^2 / |L_ref|^2`` with ``L_ref`` the same coefficient on the
+        # ABERRATION-FREE twin of the optic (same w_s, w_p, |det J|, w_o,
+        # evaluated at the twin's own chief-ray landing), so every
+        # dimensional factor cancels and what is left is a pure coupling.
+        # History of this band on this fixture (R1 = 500 mm plano-convex
+        # N-BK7, ap 4 mm, lambda = 1.30 um, w_p = 0.05, on-axis):
         #
-        # Measured here: 1.3e-09 / 2.5e-07 / 1.5e-06 relative at
-        # w_s = 5e-6 / 2e-5 / 5e-5.  That residual is NOT the JAX twin: with
-        # the SAME v_star handed to both, ``aberration_tensor`` and
+        #   pre-Y2  |L|^2 = 4.74e-04 .. 4.04e-03  -- dimensional; it only
+        #           looked Strehl-like because the missing
+        #           lambda*sqrt(|det J|) (a LENGTH) cancelled the
+        #           closed-form branch's 1/length^2 by accident
+        #   post-Y2 |L|^2 = 7.05e+13 .. 6.01e+14  -- dimensional, the same
+        #           numbers times 1/(lambda^2 |det J|) = 1.486604e+17
+        #   v5.46   |L/L_ref|^2 = 1.000003 / 1.000629 / 1.003021 at
+        #           w_s = 5e-6 / 2e-5 / 5e-5              <-- pinned here
+        #
+        # Band [0.5, 1.5]: 500x headroom below against the underflow this
+        # non-vacuity check exists to catch, 500x above, and it excludes
+        # BOTH historical scales by 13 and 3 decades.
+        assert 0.5 < coupling < 1.5, (
+            f'R-5: w_s={w_s:.1e}: the (0, 0) coupling |L/L_ref|^2 = '
+            f'{coupling:.6e} left the measured band (1.000003 .. 1.003021); '
+            f'the equality below would be vacuous if the tensor underflowed '
+            f'to zero.')
+        # v5.46 (VERIFY-A4): the pin is on the difference in the COUPLING,
+        # not a relative bar on the merit.  The merit is ``1 - coupling``
+        # with coupling ~ 1, so a relative tolerance on a ~1e-3 merit would
+        # pin the two backends' agreement in the third significant figure of
+        # a difference -- weak, and not what this test is for.  What it IS
+        # for is the ``x`` vs ``1 - x`` inversion, which moves the value
+        # by ~1.
+        #
+        # Measured |nv - jv| on this fixture: 3.3e-09 / 6.5e-07 / 3.1e-06 at
+        # w_s = 5e-6 / 2e-5 / 5e-5.  That residual is NOT the JAX twin:
+        # handed the SAME v_star, ``aberration_tensor`` and
         # ``aberration_tensor_lg00_jax`` agree to 3.5e-15 relative in |L| on
-        # this fixture (measured).  It is the two MERIT wrappers running
-        # their own envelope-stationary Newton solves, whose v_star differ at
-        # the solver tolerance; L is stationary in v_star only to first
-        # order, so the difference survives at second order.  Gate at 1e-5:
-        # 6.7x above the worst measured value and 5 decades below any
-        # ``x`` vs ``1-x`` confusion (which is what this test pins).
-        assert nv == pytest.approx(jv, rel=1e-5), (
+        # this fixture (measured by WP-A4).  It is the two merit WRAPPERS
+        # running their own envelope-stationary Newton solves -- now twice
+        # each, for the optic and for its aberration-free twin -- whose
+        # v_star differ at the solver tolerance.
+        #
+        # Gate at abs=1e-05: 3.2x above the worst measured value and 5
+        # decades below the ~1.0 an x-vs-(1-x) confusion would produce.
+        assert nv == pytest.approx(jv, abs=1e-5, rel=0.0), (
             f'R-5: w_s={w_s:.1e}: NumPy merit {nv:.9e} != JAX twin '
             f'{jv:.9e}.  Pre-fix NumPy returned |L|^2 while JAX returned '
             f'1 - |L|^2, so the two summed to 1.0 instead of matching.')

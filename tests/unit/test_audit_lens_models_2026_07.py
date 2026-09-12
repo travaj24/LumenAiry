@@ -14,6 +14,15 @@ import warnings
 import numpy as np
 import pytest
 
+# WP-A15a V5 / VERIFY-A4: this file measures 641.0 s on the committed
+# ``.test_durations`` -- five times the 2 min/file bar for the slow lane --
+# so it runs there rather than in the fast matrix.  Nothing about the tests
+# changes; the marker only moves which CI leg collects them.  Re-measured
+# after the ruling-2 restatement (which took its own test from ~40 min to
+# 1.64 s by dropping an n_v2 = 512 oracle): 206.7 s for 62 passed +
+# 7 skipped on this box, still over the bar.
+pytestmark = pytest.mark.slow
+
 import lumenairy as la
 from lumenairy.elements._lens_traced import apply_real_lens_traced
 
@@ -114,12 +123,49 @@ def test_n2_under_resolved_quadrature_warns():
 
 
 def test_a1_auto_n_v2_resolves_demanding_default_quadrature():
-    """A1 (v5.20): n_v2=None (the new default) auto-resolves the uniform
-    quadrature from the fitted v2-oscillation estimate, so the *default*
-    ``apply_real_lens_maslov`` call on a demanding tight-focus chart matches
-    the well-resolved local_quadrature truth instead of speckling at a fixed
-    n_v2=32.  This is the corrected A1 fix: the '67% gap' was never a
-    local_quadrature bug -- it was the default quadrature being under-resolved.
+    """A1 (v5.20), RESTATED v5.46 (VERIFY-A4).
+
+    What this test used to pin.  ``n_v2=None`` (the v5.20 default)
+    auto-resolves the uniform-quadrature sampling from the fitted
+    v2-oscillation estimate, so the DEFAULT call on a demanding tight-focus
+    chart tracked a well-resolved ``local_quadrature`` reference while the
+    historical fixed ``n_v2=32`` did not -- the fail-before arm asserted
+    ``il2(old32, truth) > 0.5`` and measured ~0.67.
+
+    Why it no longer holds.  Audit S2 changed the ``'auto'`` ROUTER: on a
+    chart this oscillatory (the router reports ``need n_v2 ~ 2248``, cap 256)
+    ``'auto'`` resolves to ``'stationary_phase'``, not to uniform quadrature.
+    ``n_v2`` then never enters, so ``apply_real_lens_maslov(E)`` and
+    ``apply_real_lens_maslov(E, n_v2=32)`` are the SAME computation -- the
+    byte-identity is asserted below -- and the old fail-before arm measures
+    1.325e-04 against its ``> 0.5`` bar.  The defect it was written for (an
+    under-resolved default) cannot recur while the router behaves this way,
+    so the pin is RESTATED as the property that now holds rather than
+    deleted.
+
+    What is pinned instead.
+
+    * both defaults land on the well-resolved ``local_quadrature`` reference
+      this test already carried (n = 8, window_sigma = 3.0, which
+      ``tests/unit/test_audit2609_a4_verify_maslov_asymptotic.py`` shows is
+      exact to 8.33e-15 on a quadratic chart): measured il2 **1.325e-04**
+      for both, against the ``5e-3`` bar this test already used -- 38x of
+      headroom, and 3 decades below the 0.67 the pre-S2 default scored;
+    * ``'auto'`` is no worse than the fixed default;
+    * and the two are BYTE-IDENTICAL, which is the mechanism above.  If the
+      router changes, that assertion fails and the numbers here have to be
+      re-measured.
+
+    One-off cross-check against a converged uniform quadrature, measured
+    2026-09-12 and not re-run here because it costs ~40 min on this fixture
+    (n_v2 = 512 is 2.6e5 v2 samples per pixel on a 128^2 grid):
+
+        il2(n_v2 = 384, n_v2 = 512)                  2.14e-06   (converged)
+        il2(default 'auto',             n_v2 = 512)  5.844e-04
+        il2(historical n_v2 = 32,       n_v2 = 512)  5.844e-04
+        il2(local_quadrature reference, n_v2 = 512)  5.754e-04
+
+    i.e. all three integrators now agree with the converged oracle to ~6e-04.
     """
     N, dx = 128, 90e-6
     E = _gauss(N, dx, w=3e-3).astype(np.complex128)
@@ -139,9 +185,23 @@ def test_a1_auto_n_v2_resolves_demanding_default_quadrature():
             local_n_samples=8, local_window_sigma=3.0, **kw)
         auto = la.apply_real_lens_maslov(E, **kw)          # default: n_v2=None
         old32 = la.apply_real_lens_maslov(E, n_v2=32, **kw)
-    # The auto default now tracks the truth; the old fixed default did not.
-    assert il2(auto, truth) < 5e-3, il2(auto, truth)
-    assert il2(old32, truth) > 0.5, il2(old32, truth)
+
+    e_auto, e_old = il2(auto, truth), il2(old32, truth)
+    assert e_auto < 5e-3, (
+        f'the DEFAULT call must track the well-resolved reference: il2 = '
+        f'{e_auto:.3e} (measured 1.325e-04)')
+    assert e_old < 5e-3, (
+        f'and so must the historical n_v2 = 32 -- since audit S2 the router '
+        f'sends both to the same integrator: il2 = {e_old:.3e} '
+        f'(measured 1.325e-04)')
+    assert e_auto <= e_old * (1.0 + 1e-9), (
+        f"'auto' must be no worse than the fixed default: {e_auto:.6e} vs "
+        f'{e_old:.6e}')
+    assert np.array_equal(auto, old32), (
+        "since audit S2 'auto' resolves to an asymptotic integrator on this "
+        'chart, so n_v2 is inert and the two calls must be byte-identical; '
+        'if this fails the router has changed and the numbers in the '
+        'docstring have to be re-measured')
 
 
 def test_a1_auto_n_v2_floor_is_byte_identical_to_32_on_weak_chart():

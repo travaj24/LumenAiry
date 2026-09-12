@@ -981,10 +981,12 @@ class LGAberrationMerit(MeritTerm):
     via the closed-form modal asymptotic propagator (
     Section 7).
 
-    Native scale (audit S4-18 / :class:`NormalizedMerit`): the summed
-    squared LG aberration-channel magnitude ``|L|^2`` (channel-native
-    units) -- reference-less, so wrap with an explicit
-    ``NormalizedMerit(..., scale=)``.
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): every channel is
+    reported as ``|L|^2 / |L_ref(0, 0)|^2`` -- DIMENSIONLESS, referenced to
+    the aberration-free twin of the same optic (v5.46, see
+    ``strehl_branch``).  Before v5.46 it was the bare ``|L|^2``, which after
+    the Van Vleck normalisation landed (audit Y2) is ~1e14 on a stock
+    singlet: ``1 - |L|^2`` was then -4.79e+14, not a Strehl deficit.
 
     Each entry ``L_{(p, ell), n}(s_2^img)`` of the LG aberration tensor
     is the projection of the system's leading-order asymptotic
@@ -1038,6 +1040,50 @@ class LGAberrationMerit(MeritTerm):
         ``fit_canonical_polynomials``:  ``poly_order``,
         ``source_box_half``, ``pupil_box_half``, ``n_field``,
         ``n_pupil``, ``extract_linear_phase``, ``object_distance``.
+    strehl_branch : {'sigma', 'closed_form'}, default 'sigma'
+        Which ``aberration_tensor`` branch supplies ``L`` (v5.46, audit Y2
+        follow-up).  Both divide by ``|L_ref(0, 0)|^2`` from the
+        aberration-free twin
+        (:func:`~lumenairy.propagators.asymptotic.aberration_free_reference_fit`),
+        so both are dimensionless and both read EXACTLY 1.0 -- bit-for-bit,
+        the same computation twice -- on an unaberrated optic.  They differ
+        in whether that ratio behaves like a Strehl:
+
+        * ``'sigma'`` (default) routes through the sigma-grid OVERLAP, which
+          is a true mode overlap.  Measured on an f/2.5 N-BK7 plano-convex
+          singlet with its cubic-and-higher pupil phase scaled by
+          0 / 0.25 / 0.5 / 1 / 2 / 4: ``1.000000 / 0.902949 / 0.818530 /
+          0.680291 / 0.489330 / 0.286701`` on an 8-mode request at the
+          adaptive grid, and ``1.000000 / - / 0.811431 / 0.659170 /
+          0.447292`` on this class's own 2-mode request at
+          ``sigma_grid_n = 64`` -- monotone, in [0, 1], either way.  On the
+          classic orientation pair: 0.815601 (curved side toward the source,
+          25.8 waves of cubic+ phase) vs 0.731874 (flat side toward it,
+          39.8 waves).  Cost: two tensor calls; the RATIO is insensitive to
+          the grid (identical to 6 significant figures from
+          ``sigma_grid_n = 32`` to 256, because numerator and reference
+          alias together), so the cheap default below is not an accuracy
+          compromise.  It is a Strehl ratio up to a small POSITIVE bias on a
+          near-diffraction-limited chart -- the leading-order asymptotic
+          evaluator does not conserve energy exactly -- measured 1.002838 on
+          a plano-convex R1 = 500 mm / 4 mm singlet carrying only 1.36e-03
+          waves of cubic+ pupil phase, and stable to 8 digits from
+          ``sigma_grid_n`` 32 to 256, i.e. not a grid artefact.  So
+          ``1 - coupling`` can be ~-3e-03 at best focus; it rises through
+          +0.258 / +0.851 / +0.99994 as the image point walks 20 / 50 /
+          100 um off the chief ray, which is the property a minimiser needs.
+        * ``'closed_form'`` keeps the pure-``(0, 0)`` point-sampling branch
+          the JAX twin :func:`make_lg_aberration_merit_jax` is restricted to.
+          It is ~2x cheaper and is what the cross-backend parity pin
+          compares -- but it is NOT a Strehl: a truncated leading-order
+          saddle expansion does not conserve energy, and the same ratio
+          RISES with aberration on the same two ladders (1.000000 ->
+          1.024914 -> 1.095510; 1.024914 vs 1.033099).  Selecting it emits a
+          ``RuntimeWarning`` saying so.
+    sigma_grid_n : int or None, default 64
+        ``sigma_grid_n`` forwarded to ``aberration_tensor`` on the
+        ``'sigma'`` branch (``None`` = the library's adaptive default, which
+        is ~14x more expensive here for no change in the ratio).
     weight : float, default 1.0
     name : str, optional
 
@@ -1058,10 +1104,35 @@ class LGAberrationMerit(MeritTerm):
                  w_s: float = 50e-6, w_p: float = 0.05,
                  w_o: Optional[float] = None,
                  fit_kwargs: Optional[Dict[str, Any]] = None,
+                 strehl_branch: str = 'sigma',
+                 sigma_grid_n: Optional[int] = 64,
                  weight: float = 1.0,
                  name: Optional[str] = None) -> None:
         if not targets:
             raise ValueError("LGAberrationMerit: targets dict is empty")
+        if strehl_branch not in ('sigma', 'closed_form'):
+            raise ValueError(
+                f"LGAberrationMerit: strehl_branch must be 'sigma' or "
+                f"'closed_form', got {strehl_branch!r}")
+        self.strehl_branch = str(strehl_branch)
+        self.sigma_grid_n = (None if sigma_grid_n is None
+                             else int(sigma_grid_n))
+        if self.strehl_branch == 'closed_form':
+            import warnings as _w
+            _w.warn(
+                "LGAberrationMerit(strehl_branch='closed_form'): the pure "
+                "(0, 0) point-sampling branch is a leading-order saddle "
+                "value, and a truncated saddle expansion does not conserve "
+                "energy -- its aberration-free-referenced coupling RISES "
+                "with aberration (measured 1.000000 -> 1.024914 -> 1.095510 "
+                "as the cubic+ pupil phase of an f/2.5 singlet is scaled by "
+                "0 / 1 / 4), so 1 - coupling is a NEGATIVE departure, not a "
+                "Strehl deficit, and minimising it rewards aberration.  It "
+                "exists only for parity with make_lg_aberration_merit_jax, "
+                "which has no sigma branch.  Use the default "
+                "strehl_branch='sigma' for a merit (measured 1.000000 -> "
+                "0.680291 -> 0.286701 on the same ladder).",
+                RuntimeWarning, stacklevel=2)
         self.targets = {tuple(k): float(v) for k, v in targets.items()}
         if field_points is None:
             field_points = [(0.0, 0.0)]
@@ -1086,7 +1157,11 @@ class LGAberrationMerit(MeritTerm):
 
     def evaluate(self, ctx: Any) -> float:
         # Lazy import to avoid bootstrap cycles.
-        from ..propagators.asymptotic import aberration_tensor, fit_canonical_polynomials
+        from ..propagators.asymptotic import (
+            aberration_free_reference_fit,
+            aberration_tensor,
+            fit_canonical_polynomials,
+        )
         # Canonical-fit cache: when a CompositeMerit contains several
         # LGAberrationMerit terms with the same fit_kwargs (typical:
         # one term per emitter class -- centre / edge / corner -- all
@@ -1143,6 +1218,18 @@ class LGAberrationMerit(MeritTerm):
         # for piston (always useful diagnostically).
         target_keys = list(self.targets.keys())
         output_modes = list(set([(0, 0)] + target_keys))
+        # v5.46: the 'sigma' branch needs at least one non-(0, 0) output mode
+        # to engage (``aberration_tensor`` routes a pure [(0, 0)] request to
+        # the closed form).  (1, 0) is the cheapest extra mode and is the
+        # first defocus channel, so it costs one column of L, not a second
+        # grid.
+        tensor_kwargs: Dict[str, Any] = {}
+        if self.strehl_branch == 'sigma':
+            if all(tuple(k) == (0, 0) for k in output_modes):
+                output_modes = output_modes + [(1, 0)]
+            if self.sigma_grid_n is not None:
+                tensor_kwargs['sigma_grid_n'] = int(self.sigma_grid_n)
+        fit_ref = aberration_free_reference_fit(fit)
 
         total = 0.0
         for ifp, src in enumerate(self.field_points):
@@ -1163,6 +1250,35 @@ class LGAberrationMerit(MeritTerm):
                     pupil_modes=[(0, 0)],
                     output_modes=output_modes,
                     w_s=self.w_s, w_p=self.w_p, w_o=self.w_o,
+                    **tensor_kwargs,
+                )
+                # v5.46 (audit Y2 follow-up): the same evaluation on the
+                # aberration-free twin, with the SAME w_o, so every
+                # dimensional factor (the Van Vleck weight sqrt(|det J|)/lam,
+                # N_s, N_p, N_o, pi/sqrt(det M)) cancels in the ratio and
+                # what is left is a pure coupling.
+                #
+                # The reference is evaluated at the twin's OWN chief-ray
+                # landing, not at ``s2_img``: a Strehl ratio is referenced to
+                # the DIFFRACTION-LIMITED PEAK, so walking the image point off
+                # the chief ray has to LOWER it.  Referencing at ``s2_img``
+                # instead divides the off-point falloff out of both sides and
+                # leaves the merit blind to image-point placement -- measured
+                # -2.84e-03 / -2.98e-03 / -3.77e-03 / -1.05e-02 at
+                # dy = 0 / 20 / 50 / 100 um, i.e. FALLING as the aberration
+                # grows, which is the OPT-1 descent-direction defect again.
+                # With ``image_points=None`` (the default) the two points
+                # coincide, ``fit_ref is fit`` for an unaberrated optic, and
+                # the two calls are then bit-identical -> ratio exactly 1.0.
+                tensor_ref = aberration_tensor(
+                    fit_ref,
+                    s2_image=(fit.s2x_centre, fit.s2y_centre),
+                    source_point=src,
+                    source_modes=[(0, 0)],
+                    pupil_modes=[(0, 0)],
+                    output_modes=output_modes,
+                    w_s=self.w_s, w_p=self.w_p, w_o=tensor.w_o,
+                    **tensor_kwargs,
                 )
             except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
                     np.linalg.LinAlgError, IndexError, AttributeError,
@@ -1173,13 +1289,55 @@ class LGAberrationMerit(MeritTerm):
                 return 1e20
             # Index of each target in output_modes
             idx_map = {m: i for i, m in enumerate(output_modes)}
+            _ref = complex(tensor_ref.L[idx_map[(0, 0)], 0])
+            ref_sq = _ref.real * _ref.real + _ref.imag * _ref.imag
+            if not np.isfinite(ref_sq) or ref_sq <= 0.0:
+                # The aberration-free reference vanished -- the ratio is
+                # undefined, so steer the optimiser away rather than
+                # returning an arbitrary number.
+                return 1e20
+            # The reference is only a REFERENCE SPHERE when the pupil phase
+            # it removes is a perturbation.  On a chart whose v2-cubic-and-
+            # higher content is thousands of waves -- reachable with a finite
+            # ``object_distance`` and a wide ``pupil_box_half`` -- zeroing it
+            # builds a DIFFERENT optic whose focus is somewhere else, the
+            # reference coupling collapses, and the ratio stops being a
+            # Strehl ratio.  Measured on the validation suite's 51.5 mm
+            # singlet at object_distance = 200 mm, pupil_box_half = 0.02:
+            # 4.206e+05 waves removed, |L_ref(0,0)|^2 = 6.16e-10 against
+            # |L(0,0)|^2 = 0.799, i.e. a coupling of 1.30e+09.  Say so once
+            # rather than report that as a Strehl.
+            _c00 = complex(tensor.L[idx_map[(0, 0)], 0])
+            _cpl00 = (_c00.real * _c00.real
+                      + _c00.imag * _c00.imag) / ref_sq
+            if (not np.isfinite(_cpl00)) or _cpl00 > 10.0:
+                import warnings as _w
+                _removed = float(np.sum(np.abs(np.asarray(
+                    [c for c, k in zip(np.asarray(fit.coef_phi),
+                                       fit.multi_indices)
+                     if (k[2] + k[3]) >= 3]))))
+                _w.warn(
+                    f"LGAberrationMerit: the aberration-free reference "
+                    f"coupling |L(0,0)/L_ref(0,0)|^2 = {_cpl00:.3e} is far "
+                    f"outside [0, 1], so the reported channels are NOT "
+                    f"Strehl-normalised on this chart.  The reference zeroes "
+                    f"{_removed:.3e} waves of cubic-and-higher pupil phase, "
+                    f"which is not a reference-sphere perturbation but a "
+                    f"different optic -- its focus moves and its coupling "
+                    f"collapses.  The channels are still mutually consistent "
+                    f"and still monotone in aberration, so an optimiser "
+                    f"behaves; only the SCALE is meaningless.  Narrow "
+                    f"fit_kwargs['pupil_box_half'] (or raise poly_order) so "
+                    f"the fit's high-order pupil phase is a few waves, not "
+                    f"thousands.",
+                    RuntimeWarning, stacklevel=2)
             for (p, ell), wgt in self.targets.items():
                 try:
                     i = idx_map[(p, ell)]
                 except KeyError:
                     continue
                 val = complex(tensor.L[i, 0])
-                mag_sq = val.real * val.real + val.imag * val.imag
+                mag_sq = (val.real * val.real + val.imag * val.imag) / ref_sq
                 if (p, ell) == (0, 0):
                     # OPT-1 (AUDIT_OPTIMIZE_MERITS) / R-5
                     # (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the (0, 0)
@@ -1196,6 +1354,18 @@ class LGAberrationMerit(MeritTerm):
                     # the two now agree numerically on the (0, 0) target.
                     # Every OTHER (p, ell) channel keeps ``|L|^2`` -- driving
                     # a named aberration channel to zero IS the intent there.
+                    #
+                    # v5.46 (audit Y2 follow-up): ``mag_sq`` is now
+                    # ``|L|^2 / |L_ref(0,0)|^2``, dimensionless and exactly
+                    # 1.0 on an aberration-free optic, so ``1 - mag_sq`` is a
+                    # real deficit in [0, 1] on the default 'sigma' branch.
+                    # Before v5.46 it was the bare ``|L|^2`` -- 4.79e+14 on
+                    # the stock singlet after the Van Vleck normalisation
+                    # (audit Y2) and 3.2e-03 before it, neither of which is a
+                    # Strehl ratio; the old number only LOOKED like one
+                    # because the missing lambda*sqrt(|det J|) (a LENGTH)
+                    # cancelled the closed-form branch's 1/length^2 by
+                    # dimensional accident.
                     total = total + wgt * (1.0 - mag_sq)
                 else:
                     total = total + wgt * mag_sq

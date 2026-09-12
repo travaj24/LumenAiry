@@ -107,8 +107,12 @@ class AberrationTensorResult:
         Y2).  Exposed so a caller that needs the pre-v5.46 scale can divide
         it out and multiply back the old ``|det ds1/dv2|``:
         ``L_legacy = L * |det J| / van_vleck_weight``, i.e.
-        ``L_legacy = L * lambda**2 * |det J|`` in magnitude.  ``None`` on
-        the sigma-grid branch, which evaluates the weight per grid point.
+        ``|L_legacy| = |L| * lambda * sqrt(|det J|)`` -- equivalently
+        ``|L_legacy|**2 = |L|**2 * lambda**2 * |det J|``, which is the
+        ``1/(lambda**2 |det J|)`` factor the two LG-merit re-pins quote.
+        (VERIFY-A4: the pre-v5.46-final wording gave the SQUARED factor for
+        ``L`` itself.)  ``None`` on the sigma-grid branch, which evaluates
+        the weight per grid point.
 
     Notes
     -----

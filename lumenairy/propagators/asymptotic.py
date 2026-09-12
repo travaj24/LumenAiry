@@ -148,6 +148,7 @@ from .asymptotic_canonical_fit import (  # noqa: F401
     CanonicalPolyFit,
     HFPolyFit,
     _eval_4d_cross_deriv,
+    aberration_free_reference_fit,
     fit_canonical_polynomials,
     fit_hf_polynomials,
     propagate_hf_chebyshev_quadrature,
@@ -228,6 +229,7 @@ __all__ = [
     'gaussian_moment_2d',
     'gaussian_moment_table_2d',
     # Polynomial fits
+    'aberration_free_reference_fit',
     'fit_canonical_polynomials',
     'fit_hf_polynomials',
     # Stationary solver

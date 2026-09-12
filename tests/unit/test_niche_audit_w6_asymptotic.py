@@ -274,6 +274,62 @@ from lumenairy.propagators.asymptotic import (
 
 WL = 1.31e-6
 
+
+def _vv_weight_textbook(abs_det_J, wavelength):
+    """Van Vleck-Maslov amplitude weight, DERIVED HERE -- not imported.
+
+    VERIFY-A4: WP-A4 replaced the ``detJ`` in the two brute-force oracles
+    below with a call to ``lumenairy...asymptotic.van_vleck_weight``.  An
+    oracle that reuses the library's own weight cannot detect a wrong weight,
+    which is exactly the failure mode audit Y2 recorded (every pre-fix pin
+    passed with ``|det J|`` to the FIRST power).  So the weight is restated
+    from the textbook stationary-phase Fresnel integral instead:
+
+        the 2-D semiclassical (Van Vleck-Morette) kernel is
+            K = (k / (2 pi i)) |det d2S/ds1 ds2|^(1/2) exp(i k S),
+        and changing the integration variable s1 -> v2 at fixed s2 gives
+            d^2 s1 = |det J| d^2 v2,  |det d2S/ds1 ds2|^(1/2) = |det J|^(-1/2)
+        with J = ds1/dv2, so the two combine to
+            (1 / (i lambda)) |det J|^(1/2) = -1j sqrt(|det J|) / lambda.
+
+    Pinned against the library helper in
+    ``test_w6_verify_van_vleck_weight_matches_the_textbook_fresnel_form``.
+    """
+    return -1j * np.sqrt(np.asarray(abs_det_J)) / float(wavelength)
+
+
+def test_w6_verify_van_vleck_weight_matches_the_textbook_fresnel_form():
+    """VERIFY-A4: the library's ``van_vleck_weight`` IS the textbook weight.
+
+    The two brute-force oracles in this file used to inline ``|det J|`` and
+    were changed by WP-A4 to call the library helper; that made them blind to
+    a wrong helper.  They now call :func:`_vv_weight_textbook`, derived from
+    the stationary-phase Fresnel integral in its docstring, and this test is
+    the ONE place the two forms are compared -- so a change to the library
+    weight shows up here as a failure instead of silently moving every
+    oracle with it.
+
+    Bar: exact equality is not asserted (the library writes
+    ``det_J ** 0.5``, this writes ``np.sqrt``; both are the IEEE-correctly-
+    rounded square root, so they agree to 0 ULP today, but the bar is set at
+    8 ULP = 1.8e-15 relative to leave room for a namespace change).  Measured
+    on this ladder: max relative difference 0.000e+00.
+    """
+    for det_J in (1e-12, 3.98e-06, 1.0, 7.08e-06, 1234.5, 1e12):
+        for lam in (1.31e-6, 633e-9, 10.6e-6):
+            a = complex(van_vleck_weight(det_J, lam))
+            b = complex(_vv_weight_textbook(det_J, lam))
+            assert abs(a - b) <= 8 * np.finfo(float).eps * abs(b), (
+                f'van_vleck_weight({det_J}, {lam}) = {a!r} is not the '
+                f'textbook -1j sqrt(|det J|)/lambda = {b!r}')
+    # ... and it is NOT the pre-Y2 form, on a fixture where the two differ by
+    # decades: |det J| = 3.98e-06 m^2, lambda = 1.31 um ->
+    # |w| = 1.523e+03 vs the pre-fix 3.98e-06, a factor 3.8e+08.
+    w = abs(complex(van_vleck_weight(3.98e-06, 1.31e-6)))
+    assert abs(w / 1.523e+03 - 1.0) < 1e-3, (
+        f'|van_vleck_weight| = {w:.6e}, expected 1.523e+03 = '
+        f'sqrt(3.98e-06)/1.31e-6')
+
 # ===========================================================================
 # The real-lens fixture -- the same singlet the validation suite fits
 # (validation/propagators/test_asymptotic.py::_build_test_singlet).
@@ -419,7 +475,10 @@ def _quad_oracle(fit, s2x, s2y, *, src, w_s, w_p, v_c, v_star, n, half):
     # from-scratch quadrature of the SAME integral the engine approximates,
     # so it carries the same weight; leaving the pre-Y2 ``detJ`` here would
     # compare the engine against an integral it no longer evaluates.
-    detJ = van_vleck_weight(np.abs(jxx * jyy - jxy * jyx), fit.wavelength)
+    # VERIFY-A4: the weight is DERIVED in this file (``_vv_weight_textbook``),
+    # not imported -- an oracle that reuses the library's own helper cannot
+    # detect a wrong helper.
+    detJ = _vv_weight_textbook(np.abs(jxx * jyy - jxy * jyx), fit.wavelength)
     phi = fit.eval_phi(S2X, S2Y, VX, VY, include_linear=False)
     rx, ry = s1x - src[0], s1y - src[1]
     dvx, dvy = VX - v_c[0], VY - v_c[1]
@@ -854,7 +913,8 @@ def _a9_quad(fit, v_star, half, n, src_modes, pup_modes):
     S2Y = np.full(VX.shape, float(sy))
     s1x, s1y, jxx, jxy, jyx, jyy = fit.eval_s1_with_v2_grad(S2X, S2Y, VX, VY)
     # v5.46 (audit Y2): Van Vleck-Maslov weight -- see ``_quad_oracle``.
-    detJ = van_vleck_weight(np.abs(jxx * jyy - jxy * jyx), fit.wavelength)
+    # VERIFY-A4: derived here, not imported.
+    detJ = _vv_weight_textbook(np.abs(jxx * jyy - jxy * jyx), fit.wavelength)
     phi = fit.eval_phi(S2X, S2Y, VX, VY, include_linear=False)
     rx, ry = s1x - src[0], s1y - src[1]
     dvx, dvy = VX - v_c[0], VY - v_c[1]

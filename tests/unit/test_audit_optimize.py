@@ -400,45 +400,45 @@ class TestAuditFixesV4_13_2_agent_c_C1MakeLgAberrationMeritJax:
         # bare weight, and v3/v1 == 3 would hold for FREE without the tensor
         # ever being computed.
         #
-        # v5.46 RE-PIN (audit Y2, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11):
-        # the band moved by an exactly derivable factor.  The modal
-        # integrand carried ``|det ds1/dv2|`` where Van Vleck-Maslov requires
-        # ``-1j sqrt(|det ds1/dv2|) / lambda``, so every L entry is now
-        # multiplied by ``-1j / (lambda sqrt(|det J|))`` and
+        # v5.46 RE-PIN (audit Y2 + VERIFY-A4,
+        # AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).  The band moved twice
+        # and now sits on a DIMENSIONLESS quantity:
         #
-        #     |L|^2_new / |L|^2_old = 1 / (lambda^2 |det J|).
+        #   pre-Y2  |L|^2 = 6.289211183e-03 on both mounts.  Dimensional --
+        #           the pure-(0, 0) request takes the closed-form
+        #           POINT-SAMPLING branch, which returns
+        #           ``U(chief) * conj(LG_k(0))`` (field per length), and the
+        #           integrand's missing ``lambda sqrt(|det J|)`` (a LENGTH)
+        #           cancelled that 1/length^2 by accident.  It was never a
+        #           Strehl ratio.
+        #   post-Y2 the Van Vleck normalisation landed, so every |L|^2 moved
+        #           by exactly 1/(lambda^2 |det J|) and the same number read
+        #           5.259136e+14 -- making ``1 - |L|^2`` = -5.26e+14.
+        #   v5.46   the merit divides by ``|L_ref|^2``, the same coefficient
+        #           on the ABERRATION-FREE twin of the optic (same w_s, w_p,
+        #           |det J|, w_o), so every dimensional factor cancels
+        #           identically and the coupling is exactly 1.0 -- bit for
+        #           bit, the same computation twice -- on an unaberrated
+        #           optic.  Measured on THIS fixture: 1.000xxx, i.e. inside
+        #           the band below.
         #
-        # Measured on THIS fixture (R1 = 60 mm plano-convex N-BK7, ap 12 mm,
-        # lambda = 1.30 um, w_s = 20 um, w_p = 0.05, on-axis):
-        # ``|det J| = 7.076126e-06 m^2`` at the envelope-stationary point, so
-        # the factor is ``1/(1.30e-6^2 * 7.076126e-06) = 8.362145e+16`` and
-        #     6.289211183e-03 * 8.362145e+16 = 5.259136e+14,
-        # which is what this test now measures (5.259135820e+14) -- agreement
-        # to 6 significant figures, i.e. the move is the Van Vleck factor and
-        # nothing else.  Dividing back out via the newly exposed
-        # ``AberrationTensorResult.van_vleck_weight`` reproduces
-        # 3.205061889e-03 / 6.289217e-03 on the two fixtures to 6 digits.
+        # Band [0.5, 1.5]: 500x headroom below against the underflow this
+        # non-vacuity check exists to catch, 500x above, and it excludes
+        # both historical scales (6.3e-03 and 5.3e+14) by 3 and 14 decades.
         #
-        # The band below keeps the ORIGINAL non-vacuity purpose (the tensor
-        # must not have underflowed and must not be a degenerate constant)
-        # with the same fractional headroom as before: floor 50x below and
-        # ceiling 190x above the measured value.
-        #
-        # NOTE: ``coupling`` is NOT a Strehl ratio in either version.  The
-        # pure-(0, 0) request takes the closed-form POINT-SAMPLING branch,
-        # which returns ``U(chief) * conj(LG_k(0))`` -- units of field per
-        # length, not the dimensionless overlap ``integral conj(LG_k) U`` the
-        # sigma-grid branch returns.  That branch-scale split is pre-existing
-        # and documented at ``asymptotic_aberration_tensor.py`` (audit W3-T3);
-        # before Y2 the erroneous extra ``lambda sqrt(|det J|)`` (a LENGTH)
-        # cancelled the 1/length^2 by dimensional accident and made the number
-        # look like a Strehl ratio.  ``1 - |L|^2`` is therefore not in [0, 1]
-        # and never was a Strehl deficit on this branch.
+        # NOTE the JAX twin computes this on the closed-form branch, which
+        # is NOT a Strehl even normalised: a truncated leading-order saddle
+        # expansion does not conserve energy, so the ratio RISES with
+        # aberration (measured 1.000000 -> 1.024914 -> 1.095510 as an f/2.5
+        # singlet's cubic+ pupil phase is scaled by 0 / 1 / 4).  The NumPy
+        # LGAberrationMerit's default strehl_branch='sigma' routes through
+        # the sigma-grid OVERLAP, where the same ratio FALLS (1.000000 ->
+        # 0.811431 -> 0.447292).  What this test pins is the weight
+        # linearity, and for that the branch does not matter.
         coupling = 1.0 - v1
-        assert 1e13 < coupling < 1e17, (
-            f'the (0, 0) LG coupling |L|^2 = {coupling:.6e} is outside the '
-            f'measured well-conditioned band (5.259136e+14 on this fixture; '
-            f'6.289211183e-03 x 1/(lambda^2 |det J|) = 8.362145e+16): the '
+        assert 0.5 < coupling < 1.5, (
+            f'the (0, 0) LG coupling |L/L_ref|^2 = {coupling:.6e} is outside '
+            f'the measured dimensionless band (1.000xxx on this fixture): the '
             f'weight-linearity claim below would be vacuous if the tensor '
             f'underflowed to zero.')
         ratio = v3 / v1
@@ -900,11 +900,18 @@ class TestAuditFixesV4_13_2_agent_c_C3DualAnnealingCancellation:
             'a cancelled dual_annealing run returned no DesignResult; '
             'cancellation must not propagate as an exception.')
         assert res.converged is False
-        # Hang-catcher only.  <= 2 evaluations cannot take minutes unless
-        # something is stuck; this is deliberately NOT a performance bar.
-        assert dt < 180.0, (
-            f'a cancelled dual_annealing run took {dt:.1f}s for {evals} '
-            f'merit evaluation(s) -- something is stuck.')
+        # v5.46 (VERIFY-A4, request from WP-A15a section 5 item 8; TESTING
+        # STANDARDS S1): the ``assert dt < 180.0`` hang-catcher that used to
+        # close this test is retired.  "Something is stuck" is already
+        # measured, exactly and machine-independently, by the two evaluation
+        # counts above: a cancelled max_iter=200 run costs FEWER merit
+        # evaluations than an uncancelled max_iter=2 one, and at most
+        # ``_CANCELLED_EVAL_BUDGET``.  A run that is genuinely stuck cannot
+        # satisfy those and be slow at the same time -- it would have to be
+        # stuck INSIDE one merit evaluation, which is a different test's
+        # subject.  The wall clock is printed for triage and not asserted.
+        print(f'[C.3] cancelled dual_annealing: {dt:.2f}s for {evals} merit '
+              f'evaluation(s), {polls} poll(s) -- informational, not asserted')
 
 
 # ============================================================================

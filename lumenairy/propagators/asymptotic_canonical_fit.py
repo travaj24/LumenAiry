@@ -51,11 +51,67 @@ from ..elements.lenses import (
 __all__ = [
     'CanonicalPolyFit',
     'HFPolyFit',
+    'aberration_free_reference_fit',
     'fit_canonical_polynomials',
     'fit_hf_polynomials',
     'solve_envelope_stationary',
     'propagate_hf_chebyshev_quadrature',
 ]
+
+
+def aberration_free_reference_fit(fit: "CanonicalPolyFit") -> "CanonicalPolyFit":
+    """The aberration-free twin of ``fit``: same geometry, no wavefront error.
+
+    Returns a copy in which every ``Phi`` coefficient of total degree >= 3 in
+    the PUPIL variables ``(u3, u4) = (v2x, v2y)`` is zeroed, and everything
+    else -- ``coef_s1x`` / ``coef_s1y`` (hence ``det ds1/dv2``), the
+    normalisation boxes, the extracted linear ramp ``a0..a4`` and the
+    wavelength -- is left untouched.  The result is the same optic with its
+    reference sphere and its Gaussian (defocus / astigmatism) content intact
+    and its ABERRATION removed, which is what a Strehl ratio is referenced
+    against.
+
+    Why it exists (audit Y2 follow-up).  ``L`` out of
+    :func:`~lumenairy.propagators.asymptotic_aberration_tensor.aberration_tensor`
+    is a DIMENSIONAL quantity: after the Van Vleck normalisation landed it
+    carries ``sqrt(|det J|)/lambda`` and the closed-form branch additionally
+    carries the LG point-sampling normalisations, so ``|L|**2`` is ~1e14 on a
+    stock singlet and ``1 - |L|**2`` is not a Strehl deficit and cannot be
+    made one by rescaling.  Dividing by ``|L_ref|**2`` evaluated on this
+    reference cancels every one of those factors identically -- the two calls
+    differ ONLY in the cubic-and-higher pupil phase -- leaving a dimensionless
+    coupling that is exactly ``1.0`` (bit-for-bit: an already-aberration-free
+    fit is returned unchanged, so the two evaluations are the same
+    computation) for an unaberrated system.
+
+    Note which branch you normalise.  On the sigma-grid branch the ratio is a
+    true Strehl: measured 1.000000 / 0.902949 / 0.818530 / 0.680291 /
+    0.489330 / 0.286701 as the cubic+ pupil phase of an f/2.5 N-BK7
+    plano-convex singlet is scaled by 0 / 0.25 / 0.5 / 1 / 2 / 4, and
+    0.815601 (curved side toward the source) vs 0.731874 (flat side toward
+    the source) on the classic orientation pair.  On the CLOSED-FORM
+    point-sampling branch the same ratio RISES with aberration (1.000000 ->
+    1.024914 -> 1.095510 on the same ladder, and 1.024914 vs 1.033099 on the
+    orientation pair), because that branch is a leading-order saddle value
+    and a truncated saddle expansion does not conserve energy.  Use the
+    sigma-grid branch for anything that has to behave like a Strehl.
+    """
+    keep = np.array([0.0 if (int(k[2]) + int(k[3])) >= 3 else 1.0
+                     for k in fit.multi_indices], dtype=np.float64)
+    if not np.any(keep == 0.0):
+        # The basis has no cubic-or-higher pupil term at all.
+        return fit
+    if isinstance(fit.coef_phi, np.ndarray):
+        # Already aberration-free (idempotent re-entry, or a synthetic
+        # quadratic chart): return the SAME object so a caller that divides
+        # by the reference gets exactly 1.0, with no round-off.  Guarded on
+        # the concrete-array check because a JAX-traced ``coef_phi`` cannot
+        # be branched on -- there the multiply below is a no-op anyway and
+        # the two evaluations still agree to round-off.
+        if not np.any(fit.coef_phi[keep == 0.0] != 0.0):
+            return fit
+    import dataclasses as _dc
+    return _dc.replace(fit, coef_phi=fit.coef_phi * keep)
 
 
 # ===========================================================================
