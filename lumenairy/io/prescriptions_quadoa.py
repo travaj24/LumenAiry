@@ -28,6 +28,8 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
+from ..glass import GLASS_REGISTRY
+
 # ============================================================================
 # Quadoa Optikos .qos (JSON) file I/O -- best-effort
 # ============================================================================
@@ -172,9 +174,15 @@ def export_quadoa_qos(prescription: Dict[str, Any], path: str, *,
     if stop_surface is None:
         stop_surface = prescription.get('stop_index')
         if stop_surface is None:
+            # I8 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): pre-v5.46 this
+            # fell back to 0, and line ~211 then wrote ``is_stop = (i == 0)``
+            # on every surface -- so a prescription with NO declared stop
+            # round-tripped as one with a stop at surface 0, INVENTING an
+            # aperture stop the design never had.  Keep None and write no
+            # ``is_stop`` flag at all in that case.
             stop_surface = next(
-                (i for i, s in enumerate(surfaces) if s.get('is_stop')), 0)
-    stop_surface = int(stop_surface)
+                (i for i, s in enumerate(surfaces) if s.get('is_stop')), None)
+    stop_surface = None if stop_surface is None else int(stop_surface)
     if aperture_diameter is None:
         aperture_diameter = prescription.get('aperture_diameter', 25.4e-3)
     bfl = back_focal_length or 0.0
@@ -208,7 +216,8 @@ def export_quadoa_qos(prescription: Dict[str, Any], path: str, *,
             'glass_before': surf.get('glass_before', 'air'),
             'glass_after': surf.get('glass_after', 'air'),
             'thickness': float(t_m) * scale,
-            'is_stop': bool(i == stop_surface),
+            'is_stop': bool(stop_surface is not None
+                            and i == stop_surface),
             'semi_diameter': (None if sd is None or not np.isfinite(sd)
                               else float(sd) * scale),
             'comment': surf.get('comment', ''),
@@ -224,7 +233,8 @@ def export_quadoa_qos(prescription: Dict[str, Any], path: str, *,
         'wavelength_nm': float(wavelength) * 1e9,
         'aperture_diameter': float(aperture_diameter) * scale,
         'back_focal_length': float(bfl) * scale,
-        'stop_surface': int(stop_surface),
+        'stop_surface': (None if stop_surface is None
+                         else int(stop_surface)),
         'surfaces': surf_list,
     }
 
@@ -351,12 +361,27 @@ def load_quadoa_qos(filepath: str,
         25.4e-3 if aperture_diameter is None
         else float(aperture_diameter) * inv_scale)
 
+    # I7: emit the ``elements`` / ``all_thicknesses`` pair that
+    # ``normalize_prescription`` and ``split_prescription_at_mirrors`` have
+    # always documented this loader as producing.  A ``.qos`` surface list is
+    # purely refractive (the format has no mirror flag here), so ``elements``
+    # mirrors ``surfaces`` with the ``element_type`` stamp, and
+    # ``all_thicknesses`` equals ``thicknesses``.
+    elements = []
+    for i, sd_ in enumerate(surfaces):
+        el = dict(sd_)
+        el['element_type'] = 'surface'
+        el.setdefault('surf_num', i + 1)
+        elements.append(el)
+
     result = {
         'name': name or doc.get('name')
             or os.path.splitext(os.path.basename(filepath))[0],
         'aperture_diameter': aperture_m,
         'surfaces': surfaces,
         'thicknesses': thicknesses,
+        'elements': elements,
+        'all_thicknesses': list(thicknesses),
     }
     if 'wavelength_nm' in doc:
         result['wavelength'] = float(doc['wavelength_nm']) * 1e-9
@@ -385,6 +410,22 @@ def load_quadoa_qos(filepath: str,
         if (last_surface_thickness != 0.0
                 and np.isfinite(last_surface_thickness)):
             result['back_focal_length'] = float(last_surface_thickness)
+    # I7: unknown glasses.  Both Zemax loaders end with this block; without it
+    # an unregistered glass name surfaced much later as a ValueError from
+    # ``get_glass_index`` inside a propagation, with no pointer back to the
+    # file.
+    _unknown = sorted({g for sd_ in surfaces
+                       for g in (sd_.get('glass_before'),
+                                 sd_.get('glass_after'))
+                       if g and g != 'air' and g not in GLASS_REGISTRY})
+    if _unknown:
+        warnings.warn(
+            f"load_quadoa_qos({os.path.basename(filepath)!r}): glasses not "
+            f"in GLASS_REGISTRY: {_unknown}.  Add them before propagating. "
+            f"Example:  GLASS_REGISTRY['GLASS_NAME'] = "
+            f"('specs', 'CATALOG', 'PAGE').  "
+            f"Browse refractiveindex.info to find the correct path.",
+            UserWarning, stacklevel=2)
     return result
 
 

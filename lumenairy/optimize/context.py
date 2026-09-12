@@ -264,11 +264,30 @@ class MeritTerm:
         so the optimizer skips the ray-leg (a speed win, and the unblocker for
         optimizing a prescription that has no sensible ABCD).  The ray-leg is
         skipped only if NO merit term needs it.
+    needs_focus_scan : bool, default True
+        If True (and ``needs_wave``), the optimizer runs the through-focus
+        scan that fills ``ctx.strehl_best`` / ``ctx.z_best`` /
+        ``ctx.rms_radius_best``.  Set False on a wave merit that reads only
+        ``ctx.E_exit`` / ``ctx.opd_map``.
+
+        I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): the scan is
+        ``z_scan_n=31`` full propagations per merit evaluation against the
+        wave leg's ONE lens propagation, and the default ``jac='auto'`` path
+        without a ``JaxMeritTerm`` finite-differences the merit, so every
+        gradient pays it n+1 times.  Measured on 3 free variables, N=128,
+        L-BFGS-B, max_iter=2: 17 merit evaluations, 17 lens propagations,
+        **527 focus-scan slices** -- 97 % of the wave-leg work, recomputed
+        from scratch for every FD probe, even when no merit read the result.
+        The default stays ``True`` so a user-written merit that reads
+        ``ctx.strehl_best`` keeps working unchanged; the library's own wave
+        merits declare it accurately.  The scan is skipped only if NO merit
+        term needs it.
     """
 
     weight: float = 1.0
     needs_wave: bool = False
     needs_ray: bool = True
+    needs_focus_scan: bool = True
     name: str = 'MeritTerm'
 
     def evaluate(self, ctx: Any) -> float:

@@ -156,22 +156,65 @@ def create_zoom_configs(prescription_template: Dict[str, Any],
     ----------
     prescription_template : dict
     zoom_spacings : list of list of float
-        Each inner list gives the air-gap thicknesses for one zoom
-        position.  Length must match the number of thicknesses in the
-        prescription.
+        Each inner list gives one zoom position.  Two accepted forms:
+
+        * a flat sequence of thicknesses, written positionally over
+          ``prescription['thicknesses']`` -- its length must equal
+          ``len(prescription['thicknesses'])``;
+        * a sequence of ``(slot_index, value)`` pairs, which writes only
+          the named slots.  Use this when only the AIR gaps move (the
+          usual zoom case) so the glass centre thicknesses are left
+          alone.
     wavelength : float
     field_angle : float
 
     Returns
     -------
     configs : list of Configuration
+
+    Raises
+    ------
+    ValueError
+        If a flat spacing list is not exactly as long as the template's
+        ``thicknesses``, or a ``(slot, value)`` pair names a slot that
+        does not exist.
+
+    Notes
+    -----
+    I8 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): the parameter is named
+    ``zoom_spacings`` and documented as "the air-gap thicknesses", but the
+    loop was positional over the WHOLE ``thicknesses`` list -- so slot 0 of
+    a cemented doublet's zoom vector overwrote the glass centre thickness
+    -- and ``if j < len(...)`` dropped any extra entry with no warning, so
+    a mis-sized zoom vector silently produced a system nobody asked for.
+    Both are now errors, and the pair form makes "which slot" explicit.
     """
     configs = []
+    n_th = len(prescription_template.get('thicknesses') or [])
     for i, spacings in enumerate(zoom_spacings):
         pres = copy.deepcopy(prescription_template)
-        for j, t in enumerate(spacings):
-            if j < len(pres['thicknesses']):
-                pres['thicknesses'][j] = t
+        seq = list(spacings)
+        is_pairs = bool(seq) and all(
+            isinstance(e, (tuple, list)) and len(e) == 2 for e in seq)
+        if is_pairs:
+            updates = [(int(j), float(t)) for j, t in seq]
+        else:
+            if len(seq) != n_th:
+                raise ValueError(
+                    f"create_zoom_configs: zoom_spacings[{i}] has "
+                    f"{len(seq)} entries but the prescription has {n_th} "
+                    f"thickness slot(s).  A flat spacing list is written "
+                    f"positionally over EVERY slot (glass centre thicknesses "
+                    f"included), so it must match exactly; pass "
+                    f"(slot_index, value) pairs to set only the air gaps.")
+            updates = [(j, float(t)) for j, t in enumerate(seq)]
+        for j, t in updates:
+            if not (0 <= j < n_th):
+                raise ValueError(
+                    f"create_zoom_configs: zoom_spacings[{i}] names "
+                    f"thickness slot {j}, but the prescription has "
+                    f"{n_th} slot(s) (valid 0..{n_th - 1}).")
+            pres['thicknesses'][j] = t
         configs.append(Configuration(
             name=f'Zoom_{i}',
             prescription=pres,

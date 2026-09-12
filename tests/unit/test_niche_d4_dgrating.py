@@ -355,11 +355,19 @@ class TestDgratingImport:
         assert rx['diffractives'] == []
         assert not any('DGRATING' in m or 'diffractive' in m.lower()
                        for m in msgs)
+        # I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11, WP-A10): the loader
+        # also gained 'configurations' -- ``None`` for a single-configuration
+        # file like this one, the MNUM header + raw MCON operand rows for a
+        # zoom / thermal file (pre-fix those records were dropped with no
+        # warning, so a multi-config .zmx imported as its base LDE state in
+        # silence).  The key is additive exactly as 'diffractives' was.
+        assert rx['configurations'] is None
         assert set(rx) == {
             'name', 'aperture_diameter', 'surfaces', 'thicknesses',
             'stop_index', 'elements', 'all_thicknesses', 'object_distance',
-            'coord_breaks', 'diffractives'}, (
-            "load_zemax_zmx's returned key set must only GAIN 'diffractives'")
+            'coord_breaks', 'diffractives', 'configurations'}, (
+            "load_zemax_zmx's returned key set must only GAIN 'diffractives' "
+            "and 'configurations'")
         # pre-existing contract, recomputed independently from the file
         assert np.isclose(rx['surfaces'][0]['radius'], (1.0 / 0.01) * 1e-3)
         assert np.isclose(rx['surfaces'][0]['conic'], -0.5)

@@ -142,8 +142,12 @@ CASES += [
     # comfortably inside the simulation grid (16.38 mm typ).
     _thorlabs_case('LA1050-C',   aperture=15.0e-3,
                    description='LA1050-C plano-convex f=100 mm'),
+    # I6 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): LA1509 is a 100 mm lens
+    # (R = 51.5 mm, tc = 3.6 mm, N-BK7).  The catalogue entry carried
+    # R1 = 103.29 mm -- a 200 mm lens's radius -- and this description
+    # repeated the wrong figure, so the fixture could not catch it.
     _thorlabs_case('LA1509-C',   aperture=15.0e-3,
-                   description='LA1509-C plano-convex f=200 mm'),
+                   description='LA1509-C plano-convex f=100 mm'),
     _thorlabs_case('LA1301-C',   aperture=15.0e-3,
                    description='LA1301-C plano-convex f=250 mm'),
     _thorlabs_case('AC254-050-C', aperture=12.0e-3, dx=1e-6, N=16384,

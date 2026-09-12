@@ -620,6 +620,12 @@ def design_optimize(parameterization: Any,
     # behavior).  Skipping it speeds up wave-only / rigorous-element merits and
     # lets a prescription with no sensible ABCD (a metasurface) optimize.
     need_ray = any(getattr(m, 'needs_ray', True) for m in merit_terms)
+    # I7: the through-focus scan is the dominant cost of the wave leg (31
+    # propagations per merit evaluation, re-run for every FD probe).  Run it
+    # only when some merit reads its results.  ``getattr(..., True)`` keeps a
+    # user-written merit class that predates the flag working unchanged.
+    need_focus_scan = any(getattr(m, 'needs_focus_scan', True)
+                          for m in merit_terms if m.needs_wave)
     n_params = parameterization.n_params
     x0 = parameterization.initial_values()
     bounds = parameterization.bounds
@@ -909,36 +915,51 @@ def design_optimize(parameterization: Any,
                 # float object" and killed the run instead of being
                 # penalised.
                 return _sum_merits(ctx, merit_terms), ctx
-            if z_scan_range is None:
-                half = max(abs(ctx.bfl) / 20.0, 1e-3)
-                z0, z1 = -half, +half
-            else:
-                z0, z1 = z_scan_range
-            z_values = np.linspace(ctx.bfl + z0, ctx.bfl + z1, z_scan_n)
-            ideal = _core.diffraction_limited_peak(
-                E_exit, wavelength, ctx.bfl, dx)
-            scan = _core.through_focus_scan(
-                E_exit, dx, wavelength, z_values,
-                ideal_peak=ideal, verbose=False)
-            z_best_v, strehl_best_v = _core.find_best_focus(scan, 'strehl')
-            ctx.z_best = float(z_best_v)
-            # S4-5 (AUDIT_V5_24_2): ``find_best_focus`` returns ``nan``
-            # when every through-focus slice is NaN (a fully-vignetted /
-            # dark exit field).  A raw ``float(nan)`` then leaks into
-            # ``StrehlMerit``, where ``max(0.0, min_strehl - nan) == 0.0``
-            # REWARDS the failed design with a perfect score (the main
-            # wave leg disagreed in the SIGN of its failure handling with
-            # the wrapper merits, which write the 0.0 failed-scan
-            # sentinel).  Coerce a non-finite best Strehl to 0.0 so a
-            # degenerate wave leg is penalised, matching the wrapper.
-            ctx.strehl_best = (float(strehl_best_v)
-                               if np.isfinite(strehl_best_v) else 0.0)
-            # v5.4.6 (audit F-5): NaN-safe argmax -- a single NaN
-            # through-focus slice must not steal the argmax (np.argmax
-            # treats NaN as the maximum).  Mirrors the wrapper-merit guard.
-            if np.any(np.isfinite(scan.strehl)):
-                i_best = int(np.nanargmax(scan.strehl))
-                ctx.rms_radius_best = float(scan.rms_radius[i_best])
+            # I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): the scan below is
+            # ``z_scan_n`` (default 31) FULL propagations against the wave
+            # leg's one, and on the default ``jac='auto'`` path without a
+            # JaxMeritTerm scipy finite-differences the merit, so every
+            # gradient pays it n+1 times.  Measured: 17 merit evaluations ->
+            # 527 focus-scan slices, 97 % of the wave-leg work.  Run it only
+            # when a merit actually reads ``strehl_best`` / ``z_best`` /
+            # ``rms_radius_best`` -- the same ``needs_*`` gate ``need_wave``
+            # and ``need_ray`` already use.  When skipped, those three fields
+            # keep their EvaluationContext defaults (0.0 / 0.0 / inf), which
+            # is what a merit that declared it does not read them sees.
+            if need_focus_scan:
+                if z_scan_range is None:
+                    half = max(abs(ctx.bfl) / 20.0, 1e-3)
+                    z0, z1 = -half, +half
+                else:
+                    z0, z1 = z_scan_range
+                z_values = np.linspace(
+                    ctx.bfl + z0, ctx.bfl + z1, z_scan_n)
+                ideal = _core.diffraction_limited_peak(
+                    E_exit, wavelength, ctx.bfl, dx)
+                scan = _core.through_focus_scan(
+                    E_exit, dx, wavelength, z_values,
+                    ideal_peak=ideal, verbose=False)
+                z_best_v, strehl_best_v = _core.find_best_focus(
+                    scan, 'strehl')
+                ctx.z_best = float(z_best_v)
+                # S4-5 (AUDIT_V5_24_2): ``find_best_focus`` returns ``nan``
+                # when every through-focus slice is NaN (a fully-vignetted /
+                # dark exit field).  A raw ``float(nan)`` then leaks into
+                # ``StrehlMerit``, where ``max(0.0, min_strehl - nan) == 0.0``
+                # REWARDS the failed design with a perfect score (the main
+                # wave leg disagreed in the SIGN of its failure handling with
+                # the wrapper merits, which write the 0.0 failed-scan
+                # sentinel).  Coerce a non-finite best Strehl to 0.0 so a
+                # degenerate wave leg is penalised, matching the wrapper.
+                ctx.strehl_best = (float(strehl_best_v)
+                                   if np.isfinite(strehl_best_v) else 0.0)
+                # v5.4.6 (audit F-5): NaN-safe argmax -- a single NaN
+                # through-focus slice must not steal the argmax (np.argmax
+                # treats NaN as the maximum).  Mirrors the wrapper-merit
+                # guard.
+                if np.any(np.isfinite(scan.strehl)):
+                    i_best = int(np.nanargmax(scan.strehl))
+                    ctx.rms_radius_best = float(scan.rms_radius[i_best])
             # Build OPD map for Zernike fit
             ap = pres.get('aperture_diameter') or (0.4 * N * dx)
             try:
@@ -1448,6 +1469,24 @@ def design_optimize(parameterization: Any,
                     f"(the default) for larger problems; it uses an "
                     f"L-BFGS Hessian approximation that costs O(N) "
                     f"per iteration.",
+                    UserWarning, stacklevel=2)
+
+            # I8 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): ``trust-ncg``
+            # accepts no ``bounds``; only the FD stencil is clipped below, so
+            # the optimizer itself walks freely outside the box.  The generic
+            # ``minimize`` branch warns loudly in exactly this situation
+            # (and the ``lm`` branch too) -- this one did not, so a bounded
+            # Newton run looked bounded and was not.
+            if bounds is not None:
+                warnings.warn(
+                    "design_optimize(method='newton', bounds=...): the "
+                    "scipy 'trust-ncg' solver this method dispatches to "
+                    "cannot handle bounds, so the supplied bounds are NOT "
+                    "enforced on the iterates -- only the finite-difference "
+                    "gradient/Hessian stencils are clipped to them.  The "
+                    "returned design may lie outside the box.  Use a "
+                    "bounds-capable method (e.g. 'L-BFGS-B', the default, or "
+                    "'trust-constr') if the bounds are hard.",
                     UserWarning, stacklevel=2)
 
             # Build merit-gradient and Hessian closures.

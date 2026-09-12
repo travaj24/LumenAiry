@@ -16,6 +16,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import os
+import re
 import warnings
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -115,6 +116,44 @@ def _raw_surface_is_dgrating(s):
         return False
     lines_per_um = float((s.get('aspheric_params') or {}).get(1, 0.0) or 0.0)
     return lines_per_um != 0.0 and bool(np.isfinite(lines_per_um))
+
+
+# I2 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): Zemax SURFTYPEs that act on a
+# ray WITHOUT any glass on either side -- an ideal lens, an ABCD black box, a
+# phase/hologram surface.  They never enter the glass span, so the pre-fix
+# glass/mirror/DGRATING window auto-detect deleted them (and their STOP flag)
+# BEFORE the unsupported-SURFTYPE branch could warn.  Measured: a ``PARAXIAL
+# f=100 mm`` + STOP ahead of a glass singlet imported as the singlet alone,
+# ``stop_index=None``, zero warnings.  The v5.32 DGRATING fix was exactly this
+# repair applied to one type only.
+_ZEMAX_AIR_POWERED_TYPES = frozenset({
+    'PARAXIAL', 'PARAXIALXY', 'PARAXIALX', 'PARAXIALY', 'IDEAL', 'IDEAL2',
+    'ABCD', 'BINARY_1', 'BINARY_2', 'BINARY_3', 'BINARY_4', 'BINARYOPT',
+    'GRID_PHASE', 'GRIDPHASE', 'ZERNPHASE', 'HOLOGRAM1', 'HOLOGRAM2',
+    'DIFF_GRATING', 'TILTSURF',
+})
+
+
+def _raw_surface_is_air_powered(s):
+    """True when a RAW surface record acts on the ray with no glass on it.
+
+    Cheap and SILENT, like :func:`_raw_surface_is_dgrating`, because it runs
+    inside the lens-window auto-detect.  The loud per-surface diagnostic is the
+    unsupported-SURFTYPE warning further down, which these surfaces now reach
+    instead of being deleted first.
+    """
+    if s.get('glass') is not None or s.get('is_mirror'):
+        return False    # already admitted by the glass/mirror predicate
+    stype = (s.get('type') or 'STANDARD').upper()
+    if stype not in _ZEMAX_AIR_POWERED_TYPES:
+        return False
+    # An ideal-lens / ABCD / phase row with an entirely empty PARM table is an
+    # inert placeholder; only admit one that actually carries parameters (or a
+    # curvature), mirroring the DGRATING predicate's "no PARM 1 -> not
+    # diffractive, do not widen the window" rule.
+    parms = {k: v for k, v in (s.get('aspheric_params') or {}).items()
+             if float(v or 0.0) != 0.0}
+    return bool(parms) or float(s.get('curvature', 0.0) or 0.0) != 0.0
 
 
 def _dgrating_surface_data(s, filepath):
@@ -465,8 +504,12 @@ def load_zemax_zmx(filepath: str,
 
     >>> rx = load_zemax_zmx('my_design.zmx', surface_range=(2, 5))
     """
-    # Read file -- try UTF-16-LE first (Zemax default), then UTF-8
-    for encoding in ('utf-16-le', 'utf-8', 'latin-1'):
+    # Read file.  I8: BOM-sniffing 'utf-16' FIRST so a big-endian export is
+    # decoded by its BOM -- pre-fix a UTF-16-BE file decoded under latin-1
+    # without a readable 'SURF' and was reported as "not a Zemax .zmx lens
+    # file", pointing at the wrong cause.  Then UTF-16-LE (Zemax's own
+    # BOM-less default), UTF-8, latin-1.
+    for encoding in ('utf-16', 'utf-16-le', 'utf-8', 'latin-1'):
         try:
             with open(filepath, 'r', encoding=encoding) as f:
                 text = f.read()
@@ -482,7 +525,7 @@ def load_zemax_zmx(filepath: str,
         raise IOError(
             f"{filepath} does not appear to be a Zemax .zmx lens file "
             f"(no 'SURF' surface records found under any supported "
-            f"encoding: utf-16-le / utf-8 / latin-1).")
+            f"encoding: utf-16 (BOM) / utf-16-le / utf-8 / latin-1).")
 
     # Remove BOM if present
     text = text.lstrip('﻿')
@@ -521,6 +564,15 @@ def load_zemax_zmx(filepath: str,
     # ------------------------------------------------------------------
     surfaces_raw = []
     current_surf = None
+    # I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): Zemax multi-configuration
+    # records.  ``MNUM <n_configs> <current>`` heads the block and each
+    # ``MCON <op> <config> <surface> <value> ...`` row is one multi-config
+    # operand.  Neither was matched at any level, so a zoom / thermal / athermal
+    # file imported as the base LDE state with NO ``configurations`` key and no
+    # warning -- while ``optimize/multiconfig.py`` + ``examples/08`` make the
+    # feature look supported end to end.
+    mcon_rows = []
+    mnum_header = None
 
     for line_num, line in enumerate(lines, 1):
         stripped = line.strip()
@@ -613,6 +665,26 @@ def load_zemax_zmx(filepath: str,
 
                 elif keyword == 'COMM':
                     current_surf['comment'] = stripped[5:].strip().strip('"')
+
+            if keyword == 'MNUM':
+                # I7: ``MNUM n_configs current_config``.
+                mnum_header = tuple(tokens[1:3])
+            elif keyword == 'MCON':
+                # I7: one multi-config operand row.  Kept verbatim (the
+                # operand vocabulary is large and version-dependent) plus the
+                # decoded common fields, so ``create_zoom_configs`` has
+                # something to consume and the user can see what was there.
+                _row = {'raw': stripped, 'operand': (tokens[1]
+                                                     if len(tokens) > 1
+                                                     else '')}
+                for _name, _pos in (('config', 2), ('surface', 3),
+                                    ('value', 4)):
+                    if len(tokens) > _pos:
+                        try:
+                            _row[_name] = float(tokens[_pos])
+                        except ValueError:
+                            _row[_name] = tokens[_pos]
+                mcon_rows.append(_row)
         except (IndexError, ValueError) as exc:
             raise ValueError(
                 f"Malformed Zemax line {line_num} in {filepath}: "
@@ -670,12 +742,19 @@ def load_zemax_zmx(filepath: str,
         # behind a collimator; a fan-out at the output, behind the last
         # glass).  Design 121 never saw it because both its DGRATINGs sit
         # between glass surfaces.
+        # I2: air-to-air POWERED types (PARAXIAL / ABCD / phase surfaces) join
+        # the predicate for exactly the reason DGRATING did -- otherwise they
+        # are deleted here, before any warning can fire.
         active = [s for s in optical_surfaces
                   if s['glass'] is not None or s['is_mirror']
-                  or _raw_surface_is_dgrating(s)]
+                  or _raw_surface_is_dgrating(s)
+                  or _raw_surface_is_air_powered(s)]
         if not active:
             raise ValueError(
-                f"No glass/mirror/diffractive surfaces found in {filepath}")
+                f"No glass/mirror/diffractive/powered surfaces found in "
+                f"{filepath} (looked for: a GLAS row, a mirror, a DGRATING "
+                f"with PARM 1, or an air-to-air powered SURFTYPE "
+                f"{sorted(_ZEMAX_AIR_POWERED_TYPES)}).")
         s_first = active[0]['surf_num']
         # v5.17.1 (audit P3-42): only extend the range by +1 when the
         # last active surface is refractive glass (the +1 exists to
@@ -714,6 +793,36 @@ def load_zemax_zmx(filepath: str,
                         else _gm[-1]['surf_num'] + 1)
             if (_gm[0]['surf_num'], _gm_last) != (s_first, s_last):
                 _ap_span = (_gm[0]['surf_num'], _gm_last)
+
+    # I2: whatever the window ended up being (auto-detected or an explicit
+    # ``surface_range``), name every optical surface it EXCLUDED that still
+    # carries shape or parameters.  The window is a heuristic; a surface it
+    # drops silently is the failure mode this finding is about, and the
+    # predicate above cannot know every OpticStudio SURFTYPE.
+    _kept = {_ls['surf_num'] for _ls in lens_surfaces}
+    _dropped_powered = []
+    for _os in optical_surfaces:
+        if _os['surf_num'] in _kept:
+            continue
+        _curv = float(_os.get('curvature', 0.0) or 0.0)
+        _parms = {k: v for k, v in (_os.get('aspheric_params') or {}).items()
+                  if float(v or 0.0) != 0.0}
+        if _curv != 0.0 or _parms or _os.get('is_stop'):
+            _dropped_powered.append(
+                f"SURF {_os['surf_num']} (TYPE {(_os.get('type') or 'STANDARD')}"
+                + (f", CURV {_curv:g}" if _curv else "")
+                + (f", PARM {_parms}" if _parms else "")
+                + (", STOP" if _os.get('is_stop') else "") + ")")
+    if _dropped_powered:
+        warnings.warn(
+            f"{filepath}: the imported surface window ({s_first}, {s_last}) "
+            f"EXCLUDES {len(_dropped_powered)} optical surface(s) that carry "
+            f"curvature, a PARM table or the STOP flag: "
+            f"{'; '.join(_dropped_powered)}.  They are NOT part of the "
+            f"returned prescription, so the imported system is not the one in "
+            f"the file.  Pass surface_range=(first, last) to include them, or "
+            f"convert them to a supported type in Zemax.",
+            UserWarning, stacklevel=2)
 
     # v5.17.1 (audit P3-42): a single terminal mirror is a legitimate
     # one-element system (elements-only prescription for apply_mirror);
@@ -900,7 +1009,18 @@ def load_zemax_zmx(filepath: str,
                    if _dropped_parms else "")
                 + ". The imported surface shape is likely WRONG -- "
                   "convert the surface to a supported type in Zemax "
-                  "before importing.",
+                  "before importing."
+                # I8: name the hand-entry route for the two anamorphic types,
+                # whose PARM semantics the library DOES have a home for
+                # (radius_y / conic_y) but whose file-side convention (radius
+                # vs curvature in the PARM slot) is not verifiable offline --
+                # so the mapping is deliberately not guessed here.
+                + (" For TOROIDAL / BICONICX the library has full "
+                   "radius_y / conic_y support (make_biconic, .qos I/O): "
+                   "read the X-profile radius and conic off the Zemax "
+                   "surface editor and set surfaces[i]['radius_y'] / "
+                   "['conic_y'] by hand."
+                   if stype_u in ('TOROIDAL', 'BICONICX', 'BICONIC') else ""),
                 UserWarning,
                 stacklevel=2,
             )
@@ -1191,6 +1311,37 @@ def load_zemax_zmx(filepath: str,
     _stop_index = next((i for i, ps in enumerate(prescription_surfaces)
                         if ps.get('is_stop')), None)
 
+    # I7: surface the multi-configuration rows this loader now collects, and
+    # say out loud that only the base (LDE) state was imported.  Pre-fix a
+    # zoom / thermal file imported as config 1 with no signal that the other
+    # N-1 positions existed.
+    configurations = None
+    if mcon_rows or mnum_header:
+        _n_cfg = None
+        if mnum_header:
+            try:
+                _n_cfg = int(float(mnum_header[0]))
+            except (ValueError, IndexError, TypeError):
+                _n_cfg = None
+        configurations = {
+            'n_configs': _n_cfg,
+            'current_config': (mnum_header[1]
+                               if mnum_header and len(mnum_header) > 1
+                               else None),
+            'operands': mcon_rows,
+        }
+        _ops = sorted({str(r.get('operand', '')) for r in mcon_rows})
+        warnings.warn(
+            f"{filepath}: the file carries Zemax MULTI-CONFIGURATION data "
+            f"({_n_cfg if _n_cfg is not None else '?'} configurations, "
+            f"{len(mcon_rows)} MCON operand row(s): {_ops}).  Only the BASE "
+            f"lens-data-editor state was imported -- the other configurations "
+            f"are NOT in this prescription.  The raw rows are available under "
+            f"prescription['configurations']['operands']; build the zoom "
+            f"positions explicitly with "
+            f"lumenairy.optimize.create_zoom_configs.",
+            UserWarning, stacklevel=2)
+
     return {
         'name': name,
         'aperture_diameter': aperture,
@@ -1198,6 +1349,9 @@ def load_zemax_zmx(filepath: str,
         'surfaces': prescription_surfaces,
         'thicknesses': lens_thicknesses,
         'stop_index': _stop_index,
+        # I7: ``None`` for a single-configuration file (the overwhelming
+        # majority); the MNUM header + raw MCON operand rows otherwise.
+        'configurations': configurations,
         # Full element list including mirrors (for manual use)
         'elements': elements,
         'all_thicknesses': thicknesses,
@@ -1855,6 +2009,9 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
     """
     surfaces = prescription['surfaces']
     thicknesses = prescription['thicknesses']
+    # I4: this table has one RADIUS column, so an anamorphic surface would be
+    # transcribed into Zemax as a sphere of revolution.  Warn per surface.
+    _warn_dropped_anamorphic(surfaces, 'export_zemax_lens_data', path)
     if aperture_diameter is None:
         aperture_diameter = prescription.get('aperture_diameter', 25.4e-3)
     semi_dia_mm = 0.5 * aperture_diameter * 1e3
@@ -1970,6 +2127,33 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
         f.write('\n'.join(lines) + '\n')
 
 
+def _zmx_record_text(value, *, field, path, max_len=255):
+    """One-line, quote-free text safe to place after a ``.zmx`` keyword.
+
+    I8 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): ``NAME`` and ``COMM`` were
+    written verbatim, so a newline inside a prescription name or comment
+    INJECTED arbitrary records into the exported file (measured: a name
+    carrying an embedded newline followed by ``SURF 99`` / ``CURV 0.5``
+    produced extra ``SURF`` rows in the output, and the file reloaded as a
+    different system).  Collapse every newline / control character to a space and
+    replace the double quote that the ``CURV`` / ``DIAM`` rows use as a
+    field delimiter.
+    """
+    txt = '' if value is None else str(value)
+    cleaned = re.sub(r'[\x00-\x1f\x7f]+', ' ', txt).replace('"', "'")
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip()
+    if cleaned != txt.strip():
+        warnings.warn(
+            f"export_zemax_zmx({os.path.basename(path)!r}): the {field} "
+            f"text {txt!r} carries newlines, control characters or quotes "
+            f"that would inject records into the .zmx; writing {cleaned!r} "
+            f"instead.",
+            UserWarning, stacklevel=3)
+    return cleaned
+
+
 def _warn_dropped_qtype(surf_dict, surf_label):
     """v5.17.1 (audit P2-20): warn LOUDLY when a Forbes Q-type freeform
     surface (``freeform_type`` = ``'q_bfs'`` / ``'q_con'`` with its
@@ -1995,6 +2179,45 @@ def _warn_dropped_qtype(surf_dict, surf_label):
         UserWarning,
         stacklevel=2,
     )
+
+
+def _warn_dropped_anamorphic(surfaces, fn_name: str, path: str,
+                             labels=None) -> None:
+    """Warn once per surface whose one-axis (anamorphic) keys cannot be written.
+
+    I4 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): a cylindrical / biconic
+    surface carries ``radius_y`` / ``conic_y`` / ``aspheric_coeffs_y`` that the
+    CODE V and Zemax writers in this package have no emission path for, so the
+    surface would export as a rotationally-symmetric sphere with no diagnostic
+    -- a one-axis focusing element silently becoming a two-axis one.  The
+    Quadoa writer handles it, which makes the gap an inconsistency rather than
+    a format limitation.  Match the loudness of ``_warn_dropped_qtype``.
+    """
+    for idx, s in enumerate(surfaces or ()):
+        if not isinstance(s, dict):
+            continue
+        label = labels[idx] if labels is not None else idx
+        ry = s.get('radius_y')
+        ky = s.get('conic_y')
+        ay = s.get('aspheric_coeffs_y')
+        R = s.get('radius')
+        # ``radius_y`` equal to ``radius`` (or both inf) is rotationally
+        # symmetric and loses nothing; only a genuine difference matters.
+        ry_differs = (ry is not None
+                      and not (R is not None and (
+                          ry == R or (np.isinf(ry) and np.isinf(R)))))
+        if not (ry_differs or (ky is not None and ky != s.get('conic', 0.0))
+                or ay):
+            continue
+        warnings.warn(
+            f"{fn_name}({os.path.basename(path)!r}): surface {label} is "
+            f"ANAMORPHIC (radius_y={ry!r}, conic_y={ky!r}, "
+            f"aspheric_coeffs_y={ay!r}) but this writer emits only the "
+            f"rotationally-symmetric x-profile -- the exported surface is a "
+            f"SPHERE/CONIC of revolution about radius={R!r} and does NOT "
+            f"represent the design.  Export to Quadoa ``.qos`` (which carries "
+            f"the y-profile) or re-enter the toroid/biconic by hand.",
+            UserWarning, stacklevel=3)
 
 
 def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
@@ -2062,7 +2285,7 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     lines = []
     lines.append('VERS 210000 0 123 0 0')
     lines.append('MODE SEQ')
-    lines.append(f'NAME {name}')
+    lines.append(f'NAME {_zmx_record_text(name, field="NAME", path=path)}')
     lines.append('UNIT MM X W X CM MR CPMM')
     lines.append(f'ENPD {epd_mm:.8f}')
     lines.append('ENVD 2.0e+01 1 0')
@@ -2198,7 +2421,8 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
         sd_mm_e = (float(sd_m) * 1e3
                     if (sd_m is not None and np.isfinite(sd_m))
                     else semi_dia_mm)
-        comment = (e.get('comment') or '').strip()
+        comment = _zmx_record_text(e.get('comment'), field='COMM',
+                                   path=path)
         curv_val = _zemax_curv(R_m)
         lines.append(f'SURF {surf_counter}')
         if comment:
@@ -2209,6 +2433,11 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
         # cross-verification workflow (LumenAiry vs OpticStudio) is
         # never run against the wrong surface unawares.
         _warn_dropped_qtype(e, surf_counter)
+        # I4: same loudness for an anamorphic (cylindrical / biconic)
+        # surface -- this writer emits CURV from ``radius`` only, so a
+        # one-axis element would export as a sphere of revolution.
+        _warn_dropped_anamorphic([e], 'export_zemax_zmx', path,
+                                 labels=[surf_counter])
         if e_type == 'mirror':
             lines.append('  TYPE STANDARD')
             lines.append(f'  CURV {curv_val:.10f} 0 0 0 0 ""')
@@ -2380,7 +2609,7 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
     lines = []
     lines.append('VERS 210000 0 123 0 0')
     lines.append('MODE SEQ')
-    lines.append(f'NAME {name}')
+    lines.append(f'NAME {_zmx_record_text(name, field="NAME", path=path)}')
     lines.append('UNIT MM X W X CM MR CPMM')
     lines.append(f'ENPD {epd_mm:.8f}')
     lines.append('ENVD 2.0e+01 1 0')
@@ -2440,6 +2669,9 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
         # v5.17.1 (audit P2-20): warn loudly instead of silently
         # dropping Forbes Q-type freeform coefficients.
         _warn_dropped_qtype(surf, idx)
+        # I4: ditto for radius_y / conic_y / aspheric_coeffs_y.
+        _warn_dropped_anamorphic([surf], 'export_zemax_zmx', path,
+                                 labels=[idx])
 
         lines.append(f'SURF {idx}')
         lines.append('  TYPE STANDARD')

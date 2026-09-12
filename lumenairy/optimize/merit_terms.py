@@ -196,6 +196,10 @@ class RMSWavefrontMerit(MeritTerm):
 
     needs_wave = True
     name = 'RMSWavefront'
+    # I7: reads ctx.opd_map only (built from ctx.bfl), never
+    # strehl_best / z_best / rms_radius_best -- so the 31-plane
+    # through-focus scan is pure waste for this term.
+    needs_focus_scan = False
     native_scale = 1.0
 
     def __init__(self, max_rms_waves: float = 0.07,
@@ -295,6 +299,10 @@ class MatchIdealThinLensMerit(MeritTerm):
 
     needs_wave = True
     name = 'MatchIdealThinLens'
+    # I7: reads ctx.opd_map only (built from ctx.bfl), never
+    # strehl_best / z_best / rms_radius_best -- so the 31-plane
+    # through-focus scan is pure waste for this term.
+    needs_focus_scan = False
     # S4-18/B3 native scale: 1.0 (contribution is waves^2, dimensionless).
     native_scale = 1.0
 
@@ -512,6 +520,10 @@ class MatchIdealSystemMerit(MeritTerm):
 
     needs_wave = True
     name = 'MatchIdealSystem'
+    # I7: reads ctx.opd_map only (built from ctx.bfl), never
+    # strehl_best / z_best / rms_radius_best -- so the 31-plane
+    # through-focus scan is pure waste for this term.
+    needs_focus_scan = False
 
     def __init__(self, ideal_elements: Sequence[Dict[str, Any]],
                  real_elements: Optional[Sequence[Dict[str, Any]]] = None,
@@ -853,6 +865,10 @@ class MatchTargetOPDMerit(MeritTerm):
 
     needs_wave = True
     name = 'MatchTargetOPD'
+    # I7: reads ctx.opd_map only (built from ctx.bfl), never
+    # strehl_best / z_best / rms_radius_best -- so the 31-plane
+    # through-focus scan is pure waste for this term.
+    needs_focus_scan = False
     # S4-18/B3 native scale: 1.0 (contribution is waves^2, dimensionless).
     native_scale = 1.0
 
@@ -922,6 +938,10 @@ class ZernikeCoefficientMerit(MeritTerm):
 
     needs_wave = True
     name = 'ZernikeCoefficient'
+    # I7: reads ctx.opd_map only (built from ctx.bfl), never
+    # strehl_best / z_best / rms_radius_best -- so the 31-plane
+    # through-focus scan is pure waste for this term.
+    needs_focus_scan = False
     # S4-18/B3 native scale: 1.0 (sum of (coeff_err/wavelength)^2 in
     # waves^2, dimensionless).
     native_scale = 1.0
@@ -1202,6 +1222,10 @@ class CompositeMerit(MeritTerm):
         self.sub_merits = list(sub_merits)
         self.weight = float(weight)
         self.needs_wave = any(m.needs_wave for m in self.sub_merits)
+        # I7: a composite needs the focus scan iff any wave sub-merit does.
+        self.needs_focus_scan = any(
+            getattr(m, 'needs_focus_scan', True)
+            for m in self.sub_merits if getattr(m, 'needs_wave', False))
 
     def evaluate(self, ctx: Any) -> float:
         s = 0.0
@@ -1334,6 +1358,9 @@ class NormalizedMerit(MeritTerm):
         self.weight = float(getattr(inner, 'weight', 1.0))
         self.needs_wave = bool(getattr(inner, 'needs_wave', False))
         self.needs_ray = bool(getattr(inner, 'needs_ray', True))
+        # I7: forward the focus-scan requirement from the wrapped merit.
+        self.needs_focus_scan = bool(
+            getattr(inner, 'needs_focus_scan', True))
         self.name = f'Normalized({getattr(inner, "name", "Merit")})'
 
     def evaluate(self, ctx: Any) -> float:
@@ -1529,6 +1556,162 @@ class MaxThicknessMerit(MeritTerm):
                 continue
             excess = max(0.0, float(t) - self.max_thickness)
             total = total + excess * excess
+        return self.weight * total
+
+
+def edge_thickness(prescription: Dict[str, Any], slot: int,
+                   semi_diameter: Optional[float] = None) -> float:
+    """Edge thickness [m] of the glass in gap ``slot`` of ``prescription``.
+
+    ``t_edge = t_centre + sag(R2, k2, h) - sag(R1, k1, h)`` evaluated at the
+    clear semi-diameter ``h``, where surface 1 bounds the gap on the entry
+    side and surface 2 on the exit side.
+
+    Sign convention check (the case the audit's probe list flags): for a
+    BICONVEX element ``R1 > 0`` so ``sag(R1, h) > 0`` and ``R2 < 0`` so
+    ``sag(R2, h) < 0`` -- both terms shrink the edge below the centre
+    thickness, which is right.  For a CONCAVE-FIRST MENISCUS (``R1 < 0``,
+    ``R2 < 0``) the two sags have the same sign and partly cancel, so the
+    edge can be thicker than the centre -- also right, and exactly the case
+    a formula written as ``t_c - |sag1| - |sag2|`` gets wrong.
+
+    Parameters
+    ----------
+    prescription : dict
+        Any prescription carrying ``surfaces`` and ``thicknesses``.
+    slot : int
+        Index into ``thicknesses`` (the gap AFTER ``surfaces[slot]``).
+    semi_diameter : float, optional
+        Radial height at which to evaluate [m].  Defaults to the smaller
+        of the two bounding surfaces' ``semi_diameter``, else half the
+        prescription's ``aperture_diameter``.
+
+    Returns
+    -------
+    float
+        Edge thickness [m].  ``nan`` when the slot or the height cannot
+        be resolved.
+
+    Notes
+    -----
+    I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): before v5.46 nothing in
+    the library computed an edge thickness -- ``MinThicknessMerit`` /
+    ``MaxThicknessMerit`` constrain the CENTRE thickness only, while their
+    "minimum acceptable GLASS thickness" docstring reads as
+    manufacturability coverage.  Edge thickness is the constraint an
+    unconstrained radius optimisation violates first (a strongly biconvex
+    or steeply aspheric element goes knife-edged long before its centre
+    thins), which is why every commercial code ships it (``ETGT``/``ETVA``
+    in OpticStudio, ``ETH`` in CODE V).
+    """
+    from ..elements.lenses import surface_sag_general
+    surfaces = prescription.get('surfaces') or []
+    thicknesses = prescription.get('thicknesses') or []
+    if slot < 0 or slot >= len(thicknesses) or slot + 1 >= len(surfaces):
+        return float('nan')
+    s1, s2 = surfaces[slot], surfaces[slot + 1]
+    if semi_diameter is None:
+        cands = [s.get('semi_diameter') for s in (s1, s2)]
+        cands = [float(c) for c in cands
+                 if c is not None and np.isfinite(c) and float(c) > 0.0]
+        if cands:
+            semi_diameter = min(cands)
+        else:
+            ap = prescription.get('aperture_diameter')
+            if ap is None or not np.isfinite(ap):
+                return float('nan')
+            semi_diameter = 0.5 * float(ap)
+    # 1-element 1-D array, not a 0-d scalar: ``surface_sag_general`` writes
+    # through ``out=`` so it needs a real ndarray buffer.
+    h_sq = np.array([float(semi_diameter) ** 2], dtype=np.float64)
+    sag1 = float(surface_sag_general(
+        h_sq, s1.get('radius', float('inf')),
+        float(s1.get('conic', 0.0) or 0.0), s1.get('aspheric_coeffs'))[0])
+    sag2 = float(surface_sag_general(
+        h_sq.copy(), s2.get('radius', float('inf')),
+        float(s2.get('conic', 0.0) or 0.0), s2.get('aspheric_coeffs'))[0])
+    return float(thicknesses[slot]) + sag2 - sag1
+
+
+class MinEdgeThicknessMerit(MeritTerm):
+    """Penalise any GLASS element whose EDGE thickness falls below a minimum.
+
+    ``contribution = weight * sum_glass_slots max(0, min_edge - t_edge_i)^2``
+
+    The edge thickness is ``t_c + sag(R2, k2, h) - sag(R1, k1, h)`` at the
+    clear semi-diameter ``h`` -- see :func:`edge_thickness` for the sign
+    convention and the meniscus case.  A negative result means a knife edge
+    (the surfaces have already crossed), which the quadratic penalty
+    punishes hard.
+
+    I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): the library had no edge
+    constraint at all -- ``MinThicknessMerit`` / ``MaxThicknessMerit``
+    constrain the CENTRE thickness, and a repo-wide grep for
+    ``edge_thickness|EdgeThickness|edge thickness`` hit only two incidental
+    comments.  This is the constraint an unconstrained radius optimisation
+    violates first.
+
+    Parameters
+    ----------
+    min_edge : float, default 0.5e-3
+        Minimum acceptable edge thickness [m].  Typical shop minima are
+        0.5-1.0 mm for a 25 mm element.
+    weight : float
+    semi_diameter : float, optional
+        Evaluate at this height [m] instead of the per-surface /
+        aperture-derived default.
+    include_air : bool, default False
+        Also constrain AIR gaps (the air-space equivalent is the
+        clearance between two elements' rims).
+
+    Native scale (audit S4-18 / :class:`NormalizedMerit`): absolute
+    ``min_edge^2`` [m^2].
+
+    Examples
+    --------
+    >>> import lumenairy as la
+    >>> rx = la.make_singlet(25e-3, -25e-3, 3e-3, 'N-BK7', aperture=25e-3)
+    >>> m = la.MinEdgeThicknessMerit(min_edge=1e-3)   # doctest: +SKIP
+    """
+
+    needs_wave = False
+    needs_ray = False
+    name = 'MinEdgeThickness'
+
+    def __init__(self, min_edge: float = 0.5e-3,
+                 weight: float = 1.0,
+                 semi_diameter: Optional[float] = None,
+                 include_air: bool = False) -> None:
+        if not np.isfinite(min_edge):
+            raise ValueError(
+                f"MinEdgeThicknessMerit: min_edge must be finite, "
+                f"got {min_edge!r}")
+        if semi_diameter is not None and not (
+                np.isfinite(semi_diameter) and semi_diameter > 0):
+            raise ValueError(
+                f"MinEdgeThicknessMerit: semi_diameter must be finite and "
+                f"> 0 when given, got {semi_diameter!r}")
+        self.min_edge = float(min_edge)
+        self.weight = float(weight)
+        self.semi_diameter = (None if semi_diameter is None
+                              else float(semi_diameter))
+        self.include_air = bool(include_air)
+        self.native_scale = (self.min_edge ** 2
+                             if self.min_edge > 0.0 else None)
+
+    def evaluate(self, ctx: Any) -> float:
+        pres = ctx.prescription
+        surfaces = pres.get('surfaces', [])
+        thicknesses = pres.get('thicknesses', [])
+        total = 0.0
+        for i in range(len(thicknesses)):
+            if not self.include_air and _thickness_slot_is_air(surfaces, i):
+                continue
+            t_edge = edge_thickness(pres, i, self.semi_diameter)
+            if not np.isfinite(t_edge):
+                continue
+            deficit = max(0.0, self.min_edge - t_edge)
+            total = total + deficit * deficit
         return self.weight * total
 
 

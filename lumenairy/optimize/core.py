@@ -191,6 +191,8 @@ from .merit_terms import (
     MaxFNumberMerit,
     MaxThicknessMerit,
     MinBackFocalLengthMerit,
+    MinEdgeThicknessMerit,
+    edge_thickness,
     MinThicknessMerit,
     NormalizedMerit,
     RMSWavefrontMerit,

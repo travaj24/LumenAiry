@@ -43,6 +43,7 @@ into ``core``) is harmless -- by the time any ``.evaluate(...)`` runs,
 
 from __future__ import annotations
 
+import hashlib
 import threading
 import warnings
 from collections import OrderedDict
@@ -134,19 +135,28 @@ def _wrapper_merit_aperture_key(aperture: Any) -> tuple:
 
     Three branches:
       - ``None``  -> ``('none',)``.
-      - ndarray   -> ``('arr', shape, dtype, content_hash)``.
-        ``hash(np.ascontiguousarray(a).tobytes())`` captures content
-        cheaply (a single ~N^2 byte scan; for N=512^2 complex128 that
-        is ~4 MB which hashes in <1 ms).
+      - ndarray   -> ``('arr', shape, dtype, content_digest)``.
+        The digest is a 128-bit ``blake2b`` over the contiguous bytes --
+        one ~N^2 byte scan, the same cost the previous 64-bit
+        ``hash(...tobytes())`` paid (for N=512^2 complex128 that is ~4 MB,
+        hashed in <1 ms).
       - scalar    -> ``('scalar', float)`` covering the common case of
         a single aperture_diameter taken from ``prescription``.
+
+    I8 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): the ndarray branch keyed on
+    Python's 64-bit ``hash`` of the bytes, so a collision returned the WRONG
+    cached aperture mask -- astronomically unlikely, but a content digest
+    removes the class outright for the same single byte-scan, and a cache key
+    that is not a pure function of its input by VALUE is the pattern this
+    audit flags across the library.
     """
     if aperture is None:
         return ('none',)
     if isinstance(aperture, np.ndarray):
         arr = np.ascontiguousarray(aperture)
         return ('arr', arr.shape, str(arr.dtype),
-                hash(arr.tobytes()))
+                hashlib.blake2b(arr.view(np.uint8).reshape(-1).data,
+                                digest_size=16).digest())
     # Scalar aperture: a Python int/float/np.floating.  Forced to a
     # plain float so np.float64(1.0) and 1.0 share the same cache key.
     return ('scalar', float(aperture))
@@ -408,6 +418,14 @@ class MultiWavelengthMerit(MeritTerm):
         self.sub_merit = sub_merit
         self.weight = float(weight)
         self.needs_wave = sub_merit.needs_wave
+        # I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): forward the
+        # focus-scan requirement.  This wrapper re-runs its own
+        # per-leg scan, but it also SEEDS each sub-context from the
+        # outer ctx's strehl_best / rms_radius_best / z_best, so the
+        # outer scan must still run whenever the wrapped merit reads
+        # them.
+        self.needs_focus_scan = bool(
+            getattr(sub_merit, 'needs_focus_scan', True))
 
     def evaluate(self, ctx: Any) -> float:
         # 4.10: re-evaluate the wave leg at each wavelength.  Pre-4.10
@@ -679,6 +697,9 @@ class MultiFieldMerit(MeritTerm):
         self.sub_merit = sub_merit
         self.weight = float(weight)
         self.needs_wave = True
+        # I7: same forwarding rule as MultiWavelengthMerit.
+        self.needs_focus_scan = bool(
+            getattr(sub_merit, 'needs_focus_scan', True))
 
     def evaluate(self, ctx: Any) -> float:
         from . import core as _core
@@ -863,6 +884,14 @@ class ToleranceAwareMerit(MeritTerm):
         self.seed = int(seed)
         self.weight = float(weight)
         self.needs_wave = sub_merit.needs_wave
+        # I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): forward the
+        # focus-scan requirement.  This wrapper re-runs its own
+        # per-leg scan, but it also SEEDS each sub-context from the
+        # outer ctx's strehl_best / rms_radius_best / z_best, so the
+        # outer scan must still run whenever the wrapped merit reads
+        # them.
+        self.needs_focus_scan = bool(
+            getattr(sub_merit, 'needs_focus_scan', True))
 
     def evaluate(self, ctx: Any) -> float:
         from ..analysis.through_focus import Perturbation, apply_perturbations

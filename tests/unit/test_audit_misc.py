@@ -6000,14 +6000,21 @@ def test_d2_codev_seq_roundtrip_preserves_bfl(tmp_path):
     round-trip through ``load_codev_seq`` -- the BFL must be
     accessible (v4.13.2 surfaces it via the ``back_focal_length`` key
     on the returned prescription)."""
-    # Hand-written .seq with an SI image plane THI = 0.012345 m.
+    # Hand-written .seq in GENUINE CODE V lens units.
+    #
+    # I1 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): this fixture used to
+    # write SI METRES under ``DIM M`` -- i.e. it pinned the pre-v5.46 reader
+    # convention, which is exactly the defect (CODE V's ``DIM M`` means
+    # MILLIMETRES; the language has no metre unit).  The numbers below are the
+    # same physical lens expressed the way CODE V expresses it: R = +-25 mm,
+    # centre thickness 3 mm, image distance 12.345 mm, aperture radius 5 mm.
     seq_text = '\n'.join([
         '! Hand-written CODE V test file',
         'LEN NEW',
         'DIM M',
         'WL 1550.0',
         'REF 1',
-        'APE F1 CIR R 0.005',
+        'APE F1 CIR R 5.0',
         '',
         '! Object surface',
         'SO',
@@ -6017,19 +6024,19 @@ def test_d2_codev_seq_roundtrip_preserves_bfl(tmp_path):
         '! Surface 1 (stop)',
         'S1',
         '  STO',
-        '  RDY 0.025000',
-        '  THI 0.003000',
-        '  GLA BK7',
+        '  RDY 25.000000',
+        '  THI 3.000000',
+        '  GLA N-BK7',
         '',
         '! Surface 2',
         'S2',
-        '  RDY -0.025000',
-        '  THI 0.012345',
+        '  RDY -25.000000',
+        '  THI 12.345000',
         '',
         '! Image surface',
         'SI',
         '  RDY INFINITY',
-        '  THI 0.012345',
+        '  THI 12.345000',
         '',
         'GO',
         'END',
@@ -6045,8 +6052,15 @@ def test_d2_codev_seq_roundtrip_preserves_bfl(tmp_path):
     # ``back_focal_length`` rather than silently dropped.
     assert 'back_focal_length' in pres, (
         "v4.13.2 must surface the trailing-surface THI as a BFL key.")
-    assert pres['back_focal_length'] == pytest.approx(0.012345, rel=1e-6)
+    # 12.345 CODE V lens units (mm) -> 12.345e-3 m.
+    assert pres['back_focal_length'] == pytest.approx(12.345e-3, rel=1e-6)
     assert len(pres['thicknesses']) == len(pres['surfaces']) - 1
+    # I1: the whole file must land on the CODE V millimetre scale, not the
+    # pre-fix metre reading (which gave R = 25 m and a 12.345 m BFL).
+    assert pres['surfaces'][0]['radius'] == pytest.approx(25e-3, rel=1e-9)
+    assert pres['surfaces'][1]['radius'] == pytest.approx(-25e-3, rel=1e-9)
+    assert pres['thicknesses'][0] == pytest.approx(3e-3, rel=1e-9)
+    assert pres['aperture_diameter'] == pytest.approx(10e-3, rel=1e-9)
 
 
 def test_d2_codev_seq_export_roundtrip_preserves_bfl(tmp_path):

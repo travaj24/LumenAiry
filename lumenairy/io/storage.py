@@ -430,6 +430,59 @@ def _h5_read_attrs(holder) -> Dict[str, Any]:
     return out
 
 
+# =========================================================================
+# I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): compression + chunk defaults
+# =========================================================================
+#
+# Measured on this workstation, 1024^2 complex128 (16 MiB), medians of 7
+# INTERLEAVED runs (interleaved because the box is shared, so a block of
+# same-variant runs would carry the contention of its own time window):
+#
+#   variant          write [s]   read [s]   on disk        tracemalloc peak
+#   gzip level 4      0.4274      0.0867    15.12 MiB       1.8 MiB
+#   None              0.0074      0.0122    16.01 MiB       0.0 MiB
+#                     x57.9       x7.1      -5.6 %
+#
+# (The audit measured the same shape at 4096^2: 17.05 s vs 0.70 s, -5.6 %.)
+# Complex float mantissas are incompressible, so gzip is almost pure
+# overhead on a field -- and the SAME default sat on ``append_plane_h5``,
+# the per-plane hot path of every multi-plane run.
+#
+# ``'auto'`` therefore means: no compression for complex data, and the
+# historical ``gzip`` level 4 for everything else (masks, real-valued maps,
+# index arrays -- where it does compress).  Passing ``compression='gzip'``
+# / ``None`` / ``'lzf'`` explicitly still does exactly what it says.
+_AUTO_COMPRESSION = 'auto'
+# Chunk-size budget.  ``chunk_size=1024`` made a 1024x1024xcomplex128 chunk
+# = 16 MiB, sixteen times HDF5's 1 MiB default chunk cache, so every partial
+# read re-inflated (or at least re-read) a whole 16 MiB chunk.  'auto' picks
+# the largest power-of-two edge whose chunk is <= this budget.
+_CHUNK_BYTE_BUDGET = 1 << 20
+
+
+def _resolve_compression(compression, compression_opts, dtype):
+    """Resolve the ``'auto'`` compression default for an array dtype.
+
+    Returns ``(compression, compression_opts)`` unchanged unless
+    ``compression`` is ``'auto'``.
+    """
+    if compression != _AUTO_COMPRESSION:
+        return compression, compression_opts
+    if np.issubdtype(np.dtype(dtype), np.complexfloating):
+        return None, None
+    return 'gzip', (4 if compression_opts is None else compression_opts)
+
+
+def _resolve_chunk_edge(chunk_size, shape, dtype):
+    """Resolve the ``'auto'`` chunk edge to ~``_CHUNK_BYTE_BUDGET`` bytes."""
+    if chunk_size != 'auto':
+        return int(chunk_size)
+    itemsize = max(int(np.dtype(dtype).itemsize), 1)
+    edge = int(np.sqrt(_CHUNK_BYTE_BUDGET / itemsize))
+    edge = max(1 << int(np.floor(np.log2(max(edge, 1)))), 32)
+    return min(edge, max(int(shape[0]), 1), max(int(shape[1]), 1))
+
+
 # ── Single field I/O (HDF5-specific) ────────────────────────────────────
 
 def save_field_h5(filepath: str, E: np.ndarray, dx: float,
@@ -437,8 +490,8 @@ def save_field_h5(filepath: str, E: np.ndarray, dx: float,
                   wavelength: Optional[float] = None,
                   label: Optional[str] = None,
                   metadata: Optional[Dict[str, Any]] = None,
-                  compression: Optional[str] = 'gzip',
-                  compression_opts: Optional[int] = 4,
+                  compression: Optional[str] = 'auto',
+                  compression_opts: Optional[int] = None,
                   preserve_dtype: bool = False) -> None:
     """
     Save a single complex optical field to an HDF5 file.
@@ -460,9 +513,19 @@ def save_field_h5(filepath: str, E: np.ndarray, dx: float,
         Human-readable label for the field.
     metadata : dict, optional
         Additional attributes to store.
-    compression : str or None, default 'gzip'
-        HDF5 compression filter ('gzip', 'lzf', or None).
-    compression_opts : int, default 4
+    compression : str or None, default 'auto'
+        HDF5 compression filter.  ``'auto'`` (v5.46 default) means **no
+        compression for complex data and gzip level 4 for everything
+        else**; ``'gzip'`` / ``'lzf'`` / ``None`` do exactly what they
+        say.  Measured on 1024^2 complex128 (medians of 7 interleaved
+        runs): gzip-4 costs **57.9x the write time and 7.1x the read
+        time for 5.6 % of space** (0.4274 s vs 0.0074 s; 15.12 vs 16.01
+        MiB), because complex float mantissas are incompressible.  Pass
+        ``compression='gzip'`` explicitly to restore the pre-v5.46
+        behaviour on a complex field.
+    compression_opts : int or None, default None
+        Filter level.  ``None`` with ``compression='auto'`` uses gzip
+        level 4 on the non-complex branch (the historical value).
         Compression level (for gzip, 1-9).
     preserve_dtype : bool, default False
         If True, store ``E`` at its native complex precision
@@ -481,6 +544,9 @@ def save_field_h5(filepath: str, E: np.ndarray, dx: float,
     E_np = to_numpy(E) if not isinstance(E, np.ndarray) else E
     if not preserve_dtype:
         E_np = E_np.astype(np.complex128, copy=False)
+    # I7: resolve the 'auto' default against the actual dtype.
+    compression, compression_opts = _resolve_compression(
+        compression, compression_opts, E_np.dtype)
     with h5py.File(filepath, 'w') as f:
         dset = f.create_dataset(
             'field', data=E_np,
@@ -536,8 +602,8 @@ def load_field_h5(filepath: str) -> Tuple[np.ndarray, Dict[str, Any]]:
 def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
                    wavelength: Optional[float] = None,
                    metadata: Optional[Dict[str, Any]] = None,
-                   compression: Optional[str] = 'gzip',
-                   compression_opts: Optional[int] = 4,
+                   compression: Optional[str] = 'auto',
+                   compression_opts: Optional[int] = None,
                    preserve_dtype: bool = False) -> None:
     """
     Save a sequence of complex fields to a single HDF5 file.
@@ -557,8 +623,19 @@ def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
         in ``planes[i]['wavelength']`` are also stored and override
         the run-level value on load.
     metadata : dict, optional
-    compression : str, default 'gzip'
-    compression_opts : int, default 4
+    compression : str or None, default 'auto'
+        HDF5 compression filter.  ``'auto'`` (v5.46 default) means **no
+        compression for complex data and gzip level 4 for everything
+        else**; ``'gzip'`` / ``'lzf'`` / ``None`` do exactly what they
+        say.  Measured on 1024^2 complex128 (medians of 7 interleaved
+        runs): gzip-4 costs **57.9x the write time and 7.1x the read
+        time for 5.6 % of space** (0.4274 s vs 0.0074 s; 15.12 vs 16.01
+        MiB), because complex float mantissas are incompressible.  Pass
+        ``compression='gzip'`` explicitly to restore the pre-v5.46
+        behaviour on a complex field.
+    compression_opts : int or None, default None
+        Filter level.  ``None`` with ``compression='auto'`` uses gzip
+        level 4 on the non-complex branch (the historical value).
     preserve_dtype : bool, default False
         Preserve the per-plane complex precision (``complex64`` /
         ``complex128``).  See :func:`save_field_h5` for the same
@@ -592,10 +669,14 @@ def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
                  else E_in)
             if not preserve_dtype:
                 E = E.astype(np.complex128, copy=False)
+            # I7: resolve the 'auto' default per plane (planes may carry
+            # different dtypes when preserve_dtype=True).
+            _comp, _copts = _resolve_compression(
+                compression, compression_opts, E.dtype)
             dset = grp.create_dataset(
                 name, data=E,
-                compression=compression,
-                compression_opts=compression_opts
+                compression=_comp,
+                compression_opts=_copts
             )
             # A-4 follow-up: structural keys stay native (see
             # _PLANE_NATIVE_KEYS); the caller's extra keys are per-plane
@@ -661,8 +742,8 @@ def save_jones_field_h5(filepath: str, jones_field: Any,
                         wavelength: Optional[float] = None,
                         label: Optional[str] = None,
                         metadata: Optional[Dict[str, Any]] = None,
-                        compression: Optional[str] = 'gzip',
-                        compression_opts: Optional[int] = 4,
+                        compression: Optional[str] = 'auto',
+                        compression_opts: Optional[int] = None,
                         preserve_dtype: bool = False) -> None:
     """Save a JonesField (polarized field) to an HDF5 file.
 
@@ -678,9 +759,19 @@ def save_jones_field_h5(filepath: str, jones_field: Any,
         Human-readable label for the field.
     metadata : dict, optional
         Additional attributes to store.
-    compression : str or None, default ``'gzip'``
-        HDF5 compression filter.
-    compression_opts : int, default 4
+    compression : str or None, default 'auto'
+        HDF5 compression filter.  ``'auto'`` (v5.46 default) means **no
+        compression for complex data and gzip level 4 for everything
+        else**; ``'gzip'`` / ``'lzf'`` / ``None`` do exactly what they
+        say.  Measured on 1024^2 complex128 (medians of 7 interleaved
+        runs): gzip-4 costs **57.9x the write time and 7.1x the read
+        time for 5.6 % of space** (0.4274 s vs 0.0074 s; 15.12 vs 16.01
+        MiB), because complex float mantissas are incompressible.  Pass
+        ``compression='gzip'`` explicitly to restore the pre-v5.46
+        behaviour on a complex field.
+    compression_opts : int or None, default None
+        Filter level.  ``None`` with ``compression='auto'`` uses gzip
+        level 4 on the non-complex branch (the historical value).
         Compression level (for gzip, 1-9).
     preserve_dtype : bool, default False
         If True, store ``Ex`` / ``Ey`` at their native complex precision
@@ -716,6 +807,9 @@ def save_jones_field_h5(filepath: str, jones_field: Any,
         # over the 19-type probe set: 14 wrote without raising / 4 raised /
         # 1 silently dropped (``None``) / 7 type-coerced -> now 19/19.
         _h5_write_meta_attrs(grp, metadata)
+        # I7: resolve the 'auto' default against the component dtype.
+        compression, compression_opts = _resolve_compression(
+            compression, compression_opts, np.asarray(Ex).dtype)
         dset_ex = grp.create_dataset(
             'Ex', data=Ex,
             compression=compression, compression_opts=compression_opts)
@@ -757,9 +851,9 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
                     z: Optional[float] = None,
                     label: Optional[str] = None,
                     metadata: Optional[Dict[str, Any]] = None,
-                    compression: Optional[str] = 'gzip',
-                    compression_opts: Optional[int] = 4,
-                    chunk_size: int = 1024,
+                    compression: Optional[str] = 'auto',
+                    compression_opts: Optional[int] = None,
+                    chunk_size: Any = 'auto',
                     preserve_dtype: bool = False,
                     swmr: bool = True,
                     lock_timeout: float = 30.0) -> None:
@@ -788,10 +882,26 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
         containers and silently dropped ``None``.  A flattened
         native-attr copy of the scalars is still written for external
         inspection tools.
-    compression, compression_opts
-        HDF5 compression filter and level.
-    chunk_size : int, default 1024
-        HDF5 chunk-size cap (clipped to the field extent).
+    compression : str or None, default 'auto'
+        HDF5 compression filter.  ``'auto'`` (v5.46 default) means **no
+        compression for complex data and gzip level 4 for everything
+        else**; ``'gzip'`` / ``'lzf'`` / ``None`` do exactly what they
+        say.  Measured on 1024^2 complex128 (medians of 7 interleaved
+        runs): gzip-4 costs **57.9x the write time and 7.1x the read
+        time for 5.6 % of space** (0.4274 s vs 0.0074 s; 15.12 vs 16.01
+        MiB), because complex float mantissas are incompressible.  Pass
+        ``compression='gzip'`` explicitly to restore the pre-v5.46
+        behaviour on a complex field.
+    compression_opts : int or None, default None
+        Filter level.  ``None`` with ``compression='auto'`` uses gzip
+        level 4 on the non-complex branch (the historical value).
+    chunk_size : int or 'auto', default 'auto'
+        HDF5 chunk-edge cap (clipped to the field extent).  ``'auto'``
+        (v5.46 default) picks the largest power-of-two edge whose chunk is
+        <= 1 MiB -- 256 for complex128, 362->256 for complex64.  The old
+        fixed ``1024`` made a **16 MiB** chunk for complex128, sixteen
+        times HDF5's 1 MiB default chunk cache, so every partial read
+        touched a whole 16 MiB chunk.
     preserve_dtype : bool, default False
         If True, store ``field`` at its native complex precision
         (``complex64`` or ``complex128``).  If False (the historical
@@ -918,12 +1028,16 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
             n = int(grp.attrs.get('n_planes', 0))
             name = f'plane_{n:02d}'
             Ny, Nx = E.shape
-            chunks = (min(chunk_size, Ny), min(chunk_size, Nx))
+            # I7: resolve the 'auto' compression and chunk-edge defaults.
+            _comp, _copts = _resolve_compression(
+                compression, compression_opts, E.dtype)
+            _edge = _resolve_chunk_edge(chunk_size, E.shape, E.dtype)
+            chunks = (min(_edge, Ny), min(_edge, Nx))
             ds_kwargs = dict(chunks=chunks)
-            if compression is not None:
-                ds_kwargs['compression'] = compression
-                if compression_opts is not None:
-                    ds_kwargs['compression_opts'] = compression_opts
+            if _comp is not None:
+                ds_kwargs['compression'] = _comp
+                if _copts is not None:
+                    ds_kwargs['compression_opts'] = _copts
             # v4.14.3 (P0-NEW-1): reserve the slot atomically by
             # bumping ``n_planes`` BEFORE the dataset is created.  If
             # ``create_dataset`` crashes (disk full, dtype mismatch,
@@ -1236,6 +1350,60 @@ def _require_zarr():
             "Install with: pip install zarr")
 
 
+def _zarr_write_meta_attrs(holder, metadata) -> None:
+    """Zarr twin of :func:`_h5_write_meta_attrs` (I6).
+
+    Same contract, same bytes: the authoritative type-tagged JSON blob under
+    ``_META_BLOB_KEY`` plus a best-effort flattened native-attr copy for
+    external inspection (``zarr.open_group(...).attrs`` in a notebook, the
+    ``.zattrs`` JSON on disk).  The flat copy is lossy by construction and is
+    dropped on read in favour of the blob by :func:`_zarr_read_attrs`.
+
+    ``except`` is wider than the HDF5 twin's: zarr's attribute setter raises
+    ``ValueError`` (JSON-serialisability) where h5py raises ``TypeError``.
+    """
+    if not metadata:
+        return
+    holder.attrs[_META_BLOB_KEY] = _meta_dumps(metadata)
+    for k, v in _flatten_metadata(metadata).items():
+        if v is None:
+            continue    # the blob carries it; keep the flat view JSON-clean
+        try:
+            holder.attrs[str(k)] = v
+        except (TypeError, ValueError):
+            try:
+                holder.attrs[str(k)] = str(v)
+            except (TypeError, ValueError):
+                pass
+
+
+def _zarr_read_attrs(holder) -> Dict[str, Any]:
+    """Zarr twin of :func:`_h5_read_attrs` (I6): blob overlay on native attrs.
+
+    Files written before the blob existed carry no ``_META_BLOB_KEY`` and read
+    back exactly as before.
+    """
+    out = {}
+    for k in holder.attrs:
+        v = holder.attrs[k]
+        if isinstance(v, bytes):
+            v = v.decode()
+        out[k] = v
+    blob = out.pop(_META_BLOB_KEY, None)
+    if blob is None:
+        return out
+    try:
+        decoded = _meta_loads(blob)
+    except (ValueError, TypeError):
+        return out
+    if not isinstance(decoded, dict):
+        return out
+    for flat_key in _flatten_metadata(decoded):
+        out.pop(flat_key, None)
+    out.update(decoded)
+    return out
+
+
 def _open_zarr_group_safe(zarr_mod, filepath, writable=False):
     """Open a zarr group safely across zarr v2/v3 on Windows.
 
@@ -1319,7 +1487,7 @@ def _open_zarr_group_safe(zarr_mod, filepath, writable=False):
 
 
 def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
-                       metadata=None, chunk_size=1024,
+                       metadata=None, chunk_size='auto',
                        preserve_dtype=False, lock_timeout=30.0,
                        **_kwargs):
     """Append one plane to a Zarr store, ``planes/plane_NN`` dataset.
@@ -1366,7 +1534,9 @@ def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
     else:
         E = np.asarray(field_np, dtype=np.complex128)
     Ny, Nx = E.shape
-    chunks = (min(chunk_size, Ny), min(chunk_size, Nx))
+    # I7: same 'auto' chunk-edge budget as the HDF5 path.
+    _edge = _resolve_chunk_edge(chunk_size, E.shape, E.dtype)
+    chunks = (min(_edge, Ny), min(_edge, Nx))
 
     # v4.16.0: acquire the cross-process append lock BEFORE opening
     # the Zarr store.  Mirrors the HDF5 path; see ``append_plane_h5``
@@ -1423,12 +1593,18 @@ def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
                 ds.attrs['z'] = float(z)
             if label is not None:
                 ds.attrs['label'] = str(label)
-            if metadata:
-                for k, v in metadata.items():
-                    try:
-                        ds.attrs[str(k)] = v
-                    except TypeError:
-                        ds.attrs[str(k)] = str(v)
+            # I6 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): route per-plane
+            # metadata through the SAME type-tagged codec every HDF5 write
+            # site uses (the A-4 / S4-19 contract) instead of the pre-A-4 raw
+            # loop.  Measured over the module's own 19-type probe set, the raw
+            # loop kept 13/19 faithful against HDF5's 18/19: complex -> str,
+            # bytes -> str, tuple -> list, np scalar -> str, and -- the
+            # irrecoverable one -- ndarray -> str(), which inserts ``...``
+            # beyond numpy's 1000-element print threshold, so the values were
+            # GONE.  ``_zarr_write_sim_metadata`` already used the codec, so
+            # the same call with the same arguments had different fidelity
+            # depending on a global backend switch.
+            _zarr_write_meta_attrs(ds, metadata)
         except Exception:
             # Roll back the slot reservation so a retry re-uses the
             # same name.  Re-raise the original exception class
@@ -1449,7 +1625,7 @@ def _zarr_load_planes(filepath, indices=None):
     n = int(grp.attrs['n_planes'])
     if indices is None:
         indices = list(range(n))
-    file_metadata = dict(grp.attrs)
+    file_metadata = _zarr_read_attrs(grp)     # I6: blob overlay
     planes = []
     for i in indices:
         name = f'plane_{i:02d}'
@@ -1457,11 +1633,8 @@ def _zarr_load_planes(filepath, indices=None):
             raise KeyError(f"Plane {name} not found")
         ds = grp[name]
         plane = {'field': np.array(ds[:])}
-        for k in ds.attrs:
-            v = ds.attrs[k]
-            if isinstance(v, bytes):
-                v = v.decode()
-            plane[k] = v
+        # I6: apply the same metadata-blob overlay the HDF5 reader applies.
+        plane.update(_zarr_read_attrs(ds))
         planes.append(plane)
     return planes, file_metadata
 
@@ -1473,7 +1646,7 @@ def _zarr_list_planes(filepath):
         raise KeyError(f"Zarr store {filepath} has no 'planes' group")
     grp = store['planes']
     n = int(grp.attrs['n_planes'])
-    file_metadata = dict(grp.attrs)
+    file_metadata = _zarr_read_attrs(grp)     # I6: blob overlay
     planes = []
     for i in range(n):
         name = f'plane_{i:02d}'
@@ -1481,11 +1654,7 @@ def _zarr_list_planes(filepath):
             continue
         ds = grp[name]
         info = {'index': i, 'shape': tuple(ds.shape)}
-        for k in ds.attrs:
-            v = ds.attrs[k]
-            if isinstance(v, bytes):
-                v = v.decode()
-            info[k] = v
+        info.update(_zarr_read_attrs(ds))     # I6: blob overlay
         planes.append(info)
     return planes, file_metadata
 
@@ -1510,11 +1679,7 @@ def _zarr_load_plane_by_label(filepath, label_substring,
         haystack = label if case_sensitive else label.lower()
         if target in haystack:
             plane = {'index': i, 'field': np.array(ds[:])}
-            for k in ds.attrs:
-                v = ds.attrs[k]
-                if isinstance(v, bytes):
-                    v = v.decode()
-                plane[k] = v
+            plane.update(_zarr_read_attrs(ds))     # I6: blob overlay
             return plane
     raise KeyError(f"No plane with label containing {label_substring!r}")
 
@@ -1530,7 +1695,7 @@ def _zarr_load_plane_slice(filepath, plane_index, y_slice, x_slice):
         raise KeyError(f"Plane {name} not found")
     ds = grp[name]
     E_sub = np.array(ds[y_slice, x_slice])
-    attrs = dict(ds.attrs)
+    attrs = _zarr_read_attrs(ds)     # I6: blob overlay
     return E_sub, attrs
 
 
@@ -1544,17 +1709,9 @@ def _zarr_write_sim_metadata(filepath, metadata):
     """
     zarr = _require_zarr()
     store = _open_zarr_group_safe(zarr, filepath, writable=True)
-    store.attrs[_META_BLOB_KEY] = _meta_dumps(metadata)
-    flat = _flatten_metadata(metadata)
-    for k, v in flat.items():
-        # Best-effort external-inspection view (blob is authoritative).
-        try:
-            store.attrs[str(k)] = v
-        except (TypeError, ValueError):
-            try:
-                store.attrs[str(k)] = str(v)
-            except (TypeError, ValueError):
-                pass
+    # I6: one helper for both zarr metadata writers (this path already used
+    # the codec; ``_zarr_append_plane`` did not).
+    _zarr_write_meta_attrs(store, metadata)
 
 
 def _zarr_read_sim_metadata(filepath):
@@ -1667,7 +1824,7 @@ def append_plane(filepath: str, field: np.ndarray, dx: float,
                  z: Optional[float] = None,
                  label: Optional[str] = None,
                  metadata: Optional[Dict[str, Any]] = None,
-                 chunk_size: int = 1024,
+                 chunk_size: Any = 'auto',
                  preserve_dtype: bool = False,
                  **kwargs: Any) -> None:
     """Append a plane to a multi-plane file (HDF5 or Zarr, auto-dispatch).
@@ -1703,6 +1860,22 @@ def append_plane(filepath: str, field: np.ndarray, dx: float,
         # ergonomic for backend-agnostic call sites.
         zarr_kwargs = {k: v for k, v in kwargs.items()
                        if k in ('lock_timeout',)}
+        # I7 (perf note 6): ``compression`` / ``compression_opts`` are DROPPED
+        # on the zarr path -- ``_zarr_append_plane`` has no compression
+        # parameter at all -- so a caller tuning them on a ``.zarr`` store had
+        # no effect and no diagnostic.  Say so once rather than silently
+        # ignoring a request that the same call honours on HDF5.
+        _dropped = [k for k in ('compression', 'compression_opts', 'swmr')
+                    if k in kwargs]
+        if [k for k in _dropped if k != 'swmr']:
+            warnings.warn(
+                f"append_plane({filepath!r}): the Zarr backend ignores "
+                f"{[k for k in _dropped if k != 'swmr']} -- "
+                f"``_zarr_append_plane`` writes with zarr's own default "
+                f"codec pipeline and has no compression parameter.  The "
+                f"plane IS written; only the compression request is dropped. "
+                f"Use the HDF5 backend if the filter matters.",
+                UserWarning, stacklevel=2)
         _zarr_append_plane(filepath, field, dx, dy=dy, z=z, label=label,
                            metadata=metadata, chunk_size=chunk_size,
                            preserve_dtype=preserve_dtype, **zarr_kwargs)

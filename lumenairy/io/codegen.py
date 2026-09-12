@@ -39,10 +39,28 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import re
 import warnings
 from typing import Any, Dict, Optional
 
 import numpy as np
+
+# I5 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11) -- arbitrary-code injection.
+# Every string that reaches this module comes from a file the user did not
+# write (a vendor / colleague / catalogue-site ``.zmx``): the ``GLAS`` token,
+# the labels derived from it, the system name (the file stem by default).
+# Pre-fix those were interpolated into CODE positions of the generated
+# script -- ``la.GLASS_REGISTRY['{g}'] = ...``, ``print("Applying {label}
+# ...")``, ``print('Running: {sys_name}')`` -- with no escaping, so a
+# whitespace-free ``GLAS`` token such as ``X'];<payload>;#`` became live code
+# in the emitted file and executed the moment the user ran it.  Two independent
+# guards now stand between the file and the script:
+#   1. ``_py(...)`` / ``!r`` on EVERY interpolated string, so a hostile token
+#      can only ever become a Python string literal; and
+#   2. ``_validate_codegen_token`` at the boundary, which refuses a token that
+#      is not a plain identifier-ish name (the shape a real glass / lens name
+#      has) instead of trusting the quoting alone.
+_CODEGEN_SAFE_TOKEN_RE = re.compile(r'[A-Za-z0-9_\-\.\+]+')
 
 # CG-1 (AUDIT_IO_STORAGE_CODEGEN): the Forbes Q-type freeform keys the Zemax
 # loader attaches to QBFS/QCON surfaces -- forwarded through codegen so a
@@ -53,6 +71,73 @@ _CODEGEN_FREEFORM_KEYS = ('freeform_type', 'q_bfs_coeffs', 'q_con_coeffs',
 
 from ..glass import GLASS_REGISTRY
 from .prescriptions import load_zemax_prescription_data_txt, load_zemax_zmx
+
+
+def _validate_codegen_token(tok: Any, *, what: str) -> str:
+    """Return ``tok`` reduced to characters a glass / system name may carry.
+
+    I5: the second of the two injection guards (the first is ``repr``-ing
+    every interpolation).  A real Zemax ``GLAS`` token or lens name is
+    ``[A-Za-z0-9_-.+]+``; anything else -- quotes, brackets, semicolons,
+    newlines -- is dropped and the caller is told, so a doctored file can
+    neither inject code nor silently rename a glass.
+    """
+    s = '' if tok is None else str(tok)
+    kept = ''.join(_CODEGEN_SAFE_TOKEN_RE.findall(s))
+    if kept != s:
+        warnings.warn(
+            f"generate_simulation_script: {what} {s!r} carries characters "
+            f"that are not valid in a Zemax name and are stripped before the "
+            f"script is written (kept {kept!r}).  A token like this in a "
+            f"third-party .zmx is an injection attempt -- check the file's "
+            f"provenance before running the generated script.",
+            UserWarning, stacklevel=3)
+    return kept
+
+
+def _comment_text(value: Any) -> str:
+    """One-line text safe to place after a ``#`` in the generated script.
+
+    I5: a newline inside a name / comment would end the comment and put the
+    remainder of the string at statement position.  A ``\"\"\"`` would close the
+    module docstring the header lives in.
+    """
+    s = '' if value is None else str(value)
+    s = re.sub(r'[\x00-\x1f\x7f]+', ' ', s).replace('"""', "'''")
+    return re.sub(r'\s+', ' ', s).strip()
+
+
+def _py(value: Any) -> str:
+    """Render ``value`` as a Python literal that always re-parses.
+
+    I7: ``repr``/``str`` of a float produces the bare names ``inf`` and
+    ``nan``, which are NOT Python literals -- the emitted prescription block
+    raised ``NameError: name 'inf' is not defined``.  ``np.isinf`` is also
+    sign-blind, so a ``-inf`` radius was written as ``float('inf')``: the sign
+    of a flat/concave-at-infinity surface flipped in silence.  One helper for
+    radius, conic, thickness, aperture and every aspheric coefficient.
+    """
+    if isinstance(value, (dict,)):
+        return ('{' + ', '.join(f'{_py(k)}: {_py(v)}'
+                                for k, v in value.items()) + '}')
+    if isinstance(value, (list, tuple)):
+        body = ', '.join(_py(v) for v in value)
+        if isinstance(value, tuple):
+            body = body + (',' if len(value) == 1 else '')
+            return f'({body})'
+        return f'[{body}]'
+    if isinstance(value, (bool, np.bool_)):
+        return repr(bool(value))
+    if isinstance(value, (int, np.integer)):
+        return repr(int(value))
+    if isinstance(value, (float, np.floating)):
+        v = float(value)
+        if np.isnan(v):
+            return "float('nan')"
+        if np.isinf(v):
+            return "float('inf')" if v > 0 else "float('-inf')"
+        return repr(v)
+    return repr(value)
 
 # ============================================================================
 # Public API
@@ -176,7 +261,8 @@ def generate_simulation_script(
         )
 
     aperture = prescription.get('aperture_diameter', 25.4e-3)
-    sys_name = prescription.get('name', 'Zemax System')
+    # I5: the system name defaults to the .zmx file stem -- untrusted.
+    sys_name = _comment_text(prescription.get('name', 'Zemax System'))
 
     if dx is None:
         # Auto-size: at least 20 samples across the aperture radius
@@ -197,9 +283,16 @@ def generate_simulation_script(
     for step in steps:
         if step['type'] == 'real_lens':
             for surf in step['prescription']['surfaces']:
-                for g in (surf['glass_before'], surf['glass_after']):
-                    if g.lower() != 'air':
-                        glasses_used.add(g)
+                for _k in ('glass_before', 'glass_after'):
+                    g = surf[_k]
+                    if str(g).lower() == 'air':
+                        continue
+                    # I5: validate at the boundary, so the token that reaches
+                    # both the emitted registry line AND the emitted
+                    # prescription dict is a plain Zemax-shaped name.
+                    g_ok = _validate_codegen_token(g, what='glass name')
+                    surf[_k] = g_ok
+                    glasses_used.add(g_ok)
 
     # ------------------------------------------------------------------
     # Generate the script
@@ -333,11 +426,13 @@ def _decompose_prescription(prescription):
         if stop_index is None:
             return False
         # Count refracting surfaces up to (and including) idx.
-        if elem.get('element_type') != 'surface':
+        # I7: default to 'surface' -- ``normalize_prescription`` output
+        # carries no ``element_type`` at all.
+        if elem.get('element_type', 'surface') != 'surface':
             return False
         refr_count = sum(
             1 for k, e in enumerate(elements)
-            if k <= idx and e.get('element_type') == 'surface'
+            if k <= idx and e.get('element_type', 'surface') == 'surface'
         )
         return refr_count - 1 == stop_index
 
@@ -357,7 +452,12 @@ def _decompose_prescription(prescription):
     while i < n_elem:
         elem = elements[i]
 
-        if elem['element_type'] == 'mirror':
+        # I7: ``normalize_prescription`` mirrors plain surface dicts into
+        # ``elements`` without stamping ``element_type``, so the unguarded
+        # subscript raised KeyError on the output of the one helper that
+        # exists to make a builder prescription codegen-shaped.  Default to
+        # 'surface', exactly as the step builder below already does.
+        if elem.get('element_type', 'surface') == 'mirror':
             # S2a: emit aperture step before the mirror if this element
             # is the stop surface.
             if _is_stop_elem(i, elem):
@@ -398,7 +498,7 @@ def _decompose_prescription(prescription):
             i += 1
             continue
 
-        if elem['element_type'] == 'surface':
+        if elem.get('element_type', 'surface') == 'surface':
             # Check if this is an air-to-air surface (DOE, dummy, reference plane)
             gb = elem.get('glass_before', 'air').lower()
             ga = elem.get('glass_after', 'air').lower()
@@ -457,7 +557,7 @@ def _decompose_prescription(prescription):
             j_scan = i
             while j_scan < n_elem:
                 cand = elements[j_scan]
-                if cand.get('element_type') != 'surface':
+                if cand.get('element_type', 'surface') != 'surface':
                     break
                 if _is_stop_elem(j_scan, cand):
                     group_stop_elem = cand
@@ -482,13 +582,14 @@ def _decompose_prescription(prescription):
             j = i
             while j < n_elem - 1:
                 current = elements[j]
-                if current['element_type'] != 'surface':
+                if current.get('element_type', 'surface') != 'surface':
                     break
                 # If glass_after is not air, the next surface is part
                 # of the same lens group
                 if current.get('glass_after', 'air').lower() != 'air':
                     j += 1
-                    if j < n_elem and elements[j]['element_type'] == 'surface':
+                    if j < n_elem and elements[j].get(
+                            'element_type', 'surface') == 'surface':
                         group_surfaces.append(elements[j])
                     else:
                         break
@@ -613,7 +714,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
                       f'Generated by lumenairy {_LA_VERSION}\n"""')
     else:
         lines.append('"""')
-        lines.append(f'ASM Simulation — {sys_name}')
+        lines.append(f'ASM Simulation - {_comment_text(sys_name)}')
         lines.append(f'{"=" * 50}')
         lines.append('')
         lines.append('Auto-generated from Zemax prescription by')
@@ -692,8 +793,11 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
             lines.append('# (shelf, book, page) tuple for each glass.')
             lines.append('# ' + '-' * 70)
             for g in unknown:
+                # I5: repr() the key -- pre-fix the raw GLAS token was pasted
+                # between quotes, so a token carrying a quote escaped the
+                # string and became executable code in the emitted script.
                 lines.append(
-                    f"la.GLASS_REGISTRY['{g}'] = "
+                    f"la.GLASS_REGISTRY[{g!r}] = "
                     f"('specs', 'CATALOG', 'PAGE')  # TODO: fill in correct path"
                 )
             lines.append('')
@@ -717,14 +821,17 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
                 lines.append(f'# {comment}')
             lines.append(f'{var_name} = {{')
             lines.append(f'    "name": {rx["name"]!r},')
-            lines.append(f'    "aperture_diameter": {rx["aperture_diameter"]:.17e},')
+            lines.append(f'    "aperture_diameter": {_py(rx["aperture_diameter"])},')
             lines.append('    "surfaces": [')
             for surf in rx['surfaces']:
-                r_str = "float('inf')" if np.isinf(surf['radius']) else f'{surf["radius"]:.17e}'
+                # I7: one helper for every numeric literal -- np.isinf is
+                # sign-blind (a -inf radius was emitted as float('inf')) and
+                # str(inf)/str(nan) are not Python literals at all.
+                r_str = _py(surf['radius'])
                 asph = surf.get('aspheric_coeffs')
-                asph_str = repr(asph) if asph else 'None'
+                asph_str = _py(asph) if asph else 'None'
                 lines.append(f'        {{"radius": {r_str}, '
-                             f'"conic": {surf["conic"]},')
+                             f'"conic": {_py(surf["conic"])},')
                 lines.append(f'         "aspheric_coeffs": {asph_str},')
                 # CG-1: emit the forwarded Q-type freeform keys so the
                 # generated apply_real_lens reproduces the Forbes surface
@@ -735,7 +842,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
                 lines.append(f'         "glass_before": {surf["glass_before"]!r}, '
                              f'"glass_after": {surf["glass_after"]!r}}},')
             lines.append('    ],')
-            thk_str = ', '.join(f'{t:.17e}' for t in rx['thicknesses'])
+            thk_str = ', '.join(_py(t) for t in rx['thicknesses'])
             lines.append(f'    "thicknesses": [{thk_str}],')
             lines.append('}')
 
@@ -784,8 +891,11 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
             var_name = lens_var_names[id(step)]
             rx = step['prescription']
             label = rx['name']
-            lines.append(f'    # --- Step {step_num}: {label} ---')
-            lines.append(f'    if verbose: print("Applying {label} ...")')
+            # I5: the label is derived from the file's GLAS tokens
+            # (_lens_group_name), so it goes through repr() like every other
+            # untrusted string; the '#' comment line is newline-collapsed.
+            lines.append(f'    # --- Step {step_num}: {_comment_text(label)} ---')
+            lines.append(f'    if verbose: print("Applying " + {label!r} + " ...")')
             lines.append(f'    E = la.apply_real_lens(E, prescription={var_name}, '
                          f'wavelength=WAVELENGTH, dx=dx)')
             lines.append(f"    planes.append({{'field': E.copy(), 'dx': dx, "
@@ -810,7 +920,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
             ap = step.get('aperture_diameter')
             ap_str = f'{ap:.17e}' if ap and ap > 0 else 'None'
             comment = step.get('comment', 'Mirror')
-            lines.append(f'    # --- Step {step_num}: {comment} ---')
+            lines.append(f'    # --- Step {step_num}: {_comment_text(comment)} ---')
             lines.append('    if verbose: print("Applying mirror ...")')
             lines.append(f'    E = la.apply_mirror(E, WAVELENGTH, dx, '
                          f'radius={r_str}, conic={conic}, '
@@ -832,7 +942,8 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
             comment = step.get('comment', 'DOE surface')
             surf_num = step.get('surf_num', '?')
             asph = step.get('aspheric_coeffs', {})
-            lines.append(f'    # --- Step {step_num}: {comment} (surface {surf_num}) ---')
+            lines.append(f'    # --- Step {step_num}: {_comment_text(comment)} '
+                         f'(surface {surf_num}) ---')
             lines.append('    # TODO: This is a diffractive/DOE surface from the Zemax model.')
             lines.append(f'    # The Zemax aspheric/diffractive coefficients are: {asph}')
             lines.append('    # Replace this with your DOE phase mask, e.g.:')
@@ -878,7 +989,9 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
     # --- Main ---
     lines.append('')
     lines.append("if __name__ == '__main__':")
-    lines.append(f"    print('Running: {sys_name}')")
+    # I5: the system name is the .zmx file stem by default -- repr() it into a
+    # string literal instead of pasting it inside the print's own quotes.
+    lines.append(f"    print('Running: ' + {sys_name!r})")
     lines.append('    print()')
     lines.append('    E_out, planes = run_simulation(verbose=True)')
     if include_plotting:
@@ -912,7 +1025,8 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
                       f'Generated by lumenairy {_LA_VERSION}\n"""')
     else:
         lines.append('"""')
-        lines.append(f'ASM Simulation — {sys_name} (system-list style)')
+        lines.append(f'ASM Simulation - {_comment_text(sys_name)} '
+                     f'(system-list style)')
         lines.append('Auto-generated by lumenairy.codegen')
         lines.append(f'lumenairy_version: {_LA_VERSION}')
         lines.append('"""')
@@ -963,8 +1077,9 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
     unknown = [g for g in sorted(glasses_used) if g not in GLASS_REGISTRY]
     if unknown:
         for g in unknown:
+            # I5: see _generate_unrolled -- repr() the key.
             lines.append(
-                f"la.GLASS_REGISTRY['{g}'] = "
+                f"la.GLASS_REGISTRY[{g!r}] = "
                 f"('specs', 'CATALOG', 'PAGE')  # TODO"
             )
         lines.append('')
@@ -980,18 +1095,20 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
             rx = step['prescription']
             lines.append(f'{var_name} = {{')
             lines.append(f'    "name": {rx["name"]!r},')
-            lines.append(f'    "aperture_diameter": {rx["aperture_diameter"]:.17e},')
+            lines.append(f'    "aperture_diameter": {_py(rx["aperture_diameter"])},')
             lines.append('    "surfaces": [')
             for surf in rx['surfaces']:
-                r_str = "float('inf')" if np.isinf(surf['radius']) else f'{surf["radius"]:.17e}'
+                # I7: see _generate_unrolled.
+                r_str = _py(surf['radius'])
                 asph = surf.get('aspheric_coeffs')
-                asph_str = repr(asph) if asph else 'None'
-                lines.append(f'        {{"radius": {r_str}, "conic": {surf["conic"]}, '
+                asph_str = _py(asph) if asph else 'None'
+                lines.append(f'        {{"radius": {r_str}, '
+                             f'"conic": {_py(surf["conic"])}, '
                              f'"aspheric_coeffs": {asph_str}, '
                              f'"glass_before": {surf["glass_before"]!r}, '
                              f'"glass_after": {surf["glass_after"]!r}}},')
             lines.append('    ],')
-            thk_str = ', '.join(f'{t:.17e}' for t in rx['thicknesses'])
+            thk_str = ', '.join(_py(t) for t in rx['thicknesses'])
             lines.append(f'    "thicknesses": [{thk_str}],')
             lines.append('}')
             lines.append('')

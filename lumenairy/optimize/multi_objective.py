@@ -65,6 +65,7 @@ Example
 from __future__ import annotations
 
 import importlib.util as _importlib_util
+import warnings
 from dataclasses import dataclass
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
@@ -153,7 +154,10 @@ def design_optimize_multi_objective(
     x0 : array-like
         Initial parameter vector.  pymoo doesn't actually use a single
         starting point (it samples a population) but ``x0`` is used to
-        infer ``n_params`` and as a sanity check against ``bounds``.
+        infer ``n_params`` and as a sanity check against ``bounds`` --
+        an ``x0`` outside the box raises a :class:`UserWarning` (I8;
+        pre-v5.46 only ``n_params`` was read and the documented check did
+        not exist).
     bounds : sequence of (float, float)
         ``(lower, upper)`` bound per parameter.  Required by NSGA-II
         (pymoo uses the bounds to seed the initial population and to
@@ -197,7 +201,13 @@ def design_optimize_multi_objective(
     ValueError
         If ``len(merits) < 2`` (use single-objective
         ``design_optimize`` for one merit), if ``len(bounds) !=
-        len(x0)``, or if any bound interval has ``lb >= ub``.
+        len(x0)``, or if any bound interval has ``lb >= ub``.  Also when
+        NSGA-II terminates with **no feasible solution** -- pymoo then
+        sets ``Result.X`` to ``None`` and pre-v5.46 this returned a 0-d
+        NaN array AS the Pareto front (``np.asarray(None, np.float64)``
+        is ``array(nan)``, ``ndim == 0``, so the 1-D normalisation guard
+        never fired), or raised ``IndexError`` when ``progress`` was
+        supplied (I7).
 
     Notes
     -----
@@ -246,6 +256,25 @@ def design_optimize_multi_objective(
                 f"({lo}, {hi}) must have lb < ub.")
         lb[i] = lo
         ub[i] = hi
+
+    # I8 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): the docstring says ``x0``
+    # is "used to infer n_params and as a sanity check against bounds", but
+    # the check did not exist -- only ``n_params`` was read.  NSGA-II samples
+    # its own population, so an out-of-box ``x0`` does not break the run; it
+    # does mean the caller's starting design is outside the box they think
+    # they are searching, which is worth saying once.
+    _oob = [i for i in range(n_params)
+            if not (lb[i] <= x0_arr.ravel()[i] <= ub[i])]
+    if _oob:
+        warnings.warn(
+            f"design_optimize_multi_objective: x0 lies OUTSIDE bounds at "
+            f"index/indices {_oob} "
+            f"({[float(x0_arr.ravel()[i]) for i in _oob]} vs "
+            f"{[(float(lb[i]), float(ub[i])) for i in _oob]}).  NSGA-II "
+            f"samples its own population from the bounds, so x0 is not used "
+            f"as a seed -- but the design you started from is not inside the "
+            f"box being searched.",
+            UserWarning, stacklevel=2)
 
     # Translate Constraint instances to (g_lb, g_ub) pairs.
     cons = list(constraints or ())
@@ -354,6 +383,31 @@ def design_optimize_multi_objective(
         ('n_gen', int(n_generations)),
         **pymoo_kwargs,
     )
+
+    # I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): pymoo sets ``Result.X`` /
+    # ``Result.F`` to ``None`` when the final population is entirely
+    # infeasible -- its documented infeasible-run contract.  ``np.asarray(
+    # None, dtype=np.float64)`` is ``array(nan)`` with ``ndim == 0`` (verified
+    # on this numpy), so the ``ndim == 1`` normalisation below did not fire
+    # and a 0-d NaN array was returned AS the Pareto front; with ``progress``
+    # supplied, ``X.shape[0]`` then raised ``IndexError: tuple index out of
+    # range`` instead.  Refuse explicitly, naming the knobs that fix it.
+    if pymoo_res.X is None or pymoo_res.F is None:
+        _cv = getattr(pymoo_res, 'CV', None)
+        _cv_txt = ''
+        try:
+            if _cv is not None and np.size(_cv):
+                _cv_txt = (f"  Smallest constraint violation in the final "
+                           f"population: {float(np.min(_cv)):.6g}.")
+        except (TypeError, ValueError):
+            pass
+        raise ValueError(
+            f"design_optimize_multi_objective: NSGA-II finished "
+            f"{int(n_generations)} generations with NO feasible solution "
+            f"(pymoo returned Result.X = None), so there is no Pareto front "
+            f"to return.{_cv_txt}  Relax or remove the constraints, widen "
+            f"``bounds``, raise ``n_generations`` / ``pop_size``, or check "
+            f"that the merit callables return finite values.")
 
     # pymoo's Result.X / Result.F can be 1-D when the Pareto set
     # collapses to a single solution.  Normalise to 2-D.

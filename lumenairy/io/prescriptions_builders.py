@@ -17,6 +17,8 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import math
+import warnings
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -446,44 +448,146 @@ def make_off_axis_parabola(
 # ============================================================================
 # Surface data from Thorlabs Zemax files.  All dimensions in meters.
 # Sign convention: positive R = center of curvature to the right.
+#
+# I6 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): every entry's paraxial EFL is
+# re-derived from the radii / thickness / glass below by ``system_abcd`` and
+# checked against the focal length its part number states.  The measured
+# d-line (587.6 nm) EFLs, with the vendor value in brackets, are on each row.
+# A row whose measured EFL drifts from its part number is a DATA defect, not a
+# tolerance: ``LA1509-C`` carried R1 = 103.29 mm -- the radius of a 200 mm
+# lens -- under a part number that is a 100 mm lens, so ``thorlabs_lens(
+# 'LA1509-C')`` returned a 2x focal-length error with no diagnostic.  The
+# regression test ``tests/unit/test_audit2609_a10_catalog.py`` re-measures
+# every row, so this comment cannot go stale silently.
 
 THORLABS_CATALOG = {
     # --- Plano-convex singlets (C-coated = 1050-1700 nm) ---
-    'LA1050-C': {  # f=100mm, N-BK7, 1" dia
+    'LA1050-C': {  # f=100mm, N-BK7, 1" dia    (measured EFL 99.65 mm @ 587.6 nm)
         'type': 'singlet',
         'R1': 51.5e-3, 'R2': float('inf'),
         'd': 4.1e-3, 'glass': 'N-BK7', 'aperture': 25.4e-3,
     },
-    'LA1509-C': {  # f=200mm, N-BK7, 1" dia (curved side first for collimation)
+    # f=100mm, N-BK7, 1" dia (curved side first for collimation).
+    # Thorlabs LA1509: R = 51.5 mm, tc = 3.6 mm, N-BK7, f = 100.0 mm.
+    # (measured EFL 99.65 mm @ 587.6 nm; was 199.68 mm with R1 = 103.29 mm)
+    'LA1509-C': {
         'type': 'singlet',
-        'R1': 103.29e-3, 'R2': float('inf'),
+        'R1': 51.5e-3, 'R2': float('inf'),
         'd': 3.6e-3, 'glass': 'N-BK7', 'aperture': 25.4e-3,
     },
-    'LA1301-C': {  # f=250mm, N-BK7, 1" dia
+    'LA1301-C': {  # f=250mm, N-BK7, 1" dia   (measured EFL 250.00 mm @ 587.6 nm)
         'type': 'singlet',
         'R1': 129.2e-3, 'R2': float('inf'),
         'd': 3.4e-3, 'glass': 'N-BK7', 'aperture': 25.4e-3,
     },
     # --- Achromatic doublets (C-coated) ---
-    'AC254-050-C': {  # f=50mm, 1" dia
+    # I6 NOTE: the three doublet rows below do NOT reproduce their part
+    # numbers' focal lengths (measured d-line EFL in each comment).  Unlike
+    # LA1509-C there is no vendor value in the audit brief to correct them
+    # with, so the DATA is left as-is and ``thorlabs_lens`` warns; see
+    # ``_THORLABS_NOMINAL_EFL`` below.
+    'AC254-050-C': {  # f=50mm, 1" dia     (measured EFL 44.56 mm, -10.9 %)
         'type': 'doublet',
         'R1': 33.3e-3, 'R2': -24.1e-3, 'R3': -95.3e-3,
         'd1': 9.0e-3, 'd2': 3.0e-3,
         'glass1': 'N-BAF10', 'glass2': 'N-SF6HT', 'aperture': 25.4e-3,
     },
-    'AC254-200-C': {  # f=200mm, 1" dia
+    'AC254-200-C': {  # f=200mm, 1" dia    (measured EFL 137.40 mm, -31.3 %)
         'type': 'doublet',
         'R1': 110.1e-3, 'R2': -80.6e-3, 'R3': -277.5e-3,
         'd1': 4.0e-3, 'd2': 2.0e-3,
         'glass1': 'N-BAF10', 'glass2': 'N-SF6HT', 'aperture': 25.4e-3,
     },
-    'AC254-100-C': {  # f=100mm, 1" dia
+    'AC254-100-C': {  # f=100mm, 1" dia    (measured EFL 83.17 mm, -16.8 %)
         'type': 'doublet',
         'R1': 62.8e-3, 'R2': -46.5e-3, 'R3': -184.5e-3,
         'd1': 6.0e-3, 'd2': 2.5e-3,
         'glass1': 'N-BAF10', 'glass2': 'N-SF6HT', 'aperture': 25.4e-3,
     },
 }
+
+# Focal length each PART NUMBER states, in metres.  This is the vendor's
+# published specification, independent of the surface data above -- which is
+# exactly what makes it usable as an oracle: ``thorlabs_lens`` re-derives the
+# paraxial EFL from the radii / thicknesses / glass and compares.
+_THORLABS_NOMINAL_EFL = {
+    'LA1050-C': 100e-3,
+    'LA1509-C': 100e-3,
+    'LA1301-C': 250e-3,
+    'AC254-050-C': 50e-3,
+    'AC254-100-C': 100e-3,
+    'AC254-200-C': 200e-3,
+}
+# Relative tolerance on |EFL_measured / EFL_nominal - 1| before warning.
+# Derivation: the nominal figure is a thin-lens d-line spec, while the value
+# below is the exact thick-lens paraxial EFL at 587.6 nm, so a few tenths of a
+# percent of legitimate spread is expected -- the three correct rows measure
+# -0.35 %, -0.35 % and +0.0004 %.  The three doublet rows that disagree are
+# -10.9 %, -16.8 % and -31.3 %, i.e. 30x to 90x the largest legitimate
+# deviation, so 3 % sits with a decade of gap on the signal side and an order
+# of magnitude on the noise side.
+_THORLABS_EFL_RTOL = 0.03
+
+
+def _paraxial_efl_from_entry(entry: Dict[str, Any],
+                             wavelength: float = 587.6e-9) -> float:
+    """Paraxial EFL [m] of a catalogue entry, from an independent trace.
+
+    A plain surface-by-surface ray-transfer product -- deliberately NOT
+    ``raytrace.system_abcd`` -- so the catalogue check does not read its
+    answer from the same code path the library's users do.  Returns ``nan``
+    when a glass index cannot be resolved.
+    """
+    from ..glass import get_glass_index
+    if entry['type'] == 'singlet':
+        radii = [entry['R1'], entry['R2']]
+        gaps = [entry['d']]
+        media = ['air', entry['glass'], 'air']
+    else:
+        radii = [entry['R1'], entry['R2'], entry['R3']]
+        gaps = [entry['d1'], entry['d2']]
+        media = ['air', entry['glass1'], entry['glass2'], 'air']
+    try:
+        n = [1.0 if m == 'air' else float(get_glass_index(m, wavelength))
+             for m in media]
+    except (ValueError, KeyError):
+        return float('nan')
+    # Marginal ray: launch parallel at unit height, refract / translate.
+    y, u = 1.0, 0.0                      # u = n * angle (reduced slope)
+    for i, R in enumerate(radii):
+        power = 0.0 if not math.isfinite(R) else (n[i + 1] - n[i]) / R
+        u = u - y * power                # refraction
+        if i < len(gaps):
+            y = y + gaps[i] * u / n[i + 1]   # translation inside medium i+1
+    return float('inf') if u == 0.0 else -1.0 / u
+
+
+_THORLABS_EFL_WARNED: set = set()
+
+
+def _check_catalog_efl(part_number: str, entry: Dict[str, Any]) -> None:
+    """Warn once per part number whose data misses its nominal focal length."""
+    if part_number in _THORLABS_EFL_WARNED:
+        return
+    nominal = _THORLABS_NOMINAL_EFL.get(part_number)
+    if nominal is None:
+        return
+    efl = _paraxial_efl_from_entry(entry)
+    if not np.isfinite(efl) or nominal == 0.0:
+        return
+    rel = abs(efl / nominal - 1.0)
+    if rel <= _THORLABS_EFL_RTOL:
+        return
+    _THORLABS_EFL_WARNED.add(part_number)
+    warnings.warn(
+        f"thorlabs_lens({part_number!r}): the catalogue surface data gives a "
+        f"paraxial EFL of {efl * 1e3:.2f} mm at 587.6 nm, but the part number "
+        f"specifies {nominal * 1e3:.1f} mm ({rel * 100:.1f} % off).  The "
+        f"prescription you just got is NOT the lens the part number names -- "
+        f"check the radii against the vendor drawing before using it for "
+        f"anything quantitative.  (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11 "
+        f"I6: LA1509-C had exactly this defect, at 2x.)",
+        UserWarning, stacklevel=3)
 
 
 def thorlabs_lens(part_number: str) -> Dict[str, Any]:
@@ -501,12 +605,25 @@ def thorlabs_lens(part_number: str) -> Dict[str, Any]:
     -------
     prescription : dict
         Ready to pass to :func:`apply_real_lens`.
+
+    Warns
+    -----
+    UserWarning
+        When the entry's surface data does not reproduce the focal length
+        its part number states, to within
+        ``_THORLABS_EFL_RTOL``.  I6 (AUDIT_ADVERSARIAL_EXHAUSTIVE
+        2026-09-11): ``LA1509-C`` carried a 200 mm lens's radius under a
+        100 mm part number, and a caller got a 2x focal-length error with
+        no diagnostic at all.  That row is corrected; the three
+        ``AC254-*-C`` doublet rows are still 11-31 % off their part
+        numbers and now say so on every call.
     """
     if part_number not in THORLABS_CATALOG:
-        raise ValueError(f"Unknown part '{part_number}'. "
-                         f"Available: {list(THORLABS_CATALOG.keys())}")
+        raise ValueError(f"thorlabs_lens: unknown part {part_number!r}. "
+                         f"Available: {sorted(THORLABS_CATALOG)}")
 
     entry = THORLABS_CATALOG[part_number]
+    _check_catalog_efl(part_number, entry)
 
     if entry['type'] == 'singlet':
         return make_singlet(

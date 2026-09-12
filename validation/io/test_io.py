@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import warnings
 
 import numpy as np
 
@@ -255,22 +256,63 @@ H.run('CODE V .seq: doublet round-trip', t_codev_seq_roundtrip)
 
 
 def t_codev_seq_units_mm():
+    # I1 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): CODE V's DIM tokens are
+    # M (millimetres) / C (centimetres) / I (inches) -- there is no ``MM``
+    # token, and this check used to require the writer to emit one.  The
+    # writer now normalises the ``'MM'`` alias to CODE V's own ``M`` and the
+    # numbers it writes are millimetres, which is what the file must say for
+    # CODE V to read it correctly.
     pres = la.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=25.4e-3)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'singlet.seq')
         la.export_codev_seq(pres, p, wavelength=1.31e-6, units='MM')
         with open(p) as f:
             txt = f.read()
-        has_dim_mm = 'DIM MM' in txt
+        has_dim_m = ('DIM M\n' in txt) and ('DIM MM' not in txt)
+        # 50 mm radius written as the number 50, not 0.05.
+        wrote_mm_numbers = 'RDY 50.00000000' in txt
         loaded = la.load_codev_seq(p)
-    ok = (has_dim_mm
+    ok = (has_dim_m and wrote_mm_numbers
           and abs(loaded['surfaces'][0]['radius'] - 50e-3) < 1e-12
           and abs(loaded['thicknesses'][0] - 3e-3) < 1e-12
           and abs(loaded['aperture_diameter'] - 25.4e-3) < 1e-12)
-    return ok, 'mm units preserved through round-trip'
+    return ok, 'CODE V mm lens units preserved through round-trip'
 
 
-H.run('CODE V .seq: DIM MM units round-trip', t_codev_seq_units_mm)
+H.run('CODE V .seq: DIM M (millimetre) units round-trip',
+      t_codev_seq_units_mm)
+
+
+def t_codev_seq_dim_tokens():
+    """I1: DIM M/C/I scale a hand-written CODE V file correctly, and an
+    unknown token warns instead of silently falling back."""
+    body = ('LEN NEW\nDIM {tok}\nWL 587.6\nS1\n  STO\n  RDY 62.75\n'
+            '  THI 4.0\n  GLA N-BK7\nS2\n  RDY -45.71\n  THI 95.0\n'
+            'SI\n  RDY INFINITY\n  THI 0.0\nEND\n')
+    expect = {'M': 62.75e-3, 'C': 62.75e-2, 'I': 62.75 * 0.0254}
+    errs = []
+    with tempfile.TemporaryDirectory() as td:
+        for tok, want in expect.items():
+            p = os.path.join(td, f'dim_{tok}.seq')
+            with open(p, 'w') as f:
+                f.write(body.format(tok=tok))
+            got = la.load_codev_seq(p)['surfaces'][0]['radius']
+            if abs(got - want) > 1e-12 * max(1.0, abs(want)):
+                errs.append(f'DIM {tok}: {got!r} != {want!r}')
+        p = os.path.join(td, 'dim_bogus.seq')
+        with open(p, 'w') as f:
+            f.write(body.format(tok='BOGUS'))
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            la.load_codev_seq(p)
+        if not any('DIM' in str(x.message) for x in w):
+            errs.append('unknown DIM token did not warn')
+    return not errs, ('; '.join(errs) if errs
+                      else 'M=mm, C=cm, I=inch; unknown token warns')
+
+
+H.run('CODE V .seq: DIM M/C/I scaling + unknown-token warning',
+      t_codev_seq_dim_tokens)
 
 
 def t_codev_seq_conic_roundtrip():

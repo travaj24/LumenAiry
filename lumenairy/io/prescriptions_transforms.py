@@ -17,6 +17,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import copy
+import warnings
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -24,6 +25,59 @@ import numpy as np
 # ============================================================================
 # Geometric scaling
 # ============================================================================
+
+# I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): ``scale_prescription`` handled
+# radius / semi_diameter / aspheric_coeffs only, and its docstring listed what
+# it scaled and what it deliberately did not -- so the three families it
+# handled NEITHER way (Forbes-Q, diffractives, BFL) read as coverage.  The
+# tables below are the explicit ledger: every key a dict of this kind may
+# carry is either scaled, listed as deliberately dimensionless, or warned
+# about.  Add to them when the schema grows.
+_SURFACE_SCALED_KEYS = frozenset({
+    'radius', 'radius_y', 'semi_diameter', 'aspheric_coeffs',
+    'aspheric_coeffs_y', 'r_max', 'q_bfs_coeffs', 'q_con_coeffs',
+})
+_SURFACE_DIMENSIONLESS_KEYS = frozenset({
+    'conic', 'conic_y', 'glass', 'glass_before', 'glass_after',
+    'element_type', 'freeform_type', 'is_stop', 'is_mirror', 'surf_num',
+    'comment', 'name', 'stop_index', 'tilt', 'diffractive',
+})
+# ``decenter`` is a LENGTH pair, but it lives on builder surfaces
+# (make_off_axis_parabola) rather than loader ones; it is scaled explicitly.
+_SURFACE_SCALED_KEYS = _SURFACE_SCALED_KEYS | {'decenter', 'clear_aperture'}
+_DIFFRACTIVE_SCALED_KEYS = frozenset({
+    'period', 'gap_before', 'gap_after', 'semi_diameter', 'origin',
+    'lines_per_um',
+})
+_DIFFRACTIVE_DIMENSIONLESS_KEYS = frozenset({
+    'type', 'order', 'angle_deg', 'surf_num', 'name', 'comment',
+})
+# Substrings that make a key name length-like.  Used only for the warning.
+_LENGTH_LIKE_SUBSTRINGS = (
+    'radius', 'diameter', 'thickness', 'distance', 'length', 'gap',
+    'period', 'pitch', 'decenter', 'offset', 'sag', 'aperture', 'origin',
+    'height', 'width', 'focal', 'depth', 'spacing', 'clearance',
+)
+
+
+def _warn_unscaled_length_keys(d, scaled_keys, what):
+    """Warn once per unrecognised length-like key left unscaled."""
+    unknown = sorted(
+        k for k in d
+        if k not in scaled_keys
+        and any(sub in str(k).lower() for sub in _LENGTH_LIKE_SUBSTRINGS)
+        and not any(sub in str(k).lower()
+                    for sub in ('conic', 'aperture_type', 'is_'))
+        and d.get(k) is not None
+    )
+    if unknown:
+        warnings.warn(
+            f"scale_prescription: {what} entry carries length-like key(s) "
+            f"{unknown} that this transform does not recognise; they were "
+            f"left UNSCALED, so the result is not geometrically similar.  "
+            f"Scale them yourself or extend "
+            f"prescriptions_transforms._SURFACE_SCALED_KEYS.",
+            UserWarning, stacklevel=3)
 
 
 def scale_prescription(prescription: Dict[str, Any],
@@ -59,13 +113,34 @@ def scale_prescription(prescription: Dict[str, Any],
       ``decenter_y_m``, and ``thickness_m``;
     * every aspheric coefficient ``A_n`` as ``A_n / factor**(n - 1)``,
       so the surface sag ``sum_n A_n * h**n`` scales linearly with
-      ``factor`` when ``h`` does.
+      ``factor`` when ``h`` does;
+    * the Forbes-Q freeform lengths ``r_max`` (normalisation radius) and
+      ``q_bfs_coeffs`` / ``q_con_coeffs`` (each coefficient is a sag
+      LENGTH, so they scale linearly, not as the aspheric rule);
+    * the stored ``back_focal_length``;
+    * every length on each entry of ``diffractives`` -- ``period``,
+      ``origin``, ``gap_before``, ``gap_after``, ``semi_diameter``.
 
     The function does NOT scale (these are dimensionless or
     wavelength-relative): ``conic`` / ``conic_y`` constants, glass
     names, tilt angles in coord breaks, stop indices, wavelength
-    metadata.  ``DAMMANN_PERIODX`` / ``DAMMANN_PERIODY`` aren't part
-    of the prescription dict and are also not touched.
+    metadata, and the diffraction ``order``.  ``DAMMANN_PERIODX`` /
+    ``DAMMANN_PERIODY`` aren't part of the prescription dict and are
+    also not touched.
+
+    Any other key whose name looks length-like and is not in the handled
+    set raises a :class:`UserWarning` rather than being left at its
+    original size in silence.
+
+    .. note::
+       Scaling a grating ``period`` is what geometric self-similarity
+       requires (every length times ``factor``), but the wavelength is
+       deliberately NOT scaled -- so a scaled DOE diffracts at a
+       different angle than the original.  That is the same trade the
+       rest of this transform makes for every focusing surface (the
+       F-number is preserved, the absolute diffraction-limited spot is
+       not); pass the diffractives through unscaled by removing the key
+       first if the DOE is meant to be kept at its as-built pitch.
 
     Parameters
     ----------
@@ -107,11 +182,13 @@ def scale_prescription(prescription: Dict[str, Any],
     rx = copy.deepcopy(prescription)
     s = float(factor)
 
-    # Top-level scalars
-    if rx.get('aperture_diameter') is not None:
-        rx['aperture_diameter'] = float(rx['aperture_diameter']) * s
-    if rx.get('object_distance') is not None:
-        rx['object_distance'] = float(rx['object_distance']) * s
+    # Top-level scalars.  I7: ``back_focal_length`` (written by
+    # ``load_codev_seq`` / ``load_quadoa_qos``) is a LENGTH and was left at
+    # its original value, so a scaled prescription carried the unscaled
+    # image distance -- measured at s = 0.25: 0.084 m instead of 0.021 m.
+    for _lk in ('aperture_diameter', 'object_distance', 'back_focal_length'):
+        if rx.get(_lk) is not None:
+            rx[_lk] = float(rx[_lk]) * s
 
     # Thickness lists
     for tkey in ('thicknesses', 'all_thicknesses'):
@@ -141,6 +218,33 @@ def scale_prescription(prescription: Dict[str, Any],
                     int(n): float(v) / (s ** (int(n) - 1))
                     for n, v in ac.items()
                 }
+        # I7: Forbes-Q freeform.  ``r_max`` is a normalisation RADIUS and each
+        # ``q_*_coeffs`` entry is a sag LENGTH, so both scale linearly -- the
+        # aspheric ``A_n / s**(n-1)`` rule does NOT apply (the Q polynomials
+        # are functions of the dimensionless u = r / r_max).  Pre-fix neither
+        # was touched, so a scaled Q-type surface kept its original freeform
+        # sag on a rescaled base conic (measured at s = 0.25: r_max stayed
+        # 7.5 mm instead of 1.875 mm).
+        if d.get('r_max') is not None and np.isfinite(d['r_max']):
+            d['r_max'] = float(d['r_max']) * s
+        for qkey in ('q_bfs_coeffs', 'q_con_coeffs'):
+            qc = d.get(qkey)
+            if isinstance(qc, (list, tuple)):
+                d[qkey] = type(qc)(float(v) * s for v in qc)
+            elif isinstance(qc, np.ndarray):
+                d[qkey] = np.asarray(qc, dtype=float) * s
+        # I7: the builder-side length keys (``make_off_axis_parabola`` writes
+        # a decenter pair and a clear aperture) are lengths too; ``tilt`` is
+        # an angle triple and is deliberately left alone.
+        if d.get('clear_aperture') is not None and np.isfinite(
+                d['clear_aperture']):
+            d['clear_aperture'] = float(d['clear_aperture']) * s
+        dec = d.get('decenter')
+        if isinstance(dec, (list, tuple)):
+            d['decenter'] = type(dec)(float(v) * s for v in dec)
+        elif isinstance(dec, np.ndarray):
+            d['decenter'] = np.asarray(dec, dtype=float) * s
+        _warn_unscaled_length_keys(d, _SURFACE_SCALED_KEYS, 'surface')
 
     if isinstance(rx.get('surfaces'), list):
         for surf in rx['surfaces']:
@@ -157,6 +261,30 @@ def scale_prescription(prescription: Dict[str, Any],
             for dkey in ('decenter_x_m', 'decenter_y_m', 'thickness_m'):
                 if cb.get(dkey) is not None:
                     cb[dkey] = float(cb[dkey]) * s
+
+    # I7: the v5.32 diffractive payload is entirely lengths and was untouched,
+    # so a scaled system kept the original DOE pitch and axial gaps (measured
+    # at s = 0.25: period 2 um instead of 0.5 um, gap_before 10 mm instead of
+    # 2.5 mm) -- i.e. the "self-similar" result was not self-similar at all.
+    if isinstance(rx.get('diffractives'), list):
+        for dg in rx['diffractives']:
+            if not isinstance(dg, dict):
+                continue
+            for dkey in ('period', 'gap_before', 'gap_after',
+                         'semi_diameter'):
+                if dg.get(dkey) is not None and np.isfinite(dg[dkey]):
+                    dg[dkey] = float(dg[dkey]) * s
+            org = dg.get('origin')
+            if isinstance(org, (list, tuple)):
+                dg['origin'] = type(org)(float(v) * s for v in org)
+            elif isinstance(org, np.ndarray):
+                dg['origin'] = np.asarray(org, dtype=float) * s
+            # ``lines_per_um`` is the reciprocal of the pitch, so it scales
+            # INVERSELY -- keep it consistent with ``period``.
+            if dg.get('lines_per_um') is not None and dg['lines_per_um'] != 0:
+                dg['lines_per_um'] = float(dg['lines_per_um']) / s
+            _warn_unscaled_length_keys(dg, _DIFFRACTIVE_SCALED_KEYS,
+                                       'diffractive')
 
     return rx
 
@@ -181,8 +309,12 @@ def normalize_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
     * :func:`load_zemax_prescription_data_txt` additionally adds
       ``'wavelength'`` (primary), ``'units'`` (originating unit
       string), and ``'has_semi_diameters'``.
-    * :func:`load_codev_seq` / :func:`load_quadoa_qos` match
-      ``load_zemax_zmx``'s schema.
+    * :func:`load_codev_seq` emits the same ``'elements'`` /
+      ``'all_thicknesses'`` pair (I7, v5.46 -- before that it emitted
+      neither, although this docstring said it did).
+    * :func:`load_quadoa_qos` still emits ``'surfaces'`` /
+      ``'thicknesses'`` only; run it through this helper to get the
+      superset.
 
     Downstream functions (:func:`apply_real_lens`,
     :func:`monte_carlo_tolerancing`, :func:`eval_image_plane_wfe`, ...)
@@ -195,8 +327,9 @@ def normalize_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
     This helper builds the **canonical superset**: every prescription
     is returned with both ``'surfaces'`` and ``'elements'`` populated
     (with ``elements`` mirroring ``surfaces`` if no ``elements``
-    were provided), both ``'thicknesses'`` and ``'all_thicknesses'``
-    populated, and the optional metadata fields (``'wavelength'``,
+    were provided, each entry carrying the canonical
+    ``element_type='surface'`` discriminator -- v5.46, I7), both
+    ``'thicknesses'`` and ``'all_thicknesses'`` populated, and the optional metadata fields (``'wavelength'``,
     ``'units'``, ``'object_distance'``, ``'stop_index'``,
     ``'has_semi_diameters'``) present (with safe defaults: ``None``
     for the metadata, ``0.0`` for ``object_distance`` if missing).
@@ -227,6 +360,8 @@ def normalize_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
      'units', 'wavelength']
     >>> q['elements'] == q['surfaces']    # elements mirrors surfaces
     True
+    >>> q['elements'][0]['element_type']  # canonical discriminator (v5.46)
+    'surface'
 
     Notes
     -----
@@ -264,6 +399,23 @@ def normalize_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
     if elems is None:
         # Elements mirror surfaces verbatim (no mirrors in pure
         # refractive prescriptions).
+        #
+        # I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): stamp
+        # ``element_type='surface'`` on the mirrored entries.  Pre-fix they
+        # were plain surface dicts with no ``element_type``, so
+        # ``generate_simulation_script`` -- which subscripts
+        # ``elem['element_type']`` -- raised ``KeyError: 'element_type'`` on
+        # the output of the one helper documented as "the recommended idiom"
+        # for making a builder prescription codegen-shaped.
+        #
+        # The stamp is applied IN PLACE on the shared dicts (``rx`` is
+        # already a deep copy of the caller's input), so the documented
+        # ``q['elements'] == q['surfaces']`` identity -- and the aliasing it
+        # rests on -- is preserved exactly; only the canonical discriminator
+        # is now present on both views instead of neither.
+        for _s in surfs:
+            if isinstance(_s, dict):
+                _s.setdefault('element_type', 'surface')
         rx['elements'] = list(surfs)
 
     # thicknesses / all_thicknesses
@@ -313,11 +465,15 @@ def split_prescription_at_mirrors(
     Parameters
     ----------
     prescription : dict
-        A prescription dict as returned by :func:`load_zemax_zmx`,
-        :func:`load_codev_seq`, or :func:`load_quadoa_qos` -- i.e.
-        carrying both ``'elements'`` and ``'all_thicknesses'``.  A
-        plain ``'surfaces'``-only prescription is returned unchanged
-        wrapped in a single-element list.
+        A prescription dict carrying both ``'elements'`` and
+        ``'all_thicknesses'`` -- as returned by :func:`load_zemax_zmx`,
+        :func:`load_codev_seq` (v5.46+), or :func:`normalize_prescription`.
+        A plain ``'surfaces'``-only prescription (for example a
+        :func:`load_quadoa_qos` result, or any ``make_*`` builder output)
+        is returned unchanged wrapped in a single-element list, **with a
+        :class:`UserWarning`** -- that path cannot see a fold, so a silent
+        single-leg answer would be indistinguishable from a genuinely
+        unfolded design.
 
     Returns
     -------
@@ -371,6 +527,22 @@ def split_prescription_at_mirrors(
     all_th = prescription.get('all_thicknesses')
     if elements is None or all_th is None:
         # Plain prescription without mirrors -- return as a single leg.
+        # I7: say so.  Pre-fix this early return was silent, so a
+        # prescription whose loader simply does not emit ``elements``
+        # reported "one refractive leg, no folds" -- indistinguishable from a
+        # genuinely unfolded design, and the docstring above promises the
+        # CODE V / Quadoa loaders carry both keys.
+        _missing = [k for k, v in (('elements', elements),
+                                   ('all_thicknesses', all_th)) if v is None]
+        warnings.warn(
+            f"split_prescription_at_mirrors: prescription "
+            f"{prescription.get('name')!r} has no {' / '.join(_missing)} key, "
+            f"so it is returned as ONE refractive leg without inspecting it "
+            f"for mirrors.  If the design is folded, run it through "
+            f"normalize_prescription (or reload it with a loader that emits "
+            f"the full element list) first -- otherwise the fold is silently "
+            f"flattened.",
+            UserWarning, stacklevel=2)
         return [{'kind': 'refractive',
                  'prescription': copy.deepcopy(prescription)}]
 
