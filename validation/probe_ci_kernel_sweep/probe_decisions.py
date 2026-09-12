@@ -49,6 +49,24 @@ The usable ladder is consequently HASWELL (= the default = Zen) / SANDYBRIDGE
 four different reduction orders and blockings, which is what the decisions
 have to survive.
 
+MEASURED AGAIN 2026-09-12 (WP-A23) ON A DIFFERENT HOST -- Intel Xeon w3-2535
+(Sapphire Rapids, 10 cores / 20 threads), Windows 11, CPython 3.14.6, numpy
+2.4.6 / scipy 1.17.1.  The caveats above are properties of the 2026-09-11
+host, not of the wheels, and on this one the ladder is LONGER by exactly the
+kernel that was unreachable there.  Corename read back per request:
+
+    unset -> SkylakeX      SKYLAKEX -> SkylakeX     HASWELL -> Haswell
+    ZEN   -> Haswell       BOGUSCORE -> SkylakeX    NEHALEM -> Nehalem
+    SANDYBRIDGE -> Sandybridge                      KATMAI / PRESCOTT -> Katmai
+
+so ``SKYLAKEX`` is the AUTO-DETECTED default here (AVX-512 silicon) rather
+than a SIGILL, ``ZEN`` still resolves to ``Haswell`` and an unrecognised name
+still resolves to auto-detection -- both caveats above survive the change of
+host, and the second one inverts.  Five distinct kernels are therefore
+reachable here: SkylakeX / Haswell / Sandybridge / Nehalem / Katmai.  numpy's
+ILP64 build and scipy's LP64 build dispatch the SAME kernel on every rung
+(both read back per rung), so the arm has one kernel name and not two.
+
 WHAT IS RECORDED.  Two blocks per arm:
 
   ``decisions``     the guard OUTCOMES the library actually takes, as short
@@ -68,7 +86,10 @@ WHAT IS RECORDED.  Two blocks per arm:
   ``classes``       the ANSWER CLASS each guard row is deciding about, as
                     measured WITH THE GUARD DISARMED: ``correct`` / ``grey`` /
                     ``wrong`` by the campaign's own closure rule.  Added
-                    2026-09-11 -- see THE CONTRACT below.
+                    2026-09-11 -- see THE CONTRACT below.  A row with NO class
+                    is one no answer can follow (the band, branch-cut, mortar,
+                    T22 and ``notices@`` rows), and those are compared across
+                    arms for plain equality.
   ``readings``      the underlying floats, for the audit document only.  They
                     are NOT asserted anywhere; they move with the kernel by
                     design and that is the whole point.
@@ -227,9 +248,25 @@ _RULES = {
         "grey": ("open",),
         "wrong": ("open",),
     },
-    # whether anything was said.  The 1-D site shipped UNGUARDED, so the only
-    # voice here is the stack's own energy tripwire: silent on a correct
-    # answer, loud on a wrong one.
+    # whether the stack's ENERGY TRIPWIRE said anything: silent on a correct
+    # answer, loud on a wrong one.  The 1-D site itself ships UNGUARDED, so
+    # the tripwire is the only voice that is ABOUT THE ANSWER here -- which is
+    # why this row can carry an answer-following rule at all.
+    #
+    # NARROWED 2026-09-12 (WP-A23), and the narrowing is what keeps the rule
+    # honest rather than what relaxes it.  Until this round the row was
+    # decided as "did ANY warning come out", which was the same thing while
+    # the tripwire was the only voice.  It stopped being the same thing when
+    # WP-A12's G2 raised the default ``min_feature`` two decades: the union
+    # grid now SNAPS this fixture's colliding walls and says so
+    # (``_pmm_union_grid: snapped 2 pair(s) ...``, ``pmm/_core.py``), on a
+    # CORRECT answer, at both wall separations.  Counting that as "warned"
+    # made the census report a guard crying wolf -- ``warn`` at class
+    # ``correct``, which this table forbids -- when what had actually
+    # happened is that a second, deliberate, answer-INDEPENDENT voice had
+    # appeared.  The geometry notice is censused in its own right by
+    # ``pmm1d_interface/notices@`` instead, so nothing is lost and the
+    # no-false-alarm claim stays exactly as strict as it was.
     "pmm1d_interface/warned@": {
         "correct": ("silent",),
         "grey": ("silent", "warn"),
@@ -251,6 +288,75 @@ _RULES = {
         "wrong": ("warn", "refuse"),
     },
 }
+
+
+#: The two voices the plain 1-D interface fixture can raise, matched on the
+#: message text AT THE SITE THAT RAISES IT so the match cannot drift to a
+#: lookalike: the stack's energy tripwire
+#: (``pmm/stack.py::PMMStack.solve``, "energy not conserved (max R+T = ...)")
+#: and the union grid's near-coincident-wall snap notice
+#: (``pmm/_core.py::_pmm_union_grid``).  Anything else is counted as
+#: ``other`` rather than dropped -- a THIRD voice appearing at this site is a
+#: censusable event, and a matcher that silently ignored it would retire the
+#: row's meaning without anyone editing the row.
+_VOICE_ENERGY = "energy not conserved"
+_VOICE_SNAP = "_pmm_union_grid: snapped"
+
+
+def _is_env_advisory(rec):
+    """Is this warning about the ENVIRONMENT rather than about the solve?
+
+    The library advises, at run time, when an optional or declared dependency
+    it wanted is missing -- e.g. ``lumenairy/memory.py``'s "psutil not
+    installed - assuming 4 GB available memory.  Install psutil for accurate
+    memory-aware batching." (``RuntimeWarning``).  That is a statement about
+    the machine, not about this fixture's geometry or its answer, and it MUST
+    NOT enter a decision: a census row that moved because one interpreter is
+    missing a package would be red on exactly the hosts the census exists to
+    speak about, which is the failure mode this whole file is a reaction to.
+
+    MEASURED 2026-09-12 (WP-A23): the WSL build reachable from this
+    workstation is a bare venv without ``psutil``, and the interface fixture
+    raises the advisory THREE times per solve there against zero on Windows.
+    Without this split the two builds would disagree on ``notices@`` -- a row
+    with no answer class, i.e. a reported P1 -- for a reason that has nothing
+    to do with the library's guards.
+
+    Matched on the library's own advisory idiom (a ``RuntimeWarning`` that
+    says a package is "not installed" and asks the user to install it), not
+    on one message, so a second such advisory is covered.  The count is kept
+    as a READING, so an arm that is missing dependencies still says so.
+    """
+    msg = str(rec.message)
+    return (issubclass(rec.category, RuntimeWarning)
+            and "not installed" in msg and "Install " in msg)
+
+
+def _voices(caught):
+    """``(energy, snap, env, other)`` counts over one solve's warnings."""
+    energy = snap = env = other = 0
+    for rec in caught:
+        msg = str(rec.message)
+        if _VOICE_ENERGY in msg:
+            energy += 1
+        elif _VOICE_SNAP in msg:
+            snap += 1
+        elif _is_env_advisory(rec):
+            env += 1
+        else:
+            other += 1
+    return energy, snap, env, other
+
+
+def _notice_label(snap, other):
+    """The ``notices@`` DECISION: which answer-independent voices spoke.
+
+    A label set, not a count -- the number of snapped pairs is a reading and
+    moves with the fixture, while WHICH voices spoke is a decision and must
+    be the same on every arm, this being pure geometry.
+    """
+    parts = [name for name, n in (("snap", snap), ("other", other)) if n]
+    return "+".join(parts) if parts else "none"
 
 
 def rule_for(key):
@@ -275,10 +381,50 @@ def rule_for(key):
 _1D_P, _1D_WL, _1D_TH = 1.2, 0.85, 0.15
 _1D_EPS_P, _1D_EPS_H = 9.0, 2.25
 
+#: ``min_feature`` PINNED as a fixture parameter, at ``period * 1e-5``.
+#:
+#: WHY IT IS PINNED (2026-09-12, WP-A23), and why pinning it makes this
+#: section HARDER rather than easier.  ``min_feature`` is the knob that SNAPS
+#: a near-coincident cross-layer wall pair away, and this fixture IS a
+#: cross-layer wall pair ``delta`` = 1e-04 / 1e-05 of a period apart -- the
+#: object of measurement for every row in sections A and B.  Audit finding G2
+#: (WP-A12, ``56a76f22``) raised the library default from ``period*1e-5`` to
+#: ``period*1e-3``, two decades ABOVE both separations, and an unpinned
+#: fixture therefore stopped constructing the thing it censuses: MEASURED on
+#: this tree at the shipped default, both wall pairs snap to coincidence, the
+#: two layers become geometrically IDENTICAL, the interface's reciprocal
+#: condition moves from 9.7297e-13 to 5.2104e-04 (NINE decades) and every row
+#: reads the same trivial ``correct`` / ``closes`` / ``silent`` / ``return``
+#: on every arm.  A section that cannot distinguish two kernels cannot detect
+#: a guard that decides differently on them, which is this file's entire job.
+#:
+#: The pin is the same remedy WP-A12 applied to its three inherited fixtures
+#: and VERIFY-A12 applied to ``test_fix_pmm2d_mortar_round2.py::
+#: test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why`` --
+#: the very test this section exists to mirror, so pinning here RE-SYNCS the
+#: census with it rather than diverging.  Every bar, every rule and every
+#: decision key is unchanged; what changes is that the fixture is built again.
+#:
+#: What the SHIPPED default does is not thereby lost: the third case below
+#: measures it, under its own tag, so the default change is censused as a
+#: decision instead of silently erasing the rows around it.
+_1D_MF_PINNED = 1.0e-5
 
-def _pmm1d_two_layer(delta):
+#: ``(delta, min_feature fraction or None for the shipped default, tag)``.
+#: The first two tags are the committed census's own, at the committed
+#: geometry, so an arm measured today lines up row for row with one measured
+#: in 2026-09-11.  The third is the shipped-default twin of the harder one.
+_1D_CASES = (
+    (1e-4, _1D_MF_PINNED, "1e-04"),
+    (1e-5, _1D_MF_PINNED, "1e-05"),
+    (1e-5, None, "1e-05@mf-default"),
+)
+
+
+def _pmm1d_two_layer(delta, mf_frac=_1D_MF_PINNED):
     a0, a1 = 0.27865, 0.62505
-    st = PMMStack(_1D_P, degree=12, far_field_orders=5)
+    kw = {} if mf_frac is None else {"min_feature": _1D_P * mf_frac}
+    st = PMMStack(_1D_P, degree=12, far_field_orders=5, **kw)
     st.add_layer(0.08, segments=[(a0, _1D_EPS_H), (a1 - a0, _1D_EPS_P),
                                  (1 - a1, _1D_EPS_H)])
     b0, b1 = a0 - delta, a1 + delta
@@ -298,6 +444,14 @@ def _interface_site_population(dec, hyp, rea, cls=None):
     section measure the SLIVER guard rather than the MORTAR site.  Disarmed,
     the site is reached at both wall separations on every build and the
     population is the same object everywhere.
+
+    THREE CASES (2026-09-12), see :data:`_1D_CASES`: the two committed wall
+    separations at the PINNED ``min_feature`` -- the configuration in which
+    this fixture is an ill-conditioned interface at all -- and the harder one
+    again at the SHIPPED default, which is what a caller who passes no
+    ``min_feature`` gets today.  The third is tagged ``@mf-default`` and is
+    what makes the default change visible in the table rather than only in
+    the report that describes it.
     """
     real = _st1d._interface_smatrix
     prev_guard = _st1d.PMM_SLIVER_GUARD
@@ -316,22 +470,38 @@ def _interface_site_population(dec, hyp, rea, cls=None):
     if cls is None:
         cls = {}
     try:
-        for delta in (1e-4, 1e-5):
+        for delta, mf_frac, tag in _1D_CASES:
             seen.clear()
-            st = _pmm1d_two_layer(delta)
+            st = _pmm1d_two_layer(delta, mf_frac)
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")
                 _o, R, T = st.solve()[:3]
             tot = float(np.max(np.atleast_2d(R).sum(1)
                                + np.atleast_2d(T).sum(1)))
             rc = min(seen)
-            tag = "%.0e" % delta
+            energy, snap, env, other = _voices(w)
             rea["pmm1d_interface/rcond@%s" % tag] = rc
             rea["pmm1d_interface/R+T@%s" % tag] = tot
+            rea["pmm1d_interface/n_warnings@%s" % tag] = float(len(w))
+            if env:
+                rea["pmm1d_interface/env_advisories@%s" % tag] = float(env)
+            if other:
+                rea["pmm1d_interface/other_voice@%s" % tag] = "; ".join(
+                    str(x.message)[:80] for x in w
+                    if _VOICE_ENERGY not in str(x.message)
+                    and _VOICE_SNAP not in str(x.message)
+                    and not _is_env_advisory(x))[:200]
             dec["pmm1d_interface/answer@%s" % tag] = (
                 "closes" if abs(tot - 1.0) < 1e-5 else "open")
             dec["pmm1d_interface/warned@%s" % tag] = (
-                "warn" if len(w) else "silent")
+                "warn" if energy else "silent")
+            # the answer-INDEPENDENT voices, censused separately so the row
+            # above can keep meaning "the tripwire spoke".  This one carries
+            # NO answer class: whether the union grid snaps is decided by the
+            # wall separation against ``min_feature``, which is arithmetic no
+            # BLAS kernel participates in -- so it is compared across arms for
+            # plain equality, like the band and branch-cut sections.
+            dec["pmm1d_interface/notices@%s" % tag] = _notice_label(snap, other)
             dec["pmm1d_interface/returns@%s" % tag] = "return"
             # the ANSWER CLASS this row's guards are deciding about, taken
             # here because here is where the guard is DISARMED.  The sliver
@@ -360,12 +530,11 @@ def _interface_site_population(dec, hyp, rea, cls=None):
 # B -- the 1-D SLIVER guard's refusal (NOT owned here: handed off)
 # ======================================================================
 def _sliver_decisions(dec, rea, cls=None):
-    for delta in (1e-4, 1e-5):
-        tag = "%.0e" % delta
+    for delta, mf_frac, tag in _1D_CASES:
         try:
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always")
-                _o, R, T = _pmm1d_two_layer(delta).solve()[:3]
+                _o, R, T = _pmm1d_two_layer(delta, mf_frac).solve()[:3]
             tot = float(np.max(np.atleast_2d(R).sum(1)
                                + np.atleast_2d(T).sum(1)))
             rea["sliver/R+T@%s" % tag] = tot
@@ -549,15 +718,151 @@ def _branch_cut_decisions(dec, rea):
 
 
 # ======================================================================
+#: The symbol spellings the bundled BLAS wheels export for the RUNTIME core
+#: name and the thread width.  The scipy-openblas wheels rename OpenBLAS's own
+#: symbols so that numpy's ILP64 build and scipy's LP64 build can be loaded
+#: into one process without colliding, which is why the plain names are absent
+#: and the prefixed ones are what is there.  MEASURED 2026-09-12 on this
+#: workstation: ``libscipy_openblas-<hash>.dll`` (scipy 1.17.1) exports
+#: ``scipy_openblas_get_corename`` and ``libscipy_openblas64_-<hash>.dll``
+#: (numpy 2.4.6) exports ``scipy_openblas_get_corename64_``; neither exports
+#: the unmangled ``openblas_get_corename``.  Both plain spellings are kept
+#: first because a distro OpenBLAS does export them.
+_BLAS_CORENAME_SYMBOLS = ("openblas_get_corename",
+                          "openblas_get_corename64_",
+                          "scipy_openblas_get_corename",
+                          "scipy_openblas_get_corename64_")
+_BLAS_NTHREADS_SYMBOLS = ("openblas_get_num_threads",
+                          "openblas_get_num_threads64_",
+                          "scipy_openblas_get_num_threads",
+                          "scipy_openblas_get_num_threads64_")
+
+
+def _is_blas_image(name):
+    low = os.path.basename(name).lower()
+    return ("openblas" in low or "mkl_rt" in low or "libblas" in low
+            or "libmkl_core" in low)
+
+
+def _loaded_blas_paths():
+    """Paths of the BLAS shared libraries LOADED INTO THIS PROCESS.
+
+    Two routes, and the order is not arbitrary.  ``/proc/self/maps`` is
+    first because it is dependency-free and is the only route available on
+    the WSL build of this census, whose interpreter is a bare venv without
+    ``psutil``; ``psutil`` (a declared core dependency of the library) is the
+    Windows route, where there is no ``/proc``.  An empty answer is not an
+    error -- the caller degrades to ``unknown``, which is what the census
+    recorded before this fallback existed.
+    """
+    paths = set()
+    try:
+        with open("/proc/self/maps", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                part = line.rstrip("\n").split(" ", 5)[-1].strip()
+                if part.startswith("/") and _is_blas_image(part):
+                    paths.add(part)
+    except OSError:
+        pass
+    if not paths:
+        try:
+            import psutil  # noqa: PLC0415
+            paths = {m.path for m in psutil.Process().memory_maps()
+                     if _is_blas_image(m.path)}
+        except (ImportError, OSError, AttributeError, NotImplementedError):
+            paths = set()
+    return sorted(paths)
+
+
+def _blas_read_back_ctypes():
+    """``(kernel, num_threads, per-library detail)`` read out of the LOADED
+    BLAS libraries with ``ctypes``.
+
+    WHY THIS EXISTS.  ``threadpoolctl`` is a declared CORE dependency of the
+    library (``pyproject.toml``), and it is nevertheless ABSENT on two of the
+    machines this census has to speak about: the GitHub runner says so itself
+    in the 5.45.0 logs (``docs/audits/CI_PREMISE_GATES_2026_09_11.md`` 2.1,
+    which is why the transcribed CI arm is called ``CI-unknown-t1``), and it
+    is absent from this workstation's interpreter as well.  Without it the
+    ``threadpool_info`` path below yields ``unknown``, and then FOUR
+    kernel arms all want the same arm key -- i.e. the census's own kernel
+    axis collapses exactly where it is supposed to discriminate.
+
+    This is the same READ-BACK threadpoolctl performs, done directly:
+    ``openblas_get_corename()`` returns the micro-kernel OpenBLAS actually
+    DISPATCHED, which is the property this census needs and is NOT the same
+    thing as ``OPENBLAS_CORETYPE`` (``ZEN`` and ``BOGUSCORE`` both resolve to
+    something else -- see the module docstring's measured caveats).  Reading
+    the request instead would let two arms that ran identical code look like
+    independent evidence, so the fallback keeps the invariant rather than
+    trading it away for a name.
+
+    ``ctypes.CDLL`` on an already-loaded library takes a reference to the
+    loaded image; it does not load a second copy.  When several BLAS
+    libraries are loaded and they DISAGREE the names are joined with ``+``,
+    because an arm whose two libraries dispatch different kernels is neither
+    of them and must not be filed under either.
+    """
+    detail, cores, widths = {}, [], []
+    try:
+        import ctypes  # noqa: PLC0415
+    except ImportError:                            # pragma: no cover
+        return "unknown", None, {}
+    paths = _loaded_blas_paths()
+    for path in paths:
+        core, width = None, None
+        try:
+            lib = ctypes.CDLL(path)
+        except OSError:
+            continue
+        for name in _BLAS_CORENAME_SYMBOLS:
+            fn = getattr(lib, name, None)
+            if fn is None:
+                continue
+            fn.restype = ctypes.c_char_p
+            try:
+                core = fn().decode("ascii", "replace")
+            except (OSError, ValueError, AttributeError):
+                core = None
+            break
+        for name in _BLAS_NTHREADS_SYMBOLS:
+            fn = getattr(lib, name, None)
+            if fn is None:
+                continue
+            fn.restype = ctypes.c_int
+            try:
+                width = int(fn())
+            except (OSError, ValueError):
+                width = None
+            break
+        detail[os.path.basename(path)] = {"corename": core,
+                                          "num_threads": width}
+        if core:
+            cores.append(core)
+        if width:
+            widths.append(width)
+    if not cores:
+        return "unknown", (max(widths) if widths else None), detail
+    uniq = sorted(set(cores))
+    return ("+".join(uniq), (max(widths) if widths else None), detail)
+
+
 def _arm_id():
     """``BUILD-KERNEL-tN`` -- the arm's identity, all three parts MEASURED.
 
-    The kernel part is read back from the loaded OpenBLAS (via
-    ``threadpoolctl``) rather than from ``OPENBLAS_CORETYPE``, because the
-    request and the result are NOT the same thing: ``ZEN`` and ``BOGUSCORE``
-    both resolve to ``Haswell`` in these wheels (see the module docstring).
+    The kernel part is read back from the loaded OpenBLAS rather than from
+    ``OPENBLAS_CORETYPE``, because the request and the result are NOT the
+    same thing: ``ZEN`` and ``BOGUSCORE`` both resolve to the host's
+    auto-detected kernel in these wheels (see the module docstring).
     Recording the REQUEST would let two arms that ran identical code look
     like independent evidence.
+
+    ``threadpoolctl`` is preferred because it is the library's own instrument
+    and understands MKL as well; :func:`_blas_read_back_ctypes` is the
+    fallback for the hosts that do not have it -- the CI runner and this
+    workstation both -- and reads the SAME ``openblas_get_corename``
+    threadpoolctl reads.  Which of the two answered is recorded in
+    ``kernel_source`` so a reader of the census can tell.
 
     The thread part is likewise read back from the loaded library, not from
     the environment: ``tauto`` is an arm with NO cap set, where OpenBLAS
@@ -568,20 +873,51 @@ def _arm_id():
     recorded in ``blas_threads`` beside the label.
     """
     build = "WSL" if sys.platform.startswith("linux") else "WIN"
-    arch, nthreads = "unknown", None
+    arch, nthreads, source, detail = "unknown", None, "none", {}
     try:
         import threadpoolctl  # noqa: I001, PLC0415
         for d in threadpoolctl.threadpool_info():
             if d.get("internal_api") in ("openblas", "mkl"):
                 arch = str(d.get("architecture") or "unknown")
                 nthreads = d.get("num_threads")
+                source = "threadpoolctl"
                 break
     except Exception:                                   # noqa: BLE001
         pass
+    if arch == "unknown":
+        arch, nthreads, detail = _blas_read_back_ctypes()
+        source = "ctypes(openblas_get_corename)" if arch != "unknown" \
+            else "none"
     cap = os.environ.get("OPENBLAS_NUM_THREADS", "") \
         or os.environ.get("OMP_NUM_THREADS", "")
     tag = ("t%s" % cap) if cap else "tauto"
-    return "%s-%s-%s" % (build, arch, tag), build, arch, tag, nthreads
+    return ("%s-%s-%s" % (build, arch, tag), build, arch, tag, nthreads,
+            source, detail)
+
+
+def _tree_id():
+    """``<branch> <short sha>[ +dirty]`` for the tree this arm was taken on.
+
+    An arm without its tree is not evidence: the 2026-09-11 census went stale
+    because a library default moved under it and nothing in the table said
+    which library it had measured.  Read-only ``git``; degrades to the empty
+    string off a checkout, in which case ``merge_arms.py`` says so.
+    """
+    import subprocess  # noqa: PLC0415
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+
+    def _git(*args):
+        return subprocess.run(("git", "-C", root) + args, check=True,
+                              capture_output=True, text=True).stdout.strip()
+
+    try:
+        sha = _git("rev-parse", "--short", "HEAD")
+        branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+        dirty = bool(_git("status", "--porcelain"))
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return "%s %s%s" % (branch, sha, " +dirty" if dirty else "")
 
 
 def main(argv=None):
@@ -597,11 +933,17 @@ def main(argv=None):
     _t22_decisions(dec, rea)
     _branch_cut_decisions(dec, rea)
 
-    arm, build, arch, tag, nthreads = _arm_id()
+    arm, build, arch, tag, nthreads, ksource, kdetail = _arm_id()
     doc = {
         "arm": arm,
         "build": build,
         "kernel": arch,
+        "kernel_source": ksource,
+        "blas_libraries": kdetail,
+        "recorded": __import__("datetime").date.today().isoformat(),
+        "tree": _tree_id(),
+        "lumenairy": getattr(__import__("lumenairy"), "__version__", "?"),
+        "min_feature_default_frac": float(_st1d._MIN_FEATURE_DEFAULT_FRAC),
         "thread_arm": tag,
         "blas_threads": nthreads,
         "coretype_requested": os.environ.get("OPENBLAS_CORETYPE", ""),

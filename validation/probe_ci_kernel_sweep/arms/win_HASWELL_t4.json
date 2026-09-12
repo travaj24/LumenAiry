@@ -69,6 +69,7 @@
   "t22/spacer@M5/refused_t22": "0",
   "t22/spacer@M5/worst_rcond_eq_decade": "1e-03"
  },
+ "historical": true,
  "hypothetical": {
   "pmm1d_interface/bar_1e-12_would@1e-04": "accept",
   "pmm1d_interface/bar_1e-12_would@1e-05": "refuse",
@@ -78,6 +79,7 @@
  "kernel": "Haswell",
  "numpy": "2.4.4",
  "platform": "Windows-11-10.0.26200-SP0",
+ "provenance": "MEASURED 2026-09-11 by probe_decisions.py, kept as a HISTORICAL arm.  It is NOT a reading of the current tree and must not be read as one: it was taken on a host whose OpenBLAS auto-detects Haswell and cannot execute the AVX-512 (SkylakeX) kernels, with threadpoolctl installed (so the kernel name came from threadpool_info rather than the ctypes read-back), on numpy 2.4.4 (WIN) / 2.4.6 (WSL), and with the 1-D fixture inheriting the then-default min_feature = period*1e-5 rather than pinning it.  It is carried because it is the only evidence of the SECOND BUILD and of the four-kernel ladder of that host, and because it is the before-side of the min_feature default change.  It covers only the rows that existed when it was taken, so the consistency gate does not require it to answer rows added later.",
  "python": "3.14.6",
  "readings": {
   "band/9.0e-04/msg": "Basis1D: segment 1 of this NON-UNIFORM element grid is 9e-10 wide -- 9.000e-04 o",
@@ -105,11 +107,13 @@
   "t22/slant_both@M4/worst_rcond_eq": 0.0029020979187227357,
   "t22/spacer@M5/worst_rcond_eq": 0.0037419051482240986
  },
+ "recorded": "2026-09-11",
  "scipy": "1.17.1",
  "thread_arm": "t4",
  "threads": {
   "MKL_NUM_THREADS": "4",
   "OMP_NUM_THREADS": "4",
   "OPENBLAS_NUM_THREADS": "4"
- }
+ },
+ "tree": "commit da377e0b (branch fix/ci-premise-gates off main 3865813) -- BEFORE WP-A12's 56a76f22 (2026-09-12) raised pmm/stack.py::_MIN_FEATURE_DEFAULT_FRAC from 1e-5 to 1e-3, and before this probe pinned min_feature as a fixture parameter"
 }

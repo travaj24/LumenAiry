@@ -82,6 +82,7 @@
   "pmm1d_interface/rcond@1e-04": 9.693991669399938e-11,
   "pmm1d_interface/rcond@1e-05": 9.7296703051673e-13
  },
+ "recorded": "2026-09-11 (transcribed, not run)",
  "scipy": "unknown (as above; the release round records scipy 1.17.1)",
  "synthetic": true,
  "thread_arm": "t1",
@@ -89,5 +90,6 @@
   "MKL_NUM_THREADS": "1",
   "OMP_NUM_THREADS": "1",
   "OPENBLAS_NUM_THREADS": "1"
- }
+ },
+ "tree": "main 3865813 -- the 5.45.0 release matrix, BEFORE WP-A12's 56a76f22 raised the min_feature default; the runner's fixture therefore carried the same period*1e-5 this probe now pins"
 }

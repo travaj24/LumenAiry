@@ -1,18 +1,32 @@
 {
- "arm": "WSL-Nehalem-t1",
+ "arm": "WIN-Haswell-t1",
+ "blas_libraries": {
+  "libscipy_openblas-64eda39e79589aedb16f58e5547eb599.dll": {
+   "corename": "Haswell",
+   "num_threads": 1
+  },
+  "libscipy_openblas64_-63c857e738469261263c764a36be9436.dll": {
+   "corename": "Haswell",
+   "num_threads": 1
+  }
+ },
  "blas_threads": 1,
- "build": "WSL",
+ "build": "WIN",
  "classes": {
   "pmm1d_interface/answer@1e-04": "correct",
   "pmm1d_interface/answer@1e-05": "wrong",
+  "pmm1d_interface/answer@1e-05@mf-default": "correct",
   "pmm1d_interface/returns@1e-04": "correct",
   "pmm1d_interface/returns@1e-05": "wrong",
+  "pmm1d_interface/returns@1e-05@mf-default": "correct",
   "pmm1d_interface/warned@1e-04": "correct",
   "pmm1d_interface/warned@1e-05": "wrong",
+  "pmm1d_interface/warned@1e-05@mf-default": "correct",
   "sliver/pmm1d@1e-04": "correct",
-  "sliver/pmm1d@1e-05": "wrong"
+  "sliver/pmm1d@1e-05": "wrong",
+  "sliver/pmm1d@1e-05@mf-default": "correct"
  },
- "coretype_requested": "NEHALEM",
+ "coretype_requested": "HASWELL",
  "decisions": {
   "band/1.2e-03": "warn",
   "band/2.0e-02": "warn",
@@ -47,12 +61,19 @@
   "mortar/spacer@M5/worst_resid_decade": "1e-14",
   "pmm1d_interface/answer@1e-04": "closes",
   "pmm1d_interface/answer@1e-05": "open",
+  "pmm1d_interface/answer@1e-05@mf-default": "closes",
+  "pmm1d_interface/notices@1e-04": "none",
+  "pmm1d_interface/notices@1e-05": "none",
+  "pmm1d_interface/notices@1e-05@mf-default": "snap",
   "pmm1d_interface/returns@1e-04": "return",
   "pmm1d_interface/returns@1e-05": "return",
+  "pmm1d_interface/returns@1e-05@mf-default": "return",
   "pmm1d_interface/warned@1e-04": "silent",
   "pmm1d_interface/warned@1e-05": "warn",
+  "pmm1d_interface/warned@1e-05@mf-default": "silent",
   "sliver/pmm1d@1e-04": "return",
   "sliver/pmm1d@1e-05": "refuse",
+  "sliver/pmm1d@1e-05@mf-default": "return",
   "t22/pattern@M4": "accept",
   "t22/pattern@M4/bar_would_refuse": "accept",
   "t22/pattern@M4/n_t22": "2",
@@ -69,18 +90,21 @@
   "t22/spacer@M5/refused_t22": "0",
   "t22/spacer@M5/worst_rcond_eq_decade": "1e-03"
  },
- "historical": true,
  "hypothetical": {
   "pmm1d_interface/bar_1e-12_would@1e-04": "accept",
   "pmm1d_interface/bar_1e-12_would@1e-05": "refuse",
+  "pmm1d_interface/bar_1e-12_would@1e-05@mf-default": "accept",
   "pmm1d_interface/rcond_decade@1e-04": "1e-11",
-  "pmm1d_interface/rcond_decade@1e-05": "1e-13"
+  "pmm1d_interface/rcond_decade@1e-05": "1e-13",
+  "pmm1d_interface/rcond_decade@1e-05@mf-default": "1e-04"
  },
- "kernel": "Nehalem",
+ "kernel": "Haswell",
+ "kernel_source": "ctypes(openblas_get_corename)",
+ "lumenairy": "5.45.1",
+ "min_feature_default_frac": 0.001,
  "numpy": "2.4.6",
- "platform": "Linux-4.4.0-26100-Microsoft-x86_64-with-glibc2.39",
- "provenance": "MEASURED 2026-09-11 by probe_decisions.py, kept as a HISTORICAL arm.  It is NOT a reading of the current tree and must not be read as one: it was taken on a host whose OpenBLAS auto-detects Haswell and cannot execute the AVX-512 (SkylakeX) kernels, with threadpoolctl installed (so the kernel name came from threadpool_info rather than the ctypes read-back), on numpy 2.4.4 (WIN) / 2.4.6 (WSL), and with the 1-D fixture inheriting the then-default min_feature = period*1e-5 rather than pinning it.  It is carried because it is the only evidence of the SECOND BUILD and of the four-kernel ladder of that host, and because it is the before-side of the min_feature default change.  It covers only the rows that existed when it was taken, so the consistency gate does not require it to answer rows added later.",
- "python": "3.12.3",
+ "platform": "Windows-11-10.0.26200-SP0",
+ "python": "3.14.6",
  "readings": {
   "band/9.0e-04/msg": "Basis1D: segment 1 of this NON-UNIFORM element grid is 9e-10 wide -- 9.000e-04 o",
   "branch_cut/at_cutoff/max_ratio": 9.316949905111799e-14,
@@ -91,23 +115,29 @@
   "branch_cut/lossless_propagating/min_ratio": 2.8262402467562398e-18,
   "branch_cut/lossy/max_ratio": 0.009998500387383162,
   "branch_cut/lossy/min_ratio": 0.004999250193691581,
-  "mortar/pattern@M4/worst_rcond": 1.919011291626729e-11,
-  "mortar/pattern@M4/worst_resid": 8.278880715781831e-15,
-  "mortar/slant_both@M4/worst_rcond": 0.00010383703077367926,
-  "mortar/slant_both@M4/worst_resid": 8.044426193652552e-15,
-  "mortar/spacer@M5/worst_rcond": 4.398765452955934e-14,
-  "mortar/spacer@M5/worst_resid": 2.6965510192913247e-14,
-  "pmm1d_interface/R+T@1e-04": 1.0000003599492868,
-  "pmm1d_interface/R+T@1e-05": 2.1715862535647332,
-  "pmm1d_interface/rcond@1e-04": 9.693991669383817e-11,
-  "pmm1d_interface/rcond@1e-05": 9.730884764137789e-13,
-  "sliver/R+T@1e-04": 1.0000003599492868,
+  "mortar/pattern@M4/worst_rcond": 1.9190112916354224e-11,
+  "mortar/pattern@M4/worst_resid": 7.035364586905535e-15,
+  "mortar/slant_both@M4/worst_rcond": 0.00010383703077370105,
+  "mortar/slant_both@M4/worst_resid": 7.231763404014557e-15,
+  "mortar/spacer@M5/worst_rcond": 4.4697113339952505e-14,
+  "mortar/spacer@M5/worst_resid": 2.614012278605402e-14,
+  "pmm1d_interface/R+T@1e-04": 0.9999999898157187,
+  "pmm1d_interface/R+T@1e-05": 2.172858319636308,
+  "pmm1d_interface/R+T@1e-05@mf-default": 1.0000000000000504,
+  "pmm1d_interface/n_warnings@1e-04": 0.0,
+  "pmm1d_interface/n_warnings@1e-05": 1.0,
+  "pmm1d_interface/n_warnings@1e-05@mf-default": 1.0,
+  "pmm1d_interface/rcond@1e-04": 9.696854913500437e-11,
+  "pmm1d_interface/rcond@1e-05": 9.730884764326215e-13,
+  "pmm1d_interface/rcond@1e-05@mf-default": 0.0005344409876681357,
+  "sliver/R+T@1e-04": 0.9999999898157187,
+  "sliver/R+T@1e-05@mf-default": 1.0000000000000504,
   "sliver/msg@1e-05": "PMMStack.solve: REFUSED -- a NEAR-COINCIDENT-WALL SLIVER on the shared union gri",
-  "t22/pattern@M4/worst_rcond_eq": 0.0021887923176904267,
-  "t22/slant_both@M4/worst_rcond_eq": 0.002989958972284174,
-  "t22/spacer@M5/worst_rcond_eq": 0.004441604941479312
+  "t22/pattern@M4/worst_rcond_eq": 0.002326115520434496,
+  "t22/slant_both@M4/worst_rcond_eq": 0.002870003778397365,
+  "t22/spacer@M5/worst_rcond_eq": 0.003931068164979616
  },
- "recorded": "2026-09-11",
+ "recorded": "2026-09-12",
  "scipy": "1.17.1",
  "thread_arm": "t1",
  "threads": {
@@ -115,5 +145,5 @@
   "OMP_NUM_THREADS": "1",
   "OPENBLAS_NUM_THREADS": "1"
  },
- "tree": "commit da377e0b (branch fix/ci-premise-gates off main 3865813) -- BEFORE WP-A12's 56a76f22 (2026-09-12) raised pmm/stack.py::_MIN_FEATURE_DEFAULT_FRAC from 1e-5 to 1e-3, and before this probe pinned min_feature as a fixture parameter"
+ "tree": "audit-fixes-2026-09 2622449f +dirty"
 }

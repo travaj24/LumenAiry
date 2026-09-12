@@ -77,6 +77,10 @@ doc = {
     "blas_threads": None,
     "coretype_requested": "",
     "synthetic": True,
+    "recorded": "2026-09-11 (transcribed, not run)",
+    "tree": "main 3865813 -- the 5.45.0 release matrix, BEFORE WP-A12's "
+            "56a76f22 raised the min_feature default; the runner's fixture "
+            "therefore carried the same period*1e-5 this probe now pins",
     "provenance":
         "TRANSCRIBED from the 5.45.0 release matrix (GitHub Actions run "
         "34566427386, artifacts under C:/tmp/ci_5450b/), NOT measured.  "

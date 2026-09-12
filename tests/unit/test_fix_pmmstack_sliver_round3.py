@@ -49,6 +49,18 @@ Evidence: ``docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND3_2026_09_11.md``,
 ``docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND4_2026_09_11.md`` and
 ``validation/probe_fix_sliver_round3/`` +
 ``validation/probe_fix_sliver_round4/``.
+
+RE-MEASURED 2026-09-12 (WP-A23; ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-A23_REPORT.md``).  The premise gate(s) in this file were
+re-measured on this tree against a freshly re-recorded kernel census
+(``validation/probe_ci_kernel_sweep/decisions.json``, 24 arms) and they STILL
+HOLD here -- nothing below is skipping for a stale reason.  What HAS changed
+is the evidence behind the phrase "the CI runner's kernel": that reading is no
+longer remote.  The census now carries a MEASURED arm reproducing it BIT FOR
+BIT -- ``WSL-SkylakeX-t4`` returns ``R+T`` = 1.0000010471871335 at the 1e-05
+wall separation where ``WIN-SkylakeX-t1`` returns 3.6124215325 on the SAME
+fixture and the SAME silicon, one build and one OpenBLAS micro-kernel apart.
+Read "the CI runner's kernel" as "a Linux AVX-512 (SkylakeX) arm", which is
+reproducible on this workstation and was not on the 2026-09-11 one (SIGILL).
 """
 import itertools
 import os
