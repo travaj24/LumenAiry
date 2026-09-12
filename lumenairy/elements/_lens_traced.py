@@ -10749,16 +10749,43 @@ def apply_real_lens_traced(
     # 2.62 um -- a 3x finer grid, 9x the memory -- and which
     # ``_exit_na_out['na_exit']`` then feeds to the chain's
     # ``on_tilt_exact_grid``, whose DEFAULT action is 'error'.  Gate on the
-    # same disc the output mask uses.
+    # aperture disc.
+    #
+    # TWO DISCS, and they are not the same one.  The reported ``na_exit`` is
+    # gated on the ENTRANCE height (``h_x``, ``h_y``) because that is the
+    # aperture the element physically stops with, and because the chain reads
+    # this number.  The mask the RETURNED FIELD carries is applied on the
+    # OUTPUT grid coordinate, so on a thick or fast element the two sets
+    # differ: a ray entering outside ``aperture/2`` can still land inside it.
+    # Measured against an independent Newton+Snell trace (VERIFY-A3,
+    # 2026-09-12, lambda = 1.31 um): R = +-51.68 mm / t = 4 mm / ap = 24 mm
+    # reads 0.24436 on the entrance disc against 0.25493 on the output disc
+    # (1.04x), a 100 mm/60 mm meniscus 1.02x -- but R = +-20 mm / t = 12 mm /
+    # ap = 18 mm reads 0.49809 against 0.85802, i.e. the entrance-disc figure
+    # UNDERSTATES the exit NA of the returned field by 1.72x and the advice
+    # "use dx <= lambda/(2 NA)" would then be 1.7x too coarse.  Understating
+    # is the unsafe direction for a Nyquist guard, so the WARNING is decided
+    # on the larger of the two while ``na_exit`` itself is left alone (its
+    # consumers are calibrated against it); both are reported.
+    _sig_amp = _sig
+    _sig_out = _sig
     if aperture is not None:
         # ``h_x`` / ``h_y`` are the launch heights on the AXIS-CENTRED launch
         # lattice (deliberately not origin-shifted -- see the ``origin``
         # parameter doc), and the aperture is centred on the element axis, so
         # the disc test needs no origin term.
-        _sig = _sig & (h_x * h_x + h_y * h_y <= (0.5 * float(aperture)) ** 2)
+        _ap_r2 = (0.5 * float(aperture)) ** 2
+        _sig = _sig_amp & (h_x * h_x + h_y * h_y <= _ap_r2)
+        with np.errstate(invalid='ignore'):
+            _sig_out = _sig_amp & (final.x * final.x
+                                   + final.y * final.y <= _ap_r2)
     if _sig.any():
         _na_exit = float(np.sqrt(final.L[_sig] ** 2
                                  + final.M[_sig] ** 2).max())
+        _na_exit_out = (float(np.sqrt(final.L[_sig_out] ** 2
+                                      + final.M[_sig_out] ** 2).max())
+                        if _sig_out.any() else _na_exit)
+        _na_guard = max(_na_exit, _na_exit_out)
         _dx_eff = max(dx, _dy_eff)
         # niche C1 item 4: report the MEASURED exit NA (and how much exit
         # power sits above this grid's Nyquist angle) to a caller who asked
@@ -10779,19 +10806,28 @@ def apply_real_lens_traced(
             _na_ny = (wavelength / (2.0 * _dx_eff)) if _dx_eff > 0 else np.inf
             _exit_na_out.update({
                 'na_exit': _na_exit,
+                # the same statistic over the two discs, kept apart so a
+                # consumer can choose (see the two-discs note above):
+                # ``entrance`` is what ``na_exit`` reports, ``output`` is over
+                # the rays that land inside the mask the returned field
+                # carries, and ``guard`` is the conservative max the
+                # undersample warning is decided on.
+                'na_exit_entrance_disc': _na_exit,
+                'na_exit_output_disc': _na_exit_out,
+                'na_exit_guard': _na_guard,
                 'dx': float(_dx_eff),
                 'na_nyquist': float(_na_ny),
                 'power_frac_above_nyquist': (
                     float(_wgt[_na_all > _na_ny].sum()) / _wtot
                     if _wtot > 0.0 else 0.0),
                 'n_rays': int(final.alive.sum())})
-        if _na_exit > 0 and _dx_eff > wavelength / (2.0 * _na_exit):
-            _dx_need = wavelength / (2.0 * _na_exit)
+        if _na_guard > 0 and _dx_eff > wavelength / (2.0 * _na_guard):
+            _dx_need = wavelength / (2.0 * _na_guard)
             if on_undersample != 'silent':
                 import warnings
                 warnings.warn(
                     f'apply_real_lens_traced: the exit beam converges at '
-                    f'NA_exit={_na_exit:.4f}, so the exit wavefront needs '
+                    f'NA_exit={_na_guard:.4f}, so the exit wavefront needs '
                     f'dx <= lambda/(2*NA_exit) = {_dx_need*1e6:.2f} um but '
                     f'the grid has dx = {_dx_eff*1e6:.2f} um.  The '
                     f'beyond-Nyquist annulus of the exit phase ALIASES: '

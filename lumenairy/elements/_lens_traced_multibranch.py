@@ -692,6 +692,10 @@ def apply_real_lens_traced_multibranch(
     _n_tri = int(area2.size)
     _n_finite = int(finite_tri.sum())
     _n_degenerate = int(_n_finite - int(good.sum()))
+    #: Launch power carried by the triangles that RASTERISE onto this grid --
+    #: the second, independent denominator the energy tripwire brackets with
+    #: (VERIFY-A3).  Filled in the rasteriser block below.
+    _p_in_tri = 0.0
     if good.any():
         xmn = np.minimum(np.minimum(x0, x1), x2)[good]
         xmx = np.maximum(np.maximum(x0, x1), x2)[good]
@@ -739,6 +743,17 @@ def apply_real_lens_traced_multibranch(
         E0 = _g(E_launch[V0i, V0j])
         E1 = _g(E_launch[V1i, V1j])
         E2 = _g(E_launch[V2i, V2j])
+        # Launch power of the triangles that reach this grid.  Over the
+        # INTERIOR of the launch lattice this is algebraically the node sum
+        # ``sum |E_launch|^2 h^2`` (each node is shared by six triangles and
+        # each triangle averages three nodes, so the two quadratures agree);
+        # where a triangle STRADDLES the grid boundary it counts the whole
+        # triangle where the node sum counts none of it, so it is an upper
+        # bound on the launched power that lands -- which is exactly what the
+        # gain arm of the tripwire needs to bracket against (see there).
+        _p_in_tri = float(np.sum(
+            (np.abs(E0) ** 2 + np.abs(E1) ** 2 + np.abs(E2) ** 2)
+            * (1.0 / 3.0))) * tri_launch_area
         pxmin, pxmax = pxmin[keep], pxmax[keep]
         pymin, pymax = pymin[keep], pymax[keep]
         nb_flat = n_branch.reshape(-1)
@@ -968,6 +983,22 @@ def apply_real_lens_traced_multibranch(
                                                         <= 0.5 * N * dx)
     p_in = float(np.sum(np.abs(E_launch[_in_grid]) ** 2)) * (h * h)
     p_out = float(np.sum(np.abs(E_out) ** 2)) * (dx * dx)
+    # BRACKET the gain arm (VERIFY-A3).  ``p_in`` counts a launch node only
+    # when its own mapped point lands on the grid, while ``p_out`` counts
+    # every pixel a triangle covers -- including triangles that STRADDLE the
+    # grid boundary, whose nodes are outside.  On a coarse launch lattice over
+    # a grid much smaller than the beam that mismatch alone reaches 3.3x:
+    # measured on the D3 fixture (aperture 25x the grid AREA) at
+    # ray_subsample=8, z = 100 / 110 / 120 mm -> 3.26 / 2.56 / 2.07 with
+    # n_branch = 1 and ZERO degenerate triangles, i.e. no coalescence at all,
+    # three spurious RuntimeWarnings from the very geometry the launched-power
+    # normaliser was introduced to quieten.  ``_p_in_tri`` counts the WHOLE
+    # launch power of every contributing triangle, so it is an upper bound
+    # where ``p_in`` is a lower one; requiring the gain to clear BOTH removes
+    # the artefact and costs no detection power, because a real point-focus
+    # blow-up is 1e5x (measured 1.8e+05 at 0.98 BFL on the same fixture) and
+    # the audit's silent pre-focus band is 4-8x -- decades outside either.
+    p_in_hi = max(p_in, _p_in_tri)
 
     # TOTAL COLLAPSE.  This is the only outcome of the four that is not merely
     # inaccurate but EMPTY, and before this census it reached the caller as an
@@ -1014,7 +1045,7 @@ def apply_real_lens_traced_multibranch(
             f"ASM hand-off) or the GBD / Maslov propagators here.",
             RuntimeWarning, stacklevel=2)
 
-    if p_in > 0.0 and p_out > _ENERGY_BLOWUP_FACTOR * p_in:
+    if p_in_hi > 0.0 and p_out > _ENERGY_BLOWUP_FACTOR * p_in_hi:
         warnings.warn(
             "apply_real_lens_traced_multibranch: reconstructed grid power is "
             f"{p_out / p_in:.3g}x the launched power that reaches this grid "
@@ -1048,5 +1079,13 @@ def apply_real_lens_traced_multibranch(
                        'n_triangles_degenerate': _n_degenerate,
                        # reconstructed grid power / launched power reaching
                        # the grid: 1.0 = energy conserved by the branch sum
-                       'power_ratio': (p_out / p_in) if p_in > 0.0 else None}
+                       'power_ratio': (p_out / p_in) if p_in > 0.0
+                       else None,
+                       # the bracketing upper-bound denominator the
+                       # gain arm is decided on (VERIFY-A3): equal to
+                       # ``power_ratio`` except where triangles
+                       # straddle the grid boundary
+                       'power_ratio_triangles': (
+                           (p_out / _p_in_tri) if _p_in_tri > 0.0
+                           else None)}
     return E_out

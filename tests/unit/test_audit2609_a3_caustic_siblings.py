@@ -290,12 +290,17 @@ def test_t2_energy_tripwire_is_two_sided_and_sees_the_pre_focus_band():
         except RuntimeError:
             continue                      # the total-collapse refusal
         ratio = float((np.abs(E) ** 2).sum()) / p_in
+        # the ENERGY arm specifically -- the degenerate-triangle census warns
+        # from the same module with a different message, and accepting that
+        # one would let a broken energy tripwire pass (VERIFY-A3).
         msgs = [str(w.message) for w in rec
-                if 'multibranch' in str(w.message)]
+                if 'reconstructed grid power is' in str(w.message)]
         if ratio > 2.0 or ratio < 0.5:
             assert msgs, (
                 f'P_out/P_in = {ratio:.4g} at z = {z * 1e3:.4f} mm with NO '
-                f'warning -- the tripwire is still one-sided or mis-tuned')
+                f'energy warning -- the tripwire is still one-sided or '
+                f'mis-tuned (other multibranch warnings seen: '
+                + '; '.join(str(w.message)[:60] for w in rec) + ')')
             fired = True
             break
     assert fired, (
