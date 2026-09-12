@@ -2,9 +2,8 @@
 FFT backend / cache / default-config infrastructure for the propagator family.
 ==============================================================================
 
-v5.1.0 split (Agent C): the formerly-monolithic
-``lumenairy/propagators/propagation.py`` is reorganised into six
-submodules sharing this one infrastructure layer.  This module owns:
+Shared infrastructure layer for the ``lumenairy.propagators``
+submodules.  This module owns:
 
 * Backend availability flags + lazy loaders (CuPy / pyFFTW / scipy.fft).
 * FFT backend configuration globals + their setters / getters
@@ -20,8 +19,10 @@ submodules sharing this one infrastructure layer.  This module owns:
 
 Public API contract: every name previously importable from
 ``lumenairy.propagators.propagation`` is re-exported there unchanged
-(see ``propagation.py``).  No public behaviour changed in the v5.1.0
-split -- it is a pure file-level refactor.
+(see ``propagation.py``).
+
+Version history for this module -- what each audit changed and why --
+lives in ``docs/history/fft_infra.md``.
 
 Author:  Andrew Traverso
 """
@@ -41,8 +42,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 # The probe, the first-use import and the isinstance test live in ONE place
-# (audit 2026-09-11 TESTS-ARCH P2-9: five hand-copied pairs, one of which is
-# the only place the accelerator-absent path could be tested).
+# (audit 2026-09-11 TESTS-ARCH P2-9; docs/history/fft_infra.md).
 from ..backend._optional import CUPY_AVAILABLE
 from ..backend._optional import ensure_cupy as _ensure_cupy
 from ..backend._optional import is_cupy_array as _optional_is_cupy_array
@@ -68,12 +68,10 @@ def _is_cupy_array(x):
     """
     Reliable CuPy array check.
 
-    Historically this module used ``hasattr(x, 'device')`` as a duck-type
-    test for a CuPy device array.  That broke in NumPy 2.x: ``ndarray``
-    now exposes ``.device`` as part of the Python Array API standard, so
-    every NumPy array falsely tests as a CuPy array and gets routed
-    through the (unusable without CUDA) CuPy FFT path.  Use ``isinstance``
-    against the real CuPy type instead.
+    ``isinstance`` against the real CuPy type, never ``hasattr(x, 'device')``:
+    NumPy 2.x ``ndarray`` exposes ``.device`` as part of the Python Array API,
+    so the duck-type test sends every NumPy array down the (unusable without
+    CUDA) CuPy FFT path.
     """
     if not CUPY_AVAILABLE:
         # Local short-circuit, not a delegation: this runs once per FFT and
@@ -120,11 +118,9 @@ except ImportError:
 # process_cpu_count so we don't oversubscribe a restricted machine.
 from ..memory import available_cpus as _available_cpus
 
-# Every process-global knob below is registered with the central registry
-# (audit 2026-09-11 TESTS-ARCH P2-5: 12 of the library's ~20 process globals
-# live in this module, and none of them had a context-manager form or a
-# reset).  Registration is what makes ``lumenairy.override(...)`` and the
-# suite's autouse snapshot/restore fixture reach them.
+# Every process-global knob below is registered with the central registry:
+# registration is what makes ``lumenairy.override(...)`` and the suite's
+# autouse snapshot/restore fixture reach them (audit 2026-09-11 P2-5).
 from .._knobs import register_knob as _register_knob
 
 # ============================================================================
@@ -135,17 +131,14 @@ from .._knobs import register_knob as _register_knob
 # :func:`lumenairy._backends.available_cpus`, capped at the oversubscription
 # knee (see below); pass a positive int to :func:`set_fft_threads` to override.
 #
-# S5-8c (perf, audit AUDIT_V5_24_2): on a many-core box (> 8 physical cores)
-# libfftw3 OVERSUBSCRIBES a single 2-D transform -- a 1024^2..2048^2 complex128
-# FFT is measured 11-18% FASTER at 8 threads than at all 24, because the
-# transform is memory-bandwidth bound past ~8 threads and the extra threads
-# only add butterfly / barrier contention.  So the DEFAULT thread count is
-# capped at ``_FFTW_DEFAULT_THREAD_CAP``.  This is NOT bit-identical to the
-# all-core count (a different thread count changes the FFT reduction order at
-# the LSB, ~1e-15 relative -- the same order-of-magnitude perturbation the
-# opt-in ESTIMATE->MEASURE auto-promote introduces), so it is applied only to
-# the DEFAULT; pass an explicit ``set_fft_threads(n)`` to pin ANY count,
-# including all cores via ``set_fft_threads(<available_cpus()>)``.
+# The cap is there because libfftw3 OVERSUBSCRIBES a single 2-D transform past
+# ~8 threads (it is memory-bandwidth bound from there on, and the extra threads
+# only add butterfly / barrier contention): measured 11-18 % FASTER at 8 threads
+# than at all 24 on 1024^2..2048^2 complex128.  It applies to the DEFAULT only --
+# a different thread count moves the FFT reduction order at the LSB (~1e-15
+# relative) -- so ``set_fft_threads(n)`` still pins ANY count, all cores
+# included via ``set_fft_threads(<available_cpus()>)``.
+# (S5-8c, audit AUDIT_V5_24_2; docs/history/fft_infra.md.)
 _FFTW_DEFAULT_THREAD_CAP = 8
 
 
@@ -193,17 +186,14 @@ FFTW_MIN_SIZE = 256
 # thrashing the plan cache.  Gets reset when the user explicitly
 # flushes via ``reset_fft_backend()``.
 #
-# K7 (audit 2026-09-11): entries are ``(shape, dtype.str, direction)``
-# triples, not bare shapes.  Keyed on the bare shape, ONE complex128
-# MemoryError at (512, 512) also blacklisted complex64 at the same shape
-# -- half the memory, likely to succeed -- and the inverse direction,
-# which has its own separate plan and buffer.  Measured: after a single
-# simulated complex128 failure at (512, 512) the blacklist was
-# ``{(512, 512)}`` and a subsequent complex64 transform skipped pyFFTW.
-# The key now matches the plan cache's own
-# ``(direction, shape, dtype, threads)``, minus ``threads`` (an
-# allocation failure is not thread-count-specific).  The name is kept
-# for the reset / snapshot machinery and the tests that reference it.
+# Entries are ``(shape, dtype.str, direction)`` triples, NOT bare shapes: keyed
+# on the shape alone, one complex128 MemoryError at (512, 512) also blacklisted
+# complex64 at that shape -- half the memory, likely to succeed -- and the
+# inverse direction, which has its own plan and buffer.  The key matches the
+# plan cache's own ``(direction, shape, dtype, threads)`` minus ``threads`` (an
+# allocation failure is not thread-count-specific).  The NAME is kept for the
+# reset / snapshot machinery and the tests that reference it.
+# (K7, audit 2026-09-11; docs/history/fft_infra.md.)
 _PYFFTW_BAD_SHAPES: set[tuple] = set()
 
 
@@ -281,7 +271,7 @@ _register_knob(
 
 
 # ---------------------------------------------------------------------------
-# v4.16.2 (pre-v5.0 prep) -- 3 additional library-wide default-config knobs
+# Library-wide default-config knobs
 # ---------------------------------------------------------------------------
 #
 # Parallel to ``set_default_complex_dtype`` above.  Each knob:
@@ -300,30 +290,10 @@ _register_knob(
 #         dy = _resolve_default_dy(dy)
 #         ...
 #
-# v4.16.3 (audit P2-NEW-F1-3 + P2-NEW-F1-4) status of consumer rollout:
-#
-#   * ``DEFAULT_REAL_DTYPE``       -- consumed at one site
-#     (``propagate_ensemble``'s no-input-dtype real-accumulator
-#     fallback, ``ensemble.py:~347``).  v4.16.2 shipped this consumer
-#     behind an unreachable ``except`` branch; v4.16.3 re-shapes the
-#     consumer so the ``in_dtype is None`` path is the canonical
-#     fallback.
-#   * ``DEFAULT_WAVE_PROPAGATOR``  -- v5.1.0: consumer-wired across
-#     ``apply_real_lens`` (``_lens_real.py``),
-#     ``apply_real_lens_traced`` (``_lens_traced.py``), and the
-#     ``method=`` argument of ``propagate_through_system``
-#     (``system.py``).  v4.16.2 / v4.16.3 / v5.0.x shipped the SET /
-#     GET API only and emitted a one-shot UserWarning that no
-#     library consumer existed; v5.1.0 retires that warning and
-#     wires the resolver at the entry points listed above.
-#   * ``DEFAULT_DY``               -- v5.1.0: consumer-wired across
-#     ``apply_real_lens`` and ``apply_real_lens_traced``.  Same
-#     status history as ``DEFAULT_WAVE_PROPAGATOR``: API-only at
-#     v4.16.2-v5.0.x, library-wide rollout at v5.1.0.
-#
-# Multiprocess / fork notes (v4.16.3, audit P3-NEW-F1-2 + P3-NEW-F1-3)
+# Multiprocess / fork notes
 # --------------------------------------------------------------------
-# The three ``DEFAULT_*`` module-level globals below are PLAIN PYTHON
+# STILL TRUE, and the reason ``snapshot_fft_state`` / ``restore_fft_state``
+# exist.  The three ``DEFAULT_*`` module-level globals below are PLAIN PYTHON
 # globals -- they live in the parent process's import of this module.
 # Two correctness corollaries follow:
 #
@@ -335,10 +305,10 @@ _register_knob(
 #    set them to via the ``set_default_*`` accessors.  A parent that
 #    calls ``set_default_real_dtype(np.float32)`` then submits work to
 #    a ``ProcessPoolExecutor`` (default = spawn on Windows / macOS)
-#    silently loses the override in each worker.  Workaround until v5.0
-#    rolls out a shared-state mechanism: re-call ``set_default_*`` at
-#    the top of each worker callable, or pass the value explicitly per
-#    call.
+#    silently loses the override in each worker.  Carry the configuration
+#    across the boundary with ``snapshot_fft_state`` / ``restore_fft_state``,
+#    re-call ``set_default_*`` at the top of each worker callable, or pass
+#    the value explicitly per call.
 # 2. **One-shot latch fork-safety**: the
 #    ``_DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED`` and
 #    ``_DEFAULT_DY_NO_CONSUMER_WARNED`` latches (and the sibling
@@ -351,41 +321,38 @@ _register_knob(
 #    (each emission is still capped at one per worker process) but
 #    documented here so the user isn't surprised.
 #
-# Neither limitation is fixed in v4.16.3.  The fixes require either a
+# Neither limitation is fixed.  The fixes require either a
 # ``multiprocessing.Manager``-backed shared dict (heavy) or a stamped
-# environment-variable handshake (fragile across the spawn boundary);
-# both push out into the v5.0 default-config-knob consumer-wiring
-# scope.
+# environment-variable handshake (fragile across the spawn boundary).
+#
+# Which consumer honours which knob, and when each was wired:
+# docs/history/fft_infra.md.
 
 DEFAULT_REAL_DTYPE = np.float64
 
 DEFAULT_WAVE_PROPAGATOR = 'asm'
 
-# v5.31 (audit W9-8): the SHIPPED value of the knob above, frozen at import and
-# never reassigned.  ``propagate()`` compares against it to tell "the caller
-# moved the library default" from "nobody touched it, so the value is still the
-# factory one" -- it honours the knob only in the first case, because resolving
-# it unconditionally would silently retire ``propagate``'s far-field
-# auto-selection for every caller who never asked for that.  A CONSTANT rather
-# than a "setter was called" latch on purpose: comparison is stateless, so
-# restoring the knob with ``set_default_wave_propagator('asm')`` restores the
-# behaviour with no cross-call or cross-process residue.
-# ``propagate_through_system`` is unaffected -- it resolves the knob
-# unconditionally, as it has since v5.1.0.
+# The SHIPPED value of the knob above, frozen at import and never reassigned.
+# ``propagate()`` compares against it to tell "the caller moved the library
+# default" from "nobody touched it, so the value is still the factory one" -- it
+# honours the knob only in the first case, because resolving it unconditionally
+# would silently retire ``propagate``'s far-field auto-selection for every caller
+# who never asked for that.  A CONSTANT rather than a "setter was called" latch
+# on purpose: comparison is stateless, so restoring the knob with
+# ``set_default_wave_propagator('asm')`` restores the behaviour with no
+# cross-call or cross-process residue.  ``propagate_through_system`` is
+# unaffected -- it resolves the knob unconditionally.
+# (audit W9-8; docs/history/fft_infra.md.)
 DEFAULT_WAVE_PROPAGATOR_SHIPPED = DEFAULT_WAVE_PROPAGATOR
 
 DEFAULT_DY = None  # None means "match dx"
 
-# v4.16.3 (audit P2-NEW-F1-4): module-level latches that gated the
-# "API-only in v4.16.2/v4.16.3; consumer wiring follows in v5.0"
-# one-shot UserWarning emitted by the wave_propagator / dy setters.
-# v5.1.0 retired both warnings (the resolver is now wired across
-# ``apply_real_lens`` / ``apply_real_lens_traced`` /
-# ``propagate_through_system``), so the setters no longer reach the
-# emission branch.  The latch globals are preserved (pinned permanently
-# to ``True``) for back-compat with code that introspects the module's
-# attribute surface; flipping them back to ``False`` no longer revives
-# the warning.
+# Module-level latches that once gated a one-shot "API-only, no consumer yet"
+# UserWarning from the wave_propagator / dy setters.  The resolvers are wired
+# now, so the setters never reach the emission branch; the globals are kept
+# (pinned permanently to ``True``) for code that introspects this module's
+# attribute surface, and flipping them back to ``False`` does NOT revive the
+# warning.  (audit P2-NEW-F1-4; docs/history/fft_infra.md.)
 _DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED = True
 _DEFAULT_DY_NO_CONSUMER_WARNED = True
 
@@ -402,11 +369,11 @@ def set_default_real_dtype(dtype: Any) -> None:
     The change applies to subsequent allocations; existing arrays
     keep their dtype.
 
-    Consumer scope (v4.16.3 + v5.1.0):
+    Consumer scope:
 
     * :func:`lumenairy.propagate_ensemble` -- the no-input-dtype
       real-accumulator fallback (the canonical ``in_dtype is None``
-      path).  v4.16.3 wiring.
+      path).
 
     Other user-facing entry points correctly DERIVE their real
     dtype from the input complex array's real counterpart (e.g.
@@ -414,8 +381,7 @@ def set_default_real_dtype(dtype: Any) -> None:
     knob.  The library follows the convention "match the input's
     precision" wherever a complex input array is present; the
     default-real-dtype knob fills the gap only at sites that
-    allocate a fresh real array with no complex parent.  See the
-    v5.1.0 release notes for the per-site rationale.
+    allocate a fresh real array with no complex parent.
     """
     global DEFAULT_REAL_DTYPE
     dt = np.dtype(dtype)
@@ -445,7 +411,7 @@ def set_default_wave_propagator(name: str) -> None:
     non-ASM choice) to every entry point.  Valid names: ``'asm'``,
     ``'sas'``, ``'fresnel'``, ``'rayleigh_sommerfeld'``, ``'rs'``.
 
-    Consumers that honour this default (v5.1.0):
+    Consumers that honour this default:
 
     * :func:`lumenairy.apply_real_lens` -- the analytic split-step
       real-lens propagator.  ``wave_propagator=None`` (the new
@@ -460,10 +426,6 @@ def set_default_wave_propagator(name: str) -> None:
       ``'asm' / 'sas' / 'fresnel'`` subset; if the library default
       resolves to ``'rs'`` / ``'rayleigh_sommerfeld'`` the call
       raises ``ValueError`` with a clear migration recipe.
-
-    Pre-v5.1.0 the setter stored the value but no library consumer
-    read it (API-only) and a one-shot ``UserWarning`` advertised the
-    gap; v5.1.0 retired that warning.
     """
     global DEFAULT_WAVE_PROPAGATOR
     _VALID = ('asm', 'sas', 'fresnel', 'rayleigh_sommerfeld', 'rs')
@@ -497,7 +459,7 @@ def set_default_dy(value: Any) -> None:
     classic isotropic-grid behavior.  Pass a positive float to set a
     library-wide anamorphic spacing without per-call kwarg.
 
-    Consumers that honour this default (v5.1.0):
+    Consumers that honour this default:
 
     * :func:`lumenairy.apply_real_lens` -- ``dy=None`` (the default)
       resolves via ``get_default_dy()``; if the resolved value is
@@ -508,10 +470,6 @@ def set_default_dy(value: Any) -> None:
       raises ``ValueError`` if the resolved ``dy`` differs from
       ``dx`` more than 1e-15 relative; this guard is preserved from
       v4.x.
-
-    Pre-v5.1.0 the setter stored the value but no library consumer
-    read it (API-only) and a one-shot ``UserWarning`` advertised the
-    gap; v5.1.0 retired that warning.
     """
     global DEFAULT_DY
     if value is None:
@@ -547,13 +505,11 @@ _register_knob(
 def _resolve_jax_complex_dtype(dtype: Any = None) -> Any:
     """Resolve a JAX complex dtype that honours ``set_default_complex_dtype``.
 
-    v4.13.0 (audit L2): JAX-side code historically hard-cast to
-    ``jnp.complex64`` (or read ``jax.config.jax_enable_x64`` directly),
-    which silently overrides the user's
-    :func:`set_default_complex_dtype` setting and gives float32-precision
-    answers with no warning.  This helper centralises the
-    NumPy-default-dtype -> JAX-dtype mapping so every JAX entry point
-    obeys the same configuration knob.
+    Centralises the NumPy-default-dtype -> JAX-dtype mapping so every JAX entry
+    point obeys :func:`set_default_complex_dtype`.  A JAX kernel that hard-casts
+    to ``jnp.complex64`` (or reads ``jax.config.jax_enable_x64`` directly)
+    silently overrides that setting and returns float32-precision answers with
+    no warning.  (audit L2; ``docs/history/fft_infra.md``.)
 
     Parameters
     ----------
@@ -614,10 +570,9 @@ def _resolve_jax_complex_dtype(dtype: Any = None) -> Any:
 def _resolve_jax_real_dtype(dtype: Any = None) -> Any:
     """Resolve a JAX real dtype paired with the default complex dtype.
 
-    v4.13.0 (audit L2 companion): real-valued JAX kernels (phase
-    arrays, masks, prefactors) also need a precision twin to match the
-    complex dtype.  Returns ``jnp.float64`` when the default complex
-    dtype is ``np.complex128`` and ``jnp.float32`` for
+    The precision twin of :func:`_resolve_jax_complex_dtype` for real-valued
+    JAX kernels (phase arrays, masks, prefactors): ``jnp.float64`` when the
+    default complex dtype is ``np.complex128``, ``jnp.float32`` for
     ``np.complex64``.
 
     Parameters mirror :func:`_resolve_jax_complex_dtype`.  Auto-
@@ -652,23 +607,20 @@ def _resolve_jax_real_dtype(dtype: Any = None) -> Any:
 
 
 # ----------------------------------------------------------------------------
-# Multi-slot pyFFTW plan cache (3.2.14)
+# Multi-slot pyFFTW plan cache
 # ----------------------------------------------------------------------------
-# Earlier the cache held *one* plan per direction (forward / inverse).
-# That worked when a single call site dominated, but optimization
-# loops, JonesField (Ex/Ey at one shape, then a 3D batch shape),
-# Maslov (mixes the input grid and per-axis 1-D FFTs), and any code
-# that propagates at multiple sizes thrashes the single slot --
-# every call between two shapes has to reallocate the bound buffer
-# and re-plan.  An LRU dict keyed by ``(direction, shape, dtype,
-# threads)`` lets several recently-used plans stay resident, with
-# bounded memory because old entries fall out the back of the LRU.
+# An LRU dict keyed by ``(direction, shape, dtype, threads)`` keeps several
+# recently-used plans resident, with bounded memory because old entries fall out
+# the back.  ONE plan per direction would thrash for any caller that works at
+# more than one shape -- optimisation loops, JonesField (Ex/Ey at one shape, then
+# a 3-D batch shape), Maslov (the input grid plus per-axis 1-D FFTs) -- because
+# every call between two shapes reallocates the bound buffer and re-plans.
 #
-# Entry layout (4.12 double-buffer):
+# Entry layout (double-buffer ping-pong):
 #   OrderedDict[key] = {
 #       'plans':   [plan_a, plan_b],   # one in-place pyFFTW plan per slot
 #       'bufs':    [buf_a,  buf_b],    # aligned workspaces, plan_i bound to bufs[i]
-#       'locks':   [Lock(), Lock()],   # one per slot (v5.46, audit K4)
+#       'locks':   [Lock(), Lock()],   # one per slot (audit K4)
 #       'idx':     int,                # next slot to use, toggled each call
 #       'flag':    'FFTW_ESTIMATE' | 'FFTW_MEASURE' | ... (per-entry planner)
 #       'calls':   int,                # call count for auto-promote tracking
@@ -691,14 +643,7 @@ _PYFFTW_PLAN_LOCK = threading.Lock()
 # it still holds the reference, and the caller then multiplies a stale or
 # half-written spectrum -- a silent 100 %-wrong field, not a crash.
 #
-# The per-slot locks (audit K4) removed the entry-wide serialisation that
-# had been masking this: measured on this box, 8 threads x 40 concurrent
-# ``rayleigh_sommerfeld_propagate`` calls at (128, 128) / complex128 /
-# z = 5 mm returned 7 fields with max|out - ref|/max|ref| = 1.14 (i.e.
-# 100 % wrong) with per-slot locks and 0 with one shared lock per entry.
-# ``angular_spectrum_propagate`` measured 0 / 320 either way.
-#
-# Fix: latch the first thread that reaches the plan cache; the instant a
+# So: latch the first thread that reaches the plan cache; the instant a
 # SECOND thread issues an FFT, every subsequent pyFFTW return privatises
 # its buffer (``buf.copy()``) for the rest of the process.  Single-threaded
 # callers -- the overwhelmingly common case, and the one the double buffer
@@ -708,6 +653,7 @@ _PYFFTW_PLAN_LOCK = threading.Lock()
 # so the first thread's outstanding view is on the alternate slot and
 # survives.  It is deliberately one-way: nothing resets it, because a
 # process that has been multi-threaded once may be again.
+# (Measured evidence: docs/history/fft_infra.md.)
 _PYFFTW_FIRST_FFT_THREAD = None
 _PYFFTW_SHARED_BUFFERS_UNSAFE = False
 
@@ -734,31 +680,21 @@ def _note_fft_thread():
 # MEASURE.  Switch at runtime via ``set_pyfftw_planner()``.
 _PYFFTW_PLAN_FLAGS = ('FFTW_ESTIMATE',)
 
-# 4.12 auto-promote: when an ESTIMATE-flagged plan key gets called this
+# Auto-promote: when an ESTIMATE-flagged plan key gets called this
 # many times, the plan is evicted and rebuilt with FFTW_MEASURE so the
 # steady-state hot path benefits from the better planner.  Below the
 # threshold the one-shot MEASURE planning cost (~0.2-11 s, 256^2..4096^2
 # measured) isn't recouped, so we stay with ESTIMATE.
 #
-# v5.30.1 (audit W9): the DEFAULT is now False -- auto-promote is OPT-IN.
-# It was on by default from 4.12 through v5.30, which made lumenairy
-# silently non-reproducible, in two separate ways:
-#
-#   1. IN-PROCESS.  The switch happens mid-session, at whichever call
-#      crosses the threshold at that key.  A caller doing N transforms per
-#      user-level call sees its output change bits after ceil(5/N) calls
-#      on one FIXED input -- measured on apply_real_lens_traced (4
-#      transforms per call at one 256^2 key): calls 0-1 give one value,
-#      calls 2+ a different one, max|d| ~ 2.8e-15.  Because 'calls' is
-#      global state keyed on (direction, shape, dtype, threads), an
-#      UNRELATED earlier caller at the same shape moves the boundary --
-#      which is how this reached CI as a collection-order-dependent
-#      failure of a byte-identity pin.
-#   2. ACROSS PROCESSES.  FFTW_MEASURE picks its algorithm by TIMING
-#      candidate plans at plan time, so the winner depends on machine
-#      noise.  Measured: 4 fresh processes, same input, 4 DIFFERENT
-#      post-promotion bit patterns -- while the ESTIMATE result was
-#      identical in all 4.  Only ESTIMATE is a deterministic planner.
+# The DEFAULT is False -- auto-promote is OPT-IN -- because it is not
+# reproducible.  IN-PROCESS the plan swaps MID-SESSION at whichever call crosses
+# the per-key counter, so one FIXED input returns different bits before and
+# after (~2.8e-15 measured), and the counter is global per (direction, shape,
+# dtype, threads), so an UNRELATED earlier caller at the same shape moves the
+# boundary.  ACROSS PROCESSES FFTW_MEASURE picks its algorithm by TIMING
+# candidate plans, so the winner varies with machine noise (4 fresh processes,
+# 4 distinct post-promotion bit patterns; ESTIMATE gave one).  Only ESTIMATE is
+# a deterministic planner.
 #
 # Neither result is "more correct" (both are valid FFTs, differing at the
 # ULP), so the tie-break is reproducibility: a physics library must return
@@ -768,13 +704,13 @@ _PYFFTW_PLAN_FLAGS = ('FFTW_ESTIMATE',)
 #
 #   set_pyfftw_planner('FFTW_MEASURE')  -- plan every key with MEASURE from
 #       call 1 (recommended; also skips the wasted ESTIMATE warm-up phase).
-#   set_fft_auto_promote(True)          -- restore the pre-v5.30.1 threshold
-#       behaviour, boundary and all.
+#   set_fft_auto_promote(True)          -- the threshold behaviour, boundary and
+#       all.
 #
 # Measured ESTIMATE -> MEASURE steady-state execution speedup on this box
 # (complex128, 8 threads): 1.39x @256^2, 2.22x @512^2, 2.04x @1024^2,
 # 3.67x @2048^2, 4.55x @4096^2 -- so the opt-in is well worth it for
-# long-running production sweeps, and is documented as such.
+# long-running production sweeps.
 #
 # ``_PYFFTW_AUTO_PROMOTE_SHIPPED`` is the immutable source-declared default
 # (mirroring ``DEFAULT_WAVE_PROPAGATOR_SHIPPED``).  ``_PYFFTW_AUTO_PROMOTE``
@@ -812,7 +748,7 @@ def set_pyfftw_planner(planner: str = 'FFTW_ESTIMATE') -> None:
 
     .. warning::
         Switching **back** to ``'FFTW_ESTIMATE'`` does not restore the
-        bits you had before (audit W9).  Clearing the plan cache does
+        bits you had before.  Clearing the plan cache does
         not clear libfftw3's process-global *wisdom*: once MEASURE has
         planned a given problem size, later ESTIMATE plans at that size
         reuse the wisdom-recorded algorithm.  Measured on a 256^2
@@ -851,10 +787,9 @@ def reset_fft_backend() -> None:
     aligned workspaces.
     """
     global _PYFFTW_AUTO_PROMOTE_LOGGED
-    # v5.4.6 (audit P3-14): clear the bad-shapes set IN PLACE under the
-    # plan lock instead of rebinding the global, so a concurrent
-    # _handle_pyfftw_failure cannot add to an orphaned set that is then
-    # GC'd (silently dropping the blacklist entry).
+    # Clear the bad-shapes set IN PLACE under the plan lock rather than
+    # rebinding the global, so a concurrent _handle_pyfftw_failure cannot add to
+    # an orphaned set that is then GC'd -- silently dropping the entry.
     with _PYFFTW_PLAN_LOCK:
         _PYFFTW_BAD_SHAPES.clear()
         _PYFFTW_PLAN_CACHE.clear()
@@ -867,11 +802,10 @@ def reset_fft_backend() -> None:
     # for "what was just being computed" so dropping them on backend
     # reset matches the user's mental model.
     clear_asm_caches()
-    # S5-8 (perf, no-loss): the real plan buffers live in
-    # ``_PYFFTW_PLAN_CACHE`` (cleared above under the lock); the
-    # ``pyfftw.interfaces.cache`` we used to disable/enable here is never
-    # populated by lumenairy (raw ``pyfftw.FFTW`` plans only), so toggling it
-    # freed nothing and only reset the idle keep-alive daemon.  Dropped.
+    # Deliberately NOT toggling ``pyfftw.interfaces.cache``: the real plan
+    # buffers live in ``_PYFFTW_PLAN_CACHE`` (cleared above under the lock), and
+    # lumenairy never uses the ``pyfftw.interfaces.*`` wrapper API, so that cache
+    # is always empty for us.  (S5-8; docs/history/fft_infra.md.)
 
 
 def set_fft_plan_cache_size(n: int) -> None:
@@ -890,7 +824,7 @@ def get_fft_plan_cache_size() -> int:
     Each resident plan key holds up to a two-buffer ping-pong of aligned
     full-grid workspaces, so this bounds the persistent FFT memory:
     ``min(#distinct keys, size) * n_bufs * N*N*itemsize`` bytes, with
-    ``n_bufs`` 2 or 1 per :func:`_plan_entry_n_bufs` (v5.33.2: 1 above
+    ``n_bufs`` 2 or 1 per :func:`_plan_entry_n_bufs` (1 above
     :func:`get_fft_plan_max_bytes_per_buffer`, or whenever
     :func:`set_fft_double_buffer` is off).  The estimator
     (:func:`lumenairy.estimate_sim_memory`) reads both to size the ASM-step
@@ -905,20 +839,19 @@ _register_knob(
         "evicts oldest-first immediately.")
 
 
-# v5.16.2: opt-out for the v4.12 two-buffer ping-pong.  With the ping-pong,
-# ``_fft2``/``_ifft2`` return one of two live workspace buffers with no copy
-# (speed), at the cost of a SECOND resident full-grid aligned buffer per plan
-# key (16 GiB/key at N=32768 complex128).  ``set_fft_double_buffer(False)``
-# restores the pre-v4.12 single-buffer footprint; the dispatchers then return
-# ``buf.copy()`` so results stay private -- byte-identical values, ~one extra
-# array copy per FFT (~1-3% of a large transform).
+# Opt-out for the two-buffer ping-pong.  With the ping-pong, ``_fft2``/``_ifft2``
+# return one of two live workspace buffers with no copy (speed), at the cost of a
+# SECOND resident full-grid aligned buffer per plan key (16 GiB/key at N=32768
+# complex128).  ``set_fft_double_buffer(False)`` keeps a single buffer per key;
+# the dispatchers then return ``buf.copy()`` so results stay private --
+# byte-identical values, one extra array copy per FFT (priced in the byte-cap
+# note below, which measured it: it is NOT the "~1-3 %" this comment used to
+# claim).
 _PYFFTW_DOUBLE_BUFFER = True
 
-# v5.33.2 PER-KEY BYTE CAP on the ping-pong (audit
-# AUDIT_TRACED_MEMORY_2026_08_09 rows 2 and 5.4).  ``_PYFFTW_DOUBLE_BUFFER``
-# above is an all-or-nothing process switch, and the plan cache had no byte
-# bound of any kind -- 8 KEYS, each holding TWO full-grid aligned workspaces,
-# priced only in KEYS.  MEASURED retained after ONE design-121 order:
+# PER-KEY BYTE CAP on the ping-pong.  ``_PYFFTW_DOUBLE_BUFFER`` above is an
+# all-or-nothing process switch; this is the per-key bound.  MEASURED resident
+# after ONE design-121 order, before the cap existed:
 #
 #     fwd+inv @ 16384^2   17.18 GB
 #     fwd+inv @  9216^2    5.44 GB
@@ -939,10 +872,9 @@ _PYFFTW_DOUBLE_BUFFER = True
 # The cap is PER WORKSPACE, which is ``_H_CACHE_MAX_BYTES_PER_ENTRY``'s
 # semantic (that cap bounds one ARRAY, and one workspace is the array here).
 #
-# 2 GB is where the MEASURED trade turns, and the trade is not the one this
-# module's v5.16.2 comment records.  That comment prices the single-buffer
-# copy at "~1-3% of a large transform"; measured on this box (complex128,
-# warm plan, best of 5):
+# 2 GB is where the MEASURED trade turns, and the trade is NOT the "~1-3 % of a
+# large transform" the ping-pong note above used to claim; measured on this box
+# (complex128, warm plan, best of 5):
 #
 #     N = 4096  (0.268 GB/buffer)   fft2 184 ms -> 160 ms    (no copy: still
 #                                                             double-buffered)
@@ -958,12 +890,8 @@ _PYFFTW_DOUBLE_BUFFER = True
 # order (0.2 %) -- 3 x the MEASURED +524.2 ms at 16384 -- to give back 8.59 GB
 # of a 98.85 GB peak (8.7 %).  Decimal 2e9 rather than 2 GiB deliberately:
 # 8192^2 complex128 is EXACTLY 1 GiB, so a power-of-two threshold would decide
-# a common shape on the direction of a ``<=``.  (2 GiB would instead bind at
-# N >= 11586, which is where this comment's own earlier binding figure came
-# from; the constant is decimal, so 11181 is the one that is true.  The cost
-# line likewise read "~4.5 s ... (0.5 %)" against the 1.6 s / 0.2 % its own
-# measured table gives -- both corrected v5.33.3,
-# VERIFY_PERF_BRANCH_2026_08_10 D6.)
+# a common shape on the direction of a ``<=``.  (2 GiB would bind at N >= 11586
+# instead; the constant is decimal, so 11181 is the one that is true.)
 #
 # On the production order, with the separable readout (row 6) removing the
 # 9216^2 plans from existence entirely, the resident plan buffers go
@@ -978,7 +906,7 @@ _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER = 2_000_000_000   # 2 GB
 def _plan_entry_n_bufs(shape_t, dt) -> int:
     """How many workspaces one plan key at ``(shape_t, dt)`` may hold.
 
-    ``2`` (the v4.12 ping-pong) only when the double buffer is enabled AND one
+    ``2`` (the ping-pong) only when the double buffer is enabled AND one
     workspace fits ``_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER``; ``1`` otherwise.
     Single source of truth for the build site and for the dispatchers'
     copy-or-not decision, so the two can never disagree -- a single-buffer
@@ -1002,7 +930,7 @@ def set_fft_plan_max_bytes_per_buffer(nbytes) -> None:
     for one array copy per FFT at that shape -- byte-identical values either
     way (the same trade :func:`set_fft_double_buffer` makes globally, and in
     the same "safe set" :func:`lumenairy.set_low_memory` documents).  Pass
-    ``float('inf')`` for the pre-v5.33.2 behaviour (ping-pong at every shape).
+    ``float('inf')`` to ping-pong at every shape, whatever its size.
     Clears the plan cache so every resident entry matches the new bound."""
     global _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER
     _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER = (
@@ -1075,8 +1003,10 @@ def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional
         ``np.complex128``.  Pass ``np.complex64`` for the
         single-precision path used by the JAX/CuPy paths.
     threads : int, optional
-        Threads per plan.  Defaults to
-        :func:`lumenairy._backends.available_cpus`.
+        Threads per plan.  Defaults to the live :data:`FFTW_THREADS` global
+        that :func:`_fft2` / :func:`_ifft2` dispatch on -- the plan-cache key
+        includes the thread count, so any other default would build plans
+        under a key the runtime never queries (audit F-32).
 
     Returns
     -------
@@ -1097,11 +1027,11 @@ def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional
     if dtype is None:
         dtype = np.complex128
     if threads is None:
-        # v5.4.6 (audit F-32): default to the FFTW_THREADS global that
-        # _fft2/_ifft2 actually dispatch on, NOT _available_cpus().  The
-        # plan cache key includes the thread count, so after
-        # set_fft_threads(k) a warmup built at _available_cpus() threads
-        # lands under a key the runtime never queries -- a silent no-op.
+        # Default to the FFTW_THREADS global that _fft2/_ifft2 actually
+        # dispatch on, NOT _available_cpus(): the plan cache key includes the
+        # thread count, so after set_fft_threads(k) a warmup built at
+        # _available_cpus() threads lands under a key the runtime never
+        # queries -- a silent no-op.  (audit F-32.)
         threads = max(1, int(FFTW_THREADS))
     n = 0
     for shape in shapes:
@@ -1112,29 +1042,26 @@ def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional
     return n
 
 
-# v5.4.6 (audit P3-16): the FFT/precision dispatch globals below are plain
-# module globals, so a spawn-based worker re-imports this module at library
-# defaults and silently loses any parent ``set_default_*`` / ``set_fft_*``
-# overrides.  ``snapshot_fft_state`` / ``restore_fft_state`` let a caller
-# carry the parent's configuration across the spawn boundary.
+# The FFT/precision dispatch globals below are plain module globals, so a
+# spawn-based worker re-imports this module at library defaults and silently
+# loses any parent ``set_default_*`` / ``set_fft_*`` overrides.
+# ``snapshot_fft_state`` / ``restore_fft_state`` carry the parent's
+# configuration across the spawn boundary.  (audit P3-16.)
 _FFT_STATE_KEYS = (
     'DEFAULT_COMPLEX_DTYPE', 'DEFAULT_REAL_DTYPE', 'DEFAULT_WAVE_PROPAGATOR',
     'DEFAULT_DY', 'FFTW_THREADS', 'SCIPY_FFT_WORKERS', 'USE_PYFFTW',
     '_PYFFTW_PLAN_FLAGS', '_PYFFTW_AUTO_PROMOTE',
-    # v5.17.1 (audit P3-54): setter-backed globals added after v5.4.6 that
-    # spawned workers must inherit too -- without these a worker silently
-    # reverts to double-buffered plans / default cache budgets, i.e. ~2x
-    # the FFT workspace the parent's knobs were set to prevent.
-    # restore_fft_state tolerates snapshots from older library versions
-    # that lack these keys (mixed-version worker pools).
+    # Setter-backed globals a spawned worker must inherit too -- without these
+    # a worker silently reverts to double-buffered plans / default cache budgets,
+    # i.e. ~2x the FFT workspace the parent's knobs were set to prevent.
+    # restore_fft_state tolerates snapshots that lack these keys (mixed-version
+    # worker pools).  (audit P3-54.)
     'USE_SCIPY_FFT',                 # raw toggle (peer of USE_PYFFTW)
     'PYFFTW_FALLBACK_ON_ERROR',      # set_fft_fallback
     '_PYFFTW_DOUBLE_BUFFER',         # set_fft_double_buffer (v5.16.2)
     '_PYFFTW_PLAN_CACHE_SIZE',       # set_fft_plan_cache_size
-    # v5.33.2: the per-key byte cap on the ping-pong.  A worker that missed
-    # it would rebuild double-buffered plans at the very shapes the parent
-    # capped -- the same "~2x the FFT workspace the parent's knobs were set
-    # to prevent" the P3-54 note above records.
+    # The per-key byte cap on the ping-pong: a worker that missed it would
+    # rebuild double-buffered plans at the very shapes the parent capped.
     '_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER',   # set_fft_plan_max_bytes_per_buffer
     '_H_CACHE_SIZE', '_FREQ_GRID_CACHE_SIZE', '_BANDLIMIT_CACHE_SIZE',
     '_H_CACHE_MAX_BYTES_PER_ENTRY', '_H_CACHE_MAX_TOTAL_BYTES',
@@ -1146,7 +1073,7 @@ _FFT_STATE_KEYS = (
 # mode clears plans built in the other mode; tightening a cache bound
 # trims already-resident entries).  In a fresh spawn worker the caches
 # are empty so the side effects are no-ops, but restore_fft_state is
-# also callable in a warm process.  v5.17.1 (audit P3-54).
+# also callable in a warm process.  (audit P3-54.)
 _FFT_STATE_SETTER_KEYS = frozenset((
     '_PYFFTW_DOUBLE_BUFFER', '_PYFFTW_PLAN_CACHE_SIZE',
     '_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER',
@@ -1160,12 +1087,8 @@ def snapshot_fft_state() -> dict:
     (via the ``set_default_*`` / ``set_fft_*`` / ``set_pyfftw_*`` setters).
 
     Returns a plain, pickleable ``dict`` suitable for handing to a spawned
-    worker.  See :func:`restore_fft_state`.  v5.4.6 (audit P3-16).
-
-    v5.17.1 (audit P3-54): also captures the later-added knobs --
-    ``USE_SCIPY_FFT``, :func:`set_fft_fallback`,
-    :func:`set_fft_double_buffer`, :func:`set_fft_plan_cache_size` and
-    the :func:`set_asm_cache_size` bounds.
+    Returns a plain, pickleable ``dict`` suitable for handing to a spawned
+    worker.  See :func:`restore_fft_state`.
     """
     g = globals()
     return {k: g[k] for k in _FFT_STATE_KEYS}
@@ -1184,18 +1107,18 @@ def restore_fft_state(state: dict) -> None:
 
     so each worker runs at the parent's precision / thread / planner
     settings instead of the library defaults.  Unknown / missing keys are
-    ignored (forward-compatible).  v5.4.6 (audit P3-16).
+    ignored (forward-compatible).
     """
     if not state:
         return
     g = globals()
     for k in _FFT_STATE_KEYS:
-        # Missing keys (snapshot taken by an older library version in a
+        # Missing keys (a snapshot from an older library version in a
         # mixed-version worker pool) leave this process's value alone;
-        # unknown extra keys in ``state`` are ignored.  v5.17.1 (P3-54).
+        # unknown extra keys in ``state`` are ignored.
         if k in state and k not in _FFT_STATE_SETTER_KEYS:
             g[k] = state[k]
-    # v5.17.1 (audit P3-54): the remaining keys go through their setters
+    # The remaining keys go through their setters
     # so the side effects fire (plan-cache clear on a ping-pong flip;
     # LRU trim on tightened bounds).  No-ops in a fresh spawn worker.
     if '_PYFFTW_DOUBLE_BUFFER' in state:
@@ -1241,20 +1164,15 @@ def _build_plan_entry(direction, shape_t, dt, threads, flag):
     Returns the cache-entry dict; the caller is responsible for
     storing it under the appropriate key.
 
-    v5.16.2: when :func:`set_fft_double_buffer` disabled the ping-pong
-    (``_PYFFTW_DOUBLE_BUFFER = False``), a SINGLE buffer + plan is built
-    instead -- halving the resident aligned-workspace memory (one
-    full-grid array per plan key; 16 GiB/key at N=32768 complex128,
-    matching the pre-v4.12 single-buffer behaviour).  ``_fft2`` /
-    ``_ifft2`` then return ``buf.copy()`` instead of the live buffer, so
-    results stay private (byte-identical values; ~one extra copy per
-    FFT).
-
-    v5.33.2: the same single-buffer entry is built, per key, whenever the
-    ping-pong would exceed :data:`_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER` -- see
-    :func:`_plan_entry_n_bufs`.  The dispatchers read the entry's buffer
-    COUNT (not the global switch) to decide whether to copy, so a
-    byte-capped key and a globally-disabled one behave identically.
+    A SINGLE buffer + plan is built instead -- halving the resident
+    aligned-workspace memory -- in two cases: when
+    :func:`set_fft_double_buffer` has disabled the ping-pong globally, and,
+    per key, when the ping-pong would exceed
+    :data:`_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER` (see :func:`_plan_entry_n_bufs`).
+    ``_fft2`` / ``_ifft2`` then return ``buf.copy()`` instead of the live
+    buffer, so results stay private: byte-identical values, one extra copy per
+    FFT.  The dispatchers read the entry's buffer COUNT, not the global switch,
+    so a byte-capped key and a globally-disabled one behave identically.
 
     Note: on ``flag = 'FFTW_MEASURE'`` (or stronger), the pyFFTW
     constructor runs the planner against the supplied buffer, which
@@ -1283,19 +1201,14 @@ def _build_plan_entry(direction, shape_t, dt, threads, flag):
     return {
         'plans': plans,
         'bufs': bufs,
-        # K4 (audit 2026-09-11): ONE LOCK PER SLOT, not one per entry.
-        # Each pyFFTW plan is bound to its own buffer and the ping-pong
-        # slot index is advanced under ``_PYFFTW_PLAN_LOCK``, so two
-        # threads at the same key always receive DIFFERENT plans and
-        # DIFFERENT buffers -- there is nothing for them to race on.  A
-        # single entry-wide lock nevertheless serialised them: measured
-        # max simultaneous threads inside the pyFFTW critical section =
-        # 1 with 4 threads x 6 calls on one (1024, 1024) complex128
-        # shape, i.e. the double buffer could never deliver any
-        # concurrency at all.  The per-slot lock still guards the one
-        # real hazard -- ``pyfftw.FFTW.__call__`` on the SAME buffer --
-        # which only arises when two callers wrap around to the same
-        # slot.
+        # ONE LOCK PER SLOT, not one per entry (audit K4).  Each pyFFTW plan is
+        # bound to its own buffer and the slot index is advanced under
+        # ``_PYFFTW_PLAN_LOCK``, so two threads at the same key always receive
+        # DIFFERENT plans and DIFFERENT buffers.  An entry-wide lock serialised
+        # them anyway and the double buffer could never deliver any concurrency
+        # at all.  The per-slot lock still guards the one real hazard --
+        # ``pyfftw.FFTW.__call__`` on the SAME buffer -- which only arises when
+        # two callers wrap around to the same slot.
         'locks': [threading.Lock() for _ in bufs],
         'idx': 0,
         'flag': str(flag),
@@ -1314,12 +1227,8 @@ def _promote_entry_to_measure(direction, shape_t, dt, threads):
     time any key promotes.
 
     .. versionchanged:: 5.30
-        Dropped the leading ``entry`` parameter (audit P13): despite the
-        "in-place" wording it was never read -- the function builds a
-        FRESH entry from ``(direction, shape_t, dt, threads)`` and the
-        single call site copies ``entry['calls']`` across itself.
-        Module-private (underscore, one caller inside this module), so no
-        public signature changed.
+        Dropped the leading ``entry`` parameter, which was never read (audit
+        P13).  Module-private, so no public signature changed.
     """
     import logging
     _log = logging.getLogger('lumenairy')
@@ -1352,7 +1261,7 @@ def _get_or_make_plan(direction, shape, dtype, threads):
     the current call -- the wrapper can return ``buf`` directly
     instead of paying for a ``.copy()``.
 
-    v5.33.2: an entry may hold ONE workspace instead of two -- when
+    An entry may hold ONE workspace instead of two -- when
     :func:`set_fft_double_buffer` disabled the ping-pong globally, or when
     this key's two workspaces would exceed
     :data:`_PYFFTW_PLAN_MAX_BYTES_PER_BUFFER`.  The returned ``n_bufs`` is what
@@ -1390,7 +1299,7 @@ def _get_or_make_plan(direction, shape, dtype, threads):
     call.  See :func:`_fft2` / :func:`_ifft2` docstrings for the
     contract.
 
-    Auto-promote: when ``_PYFFTW_AUTO_PROMOTE`` is True (v5.30.1: OPT-IN,
+    Auto-promote: when ``_PYFFTW_AUTO_PROMOTE`` is True (OPT-IN,
     default False), an entry whose plan was built with ``FFTW_ESTIMATE``
     is rebuilt with ``FFTW_MEASURE`` after its 5th call -- which changes
     the output bits mid-session at whichever caller crosses the shared
@@ -1435,17 +1344,14 @@ def _get_or_make_plan(direction, shape, dtype, threads):
                     # Promotion is one-shot; subsequent hits at this
                     # key use the MEASURE plan without re-planning.
                     #
-                    # v5.4.6 (audit P3-13): KNOWN LIMITATION (perf, not
-                    # correctness).  The FFTW_MEASURE planner here can take
-                    # 100-1000 ms on 4k+ grids and runs while holding
-                    # _PYFFTW_PLAN_LOCK, so every concurrent _fft2/_ifft2
-                    # blocks for that window.  The proper fix is a
-                    # double-checked lock: stash a "promote requested"
-                    # marker, drop the lock, build the new entry, then
-                    # reacquire and swap only if the slot is unchanged.
-                    # That concurrency-sensitive refactor is deferred to
-                    # v5.5; single-thread / single-process callers (the
-                    # common case) are unaffected.
+                    # KNOWN LIMITATION (perf, not correctness, audit P3-13):
+                    # the FFTW_MEASURE planner here can take 100-1000 ms on 4k+
+                    # grids and runs while holding _PYFFTW_PLAN_LOCK, so every
+                    # concurrent _fft2/_ifft2 blocks for that window.  The fix is
+                    # a double-checked lock (stash a "promote requested" marker,
+                    # drop the lock, build, reacquire and swap only if the slot
+                    # is unchanged); single-thread / single-process callers are
+                    # unaffected.
                     _ensure_pyfftw_loaded()
                     new_entry = _promote_entry_to_measure(
                         direction, shape_t, dt, threads)
@@ -1485,7 +1391,7 @@ def _get_or_make_plan(direction, shape, dtype, threads):
 
 
 # ----------------------------------------------------------------------------
-# ASM transfer-function and frequency-grid caches (3.2.14)
+# ASM transfer-function and frequency-grid caches
 # ----------------------------------------------------------------------------
 # ``angular_spectrum_propagate`` builds three scalar/vector grids on
 # every call: kx_sq[Nx], ky_sq[Ny], the band-limit masks bl_x[Nx] /
@@ -1518,7 +1424,7 @@ _BANDLIMIT_CACHE_SIZE = 16
 _H_CACHE: 'OrderedDict[tuple, np.ndarray]' = OrderedDict()
 _H_CACHE_SIZE = 8
 
-# 3.2.14.1: Per-entry size cap.  At N=32768 each H is 16 GB
+# Per-entry size cap.  At N=32768 each H is 16 GB
 # complex128; without this cap, an 8-entry cache can hold up to
 # 128 GB of transfer functions and starve apply_real_lens of the
 # few GB it needs for its own sag intermediates.  Above this
@@ -1540,30 +1446,24 @@ def _clear_local_asm_caches() -> None:
     :data:`_ASM_CACHE_LOCK`.
 
     Called by the central cache-clearer registry (registered as
-    ``'asm_local'`` in v4.16.0).  Drains:
+    ``'asm_local'``).  Drains:
 
     - ``_FREQ_GRID_CACHE``  : kx_sq / ky_sq frequency-grid pairs.
     - ``_BANDLIMIT_CACHE``  : ASM band-limit filter pairs.
     - ``_H_CACHE``          : ASM transfer function H per shape/wavelength/z.
-    - ``_PYFFTW_PLAN_CACHE``: jit-built pyFFTW plans (v4.12.2 add).
-    - ``_PYFFTW_BAD_SHAPES``: pyFFTW "skip this shape" memo (v4.12.2 add).
+    - ``_PYFFTW_PLAN_CACHE``: jit-built pyFFTW plans.
+    - ``_PYFFTW_BAD_SHAPES``: pyFFTW "skip this shape" memo.
 
     Public API users should call :func:`clear_asm_caches` instead so
     every sibling cache is drained in the same operation.
 
-    v5.17.1 (audit P3-55): the two pyFFTW structures are cleared under
-    ``_PYFFTW_PLAN_LOCK`` -- the lock that serialises every other
-    mutation of them (``_get_or_make_plan``, ``_handle_pyfftw_failure``,
-    ``reset_fft_backend`` per the v5.4.6 P3-14 fix).  Clearing them
-    under ``_ASM_CACHE_LOCK`` let this clearer empty the plan cache
-    between ``_get_or_make_plan``'s membership check and its indexing
-    (both performed while HOLDING the plan lock), raising an uncaught
-    ``KeyError`` out of ``_fft2`` in a concurrent clear.  The two locks
-    are acquired SEQUENTIALLY (never nested) so no lock order is
-    established with any other holder (``restore_fft_state`` ->
-    ``set_fft_plan_cache_size`` takes the plan lock alone;
-    ``reset_fft_backend`` releases it before calling
-    ``clear_asm_caches``).
+    The two pyFFTW structures are cleared under ``_PYFFTW_PLAN_LOCK`` -- the
+    lock that serialises every other mutation of them -- NOT under
+    ``_ASM_CACHE_LOCK``, which let this clearer empty the plan cache between
+    ``_get_or_make_plan``'s membership check and its indexing and raise an
+    uncaught ``KeyError`` out of ``_fft2``.  The two locks are acquired
+    SEQUENTIALLY, never nested, so no lock order is established with any other
+    holder.  (audit P3-55; ``docs/history/fft_infra.md``.)
     """
     with _ASM_CACHE_LOCK:
         _FREQ_GRID_CACHE.clear()
@@ -1574,29 +1474,15 @@ def _clear_local_asm_caches() -> None:
         _PYFFTW_BAD_SHAPES.clear()
 
 
-# v4.16.0 (ROADMAP #15): register the local-ASM clearer with the
-# central registry at module-import time.  ``clear_asm_caches`` now
-# walks the registry rather than enumerating clear calls by hand.
-#
-# v4.16.1 (audit P1-NEW-F1-2 / C.5): late-binding lambda matching
-# the canonical pattern used by the other 8 cache-owning modules.
-# The registered entry re-resolves ``_clear_local_asm_caches`` from
-# the module's current namespace at call time -- this preserves the
-# pre-v4.16 ``mock.patch.object`` semantic where tests that monkey-
-# patch the clear-function still observe their counter increment
-# when ``clear_asm_caches`` walks the registry.  Pre-v4.16.1 the
-# registration captured the function object directly (early-binding),
-# which silently bypassed ``mock.patch.object`` -- a tester-visible
-# inconsistency vs the other 8 caches.  The cost is one attribute
-# lookup per cache per drain (negligible vs the cache-clear work).
-#
-# v5.1.0 (Agent C, propagation.py split): the registry entry must
-# remain registered under the legacy module path so external code that
-# monkey-patches ``lumenairy.propagators.propagation._clear_local_asm_caches``
-# still observes the patch.  ``propagation`` re-exports
-# ``_clear_local_asm_caches`` from this module, and the registry hook
-# below resolves the attribute on the ``propagation`` module
-# namespace so the legacy patch path stays intact.
+# The local-ASM clearer is registered with the central registry at import time;
+# ``clear_asm_caches`` walks the registry rather than enumerating clear calls.
+# The entry is a LATE-BINDING lambda on purpose: it re-resolves
+# ``_clear_local_asm_caches`` from the module namespace at call time, so a test
+# that ``mock.patch.object``s the clear function still sees its counter move.
+# It resolves the attribute on the ``propagation`` module namespace first, so
+# the legacy patch path
+# ``lumenairy.propagators.propagation._clear_local_asm_caches`` stays intact.
+# (docs/history/fft_infra.md.)
 import sys as _sys
 
 from .._cache_registry import (
@@ -1610,10 +1496,9 @@ from .._cache_registry import (
 def _resolve_asm_clearer():
     """Resolve the current ``_clear_local_asm_caches`` callable.
 
-    Looks up the attribute on the ``propagation`` module first
-    (preserves the pre-v5.1.0 monkey-patch point) and falls back to
-    this module's local function if propagation has not been imported
-    yet.
+    Looks up the attribute on the ``propagation`` module first (that is the
+    legacy monkey-patch point) and falls back to this module's local function
+    if propagation has not been imported yet.
     """
     prop_mod = _sys.modules.get(__name__.rsplit('.', 1)[0] + '.propagation')
     if prop_mod is not None and hasattr(prop_mod, '_clear_local_asm_caches'):
@@ -1630,18 +1515,11 @@ _register_cache_clearer(
 def clear_asm_caches() -> None:
     """Drop every propagator-adjacent cache the library can grow.
 
-    v4.16.0 retires the lazy-import fan-out that this function used
-    pre-v4.15 in favour of the central cache-clearer registry (see
-    :mod:`lumenairy._cache_registry`).  Each cache-owning module
-    registers its own clear function at import time via
-    :func:`lumenairy.register_cache_clearer`, and this function simply
-    walks the registry.
-
-    The external contract is preserved bit-for-bit: every cache that
-    was drained pre-v4.16 is still drained, and the same narrowed-
-    except classes (``ImportError``, ``RuntimeError``,
-    ``AttributeError``) are swallowed so a partial install does not
-    strand the rest of the chain.
+    Each cache-owning module registers its own clear function at import time
+    via :func:`lumenairy.register_cache_clearer`, and this function walks the
+    registry (see :mod:`lumenairy._cache_registry`).  The narrowed-except
+    classes (``ImportError``, ``RuntimeError``, ``AttributeError``) are
+    swallowed so a partial install does not strand the rest of the chain.
 
     Caches drained on a typical install:
 
@@ -1650,8 +1528,8 @@ def clear_asm_caches() -> None:
     - ``_FREQ_GRID_CACHE``  : kx_sq / ky_sq frequency-grid pairs.
     - ``_BANDLIMIT_CACHE``  : ASM band-limit filter pairs.
     - ``_H_CACHE``          : ASM transfer function H per shape/wavelength/z.
-    - ``_PYFFTW_PLAN_CACHE``: jit-built pyFFTW plans (v4.12.2 add).
-    - ``_PYFFTW_BAD_SHAPES``: pyFFTW "skip this shape" memo (v4.12.2 add).
+    - ``_PYFFTW_PLAN_CACHE``: jit-built pyFFTW plans.
+    - ``_PYFFTW_BAD_SHAPES``: pyFFTW "skip this shape" memo.
 
     **Sibling-module caches** -- each registered at the owning
     module's import time.  Cross-references to the underlying
@@ -1679,16 +1557,6 @@ def clear_asm_caches() -> None:
     Use :func:`lumenairy.list_registered_cache_clearers` to introspect
     the live registry contents (useful for the meta-pin
     ``test_all_known_caches_are_registered``).
-
-    Historical notes:
-        The original 3.2.14 perf-pass only cleared the first three
-        local caches.  v4.12.2 extended this to drop the pyFFTW plan
-        cache + bad-shape memo.  v4.14.1 chained the LG/HG mode-stack
-        and wrapper-merit caches.  v4.14.2 (AUDIT_V4_14_1_2026_05_17
-        P1-NEW-3 / Agent C) chained the five additional sibling caches.
-        v4.14.3 chained the LG polynomial coefficient cache (8th
-        sibling).  v4.16.0 retires the lazy-import fan-out entirely
-        in favour of the central registry.
     """
     _clear_all_registered_caches()
 
@@ -1750,8 +1618,8 @@ def _get_or_make_freq_grids(Ny, Nx, dy, dx, xp_is_numpy):
     pixel pitch.  CuPy callers skip the cache (device arrays don't
     survive a host-side dict).
 
-    Layout contract (audit P1, 2026-07-25)
-    --------------------------------------
+    Layout contract
+    ---------------
     The vectors are in CENTRED layout: element ``j`` is the bin that
     ``fftshift`` puts at centred index ``j``, and every consumer either
     ``ifftshift``-es them (``_get_asm_H_natural``, ``fresnel_tf_propagate``)
@@ -1785,7 +1653,7 @@ def _get_or_make_freq_grids(Ny, Nx, dy, dx, xp_is_numpy):
             return _FREQ_GRID_CACHE[key]
     dfx = 1.0 / (Nx * dx)
     dfy = 1.0 / (Ny * dy)
-    # audit P1: integer DC anchor (see the layout contract above).
+    # Integer DC anchor (see the layout contract above).
     fx = (np.arange(Nx) - Nx // 2) * dfx
     fy = (np.arange(Ny) - Ny // 2) * dfy
     kx_sq = (2 * np.pi * fx) ** 2
@@ -1803,7 +1671,7 @@ def _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength, abs_z, xp_is_numpy):
     Same CENTRED layout + integer DC anchor (``N // 2``) contract as
     :func:`_get_or_make_freq_grids` -- the masks are multiplied against
     an H built from those very grids, so the two must label the bins
-    identically (audit P1).  Bit-identical for even N.
+    identically.  Bit-identical for even N.
 
     What the cutoff ``L / (2*lambda*|z|)`` actually is  (audit P12)
     --------------------------------------------------------------
@@ -1846,10 +1714,8 @@ def _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength, abs_z, xp_is_numpy):
     (``lambda = 633 nm``; the ``f_lim`` columns are in 1/m.)  So the two
     agree to <0.5% for ``z >= 5 L`` and the asymptote is up to ~2.2x too
     wide in the deep near field ``z ~ L/4`` -- where the un-filtered ASM
-    is anyway the accurate choice.  The cutoff is deliberately left as
-    the asymptote (it is the pinned, one-sided-safe behaviour); only the
-    docstrings that mis-attributed it to the paper's exact expression
-    were corrected.
+    is anyway the accurate choice.  The cutoff is deliberately left as the
+    asymptote: it is the pinned, one-sided-safe behaviour.
 
     References
     ----------
@@ -1877,14 +1743,11 @@ def _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength, abs_z, xp_is_numpy):
     Ly = Ny * dy
     fx_max = Lx / (2 * wavelength * abs_z)
     fy_max = Ly / (2 * wavelength * abs_z)
-    # audit P1: integer DC anchor, matching _get_or_make_freq_grids.
-    # K8 (audit 2026-09-11): and the SAME multiply-by-reciprocal
-    # expression, not a division.  These masks label the bins of an H
-    # built from ``_get_or_make_freq_grids``, and the two forms differ by
-    # up to 1 ULP whenever ``1/(N*d)`` is not exactly representable -- a
-    # mask/kernel label mismatch.  Latent only (0 flipped mask bins in
-    # 400 randomised (N, dx, lambda, z) trials), but there is no reason
-    # for two expressions where one will do.
+    # Integer DC anchor, matching _get_or_make_freq_grids -- and the SAME
+    # multiply-by-reciprocal expression, not a division.  These masks label the
+    # bins of an H built from ``_get_or_make_freq_grids``, and the two forms
+    # differ by up to 1 ULP whenever ``1/(N*d)`` is not exactly representable,
+    # which would be a mask/kernel label mismatch.  (audit K8.)
     fx = (np.arange(Nx) - Nx // 2) * (1.0 / (Nx * dx))
     fy = (np.arange(Ny) - Ny // 2) * (1.0 / (Ny * dy))
     bl_x = np.abs(fx) < fx_max
@@ -1943,17 +1806,11 @@ def _h_cache_store(key, H):
     h_bytes = _entry_bytes(H)
     if h_bytes > _H_CACHE_MAX_BYTES_PER_ENTRY:
         return  # too big to cache; lookups will miss + rebuild
-    # K8 (audit 2026-09-11): ``_h_cache_lookup`` hands the STORED array
-    # back by reference (no copy -- that is the point of the cache), and
-    # the internal consumers (``angular_spectrum_propagate``,
-    # ``angular_spectrum_propagate_batch``, ``shack_hartmann``,
-    # ``rayleigh_sommerfeld_propagate``) hold the live object.  The
-    # convention "callers must not mutate it in place" was a comment;
-    # make it an enforced invariant at zero cost.  Measured pre-fix: two
-    # successive ``_get_asm_H_natural`` calls at the same key returned
-    # arrays for which ``np.shares_memory(...) is True`` and both were
-    # writeable.  The public ``get_asm_transfer_function`` already
-    # copies, so its return stays writeable.
+    # ``_h_cache_lookup`` hands the STORED array back by reference (no copy --
+    # that is the point of the cache) and the internal consumers hold the live
+    # object, so "callers must not mutate it in place" is enforced rather than
+    # merely documented.  The public ``get_asm_transfer_function`` already
+    # copies, so its return stays writeable.  (audit K8.)
     for _a in (H if isinstance(H, (tuple, list)) else (H,)):
         try:
             if _a is not None and getattr(_a, 'flags', None) is not None:
@@ -2028,9 +1885,8 @@ def get_fft_threads() -> int:
 
     Mirrors :func:`set_fft_threads`.  Returns the effective integer
     actually being passed to pyFFTW (affinity-aware default or the
-    user override).  Companion accessor introduced in 4.8.1 alongside
-    the :func:`lumenairy.lumenairy_context` manager, which needs it
-    to snapshot/restore state.
+    user override).  Companion accessor to :func:`lumenairy.lumenairy_context`,
+    which needs it to snapshot / restore state.
     """
     return int(FFTW_THREADS)
 
@@ -2047,8 +1903,8 @@ def get_pyfftw_planner() -> str:
 
     Mirrors :func:`set_pyfftw_planner`.  Returns one of
     ``'FFTW_ESTIMATE'`` (the import-time default), ``'FFTW_MEASURE'``,
-    ``'FFTW_PATIENT'``, ``'FFTW_EXHAUSTIVE'``.  Companion accessor
-    introduced in 4.8.1 alongside :func:`lumenairy.lumenairy_context`.
+    ``'FFTW_PATIENT'``, ``'FFTW_EXHAUSTIVE'``.  Companion accessor to
+    :func:`lumenairy.lumenairy_context`.
     """
     return _PYFFTW_PLAN_FLAGS[0]
 
@@ -2062,7 +1918,7 @@ _register_knob(
 
 
 def set_fft_auto_promote(enabled: bool) -> None:
-    """Enable or disable automatic ESTIMATE -> MEASURE plan promotion (4.12).
+    """Enable or disable automatic ESTIMATE -> MEASURE plan promotion.
 
     When enabled, the pyFFTW plan cache tracks the call count for
     every ``(direction, shape, dtype, threads)`` key that was built
@@ -2081,20 +1937,13 @@ def set_fft_auto_promote(enabled: bool) -> None:
     rarely-used key won't keep paying the MEASURE cost on rebuild.
 
     .. versionchanged:: 5.30.1
-        **The default is now** ``False`` **(opt-in)**; it was ``True``
-        from 4.12 through v5.30.  Auto-promote is not reproducible, and
-        it was on by default: (1) it swaps the plan MID-SESSION, so one
-        FIXED input returns one bit pattern before the threshold call
-        and a different one after (measured ~2.8e-15 on a 256^2 traced
-        lens: calls 0-1 vs calls 2+), and the counter is GLOBAL per
-        ``(direction, shape, dtype, threads)`` key, so an unrelated
-        earlier caller at the same shape moves the boundary; (2)
-        ``FFTW_MEASURE`` selects its algorithm by timing candidates at
-        plan time, so the winner -- and therefore the output bits --
-        varies with machine noise (measured: 4 fresh processes, 4
-        distinct post-promotion results, where ESTIMATE gave one).
-        Neither result is more accurate; the default now favours
-        reproducibility.
+        **The default is now** ``False`` **(opt-in)**.  Auto-promote is not
+        reproducible: the plan swaps MID-SESSION at whichever call crosses a
+        per-key counter that unrelated callers also advance, and
+        ``FFTW_MEASURE`` picks its algorithm by timing candidates, so the
+        output bits vary with machine noise across processes.  Neither
+        result is more accurate; the default favours reproducibility.
+        (Measurements: ``docs/history/fft_infra.md``.)
 
     To get the throughput back, prefer ``set_pyfftw_planner(
     'FFTW_MEASURE')`` over ``set_fft_auto_promote(True)``: it plans
@@ -2112,16 +1961,15 @@ def set_fft_auto_promote(enabled: bool) -> None:
 
 
 def get_fft_auto_promote() -> bool:
-    """Return whether auto-promote of ESTIMATE -> MEASURE is on (4.12).
+    """Return whether auto-promote of ESTIMATE -> MEASURE is on.
 
     Mirrors :func:`set_fft_auto_promote`.  Defaults to ``False`` at
     import time.
 
     .. versionchanged:: 5.30.1
         The import-time default flipped ``True`` -> ``False`` (audit W9):
-        auto-promote is now opt-in because it is not reproducible either
-        in-process (the plan swaps mid-session) or across processes (the
-        MEASURE planner picks by timing).  See :func:`set_fft_auto_promote`.
+        auto-promote is opt-in because it is not reproducible.  See
+        :func:`set_fft_auto_promote`.
     """
     return bool(_PYFFTW_AUTO_PROMOTE)
 
@@ -2146,8 +1994,7 @@ def get_asm_cache_size() -> Dict[str, int]:
       ancillary caches
 
     Snapshot-friendly: ``set_asm_cache_size(**get_asm_cache_size())``
-    is a round-trip.  Introduced in 4.8.1 to support
-    :func:`lumenairy.lumenairy_context`.
+    is a round-trip, which is what :func:`lumenairy.lumenairy_context` uses.
     """
     return {
         'h_cache': int(_H_CACHE_SIZE),
@@ -2198,26 +2045,24 @@ def _handle_pyfftw_failure(x, op_name, exc):
     # same shape, nor about the opposite direction's own plan + buffer.
     direction = 'inv' if op_name.startswith('ifft') else 'fwd'
     key = _pyfftw_bad_key(shape, x.dtype, direction)
-    # v5.4.6 (audit P3-14): the read-test-then-add must be atomic under the
-    # plan lock, else two threads failing on the same key both observe
-    # was_new=True (duplicate warnings) and a concurrent reset can swap the
-    # binding underfoot.  This handler runs OUTSIDE the plan-lookup lock
-    # (it is called from the _fft2/_ifft2 execution except-blocks), so
-    # acquiring the (non-reentrant) lock here does not deadlock.
+    # The read-test-then-add must be atomic under the plan lock, else two
+    # threads failing on the same key both observe was_new=True (duplicate
+    # warnings) and a concurrent reset can swap the binding underfoot.  This
+    # handler runs OUTSIDE the plan-lookup lock (it is called from the
+    # _fft2/_ifft2 execution except-blocks), so acquiring the (non-reentrant)
+    # lock here does not deadlock.  (audit P3-14.)
     with _PYFFTW_PLAN_LOCK:
         was_new = key not in _PYFFTW_BAD_SHAPES
         _PYFFTW_BAD_SHAPES.add(key)
     if was_new:
         import warnings
-        # S5-8 (perf, no-loss): we no longer toggle
-        # ``pyfftw.interfaces.cache`` here.  That cache belongs to the
-        # ``pyfftw.interfaces.*`` wrapper API, which lumenairy never uses (raw
-        # ``pyfftw.FFTW`` plans only), so it was always empty for us -- the
-        # disable/enable freed no failed buffers despite the old comment's
-        # claim.  This shape is recorded in ``_PYFFTW_BAD_SHAPES`` above, so
-        # subsequent calls at this shape route straight to scipy/numpy; call
-        # ``reset_fft_backend()`` to drop the resident aligned plan buffers
-        # in ``_PYFFTW_PLAN_CACHE`` once the memory pressure has passed.
+        # ``pyfftw.interfaces.cache`` is deliberately NOT toggled here: it
+        # belongs to the ``pyfftw.interfaces.*`` wrapper API, which lumenairy
+        # never uses, so it is always empty for us.  This key is recorded in
+        # ``_PYFFTW_BAD_SHAPES`` above, so subsequent calls at this shape route
+        # straight to scipy/numpy; call ``reset_fft_backend()`` to drop the
+        # resident aligned plan buffers once the memory pressure has passed.
+        # (S5-8.)
         warnings.warn(
             f'pyFFTW {op_name} failed on shape {shape} '
             f'(dtype {np.dtype(x.dtype).str}, direction {direction}): '
@@ -2250,8 +2095,8 @@ def _fft2(x):
     falls back to scipy.fft rather than propagating the error.  See
     :data:`PYFFTW_FALLBACK_ON_ERROR`.
 
-    Returned-buffer ownership (4.12 double-buffer)
-    ----------------------------------------------
+    Returned-buffer ownership
+    -------------------------
     On the pyFFTW path the returned array IS one of the two ping-pong
     workspace buffers held inside the plan cache, not a fresh
     allocation.  This skips the ~256 MB-1 GB per-call copy at 4k-8k
@@ -2278,14 +2123,11 @@ def _fft2(x):
     if _is_cupy_array(x):
         return cp.fft.fft2(x)
     shape = tuple(x.shape)
-    # v5.17.x (audit W5 P2-26 hardening): the pyFFTW path is complex-to-
-    # complex only -- a real-dtype input used to reach _get_or_make_plan,
-    # fail (ValueError), and permanently poison the bare-shape
-    # _PYFFTW_BAD_SHAPES blacklist for ALL dtypes at that shape, with a
-    # misleading "memory pressure" warning.  Gate on iscomplexobj here
-    # (and in the three sibling dispatchers) so real input routes
-    # directly to the scipy/numpy fallback -- correct result, no
-    # blacklist poisoning -- regardless of how future callers cast.
+    # Complex-only gate (audit W5 P2-26): the pyFFTW path is
+    # complex-to-complex, and a real-dtype input reaching _get_or_make_plan
+    # fails with a ValueError that poisons the _PYFFTW_BAD_SHAPES blacklist
+    # for every dtype at that shape.  Real input routes straight to the
+    # scipy/numpy fallback instead.
     if (USE_PYFFTW and PYFFTW_AVAILABLE
             and np.iscomplexobj(x)
             and x.shape[0] >= FFTW_MIN_SIZE
@@ -2304,14 +2146,13 @@ def _fft2(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                # Single-buffer mode -- set_fft_double_buffer(False), or
-                # this key's ping-pong exceeding
-                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER (v5.33.2).  Privatise the
-                # result so the next call at this key can't clobber the
-                # caller's reference.  Branching on the ENTRY's buffer count
-                # rather than on the global switch is what makes the byte cap
-                # safe: a capped key hands back a copy even while the global
-                # ping-pong is on.
+                # Single-buffer mode -- set_fft_double_buffer(False), or this
+                # key's ping-pong exceeding
+                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER.  Privatise the result so
+                # the next call at this key can't clobber the caller's
+                # reference.  Branching on the ENTRY's buffer count rather than
+                # on the global switch is what makes the byte cap safe: a capped
+                # key hands back a copy even while the global ping-pong is on.
                 # A second thread has issued an FFT in this process, so the
                 # ping-pong slot can be recycled while this caller still holds
                 # its reference -- privatise (see _PYFFTW_SHARED_BUFFERS_UNSAFE).
@@ -2352,7 +2193,7 @@ def _ifft2(x):
     if _is_cupy_array(x):
         return cp.fft.ifft2(x)
     shape = tuple(x.shape)
-    # v5.17.x (audit W5 P2-26 hardening): complex-only gate; see _fft2.
+    # Complex-only gate; see _fft2.
     if (USE_PYFFTW and PYFFTW_AVAILABLE
             and np.iscomplexobj(x)
             and x.shape[0] >= FFTW_MIN_SIZE
@@ -2364,14 +2205,10 @@ def _ifft2(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                # Single-buffer mode -- set_fft_double_buffer(False), or
-                # this key's ping-pong exceeding
-                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER (v5.33.2).  Privatise the
-                # result so the next call at this key can't clobber the
-                # caller's reference.  Branching on the ENTRY's buffer count
-                # rather than on the global switch is what makes the byte cap
-                # safe: a capped key hands back a copy even while the global
-                # ping-pong is on.
+                # Single-buffer mode -- set_fft_double_buffer(False), or this
+                # key's ping-pong exceeding
+                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER.  Privatise the result; see
+                # _fft2 for why the branch reads the entry, not the global.
                 # A second thread has issued an FFT in this process, so the
                 # ping-pong slot can be recycled while this caller still holds
                 # its reference -- privatise (see _PYFFTW_SHARED_BUFFERS_UNSAFE).
@@ -2401,7 +2238,7 @@ def _fft2_nd(x):
     if _is_cupy_array(x):
         return cp.fft.fft2(x, axes=(-2, -1))
     shape = tuple(x.shape)
-    # v5.17.x (audit W5 P2-26 hardening): complex-only gate; see _fft2.
+    # Complex-only gate; see _fft2.
     if (USE_PYFFTW and PYFFTW_AVAILABLE and len(shape) >= 2
             and np.iscomplexobj(x)
             and shape[-2] >= FFTW_MIN_SIZE
@@ -2414,14 +2251,10 @@ def _fft2_nd(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                # Single-buffer mode -- set_fft_double_buffer(False), or
-                # this key's ping-pong exceeding
-                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER (v5.33.2).  Privatise the
-                # result so the next call at this key can't clobber the
-                # caller's reference.  Branching on the ENTRY's buffer count
-                # rather than on the global switch is what makes the byte cap
-                # safe: a capped key hands back a copy even while the global
-                # ping-pong is on.
+                # Single-buffer mode -- set_fft_double_buffer(False), or this
+                # key's ping-pong exceeding
+                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER.  Privatise the result; see
+                # _fft2 for why the branch reads the entry, not the global.
                 # A second thread has issued an FFT in this process, so the
                 # ping-pong slot can be recycled while this caller still holds
                 # its reference -- privatise (see _PYFFTW_SHARED_BUFFERS_UNSAFE).
@@ -2446,7 +2279,7 @@ def _ifft2_nd(x):
     if _is_cupy_array(x):
         return cp.fft.ifft2(x, axes=(-2, -1))
     shape = tuple(x.shape)
-    # v5.17.x (audit W5 P2-26 hardening): complex-only gate; see _fft2.
+    # Complex-only gate; see _fft2.
     if (USE_PYFFTW and PYFFTW_AVAILABLE and len(shape) >= 2
             and np.iscomplexobj(x)
             and shape[-2] >= FFTW_MIN_SIZE
@@ -2459,14 +2292,10 @@ def _ifft2_nd(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                # Single-buffer mode -- set_fft_double_buffer(False), or
-                # this key's ping-pong exceeding
-                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER (v5.33.2).  Privatise the
-                # result so the next call at this key can't clobber the
-                # caller's reference.  Branching on the ENTRY's buffer count
-                # rather than on the global switch is what makes the byte cap
-                # safe: a capped key hands back a copy even while the global
-                # ping-pong is on.
+                # Single-buffer mode -- set_fft_double_buffer(False), or this
+                # key's ping-pong exceeding
+                # _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER.  Privatise the result; see
+                # _fft2 for why the branch reads the entry, not the global.
                 # A second thread has issued an FFT in this process, so the
                 # ping-pong slot can be recycled while this caller still holds
                 # its reference -- privatise (see _PYFFTW_SHARED_BUFFERS_UNSAFE).
@@ -2585,13 +2414,10 @@ def _validate_propagator_inputs(E_in, z, wavelength, dx, dy=None, *,
             f'(LumenAiry uses metres; for a 2 um pixel pitch pass '
             f'dx = 2e-6, not 2.)'
         )
-    # 4.9 fix (audit #4.3): the > 1 mm guard was over-strict.  Large
-    # telescope pupils (Hale-class ground apertures, JWST-scale segment
-    # arrays) are legitimately sampled at the mm scale.  Loosened to
-    # > 100 mm (above which a unit-error is far more likely than a
-    # genuine telescope-class problem); the legacy < 1 mm sanity floor
-    # downgrades to a one-time RuntimeWarning so users who really do
-    # have mm-scale pixel pitch see the warning once and proceed.
+    # > 100 mm raises (a unit error is far more likely than a genuine
+    # telescope-class problem); > 1 mm only warns, once, because large-aperture
+    # telescope pupils (Hale-class, JWST-scale segment arrays) really are
+    # sampled at the mm scale.  (audit 4.3.)
     if dx_f > 1e-1:
         raise ValueError(
             f'{fn_name}: dx = {dx_f!r} m looks suspicious (> 100 mm). '
@@ -2627,15 +2453,12 @@ def _validate_propagator_inputs(E_in, z, wavelength, dx, dy=None, *,
 
 __all__ = [
     # Backend flags + loaders
-    # v5.1.0 (Wave-4 integration / V9 walker symmetry): module handles
-    # ``cp`` / ``pyfftw`` and internal config flags (FFTW_MIN_SIZE /
-    # FFTW_THREADS / PYFFTW_FALLBACK_ON_ERROR / SCIPY_FFT_AVAILABLE /
-    # SCIPY_FFT_WORKERS / USE_PYFFTW / USE_SCIPY_FFT) are intentionally
-    # NOT in __all__ -- they're module-attribute-accessible for power
-    # users (``lumenairy.propagators.propagation.USE_PYFFTW = True``)
-    # but not part of the public top-level API.  CUPY_AVAILABLE /
-    # PYFFTW_AVAILABLE stay public because they're documented as
-    # capability-probe flags in the README.
+    # The module handles (``cp`` / ``pyfftw``) and the internal config flags
+    # (FFTW_MIN_SIZE / FFTW_THREADS / PYFFTW_FALLBACK_ON_ERROR /
+    # SCIPY_FFT_AVAILABLE / SCIPY_FFT_WORKERS / USE_PYFFTW / USE_SCIPY_FFT) are
+    # deliberately NOT in __all__: module-attribute-accessible for power users,
+    # but not public top-level API.  CUPY_AVAILABLE / PYFFTW_AVAILABLE stay
+    # public -- the README documents them as capability-probe flags.
     'CUPY_AVAILABLE', 'PYFFTW_AVAILABLE',
     '_ensure_cupy_loaded', '_ensure_pyfftw_loaded', '_is_cupy_array',
     # FFT backend config (setters only -- the underlying globals stay

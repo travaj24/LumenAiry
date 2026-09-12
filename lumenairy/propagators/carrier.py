@@ -17,6 +17,10 @@ beam edge forces production grids to ``N = 28672 / dx = 0.9 um``
 *propagator-independently* -- ANY model that samples the full phase
 ``exp(i*k*r^2/(2R))`` on a grid pays that cost (hammer-audit finding H8).
 
+Version history for this module -- what each audit changed, what the
+pre-fix behaviour was and why it was wrong -- lives in
+``docs/history/carrier.md``.
+
 The carrier-referenced propagator sidesteps it: write the field as an
 envelope times a spherical carrier,
 
@@ -178,14 +182,10 @@ _BRIDGE_FIT_MARGIN = 1.6
 
 # --- default fine-zoom leg for carrier_referenced_focus_readout ------------
 #
-# THE CONTROLLING INVARIANT IS THE GRID EXTENT, NOT NA (fix D2, 2026-08-06).
-# Two earlier defaults were both CONSTANT multiples of the Rayleigh range --
-# ``_BRIDGE_ZR_FACTOR`` (6.0 zR) and then 0.8 zR, the latter justified by an
-# "the optimum is NA-independent" argument.  Both are refuted by measurement:
-# the optimum moves by 3.4x with the INPUT GRID EXTENT at fixed NA, and at a
-# grid half-extent of 2 beam radii the 0.8 zR default was measurably WORSE
-# than the 6.0 zR one it replaced (FWHM error 10.58% vs 10.13% against an
-# exact discrete paraxial focal-plane oracle; local optimum ~1.7 zR at 4.8%).
+# THE CONTROLLING INVARIANT IS THE GRID EXTENT, NOT NA (fix D2).  No CONSTANT
+# multiple of the Rayleigh range can express this leg: measured against an
+# exact discrete paraxial focal-plane oracle, the optimum moves by 3.4x with
+# the INPUT GRID EXTENT at FIXED NA.
 #
 # The resolver below therefore sizes the leg from the geometry the readout
 # actually depends on.  Write ``s`` for the standoff, ``zR`` / ``w0`` for the
@@ -257,13 +257,9 @@ _FOCUS_STANDOFF_WAIST_GROWTH = 2.0
 # Everything above describes the branch where the margin ``M`` is REACHABLE.
 # It is not reachable below ``ext = M/sat = 3.695``, and there the law shipped
 # above degenerates: ``m_req = sat*ext`` makes ``f = f_cap = sqrt(3)`` EXACTLY,
-# for every extent and every NA.  So the "derived, extent-following" law was,
-# under 3.695 beam radii of grid, one more CONSTANT multiple of the Rayleigh
-# range -- 1.732 instead of 0.8 or 6.0 -- and it sat in a contiguous 9-cell
-# band (NA >= 0.10, ext 1.5-2.0 on a 6 NA x 9 ext matrix) where it was worse
-# than BOTH constants it replaced, by up to 5.1x against 0.8 zR and 3.9x
-# against 6.0 zR, and where its worst cell (1.62e-1 at NA 0.05 / ext 1.5) lost
-# to 6.0 zR's worst (1.26e-1) by 1.28x.
+# for every extent and every NA.  So under 3.695 beam radii of grid the
+# "derived, extent-following" law is one more CONSTANT multiple of the
+# Rayleigh range, and measurement says it is the wrong one there.
 #
 # The cap's own justification is what fails: "past ``growth`` the margin buys
 # nothing" is true of the margin's DERIVATIVE, not of the ERROR.  ``C`` is
@@ -313,14 +309,10 @@ _FOCUS_STANDOFF_WAIST_GROWTH = 2.0
 # resolver leaves it alone.  This is measurement, not preference: extending
 # those cells anyway was measured to make NA 0.10 / ext 1.5 1.9x WORSE.
 #
-# Measured after (6 NA x 9 ext, 6 w0 window, relL2 of |F| vs the oracle; full
-# matrix in docs/audits/FIX_V1_V8_2026_08_06.md):
-#     geomean  4.20e-3 -> 2.68e-3     worst  1.62e-1 -> 9.12e-2
-#     against 0.8 zR   1.79e-2 / 1.07e+0   and 6.0 zR   1.47e-2 / 1.26e-1
-# -- so the worst-case half of the headline, which V1 refuted, now holds on the
-# EXTENDED grid too, and the 9-cell "worse than both" band drops to 7 cells
-# whose worst loss is 1.8x (was 5.1x).  What remains is disclosed in the fix
-# doc, not smoothed over.
+# Measured acceptance for this branch (6 NA x 9 extents, relL2 of |F| against
+# the exact discrete paraxial oracle): geomean 2.68e-3, worst 9.12e-2.  Full
+# matrix, and the cells that still lose, in
+# docs/audits/FIX_V1_V8_2026_08_06.md and docs/history/carrier.md.
 _FOCUS_STANDOFF_CLIP_COEFF = 0.34          # C0 in C = C0 exp(-margin^2)
 _FOCUS_STANDOFF_LEG_ERR_COEFF = 0.155      # A  in [2]
 _FOCUS_STANDOFF_LEG_ERR_NA_POW = 3.0       # NA exponent in [2]
@@ -469,7 +461,7 @@ _FOCUS_READOUT_WINDOW_ENERGY_TOL = 0.01
 
 def _backend_of(E):
     """Return ``(xp, is_jax, bld)`` for a field ``E``: its array namespace,
-    whether it is a JAX array, and the module used to build field-independent
+    whether it is a JAX array.  Field-independent
     float64 grids (host NumPy for JAX, the device namespace otherwise)."""
     from ..backend import array_namespace, is_jax_array
     xp = array_namespace(E)
@@ -499,24 +491,20 @@ def _cdtype_of(x):
     return np.dtype(DEFAULT_COMPLEX_DTYPE)
 
 
-# THE OFFSET IS ``N // 2``, NOT ``N / 2`` (defect D7, REVIEW_TRACED_EXACT
-# 2026-08-05; fixed 2026-08-06).  Both builders return the FFTSHIFTED
-# (centred) frequency axis and every caller un-shifts it with ``ifftshift``,
-# so the values must be exactly ``fftshift(fftfreq(N, d))`` -- i.e. the
-# INTEGER bins ``(j - N//2)``.  The historical ``- N / 2`` is the same number
-# for EVEN ``N`` (``N/2 == N//2`` exactly, so the even path -- the whole
-# validated surface -- is bit-identical), but for ODD ``N`` it is
-# half-integer, and ``ifftshift`` of a half-integer axis is NOT ``fftfreq``:
+# THE OFFSET IS ``N // 2``, NOT ``N / 2`` (defect D7).  Both builders return
+# the FFTSHIFTED (centred) frequency axis and every caller un-shifts it with
+# ``ifftshift``, so the values must be exactly ``fftshift(fftfreq(N, d))`` --
+# i.e. the INTEGER bins ``(j - N//2)``.  ``- N / 2`` is the same number for
+# EVEN ``N`` (``N/2 == N//2`` exactly, so the even path is bit-identical), but
+# for ODD ``N`` it is half-integer, and ``ifftshift`` of a half-integer axis is
+# NOT ``fftfreq``:
 #
-#     N = 5, d = 1:  ifftshift(old) = [-0.1, 0.1, 0.3, -0.5, -0.3]
-#                    fftfreq(5)     = [ 0.0, 0.2, 0.4, -0.4, -0.2]
+#     N = 5, d = 1:  ifftshift(-N/2) = [-0.1, 0.1, 0.3, -0.5, -0.3]
+#                    fftfreq(5)      = [ 0.0, 0.2, 0.4, -0.4, -0.2]
 #
-# so every transfer function built on it multiplied the wrong spectral bin.
-# Measured consequence before the fix: ``_exact_tf_2d_xp`` vs the NumPy
-# ``_exact_envelope_tf_step`` relL2 = 1.239 at N = 65 and 0.721 at N = 127
-# (order unity), and ``_fresnel_tf_2d_xp`` vs ``fresnel_tf_propagate`` the
-# same, against 4e-16 at N = 64 / 128.  ``N = 1`` was also wrong (``[-0.5]``
-# for the single DC bin, which must be ``[0.0]``).
+# -- so every transfer function built on it multiplies the wrong spectral bin.
+# ``N = 1`` likewise: ``[-0.5]`` for the single DC bin, which must be
+# ``[0.0]``.
 
 def _freq_sq_1d_bld(N, d, bld):
     """Centred ``(2*pi*f)^2`` float64 vector on backend ``bld``.
@@ -649,18 +637,12 @@ def _fresnel_tf_2d_xp(E, z, wavelength, dx, dy, xp, is_jax, bld):
 # ---------------------------------------------------------------------------
 # gap-kernel selection -- the COMPLETE accepted vocabulary, and its gate
 # ---------------------------------------------------------------------------
-# Defect D4 (REVIEW_TRACED_EXACT_2026_08_05; fixed 2026-08-06).  The kernel was
-# resolved by an if/elif chain whose LAST arm was an unguarded catch-all, so
-# every value that was not literally 'auto' or 'exact' selected the PARAXIAL
-# kernel.  Measured before the fix, on ``propagate_carrier_referenced``:
-#
-#     'auto'    -> EXACT      'exsct'  -> FRESNEL   (dist_to_fresnel = 0.0)
-#     'exact'   -> EXACT      'EXACT'  -> FRESNEL
-#     'fresnel' -> FRESNEL    None / 1 / ''  -> FRESNEL
-#
-# i.e. a typo, a capitalisation, or an uninitialised variable silently bought
-# back the paraxial gap transport this campaign exists to remove -- the same
-# defect class as the ``on_readout_windo`` typo fixed under niche C1.
+# The vocabulary is CLOSED and it is CHECKED (defect D4).  The natural shape
+# here -- an if/elif chain with an unguarded catch-all last arm -- makes every
+# value that is not literally 'auto' or 'exact' select the PARAXIAL kernel, so
+# a typo, a capitalisation or an uninitialised variable silently buys back the
+# paraxial gap transport this campaign exists to remove.  (Same defect class
+# as the ``on_readout_windo`` typo under niche C1.)
 #
 # The vocabulary is CASE-SENSITIVE and there is no normalisation: 'EXACT' is a
 # typo, not a synonym.  Normalising would make ``gap_kernel`` the only knob in
@@ -858,8 +840,7 @@ _PHASOR_BAND_BYTES = 32e6
 def _phasor_c64(dtype):
     """True when a reference-phase helper was asked for a complex64 phasor.
 
-    v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 sec 3.3 / row 12).  ``dtype=None``
-    (every pre-v5.44 call) and ``complex128`` select the shipped whole-grid
+    ``dtype=None`` and ``complex128`` select the shipped whole-grid
     ``np.exp`` -- byte-identical.  Only an explicit ``complex64`` takes the
     banded build below."""
     return dtype is not None and np.dtype(dtype) == np.dtype(np.complex64)
@@ -1159,9 +1140,8 @@ def propagate_carrier_referenced(
         # the exact kernel is NOT separable (sqrt(k^2 - qx^2 - qy^2) does not
         # factor into an x part and a y part; only its small-|q| expansion,
         # the paraxial kernel, does).  So there is no exact per-axis kernel to
-        # run, and an explicit gap_kernel='exact' here cannot be honoured.  It
-        # used to be accepted and ignored -- the caller believed they had a
-        # non-paraxial leg and got a paraxial one.  'auto' still resolves to
+        # run, and an explicit gap_kernel='exact' here cannot be honoured; it
+        # is REFUSED, not accepted and ignored.  'auto' still resolves to
         # the paraxial kernel on this path, documented, because 'auto' means
         # "the best available for this geometry" and here that is all there is.
         if gap_kernel == 'exact':
@@ -1191,14 +1171,12 @@ def propagate_carrier_referenced(
     # Collimated carrier: the transform degenerates to m == 1, z_eff == z;
     # an ordinary same-grid transfer-function step, grid unchanged.
     #
-    # D4 (2026-08-06): this branch used to call ``fresnel_tf_propagate``
-    # UNCONDITIONALLY, so ``R = +/-inf`` ran the PARAXIAL kernel and dropped
-    # ``tilt`` whatever ``gap_kernel`` said -- measured, the exact-vs-fresnel
-    # difference on a collimated leg was exactly 0.000e+00 against 1.3e-05 on
-    # the same leg at R = -0.2 m.  It is the worst place to be silently
-    # paraxial: ``m == 1`` means NO frame rescaling, which is the one regime
-    # where the exact kernel is genuinely exact (validated to 1e-12 against an
-    # independent ASM oracle) and where it composes across splits perfectly.
+    # ``R = +/-inf`` must NOT be forced through ``fresnel_tf_propagate``: that
+    # runs the PARAXIAL kernel and drops ``tilt`` whatever ``gap_kernel`` says.
+    # It is the worst place to be silently paraxial -- ``m == 1`` means NO
+    # frame rescaling, which is the one regime where the exact kernel is
+    # genuinely exact (validated to 1e-12 against an independent ASM oracle)
+    # and where it composes across splits perfectly.
     if np.isinf(R):
         xp, is_jax, bld = _backend_of(E_env)
         env_out = _envelope_tf_step(
@@ -1354,16 +1332,8 @@ def _carrier_step_fast(E_env, R, z, wavelength, dx, dy,
     namespace.  The leg is data-branch-free, so it is ``jax.jit`` / ``jax.grad``
     compatible.
 
-    ``gap_kernel`` DEFAULT: 'auto', matching every public entry point.  It was
-    left at 'fresnel' when the public default flipped (2026-08-05), which made
-    the private default silently PARAXIAL while every public path was exact --
-    the same silent-fallback disease as D4, one level down.  Nothing in the
-    library relied on it (all three call sites pass the argument explicitly), so
-    aligning it changes no shipped physics; what it removes is the trap that a
-    future internal call omitting the argument would quietly run paraxial.  It
-    also restores the meaning of
-    ``test_carrier_referenced::test_near_focus_landing_fast_path_unchanged``,
-    which compares a DEFAULTED public call against a DEFAULTED private one and
+    ``gap_kernel`` DEFAULT: 'auto', matching every public entry point, so an
+    internal call that omits the argument cannot quietly run paraxial.
     had been failing on that mismatch since the flip."""
     xp, is_jax, bld = _backend_of(E_env)
     R_out = R + z
@@ -1464,13 +1434,12 @@ def _envelope_amp_centroid(E_env, dx, dy):
     """Intensity centroid ``(xc, yc)`` of the envelope on the centred grid,
     SNAPPED to exactly ``(0.0, 0.0)`` when both components are sub-pixel.
 
-    Verifier round 2 (2026-08-06, sibling of V3): the standoff resolver and
-    the near-focus bridge gate measured the beam about the GRID ORIGIN, so a
-    decentred beam read ``sqrt(2 x_c^2 + w^2)`` -- 2.34x too wide at a 1.5 w
-    decentre -- and resolved a 6.3x shorter leg (hence a 6.3x shorter
-    Bluestein period).  Measuring about the centroid fixes that; the
-    sub-pixel snap keeps every effectively-centred call on the exact
-    ``centre == (0.0, 0.0)`` short-circuit of
+    Measuring about the CENTROID rather than the grid origin is what makes a
+    decentred beam read its own width: about the origin it reads
+    ``sqrt(2 x_c^2 + w^2)`` -- 2.34x too wide at a 1.5 w decentre, which the
+    standoff resolver and the near-focus bridge gate then turn into a 6.3x
+    short leg.  The sub-pixel snap keeps every effectively-centred call on the
+    exact ``centre == (0.0, 0.0)`` short-circuit of
     :func:`_envelope_amp_radius`, so the on-axis universe stays
     byte-identical.  Returns ``(0.0, 0.0)`` for an empty field."""
     from ..backend import to_numpy
@@ -3612,10 +3581,9 @@ def _check_readout_replica(fn, period, dx_out, N_out, on_replica,
         2 |centre_out| + N_out * dx_out  <=  period                      [V3]
 
     -- NOT ``N_out * dx_out <= period``, which is [V3] specialised to
-    ``centre_out == 0`` and which this guard shipped for every offset.
-    Measured on the paraxial readout (NA 0.10, half-extent 3, default
-    standoff, period 33.0797 um) with a window of 0.7698 periods -- silent
-    under the old condition at EVERY offset:
+    ``centre_out == 0``.  Measured on the paraxial readout (NA 0.10,
+    half-extent 3, default standoff, period 33.0797 um) with a window of
+    0.7698 periods -- silent under the centre-blind condition at EVERY offset:
 
         centre_out    peak |F|        peak |truth|     relL2
           0.00 p      1.570252e+02    1.570727e+02     5.26e-04
@@ -3932,12 +3900,11 @@ def _tilt_exactness_phase(shape, dx, dy, wavelength, R, L, M, sign,
     uu = X + R * L / n_par
     vv = Y + R * M / n_par
     r2 = X * X + Y * Y
-    # RATIONALIZED, both terms.  a185cfc removed ``sqrt(r^2+R^2) - |R|`` from
-    # _exact_sphere_eikonal but not from here, so ANY nonzero tilt put the
-    # whole k0*eps*|R| cancellation floor straight back into the carrier the
-    # rationalization had just cleaned (VERIFY_ARCHITECTURE B14/P2-7:
-    # measured 2.11e-11 rad at |R| = 50 mm, indistinguishable from the
-    # pre-fix column, while the untilted path read 6.3e-17).
+    # RATIONALIZED, both terms, including the TILTED sphere.  Leaving
+    # ``sqrt(r^2+R^2) - |R|`` here while _exact_sphere_eikonal is rationalized
+    # puts the whole k0*eps*|R| cancellation floor back into the carrier for
+    # ANY nonzero tilt: measured 2.11e-11 rad at |R| = 50 mm against 6.3e-17
+    # on the untilted path (audit VERIFY_ARCHITECTURE B14/P2-7).
     #
     #   sgn*(A - B) == sgn*(A^2 - B^2)/(A + B),   A, B > 0
     #
@@ -3969,11 +3936,10 @@ def _tilt_exactness_phase(shape, dx, dy, wavelength, R, L, M, sign,
     return np.exp(sign * 1j * k * D * np.cos(0.5 * np.pi * t) ** 2)
 
 
-#: Niche C9 (2026-08-02, D121 FINAL CLOSURE).  ``True`` -- the
-#: parabola <-> exact-sphere carrier-convention conversion
+#: ``True`` -- the parabola <-> exact-sphere carrier-convention conversion
 #: (:func:`_sphere_parab_conversion`) is applied EXACTLY, on the whole grid.
-#: ``False`` restores the historical ``cos^2`` band-limit taper bit for bit --
-#: the fail-before switch.
+#: ``False`` restores the ``cos^2`` band-limit taper bit for bit -- the
+#: fail-before switch (audit niche C9).
 #:
 #: The taper was a Nyquist GUARD, not physics: beyond
 #: ``r_safe = (|R|^3 lambda/dx)^(1/3)`` the DIFFERENCE term ``S(R) - r^2/2R``
@@ -3987,35 +3953,9 @@ def _tilt_exactness_phase(shape, dx, dy, wavelength, R, L, M, sign,
 #: the annulus where the beam still carries power, and the chain then
 #: Sziklas-Siegman-transports that across the next gap.
 #:
-#: **The counter-evidence on record was a mis-citation.**  This function's
-#: docstring said "the untapered swap breaks a coarse chain", sourced to
-#: ``AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24`` S6.6.  That audit measured the
-#: opposite: *"The taper worked as designed -- stage traces identical to the
-#: whole-grid swap to 4 digits, i.e. the guard band truly carries nothing -- so
-#: the breakage is in-band and intrinsic, not an aliasing artifact."*  What
-#: broke that chain was the CONVERSION ITSELF in the pre-``ray_density`` era
-#: (its "window 77.5 % -> 7.1 %" is the spot walking out of a narrow readout,
-#: which the same paragraph says), and the conversion has been the shipped
-#: default since v5.29.  Re-derived in
-#: ``docs/audits/D121_FINAL_CLOSURE_2026_08_02.md`` S4.
-#:
-#: Measured on design 121 (six post-DOE groups, ``ray_subsample=4``,
-#: ``RN=1024``), EE3 against the exact-ray + Rayleigh-Sommerfeld oracle at the
-#: chain's group-5 exit, read out against the exact eikonal:
-#:
-#: .. code-block:: text
-#:
-#:     order      taper ON   taper OFF   d      oracle (true ceiling)
-#:     (0,0)       89.662     90.693   +1.032        90.742
-#:     (-4,0)      89.385     90.342   +0.957        90.928
-#:     (-4,-2)     88.904     89.900   +0.996        90.023
-#:
-#: and on the PRODUCTION path (``final_leg='exact'``, exact Bluestein readout,
-#: N=2048/NFC=8192/WF=4.0), where the last group's own conversion happens on
-#: the FINE retrace grid and is inert either way, the residual gain is small
-#: but real and in the same direction: BEST-FOCUS[peak] ``dz=0``
-#: **3.450 um / EE3 90.2 -> 3.350 um / EE3 90.3**, peak +0.8 %, no plane of the
-#: +-80 um through-focus scan worse.
+#: What the taper cost when it was on -- +0.96 to +1.03 EE3 points per DOE
+#: order against the exact-ray + Rayleigh-Sommerfeld oracle -- and the
+#: mis-citation that had kept it there: docs/history/carrier.md.
 #:
 #: WHERE IT ACTS.  A per-call census on design 121 (13 conversion calls) finds
 #: 9 of them inert -- their onset sits at 3.0-24607 beam radii -- and the whole
@@ -4040,10 +3980,11 @@ def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
     ``exp(sign*i*k*(S(R) - r^2/(2R)))`` on the centred grid, or ``None`` for a
     collimated/degenerate carrier (nothing to convert).
 
-    **Since niche C9 (2026-08-02) the conversion is EXACT on the whole grid.**
-    It was historically multiplied by a ``cos^2`` band-limit taper ``T(r)``;
+    **The conversion is EXACT on the whole grid.**  It was historically
+    multiplied by a ``cos^2`` band-limit taper ``T(r)``;
     :data:`SPHERE_PARAB_CONVERSION_EXACT` = ``False`` restores that bit for
-    bit, and the measured record for the change is on that flag.
+    bit, and the measured record for the change is on that flag and in
+    ``docs/history/carrier.md``.
 
     The carrier-referenced machinery references the PARAXIAL PARABOLA
     ``r^2/(2R)`` (:func:`_radial_carrier_phase`), while a traced element's ray
@@ -4057,81 +3998,26 @@ def _sphere_parab_conversion(shape, dx, wavelength, R, sign, w_beam=None,
     parabola-referenced reconstruction into the exact-sphere-referenced field
     the element consumes (``sign=+1``) and back (``sign=-1``).
 
-    ``T(r)`` is a ``cos^2`` roll-off from ``0.75*r_safe`` to
-    ``r_safe = (|R|^3 * lambda / dx)^(1/3)`` -- the radius beyond which the
-    DIFFERENCE term itself exceeds the grid's Nyquist slope, so a whole-grid
-    swap would scatter aliased guard-band junk into the beam (measured: the
+    ``T(r)`` -- the taper :data:`SPHERE_PARAB_CONVERSION_EXACT` = ``False``
+    restores -- is a ``cos^2`` roll-off from ``0.75*r_safe`` to
+    ``r_safe = (|R|^3 * lambda / dx)^(1/3)``, the radius beyond which the
+    DIFFERENCE term itself exceeds the grid's Nyquist slope.  Measured, the
     tapered and whole-grid conversions agree to 4 digits on the design-121
-    stages, i.e. the guard band truly carries nothing, while the untapered
-    swap breaks a coarse chain).  ``w_beam`` (optional) enables a warning when
-    the taper reaches into the beam (``r_safe < 2*w_beam``), where the
-    representation would be mixed exactly where the amplitude matters.
+    stages: the guard band truly carries nothing.
 
-    **The taper's mixed-convention skirt is a MEASURED NULL on design-121
-    ON AXIS -- and a measured 1.41 EE3 POINTS on a tilted congruence.**  Read
-    the two paragraphs below together; the first was validated on axis only and
-    said so nowhere until 2026-07-31.
-
-    *On axis (S12).*  Audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S8.6
-    attributed "the residual 9 % of Strehl beyond r > 1.5 w" partly to this
-    skirt; direct measurement refutes that.  Scaling ``r_safe`` by 1.5 and by
-    INFINITY (T == 1, i.e. the whole-grid swap with no taper at all)
-    reproduces the shipping design-121 result to the digit -- **at-plane
-    3.650 um / 87.3 / 99.3 and best focus 3.550 um / EE3 89.57 / EE6 99.26,
-    all of them ON-AXIS metrics** -- in all three runs.  Two reasons: (i) the
-    conversion and its inverse are POINTWISE, so ``env = E*exp(-ikS)`` is exact
-    at every grid point no matter how the phase slope compares with Nyquist --
-    only FFT-based steps that see the RESULT care, and a wider taper makes the
-    stored envelope smoother, not rougher; (ii) geometrically the taper barely
-    reaches the beam on the planes that paragraph looked at -- the onset
-    ``0.75*r_safe`` sits at 2.73 w (first entrance), 3.60 w (S21-S22 exit) and
-    2.07 w (S23-S24 exit), and ``r_safe`` exceeds the whole grid on the fine
-    retrace leg.  The S8.6 skirt was really the
-    ``preserve_input_phase='remap'`` ray-lattice alias (see
-    ``apply_real_lens_traced``'s ``remap_sampling``).
-
-    *Off axis (2026-07-31, docs/audits/APPROXIMATION_AUDIT_POST_C6_2026_07_31
-    S2).*  On design 121's WORST DOE order, (-4,-2) at 51.5 mrad, measured end
-    to end through the exact readout against the landed niche-C6 launch:
-
-        r_safe x 0.5     dEE3  -41.62   (EE3 46.15 %, P_tile -23.06, 2 fold
-                                         caustic warnings)
-        r_safe x 1       --     (shipped, EE3 87.771 %)
-        r_safe x 2       dEE3   +1.4147
-        no taper (T==1)  dEE3   +1.4147
-
-    The response is MONOTONE and SATURATING: x2 and T==1 agree to four decimal
-    places in EE3, EE6, ``P_tile`` and ``exit_power_above_nyquist``, i.e. at
-    twice the radius the taper no longer touches anything the result depends
-    on, and the optimum is NO TAPER.  So the taper is not doing something
-    different off axis -- it is doing the SAME thing at a radius that is too
-    small once the congruence is tilted, and the beam pays for the
-    mixed-convention annulus.  The geometry: the onset sits at **1.64 w and
-    1.63 w on the last two planes** with **5.0e-03 and 5.7e-03 of the envelope
-    power beyond it** -- 25x the "~2e-4 of the power ever sees a mixed
-    convention" the on-axis paragraph above concluded from a plane list that
-    omits them.  The "at most ~2e-4" figure is retracted for tilted
-    congruences.
-
-    TAKEN, 2026-08-02 (niche C9): the default IS now ``T == 1``.  The one thing
-    that stood against it -- "the untapered swap breaks a coarse chain" -- was
-    re-derived and is a **mis-citation of a measurement that says the
-    opposite**; see :data:`SPHERE_PARAB_CONVERSION_EXACT` for the source
-    quotation, the per-call census that localises the effect, the per-order EE3
-    table and the production acceptance.  The 2026-07-31 sweep above is
-    reproduced by that work at the same sign and a comparable magnitude
-    (+1.03 / +0.96 / +1.00 points at (0,0) / (-4,0) / (-4,-2) on the
-    post-C8 tree), and the ``r_safe x 0.5`` cliff is unchanged -- it is the
-    same monotone axis, read at its other end.
+    The taper is OFF by default because it cost a measured **1.41 EE3 points**
+    on design 121's worst DOE order ((-4,-2) at 51.5 mrad): its onset landed at
+    1.64 w with 5.0e-03 of the envelope power beyond it, so the beam paid for a
+    mixed-convention annulus.  On axis the same sweep is a measured NULL.  The
+    sweeps, and the mis-citation that had kept the taper on, are in
+    ``docs/history/carrier.md``.
 
     ``w_beam`` (optional) enables a warning when the band-limit radius sits
-    inside the beam.  **Its threshold is unchanged from 2026-07-31**
-    (``0.75*r_safe < 2*w_beam``, i.e. ``w > 0.375 r_safe``): the quantity it
-    tests no longer marks a taper onset, but it is the same validity question
-    -- how far inside the beam the conversion factor stops being representable
-    on this grid -- and it is deliberately left at the tighter of the two forms
-    it has had.  The warning is a validity flag, not a refusal, and the
-    returned array does not depend on it.
+    inside the beam (``0.75*r_safe < 2*w_beam``, i.e. ``w > 0.375 r_safe``).
+    With no taper the quantity it tests is no longer a taper onset, but it is
+    the same validity question -- how far inside the beam the conversion
+    factor stops being representable on this grid.  The warning is a validity
+    flag, not a refusal, and the returned array does not depend on it.
 
     ``dy`` defaults to ``dx``.  It exists because
     :func:`propagate_carrier_referenced` and
@@ -4217,10 +4103,9 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
 
     Returns the envelope on the ``n_fine`` grid spanning the SAME physical
     window (``n_crop * dx``), i.e. pitch ``dx * n_crop / n_fine`` -- in
-    EITHER direction: ``out.shape[-1] == n_fine`` always holds (audit
-    AUDIT_TRACED_CHAIN_DX_SCALING_2026_07_22 F-A: the pre-fix downsample
-    branch instead returned the raw ``n_crop``-sized crop, silently
-    mismatching the pitch every downstream caller assumed).
+    EITHER direction: ``out.shape[-1] == n_fine`` ALWAYS holds -- a downsample
+    branch that returned the raw ``n_crop``-sized crop would silently mismatch
+    the pitch every downstream caller assumes (audit F-A).
 
     ``n_crop`` must fit inside the input (``<= env.shape[-1]``) and be at
     least 2.  A LARGER ``n_crop`` cannot be honoured -- the sub-window does
@@ -4235,17 +4120,11 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     call sites clamp ``n_crop`` to the grid, so this is a contract guard,
     not a behaviour change.
 
-    FFT BACKEND (FIX_PERF_ROUND2_2026_08_10 item 1; AUDIT_TRACED_SPEED sec 5,
-    row 5 of its ranked table).  The transform pair below used to be RAW
-    ``np.fft.fft2`` / ``np.fft.ifft2``, i.e. single-threaded pocketfft, on the
-    one shape in the whole chain where it matters -- this function runs TWICE
-    per exact final leg at the FINE grid (retrace + readout), which is
-    8192-16384 square.  Every other transform in the library goes through the
-    :func:`_fft2` / :func:`_ifft2` dispatcher (pyFFTW with a cached plan and
-    ``FFTW_THREADS`` threads, scipy.fft next, numpy last), so this site was the
-    only large FFT paying a single core.  MEASURED on the design-121 fan order
-    at ``n_fine_cap=8192``: the raw-pocketfft leaves under this function were
-    2.51 % of the order's wall and the whole function 3.69 %.
+    FFT BACKEND.  The transform pair below goes through the :func:`_fft2` /
+    :func:`_ifft2` dispatcher (pyFFTW with a cached plan and ``FFTW_THREADS``
+    threads, scipy.fft next, numpy last), like every other transform in the
+    library.  It matters here: this function runs TWICE per exact final leg at
+    the FINE grid (retrace + readout), which is 8192-16384 square.
 
     ACCURACY.  This is NOT bit-identical -- pyFFTW and pocketfft are different
     implementations of the same transform and differ at FFT round-off.  The
@@ -4282,28 +4161,17 @@ def _fourier_upsample_crop(env, n_crop, n_fine):
     if n_fine == n_crop:
         out = ec
     else:
-        # DTYPE PARITY with the raw ``np.fft`` this replaced.  Promote here so
-        # a non-complex128 caller keeps the historical output dtype instead of
-        # silently acquiring a narrower one (the shipped chain is complex128,
-        # where ``asarray`` is a no-op and no copy is made).
-        #
-        # CORRECTION 2026-09-11 (VERIFY_LENS_BANDED_COMPLEX64_2026_09_10 D3):
-        # the parity this was written for -- "numpy's FFT is double-only and
-        # returns complex128 for EVERY input dtype, while the dispatcher's
-        # pyFFTW / scipy backends preserve complex64" -- has not held since
-        # numpy 2.0, which has a single-precision FFT: ``np.fft.fft2`` of a
-        # complex64 array RETURNS complex64.  So on numpy >= 2 every backend
-        # preserves complex64 and this promotion is what makes the OTHER
-        # dtypes (real, float32, complex256) land on complex128, which is
-        # still the historical answer for them.  The complex64 branch below is
-        # therefore not a narrowing of a complex128 transform: BOTH transforms
-        # of the pair run in single precision.  MEASURED and accepted -- see
-        # the ``_cdt`` note.
+        # DTYPE PARITY.  Since numpy 2.0 every backend preserves complex64
+        # (``np.fft.fft2`` of a complex64 array returns complex64), so this
+        # promotion is what makes the OTHER dtypes (real, float32,
+        # complex256) land on complex128 -- the historical answer for them.
+        # The complex64 branch below is therefore not a narrowing of a
+        # complex128 transform: BOTH transforms of the pair run in single
+        # precision.  MEASURED and accepted -- see the ``_cdt`` note.
         _ecs = np.fft.ifftshift(ec)
-        # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 sec 3.3): a complex64 envelope
-        # stays complex64 through the transform pair -- this hard complex128
-        # pad was the leak the audit found sitting directly on the
-        # memory-dominant stage.  Every other input is promoted to complex128
+        # A complex64 envelope stays complex64 through the transform pair -- a
+        # hard complex128 pad here sits directly on the memory-dominant stage.
+        # Every other input is promoted to complex128
         # exactly as before, so the shipped chain is byte-identical.
         #
         # PRECISION, measured 2026-09-11 (D3,
@@ -4372,14 +4240,13 @@ def _crop_about_centre(env, dx, x0, y0, n_crop, where):
     that centre -- the crop would otherwise wrap round (a plausible-looking
     wrong answer).
 
-    NOTE (2026-07-29 adversarial verification): that raise is a DEFENSIVE
-    invariant, not the guard a caller sees.  Its only shipped caller,
+    NOTE: that raise is a DEFENSIVE invariant, not the guard a caller sees.
+    Its only shipped caller,
     :func:`carrier_referenced_exact_focus_readout`, bounds ``n_crop`` by what
-    fits at ``(x0, y0)`` BEFORE calling here, so this branch is unreachable
-    from it; the user-visible guard for the same failure is that function's
+    fits at ``(x0, y0)`` BEFORE calling here, so the branch is unreachable from
+    it; the user-visible guard for the same failure is that function's
     ``on_readout_window``, which measures the power the bound actually
-    truncates.  An earlier revision described THIS raise as the protection,
-    which it was not -- the clamp was silent.
+    truncates.
 
     FFT BACKEND (FIX_PERF_ROUND2_2026_08_10 item 4a): the sub-pixel shift this
     delegates to :func:`_shift_envelope` now goes through the library's own
@@ -4523,14 +4390,13 @@ def _check_guard_action(name, value, fn):
 # ---------------------------------------------------------------------------
 # P3 -- multi-congruence detection at chain entry
 # ---------------------------------------------------------------------------
-# The failure this exists for is a PLAUSIBLE-LOOKING WRONG ANSWER.  At v5.28
-# the design-121 32-order Dammann fan was pushed through
-# :func:`propagate_traced_carrier_chain` MULTIPLEXED and produced a populated,
-# credible-looking frame lattice whose per-frame power was scrambled
-# (0.47 +/- 0.51 % against a design 2.78 %/frame, uniformity ~0.996).  Nothing
-# raised and nothing warned, even though ``apply_real_lens_traced``'s
-# entrance->exit map names exactly that case -- "comparable-power beams at
-# well-separated angles (post-DOE at large split)" -- as EXCLUDED.
+# The failure this exists for is a PLAUSIBLE-LOOKING WRONG ANSWER: a DOE fan
+# pushed through :func:`propagate_traced_carrier_chain` MULTIPLEXED returns a
+# populated, credible-looking frame lattice whose per-frame power is
+# scrambled, with nothing raised and nothing warned -- even though
+# ``apply_real_lens_traced``'s entrance->exit map names exactly that case --
+# "comparable-power beams at well-separated angles (post-DOE at large
+# split)" -- as EXCLUDED.
 #
 # TWO measurements are needed, and each is blind to what the other catches.
 # Both are the SHIPPED detectors, reused as-is (no competing estimator):
@@ -4548,8 +4414,7 @@ def _check_guard_action(name, value, fn):
 #      :func:`~lumenairy.apply_real_lens_universal` already routes on.  It is
 #      called here at ``na=1`` (so the return is a raw rms direction cosine, in
 #      radians) and then put on a GRID-CANONICAL scale and compared against a
-#      FIXED reference NA -- see the two subsections below, both of which are
-#      corrections to defects measured in this gate's first cut.
+#      FIXED reference NA -- see the two subsections below.
 #
 # Measurement A alone is NOT sufficient, and this is the caveat the
 # wavefront-aware audit recorded: a wrapped nearest-neighbour gradient
@@ -4596,11 +4461,6 @@ def _check_guard_action(name, value, fn):
 #   dx0 (um)   4       2       1       0.5     0.25    0.125
 #   raw        2.97e-2 2.28e-2 1.66e-2 1.19e-2 8.36e-3 5.92e-3
 #   ratio        --    0.767   0.727   0.717   0.703   0.708   (1/sqrt2 = 0.707)
-# The pre-canonical gate was therefore SILENT on design 121's own 32-order fan
-# at dx0 = 0.25 um / N = 8192 -- the exact production condition roadmap P4
-# names as the original F-B evidence matrix's worst row -- while the multiplexed
-# answer stays 36-86 % wrong by the linearity oracle at every pitch.  Detector A
-# is blind there by symmetry (residual 1.5e-16 rad).
 #
 # Multiplying by ``sqrt(lambda / dx)`` cancels the law exactly and, by the
 # expression above, leaves ``canon ~ 2 pi theta^1.5`` -- a function of the
@@ -4684,13 +4544,9 @@ def _check_guard_action(name, value, fn):
 # Closing it needs an estimator that separates crossing congruences from edge
 # ringing at small angle, which no shipped estimator does.
 #
-# The floor is stated in the angle between INTERFERING PAIRS.  Mapping a FAN
-# onto that pair scale is the part an earlier cut of this note got wrong, in
-# both magnitude and DIRECTION: it claimed the score is "set by the finest
-# fringes, i.e. by the nearest-neighbour order spacing", so that a dense fan
-# would hide far below its span.  It does not.  Re-measured with the shipped
-# helper (``_chain_entry_congruence_stats``; the harness reproduces the 8x8
-# row below to 3 digits, so this is the same measurement, not a competing one):
+# The floor is stated in the angle between INTERFERING PAIRS.  A FAN maps onto
+# that pair scale by its TOTAL SPAN, not by its order spacing -- measured with
+# the shipped helper (``_chain_entry_congruence_stats``):
 #
 #   construction                       canonical rad, dx0 = 4 / 2 / 1 um   eq. PAIR
 #   8x8 fan, span +-23, NN 6.571    7.83e-3 / 8.41e-3 / 8.93e-3   17.1-18.7 mrad
@@ -4700,23 +4556,20 @@ def _check_guard_action(name, value, fn):
 # The fan reads 5.3x ABOVE what the nearest-neighbour rule predicts and 0.8x of
 # an equal-SPAN pair, so the TOTAL SPAN -- not the order spacing -- is what
 # carries the score.  Densifying at FIXED span moves it DOWN, not up, which is
-# the direction the old rule got backwards: a 1-D fan of 4 / 8 / 16 orders
+# the direction a spacing rule gets backwards: a 1-D fan of 4 / 8 / 16 orders
 # spanning +-23 (NN 15.3 / 6.6 / 3.1 mrad) reads 7.56e-3 / 5.92e-3 / 5.04e-3
 # canonical at dx0 = 2 um -- an equivalent pair of 16.7 / 14.2 / 12.8 mrad,
 # a 1.5x drift over a 5x change in spacing, and never anywhere near the 3 mrad
 # the spacing rule would demand.
 #
-# OPERATIONAL RULE, corrected: score a fan by its total span, derated ~20 %.
-# A fan whose SPAN clears the ~19 mrad floor is caught even when its order
-# spacing is far below the floor -- the old wording told callers the opposite,
-# and was over-conservative rather than unsafe.  The two concrete verdicts it
-# reported still stand on the re-measurement: the 8x8 +-23 fan sits ON the
-# cutoff with no margin either way and is not reliably caught (though because
-# its SPAN lands there, not its spacing), while the design-121 8x4 fan at
-# +-46 / +-23 mrad reads 1.65e-2 / 1.82e-2 / 1.87e-2 and clears by ~2x at every
-# pitch.  That boundary is pinned by
-# ``test_the_documented_detection_floor_is_a_pinned_boundary`` so a future
-# cutoff change cannot move it silently.
+# OPERATIONAL RULE: score a fan by its total span, derated ~20 %.  A fan whose
+# SPAN clears the ~19 mrad floor is caught even when its order spacing is far
+# below the floor.  The two concrete verdicts: the 8x8 +-23 fan sits ON the
+# cutoff with no margin either way and is not reliably caught (its SPAN lands
+# there), while the design-121 8x4 fan at +-46 / +-23 mrad reads
+# 1.65e-2 / 1.82e-2 / 1.87e-2 and clears by ~2x at every pitch.  That boundary
+# is pinned by ``test_the_documented_detection_floor_is_a_pinned_boundary`` so
+# a future cutoff change cannot move it silently.
 #
 # One further non-physical corner: 20 % per-pixel amplitude noise reads 0.0 down
 # to dx0 = 1 um but 4.7e-3 rad canonical at dx0 = 0.25 um, because its sign
@@ -4849,151 +4702,43 @@ def _check_chain_entry_congruence(env, dx, wavelength, action,
 #
 # Peak working set, in complex128 arrays OF THE FINE GRID.
 #
-# v5.33.2 (docs/audits/AUDIT_TRACED_MEMORY_2026_08_09.md sec 2.3, 2.5 and
-# row 9): this was 4 -- "the Fourier-upsample pad + its inverse transform,
-# then the reconstructed field alongside the exact-sphere phasor, then the
-# Bluestein zoom's own workspace" -- and that model is 4.0x OPTIMISTIC.  The
-# leg does not hold four arrays.  MEASURED by a live big-ndarray census walked
-# from ``sys._current_frames()`` at the peak plateau of one design-121 order
-# (``RN=1024, RS=4, NFC=16384, WF=4.0, TILE=1024, DXO=0.2 um``, exact final
-# leg, serial Newton, ``set_max_ram(105)`` so the grid choice is
-# deterministic), at ``n_fine = 16384`` where one complex128 grid is 4.295 GB:
+# The number is a constrained UPPER-BOUND ENVELOPE over every measured point
+# -- whole-process AND congruence-worker child, two-order AND six-order, three
+# fine grids -- not a decomposition of where the bytes go.
+# ``_FINE_GRID_BASE_BYTES`` carries the intercept.  Two method notes for
+# whoever re-measures it:
 #
-#   6 x 4.295 GB  complex128 (16384,16384)  _fine_trace_group_exit:
-#                   env_f, E_full, _ph, _cf, _rp, _xf
-#   5 x 4.295 GB  complex128 / float64      apply_real_lens_traced:
-#                   _unit, E_out, _coords, E_analytic, _rd_resid_map
-#  10 x 2.147 GB  float64   (16384,16384)   apply_real_lens_traced:
-#                   _pip_remap_W, _ard, _absE, _nan_rd, _a_rd, ard_map,
-#                   amp, _mag0, Y, X
-#   1 x 0.268 GB  bool      (16384,16384)   apply_real_lens_traced: valid
-#   --------------------------------------------------------------------
-#   69.26 GB owned across 23 live full-grid arrays
-#     = 69.26 / 4.295 = 16.1 complex128-equivalents IN FRAMES ALONE
-#      (21.9 including the resident pyFFTW plan buffers; 23.0 against the
-#       thread-free peak RSS of 98.85 GB, and 25.7 against the 110.55 GB
-#       instrumented peak the census itself was taken inside -- the audit's
-#       sec 4.5 observer artefact, which is why the frame-live count and not
-#       an RSS ratio is what this constant carries).
+#   * measure from OUTSIDE the process.  An in-process sampler thread inflates
+#     peak working set by up to 2.5x on this workload.
+#   * price the ENVELOPE, not a fit.  A slope fitted to whole-process runs
+#     alone UNDER-prices a congruence worker child, whose leg-local caches
+#     grow with the orders that process runs -- and under-pricing is an OOM
+#     while over-pricing is a warning an operator reads.
 #
-# The consequence of the old 4 is the point, and it is measured: with
-# ``frac = 0.5`` the 4-array model approves ``n_fine = 16384`` whenever
-# ~34.4 GB is free, and the run then touches 98.85 GB -- 2.9x -- leaving a
-# 137.4 GB box with 18.4 GB.  It also let ``_multi_resolve_workers`` approve
-# SIX congruence workers (~484 GB) on a 128 GB box at that cap
-# (AUDIT_TRACED_SPEED_2026_08_09.md sec 3.3).  The model being optimistic was
-# the only reason the single-order run completed; that is the absence of a
-# safety margin, not the presence of one.
+# MEASURED (design-121 order, ``RN=1024 RS=4 NW=1 DXO=0.2 um NOUT=8192
+# TILE=1024 WF=4.0 LEG=auto``, ``ram_budget=inf``) -- the seven points the
+# (24, 1.8 GB) pair is the envelope of:
 #
-# 16 was the FRAME-LIVE census rounded to an integer, deliberately NOT the
-# 21.9 that includes the plan buffers (those are process-global and shared
-# across the legs, so charging them per fine grid would double-count when two
-# grids of different size are sized in the same process).  Whoever re-measures
-# this: the census method is in the audit's sec 1 -- measure from OUTSIDE the
-# process, an in-process sampler thread inflates peak working set by up to
-# 2.5x on this workload.
+#     n_fine   what                                   peak RSS
+#      4096    2 orders, whole process                 7.059 GB
+#      4096    2 orders, whole process, re-run         7.090 GB
+#      4096    2 orders, largest CHILD k=2             6.760 GB
+#      8192    2 orders, whole process                24.618 GB
+#      8192    6 orders, largest CHILD k=2            26.175 GB
+#      8192    6 orders, largest CHILD k=3            26.737 GB
+#     16384    2 orders, whole process                87.925 GB
 #
-# v5.33.3 (docs/audits/FIX_PERF_PARALLEL_2026_08_10.md sec 3) -- 16 -> 20,
-# RE-DERIVED FROM A SCALING MEASUREMENT rather than from a census, because a
-# census counts arrays at ONE grid and cannot separate what scales from what
-# does not.  Peak RSS of a design-121 order was sampled at 1 Hz over the whole
-# process at THREE fine grids on this branch, everything else pinned
-# (``RN=1024 RS=4 NW=1 DXO=0.2 um NOUT=8192 TILE=1024 WF=4.0 LEG=auto``,
-# ``ram_budget=inf`` so the grid choice is the one asked for):
-#
-#     n_fine    peak RSS      implied count at zero intercept
-#      4096      7.123 GB              26.5
-#      8192     23.968 GB              22.3
-#     16384     84.589 GB              19.7
-#
-# The count FALLS with the grid, which is the signature of a fixed cost, not
-# of a smaller array set; a straight line in ``n_fine ** 2`` fits all three to
-# within 3.5 % and gives slope 305.9 B/px = **19.1 complex128-equivalents**
-# and intercept **2.6 GB**.  Pairwise slopes are 18.8 / 19.2 / 20.9, so 20 is
-# the round-up, and ``_FINE_GRID_BASE_BYTES`` carries the intercept.
-#
-# The direction matters: the shipped 16 was 1.20x OPTIMISTIC on the term that
-# grows, which is the dangerous side of the trade -- ``_multi_resolve_workers``
-# priced a NFC=8192 worker at 17.55 GB against a MEASURED 24.97 GB and
-# approved FIVE workers on a box that holds three or four
-# (AUDIT_TRACED_SPEED_2026_08_09 sec 3.4).
-#
-# v5.33.3 (VERIFY_PERF_BRANCH_2026_08_10 D4): 20 was the round-up of a
-# THREE-POINT, TWO-ORDER, WHOLE-PROCESS fit.  It is not the envelope the
-# clamp needs.  A congruence WORKER's own peak -- the quantity an OOM is
-# measured against, and the only one observable at k > 1 -- sits ABOVE that
-# line at 8192 (26.0 GB against the two-order 23.97), because a process's
-# leg-local caches grow with the orders it runs.  Bounding the child from a
-# 19.1-slope line therefore forced the INTERCEPT up (2.3 -> 4.5 GB), and an
-# intercept is exactly the wrong lever: it over-prices the small end, where
-# the whole peak IS the intercept.  At (20, 4.5 GB) the model read 1.476x the
-# 4096 worker child measured below -- inside the 1.5x bar this file's test
-# declares by 1.6 %, i.e. not reproducible.
-#
-# So the split is re-derived as what it actually is: a constrained UPPER-BOUND
-# ENVELOPE over EVERY measured point (whole-process AND worker-child,
-# two-order AND six-order, three grids), not a decomposition of where the
-# bytes go.  Slope 22 and floor 2.6 GB is the pair that minimises the worst
-# ratio subject to (a) bounding all eleven measured points, (b) keeping at
-# least 2 % of margin over the 8192 worker child -- the row the clamp is
-# actually decided by -- and (c) not pushing the 16384 price past what this
-# box's own pre-flight will approve for one worker.  The floor is the
-# three-grid fit's measured 2.3 GB intercept rounded up, and still clears the
-# 1.75 GB interpreter-plus-import commit the Newton pool measured
-# independently (``_lens_traced._NEWTON_WORKER_BASE_BYTES``).  Measured rows
-# and ratios: ``tests/unit/test_niche_d8_congruence_workers.py``'s
-# ``_MEASURED_PEAK_BYTES``; worst ratio 1.279 (was 1.476, on the 4096 child),
-# tightest bound 1.023 on the 8192 child (was 1.013).
-#
-# A steeper slope prices the small end better still (23 / 2.0 GB reads 1.232
-# worst) but takes ``n_fine = 16384`` from 97.5 GB to 101.2 GB per worker,
-# which is where the runners' pre-flight stops approving a SINGLE 16384 worker
-# on a ~105 GB-free box.  That trade was made deliberately and this is the
-# note that says so.
-#
-# v5.33.4 (docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 2): 22 -> 24,
-# and the floor 2.6 -> 1.8 GB.  RE-MEASURED, not re-derived: every point the
-# (22, 2.6 GB) envelope was fitted to was taken BEFORE the round-2 items
-# landed, and round 2 moved this leg's footprint in BOTH directions -- it
-# removed a measured 8.6 GB coords transient at n_fine = 16384
-# (FIX_PERF_ROUND2 sec 3.2b) and it added ~1.05 GB of resident pyFFTW plan
-# buffers by routing two more call sites through the dispatcher (its sec 7.3).
-# Re-measured on the FINAL tree, same harness, same configuration:
-#
-#     n_fine   what                                was          now
-#      4096    2 orders, whole process           7.123 GB     7.059 GB
-#      4096    2 orders, whole process, re-run   7.120 GB     7.090 GB
-#      4096    2 orders, largest CHILD k=2       6.937 GB     6.760 GB
-#      8192    2 orders, whole process          23.968 GB    24.618 GB
-#      8192    6 orders, largest CHILD k=2      26.001 GB    26.175 GB
-#      8192    6 orders, largest CHILD k=3      25.985 GB    26.737 GB
-#     16384    2 orders, whole process          84.589 GB    87.925 GB
-#
-# **The shipped (22, 2.6 GB) split is UNDER the 8192 k=3 worker child on this
-# tree -- 26.591 modelled against 26.737 measured, 0.995x.**  It is not a loose
-# upper bound any more; it is not an upper bound.  That is the OOM side of the
-# trade, and it is why this moved rather than being left alone.
-#
-# The set did not move one way, which is what forced BOTH constants: the
-# small-end child FELL 2.6 % while the binding 8192 child ROSE 2.9 %.  A
-# 22-slope cannot absorb that pair -- bounding the k=3 child with 2 % of margin
-# at slope 22 needs a 2.9 GB floor, and that floor prices the 4096 child at
-# 1.35x, outside the 1.3x bar.  The feasible region starts at slope 23, and
-# (24, 1.8 GB) is the integer pair in it that minimises the worst ratio:
+# (24, 1.8 GB) is the integer pair that minimises the worst ratio subject to
+# bounding every row above with at least 2 % of margin over the BINDING row --
+# the 8192 k=3 worker child, which is what an OOM is measured against:
 # **worst 1.274, tightest 1.045**, an upper bound at all seven points.
+# Measured rows and ratios:
+# ``tests/unit/test_niche_d8_congruence_workers.py``'s ``_MEASURED_PEAK_BYTES``.
 #
-# The floor is no longer carrying the child excess, and it is smaller for a
-# MEASURED reason: a least-squares line through the four whole-process points
-# now reads slope 320.5 B/px = 20.03 complex128-equivalents and intercept
-# 2.102 GB, i.e. a per-process floor of 2.102 - 0.369 = **1.733 GB** once the
-# ``_MULTI_WORKER_GRID_FACTOR`` term for that measurement's own 1024^2 input is
-# removed.  1.8 GB is that rounded up, and it still clears the 1.75 GB
-# interpreter-plus-import commit the Newton pool measured independently
-# (``_lens_traced._NEWTON_WORKER_BASE_BYTES``) -- by 50 MB, which is thin and
-# is stated rather than hidden.
+# The floor is measured, not chosen; its derivation is at
+# ``_FINE_GRID_BASE_BYTES`` below.
 #
-# WHAT THE 16384 PRICE COSTS NOW, since the previous re-derivation refused a
-# steeper slope to protect it: 105.2 GB per worker, which this box's own
+# WHAT THE 16384 PRICE COSTS: 105.2 GB per worker, which this box's own
 # pre-flight does NOT approve out of ~94 GB free.  That constraint is
 # deliberately dropped, because the pre-flight no longer REFUSES an explicit
 # intent it cannot approve -- it warns and proceeds
@@ -5004,8 +4749,8 @@ def _check_chain_entry_congruence(env, dx, wavelength, action,
 #
 # ENVELOPE: measured on design 121's post-DOE chain with the EXACT final leg,
 # a 1024^2 input and the shipped separable-Bluestein readout, on this branch.
-# It is a property of that leg's array traffic and it has now moved on EVERY
-# round that touched the fine leg (items #6/#7, then round 2), so re-measure it
+# It is a property of that leg's array traffic and moves on any round that
+# touches the fine leg, so re-measure it after such a change rather than
 # after any such change rather than trusting this number across one.
 # ``tests/unit/test_niche_p2_guards.py``'s cap ladder is ARITHMETIC on this
 # constant and asserts it first: re-derive the ladder when this moves.
@@ -5067,27 +4812,17 @@ _FINE_GRID_MIN = 64
 # small ``n_fine`` and too light at large ``n_fine``, which is exactly the
 # shape of the 4.59x mis-pricing AUDIT_TRACED_SPEED_2026_08_09 sec 3.3 found.
 #
-# MEASURED THREE TIMES.  The three-grid fit above intercepts at 2.635 GB,
-# less the 0.369 GB the ``_MULTI_WORKER_GRID_FACTOR`` term already charges for
-# that measurement's own 1024^2 input = 2.3 GB -- but that fit is over runs of
-# TWO orders in the PARENT.  A real congruence WORKER, which is what this
-# constant is for, was then sampled directly at k > 1 (six orders, NFC 8192):
-# largest single child **24.21 / 24.20 GiB = 26.0 GB**, i.e. above the
-# two-order line.  The difference is the leg's own process-global caches,
-# which grow with the number of orders a process runs.
-#
-# The first cut carried that difference entirely in this constant (4.5 GB),
-# which bought a bounded child at the price of a 1.476x over-price at
-# ``n_fine = 4096`` -- outside the 1.5x bar once the 4096 WORKER CHILD was
-# measured (6.94 GB; VERIFY_PERF_BRANCH_2026_08_10 D4).  The slope carries it
-# now (see ``_FINE_GRID_WORK_ARRAYS``), and this constant is back to the
-# process floor it names.  What is in it: the interpreter-plus-import commit,
-# the order table and chain-A output the process carries across chain B, and
-# the process-global FFT plan / chirp caches the leg leaves behind (byte-capped
+# MEASURED on a real congruence WORKER, which is what this constant is for,
+# sampled directly at k > 1 (six orders, NFC 8192): largest single child
+# **24.21 / 24.20 GiB = 26.0 GB**, above the two-order whole-process line.
+# The difference is the leg's own process-global caches, which grow with the
+# number of orders a process runs; the SLOPE carries that difference (see
+# ``_FINE_GRID_WORK_ARRAYS``), and this constant is the process floor it
+# names.  What is in it: the interpreter-plus-import commit, the order table
+# and chain-A output the process carries across chain B, and the
+# process-global FFT plan / chirp caches the leg leaves behind (byte-capped
 # since item #6, so they saturate rather than grow without bound).
 #
-# v5.33.4 (docs/audits/FIX_CLAMP_RECAL_OVERRIDE_2026_08_10.md sec 2): 2.6 ->
-# **1.8 GB**, re-measured on the final round-2 tree together with the slope.
 # The floor is MEASURED, not chosen: a least-squares line through the four
 # whole-process peaks (two at 4096, one at 8192, one at 16384) intercepts at
 # 2.102 GB, and removing the 0.369 GB the ``_MULTI_WORKER_GRID_FACTOR`` term
@@ -5126,13 +4861,9 @@ _FINE_GRID_BASE_BYTES = 1.8e9
 # The PARAXIAL leg's own floor (VERIFY_PERF_BRANCH_2026_08_10 D5).
 # ---------------------------------------------------------------------------
 # ``_FINE_GRID_BASE_BYTES``'s envelope note says in as many words that it is a
-# design-121-class EXACT-leg figure.  The first cut charged it to every worker
-# anyway, including ``final_leg='paraxial'`` workers, whose whole point is
-# that no fine grid is built: on a box with 16 GB free that took a paraxial
-# multi-congruence run from 21 approved workers to ONE, on the strength of a
-# floor measured on a six-order exact-leg congruence.  A throughput
-# regression, not a wrong answer -- but exactly the shape the envelope note
-# exists to prevent.
+# design-121-class EXACT-leg figure, and a ``final_leg='paraxial'`` worker
+# builds no fine grid at all -- so charging it that floor costs throughput
+# for nothing (measured: 21 approved workers down to ONE on a 16 GB-free box).
 #
 # So the paraxial leg gets its own floor, and it is MEASURED, not assumed, on
 # BOTH ends of the range this clamp sees.
@@ -5371,9 +5102,8 @@ def carrier_referenced_exact_focus_readout(
         Either way the value is capped to ``n_fine_cap`` (a COUNT cap) and then
         to the RAM budget (see ``ram_budget``): the physics-driven default can
         demand 32768^2 complex128 = 16 GiB per working array (measured,
-        design-121 class), which used to die with a ``MemoryError``
-        mid-propagation.  When either cap binds, a ``RuntimeWarning`` names the
-        un-degraded requirement and the result is flagged as
+        design-121 class).  When either cap binds, a ``RuntimeWarning`` names
+        the un-degraded requirement and the result is flagged as
         resolution-limited rather than silently returned as if it were the
         requested resolution.
     n_fine_cap : int, optional
@@ -5382,17 +5112,14 @@ def carrier_referenced_exact_focus_readout(
         applied BEFORE the ``ram_budget`` clamp.  Default ``None`` = no count
         cap (the pre-v5.33.2 behaviour, byte-identical).
 
-        v5.33.2, audit ``AUDIT_TRACED_MEMORY_2026_08_09`` row 10 -- one of that
-        audit's two UNSAFE rows.  This grid's size is quadratic in
-        ``window_factor`` (its window is ``window_factor * w_exit``) and until
-        now NOTHING bounded it but the RAM clamp, whose cost model was 4.0x
-        optimistic.  MEASURED on the design-121 production order: ``wf = 4``
-        gives ``N_fine`` 8192 (4.295 GB/array) and ``wf = 7`` gives 16384 --
-        4x the memory for the same physics.  ``propagate_traced_carrier_chain``
-        forwards its ``focus_readout['n_fine_cap']`` (default 16384) here, so
-        the production path is bound by the number that already bounds its
-        re-trace leg; a DIRECT caller who passes nothing keeps the uncapped
-        behaviour.
+        This grid's size is quadratic in ``window_factor`` (its window is
+        ``window_factor * w_exit``): MEASURED on the design-121 production
+        order, ``wf = 4`` gives ``N_fine`` 8192 (4.295 GB/array) and ``wf = 7``
+        gives 16384 -- 4x the memory for the same physics.
+        ``propagate_traced_carrier_chain`` forwards its
+        ``focus_readout['n_fine_cap']`` (default 16384) here, so the production
+        path is bound by the number that already bounds its re-trace leg; a
+        DIRECT caller who passes nothing keeps the uncapped behaviour.
     on_n_fine_cap : {'warn', 'error', 'ignore'}, default 'warn'
         Disposition when ``n_fine_cap`` BINDS.  ``'warn'`` degrades and
         announces (naming the un-degraded requirement, the resulting
@@ -5505,15 +5232,15 @@ def carrier_referenced_exact_focus_readout(
         ``centre``, AND the shortfall truncates measurable beam power.
 
         The crop is necessarily bounded by what the grid holds -- at a chief
-        ray ``(cx, cy)`` only ``N*dx - 2*max(|cx|, |cy|)`` is available -- and
-        until v5.32.1 that bound was applied SILENTLY, so a decentred readout
-        degraded with no symptom while the beam still sat comfortably on the
-        grid.  Measured (1024 x 0.5 um grid, Gaussian ``w`` = 40 um,
-        ``R`` = -400 um, ``z`` = 400 um, ``window_factor`` = 6) against a plain
-        :func:`~lumenairy.propagators.mft.angular_spectrum_propagate_mft` on
-        the same input grid: ``cx`` = 0 and 150 um agree to 3e-5 / 3e-4 of the
-        peak, ``cx`` = 200 um returns 0.919 of the power at 0.906 of the peak,
-        and ``cx`` = 230 um returns **0.279 of the power at 0.435 of the
+        ray ``(cx, cy)`` only ``N*dx - 2*max(|cx|, |cy|)`` is available.
+        Applied SILENTLY that is a plausible-looking wrong answer: measured
+        (1024 x 0.5 um grid, Gaussian ``w`` = 40 um, ``R`` = -400 um,
+        ``z`` = 400 um, ``window_factor`` = 6) against a plain
+        :func:`~lumenairy.propagators.mft.angular_spectrum_propagate_mft`,
+        ``cx`` = 200 um returns 0.919 of the power at 0.906 of the peak and
+        ``cx`` = 230 um returns **0.279 of the power at 0.435 of the peak**.
+        The guard measures the truncated power fraction directly from
+        ``E_full`` and refuses above ``readout_window_tol``.
         peak** -- all three with an empty warning list.  The guard now measures
         the truncated power fraction directly from ``E_full`` and refuses
         above ``readout_window_tol``.
@@ -5675,7 +5402,7 @@ def carrier_referenced_exact_focus_readout(
     _win_want = float(window_factor) * w_amp if w_amp > 0.0 else _avail
     win = min(_win_want, _avail)
     # The clamp above is GEOMETRICALLY forced (nothing outside the grid can be
-    # cropped), but it used to be silent -- and at a decentred ``centre`` it
+    # cropped) and must NOT be silent: at a decentred ``centre`` it
     # shrinks with the offset while the beam still sits comfortably on the
     # grid, which is the exact plausible-looking-wrong-answer class this
     # campaign exists to prevent.  Report it, sized by the power it actually
@@ -5732,20 +5459,10 @@ def carrier_referenced_exact_focus_readout(
     N_fine = int(N_fine)
     _na_ny = (min(max(w_amp / abs(R), 0.02), 0.95)
               if (np.isfinite(R) and R != 0.0 and w_amp > 0.0) else 0.1)
-    # v5.33.2 (AUDIT_TRACED_MEMORY_2026_08_09 row 10, one of the audit's two
-    # UNSAFE rows): the COUNT cap the re-trace leg has always honoured, applied
-    # here too and BEFORE the RAM clamp -- the same order as
-    # ``_fine_trace_group_exit`` (``min(n_fine_req, n_fine_cap)`` then
-    # ``_memory_bounded_n_fine``).
+    # The COUNT cap the re-trace leg has always honoured, applied here too and
+    # BEFORE the RAM clamp -- the same order as ``_fine_trace_group_exit``
+    # (``min(n_fine_req, n_fine_cap)`` then ``_memory_bounded_n_fine``).
     #
-    # Until now this grid had no count cap at all.  Its sizing is quadratic in
-    # ``window_factor`` (the window is ``window_factor * w_exit``), so the ONLY
-    # thing between it and an OOM was the RAM clamp -- whose cost model was
-    # itself 4.0x optimistic (see ``_FINE_GRID_WORK_ARRAYS``).  MEASURED on the
-    # design-121 production order: ``wf = 4`` lands N_fine = 8192 (4.295 GB per
-    # working array) and ``wf = 7`` lands 16384, i.e. 4x the readout's memory
-    # for the same physics, with nothing bounding it.  The exposure was latent
-    # rather than realised at the two configurations the audit measured, which
     # is an argument for capping the dimension, not for assuming it is safe.
     #
     # Default None = NO count cap, i.e. byte-identical to every pre-v5.33.2
@@ -5811,10 +5528,9 @@ def carrier_referenced_exact_focus_readout(
     # -- reconstruct the exact sphere on the fine grid ------------------------
     # (decentred: the fine grid is CENTRED ON THE CHIEF RAY, so the sphere and
     # the tilt ramp are both referenced to its own origin.)
-    # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 sec 3.3): these two casts were the
-    # readout's own complex128 leak.  The field keeps the ENVELOPE's dtype --
-    # complex64 stays complex64, with the sphere's phasor built in float64
-    # per row band -- and every other dtype is promoted exactly as before.
+    # The field keeps the ENVELOPE's dtype -- complex64 stays complex64,
+    # with the sphere's phasor built in float64 per row band -- and every
+    # other dtype is promoted exactly as before.
     _fine_dt = (np.dtype(np.complex64)
                 if np.asarray(env_f).dtype == np.complex64
                 else np.dtype(np.complex128))
@@ -6159,13 +5875,10 @@ def _group_chief_transfer(presc, abcd, x, y, L, M, wavelength, fn):
     (``B = t/n ~ 2 mm`` against ``GAP``/``fd`` legs two orders larger, which
     already use the exact ``tan``).
 
-    So the predictor is not linearised at all any more: the chief ray is
-    TRACED, through the group's own surfaces, with the same engine the tests
-    use as their oracle.  Measured on that fixture the residual against the
-    exact trace goes ``0.1214 um -> 0.0`` (machine precision).  It is exact at
-    ANY angle, so the ``z L^3 / 2``-class error simply does not arise: on the
-    D6 synthetic stand-in (``L = -0.20``) the old predictor sat 12.4 um from
-    the Fermat focus while the exact leg's spot landed ON it.
+    The predictor is not linearised at all: the chief ray is TRACED, through
+    the group's own surfaces, with the same engine the tests use as their
+    oracle, so the residual against an exact trace is 0.0 (machine precision)
+    and the ``z L^3 / 2``-class error does not arise at any angle.
 
     Apertures are removed from the traced copy on purpose.  The ABCD this
     replaces was a purely geometric transfer that could not vignette, so
@@ -6225,20 +5938,12 @@ def _shift_envelope(env, sx, sy, dx):
     construction, so the chief-ray offset is never quantised to the grid.
     Periodic: callers must check the beam still fits (``_check_tilt_fits``).
 
-    FFT BACKEND (FIX_PERF_ROUND2_2026_08_10 item 4a).  The transform pair was
-    RAW ``np.fft``, i.e. single-threaded pocketfft, and it runs on the exact
-    leg's FINE grid through :func:`_crop_about_centre` -- MEASURED at 1.37 % of
-    a design-121 fan order's wall at ``n_fine_cap=8192``, which made it the
-    second-largest raw-``np.fft`` site after
-    :func:`_fourier_upsample_crop`.  Same dispatcher, same accuracy statement
-    (bounded at FFT round-off, NOT bit-identical -- see that function's note
-    and ``FIX_PERF_ROUND2_2026_08_10.md`` sec 5), and the same dtype-parity
-    promotion, which here is UNCONDITIONAL: this transform pair always runs in
-    complex128 and the result is narrowed back to the input's dtype on return.
-    (2026-09-11, D3: the historical justification for the promotion -- that
-    numpy's FFT was double-only -- lapsed at numpy 2.0, but the promotion
-    itself is what this function does and is left as it is; the crop, which
-    does NOT promote a complex64 input, carries the measured cost note.)
+    FFT BACKEND.  The transform pair goes through the :func:`_fft2` /
+    :func:`_ifft2` dispatcher, with the same accuracy statement as
+    :func:`_fourier_upsample_crop` (bounded at FFT round-off, NOT
+    bit-identical), and the same dtype-parity promotion -- which here is
+    UNCONDITIONAL: this pair always runs in complex128 and the result is
+    narrowed back to the input's dtype on return.
 
     BUFFER OWNERSHIP: ``_fft2``'s result is consumed by the ``* ramp``
     multiply (a fresh array) before any other FFT is issued, and ``_ifft2``'s
@@ -7031,13 +6736,12 @@ def _check_decentred_fit(w, x_c, y_c, where, action, frac):
     _guard_dispose(
         action,
         f"propagate_traced_carrier_chain: at {where} the congruence's chief "
-        # niche D9: "off the OPTICAL AXIS", not "off the element grid centre".
-        # ``reach`` was always hypot(x_c, y_c) with the chief ray in ABSOLUTE
-        # coordinates, and on the exact final leg the grid centre now IS the
-        # chief ray -- so the old phrasing named the wrong reference at one of
-        # the two call sites.  What the guard measures is unchanged: the ray
-        # fit's disc is off-centre in the AXIS-centred launch grid, which the
-        # origin does not move.
+        # "off the OPTICAL AXIS", not "off the element grid centre"
+        # (niche D9): ``reach`` is hypot(x_c, y_c) with the chief ray in
+        # ABSOLUTE coordinates, and on the exact final leg the grid centre IS
+        # the chief ray.  What the guard measures: the ray fit's disc is
+        # off-centre in the AXIS-centred launch grid, which the origin does
+        # not move.
         f"ray sits {reach * 1e3:.4f} mm off the OPTICAL AXIS = "
         f"{ratio:.3f} beam amplitude radii (w = {w * 1e3:.4f} mm), above "
         f"decentre_fit_frac={float(frac)}.  A decentred hand-off measurably "
@@ -7076,14 +6780,10 @@ def _check_decentred_fit(w, x_c, y_c, where, action, frac):
 # ROADMAP_DESIGN121_FULL_CONFIGURATION_2026_07_27 P2)
 # ===========================================================================
 # Design 121 is not a bare relay: it is a crossed Dammann DOE between two
-# refractive halves.  Until v5.32 the DOE could not be part of the design the
-# chain sees at all -- ``DGRATING`` surfaces imported as flat optical surfaces
-# with their parameters dropped -- so a consumer had to hand-build the
-# grating, hand-split the chain at the DOE plane, and hand-fold the DOE's
-# 51.539 mm gap into a neighbouring group's ``gap_before``.  That manual fold
-# is the error-prone step: it is only correct for an UNDEFLECTED order,
-# because a fold transports the chief ray over the whole folded distance at
-# the PRE-DOE angle.
+# Folding a DOE gap into a neighbouring group by hand is only correct for an
+# UNDEFLECTED order, because a fold transports the chief ray over the whole
+# folded distance at the PRE-DOE angle.  A DOE entry in ``groups`` removes
+# that step.
 #
 # A DOE entry in ``groups`` is therefore not new diffraction physics -- it is
 # the ONE congruence's exact per-order bookkeeping, which the chain is already
@@ -7151,14 +6851,11 @@ def _check_decentred_fit(w, x_c, y_c, where, action, frac):
 #      split (R = -3..-45 mm, field agreement 3e-12..6e-11).  Deferring makes
 #      a DOE entry safe for a design whose screen sits near a carrier focus.
 #
-# NOTE, corrected 2026-07-28: design 121 is NOT such a design.  Its DOE sits
-# in COLLIMATED space -- measured R = +703591.2 mm (703.6 m, diverging) at
-# the pre-DOE group exit -- so one 58.5393 mm step and a 51.5393 + 7.0000 mm
-# pair land on the SAME co-moving pitch (51.23386 um, ratio 1.000000) and
-# agree to max|dE|/max|E| = 2.1e-11.  An earlier revision of this note cited
-# a 5.5x pitch split for design 121's own leg; that number belongs to the
-# near-focus corner in (2), not to this design.  For the 121 the operative
-# reason is (1).
+# Design 121 is NOT such a design: its DOE sits in COLLIMATED space (measured
+# R = +703591.2 mm at the pre-DOE group exit), so one 58.5393 mm step and a
+# 51.5393 + 7.0000 mm pair land on the SAME co-moving pitch (51.23386 um,
+# ratio 1.000000) and agree to max|dE|/max|E| = 2.1e-11.  For the 121 the
+# operative reason is (1).
 
 _DOE_SPEC_KEYS = frozenset({
     'type', 'period', 'order', 'angle_deg', 'origin', 'lines_per_um',
@@ -7398,19 +7095,17 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     clamp is forced rather than wrong, but the F-C contract ("keeps the CHAIN's
     physical ray pitch") does not hold there, so a ``RuntimeWarning`` fires
     naming BOTH pitches and the remedy (raise ``n_fine_cap`` / shrink
-    ``window_factor``) whenever the clamp binds (S12) -- previously this was a
-    silent, docstring-only contract gap that only the F-D warning hinted at
-    (and F-D names the symptom, ``dx_fine`` vs the exit Nyquist pitch, not the
-    ray lattice).  ``on_rs_fine_clamp='error'`` (D3 / roadmap P5) is the
+    ``window_factor``) whenever the clamp binds (S12).  The sibling F-D
+    warning names a different symptom -- ``dx_fine`` against the exit Nyquist
+    pitch, not the ray lattice.  ``on_rs_fine_clamp='error'`` (D3 / roadmap
+    P5) is the
     opt-in STRICT mode for that corner: a production run that needs the F-C
     pitch-preservation contract to actually hold raises there instead of
     accepting a coarser final-leg ray lattice than the rest of the chain.
 
-    Interaction note (F-C, reviewed 2026-07-22): the pitch-preserving
-    ``ray_subsample`` rescale reduces the ray-fit density on THIS leg
-    relative to the pre-fix behaviour (which accidentally over-sampled by
-    reusing the chain-level integer in the finer grid's pixel units), so it
-    reduces -- but for a realistic beam/aperture ratio does not eliminate --
+    Interaction note (F-C): the pitch-preserving ``ray_subsample`` rescale
+    sets the ray-fit density on THIS leg from the CHAIN's physical pitch, so
+    it reduces -- but for a realistic beam/aperture ratio does not eliminate --
     the safety margin against ``apply_real_lens_traced``'s own
     ``min_coarse_samples_per_aperture`` aliasing floor (default 32,
     ``on_undersample='error'`` by default).  Quantitatively: tripping it
@@ -7418,10 +7113,9 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
     ``16 * ray_subsample`` pixels on the co-moving grid for a
     beam-filling aperture -- e.g. < 64 px at the default
     ``ray_subsample=4`` (the design-121 R9 case samples it at 213 px, a
-    3.3x margin).  Any chain coarse enough to trip this was ALREADY
-    aliasing the Newton/Cheb fit silently pre-fix; post-fix it fails
-    loudly instead, which is strictly safer, but if you hit it, pass
-    ``traced_kwargs={'on_undersample': 'warn'}`` (or ``'silent'``) at the
+    3.3x margin).  Any chain coarse enough to trip it is aliasing the
+    Newton/Cheb fit, so failing loudly is the right answer; if you hit it,
+    pass ``traced_kwargs={'on_undersample': 'warn'}`` (or ``'silent'``) at the
     ``propagate_traced_carrier_chain`` call rather than assuming a bug here.
 
     TILT AWARENESS (niche D6, roadmap
@@ -8094,14 +7788,12 @@ def propagate_traced_carrier_chain(
     (:func:`system_abcd_prescription` mapped onto the incoming carrier), so the
     caller needs no external q-trace.
 
-    ``validation/repro_traced_carrier_121/carrier_chain_121.py`` is the hand-
-    written form of that pattern.  NOTE (v5.29): the two agree only with the
-    LEGACY options -- ``carrier_reference='parabola'`` plus
+    ``validation/repro_traced_carrier_121/carrier_chain_121.py`` is the
+    hand-written form of that pattern.  It agrees with this function only
+    under the LEGACY options -- ``carrier_reference='parabola'`` plus
     ``traced_kwargs={'amplitude_model': 'screen', 'preserve_input_phase':
-    True}`` -- because the chain's defaults have since flipped to the validated
-    carrier-regime configuration (see ``carrier_reference``).  With the shipping
-    defaults this orchestrator is a DIFFERENT (and much more accurate) model
-    than that script: design-121 best-focus EE6 79.7% -> 99.3%.
+    True}``; with the shipping defaults this orchestrator is a DIFFERENT and
+    much more accurate model (design-121 best-focus EE6 79.7% -> 99.3%).
 
     Parameters
     ----------
@@ -8358,13 +8050,10 @@ def propagate_traced_carrier_chain(
           Raise this (RAM permitting) to resolve the full NA, or shrink
           ``window_factor`` instead.
 
-          v5.33.2 (audit AUDIT_TRACED_MEMORY_2026_08_09 row 10): this cap is
-          now forwarded to the EXACT READOUT's own internal fine grid as well
-          -- previously the chain bounded the re-trace leg and left the
-          readout's grid (whose window is quadratic in ``window_factor``)
-          bounded only by the RAM clamp.  Both grids therefore cap at the same
-          number, and ``on_n_fine_cap`` ({'warn', 'error', 'ignore'}, default
-          ``'warn'``) disposes of the readout-side bind.
+          The cap is forwarded to the EXACT READOUT's own internal fine grid
+          as well, so both grids cap at the same number, and
+          ``on_n_fine_cap`` ({'warn', 'error', 'ignore'}, default ``'warn'``)
+          disposes of the readout-side bind.
         * ``max_fine_launch_points`` (int, default 4096) -- independent
           backstop on the re-trace's Newton/Chebyshev ray-fit grid size,
           in case the physical-pitch-preserving ``ray_subsample`` (F-C)
@@ -8580,8 +8269,7 @@ def propagate_traced_carrier_chain(
         Cutoff for the ``_tilt_dispersion`` multi-valuedness score above, in
         fga's own currency (NA-normalized) and defaulted to fga's own
         ``multivalued_threshold``.  Two things are done to fga's raw reading
-        before the comparison, and both are corrections to measured defects in
-        this gate's first cut -- see the "P3 -- multi-congruence detection"
+        before the comparison -- see the "P3 -- multi-congruence detection"
         module note (B.1, B.2) for the derivations and the full battery:
 
         * it is put on a GRID-CANONICAL scale (``x sqrt(lambda / dx)``).  The
@@ -8725,10 +8413,9 @@ def propagate_traced_carrier_chain(
     decentre_fit_frac : float, default 0.5
         Chief-ray offset, in beam amplitude radii, above which
         ``on_decentred_fit`` fires.  The measured onset on the decentre-
-        invariant stand-in above is ~0.75 w; 0.5 keeps the default one step
-        conservative of it.  ``0`` disables the check.
-    on_gap_paraxial : {'warn', 'error', 'ignore'}, default 'warn'
-        Guard rail on the PARAXIAL INTER-GROUP TRANSPORT (niche C3, roadmap
+        <= 0.01 point.  (An exit-slope curve running 3.7 -> 408 urad, once
+        quoted here, is an artefact of the repro script's FFT-derivative
+        slope extraction; see ``_DECENTRED_FIT_POLY_ORDER``.)
         P7).  Inter-group free-space legs are Sziklas-Siegman, i.e. exact for
         the FRESNEL kernel; relative to an exact angular spectrum each leg
         therefore drops ``phi_drop = k z NA^4 / 8`` radians of quartic --
@@ -8942,24 +8629,21 @@ def propagate_traced_carrier_chain(
     _check_chain_entry_congruence(
         E_in, dx, wavelength, on_multi_congruence,
         multi_congruence_threshold, _fn)
-    # v5.29 default flip (audit AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24 S8):
-    # the chain's per-group traced calls default to the validated
-    # carrier-regime configuration -- the chain ALWAYS operates with its
-    # carrier beyond the grid Nyquist, where the geometric (ray-density)
-    # amplitude and the geometric residual carry are the correct physics,
-    # not preferences.  Anything the caller passes in ``traced_kwargs`` (or a
-    # group's own ``traced_kwargs``) WINS over these defaults; the standalone
+    # The chain's per-group traced calls default to the validated
+    # carrier-regime configuration: the chain ALWAYS operates with its carrier
+    # beyond the grid Nyquist, where the geometric (ray-density) amplitude and
+    # the geometric residual carry are the correct physics, not preferences.
+    # Anything the caller passes in ``traced_kwargs`` (or a group's own
+    # ``traced_kwargs``) WINS over these defaults; the standalone
     # ``apply_real_lens_traced`` element defaults are untouched.
-    # P2 (audit AUDIT_TRACED_PRODUCTION_READINESS_2026_07_24 §4): the chain also
-    # defaults the APERTURE:BEAM CLIFF GUARD on -- the ray-fit domain is tied to
-    # the beam, not to the (arbitrary, prescription-supplied) vignetting
-    # aperture.  A chain is exactly the daily-driver case that receives
-    # arbitrary apertures, and the cliff is silent: measured on the E4 corrected
-    # relay, exit-wavefront Strehl 0.998 (6 mm aperture) -> 0.105 (7 mm) ->
-    # 0.039 (10 mm) with no warning and no energy loss to show for it, recovered
-    # to 0.9995 at every aperture by this default.  Fit-domain only: no field
-    # energy is vignetted (measured identical exit power to 4 digits), and the
-    # design-121 acceptance is unchanged.
+    # The chain also defaults the APERTURE:BEAM CLIFF GUARD on -- the ray-fit
+    # domain is tied to the beam, not to the (arbitrary, prescription-supplied)
+    # vignetting aperture.  A chain is exactly the daily-driver case that
+    # receives arbitrary apertures, and the cliff is silent: measured on the E4
+    # corrected relay, exit-wavefront Strehl 0.998 (6 mm aperture) -> 0.105
+    # (7 mm) -> 0.039 (10 mm) with no warning and no energy loss to show for
+    # it, recovered to 0.9995 at every aperture by this default.  Fit-domain
+    # only: no field energy is vignetted.
     from ..elements._lens_traced import _FIT_RADIUS_BEAM_FACTOR_DEFAULT
     base_kw = {'amplitude_model': 'ray_density',
                'preserve_input_phase': 'remap',
@@ -8981,8 +8665,8 @@ def propagate_traced_carrier_chain(
     # The y pitch, tracked separately.  It equals ``cur_dx`` on every square
     # leg (the chain's input grid is square by contract), and DIVERGES only
     # after an astigmatic leg, whose ``(dx_x, dx_y)`` pair the two collapse
-    # sites below used to reduce to its x component and throw away.  The
-    # parabola<->sphere conversion is the one screen that builds its own y
+    # after an astigmatic leg, whose ``(dx_x, dx_y)`` pair the two collapse
+    # sites below must NOT reduce to its x component.  The
     # axis, so it is the one that needs the real pitch (VERIFY-A6 OI-3).
     cur_dy = cur_dx
     env = E_in
@@ -9154,13 +8838,13 @@ def propagate_traced_carrier_chain(
                 cur_dy = cur_dx
             if isinstance(R, tuple):
                 R = R[0]
-            # A COLLIMATED leg (R = inf) previously took no arm at all: the
-            # whole guard was gated on ``isfinite(R)``.  That is the WRONG way
-            # round for the frame arm -- with no co-moving reduction
-            # ``z_eff = z``, its largest possible value, so the frame-dropped
-            # term ``k |z_eff| theta^4 / 8`` is MAXIMAL on exactly the legs
-            # that were unguarded, and roadmap P8 names "a fast final group
-            # after a collimated space" as the most common relay architecture.
+            # A COLLIMATED leg (R = inf) must NOT be excluded by an
+            # ``isfinite(R)`` gate: that is the WRONG way round for the frame
+            # arm -- with no co-moving reduction ``z_eff = z``, its largest
+            # possible value, so the frame-dropped term
+            # ``k |z_eff| theta^4 / 8`` is MAXIMAL on exactly a collimated
+            # leg, and roadmap P8 names "a fast final group after a
+            # collimated space" as the most common relay architecture.
             # Arms A/B self-silence there (phi_drop = 0, na = 0), so it is safe
             # to call the guard for any scalar R and let each arm decide.
             if np.isscalar(_R_gap) or np.ndim(_R_gap) == 0:
@@ -9336,12 +9020,10 @@ def propagate_traced_carrier_chain(
                 'centre_out', 'bandlimit', 'ram_budget',
                 'on_readout_window', 'readout_window_tol',
                 'on_replica', 'on_n_fine_cap') if kk in fr}
-            # v5.33.2 (AUDIT_TRACED_MEMORY_2026_08_09 row 10): the readout's
-            # own fine grid gets the SAME count cap the re-trace leg above was
-            # just given -- eleven keys used to reach it and this was not one of
-            # them, so the chain bounded the leg's grid and left the readout's
-            # bounded only by the RAM clamp.  Passed explicitly (not via the
-            # ``if kk in fr`` comprehension) so the DEFAULT 16384 travels too:
+            # The readout's own fine grid gets the SAME count cap the
+            # re-trace leg above was just given.  Passed explicitly (not via
+            # the ``if kk in fr`` comprehension) so the DEFAULT 16384 travels
+            # too:
             # a focus_readout that names no cap still caps both grids at the
             # same number, which is what makes the pair consistent.
             exact_kw['n_fine_cap'] = int(fr.get('n_fine_cap', 16384))
@@ -9729,12 +9411,9 @@ def propagate_traced_carrier_chain(
 # :func:`propagate_traced_carrier_chain` propagates ONE congruence.  The
 # shipping design-121 device is not one congruence: it is a Dammann DOE fan
 # (8x4 orders, 480 um frame pitch, +-46 mrad) from an emitter array, i.e. K
-# comparable-power beams at well-separated angles.  Pushed through the chain
-# MULTIPLEXED that fan produced a populated, credible-looking frame lattice
-# whose per-frame power was scrambled (0.47 +/- 0.51 % against a design
-# 2.78 %/frame) with nothing raised and nothing warned -- the element's
+# MULTIPLEXED that fan returns a populated, credible-looking frame lattice
+# whose per-frame power is scrambled, with nothing raised -- the element's
 # entrance->exit map names exactly that case as excluded
-# (``_lens_traced.py``, ``carrier``'s validity paragraph).
 #
 # The orchestrator below runs each congruence through the SHIPPED-DEFAULT
 # chain -- ``carrier_reference='sphere'`` + ``preserve_input_phase='remap'``
@@ -9778,17 +9457,16 @@ def propagate_traced_carrier_chain(
 #     v5.28 failure, reproduced by the fix for it.  ``on_replica`` (default
 #     'error') refuses it, from the period the chain now reports, rather than
 #     leaving it to a downstream UserWarning that any upstream
-#     ``filterwarnings('ignore')`` silences.  Two corrections a second
-#     adversarial pass forced, both about WHOSE window is at risk:
+#     ``filterwarnings('ignore')`` silences.  Two properties of the guard
+#     matter, and both are about WHOSE window is at risk:
 #       - the shared 'auto' window is sized from min(period) over ALL K
-#         congruences (measured in a cheap 16-px probe pass), not from
+#         congruences (measured in a cheap 16-px probe pass), NOT from
 #         congruence 0.  Design-121's per-order periods span 1.8 %, so sizing
-#         from the first congruence made the DEFAULT raise on the acceptance
-#         config, and made "does it run at all" depend on list order.
-#       - the guard is a MULTIPLEXING guard: at K = 1 there is no neighbouring
-#         frame to contaminate and the answer is exactly the chain's, so it
-#         downgrades to a warning and 'auto' keeps the requested field of view
-#         (an earlier cut silently returned zeros over 55 % of a K=1 grid).
+#         from the first congruence would make the DEFAULT raise on the
+#         acceptance config and make "does it run at all" depend on list order.
+#       - it is a MULTIPLEXING guard: at K = 1 there is no neighbouring frame
+#         to contaminate and the answer is exactly the chain's, so it
+#         downgrades to a warning and 'auto' keeps the requested field of view.
 #   * TOO NARROW -- a tile that clips the halo makes ``power_out``
 #     window-dependent, and since the halo grows with field angle the clipped
 #     fraction varies across a fan and reads as vignetting.  Measured on the
@@ -9997,9 +9675,9 @@ def _chain_chief_ray_at_target(groups, wavelength, carrier, final_distance,
     needs nothing but it: on a free leg the chief ray advances by
     ``gap * (L, M) / cos(theta)`` with the tilt invariant, and through a group
     it is TRACED, exactly, through that group's own surfaces
-    (:func:`_group_chief_transfer`; niche C3 -- it used to go through the
-    group's lumped paraxial ABCD, which is neither a sine nor a tangent
-    convention and left 0.044-0.288 um per group on the D1 relay at 46 mrad).
+    (:func:`_group_chief_transfer`; niche C3 -- a lumped paraxial ABCD is
+    neither a sine nor a tangent convention and leaves 0.044-0.288 um per
+    group on the D1 relay at 46 mrad).
     Both closures must use the SAME step: the orchestrator cross-checks this
     prediction against the chain's own ``stages[-1]`` and RAISES on a
     mismatch, so converting one without the other is a hard break.  The
@@ -10421,24 +10099,19 @@ def _multi_resolve_workers(requested, K, shape0, min_free_gb, fn,
         return requested
     n_px = int(np.prod(shape0[-2:])) if len(shape0) >= 2 else 0
     # The EXACT final leg's fine grid is a SECOND peak, on top of the chain
-    # working set and live at the same time.  Sizing workers from the chain
-    # alone is how 3 workers each correctly decided they could afford a
-    # 16384^2 fine grid (17.2 GB) and then collectively asked for 123 GB of a
-    # 127 GB box -- MEASURED on design 121's fan, which died with 'Unable to
-    # allocate 4.00 GiB for an array with shape (16384, 16384)' while 97 GB
-    # still read free.
+    # working set and live at the same time -- sizing workers from the chain
+    # alone is how three workers each correctly decided they could afford a
+    # 16384^2 fine grid and then collectively asked for 123 GB of a 127 GB box.
     #
     # ``_fine_grid_peak_bytes`` is the readout's OWN model (grid term + the
-    # per-process floor), called rather than re-spelled: pricing a worker with
+    # per-process floor), CALLED rather than re-spelled: pricing a worker with
     # a second copy of the arithmetic is how this clamp and
-    # ``_memory_bounded_n_fine`` came to disagree by 4.59x once already
-    # (AUDIT_TRACED_SPEED_2026_08_09 sec 3.3).  ``n_fine_cap`` falsy =
-    # ``final_leg='paraxial'``, which builds no fine grid and is therefore
-    # priced with the MEASURED paraxial floor rather than the exact leg's --
-    # v5.33.3, VERIFY_PERF_BRANCH_2026_08_10 D5: charging the exact leg's
-    # design-121-class floor to a paraxial worker took a 16 GB-free box from
-    # 21 approved workers to one, against a paraxial worker MEASURED at
-    # 0.44-1.17 GB (1.17 being the design-121 fan's own, at k=2).
+    # ``_memory_bounded_n_fine`` came to disagree by 4.59x once already.
+    # ``n_fine_cap`` falsy = ``final_leg='paraxial'``, which builds no fine
+    # grid and is therefore priced with the MEASURED paraxial floor rather
+    # than the exact leg's (charging the exact leg's design-121-class floor to
+    # a paraxial worker took a 16 GB-free box from 21 approved workers to one,
+    # against a paraxial worker MEASURED at 0.44-1.17 GB).
     per_worker_b = _fine_grid_peak_bytes(int(n_fine_cap or 0), n_px=n_px)
     if per_worker_b <= 0:
         return requested

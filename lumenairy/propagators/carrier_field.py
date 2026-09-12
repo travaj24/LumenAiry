@@ -57,12 +57,11 @@ THREE THINGS THE PROBE PROVED THAT THIS MODULE ENCODES
    The ENVELOPE's band does add, to each bound separately.  A re-reference
    returns ``resample(env) * exp(i k0 (C_src - C_dst))`` -- a PRODUCT, whose
    band is the sum of its factors' -- so a lattice that holds the ramp but
-   not ``ramp + band`` aliases the envelope's skirt into the answer.  Left
-   out, that is a 38 %-wrong round trip accepted at the guard's own default
-   (VERIFY_ARCHITECTURE P0-1/P0-2), and it is invisible to an energy ledger
-   because aliasing conserves power.  :func:`carrier_difference_nyquist`
-   takes the band MEASURED off the envelope (:meth:`CarrierField.band_slope`)
-   and adds ``_BAND_HEADROOM`` times it to both bounds.
+   not ``ramp + band`` aliases the envelope's skirt into the answer -- and
+   that aliasing is invisible to an energy ledger, because aliasing conserves
+   power.  :func:`carrier_difference_nyquist` takes the band MEASURED off the
+   envelope (:meth:`CarrierField.band_slope`) and adds ``_BAND_HEADROOM``
+   times it to both bounds.
 
 PISTON IS EXPLICIT, AND THAT IS THE POINT
 -----------------------------------------
@@ -105,6 +104,9 @@ vs 1.5243 um) AND in origin (0.000 / -1.508 / -3.016 mm), and both have to be
 carried for the orders to land on one lattice.  The library's private eikonal
 builders take a grid-frame ``centre``, so everything here converts once, at
 the call site, via ``centre - origin``.
+
+Version history for this module -- what each audit changed and why -- lives in
+``docs/history/carrier_field.md``.
 
 Author: Andrew Traverso
 """
@@ -194,20 +196,16 @@ _NYQUIST_N_ANGLES = 256
 #: multiplier converts the robust statistic into the operative bound, and
 #: its value is MEASURED rather than chosen.
 #:
-#: HOW IT WAS DERIVED (docs/audits/FIX_VERIFY_ARCH_2026_08_12.md S1).  The
-#: round-trip cliff was bisected over 24 fixtures -- beam widths 25..200 um,
-#: ramps 0.02..0.10 rad, finite-R and collimated carriers.  Expressed as
-#: ``(lambda/2dx - ramp) / band``, the cliff sits at 1.666..2.092, a 1.26x
-#: spread over the whole matrix.  Expressed instead as a ``nyquist_margin``
-#: on the ramp-only bound -- the coordinate the guard used to cut in -- the
-#: SAME cliff runs 1.087..4.478, a 4.12x spread, which is the proof that no
-#: choice of margin default can express this boundary and that the missing
-#: BAND TERM is what the guard was short by.
-#:
-#: 2.5 is the measured worst case (2.092) plus 1.20x headroom.  The upper
-#: end is set by over-refusal: 3.0 starts refusing pitches measured clean at
-#: 3.4e-10 relative.  Verified in both directions -- see the fail-before /
-#: fix-after tables in that document.
+#: 2.5 is the measured worst case (2.092) plus 1.20x headroom, and both ends
+#: are measured.  The round-trip cliff was bisected over 24 fixtures (beam
+#: widths 25..200 um, ramps 0.02..0.10 rad, finite-R and collimated carriers):
+#: in the coordinate ``(lambda/2dx - ramp) / band`` it sits at 1.666..2.092, a
+#: 1.26x spread; in the ramp-only ``nyquist_margin`` coordinate the SAME cliff
+#: runs 1.087..4.478, a 4.12x spread -- which is the proof that no choice of
+#: margin default can express this boundary, and that the missing BAND TERM is
+#: what the guard was short by.  The upper end is set by over-refusal: 3.0
+#: starts refusing pitches measured clean at 3.4e-10 relative.
+#: (docs/audits/FIX_VERIFY_ARCH_2026_08_12.md S1; docs/history/carrier_field.md.)
 _BAND_HEADROOM = 2.5
 
 #: Enclosed-power fraction used to size the SPECTRAL band radius.  The same
@@ -309,12 +307,11 @@ class CarrierSpec:
         Chief-ray direction cosines ``(L, M)``.  DIRECTION COSINES, not
         slopes: ``L^2 + M^2 < 1`` is required.
     piston : float
-        Constant optical path (m), EXPLICIT.  This is the term
-        ``FIX_TILT_QUADRATIC_OPL_2026_08_11`` restores to
-        ``apply_real_lens_traced``'s exit field, and carrying it here is what
-        lets a field re-referenced onto another carrier keep a meaningful
-        ABSOLUTE optical path.  Contributes ``exp(i k0 piston)`` -- a global
-        unit phasor, intensity-blind by construction.
+        Constant optical path (m), EXPLICIT.  Carrying it here is what lets a
+        field re-referenced onto another carrier keep a meaningful ABSOLUTE
+        optical path -- ``apply_real_lens_traced``'s exit field supplies one.
+        Contributes ``exp(i k0 piston)`` -- a global unit phasor,
+        intensity-blind by construction.
     """
 
     R: float
@@ -447,7 +444,7 @@ class CarrierSpec:
         who intends to handle the constant separately (or who is comparing
         two carriers that share it) wants.
 
-        ``dtype`` (default ``None`` = ``complex128``, the historical answer):
+        ``dtype`` (default ``None`` = ``complex128``):
         pass ``np.complex64`` -- normally the dtype of the envelope this
         phasor will multiply -- and the sphere is assembled in row bands
         through ``_phasor_rows`` and the ramp / exactness factors are asked
@@ -899,14 +896,14 @@ def _enclosed_power_radius(env, dx, dy, centre, frac, *,
     one bin (``min(dx, dy)``) -- the conservative direction for a bound that
     is used to SIZE a grid.
 
-    A NON-FINITE sample RAISES.  It used to fall through the ``tot > 0.0``
-    test -- ``nan > 0.0`` is ``False`` -- and return 0.0, which is not a
+    A NON-FINITE sample RAISES.  Returning 0.0 instead -- which is what a bare
+    ``tot > 0.0`` test does, since ``nan > 0.0`` is ``False`` -- is not a
     conservative failure but the LEAST conservative one available: a support
-    radius of zero collapses every maximum-over-the-disc in this module to
-    the chief ray alone, where a concentric sphere-difference ramp is
-    identically zero, so the Nyquist guard SILENTLY ACCEPTED calls it
-    correctly refuses on the same field when clean (VERIFY_ARCHITECTURE
-    P1-3).  A guard whose own input is NaN has to say so."""
+    radius of zero collapses every maximum-over-the-disc in this module to the
+    chief ray alone, where a concentric sphere-difference ramp is identically
+    zero, so the Nyquist guard ACCEPTS calls it correctly refuses on the same
+    field when clean.  A guard whose own input is NaN has to say so.
+    (audit VERIFY_ARCHITECTURE P1-3; ``docs/history/carrier_field.md``.)"""
     env = np.asarray(env)
     ny, nx = env.shape[-2], env.shape[-1]
     if x_axis is None:
@@ -1085,7 +1082,8 @@ def carrier_difference_nyquist(src_carrier, dst_carrier, wavelength,
         dx_reconstruct = lambda / (2 * (max|grad C_src| + band))
 
     **THE ENVELOPE BAND ADDS.  THE CARRIER'S NA DOES NOT.**  These are two
-    different quantities and the module used to name only the second.
+    different quantities, and getting them the right way round is the whole
+    of the sampling argument.
 
     * ``band`` is the ENVELOPE's own angular content -- what a 10 um waist
       carries that a 200 um waist does not.  It is a genuine signal riding
@@ -1103,13 +1101,10 @@ def carrier_difference_nyquist(src_carrier, dst_carrier, wavelength,
       1.5x INSIDE that bound and the extreme order did not move (two pitches
       2x apart agree to every printed digit).
 
-    Leaving ``band`` out is what let the guard accept a **38 %-wrong**
-    round trip at its own default (VERIFY_ARCHITECTURE P0-1/P0-2): with the
-    pitch and the ramp both frozen at an ACCEPTED margin of 1.023, shrinking
-    the beam 200 -> 10 um drove the round trip to rel L2 1.0055 while the
-    reported margin never moved.  ``env_band`` defaults to 0.0 so the
-    arithmetic of a caller who has no field in hand is unchanged, but
-    :func:`re_reference` and :func:`aggregate` always measure and pass it.
+    ``env_band`` defaults to 0.0 so the arithmetic of a caller who has no
+    field in hand is unchanged, but :func:`re_reference` and
+    :func:`aggregate` always measure and pass it.  What leaving ``band`` out
+    cost, measured: ``docs/history/carrier_field.md``.
 
     **What is NOT a bound: the destination carrier's own band.**
     ``max|grad C_dst|`` over the SOURCE's support is large whenever the two
@@ -1294,9 +1289,9 @@ def re_reference(field: CarrierField, to_carrier: CarrierSpec,
         Skip the measurement and use this envelope half-band (slope units).
         Same escape hatch as ``support_radius`` and for the same reason --
         the measurement is an ``fft2`` (see :meth:`CarrierField.band_slope`).
-        Passing 0.0 REMOVES the band term, which is the pre-fix arithmetic
-        and is not recommended: it is what let the guard accept a 38 %-wrong
-        answer at its own default.
+        Passing 0.0 REMOVES the band term and is not recommended: that is the
+        arithmetic which let the guard accept a 38 %-wrong answer at its own
+        default.
     nyquist_margin : float
         Required ratio ``dx_binding / target_grid.dx``.  1.0 = bare Nyquist
         OF THE FULL SIGNAL -- ramp plus the measured envelope band, not the
