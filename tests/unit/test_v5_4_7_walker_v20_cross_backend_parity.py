@@ -54,6 +54,10 @@ _UTILITY_SUFFIXES = ('_cache', '_state')
 _PARITY_REGISTRY = {
     'lumenairy.raytrace.jax_trace:trace_jax':
         'lumenairy.raytrace.trace:trace',
+    # audit-2609 WP-A1: the shared exit-vertex transfer (signed t = -z/N to the
+    # vertex plane) has one NumPy body and one JAX body; both must move together.
+    'lumenairy.raytrace.jax_trace:exit_vertex_transfer_jax':
+        'lumenairy.raytrace.exit_vertex:exit_vertex_transfer',
     'lumenairy.raytrace.jax_trace:trace_jax_with_params':
         'lumenairy.raytrace.trace:trace_prescription',
     'lumenairy.elements._lens_jax:apply_real_lens_traced_jax':
@@ -174,14 +178,28 @@ def test_registered_pairs_have_both_backends():
 
 def test_jax_intersect_direction_aware_root_pick_present():
     """The v5.4.1/v5.4.6 direction-aware near-root pick must remain in
-    BOTH JAX intersect kernels (the P1-1 parity fix)."""
+    BOTH JAX intersect kernels (the P1-1 parity fix).
+
+    audit-2609 WP-A1 (R4): the kernels now take the near root from the
+    Spencer-Murty stable quadratic ``t = e/q`` with
+    ``q = -(b + sign(b) sqrt(disc))/2`` -- the near root by construction
+    (|e/q| <= |q/a|), direction-aware without an explicit ``min |t|`` -- and
+    ``_intersect_jax`` keeps the explicit ``min |t|`` pick on its
+    pure-spherical branch.  Either spelling is the direction-aware pick; a
+    direction-blind ``t1 if R>0 else t2`` is neither.
+    """
     import lumenairy.raytrace.jax_trace as jt
-    src = inspect.getsource(jt)
-    n = src.count('jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)')
-    assert n >= 2, (
-        f"V20: expected the direction-aware root pick in both JAX intersect "
-        f"kernels (_intersect_jax + _intersect_jax_param); found {n}.  A "
-        f"direction-blind ``t1 if R>0 else t2`` regressed the JAX twin.")
+    explicit_min_abs = 'jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)'
+    spencer_murty = 'e_q / jnp.where(q_ok, q_q, 1.0)'
+    for kernel in (jt._intersect_jax, jt._intersect_jax_param):
+        src = inspect.getsource(kernel)
+        assert explicit_min_abs in src or spencer_murty in src, (
+            f"V20: {kernel.__name__} carries neither the explicit min-|t| root "
+            f"pick nor the Spencer-Murty near-root quotient; a direction-blind "
+            f"``t1 if R>0 else t2`` regressed the JAX twin.")
+        assert 't1 if R' not in src and 'R_finite > 0' not in src.replace(
+            '# ``R_finite > 0`` selector', ''), (
+            f"V20: {kernel.__name__} reintroduced the direction-blind selector.")
 
 
 def test_jax_rng_default_dtype_is_x64_aware():
