@@ -940,7 +940,21 @@ def test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why():
         out = {}
         for delta in (1e-4, 1e-5):
             seen.clear()
-            st = PMMStack(_P, degree=12, far_field_orders=5)
+            # ``min_feature`` PINNED at the value this census was taken with
+            # (2026-09-12).  The fixture's whole object is a CROSS-LAYER wall
+            # pair ``delta`` = 1e-04 / 1e-05 of the period apart, and
+            # ``min_feature`` is the knob that SNAPS such a pair away: at the
+            # default raised to ``period*1e-3`` by audit finding G2 both
+            # separations are snapped to coincidence, the two layers become
+            # geometrically IDENTICAL and the near-singular interface this test
+            # exists to measure does not exist -- measured ``rcond`` 4.29e-04
+            # (1e-04) / 5.21e-04 (1e-05) and R+T = 1.0000000000 on both rows,
+            # against the 9.694e-11 / 9.730e-13 and R+T = 3.612 the committed
+            # per-kernel census below is made of.  Pinning the old default
+            # reproduces those numbers exactly (9.6940e-11, gap 1.998 decades),
+            # so this is a fixture pin, not a relaxed bar.
+            st = PMMStack(_P, degree=12, far_field_orders=5,
+                          min_feature=_P * 1e-5)
             st.add_layer(0.08, segments=[(a0, _EPS_H), (a1 - a0, _EPS_P),
                                          (1 - a1, _EPS_H)])
             b0, b1 = a0 - delta, a1 + delta

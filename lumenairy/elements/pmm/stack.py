@@ -439,9 +439,14 @@ _SLIVER_OWN_SCALE_RATIO = 100.0
 #: DEFAULT ``min_feature``, as a FRACTION of the period (audit finding G2,
 #: 2026-09-12).  The wall snap is the only thing that removes a MANUFACTURED
 #: cross-layer sliver before it reaches the solve, and the sliver pathology has
-#: a measured width: a collision of size ``s`` corrupts the answer for ``s`` in
-#: roughly ``[1, 8] * min_feature`` and is harmless outside it, so the default
-#: must sit ABOVE the geometry's collision scale, not below it.
+#: a measured width that is ABSOLUTE, not a multiple of this knob: an unsnapped
+#: collision of size ``s`` corrupts the answer for ``s`` measured at roughly
+#: ``1e-5 .. 1e-4`` of a PERIOD (both fixtures below, degrees 10-26) and is
+#: harmless outside that.  The default therefore has to sit ABOVE the
+#: geometry's own collision scale -- which is what makes raising it a cure:
+#: were the band a fixed multiple of ``min_feature`` it would simply move with
+#: the knob and no setting could clear it, and the ladder below shows it does
+#: not (at ``1e-3`` the rungs at 1x .. 8x of the threshold are clean).
 #:
 #: MEASURED on two independent fixtures (Si/SiO2, 1.0 um pitch, 1.55 um, 12 deg;
 #: and TiO2-like 2.35/1.46, 0.55 um pitch, 0.70 um, 31 deg) over an
@@ -1695,9 +1700,11 @@ class PMMStack:
         This is an ACCURACY knob, not only a cost knob.  A cross-layer wall
         collision the snap does NOT remove puts a near-zero-width element on
         the grid whose ``1/w^2`` nodal conditioning corrupts the solve, and the
-        corruption band is MEASURED at roughly ``[1, 8] * min_feature`` in the
-        collision width -- so the threshold has to sit ABOVE the geometry's own
-        collision scale, not below it.  That scale is not a period fraction:
+        corruption band is MEASURED at roughly ``1e-5 .. 1e-4`` of a PERIOD in
+        the collision width -- an ABSOLUTE band, not a multiple of this knob,
+        which is why raising the knob above it is a cure -- so the threshold
+        has to sit ABOVE the geometry's own collision scale, not below it.
+        That scale is not a period fraction:
         for a staircased taper it is the per-slice wall offset
         ``(thickness / n_slices) * tan(sidewall)``, in nanometres, independent
         of the period.  **Rule of thumb: pass** ``min_feature`` **at least ~10x
@@ -1790,9 +1797,14 @@ class PMMStack:
         # WHY 1e-3 AND NOT 1e-5 (audit finding G2, 2026-09-12).  The snap is
         # the only thing standing between a staircased stack and the
         # MANUFACTURED-sliver pathology below, and the pathology has a MEASURED
-        # width: a cross-layer wall collision of size ``s`` corrupts the solve
-        # for ``s`` in roughly ``[1, 8] * min_feature`` and is harmless outside
-        # it.  The old default of ``period*1e-5`` therefore snapped away only
+        # width that is ABSOLUTE rather than a multiple of this knob: an
+        # unsnapped cross-layer wall collision of size ``s`` corrupts the solve
+        # for ``s`` at roughly ``1e-5 .. 1e-4`` of a PERIOD and is harmless
+        # outside that -- which is what makes raising the threshold a cure at
+        # all (a band that scaled WITH the knob could never be cleared by
+        # raising it; the ladder below shows it does not, because at 1e-3 the
+        # rungs at 1x .. 8x of the threshold are clean where at 1e-5 they were
+        # the whole hazard).  The old default of ``period*1e-5`` snapped away only
         # the collisions that were already harmless and left the whole
         # dangerous decade exposed.  Measured on two independent fixtures (a
         # Si/SiO2 1.0/1.55 um pair at 12 deg and a TiO2-like 0.55/0.70 um pair

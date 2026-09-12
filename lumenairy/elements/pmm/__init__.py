@@ -37,4 +37,5 @@ __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_jax",
            "PMM2DStackPure",
            "PreparedPMM2D", "prepare_pmm_2d", "prepare_pmm_2d_cell",
            "pmm_efficiency_2d_vs_wavelength",
-           "pmm_efficiency_2d_cell_vs_wavelength"]
+           "pmm_efficiency_2d_cell_vs_wavelength",
+           "pmm_2d_order_drift"]
