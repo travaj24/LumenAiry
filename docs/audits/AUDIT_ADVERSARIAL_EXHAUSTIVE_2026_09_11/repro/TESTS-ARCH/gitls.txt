@@ -1,0 +1,15 @@
+=== tracked file count ===
+3970
+=== tracked under validation/ ===
+2785
+=== tracked .npz/.npy/.csv/.json under validation ===
+1493
+=== tracked cache/artefact paths ===
+.benchmarks/Windows-CPython-3.14-64bit/0001_v4_11_2.json
+.benchmarks/Windows-CPython-3.14-64bit/0002_v4_11_2_zernike.json
+.test_durations
+(end)
+=== tracked pyc ===
+0
+=== repo .git size ===
+550M	.git

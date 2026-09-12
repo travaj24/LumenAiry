@@ -1,0 +1,57 @@
+import 36.4 s
+
+===== D2) RECIPROCITY (corrected pairing p=+m) =====
+   T pol=te m=-2: fwd=0.020231533181 rev=0.020232109275 rel=2.848e-05
+   T pol=te m=-1: fwd=0.247369315008 rev=0.247373642408 rel=1.749e-05
+   T pol=te m=+0: fwd=0.386594560410 rev=0.386594560410 rel=5.026e-15
+   T pol=te m=+1: fwd=0.031794012387 rev=0.031791815308 rel=6.910e-05
+   T pol=te m=+2: fwd=0.204657930559 rev=0.204662374713 rel=2.172e-05
+   R pol=te m=-1: fwd=0.008324838320 rev=0.008324602662 rel=2.831e-05
+   R pol=te m=+1: fwd=0.017278557559 rev=0.017279596247 rel=6.011e-05
+   T pol=tm m=-2: fwd=0.042360814183 rev=0.042367583516 rel=1.598e-04
+   T pol=tm m=-1: fwd=0.201068705834 rev=0.201057429731 rel=5.608e-05
+   T pol=tm m=+0: fwd=0.221826315053 rev=0.221826315053 rel=4.642e-14
+   T pol=tm m=+1: fwd=0.093192345975 rev=0.093196220886 rel=4.158e-05
+   T pol=tm m=+2: fwd=0.250211476171 rev=0.250247713387 rel=1.448e-04
+   R pol=tm m=-1: fwd=0.032387792140 rev=0.032380210473 rel=2.341e-04
+   R pol=tm m=+1: fwd=0.028466146083 rev=0.028471435447 rel=1.858e-04
+
+===== E) grazing-order nudge driven by ANGLE (Rayleigh in theta) =====
+   critical theta = -23.578178 deg
+   dtheta=-1.0e-04  R0=0.060242523100  sum=1.000000000000
+   dtheta=-1.0e-05  R0=0.059906904094  sum=1.000000000000
+   dtheta=-1.0e-06  R0=0.059806757063  sum=1.000000000000
+   dtheta=-1.0e-07  R0=0.059775681153  sum=1.000000000000
+   dtheta=+0.0e+00  R0=0.059772833031  sum=1.000000000000
+   dtheta=+1.0e-07  R0=0.059765447686  sum=1.000000000000
+   dtheta=+1.0e-06  R0=0.059773993670  sum=1.000000000000
+   dtheta=+1.0e-05  R0=0.059799280535  sum=1.000000000000
+   dtheta=+1.0e-04  R0=0.059862233576  sum=1.000000000000
+
+===== F) 2-D symmetry tests =====
+   square-C4 laurent RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+   square-C4 li RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+   disk laurent RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+   disk li RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+
+===== G) phi-rotation covariance (conical Jones basis, CONVENTIONS 7.1) =====
+   phi=0.0 RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+   phi=30.0 RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+   phi=90.0 RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+
+===== H) 2-D separable limit vs 1-D solver =====
+   pol=tm ang=0.0 RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+   pol=tm ang=30.0 RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+   pol=te ang=0.0 RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+   pol=te ang=30.0 RAISED TypeError: rcwa_jones_2d() missing 1 required positional argument: 'wavelength'
+
+===== I) 2-D conical energy conservation =====
+   laurent th=0.0 RAISED TypeError: rcwa_efficiency_2d() missing 1 required positional argument: 'wavelength'
+   laurent th=25.0 RAISED TypeError: rcwa_efficiency_2d() missing 1 required positional argument: 'wavelength'
+   laurent th=50.0 RAISED TypeError: rcwa_efficiency_2d() missing 1 required positional argument: 'wavelength'
+   li th=0.0 RAISED TypeError: rcwa_efficiency_2d() missing 1 required positional argument: 'wavelength'
+   li th=25.0 RAISED TypeError: rcwa_efficiency_2d() missing 1 required positional argument: 'wavelength'
+   li th=50.0 RAISED TypeError: rcwa_efficiency_2d() missing 1 required positional argument: 'wavelength'
+   fff_nv th=0.0 RAISED TypeError: rcwa_efficiency_2d() missing 1 required positional argument: 'wavelength'
+   fff_nv th=25.0 RAISED TypeError: rcwa_efficiency_2d() missing 1 required positional argument: 'wavelength'
+   fff_nv th=50.0 RAISED TypeError: rcwa_efficiency_2d() missing 1 required positional argument: 'wavelength'

@@ -1,0 +1,28 @@
+import 275.3 s
+=== V) 2-D(n_orders_y=0) vs 1-D: convergence in CELL PIXELS Sx ===
+   Sx=   64  te: dR=1.46e-04 dT=5.16e-04  tm: dR=1.86e-05 dT=1.18e-04
+   Sx=  128  te: dR=3.66e-05 dT=1.29e-04  tm: dR=4.58e-06 dT=3.01e-05
+   Sx=  256  te: dR=9.14e-06 dT=3.23e-05  tm: dR=1.14e-06 dT=7.56e-06
+   Sx=  512  te: dR=2.28e-06 dT=8.07e-06  tm: dR=2.85e-07 dT=1.89e-06
+   Sx= 1024  te: dR=5.71e-07 dT=2.02e-06  tm: dR=7.11e-08 dT=4.73e-07
+   Sx= 2048  te: dR=1.43e-07 dT=5.04e-07  tm: dR=1.78e-08 dT=1.18e-07
+   Sx= 4096  te: dR=3.57e-08 dT=1.26e-07  tm: dR=4.44e-09 dT=2.96e-08
+
+=== B4b) BOR reciprocity / unitarity on the propagating block ===
+   n_inc=71 n_out=71
+   |S21-S12^T|/max|S21| = 3.404e-01
+   |S11-S11^T|/max|S11| = 2.966e-01
+   |U^H U - I| = 8.598e-01
+   max|E-1| = 4.869e-13
+
+=== B1c) guided_modes debug on the V=2.4 fiber ===
+   oracle neff=1.445293173134   guided window neff in (1.4400, 1.4500)
+   Rbig=6a N=300: 1 modes in the guided window; neff=[1.44528324]  reldiv=[9.31762272e-14]
+      best neff=1.445283244268 err=-9.929e-06 rel=6.870e-06
+      guided_modes() returned 0 modes
+   Rbig=6a N=600: 1 modes in the guided window; neff=[1.44528821]  reldiv=[5.4484329e-13]
+      best neff=1.445288209192 err=-4.964e-06 rel=3.435e-06
+      guided_modes() returned 0 modes
+   Rbig=12a N=600: 1 modes in the guided window; neff=[1.44528821]  reldiv=[7.38729278e-13]
+      best neff=1.445288205825 err=-4.967e-06 rel=3.437e-06
+      guided_modes() returned 0 modes

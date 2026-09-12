@@ -1,0 +1,3 @@
+theta=0.020 rad  N=2048 dx=2.751um : blind=2.333 nm  carrier + correction=2.020 nm  carrier, correction OFF=2.333 nm
+theta=0.050 rad  N=4096 dx=1.808um : blind=15.135 nm  carrier + correction=15.812 nm  carrier, correction OFF=15.135 nm
+theta=0.100 rad  N=8192 dx=1.152um : blind=544.729 nm  carrier + correction=536.605 nm  carrier, correction OFF=544.729 nm

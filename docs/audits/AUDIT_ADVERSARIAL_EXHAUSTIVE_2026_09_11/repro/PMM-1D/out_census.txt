@@ -1,0 +1,19 @@
+reference T0 = 0.757638543123, slope = 0.782513
+
+cells marked ** are WRONG (|dT| > 1e-3) ; a WRONG+SILENT cell is a FALSE NEGATIVE
+        s |           d10           d12           d14           d16           d18           d20           d22           d24
+  1.0e-05 |   0.7576519 .        RAISE         RAISE         RAISE    0.7576936 .   0.7574818 .        RAISE    0.7575462 .
+  1.2e-05 |   0.7576617 .   0.7576451 .        RAISE         RAISE         RAISE         RAISE         RAISE         RAISE 
+  1.5e-05 |        RAISE         RAISE         RAISE         RAISE         RAISE         RAISE         RAISE         RAISE 
+  2.0e-05 |        RAISE         RAISE         RAISE         RAISE         RAISE         RAISE         RAISE         RAISE 
+  3.0e-05 |   0.7576567 .   0.7576598 .        RAISE         RAISE         RAISE    0.7576190 .        RAISE         RAISE 
+  4.0e-05 |   0.7576701 .   0.7576714 .   0.7576674 .        RAISE    0.7576679 .        RAISE         RAISE    0.7576769 .
+  5.0e-05 |        RAISE    0.7576792 .   0.7576769 .   0.7576799 .        RAISE         RAISE         RAISE    0.7576682 .
+  6.5e-05 |   0.7576897 .   0.7576902 .        RAISE    0.7576904 .   0.7576898 .        RAISE    0.7576870 .   0.7576921 .
+  8.0e-05 |   0.7577013 .        RAISE    0.7577017 .   0.7577011 .        RAISE         RAISE    0.7576993 .        RAISE 
+  1.0e-04 |   0.7577170 .   0.7577175 .   0.7577175 .   0.7577173 .   0.7577160 .   0.7577180 .   0.7577145 .   0.7577162 .
+  1.5e-04 |   0.7577566 .   0.7577567 .   0.7577565 .   0.7577564 .   0.7577568 .   0.7577563 .   0.7577569 .   0.7577567 .
+  2.0e-04 |   0.7577959 .   0.7577958 .   0.7577958 .   0.7577959 .   0.7577956 .   0.7577957 .   0.7577959 .   0.7577959 .
+
+FALSE NEGATIVES (wrong AND silent):
+  none

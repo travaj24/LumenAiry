@@ -1,0 +1,24 @@
+import 23.5 s
+bor exports: ['BORNodalPassivityError', 'BORSemMeshError', 'BORStack', 'SemRadialMesh', 'annotations', 'bor_solve', 'bor_stack', 'coupled_radial_eigensolver', 'equalize_meshes', 'far_field_angles', 'farfield', 'fiber_modes', 'fiber_oracle', 'fourier_bessel', 'guided_modes', 'layer_modes', 'order_power_fractions', 'radial_coupled_modes', 'radial_eigensolver', 'radial_spectrum', 'sem_interface_smatrix', 'sem_layer_modes', 'sem_radial', 'stepindex_modes', 'stepindex_oracle', 'zcascade']
+
+===== O1) AUDIT THE ORACLE: exact hybrid vs LP (weakly guiding) =====
+   lam=1.550e-06 a=3.482685e-06 m  NA=0.170000
+   LP01 (weakly-guiding):  b=0.530026404049  neff=1.445308881546
+   exact m=1 oracle q/k0 = [1.44529317]
+   |neff_exact(HE11) - neff_LP01| = 1.571e-05  (relative 1.087e-05)
+   exact m=0 oracle q/k0 = []
+   exact m=2 oracle q/k0 = []
+
+===== O2) coupled radial eigensolver vs the FIBER oracle =====
+   cre exports: ['STAGGERED_WALL_ANCHOR', 'annotations', 'census_inv', 'eig', 'guided_modes', 'lu_factor', 'lu_solve', 'np', 'radial_coupled_modes', 'warnings']
+
+===== O3) BOR reproducer (AUDIT_BOR_PROPAGATING_CUTOFF) =====
+   (8.3s) n_modes=318 max|E-1|=6.786127e-12
+   R[0]=0.138034 T[0]=0.861966
+   keys: ['q', 'gamma', 'angles', 'R', 'T', 'energy', 'inc', 'out', 'S']
+   min q/k0 (kept) = 0.051165
+
+===== O4) unit-scale invariance of the reproducer =====
+   S=1: n=256 max|E-1|=5.524914e-12 R0=0.0175974849
+   S=1e+06: n=256 max|E-1|=3.022915e-12 R0=0.0175974849
+   S=1e+09: n=256 max|E-1|=7.252643e-12 R0=0.0175974849

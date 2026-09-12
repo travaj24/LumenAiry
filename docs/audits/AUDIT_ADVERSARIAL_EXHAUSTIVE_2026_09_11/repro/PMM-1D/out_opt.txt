@@ -1,0 +1,4 @@
+=== A/B end-to-end, min of 7 ===
+  degree=16 nlay=6 nseg=4: shipped 80.395s  optimized 119.019s  speed-up 0.68x   max|d| = 0.00e+00
+  degree=24 nlay=8 nseg=6: shipped 504.947s  optimized 536.874s  speed-up 0.94x   max|d| = 0.00e+00
+  degree=32 nlay=8 nseg=6: shipped 43.383s  optimized 40.182s  speed-up 1.08x   max|d| = 0.00e+00

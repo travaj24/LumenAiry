@@ -1,0 +1,7 @@
+ nslice         s  guard ON solves  guard OFF solves      x  note
+      4   3.0e-04                4                 1   4.00  
+      8   3.0e-04                4                 1   4.00  
+      8   1.0e-04                4                 1   4.00  
+     16   5.0e-05                4                 1   4.00  
+      4   0.0e+00                1                 1   1.00  no sliver
+      1   0.0e+00                1                 1   1.00  no sliver

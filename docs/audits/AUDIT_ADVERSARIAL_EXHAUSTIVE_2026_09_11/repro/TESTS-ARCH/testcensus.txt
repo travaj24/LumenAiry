@@ -1,0 +1,196 @@
+tests/ total .py files: 536  unit=532 integration=2 other=2
+   other: tests/conftest.py
+   other: tests/__init__.py
+total test LOC: 260341
+largest 15 test files:
+     6571  tests/unit/test_audit_misc.py
+     4506  tests/unit/test_audit_propagation.py
+     3098  tests/unit/test_niche_audit_w3_oracles.py
+     2909  tests/unit/test_audit_optimize.py
+     2554  tests/unit/test_pmm_m2_window_contract.py
+     2504  tests/unit/test_audit_raytrace.py
+     2304  tests/unit/test_audit_analysis.py
+     2264  tests/unit/test_audit_lens.py
+     2165  tests/unit/test_niche_audit_w6_asymptotic.py
+     1713  tests/unit/test_niche_d1_tilted_carrier.py
+     1704  tests/unit/test_m1_conditioning_guard.py
+     1693  tests/unit/test_audit_io.py
+     1628  tests/unit/test_pmm_m3_efficiency.py
+     1610  tests/unit/test_audit_lens_models_2026_07.py
+     1559  tests/unit/test_v5_21_2_subsystem_audits.py
+smallest 15 test files:
+       64  tests/unit/test_fix_v10_decentred_standoff.py
+       64  tests/unit/test_v5_18_1_jones_shared_eig.py
+       60  tests/unit/test_farfield.py
+       52  tests/unit/test_v5_4_6_wave7_sources.py
+       51  tests/unit/test_through_focus_metric_parity.py
+       49  tests/unit/test_v5_20_7_pmm_geo_eig_cache.py
+       46  tests/unit/test_g08_s3_16_sources.py
+       44  tests/unit/test_v5_4_6_wave9_concurrency.py
+       40  tests/unit/test_g10_s5_12_test_hygiene.py
+       36  tests/unit/test_g10_s5_9_layerspec_tracked.py
+       33  tests/unit/test_backend_disable_jax.py
+       25  tests/unit/_tolerances.py
+        1  tests/__init__.py
+        1  tests/integration/__init__.py
+        1  tests/unit/__init__.py
+median test file LOC: 371  mean: 486
+
+=== source modules NEVER named in any test file: 53 / 227 ===
+    lumenairy._math
+    lumenairy.analysis.aberration
+    lumenairy.analysis.coronagraph
+    lumenairy.elements._traced_flags
+    lumenairy.elements.bor._inv_census
+    lumenairy.elements.bor._jax_bor
+    lumenairy.elements.bor._jax_sem
+    lumenairy.elements.bor._orient
+    lumenairy.elements.coronagraph
+    lumenairy.elements.eme._jax_modes
+    lumenairy.elements.materials
+    lumenairy.elements.pmm._jax_stack2d
+    lumenairy.elements.pmm._jax_twod_jones
+    lumenairy.propagators._bluestein
+    lumenairy.propagators.asymptotic_maslov
+    lumenairy.raytrace.paraxial
+    lumenairy.ui.algebra_dock
+    lumenairy.ui.analysis
+    lumenairy.ui.ao_dock
+    lumenairy.ui.caustic_dock
+    lumenairy.ui.chebyshev_fit_dock
+    lumenairy.ui.coatings_dock
+    lumenairy.ui.command_palette
+    lumenairy.ui.coronagraph_dock
+    lumenairy.ui.diagnostics
+    lumenairy.ui.distortion_dock
+    lumenairy.ui.element_table
+    lumenairy.ui.field_browser_dock
+    lumenairy.ui.footprint_dock
+    lumenairy.ui.ghost_dock
+    lumenairy.ui.glass_map_dock
+    lumenairy.ui.interferometry_dock
+    lumenairy.ui.jones_pupil_dock
+    lumenairy.ui.lens_options_dialog
+    lumenairy.ui.lg_aberration_dock
+    lumenairy.ui.library_dock
+    lumenairy.ui.log_viewer_dock
+    lumenairy.ui.materials_dock
+    lumenairy.ui.multiconfig_dock
+    lumenairy.ui.optimizer_dock
+    lumenairy.ui.phase_retrieval_dock
+    lumenairy.ui.rayfan_dock
+    lumenairy.ui.repl_dock
+    lumenairy.ui.sensitivity_dock
+    lumenairy.ui.shack_hartmann_dock
+    lumenairy.ui.slider_dock
+    lumenairy.ui.snapshots_dock
+    lumenairy.ui.surface_editors
+    lumenairy.ui.tolerance_dock
+    lumenairy.ui.wavefront_map_dock
+    lumenairy.ui.welcome_dock
+    lumenairy.ui.workspace
+    lumenairy.ui.zernike_dock
+
+=== source modules with a name-matched dedicated test file: 43 ===
+=== modules with NO name-matched test file: 184 ===
+
+=== test functions found by AST: 7664 in 536 files ===
+
+=== whole-corpus heuristic tags (over all 7664 test functions) ===
+   CLAIMS-ORACLE          3724  ( 48.6%)
+   ERROR-PATH             1252  ( 16.3%)
+   NO-ASSERT               928  ( 12.1%)
+   MAGIC-NUMBER            810  ( 10.6%)
+   SELF-CONSISTENCY        763  ( 10.0%)
+   CONTRACT/SIG            523  (  6.8%)
+   SMOKE/FINITE            513  (  6.7%)
+   DOC/SOURCE-TEXT         376  (  4.9%)
+   SKIP                    315  (  4.1%)
+   MOCK                    268  (  3.5%)
+   NEGATIVE-ONLY           162  (  2.1%)
+   TRIVIAL                  62  (  0.8%)
+
+=== SAMPLE OF 70 (random.seed(0)) -- tags ===
+tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py:603  test_fff_nv_out_of_plane_converges_fast  span= 48  [MAGIC-NUMBER]
+tests/unit/test_niche_audit_w6_berreman.py:730  test_o7_split_fwd_bwd_matches_the_jax_twin_on_physical_tensors  span= 61  [CLAIMS-ORACLE]
+tests/unit/test_v4_16_3_agent_b.py:129  test_warning_does_not_block_storage  span= 19  [CLAIMS-ORACLE]
+tests/unit/test_v5_4_1_raytrace_mirror_backward_ray.py:235  test_ghost_intersect_alias_routes_through_library  span= 29  [CLAIMS-ORACLE]
+tests/unit/test_niche_audit_w9_hfpi_doe.py:94  test_the_kick_depends_only_on_m_over_Lambda  span= 16  []
+tests/unit/test_audit_misc.py:4781  test_p2_13_cancellable_progress_cancel_is_idempotent  span=  6  []
+tests/unit/test_gate4.py:195  test_gate4_convergence_in_Rbig_over_Lambda  span= 18  []
+tests/unit/test_niche_p2_design_battery.py:514  test_battery_through_focus_truncated_aperture_broadens_predictably  span= 11  [TRIVIAL,CLAIMS-ORACLE]
+tests/unit/test_niche_d7_decentred_fit.py:1105  test_the_prepared_screen_path_refuses_the_knob_with_a_reason  span= 11  [ERROR-PATH,NO-ASSERT]
+tests/unit/test_niche_audit_w8_raster.py:182  test_w8_boundary_coincidence_keeps_the_pixel  span= 18  [MAGIC-NUMBER,CLAIMS-ORACLE]
+tests/unit/test_validation_helpers.py:56  test_three_d_input_raises  span=  4  [ERROR-PATH,NO-ASSERT]
+tests/unit/test_v5_12_0_naming_aliases.py:84  test_pmm_1d_dispatcher_n_orders_byte_identical  span= 10  [SELF-CONSISTENCY,MAGIC-NUMBER]
+tests/unit/test_v5_1_0_agent_c_split.py:434  test_sas_smoke  span=  7  [CLAIMS-ORACLE]
+tests/unit/test_niche_audit_p2_fresnel_tf_buffer.py:102  test_copy_did_not_change_the_values  span= 14  [SELF-CONSISTENCY,CLAIMS-ORACLE]
+tests/unit/test_niche_d4_dgrating.py:544  test_entry_overrides_spec  span=  8  []
+tests/unit/test_niche_audit_w4_gaps.py:547  test_smallest_denormal_f_is_accepted_not_rejected  span= 18  []
+tests/unit/test_pipeline.py:631  test_run_refuses_an_unknown_stage_name  span=  7  [ERROR-PATH,NO-ASSERT]
+tests/unit/test_v5_4_1_stamp_changelog_net_loc.py:559  test_stamp_three_net_loc_lines_all_refreshed  span= 33  [MOCK,DOC/SOURCE-TEXT]
+tests/unit/test_v5_5_3_coatings_jax.py:144  test_jax_grad_drives_ar_thickness_toward_quarter_wave  span= 15  []
+tests/unit/test_fix_d5_fit_domain_basis.py:756  test_a_cached_model_cannot_carry_an_acceptance_across_bases  span= 24  [MAGIC-NUMBER]
+tests/unit/test_niche_newton_pool_both_fits.py:376  test_the_cost_class_separates_the_three_measured_backends  span= 26  []
+tests/unit/test_audit_w3_entry_validation.py:265  test_traced_thickness_skips_the_guard  span= 10  [SKIP,NO-ASSERT]
+tests/unit/test_niche_audit_eh1_maslov_upsample.py:127  test_eh1_second_moment_width_is_not_magnified  span=  8  [MAGIC-NUMBER,CLAIMS-ORACLE]
+tests/unit/test_audit_w3_pmm_jax_guards.py:100  test_twod_host_guard_nonpropagating_raises  span=  5  [ERROR-PATH,NO-ASSERT]
+tests/unit/test_v4_16_3_agent_a.py:93  test_pyproject_parser_handles_comment_with_bracket  span= 36  [CLAIMS-ORACLE]
+tests/unit/test_audit_propagation.py:1701  test_gbd_vs_analytic_gaussian_Q_gt_1  span= 50  [CLAIMS-ORACLE]
+tests/unit/test_propagation.py:66  test_dtype_is_complex  span=  4  [CLAIMS-ORACLE]
+tests/unit/test_v5_12_0_pmm_slant_and_convergence.py:1086  test_jones_slant_coupled_byte_identical_after_cure  span= 18  [SELF-CONSISTENCY,MAGIC-NUMBER]
+tests/unit/test_folded_design_guard.py:68  test_apply_real_lens_traced_raises  span=  6  [ERROR-PATH,NO-ASSERT]
+tests/unit/test_v5_6_glass_memo.py:30  test_sentinel_glasses_exist  span=  3  []
+tests/unit/test_niche_r1_cosgrid_cache.py:206  test_cache_off_by_default  span= 14  []
+tests/unit/test_v4_15_5_agent_a.py:103  test_deformable_mirror_apply_rejects_3d_ensemble  span= 17  [ERROR-PATH,CLAIMS-ORACLE]
+tests/unit/test_v5_14_1_device_geometry.py:313  test_pmm_retain_internal_guards  span=  5  [ERROR-PATH,NO-ASSERT]
+tests/unit/test_pmm2d_staggered_oop.py:247  test_g1_dispatch_floor_is_relative_and_bit_identical  span= 23  []
+tests/unit/test_v5_4_coating_materials.py:85  test_get_index_constant_returns_n  span= 10  [CLAIMS-ORACLE]
+tests/unit/test_audit_w4_rcwa_homog_fftlock.py:118  test_homog_hit_miss_and_postevict_recompute_byte_identical  span= 30  [SELF-CONSISTENCY,CLAIMS-ORACLE]
+tests/unit/test_niche_audit_w3_elements.py:856  test_em12_prescription_radius_sign_is_documented_and_true  span= 23  [DOC/SOURCE-TEXT,CLAIMS-ORACLE]
+tests/unit/test_audit_propagation.py:4376  test_clear_lg_mode_stack_cache_in_all  span=  5  [CONTRACT/SIG,CLAIMS-ORACLE]
+tests/unit/test_v4_16_0_agent_d_cache_registry.py:414  test_register_cache_clearer_at_top_level  span=  5  [CONTRACT/SIG]
+tests/unit/test_audit_optimize.py:2204  test_match_ideal_aperture_none_produces_full_grid  span= 19  []
+tests/unit/test_v5_4_6_wave7_sources.py:43  test_schell_realizations_deterministic_mean_intensity  span=  9  [CLAIMS-ORACLE]
+tests/unit/test_v5_20_8_rcwa_threaded_sweep.py:185  test_threaded_sweep_matches_per_wavelength_solve  span= 10  []
+tests/unit/test_v4_15_2_agent_c.py:226  test_apply_thin_lens_rejects_partial_coherence_mcf  span=  9  [ERROR-PATH]
+tests/unit/test_niche_audit_w3_propagators.py:163  test_return_result_is_silent_and_reports_kernel_pitch  span= 16  [CLAIMS-ORACLE]
+tests/unit/test_niche_d3_guards.py:735  test_the_separation_survives_the_c10_residual_degree_and_is_caused_by_  span= 85  [MAGIC-NUMBER,CLAIMS-ORACLE]
+tests/unit/test_niche_s9_lattice_and_sentinels.py:222  test_radial_profile_first_zero_is_grid_aspect_invariant  span= 13  [CLAIMS-ORACLE]
+tests/unit/test_audit_raytrace.py:382  test_ray_to_beamlet_succeeds  span= 10  [CLAIMS-ORACLE]
+tests/unit/test_niche_audit_w4d_folded_frames.py:216  test_folded_and_unfolded_agree_on_the_focus_position  span=  9  []
+tests/unit/test_niche_c13_lstsq_conditioning.py:246  test_the_step_down_does_not_degrade_a_screened_but_healthy_solve  span=  8  []
+tests/unit/test_niche_audit_w3_infra.py:627  test_repeated_array_counted_once  span= 14  [CLAIMS-ORACLE]
+tests/unit/test_pmm_m2_window_contract.py:828  test_min_feature_displacement_is_bounded_by_half  span= 12  []
+tests/unit/test_sources.py:87  test_diverging_vs_converging_sign_flips  span= 35  []
+tests/unit/test_v5_6_rcwa_convergence.py:332  test_richardson_various_orders  span=  4  []
+tests/unit/test_fga.py:310  test_fga_cache_trace_reuses_and_is_identical  span= 26  [CLAIMS-ORACLE]
+tests/unit/test_niche_s12_shack_hartmann_reference.py:295  test_slope_matches_theta  span=  5  []
+tests/unit/test_niche_d4_dgrating.py:716  test_gap_after_folds_into_the_next_group  span= 10  []
+tests/unit/test_niche_c15_inverse_map.py:822  test_the_cache_key_tracks_the_incumbent_by_content  span= 75  [MAGIC-NUMBER]
+tests/unit/test_v5_21_lens_accuracy_extensions.py:639  test_traced_multibranch_no_shared_edge_double_count  span= 41  [CLAIMS-ORACLE]
+tests/unit/test_niche_p7_seidel_gate.py:310  test_extreme_na_underestimate_is_high_na_out_of_gate_scope  span= 14  [CLAIMS-ORACLE]
+tests/unit/test_gbd_feature_complete.py:387  test_anamorphic_scalar_path_byte_identical  span= 11  [SELF-CONSISTENCY]
+tests/unit/test_audit_misc.py:5777  test_apply_cylindrical_lens_complex64  span=  7  [CLAIMS-ORACLE]
+tests/unit/test_v5_14_0_pmm2d_oop.py:139  test_nonreciprocal_total_power_matches_1d_not_unity  span= 16  []
+tests/unit/test_validation_helpers.py:66  test_nan_z_raises  span=  4  [ERROR-PATH,NO-ASSERT]
+tests/unit/test_niche_s11_sibling_deferred.py:735  test_s11_6b_zernike_modal_basis_supports_one_lenslet  span= 11  [SMOKE/FINITE,CLAIMS-ORACLE]
+tests/unit/test_v5_8_0_pmm.py:160  test_pmm_grading_helps_metal_tm  span=  5  [CLAIMS-ORACLE]
+tests/unit/test_audit_dynameta_consumer_api_2.py:188  test_c1_bor_absorption_budget_and_split  span= 24  []
+tests/unit/test_audit_propagation.py:1262  test_fraunhofer_with_output_dx_auto_promotes_to_mft  span= 19  []
+tests/unit/test_v4_15_agent_e.py:112  test_table_lists_n_lasf9_and_s_nph1  span= 19  [DOC/SOURCE-TEXT,CONTRACT/SIG,CLAIMS-ORACLE]
+tests/unit/test_v5_20_0_pmm_rcwa_upgrades.py:297  test_solve_vs_wavelength_explicit_theta_still_wins  span=  9  []
+tests/unit/test_niche_audit_w7_pmm.py:824  test_w7_w63_stack2d_layer_absorption_closes  span= 10  []
+
+--- sample tag totals ---
+   CLAIMS-ORACLE          29  ( 41.4%)
+   ERROR-PATH              9  ( 12.9%)
+   MAGIC-NUMBER            8  ( 11.4%)
+   NO-ASSERT               8  ( 11.4%)
+   SELF-CONSISTENCY        5  (  7.1%)
+   DOC/SOURCE-TEXT         3  (  4.3%)
+   CONTRACT/SIG            3  (  4.3%)
+   TRIVIAL                 1  (  1.4%)
+   MOCK                    1  (  1.4%)
+   SKIP                    1  (  1.4%)
+   SMOKE/FINITE            1  (  1.4%)

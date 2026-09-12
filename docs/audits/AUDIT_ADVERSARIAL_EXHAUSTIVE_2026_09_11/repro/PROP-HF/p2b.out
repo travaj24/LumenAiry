@@ -1,0 +1,47 @@
+==============================================================================
+(A) on-axis circular aperture: which kernel does HF converge to?
+==============================================================================
+
+z=  100.0 um  N_F= 6.319
+  RS-I exact              U = 0.221102-0.746613j   |U|^2=0.606317
+  RS-I minus near-field   U = 0.220361-0.746850j   |U|^2=0.606343   (differs from RS-I by 9.986e-04)
+    N=  256 dx=  390.6nm  U=0.235275-0.763381j  err_vs_noNF=2.859e-02  err_vs_RS1=2.820e-02
+    N=  512 dx=  195.3nm  U=0.218507-0.744558j  err_vs_noNF=3.785e-03  err_vs_RS1=4.251e-03
+    N= 1024 dx=   97.7nm  U=0.218929-0.745127j  err_vs_noNF=2.877e-03  err_vs_RS1=3.381e-03
+    N= 2048 dx=   48.8nm  U=0.220888-0.747505j  err_vs_noNF=1.080e-03  err_vs_RS1=1.177e-03
+
+z=  500.0 um  N_F= 1.264
+  RS-I exact              U = 1.758621-0.508327j   |U|^2=3.351144
+  RS-I minus near-field   U = 1.758518-0.508681j   |U|^2=3.351143   (differs from RS-I by 2.014e-04)
+    N=  256 dx=  390.6nm  U=1.757848-0.504150j  err_vs_noNF=2.502e-03  err_vs_RS1=2.320e-03
+    N=  512 dx=  195.3nm  U=1.758593-0.509273j  err_vs_noNF=3.261e-04  err_vs_RS1=5.173e-04
+    N= 1024 dx=   97.7nm  U=1.758574-0.509124j  err_vs_noNF=2.440e-04  err_vs_RS1=4.364e-04
+    N= 2048 dx=   48.8nm  U=1.758487-0.508491j  err_vs_noNF=1.053e-04  err_vs_RS1=1.158e-04
+
+z= 2000.0 um  N_F= 0.316
+  RS-I exact              U = -0.720852+0.622305j   |U|^2=0.906892
+  RS-I minus near-field   U = -0.720821+0.622342j   |U|^2=0.906892   (differs from RS-I by 5.037e-05)
+    N=  256 dx=  390.6nm  U=-0.721940+0.622583j  err_vs_noNF=1.202e-03  err_vs_RS1=1.179e-03
+    N=  512 dx=  195.3nm  U=-0.720674+0.622309j  err_vs_noNF=1.580e-04  err_vs_RS1=1.873e-04
+    N= 1024 dx=   97.7nm  U=-0.720711+0.622317j  err_vs_noNF=1.184e-04  err_vs_RS1=1.492e-04
+    N= 2048 dx=   48.8nm  U=-0.720867+0.622352j  err_vs_noNF=4.964e-05  err_vs_RS1=5.111e-05
+
+==============================================================================
+(B) Gaussian beam vs analytic, on a 1-D cut, and vs ASM
+==============================================================================
+  w0=8.0 um  z_R=317.633 um  (NA ~ lam/(pi w0) = 0.0252)
+  z= 0.5 z_R =  158.817 um   L2(HF, analytic)=7.039e-04   L2(ASM, analytic)=1.047e-04   L2(HF, ASM)=6.353e-04   [8.5s, 25 out px]
+  z= 1.0 z_R =  317.633 um   L2(HF, analytic)=3.951e-04   L2(ASM, analytic)=1.562e-04   L2(HF, ASM)=3.173e-04   [7.9s, 25 out px]
+  z= 3.0 z_R =  952.900 um   L2(HF, analytic)=2.013e-04   L2(ASM, analytic)=2.177e-04   L2(HF, ASM)=2.442e-04   [9.9s, 25 out px]
+
+==============================================================================
+(C) finite_diff_step scan on the EXACT SPHERICAL OPL (not the quadratic
+    Fresnel OPL the docstring measured on)
+==============================================================================
+  h= 1.0e-09 m   sqrt|det| rel err = +2.2605e-01
+  h= 1.0e-08 m   sqrt|det| rel err = +1.5337e-03
+  h= 1.0e-07 m   sqrt|det| rel err = +2.5030e-05
+  h= 1.0e-06 m   sqrt|det| rel err = +2.3578e-07
+  h= 1.0e-05 m   sqrt|det| rel err = -3.7685e-08
+  h= 1.0e-04 m   sqrt|det| rel err = -3.9720e-06
+  h= 1.0e-03 m   sqrt|det| rel err = -3.9690e-04

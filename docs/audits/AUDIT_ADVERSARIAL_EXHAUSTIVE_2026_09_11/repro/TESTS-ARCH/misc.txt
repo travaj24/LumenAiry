@@ -1,0 +1,188 @@
+=== 'slow' marker: 108 applications in 54 of 536 files
+    tests/unit/test_audit_bor_grazing_cutoff.py x 1
+    tests/unit/test_audit_dynameta_consumer_api_2.py x 8
+    tests/unit/test_bor_solve.py x 1
+    tests/unit/test_carrier_referenced.py x 1
+    tests/unit/test_coupled_eigensolver.py x 1
+    tests/unit/test_eme_2d.py x 1
+    tests/unit/test_eme_2d_vector.py x 1
+    tests/unit/test_eme_diffraction.py x 1
+    tests/unit/test_farfield.py x 1
+    tests/unit/test_fga_h4_h5.py x 3
+    tests/unit/test_fix_bor_guards_round2.py x 1
+    tests/unit/test_fix_newton_pool_memory.py x 3
+    tests/unit/test_g2_displaced_congruence.py x 1
+    tests/unit/test_gate4.py x 2
+    tests/unit/test_hammer_h2_displaced_projection.py x 2
+    tests/unit/test_niche_audit_w6_bor.py x 12
+    tests/unit/test_niche_audit_w6_eme.py x 2
+    tests/unit/test_niche_audit_w9_hfpi_doe.py x 1
+    tests/unit/test_niche_c3_gap_paraxial_guard.py x 2
+    tests/unit/test_niche_d14_deterministic_carrier_fit.py x 3
+    tests/unit/test_niche_d15_deterministic_traced_fit.py x 4
+    tests/unit/test_niche_k1_kmah_caustic.py x 2
+    tests/unit/test_niche_k2_carrier_backends.py x 3
+    tests/unit/test_niche_p10_transverse_walk_remap.py x 3
+    tests/unit/test_niche_p11_ray_density_amplitude.py x 2
+    tests/unit/test_niche_p2_displaced_extreme.py x 2
+    tests/unit/test_niche_p3_pointwise_obliquity.py x 1
+    tests/unit/test_niche_p5_sampling.py x 3
+    tests/unit/test_niche_p6_astigmatic_aperture.py x 3
+    tests/unit/test_niche_p7_seidel_gate.py x 1
+    tests/unit/test_niche_p8_capstone.py x 3
+    tests/unit/test_niche_p9_decenter_tilt.py x 2
+    tests/unit/test_niche_perf_poly_locals.py x 2
+    tests/unit/test_niche_perf_round2_2026_08_10.py x 1
+    tests/unit/test_niche_r4_fga_dual_vectorize.py x 2
+    tests/unit/test_radial_eigensolver.py x 1
+    tests/unit/test_staggered.py x 1
+    tests/unit/test_v5_11_0_rcwa_fff_nv_2d.py x 2
+    tests/unit/test_v5_20_0_pmm_conical.py x 1
+    tests/unit/test_v5_20_0_pmm_conical_tensor.py x 1
+    tests/unit/test_v5_20_0_pmm_rcwa_upgrades.py x 1
+    tests/unit/test_v5_20_0_pmm_stack_conical.py x 1
+    tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py x 1
+    tests/unit/test_v5_20_13_pmm_jones_2d_fff_nv.py x 1
+    tests/unit/test_v5_21_delta_audit.py x 2
+    tests/unit/test_v5_21_gbd_maslov_perf.py x 2
+    tests/unit/test_v5_21_gbd_windowed_adaptive.py x 1
+    tests/unit/test_v5_21_lens_accuracy_extensions.py x 1
+    tests/unit/test_v5_21_maslov_jax_caustic.py x 3
+    tests/unit/test_v5_21_pmm2d_staggered_oblique.py x 2
+    tests/unit/test_v5_2_3_subaperture_image_plane.py x 2
+    tests/unit/test_verify_bor_guards_round2.py x 1
+    tests/unit/test_verify_bor_multilayer_guards.py x 1
+    tests/unit/test_zcascade.py x 1
+    durations attributable to files containing mark.slow: 4225s (32.2% of 13136s)
+    mark.integration: 3 applications
+    mark.regression: 0 applications
+    mark.bench: 0 applications
+    mark.unit: 0 applications
+
+### validation/ : 3144 files (876 .py, 43 .md, 2225 other), 128 subdirs
+      validation/analysis
+      validation/backend
+      validation/elements
+      validation/gui
+      validation/integration
+      validation/io
+      validation/optimize
+      validation/oracles
+      validation/pipeline
+      validation/pipeline/specs
+      validation/probe_c13_screen
+      validation/probe_c13_screen/fits
+      validation/probe_c13_screen/fits_small
+      validation/probe_ci_kernel_sweep
+      validation/probe_ci_kernel_sweep/arms
+      validation/probe_fffnv_1d_degeneracy
+      validation/probe_fix_bor_guards
+      validation/probe_fix_bor_round2
+      validation/probe_fix_bor_round2/runs
+      validation/probe_fix_bor_round3
+      validation/probe_fix_bor_round3/runs
+      validation/probe_fix_branch_cut_round2
+      validation/probe_fix_branch_cut_round3
+      validation/probe_fix_hybrid_slant_anchor
+      validation/probe_fix_hybrid_slant_anchor/results
+      validation/probe_fix_lens_5440
+      validation/probe_fix_lens_5440/results
+      validation/probe_fix_mortar_round3
+      validation/probe_fix_mortar_round4
+      validation/probe_fix_rcwa_even_sector_wsl
+      validation/probe_fix_rcwa_even_sector_wsl/results
+      validation/probe_fix_slant_anchor_v1v2o2
+      validation/probe_fix_slant_anchor_v1v2o2/results
+      validation/probe_fix_sliver_round3
+      validation/probe_fix_sliver_round4
+      validation/probe_p4_reexpand
+      validation/probe_pmm2d_mortar_round2
+      validation/probe_pmm2d_staggered_aniso
+      validation/probe_pmm2d_staggered_magnetic
+      validation/probe_pmm2d_staggered_mortar
+     top-level files: ['README.md', '__init__.py', '__pycache__', '_harness.py', 'analysis', 'backend', 'conftest.py', 'elements', 'gui', 'integration', 'io', 'm5_covariant_taper.py', 'm5_derham_nonuniform.py', 'm5_taper_degree_spread.py', 'optimize', 'oracles', 'pipeline', 'probe_c13_screen', 'probe_ci_kernel_sweep', 'probe_fffnv_1d_degeneracy', 'probe_fix_bor_guards', 'probe_fix_bor_round2', 'probe_fix_bor_round3', 'probe_fix_branch_cut_round2', 'probe_fix_branch_cut_round3', 'probe_fix_hybrid_slant_anchor', 'probe_fix_lens_5440', 'probe_fix_mortar_round3', 'probe_fix_mortar_round4', 'probe_fix_rcwa_even_sector_wsl', 'probe_fix_slant_anchor_v1v2o2', 'probe_fix_sliver_round3', 'probe_fix_sliver_round4', 'probe_p4_reexpand', 'probe_pmm2d_mortar_round2', 'probe_pmm2d_staggered_aniso', 'probe_pmm2d_staggered_magnetic', 'probe_pmm2d_staggered_mortar', 'probe_pmm2d_staggered_oop', 'probe_pmm2d_staggered_oop_blockeig']
+
+### benchmarks/ : 8 files (7 .py, 1 .md, 0 other), 0 subdirs
+     top-level files: ['README.md', '__pycache__', 'conftest.py', 'test_bench_asymptotic.py', 'test_bench_baseline.py', 'test_bench_fft_infra.py', 'test_bench_jax_jit.py', 'test_bench_through_focus.py', 'test_bench_zernike_cache.py']
+
+### .benchmarks/ : 2 files (0 .py, 0 .md, 2 other), 1 subdirs
+
+### scripts/ : 15 files (15 .py, 0 .md, 0 other), 0 subdirs
+     top-level files: ['__pycache__', '_d5_byteid.py', '_d5_probe.py', '_d5_probe2.py', '_d5_probe3.py', '_d5_probe4.py', '_d5_probe5.py', '_d5_probe6.py', '_d5_spl.py', '_g8_c15lad.py', '_g8_failbefore.py', '_g8_probe.py', 'check_dep_metadata.py', 'check_source_line_citations.py', 'stamp_changelog.py', 'verify_changelog_closures.py']
+
+### examples/ : 29 files (19 .py, 1 .md, 9 other), 1 subdirs
+
+### docs/ : 352 files (0 .py, 352 .md, 0 other), 3 subdirs
+
+
+===== GLOBAL MUTABLE CONFIG CENSUS =====
+functions named set_/get_/reset_/enable_/disable_/clear_/configure_*: 103
+   of which actually WRITE a module-level global (`global` stmt): 22
+   context-manager forms among all of them: 1
+
+--- setter/getter families (module, knob) : which verbs exist ---
+  lumenairy/analysis/ao.py:   187  command                                      [set]
+  lumenairy/cache.py:   368  budget                                       [set]
+  lumenairy/cache.py:   166  cache_budget                                 [get,set]
+  lumenairy/elements/_lens_real.py:   154  lens_sag_dtype                               [get,set]
+  lumenairy/elements/_lens_real.py:  1188  pointwise_cos_grid_cache_budget              [get,set]
+  lumenairy/elements/_lens_traced.py:   521  lens_parallel_amp                            [get,set]
+  lumenairy/elements/berreman.py:   982  source                                       [set]
+  lumenairy/elements/bor/bor_stack.py:   499  source                                       [set]
+  lumenairy/elements/pmm/stack.py:  2261  source                                       [set]
+  lumenairy/elements/pmm/stack2d.py:   777  source                                       [set]
+  lumenairy/elements/pmm/stack2d_pure.py:  1210  source                                       [set]
+  lumenairy/elements/rcwa/_core.py:   187  blas_threads                                 [set]
+  lumenairy/elements/rcwa/stack.py:  2234  source                                       [set]
+  lumenairy/io/storage.py:  1587  storage_backend                              [get,set]
+  lumenairy/memory.py:  1052  low_memory                                   [set]
+  lumenairy/memory.py:    78  max_ram                                      [get,set]
+  lumenairy/propagators/fft_infra.py:  1542  asm_cache_size                               [get,set]
+  lumenairy/propagators/fft_infra.py:   199  default_complex_dtype                        [get,set]
+  lumenairy/propagators/fft_infra.py:   430  default_dy                                   [get,set]
+  lumenairy/propagators/fft_infra.py:   344  default_real_dtype                           [get,set]
+  lumenairy/propagators/fft_infra.py:   385  default_wave_propagator                      [get,set]
+  lumenairy/propagators/fft_infra.py:  1848  fft_auto_promote                             [get,set]
+  lumenairy/propagators/fft_infra.py:   900  fft_double_buffer                            [get,set]
+  lumenairy/propagators/fft_infra.py:  1796  fft_fallback                                 [set]
+  lumenairy/propagators/fft_infra.py:   765  fft_plan_cache_size                          [get,set]
+  lumenairy/propagators/fft_infra.py:   878  fft_plan_max_bytes_per_buffer                [get,set]
+  lumenairy/propagators/fft_infra.py:  1803  fft_threads                                  [get,set]
+  lumenairy/propagators/fft_infra.py:   679  pyfftw_planner                               [get,set]
+  lumenairy/ui/element_table.py:   702  element                                      [set]
+  lumenairy/ui/layout_2d.py:   717  selected_element                             [set]
+  lumenairy/ui/layout_3d.py:   591  selected_element                             [set]
+  lumenairy/ui/log_viewer_dock.py:    90  name_prefix                                  [set]
+  lumenairy/ui/model.py:   569  coordinate_mode                              [set]
+  lumenairy/ui/model.py:   789  display_distance                             [get,set]
+  lumenairy/ui/model.py:   669  element_absolute_field                       [set]
+  lumenairy/ui/model.py:  1131  element_field                                [set]
+  lumenairy/ui/model.py:   821  epd                                          [set]
+  lumenairy/ui/model.py:   828  source                                       [set]
+  lumenairy/ui/model.py:  1184  surface_field                                [set]
+  lumenairy/ui/model.py:  2442  variable_values                              [get,set]
+  lumenairy/ui/model.py:   813  wavelength                                   [set]
+  lumenairy/ui/repl_dock.py:   123  wave_result                                  [set]
+  lumenairy/ui/shack_hartmann_dock.py:    95  field                                        [set]
+  lumenairy/ui/slider_dock.py:   123  value                                        [set]
+  lumenairy/ui/through_focus_dock.py:   215  source_field                                 [set]
+  lumenairy/ui/welcome_dock.py:   143  recent_files                                 [set]
+  lumenairy/ui/workspace.py:   104  current_index                                [set]
+  lumenairy/ui/workspace.py:   556  dock_names                                   [set]
+  lumenairy/ui/workspace.py:    90  names                                        [set]
+  lumenairy/ui/workspace.py:   115  tab_text                                     [set]
+  lumenairy/ui/zernike_dock.py:   168  field                                        [set]
+  lumenairy/ui/zernike_dock.py:   153  opd_map                                      [set]
+  lumenairy/user_library.py:    66  library_path                                 [get,set]
+
+  set_* knobs WITHOUT a context-manager form: 53
+  set_* knobs WITHOUT a reset_* form:          53
+
+--- environment variables read by the library: 3 ---
+     2  LUMENAIRY_MEM_BUDGET_MB
+     1  LUMENAIRY_CACHE_BUDGET_MB
+     1  LUMENAIRY_DISABLE_JAX
+
+===== lumenairy.__all__ : 708 symbols =====
+   __all__ += occurrences: 0  __all__.extend: 0
+   tier markers in __init__.py: 10

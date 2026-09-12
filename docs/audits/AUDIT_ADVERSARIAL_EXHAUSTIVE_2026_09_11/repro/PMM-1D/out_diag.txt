@@ -1,0 +1,8 @@
+=== how many _safe_inv calls are on EXACTLY DIAGONAL matrices? ===
+  degree=16 nlay=6 nseg=4: 5 of 5 _safe_inv calls are diagonal, sizes [64]
+  degree=24 nlay=8 nseg=6: 5 of 5 _safe_inv calls are diagonal, sizes [144]
+
+=== A/B end-to-end (interleaved, min of 7) ===
+  degree=16 nlay=6 nseg=4: shipped 0.196s  diag-aware 0.173s  speed-up 1.14x   max|d| vs shipped = 0.00e+00
+  degree=20 nlay=8 nseg=6: shipped 0.964s  diag-aware 0.946s  speed-up 1.02x   max|d| vs shipped = 0.00e+00
+  degree=24 nlay=8 nseg=6: shipped 1.656s  diag-aware 1.538s  speed-up 1.08x   max|d| vs shipped = 0.00e+00

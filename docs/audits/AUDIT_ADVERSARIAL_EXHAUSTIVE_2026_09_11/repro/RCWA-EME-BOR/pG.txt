@@ -1,0 +1,37 @@
+import 2.7 s
+
+=== Q) is the Wood/grazing wavelength nudge SILENT? ===
+   warnings emitted: []
+   R0 at exactly lam=Lam: 0.155908839054
+   _grazing_safe_wavelength(1e-6,...) = 1.000000100000000e-06
+
+=== Q2) same via RCWAStack (2-D engine) ===
+   wl=1.0000000000e-06: R(x,0)=0.163905639300 warn=[]
+   wl=1.0000001000e-06: R(x,0)=0.163905639300 warn=[]
+   wl=9.9999990000e-07: R(x,0)=0.163802716999 warn=[]
+
+=== R) BLAS-thread global state / thread safety ===
+   _get_blas_threads() initially: None
+docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/RCWA-EME-BOR\pG_misc.py:39: UserWarning: rcwa: set_blas_threads(...) / rcwa_blas_threads(...) needs the optional `threadpoolctl` package, which is not installed -- the requested BLAS-thread cap is INERT (the solve runs at the environment's default threading even though _get_blas_threads() reports the requested value).  Install threadpoolctl to make the cap effective, or set OMP_NUM_THREADS / OPENBLAS_NUM_THREADS / MKL_NUM_THREADS in the environment instead.
+  set_blas_threads(n)
+   per-thread settings after concurrent set: {1: 1, 2: 2, 4: 4}
+   main thread setting: None
+   inside ctx: 2
+   after ctx: None
+
+=== S) _HOMOG_CACHE identity / read-only protection ===
+   cache size after 1 solve: 2
+   MUTATION SUCCEEDED (cache poisoning possible!)
+
+=== T) lossy-structure energy guard window ===
+   lossy: sumR+T = 0.869884474163  warn=[]
+
+=== U) 1-D TM solve timing vs N (single-thread BLAS) ===
+   M= 25 (N= 51):  0.0046 s
+   M= 50 (N=101):  0.0371 s
+   M=100 (N=201):  0.1979 s
+   M=200 (N=401):  2.1963 s
+   -- component costs at N=401 --
+   eig: 0.3258 s
+   inv: 0.1429 s
+   solve: 0.0187 s

@@ -1,0 +1,38 @@
+=== 14a: sum(layer_absorption) vs 1 - R - T ===
+  deg= 12: 1-R-T = [0.19302935 0.26641687]  sum(A) = [0.19302935 0.26641687]  resid = [1.47937218e-13 9.00390873e-14]
+          per-layer A = 
+[[0.04783454 0.0254036 ]
+ [0.03109509 0.05408677]
+ [0.11409971 0.1869265 ]]
+  deg= 16: 1-R-T = [0.19304792 0.26641686]  sum(A) = [0.19304792 0.26641686]  resid = [1.50823798e-13 9.05386877e-14]
+          per-layer A = 
+[[0.04784388 0.0254036 ]
+ [0.03109613 0.05408677]
+ [0.11410791 0.1869265 ]]
+  deg= 20: 1-R-T = [0.1930546  0.26641686]  sum(A) = [0.1930546  0.26641686]  resid = [1.30145894e-13 1.82964754e-13]
+          per-layer A = 
+[[0.0478473  0.0254036 ]
+ [0.03109648 0.05408677]
+ [0.11411082 0.1869265 ]]
+  deg= 26: 1-R-T = [0.19305844 0.26641686]  sum(A) = [0.19305844 0.26641686]  resid = [5.78426196e-14 7.47013562e-13]
+          per-layer A = 
+[[0.04784929 0.0254036 ]
+ [0.03109666 0.05408677]
+ [0.11411249 0.1869265 ]]
+
+=== 14b: by_material ===
+   (array([[0.0478473 , 0.0254036 ],
+       [0.03109648, 0.05408677],
+       [0.11411082, 0.1869265 ]]), {(3.9975+0.2j): array([0.0478473, 0.0254036]), (2.8895999999999997+0.068j): array([0.03109648, 0.05408677]), (8.99+0.6000000000000001j): array([0.11411082, 0.1869265 ])})
+
+=== 14c: LOSSLESS stack -> absorption must be ~0 ===
+  1-R-T = [-1.67865721e-13 -1.71151981e-12]   sum(A) = [-4.57714870e-14 -1.55190064e-12]
+
+=== 14d: internal_field continuity across an interface ===
+Traceback (most recent call last):
+  File "docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/PMM-1D\p14_absorption.py", line 72, in <module>
+    F = st.internal_field(zs, component="all", pol="x")
+  File "D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\stack.py", line 3726, in internal_field
+    raise ValueError(
+        "PMMStack.internal_field: pol must be 0 or 1.")
+ValueError: PMMStack.internal_field: pol must be 0 or 1.

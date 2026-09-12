@@ -1,0 +1,61 @@
+============================================================================
+Si/air   P=lam  f=0.5  normal
+  te: 56 SEM modes; lowest 12 by |u|:
+     max |F(u_sem)|/|F'| over lowest 12 = 4.504e-13   (over ALL modes 5.837e+02)
+     independent Newton found 16 distinct roots; of the 14 with largest Re(u): 0 unmatched by SEM
+     forward branch: 0 modes with Im(q) < 0, 0 near-real modes with Re(q) < 0
+  tm: 56 SEM modes; lowest 12 by |u|:
+     max |F(u_sem)|/|F'| over lowest 12 = 2.261e-13   (over ALL modes 1.053e+02)
+     independent Newton found 16 distinct roots; of the 14 with largest Re(u): 0 unmatched by SEM
+     forward branch: 0 modes with Im(q) < 0, 0 near-real modes with Re(q) < 0
+============================================================================
+Au/air   P=lam  f=0.5  normal
+  te: 56 SEM modes; lowest 12 by |u|:
+     max |F(u_sem)|/|F'| over lowest 12 = 1.910e-13   (over ALL modes 5.590e+02)
+     independent Newton found 14 distinct roots; of the 14 with largest Re(u): 0 unmatched by SEM
+     forward branch: 0 modes with Im(q) < 0, 0 near-real modes with Re(q) < 0
+  tm: 56 SEM modes; lowest 12 by |u|:
+     max |F(u_sem)|/|F'| over lowest 12 = 3.211e-13   (over ALL modes 7.741e+01)
+     independent Newton found 14 distinct roots; of the 14 with largest Re(u): 0 unmatched by SEM
+     forward branch: 0 modes with Im(q) < 0, 0 near-real modes with Re(q) < 0
+============================================================================
+Au/air   P=lam  f=0.5  25deg 
+  te: 56 SEM modes; lowest 12 by |u|:
+     max |F(u_sem)|/|F'| over lowest 12 = 2.690e-13   (over ALL modes 3.578e+01)
+     independent Newton found 14 distinct roots; of the 14 with largest Re(u): 0 unmatched by SEM
+     forward branch: 0 modes with Im(q) < 0, 0 near-real modes with Re(q) < 0
+  tm: 56 SEM modes; lowest 12 by |u|:
+     max |F(u_sem)|/|F'| over lowest 12 = 4.146e-13   (over ALL modes 1.203e+02)
+     independent Newton found 14 distinct roots; of the 14 with largest Re(u): 0 unmatched by SEM
+     forward branch: 0 modes with Im(q) < 0, 0 near-real modes with Re(q) < 0
+============================================================================
+Au/Si    P=2lam f=0.3  40deg 
+  te: 56 SEM modes; lowest 12 by |u|:
+     max |F(u_sem)|/|F'| over lowest 12 = 1.590e-03   (over ALL modes 1.536e+01)
+     independent Newton found 28 distinct roots; of the 14 with largest Re(u): 4 unmatched by SEM
+        MISSED root u=-4.39590867+0.06587422j  nearest SEM at 1.344e-05
+        MISSED root u=-7.15939343+0.09490404j  nearest SEM at 1.757e-04
+        MISSED root u=-10.04584040+0.16503758j  nearest SEM at 1.587e-03
+        MISSED root u=-12.37426291+1.09704186j  nearest SEM at 5.175e-04
+     forward branch: 0 modes with Im(q) < 0, 0 near-real modes with Re(q) < 0
+  tm: 56 SEM modes; lowest 12 by |u|:
+     max |F(u_sem)|/|F'| over lowest 12 = 7.463e-04   (over ALL modes 3.086e+01)
+     independent Newton found 30 distinct roots; of the 14 with largest Re(u): 5 unmatched by SEM
+        MISSED root u=-5.16655393+0.01121751j  nearest SEM at 3.451e-05
+        MISSED root u=-8.62799095-0.07045739j  nearest SEM at 7.458e-04
+        MISSED root u=-12.43500810+1.39386176j  nearest SEM at 5.467e-04
+        MISSED root u=-12.48622307-0.49379600j  nearest SEM at 7.549e-03
+        MISSED root u=-14.41916979+1.78269588j  nearest SEM at 3.160e-03
+     forward branch: 0 modes with Im(q) < 0, 0 near-real modes with Re(q) < 0
+============================================================================
+Si/air   P=lam  f=0.9999 (near-degenerate limit)
+  te: 56 SEM modes; lowest 12 by |u|:
+     max |F(u_sem)|/|F'| over lowest 12 = 5.485e-06   (over ALL modes 2.574e+06)
+     independent Newton found 15 distinct roots; of the 14 with largest Re(u): 1 unmatched by SEM
+        MISSED root u=-36.88960000-0.00000000j  nearest SEM at 1.163e-03
+     forward branch: 0 modes with Im(q) < 0, 0 near-real modes with Re(q) < 0
+  tm: 56 SEM modes; lowest 12 by |u|:
+     max |F(u_sem)|/|F'| over lowest 12 = 5.141e-06   (over ALL modes 2.093e+05)
+     independent Newton found 15 distinct roots; of the 14 with largest Re(u): 1 unmatched by SEM
+        MISSED root u=-36.80778877-0.00000000j  nearest SEM at 3.272e-03
+     forward branch: 0 modes with Im(q) < 0, 0 near-real modes with Re(q) < 0

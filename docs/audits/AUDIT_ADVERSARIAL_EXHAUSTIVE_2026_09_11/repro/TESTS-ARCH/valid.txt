@@ -1,0 +1,121 @@
+===== validation/oracles/ =====
+   [non-py] README.md
+   [non-py] __pycache__
+   [non-py] caustic_cusp_ref.npz
+   [non-py] caustic_cusp_singlet_ref.npz
+   [non-py] caustic_fold_case.json
+   [non-py] caustic_fold_ref.npz
+
+   caustic_fold_truth.py  (426 lines)
+      imports: __future__, json, numpy, scipy.special, sys
+      -> IMPORTS LUMENAIRY: NO (independent)
+
+   conftest.py  (8 lines)
+      imports: 
+      -> IMPORTS LUMENAIRY: NO (independent)
+
+   debye_oracle_v3.py  (518 lines)
+      imports: __future__, json, numpy, scipy.special, sys
+      -> IMPORTS LUMENAIRY: NO (independent)
+
+   geom_spot_decenter_oracle.py  (339 lines)
+      imports: __future__, json, numpy, sys
+      -> IMPORTS LUMENAIRY: NO (independent)
+   [non-py] job_m5real.json
+   [non-py] job_m6.json
+
+
+===== validation runners =====
+   run_all.py: EXISTS  (3502 bytes)
+   run_validation.py: MISSING
+   _harness.py: EXISTS  (4667 bytes)
+   conftest.py: EXISTS  (4431 bytes)
+   README.md: EXISTS  (5313 bytes)
+   validation/real_lens_opd: EXISTS  (9 entries)
+   validation/repro_traced_carrier_121: EXISTS  (423 entries)
+   validation/repro_traced_carrier_122: EXISTS  (15 entries)
+
+   validation/ file extensions:
+      .json       1434       59.53 MB
+      .py          876        7.95 MB
+      .txt         275        2.22 MB
+      .npz         248     8133.56 MB
+      .log         102        0.49 MB
+      .sh           51        0.05 MB
+      .md           43        0.20 MB
+      .png          33       11.59 MB
+      .jsonl        26        0.23 MB
+      .csv          23       21.82 MB
+      .zmx          21        0.02 MB
+      (none)         7        0.00 MB
+      .npy           5     3221.75 MB
+
+
+===== conftest.py files =====
+   benchmarks/conftest.py  (17 lines)  fixtures=[]  autouse=0
+   tests/conftest.py  (679 lines)  fixtures=['N_small', 'N_med', 'dx_m', 'wavelength_m', 'k0', 'plane_wave', 'gaussian_beam', 'shipped_fft_dispatch', 'singlet_prescription', 'doublet_prescription', '_module_flag_leak_guard', '_module_glass_registry_guard', 'fft_state_ctx', 'process_state_dump']  autouse=2
+   validation/conftest.py  (123 lines)  fixtures=[]  autouse=0
+   validation/oracles/conftest.py  (8 lines)  fixtures=[]  autouse=0
+
+
+===== global-knob use in tests, and whether it is restored =====
+knob                                      files  calls  try/finally  fixture
+set_lens_sag_dtype                            2      8            2        2
+set_lens_parallel_amp                         1      2            1        0
+set_default_wave_propagator                   7     46            5        6
+set_default_real_dtype                        5     15            3        5
+set_default_complex_dtype                     8     44            6        4
+set_default_dy                                5     31            3        5
+set_fft_threads                               1      4            1        0
+set_fft_plan_cache_size                       3      7            2        2
+set_asm_cache_size                            1      2            0        1
+set_fft_auto_promote                         17     45           10       16
+set_fft_double_buffer                         2      4            1        2
+set_fft_fallback                              1      2            0        1
+set_pyfftw_planner                            3      8            3        2
+set_max_ram                                   5     23            5        1
+set_low_memory                                2     15            2        1
+set_cache_budget                              2     15            0        2
+set_blas_threads                              2      9            1        0
+set_pointwise_cos_grid_cache_budget           2     18            1        2
+set_fft_plan_max_bytes_per_buffer             1      5            1        0
+
+
+===== docs/ census =====
+   total docs files: 352, 10.90 MB
+   files with AUDIT in the name: 272
+   FIX*/VERIFY*/GAP*/PROBE* named: 88
+   docs by mtime month:
+      2026-05   102
+      2026-06    18
+      2026-07    48
+      2026-08   129
+      2026-09    55
+
+   20 largest docs:
+         421.8 KB  docs/audits/AUDIT_V5_17_0_2026_07_01_DEEP.md
+         322.5 KB  docs/changelogs/v4.md
+         133.4 KB  docs/audits/AUDIT_V5_4_5_2026_05_29_DEEP_FOLLOWUP.md
+         107.0 KB  docs/audits/EXPERIMENT_PMM2D_STAGGERED_MORTAR_2026_09_10.md
+          89.5 KB  docs/audits/AUDIT_V5_24_2_2026_07_17_EXHAUSTIVE.md
+          85.7 KB  docs/audits/C11_PHYSICAL_DECENTRE_GATE_2026_08_03.md
+          83.5 KB  docs/audits/FIX_EME_CENSUS_2026_08_12.md
+          83.3 KB  docs/audits/ARCH_TRACED_ENCAPSULATION_2026_08_03.md
+          81.4 KB  docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md
+          79.8 KB  docs/audits/VERIFY_PMM2D_STAGGERED_MORTAR_2026_09_11.md
+          79.0 KB  docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND3_2026_09_11.md
+          75.7 KB  docs/audits/VERIFY_PMMSTACK_SLIVER_ROUND2_2026_09_11.md
+          73.2 KB  docs/audits/SCOPE_BOR_MULTILAYER_GUARDS_2026_09_12.md
+          72.3 KB  docs/audits/FIX_PMMSTACK_SLIVER_WALLS_ROUND4_2026_09_11.md
+          72.0 KB  docs/audit_real_lens_displaced_2026_07_19.md
+          68.3 KB  docs/audits/EXPERIMENT_PMM2D_STAGGERED_OOP_2026_09_09.md
+          68.2 KB  docs/audits/VERIFY_PMM2D_STAGGERED_SLANT_2026_09_10.md
+          68.2 KB  docs/audits/EXPERIMENT_PMM2D_STAGGERED_SLANT_2026_09_10.md
+          68.1 KB  docs/audits/VERIFY_PMM2D_MORTAR_ROUND3_2026_09_11.md
+          67.7 KB  docs/audits/D121_RESIDUAL_CLOSURE_2026_08_02.md
+
+   docs subdirectories:
+        267  docs/audits/
+         62  docs/release_notes/
+         22  docs/
+          1  docs/changelogs/

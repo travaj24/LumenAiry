@@ -1,0 +1,358 @@
+
+########## .github/workflows/unit-tests.yml  (533 lines, 26141 bytes) ##########
+    1| name: Unit tests + lint
+   16| jobs:
+   18|     name: Unit tests (Python ${{ matrix.python-version }}, shard ${{ matrix.shard }}/5)
+   19|     runs-on: ubuntu-latest
+   20|     strategy:
+   21|       fail-fast: false
+   22|       matrix:
+   24|         python-version: ['3.10', '3.11', '3.12', '3.13']
+   26|         # pytest-split.  A single runner has only ~2-4 cores, so in-process xdist
+   40|         shard: [1, 2, 3, 4, 5]
+   42|     # .test_durations regenerated to cover ALL fast files incl. test_fga's ~7min
+   52|     # shards or regenerating .test_durations for the new files is the proper
+   54|     # v5.31 (audit W9): .test_durations REGENERATED end-to-end -- full fast
+   64|     timeout-minutes: 50
+   79|       - name: Set up Python ${{ matrix.python-version }}
+   82|           python-version: ${{ matrix.python-version }}
+   85|       - name: Install dependencies
+   99|       - name: Library import sanity
+  105|       - name: Numerics provenance (numpy / scipy / BLAS / CPU)
+  113|       - name: Run unit tests (shard ${{ matrix.shard }}/5)
+  114|         # ``-p no:cacheprovider`` avoids writing the pytest cache to the readonly
+  119|         # runner (pytest-split --splits 3 --group).  Serial -> the timing/speedup
+  121|         # ``.test_durations`` now carries FRESH timings for the whole fast gate
+  125|         # v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 �2) -- HOW TO REGENERATE
+  126|         # ``.test_durations``, because the current file is balanced but not
+  132|         # either way).  pytest-split then splits EVENLY on unevenly-scaled
+  144|           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
+  145|             -p no:cacheprovider --maxfail=50 -v \
+  148|             --durations-path .test_durations 2>&1 \
+  154|         timeout-minutes: 45
+  156|       - name: Upload unit-test log on failure
+  157|         if: failure()
+  160|           name: unit-test-output-py${{ matrix.python-version }}-shard${{ matrix.shard }}
+  165|       - name: Dump tail to job summary on failure
+  166|         if: failure()
+  173|             tail -n 200 unit_test_output.txt || echo "(no output file)"
+  177|       - name: Emit FAILED tests as annotations
+  178|         if: failure()
+  188|           # type for ``-grep "^FAILED"`` matches in pytest output.
+  189|           # The trailing ``tail -n 5`` summary line(s) (e.g.
+  200|               | head -n 20 \
+  206|             tail -n 5 unit_test_output.txt | while IFS= read -r line; do
+  214|     name: Ruff lint
+  215|     runs-on: ubuntu-latest
+  222|     continue-on-error: true
+  226|       - name: Set up Python
+  229|           python-version: '3.12'
+  231|       - name: Install ruff
+  234|       - name: Ruff check
+  238|     name: mypy strict (whitelist)
+  239|     runs-on: ubuntu-latest
+  250|     continue-on-error: false
+  254|       - name: Set up Python
+  257|           python-version: '3.12'
+  259|       - name: Install dependencies
+  268|       - name: mypy strict (pyproject whitelist)
+  275|     name: Public API smoke test
+  276|     runs-on: ubuntu-latest
+  280|       - name: Set up Python
+  283|           python-version: '3.12'
+  285|       - name: Install dependencies
+  291|       - name: Run public-API smoke
+  292|         run: python -m pytest tests/unit/test_public_api.py -v
+  295|     name: JAX unit tests (Python 3.12)
+  296|     runs-on: ubuntu-latest
+  301|     # ``pytest.importorskip('jax')``) SKIP everywhere in CI -- including every
+  315|     # ``pytest-split`` pattern) rather than adding jax back to the matrix.
+  316|     timeout-minutes: 50
+  326|       - name: Set up Python
+  329|           python-version: '3.12'
+  332|       - name: Install dependencies (with jax)
+  340|       - name: Library import sanity (jax present)
+  345|       - name: Run jax-guarded unit tests
+  347|         env:
+  372|         # v5.32.1 (AUDIT_CI_TEST_TIME_2026_08_03 �4/chunk 6 -- COVERAGE HOLE,
+  375|         # ``@pytest.mark.skipif(not _jax_ok(), ...)`` / ``not _HAS_JAX`` /
+  397|           # pytest-timeout converts any residual hang into a clean per-test
+  400|           pip install --quiet pytest-timeout
+  407|           python -m pytest "${jax_files[@]}" -m "not integration and not slow" \
+  410|             --tb=short -p no:cacheprovider --maxfail=8 -v 2>&1 \
+  413|         timeout-minutes: 45
+  415|       - name: Upload jax-unit log on failure
+  416|         if: failure()
+  419|           name: jax-unit-output
+  430|       - name: Dump jax tail to job summary on failure
+  431|         if: failure()
+  438|             tail -n 200 jax_unit_output.txt || echo "(no output file)"
+  442|       - name: Emit jax FAILED/ERROR lines as annotations
+  443|         if: failure()
+  448|               | head -n 20 \
+  452|             tail -n 5 jax_unit_output.txt | while IFS= read -r line; do
+  460|     name: Slow tests shard ${{ matrix.shard }}/3 (eig-heavy)
+  461|     runs-on: ubuntu-latest
+  467|     # v5.23.0: SHARD across 3 parallel jobs via pytest-split (balanced by the
+  468|     # committed .test_durations).  In-process xdist is UNSAFE here -- it would
+  472|     strategy:
+  473|       fail-fast: false
+  474|       matrix:
+  475|         shard: [1, 2, 3]
+  477|     timeout-minutes: 35
+  484|       - name: Set up Python
+  487|           python-version: '3.12'
+  490|       - name: Install dependencies
+  495|       - name: Run slow tests (shard ${{ matrix.shard }}/3)
+  506|         env:
+  513|           # pytest-split --splits/--group distributes the slow tests across the
+  514|           # 3 shard jobs, balanced by the committed .test_durations; each shard
+  516|           python -m pytest tests/unit -m "slow and not integration" --tb=short \
+  520|             --durations-path .test_durations 2>&1 \
+  524|         timeout-minutes: 30
+  526|       - name: Upload slow-test log on failure
+  527|         if: failure()
+  530|           name: slow-test-output-shard${{ matrix.shard }}
+
+########## .github/workflows/publish.yml  (243 lines, 11571 bytes) ##########
+    1| name: Publish to PyPI
+   26| jobs:
+   34|   # v5.1.1 actually wires it: this pre-build ``verify`` job runs the
+   36|   # release on broken CI cannot upload to PyPI.  ``build`` depends
+   39|     name: Verify CI on release tag
+   40|     runs-on: ubuntu-latest
+   57|         # fast gate (pytest-split), so the tag verification is fast too.
+   84|       - name: Set up Python ${{ matrix.python-version }}
+   90|       - name: Install Lumenairy with test extras
+  112|       - name: Verify CHANGELOG source-line citations
+  144|       - name: Verify CHANGELOG closures have backing diffs
+  161|       - name: Library import sanity
+  164|       - name: Run unit tests (release tag verification, shard ${{ matrix.shard }}/7)
+  166|         # gate serially on its own runner (pytest-split --splits N --group).
+  173|         # the two timeouts above): pytest-split balances on the committed
+  185|           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
+  194|   build:
+  195|     name: Build sdist + wheel
+  197|     runs-on: ubuntu-latest
+  201|       - name: Set up Python 3.12
+  206|       - name: Install build tooling
+  209|           pip install build twine
+  211|       - name: Build distributions
+  212|         run: python -m build
+  214|       - name: Validate distributions
+  215|         run: python -m twine check dist/*
+  217|       - name: Upload artifacts for the publish job
+  220|           name: distributions
+  224|     name: Publish to PyPI
+  225|     needs: [verify, build]
+  226|     runs-on: ubuntu-latest
+  230|       name: pypi
+  235|       - name: Download built distributions
+  238|           name: distributions
+  241|       - name: Publish to PyPI
+
+########## .github/workflows/validate.yml  (65 lines, 2176 bytes) ##########
+    1| name: Validate
+    2| 
+    3| # Runs the full validation suite on every push to main and on every PR.
+    4| # Matrix-tests against multiple Python versions so we catch any 3.x-specific
+    5| # regressions early.
+    6| 
+    7| on:
+    8|   push:
+    9|     branches: [main]
+   10|   pull_request:
+   11|     branches: [main]
+   12|   # Allow manual triggering from the Actions tab
+   13|   workflow_dispatch:
+   14| 
+   15| jobs:
+   16|   validate:
+   17|     name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+   18|     runs-on: ${{ matrix.os }}
+   19|     strategy:
+   20|       fail-fast: false
+   21|       matrix:
+   22|         os: [ubuntu-latest, windows-latest]
+   23|         python-version: ['3.11', '3.12', '3.13']
+   24| 
+   25|     steps:
+   26|       - uses: actions/checkout@v4
+   27| 
+   28|       - name: Set up Python ${{ matrix.python-version }}
+   29|         uses: actions/setup-python@v5
+   30|         with:
+   31|           python-version: ${{ matrix.python-version }}
+   32|           cache: pip
+   33| 
+   34|       - name: Install Lumenairy with all extras + dev
+   35|         # GUI / GPU / FITS extras are skipped in CI because they need
+   36|         # platform tooling we don't run on a standard runner (Qt
+   37|         # platform plugin, CUDA toolkit, etc.).  Core + perf + numba
+   38|         # is enough to exercise the validation suite.
+   39|         run: |
+   40|           python -m pip install --upgrade pip
+   41|           pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
+   42| 
+   43|       - name: Library version + import sanity
+   44|         run: |
+   45|           python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
+   46| 
+   47|       - name: Run validation suite
+   48|         # Tee stdout/stderr to a file so the artifact step (below) has
+   49|         # something concrete to upload on failure -- the suite itself
+   50|         # prints to stdout and doesn't write a log file.
+   51|         shell: bash
+   52|         run: |
+   53|           python validation/run_all.py 2>&1 | tee validation_output.txt
+   54|           # Propagate the suite's exit code (the tee zeros it otherwise)
+   55|           exit ${PIPESTATUS[0]}
+   56|         timeout-minutes: 15
+   57| 
+   58|       - name: Upload validation log on failure
+   59|         if: failure()
+   60|         uses: actions/upload-artifact@v4
+
+########## .github/workflows/dep-drift.yml  (95 lines, 3667 bytes) ##########
+    1| name: Dep-metadata drift check
+   12| # that bumped their ``requires-python`` to ``>=3.11``, silently breaking
+   13| # ``pip install lumenairy[fft,zarr,...]`` on 3.10:
+   15| # - pyfftw 0.15.1 (2025): ``requires-python = ">=3.11"``
+   16| # - zarr 3.1.6 (2025):    ``requires-python = ">=3.11"``
+   48| # ``requires-python``", not "this PR is broken".
+   70| jobs:
+   72|     name: PyPI dep-metadata drift
+   74|     # v5.2.3: not in the merge-blocking pipeline; informative only.  A
+   82|       - name: Set up Python
+   83|         uses: actions/setup-python@v5
+   85|           python-version: '3.12'
+   87|       - name: Install tomllib backport (for 3.10 fallback path)
+   92|         run: pip install tomli
+   94|       - name: Check dep metadata
+   95|         run: python scripts/check_dep_metadata.py
+
+########## .gitignore  (47 lines, 528 bytes) ##########
+    1| # Byte-compiled / cache
+    2| __pycache__/
+    3| *.py[cod]
+    4| *$py.class
+    5| *.so
+    6| 
+    7| # Distribution / packaging
+    8| build/
+    9| dist/
+   10| *.egg-info/
+   11| *.egg
+   12| pip-wheel-metadata/
+   13| 
+   14| # Virtual environments
+   15| .venv/
+   16| venv/
+   17| env/
+   18| ENV/
+   19| 
+   20| # Test / coverage
+   21| .pytest_cache/
+   22| .coverage
+   23| htmlcov/
+   24| .tox/
+   25| 
+   26| # IDE / editor
+   27| .vscode/
+   28| .idea/
+   29| *.swp
+   30| *.swo
+   31| .DS_Store
+   32| 
+   33| # Jupyter
+   34| .ipynb_checkpoints/
+   35| 
+   36| # Output / working files
+   37| output/
+   38| *.png
+   39| *.jpg
+   40| *.pdf
+
+########## MANIFEST.in  (53 lines, 1791 bytes) ##########
+    1| # MANIFEST.in for lumenairy
+    2| #
+    3| # Controls which non-package files are included in the source
+    4| # distribution (sdist) produced by ``python -m build``.  Wheels are
+    5| # built from the discovered ``lumenairy*`` packages declared in
+    6| # pyproject.toml -- they do NOT include the files listed below.
+    7| #
+    8| # The intent of the entries here is to make a tarball downloaded
+    9| # from PyPI a complete reproduction of the repository: tests,
+   10| # validation suite, examples, license, and CI workflows ship with
+   11| # it.  This was added in 4.4.0 in response to a packaging audit
+   12| # (the validation/ tree previously vanished from sdist + wheel).
+   13| 
+   14| include README.md
+   15| include CHANGELOG.md
+   16| include LICENSE
+   17| include pyproject.toml
+   18| 
+   19| # v5.24.x (audit S4-20): ship the top-level reference docs in the sdist
+   20| # so a PyPI tarball is a complete reproduction of the repository (the
+   21| # stated intent below).  Pre-fix these vanished from the sdist even
+   22| # though they are the canonical convention / migration / roadmap refs
+   23| # that the code + docstrings point users at.
+   24| include CONVENTIONS.md
+   25| include Migration-Guide.md
+   26| include ROADMAP.md
+   27| include CONTRIBUTING.md
+   28| recursive-include docs *.md *.txt
+   29| 
+   30| # Validation suite -- 31 files with ~370 physics-fidelity tests.
+   31| # Run with `python validation/run_all.py` after extracting the sdist.
+   32| recursive-include validation *.py *.md *.txt
+   33| 
+   34| # Unit + integration tests.
+   35| recursive-include tests *.py
+   36| 
+   37| # Example scripts.
+   38| recursive-include examples *.py *.md
+   39| 
+   40| # CI workflows (so a downstream re-spin can replay them).
+   41| recursive-include .github *.yml *.yaml
+   42| 
+   43| # Don't ship caches, build artefacts, or editor cruft.
+   44| global-exclude __pycache__
+   45| global-exclude *.pyc
+
+########## pyproject.toml  (383 lines, 18037 bytes) ##########
+    1| [build-system]
+    2| requires = ["setuptools>=61", "wheel"]
+    5| [project]
+    6| name = "lumenairy"
+    7| version = "5.45.1"
+   11| requires-python = ">=3.10"
+   29| classifiers = [
+   81| dependencies = [
+   88| [project.optional-dependencies]
+  133| zarr = ['zarr>=3.0; python_version >= "3.11"', "filelock>=3.0"]
+  148| jax = ['jax>=0.11.0; python_version >= "3.12"']
+  151| jax-gpu = ['jax[cuda12]>=0.11.0; python_version >= "3.12"']
+  159| numba = ["numba>=0.58"]
+  207| [project.urls]
+  215| [project.scripts]
+  221| [tool.setuptools.packages.find]
+  224| [tool.setuptools.package-data]
+  227| [tool.pytest.ini_options]
+  240| testpaths = ["tests"]
+  241| python_files = ["test_*.py"]
+  242| python_classes = ["Test*"]
+  247| python_functions = ["test_*", "t_*"]
+  248| markers = [
+  283| addopts = [
+  293| [tool.ruff]
+  294| line-length = 100
+  295| target-version = "py310"
+  303| [tool.ruff.lint]
+  307| select = ["E", "F", "I"]
+  308| ignore = [
+  314| [tool.ruff.lint.per-file-ignores]
+  357| [tool.mypy]
+  364| python_version = "3.12"
+  365| strict = true
+  383| ignore_missing_imports = true

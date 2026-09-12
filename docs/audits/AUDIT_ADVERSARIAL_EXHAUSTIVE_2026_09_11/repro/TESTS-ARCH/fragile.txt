@@ -1,0 +1,226 @@
+
+===== S1a: assertions on measured TIME / speed: 24 hits in 19 files =====
+  tests/unit/test_audit_analysis.py:1924  assert elapsed_ms < 5000.0, (
+  tests/unit/test_audit_analysis.py:1946  assert elapsed_ms < 5000.0, (
+  tests/unit/test_audit_propagation.py:2587  to assert ``t_fused <= 1.30 * t_ref``: a per-build wall-clock fact
+  tests/unit/test_audit_propagation.py:3757  assert speedup >= 5.0, (
+  tests/unit/test_audit_raytrace.py:1092  assert speedup >= self.SPEEDUP_FLOOR, (
+  tests/unit/test_audit_raytrace.py:1568  assert speedup >= self.RATIO_FLOOR, (
+  tests/unit/test_ci_kernel_consistency.py:492  assert elapsed < 20.0, elapsed
+  tests/unit/test_fix_bor_multilayer_guards.py:1342  assert params == {"bnd", "layer_index", "walls", "Rbig", "q", "n_max",
+  tests/unit/test_fix_hybrid_slant_transmission_anchor.py:167  assert abs(sh - round(sh)) < 1e-9, (K, k, sh)   # exact pixel walls
+  tests/unit/test_fix_pmmstack_sliver_round3.py:464  assert v in ("sliver", "wall"), (deg, d, v, ev)
+  tests/unit/test_fix_pmmstack_sliver_round4.py:608  assert got[0] in ("sliver", "wall", "truncation"), (reading, got[0])
+  tests/unit/test_fix_pmmstack_sliver_round4.py:666  assert verdict in ("sliver", "wall"), (deg, d, verdict, ev)
+  tests/unit/test_fix_pmmstack_sliver_walls_round2.py:364  assert verdict in ("sliver", "wall", "truncation"), verdict
+  tests/unit/test_niche_k3_perf.py:226  to assert ``t_new < 0.85 * t_old``.  That is a per-build wall-clock fact
+  tests/unit/test_perf_v4_12_0_through_focus.py:714  assert speedup >= 10.0, (
+  tests/unit/test_pipeline.py:63  #: The resume tests assert on THIS rather than on a wall-clock, because
+  tests/unit/test_pmm2d_staggered_mortar.py:869  assert len(walls) == 4 and len(set(walls)) == 4
+  tests/unit/test_v4_15_agent_a.py:351  assert speedup >= 5.0, (
+  tests/unit/test_v4_16_0_agent_b_multiprocess_storage.py:412  holder to boot, and ``assert elapsed < 2.5`` on the foreground
+  tests/unit/test_v5_11_0_pmm_anisotropic.py:127  assert abs(float(R[0].sum()) - float(Rtm.sum())) < 2e-3   # TM (slower rate)
+  tests/unit/test_v5_14_1_device_geometry.py:127  assert len(uw) == 2                       # snapped to one wall
+  tests/unit/test_v5_7_0_rcwa_asr.py:60  assert err_asr < err_uniform                                # faster
+  tests/unit/test_verify_pmmstack_sliver_round3.py:301  assert v == "wall", (v, ev)
+  tests/unit/test_verify_pmmstack_sliver_round3.py:525  assert v == "wall", (delta, v, ev)
+
+===== S1b: assertions on a measured-ratio bar: 6 hits in 5 files =====
+  tests/unit/test_g1_gate_generality.py:104  assert abs(est - ref) < 1e-9 * ref, (est, ref)
+  tests/unit/test_g1_gate_generality.py:207  assert est > 0.7 * ref                      # but not wildly (thin doublet)
+  tests/unit/test_niche_audit_w3_infra.py:646  assert deep_nbytes(pair) < 1.5 * base.nbytes
+  tests/unit/test_niche_audit_w4_immersed_pupils.py:443  assert abs(t / _N_BK7 - t) > 0.3 * t
+  tests/unit/test_p2t_pmm2d_tree_cascade.py:571  assert got <= max(10.0 * base, 1e3 * scale * np.finfo(np.float64).eps), (
+  tests/unit/test_pmm2d_slant_metric.py:111  assert _dmax(_solve(uni, slant=(t, 0.7 * t), theta=theta), base) < 1e-11
+
+===== S3: pytest.skip() calls (resource / env preconditions): 203 hits in 84 files =====
+  tests/unit/test_audit_analysis.py:123  pytest.skip("JAX not installed; gerchberg_saxton_jax test skipped")
+  tests/unit/test_audit_glass.py:130  pytest.skip(
+  tests/unit/test_audit_io.py:830  pytest.skip('h5py not installed')
+  tests/unit/test_audit_io.py:850  pytest.skip('h5py not installed')
+  tests/unit/test_audit_io.py:865  pytest.skip('h5py not installed')
+  tests/unit/test_audit_io.py:880  pytest.skip('h5py not installed')
+  tests/unit/test_audit_io.py:900  pytest.skip('h5py not installed')
+  tests/unit/test_audit_io.py:1176  pytest.skip('h5py not installed')
+  tests/unit/test_audit_io.py:1242  pytest.skip('zarr not installed')
+  tests/unit/test_audit_jax_c64_propagator_precision.py:47  pytest.skip(
+  tests/unit/test_audit_lens.py:2213  pytest.skip(f"apply_real_lens_maslov unavailable: {exc!r}")
+  tests/unit/test_audit_misc.py:676  pytest.skip(
+  tests/unit/test_audit_misc.py:683  pytest.skip(
+  tests/unit/test_audit_misc.py:2601  pytest.skip("JAX is not available.")
+  tests/unit/test_audit_misc.py:3778  pytest.skip("JAX is not installed")
+  tests/unit/test_audit_misc.py:3798  pytest.skip("JAX is not installed")
+  tests/unit/test_audit_misc.py:3820  pytest.skip("JAX is not installed")
+  tests/unit/test_audit_misc.py:5362  pytest.skip('JAX too old: jax.random.key() not available.')
+  tests/unit/test_audit_misc.py:5388  pytest.skip('JAX too old: jax.random.key() not available.')
+  tests/unit/test_audit_optimize.py:276  # ``except Exception: pytest.skip('LG-tensor ... unstable on this runtime')``
+  tests/unit/test_audit_optimize.py:522  # ``except Exception: pytest.skip('LG-tensor gradient unstable on
+  tests/unit/test_audit_optimize.py:556  body ended in ``except Exception: pytest.skip('LG-tensor gradient
+  tests/unit/test_audit_propagation.py:805  pytest.skip("JAX not installed")
+  tests/unit/test_audit_propagation.py:3483  # ``if warm_peak == 0: pytest.skip('warm-start reference produced no
+  tests/unit/test_audit_raytrace.py:2375  pytest.skip("JAX not installed -- skipping JAX-trace test.")
+  tests/unit/test_audit_raytrace.py:2402  pytest.skip("JAX not installed -- skipping JAX-trace test.")
+  tests/unit/test_audit_through_focus_jax_x64.py:45  pytest.skip(
+  tests/unit/test_audit_v5_24_2_g09_seams_prop2.py:129  pytest.skip("angular_spectrum_propagate_batch not available")
+  tests/unit/test_audit_w4_rcwa_homog_fftlock.py:199  pytest.skip("pyFFTW dispatch disabled")
+  tests/unit/test_audit_w4_rcwa_homog_fftlock.py:240  pytest.skip("pyFFTW dispatch disabled")
+  ... +173 more
+
+===== S3b: resource probes inside tests: 444 hits in 121 files =====
+  tests/conftest.py:625  lines.append(f'  CACHE _lens_traced unavailable: {exc!r}')
+  tests/conftest.py:652  lines.append(f'  FFT state unavailable: {exc!r}')
+  tests/unit/test_audit_analysis.py:277  # At least a few rim pairs should be available.
+  tests/unit/test_audit_except_budget.py:80  # cache RAM-detection guard was NARROWED (not broad), so net +1.
+  tests/unit/test_audit_g06_perf.py:108  oversubscription knee (min(available_cpus, cap)), and the
+  tests/unit/test_audit_g06_perf.py:110  from lumenairy.memory import available_cpus
+  tests/unit/test_audit_g06_perf.py:114  expected = max(1, min(int(available_cpus()), cap))
+  tests/unit/test_audit_io.py:1235  pool.  Even when zarr is unavailable, the patch install/
+  tests/unit/test_audit_lens.py:1357  _SKIP_REASON = f'GUI deps unavailable: {_e}'
+  tests/unit/test_audit_lens.py:2213  pytest.skip(f"apply_real_lens_maslov unavailable: {exc!r}")
+  tests/unit/test_audit_lens_models_2026_07.py:316  def _gpu_available():
+  tests/unit/test_audit_lens_models_2026_07.py:328  _GPU = _gpu_available()
+  tests/unit/test_audit_lens_models_2026_07.py:329  _gpu_skip = pytest.mark.skipif(not _GPU, reason='CuPy+GPU (cublas) unavailable')
+  tests/unit/test_audit_lens_models_2026_07.py:1374  _pt.skip("numba not available")
+  tests/unit/test_audit_lens_models_2026_07.py:1398  _pt.skip("numba not available")
+  tests/unit/test_audit_misc.py:677  f"export_zemax_zmx unavailable or raised "
+  tests/unit/test_audit_misc.py:783  # Skip the whole module if JAX is unavailable.
+  tests/unit/test_audit_misc.py:1560  jax = pytest.importorskip('jax', reason='JAX not available')
+  tests/unit/test_audit_misc.py:2601  pytest.skip("JAX is not available.")
+  tests/unit/test_audit_misc.py:3172  JAX is optional; if not available we populate the dicts with sentinels
+  tests/unit/test_audit_misc.py:3185  # available, fall back to sentinel insertion so the clear
+  tests/unit/test_audit_misc.py:5362  pytest.skip('JAX too old: jax.random.key() not available.')
+  tests/unit/test_audit_misc.py:5388  pytest.skip('JAX too old: jax.random.key() not available.')
+  tests/unit/test_audit_misc.py:5862  """When CuPy is available, the three newly-routed thin-lens
+  tests/unit/test_audit_p1_glass_registration.py:110  """With the refractiveindex package unavailable, thin-lens and
+  ... +419 more
+
+===== S4: assert < <many-digit> float literal: 1 hits in 1 files =====
+  tests/unit/test_niche_c7_ray_density_halo_check.py:177  assert 4.622e-05 * 4.0 < LT._RD_HALO_AMAX_TOL < 5.684e-03 / 4.0
+
+===== S5: exact len() == N assertions: 426 hits in 157 files =====
+  tests/unit/test_analysis.py:45  assert len(c) == 2
+  tests/unit/test_analysis.py:90  assert len(names) == 10
+  tests/unit/test_audit_g06_perf.py:206  assert len(bs._MESHGRID_CACHE) == 1
+  tests/unit/test_audit_g06_perf.py:224  assert len(bs._MESHGRID_CACHE) == 0
+  tests/unit/test_audit_g06_perf.py:256  assert len(tagged) == 1, (
+  tests/unit/test_audit_io.py:422  assert len(surfs) == 2, (
+  tests/unit/test_audit_io.py:440  assert len(norm['surfaces']) == 1
+  tests/unit/test_audit_io.py:839  assert len(planes) == 1
+  tests/unit/test_audit_io.py:1219  assert len(planes_a) == 1, \
+  tests/unit/test_audit_io.py:1221  assert len(planes_b) == 1, \
+  tests/unit/test_audit_io.py:1690  assert len(_FREQ_GRID_CACHE) == 0
+  tests/unit/test_audit_io.py:1691  assert len(_BANDLIMIT_CACHE) == 0
+  tests/unit/test_audit_io.py:1692  assert len(_H_CACHE) == 0
+  tests/unit/test_audit_misc.py:2425  assert len(stop_surfs) == 1, (
+  tests/unit/test_audit_misc.py:2539  assert len(cb_surfs) == 1, (
+  tests/unit/test_audit_misc.py:2547  assert len(stop_surfs) == 1, (
+  tests/unit/test_audit_misc.py:3027  assert len(_FREQ_GRID_CACHE) == 0, (
+  tests/unit/test_audit_misc.py:3029  assert len(_BANDLIMIT_CACHE) == 0, (
+  tests/unit/test_audit_misc.py:3031  assert len(_H_CACHE) == 0, (
+  tests/unit/test_audit_misc.py:3033  assert len(_PYFFTW_PLAN_CACHE) == 0, (
+  tests/unit/test_audit_misc.py:3035  assert len(_PYFFTW_BAD_SHAPES) == 0, (
+  tests/unit/test_audit_misc.py:3212  assert len(_GS_KERNEL_CACHE) == 0
+  tests/unit/test_audit_misc.py:3213  assert len(_ER_KERNEL_CACHE) == 0
+  tests/unit/test_audit_misc.py:3214  assert len(_HIO_KERNEL_CACHE) == 0
+  tests/unit/test_audit_misc.py:3285  assert len(_FREQ_GRID_CACHE) == 0, "_FREQ_GRID_CACHE leaked"
+  ... +401 more
+
+===== V: tests asserting on markdown / doc file CONTENT: 22 hits in 10 files =====
+  tests/unit/test_niche_audit_w4_p5_return_contract.py:691  assert 'roadmap_deferred_2026_07_21.md' in doc
+  tests/unit/test_v4_15_2_agent_a.py:323  return _CHANGELOG_PATH.read_text(encoding='utf-8')
+  tests/unit/test_v4_15_4_agent_c.py:69  text = _CHANGELOG.read_text(encoding='utf-8')
+  tests/unit/test_v4_15_5_agent_c.py:60  text = _CHANGELOG.read_text(encoding='utf-8')
+  tests/unit/test_v4_15_agent_f.py:440  text = _README_PATH.read_text(encoding='utf-8')
+  tests/unit/test_v4_15_agent_f.py:446  text = _README_PATH.read_text(encoding='utf-8')
+  tests/unit/test_v4_15_agent_f.py:469  text = _README_PATH.read_text(encoding='utf-8')
+  tests/unit/test_v4_15_agent_f.py:508  text = _CHANGELOG_PATH.read_text(encoding='utf-8')
+  tests/unit/test_v4_15_agent_f.py:533  text = _CHANGELOG_PATH.read_text(encoding='utf-8')
+  tests/unit/test_v4_16_2_agent_d.py:30  text = (_REPO_ROOT / 'README.md').read_text(encoding='utf-8')
+  tests/unit/test_v4_16_2_agent_d.py:45  text = (_REPO_ROOT / 'README.md').read_text(encoding='utf-8')
+  tests/unit/test_v4_16_2_agent_d.py:93  text = (_REPO_ROOT / 'ROADMAP.md').read_text(encoding='utf-8')
+  tests/unit/test_v4_16_2_agent_d.py:106  text = (_REPO_ROOT / 'ROADMAP.md').read_text(encoding='utf-8')
+  tests/unit/test_v4_16_2_agent_d.py:119  text = (_REPO_ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
+  tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py:207  text = text if text is not None else _CHANGELOG.read_text(encoding='utf-8')
+  tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py:283  readme = _README.read_text(encoding='utf-8')
+  tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py:327  readme = _README.read_text(encoding='utf-8')
+  tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py:455  text = _CHANGELOG.read_text(encoding='utf-8')
+  tests/unit/test_v4_16_3_agent_d.py:263  text = (_REPO_ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
+  tests/unit/test_v4_16_3_agent_d.py:293  text = (_REPO_ROOT / 'ROADMAP.md').read_text(encoding='utf-8')
+  tests/unit/test_v5_2_walker_changelog_changeset.py:60  return _CHANGELOG.read_text(encoding='utf-8')
+  tests/unit/test_v5_3_walker_changelog_self_citation.py:70  return _CHANGELOG.read_text(encoding='utf-8')
+
+===== V2: tests asserting on docstrings / source text: 211 hits in 80 files =====
+  tests/unit/test_audit_analysis.py:16  test class an audit-version attribution prefix).  inspect.getsource proxy
+  tests/unit/test_audit_analysis.py:956  doc = (_g.__doc__ or '').lower()
+  tests/unit/test_audit_analysis.py:970  doc = (_g.__doc__ or '').lower()
+  tests/unit/test_audit_g06_perf.py:401  src = inspect.getsource(fga._fga_coarse)
+  tests/unit/test_audit_glass.py:12  v5.2.1 TODO markers on the inspect.getsource proxy-test sites in this
+  tests/unit/test_audit_glass.py:14  inspect.getsource by design and updated the comment to explain why
+  tests/unit/test_audit_glass.py:465  # v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: replace inspect.getsource proxy with behavioral pin):
+  tests/unit/test_audit_io.py:12  test class an audit-version attribution prefix).  inspect.getsource proxy
+  tests/unit/test_audit_io.py:1414  doc = append_plane_h5.__doc__
+  tests/unit/test_audit_io.py:1643  doc = clear_asm_caches.__doc__
+  tests/unit/test_audit_lens.py:19  v5.2.1 TODO markers on the inspect.getsource proxy-test sites in this
+  tests/unit/test_audit_lens.py:21  inspect.getsource by design and updated the comment to explain why
+  tests/unit/test_audit_lens.py:467  doc = ghost_mod.__doc__ or ""
+  tests/unit/test_audit_lens.py:483  doc = ghost_mod.__doc__ or ""
+  tests/unit/test_audit_lens.py:499  doc = ghost_mod.ghost_analysis.__doc__ or ""
+  tests/unit/test_audit_lens.py:524  # v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: kept inspect.getsource by design):
+  tests/unit/test_audit_lens.py:533  # inspect.getsource on the function body is the correct tool for
+  tests/unit/test_audit_lens.py:536  src = inspect.getsource(ghost_mod.ghost_analysis)
+  tests/unit/test_audit_lens.py:2114  # v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: kept inspect.getsource by design):
+  tests/unit/test_audit_lens.py:2125  src = inspect.getsource(lenses_maslov)
+  tests/unit/test_audit_lens.py:2147  # v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: kept inspect.getsource by design):
+  tests/unit/test_audit_lens.py:2155  src = inspect.getsource(_lens_thin)
+  tests/unit/test_audit_lens.py:2168  # v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: kept inspect.getsource by design):
+  tests/unit/test_audit_lens.py:2172  apl = inspect.getsource(_lens_thin.apply_thin_lens)
+  tests/unit/test_audit_misc.py:22  v5.2.1 TODO markers on the inspect.getsource proxy-test sites in this
+  tests/unit/test_audit_misc.py:24  inspect.getsource by design and updated the comment to explain why
+  tests/unit/test_audit_misc.py:3511  v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: replace inspect.getsource
+  tests/unit/test_audit_misc.py:6428  v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: replace inspect.getsource
+  tests/unit/test_audit_optimize.py:15  test class an audit-version attribution prefix).  inspect.getsource proxy
+  tests/unit/test_audit_optimize.py:2839  doc = clear_asm_caches.__doc__
+  ... +181 more
+
+===== III: monkeypatching a physics function: 19 hits in 12 files =====
+  tests/unit/test_audit_w5_pmm_rcwa.py:113  monkeypatch.setattr(pmm_stack_mod, "_redheffer_star", counting)
+  tests/unit/test_audit_w6_bor.py:68  monkeypatch.setattr(bor_stack_mod, "layer_modes", counting)
+  tests/unit/test_carrier_field.py:339  monkeypatch.setattr(_carrier_field, '_exact_sphere_eikonal',
+  tests/unit/test_niche_audit_m1_layer_eig_key.py:166  monkeypatch.setattr(RCWAStack, "_layer_modes", spy)
+  tests/unit/test_niche_audit_m1_layer_eig_key.py:244  monkeypatch.setattr(RCWAStack, "_layer_eig_key",
+  tests/unit/test_niche_audit_w6_bor.py:502  monkeypatch.setattr(bor_stack_mod, "layer_modes", counted)
+  tests/unit/test_niche_audit_w6_bor.py:524  monkeypatch.setattr(bor_stack_mod, "_MODAL_CACHE_SIZE", cap)
+  tests/unit/test_niche_audit_w6_bor.py:541  monkeypatch.setattr(bor_stack_mod, "_MODAL_CACHE_SIZE", cap)
+  tests/unit/test_niche_audit_w9_eig_vjp.py:460  monkeypatch.setattr(pmm, "_jpmm_min_norm_projection", _capture)
+  tests/unit/test_niche_audit_w9_eig_vjp.py:510  monkeypatch.setattr(pmm, "PMM_JAX_MINNORM_PROJECTION", False)
+  tests/unit/test_niche_c3_gap_paraxial_guard.py:536  monkeypatch.setattr(_carrier, '_gap_amp_radius', lambda env, dx: 0.0)
+  tests/unit/test_niche_c3_gap_paraxial_guard.py:537  monkeypatch.setattr(_carrier, '_check_gap_paraxial',
+  tests/unit/test_niche_r9_dx_scaling_fix.py:276  monkeypatch.setattr('lumenairy.elements.apply_real_lens_traced',
+  tests/unit/test_niche_s12_rs_fine_clamp_warning.py:162  monkeypatch.setattr('lumenairy.elements.apply_real_lens_traced',
+  tests/unit/test_pmm2d_staggered_magnetic.py:1030  monkeypatch.setattr("lumenairy.elements.pmm.stack2d_pure._region_modes",
+  tests/unit/test_v5_12_0_pmm_slant_and_convergence.py:501  monkeypatch.setattr(_pmm_oned, "_pmm_jones_slant_diag_solve", spy_cure)
+  tests/unit/test_v5_12_0_pmm_slant_and_convergence.py:502  monkeypatch.setattr(_pmm_oned, "_pmm_jones_slant_solve", spy_metric)
+  tests/unit/test_v5_6_rcwa_convergence.py:299  monkeypatch.setattr(la.RCWAStack, "_layer_modes", spy)
+  tests/unit/test_v5_6_rcwa_convergence.py:311  monkeypatch.setattr(la.RCWAStack, "_layer_eig_key",
+
+===== tests importing PRIVATE (underscore) library symbols: 402 distinct (file,symbol) pairs in 199 files =====
+   11 private symbols  tests/unit/test_fga.py
+   10 private symbols  tests/unit/test_audit_misc.py
+    8 private symbols  tests/unit/test_v4_15_1_agent_e.py
+    7 private symbols  tests/unit/test_screen_obliquity.py
+    7 private symbols  tests/unit/test_v5_21_2_subsystem_audits.py
+    6 private symbols  tests/unit/test_audit_g04_guards_prop.py
+    6 private symbols  tests/unit/test_v4_15_2_agent_e.py
+    5 private symbols  tests/unit/test_audit_optimize.py
+    5 private symbols  tests/unit/test_audit_v5_24_2_g05_seams.py
+    5 private symbols  tests/unit/test_audit_v5_24_2_g07_dedup.py
+    5 private symbols  tests/unit/test_niche_audit_m4_m5_m6_rcwa.py
+    5 private symbols  tests/unit/test_niche_audit_w3_oracles.py
+    5 private symbols  tests/unit/test_v5_21_delta_audit.py
+    4 private symbols  tests/unit/test_gbd_feature_complete.py
+    4 private symbols  tests/unit/test_niche_audit_w3_elements.py
+    4 private symbols  tests/unit/test_niche_audit_w4d_folded_frames.py
+    4 private symbols  tests/unit/test_niche_audit_w4_immersed_pupils.py
+    4 private symbols  tests/unit/test_niche_audit_w7_pmm.py
+    4 private symbols  tests/unit/test_niche_c15_inverse_map.py
+    4 private symbols  tests/unit/test_niche_exact_gap_kernel.py

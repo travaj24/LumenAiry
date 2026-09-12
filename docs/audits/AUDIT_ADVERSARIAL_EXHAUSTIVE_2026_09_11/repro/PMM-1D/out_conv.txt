@@ -1,0 +1,49 @@
+=== RCWA n_orders sequence (the oracle's own convergence) ===
+  n=  101: R0=0.415457249620  (59.0s)
+  n=  201: R0=0.415453025812  (105.7s)
+  n=  301: R0=0.415467856504  (130.9s)
+  n=  401: R0=0.415478858867  (183.8s)
+  n=  601: R0=0.415490900082  (263.9s)
+  n=  801: R0=0.415496903724  (324.4s)
+  n= 1201: R0=0.415502589184  (484.3s)
+  successive diffs: ['-4.224e-06', '+1.483e-05', '+1.100e-05', '+1.204e-05', '+6.004e-06', '+5.685e-06']
+  fit R0 = 0.415514655981 + -0.01433/n   -> R_inf(rcwa) = 0.415514655981
+
+=== PMM degree sequence, elements_per_region = 1 ===
+  deg=  6 dof=  12: R0=0.416444532756 err=9.299e-04 (0.01s)
+  deg=  8 dof=  16: R0=0.416058395315 err=5.437e-04 rate=1.87 (0.01s)
+  deg= 12 dof=  24: R0=0.415735706397 err=2.211e-04 rate=2.22 (0.03s)
+  deg= 16 dof=  32: R0=0.415629065380 err=1.144e-04 rate=2.29 (0.01s)
+  deg= 24 dof=  48: R0=0.415558212399 err=4.356e-05 rate=2.38 (0.07s)
+  deg= 32 dof=  64: R0=0.415535441988 err=2.079e-05 rate=2.57 (0.03s)
+  deg= 44 dof=  88: R0=0.415522654502 err=7.999e-06 rate=3.00 (0.55s)
+  deg= 60 dof= 120: R0=0.415516547462 err=1.891e-06 rate=4.65 (24.09s)
+
+=== PMM, elements_per_region = 3, grade=True (the docstring's cure) ===
+  deg=  6 dof=  36: R0=0.415719109813 err=2.045e-04
+  deg=  8 dof=  48: R0=0.415622104216 err=1.074e-04
+  deg= 12 dof=  72: R0=0.415556224211 err=4.157e-05
+  deg= 16 dof=  96: R0=0.415534637719 err=1.998e-05
+  deg= 24 dof= 144: R0=0.415520268225 err=5.612e-06
+  deg= 32 dof= 192: R0=0.415515645975 err=9.900e-07
+
+=== PMM, elements_per_region = 6, grade=True ===
+  deg=  6 dof=  72: R0=0.415556374563 err=4.172e-05
+  deg=  8 dof=  96: R0=0.415535104336 err=2.045e-05
+  deg= 12 dof= 144: R0=0.415520633477 err=5.977e-06
+  deg= 16 dof= 192: R0=0.415515887721 err=1.232e-06
+  deg= 24 dof= 288: R0=0.415512729610 err=1.926e-06
+
+=== PMM, elements_per_region = 3, grade=FALSE (control) ===
+  deg=  8 dof=  48: R0=0.415665915299 err=1.513e-04
+  deg= 16 dof=  96: R0=0.415544064132 err=2.941e-05
+  deg= 24 dof= 144: R0=0.415524058912 err=9.403e-06
+  deg= 32 dof= 192: R0=0.415517623545 err=2.968e-06
+
+=== same, but a LOSSLESS high-contrast TM grating (no metal corner) ===
+  deg=  8: R0=0.522869033860 err_vs_rcwa801=8.348e-04
+  deg= 12: R0=0.522302029975 err_vs_rcwa801=2.678e-04
+  deg= 16: R0=0.522154344062 err_vs_rcwa801=1.201e-04
+  deg= 24: R0=0.522073224136 err_vs_rcwa801=3.902e-05
+  deg= 32: R0=0.522052010252 err_vs_rcwa801=1.780e-05
+  deg= 44: R0=0.522041958013 err_vs_rcwa801=7.752e-06

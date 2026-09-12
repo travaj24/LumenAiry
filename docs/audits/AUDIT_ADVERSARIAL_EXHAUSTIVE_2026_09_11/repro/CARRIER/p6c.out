@@ -1,0 +1,8 @@
+true focus at z=20.000 mm, w0=8.3397 um; window N_out*dx_out=66.72 um
+
+R/R0= 1.00  standoff=   222.39um  stop dx=   86.87nm half=   44.48um  beam@stop=   13.84um half/beam=  3.21  period=   88.96um  -> ran, peak ratio vs R0 ref=1.000000  warns=0 []
+R/R0= 0.99  standoff=   417.97um  stop dx=   86.00nm half=   44.03um  beam@stop=   22.43um half/beam=  1.96  period=   88.07um  -> ran, peak ratio vs R0 ref=0.986188  warns=0 []
+R/R0= 0.98  standoff=   613.59um  stop dx=   85.13nm half=   43.59um  beam@stop=   31.42um half/beam=  1.39  period=   87.18um  -> ran, peak ratio vs R0 ref=0.745432  warns=0 []
+R/R0= 0.95  standoff=  1200.71um  stop dx=   82.53nm half=   42.25um  beam@stop=   46.40um half/beam=  0.91  period=   84.51um  -> ran, peak ratio vs R0 ref=0.187913  warns=0 []
+R/R0= 0.90  standoff=  2180.14um  stop dx=   78.18nm half=   40.03um  beam@stop=   46.26um half/beam=  0.87  period=   80.06um  -> ran, peak ratio vs R0 ref=0.026309  warns=0 []
+--- p6c done ---

@@ -1,0 +1,18 @@
+=== FICTITIOUS interface inside a PATTERNED region ===
+ deg |          Ex          Ey          Ez          Hx          Hy          Hz
+  10 |   1.588e-04   0.000e+00   3.110e-04   0.000e+00   2.082e-04   0.000e+00
+  14 |   1.620e-04   0.000e+00   3.044e-04   0.000e+00   2.091e-04   0.000e+00
+  18 |   1.635e-04   0.000e+00   3.081e-04   0.000e+00   2.087e-04   0.000e+00
+  24 |   1.646e-04   0.000e+00   3.077e-04   0.000e+00   2.086e-04   0.000e+00
+
+=== FICTITIOUS interface inside a UNIFORM region (no walls at all) ===
+ deg |          Ex          Ey          Ez          Hx          Hy          Hz
+  10 |   2.716e-04   0.000e+00   2.245e-04   0.000e+00   2.245e-04   0.000e+00
+  14 |   2.716e-04   0.000e+00   2.245e-04   0.000e+00   2.245e-04   0.000e+00
+  18 |   2.716e-04   0.000e+00   2.245e-04   0.000e+00   2.245e-04   0.000e+00
+  24 |   2.716e-04   0.000e+00   2.245e-04   0.000e+00   2.245e-04   0.000e+00
+
+internal_field keys: ['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz', 'layer', 'x', 'z']
+largest Ex jump at x/P = 0.005882 (segment wall at 0.45); jump 2.390e-04
+top-10 jump x/P: [0.0059 0.5441 0.0196 0.5304 0.0406 0.775  0.7369 0.8131 0.7    0.85  ]
+median |jump| over x: 0.000158924076329521

@@ -1,0 +1,4 @@
+=== -k real_lens collect ===
+=========================== short test summary info ===========================
+SKIPPED [1] tests\unit\test_v5_14_5_viewer_polarization.py:21: could not import 'PySide6': No module named 'PySide6'
+135/13321 tests collected (13186 deselected) in 471.90s (0:07:51)

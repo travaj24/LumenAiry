@@ -1,0 +1,42 @@
+import 13.6 s
+
+=== E1) strip_x_modes vs ANALYTIC slab-waveguide TE0 (open->PEC box) ===
+   analytic TE0 beta = 9.249604533741  neff = 1.472120283190
+   Nx=  240: beta_FD=9.249823582902  err=+2.190e-04  rel=2.368e-05
+   Nx=  480: beta_FD=9.249659300794  err=+5.477e-05  rel=5.921e-06
+   Nx=  960: beta_FD=9.249618228055  err=+1.369e-05  rel=1.481e-06
+   Nx= 1920: beta_FD=9.249607959737  err=+3.426e-06  rel=3.704e-07
+   Nx= 3840: beta_FD=9.249605392650  err=+8.589e-07  rel=9.286e-08
+
+=== E2) strip_x_modes orthonormality / Hermiticity at kx0 != 0 ===
+   kx0=0.0: max|Phi^H Phi - I| = 1.360e-15  max|Im lam| = 0.000e+00
+        lossy: max|Im lam| = 8.668e-02
+   kx0=0.37: max|Phi^H Phi - I| = 1.694e-15  max|Im lam| = 0.000e+00
+        lossy: max|Im lam| = 8.668e-02
+
+=== E3) mode_match vs ANALYTIC Airy slab (uniform layer) ===
+   n=1.5 d=0.2: R_fd=0.004594214440 R_an=0.004594214440  T_fd=0.995405785560 T_an=0.995405785560  energy=1.000000000000
+   n=1.5 d=2.0: R_fd=0.147363631506 R_an=0.147363631506  T_fd=0.852636368494 T_an=0.852636368494  energy=1.000000000000
+   n=1.5 d=5.3: R_fd=0.022448180626 R_an=0.022448180626  T_fd=0.977551819374 T_an=0.977551819374  energy=1.000000000000
+   n=(1.5+0.2j) d=4.0: R_fd=0.046104917703 R_an=0.046104917703  T_fd=0.000000117309 T_an=0.000000117309  energy=0.046105035013
+
+=== E4) EME layer_modes vs the 2-D FD oracle (structured cell) ===
+   (2.5s) EME modes in (0, 4k0^2): [210.16681153 146.5424813  143.2133991   82.06275025  70.54439482
+  69.96188653  25.0263219   19.04699381  18.3606842 ]
+   FD oracle top-8 qz^2 (Ny=32): [210.42093715 146.77929406 144.292311    83.01647735  70.75738667
+  59.29340567  21.62535713  19.58122152]
+      EME qz2=210.166812 -> nearest FD 210.420937  |d|=2.541e-01  rel=1.209e-03
+      EME qz2=146.542481 -> nearest FD 146.779294  |d|=2.368e-01  rel=1.616e-03
+      EME qz2=143.213399 -> nearest FD 144.292311  |d|=1.079e+00  rel=7.534e-03
+      EME qz2=82.062750 -> nearest FD 83.016477  |d|=9.537e-01  rel=1.162e-02
+      EME qz2=70.544395 -> nearest FD 70.757387  |d|=2.130e-01  rel=3.019e-03
+      EME qz2=69.961887 -> nearest FD 70.757387  |d|=7.955e-01  rel=1.137e-02
+      EME qz2=25.026322 -> nearest FD 21.625357  |d|=3.401e+00  rel=1.359e-01
+      EME qz2=19.046994 -> nearest FD 19.193669  |d|=1.467e-01  rel=7.701e-03
+      EME qz2=18.360684 -> nearest FD 19.193669  |d|=8.330e-01  rel=4.537e-02
+
+=== E5) vector strip modes: uniform-strip analytic dispersion ===
+   qz2=0.0: n_fwd=48 first few |ky| = [ 9.02291461  9.02291461  9.02291461  9.02291461 10.08272112 10.08272112]
+      analytic |ky| (first few) = [ 9.90385428  9.90385428  9.96522747  9.96522747 14.71467235 14.71467235]
+   qz2=9.0: n_fwd=48 first few |ky| = [9.50857445 9.50857445 9.50857445 9.50857445 9.62607216 9.62607216]
+      analytic |ky| (first few) = [ 9.43855548  9.43855548 10.40700526 10.40700526 14.40560941 14.40560941]

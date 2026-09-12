@@ -1,0 +1,3 @@
+N=256 dx=30um: backward OPL finite on 48.0% of the grid; inside the beam (r<2w=3.0e-03 m) finite on 98.8%
+   r<w : backward-vs-newton exit phase rms 1.9284e+00 rad =   180.35 nm rms OPD, max   324.93 nm   (docstring claims ~35-40 nm)
+   r<2w: backward-vs-newton exit phase rms 1.6891e+00 rad =   157.96 nm rms OPD, max   371.99 nm   (docstring claims ~35-40 nm)

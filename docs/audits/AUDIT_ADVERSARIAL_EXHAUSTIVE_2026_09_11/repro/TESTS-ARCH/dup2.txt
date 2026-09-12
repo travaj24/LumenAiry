@@ -1,0 +1,120 @@
+===== targeted probes (definition sites) =====
+
+  _ensure_cupy_loaded* : 5 definitions in 5 modules
+      lumenairy/elements/_lens_real.py:34  _ensure_cupy_loaded
+      lumenairy/elements/_lens_traced.py:38  _ensure_cupy_loaded
+      lumenairy/elements/lenses.py:46  _ensure_cupy_loaded
+      lumenairy/propagators/fft_infra.py:46  _ensure_cupy_loaded
+      lumenairy/sources/core.py:26  _ensure_cupy_loaded
+
+  _is_cupy_array* : 5 definitions in 5 modules
+      lumenairy/elements/_lens_real.py:42  _is_cupy_array
+      lumenairy/elements/_lens_thin.py:41  _is_cupy_array
+      lumenairy/elements/_lens_traced.py:46  _is_cupy_array
+      lumenairy/elements/lenses.py:119  _is_cupy_array
+      lumenairy/propagators/fft_infra.py:54  _is_cupy_array
+
+  _load_numba* : 5 definitions in 5 modules
+      lumenairy/elements/_lens_imap.py:415  _load_numba
+      lumenairy/elements/_lens_traced.py:74  _load_numba
+      lumenairy/elements/lenses.py:85  _load_numba
+      lumenairy/optimize/_merit_jit.py:58  _load_numba
+      lumenairy/propagators/fga.py:95  _load_numba
+
+  _sag* : 6 definitions in 3 modules
+      lumenairy/propagators/carrier.py:5902  _sag
+      lumenairy/propagators/fga.py:2487  _sag_screen_aberration_rad
+      lumenairy/raytrace/jax_trace.py:159  _sag_value_jax
+      lumenairy/raytrace/jax_trace.py:185  _sag_derivatives_jax
+      lumenairy/raytrace/jax_trace.py:1323  _sag_value_param
+      lumenairy/raytrace/jax_trace.py:1345  _sag_derivatives_param
+
+  _surface_sag* : 4 definitions in 2 modules
+      lumenairy/elements/_lens_thin.py:695  _surface_sag
+      lumenairy/raytrace/surface.py:389  _surface_sag_xy
+      lumenairy/raytrace/surface.py:449  _surface_sag_derivatives_xy
+      lumenairy/raytrace/surface.py:537  _surface_sag_derivative
+
+
+===== 'exit vertex transfer'  t = -z / N   idiom =====
+   lumenairy/raytrace/intersection.py:139  # t such that z + N*t = 0  =>  t = -z / N
+   lumenairy/raytrace/jax_trace.py:235  # Pure flat surface: t = -z / N.
+
+
+===== difflib near-duplicate clusters over 2528 functions (>=12 lines, code-only) =====
+
+  [1] similarity 0.85  (~87 code lines)
+       lumenairy/elements/lenses_maslov.py:480  _cheb4d_vd9  (88 lines)
+       lumenairy/elements/lenses_maslov.py:322  _get_cheb4d_vd3_numba  (92 lines)
+
+  [2] similarity 0.96  (~28 code lines)
+       lumenairy/propagators/hf.py:33  _resolve_output_shape  (30 lines)
+       lumenairy/propagators/hfpi.py:53  _resolve_output_shape  (30 lines)
+
+  [3] similarity 0.81  (~18 code lines)
+       lumenairy/elements/lenses_maslov.py:416  _opd_vd3  (20 lines)
+       lumenairy/elements/lenses_maslov.py:573  _opd_vd9  (21 lines)
+
+  [4] similarity 0.89  (~16 code lines)
+       lumenairy/elements/lenses_maslov.py:2777  _sample  (17 lines)
+       lumenairy/elements/lenses_maslov.py:3538  _sample_bilinear_xp  (22 lines)
+
+  [5] similarity 0.85  (~13 code lines)
+       lumenairy/elements/polarization.py:829  apply_half_wave_plate  (17 lines)
+       lumenairy/elements/polarization.py:848  apply_quarter_wave_plate  (17 lines)
+
+  [6] similarity 1.00  (~11 code lines)
+       lumenairy/elements/_lens_traced.py:76  _load_numba  (13 lines)
+       lumenairy/optimize/_merit_jit.py:60  _load_numba  (13 lines)
+
+  [7] similarity 1.00  (~11 code lines)
+       lumenairy/ui/distortion_dock.py:243  _draw_message  (12 lines)
+       lumenairy/ui/spot_field_dock.py:266  _draw_message  (12 lines)
+
+  [8] similarity 0.91  (~11 code lines)
+       lumenairy/elements/lenses.py:87  _load_numba  (13 lines)
+       lumenairy/elements/_lens_imap.py:417  _load_numba  (13 lines)
+
+  [9] similarity 0.91  (~11 code lines)
+       lumenairy/elements/lenses.py:87  _load_numba  (13 lines)
+       lumenairy/elements/_lens_traced.py:76  _load_numba  (13 lines)
+
+  [10] similarity 0.91  (~11 code lines)
+       lumenairy/elements/lenses.py:87  _load_numba  (13 lines)
+       lumenairy/optimize/_merit_jit.py:60  _load_numba  (13 lines)
+
+  [11] similarity 0.91  (~11 code lines)
+       lumenairy/elements/_lens_imap.py:417  _load_numba  (13 lines)
+       lumenairy/elements/_lens_traced.py:76  _load_numba  (13 lines)
+
+  [12] similarity 0.91  (~11 code lines)
+       lumenairy/elements/_lens_imap.py:417  _load_numba  (13 lines)
+       lumenairy/optimize/_merit_jit.py:60  _load_numba  (13 lines)
+
+  [13] similarity 0.83  (~12 code lines)
+       lumenairy/analysis/phase_retrieval.py:673  _run  (17 lines)
+       lumenairy/analysis/phase_retrieval.py:667  _make_gs_kernel  (25 lines)
+
+  [14] similarity 0.83  (~12 code lines)
+       lumenairy/analysis/phase_retrieval.py:700  _run  (14 lines)
+       lumenairy/analysis/phase_retrieval.py:694  _make_er_kernel  (22 lines)
+
+  [15] similarity 0.80  (~12 code lines)
+       lumenairy/ui/coherence_dock.py:446  _draw_empty  (14 lines)
+       lumenairy/ui/thin_grating_dock.py:144  _draw_empty  (13 lines)
+
+  [16] similarity 0.80  (~12 code lines)
+       lumenairy/ui/richards_wolf_dock.py:165  _draw_empty  (14 lines)
+       lumenairy/ui/thin_grating_dock.py:144  _draw_empty  (13 lines)
+
+  [17] similarity 0.80  (~12 code lines)
+       lumenairy/ui/shack_hartmann_dock.py:100  _draw_empty  (14 lines)
+       lumenairy/ui/thin_grating_dock.py:144  _draw_empty  (13 lines)
+
+  [18] similarity 0.80  (~10 code lines)
+       lumenairy/analysis/phase_retrieval.py:724  _run  (12 lines)
+       lumenairy/analysis/phase_retrieval.py:718  _make_hio_kernel  (20 lines)
+
+  total pairs with similarity >= 0.80: 24
+  of which CROSS-MODULE: 15
+  redundant code lines (sum over cross-module pairs, dedup by target): ~205

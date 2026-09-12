@@ -1,0 +1,23 @@
+=== UNIFORM slab: every 1-D Jones entry vs the analytic Fresnel ===
+  ang         solver                  J[0,0] (x/tm)                  J[1,1] (y/te)
+    0   analytic r_p 0.485179610391-0.045332709839j                          (r_s)
+    0   analytic r_s                                -0.485179610391+0.045332709839j
+    0   pmm_jones_1d -0.485179610391+0.045332709839j -0.485179610391+0.045332709839j
+    0  rcwa_jones_1d -0.485179610391+0.045332709839j -0.485179610391+0.045332709839j
+    0       berreman  N/A: TypeError berreman_jones_1d() got multiple values for argument 'n_substrate'
+      ratio pmm/analytic: xx -1.000000+0.000000j  yy +1.000000+0.000000j   |  rcwa/pmm: xx +1.000000+0.000000j yy +1.000000-0.000000j
+
+   30   analytic r_p 0.400347322452-0.092503131857j                          (r_s)
+   30   analytic r_s                                -0.509634985483+0.097722395344j
+   30   pmm_jones_1d -0.400347322452+0.092503131857j -0.509634985483+0.097722395344j
+   30  rcwa_jones_1d -0.400347322452+0.092503131857j -0.509634985483+0.097722395344j
+   30       berreman  N/A: TypeError berreman_jones_1d() got multiple values for argument 'n_substrate'
+      ratio pmm/analytic: xx -1.000000-0.000000j  yy +1.000000+0.000000j   |  rcwa/pmm: xx +1.000000-0.000000j yy +1.000000-0.000000j
+
+   60   analytic r_p 0.054970737160-0.111421587168j                          (r_s)
+   60   analytic r_s                                -0.582544132623+0.145713399114j
+   60   pmm_jones_1d -0.054970737160+0.111421587168j -0.582544132623+0.145713399114j
+   60  rcwa_jones_1d -0.054970737160+0.111421587168j -0.582544132623+0.145713399114j
+   60       berreman  N/A: TypeError berreman_jones_1d() got multiple values for argument 'n_substrate'
+      ratio pmm/analytic: xx -1.000000-0.000000j  yy +1.000000-0.000000j   |  rcwa/pmm: xx +1.000000-0.000000j yy +1.000000+0.000000j
+

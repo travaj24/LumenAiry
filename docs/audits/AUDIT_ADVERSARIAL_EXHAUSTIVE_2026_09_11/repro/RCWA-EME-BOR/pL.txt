@@ -1,0 +1,6 @@
+import 382.1 s
+n_inc=71 n_out=71  per-channel max|E-1|=4.869e-13
+restricted per-column closure: max|.-1| = 8.598e-01
+SUPERPOSITION closure over 200 random inputs: worst |R+T-1| = 7.216465e-01
+worst 2-channel pair (4, 21): |R+T-1| = 9.102576e-01
+Gram |G - I| = 8.598e-01  (diag dev 8.598e-01)

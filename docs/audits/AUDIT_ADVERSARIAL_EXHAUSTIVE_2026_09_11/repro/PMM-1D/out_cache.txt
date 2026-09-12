@@ -1,0 +1,20 @@
+=== 9a: geo-eig cache -- wavelength / angle / eps staleness ===
+  8 cases, 0 cache-dependent mismatches (0 = cache is content-keyed correctly)
+  shuffled replay: 0 mismatches
+
+=== 9b: THREADED vs serial ===
+  16 threaded solves vs serial: max|d| = 0.000e+00
+
+=== 9c: cached arrays read-only? ===
+  gll nodes: read-only OK
+  gll weights: read-only OK
+  Dref: read-only OK
+  geo mu: WRITEABLE
+  geo X: read-only OK
+
+=== 9d: UNIT (scale) invariance of the 1-D path ===
+  metres        : scalar R0=0.08536814608764 sumRT=0.99999999999999 | jones J00=0.074599764522-0.282494285289j
+  micrometres   : scalar R0=0.08536814608762 sumRT=1.00000000000003 | jones J00=0.074599764522-0.282494285289j
+  nanometres    : scalar R0=0.08536814608760 sumRT=0.99999999999997 | jones J00=0.074599764522-0.282494285289j
+  angstrom      : scalar R0=0.08536814608764 sumRT=1.00000000000006 | jones J00=0.074599764522-0.282494285289j
+  kilometres    : scalar R0=0.08536814608770 sumRT=0.99999999999991 | jones J00=0.074599764522-0.282494285289j

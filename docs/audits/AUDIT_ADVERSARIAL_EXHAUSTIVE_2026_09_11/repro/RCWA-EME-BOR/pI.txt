@@ -1,0 +1,20 @@
+import 173.9 s
+=== V) 2-D(n_orders_y=0) vs 1-D: convergence in CELL PIXELS Sx ===
+Traceback (most recent call last):
+  File "docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/RCWA-EME-BOR\pI_pix.py", line 21, in <module>
+    r = rcwa_efficiency_2d(0.5e-6, 0.5e-6, cell, 1.5, 1.0, 0.3e-6,
+                           0.633e-6, theta=0.0, phi=0.0,
+                           polarization=pol, n_orders_x=8,
+                           n_orders_y=0, formulation='li')
+  File "D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\rcwa\_core.py", line 313, in _wrapped
+    return fn(*args, **kwargs)
+  File "D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\rcwa\twod.py", line 944, in rcwa_efficiency_2d
+    _validate_cell_sampling("rcwa_efficiency_2d", eps_cell,
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                            n_orders_x, n_orders_y, strict_y=True)
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\Lumenairy\lumenairy\elements\rcwa\_core.py", line 1680, in _validate_cell_sampling
+    raise ValueError(
+    ...<3 lines>...
+        f"(>= {bound} per axis).")
+ValueError: rcwa_efficiency_2d: the unit-cell sampling (32, 1) is too coarse for n_orders_x=8, n_orders_y=0; the Fourier convolution would alias.  Need at least (33, 1) samples (>= 4*n_orders + 1 per axis).

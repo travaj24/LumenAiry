@@ -1,0 +1,30 @@
+import 98.7 s
+  radial_coupled_modes (m, Rbig, N, eps_profile, k0, *, inverse_rule=True, R_pml=None, sigma_max=5.0, pml_p=2, wall=None, staggered=False)
+  guided_modes (m, a, Rbig, N, eps_core, eps_clad, k0, *, reldiv_tol=1.0, tail_tol=0.05)
+  radial_spectrum (m, R, degree, n_el, *, bc='dirichlet', n_low=6, return_modes=False, nq_extra=10)
+
+=== B1) coupled radial eigensolver vs the fiber oracle ===
+   a=3.482685  Rbig=27.861477  (V=2.4)
+   oracle HE11 q/k0 = [1.44529317]
+   N=200 guided_modes RAISED TypeError: guided_modes() missing 2 required positional arguments: 'eps_clad' and 'k0'
+   N=400 guided_modes RAISED TypeError: guided_modes() missing 2 required positional arguments: 'eps_clad' and 'k0'
+   N=800 guided_modes RAISED TypeError: guided_modes() missing 2 required positional arguments: 'eps_clad' and 'k0'
+
+=== B2) BOR reproducer: FUNDAMENTAL (argmax q) R pin ===
+   n_modes=318 max|E-1|=6.786127e-12
+   fundamental (argmax q) index=53 q/k0=1.409987 R=0.142290  [doc claims 0.142290 post-anchor-flip]
+   min q/k0 kept = 0.051165  [doc claims 0.0512]
+
+=== B3) unit-scale invariance at S=1e9 ===
+   S=1: n=192 max|E-1|=6.868e-12 R_fund=0.099828207830
+   S=1e+06: n=192 max|E-1|=5.949e-12 R_fund=0.099828207830
+   S=1e+09: n=192 max|E-1|=7.151e-12 R_fund=0.099828207830
+
+=== B4) BOR reciprocity/symmetry: S-matrix reciprocity ===
+   S type: <class 'tuple'>
+   |S21 - S12^T| / |S21| = 1.001e+00
+   |S11 - S11^T| / |S11| = 8.383e-01
+
+=== B5) cache poisoning re-check ===
+   max|kz(after) - kz(before)| = 0.000e+00  (0 => cache NOT poisoned)
+   same-result Ex aliasing: max|Ex| after zeroing = 0.000e+00  (0 => aliased/mutable)

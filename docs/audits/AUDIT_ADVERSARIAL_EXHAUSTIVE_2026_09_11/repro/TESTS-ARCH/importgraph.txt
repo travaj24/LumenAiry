@@ -1,0 +1,318 @@
+=== modules: 227
+=== module-level import edges: 533
+=== function-level (lazy) import edges: 415
+=== total distinct edges: 905
+
+===== MODULE-LEVEL (import-time) : strongly-connected components with >1 module =====
+  SCC size 43:
+    lumenairy  ->  lumenairy.analysis, lumenairy.analysis.coherence, lumenairy.analysis.field, lumenairy.analysis.ghost, lumenairy.analysis.image_plane_wfe, lumenairy.analysis.through_focus, lumenairy.elements, lumenairy.elements.freeform, lumenairy.elements.lenses, lumenairy.elements.lenses_maslov, lumenairy.elements.polarization, lumenairy.optimize, lumenairy.optimize.multiconfig, lumenairy.propagators.asymptotic, lumenairy.propagators.system, lumenairy.raytrace, lumenairy.raytrace.trace
+    lumenairy.analysis  ->  lumenairy.analysis.coherence, lumenairy.analysis.field, lumenairy.analysis.ghost, lumenairy.analysis.image_plane_wfe, lumenairy.analysis.through_focus
+    lumenairy.analysis.coherence  ->  lumenairy.elements.lenses
+    lumenairy.analysis.field  ->  lumenairy.raytrace, lumenairy.raytrace.core, lumenairy.raytrace.seidel, lumenairy.raytrace.trace
+    lumenairy.analysis.ghost  ->  lumenairy.raytrace
+    lumenairy.analysis.image_plane_wfe  ->  lumenairy.raytrace, lumenairy.raytrace.seidel, lumenairy.raytrace.trace
+    lumenairy.analysis.through_focus  ->  lumenairy.elements.lenses
+    lumenairy.elements  ->  lumenairy.elements.elements, lumenairy.elements.freeform, lumenairy.elements.lenses, lumenairy.elements.polarization
+    lumenairy.elements._lens_jax  ->  lumenairy.elements._lens_real
+    lumenairy.elements._lens_real  ->  lumenairy.elements.lenses
+    lumenairy.elements._lens_thin  ->  lumenairy.elements, lumenairy.elements.lenses
+    lumenairy.elements._lens_traced  ->  lumenairy.elements, lumenairy.elements._lens_real, lumenairy.elements.lenses
+    lumenairy.elements._lens_traced_multibranch  ->  lumenairy, lumenairy.raytrace
+    lumenairy.elements._lens_traced_uniform  ->  lumenairy, lumenairy.elements._lens_traced_multibranch, lumenairy.elements.lenses_maslov, lumenairy.raytrace
+    lumenairy.elements.elements  ->  lumenairy.elements.lenses
+    lumenairy.elements.freeform  ->  lumenairy.elements.lenses
+    lumenairy.elements.lenses  ->  lumenairy.elements._lens_jax, lumenairy.elements._lens_real, lumenairy.elements._lens_thin, lumenairy.elements._lens_traced, lumenairy.elements._lens_traced_multibranch, lumenairy.elements._lens_traced_uniform, lumenairy.elements.lenses_maslov
+    lumenairy.elements.lenses_maslov  ->  lumenairy, lumenairy.elements.lenses, lumenairy.raytrace
+    lumenairy.elements.polarization  ->  lumenairy.elements.elements, lumenairy.elements.lenses
+    lumenairy.optimize  ->  lumenairy.optimize.core, lumenairy.optimize.multiconfig
+    lumenairy.optimize.core  ->  lumenairy.analysis, lumenairy.analysis.through_focus, lumenairy.elements.lenses, lumenairy.optimize.driver, lumenairy.raytrace, lumenairy.raytrace.trace
+    lumenairy.optimize.driver  ->  lumenairy.elements.lenses
+    lumenairy.optimize.multiconfig  ->  lumenairy.raytrace
+    lumenairy.propagators.asymptotic  ->  lumenairy.propagators.asymptotic_aberration_tensor, lumenairy.propagators.asymptotic_canonical_fit, lumenairy.propagators.asymptotic_jax_twin, lumenairy.propagators.asymptotic_maslov
+    lumenairy.propagators.asymptotic_aberration_tensor  ->  lumenairy.propagators.asymptotic_canonical_fit, lumenairy.propagators.asymptotic_maslov
+    lumenairy.propagators.asymptotic_canonical_fit  ->  lumenairy.elements.lenses
+    lumenairy.propagators.asymptotic_jax_twin  ->  lumenairy.elements.lenses, lumenairy.propagators.asymptotic_canonical_fit
+    lumenairy.propagators.asymptotic_maslov  ->  lumenairy.propagators.asymptotic_canonical_fit
+    lumenairy.propagators.system  ->  lumenairy.elements, lumenairy.elements.lenses
+    lumenairy.raytrace  ->  lumenairy.raytrace.bundles, lumenairy.raytrace.core, lumenairy.raytrace.differential, lumenairy.raytrace.from_field, lumenairy.raytrace.seidel_analysis, lumenairy.raytrace.world
+    lumenairy.raytrace.bundles  ->  lumenairy.raytrace.core
+    lumenairy.raytrace.core  ->  lumenairy.raytrace.intersection, lumenairy.raytrace.layout, lumenairy.raytrace.ray_fan, lumenairy.raytrace.seidel, lumenairy.raytrace.surface, lumenairy.raytrace.trace, lumenairy.raytrace.world_trace
+    lumenairy.raytrace.differential  ->  lumenairy.raytrace.trace
+    lumenairy.raytrace.from_field  ->  lumenairy.raytrace.core
+    lumenairy.raytrace.intersection  ->  lumenairy.raytrace.surface
+    lumenairy.raytrace.layout  ->  lumenairy.raytrace.ray_fan, lumenairy.raytrace.seidel, lumenairy.raytrace.surface, lumenairy.raytrace.trace
+    lumenairy.raytrace.ray_fan  ->  lumenairy.raytrace.seidel, lumenairy.raytrace.surface, lumenairy.raytrace.trace, lumenairy.raytrace.world_trace
+    lumenairy.raytrace.seidel  ->  lumenairy.raytrace.surface, lumenairy.raytrace.trace
+    lumenairy.raytrace.seidel_analysis  ->  lumenairy.raytrace.core
+    lumenairy.raytrace.surface  ->  lumenairy.elements.lenses
+    lumenairy.raytrace.trace  ->  lumenairy.raytrace.intersection, lumenairy.raytrace.surface
+    lumenairy.raytrace.world  ->  lumenairy.raytrace.core
+    lumenairy.raytrace.world_trace  ->  lumenairy.raytrace.intersection, lumenairy.raytrace.surface
+  SCC size 6:
+    lumenairy.propagators  ->  lumenairy.propagators.carrier, lumenairy.propagators.carrier_field
+    lumenairy.propagators.asm  ->  lumenairy.propagators
+    lumenairy.propagators.carrier  ->  lumenairy.propagators.fresnel
+    lumenairy.propagators.carrier_field  ->  lumenairy.propagators.carrier, lumenairy.propagators.mft
+    lumenairy.propagators.fresnel  ->  lumenairy.propagators
+    lumenairy.propagators.mft  ->  lumenairy.propagators, lumenairy.propagators.asm
+  (2 SCCs)
+  --- 2-cycles (5) ---
+    lumenairy  <->  lumenairy.elements.lenses_maslov
+    lumenairy.elements._lens_real  <->  lumenairy.elements.lenses
+    lumenairy.elements._lens_thin  <->  lumenairy.elements.lenses
+    lumenairy.elements._lens_traced  <->  lumenairy.elements.lenses
+    lumenairy.elements.lenses  <->  lumenairy.elements.lenses_maslov
+
+===== ALL (incl. lazy/in-function): strongly-connected components with >1 module =====
+  SCC size 134:
+    lumenairy  ->  lumenairy._context, lumenairy.algebra, lumenairy.analysis, lumenairy.analysis.aberration, lumenairy.analysis.ao, lumenairy.analysis.coherence, lumenairy.analysis.detector, lumenairy.analysis.field, lumenairy.analysis.ghost, lumenairy.analysis.image_plane_wfe, lumenairy.analysis.phase_retrieval, lumenairy.analysis.plotting, lumenairy.analysis.through_focus, lumenairy.backend, lumenairy.cache, lumenairy.elements, lumenairy.elements.berreman, lumenairy.elements.bor, lumenairy.elements.bsdf, lumenairy.elements.coatings, lumenairy.elements.emt, lumenairy.elements.freeform, lumenairy.elements.lenses, lumenairy.elements.lenses_maslov, lumenairy.elements.pmm, lumenairy.elements.pmm.stack2d, lumenairy.elements.pmm.stack2d_pure, lumenairy.elements.pmm.twod, lumenairy.elements.pmm.twod_jones, lumenairy.elements.pmm.twod_staggered, lumenairy.elements.polarization, lumenairy.elements.rcwa, lumenairy.elements.segment_geometry, lumenairy.io.codegen, lumenairy.io.storage, lumenairy.memory, lumenairy.optimize, lumenairy.optimize.multiconfig, lumenairy.propagators, lumenairy.propagators.asymptotic, lumenairy.propagators.carrier_field, lumenairy.propagators.dispatch, lumenairy.propagators.ensemble, lumenairy.propagators.fft_infra, lumenairy.propagators.fga, lumenairy.propagators.gbd, lumenairy.propagators.hf, lumenairy.propagators.hfpi, lumenairy.propagators.mhs, lumenairy.propagators.propagation, lumenairy.propagators.result, lumenairy.propagators.subaperture, lumenairy.propagators.system, lumenairy.propagators.vector_diffraction, lumenairy.propagators.vectorial_hfpi, lumenairy.raytrace, lumenairy.raytrace.jax_trace, lumenairy.raytrace.trace, lumenairy.sources
+    lumenairy._context  ->  lumenairy.memory, lumenairy.propagators.propagation
+    lumenairy._validation  ->  lumenairy.sources.core
+    lumenairy.algebra  ->  lumenairy.algebra.apertures, lumenairy.algebra.base, lumenairy.algebra.from_prescription, lumenairy.algebra.primitives
+    lumenairy.algebra.apertures  ->  lumenairy.algebra.base, lumenairy.elements
+    lumenairy.algebra.base  ->  lumenairy.sources
+    lumenairy.algebra.from_prescription  ->  lumenairy.algebra.base, lumenairy.algebra.primitives, lumenairy.raytrace
+    lumenairy.algebra.primitives  ->  lumenairy.algebra.base, lumenairy.elements.lenses, lumenairy.propagators.dispatch
+    lumenairy.analysis  ->  lumenairy.analysis.aberration, lumenairy.analysis.ao, lumenairy.analysis.coherence, lumenairy.analysis.core, lumenairy.analysis.detector, lumenairy.analysis.field, lumenairy.analysis.ghost, lumenairy.analysis.image_plane_wfe, lumenairy.analysis.phase_retrieval, lumenairy.analysis.plotting, lumenairy.analysis.through_focus
+    lumenairy.analysis.aberration  ->  lumenairy.backend, lumenairy.propagators.asymptotic, lumenairy.raytrace, lumenairy.raytrace.trace
+    lumenairy.analysis.ao  ->  lumenairy._validation, lumenairy.analysis.core, lumenairy.analysis.detector
+    lumenairy.analysis.beam_stats  ->  lumenairy._validation, lumenairy.backend
+    lumenairy.analysis.coherence  ->  lumenairy._validation, lumenairy.elements.lenses, lumenairy.propagators.propagation
+    lumenairy.analysis.core  ->  lumenairy.analysis.beam_stats, lumenairy.analysis.opd, lumenairy.analysis.polychromatic, lumenairy.analysis.psf_mtf_otf, lumenairy.analysis.strehl
+    lumenairy.analysis.detector  ->  lumenairy._validation, lumenairy.propagators.propagation
+    lumenairy.analysis.field  ->  lumenairy.raytrace, lumenairy.raytrace.core, lumenairy.raytrace.seidel, lumenairy.raytrace.trace
+    lumenairy.analysis.ghost  ->  lumenairy.raytrace, lumenairy.raytrace.core, lumenairy.raytrace.intersection
+    lumenairy.analysis.image_plane_wfe  ->  lumenairy.raytrace, lumenairy.raytrace.seidel, lumenairy.raytrace.trace
+    lumenairy.analysis.opd  ->  lumenairy._validation
+    lumenairy.analysis.phase_retrieval  ->  lumenairy.backend, lumenairy.propagators.propagation
+    lumenairy.analysis.plotting  ->  lumenairy.analysis.core, lumenairy.elements.lenses, lumenairy.elements.polarization, lumenairy.raytrace, lumenairy.raytrace.seidel, lumenairy.raytrace.trace
+    lumenairy.analysis.polychromatic  ->  lumenairy.analysis.psf_mtf_otf, lumenairy.analysis.through_focus, lumenairy.elements.lenses, lumenairy.propagators.propagation, lumenairy.raytrace
+    lumenairy.analysis.psf_mtf_otf  ->  lumenairy._validation, lumenairy.analysis.beam_stats, lumenairy.backend
+    lumenairy.analysis.strehl  ->  lumenairy._validation, lumenairy.backend
+    lumenairy.analysis.through_focus  ->  lumenairy.analysis.core, lumenairy.backend, lumenairy.elements.lenses, lumenairy.propagators.fft_infra, lumenairy.propagators.propagation
+    lumenairy.backend  ->  lumenairy.backend.fft
+    lumenairy.backend.fft  ->  lumenairy.propagators, lumenairy.propagators.fft_infra
+    lumenairy.cache  ->  lumenairy.memory
+    lumenairy.elements  ->  lumenairy.elements.berreman, lumenairy.elements.bsdf, lumenairy.elements.coatings, lumenairy.elements.elements, lumenairy.elements.emt, lumenairy.elements.freeform, lumenairy.elements.lenses, lumenairy.elements.pmm, lumenairy.elements.pmm.twod, lumenairy.elements.pmm.twod_staggered, lumenairy.elements.polarization, lumenairy.elements.rcwa
+    lumenairy.elements._berreman_jax  ->  lumenairy.elements.berreman, lumenairy.elements.rcwa, lumenairy.elements.rcwa._core
+    lumenairy.elements._lens_imap  ->  lumenairy, lumenairy.elements, lumenairy.elements._lens_traced, lumenairy.memory
+    lumenairy.elements._lens_jax  ->  lumenairy.backend, lumenairy.elements._lens_real, lumenairy.propagators.propagation, lumenairy.raytrace.jax_trace
+    lumenairy.elements._lens_real  ->  lumenairy._validation, lumenairy.cache, lumenairy.elements._lens_traced, lumenairy.elements.freeform, lumenairy.elements.lenses, lumenairy.propagators.carrier, lumenairy.propagators.propagation, lumenairy.raytrace, lumenairy.raytrace.trace
+    lumenairy.elements._lens_thin  ->  lumenairy._validation, lumenairy.elements, lumenairy.elements.lenses
+    lumenairy.elements._lens_traced  ->  lumenairy, lumenairy._validation, lumenairy.elements, lumenairy.elements._lens_imap, lumenairy.elements._lens_real, lumenairy.elements._lens_traced_multibranch, lumenairy.elements._lens_traced_uniform, lumenairy.elements.lenses, lumenairy.memory, lumenairy.propagators.propagation, lumenairy.raytrace, lumenairy.raytrace.trace
+    lumenairy.elements._lens_traced_multibranch  ->  lumenairy, lumenairy._validation, lumenairy.raytrace
+    lumenairy.elements._lens_traced_uniform  ->  lumenairy, lumenairy._validation, lumenairy.elements._lens_traced, lumenairy.elements._lens_traced_multibranch, lumenairy.elements.lenses_maslov, lumenairy.raytrace
+    lumenairy.elements.berreman  ->  lumenairy.backend, lumenairy.elements._berreman_jax, lumenairy.elements.emt, lumenairy.elements.rcwa, lumenairy.elements.rcwa._core, lumenairy.elements.rcwa.oned
+    lumenairy.elements.bor  ->  lumenairy.elements.bor.bor_solve, lumenairy.elements.bor.bor_stack, lumenairy.elements.bor.coupled_radial_eigensolver, lumenairy.elements.bor.sem_radial, lumenairy.elements.bor.zcascade
+    lumenairy.elements.bor._inv_census  ->  lumenairy.elements.rcwa._core
+    lumenairy.elements.bor._jax_bor  ->  lumenairy.elements.bor.coupled_radial_eigensolver, lumenairy.elements.rcwa
+    lumenairy.elements.bor._jax_sem  ->  lumenairy.backend, lumenairy.elements.bor._jax_bor, lumenairy.elements.bor.sem_radial, lumenairy.elements.rcwa
+    lumenairy.elements.bor.bor_solve  ->  lumenairy.elements.bor.zcascade
+    lumenairy.elements.bor.bor_stack  ->  lumenairy.backend, lumenairy.elements.bor._inv_census, lumenairy.elements.bor._jax_bor, lumenairy.elements.bor._jax_sem, lumenairy.elements.bor.sem_radial, lumenairy.elements.bor.zcascade
+    lumenairy.elements.bor.coupled_radial_eigensolver  ->  lumenairy.elements.bor._inv_census
+    lumenairy.elements.bor.sem_radial  ->  lumenairy.elements.bor._inv_census, lumenairy.elements.bor.coupled_radial_eigensolver, lumenairy.elements.bor.zcascade
+    lumenairy.elements.bor.zcascade  ->  lumenairy.elements.bor._inv_census, lumenairy.elements.bor.coupled_radial_eigensolver
+    lumenairy.elements.bsdf  ->  lumenairy, lumenairy.raytrace
+    lumenairy.elements.coatings  ->  lumenairy.backend
+    lumenairy.elements.elements  ->  lumenairy.backend, lumenairy.elements.lenses
+    lumenairy.elements.emt  ->  lumenairy.backend
+    lumenairy.elements.freeform  ->  lumenairy.analysis, lumenairy.backend, lumenairy.elements.lenses
+    lumenairy.elements.lenses  ->  lumenairy.elements._lens_jax, lumenairy.elements._lens_real, lumenairy.elements._lens_thin, lumenairy.elements._lens_traced, lumenairy.elements._lens_traced_multibranch, lumenairy.elements._lens_traced_uniform, lumenairy.elements.lenses_gbd, lumenairy.elements.lenses_maslov
+    lumenairy.elements.lenses_gbd  ->  lumenairy._validation, lumenairy.elements._lens_traced, lumenairy.propagators.gbd
+    lumenairy.elements.lenses_maslov  ->  lumenairy, lumenairy._validation, lumenairy.elements, lumenairy.elements._lens_real, lumenairy.elements.elements, lumenairy.elements.lenses, lumenairy.propagators.asm, lumenairy.propagators.gbd, lumenairy.propagators.propagation, lumenairy.raytrace
+    lumenairy.elements.pmm  ->  lumenairy.elements.pmm._core, lumenairy.elements.pmm.conical, lumenairy.elements.pmm.oned, lumenairy.elements.pmm.stack, lumenairy.elements.pmm.stack2d, lumenairy.elements.pmm.stack2d_pure, lumenairy.elements.pmm.twod, lumenairy.elements.pmm.twod_jones, lumenairy.elements.pmm.twod_staggered
+    lumenairy.elements.pmm._core  ->  lumenairy.backend, lumenairy.cache, lumenairy.elements.rcwa, lumenairy.elements.rcwa._core
+    lumenairy.elements.pmm._jax_stack  ->  lumenairy.backend, lumenairy.elements.pmm._core, lumenairy.elements.rcwa
+    lumenairy.elements.pmm._jax_stack2d  ->  lumenairy.elements.pmm.twod, lumenairy.elements.rcwa, lumenairy.elements.rcwa._core
+    lumenairy.elements.pmm._jax_twod  ->  lumenairy.backend, lumenairy.elements.pmm._core, lumenairy.elements.pmm.twod, lumenairy.elements.rcwa, lumenairy.elements.rcwa._core
+    lumenairy.elements.pmm._jax_twod_jones  ->  lumenairy.backend, lumenairy.elements.pmm._jax_twod, lumenairy.elements.rcwa, lumenairy.elements.rcwa._core
+    lumenairy.elements.pmm._stack2d_cache  ->  lumenairy.memory
+    lumenairy.elements.pmm.conical  ->  lumenairy.elements.pmm._core, lumenairy.elements.pmm.twod, lumenairy.elements.pmm.twod_jones, lumenairy.elements.rcwa._core
+    lumenairy.elements.pmm.oned  ->  lumenairy.backend, lumenairy.elements.pmm._core
+    lumenairy.elements.pmm.stack  ->  lumenairy.backend, lumenairy.elements.pmm._core, lumenairy.elements.pmm._jax_stack, lumenairy.elements.pmm.conical, lumenairy.elements.pmm.twod, lumenairy.elements.pmm.twod_jones, lumenairy.elements.rcwa, lumenairy.elements.rcwa._core
+    lumenairy.elements.pmm.stack2d  ->  lumenairy.backend, lumenairy.elements.pmm._core, lumenairy.elements.pmm._jax_stack2d, lumenairy.elements.pmm._stack2d_cache, lumenairy.elements.pmm.stack, lumenairy.elements.pmm.twod, lumenairy.elements.pmm.twod_jones, lumenairy.elements.rcwa._core, lumenairy.memory
+    lumenairy.elements.pmm.stack2d_pure  ->  lumenairy.elements.pmm._core, lumenairy.elements.pmm.twod_staggered, lumenairy.elements.rcwa._core
+    lumenairy.elements.pmm.twod  ->  lumenairy.backend, lumenairy.elements.pmm._core, lumenairy.elements.pmm._jax_twod, lumenairy.elements.rcwa, lumenairy.elements.rcwa._core
+    lumenairy.elements.pmm.twod_jones  ->  lumenairy.backend, lumenairy.elements.pmm._core, lumenairy.elements.pmm._jax_twod_jones, lumenairy.elements.pmm.twod, lumenairy.elements.rcwa._core
+    lumenairy.elements.pmm.twod_staggered  ->  lumenairy.cache, lumenairy.elements.pmm._core, lumenairy.elements.pmm.stack2d_pure, lumenairy.elements.pmm.twod_jones, lumenairy.elements.rcwa, lumenairy.elements.rcwa._core
+    lumenairy.elements.polarization  ->  lumenairy.elements.elements, lumenairy.elements.lenses, lumenairy.propagators.propagation
+    lumenairy.elements.rcwa  ->  lumenairy.elements.rcwa._core, lumenairy.elements.rcwa.oned, lumenairy.elements.rcwa.stack, lumenairy.elements.rcwa.twod
+    lumenairy.elements.rcwa._core  ->  lumenairy.backend
+    lumenairy.elements.rcwa.oned  ->  lumenairy.backend, lumenairy.elements.rcwa._core
+    lumenairy.elements.rcwa.stack  ->  lumenairy.backend, lumenairy.elements.polarization, lumenairy.elements.rcwa._core, lumenairy.elements.rcwa.oned, lumenairy.elements.rcwa.twod
+    lumenairy.elements.rcwa.twod  ->  lumenairy.backend, lumenairy.elements.rcwa._core
+    lumenairy.elements.segment_geometry  ->  lumenairy.elements.pmm, lumenairy.elements.rcwa
+    lumenairy.io.codegen  ->  lumenairy
+    lumenairy.io.storage  ->  lumenairy, lumenairy.backend, lumenairy.elements.polarization, lumenairy.propagators.result
+    lumenairy.memory  ->  lumenairy.elements._lens_real, lumenairy.elements._lens_traced, lumenairy.propagators.fft_infra
+    lumenairy.optimize  ->  lumenairy.optimize.core, lumenairy.optimize.multiconfig
+    lumenairy.optimize.context  ->  lumenairy.analysis
+    lumenairy.optimize.core  ->  lumenairy.analysis, lumenairy.analysis.through_focus, lumenairy.elements.lenses, lumenairy.optimize, lumenairy.optimize.context, lumenairy.optimize.driver, lumenairy.optimize.jax_merits, lumenairy.optimize.merit_terms, lumenairy.optimize.wrapper_merits, lumenairy.propagators.propagation, lumenairy.raytrace, lumenairy.raytrace.trace
+    lumenairy.optimize.driver  ->  lumenairy.elements.lenses, lumenairy.optimize, lumenairy.optimize.context, lumenairy.optimize.core, lumenairy.optimize.jax_merits, lumenairy.optimize.wrapper_merits, lumenairy.propagators.asymptotic, lumenairy.propagators.gbd, lumenairy.propagators.hf, lumenairy.propagators.hfpi, lumenairy.propagators.propagation
+    lumenairy.optimize.jax_merits  ->  lumenairy._validation, lumenairy.backend, lumenairy.elements._lens_jax, lumenairy.optimize.context, lumenairy.propagators.asymptotic
+    lumenairy.optimize.merit_terms  ->  lumenairy.analysis, lumenairy.optimize.context, lumenairy.propagators.asymptotic, lumenairy.propagators.propagation, lumenairy.propagators.system, lumenairy.raytrace
+    lumenairy.optimize.multiconfig  ->  lumenairy.raytrace
+    lumenairy.optimize.wrapper_merits  ->  lumenairy.analysis.through_focus, lumenairy.optimize, lumenairy.optimize.context, lumenairy.optimize.core
+    lumenairy.propagators  ->  lumenairy.propagators.carrier, lumenairy.propagators.carrier_field, lumenairy.propagators.dispatch, lumenairy.propagators.ensemble, lumenairy.propagators.fga, lumenairy.propagators.gbd, lumenairy.propagators.hf, lumenairy.propagators.hfpi, lumenairy.propagators.mhs, lumenairy.propagators.result, lumenairy.propagators.subaperture, lumenairy.propagators.vectorial_hfpi
+    lumenairy.propagators._bluestein  ->  lumenairy.propagators, lumenairy.propagators.fft_infra
+    lumenairy.propagators.asm  ->  lumenairy._validation, lumenairy.backend, lumenairy.memory, lumenairy.propagators, lumenairy.propagators.fft_infra
+    lumenairy.propagators.asymptotic  ->  lumenairy.propagators.asymptotic_aberration_tensor, lumenairy.propagators.asymptotic_canonical_fit, lumenairy.propagators.asymptotic_jax_twin, lumenairy.propagators.asymptotic_maslov
+    lumenairy.propagators.asymptotic_aberration_tensor  ->  lumenairy.propagators.asymptotic, lumenairy.propagators.asymptotic_canonical_fit, lumenairy.propagators.asymptotic_maslov
+    lumenairy.propagators.asymptotic_canonical_fit  ->  lumenairy.elements.lenses, lumenairy.raytrace, lumenairy.raytrace.trace
+    lumenairy.propagators.asymptotic_jax_twin  ->  lumenairy.backend, lumenairy.elements.lenses, lumenairy.propagators.asymptotic_canonical_fit, lumenairy.raytrace.jax_trace
+    lumenairy.propagators.asymptotic_maslov  ->  lumenairy.propagators.asymptotic_canonical_fit
+    lumenairy.propagators.carrier  ->  lumenairy, lumenairy._validation, lumenairy.backend, lumenairy.elements, lumenairy.elements._lens_traced, lumenairy.memory, lumenairy.propagators.fft_infra, lumenairy.propagators.fga, lumenairy.propagators.fresnel, lumenairy.propagators.mft, lumenairy.propagators.propagation, lumenairy.raytrace, lumenairy.raytrace.seidel, lumenairy.raytrace.trace
+    lumenairy.propagators.carrier_field  ->  lumenairy.io.storage, lumenairy.propagators.carrier, lumenairy.propagators.mft
+    lumenairy.propagators.dispatch  ->  lumenairy._validation, lumenairy.elements.lenses, lumenairy.propagators, lumenairy.propagators.asymptotic, lumenairy.propagators.fft_infra, lumenairy.propagators.gbd, lumenairy.propagators.hf, lumenairy.propagators.hfpi, lumenairy.propagators.mhs, lumenairy.propagators.propagation, lumenairy.propagators.result
+    lumenairy.propagators.ensemble  ->  lumenairy.backend, lumenairy.propagators.propagation
+    lumenairy.propagators.fft_infra  ->  lumenairy.memory
+    lumenairy.propagators.fga  ->  lumenairy._validation, lumenairy.backend, lumenairy.elements, lumenairy.elements._lens_traced, lumenairy.memory, lumenairy.propagators.asm, lumenairy.propagators.gbd, lumenairy.raytrace, lumenairy.raytrace.differential
+    lumenairy.propagators.fresnel  ->  lumenairy._validation, lumenairy.backend, lumenairy.propagators, lumenairy.propagators.fft_infra
+    lumenairy.propagators.gbd  ->  lumenairy._validation, lumenairy.backend, lumenairy.propagators.asm, lumenairy.raytrace, lumenairy.raytrace.differential, lumenairy.raytrace.intersection, lumenairy.raytrace.trace, lumenairy.raytrace.world, lumenairy.raytrace.world_trace
+    lumenairy.propagators.hf  ->  lumenairy.analysis.core, lumenairy.backend, lumenairy.propagators.asymptotic, lumenairy.propagators.propagation
+    lumenairy.propagators.hfpi  ->  lumenairy.backend, lumenairy.raytrace, lumenairy.raytrace.trace
+    lumenairy.propagators.mft  ->  lumenairy._validation, lumenairy.backend, lumenairy.propagators, lumenairy.propagators._bluestein, lumenairy.propagators.asm, lumenairy.propagators.fft_infra
+    lumenairy.propagators.mhs  ->  lumenairy.backend, lumenairy.io.storage, lumenairy.propagators.dispatch, lumenairy.propagators.gbd, lumenairy.propagators.mft, lumenairy.propagators.propagation, lumenairy.propagators.result
+    lumenairy.propagators.propagation  ->  lumenairy.propagators, lumenairy.propagators.asm, lumenairy.propagators.carrier, lumenairy.propagators.fft_infra, lumenairy.propagators.fresnel, lumenairy.propagators.mft, lumenairy.propagators.rs, lumenairy.propagators.sas
+    lumenairy.propagators.result  ->  lumenairy.sources.core
+    lumenairy.propagators.rs  ->  lumenairy._validation, lumenairy.backend, lumenairy.propagators, lumenairy.propagators.fft_infra
+    lumenairy.propagators.sas  ->  lumenairy._validation, lumenairy.propagators, lumenairy.propagators.fft_infra
+    lumenairy.propagators.subaperture  ->  lumenairy.analysis.core, lumenairy.backend, lumenairy.propagators.asymptotic, lumenairy.raytrace
+    lumenairy.propagators.system  ->  lumenairy._validation, lumenairy.backend, lumenairy.elements, lumenairy.elements.coatings, lumenairy.elements.lenses, lumenairy.io.codegen, lumenairy.io.storage, lumenairy.propagators.propagation, lumenairy.propagators.result, lumenairy.sources, lumenairy.sources.core
+    lumenairy.propagators.vector_diffraction  ->  lumenairy._validation, lumenairy.propagators.propagation
+    lumenairy.propagators.vectorial_hfpi  ->  lumenairy.backend, lumenairy.propagators.hfpi
+    lumenairy.raytrace  ->  lumenairy.raytrace.bundles, lumenairy.raytrace.core, lumenairy.raytrace.differential, lumenairy.raytrace.from_field, lumenairy.raytrace.jax_trace, lumenairy.raytrace.paraxial, lumenairy.raytrace.seidel_analysis, lumenairy.raytrace.world
+    lumenairy.raytrace.bundles  ->  lumenairy.propagators.gbd, lumenairy.propagators.hfpi, lumenairy.raytrace.core
+    lumenairy.raytrace.core  ->  lumenairy.raytrace.intersection, lumenairy.raytrace.layout, lumenairy.raytrace.ray_fan, lumenairy.raytrace.seidel, lumenairy.raytrace.surface, lumenairy.raytrace.trace, lumenairy.raytrace.world_trace
+    lumenairy.raytrace.differential  ->  lumenairy.raytrace.jax_trace, lumenairy.raytrace.trace
+    lumenairy.raytrace.from_field  ->  lumenairy._validation, lumenairy.raytrace.core
+    lumenairy.raytrace.intersection  ->  lumenairy.raytrace.surface
+    lumenairy.raytrace.jax_trace  ->  lumenairy.backend, lumenairy.raytrace.core
+    lumenairy.raytrace.layout  ->  lumenairy.raytrace.ray_fan, lumenairy.raytrace.seidel, lumenairy.raytrace.surface, lumenairy.raytrace.trace
+    lumenairy.raytrace.paraxial  ->  lumenairy.raytrace.core
+    lumenairy.raytrace.ray_fan  ->  lumenairy.raytrace.seidel, lumenairy.raytrace.surface, lumenairy.raytrace.trace, lumenairy.raytrace.world_trace
+    lumenairy.raytrace.seidel  ->  lumenairy.raytrace.surface, lumenairy.raytrace.trace
+    lumenairy.raytrace.seidel_analysis  ->  lumenairy.raytrace.core
+    lumenairy.raytrace.surface  ->  lumenairy.elements.freeform, lumenairy.elements.lenses, lumenairy.raytrace.jax_trace
+    lumenairy.raytrace.trace  ->  lumenairy.raytrace.intersection, lumenairy.raytrace.seidel, lumenairy.raytrace.surface
+    lumenairy.raytrace.world  ->  lumenairy.raytrace.core
+    lumenairy.raytrace.world_trace  ->  lumenairy.raytrace.intersection, lumenairy.raytrace.surface
+    lumenairy.sources  ->  lumenairy.sources.core
+    lumenairy.sources.core  ->  lumenairy.propagators.dispatch, lumenairy.propagators.propagation
+  SCC size 3:
+    lumenairy.elements.eme._jax_modes  ->  lumenairy.elements.eme.eme_2d_vector
+    lumenairy.elements.eme.eme_2d  ->  lumenairy.elements.eme._jax_modes, lumenairy.elements.eme.eme_2d_vector
+    lumenairy.elements.eme.eme_2d_vector  ->  lumenairy.elements.eme._jax_modes, lumenairy.elements.eme.eme_2d
+  (2 SCCs)
+  --- 2-cycles (26) ---
+    lumenairy  <->  lumenairy.elements.bsdf
+    lumenairy  <->  lumenairy.elements.lenses_maslov
+    lumenairy  <->  lumenairy.io.codegen
+    lumenairy  <->  lumenairy.io.storage
+    lumenairy.elements._berreman_jax  <->  lumenairy.elements.berreman
+    lumenairy.elements._lens_imap  <->  lumenairy.elements._lens_traced
+    lumenairy.elements._lens_real  <->  lumenairy.elements._lens_traced
+    lumenairy.elements._lens_real  <->  lumenairy.elements.lenses
+    lumenairy.elements._lens_thin  <->  lumenairy.elements.lenses
+    lumenairy.elements._lens_traced  <->  lumenairy.elements._lens_traced_uniform
+    lumenairy.elements._lens_traced  <->  lumenairy.elements.lenses
+    lumenairy.elements._lens_traced  <->  lumenairy.memory
+    lumenairy.elements.eme._jax_modes  <->  lumenairy.elements.eme.eme_2d_vector
+    lumenairy.elements.eme.eme_2d  <->  lumenairy.elements.eme.eme_2d_vector
+    lumenairy.elements.lenses  <->  lumenairy.elements.lenses_maslov
+    lumenairy.elements.pmm._jax_twod  <->  lumenairy.elements.pmm.twod
+    lumenairy.elements.pmm.stack2d_pure  <->  lumenairy.elements.pmm.twod_staggered
+    lumenairy.memory  <->  lumenairy.propagators.fft_infra
+    lumenairy.optimize  <->  lumenairy.optimize.core
+    lumenairy.optimize.core  <->  lumenairy.optimize.driver
+    lumenairy.optimize.core  <->  lumenairy.optimize.wrapper_merits
+    lumenairy.propagators  <->  lumenairy.propagators.dispatch
+    lumenairy.propagators.asymptotic  <->  lumenairy.propagators.asymptotic_aberration_tensor
+    lumenairy.propagators.carrier  <->  lumenairy.propagators.propagation
+    lumenairy.propagators.dispatch  <->  lumenairy.propagators.mhs
+    lumenairy.raytrace.seidel  <->  lumenairy.raytrace.trace
+
+===== LAYERING VIOLATIONS (lower-layer module importing a higher-level subsystem) =====
+
+  lumenairy.elements  ->  lumenairy.propagators   (9 edges, 0 at module level)
+     [lazy        ] lumenairy.elements._lens_jax -> lumenairy.propagators.propagation
+     [lazy        ] lumenairy.elements._lens_real -> lumenairy.propagators.carrier
+     [lazy        ] lumenairy.elements._lens_real -> lumenairy.propagators.propagation
+     [lazy        ] lumenairy.elements._lens_traced -> lumenairy.propagators.propagation
+     [lazy        ] lumenairy.elements.lenses_gbd -> lumenairy.propagators.gbd
+     [lazy        ] lumenairy.elements.lenses_maslov -> lumenairy.propagators.asm
+     [lazy        ] lumenairy.elements.lenses_maslov -> lumenairy.propagators.gbd
+     [lazy        ] lumenairy.elements.lenses_maslov -> lumenairy.propagators.propagation
+     [lazy        ] lumenairy.elements.polarization -> lumenairy.propagators.propagation
+
+  lumenairy.algebra  ->  lumenairy.elements   (2 edges, 0 at module level)
+     [lazy        ] lumenairy.algebra.apertures -> lumenairy.elements
+     [lazy        ] lumenairy.algebra.primitives -> lumenairy.elements.lenses
+
+  lumenairy.elements  ->  lumenairy.analysis   (2 edges, 0 at module level)
+     [lazy        ] lumenairy.elements.elements -> lumenairy.analysis.coronagraph
+     [lazy        ] lumenairy.elements.freeform -> lumenairy.analysis
+
+  lumenairy.propagators  ->  lumenairy.analysis   (2 edges, 0 at module level)
+     [lazy        ] lumenairy.propagators.hf -> lumenairy.analysis.core
+     [lazy        ] lumenairy.propagators.subaperture -> lumenairy.analysis.core
+
+  lumenairy.raytrace  ->  lumenairy.propagators   (2 edges, 0 at module level)
+     [lazy        ] lumenairy.raytrace.bundles -> lumenairy.propagators.gbd
+     [lazy        ] lumenairy.raytrace.bundles -> lumenairy.propagators.hfpi
+
+  lumenairy.raytrace  ->  lumenairy.elements   (2 edges, 1 at module level)
+     [lazy        ] lumenairy.raytrace.surface -> lumenairy.elements.freeform
+     [MODULE-LEVEL] lumenairy.raytrace.surface -> lumenairy.elements.lenses
+
+  lumenairy.sources  ->  lumenairy.propagators   (2 edges, 0 at module level)
+     [lazy        ] lumenairy.sources.core -> lumenairy.propagators.dispatch
+     [lazy        ] lumenairy.sources.core -> lumenairy.propagators.propagation
+
+  lumenairy.algebra  ->  lumenairy.sources   (1 edges, 0 at module level)
+     [lazy        ] lumenairy.algebra.base -> lumenairy.sources
+
+  lumenairy.algebra  ->  lumenairy.raytrace   (1 edges, 0 at module level)
+     [lazy        ] lumenairy.algebra.from_prescription -> lumenairy.raytrace
+
+  lumenairy.algebra  ->  lumenairy.propagators   (1 edges, 0 at module level)
+     [lazy        ] lumenairy.algebra.primitives -> lumenairy.propagators.dispatch
+
+  lumenairy.elements  ->  lumenairy.io   (1 edges, 0 at module level)
+     [lazy        ] lumenairy.elements.lenses_maslov -> lumenairy.io.prescriptions_transforms
+
+  lumenairy.io  ->  lumenairy.propagators   (1 edges, 0 at module level)
+     [lazy        ] lumenairy.io.storage -> lumenairy.propagators.result
+
+===== TOP 15 fan-out =====
+    70  lumenairy
+    51  lumenairy.ui.main_window
+    16  lumenairy.ui.waveoptics_dock
+    16  lumenairy.propagators.carrier
+    16  lumenairy.elements._lens_traced
+    15  lumenairy.elements.lenses_maslov
+    14  lumenairy.optimize.driver
+    14  lumenairy.optimize.core
+    14  lumenairy.elements
+    13  lumenairy.propagators.system
+    12  lumenairy.propagators.dispatch
+    12  lumenairy.propagators
+    12  lumenairy.elements._lens_real
+    12  lumenairy.analysis
+    11  lumenairy.propagators.gbd
+===== TOP 15 fan-in =====
+    47  lumenairy.backend
+    34  lumenairy.raytrace
+    27  lumenairy.glass
+    27  lumenairy._validation
+    24  lumenairy._cache_registry
+    24  lumenairy.propagators.propagation
+    24  lumenairy.elements.lenses
+    24  lumenairy.ui.model
+    23  lumenairy
+    21  lumenairy.raytrace.trace
+    19  lumenairy.elements.rcwa._core
+    15  lumenairy.analysis
+    15  lumenairy.elements.rcwa
+    14  lumenairy.propagators.fft_infra
+    13  lumenairy.raytrace.core

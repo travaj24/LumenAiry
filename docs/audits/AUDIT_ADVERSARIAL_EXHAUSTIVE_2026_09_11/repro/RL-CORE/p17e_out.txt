@@ -1,0 +1,5 @@
+  surface_sag_general        248.18 ms   tracemalloc peak   171.97 MB = 5.13 float64 grids
+  in-place equivalent         54.82 ms   tracemalloc peak    67.11 MB = 2.00 float64 grids
+
+  E = E * exp(...)  (shipped)        615.85 ms  peak   201.33 MB = 3.00 complex128 grids
+  E *= exp(...)      (in-place)      462.58 ms  peak   201.33 MB = 3.00 complex128 grids

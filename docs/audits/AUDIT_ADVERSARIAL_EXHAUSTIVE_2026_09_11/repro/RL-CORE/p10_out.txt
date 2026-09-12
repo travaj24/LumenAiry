@@ -1,0 +1,72 @@
+=== 10. row-banded vs whole-grid BYTE identity (N=1024) ===
+  plain conic+asph 3-surf    cr=None  OK 
+  plain conic+asph 3-surf    cr=1     OK 
+  plain conic+asph 3-surf    cr=7     OK 
+  plain conic+asph 3-surf    cr=64    OK 
+  plain conic+asph 3-surf    cr=256   OK 
+  plain conic+asph 3-surf    cr=1024  OK 
+  plain conic+asph 3-surf    cr=4096  OK 
+  decentered mid surface     cr=None  OK 
+  decentered mid surface     cr=1     OK 
+  decentered mid surface     cr=7     OK 
+  decentered mid surface     cr=64    OK 
+  decentered mid surface     cr=256   OK 
+  decentered mid surface     cr=1024  OK 
+  decentered mid surface     cr=4096  OK 
+  clear_aperture mid         cr=None  OK 
+  clear_aperture mid         cr=1     OK 
+  clear_aperture mid         cr=7     OK 
+  clear_aperture mid         cr=64    OK 
+  clear_aperture mid         cr=256   OK 
+  clear_aperture mid         cr=1024  OK 
+  clear_aperture mid         cr=4096  OK 
+  stop at mid surface        cr=None  OK 
+  stop at mid surface        cr=1     OK 
+  stop at mid surface        cr=7     OK 
+  stop at mid surface        cr=64    OK 
+  stop at mid surface        cr=256   OK 
+  stop at mid surface        cr=1024  OK 
+  stop at mid surface        cr=4096  OK 
+  mixed band/whole-grid      cr=None  OK 
+  mixed band/whole-grid      cr=1     OK 
+  mixed band/whole-grid      cr=7     OK 
+  mixed band/whole-grid      cr=64    OK 
+  mixed band/whole-grid      cr=256   OK 
+  mixed band/whole-grid      cr=1024  OK 
+  mixed band/whole-grid      cr=4096  OK 
+
+=== 10b. banded + fresnel / slant (the second banded path) ===
+  {'fresnel': True}                                cr=1    OK 
+  {'fresnel': True}                                cr=33   OK 
+  {'fresnel': True}                                cr=256  OK 
+  {'slant_correction': True}                       cr=1    OK 
+  {'slant_correction': True}                       cr=33   OK 
+  {'slant_correction': True}                       cr=256  OK 
+  {'fresnel': True, 'slant_correction': True}      cr=1    OK 
+  {'fresnel': True, 'slant_correction': True}      cr=33   OK 
+  {'fresnel': True, 'slant_correction': True}      cr=256  OK 
+
+=== 11. complex64 vs complex128 (3-surface, 5 mm total thickness) ===
+  dtype out: c128 -> complex128, c64 -> complex64
+  max|E64 - E128| / max|E128| = 6.7450e-07
+  phase error: rms 1.7153e-03 rad, max 1.4829e-01 rad
+  (piston n*k0*t for 3mm BK7 = 4.5128e+04 rad; eps_f32*that = 5.380e-03 rad)
+
+=== 13. accumulator_store='memmap' vs 'ram' (tangent_facet) ===
+  ram vs memmap byte-identical: True
+  scratch_dir leftovers after normal return: []
+  mid-run exception (ValueError); leftovers: []
+
+=== 14. prepare_real_lens vs apply_real_lens ===
+  byte-identical: True  max|d| = 0.000e+00 (peak 1.025e+00)
+  complex64: byte-identical True max|d| = 0.000e+00
+
+=== 14b. prepared lens: stale w.r.t. the GLASS CATALOGUE? ===
+  prepared before/after catalogue change identical: True (documented freeze)
+  prepared vs apply AFTER change: max|d| = 1.839e+00 (peak 1.029e+00)
+
+=== 14c. prescription MUTATED between prepare and call ===
+  prepared(after mutation) vs apply: max|d| = 1.979e+00
+
+=== 2. thicknesses length validation ===
+  extra thickness -> AssertionError: Need 1 thicknesses for 2 surfaces, got 2

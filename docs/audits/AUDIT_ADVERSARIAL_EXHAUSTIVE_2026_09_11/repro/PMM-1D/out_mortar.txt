@@ -1,0 +1,20 @@
+=== 3c-i: identical grids -> mortar == plain interface ===
+  |Ma - Mb|max      = 0.0
+  |Cab - Ma|max     = 1.1911400820763599e-22
+  S11: max|d| = 3.348e-14  rel = 3.784e-14
+  S12: max|d| = 4.019e-14  rel = 3.003e-14
+  S21: max|d| = 3.275e-14  rel = 2.192e-14
+  S22: max|d| = 4.019e-14  rel = 4.309e-14
+
+=== 3c-ii: per-layer vs shared, 3-layer stack, degree ladder ===
+  deg= 10: max|dR|=1.575e-06 max|dT|=2.062e-05 max|dJ|=1.848e-05  tot_shared=[1. 1.]  tot_pl=[1.00000024 1.        ]
+  deg= 14: max|dR|=7.088e-07 max|dT|=7.273e-06 max|dJ|=6.507e-06  tot_shared=[1. 1.]  tot_pl=[1.00000009 1.        ]
+  deg= 18: max|dR|=3.514e-07 max|dT|=3.269e-06 max|dJ|=2.952e-06  tot_shared=[1. 1.]  tot_pl=[1.00000004 1.        ]
+  deg= 24: max|dR|=1.516e-07 max|dT|=1.295e-06 max|dJ|=1.181e-06  tot_shared=[1. 1.]  tot_pl=[1.00000001 1.        ]
+  deg= 30: max|dR|=7.801e-08 max|dT|=6.284e-07 max|dJ|=5.754e-07  tot_shared=[1. 1.]  tot_pl=[1. 1.]
+
+=== 3c-iii: window_halfwidth >= nlayers-1 must reproduce SHARED ===
+  hw=1: max|dJ| vs shared = 2.952e-06
+  hw=2: max|dJ| vs shared = 0.000e+00
+  hw=3: max|dJ| vs shared = 0.000e+00
+  hw=4: max|dJ| vs shared = 0.000e+00

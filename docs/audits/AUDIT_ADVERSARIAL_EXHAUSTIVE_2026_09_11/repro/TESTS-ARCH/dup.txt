@@ -1,0 +1,376 @@
+===== EXACT duplicate function bodies (identical AST incl. identifiers, >=8 lines) =====
+
+  [1] 40 copies x ~11 lines  (name(s): ['minimumSizeHint'])
+        lumenairy/ui/algebra_dock.py:833  minimumSizeHint  (11 lines)
+        lumenairy/ui/ao_dock.py:917  minimumSizeHint  (11 lines)
+        lumenairy/ui/caustic_dock.py:267  minimumSizeHint  (11 lines)
+        lumenairy/ui/chebyshev_fit_dock.py:558  minimumSizeHint  (11 lines)
+        lumenairy/ui/coatings_dock.py:760  minimumSizeHint  (11 lines)
+        lumenairy/ui/coherence_dock.py:841  minimumSizeHint  (11 lines)
+        lumenairy/ui/coronagraph_dock.py:802  minimumSizeHint  (11 lines)
+        lumenairy/ui/distortion_dock.py:256  minimumSizeHint  (11 lines)
+        lumenairy/ui/element_table.py:1309  minimumSizeHint  (11 lines)
+        lumenairy/ui/field_browser_dock.py:209  minimumSizeHint  (11 lines)
+        lumenairy/ui/footprint_dock.py:200  minimumSizeHint  (11 lines)
+        lumenairy/ui/ghost_dock.py:704  minimumSizeHint  (11 lines)
+        lumenairy/ui/glass_map_dock.py:239  minimumSizeHint  (11 lines)
+        lumenairy/ui/interferometry_dock.py:276  minimumSizeHint  (11 lines)
+        lumenairy/ui/jones_pupil_dock.py:364  minimumSizeHint  (11 lines)
+        lumenairy/ui/layout_2d.py:1091  minimumSizeHint  (9 lines)
+        lumenairy/ui/layout_3d.py:978  minimumSizeHint  (9 lines)
+        lumenairy/ui/lg_aberration_dock.py:191  minimumSizeHint  (11 lines)
+        lumenairy/ui/library_dock.py:347  minimumSizeHint  (11 lines)
+        lumenairy/ui/log_viewer_dock.py:394  minimumSizeHint  (11 lines)
+        lumenairy/ui/materials_dock.py:47  minimumSizeHint  (11 lines)
+        lumenairy/ui/multiconfig_dock.py:294  minimumSizeHint  (11 lines)
+        lumenairy/ui/optimizer_dock.py:1242  minimumSizeHint  (11 lines)
+        lumenairy/ui/phase_retrieval_dock.py:906  minimumSizeHint  (11 lines)
+        lumenairy/ui/psf_mtf_dock.py:380  minimumSizeHint  (11 lines)
+        lumenairy/ui/rayfan_dock.py:229  minimumSizeHint  (11 lines)
+        lumenairy/ui/repl_dock.py:187  minimumSizeHint  (11 lines)
+        lumenairy/ui/richards_wolf_dock.py:257  minimumSizeHint  (11 lines)
+        lumenairy/ui/sensitivity_dock.py:190  minimumSizeHint  (11 lines)
+        lumenairy/ui/shack_hartmann_dock.py:218  minimumSizeHint  (11 lines)
+        lumenairy/ui/slider_dock.py:417  minimumSizeHint  (11 lines)
+        lumenairy/ui/snapshots_dock.py:146  minimumSizeHint  (11 lines)
+        lumenairy/ui/spot_field_dock.py:279  minimumSizeHint  (11 lines)
+        lumenairy/ui/thin_grating_dock.py:295  minimumSizeHint  (11 lines)
+        lumenairy/ui/through_focus_dock.py:418  minimumSizeHint  (11 lines)
+        lumenairy/ui/tolerance_dock.py:578  minimumSizeHint  (11 lines)
+        lumenairy/ui/wavefront_map_dock.py:666  minimumSizeHint  (11 lines)
+        lumenairy/ui/waveoptics_dock.py:2925  minimumSizeHint  (11 lines)
+        lumenairy/ui/welcome_dock.py:199  minimumSizeHint  (11 lines)
+        lumenairy/ui/zernike_dock.py:411  minimumSizeHint  (11 lines)
+
+  [2] 2 copies x ~36 lines  (name(s): ['_resolve_incidence_checked'])
+        lumenairy/elements/pmm/_core.py:133  _resolve_incidence_checked  (36 lines)
+        lumenairy/elements/rcwa/oned.py:286  _resolve_incidence_checked  (31 lines)
+
+  [3] 4 copies x ~13 lines  (name(s): ['_load_numba'])
+        lumenairy/elements/_lens_imap.py:417  _load_numba  (13 lines)
+        lumenairy/elements/_lens_traced.py:76  _load_numba  (13 lines)
+        lumenairy/elements/lenses.py:87  _load_numba  (13 lines)
+        lumenairy/optimize/_merit_jit.py:60  _load_numba  (13 lines)
+
+  [4] 2 copies x ~15 lines  (name(s): ['_resolve_incidence'])
+        lumenairy/elements/pmm/_core.py:116  _resolve_incidence  (15 lines)
+        lumenairy/elements/rcwa/oned.py:276  _resolve_incidence  (8 lines)
+
+  [5] 2 copies x ~12 lines  (name(s): ['_is_cupy_array'])
+        lumenairy/elements/lenses.py:121  _is_cupy_array  (12 lines)
+        lumenairy/propagators/fft_infra.py:56  _is_cupy_array  (16 lines)
+
+  [6] 2 copies x ~12 lines  (name(s): ['_draw_message'])
+        lumenairy/ui/distortion_dock.py:243  _draw_message  (12 lines)
+        lumenairy/ui/spot_field_dock.py:266  _draw_message  (12 lines)
+
+  [7] 2 copies x ~11 lines  (name(s): ['_homog'])
+        lumenairy/elements/pmm/_jax_twod.py:370  _homog  (11 lines)
+        lumenairy/elements/pmm/_jax_twod_jones.py:204  _homog  (11 lines)
+
+  [8] 2 copies x ~10 lines  (name(s): ['_lagrange_vals', '_vals'])
+        lumenairy/elements/pmm/_core.py:3399  _lagrange_vals  (10 lines)
+        lumenairy/elements/pmm/twod.py:444  _vals  (10 lines)
+
+  [9] 2 copies x ~9 lines  (name(s): ['_store'])
+        lumenairy/elements/pmm/stack.py:4405  _store  (9 lines)
+        lumenairy/elements/pmm/stack.py:4630  _store  (9 lines)
+
+  duplicated lines removable from top-22 exact clusters: ~573
+  total exact-dup clusters: 9; total redundant lines across ALL clusters: ~573
+
+
+===== STRUCTURAL near-duplicates (identifiers/constants erased, >=8 lines) =====
+
+  [1] 40 copies x ~11 lines  names=['minimumSizeHint']
+        lumenairy/ui/algebra_dock.py:833  minimumSizeHint
+        lumenairy/ui/ao_dock.py:917  minimumSizeHint
+        lumenairy/ui/caustic_dock.py:267  minimumSizeHint
+        lumenairy/ui/chebyshev_fit_dock.py:558  minimumSizeHint
+        lumenairy/ui/coatings_dock.py:760  minimumSizeHint
+        lumenairy/ui/coherence_dock.py:841  minimumSizeHint
+        lumenairy/ui/coronagraph_dock.py:802  minimumSizeHint
+        lumenairy/ui/distortion_dock.py:256  minimumSizeHint
+        ... +32 more
+
+  [2] 3 copies x ~39 lines  names=['_resolve_output_shape']
+        lumenairy/propagators/gbd.py:200  _resolve_output_shape
+        lumenairy/propagators/hf.py:33  _resolve_output_shape
+        lumenairy/propagators/hfpi.py:53  _resolve_output_shape
+
+  [3] 5 copies x ~14 lines  names=['_draw_empty']
+        lumenairy/ui/coherence_dock.py:446  _draw_empty
+        lumenairy/ui/lg_aberration_dock.py:80  _draw_empty
+        lumenairy/ui/richards_wolf_dock.py:165  _draw_empty
+        lumenairy/ui/shack_hartmann_dock.py:100  _draw_empty
+        lumenairy/ui/thin_grating_dock.py:144  _draw_empty
+
+  [4] 6 copies x ~10 lines  names=['clear_coarse_trace_cache', 'clear_displaced_lut_cache', 'clear_propagate_system_jax_cache', 'clear_through_focus_scan_jax_cache', 'clear_trace_jax_cache', 'clear_zernike_basis_cache']
+        lumenairy/analysis/through_focus.py:92  clear_through_focus_scan_jax_cache
+        lumenairy/analysis/zernike.py:255  clear_zernike_basis_cache
+        lumenairy/elements/_lens_real.py:734  clear_displaced_lut_cache
+        lumenairy/propagators/fga.py:827  clear_coarse_trace_cache
+        lumenairy/propagators/system.py:1287  clear_propagate_system_jax_cache
+        lumenairy/raytrace/jax_trace.py:1071  clear_trace_jax_cache
+
+  [5] 4 copies x ~13 lines  names=['_load_numba']
+        lumenairy/elements/_lens_imap.py:417  _load_numba
+        lumenairy/elements/_lens_traced.py:76  _load_numba
+        lumenairy/elements/lenses.py:87  _load_numba
+        lumenairy/optimize/_merit_jit.py:60  _load_numba
+
+  [6] 3 copies x ~14 lines  names=['_resolve_incidence', '_resolve_order_count']
+        lumenairy/elements/pmm/_core.py:79  _resolve_order_count
+        lumenairy/elements/pmm/_core.py:116  _resolve_incidence
+        lumenairy/elements/rcwa/oned.py:276  _resolve_incidence
+
+  [7] 4 copies x ~9 lines  names=['get_fft_auto_promote', 'get_fft_plan_cache_size', 'get_fft_threads', 'stokes_parameters']
+        lumenairy/elements/polarization.py:214  stokes_parameters
+        lumenairy/propagators/fft_infra.py:775  get_fft_plan_cache_size
+        lumenairy/propagators/fft_infra.py:1825  get_fft_threads
+        lumenairy/propagators/fft_infra.py:1898  get_fft_auto_promote
+
+  [8] 3 copies x ~11 lines  names=['_homog']
+        lumenairy/elements/pmm/_jax_stack2d.py:188  _homog
+        lumenairy/elements/pmm/_jax_twod.py:370  _homog
+        lumenairy/elements/pmm/_jax_twod_jones.py:204  _homog
+
+  [9] 3 copies x ~9 lines  names=['_star']
+        lumenairy/elements/pmm/_core.py:3718  _star
+        lumenairy/elements/pmm/_core.py:4219  _star
+        lumenairy/elements/pmm/_jax_stack.py:366  _star
+
+
+===== same FUNCTION NAME defined in >=3 modules (>=8 lines) =====
+  __init__                                   126 defs in 74 modules, ~6556 total lines
+        lumenairy/_deprecation.py:376 (9 lines)
+        lumenairy/algebra/apertures.py:57 (52 lines)
+        lumenairy/algebra/apertures.py:174 (17 lines)
+        lumenairy/algebra/base.py:452 (23 lines)
+        lumenairy/algebra/primitives.py:82 (17 lines)
+        lumenairy/algebra/primitives.py:212 (27 lines)
+        lumenairy/algebra/primitives.py:294 (34 lines)
+        lumenairy/algebra/primitives.py:424 (37 lines)
+        ... +118
+  minimumSizeHint                            40 defs in 40 modules, ~436 total lines
+        lumenairy/ui/algebra_dock.py:833 (11 lines)
+        lumenairy/ui/ao_dock.py:917 (11 lines)
+        lumenairy/ui/caustic_dock.py:267 (11 lines)
+        lumenairy/ui/chebyshev_fit_dock.py:558 (11 lines)
+        lumenairy/ui/coatings_dock.py:760 (11 lines)
+        lumenairy/ui/coherence_dock.py:841 (11 lines)
+        lumenairy/ui/coronagraph_dock.py:802 (11 lines)
+        lumenairy/ui/distortion_dock.py:256 (11 lines)
+        ... +32
+  evaluate                                   24 defs in 6 modules, ~1239 total lines
+        lumenairy/elements/bsdf.py:193 (32 lines)
+        lumenairy/elements/bsdf.py:297 (24 lines)
+        lumenairy/elements/bsdf.py:427 (14 lines)
+        lumenairy/optimize/driver.py:813 (144 lines)
+        lumenairy/optimize/jax_merits.py:153 (16 lines)
+        lumenairy/optimize/merit_terms.py:65 (14 lines)
+        lumenairy/optimize/merit_terms.py:100 (10 lines)
+        lumenairy/optimize/merit_terms.py:128 (12 lines)
+        ... +16
+  run                                        18 defs in 15 modules, ~794 total lines
+        lumenairy/propagators/mhs.py:183 (100 lines)
+        lumenairy/ui/ao_dock.py:97 (113 lines)
+        lumenairy/ui/caustic_dock.py:46 (12 lines)
+        lumenairy/ui/coherence_dock.py:153 (63 lines)
+        lumenairy/ui/coherence_dock.py:311 (44 lines)
+        lumenairy/ui/coronagraph_dock.py:167 (9 lines)
+        lumenairy/ui/ghost_dock.py:54 (24 lines)
+        lumenairy/ui/multiconfig_dock.py:53 (30 lines)
+        ... +10
+  _run                                       17 defs in 15 modules, ~552 total lines
+        lumenairy/analysis/phase_retrieval.py:673 (17 lines)
+        lumenairy/analysis/phase_retrieval.py:700 (14 lines)
+        lumenairy/analysis/phase_retrieval.py:724 (12 lines)
+        lumenairy/elements/pmm/stack2d.py:192 (12 lines)
+        lumenairy/propagators/carrier.py:10265 (18 lines)
+        lumenairy/ui/caustic_dock.py:228 (22 lines)
+        lumenairy/ui/coherence_dock.py:461 (17 lines)
+        lumenairy/ui/ghost_dock.py:267 (22 lines)
+        ... +9
+  _on_finished                               12 defs in 12 modules, ~385 total lines
+        lumenairy/ui/ao_dock.py:842 (74 lines)
+        lumenairy/ui/caustic_dock.py:251 (10 lines)
+        lumenairy/ui/coherence_dock.py:479 (24 lines)
+        lumenairy/ui/coronagraph_dock.py:700 (31 lines)
+        lumenairy/ui/ghost_dock.py:290 (36 lines)
+        lumenairy/ui/multiconfig_dock.py:278 (15 lines)
+        lumenairy/ui/optimizer_dock.py:849 (22 lines)
+        lumenairy/ui/phase_retrieval_dock.py:881 (24 lines)
+        ... +4
+  solve                                      11 defs in 10 modules, ~1880 total lines
+        lumenairy/backend/scipy.py:127 (8 lines)
+        lumenairy/elements/berreman.py:1019 (69 lines)
+        lumenairy/elements/bor/bor_solve.py:777 (50 lines)
+        lumenairy/elements/bor/bor_stack.py:546 (166 lines)
+        lumenairy/elements/pmm/stack.py:2599 (479 lines)
+        lumenairy/elements/pmm/stack.py:4943 (108 lines)
+        lumenairy/elements/pmm/stack2d.py:1156 (474 lines)
+        lumenairy/elements/pmm/stack2d_pure.py:1303 (298 lines)
+        ... +3
+  __post_init__                              10 defs in 6 modules, ~263 total lines
+        lumenairy/analysis/ao.py:148 (18 lines)
+        lumenairy/optimize/context.py:464 (54 lines)
+        lumenairy/optimize/parameterizations.py:143 (40 lines)
+        lumenairy/optimize/parameterizations.py:386 (47 lines)
+        lumenairy/propagators/carrier_field.py:323 (21 lines)
+        lumenairy/propagators/carrier_field.py:551 (14 lines)
+        lumenairy/propagators/carrier_field.py:640 (29 lines)
+        lumenairy/propagators/result.py:134 (10 lines)
+        ... +2
+  _apply                                     9 defs in 3 modules, ~255 total lines
+        lumenairy/algebra/apertures.py:122 (22 lines)
+        lumenairy/algebra/apertures.py:195 (13 lines)
+        lumenairy/algebra/base.py:400 (26 lines)
+        lumenairy/algebra/base.py:482 (14 lines)
+        lumenairy/algebra/primitives.py:103 (74 lines)
+        lumenairy/algebra/primitives.py:243 (15 lines)
+        lumenairy/algebra/primitives.py:334 (21 lines)
+        lumenairy/algebra/primitives.py:465 (32 lines)
+        ... +1
+  _build_ui                                  7 defs in 7 modules, ~949 total lines
+        lumenairy/ui/algebra_dock.py:242 (131 lines)
+        lumenairy/ui/ao_dock.py:247 (76 lines)
+        lumenairy/ui/chebyshev_fit_dock.py:210 (111 lines)
+        lumenairy/ui/coatings_dock.py:155 (206 lines)
+        lumenairy/ui/coronagraph_dock.py:453 (174 lines)
+        lumenairy/ui/log_viewer_dock.py:153 (77 lines)
+        lumenairy/ui/wavefront_map_dock.py:202 (174 lines)
+  _draw_empty                                7 defs in 7 modules, ~100 total lines
+        lumenairy/ui/caustic_dock.py:153 (14 lines)
+        lumenairy/ui/coatings_dock.py:708 (16 lines)
+        lumenairy/ui/coherence_dock.py:446 (14 lines)
+        lumenairy/ui/lg_aberration_dock.py:80 (15 lines)
+        lumenairy/ui/richards_wolf_dock.py:165 (14 lines)
+        lumenairy/ui/shack_hartmann_dock.py:100 (14 lines)
+        lumenairy/ui/thin_grating_dock.py:144 (13 lines)
+  __call__                                   6 defs in 6 modules, ~176 total lines
+        lumenairy/algebra/base.py:292 (67 lines)
+        lumenairy/elements/_lens_real.py:6704 (32 lines)
+        lumenairy/elements/_lens_traced.py:13033 (22 lines)
+        lumenairy/elements/materials.py:48 (11 lines)
+        lumenairy/optimize/multi_objective.py:326 (11 lines)
+        lumenairy/progress.py:126 (33 lines)
+  add_layer                                  6 defs in 6 modules, ~962 total lines
+        lumenairy/elements/berreman.py:940 (16 lines)
+        lumenairy/elements/bor/bor_stack.py:215 (276 lines)
+        lumenairy/elements/pmm/stack.py:1668 (74 lines)
+        lumenairy/elements/pmm/stack2d.py:397 (192 lines)
+        lumenairy/elements/pmm/stack2d_pure.py:628 (171 lines)
+        lumenairy/elements/rcwa/stack.py:1472 (233 lines)
+  set_source                                 6 defs in 6 modules, ~120 total lines
+        lumenairy/elements/berreman.py:982 (15 lines)
+        lumenairy/elements/bor/bor_stack.py:499 (27 lines)
+        lumenairy/elements/pmm/stack.py:2261 (28 lines)
+        lumenairy/elements/pmm/stack2d.py:777 (14 lines)
+        lumenairy/elements/pmm/stack2d_pure.py:1210 (8 lines)
+        lumenairy/elements/rcwa/stack.py:2234 (28 lines)
+  layer_absorption                           6 defs in 6 modules, ~369 total lines
+        lumenairy/elements/berreman.py:1215 (37 lines)
+        lumenairy/elements/bor/bor_stack.py:975 (57 lines)
+        lumenairy/elements/pmm/stack.py:3986 (142 lines)
+        lumenairy/elements/pmm/stack2d.py:1853 (27 lines)
+        lumenairy/elements/pmm/stack2d_pure.py:2044 (28 lines)
+        lumenairy/elements/rcwa/stack.py:1168 (78 lines)
+  _load_numba                                5 defs in 5 modules, ~63 total lines
+        lumenairy/elements/_lens_imap.py:417 (13 lines)
+        lumenairy/elements/_lens_traced.py:76 (13 lines)
+        lumenairy/elements/lenses.py:87 (13 lines)
+        lumenairy/optimize/_merit_jit.py:60 (13 lines)
+        lumenairy/propagators/fga.py:97 (11 lines)
+  _replot                                    5 defs in 5 modules, ~593 total lines
+        lumenairy/ui/distortion_dock.py:95 (147 lines)
+        lumenairy/ui/footprint_dock.py:88 (99 lines)
+        lumenairy/ui/glass_map_dock.py:143 (68 lines)
+        lumenairy/ui/rayfan_dock.py:97 (131 lines)
+        lumenairy/ui/spot_field_dock.py:117 (148 lines)
+  __getattr__                                4 defs in 4 modules, ~46 total lines
+        lumenairy/__init__.py:2079 (12 lines)
+        lumenairy/backend/scipy.py:58 (10 lines)
+        lumenairy/elements/_lens_thin.py:51 (12 lines)
+        lumenairy/optimize/core.py:288 (12 lines)
+  internal_field                             4 defs in 4 modules, ~694 total lines
+        lumenairy/elements/berreman.py:1133 (81 lines)
+        lumenairy/elements/pmm/stack.py:3663 (322 lines)
+        lumenairy/elements/pmm/stack2d.py:1671 (137 lines)
+        lumenairy/elements/rcwa/stack.py:956 (154 lines)
+  _star                                      4 defs in 3 modules, ~35 total lines
+        lumenairy/elements/eme/eme_2d.py:165 (8 lines)
+        lumenairy/elements/pmm/_core.py:3718 (9 lines)
+        lumenairy/elements/pmm/_core.py:4219 (9 lines)
+        lumenairy/elements/pmm/_jax_stack.py:366 (9 lines)
+  _on_run                                    4 defs in 4 modules, ~134 total lines
+        lumenairy/ui/ao_dock.py:742 (64 lines)
+        lumenairy/ui/coatings_dock.py:646 (39 lines)
+        lumenairy/ui/coronagraph_dock.py:656 (18 lines)
+        lumenairy/ui/wavefront_map_dock.py:587 (13 lines)
+  _on_progress                               4 defs in 4 modules, ~52 total lines
+        lumenairy/ui/ao_dock.py:816 (25 lines)
+        lumenairy/ui/phase_retrieval_dock.py:856 (9 lines)
+        lumenairy/ui/through_focus_dock.py:61 (9 lines)
+        lumenairy/ui/waveoptics_dock.py:2832 (9 lines)
+  _draw_result                               4 defs in 4 modules, ~132 total lines
+        lumenairy/ui/caustic_dock.py:168 (29 lines)
+        lumenairy/ui/richards_wolf_dock.py:214 (25 lines)
+        lumenairy/ui/shack_hartmann_dock.py:163 (35 lines)
+        lumenairy/ui/thin_grating_dock.py:251 (43 lines)
+  jones_transmission                         3 defs in 3 modules, ~47 total lines
+        lumenairy/elements/berreman.py:1089 (13 lines)
+        lumenairy/elements/pmm/_core.py:2025 (14 lines)
+        lumenairy/elements/pmm/stack.py:3472 (20 lines)
+  propagate                                  3 defs in 3 modules, ~501 total lines
+        lumenairy/elements/polarization.py:250 (27 lines)
+        lumenairy/propagators/dispatch.py:110 (409 lines)
+        lumenairy/sources/core.py:2647 (65 lines)
+  plot_geometry                              3 defs in 3 modules, ~215 total lines
+        lumenairy/elements/pmm/stack.py:2179 (81 lines)
+        lumenairy/elements/pmm/stack2d.py:722 (54 lines)
+        lumenairy/elements/rcwa/stack.py:2153 (80 lines)
+  per_order_amplitudes                       3 defs in 3 modules, ~129 total lines
+        lumenairy/elements/pmm/_core.py:1992 (32 lines)
+        lumenairy/elements/pmm/stack.py:3413 (58 lines)
+        lumenairy/elements/rcwa/stack.py:664 (39 lines)
+  _internal_amplitudes                       3 defs in 3 modules, ~78 total lines
+        lumenairy/elements/pmm/stack.py:3605 (31 lines)
+        lumenairy/elements/pmm/stack2d.py:1809 (23 lines)
+        lumenairy/elements/pmm/stack2d_pure.py:1975 (24 lines)
+  _flux_at                                   3 defs in 3 modules, ~87 total lines
+        lumenairy/elements/pmm/stack.py:3637 (25 lines)
+        lumenairy/elements/pmm/stack2d.py:1833 (19 lines)
+        lumenairy/elements/pmm/stack2d_pure.py:2000 (43 lines)
+  solve_vs_wavelength                        3 defs in 3 modules, ~560 total lines
+        lumenairy/elements/pmm/stack.py:4129 (310 lines)
+        lumenairy/elements/pmm/stack2d.py:1897 (90 lines)
+        lumenairy/elements/rcwa/stack.py:2366 (160 lines)
+  _solve_one                                 3 defs in 3 modules, ~124 total lines
+        lumenairy/elements/pmm/stack.py:4330 (74 lines)
+        lumenairy/elements/pmm/stack2d.py:1938 (19 lines)
+        lumenairy/elements/rcwa/stack.py:2431 (31 lines)
+  add_tapered_pillars                        3 defs in 3 modules, ~231 total lines
+        lumenairy/elements/pmm/stack2d.py:614 (63 lines)
+        lumenairy/elements/pmm/stack2d_pure.py:1051 (77 lines)
+        lumenairy/elements/rcwa/stack.py:2061 (91 lines)
+  _homog                                     3 defs in 3 modules, ~33 total lines
+        lumenairy/elements/pmm/_jax_stack2d.py:188 (11 lines)
+        lumenairy/elements/pmm/_jax_twod.py:370 (11 lines)
+        lumenairy/elements/pmm/_jax_twod_jones.py:204 (11 lines)
+  _resolve_output_shape                      3 defs in 3 modules, ~99 total lines
+        lumenairy/propagators/gbd.py:200 (39 lines)
+        lumenairy/propagators/hf.py:33 (30 lines)
+        lumenairy/propagators/hfpi.py:53 (30 lines)
+  eventFilter                                3 defs in 3 modules, ~68 total lines
+        lumenairy/ui/command_palette.py:190 (17 lines)
+        lumenairy/ui/layout_3d.py:935 (42 lines)
+        lumenairy/ui/main_window.py:3484 (9 lines)
+  closeEvent                                 3 defs in 3 modules, ~42 total lines
+        lumenairy/ui/coronagraph_dock.py:683 (12 lines)
+        lumenairy/ui/log_viewer_dock.py:376 (17 lines)
+        lumenairy/ui/main_window.py:1091 (13 lines)
+  _draw_message                              3 defs in 3 modules, ~35 total lines
+        lumenairy/ui/distortion_dock.py:243 (12 lines)
+        lumenairy/ui/footprint_dock.py:188 (11 lines)
+        lumenairy/ui/spot_field_dock.py:266 (12 lines)

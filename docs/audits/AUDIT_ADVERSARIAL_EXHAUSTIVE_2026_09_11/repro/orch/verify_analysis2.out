@@ -1,0 +1,3 @@
+diffraction_limited_peak signature: (E_exit: 'np.ndarray', wavelength: 'float', f: 'float', dx: 'float', bandlimit: 'bool' = True) -> 'float'
+(1) perfect sphere f/2.5: actual peak / 'diffraction-limited' reference = 1.468  (should be 1.000; predicted W040 of the quadratic ref = 0.33 waves)
+(2) wave_opd_2d, 0.5 waves rms coma: max |OPD error| = 1.000 waves ; fraction of pupil wrong by >0.4 waves = 53.2%  (max dphi/sample = 0.27 rad)

@@ -1,0 +1,171 @@
+##############################################################################
+# D1  seidel_correction=True on a prescription whose LAST surface is CURVED,
+#     asserting on FOCUS POSITION
+##############################################################################
+files passing seidel_correction=True: ['tests/unit/test_audit_glass.py']
+test functions: [('tests/unit/test_audit_glass.py', 92, 'test_seidel_correction_field_matches_traced_within_few_waves')]
+...of those, functions ALSO mentioning focus position: []
+...of those, using a prescription with R2 finite (curved last surface): []
+
+##############################################################################
+# D2  surface_frame=True with a TILTED surface, asserting BEAM DEVIATION
+##############################################################################
+files: ['tests/unit/test_v5_2_off_axis_conic_surface_frame.py']
+test functions with surface_frame=True: [('tests/unit/test_v5_2_off_axis_conic_surface_frame.py', 116, 'test_paraxial_sag_at_field_origin'), ('tests/unit/test_v5_2_off_axis_conic_surface_frame.py', 202, 'test_tilted_parabola_branches_differ'), ('tests/unit/test_v5_2_off_axis_conic_surface_frame.py', 397, 'test_surface_frame_runs_on_off_axis_conic_smoke')]
+...also mentioning tilt: [('tests/unit/test_v5_2_off_axis_conic_surface_frame.py', 116, 'test_paraxial_sag_at_field_origin'), ('tests/unit/test_v5_2_off_axis_conic_surface_frame.py', 202, 'test_tilted_parabola_branches_differ'), ('tests/unit/test_v5_2_off_axis_conic_surface_frame.py', 397, 'test_surface_frame_runs_on_off_axis_conic_smoke')]
+...also asserting on a centroid / deviation / chief-ray angle: []
+
+##############################################################################
+# D3  apply_real_lens_traced with a REAL-dtype E_in
+##############################################################################
+traced tests touching a real dtype anywhere: 8
+    ('tests/unit/test_audit_lens_models_2026_07.py', 583, 'test_tp1_prepared_matches_direct')
+    ('tests/unit/test_banded_ray_density_and_inverse_map.py', 287, 'test_band_path_lowers_the_peak_on_the_ray_density_inverse_map_route')
+    ('tests/unit/test_carrier_referenced.py', 366, 'test_traced_handoff_focuses_at_abcd_image')
+    ('tests/unit/test_lens_chunked_sag.py', 344, 'test_public_docstrings_document_memory_knobs')
+    ('tests/unit/test_niche_d3_guards.py', 846, 'test_the_residual_degree_moves_the_multiplexed_route_only_through_c6')
+    ('tests/unit/test_niche_r3_gbd_mem_lstsq.py', 405, 'test_traced_field_matches_lstsq_reference')
+    ('tests/unit/test_niche_s10_sibling_patterns.py', 320, 'test_row_band_assembly_matches_whole_grid_under_a_carrier')
+    ('tests/unit/test_v4_14_0_dispatcher_pin_apply_lens.py', 451, 'test_complex64_input_preserves_complex64_output')
+
+traced call sites whose E_in assignment shows NO complex marker: 107
+   tests/unit/test_audit_lens_models_2026_07.py:508  E = _gauss(N, dx)
+   tests/unit/test_audit_lens_models_2026_07.py:596  E = (np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2)
+   tests/unit/test_audit_lens_models_2026_07.py:628  E = (np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2)
+   tests/unit/test_audit_lens_models_2026_07.py:677  E2 = _two_emitters(N, dx)
+   tests/unit/test_audit_lens_models_2026_07.py:790  E = (np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2)
+   tests/unit/test_audit_lens_models_2026_07.py:791  E = (np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2)
+   tests/unit/test_audit_lens_models_2026_07.py:1027  E0 = (np.exp(-r_sq / w_L ** 2)
+   tests/unit/test_audit_misc.py:2130  E_in = np.exp(-(X ** 2 + Y ** 2) / (1.5e-3) ** 2).astype(
+   tests/unit/test_banded_ray_density_and_inverse_map.py:338  E = _field(N, dx)
+   tests/unit/test_banded_ray_density_and_inverse_map.py:343  E = _field(N, dx)
+   tests/unit/test_carrier_referenced.py:369  carrier = R)``, focuses the diverging beam at the
+   tests/unit/test_carrier_referenced.py:410  E_lens_in = carrier_referenced_reconstruct(env, R_lens, WL, dx)
+   tests/unit/test_fix_d5_fit_domain_basis.py:229  E = np.exp(-(((x[None, :] - c) ** 2 + x[:, None] ** 2) / _C11_W ** 2)
+   tests/unit/test_fix_runner_oom_2026_08_13.py:513  E = _gauss(2048, 1.0e-6, 0.40e-3)
+   tests/unit/test_fix_tilt_quadratic_opl.py:307  env = np.exp(-(x[None, :] ** 2 + x[:, None] ** 2)
+   tests/unit/test_hammer_h2_displaced_projection.py:178  E0 = _gauss(N, dx, 2e-3)
+   tests/unit/test_hammer_h3_traced_nyquist_guard.py:86  E0 = _gauss(1024, 12e-6, 5e-3)
+   tests/unit/test_hammer_h3_traced_nyquist_guard.py:105  E0 = _gauss(1024, 8e-6, 0.5e-3)
+   tests/unit/test_hammer_h3_traced_nyquist_guard.py:123  E0 = _gauss(1024, 12e-6, 5e-3)
+   tests/unit/test_hammer_h3_traced_nyquist_guard.py:202  E0 = _gauss(1024, 12e-6, 5e-3)
+
+##############################################################################
+# D4  caustic='multibranch' with output_plane_distance at the PARAXIAL FOCUS
+##############################################################################
+test functions mentioning multibranch: 34
+...also passing output_plane_distance: 24
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 241, 'test_multibranch_routes_to_existing_machinery_byte_identical')
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 261, 'test_multibranch_validation_errors')
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 285, 'test_multibranch_finite_and_preserves_complex_dtype')
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 302, 'test_collimated_single_branch_reduces_to_ray_density_and_conserves')
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 355, 'test_multibranch_matches_direct_huygens_single_branch_amplitude')
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 416, 'test_multibranch_kmah_fringe_matches_fold_ref_maslov_sensitive')
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 511, 'test_airy_transition_via_propagator_finite_no_blowup')
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 538, 'test_fold_ground_truth_finite_and_documented_residual')
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 593, 'test_decenter_centroid_matches_geom_oracle_psf_is_documented_residual')
+    ('tests/unit/test_niche_k4_uniform_caustic.py', 170, 'test_default_and_multibranch_paths_unchanged')
+    ('tests/unit/test_niche_k4_uniform_caustic.py', 200, 'test_uniform_validation_errors')
+    ('tests/unit/test_niche_k4_uniform_caustic.py', 252, 'test_uniform_reduces_to_multibranch_on_bright_side')
+    ('tests/unit/test_niche_k4_uniform_caustic.py', 284, 'test_fold_truth_dark_tail_closes_gap')
+    ('tests/unit/test_niche_k4_uniform_caustic.py', 369, 'test_fallbacks_return_multibranch_finite')
+    ('tests/unit/test_niche_r2_pearcey_cusp.py', 453, 'test_uniform_routes_cusp_to_pearcey')
+    ('tests/unit/test_niche_r2_pearcey_cusp.py', 496, 'test_cusp_fallbacks_finite')
+    ('tests/unit/test_niche_r5_gbd_vector_catastrophe.py', 372, 'test_a4_higher_catastrophe_routes_finite_named')
+    ('tests/unit/test_v5_21_delta_audit.py', 127, 'test_d3_air_focus_multibranch_runs_without_warning')
+    ('tests/unit/test_v5_21_lens_accuracy_extensions.py', 604, 'test_traced_multibranch_energy_and_gouy_through_focus')
+    ('tests/unit/test_v5_21_lens_accuracy_extensions.py', 639, 'test_traced_multibranch_no_shared_edge_double_count')
+    ('tests/unit/test_v5_21_lens_accuracy_extensions.py', 687, 'test_traced_multibranch_matches_exact_diffraction_oracle')
+    ('tests/unit/test_v5_21_lens_accuracy_extensions.py', 737, 'test_multibranch_ludwig_band_swap')
+    ('tests/unit/test_v5_21_lens_accuracy_extensions.py', 771, 'test_multibranch_input_carrier_tilt')
+    ('tests/unit/test_v5_21_lens_accuracy_extensions.py', 842, 'test_multibranch_axial_focus_catastrophe_warns')
+...and evaluating at a focal/paraxial distance: 6
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 511, 'test_airy_transition_via_propagator_finite_no_blowup')
+    ('tests/unit/test_niche_k1_kmah_caustic.py', 593, 'test_decenter_centroid_matches_geom_oracle_psf_is_documented_residual')
+    ('tests/unit/test_v5_21_delta_audit.py', 127, 'test_d3_air_focus_multibranch_runs_without_warning')
+    ('tests/unit/test_v5_21_lens_accuracy_extensions.py', 604, 'test_traced_multibranch_energy_and_gouy_through_focus')
+    ('tests/unit/test_v5_21_lens_accuracy_extensions.py', 771, 'test_multibranch_input_carrier_tilt')
+    ('tests/unit/test_v5_21_lens_accuracy_extensions.py', 842, 'test_multibranch_axial_focus_catastrophe_warns')
+
+##############################################################################
+# D5  newton_fit='spline' with a VIGNETTED ray
+##############################################################################
+test functions passing newton_fit='spline': 18
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 250, 'test_the_arbiter_is_announced_when_the_basis_cannot_honour_it')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 281, 'test_an_inert_fit_domain_knob_is_announced_not_silent')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 308, 'test_the_inert_knob_can_be_made_fatal_and_acknowledged')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 356, 'test_a_junk_fit_domain_basis_raises_and_names_the_valid_set')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 389, 'test_each_valid_mode_behaves_as_named')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 411, 'test_the_carrier_style_silencers_are_honoured_as_aliases')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 524, 'test_an_inert_restriction_no_longer_silences_the_aperture_beam_guard')
+    ('tests/unit/test_fix_newton_pool_memory.py', 1275, 'test_the_shipped_state_carries_the_fit_and_not_the_grids')
+    ('tests/unit/test_niche_audit_e_prepared_and_enums.py', 411, 'test_h2_newton_max_iters_is_live_on_the_pool_path')
+    ('tests/unit/test_niche_audit_e_prepared_and_enums.py', 738, 'test_l22_delegate_reports_the_discarded_physics_kwargs')
+    ('tests/unit/test_niche_audit_w3_elements.py', 529, 'test_el3_a_worker_valueerror_is_not_swallowed')
+    ('tests/unit/test_niche_audit_w3_elements.py', 559, 'test_el3_broken_pool_falls_back_and_resets_the_cached_pool')
+    ('tests/unit/test_niche_c15_inverse_map.py', 899, 'test_a_map_the_guard_would_refuse_is_not_served_from_the_cache')
+    ('tests/unit/test_niche_c6_stationary_phase_launch.py', 557, 'test_the_two_newton_fit_backends_still_describe_the_same_map')
+    ('tests/unit/test_niche_c8_inverse_support_bound.py', 338, 'test_both_newton_backends_get_the_same_support')
+    ('tests/unit/test_niche_d1_tilted_carrier.py', 1398, 'test_off_centre_fit_disc_does_not_ghost_the_exit_field')
+    ('tests/unit/test_niche_d7_decentred_fit.py', 361, 'test_the_spline_fit_takes_no_fit_disc_so_d7_cannot_touch_it')
+    ('tests/unit/test_niche_d7_decentred_fit.py', 910, 'test_the_off_centre_field_tracks_the_unrestricted_spline_map')
+...also mentioning vignetting/aperture/nan: 9
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 281, 'test_an_inert_fit_domain_knob_is_announced_not_silent')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 308, 'test_the_inert_knob_can_be_made_fatal_and_acknowledged')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 356, 'test_a_junk_fit_domain_basis_raises_and_names_the_valid_set')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 389, 'test_each_valid_mode_behaves_as_named')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 411, 'test_the_carrier_style_silencers_are_honoured_as_aliases')
+    ('tests/unit/test_fix_d5_fit_domain_basis.py', 524, 'test_an_inert_restriction_no_longer_silences_the_aperture_beam_guard')
+    ('tests/unit/test_niche_audit_w3_elements.py', 529, 'test_el3_a_worker_valueerror_is_not_swallowed')
+    ('tests/unit/test_niche_audit_w3_elements.py', 559, 'test_el3_broken_pool_falls_back_and_resets_the_cached_pool')
+    ('tests/unit/test_niche_d7_decentred_fit.py', 361, 'test_the_spline_fit_takes_no_fit_disc_so_d7_cannot_touch_it')
+
+files mentioning 'vignett' at all: 27
+    tests/unit/test_audit_analysis.py
+    tests/unit/test_audit_s4_5_optimize_failure_direction.py
+    tests/unit/test_audit_w3_raytrace_parity.py
+    tests/unit/test_audit_w5_raytrace_bundles.py
+    tests/unit/test_fga.py
+    tests/unit/test_fga_h4_h5.py
+    tests/unit/test_fix_tilt_quadratic_opl.py
+    tests/unit/test_gbd_feature_complete.py
+    tests/unit/test_niche_audit_r_guards_and_merits.py
+    tests/unit/test_niche_audit_w3_raytrace_sources.py
+    tests/unit/test_niche_audit_w4_immersed_pupils.py
+    tests/unit/test_niche_audit_w6_asymptotic.py
+    tests/unit/test_niche_d2_chain_multi.py
+    tests/unit/test_niche_e4_corrected_relay_oracle.py
+    tests/unit/test_niche_p2_guards.py
+
+##############################################################################
+# kwarg-COMBINATION coverage: how many distinct kwargs per call site?
+##############################################################################
+distribution of #non-trivial kwargs per apply_real_lens* call in tests:
+     0 kwargs :   188 call sites
+     1 kwargs :   272 call sites
+     2 kwargs :   100 call sites
+     3 kwargs :    36 call sites
+     4 kwargs :    23 call sites
+     5 kwargs :    19 call sites
+     6 kwargs :    14 call sites
+     7 kwargs :    11 call sites
+     8 kwargs :     4 call sites
+     9 kwargs :     2 call sites
+    10 kwargs :     1 call sites
+    11 kwargs :     1 call sites
+    17 kwargs :     2 call sites
+total call sites: 673
+distinct kwarg COMBINATIONS exercised: 177
+top 12 combinations:
+     188  ()
+      38  ('carrier',)
+      37  ('sag_chunk_rows',)
+      21  ('surface_model',)
+      11  ('dy',)
+      11  ('conjugate', 'surface_model')
+      10  ('output_subsample',)
+       7  ('ray_subsample',)
+       7  ('n_p', 'output_plane_distance', 'p_max', 'w0_factor')
+       7  ('momentum_sampling',)
+       6  ('integration_method',)
+       6  ('extract_linear_phase',)

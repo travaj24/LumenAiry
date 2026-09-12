@@ -1,0 +1,24 @@
+import 206.4 s
+=== B1) guided_modes vs the exact fiber oracle (V=2.4) ===
+   a=3.482685  oracle HE11 neff=1.445293173134
+   Rbig=4a N= 150: n_band=0 neff=nan err=+nan rel=nan
+   Rbig=4a N= 300: n_band=0 neff=nan err=+nan rel=nan
+   Rbig=4a N= 600: n_band=0 neff=nan err=+nan rel=nan
+   Rbig=8a N= 150: n_band=0 neff=nan err=+nan rel=nan
+   Rbig=8a N= 300: n_band=0 neff=nan err=+nan rel=nan
+   Rbig=8a N= 600: n_band=0 neff=nan err=+nan rel=nan
+
+=== B1b) M1 SEM radial spectrum vs Bessel zeros ===
+   m=0 dirichlet: max rel err = 3.113e-13
+   m=0 neumann  : max rel err = 1.000e+00
+   m=1 dirichlet: max rel err = 1.778e-13
+   m=1 neumann  : max rel err = 7.041e-13
+   m=3 dirichlet: max rel err = 5.415e-14
+   m=3 neumann  : max rel err = 1.831e-13
+
+=== B4b) BOR reciprocity on the PROPAGATING channel block ===
+   inc dtype=int64 shape=(158,) sum=13044
+   propagating block: |S21 - S12^T| / max|S21| = 1.004e+00
+   |S11 - S11^T| / max|S11| (prop block) = 5.825e-01
+   |U^H U - I| = 7.247e+00
+   n_ch=158/158  max|E-1|=1.313e-12

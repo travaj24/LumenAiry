@@ -1,0 +1,18 @@
+--- TE (slant 20 deg, n=2.0/1.0, P=1um, wl=0.8um, d=0.5um) ---
+  slanted PMM deg= 16 (1 layer): R-1=0.04073747 R0=0.07794570 R+1=0.01065607 T0=0.07982690 tot=0.9999999853
+  slanted PMM deg= 22 (1 layer): R-1=0.04073747 R0=0.07794570 R+1=0.01065607 T0=0.07982690 tot=1.0000000001
+  slanted PMM deg= 28 (1 layer): R-1=0.04073747 R0=0.07794570 R+1=0.01065607 T0=0.07982690 tot=1.0000000011
+  PMM staircase ns=   8 deg=12: R-1=0.04090110 R0=0.07730068 R+1=0.01059122 T0=0.07614784 tot=1.0000000000
+  PMM staircase ns=  24 deg=12: R-1=0.04075542 R0=0.07786931 R+1=0.01064550 T0=0.07940367 tot=0.9999999999
+  PMM staircase ns=  64 deg=12: R-1=0.04073998 R0=0.07793480 R+1=0.01065449 T0=0.07976677 tot=0.9999999999
+  staircase ns= 128: MemoryError: Unable to allocate 145. MiB for an array with shape (3084, 3084) and d
+
+--- TM (slant 20 deg, n=2.0/1.0, P=1um, wl=0.8um, d=0.5um) ---
+  slanted PMM deg= 16 (1 layer): R-1=0.01443596 R0=0.05057626 R+1=0.01815714 T0=0.00268222 tot=1.0000908413
+  slanted PMM deg= 22 (1 layer): R-1=0.01445783 R0=0.05061720 R+1=0.01815097 T0=0.00269002 tot=1.0000603536
+  slanted PMM deg= 28 (1 layer): R-1=0.01446752 R0=0.05063694 R+1=0.01814708 T0=0.00269372 tot=1.0000431589
+  PMM staircase ns=   8 deg=12: R-1=0.01375184 R0=0.04863224 R+1=0.01904315 T0=0.00330833 tot=1.0000000000
+  PMM staircase ns=  24 deg=12: R-1=0.01424606 R0=0.05015838 R+1=0.01832096 T0=0.00292733 tot=1.0000000001
+  PMM staircase ns=  64 deg=12: R-1=0.01439562 R0=0.05050924 R+1=0.01818870 T0=0.00278895 tot=1.0000000000
+  staircase ns= 128: MemoryError: Unable to allocate 145. MiB for an array with shape (3084, 3084) and d
+

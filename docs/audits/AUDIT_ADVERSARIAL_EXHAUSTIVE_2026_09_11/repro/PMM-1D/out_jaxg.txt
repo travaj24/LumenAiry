@@ -1,0 +1,29 @@
+=== 11a: OVER-CAPACITY Rayleigh projection (the M1 _guarded_lstsq case) ===
+ degree   ffo |                                              numpy |                                      jax
+      4    41 |                            tot=[1.000403 0.99837 ] |                  tot=[1.000403 0.99837 ]
+                  max|dR| numpy-vs-jax = 1.249e-15
+      5    41 |                            tot=[0.999956 1.000033] |                  tot=[0.999956 1.000033]
+                  max|dR| numpy-vs-jax = 1.547e-15
+      6    41 |                            tot=[0.999979 0.999997] |                  tot=[0.999979 0.999997]
+                  max|dR| numpy-vs-jax = 3.386e-15
+      8    61 |                                        tot=[1. 1.] |                              tot=[1. 1.]
+                  max|dR| numpy-vs-jax = 1.492e-15
+      4     9 |                            tot=[1.000403 0.99837 ] |                  tot=[1.000403 0.99837 ]
+                  max|dR| numpy-vs-jax = 1.249e-15
+      6    21 |                            tot=[0.999979 0.999997] |                  tot=[0.999979 0.999997]
+                  max|dR| numpy-vs-jax = 3.386e-15
+
+=== 11b: a stack whose NumPy solve is REFUSED by the sliver guard ===
+  deg= 12  numpy: T0(Ey)=0.7658701 tot=1.000031                  jax: T0(Ey)=0.7658918 tot=1.000019
+  deg= 14  numpy: RAISE ValueError                               jax: T0(Ey)=1.3416682 tot=8.348260
+  deg= 16  numpy: RAISE ValueError                               jax: T0(Ey)=1.3416653 tot=8.349067
+  deg= 18  numpy: RAISE ValueError                               jax: T0(Ey)=1.3416225 tot=8.348532
+  deg= 20  numpy: RAISE ValueError                               jax: T0(Ey)=0.7659349 tot=1.000026
+
+=== 11c: NaN / gain / grazing on the JAX path ===
+  NaN eps        numpy: RAISE LinAlgError :: Array must not contain infs or NaNs
+                 jax  : RAISE ValueError :: cannot convert float NaN to integer
+  gain n_sup     numpy: RAISE ValueError :: PMMStack.solve: gain incidence medium (Im(n_superstrate) < 0; public eps_superst
+                 jax  : tot=[-0.84773 -0.86262]
+  near-grazing   numpy: tot=[1. 1.]
+                 jax  : tot=[1. 1.]

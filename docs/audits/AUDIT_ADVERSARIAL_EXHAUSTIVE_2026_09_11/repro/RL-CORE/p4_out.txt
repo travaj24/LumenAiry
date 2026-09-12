@@ -1,0 +1,7 @@
+|E_out|              = 0.284609543
+exp(-k0*kappa*t)     = 0.284609543  <- correct AMPLITUDE factor
+exp(-2*pi*kappa*t/l) = 0.284609543  (same thing)
+|E|^2 = 0.081002592  vs exp(-4 pi kappa t/lam) = 0.081002592
+meniscus |E|: axis=0.293552125  at 3.5mm=0.298733904
+single interface into absorber |E| = 1.000000000
+absorber+BK7 stack |E| = 0.284574010  expected 0.284609543 (only the first gap absorbs)

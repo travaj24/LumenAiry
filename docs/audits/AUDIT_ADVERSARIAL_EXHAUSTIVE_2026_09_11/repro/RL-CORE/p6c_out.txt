@@ -1,0 +1,6 @@
+== plano-convex 4mm: N=1024 dx=9.255um f~95.066mm ==
+   {}                               peak |E|^2 =   41849.17 at z =  95.0657 mm
+   {'seidel_correction': True}      peak |E|^2 =   40157.39 at z =  96.9670 mm
+== doublet 8mm: N=8192 dx=2.788um f~51.126mm ==
+   {}                               peak |E|^2 = 1606837.91 at z =  50.6152 mm
+   {'seidel_correction': True}      peak |E|^2 = 1109382.33 at z =  48.8258 mm

@@ -1,0 +1,60 @@
+import 35.8 s
+
+===== D3) reciprocity residual vs truncation =====
+   M= 11 pol=te: worst rel reciprocity residual = 1.572e-03
+   M= 11 pol=tm: worst rel reciprocity residual = 7.364e-03
+   M= 21 pol=te: worst rel reciprocity residual = 1.044e-04
+   M= 21 pol=tm: worst rel reciprocity residual = 1.078e-03
+   M= 41 pol=te: worst rel reciprocity residual = 7.515e-06
+   M= 41 pol=tm: worst rel reciprocity residual = 1.445e-04
+   M= 81 pol=te: worst rel reciprocity residual = 5.021e-07
+   M= 81 pol=tm: worst rel reciprocity residual = 1.867e-05
+
+===== F) 2-D symmetry tests (normal incidence) =====
+   square-C4  laurent : Jxx=0.2582078309<-2.773612755 Jyy=0.2582078309<-2.773612755 |Jxx-Jyy|=1.316e-14 |Jxy|=5.611e-16 |Jyx|=6.247e-16
+   square-C4  li      : Jxx=0.2576138426<-2.812806693 Jyy=0.2576138426<-2.812806693 |Jxx-Jyy|=6.480e-15 |Jxy|=1.641e-14 |Jyx|=1.510e-14
+   square-C4  fff_nv  : Jxx=0.2576481545<-2.812546543 Jyy=0.2576551444<-2.811928107 |Jxx-Jyy|=1.595e-04 |Jxy|=1.196e-14 |Jyx|=1.437e-14
+   disk       laurent : Jxx=0.2611258027<-2.897873402 Jyy=0.2611258027<-2.897873402 |Jxx-Jyy|=3.010e-14 |Jxy|=5.799e-16 |Jyx|=1.977e-16
+   disk       li      : Jxx=0.2583847462<-2.932962284 Jyy=0.2583847462<-2.932962284 |Jxx-Jyy|=3.725e-15 |Jxy|=9.060e-15 |Jyx|=7.187e-15
+   disk       fff_nv  : Jxx=0.2585306712<-2.932356513 Jyy=0.2593206722<-2.919001558 |Jxx-Jyy|=3.547e-03 |Jxy|=1.073e-14 |Jyx|=1.156e-14
+
+===== G) phi-rotation covariance of a C-inf (disk) cell =====
+   phi=  0.0: J=[[0.2563666594<-2.980424626,0.0000000000<-1.849468513],[0.0000000000<-2.618567616,0.2708164901<-3.061165817]]
+   phi= 30.0: J=[[0.2663891086<-2.915991461,0.0306205692<+0.143844317],[0.0333914489<+0.201518747,0.2522833715<-3.048945148]]
+      R J0 R^T residual = 2.954e-02
+   phi= 90.0: J=[[0.2708164901<-3.061165817,0.0000000000<-0.718904160],[0.0000000000<+0.455434273,0.2563666594<-2.980424626]]
+      R J0 R^T residual = 8.561e-14
+
+===== H) 2-D separable (y-uniform) limit vs 1-D solver =====
+   pol=te ang= 0.0 laurent : max|dR|=6.884e-04 max|dT|=3.322e-03 closure=-5.551e-16
+   pol=te ang= 0.0 li      : max|dR|=6.884e-04 max|dT|=3.322e-03 closure=-3.442e-15
+   pol=te ang=30.0 laurent : max|dR|=5.714e-04 max|dT|=8.686e-03 closure=+2.665e-15
+   pol=te ang=30.0 li      : max|dR|=5.714e-04 max|dT|=8.686e-03 closure=+2.665e-15
+   pol=tm ang= 0.0 laurent : max|dR|=6.586e-04 max|dT|=4.298e-03 closure=+2.220e-16
+   pol=tm ang= 0.0 li      : max|dR|=2.433e-03 max|dT|=1.878e-03 closure=-1.332e-15
+   pol=tm ang=30.0 laurent : max|dR|=2.261e-03 max|dT|=1.603e-02 closure=+6.439e-15
+   pol=tm ang=30.0 li      : max|dR|=5.144e-04 max|dT|=1.281e-02 closure=+4.441e-16
+
+===== I) 2-D conical energy conservation (lossless) =====
+   laurent  th= 0.0 phi= 0.0 te: closure=-1.443e-15 warn=[]
+   laurent  th= 0.0 phi= 0.0 tm: closure=+2.220e-15 warn=[]
+   laurent  th=25.0 phi=35.0 te: closure=-1.166e-14 warn=[]
+   laurent  th=25.0 phi=35.0 tm: closure=+1.554e-15 warn=[]
+   laurent  th=50.0 phi=70.0 te: closure=-5.329e-15 warn=[]
+   laurent  th=50.0 phi=70.0 tm: closure=+1.132e-14 warn=[]
+   li       th= 0.0 phi= 0.0 te: closure=-2.887e-15 warn=[]
+   li       th= 0.0 phi= 0.0 tm: closure=-3.997e-15 warn=[]
+   li       th=25.0 phi=35.0 te: closure=+7.772e-15 warn=[]
+   li       th=25.0 phi=35.0 tm: closure=-2.220e-15 warn=[]
+   li       th=50.0 phi=70.0 te: closure=-1.998e-15 warn=[]
+   li       th=50.0 phi=70.0 tm: closure=-4.108e-15 warn=[]
+   fff_nv th=0.0 te RAISED ValueError: rcwa_efficiency_2d(formulation='fff_nv'): NON-SEPARABLE geometry (curved / non-axis-aligned walls; 17% of the boundary runs diagonal to the axes, max|Nx*Ny| = 0
+   fff_nv th=0.0 tm RAISED ValueError: rcwa_efficiency_2d(formulation='fff_nv'): NON-SEPARABLE geometry (curved / non-axis-aligned walls; 17% of the boundary runs diagonal to the axes, max|Nx*Ny| = 0
+   fff_nv th=25.0 te RAISED ValueError: rcwa_efficiency_2d(formulation='fff_nv'): NON-SEPARABLE geometry (curved / non-axis-aligned walls; 17% of the boundary runs diagonal to the axes, max|Nx*Ny| = 0
+   fff_nv th=25.0 tm RAISED ValueError: rcwa_efficiency_2d(formulation='fff_nv'): NON-SEPARABLE geometry (curved / non-axis-aligned walls; 17% of the boundary runs diagonal to the axes, max|Nx*Ny| = 0
+   fff_nv th=50.0 te RAISED ValueError: rcwa_efficiency_2d(formulation='fff_nv'): NON-SEPARABLE geometry (curved / non-axis-aligned walls; 17% of the boundary runs diagonal to the axes, max|Nx*Ny| = 0
+   fff_nv th=50.0 tm RAISED ValueError: rcwa_efficiency_2d(formulation='fff_nv'): NON-SEPARABLE geometry (curved / non-axis-aligned walls; 17% of the boundary runs diagonal to the axes, max|Nx*Ny| = 0
+
+===== J) 2-D symmetry fold on/off equivalence =====
+   symmetry=True: R00=0.06818668486148 closure=-1.443e-15
+   symmetry=False: R00=0.06818668486149 closure=-2.442e-15

@@ -1,0 +1,13 @@
+ n_glob    2N  modes(eig+asm)  bare eig(2N)   interface      star   inv(2N)  solve(2N)
+     72   144           26.30        489.65    14968.14  12382.75   5866.92    4343.17   (ms)
+          model  8-layer stack: total 233985.6 ms, bare-eig share   1.7%, modes   0.1%, ifc  57.6%, star  42.3%
+          model 40-layer stack: total 1110055.6 ms, bare-eig share   1.8%, modes   0.1%, ifc  55.3%, star  44.6%
+     96   192          610.61        889.38    20223.78  14384.83   8603.32    5752.98   (ms)
+          model  8-layer stack: total 301977.4 ms, bare-eig share   2.4%, modes   1.6%, ifc  60.3%, star  38.1%
+          model 40-layer stack: total 1428992.1 ms, bare-eig share   2.5%, modes   1.7%, ifc  58.0%, star  40.3%
+    160   320        25795.82       6689.44    47785.00  32564.64  15213.09   17529.54   (ms)
+          model  8-layer stack: total 896948.6 ms, bare-eig share   6.0%, modes  23.0%, ifc  47.9%, star  29.0%
+          model 40-layer stack: total 4293603.2 ms, bare-eig share   6.2%, modes  24.0%, ifc  45.6%, star  30.3%
+    192   384        24244.48      15649.68    64230.78  44937.64   3783.66     289.35   (ms)
+          model  8-layer stack: total 1131534.0 ms, bare-eig share  11.1%, modes  17.1%, ifc  51.1%, star  31.8%
+          model 40-layer stack: total 5400747.0 ms, bare-eig share  11.6%, modes  18.0%, ifc  48.8%, star  33.3%

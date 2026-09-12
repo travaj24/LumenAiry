@@ -1,0 +1,75 @@
+=== 10a: structure of the assembled operators ===
+  degree=16 nseg=2 n_glob=32
+    mass[one      ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[eyy      ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[exy_xx   ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[eyx_xx   ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[schur    ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[ezz      ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[inv_xx   ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[inv_ezz  ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    stiff[one      ] max|offdiag| = 2.014e+08   density = 0.561
+    stiff[inv_ezz  ] max|offdiag| = 9.659e+07   density = 0.561
+    conv[one      ]  density = 0.561
+    conv[inv_ezz  ]  density = 0.561
+    scalar S0    max|offdiag| = 0.000e+00
+    scalar Peps  max|offdiag| = 0.000e+00
+    scalar Pinv  max|offdiag| = 0.000e+00
+  degree=24 nseg=4 n_glob=96
+    mass[one      ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[eyy      ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[exy_xx   ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[eyx_xx   ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[schur    ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[ezz      ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[inv_xx   ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    mass[inv_ezz  ]  max|offdiag| = 0.000e+00   nnz_offdiag = 0
+    stiff[one      ] max|offdiag| = 8.864e+08   density = 0.271
+    stiff[inv_ezz  ] max|offdiag| = 4.251e+08   density = 0.271
+    conv[one      ]  density = 0.271
+    conv[inv_ezz  ]  density = 0.271
+    scalar S0    max|offdiag| = 0.000e+00
+    scalar Peps  max|offdiag| = 0.000e+00
+    scalar Pinv  max|offdiag| = 0.000e+00
+
+=== 10b: cost split of _sem_modes_tensor at n_glob ~ 100-200 ===
+  n_glob=  96: _safe_inv(S0) =   0.492 ms   diag inverse =   0.011 ms   max|d| = 0.00e+00
+             _sem_modes_tensor =  2690.59 ms, bare 2n eig =  3330.34 ms -> overhead =  -639.75 ms (-24%)
+  n_glob= 192: _safe_inv(S0) = 7022.622 ms   diag inverse =   0.059 ms   max|d| = 0.00e+00
+             _sem_modes_tensor = 16434.22 ms, bare 2n eig =  8711.48 ms -> overhead =  7722.74 ms (47%)
+  n_glob= 256: _safe_inv(S0) = 6465.254 ms   diag inverse =   0.241 ms   max|d| = 0.00e+00
+             _sem_modes_tensor = 23418.68 ms, bare 2n eig =  9974.80 ms -> overhead = 13443.89 ms (57%)
+
+=== 10c: full stack solve profile (degree 24, 8 layers) ===
+  wall = 348.851 s
+         15509 function calls (14849 primitive calls) in 272.834 seconds
+
+   Ordered by: internal time
+   List reduced from 195 to 22 due to restriction <22>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       42  152.448    3.630  152.449    3.630 C:\Users\AndrewT\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\numpy\linalg\_linalg.py:535(inv)
+       18   73.672    4.093   73.673    4.093 C:\Users\AndrewT\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\numpy\linalg\_linalg.py:362(solve)
+        8   40.133    5.017   40.138    5.017 C:\Users\AndrewT\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\numpy\linalg\_linalg.py:1361(eig)
+        8    3.924    0.490   91.431   11.429 D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\_core.py:2354(_sem_modes_tensor)
+        8    1.129    0.141   75.523    9.440 D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\rcwa\_core.py:2696(_redheffer_star)
+        2    0.471    0.236    0.471    0.236 D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\stack.py:3040(_proj)
+        9    0.390    0.043  103.705   11.523 D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\_core.py:1846(_interface_smatrix)
+       16    0.200    0.012    0.200    0.012 D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\_core.py:2412(_kxop)
+        2    0.159    0.079    0.174    0.087 D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\_core.py:2575(_sem_modes_uniform)
+        1    0.054    0.054  272.834  272.834 D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\stack.py:2599(solve)
+        8    0.042    0.005    0.043    0.005 D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\rcwa\_core.py:2822(_propagation_star)
+       60    0.040    0.001    0.040    0.001 {built-in method numpy._core._multiarray_umath.concatenate}
+        2    0.036    0.018    0.036    0.018 C:\Users\AndrewT\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\numpy\linalg\_linalg.py:2418(lstsq)
+      283    0.033    0.000    0.033    0.000 {built-in method numpy.zeros}
+       10    0.025    0.002    0.063    0.006 D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\_core.py:2850(_build_sem_tensor_segments)
+       10    0.013    0.001    0.015    0.002 D:\Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy\lumenairy\elements\pmm\_core.py:753(_mass_flux_threshold)
+      171    0.011    0.000    0.012    0.000 C:\Users\AndrewT\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\numpy\lib\_twodim_base_impl.py:258(diag)
+      223    0.010    0.000    0.010    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+       20    0.007    0.000    0.007    0.000 {built-in method numpy._core._multiarray_umath.c_einsum}
+       18    0.005    0.000    0.005    0.000 C:\Users\AndrewT\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\numpy\lib\_twodim_base_impl.py:176(eye)
+        8    0.004    0.000    0.004    0.001 C:\Users\AndrewT\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\numpy\linalg\_linalg.py:247(_assert_finite)
+       20    0.003    0.000    0.043    0.002 C:\Users\AndrewT\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\numpy\_core\shape_base.py:988(_block_concatenate)
+
+
+
