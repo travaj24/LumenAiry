@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import numpy as np
 from numpy.polynomial.legendre import leggauss
+from scipy.linalg import eigh
 
 
 def _gll_nodes_weights(degree):
@@ -158,12 +159,20 @@ def radial_spectrum(m, R, degree, n_el, *, bc="dirichlet", n_low=6,
     keep = np.array([i for i in range(n_glob) if i not in drop])
     Ak = A[np.ix_(keep, keep)]
     Mk = M[np.ix_(keep, keep)]
+    # SYMMETRIC-DEFINITE PENCIL (audit H4).  ``Ak`` is symmetric positive
+    # semi-definite and ``Mk`` is the SPD mass matrix, so this is
+    # ``eigh(Ak, Mk)``: no explicit ``Mk^-1`` (which conditions badly on a
+    # graded mesh), eigenvalues REAL and ascending by construction instead of a
+    # silent ``.real`` truncation of a non-symmetric spectrum, and measurably
+    # cheaper -- the historical ``eig(solve(Mk, Ak))`` ran a general
+    # (Hessenberg + QR) eigensolve on a matrix it first had to invert against.
+    # The eigenvectors come back ``Mk``-ORTHONORMAL (``v^T Mk v = I``, i.e.
+    # ``INT r psi^2 dr = 1``) rather than unit 2-norm: a scale change only, and
+    # the physically meaningful normalisation for this weak form.
     if return_modes:
-        w, vec = np.linalg.eig(np.linalg.solve(Mk, Ak))
-        order = np.argsort(w.real)
-        w = w[order].real
+        w, vec = eigh(Ak, Mk)
         full = np.zeros((n_glob, vec.shape[1]))
-        full[keep] = vec.real[:, order]
+        full[keep] = vec
         return w[:n_low], full[:, :n_low], r_glob
-    w = np.sort(np.linalg.eigvals(np.linalg.solve(Mk, Ak)).real)
+    w = eigh(Ak, Mk, eigvals_only=True)
     return w[:n_low]

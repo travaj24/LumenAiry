@@ -51,13 +51,17 @@ def _tensor_cell(eps=2.25, size=24):
 
 def _capture_lossless(monkeypatch, module):
     """Patch ``module._check_energy`` to record the ``lossless`` kwarg it is
-    handed (then call through so the real guard still runs)."""
+    handed -- and, since audit H6, the ``passive`` one beside it (then call
+    through so the real guard still runs).  ``**kw`` forwards any future clause
+    verbatim, so a new guard argument extends what is recorded instead of
+    breaking this stub."""
     seen = {}
     orig = module._check_energy
 
-    def _rec(fn_name, R, T, lossless=False):
+    def _rec(fn_name, R, T, lossless=False, **kw):
         seen["lossless"] = lossless
-        return orig(fn_name, R, T, lossless=lossless)
+        seen.update(kw)
+        return orig(fn_name, R, T, lossless=lossless, **kw)
 
     monkeypatch.setattr(module, "_check_energy", _rec)
     return seen

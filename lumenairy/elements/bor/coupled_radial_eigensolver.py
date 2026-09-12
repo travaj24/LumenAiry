@@ -504,20 +504,64 @@ def guided_modes(m, a, Rbig, N, eps_core, eps_clad, k0, *,
     guided window ``sqrt(eps_clad) k0 .. sqrt(eps_core) k0`` = 2.8e-3..4.9e-3
     BELOW the 1e-2 margin, so ``qlo + 1e-2 < q < qhi - 1e-2`` was empty and
     this function silently returned ``[]`` while the raw spectrum held the
-    correct bound modes.  ``5e-3 * k0`` / ``5e-4 * k0`` reproduce the historical
-    constants bit-exactly at the validated ``k0 = 2.0`` (same recast as the
-    P2-06 / AUDIT_BOR_PROPAGATING_CUTOFF_ENERGY classifier fixes).
+    correct bound modes.
+
+    CONTRAST INVARIANCE (audit H1, 2026-09-12) is the SECOND half of that same
+    statement and it was missing.  Making the margin a fraction of ``k0``
+    (``5e-3 * k0`` per side) left it a fraction of the WRONG quantity: the
+    guided window is ``(n_core - n_clad) * k0`` wide, so a ``5e-3 * k0`` band
+    on EACH side admits nothing at all unless ``n_core - n_clad > 0.01``.  Real
+    fibers live an order of magnitude below that -- telecom SMF is
+    ``dn ~ 0.005``, and the textbook ``V = 2.4`` fiber (1.45 / 1.44) has
+    ``dn = 0.01`` exactly, collapsing the admissible interval to a single
+    point.  Both returned ``[]`` while ``radial_coupled_modes`` held the correct
+    HE11 (measured ``n_eff = 1.445293453`` against the exact hybrid oracle's
+    ``1.445293173`` at ``N = 300``), i.e. the eigensolver was right and the
+    FILTER threw the answer away -- and the empty list is indistinguishable
+    from a genuinely cut-off structure.  The margin is now a fraction of the
+    WINDOW, ``max(1e-6 * k0, 1e-3 * (qhi - qlo))``, which is invariant under
+    BOTH a unit rescale and an index-contrast rescale; the ``1e-6 * k0`` floor
+    keeps a band on a window so narrow that ``1e-3`` of it would be rounding.
+    The old ``5e-3 * k0`` is reproduced only where it was ever meaningful
+    (``dn = 5`` would be needed for the two to coincide), so every fixture with
+    a realistic contrast changes from "no modes" to "the modes that are there".
+
+    Raises ``ValueError`` when the window is narrower than the guard band it
+    would need (``qhi - qlo <= 2 * q_margin``, i.e. ``dn <= 2e-6``): nothing can
+    be admitted there, and saying so is the one thing an empty list cannot.
+    Warns when the filter empties a window that DID hold candidates, naming the
+    closest one, so the "silent []" failure mode cannot come back through a
+    different door.
     """
     def eps_profile(rr):
         return np.where(rr <= a, eps_core, eps_clad)
     out = []
     qlo, qhi = np.sqrt(eps_clad) * k0, np.sqrt(eps_core) * k0
-    q_margin = 5e-3 * k0                 # == 1e-2 at k0 = 2.0 (bit-exact)
-    imag_tol = 5e-4 * k0                 # == 1e-3 at k0 = 2.0 (bit-exact)
+    window = float(np.real(qhi - qlo))
+    # Relative to the WINDOW (contrast-invariant), floored on k0 (unit-invariant).
+    q_margin = max(1e-6 * k0, 1e-3 * window)
+    # Unchanged at every contrast the historical value was meaningful at; the
+    # clamp only binds when 5e-4*k0 exceeded half the window itself, where the
+    # old tolerance admitted a q whose imaginary part was larger than the whole
+    # guided band.
+    imag_tol = min(5e-4 * k0, 0.5 * window)
+    if window <= 2.0 * q_margin:
+        raise ValueError(
+            f"guided_modes: the guided window is empty -- "
+            f"sqrt(eps_core) - sqrt(eps_clad) = {window / k0:.3e} (in units of "
+            f"k0) is not wider than the 2 x {q_margin / k0:.3e} guard band the "
+            f"filter needs, so no q can be admitted whatever the spectrum "
+            f"holds.  Increase the index contrast (eps_core = {eps_core!r}, "
+            f"eps_clad = {eps_clad!r}) or call radial_coupled_modes directly "
+            f"and classify the raw spectrum yourself.")
+    near = None                       # closest mode rejected by the band alone
     for md in radial_coupled_modes(m, Rbig, N, eps_profile, k0):
         q = md["q"]
-        if not (qlo + q_margin < q.real < qhi - q_margin
-                and abs(q.imag) < imag_tol):
+        if not (qlo < q.real < qhi and abs(q.imag) < imag_tol):
+            continue
+        if not (qlo + q_margin < q.real < qhi - q_margin):
+            if near is None or q.real > near["q"].real:
+                near = md             # inside the window, inside the guard band
             continue
         if md["reldiv"] > reldiv_tol:
             continue                                    # spurious
@@ -526,4 +570,14 @@ def guided_modes(m, a, Rbig, N, eps_core, eps_clad, k0, *,
         if amp[md["r"] > 0.8 * Rbig].max() > tail_tol:
             continue                                    # radiation, not bound
         out.append(md)
+    if not out and near is not None:
+        warnings.warn(
+            f"guided_modes: no mode survived the filters, but the raw spectrum "
+            f"holds a mode INSIDE the guided window and inside the "
+            f"{q_margin / k0:.3e} k0 guard band at its edge (n_eff = "
+            f"{near['q'].real / k0:.9f}, window "
+            f"{qlo.real / k0:.9f}..{qhi.real / k0:.9f}, reldiv = "
+            f"{near['reldiv']:.2e}).  An empty list here means 'too close to "
+            f"cut-off for this filter', NOT 'no guided mode': refine N / Rbig, "
+            f"or inspect radial_coupled_modes directly.", stacklevel=2)
     return sorted(out, key=lambda md: -md["q"].real)

@@ -85,6 +85,7 @@ from __future__ import annotations
 
 import contextlib
 import functools
+import inspect
 import threading
 import warnings
 from collections import OrderedDict
@@ -174,13 +175,21 @@ def _warn_blas_uncontrollable() -> None:
         return
     _BLAS_WARNED_UNCONTROLLABLE = True
     warnings.warn(
-        "rcwa: set_blas_threads(...) / rcwa_blas_threads(...) needs the "
-        "optional `threadpoolctl` package, which is not installed -- the "
-        "requested BLAS-thread cap is INERT (the solve runs at the "
-        "environment's default threading even though _get_blas_threads() "
-        "reports the requested value).  Install threadpoolctl to make the cap "
-        "effective, or set OMP_NUM_THREADS / OPENBLAS_NUM_THREADS / "
-        "MKL_NUM_THREADS in the environment instead.", stacklevel=3)
+        "rcwa: BLAS-THREAD CAP IS INERT -- set_blas_threads(...) / "
+        "rcwa_blas_threads(...) / the @_with_blas_limit wrapper on every public "
+        "RCWA entry point all need the `threadpoolctl` package, which is NOT "
+        "installed.  The solve runs at the environment's default threading "
+        "even though _get_blas_threads() keeps reporting the requested value.  "
+        "THIS IS NOT A MICRO-OPTIMISATION: on an oversubscribed many-core box "
+        "the default pool is catastrophically slow for these small dense "
+        "eigen/inverse kernels -- MEASURED on a 24-thread Windows OpenBLAS "
+        "0.3.31 build, inv() of a 163x163 complex matrix takes 2.29 s unpinned "
+        "against 0.0057 s pinned to one thread (400x), and a 1-D TM solve at "
+        "n_orders=81 takes 18.2 s instead of 0.13 s (140x).  Fix it either way: "
+        "`pip install threadpoolctl` (tiny, pure Python) so this library's own "
+        "cap works, or set OMP_NUM_THREADS / OPENBLAS_NUM_THREADS / "
+        "MKL_NUM_THREADS=1 in the environment BEFORE importing numpy.",
+        stacklevel=3)
 
 
 
@@ -433,16 +442,23 @@ class Efficiency2D(tuple):
     cost metric for an accuracy-vs-cost comparison (the PMM win is matched accuracy
     at smaller ``dof``).  Being a ``tuple`` subclass, ``o, R, T = result``,
     ``result[i]`` and ``isinstance(result, tuple)`` all behave as before -- only the
-    extra ``.dof`` attribute is new (the cross-suite return-shape unification)."""
+    extra ``.dof`` attribute is new (the cross-suite return-shape unification).
 
-    def __new__(cls, orders, R, T, dof):
+    ``.wl_eff`` (audit H2) is the wavelength the solve ACTUALLY ran at: the
+    requested one for an ordinary solve, the nudged one when a diffracted order
+    sat exactly at a Wood anomaly, or the ``(lo, hi)`` pair when the answer is
+    the symmetric average of the two sides of such an anomaly.  ``None`` when
+    the entry point did not record it (e.g. a traced JAX wavelength)."""
+
+    def __new__(cls, orders, R, T, dof, wl_eff=None):
         self = super().__new__(cls, (orders, R, T))
         self.dof = int(dof)
+        self.wl_eff = wl_eff
         return self
 
     def __repr__(self):
         return (f"Efficiency2D(orders=<{len(self[0])}>, R=..., T=..., "
-                f"dof={self.dof})")
+                f"dof={self.dof}, wl_eff={self.wl_eff!r})")
 
 
 
@@ -897,7 +913,67 @@ def _guarded_inverse(A, site, hint=None, rcond_refuse=None):
     return X
 
 
-def _check_energy(fn_name, R, T, lossless=False):
+def _passive_media(eps_sup, eps_sub, *eps_arrays):
+    """True when the INCIDENCE half-space is exactly lossless AND no medium in
+    the problem has gain AND every full ``(.., 3, 3)`` permittivity tensor is
+    symmetric -- the conditions under which ``sum(R) + sum(T) <= 1`` is a
+    THEOREM whatever the structure does (audit H6).
+
+    All three clauses are load-bearing, and each is a measured exception the
+    guard must not false-fire on:
+
+    * a LOSSY incidence medium puts net flux in the incident/reflected
+      cross-term, so ``R + T`` legitimately exceeds 1 (measured +0.2% at
+      ``Im(n_sup) = 0.01``, +2.3% at 0.1 -- see
+      :func:`_require_propagating_incidence`).  Exact ``Im(eps_sup) == 0`` is
+      required, not a tolerance;
+    * a GAIN medium anywhere is an active structure and ``R + T > 1`` is
+      physical;
+    * a real but ASYMMETRIC ``(3, 3)`` tensor is non-reciprocal / non-Hermitian
+      and can exchange energy with the field (the same clause
+      :func:`_cell_lossless` carries, for the same reason).
+
+    Permittivities are INTERNAL (loss-bridge-conjugated), so ``Im(eps) < 0`` is
+    loss and ``Im(eps) > 0`` is gain.
+    """
+    try:
+        if float(np.imag(complex(eps_sup))) != 0.0:
+            return False
+        if float(np.imag(complex(eps_sub))) > 0.0:
+            return False
+        for a in eps_arrays:
+            arr = to_numpy(a)
+            if float(np.max(np.imag(arr))) > 0.0:
+                return False
+            if np.ndim(arr) >= 2 and arr.shape[-2:] == (3, 3):
+                asym = np.max(np.abs(arr - np.swapaxes(arr, -1, -2)))
+                scale = max(float(np.max(np.abs(arr))), 1.0)
+                if float(asym) > 1e-15 * scale:
+                    return False
+    except (TypeError, ValueError):            # traced / array-valued inputs
+        return False
+    return True
+
+
+#: One-sided excess over ``n_states`` that :func:`_check_energy` treats as a
+#: real closure violation when ``R + T <= 1`` is a THEOREM (a lossless
+#: incidence medium and no gain anywhere -- see :func:`_passive_media`).
+#:
+#: DERIVED, not chosen.  Clean solves in this package hold the closure to
+#: <= 1.4e-13 over the audit's 24-configuration sweep (TE/TM x 0/30/60 deg x
+#: n_sub in {1, 1.5} at n_orders 31) and to 1.2e-14 on the 2-D conical set, and
+#: the exactly-Wood-anomaly path measured 4.2e-14 through the symmetric
+#: average -- so this bar sits ~7 decades above the arithmetic floor.  On the
+#: other side, the documented SILENT WINDOW this exists to close runs from
+#: ~1e-6 (where the per-order answers start to be visibly wrong: a +3.3e-2
+#: closure error carried an 8% per-order error) up to the 1.05 hard tripwire,
+#: which a LOSSY cell disarmed entirely because the tight lossless clause keys
+#: on every permittivity being real.  Same value as the lossless two-sided
+#: clause, for the same reason.
+_PASSIVE_EXCESS_BAR = 1e-6
+
+
+def _check_energy(fn_name, R, T, lossless=False, passive=False):
     """Raise if the total efficiency exceeds the incident power by a large
     margin.  A PASSIVE structure cannot reflect + transmit more than what
     comes in, so ``sum(R) + sum(T) >> 1`` per incident polarization signals a
@@ -937,6 +1013,16 @@ def _check_energy(fn_name, R, T, lossless=False):
     stack: closure 8.1e-05 at a 1e-6 detune, 8.7e-14 only by 1e-3).  If this
     guard still fires on a coincident geometry, the branch selector is the
     place to look, not the permittivity.
+
+    ``passive`` (audit H6) arms a ONE-SIDED bar 5 decades tighter than the
+    1.05 tripwire.  ``lossless`` proves the two-sided closure ``R+T = 1`` and is
+    disarmed by ANY complex permittivity -- so a lossless-INCIDENCE structure
+    with an absorbing layer (a metal grating in air: the common case) could
+    return ``R+T`` anywhere in ``(1, 1.05]`` with no signal at all.  But for a
+    passive structure under a lossless incidence medium ``R+T <= 1`` is a
+    theorem whatever the layers do, so any excess is numerical.  See
+    :func:`_passive_media` for the three clauses and ``_PASSIVE_EXCESS_BAR``
+    for the derivation of the bar.
 
     Skipped on the JAX path (the sums are traced).  Lossy media give R+T < 1
     (never triggered); the tolerance leaves normal Wood-nudge residue alone.
@@ -987,6 +1073,18 @@ def _check_energy(fn_name, R, T, lossless=False):
     # an 8% per-order error and broken +/-1 symmetry).  WARN here (raising
     # would break shipped behaviour); the stabilize= retry ladders treat
     # this warning as a failed attempt and move to the next truncation.
+    if (passive and not lossless
+            and tot - n_states > _PASSIVE_EXCESS_BAR * n_states):
+        warnings.warn(_EnergyWarning(
+            f"{fn_name}: passive-structure energy bound violated (sum R+T - "
+            f"{n_states} = {tot - n_states:+.3e}).  The incidence medium is "
+            f"exactly lossless and no medium has gain, so sum R+T <= "
+            f"{n_states} is a THEOREM whatever the structure absorbs -- the "
+            f"excess is numerical, and the PER-ORDER efficiencies are suspect "
+            f"at this truncation (the tight lossless closure clause cannot "
+            f"see this case: it is disarmed by the absorbing layer).  Pass "
+            f"stabilize=True (retries nearby truncations) or change "
+            f"n_orders."), stacklevel=3)
     if lossless and abs(tot - n_states) > 1e-6 * n_states:
         warnings.warn(_EnergyWarning(
             f"{fn_name}: lossless energy closure violated (sum R+T - "
@@ -1381,6 +1479,28 @@ def _sqrt_decay(x, xp=None, band: float = _CUT_BAND_REL):
     is not the evanescent ``exp(+|gamma| k0 L)`` blow-up the ``Re(lam) >= 0``
     rule exists to prevent; it is a 2e-09 amplitude excess on a unit-modulus
     phase, two decades below the 1.6e-07 forward discontinuity it buys off.
+
+    WHAT MAKES "by construction a PROPAGATING one" TRUE (2026-09-12).  With the
+    band test alone that sentence was a statement about the CENSUS, not about
+    the predicate: ``|Re r| <= band * scale`` measures proximity to the ORIGIN
+    on the SPECTRUM's scale, and a deeply evanescent root whose own magnitude
+    has collapsed sits near the origin too.  ``_sqrt_decay([1e-20 - 1e-30j])``
+    returned ``-1e-10 + 5e-21j`` -- a genuinely DECAYING mode (``lam^2`` a
+    positive real) handed back with ``Re(lam) < 0``, i.e. the
+    ``exp(+|gamma| k0 L)`` growth this function exists to prevent; and because
+    the scale is the array maximum, a spectrum with a large top can pull an
+    ordinary near-cutoff evanescent mode into the band as well (worst
+    constructed ``|X| = exp(band * max|lam| * k0 L)`` = 1.059 / 302 / 1e248 for
+    spectrum scales 1 / 1e2 / 1e4 at the ``k0 L = 1.14e7`` above).  The third
+    conjunct ``Im(r)^2 > Re(r)^2`` restates the test as proximity to the
+    IMAGINARY AXIS, which is what "on the cut" actually means, and it is scale
+    free.  With it the bound is a theorem rather than a census: a flipped root
+    has ``|Re r| < |Im r|``, so ``lam^2 = r^2`` has ``Re(lam^2) < 0`` -- the
+    mode is propagating -- and the price is bounded by the band exactly as the
+    paragraph above states, ``|X| - 1 <= exp(band * scale * k0 L) - 1``.  The
+    new conjunct is INERT on every population the band was derived against:
+    the worst ``|Re(r)| / |r|`` ever flipped there is 2.0751e-03 (so
+    ``Im^2 / Re^2 > 2e5``), five decades clear of the ``Im^2 = Re^2`` edge.
     The obvious mitigation -- keeping ``-r`` but zeroing the noise real part,
     ``where(flip, 1j * imag(r_flipped), r_flipped)`` -- was measured and
     REJECTED: ``imag()`` is itself non-holomorphic, and it scored WORSE than
@@ -1425,7 +1545,15 @@ def _sqrt_decay(x, xp=None, band: float = _CUT_BAND_REL):
     # an absolute band).  Pin Im >= 0 there so propagating modes use the
     # outgoing root deterministically, on every build.
     scale = xp.maximum(xp.max(xp.abs(r)), 1.0) if r.size else 1.0
-    flip = (xp.abs(r.real) <= band * scale) & (r.imag < 0)
+    # THREE conjuncts, and the third is what makes the price bound TRUE.
+    # ``|Re r| <= band * scale`` alone says "near the ORIGIN on the spectrum's
+    # scale", which a tiny EVANESCENT root also satisfies; adding
+    # ``Im(r)^2 > Re(r)^2`` says "nearer the IMAGINARY axis than the real one",
+    # so the flipped set is exactly the modes whose root is dominated by its
+    # imaginary part -- i.e. propagating ones.  See the docstring's PRICE
+    # paragraph for the bound this buys.
+    flip = ((xp.abs(r.real) <= band * scale) & (r.imag < 0)
+            & (r.imag ** 2 > r.real ** 2))
     # ROUND 3: the flip is ``-r``, NOT ``conj(r)``.  ``-r`` is the EXACT
     # forward/backward involution the S-matrix assembly is invariant under,
     # and multiplying by a real +/-1 whose sign is a piecewise-constant
@@ -1504,8 +1632,61 @@ def _require_propagating_incidence(fn_name, eps_sup, kt0_sq, *,
 
 
 
+class WoodNudgeWarning(UserWarning):
+    """Emitted whenever :func:`_grazing_safe_wavelength` substitutes a
+    different wavelength for the requested one because a diffracted order sits
+    EXACTLY at cut-off (a Wood / Rayleigh anomaly).
+
+    A dedicated category (rather than a bare ``UserWarning``) so a wavelength
+    sweep that deliberately steps onto the anomaly can filter it, and so a
+    caller that must never accept a substituted answer can promote it with
+    ``warnings.filterwarnings('error',
+    category=lumenairy.elements.rcwa.WoodNudgeWarning)``."""
+
+
+#: ``|eps - kt^2|`` below this counts as "the order is EXACTLY at cut-off".
+#: The nudge search below moves the wavelength until every listed medium is
+#: further than this from every order's transverse wavenumber.
+_WOOD_DETECT = 1e-9
+
+#: Relative wavelength step of one nudge iteration.  NOT reduced by the
+#: 2026-09-12 H2 work even though the exact-wavelength answer is what the user
+#: asked for and the error falls as ``sqrt(delta)`` (measured below): this
+#: function is SHARED with ``elements/pmm``, whose staggered engine degrades
+#: like ``1/sqrt(distance)`` as the cut-off is approached, so a smaller step
+#: is better for RCWA and worse for PMM.  The RCWA entry points buy the
+#: accuracy back instead through the symmetric average
+#: (:func:`_grazing_safe_wavelength_pair` / :func:`_wood_symmetric`), which is
+#: local to this package.
+_WOOD_STEP_REL = 1e-7
+
+#: Base relative half-width of the SYMMETRIC bracket the RCWA entry points
+#: solve at (:func:`_grazing_safe_wavelength_pair`), grown by 10x per iteration
+#: until both sides clear ``_WOOD_DETECT``.  Two decades smaller than
+#: ``_WOOD_STEP_REL``, which is the whole point: this constant is NOT shared
+#: with ``elements/pmm`` (whose staggered engine degrades TOWARD a cut-off, so
+#: it wants the larger step), and the RCWA error falls as ``sqrt(shift)``, so a
+#: 100x smaller bracket is a 10x better answer.
+#:
+#: WHY 1e-9 AND NOT SMALLER.  ``_WOOD_DETECT`` is the floor: at the canonical
+#: ``Lambda = lambda`` mount ``d|eps - kt^2| / d(rel wl) = 2``, so this step
+#: puts the nearest medium 2e-09 away -- clear of the 1e-09 detection
+#: threshold, which is what "off the anomaly" is defined to mean here.
+#: Conditioning is NOT the binding constraint anywhere near it: measured on
+#: that mount, the solve's energy closure is 2e-14 .. 5e-14 and its agreement
+#: with an independent direct-boundary-match oracle is the physical
+#: ``sqrt(shift)`` all the way down to a 1e-13 shift (where the grazing mode's
+#: ``kz`` is 4.5e-07 and ``_inv_lam`` is still five decades above its 1e-12
+#: floor).  The search grows the step geometrically, so a mount where the
+#: anomaly condition is flat in wavelength still terminates -- and its reach
+#: (1e-09 * 10^7 = 1e-02 relative at the default ``max_iter``) is four decades
+#: LONGER than the one-sided search's 8e-07.
+_WOOD_PAIR_STEP_REL = 1e-9
+
+
 def _grazing_safe_wavelength(wavelength, kx0, ky0, m_orders, n_orders,
-                             period_x, period_y, eps_reals, max_iter=8):
+                             period_x, period_y, eps_reals, max_iter=8, *,
+                             fn_name=None, warn=True):
     """Wavelength nudged off any EXACT Wood anomaly -- a diffracted order
     grazing (``kz = 0``) in ANY medium whose real permittivity is in
     ``eps_reals`` (the super/substrate AND the layer's constituent indices;
@@ -1513,7 +1694,32 @@ def _grazing_safe_wavelength(wavelength, kx0, ky0, m_orders, n_orders,
     S-matrix).  A tiny relative REAL nudge is applied only when an exact
     grazing is detected, so lossless energy stays exact, ``+/-m`` symmetry is
     preserved, and the grazing order (which carries no z-power) limits
-    continuously."""
+    continuously.
+
+    THE SUBSTITUTION IS ANNOUNCED (audit H2, 2026-09-12).  Until then it was
+    silent, and that silence was the whole of the finding: at the canonical
+    Moharam mount ``Lambda = lambda = 1 um`` (n_ridge 2.04, d = 1 um, duty 0.5,
+    normal incidence, n_orders 21) the TM zeroth-order reflectance came back
+    0.155908839054 against an independent direct-boundary-match oracle's
+    0.155845785342 at the requested wavelength -- 4.05e-04 relative -- with
+    ``warnings.catch_warnings(record=True)`` returning an EMPTY list.  The
+    number is not wrong by accident: it is the exactly-right answer to
+    ``lambda * (1 + 1e-7)``, which is a different problem, and nothing said so.
+    ``warn=False`` suppresses the notice for an internal probe that is only
+    asking WHERE the anomaly is (see :func:`_grazing_safe_wavelength_pair`).
+
+    WHY A NUDGE AT ALL.  The exact-wavelength problem is well posed -- the
+    direct 4N boundary match solves it with closure 1.5e-13 at every truncation
+    -- but this S-matrix formulation's REGION mode basis is genuinely defective
+    there: a grazing order has ``kz = 0``, so its two half-space modes coincide,
+    ``_inv_lam`` floors ``1 / lam`` and the interface mode match ``Vb`` becomes
+    exactly singular (measured: ``LinAlgError: Singular matrix`` from
+    ``_interface_smatrix`` for 1-D TE and for BOTH 2-D polarizations at the
+    mount above; 1-D TM happens to survive, reproducing the oracle to 1.06e-13).
+    So the nudge stays -- what changes is that it is announced, and that the
+    RCWA entry points report the symmetric average of the two sides instead of
+    one side only.
+    """
     eps_reals = [float(np.real(e)) for e in eps_reals]
 
     def closest(wl):
@@ -1524,10 +1730,212 @@ def _grazing_safe_wavelength(wavelength, kx0, ky0, m_orders, n_orders,
 
     wl = wavelength
     for _ in range(max_iter):
-        if closest(wl) > 1e-9:
-            return wl
-        wl = wl * (1.0 + 1e-7)
+        if closest(wl) > _WOOD_DETECT:
+            break
+        wl = wl * (1.0 + _WOOD_STEP_REL)
+    if warn and wl != wavelength:
+        warnings.warn(
+            f"{fn_name or '_grazing_safe_wavelength'}: a diffracted order sits "
+            f"EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested "
+            f"wavelength {wavelength!r} m, where this solver's half-space mode "
+            f"basis is degenerate (kz = 0 gives two coincident modes and a "
+            f"singular interface match).  The solve is being run at "
+            f"{wl!r} m instead (relative shift "
+            f"{(wl - wavelength) / wavelength:+.3e}) -- a DIFFERENT problem.  "
+            f"The answer is exact for that wavelength; measured on the "
+            f"Lambda = lambda Moharam mount it differs from the exact-lambda "
+            f"limit by 4.05e-04 relative in TM R0.  Move the wavelength off "
+            f"the anomaly yourself, or read the result's wl_eff.",
+            WoodNudgeWarning, stacklevel=3)
     return wl
+
+
+def _grazing_safe_wavelength_pair(wavelength, kx0, ky0, m_orders, n_orders,
+                                  period_x, period_y, eps_reals, max_iter=8,
+                                  *, fn_name=None):
+    """``(wl_eff, wl_mirror)`` -- the Wood nudge and its MIRROR about the
+    requested wavelength, or ``(wavelength, None)`` when no order is at cut-off.
+
+    ``wl_mirror = 2 * wavelength - wl_eff`` exactly, so the two solves bracket
+    the requested wavelength symmetrically and their mean is the requested one
+    to rounding.  Averaging the two ANSWERS is then the best estimate of the
+    exact-wavelength answer this formulation can produce
+    (:func:`_wood_symmetric`).
+
+    MEASURED, at the Moharam ``Lambda = lambda = 1 um`` mount (n_ridge 2.04,
+    d = 1 um, duty 0.5, normal incidence, n_orders 21) against an independent
+    direct-boundary-match oracle at the EXACT wavelength (TM R0
+    0.155845785342, its own closure 1.8e-15):
+
+    ======  =========================  =========================
+    delta   one-sided ``+delta`` err   symmetric-average err
+    ======  =========================  =========================
+    1e-06   +2.02e-04                  +3.30e-05
+    1e-07   +6.31e-05 (the old nudge)  +1.04e-05
+    1e-08   +1.99e-05                  +3.30e-06
+    1e-09   +6.28e-06 (this bracket)   **+1.04e-06**
+    ======  =========================  =========================
+
+    Both columns fall as ``sqrt(delta)``, not as ``delta^2``: a Wood anomaly is
+    a SQUARE-ROOT branch point of the efficiencies in the wavelength, so the
+    two one-sided limits approach the value with infinite slope and no
+    symmetric difference can cancel the leading term.  Two things follow, and
+    both are why this function exists instead of just calling
+    :func:`_grazing_safe_wavelength`:
+
+    * the bracket should be as NARROW as the detection threshold allows -- see
+      ``_WOOD_PAIR_STEP_REL``.  Against the old one-sided ``1e-7`` nudge the
+      shipped bracket is 60x more accurate on TM R0 (6.31e-05 -> 1.04e-06);
+    * the average restores CONTINUITY, which no one-sided rule can.  The
+      one-sided value at the anomaly is bit-identical to its ``+delta``
+      neighbour, so it sat ABOVE BOTH neighbours in a wavelength sweep
+      (0.155822748627 at -3e-8, 0.155908839054 AT the anomaly, 0.155880240631
+      at +3e-8) -- a one-point spike any optimiser differencing through it
+      reads as a real feature.  The average lands strictly between its
+      neighbours, as a limit must.
+
+    THE ONE THING THE AVERAGE GETS WRONG, stated exactly.  An order that is
+    EXACTLY grazing at the requested wavelength carries no z-directed power --
+    that is a theorem, and both the one-sided nudge (which happens to make it
+    evanescent) and the oracle return exactly 0 for it.  The average does not:
+    on the ``-delta`` side that order is PROPAGATING and carries ~``sqrt(delta)``
+    of power, so half of that survives the mean.  Measured at this mount,
+    TM order ``m = +/-1``: R 0.0 -> 2.34e-05 and T 0.0 -> 4.38e-05 at a 1e-7
+    bracket, 10x smaller at the shipped 1e-9.  The power is not invented -- it
+    comes out of the specular order, so the closure stays exact (4.2e-14) --
+    and it is the SAME ``sqrt(delta)`` that sets the error on every other
+    order.  Zeroing those orders afterwards was considered and rejected: it
+    would leave the closure short by exactly that amount, which is a worse
+    violation of a theorem than a per-order value 4 decades below its
+    neighbours.  Read ``wl_eff`` to see the bracket.
+    """
+    eps_reals_f = [float(np.real(e)) for e in eps_reals]
+
+    def closest(wl):
+        kxg = kx0 + m_orders * (wl / period_x)
+        kyg = ky0 + n_orders * (wl / period_y)
+        kt2 = kxg ** 2 + kyg ** 2
+        return min(float(np.min(np.abs(e - kt2))) for e in eps_reals_f)
+
+    if closest(wavelength) > _WOOD_DETECT:
+        return wavelength, None                     # no anomaly: nothing to do
+    # The NARROWEST symmetric bracket that clears the detection threshold on
+    # BOTH sides (a multi-order coincidence is not symmetric in general, so both
+    # sides are tested).  ``wl * (1 -/+ rel)`` is exactly symmetric about ``wl``
+    # to rounding, so the mean of the two solves is the requested wavelength.
+    rel = _WOOD_PAIR_STEP_REL
+    wl_eff = wl_mirror = None
+    for _ in range(max_iter):
+        hi, lo = wavelength * (1.0 + rel), wavelength * (1.0 - rel)
+        if closest(hi) > _WOOD_DETECT and closest(lo) > _WOOD_DETECT:
+            wl_eff, wl_mirror = hi, lo
+            break
+        rel *= 10.0
+    if wl_eff is None:
+        # No symmetric bracket within reach -> fall back to the shared one-sided
+        # nudge, which warns on its own.
+        return _grazing_safe_wavelength(
+            wavelength, kx0, ky0, m_orders, n_orders, period_x, period_y,
+            eps_reals, max_iter, fn_name=fn_name), None
+    warnings.warn(
+        f"{fn_name or '_grazing_safe_wavelength'}: a diffracted order sits "
+        f"EXACTLY at cut-off (Wood / Rayleigh anomaly) at the requested "
+        f"wavelength {wavelength!r} m, where this solver's half-space mode "
+        f"basis is degenerate (kz = 0 gives two coincident modes and a "
+        f"singular interface match).  The result is the SYMMETRIC AVERAGE of "
+        f"solves at {wl_mirror!r} m and {wl_eff!r} m (relative shift "
+        f"+/-{rel:.3e}), which is continuous through the anomaly; the residual "
+        f"against the exact-wavelength limit falls as sqrt(shift) and is "
+        f"~6.7e-06 relative on the Lambda = lambda Moharam mount, and an "
+        f"EXACTLY grazing order picks up ~sqrt(shift) of power where the exact "
+        f"answer is 0.  Read wl_eff on the result for the two wavelengths "
+        f"actually solved.", WoodNudgeWarning, stacklevel=3)
+    return wl_eff, wl_mirror
+
+
+class _WoodAnomaly(Exception):
+    """PRIVATE control-flow signal, raised by an RCWA entry point the moment it
+    discovers that the requested wavelength sits on an exact Wood anomaly and
+    caught by that same entry point's :func:`_wood_symmetric` wrapper, which
+    re-enters it twice (once per side) and averages.
+
+    A control-flow exception rather than a return value because the alternative
+    -- every entry point re-listing its own ~20 arguments to call itself -- is a
+    site where a later kwarg silently fails to be forwarded.  Deliberately NOT a
+    ``ValueError`` subclass so no existing ``except ValueError`` handler can
+    swallow it."""
+
+    def __init__(self, fn_name, wl_requested, wl_lo, wl_hi):
+        super().__init__(
+            f"{fn_name}: Wood anomaly at {wl_requested!r} m "
+            f"(internal control flow; should have been handled by "
+            f"_wood_symmetric)")
+        self.fn_name = fn_name
+        self.wl_requested = wl_requested
+        self.wl_lo = wl_lo
+        self.wl_hi = wl_hi
+
+
+@functools.lru_cache(maxsize=None)
+def _wood_signature(fn):
+    return inspect.signature(fn)
+
+
+def _wood_mean_leaf(fn_name, a, b):
+    """Mean of one leaf of a result: integer arrays (order labels) must AGREE
+    and are passed through; floating / complex arrays and scalars are
+    averaged."""
+    da = getattr(a, "dtype", None)
+    if da is not None and np.issubdtype(da, np.integer):
+        if not bool(np.all(np.asarray(a) == np.asarray(b))):
+            raise ValueError(
+                f"{fn_name}: the two sides of the Wood-anomaly symmetric "
+                f"average retained DIFFERENT diffraction orders; the average "
+                f"is not defined.  Move the wavelength off the anomaly.")
+        return a
+    if isinstance(a, (bool, np.bool_)) or isinstance(a, str) or a is None:
+        return a
+    return 0.5 * (a + b)
+
+
+def _wood_mean(fn_name, lo, hi, wl_lo, wl_hi):
+    """Average the two sides of a Wood-anomaly bracket into one result of the
+    same type.  ``Efficiency2D`` and plain tuples are averaged element-wise;
+    anything exposing ``_wood_mean_with`` (``RCWAResult``) averages itself."""
+    if hasattr(lo, "_wood_mean_with"):
+        return lo._wood_mean_with(hi, (wl_lo, wl_hi))
+    if isinstance(lo, Efficiency2D):
+        return Efficiency2D(lo[0], _wood_mean_leaf(fn_name, lo[1], hi[1]),
+                            _wood_mean_leaf(fn_name, lo[2], hi[2]), lo.dof,
+                            wl_eff=(wl_lo, wl_hi))
+    if isinstance(lo, tuple):
+        return tuple(_wood_mean_leaf(fn_name, a, b) for a, b in zip(lo, hi))
+    return _wood_mean_leaf(fn_name, lo, hi)
+
+
+def _wood_symmetric(fn):
+    """Decorator: turn a :class:`_WoodAnomaly` raised inside ``fn`` into the
+    SYMMETRIC AVERAGE of two solves bracketing the requested wavelength.
+
+    The decorated function must accept a keyword-only ``_wl_eff`` that, when
+    not ``None``, replaces the wavelength it would otherwise derive (and skips
+    the anomaly detection, so the two inner legs cannot recurse).  Off-anomaly
+    the wrapper is a bare call -- no signature work, no cost.  See
+    :func:`_grazing_safe_wavelength_pair` for the measurements that make this
+    the default."""
+    @functools.wraps(fn)
+    def _wrapped(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except _WoodAnomaly as anomaly:
+            ba = _wood_signature(fn).bind(*args, **kwargs)
+            ba.arguments["_wl_eff"] = anomaly.wl_lo
+            lo = fn(*ba.args, **ba.kwargs)
+            ba.arguments["_wl_eff"] = anomaly.wl_hi
+            hi = fn(*ba.args, **ba.kwargs)
+            return _wood_mean(anomaly.fn_name, lo, hi,
+                              anomaly.wl_lo, anomaly.wl_hi)
+    return _wrapped
 
 
 
@@ -1544,10 +1952,34 @@ def _validate_geometry(fn_name, *, period=None, period_y=None, depth=None,
     ``n_orders_y = 0`` IS allowed (audit M8 2026-07-25): a y-INVARIANT 2-D cell
     (a stripe / 1-D grating solved through the 2-D engine) needs no y-harmonics
     at all -- the ``n != 0`` orders are exactly decoupled, and the ``N_y = 0``
-    solve reproduces :func:`rcwa_efficiency_1d` per order to ~5e-15 with a
-    ~1e-14 closure, at 1/27 of the ``N_y = 1`` eigensolve (the retained-harmonic
-    count triples, and the eig is ``O(N^3)``; measured 5 ms vs 2.6 s at
+    solve is the SAME PROBLEM as the ``N_y = 1`` one to ~5e-15 per order with a
+    ~1e-14 closure, at 1/27 of the eigensolve (the retained-harmonic count
+    triples, and the eig is ``O(N^3)``; measured 5 ms vs 2.6 s at
     ``n_orders_x = 12``).  The forced minimum was therefore pure cost.
+
+    THE ~5e-15 IS THE Y-HARMONIC CLAIM, NOT A 1-D/2-D EQUIVALENCE (audit H6,
+    2026-09-12).  It was written as "reproduces :func:`rcwa_efficiency_1d` per
+    order to ~5e-15", which holds only in the infinite-pixel limit: the 1-D core
+    builds EXACT analytic step coefficients (:func:`_binary_step_coeffs`) while
+    the 2-D core FFTs a RASTERIZED cell, so the two solve slightly different
+    structures and the gap is a RASTERIZATION error, clean ``O(1/Sx^2)``.
+    Measured on a grid-exact duty 0.5, period 0.5 um, n = 2/1 on n_sub = 1.5,
+    d = 0.3 um, lambda = 0.633 um, ``n_orders_x`` 8, ``'li'``:
+
+    ====  ===========  ===========  ===========  ===========
+    Sx    TE max|dR|   TE max|dT|   TM max|dR|   TM max|dT|
+    ====  ===========  ===========  ===========  ===========
+    64    1.46e-04     5.16e-04     1.86e-05     1.18e-04
+    256   9.14e-06     3.23e-05     1.14e-06     7.56e-06
+    1024  5.71e-07     2.02e-06     7.11e-08     4.73e-07
+    4096  3.57e-08     1.26e-07     4.44e-09     2.96e-08
+    ====  ===========  ===========  ===========  ===========
+
+    At the MINIMUM sampling :func:`_validate_cell_sampling` allows
+    (``Sx >= 4*n_orders + 1`` = 33) the gap is ~1e-3, not 5e-15.  The public
+    :func:`~..twod.rcwa_efficiency_2d` PIXEL CELL CONTRACT already says so; this
+    note now says it too.  Compare the two engines only at a sampling you have
+    convergence-tested, or compare the 2-D engine against itself.
     ``n_orders`` (the x count) still requires ``>= 1``: with ZERO x-harmonics
     there is no diffraction problem left.  A cell that VARIES along y is
     rejected by :func:`_validate_cell_sampling`, which owns the cell (it would
@@ -4347,6 +4779,7 @@ __all__ = [
     "_EnergyWarning",
     "_check_energy",
     "_cell_lossless",
+    "_passive_media",
     "_require_jax_x64",
     "_normalize_pol",
     "_sqrt_forward",
@@ -4356,6 +4789,10 @@ __all__ = [
     "_sqrt_decay",
     "_require_propagating_incidence",
     "_grazing_safe_wavelength",
+    "_grazing_safe_wavelength_pair",
+    "_WoodAnomaly",
+    "_wood_symmetric",
+    "WoodNudgeWarning",
     "_validate_geometry",
     "_validate_cell_sampling",
     "_shape_support",

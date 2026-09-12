@@ -87,7 +87,12 @@ def strip_x_modes(eps_x, Lx, Nx, k0, kx0=0.0):
     eps_c = np.asarray(eps_x, dtype=complex)
     A = D + np.diag(eps_c * k0 ** 2)
     if not np.any(eps_c.imag):                  # Hermitian at ANY real kx0
-        lam, Phi = np.linalg.eigh(A.real if np.isrealobj(A) else A)
+        # ``A`` is built ``dtype=complex`` unconditionally, so the historical
+        # ``A.real if np.isrealobj(A) else A`` never took its ``.real`` arm
+        # (audit H6).  ``eigh`` on the complex-with-zero-imaginary matrix is the
+        # branch that always ran and the one the cross-build determinacy gates
+        # measured, so it is now the only branch.
+        lam, Phi = np.linalg.eigh(A)
     else:
         from scipy.linalg import eig
         # EME-nit (AUDIT_EME): unlike the ``eigh`` branch (ascending ``lam``),
@@ -436,9 +441,17 @@ def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0, return_vecs=False
             cols += [p, ix(i + 1, j), ix(i - 1, j), ix(i, j + 1), ix(i, j - 1)]
             vals += [-2 / hx ** 2 - 2 / hy ** 2 + eps_xy[i, j] * k0 ** 2,
                      (px if i == Nx - 1 else 1) / hx ** 2,
-                     ((1 / px) if i == 0 else 1) / hx ** 2,
+                     # np.conj, NOT 1/px -- the SAME rule strip_x_modes states
+                     # at :83-86 (audit H6: the oracle used 1/px while the
+                     # operator it validates used conj, which is the exact
+                     # inconsistency that comment exists to prevent).  For
+                     # |px| = 1 they agree analytically; 1/px carries a roundoff
+                     # error that makes A only APPROXIMATELY Hermitian, and this
+                     # oracle is compared against an EXACTLY Hermitian operator.
+                     # Identical bits at kx0 = ky0 = 0, where px = py = 1.
+                     (np.conj(px) if i == 0 else 1) / hx ** 2,
                      (py if j == Ny - 1 else 1) / hy ** 2,
-                     ((1 / py) if j == 0 else 1) / hy ** 2]
+                     (np.conj(py) if j == 0 else 1) / hy ** 2]
     A = _sp.coo_matrix((vals, (rows, cols)), shape=(N, N), dtype=complex).tocsc()
     if k is None:
         from scipy.linalg import eig

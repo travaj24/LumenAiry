@@ -353,29 +353,44 @@ def _round1_body(x):
     return xp.where(on_cut & (r.imag < 0), xp.conj(r), r)
 
 
-def test_the_shared_body_keeps_the_round_one_SELECTOR_and_changes_only_the_value():
-    """The round-2 consolidation and the round-3 flip touch DIFFERENT halves of
-    this function, and this test pins the split.
+def test_the_shared_body_narrows_the_round_one_SELECTOR_to_the_cut():
+    """The round-2 consolidation, the round-3 flip and the round-4 predicate
+    touch DIFFERENT halves of this function, and this test pins the split.
 
-    RESTATED 2026-09-11 (ROUND 3).  The old form asserted the shared body was
-    BIT-IDENTICAL to the round-1 body over 4,010 values.  Round 3 changed the
-    on-cut flip from ``conj(r)`` to ``-r``, so the VALUES differ wherever the
-    flip fires -- and that is the whole of the change, which is what makes it
-    reviewable.  The two claims below are each stronger than a bit-comparison
-    against a body that is no longer the contract:
+    RESTATED 2026-09-12 (ROUND 4, audit G11).  Round 3 changed the on-cut flip
+    from ``conj(r)`` to ``-r``, so the VALUES differ from the round-1 body
+    wherever the flip fires.  Round 4 changed WHICH modes fire: the round-1
+    predicate ``|Re r| <= band * scale`` measures proximity to the ORIGIN on the
+    SPECTRUM's scale, which a deeply evanescent root satisfies too once its own
+    magnitude has collapsed, and flipping one of those hands a DECAYING mode
+    back with ``Re(lam) < 0`` -- the ``exp(+|gamma| k0 L)`` growth the
+    ``Re >= 0`` rule exists to prevent (counterexample:
+    ``_sqrt_decay([1e-20 - 1e-30j])`` returned ``-1e-10 + 5e-21j``).  The third
+    conjunct ``Im(r)^2 > Re(r)^2`` restates the test as proximity to the
+    IMAGINARY AXIS, which is what "on the cut" means and is scale free.
 
-      (a) THE SELECTOR IS UNCHANGED.  Which modes the band flips is decided by
-          exactly the round-1 predicate, over the same 4,010 values and the
-          same five array SIZES (the band is relative to the array, so size is
-          a real axis).  Nothing about WHEN the flip fires moved in round 2 or
-          round 3, so the round-1/round-2 population measurements -- the
-          fourteen decades of separation recorded at ``_CUT_BAND_REL`` -- carry
-          forward unchanged.
-      (b) WHERE IT FIRES, THE VALUE MOVED BY EXACTLY ``2 Re(r)``.  That is an
+    So claim (a) is no longer "the selector is unchanged"; it is the STRICTLY
+    STRONGER pair below.  MEASURED on this fixture (4,010 values, five array
+    sizes): round-1 flips 0 / 0 / 0 / 4 / 37 / 0 at n = 1 / 2 / 7 / 64 / 243 /
+    4010, round 4 flips 0 / 0 / 0 / 4 / 23 / 0 -- 14 entries dropped, all of
+    them at n = 243, and the CLOSEST dropped entry has ``|Re r| / |Im r|`` =
+    1.251 (i.e. it was on the evanescent side of the 45-degree line, not on the
+    cut), while the closest KEPT entry has ``|Im r| / |Re r|`` = 1.007.
+
+      (a1) THE FLIP SET IS EXACTLY THE PUBLISHED ROUND-4 PREDICATE, over the
+           same values and the same five array SIZES (the band is relative to
+           the array, so size is a real axis).
+      (a2) IT IS A SUBSET OF THE ROUND-1 SELECTOR, and every entry it drops has
+           ``Re(r)^2 >= Im(r)^2`` -- a root nearer the REAL axis than the
+           imaginary one, i.e. an evanescent-side mode that must never be
+           flipped.  Nothing was ADDED, so the round-1/round-2 population
+           measurements -- the fourteen decades recorded at ``_CUT_BAND_REL`` --
+           carry forward as an upper bound on what fires.
+      (b) WHERE BOTH FIRE, THE VALUE MOVED BY EXACTLY ``2 Re(r)``.  That is an
           identity, not a tolerance: ``conj(r) - (-r) == 2 Re(r)`` in exact
-          arithmetic, and in binary floating point too, because ``2a`` is
-          exact and ``2a - a == a``.  Anywhere the flip does NOT fire the two
-          bodies still agree bit for bit.
+          arithmetic, and in binary floating point too, because ``2a`` is exact
+          and ``2a - a == a``.  Where round 4 does NOT fire the shared body
+          returns the PRINCIPAL root, bit for bit.
     """
     rng = np.random.default_rng(20260911)
     mags = 10.0 ** rng.uniform(-15.0, 6.0, 4000)
@@ -386,6 +401,7 @@ def test_the_shared_body_keeps_the_round_one_SELECTOR_and_changes_only_the_value
              complex("nan"), 1e300 + 1e300j]
     z = np.array(vals, dtype=complex)
     fired = 0
+    dropped_total = 0
     for n in (1, 2, 7, 64, 243, z.size):
         zz = z[:n]
         a = np.asarray(_rc._sqrt_decay(zz))
@@ -396,34 +412,43 @@ def test_the_shared_body_keeps_the_round_one_SELECTOR_and_changes_only_the_value
         # NaN included -- a NaN anywhere makes ``scale`` NaN, every ``<=``
         # comparison False, and the band inert.  That is a real property of the
         # selector (a NaN modal eigenvalue disarms the pin for the whole
-        # spectrum), and reproducing it here is what makes (a) a statement
+        # spectrum), and reproducing it here is what makes (a1) a statement
         # about the predicate rather than about the fixture.
         with np.errstate(invalid="ignore"):
             band = _rc._CUT_BAND_REL * max(float(np.max(np.abs(r))), 1.0)
-            flip = (np.abs(r.real) <= band) & (r.imag < 0)
+            near_origin = (np.abs(r.real) <= band) & (r.imag < 0)
+            flip = near_origin & (r.imag ** 2 > r.real ** 2)
         fired += int(flip.sum())
-        # (a) the SELECTOR: round-1 flipped exactly where the shared body does
         sel_round1 = np.zeros(zz.shape, bool)
         sel_round1[fin] = b[fin] != r[fin]
         sel_shared = np.zeros(zz.shape, bool)
         sel_shared[fin] = a[fin] != r[fin]
-        assert np.array_equal(sel_round1, sel_shared), (
-            "the shared body flips a DIFFERENT set of modes than the round-1 "
-            "body at n = %d (%d vs %d)"
-            % (n, int(sel_round1.sum()), int(sel_shared.sum())))
-        assert np.array_equal(sel_shared, flip), (
+        # (a1) the shared body flips exactly the published round-4 predicate
+        assert np.array_equal(sel_shared, flip & fin), (
             "the shared body's flip set is not the published predicate at "
             "n = %d" % n)
-        # (b) UNFLIPPED entries are still bit-identical to the round-1 body
+        # (a2) a SUBSET of round 1, and every dropped entry is evanescent-side
+        assert not np.any(sel_shared & ~sel_round1), (
+            "round 4 flips a mode round 1 did not, at n = %d" % n)
+        dropped = sel_round1 & ~sel_shared
+        dropped_total += int(dropped.sum())
+        assert np.all(r.real[dropped] ** 2 >= r.imag[dropped] ** 2), (
+            "an entry dropped at n = %d is nearer the IMAGINARY axis than the "
+            "real one -- it belongs on the cut and must still flip" % n)
+        # (b) off the round-4 flip set the shared body is the PRINCIPAL root
         keep = fin & ~flip
-        assert np.array_equal(a[keep], b[keep]), (
-            "the shared body differs from the round-1 body OFF the flip set "
-            "at n = %d" % n)
-        # ... and on the flip set it differs by exactly 2 Re(r), bit for bit
-        assert np.array_equal(b[flip] - a[flip], 2.0 * r.real[flip] + 0j), (
+        assert np.array_equal(a[keep], r[keep]), (
+            "the shared body is not the principal root off its flip set at "
+            "n = %d" % n)
+        # ... and where BOTH flip it differs from round 1 by exactly 2 Re(r)
+        both = fin & flip & sel_round1
+        assert np.array_equal(b[both] - a[both], 2.0 * r.real[both] + 0j), (
             "the round-1 and round-3 flips do not differ by exactly 2 Re(r) "
             "at n = %d" % n)
     assert fired > 0, "the flip never fired on this fixture -- wrong values"
+    assert dropped_total > 0, (
+        "the round-4 conjunct dropped NOTHING on this fixture -- it is no "
+        "longer discriminating and (a2) is vacuous")
 
 
 def test_the_band_parameter_is_live_and_defaults_to_the_module_constant():

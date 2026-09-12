@@ -22,6 +22,7 @@ from ._core import (
     _EnergyError,
     _forward_flux_kz,
     _grazing_safe_wavelength,
+    _grazing_safe_wavelength_pair,
     _homogeneous_eigenmodes,
     _interface_smatrix,
     _interface_smatrix_general,
@@ -30,6 +31,7 @@ from ._core import (
     _layer_eigenmodes_tensor,
     _modes_to_M,
     _normalize_pol,
+    _passive_media,
     _project_efficiency,
     _propagation_star,
     _propagation_star_general,
@@ -49,6 +51,8 @@ from ._core import (
     _validate_geometry,
     _validate_shapes,
     _with_blas_limit,
+    _WoodAnomaly,
+    _wood_symmetric,
 )
 
 
@@ -405,10 +409,12 @@ def _li_axis_tensor(blocks, axis, M_along, S_along, xp):
 
 
 def _li_convolutions_2d_tensor(exx, exy, eyx, eyy, orders, n_orders_x,
-                               n_orders_y, xp):
-    """Li-2003 successive full-tensor factorization `` ehat = L2 L1(eps) `` of the
-    in-plane 2x2 tensor (JOSA/J.Opt.A 5:345, Eqs. 13-20; the Smagin-Weiss-Dyakov
-    2026 ``l+-_tau`` operator).
+                               n_orders_y, xp, *, symmetrize=True):
+    """Li-2003 successive full-tensor factorization of the in-plane 2x2 tensor
+    (JOSA/J.Opt.A 5:345, Eqs. 13-20; the Smagin-Weiss-Dyakov 2026 ``l+-_tau``
+    operator), SYMMETRIZED over the two factorization orders::
+
+        ehat = (L2 L1(eps) + L1 L2(eps)) / 2
 
     Returns ``(Cxx, Cxy, Cyx, Cyy)`` -- the four in-plane permittivity-operator
     blocks with the correct inverse-rule treatment along BOTH axes: the inverse
@@ -420,12 +426,57 @@ def _li_convolutions_2d_tensor(exx, exy, eyx, eyy, orders, n_orders_x,
     ~1e7 for the normal-vector projector form).
 
     Reduces EXACTLY (machine precision) to the 1-D Li-1996 factorization
-    (:func:`_li_convolutions_2d`) for a y-uniform stripe, and to Laurent for a
-    uniform cell.  Rigorous for AXIS-ALIGNED (Manhattan) cells; the ``L2 L1`` vs
-    ``L1 L2`` order differs in the truncated space (Li 2003 Sec. 5.2, converging
-    to the same limit) -- this uses the fixed ``L2 L1`` order.  ``eps_*`` are the
-    INTERNAL (loss-bridge-conjugated) samples.
+    (:func:`_li_convolutions_2d`) for a y-uniform stripe -- both orders coincide
+    there -- and to Laurent for a uniform cell.  Rigorous for AXIS-ALIGNED
+    (Manhattan) cells.
+
+    WHY THE AVERAGE (audit H3, 2026-09-12).  ``L2 L1`` factorizes x first and y
+    second.  That order is not x<->y symmetric, so a cell that IS
+    (``np.array_equal(cell, cell.T)``) came out with ``Jxx != Jyy`` at normal
+    incidence, where the cell's own C4 / C-infinity symmetry makes them
+    identical.  Measured on :func:`rcwa_jones_2d` (period 0.5 um, depth 0.3 um,
+    lambda 0.633 um, eps 6.25 in 2.25, theta = phi = 0, 96x96 cell), ``|Jxx -
+    Jyy|`` at truncations M = 4..12:
+
+    ==========  ===================  ====================
+    cell        ``li`` / ``laurent`` ``fff_nv``, one order
+    ==========  ===================  ====================
+    square C4   2e-15 .. 1e-13       3.09e-04 .. 3.42e-05
+    disk        1e-15 .. 3e-13       8.00e-03 .. 2.05e-03
+    ==========  ===================  ====================
+
+    It converges as ~1/M, so it is a truncation artefact of the fixed order --
+    but at the truncations waveplate work actually runs it is 2-5e-03 of
+    spurious form birefringence on a cell that has NONE, i.e. a systematic
+    retardance and diattenuation bias in exactly the workflow this entry point
+    exists to serve.  Under the transpose ``T`` (order labels ``(m, n) ->
+    (n, m)``, components x<->y) one has ``T L2L1(eps) T = L1L2(eps^T)``, so for
+    a transpose-symmetric cell the average is EXACTLY symmetric; the price is
+    one extra scalar-pivot factorization, which is the cheap half of the build.
+    ``symmetrize=False`` recovers the historical single-order operator (used by
+    the regression gate that pins the asymmetry it removes).
+
+    ``eps_*`` are the INTERNAL (loss-bridge-conjugated) samples.
     """
+    A = _li_tensor_l2l1(exx, exy, eyx, eyy, orders, n_orders_x, xp)
+    if not symmetrize:
+        return A
+    # L1 L2 == the x<->y TRANSPOSED problem run through the same L2 L1 body:
+    # swap the component labels (xx<->yy, xy<->yx), transpose the pixel arrays,
+    # and swap the order-label columns.  The retained-order ROWS are untouched,
+    # so the four blocks come back in this same basis and only their component
+    # labels need swapping back.
+    Bxx, Bxy, Byx, Byy = _li_tensor_l2l1(
+        xp.asarray(eyy).T, xp.asarray(eyx).T, xp.asarray(exy).T,
+        xp.asarray(exx).T, orders[:, ::-1], n_orders_y, xp)
+    B = (Byy, Byx, Bxy, Bxx)
+    return tuple(0.5 * (a + b) for a, b in zip(A, B))
+
+
+def _li_tensor_l2l1(exx, exy, eyx, eyy, orders, n_orders_x, xp):
+    """ONE factorization order of :func:`_li_convolutions_2d_tensor`:
+    ``ehat = L2 L1(eps)`` (x first, y second).  Split out so the symmetrized
+    entry can call it a second time on the transposed problem."""
     Mx = int(n_orders_x)
     exx = xp.asarray(exx).astype(_C)
     exy = xp.asarray(exy).astype(_C)
@@ -672,7 +723,56 @@ def _nv_nonseparable_guard(fn_name, eps_cell, allow_nonseparable_nv):
 
 
 
+def _li_tensor_scope_notice(fn_name, eps_t, allow_nonseparable_nv):
+    """Validated-scope notice for ``formulation='fff_nv'`` on the JONES entry
+    (audit H3, second half).
+
+    ``fff_nv`` means a DIFFERENT algorithm on each entry point (CONVENTIONS
+    Section 11): the NORMAL-VECTOR method on :func:`rcwa_efficiency_2d`, where
+    :func:`_nv_nonseparable_guard` RAISES on a curved or metallic-cornered cell,
+    and the Li-2003 successive factorization here.  The two share the
+    axis-aligned (Manhattan) validity scope -- Li-2003 is rigorous for a
+    staircase-representable cell and merely convergent otherwise -- but until
+    2026-09-12 the Jones entry carried no notice at all, so
+    ``rcwa_efficiency_2d(formulation='fff_nv')`` REFUSED a disk
+    (``NON-SEPARABLE geometry ... 17% of the boundary runs diagonal``) while
+    ``rcwa_jones_2d(formulation='fff_nv')`` accepted the same disk silently.
+
+    This WARNS rather than raises, because the Li-2003 failure mode here is a
+    convergence rate, not the normal-vector method's ~50% absorptance mis-split:
+    with the symmetrized operator the cell's own C4 / C-infinity symmetry is
+    restored to rounding, and what remains is ordinary staircase convergence.
+    ``allow_nonseparable_nv=True`` silences it.  The diagnostic runs on the
+    in-plane TRACE ``(exx + eyy) / 2``, which is the scalar field the wall
+    geometry lives on for an in-plane tensor cell."""
+    if allow_nonseparable_nv:
+        return
+    try:
+        scal = 0.5 * (np.asarray(to_numpy(eps_t))[:, :, 0, 0]
+                      + np.asarray(to_numpy(eps_t))[:, :, 1, 1])
+    except (TypeError, ValueError, IndexError):
+        return                       # traced / unusual cell: nothing to measure
+    if _uniform_cell(scal):
+        return
+    frac = _nv_curved_wall_fraction(scal)
+    if frac <= _NV_CURVED_FRAC_MAX:
+        return                                   # axis-aligned: rigorous scope
+    warnings.warn(
+        f"{fn_name}(formulation='fff_nv'): NON-SEPARABLE geometry ({frac:.0%} "
+        f"of the cell boundary runs diagonal to the axes, above the "
+        f"{_NV_CURVED_FRAC_MAX:.0%} axis-aligned scope).  On THIS entry point "
+        f"'fff_nv' is the Li-2003 successive factorization (not the "
+        f"normal-vector method rcwa_efficiency_2d refuses here -- see "
+        f"CONVENTIONS Section 11), which is rigorous only for axis-aligned "
+        f"(Manhattan) cells and merely CONVERGENT on a curved wall: the "
+        f"staircase error falls ~1/n_orders and is not bounded by the energy "
+        f"closure.  'li' and 'laurent' are rigorous for curved patterns -- "
+        f"prefer them, or pass allow_nonseparable_nv=True to silence this.",
+        UserWarning, stacklevel=3)
+
+
 @_with_blas_limit
+@_wood_symmetric
 def rcwa_efficiency_2d(
     period_x: float,
     period_y: float,
@@ -693,6 +793,7 @@ def rcwa_efficiency_2d(
     symmetry="auto",
     use_gpu: bool = False,
     allow_nonseparable_nv: bool = False,
+    _wl_eff: float | None = None,
 ) -> Efficiency2D:
     """Rigorous diffraction efficiencies of a 2-D (doubly periodic) crossed
     grating: a single patterned layer of permittivity ``eps_cell`` between a
@@ -987,9 +1088,15 @@ def rcwa_efficiency_2d(
         if not is_jax:
             eps_reals += [float(xp.real(eps_cell).min()),
                           float(xp.real(eps_cell).max())]
-        wl_eff = _grazing_safe_wavelength(
-            float(wavelength), kx0, ky0, orders[:, 0], orders[:, 1], period_x,
-            period_y, eps_reals)
+        if _wl_eff is not None:
+            wl_eff = float(_wl_eff)        # one leg of a Wood symmetric average
+        else:
+            wl_eff, _wl_mirror = _grazing_safe_wavelength_pair(
+                float(wavelength), kx0, ky0, orders[:, 0], orders[:, 1],
+                period_x, period_y, eps_reals, fn_name="rcwa_efficiency_2d")
+            if _wl_mirror is not None:
+                raise _WoodAnomaly("rcwa_efficiency_2d", float(wavelength),
+                                   _wl_mirror, wl_eff)
     else:
         wl_eff = wavelength
     k0 = 2.0 * np.pi / wl_eff
@@ -1125,9 +1232,11 @@ def rcwa_efficiency_2d(
                                        rx, ry, rz, tx, ty, tz, einc_sq)
     if not is_jax:
         _check_energy("rcwa_efficiency_2d", R_eff, T_eff,
-                      lossless=_cell_lossless(eps_sup, eps_sub, eps_cell))
+                      lossless=_cell_lossless(eps_sup, eps_sub, eps_cell),
+                      passive=_passive_media(eps_sup, eps_sub, eps_cell))
     # cross-suite return shape: unpacks as (orders, R, T); .dof = 2N eigenproblem dim
-    return Efficiency2D(orders, R_eff, T_eff, 2 * len(orders))
+    return Efficiency2D(orders, R_eff, T_eff, 2 * len(orders),
+                        wl_eff=wl_eff)
 
 
 # =========================================================================== #
@@ -1163,13 +1272,15 @@ class PreparedRCWA2D:
     __slots__ = ("xp", "polarization", "formulation", "symmetry", "orders", "N",
                  "eps_sup", "eps_sub", "EPS", "EPS_normal", "ez_inv", "fff",
                  "kx0", "ky0", "kt", "kz_inc", "einc_sq", "cinc",
-                 "period_x", "period_y", "depth", "eps_reals", "lossless")
+                 "period_x", "period_y", "depth", "eps_reals",
+                 "lossless", "passive")
 
     def __init__(self, **kw):
         for k, v in kw.items():
             setattr(self, k, v)
 
-    def solve(self, wavelength) -> Efficiency2D:
+    @_wood_symmetric
+    def solve(self, wavelength, *, _wl_eff=None) -> Efficiency2D:
         """Diffraction efficiencies at ``wavelength`` reusing the prepared
         geometry.  Equivalent to ``rcwa_efficiency_2d(...)`` at this wavelength
         (to ~1e-13) but skips the eps factorization, order set, and incident
@@ -1181,9 +1292,16 @@ class PreparedRCWA2D:
         _require_propagating_incidence("rcwa_efficiency_2d", self.eps_sup,
                                        self.kx0 ** 2 + self.ky0 ** 2,
                                        warn_lossy=True)
-        wl_eff = _grazing_safe_wavelength(
-            float(wavelength), self.kx0, self.ky0, orders[:, 0], orders[:, 1],
-            self.period_x, self.period_y, self.eps_reals)
+        if _wl_eff is not None:
+            wl_eff = float(_wl_eff)        # one leg of a Wood symmetric average
+        else:
+            wl_eff, _wl_mirror = _grazing_safe_wavelength_pair(
+                float(wavelength), self.kx0, self.ky0, orders[:, 0],
+                orders[:, 1], self.period_x, self.period_y, self.eps_reals,
+                fn_name="RCWA2DPrepared.solve")
+            if _wl_mirror is not None:
+                raise _WoodAnomaly("RCWA2DPrepared.solve", float(wavelength),
+                                   _wl_mirror, wl_eff)
         k0 = 2.0 * np.pi / wl_eff
         kx = self.kx0 + orders[:, 0] * (wl_eff / self.period_x)
         ky = self.ky0 + orders[:, 1] * (wl_eff / self.period_y)
@@ -1234,7 +1352,8 @@ class PreparedRCWA2D:
         R_eff, T_eff = _project_efficiency(xp, kz_ref_f, kz_trn_f, self.kz_inc,
                                            rx, ry, rz, tx, ty, tz, self.einc_sq)
         _check_energy("rcwa_efficiency_2d", R_eff, T_eff,
-                      lossless=getattr(self, "lossless", False))
+                      lossless=getattr(self, "lossless", False),
+                      passive=getattr(self, "passive", False))
         # Hand out a COPY of the order table (audit W7-C): returning
         # ``self.orders`` by identity made every Efficiency2D of the sweep --
         # and the prepared object itself -- share one array, so a caller that
@@ -1243,7 +1362,8 @@ class PreparedRCWA2D:
         # left ``prep.orders`` all-zero and the next ``solve()`` reported
         # zeroed orders).  The free entry points already return a fresh
         # ``_harmonic_orders_2d`` array per call; this restores parity.
-        return Efficiency2D(np.array(orders, copy=True), R_eff, T_eff, 2 * N)
+        return Efficiency2D(np.array(orders, copy=True), R_eff, T_eff,
+                            2 * N, wl_eff=wl_eff)
 
 
 @_with_blas_limit
@@ -1357,7 +1477,8 @@ def prepare_rcwa_2d(
         EPS=EPS, EPS_normal=EPS_normal, ez_inv=ez_inv, fff=fff,
         kx0=kx0, ky0=ky0, kt=kt, kz_inc=kz_inc, einc_sq=einc_sq, cinc=cinc,
         period_x=period_x, period_y=period_y, depth=depth, eps_reals=eps_reals,
-        lossless=_cell_lossless(eps_sup, eps_sub, eps_cell))
+        lossless=_cell_lossless(eps_sup, eps_sub, eps_cell),
+        passive=_passive_media(eps_sup, eps_sub, eps_cell))
 
 
 def rcwa_efficiency_2d_vs_wavelength(
@@ -1442,6 +1563,7 @@ def rcwa_efficiency_2d_vs_wavelength(
 
 
 @_with_blas_limit
+@_wood_symmetric
 def rcwa_jones_2d(
     period_x: float,
     period_y: float,
@@ -1459,6 +1581,8 @@ def rcwa_jones_2d(
     symmetry="auto",
     formulation: str = "laurent",
     truncation: str = "rectangular",
+    allow_nonseparable_nv: bool = False,
+    _wl_eff: float | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous 2-D (doubly periodic) anisotropic grating: a single layer
     whose permittivity is a full in-plane TENSOR FIELD (the z-decoupled LC
@@ -1495,7 +1619,11 @@ def rcwa_jones_2d(
         sector (~x4); any failed precondition (oblique, out-of-plane components,
         a non-symmetric cell, JAX backend) falls back to the full solve
         bit-identically.  ``symmetry=False`` forces the full solve (the even
-        basis matches it to ~1e-12, not bit-for-bit).
+        basis matches it to ~1e-12, not bit-for-bit).  Since 2026-09-12 the fold
+        covers EVERY in-plane formulation (it acts on the ``(P, Q)`` generator
+        and is indifferent to the factorization): measured 3.0-3.2x for ``'li'``
+        and 2.5-3.2x for ``'fff_nv'`` at ``n_orders`` 6-9 on a 96x96 square
+        cell, where both previously ran the full 2N solve.
     formulation : {'laurent', 'li', 'fff_nv'}, optional
         Fourier factorization of the IN-PLANE tensor operators.  ``'laurent'``
         (default) applies the direct rule to every component -- exactly
@@ -1524,14 +1652,31 @@ def rcwa_jones_2d(
         (~10x fewer orders on a high-contrast crossed pillar), and unlike the
         diagonal-only ``'li'`` it stays MONOTONE there.  Rigorous for AXIS-ALIGNED
         (Manhattan) cells; ``L2 L1`` vs ``L1 L2`` differ in the truncated space
-        (Li 2003 Sec. 5.2, same limit) -- the fixed ``L2 L1`` order is used.
+        (Li 2003 Sec. 5.2, same limit), and the in-plane operator is the
+        SYMMETRIC MEAN of the two orders, ``(L2 L1 + L1 L2) / 2`` (audit H3,
+        2026-09-12).  The fixed ``L2 L1`` order broke the cell's own x<->y
+        symmetry: a transpose-symmetric cell at normal incidence, where
+        ``Jxx == Jyy`` exactly, came back with ``|Jxx - Jyy|`` = 9.0e-04
+        (square) and 2.1e-02 (disk) at ``n_orders`` 4, falling only as ~1/M to
+        1.1e-04 / 5.8e-03 at 12 -- i.e. 2-5e-03 of SPURIOUS form birefringence
+        on a cell that has none, at the truncations waveplate work runs.  The
+        mean is exactly symmetric for such a cell (under the transpose T,
+        ``T L2L1(eps) T = L1L2(eps^T)``) and costs one extra scalar-pivot
+        factorization; measured after: 5e-15 .. 3e-13, the same level as
+        ``'laurent'`` / ``'li'``.  A y-uniform stripe is unchanged (the two
+        orders coincide there; measured 1e-12).  On a CURVED / non-axis-aligned
+        cell this entry now emits a validated-scope ``UserWarning`` naming the
+        diagonal-boundary fraction -- the Jones counterpart of the refusal
+        ``rcwa_efficiency_2d(formulation='fff_nv')`` issues for the (different)
+        normal-vector algorithm that token selects there (CONVENTIONS Section
+        11); pass ``allow_nonseparable_nv=True`` to silence it.
         OUT-OF-PLANE tensors (``exz, eyz != 0``) are also supported: the full-3x3
         ``L2 L1`` factorization plus the ``E_z`` fold ``l3-`` (Li 2003 Eq. 27, an
         ordinary matrix inverse of ``ehat^{33}`` through the generalized cascade),
         again converging to the direct-rule limit but far faster (nearly
         order-independent where laurent still climbs).  Reduces EXACTLY to the
         rigorous 1-D full-tensor solver for a y-uniform stripe.  NumPy/CuPy only;
-        takes the full 2N solve (no even-parity fold).
+        folds in the even sector like the other two since 2026-09-12.
         A scalar cell reduces EXACTLY to ``rcwa_efficiency_2d(formulation='li')``
         (``'li'``).  ``'li'`` on an out-of-plane cell always uses the direct rule
         (the ezz-Schur composite has no validated inverse rule).  The even-parity
@@ -1663,9 +1808,15 @@ def rcwa_jones_2d(
         if not is_jax:
             dr = xp.real(eps_t[:, :, [0, 1, 2], [0, 1, 2]])
             eps_reals += [float(dr.min()), float(dr.max())]
-        wl_eff = _grazing_safe_wavelength(
-            float(wavelength), kx0, ky0, orders[:, 0], orders[:, 1], period_x,
-            period_y, eps_reals)
+        if _wl_eff is not None:
+            wl_eff = float(_wl_eff)        # one leg of a Wood symmetric average
+        else:
+            wl_eff, _wl_mirror = _grazing_safe_wavelength_pair(
+                float(wavelength), kx0, ky0, orders[:, 0], orders[:, 1],
+                period_x, period_y, eps_reals, fn_name="rcwa_jones_2d")
+            if _wl_mirror is not None:
+                raise _WoodAnomaly("rcwa_jones_2d", float(wavelength),
+                                   _wl_mirror, wl_eff)
     else:
         wl_eff = wavelength
     k0 = 2.0 * np.pi / wl_eff
@@ -1687,8 +1838,27 @@ def rcwa_jones_2d(
         inverse-along-y from ``eyy``) via the validated scalar builder; the
         off-diagonal blocks and ``EZZ`` keep the direct rule (Li rule 3)."""
         if formulation == "li":
-            Cxx = _li_convolutions_2d(exx, orders, n_orders_x, n_orders_y, xp)[0]
-            Cyy = _li_convolutions_2d(eyy, orders, n_orders_x, n_orders_y, xp)[1]
+            # ONE call for an isotropic cell (audit H4).  _li_convolutions_2d
+            # builds BOTH operators on every call -- Sy batched inversions of
+            # (2Mx+1)^3 for Cxx PLUS Sx of (2My+1)^3 for Cyy -- and the two-call
+            # form discarded half of each.  exx and eyy are the SAME field for
+            # every isotropic (scalar-promoted) cell, which is the overwhelming
+            # majority of this entry point's traffic; a traced cell cannot be
+            # compared by value, so it keeps the two-call path.
+            # NB ``_is_traced`` is a SCALAR predicate (it tries ``complex(v)``)
+            # and is True for every array, traced or not -- the JAX test here is
+            # the backend, which cannot host a data-dependent Python branch.
+            same = exx is eyy
+            if not same and not is_jax:
+                same = bool(xp.all(exx == eyy))
+            if same:
+                Cxx, Cyy = _li_convolutions_2d(
+                    exx, orders, n_orders_x, n_orders_y, xp)[:2]
+            else:
+                Cxx = _li_convolutions_2d(
+                    exx, orders, n_orders_x, n_orders_y, xp)[0]
+                Cyy = _li_convolutions_2d(
+                    eyy, orders, n_orders_x, n_orders_y, xp)[1]
         else:
             Cxx, Cyy = _conv(exx), _conv(eyy)
         return Cxx, _conv(exy), _conv(eyx), Cyy, _conv(ezz)
@@ -1698,24 +1868,46 @@ def rcwa_jones_2d(
     # even-parity fast path (backlog A1): a centro-symmetric IN-PLANE tensor
     # cell at normal incidence solves in the (N+1)-d even sector for BOTH
     # incident polarizations; transparent fallback otherwise.
+    #
+    # EVERY IN-PLANE FORMULATION FOLDS (audit H4, 2026-09-12).  The fold used to
+    # be gated on ``formulation == 'laurent'`` and built its own direct-rule
+    # operator set, so ``'li'`` and ``'fff_nv'`` users never got the ~4-8x at
+    # normal incidence even though the fold acts on the (P, Q) GENERATOR and is
+    # indifferent to how the permittivity operators were factorized.  The
+    # operator set is now built ONCE, before the attempt, and reused by whichever
+    # path runs -- so the fold sees the SAME operators the full solve would, the
+    # 'laurent' arithmetic is unchanged bit for bit, and a failed precondition
+    # still falls through to the full 2N solve with no rebuild.
     sym_rt = None
-    if (_symmetry_on(symmetry) and not is_jax and not offplane
-            and formulation == "laurent"
+    inplane_ops = None
+    if not offplane:
+        if formulation == "fff_nv":
+            _li_tensor_scope_notice("rcwa_jones_2d", eps_t,
+                                    allow_nonseparable_nv)
+            Cxx_i, Cxy_i, Cyx_i, Cyy_i = _li_convolutions_2d_tensor(
+                eps_t[:, :, 0, 0], eps_t[:, :, 0, 1], eps_t[:, :, 1, 0],
+                eps_t[:, :, 1, 1], orders, n_orders_x, n_orders_y, xp)
+            inplane_ops = (Cxx_i, Cxy_i, Cyx_i, Cyy_i,
+                           _conv(eps_t[:, :, 2, 2]))
+        else:
+            inplane_ops = _inplane_ops(
+                eps_t[:, :, 0, 0], eps_t[:, :, 0, 1], eps_t[:, :, 1, 0],
+                eps_t[:, :, 1, 1], eps_t[:, :, 2, 2])
+    if (inplane_ops is not None and _symmetry_on(symmetry) and not is_jax
             and abs(kx0) < 1e-12 and abs(ky0) < 1e-12):
-        def _conv_sym(comp):
-            return _eps_convolution_2d(comp, orders, n_orders_x, n_orders_y)
-        Cxx_s = _conv_sym(eps_t[:, :, 0, 0])
-        Cxy_s = _conv_sym(eps_t[:, :, 0, 1])
-        Cyx_s = _conv_sym(eps_t[:, :, 1, 0])
-        Cyy_s = _conv_sym(eps_t[:, :, 1, 1])
-        EZZ_s = _conv_sym(eps_t[:, :, 2, 2])
-        P_s, Q_s = _tensor_PQ(Kx, Ky, Cxx_s, Cxy_s, Cyx_s, Cyy_s, EZZ_s, xp)
+        P_s, Q_s = _tensor_PQ(Kx, Ky, *inplane_ops, xp)
         delta_s = xp.asarray(((orders[:, 0] == 0)
                               & (orders[:, 1] == 0)).astype(_C))
         cincs = [xp.concatenate([1.0 * delta_s, 0.0 * delta_s]),
                  xp.concatenate([0.0 * delta_s, 1.0 * delta_s])]
+        # The symmetry PROBE stays the DIRECT-RULE xx convolution for every
+        # formulation: it is only used to locate the cell's symmetry centre, and
+        # keeping one probe makes the centre detection formulation-independent
+        # (the 'laurent' probe is this same matrix, so that path is unchanged).
+        probe = (inplane_ops[0] if formulation == "laurent"
+                 else _conv(eps_t[:, :, 0, 0]))
         sym_rt = _symmetric_cascade_rt(
-            Vref, Vtrn, Kx, Ky, [("PQ", P_s, Q_s, Cxx_s)], [depth], k0,
+            Vref, Vtrn, Kx, Ky, [("PQ", P_s, Q_s, probe)], [depth], k0,
             cincs, orders, xp)
     if offplane:
         # Full-3x3 path (audit GAP2, v5.14.1; the same Li-2003 order the 1-D
@@ -1770,25 +1962,15 @@ def rcwa_jones_2d(
         S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
     elif sym_rt is not None:
         S = None                              # even sector already solved
-    elif formulation == "fff_nv":
-        # Li-2003 successive full-tensor factorization ehat = L2 L1(eps) of the
-        # in-plane 2x2: the inverse rule on the wall-normal diagonal along each
-        # axis + the correct off-diagonal composite of a rotated director, with
-        # ONLY scalar wall-normal inversions (well-conditioned for crossed cells,
-        # cond ~ O(10); reduces to the rigorous Li-1996 for a stripe).  EZZ stays
-        # direct (E_z tangential to every vertical wall, Li 1997 Eq. 27).
-        Cxx, Cxy, Cyx, Cyy = _li_convolutions_2d_tensor(
-            eps_t[:, :, 0, 0], eps_t[:, :, 0, 1], eps_t[:, :, 1, 0],
-            eps_t[:, :, 1, 1], orders, n_orders_x, n_orders_y, xp)
-        EZZ = _conv(eps_t[:, :, 2, 2])
-        Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
-        S = _interface_smatrix(Wref, Vref, Wl, Vl)
-        S = _propagation_star(S, lam, k0 * depth)
-        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
     else:
-        Cxx, Cxy, Cyx, Cyy, EZZ = _inplane_ops(
-            eps_t[:, :, 0, 0], eps_t[:, :, 0, 1], eps_t[:, :, 1, 0],
-            eps_t[:, :, 1, 1], eps_t[:, :, 2, 2])
+        # In-plane path, every formulation: the operator set was built above
+        # (once) -- 'fff_nv' is the SYMMETRIZED Li-2003 successive full-tensor
+        # factorization (audit H3; the inverse rule on the wall-normal diagonal
+        # along each axis plus the correct off-diagonal composite of a rotated
+        # director, with only scalar wall-normal inversions, cond ~ O(10)), and
+        # 'li' / 'laurent' come from _inplane_ops.  EZZ stays direct in every
+        # case (E_z is tangential to every vertical wall, Li 1997 Eq. 27).
+        Cxx, Cxy, Cyx, Cyy, EZZ = inplane_ops
         Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
@@ -1829,7 +2011,10 @@ def rcwa_jones_2d(
     jones_reflection = xp.stack(j_cols, axis=1)
     if not is_jax:
         _check_energy("rcwa_jones_2d", R_eff, T_eff,
-                      lossless=_cell_lossless(eps_sup, eps_sub, eps_tensor_cell))
+                      lossless=_cell_lossless(eps_sup, eps_sub,
+                                              eps_tensor_cell),
+                      passive=_passive_media(eps_sup, eps_sub,
+                                             eps_tensor_cell))
     return orders, R_eff, T_eff, jones_reflection
 
 
@@ -1922,6 +2107,7 @@ def _analytic_convolutions_2d(eps_background, shapes, orders, n_orders_x,
 
 
 @_with_blas_limit
+@_wood_symmetric
 def rcwa_efficiency_2d_shapes(
     period_x: float,
     period_y: float,
@@ -1942,6 +2128,7 @@ def rcwa_efficiency_2d_shapes(
     stabilize: bool = False,
     symmetry=False,
     use_gpu: bool = False,
+    _wl_eff: float | None = None,
 ) -> Efficiency2D:
     """Rigorous 2-D crossed-grating efficiencies using **analytic** shape
     Fourier transforms and the Laurent (direct-rule) factorization.
@@ -2111,9 +2298,16 @@ def rcwa_efficiency_2d_shapes(
     _require_propagating_incidence("rcwa_efficiency_2d_shapes", eps_sup,
                                    kx0 ** 2 + ky0 ** 2, warn_lossy=True)
     layer_eps = [eps_bg] + [s["eps"] for s in shapes_c]
-    wl_eff = _grazing_safe_wavelength(
-        wavelength, kx0, ky0, orders[:, 0], orders[:, 1], period_x, period_y,
-        [eps_sup, eps_sub] + layer_eps)
+    if _wl_eff is not None:
+        wl_eff = float(_wl_eff)            # one leg of a Wood symmetric average
+    else:
+        wl_eff, _wl_mirror = _grazing_safe_wavelength_pair(
+            wavelength, kx0, ky0, orders[:, 0], orders[:, 1], period_x,
+            period_y, [eps_sup, eps_sub] + layer_eps,
+            fn_name="rcwa_efficiency_2d_shapes")
+        if _wl_mirror is not None:
+            raise _WoodAnomaly("rcwa_efficiency_2d_shapes", float(wavelength),
+                               _wl_mirror, wl_eff)
     k0 = 2.0 * np.pi / wl_eff
     kx = kx0 + orders[:, 0] * (wl_eff / period_x)
     ky = ky0 + orders[:, 1] * (wl_eff / period_y)
@@ -2180,11 +2374,12 @@ def rcwa_efficiency_2d_shapes(
     tz = -(kxv * tx + kyv * ty) / safe_t
     R_eff, T_eff = _project_efficiency(xp, kz_ref_f, kz_trn_f, kz_inc,
                                        rx, ry, rz, tx, ty, tz, einc_sq)
+    _shape_eps = np.array([eps_bg] + [sh["eps"] for sh in shapes_c])
     _check_energy("rcwa_efficiency_2d_shapes", R_eff, T_eff,
-                  lossless=_cell_lossless(
-                      eps_sup, eps_sub,
-                      np.array([eps_bg] + [sh["eps"] for sh in shapes_c])))
-    return Efficiency2D(orders, R_eff, T_eff, 2 * len(orders))
+                  lossless=_cell_lossless(eps_sup, eps_sub, _shape_eps),
+                  passive=_passive_media(eps_sup, eps_sub, _shape_eps))
+    return Efficiency2D(orders, R_eff, T_eff, 2 * len(orders),
+                        wl_eff=wl_eff)
 
 
 __all__ = [

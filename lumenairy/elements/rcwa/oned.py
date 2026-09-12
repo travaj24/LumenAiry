@@ -24,6 +24,7 @@ from ._core import (
     _forward_flux_kz,
     _fourier_coeffs_1d,
     _grazing_safe_wavelength,
+    _grazing_safe_wavelength_pair,
     _homogeneous_eigenmodes,
     _interface_smatrix,
     _interface_smatrix_general,
@@ -33,6 +34,7 @@ from ._core import (
     _layer_eigenmodes_tensor,
     _modes_to_M,
     _normalize_pol,
+    _passive_media,
     _project_efficiency,
     _propagation_star,
     _propagation_star_general,
@@ -51,6 +53,8 @@ from ._core import (
     _toeplitz_1d,
     _validate_geometry,
     _with_blas_limit,
+    _WoodAnomaly,
+    _wood_symmetric,
 )
 
 
@@ -318,6 +322,7 @@ def _resolve_incidence_checked(fn_name, angle, theta):
 
 
 @_with_blas_limit
+@_wood_symmetric
 def rcwa_efficiency_1d(
     period: float,
     n_ridge: complex,
@@ -337,6 +342,7 @@ def rcwa_efficiency_1d(
     asr_eta: float = 0.0,
     asr_samples: int = 16384,
     use_gpu: bool = False,
+    _wl_eff: float | None = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous diffraction efficiencies of a 1-D binary grating.
 
@@ -556,9 +562,16 @@ def rcwa_efficiency_1d(
         eps_reals = [complex(eps_sup), complex(eps_sub)]
         if not _is_traced(n_ridge):
             eps_reals += [complex(n_ridge) ** 2, complex(n_groove) ** 2]
-        wl_eff = _grazing_safe_wavelength(
-            float(wavelength), float(xp.real(kx0)), 0.0, np.arange(-M, M + 1),
-            np.zeros(N), period, 1.0, eps_reals)
+        if _wl_eff is not None:
+            wl_eff = float(_wl_eff)        # one leg of a Wood symmetric average
+        else:
+            wl_eff, _wl_mirror = _grazing_safe_wavelength_pair(
+                float(wavelength), float(xp.real(kx0)), 0.0,
+                np.arange(-M, M + 1), np.zeros(N), period, 1.0, eps_reals,
+                fn_name="rcwa_efficiency_1d")
+            if _wl_mirror is not None:
+                raise _WoodAnomaly("rcwa_efficiency_1d", float(wavelength),
+                                   _wl_mirror, wl_eff)
     else:
         wl_eff = wavelength
 
@@ -744,7 +757,10 @@ def rcwa_efficiency_1d(
                           _C(n_ridge) ** 2, _C(n_groove) ** 2))
         except TypeError:                  # traced / array-valued inputs
             lossless = False
-        _check_energy("rcwa_efficiency_1d", R_eff, T_eff, lossless=lossless)
+        _check_energy("rcwa_efficiency_1d", R_eff, T_eff, lossless=lossless,
+                      passive=_passive_media(
+                          complex(eps_sup), complex(eps_sub),
+                          np.array([_C(n_ridge) ** 2, _C(n_groove) ** 2])))
     return orders, R_eff, T_eff
 
 
@@ -1123,6 +1139,7 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
 
 
 @_with_blas_limit
+@_wood_symmetric
 def rcwa_jones_1d(
     period: float,
     eps_ridge,
@@ -1139,6 +1156,7 @@ def rcwa_jones_1d(
     formulation: str = "li",
     use_gpu: bool = False,
     return_jones_transmission: bool = False,
+    _wl_eff: float | None = None,
 ) -> Tuple[np.ndarray, ...]:
     """Rigorous 1-D anisotropic grating: a binary grating whose ridge and
     groove are full ``(3, 3)`` permittivity tensors (the liquid-crystal /
@@ -1287,9 +1305,15 @@ def rcwa_jones_1d(
             eps_reals += [complex(eps_ridge[0, 0]), complex(eps_ridge[1, 1]),
                           complex(eps_ridge[2, 2]), complex(eps_groove[0, 0]),
                           complex(eps_groove[1, 1]), complex(eps_groove[2, 2])]
-        wl_eff = _grazing_safe_wavelength(
-            float(wavelength), kx0, 0.0, orders, np.zeros_like(orders), period,
-            1.0, eps_reals)
+        if _wl_eff is not None:
+            wl_eff = float(_wl_eff)        # one leg of a Wood symmetric average
+        else:
+            wl_eff, _wl_mirror = _grazing_safe_wavelength_pair(
+                float(wavelength), kx0, 0.0, orders, np.zeros_like(orders),
+                period, 1.0, eps_reals, fn_name="rcwa_jones_1d")
+            if _wl_mirror is not None:
+                raise _WoodAnomaly("rcwa_jones_1d", float(wavelength),
+                                   _wl_mirror, wl_eff)
     else:
         wl_eff = wavelength
     k0 = 2.0 * np.pi / wl_eff
@@ -1331,6 +1355,7 @@ def rcwa_jones_1d(
 
 
 @_with_blas_limit
+@_wood_symmetric
 def rcwa_jones_1d_segments(
     period: float,
     segments,
@@ -1344,6 +1369,7 @@ def rcwa_jones_1d_segments(
     n_orders: int = 11,
     use_gpu: bool = False,
     return_jones_transmission: bool = False,
+    _wl_eff: float | None = None,
 ) -> Tuple[np.ndarray, ...]:
     """Rigorous 1-D anisotropic grating with an ARBITRARY piecewise-constant
     profile -- the multi-region / multi-level generalisation of
@@ -1489,9 +1515,15 @@ def rcwa_jones_1d_segments(
                 eps_reals += [complex(t[0, 0]), complex(t[1, 1]),
                               complex(t[2, 2])]        # ezz too (audit P2 -- a layer
                 #                          mode grazing on ezz was never nudged)
-        wl_eff = _grazing_safe_wavelength(
-            float(wavelength), kx0, 0.0, orders, np.zeros_like(orders), period,
-            1.0, eps_reals)
+        if _wl_eff is not None:
+            wl_eff = float(_wl_eff)        # one leg of a Wood symmetric average
+        else:
+            wl_eff, _wl_mirror = _grazing_safe_wavelength_pair(
+                float(wavelength), kx0, 0.0, orders, np.zeros_like(orders),
+                period, 1.0, eps_reals, fn_name="rcwa_jones_1d_segments")
+            if _wl_mirror is not None:
+                raise _WoodAnomaly("rcwa_jones_1d_segments", float(wavelength),
+                                   _wl_mirror, wl_eff)
     else:
         wl_eff = wavelength
     k0 = 2.0 * np.pi / wl_eff

@@ -266,7 +266,9 @@ def test_m5_laurent_stabilize_still_burns_the_ladder_on_closure(monkeypatch):
     still raises while ``fff_nv`` completes."""
     calls = []
 
-    def _fake_check_energy(fn_name, R, T, lossless=False):
+    # ``**kw`` so a new guard clause on the shipped signature (audit H6 added
+    # ``passive=``) extends the real guard rather than breaking this stub.
+    def _fake_check_energy(fn_name, R, T, lossless=False, **kw):
         calls.append(fn_name)
         warnings.warn(_EnergyWarning(
             f"{fn_name}: lossless energy closure violated (injected probe)"))

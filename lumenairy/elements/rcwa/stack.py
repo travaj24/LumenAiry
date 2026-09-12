@@ -25,6 +25,7 @@ from ._core import (
     _EnergyError,
     _forward_flux_kz,
     _grazing_safe_wavelength,
+    _grazing_safe_wavelength_pair,
     _homogeneous_eigenmodes,
     _interface_smatrix,
     _interface_smatrix_general,
@@ -33,6 +34,7 @@ from ._core import (
     _max_aligned_delta,
     _modes_to_M,
     _order_key,
+    _passive_media,
     _project_efficiency,
     _propagation_smatrix_general,
     _propagation_star,
@@ -56,6 +58,8 @@ from ._core import (
     _validate_geometry,
     _validate_shapes,
     _with_blas_limit,
+    _WoodAnomaly,
+    _wood_symmetric,
 )
 from .oned import (
     _resolve_incidence,
@@ -624,16 +628,50 @@ class RCWAResult:
     """
 
     def __init__(self, orders, R, T, jones_reflection, jones_transmission,
-                 modal=None):
+                 modal=None, wl_eff=None):
         self.orders = orders
         self._R = R
         self._T = T
         self._Jr = jones_reflection
         self._Jt = jones_transmission
         self._modal = modal   # per-order amplitudes + k-vectors (or None)
+        #: The wavelength the solve ACTUALLY ran at (audit H2): the requested
+        #: one normally, or the ``(lo, hi)`` pair bracketing an exact Wood
+        #: anomaly when ``R``/``T``/the Jones matrices are the symmetric
+        #: average of the two sides.  ``None`` on the traced (JAX) path.
+        self.wl_eff = wl_eff
 
     def efficiencies(self):
         return self.orders, self._R, self._T
+
+    def _wood_mean_with(self, other, wl_eff):
+        """The SYMMETRIC AVERAGE of this result and the mirror-side one, used
+        by :func:`~.._core._wood_symmetric` when the requested wavelength sits
+        on an exact Wood anomaly (audit H2).  Averages the efficiencies, the
+        Jones matrices and the per-order modal amplitudes -- all linear in the
+        field -- and DROPS the retained internal-field data, whose
+        reconstruction is not linear in the stored partial S-matrices."""
+        modal = None
+        if self._modal is not None and other._modal is not None:
+            modal = {}
+            for k, v in self._modal.items():
+                w = other._modal.get(k)
+                if k in ("layers", "S_partial", "internal"):
+                    continue           # not linear in the field -- dropped
+                try:
+                    dt = np.asarray(v).dtype
+                except (TypeError, ValueError):
+                    modal[k] = v
+                    continue
+                if np.issubdtype(dt, np.integer) or np.issubdtype(dt, np.str_):
+                    modal[k] = v
+                else:
+                    modal[k] = 0.5 * (v + w)
+        return RCWAResult(self.orders, 0.5 * (self._R + other._R),
+                          0.5 * (self._T + other._T),
+                          0.5 * (self._Jr + other._Jr),
+                          0.5 * (self._Jt + other._Jt),
+                          modal=modal, wl_eff=wl_eff)
 
     # -- per-order modal access + multi-order field reconstruction ---------
 
@@ -687,12 +725,20 @@ class RCWAResult:
         m = self._require_modal()
         ex, ey = ("rx", "ry") if port == "reflection" else ("tx", "ty")
         kz = m["kz_ref"] if port == "reflection" else m["kz_trn"]
-        # ``kz`` comes straight out of the module-level homogeneous-mode cache,
-        # which now hands its values out READ-ONLY (audit W7-B).  Copy it here
-        # so the public dict keeps its writable-array contract while a caller's
-        # in-place edit can no longer poison the cache for later solves.
-        return dict(orders=self.orders, Ex=to_numpy(m[ex]), Ey=to_numpy(m[ey]),
-                    kx=to_numpy(m["kx"]), ky=to_numpy(m["ky"]),
+        # EVERY array entry is COPIED (audit H6).  ``kz`` comes straight out
+        # of the module-level homogeneous-mode cache, which hands its values out
+        # READ-ONLY (audit W7-B), so it always needed one; ``Ex``/``Ey``/``kx``/
+        # ``ky`` were handed out BY REFERENCE into this result's own modal dict,
+        # so ``amp = res.per_order_amplitudes('reflection'); amp['Ex'][:] = 0``
+        # made the NEXT ``per_order_amplitudes`` call on the SAME result return
+        # ``max|Ex| = 0.0``.  ``to_numpy`` is a no-op view for a NumPy backend,
+        # which is why the alias survived the W7-B pass.  One dict of copies per
+        # call is ~5 x (2, N) complex -- negligible beside the solve.
+        return dict(orders=np.array(to_numpy(self.orders), copy=True),
+                    Ex=np.array(to_numpy(m[ex]), copy=True),
+                    Ey=np.array(to_numpy(m[ey]), copy=True),
+                    kx=np.array(to_numpy(m["kx"]), copy=True),
+                    ky=np.array(to_numpy(m["ky"]), copy=True),
                     kz=np.array(to_numpy(kz), copy=True),
                     wavelength=m["wavelength"],
                     # incidence terms for the power-normalized field bridge
@@ -2300,6 +2346,23 @@ class RCWAStack:
                 arrs.append(L.data)
         return _cell_lossless(eps_sup, eps_sub, *arrs)
 
+    def _stack_passive(self):
+        """True when the incidence half-space is exactly lossless and no medium
+        of the stack has gain -- then ``sum(R)+sum(T) <= 1`` is a theorem and
+        :func:`_check_energy` arms the tight one-sided bar (audit H6).  Same
+        layer enumeration as :meth:`_stack_lossless`."""
+        eps_sup = complex(np.conj(_C(self.n_superstrate) ** 2))
+        eps_sub = complex(np.conj(_C(self.n_substrate) ** 2))
+        arrs = []
+        for L in self._layers:
+            if L.kind == "shapes":
+                bg, shapes = L.data
+                arrs.append(bg)
+                arrs += [s["eps"] for s in shapes]
+            else:
+                arrs.append(L.data)
+        return _passive_media(eps_sup, eps_sub, *arrs)
+
     def _materialized_layers(self, wl, layers=None):
         """Concrete layer list at one wavelength: every DISPERSIVE
         (``wl -> value``) layer spec is resolved and validated; non-dispersive
@@ -2588,8 +2651,14 @@ class RCWAStack:
         exx = xp.conj(xp.asarray(pair[0]))
         eyy = xp.conj(xp.asarray(pair[1]))
         Z = xp.zeros_like(exx)
+        # symmetrize=False: this call wants the Li-1997 PER-AXIS rule (x-inverse
+        # on exx into Cxx, y-inverse on eyy into Cyy), which is what the single
+        # ``L2 L1`` order gives for a diagonal tensor.  The audit-H3 symmetrized
+        # default averages in the OTHER axis order, which is the right operator
+        # for a rotated director but would break the documented exact reduction
+        # to _li_convolutions_2d when both companions are the cell.
         Cxx, _Cxy, _Cyx, Cyy = _li_convolutions_2d_tensor(
-            exx, Z, Z, eyy, orders, self.nox, self.noy, xp)
+            exx, Z, Z, eyy, orders, self.nox, self.noy, xp, symmetrize=False)
         return Cxx, Cyy
 
     def _layer_modes(self, layer, Kx, Ky, orders):
@@ -2826,8 +2895,9 @@ class RCWAStack:
         finally:
             self.nox, self.noy = base_nox, base_noy
 
+    @_wood_symmetric
     def _solve_once(self, *, retain_internal=False,
-                    symmetry="auto") -> RCWAResult:
+                    symmetry="auto", _wl_eff=None) -> RCWAResult:
         """Inner single-``n_orders`` stack solve (the public :meth:`solve` body;
         ``stabilize`` scans a window of these).
 
@@ -2893,9 +2963,24 @@ class RCWAStack:
             # cutoffs yourself when differentiating through wl).
             eps_reals = ([eps_sup, eps_sub] if is_jax
                          else [eps_sup, eps_sub] + self._layer_eps_reals())
-            wl = _grazing_safe_wavelength(
-                wl, kx0, ky0, orders[:, 0], orders[:, 1], self.period_x,
-                self.period_y, eps_reals)
+            if _wl_eff is not None:
+                wl = float(_wl_eff)        # one leg of a Wood symmetric average
+            elif retain_internal:
+                # The symmetric average drops the retained per-layer data (it
+                # is not linear in the stored partial S-matrices), so a caller
+                # who asked for the internal field gets the one-sided nudge and
+                # is told which wavelength it belongs to.
+                wl = _grazing_safe_wavelength(
+                    wl, kx0, ky0, orders[:, 0], orders[:, 1], self.period_x,
+                    self.period_y, eps_reals, fn_name="RCWAStack.solve")
+            else:
+                wl, _wl_mirror = _grazing_safe_wavelength_pair(
+                    wl, kx0, ky0, orders[:, 0], orders[:, 1], self.period_x,
+                    self.period_y, eps_reals, fn_name="RCWAStack.solve")
+                if _wl_mirror is not None:
+                    raise _WoodAnomaly("RCWAStack.solve",
+                                       float(src["wavelength"]),
+                                       _wl_mirror, wl)
         k0 = 2.0 * np.pi / wl
         kx = kx0 + orders[:, 0] * (wl / self.period_x)
         ky = ky0 + orders[:, 1] * (wl / self.period_y)
@@ -3193,8 +3278,10 @@ class RCWAStack:
                 is_1d=self.is_1d, nox=self.nox, noy=self.noy)
         if not is_jax:                       # the guard needs concrete R/T
             _check_energy("RCWAStack.solve", R, T,
-                          lossless=self._stack_lossless())
-        return RCWAResult(out_orders, R, T, Jr, Jt, modal=modal)
+                          lossless=self._stack_lossless(),
+                          passive=self._stack_passive())
+        return RCWAResult(out_orders, R, T, Jr, Jt, modal=modal,
+                          wl_eff=(None if src_traced else float(wl)))
 
     def _internal_partials(self, modes, Wref, Vref, Wtrn, Vtrn, k0):
         """Cumulative ``(S_above, S_below)`` partial S-matrices bracketing the
