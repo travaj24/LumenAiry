@@ -1182,10 +1182,13 @@ def test_followup_88_non_finite_object_distance_reads_as_infinity():
     assert m.object_distance_m() == pytest.approx(0.250, rel=1e-12)
 
     # An infinite FIRST-ELEMENT distance falls through to the field.
-    # ``recompute_element_frames`` multiplies that distance by the axis
-    # vector, whose x/y are 0, so it emits a numpy invalid-value warning
-    # and leaves a NaN origin -- a separate, pre-existing weakness
-    # recorded as an open item; it is not what this assertion is about.
+    # Written straight onto the attribute, deliberately bypassing the
+    # mutators -- which now refuse it (see
+    # ``test_followup_nonfinite_distance_is_refused_by_the_mutators``).
+    # ``recompute_element_frames`` then multiplies inf by the axis
+    # vector's zero components and leaves a NaN origin, so the numpy
+    # invalid-value warning is expected here and suppressed explicitly
+    # rather than hidden.
     m = _point_source_model(100.0, 400.0)
     m.elements[1].distance_mm = float('inf')
     with np.errstate(invalid='ignore'):
@@ -1242,6 +1245,125 @@ def test_followup_89_local_and_world_lists_close_the_same_gaps():
     assert find_paraxial_focus(with_empty.build_trace_surfaces(), wv) == \
         pytest.approx(find_paraxial_focus(plain.build_trace_surfaces(), wv),
                       rel=1e-12)
+
+
+def _three_element_model():
+    m = SystemModel()
+    m.insert_element(1, Element(0, 'L1', 'Singlet', distance_mm=10.0,
+                                surfaces=[SurfaceRow(50.0, 3.0, 'N-BK7', 12.7),
+                                          SurfaceRow(np.inf, 0.0, '', 12.7)]))
+    m.insert_element(2, Element(0, 'L2', 'Singlet', distance_mm=40.0,
+                                surfaces=[SurfaceRow(80.0, 3.0, 'N-BK7', 12.7),
+                                          SurfaceRow(np.inf, 0.0, '', 12.7)]))
+    m.insert_element(3, Element(0, 'L3', 'Singlet', distance_mm=25.0,
+                                surfaces=[SurfaceRow(120.0, 2.0, 'N-BK7',
+                                                     12.7),
+                                          SurfaceRow(np.inf, 0.0, '', 12.7)]))
+    return m
+
+
+@pytest.mark.parametrize('bad', [float('inf'), float('-inf'), float('nan')])
+def test_followup_nonfinite_distance_is_refused_by_the_mutators(bad):
+    """`recompute_element_frames` advances `origin += d * R[:, 2]`, and
+    an untilted axis has two zero components, so `inf * 0` is `nan`: a
+    single non-finite spacing leaves a NaN `origin` on that element AND
+    on every element after it, with nothing to say where it came from.
+    `nan` was worse than `inf` -- `max(0, nan)` is `0` in Python, so a
+    NaN entry silently moved the element onto the previous one's back
+    vertex.
+
+    The three mutators an operator or the optimizer can feed now refuse
+    it with a CONVENTIONS §2-prefixed `ValueError` naming the element
+    and the value, leave the design untouched, and take no undo step.
+    """
+    # --- 1. the Distance column, relative mode -------------------------
+    m = _three_element_model()
+    before = [e.distance_mm for e in m.elements]
+    depth = len(m._undo_stack)
+    with pytest.raises(ValueError, match='set_display_distance'):
+        m.set_display_distance(2, bad)
+    assert [e.distance_mm for e in m.elements] == before
+    assert len(m._undo_stack) == depth, 'a refused edit left an undo step'
+    assert np.all(np.isfinite([np.asarray(e.origin, dtype=float)
+                               for e in m.elements]))
+
+    # --- 2. the Distance column, absolute mode -------------------------
+    m.set_coordinate_mode('absolute')
+    depth = len(m._undo_stack)
+    with pytest.raises(ValueError, match='set_display_distance'):
+        m.set_display_distance(2, bad)
+    assert [e.distance_mm for e in m.elements] == before
+    assert len(m._undo_stack) == depth
+
+    # --- 3. the absolute-coordinates editor (Z / X / Y columns) --------
+    for col in (3, 6, 7):
+        m2 = _three_element_model()
+        m2.set_coordinate_mode('absolute')
+        depth = len(m2._undo_stack)
+        with pytest.raises(ValueError, match='set_element_absolute_field'):
+            m2.set_element_absolute_field(2, col, bad)
+        assert [e.distance_mm for e in m2.elements] == before, col
+        assert len(m2._undo_stack) == depth, col
+
+    # --- 4. the optimizer write-back -----------------------------------
+    m3 = _three_element_model()
+    m3.opt_variables = [(2, 0, 'distance')]
+    m3._invalidate()
+    with pytest.raises(ValueError, match='set_variable_values'):
+        m3.set_variable_values([bad])
+    assert m3.elements[2].distance_mm == pytest.approx(40.0)
+
+    # The message names the element and the value it refused.
+    with pytest.raises(ValueError) as ei:
+        m3.set_display_distance(2, bad)
+    assert "'L2'" in str(ei.value) and repr(bad) in str(ei.value)
+
+    # A non-numeric entry is still refused, by the same helper.
+    with pytest.raises(ValueError, match='set_display_distance'):
+        m3.set_display_distance(2, 'twelve')
+
+
+def test_followup_finite_distance_writes_are_bit_identical():
+    """Guard on the finiteness check: it must reject and nothing else.
+
+    Every ordinary write goes through unchanged, to the last bit --
+    including 0.0, a value already in place, and the `max(0, ...)` clamp
+    on a negative entry that predates this guard.
+    """
+    m = _three_element_model()
+    baseline = [float(np.asarray(e.origin, dtype=float)[2])
+                for e in m.elements]
+
+    m.set_coordinate_mode('relative')
+    for idx, value in ((1, 12.5), (2, 0.0), (3, 25.0), (2, -7.0)):
+        m.set_display_distance(idx, value)
+        assert m.elements[idx].distance_mm == (value if value > 0 else 0)
+
+    # Absolute mode round trip is still exact (and still bit-exact on an
+    # unfolded system, where the axis slope is 1.0 to the last bit).
+    m2 = _three_element_model()
+    m2.set_coordinate_mode('absolute')
+    for idx in (1, 2, 3):
+        shown = m2.get_display_distance(idx)
+        keep = m2.elements[idx].distance_mm
+        m2.set_display_distance(idx, shown)
+        assert m2.elements[idx].distance_mm == keep, 'not bit-exact'
+    assert [float(np.asarray(e.origin, dtype=float)[2])
+            for e in m2.elements] == baseline
+
+    # The absolute editor and the optimizer write-back likewise.
+    m3 = _three_element_model()
+    m3.set_coordinate_mode('absolute')
+    m3.set_element_absolute_field(2, 3, 60.0)
+    assert float(np.asarray(m3.elements[2].origin, dtype=float)[2]) == \
+        pytest.approx(60.0, rel=1e-12)
+
+    m4 = _three_element_model()
+    m4.opt_variables = [(2, 0, 'distance')]
+    m4._invalidate()
+    m4.set_variable_values([37.5])
+    assert m4.elements[2].distance_mm == 37.5
+    assert np.all(np.isfinite(np.asarray(m4.elements[3].origin, dtype=float)))
 
 
 if __name__ == '__main__':

@@ -746,3 +746,104 @@ itself.
 I did **not** touch `lumenairy/raytrace/__init__.py` or
 `lumenairy/raytrace/surface.py` (WP-A15b's), nor `lumenairy/user_library.py`.
 No git write commands were run at any point.
+
+## F6. The P3 non-finite-spacing guard  [DONE]
+
+`recompute_element_frames` advances the running origin by
+`origin += distance_mm * R[:, 2]` exactly once per element.  An untilted axis
+is `(0, 0, 1)`, so a non-finite spacing multiplies `inf` by two zero components
+and the element's world origin becomes `[nan, nan, inf]` — and, because the
+walk is cumulative, so does **every element after it**.  Nothing raised, and
+nothing named the element that caused it.  Measured on a three-singlet system,
+`set_display_distance(2, inf)` before the guard:
+
+```
+element 0 origin = [0.0, 0.0, 0.0]
+element 1 origin = [0.0, 0.0, 10.0]
+element 2 origin = [nan, nan, inf]     <- the edited element
+element 3 origin = [nan, nan, inf]     <- and every one after it
+element 4 origin = [nan, nan, inf]
+find_paraxial_focus(world) = inf
+```
+
+`nan` was the worse of the two: `max(0, nan)` is `0` in Python, so
+`set_display_distance(2, nan)` silently wrote **`distance_mm = 0`** and moved the
+element onto the previous one's back vertex with no diagnostic at all.
+
+**Changed.**  A new `model._as_distance_mm(value, fn_name, elem_index, elem)`
+rejects a non-finite (or non-numeric) spacing with a CONVENTIONS §2-prefixed
+`ValueError` naming the function, the element index, the element's name and the
+value it refused, e.g.
+
+```
+set_display_distance: element 2 ('L2') distance must be a finite number of
+millimetres (got inf); a non-finite spacing makes every element from here on
+have a NaN world origin.
+```
+
+It is called from the three mutators an operator or the optimizer can feed:
+
+| site | what it guards |
+|---|---|
+| `SystemModel.set_display_distance` | the Distance column, both coordinate modes — validated BEFORE `_checkpoint()`, so a refused entry leaves no undo step |
+| `SystemModel.set_element_absolute_field` (cols 3 / 6 / 7) | the absolute-coordinates editor's Z / X / Y; also before the checkpoint |
+| `SystemModel.set_variable_values` | the optimizer write-back, where a degenerate simplex can propose a non-finite step; `run_optimization` reports the raise as a named failure instead of scoring NaN merits against NaN geometry |
+
+Direct attribute writes (`elem.distance_mm = ...`) are deliberately not guarded
+— `load_prescription`, the session restore and the group/ungroup paths write
+values that are already in the model, and a defensive raise there would reject a
+legitimately-saved file mid-restore.
+
+**Verified.**
+
+* **Fail-before**: the guard reverted in process, both non-finite arms fail
+  (`DID NOT RAISE ValueError`) and the NaN-origin cascade above is what the
+  pre-fix code produces.  Total for the follow-up: **10 properties replayed,
+  9 fail as required, 1 vacuous** — the 1 is the deliberate bit-identity
+  control, which is supposed to pass on both sides.
+* **Bit-identity**: every ordinary write is unchanged — `12.5`, `0.0`, `25.0`,
+  the pre-existing `max(0, ...)` clamp on a negative entry, the absolute-mode
+  round trip (`==`, not `approx`), an absolute Z edit landing at 60.0 mm to
+  1e-12 relative, and an optimizer write-back of 37.5 mm leaving finite origins
+  downstream.
+* **Collateral**: 12 UI files alone 50 passed / **35 skipped** (invariant
+  unchanged); + both A9 files 131 passed / 35 skipped, identical in the reversed
+  collection order; the 15-file raytrace set + cross-backend parity
+  **314 passed, 0 failed, 0 skipped**.
+
+`tests/unit/test_audit2609_a9_verify_ui.py` is now **45 tests** (41 + 4:
+`test_followup_nonfinite_distance_is_refused_by_the_mutators` parametrized over
+`inf` / `-inf` / `nan`, plus
+`test_followup_finite_distance_writes_are_bit_identical`).
+
+**Remaining hole, deliberately not closed** [P3]: a non-finite `tilt_x` /
+`tilt_y` reaches `np.cos` / `np.sin` in `recompute_element_frames` and produces
+a NaN rotation matrix by the same mechanism.  `set_element_absolute_field`'s
+orientation columns (4 / 5) are not guarded — that is a separate finding, not
+the one asked for here, and widening the validation to them is a behaviour
+change worth its own decision.
+
+**New collateral failure observed during this step** (not mine):
+`tests/unit/test_audit_optimize.py::
+TestAuditFixesV4_13_2_agent_c_C1MakeLgAberrationMeritJax::
+test_piston_weight_scales_merit_linearly` — the (0, 0) LG coupling reads
+`|L_00|^2 = 1.000392e+00` against a pinned 1e13–1e17 band.  Same family as the
+four `test_niche_audit_w3_oracles` failures already attributed above: the value
+comes from `make_lg_aberration_merit_jax` → `lumenairy/optimize/jax_merits.py`
+→ `lumenairy/propagators/asymptotic.py` / `asymptotic_canonical_fit.py`, and
+`jax_merits.py`, `_merit_jit.py`, `merit_terms.py`, `asymptotic.py`,
+`asymptotic_canonical_fit.py` and `system.py` are all modified in the working
+tree by the concurrently running WPs.  Its fixture is
+`make_singlet(R1=51.5 mm, …)`, which emits **no `elements` key and no mirror**,
+so the branch VERIFY-A9 touched in `trace.py` / `jax_trace.py` is unreachable
+for it, and the failing quantity is an overlap-integral normalisation, not an
+aperture.  The rest of that batch: 179 passed, 4 skipped.
+
+### F6 file list
+
+Modified: `lumenairy/ui/model.py` (new `_as_distance_mm`; called from
+`set_display_distance`, `set_element_absolute_field`, `set_variable_values`).
+Tests: `tests/unit/test_audit2609_a9_verify_ui.py` (+2 test functions, 4 cases).
+Docs: this file and
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-A9_CHANGELOG.md`.
+No other file touched; no git write commands.

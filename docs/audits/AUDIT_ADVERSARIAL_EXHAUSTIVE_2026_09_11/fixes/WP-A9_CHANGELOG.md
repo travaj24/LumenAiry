@@ -526,3 +526,31 @@ the machines with no Qt.  They run on the auditor's Qt stub through the same
 bootstrap the WP-A9 test file owns.  **The UI skip invariant is now 35, down
 from 38**, identical with and without the A9 test files and in either collection
 order.
+
+## BLOCK 2 addition — for `GUI_CHANGELOG.md` (VERIFY-A9 follow-up, P3)
+
+### Fixed -- a non-finite element spacing put NaN world origins on every element after it
+
+`SystemModel.recompute_element_frames` advances the running origin by
+`distance_mm * R[:, 2]` once per element.  An untilted axis is `(0, 0, 1)`, so
+an infinite spacing multiplies `inf` by two zero components and the element's
+world origin becomes `[nan, nan, inf]` — and, the walk being cumulative, so does
+every element after it.  The 2-D/3-D layouts, both trace-surface builders and
+every ABCD taken on them then read NaN, with nothing anywhere to say which
+element caused it.  Measured on three singlets, `set_display_distance(2, inf)`:
+elements 2, 3 and 4 all at `[nan, nan, inf]` and `find_paraxial_focus(world)`
+= `inf`.  `nan` was worse still: `max(0, nan)` is `0` in Python, so a NaN entry
+silently moved the element onto the previous one's back vertex.
+
+The three mutators an operator or the optimizer can feed — the Distance column
+in either coordinate mode (`set_display_distance`), the absolute-coordinates
+editor's Z / X / Y columns (`set_element_absolute_field`) and the optimizer
+write-back (`set_variable_values`) — now refuse a non-finite or non-numeric
+spacing with a CONVENTIONS §2-prefixed `ValueError` naming the function, the
+element and the value.  The two UI mutators validate before taking their undo
+checkpoint, so a refused entry leaves no undo step.  Every finite write is
+unchanged to the last bit, the `max(0, ...)` clamp on a negative entry included.
+
+Test: `tests/unit/test_audit2609_a9_verify_ui.py::
+test_followup_nonfinite_distance_is_refused_by_the_mutators` (inf / -inf / nan)
+and `::test_followup_finite_distance_writes_are_bit_identical`.

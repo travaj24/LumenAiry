@@ -75,6 +75,42 @@ class SurfaceRow:
 _MAX_EMITTER_COUNT = 4096
 
 
+def _as_distance_mm(value, fn_name, elem_index, elem=None):
+    """Coerce an element spacing to a FINITE float [mm].
+
+    ``recompute_element_frames`` advances the running origin by
+    ``distance_mm * R[:, 2]``.  The axis vector's components are zero on
+    two of three axes for an untilted system, so a non-finite spacing
+    multiplies ``inf`` by ``0`` and leaves a NaN ``origin`` on this
+    element AND on every element after it -- the 2-D/3-D layouts, both
+    trace-surface builders and every ABCD taken on them then read NaN,
+    with nothing anywhere to say which element caused it.  ``nan`` is
+    worse than ``inf``: ``max(0, nan)`` is ``0`` in Python, so a NaN
+    entry silently moved the element to the previous one's back vertex.
+
+    Rejecting it here, in the mutator, is the only place the offending
+    element is still identifiable.
+    """
+    label = ''
+    if elem is not None:
+        name = getattr(elem, 'name', '') or getattr(elem, 'elem_type', '')
+        if name:
+            label = f' ({name!r})'
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f'{fn_name}: element {elem_index}{label} distance must be a '
+            f'finite number of millimetres (got {value!r}).') from None
+    if not np.isfinite(v):
+        raise ValueError(
+            f'{fn_name}: element {elem_index}{label} distance must be a '
+            f'finite number of millimetres (got {value!r}); a non-finite '
+            f'spacing makes every element from here on have a NaN world '
+            f'origin.')
+    return v
+
+
 def _as_count(value, field_name):
     """Coerce a source count field to a positive int.
 
@@ -772,6 +808,14 @@ class SystemModel(QObject):
             v = float(value)
         except (TypeError, ValueError):
             return
+        if col in (3, 6, 7):
+            # Position columns feed ``distance_mm`` / ``decenter_x`` /
+            # ``decenter_y``, every one of which
+            # ``recompute_element_frames`` multiplies into the running
+            # origin.  Reject a non-finite entry here, before the
+            # checkpoint, so a refused edit leaves no undo step and the
+            # element that caused it is still named.
+            _as_distance_mm(v, 'set_element_absolute_field', elem_idx, e)
         self._checkpoint()
         # Orientation edits: drive tilt_x / tilt_y directly.
         if col == 4:
@@ -885,6 +929,12 @@ class SystemModel(QObject):
         """Set distance from display value, handling coordinate mode."""
         if elem_index == 0:
             return  # Source is always at z=0
+        # Validate BEFORE the checkpoint so a rejected entry leaves no
+        # undo step behind.  ``max(0, nan)`` is 0 in Python, so without
+        # this a NaN entry silently moved the element to the previous
+        # one's back vertex instead of being refused.
+        value = _as_distance_mm(value, 'set_display_distance', elem_index,
+                                self.elements[elem_index])
         if self._coordinate_mode == 'relative':
             self._checkpoint()
             self.elements[elem_index].distance_mm = max(0, value)
@@ -2838,7 +2888,14 @@ class SystemModel(QObject):
         for i, (elem_idx, surf_idx, field) in enumerate(live):
             elem = self.elements[elem_idx]
             if field == 'distance':
-                elem.distance_mm = values[i]
+                # A degenerate simplex can propose a non-finite step; a
+                # non-finite spacing would put a NaN origin on this
+                # element and every one after it, and the optimizer
+                # would then score NaN merits against NaN geometry.
+                # Raising surfaces it as a named failure instead
+                # (run_optimization reports it).
+                elem.distance_mm = _as_distance_mm(
+                    values[i], 'set_variable_values', elem_idx, elem)
             else:
                 setattr(elem.surfaces[surf_idx], field, values[i])
         self._invalidate()
