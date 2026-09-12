@@ -4674,24 +4674,42 @@ def apply_real_lens(
     ``tx*x + ty*y``.  This is the v3.x -> v5.1 contract, kept as the
     default so existing callers see no numerical change.
 
-    ``surface_frame=True`` (v5.2+) instead evaluates each surface's sag
-    in its own rigid-body-transformed local frame, matching the Optiland
-    / Zemax treatment of a tilted / displaced asphere.  The field's
-    ``(x, y)`` grid is mapped to surface-frame coordinates via the
-    inverse rigid-body transform: a translation by ``-decenter`` followed
-    by an inverse rotation ``R^T = Ry(-ty) @ Rx(-tx)`` (full rotation
-    matrix, no small-angle linearisation), then the sag is evaluated at
-    the resulting ``(x_s, y_s)``.  Phase contribution is the same
-    ``-k0 * (n2 - n1) * sag(x_s, y_s)`` thin-element formula as the
-    field-frame branch; only the coordinate at which sag is evaluated
-    changes.
+    ``surface_frame=True`` (v5.2+) instead treats the surface as a RIGID
+    BODY, matching the Optiland / Zemax treatment of a tilted /
+    displaced asphere.  The field's ``(x, y)`` grid is mapped to
+    surface-frame coordinates via the inverse rigid-body transform: a
+    translation by ``-decenter`` followed by an inverse rotation
+    ``R^T`` with ``R = Rx(theta_x) @ Ry(theta_y)`` (full rotation
+    matrix, no small-angle linearisation), giving the surface-frame
+    FOOTPRINT ``(x_s, y_s)``.  The phase is then
+    ``-k0 * (n2 - n1) * z_f`` with the rotated surface's FIELD-frame
+    height
 
-    Use ``surface_frame=True`` for off-axis aspheres, decentered
-    parabolas, and any system where the surface's own coordinate frame
-    differs meaningfully from the field's grid frame.  Use the default
-    field-frame branch for the small-tilt / small-decenter alignment-
-    tolerance regime where the linearised sag ramp is the textbook
-    physics.
+    .. code-block:: text
+
+        z_f = R_zx*x_s + R_zy*y_s + R_zz*g(x_s, y_s)
+        R_z. = (-cos(theta_x) sin(theta_y), sin(theta_x),
+                 cos(theta_x) cos(theta_y))
+
+    -- NOT the bare surface-frame sag ``g(x_s, y_s)``.  Evaluating ``g``
+    at the rotated footprint and discarding ``z_s`` drops
+    ``R_zx*x_s + R_zy*y_s``, which to first order is the entire tilt
+    ramp: a rotation RE-EXPRESSES the ramp, it does not delete it.
+
+    ACCURACY, measured against the exact rigid-body geometry (a sphere
+    rotated about its vertex is a sphere with the rotated centre, so the
+    field-frame height is closed form).  R = 50 mm over a +-2 mm pupil,
+    piston removed: the surface-frame branch reads 1.68 / 10.26 /
+    80.1 nm at 1 / 5 / 20 mrad and the default field-frame ramp 1.64 /
+    9.10 / 53.4 nm.  Both are under 0.13 waves, and the two are within
+    a factor 1.5 of each other -- so ``surface_frame=True`` is NOT the
+    more accurate branch for a simple tilt, it is the one that means
+    "rigid body" rather than "sheared surface".  Use it when that is
+    the geometry you have (off-axis aspheres, decentered parabolas,
+    a mount that rotates the part); use the default when the surface is
+    specified as a figure plus a wedge.  Both branches read the ``tilt``
+    key the same way, so flipping the flag no longer re-points the
+    element.
 
     The prescription dict may also specify ``"stop_index"`` (int) to apply
     the global ``"aperture_diameter"`` at a specific surface (the aperture
@@ -4811,26 +4829,62 @@ def apply_real_lens(
         Apply bulk attenuation through each glass region using the
         extinction coefficient from :func:`get_glass_index_complex`.
     seidel_correction : bool, default False
-        Add a "Seidel-style" radially-symmetric OPD correction at the
-        exit pupil derived from a 1-D geometric ray-trace fan.  A
-        polynomial is fit to the difference between the geometric
-        ray OPL and the analytic thin-element OPL (``(n2-n1)*sag``),
-        then applied as a radial phase screen on the way out.
-        Captures ~3-5x improvement on cemented doublets at essentially
-        no extra cost (~41 rays traced, one polynomial fit, one 2-D
-        phase multiplication).  **Off by default** because: (a) well-
-        corrected singlets already achieve sub-30 nm residual against
-        the geometric ray trace via the thin-element model alone, and
-        (b) the Seidel correction can inject polynomial-fit artefacts
-        of order 100 nm on such systems (the analytic formula doesn't
-        model the Fresnel ASM contribution exactly).  A 50 nm RMS
-        correction-amplitude threshold is applied internally to skip
-        the correction when the thin-element model is already good
-        enough.  Recommended: turn on for ``AC254*``-class cemented
-        doublets and similar multi-surface curved-interface systems;
-        leave off for plano-convex singlets and similar well-behaved
-        cases, or use :func:`apply_real_lens_traced` for uniformly
-        high accuracy.
+        Add a radially-symmetric high-order OPD correction at the exit
+        pupil, derived from a 41-ray geometric fan across the clear
+        aperture.  What is fitted is the difference between (a) that
+        fan's OPL on the EXIT VERTEX PLANE and (b) THIS MODEL'S OWN exit
+        OPL on the same fan -- a thin-screen ray walk through the very
+        screens this function applies and the glass gaps its ASM legs
+        propagate -- so the residual is the split-step model's own
+        error and nothing else.  The fit starts at ``rho**4`` (a
+        ``rho**2`` term is defocus, not a high-order residual), it is
+        HELD CONSTANT beyond the largest radius the fan actually lands
+        at rather than extrapolated, and it is skipped entirely unless
+        the fitted part exceeds 5 nm rms.  Cost: 41 traced rays, one
+        least-squares fit and one 2-D phase multiplication.
+
+        Measured exit-plane OPD rms against an independent
+        closed-form-intersection + vector-Snell ray oracle, correction
+        off -> on: an 8 mm cemented doublet 173.6 -> 1.05 nm (165x),
+        the same doublet at 4 mm 10.9 -> 2.6 nm, a meniscus 5.21 ->
+        0.03 nm, a four-surface air-spaced doublet 29.8 -> 0.04 nm, an
+        f/2 singlet 402.6 -> 1.50 nm (268x).  On a well-corrected
+        singlet (model residual 0.85 nm) the gate SKIPS and the call is
+        bit-identical to leaving the flag off.
+
+        LIMITS.  The fan is COLLIMATED and ON AXIS, so the screen is a
+        radial function: it is not valid for a non-collimated or
+        off-axis input (measured on a fast biconvex it still helps at
+        20-50 mrad of input tilt, but by progressively less).  It also
+        ignores per-surface ``decenter`` / ``tilt`` / ``form_error``,
+        which the fan does not see.  Mutually exclusive with
+        ``slant_correction`` (both replace the same per-surface
+        coefficient).  For a per-pixel ray-traced OPL with none of
+        these restrictions use :func:`apply_real_lens_traced`.
+
+        It also assumes the exit field FILLS the pupil the fit is
+        normalised to.  On a fast, thick element it does not: the
+        transverse walk is inward, so the outer pupil carries only the
+        diffractive tail of the geometric field and neither the ray
+        trace nor this model's own eikonal describes it (measured on an
+        f/2 singlet at converged sampling: |E| falls 20x between
+        rho = 0.85 and rho = 0.93 and the model-vs-wave difference over
+        the full pupil is 3.7 um, against 1.5 nm over rho <= 0.85).
+        Whatever the radial screen puts on that annulus -- and it must
+        put something -- scatters its ~5 % of the energy out of the
+        core: on that fixture the exit wavefront over rho <= 0.85
+        improves 268x while the focal PEAK drops 37 %.  Judge this
+        option on a filled pupil, or use
+        :func:`apply_real_lens_traced`, which has no radial screen.
+
+        SAMPLING.  Judging this option (or any exit-OPD measurement on
+        a hard-apertured prescription) needs ``dx`` around
+        ``1.45 * aperture_diameter / 2048`` -- NOT the
+        ``0.3 * wavelength / NA`` a carrier-Nyquist rule gives: on a
+        coarser grid the aperture edge aliases through the in-glass ASM
+        and the exit phase reads hundreds of nm of error that is
+        entirely the grid (measured on a meniscus: 558 nm at N = 512,
+        converging to 0.03 nm by N = 2048 over the same window).
     seidel_poly_order : int, default 6
         Highest even power of the radial polynomial fit used for the
         Seidel correction.  Order 4 is classical spherical-aberration
@@ -4854,15 +4908,20 @@ def apply_real_lens(
 
         When ``True``, the per-surface ``"decenter"`` / ``"tilt"`` are
         applied as a rigid-body transformation of the surface itself
-        (Optiland / Zemax style).  The field's ``(x, y)`` grid is
-        mapped to surface-frame coordinates via the inverse rigid-body
-        transform (``-decenter`` then ``R^T = Ry(-ty) @ Rx(-tx)``
-        with the full rotation matrix, no small-angle linearisation)
-        and the sag is evaluated at the resulting ``(x_s, y_s)``.
-        Use for off-axis aspheres / decentered parabolas where the
-        sag's curvature must rotate with the surface, not just acquire
-        a linear ramp.  See the "Field-frame vs surface-frame
-        decenter / tilt" docstring section above for the physics.
+        (Optiland / Zemax style): the field grid is mapped through the
+        inverse transform to the surface-frame FOOTPRINT, and the phase
+        imprints the rotated surface's FIELD-frame HEIGHT ``z_f``, not
+        the bare surface-frame sag.  Use for off-axis aspheres /
+        decentered parabolas where the sag's curvature must rotate with
+        the surface.  It is not a strictly more accurate branch for a
+        simple tilt -- measured against the exact rotated sphere, the
+        two branches sit within a factor 1.5 of each other and both
+        under 0.13 waves out to 20 mrad -- it is the one that means
+        "rigid body" rather than "figure plus wedge".  Both branches
+        read ``tilt`` the same way, so flipping the flag does not
+        re-point the element.  See the "Field-frame vs surface-frame
+        decenter / tilt" docstring section above for the physics and
+        the measured numbers.
     sag_dtype : {None, np.float32, np.float64}, default None
         v5.17.0 opt-in geometry (coordinate/sag/OPD) dtype.  ``None``
         (default) resolves to the process-wide
@@ -7527,7 +7586,18 @@ def _apply_real_lens_impl(
         )
         r_pupil = 0.5 * aperture
         n_fan = 41
-        h_fan = np.linspace(-0.9 * r_pupil, 0.9 * r_pupil, n_fan)
+        # The fan spans the FULL clear aperture (0.999 rather than 0.9 of it).
+        # The screen below is imprinted out to rho = 1, so every ray height the
+        # fit does not cover is a radius the polynomial has to EXTRAPOLATE
+        # into -- and the transverse walk through the element is inward, so a
+        # fast element already lands well short of wherever the fan is
+        # launched.  Measured on an f/2 singlet with the 0.9 launch: the fan
+        # landed at rho = 0.808 while the screen was applied to rho = 1.0, so a
+        # third of the pupil AREA (a fifth of its energy) got an extrapolated
+        # correction that swung through three waves and cost 37 % of the focal
+        # peak.  Launching to the rim shrinks that band; the clamp below
+        # removes what is left of it.
+        h_fan = np.linspace(-0.999 * r_pupil, 0.999 * r_pupil, n_fan)
         z_arr = np.zeros_like(h_fan)
         fan = _rt_make_bundle(
             x=h_fan, y=z_arr, L=z_arr, M=z_arr,
@@ -7608,6 +7678,28 @@ def _apply_real_lens_impl(
                 corr_map = xp.zeros_like(rho_map_sq)
                 for _p, c in zip(even_powers, coeffs):
                     corr_map = corr_map + float(c) * rho_map_sq ** (_p // 2)
+                # (4) CLAMP, never EXTRAPOLATE.  The fit lives on the radii the
+                # model's rays actually LAND at, and the transverse walk
+                # through the element is inward, so even a rim-launched fan
+                # lands short of the pupil edge (measured 0.87 of it on an f/2
+                # singlet, 0.78 on an 8 mm cemented doublet).  Continuing a
+                # rho**4 + rho**6 polynomial past its own data is where the
+                # coefficients stop meaning anything: on the f/2 the shipped
+                # screen ran +1926.6 nm at the last fitted radius and +25.4 nm
+                # at the rim -- three waves of pure extrapolation over a third
+                # of the pupil AREA carrying a fifth of its energy, which cost
+                # 37 % of the focal peak while the wavefront INSIDE the fit
+                # improved 215x.  Holding the last fitted value instead is a
+                # PISTON over that band (unobservable) and turned the same
+                # measurement into +37 %.  Outside the clear aperture the map
+                # stays 0 exactly as before.
+                _rho_fit = float(np.max(np.abs(rho)))
+                if _rho_fit < 1.0:
+                    _corr_edge = float(sum(
+                        float(c) * _rho_fit ** int(_p)
+                        for _p, c in zip(even_powers, coeffs)))
+                    corr_map = xp.where(rho_map_sq <= _rho_fit ** 2,
+                                        corr_map, _corr_edge)
                 corr_map = xp.where(rho_map_sq <= 1.0, corr_map, 0.0)
                 E = E * xp.exp(+1j * k0 * corr_map)
 

@@ -216,17 +216,21 @@ def surface_sag_general(
     # converts to host, so we dispatch explicitly.
     xp = cp if _is_cupy_array(h_sq) else np
 
-    # ``R = 0`` is not a surface: the conic expression divides by ``R**2`` and
-    # then by ``R``, so it returned an all-NaN sag behind four anonymous numpy
-    # RuntimeWarnings ("divide by zero", "invalid value") that name neither
-    # this function nor the offending key.  ``R = inf`` and ``R = None`` are
-    # the two spellings of a FLAT surface and are handled below; a zero radius
-    # is a malformed prescription and gets the CONVENTIONS SS2 message.
-    if R is not None and not np.isinf(R) and float(R) == 0.0:
+    # ``R = 0`` and ``R = nan`` are not surfaces: the conic expression divides
+    # by ``R**2`` and then by ``R``, so both returned an all-NaN sag behind
+    # anonymous numpy RuntimeWarnings ("divide by zero", "invalid value") that
+    # name neither this function nor the offending key -- and a NaN radius
+    # propagates silently all the way into the phase screen, where it zeroes
+    # the whole field.  ``R = inf`` and ``R = None`` are the two spellings of a
+    # FLAT surface and are handled below; anything else non-finite or zero is a
+    # malformed prescription and gets the CONVENTIONS SS2 message.
+    if R is not None and not np.isinf(R) and not (float(R) != 0.0
+                                                  and np.isfinite(R)):
+        _what = 'nan' if not np.isfinite(R) else '0'
         raise ValueError(
-            "surface_sag_general: radius R = 0 is not a surface (the conic "
-            "sag divides by R).  Use R = np.inf or R = None for a FLAT "
-            "surface; a finite non-zero R for a curved one.")
+            f"surface_sag_general: radius R = {_what} is not a surface (the "
+            f"conic sag divides by R).  Use R = np.inf or R = None for a FLAT "
+            f"surface; a finite non-zero R for a curved one.")
 
     if R is not None and not np.isinf(R):
         # Conic sag: h^2 / (R * (1 + sqrt(1 - (1+k)*h^2/R^2)))

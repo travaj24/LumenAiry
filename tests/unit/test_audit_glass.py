@@ -307,14 +307,16 @@ class TestAuditFixesV4_11_2_track_a_SeidelCorrectionSignAgainstGroundTruth:
         Measured on this 8 mm doublet: 173.5 nm rms with the correction off,
         and pre-fix 1430.0 nm with it ON -- 8.2x WORSE, which is what the
         wrapped assertion this test replaces could not see.  With the
-        exit-vertex transfer, the model-own reference and the rho**4 basis it
-        lands at **1.126 nm** (re-measured 2026-09-12 against a second,
-        independently written closed-form-intersection oracle: 173.466 ->
-        1.126 nm, 154x; an earlier revision of this docstring said "~50 nm",
-        which was not the shipped number).  The bar stays a 3x improvement --
-        two decades above the oracle floor and 51x below the measured margin,
-        so it fails immediately on any of the three defects returning (each on
-        its own put this number the wrong side of 1.0x).
+        exit-vertex transfer, the model-own reference, the rho**4 basis and
+        the rim-launched / clamped screen it lands at **1.053 nm** on THIS
+        fixture at THIS sampling -- 165x, re-measured 2026-09-12 through the
+        helper below.  (Cross-checked against a second, independently written
+        closed-form-intersection oracle on its own grid: 173.4 -> 1.24 nm.
+        An earlier revision of this docstring said "~50 nm", which was never
+        the shipped number.)  The bar stays a 3x improvement -- two decades
+        above the oracle floor and 55x below the measured margin, so it fails
+        immediately on any of the three defects returning (each on its own put
+        this number the wrong side of 1.0x).
         """
         rx = self._doublet(ap=8e-3)
         off = self._exit_wavefront_rms(rx)
@@ -342,18 +344,30 @@ class TestAuditFixesV4_11_2_track_a_SeidelCorrectionSignAgainstGroundTruth:
         ``_through_focus_peak`` for why the raw sampled maximum is not usable
         at this depth of focus).
         * PEAK.  Pre-fix the option cost 26.8 % of the focal peak on this
-          doublet (111 325 -> 81 437 at a 4 mm pupil).  Measured now: -0.27 %
-          (115 929 -> 115 614), i.e. the corrected field focuses as hard as
-          the uncorrected one.  The bar is "must not drop by more than 2 %" --
+          doublet (111 325 -> 81 437 at a 4 mm pupil).  Measured 2026-09-12
+          with the rim-launched, clamped screen: **-0.24 %** (115 928.78 ->
+          115 651.07), i.e. the corrected field focuses as hard as the
+          uncorrected one.  The bar is "must not drop by more than 2 %" --
           one-sided by design, because a correction that costs intensity is
-          not a correction -- which is 7x above the measurement and 13x below
+          not a correction -- which is 8x above the measurement and 13x below
           the defect it guards.
         * FOCUS PLANE.  Pre-fix the best focus moved -2.5 % (50.6291 ->
-          49.3570 mm).  Measured now: +0.146 % (50.7500 -> 50.8239 mm), with
-          the right SIGN for a real correction (removing spherical aberration
-          moves the marginal/paraxial best-focus compromise outward).  The bar
-          is 1.0 %: 6.8x above the measurement and 2.5x below the defect,
-          which a returning rho**2 term crosses immediately.
+          49.3570 mm).  Measured now: **+0.146 %** (50.7500 -> 50.8240 mm),
+          with the right SIGN for a real correction (removing spherical
+          aberration moves the marginal/paraxial best-focus compromise
+          outward).  The bar is 1.0 %: 6.8x above the measurement and 2.5x
+          below the defect, which a returning rho**2 term crosses immediately.
+
+        A NOTE ON THE FIXTURE, added 2026-09-12 (VERIFY-A2).  This is a SLOW
+        doublet, where the fan lands at rho ~ 0.78 of the pupil and the
+        correction is ~0.2 waves.  On a FAST element the same block fits over
+        a smaller fraction of the pupil and the correction is an order larger,
+        which is why the screen is now held constant beyond the fitted radius
+        instead of extrapolated -- see ``_lens_real``'s Seidel block.  Any
+        re-measurement of a fast element needs
+        ``dx ~ 1.45 * aperture / 2048`` or finer: on a coarser grid the
+        aperture edge aliases through the in-glass ASM and the exit phase
+        reads hundreds of nm that are entirely the grid.
         """
         rx = self._doublet(ap=4e-3)
         pk_off, z_off = self._through_focus_peak(rx)

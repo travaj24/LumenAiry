@@ -53,6 +53,31 @@ the flag on and off (peak 41 849.17 at z = 95.0657 mm both ways; before, ON lost
 AC254-100-like doublet's on-axis peak stays at z = 114.0 mm against a 114.85 mm
 paraxial BFL (before it moved to z = 62.0 mm).
 
+FOLLOW-UP (VERIFY-A2, 2026-09-12).  Two further changes to the same block,
+both of which only improve the numbers above.  (1) The 41-ray fan is launched
+across the FULL clear aperture (`±0.999·r_pupil`, was `±0.9`).  (2) The fitted
+screen is now HELD CONSTANT beyond the largest radius the fan lands at instead
+of being extrapolated: the transverse walk through the element is inward, so
+the rays land short of the pupil edge (measured 0.897 of it on an f/2 singlet,
+0.783 on the 8 mm doublet) and continuing a ρ⁴+ρ⁶ polynomial past its own data
+put three waves of nothing on a third of the pupil area.  Re-measured: the
+8 mm doublet 173.6 → **1.053 nm (165×)**, the f/2 singlet 402.6 → **1.504 nm
+(268×)**, the 4 mm doublet's through-focus peak −0.24 % with the focus unmoved
+(+0.146 %).  The plano-convex gate still SKIPS bit-identically.
+
+KNOWN SCOPE LIMIT, measured and now in the docstring: the radial screen assumes
+the exit field FILLS the pupil the fit is normalised to.  On a fast, thick
+element it does not — on an f/2 singlet at converged sampling |E| falls 20×
+between ρ = 0.85 and ρ = 0.93, and the model-vs-wave difference over the full
+pupil is 3.7 µm against 1.5 nm over ρ ≤ 0.85.  Whatever the screen puts on that
+annulus scatters its ~5 % of the energy out of the core: the exit wavefront
+improves 268× while the focal PEAK drops 37 %.  Judge the option on a filled
+pupil, and use `apply_real_lens_traced` (no radial screen) otherwise.  Also in
+the docstring: any exit-OPD measurement on an apertured prescription needs
+`dx ≈ 1.45·aperture/2048` or finer — coarser and the aperture edge aliases
+through the in-glass ASM and reads hundreds of nm that are entirely the grid
+(measured on a meniscus: 558 nm at N = 512, 0.03 nm at N = 2048).
+
 ### Fixed -- apply_real_lens: `slant_correction=True` used normal-referenced cosines and was 2.94× WORSE than the screen it corrects (L12)
 
 The screen applied `(n2·cosθt − n1·cosθi)·sag`, with both cosines referenced to
@@ -315,11 +340,24 @@ back to `xp.exp` for any narrower dtype, and the bit-identity test covers both.
 ### Performance -- apply_real_lens: the four geometric Newton loops stop at their fixed point (L9)
 
 `_build_displaced_cos_luts`, `_build_displaced_cos_grid` and the two ray-map
-builders each ran a FIXED 24 intersection sweeps where the residual is exactly
-zero after 2, and each sweep costs three `_surface_sag_general` evaluations over
-the whole fan.  They now break when `t` reaches a BITWISE fixed point — not a
-tolerance: once another sweep provably cannot change a bit, the remaining ones
-are pure cost, so the output is unchanged by construction.
+builders each ran a FIXED 24 intersection sweeps, and each sweep costs three
+`_surface_sag_general` evaluations over the whole fan.  They now break when `t`
+reaches a BITWISE fixed point — not a tolerance: once another sweep provably
+cannot change a bit, the remaining ones are pure cost, so the output is
+unchanged by construction.
+
+Re-measured (VERIFY-A2, 2026-09-12) on a spherical singlet and a
+conic+aspheric one: the bitwise fixed point is reached after **13** sweeps in
+both ray-map builders and 3 in `_build_displaced_cos_luts`, so
+`_surface_sag_general` calls drop **150 → 84 (1.79x)** per two-surface build,
+not the "2 sweeps / ~10x" an earlier revision of this entry (and RL-MODELS)
+quoted — the residual is zero to a TOLERANCE after ~2 sweeps, but `t` keeps
+moving in the last bits for a further ~11.  The property the change rests on is
+unaffected and was verified directly: forcing the old 24 sweeps back (by making
+the fixed-point test never fire) changes **no bit** of any of the four
+builders' outputs across 2 prescriptions x 4 fan radii x 3 grid sizes
+(`tests/unit/test_audit2609_a2_verify_lens_analytic.py::
+TestVerifyL9NewtonEarlyExitIsBitwise`).
 
 ### Changed -- apply_real_lens: two `displaced` resolutions now scale with the grid (L9)
 

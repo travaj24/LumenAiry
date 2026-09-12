@@ -822,33 +822,203 @@ class TestVerifyL9NewtonEarlyExitIsBitwise:
 # ===========================================================================
 # L1 -- the gate's decision on an IMMERSED-rear singlet
 # ===========================================================================
-class TestVerifyL1GateSkipsAnImmersedRearSinglet:
-    """A fixture WP-A2 did not use: the exit medium is N-SF11, so both the
-    exit-vertex transfer and the exit momentum ``p = n_exit L`` carry a
-    non-unit index.  The split-step model's own exit residual on it is 2.37 nm
-    rms against an independent trace, i.e. below the 5 nm gate, so the gate
-    must SKIP -- asserted as a bit identity, which no tolerance can soften.
+class TestVerifyL1GateDecisions:
+    """The 5 nm gate's two decisions, on fixtures WP-A2 did not use.
 
-    Pre-fix the same call imprinted a spurious rho**2 screen on every
-    prescription it was given, so this returned a DIFFERENT field.
+    * a well-corrected PLANO-CONVEX (model residual 0.85 nm rms) must be
+      SKIPPED -- asserted as a bit identity, which no tolerance can soften.
+      Pre-fix the same call imprinted a spurious rho**2 screen on every
+      prescription it was given, so it returned a DIFFERENT field.
+    * an IMMERSED-REAR singlet (exit medium N-SF11, so both the exit-vertex
+      transfer and the exit momentum ``p = n_exit L`` carry a non-unit index)
+      fires the gate and must IMPROVE the exit wavefront.
     """
 
-    def test_the_gate_skips(self):
+    def test_the_gate_skips_on_a_plano_convex_too(self):
+        """The other half of the decision rule, on the fixture the audit's own
+        residual measurement (0.85 nm rms) is for.  Bit identity, so it cannot
+        be softened; pre-fix the corrected call differed by ~90 um of rho**2.
+        Re-checked after the rim-launched fan and the clamp (VERIFY-A2
+        follow-up) at two samplings, because the fan change moves WHICH rays
+        are fitted and so could in principle push the fitted part over the
+        5 nm gate."""
+        rx = dict(surfaces=[dict(radius=50e-3, glass_before='AIR',
+                                 glass_after='N-BK7'),
+                            dict(radius=float('inf'), glass_before='N-BK7',
+                                 glass_after='AIR')],
+                  thicknesses=[3e-3], aperture_diameter=4e-3)
+        for N, dx in ((256, 3.0e-6), (512, 5.0e-6)):
+            E = np.ones((N, N), dtype=np.complex128)
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                a = apply_real_lens(E, prescription=rx, wavelength=_LAM, dx=dx)
+                b = apply_real_lens(E, prescription=rx, wavelength=_LAM, dx=dx,
+                                    seidel_correction=True)
+            assert np.array_equal(a.view(np.uint8), b.view(np.uint8)), (
+                f"N={N}: the 5 nm gate fired on a singlet whose model residual "
+                f"is 0.85 nm rms; max|d| = {np.max(np.abs(a - b)):.3e}")
+
+    def test_it_improves_the_immersed_exit_wavefront(self):
+        """UPDATED 2026-09-12 (VERIFY-A2 follow-up).  This asserted that the
+        gate SKIPS here.  It did while the fan was launched at 0.9 of the
+        clear aperture: the model's residual grows as rho**4, so a fan that
+        stops at 0.9 under-reads it and the fitted part landed under the 5 nm
+        bar.  With the fan across the FULL aperture the same fixture fits
+        above the bar and the correction is applied -- which is the right
+        decision, and the wavefront says so.
+
+        DERIVATION OF THE BAR.  Oracle: the closed-form-intersection
+        meridional trace in ``TestVerifyL7...`` (exit index resolved from the
+        prescription, so the N-SF11 exit leg is carried at n = 1.7912).
+        Measured 2026-09-12, piston-free rms over |x| <= 0.85 r_pupil:
+        2.400 -> 0.023 nm at N = 1024 (105x) and 2.394 -> 0.032 nm at
+        N = 2048 (74x); over 0.95 r_pupil, 5.9x and 3.1x.  The bar is a 2x
+        improvement -- below the weakest of those four and far above 1.0, so
+        it fails outright if the correction ever makes an immersed exit worse
+        (which is what a wrong n_exit in either the exit-vertex transfer or
+        the exit momentum p = n_exit*L would do).
+        """
         rx = dict(surfaces=[dict(radius=40e-3, glass_before='AIR',
                                  glass_after='N-BK7'),
                             dict(radius=-60e-3, glass_before='N-BK7',
                                  glass_after='N-SF11')],
                   thicknesses=[3.5e-3], aperture_diameter=4e-3)
-        N, dx = 256, 1.1e-5
+        ap = rx['aperture_diameter']
+        N = 1024
+        dx = 1.45 * ap / N
+        x = (np.arange(N) - N / 2) * dx
         E = np.ones((N, N), dtype=np.complex128)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             a = apply_real_lens(E, prescription=rx, wavelength=_LAM, dx=dx)
             b = apply_real_lens(E, prescription=rx, wavelength=_LAM, dx=dx,
                                 seidel_correction=True)
-        assert np.array_equal(a.view(np.uint8), b.view(np.uint8)), (
-            f"the 5 nm gate fired on a singlet whose model residual is "
-            f"2.37 nm rms; max|d| = {np.max(np.abs(a - b)):.3e}")
+        h = np.linspace(1e-9, 0.999 * ap / 2, 20001)
+        xo, oplo = TestVerifyL7ImmersedExitReferencingLeg._trace(
+            rx['surfaces'], rx['thicknesses'], h)
+        order = np.argsort(xo)
+        m = np.abs(x) <= 0.85 * ap / 2
+        Wr = np.interp(np.abs(x[m]), xo[order], oplo[order])
+        out = {}
+        for lab, E_ in (('off', a), ('on', b)):
+            d = np.unwrap(np.angle(E_[N // 2]))[m] / _K0 - Wr
+            out[lab] = float(np.std(d - d.mean()))
+        assert out['off'] > 1e-9, (
+            f"fixture lost its residual ({out['off'] * 1e9:.3f} nm); the test "
+            f"would be vacuous")
+        assert out['on'] < out['off'] / 2.0, (
+            f"seidel_correction on an IMMERSED exit gives "
+            f"{out['on'] * 1e9:.4f} nm rms against {out['off'] * 1e9:.4f} nm "
+            f"with it off -- a {out['off'] / out['on']:.2f}x change where "
+            f">= 2x is required")
+
+
+# ===========================================================================
+# L1 follow-up -- the Seidel screen must never EXTRAPOLATE its own fit
+# ===========================================================================
+class TestVerifyL1SeidelScreenIsClampedNotExtrapolated:
+    """The fan is launched across the FULL clear aperture and the ray walk
+    through the element is inward, so the model's rays land SHORT of the pupil
+    edge (measured 0.897 of it on the f/2 fixture below, 0.78 on a cemented
+    doublet).  The screen is imprinted out to rho = 1 regardless, so every
+    radius past the landing radius is a radius where a rho**4 + rho**6
+    polynomial is being continued past its own data.
+
+    Measured before this was clamped: on an f/2 singlet the screen ran
+    +1926.6 nm at the last fitted radius and +25.4 nm at the rim -- three
+    waves of pure extrapolation over a third of the pupil AREA -- and cost
+    37 % of the focal peak while the wavefront INSIDE the fit improved 215x.
+    Holding the last fitted value instead is a PISTON over that band.
+
+    The pin is the MECHANISM, not the peak: the peak needs
+    ``dx <= 1.45*aperture/2048`` to measure honestly (a coarser grid aliases
+    the aperture edge through the in-glass ASM and reads hundreds of nm that
+    are entirely the grid -- that is a minutes-long run, and
+    ``docs/TESTING_STANDARDS.md`` S1 does not want the wall clock asserted
+    either).  What IS exact on any grid is the screen itself: ``E_ON /
+    E_OFF`` is ``exp(+i k0 corr_map)`` wherever ``E_OFF != 0``, whatever the
+    amplitude there, so the piston can be read to float64 out to the rim.
+    """
+
+    N, DX = 512, 1.4160e-6
+
+    @staticmethod
+    def _fast_singlet():
+        """f/2 (EFL 1 mm, 0.5 mm aperture): fast enough that the fan lands
+        well inside the pupil and the correction is ~1.5 waves."""
+        return dict(surfaces=[dict(radius=1.03e-3, glass_before='AIR',
+                                   glass_after='N-BK7'),
+                              dict(radius=-1.03e-3, glass_before='N-BK7',
+                                   glass_after='AIR')],
+                    thicknesses=[0.30e-3], aperture_diameter=0.5e-3)
+
+    def _screen_row(self):
+        rx = self._fast_singlet()
+        E = np.ones((self.N, self.N), dtype=np.complex128)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            off = apply_real_lens(E, prescription=rx, wavelength=_LAM,
+                                  dx=self.DX)
+            on = apply_real_lens(E, prescription=rx, wavelength=_LAM,
+                                 dx=self.DX, seidel_correction=True)
+        assert not np.array_equal(off.view(np.uint8), on.view(np.uint8)), (
+            "the fixture stopped firing the 5 nm gate; the test would be "
+            "vacuous")
+        row = np.unwrap(np.angle(on[self.N // 2] * np.conj(off[self.N // 2])))
+        x = (np.arange(self.N) - self.N / 2) * self.DX
+        return x, row / _K0, rx['aperture_diameter'] / 2.0
+
+    def test_the_screen_is_flat_beyond_the_fitted_radius(self):
+        """Two-sided and tolerance-free in the only sense a piston admits: the
+        imprinted screen must be CONSTANT over the outer band, to the float64
+        noise of reading a phase difference (measured max spread 0 over
+        0.94 <= rho <= 0.99; the bar is 1e-12 m, i.e. 2e-6 waves).  Pre-clamp
+        the same band spanned 1.9e-6 m -- three waves."""
+        x, scr, r_p = self._screen_row()
+        rho = np.abs(x) / r_p
+        band = (rho >= 0.94) & (rho <= 0.99)
+        assert band.sum() >= 8, "scoring band lost its samples"
+        spread = float(np.ptp(scr[band]))
+        assert spread < 1e-12, (
+            f"the Seidel screen varies by {spread:.4e} m over "
+            f"0.94 <= rho <= 0.99, i.e. it is still EXTRAPOLATING its rho**4 "
+            f"fit past the radius the fan lands at (pre-clamp: 1.9e-6 m)")
+
+    def test_the_clamp_is_continuous_with_the_fit(self):
+        """The held value must be the polynomial's own value where the fit
+        ends, not zero and not a fresh constant: a step there would be a
+        hard-edged phase discontinuity inside the pupil.  Scored as the jump
+        between the last varying sample and the first flat one, against the
+        typical sample-to-sample step of the polynomial just inside it.
+
+        Measured: the jump is 0.0 (the clamp reuses the fitted value), against
+        an inner step of ~1e-8 m per sample.  The bar is 'no larger than the
+        local step', which a zero-fill or an independent constant fails by
+        orders."""
+        x, scr, r_p = self._screen_row()
+        half = scr[self.N // 2:]
+        rho = (x[self.N // 2:]) / r_p
+        inside = rho <= 1.0
+        half, rho = half[inside], rho[inside]
+        d = np.abs(np.diff(half))
+        flat = d < 1e-13
+        assert flat.any() and (~flat).any(), (
+            "the screen is either all flat or nowhere flat on this fixture")
+        j = int(np.argmax(flat))                     # first flat step
+        local = float(np.median(d[max(j - 8, 0):j])) if j >= 2 else 0.0
+        jump = float(d[j - 1]) if j >= 1 else 0.0
+        assert jump <= max(local * 3.0, 1e-12), (
+            f"the clamp introduces a {jump:.3e} m step at rho = "
+            f"{rho[j]:.4f}, against a local polynomial step of {local:.3e} m")
+
+    def test_the_screen_stays_zero_outside_the_clear_aperture(self):
+        """Unchanged behaviour: past rho = 1 the map is exactly 0, as it was
+        before the clamp."""
+        x, scr, r_p = self._screen_row()
+        rho = np.abs(x) / r_p
+        out = rho > 1.02
+        if out.sum() >= 4:
+            assert float(np.max(np.abs(scr[out] - scr[out][0]))) < 1e-12
 
 
 if __name__ == '__main__':

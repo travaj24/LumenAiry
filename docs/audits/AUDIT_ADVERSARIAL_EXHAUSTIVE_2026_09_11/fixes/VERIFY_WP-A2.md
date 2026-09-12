@@ -565,3 +565,189 @@ walk asserted as a byte identity against a hand-written unfolded prescription.  
 defects were also fixed (a wrong measured number inside a derivation comment, and a fixture that
 broke on a sibling module's in-flight change).  Seven further items (§5.2–5.8) are recorded for the
 orchestrator; none of them blocks the commit.
+
+---
+
+# Follow-up (2026-09-12) — the coordinator's rulings on §5
+
+Rulings implemented: **5.1** (clamp + rim-launched fan + docstring sampling
+recipe + pins), **5.2** (`surface_frame` docstring), **5.3** (L9 sweep numbers
+in `WP-A2_REPORT.md` and `WP-A2_CHANGELOG.md`), **5.6**
+(`surface_sag_general(R=nan)`).  **5.7** left alone as instructed (the abort is
+noted in §2 and below).  **5.5 / 5.8** handed to the docs package.
+
+## F.1 — 5.1 implemented, and my §5.1 diagnosis PARTLY RETRACTED
+
+**What was changed** (`_lens_real.py`, Seidel block):
+
+1. the fan is launched across the full clear aperture, `±0.999·r_pupil`
+   instead of `±0.9·r_pupil`;
+2. the screen is **clamped** rather than extrapolated —
+   `corr_map = where(rho² <= rho_fit², corr_map, corr(rho_fit))` with
+   `rho_fit = max|x_model|/r_pupil`, holding the polynomial's own value at the
+   last radius the fan lands at.  Outside the clear aperture the map is still
+   exactly 0.
+
+**Measured effect.**  Both changes help the wavefront, on every fixture:
+
+| fixture | sampling | OFF | ON before F.1 | ON after F.1 |
+|---|---|---:|---:|---:|
+| cemented doublet 8 mm (the WP's own test helper) | the test's grid | 173.634 nm | 1.126 | **1.053 nm (165.0x)** |
+| cemented doublet 8 mm (my oracle) | N = 4096, dx = 2.832 um | 173.403 | — | **1.238 (140.1x)** |
+| cemented doublet 4 mm (my oracle) | N = 4096, dx = 1.416 um | 10.945 | — | **2.646 (4.14x)** |
+| f/2 biconvex R = ±4.12 mm | N = 4096, dx = 0.708 um | 402.638 | 1.871 (215x) | **1.504 (267.7x)** |
+| rho_fit on the f/2 | — | — | 0.8084 | **0.8967** |
+
+The WP's own L1 tests pass unchanged, and their derivation numbers are re-barred
+to the sampling those tests use: the 8 mm doublet reads **1.053 nm / 165x** (was
+1.126) and the 4 mm through-focus **−0.24 % peak / +0.146 % focus** (was
+−0.27 % / +0.146 %) — i.e. the change does not disturb them.
+`test_audit_glass.py`: **21 passed**.
+
+**What did NOT happen, and this is a retraction.**  §5.1 predicted the clamp
+would turn the f/2's −37 % peak into +37 %, on the strength of a masked-screen
+experiment.  Re-measured on the current code at converged sampling, the peak is
+**−36.6 %** (210 672 → 133 595 at N = 4096) — essentially unchanged.  The
+masked-screen experiment does **not** reproduce: it ran on a differently-sampled
+fixture and rebuilt the 2-D screen by radial interpolation of one row with a
+4.7e-3 reconstruction error.  It should not have been quoted as a
+demonstration; read §5.1 with this paragraph.
+
+**What the radial profile actually shows** (f/2, N = 4096, dx = 0.708 um, well
+inside the 1.260 um Nyquist):
+
+| rho | abs(E) | residual OFF [nm] | residual ON [nm] | screen [nm] |
+|---:|---:|---:|---:|---:|
+| 0.20 | 1.110 | 732.7 | 1258.7 | −3.9 |
+| 0.70 | 1.153 | 1400.0 | 1259.6 | −670.4 |
+| 0.85 | 1.178 | 2278.0 | 1265.6 | −1542.4 |
+| 0.90 | **0.494** | 244.1 | −1169.5 | −1943.6 (clamped) |
+| 0.93 | **0.115** | −6533.4 | −7947.0 | −1943.6 |
+| 0.99 | **0.048** | −16865.4 | −18279.0 | −1943.6 |
+
+Central-row energy: 94.59 % inside rho <= 0.85, 5.14 % in 0.85–0.90, 0.21 % in
+0.90–1.0.  `model − wave` over the FULL pupil is **3662.8 nm** and `ray − wave`
+**3714.1 nm**, against 1.5 nm over rho <= 0.85.
+
+So the real limitation is **not** the polynomial extrapolation — that was real
+(three waves) and is now gone.  It is that **this fixture's exit field does not
+fill the pupil the screen is normalised to**: the inward transverse walk of a
+fast, thick element leaves the outer pupil carrying only the diffractive tail of
+the geometric field, where neither the ray trace nor the model's own eikonal
+describes it.  A radial screen must put *something* on that annulus, and
+whatever it puts scatters its ~5 % of the energy out of the core.  That is a
+SCOPE limitation of a radial screen, not a coding defect — and it is now stated
+in the `seidel_correction` docstring together with the sampling recipe.
+
+**I did not add a guard for it.**  The obvious candidate (warn when
+`rho_fit < 0.95`) fires on the 8 mm cemented doublet, where `rho_fit = 0.783`
+and the correction is excellent (165x, peak −0.24 %) — so `rho_fit` does not
+separate the good case from the bad one, and I will not ship a bar I cannot
+derive.  The distinguishing quantity is whether the exit field still FILLS the
+pupil, which the function has in hand (`E` at the exit plane) but which an
+apodised input would also trip.  Handing that design decision back with the
+data rather than guessing a threshold.
+
+**Pins added** (`TestVerifyL1SeidelScreenIsClampedNotExtrapolated`, 3 tests).
+The MECHANISM is pinned, not the peak: `E_ON / E_OFF` is `exp(+i k0 corr_map)`
+exactly, whatever the amplitude there, so the screen can be read to float64 on
+a cheap grid.  (i) it is **constant to < 1e-12 m** over 0.94 <= rho <= 0.99,
+where pre-clamp it spanned 1.9e-6 m; (ii) the held value is continuous with the
+fit (no step beyond the local polynomial step); (iii) past rho = 1 the map is
+still exactly 0.  The peak is NOT pinned: an honest f/2 peak needs
+`dx <= 1.45*aperture/2048` and a minutes-long N = 4096 run, and it would pin a
+number I have just shown is a property of the fixture rather than of the code.
+
+**One bar moved as a consequence.**  My
+`TestVerifyL1GateSkipsAnImmersedRearSinglet` asserted that the gate SKIPS on an
+immersed-rear singlet.  It skipped only because the 0.9-launch fan under-read a
+residual that grows as rho⁴; with the rim-launched fan the same fixture fits
+above the 5 nm bar and the correction is applied — correctly, as the wavefront
+shows: 2.400 → **0.023 nm** at N = 1024 (105x) and 2.394 → 0.032 nm at N = 2048
+(74x); over rho <= 0.95, 5.9x and 3.1x.  The test is renamed
+`test_it_improves_the_immersed_exit_wavefront` with a 2x bar (below the weakest
+of those four, far above 1.0).  The **plano-convex gate still SKIPS
+bit-identically**, now pinned at two samplings (N = 256 / dx = 3 um and
+N = 512 / dx = 5 um).
+
+## F.2 — 5.2, 5.3, 5.6
+
+* **5.2 `surface_frame`.**  Both the narrative section and the parameter entry
+  were rewritten, because two things were wrong there, not one: the narrative
+  still said "Phase contribution is the same ``-k0*(n2-n1)*sag(x_s, y_s)``
+  thin-element formula ... only the coordinate at which sag is evaluated
+  changes" — a description of the L2 DEFECT, in the public docstring of the
+  function that fixed it.  It now states the field-frame height `z_f` and its
+  `R_z.` row explicitly, carries the measured accuracy of BOTH branches
+  (1.68 / 10.26 / 80.1 nm surface-frame against 1.64 / 9.10 / 53.4 nm
+  field-frame at 1 / 5 / 20 mrad on R = 50 mm) and replaces "more accurate"
+  with what the flag actually means (rigid body vs figure-plus-wedge).
+* **5.3 L9 sweep numbers** corrected in `WP-A2_REPORT.md` (the §1 row and §2)
+  and in `WP-A2_CHANGELOG.md`: 24 → **13** sweeps in the two ray-map builders
+  (3 in `_build_displaced_cos_luts`), `_surface_sag_general` calls **150 → 84 =
+  1.79x**, with the bitwise-identity verification named.
+* **5.6 `surface_sag_general(R=nan)`** now raises the same SS2-prefixed
+  `ValueError` as `R = 0`, naming which of the two it saw.  Verified under
+  `-W error::RuntimeWarning`: `0.0`, `0` and `nan` raise; `inf`, `-inf` and
+  `None` still return zeros; finite radii unchanged.
+* **5.7** `repro/RL-CORE/p7b.py` left untouched, as instructed.  It aborts at
+  its `stop_index=2` row (correctly — that is a `ValueError` now); the three
+  rows it prints first (`None` 0.26930, `0` 0.26930, `1` 0.27880) are unchanged
+  from the audit's numbers.
+
+## F.3 — a third docstring miss, found while doing 5.1
+
+The WP's changelog says "the `slant_correction` guidance ... and the
+`seidel_correction` recommendation ('turn on for AC254*-class cemented
+doublets') are rewritten against the measurements above."  The slant guidance
+**was** rewritten.  The `seidel_correction` parameter entry was **not touched at
+all** by `b97c0b6e` (`git show b97c0b6e -- lumenairy/elements/_lens_real.py |
+grep AC254` returns nothing).  It still described the removed defect — "a
+polynomial is fit to the difference between the geometric ray OPL and the
+analytic thin-element OPL (``(n2-n1)*sag``)", which is exactly reference (c)
+that L1 replaced — still quoted a **50 nm** threshold where the gate is 5 nm,
+and still said "Recommended: turn on for ``AC254*``-class cemented doublets".
+Rewritten in full: what is actually fitted, the rho⁴ basis, the clamp, the 5 nm
+gate, the measured numbers on five fixtures, the collimated / on-axis /
+filled-pupil limits, and the sampling recipe.
+
+## F.4 — files touched in the follow-up
+
+* `lumenairy/elements/_lens_real.py` — Seidel fan launch + clamp;
+  `seidel_correction` parameter entry rewritten; `surface_frame` narrative and
+  parameter entry corrected.
+* `lumenairy/elements/lenses.py` — the `R = nan` guard.
+* `tests/unit/test_audit2609_a2_verify_lens_analytic.py` — new class
+  `TestVerifyL1SeidelScreenIsClampedNotExtrapolated` (3 tests), new
+  `test_the_gate_skips_on_a_plano_convex_too`, immersed-rear test re-barred.
+* `tests/unit/test_audit_glass.py` — the two L1 derivation comments re-barred
+  to the re-measured values plus the fast-element / sampling note.  No bar
+  moved.
+* `docs/audits/.../fixes/WP-A2_REPORT.md`, `.../WP-A2_CHANGELOG.md` — 5.3.
+* this file.
+
+## F.5 — test runs (follow-up, all AFTER the code changes above)
+
+| command | result | duration |
+|---|---|---|
+| `test_audit2609_a2_verify_lens_analytic.py` (mine) | **47 passed** (43 + 4 new) | 4 s |
+| `test_audit_glass.py` (the WP's three L1 tests) | **21 passed** | 86 s |
+| `test_audit2609_a2_verify_lens_analytic` + `test_audit2609_a2_analytic_lens` + `test_audit2609_a2_displaced_models` + `test_audit_glass` | **130 passed** | 116 s |
+| `test_v5_2_off_axis_conic_surface_frame` + `test_hammer_h1_slant_obliquity` + `test_elements_lens` + `test_folded_design_guard` + `test_audit_misc::…StopIndexWarn` + `test_lens_chunked_sag` + `test_sag_float32_production_window` | **63 passed, 1 skipped** (Optiland) | 82 s |
+| `pytest tests/unit -k real_lens` (whole-suite selection) | **146 passed, 3 skipped**, 0 failed | 301 s |
+| `python validation/run_all.py test_lenses` | every `apply_real_lens` case OK, including `cylindrical + seidel_correction`, `seidel runs without error`, `all optional features together` and `slant + seidel raise ValueError`.  The one failure is the unchanged pre-existing `apply_real_lens_traced_jax` x64 case in `_lens_jax.py` (another WP's file) | 40 s |
+| `surface_sag_general` guard, under `-W error::RuntimeWarning` | `0.0` / `0` / `nan` raise the SS2-prefixed `ValueError`; `inf` / `-inf` / `None` return zeros; finite radii unchanged | — |
+
+No new failure anywhere.  The `-k real_lens` count is unchanged from the
+pre-follow-up run (146 passed, 3 skipped), so nothing in the wider lens surface
+moved.
+
+## F.6 — what remains open after the follow-up
+
+| # | Sev | Item |
+|---|---|---|
+| **5.1r** | **P2, reduced** | `seidel_correction` on an element whose exit field does not FILL the pupil (fast + thick).  The extrapolation half is fixed and pinned; the remaining half is a scope limitation of a radial screen, now stated in the docstring.  A guard is possible but I could not derive a threshold that separates the 8 mm doublet (`rho_fit = 0.783`, excellent) from the f/2 (`rho_fit = 0.897`, peak −37 %) — `rho_fit` is not it.  Design input needed, not a number. |
+| 5.5 | P2 | CONVENTIONS.md power-convention sentence — with the docs package, unchanged. |
+| 5.8 | — | The sampling recipe is now in the `seidel_correction` docstring; the docs package may still want it wherever the audit's measurement method is written down. |
+
+5.2, 5.3, 5.6 are closed.  5.7 is closed as "leave it" per the ruling.
