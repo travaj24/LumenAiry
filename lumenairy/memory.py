@@ -507,6 +507,40 @@ _LENS_F64_ARRAYS = 6.2            # coord lineage + sag/opd transients + opl_map
 _LENS_SLANT_F64_ARRAYS = 6.0     # extra angle stack (dsag_dx/dy, grad_sq, cos_ti/tt, opd) when slant/fresnel
 _LENS_COMPLEX_ARRAYS = 0.8       # resident complex set after the v5.17.0 eager frees
 _NEWTON_BYTES_PER_COARSE_PT = 2490.0   # coarse-grid Newton solve + poly fit + map_coordinates, per (N/sub)^2 pt
+
+# ---------------------------------------------------------------------------
+# ``lens_model='real'`` -- the BARE ``apply_real_lens`` entry point.
+#
+# v5.46 (audit Z3).  These are its OWN constants, measured on it.  The
+# pre-v5.46 branch reused the traced calibration above and then scaled the
+# float64 core DOWN by ``5 / _LENS_F64_ARRAYS`` on the reasoning that the bare
+# entry point "omits the traced final-assembly float64 arrays".  Measured, it
+# does not: ``estimate_lens_memory(..., lens_model='real')`` under-predicted
+# ``apply_real_lens``'s tracemalloc peak by 2.8x (parallel_amp=False) / 1.6x
+# (parallel_amp=True, the default) -- i.e. a pre-flight budget computed with
+# the DOCUMENTED model for that entry point under-reserved by up to 2.8x,
+# which is the exact failure ``check_sim_memory`` exists to prevent.
+#
+# CALIBRATION (2026-09-12, tracemalloc peak of ONE ``apply_real_lens`` call on
+# an N-BK7 biconvex singlet R = +-50 mm / d = 5 mm / 25 mm aperture, 633 nm,
+# 30 mm field, caches warmed, whole-grid mode).  The measured peak is pure
+# N^2 -- no fixed term -- so bytes/pixel IS the calibration:
+#
+#     N        c128 B/px      c64 B/px
+#     512        178.50        120.13
+#     1024       176.06        120.04
+#     2048       176.02        120.01
+#
+# Two unknowns, two dtypes, exact solve on the N >= 1024 asymptote:
+#     8*F + 16*C = 176.02   and   8*F + 8*C = 120.01
+#   ->  C = 7.00 complex full-grid arrays, F = 8.00 float64 full-grid arrays.
+# Of those 8 float64-equivalents, 2 are the complex128-first ``phase_exp``
+# transient the shared term below already models (16 B/px), leaving 6.0 for
+# the geometric core.  The shipped constants carry a ~7 % margin on top so the
+# estimate BOUNDS the measurement (the fail-safe direction for a pre-flight
+# budget): est/measured = 1.06 (c128, N=512) to 1.07 (both dtypes, N >= 1024).
+_LENS_REAL_F64_ARRAYS = 6.6      # geometric core, apply_real_lens (measured 6.0 + margin)
+_LENS_REAL_COMPLEX_ARRAYS = 7.5  # resident complex set, apply_real_lens (measured 7.0 + margin)
 # Bare ASM step (audit A-6, RE-DERIVED 2026-07-25 from fresh-interpreter
 # tracemalloc profiles of ``angular_spectrum_propagate`` at N=64..2048 in
 # complex64 and complex128; see :func:`estimate_asm_memory`).  The measured
@@ -613,13 +647,32 @@ def estimate_lens_memory(n_grid: int,
     complex_dtype : dtype-like, default ``'complex128'``
         Field dtype.  ``'complex64'`` halves ONLY the complex terms.
     lens_model : ``'traced'`` | ``'real'``, default ``'traced'``
-        ``'real'`` (bare ``apply_real_lens``) omits the traced final-assembly
-        (Newton + ``map_coordinates`` + delta_phase) float64 arrays.
+        Which entry point to model: ``'traced'`` is
+        :func:`~lumenairy.apply_real_lens_traced` (carries the Newton coarse
+        solve + ``map_coordinates`` assembly), ``'real'`` the bare
+        :func:`~lumenairy.apply_real_lens` (no traced final assembly).  Each
+        has its OWN measured full-grid array counts; see the calibration note
+        on :data:`_LENS_REAL_F64_ARRAYS`.
+
+        .. versionchanged:: 5.46
+            ``'real'`` is re-derived from ``tracemalloc`` on
+            ``apply_real_lens`` itself (audit Z3).  It previously reused the
+            traced constants and scaled the float64 core DOWN, and
+            under-predicted the measured peak by 1.6x (default
+            ``parallel_amp=True``) to 2.8x (``parallel_amp=False``) -- a
+            pre-flight budget built from it under-reserved.  It now bounds
+            the measurement by ~7 %.
     ray_subsample : int, default 8
         Ray-trace OPL subsample.  Larger -> smaller Newton coarse solve.
+        Read only by ``lens_model='traced'`` (and by the row-band branch).
     parallel_amp : bool, default True
         When True the amp + amp(pw) legs run concurrently -> ~2x the lens
-        working set (the single largest claw-back when turned off).
+        working set (the single largest claw-back when turned off).  Applies
+        to ``lens_model='traced'`` and to the row-band branch.  It is INERT
+        for ``lens_model='real'`` in whole-grid mode (v5.46): the bare
+        ``apply_real_lens`` has no ``parallel_amp`` argument, so there is
+        nothing to switch off, and its constants are measured on the shipped
+        behaviour.
     slant_correction : bool, default False
         Adds the ~6 float64 angle-gradient arrays.
     sag_dtype : dtype-like or None
@@ -689,24 +742,32 @@ def estimate_lens_memory(n_grid: int,
                 'complex_dtype': str(np.dtype(complex_dtype)),
                 'sag_dtype': 'float32' if sb == 4 else 'float64'}
 
-    f64_core = _LENS_F64_ARRAYS * sb * npix
+    _real = (lens_model != 'traced')
+    # v5.46 (audit Z3): the two entry points carry DIFFERENT array counts, each
+    # calibrated on itself -- see the constants above.
+    f64_core = ((_LENS_REAL_F64_ARRAYS if _real else _LENS_F64_ARRAYS)
+                * sb * npix)
     if slant_correction:
         f64_core += _LENS_SLANT_F64_ARRAYS * sb * npix
-    complex_part = _LENS_COMPLEX_ARRAYS * cb * npix
+    complex_part = ((_LENS_REAL_COMPLEX_ARRAYS if _real
+                     else _LENS_COMPLEX_ARRAYS) * cb * npix)
     # phase_exp = np.exp(1j*delta_phase) is built complex128-FIRST whenever
     # delta_phase is float64 (the default sag), so a c128-sized transient
     # rides even in a complex64 run.  float32 sag removes it.
     phase_exp_trap = 16 * npix if sb == 8 else 0
 
-    if lens_model == 'traced':
+    if _real:
+        # Bare apply_real_lens has no traced final assembly.
+        newton = 0.0
+    else:
         sub = max(1, int(ray_subsample))
         newton = _NEWTON_BYTES_PER_COARSE_PT * (N / sub) ** 2
-    else:  # bare apply_real_lens has no traced final assembly
-        newton = 0.0
-        # 'real' holds fewer of the assembly float64 arrays
-        f64_core *= (5.0 / _LENS_F64_ARRAYS)
 
-    if parallel_amp:
+    if parallel_amp and not _real:
+        # The x2 models the traced path's concurrent amp + amp(pw) legs.
+        # ``apply_real_lens`` exposes no ``parallel_amp`` knob at all, and the
+        # 'real' constants were measured on its shipped behaviour, so doubling
+        # them would double-count (see the calibration note).
         f64_core *= 2.0
         complex_part *= 2.0
 

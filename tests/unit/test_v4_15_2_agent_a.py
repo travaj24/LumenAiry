@@ -146,10 +146,24 @@ class TestSchellDefaultDeprecationWarning:
         warning the default path produced for nominal kwargs.  Pin
         that a clean default-kwarg call is fully silent across all
         warning categories (UserWarning, DeprecationWarning, etc.).
+
+        v5.46 (audit Z2): "nominal" now has a stated meaning for this
+        factory -- the grid has to hold the coherence length.  The shared
+        ``_GAUSSIAN_SCHELL_KW`` fixture above is a 16 x 16 / dx = 2 um toy
+        (L = 32 um) carrying ``sigma_g = 8 um = L/4``, i.e. fewer than six
+        coherence cells across the grid, which the factory now warns about
+        (the ensemble is aperture-dominated there -- the audit measured the
+        coherent-mode spectrum's exact 3-fold n = 2 degeneracy broken by
+        ~30 %).  The sibling tests in this class filter to
+        ``DeprecationWarning`` and are unaffected; this one asserts total
+        silence, so it uses a grid that satisfies ``N*dx >= 6*sigma_g``
+        (64 um >= 48 um).  Every other kwarg is the shared fixture's.
         """
+        kw = dict(_GAUSSIAN_SCHELL_KW, N=32)
+        assert kw['N'] * kw['dx'] >= 6 * kw['sigma_g']
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            create_gaussian_schell_source(**_GAUSSIAN_SCHELL_KW)
+            create_gaussian_schell_source(**kw)
         # Filter out anything not originating from lumenairy itself
         # (e.g. numpy / scipy internal deprecation warnings that may
         # bubble through unrelated transitive code paths).

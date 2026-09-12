@@ -502,7 +502,11 @@ def create_gaussian_beam(
 
     x = (xp.arange(Nx) - Nx / 2) * dx
     y = (xp.arange(Ny) - Ny / 2) * dy
-    X, Y = xp.meshgrid(x, y)
+    # S3-7: broadcast views, not a dense N x N grid.  ``xp.meshgrid`` here
+    # materialised two float64 N^2 arrays whose rows/columns are all
+    # identical; the exponent below broadcasts them just as well, and the
+    # arithmetic is elementwise so the result is bit-identical.
+    X, Y = x[None, :], y[:, None]
 
     # v5.4.6 (audit F-39): reject non-physical scale parameters -- sigma=0
     # gives a divide-by-zero / NaN-laced field and sigma<0 silently
@@ -512,10 +516,19 @@ def create_gaussian_beam(
         raise ValueError(
             f"create_gaussian_beam: sigma must be positive and finite, "
             f"got {sigma}.")
-    # Gaussian amplitude: exp(-r^2 / (2 sigma^2))
+    # Gaussian amplitude: exp(-r^2 / (2 sigma^2)).  Built in place through
+    # one real N^2 buffer: `(-S)/c == -(S/c)` exactly in IEEE (division is
+    # sign-symmetric and negation exact), so folding the sign into a
+    # separate in-place negate keeps the values bit-identical to the
+    # out-of-place `exp(-(...)/(2 sigma^2))` while dropping two full-grid
+    # float64 temporaries.
     target_dtype = _resolve_complex_dtype(dtype)
-    E = xp.exp(-((X - x0)**2 + (Y - y0)**2) / (2 * sigma**2))
-    E = E.astype(target_dtype)
+    arg = (X - x0) ** 2 + (Y - y0) ** 2
+    arg /= (2 * sigma ** 2)
+    xp.negative(arg, out=arg)
+    xp.exp(arg, out=arg)
+    E = arg.astype(target_dtype)
+    del arg
 
     if normalize == 'peak':
         # v5.4.6 (audit F-38): divide by the ACTUAL peak so the field is
@@ -524,11 +537,13 @@ def create_gaussian_beam(
         # an on-grid peak (max is already 1).
         mx = float(xp.abs(E).max())
         if mx > 0:
-            E = E / mx
+            # In place, matching ``_apply_field_normalization``: an
+            # out-of-place divide costs a second full-grid complex array.
+            E /= mx
     elif normalize == 'power':
         norm = xp.sqrt(xp.sum(xp.abs(E) ** 2) * dx * dy)
         if float(norm) > 0:
-            E = E / norm
+            E /= norm
     elif normalize == 'none':
         pass
     else:
@@ -1715,10 +1730,13 @@ def create_bessel_beam(
 # Wolf 1982 JOSA 72 343) is:
 #
 #   1. For each realisation k = 1..n_realizations, draw circular-Gaussian
-#      complex white noise W_k(r) on the grid.
+#      complex white noise W_k(r) on a grid PADDED by >= 4 sigma_g per side
+#      (an FFT filter is a circular convolution, so on the bare grid the
+#      realised kernel is the PERIODISED Gaussian -- audit Z2).
 #   2. Multiply by the Fourier-space filter
-#      ``H(k) = exp(-|k|^2 * sigma_g^2 / 4)`` and inverse-FFT to obtain
-#      the band-limited complex random field ``phi_k(r)``.
+#      ``H(k) = exp(-|k|^2 * sigma_g^2 / 4)``, inverse-FFT, and crop the
+#      central window to obtain the band-limited complex random field
+#      ``phi_k(r)``.
 #   3. Normalise ``phi_k`` so ``<|phi_k(r)|^2>_r == 1`` (unit mean
 #      intensity).  The two-point correlation of the resulting field is
 #      ``<phi(r1) * conj(phi(r2))> = exp(-|r1-r2|^2 / (2 sigma_g^2))``
@@ -2066,6 +2084,41 @@ def _validate_return_kind(value: Any, fn_name: str) -> str:
 # validator).
 
 
+#: Default anti-wrap pad, in units of ``sigma_g``, applied to EACH side of
+#: the noise grid before the Fourier-space Gaussian filter (see
+#: :func:`_schell_phase_realizations`).  The periodisation residual left by a
+#: pad ``p`` per side is ``exp(-(2p)^2 / (2 sigma_g^2))``; at ``p = 4 sigma_g``
+#: that is ``exp(-32) = 1.3e-14``, i.e. below the float64 noise floor of the
+#: kernel itself.
+_SCHELL_PAD_SIGMA = 4.0
+
+#: Cap on the anti-wrap pad, as a multiple of the requested grid size per
+#: axis.  The FFT work scales with the padded AREA, so an unbounded pad turns
+#: ``sigma_g >> L`` into an out-of-memory.  When the cap binds, the generator
+#: warns with the residual periodisation error it actually leaves.
+_SCHELL_MAX_PAD_GROWTH = 4.0
+
+
+def _periodised_gaussian_error(span: float, period: float,
+                               sigma: float) -> float:
+    """Max deviation of the normalised PERIODISED Gaussian from the true one.
+
+    The DFT realises ``sum_m exp(-|d + m*period|^2 / (2 sigma^2))`` (Poisson
+    summation) rather than ``exp(-|d|^2 / (2 sigma^2))``.  Returns
+    ``max_{0<=d<=span} |W(d)/W(0) - exp(-d^2/(2 sigma^2))|`` -- the
+    correlation error the periodisation leaves at separations the caller can
+    actually form on the grid.  Used only to quantify a warning, so a
+    257-point sample of ``d`` and 9 image terms are ample.
+    """
+    if sigma <= 0.0 or period <= 0.0:
+        return 0.0
+    d = np.linspace(0.0, float(span), 257)
+    m = np.arange(-4, 5)[None, :]
+    w = np.exp(-(d[:, None] + m * period) ** 2 / (2.0 * sigma ** 2)).sum(axis=1)
+    w0 = float(np.exp(-(m[0] * period) ** 2 / (2.0 * sigma ** 2)).sum())
+    return float(np.abs(w / w0 - np.exp(-d ** 2 / (2.0 * sigma ** 2))).max())
+
+
 def _schell_phase_realizations(
     *,
     Ny: int,
@@ -2075,6 +2128,7 @@ def _schell_phase_realizations(
     coherence_length: float,
     n_realizations: int,
     rng: np.random.Generator,
+    pad_sigma: float = _SCHELL_PAD_SIGMA,
 ) -> np.ndarray:
     """Generate ``n_realizations`` band-limited complex random fields
     with the Gaussian Schell kernel as their two-point correlation.
@@ -2088,37 +2142,134 @@ def _schell_phase_realizations(
     The recipe (Goodman, _Statistical Optics_, Sec 5.5):
 
     1. For each realisation, draw circular-Gaussian complex white
-       noise ``W(r)`` on the grid (independent N(0, 1/2) real and
-       imaginary parts).
+       noise ``W(r)`` on a grid PADDED by ``pad_sigma * sigma_g`` on each
+       side (independent N(0, 1/2) real and imaginary parts).
     2. Multiply by the Fourier-space filter
-       ``H(k) = exp(-|k|^2 * sigma_g^2 / 4)`` and inverse-FFT.  The
-       resulting complex field ``phi(r)`` has spatial correlation
-       ``<phi(r1) conj(phi(r2))> ~ exp(-|r1-r2|^2 / (2 sigma_g^2))``.
+       ``H(k) = exp(-|k|^2 * sigma_g^2 / 4)``, inverse-FFT, and crop the
+       central ``(Ny, Nx)`` window.  The resulting complex field
+       ``phi(r)`` has spatial correlation
+       ``<phi(r1) conj(phi(r2))> = exp(-|r1-r2|^2 / (2 sigma_g^2))``.
     3. Normalise by the DETERMINISTIC expected mean intensity
        ``phi <- phi / sqrt(E[<|phi|^2>])`` with
-       ``E[<|phi|^2>] = sum_k |H(k)|^2 / (Ny*Nx)`` (Parseval), a single
-       constant for the whole ensemble.  v5.4.6 (audit P3-10): this
+       ``E[<|phi|^2>] = sum_k |H(k)|^2 / (Ny_pad*Nx_pad)`` (Parseval), a
+       single constant for the whole ensemble.  v5.4.6 (audit P3-10): this
        preserves unit mean intensity in EXPECTATION while keeping the
        two-point correlation exactly Gaussian-Schell; per-realisation
        normalisation (the pre-fix recipe) biases the empirical MCF.
+
+    Why the pad (audit Z2, ``AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11``).
+    An FFT filter is a CIRCULAR convolution, so the two-point correlation it
+    realises is the inverse DFT of ``|H(k)|^2`` -- by Poisson summation the
+    PERIODISED Gaussian ``sum_m exp(-|d + m L|^2 / (2 sigma_g^2))`` with
+    ``L = N dx``, not the Gaussian itself.  The wrap manufactures
+    long-range coherence between opposite edges of the grid: measured on a
+    64 x 64, dx = 1 um grid, the correlation between the two edge columns
+    (separation ``L - dx``) is 0.995 instead of 0.000, and at
+    ``sigma_g = L/3`` the kernel departs from the documented Gaussian by
+    0.27 of peak.  The noise is therefore drawn (and filtered) on a grid
+    ``>= 2 * pad_sigma * sigma_g`` larger and the central window cropped:
+    the nearest wrapped image then sits at least ``2 * pad_sigma * sigma_g``
+    away, leaving ``exp(-2 pad_sigma^2)`` of residual.  The noise is drawn
+    over the WHOLE padded grid (not zeroed outside the window), so ``phi``
+    stays statistically stationary -- zero-padding the noise itself would
+    taper the variance within ``sigma_g`` of the crop edges.
+
+    Parameters
+    ----------
+    pad_sigma : float, default 4.0
+        Anti-wrap pad per side in units of ``sigma_g``.  ``0.0`` restores
+        the pre-fix periodised kernel bit-for-bit (same RNG draws, same
+        FFT); it exists for reproducing archived ensembles and for the
+        regression test, and is not a physically meaningful setting.
+        Values above 0 must satisfy ``exp(-2 pad_sigma^2)`` residual; the
+        pad is additionally capped at ``_SCHELL_MAX_PAD_GROWTH`` times the
+        requested grid per axis, with a warning naming the residual left.
 
     Returns
     -------
     phi : ndarray (n_realizations, Ny, Nx), complex128
         Unit-mean-intensity band-limited noise stack.
     """
-    kx = 2.0 * np.pi * np.fft.fftfreq(Nx, d=dx)
-    ky = 2.0 * np.pi * np.fft.fftfreq(Ny, d=dy)
+    import math
+    import warnings
+
+    sigma_g = float(coherence_length)
+    Ny, Nx = int(Ny), int(Nx)
+    dx, dy = float(dx), float(dy)
+    pad_sigma = float(pad_sigma)
+    if not (np.isfinite(pad_sigma) and pad_sigma >= 0.0):
+        raise ValueError(
+            f"_schell_phase_realizations: pad_sigma must be a finite "
+            f"non-negative number (units of sigma_g); got {pad_sigma!r}.")
+
+    Lx, Ly = Nx * dx, Ny * dy
+    L_min = min(Lx, Ly)
+    # CONVERGENCE / COST guard.  With the pad the kernel is right at any
+    # sigma_g, but a grid shorter than ~6 coherence lengths holds too few
+    # independent coherence cells for an ensemble estimate of ANY two-point
+    # quantity to converge (the audit measured the exact 3-fold degeneracy
+    # of the n=2 coherent-mode shell broken by ~30 % at sigma_g = L/2), and
+    # the anti-wrap pad makes each realisation ~((L + 8 sigma_g)/L)^2 more
+    # expensive.
+    if pad_sigma > 0.0 and sigma_g > L_min / 6.0:
+        _growth = (1.0 + 2.0 * pad_sigma * sigma_g / L_min) ** 2
+        warnings.warn(
+            f"_schell_phase_realizations: coherence_length "
+            f"sigma_g={sigma_g:.4g} m exceeds L/6 = {L_min / 6.0:.4g} m "
+            f"(L = min(Nx*dx, Ny*dy) = {L_min:.4g} m), so fewer than 6 "
+            f"coherence lengths fit across the grid.  The two-point kernel "
+            f"is still the documented Gaussian (the anti-wrap pad sees to "
+            f"that) but (a) the ensemble average of any two-point quantity "
+            f"-- MCF, coherent-mode spectrum -- converges slowly and is "
+            f"aperture-dominated rather than source-dominated, and (b) the "
+            f"pad costs ~{_growth:.1f}x the FFT work per realisation.  "
+            f"Enlarge the grid (N*dx >= 6*sigma_g) for a source-dominated "
+            f"result.",
+            UserWarning, stacklevel=3)
+
+    if pad_sigma > 0.0:
+        from scipy.fft import next_fast_len
+        pad_x = int(math.ceil(pad_sigma * sigma_g / dx))
+        pad_y = int(math.ceil(pad_sigma * sigma_g / dy))
+        Nx_p = min(int(next_fast_len(Nx + 2 * pad_x)),
+                   int(next_fast_len(int(math.ceil(
+                       _SCHELL_MAX_PAD_GROWTH * Nx)))))
+        Ny_p = min(int(next_fast_len(Ny + 2 * pad_y)),
+                   int(next_fast_len(int(math.ceil(
+                       _SCHELL_MAX_PAD_GROWTH * Ny)))))
+        # Residual periodisation left after the (possibly capped) pad, at
+        # the largest separation the cropped window can form.
+        err = max(_periodised_gaussian_error((Nx - 1) * dx, Nx_p * dx,
+                                             sigma_g),
+                  _periodised_gaussian_error((Ny - 1) * dy, Ny_p * dy,
+                                             sigma_g))
+        if err > 1e-6:
+            warnings.warn(
+                f"_schell_phase_realizations: the anti-wrap pad is capped "
+                f"at {_SCHELL_MAX_PAD_GROWTH:g}x the grid per axis "
+                f"({Ny}x{Nx} -> {Ny_p}x{Nx_p}), which for "
+                f"sigma_g={sigma_g:.4g} m leaves up to {err:.3g} of "
+                f"spurious PERIODIC coherence in the two-point kernel "
+                f"(correlation between opposite edges of the grid that the "
+                f"Gaussian-Schell model does not have).  Reduce sigma_g or "
+                f"shrink the grid so that sigma_g <= "
+                f"{_SCHELL_MAX_PAD_GROWTH * L_min / 10.0:.3g} m.",
+                UserWarning, stacklevel=3)
+    else:
+        Nx_p, Ny_p = Nx, Ny
+    off_x = (Nx_p - Nx) // 2
+    off_y = (Ny_p - Ny) // 2
+
+    kx = 2.0 * np.pi * np.fft.fftfreq(Nx_p, d=dx)
+    ky = 2.0 * np.pi * np.fft.fftfreq(Ny_p, d=dy)
     KX, KY = kx[None, :], ky[:, None]  # S3-7: broadcast views, not a dense grid
     # Fourier-space Gaussian filter.  Variance of |phi(r)|^2 in real
     # space scales as integral of |H(k)|^2 dk; we re-normalise to
     # unit mean intensity per realisation below, so the absolute
     # amplitude of H here is irrelevant.
-    sigma_g = float(coherence_length)
     spec_filter = np.exp(-(KX * KX + KY * KY) * (sigma_g ** 2) / 4.0)
 
-    out = np.empty((int(n_realizations), int(Ny), int(Nx)),
-                   dtype=np.complex128)
+    out = np.empty((int(n_realizations), Ny, Nx), dtype=np.complex128)
     inv_sqrt2 = 1.0 / np.sqrt(2.0)
     # v5.4.6 (audit P3-10): normalise EVERY realisation by the single
     # DETERMINISTIC expected mean intensity, not by each realisation's own
@@ -2126,17 +2277,21 @@ def _schell_phase_realizations(
     # non-linear in the ensemble and systematically biases the empirical
     # Gaussian-Schell two-point correlation (the bias does NOT average out
     # with more realisations).  By Parseval, E[mean(|Phi|^2)] =
-    # sum_k |H(k)|^2 / (Ny*Nx).  Unit mean intensity is thus preserved IN
-    # EXPECTATION while keeping <phi(r1) conj(phi(r2))> exactly Gaussian.
-    _mean_I = float(np.sum(np.abs(spec_filter) ** 2) / (Ny * Nx))
+    # sum_k |H(k)|^2 / (Ny_p*Nx_p).  Unit mean intensity is thus preserved
+    # IN EXPECTATION while keeping <phi(r1) conj(phi(r2))> exactly
+    # Gaussian.  The padded grid is statistically homogeneous, so the
+    # constant computed there is the right one for the cropped window too.
+    _mean_I = float(np.sum(np.abs(spec_filter) ** 2) / (Ny_p * Nx_p))
     _norm = np.sqrt(_mean_I) if _mean_I > 0.0 else 1.0
     for k in range(int(n_realizations)):
-        # Circular-Gaussian complex white noise.
-        w_re = rng.standard_normal((Ny, Nx))
-        w_im = rng.standard_normal((Ny, Nx))
+        # Circular-Gaussian complex white noise over the FULL padded grid
+        # (drawing it only inside the window would taper the variance
+        # within sigma_g of the crop edge).
+        w_re = rng.standard_normal((Ny_p, Nx_p))
+        w_im = rng.standard_normal((Ny_p, Nx_p))
         W = (w_re + 1j * w_im) * inv_sqrt2
         Phi = np.fft.ifft2(np.fft.fft2(W) * spec_filter)
-        out[k] = Phi / _norm
+        out[k] = Phi[off_y:off_y + Ny, off_x:off_x + Nx] / _norm
     return out
 
 
@@ -2172,6 +2327,20 @@ def create_gaussian_schell_source(
     fully-incoherent limit ``sigma_g -> 0`` the off-diagonal MCF
     decays to zero.
 
+    **Grid constraint (audit Z2).**  The two limits above are limits of
+    the CONTINUOUS model; on a finite grid of side ``L = N*dx`` the
+    coherence length is resolved only while ``dx << sigma_g`` (below a
+    pixel it is indistinguishable from delta-correlated) and only while
+    the grid holds several coherence cells.  The realised kernel is now
+    the documented Gaussian to ~1e-14 at any ``sigma_g`` (the generator
+    zero-pads against FFT wrap-around, see
+    :func:`_schell_phase_realizations`), but a grid with
+    ``sigma_g > L/6`` holds fewer than six coherence cells, so the
+    ENSEMBLE estimate of any two-point quantity (the MCF itself, the
+    coherent-mode spectrum) is aperture-dominated and converges slowly --
+    the factory warns in that regime.  Size the grid from the coherence
+    length, ``N*dx >= 6*sigma_g``, not only from the waist.
+
     Parameters
     ----------
     N : int
@@ -2183,9 +2352,22 @@ def create_gaussian_schell_source(
     w0 : float
         Gaussian 1/e^2 intensity radius of the beam envelope [m].
     sigma_g : float
-        Gaussian transverse coherence length [m].  Must be > 0;
-        ``sigma_g >> w0`` approaches the coherent limit;
-        ``sigma_g << dx`` approaches the incoherent limit.
+        Gaussian transverse coherence length [m].  Must be > 0.  The
+        beam's global degree of coherence is ``q = sigma_g / w0``:
+        ``q >> 1`` is the near-coherent regime and ``q << 1`` the
+        near-incoherent one.  Resolve it on the grid --
+        ``dx << sigma_g`` (below one pixel the kernel is
+        indistinguishable from delta-correlated) and
+        ``sigma_g <= N*dx/6`` (above that fewer than six coherence
+        cells fit and the ensemble is aperture-dominated; a
+        ``UserWarning`` fires).  A typical grid is ``L ~ 4*w0``, so
+        asking for ``sigma_g >> w0`` on it means asking for
+        ``sigma_g > L/6`` -- enlarge ``N`` rather than shrinking
+        ``w0``.  v5.46 (audit Z2): the realised kernel is the
+        documented Gaussian at any ``sigma_g``; pre-v5.46 it was the
+        grid-PERIODISED Gaussian, which at ``sigma_g = L/3`` differed
+        by 0.27 of peak and made opposite edges of the grid 99 %
+        coherent.
     n_realizations : int, default 16
         Number of independent ensemble draws.  Must be >= 1.
     dy : float, optional
@@ -2340,7 +2522,13 @@ def create_schell_model_source(
     intensity_profile : ndarray (N, N), real >= 0
         Time-averaged intensity profile of the source.
     coherence_length : float
-        Gaussian transverse coherence length [m]; must be > 0.
+        Gaussian transverse coherence length [m]; must be > 0.  Same
+        grid constraint as :func:`create_gaussian_schell_source`'s
+        ``sigma_g``: resolve it (``dx << coherence_length``) and fit it
+        (``coherence_length <= N*dx/6``, else a ``UserWarning`` fires).
+        v5.46 (audit Z2): the realised kernel is the documented Gaussian
+        at any coherence length; pre-v5.46 it was the grid-PERIODISED
+        Gaussian.
     n_realizations : int, default 16
         Number of independent ensemble draws.
     dy : float, optional

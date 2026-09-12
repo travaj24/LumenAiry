@@ -350,7 +350,16 @@ class TestFourierTransformApplication:
             N=256, dx=2e-6, wavelength=633e-9, w0=100e-6, x0=80e-6,
         )
         op = FourierTransform(f)
-        chain = FreeSpace(f) * ThinLens(f) * FreeSpace(f)
+        # v5.46 (audit Z3): ``FreeSpace``'s default ``method`` moved
+        # ``'auto'`` -> ``'asm'`` (pitch-preserving, so the delivered grid
+        # agrees with the ABCD the operator reports).  ``FourierTransform``
+        # deliberately keeps ``'auto'`` for its two legs -- the optical FT
+        # IS a re-gridding operation (its natural output pitch is the
+        # Fourier-plane ``lambda f / (N dx)``), which is why v4.15.2 pinned
+        # the backend there -- so the comparison chain has to name the same
+        # kernel for this equivalence to be the one under test.
+        chain = (FreeSpace(f, method='auto') * ThinLens(f)
+                 * FreeSpace(f, method='auto'))
         out_op = op(src)
         out_chain = chain(src)
         # Both should produce the same output pitch since the 3-stage

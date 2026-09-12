@@ -4,6 +4,21 @@ Provides :func:`from_prescription`, a factory that walks a LumenAiry
 prescription dict (via :func:`lumenairy.raytrace.surfaces_from_prescription`)
 and produces an equivalent :class:`CompositeOperator`.
 
+NAME RESOLUTION (audit Z4).  This module and the function it exports share a
+name.  ``lumenairy/algebra/__init__.py`` rebinds the package ATTRIBUTE to the
+function, so::
+
+    from lumenairy.algebra import from_prescription   # the FUNCTION
+    op = from_prescription(rx, 633e-9)
+
+works, as does ``lumenairy.algebra.from_prescription(rx, wl)`` and the
+canonical ``lumenairy.Operator.from_prescription(rx, wl)`` classmethod.  The
+module itself is still importable by its dotted path
+(``from lumenairy.algebra.from_prescription import from_prescription``,
+``importlib.import_module(...)``); only the chained attribute spelling
+``lumenairy.algebra.from_prescription.from_prescription`` is gone, because
+that first component now resolves to the callable.
+
 The resulting CompositeOperator's ABCD matches
 ``system_abcd(surfaces, wavelength)`` to within numerical roundoff
 (``< 1e-12`` absolute on representative singlet / doublet /
@@ -57,6 +72,14 @@ def from_prescription(
         Vacuum wavelength [m] -- used to resolve glass indices.
     method : str, default ``'auto'``
         Propagator method passed to every emitted :class:`FreeSpace`.
+        Kept at ``'auto'`` (rather than following :class:`FreeSpace`'s own
+        v5.46 ``'asm'`` default) because the legs this factory emits are
+        short in-glass thicknesses where the dispatcher's choice is
+        pitch-preserving in practice -- measured on a singlet / meniscus /
+        doublet at N = 256, dx = 8 um: ``dx_out == dx_in`` and no warnings.
+        Pass ``method='asm'`` to guarantee it for an unusual prescription;
+        see the PITCH CONTRACT note on :attr:`Operator.abcd` for why it
+        matters.
 
     Returns
     -------

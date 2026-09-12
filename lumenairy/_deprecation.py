@@ -467,11 +467,33 @@ class _NoDefaultSentinel(_Sentinel):
 _NO_DEFAULT = _NoDefaultSentinel()
 
 
-def _emit(msg: str, *, stacklevel: int = 3) -> None:
+#: Default ``stacklevel`` for the ``warn_deprecated_*`` helpers.
+#:
+#: STACKLEVEL ARITHMETIC (audit Z4).  ``warnings.warn(stacklevel=n)`` counts
+#: from the frame that CALLS ``warnings.warn`` -- here :func:`_emit`.  For the
+#: canonical chain
+#:
+#:     user code -> public function body -> warn_deprecated_* -> _emit -> warn
+#:      n = 4            n = 3                  n = 2           n = 1
+#:
+#: so ``n = 4`` is what names the user's line.  ``n = 3`` names the public
+#: function's own body inside lumenairy -- which is where ``-W
+#: error::DeprecationWarning`` tracebacks, IDE problem panes and
+#: ``warnings.filterwarnings(..., module='myapp')`` were all pointing before
+#: v5.46.  A helper that adds a frame of its own (see
+#: :func:`warn_renamed_function`) needs one more.
+_DEFAULT_STACKLEVEL = 4
+
+
+def _emit(msg: str, *, stacklevel: int = _DEFAULT_STACKLEVEL) -> None:
     """Emit a ``DeprecationWarning`` with consistent stacklevel.
 
-    ``stacklevel=3`` lets the warning point at the *caller* of the
-    public function rather than the body of the deprecation helper.
+    ``stacklevel`` is passed straight through to ``warnings.warn`` and is
+    counted from THIS frame: ``1`` names ``_emit`` itself, ``2`` the
+    ``warn_deprecated_*`` helper that called it, ``3`` the public function
+    whose deprecation is being announced, and ``4`` -- the default, see
+    :data:`_DEFAULT_STACKLEVEL` -- the user code that called that public
+    function, which is the line a deprecation warning should name.
     """
     warnings.warn(msg, DeprecationWarning, stacklevel=stacklevel)
 
@@ -483,7 +505,7 @@ def warn_deprecated_kwarg(
     function: str,
     version_added: str = '4.7',
     version_removed: Optional[str] = None,
-    stacklevel: int = 3,
+    stacklevel: int = _DEFAULT_STACKLEVEL,
 ) -> None:
     """Warn that a keyword argument was renamed.
 
@@ -518,7 +540,7 @@ def warn_deprecated_alias(
     *,
     version_added: str = '4.7',
     version_removed: Optional[str] = None,
-    stacklevel: int = 3,
+    stacklevel: int = _DEFAULT_STACKLEVEL,
 ) -> None:
     """Warn that a top-level function alias has been renamed."""
     removal = _format_removal(version_removed)
@@ -570,10 +592,17 @@ def warn_renamed_function(
     new_name: str,
     *,
     version_added: str = '4.7',
-    stacklevel: int = 3,
+    stacklevel: int = _DEFAULT_STACKLEVEL + 1,
 ) -> None:
     """Equivalent to :func:`warn_deprecated_alias` but more explicit
-    when the call site is the renamed function itself."""
+    when the call site is the renamed function itself.
+
+    The default ``stacklevel`` is one MORE than
+    :data:`_DEFAULT_STACKLEVEL` because this helper inserts a frame of its
+    own: the chain is ``user -> renamed function body ->
+    warn_renamed_function -> warn_deprecated_alias -> _emit -> warn``, five
+    frames above ``warnings.warn``.
+    """
     warn_deprecated_alias(
         old_name, new_name,
         version_added=version_added,
@@ -588,7 +617,7 @@ def warn_deprecated_default(
     function: str,
     version_added: str = '4.7',
     version_removed: Optional[str] = None,
-    stacklevel: int = 3,
+    stacklevel: int = _DEFAULT_STACKLEVEL,
 ) -> None:
     """Warn that an argument's default value is deprecated and the
     argument will be required in a future release.
@@ -622,7 +651,7 @@ def warn_deprecated_signature(
     new_signature: str,
     version_added: str = '4.15',
     version_removed: Optional[str] = None,
-    stacklevel: int = 3,
+    stacklevel: int = _DEFAULT_STACKLEVEL,
 ) -> None:
     """Warn that a legacy positional call form is deprecated.
 

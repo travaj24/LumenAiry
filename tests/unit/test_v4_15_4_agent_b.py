@@ -96,11 +96,20 @@ def test_validation_helper_lazy_import_removed():
     src = src_path.read_text(encoding='utf-8')
     tree = ast.parse(src)
 
-    module_level_from_sources = []
-    for node in tree.body:
-        if isinstance(node, ast.ImportFrom) and \
-                node.module == 'lumenairy.sources.core':
-            module_level_from_sources.append(node)
+    def _is_sources_core(node):
+        # v5.46 (audit Z4 secondary nit): accept the absolute
+        # ``lumenairy.sources.core`` (level 0) spelling AND the relative
+        # ``.sources.core`` (level 1) one the rest of the package uses
+        # (an absolute self-import re-enters the top-level package by
+        # name and only works because it is already in sys.modules).
+        # What this pin guards -- MODULE scope rather than a per-call
+        # lazy import -- is independent of which spelling is in force.
+        return (isinstance(node, ast.ImportFrom)
+                and node.module in ('lumenairy.sources.core',
+                                    'sources.core'))
+
+    module_level_from_sources = [n for n in tree.body
+                                 if _is_sources_core(n)]
     assert module_level_from_sources, (
         "Expected a module-level ``from lumenairy.sources.core "
         "import PartialCoherenceMCF as _MCF`` in _validation.py after "
@@ -124,8 +133,7 @@ def test_validation_helper_lazy_import_removed():
         if isinstance(func, ast.FunctionDef) and \
                 func.name == '_check_2d_scalar_field':
             for inner in ast.walk(func):
-                if isinstance(inner, ast.ImportFrom) and \
-                        inner.module == 'lumenairy.sources.core':
+                if _is_sources_core(inner):
                     lazy_imports.append(inner.lineno)
     assert not lazy_imports, (
         f"Found lazy ``from lumenairy.sources.core import ...`` "

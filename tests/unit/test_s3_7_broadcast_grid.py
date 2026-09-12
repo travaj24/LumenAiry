@@ -143,36 +143,105 @@ def test_laguerre_gauss_broadcast_bit_identical():
     assert np.array_equal(E, ref)
 
 
-def _schell_phi_meshgrid_ref(*, Ny, Nx, dx, dy, sigma_g, nr, seed):
+def _schell_phi_meshgrid_ref(*, Ny, Nx, dx, dy, sigma_g, nr, seed,
+                             Ny_p=None, Nx_p=None):
     """Independent meshgrid reconstruction of _schell_phase_realizations,
-    mirroring the KX/KY grid site (sources/core.py) exactly."""
-    kx = 2.0 * np.pi * np.fft.fftfreq(Nx, d=dx)
-    ky = 2.0 * np.pi * np.fft.fftfreq(Ny, d=dy)
+    mirroring the KX/KY grid site (sources/core.py) exactly.
+
+    ``Ny_p`` / ``Nx_p`` are the PADDED dimensions the generator filters on
+    (v5.46, audit Z2: an FFT filter is a circular convolution, so the noise
+    is drawn and filtered on a grid >= 4 sigma_g larger per side and the
+    central window cropped).  Omit them for the ``pad_sigma=0.0`` path, which
+    filters on the bare grid.  The padded SIZE is not what this file is
+    pinning -- the KX/KY ORIENTATION is -- so the reference takes it as given
+    and rebuilds the frequency grid with a dense ``np.meshgrid``.
+    """
+    Ny_p = Ny if Ny_p is None else Ny_p
+    Nx_p = Nx if Nx_p is None else Nx_p
+    kx = 2.0 * np.pi * np.fft.fftfreq(Nx_p, d=dx)
+    ky = 2.0 * np.pi * np.fft.fftfreq(Ny_p, d=dy)
     KX, KY = np.meshgrid(kx, ky)
     spec_filter = np.exp(-(KX * KX + KY * KY) * (sigma_g ** 2) / 4.0)
-    mean_I = float(np.sum(np.abs(spec_filter) ** 2) / (Ny * Nx))
+    mean_I = float(np.sum(np.abs(spec_filter) ** 2) / (Ny_p * Nx_p))
     norm = np.sqrt(mean_I) if mean_I > 0.0 else 1.0
+    off_y, off_x = (Ny_p - Ny) // 2, (Nx_p - Nx) // 2
     out = np.empty((nr, Ny, Nx), dtype=np.complex128)
     inv_sqrt2 = 1.0 / np.sqrt(2.0)
     rng = np.random.default_rng(seed)
     for k in range(nr):
-        w_re = rng.standard_normal((Ny, Nx))
-        w_im = rng.standard_normal((Ny, Nx))
+        w_re = rng.standard_normal((Ny_p, Nx_p))
+        w_im = rng.standard_normal((Ny_p, Nx_p))
         W = (w_re + 1j * w_im) * inv_sqrt2
-        out[k] = np.fft.ifft2(np.fft.fft2(W) * spec_filter) / norm
+        phi = np.fft.ifft2(np.fft.fft2(W) * spec_filter) / norm
+        out[k] = phi[off_y:off_y + Ny, off_x:off_x + Nx]
     return out
 
 
-def test_schell_phase_realizations_kxky_bit_identical():
-    # Rectangular grid + dx != dy: the KX/KY orientation is load-bearing.
+def test_schell_phase_realizations_kxky_bit_identical_unpadded():
+    """``pad_sigma=0.0`` -- the bare-grid path (v5.46 escape hatch, and the
+    <= v5.45 default).  Rectangular grid + dx != dy: the KX/KY orientation is
+    load-bearing."""
     Ny, Nx, sigma_g, nr, seed = 6, 10, 20.0e-6, 3, 12345
+    phi = _schell_phase_realizations(
+        Ny=Ny, Nx=Nx, dx=_DX, dy=_DY,
+        coherence_length=sigma_g, n_realizations=nr,
+        rng=np.random.default_rng(seed), pad_sigma=0.0)
+    ref = _schell_phi_meshgrid_ref(
+        Ny=Ny, Nx=Nx, dx=_DX, dy=_DY, sigma_g=sigma_g, nr=nr, seed=seed)
+    assert np.array_equal(phi, ref)
+
+
+def test_schell_phase_realizations_kxky_bit_identical_padded():
+    """The DEFAULT (anti-wrap padded) path, same orientation claim.
+
+    v5.46 (audit Z2): the generator now draws and filters the noise on a grid
+    padded by >= 4 sigma_g per side and crops the centre, so the reference
+    has to be rebuilt on the padded frequency grid -- but the property this
+    file exists to pin is unchanged: ``KX, KY = kx[None, :], ky[:, None]``
+    must reproduce ``np.meshgrid(kx, ky)`` bit-for-bit on a grid where
+    ``Ny != Nx`` and ``dx != dy``, so a transposed-axis regression fails
+    rather than slipping through.
+
+    ``sigma_g`` is small enough here that the pad is not capped, so the
+    padded dimensions are ``next_fast_len(N + 2*ceil(4 sigma_g / d))``.
+    """
+    from scipy.fft import next_fast_len
+    Ny, Nx, sigma_g, nr, seed = 6, 10, 4.0e-6, 3, 12345
+    pad_y = int(np.ceil(4.0 * sigma_g / _DY))
+    pad_x = int(np.ceil(4.0 * sigma_g / _DX))
+    Ny_p, Nx_p = int(next_fast_len(Ny + 2 * pad_y)), \
+        int(next_fast_len(Nx + 2 * pad_x))
     phi = _schell_phase_realizations(
         Ny=Ny, Nx=Nx, dx=_DX, dy=_DY,
         coherence_length=sigma_g, n_realizations=nr,
         rng=np.random.default_rng(seed))
     ref = _schell_phi_meshgrid_ref(
-        Ny=Ny, Nx=Nx, dx=_DX, dy=_DY, sigma_g=sigma_g, nr=nr, seed=seed)
+        Ny=Ny, Nx=Nx, dx=_DX, dy=_DY, sigma_g=sigma_g, nr=nr, seed=seed,
+        Ny_p=Ny_p, Nx_p=Nx_p)
     assert np.array_equal(phi, ref)
+
+
+def test_gaussian_beam_broadcast_bit_identical():
+    """v5.46 (audit Z3): ``create_gaussian_beam`` was the LAST factory still
+    building a dense ``np.meshgrid`` (peak/output 3.00x at complex128, 5.00x
+    at complex64).  Same independent-oracle shape as its siblings above:
+    rebuild from a full meshgrid and the documented closed form
+    ``exp(-r^2 / w0^2)``, asserting bit-identity.  ``x0 != y0`` and
+    ``dx != dy`` so a transposed-axis regression is observable, and the
+    ``normalize='peak'`` divide (now in place) is exercised."""
+    w0 = 17.0e-6
+    E, x, y = la.create_gaussian_beam(
+        _N, _DX, _LAM, w0=w0, x0=_X0, y0=_Y0, dy=_DY, normalize='peak')
+    X, Y = np.meshgrid(*_axes(_N, _DX, _DY))
+    sigma = w0 / np.sqrt(2.0)
+    ref = np.exp(-((X - _X0) ** 2 + (Y - _Y0) ** 2) / (2 * sigma ** 2))
+    ref = ref.astype(_resolve_complex_dtype(None))
+    mx = float(np.abs(ref).max())
+    if mx > 0:
+        ref = ref / mx
+    assert np.array_equal(E, ref)
+    assert np.array_equal(x, _axes(_N, _DX, _DY)[0])
+    assert np.array_equal(y, _axes(_N, _DX, _DY)[1])
 
 
 def test_gaussian_schell_source_amp_bit_identical():

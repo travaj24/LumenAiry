@@ -545,15 +545,27 @@ class TestInternalCallSitesAreMigrated:
 
     def test_freespace_grid_changing_reports_the_kernel_pitch(self):
         """Counter-pin to the above: a genuinely re-gridding selection must
-        still report the KERNEL's output pitch, not the input one."""
+        still report the KERNEL's output pitch, not the input one.
+
+        v5.46 (audit Z3): ``FreeSpace``'s default ``method`` moved
+        ``'auto'`` -> ``'asm'``, because ``'auto'`` delivered a pitch that
+        contradicted the ABCD the same object reports (1.93x the input on a
+        4f chain whose ABCD says magnification -1) and emitted the library's
+        own un-actionable "no stable contract" warning on every far-field
+        segment.  A re-gridding selection is therefore now something the
+        caller NAMES -- so this pin names it, and additionally pins that the
+        default does not re-grid."""
         from lumenairy.algebra.primitives import FreeSpace
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            _E, dxo, _dyo = FreeSpace(Z_GRID_CHANGING)._apply(
+            _E, dxo, _dyo = FreeSpace(Z_GRID_CHANGING, method='auto')._apply(
+                _gauss(), dx=DX, dy=DX, wavelength=LAM)
+            _E2, dx_default, _ = FreeSpace(Z_GRID_CHANGING)._apply(
                 _gauss(), dx=DX, dy=DX, wavelength=LAM)
             native = propagate(_gauss(), z=Z_GRID_CHANGING, wavelength=LAM,
                                dx=DX, return_result=False)
         assert float(dxo) == float(native[1]) != DX
+        assert float(dx_default) == DX
 
     def test_source_propagate_still_returns_a_source(self):
         from lumenairy.sources.core import Source
@@ -577,7 +589,17 @@ class TestInternalCallSitesAreMigrated:
                    for kw in mhs_calls.values()), mhs_calls
         fs_calls = _dispatcher_calls(primitives.FreeSpace._apply)
         assert len(fs_calls) == 1, fs_calls
-        assert all(kw.get('return_result') == 'False'
+        # v5.46 (audit Z3): FreeSpace now CHOOSES per call -- the wrapped
+        # PropagationResult on the square-grid branch (so the dispatcher's
+        # "no stable contract" UserWarning, which named an argument this
+        # layer owns, has nothing left to warn about), and the legacy tuple
+        # on the anamorphic branch (where the wrapper reports
+        # ``dy == dx`` for the pitch-preserving kernel that branch forces --
+        # the regression pinned by
+        # ``test_freespace_operator_preserves_the_anamorphic_pitch``).  The
+        # contract this pin guards is unchanged: the call must NAME
+        # ``return_result`` rather than fall onto the default path.
+        assert all(kw.get('return_result') == 'wrap'
                    for kw in fs_calls.values()), fs_calls
         src_calls = _dispatcher_calls(Source.propagate)
         assert len(src_calls) == 1, src_calls

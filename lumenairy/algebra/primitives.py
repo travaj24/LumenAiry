@@ -66,20 +66,38 @@ class FreeSpace(Operator):
         Negative distances are honoured by the underlying ASM /
         Rayleigh-Sommerfeld backends (back-propagation); the Fresnel
         and Fraunhofer kernels are forward-only.
-    method : str, default ``'auto'``
+    method : str, default ``'asm'``
         Propagator backend to delegate to.  One of
         :data:`lumenairy.VALID_METHODS`.  ``'auto'`` lets the
         dispatcher pick the best method given the geometry.
+
+        .. versionchanged:: 5.46
+            The default moved from ``'auto'`` to ``'asm'`` (audit Z3).
+            ``'auto'`` routes far-field segments to SAS, which RESAMPLES:
+            on the canonical 4f chain (f = 200 mm, N = 256, dx = 8 um) it
+            delivered ``dx_out = 15.45 um`` -- 1.93x the input pitch --
+            while the same object's :attr:`~Operator.abcd` reported
+            ``[[-1, 0], [0, -1]]``, i.e. magnification -1 and therefore the
+            input pitch.  ``'asm'`` is pitch-preserving and
+            anamorphic-aware, so the delivered sampling and the reported
+            ABCD agree.  Pass ``method='auto'`` explicitly to restore the
+            dispatcher-selected kernel (and its resampling); the delivered
+            pitch is always reported back through
+            :meth:`Operator.__call__` / :meth:`Operator.apply_with_grid`.
 
     Notes
     -----
     Delegates :meth:`_apply` to
     :func:`lumenairy.propagators.dispatch.propagate` for a Source-
     driven call chain.  The ABCD is independent of the chosen
-    method.
+    method -- see the PITCH CONTRACT note on :attr:`Operator.abcd`:
+    a pitch-CHANGING ``method`` (``'auto'`` in the far field,
+    ``'fresnel'``, ``'fraunhofer'``, ``'sas'``) delivers the physically
+    correct field on a kernel-chosen grid that the ray matrix does not
+    describe.
     """
 
-    def __init__(self, distance: float, *, method: str = 'auto') -> None:
+    def __init__(self, distance: float, *, method: str = 'asm') -> None:
         try:
             d = float(distance)
         except (TypeError, ValueError) as e:
@@ -159,16 +177,27 @@ class FreeSpace(Operator):
         # ``_coerce_propagation_output`` returns the caller's own ``dy_default``.
         # Measured with dx=2e-6, dy=3e-6: dy_out was 3e-6 unwrapped and 2e-6
         # wrapped, i.e. the flip would have silently squared an anamorphic
-        # algebra chain's output pitch.  Naming the legacy contract keeps the
-        # operator's ``(E, dx_out, dy_out)`` bit-identical to pre-flip (and
-        # skips a wrapper allocation per FreeSpace in optimiser loops).
+        # algebra chain's output pitch.
+        #
+        # v5.46 (audit Z3): that reason applies ONLY to the anamorphic branch,
+        # which is forced to ``'asm'`` above -- a pitch-PRESERVING kernel, so
+        # ``propagate`` never warns about it.  On the square-grid branch the
+        # legacy contract bought nothing and cost a ``UserWarning`` per
+        # far-field segment ("a caller that unpacks this return has no stable
+        # contract ... drop the argument"), advice the caller could not act on
+        # because the argument is this layer's own -- three of them per 4f
+        # evaluation.  Take the shape-stable ``PropagationResult`` there: it
+        # reports the kernel's own ``dx``/``dy`` for every method, which is
+        # exactly what this operator has to return, and the warning has
+        # nothing left to warn about.
+        wrap = not anamorphic
         out = propagate(
             E,
             z=self.distance,
             wavelength=wavelength,
             dx=dx,
             method=method,
-            return_result=False,
+            return_result=wrap,
             **kw,
         )
         return _coerce_propagation_output(

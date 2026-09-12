@@ -170,6 +170,59 @@ _CMP_OPS = {
     ast.Gt: operator.gt, ast.GtE: operator.ge,
 }
 
+#: Ceiling on the BIT LENGTH of an integer a phase-mask expression may build
+#: with ``**`` or ``<<``.  4096 bits is ~1234 decimal digits -- orders of
+#: magnitude beyond anything a phase mask needs (``X**2``, ``2**10``, ``R**4``
+#: are all < 40 bits), and small enough that the rejected expression cannot
+#: have started allocating.
+#:
+#: v5.46 (audit Z4).  The allowlist AST interpreter below is a genuine
+#: sandbox -- the auditor could not escape it -- but it left one
+#: resource-exhaustion path open: CPython's ``int`` is arbitrary precision, so
+#: ``2**(10**9)`` asks for a 125 MB integer (and ``1 << (10**9)`` the same)
+#: inside a routine whose input is an untrusted user-library string.  Nothing
+#: is compromised, but the process stalls or dies.  Bounding the RESULT's bit
+#: length is the cheap, total fix; only the pure-Python-``int`` path is
+#: affected, so float, complex and every ndarray operand are untouched.
+_MAX_INT_RESULT_BITS = 4096
+
+
+def _guard_int_growth(op_name: str, left: Any, right: Any) -> None:
+    """Refuse an integer ``**`` / ``<<`` whose result would exceed
+    :data:`_MAX_INT_RESULT_BITS` bits.
+
+    Only fires when BOTH operands are Python integers with a non-negative
+    right operand -- the only combination that reaches CPython's
+    arbitrary-precision path.  NumPy scalars and arrays are fixed-width and
+    saturate or wrap instead of allocating, so they are not checked.
+    """
+    if not (isinstance(left, int) and isinstance(right, int)):
+        return
+    if right < 0:
+        return                      # int ** negative -> float, no bignum
+    base_bits = int(left).bit_length()
+    if base_bits == 0:              # 0 ** n / 0 << n
+        return
+    if op_name == '<<':
+        result_bits = base_bits + int(right)
+    else:
+        if base_bits == 1 and abs(int(left)) == 1:
+            return                  # (+-1) ** n stays one bit
+        result_bits = base_bits * int(right)
+    if result_bits > _MAX_INT_RESULT_BITS:
+        raise ValueError(
+            f"load_phase_mask: the integer expression "
+            f"``{left} {op_name} {right}`` would build a "
+            f"~{result_bits}-bit ({result_bits // 8} byte) integer, over "
+            f"the {_MAX_INT_RESULT_BITS}-bit ceiling this evaluator "
+            f"enforces.  Python integers are arbitrary precision, so an "
+            f"expression like ``2 ** (10 ** 9)`` exhausts memory before it "
+            f"returns.  Phase-mask expressions operate on the array grids "
+            f"(X, Y, R, THETA), where the exponent is small; if a huge "
+            f"magnitude is genuinely intended, make an operand a float "
+            f"(``2.0 ** 5000``) so the result is an ordinary float (which "
+            f"overflows to an error rather than allocating).")
+
 
 def _safe_eval_expression(expr: str, variables: Dict[str, Any]) -> Any:
     """Safely evaluate a phase-mask expression via a restricted AST walk.
@@ -224,7 +277,15 @@ def _safe_eval_expression(expr: str, variables: Dict[str, Any]) -> Any:
                 raise ValueError(
                     "load_phase_mask: operator "
                     f"{type(node.op).__name__} is not allowed.")
-            return op(_ev(node.left), _ev(node.right))
+            left, right = _ev(node.left), _ev(node.right)
+            # The only two operators that can turn a short expression into an
+            # unbounded allocation (CPython bignum) -- see
+            # :func:`_guard_int_growth`.
+            if isinstance(node.op, ast.Pow):
+                _guard_int_growth('**', left, right)
+            elif isinstance(node.op, ast.LShift):
+                _guard_int_growth('<<', left, right)
+            return op(left, right)
 
         if isinstance(node, ast.UnaryOp):
             op = _UNARY_OPS.get(type(node.op))

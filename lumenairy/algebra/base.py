@@ -169,6 +169,25 @@ class Operator:
     def abcd(self) -> np.ndarray:
         """System ABCD if isotropic (``_abcd_x == _abcd_y``).
 
+        PITCH CONTRACT (audit Z3).  The ABCD is a PARAXIAL RAY matrix: it
+        describes how ``(height, angle)`` transforms, and nothing about the
+        sampling grid the field is delivered on.  With a pitch-PRESERVING
+        propagator -- :class:`~lumenairy.algebra.FreeSpace`'s default
+        ``method='asm'``, and ``'rs'`` -- the delivered ``dx_out`` equals the
+        input ``dx``, so the two agree and ``|A|`` is the grid magnification
+        as well as the ray one.  With a pitch-CHANGING propagator
+        (``'fresnel'``, ``'fraunhofer'``, ``'sas'``, and ``'auto'`` whenever
+        the dispatcher selects one of them in the far field) the kernel
+        RESAMPLES: the field is the same physical field, delivered on a
+        kernel-chosen grid the matrix does not describe.  Measured on the 4f
+        chain ``FreeSpace(f) ThinLens(f) FreeSpace(2f) ThinLens(f)
+        FreeSpace(f)`` at f = 200 mm, N = 256, dx = 8 um with
+        ``method='auto'``: ABCD ``[[-1, 0], [0, -1]]`` (magnification -1) but
+        ``dx_out = 15.45 um``, 1.93x the input.  Read the delivered pitch off
+        :meth:`Operator.__call__`'s returned Source / tuple (which threads
+        ``dx_out`` / ``dy_out``), never off ``|A|``, unless every
+        :class:`FreeSpace` in the chain is pitch-preserving.
+
         Raises
         ------
         ValueError

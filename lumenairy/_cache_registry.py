@@ -34,7 +34,8 @@ Author: Andrew Traverso -- v4.16.0 / Agent D
 from __future__ import annotations
 
 import threading
-from typing import Callable, Dict, List
+import warnings
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Registry storage
@@ -48,6 +49,45 @@ from typing import Callable, Dict, List
 _REGISTRY_LOCK = threading.Lock()
 
 _CACHE_CLEARERS: Dict[str, Callable[[], None]] = {}
+
+
+def _clearer_identity(fn: Any) -> Tuple[Optional[str], Optional[str],
+                                        Optional[str], Optional[int]]:
+    """A key that is EQUAL across ``importlib.reload`` and DIFFERENT for two
+    genuinely distinct callables.
+
+    ``importlib.reload`` re-executes the module body, producing a new function
+    object compiled from the same source line of the same file -- so
+    ``(module, qualname, co_filename, co_firstlineno)`` is unchanged.  Two
+    different functions (including two lambdas written on different lines of
+    the same module, which share ``__qualname__ == '<lambda>'``) differ in
+    ``co_firstlineno``.  Callables with no code object (``functools.partial``,
+    instances with ``__call__``) fall back to their type name, which is coarse
+    but errs towards warning rather than silence.
+    """
+    code = getattr(fn, '__code__', None)
+    module = getattr(fn, '__module__', None)
+    qualname = getattr(fn, '__qualname__', None)
+    if code is not None:
+        return (module, qualname,
+                getattr(code, 'co_filename', None),
+                getattr(code, 'co_firstlineno', None))
+    return (module, qualname, type(fn).__name__, None)
+
+
+def _describe_clearer(fn: Any) -> str:
+    """``module.qualname (file:line)`` for a collision warning; falls back to
+    ``repr`` for a callable with no code object."""
+    module = getattr(fn, '__module__', None)
+    qualname = getattr(fn, '__qualname__', None)
+    if qualname is None:
+        return repr(fn)
+    code = getattr(fn, '__code__', None)
+    where = ''
+    if code is not None:
+        where = (f" ({getattr(code, 'co_filename', '?')}"
+                 f":{getattr(code, 'co_firstlineno', '?')})")
+    return f"{module}.{qualname}{where}"
 
 
 # ---------------------------------------------------------------------------
@@ -81,21 +121,49 @@ def register_cache_clearer(name: str,
         :func:`lumenairy.lumenairy_context` with
         ``clear_caches_on_exit=True``).
 
+    Warns
+    -----
+    RuntimeWarning
+        If ``name`` is already registered to a DIFFERENT callable.  The
+        first registration wins (behaviour is unchanged), so the second
+        cache would be left permanently unclearable -- in the module whose
+        whole purpose is to retire the "fix N, miss N+1" cache-clear
+        pattern.  v5.46 (audit Z4): pre-v5.46 the collision was silent.
+
     Notes
     -----
     Multiple imports of the same module (e.g. via
     :func:`importlib.reload`) trigger re-registration.  The registry
-    treats a duplicate name as a no-op rather than warning -- warnings
-    churn during interactive development sessions.  The "name" key is
-    therefore idempotent and stable across reloads.
+    treats a duplicate name from the SAME call site as a no-op rather
+    than warning -- warnings churn during interactive development
+    sessions.  "Same call site" is decided by
+    :func:`_clearer_identity` (module + qualname + source file + first
+    line), which a reload preserves and a genuinely different function
+    does not.  The "name" key is therefore idempotent and stable across
+    reloads while a real collision is audible.
     """
     with _REGISTRY_LOCK:
-        if name in _CACHE_CLEARERS:
-            # Idempotent: ignore re-registration of the same name.
-            # Re-importing the owning module (e.g. during a
-            # ``importlib.reload`` cycle, or during a test that
-            # imports the module twice) re-triggers the
-            # ``register_cache_clearer`` call -- accept silently.
+        existing = _CACHE_CLEARERS.get(name)
+        if existing is not None:
+            # Idempotent: ignore re-registration of the same name FROM THE
+            # SAME SITE.  Re-importing the owning module (e.g. during an
+            # ``importlib.reload`` cycle, or during a test that imports the
+            # module twice) re-triggers the ``register_cache_clearer`` call
+            # -- accept silently.
+            if (existing is clear_fn
+                    or _clearer_identity(existing) == _clearer_identity(clear_fn)):
+                return
+            old_id = _describe_clearer(existing)
+            new_id = _describe_clearer(clear_fn)
+            warnings.warn(
+                f"register_cache_clearer: the name {name!r} is already "
+                f"registered to a different clearer ({old_id}); the new one "
+                f"({new_id}) is IGNORED, so its cache will never be cleared "
+                f"by clear_asm_caches() / "
+                f"lumenairy_context(clear_caches_on_exit=True).  Register it "
+                f"under a unique name.  Already registered: "
+                f"{sorted(_CACHE_CLEARERS)}.",
+                RuntimeWarning, stacklevel=2)
             return
         _CACHE_CLEARERS[name] = clear_fn
 
@@ -134,6 +202,17 @@ def clear_all_registered_caches() -> None:
     ``AttributeError``) to preserve back-compat behaviour: a registry
     walk should leave the cache state in exactly the same shape as
     the v4.15 fan-out did on the same failure mode.
+
+    Warns
+    -----
+    RuntimeWarning
+        Once, at the end of the walk, naming every clearer that raised.
+        v5.46 (audit Z4): the failures were previously swallowed with no
+        signal at all, so a caller who ran ``clear_asm_caches()`` to free
+        RAM before a large allocation could not tell that a cache had
+        stayed full -- the memory is still held and the next allocation
+        still OOMs, but nothing said why.  The walk itself is still
+        best-effort and does not raise.
     """
     # Snapshot under the lock so a concurrent registration during the
     # walk doesn't produce a "dictionary changed size during
@@ -143,15 +222,28 @@ def clear_all_registered_caches() -> None:
     # any cache-internal lock.
     with _REGISTRY_LOCK:
         items = list(_CACHE_CLEARERS.items())
+    failures: List[str] = []
     for name, fn in items:
         try:
             fn()
-        except (ImportError, RuntimeError, AttributeError):
+        except (ImportError, RuntimeError, AttributeError) as exc:
             # Same narrowed-except as the v4.15 fan-out.  A single
             # clearer failure must not strand the rest of the chain.
             # We swallow rather than re-raise to preserve the v4.15
-            # contract that ``clear_asm_caches`` is best-effort.
-            pass
+            # contract that ``clear_asm_caches`` is best-effort -- but we
+            # COLLECT it, so the caller learns that the memory it asked
+            # for was not actually released (audit Z4).
+            failures.append(f"{name} ({type(exc).__name__}: {exc})")
+    if failures:
+        warnings.warn(
+            f"clear_all_registered_caches: {len(failures)} of {len(items)} "
+            f"registered cache clearers raised and were skipped, so those "
+            f"caches are still holding memory: "
+            f"{'; '.join(failures)}.  The walk is best-effort by contract "
+            f"(the remaining clearers all ran), but a caller clearing "
+            f"caches to make room for a large allocation should not assume "
+            f"the memory was freed.",
+            RuntimeWarning, stacklevel=2)
 
 
 def _unregister_for_test(name: str) -> bool:

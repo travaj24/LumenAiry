@@ -89,6 +89,37 @@ Operator.from_prescription = classmethod(
 )
 
 
+# v5.46 (audit Z4): make ``lumenairy.algebra.from_prescription`` resolve to
+# the FUNCTION, not to the submodule of the same name.
+#
+# Importing ``.from_prescription`` above made the import system bind the
+# SUBMODULE as an attribute of this package, so the call every reader writes
+# from the submodule's own ``__all__`` and docstring --
+#
+#     from lumenairy.algebra import from_prescription
+#     from_prescription(rx, 633e-9)
+#
+# -- raised ``TypeError: 'module' object is not callable``, and the only
+# working spellings were ``Operator.from_prescription(rx, wl)`` and the
+# fully-qualified ``lumenairy.algebra.from_prescription.from_prescription``.
+# Rebinding the attribute after the import fixes the documented spelling.
+# The submodule stays in ``sys.modules`` under its own dotted name, so
+# ``from lumenairy.algebra.from_prescription import from_prescription`` and
+# ``importlib.import_module('lumenairy.algebra.from_prescription')`` keep
+# working; what changes is that ATTRIBUTE access
+# (``lumenairy.algebra.from_prescription``) now yields the callable, so the
+# chained ``...from_prescription.from_prescription`` workaround no longer
+# resolves -- drop the duplicated tail.
+#
+# Deliberately NOT added to this package's ``__all__``: the top-level
+# ``lumenairy.__all__`` does not re-export it (``Operator.from_prescription``
+# is the canonical entry point, per the documented exemption in
+# ``tests/unit/test_v4_16_0_walker_all_symmetry.py``), and the symmetry
+# walker requires every submodule ``__all__`` entry to be re-exported or
+# exempted.
+from_prescription = _from_prescription
+
+
 __all__ = [
     'Operator',
     'CompositeOperator',

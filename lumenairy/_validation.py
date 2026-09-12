@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
+
 # Module-level import -- v4.15.3 used a lazy import inside the function
 # body, citing a (hypothetical) circular dependency with
 # ``sources.core``.  ``sources.core`` does NOT actually import from
@@ -36,7 +38,11 @@ from typing import Any
 # ``type(E).__name__ == 'PartialCoherenceMCF'``) instead of restoring
 # the lazy import -- the duck-typed predicate is free of import-order
 # constraints AND keeps the helper hot-loop cheap.
-from lumenairy.sources.core import PartialCoherenceMCF as _MCF
+# v5.46 (audit Z4 nit): relative, matching the rest of the package -- an
+# absolute ``from lumenairy...`` inside the package re-enters the top-level
+# ``lumenairy/__init__`` by name and only works because it is already in
+# sys.modules by the time this module is imported.
+from .sources.core import PartialCoherenceMCF as _MCF
 
 # v5.31 (audit A-9): the closed vocabulary for ``input_kind``.
 #
@@ -57,6 +63,19 @@ from lumenairy.sources.core import PartialCoherenceMCF as _MCF
 # supported way to extend the vocabulary; passing an unlisted one is
 # a library bug, not a user error, so it fails loudly.
 _INPUT_KINDS = frozenset({'field', 'psf', 'pupil'})
+
+# v5.46 (audit Z4): the numeric ``dtype.kind`` letters this guard accepts.
+# The guard's own message has always said "expected 2-D complex <kind>" while
+# it enforced only ``ndim == 2``; complex ('c') is the intended input and real
+# ('f') / integer ('i', 'u') / bool ('b') are legitimately used as amplitude
+# masks (every kernel promotes them to complex).  Everything else -- object
+# ('O'), string ('U'/'S'), datetime, void, structured -- is not a field: an
+# object-dtype array reaches the kernels and takes NumPy's Python-object slow
+# path, producing a plausible-looking result from whatever ``__mul__`` the
+# elements happen to define.  ``dtype.kind`` is a one-character attribute
+# lookup (~60 ns), which matters because this helper runs at the entry point
+# of every propagator / lens call; ``np.issubdtype`` costs ~20x that.
+_FIELD_DTYPE_KINDS = frozenset('cfiub')
 
 
 def _check_2d_scalar_field(
@@ -120,6 +139,20 @@ def _check_2d_scalar_field(
         propagator.  The error message points at
         :func:`lumenairy.propagate_ensemble` (v4.16.1) for the
         canonical workflow.
+    TypeError
+        If ``E`` is an :class:`numpy.matrix`, or if its dtype kind is
+        outside :data:`_FIELD_DTYPE_KINDS` (i.e. not complex / real /
+        integer / boolean -- an object-dtype array being the usual
+        offender).  v5.46 (audit Z4): the guard's message promised
+        "2-D complex" since v4.15.2 but enforced only ``ndim == 2``, so
+        both of these reached the kernels and produced a plausible
+        finite result computed by the wrong arithmetic --
+        :class:`numpy.matrix` because its ``*`` is a matrix product, so
+        every elementwise mask / phase-screen multiply downstream became
+        a matmul; object dtype because NumPy falls back to calling the
+        elements' own ``__mul__``.  Real / integer / boolean input stays
+        ACCEPTED: an amplitude mask is a legitimate field and every
+        kernel promotes it to complex.
     """
     if input_kind not in _INPUT_KINDS:
         raise ValueError(
@@ -209,4 +242,33 @@ def _check_2d_scalar_field(
             f"(Ny, Nx); got {ndim}-D array of shape "
             f"{shape_str}.\n"
             f"{hint}"
+        )
+
+    # v5.46 (audit Z4): the two 2-D inputs that used to pass this guard and
+    # then compute something plausible but wrong.
+    if isinstance(E, np.matrix):
+        raise TypeError(
+            f"{fn_name}: np.matrix is not a valid {input_kind}.  Its ``*`` "
+            f"is MATRIX multiplication and its ``**`` is matrix power, so "
+            f"every elementwise step downstream -- multiplying by an "
+            f"aperture mask, by a phase screen, by a transfer function -- "
+            f"would silently compute a matrix product instead, returning a "
+            f"finite array that is not the field you asked for.  Pass "
+            f"``np.asarray(M)`` (a view; no copy) instead.  np.matrix is "
+            f"itself deprecated in NumPy."
+        )
+
+    dtype = getattr(E, 'dtype', None)
+    kind = getattr(dtype, 'kind', None)
+    if kind is not None and kind not in _FIELD_DTYPE_KINDS:
+        raise TypeError(
+            f"{fn_name}: expected a 2-D complex (or real / integer / "
+            f"boolean, for an amplitude mask) {input_kind}; got dtype "
+            f"{dtype!r}.  An object-dtype array is the usual cause -- it "
+            f"comes from ``np.array(list_of_ragged_rows)`` or from mixing "
+            f"Python scalars with arrays -- and NumPy would run every "
+            f"downstream kernel on the Python-object slow path, calling "
+            f"whatever ``__mul__`` the elements define.  Build the field "
+            f"with an explicit dtype, e.g. "
+            f"``np.asarray(E, dtype=np.complex128)``."
         )

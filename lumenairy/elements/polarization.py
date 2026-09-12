@@ -248,7 +248,7 @@ class JonesField:
     _BATCH_PROPAGATE_MIN_N = 512
 
     def propagate(self, z: float, wavelength: float, bandlimit: bool = True) -> 'JonesField':
-        """Propagate via the angular spectrum method.
+        """Propagate via the angular spectrum method, IN PLACE.
 
         For grids at or above ``_BATCH_PROPAGATE_MIN_N`` (default 512)
         uses :func:`angular_spectrum_propagate_batch` so Ex/Ey share a
@@ -256,6 +256,16 @@ class JonesField:
         sequential path is faster because FFT-call dispatch dominates
         compute -- both components hit the H cache on the second call
         anyway.
+
+        Returns
+        -------
+        JonesField
+            ``self``.  ``Ex`` and ``Ey`` are REBOUND to the propagated
+            arrays (the caller's original arrays are not written), and the
+            grid pitch is unchanged -- ASM is pitch-preserving.  Every
+            ``JonesField.propagate*`` method follows this in-place-and-return-
+            self convention; use ``copy.deepcopy(jf)`` first if you need the
+            input field afterwards.
         """
         same_layout = (self.Ex.shape == self.Ey.shape
                        and self.Ex.dtype == self.Ey.dtype)
@@ -283,13 +293,20 @@ class JonesField:
         tilt_y: float = 0,
         bandlimit: bool = True,
     ) -> 'JonesField':
-        """Propagate via off-axis ASM.
+        """Propagate via off-axis ASM, IN PLACE.
 
         v5.4.6 (audit P3-20): valid in the paraxial / small-tilt regime
         (|tilt| < ~5 deg).  Ex and Ey are dispatched with the same carrier
         tilt and NO rotation of the (Ex, Ey) basis into the tilted
         propagation frame, so at larger tilts the implied transverse
         polarization basis and the (small) Ez component are not modeled.
+
+        Returns
+        -------
+        JonesField
+            ``self``, with ``Ex`` / ``Ey`` rebound to the propagated arrays
+            and the pitch unchanged.  See :meth:`propagate` for the in-place
+            convention shared by every ``propagate*`` method here.
         """
         self.Ex = angular_spectrum_propagate_tilted(
             self.Ex, z, wavelength, self.dx, self.dy,
@@ -300,7 +317,17 @@ class JonesField:
         return self
 
     def propagate_fresnel(self, z: float, wavelength: float) -> 'JonesField':
-        """Propagate via single-FFT Fresnel. Returns new grid spacings."""
+        """Propagate via single-FFT Fresnel, IN PLACE.
+
+        Returns
+        -------
+        JonesField
+            ``self``.  v5.46 (audit Z4): this docstring used to read
+            "Returns new grid spacings", which it never did -- the new
+            spacings are written onto ``self.dx`` / ``self.dy`` (Fresnel is
+            pitch-CHANGING: ``dx_out = lambda*z/(N*dx)``) and the method
+            returns ``self``.  Read the new pitch off the returned object.
+        """
         self.Ex, dx_out, dy_out = fresnel_propagate(
             self.Ex, z, wavelength, self.dx, self.dy)
         self.Ey, _, _ = fresnel_propagate(
@@ -310,7 +337,16 @@ class JonesField:
         return self
 
     def propagate_fraunhofer(self, z: float, wavelength: float) -> 'JonesField':
-        """Propagate to the far-field via Fraunhofer. Returns new grid spacings."""
+        """Propagate to the far field via Fraunhofer, IN PLACE.
+
+        Returns
+        -------
+        JonesField
+            ``self``.  v5.46 (audit Z4): as for :meth:`propagate_fresnel`,
+            the new spacings are written onto ``self.dx`` / ``self.dy``
+            rather than returned; the old "Returns new grid spacings"
+            wording described a return this method never had.
+        """
         self.Ex, dx_out, dy_out = fraunhofer_propagate(
             self.Ex, z, wavelength, self.dx, self.dy)
         self.Ey, _, _ = fraunhofer_propagate(
@@ -1301,10 +1337,25 @@ def stokes_parameters(field: 'JonesField') -> Dict[str, np.ndarray]:
     """
     Ex = field.Ex
     Ey = field.Ey
-    S0 = np.abs(Ex)**2 + np.abs(Ey)**2
-    S1 = np.abs(Ex)**2 - np.abs(Ey)**2
-    S2 = 2 * np.real(Ex * np.conj(Ey))
-    S3 = -2 * np.imag(Ex * np.conj(Ey))
+    # Each of |Ex|^2, |Ey|^2 and Ex*conj(Ey) is computed ONCE and consumed by
+    # the two Stokes components that need it; ``a`` / ``b`` are released
+    # before the complex cross term is built.  Bit-identical to the
+    # four-expression form, which needs care in two places: ``x**2`` is
+    # exactly ``np.square``, but the complex product is NOT commutative bitwise
+    # here (numpy's vectorised complex multiply contracts differently when the
+    # operands swap -- measured 1.8e-15 on S3 at N=64), so the ``out=``
+    # multiply below keeps ``Ex`` as the LEFT operand.
+    a = np.abs(Ex)
+    np.square(a, out=a)
+    b = np.abs(Ey)
+    np.square(b, out=b)
+    S0 = a + b
+    S1 = a - b
+    del a, b
+    cross = np.conj(Ey)
+    np.multiply(Ex, cross, out=cross)   # Ex * conj(Ey), no second temporary
+    S2 = 2 * np.real(cross)
+    S3 = -2 * np.imag(cross)
     return {'S0': S0, 'S1': S1, 'S2': S2, 'S3': S3}
 
 
@@ -1363,14 +1414,38 @@ def degree_of_polarization(field: 'JonesField') -> np.ndarray:
     # so this form is underflow-free; for the pure states a JonesField can
     # hold it is numerically identical (both give 1 to within 4.4e-16,
     # which the clip below removes).
-    dop = np.sqrt((S['S1'] / safe) ** 2 + (S['S2'] / safe) ** 2
-                  + (S['S3'] / safe) ** 2)
-    dop = np.where(live, dop, 0.0)
+    #
+    # The accumulation runs IN PLACE over the Stokes arrays themselves --
+    # ``S`` was built by the call above and is local, so consuming it is
+    # safe, and each of S1 / S2 / S3 is released as soon as its square has
+    # been added.  Same operand order as the single expression
+    # ``sqrt(((A**2 + B**2) + C**2))``, so the result is bit-identical; the
+    # peak drops from 8.25 to 5.00 full-grid real arrays at N = 2048.
+    dop = S.pop('S1')
+    dop /= safe
+    np.square(dop, out=dop)
+    term = S.pop('S2')
+    term /= safe
+    np.square(term, out=term)
+    dop += term
+    del term
+    term = S.pop('S3')
+    term /= safe
+    np.square(term, out=term)
+    dop += term
+    del term, safe
+    np.sqrt(dop, out=dop)
+    dop[~live] = 0.0
     # E-L17: the docstring promises [0, 1]; keep it true (the raw ratio
     # overshoots by up to 4.4e-16 on pure states).
-    dop = np.clip(dop, 0.0, 1.0)
+    np.clip(dop, 0.0, 1.0, out=dop)
     # NaN in, NaN out -- do not launder a NaN field into a "dark" 0.0.
-    return np.where(np.isnan(S0) | np.isnan(dop), np.nan, dop)
+    # ``S0`` can be +inf with a NaN dop (|Ex| = inf makes S1 = inf - inf),
+    # so both masks are needed.
+    nan_in = np.isnan(S0)
+    nan_in |= np.isnan(dop)
+    dop[nan_in] = np.nan
+    return dop
 
 
 def polarization_ellipse(field: 'JonesField') -> Tuple[np.ndarray, np.ndarray]:
@@ -1576,13 +1651,25 @@ def _order_power_scale(ax, ay, kz_m, kx_m, ky_m, kz_inc, kx0, ky0, incident):
 def _plane_wave_carrier(kx_m, ky_m, wavelength, nx, ny, dx, dy):
     """Unit plane-wave carrier ``exp(i (kx_m x + ky_m y))`` of one order on a
     centred ``(ny, nx)`` grid.  ``kx_m`` / ``ky_m`` are stored normalised by
-    ``k0 = 2*pi/wavelength``."""
+    ``k0 = 2*pi/wavelength``.
+
+    The grid is ``(arange(N) - N/2) * d`` -- the package-wide centring used by
+    :func:`apply_jones_matrix`'s callable grid, every ``sources/core.py``
+    factory and every ``elements/elements.py`` grid.  v5.46 (audit Z4): this
+    site used the integer ``N // 2``, which agrees for even ``N`` but puts the
+    origin half a pixel off for ODD ``N``, so a :class:`JonesField` built by
+    :func:`jones_field_from_orders` on an odd grid was offset by ``dx/2``
+    relative to every element applied to it afterwards (apertures,
+    spatially-varying Jones callables).
+    """
     k0 = 2.0 * np.pi / wavelength
     kx = k0 * float(np.real(kx_m))                     # physical [1/m]
     ky = k0 * float(np.real(ky_m))
-    xg = (np.arange(nx) - nx // 2) * dx
-    yg = (np.arange(ny) - ny // 2) * dy
-    X, Y = np.meshgrid(xg, yg)                         # (ny, nx)
+    # Broadcast views, not a dense meshgrid: the exponent broadcasts them
+    # identically and this drops two float64 (ny, nx) arrays.
+    xg = (np.arange(nx) - nx / 2) * dx
+    yg = (np.arange(ny) - ny / 2) * dy
+    X, Y = xg[None, :], yg[:, None]                    # -> (ny, nx)
     return np.exp(1j * (kx * X + ky * Y)).astype(np.complex128)
 
 

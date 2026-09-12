@@ -24,6 +24,54 @@ from typing import List, Tuple, Union
 
 import numpy as np
 
+# Resolved on first use so importing this module does not pull in the RCWA
+# solver stack (CONVENTIONS Section 10 shape).  ``_normalize_pol`` lives in
+# ``rcwa/_core.py`` and is the single source of truth for the te/tm <-> s/p
+# alias table named by CONVENTIONS Section 7.
+_RCWA_NORMALIZE_POL = None
+
+#: Polarization tokens accepted by the coating entry points, in the spelling
+#: used by the error message.  ``'avg'`` is coatings-only (the unpolarised
+#: average); the rest are the CONVENTIONS Section 7 aliases.
+_COATING_POL_TOKENS = ("'s'", "'te'", "'p'", "'tm'", "'avg'")
+
+
+def _normalize_coating_pol(fn_name: str, polarization) -> str:
+    """Normalise a coating ``polarization`` argument to ``'s'``/``'p'``/``'avg'``.
+
+    The coatings TMM speaks ``s``/``p`` while the grating solvers speak
+    ``te``/``tm``; CONVENTIONS Section 7 makes both spellings valid
+    everywhere, case-insensitively.  This routes the te/tm/s/p set through
+    the RCWA :func:`~lumenairy.elements.rcwa._core._normalize_pol` (so the
+    two families cannot drift apart) and maps its ``te``/``tm`` answer back
+    to the ``s``/``p`` tokens this module's admittance branches use.
+    ``'avg'`` -- the unpolarised average, which has no grating counterpart --
+    is handled here.
+
+    Raises
+    ------
+    ValueError
+        If ``polarization`` is not one of ``'s'``, ``'te'``, ``'p'``,
+        ``'tm'``, ``'avg'`` (any case).  An unrecognised string used to fall
+        through to the p branch silently, so a typo -- or the perfectly legal
+        ``'te'`` -- returned the TM coefficient for a TE wave.
+    """
+    global _RCWA_NORMALIZE_POL
+    if isinstance(polarization, str) and polarization.lower() == 'avg':
+        return 'avg'
+    if _RCWA_NORMALIZE_POL is None:
+        from .rcwa._core import _normalize_pol as _np_pol
+        _RCWA_NORMALIZE_POL = _np_pol
+    try:
+        te_tm = _RCWA_NORMALIZE_POL(fn_name, polarization)
+    except ValueError:
+        raise ValueError(
+            f"{fn_name}: polarization must be one of "
+            f"{', '.join(_COATING_POL_TOKENS)} (case-insensitive; "
+            f"'s' == 'te' and 'p' == 'tm' per CONVENTIONS Section 7), "
+            f"got {polarization!r}.") from None
+    return 's' if te_tm == 'te' else 'p'
+
 
 def coating_reflectance(
     layers: List[Tuple[Union[float, complex], float]],
@@ -50,7 +98,10 @@ def coating_reflectance(
     n_ambient : float, default 1.0
         Ambient (incident) medium refractive index.
     polarization : str, default 'avg'
-        ``'s'``, ``'p'``, or ``'avg'`` (average of s and p).
+        ``'s'`` (== ``'te'``), ``'p'`` (== ``'tm'``), or ``'avg'``
+        (unpolarised average of s and p).  Case-insensitive; the
+        ``te``/``tm`` aliases are the CONVENTIONS Section 7 bridge to the
+        grating solvers.  Anything else raises ``ValueError``.
 
     Returns
     -------
@@ -61,8 +112,27 @@ def coating_reflectance(
     phase_r : ndarray
         Reflection phase [rad] at each wavelength.
 
+    Raises
+    ------
+    ValueError
+        If ``polarization`` is not one of ``'s'``/``'te'``/``'p'``/``'tm'``/
+        ``'avg'``.
+
     Notes
     -----
+    **p-polarisation reflection-phase convention.**  This TMM uses the
+    Macleod tilted admittance ``eta_p = n / cos(theta)``, which makes the
+    returned p amplitude ``r_p = -r_p_Fresnel`` (the textbook Fresnel
+    convention), i.e. ``phase_r`` for ``'p'`` differs from the Fresnel one
+    by ``pi``.  The benefit is that ``r_s`` and ``r_p`` agree at normal
+    incidence (both ``-0.206349`` for an uncoated n=1.52 substrate, no
+    spurious pi jump), and the sign matches ``berreman_jones_1d``'s
+    lab-frame ``jones_r[0, 0]`` to 1.8e-15, so the two families compose.
+    ``propagate_through_system``'s ``'reflection'`` port applies
+    ``sqrt(R) * exp(1j * phase_r)`` directly, so this convention is
+    observable there.
+
+
     **Snell factorization (v5.6 complex-angle TMM).**  The wall-normal
     ``cos(theta)`` is set by the conserved Snell invariant
     ``n0 sin(theta0)`` and carried as a COMPLEX number on the
@@ -109,7 +179,11 @@ def coating_reflectance(
     wavelengths = np.atleast_1d(_wv_in)
     n_wv = wavelengths.size
 
-    pols = ['s', 'p'] if polarization == 'avg' else [polarization]
+    # Normalise FIRST: every branch below keys off the canonical token, so
+    # 'te'/'TE'/'S' reach the s admittance and junk raises instead of
+    # falling through to the p branch.
+    pol_norm = _normalize_coating_pol('coating_reflectance', polarization)
+    pols = ['s', 'p'] if pol_norm == 'avg' else [pol_norm]
 
     # The Snell-angle chain is intrinsically sequential per layer (each
     # layer's sin_t depends on the previous after the TIR cap), but it
@@ -275,7 +349,7 @@ def coating_reflectance(
         rs_by_pol[pol] = r
         ts_by_pol[pol] = t_amp
 
-    if polarization == 'avg':
+    if pol_norm == 'avg':
         r_s = rs_by_pol['s']
         r_p = rs_by_pol['p']
         t_s = ts_by_pol['s']
@@ -346,7 +420,10 @@ def coating_reflectance_jax(
 
     Parameters mirror :func:`coating_reflectance` (``layers`` is a list of
     ``(index, thickness)`` ambient-side first; ``polarization`` is
-    ``'s'`` / ``'p'`` / ``'avg'``).
+    ``'s'`` / ``'te'`` / ``'p'`` / ``'tm'`` / ``'avg'``, case-insensitive,
+    normalised by the same helper so a gradient-based design on ``'te'``
+    optimises the TE stack and junk raises rather than silently optimising
+    the p branch).
     """
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
@@ -354,6 +431,7 @@ def coating_reflectance_jax(
             "coating_reflectance_jax requires the optional 'jax' extra; "
             "install with `pip install lumenairy[jax]`.  Use "
             "coating_reflectance for non-differentiable evaluation.")
+    pol_norm = _normalize_coating_pol('coating_reflectance_jax', polarization)
     import cmath
 
     import jax.numpy as jnp
@@ -382,7 +460,7 @@ def coating_reflectance_jax(
     cos_sub = _cos_theta(complex(n_substrate))
     cos_angle = _cos_theta(complex(n_ambient))    # == cos(angle) for real amb
 
-    pols = ['s', 'p'] if polarization == 'avg' else [polarization]
+    pols = ['s', 'p'] if pol_norm == 'avg' else [pol_norm]
     R_terms = []
     for pol in pols:
         if pol == 's':
