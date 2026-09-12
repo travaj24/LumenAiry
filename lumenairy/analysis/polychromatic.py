@@ -154,8 +154,18 @@ def radial_power_bands(
     order = np.argsort(r2_flat, kind='stable')
     r2_sorted = r2_flat[order]
     p_cum = np.cumsum(I.ravel()[order]) * (dx * dy)
-    idx = np.searchsorted(r2_sorted, radii_arr.ravel() ** 2, side='right')
+    r2_query = radii_arr.ravel() ** 2
+    idx = np.searchsorted(r2_sorted, r2_query, side='right')
     powers = np.where(idx > 0, p_cum[np.maximum(idx - 1, 0)], 0.0)
+    # A NaN radius is the one query the two paths would answer
+    # differently: `R2 <= nan` is False everywhere, so the masked loop
+    # returns 0, while `searchsorted` sorts NaN ABOVE every finite key and
+    # would hand back the whole grid's power.  Keep the masked loop's
+    # answer, so the crossover is invisible to the caller.  (+/- inf needs
+    # no special case: r*r is +inf on both paths and both return the
+    # total.)
+    if np.isnan(r2_query).any():
+        powers = np.where(np.isnan(r2_query), 0.0, powers)
     return np.asarray(powers, dtype=float).reshape(radii_arr.shape)
 
 

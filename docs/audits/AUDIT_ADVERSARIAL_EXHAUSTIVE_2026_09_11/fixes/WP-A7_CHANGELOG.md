@@ -66,9 +66,15 @@ NEAREST `x = y = 0` rather than on whatever sample the integration started
 from, so a pupil carrying a known defocus comes back with the right INTEGER
 WAVE COUNT (a converging wavefront is stationary at the pupil centre).
 Measured on a 51.8-wave defocus pupil: absolute error 17.0000 waves before,
-0.0000 after. **Migration:** any caller that stored an absolute `opd_map`
-piston from a strongly curved pupil may see it move by a whole number of
-waves; the piston it stored was arbitrary. Shape, PV, RMS, Zernike
+0.0000 after. The docstring states the condition: it is a CENTRED pupil that
+comes back absolutely anchored, because that is where the anchor sample and
+the wavefront's stationary point coincide. A pupil that does not straddle the
+grid origin is anchored on its rim instead and its piston is an arbitrary --
+but always EXACT -- whole number of waves (measured on a 1.2-waves-rms coma
+pupil decentred by (+60, -40) and (+110, +90) um: +1.0000 and +2.0000 waves,
+against 0.0000 centred). **Migration:** any caller that stored an absolute
+`opd_map` piston from a strongly curved pupil may see it move by a whole
+number of waves; the piston it stored was arbitrary. Shape, PV, RMS, Zernike
 coefficients above piston, and every nearly-flat map are unaffected.
 
 ### Fixed -- analysis/through_focus: the Strehl denominator was a PARAXIAL reference (A2, P0)
@@ -159,7 +165,16 @@ the NaN pattern of `wavefront` matches `slopes_x` exactly. Callers that
 reduce the map should mask (`np.nanmax`, `np.isfinite`).
 
 Files: `lumenairy/analysis/detector.py`.
-Tests: `tests/unit/test_audit2609_a7_detector_sh.py` (11);
+The `'itoh'` path does NOT get the NaN exclusion, and the docstrings now say
+so on all three sites (`shack_hartmann(reconstruction=)`,
+`_reconstruct_wavefront`, `_itoh_wavefront`): a path integral has one route to
+each lenslet, so an un-measured lenslet on that route is substituted with zero
+slope and integrated through, and everything beyond it on the path inherits
+the error. Measured on an annular lenslet mask with exact analytic slopes:
+`'itoh'` off by 0.49 of the wavefront span where `'southwell'` is exact to
+8.7e-15 of it.
+
+Tests: `tests/unit/test_audit2609_a7_detector_sh.py` (12);
 `tests/unit/test_niche_s12_shack_hartmann_reference.py::TestTiltOracle::test_reconstruction_integrates_the_uniform_slope`
 and `tests/unit/test_v4_16_1_agent_a.py::_measured_pitch_from_wf` had the
 factor 0.5 / 2.0 baked into their oracles and were pinning the defect; both
@@ -196,7 +211,20 @@ it lands at 47.4773 mm with PV 0.9425 / RMS 0.2723 waves.
 
 A new `field_max_rad` kwarg (and `prescription['field_max_rad']`) carries the
 off-axis field for an infinite conjugate, where a field point is a DIRECTION
-rather than a height; a non-zero `field` at infinity without it is refused.
+rather than a height; a non-zero `field` at infinity without it is refused,
+and a `field_max_rad` at or beyond 90 deg is refused on the ANGLE (a guard on
+the direction cosine `N = sqrt(1 - sin^2 x - sin^2 y)` cannot catch it: `sin`
+is not monotonic past `pi/2`, so 2.0 rad = 114.6 deg would fold back silently
+to 65.4 deg). **`field` keeps its object-position sense at BOTH conjugates**:
+`field = (0, +1)` is an object above the axis either way, so the chief travels
+towards `-y` and the direction cosines are `L = -sin(Hx * field_max_rad)`,
+`M = -sin(Hy * field_max_rad)` -- the NEGATIVE of `raytrace.ray_fan`'s
+`field_angle`, which is a ray-direction angle. Measured on the singlet above:
+`object_distance = inf` at `field = (0, +1)` agrees with `object_distance =
+1e3 m` at the same `field = (0, +1)` to 0.0025 / 0.0033 / 0.0033 waves
+(<= 0.07 % of the map's span) at 0.5 / 1 / 2 deg, where the opposite sign
+differs by 0.854 / 1.706 / 3.404 waves (23 / 40 / 59 % of span). PV and RMS
+are sign-blind, so only a per-ray comparison sees it.
 The collimated launch measures its OPL from the incident wavefront through
 `raytrace.trace.seed_entrance_eikonal` (R2's helper, which carries the `N*z`
 term an off-`z=0` launch needs); the finite point-source launch keeps
@@ -236,6 +264,25 @@ steps are scale invariant), which is why this survived. The JAX twin
 `gerchberg_saxton_jax` never rescaled at all, so the two backends' `err`
 differed by `N_pix` despite documenting the same physics; both now use
 `sqrt(N_pix * source_power / target_power)`.
+
+### Fixed -- analysis/phase_retrieval: `gerchberg_saxton_jax`'s `dtype` handling (A5 follow-up)
+
+Two defects behind the "same physics" claim, both found in verification:
+
+* A COMPLEX `dtype` (`np.complex128`) fell through the "unrecognised real
+  dtype" branch, made `src` / `tgt` complex, and killed the call in
+  `float(err)` with `TypeError: float() argument must be a string or a real
+  number, not 'complex'`. A complex request now names the iteration's FIELD
+  type and the amplitude / phase arrays take its real counterpart, so `err` is
+  always a real float.
+* `dtype=None` resolved to float32 unconditionally, so a caller who had
+  enabled `jax_enable_x64` still got a single-precision answer. It now follows
+  the flag, as `jax.numpy`'s own default float type does. Measured with x64
+  on, 10 iterations at N = 32: the two backends' `err` now agree to every
+  digit float64 carries (1.5027588862e-01 both, previously 2.0e-05 relative
+  apart), and on an exactly-solvable target the JAX floor drops from 2.3e-12
+  to 5.2e-29. **Migration:** a caller who wants the historical single
+  precision under x64 passes `dtype=np.float32` explicitly.
 
 Files: `lumenairy/analysis/phase_retrieval.py`.
 Tests: `tests/unit/test_audit2609_a7_misc.py` (4);
@@ -310,6 +357,12 @@ relative metric drift measured against a per-plane
 1e-12 to a derived `HOIST_RTOL = 1e-9` with that derivation recorded in the
 file.
 
+The JAX twin `through_focus_scan_jax` deliberately keeps its per-plane
+`exp(1j kz z)`: it is the reference evaluation the NumPy path is checked
+against (`TestThroughFocusScanMatchesJAXTwin`), and re-deriving it per plane
+is what makes that check independent. The recurrence is a NumPy-path
+optimisation only.
+
 ### Performance -- analysis/polychromatic: `radial_power_bands` stops growing with the band count (A6)
 
 The mask-and-sum loop built a full `Ny x Nx` boolean and re-summed the whole
@@ -334,9 +387,18 @@ over a radius-ordered permutation instead of numpy's pairwise reduction),
 bounded by `O(Ny*Nx * eps)` = 7e-12 relative at N = 1024 and measured at
 2.1e-13.
 
+One query the two paths would otherwise answer differently is a **NaN
+radius**: `R2 <= nan` is False everywhere, so the masked loop returns 0, while
+`searchsorted` sorts NaN ABOVE every finite key and the sorted path handed
+back the whole grid's power (measured 2.513e-09 against 0.0). The sorted path
+now reproduces the masked loop's answer, so the crossover is invisible to the
+caller. `+/- inf` needs no special case -- `r*r` is `+inf` on both paths and
+both return the total.
+
 Files: `lumenairy/analysis/through_focus.py`, `lumenairy/analysis/beam_stats.py`,
 `lumenairy/analysis/polychromatic.py`.
-Tests: `tests/unit/test_audit2609_a7_misc.py` (9).
+Tests: `tests/unit/test_audit2609_a7_misc.py` (9);
+`tests/unit/test_audit2609_verify_a7.py` (the crossover, NaN and inf pins).
 
 ### Fixed -- analysis: the P3 row (A7)
 

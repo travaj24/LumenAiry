@@ -347,6 +347,26 @@ def eval_image_plane_wfe(
         by this instead.  Required when ``field != (0, 0)`` and the object
         is at infinity.  Falls back to
         ``prescription['field_max_rad']``.
+
+        **Sign.**  ``field`` scales an OBJECT POSITION at both conjugates,
+        so ``field = (0, +1)`` means the same physical field point whether
+        the object is 1 m away or at infinity: an object ABOVE the axis,
+        at ``y = Hy * field_max_m`` in the finite case and in the
+        direction ``Hy * field_max_rad`` above the axis in the infinite
+        one.  In both the chief ray therefore travels towards ``-y``, and
+        the two agree in the limit -- measured on a biconvex N-BK7 singlet
+        at 587.6 nm, ``object_distance = inf`` at ``field = (0, +1)``
+        matches ``object_distance = 1e3 m`` at the same ``field = (0, +1)``
+        with ``field_max_m = 1e3 * tan(theta)`` to 0.0025 / 0.0033 /
+        0.0033 waves (<= 0.07 % of the map's span) at
+        theta = 0.5 / 1 / 2 deg, where the opposite sign differs by
+        0.854 / 1.706 / 3.404 waves (23 / 40 / 59 % of span).
+
+        Note the relation to ``raytrace.ray_fan`` and
+        :func:`~lumenairy.analysis.field.field_aberration_sweep`, whose
+        ``field_angle`` is a ray DIRECTION angle (``M = +sin``): this
+        ``field`` is its NEGATIVE, i.e.
+        ``field_angle = -Hy * field_max_rad``.
     pupil_grid : tuple ``(px, py)``, optional *(4.1+)*
         Custom pupil-grid coordinates as a pair of 1-D arrays of
         **normalised pupil coordinates** in ``[-1, 1]`` -- one ray
@@ -592,16 +612,37 @@ def eval_image_plane_wfe(
         # cancels in the chief-relative OPD below.  All path lengths are
         # O(aperture), so none of the object-side ray-sphere cancellation
         # of a large finite object_distance arises.
+        # Sign: ``field`` scales an OBJECT POSITION at both conjugates, so
+        # the direction cosines are NEGATIVE sines.  ``field = (0, +1)``
+        # is an object above the axis in both branches -- at a finite
+        # distance a point at ``y = +Hy*field_max_m``, at infinity a
+        # direction ``+Hy*field_max_rad`` above the axis -- and in both
+        # the chief therefore travels towards ``-y``.  Without the sign
+        # the same ``field`` would name opposite field points at the two
+        # conjugates (measured: up to 59 % of the map's span at 2 deg),
+        # and PV / RMS are sign-blind, so nothing downstream would notice.
+        # Relation to ``raytrace.ray_fan``, which takes a ray DIRECTION
+        # angle (``M = +sin(field_angle)``): this ``field`` is its
+        # negative, ``field_angle = -Hy*field_max_rad``.
         th_x = Hx * field_max_rad if Hx != 0.0 else 0.0
         th_y = Hy * field_max_rad if Hy != 0.0 else 0.0
-        Ld0 = float(np.sin(th_x))
-        Md0 = float(np.sin(th_y))
-        Nd0 = float(np.sqrt(max(1.0 - Ld0 ** 2 - Md0 ** 2, 0.0)))
-        if Nd0 <= 0.0:
+        # Gate on the ANGLE, not on the direction cosine: ``sin`` is not
+        # monotonic past pi/2, so ``Nd0 = sqrt(1 - sin^2)`` stays positive
+        # for any angle and a 114.6 deg field would fold back silently to
+        # 65.4 deg instead of being refused.
+        if abs(th_x) >= 0.5 * np.pi or abs(th_y) >= 0.5 * np.pi:
             raise ValueError(
                 f"eval_image_plane_wfe: field direction "
                 f"({th_x:g}, {th_y:g}) rad is at or beyond 90 deg from "
                 f"the axis; reduce field_max_rad.")
+        Ld0 = -float(np.sin(th_x))
+        Md0 = -float(np.sin(th_y))
+        Nd0 = float(np.sqrt(max(1.0 - Ld0 ** 2 - Md0 ** 2, 0.0)))
+        if Nd0 <= 0.0:
+            raise ValueError(
+                f"eval_image_plane_wfe: field direction "
+                f"({th_x:g}, {th_y:g}) rad leaves no axial component; "
+                f"reduce field_max_rad.")
         L = np.full_like(px, Ld0)
         M = np.full_like(px, Md0)
         tx = px * ep_r

@@ -1129,11 +1129,20 @@ def wave_opd_2d(
     -----
     * **Piston anchor.**  An unwrap fixes the phase only up to one additive
       whole wave per connected pupil region.  The map is anchored on the
-      principal value of the valid sample NEAREST ``x = y = 0``, so a pupil
-      carrying a known defocus comes back with the right integer wave
-      count (a converging wavefront is stationary at the pupil centre).
-      Disconnected pupil regions are anchored independently and carry no
-      phase relationship to one another.
+      principal value of the valid sample NEAREST ``x = y = 0``, so a
+      CENTRED pupil carrying a known defocus comes back with the right
+      integer wave count -- a converging wavefront is stationary at the
+      pupil centre, so the principal value there is the true absolute
+      phase.  For a pupil that does NOT straddle the grid origin the
+      anchor lands on its rim instead, where the wavefront is not
+      stationary, and the returned piston is then an arbitrary whole
+      number of waves (measured on a 1.2-waves-rms coma pupil decentred
+      by (+60, -40) and (+110, +90) um: +1.0000 and +2.0000 waves, against
+      0.0000 centred).  It is always an EXACT whole wave -- the map stays
+      congruent to the wrapped phase everywhere -- so the shape, PV, RMS
+      and every Zernike coefficient above piston are unaffected; only an
+      absolute-piston reading is.  Disconnected pupil regions are anchored
+      independently and carry no phase relationship to one another.
     * **Limit.**  No unwrap can recover a wavefront whose true phase moves
       by more than ``pi`` between neighbouring samples -- the wrapped data
       no longer determines the branch.  For a lens of focal length ``f``

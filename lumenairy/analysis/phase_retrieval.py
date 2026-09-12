@@ -772,10 +772,24 @@ def gerchberg_saxton_jax(
         zero initial phase (matches the historical deterministic
         behaviour); pass an int to draw an i.i.d. uniform initial
         phase that randomises the iteration start.
-    dtype : numpy/jax float dtype, optional
-        4.10: caller can request float64.  Default is float32 to match
-        the historical JAX path.  Pass ``np.float64`` to bring the
-        backend to NumPy parity (~1e-6 -> ~1e-14 residual error).
+    dtype : numpy/jax float OR complex dtype, optional
+        Working precision.  A COMPLEX dtype (``np.complex128`` /
+        ``np.complex64``) is accepted and names the iteration's complex
+        field type; the amplitude and phase arrays -- and therefore the
+        returned ``err`` -- take its REAL counterpart, so ``err`` is
+        always a real float.  (Pre-fix a complex ``dtype`` fell through
+        to the defensive branch, made ``src``/``tgt`` complex, and the
+        call died in ``float(err)`` with
+        ``TypeError: float() argument must be ... not 'complex'``.)
+
+        ``None`` (default) follows JAX's own x64 convention: float64
+        when ``jax.config.jax_enable_x64`` is enabled, float32 otherwise.
+        Before this it was float32 unconditionally, so a caller who had
+        turned x64 on still got a single-precision answer and a ~1e-6
+        error floor while the NumPy twin reached ~1e-14 -- the two
+        backends documented "the same physics" and did not agree to more
+        than six digits. Pass an explicit ``np.float32`` to pin the
+        historical behaviour regardless of the global flag.
     initial_phase : ndarray, optional
         4.11.2: explicit initial-phase array.  Overrides ``seed``.
         Mirrors the NumPy variant's API.
@@ -794,8 +808,17 @@ def gerchberg_saxton_jax(
             'use gerchberg_saxton() (NumPy).')
     import jax
     import jax.numpy as jnp
+    # Resolve the working precision to a REAL dtype for the amplitude and
+    # phase arrays.  ``err`` is a mean of squares of real amplitudes, so
+    # keeping these real is what keeps ``float(err)`` well defined -- a
+    # complex request names the FIELD type and is mapped to its real
+    # counterpart here.  ``None`` follows jax_enable_x64, the same rule
+    # jax.numpy applies to its own default float type.
     if dtype is None:
-        dtype = jnp.float32
+        dtype = (jnp.float64 if bool(jax.config.jax_enable_x64)
+                 else jnp.float32)
+    elif np.issubdtype(np.dtype(dtype), np.complexfloating):
+        dtype = np.empty(0, dtype=np.dtype(dtype)).real.dtype
 
     src = jnp.asarray(source_amplitude, dtype=dtype)
     tgt = jnp.asarray(target_amplitude, dtype=dtype)

@@ -439,8 +439,11 @@ def shack_hartmann(
         least-squares solve of the co-located Southwell geometry (*JOSA*
         **70** (1980) 998), which uses both slope components at every
         lenslet and is correct for wavefronts that are not separable in x
-        and y; ``'itoh'`` is the cheaper single-path integral (down column
-        0, then along each row).  Both carry the same scale -- see the
+        and y, and which EXCLUDES un-measured lenslets; ``'itoh'`` is the
+        cheaper single-path integral (down column 0, then along each row),
+        which substitutes zero slope for an un-measured lenslet on the
+        path and integrates through it, so it is for a fully measured,
+        simply connected grid only.  Both carry the same scale -- see the
         Notes.
 
     Returns
@@ -822,18 +825,28 @@ def _reconstruct_wavefront(
     field linear in the pupil coordinate (the trapezoid on the right), and
     is correct for wavefronts that are not separable in x and y.
 
+    Lenslets with no measurement (the NaN sentinels of an out-of-bounds or
+    dark sub-aperture) are excluded from the SOUTHWELL solve and returned
+    as NaN rather than integrated through as if they had measured zero
+    slope.  Each connected group of measured lenslets is anchored on its
+    own lowest-index member, so ``wavefront[0, 0] == 0`` whenever that
+    lenslet was measured (the historical gauge), and groups separated by
+    un-measured lenslets carry no relative piston.
+
     ``'itoh'`` is the single-path integral -- down column 0, then along the
     row -- which uses one slope component per leg and is exact only when
     the slope field is consistent (noise-free).  It is kept because it is
     the cheapest reconstruction and because it reproduces the classical
-    textbook path integral exactly.
-
-    Lenslets with no measurement (the NaN sentinels of an out-of-bounds or
-    dark sub-aperture) are excluded from the solve and returned as NaN
-    rather than integrated through as if they had measured zero slope.
-    Each connected group of measured lenslets is anchored on its own
-    lowest-index member, so ``wavefront[0, 0] == 0`` whenever that lenslet
-    was measured (the historical gauge).
+    textbook path integral exactly.  **It does NOT get the NaN exclusion
+    above**: a path integral has only one route to each lenslet, so an
+    un-measured lenslet on that route is substituted with zero slope and
+    integrated through, and everything downstream of it on the path
+    inherits the error.  The output is still masked to NaN where the
+    slopes were, but the finite values beyond a hole are wrong -- measured
+    on an annular (centrally obscured) lenslet mask carrying exact
+    analytic slopes, ``'itoh'`` is off by 0.49 of the wavefront span where
+    ``'southwell'`` is exact to 8.7e-15 of it.  Use ``'itoh'`` only on a
+    fully measured, simply connected lenslet grid.
     """
     if method not in ('southwell', 'itoh'):
         raise ValueError(
@@ -928,6 +941,14 @@ def _itoh_wavefront(
     every separable wavefront: with ``W = f(x) + g(y)`` the x integral
     returns ``f_j - f_0`` and the y integral ``g_i - g_0``, so their mean
     is ``(W - W_00) / 2``.
+
+    Un-measured lenslets are substituted with ZERO slope and integrated
+    through (a path integral has only one route to each node, so it cannot
+    route around a hole the way the Southwell solve does); the output is
+    masked to NaN where the slopes were, but every finite value downstream
+    of a hole on its path is wrong.  Measured on an annular lenslet mask
+    with exact analytic slopes: 0.49 of the wavefront span, against 8.7e-15
+    for ``'southwell'``.
     """
     sx = np.where(good, slopes_x, 0.0)
     sy = np.where(good, slopes_y, 0.0)
