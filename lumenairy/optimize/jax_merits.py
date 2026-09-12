@@ -219,6 +219,81 @@ def _is_jax_tracer(a: Any) -> bool:
         return False
 
 
+# v5.46 (VERIFY-A4 follow-up, O-5): fraction of the fit's ``s2`` half-range
+# used as the output LG basis waist on the JAX sigma branch.  It is a
+# CONVENTION, not a measurement -- it cancels exactly between the numerator
+# and the aberration-free reference, which is the only place the merit uses
+# the overlap.  0.25 puts the ``4 w_o`` grid across the whole validity box,
+# the know-nothing choice the NumPy branch also falls back to when its
+# image-plane probe fails.
+_JAX_SIGMA_W_FRAC = 0.25
+# Grid points per axis.  The RATIO is grid-independent: measured
+# 1.002677530 / 1.002677732 / 1.002677729 at n = 16 / 24 / 32 on an f/2.5
+# N-BK7 plano-convex singlet -- 9 significant figures -- because the
+# numerator and the reference alias together.  24 is the cheap middle.
+_JAX_SIGMA_GRID_N = 24
+
+
+def _lg00_sigma_overlap_jax(fit, s2_image, source_point, *, w_s, w_p,
+                            v2_centre, n_grid, w_frac):
+    """``integral conj(LG_00) U d^2 sigma`` on a sigma grid, in pure JAX.
+
+    The JAX twin of the NumPy sigma-grid OVERLAP branch of
+    :func:`~lumenairy.propagators.asymptotic_aberration_tensor.aberration_tensor`,
+    written for the merit rather than for the tensor: it returns the single
+    ``(0, 0)`` coefficient, which is all
+    :func:`make_lg_aberration_merit_jax` reads.
+
+    Why this does NOT have to reproduce the NumPy branch's ``w_o`` and grid.
+    The merit uses only the RATIO ``|L|^2 / |L_ref|^2``, and the basis waist,
+    the grid extent and ``n_grid`` are identical on both sides of it, so they
+    cancel.  That removes the two pieces of the NumPy branch that have no
+    cheap JAX twin -- the iterative ``_measure_image_plane_waist`` probe and
+    the adaptive ``sigma_grid_n`` ladder -- and leaves an overlap that is a
+    few lines of ``jnp``, ``vmap``-ed over the grid and differentiable
+    through :func:`solve_envelope_stationary_jax_ift`'s implicit-function
+    gradient.
+
+    Measured against the NumPy sigma branch on an f/2.5 N-BK7 plano-convex
+    singlet (w_s = 20 um, w_p = 0.05, on-axis): coupling 1.002678 here
+    against 1.002871 there, i.e. **1.92e-04** relative.  The residual is the
+    basis-waist convention, not the physics -- moving ``w_frac`` 0.25 -> 0.5
+    moves this side to 1.003309 (4.37e-04 from NumPy) while ``n_grid``
+    16 -> 32 moves it by 3e-09.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    w_o = float(w_frac) * float(fit.s2x_halfrange)
+    extent = 4.0 * w_o
+    n = int(n_grid)
+    g = jnp.linspace(-extent, extent, n)
+    SX, SY = jnp.meshgrid(g, g, indexing='xy')
+    d_sigma = 2.0 * extent / (n - 1)
+
+    from ..propagators.asymptotic_jax_twin import (
+        _modal_field_lg00_pixel_jax,
+        solve_envelope_stationary_jax_ift,
+    )
+
+    def _pixel(a, b):
+        v = solve_envelope_stationary_jax_ift(
+            fit, (a, b), tuple(source_point),
+            w_s=w_s, w_p=w_p, v2_centre=v2_centre)
+        return _modal_field_lg00_pixel_jax(
+            fit, a, b, v[0], v[1],
+            source_point[0], source_point[1], w_s, w_p,
+            v2_centre[0], v2_centre[1])
+
+    U = jax.vmap(_pixel)(SX.ravel() + s2_image[0],
+                         SY.ravel() + s2_image[1]).reshape(SX.shape)
+    # LG_{0,0} is real and positive, so conj() is the identity; kept
+    # explicit so the expression stays the overlap it claims to be.
+    N_o = jnp.sqrt(2.0 / (jnp.pi * w_o * w_o))
+    basis = N_o * jnp.exp(-(SX * SX + SY * SY) / (w_o * w_o))
+    return jnp.sum(jnp.conj(basis) * U) * d_sigma * d_sigma
+
+
 def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
                                  wavelength: float,
                                  targets: Dict[Any, float],
@@ -232,6 +307,8 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
                                  n_field: int = 8, n_pupil: int = 8,
                                  weight: float = 1.0,
                                  enable_x64: bool = True,
+                                 strehl_branch: str = 'sigma',
+                                 sigma_grid_n: int = _JAX_SIGMA_GRID_N,
                                  name: str = 'LGAberrationJax') -> "JaxMeritTerm":
     """Build a JAX-grad-compatible LG-aberration merit term.
 
@@ -295,8 +372,20 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
         :class:`LGAberrationMerit` (finite-difference path); a non-(0,0)
         target raises ``NotImplementedError`` here.
 
+        .. note::
+           **Since v5.46 the default IS a Strehl deficit** (VERIFY-A4, O-5):
+           ``strehl_branch='sigma'`` routes through a JAX sigma-grid LG_{0,0}
+           OVERLAP (:func:`_lg00_sigma_overlap_jax`) and divides by the
+           aberration-free reference, giving a dimensionless coupling that is
+           exactly 1.0 on an unaberrated optic and FALLS with aberration --
+           measured 1.002678 against the NumPy sigma branch's 1.002871, i.e.
+           1.92e-04 relative, on an f/2.5 N-BK7 plano-convex singlet.  The
+           paragraph below describes ``strehl_branch='closed_form'``, which
+           is kept for the cross-backend parity pins and warns when selected.
+
         .. warning::
-           **This is not a Strehl deficit** (v5.46, audit Y2 follow-up).
+           **``strehl_branch='closed_form'`` is not a Strehl deficit**
+           (v5.46, audit Y2 follow-up).
            ``|L|^2`` is dimensional -- ~1e14 on a stock singlet once the Van
            Vleck normalisation landed -- so the v5.45 ``1 - |L|^2`` was
            -4.79e+14.  It is now divided by ``|L_ref|^2`` from the
@@ -372,6 +461,24 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
         aberration_tensor_lg00_jax,
         fit_canonical_polynomials_jax,
     )
+    if strehl_branch not in ('sigma', 'closed_form'):
+        raise ValueError(
+            f"make_lg_aberration_merit_jax: strehl_branch must be 'sigma' "
+            f"or 'closed_form', got {strehl_branch!r}")
+    if strehl_branch == 'closed_form':
+        warnings.warn(
+            "make_lg_aberration_merit_jax(strehl_branch='closed_form'): the "
+            "pure (0, 0) point-sampling branch is a leading-order saddle "
+            "value, and a truncated saddle expansion does not conserve "
+            "energy -- its aberration-free-referenced coupling RISES with "
+            "aberration (measured 1.000000 -> 1.024914 -> 1.095510 as the "
+            "cubic+ pupil phase of an f/2.5 singlet is scaled by 0 / 1 / 4), "
+            "so 1 - coupling is a NEGATIVE departure, not a Strehl deficit, "
+            "and minimising it rewards aberration.  It is kept for the "
+            "cross-backend parity pins and for callers who need the cheap "
+            "path; the default strehl_branch='sigma' is a real Strehl "
+            "(1.000000 -> 0.811431 -> 0.447292 on the same ladder).",
+            RuntimeWarning, stacklevel=2)
     if field_points is None:
         field_points = [(0.0, 0.0)]
 
@@ -484,20 +591,35 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
             # diffraction-limited PEAK), as in the NumPy sibling -- see the
             # long comment there.
             s2_ref = (fit.s2x_centre, fit.s2y_centre)
-            res = aberration_tensor_lg00_jax(
-                fit, s2_img, v_star,
-                source_point=tuple(src),
-                w_s=w_s_local, w_p=w_p_local, w_o=1.0,
-                v2_centre=(fit.v2x_centre, fit.v2y_centre))
-            v_star_ref = solve_envelope_stationary_jax_ift(
-                fit_ref, s2_ref, tuple(src),
-                w_s=w_s_local, w_p=w_p_local,
-                v2_centre=(fit.v2x_centre, fit.v2y_centre))
-            res_ref = aberration_tensor_lg00_jax(
-                fit_ref, s2_ref, v_star_ref,
-                source_point=tuple(src),
-                w_s=w_s_local, w_p=w_p_local, w_o=1.0,
-                v2_centre=(fit.v2x_centre, fit.v2y_centre))
+            vc = (fit.v2x_centre, fit.v2y_centre)
+            if strehl_branch == 'sigma':
+                # v5.46 (VERIFY-A4 follow-up, O-5): the sigma-grid OVERLAP,
+                # which is what makes the ratio a Strehl -- see
+                # ``_lg00_sigma_overlap_jax`` and the NumPy sibling's
+                # ``strehl_branch`` docs.  ``w_o``, the grid extent and
+                # ``n_grid`` are identical on both sides and cancel.
+                res = _lg00_sigma_overlap_jax(
+                    fit, s2_img, tuple(src),
+                    w_s=w_s_local, w_p=w_p_local, v2_centre=vc,
+                    n_grid=sigma_grid_n, w_frac=_JAX_SIGMA_W_FRAC)
+                res_ref = _lg00_sigma_overlap_jax(
+                    fit_ref, s2_ref, tuple(src),
+                    w_s=w_s_local, w_p=w_p_local, v2_centre=vc,
+                    n_grid=sigma_grid_n, w_frac=_JAX_SIGMA_W_FRAC)
+            else:
+                res = aberration_tensor_lg00_jax(
+                    fit, s2_img, v_star,
+                    source_point=tuple(src),
+                    w_s=w_s_local, w_p=w_p_local, w_o=1.0,
+                    v2_centre=vc)
+                v_star_ref = solve_envelope_stationary_jax_ift(
+                    fit_ref, s2_ref, tuple(src),
+                    w_s=w_s_local, w_p=w_p_local, v2_centre=vc)
+                res_ref = aberration_tensor_lg00_jax(
+                    fit_ref, s2_ref, v_star_ref,
+                    source_point=tuple(src),
+                    w_s=w_s_local, w_p=w_p_local, w_o=1.0,
+                    v2_centre=vc)
             # res is a complex scalar (the L_{(0,0),(0,0)} element) -- the
             # leading STREHL AMPLITUDE: |res|^2 -> 1 for a perfect system and
             # -> 0 as aberration grows.  OPT-1 (AUDIT_OPTIMIZE_MERITS): the

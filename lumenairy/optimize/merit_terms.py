@@ -1231,6 +1231,50 @@ class LGAberrationMerit(MeritTerm):
                 tensor_kwargs['sigma_grid_n'] = int(self.sigma_grid_n)
         fit_ref = aberration_free_reference_fit(fit)
 
+        # v5.46 (VERIFY-A4 follow-up, O-3): the aberration-free reference is a
+        # pure function of (fit, s2_image, source_point, w_s, w_p, w_o,
+        # branch, sigma grid), so it rides in the SAME per-context cache the
+        # canonical fit uses.  A CompositeMerit with several LGAberrationMerit
+        # terms on one fit -- the common "one term per emitter class" layout --
+        # then pays for the reference ONCE per (fit, field point) instead of
+        # once per term, and so does a repeated evaluation inside one context.
+        # Measured on an f/2.5 N-BK7 plano-convex singlet, three terms sharing
+        # one fit: 4.17 s -> 1.51 s for the composite (the first term still
+        # pays both calls).  ``ref_cache_key`` is None whenever the fit itself
+        # was uncacheable, so the two stay consistent.
+        #
+        # The reference is requested on a FIXED minimal mode set rather than
+        # on this term's ``output_modes``: only its (0, 0) entry is ever read,
+        # and pinning the request makes every channel of every term on the
+        # same optic divide by the SAME constant -- which is what lets a
+        # CompositeMerit compare its channels at all -- as well as letting one
+        # cached reference serve every term.
+        ref_modes = ([(0, 0), (1, 0)] if self.strehl_branch == 'sigma'
+                     else [(0, 0)])
+
+        def _reference_tensor(src, w_o_used):
+            ref_key = None
+            if cache_key is not None and cache is not None:
+                ref_key = ('lg_ref', cache_key, tuple(src),
+                           float(self.w_s), float(self.w_p),
+                           None if w_o_used is None else float(w_o_used),
+                           self.strehl_branch, self.sigma_grid_n)
+                if ref_key in cache:
+                    return cache[ref_key]
+            out = aberration_tensor(
+                fit_ref,
+                s2_image=(fit.s2x_centre, fit.s2y_centre),
+                source_point=src,
+                source_modes=[(0, 0)],
+                pupil_modes=[(0, 0)],
+                output_modes=ref_modes,
+                w_s=self.w_s, w_p=self.w_p, w_o=w_o_used,
+                **tensor_kwargs,
+            )
+            if ref_key is not None:
+                cache[ref_key] = out
+            return out
+
         total = 0.0
         for ifp, src in enumerate(self.field_points):
             if self.image_points is None:
@@ -1270,16 +1314,7 @@ class LGAberrationMerit(MeritTerm):
                 # With ``image_points=None`` (the default) the two points
                 # coincide, ``fit_ref is fit`` for an unaberrated optic, and
                 # the two calls are then bit-identical -> ratio exactly 1.0.
-                tensor_ref = aberration_tensor(
-                    fit_ref,
-                    s2_image=(fit.s2x_centre, fit.s2y_centre),
-                    source_point=src,
-                    source_modes=[(0, 0)],
-                    pupil_modes=[(0, 0)],
-                    output_modes=output_modes,
-                    w_s=self.w_s, w_p=self.w_p, w_o=tensor.w_o,
-                    **tensor_kwargs,
-                )
+                tensor_ref = _reference_tensor(src, tensor.w_o)
             except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
                     np.linalg.LinAlgError, IndexError, AttributeError,
                     TypeError):
@@ -1289,7 +1324,7 @@ class LGAberrationMerit(MeritTerm):
                 return 1e20
             # Index of each target in output_modes
             idx_map = {m: i for i, m in enumerate(output_modes)}
-            _ref = complex(tensor_ref.L[idx_map[(0, 0)], 0])
+            _ref = complex(tensor_ref.L[ref_modes.index((0, 0)), 0])
             ref_sq = _ref.real * _ref.real + _ref.imag * _ref.imag
             if not np.isfinite(ref_sq) or ref_sq <= 0.0:
                 # The aberration-free reference vanished -- the ratio is

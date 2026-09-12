@@ -1077,24 +1077,68 @@ def test_opt1_lg_jax_merit_is_strehl_deficit_not_amplitude():
     def build_args(x):
         return (None, None, None, None, x[0], None)
 
-    merit = make_lg_aberration_merit_jax(
-        pres, wavelength=1.30e-6, targets={(0, 0): 1.0},
-        build_args=build_args, field_points=[(0.0, 0.0)])
-    x = np.array([50e-6])   # grossly mismatched source waist -> |Strehl|^2 ~ 0
-    ctx = EvaluationContext(prescription=pres, wavelength=1.30e-6,
-                            N=64, dx=10e-6, x=x)
+    x = np.array([50e-6])
+    #
+    # v5.46 RE-PIN (audit Y2 + VERIFY-A4 O-9 / O-5).  The MECHANISM this test
+    # used changed; the CLAIM it pins did not, so it is driven differently
+    # rather than retired.
+    #
+    # It used to read the merit at a grossly waist-MISMATCHED source, where
+    # the raw ``|L|^2`` underflows, so the deficit form gave ~1 and the
+    # amplitude form ~0.  Since VERIFY-A4 the merit is
+    # ``1 - |L|^2 / |L_ref|^2`` with ``L_ref`` the same coefficient on the
+    # ABERRATION-FREE twin of the same optic -- and a waist mismatch is not
+    # an aberration: it hits the reference identically and cancels.  The
+    # merit at the mismatched waist is therefore ~0 now (measured
+    # -3.190e-03), which the old bar would read as the pre-OPT-1 defect.
+    #
+    # Driven instead by a real aberration: walk the IMAGE POINT off the chief
+    # ray, which is what an optimiser that had the sign backwards would seek.
+    # MEASURED on this fixture (R1 = 500 mm plano-convex N-BK7, ap 4 mm,
+    # w_s = 50 um, sigma branch, VERIFY-A4 O-5):
+    #
+    #   dy          0        20 um       50 um       100 um
+    #   merit     -3.19e-03  +1.70e-01   +6.94e-01   +9.91e-01
+    #
+    # so the merit RISES monotonically with aberration and approaches 1 -- the
+    # deficit direction.  The pre-OPT-1 ``|Strehl|^2`` form is the same ladder
+    # with the sign flipped, i.e. FALLING from ~1 toward 0, which every
+    # inequality below excludes.  Bars: strict monotonicity (smallest measured
+    # step 0.17, 15 decades above float64 noise on an O(1) value) and
+    # ``v(100 um) > 0.5``, which is 2x below the measured 0.991 and 2x above
+    # anything the flipped form can reach there.
+    def _merit_at(image_points):
+        m = make_lg_aberration_merit_jax(
+            pres, wavelength=1.30e-6, targets={(0, 0): 1.0},
+            build_args=build_args, field_points=[(0.0, 0.0)],
+            image_points=image_points)
+        ctx = EvaluationContext(prescription=pres, wavelength=1.30e-6,
+                                N=64, dx=10e-6, x=x)
+        return float(m.evaluate(ctx))
+
     try:
-        v = float(merit.evaluate(ctx))
+        vals = [_merit_at(None)] + [_merit_at([(0.0, dy)])
+                                    for dy in (20e-6, 50e-6, 100e-6)]
     except (RuntimeError, ValueError, ZeroDivisionError,
             np.linalg.LinAlgError) as exc:
         pytest.skip(f'LG-tensor eval unstable on this runtime: {exc}')
-    if not np.isfinite(v):
+    if not all(np.isfinite(v) for v in vals):
         pytest.skip('LG-tensor eval returned non-finite on this runtime.')
-    # Deficit form at poor coupling -> ~1; the OLD |res|^2 form -> ~0.
-    assert 0.5 < v <= 1.0 + 1e-6, (
-        f'LG-JAX (0,0) merit = {v} at a mismatched waist (poor coupling); '
-        f'expected a LARGE Strehl DEFICIT (~1).  A value near 0 means the '
-        f'pre-OPT-1 |Strehl|^2 (wrong-direction) form is still in place.')
+    v = vals[0]
+    assert all(vals[i] < vals[i + 1] for i in range(len(vals) - 1)), (
+        f'LG-JAX (0,0) merit {vals} must RISE as the image point walks off '
+        f'the chief ray (measured -3.19e-03 / +1.70e-01 / +6.94e-01 / '
+        f'+9.91e-01).  A falling ladder is the pre-OPT-1 |Strehl|^2 '
+        f'(wrong-direction) form.')
+    assert vals[-1] > 0.5, (
+        f'LG-JAX (0,0) merit = {vals[-1]} at 100 um off the chief ray; '
+        f'expected a LARGE deficit (measured 9.91e-01).  A value near 0 '
+        f'means the pre-OPT-1 |Strehl|^2 form is still in place.')
+    assert abs(v) < 0.05, (
+        f'... and at BEST FOCUS the deficit must be near zero (measured '
+        f'-3.19e-03; it is slightly negative because the leading-order '
+        f'evaluator does not conserve energy exactly -- VERIFY-A4 O-4); '
+        f'got {v}')
 
 
 # =========================================================================

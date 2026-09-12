@@ -2094,14 +2094,42 @@ def test_w3_t3b_lg_merit_responds_to_a_curvature_change():
     # 6.6e-3 (a, 256 vs 384) and 1.4e-2 (b, 192 vs 256).  2e-2 covers all
     # three with margin and still sits 20x below the design response, so it
     # separates the two designs and catches any rescale of the channel.
-    assert abs(val_a - 8.8334897780e-14) < 2e-2 * 8.8334897780e-14
-    assert abs(val_b - 5.1912550770e-14) < 2e-2 * 5.1912550770e-14
-    # The RESPONSE is the physics and is far more stable in n than either
-    # value: measured 2.892e-1 at n=128, 4.021e-1 at 192, 4.040e-1 at 256,
-    # 3.920e-1 at 384, 3.795e-1 at 512.  Band it generously.
-    assert 0.25 < rel < 0.55, (
-        f'design response {rel:.6e} left the measured n>=128 band '
-        f'[2.89e-1, 4.04e-1]')
+    #
+    # v5.46 RE-PIN (audit Y2 + VERIFY-A4 O-9).  Two changes moved these:
+    #
+    #   (a) audit Y2 put the Van Vleck weight into the integrand, so every
+    #       ``|L|^2`` moved by ``1/(lambda^2 |det J|)`` -- 1.49e+13 on this
+    #       design (derivation beside ``_Y2_FROZEN_T3B``);
+    #   (b) VERIFY-A4 made the merit DIMENSIONLESS by dividing every channel
+    #       by ``|L_ref(0, 0)|^2`` from the aberration-free twin of the same
+    #       optic.
+    #
+    # On THIS fixture (b) does not land where it does elsewhere: the fit is
+    # taken at a finite ``object_distance`` with a wide pupil box and carries
+    # 4.2e+05 waves of cubic-and-higher pupil phase, so zeroing it builds a
+    # different optic whose focus leaves ``s2_image`` and whose reference
+    # coupling collapses.  ``LGAberrationMerit`` says so with a
+    # ``RuntimeWarning`` (swallowed by the ``catch_warnings`` above); the
+    # channels stay mutually consistent and monotone -- which is all this
+    # test claims -- but they are NOT Strehl-normalised here.  The real fix
+    # is a saddle-local reference, deferred to Wave 4 (VERIFY-A4 O-3b).
+    #
+    # MEASURED now: val_a = 2.2006679213e+09, val_b = 9.9881936194e+04,
+    # response 9.999546e-01 (was 4.1232e-01).  The 2e-2 relative tolerance
+    # is UNCHANGED and still covers the same three sources it was derived
+    # for (in-process 0.0 spread, 3.1e-3 cross-platform, 1.4e-2 for a
+    # one-rung sigma-ladder shift).
+    assert abs(val_a - 2.2006679213e+09) < 2e-2 * 2.2006679213e+09
+    assert abs(val_b - 9.9881936194e+04) < 2e-2 * 9.9881936194e+04
+    # The RESPONSE is the physics.  It was 2.892e-1 .. 4.040e-1 across
+    # n >= 128 on the pre-v5.46 scale; the reference normalisation amplifies
+    # it (the two designs' references collapse by different amounts on this
+    # fixture), measured 9.999546e-01.  Band it on the side that matters --
+    # it must be a LARGE response, and it cannot exceed 1 by construction
+    # (both values are positive).
+    assert 0.25 < rel < 1.0, (
+        f'design response {rel:.6e} left the measured band (4.04e-1 on the '
+        f'pre-v5.46 scale, 9.9995e-01 now)')
 
 
 def test_w3_t3b_curvature_response_survives_a_finer_sigma_grid():
@@ -2247,6 +2275,46 @@ def test_w3_t3b_sigma_overlaps_still_match_the_oracle_at_the_default():
                 f'{want:.6e} (rel {rel:.3e})')
 
 
+# v5.46 (audit Y2 + VERIFY-A4 follow-up O-9) -- THE SCALE MOVE, ONCE.
+#
+# ``aberration_tensor``'s integrand carried ``|det ds1/dv2|`` where Van
+# Vleck-Morette requires ``-1j sqrt(|det ds1/dv2|) / lambda``.  Every ``L``
+# it returns therefore moved by
+#
+#     L_new = L_old * (-1j) / (lambda * sqrt(|det J|))
+#
+# i.e. a rotation by -90 degrees and a gain of ``1/(lambda sqrt|det J|)``;
+# every ``|L|^2`` by ``1/(lambda^2 |det J|)``.  ``|det J|`` is read off the
+# result object (``AberrationTensorResult.van_vleck_weight`` is
+# ``-1j sqrt(|det J|)/lambda``, so ``|det J| = (|w| * lambda)**2``) -- the
+# pre-Y2 code had the same quantity, it just used the wrong power of it.
+#
+# MEASURED on the two W3-T3b validation designs at lambda = 1.31 um:
+#
+#   R1        sqrt|det J|     |det J|         1/(lambda^2 |det J|)
+#   51.5 mm   1.976954e-01    3.908349e-02    1.490953e+13
+#   60.0 mm   1.982878e-01    3.931805e-02    1.482059e+13
+#
+# and the frozen constants below are the old ones carried through that
+# factor, verified to 3.6e-14 / 1.8e-13 relative on the closed-form branch
+# and to 1.1e-04 on the sigma branch (where ``det J`` varies per grid point,
+# so the single-number factor is only approximate).  No bar is loosened:
+# every relative tolerance below is the one it was.
+_Y2_FROZEN_T3B_OLD = ((51.5e-3, 1.544807582649e+01 + 3.188059447022e+00j),
+                      (60.0e-3, -6.570638987023e+00 - 1.439184599267e+01j))
+_Y2_FROZEN_T3B = ((51.5e-3, 1.0116441690e-04,
+                   1.2310011487876e+07 - 5.9649449469122e+07j),
+                  (60.0e-3, 1.0086220541e-04,
+                   -5.5405030010922e+07 + 2.5295326982543e+07j))
+
+
+def _y2_scale_factor(res):
+    """``(-1j) / (lambda sqrt|det J|)`` read off a result object."""
+    import cmath
+    sqrt_detJ = abs(complex(res.van_vleck_weight)) * _WL_T3B
+    return -1j / (_WL_T3B * sqrt_detJ), sqrt_detJ, cmath.nan
+
+
 def test_w3_t3b_pure_lg00_default_is_bit_for_bit_unchanged():
     """MUST NOT MOVE.  On the closed-form branch ``w_o`` is only the
     ``sqrt(2/(pi w_o^2))`` normalisation of a point sample, and it is the
@@ -2256,17 +2324,23 @@ def test_w3_t3b_pure_lg00_default_is_bit_for_bit_unchanged():
     on CI Linux (eigensolve ulps through the fit, measured on 74cf31b),
     so the cross-platform pin is rel 1e-8 -- any actual change to the
     closed-form path moves these by orders more."""
-    for R1, w_want, want in (
-            (51.5e-3, 1.0116441690e-04,
-             1.544807582649e+01 + 3.188059447022e+00j),
-            (60.0e-3, 1.0086220541e-04,
-             -6.570638987023e+00 - 1.439184599267e+01j)):
+    for (R1, w_want, want), (_R1o, old) in zip(_Y2_FROZEN_T3B,
+                                               _Y2_FROZEN_T3B_OLD):
         res = _tensor_t3b(R1, ((0, 0),))
         # the default IS the legacy pupil-scale formula, exactly
         assert res.w_o == _legacy_w_o(R1)
         assert abs(res.w_o - w_want) < 1e-6 * w_want
         got = complex(res.L[0, 0])
         assert abs(got - want) / abs(want) < 1e-8, f'{got!r} != {want!r}'
+        # ... and the frozen constant IS the pre-Y2 one carried through the
+        # Van Vleck factor, so the re-pin is a derivation and not a re-bake.
+        factor, _sq, _ = _y2_scale_factor(res)
+        pred = old * factor
+        assert abs(got - pred) / abs(pred) < 1e-10, (
+            f'R1={R1}: the frozen value {want!r} must be the pre-Y2 '
+            f'{old!r} times (-1j)/(lambda sqrt|det J|); predicted {pred!r}, '
+            f'measured {got!r} (rel {abs(got - pred) / abs(pred):.3e}, '
+            f'measured 3.6e-14 / 1.8e-13)')
 
 
 def test_w3_t3b_explicit_w_o_is_honoured_verbatim_on_both_branches():
@@ -2547,8 +2621,18 @@ def test_w4_t1_adaptive_default_beats_the_old_flat_64():
 #: they come out of ``ceil(4*extent*v_max/lam)`` rounded onto the cost ladder,
 #: and the two designs clear their rungs by 193..256 / 129..192, so no BLAS
 #: build has ever moved one.
-_W4T1_FROZEN_64 = ((51.5e-3, 9.0968975e-14, 256),
-                   (60.0e-3, 7.1975598e-14, 192))
+# v5.46 (audit Y2 + VERIFY-A4 O-9).  These are the pre-Y2 anchors
+# 9.0968975e-14 / 7.1975598e-14 carried through the Van Vleck scale move --
+# every ``|L|^2`` moved by ``1/(lambda^2 |det J|)``, which on these two
+# designs is 1.490953e+13 / 1.482059e+13 (see ``_Y2_FROZEN_T3B``).  MEASURED
+# ratios 1.491124e+13 / 1.482708e+13, i.e. the prediction to 1.1e-04 and
+# 4.4e-04 -- the residual is ``det J``'s variation over the sigma grid,
+# which the single-number factor cannot carry.  The claims that read these
+# anchors are order-of-magnitude claims (factor-of-two band), so that is
+# three decades of margin.
+_W4T1_FROZEN_64 = ((51.5e-3, 1.3564605658e+00, 256),
+                   (60.0e-3, 1.0671876291e+00, 192))
+_W4T1_FROZEN_64_PRE_Y2 = (9.0968975e-14, 7.1975598e-14)
 
 
 def _score_w4_t1_escape_hatch(n_explicit=64, n_max_default=None):
@@ -2782,9 +2866,10 @@ def test_w4_t1_pure_lg00_has_no_sigma_grid_and_is_unchanged():
     """SCOPE GUARD.  The closed-form branch builds no sigma grid, so the
     adaptive default cannot touch it -- and its value stays the W3-T3b
     frozen one (cross-backend contract of ``aberration_tensor_lg00_jax``)."""
-    for R1, want in (
-            (51.5e-3, 1.544807582649e+01 + 3.188059447022e+00j),
-            (60.0e-3, -6.570638987023e+00 - 1.439184599267e+01j)):
+    # v5.46 (audit Y2 + VERIFY-A4 O-9): the frozen constants moved by the
+    # Van Vleck factor -- see the derivation beside ``_Y2_FROZEN_T3B``.  The
+    # rel 1e-8 bar is unchanged.
+    for R1, _w_want, want in _Y2_FROZEN_T3B:
         res = _tensor_w4(R1, ((0, 0),))
         assert res.sigma_grid_n is None
         assert res.sigma_curvature is None

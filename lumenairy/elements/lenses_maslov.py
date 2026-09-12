@@ -188,10 +188,19 @@ def _maslov_kernel_prefactor(wavelength: float) -> complex:
 #    ``sigma_j = 1/sqrt(pi |lambda_j|)`` the model phase is exactly
 #    ``s * xi^2``).  Because the correction is computed on the same lattice,
 #    the scheme is EXACT for a quadratic chart with a constant amplitude at
-#    ANY ``local_n_samples`` / ``local_window_sigma``, and for a real chart it
-#    is the Gaussian-regularised saddle with the model divided out -- i.e. no
-#    worse than ``stationary_phase``, plus whatever non-quadratic content the
+#    any ``local_n_samples`` / ``local_window_sigma`` WHILE THE TAPERED
+#    LATTICE FITS INSIDE THE FITTED CHART BOX, and for a real chart it is the
+#    Gaussian-regularised saddle with the model divided out -- i.e. no worse
+#    than ``stationary_phase``, plus whatever non-quadratic content the
 #    lattice resolves.
+#
+#    The qualifier is load-bearing (VERIFY-A4, O-1): out-of-box samples are
+#    dropped while the correction is still computed on the FULL lattice, so
+#    the exactness goes with them -- measured 8.09e-02 at
+#    ``window_sigma = 5`` and 8.17e-01 at the shipped defaults on a chart
+#    whose small Hessian eigenvalue puts ``sigma2_norm`` at 1.785, against
+#    1e-15 when nothing is dropped.  ``_warn_local_window_truncation`` says
+#    so once, above a 1 % dropped fraction.
 # ---------------------------------------------------------------------------
 
 # Number of Gaussian standard deviations of taper that fit inside the sampled
@@ -261,6 +270,80 @@ def _local_window_geometry(xp, H33, H34, H44, v2x_h, v2y_h,
     c1 = xp.where(lam1 >= 0.0, corr_plus, corr_minus)
     c2 = xp.where(lam2 >= 0.0, corr_plus, corr_minus)
     return sigma1, sigma2, cos_t, sin_t, c1 * c2
+
+
+# Fraction of a pixel's tapered lattice that may fall outside the fitted
+# chart before ``local_quadrature`` stops being exact on a quadratic chart.
+# Derivation in :func:`_warn_local_window_truncation`.
+_LOCAL_WINDOW_DROP_WARN_FRAC = 0.01
+
+
+def _warn_local_window_truncation(in_chart, inbox_flat, n_samples,
+                                  window_sigma) -> None:
+    """One RuntimeWarning when the tapered lattice leaves the chart box.
+
+    VERIFY-A4 (O-1).  ``_integrate_local_quadrature`` is exact on a quadratic
+    chart because it divides its Gaussian taper back out of the QUADRATIC
+    MODEL computed on the SAME finite lattice -- but the samples that land
+    outside the fitted Chebyshev box are DROPPED (correctly: the recurrences
+    are not accurate there) while the correction is still computed on the
+    FULL lattice, so the two stop matching as soon as any sample is lost.
+
+    MEASURED on a synthetic quadratic chart whose larger principal width is
+    ``sigma2_norm = 0.2524`` (a = 37, d = 5, hx = 0.031, hy = 0.019),
+    against the closed-form Fresnel value:
+
+        window_sigma  lattice reach in u   relative error
+        3.0           0.757  (inside)      6.60e-15
+        3.7           0.934  (inside)      2.75e-15
+        5.0           1.262  (OUTSIDE)     8.09e-02
+        7.5           1.893  (OUTSIDE)     8.79e-02
+
+    and **8.17e-01** at the SHIPPED defaults on a chart with a small Hessian
+    eigenvalue (a = 5, b = 4.9, d = 5 -> ``sigma2_norm = 1.785``), where
+    ``stationary_phase`` is exact to 1.4e-15.  That is bounded -- the pre-S2
+    ``np.clip`` over-count reached 2.0e+03 -- but it was SILENT, which is the
+    same class of defect audit Y4 closed for ``propagate_modal_asymptotic``.
+
+    The 1 % trigger is where the dropped weight stops being round-off: with
+    the taper at ``exp(-4.5)`` on the lattice edge, losing 1 % of the samples
+    costs ~1e-3 of the summed weight -- three decades above the 1e-15 the
+    scheme reaches when nothing is dropped, and three decades below the
+    8e-02 measured at ``window_sigma = 5``.
+    """
+    live = np.asarray(inbox_flat, dtype=bool).ravel()
+    if not np.any(live):
+        return
+    ok = np.asarray(in_chart, dtype=bool)[live]
+    n_total = int(ok.size)
+    if n_total <= 0:
+        return
+    n_drop = n_total - int(np.count_nonzero(ok))
+    if n_drop <= 0:
+        return
+    frac = n_drop / n_total
+    if frac < _LOCAL_WINDOW_DROP_WARN_FRAC:
+        return
+    n_px = int(np.count_nonzero(live))
+    worst = float(1.0 - ok.reshape(n_px, -1).mean(axis=1).min())
+    import warnings
+    warnings.warn(
+        f"apply_real_lens_maslov: integration_method='local_quadrature' "
+        f"dropped {n_drop}/{n_total} window samples ({100.0 * frac:.1f} %; "
+        f"worst pixel {100.0 * worst:.1f} %) because the tapered lattice "
+        f"reaches OUTSIDE the fitted Chebyshev chart at "
+        f"local_window_sigma={window_sigma:g}, "
+        f"local_n_samples={int(n_samples):d}.  The scheme is exact on a "
+        f"quadratic chart only while the lattice fits INSIDE the box -- it "
+        f"divides the taper back out of a model evaluated on the FULL "
+        f"lattice, so a truncated lattice leaves a residual (measured "
+        f"relative error 8.1e-02 at 26 % dropped, and 8.2e-01 on a chart "
+        f"whose small Hessian eigenvalue puts sigma2_norm at 1.8, against "
+        f"1e-15 when nothing is dropped).  Reduce local_window_sigma, widen "
+        f"the chart (larger aperture / input_na), or use "
+        f"integration_method='stationary_phase', which is exact on a "
+        f"quadratic chart at any window.",
+        RuntimeWarning, stacklevel=3)
 
 
 def _v2_oscillation_bound(mi, coef_opd) -> float:
@@ -3591,7 +3674,23 @@ def _integrate_levin(
         return _tukey_taper(u, alpha)
 
     # S4: the physical d^2 v2 measure that the unit-box Levin engine does not
-    # carry; see the ``f`` closure below.
+    # carry; see the ``f`` closure below.  VERIFY-A4 (O-2): the DENSITY
+    # itself comes from the shared :func:`_van_vleck_density`, like the six
+    # other integrand sites -- the two closures below used to write
+    # ``sqrt(|det J_norm|)`` out by hand, which is exactly the drift the
+    # shared helper exists to prevent.  Composing them is an identity:
+    # ``_van_vleck_density(d, 1, 1) == d ** 0.5``, and NumPy's ``** 0.5`` is
+    # ``sqrt`` bit-for-bit (verified over 1e5 samples), so composing the
+    # helper with the box Jacobian ``sqrt(hx * hy)`` reproduces the previous
+    # expression EXACTLY -- pinned in
+    # tests/unit/test_audit2609_a4_verify_maslov_asymptotic.py.
+    #
+    # Unit half-widths are the right call here, not ``(v2x_h, v2y_h)``: the
+    # Levin engine works in the NORMALISED unit box from end to end, so it
+    # wants the normalised-chart density and carries the box map's Jacobian
+    # separately.  (``_van_vleck_density(d, hx, hy) * hx * hy`` is the same
+    # number to 1-2 ULP but re-associates the products, which would move the
+    # returned field off bit-identity for no reason.)
     _vv_measure = float(np.sqrt(v2x_h * v2y_h))
 
     idx = np.where(inbox_flat)[0]
@@ -3625,10 +3724,12 @@ def _integrate_levin(
         def f(u3, u4):
             s1x, dx3, dx4 = _ev(coef_s1x, u3, u4)[:3]
             s1y, dy3, dy4 = _ev(coef_s1y, u3, u4)[:3]
-            # S4: sqrt(|det ds1/dv2|) * d^2 v2 = sqrt(|det_J_norm| *
-            # v2x_h * v2y_h) du3 du4 -- the Levin engine integrates over the
-            # normalised unit box, so the measure factor rides on ``f``.
-            detJ = _vv_measure * np.sqrt(np.abs(dx3 * dy4 - dx4 * dy3))
+            # S4: sqrt(|det ds1/dv2|) * d^2 v2 -- the Levin engine
+            # integrates over the normalised unit box, so the physical
+            # measure ``v2x_h * v2y_h`` rides on ``f`` beside the shared
+            # Van Vleck density.
+            detJ = _vv_measure * _van_vleck_density(
+                np.abs(dx3 * dy4 - dx4 * dy3), 1.0, 1.0)
             Eo = sample_E_bilinear(
                 s1x.ravel(), s1y.ravel()).reshape(np.shape(u3))
             return Eo * detJ * _tuk(np.asarray(u3)) * _tuk(np.asarray(u4))
@@ -3701,7 +3802,8 @@ def _integrate_levin(
 
     def _pairs_f(u3v, u4v, sx, dx3, dx4, sy, dy3, dy4):
         """Integrand amplitude f from the s1x/s1y outputs of _pair_ev9."""
-        detJ = _vv_measure * np.sqrt(np.abs(dx3 * dy4 - dx4 * dy3))
+        detJ = _vv_measure * _van_vleck_density(
+            np.abs(dx3 * dy4 - dx4 * dy3), 1.0, 1.0)
         Eo = sample_E_bilinear(sx.ravel(), sy.ravel()).reshape(sx.shape)
         return (Eo * detJ * _tuk(np.asarray(u3v, dtype=np.float64))
                 * _tuk(np.asarray(u4v, dtype=np.float64)))
@@ -3983,6 +4085,12 @@ def _integrate_local_quadrature(
     converge; see :func:`_local_window_geometry` for the algebra and the
     measured convergence ladder.
 
+    Exact on a quadratic chart at any ``n_samples`` / ``window_sigma`` WHILE
+    THE TAPERED LATTICE FITS INSIDE THE FITTED CHART BOX; out-of-box samples
+    are dropped and the exactness goes with them, which
+    :func:`_warn_local_window_truncation` announces once above a 1 % dropped
+    fraction.
+
     v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
     compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
     """
@@ -4041,6 +4149,8 @@ def _integrate_local_quadrature(
     in_chart = ((np.abs(u_v2x_samp) <= 1.0) & (np.abs(u_v2y_samp) <= 1.0))
     np.clip(u_v2x_samp, -1.0, 1.0, out=u_v2x_samp)
     np.clip(u_v2y_samp, -1.0, 1.0, out=u_v2y_samp)
+    _warn_local_window_truncation(in_chart, inbox_flat, n_samples,
+                                  window_sigma)
 
     n_s2 = n_samples * n_samples
     u_s2x_tile = np.broadcast_to(u_s2x_flat[:, None], (N_px, n_s2))
@@ -4253,6 +4363,12 @@ def _integrate_local_quadrature_cupy(
     in_chart = ((xp.abs(u_v2x_samp) <= 1.0) & (xp.abs(u_v2y_samp) <= 1.0))
     u_v2x_samp = xp.clip(u_v2x_samp, -1.0, 1.0)
     u_v2y_samp = xp.clip(u_v2y_samp, -1.0, 1.0)
+    # One device->host transfer of the boolean mask so the GPU integrator is
+    # as audible as the CPU one; see _warn_local_window_truncation.
+    _warn_local_window_truncation(
+        xp.asnumpy(in_chart) if hasattr(xp, 'asnumpy') else np.asarray(
+            in_chart),
+        np.asarray(inbox_flat), n_samples, window_sigma)
     n_s2 = n_samples * n_samples
     w2d_phys = (sigma1_phys * sigma2_phys) * (dxi ** 2) * window_corr
 
@@ -4321,6 +4437,7 @@ except ImportError:
 __all__ = [
     'apply_real_lens_maslov',
     'apply_real_lens_maslov_vector',
+    'clear_maslov_local_window_cache',
     'uniform_fold_airy',
     'pearcey',
 ]

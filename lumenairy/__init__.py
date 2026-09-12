@@ -180,6 +180,12 @@ from .elements.lenses import (
 # re-exported by the elements.lenses aggregate.
 from .elements.lenses_maslov import (
     apply_real_lens_maslov_vector,
+    # v5.46 (audit S2 follow-up): the local_quadrature sample-lattice cache.
+    # It is enrolled with ``_cache_registry`` so ``clear_asm_caches()``
+    # already drains it; the top-level name exists because
+    # ``test_v4_14_1_dispatcher_pin_cache_clears`` requires every
+    # submodule-``__all__`` ``clear_*`` to be re-exported here.
+    clear_maslov_local_window_cache,
     pearcey,
     uniform_fold_airy,
 )
@@ -1984,6 +1990,7 @@ __all__ = [
     'clear_meshgrid_cache',
     'meshgrid_cache_bytes',
     'clear_lg_polynomial_cache',
+    'clear_maslov_local_window_cache',
     'clear_lg_mode_stack_cache',
     'clear_through_focus_scan_jax_cache',
     'clear_trace_jax_cache',

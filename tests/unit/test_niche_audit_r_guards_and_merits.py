@@ -487,14 +487,12 @@ def test_r5_numpy_lg_merit_matches_jax_twin():
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             jv = float(merit.evaluate(ctx))
-        # v5.46 (VERIFY-A4): the JAX twin has no sigma branch, so the
-        # cross-backend comparison is made on the branch they SHARE.  The
-        # NumPy merit's default is 'sigma' (a real Strehl); 'closed_form'
-        # here is the parity branch and warns that it is not one.
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            nv = _lg_merit(pres, {(0, 0): 1.0}, w_s=w_s,
-                           branch='closed_form')
+        # v5.46 (VERIFY-A4 follow-up, O-5): the JAX twin GAINED a sigma
+        # branch (``_lg00_sigma_overlap_jax``), so the comparison is
+        # sigma-to-sigma -- both backends on the branch whose ratio is a
+        # real Strehl -- rather than on the closed form both merits now
+        # relegate to a parity/cheap path.
+        nv = _lg_merit(pres, {(0, 0): 1.0}, w_s=w_s, branch='sigma')
         print(f'[R-5] w_s={w_s:.1e} numpy={nv!r} jax={jv!r} '
               f'|L_00|^2={1.0 - jv:.9e}')
         assert np.isfinite(jv) and np.isfinite(nv), (
@@ -562,26 +560,30 @@ def test_r5_numpy_lg_merit_matches_jax_twin():
             f'{coupling:.6e} left the measured band (1.000003 .. 1.003021); '
             f'the equality below would be vacuous if the tensor underflowed '
             f'to zero.')
-        # v5.46 (VERIFY-A4): the pin is on the difference in the COUPLING,
-        # not a relative bar on the merit.  The merit is ``1 - coupling``
-        # with coupling ~ 1, so a relative tolerance on a ~1e-3 merit would
-        # pin the two backends' agreement in the third significant figure of
-        # a difference -- weak, and not what this test is for.  What it IS
-        # for is the ``x`` vs ``1 - x`` inversion, which moves the value
-        # by ~1.
+        # v5.46 (VERIFY-A4 follow-up, O-5): the pin is on the difference in
+        # the COUPLING, sigma branch on BOTH sides.  The merit is
+        # ``1 - coupling`` with coupling ~ 1, so a relative tolerance on a
+        # ~3e-03 merit would pin the two backends' agreement in the third
+        # significant figure of a difference -- weak, and not what this test
+        # is for.  What it IS for is the ``x`` vs ``1 - x`` inversion, which
+        # moves the value by ~1.
         #
-        # Measured |nv - jv| on this fixture: 3.3e-09 / 6.5e-07 / 3.1e-06 at
-        # w_s = 5e-6 / 2e-5 / 5e-5.  That residual is NOT the JAX twin:
-        # handed the SAME v_star, ``aberration_tensor`` and
-        # ``aberration_tensor_lg00_jax`` agree to 3.5e-15 relative in |L| on
-        # this fixture (measured by WP-A4).  It is the two merit WRAPPERS
-        # running their own envelope-stationary Newton solves -- now twice
-        # each, for the optic and for its aberration-free twin -- whose
-        # v_star differ at the solver tolerance.
+        # Measured |nv - jv| on this fixture (= the difference in the
+        # coupling, since both are 1 - coupling): 6.97e-04 / 1.80e-04 /
+        # 1.75e-04 at w_s = 5e-6 / 2e-5 / 5e-5.  That residual is the
+        # OUTPUT-BASIS WAIST convention, not the physics: the NumPy sigma
+        # branch measures the image-plane waist with an iterative probe
+        # (``_measure_image_plane_waist``) while the JAX branch uses
+        # ``0.25 * fit.s2x_halfrange`` -- a constant that cancels between the
+        # numerator and the aberration-free reference on each side but does
+        # not have to match across them.  Moving the JAX ``w_frac`` 0.25 ->
+        # 0.5 moves that side by 6.3e-04, the same size, which is how you can
+        # tell it is the convention.  The ``n_grid`` dependence, by contrast,
+        # is 3e-09 (16 -> 32).
         #
-        # Gate at abs=1e-05: 3.2x above the worst measured value and 5
-        # decades below the ~1.0 an x-vs-(1-x) confusion would produce.
-        assert nv == pytest.approx(jv, abs=1e-5, rel=0.0), (
+        # Gate at abs=2e-03: 2.9x above the worst measured value and
+        # 2.5 decades below the ~1.0 an x-vs-(1-x) confusion would produce.
+        assert nv == pytest.approx(jv, abs=2e-3, rel=0.0), (
             f'R-5: w_s={w_s:.1e}: NumPy merit {nv:.9e} != JAX twin '
             f'{jv:.9e}.  Pre-fix NumPy returned |L|^2 while JAX returned '
             f'1 - |L|^2, so the two summed to 1.0 instead of matching.')

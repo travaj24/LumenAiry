@@ -981,3 +981,236 @@ def test_ruling1_merit_warns_when_the_reference_optic_collapses():
     assert -0.01 < v2 < 0.01, (
         f'and its deficit must be near zero at best focus (measured '
         f'-2.87e-03); got {v2!r}')
+
+
+# ===========================================================================
+# VERIFY-A4 follow-up -- O-1, O-2, O-6.
+# ===========================================================================
+
+def test_o1_local_quadrature_warns_when_its_lattice_leaves_the_chart_box():
+    """O-1: the truncation that costs the exactness must be AUDIBLE.
+
+    ``_integrate_local_quadrature`` divides its Gaussian taper back out of a
+    quadratic model computed on the FULL lattice, so dropping out-of-box
+    samples breaks the cancellation.  Measured on the anamorphic chart
+    (``sigma2_norm = 0.2524``), against the closed-form Fresnel value:
+
+        window_sigma  reach in u   relerr      samples dropped
+        3.0           0.757        6.60e-15    0 / 64
+        2.5 (n = 33)  0.631        3.41e-15    0 / 1089
+        5.0 (n = 11)  1.262        8.09e-02    44 / 121   (36.4 %)
+        7.5 (n = 13)  1.893        8.79e-02    78 / 169   (46.2 %)
+
+    So the warning must fire on the last two and not on the first two, and
+    the message must carry the fraction.  Both bars are structural (a
+    warning fires / does not); the 1 % trigger is derived in
+    ``_warn_local_window_truncation``.
+    """
+    from lumenairy.elements.lenses_maslov import (
+        _LOCAL_WINDOW_DROP_WARN_FRAC,
+    )
+    assert _LOCAL_WINDOW_DROP_WARN_FRAC == 0.01
+
+    def _drop_warnings(n, ws):
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            ex, lq, _sp = _run_pair(37.0, 0.0, 5.0, 2.5, 0.4, 0.031, 0.019,
+                                    n, ws)
+        msgs = [str(w.message) for w in rec
+                if 'window samples' in str(w.message)]
+        return abs(lq - ex) / abs(ex), msgs
+
+    for n, ws in ((8, 3.0), (33, 2.5)):
+        rel, msgs = _drop_warnings(n, ws)
+        assert rel < 1e-11, f'premise: n={n} ws={ws} must be in-box'
+        assert not msgs, (
+            f'n={n} ws={ws} keeps the lattice inside the box (relerr '
+            f'{rel:.3e}) and must not warn; got {msgs}')
+
+    for n, ws, want_frac in ((11, 5.0, 36.4), (13, 7.5, 46.2)):
+        rel, msgs = _drop_warnings(n, ws)
+        assert rel > 1e-3, f'premise: n={n} ws={ws} must be out-of-box'
+        assert msgs, (
+            f'n={n} ws={ws} drops {want_frac:.1f} % of its lattice and is '
+            f'{rel:.3e} from the closed form -- it must warn')
+        assert 'local_quadrature' in msgs[0] and '%' in msgs[0]
+        assert f'{want_frac:.1f} %' in msgs[0], (
+            f'the message must carry the measured dropped fraction '
+            f'({want_frac:.1f} %); got {msgs[0][:200]!r}')
+
+
+def test_o2_levin_van_vleck_density_is_the_shared_helper_bit_for_bit():
+    """O-2: ``_integrate_levin`` now calls ``_van_vleck_density`` instead of
+    writing ``sqrt(|det J_norm|)`` out by hand, at both of its integrand
+    closures.
+
+    The composition has to be BIT-IDENTICAL or the change is not free:
+    ``_van_vleck_density(d, 1, 1)`` is ``d ** 0.5``, NumPy's ``** 0.5`` is
+    ``sqrt`` bit-for-bit, and the box Jacobian ``sqrt(hx * hy)`` is applied
+    exactly as before.  Bar: ``np.array_equal`` over 1e5 samples x 3
+    anamorphic half-width pairs -- an exact bar, no tolerance.
+
+    (The OTHER association, ``_van_vleck_density(d, hx, hy) * hx * hy``, is
+    the same number to 1-2 ULP but not bit-identical -- measured 2.7e-16 /
+    3.3e-16 / 3.0e-16 max relative -- which is why the unit-half-width form
+    is the one in the code.)
+    """
+    rng = np.random.default_rng(1)
+    d = np.abs(rng.normal(size=100_000)) * 1e3
+    assert np.array_equal(d ** 0.5, np.sqrt(d)), (
+        'premise: NumPy ** 0.5 must be sqrt bit-for-bit')
+    for hx, hy in ((0.02, 0.02), (0.031, 0.019), (0.5, 1e-3)):
+        hand = np.sqrt(hx * hy) * np.sqrt(d)
+        shared = float(np.sqrt(hx * hy)) * _van_vleck_density(d, 1.0, 1.0)
+        assert np.array_equal(hand, shared), (
+            f'hx={hx} hy={hy}: the shared helper must reproduce the '
+            f'hand-written Levin density bit-for-bit; max rel '
+            f'{np.max(np.abs(hand - shared) / hand):.3e}')
+
+
+def test_o6_exit_vertex_with_a_mirror_last_surface():
+    """O-6: the exit-vertex transfer on a system whose LAST surface is a
+    MIRROR.  Every WP-A4 and audit fixture ends in a refracting surface.
+
+    The convention ``raytrace/exit_vertex.py`` documents: ``n_exit`` is a
+    PHYSICAL (positive) index even for a mirror, and for a mirror it is
+    ``glass_before`` -- the reflected ray travels back through the medium it
+    arrived in.  The Welford ``n' = -n`` bookkeeping lives in the trace, not
+    in the OPL, and the sign comes back through ``N < 0`` in ``t = -z/N``.
+
+    Fixture: an N-BK7 front surface and an internally-reflecting R = -25 mm
+    back surface, so the reflected ray runs back through the GLASS.
+    MEASURED: ``N = -0.998741`` after reflection, sag range 15.4 um,
+    ``n(N-BK7) = 1.503583``.  The vertex OPD equals
+    ``opd_surface + n_BK7 * t`` EXACTLY (0.0); the "it must be air" mistake
+    would be off by 7.783e-06 m = 5.9 waves at 1.31 um.
+    """
+    from lumenairy import raytrace as rt
+    from lumenairy.glass import get_glass_index
+    from lumenairy.raytrace import _make_bundle
+
+    wl = 1.31e-6
+    pres = {'surfaces': [
+        {'radius': 40e-3, 'conic': 0.0, 'glass_before': 'air',
+         'glass_after': 'N-BK7'},
+        {'radius': -25e-3, 'conic': 0.0, 'glass_before': 'N-BK7',
+         'glass_after': 'N-BK7', 'is_mirror': True}],
+        'thicknesses': [3.0e-3], 'aperture_diameter': 2.0e-3}
+    n = 9
+    h = np.linspace(-0.9e-3, 0.9e-3, n)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        b = _make_bundle(x=h, y=np.zeros(n), L=np.zeros(n), M=np.zeros(n),
+                         wavelength=wl)
+        tr = rt.trace(b, rt.surfaces_from_prescription(pres), wl)
+    ev = tr.at_exit_vertex()
+    im = tr.image_rays
+    assert float(np.mean(im.N)) < -0.9, (
+        'premise: the last surface must actually reflect (N < 0); got '
+        f'{float(np.mean(im.N)):+.6f}')
+    assert np.max(np.abs(im.z)) > 1e-6, 'premise: the mirror has sag'
+    t = -im.z / im.N
+    n_glass = float(get_glass_index('N-BK7', wl))
+    n_air = float(get_glass_index('air', wl))
+    assert np.max(np.abs(ev.opd - (im.opd + n_glass * t))) == 0.0, (
+        'a mirror exit must be priced at glass_before, not glass_after')
+    wrong = float(np.max(np.abs(ev.opd - (im.opd + n_air * t))))
+    assert wrong > 1e-7, (
+        f'the "exit medium is air" mistake would be {wrong:.3e} m '
+        f'(measured 7.783e-06 m = 5.9 waves); if this is ~0 the reflected '
+        f'exit index is not being resolved')
+    assert np.max(np.abs(ev.z)) == 0.0
+
+
+_O6_FIELDS = [
+    # (source_centre, traced chief ray, |a3|, |a4|) -- all MEASURED.
+    pytest.param((100e-6, 0.0), (9.665156e-05, 0.0), 2.74e+03, 2.6e-10,
+                 id='x-offset'),
+    pytest.param((0.0, 150e-6), (0.0, 1.449788e-04), 8.5e-10, 4.00e+03,
+                 id='y-offset'),
+    pytest.param((-70e-6, 70e-6), (-6.765608e-05, 6.765608e-05),
+                 1.89e+03, 1.89e+03, id='diagonal'),
+]
+
+
+@pytest.mark.parametrize('src, chief, a3_want, a4_want', _O6_FIELDS)
+def test_o6_y1_psf_lands_on_the_chief_ray_at_three_field_angles(
+        src, chief, a3_want, a4_want):
+    """O-6: Y1's property at a SECOND (and third) field angle.
+
+    WP-A4 pinned it at ``source_centre = (100 um, 0)``, where the
+    rank-deficient design puts the whole ramp in ``a3`` and leaves ``a4`` at
+    2.6e-10 -- so the ``a4 u4`` half of the Y1 fix is never exercised.  A
+    y-offset source puts 4.00e+03 waves in ``a4`` and 8.5e-10 in ``a3``, and
+    a diagonal one splits 1.89e+03 into each.
+
+    Oracle: an independent ray trace of the chief ray from the SAME
+    prescription, launched from the object plane at z = -0.1 m.
+
+    MEASURED (grid pitch 92.3 um):
+
+        source            traced chief              PSF peak            miss
+        (100, 0) um       ( 9.665156e-05, 0)        ( 9.785275e-05, 0)  1.20 um
+        (0, 150) um       (0,  1.449788e-04)        (0,  1.467808e-04)  1.80 um
+        (-70, 70) um      (-6.765608e-05, +same)    (-6.851335e-05, ..) 1.21 um
+
+    Bar 20 um: 11x above the worst measured miss, one fifth of a grid pitch,
+    and 35x below the ~700 um the pre-Y1 default flag produced on the
+    x-offset fixture.
+    """
+    from lumenairy import raytrace as rt
+    from lumenairy.raytrace import _make_bundle
+    import lumenairy as la
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials,
+        propagate_modal_asymptotic,
+    )
+
+    wl = 1.31e-6
+
+    def _pres():
+        p = la.make_singlet(R1=20e-3, R2=-20e-3, d=2e-3, glass='N-BK7',
+                            aperture=10e-3)
+        p['object_distance'] = 0.1
+        return p
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        b = _make_bundle(x=np.array([src[0]]), y=np.array([src[1]]),
+                         L=np.array([0.0]), M=np.array([0.0]), wavelength=wl)
+        b.z = np.full(1, -0.1)
+        r = rt.trace(b, rt.surfaces_from_prescription(_pres()), wl,
+                     output_filter='last')
+        cx, cy = float(r.image_rays.x[0]), float(r.image_rays.y[0])
+        assert math.hypot(cx - chief[0], cy - chief[1]) < 1e-6, (
+            f'oracle drift: traced chief ({cx:.6e}, {cy:.6e}) vs the '
+            f'recorded {chief}')
+
+        fit = fit_canonical_polynomials(
+            _pres(), wl, source_box_half=20e-6, pupil_box_half=0.02,
+            n_field=8, n_pupil=8, poly_order=6,
+            source_centre=src, extract_linear_phase=True)
+        a3 = abs(float(fit.linear_coeffs_phi[3]))
+        a4 = abs(float(fit.linear_coeffs_phi[4]))
+        assert abs(a3 / a3_want - 1.0) < 0.05 or a3 < 1e-6, (
+            f'premise |a3| = {a3:.4e}, recorded {a3_want:.3e}')
+        assert abs(a4 / a4_want - 1.0) < 0.05 or a4 < 1e-6, (
+            f'premise |a4| = {a4:.4e}, recorded {a4_want:.3e}')
+        assert max(a3, a4) > 1e2, (
+            'premise: this fit must carry a v2-linear ramp at all')
+
+        half = fit.s2x_halfrange * 0.9
+        ax = np.linspace(-half, half, 41) + fit.s2x_centre
+        ay = np.linspace(-half, half, 41) + fit.s2y_centre
+        X, Y = np.meshgrid(ax, ay, indexing='xy')
+        E = np.asarray(propagate_modal_asymptotic(
+            fit, source_point=src, w_s=20e-6, w_p=0.02,
+            v2_centre=(fit.v2x_centre, fit.v2y_centre),
+            s2_grid_x=X, s2_grid_y=Y))
+    k = np.unravel_index(np.argmax(np.abs(E)), E.shape)
+    miss = math.hypot(float(X[k]) - cx, float(Y[k]) - cy)
+    assert miss < 20e-6, (
+        f'src={src}: PSF at ({float(X[k]):.6e}, {float(Y[k]):.6e}) vs the '
+        f'traced chief ray at ({cx:.6e}, {cy:.6e}) -- miss '
+        f'{miss * 1e6:.2f} um (measured 1.20 / 1.80 / 1.21 um on the three '
+        f'field angles; pre-Y1 the x-offset case was ~700 um off)')

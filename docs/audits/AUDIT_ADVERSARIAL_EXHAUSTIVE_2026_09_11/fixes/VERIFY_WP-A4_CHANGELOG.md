@@ -208,3 +208,125 @@ TESTING_STANDARDS S1, from WP-A15a's section 5 item 8.
 Public helper returning the aberration-free twin of a `CanonicalPolyFit` (see
 the first entry).  Idempotent, and returns the *same object* when there is
 nothing to remove, so a caller that divides by the reference gets exactly 1.0.
+
+
+---
+
+## VERIFY-A4 follow-up (coordinator rulings on the report's section 5)
+
+### Added -- optimize: `make_lg_aberration_merit_jax` gets a sigma-grid branch
+
+The JAX LG merit was restricted to the closed-form point-sampling branch,
+which is a leading-order saddle value and therefore not a descent direction
+even after the aberration-free normalisation -- its coupling RISES with
+aberration.  It now has the same `strehl_branch` choice as the NumPy
+`LGAberrationMerit`, defaulting to `'sigma'`: a new
+`_lg00_sigma_overlap_jax` builds the sigma grid, `jax.vmap`s
+`solve_envelope_stationary_jax_ift` + `_modal_field_lg00_pixel_jax` over it
+and projects onto LG_{0,0} analytically, all in `jnp` and differentiable.
+
+It does NOT have to reproduce NumPy's `_measure_image_plane_waist` probe or
+its adaptive `sigma_grid_n` ladder: the merit uses only the RATIO
+`|L|^2/|L_ref|^2` and the basis waist, extent and grid are identical on both
+sides of it, so they cancel.  MEASURED on an f/2.5 N-BK7 plano-convex
+singlet (w_s = 20 um, w_p = 0.05, on-axis): JAX coupling **1.002678** against
+the NumPy sigma branch's **1.002871**, i.e. 1.92e-04 relative, with the
+residual identified as the basis-waist convention (moving the JAX `w_frac`
+0.25 -> 0.5 moves that side by 6.3e-04 while `n_grid` 16 -> 32 moves it by
+3e-09).  `jax.grad` through the whole thing is finite
+(`d(1-S)/dw_s = -3.10e+01`).  Cost 11.7 s first call (XLA compile), 1.4 s
+warm.  `strehl_branch='closed_form'` keeps the old path and warns.
+`tests/unit/test_niche_audit_r_guards_and_merits.py::test_r5_numpy_lg_merit_matches_jax_twin`
+now compares sigma to sigma at `abs=2e-03` on the coupling (2.9x the worst
+measured 6.97e-04, 2.5 decades below an x-vs-(1-x) confusion).
+
+### Fixed -- lenses_maslov: `local_quadrature` says when it truncates its window
+
+The Gaussian-taper correction is computed on the FULL lattice while
+out-of-box samples are DROPPED, so the scheme's exactness on a quadratic
+chart holds only while the lattice fits inside the fitted Chebyshev box.
+New `_warn_local_window_truncation` (NumPy and CuPy integrators both) emits
+one `RuntimeWarning` naming the dropped fraction above a 1 % trigger.
+MEASURED on an anamorphic quadratic chart against the closed-form Fresnel
+value: 0/64 dropped and relerr 6.60e-15 at `window_sigma = 3.0`, 0/1089 and
+3.41e-15 at 2.5; **44/121 (36.4 %) and 8.09e-02** at 5.0, **78/169 (46.2 %)
+and 8.79e-02** at 7.5 -- and 8.17e-01 at the shipped defaults on a chart
+whose small Hessian eigenvalue puts `sigma2_norm` at 1.785.  The module
+comment and the function docstring gain the "while the tapered lattice fits
+inside the chart box" qualifier.
+
+### Changed -- lenses_maslov: `_integrate_levin` uses the shared Van Vleck helper
+
+Both Levin integrand closures wrote `sqrt(|det J_norm|)` out by hand -- the
+duplication `_van_vleck_density` exists to prevent.  They call it now, in the
+association that is BIT-IDENTICAL (`np.array_equal` over 1e5 samples x 3
+anamorphic half-width pairs): `_van_vleck_density(d, 1, 1)` is `d ** 0.5`,
+NumPy's `** 0.5` is `sqrt` bit-for-bit, and the box Jacobian `sqrt(hx*hy)`
+is applied as before.  Unit half-widths are correct here because the Levin
+engine works in the normalised unit box end to end.
+
+### Performance -- optimize: the LG merit's aberration-free reference is cached
+
+`LGAberrationMerit` takes the reference from `ctx._canonical_fit_cache`,
+keyed by `('lg_ref', <the fit's own key>, source_point, w_s, w_p, w_o,
+strehl_branch, sigma_grid_n)`, and requests it on a FIXED minimal mode set
+rather than the term's own `output_modes` -- only its `(0, 0)` entry is read,
+and pinning it makes every channel of every term on one optic divide by the
+same constant (which is what lets a `CompositeMerit` compare its channels)
+as well as letting one cached reference serve them all.  MEASURED, three
+terms on one fit (medians of 3): **4.365 s -> 2.807 s**, i.e. 1.455 ->
+0.936 s per term, with exactly ONE `lg_ref` cache entry.  Values unchanged
+(composite 1.829191e-01 before and after).  No timing is asserted anywhere.
+
+### Added -- `clear_maslov_local_window_cache` is re-exported at top level
+
+Added to `lenses_maslov.__all__` and imported / listed in
+`lumenairy/__init__.py`, which is what
+`test_v4_14_1_dispatcher_pin_cache_clears` requires of every
+submodule-`__all__` `clear_*` name.  The cache was already enrolled with
+`_cache_registry`, so `clear_asm_caches()` behaviour is unchanged.
+
+### Changed -- tests: five pins carried through the audit-Y2 scale move
+
+`tests/unit/test_niche_audit_w3_oracles.py` (x4) and
+`tests/unit/test_v5_21_2_subsystem_audits.py` (x1) were red at `32ba3ba2`
+from WP-A4's own Y2 change, in files its report did not list.  Re-pinned by
+DERIVATION, not by re-baking: `L_new = L_old * (-1j)/(lambda sqrt|det J|)`
+and `|L|^2_new = |L|^2_old / (lambda^2 |det J|)`, with `|det J|` read off
+`AberrationTensorResult.van_vleck_weight`.  Measured at lambda = 1.31 um:
+`|det J| = 3.908349e-02 / 3.931805e-02` on the two validation designs, so
+the factor is 1.490953e+13 / 1.482059e+13.
+
+* the closed-form constants `15.448+3.188j` / `-6.571-14.392j` become
+  `1.2310011487876e+07-5.9649449469122e+07j` /
+  `-5.5405030010922e+07+2.5295326982543e+07j`, and the test now ALSO asserts
+  the identity that produced them (measured 3.6e-14 / 1.8e-13 relative);
+* the sigma anchors `9.0968975e-14 / 7.1975598e-14` become
+  `1.3564605658e+00 / 1.0671876291e+00` (measured ratios 1.491124e+13 /
+  1.482708e+13, i.e. the predicted factor to 1.1e-04 / 4.4e-04 -- the
+  residual is `det J`'s variation over the sigma grid);
+* the LG-merit curvature-response values become 2.2006679213e+09 /
+  9.9881936194e+04 with response 9.999546e-01 (the 2e-2 relative tolerance
+  is UNCHANGED), and the docstring records that this fixture trips the
+  reference-collapse guard;
+* `test_opt1_lg_jax_merit_is_strehl_deficit_not_amplitude` keeps its claim
+  but changes its driver: a waist mismatch is not an aberration and now
+  cancels against the reference, so the test walks the IMAGE POINT off the
+  chief ray instead -- merit -3.19e-03 / +1.70e-01 / +6.94e-01 / +9.91e-01
+  at dy = 0 / 20 / 50 / 100 um, pinned as strict monotonicity plus
+  `v(100 um) > 0.5` and `|v(0)| < 0.05`.
+
+No bar was loosened; every changed one carries its derivation.
+
+### Added -- tests: the mirror exit vertex and Y1 at a second field angle
+
+`tests/unit/test_audit2609_a4_verify_maslov_asymptotic.py` gains six tests:
+the O-1 truncation warning (fires / silent, with the fraction in the
+message), the O-2 bit-identity, the mirror-last-surface exit vertex
+(`n_exit = n(glass_before) = 1.503583` applied to 0.0; the "air" mistake
+would be 7.783e-06 m = 5.9 waves), and Y1's chief ray at THREE field angles
+-- (100, 0), (0, 150) and (-70, 70) um, which split the extracted ramp
+`|a3| / |a4|` as 2.74e+03 / 2.6e-10, 8.5e-10 / 4.00e+03 and 1.89e+03 /
+1.89e+03, so the `a4 u4` half of the Y1 fix is exercised for the first time.
+PSF within 1.20 / 1.80 / 1.21 um of the independently traced chief ray on a
+92.3 um pitch.

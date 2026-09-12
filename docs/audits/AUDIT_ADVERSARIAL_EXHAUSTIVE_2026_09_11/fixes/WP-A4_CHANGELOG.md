@@ -594,3 +594,11 @@ in `fixes/VERIFY_WP-A4_CHANGELOG.md` (same voice, same assembly).  They are:
 * **`### Added`** —
   `lumenairy.propagators.asymptotic.aberration_free_reference_fit` (the name is
   final; `lumenairy/__init__.py`'s eager re-export is safe).
+
+A second block in the same file covers the VERIFY-A4 FOLLOW-UP (the
+coordinator's rulings on the report's §5): the JAX LG merit's new sigma
+branch, `local_quadrature`'s window-truncation warning, `_integrate_levin`
+through the shared Van Vleck helper, the cached aberration-free reference,
+the `clear_maslov_local_window_cache` re-export, and five pins in
+`test_niche_audit_w3_oracles.py` / `test_v5_21_2_subsystem_audits.py`
+carried through the audit-Y2 scale move.

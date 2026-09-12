@@ -726,19 +726,270 @@ job the WP estimated.
 
 | # | severity | item |
 |---|---|---|
-| **O-1** | P3 | `local_quadrature` is SILENT when its tapered lattice leaves the fitted chart box, where it is no longer exact: measured relerr **8.79e-02** at `window_sigma = 7.5` and **8.17e-01** at the shipped defaults on a chart with a small Hessian eigenvalue.  Fix: count the dropped samples per pixel in `_integrate_local_quadrature` and warn once with the fraction, exactly as Y4's `_warn_dropped_pixels` does.  ~1 hour.  The module docstring's "exact … at ANY `local_n_samples` / `local_window_sigma`" should gain the "while the lattice fits inside the box" qualifier at the same time. |
-| **O-2** | P3 | `_integrate_levin` writes the Van Vleck algebra out by hand in two places instead of calling `_van_vleck_density` — the duplication the helper's own comment says it exists to prevent.  One-line change each, plus the measure factor. |
-| **O-3** | P2 | `LGAberrationMerit`'s new default costs two `aberration_tensor` calls per field point (measured 1.4 s vs 0.15 s for the pre-fix single closed-form call).  If that is too slow for a production design loop, the reference is a pure function of `(fit, s2_img, src, w_s, w_p, w_o, branch, grid)` and can be cached on `ctx._canonical_fit_cache` alongside the fit — the merit already has that hook. |
-| **O-3b** | P2 | The aberration-free reference is only a reference SPHERE while the pupil phase it removes is a perturbation.  On a chart with a finite `object_distance` and a wide `pupil_box_half` it can remove 4.2e+05 waves and collapse (measured coupling 1.30e+09).  The merit now warns; the real fix is to re-expand `Phi` about the saddle and truncate THERE, so the reference is a perturbation by construction.  ~half a day plus a bit-identity harness. |
-| **O-4** | P3 | On a near-diffraction-limited chart the σ-branch Strehl exceeds 1 by a few 1e-3 (measured 1.002838 on a chart with 1.36e-03 waves of cubic+ phase, grid-independent).  It is the leading-order evaluator's own non-conservation.  A caller who needs a hard `[0, 1]` should clamp; I did not, because silently clamping would hide exactly this. |
-| **O-5** | P2 | `make_lg_aberration_merit_jax` is still restricted to the closed-form branch, which is not a descent direction even normalised.  Either give the JAX twin a σ branch (it needs `decompose_lg` on a jnp grid — the pieces exist) or make the JAX merit refuse `targets={(0,0): …}` and point at the NumPy term.  Doing the latter now would break the R-5 cross-backend pin, so it is a coordinated change. |
-| **O-6** | P3 | Two checks I did not get to: an exit-vertex case with a MIRROR last surface (I could not settle the reflected-`N` sign convention inside this pass), and Y1's chief ray at a SECOND field angle.  Y1's own repro and the whole W6 suite pass, so this is coverage, not a suspicion. |
+| **O-1** | *(closed in the Follow-up)* | `local_quadrature` WAS SILENT when its tapered lattice leaves the fitted chart box, where it is no longer exact: measured relerr **8.79e-02** at `window_sigma = 7.5` and **8.17e-01** at the shipped defaults on a chart with a small Hessian eigenvalue.  Fix: count the dropped samples per pixel in `_integrate_local_quadrature` and warn once with the fraction, exactly as Y4's `_warn_dropped_pixels` does.  ~1 hour.  The module docstring's "exact … at ANY `local_n_samples` / `local_window_sigma`" should gain the "while the lattice fits inside the box" qualifier at the same time. |
+| **O-2** | *(closed in the Follow-up)* | `_integrate_levin` wrote the Van Vleck algebra out by hand in two places instead of calling `_van_vleck_density` — the duplication the helper's own comment says it exists to prevent.  One-line change each, plus the measure factor. |
+| **O-3** | *(closed in the Follow-up)* | `LGAberrationMerit`'s new default cost two `aberration_tensor` calls per field point (measured 1.4 s vs 0.15 s for the pre-fix single closed-form call).  If that is too slow for a production design loop, the reference is a pure function of `(fit, s2_img, src, w_s, w_p, w_o, branch, grid)` and can be cached on `ctx._canonical_fit_cache` alongside the fit — the merit already has that hook. |
+| **O-3b** | P2 (deferred to Wave 4 by the coordinator) | The aberration-free reference is only a reference SPHERE while the pupil phase it removes is a perturbation.  On a chart with a finite `object_distance` and a wide `pupil_box_half` it can remove 4.2e+05 waves and collapse (measured coupling 1.30e+09).  The merit now warns; the real fix is to re-expand `Phi` about the saddle and truncate THERE, so the reference is a perturbation by construction.  ~half a day plus a bit-identity harness. |
+| **O-4** | P3 (documented, no clamp, as directed) | On a near-diffraction-limited chart the σ-branch Strehl exceeds 1 by a few 1e-3 (measured 1.002838 on a chart with 1.36e-03 waves of cubic+ phase, grid-independent).  It is the leading-order evaluator's own non-conservation.  A caller who needs a hard `[0, 1]` should clamp; I did not, because silently clamping would hide exactly this. |
+| **O-5** | *(closed in the Follow-up — the JAX twin GOT the sigma branch)* | `make_lg_aberration_merit_jax` was restricted to the closed-form branch, which is not a descent direction even normalised.  Either give the JAX twin a σ branch (it needs `decompose_lg` on a jnp grid — the pieces exist) or make the JAX merit refuse `targets={(0,0): …}` and point at the NumPy term.  Doing the latter now would break the R-5 cross-backend pin, so it is a coordinated change. |
+| **O-6** | *(closed in the Follow-up)* | Two checks I had not got to: an exit-vertex case with a MIRROR last surface (I could not settle the reflected-`N` sign convention inside this pass), and Y1's chief ray at a SECOND field angle.  Y1's own repro and the whole W6 suite pass, so this is coverage, not a suspicion. |
 | **O-7** | — | *(closed)* Everything ran.  `test_audit_lens_models_2026_07.py` (ruling 2) is 62 passed / 7 skipped in 206.7 s; the three-file A15a re-run is 252 passed / 7 skipped. |
-| **O-8** | P3 | WP-A4's §5 item 2 stands: `clear_maslov_local_window_cache` still needs re-exporting from `lumenairy/__init__.py` and adding to `lenses_maslov.__all__` in the same commit. |
-| **O-9** | **P2** | **Four tests are red at `32ba3ba2` from WP-A4's own Y2 scale move, in files its report does not list.**  `tests/unit/test_niche_audit_w3_oracles.py` × 3 (hard-pinned `L` / `|L|²` values: `15.448+3.188j` → `1.231e+07−5.965e+07j`; `9.0969e-14` → `1.3565e+00`) and `tests/unit/test_v5_21_2_subsystem_audits.py::test_opt1_lg_jax_merit_is_strehl_deficit_not_amplitude` (expects the JAX merit in `(0.5, 1.0]`; `−4.79e+14` at `32ba3ba2`, `−3.02e-03` now).  A fifth, `test_w3_t3b_lg_merit_responds_to_a_curvature_change` (pins `8.833e-14`), is the Y2 move plus my normalisation.  Each needs its pinned constant re-derived exactly as WP-A4 did for `test_audit_optimize` / `test_niche_audit_r_guards_and_merits` — the two raw-`aberration_tensor` ones by the `1/(λ²|det J|)` factor, the two merit ones against the new dimensionless coupling.  Outside my ownership, so untouched. |
+| **O-8** | *(closed in the Follow-up)* | WP-A4's §5 item 2: `clear_maslov_local_window_cache` still needs re-exporting from `lumenairy/__init__.py` and adding to `lenses_maslov.__all__` in the same commit. |
+| **O-9** | *(closed in the Follow-up)* | **Four tests were red at `32ba3ba2` from WP-A4's own Y2 scale move, in files its report does not list.**  `tests/unit/test_niche_audit_w3_oracles.py` × 3 (hard-pinned `L` / `|L|²` values: `15.448+3.188j` → `1.231e+07−5.965e+07j`; `9.0969e-14` → `1.3565e+00`) and `tests/unit/test_v5_21_2_subsystem_audits.py::test_opt1_lg_jax_merit_is_strehl_deficit_not_amplitude` (expects the JAX merit in `(0.5, 1.0]`; `−4.79e+14` at `32ba3ba2`, `−3.02e-03` now).  A fifth, `test_w3_t3b_lg_merit_responds_to_a_curvature_change` (pins `8.833e-14`), is the Y2 move plus my normalisation.  Each needs its pinned constant re-derived exactly as WP-A4 did for `test_audit_optimize` / `test_niche_audit_r_guards_and_merits` — the two raw-`aberration_tensor` ones by the `1/(λ²|det J|)` factor, the two merit ones against the new dimensionless coupling.  Outside my ownership, so untouched. |
 
 ## 6. Changelog
 
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WP-A4_CHANGELOG.md`,
 with a pointer block and the migration note appended to
 `fixes/WP-A4_CHANGELOG.md`.
+
+
+---
+
+# Follow-up (coordinator rulings on §5, same session)
+
+Granted for this pass in addition to the original ownership:
+`tests/unit/test_niche_audit_w3_oracles.py`,
+`tests/unit/test_v5_21_2_subsystem_audits.py`, and `lumenairy/__init__.py`
+for the O-8 export.  No git writes.
+
+| item | verdict | measured |
+|---|---|---|
+| **O-9** re-pin the five red tests | **done** | the closed-form constants carried through `L_new = L_old·(−1j)/(λ√\|det J\|)`, verified to **3.6e-14 / 1.8e-13** relative; the σ anchors through `1/(λ²\|det J\|)` to **1.1e-04 / 4.4e-04**; the two merit pins re-measured.  `test_niche_audit_w3_oracles.py` **181 passed**, the OPT-1 test **1 passed** |
+| **O-1** dropped-sample diagnostic | **done** | one `RuntimeWarning` naming the fraction; fires at **36.4 %** (ws = 5.0) and **46.2 %** (ws = 7.5) dropped, silent at ws = 3.0 / 2.5 where nothing is dropped; docstrings qualified |
+| **O-2** Levin → `_van_vleck_density` | **done** | **bit-identical** (`np.array_equal` over 1e5 samples × 3 anamorphic half-width pairs) |
+| **O-6** mirror exit vertex + Y1 second field angle | **done** | mirror: `n_exit = n(glass_before) = 1.503583` applied to **0.0**, the "air" mistake **7.783e-06 m = 5.9 waves**; Y1 at three field angles, PSF within **1.20 / 1.80 / 1.21 µm** of the traced chief ray |
+| **O-3** cache the reference | **done** | 3 terms on one fit: **4.365 s → 2.807 s** (1.455 → **0.936 s/term**); exactly **one** `lg_ref` cache entry serves all three |
+| **O-5** JAX σ branch | **done — the PREFERRED branch, not the fallback** | JAX σ coupling **1.002678** vs NumPy σ **1.002871**, i.e. **1.92e-04**; grid-independent to **3e-09** (n = 16 → 32); `jax.grad` finite (`d(1−S)/dw_s = −3.10e+01`); R-5 now compares σ to σ |
+| **O-8** export the cache clearer | **done** | `clear_maslov_local_window_cache` in `lenses_maslov.__all__` and re-exported from `lumenairy/__init__.py` |
+| **O-3b**, **O-4** | deferred / documented as directed | — |
+
+## F.1 O-9 — the five red tests
+
+The whole move is one identity, written once beside the constants:
+
+    L_new = L_old · (−1j) / (λ · √|det J|)        (every L)
+    |L|²_new = |L|²_old / (λ² · |det J|)             (every |L|²)
+
+with `|det J|` read off the result object (`van_vleck_weight` is
+`−1j√|det J|/λ`, so `|det J| = (|w|λ)²`) — a quantity the pre-Y2 code
+already had, just at the wrong power.  Measured at λ = 1.31 µm:
+
+| design | `√\|det J\|` | `\|det J\|` | `1/(λ²\|det J\|)` |
+|---|---|---|---|
+| R1 = 51.5 mm | 1.976954e-01 | 3.908349e-02 | 1.490953e+13 |
+| R1 = 60.0 mm | 1.982878e-01 | 3.931805e-02 | 1.482059e+13 |
+
+1. **`test_w3_t3b_pure_lg00_default_is_bit_for_bit_unchanged`** — constants
+   `15.448+3.188j` / `−6.571−14.392j` →
+   `1.2310011487876e+07−5.9649449469122e+07j` /
+   `−5.5405030010922e+07+2.5295326982543e+07j`.  The rel-1e-8 bar is
+   unchanged, and the test now ALSO asserts that the new constant is the old
+   one times the factor (measured **3.6e-14 / 1.8e-13**), so the re-pin is a
+   derivation rather than a re-bake.
+2. **`test_w4_t1_explicit_sigma_grid_n_64_is_the_pre_fix_default_bit_for_bit`**
+   and 3. **`test_w4_t1_pure_lg00_has_no_sigma_grid_and_is_unchanged`** —
+   `_W4T1_FROZEN_64` moves `9.0968975e-14 / 7.1975598e-14` →
+   `1.3564605658e+00 / 1.0671876291e+00`; measured ratios
+   **1.491124e+13 / 1.482708e+13** against the predicted
+   1.490953e+13 / 1.482059e+13, i.e. **1.1e-04 / 4.4e-04** — the residual is
+   `det J`'s variation across the σ grid, which a single-number factor
+   cannot carry, and the claims reading these anchors are factor-of-two
+   bands, so that is three decades of margin.  The pre-Y2 anchors are kept
+   beside them as `_W4T1_FROZEN_64_PRE_Y2`.
+4. **`test_w3_t3b_lg_merit_responds_to_a_curvature_change`** — re-measured
+   against the σ coupling: `val_a` **2.2006679213e+09**, `val_b`
+   **9.9881936194e+04**, response **9.999546e-01** (was 4.1232e-01).  The
+   2e-2 relative tolerance is UNCHANGED.  This fixture is the one that trips
+   the new collapse guard (4.2e+05 waves of cubic+ pupil phase at a finite
+   `object_distance`), so the docstring now says plainly that the channels
+   are mutually consistent and monotone here but NOT Strehl-normalised, and
+   points at O-3b.  The response band is restated `0.25 < rel < 1.0` — the
+   upper edge is structural (both values are positive).
+5. **`test_opt1_lg_jax_merit_is_strehl_deficit_not_amplitude`** — its
+   MECHANISM is gone, not its claim.  It read the merit at a grossly
+   waist-mismatched source, where the raw `|L|²` underflowed; the merit is
+   now referenced to the aberration-free twin, and a waist mismatch is not
+   an aberration — it hits the reference identically and cancels (measured
+   −3.190e-03, which the old `0.5 < v <= 1` bar would read as the defect).
+   Driven instead by a real aberration, the image point walking off the
+   chief ray:
+
+   | dy | 0 | 20 µm | 50 µm | 100 µm |
+   |---|---|---|---|---|
+   | JAX (0,0) merit | −3.19e-03 | +1.70e-01 | +6.94e-01 | +9.91e-01 |
+
+   The test now pins strict monotonicity (smallest step 0.17), `v(100 µm) >
+   0.5` and `|v(0)| < 0.05`.  The pre-OPT-1 `|Strehl|²` form is the same
+   ladder with the sign flipped and fails all three.
+
+## F.2 O-1 — the local-quadrature truncation is now audible
+
+`_warn_local_window_truncation` counts the dropped samples over the live
+pixels and warns ONCE above a **1 %** fraction (derived: with the taper at
+`exp(−4.5)` on the lattice edge, 1 % of the samples is ~1e-3 of the summed
+weight — three decades above the 1e-15 the scheme reaches when nothing is
+dropped and three below the 8e-02 measured at `window_sigma = 5`).  Both the
+NumPy integrator and the CuPy twin call it.  Measured on the anamorphic
+chart:
+
+```
+n= 8 ws=3.0  reach 0.757  relerr 6.60e-15  dropped   0/  64  warn False
+n=33 ws=2.5  reach 0.631  relerr 3.41e-15  dropped   0/1089  warn False
+n=11 ws=5.0  reach 1.262  relerr 8.09e-02  dropped  44/ 121  warn True  (36.4 %)
+n=13 ws=7.5  reach 1.893  relerr 8.79e-02  dropped  78/ 169  warn True  (46.2 %)
+```
+
+The module comment and the function docstring now carry the qualifier
+"while the tapered lattice fits inside the fitted chart box".
+
+## F.3 O-2 — Levin through the shared helper
+
+Both `_integrate_levin` integrand closures call `_van_vleck_density` now.
+The composition is chosen so it is **bit-identical**:
+`_van_vleck_density(d, 1, 1)` is `d ** 0.5`, NumPy's `** 0.5` IS `sqrt`
+bit-for-bit (verified over 1e5 samples), and the box Jacobian
+`sqrt(hx·hy)` is applied exactly as before.  Unit half-widths are the right
+call here because the Levin engine works in the normalised unit box end to
+end — the other association
+(`_van_vleck_density(d, hx, hy) · hx · hy`) is the same number to 1–2 ULP
+(measured 2.7e-16 / 3.3e-16 / 3.0e-16) but re-associates the products and
+would move the returned field off bit-identity for nothing.
+
+## F.4 O-6 — the two checks I had not got to
+
+**Mirror last surface.**  `raytrace/exit_vertex.py` documents the
+convention: `n_exit` is a PHYSICAL (positive) index even for a mirror, and
+for a mirror it is `glass_before` — the reflected ray travels back through
+the medium it arrived in; the Welford `n' = −n` bookkeeping lives in the
+trace and the sign returns through `N < 0` in `t = −z/N`.  On an N-BK7
+front surface with an internally reflecting R = −25 mm back surface
+(measured `N = −0.998741`, sag 15.4 µm): the vertex OPD equals
+`opd_surface + n(N‑BK7)·t` **exactly (0.0)**, and the "it must be air"
+mistake would be **7.783e-06 m = 5.9 waves** at 1.31 µm.
+
+**Y1 at a second and third field angle.**  WP-A4 pinned the x-offset source,
+where the rank-deficient design puts the entire ramp in `a3` and leaves
+`a4` at 2.6e-10 — so the `a4·u4` half of the Y1 fix was never exercised.
+Measured (grid pitch 92.3 µm), against an independent ray trace of the
+chief ray from the same prescription:
+
+| source | `\|a3\|` | `\|a4\|` | traced chief | PSF peak | miss |
+|---|---|---|---|---|---|
+| (100, 0) µm | 2.740e+03 | 2.6e-10 | (9.665156e-05, 0) | (9.785275e-05, 0) | 1.20 µm |
+| (0, 150) µm | 8.5e-10 | 3.998e+03 | (0, 1.449788e-04) | (0, 1.467808e-04) | 1.80 µm |
+| (−70, 70) µm | 1.893e+03 | 1.893e+03 | (−6.765608e-05, +same) | (−6.851335e-05, +same) | 1.21 µm |
+
+so the `a4` term is now covered on its own and jointly.  Bar 20 µm: 11×
+above the worst measured miss, one fifth of a grid pitch, 35× below the
+~700 µm the pre-Y1 default flag produced.
+
+## F.5 O-3 — the reference is cached per (fit, field point)
+
+`LGAberrationMerit` now takes the aberration-free reference from
+`ctx._canonical_fit_cache`, keyed by
+`('lg_ref', <the fit's own cache key>, source_point, w_s, w_p, w_o,
+strehl_branch, sigma_grid_n)`.  The reference request itself is pinned to a
+FIXED minimal mode set (`[(0,0), (1,0)]` on the σ branch) rather than the
+term's own `output_modes`: only its `(0, 0)` entry is ever read, and pinning
+it makes every channel of every term on the same optic divide by the SAME
+constant — which is what lets a `CompositeMerit` compare its channels at all
+— as well as letting one cached reference serve every term.  The value is
+unchanged by that (measured composite 1.829191e-01 before and after).
+
+Measured, three `LGAberrationMerit` terms on one fit (medians of 3):
+
+```
+3 terms, ONE context (reference cached):   2.807 s  ->  0.936 s/term
+3 terms, separate contexts (no sharing):   4.365 s  ->  1.455 s/term
+1 term alone (numerator + reference):      1.520 s
+```
+
+and the cache holds exactly **one** `lg_ref` entry after a composite
+evaluation.  No timing is asserted anywhere (TESTING_STANDARDS S1).
+
+## F.6 O-5 — the JAX twin got the σ branch (the preferred option)
+
+I took the preferred branch, not the fallback, because the merit only ever
+uses the RATIO `|L|²/|L_ref|²` — and the basis waist, the grid extent and
+`n_grid` are identical on both sides of it, so they cancel.  That removes
+the two pieces of the NumPy σ branch with no cheap JAX twin (the iterative
+`_measure_image_plane_waist` probe and the adaptive `sigma_grid_n` ladder)
+and leaves an overlap that is a dozen lines of `jnp`: a σ grid,
+`jax.vmap` over `solve_envelope_stationary_jax_ift` +
+`_modal_field_lg00_pixel_jax`, and an analytic LG₀₀ projection.  New
+`_lg00_sigma_overlap_jax` in `optimize/jax_merits.py`, plus
+`strehl_branch` (default `'sigma'`) and `sigma_grid_n` (default 24) on
+`make_lg_aberration_merit_jax`, mirroring the NumPy merit;
+`strehl_branch='closed_form'` keeps the old path and warns.
+
+Measured on an f/2.5 N-BK7 plano-convex singlet (w_s = 20 µm, w_p = 0.05,
+on-axis):
+
+```
+NumPy sigma coupling (n=64):          1.002870569
+JAX   sigma coupling n=16 w_frac=.25: 1.002677530   rel vs NumPy 1.925e-04
+JAX   sigma coupling n=24 w_frac=.25: 1.002677732   rel vs NumPy 1.923e-04
+JAX   sigma coupling n=32 w_frac=.25: 1.002677729   rel vs NumPy 1.923e-04
+JAX   sigma coupling n=24 w_frac=.50: 1.003308587   rel vs NumPy 4.368e-04
+jax.grad d(1-S)/dw_s = -3.101741e+01   (finite)
+```
+
+The ratio is grid-independent to **3e-09** (n = 16 → 32) and moves by
+6.3e-04 when the basis-waist convention moves — which is how you can tell
+the 1.9e-04 residual against NumPy is the convention (NumPy measures the
+image-plane waist; the JAX branch uses `0.25·fit.s2x_halfrange`), not the
+physics.  End to end through the merit, NumPy σ vs JAX σ:
+
+| w_s | 5 µm | 20 µm | 50 µm |
+|---|---|---|---|
+| Δcoupling | 6.97e-04 | 1.80e-04 | 1.75e-04 |
+
+**R-5 now compares σ to σ** (`branch='sigma'` on the NumPy side), gated at
+`abs=2e-03` on the coupling — 2.9× above the worst measured value and
+2.5 decades below the ~1.0 an `x` vs `1−x` confusion would produce.  Cost:
+11.7 s first call (XLA compile), **1.4 s** warm.
+
+## F.7 O-8 — the cache clearer is exported
+
+`clear_maslov_local_window_cache` added to `lenses_maslov.__all__` and
+re-exported from `lumenairy/__init__.py` (eager, beside the other two
+`lenses_maslov` names, with a why-comment naming the walker test that
+requires it) and added to the top-level `__all__`.
+`lumenairy/__init__.py`'s eager re-export of `aberration_free_reference_fit`
+is untouched — the name is final.
+
+## F.8 Files touched in the follow-up
+
+**Source**
+
+* `lumenairy/elements/lenses_maslov.py` — O-1 (`_warn_local_window_truncation`,
+  `_LOCAL_WINDOW_DROP_WARN_FRAC`, both integrators, two docstrings), O-2
+  (both Levin closures), O-8 (`__all__`).
+* `lumenairy/optimize/merit_terms.py` — O-3 (`_reference_tensor` + the fixed
+  reference mode set).
+* `lumenairy/optimize/jax_merits.py` — O-5 (`_lg00_sigma_overlap_jax`,
+  `strehl_branch`, `sigma_grid_n`, docstring).
+* `lumenairy/__init__.py` — O-8 (import + `__all__`).
+
+**Tests**
+
+* `tests/unit/test_audit2609_a4_verify_maslov_asymptotic.py` — 6 new tests
+  (O-1 ×1, O-2 ×1, O-6 ×4).
+* `tests/unit/test_niche_audit_w3_oracles.py` — O-9 pins 1–4 (the derivation
+  block `_Y2_FROZEN_T3B` / `_y2_scale_factor`, `_W4T1_FROZEN_64`).
+* `tests/unit/test_v5_21_2_subsystem_audits.py` — O-9 pin 5.
+* `tests/unit/test_niche_audit_r_guards_and_merits.py` — R-5 restated σ-to-σ.
+
+## F.9 Follow-up test runs
+
+| command | result | duration |
+|---|---|---|
+| `test_niche_audit_w3_oracles.py` | **181 passed** | 81 s |
+| `test_niche_audit_r_guards_and_merits.py test_audit_optimize.py` | **109 passed** | 76 s |
+| `test_audit2609_a4_verify_maslov_asymptotic.py -k "o1 or o2 or o6"` | **6 passed** | 2 s |
+| `test_v5_21_2_subsystem_audits.py -k opt1_lg` | **1 passed** | 17 s |
+| `test_audit2609_a4_verify_maslov_asymptotic.py test_audit2609_a4_maslov_gbd.py test_audit2609_a4_asymptotic.py test_niche_audit_w6_asymptotic.py test_audit_propagation.py test_v4_16_0_walker_all_symmetry.py test_v4_14_1_dispatcher_pin_cache_clears.py` | **282 passed** (the walker and the cache-clear pin included — O-8) | 265 s |
+| `test_niche_audit_w3_oracles.py test_v5_21_2_subsystem_audits.py test_v5_21_maslov_jax_caustic.py test_niche_audit_eh1_maslov_upsample.py test_v5_1_0_agent_e_split.py test_v4_16_1_agent_d.py` | **321 passed, 1 skipped** | 464 s |
+| `python validation/run_all.py test_lenses test_asymptotic` | **46/46 + 48/48 passed** (27.8 s + 58.5 s) | — |
+| `python -m ruff check` on every file touched in the follow-up | clean | — |
