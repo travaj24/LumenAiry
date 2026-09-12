@@ -146,6 +146,28 @@ affordable truncation (`arg(Jxx)` 8.9° out at n_orders 11 against 1.2° for
 `'laurent'`) while energy closes to 1e-5 on both, so no tripwire fires.  The
 docstring now carries that table and the ordering.
 
+**The ordering is qualified to the REFLECTION Jones (VERIFY-A13, 2026-09-12).**
+Both tables above measure the reflection Jones, and the docstring originally
+stated `fff_nv > laurent > li` as a blanket preference.  On the TRANSMISSION
+retardance — the observable `return_jones_transmission=` exists for, and the one
+the LC-QWP work is designed against — the order is different.  MEASURED on the
+form-birefringent Si/air stripe at Λ/λ = 0.2 (duty 0.5, d = 208.14 nm) against
+the `rcwa_jones_1d(n_orders=60, 'li')` reference **+100.066°**, cross-checked by
+a no-floor `PMM2DStackPure` at M = 8 (**+100.051°**):
+
+| n_orders | `fff_nv` | `laurent` | `li` |
+|---|---|---|---|
+| 5 | +100.12 | +94.69 | +96.73 |
+| 9 | +100.23 | +98.94 | **+100.04** |
+| 15 | +99.90 | +99.63 | **+100.04** |
+
+`'li'` is the most accurate of the three at `n_orders ≥ 9` there (0.03° against
+0.17–0.34° for `'fff_nv'`), despite being the worst on the reflection Jones of
+the stripe above.  The docstring now says the ordering is the reflection one,
+carries this table, and tells the reader to pick the rule for the observable
+they are designing against.  `'auto'` still resolves on the reflection ordering
+(it is unchanged); nothing about the default moves.
+
 `formulation='auto'` is added: `'fff_nv'` on a SEPARABLE in-plane cell (where
 it is both available and best) and `'laurent'` otherwise; on the JAX path it
 resolves to `'laurent'` (`'fff_nv'` is NumPy only).  The DEFAULT stays
@@ -280,6 +302,23 @@ Added (`lumenairy/elements/pmm/twod_staggered.py`,
   because splitting a region into more segments is a legal h-refinement.  A
   grid that reduces to 1×1 is exempt: tiling a uniform axis into equal segments
   is the documented way to satisfy the `Nx == Ny` contract.
+* the redundancy advice is a STACK property on the union grid (VERIFY-A13).
+  `layer_grids='shared'` makes the lattice shared, so ONE layer's minimal
+  lattice is not a grid the caller may pass: measured, a 2x2 and a 3x3 pillar
+  tiled onto a common 6x6 each drew "use the uniform 2x2 / 3x3 lattice", and
+  following either made the other layer's `add_layer` raise the union-grid
+  error.  The followable number is the lcm of the per-layer minima
+  (`lcm(2, 3) = 6` — the grid already passed), which is what
+  `_stag_minimal_uniform_segments` returns over the layers' JOINT wall set
+  since `N / gcd(g_A, g_B) = lcm(N/g_A, N/g_B)`.  `PMM2DStackPure.solve`
+  therefore takes the WARN arm once over every patterned layer,
+  `add_layer` on a shared stack keeps only the absolute refusal, and
+  `layer_grids='per-layer'` is unchanged (there each layer really does own its
+  lattice).  A single-patterned-layer stack reduces exactly to the old
+  per-layer check, so the audit's 12x12 case still warns naming 4x4 — now at
+  the top of `solve`, before the QZ it is warning about.  `max_pencil_dof=` on
+  any layer still acknowledges and silences it.  MEASURED:
+  `tests/unit/test_pmm2d_staggered_mortar.py` 6 warnings -> **0**.
 * PIXEL-vs-SEGMENT cross-references in both families' `eps_cell` docs
   (`twod._cell_to_walls_tile`, `pmm_efficiency_2d_cell`,
   `pmm_efficiency_2d_staggered`, `pmm_jones_2d_staggered`,

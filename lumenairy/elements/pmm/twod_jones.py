@@ -527,10 +527,36 @@ def pmm_jones_2d(
         additionally keeps the WRONG SIGN on ``Im(Jxx)`` at every affordable
         truncation -- ``arg(Jxx)`` is 8.9 deg out at ``n_orders = 11``
         against 1.2 deg for ``'laurent'`` -- while energy closes to 1e-5 on
-        both, so no tripwire fires.  Order of preference on this entry:
-        ``'fff_nv'`` where it is available, then ``'laurent'``, then ``'li'``.
+        both, so no tripwire fires.  Order of preference ON THE REFLECTION
+        JONES, which is what both tables above measure: ``'fff_nv'`` where it
+        is available, then ``'laurent'``, then ``'li'``.
 
-        ``'auto'`` picks that for you: ``'fff_nv'`` on a SEPARABLE in-plane
+        THE TRANSMISSION RETARDANCE RANKS DIFFERENTLY, and it is the
+        observable a waveplate is designed against (``return_jones_transmission``
+        below).  On the form-birefringent Si/air stripe at ``Lambda/lambda =
+        0.2`` (duty 0.5, ``d = 208.14 nm``), against the
+        ``rcwa_jones_1d(n_orders=60, 'li')`` reference ``+100.066 deg`` and a
+        no-floor ``PMM2DStackPure`` cross-check (``+100.05 deg`` at M = 8),
+        ``wrap(arg(J^t_yy) - arg(J^t_xx))`` reads
+
+        ==========  ==========  ==========  ==========
+        n_orders    'fff_nv'    'laurent'   'li'
+        ==========  ==========  ==========  ==========
+        5           +100.12     +94.69      +96.73
+        9           +100.23     +98.94      +100.04
+        15          +99.90      +99.63      +100.04
+        ==========  ==========  ==========  ==========
+
+        -- so ``'li'`` is the MOST accurate of the three at ``n_orders >= 9``
+        here (0.03 deg, against 0.17-0.34 deg for ``'fff_nv'``), even though it
+        is the worst on the reflection Jones of the stripe above.  Pick the
+        rule for the observable you are designing against, and measure it:
+        ``'fff_nv'`` is the safe default for reflection and for a coarse
+        truncation, ``'li'`` is worth checking for a converged transmission
+        phase.
+
+        ``'auto'`` picks the REFLECTION ordering for you: ``'fff_nv'`` on a
+        SEPARABLE in-plane
         cell (where it is both available and best) and ``'laurent'``
         otherwise.  It is not the default only because the default must keep
         the exact ``pmm_efficiency_2d_cell('laurent')`` reduction above;

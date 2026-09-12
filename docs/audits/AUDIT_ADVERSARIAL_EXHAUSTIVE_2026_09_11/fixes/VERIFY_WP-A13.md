@@ -452,7 +452,7 @@ New file: `tests/unit/test_audit2609_a13_verify_guards.py`.
 
 ---
 
-### V5 (low–moderate) — the redundancy advice is UNACTIONABLE on the shared grid — reported, NOT changed
+### V5 (low–moderate) — the redundancy advice is UNACTIONABLE on the shared grid — **FIXED in §8.1**
 
 Raised by the coordinator via VERIFY-A12's collateral report, and then found to have a second half.
 
@@ -493,14 +493,10 @@ with two patterned layers on different natural lattices there is no grid the cal
 satisfies both the advice and the union-grid rule. The RAISE arm is unaffected (it is an absolute
 cost bound, always actionable via `max_pencil_dof=`); only the advisory WARN is wrong.
 
-**I did not change this.** It is a policy decision the WP tuned deliberately (its 25 → 5 → 0 warning
-sequence), and the single-layer case the audit is about must keep warning. Recommended fix, for the
-orchestrator: evaluate redundancy JOINTLY at solve time on the shared path — `n_min` for the stack
-is `lcm` of the per-layer minimal lattices, capped at `N` — and keep the per-layer check only for
-`layer_grids='per-layer'` and for the first patterned layer of a shared stack. A one-line
-interim mitigation with no false negatives is to skip the WARN (not the RAISE) whenever
-`self.layer_grids == 'shared'` and `self._grid` is already registered, which removes half the
-false positives because a later layer's grid is fixed by the first.
+**Originally reported, not changed** — it was a policy decision the WP had tuned deliberately (its
+25 → 5 → 0 warning sequence), and the single-layer case the audit is about must keep warning. The
+coordinator ruled for the joint design; **it is implemented and measured in §8.1**, and the mortar
+file now emits 0.
 
 ### V6 (low) — the PMM 2-D results never carried `wl_eff` — ADDED
 
@@ -619,10 +615,10 @@ Two notes:
 | 1 | low | **Commit-message correction.** `83142777`'s message says the audit's 7200² pencil "now warns instead of running 498 s / 8.4 GB". Measured: `dof = 7200 < 12 000`, so it warns **and still runs**. The report and the changelog are correct; only the commit message is not. |
 | 2 | low | **`lumenairy/__init__.py` re-export still missing.** `pmm_2d_order_drift` is now in `lumenairy/elements/pmm/__init__.py::__all__` (landed in `49c05569`), so `from lumenairy.elements.pmm import pmm_2d_order_drift` works; `lumenairy.pmm_2d_order_drift` still does not. WP-A13's §5 item 1 is half-landed — the top-level block that re-exports `prepare_pmm_2d` still needs the name. |
 | 3 | **closed** | **WP-A13 §5 item 4 is stale.** `test_fix_pmm2d_mortar_round2.py::test_the_plain_1d_interface_solve_is_left_unguarded_and_this_is_why` now PASSES — re-confirmed after VERIFY-A12's follow-up landed as commit `49c05569`, which carries the `pmm/stack.py` and test-file changes. Nothing for WP-A12 to do. |
-| 4 | low | **Docstring amendment (G6).** `pmm_jones_2d`'s `formulation` block states a blanket preference `fff_nv > laurent > li`. On the TRANSMISSION retardance of the WP's own QWP fixture `li` is the most accurate at `n_orders ≥ 9` (+100.036 / +100.039° vs `fff_nv` +100.233 / +99.904°, reference +100.066°). Exact change: qualify the ordering as measured on the REFLECTION Jones, and add one sentence saying the transmission retardance ranks differently on a form-birefringent stripe — a QWP designer reads that paragraph. I did not edit it because the whole paragraph is the WP's deliberate G6 wording. |
-| 5 | low | **Test restatement (G13).** `test_g13_transmission_jones_matches_the_stack_and_the_qwp_reference`'s 2e-2 arm carries an incorrect justification (§5). |
+| 4 | **closed** | **Docstring amendment (G6)** — done in §8.2.  Original finding: `pmm_jones_2d`'s `formulation` block states a blanket preference `fff_nv > laurent > li`. On the TRANSMISSION retardance of the WP's own QWP fixture `li` is the most accurate at `n_orders ≥ 9` (+100.036 / +100.039° vs `fff_nv` +100.233 / +99.904°, reference +100.066°). Exact change: qualify the ordering as measured on the REFLECTION Jones, and add one sentence saying the transmission retardance ranks differently on a form-birefringent stripe — a QWP designer reads that paragraph. I did not edit it because the whole paragraph is the WP's deliberate G6 wording. |
+| 5 | **closed** | **Test restatements (G10 / G13)** — both done in §8.3: the literal `T00` pin is now an in-process invariance, and the G13 seam arm is 1e-12 (measured 0.000e+00) on operators that really are identical. |
 | 6 | info | **Pre-existing, unrelated:** `pickle` / `copy.deepcopy` of a `PMM2DStackHybrid` raise on the `LayerCache` lock (present at the parent commit). Also `_axis_elem_counts`'s argmax tie-break makes an EXACT-tie 50 %-duty grating non-covariant under a 90° ROTATION (though covariant under the transpose the tests use) — a discretisation artefact, not G5. |
-| 7 | **med** | **The shared-grid redundancy warning gives advice the caller cannot follow** (§4 V5 half 2), and the WP's "the shipped staggered suite is SILENT" is not accurate — 6 warnings remain in `tests/unit/test_pmm2d_staggered_mortar.py`, which the WP re-ran only before the gcd rule landed. Measured proof and a recommended design are in §4 V5; I deliberately did not change the policy. |
+| 7 | **closed** | **The shared-grid redundancy warning gave advice the caller could not follow** (§4 V5 half 2), and the WP's "the shipped staggered suite is SILENT" was not accurate — 6 warnings in `tests/unit/test_pmm2d_staggered_mortar.py`. Both **resolved in §8.1**: the joint lcm rule is implemented, the mortar file emits **0**, and the WP report / changelog carry the dated correction. |
 | 8 | info | **`wl_eff` is now on the PMM 2-D results** (§4 V6), closing VERIFY-A14 §6 V8. The JAX dispatch sites keep `None`, per the class docstring. `pmm_jones_2d` and the two stacks return plain tuples, not `Efficiency2D`, so they have no slot for it — if the same signal is wanted there it needs a return-shape decision, which is a separate change. |
 | 9 | info | **G10(d) deferred item stands.** The tensor-`lops` cache (WP §6.1) is genuinely not done; the design in §6.1 is sound and its bit-identity gate is the right one. `cascade='fused'` measured non-bit-identical here too (1.9e-16…7e-16 on my normal-incidence fixture; the WP's oblique fixtures reached 1e-13), so leaving the default at `'fast'` is right. |
 
@@ -641,3 +637,136 @@ shared-grid redundancy advice a caller cannot follow, and with it the WP's "the 
 suite is SILENT" claim). No physics regression anywhere: **1 175 existing PMM 2-D tests pass across 52 files**
 (208 → 362 hybrid/stack/JAX, 328 slant/autodiff, 300 staggered, 117 mortar remainder, 168 in the
 final post-`wl_eff` pass, 15 sliver-walls), plus the WP's own 61 and my 12.
+
+---
+
+## 8. Follow-up (coordinator rulings, 2026-09-12)
+
+Four rulings, all implemented and measured. Nothing in §1–§7 changes; §4 V5 half 2 moves from
+"reported" to "fixed", and two §5 test notes and one §6 item are discharged.
+
+### 8.1 Ruling 1 — the joint redundancy rule on the shared grid (V5 half 2)
+
+**The rule.** `layer_grids='shared'` makes the segment lattice a property of the STACK, so the
+advice is too. The stack's minimum is the lcm of the per-layer minima, capped at `N`, and the
+redundancy warning fires only when the caller's lattice exceeds it. Implementation note worth
+keeping: that lcm needs no separate bookkeeping — with `g_L = gcd(N, walls of L)` the per-layer
+minimum is `N/g_L`, and
+
+```
+N / gcd(g_A, g_B)  ==  lcm(N/g_A, N/g_B)
+```
+
+so running `_stag_minimal_uniform_segments` over the layers' JOINT wall set computes it directly.
+The existing helper already merges several arrays jointly (it was written for `eps_cell` +
+`mu_cell`), so the change is a call site, not a new algorithm.
+
+**Where it runs.** `_validate_stag_cost` gained `check=("raise", "warn")` and `n_min_joint=`.
+The RAISE is an absolute cost bound, always actionable via `max_pencil_dof=`, so it still fires at
+`add_layer` on both paths. The WARN is advice, so on a shared stack it is deferred to
+`PMM2DStackPure.solve`, which calls the new `_warn_stag_shared_redundancy()` **first** — before any
+QZ, i.e. before the cost it is warning about — over every patterned layer at once
+(`_patterned_cells()` collects the `eps_cell` of a plain patterned layer and the patterned side(s)
+of a magnetic one). `layer_grids='per-layer'` is untouched: there each layer really does own its
+lattice, so per-layer advice is followable and both arms stay at `add_layer`. `max_pencil_dof=` on
+ANY layer sets `_stag_cost_ack` and suppresses the joint warning, as it already did per layer.
+
+**Why deferral rather than the interim skip.** The two requirements — "the 2×2 + 3×3 on 6×6 fixture
+is SILENT" and "the single-layer audit case must keep warning" — cannot both hold at `add_layer`
+time: when layer A arrives there is no layer B yet, so a per-layer check on the first patterned
+layer necessarily warns on the very fixture that must be silent. Evaluating at `solve` is the only
+point where the patterned set is complete, and it is also the point where the cost is incurred. The
+single-layer case is unaffected in substance: with one patterned layer the joint minimum IS that
+layer's own minimum, so the audit's 12×12 pillar still warns with the same number, one call later.
+
+**Measured** (guard only — no solve runs in any of these; `_warn_stag_shared_redundancy` calls no
+eigensolve):
+
+| fixture | at `add_layer` | total | names |
+|---|---|---|---|
+| 2×2 + 3×3 pillars on a SHARED 6×6 (the mortar shape) | 0 | **0** | — |
+| the same pair tiled onto a SHARED 12×12 | 0 | **1** | `uniform 6x6 lattice` (not 2×2, not 3×3) |
+| single 6×6 reducible to 2×2 | 0 | **1** | `uniform 2x2 lattice` |
+| the audit's 12×12 half-fill pillar, M = 5 | 0 | **1** | `uniform 4x4 lattice`, `4608x4608` → `512x512`, `729x less QZ time` |
+| the 6×6 pair with `layer_grids='per-layer'` | 2 | **2** | `uniform 2x2` and `uniform 3x3` — unchanged |
+| the 6×6 pair with `max_pencil_dof=1e7` | 0 | **0** | acknowledged |
+| `max_pencil_dof=1` on either path | raises | — | the absolute refusal is unchanged |
+
+**`test_pmm2d_staggered_mortar.py` re-run: 31 passed, 197.1 s, SEGMENT-grid warnings 6 → 0.**
+(Counted by grepping the message text rather than by a `-W` module filter: the warning carries
+`stacklevel=3`, so Python attributes it to the caller's module and a
+`-W error::UserWarning:lumenairy.elements.pmm.twod_staggered` filter does not reliably catch it —
+worth knowing if anyone re-arms this gate in CI.)
+
+**WP-A13 docs corrected** (§2 item 3 discharged): `fixes/WP-A13_REPORT.md` §2.5's "the shipped
+staggered suite is SILENT" now carries a dated CORRECTION paragraph stating the 6 measured
+warnings, why the earlier re-run missed that file, why the advice was unfollowable, and the 6 → 0
+result; `fixes/WP-A13_CHANGELOG.md`'s G9 block gains the joint-rule bullet with the same numbers.
+
+### 8.2 Ruling 2 — the G6 ordering is qualified to the reflection Jones (§6 item 4 discharged)
+
+`pmm_jones_2d`'s `formulation` docstring now says the `fff_nv > laurent > li` ordering is measured
+**on the reflection Jones** (which is what both of its tables are), and adds the transmission table
+with the sentence a waveplate designer needs:
+
+| n_orders | `fff_nv` | `laurent` | `li` |
+|---|---|---|---|
+| 5 | +100.12 | +94.69 | +96.73 |
+| 9 | +100.23 | +98.94 | **+100.04** |
+| 15 | +99.90 | +99.63 | **+100.04** |
+
+against the `rcwa_jones_1d(n_orders=60, 'li')` reference **+100.066°** and the no-floor
+`PMM2DStackPure` cross-check **+100.051°** at M = 8 — so `'li'` is the most accurate of the three at
+`n_orders ≥ 9` on a form-birefringent stripe (0.03° against 0.17–0.34°), and the reader is told to
+pick the rule for the observable being designed against. `'auto'` and the default are unchanged; the
+same paragraph is added to the changelog's G6 block.
+
+### 8.3 Ruling 3 — the two test restatements (§5 notes discharged)
+
+* `test_g10_rectangular_truncation_is_untouched` no longer pins the literal `T00 = 0.023191963156`
+  at `abs=5e-12`. It is now an **in-process invariance** with no tolerance anywhere: the order set is
+  exactly `(2n+1)² = 121`; the DEFAULT stack is `np.array_equal` to the same stack with
+  `truncation='rectangular'` spelled out, on orders, `R`, `T` and the Jones; and `'circular'` retains
+  strictly fewer orders, so the identity is not holding vacuously on a build where the option did
+  nothing. A `max(T) > 0.5` guard keeps it from passing on an all-zero answer.
+* `test_g13_transmission_jones_matches_the_stack_and_the_qwp_reference`'s seam arm no longer compares
+  a TENSOR-cell entry against a SCALAR-cell stack behind a 2e-2 bar with a false justification. Both
+  sides now take the **same tensor cell at the same formulation with the fold off**, so they run the
+  identical `_tensor_layer_modes` operators through the identical dense cascade — and the bar is
+  **1e-12**, measured **0.000e+00** (bit-identical), 10 decades tighter than before. The comment
+  records why the fold must be off (at `symmetry='auto'` the two entries take different recursions —
+  the entry's `_symmetric_cascade_rt` against the stack's `block_eig` — which is the 2.8e-14 in §3.7)
+  and why the old bar had to be loose (on the tensor entry `'li'` selects only the `E_z` rule while
+  the scalar stack applies the per-slot wall-normal inverse rule).
+
+### 8.4 Tests run for the follow-up
+
+| command | result |
+|---|---|
+| `test_audit2609_a13_staggered_cost.py` (4 new V5 tests: joint minimum, per-layer control, the `max_pencil_dof` acknowledgement, the unchanged refusal) | **12 passed, 0.14 s** |
+| the two restated tests, alone | **2 passed, 8.7 s** |
+| all five A13 files + `test_audit_w4_jax_static_caches.py` | **77 passed, 59.3 s** |
+| `test_pmm2d_staggered_mortar.py` | **31 passed, 197.1 s; SEGMENT-grid warnings 6 → 0** |
+| staggered suite (10 files) + `test_verify_pmmstack_sliver_walls.py`, post-change | **292 passed, 834.7 s; SEGMENT-grid warnings 0** |
+| a once-per-geometry latch was added after that run (repeated `solve` on one stack must not re-emit an advisory): measured `[1, 0, 0, 0]` over four solves, cleared by a new PATTERNED layer and deliberately not by a uniform one. No other test in the suite asserts on this warning (`grep`), and the latch can only REMOVE warnings, so it cannot invalidate the 292/0 above | **24 passed** (`a13_staggered_cost` + `a13_verify_guards`) |
+| `ruff check lumenairy/elements/pmm/` + the three edited test files | clean |
+
+### 8.5 Files touched by the follow-up
+
+* `lumenairy/elements/pmm/twod_staggered.py` — `_validate_stag_cost(check=, n_min_joint=)`, the arm
+  gates, and the docstring paragraph deriving the lcm identity.
+* `lumenairy/elements/pmm/stack2d_pure.py` — `_patterned_cells()`, `_warn_stag_shared_redundancy()`,
+  the `check=` selection and `_stag_cost_ack` on both `add_layer` branches, and the call at the top
+  of `solve`.
+* `lumenairy/elements/pmm/twod_jones.py` — the `formulation` docstring (reflection qualifier +
+  transmission table).
+* `tests/unit/test_audit2609_a13_staggered_cost.py` — a `_stack_warnings` helper, two existing tests
+  moved onto it, four new V5 tests.
+* `tests/unit/test_audit2609_a13_stack2d.py` — `test_g10_rectangular_truncation_is_untouched`
+  restated.
+* `tests/unit/test_audit2609_a13_twod.py` — the G13 seam arm restated at 1e-12.
+* `docs/audits/.../fixes/WP-A13_REPORT.md` and `WP-A13_CHANGELOG.md` — the two corrections above.
+
+`lumenairy/elements/pmm/__init__.py` was NOT touched (WP-A15b owns it); §6 item 2 —
+`lumenairy.pmm_2d_order_drift` still missing at the package root — therefore still stands for
+whoever holds `lumenairy/__init__.py`.

@@ -311,11 +311,34 @@ def test_g10_circular_truncation_reaches_the_stack():
 
 def test_g10_rectangular_truncation_is_untouched():
     """The circular option must be a pure ADDITION: at the default the stack
-    is bit-for-bit what it was.  Oracle: the audit's own post-fix reading for
-    this fixture, ``T00 = 0.023191963156`` (q1b_stackli, ``li``, degree 11,
-    n_orders 5) -- a number produced outside this test."""
+    is bit-for-bit what it always was.
+
+    Stated as an IN-PROCESS INVARIANCE rather than as a literal ``T00``
+    (VERIFY-A13, TESTING_STANDARDS durability rule: nothing may pin a prior
+    version's number, and an eigendecomposition-derived efficiency is exactly
+    the quantity a BLAS build is entitled to move in its last bits).  Three
+    claims, none of them a tolerance:
+
+    1. the order set is the full rectangular box, ``(2n+1)^2``;
+    2. the default stack is ``np.array_equal`` to the same stack built with
+       ``truncation='rectangular'`` SPELLED OUT -- so the option's presence
+       changes no bit of the path it defaults to;
+    3. the F8 code really is reachable on this fixture, i.e. ``'circular'``
+       retains strictly fewer orders -- otherwise (1) and (2) would hold
+       vacuously on a build where the option did nothing at all.
+    """
     cx, _cy = _stripes()
-    o_, _R, T, _J = _stack(cx, degree=11, n_orders=5, formulation="li",
-                           symmetry="auto")
-    i0 = int(np.where((o_[:, 0] == 0) & (o_[:, 1] == 0))[0][0])
-    assert float(T[0][i0]) == pytest.approx(0.023191963156, abs=5e-12)
+    o_d, R_d, T_d, J_d = _stack(cx, degree=11, n_orders=5, formulation="li",
+                                symmetry="auto")
+    o_r, R_r, T_r, J_r = _stack(cx, degree=11, n_orders=5, formulation="li",
+                                symmetry="auto", truncation="rectangular")
+    assert len(o_d) == (2 * 5 + 1) ** 2
+    assert np.array_equal(np.asarray(o_d), np.asarray(o_r))
+    assert np.array_equal(np.asarray(R_d), np.asarray(R_r))
+    assert np.array_equal(np.asarray(T_d), np.asarray(T_r))
+    assert np.array_equal(np.asarray(J_d), np.asarray(J_r))
+    o_c, _Rc, _Tc, _Jc = _stack(cx, degree=11, n_orders=5, formulation="li",
+                                symmetry="auto", truncation="circular")
+    assert len(o_c) < len(o_d)
+    # non-degenerate answer, so the identity above is not an all-zero pass
+    assert np.max(T_d) > 0.5

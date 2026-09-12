@@ -267,8 +267,27 @@ UNIFORM, and tiling a uniform axis into equal segments is the documented way to
 satisfy that same square contract (`PMM2DStackPure.add_layer(grid=)` exists
 precisely to h-refine a uniform region).
 
-With `_stag_minimal_uniform_segments` implementing the gcd rule, the shipped
-staggered suite is SILENT and the audit's own case still warns.
+With `_stag_minimal_uniform_segments` implementing the gcd rule, the audit's
+own case still warns.
+
+**CORRECTION (VERIFY-A13, 2026-09-12).**  This paragraph originally read "the
+shipped staggered suite is SILENT".  Re-measured, it was not: **6** cost-guard
+warnings remained, all in `tests/unit/test_pmm2d_staggered_mortar.py` — a file
+this WP re-ran only in its earlier "remainder" group, BEFORE the gcd rule
+landed, so the re-run that produced the "silent" reading never covered it.  The
+arithmetic was right; the ADVICE was not followable.  All six sites are
+`layer_grids='shared'` union-grid arms where a 2x2 and a 3x3 pillar are
+deliberately tiled onto one common 6x6 lattice because the shared contract
+requires it, and each layer was told to use its own minimum — measured, obeying
+either one made the OTHER layer's `add_layer` raise `all patterned layers must
+share ONE common (Nx, Ny) grid`.  The union grid is a property of the STACK, so
+the advice is too: the followable number is the lcm of the per-layer minima
+(`lcm(2, 3) = 6`, the grid the caller already passed).  VERIFY-A13 implemented
+that joint rule — `PMM2DStackPure.solve` now takes the warn arm ONCE over every
+patterned layer, `add_layer` on a shared stack keeps only the absolute refusal,
+and `layer_grids='per-layer'` is unchanged.  Re-measured after the change:
+`test_pmm2d_staggered_mortar.py` emits **0**, and the audit's single-layer 12x12
+case still warns naming its 4x4 lattice.
 
 **How I verified.**  Guard-only, so nothing expensive runs: the 12×12 array has
 3×3 distinct strips and a minimal uniform lattice of 4;

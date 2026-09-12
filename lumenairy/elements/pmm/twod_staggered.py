@@ -489,7 +489,8 @@ def _stag_minimal_uniform_segments(*cells):
 
 
 def _validate_stag_cost(fn_name, M, *cells, max_pencil_dof=None,
-                        walls_given=False):
+                        walls_given=False, check=("raise", "warn"),
+                        n_min_joint=None):
     """Cost guard for the staggered family's SEGMENT grid -- the sibling of
     :func:`~lumenairy.elements.pmm.twod._validate_cell_cost`, which the hybrid
     family has had all along and this one had not.
@@ -528,6 +529,25 @@ def _validate_stag_cost(fn_name, M, *cells, max_pencil_dof=None,
     expensive one -- and RAISE on the absolute ``max_pencil_dof`` budget, which
     no redundancy check can replace (a legitimate 8-segment cell at M = 8 is a
     BIGGER pencil than the pathological 12-segment one at M = 5).
+
+    ``check`` selects the arms.  The RAISE is an absolute cost bound and is
+    always actionable (``max_pencil_dof=`` lifts it), so it runs wherever the
+    geometry is accepted.  The WARN is ADVICE, and advice has to be followable:
+    on a ``layer_grids='shared'`` stack ONE layer's minimal lattice is not a
+    grid the caller may pass, because every other patterned layer must live on
+    the same lattice.  :meth:`PMM2DStackPure.solve` therefore takes the warn arm
+    ONCE, over every patterned layer JOINTLY, and ``add_layer`` on a shared
+    stack passes ``check=("raise",)``.  ``n_min_joint`` overrides the computed
+    minimum for that joint call.
+
+    (VERIFY-A13 V5, measured: a 2x2 and a 3x3 pillar tiled onto one shared 6x6
+    lattice each drew "expressible on the uniform 2x2 / 3x3 lattice", and
+    FOLLOWING either made the other layer's ``add_layer`` raise the union-grid
+    error -- the joint minimum is ``lcm(2, 3) = 6``, exactly the grid the caller
+    already passed.  The joint minimum IS that lcm: with ``g_L = gcd(N, walls of
+    L)``, ``N / gcd(g_A, g_B) = lcm(N/g_A, N/g_B)``, so running
+    :func:`_stag_minimal_uniform_segments` over the layers' JOINT wall set
+    computes it directly.)
     """
     cap = _MAX_STAG_PENCIL_DOF if max_pencil_dof is None else int(max_pencil_dof)
     arrs = [np.asarray(c) for c in cells if c is not None]
@@ -543,7 +563,8 @@ def _validate_stag_cost(fn_name, M, *cells, max_pencil_dof=None,
     # would be WRONG advice, because a 3-strip cell whose walls sit at 1/4 and
     # 3/4 needs a 4-segment lattice).
     nx_m, ny_m = _stag_merged_segments(*arrs)
-    n_min = _stag_minimal_uniform_segments(*arrs)
+    n_min = (_stag_minimal_uniform_segments(*arrs) if n_min_joint is None
+             else int(n_min_joint))
     dof_m = 2 * (n_min * (int(M) - 1)) ** 2
     ratio = dof / max(dof_m, 1)
     redundant = 0 < n_min < min(Nx, Ny)
@@ -556,7 +577,7 @@ def _validate_stag_cost(fn_name, M, *cells, max_pencil_dof=None,
         if redundant else
         f"your {Nx}x{Ny} grid is already the smallest uniform lattice that "
         f"contains its walls (merged strips {nx_m}x{ny_m})")
-    if dof > cap:
+    if dof > cap and "raise" in check:
         raise ValueError(
             f"{fn_name}: the SEGMENT grid needs a {dof}x{dof} dense "
             f"generalized pencil (2 * Nx*(M-1) * Ny*(M-1) with Nx={Nx}, "
@@ -574,7 +595,7 @@ def _validate_stag_cost(fn_name, M, *cells, max_pencil_dof=None,
     # here (``PMM2DStackPure.add_layer(grid=)``), so it is a deliberate choice
     # rather than the PIXEL-grid mistake this warning is about.  The absolute
     # ``max_pencil_dof`` cap above still guards the extreme.
-    if redundant and n_min > 1 and not walls_given:
+    if redundant and n_min > 1 and not walls_given and "warn" in check:
         import warnings
         warnings.warn(
             f"{fn_name}: eps_cell is a SEGMENT grid (every row and column is "

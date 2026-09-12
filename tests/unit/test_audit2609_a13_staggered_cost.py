@@ -99,16 +99,34 @@ def test_g9_an_unaffordable_segment_grid_raises_before_solving(call):
     assert "max_pencil_dof" in msg
 
 
+def _stack_warnings(cells, *, n_modes=5, layer_grids="shared", **kw):
+    """Every SEGMENT-grid warning a stack produces, from ``add_layer`` AND from
+    the joint check ``solve`` runs first -- WITHOUT solving, so nothing
+    expensive runs (VERIFY-A13 V5 moved the shared path's advice to solve
+    time; ``_warn_stag_shared_redundancy`` is the first thing ``solve`` calls
+    and runs no eigensolve)."""
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.45,
+                            n_modes=n_modes, n_orders=3,
+                            layer_grids=layer_grids)
+        for c in cells:
+            st.add_layer(_DEP, eps_cell=c, **kw)
+        st._warn_stag_shared_redundancy()
+        return [str(x.message) for x in w if "SEGMENT grid" in str(x.message)]
+
+
 def test_g9_a_redundant_patterned_grid_warns_with_the_merged_count():
     """At the DEFAULT budget the audit's call is affordable-ish and therefore
     proceeds -- but it must say that 12 segments/axis is 729x the QZ work of
     the 4 the geometry needs.  Splitting a region into more segments IS a legal
-    h-refinement, which is why this warns rather than refusing."""
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.45, n_modes=5,
-                       n_orders=3).add_layer(_DEP, eps_cell=_pillar_12())
-    msgs = [str(x.message) for x in w if "SEGMENT grid" in str(x.message)]
+    h-refinement, which is why this warns rather than refusing.
+
+    A one-patterned-layer stack is where the joint rule (VERIFY-A13 V5) reduces
+    EXACTLY to the per-layer one, so the audit's case reads the same number it
+    always did -- it is now delivered at the top of ``solve``, before the QZ it
+    is warning about, rather than at ``add_layer``."""
+    msgs = _stack_warnings([_pillar_12()])
     assert len(msgs) == 1, msgs
     assert "12x12 segments and only 3x3 DISTINCT strips" in msgs[0]
     # the SUGGESTION is the smallest uniform lattice that still contains the
@@ -136,12 +154,7 @@ def test_g9_a_minimal_or_uniform_grid_is_silent():
     corner = np.full((6, 6), 1.0 + 0j)
     corner[0, 0] = 12.25          # 2 distinct strips/axis, but wall at 1/6
     for cell in (_pillar_3(), uni, corner):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.45,
-                           n_modes=5, n_orders=3).add_layer(_DEP,
-                                                            eps_cell=cell)
-        assert not [x for x in w if "SEGMENT grid" in str(x.message)], cell
+        assert not _stack_warnings([cell]), cell
 
 
 def test_g9_the_suggestion_is_a_lattice_that_actually_holds_the_walls():
@@ -215,3 +228,78 @@ def test_g9_the_hybrid_docstrings_cross_reference_the_two_meanings():
     assert "PIXEL" in _SP.add_layer.__doc__
     assert "SEGMENT grid, not a PIXEL grid" in \
         pmm_efficiency_2d_staggered.__doc__
+
+
+# --------------------------------------------------------------------------- #
+# VERIFY-A13 V5 -- the SHARED grid's redundancy advice is a STACK property
+# --------------------------------------------------------------------------- #
+
+def _tiled(n, lo, hi, reps):
+    """An ``n``-segment pillar tiled ``reps`` times per axis: an
+    ``n*reps``-segment cell whose minimal uniform lattice is ``n``."""
+    c = np.full((n, n), 1.0 + 0j)
+    c[lo:hi, lo:hi] = 12.25
+    return np.kron(c, np.ones((reps, reps)))
+
+
+def test_v5_the_shared_grids_advice_is_the_joint_minimum_not_the_per_layer_one():
+    """``layer_grids='shared'`` makes the lattice a property of the STACK, so
+    per-layer advice is UNFOLLOWABLE and must not be given.
+
+    MEASURED before this rule: a 2x2 pillar and a 3x3 pillar tiled onto one
+    shared 6x6 lattice each drew "expressible on the uniform 2x2 / 3x3
+    lattice", and FOLLOWING either one made the other layer's ``add_layer``
+    raise ``all patterned layers must share ONE common (Nx, Ny) grid``.  The
+    grid the caller CAN pass is the smallest uniform lattice holding EVERY
+    layer's walls -- the lcm of the per-layer minima, ``lcm(2, 3) = 6``, which
+    is the grid they already passed.
+
+    Exact counts, not tolerances: the pair on 6x6 is SILENT, and the identical
+    pair tiled onto 12x12 warns ONCE naming 6.  ``_stag_minimal_uniform_
+    segments`` over the joint wall set computes that lcm directly, because
+    ``N / gcd(g_A, g_B) = lcm(N/g_A, N/g_B)`` with ``g_L = gcd(N, walls of L)``.
+    """
+    a6, b6 = _tiled(2, 0, 1, 3), _tiled(3, 1, 2, 2)         # both 6x6
+    assert _stag_merged_segments(a6, b6)                     # joint merge runs
+    assert not _stack_warnings([a6, b6], n_modes=3)
+
+    a12, b12 = _tiled(2, 0, 1, 6), _tiled(3, 1, 2, 4)        # both 12x12
+    msgs = _stack_warnings([a12, b12], n_modes=3)
+    assert len(msgs) == 1, msgs
+    assert "uniform 6x6 lattice" in msgs[0], msgs[0]
+    # ... and it does NOT suggest either layer's own minimum
+    assert "uniform 2x2 lattice" not in msgs[0]
+    assert "uniform 3x3 lattice" not in msgs[0]
+
+
+def test_v5_per_layer_grids_keep_the_per_layer_advice():
+    """With ``layer_grids='per-layer'`` each layer really does own its lattice,
+    so the per-layer suggestion IS followable and both layers must still get
+    it -- the control that shows the change above is scoped to the union-grid
+    contract and not a general weakening of the guard."""
+    a6, b6 = _tiled(2, 0, 1, 3), _tiled(3, 1, 2, 2)
+    msgs = _stack_warnings([a6, b6], n_modes=3, layer_grids="per-layer")
+    assert len(msgs) == 2, msgs
+    assert any("uniform 2x2 lattice" in m for m in msgs), msgs
+    assert any("uniform 3x3 lattice" in m for m in msgs), msgs
+
+
+def test_v5_max_pencil_dof_acknowledges_the_shared_stack_too():
+    """``max_pencil_dof=`` is the documented acknowledgement of a deliberate
+    h-refinement, and it has to reach the joint check as well -- otherwise a
+    caller who acknowledged at ``add_layer`` would be warned again at solve."""
+    a6 = _tiled(2, 0, 1, 3)
+    assert _stack_warnings([a6], n_modes=3)                  # warns by default
+    assert not _stack_warnings([a6], n_modes=3, max_pencil_dof=10 ** 7)
+
+
+def test_v5_the_absolute_refusal_is_unchanged_and_still_at_add_layer():
+    """Only the ADVICE moved.  The RAISE is an absolute cost bound, always
+    actionable via ``max_pencil_dof=``, and must still fire where the geometry
+    is accepted -- before any solve, on the shared path as on the per-layer
+    one."""
+    for grids in ("shared", "per-layer"):
+        st = PMM2DStackPure(_P, _P, n_superstrate=1.0, n_substrate=1.45,
+                            n_modes=5, n_orders=3, layer_grids=grids)
+        with pytest.raises(ValueError, match=r"max_pencil_dof=1\b"):
+            st.add_layer(_DEP, eps_cell=_pillar_12(), max_pencil_dof=1)

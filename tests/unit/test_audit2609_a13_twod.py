@@ -414,20 +414,34 @@ def test_g13_transmission_jones_matches_the_stack_and_the_qwp_reference():
                            n_orders=9, formulation="fff_nv",
                            return_jones_transmission=True)
         st = PMM2DStackHybrid(lam, lam, n_superstrate=1.0, n_substrate=1.0,
-                              degree=11, n_orders=9, formulation="li")
-        st.add_layer(d, eps_cell=sc)
+                              degree=11, n_orders=9, formulation="li",
+                              symmetry=False)
+        st.add_layer(d, eps_tensor_cell=tc)
         st.set_source(_WL, theta=0.0, phi=0.0)
         st.solve()
     assert len(res) == 5
     Jt = res[4]
-    # (1) same convention as the stack's accessor -- checked on the SCALAR
-    # branch, where both entries run the identical per-slot-Li operators
+    # (1) ONE convention, two entry points.  Both sides are given the SAME
+    # TENSOR cell at the SAME formulation with the fold OFF, so both run the
+    # identical ``_tensor_layer_modes`` operators through the identical dense
+    # cascade and the only freedom left is the order of the same floating-point
+    # operations.  BAR 1e-12; MEASURED 0.000e+00 -- bit-identical (VERIFY-A13
+    # re-measured this seam on an in-plane tensor, an OUT-OF-PLANE tensor and a
+    # slanted cell at normal and oblique incidence: 0.000e+00 on five of eight
+    # arms and <= 2.8e-14 on the rest, where ``symmetry='auto'`` sends the two
+    # entries down DIFFERENT recursions -- the entry's ``_symmetric_cascade_rt``
+    # against the stack's ``block_eig`` -- which is why this arm pins the fold
+    # off).  The earlier form of this assertion compared a TENSOR-cell entry
+    # against a SCALAR-cell stack and needed a 2e-2 bar for that reason: on the
+    # tensor entry ``'li'`` selects only the ``E_z`` rule while the scalar stack
+    # applies the per-slot wall-normal inverse rule, so they are not the same
+    # operators and the seam was never what the loose bar measured.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         res_li = pmm_jones_2d(lam, lam, tc, 1.0, 1.0, d, _WL, degree=11,
                               n_orders=9, formulation="li", symmetry=False,
                               return_jones_transmission=True)
-    assert np.max(np.abs(res_li[4] - st.jones_transmission())) < 2e-2
+    assert np.max(np.abs(res_li[4] - st.jones_transmission())) < 1e-12
     # (2) the retardance, and its SIGN
     ret = np.rad2deg(wrap(np.angle(Jt[1, 1]) - np.angle(Jt[0, 0])))
     assert ret > 0.0                          # slow axis carries exp(+i.)

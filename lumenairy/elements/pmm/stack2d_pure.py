@@ -799,11 +799,21 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         # ELEMENTS, not the hybrid's PIXEL grid, so a redundant grid is a cubic
         # cost multiplier rather than free.  Priced on this layer's own modal
         # count (``n_modes=`` per layer, else the stack's M).
+        # On the SHARED path the per-layer redundancy ADVICE is not followable
+        # (see _validate_stag_cost's ``check``), so only the absolute refusal
+        # runs here and :meth:`solve` warns once over every patterned layer
+        # jointly.  ``per-layer`` grids keep both arms: there each layer really
+        # does own its lattice.
         _validate_stag_cost("PMM2DStackPure.add_layer",
                             int(_pl.get("M") or self.M), cell,
                             max_pencil_dof=max_pencil_dof,
                             walls_given=(x_walls is not None
-                                         or y_walls is not None))
+                                         or y_walls is not None),
+                            check=(("raise",) if self.layer_grids == "shared"
+                                   else ("raise", "warn")))
+        if max_pencil_dof is not None:
+            self._stag_cost_ack = True      # explicit acknowledgement, any layer
+        self._stag_cost_warned = False      # new patterned grid -> re-arm
         cgrid = cell.shape[:2]
         if self.layer_grids == "shared":
             if self._grid is None:
@@ -987,7 +997,12 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             _cells = [_cells[0]]
         _validate_stag_cost(fn, int(self.M if M is None else M), *_cells,
                             max_pencil_dof=max_pencil_dof,
-                            walls_given=walls_given)
+                            walls_given=walls_given,
+                            check=(("raise",) if self.layer_grids == "shared"
+                                   else ("raise", "warn")))
+        if max_pencil_dof is not None:
+            self._stag_cost_ack = True
+        self._stag_cost_warned = False      # new patterned grid -> re-arm
         # union grid: any PATTERNED side (eps_cell or mu_cell) registers it
         for spec, uni in ((eps_spec, eps_uni), (mu_spec, mu_uni)):
             if uni or self.layer_grids != "shared":
@@ -1345,6 +1360,64 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         return wl, k0, kx0, ky0, a0x, a0y, eps_sup, eps_sub
 
     # ------------------------------------------------------------------ solve
+    def _patterned_cells(self):
+        """Every PATTERNED (segment-grid) array this stack carries -- the
+        ``eps_cell`` of a plain patterned layer and the patterned side(s) of a
+        magnetic one.  Uniform layers own no lattice and are skipped."""
+        out = []
+        for L in self._layers:
+            if L.get("kind") == "patterned":
+                out.append(L["eps_cell"])
+            elif L.get("kind") == "magnetic":
+                if not L.get("eps_uniform", True):
+                    out.append(L["eps"])
+                if not L.get("mu_uniform", True):
+                    out.append(L["mu"])
+        return out
+
+    def _warn_stag_shared_redundancy(self):
+        """JOINT SEGMENT-grid redundancy advice for a ``layer_grids='shared'``
+        stack, emitted once at :meth:`solve` (VERIFY-A13 V5).
+
+        The union-grid contract makes the lattice a property of the STACK, not
+        of a layer, so per-layer advice is unfollowable: MEASURED, a 2x2 and a
+        3x3 pillar tiled onto one shared 6x6 lattice each drew "use the 2x2 /
+        3x3 lattice", and obeying either made the other layer's
+        :meth:`add_layer` raise ``all patterned layers must share ONE common
+        (Nx, Ny) grid``.  The grid the caller CAN pass is the smallest uniform
+        lattice holding every layer's walls -- the lcm of the per-layer minima,
+        which is what :func:`_stag_minimal_uniform_segments` returns when it is
+        given every layer's cell at once (``N / gcd(g_A, g_B) =
+        lcm(N/g_A, N/g_B)``).  On that fixture it is ``lcm(2, 3) = 6``: the
+        caller's own grid, so nothing is said.  Tile the same pair onto 12x12
+        and it still reads 6, so the advice fires and names 6.
+
+        A stack whose lattice already equals that joint minimum is silent; a
+        single-patterned-layer stack reduces to the per-layer check, so the
+        audit's 12x12 half-fill pillar still warns (naming its 4x4 lattice).
+        ``max_pencil_dof=`` on ANY layer is the documented acknowledgement and
+        suppresses it, as on the per-layer path.
+        """
+        if self.layer_grids != "shared" or getattr(self, "_stag_cost_ack",
+                                                   False):
+            return
+        # ONCE per geometry: a wavelength/angle sweep calls solve() many times
+        # on one stack and the advice cannot change between them.  A new
+        # PATTERNED layer clears the latch (it can change the joint minimum); a
+        # uniform one deliberately does not, since it owns no segment lattice.
+        # Same contract as the hybrid stack's eig-refusal warning.
+        if getattr(self, "_stag_cost_warned", False):
+            return
+        cells = self._patterned_cells()
+        if not cells:
+            return
+        shapes = {np.shape(c)[:2] for c in cells}
+        if len(shapes) > 1:                 # the union-grid error's business
+            return
+        self._stag_cost_warned = True
+        _validate_stag_cost("PMM2DStackPure.solve", int(self.M), *cells,
+                            check=("warn",))
+
     def solve(self, *, jones=True, retain_internal=False):
         """Cascade the stack and return the diffraction efficiencies.
 
@@ -1365,6 +1438,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             raise ValueError("PMM2DStackPure.solve: call set_source(...) first.")
         if not self._layers:
             raise ValueError("PMM2DStackPure.solve: add at least one layer.")
+        self._warn_stag_shared_redundancy()
         _check_stack_slant(self._layers, "PMM2DStackPure.solve")
         _slanted_stack = any(not _slant_is_zero(L.get("slant"))
                              for L in self._layers)
