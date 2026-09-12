@@ -1510,8 +1510,20 @@ def _gs_reference(source_amplitude, target_amplitude, n_iter, seed=0):
     phase = rng.uniform(-np.pi, np.pi, size=source_amplitude.shape)
     source_power = np.sum(source_amplitude ** 2)
     target_power = np.sum(target_amplitude ** 2)
+    # A5 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the target must be put
+    # on the scale of the UNNORMALISED DFT it is compared against.
+    # ``_fft2`` carries no 1/N, so Parseval reads
+    # ``sum |F|^2 = N_pix * sum |field|^2``; scaling to the SOURCE power
+    # (what this reference and the library both used to do) leaves a
+    # hard-wired factor N_pix in the reported error, which then cannot
+    # reach 0 for an exact solution.  Measured on a target built as
+    # |FFT(source e^{i phi0})| with phi0 handed back as initial_phase:
+    # reported error 3.775380e+02 (97 % of the target energy, flat over
+    # 50 iterations) before, 3.26e-29 after.
+    n_pix = int(np.asarray(source_amplitude).size)
     if target_power > 0:
-        target_scaled = target_amplitude * np.sqrt(source_power / target_power)
+        target_scaled = target_amplitude * np.sqrt(
+            n_pix * source_power / target_power)
     else:
         target_scaled = target_amplitude
     field = source_amplitude * np.exp(1j * phase)
@@ -1741,7 +1753,10 @@ def test_3a_return_history_matches_reference():
     phase = rng_ref.uniform(-np.pi, np.pi, size=src.shape)
     src_power = np.sum(src ** 2)
     tgt_power = np.sum(tgt ** 2)
-    target_scaled = tgt * np.sqrt(src_power / tgt_power)
+    # A5: the N_pix factor that puts the target on the unnormalised-DFT
+    # scale -- see the note in ``_gs_reference``.  Without it the history
+    # is N_pix = 1024x too large here and cannot reach 0.
+    target_scaled = tgt * np.sqrt(src.size * src_power / tgt_power)
     field = src * np.exp(1j * phase)
     hist_ref = []
     for _ in range(10):

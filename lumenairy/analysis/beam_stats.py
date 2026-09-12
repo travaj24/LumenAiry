@@ -186,6 +186,56 @@ def _subtract_background(xp, I, background):
     return xp.where(I > 0, I, xp.zeros_like(I))
 
 
+def _whole_grid_moments(xp, I, X, Y):
+    """Total power, centroid and D4sigma of one intensity map, in one pass.
+
+    The single source of the whole-grid moment arithmetic: the first pass
+    of :func:`beam_d4sigma` and the per-plane metrics of
+    :func:`lumenairy.analysis.through_focus.single_plane_metrics` both run
+    it, so a caller that needs centroid AND width pays for the moment sums
+    once rather than twice (and for ``|E|**2`` once rather than three
+    times).  Returns ``(None, 0.0, 0.0, 0.0, 0.0)`` for a zero-power map so
+    the caller can reproduce its own empty-field contract.
+    """
+    total = xp.sum(I)
+    if float(total) == 0:
+        return None, 0.0, 0.0, 0.0, 0.0
+    cx = xp.sum(X * I) / total
+    cy = xp.sum(Y * I) / total
+    var_x = xp.sum((X - cx) ** 2 * I) / total
+    var_y = xp.sum((Y - cy) ** 2 * I) / total
+    return total, cx, cy, 4 * xp.sqrt(var_x), 4 * xp.sqrt(var_y)
+
+
+def _centroid_and_d4sigma(E, dx, dy=None):
+    """Whole-grid centroid + D4sigma from ONE intensity pass.
+
+    Bit-identical to ``beam_centroid(E, dx, dy)`` followed by
+    ``beam_d4sigma(E, dx, dy)`` with the ISO conditioning left at its
+    defaults -- same helper, same order of operations -- but it builds
+    ``|E|**2`` once instead of three times and takes the moment sums once
+    instead of twice.
+
+    PRIVATE and UNGUARDED: it assumes a 2-D array field.  Callers keep the
+    ``_check_2d_scalar_field`` entry guard on the public function they
+    expose, and route anything that is not a plain 2-D field to that
+    function so the canonical rejection message is unchanged.
+
+    Returns ``(I, cx, cy, d4x, d4y)``; ``I`` is the intensity map the
+    caller would otherwise rebuild for peak / total power.
+    """
+    if dy is None:
+        dy = dx
+    xp = _xp_of(E)
+    Ny, Nx = E.shape
+    X, Y = _centered_meshgrid(xp, Ny, Nx, dx, dy)
+    I = xp.abs(E) ** 2
+    total, cx, cy, d4x, d4y = _whole_grid_moments(xp, I, X, Y)
+    if total is None:
+        return I, 0.0, 0.0, 0.0, 0.0
+    return I, float(cx), float(cy), float(d4x), float(d4y)
+
+
 def beam_centroid(
     E: np.ndarray,
     dx: float,
@@ -324,16 +374,9 @@ def beam_d4sigma(
     # default, so clean fields are byte-identical to prior releases).
     I = _subtract_background(xp, I, background)
 
-    total = xp.sum(I)
-    if float(total) == 0:
+    total, cx, cy, d4x, d4y = _whole_grid_moments(xp, I, X, Y)
+    if total is None:
         return 0.0, 0.0
-
-    cx = xp.sum(X * I) / total
-    cy = xp.sum(Y * I) / total
-    var_x = xp.sum((X - cx) ** 2 * I) / total
-    var_y = xp.sum((Y - cy) ** 2 * I) / total
-    d4x = 4 * xp.sqrt(var_x)
-    d4y = 4 * xp.sqrt(var_y)
 
     # S3-5: opt-in ISO 11146 clause 9 iterative integration aperture.
     # The default (aperture is None) integrates over the whole grid and

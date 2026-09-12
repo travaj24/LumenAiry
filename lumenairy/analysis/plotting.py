@@ -95,6 +95,17 @@ def _auto_extent(N, dx, unit='auto'):
 
     Returns (extent_tuple, unit_label, scale_factor).
     The scale_factor multiplies meters to reach the chosen display unit.
+
+    The extent addresses the OUTER EDGES of the first and last pixel,
+    while this library samples fields on the centred grid
+    ``(arange(N) - N / 2) * dx`` -- so the edges sit half a sample outside
+    the first and last SAMPLE, at ``-(N / 2 + 1 / 2) * dx`` and
+    ``+(N / 2 - 1 / 2) * dx``.  The symmetric ``+/- N / 2 * dx`` this used
+    to return put every drawn pixel centre half a sample to the RIGHT of
+    the sample it displays (samples ``[-4..3] * dx`` drew at
+    ``[-3.5..3.5] * dx``), while ``plot_psf``'s ``(x[0], x[-1])`` form put
+    them half a sample to the LEFT -- so the same field plotted two ways
+    landed a whole pixel apart.  Both now address the same edges.
     """
     L = N * dx  # grid extent in meters
     if unit == 'auto':
@@ -110,8 +121,10 @@ def _auto_extent(N, dx, unit='auto'):
             raise ValueError(f"Unknown unit {unit!r}")
         scale = scales[unit]
 
-    half = (N / 2) * dx * scale
-    extent = (-half, +half, -half, +half)
+    d = dx * scale
+    lo = -(N / 2 + 0.5) * d
+    hi = (N / 2 - 0.5) * d
+    extent = (lo, hi, lo, hi)
     return extent, unit, scale
 
 
@@ -170,7 +183,7 @@ def plot_intensity(
     Ny, Nx = I.shape
 
     extent, unit_label, _ = _auto_extent(Nx, dx, unit)
-    extent_y, _, _ = _auto_extent(Ny, dy, unit)
+    extent_y, _, _ = _auto_extent(Ny, dy, unit_label)
     full_extent = (extent[0], extent[1], extent_y[2], extent_y[3])
 
     if ax is None:
@@ -244,7 +257,7 @@ def plot_phase(
         phi = np.where(I > mask_threshold * I.max(), phi, np.nan)
 
     extent, unit_label, _ = _auto_extent(Nx, dx, unit)
-    extent_y, _, _ = _auto_extent(Ny, dy, unit)
+    extent_y, _, _ = _auto_extent(Ny, dy, unit_label)
     full_extent = (extent[0], extent[1], extent_y[2], extent_y[3])
 
     if ax is None:
@@ -600,7 +613,11 @@ def plot_psf(
     N = psf.shape[0]
     if dx_psf is not None:
         x_um = (np.arange(N) - N / 2) * dx_psf * 1e6
-        extent = (x_um[0], x_um[-1], x_um[0], x_um[-1])
+        # imshow's extent addresses pixel EDGES; x_um holds pixel CENTRES,
+        # so the edges are half a sample outside both ends.  Matches
+        # ``_auto_extent`` exactly.
+        h = 0.5 * dx_psf * 1e6
+        extent = (x_um[0] - h, x_um[-1] + h, x_um[0] - h, x_um[-1] + h)
         ax.set_xlabel('x [µm]')
         ax.set_ylabel('y [µm]')
     else:
@@ -691,6 +708,7 @@ def plot_stokes(
     unit: str = 'auto',
     figsize: Tuple[float, float] = (12, 10),
     suptitle: str = 'Stokes parameters',
+    dy: Optional[float] = None,
 ) -> Tuple[Any, Any]:
     """
     Plot the four Stokes parameters (S0, S1, S2, S3) for a JonesField.
@@ -699,10 +717,17 @@ def plot_stokes(
     ----------
     jones_field : JonesField
     dx : float, optional
-        Grid spacing. If None, uses jones_field.dx.
+        Grid spacing in x. If None, uses ``jones_field.dx``.
     unit : str
     figsize : tuple
     suptitle : str
+    dy : float, optional
+        Grid spacing in y.  Defaults to ``jones_field.dy`` when the field
+        carries one, else to ``dx``.  Needed because the y axis is drawn
+        from ``Ny`` and ``dy``: taking the x extent for both axes
+        mislabels every ``Ny != Nx`` or anamorphic Jones field, and
+        ``_auto_extent(64, 1e-6)`` and ``_auto_extent(32, 2e-6)`` are
+        indistinguishable, so the error is invisible in the drawn figure.
 
     Returns
     -------
@@ -713,9 +738,15 @@ def plot_stokes(
     S = stokes_parameters(jones_field)
     if dx is None:
         dx = jones_field.dx
+    if dy is None:
+        dy = getattr(jones_field, 'dy', None)
+    if dy is None:
+        dy = dx
 
     Ny, Nx = S['S0'].shape
-    extent, unit_label, _ = _auto_extent(Nx, dx, unit)
+    extent_x, unit_label, _ = _auto_extent(Nx, dx, unit)
+    extent_y, _, _ = _auto_extent(Ny, dy, unit_label)
+    extent = (extent_x[0], extent_x[1], extent_y[2], extent_y[3])
 
     fig, axes = plt.subplots(2, 2, figsize=figsize)
     names = ['S0', 'S1', 'S2', 'S3']
@@ -789,7 +820,7 @@ def plot_polarization_ellipses(
     dy = jones_field.dy
 
     extent, unit_label, scale = _auto_extent(Nx, dx, unit)
-    ext_y, _, _ = _auto_extent(Ny, dy, unit)
+    ext_y, _, _ = _auto_extent(Ny, dy, unit_label)
     full_extent = (extent[0], extent[1], ext_y[2], ext_y[3])
 
     ax.imshow(I, extent=full_extent, origin='lower', cmap=cmap,
@@ -1076,7 +1107,9 @@ def plot_wavefront(
 
     Ny, Nx = opd_disp.shape
     extent, unit_label, _ = _auto_extent(Nx, dx, 'auto')
-    extent_y, _, _ = _auto_extent(Ny, dy, 'auto')
+    # Resolve y in the SAME unit x picked; two independent 'auto' calls
+    # can land on different units and silently mix them on one figure.
+    extent_y, _, _ = _auto_extent(Ny, dy, unit_label)
     full_extent = (extent[0], extent[1], extent_y[2], extent_y[3])
 
     # Symmetric colour limits about zero so the divergent colormap
@@ -1918,7 +1951,7 @@ def plot_jones_pupil(
     if dx is not None:
         extent, unit_label, _ = _auto_extent(Nx, dx, unit)
         if dy is not None:
-            ext_y, _, _ = _auto_extent(Ny, dy, unit)
+            ext_y, _, _ = _auto_extent(Ny, dy, unit_label)
         else:
             ext_y = extent
         full_extent = (extent[0], extent[1], ext_y[2], ext_y[3])
@@ -2006,12 +2039,22 @@ def plot_jones_pupil(
 
 # Measured envelope for the S5.3 runaway-focus guard below
 # (AUDIT_PLOT_LENS_LAYOUT_RAY_OVERLAY_2026_08_19 S5.3, remeasured
-# 2026-08-22 on this build).  ``|image_z| / max(track, aperture, |efl|)``
-# over every in-tree prescription:
+# 2026-08-22 and again 2026-09-12 on this build).
+# ``|image_z| / max(track, aperture, |efl|)`` over every in-tree
+# prescription, at the infinite conjugate:
 #
-#   LA1050-C 0.9733   LA1509-C 0.9883   LA1301-C 0.9912
-#   AC254-050-C 0.8677   AC254-100-C 0.9511   AC254-200-C 0.9806
+#   LA1050-C 0.9729   LA1509-C 0.9762   LA1301-C 0.9910
+#   AC254-050-C 0.8664   AC254-100-C 0.9508   AC254-200-C 0.9805
 #   f/1 biconvex 0.8928   f/40 plano-convex 0.9995   f/100 0.9998
+#
+# The 2026-09-12 re-measurement is of the SIX CATALOGUE rows only, after
+# AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11 corrected the ``LA1509-C``
+# radius (R1 103.29 -> 51.5 mm, EFL 199 -> 99.65 mm, see
+# io/prescriptions_builders.py): that row moves 0.9883 -> 0.9762 and the
+# other five drift by <= 0.0013.  The three synthetic rows carry their
+# 2026-08-22 values (a reconstruction of those fixtures measures
+# 0.8910 / 0.9980 / 0.9992, the same envelope).  Max over the census
+# 0.9992, so the bar below is untouched.
 #
 # i.e. every focusing system sits at or below 1.0, because for an
 # infinite conjugate the ratio reduces to |A| (the ABCD ray-height

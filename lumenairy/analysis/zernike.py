@@ -172,6 +172,11 @@ def zernike_polynomial(
 _ZERNIKE_BASIS_CACHE: "OrderedDict[Any, Tuple[np.ndarray, np.ndarray]]" = OrderedDict()
 _ZERNIKE_BASIS_CACHE_MAXSIZE = 32
 
+# Interior coordinate samples the basis-cache key carries, taken along the
+# grid diagonal.  Fixed (not O(N)) so a cache HIT stays cheap: 16 float
+# reads is ~5 us against a 600 ms basis build at N = 1024.
+_KEY_DIAG_SAMPLES = 16
+
 # v5.33.3 BYTE CAPS (VERIFY_PERF_BRANCH_2026_08_10 sec 5, class B).  The count
 # cap above was the ONLY bound, and one entry is an ``(n_modes, Npix)``
 # float64 basis matrix plus its mask -- it scales with the CALLER's pupil AND
@@ -237,17 +242,29 @@ def _zernike_basis_cache_key(
     # Coerce to ndarray for shape/dtype/corner access without copying.
     Xa = np.asarray(X)
     Ya = np.asarray(Y)
-    # P4 nit: include a MID-POINT sample as well as the corners -- two grids
-    # with equal shape/dtype/corners but different interiors (e.g. a warped
-    # vs uniform grid passed via the public X, Y args) would otherwise share
-    # a basis.  The mid sample distinguishes them for free.
-    _mid = Xa.size // 2
+    # Interior samples as well as the corners, so two grids with equal
+    # shape / dtype / corners but different interiors (a warped vs a
+    # uniform grid passed through the public X, Y args) do not share a
+    # basis.  A7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the previous
+    # single "mid-point" sample at ``Xa.size // 2`` carried NO information
+    # for X on the row-repeating meshgrid every caller passes --
+    # ``X.flat[N * N / 2] == X[N / 2, 0] == x[0] == X.flat[0]`` -- so the
+    # key was corners-only in X.  Sampling along the DIAGONAL
+    # (``flat[k * (Nx + 1)] == X[k, k]``) moves in both axes at once, so
+    # every sample carries new information for X and for Y; a fixed
+    # ``_KEY_DIAG_SAMPLES`` of them keeps the key O(1) to build on a hit.
+    n_diag = min(Xa.shape) if Xa.ndim == 2 else 1
+    stride = (Xa.shape[-1] + 1) if Xa.ndim == 2 else 1
+    step = max(1, n_diag // _KEY_DIAG_SAMPLES)
+    diag = [k * stride for k in range(0, n_diag, step)]
     return (
         int(n_modes),
         Xa.shape, Xa.dtype.str,
         Ya.shape, Ya.dtype.str,
-        float(Xa.flat[0]), float(Xa.flat[_mid]), float(Xa.flat[-1]),
-        float(Ya.flat[0]), float(Ya.flat[_mid]), float(Ya.flat[-1]),
+        float(Xa.flat[0]), float(Xa.flat[-1]),
+        float(Ya.flat[0]), float(Ya.flat[-1]),
+        tuple(float(Xa.flat[i]) for i in diag),
+        tuple(float(Ya.flat[i]) for i in diag),
         float(pupil_radius),
     )
 

@@ -340,18 +340,26 @@ def _measured_pitch_from_wf(wf, slopes_x):
     """Empirically recover the multiplicative pitch used inside
     ``shack_hartmann`` by inverting the column-step relationship.
 
-    Given the post-cumsum wavefront ``wf`` and the underlying
-    ``slopes_x`` (both returned by ``shack_hartmann``), the
-    reconstruction is:
+    Given the reconstructed wavefront ``wf`` and the underlying
+    ``slopes_x`` (both returned by ``shack_hartmann``), a UNIFORM slope
+    field integrates to
 
-        wf[iy, ix] = 0.5 * (sum_{i<=ix} slopes_x[iy, i] * P
-                            + sum_{j<=iy} slopes_y[j, ix] * P)
-                     -- normalized so wf[0, 0] = 0
+        wf[iy, ix] = sum_{i<=ix} slopes_x[iy, i] * P
+                     + sum_{j<=iy} slopes_y[j, ix] * P
+                     -- gauged so wf[0, 0] = 0
 
     where ``P`` is the multiplier under test.  For a pure-x-tilt
     input the slopes_y leg is zero, so::
 
-        wf[iy, ix+1] - wf[iy, ix] = 0.5 * slopes_x[iy, ix+1] * P
+        wf[iy, ix+1] - wf[iy, ix] = slopes_x[iy, ix+1] * P
+
+    A3 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): this helper used to
+    carry a compensating ``2.0 *`` because the reconstruction averaged
+    two ONE-SIDED integrals and so returned HALF of every separable
+    wavefront -- i.e. the probe was calibrated against the defect.  With
+    the factor of 2 removed on both sides the recovered P is unchanged
+    (45.0000 um on the integer-ratio fixture); leaving it in reported
+    90.0000 um.
 
     The OOB sentinels at the edge lenslets are NaN, so we look at
     a valid interior column-step.  Returns the median across all
@@ -362,11 +370,9 @@ def _measured_pitch_from_wf(wf, slopes_x):
     if nLx < 2:
         return np.nan
     # Compute the column-step at each (iy, ix-1 -> ix) for ix>=1.
-    # The cumsum-along-x of slopes_x gives wf_x[iy, ix] =
-    # sum_{i=0..ix} slopes_x[iy, i] * P; subtracting wf_x[iy, ix-1]
-    # leaves slopes_x[iy, ix] * P.  After the 0.5 * (wf_x + wf_y)
-    # average and the corner-anchor, the per-column step from a
-    # pure-x-tilt is 0.5 * slopes_x[iy, ix] * P.
+    # The integral along x gives wf[iy, ix] = sum_{i<=ix}
+    # slopes_x[iy, i] * P (plus a column-0 leg that is constant along
+    # the row); subtracting wf[iy, ix-1] leaves slopes_x[iy, ix] * P.
     wf_diff = np.diff(wf, axis=1)  # shape (nLy, nLx - 1)
     # The aligned slope value for each diff is slopes_x[:, 1:].
     sx_at = slopes_x[:, 1:]
@@ -374,7 +380,7 @@ def _measured_pitch_from_wf(wf, slopes_x):
             & (np.abs(sx_at) > 1e-20))
     if not np.any(mask):
         return np.nan
-    P_vals = 2.0 * wf_diff[mask] / sx_at[mask]
+    P_vals = wf_diff[mask] / sx_at[mask]
     return float(np.median(P_vals))
 
 
@@ -792,9 +798,19 @@ def test_v4_16_1_fix_lines_present():
     assert 'pitch_actual = sa_pixels * dx' in det_py, (
         "Bug 2 fix-line missing: 'pitch_actual = sa_pixels * dx' "
         "must appear in analysis/detector.py.")
-    assert 'cumsum(sx_safe, axis=1) * pitch_actual' in det_py, (
-        "Bug 2 fix-line missing: cumsum(sx_safe, axis=1) * "
-        "pitch_actual must appear (instead of * lenslet_pitch).")
+    # A3 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11) moved the integration
+    # out of ``shack_hartmann`` into ``_reconstruct_wavefront`` (and off
+    # the halved cumsum average), so the marker follows the value into
+    # the call that consumes it.  What is being pinned is unchanged: the
+    # ON-GRID pitch, not the requested ``lenslet_pitch``, is what the
+    # slope-to-wavefront integration is scaled by.
+    assert 'slopes_x, slopes_y, pitch_actual, reconstruction' in det_py, (
+        "Bug 2 fix-line missing: the wavefront reconstruction must be "
+        "driven by pitch_actual (instead of lenslet_pitch).")
+    assert 'lenslet_pitch)' not in det_py.split(
+        'pitch_actual = sa_pixels * dx')[1][:800], (
+        "Bug 2 regression: the reconstruction is scaled by the requested "
+        "lenslet_pitch again.")
 
     # Bug 3 marker: zarr.json marker check in _detect_backend.
     io_py = (repo / 'lumenairy' / 'io' / 'storage.py').read_text(

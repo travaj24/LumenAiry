@@ -11,15 +11,16 @@ function ``H = exp(i * kz * z) * propagating * bandlimit_z`` inside.
 These tests pin that the hoisted path is functionally identical to
 the per-z fallback to within tight bounds:
 
-* vs per-z ``angular_spectrum_propagate`` reference  --  1e-12 relative
-  (bit-near-exact: same FFT primitives, same float64 phase,
-  same fftshift convention).
+* vs per-z ``angular_spectrum_propagate`` reference  --  ``HOIST_RTOL``
+  relative (same FFT primitives, same fftshift convention; the residual
+  is the float64 phase-argument floor of the H recurrence, derived at
+  ``HOIST_RTOL`` below).
 * vs JAX twin (``through_focus_scan_jax``)            --  1e-9 absolute
   (the JAX path is the canonical reference for the hoisted structure
   but uses jax.numpy FFTs and JIT, so a small numeric drift is
   expected).
 * Per-z metrics (Strehl, RMS, D4sigma, power-in-bucket) match the
-  per-z fallback (1e-12 relative) so callers downstream of the scan
+  per-z fallback (``HOIST_RTOL`` relative) so callers downstream of the scan
   (``find_best_focus``, ``MultiFieldMerit``, MC tolerancing) see
   unchanged values.
 * ``bandlimit=True`` / ``bandlimit=False`` both match their per-z
@@ -105,9 +106,30 @@ def _per_z_reference(E_exit, dx, wl, z_arr, bandlimit, *,
 # Pin #1 -- bit-near-exact vs per-z angular_spectrum_propagate
 # ==========================================================================
 
+# Agreement bar between the scan and a per-z ``angular_spectrum_propagate``
+# reference, relative.
+#
+# Derivation (A6, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).  For a
+# uniformly spaced z the scan builds its transfer function by the
+# recurrence ``H(z + dz) = H(z) * H(dz)`` instead of re-evaluating
+# ``exp(1j * kz * z)`` on the whole K-grid per plane (measured 42.8 ->
+# 5.6 ms/plane at N = 1024).  Both evaluate the SAME exact function and
+# both carry an argument rounding of order ``|kz z| * eps / 2``, so their
+# difference is bounded by ``2 |kz z|_max * eps`` and neither is the more
+# accurate one.  These fixtures run z <= 55 mm at 1.55 um, i.e.
+# ``|kz z|_max = 2.23e5`` rad, giving a bound of
+# ``2 * 2.23e5 * 2.22e-16 = 9.9e-11``; the measured worst relative metric
+# drift is 9.5e-12 (peak_I, bandlimit=False), 10x inside it.  1e-9 sits
+# one decade above the analytic bound and two above the measurement,
+# while any REAL defect in the hoist (a wrong band-limit edge, a sign, a
+# dropped fftshift) moves these metrics by 1e-3 or more -- six decades
+# clear.  The modulus of H is preserved to 1.8e-15, so no energy drifts.
+HOIST_RTOL = 1e-9
+
+
 class TestThroughFocusScanFFTHoistBitExact:
     """The hoisted scan must reproduce the per-z reference to within
-    1e-12 relative on every metric and every field sample.
+    ``HOIST_RTOL`` on every metric and every field sample.
     """
 
     @pytest.mark.parametrize('bandlimit', [True, False])
@@ -136,22 +158,22 @@ class TestThroughFocusScanFFTHoistBitExact:
         # NaN entries (no power-in-bucket if bucket_radius=None) and
         # tiny near-zero metrics don't blow up the ratio.
         np.testing.assert_allclose(
-            scan.peak_I, ref_peak, rtol=1e-12, atol=0,
+            scan.peak_I, ref_peak, rtol=HOIST_RTOL, atol=0,
             err_msg=f'peak_I drift (bandlimit={bandlimit})')
         np.testing.assert_allclose(
-            scan.d4sigma_x, ref_d4x, rtol=1e-12, atol=0,
+            scan.d4sigma_x, ref_d4x, rtol=HOIST_RTOL, atol=0,
             err_msg=f'd4sigma_x drift (bandlimit={bandlimit})')
         np.testing.assert_allclose(
-            scan.d4sigma_y, ref_d4y, rtol=1e-12, atol=0,
+            scan.d4sigma_y, ref_d4y, rtol=HOIST_RTOL, atol=0,
             err_msg=f'd4sigma_y drift (bandlimit={bandlimit})')
         np.testing.assert_allclose(
-            scan.rms_radius, ref_rms, rtol=1e-12, atol=0,
+            scan.rms_radius, ref_rms, rtol=HOIST_RTOL, atol=0,
             err_msg=f'rms_radius drift (bandlimit={bandlimit})')
         np.testing.assert_allclose(
-            scan.power_in_bucket, ref_buck, rtol=1e-12, atol=0,
+            scan.power_in_bucket, ref_buck, rtol=HOIST_RTOL, atol=0,
             err_msg=f'power_in_bucket drift (bandlimit={bandlimit})')
         np.testing.assert_allclose(
-            scan.strehl, ref_strehl, rtol=1e-12, atol=0,
+            scan.strehl, ref_strehl, rtol=HOIST_RTOL, atol=0,
             err_msg=f'strehl drift (bandlimit={bandlimit})')
 
     def test_field_complex_values_match_per_z_reference(self):
@@ -160,7 +182,7 @@ class TestThroughFocusScanFFTHoistBitExact:
         values.  Done by repeating the per-z propagation and the
         hoisted propagation independently, then asserting the |E|^2
         peak (a proxy for the complex field that ``through_focus_scan``
-        does NOT expose) matches to 1e-12 relative.
+        does NOT expose) matches to ``HOIST_RTOL``.
         """
         N, dx, wl = 96, 6e-6, 1.31e-6
         E_exit = _make_focusing_field(N=N, dx=dx, wl=wl, f=20e-3,
@@ -171,7 +193,7 @@ class TestThroughFocusScanFFTHoistBitExact:
         scan = through_focus_scan(
             E_exit, dx, wl, z_arr, bandlimit=True, verbose=False)
         np.testing.assert_allclose(
-            scan.peak_I, ref_peak, rtol=1e-12, atol=0,
+            scan.peak_I, ref_peak, rtol=HOIST_RTOL, atol=0,
             err_msg='hoisted peak_I diverges from per-z reference')
 
     def test_z_zero_passthrough(self):
@@ -381,7 +403,7 @@ class TestThroughFocusScanPerZMetrics:
 
         # Per-z verification: take the field at each z (via per-z
         # angular_spectrum_propagate, which we already know agrees
-        # with the hoisted path to 1e-12) and feed it through
+        # with the hoisted path to HOIST_RTOL) and feed it through
         # single_plane_metrics.  Both numbers must agree.
         for i, z in enumerate(z_arr):
             E_z = angular_spectrum_propagate(
@@ -393,19 +415,19 @@ class TestThroughFocusScanPerZMetrics:
             )
             # peak / strehl / d4sigma / rms / bucket
             assert abs(scan.peak_I[i] - m['peak_I']) <= \
-                1e-12 * abs(m['peak_I']), (
+                HOIST_RTOL * abs(m['peak_I']), (
                 f"z={z:.3e}: peak_I {scan.peak_I[i]:.16g} vs "
                 f"{m['peak_I']:.16g}")
             assert abs(scan.d4sigma_x[i] - m['d4sigma_x']) <= \
-                1e-12 * abs(m['d4sigma_x'] or 1.0)
+                HOIST_RTOL * abs(m['d4sigma_x'] or 1.0)
             assert abs(scan.d4sigma_y[i] - m['d4sigma_y']) <= \
-                1e-12 * abs(m['d4sigma_y'] or 1.0)
+                HOIST_RTOL * abs(m['d4sigma_y'] or 1.0)
             assert abs(scan.rms_radius[i] - m['rms_radius']) <= \
-                1e-12 * abs(m['rms_radius'] or 1.0)
+                HOIST_RTOL * abs(m['rms_radius'] or 1.0)
             assert abs(scan.power_in_bucket[i] - m['power_in_bucket']) <= \
-                1e-12 * abs(m['power_in_bucket'] or 1.0)
+                HOIST_RTOL * abs(m['power_in_bucket'] or 1.0)
             assert abs(scan.strehl[i] - m['strehl']) <= \
-                1e-12 * abs(m['strehl'] or 1.0)
+                HOIST_RTOL * abs(m['strehl'] or 1.0)
 
     def test_find_best_focus_finds_same_z_as_per_z_reference(self):
         """End-to-end: ``find_best_focus(scan, 'strehl')`` returns
@@ -430,7 +452,7 @@ class TestThroughFocusScanPerZMetrics:
         s_best_ref = float(np.nanmax(ref_strehl))
         assert z_best == z_best_ref, (
             f'best-focus z drifted: hoisted={z_best} ref={z_best_ref}')
-        assert abs(s_best - s_best_ref) <= 1e-12 * abs(s_best_ref), (
+        assert abs(s_best - s_best_ref) <= HOIST_RTOL * abs(s_best_ref), (
             f'best-Strehl drifted: hoisted={s_best:.16g} '
             f'ref={s_best_ref:.16g}')
 

@@ -168,6 +168,20 @@ def strehl_phase_integral(pupil: np.ndarray) -> float:
     the diffraction-limited peak does not sit on the geometric chief
     ray.
 
+    .. warning::
+
+       **Piston and TILT are NOT removed.**  This is the ON-AXIS Strehl:
+       it measures the intensity at the un-shifted geometric focus, so a
+       wavefront that is merely tilted -- a perfect image, displaced --
+       reads as a catastrophic loss.  :func:`strehl_ratio` takes the PEAK
+       of the PSF wherever the peak is, so it is blind to tilt by
+       construction.  Measured on a pupil carrying 1 wave rms of pure
+       tilt: ``strehl_ratio`` 0.99996, ``strehl_phase_integral``
+       0.00069 -- three orders apart, and both correct for the question
+       each asks.  Remove piston and tilt from the pupil phase first
+       (see :func:`lumenairy.analysis.remove_wavefront_modes`) if you
+       want the aberration-only number.
+
     Parameters
     ----------
     pupil : ndarray (complex, 2-D)

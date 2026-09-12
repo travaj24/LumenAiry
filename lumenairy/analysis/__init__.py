@@ -32,14 +32,23 @@ from .aberration import (
 from .ao import (
     DeformableMirror,
     LeakyIntegrator,
+    ao_closed_loop,
     apply_dm,
+    make_shack_hartmann_wfs,
     slope_to_modal,
     zernike_modal_basis,
+)
+from .beam_stats import (
+    clear_meshgrid_cache,
+    meshgrid_cache_bytes,
 )
 from .coherence import (
     extended_source_image,
     koehler_image,
     mutual_coherence,
+)
+from .coronagraph import (
+    coronagraph_contrast_curve,
 )
 from .core import (
     M2,
@@ -156,6 +165,12 @@ from .plotting import (
     plot_stokes,
     plot_wavefront,
 )
+from .opd import (
+    unwrap_phase_2d,
+)
+from .zernike import (
+    zernike_basis_cache_bytes,
+)
 from .through_focus import (
     Perturbation,
     ThroughFocusResult,
@@ -187,14 +202,16 @@ __all__ = [
     'rayleigh_resolution', 'sparrow_resolution', 'fwhm_resolution',
     'depth_of_focus',
     'remove_wavefront_modes',
-    'opd_pv_rms', 'wave_opd_1d', 'wave_opd_2d', 'check_opd_sampling',
+    'opd_pv_rms', 'wave_opd_1d', 'wave_opd_2d', 'unwrap_phase_2d',
+    'check_opd_sampling',
     'chromatic_focal_shift', 'polychromatic_strehl',
     'polychromatic_psf',
     'radial_power_bands',
     'zernike_polynomial', 'zernike_basis_matrix', 'zernike_decompose',
     'zernike_reconstruct', 'zernike_index_to_nm', 'zernike_nm_to_index',
     'astigmatism_mag_angle',
-    'clear_zernike_basis_cache',
+    'clear_zernike_basis_cache', 'zernike_basis_cache_bytes',
+    'clear_meshgrid_cache', 'meshgrid_cache_bytes',
     # detector
     'apply_detector', 'shack_hartmann',
     # ghost
@@ -237,7 +254,9 @@ __all__ = [
     # via a shim for back-compat)
     'DeformableMirror', 'apply_dm',
     'zernike_modal_basis', 'slope_to_modal',
-    'LeakyIntegrator',
+    'LeakyIntegrator', 'ao_closed_loop', 'make_shack_hartmann_wfs',
+    # coronagraph
+    'coronagraph_contrast_curve',
     # field-resolved analyses (4.4.0; lifted from ui/*_dock.py)
     'DistortionVsField', 'distortion_vs_field',
     'DistortionGrid', 'distortion_grid',

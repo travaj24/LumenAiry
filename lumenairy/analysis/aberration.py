@@ -492,6 +492,7 @@ def caustic_diagnostic(prescription: Dict[str, Any],
     chief_h = np.empty(z_samples.size, dtype=float)
 
     n_surfaces = len(surfaces)
+    n_complex_eig = 0
     for i, z in enumerate(z_samples):
         # Find which between-surface gap this z falls in.
         gap = None
@@ -541,7 +542,18 @@ def caustic_diagnostic(prescription: Dict[str, Any],
         # tangential foci, two separate Maslov increments).
         tr = dxdx + dydy
         det = det_J[i]
-        disc = max(0.25 * tr * tr - det, 0.0)
+        disc_raw = 0.25 * tr * tr - det
+        if disc_raw < 0.0:
+            # Complex-conjugate eigenvalue pair: the ray Jacobian has a
+            # rotational part (a skewed / non-orthogonal system), and
+            # NEITHER eigenvalue is real, so neither can cross zero and
+            # the crossing count below is not a Maslov index for this
+            # plane.  Clamping to `tr / 2` -- which is what the plain
+            # `max(..., 0)` did -- reports two SPURIOUS coincident real
+            # eigenvalues instead, and the zero-crossing scan then
+            # invents a coincident caustic wherever `tr` changes sign.
+            n_complex_eig += 1
+        disc = max(disc_raw, 0.0)
         sqrt_disc = float(np.sqrt(disc))
         eig_J_min[i] = 0.5 * tr - sqrt_disc
         eig_J_max[i] = 0.5 * tr + sqrt_disc
@@ -580,6 +592,19 @@ def caustic_diagnostic(prescription: Dict[str, Any],
             if zc - merged[-1] > 0.5 * sample_step:
                 merged.append(zc)
         caustic_z = merged
+
+    if n_complex_eig:
+        import warnings as _w
+        _w.warn(
+            f'caustic_diagnostic: the ray Jacobian has a complex-conjugate '
+            f'eigenvalue pair at {n_complex_eig} of {z_samples.size} sampled '
+            f'planes (discriminant tr^2/4 - det < 0), i.e. the transverse '
+            f'map rotates there.  Neither eigenvalue is real at those '
+            f'planes, so neither can cross zero: the reported maslov_index '
+            f'and caustic_z come from the real part tr/2 alone and are not '
+            f'a Maslov count for a skewed system.  Axisymmetric systems '
+            f'never reach this branch.',
+            RuntimeWarning, stacklevel=2)
 
     return CausticDiagnostic(
         z_samples=z_samples,

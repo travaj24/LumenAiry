@@ -28,6 +28,7 @@ def simulate_interferogram(
     visibility: float = 1.0,
     background: float = 0.5,
     dx: Optional[float] = None,
+    dy: Optional[float] = None,
 ) -> np.ndarray:
     """Generate a fringe pattern from an OPD map.
 
@@ -50,20 +51,31 @@ def simulate_interferogram(
     background : float, default 0.5
         Mean intensity level (DC offset).
     dx : float, optional
-        Grid spacing [m].  Required if ``tilt_x`` or ``tilt_y`` are
+        Grid spacing in x [m].  Required if ``tilt_x`` or ``tilt_y`` are
         nonzero.
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.  Without it the y
+        tilt ramp is built on the x pitch, so an anamorphic or
+        non-square grid gets the wrong fringe frequency along y.
 
     Returns
     -------
     fringe : ndarray (2-D, real)
-        Intensity fringe pattern, values in [0, 1].
+        Intensity fringe pattern ``background * (1 + visibility *
+        cos(phase))``, so values run over
+        ``[background * (1 - visibility), background * (1 + visibility)]``
+        -- ``[0, 2 * background]`` at full visibility, and ``[0, 1]``
+        only at the default ``background = 0.5``.  Masked (``NaN`` OPD)
+        pixels are 0.
     """
     opd = np.asarray(opd_map, dtype=np.float64)
     Ny, Nx = opd.shape
     phase = 2 * np.pi * opd / wavelength
     if (tilt_x != 0 or tilt_y != 0) and dx is not None:
+        if dy is None:
+            dy = dx
         x = (np.arange(Nx) - Nx / 2) * dx
-        y = (np.arange(Ny) - Ny / 2) * dx
+        y = (np.arange(Ny) - Ny / 2) * dy
         X, Y = np.meshgrid(x, y)
         phase = phase + 2 * np.pi * (tilt_x * X + tilt_y * Y)
     # 4.10: classic Michelson fringe is

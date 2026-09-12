@@ -322,22 +322,34 @@ class TestTiltOracle:
         assert plus == pytest.approx(-minus, rel=0.02)
 
     def test_reconstruction_integrates_the_uniform_slope(self):
-        """``wavefront[i, j] = 0.5 * pitch_actual * (s_x * j + s_y * i)``
-        for uniform slopes, so the extremes sit at opposite corners and
+        """A uniform slope pair integrates to ``W[i, j] = pitch * (s_x * j
+        + s_y * i)`` -- the FULL wavefront, not half of it -- so the
+        extremes sit at opposite corners and
 
-            ptp = 0.5 * pitch_actual * (n - 1) * (|s_x| + |s_y|)
+            ptp = pitch_actual * (n - 1) * (|s_x| + |s_y|)
 
         (each leg contributes its magnitude independently, whatever the
         relative sign).  With the zero point clean, ``s_y == 0`` for a pure
         x tilt, so this reduces to the single-leg form.  All 16x16
-        sub-apertures are in bounds at GOOD, so no NaN-zeroing enters the
-        cumsum.
+        sub-apertures are in bounds at GOOD, so no lenslet is dropped.
+
+        A3 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): this bar used to
+        carry a ``0.5 *``, pinning the defect it was meant to catch.  The
+        pre-fix reconstruction averaged two ONE-SIDED integrals -- the row
+        cumsum anchored at column 0 and the column cumsum anchored at row
+        0 -- whose mean is ``(W - W_00) / 2`` for ANY wavefront separable
+        in x and y, i.e. for tilt, defocus and astigmatism alike.
+        Measured ptp at GOOD with tilt = 1 mrad (16x16 lenslets):
+        2.2680e-06 m post-fix against the oracle 2.2680e-06 m (ratio
+        1.0000, both the 'southwell' and 'itoh' reconstructions); pre-fix
+        1.1340e-06 m (ratio 0.5000).  The independent end-to-end check is
+        in ``tests/unit/test_audit2609_a7_detector_sh.py``.
         """
         (sx, sy, wf, _cx, _cy), _R = _run(tilt=1e-3)
         assert np.all(np.isfinite(sx)) and np.all(np.isfinite(sy))
         n = sx.shape[0]
         pitch_actual = int(round(GOOD['pitch'] / GOOD['dx'])) * GOOD['dx']
-        oracle = (0.5 * pitch_actual * (n - 1)
+        oracle = (pitch_actual * (n - 1)
                   * (abs(float(np.nanmean(sx))) + abs(float(np.nanmean(sy)))))
         assert float(np.nanmax(wf) - np.nanmin(wf)) == pytest.approx(
             oracle, rel=0.02)

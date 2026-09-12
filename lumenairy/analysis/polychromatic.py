@@ -25,6 +25,29 @@ from typing import Any, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
+# Band count above which `radial_power_bands` switches from the
+# mask-and-sum loop to one sort-and-searchsorted pass.
+#
+# Derivation (A6, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).  The loop
+# costs a fixed |E|^2 + meshgrid plus a marginal pass per radius; the
+# sorted construction costs one argsort of Ny*Nx and then nothing per
+# radius.  Measured on this class of machine (median of 3, float64
+# Gaussian, OPENBLAS_NUM_THREADS=1):
+#
+#   N      sort [ms]   masked marginal [ms/radius]   crossover
+#   256      2.19            0.027                      82
+#   512     10.02            0.151                      67
+#   1024    54.99            0.673                      82
+#   2048   274.41            4.232                      65
+#
+# i.e. the crossover sits at 65-82 bands almost independently of N (both
+# sides scale with Ny*Nx; the sort carries the extra log factor).  96 is
+# above the whole measured band, so the switch never makes a small call
+# slower -- `single_plane_metrics(bucket_radius=...)` asks for ONE radius
+# per plane -- while a caller sweeping hundreds of radii gets the flat
+# cost.
+_RADIAL_SORT_CROSSOVER = 96
+
 __all__ = [
     'chromatic_focal_shift',
     'polychromatic_strehl',
@@ -105,11 +128,35 @@ def radial_power_bands(
     I = np.abs(E) ** 2
 
     radii_arr = np.asarray(radii, dtype=float)
-    powers = np.empty(radii_arr.shape, dtype=float)
-    for i, r in enumerate(radii_arr):
-        mask = R2 <= r * r
-        powers[i] = float(np.sum(I[mask]) * dx * dy)
-    return powers
+    if radii_arr.size == 0:
+        return np.empty(radii_arr.shape, dtype=float)
+
+    if radii_arr.size < _RADIAL_SORT_CROSSOVER:
+        powers = np.empty(radii_arr.shape, dtype=float)
+        for i, r in enumerate(radii_arr.ravel()):
+            mask = R2 <= r * r
+            powers.ravel()[i] = float(np.sum(I[mask]) * dx * dy)
+        return powers
+
+    # Many bands: sort the pixels by radius once and read every band off
+    # the cumulative sum, instead of building a full Ny x Nx boolean mask
+    # and re-summing the whole grid per radius.  One O(N^2 log N) sort
+    # replaces n_radii passes of O(N^2), so the cost stops growing with
+    # the band count.  `side='right'` counts every pixel with
+    # R2 <= r^2, matching `mask = R2 <= r * r` exactly on the boundary;
+    # the value differs from the masked sum only by summation order --
+    # a sequential `cumsum` over a radius-ordered permutation instead of
+    # numpy's pairwise reduction, bounded by O(Ny*Nx * eps) = 1.1e-10
+    # relative at N = 1024 and measured at 2.1e-13 on a Gaussian.  Below
+    # `_RADIAL_SORT_CROSSOVER` the masked loop is kept and the result is
+    # bit-identical to every earlier release.
+    r2_flat = R2.ravel()
+    order = np.argsort(r2_flat, kind='stable')
+    r2_sorted = r2_flat[order]
+    p_cum = np.cumsum(I.ravel()[order]) * (dx * dy)
+    idx = np.searchsorted(r2_sorted, radii_arr.ravel() ** 2, side='right')
+    powers = np.where(idx > 0, p_cum[np.maximum(idx - 1, 0)], 0.0)
+    return np.asarray(powers, dtype=float).reshape(radii_arr.shape)
 
 
 def chromatic_focal_shift(

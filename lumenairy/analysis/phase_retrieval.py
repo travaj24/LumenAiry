@@ -178,11 +178,22 @@ def gerchberg_saxton(
     else:
         phase = initial_phase.copy()
 
-    # Normalize target so both fields have the same total power
+    # Normalise the target onto the scale of the UNNORMALISED DFT the
+    # error metric compares it against.  ``_fft2`` carries no 1/N, so
+    # Parseval reads ``sum |F|^2 = N_pix * sum |field|^2``: scaling the
+    # target to the SOURCE power leaves a hard-wired factor N_pix in the
+    # mean-square error, which then cannot reach 0 even for an exact
+    # solution (measured: 3.775e+02 against a target energy of 3.896e+02,
+    # flat over 50 iterations, on a target built as |FFT(source e^{i phi0})|
+    # with phi0 supplied as the initial phase).  The retrieved PHASE is
+    # unaffected either way -- both amplitude-replacement steps are scale
+    # invariant -- so this is a metric fix, not an algorithm change.
     source_power = np.sum(source_amplitude**2)
     target_power = np.sum(target_amplitude**2)
+    n_pix = int(np.asarray(source_amplitude).size)
     if target_power > 0:
-        target_scaled = target_amplitude * np.sqrt(source_power / target_power)
+        target_scaled = target_amplitude * np.sqrt(
+            n_pix * source_power / target_power)
     else:
         target_scaled = target_amplitude
 
@@ -788,6 +799,19 @@ def gerchberg_saxton_jax(
 
     src = jnp.asarray(source_amplitude, dtype=dtype)
     tgt = jnp.asarray(target_amplitude, dtype=dtype)
+    # Backend parity with :func:`gerchberg_saxton`: put the target on the
+    # scale of the unnormalised DFT (``sum |F|^2 = N_pix * sum |E|^2``)
+    # that ``err`` compares it against.  Without it the two backends'
+    # ``err`` differ by N_pix despite documenting the "same physics", and
+    # neither reaches 0 for an exact solution.  Scale invariant for the
+    # returned phase (both replacement steps re-impose an amplitude).
+    _src_pow = jnp.sum(src ** 2)
+    _tgt_pow = jnp.sum(tgt ** 2)
+    _n_pix = float(np.asarray(source_amplitude).size)
+    tgt = jnp.where(
+        _tgt_pow > 0,
+        tgt * jnp.sqrt(_n_pix * _src_pow / jnp.where(_tgt_pow > 0, _tgt_pow, 1.0)),
+        tgt)
 
     # 4.11.2: actually consume `seed`.  Build the initial complex field
     # from src amplitude plus a (possibly random) initial phase.  The

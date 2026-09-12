@@ -44,6 +44,10 @@ from ..raytrace import (
     surfaces_from_prescription,
     trace,
 )
+# R2's entrance-eikonal helper.  Imported from its home module because
+# ``raytrace/__init__`` does not re-export it (unlike
+# ``exit_vertex_transfer``); no local copy is kept here.
+from ..raytrace.trace import seed_entrance_eikonal
 
 # W4c: terminal-index factors from their SINGLE SOURCE in
 # raytrace.seidel -- re-deriving them here is the drift R-1 and S11-1
@@ -195,6 +199,53 @@ def _ray_sphere_opd(opd_a_w, s2x, s2y, s2z, Ld, Md, Nd,
     return rs_w
 
 
+def _warn_object_distance_precision(
+    surfaces, obj_d_m: float, wavelength: float, fod,
+) -> None:
+    """Warn when a finite ``object_distance`` has lost the surface sag.
+
+    Each surface intersection solves ``t^2 + b t + c = 0`` with
+    ``b ~ 2 * obj_d_m`` and ``c = |P - C|^2 - R^2``.  The two roots are
+    separated by ``sqrt(b^2 - 4c) ~ 2 |R|``, so the float64 rounding of
+    ``b^2`` (``eps * b^2``) propagates into the root as
+
+        ``dt ~ eps * (2 obj_d)^2 / (2 * 2 |R|) = eps * obj_d^2 / |R|``.
+
+    Measured on the audit fixture (biconvex N-BK7, ``|R| = 50`` mm,
+    587.6 nm) the marginal ray's surface-0 intersection error was
+    ``0.024 / 5.3 / 590 um`` at ``obj_d = 1e4 / 1e5 / 1e6`` m against a
+    bound of ``0.44 / 44 / 4400 um`` -- the estimator tracks the measured
+    onset and over-states it by ~8x, so gating it at a tenth of a wave
+    fires just as the reported PV starts to move (3.467 waves at 1e3 m,
+    3.691 at 1e4 m, 47.3 at 1e5 m) and stays silent below.
+    """
+    radii = []
+    for s in surfaces:
+        r = float(getattr(s, 'radius', np.inf) or np.inf)
+        if np.isfinite(r) and r != 0.0:
+            radii.append(abs(r))
+    if not radii:
+        return                      # all-flat system: no quadratic solve
+    r_min = min(radii)
+    dt = np.finfo(np.float64).eps * obj_d_m ** 2 / r_min
+    if dt <= 0.1 * wavelength:
+        return
+    efl = float(getattr(fod, 'efl', np.nan))
+    import warnings as _w
+    _w.warn(
+        f'eval_image_plane_wfe: object_distance = {obj_d_m:.3g} m is far '
+        f'enough that the object-side ray-surface intersection loses the '
+        f'surface sag to float64 cancellation -- estimated intersection '
+        f'error {dt*1e6:.3g} um (tightest surface radius {r_min*1e3:.3g} '
+        f'mm, EFL {efl*1e3:.3g} mm), against a wavefront resolution of '
+        f'{wavelength*1e6:.3g} um.  The reported PV / RMS are degraded '
+        f'and the chief ray no longer lands on the axis.  For a distant '
+        f'or infinite object set '
+        f'prescription["object_distance"] = float("inf"), which launches '
+        f'a collimated bundle at the entrance pupil and is exact.',
+        RuntimeWarning, stacklevel=3)
+
+
 def eval_image_plane_wfe(
     prescription: dict,
     wavelength: float,
@@ -205,6 +256,7 @@ def eval_image_plane_wfe(
     sphere_tangent: str = 'vertex',
     field_max_m: Optional[float] = None,
     pupil_grid: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+    field_max_rad: Optional[float] = None,
 ) -> ImagePlaneWFE:
     """Compute image-plane reference-sphere wavefront error.
 
@@ -222,6 +274,17 @@ def eval_image_plane_wfe(
         ``object_distance``, ``aperture_diameter``, and a
         ``surfaces`` list -- see
         :func:`lumenairy.raytrace.surfaces_from_prescription`).
+
+        ``object_distance`` is the distance from surface 0 to the object
+        [m], ``> 0``.  Set it to ``float('inf')`` (or ``None``) for an
+        INFINITE CONJUGATE: the bundle is then launched collimated a few
+        aperture-widths before surface 0, on a plane wavefront normal to
+        the field direction, instead of from a point at a large finite
+        distance.  The finite launch is not a usable stand-in for
+        infinity: the object-side ray-sphere solve carries
+        ``|P - C|^2 ~ object_distance^2`` against ``R^2``, which cancels
+        catastrophically in float64 (see the ``object_distance`` note
+        under Raises).
     wavelength : float
         Vacuum wavelength [m].
     field : tuple of float, default (0, 0)
@@ -272,10 +335,18 @@ def eval_image_plane_wfe(
     field_max_m : float, optional
         Maximum half-field height in **object-space metres**, used
         to convert the normalised ``field`` coordinate to a physical
-        source position.  Required when ``field != (0, 0)``.  If
-        omitted and ``field == (0, 0)``, has no effect (on-axis
-        case).  Falls back to ``prescription['field_max_m']`` if the
-        prescription carries that key.
+        source position.  Required when ``field != (0, 0)`` at a FINITE
+        object distance.  If omitted and ``field == (0, 0)``, has no
+        effect (on-axis case).  Falls back to
+        ``prescription['field_max_m']`` if the prescription carries that
+        key.
+    field_max_rad : float, optional
+        Maximum half-field **angle in radians**, the infinite-conjugate
+        counterpart of ``field_max_m``: at ``object_distance = inf`` a
+        field point is a DIRECTION, not a height, so ``field`` is scaled
+        by this instead.  Required when ``field != (0, 0)`` and the object
+        is at infinity.  Falls back to
+        ``prescription['field_max_rad']``.
     pupil_grid : tuple ``(px, py)``, optional *(4.1+)*
         Custom pupil-grid coordinates as a pair of 1-D arrays of
         **normalised pupil coordinates** in ``[-1, 1]`` -- one ray
@@ -352,26 +423,43 @@ def eval_image_plane_wfe(
             f"('vertex','exit_pupil'); got {sphere_tangent!r}.")
     Hx = float(field[0])
     Hy = float(field[1])
-    if (Hx != 0.0 or Hy != 0.0):
-        if field_max_m is None:
-            field_max_m = prescription.get('field_max_m')
-        if field_max_m is None or float(field_max_m) <= 0:
-            raise ValueError(
-                'eval_image_plane_wfe: non-zero field requires '
-                'field_max_m (object-space half-field radius in m) '
-                'either as a kwarg or in prescription["field_max_m"].')
-        field_max_m = float(field_max_m)
     if not prescription.get('surfaces'):
         raise ValueError(
             'eval_image_plane_wfe: prescription has no "surfaces".')
 
     surfaces = surfaces_from_prescription(prescription)
 
-    obj_d_m = float(prescription.get('object_distance', 0.0))
-    if obj_d_m <= 0:
+    _obj_raw = prescription.get('object_distance', 0.0)
+    obj_d_m = float('inf') if _obj_raw is None else float(_obj_raw)
+    if np.isnan(obj_d_m) or obj_d_m <= 0:
         raise ValueError(
-            f'eval_image_plane_wfe: prescription object_distance must '
-            f'be > 0 (got {obj_d_m:g} m).')
+            f"eval_image_plane_wfe: prescription object_distance must "
+            f"be > 0 (got {obj_d_m:g} m), or float('inf') / None for an "
+            f"infinite conjugate.")
+    infinite_object = not np.isfinite(obj_d_m)
+
+    if (Hx != 0.0 or Hy != 0.0):
+        if infinite_object:
+            if field_max_rad is None:
+                field_max_rad = prescription.get('field_max_rad')
+            if field_max_rad is None or float(field_max_rad) <= 0:
+                raise ValueError(
+                    'eval_image_plane_wfe: non-zero field at an infinite '
+                    'conjugate requires field_max_rad (object-space '
+                    'half-field ANGLE in radians) either as a kwarg or in '
+                    'prescription["field_max_rad"] -- a field point at '
+                    'infinity is a direction, not a height, so '
+                    'field_max_m does not define it.')
+            field_max_rad = float(field_max_rad)
+        else:
+            if field_max_m is None:
+                field_max_m = prescription.get('field_max_m')
+            if field_max_m is None or float(field_max_m) <= 0:
+                raise ValueError(
+                    'eval_image_plane_wfe: non-zero field requires '
+                    'field_max_m (object-space half-field radius in m) '
+                    'either as a kwarg or in prescription["field_max_m"].')
+            field_max_m = float(field_max_m)
 
     # Need first-order data for both the paraxial image-distance
     # derivation AND the exit-pupil sphere tangent (3.8.2+).
@@ -473,7 +561,7 @@ def eval_image_plane_wfe(
     # Compute object-space source position.  On-axis (Hx=Hy=0)
     # this is (0, 0, -obj_d).  Off-axis the source is laterally
     # displaced by (Hx*field_max_m, Hy*field_max_m).
-    if Hx == 0.0 and Hy == 0.0:
+    if Hx == 0.0 and Hy == 0.0 or infinite_object:
         src_x = 0.0
         src_y = 0.0
     else:
@@ -493,17 +581,71 @@ def eval_image_plane_wfe(
     ep_r = float(getattr(fod, 'ep_radius', semi))
     if not np.isfinite(ep_r) or ep_r <= 0:
         ep_r = semi
-    aim_x = px * ep_r - src_x
-    aim_y = py * ep_r - src_y
-    aim_z = obj_d_m + ep_z  # ray length from -obj_d to ep_z
-    norm_aim = np.sqrt(aim_x ** 2 + aim_y ** 2 + aim_z ** 2)
-    L = aim_x / norm_aim
-    M = aim_y / norm_aim
 
-    bundle = _make_bundle(
-        x=np.full_like(px, src_x), y=np.full_like(px, src_y),
-        L=L, M=M, wavelength=wavelength)
-    bundle.z = np.full(px.size, -obj_d_m)
+    if infinite_object:
+        # Collimated launch on a plane wavefront normal to the field
+        # direction.  Every ray gets the SAME direction and its own foot
+        # on that wavefront, so the launch carries the object-side OPL
+        # difference between pupil points exactly (a tilted plane wave is
+        # NOT in phase across a plane of constant z) while the piston --
+        # the only part that depends on how far back the plane sits --
+        # cancels in the chief-relative OPD below.  All path lengths are
+        # O(aperture), so none of the object-side ray-sphere cancellation
+        # of a large finite object_distance arises.
+        th_x = Hx * field_max_rad if Hx != 0.0 else 0.0
+        th_y = Hy * field_max_rad if Hy != 0.0 else 0.0
+        Ld0 = float(np.sin(th_x))
+        Md0 = float(np.sin(th_y))
+        Nd0 = float(np.sqrt(max(1.0 - Ld0 ** 2 - Md0 ** 2, 0.0)))
+        if Nd0 <= 0.0:
+            raise ValueError(
+                f"eval_image_plane_wfe: field direction "
+                f"({th_x:g}, {th_y:g}) rad is at or beyond 90 deg from "
+                f"the axis; reduce field_max_rad.")
+        L = np.full_like(px, Ld0)
+        M = np.full_like(px, Md0)
+        tx = px * ep_r
+        ty = py * ep_r
+        tz = ep_z
+        # Signed distance of each entrance-pupil target along the field
+        # direction; the launch plane sits `back` behind the nearest one.
+        proj = tx * Ld0 + ty * Md0 + tz * Nd0
+        back = 2.0 * aperture_m + abs(ep_z) + 1e-3
+        s = proj - (float(np.min(proj)) - back)
+        bundle = _make_bundle(
+            x=tx - s * Ld0, y=ty - s * Md0,
+            L=L, M=M, wavelength=wavelength)
+        bundle.z = tz - s * Nd0
+        # OPL measured from the incident WAVEFRONT, not from the plane the
+        # bundle happens to be launched on.  ``_make_bundle``'s own
+        # ``opd_seed='eikonal'`` is the ``z = 0`` form and this bundle is
+        # not on ``z = 0``, so use the functional helper, which carries the
+        # ``N*z`` term (R2, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).  It
+        # is a constant here by construction -- every launch point is the
+        # foot of its own ray on one common wavefront -- and the constant
+        # cancels in the chief-relative OPD below; seeding it anyway keeps
+        # the launch correct if the construction ever changes.
+        seed_entrance_eikonal(bundle)
+    else:
+        aim_x = px * ep_r - src_x
+        aim_y = py * ep_r - src_y
+        aim_z = obj_d_m + ep_z  # ray length from -obj_d to ep_z
+        norm_aim = np.sqrt(aim_x ** 2 + aim_y ** 2 + aim_z ** 2)
+        L = aim_x / norm_aim
+        M = aim_y / norm_aim
+
+        bundle = _make_bundle(
+            x=np.full_like(px, src_x), y=np.full_like(px, src_y),
+            L=L, M=M, wavelength=wavelength)
+        bundle.z = np.full(px.size, -obj_d_m)
+        # NO entrance eikonal here: every ray leaves the SAME object
+        # point, so the incident wavefront is a sphere of zero radius and
+        # every ray starts with zero optical path.  ``_make_bundle``'s
+        # default ``opd_seed='plane'`` is exactly that; the ``'eikonal'``
+        # seed is for a COLLIMATED bundle and would add a spurious
+        # ``L*src_x + M*src_y`` across the pupil for an off-axis source.
+        _warn_object_distance_precision(
+            surfaces, obj_d_m, wavelength, fod)
 
     res = trace(bundle, surfaces, wavelength, output_filter='last')
     f = res.image_rays
