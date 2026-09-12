@@ -1,6 +1,13 @@
 """RAYTRACE probe 8c: the missing aspheric/conic Seidel term, quantified,
 plus the proposed one-line fix validated against real rays.
 
+POST-FIX READING NOTE (VERIFY-WP-A1, open item 10) -- the MEASUREMENTS below
+are correct on the fixed library, but the NARRATIVE is pre-fix: WP-A1's R3
+now adds the aspheric term inside ``seidel_coefficients``, so the ``S1_lib``
+column already contains it and the ``S1_fixed`` column DOUBLE-COUNTS it.
+Read ``S1_lib`` as the shipped value; ignore ``dS1_pred`` and ``S1_fixed``.
+This file is audit evidence, so it is annotated rather than rewritten.
+
 Proposed fix (library sign convention, code = -S_Welford):
     A4_eff = conic / (8 R^3) + aspheric_coeffs.get(4, 0.0)
     S1[i] += 8 * (n2 - n1) * A4_eff * y_marginal[i]**4

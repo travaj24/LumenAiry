@@ -349,10 +349,15 @@ class TraceResult:
         -------
         RayBundle
             A NEW bundle; ``self`` and ``image_rays`` are untouched.
-            Rays that were already dead keep their state exactly, and
-            grazing rays (``|N| <= 1e-30``) are KILLED with
+            Rays that were already dead keep their state exactly --
+            **including ``z``**, so a vignetted ray reports the ``z`` at
+            which it died rather than the vertex plane it never reached;
+            mask on ``alive`` before reading a coordinate.  Grazing rays
+            (``|N| <= 1e-30``) are KILLED with
             ``error_code = RAY_MISSED_SURFACE`` rather than teleported to
-            the vertex plane with zero optical path.  Applying the
+            the vertex plane with zero optical path, and rays whose ``N``
+            is not finite with ``error_code = RAY_NAN``.  A uniformly
+            float32 bundle stays float32 on every field.  Applying the
             transform twice is a no-op.
 
         See Also

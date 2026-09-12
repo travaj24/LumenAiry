@@ -19,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._conic_core import reflect_mirror, refract_snell
-from .exit_vertex import _kill_grazing, vertex_plane_transfer_t
+from .exit_vertex import _kill_unreachable, vertex_plane_transfer_t
 from .surface import (
     RAY_APERTURE,
     RAY_MISSED_SURFACE,
@@ -54,6 +54,19 @@ def _inplace_capable(*arrays) -> bool:
 
 def _advance_along_rays(rays, t, n_medium, *, update_z=True):
     """``x += L t``, ``y += M t``, (``z += N t``), ``opd += n_medium t``.
+
+    .. warning:: **The arrays you pass are modified IN PLACE**, not merely
+       rebound on ``rays``.  On the fast path this writes through
+       ``rays.x`` / ``.y`` / ``.z`` / ``.opd`` with ``np.add(..., out=)``,
+       so a caller that also holds one of those arrays (a view into its
+       own buffer, or a second reference) sees the update.  Pre-R6 each
+       statement allocated a new array and rebound the attribute, so such
+       a caller saw nothing.  ``trace`` / ``trace_world`` operate on a
+       private ``rays.copy()`` and are unaffected; direct callers of
+       :func:`_intersect_surface` / :func:`_transfer` (``analysis.ghost``
+       and the finite-difference differential path) must pass a bundle
+       they own.  Non-float64 or read-only inputs take the allocating
+       fallback below, which does rebind.  (VERIFY-WP-A1 open item 8.)
 
     R6 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11) measured the trace hot
     path allocating ~4 full bundles of transient per call (peak 257.5 MiB
@@ -100,6 +113,13 @@ def _intersect_surface(rays, surface, n_medium=1.0):
     intersection** (in the medium the rays are currently in, which is
     the medium *before* this surface).  Rays that miss the clear
     aperture are marked dead.
+
+    .. warning:: "In place" now includes the ARRAYS, not just the
+       attributes: the position / OPL block goes through
+       :func:`_advance_along_rays`, which writes with ``out=`` on the
+       float64 fast path (VERIFY-WP-A1 open item 8).  A caller that hands
+       in a bundle whose fields alias its own buffers will see them
+       change; ``trace`` / ``trace_world`` pass a private ``rays.copy()``.
 
     Parameters
     ----------
@@ -198,7 +218,7 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         # ``exit_vertex_transfer`` so all three "advance to a z = const
         # plane" primitives use the SAME arithmetic and the same
         # grazing-ray definition (audit 2026-09-11 §15.1).
-        t, graze = vertex_plane_transfer_t(rays.z, rays.N, rays.alive)
+        t, unreachable = vertex_plane_transfer_t(rays.z, rays.N, rays.alive)
         # R-4 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): a ray parallel to
         # this plane (|N| <= 1e-30) never reaches it, so the t = 0 fallback
         # above must not be reported as a hit.  Pre-fix it stayed alive with
@@ -215,7 +235,10 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         # had N = 1), so the design case is untouched.  Only a SUBSEQUENT
         # flat surface (which the grazing order provably cannot reach, and
         # which trace_jax likewise kills) now ends the ray.
-        _kill_grazing(rays, graze)
+        # A NOT-FINITE N fails the same |N| > tol test but is a numerical
+        # fault, so ``_kill_unreachable`` stamps RAY_NAN there instead of
+        # RAY_MISSED_SURFACE (VERIFY-WP-A1 open item 5).
+        _kill_unreachable(rays, unreachable)
     elif is_pure_spherical:
         # ---- v4.12.1 Track C: Newton-skip fast path -----------------
         # For a sphere ``x^2 + y^2 + (z - R)^2 = R^2`` the ray-surface
@@ -314,6 +337,23 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         # Anamorphic / freeform / field-frame surfaces are NOT
         # rotationally symmetric, so their conic discriminant is not a
         # valid miss test; those keep the legacy sphere seed.
+        #
+        # Scope of the miss test on a conic + POLYNOMIAL asphere.  The
+        # conic domain is h < |R| for k = 0, UNBOUNDED for k <= -1, and
+        # h < |R|/sqrt(1+k) for k > -1 -- so for k > 0 (an OBLATE
+        # ellipsoid) it is SMALLER than the sphere domain |R|, not
+        # larger, and the test is STRICTER there than the sphere test it
+        # replaces.  (VERIFY-WP-A1 open item 2 corrected the earlier
+        # claim that the conic domain always contains the sphere domain.)
+        # That is not a regression: ``elements.lenses.surface_sag_general``
+        # -- the sag this branch's Newton loop evaluates -- returns NaN
+        # outside the conic domain, so a ray there never converged and was
+        # killed by the post-loop ``~converged`` test anyway.  Measured on
+        # R = 20 mm, k = +2 (domain 11.547 mm) with A4 = +5e4: h = 11.6 and
+        # 13 mm come back alive=False / error_code=3 both before and after
+        # this change, while h = 5 and 11 mm land on the exact sag to
+        # 8.7e-19 m.  The test is exact for a pure conic and conservative
+        # for a conic plus a polynomial departure.
         rot_sym = (radius_y is None and freeform is None and not field_frame)
         if (not np.isinf(R)) and rot_sym:
             x0, y0, z0 = rays.x, rays.y, rays.z
@@ -597,8 +637,25 @@ def _transfer(rays, thickness, n_medium):
     Translates ray positions so they arrive at the next surface vertex
     plane (z = 0) and accumulates OPD.
 
+    .. warning:: **Modifies ``rays`` IN PLACE, arrays included.**  The
+       position / OPL update goes through :func:`_advance_along_rays`,
+       which writes into ``rays.x`` / ``.y`` / ``.opd`` with ``out=``
+       rather than rebinding them, so a caller holding those arrays
+       elsewhere sees the change (VERIFY-WP-A1 open item 8).  ``trace`` /
+       ``trace_world`` pass a private copy.
+
+    DEAD rays keep the ``z`` they had -- they are NOT moved to the next
+    vertex plane.  ``image_rays.z`` of a vignetted ray is therefore the
+    ``z`` at which it died, not ``0``; mask on ``alive`` before reading a
+    coordinate (VERIFY-WP-A1 open item 7).  Their ``x`` / ``y`` / ``opd``
+    were already frozen pre-R6, so this makes the whole dead-ray state
+    self-consistent.
+
     Grazing rays (``|N| <= 1e-30``) are KILLED with
-    ``RAY_MISSED_SURFACE``.  R6 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11):
+    ``RAY_MISSED_SURFACE``, and rays whose ``N`` is NOT FINITE with
+    ``RAY_NAN`` (both fail the same ``|N| > tol`` test; see
+    :func:`lumenairy.raytrace.exit_vertex._kill_unreachable`).
+    R6 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11):
     pre-fix ``t`` was masked to 0 for them but ``rays.z`` was reset to the
     next vertex plane UNCONDITIONALLY, so a ray parallel to the axis-normal
     planes was TELEPORTED one gap downstream with zero OPL and stayed
@@ -615,9 +672,9 @@ def _transfer(rays, thickness, n_medium):
     # Transfer: advance each ray along its direction until it reaches
     # z = thickness (the next surface vertex plane).  t = (thickness - z)/N,
     # via the shared ``vertex_plane_transfer_t`` kernel.
-    t, graze = vertex_plane_transfer_t(rays.z, rays.N, rays.alive,
-                                       z_target=thickness)
-    _kill_grazing(rays, graze)
+    t, unreachable = vertex_plane_transfer_t(rays.z, rays.N, rays.alive,
+                                             z_target=thickness)
+    _kill_unreachable(rays, unreachable)
 
     # Accumulate OPD: geometric path * refractive index, and advance the
     # transverse position, through one reusable buffer (R6).
@@ -632,10 +689,12 @@ def _transfer(rays, thickness, n_medium):
     _advance_along_rays(rays, t, n_medium, update_z=False)
 
     # Only rays that actually made the trip land on the next vertex
-    # plane.  Rays that were already dead, and the grazing rays killed
-    # above, keep the z they had -- freezing a dead ray's state is the
-    # same policy ``_transfer_jax`` adopted in S3-12 and what stops the
-    # teleport described in the docstring.
+    # plane.  Rays that were already dead, and the grazing / NaN rays
+    # killed above, keep the z they had -- freezing a dead ray's state is
+    # the same policy ``_transfer_jax`` adopted in S3-12 and what stops
+    # the teleport described in the docstring.  Behaviour change vs
+    # pre-R6, where this line was unconditional: a vignetted ray's
+    # ``image_rays.z`` is now its death-point z rather than 0.
     rays.z = np.where(rays.alive, np.zeros_like(rays.z), rays.z)
 
 

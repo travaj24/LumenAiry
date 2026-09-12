@@ -38,11 +38,20 @@ sites):
   Here such a ray is killed with ``RAY_MISSED_SURFACE`` and its state is
   frozen -- the same vocabulary and the same policy the flat branch of
   :func:`lumenairy.raytrace.intersection._intersect_surface` uses.
+  A ray whose ``N`` is NOT FINITE fails the same ``|N| > tol`` test, but
+  it is a numerical fault rather than a geometry one, so it is killed
+  with ``RAY_NAN`` instead (VERIFY-WP-A1 open item 5).
 
 Dead rays (``alive == False`` on input, including newly-killed grazing
-rays) keep their position, direction and OPL exactly.  The operator is
-therefore **idempotent**: applying it twice is a no-op, because every ray
-it moved now sits at ``z = 0`` and gets ``t = 0`` on the second pass.
+rays) keep their position, direction and OPL exactly -- including their
+``z``.  A vignetted ray therefore reports the ``z`` at which it DIED, not
+``0``; read ``alive`` before reading any coordinate.  The operator is
+**idempotent**: applying it twice is a no-op, because every ray it moved
+now sits at ``z = 0`` and gets ``t = 0`` on the second pass.
+
+Dtype: a uniformly-float32 bundle stays float32 on every field,
+``opd`` included -- ``n_exit`` is validated in float64 and then cast to
+the bundle's own OPL dtype (VERIFY-WP-A1 open item 4).
 
 Author: Andrew Traverso
 """
@@ -53,7 +62,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from .surface import RAY_MISSED_SURFACE, RAY_OK
+from .surface import RAY_MISSED_SURFACE, RAY_NAN, RAY_OK
 
 # Grazing-ray tolerance on |N|.  Shared with ``intersection._transfer``
 # and the flat branch of ``intersection._intersect_surface`` so the three
@@ -68,6 +77,10 @@ __all__ = [
     'resolve_exit_index',
     'vertex_plane_transfer_t',
 ]
+
+# Codes this module can stamp, re-exported so a consumer can name them
+# without reaching into ``surface``.
+_KILL_CODES = (RAY_MISSED_SURFACE, RAY_NAN)
 
 
 def vertex_plane_transfer_t(
@@ -103,9 +116,13 @@ def vertex_plane_transfer_t(
         ``(z_target - z) / N`` where the ray is alive and non-grazing,
         ``0.0`` everywhere else.  Signed: negative means the ray has
         already passed the plane and must back-track.
-    graze : ndarray of bool
-        Alive rays whose ``|N| <= tol`` -- the caller decides whether to
-        kill them (every caller in this package does).
+    unreachable : ndarray of bool
+        Alive rays that cannot reach the plane -- ``|N| <= tol`` (grazing)
+        OR ``N`` not finite (a numerical fault, which fails the same
+        comparison).  The caller decides whether to kill them (every
+        caller in this package does, via :func:`_kill_unreachable`, which
+        separates the two causes into ``RAY_MISSED_SURFACE`` and
+        ``RAY_NAN``).
     """
     z = np.asarray(z)
     N = np.asarray(N)
@@ -116,19 +133,39 @@ def vertex_plane_transfer_t(
     return t, alive & ~propagating
 
 
-def _kill_grazing(bundle, graze) -> None:
-    """Mark ``graze`` rays dead on ``bundle`` with ``RAY_MISSED_SURFACE``.
+def _kill_unreachable(bundle, unreachable) -> None:
+    """Mark ``unreachable`` rays dead on ``bundle``, classifying the cause.
+
+    ``RAY_NAN`` where the ray's own ``N`` is not finite (a numerical
+    fault), ``RAY_MISSED_SURFACE`` where it is a finite grazing cosine (a
+    geometry fact).  VERIFY-WP-A1 open item 5: both fail the same
+    ``|N| > tol`` test in :func:`vertex_plane_transfer_t`, so before this
+    split a NaN direction cosine was reported as "missed the surface",
+    which sends a caller looking for a vignetting problem that is not
+    there.  ``RAY_NAN`` is the code the Newton branch of
+    ``_intersect_surface`` already uses for exactly this condition.
 
     First-failure-wins on ``error_code`` (only ``RAY_OK`` entries are
     overwritten), matching every other kill site in this package.
     """
-    if not graze.any():
+    if not unreachable.any():
         return
-    bundle.alive = np.asarray(bundle.alive, dtype=bool) & ~graze
+    bundle.alive = np.asarray(bundle.alive, dtype=bool) & ~unreachable
     ec = getattr(bundle, 'error_code', None)
     if ec is not None:
-        first_failure = graze & (ec == RAY_OK)
-        bundle.error_code = np.where(first_failure, RAY_MISSED_SURFACE, ec)
+        first_failure = unreachable & (ec == RAY_OK)
+        nan_cause = ~np.isfinite(np.asarray(bundle.N))
+        bundle.error_code = np.where(
+            first_failure,
+            np.where(nan_cause, np.uint8(RAY_NAN),
+                     np.uint8(RAY_MISSED_SURFACE)),
+            ec)
+
+
+# Backward-compatible alias: the pre-VERIFY name, kept so an in-flight
+# consumer that imported it keeps working.  New code should use
+# ``_kill_unreachable``, whose name matches what it now does.
+_kill_grazing = _kill_unreachable
 
 
 def exit_vertex_transfer(bundle, n_exit, *, fn_name: str = 'exit_vertex_transfer'):
@@ -166,15 +203,24 @@ def exit_vertex_transfer(bundle, n_exit, *, fn_name: str = 'exit_vertex_transfer
         * grazing rays (``|N| <=``
           :data:`EXIT_VERTEX_GRAZING_TOL`) killed with
           ``error_code = RAY_MISSED_SURFACE`` and their state frozen,
+        * rays whose ``N`` is not finite killed with
+          ``error_code = RAY_NAN`` (same freeze),
         * rays that were already dead frozen exactly as they were
-          (position, direction and OPL), so a vignetted ray never
-          reports a vertex-plane coordinate it did not reach.
+          (position, direction and OPL) -- **including ``z``**, so a
+          vignetted ray reports the ``z`` at which it died rather than a
+          vertex-plane coordinate it never reached.  Read ``alive``
+          before reading any coordinate.
 
     Notes
     -----
     * **Idempotent.**  ``exit_vertex_transfer(exit_vertex_transfer(b, n),
       n)`` equals ``exit_vertex_transfer(b, n)`` bit-for-bit: transferred
       rays sit at ``z = 0`` so the second pass computes ``t = 0``.
+    * **Dtype-preserving.**  ``n_exit`` is validated in float64 and then
+      cast to ``bundle.opd``'s own dtype, so a uniformly-float32 bundle
+      comes back float32 on every field.  (Before VERIFY-WP-A1 open item
+      4 the float64 ``n_exit`` promoted ``opd`` alone to float64 while
+      ``x``/``y``/``z`` stayed float32 -- a mixed-dtype bundle.)
     * **Exact on the analytic OPL.**  For a ray leaving a surface of sag
       ``s`` at direction cosine ``N``, the vertex-plane optical path is
       ``opl_sag - n_exit * s / N`` -- which is what this returns, with no
@@ -207,17 +253,24 @@ def exit_vertex_transfer(bundle, n_exit, *, fn_name: str = 'exit_vertex_transfer
             f"parameter already carries the propagation direction.")
 
     out = bundle.copy()
-    t, graze = vertex_plane_transfer_t(out.z, out.N, out.alive)
-    _kill_grazing(out, graze)
-    # Recompute the mask AFTER the kill so a grazing ray neither moves
-    # nor accrues OPL (``t`` is already 0 there, but ``z`` must not be
-    # forced to the vertex plane either -- that was the "immortal
+    # Keep the bundle's own OPL dtype: validation happened in float64
+    # above, but a float64 scalar would promote a float32 ``opd`` alone
+    # and leave x/y/z float32 (VERIFY-WP-A1 open item 4).
+    opd_dtype = np.asarray(out.opd).dtype
+    if np.issubdtype(opd_dtype, np.floating):
+        n_exit_arr = n_exit_arr.astype(opd_dtype, copy=False)
+    t, unreachable = vertex_plane_transfer_t(out.z, out.N, out.alive)
+    _kill_unreachable(out, unreachable)
+    # Recompute the mask AFTER the kill so a grazing / NaN ray neither
+    # moves nor accrues OPL (``t`` is already 0 there, but ``z`` must not
+    # be forced to the vertex plane either -- that was the "immortal
     # phantom" teleport the audit found in five of the seven copies).
     moved = np.asarray(out.alive, dtype=bool)
     out.opd = out.opd + n_exit_arr * t
     out.x = out.x + out.L * t
     out.y = out.y + out.M * t
-    out.z = np.where(moved, 0.0, out.z)
+    out.z = np.where(moved, np.asarray(0.0, dtype=np.asarray(out.z).dtype),
+                     out.z)
     return out
 
 

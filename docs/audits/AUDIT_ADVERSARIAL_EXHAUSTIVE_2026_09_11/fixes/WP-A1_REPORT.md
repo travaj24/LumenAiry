@@ -44,25 +44,46 @@ resolve_exit_index(surfaces, wavelength, *, fn_name, n_exit=None) -> float
 | property | behaviour |
 |---|---|
 | operator | `t = -z/N`; `opd += n_exit*t`; `x += L*t`; `y += M*t`; `z = 0` |
-| sign | SIGNED `t`, never `abs(t)` — a convex exit (`sag > 0`) SUBTRACTS OPL |
+| sign | SIGNED `t`, never `abs(t)`.  `sag > 0` (the exit surface is CONCAVE as seen from downstream, i.e. its edge is past the vertex) gives `t < 0` and SUBTRACTS OPL; `sag < 0` adds it |
 | mask | ALIVE rays only |
-| grazing (`abs(N) <= 1e-30`) | KILLED: `alive=False`, `error_code=RAY_MISSED_SURFACE` (first-failure-wins), state FROZEN — no teleport, no `-z/1e-30` |
-| dead rays | frozen exactly (`x, y, z, opd, error_code` unchanged) |
-| mutation | none — a new bundle/state is returned; `image_rays` is untouched |
+| grazing (`abs(N) <= 1e-30`, finite) | KILLED: `alive=False`, `error_code=RAY_MISSED_SURFACE` (first-failure-wins), state FROZEN — no teleport, no `-z/1e-30` |
+| non-finite `N` | KILLED with `error_code=RAY_NAN` — it fails the same `abs(N) > tol` test but is a numerical fault, not a geometry one (VERIFY open item 5) |
+| **dead rays** | **frozen exactly — `x, y, z, opd, error_code` ALL unchanged.  `z` included: a vignetted ray reports the `z` at which it DIED, not 0.  Mask on `alive` before reading any coordinate.**  `_transfer` adopted the same policy in R6, so `image_rays.z` of a dead ray is already its death-point sag before you call this (VERIFY open item 7) |
+| mutation | none — a new bundle/state is returned; `image_rays` is untouched.  (This is the BUNDLE-level operator.  The three in-package kernel sites — `_intersect_surface`, `_transfer`, `refocus` — do mutate, arrays included: see the in-place note below) |
+| dtype | preserved on every field.  `n_exit` is validated in float64 then cast to `bundle.opd`'s dtype, so a uniformly-float32 bundle stays float32 throughout (VERIFY open item 4) |
 | idempotence | exact: applying twice is bit-identical to applying once |
 | directions | `(L, M, N)` untouched — this is a transfer, not a refraction |
-| `n_exit` default | `get_glass_index(surfaces[-1].glass_after, result.wavelength)`; `glass_before` instead when `surfaces[-1].is_mirror` or `glass_after` is a `'MIRROR'` marker; raises `ValueError` naming the function if the name cannot be resolved — it never guesses 1.0 |
+| `n_exit` default | `get_glass_index(surfaces[-1].glass_after, result.wavelength)`; `glass_before` instead when `surfaces[-1].is_mirror` (the `'MIRROR'` string branch is dead defensive code — `trace()` resolves every `glass_after` through the registry first, so a literal `'MIRROR'` raises there); raises `ValueError` naming the function if the name cannot be resolved — it never guesses 1.0 |
 | `n_exit` validation | must be positive and finite (scalar or per-ray).  A mirror's Welford `n2 = -n1` paraxial sign must NOT be passed: the traced OPL is a physical path length and the signed `t` already carries the propagation direction |
-| JAX form | `JaxRayState` has no `error_code`, so the grazing kill shows only in `alive`; double-`where` throughout, so `jax.grad` is finite at `N = 0` |
+| JAX form | `JaxRayState` has no `error_code`, so both kills show only in `alive`; double-`where` throughout, so `jax.grad` is finite at `N = 0` |
+
+### In-place mutation of the three kernel sites (VERIFY open item 8)
+
+`exit_vertex_transfer` / `at_exit_vertex` never mutate.  The shared
+`vertex_plane_transfer_t` kernel, however, is used by three sites that
+advance a bundle in place, and since R6 "in place" means **the arrays, not
+just the attributes**: `intersection._advance_along_rays` writes through
+`rays.x` / `.y` / `.z` / `.opd` with `np.add(..., out=)` on the float64 fast
+path.  A caller that hands `_intersect_surface` or `_transfer` a bundle whose
+fields alias its own buffers will see them change; pre-R6 each statement
+allocated and rebound, so it saw nothing.  `trace` / `trace_world` operate on
+a private `rays.copy()` and are unaffected — this only matters for the direct
+callers (`analysis/ghost.py`, the finite-difference differential path).
+Non-float64 or read-only inputs take an allocating fallback that still rebinds.
 
 ### Differences from the six hand-written copies you are replacing
 
 1. Grazing rays **die** instead of being teleported (NumPy copies) or getting
    `t = -z/1e-30` (the two `_lens_jax` copies).  If a consumer relied on a
-   grazing ray surviving, it will now see `alive=False`.
-2. Dead rays keep their pre-transfer state instead of being moved to `z = 0`.
+   grazing ray surviving, it will now see `alive=False`.  A non-finite `N`
+   dies too, with `RAY_NAN` rather than `RAY_MISSED_SURFACE`.
+2. Dead rays keep their pre-transfer state instead of being moved to `z = 0` —
+   **including `z`**.  Any consumer that read `image_rays.z` without masking on
+   `alive` and assumed 0 must now mask.
 3. `n_exit` is resolved once, from the prescription, with an explicit failure
    mode.
+4. The bundle's dtype is preserved on every field (a float32 bundle used to
+   come back with `opd` alone widened to float64).
 
 Everything else is bit-identical to the correct copies: measured against the
 analytic vertex-plane OPL `n_exit*(-sag/N)` on sphere / parabola / hyperbola /
@@ -187,6 +208,20 @@ with `v = P − C`.  `R = |xp_z / N_chief|` from `first_order_data`; `R = inf`
 (the reference-PLANE limit, which keeps the exact first-order term) is the
 documented fallback when the exit pupil is unavailable.  New keyword
 `reference_sphere_radius` overrides.
+
+**Deliberate refinement over the Zemax convention** (VERIFY open item 3).
+OpticStudio documents the reference sphere as *centred on the chief ray
+intercept with the image surface, radius equal to the exit pupil distance* —
+the AXIAL `|xp_z|`.  Dividing by `|N_chief|` uses the chief's SLANT path, so
+the sphere passes through the chief's actual crossing of the XP plane rather
+than a point `|xp_z|` away along it.  The two agree exactly on axis and differ
+only in the second-order `n·ε²/(2R)` term off axis.  VERIFY-A1 measured the
+whole difference against its own exact Decimal solve: **0.088 waves out of a
+135.7-wave fan (0.065 %) at 3° on an f/2.4 meniscus** with 4.1 mm of transverse
+aberration, and 8.1e-3 waves out of 52.8 on a cemented doublet at 2°.  Pass
+`reference_sphere_radius=abs(fod.xp_z)` to reproduce Zemax exactly.
+(The helper's third parameter is spelled `N_chief` — it is a direction cosine,
+not a refractive index; it was misleadingly named `n_chief` before VERIFY.)
 
 **Verified** against an INDEPENDENT exact singlet trace written in the test
 (ray/sphere intersection, vector Snell, straight leg to the Gaussian image
@@ -351,9 +386,23 @@ stable root (audit baseline 3.3e-16).
 
 **Residual risk.** The conic discriminant is now also the miss test for a conic
 + POLYNOMIAL asphere, where a large polynomial departure could in principle
-extend the surface past the base conic's domain.  That is a strict improvement
-over the sphere test it replaces (the conic domain always contains the sphere
-domain), but it is not exact for such a surface.  Documented in the code.
+extend the surface past the base conic's domain, so it is not exact for such a
+surface.
+
+*Correction (VERIFY open item 2).*  This paragraph originally justified that as
+"a strict improvement over the sphere test it replaces (the conic domain always
+contains the sphere domain)".  **That justification is false for `k > 0`**: the
+conic domain is `h < |R|` for `k = 0`, unbounded for `k <= -1`, and
+`h < |R|/sqrt(1+k)` for `k > -1` — so an OBLATE ellipsoid's domain is SMALLER
+than the sphere's, and the new test is *stricter* there, not looser.  The
+conclusion (no regression) still holds, for a different reason:
+`elements.lenses.surface_sag_general`, the sag this branch's Newton loop
+evaluates, returns NaN outside the conic domain, so such a ray never converged
+and was killed by the post-loop `~converged` test pre-fix too.  VERIFY-A1
+measured it on `R = 20 mm, k = +2` (domain 11.547 mm) with `A4 = +5e4`:
+`h = 11.6` and `13 mm` come back `alive=False, error_code=3` both before and
+after, while `h = 5` and `11 mm` land on the exact sag to `8.7e-19 m`.  The
+code comment now carries this corrected reasoning.
 
 ### R5 — the diffraction-order kick omits the medium index
 
@@ -401,7 +450,11 @@ edge rays.
 error_code=[0 0]` — teleported one gap downstream with zero OPL and still alive.
 After: `z=[1e-4 1e-4], alive=[F F], opd=[0 0], error_code=[3 3]`.  Dead rays now
 keep their `z` (the `_transfer_jax` S3-12 policy); ordinary rays are
-bit-identical.
+bit-identical.  **Contract note** (VERIFY open item 7): this makes
+`image_rays.z` of a VIGNETTED ray its death-point sag rather than 0, for every
+consumer, not just for `at_exit_vertex` callers.  Mask on `alive`.  A NaN `N`
+is now killed with `RAY_NAN` rather than `RAY_MISSED_SURFACE` (VERIFY open
+item 5) at all three sites that share the kernel.
 
 **In-place arithmetic.** `_intersect_surface`'s position+OPL block and
 `_transfer` write through one reusable buffer (`_advance_along_rays`), guarded
@@ -410,10 +463,21 @@ on float64 + writeable with an allocating fallback.  Output is **bit-identical**
 same two roundings.  Medians of 7 interleaved runs, 7 surfaces,
 `output_filter='last'`, on a box shared with the other WPs:
 
-| N | before | after | speedup | tracemalloc peak |
-|---|---|---|---|---|
-| 300 000 | 2806.3 ns/ray | 2676.1 ns/ray | 1.049× | 70.7 → 65.8 MiB |
-| 1 000 000 | 2931.7 ns/ray | 2840.9 ns/ray | 1.032× | 235.6 → 219.4 MiB |
+| N | before | after | speedup |
+|---|---|---|---|
+| 300 000 | 2806.3 ns/ray | 2676.1 ns/ray | 1.049× |
+| 1 000 000 | 2931.7 ns/ray | 2840.9 ns/ray | 1.032× |
+
+**No memory claim** (VERIFY open item 1).  This table originally carried a
+`tracemalloc peak` column (70.7 → 65.8 MiB and 235.6 → 219.4 MiB).  VERIFY-A1
+could not reproduce any saving: medians of 3 INTERLEAVED runs taken after
+warming both code paths give **178.3 MiB for both** implementations at N = 1e6
+and 35.7 MiB for both at N = 2e5.  The mechanism agrees — the allocating form
+frees each temporary as it rebinds the attribute, so the instantaneous peak
+differs by about one array, not eight — and a single un-warmed first call reads
+*higher* for the in-place arm (190.1 MiB), which is probably what the original
+un-interleaved measurement captured.  The column is withdrawn; the bit-identity
+and the 1.03–1.10× speedup both reproduce independently.
 
 Deferred (with designs) in §6: the `_refract` renormalise hoist and the analytic
 sphere normal — the latter is the 24 % block but a v4.12.0 attempt at it broke a

@@ -115,7 +115,7 @@ def _image_space_index_for_fan(surfaces, wavelength) -> float:
 def _reference_sphere_radius(
     surfaces: List['Surface'],
     wavelength: float,
-    n_chief: float,
+    N_chief: float,
     override: Optional[float],
 ) -> float:
     """Radius [m] of the reference sphere centred on the image point.
@@ -127,10 +127,33 @@ def _reference_sphere_radius(
     passes through the EXIT PUPIL centre, so its radius is the chief
     ray's path length from the XP plane to the image.
 
+    Parameters
+    ----------
+    N_chief : float
+        The chief ray's LONGITUDINAL DIRECTION COSINE at the evaluation
+        surface (``image_rays.N[0]`` of the chief trace) -- **not** a
+        refractive index.  (It was spelled ``n_chief`` until VERIFY-WP-A1
+        open item 3; the value passed has always been the cosine.)
+
+    Notes
+    -----
     ``opd_fan_data`` evaluates the wavefront at the LAST surface of the
     caller's list, and :attr:`FirstOrderData.xp_z` is measured from that
     same surface, so the axial separation is ``|xp_z|`` and the arc
     length along the chief is ``|xp_z / N_chief|``.
+
+    **Deliberate refinement over the Zemax convention.**  OpticStudio
+    documents the reference sphere as "centred on the chief ray intercept
+    with the image surface, radius equal to the exit pupil distance",
+    i.e. the AXIAL ``|xp_z|``.  Dividing by ``|N_chief|`` uses the chief's
+    SLANT path instead, so the sphere passes through the chief ray's
+    actual crossing of the XP plane rather than through a point ``|xp_z|``
+    away along it.  The two agree exactly on axis and differ only in the
+    second-order ``n*eps^2/(2R)`` term off axis: VERIFY-WP-A1 measured
+    the whole difference at **0.088 waves out of a 135.7-wave fan (0.065 %)**
+    at 3 deg on an f/2.4 meniscus with 4.1 mm of transverse aberration,
+    and 8.1e-3 waves out of 52.8 on a cemented doublet at 2 deg.  Pass
+    ``reference_sphere_radius=abs(fod.xp_z)`` to reproduce Zemax exactly.
 
     Returns ``inf`` -- the reference-PLANE limit, which keeps the exact
     first-order ``-n*eps*sin(theta')`` correction and drops only the
@@ -153,7 +176,7 @@ def _reference_sphere_radius(
     except (ValueError, RuntimeError, ZeroDivisionError, AttributeError,
             np.linalg.LinAlgError, IndexError):
         return float('inf')
-    nc = abs(float(n_chief))
+    nc = abs(float(N_chief))
     if nc < 1e-12:
         nc = 1.0
     R = abs(xp_z) / nc
@@ -903,8 +926,8 @@ def refocus(
     # differ only in the grazing-ray policy: ``refocus`` leaves a
     # grazing ray alive and unmoved, as it always has, because a focus
     # sweep must not mutate the alive mask under the caller).
-    t, _graze = vertex_plane_transfer_t(last.z, last.N, last.alive,
-                                        z_target=delta_z)
+    t, _unreachable = vertex_plane_transfer_t(last.z, last.N, last.alive,
+                                              z_target=delta_z)
     last.x = last.x + last.L * t
     last.y = last.y + last.M * t
     last.z = last.z + last.N * t

@@ -413,9 +413,14 @@ def test_r3_near_aplanatic_asphere_is_not_reported_as_aberrated():
 def test_r3_higher_order_and_non_rotational_geometry_warns():
     """Silence is what let the omission survive; these now warn.
 
-    A6/A8 CANNOT be represented in third-order theory (documented in the
-    docstring, no warning); biconic / freeform / field-frame geometry and
-    a paraxial-power-changing A2 DO warn.
+    Biconic / freeform / field-frame geometry and a paraxial-power-changing
+    A2 warn because no rotationally-symmetric third-order expansion exists
+    for them.  A6/A8 warn too (VERIFY-WP-A1 open item 6): their third-order
+    contribution is genuinely ZERO, so the returned sums stay correct, but
+    a caller who tuned an A6 term and saw the sums not move deserves to be
+    told the coefficient was read and dropped -- the A6 arm below is
+    therefore an assertion about DISCLOSURE, not about numbers, and
+    ``test_r3_a6_does_not_change_the_sums`` pins the numbers separately.
     """
     biconic = [Surface(radius=51.68e-3, radius_y=60e-3, semi_diameter=10e-3,
                        glass_before='air', glass_after='N-BK7',
@@ -433,15 +438,71 @@ def test_r3_higher_order_and_non_rotational_geometry_warns():
     with pytest.warns(RuntimeWarning, match='paraxial power'):
         seidel_coefficients(a2, WL, field_angle=1e-6)
 
-    # A plain A4/A6 asphere must NOT warn (A4 is handled; A6 is documented).
+    # A4 + A6: A4 is handled silently, A6 is named in the warning.
+    # (Pre-VERIFY this arm asserted the opposite -- that A4/A6 must NOT
+    # warn.  It pinned the silence that open item 6 asked us to remove, so
+    # it is inverted here, not deleted.)
     plain = [Surface(radius=51.68e-3, aspheric_coeffs={4: -500.0, 6: 1e6},
                      semi_diameter=10e-3, glass_before='air',
                      glass_after='N-BK7', thickness=3.6e-3, is_stop=True),
              Surface(radius=np.inf, semi_diameter=10e-3,
                      glass_before='N-BK7', glass_after='air')]
+    with pytest.warns(RuntimeWarning, match=r'aspheric_coeffs\[6\]'):
+        seidel_coefficients(plain, WL, field_angle=1e-6)
+
+    # A pure A4 asphere (the case the R3 fix HANDLES) must stay silent.
+    a4_only = [Surface(radius=51.68e-3, aspheric_coeffs={4: -500.0},
+                       semi_diameter=10e-3, glass_before='air',
+                       glass_after='N-BK7', thickness=3.6e-3, is_stop=True),
+               Surface(radius=np.inf, semi_diameter=10e-3,
+                       glass_before='N-BK7', glass_after='air')]
     with warnings.catch_warnings():
         warnings.simplefilter('error', RuntimeWarning)
-        seidel_coefficients(plain, WL, field_angle=1e-6)
+        seidel_coefficients(a4_only, WL, field_angle=1e-6)
+    # ...and so must a plain conic, which the same fix handles.
+    conic = [Surface(radius=51.68e-3, conic=-1.0, semi_diameter=10e-3,
+                     glass_before='air', glass_after='N-BK7',
+                     thickness=3.6e-3, is_stop=True),
+             Surface(radius=np.inf, semi_diameter=10e-3,
+                     glass_before='N-BK7', glass_after='air')]
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', RuntimeWarning)
+        seidel_coefficients(conic, WL, field_angle=1e-6)
+
+
+def test_r3_a6_does_not_change_the_sums():
+    """The A6 warning is DISCLOSURE ONLY -- the numbers must not move.
+
+    VERIFY-WP-A1 open item 6 asked for a warning, not a contribution: A6
+    generates fifth- and higher-order aberration, whose third-order
+    coefficient is exactly zero, so ``seidel_coefficients`` must return
+    bit-identical sums with and without it.
+
+    BAR: bit-identical (``np.array_equal``).  Derivation -- ``A6`` enters
+    no expression in the per-surface loop at all; the only code path it
+    touches is the warning list.  Any difference whatsoever would mean the
+    higher-order coefficient had leaked into an arithmetic branch.
+    Measured with A6 = 1e9 (10^6 x a realistic value, chosen so a leak of
+    even 1e-9 relative weight would show): all five sums equal.
+    """
+    def _sys(asph):
+        return [Surface(radius=51.68e-3, aspheric_coeffs=asph,
+                        semi_diameter=10e-3, glass_before='air',
+                        glass_after='N-BK7', thickness=3.6e-3,
+                        is_stop=True),
+                Surface(radius=np.inf, semi_diameter=10e-3,
+                        glass_before='N-BK7', glass_after='air')]
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        base, _ = seidel_coefficients(_sys({4: -500.0}), WL,
+                                      field_angle=1e-3)
+        with_a6, _ = seidel_coefficients(_sys({4: -500.0, 6: 1e9}), WL,
+                                         field_angle=1e-3)
+    for key in ('S1', 'S2', 'S3', 'S4', 'S5'):
+        assert np.array_equal(base[key], with_a6[key]), (
+            f'{key} moved when A6 = 1e9 was added: {base[key]} -> '
+            f'{with_a6[key]}')
 
 
 # ===========================================================================
@@ -774,6 +835,52 @@ def test_r6_transfer_kills_grazing_rays_instead_of_teleporting_them():
     assert np.all(b.error_code == RAY_MISSED_SURFACE)
     assert np.all(b.z == 1e-4), 'grazing rays must NOT be teleported to z=0'
     assert np.all(b.opd == 0.0)
+
+
+def test_transfer_and_flat_intersect_split_nan_from_grazing():
+    """``N = nan`` gets RAY_NAN (4); a finite grazing ``N`` gets 3.
+
+    VERIFY-WP-A1 open item 5.  Both fail the same ``|N| > tol`` test in
+    ``vertex_plane_transfer_t`` (``abs(nan) > tol`` is False), so before
+    the split a NaN direction cosine was reported as "missed the surface"
+    at all three sites that share the kernel -- ``_transfer``, the flat
+    branch of ``_intersect_surface``, and ``exit_vertex_transfer``.
+    ``RAY_NAN`` is the code the Newton branch already uses for exactly
+    this condition, so the diagnostic vocabulary is now consistent across
+    the whole module.
+
+    BAR: exact error codes at both sites.  Discrete decisions, no
+    tolerance; and the healthy third ray proves the classification is
+    per-ray rather than a whole-bundle ``np.where``.
+    """
+    from lumenairy.raytrace.intersection import _intersect_surface
+    from lumenairy.raytrace.surface import RAY_NAN
+
+    def _probe():
+        return RayBundle(x=np.zeros(3), y=np.zeros(3), z=np.full(3, 1e-4),
+                         L=np.array([1.0, 0.0, 0.0]),
+                         M=np.array([0.0, 1.0, 0.0]),
+                         N=np.array([np.nan, 0.0, 1.0]), wavelength=WL,
+                         alive=np.ones(3, bool), opd=np.zeros(3),
+                         error_code=np.zeros(3, dtype=np.uint8))
+
+    b = _probe()
+    with np.errstate(invalid='ignore'):
+        _transfer(b, 10e-3, 1.0)
+    assert list(b.alive) == [False, False, True]
+    assert int(b.error_code[0]) == RAY_NAN
+    assert int(b.error_code[1]) == RAY_MISSED_SURFACE
+    assert int(b.error_code[2]) == 0
+
+    b = _probe()
+    flat = Surface(radius=np.inf, glass_before='air', glass_after='air',
+                   thickness=0.0)
+    with np.errstate(invalid='ignore'):
+        _intersect_surface(b, flat, n_medium=1.0)
+    assert list(b.alive) == [False, False, True]
+    assert int(b.error_code[0]) == RAY_NAN
+    assert int(b.error_code[1]) == RAY_MISSED_SURFACE
+    assert int(b.error_code[2]) == 0
 
 
 def test_r6_transfer_is_unchanged_for_ordinary_rays():

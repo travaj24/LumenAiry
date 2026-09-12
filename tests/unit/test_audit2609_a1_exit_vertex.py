@@ -33,6 +33,7 @@ import pytest
 from lumenairy.raytrace import (
     EXIT_VERTEX_GRAZING_TOL,
     RAY_MISSED_SURFACE,
+    RAY_NAN,
     Surface,
     exit_vertex_transfer,
     refocus,
@@ -188,6 +189,126 @@ def test_grazing_rays_are_killed_not_teleported():
     assert np.array_equal(out.x, b.x)
     assert np.array_equal(out.opd, b.opd)
     assert EXIT_VERTEX_GRAZING_TOL == 1e-30
+
+
+def test_non_finite_direction_cosine_is_RAY_NAN_not_RAY_MISSED():
+    """``N = nan`` is a numerical fault, not a geometry fact.
+
+    VERIFY-WP-A1 open item 5.  ``abs(nan) > tol`` is False, so a NaN
+    direction cosine falls into the SAME branch as a grazing ray and was
+    reported as ``RAY_MISSED_SURFACE`` (3) -- which sends a caller looking
+    for a vignetting problem that is not there.  ``_kill_unreachable``
+    now splits the two causes: not-finite ``N`` -> ``RAY_NAN`` (4), finite
+    grazing ``N`` -> ``RAY_MISSED_SURFACE`` (3).
+
+    BAR: exact error codes, and the NaN ray must not poison its neighbour
+    (a single ``np.where`` over the whole bundle would have).  Both are
+    discrete decisions, not tolerances.
+    """
+    b = RayBundle(x=np.zeros(4), y=np.array([1e-3, 2e-3, 3e-3, 4e-3]),
+                  z=np.full(4, 1e-4),
+                  L=np.array([1.0, 0.0, 0.0, 0.0]), M=np.zeros(4),
+                  N=np.array([np.nan, 0.0, -np.nan, 1.0]), wavelength=WL,
+                  alive=np.ones(4, bool), opd=np.zeros(4),
+                  error_code=np.zeros(4, dtype=np.uint8))
+    with np.errstate(invalid='ignore'):
+        out = exit_vertex_transfer(b, 1.5)
+    assert list(out.alive) == [False, False, False, True]
+    assert int(out.error_code[0]) == RAY_NAN
+    assert int(out.error_code[1]) == RAY_MISSED_SURFACE
+    assert int(out.error_code[2]) == RAY_NAN
+    assert int(out.error_code[3]) == 0
+    # The three dead rays are frozen; the healthy one transferred normally.
+    assert np.array_equal(out.z[:3], b.z[:3])
+    assert np.array_equal(out.opd[:3], b.opd[:3])
+    assert out.z[3] == 0.0
+    assert np.isfinite(out.opd[3]) and out.opd[3] == 1.5 * (-1e-4 / 1.0)
+    # First-failure-wins still applies to the NaN branch.
+    b2 = RayBundle(x=np.zeros(1), y=np.zeros(1), z=np.array([1e-4]),
+                   L=np.ones(1), M=np.zeros(1), N=np.array([np.nan]),
+                   wavelength=WL, alive=np.ones(1, bool), opd=np.zeros(1),
+                   error_code=np.array([2], dtype=np.uint8))  # RAY_APERTURE
+    with np.errstate(invalid='ignore'):
+        assert int(exit_vertex_transfer(b2, 1.0).error_code[0]) == 2
+
+
+def test_float32_bundle_keeps_its_dtype_on_every_field():
+    """A uniformly-float32 bundle must not come back mixed-dtype.
+
+    VERIFY-WP-A1 open item 4 (audit §15.6, "float32 / JAX-x64 handling is
+    inconsistent").  ``n_exit`` is validated in float64; passing that
+    float64 0-d array straight into ``opd + n_exit * t`` promoted ``opd``
+    alone to float64 under NEP 50 (0-d arrays are not weak), while
+    ``x``/``y``/``z`` stayed float32 -- so a float32 bundle came back with
+    one field silently widened.  ``n_exit`` is now cast to the bundle's
+    own OPL dtype first.
+
+    BAR: exact dtype equality on all seven fields, plus agreement with the
+    float64 answer to 2e-7 relative.  Derivation -- float32 eps is
+    1.19e-7, and the transfer is three multiply-adds, so ~2 eps is the
+    arithmetic floor; measured 6.9e-8 relative.  Validation still happens
+    in float64, so a bad ``n_exit`` is still rejected (asserted below).
+    """
+    ref = RayBundle(x=np.zeros(3), y=np.array([1e-3, 2e-3, 3e-3]),
+                    z=np.array([1e-4, -2e-4, 3e-4]),
+                    L=np.array([0.1, 0.2, 0.0]),
+                    M=np.array([0.0, 0.1, 0.0]),
+                    N=np.array([0.9, -0.8, 1.0]), wavelength=WL,
+                    alive=np.ones(3, bool), opd=np.zeros(3),
+                    error_code=np.zeros(3, dtype=np.uint8))
+    out64 = exit_vertex_transfer(ref, 1.5)
+
+    b32 = ref.copy()
+    for f in ('x', 'y', 'z', 'L', 'M', 'N', 'opd'):
+        setattr(b32, f, getattr(b32, f).astype(np.float32))
+    out32 = exit_vertex_transfer(b32, 1.5)
+    for f in ('x', 'y', 'z', 'L', 'M', 'N', 'opd'):
+        assert getattr(out32, f).dtype == np.float32, (
+            f'{f} came back {getattr(out32, f).dtype}, not float32')
+    assert np.allclose(out32.opd, out64.opd, rtol=2e-7, atol=0)
+    assert np.allclose(out32.x, out64.x, rtol=2e-7, atol=1e-12)
+    # float64 bundles are untouched by the cast.
+    assert out64.opd.dtype == np.float64
+    # Validation still runs in float64.
+    for bad in (0.0, -1.5, np.nan, np.inf):
+        with pytest.raises(ValueError, match='n_exit'):
+            exit_vertex_transfer(b32, bad)
+
+
+def test_dead_rays_keep_their_death_point_z_through_transfer():
+    """``image_rays.z`` of a vignetted ray is where it DIED, not 0.
+
+    VERIFY-WP-A1 open item 7 -- a contract detail the next wave needs.
+    ``_transfer`` used to reset ``z`` unconditionally, so a dead ray
+    carried its death-point ``x``/``y``/``opd`` but a vertex-plane ``z``:
+    an internally inconsistent state.  R6 made the reset alive-masked, so
+    the whole dead-ray record is now self-consistent -- and a consumer
+    that assumed ``z == 0`` for every row must mask on ``alive``.
+
+    BAR: exact equality with the sag of the surface the ray died on.
+    Both sides are the same float; a tolerance would hide a partial reset.
+    """
+    surfs = [Surface(radius=30e-3, conic=-0.7, semi_diameter=6e-3,
+                     glass_before='air', glass_after='N-BK7',
+                     thickness=6e-3, is_stop=True),
+             Surface(radius=40e-3, semi_diameter=14e-3,
+                     glass_before='N-BK7', glass_after='air',
+                     thickness=0.0)]
+    res = trace(_bundle([1e-3, 3e-3, 8e-3, 12e-3]), surfs, WL)
+    img = res.image_rays
+    dead = ~img.alive
+    assert dead.sum() == 2, f'fixture must vignette: alive = {img.alive}'
+    # The dead rays sit on surface 0's sag, not on a vertex plane.
+    c = 1.0 / 30e-3
+    for h in (8e-3, 12e-3):
+        sag = c * h ** 2 / (1.0 + np.sqrt(1.0 - (1.0 - 0.7) * c * c * h * h))
+        assert np.any(np.isclose(img.z[dead], sag, rtol=0, atol=0)), (
+            f'no dead ray sits at the h = {h*1e3:.0f} mm sag {sag:.9e}; '
+            f'dead z = {img.z[dead]}')
+    assert np.all(img.z[dead] != 0.0)
+    # ...and at_exit_vertex leaves them exactly there.
+    assert np.array_equal(res.at_exit_vertex().z[dead], img.z[dead])
+    assert np.all(res.at_exit_vertex().z[img.alive] == 0.0)
 
 
 def test_first_failure_wins_on_the_grazing_kill():

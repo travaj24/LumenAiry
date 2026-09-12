@@ -40,9 +40,28 @@ one definition of "grazing".
 Migration note for the other work packages: replace every hand-written
 `t = -z/N; opd += n*t; x,y += (L,M)*t; z = 0` block with
 `result.at_exit_vertex()` (or `exit_vertex_transfer(bundle, n)` /
-`exit_vertex_transfer_jax(state, n)`).  The helper changes behaviour in two
-places relative to those copies: grazing rays die rather than teleport, and
-dead rays keep their pre-transfer state.
+`exit_vertex_transfer_jax(state, n)`).  The helper differs from those copies in
+four ways:
+
+1. Grazing rays (`|N| <= 1e-30`, finite) die with `RAY_MISSED_SURFACE` rather
+   than being teleported to `z = 0` with zero OPL (NumPy copies) or given
+   `t = -z/1e-30` (the two `_lens_jax` copies).
+2. A NOT-FINITE `N` dies with `RAY_NAN` -- it fails the same `|N| > tol` test
+   but is a numerical fault, not a geometry one.
+3. Dead rays keep their pre-transfer state, **`z` included**.  A vignetted ray
+   therefore reports the `z` at which it died, not `0`; mask on `alive` before
+   reading any coordinate.  (`_transfer` adopted the same policy, so this is
+   already true of `image_rays.z` before you call the helper.)
+4. The bundle's dtype is preserved on every field -- `n_exit` is validated in
+   float64 and then cast to `bundle.opd`'s own dtype, so a uniformly-float32
+   bundle no longer comes back with `opd` alone widened to float64.
+
+The helper itself never mutates its input.  The three in-package kernel sites
+do, and since this release "in place" includes the ARRAYS:
+`intersection._advance_along_rays` writes through `rays.x/.y/.z/.opd` with
+`np.add(..., out=)`, so a direct caller of `_intersect_surface` / `_transfer`
+that passes a bundle aliasing its own buffers will see it change.  `trace` /
+`trace_world` operate on a private `rays.copy()` and are unaffected.
 
 ### Fixed -- raytrace: `opd_fan_data` had no reference sphere (R1)
 
@@ -130,11 +149,17 @@ conjugate is now reported as aberration-free, and an A4 = -500 aplanatised
 singlet as 0.34 um rather than 6.65 um.
 
 The docstring now states what IS and is NOT included, and a `RuntimeWarning`
-names any surface the rotationally-symmetric third-order expansion cannot
-represent at all (biconic `radius_y` / `conic_y` / `aspheric_coeffs_y`,
-`freeform`, the field-frame decenter/tilt block, and a power-2 aspheric
-coefficient, which changes the paraxial curvature).  A6/A8 are documented as
-out of scope -- they generate fifth- and higher-order aberration.
+names any surface whose geometry contributes nothing to the returned sums:
+biconic `radius_y` / `conic_y` / `aspheric_coeffs_y`, `freeform`, the
+field-frame decenter/tilt block, and a power-2 aspheric coefficient (which
+changes the paraxial curvature) -- none of which a rotationally-symmetric
+third-order expansion can represent at all -- and `aspheric_coeffs[6]`, `[8]`,
+... , whose third-order contribution is genuinely ZERO because they generate
+fifth- and higher-order aberration.  The A6/A8 arm is DISCLOSURE ONLY: the
+sums are bit-identical with and without such a coefficient (pinned with
+A6 = 1e9), but a caller who tuned an A6 term and saw the sums not move
+deserves to be told the coefficient was read and dropped.  Silence of exactly
+that kind is what let this whole finding survive.
 
 ### Fixed -- raytrace: conic surfaces falsely reported RAY_MISSED_SURFACE (R4)
 
@@ -245,10 +270,31 @@ measured `max |dx| = max |dy| = max |dopd| = 0.0` on a 7-surface trace.
 Medians of 7 interleaved runs on a 7-surface prescription,
 `output_filter='last'`, box shared with other jobs:
 
-| N | before | after | speedup | tracemalloc peak before -> after |
-|---|---|---|---|---|
-| 300 000 | 2806 ns/ray | 2676 ns/ray | 1.049x | 70.7 -> 65.8 MiB |
-| 1 000 000 | 2932 ns/ray | 2841 ns/ray | 1.032x | 235.6 -> 219.4 MiB |
+| N | before | after | speedup |
+|---|---|---|---|
+| 300 000 | 2806 ns/ray | 2676 ns/ray | 1.049x |
+| 1 000 000 | 2932 ns/ray | 2841 ns/ray | 1.032x |
+
+No peak-memory claim is made.  An earlier draft of this entry carried a
+`tracemalloc peak` column (70.7 -> 65.8 MiB, 235.6 -> 219.4 MiB); independent
+re-measurement (VERIFY-WP-A1) could not reproduce it -- medians of 3
+INTERLEAVED runs taken after warming both code paths read 178.3 MiB for BOTH
+implementations at N = 1e6 and 35.7 MiB for both at N = 2e5.  The allocating
+form frees each temporary as it rebinds the attribute, so the instantaneous
+peak differs by about one array rather than eight.  The speedup and the
+bit-identity above both reproduce.
+
+NOTE (behaviour change at the boundary): `_transfer` no longer resets a DEAD
+ray's `z`.  `image_rays.z` of a vignetted ray is now the `z` at which it died
+instead of `0` -- its `x`, `y` and `opd` were already frozen there, so the
+dead-ray record is self-consistent for the first time, but any consumer that
+read `image_rays.z` without masking on `alive` must now mask.  A ray whose `N`
+is not finite is killed with `RAY_NAN` rather than `RAY_MISSED_SURFACE`
+(grazing rays keep `RAY_MISSED_SURFACE`).  And `_advance_along_rays` writes
+THROUGH `rays.x/.y/.z/.opd` with `out=` rather than rebinding them, so a direct
+caller of `_intersect_surface` / `_transfer` that passes a bundle aliasing its
+own buffers now sees the mutation; `trace` / `trace_world` pass a private copy
+and are unaffected.
 
 ### Fixed -- raytrace: the P3 bundle (R7)
 

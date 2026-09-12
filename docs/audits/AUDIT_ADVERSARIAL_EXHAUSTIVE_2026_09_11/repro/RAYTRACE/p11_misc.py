@@ -1,4 +1,15 @@
-"""RAYTRACE probe: misc robustness / convention checks."""
+"""RAYTRACE probe: misc robustness / convention checks.
+
+POST-FIX READING NOTE (VERIFY-WP-A1, open item 10) -- the MEASUREMENTS below
+are correct on the fixed library, but sections A and B print a hard-coded
+PRE-FIX conclusion under them.  A now measures ``alive=[False False],
+error_code=[3 3]`` with ``z`` preserved (the grazing ray is killed, not
+teleported) even though the text still says "TELEPORTED ... and is still
+alive"; B quotes the source excerpt, which now shows the corrected
+first-failure-wins block, under a sentence claiming the ``np.where`` is
+unconditional.  Read the numbers, not the narrative.  This file is audit
+evidence, so it is annotated rather than rewritten.
+"""
 import sys
 import numpy as np
 sys.path.insert(0, r'D:/Metacept/Neurophos/Python_Test_Scripts/Free_Space_Optics/Lumenairy')

@@ -1349,8 +1349,12 @@ def seidel_coefficients(
       mirror (see :func:`_aspheric_seidel`).
     * ``aspheric_coeffs[6]``, ``[8]``, ... -- **not** included, and they
       cannot be: they generate FIFTH- and higher-order aberration, which
-      the third-order Seidel sums do not describe.  A design that leans
-      on A6/A8 needs a real-ray wavefront
+      the third-order Seidel sums do not describe.  Their third-order
+      contribution is genuinely zero, so the returned sums are correct --
+      but a ``RuntimeWarning`` now names the surfaces anyway
+      (VERIFY-WP-A1 open item 6), because a caller who tuned an A6 term
+      and saw no change in the sums deserves to be told why.  A design
+      that leans on A6/A8 needs a real-ray wavefront
       (:func:`lumenairy.raytrace.opd_fan_data` or
       :func:`lumenairy.analysis.eval_image_plane_wfe`).
     * ``aspheric_coeffs[2]``, ``radius_y`` / ``conic_y`` /
@@ -1500,15 +1504,30 @@ def seidel_coefficients(
             _why.append('field_decenter / field_tilt / field_sag_callable')
         if (getattr(_s, 'aspheric_coeffs', None) or {}).get(2, 0.0):
             _why.append('aspheric_coeffs[2] (changes the paraxial power)')
+        # VERIFY-WP-A1 open item 6: A6/A8/... generate FIFTH- and
+        # higher-order aberration only, so their third-order contribution
+        # is genuinely zero and the returned sums are RIGHT -- but the
+        # caller has no way to know their coefficients were read and
+        # dropped.  Silence of exactly this kind is what let the whole R3
+        # conic/aspheric omission survive, so say it out loud.  (The
+        # numbers are unchanged by this warning.)
+        _ho = sorted(p for p in (getattr(_s, 'aspheric_coeffs', None) or {})
+                     if isinstance(p, (int, np.integer)) and p >= 6
+                     and (getattr(_s, 'aspheric_coeffs') or {})[p])
+        if _ho:
+            _why.append(
+                'aspheric_coeffs' + '/'.join(f'[{p}]' for p in _ho)
+                + ' (5th- and higher-order only; third-order theory has no '
+                  'term for them, so they contribute exactly 0 here)')
         if _why:
             _unrepresentable.append(f'surface {_i}: ' + ', '.join(_why))
     if _unrepresentable:
         warnings.warn(
             "seidel_coefficients: the third-order (Seidel) expansion is "
             "defined only for rotationally-symmetric surfaces whose "
-            "paraxial power comes from radius/conic, so the following are "
-            "IGNORED and the returned sums describe the "
-            "rotationally-symmetric base system only -- "
+            "paraxial power comes from radius/conic and whose departure is "
+            "4th order, so the following surface features contribute "
+            "NOTHING to the returned sums -- "
             + '; '.join(_unrepresentable)
             + ".  Use a real-ray wavefront (analysis.eval_image_plane_wfe "
               "or raytrace.opd_fan_data) for these designs.",
