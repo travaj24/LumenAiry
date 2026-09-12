@@ -791,7 +791,10 @@ def _pick_ray_transfer(surfaces, exact):
     / freeform / biconic surfaces (which the analytic form does not handle) and
     when ``exact=False``.  ``exact=None`` (the default) AUTO-selects: analytic for
     an all-conic prescription, FD otherwise."""
-    from ..raytrace.differential import ray_transfer_jacobian, ray_transfer_jacobian_analytic
+    from ..raytrace.differential import (
+        ray_transfer_jacobian,
+        ray_transfer_jacobian_analytic,
+    )
     all_conic = _is_all_conic(surfaces)
     if exact is None:
         exact = all_conic       # H4c: default to the analytic Jacobian when it applies
@@ -2223,6 +2226,71 @@ def apply_real_lens_fga_vector(
     return np.stack([ex, ey], axis=0)
 
 
+def _global_mean_tilt(E_in, dx, dy, wavelength):
+    """Intensity-weighted mean direction cosines ``(tx, ty)`` of a field.
+
+    The beam's own propagation direction, i.e. the global linear phase ramp
+    ``exp(i k0 (tx x + ty y))`` it carries.  Built from the same per-pixel
+    conjugate-product local wavevector :func:`_tilt_dispersion` uses -- so the
+    two agree by construction and neither needs an FFT or a global unwrap -- and
+    weighted by ``|E|^2``.
+
+    A radially symmetric converging or diverging beam returns ``(0, 0)``: its
+    local tilts are ``+-NA`` and cancel in the intensity-weighted mean.  A
+    tilted beam returns its tilt.  The per-pixel estimator wraps at the grid
+    Nyquist angle ``lambda / (2 dx)``, which is also the largest tilt the grid
+    can represent at all.
+
+    Returns
+    -------
+    (float, float)
+        ``(tx, ty)`` in direction cosines; ``(0.0, 0.0)`` for an empty or
+        zero-power field.
+    """
+    E = np.asarray(E_in)
+    a2 = np.abs(E) ** 2
+    tot = float(a2.sum())
+    if not np.isfinite(tot) or tot <= 0.0:
+        return 0.0, 0.0
+    k0 = 2.0 * np.pi / float(wavelength)
+    px = np.zeros_like(a2)
+    py = np.zeros_like(a2)
+    px[:, :-1] = np.angle(E[:, 1:] * np.conj(E[:, :-1])) / (k0 * float(dx))
+    py[:-1, :] = np.angle(E[1:, :] * np.conj(E[:-1, :])) / (k0 * float(dy))
+    # The forward-difference columns/rows above leave one edge at 0; weight the
+    # mean by the same a2 so that edge contributes its (zero) slope with its
+    # own tiny amplitude, exactly as _tilt_dispersion does.
+    return (float(np.sum(a2 * px) / tot), float(np.sum(a2 * py) / tot))
+
+
+def _remove_global_tilt(E_in, dx, dy, wavelength):
+    """Return ``E_in`` with its global linear phase ramp divided out.
+
+    ``E * exp(-i k0 (tx x + ty y))`` with ``(tx, ty)`` from
+    :func:`_global_mean_tilt`.  A pure change of reference DIRECTION: it moves
+    no energy and changes no local wavefront CURVATURE, so any test of whether
+    a beam is collimated / converging / aberrated must be invariant under it.
+
+    S10 (audit): ``_universal_route``'s final escape hatch asked
+    ``_carrier_residual_rms(E_in, None, ...) > _NONCOLLIMATED_RESID_THRESH``,
+    and that residual is EXACTLY the tilt magnitude for a pure tilt (measured
+    5.000e-03 / 2.000e-02 / 5.000e-02 / 1.000e-01 at tilt = 0.005 / 0.02 / 0.05
+    / 0.1 rad).  So a 0.05 rad (2.9 deg) tilted PLANE WAVE read as "more
+    non-collimated" than an R = 3 mm converging wavefront (4.056e-02) and was
+    routed to the thin phase screen.
+    """
+    tx, ty = _global_mean_tilt(E_in, dx, dy, wavelength)
+    if tx == 0.0 and ty == 0.0:
+        return np.asarray(E_in)
+    E = np.asarray(E_in)
+    ny, nx = E.shape[-2], E.shape[-1]
+    k0 = 2.0 * np.pi / float(wavelength)
+    xs = (np.arange(nx) - nx // 2) * float(dx)
+    ys = (np.arange(ny) - ny // 2) * float(dy)
+    ramp = np.exp(-1j * k0 * (tx * xs[None, :] + ty * ys[:, None]))
+    return E * ramp
+
+
 def _caustic_zone(E_in, dx, prescription, wavelength, n_rays=25):
     """Geometric-caustic axial extent [z_near, z_far] PAST the last vertex, or
     ``None`` if the field is not converging to a caustic.
@@ -2265,16 +2333,47 @@ def _caustic_zone(E_in, dx, prescription, wavelength, n_rays=25):
         return None
     rr = np.linspace(xs_h[good][0], xs_h[good][-1], n_rays)
     u_in = np.interp(rr, xs_h[good], sl_h[good])
+    # S10 (audit): the fan is scored against the CHIEF ray, not against the
+    # optical axis.  ``z = -x_exit / u_exit`` asks where each ray crosses the
+    # AXIS, which is the caustic position only when the focus happens to sit on
+    # it.  Give the input a global tilt ``theta`` and the focus moves off axis
+    # by ~``f * theta``; the axis crossings are then a different quantity
+    # entirely, and the zone comes back as junk -- measured [2.002, 11.020] mm
+    # for a 0.05 rad tilt on an f = 1.2 mm singlet whose true caustic is
+    # [1.021, 1.033] mm, which routed a high-NA plane INSIDE the caustic to the
+    # thin phase screen.  The chief ray is the amplitude centroid of the
+    # meridional row launched along the amplitude-weighted mean local slope; it
+    # is traced in the SAME call as the fan (one extra element), so it costs
+    # nothing and cannot drift from it.
+    w_row = np.where(amp > 0.05 * amp.max(), amp, 0.0)
+    w_tot = float(w_row.sum())
+    if w_tot > 0.0:
+        x_chief_in = float(np.sum(w_row * xgrid) / w_tot)
+        u_chief_in = float(np.sum(w_row * slope) / w_tot)
+    else:                                # unreachable: amp.max() > 0 above
+        x_chief_in = u_chief_in = 0.0
+    rr_all = np.append(rr, x_chief_in)
+    u_all = np.append(u_in, u_chief_in)
     surfs = [_copy.copy(s) for s in surfaces_from_prescription(prescription)]
     surfs[-1].thickness = 0.0
-    zeros = np.zeros_like(rr)
-    dt = ray_transfer_jacobian(rr, zeros, u_in, zeros, surfs, wavelength,
+    zeros = np.zeros_like(rr_all)
+    dt = ray_transfer_jacobian(rr_all, zeros, u_all, zeros, surfs, wavelength,
                                per_surface=False)
-    xo, uo, alive = dt.x, dt.ux, np.asarray(dt.alive, bool)
-    conv = alive & (xo * uo < 0.0) & (np.abs(uo) > 1e-9)
+    alive_all = np.asarray(dt.alive, bool)
+    xo, uo, alive = dt.x[:-1], dt.ux[:-1], alive_all[:-1]
+    if alive_all[-1]:
+        x_c, u_c = float(dt.x[-1]), float(dt.ux[-1])
+    else:
+        # A vignetted chief ray means the centroid missed the optic; fall back
+        # to the axis, which is the pre-S10 metric (and the right answer for a
+        # centred system) rather than to a garbage reference.
+        x_c = u_c = 0.0
+    dxr = xo - x_c
+    dur = uo - u_c
+    conv = alive & (dxr * dur < 0.0) & (np.abs(dur) > 1e-9)
     if conv.sum() < max(3, n_rays // 4):        # not meaningfully converging
         return None
-    zf = -xo[conv] / uo[conv]
+    zf = -dxr[conv] / dur[conv]
     zf = zf[zf > 0.0]
     if zf.size < 3:
         return None
@@ -2811,7 +2910,15 @@ def _universal_route(E_in, prescription, wavelength, dx, dyg, opd, na_threshold,
         _NONCOLLIMATED_RESID_THRESH,
         _carrier_residual_rms,
     )
-    spread = _carrier_residual_rms(E_in, None, wavelength, dx)
+    # S10 (audit): score the collimation on the DE-TILTED field.  The residual
+    # is exactly the tilt magnitude for a pure tilt, so a 0.05 rad tilted plane
+    # wave -- which is perfectly collimated, and which ``traced`` launches along
+    # its own local phase gradient without difficulty -- read 5.000e-02 and lost
+    # to the 0.02 threshold, i.e. MORE "non-collimated" than an R = 3 mm
+    # converging wavefront at 4.056e-02.  A global tilt is a change of reference
+    # direction, not a divergence: see :func:`_remove_global_tilt`.
+    spread = _carrier_residual_rms(
+        _remove_global_tilt(E_in, dx, dyg, wavelength), None, wavelength, dx)
     if spread > _NONCOLLIMATED_RESID_THRESH and not aberrated:
         return "phase_screen"
     return "traced"

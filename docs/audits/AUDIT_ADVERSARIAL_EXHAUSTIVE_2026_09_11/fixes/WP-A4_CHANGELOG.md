@@ -448,6 +448,102 @@ grid is checked against the axis that truncates first.
   stop and continued.
 * Tests: `tests/unit/test_audit2609_a4_maslov_gbd.py::test_a2_*` (8).
 
+### Fixed -- fga: the universal dispatcher's two tilt-blind discriminators (audit S10)
+
+`apply_real_lens_universal` routed a TILTED but perfectly collimated,
+single-valued, high-NA plane AT ITS FOCUS to `phase_screen` -- NA 0.145 above
+the 0.12 `na_threshold` and inside the caustic, precisely the regime the
+dispatcher's own docstring says the thin screen cannot handle.  Both
+discriminators in that decision were blind to a global tilt:
+
+* `_caustic_zone` scored each exit ray's crossing with the optical AXIS
+  (`z = -x_exit / u_exit`).  A global input tilt moves the focus off axis by
+  ~`f * theta`, so the axis crossings measure a different quantity entirely.
+  It now scores the crossing with the CHIEF ray -- the amplitude centroid of
+  the meridional row launched along the amplitude-weighted mean local slope,
+  traced in the SAME `ray_transfer_jacobian` call as the fan (one extra array
+  element), so it costs nothing and cannot drift from it.
+* the final escape hatch asked `_carrier_residual_rms(E_in, None, ...)`, which
+  returns EXACTLY the tilt magnitude for a pure tilt.  It now asks it on the
+  DE-TILTED field (new `_remove_global_tilt` / `_global_mean_tilt`): a global
+  linear phase is a change of reference direction, not a divergence.
+
+* `lumenairy/propagators/fga.py` (`_caustic_zone`, `_universal_route`, new
+  module-private `_global_mean_tilt` / `_remove_global_tilt`).  Both
+  `_caustic_zone` call sites -- `apply_real_lens_auto` and `_universal_route`
+  -- get the fix.
+* **Independent oracle** (`tests/unit/test_audit2609_a4_fga_s10.py::_ray_focal_zone`):
+  real rays through `raytrace.trace` + `TraceResult.at_exit_vertex` -- a
+  different code path from the `ray_transfer_jacobian` differential fan -- with
+  the geometric focal zone taken as the axial range where the bundle's RMS
+  transverse spread about its own centroid is within 20 % of its minimum.
+  Measured best-focus planes: **1.021305 mm** (collimated), 1.020605 (tilt
+  0.02), 1.018505 (tilt 0.05), 1.019905 (tilt 0.05 + 80 um decentre) -- the
+  focal DISTANCE of a collimated beam moves by at most **0.27 %** under tilt.
+* Measured `_caustic_zone`, f = 1.2 mm N-BK7 biconvex, 0.30 mm aperture,
+  lambda = 1 um, N = 192, dx = 2 um:
+
+  | input | before [mm] | after [mm] | contains the real focus? |
+  |---|---|---|---|
+  | collimated | [1.021056, 1.032698] | **bit-identical** | yes -> yes |
+  | tilt 0.02 rad | [1.318251, 10.987635] | [1.021117, 1.032215] | **no -> yes** |
+  | tilt 0.05 rad | [2.002278, 11.019568] | [1.019191, 1.029461] | **no -> yes** |
+  | tilt 0.05 + 80 um decentre | [1.996611, 28.212060] | [1.009260, 1.025989] | **no -> yes** |
+  | 80 um decentre | [1.020926, 1.032689] | [1.010242, 1.028427] | yes -> yes |
+  | slow lens, exit plane | [98.021603, 98.021702] | **bit-identical** | - |
+  | multi-valued (2 tilted beams) | [0.277843, 3.274212] | **bit-identical** | - |
+
+  The zone CENTRE moved **+534.1 %** under a 0.05 rad tilt before the fix and
+  **-0.25 %** after, against the oracle's own -0.27 %.  The three symmetric
+  fixtures are bit-identical because a centred beam's chief ray IS the axis.
+* Measured collimation discriminator (`_NONCOLLIMATED_RESID_THRESH = 0.02`):
+  raw `_carrier_residual_rms` **5.000000e-03 / 2.000000e-02 / 5.000000e-02 /
+  1.000000e-01** at tilt 0.005 / 0.02 / 0.05 / 0.1 -- exactly the tilt --
+  against **1.257379e-09 / 5.029515e-09 / 1.257379e-08 / 2.514758e-08**
+  de-tilted.  Real divergence readings survive: R = 10 mm 9.714549e-03 ->
+  9.715578e-03, R = 3 mm 3.238183e-02 -> 3.238526e-02.  A 0.05 rad TILTED
+  R = 3 mm beam read **5.956998e-02** raw (84 % high, and over the gate for the
+  wrong reason) and now reads 3.238526e-02, matching the untilted beam to
+  4.0e-09 relative.
+* Routing, same fixtures: tilt 0.02 **'traced' -> 'fga'**, tilt 0.05
+  **'phase_screen' -> 'fga'**, tilt 0.05 + decentre **'phase_screen' -> 'fga'**.
+  The four regimes the audit found correctly routed (collimated slow at the
+  exit plane, collimated fast at focus, decentred at focus, multi-valued) are
+  unchanged.  `apply_real_lens_auto`'s 2-way choice follows: **'gbd' -> 'fga'**
+  for the tilted case.
+* **What this does NOT claim.**  The fix makes the router frame-invariant; it
+  does not make the chosen member more accurate on this fixture.  Measured at
+  the focus against the traced chief-ray landing (+66.402 um) and the real-ray
+  geometric fan (+66.439 um, 0.645 um rms; diffraction limit
+  lambda/(2 NA) = 3.44 um): `phase_screen` gives centroid +66.469 um and
+  intensity-rms width 3.269 um, `fga` gives +62.524 um and 12.721 um.  The two
+  members disagree by 3.9 um and a factor 3.9 -- and by the SAME factor at
+  tilt 0 (3.169 vs 12.607 um), so that is the members' own accuracy question
+  (the auditor's open suspicion about FGA's convergence knob through a real
+  singlet, re-measured here), not a tilt artefact.  What the pre-fix router
+  did was pick between them on the observer's frame.
+* Tests: `tests/unit/test_audit2609_a4_fga_s10.py` (16).
+
+### Verified correct -- fga: the vector wrapper normalises the Jones components jointly (audit S10)
+
+S10's third sub-item is that `apply_real_lens_maslov_vector` threads
+`normalize_output` through with its `'power'` default and applies it
+INDEPENDENTLY to `E_x` and `E_y`, so any differential transmission, vignetting
+or in-box clipping between the two is normalised away and the output
+polarization ratio is forced back to the post-Fresnel input ratio.
+`apply_real_lens_fga_vector` does NOT share that defect and needed no change:
+it applies ONE joint scale to `(ex, ey, ez)`, carries the per-surface Fresnel
+s/p Jones with the geometric frame rotation, and ships a real `E_z` via
+`return_longitudinal=True`.
+
+Measured on a `(2, 48, 48)` Jones input with `P_x/P_y = 4` exactly, through an
+f = 1.2 mm singlet to 1 mm past the vertex: `normalize_output='none'` gives
+`P_x/P_y = 3.9999998702357877` and `'power'` gives `3.999999870235787` -- the
+same to **2.2e-16 (1 ulp)** -- while the total power is restored to
+1.0000000000000002.  The 3.2e-08 departure from the input ratio is the s/p
+diattenuation the system really applies, and it survives the normalisation.
+Pinned so it stays that way.
+
 ### Added -- cache registry: the `local_quadrature` sample-lattice cache
 
 `_local_window_1d` (new, `functools.lru_cache`) is enrolled with

@@ -25,7 +25,7 @@ from an in-process revert of exactly the line under test (stated where used).
 | **Y4** (P2) | **partially fixed** | `asymptotic.py` `_warn_dropped_pixels` (new, :255-300) + 9 exits; NaN-safe `sqrt`/divide (:597-660) | exercised in the new suites; no perf test (TESTING_STANDARDS S1) | — | silent zeroing → one `RuntimeWarning` naming the fraction and the dominant reason (measured 48/49, 98.0 % on a 3× grid; **no** warning on a clean in-box call); two leaked NumPy `RuntimeWarning`s gone.  The three perf items are **deferred** (§6) |
 | **Y5** (P3) | **mostly fixed** | `asymptotic_aberration_tensor.py` (w_o clamp, `A_lead` guard, `pupil_modes` warning, Seidel caveat), `asymptotic.py` (Seidel caveat, radiometry text), 3 × "exact at the stationary point" | `test_audit2609_a4_asymptotic.py::test_y3_default_w_o_is_frozen_and_matches_numpy` | the NumPy/JAX pair; the closed form | `w_o` cross-backend divergence (97 % on `\|L\|` at `λ_max(Re M) < 1`) → identical helper; `A_lead` `inf` → masked; `pupil_modes` silent → warns.  Import-time monkey-patching and the triplication are **deferred** (§6) |
 | **S9** (P2, my slice) | **fixed** (estimator) / **deferred** (GBD FFT kernel) | `lenses_maslov.py` `_v2_oscillation_bound` | `test_audit2609_a4_maslov_gbd.py::test_s2_v2_oscillation_bound_uses_the_total_variation` | `TV(T_n) = 2n` on [−1, 1], written in the test | estimator under-count up to **2.47×** (136.2 → 337.1) closed; `np.clip` over-count closed with S2 |
-| **S10** (P2) | **not started** | `propagators/fga.py`, `lenses_maslov.py` vector wrapper | — | — | deferred with a design (§6); no code changed |
+| **S10** (P2) | **fixed** (routing) / **verified correct** (FGA vector) / **deferred, out of scope** (Maslov vector) | `propagators/fga.py`: `_caustic_zone` chief-ray metric, `_universal_route` de-tilted collimation test, new `_global_mean_tilt` / `_remove_global_tilt` | `test_audit2609_a4_fga_s10.py` (16) | a real-ray geometric focal zone from `raytrace.trace` + `at_exit_vertex` (a different code path from the differential fan) | caustic zone for a 0.05 rad tilt **[2.002, 11.020] mm → [1.019, 1.029] mm** against a real focus at **1.0185 mm**; zone centre moved **+534.1 % → −0.25 %** (oracle −0.27 %); route **'phase_screen' → 'fga'**, matching the untilted beam; collimation residual for a 0.05 rad plane wave **5.000e-02 → 1.257e-08** |
 | **S11** (P3, my slice) | **partially fixed** | `lenses_maslov.py:1574,1580` (`dy` on the fold-split legs) | — | — | anamorphic fold gaps used `dy = dx`; now threaded.  `uniform_fold_airy`/`pearcey` left dead — see §6 |
 | §15.9 feature | **not done, deliberately** | — | — | — | the Pearcey path could not be validated in this pass; left dead code (§6) |
 | **NEW** (found verifying S3) | **fixed** | `lenses_maslov.py` `_solve_fit` conditioning gate (`_GRAM_COND_MAX` / `_GRAM_COND_SINGULAR`) | `test_audit2609_a4_maslov_gbd.py::test_solve_fit_*` (3) | an analytically rank-1-deficient design matrix; the `output_plane_distance` composition contract | the v5.21 normal-equations Cholesky returned an ARBITRARY null-space member on a rank-deficient Gram: two charts agreeing to **3.1e-15** gave coefficients **0.869 waves** apart.  `output_plane_distance` vs baking the distance in: relL2 **0.449 / 0.757 / 0.849 / 1.384 → 3.48e-05 / 1.70e-05 / 2.33e-05 / 9.27e-04** at d = 0.5 / 1 / 2 / 5 mm |
@@ -474,6 +474,132 @@ itself moves between runs (2.26250000e+08 vs 2.18750000e+08 — 3.4 % apart).  I
 is FD conditioning, not an AD error; the derivative is ~9 orders below
 `d/dw_s`, so the central difference is differencing away ~9 significant digits.
 
+### S10 — the universal dispatcher's two tilt-blind discriminators
+
+**Wrong.**  `apply_real_lens_universal` routed a TILTED but perfectly
+collimated, single-valued, high-NA plane AT ITS FOCUS to `phase_screen` — NA
+0.145 above the 0.12 `na_threshold` and inside the caustic, precisely the
+regime the dispatcher's own docstring says the thin screen cannot handle.  Two
+compounding causes, both blind to a global tilt:
+
+1. `_caustic_zone` scored each exit ray's crossing with the optical AXIS
+   (`z = -x_exit / u_exit`).  A global input tilt moves the focus off axis by
+   ~`f·θ` — measured: the chief ray of a 0.05 rad tilted beam lands
+   **+66.402 µm** off axis at the focal plane — so the axis crossings measure a
+   different quantity and the zone came back as junk.
+2. The final escape hatch asked
+   `_carrier_residual_rms(E_in, None, wavelength, dx) > _NONCOLLIMATED_RESID_THRESH`,
+   and that residual is EXACTLY the tilt magnitude for a pure tilt.
+
+**Changed.**  `_caustic_zone` now scores the crossing with the CHIEF ray — the
+amplitude centroid of the meridional row launched along the amplitude-weighted
+mean local slope, traced in the SAME `ray_transfer_jacobian` call as the fan
+(one extra array element), so it costs nothing and cannot drift from it.
+`z = (x_c − x_i)/(u_i − u_c)` is the strict generalisation of `−x_i/u_i` and
+reduces to it exactly when the chief ray is the axis.  A vignetted chief ray
+falls back to the axis rather than to a garbage reference.  `_universal_route`
+now applies the collimation test to the DE-TILTED field via a new
+`_remove_global_tilt` (built on a new `_global_mean_tilt`, which reuses
+`_tilt_dispersion`'s own conjugate-product local wavevector so the two agree by
+construction and neither needs an FFT).
+
+**Verified — independent oracle.**  `_ray_focal_zone` in the new test file
+traces real rays with `raytrace.trace`, carries them to the exit vertex with
+the shared WP-A1 operator, and takes the geometric focal zone as the axial
+range where the bundle's RMS transverse spread about its OWN centroid is within
+20 % of its minimum.  That is a different code path from the
+`ray_transfer_jacobian` differential fan `_caustic_zone` uses, and it needs
+nothing from the dispatcher.  Measured best-focus planes: **1.021305 mm**
+(collimated), 1.020605 (tilt 0.02), 1.018505 (tilt 0.05), 1.019905 (tilt 0.05 +
+80 µm decentre) — a collimated beam's focal DISTANCE moves by at most **0.27 %**
+under tilt.
+
+| input | `_caustic_zone` before [mm] | after [mm] | contains the real focus? | route before → after |
+|---|---|---|---|---|
+| collimated | [1.021056, 1.032698] | **bit-identical** | yes → yes | fga → fga |
+| tilt 0.02 rad | [1.318251, 10.987635] | [1.021117, 1.032215] | **no → yes** | **traced → fga** |
+| tilt 0.05 rad | [2.002278, 11.019568] | [1.019191, 1.029461] | **no → yes** | **phase_screen → fga** |
+| tilt 0.05 + 80 µm dec | [1.996611, 28.212060] | [1.009260, 1.025989] | **no → yes** | **phase_screen → fga** |
+| 80 µm decentre | [1.020926, 1.032689] | [1.010242, 1.028427] | yes → yes | fga → fga |
+| slow lens, exit plane | [98.021603, 98.021702] | **bit-identical** | — | phase_screen → phase_screen |
+| multi-valued (2 tilted) | [0.277843, 3.274212] | **bit-identical** | — | fga → fga |
+
+The zone CENTRE moved **+534.1 %** under a 0.05 rad tilt before the fix and
+**−0.25 %** after, against the oracle's own −0.27 %.  The three symmetric
+fixtures are bit-identical because a centred beam's chief ray IS the axis.
+`apply_real_lens_auto`'s 2-way choice follows the same `_caustic_zone`:
+**'gbd' → 'fga'** for the tilted case.
+
+Collimation discriminator (`_NONCOLLIMATED_RESID_THRESH = 0.02`):
+
+```
+tilt                raw _carrier_residual_rms   de-tilted
+0.005               5.000000e-03                1.257379e-09
+0.020               2.000000e-02                5.029515e-09
+0.050               5.000000e-02                1.257379e-08
+0.100               1.000000e-01                2.514758e-08
+R=10 mm             9.714549e-03                9.715578e-03   (real divergence, preserved)
+R= 3 mm             3.238183e-02                3.238526e-02   (real divergence, preserved)
+0.05 rad + R=3 mm   5.956998e-02                3.238526e-02   (= the untilted value to 4.0e-09)
+```
+
+**What this does NOT claim.**  The fix makes the router FRAME-INVARIANT; it
+does not make the chosen member more accurate on this fixture, and I measured
+that rather than assume it.  At the focus, against the traced chief-ray landing
+(+66.402 µm) and the real-ray geometric fan (+66.439 µm, 0.645 µm rms;
+diffraction limit λ/(2·NA) = 3.44 µm): `phase_screen` gives centroid
+**+66.469 µm** and intensity-rms width **3.269 µm**; `fga` gives **+62.524 µm**
+and **12.721 µm**.  The two members disagree by 3.9 µm and a factor 3.9 — and
+by the same factor at tilt 0 (3.169 vs 12.607 µm), so it is the members' own
+accuracy question, which is the auditor's own open suspicion about FGA's
+convergence knob through a real singlet ("measured `apply_real_lens_fga`
+fidelity 0.357 ... I cannot call this a defect"), re-measured here and still
+open.  What the pre-fix router did was pick between two models that differ by
+4x on the observer's FRAME.  That is the defect, and it is closed.
+
+**Edge cases re-measured** (pre vs post, same fixtures): a diverging lens with
+a collimated or tilted input, and a strongly diverging input through the fast
+lens, all return `None` on both sides -- correct, there is no downstream
+caustic.  A beam filling the grid is unchanged to 1e-4 relative, and a
+1e-300-amplitude field is unchanged (the masks are relative).  One further
+improvement fell out: at a 0.20 rad tilt the pre-fix axis metric found fewer
+than three "converging" rays and returned `None`, i.e. the router got NO
+caustic information at all; post-fix it returns [0.9814, 0.9817] mm.
+
+**Residual risk.**  The decentred (untilted) zone changed slightly
+([1.020926, 1.032689] → [1.010242, 1.028427] mm) because the crossing is now
+scored against the beam's own chief ray rather than the axis.  That is the more
+correct metric — the caustic is where the bundle self-crosses — and it still
+contains the oracle focus and still routes to `fga`; but it is a behaviour
+change on an untilted fixture and is called out here rather than buried.
+
+### S10 (vector) — `apply_real_lens_fga_vector` verified correct, `apply_real_lens_maslov_vector` out of scope
+
+S10's third sub-item is that `apply_real_lens_maslov_vector` threads
+`normalize_output` through with its `'power'` default and applies it
+INDEPENDENTLY to `E_x` and `E_y`, evaluates the Fresnel Jones at axial
+incidence for every pixel, and has no polarization transport or `E_z`.  That
+function lives in `lumenairy/elements/lenses_maslov.py`, which is **outside my
+current ownership** (a verifier is working on it) — the exact requested change
+is in §5.
+
+The FGA peer, `apply_real_lens_fga_vector`, is in `fga.py` and does **not**
+share the defect; I measured all three sub-items rather than assuming:
+
+* it applies ONE joint scale to `(ex, ey, ez)`.  Measured on a `(2, 48, 48)`
+  Jones input with `P_x/P_y = 4` exactly, through an f = 1.2 mm singlet to 1 mm
+  past the vertex: `normalize_output='none'` gives `P_x/P_y = 3.9999998702357877`
+  and `'power'` gives `3.999999870235787` — the same to **2.2e-16 (1 ulp)** —
+  with the total power restored to 1.0000000000000002.  The 3.2e-08 departure
+  from the input ratio is the s/p diattenuation the system really applies, and
+  it SURVIVES the normalisation;
+* it carries the per-surface Fresnel s/p Jones with the geometric frame
+  rotation (polarization ray tracing), not an axial-incidence matrix;
+* it ships a real longitudinal component via `return_longitudinal=True`.
+
+Pinned by `test_s10_fga_vector_normalises_the_jones_components_jointly`, which
+is GREEN on both sides — a guard on a defect class the sibling has, not a fix.
+
 ### NEW — the canonical fit was returning an arbitrary null-space member
 
 Found while verifying S3's `output_plane_distance` leg, not in the audit.
@@ -560,16 +686,36 @@ deferred with designs in §6.
 * `lumenairy/propagators/asymptotic_canonical_fit.py` — Y1, Y5 wording.
 * `lumenairy/propagators/asymptotic_jax_twin.py` — Y1 twin, Y2, Y3.
 * `lumenairy/propagators/asymptotic_aberration_tensor.py` — Y2, Y3, Y5.
+* `lumenairy/propagators/fga.py` — S10 (`_caustic_zone` chief-ray metric,
+  `_universal_route` de-tilted collimation test, new private `_global_mean_tilt`
+  / `_remove_global_tilt`).  Added in the S10 follow-up pass, after the rest of
+  the package was committed as `32ba3ba2`.  The diff also carries ONE
+  unrelated four-line hunk at `_pick_ray_transfer` (line 794): a long
+  single-line `from ..raytrace.differential import ...` wrapped into
+  parentheses.  That was a PRE-EXISTING `ruff I001` violation on the committed
+  file (verified against `HEAD`), swept up by the `ruff --fix` pass over my own
+  new imports.  Pure formatting; called out so a verifier diffing the file is
+  not surprised by it.  The two new helpers are module-private
+  (`_global_mean_tilt` / `_remove_global_tilt`), matching every other helper in
+  that file; `fga.py` has no `__all__` and `propagators/__init__.py` (which I
+  may not edit) carries an explicit re-export list, so a public name there
+  would have been half-exported.  Promoting them -- the S6 follow-up and the
+  carrier chain both want a de-tilt primitive -- means adding them to that list
+  in the same commit.
 
-Not touched: `lumenairy/propagators/fga.py` (S10 deferred),
-`propagators/subaperture.py` (no finding needed it),
-`elements/lenses_gbd.py` (verified correct by the audit).
+Not touched: `propagators/subaperture.py` (no finding needed it),
+`elements/lenses_gbd.py` (verified correct by the audit, and S10 did not need
+it).
 
 **Tests — new.**
 
 * `tests/unit/test_audit2609_a4_maslov_gbd.py` (34 tests: S2 ×10, S3 ×2,
   S4 ×3, S5 ×2, S6 ×1, S7 ×5, WP-A2 ×8, fit-conditioning ×3).
 * `tests/unit/test_audit2609_a4_asymptotic.py` (7 tests: Y1 ×2, Y2 ×2, Y3 ×3).
+* `tests/unit/test_audit2609_a4_fga_s10.py` (16 tests: caustic-zone ×5,
+  collimation/de-tilt ×7, routing invariance ×4 — one of which is the
+  no-regression guard on the four regimes the audit found correctly routed —
+  plus the FGA vector-normalisation guard).
 
 **Tests — modified (each one pinned a defect or was a stale copy of a fixed
 algorithm; none had its tolerance loosened).**
@@ -637,6 +783,9 @@ All with `OPENBLAS_NUM_THREADS=1`, `python -m pytest … -q --no-header
 | `tests/unit/test_audit_except_budget.py` | **2 failed — PRE-EXISTING**: the non-UI `except Exception:` count is 51 at HEAD against a budget of 48, i.e. the pin was already red on the committed tree.  My own two new sites were NARROWED (the file's own instruction) so my net contribution is **0**; the one new site since HEAD is in `elements/_lens_imap.py` (WP-A3) | 1 s |
 | `python -m ruff check` on every file I touched | clean (`I001` introduced by my import additions, fixed; baseline at HEAD was also clean) | — |
 | all four integrators × complex64/complex128 smoke | dtype contract preserved, all finite | 30 s |
+| `tests/unit/test_audit2609_a4_fga_s10.py` | **16 passed** | 6 s |
+| `test_fga, test_fga_h4_h5, test_fga_prefactor_dedup, test_g1_gate_generality, test_niche_audit_w9_dispatch2, test_niche_d3_guards, test_niche_p7_seidel_gate` (every file that exercises the FGA dispatch) | **205 passed** | 879 s |
+| `test_fga.py -k "caustic or universal or auto or route"` (re-run after the helper rename) | **9 passed** | 112 s |
 
 **Pre-existing / other-WP failures found, with my judgement.**
 
@@ -720,34 +869,89 @@ test_gbd test_lenses`.
    0.  Either return the (centre, half-width) with the dict or drop the claim.
 5. **`lumenairy/elements/_lens_traced.py:3360`** — see failure 1 in §4; the
    `score_domain=` kwarg broke a monkeypatching test in WP-A3's own area.
+6. **`lumenairy/elements/lenses_maslov.py` — `apply_real_lens_maslov_vector`,
+   the third S10 sub-item.**  The file left my ownership when the package was
+   committed, so the change is specified here rather than made.  Three
+   independent defects, in the order I would fix them:
+   * **the Fresnel Jones is evaluated at AXIAL incidence for every pixel**
+     (`_fresnel_jones_matrix_per_beamlet(xb, yb, zc, zc, ...)` with
+     `zc = np.zeros_like(xb)`, i.e. `ux = uy = 0`).  The chart already carries
+     the traced per-surface direction cosines; pass them instead of zeros, so
+     `t_s` / `t_p` and the diattenuation are evaluated at the real angle of
+     incidence.  This is the one that matters for the diverging / converging /
+     tilted inputs the wrapper is offered for;
+   * **`normalize_output` is threaded through with its `'power'` default and
+     applied INDEPENDENTLY to `E_x` and `E_y`**, so the output polarization
+     ratio is forced back to the post-Fresnel input ratio.  Minimum fix:
+     refuse `normalize_output` in `('power', 'peak')` on the vector wrapper
+     with a Section 2 message; better fix: one joint scale, exactly as
+     `apply_real_lens_fga_vector` already does — measured there at 1 ulp
+     (§2, S10 vector);
+   * **no parallel transport / Richards–Wolf rotation of the Jones vector into
+     the exit-ray frame, and no `E_z`.**  GBD ships
+     `reconstruct_vector_field_with_ez` and FGA ships
+     `return_longitudinal=True`; the Maslov wrapper needs the analogue, or its
+     docstring must stop motivating it as a "polarization-resolved study
+     through a focus".
+   Effort: ~1–2 days for all three; the second alone is ~1 hour and stops the
+   silent-wrong output today.
 
 ---
 
 ## 6. Deferred, with designs
 
-1. **S6 proper — fit the input's local wavevector.** `_maslov_newton_saddle_cpu`
-   should solve `grad_v2[arg E_in(s1(v2)) + k·OPD] = 0`, i.e. add
-   `k1 · ds1/dv2` to the gradient and `d(k1·ds1/dv2)/dv2` to the Hessian.
-   `k1(s1)` is available as a fourth Chebyshev fit on the same design matrix
-   (the trace already carries `v1x, v1y` per ray, and `_solve_fit` takes a
-   stacked RHS, so the marginal cost is two more columns).  Effort: ~1 day
-   including a tilted/diverging oracle against `'quadrature'`.  Until then the
-   warning stops the silent-wrong output.
-2. **S10 — `apply_real_lens_universal` tilt routing** (`fga.py:2799-2817`,
-   `:2226-2281`).  Remove the intensity-weighted mean tilt from `E_in` (a global
-   linear phase) before BOTH `_caustic_zone` and the collimation test, and score
-   the caustic on the CHIEF-ray crossing rather than the axis crossing.  Effort:
-   ~half a day; the auditor's `p19_dispatch.py` is a ready routing table.  I did
-   not start it because it is a P2 in a file I had no other reason to open, and
-   the P0/P1 queue filled the pass.
-3. **S10 — `apply_real_lens_maslov_vector`** (axial-incidence Fresnel Jones, no
-   polarization transport / `E_z`, independent power normalisation of `E_x` and
-   `E_y`).  The first is a real fix (evaluate the Jones matrix at the traced
-   per-surface incidence angles the chart already carries); the second wants the
-   `reconstruct_vector_field_with_ez` treatment GBD already has; the third
-   should simply refuse `normalize_output` in `('power', 'peak')` on the vector
-   wrapper.  Effort: ~1–2 days.  **Recommend at minimum the third item plus a
-   docstring retraction of "polarization-resolved study through a focus" now.**
+1. **S6 proper — fit the input's local wavevector.  DEFERRED to a later
+   follow-up; not mine now** (`lenses_maslov.py` left my ownership when
+   `32ba3ba2` landed).  What ships today is the warning, which stops the
+   silent-wrong output but does not make the two asymptotic evaluators correct
+   for a non-collimated input.
+
+   *The defect.*  `_maslov_newton_saddle_cpu` (and its GPU twin) solve
+   `grad_v2 OPD = 0`.  The symplectic identity `dOPD/dv2 = −n1 (v1 · ds1/dv2)`
+   — which the auditor measured closing to 5.8e-7 relative on a real singlet
+   chart — makes that the `v1 = 0` launch ray at EVERY pixel, i.e. the on-axis
+   collimated ray, for every input.  The stationary point of the TOTAL
+   integrand phase is `grad_v2[arg E_in(s1(v2)) + k·OPD] = 0`, i.e.
+   `(v1_in − v1) · ds1/dv2 = 0`, which selects the ray whose LAUNCH direction
+   matches the input field's local wavevector.  Measured: at the 2 % smallest
+   `|grad_v2 OPD|` the traced rays have mean `|v1| = 6.93e-03` on a chart of
+   NA 0.05 whose all-ray mean is 3.79e-02.
+
+   *The design.*  Fit the input's local wavevector `(k1x, k1y)(s1)` as two more
+   columns of the SAME Chebyshev design matrix the chart already builds: the
+   trace carries `v1x, v1y` per ray, `_solve_fit` already takes a stacked RHS
+   (it solves OPD, s1x, s1y together), so the marginal cost is one wider RHS
+   and no extra factorisation.  Then add `k1 · ds1/dv2` to the Newton gradient
+   and `d(k1 · ds1/dv2)/dv2` to the Hessian in `_maslov_newton_saddle_cpu` /
+   `_maslov_newton_saddle_xp`, and add the same term to `opd_star` in
+   `_integrate_stationary_phase` and to `opd_v` in
+   `_integrate_local_quadrature` (the two sites that already carry `lin_v3` /
+   `lin_v4`, so the threading pattern exists).  `E_in`'s own amplitude stays
+   where it is — only its PHASE joins the exponent.
+
+   *How to verify.*  `'quadrature'` integrates the true integrand and is
+   unaffected by the saddle, so it is the oracle: on a diverging (w0 = 12 µm)
+   and a tilted (0.03 rad) input through the f = 6 mm singlet, at a plane a few
+   depths of focus past the exit vertex, `'stationary_phase'` must come within
+   the truncation error of a converged `'quadrature'` run.  Today it does not,
+   and the new warning says so.  The regression test should assert the warning
+   DISAPPEARS once the saddle is correct, so the two cannot drift apart.
+
+   *Effort.* ~1 day including the oracle.
+2. **S10 — DONE** in the follow-up pass; see §2.  The vector half
+   (`apply_real_lens_maslov_vector`) is specified in §5 item 6, since that file
+   left my ownership.
+3. **The FGA-vs-phase_screen accuracy question at NA 0.145, still open.**  Not a
+   defect I can close, but S10's measurement put a number on the auditor's own
+   unverified suspicion: at the focus of an f = 1.2 mm singlet the two members
+   disagree by a factor **3.9 in intensity-rms spot width** (12.72 µm for `fga`
+   at its default sampling vs 3.27 µm for `phase_screen`, against a 3.44 µm
+   diffraction limit and a 0.645 µm geometric fan), at tilt 0 as much as at
+   tilt 0.05.  The dispatcher currently prefers `fga` in this regime.  Next step
+   is a convergence sweep of FGA's `w0_factor` / `dq_step` / `p_max` against a
+   converged Rayleigh–Sommerfeld or `apply_real_lens_traced` reference at this
+   NA; if FGA converges to `phase_screen`, the default sampling is the bug and
+   the routing is right; if it does not, `na_threshold` is mis-set.
 4. **Y4 performance.** (a) one fused `_basis_and_grad34` per evaluation
    contracted against `np.stack([coef_s1x, coef_s1y, coef_phi])` — the auditor
    measured **2.3–5.1×** on the dominant 79 % of runtime; (b) hoist the
