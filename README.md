@@ -10,6 +10,23 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## Start here
+
+| you want | read |
+|---|---|
+| runnable examples | the [Cookbook](#cookbook) below, and [`docs/cookbook.md`](docs/cookbook.md) |
+| "I upgraded -- what changed under me?" | [`Migration-Guide.md`](Migration-Guide.md).  **v5.46 is the largest batch of behaviour changes the library has shipped** -- see [5.46.0 -- adversarial audit remediation](Migration-Guide.md#5460----adversarial-audit-remediation-2026-09-11) |
+| sign, unit, power and Jones-basis conventions | [`CONVENTIONS.md`](CONVENTIONS.md) |
+| the real-lens family: which model, what each option does now, measured envelopes, known limits | [`docs/subsystems/real_lens.md`](docs/subsystems/real_lens.md) -- the living subsystem contract |
+| what the 2026-09-11 adversarial audit found, and what was done about each finding | the report [`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11.md`](docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11.md), the per-partition auditor reports and repro scripts in [`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/`](docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/), and the finding-by-finding resolution table `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/RESOLUTION_STATUS.md` |
+| the full per-release record | [`CHANGELOG.md`](CHANGELOG.md) |
+| where the project is going | [`ROADMAP.md`](ROADMAP.md) |
+
+Two conventions worth knowing before the first call: `sum(|E|**2) * dx * dy`
+**is** the optical power (the propagators are Parseval-unitary and carry no
+impedance factor), and lengths are **metres** everywhere -- wavelengths
+included.
+
 ## Release notes
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the full per-release
@@ -327,13 +344,14 @@ optimisation loops where `dx` is a free variable.  v4.14.1 adds
   `ee[0] = 0 always` is false; `ee[0]` equals the centre-pixel
   intensity contribution.
 
-* **`row_reset` resets the Newton warm-start (P1-NEW-5)** — the
-  `row_reset` branch now resets `last_v_star = (v_cx, v_cy)` at
-  each raster row wrap, eliminating the cross-row Newton chain
-  that plausibly entered wrong-saddle basins near grid edges.
-  Coordinated with the fix, the bit-equal pin and the older
-  1e-10 rel pins both had their inline scalar references updated
-  to reset `last_v_star` at row wrap too.
+* **`maslov_tracking='row_reset'` resets the Newton warm-start
+  (P1-NEW-5)** — the `'row_reset'` branch of
+  `propagators/asymptotic.py` now resets the warm-start saddle to the
+  row's own centre at each raster row wrap, eliminating the cross-row
+  Newton chain that plausibly entered wrong-saddle basins near grid
+  edges.  Coordinated with the fix, the bit-equal pin and the older
+  1e-10 rel pins both had their inline scalar references updated the
+  same way.
 
 ### Tier-2 follow-ups
 
@@ -346,8 +364,8 @@ optimisation loops where `dx` is a free variable.  v4.14.1 adds
   (v4.14.0 only wired it into `lumenairy_context()`).
 * **Final `0+0j` / `1+0j` literal sweep** — 2 missed sites
   (`lenses_maslov.py:448`, `_lens_thin.py:173`).
-* **`fiber_mode` added** to `TestP1CSourceFactoryDispatcherPin`
-  parametrize list (stale exclusion from v4.13.2).
+* **The `'fiber_mode'` source kind added** to the P1-C source-factory
+  dispatcher-pin parametrize list (stale exclusion from v4.13.2).
 
 ### Doc-trust hygiene
 
@@ -711,9 +729,9 @@ audit:
   parameter that threads through the write path.  Default
   behaviour preserved (v4.12.x promotion).
 * **S2: `io.codegen` aperture-stop emission + wavelength sentinel**
-  -- `_decompose_prescription` now emits an `aperture` step
-  whenever `is_stop=True`; missing `wavelength_nm` raises
-  `ValueError` instead of silently defaulting to 1.31 µm.
+  -- `io.codegen._decompose_prescription` (private) now emits an
+  `aperture` step whenever `is_stop=True`; a missing `wavelength_nm`
+  key raises `ValueError` instead of silently defaulting to 1.31 µm.
 * **S3: `analysis.ghost` R/r convention** -- uppercase Fresnel
   reflectance disambiguated from lowercase curvature radius;
   locals renamed, public dict keys preserved.
@@ -1634,10 +1652,11 @@ tests for each.  Pure-additive; no breaking changes.
 * `BSDFModel` base class is now an explicit `abc.ABC`; direct
   instantiation raises `TypeError` at construction instead of
   deferring to a `NotImplementedError` at first method call.
-* `thin_grating_efficiency_1d` is a new honest-name alias for
-  `rcwa_1d`, which is an analytical thin-grating scalar
-  approximation (not full RCWA) -- the name `rcwa_1d` was
-  misadvertising.
+* `thin_grating_efficiency_1d` is a new honest-name alias for the
+  then-existing `rcwa_1d` (**removed in 4.4** — see above), which is
+  an analytical thin-grating scalar approximation, not full RCWA:
+  the name was misadvertising.  For real RCWA use
+  `rcwa_efficiency_1d`.
 * `create_hermite_gauss` / `create_laguerre_gauss` docstrings now
   call out the normalisation inconsistency with the asymptotic-
   modal-propagator's analytical normalisation (a documentation
@@ -2186,9 +2205,10 @@ focal-zoom propagator.  Both addressed; nothing existing changes.
 
 - **`fraunhofer_propagate_mft`** -- far-field counterpart to
   `fresnel_propagate_mft`.  Excellent for coronagraph and
-  high-contrast imaging workflows.  POPPy's `apply_image_plane_fftmft`
-  and prysm's `focus_fixed_sampling` are well-established equivalents
-  in their respective ecosystems and the inspiration for this addition.
+  high-contrast imaging workflows.  The equivalents in other ecosystems
+  — POPPY's `apply_image_plane_fftmft` and prysm's
+  `focus_fixed_sampling`, **neither of which is a lumenairy name** —
+  were the inspiration for this addition.
 
 - **`angular_spectrum_propagate_mft`** -- exact ASM
   (`exp(i*kz*z)` with `kz = sqrt(k² - kx² - ky²)`) followed by a
@@ -2477,7 +2497,8 @@ thin re-export shims; no user-visible breakage.
 
 ## What's new in 3.3.0
 
-A new module **`lumenairy.asymptotic`** implementing the closed-form
+A new module **`lumenairy.asymptotic`** (relocated to
+`lumenairy.propagators.asymptotic` in v5.0) implementing the closed-form
 phase-space (Maslov) diffraction propagator and Laguerre-Gaussian
 aberration tensor.  This is the
 "missing middle tier" between expensive wave-leg merits
@@ -2520,6 +2541,13 @@ ray-leg-only evaluation cost.
       field_points=[(0.0, 0.0), (5e-3, 0.0), (0.0, 5e-3)],
   )
   ```
+
+  **v5.46 scale change:** the merit is now a dimensionless coupling
+  `|L|**2 / |L_ref(0,0)|**2` referenced to the aberration-free twin of
+  the same optic, and gained `strehl_branch` (default `'sigma'`).  Any
+  absolute threshold or stopping tolerance tuned against the old value
+  must be re-derived — see the
+  [Migration-Guide](Migration-Guide.md#5460----adversarial-audit-remediation-2026-09-11).
 
 - **LG / HG basis utilities** — `lg_polynomial`, `hg_polynomial`,
   `evaluate_lg_mode`, `evaluate_hg_mode`, `decompose_lg`,
@@ -3175,8 +3203,13 @@ GPU / multi-threaded FFT acceleration.
 - **Zemax `.txt` parser** — import Zemax prescription-report text files
 - **Zemax `.zmx` / `.txt` exporters** — round-trip designs back to Zemax
 - **CODE V `.seq` import / export** — round-trips prescriptions through the
-  canonical CODE V sequence syntax (units M/MM/IN, spherical + conic
-  surfaces, stop flag, aperture; unknown directives skipped on import)
+  canonical CODE V sequence syntax (units **M (mm) / C (cm) / I (inch)**, with
+  `MM`/`CM`/`IN` tolerated as aliases on read; spherical + conic surfaces,
+  mirrors, aspheres, stop flag, aperture; unknown directives skipped on
+  import).  `DIM M` is CODE V's **millimetre** token, not metres — files
+  lumenairy itself wrote before v5.46 carry SI metres under `DIM M` and are
+  detected and read with the legacy scale, with a `UserWarning`; pass
+  `dim_units=` to force a reading.  See the Migration-Guide.
 
 ### Stray-Light / BSDF (3.2.0)
 - **Three BSDF models** with a common `evaluate` / `sample` /
@@ -3274,7 +3307,7 @@ GPU / multi-threaded FFT acceleration.
 - `lm` method routes through `scipy.optimize.least_squares`, which uses
   Householder QR with column pivoting under the hood
 
-### Phase-space asymptotic propagator (`lumenairy.asymptotic`)
+### Phase-space asymptotic propagator (`lumenairy.propagators.asymptotic`)
 - **`fit_canonical_polynomials`** — 4-variable Chebyshev tensor-product
   fit of `Phi(s2, v2)` and `s1(s2, v2)` from a ray-traced grid; sub-
   microwave residuals on refractive systems
@@ -3657,7 +3690,8 @@ Two complementary models are provided:
   ``apply_real_lens_maslov_jax`` is the right tool inside an
   autodiff optimisation loop.
 
-A critical OPL-bookkeeping fix in `raytrace._intersect_surface` (the
+A critical OPL-bookkeeping fix in
+`raytrace.intersection._intersect_surface` (the
 small "vertex-plane → actual-sag-intersection" leg now correctly
 accumulates `n·path` in the right medium) cut singlet wave-vs-geom
 residuals by 17×–130× and brought the geometric reference itself into

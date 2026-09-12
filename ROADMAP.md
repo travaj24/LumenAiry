@@ -1,5 +1,36 @@
 # LumenAiry Forward Roadmap
 
+## Current: the 2026-09-11 adversarial audit backlog (v5.46)
+
+**Last updated:** 2026-09-12.  The audit
+([`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11.md`](docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11.md))
+is the current source of forward work.  Its physics and data findings are
+remediated in v5.46 -- the finding-by-finding status is the resolution table
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/RESOLUTION_STATUS.md`, and
+the user-facing consequences are in
+[`Migration-Guide.md`](Migration-Guide.md#5460----adversarial-audit-remediation-2026-09-11).
+What remains is structural, and the audit's own effort estimates are in
+section 14 of the report:
+
+| item | est. | why it is worth doing |
+|---|---|---|
+| Lens-family **config objects** (`LensGeometry` / `LensNumerics` / `LensResources` frozen dataclasses, the 28-48 kwargs kept as a deprecated shim) | 10 d | validation moves out of a 5 719-line function into `__post_init__`; covering arrays over `dataclasses.fields()` become trivial; "knob silently discarded" becomes a round-trip assertion |
+| **History blocks out of the source** into the CHANGELOG | 5 d | measured: `_lens_traced.py` is 37.6 % and `carrier.py` 36.9 % git history by token classification -- 12 484 of 38 660 lines across six files, removable with zero behaviour change |
+| A leaf **`elements/_lens_kernels.py`** | 3 d | breaks the five module-level 2-cycles in the `_lens_*` / `lenses` cluster |
+| **Docs consolidation** (this pass started it) | 3 d | one living document per subsystem -- [`docs/subsystems/real_lens.md`](docs/subsystems/real_lens.md) is the first; `docs/audits/` freezes by year; the README splits |
+| **Pairwise covering array** over the ~12 physics-affecting lens kwargs | 3 d | four of the audit's five seeded defects were flag x geometry interactions that one-knob-at-a-time tests cannot see |
+| `probe_*` out of `validation/` and the sdist | 2 d | `validation/` is 70 % of tracked files, ~11 GB on disk |
+| **Consolidation targets** in gain order: `_traced_common.py`, one Chebyshev module, one sag module, one prescription schema, one propagator dispatch helper for glass legs | -- | each duplicate is a site where a fix lands on one side only, which is the observed history of this codebase |
+| **Alternative algorithms worth adopting**: Collins/ABCD-Fresnel with a Bluestein output grid as the carrier transport; route caustic work to FGA; Spencer-Murty exact conic quadratic; a Zernike (disc-orthogonal) basis for the traced fits | -- | report section 15.9 |
+
+The audit's single highest-leverage **process** change, adopted here: an audit
+round may not add a new test file -- it must strengthen the existing test for
+that kwarg, or explain why one does not exist.
+
+---
+
+## Historical: the v5.4.x audit cadence
+
 **Last updated:** 2026-05-30 (post-v5.4.7).  The deep self-audit cadence
 (AUDIT_V5_4_5_*_DEEP -> v5.4.6 -> AUDIT_V5_4_6 -> v5.4.7) is fully closed:
 v5.4.6 closed 73 findings from the two deep audits, and **v5.4.7 closed the
@@ -137,8 +168,8 @@ are preserved in git history; this file is forward-only.
   shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release.
   v4.16.1 closes the v4.16.0 deep audit through P3: 4 silent-wrong-
   answer correctness bugs (`MultiWavelengthMerit` SUM→AVG,
-  `shack_hartmann` pitch quantisation, `_detect_backend` directory
-  misclassification, LM `bounds` None-endpoint); the Schell-model
+  `shack_hartmann` pitch quantisation, `io.storage._detect_backend`
+  directory misclassification, LM `bounds` None-endpoint); the Schell-model
   partial-coherence cluster (new `propagate_ensemble(...)` helper +
   retired default factory `DeprecationWarning` + MCF rejection
   message refresh); JAX-traceable dtype probe + high-NA UserWarning;
