@@ -18,8 +18,8 @@ Extracted from ``lumenairy/raytrace/core.py`` as part of the v5.1.0
 Every public name here is re-exported from
 ``lumenairy.raytrace.core`` so existing imports continue to resolve.
 
-No physics change: contents are bit-for-bit copies of the original
-implementations.
+Contents are bit-for-bit copies of the implementations this module was
+split out of; no physics change.
 """
 
 from __future__ import annotations
@@ -204,10 +204,10 @@ def trace(
             # non-finite period means "no grating along that axis" and
             # yields a ZERO kick -- exactly the JAX twin's contract
             # (``jax_trace._apply_doe_kick_jax._kick``: "Returns 0.0 when
-            # ``period`` is non-finite or zero").  Pre-fix this site
-            # divided unguarded: ``period=0.0`` raised
-            # ``ZeroDivisionError`` mid-trace and ``period=nan`` silently
-            # NaN-poisoned (L, M) (measured: numpy (nan, nan) vs jax
+            # ``period`` is non-finite or zero").  Dividing unguarded
+            # here makes ``period=0.0`` raise ``ZeroDivisionError``
+            # mid-trace and ``period=nan`` silently NaN-poison (L, M)
+            # (measured: numpy (nan, nan) vs jax
             # (0.0, 0.0)).  ``inf`` already gave 0.0 by IEEE division, so
             # that case is bit-identical.
             _px_f = float(_px)
@@ -216,9 +216,9 @@ def trace(
             # equation conserves the TANGENTIAL WAVEVECTOR,
             # ``n2 L' = n1 L + m lambda_vac / Lambda``, so the kick applied
             # to the post-refraction DIRECTION COSINES carries a ``1 / n2``.
-            # Pre-fix all four sites applied ``m lambda / Lambda`` directly
-            # to (L, M) AFTER refracting into ``glass_after``: exact in air
-            # (n2 = 1) but high by exactly n2 at any interface into glass.
+            # Applying ``m lambda / Lambda`` directly to (L, M) AFTER
+            # refracting into ``glass_after`` is exact in air (n2 = 1) but
+            # high by exactly n2 at any interface into glass.
             # Measured (Lambda = 5 um, lambda = 1.31 um, m = 1, into
             # N-BK7): library L = 0.26200000 vs the grating equation's
             # 0.17425045, ratio 1.503583 == n(N-BK7) exactly -- a 50%
@@ -494,7 +494,7 @@ def surfaces_from_prescription(
         Must contain ``'surfaces'`` and ``'thicknesses'`` keys.
         Optionally ``'aperture_diameter'``.
     include_coord_breaks : bool, default False
-        v5.21.5 (AUDIT_RAYTRACE_CORE residual): when True, interleave
+        When True, interleave
         ``prescription['coord_breaks']`` into the returned list as
         ``is_coordbrk`` Surfaces (positioned by ``surf_num``) so the
         plain local-frame :func:`trace` handles folded prescriptions.
@@ -597,10 +597,10 @@ def surfaces_from_prescription(
             # flat-keys gather so a prescription with
             # ``freeform_type='q_bfs'`` and ``q_bfs_coeffs=[...]``
             # actually carries its coefficients into the Surface
-            # dataclass.  Pre-v4.15.1 the dispatcher routed the
-            # freeform_type correctly but the coefficient list was
-            # silently dropped, making Forbes Q a no-op on flat-keys
-            # prescriptions (the unified-dict shape worked).
+            # dataclass.  A dispatcher that routes the freeform_type
+            # correctly but drops the coefficient list makes Forbes Q a
+            # no-op on flat-keys prescriptions (the unified-dict shape
+            # works).
             ff = {k: v for k, v in ps.items()
                   if k in ('freeform_type', 'xy_coeffs',
                            'zernike_coeffs', 'cheb_coeffs',
@@ -1257,12 +1257,13 @@ def apply_doe_phase_traced(
         conserves the tangential wavevector,
         ``n2 L' = n1 L + m lambda_vac / Lambda``, so the direction-cosine
         kick is ``m lambda_vac / (n2 Lambda)``.  The default 1.0
-        reproduces the pre-fix behaviour exactly and is correct for a
-        grating in air; pass the glass index for a grating on the glass
-        side of an interface, where the pre-fix kick was high by exactly
-        ``n2`` (measured 0.26200000 vs 0.17425045 into N-BK7 at
-        Lambda = 5 um, lambda = 1.31 um, m = 1 -- a 50 % direction
-        error).  The in-trace kicks (``trace`` / ``trace_world``'s
+        kick is ``m lambda_vac / (n2 Lambda)``.  The default 1.0 is
+        correct for a grating in air; pass the glass index for a grating
+        on the glass side of an interface, where omitting it makes the
+        kick high by exactly ``n2`` (measured 0.26200000 vs 0.17425045
+        into N-BK7 at Lambda = 5 um, lambda = 1.31 um, m = 1 -- a 50 %
+        direction error; docs/history/lumenairy.raytrace.trace.md).  The
+        in-trace kicks (``trace`` / ``trace_world``'s
         ``surface_diffraction``) resolve this index automatically from
         the surface's ``glass_after``.
 
@@ -1277,11 +1278,9 @@ def apply_doe_phase_traced(
     -----
     The grating equation here is written in DIRECTION COSINES:
     ``n2 L_new = n1 L_in + m * lambda_vac / Lambda``.  For in-plane
-    diffraction this form is EXACT -- the pre-R5 docstring's claim that
-    it "neglects the cosine factor that distinguishes ``sin`` from the
-    direction cosine" was itself inaccurate; the real approximation the
-    function made was the missing ``1 / n2``, now exposed as
-    ``n_medium``.  The remaining idealisation is the thin-screen model:
+    diffraction this form is EXACT.  It does NOT neglect "the cosine
+    factor that distinguishes ``sin`` from the direction cosine" -- the
+    only approximation the function makes is the ``1 / n2``, exposed as
     the grating is treated as a phase discontinuity at a single plane
     (no thickness, no Bragg selectivity, no order-dependent efficiency).
 
@@ -1336,14 +1335,13 @@ def apply_doe_phase_traced(
     N_new = np.zeros_like(L_new)
     np.sqrt(np.maximum(1.0 - sum_sq, 0.0), out=N_new, where=propagating)
 
-    # v5.2 (AUDIT_V4_13_1 P1-G closure): preserve the sign of the
+    # Preserve the sign of the
     # longitudinal direction cosine.  The diffraction kick only shifts
     # the transverse (L, M) components; the propagation direction along
-    # z is unchanged.  Pre-v5.2 ``apply_doe_phase_traced`` always
-    # returned a positive ``N_new`` while the inline DOE kick in
-    # :func:`trace` correctly preserved the sign (see line ~193:
-    # ``r.N = np.where(r.N < 0, -_N_new, _N_new)``).  Match the inline
-    # site so reverse-traced bundles (``N < 0``) keep their direction.
+    # z is unchanged.  Returning a positive ``N_new`` unconditionally
+    # would diverge from the inline DOE kick in :func:`trace`, which
+    # preserves the sign (see ``r.N = np.where(r.N < 0, -_N_new,
+    # _N_new)``).  Match the inline
     N_sign = np.where(rays.N.reshape(1, n_rays) < 0, -1.0, 1.0)
     N_new = N_new * N_sign
 
@@ -1470,7 +1468,7 @@ def trace_prescription(
     if image_distance is not None and surfaces:
         # Determine the medium after the last optical surface
         last_glass = surfaces[-1].glass_after
-        # v4.13.2 (audit P1-NEW-J): clone the last surface with the new
+        # Clone the last surface with the new
         # thickness instead of mutating it in place.  The Surface
         # dataclass is not frozen and surfaces_from_prescription
         # builds the list from a possibly-shared prescription -- an
@@ -1646,10 +1644,10 @@ def surfaces_from_elements(
                 sd = elem['aperture_diameter'] / 2.0
 
             # Register the pseudo-glass under a content-derived name.
-            # v5.17.1 (audit P1-07): the name was id(elem)-derived, but
+            # The name was id(elem)-derived, but
             # CPython recycles ids after GC, so two builds with
             # different n_lens could share a name and the second
-            # registration retargeted previously built surface lists
+            # registration retargets previously built surface lists
             # to the wrong index (trace() resolves glass at trace
             # time).  Content-derived names are idempotent (same
             # content -> same name -> bounded registry growth) and
@@ -1751,7 +1749,7 @@ def _register_fixed_index(name, n, wavelength):
     # ``_invalidate_glass_name`` also pops ``_glass_cache[name]``, which the
     # overwrite below immediately restores (harmless).
     _invalidate_glass_name(name)
-    # v5.17.1 (audit P2-36): the '__user__' sentinel is what
+    # The '__user__' sentinel is what
     # get_glass_index's user-fixed branch matches (glass.py), so the
     # lookup resolves from _glass_cache without the optional
     # refractiveindex package.  The previous
@@ -1867,10 +1865,10 @@ def raytrace_system(
     # ``surfaces_from_elements`` happens to return fresh objects today,
     # but ``surfaces`` is also RETURNED to the caller, and the in-place
     # write is exactly the pattern ``trace_prescription`` was moved away
-    # from in v4.13.2 (audit P1-NEW-J).  A caller that passes a
-    # hand-built element list containing a shared ``Surface`` -- or that
-    # calls ``raytrace_system`` twice on the same converted list --
-    # otherwise sees its prescription silently re-thicknessed.
+    # from.  A caller that passes a hand-built element list containing a
+    # shared ``Surface`` -- or that calls ``raytrace_system`` twice on the
+    # same converted list -- otherwise sees its prescription silently
+    # re-thicknessed.
     if image_distance is not None and surfaces:
         last_glass = surfaces[-1].glass_after
         surfaces[-1] = _surface_copy_with(surfaces[-1],

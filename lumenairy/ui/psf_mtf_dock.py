@@ -154,7 +154,7 @@ class PSFMTFDock(QWidget):
         if HAS_MPL:
             self.fig = Figure(figsize=(7, 4), tight_layout=True)
             self.canvas = FigureCanvas(self.fig)
-            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            # Override matplotlib canvas sizeHint so the dock can shrink
             self.canvas.setMinimumSize(0, 0)
             self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar = NavigationToolbar(self.canvas, self)
@@ -255,7 +255,7 @@ class PSFMTFDock(QWidget):
         ap = 2.0 * r_max if r_max > 0 else float(self.sm.epd_m)
         N = 256
         dx = ap / N
-        # v4.15 (P1-UI-7): bounds-mask the rays BEFORE indexing so any
+        # Bounds-mask the rays BEFORE indexing so any
         # ray landing outside the pupil grid is dropped rather than
         # snapped to the boundary via ``np.clip``.  Pre-4.15 the clip
         # silently piled out-of-aperture rays onto the {0, N-1} edges
@@ -269,7 +269,7 @@ class PSFMTFDock(QWidget):
         ix = ix_raw[in_bounds]
         iy = iy_raw[in_bounds]
         opl_in = opl[in_bounds]
-        # v4.15 (P1-UI-6): accumulate mean OPD per pixel rather than
+        # Accumulate mean OPD per pixel rather than
         # last-write-wins.  The pre-4.15 ``opd_grid[iy, ix] = opl``
         # depended on numpy's right-to-left iteration order, so for
         # any pixel hit by multiple rays the stored OPD was the LAST
@@ -291,7 +291,7 @@ class PSFMTFDock(QWidget):
         opd_grid[valid] = sum_grid[valid] / cnt_grid[valid]
         k0 = 2 * np.pi / (self.sm.wavelength_nm * 1e-9)
         phase = k0 * opd_grid
-        # v5.24.x (audit S4-20): use the CONJUGATE phase convention
+        # Use the CONJUGATE phase convention
         # ``exp(-i k0 OPD)`` to match the wave-optics lens phase-screens
         # (``elements/lenses.py``: ``E * exp(-1j*k0*opd)``).  Pre-fix the
         # ray-traced pupil used ``exp(+i k0 OPD)`` -- the opposite sign
@@ -299,7 +299,7 @@ class PSFMTFDock(QWidget):
         # MIRROR-FLIPPED relative to the PSF from a wave-optics field,
         # for the same physical system.  Aligning the sign makes the two
         # pupil sources interchangeable in the downstream FFT-based PSF.
-        # v4.15: dtype-aware sentinel migration.  Pre-4.15 the
+        # Dtype-aware sentinel migration.  Pre-4.15 the
         # ``0.0 + 0.0j`` literal forced a complex128 upcast via numpy's
         # mixed-dtype rules (P3-rated in AUDIT_V4_14_1_2026_05_17.md
         # P1-NEW-4); explicit ``.astype(complex_t)`` recovery makes the
@@ -451,7 +451,7 @@ class PSFMTFDock(QWidget):
                 f'{wv:>10.1f}{s:>10.4f}{z*1e3:>14.5f}')
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -463,7 +463,7 @@ class PSFMTFDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

@@ -150,7 +150,7 @@ class ProgressScaler:
                 f'got {len(args)}')
         if self.parent is None:
             return
-        # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): narrow the
+        # Narrow the
         # object-typed unpack targets before calling float() / passing as
         # str -- mypy can't follow the runtime branch logic above.
         overall = self.lo + (self.hi - self.lo) * max(

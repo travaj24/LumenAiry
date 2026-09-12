@@ -273,13 +273,12 @@ class SourceDefinition:
         from lumenairy import Source as _Source
         wavelength = self.wavelength_nm * 1e-9
 
-        # v4.15.1 (P1-NEW-C / Agent E): migrated to the canonical
+        # Migrated to the canonical
         # kwarg-only ``Source.method(*, N, dx, wavelength, ...)`` form.
-        # Pre-v4.15.1 these 7 callsites used the legacy positional form
-        # (e.g. ``Source.gaussian(w0, N, dx, wavelength)``) and so
-        # emitted ``DeprecationWarning`` at v4.15.0 startup -- the
-        # release that introduced the deprecation shim didn't migrate
-        # its own internal UI consumers.
+        # form.  The legacy positional form
+        # (``Source.gaussian(w0, N, dx, wavelength)``) emits a
+        # ``DeprecationWarning``, so these 7 callsites must stay on the
+        # kwarg-only spelling (docs/history/lumenairy.ui.model.md).
         if self.source_type == 'plane_wave':
             ax = _np.deg2rad(self.field_angle_x_deg)
             ay = _np.deg2rad(self.field_angle_y_deg)
@@ -871,7 +870,7 @@ class SystemModel(QObject):
         else:
             return
         prev = self.elements[elem_idx - 1]
-        # v4.15 (P1-UI-4): route both call sites through one helper so
+        # Route both call sites through one helper so
         # they can't drift on this calculation again.  Pre-4.15 this
         # used ``sum(all surfaces)`` while :meth:`set_display_distance`
         # used ``Element.internal_thickness_mm`` (``sum(surfaces[:-1])``).
@@ -905,7 +904,7 @@ class SystemModel(QObject):
 
     @staticmethod
     def _prev_element_back_vertex_world(prev):
-        """v4.15 (P1-UI-4): world-coords back vertex of ``prev`` element.
+        """World-coords back vertex of ``prev`` element.
 
         Single source of truth for "where is element N-1's back-vertex
         in world space?", consumed by:
@@ -966,9 +965,9 @@ class SystemModel(QObject):
             self._checkpoint()
             self.elements[elem_index].distance_mm = max(0, value)
         else:
-            # Absolute mode: convert to relative.  v4.15 (P1-UI-4):
-            # the previous-element back vertex is now expressed in the
-            # SAME world-frame coords the absolute display column uses
+            # Absolute mode: convert to relative.  The previous-element
+            # back vertex is expressed in the SAME world-frame coords the
+            # absolute display column uses
             # (``element_z_positions_mm``, i.e. ``Element.origin[2]``).
             # Route through the single-source-of-truth helper rather
             # than re-deriving ``prev_z + internal_thickness_mm`` here:
@@ -1015,10 +1014,10 @@ class SystemModel(QObject):
 
         The wave-optics worker builds the launch field with
         ``source.to_source(...)`` (at the SOURCE's wavelength) and then
-        propagates it at the MODEL's wavelength.  Nothing used to keep
-        the two equal, so a point-source / fiber-mode / tilted field was
-        launched with the spherical phase and carrier tilt of whatever
-        wavelength the source happened to be built at.
+        propagates it at the MODEL's wavelength.  Nothing else keeps the
+        two equal, so without this a point-source / fiber-mode / tilted
+        field is launched with the spherical phase and carrier tilt of
+        whatever wavelength the source happened to be built at.
         """
         src = self.source
         if src is None:
@@ -1606,7 +1605,7 @@ class SystemModel(QObject):
     def _capture_state(self):
         """Return a deep-copied snapshot of everything undo/redo cares about.
 
-        v4.15 (P1-UI-3): added ``wavelength_weights``, ``field_weights``,
+        Added ``wavelength_weights``, ``field_weights``,
         and ``lens_options`` to the snapshot.  Pre-4.15 these three
         fields were excluded from the capture, so editing them and then
         hitting Ctrl+Z left the model in an orphan state: the elements
@@ -1645,7 +1644,7 @@ class SystemModel(QObject):
             self.field_angles_deg = list(state['field_angles_deg'])
             self._coordinate_mode = state['coordinate_mode']
             self.opt_variables = list(state['opt_variables'])
-            # v4.15 (P1-UI-3): restore the three fields that v4.14.x
+            # Restore the three fields that v4.14.x
             # silently dropped on undo/redo.  ``.get(...)`` keeps the
             # restore tolerant of older snapshots that lack the keys
             # (e.g. snapshots captured from a Snapshots-dock save that
@@ -1884,10 +1883,10 @@ class SystemModel(QObject):
         def enc_source(src):
             if src is None:
                 return None
-            # Every constructor kwarg round-trips.  The pre-audit list
-            # omitted polarization, the top-hat diameter and the two
-            # fiber-mode fields, so restoring a saved session silently
-            # reverted them to SourceDefinition's defaults.
+            # Every constructor kwarg round-trips.  A short list -- one
+            # omitting polarization, the top-hat diameter or the two
+            # fiber-mode fields -- silently reverts them to
+            # SourceDefinition's defaults on restore.
             return {
                 'source_type': src.source_type,
                 'wavelength_nm': src.wavelength_nm,
@@ -2349,11 +2348,10 @@ class SystemModel(QObject):
 
         An explicit ``image_distance`` WINS over the Detector element.
         A caller that computes the paraxial BFL and passes it is asking
-        for the focal plane; the Detector branch used to be tested
-        first, so those callers silently got the detector plane and
-        then drew focal-plane overlays (Airy radius, distortion grid)
-        on it.  Pass ``None`` -- the default -- to keep the Detector
-        preference.
+        for the focal plane.  Testing the Detector branch FIRST instead
+        would silently give those callers the detector plane and then
+        draw focal-plane overlays (Airy radius, distortion grid) on it.
+        Pass ``None`` -- the default -- to keep the Detector preference.
         """
         world_list = [Surface(
             radius=s.radius, conic=s.conic, semi_diameter=s.semi_diameter,
@@ -2722,7 +2720,7 @@ class SystemModel(QObject):
         and are transformed into each surface's local frame only for
         the intersection / refraction step.  No coord-break surfaces.
         """
-        # v5.4.2 (post-v5.4.1 user-reported GUI hang): build the
+        # Build the
         # surface list FIRST so the empty-prescription early-exit
         # can emit trace_ready(None) instead of leaving the GUI in
         # a wait-cursor + "Tracing..." status forever.  The prior
@@ -2776,8 +2774,8 @@ class SystemModel(QObject):
             # direction cosines are the polar decomposition
             # ``(rho*cos t, rho*sin t)`` with
             # ``rho = frac * semi_ap / obj_dist``.  Writing ``rho`` into
-            # BOTH L and M (the pre-fix form) put every ray on the x = y
-            # diagonal and made the marginal ray sqrt(2) too steep.
+            # BOTH L and M puts every ray on the x = y diagonal and makes
+            # the marginal ray sqrt(2) too steep.
             obj_dist = self.object_distance_m()
             if not np.isfinite(obj_dist) or obj_dist <= 0:
                 obj_dist = max(float(src.object_distance_mm), 1e-9) * 1e-3
@@ -3058,13 +3056,12 @@ class SystemModel(QObject):
 
     def run_optimization(self, max_iter=200, callback=None,
                          method='Nelder-Mead', apply_result=True):
-        # v5.4 (audit P1-D): ``method`` kwarg surfaces the optimizer-
-        # dock dropdown choice through to scipy.minimize.  Pre-v5.4
-        # the call was hardcoded to Nelder-Mead; we keep that as the
-        # default so callers that don't pass ``method=`` see byte-
-        # identical behaviour.
+        # ``method`` kwarg surfaces the optimizer-
+        # dock dropdown choice through to scipy.minimize.  The default
+        # stays 'Nelder-Mead' so callers that do not pass ``method=``
+        # see byte-identical behaviour.
         #
-        # v5.24.4 (audit S4-7, part 2): the geometric model stores NO
+        # The geometric model stores NO
         # per-variable bounds, yet the bounded methods a user can pick in
         # the dock (L-BFGS-B / TNC / SLSQP / trust-constr) silently ran
         # UNBOUNDED because no ``bounds=`` was ever passed -- so a
@@ -3073,10 +3070,10 @@ class SystemModel(QObject):
         # those bounded methods ONLY: ``distance`` / ``thickness``
         # variables are constrained non-negative, every other field
         # (radius, conic, ...) stays free.  The default Nelder-Mead path
-        # (and Powell / CG / BFGS ...) is LEFT UNBOUNDED so the pre-v5.4
-        # default remains byte-identical.
+        # (and Powell / CG / BFGS ...) is LEFT UNBOUNDED so the
+        # unbounded default stays byte-identical.
         #
-        # v5.24.4 (audit S4-7, part 1): ``apply_result`` gates the
+        # ``apply_result`` gates the
         # write-back.  The background :class:`OptimizeWorker` calls with
         # ``apply_result=False`` so this method, running OFF the GUI
         # thread, does NOT mutate ``self.elements`` or emit
@@ -3084,7 +3081,7 @@ class SystemModel(QObject):
         # the live model to x0 and stashes the solution in
         # ``self._last_optimization_x`` for the dock's finished-handler to
         # apply on the MAIN thread.  Synchronous callers keep the default
-        # ``apply_result=True`` and see the pre-v5.24.4 write-back.
+        # ``apply_result=True`` and see the write-back.
         from scipy.optimize import minimize
         if not self.opt_variables:
             return False, 'No variables defined.'
@@ -3121,7 +3118,7 @@ class SystemModel(QObject):
         try:
             result = minimize(self.merit_function, x0, method=method,
                               bounds=bounds, options=opts, callback=_cb)
-            # v5.24.4 (audit S4-7): ``merit_function`` mutated the live
+            # ``merit_function`` mutated the live
             # model on every scipy probe, so the model is currently at
             # scipy's LAST-probed point (not necessarily the optimum).
             # Record the solution, then either apply it (synchronous

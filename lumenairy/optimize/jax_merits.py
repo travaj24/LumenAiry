@@ -26,18 +26,18 @@ from .context import MeritTerm
 def _ensure_jax_x64(fn_name: str, enable_x64: bool) -> None:
     """Resolve the JAX float64 requirement for a merit that needs it.
 
-    S3-14 (audit AUDIT_V5_24_2): :func:`make_lg_aberration_merit_jax` and
-    :func:`optimize_traced_geometry` used to call
-    ``jax.config.update('jax_enable_x64', True)`` unconditionally as a
-    CONSTRUCTOR SIDE EFFECT -- silently flipping a PROCESS-WIDE global.  A
-    caller depending on JAX's default float32 elsewhere in the same
-    process was switched to float64 with no signal, and (worse) the flip
-    is undefined behaviour if it happens mid-trace under an outer
-    ``jax.jit``.  This helper makes the requirement explicit:
+    S3-14 (audit AUDIT_V5_24_2): an unconditional
+    ``jax.config.update('jax_enable_x64', True)`` in a merit constructor is
+    a CONSTRUCTOR SIDE EFFECT on a PROCESS-WIDE global.  A caller depending
+    on JAX's default float32 elsewhere in the same process would be
+    switched to float64 with no signal, and (worse) the flip is undefined
+    behaviour if it happens mid-trace under an outer ``jax.jit``.  This
+    helper makes the requirement explicit (see also
+    docs/history/lumenairy.optimize.jax_merits.md):
 
     * ``enable_x64=True`` (default, back-compatible): if x64 is already
       on, do nothing; if it is off, enable it once BUT emit a
-      ``RuntimeWarning`` so the global mutation is no longer silent.
+      ``RuntimeWarning`` so the global mutation is not silent.
     * ``enable_x64=False``: require x64 to be set already and RAISE with
       an actionable message otherwise (the require-and-raise idiom the
       RCWA / asymptotic JAX paths use) -- no global mutation at all.
@@ -219,7 +219,7 @@ def _is_jax_tracer(a: Any) -> bool:
         return False
 
 
-# v5.46 (VERIFY-A4 follow-up, O-5): fraction of the fit's ``s2`` half-range
+# Fraction of the fit's ``s2`` half-range
 # used as the output LG basis waist on the JAX sigma branch.  It is a
 # CONVENTION, not a measurement -- it cancels exactly between the numerator
 # and the aberration-free reference, which is the only place the merit uses
@@ -443,10 +443,9 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
     This merit needs JAX double precision (float64) for a meaningful
     gradient.  ``enable_x64`` (default ``True``) controls how that
     requirement is met (S3-14): the default enables x64 process-wide if
-    it is off, now with a ``RuntimeWarning`` (previously a SILENT global
-    side effect); pass ``enable_x64=False`` to instead REQUIRE x64 be set
-    already and raise a clear ``RuntimeError`` otherwise, mutating no
-    global state.
+    it is off, with a ``RuntimeWarning``; pass ``enable_x64=False`` to
+    instead REQUIRE x64 be set already and raise a clear
+    ``RuntimeError`` otherwise, mutating no global state.
     """
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
@@ -483,7 +482,7 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
         field_points = [(0.0, 0.0)]
 
     targets_kv = [(tuple(k), float(v)) for k, v in targets.items()]
-    # v4.13.2 (C-P0-1): aberration_tensor_lg00_jax only computes the
+    # aberration_tensor_lg00_jax only computes the
     # (0, 0) -> (0, 0) -> (0, 0) coefficient.  General (p, ell)
     # targets need a full aberration_tensor_jax that does not yet
     # exist.  Reject non-(0, 0) targets at construction time with a
@@ -579,7 +578,7 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
                 fit, s2_img, tuple(src),
                 w_s=w_s_local, w_p=w_p_local,
                 v2_centre=(fit.v2x_centre, fit.v2y_centre))
-            # v5.46 (audit Y2 follow-up): the same coefficient on the
+            # The same coefficient on the
             # ABERRATION-FREE twin of the same optic, so the ratio below is
             # dimensionless.  ``w_o`` is pinned to 1.0 on BOTH calls: it
             # enters only through the output normalisation N_o =
@@ -593,7 +592,7 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
             s2_ref = (fit.s2x_centre, fit.s2y_centre)
             vc = (fit.v2x_centre, fit.v2y_centre)
             if strehl_branch == 'sigma':
-                # v5.46 (VERIFY-A4 follow-up, O-5): the sigma-grid OVERLAP,
+                # The sigma-grid OVERLAP,
                 # which is what makes the ratio a Strehl -- see
                 # ``_lg00_sigma_overlap_jax`` and the NumPy sibling's
                 # ``strehl_branch`` docs.  ``w_o``, the grid extent and

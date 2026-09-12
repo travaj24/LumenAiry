@@ -4,9 +4,8 @@ per-field tilt-phase construction.
 
 Private module.  Hosts the fused parallel kernel used by
 :class:`lumenairy.optimize.wrapper_merits.MultiFieldMerit` to build
-the masked tilted plane wave on each per-field leg.  v5.3 (ROADMAP
-v5.3 horizon -- MultiFieldMerit JIT): the pre-v5.3 NumPy path
-materialises three N x N temporaries per field
+the masked tilted plane wave on each per-field leg.  A pure-NumPy
+implementation materialises three N x N temporaries per field
 
     tilt_phase    = sin(tx) * k_X + sin(ty) * k_Y   # 1
     phasor        = exp(1j * tilt_phase)            # 2
@@ -31,11 +30,11 @@ fires).  Output dtypes (complex64 or complex128) are dispatched via
 two specialised kernels because Numba ``@njit`` does not erase
 dtypes.
 
-The NumPy fallback (when Numba is unavailable) is exactly the
-pre-v5.3 path -- the call site picks which to invoke based on the
+The NumPy fallback (when Numba is unavailable) computes exactly the same
+expression -- the call site picks which to invoke based on the
 module-level ``_NUMBA_AVAILABLE`` flag.
 
-Author: Andrew Traverso -- v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT).
+Author: Andrew Traverso
 """
 
 from __future__ import annotations
@@ -45,7 +44,7 @@ import numpy as np
 from ..backend._optional import NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE
 from ..backend._optional import numba_handles as _optional_numba_handles
 
-# v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT): Numba probe, LAZY (audit
+# Numba probe, LAZY (audit
 # P2-D: the eager ``import numba`` cost ~1.8 s of ``import lumenairy`` cold
 # start).  The probe and the first-use import are shared with the rest of the
 # library through ``backend/_optional.py`` (audit 2026-09-11 TESTS-ARCH P2-9).
@@ -173,7 +172,7 @@ def _multi_field_tilt_phasor_masked(
 ) -> np.ndarray:
     """Fused tilted-plane-wave + aperture-mask constructor.
 
-    v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT): single-call
+    Single-call
     helper that returns ``np.where(mask, np.exp(1j * (sin_tx*k_X +
     sin_ty*k_Y)), 0).astype(dtype)`` using the Numba JIT fast path
     when ``_NUMBA_AVAILABLE`` is ``True`` AND the grid is large
@@ -214,7 +213,7 @@ def _multi_field_tilt_phasor_masked(
     are unconditionally NumPy-cheap (single allocation) and don't
     benefit from JIT.
     """
-    # v5.4 (audit P3): defensive dtype check -- complex256 would silently downgrade
+    # Defensive dtype check -- complex256 would silently downgrade
     np_dtype = np.dtype(dtype)
     if np_dtype not in (np.dtype(np.complex64), np.dtype(np.complex128)):
         raise TypeError(
@@ -267,7 +266,8 @@ def _multi_field_tilt_phasor_masked(
             return out.astype(np_dtype)
         return out
 
-    # Pure-NumPy fallback.  Exactly the pre-v5.3 path that this
-    # module supersedes (kept for parity + correctness pinning).
+    # Pure-NumPy fallback -- the same expression the kernel fuses (kept
+    # for parity + correctness pinning).  See
+    # docs/history/lumenairy.optimize._merit_jit.md.
     tilt_phase = sin_tx * k_X + sin_ty * k_Y
     return np.where(mask, np.exp(1j * tilt_phase), 0.0).astype(dtype)

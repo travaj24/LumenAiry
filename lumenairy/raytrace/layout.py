@@ -57,8 +57,8 @@ def trace_summary(result: 'TraceResult', units: str = 'mm') -> None:
         ``'mm'`` or ``'um'``.
     """
     # S11-6d (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): name the
-    # function and the offending value.  A wrong ``units`` string used to
-    # surface as a bare ``KeyError: 'cm'``.
+    # function and the offending value.  A wrong ``units`` string would
+    # otherwise surface as a bare ``KeyError: 'cm'``.
     _scales = {'um': 1e6, 'mm': 1e3, 'm': 1.0}
     if units not in _scales:
         raise ValueError(
@@ -73,9 +73,10 @@ def trace_summary(result: 'TraceResult', units: str = 'mm') -> None:
     final = result.image_rays
     n_alive = int(np.sum(final.alive))
     n_total = final.n_rays
-    # S11-6d: an EMPTY bundle (n_total == 0) used to die here with a bare
-    # ``ZeroDivisionError: division by zero`` from ``n_alive / n_total``,
-    # naming neither the function nor the cause.
+    # S11-6d: an EMPTY bundle (n_total == 0) would otherwise die here
+    # with a bare ``ZeroDivisionError: division by zero`` from
+    # ``n_alive / n_total``, naming neither the function nor the cause
+    # (docs/history/lumenairy.raytrace.layout.md).
     if n_total == 0:
         raise ValueError(
             "trace_summary: the trace result's image_rays bundle is EMPTY "

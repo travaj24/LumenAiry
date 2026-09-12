@@ -196,7 +196,7 @@ def lstsq(A: Any, b: Any, **kwargs: Any) -> Any:
 
 def eigh(A: Any) -> Tuple[Any, Any]:
     """Hermitian eigendecomposition."""
-    # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): the backend
+    # The backend
     # ``eigh`` returns surface as ``Any`` (untyped backend modules under
     # follow_imports=silent), but each is documented to be a 2-tuple of
     # arrays.  Cast so the public return type is honoured.

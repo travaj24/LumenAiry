@@ -59,13 +59,13 @@ from .core import (
     unregister_wave_propagator,
 )
 
-# v4.16 (ROADMAP #11): multi-objective Pareto via pymoo NSGA-II.
+# Multi-objective Pareto via pymoo NSGA-II.
 # The module imports unconditionally (so users can ``from
 # lumenairy.optimize.multi_objective import design_optimize_multi_objective``
 # regardless of whether pymoo is installed); ``design_optimize_multi_objective``
 # raises ``ImportError`` only when actually called without pymoo.
 from .multi_objective import (
-    # v4.16.0 (Agent A __all__-symmetry walker): pymoo availability
+    # Pymoo availability
     # flag re-exported so callers can probe via ``la.PYMOO_AVAILABLE``
     # without an explicit ``lumenairy.optimize.multi_objective`` import.
     # Sibling to CUPY_AVAILABLE / JAX_AVAILABLE.

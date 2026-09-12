@@ -71,15 +71,16 @@ def field_of_view(prescription: dict, wavelength: float,
     Notes
     -----
     R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the finite-conjugate
-    branch used to return ``arctan((aperture/2) / object_distance)`` --
-    the object-space APERTURE half-angle, which is independent of the
-    sensor and is therefore not a field of view at all (it is the
-    marginal-ray cone, i.e. the numerical aperture).  It is now computed
+    branch must NOT return ``arctan((aperture/2) / object_distance)``:
+    that is the object-space APERTURE half-angle, independent of the
+    sensor and therefore not a field of view at all (it is the
+    marginal-ray cone, i.e. the numerical aperture; see
+    docs/history/lumenairy.raytrace.paraxial.md).  It is computed
     from the transverse magnification,
     ``m = -image_distance / object_distance`` via the Newtonian /
     Gaussian imaging relation, giving
     ``h_obj_max = sensor_half_height / |m|`` and
-    ``theta_max = arctan(h_obj_max / object_distance)``.  The old
+    ``theta_max = arctan(h_obj_max / object_distance)``.  The aperture
     expression survives only as the explicitly-warned fallback when the
     caller supplies no sensor size, because removing it outright would
     break callers that relied on the (mislabelled) return value.
@@ -159,9 +160,9 @@ def optical_invariant(efl: float, f_number_val: float,
     .. math::
         H = \\frac{D}{2} \\cdot \\frac{h}{f}.
 
-    .. v5.4.6 (audit F-25): docstring formula corrected to match the
-        code ``H = (D/2) * (h/efl)``; the prior ``h*D/(4*(f/#)*f)`` form
-        carried a spurious extra division by ``2*(f/#)``.
+    .. note:: the formula is ``H = (D/2) * (h/efl)``; an
+        ``h*D/(4*(f/#)*f)`` form carries a spurious extra division by
+        ``2*(f/#))``.
 
     Parameters
     ----------
@@ -220,11 +221,11 @@ def f_number(prescription: dict, wavelength: float) -> float:
     Notes
     -----
     R-11 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the returned f/# is
-    ``abs(EFL) / D``.  Pre-fix this function returned the SIGNED ratio,
-    so a diverging prescription read ``f/-9.97`` while all three
-    siblings that compute the same quantity -- ``raytrace.layout``
-    (``abs(efl) / ap``), ``optimize.merit_terms.MaxFNumberMerit``
-    (``abs(ctx.efl) / ap``) and ``seidel.compute_pupils`` -- reported
+    ``abs(EFL) / D``.  A SIGNED ratio makes a diverging prescription read
+    ``f/-9.97`` while all three siblings that compute the same quantity
+    -- ``raytrace.layout`` (``abs(efl) / ap``),
+    ``optimize.merit_terms.MaxFNumberMerit`` (``abs(ctx.efl) / ap``) and
+    ``seidel.compute_pupils`` -- report
     ``+9.97``.  f/# is a cone-angle magnitude by definition (``1 / (2
     NA)``); read ``EFL`` itself if you need the conjugate sign.  No
     consumer relied on the sign (grep-verified: every call site either

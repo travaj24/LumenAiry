@@ -1,11 +1,10 @@
 """
 lumenairy.optimize.context -- evaluation context, sentinels, constraint.
 
-v5.1.0 split (Agent E): this module hosts the data containers + sentinel
-plumbing that the merit-term hierarchy and ``design_optimize`` depend
-on.  Pre-v5.1.0 everything lived in ``lumenairy/optimize/core.py``; the
-split is mechanical (no public API change) and ``optimize/core.py`` now
-re-exports every previously-public name from this module.
+This module hosts the data containers + sentinel plumbing that the
+merit-term hierarchy and ``design_optimize`` depend on.
+``optimize/core.py`` re-exports every public name from here, so both
+import paths work.
 
 Contents
 --------
@@ -95,24 +94,20 @@ def zernike_higher_order_rms_waves(coeffs, exclude_low_order, wavelength):
 _INVALID_FL_SENTINEL = 1e9
 
 
-# v4.14.1 (P1-NEW-1): sentinel meaning "aperture explicitly zero, block
-# all light."  Distinguished from ``mask is None`` ("no aperture
-# specified, use full grid").  Pre-v4.14.0 a scalar
-# ``aperture_diameter=0`` produced an all-False boolean mask, which
-# downstream apply_real_lens treated as "block all light"; v4.14.0
-# collapsed that branch into ``mask=None``, flipping the semantics so
-# ``aperture_diameter=0`` instead produced a grid-filling plane wave.
-# Callers compare ``mask is _ZERO_APERTURE_MASK`` to detect the
-# deliberate-zero case and zero their field accordingly.
+# Sentinel meaning "aperture explicitly zero, block all light",
+# distinguished from ``mask is None`` ("no aperture specified, use full
+# grid").  The two must not be conflated: collapsing a scalar
+# ``aperture_diameter=0`` into ``mask=None`` turns "block all light"
+# into a grid-filling plane wave.  Callers compare
+# ``mask is _ZERO_APERTURE_MASK`` to detect the deliberate-zero case
+# and zero their field accordingly.
 #
-# v4.15.1 (Agent E): now inherits from ``_deprecation._Sentinel`` to
-# share the singleton-name registry + pickle-safe ``__reduce__``
-# protocol.  Pre-v4.15.1 this class duplicated the singleton plumbing
-# in 3 places (here, ``_AngleUnsetSentinel`` in ``polarization.py``,
-# and ``_Sentinel`` in ``_deprecation.py``); none carried a
-# ``__reduce__``, so pickling a sentinel produced a NEW instance on
-# the receiving side and broke ``is``-identity checks in distributed
-# merit evaluation / joblib caches.
+# It inherits from ``_deprecation._Sentinel`` to share the singleton-name
+# registry and the pickle-safe ``__reduce__`` protocol.  Without
+# ``__reduce__`` a pickled sentinel arrives as a NEW instance on the
+# receiving side, which breaks ``is``-identity checks in distributed
+# merit evaluation and joblib caches.  See
+# docs/history/lumenairy.optimize.context.md.
 class _ZeroApertureMaskSentinel(_Sentinel):
     """Singleton sentinel for aperture explicitly zero / blocked."""
 
@@ -126,20 +121,17 @@ class _ZeroApertureMaskSentinel(_Sentinel):
 _ZERO_APERTURE_MASK = _ZeroApertureMaskSentinel()
 
 
-# v4.15.2 (Agent E, AUDIT_V4_15_1 P2): three additional pre-existing
-# sentinel patterns in this module are promoted to ``_Sentinel``
-# subclasses for pickle-safety + ``is``-identity discoverability.  Pre-
-# v4.15.2 these were bare scalar fallbacks (``1e9`` for invalid focal
-# length, ``0.0`` for failed-scan Strehl, and a "fall-back-to-nominal"
-# marker for perturbed-ABCD failures).  Scalar storage is preserved at
-# the call sites for arithmetic compatibility; the dedicated sentinel
-# classes here register in ``_SENTINEL_REGISTRY`` so downstream consumers
-# can perform identity checks (``ctx.efl is _INVALID_FL_SENTINEL_OBJ``)
-# without breaking the existing magnitude-based ``ctx_is_valid`` path.
-# Each carries a ``.value`` attribute holding its canonical scalar
-# fallback so call sites that want the numeric form can ``float(s)`` or
-# ``s.value``.  All three inherit ``__bool__ -> False`` from the base
-# ``_Sentinel`` (matching ``_ZeroApertureMaskSentinel`` semantics).
+# Three further sentinel patterns in this module are ``_Sentinel`` subclasses
+# for pickle-safety and ``is``-identity discoverability: invalid focal length,
+# failed-scan Strehl, and the perturbed-ABCD fallback marker.  Scalar storage
+# is preserved at the call sites for arithmetic compatibility; the dedicated
+# sentinel classes here register in ``_SENTINEL_REGISTRY`` so downstream
+# consumers can perform identity checks (``ctx.efl is
+# _INVALID_FL_SENTINEL_OBJ``) without breaking the existing magnitude-based
+# ``ctx_is_valid`` path. Each carries a ``.value`` attribute holding its
+# canonical scalar fallback so call sites that want the numeric form can
+# ``float(s)`` or ``s.value``.  All three inherit ``__bool__ -> False`` from
+# the base ``_Sentinel`` (matching ``_ZeroApertureMaskSentinel`` semantics).
 #
 # Naming convention: ``_<Concept>Sentinel`` for the class +
 # ``_<CONCEPT>_SENTINEL_OBJ`` for the singleton.  ``_OBJ`` suffix
@@ -152,12 +144,12 @@ class _InvalidFocalLengthSentinel(_Sentinel):
     """Identity-checkable singleton for "ABCD extraction failed -- focal
     length collapsed to the ``1e9`` magnitude-flag fallback".
 
-    Used at the wave-leg ABCD failure branch.  Pre-v4.15.2 that branch
-    wrote a bare scalar ``efl = bfl = 1e9``; the magnitude-check
-    downstream (``ctx_is_valid``) recovered the "invalid" semantics by
-    comparing ``abs(v) >= _INVALID_FL_SENTINEL * 0.5``.  v4.15.2 keeps
-    the scalar write (arithmetic stability) and adds this singleton so
-    a future caller wanting a strict identity check
+    Used at the wave-leg ABCD failure branch, which writes a bare scalar
+    ``efl = bfl = 1e9``; the magnitude check downstream
+    (``ctx_is_valid``) recovers the "invalid" semantics by comparing
+    ``abs(v) >= _INVALID_FL_SENTINEL * 0.5``.  Keeping the scalar write
+    (arithmetic stability) alongside this singleton lets a caller that
+    wants a strict identity check
     (``ctx.efl is _INVALID_FL_SENTINEL_OBJ``) can opt in without
     breaking the existing magnitude path.
     """
@@ -179,13 +171,12 @@ class _FailedScanStrehlSentinel(_Sentinel):
     """Identity-checkable singleton for "through-focus Strehl scan
     failed -- Strehl collapsed to the safe ``0.0`` fallback".
 
-    Used at the through-focus-scan exception branches.  Pre-v4.15.2 the
-    branch wrote ``sub_ctx.strehl_best = 0.0``; the optimizer treats
-    ``0.0`` as "very bad design" so the merit-leg contribution sinks
-    into the noise floor without dragging the parameter vector further
-    than the dispatcher's adaptive-step safeguards allow.  v4.15.2
-    keeps the scalar write and adds this singleton for identity
-    discoverability.
+    Used at the through-focus-scan exception branches, which write
+    ``sub_ctx.strehl_best = 0.0``; the optimizer treats ``0.0`` as "very
+    bad design" so the merit-leg contribution sinks into the noise floor
+    without dragging the parameter vector further than the dispatcher's
+    adaptive-step safeguards allow.  The scalar write is kept alongside
+    this singleton for identity
     """
     __slots__ = ()
 
@@ -201,16 +192,12 @@ class _FailedScanStrehlSentinel(_Sentinel):
 _FAILED_SCAN_STREHL_SENTINEL_OBJ = _FailedScanStrehlSentinel()
 
 
-# v4.15.4 (audit AUDIT_V4_15_3 P2-NEW-F1-B option a): the previously
-# defined ``_PerturbedABCDFallbackSentinel`` class and its singleton
-# ``_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ`` were dead code -- never
-# wired at the intended callsite (the tolerance-perturbation ABCD
-# failure branch at ``ToleranceAwareMerit.evaluate``).  The branch
-# writes a 2-tuple fallback ``(efl_p, bfl_p) = (ctx.efl, ctx.bfl)``
-# rather than a single scalar, and wrapping the tuple in a single
-# sentinel singleton would break downstream unpacking.  v4.15.4 deletes
-# the class + singleton outright; see the historical comment in the
-# v4.15.4 release notes.
+# There is deliberately NO ``_PerturbedABCDFallbackSentinel``.  The
+# tolerance-perturbation ABCD failure branch at
+# ``ToleranceAwareMerit.evaluate`` writes a 2-tuple fallback
+# ``(efl_p, bfl_p) = (ctx.efl, ctx.bfl)`` rather than a single scalar,
+# and wrapping the tuple in a single sentinel singleton would break
+# downstream unpacking.
 
 
 # =========================================================================
@@ -375,17 +362,16 @@ class DesignResult:
 _METHODS_SUPPORTING_CONSTRAINTS = ('SLSQP', 'trust-constr')
 
 
-# v4.16.3 (audit P2-NEW-F1-1): one-cycle DeprecationWarning latched at
-# module level, pattern parity with v4.16.2 MultiWavelengthMerit.
-# v4.16.1 shipped a ``Constraint.__post_init__`` auto-probe that called
-# ``fun(np.zeros(1))`` to shape-check the return.  v4.16.2 silently
-# removed it (the probe was expensive for BFL-style ``fun`` callables
-# that internally ran a full ray-trace) and moved the contract to an
-# opt-in :meth:`Constraint.validate` method.  Emit a one-cycle
-# DeprecationWarning so callers that came to rely on the v4.16.1
-# auto-probe notice the change and call ``.validate()`` explicitly.
-# Latched at module level so an optimisation loop that builds many
-# ``Constraint(...)`` objects doesn't flood the warning channel.
+# One-cycle DeprecationWarning latched at module level, pattern parity
+# with the MultiWavelengthMerit latch.  ``Constraint.__post_init__``
+# used to auto-probe ``fun(np.zeros(1))`` to shape-check the return;
+# that probe is gone (it was expensive for BFL-style ``fun`` callables
+# that internally run a full ray-trace) and the contract moved to the
+# opt-in :meth:`Constraint.validate` method.  The warning exists so a
+# caller who came to rely on the auto-probe notices and calls
+# ``.validate()`` explicitly.  Latched at module level so an
+# optimisation loop that builds many ``Constraint(...)`` objects
+# doesn't flood the warning channel.
 _CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED = False
 
 
@@ -416,26 +402,25 @@ class Constraint:
     raises ``TypeError: only length-1 arrays can be converted to
     Python scalars`` on a ``(K,)``-shaped ndarray.
 
-    v4.16.2 (audit P2-NEW-F1-1): the automatic ``fun(np.zeros(1))``
-    probe formerly run in :meth:`__post_init__` has been REMOVED.
+    There is NO automatic ``fun(np.zeros(1))`` probe at construction.
     For a BFL-style ``fun`` that internally calls
-    :func:`system_abcd` / :func:`apply_real_lens`, the probe ran an
-    entire trace on every ``Constraint(...)`` instantiation (e.g.
-    once per optimisation set-up and once per parallel-worker fork).
-    Caught exceptions were swallowed silently so users couldn't even
-    see the wasted work.  Call :meth:`validate` explicitly after
-    construction if you want the (best-effort) shape check.
+    :func:`system_abcd` / :func:`apply_real_lens`, such a probe runs an
+    entire trace on every ``Constraint(...)`` instantiation (e.g. once
+    per optimisation set-up and once per parallel-worker fork), and its
+    caught exceptions are invisible, so the wasted work is not even
+    reported.  Call :meth:`validate` explicitly after construction if
+    you want the (best-effort) shape check.
 
-    Pickle-safety contract (v4.16.1 / v4.16.2)
-    -------------------------------------------
+    Pickle-safety contract
+    ----------------------
     Lambdas (``lambda x: ...``) are NOT picklable, so a
     ``Constraint(fun=lambda x: ...)`` instance breaks
     :func:`scipy.optimize.differential_evolution(..., workers>1)`
     and the joblib-parallelised FD-gradient path
     (``PicklingError: Can't pickle <function <lambda>>``).
-    v4.16.2 (audit P2-NEW-F1-2) replaces the v4.16.1
-    ``getattr(fun, '__name__', None) == '<lambda>'`` heuristic with
-    a direct :func:`pickle.dumps` probe so closures
+    The check is a direct :func:`pickle.dumps` probe rather than a
+    ``getattr(fun, '__name__', None) == '<lambda>'`` heuristic, so
+    closures
     (``def inner(x): ...``) and ``functools.partial(lambda x: ...,
     ...)`` -- neither of which has ``__name__ == '<lambda>'`` --
     also raise the warning.  Module-level functions (including
@@ -464,9 +449,9 @@ class Constraint:
     Example
     -------
     >>> from lumenairy.optimize import Constraint
-    >>> # Require sum(x) <= 1 exactly.  v4.16.2 (audit P3-NEW-F1-7):
-    >>> # docstring example now uses a module-level function so
-    >>> # copy-paste users don't trigger the v4.16.1 lambda warning.
+    >>> # Require sum(x) <= 1 exactly.  The example uses a module-level
+    >>> # function so a copy-paste user does not trigger the
+    >>> # not-picklable warning.
     >>> def my_constraint(x):
     ...     return float(x[0] + x[1] - 1.0)
     >>> sum_constraint = Constraint(
@@ -491,26 +476,25 @@ class Constraint:
                 f"lb / ub must be supplied (both None is unbounded "
                 f"and the constraint is a no-op).")
 
-        # v4.16.2 (audit P2-NEW-F1-2): pickle-probe instead of the
-        # v4.16.1 ``__name__ == '<lambda>'`` heuristic.  The
-        # ``__name__`` check missed closures (``def inner(x): ...``
-        # has ``__name__ == 'inner'``) and
+        # Pickle-probe rather than a ``__name__ == '<lambda>'``
+        # heuristic.  A ``__name__`` check misses closures
+        # (``def inner(x): ...`` has ``__name__ == 'inner'``) and
         # ``functools.partial(lambda x: ..., ...)`` (whose
         # ``__name__`` attribute does not exist at all) -- both are
-        # genuinely unpicklable and both will fail under
+        # genuinely unpicklable and both fail under
         # ``differential_evolution(workers>1)`` / joblib-parallelised
-        # FD-gradients with PicklingError at the first parallel
-        # eval, which is exactly the failure mode the v4.16.1 closure
-        # was meant to prevent.  A direct ``pickle.dumps(self.fun)``
-        # probe catches all three patterns at construction time
-        # cheaply (most ``fun`` callables are tens of bytes pickled).
+        # FD-gradients with PicklingError at the first parallel eval,
+        # which is exactly the failure this warning exists to prevent.
+        # A direct ``pickle.dumps(self.fun)`` probe catches all three
+        # patterns at construction time cheaply (most ``fun`` callables
+        # are tens of bytes pickled).
         #
-        # v4.16.3 (audit P2-NEW-F1-2): widen the catch list from
-        # ``(pickle.PicklingError, AttributeError, TypeError)`` to
-        # ``Exception``.  The narrow tuple missed ``RecursionError``
-        # (deep object graph), ``RuntimeError`` (raised by a custom
-        # ``__reduce__``), ``MemoryError`` (huge object), and arbitrary
-        # exceptions from ``__reduce__`` / ``__getstate__``.  A ``fun``
+        # The catch list is ``Exception``, not just
+        # ``(pickle.PicklingError, AttributeError, TypeError)``: the
+        # narrow tuple misses ``RecursionError`` (deep object graph),
+        # ``RuntimeError`` (raised by a custom ``__reduce__``),
+        # ``MemoryError`` (huge object), and arbitrary exceptions from
+        # ``__reduce__`` / ``__getstate__``.  A ``fun``
         # whose ``__reduce__`` raises ``RuntimeError`` propagates out of
         # ``Constraint(...)`` construction, defeating the warning's
         # "friendlier than rejecting" intent.  Pickling is a
@@ -535,23 +519,21 @@ class Constraint:
                 UserWarning, stacklevel=2,
             )
 
-        # v4.16.2 (audit P2-NEW-F1-1): the v4.16.1 ``fun(np.zeros(1))``
-        # auto-probe used to live here -- removed because for a
-        # BFL-style ``fun`` that calls ``system_abcd(...)`` internally
-        # it would run an entire trace on every ``Constraint(...)``
-        # instantiation, swallowing the exception silently.  Users
-        # who want the shape check can call ``self.validate()``
-        # explicitly after construction; see :meth:`validate` for
-        # the same scalar-only contract.
+        # No ``fun(np.zeros(1))`` auto-probe here: for a BFL-style
+        # ``fun`` that calls ``system_abcd(...)`` internally it would
+        # run an entire trace on every ``Constraint(...)``
+        # instantiation, swallowing the exception silently.  Users who
+        # want the shape check call ``self.validate()`` explicitly;
+        # see :meth:`validate` for the same scalar-only contract.
 
     def validate(self) -> None:
         """Best-effort scalar-shape check by probing ``fun(np.zeros(1))``.
 
-        Pre-v4.16.2 this ran automatically in :meth:`__post_init__`
-        but the probe was expensive for the canonical BFL / EFL
-        constraint pattern (runs a full ray-trace) and the caught
-        exceptions were swallowed silently.  Now opt-in -- call
-        explicitly after construction if you want the shape check.
+        This is opt-in rather than automatic: the probe is expensive
+        for the canonical BFL / EFL constraint pattern (it runs a full
+        ray-trace) and its caught exceptions cannot be seen by the
+        caller.  Call it explicitly after construction if you want the
+        shape check.
 
         Raises
         ------

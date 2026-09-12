@@ -7,10 +7,10 @@ Cache authors register their clear-function once via
 calls by hand.
 
 This is the counter-measure to the recurring "fix N, miss N+1" meta-
-pattern in the cache-clear domain.  Pre-v4.16 every new cache had to
-remember to thread a new lazy-import + try/except block into
-``clear_asm_caches``; v4.14.3 added the 8th cache
-(``_lg_polynomial_items``) and the v4.14.2 audit found the meta-
+# pattern in the cache-clear domain.  Without it every new cache has to
+# remember to thread a new lazy-import + try/except block into
+# ``clear_asm_caches``; that is how the 8th cache
+# (``_lg_polynomial_items``) arrived and the audit found the meta-
 pattern had recurred 5 ways inside a single audit cycle.  Future
 cache additions need only register; ``clear_asm_caches`` picks them
 up automatically.
@@ -122,8 +122,8 @@ def register_cache_clearer(name: str,
 
     Called at module-import time by every module owning an LRU /
     OrderedDict cache.  Replaces the per-cache lazy-import + try/except
-    block that pre-v4.16 ``clear_asm_caches`` accumulated as new
-    caches were added.
+    block that ``clear_asm_caches`` would otherwise accumulate as new
+    caches are added (docs/history/lumenairy._cache_registry.md).
 
     Parameters
     ----------

@@ -149,12 +149,13 @@ def ray_to_beamlet(
     ``exp(+1j * k * t)`` over a forward path ``t``, and
     :func:`lumenairy.raytrace.rays_from_field` seeds
     ``opd = angle(E) / k0``, which this expression inverts exactly).
-    Pre-fix (audit P2-33) the default silently dropped both: every
-    beamlet got phase 0 -- zeroing all inter-beamlet piston phases,
-    the exact quantity coherent recombination interferes on -- and
-    dead/TIR rays contributed full amplitude 1.  An explicitly passed
-    ``amplitude`` is used verbatim (no opd/alive folding), preserving
-    the pre-fix escape hatch where callers folded the phase themselves.
+    A default that drops both gives every beamlet phase 0 -- zeroing all
+    inter-beamlet piston phases, the exact quantity coherent
+    recombination interferes on -- and lets dead/TIR rays contribute full
+    amplitude 1 (docs/history/lumenairy.raytrace.bundles.md).  An
+    explicitly passed ``amplitude`` is used verbatim (no opd/alive
+    folding), which is the escape hatch for callers that fold the phase
+    themselves.
     """
     from ..propagators.gbd import BeamletBundle
 
@@ -167,7 +168,7 @@ def ray_to_beamlet(
         # Audit P2-33: carry RayBundle.opd (piston phase) and alive
         # into the beamlet amplitude -- same getattr fallbacks as
         # ray_to_path (missing opd -> zeros -> unit phase; missing
-        # alive -> all-True), so schema-less bundles keep the old
+        # alive -> all-True), so a schema-less bundle still gets the
         # all-ones default.
         opd = np.asarray(getattr(ray_bundle, 'opd', np.zeros(n)),
                          dtype=np.float64)

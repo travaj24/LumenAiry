@@ -144,9 +144,9 @@ def _safe_name(name):
 # =========================================================================
 #
 # Phase-mask "expression" masks let a user store an arbitrary formula
-# (e.g. ``atan2(Y, X) * 3``) evaluated on the (X, Y) grid.  This used to
-# be dispatched through the built-in ``eval()`` with the whole ``np``
-# module exposed -- a code-execution risk if anyone can write to the
+# (e.g. ``atan2(Y, X) * 3``) evaluated on the (X, Y) grid.  Dispatching
+# that through the built-in ``eval()`` with the whole ``np`` module
+# exposed is a code-execution risk if anyone can write to the
 # library JSON (``eval("__import__('os').system(...)")`` etc.).  The
 # ``__``/leading-underscore string screen in front of it was a leaky
 # blocklist.
@@ -216,10 +216,11 @@ _CMP_OPS = {
 #: are all < 40 bits), and small enough that the rejected expression cannot
 #: have started allocating.
 #:
-#: v5.46 (audit Z4).  The allowlist AST interpreter below is a genuine
-#: sandbox -- the auditor could not escape it -- but it left one
-#: resource-exhaustion path open: CPython's ``int`` is arbitrary precision, so
-#: ``2**(10**9)`` asks for a 125 MB integer (and ``1 << (10**9)`` the same)
+#: The allowlist AST interpreter below is a genuine sandbox -- the
+#: auditor could not escape it -- but an allowlist alone leaves one
+#: resource-exhaustion path open: CPython's ``int`` is arbitrary
+#: precision, so ``2**(10**9)`` asks for a 125 MB integer (and
+#: ``1 << (10**9)`` the same; docs/history/lumenairy.user_library.md)
 #: inside a routine whose input is an untrusted user-library string.  Nothing
 #: is compromised, but the process stalls or dies.  Bounding the RESULT's bit
 #: length is the cheap, total fix; only the pure-Python-``int`` path is
@@ -503,7 +504,7 @@ def load_material(name: str) -> Dict[str, Any]:
 
     if data['type'] == 'catalog':
         from .glass import GLASS_REGISTRY, _invalidate_glass_name
-        # v5.4.6 (audit F-35): warn before overriding a built-in registry
+        # Warn before overriding a built-in registry
         # entry of the same name (the prior code clobbered it silently,
         # and load_material can auto-run at import).  The override still
         # proceeds -- the user explicitly saved this material -- but is
@@ -515,11 +516,11 @@ def load_material(name: str) -> Dict[str, Any]:
                 f"built-in GLASS_REGISTRY entry of the same name.",
                 UserWarning, stacklevel=2)
         GLASS_REGISTRY[mat_name] = (data['shelf'], data['book'], data['page'])
-        # v5.17.1 (audit P2-41): re-pointing the registry must also drop
-        # any stale cached resolution for this name.  Pre-v5.17.1 a name
-        # that previously resolved through ``_glass_cache`` (a user-fixed
+        # Re-pointing the registry must also drop
+        # any stale cached resolution for this name.  Without it, a name
+        # that already resolved through ``_glass_cache`` (a user-fixed
         # ``_FixedIndex`` or a ``RefractiveIndexMaterial`` for a
-        # different catalogue page) kept serving the OLD index forever:
+        # different catalogue page) keeps serving the OLD index forever:
         # ``get_glass_index``'s tuple branch trusts ``_glass_cache``
         # unconditionally.  Mirrors ``register_fixed_glass``'s hygiene
         # (which overwrites the cache entry and clears the value cache)
@@ -590,14 +591,13 @@ def register_fixed_glass(name: str, n: float) -> None:
         If ``name`` is already in :data:`glass.GLASS_REGISTRY`; the
         existing entry is overwritten anyway (sometimes that is the
         caller's intent -- e.g. re-registering a tweaked test glass
-        -- but the audit P1-GL-2 noted that pre-v4.14.3 the overwrite
-        was silent and could clobber catalog glasses like ``'N-BK7'``
-        without warning).
+        -- but a silent overwrite can clobber catalog glasses like
+        ``'N-BK7'`` without warning, so it warns).
     """
-    # v4.14.3 (P1-GL-2): input validation.  Pre-v4.14.3 accepted any
-    # name string (including ``''``) and any ``n`` (including
-    # ``n < 1.0``, which is unphysical for ordinary materials), and
-    # silently clobbered existing registry entries.
+    # Input validation.  Without it any name string (including ``''``)
+    # and any ``n`` (including ``n < 1.0``, which is unphysical for
+    # ordinary materials) is accepted, and an existing registry entry is
+    # silently clobbered.
     if not isinstance(name, str) or not name.strip():
         raise ValueError(
             f"register_fixed_glass: name must be a non-empty string; "
@@ -640,11 +640,11 @@ def register_fixed_glass(name: str, n: float) -> None:
             return self._n
 
     GLASS_REGISTRY[name] = ('__user__', '__fixed__', '__fixed__')
-    # v5.6: a re-registered name must not serve a stale value from the
+    # A re-registered name must not serve a stale value from the
     # immutable-branch value cache (e.g. a catalogue glass overwritten by a
     # fixed index).  Clearing the whole value cache is cheap (registration is
-    # rare) and fully safe.  v5.17.1 (audit P3-40): mutations go under the
-    # glass cache lock now that the value cache is a shared LRU OrderedDict.
+    # rare) and fully safe.  Mutations go under the glass cache lock,
+    # since the value cache is a shared LRU OrderedDict.
     with _GLASS_CACHE_LOCK:
         _glass_cache[name] = _FixedIndex(n_f)
         _glass_value_cache.clear()
@@ -690,10 +690,10 @@ def _deserialize_prescription(data):
 
     Walks the full nested tree and replaces ``'Infinity'`` /
     ``'-Infinity'`` string sentinels with ``float('inf')`` /
-    ``float('-inf')``.  Previously this only handled the
-    ``surfaces[i]['radius']`` slot, so any other field containing
-    infinity (thickness, conic constant, aperture) came back as a
-    string and caused downstream ``TypeError`` surprises.
+    ``float('-inf')``.  Handling only the ``surfaces[i]['radius']``
+    slot leaves any other field containing infinity (thickness, conic
+    constant, aperture) as a string, which surfaces downstream as a
+    ``TypeError``.
     """
     def _fix(obj):
         if isinstance(obj, str):
@@ -891,8 +891,8 @@ def _warn_lost_coord_break_gap(prescription: Dict[str, Any],
     mirrors, a mirror last, a tilt before a mirror, a tilt between two
     lenses, and the unfolded control).  The single case where they
     disagree is exactly the dropped carry.  Only checked when the entry
-    has coordinate breaks, because that is the only way the old exporter
-    could lose a gap.
+    has coordinate breaks, because that is the only way an exporter
+    can lose a gap.
 
     A warning, not a repair: rewriting ``thicknesses`` from
     ``all_thicknesses`` would be a second migration on a key nothing else
@@ -1220,12 +1220,12 @@ def load_all_materials() -> None:
     immediately available in any script.
 
     A corrupted / partially-written entry is SKIPPED -- one bad file must
-    not cost the user every other saved glass -- but v5.29.1 (audit A-8)
-    also emits a :class:`UserWarning` naming the entry, the file on disk,
-    and the exception.  Pre-fix this was a bare ``except ...: pass`` at
-    both levels, so a user glass that failed to load simply vanished:
-    every later ``get_glass_index('MyGlass', ...)`` raised
-    "unknown glass" with nothing anywhere pointing at the real cause.
+    not cost the user every other saved glass -- and a
+    :class:`UserWarning` names the entry, the file on disk and the
+    exception.  A bare ``except ...: pass`` at either level makes a
+    user glass that fails to load simply vanish: every later
+    ``get_glass_index('MyGlass', ...)`` then raises "unknown glass"
+    with nothing anywhere pointing at the real cause.
     """
     lib = get_library_path() / 'materials'
     for name in list_materials():
@@ -1254,11 +1254,10 @@ except (OSError, ValueError, KeyError, RuntimeError, ImportError) as _exc:
     # store -- the directory may be missing, permission-locked, or
     # contain corrupted entries.  Library functions still work; the
     # user just won't see their saved materials until they fix the
-    # underlying issue.  v5.29.1 (audit A-8): say so instead of
-    # swallowing it silently.  This outer handler now only fires for
+    # underlying issue, and the failure is reported rather than
+    # swallowed silently.  This outer handler only fires for
     # STORE-level failures (unreadable library directory) -- per-entry
     # failures are warned about and skipped inside
-    # ``load_all_materials``.
     warnings.warn(
         f"user_library: the saved-material store could not be read, so NO "
         f"user materials were registered in GLASS_REGISTRY -- "

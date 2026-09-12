@@ -1,6 +1,6 @@
 """Library-wide logging convention.
 
-v5.3.2 (ROADMAP "logging adoption sweep"): adds per-iteration
+Adds per-iteration
 TELEMETRY for the 3 long-running paths the audit cited
 (apply_real_lens_traced, design_optimize, monte_carlo_tolerancing).
 

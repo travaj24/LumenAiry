@@ -48,8 +48,8 @@ from ..backend import JAX_AVAILABLE
 from ..glass import get_glass_index
 from ._conic_core import conic_sag, conic_sag_derivs, refract_snell
 
-# RT-6 (AUDIT_RAYTRACE_CORE_2026_07_08): the v4.16.1-4.16.3 high-NA
-# "paraxial transfer" RuntimeWarning has been RETIRED.  It was built on a
+# RT-6 (AUDIT_RAYTRACE_CORE_2026_07_08): there is deliberately NO high-NA
+# "paraxial transfer" RuntimeWarning here.  Such a warning rests on a
 # mischaracterisation: ``_transfer_jax``'s ``t ~= thickness`` step lands the
 # ray at a point that is still EXACTLY on the ray line (only the parameter
 # along the line differs from the vertex-plane value), and every downstream
@@ -57,11 +57,12 @@ from ._conic_core import conic_sag, conic_sag_derivs, refract_snell
 # to which point on the line you start from) and the OPL accumulator (which
 # telescopes: ``n*(thickness + t_int) == n*t_total`` with signed legs) -- is
 # invariant to that choice.  A direct trace_jax-vs-NumPy-trace parity check
-# at NA up to 0.64 (min|N|~0.77, well past the old 0.95 gate) agrees to
-# ~2.4e-9 m, INVARIANT to the gap length across a 100x sweep (0.09 m -> 9 m);
-# the residual is the surface-intersection solver tolerance, NOT a
-# thickness-scaling paraxial error.  The warning therefore told users to
-# distrust results that are correct to sub-ppm -- removed outright.
+# at NA up to 0.64 (min|N|~0.77, well past a 0.95 gate) agrees to ~2.4e-9 m,
+# INVARIANT to the gap length across a 100x sweep (0.09 m -> 9 m); the
+# residual is the surface-intersection solver tolerance, NOT a
+# thickness-scaling paraxial error.  Warning here would tell users to
+# distrust results correct to sub-ppm.  See
+# docs/history/lumenairy.raytrace.jax_trace.md.
 
 
 # Number of Newton iterations for aspheric ray-surface intersection.
@@ -70,10 +71,10 @@ from ._conic_core import conic_sag, conic_sag_derivs, refract_snell
 # ``for _ in range(10)`` with an early-exit once every ray converges
 # (``|dt| < 1e-15`` and residual ``|F| < 1e-12``); this JAX kernel runs
 # a FIXED count (no data-dependent early exit -- required so jit/grad
-# trace once).  Pre-fix it stopped at 8, so a marginal asphere whose
-# Newton refinement needed the 9th/10th NumPy iteration could land at a
-# slightly different ``t`` (and, in float32, alive-mask-diverge from the
-# NumPy trace).  Matching the count (10) makes the two paths agree in the
+# trace once).  A lower count (8) leaves a marginal asphere whose Newton
+# refinement needs the 9th/10th NumPy iteration at a slightly different
+# ``t`` -- and, in float32, alive-mask-diverging from the NumPy trace.
+# Matching the count (10) makes the two paths agree in the
 # fully-converged regime; the quadratic tail costs ~2 extra evals but is
 # a no-op once converged.  The post-loop residual kill
 # (``_ASPHERIC_NEWTON_RESIDUAL_TOL`` / :func:`_newton_residual_tol`)
@@ -81,14 +82,14 @@ from ._conic_core import conic_sag, conic_sag_derivs, refract_snell
 # non-convergent rays the fixed count can't early-exit on.
 _ASPHERIC_NEWTON_ITERS = 10
 
-# v5.17.1 (audit P3-59): post-Newton residual acceptance tolerance [m].
+# Post-Newton residual acceptance tolerance [m].
 # The NumPy reference (intersection.py) tracks per-ray convergence and
 # kills never-converged rays as RAY_MISSED_SURFACE, accepting a
 # stuck-with-residual ray only when |F| < 1e-12.  The JAX kernels run a
 # FIXED iteration count (no early exit -- required for jit/grad), so
-# an unconverged finite t used to be accepted silently and the ray
-# landed off-surface.  After the fixed iterations we evaluate the
-# residual F(t) = z - sag(x, y) once and kill rays with |F| above this
+# without a residual check an unconverged finite t is accepted silently
+# and the ray lands off-surface.  After the fixed iterations we evaluate
+# the residual F(t) = z - sag(x, y) once and kill rays with |F| above this
 # tolerance, mirroring the NumPy 1e-12 residual criterion.
 _ASPHERIC_NEWTON_RESIDUAL_TOL = 1e-12
 
@@ -293,11 +294,11 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
         disc_pos = disc > 0
         disc_safe = jnp.where(disc_pos, disc, 1.0)
         sqrt_disc = jnp.where(disc_pos, jnp.sqrt(disc_safe), 0.0)
-        # v5.17.1 (audit P3-58): acceptance is disc >= 0, matching the
-        # NumPy path (intersection.py, v5.4.6 audit P3-3) which keeps
-        # the tangent case disc == 0 as a real single-point
-        # intersection.  The sqrt guard stays on the STRICT disc > 0 so
-        # the disc = 0 gradient singularity keeps being masked (H-RT-7).
+        # Acceptance is disc >= 0, matching the NumPy path (intersection.py,
+        # v5.4.6 audit P3-3) which keeps the tangent case disc == 0 as a real
+        # single-point intersection.  The sqrt guard stays on the STRICT disc
+        # > 0 so the disc = 0 gradient singularity keeps being masked
+        # (H-RT-7).
         disc_ok = disc >= 0
         if _use_conic_quadratic:
             q_q = -0.5 * (b_q + jnp.where(b_q >= 0.0, 1.0, -1.0) * sqrt_disc)
@@ -326,11 +327,11 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
             # (RAY_MISSED_SURFACE) and ``_intersect_jax_param`` killed it.
             miss = miss | (jnp.abs(state.N) <= eps)
         else:
-            # v5.4.6 (audit P1-1): direction-AWARE root pick, mirroring the
-            # v5.4.1 NumPy fix in intersection.py.  The Spencer-Murty
-            # ``e/q`` form above IS that near root (|e/q| <= |q/a|), so a
-            # backward-propagating ray (N < 0 after a mirror reflection)
-            # no longer lands on the diametrically-opposite FAR root.
+            # Direction-AWARE root pick, mirroring the NumPy fix in
+            # intersection.py.  The Spencer-Murty ``e/q`` form above IS that
+            # near root (|e/q| <= |q/a|), so a backward-propagating ray (N < 0
+            # after a mirror reflection) does not land on the
+            # diametrically-opposite FAR root.
             t0 = jnp.where(disc_ok, t_near, 0.0)
             # disc < 0 means the ray missed the CONIC entirely
             # (disc == 0 tangency is accepted -- audit P3-58).
@@ -355,15 +356,14 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
                 return t - step
 
             t = jax.lax.fori_loop(0, _ASPHERIC_NEWTON_ITERS, body, t0)
-            # v5.17.1 (audit P3-59): convergence check.  The fixed
-            # iteration count has no early-exit/convergence tracking,
-            # so a finite-but-unconverged t (steep asphere, grazing
-            # incidence) used to be silently accepted where the NumPy
-            # path kills the ray as RAY_MISSED_SURFACE.  Evaluate the
-            # residual once and fold it into the miss mask.  The
-            # residual only feeds a boolean comparison, so no gradient
-            # flows through this extra sag evaluation (trace-safe);
-            # the ~(<=) form also kills NaN residuals.
+            # Convergence check.  The fixed iteration count has no
+            # early-exit/convergence tracking, so a finite-but- unconverged t
+            # (steep asphere, grazing incidence) would be silently accepted
+            # here where the NumPy path kills the ray as RAY_MISSED_SURFACE.
+            # Evaluate the residual once and fold it into the miss mask.  The
+            # residual only feeds a boolean comparison, so no gradient flows
+            # through this extra sag evaluation (trace-safe); the ~(<=) form
+            # also kills NaN residuals.
             xi = state.x + state.L * t
             yi = state.y + state.M * t
             zi = state.z + state.N * t
@@ -491,16 +491,16 @@ def _apply_doe_kick_jax(state, order_x, order_y, period_x, period_y,
     R5 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the grating equation
     conserves the TANGENTIAL WAVEVECTOR,
     ``n2 L' = n1 L + m lambda_vac / Lambda``, so the kick applied to the
-    post-refraction direction cosines carries a ``1 / n2``.  Pre-fix all
-    four sites in the library (this one, ``trace``, ``trace_world``,
-    ``apply_doe_phase_traced``) omitted it: exact in air, high by exactly
-    ``n2`` into glass (measured ratio 1.503583 == n(N-BK7) at
-    Lambda = 5 um, lambda = 1.31 um, m = 1 -- a 50 % direction error).
-    The OPL term is the grating's own phase screen and must NOT carry the
-    ``1 / n2``: its transverse gradient is exactly ``n2 L' - n1 L``.
-    ``n_medium`` defaults to 1.0 so a caller that omits it reproduces the
-    pre-fix (air-correct) behaviour; both trace bodies pass the surface's
-    post-refraction index.
+    post-refraction direction cosines carries a ``1 / n2``.  Omitting it
+    -- as all four sites in the library (this one, ``trace``,
+    ``trace_world``, ``apply_doe_phase_traced``) once did -- is exact in
+    air and high by exactly ``n2`` into glass (measured ratio 1.503583 ==
+    n(N-BK7) at Lambda = 5 um, lambda = 1.31 um, m = 1 -- a 50 % direction
+    error).  The OPL term is the grating's own phase screen and must NOT
+    carry the ``1 / n2``: its transverse gradient is exactly
+    ``n2 L' - n1 L``.  ``n_medium`` defaults to 1.0 so a caller that omits
+    it gets the air-correct behaviour; both trace bodies pass the
+    surface's post-refraction index.
 
     Rays whose post-kick transverse direction cosines exceed unity
     (evanescent orders) are marked dead.
@@ -509,12 +509,11 @@ def _apply_doe_kick_jax(state, order_x, order_y, period_x, period_y,
     ----------------
     ``period_x`` / ``period_y`` may be either Python scalars (cheap
     path, no allocation) or JAX scalars / 0-D arrays (so users can
-    ``jax.grad`` w.r.t. grating period).  Pre-v4.12 used
-    ``float(period_*)`` which stripped the JAX trace -> silent zero
-    gradient under ``jax.grad``; ``np.isfinite`` on a traced value
-    further raised ``TracerArrayConversionError``.  v4.12 keeps the
-    trace alive via ``jnp.where`` whenever the period argument is
-    JAX-traced.
+    ``jax.grad`` w.r.t. grating period).  ``float(period_*)`` would strip
+    the JAX trace -> silent zero gradient under ``jax.grad``, and
+    ``np.isfinite`` on a traced value raises
+    ``TracerArrayConversionError``, so the trace is kept alive via
+    ``jnp.where`` whenever the period argument is JAX-traced.
     """
     import jax.numpy as jnp
 
@@ -561,10 +560,10 @@ def _apply_doe_kick_jax(state, order_x, order_y, period_x, period_y,
     L_new = state.L + dL
     M_new = state.M + dM
     sumsq = L_new * L_new + M_new * M_new
-    # v5.17.1 (audit P3-58): evanescence is STRICTLY sumsq > 1.0,
-    # matching the NumPy trace loop (trace.py ``_evan = _sumsq > 1.0``).
-    # A grazing order with L^2 + M^2 exactly 1.0 propagates (N = 0)
-    # on both backends instead of dying only on the JAX path.
+    # Evanescence is STRICTLY sumsq > 1.0, matching the NumPy trace loop
+    # (trace.py ``_evan = _sumsq > 1.0``). A grazing order with L^2 + M^2
+    # exactly 1.0 propagates (N = 0) on both backends instead of dying only on
+    # the JAX path.
     propagating = sumsq <= 1.0
     cos2 = jnp.maximum(1.0 - sumsq, 0.0)
     N_mag = jnp.sqrt(cos2)
@@ -628,11 +627,11 @@ def _transfer_jax(state, thickness, n_medium):
     # S3-12 (AUDIT_V5_24_2 robustness): freeze DEAD rays.  The NumPy
     # ``_transfer`` applies ``t = np.where(alive & ..., (thickness - z)/N, 0.0)``
     # -- a ray already marked ``alive == False`` keeps its (x, y, opd) exactly.
-    # This path used to advance EVERY ray's position and OPL unconditionally,
-    # which is harmless for in-tree consumers (they all mask by ``alive``) but
-    # leaves an unmasked ``jax_state_to_raybundle`` reader seeing
-    # backend-dependent drift on the dead rows.  Scale the transfer leg by the
-    # alive mask so a dead ray matches the NumPy backend (position + OPL frozen).
+    # Advancing EVERY ray's position and OPL unconditionally is harmless
+    # for in-tree consumers (they all mask by ``alive``) but leaves an
+    # unmasked ``jax_state_to_raybundle`` reader seeing backend-dependent
+    # drift on the dead rows.  Scale the transfer leg by the alive mask so
+    # a dead ray matches the NumPy backend (position + OPL frozen).
     leg = thickness * state.alive.astype(state.x.dtype)
     new_x = state.x + state.L * leg
     new_y = state.y + state.M * leg
@@ -802,12 +801,11 @@ def _reject_unsupported_jax_surfaces(surfaces_raw, fn_name):
     hand-built mirrors with ``glass_after='MIRROR'`` slipped through
     and were silently traced as refractive air->air.
 
-    v5.17.x (audit P2-34): hoisted to a module-level helper so
-    :func:`trace_jax_with_params` (which bypasses
-    :func:`_build_jax_prescription` for perf) applies the SAME guard --
-    previously it silently traced mirrors / coord-breaks / biconics /
-    freeforms as flat refractives, reproducing the pre-4.10 wrong-answer
-    mode for differentiable prescriptions.
+    Hoisted to a module-level helper so :func:`trace_jax_with_params`
+    (which bypasses :func:`_build_jax_prescription` for perf) applies the
+    SAME guard -- without it that entry point silently traces mirrors /
+    coord-breaks / biconics / freeforms as flat refractives, which is a
+    wrong answer for a differentiable prescription.
 
     Trace-safety: this guard inspects only STATIC Python fields of the
     prescription dict (booleans, glass strings, presence of biconic /
@@ -877,11 +875,11 @@ def _resolve_semi_diameters(prescription):
     clamped to the FOLLOWING lens's aperture (measured: a 25 mm fold
     mirror resolved to 6 mm).
 
-    v5.17.x (audit P2-35 residual): pre-fix the JAX builders read only
-    the per-surface ``'semi_diameter'`` key and never consulted
-    ``'elements'``, so a Zemax-loaded prescription (whose apertures
-    live in ``'elements'``) vignetted under the NumPy trace but not
-    under trace_jax / trace_jax_with_params.  Returns a list of Python
+    The JAX builders must consult ``'elements'`` as well as the per-surface
+    ``'semi_diameter'`` key: a Zemax-loaded prescription keeps its apertures
+    in ``'elements'``, so reading only ``'semi_diameter'`` vignettes under
+    the NumPy trace but not under trace_jax / trace_jax_with_params.
+    Returns a list of Python
     floats (static -- never a JAX tracer), so it is jit/grad safe.
     """
     surfaces_raw = prescription.get('surfaces', [])
@@ -923,8 +921,8 @@ def _build_jax_prescription(prescription, wavelength,
     """Build a :class:`JaxPrescription` from a plain prescription dict.
 
     Performs the surface-kind validation, glass-index lookups, and
-    semi-diameter resolution that the legacy ``trace_jax`` used to do
-    inline on every call.  The output is suitable both for direct kernel
+    semi-diameter resolution once, rather than inline on every
+    ``trace_jax`` call.  The output is suitable both for direct kernel
     use AND for cache-key lookup (the ``aux`` field is hashable).
     """
     _ensure_jaxprescription_registered()    # lazy pytree reg (audit P2-D)
@@ -1034,7 +1032,7 @@ def _running_under_trace(initial_state, jp):
     ``jax.jit`` / ``jax.vmap`` the calling transform already owns the
     trace context, and adding our own jit layer triggers JAX's
     ``dot_general`` NaN in the backward pass through ``jnp.linalg.lstsq``
-    (the v4.12.0 failure mode).
+    (a documented JAX failure mode).
     """
     import jax
     from jax.core import Tracer
@@ -1058,14 +1056,12 @@ def _trace_body_static(state, jp, wavelength):
     LEAVES of ``jp`` would appear as tracers).  The leaves themselves are
     only used by the traced-leaf path (:func:`_trace_body_traced`).
 
-    v5.31 (audit R-18, verified): the former 4th parameter
-    ``surface_diffraction`` was DEAD and is gone.  The DOE kicks are read from
-    ``jp.aux[-1]`` (``diff_aux``), which :func:`_build_jax_prescription` folds
-    in; the parameter was a vestige of the pre-``JaxPrescription`` signature
-    and was never referenced in either trace body.  Passing a spec here could
-    only mislead -- ``trace_jax`` raises (RT-8) if ``surface_diffraction`` is
-    supplied alongside a pre-built prescription, precisely because this path
-    cannot honour it.
+    There is deliberately no ``surface_diffraction`` parameter: the DOE
+    kicks are read from ``jp.aux[-1]`` (``diff_aux``), which
+    :func:`_build_jax_prescription` folds in.  Passing a spec here could
+    only mislead -- ``trace_jax`` raises (RT-8) if ``surface_diffraction``
+    is supplied alongside a pre-built prescription, precisely because this
+    path cannot honour it.
     """
     (n_surf, asph_powers, semi_ds, n_pre, n_post,
      radii_py, conics_py, thicks_py, asph_pairs, diff_aux) = jp.aux
@@ -1107,8 +1103,8 @@ def _trace_body_traced(state, jp, wavelength):
     pure-spherical surfaces), and we lose the closed-form flat-surface
     fast path.  Gradient correctness is the reason we use this branch.
 
-    v5.31 (audit R-18, verified): the dead ``surface_diffraction`` parameter is
-    gone -- see :func:`_trace_body_static`.
+    There is no ``surface_diffraction`` parameter here either -- see
+    :func:`_trace_body_static`.
     """
     (n_surf, asph_powers, semi_ds, n_pre, n_post,
      radii_py, conics_py, thicks_py, asph_pairs, diff_aux) = jp.aux
@@ -1145,20 +1141,18 @@ def _trace_body_traced(state, jp, wavelength):
 # leaf gradients flow through; under tracing we bypass this layer
 # entirely (see :func:`_running_under_trace`).
 #
-# v4.12.2: converted to an LRU-bounded ``OrderedDict`` so long-running
+# Converted to an LRU-bounded ``OrderedDict`` so long-running
 # optimizers (e.g. design sweeps over hundreds of prescriptions) do not
 # leak compiled XLA executables.  Accessed keys are moved to the end;
 # when ``len > _TRACE_JAX_CACHE_MAXSIZE`` the oldest entry is evicted.
 _TRACE_JAX_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
 _TRACE_JAX_CACHE_MAXSIZE = 32  # tune; long-running optimizers may exceed
-# v4.14.2 (P1-NEW-2 / Agent C): thread-safety lock for
-# ``_TRACE_JAX_CACHE``.  Without this two threads racing through
-# :func:`trace_jax` could see a torn OrderedDict (``get`` ->
-# ``__setitem__`` -> ``popitem`` is a read-modify-write sequence).
-# Follows the ``_ASM_CACHE_LOCK`` precedent in
-# :mod:`propagators.propagation`.  Lock-scope discipline: the
-# jit-compile step (``_make_jit_kernel``) is expensive (XLA compile)
-# and runs OUTSIDE the lock so a concurrent cache hit on a different
+# Thread-safety lock for ``_TRACE_JAX_CACHE``.  Without this two threads
+# racing through :func:`trace_jax` could see a torn OrderedDict (``get`` ->
+# ``__setitem__`` -> ``popitem`` is a read-modify-write sequence). Follows the
+# ``_ASM_CACHE_LOCK`` precedent in :mod:`propagators.propagation`.  Lock-scope
+# discipline: the jit-compile step (``_make_jit_kernel``) is expensive (XLA
+# compile) and runs OUTSIDE the lock so a concurrent cache hit on a different
 # key isn't blocked.
 _TRACE_JAX_CACHE_LOCK = threading.Lock()
 
@@ -1175,9 +1169,9 @@ def clear_trace_jax_cache() -> None:
         _TRACE_JAX_CACHE.clear()
 
 
-# v4.16.0 (ROADMAP #15): register the raytrace-JAX clearer with the
-# central registry at module-import time.  ``clear_asm_caches`` now
-# walks the registry rather than enumerating clear calls by hand.
+# Register the raytrace-JAX clearer with the central registry at
+# module-import time: ``clear_asm_caches`` walks the registry rather than
+# enumerating clear calls by hand.
 # Late-binding closure preserves ``mock.patch.object`` test semantic.
 try:
     import sys as _sys
@@ -1198,14 +1192,13 @@ def _make_jit_kernel(wavelength_float):
     The kernel takes ``(state, jp_concrete)`` where ``jp_concrete`` is a
     :class:`JaxPrescription` whose leaves are concrete JAX arrays.
 
-    v5.31 (audit R-18, verified): the former ``jp_aux`` and
-    ``surface_diffraction`` parameters were both DEAD and are gone.  ``jp_aux``
-    was never referenced in the body -- the cache KEY is built by the caller
-    (:func:`trace_jax`, ``cache_key = (jp.aux, wavelength, diff_aux)``), not
-    here, so the old docstring's "keyed on ``jp_aux``" described the caller's
-    job; the aux the kernel actually reads arrives with ``jp`` at call time.
-    ``surface_diffraction`` was only forwarded to :func:`_trace_body_static`,
-    which ignored it (the DOE kicks live in ``jp.aux[-1]``).  ``wavelength`` is
+    There are deliberately no ``jp_aux`` / ``surface_diffraction``
+    parameters.  The cache KEY is built by the caller (:func:`trace_jax`,
+    ``cache_key = (jp.aux, wavelength, diff_aux)``), not here, so the aux
+    the kernel reads arrives with ``jp`` at call time;
+    ``surface_diffraction`` would only be forwarded to
+    :func:`_trace_body_static`, which ignores it (the DOE kicks live in
+    ``jp.aux[-1]``).  ``wavelength`` is
     the one genuinely-closed-over static value -- it scales the DOE kick -- and
     it is part of the caller's cache key for exactly that reason.
     """
@@ -1556,16 +1549,16 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
     disc_pos = disc > 0
     disc_safe = jnp.where(disc_pos, disc, 1.0)
     sqrt_disc = jnp.where(disc_pos, jnp.sqrt(disc_safe), 0.0)
-    # v5.17.1 (audit P3-58): acceptance is disc >= 0 (NumPy parity,
-    # v5.4.6 audit P3-3 tangency semantics); the sqrt guard stays on
-    # the strict disc > 0 for the H-RT-7 gradient mask.
+    # Acceptance is disc >= 0 (NumPy parity, tangency semantics); the
+    # sqrt guard stays on the strict disc > 0 for the H-RT-7 gradient
+    # mask.
     disc_ok = disc >= 0
-    # v5.4.6 (audit P3-1): direction-aware near-root pick (min |t|), matching
-    # the v5.4.1 NumPy fix and the static-branch JAX kernel (P1-1).  The old
-    # ``R_finite > 0`` selector is direction-blind and lands a backward leg
-    # (post-mirror N<0) on the far root, corrupting jax.grad of mirror/folded
-    # prescriptions.  The Spencer-Murty ``t = e/q`` form below is that near
-    # root by construction (|e/q| <= |q/a|), with no vertex cancellation and
+    # Direction-aware near-root pick (min |t|), matching the NumPy fix and
+    # the static-branch JAX kernel (P1-1).  An ``R_finite > 0`` selector
+    # is direction-blind and lands a backward leg (post-mirror N<0) on the
+    # far root, corrupting jax.grad of mirror/folded prescriptions.  The
+    # Spencer-Murty ``t = e/q`` form below is that near root by
+    # construction (|e/q| <= |q/a|), with no vertex cancellation and
     # no dependence on the sign of a (possibly traced) curvature.
     q_q = -0.5 * (b_q + jnp.where(b_q >= 0.0, 1.0, -1.0) * sqrt_disc)
     q_ok = q_q != 0.0
@@ -1606,7 +1599,7 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
         return t - step
 
     t = jax.lax.fori_loop(0, _ASPHERIC_NEWTON_ITERS, body, t0)
-    # v5.17.1 (audit P3-59): convergence check -- mirror the NumPy
+    # Convergence check -- mirror the NumPy
     # residual kill (see _ASPHERIC_NEWTON_RESIDUAL_TOL and the static
     # `_intersect_jax` twin).  Residual only feeds a boolean, so this
     # extra sag evaluation is jit/grad trace-safe; the ~(<=) form
@@ -1721,8 +1714,8 @@ def trace_jax_with_params(initial_state, prescription, wavelength,
 
     # Audit P2-34: apply the same unsupported-surface fail-loud guard
     # as trace_jax's builder.  This entry point bypasses
-    # _build_jax_prescription for perf, so pre-fix it silently traced
-    # mirrors / coord-breaks / biconics / freeforms as flat
+    # _build_jax_prescription for perf, so without the guard it silently
+    # traces mirrors / coord-breaks / biconics / freeforms as flat
     # refractives.  Static-fields-only, hence jit/grad trace-safe (see
     # _reject_unsupported_jax_surfaces).
     _reject_unsupported_jax_surfaces(surfaces_raw, 'trace_jax_with_params')

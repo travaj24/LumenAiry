@@ -172,7 +172,7 @@ class FreeSpace(Operator):
         paid only in the suspicious regime and at most once per instance.
         """
         # getattr, not attribute access: an instance unpickled from a
-        # pre-v5.46 process has no such attribute.
+        # an instance unpickled from an older process has no such attribute.
         if (getattr(self, '_far_field_warned', False)
                 or method not in self._PITCH_PRESERVING):
             return None
@@ -232,8 +232,8 @@ class FreeSpace(Operator):
         low) retaining **0.096** of the input power; ``'auto'`` resamples to
         ``dx_out = 77.27 um`` and returns ``w = 5034.0 um`` (0.07 % error)
         retaining 0.9998.  Before v5.46 that cell was silent in BOTH
-        directions -- the old default gave the right answer and warned about
-        an unrelated return contract.
+        retaining 0.9998.  Both directions are worth saying: one default
+        gives the right answer and warns about an unrelated return contract.
 
         Fires at most once per operator instance (see ``__init__``).
         """
@@ -290,12 +290,12 @@ class FreeSpace(Operator):
         if self.distance == 0.0:
             return E, dx, dy
         from ..propagators.dispatch import propagate
-        # v4.15.2 (audit P1-NEW-C): thread ``dy`` into the dispatcher
+        # Thread ``dy`` into the dispatcher
         # when it differs from ``dx``, so anamorphic chains (e.g.
         # ``Magnify(a_x, a_y) * FreeSpace(d)``) propagate on the
-        # correct y-axis grid pitch.  Pre-fix the call dropped
-        # ``dy`` and the underlying kernel silently defaulted to
-        # ``dy = dx``.  ``propagate`` forwards ``**method_kwargs``
+        # correct y-axis grid pitch.  A call that drops ``dy`` lets the
+        # underlying kernel silently default to ``dy = dx``.
+        # ``propagate`` forwards ``**method_kwargs``
         # to the chosen kernel; ASM / Fresnel / Fraunhofer / RS all
         # accept ``dy`` (Optional[float] = None, defaulting to dx).
         # SAS does NOT accept ``dy`` (square-grid kernel) -- we only
@@ -305,7 +305,7 @@ class FreeSpace(Operator):
         anamorphic = (dy is not None and float(dy) != float(dx))
         if anamorphic:
             kw['dy'] = float(dy)
-        # v4.15.3 (audit P1-NEW-F1-1): when ``dy != dx`` (anamorphic
+        # When ``dy != dx`` (anamorphic
         # input), the SAS kernel does NOT accept the ``dy`` kwarg --
         # it is a square-grid-only kernel.  With ``self.method ==
         # 'auto'`` (the default), the dispatcher routes to SAS in the
@@ -325,13 +325,13 @@ class FreeSpace(Operator):
         method = self.method
         if anamorphic and method == 'auto':
             method = 'asm'
-        # v5.46 (audit Z3 / VERIFY-A11 O-1): arm the far-field truncation
+        # Arm the far-field truncation
         # check BEFORE propagating, so the input power is available to
         # compare against.  Returns None -- and costs one comparison -- in
         # every case that cannot silently truncate.
         _gate = self._far_field_gate(E, dx=dx, dy=dy, wavelength=wavelength,
                                      method=method)
-        # v5.30 (audit P5 / roadmap F1, flip-day migration): ``return_result``
+        # ``return_result``
         # named explicitly.  The roadmap's F1 inventory listed this site as
         # already flip-safe because ``_coerce_propagation_output`` accepts a
         # ``PropagationResult`` -- MEASURED, that is true for the field but NOT
@@ -345,7 +345,7 @@ class FreeSpace(Operator):
         # wrapped, i.e. the flip would have silently squared an anamorphic
         # algebra chain's output pitch.
         #
-        # v5.46 (audit Z3): that reason applies ONLY to the anamorphic branch,
+        # That reason applies ONLY to the anamorphic branch,
         # which is forced to ``'asm'`` above -- a pitch-PRESERVING kernel, so
         # ``propagate`` never warns about it.  On the square-grid branch the
         # legacy contract bought nothing and cost a ``UserWarning`` per
@@ -771,7 +771,7 @@ class FourierTransform(Operator):
                 f"finite (got {ff})."
             )
         self.f = ff
-        # v4.15.2: the propagator backend for the two FreeSpace legs
+        # The propagator backend for the two FreeSpace legs
         # is fixed to ``'auto'`` so the dispatcher chooses Fresnel
         # (the natural choice for z = f at typical optical scales);
         # users who want a specific kernel can compose
@@ -795,7 +795,7 @@ class FourierTransform(Operator):
         dy: float,
         wavelength: float,
     ) -> Tuple[np.ndarray, float, float]:
-        # v4.15.2 (audit P1-NEW-A): invoke the literal 3-stage chain
+        # Invoke the literal 3-stage chain
         # ``FreeSpace(f) -> ThinLens(f) -> FreeSpace(f)`` so the
         # output field matches the ABCD claim (Goodman §5.2).  The
         # v4.15.1 2-stage shortcut (``ThinLens(f) -> fresnel(f)``)
@@ -804,15 +804,16 @@ class FourierTransform(Operator):
         # phase-sensitive downstream operators got different fields
         # than the equivalent 3-stage chain.
         #
-        # v4.15.3 (audit P1-NEW-F1-1): the two FreeSpace legs below
+        # The two FreeSpace legs below
         # carry ``self.method == 'auto'`` -- the dispatcher's regime-
         # dependent kernel pick.  ``FreeSpace._apply`` itself now
         # forces ``method='asm'`` whenever the input grid is
         # anamorphic (``dy != dx``), so this 3-stage chain is
         # anamorphic-safe by composition: passing a non-square input
-        # grid no longer triggers the SAS-anamorphic
+        # anamorphic-safe by composition: passing a non-square input
+        # grid cannot trigger the SAS-anamorphic
         # ``TypeError: sas_propagate() got an unexpected keyword
-        # argument 'dy'`` crash that the v4.15.2 closure exposed.
+        # argument 'dy'`` crash (docs/history/lumenairy.algebra.primitives.md).
         fs = FreeSpace(self.f, method=self.method)
         tl = ThinLens(self.f)
         E1, dx1, dy1 = fs._apply(

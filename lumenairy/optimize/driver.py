@@ -1,11 +1,11 @@
 """
 lumenairy.optimize.driver -- design_optimize and friends.
 
-v5.1.0 split (Agent E): extracted from ``lumenairy/optimize/core.py``.
+Split out of ``lumenairy/optimize/core.py``.
 Hosts the wave-propagator registry, the finite-difference gradient
 helper (:func:`_fd_grad_pure`), the per-method scipy dispatch logic,
 and the main entry point :func:`design_optimize`.  Re-exported by
-``optimize/core.py`` for bit-for-bit public-API preservation.
+``optimize/core.py``, which remains the documented import path.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-# v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
 # Module-level logger for design_optimize entry + per-scipy-iteration
 # progress.  Default-quiet via the lumenairy root logger's NullHandler.
 from .._logging import get_logger
@@ -123,13 +122,9 @@ def unregister_wave_propagator(name: str) -> None:
 
 
 def _wave_real_lens(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
-    # v5.30 (W5 shim-removal wave): the ``opts['wave_traced']`` branch that
-    # routed to ``apply_real_lens_traced`` is REMOVED with the
-    # ``design_optimize(wave_traced=)`` flag that was its only gate (R-17
-    # grep-verified zero callers repo-wide, so CI never covered it).  To
-    # drive ``apply_real_lens_traced`` from a design run, register a
-    # propagator -- one dispatch mechanism instead of a boolean that
-    # mutates the meaning of ``ray_subsample``::
+    # There is no ``opts['wave_traced']`` branch: a traced propagator is
+    # REGISTERED, not selected by a boolean.  One dispatch mechanism
+    # instead of a flag that mutates the meaning of ``ray_subsample``::
     #
     #     def _traced(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
     #         return apply_real_lens_traced(
@@ -175,12 +170,11 @@ def _wave_asymptotic(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
     # Sample the asymptotic propagator on the (Ny, Nx, dx) wave grid
     # so downstream merits see a usable field.  Centre at the chief
     # image of the on-axis source.
-    # v4.12.1 (B1-10): pixel-centred `(arange(N) - N/2)*dx`, matches the
-    # library-wide convention (ASM, Fresnel, RS, sources).  Merit
-    # functions that compare wave-leg fields across propagator
-    # families need a single shared grid convention; the previous
-    # `+0.5` produced a half-pixel offset between the asymptotic leg
-    # and the ASM / GBD / HF legs.
+    # Pixel-centred `(arange(N) - N/2)*dx`, matching the library-wide
+    # convention (ASM, Fresnel, RS, sources).  Merit functions that
+    # compare wave-leg fields across propagator families need a single
+    # shared grid convention; a `+0.5` offset would put the asymptotic
+    # leg half a pixel away from the ASM / GBD / HF legs.
     _ax = (np.arange(N) - N / 2) * dx
     _x_grid = _ax + fit.s2x_centre
     _y_grid = _ax + fit.s2y_centre
@@ -281,7 +275,7 @@ def _fd_grad_pure(
     scale_floor : ndarray, shape (N,), optional
         Per-variable absolute step floor.  Defaults to 1 micron per
         variable (matches the legacy ``_fd_grad_for`` default for radii
-        / thicknesses).  v5.4.6 (audit F-20): note that ``scale_floor``
+        / thicknesses).  Note that ``scale_floor``
         is consumed by THIS finite-difference helper, which
         ``design_optimize`` invokes only on the JAX-gradient-combined
         path (``jac='auto'`` WITH a JaxMeritTerm) and ``method='newton'``.
@@ -300,8 +294,7 @@ def _fd_grad_pure(
     scheme : {'central', 'forward'}, default 'central'
         Finite-difference scheme.  ``'central'`` evaluates ``f`` at
         ``x +/- h*e_i`` for each variable (2N evals, O(h^2) truncation
-        error); this is the historical default and preserves bit-
-        identical gradient values with pre-v4.13.0 behaviour.
+        error); this is the default.
         ``'forward'`` evaluates ``f`` at ``x`` and ``x + h*e_i`` (N+1
         evals, or N when ``f0`` is supplied) at the cost of O(h)
         truncation error.  Opt-in for perf-sensitive callers where
@@ -377,9 +370,8 @@ def _fd_grad_pure(
         if f0 is None:
             f0 = float(f(x))
         elif validate_f0:
-            # v4.14 (audit P2 #16): opt-in stale-cache check.  Tight
-            # but not exact tol to allow for benign re-evaluation
-            # noise in non-deterministic merit functions.
+            # Opt-in stale-cache check.  Tight but not exact tol to allow for
+            # benign re-evaluation noise in non-deterministic merit functions.
             f0_check = float(f(x))
             tol = 1e-9 * max(abs(f0), abs(f0_check), 1.0)
             if not np.isfinite(f0_check) or abs(f0 - f0_check) > tol:
@@ -500,12 +492,10 @@ def design_optimize(parameterization: Any,
     """Optimize a lens prescription against a set of merit terms.
 
     See ``lumenairy.optimize.core.design_optimize`` for the canonical
-    docstring; the body lives here post-v5.1.0 split.  Parameter and
-    behaviour contracts are unchanged.
+    docstring; the body lives here.
 
     .. versionchanged:: 5.30
-       ``wave_traced`` is **REMOVED** (deprecated earlier in v5.30, W5
-       shim-removal wave).  R-17
+       ``wave_traced`` is **REMOVED**.  R-17
        (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25) grep-verified ZERO
        callers anywhere in the repo -- library, tests, validation,
        examples, UI -- so the ``apply_real_lens_traced`` branch it
@@ -518,12 +508,11 @@ def design_optimize(parameterization: Any,
        a boolean that mutates the meaning of another argument.  See
        ``_wave_real_lens`` for a copy-paste recipe.
 
-    v5.24.x (audit S4-18): ``seed`` controls the RNG of the stochastic
-    global methods (``differential_evolution`` / ``basin_hopping`` /
-    ``dual_annealing``).  Defaults to ``42`` -- the historical hard-coded
-    value -- so existing callers see byte-identical behaviour; pass a
-    different int for an independent stochastic restart, or ``None`` to
-    let scipy draw from the unseeded global RNG.
+    ``seed`` controls the RNG of the stochastic global methods
+    (``differential_evolution`` / ``basin_hopping`` / ``dual_annealing``).
+    It defaults to ``42``; pass a different int for an independent
+    stochastic restart, or ``None`` to let scipy draw from the unseeded
+    global RNG.
     """
     import scipy.optimize as so
 
@@ -549,20 +538,18 @@ def design_optimize(parameterization: Any,
     if precision == 'single':
         set_default_complex_dtype(np.complex64)
     # 4.10: register dtype restoration through a sentinel object so any
-    # exception (scipy raise, KeyboardInterrupt, etc.) before the
-    # success-path restore at the end still puts the global complex
-    # dtype back.  Without this, an interrupted `precision='single'`
-    # design_optimize() leaked complex64 to every subsequent call in
-    # the process.
+    # exception (scipy raise, KeyboardInterrupt, etc.) before the success-path
+    # restore at the end still puts the global complex dtype back.  Without
+    # this, an interrupted `precision='single'` design_optimize() leaked
+    # complex64 to every subsequent call in the process.
     #
-    # v4.14 (audit P2 #10): the dominant restore path is now an
-    # explicit ``try/finally`` around the optimization body so the
-    # cleanup is deterministic under ``KeyboardInterrupt`` and any
-    # exception (CPython refcount semantics in ``__del__`` are
-    # implementation-defined and can be deferred under PyPy / when a
-    # reference cycle survives garbage collection).  ``__del__`` is
-    # retained as a defensive safety net only -- the ``_restored``
-    # flag stops it firing twice on the normal path.
+    # The dominant restore path is an explicit ``try/finally`` around the
+    # optimization body so the cleanup is deterministic under
+    # ``KeyboardInterrupt`` and any exception (CPython refcount semantics in
+    # ``__del__`` are implementation-defined and can be deferred under PyPy /
+    # when a reference cycle survives garbage collection).  ``__del__`` is
+    # retained as a defensive safety net only -- the ``_restored`` flag stops
+    # it firing twice on the normal path.
     class _RestoreDtype:
         def __init__(self, dtype):
             self.dtype = dtype
@@ -592,11 +579,11 @@ def design_optimize(parameterization: Any,
                 pass
     _dtype_restore_guard = _RestoreDtype(_orig_complex_dtype)
 
-    # v4.14 (audit P2 #14): warn if the user selected a non-default
-    # wave_propagator (e.g. 'gbd') AND any of the three Merit classes
-    # that hard-code apply_real_lens for off-nominal legs is in use.
-    # Threading the propagator through the sub-merit is a v4.14+
-    # feature; this warning surfaces the silent inconsistency.
+    # Warn if the user selected a non-default wave_propagator (e.g.
+    # 'gbd') AND any of the three Merit classes that hard-code
+    # apply_real_lens for off-nominal legs is in use.  The propagator is
+    # not threaded through the sub-merit, so this warning is what
+    # surfaces the silent inconsistency.
     if wave_propagator != 'real_lens':
         _SENSITIVE = (MultiWavelengthMerit, MultiFieldMerit, ToleranceAwareMerit)
         offenders = [type(m).__name__ for m in merit_terms
@@ -630,12 +617,12 @@ def design_optimize(parameterization: Any,
     x0 = parameterization.initial_values()
     bounds = parameterization.bounds
 
-    # v4.16 (ROADMAP #9): hard-constraint validation + method-compat
-    # check.  We accept zero or more :class:`Constraint` objects; each
-    # is translated to scipy's :class:`NonlinearConstraint` and threaded
-    # through ``scipy.optimize.minimize``.  Only SLSQP / trust-constr
-    # honour hard constraints -- any other method raises here with a
-    # clear hint instead of silently dropping the constraints.
+    # Hard-constraint validation + method-compat check.  We accept zero or
+    # more :class:`Constraint` objects; each is translated to scipy's
+    # :class:`NonlinearConstraint` and threaded through
+    # ``scipy.optimize.minimize``.  Only SLSQP / trust-constr honour hard
+    # constraints -- any other method raises here with a clear hint instead of
+    # silently dropping the constraints.
     constraint_seq: Tuple[Constraint, ...] = tuple(constraints or ())
     if constraint_seq:
         for _ci, _c in enumerate(constraint_seq):
@@ -658,13 +645,12 @@ def design_optimize(parameterization: Any,
                 f"them as soft penalties via MinThicknessMerit / "
                 f"MinBackFocalLengthMerit / similar.")
 
-    # v4.16 (ROADMAP #10): state-file checkpoint/resume.  Persist the
-    # tuple ``(call_count, x_best, merit_best, history)`` to JSON so a
-    # crashed multi-hour run can resume from disk on the next start.
-    # When ``state_file`` points at an existing readable JSON file with
-    # the right shape, we override ``x0`` with the persisted ``x_best``
-    # and restore ``call_count``; otherwise we start from scratch and
-    # create the file on the first eval.
+    # State-file checkpoint/resume.  Persist the tuple ``(call_count, x_best,
+    # merit_best, history)`` to JSON so a crashed multi-hour run can resume
+    # from disk on the next start. When ``state_file`` points at an existing
+    # readable JSON file with the right shape, we override ``x0`` with the
+    # persisted ``x_best`` and restore ``call_count``; otherwise we start from
+    # scratch and create the file on the first eval.
 
     def _state_load() -> Optional[Dict[str, Any]]:
         if not state_file:
@@ -761,7 +747,6 @@ def design_optimize(parameterization: Any,
     call_progress(progress, 'design_optimize', 0.0,
                   f'method={method}, {len(merit_terms)} merit term(s)')
 
-    # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
     # Entry log -- method + free-param count + merit-term count + iter
     # cap so an attached handler shows the design_optimize call shape
     # before the first scipy iteration fires.
@@ -807,10 +792,9 @@ def design_optimize(parameterization: Any,
             frac,
             f'iter {iter_count[0]}: merit={last_value[0]:.4g}  '
             f'efl={last_efl[0]*1e3:.3f}mm')
-        # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration
-        # telemetry): one INFO record per scipy iteration -- mirrors
-        # the progress-callback message so an attached handler sees
-        # the same merit/efl trace the GUI/CLI progress bar shows.
+        # One INFO record per scipy iteration -- mirrors the progress-callback
+        # message so an attached handler sees the same merit/efl trace the
+        # GUI/CLI progress bar shows.
         logger.info(
             "design_optimize: iter %d/%d merit=%.4g efl=%.3fmm",
             int(iter_count[0]), int(max_iter),
@@ -893,7 +877,7 @@ def design_optimize(parameterization: Any,
                     f"{sorted(WAVE_PROPAGATOR_REGISTRY)} "
                     "(register custom propagators with "
                     "register_wave_propagator(name, fn)).")
-            # v5.30 (W5): ``wave_traced`` dropped from ``opts`` with the
+            # ``opts`` carries no ``wave_traced`` key.
             # kwarg.  ``ray_subsample`` stays -- it is the documented
             # channel for a user-registered traced propagator.
             _opts = {
@@ -953,10 +937,9 @@ def design_optimize(parameterization: Any,
                 # degenerate wave leg is penalised, matching the wrapper.
                 ctx.strehl_best = (float(strehl_best_v)
                                    if np.isfinite(strehl_best_v) else 0.0)
-                # v5.4.6 (audit F-5): NaN-safe argmax -- a single NaN
-                # through-focus slice must not steal the argmax (np.argmax
-                # treats NaN as the maximum).  Mirrors the wrapper-merit
-                # guard.
+                # NaN-safe argmax -- a single NaN through-focus slice must not
+                # steal the argmax (np.argmax treats NaN as the maximum).
+                # Mirrors the wrapper-merit guard.
                 if np.any(np.isfinite(scan.strehl)):
                     i_best = int(np.nanargmax(scan.strehl))
                     ctx.rms_radius_best = float(scan.rms_radius[i_best])
@@ -1013,8 +996,7 @@ def design_optimize(parameterization: Any,
             current ``x``.  Only consulted when ``scheme='forward'``.
         scheme : {'central', 'forward'}, default 'central'
             Forwarded to :func:`_fd_grad_pure`.  Central differences
-            (the default) preserve bit-identical gradient values with
-            pre-v4.13.0 behaviour at 2N evaluations per gradient.
+            (the default) cost 2N evaluations per gradient.
             Forward differences are an opt-in perf option (N+1 evals,
             or N with ``f0``) at the cost of O(h) truncation.
         """
@@ -1052,21 +1034,20 @@ def design_optimize(parameterization: Any,
             g = g + t.gradient_at_x(x)
         # Finite-difference part: gradient of the remaining terms.
         #
-        # v4.14 (audit P2 #11): switch to forward-FD with a cached
-        # ``f0`` for the other-terms sum.  scipy already evaluates
-        # ``merit_fn(x)`` before calling ``jac`` at the same ``x`` (the
-        # FULL merit, including JAX terms); we can't reuse that
-        # directly because ``_fd_grad_for`` operates on the
-        # ``other_terms`` subset only.  But evaluating once at ``x``
-        # to capture ``f0_other`` costs one evaluate() call and then
-        # saves ``N-1`` evaluations per gradient versus central FD
-        # (2N -> N+1 evals; net (2N) - (1+N) = N-1 saved per gradient).
+        # Forward-FD with a cached ``f0`` for the other-terms sum.  scipy
+        # already evaluates ``merit_fn(x)`` before calling ``jac`` at the same
+        # ``x`` (the FULL merit, including JAX terms); we can't reuse that
+        # directly because ``_fd_grad_for`` operates on the ``other_terms``
+        # subset only.  But evaluating once at ``x`` to capture ``f0_other``
+        # costs one evaluate() call and then saves ``N-1`` evaluations per
+        # gradient versus central FD (2N -> N+1 evals; net (2N) - (1+N) = N-1
+        # saved per gradient).
         #
-        # For large N (>=10 free vars), this halves the FD cost of
-        # the gradient and is the dominant runtime saving in design
-        # optimisation when ANY non-JAX merit term is present.  The
-        # O(h) truncation error of forward FD is well-tolerated by
-        # quasi-Newton line searches (L-BFGS-B etc.) at h~1e-7.
+        # For large N (>=10 free vars), this halves the FD cost of the
+        # gradient and is the dominant runtime saving in design optimisation
+        # when ANY non-JAX merit term is present.  The O(h) truncation error
+        # of forward FD is well-tolerated by quasi-Newton line searches
+        # (L-BFGS-B etc.) at h~1e-7.
         if other_terms:
             _, ctx_f0 = evaluate(x)
             f0_other = float(sum(t.evaluate(ctx_f0) for t in other_terms))
@@ -1085,11 +1066,11 @@ def design_optimize(parameterization: Any,
         """OPT-3 (AUDIT_OPTIMIZE_SECOND_PASS): the shared per-eval bookkeeping
         -- plane_logger telemetry, best-merit tracking, the history rows, and
         the rolling ``_state_save()`` checkpoint.  Factored out so the
-        ``method='lm'`` ``residuals`` path gets ALL of it too: pre-fix that
-        path re-implemented only the eval counter + progress, so a multi-hour
-        LM run with ``state_file=`` set wrote no checkpoint until the final
-        force-save (a mid-run crash lost everything) and per-eval telemetry
-        consumers silently received nothing."""
+        ``method='lm'`` ``residuals`` path gets ALL of it too.  A path that
+        re-implements only the eval counter + progress leaves a multi-hour
+        LM run with ``state_file=`` set writing no checkpoint until the
+        final force-save (a mid-run crash loses everything), and per-eval
+        telemetry consumers receiving nothing."""
         if plane_logger is not None:
             try:
                 plane_logger(call_count[0], ctx)
@@ -1102,12 +1083,11 @@ def design_optimize(parameterization: Any,
                     f"({type(_exc).__name__}: {_exc}); continuing "
                     f"without telemetry for this iteration.",
                     RuntimeWarning, stacklevel=2)
-        # v4.16 (ROADMAP #10): track best-merit-seen for checkpoint /
-        # resume.  The optimiser is guaranteed to call merit_fn at the
-        # actual converged x_opt at the end (in the final
-        # evaluate() block), so x_best is monotonic-improving.
-        # Gated on state_file being non-None so pre-v4.16 callers see
-        # byte-identical behaviour (no per-eval bookkeeping cost).
+        # Track best-merit-seen for checkpoint / resume.  The optimiser is
+        # guaranteed to call merit_fn at the actual converged x_opt at the
+        # end (in the final evaluate() block), so x_best is
+        # monotonic-improving.  Gated on state_file being non-None so a
+        # caller that does not checkpoint pays no per-eval bookkeeping.
         if state_file:
             if np.isfinite(value) and float(value) < merit_best[0]:
                 merit_best[0] = float(value)
@@ -1163,12 +1143,12 @@ def design_optimize(parameterization: Any,
                   f'strehl = {ctx.strehl_best:.4f}')
         return value
 
-    # v4.14 (audit P2 #13): honour the progress cancellation protocol
-    # (``progress.should_stop``).  scipy stops the optimiser when the
-    # callback returns ``True`` for L-BFGS-B / SLSQP / trust-constr /
-    # Nelder-Mead etc.; differential_evolution interprets a True
-    # return the same way; basin-hopping accepts True via its
-    # ``callback`` arg.  See :mod:`lumenairy.progress`.
+    # Honour the progress cancellation protocol (``progress.should_stop``).
+    # scipy stops the optimiser when the callback returns ``True`` for
+    # L-BFGS-B / SLSQP / trust-constr / Nelder-Mead etc.;
+    # differential_evolution interprets a True return the same way;
+    # basin-hopping accepts True via its ``callback`` arg.  See
+    # :mod:`lumenairy.progress`.
     from ..progress import is_cancelled
 
     def _scipy_cb_minimize(xk, *args, **kwargs):
@@ -1193,11 +1173,10 @@ def design_optimize(parameterization: Any,
             return True
         return None
 
-    # v4.13.2 (P1-NEW-L): dual_annealing's callback was an inline
-    # lambda that did NOT poll ``is_cancelled(progress)`` -- a Qt
-    # ``Stop`` press during a dual_annealing run was silently
-    # ignored.  Promote to a named callback matching the pattern of
-    # the other three scipy callbacks; returning True asks
+    # dual_annealing gets a NAMED callback, matching the other three
+    # scipy callbacks, so that it polls ``is_cancelled(progress)``: an
+    # inline lambda that does not poll leaves a Qt ``Stop`` press during
+    # a dual_annealing run silently ignored.  Returning True asks
     # dual_annealing to terminate the run.
     def _scipy_cb_da(x, f, context):
         last_value[0] = float(f)
@@ -1214,7 +1193,7 @@ def design_optimize(parameterization: Any,
     # when ``x0`` already satisfies the bounds.
     x0 = _clip_x0_to_bounds(np.asarray(x0, dtype=np.float64), bounds)
 
-    # v4.14 (audit P2 #10): wrap the dispatch + final evaluation in
+    # Wrap the dispatch + final evaluation in
     # try/finally so the complex-dtype restore is deterministic even
     # under KeyboardInterrupt / scipy raise.  The ``_dtype_restore_guard``
     # ``__del__`` remains as a defensive safety net.
@@ -1274,25 +1253,22 @@ def design_optimize(parameterization: Any,
                 return np.array(
                     [np.sqrt(max(v, 0.0) + _LM_FLOOR) for v in term_vals],
                     dtype=np.float64)
-            # v4.16.1 (AUDIT_V4_16_0_DEEP P1-DEEP-1-2): explicit
-            # ``None``-aware unpacking.  Pre-v4.16.1 used
-            # ``b[0] if b else -np.inf``, where ``b`` is a 2-tuple
-            # ``(lb_i, ub_i)``; a non-empty tuple is ALWAYS truthy in
-            # Python, so the conditional never fired even when either
-            # endpoint was ``None`` (the "no bound on this side"
-            # idiom).  ``None`` then leaked into ``np.array(...)``,
-            # producing an object-dtype array that scipy's
-            # ``least_squares`` rejects with an opaque downstream
-            # error.  scipy's ``bounds=(lb, ub)`` spec requires each
-            # endpoint to be either a finite float or +/-inf, not
-            # ``None``.  Explicit per-endpoint check below honours the
-            # idiom and produces a clean float64 array.
-            # v4.16.2 (audit P3-NEW-F1-3): length guard.  Pre-v4.16.2
-            # the helper silently picked ``b[0]`` / ``b[1]`` from
-            # ANY indexable -- so a 3-tuple ``(lb, ub, extra)`` (a
-            # genuine user mistake, e.g. mixing up scipy bounds /
-            # least_squares bounds / DE bounds formats) would parse
-            # cleanly with the 3rd element dropped.  Raise instead
+            # Explicit ``None``-aware unpacking.  ``b[0] if b else
+            # -np.inf`` is wrong here: ``b`` is a 2-tuple
+            # ``(lb_i, ub_i)`` and a non-empty tuple is ALWAYS truthy in
+            # Python, so the conditional never fires even when either
+            # endpoint is ``None`` (the "no bound on this side" idiom).
+            # ``None`` then leaks into ``np.array(...)``, which
+            # ``least_squares`` rejects with an opaque downstream error.
+            # scipy's ``bounds=(lb, ub)`` spec requires each endpoint to
+            # be either a finite float or +/-inf, not ``None``.  The
+            # explicit per-endpoint check below honours the idiom and
+            # produces a clean float64 array.
+            # Length guard: picking ``b[0]`` / ``b[1]`` from ANY indexable
+            # would parse a 3-tuple ``(lb, ub, extra)`` -- a genuine user
+            # mistake, e.g. mixing up scipy bounds / least_squares bounds
+            # / DE bounds formats -- cleanly with the 3rd element
+            # dropped.  Raise instead
             # so the user can fix the call shape.
             def _resolve_bound(b, i, default):
                 if b is None:
@@ -1314,14 +1290,12 @@ def design_optimize(parameterization: Any,
                           dtype=np.float64)
             ub = np.array([_resolve_bound(b, 1, +np.inf) for b in _bounds_iter],
                           dtype=np.float64)
-            # v4.16.2 (audit P3-NEW-F1-8): scipy's least_squares
-            # contract is that ``method='lm'`` does NOT accept
-            # bounds; passing both forces a silent switch to
-            # ``'trf'``.  Pre-v4.16.2 the override was invisible to
-            # the user: test names of the form
-            # ``test_bug4_lm_bounds_*`` documented "lm" while the
-            # production path actually ran "trf".  Warn at the
-            # override point so the user knows.
+            # scipy's least_squares contract is that ``method='lm'`` does
+            # NOT accept bounds; passing both forces a silent switch to
+            # ``'trf'``.  An invisible override is how test names of the
+            # form ``test_bug4_lm_bounds_*`` came to document "lm" while
+            # the production path ran "trf", so warn at the override
+            # point.
             if bounds is not None:
                 warnings.warn(
                     "design_optimize(method='lm', bounds=...): "
@@ -1364,9 +1338,8 @@ def design_optimize(parameterization: Any,
             }
             # S4-18: forward the analytic jacobian to the L-BFGS-B local
             # search when one is available (a JaxMeritTerm gradient or a
-            # user-supplied ``jac`` callable).  Pre-fix the local search
-            # always finite-differenced even when an exact gradient was
-            # in hand.
+            # user-supplied ``jac`` callable).  Without it the local search
+            # finite-differences even when an exact gradient is in hand.
             if final_jac is not None:
                 minimizer_kwargs['jac'] = final_jac
             res = so.basinhopping(
@@ -1446,19 +1419,19 @@ def design_optimize(parameterization: Any,
                     nit=iter_count[0], nfev=call_count[0],
                     message='Stop early due to user cancellation')
         elif method == 'newton':
-            # v4.16 (ROADMAP #12): Hessian / Newton-step.  For small
-            # (<30 free var) problems an FD-Hessian-based Newton step
-            # converges in fewer outer evaluations than L-BFGS-B.  We
-            # dispatch to scipy's 'trust-ncg' / 'Newton-CG' with an
-            # FD-Jacobian-of-the-FD-gradient Hessian estimator.
+            # Hessian / Newton-step.  For small (<30 free var) problems an
+            # FD-Hessian-based Newton step converges in fewer outer
+            # evaluations than L-BFGS-B.  We dispatch to scipy's 'trust-ncg' /
+            # 'Newton-CG' with an FD-Jacobian-of-the-FD-gradient Hessian
+            # estimator.
             #
-            # 'trust-ncg' demands an explicit Hessian callable; we
-            # build one via _fd_grad_pure of the merit gradient.
-            # 'Newton-CG' tolerates None (uses BFGS update internally),
-            # which is the safer choice for larger problems.
+            # 'trust-ncg' demands an explicit Hessian callable; we build one
+            # via _fd_grad_pure of the merit gradient. 'Newton-CG' tolerates
+            # None (uses BFGS update internally), which is the safer choice
+            # for larger problems.
             #
-            # For >30 free vars, the FD-Hessian (O(N^2) merit-fn calls
-            # per Newton step) becomes prohibitive; we warn but allow.
+            # For >30 free vars, the FD-Hessian (O(N^2) merit-fn calls per
+            # Newton step) becomes prohibitive; we warn but allow.
             if n_params > 30:
                 warnings.warn(
                     f"design_optimize: method='newton' selected with "
@@ -1564,22 +1537,21 @@ def design_optimize(parameterization: Any,
                 callback=_scipy_cb_minimize)
             x_opt = res.x
         else:
-            # v4.16 (ROADMAP #9): thread hard constraints through
+            # Thread hard constraints through
             # scipy.optimize.minimize.  Method compatibility was
             # validated up-front; here we just translate each
             # :class:`Constraint` to a scipy NonlinearConstraint.
             _scipy_constraints = [c.to_scipy() for c in constraint_seq]
-            # v5.17.x (AUDIT_V5_17_0 P2-24): forward ``bounds`` for
-            # EVERY minimize method that honours them.  Pre-fix the
-            # whitelist was ('L-BFGS-B', 'SLSQP', 'trust-constr'), so
-            # user-supplied bounds were SILENTLY dropped for Powell /
-            # Nelder-Mead / TNC / COBYLA / COBYQA -- methods scipy
-            # box-constrains natively -- and the optimizer freely
-            # walked outside the user's stated box (probe: bounded
-            # Powell converged to x=2.0 with bounds [(0, 1)]).  For
-            # methods that truly cannot handle bounds we keep passing
-            # None but warn loudly (parity with the method='lm'
-            # bounds warning above) instead of dropping silently.
+            # Forward ``bounds`` for EVERY minimize method that honours
+            # them.  A shorter whitelist -- ('L-BFGS-B', 'SLSQP',
+            # 'trust-constr') -- SILENTLY drops user-supplied bounds for
+            # Powell / Nelder-Mead / TNC / COBYLA / COBYQA, methods scipy
+            # box-constrains natively, and the optimizer then walks
+            # outside the user's stated box (probe: bounded Powell
+            # converged to x=2.0 with bounds [(0, 1)]).  For methods that
+            # truly cannot handle bounds we keep passing None but warn
+            # loudly (parity with the method='lm' bounds warning above)
+            # instead of dropping silently.
             _supports_bounds = (
                 isinstance(method, str)
                 and method.lower() in _MINIMIZE_METHODS_SUPPORTING_BOUNDS)
@@ -1596,22 +1568,22 @@ def design_optimize(parameterization: Any,
                     f"silence this warning.",
                     UserWarning, stacklevel=2,
                 )
-            # v5.17.x (AUDIT_V5_17_0 wave-5 follow-up): TNC does not
-            # take a 'maxiter' option -- its evaluation budget is
-            # 'maxfun'.  Pre-fix scipy warned 'Unknown solver
-            # options: maxiter' and ran with its DEFAULT budget, so
-            # ``max_iter`` was silently ineffective for TNC.  Map the
-            # option name per-method.
+            # TNC does not take a 'maxiter' option -- its evaluation
+            # budget is 'maxfun'.  Passing 'maxiter' makes scipy warn
+            # 'Unknown solver options: maxiter' and run with its DEFAULT
+            # budget, so ``max_iter`` would be silently ineffective for
+            # TNC.  Map the option name per-method.
             #
-            # v5.18.0: 'disp' is NO LONGER passed as a solver option.
-            # scipy 1.18.0 tightened per-method option validation and now
+            # 'disp' is deliberately NOT passed as a solver option.
+            # scipy 1.18.0 tightened per-method option validation and
             # rejects 'disp' for L-BFGS-B (and likely other methods),
             # emitting ``OptimizeWarning: Unknown solver options: disp``
             # under every generic-minimize call (scipy <= 1.17 accepted
-            # it).  The driver already prints its own iteration progress
-            # from the merit callback when ``verbose`` is set, so scipy's
-            # internal ``disp`` was redundant; dropping it keeps the
-            # generic path option-clean on scipy 1.17 AND 1.18.
+            # it).  The driver prints its own iteration progress from the
+            # merit callback when ``verbose`` is set, so scipy's internal
+            # ``disp`` is redundant; omitting it keeps the generic path
+            # option-clean on scipy 1.17 AND 1.18.
+            # See docs/history/lumenairy.optimize.driver.md.
             if isinstance(method, str) and method.lower() == 'tnc':
                 _options: Dict[str, Any] = {'maxfun': max_iter}
             else:
@@ -1634,11 +1606,10 @@ def design_optimize(parameterization: Any,
 
         # Final evaluation for the returned context
         final_value, final_ctx = evaluate(x_opt)
-        # v4.16 (ROADMAP #10): also force-save the final state so the
-        # checkpoint file reflects the converged solution, regardless
-        # of where state_save_every left the rolling-save counter.
-        # Gated on state_file so pre-v4.16 callers see byte-identical
-        # behaviour.
+        # Also force-save the final state so the checkpoint file reflects
+        # the converged solution, regardless of where state_save_every
+        # left the rolling-save counter.  Gated on state_file so a caller
+        # that does not checkpoint pays nothing.
         if state_file:
             if np.isfinite(final_value) and float(final_value) < merit_best[0]:
                 merit_best[0] = float(final_value)
@@ -1651,7 +1622,7 @@ def design_optimize(parameterization: Any,
                       f'converged: merit={final_value:.4g} '
                       f'({iter_tag}{call_count[0]} evals, {dt:.1f}s)')
     finally:
-        # v4.14 (audit P2 #10): explicit deterministic restore.  Runs on
+        # Explicit deterministic restore.  Runs on
         # normal return AND on every exception path (scipy raise, user
         # KeyboardInterrupt, MemoryError from a huge FFT, etc.).
         _dtype_restore_guard.restore()

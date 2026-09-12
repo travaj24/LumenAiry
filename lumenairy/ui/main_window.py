@@ -472,7 +472,7 @@ class MainWindow(QMainWindow):
 
         # Materials dock: Glass Map + User Library in a single tabbed
         # container.  We keep the individual docks alive (and in the
-        # View menu) for users who prefer the old split layout.
+        # View menu) for users who prefer the split layout.
         from .materials_dock import MaterialsDock
         self.materials_widget = MaterialsDock(self.model)
         self.materials_dock = dock(
@@ -1655,12 +1655,13 @@ class MainWindow(QMainWindow):
                 if kind == 'singlet':
                     R1 = entry['R1']
                     R2 = entry['R2']
-                    # v4.15 (P1-UI-1): high-index glass table for the
-                    # menu-sort heuristic.  The table used to list only
-                    # ('S-LAH64', 'N-SF11') -- so Thorlabs parts carrying
-                    # N-LASF9 or S-NPH1 fell back to the n_d=1.5168 N-BK7
-                    # estimate and sorted alongside crown singlets despite
-                    # having ~10-15% shorter EFLs at the same radii.
+                    # High-index glass table for the
+                    # menu-sort heuristic.  A table listing only
+                    # ('S-LAH64', 'N-SF11') leaves Thorlabs parts carrying
+                    # N-LASF9 or S-NPH1 falling back to the n_d=1.5168
+                    # N-BK7 estimate, sorting them alongside crown
+                    # singlets despite ~10-15% shorter EFLs at the same
+                    # radii (docs/history/lumenairy.ui.main_window.md).
                     # Bundle approximate n_d's so the menu sort lands them
                     # in the right bucket; the actual physics still uses
                     # the proper dispersion lookup via get_glass_index.
@@ -1753,7 +1754,7 @@ class MainWindow(QMainWindow):
         the window -- the user doesn't have to click into the Distance
         cell first.  Undo-safe (goes through the model's _checkpoint).
 
-        v4.15 (P1-UI-2): routed through ``set_display_distance`` so the
+        Routed through ``set_display_distance`` so the
         nudge respects the current coordinate-display mode.  Pre-4.15
         the bump mutated ``Element.distance_mm`` directly, which is
         the relative-gap field; in 'absolute' display mode the value
@@ -2785,7 +2786,7 @@ class MainWindow(QMainWindow):
         :meth:`_on_trace_ready` which restores the cursor and
         updates the status to the trace result.
 
-        v5.4.2 (audit C2 belt-and-suspenders): track that we've
+        Track that we've
         set a cursor so _on_trace_ready can defensively restore
         even if signals fire out of pair-order (e.g., a future
         worker that emits trace_ready before trace_started).
@@ -2800,7 +2801,7 @@ class MainWindow(QMainWindow):
     def _on_trace_ready(self, r):
         """3.7.9: restore cursor + status after a trace completes.
 
-        v5.4.2 (audit C2 belt-and-suspenders): wrap restore in
+        Wrap restore in
         try/finally so the cursor is ALWAYS restored even if the
         downstream status update raises.  Also defensive: only
         restore if _trace_cursor_set is True (avoids stacking a

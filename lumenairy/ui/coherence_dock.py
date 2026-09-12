@@ -1,4 +1,4 @@
-# v5.4 (audit P3-A): expand from 162-LOC Schell-source-only to 4 tabs
+# Expand from 162-LOC Schell-source-only to 4 tabs
 """Partial-coherence imaging dock.
 
 Tab 1 preserves the legacy Schell / Koehler source UI verbatim.
@@ -27,22 +27,22 @@ from ._worker import interrupt_check
 
 
 # ---------------------------------------------------------------------------
-# Source-pupil geometry.  v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25,
-# Territory A follow-up): Tab 1's "Source shape" combo (Circular / Annular /
-# Dipole / Quadrupole) had NEVER been wired -- ``_run`` built its params dict
-# without reading ``combo_shape`` at all, so all four entries produced the
-# identical filled-disk image (a live instance of the audit's inert-control
-# pattern).  The shape -> source-point mapping lives HERE, at module scope
-# and free of any Qt dependency, so it is exercisable (and pinned) on a box
-# with no PySide6 installed; the docks only call it.
+# Source-pupil geometry.  The "Source shape" combo (Circular / Annular /
+# Dipole / Quadrupole) is wired THROUGH this map: a ``_run`` that builds
+# its params dict without reading ``combo_shape`` makes all four entries
+# produce the identical filled-disk image -- the inert-control pattern
+# the audit named.  The shape -> source-point mapping lives HERE, at
+# module scope and free of any Qt dependency, so it is exercisable (and
+# pinned) on a box with no PySide6 installed; the docks only call it.
+# See docs/history/lumenairy.ui.coherence_dock.md.
 #
 # ``n`` keeps one meaning across every shape: "source samples per axis", the
 # same knob ``koehler_image``'s ``n_source_points`` names.
 #
 #   * Cartesian-masked shapes (Circular / Annular / Gaussian / Custom) sample
 #     the n x n grid over [-hw, +hw] and keep the points the mask admits, so
-#     the count is ~(fill factor) * n**2.  Bit-preserved from the pre-fix
-#     Tab 3 helper -- Tab 3's numbers do not move.
+#     the count is ~(fill factor) * n**2.  Bit-preserved from the Tab 3
+#     helper -- Tab 3's numbers do not move.
 #   * Pole shapes (Dipole / Quadrupole) are sampled in POLAR coordinates
 #     instead: each pole gets an ``m x m`` (radius x azimuth) patch with
 #     ``m = max(2, round(n / 2))``, for ``n_poles * m**2`` points total.
@@ -443,7 +443,7 @@ class CoherenceDock(QWidget):
         outer.addWidget(self.btn_run)
         self.fig = _mpl.Figure(figsize=(6, 3.4), dpi=100, facecolor='#0a0c10')
         self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
-        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        # Override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -520,7 +520,7 @@ class CoherenceDock(QWidget):
     def _make_canvas(self):
         fig = _mpl.Figure(figsize=(6, 3.4), dpi=100, facecolor=self._BG)
         canvas = _mpl.FigureCanvasQTAgg(fig)
-        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        # Override matplotlib canvas sizeHint so the dock can shrink
         canvas.setMinimumSize(0, 0)
         canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         return fig, canvas
@@ -854,7 +854,7 @@ class CoherenceDock(QWidget):
             f'|Gamma| peak along slice: {slice_mag.max():.4e}')
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -866,7 +866,7 @@ class CoherenceDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

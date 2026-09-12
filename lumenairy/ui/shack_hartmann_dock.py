@@ -77,7 +77,7 @@ class ShackHartmannDock(QWidget):
 
         self.fig = _mpl.Figure(figsize=(6, 3.4), dpi=100, facecolor='#0a0c10')
         self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
-        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        # Override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -216,7 +216,7 @@ class ShackHartmannDock(QWidget):
         self.summary.setPlainText('\n'.join(lines))
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -228,7 +228,7 @@ class ShackHartmannDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

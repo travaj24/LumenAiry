@@ -24,14 +24,14 @@ from ..raytrace import surfaces_from_prescription, system_abcd
 def _resolve_lens_glass_index(glass: str, wavelength: float) -> float:
     """Resolve the refractive index of a lensmaker glass.
 
-    v4.14.3 (P1-MC / Agent B): pre-v4.14.3 both
-    :func:`beam_expander_prescription` and :func:`keplerian_telescope`
-    hardcoded ``n=1.5`` in the thin-lens lensmaker formula
-    ``R = f*(n-1)*2``.  For ``glass='N-LASF9'`` (n ~ 1.85 at 587.6 nm)
-    that produced surface radii 17% off from the requested focal
-    length; the downstream ``_zero_C_air_gap`` correction made the
-    system afocal but the focal lengths feeding it were wrong.  Real
-    physics error -- this helper centralises the canonical lookup.
+    Both :func:`beam_expander_prescription` and :func:`keplerian_telescope`
+    need the ACTUAL index in the thin-lens lensmaker formula
+    ``R = f*(n-1)*2``.  Hardcoding ``n=1.5`` for ``glass='N-LASF9'``
+    (n ~ 1.85 at 587.6 nm) puts the surface radii 17% off the requested
+    focal length, and the downstream ``_zero_C_air_gap`` correction then
+    makes the system afocal from focal lengths that are already wrong --
+    a real physics error.  This helper centralises the canonical lookup.
+    See docs/history/lumenairy.optimize.multiconfig.md.
 
     Parameters
     ----------
@@ -56,13 +56,13 @@ def _resolve_lens_glass_index(glass: str, wavelength: float) -> float:
     try:
         from ..glass import get_glass_index
         n = float(get_glass_index(glass, wavelength))
-        # v4.15.1 (P3-1 / Agent E): consistency with
+        # The accepted range matches
         # :func:`user_library.register_fixed_glass`, which accepts
         # ``n=1.0`` inclusively (vacuum / air; the canonical zero-
-        # phase reference).  Pre-v4.15.1 this bounds check was
-        # exclusive (``1.0 < n < 5.0``), so an "air" Sellmeier entry
-        # at n=1.0 exactly was rejected with a misleading "outside
-        # expected range" message.  Upper bound widened to 4.0 to
+        # phase reference) -- an exclusive ``1.0 < n`` check rejects an
+        # "air" Sellmeier entry at exactly n=1.0 with a misleading
+        # "outside expected range" message.  The upper bound is 4.0 to
+        # match user_library; high-index semiconductors (Si ~3.4,
         # match user_library; high-index semiconductors (Si ~3.4,
         # Ge ~4.0) live at the upper edge.  Anything above n=4.0 is
         # almost certainly a typo or unit-mismatch (mm vs m vs um
@@ -314,7 +314,7 @@ def _zero_C_air_gap(prescription, gap_slot_index, wavelength=550e-9):
     pres['thicknesses'][gap_slot_index] = g1
     C1 = system_abcd(surfaces_from_prescription(pres), wavelength)[0][1, 0]
     if abs(C1 - C0) < 1e-30:
-        # v4.13.2 (P1-NEW-G): a silent ``return g1`` here disguised
+        # A silent ``return g1`` here would disguise
         # geometries whose combined ABCD ``C`` element is independent
         # of the air gap (e.g. two identical lenses with no power
         # between them).  In those geometries no afocal gap exists,
@@ -367,19 +367,18 @@ def beam_expander_prescription(M: float, f_objective: float, *,
     """
     f_eye = -f_objective / M  # negative for Galilean
 
-    # v4.14.3 (P1-MC / Agent B): use the prescription's actual glass
-    # at its design wavelength rather than the hardcoded ``n=1.5``
-    # approximation.  For ``glass='N-LASF9'`` (n ~ 1.85 at 587.6 nm)
-    # the hardcoded value put the lensmaker formula off by ~17% in
-    # surface radius; the downstream ``_zero_C_air_gap`` correction
-    # could not recover the underlying focal-length error.
+    # Use the prescription's actual glass at its design wavelength rather
+    # than a hardcoded ``n=1.5`` approximation.  For ``glass='N-LASF9'``
+    # (n ~ 1.85 at 587.6 nm) the hardcoded value puts the lensmaker formula
+    # ~17% off in surface radius, and the downstream ``_zero_C_air_gap``
+    # correction cannot recover the underlying focal-length error.
     n = _resolve_lens_glass_index(glass, wavelength)
     # Equi-shaped singlets on both sides so the thin-lens focal
     # length formula R = f*(n-1)*2 holds.  Build the eyepiece as
     # equi-concave ([R, -R] with R<0) rather than plano-concave so
-    # it has the correct focal length.  (The previous version used
-    # [R_eye, inf] which halved the eyepiece focal length, giving a
-    # beam expander whose magnification was half the requested M.)
+    # it has the correct focal length.  A plano-concave ``[R_eye, inf]``
+    # halves the eyepiece focal length and gives a beam expander whose
+    # magnification is half the requested M.
     R_obj = f_objective * (n - 1) * 2
     R_eye = f_eye * (n - 1) * 2
 
@@ -444,7 +443,7 @@ def keplerian_telescope(f_objective: float, f_eyepiece: float, *,
     -------
     prescription : dict
     """
-    # v4.14.3 (P1-MC / Agent B): see ``beam_expander_prescription``
+    # See ``beam_expander_prescription``
     # for the rationale -- replace hardcoded ``n=1.5`` with a
     # glass+wavelength-aware lookup so high-index glasses (N-LASF9,
     # N-SF6HT) get correct surface radii.

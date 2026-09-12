@@ -85,7 +85,7 @@ class Aperture(Operator):
                 f"Aperture: inner_diameter must be a real number, got "
                 f"{inner_diameter!r}."
             ) from e
-        # v5.4.6 (audit F-16): validate 0 <= inner < D FIRST, then apply
+        # Validate 0 <= inner < D FIRST, then apply
         # the annular default. The old guard nested the default inside
         # 'if inner < 0 or inner >= D', which is False for the default
         # inner==0.0, so a default Aperture(shape='annular') silently had

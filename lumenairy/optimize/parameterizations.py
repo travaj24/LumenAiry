@@ -18,8 +18,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-# v5.2 (AUDIT_V4_13_1 P1-1 closure): per-variable-type scale floors used
-# by the driver's finite-difference Hessian estimator.  Without an
+# Per-variable-type scale floors used by the driver's finite-difference
+# Hessian estimator (docs/history/lumenairy.optimize.parameterizations.md).
+# Without an
 # explicit floor a parameter near zero (e.g. a radius set to 0 for a
 # planar surface) collapses ``x_scale[i]`` to 0 and the optimiser's
 # step-size logic divides through to give a sub-eps relative
@@ -46,7 +47,7 @@ _DEFAULT_SCALE_FLOORS = {
 
 
 def _classify_path_to_floor(path: Tuple[Any, ...]) -> float:
-    """v5.2 (AUDIT_V4_13_1 P1-1 closure): map a free-var path tuple to
+    """Map a free-var path tuple to
     the appropriate per-variable scale floor.
 
     The path forms accepted are the same as those accepted by
@@ -89,11 +90,12 @@ def _classify_path_to_floor(path: Tuple[Any, ...]) -> float:
         # Aspheric / Forbes-Q polynomial coefficients: the ``alpha`` /
         # ``aspheric`` / ``forbes`` substrings, or a single-letter-A
         # coefficient name -- an 'a' followed by an optional '_' then digits
-        # (``A4`` / ``a_8`` / ``a12``).  Nit (AUDIT_OPTIMIZE_DRIVER): the old
-        # ``key_lc.startswith('a')`` matched ANY key beginning with 'a' (a
-        # future ``'axis'`` / ``'angle'`` surface field would silently pick up
-        # the dimensionless aspheric FD floor); ``re.fullmatch(r'a_?\d+')``
-        # keeps the intended A-coefficient names without the false positives.
+        # (``A4`` / ``a_8`` / ``a12``).  A bare
+        # ``key_lc.startswith('a')`` would match ANY key beginning with 'a'
+        # (a future ``'axis'`` / ``'angle'`` surface field would silently
+        # pick up the dimensionless aspheric FD floor);
+        # ``re.fullmatch(r'a_?\d+')`` keeps the intended A-coefficient
+        # names without the false positives.
         if ('alpha' in key_lc or 'aspheric' in key_lc or 'forbes' in key_lc
                 or re.fullmatch(r'a_?\d+', key_lc)):
             return _DEFAULT_SCALE_FLOORS['aspheric']
@@ -131,7 +133,7 @@ class DesignParameterization:
     template: Dict[str, Any]
     free_vars: List[Tuple[Any, ...]]
     bounds: Optional[List[Optional[Tuple[float, float]]]] = None
-    # v5.2 (AUDIT_V4_13_1 P1-1 closure): per-parameter absolute scale
+    # Per-parameter absolute scale
     # floor used by the optimiser's finite-difference Hessian estimator
     # (driver.py:754 reads this via ``getattr(parameterization,
     # 'scale_floor', None)``).  ``None`` (default) auto-fills from
@@ -141,8 +143,7 @@ class DesignParameterization:
     scale_floor: Optional[Any] = None
 
     def __post_init__(self) -> None:
-        # v5.17.x (AUDIT_V5_17_0 P3-50): mirror the v4.14 (audit P3
-        # #19) duplicate-free_vars guard from
+        # Mirror of the duplicate-free_vars guard from
         # MultiPrescriptionParameterization.  Duplicate path entries
         # silently get separate ``x[i]`` slots that all write to the
         # same prescription field: ``build(x)`` applies them in order
@@ -175,14 +176,14 @@ class DesignParameterization:
                 raise ValueError(
                     f"bounds length {len(self.bounds)} != free_vars "
                     f"length {len(self.free_vars)}")
-        # v5.2 (AUDIT_V4_13_1 P1-1 closure): resolve ``scale_floor`` to a
+        # Resolve ``scale_floor`` to a
         # length-``n_params`` ndarray.  When ``None``, infer from the
         # path classification table; when a scalar or array, broadcast
         # to the parameter count.
         self.scale_floor = self._resolve_scale_floor(self.scale_floor)
 
     def _resolve_scale_floor(self, value: Any) -> np.ndarray:
-        """v5.2 (AUDIT_V4_13_1 P1-1 closure): resolve a user-supplied
+        """Resolve a user-supplied
         ``scale_floor`` (``None`` / scalar / sequence) to an ndarray of
         length ``n_params``."""
         n = len(self.free_vars)
@@ -375,7 +376,7 @@ class MultiPrescriptionParameterization:
     templates: List[Dict[str, Any]]
     free_vars: List[Tuple[Any, ...]]
     bounds: Optional[List[Optional[Tuple[float, float]]]] = None
-    # v5.2 (AUDIT_V4_13_1 P1-1 closure): per-parameter absolute scale
+    # Per-parameter absolute scale
     # floor.  ``None`` (default) auto-fills from
     # :func:`_classify_path_to_floor` applied to the inner-path tuple
     # ``fv[1:]`` (the ``fv[0]`` prescription index is discarded for
@@ -394,7 +395,7 @@ class MultiPrescriptionParameterization:
                     f"free_var {fv!r} refers to template index "
                     f"{fv[0]}, but only {len(self.templates)} templates "
                     f"were provided")
-        # v4.14 (audit P3 #19): duplicate (prescription_index, *path)
+        # Duplicate (prescription_index, *path)
         # entries silently get separate ``x[i]`` slots that all write
         # to the same prescription field; the optimiser's gradient is
         # split arbitrarily across the duplicates and the design is
@@ -425,14 +426,14 @@ class MultiPrescriptionParameterization:
                 raise ValueError(
                     f"bounds length {len(self.bounds)} != free_vars "
                     f"length {len(self.free_vars)}")
-        # v5.2 (AUDIT_V4_13_1 P1-1 closure): resolve ``scale_floor`` to
+        # Resolve ``scale_floor`` to
         # a length-``n_params`` ndarray using the inner path (the
         # ``fv[0]`` prescription index has no bearing on the variable
         # type).
         self.scale_floor = self._resolve_scale_floor(self.scale_floor)
 
     def _resolve_scale_floor(self, value: Any) -> np.ndarray:
-        """v5.2 (AUDIT_V4_13_1 P1-1 closure): resolve a user-supplied
+        """Resolve a user-supplied
         ``scale_floor`` (``None`` / scalar / sequence) to an ndarray of
         length ``n_params``.  Inner paths (``fv[1:]``) are passed to
         :func:`_classify_path_to_floor`."""

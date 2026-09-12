@@ -264,15 +264,16 @@ def deep_nbytes(obj: Any, _seen: Optional[set] = None) -> int:
     the same base, or the same array appearing twice in a tuple, therefore
     contribute their shared buffer a single time.
 
-    v5.29.1 (audit A-5): both halves of this used to be wrong in
-    OPPOSITE directions.  A view was charged its slice size (measured: 16 B
-    for a 16-byte window on a 4 MiB base), so a view-heavy cache under a
-    1 MiB ceiling accounted 256 B while genuinely retaining 64 MiB -- 64x
-    over budget, and eviction never fired.  Meanwhile repeated arrays were
-    double-counted because the ``nbytes`` shortcut returned before the
-    ``_seen`` check (``deep_nbytes((a, a))`` charged 8000 B twice).
-    Charging the base buffer once per unique owner fixes the dangerous
-    direction without re-introducing the double count.  Residual
+    Both halves of this are easy to get wrong, in OPPOSITE directions
+    (docs/history/lumenairy.cache.md).  Charging a VIEW its slice size
+    (measured: 16 B for a 16-byte window on a 4 MiB base) lets a
+    view-heavy cache under a 1 MiB ceiling account 256 B while genuinely
+    retaining 64 MiB -- 64x over budget, with eviction never firing.
+    Returning on the ``nbytes`` shortcut before the ``_seen`` check
+    double-counts a repeated array (``deep_nbytes((a, a))`` charging
+    8000 B twice).  Charging the base buffer once per unique owner avoids
+    the dangerous direction without re-introducing the double count.
+    Residual
     under-count sources (objects with no ``nbytes`` and no
     ``getsizeof`` support, buffers shared ACROSS cache entries) remain the
     fail-safe direction: the cache may hold a little more than its budget,

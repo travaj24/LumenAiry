@@ -114,7 +114,7 @@ def forecast_resources(N, n_surfaces, n_save_planes,
       pre-resolved glass indices (3.1.11), decenter-aliased
       entrance grids (3.1.3).  Cost is dominated by (N_surf - 1)
       ASM-through-glass FFTs plus a small phase-screen overhead,
-      NOT the old "6 FFTs per surface" overestimate.
+      NOT a "6 FFTs per surface" overestimate.
     * ``apply_real_lens_traced`` — polynomial-Newton default
       (3.1.7, ~12x faster on the hot loop), parallel_amp default
       (3.1.3, amp+amp(pw) overlapped), amplitude-masked Newton
@@ -225,7 +225,7 @@ def forecast_resources(N, n_surfaces, n_save_planes,
         amp_cost = 1.2 * analytic_cost
 
         # Newton inversion: polynomial fit is the default since 3.1.7
-        # and runs ~2-3x faster than the old RectBivariateSpline path
+        # and runs ~2-3x faster than a RectBivariateSpline path
         # (with combined value+gradient eval + optional Numba jit).
         # Calibrate at 6 us per pixel for the polynomial hot loop on
         # the 12 ms-ASM reference machine; scale to local HW.
@@ -233,7 +233,7 @@ def forecast_resources(N, n_surfaces, n_save_planes,
         newton_cost = 6.0e-6 * launch_N * launch_N * hw_scale
 
         # Setup: scatter + polynomial fit + glass-interval prep.
-        # Smaller than the old spline path which had a ~0.15 s base.
+        # Smaller than a spline path, which has a ~0.15 s base.
         # Same hw_scale applies (CPU-bound).
         setup_cost = (0.05 + 0.012 * max(n_surfaces, 1)) * hw_scale
 
@@ -389,8 +389,8 @@ def _filter_wave_optics_surfaces(
     # Axial distance carried by a surface we drop.  ``thickness`` is the
     # gap AFTER its surface, and the propagation loop walks it in the
     # medium AFTER that surface, so a dropped surface's gap belongs on
-    # the PREVIOUS kept surface: that merges the two legs that used to
-    # meet at the dropped surface into the single leg of the unfolded
+    # the PREVIOUS kept surface: that merges the two legs meeting at the
+    # dropped surface into the single leg of the unfolded
     # equivalent, in the medium they both live in.  Letting it vanish
     # with the surface shortened the unfolded path by the whole
     # mirror-to-next-element gap (30 mm on the audit's fold fixture);
@@ -609,8 +609,8 @@ class WaveOpticsWorker(QThread):
         # live model and reading it from the background thread.  The
         # GUI stays interactive during a run (only btn_run is
         # disabled), so live reads could mix pre-edit and post-edit
-        # state (e.g. trace surfaces from the old design but the
-        # prescription exported from the new one) or race a list
+        # state (e.g. trace surfaces from one design but the
+        # prescription exported from another) or race a list
         # mutation.  Mirrors coronagraph_dock's snapshot-params
         # pattern: no reference into the model survives into run().
         # The snapshot itself is failure-safe: a model property that
@@ -794,9 +794,9 @@ class WaveOpticsWorker(QThread):
         unfold_mirrors = bool(cfg.get('unfold_mirrors', True))
         ignore_lateral_cbs = bool(cfg.get('ignore_lateral_cbs', True))
         # "Start at / End at": restrict the propagation to an element
-        # range.  Both locals used to be read from cfg and then never
-        # referenced, so the user restricted the run and silently got
-        # the full system.  The span map is built on the GUI thread by
+        # range.  Reading both locals from cfg and then never referencing
+        # them lets the user restrict the run and silently get the full
+        # system.  The span map is built on the GUI thread by
         # the same pass that builds the surface list, so the indices
         # here are the element indices the combos show.
         spans = self._snap.get('surface_spans') or {}
@@ -935,10 +935,10 @@ class WaveOpticsWorker(QThread):
             ray_sub = int(cfg.get('ray_subsample', 1))
             used_lens_router = False
             # What ACTUALLY ran, for the summary panel and the results
-            # dict.  The router used to swallow every exception and drop
-            # through to the per-surface ASM loop in silence, so a
+            # dict.  A router that swallows every exception and drops
+            # through to the per-surface ASM loop in silence turns a
             # folded design -- which ``apply_real_lens`` refuses BY
-            # DESIGN -- produced a thin-screen PSF labelled with the
+            # DESIGN -- into a thin-screen PSF labelled with the
             # analytic/traced/Maslov model the user picked.
             results['lens_model_requested'] = lens_model
             results['lens_model_used'] = lens_model
@@ -1071,11 +1071,11 @@ class WaveOpticsWorker(QThread):
                 step = total_steps - 2
                 self.progress.emit(step, total_steps,
                                     f'Running {method} (whole-prescription)')
-                # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25,
-                # Territory A UI pass): these four imports named
-                # ``propagators.propagation``, the v5.1.0 re-export shell
-                # for the ASM/Fresnel/RS/SAS/MFT family only -- it has
-                # never exported the whole-prescription propagators.  Every
+                # These four imports must NOT name
+                # ``propagators.propagation``, the re-export shell for the
+                # ASM/Fresnel/RS/SAS/MFT family only -- it has never
+                # exported the whole-prescription propagators.  Naming it
+                # kills every one of the four menu choices with
                 # one of the four menu choices therefore died with
                 # ``ImportError: cannot import name ... from
                 # lumenairy.propagators.propagation`` (measured), which the
@@ -1330,8 +1330,8 @@ class WaveOpticsWorker(QThread):
                                 E_focus, current_dx, wv, R=R, sign=-1)
 
                 # 3.6: optional detector model (applied to E_focus).
-                # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25,
-                # Territory A UI pass): three defects, all silent.
+                # Three silent defects this block exists to prevent:
+                #  (a) ``..detector`` has never existed (measured:
                 #  (a) ``..detector`` has never existed (measured:
                 #      ModuleNotFoundError) -- the module is
                 #      ``..analysis.detector`` -- so the checkbox was a
@@ -2176,7 +2176,7 @@ class WaveOpticsDock(QWidget):
         self.fig = _mpl.Figure(figsize=(6, 3.5), dpi=100,
                                facecolor='#0a0c10')
         self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
-        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        # Override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.canvas, stretch=1)
@@ -2537,12 +2537,12 @@ class WaveOpticsDock(QWidget):
             lines.append(
                 f'  {surf.z * 1e3:10.4f}  {peak:10.4e}    {label}')
         self.lbl_mhs_status.setPlainText('\n'.join(lines))
-        # v5.17 audit wave-5 (F821): a stray paste-duplicate of the
-        # _on_save_toggle body used to sit here, referencing the
-        # undefined name `checked` -- a NameError on every successful
-        # MHS pipeline run.  The save-toggle sync belongs (and remains)
-        # in _on_save_toggle below; running the pipeline must not
-        # touch the save-planes state.
+        # F821 guard: nothing belongs here.  A stray paste-duplicate of
+        # the _on_save_toggle body at this point references the undefined
+        # name `checked` -- a NameError on every successful MHS pipeline
+        # run.  The save-toggle sync belongs (and remains) in
+        # _on_save_toggle below; running the pipeline must not touch the
+        # save-planes state.
 
     def _on_save_toggle(self, checked):
         """Sync the save-planes pill with the main save-to-file
@@ -2660,9 +2660,9 @@ class WaveOpticsDock(QWidget):
         stay valid -- no duplication / write-back gymnastics
         needed.
 
-        v4.15 (P1-UI-5): the post-exec re-parent back to the original
-        parent now guards against the parent having been destroyed
-        while the dialog was open.  If the user closed the parent dock
+        The post-exec re-parent back to the original parent guards
+        against the parent having been destroyed while the dialog was
+        open.  If the user closed the parent dock
         or the surrounding workspace tab during ``dlg.exec()``, the
         QWidget Python proxy is still alive on Python's side but the
         underlying C++ widget has been deleted -- a ``setParent(dead)``
@@ -2704,7 +2704,7 @@ class WaveOpticsDock(QWidget):
             # via ``self.spin_*``, so visibility / layout
             # placement after close don't affect behaviour.
             #
-            # v4.15 (P1-UI-5): guard against the parent's C++ side
+            # Guard against the parent's C++ side
             # having been destroyed while the dialog was open.
             # ``setParent(None)`` is a safe fallback that reparents
             # grp_mft to the top level (no segfault) and keeps the
@@ -3161,7 +3161,7 @@ class WaveOpticsDock(QWidget):
                 try:
                     import json as _json
                     rx = _json.loads(rx_json)
-                    # v5.18.1: the dock stores the model as ``self.sm`` (see
+                    # The dock stores the model as ``self.sm`` (see
                     # __init__); ``self.model`` never existed, so this load
                     # path always raised AttributeError (caught below as a
                     # "Load failed" dialog -- the feature never worked).
@@ -3189,8 +3189,9 @@ class WaveOpticsDock(QWidget):
         # Coarse-grained per-stage progress -- complements the
         # fine_progress signal which drives the 0-1000 bar.
         self.progress_label.setText(label)
-        # If fine progress is never emitted (e.g. the old inline path
-        # with no sub-stages), approximate from step/total.
+        # If fine progress is never emitted (a path with no sub-stages),
+        # approximate from step/total.
+        # See docs/history/lumenairy.ui.waveoptics_dock.md.
         if self.progress_bar.maximum() == 1000:
             self.progress_bar.setValue(
                 int(1000 * step / max(total, 1)))
@@ -3306,7 +3307,7 @@ class WaveOpticsDock(QWidget):
         self.run_finished.emit(results)
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -3318,7 +3319,7 @@ class WaveOpticsDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

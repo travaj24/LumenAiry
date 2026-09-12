@@ -8,8 +8,8 @@ per-ray error-code constants, and the surface-sag / surface-normal
 helpers.  Every public name here is re-exported from
 ``lumenairy.raytrace.core`` so existing imports continue to resolve.
 
-No physics change: contents are bit-for-bit copies of the original
-implementations.
+Contents are bit-for-bit copies of the implementations this module was
+split out of; no physics change.
 """
 
 from __future__ import annotations
@@ -580,7 +580,7 @@ def _base_surface_sag_derivatives_xy(x, y, surface):
             norm = (1 + K) * h_sq / R ** 2
             valid = norm < 0.9999
             denom = np.where(valid, np.sqrt(np.maximum(1 - norm, 1e-30)), 1.0)
-            # v5.4.7 (audit AUDIT_V5_4_6 gap #2): NaN (not 0.0) out of the
+            # NaN (not 0.0) out of the
             # conic domain, matching the rot-sym _surface_sag_derivative
             # and the surface_sag_general / v5.4.6 F-19 sag fix.  A silent
             # 0.0 here gives a bogus axial (flat) surface normal where the
@@ -631,7 +631,7 @@ def _surface_sag_derivative(h, R, conic=0.0, aspheric_coeffs=None):
         valid = norm < 0.9999
         denom = np.where(valid, np.sqrt(np.maximum(1 - norm, 1e-30)), 1.0)
         # d(sag)/dh for conic: h / (R * sqrt(1 - (1+k)*h^2/R^2)).
-        # v5.4.6 (audit P3-2): outside the conic domain ((1+k)h^2/R^2 >= 1)
+        # Outside the conic domain ((1+k)h^2/R^2 >= 1)
         # there is no real surface, so the derivative is NaN (matching
         # surface_sag_general / the F-19 biconic fix) rather than a silent
         # 0.0 that yields a bogus axial (flat) normal and masks the bad
@@ -678,10 +678,10 @@ def _surface_copy_with(surf, **overrides):
     ``getattr(..., <default>)`` for bundles unpickled from older
     library versions.
 
-    v5.17.1 (audit P3-60): pre-fix the hand-rolled field list dropped
-    the coord-break and world-frame blocks, so a cloned coord-break
-    Surface silently became a regular flat refracting surface and a
-    cloned world-frame surface lost its frame.
+    A hand-rolled field list drops the coord-break and world-frame
+    blocks, so a cloned coord-break Surface silently becomes a regular
+    flat refracting surface and a cloned world-frame surface loses its
+    frame (docs/history/lumenairy.raytrace.surface.md).
     """
     return Surface(
         radius=overrides.get('radius', surf.radius),

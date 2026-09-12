@@ -26,8 +26,8 @@ would require duplicating the paraxial trace helpers.
 Every public name here is re-exported from
 ``lumenairy.raytrace.core`` so existing imports continue to resolve.
 
-No physics change: contents are bit-for-bit copies of the original
-implementations.
+Contents are bit-for-bit copies of the implementations this module was
+split out of; no physics change.
 """
 
 from __future__ import annotations
@@ -203,9 +203,9 @@ def system_abcd(
     ``sign * n_img * (-A/C)`` reproduces the operational global-z oracle
     to <= 1.7e-11, and ``n_img * (-A/C)`` reproduces S11-1's unfolded
     oracle -- e.g. a single concave mirror (R = -100 mm) has global-z
-    focus at -100.000000 mm and unfolded ``bfl`` +100.000000 mm.  An
-    earlier draft of this fix applied the sign here and broke seven
-    S11-1 pins; that was a category error, retracted.
+    focus at -100.000000 mm and unfolded ``bfl`` +100.000000 mm.  Applying
+    the sign here instead breaks seven S11-1 pins -- it is the wrong frame
+    (docs/history/lumenairy.raytrace.seidel.md).
 
     Air-to-air systems are therefore bit-identical at ANY mirror count:
     both factors are exactly ``1.0`` and IEEE multiplication by 1.0 is
@@ -226,9 +226,8 @@ def system_abcd(
       of f/# -- measured equal to ``1/(2 NA')`` on all six immersed
       designs (e.g. 11.264729957829 vs 11.264729957791).  The
       alternative ``f'/D_ep = n' /Phi / (2 r_ep)`` gives 17.086342788618
-      on that design and is the AIR-ONLY formula.  An earlier draft of
-      this note wrongly called ``fnum`` defective on that basis; the
-      measurement retracts it.
+      on that design and is the AIR-ONLY formula, so ``fnum`` is correct
+      as written.
     * ``analysis/image_plane_wfe.py`` solves ``1/v = 1/efl - 1/u``,
       which is the Gauss equation in REDUCED distances, so it needs
       ``1/Phi`` too (its ``u``/``v`` being geometric is a separate,
@@ -312,21 +311,18 @@ def system_abcd(
         # parity flip encode the REFLECTION (the propagation direction
         # reverses), not the POWER -- for R = inf the power term vanishes
         # but the index sign flip still holds, because
-        # ``u' = nu'/n' = nu/(-n) = -u`` when c = 0.  Pre-fix the branch
-        # read ``elif surf.is_mirror and np.isfinite(R)``, so a FLAT fold
-        # mirror fell into the powerless ``np.eye(2)`` branch and skipped
-        # the bookkeeping entirely, leaving every downstream leg with the
-        # wrong index sign AND the wrong ray slope.  Measured on
-        # ``[flat fold(t=0.2), concave R=-1]``: EFL/BFL +0.500000 where
-        # the exact 3-D trace (raytrace.trace, no shared code) gives
-        # -0.500000 and the R = -1e9 curved fold gives -0.500000; on
+        # ``u' = nu'/n' = nu/(-n) = -u`` when c = 0.  Gating the branch on
+        # ``elif surf.is_mirror and np.isfinite(R)`` instead drops a FLAT
+        # fold mirror into the powerless ``np.eye(2)`` branch, skipping
+        # the bookkeeping entirely and leaving every downstream leg with
+        # the wrong index sign AND the wrong ray slope.  Measured on
         # ``[mirror R=-1, flat fold, mirror R=-0.5]`` the error is not
         # even a global sign -- EFL -0.19230769 vs the exact trace's
         # +0.16666667 (the marginal ray height diverges at every surface
         # past the fold: y = [12.700, 17.780, 22.860] mm instead of
-        # [12.700, 17.780, 12.700] mm).  The old gating was also
-        # DISCONTINUOUS in R: R = -1e12 gave EFL -0.1985770345 while
-        # R = inf gave +0.1985770345 on the same folded singlet.
+        # [12.700, 17.780, 12.700] mm).  That gating is also
+        # DISCONTINUOUS in R: R = -1e12 gives EFL -0.1985770345 while
+        # R = inf gives +0.1985770345 on the same folded singlet.
         # Bit-identical for curved mirrors, curved refractors and flat
         # refractors (same arithmetic, same order).
         if surf.is_mirror:
@@ -830,8 +826,8 @@ def _pre_stop_abcd(
     SINGLE SOURCE for the pre-stop sub-system used by BOTH
     :func:`compute_pupils` (entrance-pupil imaging) and
     :func:`seidel_coefficients` (marginal / chief ray initial
-    conditions).  Before AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 R-1 the
-    two built it independently and DISAGREED (see below).  Identity when
+    conditions); building it independently on the two sides is how they
+    came to DISAGREE (see below).  Identity when
     ``stop_index == 0``.  See :func:`_post_stop_abcd` for the other half.
 
     Notes
@@ -881,7 +877,7 @@ def _pre_stop_abcd(
     * ``f/#``            2.0086 reported vs        2.9977 exact (-33.0%)
 
     and with a powered fold (R = -300 mm) ``ep_radius`` is +84.7% high.
-    The signature is exact: pre-fix the flat-fold system returned
+    The signature is exact: without the sign, the flat-fold system returns
     BIT-IDENTICAL pupils to the mirrorless control (the fold's only
     paraxial effect on this leg IS the sign), the error vanishes iff the
     fold->stop gap is 0 (``ep_z`` error is proportional to
@@ -928,12 +924,12 @@ def _post_stop_abcd(
     the stop vertex to surface ``stop_index + 1`` belongs to the stop
     surface's own ``thickness`` and must be appended on the RIGHT.
 
-    R-1 follow-on: ``compute_pupils`` used to supply that leg as a dummy
-    air-to-air ``Surface``, so it was always evaluated in AIR.  When the
-    stop's image-side medium is glass (a front stop declared on a lens
-    surface, or a stop inside a cemented block) the leg was short by a
-    factor ``n``: measured ``xp_z`` error +3.8% (stop at a BK7 surface),
-    +7.9% (stop inside BK7); ``xp_radius`` +1.9% / +2.5%.
+    That leg must NOT be supplied as a dummy air-to-air ``Surface``, which
+    would evaluate it in AIR.  When the stop's image-side medium is glass
+    (a front stop declared on a lens surface, or a stop inside a cemented
+    block) an air leg is short by a factor ``n``: measured ``xp_z`` error
+    +3.8% (stop at a BK7 surface), +7.9% (stop inside BK7);
+    ``xp_radius`` +1.9% / +2.5%.
 
     W3-T2 MIRROR PARITY -- deliberately NOT signed here, unlike
     :func:`_pre_stop_abcd`.  This matrix is the post-stop sub-system in
@@ -1031,15 +1027,14 @@ def compute_pupils(
 
         z_ep = -d = +B n_obj / A
 
-    R-1 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): this line used to read
-    ``ep_z = -B / A``, i.e. it returned the object DISTANCE (positive to
-    the left) under the name of a SIGNED COORDINATE -- the mirror image
-    of the true pupil plane.  Exact-real-ray discriminator: with a
-    powerless pre-stop leg (flat dummy, gap ``t``, then the stop) the EP
-    *is* the stop, at ``z_ep = +t``; the old expression gives ``-t``.
-    The defect was masked at ``stop_index == 0`` (``z_ep = 0``) and, for
-    every other system, by the missing pre-stop transfer above, which
-    left ``B`` too small to notice.
+    R-1 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): the sign matters.
+    ``ep_z = -B / A`` returns the object DISTANCE (positive to the left)
+    under the name of a SIGNED COORDINATE -- the mirror image of the true
+    pupil plane.  Exact-real-ray discriminator: with a powerless pre-stop
+    leg (flat dummy, gap ``t``, then the stop) the EP *is* the stop, at
+    ``z_ep = +t``; the negated expression gives ``-t``.  The error is
+    masked at ``stop_index == 0`` (``z_ep = 0``) and, without the
+    pre-stop transfer above, by a ``B`` too small to notice.
 
     Magnification: at imaging ``M_pre @ T(d) = [[A, 0], [C, *]]``, so
     ``y_stop = A * y_ep`` and ``ep_radius = |r_stop / A|``.
@@ -1083,8 +1078,9 @@ def compute_pupils(
         ep_radius = stop_radius
     else:
         # R-1: the pre-stop sub-system comes from the SINGLE shared
-        # builder that ``seidel_coefficients`` also uses -- the two used
-        # to disagree (this side was missing the final leg to the stop).
+        # builder that ``seidel_coefficients`` also uses -- built
+        # separately, the two disagree (this side would be missing the
+        # final leg to the stop).
         M_pre = _pre_stop_abcd(surfaces, wavelength, stop_index)
         A_pre, B_pre = float(M_pre[0, 0]), float(M_pre[0, 1])
         # W4: the object-side leg is REDUCED (``d / n_obj``), so the
@@ -1098,12 +1094,11 @@ def compute_pupils(
         n_obj = abs(float(get_glass_index(
             surfaces[0].glass_before, wavelength)))
         if abs(A_pre) > 1e-30:
-            # v5.4.6 (audit F-2): ``ep_z`` MUST be assigned here.  Pre-fix
-            # this line was a bare expression whose value was discarded,
-            # leaving ``ep_z`` unbound on every non-front-stop system ->
-            # UnboundLocalError at the ``return PupilInfo(...)`` line.
-            # R-1: signed coordinate ``+B/A`` (see Notes) -- was ``-B/A``.
-            # W4: ``* n_obj`` -- was reduced (bit-identical in air).
+            # ``ep_z`` MUST be ASSIGNED here: a bare expression leaves
+            # ``ep_z`` unbound on every non-front-stop system and the
+            # ``return PupilInfo(...)`` line raises UnboundLocalError.
+            # R-1: signed coordinate ``+B/A`` (see Notes).
+            # W4: ``* n_obj`` (bit-identical in air).
             ep_z = B_pre * n_obj / A_pre
             # Radius: EP is the reverse image of the stop with
             # magnification 1/A_pre (because the forward sub-system
@@ -1128,8 +1123,8 @@ def compute_pupils(
         # T(z) . M = [[A + z*C/n_out, B + z*D/n_out], [C, D]] and
         # B_new = 0 => z_xp = -B_post * n_out / D_post.
         #
-        # W3-T2 (mirror parity): pre-fix this line read ``-B/D``, i.e. it
-        # dropped ``n_out`` entirely.  ``_post_stop_abcd`` works in the
+        # W3-T2 (mirror parity): ``-B/D`` here would drop ``n_out``
+        # entirely.  ``_post_stop_abcd`` works in the
         # sub-system's OWN Welford frame (parity 0 on the stop's image
         # side), so that frame's output index is
         # ``(-1)**(mirrors strictly after the stop) * n(last.glass_after)``
@@ -1188,11 +1183,11 @@ def compute_pupils(
             # After prepending T(z_xp) on the image side to enforce
             # B+z·D = 0, the new matrix is [[A+z_xp·C, 0], [C, D]].  Its
             # transverse magnification at imaging is m = det(M)/D =
-            # (AD−BC)/D = 1/D for air-to-air systems (det M = 1).  Pre-
-            # 4.10 used `stop_radius * D_post` (the angular magnification,
-            # not transverse) — every XP-radius downstream consumer
-            # (vignetting, f/#, Seidel) was wrong by 1/D² for non-trivial
-            # post-stop systems.
+            # (AD-BC)/D = 1/D for air-to-air systems (det M = 1).
+            # ``stop_radius * D_post`` is the ANGULAR magnification, not
+            # the transverse one: using it makes every XP-radius
+            # consumer (vignetting, f/#, Seidel) wrong by 1/D^2 on a
+            # non-trivial post-stop system.
             det_post = float(A_post * D_post - B_post * C_post)
             xp_radius = (abs(det_post * stop_radius / D_post)
                          if np.isfinite(stop_radius) else float('nan'))
@@ -1397,8 +1392,7 @@ def seidel_coefficients(
     # AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 found ``compute_pupils``
     # building the same split WITHOUT the final leg, so the two
     # disagreed on the pre-stop system (and hence on the entrance
-    # pupil) for every non-front-stop design.  Bit-for-bit identical to
-    # the previous inline construction here.
+    # pupil) for every non-front-stop design.
     M_pre = _pre_stop_abcd(surfaces, wavelength, stop_index)
     A_pre = float(M_pre[0, 0])
     B_pre = float(M_pre[0, 1])
@@ -1537,11 +1531,11 @@ def seidel_coefficients(
         """Welford aspheric contribution to (S1, S2, S3, S5) at surface i.
 
         R3 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).  The per-surface
-        loop used to read only ``radius`` / glasses / ``thickness`` /
-        ``is_mirror``: ``grep -n 'conic\\|aspheric' seidel.py`` returned
-        ZERO hits, so a conic or aspheric surface silently reported the
-        sums of its BASE SPHERE, with no warning and no docstring note.
-        Measured pre-fix: a mirror R = -200 mm, h = 25 mm reported
+        loop reads ``radius`` / glasses / ``thickness`` / ``is_mirror``;
+        without a conic / aspheric term a conic or aspheric surface
+        silently reports the sums of its BASE SPHERE, with no warning and
+        no docstring note.  Measured without it: a mirror R = -200 mm,
+        h = 25 mm reports
         ``S1 = +9.765625e-05`` for k = 0, -0.5, -1.0 and -1.5 ALIKE --
         including k = -1, the parabola, which at infinite conjugate is
         EXACTLY aberration-free (measured ray spread at focus 0.000 um,
@@ -1633,10 +1627,10 @@ def seidel_coefficients(
 
         # S11-1 (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): the mirror
         # branch is tested FIRST and is R-INDEPENDENT -- see the matching
-        # note in :func:`system_abcd`.  Pre-fix a FLAT fold mirror fell
-        # into the flat-REFRACTOR branch below, which does not set
-        # ``n2 = -n1`` and does not flip ``mirror_parity``, so every
-        # surface downstream of a flat fold was evaluated at the wrong
+        # note in :func:`system_abcd`.  A FLAT fold mirror that falls
+        # into the flat-REFRACTOR branch below -- which does not set
+        # ``n2 = -n1`` and does not flip ``mirror_parity`` -- leaves
+        # every surface downstream of the fold evaluated at the wrong
         # effective index sign and the wrong marginal/chief ray height.
         if surf.is_mirror:
             # Mirror in the Welford paraxial convention: treat as a
@@ -1756,11 +1750,11 @@ def seidel_coefficients(
             # Flat refracting surface: c=0 but Δ(u/n) is still nonzero
             # for non-normal incidence (Snell's law: n1·u_m = n2·u_m_after,
             # so u_after/n2 = n1·u_m/n2² which is ≠ u_m/n1 unless n1=n2).
-            # Pre-4.9 zeroed S1/S2/S3 here -- but a flat surface inside
-            # a stack contributes to spherical / coma / astigmatism
-            # exactly as the audit's plano-convex hand calc showed:
-            # the R2=∞ surface of a plano-convex singlet has a real
-            # S1 contribution that the old branch dropped silently.
+            # A flat surface inside a stack contributes to spherical /
+            # coma / astigmatism exactly as the audit's plano-convex
+            # hand calc showed: the R2=inf surface of a plano-convex
+            # singlet has a real S1 contribution, so zeroing S1/S2/S3
+            # here would drop it silently.
             # Compute the full S1..S5 here too, with c=0 baked in.
             u_m = nu_val_m / n1
             u_c = nu_val_c / n1

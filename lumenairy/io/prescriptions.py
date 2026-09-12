@@ -8,12 +8,11 @@ prescriptions use glass name strings rather than numeric refractive
 indices so they remain wavelength-independent; indices are resolved
 at runtime by the propagation engine.
 
-v5.1.0 split (Agent F):  what used to be a single 3224-LOC monolith
-is now organised across five sibling submodules.  This module is a
-thin re-export shell -- public API is **unchanged**: every name
-previously importable from :mod:`lumenairy.io.prescriptions` (and
-re-exported through :mod:`lumenairy`) is still importable from the
-same locations.  See the per-submodule docstrings for the source
+This module is a thin re-export shell over five sibling submodules --
+public API is **unchanged**: every name importable from
+:mod:`lumenairy.io.prescriptions` (and re-exported through
+:mod:`lumenairy`) is importable from the same locations.  See the
+per-submodule docstrings for the source
 implementation:
 
 * :mod:`lumenairy.io.prescriptions_builders` -- ``make_singlet``,
@@ -35,8 +34,8 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-# Re-exports from the v5.1.0 split submodules.  Public API is preserved
-# bit-for-bit: every name previously defined in this module continues
+# Re-exports from the split submodules.  Public API is preserved
+# bit-for-bit: every name defined here continues
 # to live here as a re-exported alias so existing
 # ``from lumenairy.io.prescriptions import X`` and
 # ``from lumenairy import X`` continue to work unchanged.

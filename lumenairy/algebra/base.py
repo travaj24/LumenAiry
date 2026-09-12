@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
 import numpy as np
 
 if TYPE_CHECKING:
-    # v5.0.1 (audit P1-NEW-V4-1): TYPE_CHECKING guard for forward reference
+    # TYPE_CHECKING guard for forward reference
     # to lumenairy.sources.Source used in ``Operator.__call__`` annotations.
     # The runtime ``__call__`` body does its own lazy ``from ..sources import
     # Source as _Source`` to avoid a top-level circular import; ruff F821

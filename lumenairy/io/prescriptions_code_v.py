@@ -205,7 +205,7 @@ def export_codev_seq(prescription: Dict[str, Any], path: str, *,
     else:
         walk = list(surfaces)
         walk_th = list(thicknesses)
-    # v5.4.6 (audit F-29): default stop_surface to the prescription's own
+    # Default stop_surface to the prescription's own
     # stop (stop_index, else per-surface is_stop), not surface 0, so a
     # load->export->load round trip preserves the aperture stop.
     if stop_surface is None:
@@ -499,7 +499,7 @@ def load_codev_seq(filepath: str,
     # surface header or END.
     surfaces_raw = []
     current = None
-    # v4.13.2 (C-P0-4): also capture the optional SI image-plane block
+    # Also capture the optional SI image-plane block
     # so callers can recover the BFL from a `.seq` file that uses the
     # standard CODE V convention of encoding the back-focal length on
     # the image-plane THI.
@@ -901,7 +901,7 @@ def load_codev_seq(filepath: str,
         result['wavelength'] = wavelength_m
     if stop_index is not None:
         result['stop_index'] = stop_index
-    # v4.13.2 (C-P0-4): preserve the BFL.  Prefer the SI image-plane
+    # Preserve the BFL.  Prefer the SI image-plane
     # THI if present (matches what :func:`export_codev_seq` writes);
     # otherwise fall back to the last refracting surface's THI, which
     # is the convention used by some external CODE V authors.

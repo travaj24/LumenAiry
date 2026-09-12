@@ -91,7 +91,7 @@ import numpy as np
 
 from .._knobs import register_knob as _register_knob
 
-# v4.16.0: distributed (multi-process) advisory lock.  Imported lazily
+# Distributed (multi-process) advisory lock.  Imported lazily
 # inside :func:`_require_filelock` so simply importing
 # ``lumenairy.io.storage`` does not require ``filelock`` to be
 # installed -- it is only fetched when the multi-writer append path
@@ -136,28 +136,25 @@ def _append_lock_path(filepath) -> str:
     return str(filepath) + '.lock'
 
 # Module-level lock guarding the ``Path.mkdir`` monkey-patch inside
-# :func:`_open_zarr_group_safe`.  Two threads racing through
-# ``append_plane_h5`` -> ``_open_zarr_group_safe`` previously could
-# leave the patch installed indefinitely if one thread restored its
-# saved ``_orig_mkdir`` while the other was still running, or both
-# could call ``_orig_mkdir = _PL.mkdir`` simultaneously and end up
-# saving the patched version as the "original" -- making the patch
-# permanent and corrupting every later mkdir call.  L8 fix (v4.13.0):
-# serialise the patch install/restore window.  The lock is process-
-# scoped (one per import) so it imposes no overhead on the common
-# single-threaded code path.
+# :func:`_open_zarr_group_safe`.  Without it, two threads racing through
+# ``append_plane_h5`` -> ``_open_zarr_group_safe`` can leave the patch
+# installed indefinitely: one restores its saved ``_orig_mkdir`` while
+# the other is still running, or both run ``_orig_mkdir = _PL.mkdir``
+# simultaneously and save the PATCHED function as the "original" --
+# making the patch permanent and corrupting every later mkdir call in
+# the process.  The lock is process-scoped (one per import) so it
+# imposes no overhead on the common
 _ZARR_MKDIR_PATCH_LOCK = threading.Lock()
 
 
 def _get_lumenairy_version() -> str:
     """Return the installed lumenairy version string.
 
-    v4.15.0 (P2-VERSTAMP from v4.14.2 audit): every HDF5
-    ``create_dataset`` and Zarr ``create_array`` site stamps a
-    ``lumenairy_version`` attribute so a future reader can
-    distinguish data written by different library versions
-    (e.g. for migration paths around schema changes or to flag
-    data written by a known-buggy release).  Lazy import + cached
+    Every HDF5 ``create_dataset`` and Zarr ``create_array`` site stamps a
+    ``lumenairy_version`` attribute with this value, so a future reader
+    can distinguish data written by different library versions (e.g. for
+    migration paths around schema changes, or to flag data written by a
+    known-buggy release).  Lazy import + cached
     via the parent module's ``__version__`` attribute so the
     storage layer doesn't pay a top-level-import cost on every
     write call.  Falls back to the literal ``'unknown'`` if the
@@ -203,21 +200,10 @@ def _decode_attr(val):
 
 
 # =========================================================================
-# Canonical nested-metadata serialization contract (S4-19, v5.24.x)
+# Canonical nested-metadata serialization contract
 # =========================================================================
 #
-# ``write_sim_metadata`` / ``read_sim_metadata`` used to lower each
-# metadata value directly into a native h5py / zarr attribute.  Two
-# fidelity bugs followed from that (audit S4-19):
-#
-#   * **list -> ndarray coercion** -- a native attribute cannot tell a
-#     Python ``list`` from a NumPy ``ndarray``; both round-tripped to the
-#     same type, so the ``list`` vs ``ndarray`` distinction was lost.
-#   * **un-reversed dict flattening** -- nested dicts were flattened to
-#     ``"parent.child"`` keys on write but never re-nested on read, so a
-#     round-trip returned a *flat* dict, not the caller's structure.
-#
-# The fix is one canonical, backend-agnostic serialization: the whole
+# One canonical, backend-agnostic serialization: the whole
 # metadata mapping is encoded to a single JSON string with explicit
 # type tags (``_meta_dumps``) and stored under ONE reserved attribute
 # (``_META_BLOB_KEY``), byte-for-byte identical in both backends.  On
@@ -230,7 +216,9 @@ def _decode_attr(val):
 # BACK-COMPAT: a file with no blob (written by the pre-contract scheme)
 # still loads -- the reader detects the missing blob and falls back to
 # reconstructing the mapping from the individual native attributes,
-# reproducing the historical (flat) behavior exactly.
+# reproducing the flat behaviour of that scheme exactly.  What the
+# pre-contract scheme got wrong is recorded in
+# docs/history/lumenairy.io.storage.md.
 
 _META_BLOB_KEY = '__lumenairy_meta_json__'
 _META_TAG = '__lumen_t__'
@@ -558,24 +546,19 @@ def save_field_h5(filepath: str, E: np.ndarray, dx: float,
         dset.attrs['dx'] = float(dx)
         dset.attrs['dy'] = float(dy)
         dset.attrs['dtype'] = str(E_np.dtype)
-        # v4.15.0 (P2-VERSTAMP): writer version stamp for migration /
-        # known-buggy-release traceability.  See _get_lumenairy_version.
+        # Writer version stamp, for migration / known-buggy-release
+        # traceability.  See _get_lumenairy_version.
         dset.attrs['lumenairy_version'] = _get_lumenairy_version()
         if wavelength is not None:
             dset.attrs['wavelength'] = float(wavelength)
         if label is not None:
             dset.attrs['label'] = str(label)
-        # A-4 follow-up (recorded in d045980, closed 2026-07-26): route
-        # ``metadata`` through the canonical type-tagged codec instead of
-        # handing raw values to h5py attrs.  Measured over the module's
-        # 19-type probe set, the raw loop wrote 14 without raising / 4
-        # raised (heterogeneous list, flat + nested dict, arbitrary
-        # object) / 1 was silently DROPPED (``None``) / 7 came back a
-        # different type; the codec round-trips 19/19.  This SUPERSEDES
-        # the storage-nit ``None``-skip below it (the blob stores ``None``
-        # faithfully, which is what the zarr backend already did):
-        #     if value is None: continue        # <- dropped the value
-        #     dset.attrs[str(key)] = value      # <- raised on containers
+        # ``metadata`` goes through the canonical type-tagged codec, not
+        # raw h5py attrs: a raw attribute loop cannot carry ``None``,
+        # nested or heterogeneous containers, or an exact list-vs-ndarray
+        # distinction.  Measured over the module's 19-type probe set, the
+        # codec round-trips 19/19 against the raw loop's 14 written / 4
+        # raised / 1 silently dropped (``None``) / 7 type-coerced.
         _h5_write_meta_attrs(dset, metadata)
 
 
@@ -652,15 +635,14 @@ def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
     with h5py.File(filepath, 'w') as f:
         grp = f.create_group('planes')
         grp.attrs['n_planes'] = n
-        # v4.15.0 (P2-VERSTAMP): group-level stamp covers the whole
-        # batch, complementing per-dataset stamps below.
+        # Group-level stamp covering the whole batch, complementing the
+        # per-dataset stamps below.
         grp.attrs['lumenairy_version'] = _get_lumenairy_version()
         if wavelength is not None:
             grp.attrs['wavelength'] = float(wavelength)
-        # A-4 follow-up (see save_field_h5): the run-level ``metadata``
-        # mapping goes through the canonical codec, not raw h5py attrs.
-        # Same measured before-state as its siblings (14 wrote / 4 raised /
-        # ``None`` dropped / 7 coerced over the 19-type probe set).
+        # The run-level ``metadata`` mapping goes through the canonical
+        # codec, not raw h5py attrs (see save_field_h5 for the measured
+        # fidelity of the two).
         _h5_write_meta_attrs(grp, metadata)
         for i, plane in enumerate(planes):
             if 'field' not in plane or 'dx' not in plane:
@@ -701,7 +683,7 @@ def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
             if 'dy' not in plane:
                 dset.attrs['dy'] = float(plane['dx'])
             dset.attrs['dtype'] = str(E.dtype)
-            # v4.15.0 (P2-VERSTAMP): per-plane writer-version stamp.
+            # Per-plane writer-version stamp.
             dset.attrs['lumenairy_version'] = _get_lumenairy_version()
 
 
@@ -795,20 +777,16 @@ def save_jones_field_h5(filepath: str, jones_field: Any,
         grp = f.create_group('jones')
         grp.attrs['dx'] = float(jones_field.dx)
         grp.attrs['dy'] = float(jones_field.dy)
-        # v4.15.0 (P2-VERSTAMP): single group-level stamp for the
-        # Jones-field pair so the (Ex, Ey) provenance is consistent.
+        # Single group-level stamp for the Jones-field pair, so the
+        # (Ex, Ey) provenance is consistent.
         grp.attrs['lumenairy_version'] = _get_lumenairy_version()
         if wavelength is not None:
             grp.attrs['wavelength'] = float(wavelength)
         if label is not None:
             grp.attrs['label'] = str(label)
-        # A-4 follow-up (see save_field_h5).  This SUPERSEDES the S4-9
-        # ``None``-skip that used to live here: S4-9's stated goal was to
-        # stop the h5py C-layer crash and "match zarr, which stores
-        # ``None`` fine", which it reached by DROPPING the key; the codec
-        # reaches it by actually storing ``None``.  Measured before-state
-        # over the 19-type probe set: 14 wrote without raising / 4 raised /
-        # 1 silently dropped (``None``) / 7 type-coerced -> now 19/19.
+        # ``metadata`` goes through the canonical codec (see
+        # save_field_h5).  The codec stores ``None`` rather than dropping
+        # the key, which is what the zarr backend has always done.
         _h5_write_meta_attrs(grp, metadata)
         # I7: resolve the 'auto' default against the component dtype.
         compression, compression_opts = _resolve_compression(
@@ -875,16 +853,13 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
         Grid spacing in y [m].  Defaults to ``dx``.
     z, label, metadata
         Per-plane stored attributes.  ``metadata`` may be an arbitrarily
-        nested mapping: v5.29.1+ (audit A-4) serialises it through the
-        same canonical type-tagged JSON codec ``write_sim_metadata``
-        uses, so ``None``, ``bytes``, ``complex``, ``tuple``, empty and
-        heterogeneous lists, and nested dicts all survive the round-trip
-        through :func:`load_planes` / :func:`load_planes_h5` as the exact
-        Python types written.  Pre-v5.29.1 the values were handed
-        straight to h5py attrs, which raised on nested / heterogeneous
-        containers and silently dropped ``None``.  A flattened
-        native-attr copy of the scalars is still written for external
-        inspection tools.
+        nested mapping: it is serialised through the same canonical
+        type-tagged JSON codec ``write_sim_metadata`` uses, so ``None``,
+        ``bytes``, ``complex``, ``tuple``, empty and heterogeneous lists,
+        and nested dicts all survive the round-trip through
+        :func:`load_planes` / :func:`load_planes_h5` as the exact Python
+        types written.  A flattened native-attr copy of the scalars is
+        still written for external inspection tools.
     compression : str or None, default 'auto'
         HDF5 compression filter.  ``'auto'`` (v5.46 default) means **no
         compression for complex data and gzip level 4 for everything
@@ -901,15 +876,14 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
     chunk_size : int or 'auto', default 'auto'
         HDF5 chunk-edge cap (clipped to the field extent).  ``'auto'``
         (v5.46 default) picks the largest power-of-two edge whose chunk is
-        <= 1 MiB -- 256 for complex128, 362->256 for complex64.  The old
-        fixed ``1024`` made a **16 MiB** chunk for complex128, sixteen
-        times HDF5's 1 MiB default chunk cache, so every partial read
-        touched a whole 16 MiB chunk.
+        <= 1 MiB -- 256 for complex128, 362->256 for complex64.  1 MiB is
+        HDF5's own default chunk-cache size, so a chunk above it makes
+        every partial read touch more data than the cache can hold.
     preserve_dtype : bool, default False
         If True, store ``field`` at its native complex precision
         (``complex64`` or ``complex128``).  If False (the historical
         default), coerce to ``complex128`` for storage.  See
-        :func:`save_field_h5` for the same flag.  v4.13.0 onward.
+        :func:`save_field_h5` for the same flag.
     swmr : bool, default True
         v4.16.0+.  Open the underlying HDF5 file with
         ``libver='latest'`` and enable Single-Writer-Multiple-Reader
@@ -982,7 +956,7 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
     else:
         E = np.asarray(field_np, dtype=np.complex128)
 
-    # v4.16.0: acquire the cross-process append lock BEFORE opening
+    # Acquire the cross-process append lock BEFORE opening
     # the HDF5 file.  Two concurrent writer processes will be
     # serialised here -- second one blocks until first releases.
     # On timeout, raise TimeoutError with a clear pointer to the
@@ -1017,9 +991,9 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
             if 'planes' not in f:
                 grp = f.create_group('planes')
                 grp.attrs['n_planes'] = 0
-                # v4.15.0 (P2-VERSTAMP): group-level stamp on
-                # first-touch.  Note we don't overwrite the stamp on
-                # a re-open (the ``else`` branch below) so the value
+                # Group-level stamp on first touch.  It is deliberately
+                # not overwritten on a re-open (the ``else`` branch
+                # below) so the value
                 # remains the version that *created* the file.
                 # Per-plane stamps below carry the version that wrote
                 # each plane, so multi-version appends are still
@@ -1041,44 +1015,38 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
                 ds_kwargs['compression'] = _comp
                 if _copts is not None:
                     ds_kwargs['compression_opts'] = _copts
-            # v4.14.3 (P0-NEW-1): reserve the slot atomically by
-            # bumping ``n_planes`` BEFORE the dataset is created.  If
-            # ``create_dataset`` crashes (disk full, dtype mismatch,
-            # etc.) the increment is rolled back so a subsequent
-            # append re-uses this same slot rather than skipping it.
-            # The reverse order (create, then bump) left an orphan
-            # dataset on crash that collided with the next append's
-            # computed name.
+            # Reserve the slot atomically by bumping ``n_planes`` BEFORE
+            # the dataset is created.  If ``create_dataset`` crashes (disk
+            # full, dtype mismatch, etc.) the increment is rolled back so
+            # a subsequent append re-uses this same slot rather than
+            # skipping it.  The reverse order -- create, then bump --
+            # strands an orphan dataset on crash that collides with the
+            # next append's computed name.
             grp.attrs['n_planes'] = n + 1
             try:
                 dset = grp.create_dataset(name, data=E, **ds_kwargs)
                 dset.attrs['dx'] = float(dx)
                 dset.attrs['dy'] = float(dy)
                 dset.attrs['dtype'] = str(E.dtype)
-                # v4.15.0 (P2-VERSTAMP): per-plane writer stamp.
+                # Per-plane writer stamp.
                 dset.attrs['lumenairy_version'] = _get_lumenairy_version()
                 if z is not None:
                     dset.attrs['z'] = float(z)
                 if label is not None:
                     dset.attrs['label'] = str(label)
-                # A-4 (AUDIT_ADVERSARIAL_CODEBASE 2026-07-25): route
-                # ``metadata`` through the canonical type-tagged codec
-                # instead of handing raw values to h5py attrs.  This
-                # SUPERSEDES the S4-9 ``None``-skip: the blob stores
-                # ``None`` faithfully (matching zarr, which was S4-9's
-                # stated goal) instead of dropping it, and nested /
-                # heterogeneous / empty containers no longer raise.
+                # ``metadata`` goes through the canonical type-tagged
+                # codec, not raw h5py attrs: the blob stores ``None``
+                # faithfully (matching zarr) and nested / heterogeneous /
+                # empty containers do not raise.
                 _h5_write_meta_attrs(dset, metadata)
-                # v4.16.0 SWMR: enable single-writer-multiple-reader
-                # mode AFTER the new dataset + attributes are in
-                # place.  HDF5 SWMR requires that no schema changes
-                # happen after ``swmr_mode = True``, so this MUST
-                # come at the end of the writer's schema work.  The
-                # next writer open re-creates its handle so this
-                # flag is per-open, not persisted (the ``libver``
-                # marker IS persisted and makes the file SWMR-
-                # compatible across opens).  After this point,
-                # reader processes can open the file with
+                # SWMR: enable single-writer-multiple-reader mode AFTER the
+                # new dataset + attributes are in place.  HDF5 SWMR requires
+                # that no schema changes happen after ``swmr_mode = True``, so
+                # this MUST come at the end of the writer's schema work.  The
+                # next writer open re-creates its handle so this flag is
+                # per-open, not persisted (the ``libver`` marker IS persisted
+                # and makes the file SWMR- compatible across opens).  After
+                # this point, reader processes can open the file with
                 # ``swmr=True`` and follow the new plane.
                 #
                 # Wrap in try/except because some h5py versions /
@@ -1096,10 +1064,9 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
                         # writers; only the concurrent-reader
                         # guarantee is forfeited.
                         pass
-                # v4.16.0: flush in all modes so even the non-SWMR
-                # legacy path commits the new plane to disk before
-                # ``close()`` triggers final flush.  Helps readers
-                # that opportunistically retry-open.
+                # Flush in all modes so even the non-SWMR legacy path commits
+                # the new plane to disk before ``close()`` triggers final
+                # flush.  Helps readers that opportunistically retry-open.
                 f.flush()
             except Exception:
                 # Roll back the slot-reservation so a re-try lands on
@@ -1109,10 +1076,11 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
                 # create-dataset path can raise anything from the
                 # HDF5 native layer; preserve the original Exception
                 # class for the user via ``raise``.
-                # v5.4.6 (audit P3-15): if create_dataset SUCCEEDED but a
-                # later attrs/swmr/flush step raised, the orphan plane_NN
-                # dataset would block the next append at the same name
-                # (overwrite was removed in v4.14.3).  Delete it so the
+                #
+                # If create_dataset SUCCEEDED but a later attrs / swmr /
+                # flush step raised, the orphan plane_NN dataset would block
+                # the next append at the same name (this writer never
+                # overwrites).  Delete it so the
                 # file sits at exactly n planes -- the documented
                 # atomicity contract -- before decrementing n_planes.
                 try:
@@ -1309,9 +1277,9 @@ class TempFieldStore:
                                     compression=None)
             if dx is not None:
                 dset.attrs['dx'] = float(dx)
-            # v4.15.0 (P2-VERSTAMP): temp-store stamps too, so a
-            # crash-recovered process can detect cross-version temp
-            # files if a job-runner reused the temp dir.
+            # The temp store stamps too, so a crash-recovered process can
+            # detect cross-version temp files if a job-runner reused the temp
+            # dir.
             dset.attrs['lumenairy_version'] = _get_lumenairy_version()
         return name
 
@@ -1427,15 +1395,14 @@ def _open_zarr_group_safe(zarr_mod, filepath, writable=False):
     patch is scoped to the duration of the zarr call and restored in
     the finally block, so it never leaks to other code paths.
 
-    Thread-safety (L8 fix, v4.13.0): the install / restore pair is
-    serialised through a module-level :class:`threading.Lock`
-    (``_ZARR_MKDIR_PATCH_LOCK``).  Two threads racing through
-    ``append_plane_h5`` -> ``_open_zarr_group_safe`` previously could
-    save the patched ``mkdir`` as the "original" and never restore
-    the real implementation, permanently corrupting ``Path.mkdir`` for
-    the whole process.  The lock is contended only on Windows where
-    the patch is needed at all, and is uncontended on the (vastly more
-    common) single-threaded code path.
+    Thread-safety: the install / restore pair is serialised through a
+    module-level :class:`threading.Lock` (``_ZARR_MKDIR_PATCH_LOCK``).
+    Without it, two threads racing through ``append_plane_h5`` ->
+    ``_open_zarr_group_safe`` can save the patched ``mkdir`` as the
+    "original" and never restore the real implementation, permanently
+    corrupting ``Path.mkdir`` for the whole process.  The lock is
+    contended only on Windows where the patch is needed at all, and is
+    uncontended on the (vastly more common) single-threaded code path.
 
     Parameters
     ----------
@@ -1496,15 +1463,12 @@ def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
     """Append one plane to a Zarr store, ``planes/plane_NN`` dataset.
 
     See :func:`append_plane_h5` for the atomicity contract.  Same
-    fix: bump ``n_planes`` first, roll back on create failure.  In
-    addition the Zarr code path historically passed
-    ``overwrite=True`` to ``create_array``, which combined with the
-    pre-fix attribute-after-create order meant a crashed-then-restarted
-    appender would *silently clobber* the orphan dataset.  v4.14.3
-    drops ``overwrite=True``: the attribute-before-create order leaves
-    the orphan slot reserved (next append computes ``n + 1``), and if
-    a stale ``plane_NN`` already exists at the computed slot the
-    create now raises rather than silently overwriting.
+    fix: bump ``n_planes`` first, roll back on create failure.  The Zarr
+    path additionally does NOT pass ``overwrite=True`` to
+    ``create_array``: the attribute-before-create order leaves an orphan
+    slot reserved (the next append computes ``n + 1``), and if a stale
+    ``plane_NN`` already exists at the computed slot the create raises
+    rather than silently clobbering it.
 
     Parameters
     ----------
@@ -1541,7 +1505,7 @@ def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
     _edge = _resolve_chunk_edge(chunk_size, E.shape, E.dtype)
     chunks = (min(_edge, Ny), min(_edge, Nx))
 
-    # v4.16.0: acquire the cross-process append lock BEFORE opening
+    # Acquire the cross-process append lock BEFORE opening
     # the Zarr store.  Mirrors the HDF5 path; see ``append_plane_h5``
     # for the rationale.
     _fl = _require_filelock()
@@ -1570,43 +1534,38 @@ def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
         if 'planes' not in store:
             planes_grp = store.create_group('planes')
             planes_grp.attrs['n_planes'] = 0
-            # v4.15.0 (P2-VERSTAMP): mirror the HDF5 group-level
-            # stamp.  Only set on initial create; per-plane stamps
-            # below cover appended-by-different-version planes.
+            # Mirror of the HDF5 group-level stamp.  Only set on initial
+            # create; per-plane stamps below cover
+            # appended-by-different-version planes.
             planes_grp.attrs['lumenairy_version'] = (
                 _get_lumenairy_version())
         else:
             planes_grp = store['planes']
         n = int(planes_grp.attrs.get('n_planes', 0))
         name = f'plane_{n:02d}'
-        # v4.14.3 (P0-NEW-1): same attribute-before-create discipline
-        # as the HDF5 path.  Roll back on any create failure so the
-        # slot is not stranded.  ``overwrite=False`` (the default) is
-        # now required to detect-and-raise on a stale orphan rather
-        # than silently clobber it.
+        # Same attribute-before-create discipline as the HDF5 path.
+        # Roll back on any create failure so the slot is not stranded.
+        # ``overwrite=False`` (the default) is what makes a stale orphan
+        # at the computed slot raise rather than be silently clobbered.
         planes_grp.attrs['n_planes'] = n + 1
         try:
             ds = planes_grp.create_array(
                 name=name, data=E, chunks=chunks)
             ds.attrs['dx'] = float(dx)
             ds.attrs['dy'] = float(dy)
-            # v4.15.0 (P2-VERSTAMP): per-plane stamp.
+            # Per-plane stamp.
             ds.attrs['lumenairy_version'] = _get_lumenairy_version()
             if z is not None:
                 ds.attrs['z'] = float(z)
             if label is not None:
                 ds.attrs['label'] = str(label)
-            # I6 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): route per-plane
-            # metadata through the SAME type-tagged codec every HDF5 write
-            # site uses (the A-4 / S4-19 contract) instead of the pre-A-4 raw
-            # loop.  Measured over the module's own 19-type probe set, the raw
-            # loop kept 13/19 faithful against HDF5's 18/19: complex -> str,
-            # bytes -> str, tuple -> list, np scalar -> str, and -- the
-            # irrecoverable one -- ndarray -> str(), which inserts ``...``
-            # beyond numpy's 1000-element print threshold, so the values were
-            # GONE.  ``_zarr_write_sim_metadata`` already used the codec, so
-            # the same call with the same arguments had different fidelity
-            # depending on a global backend switch.
+            # Per-plane metadata goes through the SAME type-tagged codec
+            # every HDF5 write site uses, so the fidelity of a call does
+            # not depend on which backend a global switch selected.  A raw
+            # attribute loop keeps 13/19 of the module's probe set faithful
+            # against HDF5's 18/19; the irrecoverable one is ndarray ->
+            # str(), which inserts ``...`` beyond numpy's 1000-element
+            # print threshold and loses the values outright.
             _zarr_write_meta_attrs(ds, metadata)
         except Exception:
             # Roll back the slot reservation so a retry re-uses the
@@ -1748,10 +1707,9 @@ def set_storage_backend(backend: str) -> None:
     """Set the storage backend for NEW file creation ('hdf5' or 'zarr').
 
     If ``backend='zarr'`` is requested but zarr is not installed this
-    raises ``ImportError`` immediately.  Previously the check was
-    lazy: ``set_storage_backend`` succeeded and the missing library
-    only surfaced on the first ``append_plane`` call, which is harder
-    to debug in a long-running simulation.
+    raises ``ImportError`` immediately rather than deferring the failure
+    to the first ``append_plane`` call, which is much harder to debug in
+    a long-running simulation.
     """
     global _BACKEND
     if backend not in ('hdf5', 'zarr'):
@@ -1797,20 +1755,18 @@ def _detect_backend(path):
     (``zarr.json`` for Zarr v3 at the group root, or ``.zarray`` for
     Zarr v2 at the array root).  Returns ``'hdf5'`` otherwise.
 
-    v4.16.1 (AUDIT_V4_16_0_DEEP P1-DEEP-3-1) fix:
+    Two details the implementation is careful about:
 
-    1. ``str(path)`` cast added so ``pathlib.Path`` inputs no longer
-       raise ``AttributeError`` on ``.endswith``.  The dispatcher
-       docstrings advertise Path support; this enforces it.
+    1. ``str(path)`` is applied before ``.endswith``, so a
+       ``pathlib.Path`` input does not raise ``AttributeError``.  The
+       dispatcher docstrings advertise Path support; this enforces it.
 
-    2. Directory-routing restricted to actual Zarr stores via the
+    2. Directory-routing is restricted to actual Zarr stores via the
        canonical store-marker file (``zarr.json`` per the Zarr v3
        spec at the group root, or ``.zarray`` per Zarr v2 at the
-       array root).  Pre-v4.16.1 any directory at ``path`` silently
-       routed to the Zarr backend, so a stale ``output.h5/``
-       directory next to ``output.h5`` would re-route subsequent
-       reads to Zarr and silently produce a wrong-backend error
-       trace.
+       array root).  Routing on "is a directory" alone would send a
+       stale ``output.h5/`` directory sitting next to ``output.h5`` to
+       the Zarr backend, and every later read with it.
     """
     s = str(path)
     if s.endswith('.zarr'):
@@ -1869,7 +1825,7 @@ def append_plane(filepath: str, field: np.ndarray, dx: float,
     else:
         backend = _BACKEND
     if backend == 'zarr':
-        # v4.16.0: forward lock_timeout to the zarr path; drop
+        # Forward lock_timeout to the zarr path; drop
         # ``swmr`` (HDF5-only) silently to keep the unified API
         # ergonomic for backend-agnostic call sites.
         zarr_kwargs = {k: v for k, v in kwargs.items()
@@ -2027,15 +1983,11 @@ def replay_run(filepath: str, *,
         are included (e.g. ``label_prefix='mhs'`` to filter MHS-only
         planes from a mixed run).
     wavelength : float, optional
-        Forwarded onto the result's ``wavelength`` field.  v5.24.x
-        (audit S4-19): when omitted (``None``), the STORED wavelength is
-        used -- the per-plane ``wavelength`` attribute of the last plane
-        (preferred), then any per-plane value, then the file-level
-        ``wavelength`` metadata -- falling back to ``0.0`` only when the
-        store carries none.  ``append_plane`` has persisted per-plane
-        wavelength since v4.0; pre-fix ``replay_run`` ignored it and the
-        replayed result always reported ``0.0`` unless the caller
-        re-supplied the wavelength by hand.
+        Forwarded onto the result's ``wavelength`` field.  When omitted
+        (``None``), the STORED wavelength is used -- the per-plane
+        ``wavelength`` attribute of the last plane (preferred), then any
+        per-plane value, then the file-level ``wavelength`` metadata --
+        falling back to ``0.0`` only when the store carries none.
     method : str, optional
         Free-form method tag for the result (e.g. ``'mhs'``,
         ``'system'``).  Defaults to ``'replay'``.
@@ -2070,7 +2022,7 @@ def replay_run(filepath: str, *,
     selected.sort(key=lambda d: d.get('index', 0))
 
     if not selected:
-        # v5.24.x (audit S4-19): even the empty-selection path honours a
+        # Even the empty-selection path honours a
         # stored file-level wavelength when the caller did not supply one.
         resolved_wl = wavelength
         if resolved_wl is None:
@@ -2094,12 +2046,10 @@ def replay_run(filepath: str, *,
             float(plane.get('dx', info.get('dx', 0.0)) or 0.0),
         ))
 
-    # v5.24.x (audit S4-19): resolve the reported wavelength from the
-    # STORED per-plane attribute when the caller omitted it.  Prefer the
-    # last plane (the exit-plane by convention), then any per-plane
-    # value, then the file-level metadata; 0.0 only if the store carries
-    # none.  ``append_plane`` has persisted per-plane wavelength since
-    # v4.0, but pre-fix replay_run ignored it entirely.
+    # Resolve the reported wavelength from the STORED per-plane attribute
+    # when the caller omitted it.  Prefer the last plane (the exit-plane
+    # by convention), then any per-plane value, then the file-level
+    # metadata; 0.0 only if the store carries none.
     resolved_wl = wavelength
     if resolved_wl is None:
         for plane, info in zip(reversed(full_planes), reversed(selected)):

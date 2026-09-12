@@ -206,7 +206,7 @@ def to_numpy(x: Any) -> np.ndarray:
     Use this at I/O boundaries (HDF5 / Zarr writes, plotting,
     .npy save) where downstream code expects a host NumPy array.
     """
-    # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): the type
+    # The type
     # predicates above narrow at runtime but mypy can't follow that;
     # cast through ndarray on the explicit-narrow branches.
     if is_numpy_array(x):

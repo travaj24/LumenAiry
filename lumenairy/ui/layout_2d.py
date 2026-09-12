@@ -142,9 +142,9 @@ class Layout2DView(QWidget):
         # space when the user has room (the natural default for a
         # QGraphicsView), while ``setMinimumSize(0, 0)`` lets it
         # shrink to zero when the dock is dragged narrow.  Using
-        # ``Ignored`` here was wrong: it told Qt the view didn't
-        # care about size, so the dock area allocated minimal
-        # space and the layout never reached a useful default
+        # ``Ignored`` here is wrong: it tells Qt the view does not
+        # care about size, so the dock area allocates minimal
+        # space and the layout never reaches a useful default
         # size on first launch.
         self.view.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -610,8 +610,8 @@ class Layout2DView(QWidget):
             pitch_px = max(2.0, src.emitter_pitch_mm * S)
             # This is the SIDE view (y-z plane): the array's x columns
             # all project onto the same point, so only the y rows are
-            # drawn.  The old nested ix loop multiplied its own offset
-            # by 0.0 and redrew nx identical overlapping dots.
+            # drawn.  A nested ix loop would multiply its own offset by
+            # 0.0 and redraw nx identical overlapping dots.
             for iy in range(ny):
                 cy = (iy - (ny - 1) / 2) * pitch_px
                 self.scene.addEllipse(z - 1.5, cy - 1.5,
@@ -636,8 +636,8 @@ class Layout2DView(QWidget):
         # 3.6.1 (Stage C.1): optional preview rays drawn DOWNSTREAM
         # of the source -- from the source plane to the first
         # optical surface -- to make the propagation direction
-        # visually unambiguous.  The original (3.6.1 first cut)
-        # drew them upstream of the source which read backward.
+            # visually unambiguous.  Drawing them UPSTREAM of the source
+            # reads backward.
         # Default OFF in 3.6.1 hotfix; opt-in via the preference key
         # so users who want this overlay can enable it without
         # confusing ray directions for everyone else.
@@ -782,8 +782,10 @@ class Layout2DView(QWidget):
         to a straight-axis layout when no folds are present.
 
         3.6.1 hotfix-2 (kept) — the world-frame z accounts for the
-        source-to-first-surface air gap; previously the entire ray
-        fan was squished into the first ~10 mm of the system.
+        source-to-first-surface air gap; without it the entire ray
+        fan is squished into the first ~10 mm of the system
+        (docs/history/lumenairy.ui.layout_2d.md).
+        (docs/history/lumenairy.ui.layout_2d.md).
         """
         if trace_result is None:
             return

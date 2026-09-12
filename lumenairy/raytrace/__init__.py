@@ -86,7 +86,7 @@ from .differential import (  # noqa: E402
     ray_transfer_jacobian_jax,
 )
 
-# v4.15.1 (Cluster B Item 6): bridge a coherent field into a RayBundle.
+# Bridge a coherent field into a RayBundle.
 from .from_field import rays_from_field
 
 # JAX-traceable trace (functional / immutable; differentiable via
@@ -160,7 +160,7 @@ __all__ = [
     'EXIT_VERTEX_GRAZING_TOL',
     'resolve_exit_index',
     'vertex_plane_transfer_t',
-    # v5.45.2 (audit 2026-09-11 R2 / WP-A7 section 5.3): the functional form
+    # The functional form
     # of ``_make_bundle(..., opd_seed='eikonal')``, sibling of
     # ``exit_vertex_transfer`` and previously reachable only as
     # ``lumenairy.raytrace.trace.seed_entrance_eikonal``.

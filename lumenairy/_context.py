@@ -43,7 +43,7 @@ __all__ = [
     'lumenairy_context',
     'snapshot_globals',
     'apply_globals',
-    # v5.2.5 (AUDIT_V5_2_3 P3-F4): the public name ``install_atexit_restore``
+    # The public name ``install_atexit_restore``
     # was renamed to ``_install_atexit_restore`` to signal its private-
     # bootstrap intent (caller is ``lumenairy/__init__.py`` at the end
     # of library import; no user-facing call site).  The legacy name
@@ -235,14 +235,14 @@ def lumenairy_context(
             cache['h_max_bytes_per_entry'] = int(asm_cache_max_bytes_per_entry)
         new_state['asm_cache_size'] = cache
 
-    # v5.4.6 (audit F-17): apply the new state INSIDE a try so that a
+    # Apply the new state INSIDE a try so that a
     # setter raising partway through context ENTRY does not leak an
     # already-applied earlier knob.  ``prior`` is snapshotted above
     # (before any mutation), so on an entry-time failure we restore it
     # and re-raise -- leaving process-global state exactly as it was
-    # before the ``with`` was attempted.  Pre-v5.4.6 this call sat
-    # outside the try/finally, so a mid-apply exception stranded the
-    # knobs that had already been set.
+    # before the ``with`` was attempted.  A call outside the
+    # try/finally would strand the knobs already set when a mid-apply
+    # exception fires.
     try:
         apply_globals(new_state)
     except BaseException:
@@ -255,7 +255,7 @@ def lumenairy_context(
             apply_globals(prior)
         finally:
             if clear_caches_on_exit:
-                # v4.15.0 (P2-CTX-1): a single call to
+                # A single call to
                 # ``clear_asm_caches`` is now the canonical drain
                 # entry point.  It routes through the central
                 # cache-clearer registry (:mod:`lumenairy._cache_registry`),
@@ -266,11 +266,11 @@ def lumenairy_context(
                 # JAX, phase-retrieval kernels, berreman / pmm / rcwa
                 # / glass / wrapper-merit / eme_jax / bluestein, etc.
                 #
-                # v5.24.x (audit S4-15): the fallback below no longer
-                # hand-lists a subset of clearers.  Pre-fix it enumerated
-                # only 7 siblings and OMITTED berreman/pmm/rcwa/glass/
-                # wrapper_merit/eme_jax/bluestein -- the exact "fix N,
-                # miss N+1" drift the registry was built to retire.  If
+                # The fallback below must NOT hand-list a subset of
+                # clearers.  A list enumerating only 7 siblings and
+                # OMITTING berreman/pmm/rcwa/glass/wrapper_merit/
+                # eme_jax/bluestein is the exact "fix N, miss N+1"
+                # drift the registry was built to retire.  If
                 # the ``propagation`` re-export is unavailable (partial
                 # install / rename / circular import) we now walk the
                 # registry directly via ``clear_all_registered_caches``,
@@ -330,9 +330,8 @@ _ATEXIT_SNAPSHOT: Optional[dict[str, Any]] = None
 def _install_atexit_restore() -> None:
     """Register an atexit handler that restores import-time defaults.
 
-    Private bootstrap helper.  v5.2.5 (AUDIT_V5_2_3 P3-F4): renamed
-    from ``install_atexit_restore`` to the underscore-prefixed
-    form; the helper is called exactly once at the end of
+    Private bootstrap helper.  The underscore prefix is deliberate: the
+    helper is called exactly once at the end of
     :mod:`lumenairy.__init__` during library import and has no
     user-facing call site.  ``install_atexit_restore`` (the legacy
     public name) is preserved as a back-compat alias below in this
@@ -355,11 +354,11 @@ def _install_atexit_restore() -> None:
     _ATEXIT_INSTALLED = True
 
 
-# v5.2.5 (AUDIT_V5_2_3 P3-F4): legacy public name preserved as a
-# back-compat alias.  Pre-v5.2.5 the function was named
-# ``install_atexit_restore`` (no leading underscore) which made it
+# Legacy public name preserved as a
+# back-compat alias.  The function was once named
+# ``install_atexit_restore`` (no leading underscore), which made it
 # look like a user-facing API surface despite being a private
-# bootstrap helper.  External callers that imported it by the old
-# name continue to work; new code should use the underscore-
-# prefixed canonical name.
+# bootstrap helper.  External callers that import it by the old name
+# continue to work; new code should use the underscore-prefixed
+# canonical name (docs/history/lumenairy._context.md).
 install_atexit_restore = _install_atexit_restore

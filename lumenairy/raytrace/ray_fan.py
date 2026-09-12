@@ -18,8 +18,9 @@ rebuild a final ray bundle and report aberrations:
 Every public name here is re-exported from
 ``lumenairy.raytrace.core`` so existing imports continue to resolve.
 
-No physics change: contents are bit-for-bit copies of the original
-implementations.
+Contents are bit-for-bit copies of the implementations this module was
+split out of; no physics change.  See
+docs/history/lumenairy.raytrace.ray_fan.md.
 """
 
 from __future__ import annotations
@@ -55,9 +56,9 @@ def _ep_offset(ep_z: float, field_angle: float) -> float:
     produces ``NaN`` for an OBJECT-SPACE TELECENTRIC system, where
     ``compute_pupils`` legitimately returns ``ep_z = inf`` (the stop sits
     at the pre-stop group's rear focal plane, so ``A_pre = 0``): on-axis
-    that is ``inf * tan(0) = inf * 0 = NaN``, and the NaN then propagated
+    that is ``inf * tan(0) = inf * 0 = NaN``, and the NaN then propagates
     into every launched ray height, so ``ray_fan_data`` /
-    ``opd_fan_data`` returned all-NaN fans with no diagnostic.  An
+    ``opd_fan_data`` return all-NaN fans with no diagnostic.  An
     entrance pupil at infinity has no FINITE centring offset at any
     field, so fall back to the legacy origin-launched convention
     (``ep_off = 0``) -- exactly what the callers' ``except`` branches
@@ -232,7 +233,7 @@ def _opd_fan_wfe(img, chief, n_img, R, wavelength, fn_name='opd_fan_data'):
 
     ``img`` is the fan's final :class:`RayBundle`, ``chief`` the
     single-ray bundle of the SAME orientation traced through the same
-    surfaces.  Dead rays come back NaN, matching the pre-R1 contract.
+    surfaces.  Dead rays come back NaN.
 
     Guard: the reference sphere only exists if every ray is INSIDE it
     (``|P - C| < R``).  It is not when the evaluation surface sits far
@@ -473,8 +474,10 @@ def ray_fan_data(
     # field every fan ray crosses the entrance pupil displaced by
     # ``ep_z*tan(fa)``.  The 4.11.2 fix moved only the reference chief to the
     # EP centre, so chief and fan then sampled DIFFERENT pupil zones and the
-    # fan no longer passed through zero at py=0 (``ey(0)`` read the launch-
-    # convention offset instead of 0).  We shift each fan's LAUNCH heights
+    # fan would not pass through zero at py=0 (``ey(0)`` reading the
+    # launch-convention offset instead of 0).  We shift each fan's LAUNCH
+    # heights
+    # heights
     # by the same ``ep_off = -ep_z*tan(fa)`` used for the chief (so the fan
     # is centred on the chief's pupil crossing), and reference each fan
     # against a chief of the SAME orientation so ``ey(0) == ex(0) == 0``.
@@ -708,12 +711,12 @@ def opd_fan_data(
         tangential (y) and sagittal (x) fans.  Vignetted rays are NaN.
 
     Notes
-    -----
-    R1 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).  Pre-fix this function
-    returned ``(img.opd - opd_chief) / wavelength``, i.e. the OPL to each
-    ray's OWN intercept -- the reference sphere was missing entirely.
-    That differs from the wavefront error at FIRST order in the
-    transverse aberration: ``W_plane - W_true = eps * sin(theta')``.
+    R1 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).  Returning
+    ``(img.opd - opd_chief) / wavelength`` -- the OPL to each ray's OWN
+    intercept, with no reference sphere -- differs from the wavefront
+    error at FIRST order in the transverse aberration:
+    ``W_plane - W_true = eps * sin(theta')``.
+    ``W_plane - W_true = eps * sin(theta')``.
     Measured on an f/4 plano-convex singlet (R1 = 51.68 mm N-BK7, 25 mm
     pupil, 587.6 nm) at ``rho = 1``: ``+36.194`` waves reported against
     ``-11.714`` waves true -- the wrong SIGN and 3.1x the magnitude.  The
@@ -1000,10 +1003,10 @@ def through_focus_rms(
         Image distance giving minimum RMS.
     """
     focus_shifts = np.asarray(focus_shifts, dtype=np.float64)
-    # S11-6d (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): an empty
-    # ``focus_shifts`` used to fall through the whole sweep and die at the
+    # ``focus_shifts`` falls through the whole sweep and dies at the
     # ``focus_shifts[best_idx]`` return with a bare
     # ``IndexError: index 0 is out of bounds for axis 0 with size 0``,
+    # naming neither this function nor the offending argument.
     # naming neither this function nor the offending argument.
     if focus_shifts.ndim != 1 or focus_shifts.size == 0:
         raise ValueError(
@@ -1059,11 +1062,11 @@ __all__ = [
     'opd_fan_data',
     'refocus', 'through_focus_rms',
     # NB: ``ray_fan_data_world`` and ``opd_fan_data_world`` are
-    # defined in this module but deliberately omitted from
-    # ``__all__`` -- pre-v5.1.0 they were importable from
+    # ``__all__`` -- they are importable from
     # ``lumenairy.raytrace`` (via an explicit re-export in
-    # ``raytrace/__init__.py``) but were NOT in
+    # ``raytrace/__init__.py``) but are NOT in
     # ``lumenairy.raytrace.__all__`` (the advertised public
+    # surface).  Keeping them off this submodule's ``__all__``
     # surface).  Keeping them off this submodule's ``__all__``
     # preserves the same "module-attribute visible but not
     # advertised" status -- callers who imported them by name

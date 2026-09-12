@@ -76,16 +76,15 @@ import importlib.util as _importlib_util
 import math as _math
 import threading as _threading
 
-# NOTE: imported UN-aliased on purpose -- the v4.16.1 cache-enrollment
-# meta-pin's AST walker recognises a cache declaration by the literal
+# NOTE: imported UN-aliased on purpose -- the cache-enrollment meta-pin's
+# AST walker recognises a cache declaration by the literal
 # ``OrderedDict(...)`` / ``dict(...)`` / ``{}`` RHS shape; an aliased
-# ``_OrderedDict()`` would hide ``_glass_value_cache`` from discovery
-# (the exact blindness audit P2-42 just closed for lower-case names).
+# ``_OrderedDict()`` would hide ``_glass_value_cache`` from discovery.
 from collections import OrderedDict
 from typing import List
 
-# v4.16.2 (audit P3-NEW-F1-4): import numpy at module scope to support
-# numpy-scalar acceptance in GLASS_VALIDITY well-formedness check.
+# numpy at module scope: the GLASS_VALIDITY well-formedness check runs at
+# import and accepts numpy scalars, so ``np`` must already be bound.
 import numpy as np
 
 _REFRACTIVEINDEX_AVAILABLE = (
@@ -192,29 +191,17 @@ SELLMEIER_COEFFICIENTS = {
     'SF2':        ((1.40301821, 0.231767504, 0.939056586),
                    (1.05795466e-2, 4.93226978e-2, 1.12405955e2)),
     # Ohara S-LAH series ------------------------------------------------
-    # 4.11.2: the previously hard-coded Sellmeier coefficients for these
-    # two glasses produced n_d = 1.8458 (S-LAH64) and 1.8853 (S-LAH79)
-    # vs Ohara catalog n_d = 1.78800 and 2.00330 respectively -- off by
-    # 0.058 and 0.118.  The in-code coefficients appear to be misattri-
-    # buted from a different glass.  Removed from the in-code Sellmeier
-    # table and routed through the authoritative refractiveindex.info
-    # lookup via the '__sellmeier__' sentinel.  Requires ``pip install
-    # refractiveindex`` -- without it, a glass lookup for these names
-    # will fail with a clear error rather than silently returning a
-    # ~3% wrong index.  Caught by AUDIT_ROUND3_2026_05_16.md (CRIT-1).
-    #
-    # v4.15 (P1-GL-1): re-bundle these as a fallback path.  v4.11.2 left
-    # tuple-registered S-LAH64 / S-LAH79 with NO Sellmeier coefficients,
-    # so a minimal install (without the ``refractiveindex`` Python pkg)
-    # hit the dispatcher's ``ImportError`` branch on every lookup.
-    # Bundling the OHARA Sellmeier table (sourced from the
-    # refractiveindex.info-database YAMLs, OHARA Zemax 2017-11-30
-    # catalog) restores the in-process fallback while still matching
-    # ``refractiveindex`` to within 1e-9 (S-LAH64) / 4e-7 (S-LAH79) at
-    # n_d.  Verified to ~5e-5 across 488 / 532 / 633 / 1064 / 1310 /
-    # 1550 nm; rms residual relative to the refractiveindex.info
-    # tabulated values stays below 1e-5 across the catalogued
-    # 0.32-2.4 um (LAH64) / 0.37-2.4 um (LAH79) bands.
+    # Bundled Sellmeier fallback for the tuple-registered S-LAH64 /
+    # S-LAH79 entries, so a minimal install (no ``refractiveindex``
+    # package) still resolves them in-process.  Sourced from the OHARA
+    # Zemax 2017-11-30 catalog YAMLs in the refractiveindex.info-database;
+    # matches ``refractiveindex`` to within 1e-9 (S-LAH64) / 4e-7
+    # (S-LAH79) at n_d.  Verified to ~5e-5 across 488 / 532 / 633 / 1064 /
+    # 1310 / 1550 nm; rms residual relative to the refractiveindex.info
+    # tabulated values stays below 1e-5 across the catalogued 0.32-2.4 um
+    # (LAH64) / 0.37-2.4 um (LAH79) bands.  An earlier in-code coefficient
+    # pair for these two names was misattributed from a different glass
+    # (~3 % wrong index); do not restore it -- docs/history/lumenairy.glass.md.
     'S-LAH64':    ((1.83021453, 0.29156359, 1.28544024),
                    (9.0482329e-3, 3.30756689e-2, 8.93675501e1)),
     'S-LAH79':    ((2.32557148, 0.507967133, 2.43087198),
@@ -237,11 +224,9 @@ SELLMEIER_COEFFICIENTS = {
     # is the only dispatch path for the name.
     'BaF2':       ((0.643356, 0.506762, 3.8261),
                    (0.057789**2, 0.10968**2, 46.3864**2)),
-    # v4.15 (P1-GL-1): bundled Sellmeier fallback for tuple-registered
-    # fused-silica entries.  Pre-4.15 these were registered as
-    # (main, SiO2, Malitson) tuples in GLASS_REGISTRY but absent from
-    # SELLMEIER_COEFFICIENTS, so a minimal install raised ImportError
-    # on every silica lookup.  Malitson 1965 (J. Opt. Soc. Am.
+    # Bundled Sellmeier fallback for the tuple-registered fused-silica
+    # entries, so a minimal install resolves them in-process without the
+    # ``refractiveindex`` package.  Malitson 1965 (J. Opt. Soc. Am.
     # 55, 1205-1209) is the well-known well-cited 3-term Sellmeier for
     # synthetic fused silica, valid 0.21 - 6.7 um.  Coefficients are
     # quoted with C_i in um^2 (i.e. (lambda_i)^2 of the resonance pole
@@ -263,7 +248,7 @@ SELLMEIER_COEFFICIENTS = {
                      (0.0684043**2, 0.1162414**2, 9.896161**2)),
 
     # ============================================================
-    # v4.16.0 (ROADMAP #13) -- CDGM Sellmeier bundled fallback
+    # CDGM Sellmeier bundled fallback
     # ============================================================
     #
     # CDGM (Tianjin Lingxin Glass) catalogue entries that use the
@@ -339,7 +324,7 @@ SELLMEIER_COEFFICIENTS = {
 
 
 # ---------------------------------------------------------------------------
-# v4.16.2 (pre-v5.0 prep) -- formula-3 (polynomial) bundled evaluator
+# formula-3 (polynomial) bundled evaluator
 # ---------------------------------------------------------------------------
 #
 # refractiveindex.info formula-3 (the "polynomial" dispersion form):
@@ -348,14 +333,6 @@ SELLMEIER_COEFFICIENTS = {
 #
 # i.e. a constant plus an even number of (coefficient, exponent) pairs.
 # Common exponent sets in the catalogues: {-2, -4, 2, 4, 6}.
-#
-# v4.16.0 introduced the catalogue entries (Hikari E-/J-, Sumita K-, 4
-# CDGM polynomial glasses) but routed them exclusively through the
-# optional ``refractiveindex`` package.  v4.16.2 lands the bundled
-# evaluator infrastructure so minimal installs no longer fail-fast on
-# these 26 entries; per-glass coefficient ingestion is staged for
-# v5.0 (one-shot import from the refractiveindex.info YAML dataset
-# requires a non-trivial vendor-source review for each catalogue).
 #
 # POLYNOMIAL_COEFFICIENTS layout: ``{name: (c0, [(coeff, exponent), ...])}``
 #
@@ -370,11 +347,10 @@ SELLMEIER_COEFFICIENTS = {
 #     )
 #
 # Cross-check the result against refractiveindex.info's tabulated n_d
-# to 5e-5 (matches the v4.14.2 / v4.16.0 cross-check methodology).
+# to 5e-5 -- the same bar the bundled Sellmeier rows are held to.
 
 POLYNOMIAL_COEFFICIENTS = {
-    # v5.2.3 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
-    # 24 formula-3 catalogue entries (4 CDGM + 10 Hikari + 10 Sumita)
+    # The 24 formula-3 catalogue entries (4 CDGM + 10 Hikari + 10 Sumita)
     # ingested verbatim from the refractiveindex.info YAML dataset.
     # Each tuple is ``(c0, [(c_i, exponent_i), ...])`` matching the
     # ``_polynomial_index`` evaluator contract above.
@@ -512,41 +488,30 @@ POLYNOMIAL_COEFFICIENTS = {
 }
 
 
-# v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
-# manifest of formula-3 polynomial glass names that are present in
+# Manifest of formula-3 polynomial glass names that are present in
 # GLASS_REGISTRY (as ``(shelf, book, page)`` tuples for the optional
 # refractiveindex live lookup) but NOT yet ingested into
 # POLYNOMIAL_COEFFICIENTS for the bundled-evaluator fallback.
 #
-# This set lets the dispatcher distinguish "user typo / unknown
-# glass" (ValueError with suggestions) from "known formula-3 glass
-# without bundled coefficients" (NotImplementedError directing the
-# user to install the [glass] extra or open a coefficient-ingestion
-# request).  Pre-v5.2 the latter path raised a generic ImportError
-# that conflated "package not installed" with "package installed but
-# this glass not yet covered", which made the v5.2.1 ingestion gap
-# invisible to users.
+# This set lets the dispatcher distinguish "user typo / unknown glass"
+# (ValueError with suggestions) from "known formula-3 glass without
+# bundled coefficients" (NotImplementedError directing the user to
+# install the [glass] extra or open a coefficient-ingestion request).
 #
-# v5.2.3 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
-# all 24 formula-3 catalogue entries (4 CDGM + 10 Hikari + 10 Sumita)
-# have now been ingested into POLYNOMIAL_COEFFICIENTS verbatim from
-# the refractiveindex.info YAML dataset, so the stub manifest is
-# empty.  The frozenset is intentionally retained (rather than
-# deleted) so that any future formula-3 catalogue additions land
-# here as a stub before their coefficient row, and the migration-
-# message dispatch arm in get_glass_index remains reachable.
-#
-# Catalogue and validity ranges for each entry are recorded in
-# GLASS_REGISTRY / GLASS_VALIDITY (search by name).
+# It is EMPTY today -- all 24 formula-3 catalogue entries are ingested.
+# The frozenset is retained rather than deleted so that a future
+# formula-3 catalogue addition can land here as a stub before its
+# coefficient row, which keeps the migration-message dispatch arm in
+# ``get_glass_index`` reachable.  Catalogue and validity ranges for each
+# entry are recorded in GLASS_REGISTRY / GLASS_VALIDITY (search by name).
 _POLYNOMIAL_STUB_NAMES = frozenset()
 
 
 def _guard_wavelength(wavelength_m, fn_label, *, sign_symmetric):
-    """v5.4.6 (audit P3-4 / P3-7): shared negative / NaN wavelength guard
-    for the dispersion evaluators, so ``glass._sellmeier_index``,
-    ``glass._polynomial_index`` and ``coatings._coating_sellmeier`` all
-    handle bad wavelengths identically (a fix landing in one no longer
-    silently skips the others).
+    """Shared negative / NaN wavelength guard for the dispersion
+    evaluators, so ``glass._sellmeier_index``, ``glass._polynomial_index``
+    and ``coatings._coating_sellmeier`` all handle bad wavelengths
+    identically (a fix landing in one cannot silently skip the others).
 
     NaN -> UserWarning (the result will be NaN; usually upstream
     propagation).  Negative wavelength: for a ``sign_symmetric`` form
@@ -599,14 +564,13 @@ def _polynomial_index(wavelength_m, coeffs, glass_name=None):
     ``n^2 = a0 + a1*lam^2 + a2*lam^-2 + a3*lam^-4 + a4*lam^-6 +
     a5*lam^-8``.
 
-    v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
-    accepts either a Python scalar (returns float, matching the v4.16.2
-    contract and the ``_sellmeier_index`` sibling) or an array-like
-    ``wavelength_m`` (returns an ndarray with the same shape).  Array
-    inputs follow the numpy convention -- JAX / CuPy callers can pass
-    their own arrays through and will receive numpy back; downstream
-    consumers in ``get_glass_index`` always call this with a scalar
-    so the contract stays narrow.
+    Accepts either a Python scalar (returns ``float``, like the
+    ``_sellmeier_index`` sibling) or an array-like ``wavelength_m``
+    (returns an ndarray with the same shape).  Array inputs follow the
+    numpy convention -- JAX / CuPy callers can pass their own arrays
+    through and will receive numpy back; downstream consumers in
+    ``get_glass_index`` always call this with a scalar so the contract
+    stays narrow.
     """
     label = f" for glass {glass_name!r}" if glass_name else ""
     wavelength_m = _guard_wavelength(
@@ -653,23 +617,16 @@ def _sellmeier_index(wavelength_m, coeffs, glass_name=None):
     um^2.  Returns the real refractive index at the given vacuum
     wavelength [m].
 
-    4.10: validates that the wavelength does not coincide with a
-    Sellmeier resonance (``lam² ≈ C_i``) and that the radicand stays
-    positive.  Pre-4.10 a wavelength near a resonance raised an opaque
-    ``math domain error``; this version raises ``ValueError`` with the
-    glass name and the offending wavelength.
+    Validates that the wavelength does not coincide with a Sellmeier
+    resonance (``lam² ≈ C_i``) and that the radicand stays positive,
+    raising ``ValueError`` naming the glass and the offending wavelength
+    rather than an opaque ``math domain error``.
 
-    R-12 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): accepts either a
-    Python scalar (returns ``float``, the historical contract, on a pure
-    ``math`` fast path) or an array-like ``wavelength_m`` (returns an
-    ndarray of the same shape) -- mirroring the ``_polynomial_index``
-    sibling, whose docstring already claimed the two were at parity.
-    Pre-fix an array input died on ``abs(lam2 - ci) < 1e-12`` with
-    numpy's opaque "truth value of an array with more than one element
-    is ambiguous", and a list died with "can't multiply sequence by
-    non-int of type 'float'".  The scalar path is bit-identical (same
-    ``_math.sqrt`` of the same float expression); the vector path agrees
-    with a scalar loop to 0 ULP.
+    Accepts either a Python scalar (returns ``float`` on a pure ``math``
+    fast path) or an array-like ``wavelength_m`` (returns an ndarray of
+    the same shape), mirroring the ``_polynomial_index`` sibling.  The two
+    paths agree to 0 ULP -- the scalar path is ``_math.sqrt`` of the same
+    float expression the vector path evaluates elementwise.
     """
     label = f" for glass {glass_name!r}" if glass_name else ""
     wavelength_m = _guard_wavelength(
@@ -1001,12 +958,10 @@ GLASS_VALIDITY = {
 }
 
 
-# v4.16.0: one-shot warn-once memo for out-of-range Sellmeier
-# extrapolations.  Pre-v4.16 the dispatcher emitted no signal when
-# the user asked for a wavelength outside the documented Sellmeier
-# fit band (e.g. ``get_glass_index('N-BK7', 200e-9)``), silently
-# returning an extrapolated number that has no physical meaning.
-# v4.16 warns the first time per (glass, wavelength_nm) pair.
+# One-shot warn-once memo for out-of-range Sellmeier extrapolations,
+# keyed on ``(glass, wavelength_nm)``.  Outside the documented fit band
+# the dispersion formula still returns a number and that number has no
+# physical meaning, so the caller has to be told -- once.
 _validity_warned: set = set()
 
 
@@ -1046,12 +1001,9 @@ def _maybe_warn_outside_validity(glass_name, wavelength_m):
     )
 
 
-# v4.16.1 (audit P1-NEW-F2-1 / C.3): names exempt from the
-# GLASS_VALIDITY -> GLASS_REGISTRY direction of the consistency check.  A
-# GLASS_VALIDITY row for one of these must NOT be treated as drift.
-#
-# Note what these names actually are today, which is not what this list's
-# earlier description claimed:
+# Names exempt from the GLASS_VALIDITY -> GLASS_REGISTRY direction of the
+# consistency check.  A GLASS_VALIDITY row for one of these must NOT be
+# treated as drift.  What each name actually is:
 #
 # * ``'air'`` -- NOT a registry entry.  ``get_glass_index`` short-circuits
 #   any spelling of the name to n = 1.0 before the registry lookup, but it
@@ -1332,9 +1284,9 @@ def _check_glass_registry_consistency(check_values=False):
     load, so a future drift can never re-surface as a silent
     ``ValueError`` at first call.
 
-    Six structural checks (v4.14.2 forward + v4.15 reverse + v4.16.1
-    GLASS_VALIDITY -> GLASS_REGISTRY + v4.16.1 tuple well-formedness +
-    v4.16.3 polynomial forward/reverse), plus an opt-in seventh VALUE
+    Six structural checks (Sellmeier forward + reverse, polynomial
+    forward + reverse, GLASS_VALIDITY -> GLASS_REGISTRY, and
+    GLASS_VALIDITY tuple well-formedness), plus an opt-in seventh VALUE
     check.
 
     Parameters
@@ -1347,22 +1299,20 @@ def _check_glass_registry_consistency(check_values=False):
         per row; the import-time call runs the structural checks only.  The
         test suite calls it with ``check_values=True``.
 
-    * **Forward** (v4.14.2): every ``'__sellmeier__'``-flagged
-      registry entry must have a coefficient row.
-    * **Polynomial forward** (v4.16.3, audit P3-NEW-F1-1): every
-      ``'__polynomial__'``-flagged registry entry must have a
-      :data:`POLYNOMIAL_COEFFICIENTS` row.  Sibling to the Sellmeier
-      forward check.
-    * **Polynomial reverse** (v4.16.3, audit P3-NEW-F1-1): every row
-      in :data:`POLYNOMIAL_COEFFICIENTS` must appear in
+    * **Forward**: every ``'__sellmeier__'``-flagged registry entry must
+      have a coefficient row.
+    * **Polynomial forward**: every ``'__polynomial__'``-flagged registry
+      entry must have a :data:`POLYNOMIAL_COEFFICIENTS` row.  Sibling to
+      the Sellmeier forward check.
+    * **Polynomial reverse**: every row in
+      :data:`POLYNOMIAL_COEFFICIENTS` must appear in
       :data:`GLASS_REGISTRY`.  Sibling to the Sellmeier reverse check.
-    * **Reverse** (v4.15, P2): every row in
-      :data:`SELLMEIER_COEFFICIENTS` must appear in
-      :data:`GLASS_REGISTRY`.  Pre-v4.15 a coefficient row added
-      without a corresponding registry entry was silent dead code
-      (the dispatcher never consulted ``SELLMEIER_COEFFICIENTS``
-      unless the registry first routed there) -- the reverse check
-      surfaces such an orphan immediately at import time.
+    * **Reverse**: every row in :data:`SELLMEIER_COEFFICIENTS` must
+      appear in :data:`GLASS_REGISTRY`.  A coefficient row with no
+      registry entry is silent dead code -- the dispatcher never consults
+      ``SELLMEIER_COEFFICIENTS`` unless the registry first routes there --
+      so the reverse check surfaces such an orphan immediately at import
+      time.
 
       For tuple-style entries (where the registry routes to
       refractiveindex.info first), the coefficient row is a legal
@@ -1371,21 +1321,20 @@ def _check_glass_registry_consistency(check_values=False):
       registry entry is ``'__sellmeier__'`` or a tuple -- both
       paths consult ``SELLMEIER_COEFFICIENTS`` (the tuple path only
       when ``_REFRACTIVEINDEX_AVAILABLE`` is False).
-    * **GLASS_VALIDITY -> GLASS_REGISTRY** (v4.16.1 audit P1-NEW-F2-1
-      / C.3): every key in :data:`GLASS_VALIDITY` must appear in
-      :data:`GLASS_REGISTRY`.  A validity entry without a registry
-      entry is unreachable -- the validity warn helper looks up by
-      registry name, so an orphan GLASS_VALIDITY row never fires
-      its warning.  (The reverse direction
+    * **GLASS_VALIDITY -> GLASS_REGISTRY**: every key in
+      :data:`GLASS_VALIDITY` must appear in :data:`GLASS_REGISTRY`.  A
+      validity entry without a registry entry is unreachable -- the
+      validity warn helper looks up by registry name, so an orphan
+      GLASS_VALIDITY row never fires its warning.  (The reverse direction
       GLASS_REGISTRY -> GLASS_VALIDITY is intentionally NOT enforced
       as a hard requirement -- missing validity defaults to the
       no-warning sentinel ``(0.0, inf)``.  Users registering a custom
       callable glass typically do not declare a wavelength range.)
-    * **Tuple well-formedness** (v4.16.1 audit P1-NEW-F2-1 / C.3):
-      each GLASS_VALIDITY entry must be a 2-tuple
-      ``(lambda_min, lambda_max)`` with ``lambda_min < lambda_max``
-      and both finite-non-negative.  A malformed tuple would silently
-      pass or always-fire on the dispatch path.
+    * **Tuple well-formedness**: each GLASS_VALIDITY entry must be a
+      2-tuple ``(lambda_min, lambda_max)`` with
+      ``lambda_min < lambda_max`` and both finite-non-negative.  A
+      malformed tuple would silently pass or always-fire on the dispatch
+      path.
     """
     # Forward: __sellmeier__ flag -> row must exist.
     for name, entry in GLASS_REGISTRY.items():
@@ -1397,8 +1346,8 @@ def _check_glass_registry_consistency(check_values=False):
                 f"coefficients or change the registry entry to a "
                 f"(shelf, book, page) tuple / callable."
             )
-    # v4.16.3 (audit P3-NEW-F1-1): Forward for __polynomial__ flag ->
-    # row must exist.  Sibling to the __sellmeier__ forward check above.
+    # Forward for the __polynomial__ flag -> row must exist.  Sibling to
+    # the __sellmeier__ forward check above.
     for name, entry in GLASS_REGISTRY.items():
         if entry == '__polynomial__' and name not in POLYNOMIAL_COEFFICIENTS:
             raise RuntimeError(
@@ -1408,11 +1357,10 @@ def _check_glass_registry_consistency(check_values=False):
                 f"coefficients or change the registry entry to a "
                 f"(shelf, book, page) tuple / callable."
             )
-    # Reverse (v4.15, P2): row -> registry entry must exist.  Without
-    # a registry entry the row is unreachable: ``get_glass_index``
-    # raises ``ValueError`` before it inspects SELLMEIER_COEFFICIENTS,
-    # so adding coefficients but forgetting the registry pointer was
-    # a silent no-op pre-v4.15.
+    # Reverse: row -> registry entry must exist.  Without a registry
+    # entry the row is unreachable: ``get_glass_index`` raises
+    # ``ValueError`` before it inspects SELLMEIER_COEFFICIENTS, so
+    # coefficients added without the registry pointer are a silent no-op.
     for name in SELLMEIER_COEFFICIENTS:
         if name not in GLASS_REGISTRY:
             raise RuntimeError(
@@ -1425,7 +1373,7 @@ def _check_glass_registry_consistency(check_values=False):
                 f"(shelf, book, page) tuple for glasses also covered "
                 f"by refractiveindex.info."
             )
-    # v4.16.3 (audit P3-NEW-F1-1): Reverse for POLYNOMIAL_COEFFICIENTS.
+    # Reverse for POLYNOMIAL_COEFFICIENTS.
     # Without a registry entry the row is unreachable -- get_glass_index
     # raises ValueError before consulting POLYNOMIAL_COEFFICIENTS.  A
     # tuple-style entry that also routes here on the refractiveindex-
@@ -1443,7 +1391,6 @@ def _check_glass_registry_consistency(check_values=False):
                 f"(shelf, book, page) tuple for glasses also covered "
                 f"by refractiveindex.info."
             )
-    # v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
     # _POLYNOMIAL_STUB_NAMES well-formedness.  Every stub manifest entry
     # must (a) be present in GLASS_REGISTRY (else the
     # NotImplementedError dispatch arm is unreachable) and (b) NOT be
@@ -1471,7 +1418,7 @@ def _check_glass_registry_consistency(check_values=False):
                 f"exclusive states (stubbed vs ingested) -- remove "
                 f"{name!r} from _POLYNOMIAL_STUB_NAMES at the same "
                 f"commit that lands the coefficient ingestion.")
-    # v4.16.1 (audit P1-NEW-F2-1 / C.3): GLASS_VALIDITY -> GLASS_REGISTRY.
+    # GLASS_VALIDITY -> GLASS_REGISTRY.
     # An entry in GLASS_VALIDITY without a GLASS_REGISTRY counterpart is
     # unreachable -- the warn helper looks up by registry name.
     for name in GLASS_VALIDITY:
@@ -1489,10 +1436,9 @@ def _check_glass_registry_consistency(check_values=False):
                 f"_GLASS_VALIDITY_REGISTRY_EXEMPTIONS with a cited "
                 f"rationale."
             )
-    # v4.16.1 (audit P1-NEW-F2-1 / C.3): tuple well-formedness for every
-    # GLASS_VALIDITY entry.  Each must be a 2-tuple
-    # (lambda_min, lambda_max) with lmin < lmax and both finite,
-    # non-negative.
+    # Tuple well-formedness for every GLASS_VALIDITY entry.  Each must be
+    # a 2-tuple (lambda_min, lambda_max) with lmin < lmax and both
+    # finite, non-negative.
     for name, value in GLASS_VALIDITY.items():
         if not isinstance(value, tuple) or len(value) != 2:
             raise RuntimeError(
@@ -1502,11 +1448,10 @@ def _check_glass_registry_consistency(check_values=False):
                 f"format."
             )
         lmin, lmax = value
-        # v4.16.2 (audit P3-NEW-F1-4): accept numpy scalars in addition
-        # to native Python ``int`` / ``float``.  ``isinstance(np.int32(0),
-        # (int, float))`` is False on Python 3.10+; users passing
-        # ``GLASS_VALIDITY['X'] = (np.int32(300e-9), np.float32(700e-9))``
-        # are tripping the v4.16.1 well-formedness check.
+        # numpy scalars are accepted alongside native Python ``int`` /
+        # ``float``: ``isinstance(np.int32(0), (int, float))`` is False on
+        # Python 3.10+, and users do write
+        # ``GLASS_VALIDITY['X'] = (np.int32(300e-9), np.float32(700e-9))``.
         _NUMERIC_TYPES = (int, float, np.integer, np.floating)
         if not (isinstance(lmin, _NUMERIC_TYPES)
                 and isinstance(lmax, _NUMERIC_TYPES)):
@@ -1579,12 +1524,12 @@ def search_glasses(pattern: str) -> List[str]:
 # ---------------------------------------------------------------------------
 _glass_cache = {}
 
-# v5.17.1 (audit P3-40): lock guarding ``_glass_value_cache`` LRU
-# bookkeeping (get / move_to_end / setitem / popitem) and the registry-
-# driven ``_clear_glass_caches`` drain.  Follows the ``_ASM_CACHE_LOCK``
-# precedent in ``propagators/propagation.py``.  Never held while calling
-# out (``compute`` runs outside the lock), so no lock-order coupling
-# with any other cache lock (see the P3-55 lock-discipline bug class).
+# Lock guarding ``_glass_value_cache`` LRU bookkeeping (get / move_to_end /
+# setitem / popitem) and the registry- driven ``_clear_glass_caches`` drain.
+# Follows the ``_ASM_CACHE_LOCK`` precedent in ``propagators/propagation.py``.
+# Never held while calling out (``compute`` runs outside the lock), so no
+# lock-order coupling with any other cache lock (see the P3-55 lock-discipline
+# bug class).
 _GLASS_CACHE_LOCK = _threading.Lock()
 
 # Upper-case alias for the v4.14.2 cache<->lock dispatcher pin (its
@@ -1595,34 +1540,31 @@ _GLASS_CACHE_LOCK = _threading.Lock()
 # that name.  Nothing may ever REBIND either name.
 _GLASS_CACHE = _glass_cache
 
-# v5.6: value cache for the IMMUTABLE-catalogue dispatch branches only
+# Value cache for the IMMUTABLE-catalogue dispatch branches only
 # (__sellmeier__, __polynomial__ and the refractiveindex-unavailable
 # Sellmeier / polynomial fallback).  Keyed on (glass_name, wavelength in
-# picometres) -> float index.  (v5.17.1 audit P3-40: the historical
-# "femtometre" wording was wrong -- ``round(wavelength * 1e12)`` is
-# picometre resolution, still far below any optical relevance.)  It is
+# picometres -- ``round(wavelength * 1e12)``) -> float index.  It is
 # consulted ONLY inside those branches (after the entry sentinel is
 # confirmed), so re-registering a name under a different dispatch (a
 # callable, a tuple, register_fixed_glass) can never serve a stale
 # value; ``register_fixed_glass`` clears it as well.  Array wavelengths
 # bypass it (not hashable / not the hot scalar path).
 #
-# v5.17.1 (audit P3-40): LRU-bounded OrderedDict (was an unbounded plain
-# dict) + enrolled in the central cache registry as ``'glass_caches'``
-# (see ``_clear_glass_caches`` at the bottom of this module).  Values
-# are immutable floats, so eviction can never mutate a value a caller
-# already holds, and the recompute is a pure Sellmeier / polynomial
-# evaluation -- byte-identical on hit, miss, and post-eviction.
+# LRU-bounded OrderedDict, enrolled in the central cache registry as
+# ``'glass_caches'`` (see ``_clear_glass_caches`` at the bottom of this
+# module).  Values are immutable floats, so eviction can never mutate a
+# value a caller already holds, and the recompute is a pure Sellmeier /
+# polynomial evaluation -- byte-identical on hit, miss, and post-eviction.
 _glass_value_cache = OrderedDict()
 
-# v5.17.1 (audit P3-40) bound rationale: one entry costs ~100 B (tuple
+# Bound rationale for _GLASS_VALUE_CACHE_SIZE: one entry costs ~100 B (tuple
 # key + float).  Only the 28 ``'__sellmeier__'`` / ``'__polynomial__'``
-# sentinel glasses (plus the no-refractiveindex fallback) use this
-# cache, so a dense dispersive sweep -- e.g. 1000 wavelengths x every
-# sentinel glass = 28 000 entries -- fits with >2x headroom and no
-# recompute inside a single solve.  65536 entries cap the cache at
-# ~6-13 MB while still requiring a >1e6-unique-wavelength Monte-Carlo
-# (the audit's leak scenario) to ever cycle.
+# sentinel glasses (plus the no-refractiveindex fallback) use this cache, so a
+# dense dispersive sweep -- e.g. 1000 wavelengths x every sentinel glass = 28
+# 000 entries -- fits with >2x headroom and no recompute inside a single
+# solve.  65536 entries cap the cache at ~6-13 MB while still requiring a
+# >1e6-unique-wavelength Monte-Carlo (the audit's leak scenario) to ever
+# cycle.
 _GLASS_VALUE_CACHE_SIZE = 65536
 
 
@@ -1632,8 +1574,8 @@ def _cached_glass_value(glass_name, wavelength, compute):
     below any optical relevance).  Scalar wavelengths only; arrays recompute.
     ``compute`` is a zero-arg callable returning the float index.
 
-    v5.17.1 (audit P3-40): LRU-bounded at ``_GLASS_VALUE_CACHE_SIZE``
-    entries; mutations serialised by ``_GLASS_CACHE_LOCK``.  ``compute``
+    LRU-bounded at ``_GLASS_VALUE_CACHE_SIZE`` entries; mutations are
+    serialised by ``_GLASS_CACHE_LOCK``.  ``compute``
     runs OUTSIDE the lock (pure float math; two racing threads may both
     compute, last write wins with an identical value)."""
     if np.ndim(wavelength) != 0:
@@ -1654,8 +1596,8 @@ def _cached_glass_value(glass_name, wavelength, compute):
 
 
 def _invalidate_glass_name(glass_name):
-    """Drop every cached resolution for ``glass_name`` (v5.17.1, audit
-    P2-41): the ``_glass_cache`` object (stale ``_FixedIndex`` or a
+    """Drop every cached resolution for ``glass_name``: the
+    ``_glass_cache`` object (stale ``_FixedIndex`` or a
     previously-loaded ``RefractiveIndexMaterial``) and any
     ``_glass_value_cache`` entries keyed on the name.
 
@@ -1692,10 +1634,10 @@ def _require_finite_catalogue_index(fn_name, glass_name, material,
     """Refuse a non-finite refractive index coming back from a catalogue page.
 
     A refractiveindex.info page whose data does not span the requested
-    wavelength INTERPOLATES TO NaN instead of raising, so a lookup outside
-    the page's range used to hand back ``nan`` -- ``get_glass_index('SILICON',
-    633e-9)`` and, through it, ``get_glass_index_complex`` returning
-    ``nan + 0j`` -- with only a validity *warning* to show for it.  One
+    wavelength INTERPOLATES TO NaN instead of raising, so without this guard
+    a lookup outside the page's range hands back ``nan`` -- from
+    ``get_glass_index('SILICON', 633e-9)``, and ``nan + 0j`` from
+    ``get_glass_index_complex`` -- with only a validity *warning* to show.  One
     multiplication later the NaN is across the whole field.  That is the same
     silent-wrong shape as the missing-extinction arm one level over, and it
     gets the same treatment: refuse, and name the range that would work.
@@ -1821,21 +1763,18 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
             return float(n.real)
         return float(n)
 
-    # v4.16.0 (ROADMAP #14): validity-range warning.  Emitted before
-    # the actual lookup so the caller sees the warning even if the
-    # lookup returns successfully.  Skipped for non-physical entries
-    # (callables, '__thin_lens__', user-fixed) which are handled
-    # above / below.
+    # Validity-range warning.  Emitted before the actual lookup so the caller
+    # sees the warning even if the lookup returns successfully.  Skipped for
+    # non-physical entries (callables, '__thin_lens__', user-fixed) which are
+    # handled above / below.
     _maybe_warn_outside_validity(glass_name, wavelength)
 
     # Bundled Sellmeier coefficients (no external dependency).
-    # v4.16.3 (audit P3-NEW-V3-1): dispatch order is SELLMEIER -> POLYNOMIAL,
-    # NOT the "POLYNOMIAL -> SELLMEIER" wording that drifted into the
-    # v4.16.2 CHANGELOG / release notes.  Both sentinels are disjoint at
-    # the GLASS_REGISTRY level (a name carries one or the other) and the
-    # consistency check enforces the row exists, so the order is
-    # cosmetic for correctness; it matters only for documentation
-    # truthfulness.
+    # Dispatch order is SELLMEIER -> POLYNOMIAL.  Both sentinels are
+    # disjoint at the GLASS_REGISTRY level (a name carries one or the
+    # other) and the consistency check enforces that the row exists, so
+    # the order is cosmetic for correctness; it matters only for
+    # documentation truthfulness.
     if entry == '__sellmeier__':
         if glass_name not in SELLMEIER_COEFFICIENTS:
             raise ValueError(
@@ -1847,13 +1786,8 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
             lambda: _sellmeier_index(wavelength,
                                      SELLMEIER_COEFFICIENTS[glass_name]))
 
-    # v4.16.3 (audit P3-NEW-F1-1): __polynomial__ sentinel parallel to
-    # __sellmeier__.  Pre-v4.16.3 the bundled formula-3 polynomial
-    # evaluator was reachable ONLY via the refractiveindex-unavailable
-    # fallback below -- which means a user who followed the
-    # ``pip install lumenairy[glass]`` recommendation in the README
-    # could never hit the bundled polynomial path.  The sentinel makes
-    # the polynomial dispatch first-class: any glass registered as
+    # __polynomial__ sentinel parallel to __sellmeier__: it makes the
+    # polynomial dispatch first-class -- any glass registered as
     # ``'__polynomial__'`` is resolved via POLYNOMIAL_COEFFICIENTS
     # regardless of whether refractiveindex is installed.  Sibling
     # parity with the __sellmeier__ branch above (error wording,
@@ -1903,20 +1837,18 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
                 glass_name, wavelength,
                 lambda: _sellmeier_index(
                     wavelength, SELLMEIER_COEFFICIENTS[glass_name]))
-        # v4.16.2 (pre-v5.0 prep): formula-3 polynomial fallback for
-        # glasses whose coefficients have been ingested into
-        # POLYNOMIAL_COEFFICIENTS.  Empty at v4.16.2 ship; populating
-        # the 24 catalogue entries is staged for v5.2.1 (per-glass
-        # vendor-source review against refractiveindex.info YAML +
-        # 5e-5 n_d cross-check).
+        # Formula-3 polynomial fallback for glasses whose coefficients
+        # are bundled in POLYNOMIAL_COEFFICIENTS.  All 24 catalogue
+        # entries (4 CDGM + 10 Hikari + 10 Sumita) are ingested, so this
+        # arm covers every registered formula-3 glass on a minimal
+        # install.
         if glass_name in POLYNOMIAL_COEFFICIENTS:
             return _cached_glass_value(
                 glass_name, wavelength,
                 lambda: _polynomial_index(
                     wavelength, POLYNOMIAL_COEFFICIENTS[glass_name],
                     glass_name=glass_name))
-        # v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
-        # known-but-stubbed formula-3 glass.  Raise NotImplementedError
+        # Known-but-stubbed formula-3 glass.  Raise NotImplementedError
         # (not ImportError) so callers can distinguish "package missing"
         # (recoverable: install [glass]) from "glass coefficients not
         # yet ingested in the bundle" (also recoverable but via a
@@ -2009,8 +1941,7 @@ def get_glass_index_complex(glass_name: str,
         return complex(float(n), 0.0)
 
     # Sellmeier / polynomial / sentinel paths have no extinction data;
-    # return kappa = 0 explicitly.  v4.16.3 (audit P3-NEW-F1-1):
-    # __polynomial__ added parallel to __sellmeier__.
+    # return kappa = 0 explicitly.
     if entry in ('__sellmeier__', '__polynomial__', '__thin_lens__'):
         return complex(get_glass_index(glass_name, wavelength), 0.0)
 
@@ -2102,11 +2033,12 @@ def _warn_missing_kappa_once(glass_name, wavelength):
 
 
 # ---------------------------------------------------------------------------
-# v5.17.1 (audit P3-40): central-registry enrollment for this module's
-# four caches.  Pre-v5.17.1 ``clear_asm_caches`` /
-# ``lumenairy_context(clear_caches_on_exit=True)`` never drained them
-# (the enrollment meta-pin's case-sensitive ``endswith('_CACHE')``
-# filter missed the lower-case names -- audit P2-42).
+# Central-registry enrollment for this module's four caches.  This is what
+# makes ``clear_asm_caches`` and
+# ``lumenairy_context(clear_caches_on_exit=True)`` drain them.  The enrollment
+# meta-pin's discovery is name-shape sensitive, so the lower-case names are
+# enrolled explicitly here; see docs/history/lumenairy.glass.md for the drift
+# this closed.
 # ---------------------------------------------------------------------------
 
 _USER_FIXED_SENTINEL = ('__user__', '__fixed__', '__fixed__')

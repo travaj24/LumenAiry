@@ -179,15 +179,15 @@ def from_prescription(
             # direction, so the post-fold reduced thickness ``t / n2``
             # must carry the flipped sign.
             #
-            # v4.15.2 (audit P1-NEW-B) had made this layer skip the
-            # parity toggle for FLAT mirrors specifically to match
-            # ``raytrace.system_abcd``, whose own ``elif surf.is_mirror
-            # and np.isfinite(R)`` gating dropped it.  That made the two
-            # layers agree on the WRONG answer -- ``system_abcd`` is now
-            # fixed (see the S11-1 note in raytrace/seidel.py, with the
-            # exact-3-D-trace oracle numbers), so this twin follows it
-            # back to the R-independent form.  Bit-identical for curved
-            # mirrors and for every mirror-free prescription.
+            # Skipping the parity toggle for FLAT mirrors -- to match a
+            # ``system_abcd`` whose own ``elif surf.is_mirror and
+            # np.isfinite(R)`` gating dropped it -- makes the two layers
+            # agree on the WRONG answer.  ``system_abcd`` is
+            # R-independent (see the S11-1 note in raytrace/seidel.py,
+            # with the exact-3-D-trace oracle numbers), and this twin
+            # follows it.  Bit-identical for curved mirrors and for every
+            # mirror-free prescription
+            # (docs/history/lumenairy.algebra.from_prescription.md).
             n2 = -n1
             if np.isfinite(R):
                 phi = (n2 - n1) / R

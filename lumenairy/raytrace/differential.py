@@ -358,7 +358,7 @@ def _adrt_coordbreak(x, y, ux, uy, surf, wavelength, apply_transfer,
         # (``Rx_math(+theta)``, KB KA-01638), i.e. ``Rx_math(-theta)``.
         # Op-for-op replication of the corrected
         # ``intersection._apply_coord_break`` (see its _rot_x comment for
-        # the derivation and the measured pre-fix numbers).
+        # the derivation and the measured numbers).
         cx, sx = math.cos(tx), math.sin(tx)      # Rx_math(-tx)
         py, pz = cx * py + sx * pz, -sx * py + cx * pz
         M, Nn = cx * M + sx * Nn, -sx * M + cx * Nn
@@ -667,13 +667,13 @@ def _build_adrt_numba_kernel():
         #
         # R-16 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): a NaN radicand
         # must PROPAGATE, exactly as the NumPy twin does.  ``nan > 0.0``
-        # is False, so the pre-fix ternary clamped a NaN radicand to
-        # ``vc = 0.0`` and returned a perfectly finite ``0.0`` value with
+        # is False, so a ternary on ``v > 0.0`` clamps a NaN radicand to
+        # ``vc = 0.0`` and returns a perfectly finite ``0.0`` value with
         # a huge-but-finite tangent -- while ``_dual_sqrt``'s
         # ``np.maximum(nan, 0.0)`` is ``nan`` (numpy's maximum
         # propagates NaN), giving ``nan`` value AND ``nan`` tangent
-        # (``d / (2 * np.maximum(nan, 1e-300))``).  Measured pre-fix:
-        # numpy nan vs numba 0.0.  A silent 0.0 turns an already-faulted
+        # (``d / (2 * np.maximum(nan, 1e-300))``).  Measured: numpy nan
+        # vs numba 0.0 (docs/history/lumenairy.raytrace.differential.md).
         # ray into a plausible on-axis one that the numba FGA kernel then
         # keeps alive, so the numba and NumPy dual backends disagreed
         # about which rays are faulted.  Finite radicands (including
@@ -1041,12 +1041,10 @@ def _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface):
         """State + accumulated OPL.  ``opd`` rides as ``jacfwd`` AUX so
         one forward pass yields the Jacobian, the exit state AND the OPL.
 
-        R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): this path used to
-        walk the whole prescription TWICE -- ``jax.jacfwd(_state)`` for
-        the Jacobian and a second ``vmap(_full)`` for the state and OPL.
+        A separate ``jax.jacfwd(_state)`` plus a second ``vmap(_full)``
+        walks the whole prescription TWICE.
         ``jax.jacfwd(..., has_aux=True)`` returns the primal outputs of
         the same forward pass alongside the Jacobian, so the second walk
-        was pure waste (a free ~2x on the JAX ADRT path).  ``jacfwd``
         differentiates only the FIRST return value, so the exit state is
         returned as aux as well and the derivative target is the same
         ``jnp.stack([xx, yy, uxx, uyy])`` as before -- the Jacobian is

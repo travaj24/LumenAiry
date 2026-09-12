@@ -60,25 +60,23 @@ def _reassign_stop_off_coordbrk(surfaces_raw, filepath):
 # DGRATING (diffractive) import -- niche D4, roadmap
 # ROADMAP_DESIGN121_FULL_CONFIGURATION_2026_07_27 P2
 # ---------------------------------------------------------------------------
-# Pre-v5.32 a ``DGRATING`` surface fell into the generic unknown-SURFTYPE
-# branch: its GEOMETRY was imported correctly (flat / base conic) but PARM 1
-# (lines per micrometre) and PARM 2 (the design diffraction order) were
-# DROPPED with a warning.  The consequence recorded in the roadmap is that the
-# prescription the wave chain sees "has never contained the DOE", so a
-# consumer had to hand-build the grating, hand-split the chain at the DOE
-# plane, and hand-fold the DOE's axial gaps into a neighbouring group -- the
-# manual fold that produced a wrong answer once in the design-121 study.
+# A ``DGRATING`` surface imports as a flat/conic optical surface -- its
+# GEOMETRY, not its diffraction; its PARM table is NOT aspheric
+# coefficients.  The diffractive payload (PARM 1, lines per micrometre;
+# PARM 2, the design diffraction order) is ATTACHED rather than dropped:
+# per surface on ``elements[i]['diffractive']``, and collected at the top
+# level under ``'diffractives'`` together with the axial gaps to the
+# neighbouring optical elements, which is what lets
+# :func:`lumenairy.propagate_traced_carrier_chain` bookkeep those gaps
+# itself (its ``groups`` list accepts ``{'doe': rx['diffractives'][k]}``).
+# Dropping the payload is what leaves "the prescription the wave chain
+# sees has never contained the DOE", forcing a consumer to hand-build the
+# grating, hand-split the chain at the DOE plane and hand-fold its axial
+# gaps into a neighbouring group -- the manual fold that produced a wrong
+# answer once in the design-121 study
+# (docs/history/lumenairy.io.prescriptions_zemax.md).
 #
-# The geometry import is UNCHANGED (a DGRATING is still a flat/conic optical
-# surface, and its PARM table is still NOT aspheric coefficients).  What is
-# new is that the diffractive payload is ATTACHED: per surface on
-# ``elements[i]['diffractive']``, and collected at the top level under
-# ``'diffractives'`` together with the axial gaps to the neighbouring optical
-# elements, which is what lets
-# :func:`lumenairy.propagate_traced_carrier_chain` bookkeep those gaps itself
-# (its ``groups`` list accepts ``{'doe': rx['diffractives'][k]}``).
-#
-# Two rules make that drop-in safe, both learned the hard way (2026-07-28):
+# Two rules make that drop-in safe, both learned the hard way:
 #   * A DGRATING is an air-to-air flat, so the lens-window auto-detect has to
 #     count it as an ACTIVE surface.  Otherwise the window clips to the glass
 #     span and any DOE outside it -- a fan-out behind a collimator, a fan-out
@@ -120,12 +118,11 @@ def _raw_surface_is_dgrating(s):
 
 # I2 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): Zemax SURFTYPEs that act on a
 # ray WITHOUT any glass on either side -- an ideal lens, an ABCD black box, a
-# phase/hologram surface.  They never enter the glass span, so the pre-fix
-# glass/mirror/DGRATING window auto-detect deleted them (and their STOP flag)
-# BEFORE the unsupported-SURFTYPE branch could warn.  Measured: a ``PARAXIAL
-# f=100 mm`` + STOP ahead of a glass singlet imported as the singlet alone,
-# ``stop_index=None``, zero warnings.  The v5.32 DGRATING fix was exactly this
-# repair applied to one type only.
+# phase/hologram surface.  They never enter the glass span, so a
+# glass/mirror-only window auto-detect deletes them (and their STOP flag)
+# BEFORE the unsupported-SURFTYPE branch can warn.  Measured: a ``PARAXIAL
+# f=100 mm`` + STOP ahead of a glass singlet imports as the singlet alone,
+# ``stop_index=None``, zero warnings.
 _ZEMAX_AIR_POWERED_TYPES = frozenset({
     'PARAXIAL', 'PARAXIALXY', 'PARAXIALX', 'PARAXIALY', 'IDEAL', 'IDEAL2',
     'ABCD', 'BINARY_1', 'BINARY_2', 'BINARY_3', 'BINARY_4', 'BINARYOPT',
@@ -577,9 +574,9 @@ def load_zemax_zmx(filepath: str,
     their geometry, not their diffraction: nothing in ``apply_real_lens`` /
     ``apply_real_lens_traced`` splits a field into orders, and the lens-only
     ``'surfaces'`` list is deliberately left free of diffractive keys so those
-    paths keep seeing exactly the flat surface they did before.  Since v5.32
-    the grating data is no longer discarded, though: it is attached to
-    ``'diffractives'`` / ``elements[i]['diffractive']`` (with a
+    ``'surfaces'`` list is deliberately left free of diffractive keys so
+    those paths see exactly the flat surface and nothing else.  The
+    grating data is not discarded, though: it is attached to
     :class:`UserWarning` naming the per-order route), so the design is
     expressible end to end and the DOE's axial gaps stop being a manual fold.
 
@@ -595,9 +592,9 @@ def load_zemax_zmx(filepath: str,
     >>> rx = load_zemax_zmx('my_design.zmx', surface_range=(2, 5))
     """
     # Read file.  I8: BOM-sniffing 'utf-16' FIRST so a big-endian export is
-    # decoded by its BOM -- pre-fix a UTF-16-BE file decoded under latin-1
-    # without a readable 'SURF' and was reported as "not a Zemax .zmx lens
-    # file", pointing at the wrong cause.  Then UTF-16-LE (Zemax's own
+    # decoded by its BOM.  Without that, a UTF-16-BE file decodes under
+    # latin-1 with no readable 'SURF' and is reported as "not a Zemax .zmx
+    # lens file", pointing at the wrong cause.  Then UTF-16-LE (Zemax's own
     # BOM-less default), UTF-8, latin-1.
     for encoding in ('utf-16', 'utf-16-le', 'utf-8', 'latin-1'):
         try:
@@ -610,8 +607,7 @@ def load_zemax_zmx(filepath: str,
     else:
         # ZX-nit (AUDIT_IO_ZEMAX): latin-1 always decodes, so reaching here
         # means the file WAS readable but carried no ``SURF`` record -- i.e.
-        # it is not a Zemax .zmx lens file.  The old "any supported encoding"
-        # message misattributed that to an encoding failure.
+        # it is not a Zemax .zmx lens file, which is what the message says.
         raise IOError(
             f"{filepath} does not appear to be a Zemax .zmx lens file "
             f"(no 'SURF' surface records found under any supported "
@@ -634,7 +630,7 @@ def load_zemax_zmx(filepath: str,
                 'MM': 1e-3, 'CM': 1e-2, 'M': 1.0,
                 'IN': 25.4e-3, 'INCH': 25.4e-3, 'INCHES': 25.4e-3,
             }
-            # v5.24.x (audit S4-9): an unrecognised UNIT token silently
+            # An unrecognised UNIT token silently
             # defaulted to mm -- a potential order-of-magnitude mis-scale
             # with no diagnostic.  Warn before falling back.
             if unit_str not in unit_map:
@@ -672,11 +668,10 @@ def load_zemax_zmx(filepath: str,
 
         keyword = tokens[0]
 
-        # v5.17.1 (audit P3-41): wrap the per-line keyword dispatch so a
-        # malformed or truncated line (e.g. a bare '  CURV' from a
-        # partial file copy) raises a clear ValueError naming the file,
-        # line number, and offending text instead of a bare
-        # IndexError/ValueError from deep inside the token handlers.
+        # Wrap the per-line keyword dispatch so a malformed or truncated line
+        # (e.g. a bare '  CURV' from a partial file copy) raises a clear
+        # ValueError naming the file, line number, and offending text instead
+        # of a bare IndexError/ValueError from deep inside the token handlers.
         try:
             if keyword == 'SURF':
                 if current_surf is not None:
@@ -744,12 +739,10 @@ def load_zemax_zmx(filepath: str,
                     parm_val = float(tokens[2])
                     # PARM 0 is meaningful on Q-type freeforms (Norm
                     # Radius convention; see Forbes 2007 sect. 5 / Zemax
-                    # QBFS QCON docs).  Pre-v4.15.1 the loader only
-                    # stored non-zero values and the parm_num >= 1
-                    # filter further dropped any PARM 0 sourced from a
-                    # Q-type freeform; v4.15.1 stores PARM 0
-                    # unconditionally and decides per-surface how to
-                    # consume it (Q-type r_max vs EVENASPH ignore).
+                    # QBFS QCON docs).  PARM 0 is stored unconditionally
+                    # and consumed per-surface (Q-type r_max vs EVENASPH
+                    # ignore); a ``parm_num >= 1`` filter would drop the
+                    # Q-type normalisation radius.
                     if parm_num == 0 or parm_val != 0.0:
                         current_surf['aspheric_params'][parm_num] = parm_val
 
@@ -802,19 +795,19 @@ def load_zemax_zmx(filepath: str,
     # Determine which surfaces are part of the lens
     # ------------------------------------------------------------------
     # niche C1 item 3: the sub-window the no-STOP aperture fallback is allowed
-    # to read (the GLASS/MIRROR span, i.e. the pre-D4 window).  ``None`` means
-    # "the whole imported window", which is the historical behaviour and what
+    # to read (the GLASS/MIRROR span, i.e. the window before DGRATINGs
+    # joined it).  ``None`` means "the whole imported window", which is what
     # every non-diffractive file gets.  See the aperture block below.
     _ap_span = None
     if surface_range is not None:
         s_first, s_last = surface_range
         lens_surfaces = [s for s in optical_surfaces
                          if s_first <= s['surf_num'] <= s_last]
-        # v5.32 (niche D4): an EXPLICIT surface_range is the caller's own
-        # window, so it is honoured as given -- but a DGRATING it excludes is
-        # dropped from 'diffractives' too, which is exactly the "the design
-        # the chain sees has never contained the DOE" state roadmap P2 exists
-        # to end.  Say so instead of dropping it silently.
+        # An EXPLICIT surface_range is the caller's own window, so it is
+        # honoured as given -- but a DGRATING it excludes is dropped from
+        # 'diffractives' too, which is exactly the "the design the chain
+        # sees has never contained the DOE" state.  Say so instead of
+        # dropping it silently.
         _cut = [s['surf_num'] for s in optical_surfaces
                 if _raw_surface_is_dgrating(s)
                 and not (s_first <= s['surf_num'] <= s_last)]
@@ -829,15 +822,15 @@ def load_zemax_zmx(filepath: str,
                 UserWarning, stacklevel=2)
     else:
         # Auto-detect: find first and last surfaces that DO something to a
-        # ray -- glass, a mirror, or (v5.32, niche D4) a diffractive.
+        # ray -- glass, a mirror, or a diffractive.
         #
-        # v5.32 (niche D4): a DGRATING is an air-to-air flat, so the pre-fix
-        # glass/mirror-only ``active`` list clipped the window to the glass
-        # span and DISCARDED any DGRATING outside it -- with no warning, and
-        # before ``_collect_diffractives`` ever ran, so ``'diffractives'``
-        # came back EMPTY for two perfectly ordinary DOE layouts (a fan-out
-        # behind a collimator; a fan-out at the output, behind the last
-        # glass).  Design 121 never saw it because both its DGRATINGs sit
+        # A DGRATING is an air-to-air flat, so a glass/mirror-only
+        # ``active`` list clips the window to the glass span and DISCARDS
+        # any DGRATING outside it -- with no warning, and before
+        # ``_collect_diffractives`` ever runs, leaving ``'diffractives'``
+        # EMPTY for two perfectly ordinary DOE layouts (a fan-out behind a
+        # collimator; a fan-out at the output, behind the last glass).
+        # Design 121 does not show it because both its DGRATINGs sit
         # between glass surfaces.
         # I2: air-to-air POWERED types (PARAXIAL / ABCD / phase surfaces) join
         # the predicate for exactly the reason DGRATING did -- otherwise they
@@ -853,17 +846,16 @@ def load_zemax_zmx(filepath: str,
                 f"with PARM 1, or an air-to-air powered SURFTYPE "
                 f"{sorted(_ZEMAX_AIR_POWERED_TYPES)}).")
         s_first = active[0]['surf_num']
-        # v5.17.1 (audit P3-42): only extend the range by +1 when the
-        # last active surface is refractive glass (the +1 exists to
-        # capture that glass's EXIT surface).  A terminal MIRROR has no
-        # exit surface; the unconditional +1 pulled in the next surface
-        # (often the image plane or a dummy) as a bogus air-air
-        # 'surface' element whose DIAM then polluted the no-STOP
-        # aperture fallback and added a spurious element/thickness.
-        # v5.32: an air-to-air DGRATING has no exit surface either, so the
-        # test is now "does the last active surface carry glass" -- which is
-        # the SAME test as before for every non-diffractive file (a mirror is
-        # either GLAS MIRROR, caught by is_mirror, or MIRR 1 with no glass).
+        # Only extend the range by +1 when the last active surface is
+        # refractive glass (the +1 exists to capture that glass's EXIT
+        # surface).  A terminal MIRROR has no exit surface; an unconditional
+        # +1 pulled in the next surface (often the image plane or a dummy) as
+        # a bogus air-air 'surface' element whose DIAM then polluted the
+        # no-STOP aperture fallback and added a spurious element/thickness.
+        # An air-to-air DGRATING has no exit surface either, so the test is
+        # "does the last active surface carry glass" -- the SAME test as a
+        # glass-only one for every non-diffractive file (a mirror is either
+        # GLAS MIRROR, caught by is_mirror, or MIRR 1 with no glass).
         if active[-1]['is_mirror'] or active[-1]['glass'] is None:
             s_last = active[-1]['surf_num']
         else:
@@ -879,7 +871,7 @@ def load_zemax_zmx(filepath: str,
         # ``collimated -> DGRATING -> singlet`` fixture (the DOE's own
         # ``DIAM 6.5``), and 12.000 -> **100.000 mm (8.33x)** as soon as an
         # ordinary dummy reference plane with a large ``DIAM`` sits between the
-        # DOE and the glass -- which is verbatim the v5.17.1 (P3-42) failure
+        # DOE and the glass -- which is verbatim the P3-42 failure
         # three lines above: "pulled in the next surface (often the image plane
         # or a dummy) as a bogus air-air 'surface' element whose DIAM then
         # polluted the no-STOP aperture fallback".
@@ -899,10 +891,10 @@ def load_zemax_zmx(filepath: str,
     _warn_window_excluded_powered(optical_surfaces, lens_surfaces,
                                   s_first, s_last, filepath)
 
-    # v5.17.1 (audit P3-42): a single terminal mirror is a legitimate
-    # one-element system (elements-only prescription for apply_mirror);
-    # the >= 2 requirement applies to refractive selections, which need
-    # at least an entry + exit surface.
+    # A single terminal mirror is a legitimate one-element system
+    # (elements-only prescription for apply_mirror); the >= 2 requirement
+    # applies to refractive selections, which need at least an entry + exit
+    # surface.
     if len(lens_surfaces) < 2 and not (
             len(lens_surfaces) == 1 and lens_surfaces[0]['is_mirror']):
         raise ValueError(
@@ -994,10 +986,7 @@ def load_zemax_zmx(filepath: str,
         #                     field on the Q-type surface editor);
         #                     when absent, r_max falls back to DIAM
         #                     (the surface semi-diameter).
-        # Pre-v4.15.1 the loader had no QBFS/QCON branch, so any
-        # Q-type prescription silently degraded to base conic plus
-        # an EVENASPH-mis-interpreted PARM table.  See
-        # ``lumenairy.elements.freeform.surface_sag_q_bfs`` for the
+        # See ``lumenairy.elements.freeform.surface_sag_q_bfs`` for the
         # canonical coefficient consumer.
         stype_u = (s.get('type') or 'STANDARD').upper()
         q_freeform_type = None
@@ -1007,10 +996,11 @@ def load_zemax_zmx(filepath: str,
         dg_data = None
 
         if stype_u == 'DGRATING':
-            # v5.32 (niche D4): keep the flat/conic geometry EXACTLY as the
-            # pre-fix unknown-SURFTYPE branch imported it (PARM is still not
-            # aspheric), and attach the diffractive payload instead of
-            # dropping it.  See the module note above _dgrating_surface_data.
+            # Keep the flat/conic geometry EXACTLY as the generic
+            # unknown-SURFTYPE branch imports it (a DGRATING's PARM table
+            # is not aspheric), and attach the diffractive payload instead
+            # of dropping it.  See the module note above
+            # _dgrating_surface_data.
             dg_data = _dgrating_surface_data(s, filepath)
         elif stype_u in ('QBFS', 'QCON'):
             q_freeform_type = 'q_bfs' if stype_u == 'QBFS' else 'q_con'
@@ -1058,16 +1048,16 @@ def load_zemax_zmx(filepath: str,
                     UserWarning, stacklevel=2)
                 q_r_max = 1.0
         elif stype_u not in ('STANDARD', 'EVENASPH'):
-            # v5.17.1 (audit P2-19): unknown SURFTYPE.  Pre-fix, every
-            # non-QBFS/QCON type fell into the EVENASPH branch below,
-            # which interpreted its PARM table as even-asphere
+            # Unknown SURFTYPE.  Without this branch every
+            # non-QBFS/QCON type falls into the EVENASPH branch below,
+            # which interprets its PARM table as even-asphere
             # coefficients.  For sibling Zemax types the PARM slots
             # mean something entirely different (TOROIDAL PARM 1 =
             # radius of rotation in mm; ODDASPHE PARM n = coefficient
             # of r^n; DGRATING PARM 1 = grating lines/um; PARAXIAL
-            # PARM 1 = focal length; ...), so the prescription silently
-            # acquired enormous fake aspheric sag (a TOROIDAL
-            # ``PARM 1 100.0`` became a_2 = 1e5 1/m -> 0.625 m of sag
+            # PARM 1 = focal length; ...), so the prescription would
+            # silently acquire enormous fake aspheric sag (a TOROIDAL
+            # ``PARM 1 100.0`` becomes a_2 = 1e5 1/m -> 0.625 m of sag
             # at r = 2.5 mm).  Import unknown types as the plain base
             # conic (CURV/CONI are still honoured), SKIP the PARM
             # table, and warn loudly per surface.
@@ -1109,13 +1099,12 @@ def load_zemax_zmx(filepath: str,
             # usually 0 (the r^2 term is degenerate with curvature), so
             # the first non-trivial coefficient is typically PARM 2 (r^4).
             #
-            # The pre-fix loader used power = 2 + 2*parm_num, which shifted
-            # every coefficient UP one even power (r^4 -> r^6, ...) AND --
-            # via the unit_scale**(power-1) rescale -- inflated each value
-            # by unit_scale**2 = 1e6.  On a real Zemax import this turned a
-            # ~few-um asphere into a ~tens-of-um monster on the wrong order,
-            # destroying the traced-lens wavefront (observed: +2.8 mm image
-            # defocus + smeared spots on the poc1-19/20 designs).
+            # Getting this wrong by one even power (power = 2 + 2*parm_num)
+            # shifts every coefficient UP one power (r^4 -> r^6, ...) AND
+            # -- via the unit_scale**(power-1) rescale -- inflates each
+            # value by unit_scale**2 = 1e6, turning a ~few-um asphere into
+            # a ~tens-of-um monster on the wrong order.  Measured on the
+            # poc1-19/20 designs: +2.8 mm image defocus, smeared spots.
             #
             # Library canonical form: dict keyed by TOTAL power {2: a1,
             # 4: a2, 6: a3, ...}; consumed by elements.lenses.surface_sag.
@@ -1128,15 +1117,14 @@ def load_zemax_zmx(filepath: str,
                         asph_coeffs[power] = (
                             parm_val / (unit_scale ** (power - 1)))
 
-        # v4.15.1 (P1-NEW-E): pack the Forbes Q-type freeform keys
-        # into a small dict that gets spread onto either the mirror
-        # or refractive surface element below.
+        # Pack the Forbes Q-type freeform keys into a small dict that gets
+        # spread onto either the mirror or refractive surface element below.
         q_extra: Dict[str, Any] = {}
         if q_freeform_type is not None:
             q_extra['freeform_type'] = q_freeform_type
             q_extra[f"{q_freeform_type}_coeffs"] = list(q_coeffs or [])
             q_extra['r_max'] = float(q_r_max)
-        # v5.32 (niche D4): the diffractive payload rides on the ELEMENT only
+        # The diffractive payload rides on the ELEMENT only
         # -- never on the lens-only ``surfaces`` entries, which feed
         # apply_real_lens / surfaces_from_prescription and must keep meaning
         # "flat optical surface" there (nothing in those paths diffracts).
@@ -1244,7 +1232,7 @@ def load_zemax_zmx(filepath: str,
                     f"the limiting aperture here, set aperture_diameter "
                     f"explicitly or declare a STOP.",
                     UserWarning, stacklevel=2)
-    # v5.24.x (audit S4-9): a prescription with no STOP and no semi-diameter
+    # A prescription with no STOP and no semi-diameter
     # data yields aperture == 0.0, which silently fully-clips the downstream
     # field with no diagnostic.  Warn so the caller can supply an aperture.
     if aperture == 0.0:
@@ -1274,17 +1262,16 @@ def load_zemax_zmx(filepath: str,
             # ZX-3 (AUDIT_IO_ZEMAX): carry is_stop + semi_diameter (already in
             # metres, like radius) onto the lens-only surfaces.  Without them
             # the F-29 stop-preserving export -- which reads
-            # ``prescription['surfaces'][i].get('is_stop')`` -- fell through to
-            # STOP=surface-0 on every LOADED file (relocating the declared
-            # stop on re-export), and the tracer lost the explicit stop.
+            # ``prescription['surfaces'][i].get('is_stop')`` -- would fall
+            # through to STOP=surface-0 on every LOADED file (relocating
+            # the declared stop on re-export), and the tracer would lose it.
             'is_stop': bool(e.get('is_stop', False)),
             'semi_diameter': e.get('semi_diameter'),
         }
-        # v4.15.1 (P1-NEW-E): forward Forbes Q-type freeform keys so
-        # the lens-only prescription consumed by apply_real_lens_traced
-        # / surface_sag_freeform sees the coefficients and r_max
-        # (pre-v4.15.1 the Q-bfs / Q-con SURFTYPE was silently dropped
-        # to base conic).
+        # Forward Forbes Q-type freeform keys so the lens-only prescription
+        # consumed by apply_real_lens_traced / surface_sag_freeform sees
+        # the coefficients and r_max; without them a Q-bfs / Q-con SURFTYPE
+        # degrades silently to base conic.
         if e.get('freeform_type') is not None:
             ps_entry['freeform_type'] = e['freeform_type']
             for _qkey in ('q_bfs_coeffs', 'q_con_coeffs', 'r_max'):
@@ -1316,9 +1303,9 @@ def load_zemax_zmx(filepath: str,
                 if g != 'air' and g not in GLASS_REGISTRY:
                     unknown_glasses.add(g)
     if unknown_glasses:
-        # v4.16.1 (audit ORG-2 / C.7): explicit UserWarning category +
-        # stacklevel=2 so the warning points at the caller (the user
-        # invoking load_zemax_zmx / similar) rather than at this line.
+        # Explicit UserWarning category + stacklevel=2 so the warning points
+        # at the caller (the user invoking load_zemax_zmx / similar) rather
+        # than at this line.
         warnings.warn(
             f"Glasses not in GLASS_REGISTRY: {unknown_glasses}. "
             f"Add them before calling apply_real_lens. Example:\n"
@@ -1387,9 +1374,9 @@ def load_zemax_zmx(filepath: str,
                         if ps.get('is_stop')), None)
 
     # I7: surface the multi-configuration rows this loader now collects, and
-    # say out loud that only the base (LDE) state was imported.  Pre-fix a
-    # zoom / thermal file imported as config 1 with no signal that the other
-    # N-1 positions existed.
+    # say out loud that only the base (LDE) state was imported.  Without
+    # that, a zoom / thermal file imports as config 1 with no signal that
+    # the other N-1 positions exist.
     configurations = None
     if mcon_rows or mnum_header:
         _n_cfg = None
@@ -1586,7 +1573,7 @@ def load_zemax_prescription_data_txt(filepath: str,
                     'Meters': 1.0,
                     'Inches': 25.4e-3,
                 }
-                # v5.24.x (audit S4-9): warn before the silent mm fallback
+                # Warn before the silent mm fallback
                 # so an unrecognised unit name is not a silent order-of-
                 # magnitude mis-scale.
                 if unit_name not in unit_map:
@@ -1681,7 +1668,7 @@ def load_zemax_prescription_data_txt(filepath: str,
             try:
                 return float(s)
             except ValueError:
-                # v5.24.x (audit S4-19): warn on a GENUINELY malformed
+                # Warn on a GENUINELY malformed
                 # numeric (a non-empty, non-placeholder token that fails
                 # float parse) instead of silently substituting the
                 # default.  Empty / "-" placeholders and "Infinity" are
@@ -1746,10 +1733,10 @@ def load_zemax_prescription_data_txt(filepath: str,
                          if s_first <= s['surf_num'] <= s_last]
     else:
         # I2 / VERIFY-A10 (V7): the same window predicate the ``.zmx`` loader
-        # uses.  Pre-fix this side admitted glass and mirrors only, so a
+        # uses.  Admitting glass and mirrors only would delete a
         # ``PARAXIAL`` / ``ABCD`` / phase row outside the glass span -- and
-        # its STOP flag -- was deleted here before any diagnostic could fire,
-        # exactly the I2 failure, in the twin the fix had not reached.
+        # its STOP flag -- here, before any diagnostic could fire: exactly
+        # the I2 failure, in the twin the fix had not reached.
         active = [s for s in optical_surfaces
                   if s['glass'] is not None or s['is_mirror']
                   or _raw_surface_is_air_powered(s)]
@@ -1760,12 +1747,12 @@ def load_zemax_prescription_data_txt(filepath: str,
                 f"powered Type {sorted(_ZEMAX_AIR_POWERED_TYPES)} carrying "
                 f"curvature)")
         s_first = active[0]['surf_num']
-        # v5.17.1 (audit P3-42): only extend the range by +1 when the
-        # last active surface is refractive glass (the +1 captures its
-        # exit surface).  A terminal MIRROR has no exit surface -- see
-        # the matching fix in load_zemax_zmx.  v5.46: an air-to-air powered
-        # row has no exit surface either, so the test is "does it carry
-        # glass", identical to the .zmx twin.
+        # Only extend the range by +1 when the last active surface is
+        # refractive glass (the +1 captures its exit surface).  A terminal
+        # MIRROR has no exit surface -- see the matching rule in
+        # load_zemax_zmx.  An air-to-air powered row has no exit surface
+        # either, so the test is "does it carry glass", identical to the .zmx
+        # twin.
         if active[-1]['is_mirror'] or active[-1]['glass'] is None:
             s_last = active[-1]['surf_num']
         else:
@@ -1782,8 +1769,7 @@ def load_zemax_prescription_data_txt(filepath: str,
     _warn_window_excluded_powered(optical_surfaces, lens_surfaces,
                                   s_first, s_last, filepath)
 
-    # v5.17.1 (audit P3-42): allow a single terminal mirror (see
-    # load_zemax_zmx for rationale).
+    # Allow a single terminal mirror (see load_zemax_zmx for rationale).
     if len(lens_surfaces) < 2 and not (
             len(lens_surfaces) == 1 and lens_surfaces[0]['is_mirror']):
         raise ValueError(
@@ -1791,12 +1777,11 @@ def load_zemax_prescription_data_txt(filepath: str,
             f"in range ({s_first}, {s_last})"
         )
 
-    # v5.17.1 (audit P3-43): the SURFACE DATA SUMMARY table carries no
-    # aspheric/freeform coefficients (the SURFACE DATA DETAIL section
-    # that would is used only as an end marker), so any non-STANDARD
-    # surface type in the selection loses its shape data here.  Warn
-    # loudly per surface instead of silently degrading an EVENASPH /
-    # QBFS / QCON / TOROIDAL surface to its base conic.
+    # The SURFACE DATA SUMMARY table carries no aspheric/freeform coefficients
+    # (the SURFACE DATA DETAIL section that would is used only as an end
+    # marker), so any non-STANDARD surface type in the selection loses its
+    # shape data here.  Warn loudly per surface instead of silently degrading
+    # an EVENASPH / QBFS / QCON / TOROIDAL surface to its base conic.
     for s in lens_surfaces:
         _stype = (s.get('type') or 'STANDARD').upper()
         if _stype not in ('STANDARD', 'COORDBRK'):
@@ -1909,7 +1894,7 @@ def load_zemax_prescription_data_txt(filepath: str,
         aperture = stop_surfaces[0]['semi_diameter'] * 2
     else:
         aperture = max(s['semi_diameter'] for s in lens_surfaces) * 2
-    # v5.24.x (audit S4-9): warn on a silent 0.0 aperture (no STOP + no
+    # Warn on a silent 0.0 aperture (no STOP + no
     # semi-diameter data) so the downstream full-clip is not silent.
     if aperture == 0.0:
         warnings.warn(
@@ -1932,7 +1917,7 @@ def load_zemax_prescription_data_txt(filepath: str,
             'aspheric_coeffs': e['aspheric_coeffs'],
             'glass_before': e['glass_before'],
             'glass_after': e['glass_after'],
-            # v5.24.x (audit S4-9): mirror the .zmx twin (ZX-3) and carry
+            # Mirror the .zmx twin (ZX-3) and carry
             # is_stop + semi_diameter onto the lens-only surfaces.  Without
             # them the stop-preserving export -- which reads
             # ``surfaces[i].get('is_stop')`` -- fell through to STOP=surface-0
@@ -1962,9 +1947,8 @@ def load_zemax_prescription_data_txt(filepath: str,
                 if g != 'air' and g not in GLASS_REGISTRY:
                     unknown_glasses.add(g)
     if unknown_glasses:
-        # v4.16.1 (audit ORG-2 / C.7): explicit UserWarning category +
-        # stacklevel=2 so the warning points at the caller rather than
-        # at this line.
+        # Explicit UserWarning category + stacklevel=2 so the warning points
+        # at the caller rather than at this line.
         warnings.warn(
             f"Glasses not in GLASS_REGISTRY: {unknown_glasses}. "
             f"Add them before calling apply_real_lens. Example:\n"
@@ -1974,7 +1958,7 @@ def load_zemax_prescription_data_txt(filepath: str,
             stacklevel=2,
         )
 
-    # v5.24.x (audit S4-9): expose the explicit stop index at the top level
+    # Expose the explicit stop index at the top level
     # (index into the lens-only ``surfaces`` list), mirroring the .zmx twin
     # (ZX-3).  Consumers that key on 'stop_index' (exporters, tracer stop
     # resolution) now see the declared stop instead of defaulting to 0.
@@ -2129,8 +2113,8 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
     lines.append('#   Source: collimated on-axis plane wave')
     lines.append(f'#   Aperture: clear semi-diameter = '
                  f'{semi_dia_mm:.4f} mm (diameter {aperture_diameter*1e3:.4f} mm)')
-    # v5.4.6 (audit F-29): default stop_surface to the prescription's own
-    # stop (stop_index, else per-surface is_stop), not surface 0.
+    # Default stop_surface to the prescription's own stop (stop_index, else
+    # per-surface is_stop), not surface 0.
     if stop_surface is None:
         stop_surface = prescription.get('stop_index')
         if stop_surface is None:
@@ -2182,12 +2166,11 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
         # round-trip through the exported file.
         sd_surf = surf.get('semi_diameter')
         sd_mm = float(sd_surf) * 1e3 if sd_surf is not None else semi_dia_mm
-        # v5.18.1: reflect the surface's ACTUAL type in the TYPE column instead
-        # of hardcoding STANDARD -- an aspheric or freeform surface was
-        # previously mislabelled STANDARD in the paste table (the export-side
-        # sibling of the P3-43 .txt-loader drop).  The paste table's columns
-        # cannot carry the aspheric a4/a6/... coefficients themselves, so record
-        # such surfaces for a footnote pointing at the lossless .zmx export.
+        # Reflect the surface's ACTUAL type in the TYPE column rather than
+        # hardcoding STANDARD, so an aspheric or freeform surface is not
+        # mislabelled.  The paste table's columns cannot carry the aspheric
+        # a4/a6/... coefficients themselves, so record such surfaces for a
+        # footnote pointing at the lossless .zmx export.
         tp, is_asph = _txt_surface_type(surf)
         if is_asph:
             _asph_labels.append(label)
@@ -2252,14 +2235,14 @@ def _zmx_record_text(value, *, field, path, max_len=255):
 
 
 def _warn_dropped_qtype(surf_dict, surf_label):
-    """v5.17.1 (audit P2-20): warn LOUDLY when a Forbes Q-type freeform
-    surface (``freeform_type`` = ``'q_bfs'`` / ``'q_con'`` with its
+    """Warn LOUDLY when a Forbes Q-type freeform surface
+    (``freeform_type`` = ``'q_bfs'`` / ``'q_con'`` with its
     ``q_bfs_coeffs`` / ``q_con_coeffs`` + ``r_max`` keys) is exported by
     a ``.zmx`` writer that has no QBFS/QCON emission path.
 
-    Pre-fix both writers silently dropped these keys, so an exported
-    Q-type surface degraded to its base conic with no diagnostic and a
-    Zemax cross-check compared against the WRONG surface.
+    Silently dropping those keys degrades the exported surface to its
+    base conic with no diagnostic, so a Zemax cross-check would compare
+    against the WRONG surface.
     """
     ftype = surf_dict.get('freeform_type')
     if ftype is None:
@@ -2329,7 +2312,7 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     ``GLAS MIRROR`` rows for reflective surfaces, and standard
     refractive surfaces with the appropriate ``GLAS`` and curvature.
 
-    v4.11.2: the previous 3.6.1-hotfix-6 mirror-parity sign flip was
+    The previous 3.6.1-hotfix-6 mirror-parity sign flip was
     removed.  The canonical thickness convention (since GUI v3.7.4)
     is **Zemax-signed**: thicknesses stored in ``all_thicknesses``
     and ``coord_breaks[i]['thickness_m']`` already carry Zemax sign
@@ -2339,14 +2322,14 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     mirror was inverted twice).
 
     Used by :func:`export_zemax_zmx` when the prescription dict
-    carries the new keys; the pre-3.7 lens-only path remains the
-    fallback.
+    carries the element / coord-break keys; the lens-only path
+    remains the fallback.
     """
-    # v5.4.7 (audit AUDIT_V5_4_6 #6): resolve the aperture-stop index from
-    # the prescription when not given, instead of the historical hardcoded
-    # 0 (first refractive surface).  The public ``export_zemax_zmx`` already
-    # passes a resolved value (F-29), so this only changes a hypothetical
-    # direct call -- but it makes the internal writer self-consistent.
+    # Resolve the aperture-stop index from the prescription when not
+    # given, rather than defaulting to 0 (the first refractive surface).
+    # The public ``export_zemax_zmx`` already passes a resolved value
+    # (F-29); doing it here too keeps the internal writer self-consistent
+    # for a direct call.
     # ``stop_surface`` is the index AMONG REFRACTIVE surfaces, and
     # ``prescription['surfaces']`` is exactly the refractive subset (no
     # mirrors), so the is_stop / stop_index search over it yields the right
@@ -2419,9 +2402,9 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     # The GUI's to_prescription tags each cb with the surf_num it
     # sits at (i.e. the running counter increments AT the cb).
     surf_counter = 0   # we just emitted SURF 0 (object)
-    # mirror_count is retained for diagnostics only.  Pre-v4.11.2 it
-    # drove a thickness sign-flip; that flip was removed because the
-    # canonical thicknesses are already Zemax-signed.
+    # mirror_count is retained for diagnostics only -- it must NOT drive a
+    # thickness sign-flip, because the canonical thicknesses are already
+    # Zemax-signed.
     mirror_count = 0
 
     # Build a flat list of (item_kind, payload, thickness_after_m)
@@ -2458,10 +2441,9 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     # marker lands on the requested refracting surface even when
     # coord-breaks and mirrors appear earlier in ``flat``.  The
     # ``stop_surface`` parameter is documented as "zero-based index
-    # of the aperture stop **among refracting surfaces**".  Pre-v4.11.2
-    # this compared the global ``surf_counter`` (which includes
-    # coord-breaks and mirrors) so folded designs placed STOP on the
-    # wrong row.
+    # of the aperture stop **among refracting surfaces**", so comparing
+    # the global ``surf_counter`` (which includes coord-breaks and
+    # mirrors) would put STOP on the wrong row in a folded design.
     refr_counter = -1
     for kind, payload, _ in flat:
         surf_counter += 1
@@ -2476,7 +2458,7 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
             tz = float(cb.get('tilt_z_deg', 0.0))
             order = int(cb.get('order', 0) or 0)
             disz_mm = float(cb.get('thickness_m', 0.0)) * 1e3
-            # v4.11.2: no mirror-parity flip -- ``thickness_m`` is
+            # No mirror-parity flip -- ``thickness_m`` is
             # already Zemax-signed (loader copies raw DISZ * unit_scale
             # without sign manipulation).
             lines.append(f'SURF {surf_counter}')
@@ -2503,12 +2485,11 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
         else:
             t_after_m = 0.0
         elem_idx_in_full += 1
-        # v4.11.2: no mirror-parity flip.  Pre-fix code converted
-        # "physical-positive" back to Zemax-signed by negating every
-        # thickness after each mirror; but the loader stores raw
-        # Zemax-signed DISZ (no conversion) and the GUI (v3.7.4+)
-        # keeps Zemax-signed canonical, so the flip was always
-        # spurious here and destroyed mirror DISZ on round-trip.
+        # No mirror-parity flip.  Negating every thickness after a mirror
+        # (to convert "physical-positive" back to Zemax-signed) is wrong
+        # here: the loader stores raw Zemax-signed DISZ with no conversion
+        # and the GUI keeps Zemax-signed canonical, so such a flip destroys
+        # mirror DISZ on round-trip.
         disz_mm = t_after_m * 1e3
 
         e_type = e.get('element_type', 'surface')
@@ -2524,11 +2505,10 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
         lines.append(f'SURF {surf_counter}')
         if comment:
             lines.append(f'  COMM {comment}')
-        # v5.17.1 (audit P2-20): Forbes Q-type freeform keys have no
-        # emission path in this writer -- warn LOUDLY instead of
-        # silently degrading the surface to its base conic, so the
-        # cross-verification workflow (LumenAiry vs OpticStudio) is
-        # never run against the wrong surface unawares.
+        # Forbes Q-type freeform keys have no emission path in this writer --
+        # warn LOUDLY instead of silently degrading the surface to its base
+        # conic, so the cross-verification workflow (LumenAiry vs OpticStudio)
+        # is never run against the wrong surface unawares.
         _warn_dropped_qtype(e, surf_counter)
         # I4: same loudness for an anamorphic (cylindrical / biconic)
         # surface -- this writer emits CURV from ``radius`` only, so a
@@ -2542,15 +2522,13 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
                 lines.append(f'  CONI {conic:.6f}')
             lines.append('  GLAS MIRROR 0 0 1.5 50.0 0 0 0 0 0 0')
             lines.append(f'  DISZ {disz_mm:.8f}')
-            # v5.17.1 (audit P2-20): emit even-aspheric coefficients on
-            # mirrors too.  Pre-fix only the refractive branch below had
-            # the EVENASPH switch + PARM emission, so an aspherized
-            # mirror (e.g. an aspherized OAP) silently degraded to its
-            # base conic on export and load->export->load was not
-            # identity.  Same PARM mapping as refractives:
-            # parm_idx = power // 2 (v5.16.1 power = 2*parm_num
-            # convention), coefficient converted 1/m^(power-1) ->
-            # 1/mm^(power-1).
+            # Emit even-aspheric coefficients on mirrors too: without the
+            # EVENASPH switch + PARM emission here, an aspherized mirror
+            # (e.g. an aspherized OAP) degrades to its base conic on
+            # export and load->export->load is not identity.  Same PARM
+            # mapping as refractives: parm_idx = power // 2 (the
+            # power = 2*parm_num convention), coefficient converted
+            # 1/m^(power-1) -> 1/mm^(power-1).
             asph_m = e.get('aspheric_coeffs') or {}
             if asph_m:
                 for j in range(len(lines) - 1, -1, -1):
@@ -2663,10 +2641,10 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
     session in Zemax and manually enter the rows from
     :func:`export_zemax_lens_data` instead.
     """
-    # v5.4.6 (audit F-29): default stop_surface to the prescription's own
-    # stop (stop_index, else per-surface is_stop), not surface 0, so a
-    # load->export->load round trip preserves the aperture stop -- both the
-    # full (mirror/coord-break) writer and the simple lens-only writer.
+    # Default stop_surface to the prescription's own stop (stop_index, else
+    # per-surface is_stop), not surface 0, so a load->export->load round trip
+    # preserves the aperture stop -- both the full (mirror/coord-break) writer
+    # and the simple lens-only writer.
     if stop_surface is None:
         stop_surface = prescription.get('stop_index')
         if stop_surface is None:
@@ -2763,8 +2741,8 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
         sd_surf = surf.get('semi_diameter')
         sd_mm = float(sd_surf) * 1e3 if sd_surf is not None else semi_dia_mm
 
-        # v5.17.1 (audit P2-20): warn loudly instead of silently
-        # dropping Forbes Q-type freeform coefficients.
+        # Warn loudly instead of silently dropping Forbes Q-type freeform
+        # coefficients.
         _warn_dropped_qtype(surf, idx)
         # I4: ditto for radius_y / conic_y / aspheric_coeffs_y.
         _warn_dropped_anamorphic([surf], 'export_zemax_zmx', path,

@@ -8,7 +8,6 @@ mechanics so each warning has a uniform message format and the
 warnings can all be silenced with a single ``warnings.simplefilter``
 incantation in user code.
 
-v5.2 (ROADMAP opportunistic item -- "_deprecation.py orphan helpers"):
 ``warn_deprecated_kwarg``, ``warn_renamed_function``, and
 ``warn_deprecated_default`` are not currently called by any internal
 site.  They remain exported (and exercised by the test suite via the
@@ -47,14 +46,13 @@ __all__ = [
     'warn_renamed_function',
     'warn_deprecated_default',
     'warn_deprecated_signature',
-    # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25, Territory A
-    # "deprecation registry rot"): the removal-schedule registry.
+    # The removal-schedule registry.
     'NEXT_REMOVAL_VERSION',
     'REMOVAL_SCHEDULE',
     'API_TRANSITION_VERSION',
     'resolve_removal_version',
     'check_removal_schedule',
-    # v4.15.1 (Agent E): pickle-safe sentinel helpers; the unpickler
+    # Pickle-safe sentinel helpers; the unpickler
     # must be importable by name at the module top level for the
     # ``_Sentinel.__reduce__`` protocol to round-trip cleanly.
     '_sentinel_unpickle',
@@ -64,20 +62,22 @@ __all__ = [
 # ===========================================================================
 # Removal-schedule registry
 # ===========================================================================
-# v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25, Territory A
-# "deprecation registry rot").  MEASURED defect: the removed-in banner
-# emitted ``will be removed in v5.27`` from a v5.29.0 library -- i.e. the
-# message advertised a horizon the release had already blown through.  Ten
-# of twelve live deprecations were past their stated removal version (eight
-# said v5.0).
+# A removed-in banner must never advertise a horizon the running release
+# has already passed.  MEASURED defect this registry exists to prevent:
+# ``will be removed in v5.27`` emitted from a v5.29.0 library, with ten of
+# twelve live deprecations past their stated removal version (eight said
+# v5.0).
 #
-# The bug is structural, not a typo: the four message builders below
-# interpolated ``version_removed`` verbatim, so NOTHING in the library ever
-# compared a stated horizon against the running ``__version__``.  Every
-# call site was free to rot independently, and CI could not see it (the
-# pins assert the version STRING appears, which a stale string does).
+# The failure is structural, not a typo: if the four message builders
+# below interpolate ``version_removed`` verbatim, NOTHING in the library
+# ever compares a stated horizon against the running ``__version__``.
+# Every call site is then free to rot independently, and CI cannot see it
+# (the pins assert the version STRING appears, which a stale string does).
 #
-# The fix keeps the mechanics in exactly one place:
+# The full slip and tombstone log is in
+# docs/history/lumenairy._deprecation.md.
+#
+# The mechanics live in exactly one place:
 #
 #   * :data:`REMOVAL_SCHEDULE` is the registry of re-scheduled horizons --
 #     ``{stated at the shim site: live removal version}``.  Re-scheduling
@@ -99,59 +99,14 @@ __all__ = [
 #     returns no violations, so a shipped release cannot carry a horizon it
 #     has already passed.
 #
-# v5.30 (W5 shim-removal wave): the owner EXECUTED the overdue removals
-# rather than slipping them again -- see the CHANGELOG's ``### Removed``
-# section for the full old-form -> new-form table.  The retired shims were
-# the ones this registry existed to track:
-#
-#   * ``sources/core.py`` -- ``seed=`` / ``sigma=`` kwargs, the five
-#     ``Source.*`` legacy positional overloads, ``create_led_source``'s
-#     positional overload, and the Schell ``return_kind`` sentinel
-#     (``_RETURN_KIND_UNSET`` + ``_warn_schell_return_kind_default``).
-#   * ``elements/doe.py`` -- ``makedammann2d(_legacy_units='auto')``.
-#   * ``propagators/gbd.py`` / ``propagators/hf.py`` -- the inert
-#     ``wavelength=`` keywords.
-#   * ``optimize/`` -- the ``wave_traced`` / ``use_traced_lens`` /
-#     ``focus_search`` zero-caller flags.
-#
-# The same wave then EXECUTED the one **API transition** on the books -- the
-# P5 / roadmap-F1 ``propagate()`` return-contract flip (see
-# :data:`API_TRANSITION_VERSION`).  Same reasoning, one release earlier in its
-# own cycle: the announcement and the flip had not yet shipped in a release, so
-# waiting would have shipped a warning about a change no caller could see yet.
-#
-# What that leaves live here: :data:`REMOVAL_SCHEDULE` is empty, the four
-# message builders are unchanged, and :data:`API_TRANSITION_VERSION` schedules
-# nothing (its one entry is a tombstone).  The module stays fully functional --
-# the next deprecation cycle, or the next API transition, registers here as
-# before.
+# Both registries are EMPTY today: every scheduled removal and the one API
+# transition have been executed, and the entries are retired with them.
+# The module stays fully functional -- the next deprecation cycle, or the
+# next API transition, registers here as before.
 
 #: Removal horizon for deprecations whose stated version has shipped.  Set
 #: it to a version the project can realistically hit; bumping it is a
 #: deliberate one-line slip, recorded in the CHANGELOG.
-# v5.32.0 release: the horizon below had come due with NOTHING scheduled
-# (both registries are empty tombstones -- every removal and the one API
-# transition were EXECUTED early, in v5.30).  Advancing it is therefore
-# the documented deliberate one-line slip, slipping no actual removal.
-# Recorded in the CHANGELOG's 5.32.0 block.
-# v5.36.1: same situation, same one-line slip -- v5.36.0 shipped and the
-# horizon came due with both registries still empty tombstones.  Caught
-# by the release verify shard (the schedule tests assert the horizon is
-# future); the gating matrix ran pre-version-bump and could not see it.
-# Recorded in the CHANGELOG's 5.36.1 block.
-# v5.40.0: third deliberate one-line slip (v5.32.0 and v5.36.1
-# precedents) -- the horizon came due with both registries still
-# empty tombstones.  Applied PROACTIVELY in the release commit this
-# time: the gating matrix runs pre-version-bump and structurally
-# cannot see horizon collisions (the v5.36.0 tag paid for that
-# lesson).  Recorded in the CHANGELOG's 5.40.0 block.
-# v5.43.0: fourth proactive one-line slip (v5.32.0 / v5.36.1 / v5.40.0
-# precedents) -- 5.43.0 ships one minor below the horizon with both
-# registries still empty tombstones; slipped now so the NEXT release
-# cannot collide at tag-verify.  Recorded in the CHANGELOG's 5.43.0 block.
-# v5.45.0 (2026-09-10): fifth proactive slip, 5.46 -> 5.48 -- 5.45.0 ships
-# one minor below the horizon with both registries still empty, and a
-# 5.45.1 is scheduled behind it.  Recorded in the CHANGELOG's 5.45.0 block.
 NEXT_REMOVAL_VERSION = '5.48'
 
 #: Re-scheduled horizons: ``{version as written at the shim call site:
@@ -160,18 +115,12 @@ NEXT_REMOVAL_VERSION = '5.48'
 #:
 #: **Currently empty** -- every re-scheduled deprecation has been EXECUTED.
 #:
-#: Tombstone, v5.30 (W5 shim-removal wave, owner decision: remove now
-#: rather than wait for v5.32):
-#:
-#: * ``'5.27' -> '5.32'`` (added v5.30) -- the v5.25 ``seed=`` -> ``rng=``
-#:   and ``sigma=`` -> ``w0=`` source-factory kwarg deprecations
-#:   (``sources/core.py``'s ``_DEPRECATION_VERSION_REMOVED``).  The kwargs
-#:   are GONE in v5.30; the entry is retired with them.  Entries are
-#:   deleted rather than kept-as-history because
-#:   :func:`check_removal_schedule` invariant 2 requires every value to
-#:   lie in the future -- a completed removal cannot satisfy that and
-#:   would turn the self-check permanently red.  The history lives here
-#:   as a comment and in the CHANGELOG's ``### Removed`` section.
+#: An entry is DELETED when its removal is executed, not kept as history:
+#: :func:`check_removal_schedule` invariant 2 requires every value to lie
+#: in the future, so a completed removal cannot satisfy it and would turn
+#: the self-check permanently red.  The record lives in
+#: docs/history/lumenairy._deprecation.md and in the CHANGELOG's
+#: ``### Removed`` section.
 #:
 #: The :func:`resolve_removal_version` backstop still promotes a bare
 #: ``version_removed='5.27'`` (or any other already-shipped horizon) to
@@ -190,33 +139,18 @@ REMOVAL_SCHEDULE: dict[str, str] = {}
 #: been EXECUTED.  The constant stays as the slot the next API transition
 #: registers in (and as the anchor for the invariant below).
 #:
-#: Tombstone, v5.30 (roadmap ``docs/roadmap_deferred_2026_07_21.md`` Part F1,
-#: audit P5 -- owner decision: flip now rather than wait for v5.32):
+#: An executed transition is recorded as prose rather than left in a live
+#: registry field -- it cannot satisfy a "lies in the future" invariant.
+#: See docs/history/lumenairy._deprecation.md.
 #:
-#: * :func:`lumenairy.propagators.dispatch.propagate` -- the DEFAULT return is
-#:   a :class:`~lumenairy.propagators.PropagationResult` for every method
-#:   (roadmap F1 option 4, the option costed as least-breaking).  **Done in
-#:   v5.30**, in the same release that announced it: the transition
-#:   ``DeprecationWarning`` and its ``_caller_is_internal`` external-caller
-#:   predicate are retired with it, because a warning saying "the default will
-#:   become a PropagationResult in vX" cannot outlive the version that makes it
-#:   one.  ``return_result=False`` keeps the legacy bare-ndarray /
-#:   ``(E, dx_out, dy_out)`` shapes permanently and un-deprecated;
-#:   ``return_result=True`` is unchanged.  As with the
-#:   :data:`REMOVAL_SCHEDULE` entries above, the completed entry is recorded
-#:   here as prose and in the CHANGELOG rather than left in a live registry
-#:   field -- an executed transition cannot satisfy a "lies in the future"
-#:   invariant.
-#:
-#: NOT scheduled here (decided against in the same pass, and NOT changed by the
-#: flip):
+#: Deliberately NOT scheduled here:
 #:
 #: * ``PropagationResult.__iter__`` -- stays **2-item** ``(field,
-#:   intermediates)`` permanently (audit P16).  Option 4 keeps
-#:   ``return_result=False`` available, so 3-tuple unpackers migrate by
-#:   naming the legacy contract instead of by us re-arity-ing iteration --
-#:   which would break the ``E, inter = propagate_through_system(...,
-#:   return_result=True)`` callers that the 2-item form exists for.
+#:   intermediates)`` permanently (audit P16).  ``return_result=False``
+#:   remains available, so 3-tuple unpackers migrate by naming the legacy
+#:   contract instead of by re-arity-ing iteration -- which would break
+#:   the ``E, inter = propagate_through_system(..., return_result=True)``
+#:   callers that the 2-item form exists for.
 #:
 #: Bound to :data:`NEXT_REMOVAL_VERSION` by construction, so
 #: :func:`check_removal_schedule`'s "lies in the future" invariant covers it
@@ -298,8 +232,8 @@ def _format_removal(version_removed: Optional[str], *,
     """Build the ``, will be removed in vX`` clause of a warning message.
 
     Single source of the removed-in banner for all four message builders
-    below (pre-v5.30 each interpolated ``version_removed`` itself, which
-    is how four independent copies of the same rot survived).  ``verb`` is
+    below; interpolating ``version_removed`` at each of them is how four
+    independent copies of the same rot survive.  ``verb`` is
     ``'removed'`` for shims and ``'required'`` for deprecated defaults.
     """
     if not version_removed:
@@ -363,7 +297,7 @@ class _Sentinel:
     from "passed None" -- needed to warn-on-default-use without
     breaking explicit ``None`` callers.
 
-    v4.15.1 (Agent E): pickle-safe singleton via a name-keyed registry
+    Pickle-safe singleton via a name-keyed registry
     + ``__reduce__``.  Subclasses register themselves on instantiation
     and unpickle through :func:`_sentinel_unpickle` so the result is
     ``is``-identical to the registry singleton (rather than a fresh
@@ -403,7 +337,7 @@ class _Sentinel:
         return (_sentinel_unpickle, (self._name,))
 
 
-# v4.15.1 (Agent E): name-keyed registry of every ``_Sentinel`` instance
+# Name-keyed registry of every ``_Sentinel`` instance
 # ever constructed.  Used by :func:`_sentinel_unpickle` to return the
 # pre-existing singleton on unpickle rather than constructing a fresh
 # instance (which would break ``is`` identity).  Module-level (not
@@ -418,14 +352,14 @@ def _sentinel_unpickle(name: str) -> '_Sentinel':
     the registry lookup fails (e.g. the sentinel's defining module was
     not imported on the receiving side) we raise :class:`ImportError`
     with an actionable message rather than silently constructing a
-    fresh base :class:`_Sentinel`.  The pre-v4.15.2 fallback path
-    produced a *base* ``_Sentinel`` that compared ``False`` under
-    ``isinstance`` checks against the original subclass (e.g.
-    ``_ZeroApertureMaskSentinel``), silently downgrading caller
-    semantics on receivers where the subclass-defining module had not
-    yet been imported.  The audit (AUDIT_V4_15_1, P2) flagged this as
-    a latent bug in distributed pipelines with delayed imports
-    (joblib workers, dask distributed, multiprocessing Pool workers
+    fresh base :class:`_Sentinel`.  Such a fallback produces a *base*
+    ``_Sentinel`` that compares ``False`` under ``isinstance`` checks
+    against the original subclass (e.g. ``_ZeroApertureMaskSentinel``),
+    silently downgrading caller semantics on receivers where the
+    subclass-defining module has not yet been imported.  The audit
+    (AUDIT_V4_15_1, P2) flagged this as a latent bug in distributed
+    pipelines with delayed imports (joblib workers, dask distributed,
+    multiprocessing Pool workers
     that ``cloudpickle`` a callable referencing the sentinel before
     the worker has imported the module).  Strict raise surfaces the
     timing issue at the unpickle site instead of letting the silent
@@ -450,13 +384,10 @@ def _sentinel_unpickle(name: str) -> '_Sentinel':
 class _NoDefaultSentinel(_Sentinel):
     """Singleton sentinel for "argument was not explicitly passed".
 
-    v4.15.2 (Agent E, P3): dedicated subclass for consistency with
+    Dedicated subclass for consistency with
     :class:`_ZeroApertureMaskSentinel` and :class:`_AngleUnsetSentinel`.
-    Pre-v4.15.2 ``_NO_DEFAULT`` was a bare ``_Sentinel('NO_DEFAULT')``
-    instance, which differed cosmetically from the other two sentinels.
-    No behaviour change: the new subclass overrides nothing and the
-    singleton instance is still keyed by the ``'NO_DEFAULT'`` registry
-    name.
+    The subclass overrides nothing and the singleton instance is keyed by
+    the ``'NO_DEFAULT'`` registry name.
     """
     __slots__ = ()
 

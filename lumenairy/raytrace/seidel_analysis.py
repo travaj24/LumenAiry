@@ -244,12 +244,14 @@ def seidel_wfe(
 
     A positive singlet with undercorrected spherical aberration
     therefore has ``W(rho = 1) < 0``.  R-2
-    (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): pre-fix the expansion was
-    composed directly out of the ``-S_Welford`` sums and so returned
-    ``-W``; measured against an exact-trace wavefront oracle the ratio
-    was ``-0.9975 ... -0.9998`` on four singlets over ``rho in
-    [0.3, 1]``, and ``-1.000`` term by term for the ``rho^2``, ``rho^3``
-    and ``rho^4`` terms.  Magnitude-only consumers (RMS / PV WFE, Strehl
+    (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): composing the expansion
+    directly out of the ``-S_Welford`` sums returns ``-W`` instead;
+    measured against an exact-trace wavefront oracle the ratio is
+    ``-0.9975 ... -0.9998`` on four singlets over ``rho in [0.3, 1]``,
+    and ``-1.000`` term by term for the ``rho^2``, ``rho^3`` and
+    ``rho^4`` terms (docs/history/lumenairy.raytrace.seidel_analysis.md).
+    Magnitude-only consumers (RMS / PV WFE, Strehl proxies) are
+    insensitive to the choice; anything that ADDS ``W`` to a
     proxies) are unaffected by the fix; anything that ADDS ``W`` to a
     pupil phase, fits Zernikes to it, or reads the sign of coma /
     distortion asymmetry flips.  Callers passing a BARE totals dict are

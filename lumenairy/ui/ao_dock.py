@@ -215,7 +215,7 @@ class _AOClosedLoopWorker(QThread):
                 'wfe_per_iter': wfe_per_iter,
                 'iterations_run': iterations_run,
                 'stopped': self._stop_requested,
-                # v5.4: surface any WFS-fallback note (pyramid/curvature
+                # Surface any WFS-fallback note (pyramid/curvature
                 # not implemented yet, etc.) so the dock can tooltip it.
                 'wfs_note': wfs_note,
             })
@@ -298,7 +298,7 @@ class AOClosedLoopDock(QWidget):
             self.fig_residual = Figure(figsize=(5.0, 2.6), tight_layout=True,
                                        facecolor='#0a0c10')
             self.canvas_residual = FigureCanvas(self.fig_residual)
-            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            # Override matplotlib canvas sizeHint so the dock can shrink
             self.canvas_residual.setMinimumSize(0, 0)
             self.canvas_residual.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar_residual = NavigationToolbar(
@@ -313,7 +313,7 @@ class AOClosedLoopDock(QWidget):
             self.fig_dm = Figure(figsize=(5.0, 2.6), tight_layout=True,
                                  facecolor='#0a0c10')
             self.canvas_dm = FigureCanvas(self.fig_dm)
-            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            # Override matplotlib canvas sizeHint so the dock can shrink
             self.canvas_dm.setMinimumSize(0, 0)
             self.canvas_dm.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             right.addWidget(self.canvas_dm)
@@ -321,7 +321,7 @@ class AOClosedLoopDock(QWidget):
             self.fig_residual_map = Figure(
                 figsize=(5.0, 2.6), tight_layout=True, facecolor='#0a0c10')
             self.canvas_residual_map = FigureCanvas(self.fig_residual_map)
-            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            # Override matplotlib canvas sizeHint so the dock can shrink
             self.canvas_residual_map.setMinimumSize(0, 0)
             self.canvas_residual_map.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             right.addWidget(self.canvas_residual_map)
@@ -924,7 +924,7 @@ class AOClosedLoopDock(QWidget):
             f'AO loop done: iter={iters_run}, '
             f'RMS {history[0]:.4f} -> {history[-1]:.4f} rad '
             f'({wfe_initial:.3f} -> {wfe_final:.3f} waves){suffix}')
-        # v5.4: surface any WFS-fallback note from the worker (e.g. the
+        # Surface any WFS-fallback note from the worker (e.g. the
         # pyramid / curvature path used ``wfs=None`` because the real
         # sensors are not implemented yet).
         wfs_note = result.get('wfs_note', '')
@@ -932,7 +932,7 @@ class AOClosedLoopDock(QWidget):
             self.summary.append(wfs_note)
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -944,7 +944,7 @@ class AOClosedLoopDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

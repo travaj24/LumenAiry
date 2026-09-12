@@ -5,17 +5,15 @@ This module hosts the three Chebyshev helpers that the canonical
 asymptotic propagator and the Maslov-corrected real-lens kernel both
 need.  They were originally inlined in
 ``lumenairy.elements.lenses`` (around line 722 in v5.1.x) because
-the Maslov machinery used to live there; the asymptotic propagator
-then imported them from ``elements/``, creating an inverted
-dependency where ``propagators/`` reached into ``elements/`` for a
-math primitive.
+the Maslov machinery lived there, which left ``propagators/`` reaching
+into ``elements/`` for a math primitive -- an inverted dependency.
 
-v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-The three helpers move here, into a propagator-free math root.
+They live here now, in a propagator-free math root.
 ``elements/lenses.py`` and every ``propagators/asymptotic*.py``
-consumer now imports from ``lumenairy._math.chebyshev`` directly.
-Underscore-prefixed back-compat aliases are preserved at the old
-import site so external callers keep working.
+consumer imports from ``lumenairy._math.chebyshev`` directly;
+underscore-prefixed back-compat aliases are preserved at the old
+import site so external callers keep working.  See
+docs/history/lumenairy._math.chebyshev.md.
 
 The first-kind Chebyshev polynomial T_n(u) satisfies::
 
@@ -75,8 +73,7 @@ def chebyshev_vandermonde(u: np.ndarray, max_k: int,
         T[n] is T_n(u), computed by the standard 3-term recurrence.
     """
     if xp is None or xp is np:
-        # v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-        # original NumPy path, moved verbatim from elements/lenses.py.
+        # NumPy path.
         u = np.asarray(u)
         T = np.empty((max_k + 1,) + u.shape, dtype=np.float64)
         T[0] = 1.0
@@ -86,9 +83,8 @@ def chebyshev_vandermonde(u: np.ndarray, max_k: int,
             T[n] = 2.0 * u * T[n - 1] - T[n - 2]
         return T
 
-    # v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-    # xp-dispatched path, moved verbatim from propagators/asymptotic_jax_twin.py
-    # (formerly ``_chebyshev_vandermonde_xp``).  Returns a stacked array
+    # xp-dispatched path.  Returns a stacked array
+    # via xp.stack, so the caller sees the same shape contract as the
     # via xp.stack, so the caller sees the same shape contract as the
     # NumPy path regardless of backend.  Functional construction (no
     # in-place writes) keeps this jax.jit / jax.grad traceable.
@@ -124,8 +120,7 @@ def chebyshev_derivative_vandermonde(u: np.ndarray, max_k: int,
     Tp : ndarray of shape (max_k+1,) + u.shape
     """
     if xp is None or xp is np:
-        # v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-        # original NumPy path, moved verbatim from elements/lenses.py.
+        # NumPy path.
         u = np.asarray(u)
         Tp = np.zeros((max_k + 1,) + u.shape, dtype=np.float64)
         if max_k < 1:
@@ -142,7 +137,7 @@ def chebyshev_derivative_vandermonde(u: np.ndarray, max_k: int,
             Tp[n] = float(n) * U[n - 1]
         return Tp
 
-    # v5.2.5 (AUDIT_V5_2_3 P3-F1-3 chebyshev derivative xp dispatch):
+    # xp-dispatched path mirrors chebyshev_vandermonde's JAX-friendly
     # xp-dispatched path mirrors chebyshev_vandermonde's JAX-friendly
     # functional construction.  Build U_0..U_{max_k} via list-append on
     # the 3-term recurrence, then form T'_n = n * U_{n-1} for n >= 1.
@@ -153,7 +148,7 @@ def chebyshev_derivative_vandermonde(u: np.ndarray, max_k: int,
     if max_k < 1:
         # Single zero row at order 0.
         return xp.stack([xp.zeros_like(u_arr)])
-    # v5.3 (AUDIT_V5_2_5 P3-5): the ``if max_k >= 1`` guard above
+    # The ``if max_k >= 1`` guard above
     # was dead code -- we already early-returned at ``max_k < 1``
     # so by this point ``max_k >= 1`` is guaranteed.  Removed the
     # redundant check.
@@ -201,8 +196,7 @@ def chebyshev_second_derivative_vandermonde(u: np.ndarray, max_k: int,
     Tpp : ndarray of shape (max_k+1,) + u.shape
     """
     if xp is None or xp is np:
-        # v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-        # original NumPy path, moved verbatim from elements/lenses.py.
+        # NumPy path.
         u = np.asarray(u)
         shape = u.shape
         Tpp = np.zeros((max_k + 1,) + shape, dtype=np.float64)
@@ -216,7 +210,7 @@ def chebyshev_second_derivative_vandermonde(u: np.ndarray, max_k: int,
             Tpp[n + 1] = 2.0 * u * Tpp[n] + 4.0 * Tp[n] - Tpp[n - 1]
         return Tpp
 
-    # v5.2.5 (AUDIT_V5_2_3 P3-F1-3 chebyshev derivative xp dispatch):
+    # xp-dispatched path -- functional list-of-rows construction so
     # xp-dispatched path -- functional list-of-rows construction so
     # jax.jit / jax.grad can trace through it.  Recurrence is identical
     # to the NumPy branch: T''_0 = 0, T''_1 = 0, T''_2 = 4,
@@ -299,8 +293,8 @@ def chebyshev_fit_2d(x: np.ndarray,
         ``norm_x = x.max()``, ``norm_y = y.max()``.  A grid offset by
         ``x0`` is fitted about its own midpoint and evaluated about the
         axis, and the two differ by that shift at every order.  The
-        round-trip claim used to be stated unconditionally; an
-        off-centre grid whose fit has any NON-CONSTANT term now emits a
+        axis, and the two differ by that shift at every order.  An
+        off-centre grid whose fit has any NON-CONSTANT term emits a
         ``RuntimeWarning`` saying so (``T_0 T_0`` alone is
         shift-invariant, so a constant fit is silent).  Pass
         ``normalize_xy=False`` (having normalised yourself) if you want
@@ -323,7 +317,7 @@ def chebyshev_fit_2d(x: np.ndarray,
     residual : ndarray, only if ``return_residual=True``
         ``z - z_fit`` on the original ``(len(y), len(x))`` grid.
     """
-    # v5.4 Phase 5: lstsq-based 2-D Chebyshev fit promoted out of the
+    # lstsq-based 2-D Chebyshev fit promoted out of the
     # UI dock so external callers (notebook scripts, batch metrology
     # tools, regression tests) can share a single tested entry point.
     # Implementation uses numpy.polynomial.chebyshev.chebvander2d to
@@ -413,7 +407,7 @@ def chebyshev_fit_2d(x: np.ndarray,
     # natural reshape is (n_x+1, n_y+1) with axis 0 = x-order.
     coeffs_2d = coeffs_flat.reshape(n_max_x + 1, n_max_y + 1)
 
-    # v5.4.1 (audit P3 #8): tighten prune threshold from 1e-15 (ULP
+    # Tighten prune threshold from 1e-15 (ULP
     # noise) to 1e-12 (matches the test-tolerance band; eliminates
     # ~15 spurious near-zero coefficients on constant-z fits).
     coeffs_dict = {

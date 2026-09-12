@@ -26,14 +26,11 @@ plan cache + scipy thread pool + bad-shape blacklist) owns the
 infrastructure; this module delegates into it for the NumPy / CuPy
 paths so the priority chain and caches are shared, not duplicated.
 
-v5.2 (ROADMAP "backend/fft.py -> propagators/propagation.py
-inversion" cleanup): pre-v5.1, the FFT infra lived inside
-``propagators/propagation.py`` and ``backend/fft.py`` had to import
-through that monolith.  v5.1 lifted the infra to ``fft_infra.py``;
-v5.2 routes ``backend/fft.py`` directly through ``fft_infra``
-(``from ..propagators import fft_infra as _prop``) so the inversion
-through the propagation shell is removed and ``__getattr__``
-forwarding (PEP-562) no longer sits in the hot FFT path.
+This module routes directly through ``fft_infra``
+(``from ..propagators import fft_infra as _prop``) and NOT through the
+``propagators/propagation.py`` shell: going through the shell inverts
+the dependency and puts ``__getattr__`` forwarding (PEP-562) in the hot
+FFT path.  See docs/history/lumenairy.backend.fft.md.
 
 Author: Andrew Traverso
 """
@@ -50,17 +47,16 @@ from .array import (
     is_jax_array,
 )
 
-# Dead code removed in v5.29.1 (audit A-9..A-14): ``_jnp_or_none()`` had
-# zero references repo-wide (grep-verified over every .py/.pyi/.md/.cfg/
-# .toml in the tree -- the only hits were its own ``def`` line and the
-# audit report naming it).  ``_jnp_required`` below is the live accessor;
+# There is deliberately no ``_jnp_or_none()``: it had zero references
+# repo-wide (grep-verified over every .py/.pyi/.md/.cfg/.toml in the
+# tree).  ``_jnp_required`` below is the live accessor;
 # the ``JAX_AVAILABLE`` import went with it, having had no other use here.
 
 
 def _jnp_required() -> Any:
     """Return jax.numpy or assert -- used after :func:`is_jax_array`
     has narrowed an argument to a JAX array (which guarantees JAX is
-    installed).  v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure):
+    installed).  It
     centralises the None-narrow for the dispatch branches below so
     each call site doesn't need its own ``assert is not None``.
     """
@@ -88,7 +84,7 @@ def fft2(x: Any) -> Any:
 
     Returned-buffer ownership -- THE CALLER DOES NOT OWN THE RESULT
     ---------------------------------------------------------------
-    v5.29.1 (audit P13-P16): this function forwards
+    This function forwards
     :func:`lumenairy.propagators.fft_infra._fft2` **unchanged**, and so
     inherits its double-buffer contract verbatim.  On the pyFFTW path
     (NumPy input, complex dtype, ``shape[0] >= FFTW_MIN_SIZE``, plan-cache
@@ -109,7 +105,7 @@ def fft2(x: Any) -> Any:
       ``propagators/rs.py`` (audit F-3) and ``propagators/fresnel.py``
       (audit P2) for the two in-library sites where exactly this bug was
       found and fixed with a ``.copy()``; P2's symptom was a
-      previously-returned field silently becoming byte-identical to a
+      field silently becoming byte-identical to a
       later leg's result.
     * No copy is added here on purpose: in-library callers rely on the
       zero-copy path (it is the ~256 MB-1 GB per-call saving at 4k-8k
@@ -122,7 +118,7 @@ def fft2(x: Any) -> Any:
     """
     if is_jax_array(x):
         return _jnp_required().fft.fft2(x)
-    # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): fft_infra is
+    # ``fft_infra`` is
     # not on the typed-files whitelist so its public callables surface
     # as untyped under follow_imports=silent.
     from ..propagators import fft_infra as _prop

@@ -67,7 +67,7 @@ restore.  It keeps working unchanged and is the friendlier spelling for
 the five it covers; :func:`override` is the generic form that reaches
 every registered knob, including ones added later.
 
-Author: Andrew Traverso -- v5.45.2 (audit 2026-09-11 TESTS-ARCH P2-5).
+Author: Andrew Traverso
 """
 
 from __future__ import annotations

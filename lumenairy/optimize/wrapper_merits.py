@@ -1,8 +1,8 @@
 """
 lumenairy.optimize.wrapper_merits -- merit-term wrappers + meshgrid cache.
 
-v5.1.0 split (Agent E): extracted from ``lumenairy/optimize/core.py``.
-Hosts the three "wrapper" merit terms that sweep an inner sub-merit
+Split out of ``lumenairy/optimize/core.py``, which re-exports these
+names.  Hosts the three "wrapper" merit terms that sweep an inner sub-merit
 across multiple wavelengths / field angles / tolerance perturbations
 (:class:`MultiWavelengthMerit`, :class:`MultiFieldMerit`,
 :class:`ToleranceAwareMerit`) plus the shared module-level meshgrid /
@@ -14,25 +14,22 @@ Cache layout
 ``(Ny, Nx, dx, aperture_key, dtype_str)``.  The payload includes the
 coordinate meshgrid, the aperture boolean mask, and the wavelength-
 independent ``2*pi * Y`` / ``2*pi * X`` factors used for per-field
-tilt-phase construction.  v5.17.1 (audit P2-25): the aperture-
-INDEPENDENT arrays live in the sibling ``_WRAPPER_MERIT_GRID_CACHE``
-(keyed on ``(Ny, Nx, dx, dtype_str)`` only) and are shared by
-reference across per-aperture entries, so a free ``aperture_diameter``
-FD sweep no longer duplicates six N x N arrays per perturbed value.
-See ``_get_wrapper_merit_cache`` for the detailed contract.
+tilt-phase construction.  The aperture-INDEPENDENT arrays live in the
+sibling ``_WRAPPER_MERIT_GRID_CACHE`` (keyed on ``(Ny, Nx, dx, dtype_str)``
+only) and are shared by reference across per-aperture entries, so a free
+``aperture_diameter`` FD sweep does not duplicate six N x N arrays per
+perturbed value.  See ``_get_wrapper_merit_cache`` for the detailed
+contract.
 
 Lookup contract for ``system_abcd`` / ``through_focus_scan`` etc.
 -----------------------------------------------------------------
-Pre-v5.1.0, every name used in the wrapper-merit bodies lived in
-``lumenairy/optimize/core.py`` and was imported at the top of that
-file via ``from ..raytrace import system_abcd`` etc.  Tests that
-monkey-patch ``lumenairy.optimize.core.system_abcd`` (using
-:func:`unittest.mock.patch`) target THAT binding -- not the original
-``lumenairy.raytrace.system_abcd``.  After the v5.1.0 split, the
-wrapper-merit class bodies still need to honour those patches, so
-each call site reads the function via :mod:`lumenairy.optimize.core`
-(``_core.system_abcd(...)``) via a lazy module-attribute lookup.  This
-preserves the v4.15.3 mock.patch test contract bit-for-bit.
+Every name used in the wrapper-merit bodies is read through
+:mod:`lumenairy.optimize.core` (``_core.system_abcd(...)``) by a lazy
+module-attribute lookup, NOT imported directly from
+:mod:`lumenairy.raytrace`.  Tests monkey-patch
+``lumenairy.optimize.core.system_abcd`` with :func:`unittest.mock.patch`,
+which rebinds THAT name and not the original; reading through the module
+attribute is what makes those patches reach these class bodies.
 
 The lazy lookup happens inside method bodies, not at module-import
 time, so the circular dependency between ``core.py`` (which re-exports
@@ -51,10 +48,9 @@ from typing import Any, Dict, List, Sequence, Tuple
 
 import numpy as np
 
-# v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT): fused Numba
-# kernel that builds the masked tilted plane wave in one parallel
-# pass; falls back to a pure-NumPy implementation that matches the
-# pre-v5.3 path bit-for-bit when Numba is unavailable.  See
+# Fused Numba kernel that builds the masked tilted plane wave in one
+# parallel pass; falls back to a pure-NumPy implementation that is
+# bit-for-bit identical when Numba is unavailable.  See
 # ``lumenairy/optimize/_merit_jit.py`` for the contract.
 from ._merit_jit import _multi_field_tilt_phasor_masked
 from .context import (
@@ -66,7 +62,7 @@ from .context import (
 )
 
 # =========================================================================
-# Wrapper-merit meshgrid cache (v4.14.0 perf)
+# Wrapper-merit meshgrid cache
 # =========================================================================
 #
 # MultiWavelengthMerit, MultiFieldMerit, and ToleranceAwareMerit each
@@ -91,17 +87,17 @@ _WRAPPER_MERIT_CACHE: 'OrderedDict[tuple, dict]' = OrderedDict()
 _WRAPPER_MERIT_CACHE_SIZE = 32
 _WRAPPER_MERIT_MESHGRID_BUILDS = 0
 
-# v5.17.1 (audit P2-25): aperture-FREE sibling cache.  Six of the seven
-# payload arrays (X, Y, Y_factor, X_factor, r_squared, E_ones) depend
-# only on (N, dx, dtype), yet pre-v5.17.1 they were duplicated into
-# every per-aperture ``_WRAPPER_MERIT_CACHE`` entry.  With
-# ``aperture_diameter`` as a free optimisation variable every FD
-# perturbation minted a distinct key, so the 32-slot LRU retained up to
-# 32 full 57 B/px payloads (7.6 GB at N=2048) of which everything but
-# the 1 B/px mask was identical.  The grid arrays now live HERE, keyed
-# on ``(Ny, Nx, dx, dtype_str)`` only, and the per-aperture entries
+# Aperture-FREE sibling cache.  Six of the seven payload arrays (X, Y,
+# Y_factor, X_factor, r_squared, E_ones) depend only on (N, dx, dtype).
+# Duplicating them into every per-aperture ``_WRAPPER_MERIT_CACHE`` entry is
+# what makes ``aperture_diameter`` expensive as a free optimisation
+# variable: every FD perturbation mints a distinct key, so the 32-slot LRU
+# would retain up to 32 full 57 B/px payloads (7.6 GB at N=2048) of which
+# everything but the 1 B/px mask is identical.  The grid arrays live HERE,
+# keyed on ``(Ny, Nx, dx, dtype_str)`` only, and the per-aperture entries
 # hold references to the shared arrays plus their own boolean mask --
-# worst-case retention drops ~20x (one 56 B/px grid set + 32 masks).
+# worst-case retention ~20x lower (one 56 B/px grid set + 32 masks).
+# See docs/history/lumenairy.optimize.wrapper_merits.md.
 #
 # Bound rationale: a realistic single optimisation run touches ONE
 # (N, dx, dtype) grid (occasionally two when mixing precisions); 8
@@ -115,17 +111,17 @@ _WRAPPER_MERIT_GRID_CACHE_SIZE = 8
 # One lock guards BOTH the per-aperture and the grid sibling (they are
 # always touched together inside ``_get_wrapper_merit_cache`` /
 # ``_clear_wrapper_merit_cache``, so a second lock would only invite
-# lock-order bugs).  The alias satisfies the v4.14.2 cache<->lock
+# lock-order bugs).  The alias satisfies the cache<->lock
 # dispatcher pin's companion-name convention; it is the SAME lock
 # object as ``_WRAPPER_MERIT_CACHE_LOCK`` below.
 # (bound after the lock definition below)
-# v4.14.1 (P2-1): guard concurrent get / move_to_end / __setitem__ /
-# popitem(last=False) on _WRAPPER_MERIT_CACHE.  Follows the
-# _ASM_CACHE_LOCK precedent in propagators/propagation.py.  Without
-# this two threads racing through _get_wrapper_merit_cache could see a
-# torn OrderedDict.
+#
+# Guard concurrent get / move_to_end / __setitem__ / popitem(last=False) on
+# _WRAPPER_MERIT_CACHE.  Follows the _ASM_CACHE_LOCK precedent in
+# propagators/propagation.py.  Without this two threads racing through
+# _get_wrapper_merit_cache could see a torn OrderedDict.
 _WRAPPER_MERIT_CACHE_LOCK = threading.Lock()
-# v5.17.1 (audit P2-25): companion-name alias for the grid sibling --
+# Companion-name alias for the grid sibling --
 # the SAME lock object (see the note at _WRAPPER_MERIT_GRID_CACHE).
 _WRAPPER_MERIT_GRID_CACHE_LOCK = _WRAPPER_MERIT_CACHE_LOCK
 
@@ -188,14 +184,12 @@ def _get_wrapper_merit_cache(
     increment.  Use this counter in tests to pin the invariance
     contract.
 
-    v5.17.1 (audit P2-25): the six aperture-independent arrays are
-    memoised separately in ``_WRAPPER_MERIT_GRID_CACHE`` keyed on
-    ``(Ny, Nx, dx, dtype_str)`` and SHARED by reference across every
-    per-aperture entry, so an aperture-sweeping run (e.g.
-    ``aperture_diameter`` as a free FD variable) rebuilds only the
-    cheap boolean mask, and the LRU retains one grid set instead of
-    32 duplicates.  Values are byte-identical to the pre-split build
-    (same construction, same float64 comparison for the mask).
+    The six aperture-independent arrays are memoised separately in
+    ``_WRAPPER_MERIT_GRID_CACHE`` keyed on ``(Ny, Nx, dx, dtype_str)`` and
+    SHARED by reference across every per-aperture entry, so an
+    aperture-sweeping run (e.g. ``aperture_diameter`` as a free FD
+    variable) rebuilds only the cheap boolean mask and the LRU retains one
+    grid set instead of 32 duplicates.
     """
     global _WRAPPER_MERIT_MESHGRID_BUILDS
 
@@ -284,21 +278,20 @@ def _get_wrapper_merit_cache(
         if ap_diam > 0:
             mask = r_squared <= (ap_diam / 2.0) ** 2
         else:
-            # v4.14.1 (P1-NEW-1): aperture explicitly <= 0 means
-            # "block all light."  Distinct from the ``None`` branch
-            # above (which means "no aperture specified, use full
-            # grid").  Pre-v4.14.0 a scalar 0 produced an all-False
-            # boolean mask; v4.14.0 erroneously collapsed it to None
-            # and the downstream callers then treated the deliberate
-            # zero as "no aperture -> full plane wave," flipping the
-            # semantics.  Use a sentinel so callers can detect this
-            # case via ``is`` and zero their fields explicitly.
+            # Aperture explicitly <= 0 means "block all light."
+            # Distinct from the ``None`` branch above (which means
+            # "no aperture specified, use full grid").  A scalar 0
+            # must NOT collapse to None: downstream callers would
+            # then treat the deliberate zero as "no aperture -> full
+            # plane wave", flipping the semantics.  Use a sentinel so
+            # callers can detect this case via ``is`` and zero their
+            # fields explicitly.
             mask = _ZERO_APERTURE_MASK
 
-    # v5.17.1 (audit P2-25): the six aperture-independent arrays are
-    # REFERENCES into the shared grid-cache payload; only ``mask`` is
-    # owned by this entry.  Same payload keys as pre-split, so callers
-    # and the eval-count / identity pins are unaffected.
+    # The six aperture-independent arrays are REFERENCES into the shared
+    # grid-cache payload; only ``mask`` is owned by this entry.  The payload
+    # keys are unchanged, so callers and the eval-count / identity pins are
+    # unaffected.
     entry = {
         'X': grid['X'],
         'Y': grid['Y'],
@@ -309,7 +302,7 @@ def _get_wrapper_merit_cache(
         'E_ones': grid['E_ones'],
     }
     with _WRAPPER_MERIT_CACHE_LOCK:
-        # v5.4 (audit P3): increment inside lock to preserve cache-build-counter invariant
+        # Increment inside the lock to keep the build-counter invariant
         _WRAPPER_MERIT_MESHGRID_BUILDS += 1
         _WRAPPER_MERIT_CACHE[key] = entry
         while len(_WRAPPER_MERIT_CACHE) > _WRAPPER_MERIT_CACHE_SIZE:
@@ -320,29 +313,27 @@ def _get_wrapper_merit_cache(
 def _clear_wrapper_merit_cache() -> None:
     """Drop the wrapper-merit meshgrid cache and reset the build counter.
 
-    v4.14.1 (P2-3): invoked from
-    :func:`lumenairy.propagators.propagation.clear_asm_caches`.  Pre-
-    v4.16 this was a lazy import inside ``clear_asm_caches``; v4.16
-    routes the call through the central cache-clearer registry (see
-    ``_cache_registry.py``).  Either way the reverse-direction
-    dependency keeps optimize/core free of propagation-layer side-
-    effects at import time while still leaving both caches pristine
-    on a single ``clear_asm_caches()`` call.  Also callable directly
-    from tests.
+    Invoked from
+    :func:`lumenairy.propagators.propagation.clear_asm_caches` through the
+    central cache-clearer registry (see ``_cache_registry.py``).  The
+    reverse-direction dependency keeps optimize/core free of
+    propagation-layer side-effects at import time while still leaving both
+    caches pristine on a single ``clear_asm_caches()`` call.  Also callable
+    directly from tests.
     """
     global _WRAPPER_MERIT_MESHGRID_BUILDS
     with _WRAPPER_MERIT_CACHE_LOCK:
         _WRAPPER_MERIT_CACHE.clear()
-        # v5.17.1 (audit P2-25): drain the aperture-free grid sibling
-        # in the same operation -- one registered 'wrapper_merit_meshgrid'
-        # clearer covers both (they are parent/child, not siblings).
+        # Drain the aperture-free grid sibling in the same operation -- one
+        # registered 'wrapper_merit_meshgrid' clearer covers both (they are
+        # parent/child, not siblings).
         _WRAPPER_MERIT_GRID_CACHE.clear()
     _WRAPPER_MERIT_MESHGRID_BUILDS = 0
 
 
-# v4.16.0 (ROADMAP #15): register the wrapper-merit clearer with the
-# central registry at module-import time.  ``clear_asm_caches`` now
-# walks the registry rather than enumerating clear calls by hand.
+# Register the wrapper-merit clearer with the central registry at
+# module-import time: ``clear_asm_caches`` walks the registry rather than
+# enumerating clear calls by hand.
 # Late-binding closure preserves ``mock.patch.object`` test semantic.
 try:
     import sys as _sys
@@ -361,17 +352,16 @@ except ImportError:
 # Multi-wavelength support
 # =========================================================================
 
-# v4.16.2 (audit P1-NEW-F1-3): one-cycle FutureWarning latch for the
-# MultiWavelengthMerit SUM->AVG transition introduced in v4.16.1.  The
-# new AVG semantics are CORRECT (match the docstring and the sibling
-# MultiFieldMerit / ToleranceAwareMerit classes which already divide by
-# their loop length), but existing user weight-calibrations tuned
-# against the pre-v4.16.1 SUM behaviour silently see a 3x drop on a
-# 3-wavelength configuration.  Emit a one-shot FutureWarning the first
-# time any MultiWavelengthMerit.evaluate runs with >1 wavelength so
-# users notice the change and can re-scale weights if needed.  Latched
-# at module level so optimisation loops (which call evaluate() many
-# times per process) don't flood the warning channel.
+# One-cycle FutureWarning latch for the MultiWavelengthMerit SUM->AVG
+# transition.  The AVG semantics are CORRECT (they match the docstring and
+# the sibling MultiFieldMerit / ToleranceAwareMerit classes, which already
+# divide by their loop length), but a user weight-calibration tuned against
+# the older SUM behaviour silently sees a 3x drop on a 3-wavelength
+# configuration.  Emit a one-shot FutureWarning the first time any
+# MultiWavelengthMerit.evaluate runs with >1 wavelength so users notice the
+# change and can re-scale weights if needed.  Latched at module level so
+# optimisation loops (which call evaluate() many times per process) don't
+# flood the warning channel.
 _MULTIWL_AVG_WARNED = False
 
 
@@ -381,12 +371,10 @@ class MultiWavelengthMerit(MeritTerm):
     Populates ``ctx.efls_per_wavelength`` with per-wavelength EFLs
     (computed geometrically, cheap).  The sub-merit is evaluated at
     each wavelength and the results are averaged (weight * total /
-    n_wavelengths).  v4.16.1 closes the SUM-vs-AVG discrepancy at
-    the return: pre-v4.16.1 this class summed rather than averaged,
-    silently tripling the chromatic merit contribution for a
-    3-wavelength configuration vs a 1-wavelength one.  Matches the
-    sibling :class:`MultiFieldMerit` and :class:`ToleranceAwareMerit`
-    averaging shape.
+    n_wavelengths), matching the sibling :class:`MultiFieldMerit` and
+    :class:`ToleranceAwareMerit` averaging shape.  Summing instead would
+    triple a 3-wavelength configuration's contribution relative to a
+    1-wavelength one.
 
     .. warning::
         The off-wavelength wave-leg propagation in this merit's
@@ -458,18 +446,16 @@ class MultiWavelengthMerit(MeritTerm):
                 _, efl, bfl, _ = _core.system_abcd(surfs, wl)
             except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
                     np.linalg.LinAlgError, IndexError, TypeError):
-                # Degenerate ABCD at this wavelength; sentinel-large
-                # EFL/BFL nudges the wave leg toward the fallback
-                # branch downstream.  v4.15.3 (P1-NEW-F1-3): wire the
-                # ``_INVALID_FL_SENTINEL_OBJ`` singleton so a
+                # Degenerate ABCD at this wavelength; sentinel-large EFL/BFL
+                # nudges the wave leg toward the fallback branch downstream.
+                # The ``_INVALID_FL_SENTINEL_OBJ`` singleton is used so a
                 # downstream consumer in this scope can perform an
-                # ``is``-identity check; ``float()`` of the singleton
-                # still returns ``1e9`` for the existing magnitude-
-                # based ``ctx_is_valid`` path.  The sentinel does NOT
-                # escape into ``sub_ctx`` (the ``float(efl)``/
-                # ``float(bfl)`` cast at sub-context construction
-                # restores the scalar for downstream merits that
-                # weren't migrated).
+                # ``is``-identity check; ``float()`` of the singleton still
+                # returns ``1e9`` for the existing magnitude- based
+                # ``ctx_is_valid`` path.  The sentinel does NOT escape into
+                # ``sub_ctx`` (the ``float(efl)``/ ``float(bfl)`` cast at
+                # sub-context construction restores the scalar for downstream
+                # merits that weren't migrated).
                 efl = bfl = _INVALID_FL_SENTINEL_OBJ
             efls.append(float(efl))
             sub_E_exit = ctx.E_exit
@@ -477,11 +463,10 @@ class MultiWavelengthMerit(MeritTerm):
             sub_strehl = ctx.strehl_best
             sub_rms = ctx.rms_radius_best
             sub_z = ctx.z_best
-            # v4.15.3 (P1-NEW-F1-3): the sentinel form of ``bfl``
-            # is not a numpy-friendly scalar -- guard the
-            # ``np.isfinite``/``abs`` checks with an identity test
-            # so the per-wavelength wave leg is skipped when the
-            # ABCD extraction collapsed at this wavelength.
+            # The sentinel form of ``bfl`` is not a numpy-friendly scalar --
+            # guard the ``np.isfinite``/``abs`` checks with an identity test
+            # so the per-wavelength wave leg is skipped when the ABCD
+            # extraction collapsed at this wavelength.
             if self.sub_merit.needs_wave and ctx.E_exit is not None and \
                bfl is not _INVALID_FL_SENTINEL_OBJ and \
                np.isfinite(bfl) and abs(bfl) < 10:
@@ -562,9 +547,8 @@ class MultiWavelengthMerit(MeritTerm):
                         RuntimeWarning, stacklevel=2)
             per_wl_strehl.append(sub_strehl)
             per_wl_rms.append(sub_rms)
-            # v4.13.2 (C-P1-2): thread ctx.x so JaxMeritTerm sub-
-            # merits with build_args reach the analytic-gradient
-            # path instead of legacy fn(ctx) -> FD.
+            # Thread ctx.x so JaxMeritTerm sub- merits with build_args reach
+            # the analytic-gradient path instead of legacy fn(ctx) -> FD.
             sub_ctx = EvaluationContext(
                 prescription=ctx.prescription, wavelength=wl,
                 N=ctx.N, dx=ctx.dx, efl=float(efl), bfl=float(bfl),
@@ -576,28 +560,24 @@ class MultiWavelengthMerit(MeritTerm):
         ctx.efls_per_wavelength = np.array(efls)
         ctx.strehls_per_wavelength = np.array(per_wl_strehl)
         ctx.rms_per_wavelength = np.array(per_wl_rms)
-        # v4.16.1 (AUDIT_V4_16_0_DEEP P1-DEEP-1-1): SUM -> AVG.
-        # The docstring documents this class as "average" of the
-        # sub-merit across wavelengths, and BOTH sibling classes
-        # ``MultiFieldMerit`` and ``ToleranceAwareMerit`` divide by
-        # ``len(...)`` at their return.  Pre-v4.16.1 this method
-        # silently summed the per-wavelength contributions, so adding
-        # a 3rd wavelength tripled the chromatic merit's weight
-        # contribution relative to a 1-wavelength configuration.
-        # Fix: divide by ``max(len(self.wavelengths), 1)`` to match
-        # the documented behaviour and sibling-class averaging shape.
+        # SUM -> AVG.  The docstring documents this class as the
+        # "average" of the sub-merit across wavelengths, and BOTH
+        # sibling classes ``MultiFieldMerit`` and
+        # ``ToleranceAwareMerit`` divide by ``len(...)`` at their
+        # return.  Summing instead would make a 3rd wavelength triple
+        # the chromatic merit's weight contribution relative to a
+        # 1-wavelength configuration, so divide by
+        # ``max(len(self.wavelengths), 1)``.
         #
-        # v4.16.2 (audit P1-NEW-F1-3): emit a one-cycle FutureWarning
-        # the first time evaluate() runs with >1 wavelength so users
-        # tuning weight calibrations against the pre-v4.16.1 SUM
-        # behaviour notice the silent 1/N drop in the merit
-        # contribution.  Latched via the module-level
-        # ``_MULTIWL_AVG_WARNED`` flag so optimisation loops don't
-        # flood the warning channel.  Single-wavelength configurations
-        # (len == 1) are unaffected by the SUM->AVG transition and
-        # don't trigger the warning.
-        # v5.1.0 split (Agent E): the canonical latch lives on this
-        # module, but historical reset-fixtures toggle
+        # A one-cycle FutureWarning fires the first time evaluate()
+        # runs with >1 wavelength, so a user whose weight calibration
+        # was tuned against the older SUM behaviour notices the 1/N
+        # drop.  Latched via the module-level ``_MULTIWL_AVG_WARNED``
+        # flag so optimisation loops don't flood the warning channel.
+        # Single-wavelength configurations (len == 1) are unaffected
+        # and don't trigger the warning.
+        # The canonical latch lives on this module, but reset fixtures
+        # toggle
         # ``lumenairy.optimize.core._MULTIWL_AVG_WARNED`` at the
         # re-exported alias.  Honour both bindings -- read the alias
         # first (so a fixture reset on ``core`` re-fires the warning)
@@ -673,9 +653,9 @@ class MultiFieldMerit(MeritTerm):
 
     def __init__(self, field_angles: Sequence[Any],
                  sub_merit: MeritTerm, weight: float = 1.0) -> None:
-        # v4.13.2 (C-P0-2): accept EITHER scalars (back-compat:
-        # Y-axis tilt) OR (theta_x, theta_y) tuples.  Detect the
-        # form per-entry so a mixed list still works.
+        # Accept EITHER scalars (back-compat: Y-axis tilt) OR (theta_x,
+        # theta_y) tuples.  Detect the form per-entry so a mixed list still
+        # works.
         normalised: List[Tuple[float, float]] = []
         had_scalar = False
         for a in field_angles:
@@ -732,36 +712,35 @@ class MultiFieldMerit(MeritTerm):
         for theta_x, theta_y in self.field_angles:
             # Build tilted plane wave clipped to the lens aperture so
             # the propagated intensity reflects the lens's actual
-            # acceptance.  Pre-4.10 the unclipped grid-filling plane
-            # wave fed every grid pixel through apply_real_lens, then
-            # Strehl was computed against a "grid-filling" reference
-            # which artificially lowered the value and biased the
-            # optimizer toward apertures larger than designed.
-            # v4.13.2 (C-P0-2): generic off-axis tilt with both X and
-            # Y components.  Pre-fix the X term was silently dropped.
-            # 4.11.1: honour precision knob (was hard-coded complex128
-            # which silently demoted precision='single' configs).
-            # v4.14.1 (P1-NEW-1): three branches -- None means "no
-            # aperture specified, full grid"; _ZERO_APERTURE_MASK
-            # means "aperture explicitly zero, block all light";
-            # ndarray means "circular boolean mask."  Pre-v4.14.0 the
-            # zero-diameter case was an all-False ndarray (correctly
-            # zeroing the field); v4.14.0 collapsed it into the None
-            # branch (full-grid plane wave), flipping the semantics.
-            # v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT):
-            # the boolean-mask branch (the dominant hot path -- a
-            # finite ``aperture_diameter`` is set on essentially
-            # every real prescription) is now routed through the
-            # fused Numba kernel in ``_merit_jit.py``.  The kernel
-            # collapses ``sin(tx)*k_X + sin(ty)*k_Y -> exp(1j*phase)
-            # -> where(mask, ..., 0)`` -- three N x N temporaries
-            # per field in the legacy NumPy path -- into a single
-            # parallel pass with zero temporaries.  The other two
-            # branches (None / _ZERO_APERTURE_MASK) are already
-            # NumPy-cheap and stay on the legacy path.  When Numba
-            # is unavailable OR the grid is below the kernel-
-            # overhead threshold, the helper falls back to the
-            # legacy NumPy expression -- callers see no API change.
+            # acceptance.  An unclipped grid-filling plane wave would
+            # feed every grid pixel through apply_real_lens and then
+            # be scored against a "grid-filling" reference, which
+            # lowers the Strehl artificially and biases the optimizer
+            # toward apertures larger than designed.
+            #
+            # The tilt is generic off-axis, with both X and Y
+            # components, and honours the precision knob rather than
+            # hard-coding complex128.
+            #
+            # Three branches: None means "no aperture specified, full
+            # grid"; _ZERO_APERTURE_MASK means "aperture explicitly
+            # zero, block all light"; an ndarray is a circular boolean
+            # mask.  Collapsing the zero-diameter case into the None
+            # branch turns it into a full-grid plane wave and flips
+            # the semantics, so the three are kept distinct.
+            #
+            # The boolean-mask branch (the dominant hot path -- a
+            # finite ``aperture_diameter`` is set on essentially every
+            # real prescription) is routed through the fused Numba
+            # kernel in ``_merit_jit.py``.  The kernel collapses
+            # ``sin(tx)*k_X + sin(ty)*k_Y -> exp(1j*phase) ->
+            # where(mask, ..., 0)`` -- three N x N temporaries per
+            # field in the NumPy path -- into a single parallel pass
+            # with zero temporaries.  The other two branches are
+            # already NumPy-cheap and stay on the NumPy path.  When
+            # Numba is unavailable OR the grid is below the
+            # kernel-overhead threshold, the helper falls back to the
+            # NumPy expression -- callers see no API change.
             if aperture_mask is _ZERO_APERTURE_MASK:
                 E_tilted = np.zeros((Ny, Nx), dtype=_cdtype)
             elif aperture_mask is None:
@@ -773,11 +752,10 @@ class MultiFieldMerit(MeritTerm):
                     k_X, k_Y, aperture_mask, _cdtype)
             E_exit = _core.apply_real_lens(
                 E_tilted, prescription=ctx.prescription, wavelength=ctx.wavelength, dx=ctx.dx)
-            # Build sub-context.  v4.13.2 (C-P1-2): thread ctx.x so
-            # JaxMeritTerm(build_args=...) sub-merits route through
-            # the analytic-gradient path instead of falling back to
-            # legacy fn(ctx) (which would silently degrade analytic
-            # gradients to FD).
+            # Build sub-context.  Thread ctx.x so JaxMeritTerm(build_args=...)
+            # sub-merits route through the analytic-gradient path instead of
+            # falling back to legacy fn(ctx) (which would silently degrade
+            # analytic gradients to FD).
             sub_ctx = EvaluationContext(
                 prescription=ctx.prescription,
                 wavelength=ctx.wavelength, N=ctx.N, dx=ctx.dx,
@@ -938,17 +916,13 @@ class ToleranceAwareMerit(MeritTerm):
                     np.linalg.LinAlgError, IndexError, TypeError):
                 # Perturbed ABCD failed -- fall back to nominal
                 # focus, which will under-estimate the Strehl drop
-                # but is a stable sentinel.  v4.15.3 (P1-NEW-F1-3):
-                # this branch is INTENTIONALLY left unwired.  The
-                # fallback is a tuple-pattern ``(efl_p, bfl_p)`` not
-                # a single scalar, and wrapping a tuple in a single
-                # sentinel singleton would break downstream
-                # ``sub_ctx.efl=efl_p``/``sub_ctx.bfl=bfl_p`` usage
+                # but is a stable sentinel.  This branch is
+                # INTENTIONALLY left unwired to a sentinel singleton:
+                # the fallback is a tuple-pattern ``(efl_p, bfl_p)``,
+                # not a single scalar, and wrapping a tuple in one
+                # sentinel would break the downstream
+                # ``sub_ctx.efl=efl_p`` / ``sub_ctx.bfl=bfl_p`` usage
                 # (the consumer expects two floats, not a tuple).
-                # v4.15.4 (AUDIT_V4_15_3 P2-NEW-F1-B option a) deleted
-                # the defunct ``_PerturbedABCDFallbackSentinel`` class
-                # outright; see the audit closure block in the v4.15.4
-                # release notes.
                 efl_p, bfl_p = ctx.efl, ctx.bfl
 
             # Re-run wave propagation for this perturbation
@@ -965,19 +939,19 @@ class ToleranceAwareMerit(MeritTerm):
             # template.
             _cdtype = _core.get_default_complex_dtype()
             _ap = ctx.prescription.get('aperture_diameter')
-            # v4.14.2 (P1-NEW-1): the perturbed prescription preserves
-            # ``aperture_diameter`` from the nominal, so a nominal-zero
-            # aperture flows through to the per-trial wave-leg unchanged.
-            # ``apply_perturbations`` itself does NOT call
-            # ``validate_prescription``, so the validation-time rejection
-            # of ``aperture_diameter <= 0`` cannot be relied upon to gate
-            # this code path.  Honour the ``_ZERO_APERTURE_MASK`` sentinel
-            # placed in ``_cache['mask']`` by ``_get_wrapper_merit_cache``
-            # so a deliberate-zero aperture produces a zero E_in rather
-            # than the cached full-ones template (which would otherwise
-            # propagate a grid-filling plane wave through ``apply_real_lens``
-            # and silently mis-score the perturbed trial).  Matches the
-            # canonical branch at ``MultiWavelengthMerit.evaluate`` and
+            # The perturbed prescription preserves ``aperture_diameter`` from
+            # the nominal, so a nominal-zero aperture flows through to the
+            # per-trial wave-leg unchanged. ``apply_perturbations`` itself
+            # does NOT call ``validate_prescription``, so the validation-time
+            # rejection of ``aperture_diameter <= 0`` cannot be relied upon to
+            # gate this code path.  Honour the ``_ZERO_APERTURE_MASK``
+            # sentinel placed in ``_cache['mask']`` by
+            # ``_get_wrapper_merit_cache`` so a deliberate-zero aperture
+            # produces a zero E_in rather than the cached full-ones template
+            # (which would otherwise propagate a grid-filling plane wave
+            # through ``apply_real_lens`` and silently mis-score the perturbed
+            # trial).  Matches the canonical branch at
+            # ``MultiWavelengthMerit.evaluate`` and
             # ``MultiFieldMerit.evaluate``.
             _cache = _get_wrapper_merit_cache(
                 ctx.N, ctx.dx, _ap, _cdtype)
@@ -987,9 +961,8 @@ class ToleranceAwareMerit(MeritTerm):
                 E_in = _cache['E_ones'].copy()
             E_exit = _core.apply_real_lens(
                 E_in, prescription=pres_pert, wavelength=ctx.wavelength, dx=ctx.dx)
-            # v4.13.2 (C-P1-2): thread ctx.x so JaxMeritTerm sub-
-            # merits with build_args reach the analytic-gradient
-            # path instead of legacy fn(ctx) -> FD.
+            # Thread ctx.x so JaxMeritTerm sub- merits with build_args reach
+            # the analytic-gradient path instead of legacy fn(ctx) -> FD.
             sub_ctx = EvaluationContext(
                 prescription=pres_pert, wavelength=ctx.wavelength,
                 N=ctx.N, dx=ctx.dx, efl=efl_p, bfl=bfl_p,
@@ -1018,18 +991,18 @@ class ToleranceAwareMerit(MeritTerm):
                 except (ValueError, RuntimeError, ZeroDivisionError,
                         KeyError, np.linalg.LinAlgError, IndexError,
                         AttributeError, TypeError):
-                    # Tolerancing trial through-focus failed; treat
-                    # this perturbation as worst-case (Strehl=0).
-                    # v4.15.3 (P1-NEW-F1-3): wire the
-                    # ``_FAILED_SCAN_STREHL_SENTINEL_OBJ`` singleton.
-                    # Sibling branch to the MultiFieldMerit one above;
-                    # same ``float()``-coercion contract at the consumer.
+                    # Tolerancing trial through-focus failed; treat this
+                    # perturbation as worst-case (Strehl=0). Wire the
+                    # ``_FAILED_SCAN_STREHL_SENTINEL_OBJ`` singleton. Sibling
+                    # branch to the MultiFieldMerit one above; same
+                    # ``float()``-coercion contract at the consumer.
                     sub_ctx.strehl_best = _FAILED_SCAN_STREHL_SENTINEL_OBJ
             # OPT-2: build the OPD map (from the PERTURBED bfl + aperture) so
             # OPD-based sub-merits (RMSWavefrontMerit, MatchTargetOPD,
-            # ZernikeCoefficient) see real data instead of ``None`` -- pre-fix
-            # they degenerated to inf / silently-inert under this wrapper even
-            # though they optimise fine under MultiField / MultiWavelength.
+            # ZernikeCoefficient) see real data instead of ``None``.  Without
+            # it they degenerate to inf / silently-inert under this wrapper
+            # even though they optimise fine under MultiField /
+            # MultiWavelength.
             ap = pres_pert.get('aperture_diameter')
             if (ap and np.isfinite(bfl_p)
                     and getattr(self.sub_merit, 'needs_wave', False)):

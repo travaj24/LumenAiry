@@ -66,12 +66,12 @@ marginal-wise); ``rays_from_field`` warns on short-return; top-of-file
 docstring updated to phase-ratio formulation; ``n_rays=0`` returns an
 empty bundle cleanly; ``'uniform'`` deduplicates collided sub-grid
 pixels so ``n_rays > N^2`` is capped at ``N^2``.
-v4.15.3 -- Agent D: intensity-threshold comparison made consistent
-across the 3 placement modes; all three now use the inclusive
-``|E|^2 / max(|E|^2) >= intensity_threshold`` convention.  Pre-v4.15.3
-only ``_place_rejection`` used ``>=``; ``_place_cdf`` and
-``_place_uniform`` used strict ``>``, dropping boundary-exact pixels.
-This is a numerical behaviour change for inputs at the exact threshold
+The intensity-threshold comparison is consistent across the 3 placement
+modes: all three use the inclusive
+``|E|^2 / max(|E|^2) >= intensity_threshold`` convention.  A mode using
+strict ``>`` drops boundary-exact pixels (see
+docs/history/lumenairy.raytrace.from_field.md).
+This matters for inputs at the exact threshold
 boundary -- see ``docs/release_notes/.release_notes_v4_15_3_agent_d.md``.
 """
 from __future__ import annotations
@@ -150,9 +150,9 @@ def rays_from_field(
           *pixel-wise* (``|E|^2 / max(|E|^2) >= threshold``) BEFORE
           the marginal sums are formed, so sub-threshold noise
           cannot accumulate across the marginal axis and contaminate
-          the CDF.  (v4.15.2 fix; see P1-NEW-D in the v4.15.1 audit.
-          v4.15.3 -- ``>=`` is the canonical convention; pre-v4.15.3
-          used strict ``>``.)  Use for visualisation.
+          cannot accumulate across the marginal axis and contaminate
+          the CDF.  ``>=`` is the canonical convention.)  Use for
+          visualisation.
         * ``'rejection'`` -- true 2-D rejection sampling from
           ``|E|^2``.  Slower but exact regardless of separability.
           ``intensity_threshold`` is applied pixel-wise.  Use for
@@ -186,10 +186,8 @@ def rays_from_field(
         marginal sum.  The comparison is inclusive
         (``|E|^2 / max(|E|^2) >= threshold``) so a pixel whose
         normalised intensity is exactly ``intensity_threshold`` is
-        retained.  v4.15.3 -- the three modes are now consistent;
-        pre-v4.15.3 only ``_place_rejection`` used the inclusive
-        comparison while ``_place_cdf`` and ``_place_uniform`` used
-        strict ``>``.  For ``angle_method='complex_gradient'`` the
+        retained.  All three modes use the same comparison.  For
+        ``angle_method='complex_gradient'`` the
         threshold also clamps the denominator of ``grad E / E``.
     z0 : float, default 0.0
         Axial position of all ray origins [m].
@@ -274,7 +272,7 @@ def rays_from_field(
     lumenairy.propagators.gbd.decompose_field_to_beamlets : analogous
         bridge for GBD beamlets.
     """
-    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # Defensive guard via the shared
     # ``_check_2d_scalar_field`` helper.  v4.15.1 added an inline
     # ``E.ndim != 2`` check below; that catches 3-D ensembles with a
     # tailored message, but a ``PartialCoherenceMCF`` input fails at
@@ -490,19 +488,16 @@ def _place_cdf(
     -- exact for separable ``|E|^2`` (e.g. axially aligned Gaussians)
     and a fast approximation otherwise.
 
-    v4.15.2 fix (P1-NEW-D in the v4.15.1 audit) -- threshold is now
-    applied pixel-wise BEFORE the marginal sums.  Previously the
-    threshold was applied to the marginal sums themselves
-    (``Ix.sum(axis=0) > threshold * Ix.max()``), which let sub-
-    threshold background noise accumulate across rows / columns and
+    The threshold is applied pixel-wise BEFORE the marginal sums.
+    Applying it to the marginal sums themselves
+    (``Ix.sum(axis=0) > threshold * Ix.max()``) lets sub-
     contaminate the CDF.  Pixel-wise thresholding makes ``'cdf'``
     consistent with ``'rejection'`` and ``'uniform'``.
 
-    v4.15.3 -- threshold comparison is inclusive (``>=``) so pixels at
-    exactly ``intensity_threshold`` are retained, matching the
-    canonical "pixel intensity meets threshold" convention used in
-    ``_place_rejection`` and now also ``_place_uniform``.  Pre-v4.15.3
-    used strict ``>``.  Documented in the v4.15.3 release notes.
+    The threshold comparison is inclusive (``>=``) so pixels at exactly
+    ``intensity_threshold`` are retained, matching the canonical "pixel
+    intensity meets threshold" convention used in ``_place_rejection``
+    and ``_place_uniform``.
     """
     I = np.abs(E) ** 2
     I_norm = I / I.max()
@@ -569,14 +564,11 @@ def _place_rejection(
     pathological inputs; if the cap is reached the function returns
     the rays accepted so far (caller will resize the bundle).
 
-    v4.15.3 -- threshold comparison is inclusive (``>=``) here as in
-    all three placement modes; the canonical convention is "pixel
-    intensity meets threshold" so a pixel whose normalised intensity
-    is exactly ``intensity_threshold`` is retained.  Pre-v4.15.3 only
-    this mode used ``>=`` (which became the chosen convention); the
-    other two modes (``_place_cdf``, ``_place_uniform``) used strict
-    ``>``.  The behaviour change for inputs at the exact threshold
-    boundary is documented in the v4.15.3 release notes.
+    The threshold comparison is inclusive (``>=``) here as in all three
+    placement modes; the canonical convention is "pixel intensity meets
+    threshold" so a pixel whose normalised intensity is exactly
+    ``intensity_threshold`` is retained.  The behaviour difference for
+    inputs at the exact threshold
     """
     I = np.abs(E) ** 2
     I = I / I.max()
@@ -623,16 +615,15 @@ def _place_uniform(
     deduplicated so this helper never returns more rays than there
     are unique grid pixels passing the threshold).
 
-    v4.15.2 (P3 from the v4.15.1 audit): when ``n_rays`` exceeds the
-    number of unique pixels in the grid, the sub-grid pixelisation
-    used to produce duplicate ``(iy, ix)`` entries; we now dedupe in
-    a stable manner.
+    When ``n_rays`` exceeds the
+    number of unique pixels in the grid, the sub-grid pixelisation can
+    produce duplicate ``(iy, ix)`` entries, so they are deduped in a
+    stable manner.
 
-    v4.15.3 -- threshold comparison is inclusive (``>=``) so pixels at
-    exactly ``intensity_threshold`` are retained, matching the
-    canonical "pixel intensity meets threshold" convention used in
-    ``_place_rejection`` and now also ``_place_cdf``.  Pre-v4.15.3
-    used strict ``>``.  Documented in the v4.15.3 release notes.
+    The threshold comparison is inclusive (``>=``) so pixels at exactly
+    ``intensity_threshold`` are retained, matching the canonical "pixel
+    intensity meets threshold" convention used in ``_place_rejection``
+    and ``_place_cdf``.
     """
     I = np.abs(E) ** 2
     Imax = I.max()
@@ -763,10 +754,10 @@ def _angle_complex_gradient(
     -- and wrapping silently above it (measured at
     :math:`\\lambda = 1\\,\\mu m`, :math:`\\Delta x = 2\\,\\mu m`:
     ``L_true`` 0.150 recovered as -0.100, 0.200 as -0.050, 0.300 as
-    +0.050, 0.490 as -0.010).  That also falsified the old claim that
-    the form "can detect evanescent rays whose tangential k exceeds
-    :math:`\\pi/\\Delta x`": an evanescent ``L = 0.49`` came back as a
-    benign ``L = -0.01``, so no evanescent ray was ever flagged.
+    +0.050, 0.490 as -0.010).  That also falsifies the claim that the
+    form "can detect evanescent rays whose tangential k exceeds
+    :math:`\\pi/\\Delta x`": an evanescent ``L = 0.49`` comes back as a
+    benign ``L = -0.01``, so no evanescent ray is ever flagged.
 
     Boundary samples have one real neighbour only; the missing side is
     dropped (one-sided one-pixel difference), which is still exact for a
@@ -796,8 +787,8 @@ def _angle_complex_gradient(
     # Neighbour indices, clipped at the array boundary.  ``have_*``
     # records whether the neighbour is a REAL neighbour rather than the
     # clipped self-reference -- see the symmetrised-difference block
-    # below (R6: the clipped self-reference used to halve the baseline
-    # while the divisor stayed at 2 dx).
+        # below (R6: a clipped self-reference halves the baseline while
+        # the divisor stays at 2 dx).
     ix = np.asarray(ix, dtype=np.intp)
     iy = np.asarray(iy, dtype=np.intp)
     ix_plus = np.clip(ix + 1, 0, Nx - 1)
@@ -853,8 +844,8 @@ def _angle_complex_gradient(
     #
     # Boundary columns/rows have only ONE real neighbour: the clipped
     # index collapses onto the pixel itself, whose product ``E conj(E)``
-    # is a real positive number carrying no phase.  Including it used to
-    # halve the recovered direction cosine exactly -- measured on a
+    # is a real positive number carrying no phase.  Including it halves
+    # the recovered direction cosine exactly -- measured on a
     # uniform-amplitude tilted plane wave with L_true = 0.05 on a 64x64
     # grid: interior pixels +0.050000, edge columns +0.025000, ratio
     # 0.5000 over 128 edge rays.  Dropping the missing side leaves a

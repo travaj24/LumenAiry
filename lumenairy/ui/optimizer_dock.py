@@ -1,8 +1,8 @@
 """
 Optimizer dock -- variable selection, merit function, optimization control.
 
-# v5.4 (audit P1-F): wire CancellableProgress + Stop button
-# v5.4 (audit P1-D): parameter surface expansion for v4.16.0 optimisation framework
+# Wire CancellableProgress + Stop button
+# Parameter surface expansion for v4.16.0 optimisation framework
 
 Author: Andrew Traverso
 """
@@ -25,7 +25,7 @@ from ..progress import CancellableProgress, is_cancelled
 from ._worker import ThreadCancellableProgress
 
 
-# v5.4 (audit P1-D): canonical scipy / design_optimize method tokens
+# Canonical scipy / design_optimize method tokens
 # surfaced via the Advanced-parameters dropdown.  Order matters --
 # QComboBox.addItems lands on index 0 by default.  Per the backward-
 # compat note in the prompt, the local geometric path's
@@ -61,7 +61,7 @@ _DEFAULT_WAVE_PROPAGATORS = (
 class OptimizeWorker(QThread):
     """Run optimization in a background thread.
 
-    v5.4 (audit P1-D): accepts an ``advanced_kwargs`` dict from the
+    Accepts an ``advanced_kwargs`` dict from the
     dock so the user's dropdown / spinner choices (method, max_iter,
     ...) flow through to model.run_optimization() instead of being
     silently dropped.  Pre-v5.4 the worker only forwarded ``max_iter``
@@ -90,16 +90,16 @@ class OptimizeWorker(QThread):
         self.live_model = model
         self.model = self._detached_copy(model)
         self.max_iter = max_iter
-        # v5.4 (audit P1-D): dock-supplied advanced parameter dict.
+        # Dock-supplied advanced parameter dict.
         # Defaults to empty -- model.run_optimization will then keep
         # its pre-v5.4 Nelder-Mead behaviour.
         self.advanced_kwargs = dict(advanced_kwargs or {})
-        # v5.4 (audit P1-F): cancellation flag polled by the scipy
+        # Cancellation flag polled by the scipy
         # callback below.  run_optimization() doesn't take a
         # CancellableProgress so we sentinel via StopIteration in the
         # callback and catch it in run().
         self._cancel_progress = ThreadCancellableProgress(self)
-        # v5.24.4 (audit S4-7): the worker runs the optimization with
+        # The worker runs the optimization with
         # ``apply_result=False`` so it never mutates the shared live model
         # off the GUI thread; it hands the solution vector back here for
         # the dock's finished-handler to apply on the MAIN thread.
@@ -132,7 +132,7 @@ class OptimizeWorker(QThread):
         return clone
 
     def run(self):
-        # v5.4 (audit P1-D): validate dock kwarg combinations BEFORE
+        # Validate dock kwarg combinations BEFORE
         # spawning the scipy run so the user sees an immediate error
         # message instead of a deep-stack KeyError / ValueError from
         # scipy.  The local geometric path runs scipy.minimize
@@ -164,9 +164,9 @@ class OptimizeWorker(QThread):
             self.progress.emit(it, merit)
             # Both cancellation channels: the dock's Stop button sets
             # CancellableProgress, while MainWindow._shutdown_dock_workers
-            # calls Qt's requestInterruption() on close -- which used to
-            # set nothing this worker read, so the 2 s wait timed out and
-            # Qt aborted the process mid-run.
+            # calls Qt's requestInterruption() on close.  A worker that
+            # reads neither channel leaves the 2 s wait to time out and
+            # Qt aborts the process mid-run.
             if (self._cancel_progress.should_stop
                     or self.isInterruptionRequested()):
                 # Nelder-Mead's callback path lacks a clean abort
@@ -174,7 +174,7 @@ class OptimizeWorker(QThread):
                 # via OptimizeResult or raises into the caller.
                 raise StopIteration('cancelled by user')
         try:
-            # v5.24.4 (audit S4-7): apply_result=False -- the model runs
+            # Apply_result=False -- the model runs
             # the solve without writing back into the shared live model
             # from this worker thread; it restores itself to x0 and
             # exposes the solution via ``model._last_optimization_x``.
@@ -417,7 +417,7 @@ class OptimizerDock(QWidget):
         adv_row.addStretch()
         opt_layout.addLayout(adv_row)
 
-        # v5.4 (audit P1-D): "Advanced parameters" collapsible group
+        # "Advanced parameters" collapsible group
         # surfaces the 8 dock-relevant design_optimize() kwargs that
         # were hardcoded pre-v5.4.  Sits beneath the run-button row so
         # casual users still see the run controls without scrolling;
@@ -491,10 +491,10 @@ class OptimizerDock(QWidget):
 
     def _refresh_variables(self):
         # The LIVE list, in the same order and of the same length as
-        # ``get_variable_values()`` -- the grid used to be sized from
-        # the unfiltered list, so a variable whose element had been
-        # deleted left a blank row that did not correspond to any
-        # value the optimizer would actually move.
+            # ``get_variable_values()``.  Sizing the grid from the
+            # UNFILTERED list leaves a blank row for a variable whose
+            # element has been deleted -- a row that corresponds to no
+            # value the optimizer would move.
         live = self.sm.live_opt_variables()
         self.var_table.setRowCount(len(live))
         for i, (elem_idx, surf_idx, field) in enumerate(live):
@@ -577,13 +577,13 @@ class OptimizerDock(QWidget):
         self.sm.geo_merit_target = self.spin_target.value()
 
     # ----------------------------------------------------------------
-    # v5.4 (audit P1-D): Advanced-parameters group.
+    # Advanced-parameters group.
     # ----------------------------------------------------------------
 
     def _build_advanced_group(self, parent_layout):
         """Construct the collapsible Advanced-parameters group.
 
-        v5.4 (audit P1-D): surfaces 8 design_optimize() kwargs that
+        Surfaces 8 design_optimize() kwargs that
         were hardcoded pre-v5.4.  Children of the group are:
 
         * combo_method   -- method dropdown (default Nelder-Mead for
@@ -858,7 +858,7 @@ class OptimizerDock(QWidget):
         self._reset_convergence()
         self._append_convergence(0, initial_merit)
 
-        # v5.4 (audit P1-D): forward the Advanced-parameters dock
+        # Forward the Advanced-parameters dock
         # selections (method / max_iter override / hess / constraints)
         # to the worker.  Empty dict when the group is unchecked --
         # OptimizeWorker then preserves the pre-v5.4 Nelder-Mead path.
@@ -867,13 +867,13 @@ class OptimizerDock(QWidget):
         self._worker = OptimizeWorker(self.sm, max_iter, advanced_kwargs=adv)
         self._worker.progress.connect(self._on_progress)
         self._worker.finished_result.connect(self._on_finished)
-        # v5.4 (audit P1-F): also reset UI on cooperative cancel.
+        # Also reset UI on cooperative cancel.
         self._worker.cancelled.connect(
             lambda: self._on_finished(False, 'Cancelled by user'))
         self._worker.start()
 
     def _stop_optimize(self):
-        # v5.4 (audit P1-F): cooperative cancellation -- workers poll
+        # Cooperative cancellation -- workers poll
         # CancellableProgress.should_stop and return partial results.
         # The finished/cancelled signal handlers re-enable the UI.
         if self._worker and self._worker.isRunning():
@@ -917,11 +917,12 @@ class OptimizerDock(QWidget):
                 pass
 
     def _on_finished(self, success, msg):
-        # v5.24.4 (audit S4-7): the background OptimizeWorker no longer
-        # writes its solution into the live model off-thread -- it restored
-        # the model to its pre-run state and exposed the solution vector on
-        # ``worker.result_x``.  Apply it HERE, on the GUI thread, so
-        # self.elements is mutated and the rebuild signal is emitted from
+        # The background OptimizeWorker does NOT write its solution into
+        # the live model off-thread: it restores the model to its pre-run
+        # state and exposes the solution vector on ``worker.result_x``
+        # (docs/history/lumenairy.ui.optimizer_dock.md).  Apply it HERE,
+        # on the GUI thread, so self.elements is mutated and the rebuild
+        # signal is emitted from
         # the main thread only.  Workers without a ``result_x`` (the global
         # search, cancel/failure paths) leave the model untouched.
         worker = self._worker
@@ -964,7 +965,7 @@ class OptimizerDock(QWidget):
         self._worker = GlobalSearchWorker(self.sm, self.spin_iter.value(), 20)
         self._worker.progress.connect(self._on_global_progress)
         self._worker.finished_result.connect(self._on_finished)
-        # v5.4 (audit P1-F): map cancel signal to the same UI reset.
+        # Map cancel signal to the same UI reset.
         self._worker.cancelled.connect(
             lambda: self._on_finished(False, 'Cancelled by user'))
         self._worker.start()
@@ -1002,7 +1003,7 @@ class OptimizerDock(QWidget):
             # list.
             flat_surf_map = {}   # (elem_idx, surf_idx) -> flat index
             thickness_map = {}   # elem_idx -> air-gap thickness index
-            # v5.24.x (audit S4-6): (elem_idx, surf_idx) -> internal-gap
+            # (elem_idx, surf_idx) -> internal-gap
             # thickness index.  The flattened ``surfaces`` dict emitted by
             # ``to_prescription`` has NO ``thickness`` key, so a surface
             # thickness variable must be routed to the top-level
@@ -1028,7 +1029,7 @@ class OptimizerDock(QWidget):
                         surf_thk_map[(ei, si)] = flat_thk
                         flat_thk += 1
 
-            # v5.24.x (audit S4-6): a LAST-surface ``thickness`` is the air
+            # A LAST-surface ``thickness`` is the air
             # gap to the FOLLOWING lens element -- the same slot that
             # element's ``distance`` occupies.  Return its thickness index,
             # or None at the tail (the gap to the detector is not a legacy
@@ -1063,7 +1064,7 @@ class OptimizerDock(QWidget):
                         continue
                     path = ('thicknesses', tk_idx)
                 elif field == 'thickness':
-                    # v5.24.x (audit S4-6): route a surface thickness to its
+                    # Route a surface thickness to its
                     # top-level ``thicknesses`` slot -- the internal gap for
                     # a non-last surface, else the air gap to the next
                     # element.  The surface dict has no ``thickness`` key.
@@ -1083,13 +1084,13 @@ class OptimizerDock(QWidget):
                         continue
                     path = ('surfaces', fs, field)
                 else:
-                    # v5.24.x (audit S4-6): glass / semi_diameter etc. have
+                    # Glass / semi_diameter etc. have
                     # no numeric slot in the legacy wave prescription.
                     self.log.append(
                         f'  (skipped {field} for element {elem_idx} '
                         f'surface {surf_idx}: not a wave-optimizable field)')
                     continue
-                # v5.24.x (audit S4-6): a last-surface thickness and the
+                # A last-surface thickness and the
                 # next element's distance address the SAME gap; emitting
                 # both trips DesignParameterization's duplicate-path guard.
                 if path in seen_paths:
@@ -1099,7 +1100,7 @@ class OptimizerDock(QWidget):
                     continue
                 seen_paths.add(path)
                 free_vars.append(path)
-                # v5.24.3 (audit S4-2): the bounds' centre must be in the
+                # The bounds' centre must be in the
                 # SAME units as x0.  DesignParameterization.initial_values()
                 # reads x0 from ``pres`` (to_prescription converts mm -> m),
                 # so read the centre from the metre-unit template at the same
@@ -1241,7 +1242,7 @@ class OptimizerDock(QWidget):
 
             # Run in background thread
             use_jax = bool(self.chk_jax.isChecked())
-            # v5.4 (audit P1-D): forward the full Advanced-parameters
+            # Forward the full Advanced-parameters
             # dock surface to the wave worker.  The wave worker passes
             # method / hess / wave_propagator / precision / constraints
             # / state_file straight to design_optimize().  If the user
@@ -1267,7 +1268,7 @@ class OptimizerDock(QWidget):
                     self.log.append(f'  Advanced: {_amsg}')
             self._worker.finished_result.connect(self._on_wave_finished)
             self._worker.fine_progress.connect(self._on_wave_progress)
-            # v5.4 (audit P1-F): wave worker emits its own cancelled
+            # Wave worker emits its own cancelled
             # signal; the finished_result already carries success=False
             # on cancel so we don't need a second UI handler.
             self._worker.start()
@@ -1318,7 +1319,7 @@ class OptimizerDock(QWidget):
         self._worker = None
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -1330,7 +1331,7 @@ class OptimizerDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)
@@ -1350,14 +1351,14 @@ class WaveOptimizeWorker(QThread):
         self.wavelength = wavelength
         self.max_iter = max_iter
         self.use_jax = use_jax
-        # v5.4 (audit P1-D): full advanced-parameter dict from the
+        # Full advanced-parameter dict from the
         # dock.  Recognised keys: method, hess, wave_propagator,
         # precision, constraints, state_file, state_save_every,
         # multi_objective (bool), n_generations, pop_size.
         # Default empty -> preserves the pre-v5.4 'L-BFGS-B' /
         # double-precision / no-constraints behaviour.
         self.advanced_kwargs = dict(advanced_kwargs or {})
-        # v5.4 (audit P1-F): CancellableProgress wraps the existing
+        # CancellableProgress wraps the existing
         # Qt-emit callback.  design_optimize polls should_stop in all
         # 4 scipy callbacks and stops cleanly with a partial result.
         self._cancel_progress = ThreadCancellableProgress(
@@ -1369,7 +1370,7 @@ class WaveOptimizeWorker(QThread):
         self.fine_progress.emit(fraction, message)
 
     def _validate_kwargs(self):
-        """v5.4 (audit P1-D): pre-flight check on dock-supplied kwargs.
+        """Pre-flight check on dock-supplied kwargs.
 
         Raises ValueError on combinations that ``design_optimize``
         would reject downstream with a less-readable message.  Returns
@@ -1414,7 +1415,7 @@ class WaveOptimizeWorker(QThread):
         return kwargs
 
     def _run_multi_objective(self):
-        """v5.4 (audit P1-D): NSGA-II Pareto front via pymoo.
+        """NSGA-II Pareto front via pymoo.
 
         Wraps each MeritTerm.evaluate(...) into a scalar callable so
         ``design_optimize_multi_objective`` can score the population.
@@ -1465,7 +1466,7 @@ class WaveOptimizeWorker(QThread):
 
     def run(self):
         try:
-            # v5.4 (audit P1-D): NSGA-II Pareto front branch.
+            # NSGA-II Pareto front branch.
             if self.advanced_kwargs.get('multi_objective'):
                 pareto = self._run_multi_objective()
                 self.finished_result.emit({
@@ -1492,7 +1493,7 @@ class WaveOptimizeWorker(QThread):
             if self.use_jax:
                 extra['wave_propagator'] = 'real_lens_traced_jax'
 
-            # v5.4 (audit P1-D): merge dock-supplied advanced kwargs
+            # Merge dock-supplied advanced kwargs
             # over the worker defaults.  Method defaults to 'L-BFGS-B'
             # here (was hardcoded pre-v5.4); user picks at dock level.
             adv_clean = self._validate_kwargs()
@@ -1559,7 +1560,7 @@ class GlobalSearchWorker(QThread):
         # Cancelling a global search still returns the best design found
         # so far -- that was the pre-audit behaviour and it is useful.
         self.apply_result_on_failure = True
-        # v5.4 (audit P1-F): polled between restarts (and inside each
+        # Polled between restarts (and inside each
         # restart's Nelder-Mead callback) for clean cancellation.
         self._cancel_progress = ThreadCancellableProgress(self)
 
@@ -1864,7 +1865,7 @@ class _WeightsDialog(QDialog):
 
 
 # ---------------------------------------------------------------------------
-# v5.4 (audit P1-D): Constraint editor sub-panel.
+# Constraint editor sub-panel.
 # ---------------------------------------------------------------------------
 
 class _ConstraintsEditor(QGroupBox):

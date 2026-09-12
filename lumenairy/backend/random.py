@@ -48,7 +48,7 @@ class RandomState:
     samples.
     """
 
-    # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): annotate the
+    # Annotate the
     # backend-polymorphic attributes as ``Any`` -- they hold a
     # numpy/cupy Generator OR a JAX PRNGKey depending on the dispatch
     # branch selected in ``__init__``, which mypy cannot follow.
@@ -97,7 +97,7 @@ class RandomState:
         import jax
         self._key, sub = jax.random.split(self._key)
         if dtype is None:
-            # v5.4.6 (audit F-31): match the NumPy/CuPy default precision.
+            # Match the NumPy/CuPy default precision.
             # ``result_type(float)`` is x64-aware: float64 when jax_enable_x64
             # is set (so it agrees with NumPy), float32 otherwise (the only
             # option JAX supports without x64).  The old hard-coded float32
@@ -120,7 +120,7 @@ class RandomState:
         import jax
         self._key, sub = jax.random.split(self._key)
         if dtype is None:
-            # v5.4.6 (audit F-31): x64-aware default; see ``uniform``.
+            # x64-aware default; see ``uniform``.
             dtype = jax.numpy.result_type(float)
         return mean + std * jax.random.normal(sub, shape, dtype=dtype)
 
@@ -140,12 +140,12 @@ class RandomState:
         import jax
         self._key, sub = jax.random.split(self._key)
         if dtype is None:
-            # v5.4.6 (audit F-30): match the NumPy/CuPy int64 default on
+            # Match the NumPy/CuPy int64 default on
             # x64-enabled JAX (``result_type(int)`` -> int64 when
             # jax_enable_x64 is set, int32 otherwise).  Mirrors the v4.13.2
             # int64 parity fix already applied to ``choice``.
             dtype = jax.numpy.result_type(int)
-        # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): the public
+        # The public
         # contract is "high required for the JAX branch"; numpy/cupy
         # accept high=None as "use dtype max" but jax.random.randint does
         # not, so the runtime path is well-defined.  cast for mypy.
@@ -163,7 +163,7 @@ class RandomState:
         import jax
         import jax.numpy as jnp
         self._key, sub = jax.random.split(self._key)
-        # v4.13.1 (P1-F): honour replace=False on the JAX backend.
+        # Honour replace=False on the JAX backend.
         # Previously the ``p is None`` branch dispatched to
         # ``jax.random.randint``, which is always with-replacement; a
         # caller passing ``replace=False`` silently got with-replacement
@@ -171,7 +171,7 @@ class RandomState:
         # whenever ``replace=False`` so the without-replacement contract
         # is honoured for both weighted and unweighted draws.
         if not replace:
-            # v4.13.2 (P1-NEW-K): wrap the replace=False dispatch in
+            # Wrap the replace=False dispatch in
             # a try/except so pre-0.4.x JAX builds that lacked
             # ``replace=False`` on ``jax.random.choice`` raise a
             # clear migration error instead of a bare TypeError.
@@ -185,7 +185,7 @@ class RandomState:
                     "RandomState.choice(replace=False) on JAX "
                     "requires JAX >= 0.4.0 (got TypeError).  Update "
                     "JAX or switch to backend='numpy'.") from e
-        # v4.13.2 (P1-NEW-I): pin the int dtype to int64 so the JAX
+        # Pin the int dtype to int64 so the JAX
         # branch matches the NumPy branch.  ``jax.random.randint``
         # defaults to int32 (and on x32-only JAX builds int64 is
         # silently demoted, but on x64-enabled builds the difference
@@ -199,7 +199,7 @@ def _is_jax_prng_key(x: Any) -> bool:
     """Detect a JAX PRNG key in either the legacy uint32 form or the
     JAX 0.4.20+ opaque-dtype form (``jax.random.key(...)``).
 
-    v4.13.1 (P3 #20): extended to recognise opaque keys.  The legacy
+    Extended to recognise opaque keys.  The legacy
     typed form returns shape ``(..., 2)`` with dtype uint32; the opaque
     form returns scalar shape with a custom dtype whose ``name``
     starts with ``'key<'`` (e.g. ``'key<fry>'``).  When available,

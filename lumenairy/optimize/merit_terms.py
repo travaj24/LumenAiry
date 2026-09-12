@@ -1,7 +1,7 @@
 """
 lumenairy.optimize.merit_terms -- individual merit-term classes.
 
-v5.1.0 split (Agent E): extracted from ``lumenairy/optimize/core.py``.
+Split out of ``lumenairy/optimize/core.py``.
 Hosts the leaf-level merit-term classes consumed by ``design_optimize``:
 focal-length / Strehl / wavefront / spot-size / OPD / Zernike /
 Laguerre-Gauss aberration penalties, the geometric-constraint merits
@@ -11,8 +11,8 @@ merit.  Composite + Callable merit terms also live here for cohesion.
 Wrapper merits (``MultiWavelengthMerit`` / ``MultiFieldMerit`` /
 ``ToleranceAwareMerit``) and JAX merits (``JaxMeritTerm`` /
 ``make_lg_aberration_merit_jax``) live in their own submodules.  All
-public names are re-exported from ``optimize/core.py``; no public-API
-behaviour changes.
+public names are re-exported from ``optimize/core.py``, which remains
+the documented import path.
 """
 
 from __future__ import annotations
@@ -157,13 +157,13 @@ class StrehlMerit(MeritTerm):
         self.weight = float(weight)
 
     def evaluate(self, ctx: Any) -> float:
-        # v4.15.3 (P1-NEW-F1-3): coerce ``ctx.strehl_best`` via
-        # ``float()`` so the
+        # Coerce ``ctx.strehl_best`` via ``float()`` so the
         # ``_FAILED_SCAN_STREHL_SENTINEL_OBJ`` singleton written by
         # ``MultiFieldMerit`` / ``ToleranceAwareMerit`` collapses to
-        # its scalar fallback (0.0) for arithmetic.  Identity-check
-        # is available before the cast for callers that want to
-        # distinguish a real-zero Strehl from a failed-scan zero.
+        # its scalar fallback (0.0) for arithmetic.  An identity check
+        # against the singleton is available before the cast, for
+        # callers that want to distinguish a real-zero Strehl from a
+        # failed-scan zero.
         strehl_best = float(ctx.strehl_best)
         deficit = max(0.0, self.min_strehl - strehl_best)
         return self.weight * deficit * deficit
@@ -175,7 +175,7 @@ class RMSWavefrontMerit(MeritTerm):
     Uses Zernike decomposition to exclude the first
     ``exclude_low_order`` OSA/ANSI-ordered modes.
 
-    v5.4.6 (audit F-4): the default ``exclude_low_order=4`` drops OSA
+    The default ``exclude_low_order=4`` drops OSA
     indices [0:4] = piston + 2 tilts + OBLIQUE ASTIGMATISM, and KEEPS
     defocus (OSA index 4).  In OSA/ANSI order the low modes are
     0=piston, 1=tilt-Y, 2=tilt-X, 3=oblique-astig, 4=defocus,
@@ -405,8 +405,8 @@ class MatchIdealSystemMerit(MeritTerm):
         Element list for the real system.  Dicts with
         ``type='_prescription_'`` are replaced at evaluation time
         with the current ``ctx.prescription`` wrapped as a
-        ``'real_lens'`` element.  (v5.30: the ``'real_lens_traced'``
-        variant is no longer reachable through a flag -- write that
+        ``'real_lens'`` element.  (The ``'real_lens_traced'`` variant
+        is not reachable through a flag -- write that
         element out explicitly here if you want it.)
         Default: a single-lens drop-in,
         ``[{'type': '_prescription_'}]``, which is correct when the
@@ -579,22 +579,22 @@ class MatchIdealSystemMerit(MeritTerm):
             E = self.source_fn(ctx.N, ctx.dx, wavelength)
             E = np.asarray(E, dtype=cdtype)
         else:
-            # v4.14.2 (P1-NEW-1): three branches matching the canonical
-            # _ZERO_APERTURE_MASK semantics shared by
-            # ``MultiWavelengthMerit.evaluate``,
-            # ``MultiFieldMerit.evaluate``, and
-            # ``ToleranceAwareMerit.evaluate``:
+            # Three branches matching the canonical _ZERO_APERTURE_MASK
+            # semantics shared by ``MultiWavelengthMerit.evaluate``,
+            # ``MultiFieldMerit.evaluate`` and ``ToleranceAwareMerit.evaluate``:
+            #
             #   * ``ap`` finite and > 0   -> circular boolean mask.
-            #   * ``ap`` finite and <= 0  -> deliberate-zero aperture;
-            #     block all light by zeroing E entirely.  Pre-v4.14.2
-            #     the ``ap > 0`` check silently fell through to the
-            #     ``else`` branch and produced a full-grid plane wave,
-            #     which apply_real_lens would then propagate as a
-            #     bright on-axis "source" -- the exact bug v4.14.1
-            #     fixed in the wrapper-merit cache but missed at this
-            #     pre-existing site.
+            #
+            #   * ``ap`` finite and <= 0  -> deliberate-zero aperture; block all
+            #     light by zeroing E entirely.  Without the ``<= 0`` arm the
+            #     check falls through to the ``else`` branch and produces a
+            #     full-grid plane wave, which apply_real_lens then propagates
+            #     as a bright on-axis "source" -- the same failure the
+            #     wrapper-merit cache guards against with its own sentinel
+            #     branch.
+            #
             #   * ``ap`` is None or non-finite -> no aperture specified;
-            #     full-grid plane wave (unchanged behaviour).
+            #     full-grid plane wave.
             ap = (ctx.prescription.get('aperture_diameter')
                   if ctx.prescription else None)
             if ap is not None and np.isfinite(ap) and ap > 0:
@@ -602,9 +602,9 @@ class MatchIdealSystemMerit(MeritTerm):
                 x = (np.arange(ctx.N) - ctx.N / 2) * ctx.dx
                 X, Y = np.meshgrid(x, x)
                 mask = (X * X + Y * Y) <= (ap / 2.0) ** 2
-                # v4.14.2 (P1-NEW-4): dtype-aware zero so a complex64
-                # cdtype is not silently upcast to complex128 by the
-                # 0.0+0.0j literal.  Mirrors the v4.13.2 sweep at
+                # Dtype-aware zero so a complex64 cdtype is not
+                # silently upcast to complex128 by the 0.0+0.0j
+                # literal.  Mirrors the sweep at
                 # apply_aperture / apply_mirror / _lens_thin /
                 # _lens_real.
                 E = np.where(mask, E, np.zeros((), dtype=cdtype))
@@ -633,9 +633,9 @@ class MatchIdealSystemMerit(MeritTerm):
         supplied, falls back to ``ctx.prescription`` -- the
         single-prescription (backward-compatible) case.
         """
-        # v5.30 (W5): ``use_traced_lens`` is removed, so the placeholder
-        # always expands to the default ``'real_lens'`` element.  A caller
-        # who wants the traced propagator writes that element out in
+        # ``use_traced_lens`` does not exist, so the placeholder always
+        # expands to the default ``'real_lens'`` element.  A caller who
+        # wants the traced propagator writes that element out in
         # ``real_elements`` explicitly (with its own ``ray_subsample``).
         lens_type = 'real_lens'
 
@@ -713,12 +713,10 @@ class MatchIdealSystemMerit(MeritTerm):
             E_ideal = E_ideal * mask
             E_real = E_real * mask
 
-        # v5.30 (W5): the optional axial focus search is REMOVED with the
-        # ``focus_search`` flag that was its only gate, and
-        # ``_focus_search_penalty`` is deleted with it (grep-verified:
-        # ``self.focus_search`` here was the sole caller).  To decouple
-        # "correct focal plane" from "aberration quality", put an explicit
-        # ``{'type': 'propagate', 'z': dz}`` offset in ``ideal_elements``.
+        # There is no optional axial focus search: to decouple "correct
+        # focal plane" from "aberration quality", put an explicit
+        # ``{'type': 'propagate', 'z': dz}`` offset in
+        # ``ideal_elements``.
         return self._compute_penalty(E_ideal, E_real)
 
     def _compute_penalty(self, E_ideal, E_real):
@@ -1231,14 +1229,14 @@ class LGAberrationMerit(MeritTerm):
                 tensor_kwargs['sigma_grid_n'] = int(self.sigma_grid_n)
         fit_ref = aberration_free_reference_fit(fit)
 
-        # v5.46 (VERIFY-A4 follow-up, O-3): the aberration-free reference is a
-        # pure function of (fit, s2_image, source_point, w_s, w_p, w_o,
-        # branch, sigma grid), so it rides in the SAME per-context cache the
-        # canonical fit uses.  A CompositeMerit with several LGAberrationMerit
-        # terms on one fit -- the common "one term per emitter class" layout --
-        # then pays for the reference ONCE per (fit, field point) instead of
-        # once per term, and so does a repeated evaluation inside one context.
-        # Measured on an f/2.5 N-BK7 plano-convex singlet, three terms sharing
+        # The aberration-free reference is a pure function of (fit, s2_image,
+        # source_point, w_s, w_p, w_o, branch, sigma grid), so it rides in the
+        # SAME per-context cache the canonical fit uses.  A CompositeMerit
+        # with several LGAberrationMerit terms on one fit -- the common "one
+        # term per emitter class" layout -- then pays for the reference ONCE
+        # per (fit, field point) instead of once per term, and so does a
+        # repeated evaluation inside one context. Measured on an f/2.5 N-BK7
+        # plano-convex singlet, three terms sharing
         # one fit: 4.17 s -> 1.51 s for the composite (the first term still
         # pays both calls).  ``ref_cache_key`` is None whenever the fit itself
         # was uncacheable, so the two stay consistent.
@@ -1296,11 +1294,10 @@ class LGAberrationMerit(MeritTerm):
                     w_s=self.w_s, w_p=self.w_p, w_o=self.w_o,
                     **tensor_kwargs,
                 )
-                # v5.46 (audit Y2 follow-up): the same evaluation on the
-                # aberration-free twin, with the SAME w_o, so every
-                # dimensional factor (the Van Vleck weight sqrt(|det J|)/lam,
-                # N_s, N_p, N_o, pi/sqrt(det M)) cancels in the ratio and
-                # what is left is a pure coupling.
+                # The same evaluation on the aberration-free twin, with the
+                # SAME w_o, so every dimensional factor (the Van Vleck weight
+                # sqrt(|det J|)/lam, N_s, N_p, N_o, pi/sqrt(det M)) cancels in
+                # the ratio and what is left is a pure coupling.
                 #
                 # The reference is evaluated at the twin's OWN chief-ray
                 # landing, not at ``s2_img``: a Strehl ratio is referenced to
@@ -1381,26 +1378,27 @@ class LGAberrationMerit(MeritTerm):
                     # the (0, 0) contribution must be the Strehl DEFICIT
                     # ``1 - |L|^2`` (0 for a perfect system, growing with
                     # aberration), NOT ``|L|^2``: ``design_optimize``
-                    # MINIMISES the weighted merit sum, so the old ``|L|^2``
-                    # drove the design toward |Strehl| = 0 (MAXIMUM
-                    # aberration).  This is verbatim the fix the JAX twin
-                    # ``make_lg_aberration_merit_jax`` already carries
-                    # (jax_merits.py: ``piston_weight * (1 - |res|^2)``);
-                    # the two now agree numerically on the (0, 0) target.
-                    # Every OTHER (p, ell) channel keeps ``|L|^2`` -- driving
-                    # a named aberration channel to zero IS the intent there.
+                    # MINIMISES the weighted merit sum, so ``|L|^2``
+                    # itself would drive the design toward
+                    # |Strehl| = 0 (MAXIMUM aberration).  The JAX twin
+                    # ``make_lg_aberration_merit_jax`` carries the same
+                    # form (jax_merits.py: ``piston_weight *
+                    # (1 - |res|^2)``); the two agree numerically on
+                    # the (0, 0) target.  Every OTHER (p, ell) channel
+                    # keeps ``|L|^2`` -- driving a named aberration
+                    # channel to zero IS the intent there.
                     #
-                    # v5.46 (audit Y2 follow-up): ``mag_sq`` is now
-                    # ``|L|^2 / |L_ref(0,0)|^2``, dimensionless and exactly
-                    # 1.0 on an aberration-free optic, so ``1 - mag_sq`` is a
-                    # real deficit in [0, 1] on the default 'sigma' branch.
-                    # Before v5.46 it was the bare ``|L|^2`` -- 4.79e+14 on
-                    # the stock singlet after the Van Vleck normalisation
-                    # (audit Y2) and 3.2e-03 before it, neither of which is a
-                    # Strehl ratio; the old number only LOOKED like one
-                    # because the missing lambda*sqrt(|det J|) (a LENGTH)
-                    # cancelled the closed-form branch's 1/length^2 by
-                    # dimensional accident.
+                    # ``mag_sq`` is ``|L|^2 / |L_ref(0,0)|^2``,
+                    # dimensionless and exactly 1.0 on an
+                    # aberration-free optic, so ``1 - mag_sq`` is a real
+                    # deficit in [0, 1] on the default 'sigma' branch.
+                    # The bare ``|L|^2`` is NOT a Strehl ratio -- it
+                    # measures 4.79e+14 on the stock singlet after the
+                    # Van Vleck normalisation (audit Y2) and 3.2e-03
+                    # before it; that number only LOOKED like one
+                    # because the missing lambda*sqrt(|det J|) (a
+                    # LENGTH) cancelled the closed-form branch's
+                    # 1/length^2 by dimensional accident.
                     total = total + wgt * (1.0 - mag_sq)
                 else:
                     total = total + wgt * mag_sq
@@ -1472,7 +1470,7 @@ class NormalizedMerit(MeritTerm):
     """Opt-in scale-aware wrapper that rescales a merit term to a common
     dimensionless scale.
 
-    v5.25 (audit S4-18 / B3): the built-in merit families evaluate on
+    The built-in merit families evaluate on
     WILDLY different native scales -- a focal-length penalty is
     dimensionless (or dioptre^2 in the afocal case), a spot-size penalty
     is absolute m^2 (~1e-10 for a micron spot), a thickness constraint is
@@ -1483,11 +1481,11 @@ class NormalizedMerit(MeritTerm):
 
         contribution = inner.evaluate(ctx) / scale
 
-    **This is strictly OPT-IN.**  Unwrapped merit terms are byte-identical
-    to their historical behaviour (the ``design_optimize`` default path is
-    unchanged); wrapping is a deliberate choice that re-bases the weight
-    calibration onto the common dimensionless scale, so re-tune weights
-    when you adopt it.
+    **This is strictly OPT-IN.**  An unwrapped merit term is unaffected
+    (the ``design_optimize`` default path does not wrap anything);
+    wrapping is a deliberate choice that re-bases the weight calibration
+    onto the common dimensionless scale, so re-tune weights when you
+    adopt it.
 
     Parameters
     ----------
@@ -1708,8 +1706,8 @@ class MinThicknessMerit(MeritTerm):
         total = 0.0
         for i, t in enumerate(thicknesses):
             if not self.include_air and _thickness_slot_is_air(surfaces, i):
-                # v5.24.x (audit S4-18): shared glass/air classification;
-                # behaviour byte-identical to the pre-dedup inline loop.
+                # Shared glass/air classification (the
+                # :class:`MaxThicknessMerit` sibling uses the same helper).
                 continue
             deficit = max(0.0, self.min_thickness - float(t))
             total = total + deficit * deficit
@@ -1719,12 +1717,12 @@ class MinThicknessMerit(MeritTerm):
 class MaxThicknessMerit(MeritTerm):
     """Penalise any GLASS thickness above a maximum.
 
-    v5.24.x (audit S4-18): only glass thicknesses count; air gaps are
-    skipped, matching the documented intent ("glass thickness") and the
-    :class:`MinThicknessMerit` sibling.  Pre-fix this iterated EVERY
-    entry in ``prescription['thicknesses']`` including air gaps -- so a
-    large object/image-space air gap (which is not a manufacturability
-    constraint on the glass) was penalised contra the docstring.
+    Only glass thicknesses count; air gaps are skipped, matching the
+    documented intent ("glass thickness") and the
+    :class:`MinThicknessMerit` sibling.  Counting every entry in
+    ``prescription['thicknesses']`` would penalise a large object- or
+    image-space air gap, which is not a manufacturability constraint on
+    the glass (docs/history/lumenairy.optimize.merit_terms.md).
 
     Parameters
     ----------
@@ -1732,8 +1730,7 @@ class MaxThicknessMerit(MeritTerm):
         Maximum acceptable GLASS thickness [m].
     weight : float
     include_air : bool, optional
-        Set True to restore the pre-fix behaviour and also penalise
-        large air gaps.  Default False.
+        Set True to also penalise large air gaps.  Default False.
 
     Native scale (audit S4-18 / :class:`NormalizedMerit`): absolute
     ``max_thickness^2`` [m^2]; :class:`NormalizedMerit` auto-resolves it

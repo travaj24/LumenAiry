@@ -8,7 +8,7 @@ Each configuration gets its own thickness / radius overrides, but
 the free-variable set is shared so the final design is a single
 set of parts that works across every configuration.
 
-# v5.4 (audit P1-F): wire CancellableProgress + Stop button
+# Wire CancellableProgress + Stop button
 
 Author: Andrew Traverso
 """
@@ -43,7 +43,7 @@ class _MultiConfigWorker(QThread):
         self.merit_terms = merit_terms
         self.wavelength = wavelength
         self.max_iter = max_iter
-        # v5.4 (audit P1-F): wraps the existing Qt-emit callback.
+        # Wraps the existing Qt-emit callback.
         # design_optimize polls should_stop in its 4 scipy callbacks
         # so the L-BFGS-B run terminates cleanly with a partial result.
         self._cancel_progress = ThreadCancellableProgress(
@@ -148,7 +148,7 @@ class MultiConfigDock(QWidget):
         self.btn_run.clicked.connect(self._run)
         run_row.addWidget(self.btn_run)
 
-        # v5.4 (audit P1-F): Stop button -- cooperative cancel via
+        # Stop button -- cooperative cancel via
         # CancellableProgress polled in design_optimize's scipy callbacks.
         self.btn_stop = QPushButton('Stop')
         self.btn_stop.setEnabled(False)
@@ -253,7 +253,7 @@ class MultiConfigDock(QWidget):
                 self.spin_iter.value())
             self._worker.fine_progress.connect(self._on_progress)
             self._worker.finished_result.connect(self._on_finished)
-            # v5.4 (audit P1-F): inform the summary on user cancel;
+            # Inform the summary on user cancel;
             # finished_result still fires so the partial design is
             # still applied.
             self._worker.cancelled.connect(
@@ -266,7 +266,7 @@ class MultiConfigDock(QWidget):
             self.progress_bar.setVisible(False)
 
     def _stop(self):
-        # v5.4 (audit P1-F): cooperative cancel via CancellableProgress.
+        # Cooperative cancel via CancellableProgress.
         if self._worker is not None and self._worker.isRunning():
             self._worker.cancel()
             self.btn_stop.setEnabled(False)
@@ -295,7 +295,7 @@ class MultiConfigDock(QWidget):
                 f'{len(p.get("surfaces", []))} surfaces')
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -307,7 +307,7 @@ class MultiConfigDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

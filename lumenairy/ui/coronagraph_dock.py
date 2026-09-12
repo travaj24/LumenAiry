@@ -630,7 +630,7 @@ class CoronagraphDock(QWidget):
             # Contrast curve canvas (top, 60% height).
             self.fig_curve = Figure(figsize=(6, 4), tight_layout=True)
             self.canvas_curve = FigureCanvas(self.fig_curve)
-            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            # Override matplotlib canvas sizeHint so the dock can shrink
             self.canvas_curve.setMinimumSize(0, 0)
             self.canvas_curve.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar_curve = NavigationToolbar(self.canvas_curve, right_host)
@@ -641,7 +641,7 @@ class CoronagraphDock(QWidget):
             # with 4 horizontal subplots.
             self.fig_stops = Figure(figsize=(8, 3), tight_layout=True)
             self.canvas_stops = FigureCanvas(self.fig_stops)
-            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            # Override matplotlib canvas sizeHint so the dock can shrink
             self.canvas_stops.setMinimumSize(0, 0)
             self.canvas_stops.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             right_lay.addWidget(self.canvas_stops, stretch=4)
@@ -709,7 +709,7 @@ class CoronagraphDock(QWidget):
             self.summary.append('Stop requested (waits for current step).')
 
     def closeEvent(self, event):
-        """v5.4.2 (audit C1): wait briefly for an in-flight worker
+        """Wait briefly for an in-flight worker
         thread before the dock destructs.  Without this, closing the
         dock during a run leaves the worker alive with dangling
         callbacks to a deleted parent (potential segfault on emit).
@@ -828,7 +828,7 @@ class CoronagraphDock(QWidget):
         return params
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -840,7 +840,7 @@ class CoronagraphDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

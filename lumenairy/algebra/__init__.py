@@ -89,7 +89,7 @@ Operator.from_prescription = classmethod(
 )
 
 
-# v5.46 (audit Z4): make ``lumenairy.algebra.from_prescription`` resolve to
+# Make ``lumenairy.algebra.from_prescription`` resolve to
 # the FUNCTION, not to the submodule of the same name.
 #
 # Importing ``.from_prescription`` above made the import system bind the

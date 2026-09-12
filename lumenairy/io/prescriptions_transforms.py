@@ -221,10 +221,10 @@ def scale_prescription(prescription: Dict[str, Any],
         # I7: Forbes-Q freeform.  ``r_max`` is a normalisation RADIUS and each
         # ``q_*_coeffs`` entry is a sag LENGTH, so both scale linearly -- the
         # aspheric ``A_n / s**(n-1)`` rule does NOT apply (the Q polynomials
-        # are functions of the dimensionless u = r / r_max).  Pre-fix neither
-        # was touched, so a scaled Q-type surface kept its original freeform
-        # sag on a rescaled base conic (measured at s = 0.25: r_max stayed
-        # 7.5 mm instead of 1.875 mm).
+    # are functions of the dimensionless u = r / r_max).  Leaving either
+    # untouched keeps a scaled Q-type surface's original freeform sag on
+    # a rescaled base conic (measured at s = 0.25: r_max stays
+    # 7.5 mm instead of 1.875 mm).
         if d.get('r_max') is not None and np.isfinite(d['r_max']):
             d['r_max'] = float(d['r_max']) * s
         for qkey in ('q_bfs_coeffs', 'q_con_coeffs'):
@@ -262,10 +262,11 @@ def scale_prescription(prescription: Dict[str, Any],
                 if cb.get(dkey) is not None:
                     cb[dkey] = float(cb[dkey]) * s
 
-    # I7: the v5.32 diffractive payload is entirely lengths and was untouched,
-    # so a scaled system kept the original DOE pitch and axial gaps (measured
-    # at s = 0.25: period 2 um instead of 0.5 um, gap_before 10 mm instead of
-    # 2.5 mm) -- i.e. the "self-similar" result was not self-similar at all.
+    # I7: the diffractive payload is entirely lengths.  Leaving it
+    # untouched keeps the original DOE pitch and axial gaps (measured
+    # at s = 0.25: period 2 um instead of 0.5 um, gap_before 10 mm
+    # instead of 2.5 mm) -- i.e. a "self-similar" result that is not.
+    # See docs/history/lumenairy.io.prescriptions_transforms.md.
     if isinstance(rx.get('diffractives'), list):
         for dg in rx['diffractives']:
             if not isinstance(dg, dict):
@@ -388,9 +389,9 @@ def normalize_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
     if surfs is None:
         # Build surfaces from elements (drop pure-mirror entries that
         # apply_real_lens cannot consume).  The canonical mirror flag
-        # is ``element_type='mirror'`` -- pre-v4.11.2 this checked
-        # ``e.get('mirror')`` which is never set, making the filter a
-        # no-op (mirrors leaked through to apply_real_lens).
+        # is ``element_type='mirror'``; checking ``e.get('mirror')``
+        # instead is a no-op (the key is never set) and mirrors leak
+        # through to apply_real_lens.
         surfs = [e for e in elems
                  if not (isinstance(e, dict)
                          and (e.get('element_type') == 'mirror'
@@ -401,10 +402,10 @@ def normalize_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
         # refractive prescriptions).
         #
         # I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): stamp
-        # ``element_type='surface'`` on the mirrored entries.  Pre-fix they
-        # were plain surface dicts with no ``element_type``, so
+        # ``element_type='surface'`` on the mirrored entries.  Plain
+        # surface dicts with no ``element_type`` make
         # ``generate_simulation_script`` -- which subscripts
-        # ``elem['element_type']`` -- raised ``KeyError: 'element_type'`` on
+        # ``elem['element_type']`` -- raise ``KeyError: 'element_type'`` on
         # the output of the one helper documented as "the recommended idiom"
         # for making a builder prescription codegen-shaped.
         #
@@ -527,10 +528,10 @@ def split_prescription_at_mirrors(
     all_th = prescription.get('all_thicknesses')
     if elements is None or all_th is None:
         # Plain prescription without mirrors -- return as a single leg.
-        # I7: say so.  Pre-fix this early return was silent, so a
+        # I7: say so.  A silent early return makes a
         # prescription whose loader simply does not emit ``elements``
-        # reported "one refractive leg, no folds" -- indistinguishable from a
-        # genuinely unfolded design, and the docstring above promises the
+        # report "one refractive leg, no folds" -- indistinguishable from
+        # a genuinely unfolded design, and the docstring above promises the
         # CODE V / Quadoa loaders carry both keys.
         _missing = [k for k, v in (('elements', elements),
                                    ('all_thicknesses', all_th)) if v is None]
@@ -580,10 +581,11 @@ def split_prescription_at_mirrors(
         kind = el.get('element_type', 'surface')
         if kind == 'mirror':
             _flush_refractive()
-            # v5.4.6 (audit F-15): preserve the propagation distances INTO
-            # and OUT OF the mirror (previously dropped), so the folded-
-            # design walking workflow can reconstruct the inter-leg
-            # geometry.  all_th[i] is the gap from element i to element i+1.
+            # Preserve the propagation distances INTO
+            # Preserve the propagation distances INTO and OUT OF the
+            # mirror, so the folded-design walking workflow can
+            # reconstruct the inter-leg geometry.  all_th[i] is the gap
+            # from element i to element i+1.
             d_in = float(all_th[idx - 1]) if idx > 0 else 0.0
             d_out = float(all_th[idx]) if idx < len(all_th) else 0.0
             legs.append({'kind': 'mirror',

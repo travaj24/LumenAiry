@@ -38,13 +38,13 @@ import numpy as np
 # ``type(E).__name__ == 'PartialCoherenceMCF'``) instead of restoring
 # the lazy import -- the duck-typed predicate is free of import-order
 # constraints AND keeps the helper hot-loop cheap.
-# v5.46 (audit Z4 nit): relative, matching the rest of the package -- an
+# Relative, matching the rest of the package -- an
 # absolute ``from lumenairy...`` inside the package re-enters the top-level
 # ``lumenairy/__init__`` by name and only works because it is already in
 # sys.modules by the time this module is imported.
 from .sources.core import PartialCoherenceMCF as _MCF
 
-# v5.31 (audit A-9): the closed vocabulary for ``input_kind``.
+# The closed vocabulary for ``input_kind``.
 #
 # v4.15.5 introduced ``input_kind`` as a free-form string interpolated
 # straight into the rejection message and documented three
@@ -64,7 +64,7 @@ from .sources.core import PartialCoherenceMCF as _MCF
 # a library bug, not a user error, so it fails loudly.
 _INPUT_KINDS = frozenset({'field', 'psf', 'pupil'})
 
-# v5.46 (audit Z4): the numeric ``dtype.kind`` letters this guard accepts.
+# The numeric ``dtype.kind`` letters this guard accepts.
 # The guard's own message has always said "expected 2-D complex <kind>" while
 # it enforced only ``ndim == 2``; complex ('c') is the intended input and real
 # ('f') / integer ('i', 'u') / bool ('b') are legitimately used as amplitude
@@ -101,13 +101,10 @@ def _check_2d_scalar_field(
         ``pupil`` (``richards_wolf_focus``, ``debye_wolf_psf``) or
         ``psf`` (``compute_otf`` / ``compute_mtf``) see
         "expected 2-D complex pupil" / "psf" instead of the literal
-        "field" string.  v4.15.5 (P2-NEW-F1-3): parameterised after
-        the v4.15.4 audit noted that the vector-diffraction sites
-        took a pupil, not a field, but the error message hardcoded
-        "field".  v5.31 (audit A-9): the value must be a member of
-        the closed :data:`_INPUT_KINDS` vocabulary
-        (``'field'`` / ``'psf'`` / ``'pupil'``) -- see the Raises
-        section -- and is now declared explicitly at every wired
+        "field" string.  The value must be a member of the closed
+        :data:`_INPUT_KINDS` vocabulary (``'field'`` / ``'psf'`` /
+        ``'pupil'``) -- see the Raises section -- and is declared
+        explicitly at every wired
         call site rather than defaulted.
 
     Raises
@@ -143,10 +140,10 @@ def _check_2d_scalar_field(
         If ``E`` is an :class:`numpy.matrix`, or if its dtype kind is
         outside :data:`_FIELD_DTYPE_KINDS` (i.e. not complex / real /
         integer / boolean -- an object-dtype array being the usual
-        offender).  v5.46 (audit Z4): the guard's message promised
-        "2-D complex" since v4.15.2 but enforced only ``ndim == 2``, so
-        both of these reached the kernels and produced a plausible
-        finite result computed by the wrong arithmetic --
+        offender).  A guard that promises "2-D complex" but enforces
+        only ``ndim == 2`` lets both of these reach the kernels and
+        produce a plausible finite result computed by the wrong
+        arithmetic --
         :class:`numpy.matrix` because its ``*`` is a matrix product, so
         every elementwise mask / phase-screen multiply downstream became
         a matmul; object dtype because NumPy falls back to calling the
@@ -168,7 +165,7 @@ def _check_2d_scalar_field(
         )
 
     if isinstance(E, _MCF):
-        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the prior
+        # The prior
         # rejection message cited "v4.16+ scope" -- but the library
         # version was v4.16.0 at the time of the audit, leaving the
         # message stale.  Replace with an honest pointer to the
@@ -202,8 +199,7 @@ def _check_2d_scalar_field(
         # the suggestion text by ndim so the message is useful.
         shape_str = getattr(E, "shape", "(unknown shape)")
         if ndim == 3:
-            # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b follow-up):
-            # the ensemble hint now points at the
+            # The ensemble hint points at the
             # :func:`propagate_ensemble` helper rather than the bare
             # iterate-pattern.  The bare iterate still works (and is
             # left as a fallback below for users with custom
@@ -244,8 +240,8 @@ def _check_2d_scalar_field(
             f"{hint}"
         )
 
-    # v5.46 (audit Z4): the two 2-D inputs that used to pass this guard and
-    # then compute something plausible but wrong.
+    # The two 2-D inputs that pass the ndim check and then compute
+    # something plausible but wrong (docs/history/lumenairy._validation.md).
     if isinstance(E, np.matrix):
         raise TypeError(
             f"{fn_name}: np.matrix is not a valid {input_kind}.  Its ``*`` "

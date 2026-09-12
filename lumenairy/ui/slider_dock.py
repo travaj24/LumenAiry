@@ -142,7 +142,7 @@ class SliderDock(QWidget):
         self._merit_timer.setInterval(80)
         self._merit_timer.timeout.connect(self._update_merit)
 
-        # v5.4.2 (audit B-P2 belt-and-suspenders): inner 40 ms
+        # Inner 40 ms
         # debounce on the system_changed emit itself.  The
         # main_window auto-retrace timer (200 ms) already coalesces
         # the downstream retrace, but the inner debounce defends
@@ -320,7 +320,7 @@ class SliderDock(QWidget):
     def _on_slider_change(self, var_index, new_value):
         """Called when any slider is moved.
 
-        v5.4.2 (audit B-P2 belt-and-suspenders): defer the
+        Defer the
         ``system_changed`` emission via a 40 ms debounce timer so a
         drag at 60+ Hz coalesces into ~25 emits/sec instead of one
         emit per pixel.  The main_window's auto-retrace timer
@@ -334,7 +334,7 @@ class SliderDock(QWidget):
         values[var_index] = new_value
         self.sm.set_variable_values(values)
         self.sm._invalidate()
-        # v5.4.2: emit system_changed via 40 ms inner debounce
+        # Emit system_changed via 40 ms inner debounce
         # instead of synchronously.  Coalesces 60 Hz slider drag
         # into ~25 Hz emit cadence.
         self._emit_timer.start()
@@ -343,7 +343,7 @@ class SliderDock(QWidget):
         self._merit_timer.start()
 
     def _emit_system_changed(self):
-        """v5.4.2: deferred system_changed emit slot."""
+        """Deferred system_changed emit slot."""
         self.sm.system_changed.emit()
 
     def _update_merit(self):
@@ -415,7 +415,7 @@ class SliderDock(QWidget):
             self._update_merit()
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -427,7 +427,7 @@ class SliderDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

@@ -10,8 +10,9 @@ the surface's local frame and absolute world coordinates.
 Every public name here is re-exported from
 ``lumenairy.raytrace.core`` so existing imports continue to resolve.
 
-No physics change: contents are bit-for-bit copies of the original
-implementations.
+Contents are bit-for-bit copies of the implementations this module was
+split out of; no physics change.  See
+docs/history/lumenairy.raytrace.world_trace.md.
 """
 
 from __future__ import annotations
@@ -171,11 +172,11 @@ def trace_world(
             # axis" and yields a ZERO kick -- the same contract the JAX
             # path documents (``jax_trace._apply_doe_kick_jax._kick``:
             # "Returns 0.0 when ``period`` is non-finite or zero") and
-            # the sibling numpy loop (``trace.py``) now enforces.  Pre-fix
-            # this site divided unguarded, so ``period=0.0`` raised
+            # the sibling numpy loop (``trace.py``) enforces.  Dividing
+            # unguarded here makes ``period=0.0`` raise
             # ``ZeroDivisionError`` mid-trace and ``period=nan`` silently
-            # NaN-poisoned (L, M).  ``inf`` already gave 0.0 by IEEE
-            # division, so that case is bit-identical.
+            # NaN-poison (L, M).  ``inf`` already gives 0.0 by IEEE
+            # division, so that case is unaffected.
             _px_f = float(_px)
             _py_f = float(_py)
             # R5 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11), world twin of
@@ -183,7 +184,7 @@ def trace_world(
             # TANGENTIAL WAVEVECTOR, ``n2 L' = n1 L + m lambda / Lambda``,
             # so the direction-cosine kick applied after refracting into
             # ``glass_after`` carries a ``1 / n2`` (ratio measured at
-            # exactly n(N-BK7) = 1.503583 pre-fix).  The OPL term keeps the
+            # exactly n(N-BK7) = 1.503583).  The OPL term keeps the
             # index-INDEPENDENT phase-screen gradient ``m lambda / Lambda``
             # -- see the long note at the ``trace.py`` site.
             _gL = (float(_mx) * wavelength / _px_f

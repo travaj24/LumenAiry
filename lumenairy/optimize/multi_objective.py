@@ -155,9 +155,7 @@ def design_optimize_multi_objective(
         Initial parameter vector.  pymoo doesn't actually use a single
         starting point (it samples a population) but ``x0`` is used to
         infer ``n_params`` and as a sanity check against ``bounds`` --
-        an ``x0`` outside the box raises a :class:`UserWarning` (I8;
-        pre-v5.46 only ``n_params`` was read and the documented check did
-        not exist).
+        an ``x0`` outside the box raises a :class:`UserWarning` (I8).
     bounds : sequence of (float, float)
         ``(lower, upper)`` bound per parameter.  Required by NSGA-II
         (pymoo uses the bounds to seed the initial population and to
@@ -203,11 +201,10 @@ def design_optimize_multi_objective(
         ``design_optimize`` for one merit), if ``len(bounds) !=
         len(x0)``, or if any bound interval has ``lb >= ub``.  Also when
         NSGA-II terminates with **no feasible solution** -- pymoo then
-        sets ``Result.X`` to ``None`` and pre-v5.46 this returned a 0-d
-        NaN array AS the Pareto front (``np.asarray(None, np.float64)``
-        is ``array(nan)``, ``ndim == 0``, so the 1-D normalisation guard
-        never fired), or raised ``IndexError`` when ``progress`` was
-        supplied (I7).
+        sets ``Result.X`` to ``None``, which without the guard returns a 0-d
+        NaN array AS the Pareto front (``np.asarray(None, np.float64)`` is
+        ``array(nan)``, ``ndim == 0``, so the 1-D normalisation guard never
+        fires) or raises ``IndexError`` when ``progress`` is supplied (I7).
 
     Notes
     -----
@@ -257,12 +254,13 @@ def design_optimize_multi_objective(
         lb[i] = lo
         ub[i] = hi
 
-    # I8 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): the docstring says ``x0``
-    # is "used to infer n_params and as a sanity check against bounds", but
-    # the check did not exist -- only ``n_params`` was read.  NSGA-II samples
-    # its own population, so an out-of-box ``x0`` does not break the run; it
-    # does mean the caller's starting design is outside the box they think
-    # they are searching, which is worth saying once.
+    # I8 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): the docstring promises
+    # ``x0`` is "used to infer n_params and as a sanity check against
+    # bounds"; this is that check.  NSGA-II samples its own population, so
+    # an out-of-box ``x0`` does not break the run; it does mean the caller's
+    # starting design is outside the box they think they are searching,
+    # which is worth saying once.
+    # See docs/history/lumenairy.optimize.multi_objective.md.
     _oob = [i for i in range(n_params)
             if not (lb[i] <= x0_arr.ravel()[i] <= ub[i])]
     if _oob:

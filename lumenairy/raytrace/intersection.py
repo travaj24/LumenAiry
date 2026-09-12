@@ -10,8 +10,8 @@ applier.
 Every public name here is re-exported from
 ``lumenairy.raytrace.core`` so existing imports continue to resolve.
 
-No physics change: contents are bit-for-bit copies of the original
-implementations.
+Contents are bit-for-bit copies of the implementations this module was
+split out of; no physics change.
 """
 
 from __future__ import annotations
@@ -140,7 +140,7 @@ def _intersect_surface(rays, surface, n_medium=1.0):
 
     Notes
     -----
-    v4.12.1 (Track C): pure-spherical surfaces (``conic == 0``, no
+    pure-spherical surfaces (``conic == 0``, no
     aspheric / biconic / freeform / coord-break extensions, finite
     radius) take a "Newton-skip" fast path that uses the analytical
     ray-sphere quadratic root directly.  For a sphere this root is
@@ -151,11 +151,10 @@ def _intersect_surface(rays, surface, n_medium=1.0):
     :func:`_refract` / :func:`_reflect` still routes through
     :func:`_surface_sag_derivatives_xy` (numerical-radial-derivative
     based), so the normal rounding behaviour is bit-identical to
-    pre-v4.12.1.  A v4.12.0 attempt that also switched the spherical
-    normal to the analytic ``(x/R, y/R, (z-R)/R)`` form (matching
-    :mod:`jax_trace`) compounded a 1.17e-3 cross-backend rel error in
-    the Maslov asymptotic test -- this conservative variant avoids
-    that drift.
+    pre-v4.12.1.  Switching the spherical normal to the analytic
+    ``(x/R, y/R, (z-R)/R)`` form (matching :mod:`jax_trace`) compounds a
+    1.17e-3 cross-backend rel error in the Maslov asymptotic test -- this
+    conservative variant avoids
     """
     R = surface.radius
     kc = surface.conic
@@ -169,7 +168,7 @@ def _intersect_surface(rays, surface, n_medium=1.0):
     # field-frame ``_surface_sag_xy`` / ``_surface_sag_derivatives_xy``).
     field_frame = _field_frame_active(surface)
 
-    # v4.12.1: detect the pure-spherical fast path.  Requires
+    # Detect the pure-spherical fast path.  Requires
     # finite R, conic == 0, no aspherics, no biconic axis, no
     # freeform departure.  Coord-break surfaces never reach
     # :func:`_intersect_surface` -- the trace loop dispatches them
@@ -221,10 +220,12 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         t, unreachable = vertex_plane_transfer_t(rays.z, rays.N, rays.alive)
         # R-4 (AUDIT_ADVERSARIAL_CODEBASE_2026_07_25): a ray parallel to
         # this plane (|N| <= 1e-30) never reaches it, so the t = 0 fallback
-        # above must not be reported as a hit.  Pre-fix it stayed alive with
-        # RAY_OK -- an IMMORTAL PHANTOM that walked a 4-flat stack accruing
-        # opd = 0.0 and was still counted in the alive/centroid/RMS-spot
-        # summary.  Both JAX kernels already kill it (_intersect_jax pure-flat
+        # above must not be reported as a hit.  Reporting it leaves an
+        # IMMORTAL PHANTOM alive with RAY_OK -- one that walks a 4-flat
+        # stack accruing opd = 0.0 and is still counted in the
+        # alive/centroid/RMS-spot summary (see
+        # docs/history/lumenairy.raytrace.intersection.md).  Both JAX
+        # kernels already kill it (_intersect_jax pure-flat
         # ``miss |= |N| <= eps``; _intersect_jax_param ``is_flat & ...``), so
         # this restores the numpy<->jax<->jax-param triangle.
         # SCOPE: this is the flat-INTERSECTION guard only.  The P3-58
@@ -265,18 +266,18 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         t2 = (-b + sqrt_disc) / 2.0
         # Direction-aware root pick: choose the intersection whose
         # parametric distance is closer to zero (the NEAR root for
-        # the ray's current direction).  v5.4.1 (audit P1): replaces
-        # the prior direction-blind ``t = t1 if R > 0 else t2`` which
-        # produced wrong-side-of-sphere results for any backward-
-        # propagating ray (N=-1 after a reflection).  Audit reproducer
+        # the ray's current direction).  A direction-BLIND
+        # ``t = t1 if R > 0 else t2`` produces wrong-side-of-sphere
+        # results for any backward-propagating ray (N=-1 after a
+        # reflection).  Audit reproducer
         # at docs/audits/AUDIT_V5_4_0_2026_05_25.md Part 5 P1: a
         # Cassegrain chief ray landed 20cm PAST the secondary vertex
         # on the wrong side of the R=-0.3m hyperbola.  See
-        # analysis/ghost.py:_ghost_intersect for the original
+        # analysis/ghost.py:_ghost_intersect for the earlier
         # workaround (now a thin alias).
         t = np.where(np.abs(t1) <= np.abs(t2), t1, t2)
 
-        # disc < 0: ray entirely misses the sphere.  v5.4.6 (audit P3-3):
+        # disc < 0: ray entirely misses the sphere.  Audit P3-3:
         # disc == 0 is the tangent case -- a real single-point intersection
         # (e.g. a chief ray sitting exactly on the stop edge), so it is now
         # accepted (>= 0) rather than dropped as "missed".  Exact tangency
@@ -397,10 +398,10 @@ def _intersect_surface(rays, surface, n_medium=1.0):
             t2 = (-b + sqrt_disc) / (2 * a)
             # Direction-aware root pick: choose the intersection whose
             # parametric distance is closer to zero (the NEAR root for
-            # the ray's current direction).  v5.4.1 (audit P1): replaces
-            # the prior direction-blind ``t = t1 if R > 0 else t2`` which
-            # produced wrong-side-of-sphere results for any backward-
-            # propagating ray (N=-1 after a reflection) -- the Newton
+            # the ray's current direction).  A direction-BLIND
+            # ``t = t1 if R > 0 else t2`` produces wrong-side-of-sphere
+            # results for any backward-propagating ray (N=-1 after a
+            # reflection) -- the Newton
             # loop below would then "converge" to that bogus initial
             # guess.  Audit reproducer at
             # docs/audits/AUDIT_V5_4_0_2026_05_25.md Part 5 P1.
@@ -412,7 +413,7 @@ def _intersect_surface(rays, surface, n_medium=1.0):
             # such rays to land at z=0 with a residual sag, then masquerade
             # as converged once Newton found |dt|<1e-15 at a stuck point.
             missed_init = (disc < 0) & rays.alive
-            # v5.4.6 (audit P3-3): keep the tangent case (disc == 0); only
+            # Keep the tangent case (disc == 0); only
             # disc < 0 (no real root) is a true miss.  Matches missed_init.
             t = np.where(disc >= 0, t, 0.0)
         else:
@@ -494,8 +495,8 @@ def _intersect_surface(rays, surface, n_medium=1.0):
             rays.alive = rays.alive & ~clipped
             if rays.error_code is not None:
                 # First-failure-wins: only overwrite RAY_OK entries.  The
-                # pre-fix line promised this in its comment but wrote
-                # ``np.where(clipped, ...)`` unconditionally, so a ray
+                # First-failure-wins: only overwrite RAY_OK entries.  An
+                # unconditional ``np.where(clipped, ...)`` relabels a ray
                 # already carrying an earlier diagnosis (e.g. RAY_TIR from
                 # this surface's refraction on a previous pass, or a code
                 # set by a caller) had it silently relabelled.
@@ -553,9 +554,9 @@ def _refract(rays, surface, n1, n2):
     if newly_tir.any() and rays.error_code is not None:
         # First-failure-wins: RAY_TIR overwrites only RAY_OK entries.
         # R7 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11): the ``np.where``
-        # below used to be UNCONDITIONAL, i.e. it relabelled any code a
-        # ray was already carrying -- the exact defect the aperture block
-        # 50 lines down documents having fixed.  Harmless while the
+        # below must stay CONDITIONAL: an unconditional form relabels any
+        # code a ray is already carrying -- the exact defect the aperture
+        # block 50 lines down documents.  Harmless while the
         # ``alive => error_code == RAY_OK`` invariant holds (``newly_tir``
         # is already AND-ed with ``alive``), but a live trap for any
         # caller that stamps a code without clearing ``alive``.
@@ -656,13 +657,12 @@ def _transfer(rays, thickness, n_medium):
     ``RAY_NAN`` (both fail the same ``|N| > tol`` test; see
     :func:`lumenairy.raytrace.exit_vertex._kill_unreachable`).
     R6 (AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11):
-    pre-fix ``t`` was masked to 0 for them but ``rays.z`` was reset to the
-    next vertex plane UNCONDITIONALLY, so a ray parallel to the axis-normal
-    planes was TELEPORTED one gap downstream with zero OPL and stayed
-    ``alive=True, error_code=0`` -- the "immortal phantom" that R-4 removed
-    from ``_intersect_surface``'s flat branch but not from here.  Measured
-    pre-fix on a bundle at ``z = 1e-4`` with ``N = 0``:
-    ``_transfer(10 mm, n=1)`` returned ``z=[0 0], alive=[T T], opd=[0 0],
+    masking ``t`` to 0 for them while resetting ``rays.z`` to the next
+    vertex plane UNCONDITIONALLY TELEPORTS a ray parallel to the
+    axis-normal planes one gap downstream with zero OPL, still
+    ``alive=True, error_code=0`` -- the "immortal phantom" R-4 removed
+    from ``_intersect_surface``'s flat branch.  Measured on a bundle at
+    ``z = 1e-4`` with ``N = 0``:
     error_code=[0 0]``.  The state is reachable: ``trace``'s DOE branch
     keeps an ``N == 0`` diffraction order alive BY DESIGN.
     """
@@ -773,7 +773,7 @@ def _apply_coord_break(rays, surface):
         # ``ui.model.recompute_element_frames``, whose own tilt blocks
         # carried the SAME inverted sign -- so it aligned two renderers
         # with each other while inverting the physics relative to Zemax
-        # and to ``trace_world``.  Measured pre-fix on a pure-tilt oracle
+        # and to ``trace_world``.  Measured on a pure-tilt oracle
         # (single +12 deg tilt_x coord break, flat air->N-BK7 interface,
         # axial ray): this path refracted the ray +4.121516 deg toward
         # world +y while ``trace_world`` gave -4.121516 deg toward world

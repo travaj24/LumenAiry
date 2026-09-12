@@ -248,12 +248,8 @@ def make_off_axis_parabola(
         corresponds to ``off_axis_angle = pi / 4``.  Must lie in the
         open interval ``(0, pi/2)``.
 
-        (Pre-v4.15.1 the docstring described this argument as the
-        chief-ray fold angle, but the surrounding formulas already
-        assumed the surface-normal convention; v4.15.1 reconciles
-        the docstring with the audited geometric derivation below
-        and with the chief-ray geometric test ``decenter =
-        2*f*tan(alpha)`` at ``alpha = pi/4`` giving ``2 f`` rather
+        (The surface-normal convention is the one the formulas below
+        assume, and the one the chief-ray geometric test ``decenter =
         than the divergent ``f tan(pi/2)``.)
     clear_aperture : float
         Clear aperture diameter at the OAP face [m].  Must be positive
@@ -271,9 +267,8 @@ def make_off_axis_parabola(
         parabola is specified by some other prescription convention.
         Must be ``None`` or a finite positive float; zero / negative
         / non-finite values raise ``ValueError`` (P3-F1-3 closure --
-        the pre-v4.15.1 factory accepted ``vertex_radius=0`` and
-        ``vertex_radius=-1`` silently, producing a flat or
-        oppositely-curved surface).
+        accepting ``vertex_radius=0`` or ``vertex_radius=-1`` would
+        silently produce a flat or oppositely-curved surface).
     name : str, optional
         Human-readable label.  Defaults to ``"OAP (f={focal_length},
         theta={off_axis_angle})"``.
@@ -321,7 +316,7 @@ def make_off_axis_parabola(
     chief-ray fold of 90 deg; pass ``off_axis_angle = pi / 4`` to
     this factory (the surface-normal angle is half the chief-ray
     fold).  Decenter for that case is ``2 f tan(pi/4) = 2 f`` --
-    finite and physical, in contrast to the pre-v4.15.1
+    finite and physical, unlike the chief-ray reading
     ``f tan(theta) = f tan(pi/2) = inf``.
 
     Warnings
@@ -402,11 +397,10 @@ def make_off_axis_parabola(
     #
     # which is the chief-ray launch radius for a collimated bundle
     # that reflects through the parent focus ``(0, 0, f)`` at fold
-    # angle ``2 * alpha``.  Pre-v4.15.1 the code used
-    # ``h = f tan(alpha)`` -- off by a factor of two and divergent
-    # at alpha approaching pi/2.  Worst case: a 90-deg-fold OAP
-    # (alpha = pi/4) wants h = 2 f, not the pre-fix h = f tan(pi/4)
-    # = f.
+    # angle ``2 * alpha``.  ``h = f tan(alpha)`` is off by a factor of
+    # two and divergent at alpha approaching pi/2.  Worst case: a
+    # 90-deg-fold OAP (alpha = pi/4) wants h = 2 f, not f tan(pi/4) = f.
+    # See docs/history/lumenairy.io.prescriptions_builders.md.
     h_decenter = 2.0 * focal_length * math.tan(off_axis_angle)
 
     is_mirror = (glass == '__MIRROR__')
@@ -469,10 +463,9 @@ THORLABS_CATALOG = {
     },
     # f=100mm, N-BK7, 1" dia (curved side first for collimation).
     # Thorlabs LA1509: R = 51.5 mm, tc = 3.6 mm, N-BK7, f = 100.0 mm.
-    # (measured EFL 99.652 mm @ 587.6 nm; was 199.8652 mm with R1 = 103.29 mm
-    #  -- 2.0056x the corrected value.  Re-measured VERIFY-A10 2026-09-12 by
-    #  an independent 2x2 ABCD product; the earlier "199.68" in this comment
-    #  was wrong in its last two digits.)
+    # (measured EFL 99.652 mm @ 587.6 nm; R1 = 103.29 mm gives 199.8652 mm,
+    #  2.0056x the correct value.  Measured VERIFY-A10 2026-09-12 by an
+    #  independent 2x2 ABCD product.)
     'LA1509-C': {
         'type': 'singlet',
         'R1': 51.5e-3, 'R2': float('inf'),

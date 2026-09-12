@@ -46,20 +46,21 @@ def _quadoa_serialize_radius(R, scale):
 def _quadoa_serialize_aspheric(coeffs, scale=1.0):
     """Serialise a library aspheric_coeffs dict ``{4: a4, 6: a6, ...}``
     as a JSON-friendly dict with string keys (JSON requires string
-    keys).  ``None`` -> ``None``.  Pre-v4.11.2 this iterated dict keys
-    as if they were values, writing the powers [4.0, 6.0, ...] instead
-    of the coefficients.
+    keys).  ``None`` -> ``None``.  Note that this serialises the dict's
+    VALUES: iterating the keys instead writes the powers
+    [4.0, 6.0, ...] where the coefficients belong.
 
-    v5.24.x (audit S4-19): unit-rescale each coefficient.  The library
+    unit-rescale each coefficient.  The library
     stores coefficients in meters (an even-asphere term ``A_p * r**p``
     is a sag length, so ``A_p`` has units ``length**(1 - p)``).  When
     the file body is written in ``units != M`` (``scale`` is the
     length-scale factor: 1e3 for MM, 1/0.0254 for IN), a coefficient of
     power ``p`` must scale by ``scale**(1 - p)`` so the written asphere
     is physically consistent with the (already scaled) radius / sag.
-    Pre-fix the coefficients were written unscaled, so a MM file carried
-    radii in mm but aspheres in per-meter -- an internally inconsistent
-    prescription for any external Quadoa reader.  ``scale=1.0`` (the
+    Writing the coefficients unscaled makes a MM file carry radii in mm
+    but aspheres in per-meter -- an internally inconsistent prescription
+    for any external Quadoa reader
+    (docs/history/lumenairy.io.prescriptions_quadoa.md).  ``scale=1.0`` (the
     default, and the ``units='M'`` path) is a no-op, preserving byte-
     identical output for meter-unit exports.
     """
@@ -88,11 +89,11 @@ def _quadoa_deserialize_aspheric(obj, inv_scale=1.0):
     * ``None`` -> ``None``
     * dict with string-or-int keys -> dict with int keys (canonical)
     * legacy list of values [a4, a6, a8] -> dict {4: a4, 6: a6, 8: a8}
-      (the pre-v4.11.2 serializer wrote ``[4.0, 6.0, ...]`` -- those
-      values are uninterpretable, so a legacy list is read at face
-      value as coefficients starting from power=4).
+      (a legacy serializer wrote ``[4.0, 6.0, ...]`` -- those values are
+      uninterpretable, so a legacy list is read at face value as
+      coefficients starting from power=4).
 
-    v5.24.x (audit S4-19): ``inv_scale`` (the length-scale factor that
+    ``inv_scale`` (the length-scale factor that
     converts file units back to meters -- 1e-3 for MM, 0.0254 for IN)
     is applied per-coefficient as ``inv_scale**(1 - p)``, inverting the
     export-side ``scale**(1 - p)``.  With ``inv_scale == 1/scale`` the
@@ -166,7 +167,7 @@ def export_quadoa_qos(prescription: Dict[str, Any], path: str, *,
 
     surfaces = prescription['surfaces']
     thicknesses = prescription['thicknesses']
-    # v5.4.6 (audit F-29): when the caller does not pass stop_surface
+    # When the caller does not pass stop_surface
     # explicitly, default it to the PRESCRIPTION's own stop (stop_index,
     # else per-surface is_stop), not surface 0 -- otherwise a
     # load->export->load round trip relocates the aperture stop to
@@ -174,10 +175,10 @@ def export_quadoa_qos(prescription: Dict[str, Any], path: str, *,
     if stop_surface is None:
         stop_surface = prescription.get('stop_index')
         if stop_surface is None:
-            # I8 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): pre-v5.46 this
-            # fell back to 0, and line ~211 then wrote ``is_stop = (i == 0)``
+            # I8 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): falling back
+            # to 0 here would make line ~211 write ``is_stop = (i == 0)``
             # on every surface -- so a prescription with NO declared stop
-            # round-tripped as one with a stop at surface 0, INVENTING an
+            # round-trips as one with a stop at surface 0, INVENTING an
             # aperture stop the design never had.  Keep None and write no
             # ``is_stop`` flag at all in that case.
             stop_surface = next(
@@ -306,7 +307,7 @@ def load_quadoa_qos(filepath: str,
     thicknesses = []
     stop_index = None
     semi_diameters = []
-    # v4.13.2 (C-P0-5): track the last surface's THI as a BFL
+    # Track the last surface's THI as a BFL
     # fallback for foreign `.qos` files that don't write the top-level
     # ``back_focal_length`` field.
     last_surface_thickness = 0.0
@@ -344,7 +345,7 @@ def load_quadoa_qos(filepath: str,
         if extras:
             surf['_extras'] = extras
         surfaces.append(surf)
-        # v4.13.2 (C-P0-5): capture the last surface's THI as the
+        # Capture the last surface's THI as the
         # fallback BFL so externally-authored `.qos` files that encode
         # the BFL on the final surface (instead of the top-level
         # ``back_focal_length`` field) do not silently drop it on read.
@@ -394,7 +395,7 @@ def load_quadoa_qos(filepath: str,
         result['stop_index'] = stop_index
     if semi_diameters:
         result['has_semi_diameters'] = True
-    # v4.13.2 (C-P0-5): preserve the BFL.  Prefer the top-level
+    # Preserve the BFL.  Prefer the top-level
     # ``back_focal_length`` field (what :func:`export_quadoa_qos`
     # writes); otherwise fall back to the last surface's THI for
     # foreign `.qos` files that follow the trailing-THI convention.

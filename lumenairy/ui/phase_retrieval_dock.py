@@ -1,4 +1,4 @@
-# v5.4 (audit P1-E): expand from 41-LOC stub to full algorithm-dispatched dock
+# Expand from 41-LOC stub to full algorithm-dispatched dock
 """
 Phase-retrieval dock -- algorithm-dispatched runner.
 
@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont
 
-# v5.4 (audit P1-F): cooperative-cancel via the library protocol.
+# Cooperative-cancel via the library protocol.
 # Note: the underlying phase-retrieval functions do NOT take a
 # ``progress=`` kwarg and do NOT poll cancellation; we honour Stop by
 # chunking the iteration budget at this dock layer and polling
@@ -200,7 +200,7 @@ class _PhaseRetrievalWorker(QThread):
         self.phase_wrap = str(phase_wrap)
         self.initial_phase = initial_phase
         self.beta = float(beta)
-        # v5.4 (audit P1-F): replace ad-hoc ``_stop_requested`` flag
+        # Replace ad-hoc ``_stop_requested`` flag
         # with the library's CancellableProgress so the cancellation
         # protocol matches the other docks (OptimizerDock, ToleranceDock,
         # MultiConfigDock).  ``should_stop`` is polled between chunks.
@@ -230,7 +230,7 @@ class _PhaseRetrievalWorker(QThread):
             else:
                 raise ValueError(
                     f'Unknown phase-retrieval method {self.method!r}')
-            # v5.4 (audit P1-F): if user cancelled, emit cancelled
+            # If user cancelled, emit cancelled
             # before finished so the dock can mark the run as aborted
             # while still showing the partial reconstruction.
             if self._cancel_progress.should_stop:
@@ -620,7 +620,7 @@ class PhaseRetrievalDock(QWidget):
             self.ax_conv.set_yscale('log')
             self.ax_conv.grid(alpha=0.2)
             self.canvas_conv = FigureCanvas(self.fig_conv)
-            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            # Override matplotlib canvas sizeHint so the dock can shrink
             self.canvas_conv.setMinimumSize(0, 0)
             self.canvas_conv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar_conv = NavigationToolbar(self.canvas_conv, self)
@@ -646,7 +646,7 @@ class PhaseRetrievalDock(QWidget):
             self.ax_phase.set_title('arg(reconstruction)')
             self.ax_phase.set_xticks([]); self.ax_phase.set_yticks([])
             self.canvas_recon = FigureCanvas(self.fig_recon)
-            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            # Override matplotlib canvas sizeHint so the dock can shrink
             self.canvas_recon.setMinimumSize(0, 0)
             self.canvas_recon.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar_recon = NavigationToolbar(self.canvas_recon, self)
@@ -834,14 +834,14 @@ class PhaseRetrievalDock(QWidget):
         self._worker.progress.connect(self._on_progress)
         self._worker.preview.connect(self._on_preview)
         self._worker.finished_result.connect(self._on_finished)
-        # v5.4 (audit P1-F): also note user cancellation so the summary
+        # Also note user cancellation so the summary
         # text can mark a partial reconstruction.
         self._worker.cancelled.connect(
             lambda: self.summary.append('Cancelled by user.'))
         self._worker.start()
 
     def _stop(self):
-        # v5.4 (audit P1-F): cooperative cancel via CancellableProgress.
+        # Cooperative cancel via CancellableProgress.
         # The worker chunks the iteration budget so should_stop is
         # polled every CHUNK_SIZE (=10) iterations, giving responsive
         # cancellation despite the core phase_retrieval functions not
@@ -905,7 +905,7 @@ class PhaseRetrievalDock(QWidget):
             self._on_preview(result['amplitude'], result['phase'])
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -917,7 +917,7 @@ class PhaseRetrievalDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

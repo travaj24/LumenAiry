@@ -11,7 +11,7 @@ Scalar (non-polarizing) lens systems should show exactly diagonal
 Jones pupils.  Polarization-sensitive coatings or birefringent
 materials are where the off-diagonal maps become interesting.
 
-# v5.4 (audit P2-E): add Stokes + DOP tabs
+# Add Stokes + DOP tabs
 The single Jones-pupil plot is now wrapped in a QTabWidget alongside
 two new analysis tabs:
   - Stokes:                S0 / S1 / S2 / S3 derived from J under an
@@ -109,7 +109,7 @@ class JonesPupilDock(QWidget):
         # Tab 1: Jones pupil (original 2x4 grid)
         self.fig = _mpl.Figure(figsize=(12, 6), dpi=100, facecolor='#0a0c10')
         self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
-        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        # Override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.mpl_toolbar = _mpl.NavigationToolbar2QT(self.canvas, self)
@@ -123,7 +123,7 @@ class JonesPupilDock(QWidget):
         # Tab 2: Stokes 2x2 grid
         self.fig_stokes = _mpl.Figure(figsize=(10, 8), dpi=100, facecolor='#0a0c10')
         self.canvas_stokes = _mpl.FigureCanvasQTAgg(self.fig_stokes)
-        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        # Override matplotlib canvas sizeHint so the dock can shrink
         self.canvas_stokes.setMinimumSize(0, 0)
         self.canvas_stokes.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.mpl_toolbar_stokes = _mpl.NavigationToolbar2QT(self.canvas_stokes, self)
@@ -137,7 +137,7 @@ class JonesPupilDock(QWidget):
         # Tab 3: Polarisation-derived (DOP / DOLP / DOCP)
         self.fig_dop = _mpl.Figure(figsize=(12, 4), dpi=100, facecolor='#0a0c10')
         self.canvas_dop = _mpl.FigureCanvasQTAgg(self.fig_dop)
-        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        # Override matplotlib canvas sizeHint so the dock can shrink
         self.canvas_dop.setMinimumSize(0, 0)
         self.canvas_dop.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.mpl_toolbar_dop = _mpl.NavigationToolbar2QT(self.canvas_dop, self)
@@ -334,7 +334,7 @@ class JonesPupilDock(QWidget):
         # Tab 1: Jones pupil (original 2x4 grid)
         self._draw_jones_tab(J, N, dx_out, dy_out)
 
-        # v5.4 (audit P2-E): Stokes and polarisation-derived tabs
+        # Stokes and polarisation-derived tabs
         try:
             stokes = _jones_to_stokes_unpolarized(J)
             derived = _dop_dolp_docp(stokes)
@@ -361,7 +361,7 @@ class JonesPupilDock(QWidget):
             f'|Jxy|={jxy:.3e} (cross-pol)  <DOP>={dop_mean:.3f}')
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -373,7 +373,7 @@ class JonesPupilDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

@@ -5,7 +5,7 @@ Perturbs surface parameters within user-defined tolerances and traces
 each perturbed system to build a statistical distribution of performance
 metrics (RMS spot, EFL, BFL).
 
-# v5.4 (audit P1-F): wire CancellableProgress + Stop button
+# Wire CancellableProgress + Stop button
 
 Author: Andrew Traverso
 """
@@ -54,7 +54,7 @@ class ToleranceWorker(QThread):
         self.tol_radius_pct = tol_radius_pct
         self.tol_thickness_mm = tol_thickness_mm
         self.tol_decenter_mm = tol_decenter_mm
-        # v5.4 (audit P1-F): polled between trials in the run() loop.
+        # Polled between trials in the run() loop.
         # Per-trial trace_world is fast (~ms), so per-trial granularity
         # gives a responsive Stop without library-side support.
         self._cancel_progress = ThreadCancellableProgress(self)
@@ -81,7 +81,7 @@ class ToleranceWorker(QThread):
         semi_ap = self.model.epd_m / 2.0
 
         for trial in range(self.n_trials):
-            # v5.4 (audit P1-F): poll for cooperative cancel between
+            # Poll for cooperative cancel between
             # trials so the user's Stop click is honoured promptly.
             if self._cancel_progress.should_stop:
                 break
@@ -176,7 +176,7 @@ class ToleranceWorker(QThread):
                 rms_list.append(np.nan)
                 efl_list.append(np.nan)
 
-        # v5.4 (audit P1-F): emit cancelled before finished so the
+        # Emit cancelled before finished so the
         # dock can distinguish a partial run.  finished still fires
         # so the histogram is drawn from the partial sample.
         if self._cancel_progress.should_stop:
@@ -253,7 +253,7 @@ class ToleranceDock(QWidget):
         self.btn_run.clicked.connect(self._run)
         run_row.addWidget(self.btn_run)
 
-        # v5.4 (audit P1-F): Stop button -- cooperative cancel via
+        # Stop button -- cooperative cancel via
         # CancellableProgress polled between MC trials.
         self.btn_stop = QPushButton('Stop')
         self.btn_stop.setEnabled(False)
@@ -305,7 +305,7 @@ class ToleranceDock(QWidget):
         # ── Results plot ──
         self.fig = _mpl.Figure(figsize=(6, 3), dpi=100, facecolor='#0a0c10')
         self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
-        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        # Override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.canvas, stretch=1)
@@ -340,14 +340,14 @@ class ToleranceDock(QWidget):
         self._worker.fine_progress.connect(self._on_fine_progress)
         self._worker.trial_result.connect(self._on_trial_result)
         self._worker.finished_result.connect(self._on_finished)
-        # v5.4 (audit P1-F): partial-result still flushed via
+        # Partial-result still flushed via
         # finished; the cancelled signal is informational so the
         # summary line below can mark the run as user-aborted.
         self._worker.cancelled.connect(self._on_cancelled)
         self._worker.start()
 
     def _stop(self):
-        # v5.4 (audit P1-F): cooperative cancel via CancellableProgress.
+        # Cooperative cancel via CancellableProgress.
         if self._worker and self._worker.isRunning():
             self._worker.cancel()
             self.btn_stop.setEnabled(False)
@@ -581,7 +581,7 @@ class ToleranceDock(QWidget):
                                  f'Could not write report:\n{e}')
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -593,7 +593,7 @@ class ToleranceDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)

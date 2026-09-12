@@ -1,4 +1,4 @@
-# v5.4 (audit P2-C): expand from 141-LOC single-function wrapper
+# Expand from 141-LOC single-function wrapper
 """
 Ghost-path analysis dock -- enumerate, filter, rank, and inspect
 2-bounce ghost reflections through the current system.
@@ -163,7 +163,7 @@ class GhostDock(QWidget):
         self.fig_bar = _mpl.Figure(figsize=(4.0, 3.0), dpi=100,
                               facecolor='#0a0c10')
         self.canvas_bar = _mpl.FigureCanvasQTAgg(self.fig_bar)
-        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        # Override matplotlib canvas sizeHint so the dock can shrink
         self.canvas_bar.setMinimumSize(0, 0)
         self.canvas_bar.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -710,7 +710,7 @@ class GhostDock(QWidget):
             f'{os.path.basename(path)}.')
 
     def minimumSizeHint(self):
-        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        """Report a tiny minimum so
         the QDockWidget will let the user drag this dock pane down to
         almost nothing.  Inherited Qt implementation walks layout
         children (matplotlib canvas, tables, toolbars) and adds up
@@ -722,7 +722,7 @@ class GhostDock(QWidget):
         return QSize(40, 40)
 
     def sizeHint(self):
-        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        """Companion to minimumSizeHint() above.  Provides a
         reasonable initial size when the dock is first shown."""
         from PySide6.QtCore import QSize
         return QSize(400, 200)
