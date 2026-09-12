@@ -159,8 +159,7 @@ def load_numba() -> bool:
     if not NUMBA_AVAILABLE:
         return False
     import numba as _nb
-    from numba import njit as _nj
-    from numba import prange as _pr
+    from numba import njit as _nj, prange as _pr
     _numba, _njit, _prange = _nb, _nj, _pr
     return True
 

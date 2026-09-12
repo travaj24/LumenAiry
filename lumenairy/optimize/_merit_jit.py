@@ -41,8 +41,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..backend._optional import NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE
-from ..backend._optional import numba_handles as _optional_numba_handles
+from ..backend._optional import (
+    NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE,
+    numba_handles as _optional_numba_handles,
+)
 
 # Numba probe, LAZY (audit
 # P2-D: the eager ``import numba`` cost ~1.8 s of ``import lumenairy`` cold

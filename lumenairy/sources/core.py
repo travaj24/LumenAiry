@@ -23,8 +23,7 @@ import numpy as np
 # One shared probe + first-use import for the whole library (audit
 # 2026-09-11 TESTS-ARCH P2-9); this module keeps its own ``cp`` alias
 # because :func:`create_gaussian_beam` reads the module-level name.
-from ..backend._optional import CUPY_AVAILABLE
-from ..backend._optional import ensure_cupy as _ensure_cupy
+from ..backend._optional import CUPY_AVAILABLE, ensure_cupy as _ensure_cupy
 
 cp = None  # this module's alias for the cupy module; see _ensure_cupy_loaded
 
@@ -2640,8 +2639,7 @@ def create_annular_incoherent_source(
 # ---------------------------------------------------------------------------
 
 from dataclasses import dataclass
-from typing import Optional as _Optional
-from typing import Tuple as _Tuple
+from typing import Optional as _Optional, Tuple as _Tuple
 
 
 @dataclass

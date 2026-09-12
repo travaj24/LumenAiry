@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/asymptotic_maslov.py
-ast_sha256: 2fd991a39fdf46bb6c5eca7d92e63829d6d0a448dbb16da302d2c363afc1f282
-token_sha256: e63736361286eec8347061bf462e1311e81f5c25eed79af8abe73ffdea3c7c05
+ast_sha256: c95e629aa9aef0308601b2bbb1c4ceebee9381dc8fcb746de3170f6dfbe5d671
+token_sha256: 0859b3655c0db111b9b5a0b92c880468015d2c291d1ba17cc671fa65dc6043ea
 pre_relocation_lines: 756
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/propagators/asymptotic_maslov.py`

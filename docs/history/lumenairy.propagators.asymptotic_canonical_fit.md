@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/asymptotic_canonical_fit.py
-ast_sha256: 58ca4eac17e32bb633f5b89306f62e53506ede176d67127baa1fe44b5b4277df
-token_sha256: 6b6e2e8a8a31075c3a1cd1530af4f89d74eb34aa64765adc92fd375879f85eb4
+ast_sha256: 6bd8cc4bdc8fbdc79cf9dffd087f6940b6155bc1c7b410c281f9e8c4a0baa93a
+token_sha256: 5a0a1f1fa8ca281a5b8f40d06a7cf4391c3425711eb800b02e42789878ee4328
 pre_relocation_lines: 1354
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/propagators/asymptotic_canonical_fit.py`

@@ -37,9 +37,11 @@ import numpy as np
 # keeps this module out of a module-level import cycle with ``lenses``,
 # which still re-exports every name below.  The lazy slot is the SAME one
 # ``lenses.cp`` reads, so a single CuPy import is shared across the package.
-from ..backend._optional import CUPY_AVAILABLE
-from ..backend._optional import ensure_cupy as _ensure_cupy
-from ..backend._optional import is_cupy_array as _is_cupy_array
+from ..backend._optional import (
+    CUPY_AVAILABLE,
+    ensure_cupy as _ensure_cupy,
+    is_cupy_array as _is_cupy_array,
+)
 from ..glass import get_glass_index  # 4.10: was missing, broke apply_axicon
 
 

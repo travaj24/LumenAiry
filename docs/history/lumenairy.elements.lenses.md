@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/lenses.py
-ast_sha256: b04dab0471eb3648b5dce36f04c78fd9ea99c411bcf0c3e58fd723956a7ce0f3
-token_sha256: d7d07d7d1b7df91463173d0be2f475ed0c20ae71f145fa1ed07229ca148686f6
+ast_sha256: 74cd6f5dbcc60140ee45ff22ed2a1be798efd6b3908140830f688ad01a242fd5
+token_sha256: b3d2074c6d61b3a492b416a6aec8ba46919516c3c0d7d5b88aec470f720c1815
 pre_relocation_lines: 1171
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/elements/lenses.py`

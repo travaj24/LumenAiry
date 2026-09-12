@@ -177,25 +177,19 @@ def _conical_nodal_solve(period, layer_specs, eps_sup, eps_sub, wavelength,
     from ._core import (
         _build_sem_tensor_segments,
         _guarded_lstsq,
+        _interface_smatrix as _ifc_n,
         _interface_smatrix_mortar,
         _n_propagating_orders,
         _perlayer_window_grids,
         _pmm_union_grid,
+        _propagation_star as _prop_star_n,
+        _redheffer_star as _star_n,
         _redheffer_star_rect,
         _sem_cross_mass_cached,
         _sem_fourier_projection,
         _sem_mass_exact_cached,
         _sem_modes_tensor,
         _tensor3_dict,
-    )
-    from ._core import (
-        _interface_smatrix as _ifc_n,
-    )
-    from ._core import (
-        _propagation_star as _prop_star_n,
-    )
-    from ._core import (
-        _redheffer_star as _star_n,
     )
 
     eps_sup = _C(eps_sup)

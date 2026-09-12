@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/carrier_field.py
-ast_sha256: 6fc5905777971218087ce405f041d80b4a14b34daf4a839c923e9de20ccc5138
-token_sha256: f08b25bbf206e6dd5f3cbfb83808c1f470b26b7ab9683f0a154bc582a3d3c167
+ast_sha256: 16233890b8ee9a9d3379683c207ac4db9b8274c9e937f0fd6782384764dbefee
+token_sha256: 26df03fde3e5b505d0991d563f507bc4e8b3d3e175d9bc03c95d40d07228af24
 pre_relocation_lines: 1857
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/propagators/carrier_field.py`

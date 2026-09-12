@@ -406,8 +406,10 @@ _IMAP_CACHE_SIZE = 4
 # ---------------------------------------------------------------------------
 # numba
 # ---------------------------------------------------------------------------
-from ..backend._optional import NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE
-from ..backend._optional import numba_handles as _optional_numba_handles
+from ..backend._optional import (
+    NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE,
+    numba_handles as _optional_numba_handles,
+)
 
 # The MODULE-LEVEL ``_NUMBA_AVAILABLE`` is load-bearing and stays a module
 # attribute: it is read at CALL time and the test suite monkeypatches it to

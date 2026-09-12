@@ -33,17 +33,12 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .._math.chebyshev import (
-    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
-)
-from .._math.chebyshev import (
-    chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
-)
-
 # The Chebyshev helpers live in ``lumenairy._math.chebyshev``; these aliases
 # bind the public names to the underscore-prefixed locals this module's call
 # sites use.
 from .._math.chebyshev import (
+    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
+    chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
     chebyshev_vandermonde as _chebyshev_vandermonde,
 )
 from .asymptotic_canonical_fit import (

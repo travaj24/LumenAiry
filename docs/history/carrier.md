@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/carrier.py
-ast_sha256: be8794e4af34abea60441076868d4982dc0ec8d62ca21167f483a4d12b118794
-token_sha256: ab51fed522365033f6d969b8c96c80e3c0c4eb88037040eba8e969df67d07431
+ast_sha256: 6ffc86b74b8cdb928d0f28605eefb811c25c5759fa8016cd62ab30b51d9cb870
+token_sha256: 1343e6c6dd48ded22f14717aac9fc3fd778da3df0e21662d51b2b98cbd0c184c
 pre_relocation_lines: 11602
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- WP-A24: the decentre_fit_frac warning quotes the 2026-09-12 six-point calibration and states the measured ordering (was the 2026-07-29 one, whose on-axis and 1.0 w rows have since crossed over)
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/propagators/carrier.py`

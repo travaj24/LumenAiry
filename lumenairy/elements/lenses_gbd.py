@@ -53,8 +53,8 @@ from .lens_config import (
     LensNumerics,
     LensResources,
     _wants_config,
+    resolve_entry_point_kwargs as _resolve_lens_config,
 )
-from .lens_config import resolve_entry_point_kwargs as _resolve_lens_config
 
 __all__ = ['apply_real_lens_gbd']
 

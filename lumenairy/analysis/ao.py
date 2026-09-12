@@ -70,8 +70,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from dataclasses import field as _dc_field
+from dataclasses import dataclass, field as _dc_field
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np

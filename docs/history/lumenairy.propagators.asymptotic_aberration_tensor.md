@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/asymptotic_aberration_tensor.py
-ast_sha256: 62fa37a3ca65f8fe8a4375d4f02f4c2f4d0bce26b9de53be9a4f89e0cd84224b
-token_sha256: 6ae324faf202d78d3c219f3a52a03dbda1e8d1eac5b70b68e812fa3e69bb0aab
+ast_sha256: 14083b6decf74a9a33d1bc935eb45d69dd2a28d87bbe855021f982f15a5a4de9
+token_sha256: 3161e8b8210dac3ebfcebdd4e6e156a4643eec771168ac4bb5efc19d66f538da
 pre_relocation_lines: 1376
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/propagators/asymptotic_aberration_tensor.py`

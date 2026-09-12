@@ -37,13 +37,12 @@ from ...backend import is_jax_array
 # here rather than forked -- the duplication-kills rule, and a forked threshold
 # is a forked contract.  See ``INTERFACE_CONDITIONING_GUARD`` there and
 # ``docs/audits/PMM_M1_CONDITIONING_2026_08_04.md``.
-from ..rcwa import _core as _rcwa_core
-
 # Reused for the slanted-grating solver: the slant breaks the +/-q field
 # symmetry (like a full-3x3 tensor layer), so it needs the GENERALIZED
 # (explicit forward/backward) S-matrix.  rcwa does NOT import pmm, so this
 # top-level import introduces no cycle.
 from ..rcwa import (
+    _core as _rcwa_core,
     _interface_smatrix_general,
     _propagation_star,
     _propagation_star_general,

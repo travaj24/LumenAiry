@@ -1,11 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 7e644ca6bac4d7dc912c308a5151666549fc0ed314844c9ae3ad2b2becc81f4e
-token_sha256: 1e537df729b30f2f495b6123574eb8d28fae332f27956b29e67d3ef788c982fe
+ast_sha256: dff15f214e62eb09e416c7e37825a69d38c49b27b68842b513aa423762bddb73
+token_sha256: ddedecac255711160b20020add892383220b5fe08de9e501400b1f93ed0e4f58
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- _ARCHIVE_SLANT_FOLD string constant moved into this document; nothing read it (WP-A22 follow-up)
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`

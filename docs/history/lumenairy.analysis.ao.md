@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/analysis/ao.py
-ast_sha256: 720f352dc377c9fea2675fcebb0f77f1aa246c340482188685256841fbaa4d60
-token_sha256: 459fb3449702bbf6df66f0b540883ccbaf176940183637d7a9e54c6ebd11f038
+ast_sha256: ef03e90a28561055412b693a6d11c99eb7f9d5a028b57d3c02800a59729ffde5
+token_sha256: 12b3d541efebb2d71dbb8f9694cdb1acde563f4d7d547019a41f0eed6951d077
 pre_relocation_lines: 1355
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/analysis/ao.py`

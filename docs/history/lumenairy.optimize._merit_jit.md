@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/optimize/_merit_jit.py
-ast_sha256: 8b1b5404f6d2fd93eb78267fa1a5d86047e5dc05bd6c0f9c9f389f041cb33963
-token_sha256: 9cb8008917bc5adfac65fbde8f525cac6b107ca33af3b0b0e187d1e87884ce38
+ast_sha256: 3e1d1b9c131e1ffb4f9c5759e440fdf57bcc2be8d99b720ecc71597c9dbbd7c1
+token_sha256: 74c1120f2e99e60380770f2617bf6d3806ea6fe9863052020a1a45409a03f327
 pre_relocation_lines: 273
 recorded_by: WP-A17 SWEEP-3 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 

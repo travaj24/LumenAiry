@@ -519,8 +519,6 @@ def design_optimize(parameterization: Any,
     from ..progress import call_progress
     from ..propagators.propagation import (
         get_default_complex_dtype as _gddt,
-    )
-    from ..propagators.propagation import (
         set_default_complex_dtype,
     )
 

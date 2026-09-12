@@ -27,18 +27,14 @@ from typing import Any, Dict, Optional, Union
 import numpy as np
 
 from .. import raytrace as rt
-from .._math.chebyshev import (
-    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
-)
-from .._math.chebyshev import (
-    chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
-)
 
 # The three Chebyshev Vandermonde helpers live in
 # ``lumenairy._math.chebyshev``.  The new public names are imported here
 # and bound to the legacy underscore-prefixed locals so this module's
 # ~10 call sites keep working unchanged.
 from .._math.chebyshev import (
+    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
+    chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
     chebyshev_vandermonde as _chebyshev_vandermonde,
 )
 from ..progress import call_progress
@@ -52,8 +48,8 @@ from .lens_config import (
     LensNumerics,
     LensResources,
     _wants_config,
+    resolve_entry_point_kwargs as _resolve_lens_config,
 )
-from .lens_config import resolve_entry_point_kwargs as _resolve_lens_config
 
 # Pixel-band size for the stationary_phase integrator's _opd_and_derivs
 # evaluations.  None -> auto (memory-budgeted from the basis count).  A test
@@ -409,8 +405,7 @@ def _mz_load_numba():
         return True
     if not _MZ_NUMBA_AVAILABLE:
         return False
-    from numba import njit as _nj
-    from numba import prange as _pr
+    from numba import njit as _nj, prange as _pr
     _mz_njit, _mz_prange = _nj, _pr
     return True
 
@@ -3692,8 +3687,7 @@ def _integrate_levin(
     per-pixel adaptive engine).  Peak memory is chunk-bounded
     (~hundreds of MB of transients) independent of grid size.
     """
-    from .._math.levin import _cheb_D as _cheb_D_phys
-    from .._math.levin import levin2d
+    from .._math.levin import _cheb_D as _cheb_D_phys, levin2d
     t0 = time.perf_counter()
     N_px = N_out_coarse * N_out_coarse
     u1f = u_s2x_out.ravel()

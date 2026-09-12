@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/bor/bor_stack.py
-ast_sha256: 57261ad2a23f25d21a77272e02b7d01ef62e3b571f926d403a45439d0a1f411b
-token_sha256: bd5adb03a5ed067243c603f85377172827f0dd8f42844059722131e65784fed7
+ast_sha256: 6fbc5434ec50b0349770400fa695a05dcecff912e54da9b72c8db874c5425d7e
+token_sha256: 63e2a92215dbd93b0658e7d9659db1788326365720afe58cd2016c27fc377b4c
 pre_relocation_lines: 1031
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/elements/bor/bor_stack.py`

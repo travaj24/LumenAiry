@@ -90,8 +90,19 @@ def test_cupy_probe_is_the_shared_one_and_keeps_the_module_cp_alias(mod):
     assert "find_spec('cupy')" not in modsrc, (
         f'{mod.__name__} still probes for cupy itself; the probe belongs in '
         f'lumenairy.backend._optional (audit TESTS-ARCH P2-9).')
-    assert 'from ..backend._optional import CUPY_AVAILABLE' in modsrc, (
-        f'{mod.__name__} does not import the shared CUPY_AVAILABLE.')
+    # Structural, not textual: the name must arrive through an ImportFrom of
+    # ``..backend._optional`` (two dots up from elements/).  Whether that
+    # statement stands alone or is combined with the module's other
+    # ``_optional`` imports is a formatter decision (``combine-as-imports``),
+    # not a contract.
+    imports_shared = any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == 'backend._optional' and node.level == 2
+        and any(alias.name == 'CUPY_AVAILABLE' for alias in node.names)
+        for node in ast.walk(ast.parse(modsrc)))
+    assert imports_shared, (
+        f'{mod.__name__} does not import the shared CUPY_AVAILABLE from '
+        f'..backend._optional.')
     assert hasattr(mod, 'cp'), (
         f'{mod.__name__} lost its module-level ``cp`` alias.')
     # the coupling: a True answer must imply ``cp`` is bound

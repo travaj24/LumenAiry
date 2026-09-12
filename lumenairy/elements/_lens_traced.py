@@ -27,9 +27,11 @@ import numpy as np
 # Optional CuPy backend (lazy).  The availability probe, the first-use import
 # and the isinstance test live in ONE place for the whole library
 # (``backend/_optional.py``; audit 2026-09-11 TESTS-ARCH P2-9).
-from ..backend._optional import CUPY_AVAILABLE
-from ..backend._optional import ensure_cupy as _ensure_cupy
-from ..backend._optional import is_cupy_array as _optional_is_cupy_array
+from ..backend._optional import (
+    CUPY_AVAILABLE,
+    ensure_cupy as _ensure_cupy,
+    is_cupy_array as _optional_is_cupy_array,
+)
 
 # The inverse-characteristic per-pixel evaluator.  Imported as a MODULE, not
 # by name: its flags are read at CALL time (house rule -- see
@@ -47,8 +49,8 @@ from .lens_config import (
     LensNumerics,
     LensResources,
     _wants_config,
+    resolve_entry_point_kwargs as _resolve_lens_config,
 )
-from .lens_config import resolve_entry_point_kwargs as _resolve_lens_config
 
 cp = None  # this module's alias for the cupy module; see _ensure_cupy_loaded
 
@@ -87,8 +89,10 @@ def _is_cupy_array(x):
 # ``import numba`` cost ~1.8 s of ``import lumenairy`` cold start).  The kernel
 # (``_cheb2d_val_grad_numba``) has a pure-NumPy fallback, so numba is pulled in
 # only when a caller actually hits the fast path AND numba is installed.
-from ..backend._optional import NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE
-from ..backend._optional import numba_handles as _optional_numba_handles
+from ..backend._optional import (
+    NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE,
+    numba_handles as _optional_numba_handles,
+)
 
 # The MODULE-LEVEL ``_NUMBA_AVAILABLE`` is load-bearing and stays a module
 # attribute: it is read at CALL time and the test suite monkeypatches it to
@@ -582,8 +586,8 @@ _register_knob(
 from .._logging import get_logger
 from .._math.chebyshev import (
     chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
+    chebyshev_vandermonde as _chebyshev_vandermonde,
 )
-from .._math.chebyshev import chebyshev_vandermonde as _chebyshev_vandermonde
 from ..glass import get_glass_index
 from ..progress import ProgressScaler, call_progress
 from .lenses import _warn_if_aperture_exceeds_grid
@@ -2971,8 +2975,7 @@ def _solve_lstsq_qr(A, b):
             # traced fits are guarded against this upstream (every caller
             # enforces a samples-per-term floor); this is belt and braces.
             raise ValueError('under-determined')
-        from scipy.linalg import qr as _qr
-        from scipy.linalg import solve_triangular as _solve_tri
+        from scipy.linalg import qr as _qr, solve_triangular as _solve_tri
         M = np.empty((A.shape[0], m + B.shape[1]), dtype=np.float64, order='F')
         M[:, :m] = A
         M[:, m:] = B

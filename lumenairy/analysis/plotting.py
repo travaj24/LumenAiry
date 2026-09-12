@@ -75,11 +75,12 @@ def _require_mpl():
                           "Install with: pip install matplotlib")
     if plt is None:
         import matplotlib.pyplot as _plt
-        from matplotlib.colors import LogNorm as _LogNorm
-        from matplotlib.colors import Normalize as _Normalize
-        from matplotlib.colors import TwoSlopeNorm as _TwoSlopeNorm
-        from matplotlib.patches import Ellipse as _Ellipse
-        from matplotlib.patches import Rectangle as _Rectangle
+        from matplotlib.colors import (
+            LogNorm as _LogNorm,
+            Normalize as _Normalize,
+            TwoSlopeNorm as _TwoSlopeNorm,
+        )
+        from matplotlib.patches import Ellipse as _Ellipse, Rectangle as _Rectangle
         plt = _plt
         Ellipse, Rectangle = _Ellipse, _Rectangle
         LogNorm, Normalize, TwoSlopeNorm = _LogNorm, _Normalize, _TwoSlopeNorm

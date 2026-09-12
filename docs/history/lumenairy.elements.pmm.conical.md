@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/conical.py
-ast_sha256: c126acdf04867158f10ca454ab81cfeecd6a8816d03edc695f1b79e35fcbc940
-token_sha256: 3c2fbe75fdf979e2fe420431c919b289c9e2f28e1fe5763de543af958ec30ca8
+ast_sha256: dd5305a98365e8d9312a0bd763b30d27af3d20f7314f5cca5991b24a8428f6ec
+token_sha256: 604b62fd1c455133f9d3727d39f8ef339cc2f1e2a9a51c399d436c04a43babd4
 pre_relocation_lines: 693
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/elements/pmm/conical.py`

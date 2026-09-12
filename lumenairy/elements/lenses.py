@@ -44,9 +44,11 @@ import numpy as np
 # Optional CuPy backend (lazy).  The availability probe, the first-use import
 # and the isinstance test live in ONE place for the whole library
 # (``backend/_optional.py``; audit 2026-09-11 TESTS-ARCH P2-9).
-from ..backend._optional import CUPY_AVAILABLE
-from ..backend._optional import ensure_cupy as _ensure_cupy
-from ..backend._optional import is_cupy_array as _optional_is_cupy_array
+from ..backend._optional import (
+    CUPY_AVAILABLE,
+    ensure_cupy as _ensure_cupy,
+    is_cupy_array as _optional_is_cupy_array,
+)
 
 cp = None  # this module's alias for the cupy module; see _ensure_cupy_loaded
 
@@ -86,8 +88,10 @@ def _ensure_numexpr_loaded():
 # a pure-NumPy fallback -- so numba is pulled in only when a caller actually hits
 # that fast path AND numba is installed.  ``find_spec`` checks availability
 # WITHOUT importing numba.
-from ..backend._optional import NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE
-from ..backend._optional import numba_handles as _optional_numba_handles
+from ..backend._optional import (
+    NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE,
+    numba_handles as _optional_numba_handles,
+)
 
 # The MODULE-LEVEL ``_NUMBA_AVAILABLE`` is load-bearing and stays a module
 # attribute: it is read at CALL time and the test suite monkeypatches it to
@@ -882,11 +886,7 @@ def _warn_if_aperture_exceeds_grid(prescription, N, dx, *,
 
 from .._math.chebyshev import (  # noqa: F401 -- back-compat alias re-export (v5.2)
     chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,  # noqa: F401
-)
-from .._math.chebyshev import (
     chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,  # noqa: F401
-)
-from .._math.chebyshev import (
     chebyshev_vandermonde as _chebyshev_vandermonde,  # noqa: F401
 )
 
@@ -1044,8 +1044,6 @@ def _fit_normaliser(v: np.ndarray, pad: float = 0.05):
 # ---------------------------------------------------------------------------
 from ._lens_jax import (  # noqa: E402
     apply_real_lens_maslov_jax as apply_real_lens_maslov_jax,
-)
-from ._lens_jax import (
     apply_real_lens_traced_jax as apply_real_lens_traced_jax,
 )
 
@@ -1057,29 +1055,13 @@ from ._lens_jax import (
 # ---------------------------------------------------------------------------
 from ._lens_real import (  # noqa: E402
     PreparedAnalyticLens as PreparedAnalyticLens,
-)
-from ._lens_real import (
     apply_real_lens as apply_real_lens,
-)
-from ._lens_real import (
     clear_pointwise_cos_grid_cache as clear_pointwise_cos_grid_cache,
-)
-from ._lens_real import (
     get_lens_sag_dtype as get_lens_sag_dtype,
-)
-from ._lens_real import (
     get_pointwise_cos_grid_cache_budget as get_pointwise_cos_grid_cache_budget,
-)
-from ._lens_real import (
     lens_sag_float32_opd_error as lens_sag_float32_opd_error,
-)
-from ._lens_real import (
     prepare_real_lens as prepare_real_lens,
-)
-from ._lens_real import (
     set_lens_sag_dtype as set_lens_sag_dtype,
-)
-from ._lens_real import (
     set_pointwise_cos_grid_cache_budget as set_pointwise_cos_grid_cache_budget,
 )
 
@@ -1091,20 +1073,10 @@ from ._lens_real import (
 # ---------------------------------------------------------------------------
 from ._lens_thin import (  # noqa: E402
     apply_aspheric_lens as apply_aspheric_lens,
-)
-from ._lens_thin import (
     apply_axicon as apply_axicon,
-)
-from ._lens_thin import (
     apply_cylindrical_lens as apply_cylindrical_lens,
-)
-from ._lens_thin import (
     apply_grin_lens as apply_grin_lens,
-)
-from ._lens_thin import (
     apply_spherical_lens as apply_spherical_lens,
-)
-from ._lens_thin import (
     apply_thin_lens as apply_thin_lens,
 )
 
@@ -1118,29 +1090,13 @@ from ._lens_thin import (
 # ---------------------------------------------------------------------------
 from ._lens_traced import (  # noqa: E402
     PreparedTracedLens as PreparedTracedLens,
-)
-from ._lens_traced import (
     TiltedCarrier as TiltedCarrier,
-)
-from ._lens_traced import (
     apply_real_lens_traced as apply_real_lens_traced,
-)
-from ._lens_traced import (
     apply_real_lens_traced_multi as apply_real_lens_traced_multi,
-)
-from ._lens_traced import (
     apply_real_lens_traced_segmented as apply_real_lens_traced_segmented,
-)
-from ._lens_traced import (
     close_worker_pool as close_worker_pool,
-)
-from ._lens_traced import (
     get_lens_parallel_amp as get_lens_parallel_amp,
-)
-from ._lens_traced import (
     prepare_real_lens_traced as prepare_real_lens_traced,
-)
-from ._lens_traced import (
     set_lens_parallel_amp as set_lens_parallel_amp,
 )
 from ._lens_traced_multibranch import (  # noqa: E402

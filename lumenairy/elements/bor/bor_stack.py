@@ -24,8 +24,7 @@ import numpy as np
 from ...backend import is_jax_array as _is_jax_array
 from ._inv_census import census_solve
 from ._orient import channel_core
-from ._sem_contract import enforce as _sem_enforce
-from ._sem_contract import measure_layer as _sem_measure
+from ._sem_contract import enforce as _sem_enforce, measure_layer as _sem_measure
 from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
 
 # v5.17.1 (audit P3-12): bound on the per-instance modal-basis LRU.  Each

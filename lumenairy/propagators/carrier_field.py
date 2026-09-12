@@ -116,8 +116,7 @@ from __future__ import annotations
 import json
 import math
 import warnings
-from dataclasses import dataclass
-from dataclasses import field as _dc_field
+from dataclasses import dataclass, field as _dc_field
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
 import numpy as np

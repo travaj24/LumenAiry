@@ -30,15 +30,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .._math.chebyshev import (
-    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
-)
-
 # v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
 # Chebyshev helpers moved to lumenairy._math.chebyshev; binding the
 # new public names to the legacy underscore-prefixed locals keeps the
 # existing call sites in this module unchanged.
 from .._math.chebyshev import (
+    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
     chebyshev_vandermonde as _chebyshev_vandermonde,
 )
 

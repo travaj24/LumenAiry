@@ -55,9 +55,9 @@ from .zernike import (  # noqa: F401
     _ZERNIKE_BASIS_CACHE,
     _ZERNIKE_BASIS_CACHE_LOCK,
     _ZERNIKE_BASIS_CACHE_MAXSIZE,
+    __all__ as _zernike_all,
     _zernike_basis_matrix_build,
 )
-from .zernike import __all__ as _zernike_all
 
 __all__ = (
     list(_beam_stats_all)

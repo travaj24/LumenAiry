@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/analysis/field.py
-ast_sha256: a31a56bbb8964307ba48696bc8a76f264f9131a39e7c0f76d28229f53dde39bf
-token_sha256: c7e0ae3ea542c1be05e6710c794fef9c5b7deca629384e0a02f21a98e461e606
+ast_sha256: 5a5694bf8c0911c66a9e0841fc8bfcd6609ea116bd6744f6d4fd5a4587583f9c
+token_sha256: a0ece4df0e20841a508b292357e79c6e0f7cbca3a315dc78c466874e5cd3ea07
 pre_relocation_lines: 1492
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 -->
 
 # Version history -- `lumenairy/analysis/field.py`

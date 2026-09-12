@@ -32,9 +32,11 @@ import numpy as np
 # and the isinstance test live in ONE place for the whole library
 # (``backend/_optional.py``; audit 2026-09-11 TESTS-ARCH P2-9 measured five
 # hand-copied implementations of each).
-from ..backend._optional import CUPY_AVAILABLE
-from ..backend._optional import ensure_cupy as _ensure_cupy
-from ..backend._optional import is_cupy_array as _optional_is_cupy_array
+from ..backend._optional import (
+    CUPY_AVAILABLE,
+    ensure_cupy as _ensure_cupy,
+    is_cupy_array as _optional_is_cupy_array,
+)
 
 cp = None  # this module's alias for the cupy module; see _ensure_cupy_loaded
 
@@ -163,8 +165,8 @@ from .lens_config import (
     LensNumerics,
     LensResources,
     _wants_config,
+    resolve_entry_point_kwargs as _resolve_lens_config,
 )
-from .lens_config import resolve_entry_point_kwargs as _resolve_lens_config
 
 _VALID_WAVE_PROPAGATORS = ('asm', 'sas', 'fresnel', 'rayleigh_sommerfeld', 'rs')
 
@@ -7698,11 +7700,7 @@ def _apply_real_lens_impl(
         # Local imports to avoid circular dep at module load
         from ..raytrace import (
             _make_bundle as _rt_make_bundle,
-        )
-        from ..raytrace import (
             surfaces_from_prescription as _rt_surfaces_from_prescription,
-        )
-        from ..raytrace import (
             trace as _rt_trace,
         )
         r_pupil = 0.5 * aperture

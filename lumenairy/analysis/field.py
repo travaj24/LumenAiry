@@ -43,8 +43,7 @@ public functions while preserving their fold-aware geometry.
 # Version history for this module: ``docs/history/lumenairy.analysis.field.md``.
 from __future__ import annotations
 
-from dataclasses import dataclass
-from dataclasses import fields as _dc_fields
+from dataclasses import dataclass, fields as _dc_fields
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np

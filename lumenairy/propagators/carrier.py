@@ -10215,8 +10215,7 @@ def _multi_parallel_results(n_cw, specs, groups_k, chief, window, n_tile,
     Any worker exception is re-raised with its congruence named.
     """
     import warnings
-    from concurrent.futures import ProcessPoolExecutor
-    from concurrent.futures import as_completed as _as_completed
+    from concurrent.futures import ProcessPoolExecutor, as_completed as _as_completed
 
     K = len(specs)
     # The snapshot crosses a process boundary, so it must PICKLE.  A caller who
