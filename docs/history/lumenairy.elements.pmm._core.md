@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/_core.py
-ast_sha256: 94a17cad10eb2a98784d6f61d65b384d417207bc4871e0b3563ea08d5ffc5ae8
-token_sha256: c528c9a8441739d4cca9e11b5cccbe2968a7ea627f2ed2d80b6a1024c8fc9b7b
+ast_sha256: 7e644ca6bac4d7dc912c308a5151666549fc0ed314844c9ae3ad2b2becc81f4e
+token_sha256: 1e537df729b30f2f495b6123574eb8d28fae332f27956b29e67d3ef788c982fe
 pre_relocation_lines: 7690
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- _ARCHIVE_SLANT_FOLD string constant moved into this document; nothing read it (WP-A22 follow-up)
 -->
 
 # Version history -- `lumenairy/elements/pmm/_core.py`
@@ -61,6 +62,7 @@ below as *Left in the source*.
 | L5436-5441 | `_MORTAR_RESID_REFUSE` derivation, the scoping measurement | the "CORRECTION, ROUND 4 ... not merely to have a promoted side" framing |
 | L5450-5451 | `_MORTAR_RESID_REFUSE` derivation, the closing sentence | "what changes is the prediction a later reader would make from the wording" -- a note about the documentation's own history |
 | L6804-6808 | `_build_generator_metric_oop`, the factor-i fix | that the legacy real coefficients shared the rcwa generator's defect and agreed with the PRE-fix rcwa OOP results |
+| L7516-7565 | `_ARCHIVE_SLANT_FOLD` -- the module-level ARCHIVE constant | the whole superseded ezz*tan^2 STATIC METRIC FOLD: what it computed, why it was tried, the load-bearing sign detail, and why it was superseded |
 
 ---
 
@@ -367,4 +369,86 @@ below as *Left in the source*.
         # with the PRE-fix rcwa OOP results for the same reason the
         # circular oracle did -- and gave the same artificially
         # +/- symmetric extraordinary dispersion.
+```
+
+### L7516-7565 -- `_ARCHIVE_SLANT_FOLD` -- the module-level ARCHIVE constant
+
+This block was not a comment: it was a module-level raw-string CONSTANT,
+`_ARCHIVE_SLANT_FOLD`, parsed and bound on every `import lumenairy` and read by
+nothing.  Deleting it removes a module-level assignment, so both fingerprints
+move -- out of scope for a documentation-only sweep, which is why it was moved
+separately, by WP-A22, with the fingerprints re-recorded in the same commit.
+
+Its own header said the record was kept "in the code, not only in volatile
+notes".  That was the right instinct and the wrong mechanism: `docs/history/` is
+version-controlled beside the module and *pinned to it* by
+`tests/unit/test_audit2609_a17_history_relocation.py`, which a string nobody
+reads is not.  Verified before deleting: no code, test, `__all__` entry or
+tooling referenced the name -- the only two mentions were the two
+`_build_generator_metric` comments that pointed at it, and those now point here.
+
+*Left in the source:* the two pointers (`_core.py:6649`, `:6681`), saying that
+the ezz*tan^2 fold that used to sit at each site is archived in this document,
+plus the ARCHIVE section header now naming the document instead of holding
+constants.
+
+```text
+# ===========================================================================
+# ARCHIVE -- superseded methods, preserved with the WHY (NOT executed)
+# ===========================================================================
+# The PMM 1-D solver grew through many incremental rounds.  Retired approaches
+# are kept here as raw strings (parsed, never run or linted) so the institutional
+# record -- what was tried and WHY it was superseded -- survives in the code, not
+# only in volatile notes.
+
+_ARCHIVE_SLANT_FOLD = r'''
+SUPERSEDED: the ezz*tan^2 STATIC METRIC FOLD for the slant (round 11; replaced by
+the exact tan_conv*Dopx CONVECTION in _build_generator_metric, 2026-06-07).
+
+WHAT IT COMPUTED -- the Edee-Granet 2024 contravariant metric fold for a slant
+phi, formerly in _build_generator_metric behind `if abs(tan) < 1e-14: ... else:`
+arms (tan was later hard-set to 0, making the else-arms dead; this is them):
+
+    # in-plane wall-normal + cross blocks (the dead else-arm):
+    Oeps11 = _build_inv_rule_metric(
+        mats, lambda t_: 1.0 / (t_["exx"] + t_["ezz"] * tan * tan), iS0)  # eps^11 = exx + ezz tan^2
+    Oeps13 = iS0 @ _coeff_mass_metric(mats, lambda t_: -t_["ezz"] * tan)  # eps^13 = eps^31 = -ezz tan
+    Oeps31 = Oeps13.copy()
+    # OOP cross-terms (the dead else-arm); raw ezz (slant is a metric fold here):
+    Oeps13 = iS0 @ _coeff_mass_metric(mats, lambda t_: -t_["ezz"] * tan)
+    Oeps31 = Oeps13.copy()
+    # mu fold:
+    Mu11 = sec2 * I          # mu^11 = sec^2 (sec2 = 1/cos(phi)^2)
+    Mu13 = -tan * I          # mu^13 = mu^31 = -tan
+    Mu31 = -tan * I
+
+    # the now-retired helper the fold used:
+    def _build_inv_rule_metric(mats, inv_fn, iS0):
+        """Li inverse-rule operator [[coeff]]^-1: direct mass of 1/coeff, iS0, invert."""
+        M = _coeff_mass_metric(mats, inv_fn)
+        return _safe_inv(iS0 @ M)
+
+WHY IT WAS TRIED: the original (round-11) slant realization.  The contravariant
+fold sqrt(g) J^-1 eps J^-T with J = [[1,0,tan],[0,1,0],[0,0,1]] gives
+eps^11 = exx + ezz tan^2, eps^13 = eps^31 = -ezz tan, mu^11 = sec^2,
+mu^13 = mu^31 = -tan.
+
+LOAD-BEARING SIGN DETAIL (do not lose if revisiting): eps^13 and mu^13 must SHARE
+the sign of tan -- this is the J^-1 eps J^-T CONTRAVARIANT fold, NOT J eps J^T --
+so TE and TM diffract to the SAME side.  The wrong (J eps J^T) fold flips eps^13's
+sign so TE and TM convect opposite ways (TE matches the reference at one slant
+sign, TM at the other) = unphysical opposite-side diffraction.
+
+WHY SUPERSEDED: the fold caps per-order TM accuracy at ~1e-2 for strongly-coupled
+/ steep-slant cells.  The ezz-Schur cancels the slant in the longitudinal then
+re-injects it as the STATIC wall-normal ezz*tan^2, whose factorization order is
+wrong for the DISCONTINUOUS wall-normal -> per-order TM floors at ~1e-2 (vs the
+convection treatment's ~1e-4).  The fix (2026-06-07) carries the slant as the
+EXACT first-order convection tan*d/dx (tan_conv*Dopx) added to the CLEAN slant=0
+generator, reaching the ~1e-4 wall-normal floor uniformly.  (The genuinely-
+covariant Li-1999 oblique-coordinate path, factorization='covariant', converges
+SPECTRALLY rather than algebraically by making the wall a coordinate surface --
+self-converging to ~1e-7, though vs an INDEPENDENT full-3x3 oracle the TM floor
+is ~2.5e-3 at slant=45 / TE <8e-4; see the COVARIANT block above, audit P2-B.)
+'''
 ```

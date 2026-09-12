@@ -521,9 +521,16 @@ def _modal_field_lg00_pixel_jax(fit, s2x, s2y, v2x, v2y,
     b_quad = 0.25 * (b @ M_inv @ b)
     ok_bquad = (jnp.isfinite(jnp.abs(b_quad))
                 & (jnp.abs(jnp.real(b_quad)) <= B_QUAD_EXP_MAX))
-    safe_bquad = jnp.where(ok_bquad, b_quad, 0.0 + 0.0j)
+    # Both fills are dtype-MATCHED (P1-NEW-4).  A ``0.0 + 0.0j`` literal is a
+    # Python complex, and jnp's weak-typing rules promote the whole ``where``
+    # to complex whenever the other branch is REAL: ``phi_star`` is real
+    # (float64 on the x64 path, float32 at reduced precision), so that literal
+    # silently returned a complex phase whose imaginary part was always zero,
+    # and at float32 it cost a complex64 array where a float32 one was asked
+    # for.  ``jnp.zeros((), x.dtype)`` keeps whatever the operand brought.
+    safe_bquad = jnp.where(ok_bquad, b_quad, jnp.zeros((), b_quad.dtype))
     safe_phi = jnp.where(jnp.isfinite(jnp.abs(phi_star)), phi_star,
-                         0.0 + 0.0j)
+                         jnp.zeros((), phi_star.dtype))
     A_lead = (van_vleck_weight(detJ, fit.wavelength)
               * (jnp.pi / sqrt_detM) * G0
               * jnp.exp(2j * jnp.pi * safe_phi)

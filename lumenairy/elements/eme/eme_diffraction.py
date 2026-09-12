@@ -165,8 +165,9 @@ def mode_match(qz2, Psi, orders, *, kx0, ky0, k0, eps_sup, eps_sub, depth,
     if np.any(pnorm <= 0) or not np.all(np.isfinite(pnorm)):
         raise ValueError(
             "mode_match: Psi has a zero-norm or non-finite mode column, so it "
-            "cannot be normalised (this used to surface as an opaque "
-            "'SVD did not converge' LinAlgError from the least-squares solve).")
+            "cannot be normalised.  Unguarded, such a column reaches the "
+            "least-squares solve and fails there as an opaque 'SVD did not "
+            "converge' LinAlgError that names neither Psi nor the column.")
     Psi = Psi / np.sqrt(pnorm)
     O = w * (U.conj().T @ Psi)                           # (Npw, K)
     qz = np.sqrt(np.asarray(qz2, complex) + 0j)

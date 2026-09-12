@@ -31,35 +31,26 @@ from typing import Dict, Optional, Union
 
 import numpy as np
 
+# CuPy is lazy-loaded through the shared optional-dependency helper.  That
+# helper is a LEAF -- nothing in ``lumenairy.backend`` imports back into
+# ``elements`` -- so reaching it directly rather than through ``.lenses``
+# keeps this module out of a module-level import cycle with ``lenses``,
+# which still re-exports every name below.  The lazy slot is the SAME one
+# ``lenses.cp`` reads, so a single CuPy import is shared across the package.
+from ..backend._optional import CUPY_AVAILABLE
+from ..backend._optional import ensure_cupy as _ensure_cupy
+from ..backend._optional import is_cupy_array as _is_cupy_array
 from ..glass import get_glass_index  # 4.10: was missing, broke apply_axicon
 
-# CuPy is lazy-loaded; this module accesses it via the lenses module's
-# lazy slot so a single load is shared across the package.
-from . import lenses as _lenses_module
-from .lenses import (
-    CUPY_AVAILABLE,
-)
-
-
-def _is_cupy_array(x):
-    return _lenses_module._is_cupy_array(x)
-
-
-# Module-level cp alias.  Updated whenever _lenses_module's cp is loaded
-# (it points at None until first GPU call, then the actual cupy
-# module).  We sync via a property-style accessor below.
 
 def __getattr__(name):
-    """PEP 562 module-level __getattr__: route ``cp`` to the lenses
-    module's lazy slot.  Triggers when callers do
-    ``from ._lens_thin import cp`` -- the in-function references inside
-    each apply_* below resolve via this fallback if `cp` isn't yet a
-    module global.
+    """PEP 562 module-level __getattr__: route ``cp`` to the shared lazy
+    slot.  Triggers when callers do ``from ._lens_thin import cp`` -- the
+    in-function references inside each apply_* below resolve via this
+    fallback if `cp` isn't yet a module global.
     """
     if name == 'cp':
-        if _lenses_module.cp is None:
-            _lenses_module._ensure_cupy_loaded()
-        return _lenses_module.cp
+        return _ensure_cupy()
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
@@ -285,9 +276,7 @@ def apply_thin_lens(
     # lazy slot explicitly.  Same pattern as apply_cylindrical_lens /
     # apply_grin_lens / apply_axicon.
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
-        if _lenses_module.cp is None:
-            _lenses_module._ensure_cupy_loaded()
-        _cp = _lenses_module.cp
+        _cp = _ensure_cupy()
         xp = _cp
         if not _is_cupy_array(E_in):
             E_in = _cp.asarray(E_in)
@@ -621,11 +610,9 @@ def apply_spherical_lens(
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_spherical_lens', input_kind='field')
 
-    # See apply_thin_lens for the ``_lenses_module.cp`` rationale.
+    # See apply_thin_lens for the ``_ensure_cupy()`` rationale.
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
-        if _lenses_module.cp is None:
-            _lenses_module._ensure_cupy_loaded()
-        _cp = _lenses_module.cp
+        _cp = _ensure_cupy()
         xp = _cp
         if not _is_cupy_array(E_in):
             E_in = _cp.asarray(E_in)
@@ -852,11 +839,9 @@ def apply_aspheric_lens(
             check_even_aspheric_powers(
                 _A.keys(), fn_label=f'apply_aspheric_lens ({_which})')
 
-    # See apply_thin_lens for the ``_lenses_module.cp`` rationale.
+    # See apply_thin_lens for the ``_ensure_cupy()`` rationale.
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
-        if _lenses_module.cp is None:
-            _lenses_module._ensure_cupy_loaded()
-        _cp = _lenses_module.cp
+        _cp = _ensure_cupy()
         xp = _cp
         if not _is_cupy_array(E_in):
             E_in = _cp.asarray(E_in)
@@ -1052,13 +1037,11 @@ def apply_cylindrical_lens(
             f"same guard on apply_thin_lens.)")
 
     # v4.13.2 (audit C-P1-6): dispatch through CuPy when use_gpu=True
-    # or E_in is already a CuPy array.  Resolve ``cp`` via the
-    # _lenses_module lazy slot rather than a bare global (which is
-    # not bound in this module's namespace).
+    # or E_in is already a CuPy array.  Resolve ``cp`` through the shared
+    # lazy slot rather than a bare global (which is not bound in this
+    # module's namespace).
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
-        if _lenses_module.cp is None:
-            _lenses_module._ensure_cupy_loaded()
-        _cp = _lenses_module.cp
+        _cp = _ensure_cupy()
         xp = _cp
         if not _is_cupy_array(E_in):
             E_in = _cp.asarray(E_in)
@@ -1203,11 +1186,9 @@ def apply_grin_lens(
             UserWarning, stacklevel=2)
 
     # v4.13.2 (audit C-P1-6): CuPy dispatch.  See apply_cylindrical_lens
-    # above for the _lenses_module.cp resolution rationale.
+    # above for the shared-lazy-slot resolution rationale.
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
-        if _lenses_module.cp is None:
-            _lenses_module._ensure_cupy_loaded()
-        _cp = _lenses_module.cp
+        _cp = _ensure_cupy()
         xp = _cp
         if not _is_cupy_array(E_in):
             E_in = _cp.asarray(E_in)
@@ -1307,12 +1288,10 @@ def apply_axicon(
     _check_2d_scalar_field(E_in, 'apply_axicon', input_kind='field')
 
     # v4.13.2 (audit C-P1-6): CuPy dispatch.  See
-    # apply_cylindrical_lens above for the _lenses_module.cp
+    # apply_cylindrical_lens above for the shared-lazy-slot
     # resolution rationale.
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
-        if _lenses_module.cp is None:
-            _lenses_module._ensure_cupy_loaded()
-        _cp = _lenses_module.cp
+        _cp = _ensure_cupy()
         xp = _cp
         if not _is_cupy_array(E_in):
             E_in = _cp.asarray(E_in)

@@ -1415,8 +1415,13 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         if len(shapes) > 1:                 # the union-grid error's business
             return
         self._stag_cost_warned = True
+        # stacklevel=4, not the default 3: this path reaches the warning
+        # through one extra helper (solve -> _warn_stag_shared_redundancy ->
+        # _validate_stag_cost), so 3 reports at ``solve``'s own line inside
+        # this file.  The advice is about a ~1000x cost cliff, and a caller
+        # who cannot see WHICH of their calls is expensive cannot act on it.
         _validate_stag_cost("PMM2DStackPure.solve", int(self.M), *cells,
-                            check=("warn",))
+                            check=("warn",), stacklevel=4)
 
     def solve(self, *, jones=True, retain_internal=False):
         """Cascade the stack and return the diffraction efficiencies.

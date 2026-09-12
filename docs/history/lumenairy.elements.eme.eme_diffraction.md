@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/eme/eme_diffraction.py
-ast_sha256: 8f4d17a552379a9018e09f5f37d193cf94fe21e475f7d6030579a843b5595b37
-token_sha256: c19a7fc198dde6a2cfca0d38fdc929cea88b8d33411f01eea52c5899dcedf28a
+ast_sha256: 9acc98446b594cb8358f8b3f3671fd1b6886535e19da46d99f000006560d0467
+token_sha256: fa23038e05adcedf6eb1a58707dc4fd7e42ab5464b8b873d5aeaedbfde3866f3
 pre_relocation_lines: 299
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- zero-norm refusal message reworded to present tense; the retired wording is recorded in this document at L167-169 (WP-A22 follow-up)
 -->
 
 # Version history -- `lumenairy/elements/eme/eme_diffraction.py`
@@ -36,6 +37,7 @@ below as *Left in the source*.
 | original line | site | what the block records |
 |---|---|---|
 | L147 | `mode_match` docstring, STABILITY | "the backward amplitudes ``c-`` used to be referenced at ``z = 0``" |
+| L167-169 | `mode_match`, the zero-norm refusal MESSAGE | "this used to surface as an opaque 'SVD did not converge' LinAlgError" |
 | L235-237 | `eme_diffraction_orders` docstring, LOSSY layers | "It previously took the real part" |
 
 ---
@@ -46,6 +48,28 @@ below as *Left in the source*.
 
 ```text
     the backward amplitudes ``c-`` used to be referenced at ``z = 0``, which put
+```
+
+### L167-169 -- `mode_match`, the zero-norm refusal MESSAGE -- "this used to surface as an opaque 'SVD did not converge' LinAlgError"
+
+This one was inside a STRING the interpreter executes -- the text of the
+`ValueError` a user sees -- so it was out of scope for a documentation-only
+sweep (both fingerprints move when it changes) and was rewritten separately,
+by WP-A22, with the fingerprints re-recorded in the same commit.
+
+*Left in the source:* the connection to the `LinAlgError`, in present tense --
+"Unguarded, such a column reaches the least-squares solve and fails there as an
+opaque 'SVD did not converge' LinAlgError that names neither Psi nor the
+column."  That is a statement about what the guard prevents, which a reader who
+removes it or who has an old traceback still needs; the retired half was the
+claim about when the library changed.  The `zero-norm or non-finite` phrase is
+unchanged: `test_niche_audit_w6_eme.py:783` matches on it.
+
+```text
+        raise ValueError(
+            "mode_match: Psi has a zero-norm or non-finite mode column, so it "
+            "cannot be normalised (this used to surface as an opaque "
+            "'SVD did not converge' LinAlgError from the least-squares solve).")
 ```
 
 ### L235-237 -- `eme_diffraction_orders` docstring, LOSSY layers -- "It previously took the real part"

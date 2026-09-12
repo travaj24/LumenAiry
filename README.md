@@ -566,8 +566,10 @@ family:
 * **Latent CuPy dispatch bug fixed** in `apply_thin_lens`,
   `apply_spherical_lens`, `apply_aspheric_lens` — bare `cp`
   references (Python LEGB rules skip module-level PEP 562
-  `__getattr__` for function-local lookups) routed through
-  `_lenses_module.cp` instead.
+  `__getattr__` for function-local lookups) routed through an
+  explicit accessor instead.  (Those sites call
+  `backend._optional.ensure_cupy` today; at v4.13.2 they reached the
+  same lazy slot through the `lenses` module.)
 
 ### Quick wins
 

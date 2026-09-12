@@ -6645,7 +6645,8 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
         # WALL-NORMAL inverse rule: [[1/exx]]^-1 (the discontinuous normal-D mult).
         # Slant enters as CONVECTION (tan_conv*Dopx, end of function), NOT a metric
         # fold, so the wall-normal / cross blocks are built at slant=0.  (The old
-        # ezz*tan^2 fold that lived here is archived -- see _ARCHIVE_SLANT_FOLD.)
+        # ezz*tan^2 fold that lived here is archived in
+        # docs/history/lumenairy.elements.pmm._core.md.)
         Oinv_exx = iS0 @ mass["inv_exx"]         # [[1/exx]]
         Exx_norm = _safe_inv(Oinv_exx)           # [[1/exx]]^-1  (Li inverse rule)
         Oeps11 = Exx_norm                                     # = [[1/exx]]^-1
@@ -6676,7 +6677,8 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
         Oeps13 = Z.copy()                        # slant via convection, not fold
         Oeps31 = Z.copy()
     # mu (smooth metric, slant via convection -> identity; the ezz*tan^2 / -tan
-    # metric fold that scaled these is archived as _ARCHIVE_SLANT_FOLD):
+    # metric fold that scaled these is archived in
+    # docs/history/lumenairy.elements.pmm._core.md):
     Mu11 = I
     Mu13 = Z
     Mu31 = Z
@@ -7464,63 +7466,13 @@ def _pmm_jones_slant_diag_solve(period, er, eg, n_sub, n_sup, depth, duty, wl,
 
 
 # ===========================================================================
-# ARCHIVE -- superseded methods, preserved with the WHY (NOT executed)
+# ARCHIVE -- superseded methods
 # ===========================================================================
-# The PMM 1-D solver grew through many incremental rounds.  Retired approaches
-# are kept here as raw strings (parsed, never run or linted) so the institutional
-# record -- what was tried and WHY it was superseded -- survives in the code, not
-# only in volatile notes.
-
-_ARCHIVE_SLANT_FOLD = r'''
-SUPERSEDED: the ezz*tan^2 STATIC METRIC FOLD for the slant (round 11; replaced by
-the exact tan_conv*Dopx CONVECTION in _build_generator_metric, 2026-06-07).
-
-WHAT IT COMPUTED -- the Edee-Granet 2024 contravariant metric fold for a slant
-phi, formerly in _build_generator_metric behind `if abs(tan) < 1e-14: ... else:`
-arms (tan was later hard-set to 0, making the else-arms dead; this is them):
-
-    # in-plane wall-normal + cross blocks (the dead else-arm):
-    Oeps11 = _build_inv_rule_metric(
-        mats, lambda t_: 1.0 / (t_["exx"] + t_["ezz"] * tan * tan), iS0)  # eps^11 = exx + ezz tan^2
-    Oeps13 = iS0 @ _coeff_mass_metric(mats, lambda t_: -t_["ezz"] * tan)  # eps^13 = eps^31 = -ezz tan
-    Oeps31 = Oeps13.copy()
-    # OOP cross-terms (the dead else-arm); raw ezz (slant is a metric fold here):
-    Oeps13 = iS0 @ _coeff_mass_metric(mats, lambda t_: -t_["ezz"] * tan)
-    Oeps31 = Oeps13.copy()
-    # mu fold:
-    Mu11 = sec2 * I          # mu^11 = sec^2 (sec2 = 1/cos(phi)^2)
-    Mu13 = -tan * I          # mu^13 = mu^31 = -tan
-    Mu31 = -tan * I
-
-    # the now-retired helper the fold used:
-    def _build_inv_rule_metric(mats, inv_fn, iS0):
-        """Li inverse-rule operator [[coeff]]^-1: direct mass of 1/coeff, iS0, invert."""
-        M = _coeff_mass_metric(mats, inv_fn)
-        return _safe_inv(iS0 @ M)
-
-WHY IT WAS TRIED: the original (round-11) slant realization.  The contravariant
-fold sqrt(g) J^-1 eps J^-T with J = [[1,0,tan],[0,1,0],[0,0,1]] gives
-eps^11 = exx + ezz tan^2, eps^13 = eps^31 = -ezz tan, mu^11 = sec^2,
-mu^13 = mu^31 = -tan.
-
-LOAD-BEARING SIGN DETAIL (do not lose if revisiting): eps^13 and mu^13 must SHARE
-the sign of tan -- this is the J^-1 eps J^-T CONTRAVARIANT fold, NOT J eps J^T --
-so TE and TM diffract to the SAME side.  The wrong (J eps J^T) fold flips eps^13's
-sign so TE and TM convect opposite ways (TE matches the reference at one slant
-sign, TM at the other) = unphysical opposite-side diffraction.
-
-WHY SUPERSEDED: the fold caps per-order TM accuracy at ~1e-2 for strongly-coupled
-/ steep-slant cells.  The ezz-Schur cancels the slant in the longitudinal then
-re-injects it as the STATIC wall-normal ezz*tan^2, whose factorization order is
-wrong for the DISCONTINUOUS wall-normal -> per-order TM floors at ~1e-2 (vs the
-convection treatment's ~1e-4).  The fix (2026-06-07) carries the slant as the
-EXACT first-order convection tan*d/dx (tan_conv*Dopx) added to the CLEAN slant=0
-generator, reaching the ~1e-4 wall-normal floor uniformly.  (The genuinely-
-covariant Li-1999 oblique-coordinate path, factorization='covariant', converges
-SPECTRALLY rather than algebraically by making the wall a coordinate surface --
-self-converging to ~1e-7, though vs an INDEPENDENT full-3x3 oracle the TM floor
-is ~2.5e-3 at slant=45 / TE <8e-4; see the COVARIANT block above, audit P2-B.)
-'''
+# Retired approaches are recorded in docs/history/lumenairy.elements.pmm._core.md
+# ("The ARCHIVE -- superseded methods"), not as raw-string constants here: the
+# document is version-controlled beside the module and pinned to it by
+# tests/unit/test_audit2609_a17_history_relocation.py, which a module-level
+# string nobody reads is not.
 
 
 # Register the PMM module caches with the library cache registry (so the global

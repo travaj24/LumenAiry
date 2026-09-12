@@ -173,3 +173,33 @@ def test_the_stacklevel_is_a_parameter_so_the_deferred_path_can_correct_it():
     assert len(hits) == 1 and hits[0].filename == __file__, (
         f'stacklevel=2 must report at this call site; got '
         f'{[w.filename for w in hits]}')
+
+
+def test_the_deferred_path_reports_at_the_callers_line():
+    """The shared-stack entry must point at the user's ``solve()``.
+
+    The direct path already does
+    (``test_the_warning_is_attributed_to_the_caller_on_the_direct_path``); the
+    deferred one reaches the warning through
+    ``PMM2DStackPure._warn_stag_shared_redundancy``, one frame further down,
+    so it needs ``stacklevel=4`` at that call site rather than the default 3.
+
+    FAIL-BEFORE, measured on the pre-fix tree: ``hits[0].filename`` was
+    ``stack2d_pure.py`` (the library's own ``solve`` line, 1441), not this
+    file.  Bar: an exact filename, no tolerance.  The advice is about a
+    ~1000x cost cliff, and a caller who cannot see WHICH of their calls is
+    expensive cannot act on it.
+    """
+    import lumenairy.elements.pmm.stack2d_pure as _sp
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        _deferred()
+    hits = [w for w in caught if 'SEGMENT grid' in str(w.message)]
+    assert len(hits) == 1, [str(w.message)[:60] for w in caught]
+    assert hits[0].filename == __file__, (
+        f'the deferred advice is reported at {hits[0].filename} '
+        f'(the library\'s own line) rather than at the calling line in '
+        f'{__file__}.  Pass stacklevel=4 at {_sp.__file__}, in '
+        f'_warn_stag_shared_redundancy.')
+    assert hits[0].message.args[0].startswith('PMM2DStackPure.solve:')

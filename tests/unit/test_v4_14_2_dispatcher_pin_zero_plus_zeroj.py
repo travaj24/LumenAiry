@@ -77,6 +77,7 @@ Author: Andrew Traverso -- v4.14.2 / Agent D
 """
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 from typing import List, Tuple
@@ -122,7 +123,124 @@ _P3_ALLOWLIST = {
     # path.  v4.15+ Qt-side cleanup may migrate to the dtype-aware
     # sentinel; meanwhile, exempted.
     ('ui/psf_mtf_dock.py', 230),
+    # ``elements/doe.py:539`` -- ``T = np.where(inside, T, 0.0 + 0j)`` in
+    # ``create_fresnel_zone_plate``.  Found 2026-09-12 (WP-A22) by the
+    # structural walk below, which the per-line regex could not see because
+    # the fill is spelled ``0j`` rather than ``0.0j``.
+    #
+    # P3 by MEASUREMENT, not by assumption: on this branch
+    # ``T = np.exp(1j * np.where(is_even, 0.0, np.pi))`` and that phase is
+    # built from PYTHON FLOAT literals, so it is float64 for every input the
+    # entry point accepts -- ``T`` is complex128 unconditionally (measured
+    # complex128 on all four (binary, n_zones) combinations) and the fill is
+    # complex128 too.  Nothing is promoted on any reachable call.
+    #
+    # It is still the wrong spelling, and it would become P1 the moment the
+    # phase is built at a narrower dtype.  The one-line migration is
+    # ``np.where(inside, T, np.zeros((), T.dtype))``; recorded as a request to
+    # that module's owner in WP-A22's report.  Remove this entry when it
+    # lands -- the walk will then confirm it rather than exempt it.
+    ('elements/doe.py', 539),
 }
+
+
+def _literal_or_none(node):
+    """The value of a numeric literal expression, or ``None``.
+
+    ``ast.literal_eval`` rather than a hand walk, because ``0.0 + 0.0j`` is a
+    ``BinOp`` and not a ``Constant``: CPython's parser does not constant-fold
+    (that happens later, on the bytecode), and ``literal_eval`` is the one
+    place that understands the ``real + imagj`` form without executing
+    anything.
+    """
+    try:
+        return ast.literal_eval(node)
+    except (ValueError, TypeError, SyntaxError, MemoryError):
+        return None
+
+
+def _is_complex_zero_fill(node) -> bool:
+    """True for a literal complex ZERO, in any spelling.
+
+    ``0j``, ``0.0j`` and ``0.0 + 0.0j`` all qualify; they are the same defect,
+    because a Python complex is WEAKLY typed in jnp and promotes the whole
+    ``where`` to complex whenever the other branch is real.
+
+    What does NOT qualify, and the distinction is the point: a NON-ZERO
+    sentinel such as ``1.0 + 0.0j`` (``asymptotic.py``'s and the twin's
+    ``safe_det``, ``_lens_traced.py``'s five direction-cosine guards).  Those
+    exist to keep a subsequent division finite and their VALUE is load-bearing,
+    so ``zeros((), dtype)`` is not the migration for them -- swapping one in
+    would change the answer.  They are a different judgement call from the
+    no-op zero fill this pin is named after, and a first draft of this walk
+    that accepted any ``BinOp`` containing a complex zero flagged all six of
+    them.  A real zero (``0.0``) does not qualify either: it promotes nothing.
+    """
+    value = _literal_or_none(node)
+    return isinstance(value, complex) and value == 0
+
+
+def _scan_file_ast(path: Path, text: str) -> List[Tuple[int, str]]:
+    """The line regex above, done structurally -- and the reason it exists.
+
+    ADDED 2026-09-12 (WP-A22).  The regex scan is per LINE, so it sees a
+    ``where`` call only when the call and its fill are on the same line.  A
+    black-formatted or hand-wrapped call hides from it completely::
+
+        safe_phi = jnp.where(jnp.isfinite(jnp.abs(phi_star)), phi_star,
+                             0.0 + 0.0j)
+
+    That is not hypothetical: it is
+    ``propagators/asymptotic_jax_twin.py``'s ``safe_phi``, which sat two lines
+    below a site the pin DID catch and escaped it for the whole of v4.14-v5.45
+    on nothing but where the line broke.  MEASURED before the fix: the regex
+    reported 1 site in that file, this walk reports 2.
+
+    Structural rather than textual, so a literal inside a comment or a string
+    cannot match at all (no ``_is_pure_comment_line`` heuristic needed), and
+    ``xp.where`` / ``jnp.where`` / a bare ``where(...)`` are all caught by the
+    same rule rather than by the regex's incidental ``np.where`` substring hit.
+
+    Returns ``(lineno, text)`` for the FILL's own line, so the failure message
+    points at the literal rather than at the head of the call.
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:                        # pragma: no cover
+        raise AssertionError(
+            f'{path}: cannot be parsed, so this pin cannot walk it: {exc}'
+        ) from exc
+    lines = text.splitlines()
+    hits: List[Tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or len(node.args) < 3:
+            continue
+        func = node.func
+        name = (func.attr if isinstance(func, ast.Attribute)
+                else func.id if isinstance(func, ast.Name) else None)
+        if name != 'where':
+            continue
+        fill = node.args[2]
+        if not _is_complex_zero_fill(fill):
+            continue
+        # Exempt: the VALUE branch is itself a literal complex constant, so
+        # the array is complex by construction and by intent and there is no
+        # operand dtype for the fill to override.  ``doe.py:534``'s binary
+        # zone mask, ``np.where(is_even & inside, 1.0 + 0j, 0.0 + 0j)``, is
+        # the case: both branches are literals, the result is a complex
+        # transmission mask, and nothing was promoted.  The defect this pin
+        # is about needs a branch that CARRIES a dtype.
+        if _literal_or_none(node.args[1]) is not None:
+            continue
+        # Same ``.astype(`` recovery exemption the regex scan applies, read
+        # off the whole call rather than off one line: a wrapped call's
+        # recovery can land on a different line from its fill.
+        segment = '\n'.join(
+            lines[node.lineno - 1:(node.end_lineno or node.lineno)])
+        if '.astype(' in segment.split('where(', 1)[-1]:
+            continue
+        hits.append((fill.lineno, lines[fill.lineno - 1].strip()))
+    return hits
 
 
 def _is_pure_comment_line(line: str) -> bool:
@@ -207,7 +325,17 @@ def _scan_file(path: Path) -> List[Tuple[int, str]]:
         if _is_allowlisted(rel_posix, i):
             continue
         hits.append((i, line.strip()))
-    return hits
+    # The structural pass, for the calls the per-line regex cannot see (a
+    # ``where`` whose fill sits on a continuation line).  Unioned rather than
+    # substituted: the regex scan's exact behaviour is preserved, and this
+    # only ever ADDS sites it was blind to.
+    seen = {ln for ln, _ in hits}
+    for ln, content in _scan_file_ast(path, text):
+        if ln in seen or _is_allowlisted(rel_posix, ln):
+            continue
+        seen.add(ln)
+        hits.append((ln, content))
+    return sorted(hits)
 
 
 # Materialise the file list at module-import time so the test IDs
@@ -361,6 +489,77 @@ def test_pin_regex_does_not_match_scalar_accumulator():
             f"Regex {_PIN_PATTERN.pattern!r} false-matched the "
             f"scalar accumulator pattern {s!r}; this would create "
             "false regressions on lines the audit considers benign.")
+
+
+# ============================================================================
+# Falsifiability -- the structural walk catches what the line regex cannot
+# ============================================================================
+
+_TEETH_CASES = [
+    # (label, source, regex-visible, must-be-flagged)
+    ('same line, the spelling the pin is named after',
+     'x = jnp.where(ok, v, 0.0 + 0.0j)\n', True, True),
+    ('CONTINUATION LINE -- the whole reason for the AST walk',
+     'y = jnp.where(jnp.isfinite(jnp.abs(phi)), phi,\n'
+     '             0.0 + 0.0j)\n', False, True),
+    ('non-zero sentinel, whose VALUE is load-bearing',
+     'z = jnp.where(ok, det, 1.0 + 0.0j)\n', False, False),
+    ('.astype recovery on the call',
+     'w = jnp.where(ok, v, 0.0 + 0.0j).astype(v.dtype)\n', False, False),
+    ('the migration this pin prescribes',
+     'u = jnp.where(ok, v, jnp.zeros((), v.dtype))\n', False, False),
+    ('both branches literal -- complex by construction',
+     't = np.where(c, 1.0 + 0j, 0.0 + 0j)\n', False, False),
+    ('a literal inside a comment is not code',
+     '# np.where(ok, v, 0.0 + 0.0j)\n', False, False),
+    ('a real zero fill promotes nothing',
+     'q = jnp.where(ok, v, 0.0)\n', False, False),
+]
+
+
+@pytest.mark.parametrize(
+    'label,source,regex_visible,flagged',
+    _TEETH_CASES, ids=[c[0][:42] for c in _TEETH_CASES])
+def test_the_structural_walk_has_teeth(label, source, regex_visible, flagged,
+                                       tmp_path):
+    """FAIL-BEFORE for the 2026-09-12 extension, on synthetic sources.
+
+    The walker above runs over the real tree and reports zero, which is what
+    a green gate looks like AND what a gate that has stopped working looks
+    like.  These eight cases separate the two on this build.
+
+    The second row is the one that matters: it is
+    ``propagators/asymptotic_jax_twin.py``'s ``safe_phi`` verbatim, which
+    escaped this pin from v4.14 to v5.45 purely because its literal fell on a
+    continuation line.  MEASURED here: the regex sees 0, the walk sees 1.
+
+    Rows 3-8 are the counter-pins.  A walk that flagged everything would pass
+    row 2 and be useless; in particular a non-zero sentinel must NOT be
+    flagged, because ``zeros((), dtype)`` is not its migration -- substituting
+    one would change the answer, and a first draft of this walk did exactly
+    that to six live sites before the rule was made value-correct.
+    """
+    path = tmp_path / 'sample.py'
+    path.write_text(source, encoding='utf-8')
+
+    regex_hits = []
+    for i, line in enumerate(source.splitlines(), start=1):
+        if _is_pure_comment_line(line):
+            continue
+        match = _PIN_PATTERN.search(line)
+        if match is None or '.astype(' in line[match.end():]:
+            continue
+        regex_hits.append(i)
+    assert bool(regex_hits) == regex_visible, (
+        f'{label}: the per-line regex was expected to '
+        f'{"see" if regex_visible else "miss"} this and did not.  The premise '
+        f'of the row has changed, so it no longer tests what it claims.')
+
+    ast_hits = _scan_file_ast(path, source)
+    assert bool(ast_hits) == flagged, (
+        f'{label}: the structural walk reported {len(ast_hits)} site(s), '
+        f'expected {"at least one" if flagged else "none"}.  Source:\n'
+        f'{source}')
 
 
 if __name__ == '__main__':

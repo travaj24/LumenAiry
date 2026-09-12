@@ -165,3 +165,126 @@ both orders.
   `LensResources` triaged exclusions are deleted -- they resolve on their own
   now that the config objects ship.  API-claiming denominator **593 -> 597**,
   unresolved 0.
+
+---
+
+## Follow-up group (same work package, after the element sweeps landed)
+
+### Fixed -- JAX asymptotic twin: two `where` fills silently made a real phase complex
+
+`lumenairy/propagators/asymptotic_jax_twin.py`'s `_modal_field_lg00_pixel_jax`
+filled two guarded `jnp.where` branches with the Python literal `0.0 + 0.0j`.
+A Python complex is WEAKLY typed in JAX, so the fill promotes the whole `where`
+to complex whenever the other branch is REAL -- and `phi_star` is real
+(measured float64 on the x64 path).  Both fills are now dtype-matched
+(`jnp.zeros((), x.dtype)`).
+
+MEASURED under `jax.jit`, x64 enabled:
+
+| operand | before (`0.0 + 0.0j`) | after (`zeros((), dtype)`) |
+|---|---|---|
+| `b_quad` complex64 / complex128 | unchanged | unchanged |
+| `phi_star` float32 | **complex64** | **float32** |
+| `phi_star` float64 | **complex128** | **float64** |
+
+Values are preserved on every branch, and the end-to-end float64 output of
+`propagate_modal_asymptotic_lg00_jax` is **bit-identical** (`np.array_equal`
+True, `max|diff| = 0.0` on the Y3 9x9 fixture) -- so this is a dtype-contract
+fix with no numerical change.
+
+Corrects the characterisation in the finding as reported: the literal does not
+force complex128 on a complex64 iterate (weak typing prevents that); it forces
+real -> complex.  The site the existing pin caught (`safe_bquad`) was inert on
+this build because `b_quad` is already complex; the site it MISSED (`safe_phi`)
+was the live one.
+
+### Fixed -- the P1-NEW-4 pin could not see a wrapped call
+
+`tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` scanned line by
+line with a regex requiring the `where` call and its fill on the SAME line, so
+
+```python
+safe_phi = jnp.where(jnp.isfinite(jnp.abs(phi_star)), phi_star,
+                     0.0 + 0.0j)
+```
+
+was invisible to it -- and stayed invisible from v4.14 to v5.45, two lines
+below a site the pin did catch, on nothing but where the line broke.
+
+A structural (AST) pass now runs beside the regex and the two are UNIONED, so
+the regex's behaviour is unchanged and the walk only adds sites it was blind
+to.  It matches any `*.where(cond, value, <literal complex zero>)` regardless
+of line breaks, treats `0j` / `0.0j` / `0.0 + 0.0j` as one rule via
+`ast.literal_eval`, and -- being structural -- cannot match inside a comment or
+a string at all.  Two stated exemptions: a NON-ZERO sentinel such as
+`1.0 + 0.0j`, whose value is load-bearing and for which `zeros((), dtype)` is
+not the migration; and a call whose value branch is itself a literal complex
+constant, where the array is complex by construction and there is no operand
+dtype to preserve.
+
+`test_the_structural_walk_has_teeth` pins the behaviour on eight synthetic
+sources, asserting each row's premise (what the regex sees) as well as its
+verdict.  The file goes **239 -> 247 ids**.
+
+It found one further site, `elements/doe.py:539`
+(`T = np.where(inside, T, 0.0 + 0j)`), rated **P3 by measurement**: on that
+branch `T` is complex128 unconditionally (the phase is built from Python float
+literals), so nothing is promoted on any reachable call.  It is recorded in the
+pin's own `_P3_ALLOWLIST` with that measurement and the one-line migration
+written at the entry.
+
+### Fixed -- architecture: the fourth lens import cycle is gone
+
+`lumenairy/elements/_lens_thin.py` took `CUPY_AVAILABLE` and its CuPy helpers
+from `.lenses`, which imports `_lens_thin` back.  It now takes them from
+`lumenairy/backend/_optional.py`, a leaf, keeping the PEP 562 `cp` forward
+pointed at the same shared lazy slot.  MEASURED with a module-level-only AST
+walk over the lens family: **4 -> 3** module-level 2-cycles, and the six
+thin-element entry points plus a complex64 case are bit-identical.  No public
+API changed -- `lenses` still re-exports every name.
+
+### Fixed -- the staggered PMM 2-D shared-grid advisory points at the caller
+
+`PMM2DStackPure.solve`'s deferred advisory reached the warning through one
+extra helper, so at the default `stacklevel=3` it reported at
+`stack2d_pure.py`'s own line instead of at the user's `solve()` call.  It now
+passes `stacklevel=4`.  The advice is about a ~1000x cost cliff, so a caller
+who cannot see WHICH call is expensive cannot act on it.  Pinned by a new
+`test_the_deferred_path_reports_at_the_callers_line` (that file: 6 -> 7 ids),
+which fails on the pre-fix spelling.
+
+### Changed -- three history blocks that were CODE, not comments
+
+The WP-A17 element sweep could not take these, because changing any of them
+moves both of a module's fingerprints:
+
+* `elements/eme/eme_diffraction.py` -- the zero-norm refusal's user-facing
+  message carried "this used to surface as an opaque 'SVD did not converge'
+  LinAlgError".  It now states, in the present tense, what the guard prevents.
+* `elements/pmm/stack.py` -- the per-layer `stabilize='slices'` refusal quoted
+  and retracted its own earlier wording; it now states the corrected fact
+  positively.  Every operative instruction is unchanged in both.
+* `elements/pmm/_core.py` -- `_ARCHIVE_SLANT_FOLD`, a ~50-line module-level
+  raw-string constant archiving a superseded slant treatment, was parsed and
+  bound on every `import lumenairy` and read by nothing (verified: no code,
+  test or `__all__` entry referenced it).  Its text moved verbatim into
+  `docs/history/lumenairy.elements.pmm._core.md` and the two comments that
+  named it now name the document.  `__all__` is byte-identical and exactly one
+  module-level name was removed.
+
+Each retired wording is reproduced verbatim in the module's history document
+under its pre-relocation line number, and every affected module's fingerprints
+were re-recorded in the same change with
+`scripts/record_history_fingerprints.py --reason ...`.
+
+### Fixed -- the history checker's falsifiability arm could run out of targets
+
+`tests/unit/test_audit2609_a17_history_relocation.py`'s third mutation
+re-spells an integer literal to prove the token fingerprint sees what the AST
+folds away.  `lumenairy/_context.py` contains no integer constant at all
+(measured), so the arm failed with "no small integer literal found to
+re-spell" -- reporting the module as suspect when the catalogue had simply run
+out of targets.  It now falls back to flipping a string's quote style,
+skipping docstrings (which both fingerprints ignore by design) and any string
+where the flip would not be value-preserving.  That file is now fully green:
+**708 passed**.

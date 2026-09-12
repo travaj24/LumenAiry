@@ -926,3 +926,443 @@ re-record, and it now reports every document in one pass.
 ## 7. Path to the changelog text
 
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-A22_CHANGELOG.md`
+
+---
+
+# Follow-up (after the elements sweep landed)
+
+The first pass shipped as `7d03d799`.  The coordinator then confirmed that
+`lumenairy/elements/_lens_thin.py` and `lumenairy/elements/pmm/stack2d_pure.py`
+were clean, added the three items WP-A17 sweep 2 could not touch because they
+are CODE rather than comments (`fixes/WP-A17_SWEEP2_REPORT.md` sec. 7 items
+2-3), and later added sweep 1's sec. 9 item 4 (the JAX-twin dtype fill).  Every
+module's fingerprints were re-recorded in the same change as its code edit.
+
+## F1. Summary
+
+| item | status | files:lines | tests | oracle | measured before -> after |
+|---|---|---|---|---|---|
+| 8a. `_lens_thin` 2-cycle (was BLOCKED) | **fixed** | `lumenairy/elements/_lens_thin.py:36-57` + six call sites + five comments; `lumenairy/elements/lenses.py:146-150` | `test_audit2609_a8_thin_elements.py`, `test_audit2609_a8_verify.py` (97 passed) | module-level-only AST cycle walk | **4 -> 3** module-level 2-cycles |
+| 8b. `stack2d_pure` stacklevel (was BLOCKED) | **fixed** | `lumenairy/elements/pmm/stack2d_pure.py:1418-1424` | `test_audit2609_a21_pmm_warning_filter.py` **6 -> 7 ids** | frame probe at the raising site | advice reported at `stack2d_pure.py:1446` -> **at the caller's `solve()`** |
+| F-a. `eme_diffraction` refusal message | **fixed** | `lumenairy/elements/eme/eme_diffraction.py:166-170` | 271 passed across the EME/thin batch | the message text itself | narrative parenthetical -> present tense; retired wording in the history doc at L167-169 |
+| F-b. `pmm/stack.py` refusal message | **fixed** | `lumenairy/elements/pmm/stack.py:3106-3116` | `test_audit2609_a12_*` / `a13_*` (105 passed) | the message text itself | self-retraction removed; retired wording at L3209-3215 |
+| F-c. `_ARCHIVE_SLANT_FOLD` moved out | **fixed** | `lumenairy/elements/pmm/_core.py:7466-7472` (was `:7466-7523`), `:6649`, `:6681` | same PMM files | AST diff of module-level names | **one** module-level name removed, `__all__` byte-identical |
+| F-d. `asymptotic_jax_twin` dtype fills | **fixed** | `lumenairy/propagators/asymptotic_jax_twin.py:524-532` | `test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` **239 -> 247 ids**; the asymptotic files | jnp dtype promotion under `jit` | pin **1 failed / 238 passed -> 0 failed / 247 passed**; `safe_phi` float32 -> **complex64** becomes float32 -> **float32**; float64 output bit-identical |
+| F-e. the pin could not see continuation lines | **fixed** | `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py:80, 126-143, 147-196, 269-282, 497-568` | the file itself | the regex vs the AST walk on eight synthetic sources | regex sees **0** of the wrapped form, the walk sees **1** |
+| F-f. fingerprints re-recorded | **done** | six `docs/history/*.md` headers | `test_audit2609_a17_history_relocation.py` (708 passed) | the recorder + the checker | 6 drifted -> **0**; each carries a `re_recorded:` line with its reason |
+| F-g. the A17 falsifiability arm was RED | **fixed** | `tests/unit/test_audit2609_a17_history_relocation.py:335-352, 419-460` | that file | mutation 3 on `lumenairy/_context.py` | `no small integer literal found to re-spell` -> **116 passed** |
+
+## F2. Per item
+
+### F2.1 (8a) The `_lens_thin <-> lenses` cycle
+
+Applied as sec. 5.1 specified, with one deviation the linter forced and one
+knock-on the report predicted.
+
+* **Deviation.**  The parenthesised `from ..backend._optional import (...)`
+  form trips `I001`: this repo's isort profile wants one name per line here,
+  and `lenses.py:47-49` already imports the same three names that way.  It is
+  spelled to match, and the block moved ABOVE `..glass` so the run is sorted:
+
+  ```python
+  from ..backend._optional import CUPY_AVAILABLE
+  from ..backend._optional import ensure_cupy as _ensure_cupy
+  from ..backend._optional import is_cupy_array as _is_cupy_array
+  from ..glass import get_glass_index  # 4.10: was missing, broke apply_axicon
+  ```
+
+  Adding `_lens_thin.py` to the `I001` per-file ignore would also have worked
+  and was not done: that list is the one WP-A15a wrote "do not grow it" on,
+  and matching the existing spelling costs nothing.
+* **Six** three-line `_lenses_module.cp` resolution blocks became
+  `_cp = _ensure_cupy()`, and **five** comments naming the old mechanism were
+  reworded.  `grep -c _lenses_module lumenairy/elements/_lens_thin.py` now
+  returns **0**.
+* **Knock-on, as predicted:** `lenses.py:146`'s "``_lens_thin._is_cupy_array``
+  delegates here, so this is also the answer the thin-lens family gets" was
+  true and is not any more.  Reworded (the one comment the coordinator
+  authorised) to say that `_lens_thin` asks `backend._optional.is_cupy_array`
+  directly, takes the same answer from the same helper, and that the extra
+  short-circuit here is about call cost rather than about the answer.  That is
+  a DOCSTRING edit, so it moved neither of `lenses.py`'s fingerprints -- the
+  recorder listed `lenses.md` as clean, which is the checker doing its job.
+
+MEASURED, module-level-only AST cycle walk over the lens family:
+
+```
+BEFORE  module-level 2-cycles: 4      AFTER  module-level 2-cycles: 3
+  _lens_real   <-> lenses               _lens_real   <-> lenses
+  _lens_thin   <-> lenses   <-- gone    _lens_traced <-> lenses
+  _lens_traced <-> lenses               lenses <-> lenses_maslov
+  lenses <-> lenses_maslov
+```
+
+Behaviour: `CUPY_AVAILABLE` unchanged, `_lens_thin.cp` still forwards through
+PEP 562 to the shared lazy slot, an unknown attribute still raises
+`AttributeError`, and `lenses.apply_thin_lens is _lens_thin.apply_thin_lens`.
+Bit-identity of all six entry points plus a complex64 case was measured before
+the patch was proposed (sec. 5.1); the applied text is that same patch.
+
+### F2.2 (8b) The deferred PMM advisory's `stacklevel`
+
+`stacklevel=4` applied, with a why-comment naming the extra frame.
+
+**FAIL-BEFORE, by reverting the change in process** (rebuilding
+`_warn_stag_shared_redundancy` with the pre-fix call and re-running the same
+fixture, so no frame is added or removed):
+
+```
+AFTER        reported at <caller>:19
+BEFORE       reported at stack2d_pure.py:1446
+BEFORE is the library file : True
+AFTER  is the caller file  : True
+```
+
+The new pin, `test_the_deferred_path_reports_at_the_callers_line`, asserts the
+exact filename and that the message still opens `PMMStack.solve:`.  That file
+goes **6 -> 7 ids, all passing**.  The two-edged counter-pin beside it
+(`test_a_module_scoped_filter_on_this_module_does_not_catch_it`) stays green,
+as sec. 5.2 predicted: the module filter is on `twod_staggered`, and moving the
+attribution from `stack2d_pure` to the caller does not touch it.
+
+### F2.3 (F-a, F-b) Two narratives inside executed strings
+
+Both were history *inside a string literal the interpreter runs*, which is why
+a documentation-only sweep could not take them: changing one moves both
+fingerprints.
+
+**`eme_diffraction.py`** -- the zero-norm refusal said the failure "used to
+surface as an opaque 'SVD did not converge' LinAlgError".  Now: "Unguarded,
+such a column reaches the least-squares solve and fails there as an opaque 'SVD
+did not converge' LinAlgError that names neither Psi nor the column."  The
+connection is kept, in the present tense, because a reader with an old
+traceback still needs it; what went is the claim about when the library
+changed.  `zero-norm or non-finite` is untouched -- `test_niche_audit_w6_eme.py:783`
+matches on that phrase (checked before editing).
+
+**`pmm/stack.py`** -- the per-layer `stabilize='slices'` refusal quoted and
+retracted its own earlier wording ("this message used to say per-layer grids
+have 'no cross-layer walls to perturb', which is WRONG").  Now it states the
+corrected fact positively: "min_feature IS live on this path even so: a window
+is itself a union and contains the adjacent-slice collisions."  Every operative
+instruction survives.  Grepped first: no test matches the retracted sentence.
+
+Both retired texts are reproduced verbatim in their history documents under
+their PRE-RELOCATION line numbers (L167-169 and L3209-3215, read off
+`2622449f~1` rather than guessed), each with a note saying why it was moved
+separately from the sweep.
+
+### F2.4 (F-c) `_ARCHIVE_SLANT_FOLD`
+
+**Grepped first, as instructed.**  Across `*.py`, `*.md`, `*.toml`, `*.cfg`,
+`*.txt` and `*.yml`, the only hits outside `docs/audits/` were the assignment
+itself and **two comments that merely name it** (`_core.py:6648`, `:6679`).  No
+code, no test, no `__all__` entry: it was parsed and bound on every
+`import lumenairy` and read by nothing.
+
+**Correction to the sweep report's figure.**  Sweep 2 sec. 7 item 3 gives
+"lines 7472-7648, ~180 lines".  MEASURED from the AST, the assignment spans
+**7516-7565 pre-relocation / 7474-7523 today = 50 lines** (58 including the
+ARCHIVE section header above it).  The ~180 appears to have been measured to
+the end of file rather than to the end of the statement.  It is still the
+largest single history block in the partition; it is not 180 lines.
+
+The string body moved verbatim into
+`docs/history/lumenairy.elements.pmm._core.md` under a new `### L7516-7565`
+section, the two pointer comments now name that document instead of the
+constant, and the ARCHIVE section header stays but says the record lives in the
+document -- with the reason the document is the better home: it is pinned to
+the module by the A17 checker, which a module-level string nobody reads is not.
+
+Verified inert by diffing module-level names against `HEAD`:
+
+```
+module-level names removed: ['_ARCHIVE_SLANT_FOLD']
+module-level names added  : []
+counts: 183 -> 182
+__all__ identical: True | entries: 107
+```
+
+### F2.5 (F-d) `asymptotic_jax_twin.py` -- the dtype-matched fills
+
+**FAIL-BEFORE:** `test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` reported
+**1 failed / 238 passed**, naming `propagators/asymptotic_jax_twin.py`.
+
+**What is actually wrong, measured rather than assumed -- and it is not quite
+what sweep 1 sec. 9 item 4 says.**  That report states the literal "forces a
+complex128 promotion regardless of the iterate's dtype".  On this JAX build it
+does not: a Python `complex` is WEAKLY typed, so a complex64 operand stays
+complex64 with x64 on or off.  What the literal does force is a **real ->
+complex** promotion.  Measured with `jax.jit`, x64 enabled:
+
+| operand | old `0.0 + 0.0j` | new `zeros((), dtype)` |
+|---|---|---|
+| `b_quad` complex64 | complex64 | complex64 |
+| `b_quad` complex128 | complex128 | complex128 |
+| `phi_star` float32 | **complex64** | **float32** |
+| `phi_star` float64 | **complex128** | **float64** |
+
+and `phi_star` at the site IS real -- measured `float64` on the x64 path,
+straight out of `_compute_M_b_xp`.  So:
+
+* `safe_bquad` (the site the pin caught) was **inert** on this build: `b_quad`
+  is complex already.  It is still the forbidden spelling, and it depends for
+  its harmlessness on weak-typing rules JAX has changed before.
+* `safe_phi` (the site the pin MISSED) was the live one: it silently returned a
+  complex phase whose imaginary part was always zero, and at float32 it
+  produced a complex64 array where a float32 one was asked for.
+
+The irony is worth recording: the sibling that escaped the pin on a line-break
+technicality was the one that was actually wrong.
+
+**Values are preserved** (`jnp.all(old == new)` True on both branches at both
+precisions), and the end-to-end float64 output is **bit-identical**: the BEFORE
+arm was produced by loading the HEAD blob of the module under its own dotted
+name and running `propagate_modal_asymptotic_lg00_jax` on the Y3 9x9 fixture --
+
+```
+BEFORE dtype complex128 | AFTER dtype complex128
+BIT-IDENTICAL (np.array_equal): True
+max|diff| = 0.0
+```
+
+**Not changed, and the distinction is the point.**  `safe_det = jnp.where(
+ok_det, det_M, 1.0 + 0.0j)` two lines above is the same SHAPE but a different
+defect class: the fill is a NON-ZERO sentinel whose value is load-bearing (it
+keeps `1.0 / safe_det` finite), so `zeros((), dtype)` is not its migration --
+substituting one would change the answer.  The same holds for
+`propagators/asymptotic.py:658` and five sites in `elements/_lens_traced.py`.
+A first draft of the walk below flagged all six; the rule was made
+value-correct instead.
+
+### F2.6 (F-e) The pin could not see a continuation line
+
+The scanner was per LINE and the pattern required the call and its fill on the
+same line, so a wrapped call was invisible:
+
+```python
+safe_phi = jnp.where(jnp.isfinite(jnp.abs(phi_star)), phi_star,
+                     0.0 + 0.0j)
+```
+
+That is not hypothetical -- it is the `safe_phi` above, two lines below a site
+the pin DID catch, hidden from v4.14 to v5.45 by nothing but where the line
+broke.
+
+A **structural pass** now runs beside the regex and the two are UNIONED, so the
+regex's exact behaviour is preserved and the walk only ever adds sites it was
+blind to.  It finds every `*.where(cond, value, <literal complex zero>)` call
+regardless of line breaks, using `ast.literal_eval` on the fill so `0j`,
+`0.0j` and `0.0 + 0.0j` are all one rule, and it reports the FILL's own line so
+the failure points at the literal.  Being structural, it cannot match inside a
+comment or a string at all.
+
+Two exemptions, both stated rather than heuristic:
+
+* a NON-ZERO sentinel is not a hit (`literal_eval` gives `(1+0j) != 0`);
+* a call whose VALUE branch is itself a literal complex constant is not a hit:
+  the array is complex by construction and there is no operand dtype to
+  preserve.  `doe.py:534`'s `np.where(is_even & inside, 1.0 + 0j, 0.0 + 0j)`
+  binary zone mask is that case.
+
+**Teeth, pinned and not merely demonstrated.**
+`test_the_structural_walk_has_teeth` runs eight synthetic sources through both
+scanners and asserts each one's premise as well as its verdict:
+
+```
+same line (regex CAN see)    regex 1  |  AST walk 1
+CONTINUATION LINE            regex 0  |  AST walk 1   <-- caught ONLY by the new walk
+non-zero sentinel 1.0+0.0j   regex 0  |  AST walk 0
+.astype recovery             regex 0  |  AST walk 0
+the fixed spelling           regex 0  |  AST walk 0
+both branches literal        regex 0  |  AST walk 0
+literal inside a comment     regex 0  |  AST walk 0
+real zero fill               regex 0  |  AST walk 0
+```
+
+The file goes **239 -> 247 ids, all passing**.
+
+**One genuine new site, in a file I do not own: `elements/doe.py:539`.**
+`T = np.where(inside, T, 0.0 + 0j)` -- the regex never saw it because the fill
+is spelled `0j`, not `0.0j`.  Rated **P3 by measurement, not by assumption**:
+on that branch `T = np.exp(1j * np.where(is_even, 0.0, np.pi))`, and the phase
+is built from Python float literals, so it is float64 for every input the entry
+point accepts.  `T` is complex128 unconditionally -- measured complex128 on all
+four `(binary, n_zones)` combinations -- and the fill is complex128 too, so
+nothing is promoted on any reachable call.  It is added to the pin's own
+`_P3_ALLOWLIST` with that measurement written at the entry, which is the
+mechanism that file documents for exactly this severity gradient, and it is
+also a one-line request to that module's owner (sec. F5).  It is NOT a silent
+exemption: the entry says what the migration is and to delete the entry when it
+lands.
+
+### F2.7 (F-g) The A17 falsifiability arm was RED, and it was my file
+
+Found while re-running the gate:
+
+```
+FAILED ...::test_the_fingerprints_are_actually_sensitive[lumenairy._context]
+E   AssertionError: no small integer literal found to re-spell
+```
+
+Not a fingerprint problem and not `_context.py`'s fault: the mutation catalogue
+ran out of targets.  MEASURED, `lumenairy/_context.py` contains **no integer
+constant at all** (0 of them) and 31 single-line string constants.  Mutation 3
+needs a literal whose re-spelling preserves the AST and moves the token stream,
+and an integer is not the only one that does.
+
+The arm now falls back to flipping a string's quote style (`'a'` -> `"a"`), and
+the fallback is careful about the one thing that would make it vacuous: it skips
+any string that is a *statement* (docstring or string-as-comment), because the
+token fingerprint drops those by design.  It also skips strings containing a
+backslash or the other quote character, where the flip would not be
+value-preserving.  The "no target at all" message now says it is a gap in the
+catalogue and not evidence about the module -- "widen the catalogue rather than
+exempting the module".
+
+**116 passed** on that arm alone; **708 passed, 0 failed** for the whole A17
+file, the first time this campaign it has been fully green.
+
+## F3. Files touched in the follow-up
+
+**Modified -- library (7)**
+
+* `lumenairy/elements/_lens_thin.py` -- the cycle break (imports,
+  `__getattr__`, six call sites, five comments).
+* `lumenairy/elements/lenses.py` -- one docstring sentence at `:146`
+  (coordinator-authorised; docstring-only, so neither fingerprint moved).
+* `lumenairy/elements/pmm/stack2d_pure.py` -- `stacklevel=4` + why-comment.
+* `lumenairy/elements/eme/eme_diffraction.py` -- refusal message reworded.
+* `lumenairy/elements/pmm/stack.py` -- refusal message reworded.
+* `lumenairy/elements/pmm/_core.py` -- `_ARCHIVE_SLANT_FOLD` deleted, section
+  header and two pointer comments repointed.
+* `lumenairy/propagators/asymptotic_jax_twin.py` -- two dtype-matched fills.
+
+**Modified -- tests (3)**
+
+* `tests/unit/test_audit2609_a21_pmm_warning_filter.py` -- one new fail-before
+  test (6 -> 7 ids).
+* `tests/unit/test_audit2609_a17_history_relocation.py` -- mutation 3 widened,
+  plus a `_node_source` helper and the docstring that explains the fallback.
+* `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` -- the structural
+  walk, the value-correct literal rule, one measured allowlist entry, and the
+  eight-case teeth test (239 -> 247 ids).
+
+**Modified -- history documents (6)** (headers re-recorded; three also gained a
+section)
+
+* `docs/history/lumenairy.elements._lens_thin.md` (header only)
+* `docs/history/lumenairy.elements.pmm.stack2d_pure.md` (header only)
+* `docs/history/lumenairy.propagators.asymptotic_jax_twin.md` (header only)
+* `docs/history/lumenairy.elements.eme.eme_diffraction.md` (+ `L167-169`)
+* `docs/history/lumenairy.elements.pmm.stack.md` (+ `L3209-3215`)
+* `docs/history/lumenairy.elements.pmm._core.md` (+ `L7516-7565`)
+
+**Modified -- documentation (1)**
+
+* `README.md:570` -- the v4.13.2 thin-lens note cited `_lenses_module.cp`, a
+  name F2.1 deleted.  Caught by `scripts/check_doc_identifiers.py` on the
+  final sweep (denominator 597, 1 unresolved), which is the gate working on
+  its first real regression: a code change made a document stale and the
+  resolver named the file, line and token.  Reworded to name the accessor the
+  sites call today, with the v4.13.2 mechanism kept in a parenthetical so the
+  historical note still reads true.  Denominator unchanged at 597, unresolved
+  back to 0.
+
+**Modified -- reports (2)**
+
+* `docs/audits/.../fixes/WP-A22_REPORT.md` (this section)
+* `docs/audits/.../fixes/WP-A22_CHANGELOG.md` (a follow-up group)
+
+**NOT touched:** `validation/probe_ci_kernel_sweep/*`, `lumenairy/__init__.py`,
+`lumenairy/backend/__init__.py`, `lumenairy/elements/lens_config.py`,
+`tests/unit/test_ci_kernel_consistency.py` and
+`tests/unit/test_audit2609_a23_census_mechanism.py` (all another work
+package's, in flight as this one closed -- between them they appear to be
+taking sec. 5.3, sec. 5.4 and sec. 5.5), and `lumenairy/elements/doe.py`
+(sec. F5).
+
+**One shared file, flagged for the committer.**  `lumenairy/elements/lenses.py`
+carries BOTH my three-line docstring correction at `:146` (F2.1) and that other
+package's much larger re-export work from `:1040` onward.  Verified at close:
+my hunk is intact (`@@ -146,2 +146,5 @@`) and disjoint from theirs, so the two
+can be committed together or separately without conflict -- but the diff is not
+all mine.
+
+## F4. Tests run in the follow-up
+
+| command | result |
+|---|---|
+| `test_audit2609_a17_history_relocation.py` + `test_audit2609_a22_history_fingerprint_tool.py` | **708 passed**, 33.1 s |
+| `test_audit2609_a17_history_relocation.py::test_the_fingerprints_are_actually_sensitive` | **116 passed**, 23.3 s |
+| `test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` | **247 passed**, 3.5 s (was 1 failed / 238 passed) |
+| `test_audit2609_a12_pmm1d.py`, `test_audit2609_a12_verify_pmm1d.py`, `test_audit2609_a13_stack2d.py`, `test_audit2609_a13_staggered_cost.py`, `test_audit2609_a13_twod.py`, `test_audit2609_a13_verify_guards.py` | **105 passed**, 84.4 s |
+| `test_eme_diffraction.py`, `test_eme_2d.py`, `test_eme_2d_vector.py`, `test_audit_w6_eme.py`, `test_niche_audit_w6_eme.py`, `test_fix_eme_branch_cut.py`, `test_eme_census_determinacy.py`, `test_audit2609_a14_rcwa_eme_bor.py`, `test_audit2609_a8_thin_elements.py`, `test_audit2609_a8_verify.py`, `test_audit2609_a21_pmm_warning_filter.py` | **271 passed**, 832 s |
+| `test_eme_2d.py`, `test_eme_2d_vector.py`, `test_eme_census_determinacy.py`, `test_fix_eme_branch_cut.py`, `test_audit2609_a14_rcwa_eme_bor.py` | **73 passed**, 625 s |
+| `test_audit2609_a4_asymptotic.py`, `test_audit_w6_propagators.py`, `test_niche_audit_w6_asymptotic.py`, `test_v5_4_7_walker_v20_cross_backend_parity.py`, `test_v5_1_0_agent_d_split.py` | **169 passed, 1 failed**, 176 s -- the failure is pre-existing, see below |
+| `ruff check lumenairy tests scripts` | **All checks passed** |
+| `python scripts/record_history_fingerprints.py --check` | **OK**, every document matches |
+| `python scripts/check_doc_identifiers.py` | **OK**, denominator 597, unresolved 0 (after the `README.md` fix in F3) |
+| FINAL consolidated: `test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py`, `test_audit2609_a17_history_relocation.py`, `test_audit2609_a22_history_fingerprint_tool.py`, `test_audit2609_a21_pmm_warning_filter.py`, `test_audit2609_a8_thin_elements.py`, `test_audit2609_a8_verify.py`, `test_audit2609_a21_doc_identifiers.py` | **1 064 passed**, 55.4 s |
+
+### One pre-existing failure found, NOT mine
+
+`test_v5_4_7_walker_v20_cross_backend_parity.py::test_jax_intersect_direction_aware_root_pick_present`:
+
+```
+E   AssertionError: V20: _intersect_jax_param reintroduced the direction-blind selector.
+E   't1 if R' is contained here: ... 'R_finite > 0' is contained here:
+E       1).  An ``R_finite > 0`` selector
+```
+
+It is a PROSE walker: it calls `inspect.getsource(_intersect_jax_param)` in
+`lumenairy/raytrace/jax_trace.py` and greps that text for two phrases, and both
+phrases are matching **inside a comment** that describes the selector the guard
+forbids -- the classic failure mode of asserting on source text rather than on
+structure.
+
+Attribution, structural rather than argued: `lumenairy/raytrace/jax_trace.py`
+and the walker file are both CLEAN in `git status`, and I touched neither, so
+the bytes that assertion reads are byte-identical to `HEAD` -- the failure
+reproduces at `HEAD` by construction.  It is also not a sweep-3 regression: the
+phrase has been inside that function's body both before (`2ede9a16~1`, line
+1565) and after (`2ede9a16`, line 1557) that commit, and `git log -S` dates it
+to `dc50995e` (v3.5.6).
+
+Owner: whoever holds `raytrace/jax_trace.py` / that walker.  The fix is to
+assert structurally (walk the AST for the selector expression) rather than to
+re-word the comment, which is what a text walker will keep demanding.
+
+**No new failures.**  The pre-existing failures recorded in sec. 4 are
+unchanged in status: sec. 4(a) `test_ci_kernel_consistency.py` still needs the
+census owner (sec. 5.5), and sec. 4(c) `mypy` still needs the two annotations in
+`lumenairy/backend/__init__.py` (sec. 5.3).  Sec. 4(b) -- the 46 transient A17
+failures on mid-write documents -- is **resolved**: that file is now fully green.
+
+## F5. Requests still open
+
+* **sec. 5.3** `lumenairy/backend/__init__.py`, two annotations --
+  MERGE-BLOCKING, still open.
+* **sec. 5.4** the 31 re-exports, to whitelist the root `__init__` -- open.
+* **sec. 5.5** the stale CI-kernel census -- open (and another agent is in
+  `validation/probe_ci_kernel_sweep/` right now, which may be exactly this).
+* **NEW: `test_v5_4_7_walker_v20_cross_backend_parity.py::test_jax_intersect_direction_aware_root_pick_present`**
+  -- a prose walker matching its own forbidden phrases inside a comment in
+  `raytrace/jax_trace.py`.  Pre-existing at `HEAD`; detail in sec. F4.
+* **NEW: `lumenairy/elements/doe.py:539`** -- one line, for that module's
+  owner:
+
+  ```python
+  -            T = np.where(inside, T, 0.0 + 0j)
+  +            T = np.where(inside, T, np.zeros((), T.dtype))
+  ```
+
+  P3 today by the measurement in sec. F2.6 (nothing is promoted on any
+  reachable call), allowlisted in the pin with that measurement written out,
+  and P1 the moment the phase is built at a narrower dtype.  When it lands,
+  delete the `('elements/doe.py', 539)` entry from `_P3_ALLOWLIST` in
+  `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` in the same
+  change, so the walk confirms it rather than exempting it.
+
+Sections 5.1, 5.2, 5.6 and 5.7 are now **closed** -- 5.1/5.2/5.6 by this
+follow-up, 5.7 by the sweeps landing.

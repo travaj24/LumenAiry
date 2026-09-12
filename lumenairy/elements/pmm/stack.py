@@ -3110,13 +3110,10 @@ class PMMStack:
                     "the ONE SHARED union grid (n_slices re-slice / "
                     "min_feature) and read the spread across those probes, "
                     "and there is no shared union grid here: every layer "
-                    "carries its own window grid.  (M4 / N-6, 2026-08-04: "
-                    "this message used to say per-layer grids have 'no "
-                    "cross-layer walls to perturb', which is WRONG -- a "
-                    "window IS a union and contains the adjacent-slice "
-                    "collisions, so min_feature is live here too.  Vary "
-                    "min_feature directly and compare, or run the shared "
-                    "path for the consensus.)")
+                    "carries its own window grid.  min_feature IS live on this "
+                    "path even so: a window is itself a union and contains the "
+                    "adjacent-slice collisions.  Vary min_feature directly and "
+                    "compare, or run the shared path for the consensus.")
             with _mode_cut_scope("PMMStack.solve (layer_grids='per-layer')"):
                 return self._solve_vertical_perlayer(
                     wl, angle, k0, kx0, eps_sup, eps_sub,

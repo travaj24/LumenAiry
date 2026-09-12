@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/asymptotic_jax_twin.py
-ast_sha256: cf539c3892ef5a558077fc53e89e924054f801876d415519fd3c035897f2f165
-token_sha256: 9847abd8ba52e341323187787d8d8a61337869fed8f276aeee7738aefe449b4c
+ast_sha256: 6c9e1419f0baf53eb77fadd98d9498d4032747a96d3868e52719a5cd0c947ccb
+token_sha256: c0a2a51c17f5c048f73a247fa37d7970a2dbe4da8a0e70ba7b1848ffa09cd64a
 pre_relocation_lines: 1216
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- P1-NEW-4: safe_bquad and safe_phi take dtype-matched zeros((), x.dtype) fills instead of the 0.0+0.0j literal, which promoted the real phi_star to complex (WP-A22 follow-up)
 -->
 
 # Version history -- `lumenairy/propagators/asymptotic_jax_twin.py`

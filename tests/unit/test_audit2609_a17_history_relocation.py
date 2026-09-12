@@ -332,6 +332,21 @@ def _patch_node_text(src_lines, node, new_text, expect):
     return "".join(out)
 
 
+def _node_source(src_lines, node):
+    """The exact source text of a single-line ASCII ``node``, or ``None``.
+
+    The companion read to :func:`_patch_node_text`'s write, so a mutation can
+    be built from what is actually on the line (a string's quote character,
+    say) rather than from a guess at how it was spelled.
+    """
+    if node.end_lineno != node.lineno:
+        return None
+    line = src_lines[node.lineno - 1]
+    if not line.isascii():
+        return None
+    return line[node.col_offset:node.end_col_offset]
+
+
 @pytest.mark.parametrize("name,md,header", _REGISTRY, ids=_IDS)
 def test_the_fingerprints_are_actually_sensitive(name, md, header):
     """Falsifiability.  A fingerprint that never moves would pass this file
@@ -344,11 +359,22 @@ def test_the_fingerprints_are_actually_sensitive(name, md, header):
 
     1. a statement deleted        -> the AST fingerprint must move
     2. an identifier renamed      -> both fingerprints must move
-    3. a numeric literal re-spelled to the SAME value (``5`` -> ``0x5``)
-       -> the token fingerprint must move while the AST one does NOT.  That
-       asymmetry is the whole reason two fingerprints are recorded: the AST
-       folds both spellings to one ``Constant``, so the AST check alone would
-       not see a literal being rewritten.
+    3. a literal re-spelled to the SAME value -- an integer (``5`` -> ``0x5``)
+       where the module has one, else a string's quote style (``'a'`` ->
+       ``"a"``) -> the token fingerprint must move while the AST one does NOT.
+       That asymmetry is the whole reason two fingerprints are recorded: the
+       AST folds both spellings to one ``Constant``, so the AST check alone
+       would not see a literal being rewritten.
+
+       The string fallback is not a weaker test, it is the same test on a
+       different literal kind, and it is needed: ``lumenairy/_context.py``
+       carries **no integer constant at all** (measured), so an int-only
+       mutation 3 cannot be built there and the arm was failing with "no small
+       integer literal found to re-spell" -- reporting the module as suspect
+       when what had actually happened is that the catalogue ran out of
+       targets.  The string chosen is never one that is a *statement* (a
+       docstring or the string-as-comment form): the token fingerprint drops
+       those by design, so mutating one would prove nothing.
     """
     src = (REPO_ROOT / header["module"]).read_text(encoding="utf-8")
     ast_ref, tok_ref = ast_fingerprint(src), token_fingerprint(src)
@@ -405,19 +431,47 @@ def test_the_fingerprints_are_actually_sensitive(name, md, header):
     assert token_fingerprint(renamed) != tok_ref, (
         "renaming an identifier did not move the token fingerprint")
 
-    # 3. re-spell an integer literal without changing its value
-    respelled = None
+    # 3. re-spell a literal without changing its value: an integer first,
+    #    a string's quote style where the module carries no integer.
+    respelled, kind = None, None
     for node in ast.walk(tree):
         if (isinstance(node, ast.Constant) and type(node.value) is int
                 and 0 <= node.value <= 9):
             respelled = _patch_node_text(
                 src_lines, node, f"0x{node.value:X}", str(node.value))
             if respelled is not None:
+                kind = "integer"
                 break
-    assert respelled is not None, "no small integer literal found to re-spell"
+    if respelled is None:
+        skip = _string_statement_lines(tree)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)):
+                continue
+            if any(lo <= node.lineno <= hi for lo, hi in skip):
+                continue          # a docstring: both fingerprints ignore it
+            text = _node_source(src_lines, node)
+            if text is None or len(text) < 2:
+                continue
+            quote = text[0]
+            other = '"' if quote == "'" else "'"
+            if (quote not in "'\"" or text[-1] != quote
+                    or "\\" in text or other in text):
+                continue
+            respelled = _patch_node_text(
+                src_lines, node, other + text[1:-1] + other, text)
+            if respelled is not None:
+                kind = "string quote style"
+                break
+    assert respelled is not None, (
+        "no value-preserving literal re-spelling could be built for this "
+        "module: it carries neither a small integer literal nor a plain "
+        "single-line string outside a docstring.  That is a gap in this "
+        "mutation catalogue, NOT evidence about the module -- widen the "
+        "catalogue rather than exempting the module.")
     assert token_fingerprint(respelled) != tok_ref, (
-        "re-spelling a literal did not move the token fingerprint -- the "
-        "token check is not adding anything over the AST check")
+        f"re-spelling a literal ({kind}) did not move the token fingerprint "
+        f"-- the token check is not adding anything over the AST check")
     assert ast_fingerprint(respelled) == ast_ref, (
-        "the AST fingerprint moved on a value-preserving re-spelling; the "
-        "mutation is not testing what this assertion claims")
+        f"the AST fingerprint moved on a value-preserving re-spelling "
+        f"({kind}); the mutation is not testing what this assertion claims")

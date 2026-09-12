@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack.py
-ast_sha256: 5e64cff31a6a3f6afccc64a5be7a2decae4e43b97217ca55f4ae4e41a445956f
-token_sha256: 756630de8507a4acd4f56ea86edf9c3428c872397374f9d7188d9b5827fa3ba0
+ast_sha256: 9c0cea3a2b7cd1d95113832f54bf3904330b751af37cc354bafcae64fb66b37a
+token_sha256: d3d0dea91c4b129671c180e076dbc5845c76b7790f9442bd8f9dbbca9a8bb762
 pre_relocation_lines: 5360
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- per-layer stabilize='slices' refusal message reworded to present tense; the retracted wording is recorded in this document at L3209-3215 (WP-A22 follow-up)
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack.py`
@@ -58,6 +59,7 @@ below as *Left in the source*.
 | L2977-2979 | `PMMStack.solve`, the ``stabilize`` validation | P3-31 -- what the covariant dispatch used to accept |
 | L3025-3034 | `PMMStack.solve`, the incidence guard | audit M3 -- the negative efficiencies the JAX twin returned before the mirror guard existed |
 | L3134-3141 | `PMMStack.solve`, the out-of-plane routing | that the pre-fix covariant-for-OOP routing was validated against engines sharing the same defect |
+| L3209-3215 | `PMMStack.solve`, the per-layer `stabilize='slices'` refusal MESSAGE | a message retracting its own earlier wording -- "this message used to say per-layer grids have 'no cross-layer walls to perturb', which is WRONG" |
 | L3445-3447 | `_solve_vertical_perlayer` docstring | a comment correcting an earlier COMMENT -- this docstring's own retracted "``min_feature`` never enters" claim |
 | L3832-3837 | `_slices_consensus_check`, the no-recipe fallback | "previously the ENTIRE geometry-built path ... was silently unprotected" |
 | L4044-4045 | `PMMStack.internal_field` docstring, Returns | which release changed the H scale, and what the day-one method returned |
@@ -371,6 +373,38 @@ below as *Left in the source*.
             # and the RCWA tensor staircase now agree at ~4e-3 while
             # covariant is the outlier).  Explicit 'covariant' still solves
             # OOP (documented limitation; AUDIT_OOP_GENERATOR_FACTOR_I).
+```
+
+### L3209-3215 -- `PMMStack.solve`, the per-layer `stabilize='slices'` refusal MESSAGE -- a message retracting its own earlier wording
+
+This one lived inside a STRING the interpreter executes -- the text of the
+`NotImplementedError` a user sees -- so it was out of scope for a
+documentation-only sweep (both fingerprints move when it changes) and was
+rewritten separately, by WP-A22, with the fingerprints re-recorded in the same
+commit.  It is the same retraction the `_solve_vertical_perlayer` docstring
+below carries, reaching the user instead of the reader.
+
+*Left in the source:* the corrected claim, stated positively and without the
+retraction -- "min_feature IS live on this path even so: a window is itself a
+union and contains the adjacent-slice collisions.  Vary min_feature directly
+and compare, or run the shared path for the consensus."  Everything the caller
+needs in order to act is still there; what went was the account of what an
+earlier release's message said.
+
+```text
+                raise NotImplementedError(
+                    "PMMStack.solve(stabilize='slices'): not applicable with "
+                    "layer_grids='per-layer' -- the consensus probes perturb "
+                    "the ONE SHARED union grid (n_slices re-slice / "
+                    "min_feature) and read the spread across those probes, "
+                    "and there is no shared union grid here: every layer "
+                    "carries its own window grid.  (M4 / N-6, 2026-08-04: "
+                    "this message used to say per-layer grids have 'no "
+                    "cross-layer walls to perturb', which is WRONG -- a "
+                    "window IS a union and contains the adjacent-slice "
+                    "collisions, so min_feature is live here too.  Vary "
+                    "min_feature directly and compare, or run the shared "
+                    "path for the consensus.)")
 ```
 
 ### L3445-3447 -- `_solve_vertical_perlayer` docstring -- a comment correcting an earlier COMMENT -- this docstring's own retracted "``min_feature`` never enters" claim

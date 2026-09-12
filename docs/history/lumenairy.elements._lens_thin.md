@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_thin.py
-ast_sha256: 0b638ec69032cd62a3d2ebf939a0ce24bac329c14a3899b8f042e47aed313ad4
-token_sha256: 5986b7193374bb40526ebde35f010eccba7194b8dafc3a2abf2bec5530987442
+ast_sha256: 3be3a8c3ac7d9f1afece49aac48065fcddf67178701f712507049f8768a284a7
+token_sha256: 5403fbbd8c6348fb375558ee6d5e43d3a507b5e6408e6408fef3cbb6d0f0aeac
 pre_relocation_lines: 1431
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- CuPy handles taken from backend._optional instead of via .lenses, breaking the _lens_thin <-> lenses module-level 2-cycle; outputs bit-identical (WP-A22 item 8a)
 -->
 
 # Version history -- `lumenairy/elements/_lens_thin.py`

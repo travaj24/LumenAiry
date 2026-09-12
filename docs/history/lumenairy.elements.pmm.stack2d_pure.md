@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d_pure.py
-ast_sha256: c44498235d2ded47cf899eb00af8fbc4cc3fb034c32cd8fc19d52c7c5f01485b
-token_sha256: cee00e3f37d7f3aca4de9ae2361107d44a3bd0e4047cc8fda196a73a2320d7b5
+ast_sha256: f87cd4e43438e60f24d69ec66ef9e66955762a00987023af1dcfe8fd3afb900a
+token_sha256: 25863f2052ec45717bcf8c1682712251de5daf15d8cc4241e13345c4477ff7a7
 pre_relocation_lines: 2190
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- deferred shared-grid advisory passes stacklevel=4 so it reports at the caller's solve(), not at this file (WP-A22 item 8b)
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d_pure.py`
