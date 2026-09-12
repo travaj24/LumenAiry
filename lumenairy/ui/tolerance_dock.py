@@ -21,11 +21,12 @@ from PySide6.QtGui import QFont
 
 import numpy as np
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
+# matplotlib is imported lazily on first figure construction.
+from . import _mpl
 
 from .model import SystemModel
 from ..progress import CancellableProgress
+from ._worker import ThreadCancellableProgress
 from ..raytrace import (
     Surface, trace, make_rings, spot_rms, system_abcd,
     find_paraxial_focus,
@@ -38,7 +39,11 @@ class ToleranceWorker(QThread):
     progress = Signal(int, int)       # current, total (coarse)
     fine_progress = Signal(float, str)  # fraction, stage msg
     trial_result = Signal(float, float)  # per-trial (rms_um, efl_mm)
-    finished = Signal(object)         # results dict
+    # Renamed off QThread's built-in ``finished``: with the shadow in
+    # place ``worker.finished.connect(worker.deleteLater)`` bound to
+    # this custom Signal(object) -- wrong payload, and never emitted
+    # when run() raised.
+    finished_result = Signal(object)  # results dict
     cancelled = Signal()
 
     def __init__(self, model, n_trials, tol_radius_pct, tol_thickness_mm,
@@ -52,7 +57,7 @@ class ToleranceWorker(QThread):
         # v5.4 (audit P1-F): polled between trials in the run() loop.
         # Per-trial trace_world is fast (~ms), so per-trial granularity
         # gives a responsive Stop without library-side support.
-        self._cancel_progress = CancellableProgress()
+        self._cancel_progress = ThreadCancellableProgress(self)
 
     def run(self):
         rms_list = []
@@ -176,7 +181,7 @@ class ToleranceWorker(QThread):
         # so the histogram is drawn from the partial sample.
         if self._cancel_progress.should_stop:
             self.cancelled.emit()
-        self.finished.emit({
+        self.finished_result.emit({
             'rms': np.array(rms_list),
             'efl': np.array(efl_list),
         })
@@ -298,8 +303,8 @@ class ToleranceDock(QWidget):
         layout.addWidget(self.progress_bar)
 
         # ── Results plot ──
-        self.fig = Figure(figsize=(6, 3), dpi=100, facecolor='#0a0c10')
-        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.fig = _mpl.Figure(figsize=(6, 3), dpi=100, facecolor='#0a0c10')
+        self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -334,7 +339,7 @@ class ToleranceDock(QWidget):
             lambda c, t: self.progress_bar.setValue(c))
         self._worker.fine_progress.connect(self._on_fine_progress)
         self._worker.trial_result.connect(self._on_trial_result)
-        self._worker.finished.connect(self._on_finished)
+        self._worker.finished_result.connect(self._on_finished)
         # v5.4 (audit P1-F): partial-result still flushed via
         # finished; the cancelled signal is informational so the
         # summary line below can mark the run as user-aborted.

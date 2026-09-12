@@ -29,6 +29,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import datetime
+import os
 import traceback
 from typing import List, Optional, Tuple
 
@@ -75,7 +76,10 @@ class _DiagnosticsSink(QObject):
         tb = traceback.extract_tb(exc.__traceback__)
         if tb:
             last = tb[-1]
-            msg += f'  [at {last.filename.split(chr(92))[-1]}:{last.lineno} in {last.name}]'
+            # os.path.basename, not a hard-coded backslash split --
+            # the latter printed the whole POSIX path on Linux/macOS.
+            msg += (f'  [at {os.path.basename(last.filename)}:'
+                    f'{last.lineno} in {last.name}]')
         self._push('error', tag, msg)
 
     def warn(self, tag: str, msg: str) -> None:

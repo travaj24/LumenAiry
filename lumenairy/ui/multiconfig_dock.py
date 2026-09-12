@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QFont
 
 from ..progress import CancellableProgress
+from ._worker import ThreadCancellableProgress
 
 
 class _MultiConfigWorker(QThread):
@@ -45,7 +46,8 @@ class _MultiConfigWorker(QThread):
         # v5.4 (audit P1-F): wraps the existing Qt-emit callback.
         # design_optimize polls should_stop in its 4 scipy callbacks
         # so the L-BFGS-B run terminates cleanly with a partial result.
-        self._cancel_progress = CancellableProgress(self._progress)
+        self._cancel_progress = ThreadCancellableProgress(
+            self, self._progress)
 
     def _progress(self, stage, frac, msg=''):
         self.fine_progress.emit(float(frac), str(msg))
@@ -222,7 +224,8 @@ class MultiConfigDock(QWidget):
         free_vars = []
         bounds = []
         values = self.sm.get_variable_values()
-        for i, (elem_idx, surf_idx, field) in enumerate(self.sm.opt_variables):
+        for i, (elem_idx, surf_idx, field) in enumerate(
+                self.sm.live_opt_variables()):
             # Use the Optimizer's path logic -- here we just pass
             # ('surfaces', surf_idx, field) against every template
             # (the free-var list is shared across prescriptions by

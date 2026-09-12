@@ -31,9 +31,8 @@ from PySide6.QtWidgets import (
 
 import numpy as np
 
-from matplotlib.backends.backend_qtagg import (
-    FigureCanvasQTAgg, NavigationToolbar2QT)
-from matplotlib.figure import Figure
+# matplotlib is imported lazily on first figure construction.
+from . import _mpl
 
 from .model import SystemModel
 
@@ -108,12 +107,12 @@ class JonesPupilDock(QWidget):
         layout.addWidget(self.tabs, stretch=1)
 
         # Tab 1: Jones pupil (original 2x4 grid)
-        self.fig = Figure(figsize=(12, 6), dpi=100, facecolor='#0a0c10')
-        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.fig = _mpl.Figure(figsize=(12, 6), dpi=100, facecolor='#0a0c10')
+        self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.mpl_toolbar = NavigationToolbar2QT(self.canvas, self)
+        self.mpl_toolbar = _mpl.NavigationToolbar2QT(self.canvas, self)
         tab_jones = QWidget()
         lay_jones = QVBoxLayout(tab_jones)
         lay_jones.setContentsMargins(0, 0, 0, 0)
@@ -122,12 +121,12 @@ class JonesPupilDock(QWidget):
         self.tabs.addTab(tab_jones, 'Jones pupil')
 
         # Tab 2: Stokes 2x2 grid
-        self.fig_stokes = Figure(figsize=(10, 8), dpi=100, facecolor='#0a0c10')
-        self.canvas_stokes = FigureCanvasQTAgg(self.fig_stokes)
+        self.fig_stokes = _mpl.Figure(figsize=(10, 8), dpi=100, facecolor='#0a0c10')
+        self.canvas_stokes = _mpl.FigureCanvasQTAgg(self.fig_stokes)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         self.canvas_stokes.setMinimumSize(0, 0)
         self.canvas_stokes.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.mpl_toolbar_stokes = NavigationToolbar2QT(self.canvas_stokes, self)
+        self.mpl_toolbar_stokes = _mpl.NavigationToolbar2QT(self.canvas_stokes, self)
         tab_stokes = QWidget()
         lay_stokes = QVBoxLayout(tab_stokes)
         lay_stokes.setContentsMargins(0, 0, 0, 0)
@@ -136,12 +135,12 @@ class JonesPupilDock(QWidget):
         self.tabs.addTab(tab_stokes, 'Stokes')
 
         # Tab 3: Polarisation-derived (DOP / DOLP / DOCP)
-        self.fig_dop = Figure(figsize=(12, 4), dpi=100, facecolor='#0a0c10')
-        self.canvas_dop = FigureCanvasQTAgg(self.fig_dop)
+        self.fig_dop = _mpl.Figure(figsize=(12, 4), dpi=100, facecolor='#0a0c10')
+        self.canvas_dop = _mpl.FigureCanvasQTAgg(self.fig_dop)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         self.canvas_dop.setMinimumSize(0, 0)
         self.canvas_dop.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.mpl_toolbar_dop = NavigationToolbar2QT(self.canvas_dop, self)
+        self.mpl_toolbar_dop = _mpl.NavigationToolbar2QT(self.canvas_dop, self)
         tab_dop = QWidget()
         lay_dop = QVBoxLayout(tab_dop)
         lay_dop.setContentsMargins(0, 0, 0, 0)

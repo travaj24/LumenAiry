@@ -43,6 +43,7 @@ from PySide6.QtGui import QFont
 # chunking the iteration budget at this dock layer and polling
 # ``CancellableProgress.should_stop`` between chunks.
 from lumenairy.progress import CancellableProgress
+from ._worker import ThreadCancellableProgress
 
 try:
     from matplotlib.backends.backend_qtagg import (
@@ -203,7 +204,7 @@ class _PhaseRetrievalWorker(QThread):
         # with the library's CancellableProgress so the cancellation
         # protocol matches the other docks (OptimizerDock, ToleranceDock,
         # MultiConfigDock).  ``should_stop`` is polled between chunks.
-        self._cancel_progress = CancellableProgress()
+        self._cancel_progress = ThreadCancellableProgress(self)
 
     def request_stop(self):
         """Cooperative stop (back-compat shim, checked between chunks)."""

@@ -8,6 +8,7 @@ its position as a distance from the previous element.
 Author: Andrew Traverso
 """
 
+import contextlib
 import copy
 import json
 import os
@@ -38,13 +39,21 @@ class SurfaceRow:
 
     def __init__(self, radius=np.inf, thickness=0.0, glass='',
                  semi_diameter=np.inf, conic=0.0, surf_type='Standard',
-                 radius_y=None, conic_y=None):
+                 radius_y=None, conic_y=None, is_stop=False):
         self.radius = radius            # mm (inf = flat)
         self.thickness = thickness      # mm (internal glass thickness to next surface)
         self.glass = glass              # glass name or '' for air
         self.semi_diameter = semi_diameter  # mm
         self.conic = conic
         self.surf_type = surf_type      # 'Standard' or 'Mirror'
+        # Aperture stop marker.  ``raytrace.Surface`` and every
+        # prescription loader carry an ``is_stop`` flag (the .zmx STOP
+        # keyword); without a place to hold it in the model the flag was
+        # dropped on import and could never be exported, so pupil-aware
+        # analysis (compute_pupils, vignetting, chief-ray aiming) ran
+        # against the aperture-diameter default instead of the design's
+        # real stop.
+        self.is_stop = bool(is_stop)
         # Biconic / anamorphic: if radius_y is set (not None), the
         # surface has independent x and y curvatures.  When None,
         # the surface is rotationally symmetric (standard).
@@ -55,6 +64,26 @@ class SurfaceRow:
 # ════════════════════════════════════════════════════════════════════════
 # SourceDefinition
 # ════════════════════════════════════════════════════════════════════════
+
+def _as_count(value, field_name):
+    """Coerce a source count field to a positive int.
+
+    Raises ``ValueError`` with the CONVENTIONS §2 prefix on anything
+    that is not a whole number >= 1.
+    """
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f'SourceDefinition: {field_name} must be a positive '
+            f'integer (got {value!r}).') from None
+    n = int(round(f))
+    if n < 1 or abs(f - n) > 1e-9:
+        raise ValueError(
+            f'SourceDefinition: {field_name} must be a positive '
+            f'integer (got {value!r}).')
+    return n
+
 
 class SourceDefinition:
     """Defines the illumination for the optical system."""
@@ -75,10 +104,24 @@ class SourceDefinition:
         self.beam_diameter_mm = kwargs.get('beam_diameter_mm', 1.0)
         self.na = kwargs.get('na', 0.1)
         self.sigma_mm = kwargs.get('sigma_mm', 5.0)
+        # Point-source object distance, mm.  ADVISORY: the ray launch
+        # and the exported prescription take the object distance from
+        # the element GEOMETRY (see SystemModel.object_distance_m) --
+        # the source sits at world z = 0 and the first optic at its own
+        # ``distance_mm``, so this field is a second knob for the same
+        # quantity and the two disagreeing over- or under-filled the
+        # pupil by their ratio.  It is still honoured when no optic has
+        # been placed yet.
         self.object_distance_mm = kwargs.get('object_distance_mm', 1000.0)
         self.emitter_pitch_mm = kwargs.get('emitter_pitch_mm', 0.050)
-        self.emitter_nx = kwargs.get('emitter_nx', 12)
-        self.emitter_ny = kwargs.get('emitter_ny', 12)
+        # Counts, not lengths: ``to_source`` and the layout glyphs feed
+        # them to ``range()``, which refuses a float.  Coerce here so a
+        # form edit, a restored session or a scripted source can never
+        # produce an unusable emitter array.
+        self.emitter_nx = _as_count(kwargs.get('emitter_nx', 12),
+                                    'emitter_nx')
+        self.emitter_ny = _as_count(kwargs.get('emitter_ny', 12),
+                                    'emitter_ny')
         self.emitter_waist_mm = kwargs.get('emitter_waist_mm', 0.009)
         # 3.6: top-hat + fiber-mode source factories from Source class.
         self.top_hat_diameter_mm = kwargs.get('top_hat_diameter_mm', 2.0)
@@ -509,6 +552,8 @@ class SystemModel(QObject):
         self._bfl = None
         self._flat_surfaces_cache = None
         self._flat_surfaces_world_cache = None
+        # element index -> (start, stop) slice into _flat_surfaces_cache
+        self._flat_surface_spans = None
 
         # Undo / redo stacks.  Each entry is a deep copy of everything
         # needed to reproduce the system (see _capture_state /
@@ -523,9 +568,10 @@ class SystemModel(QObject):
         # alongside the live model, not on the undo stack.
         self.snapshots = []        # list of {'name': str, 'state': dict, 'efl_mm': float}
 
-        # Suppress-history flag: inside bulk operations (group/ungroup,
-        # load_prescription) we still want one checkpoint, not N.
-        self._suppress_history = False
+        # Suppress-history depth: inside a ``bulk_edit()`` block the
+        # first _checkpoint() runs and the rest are dropped, so a
+        # composite operation is one undo step.  Re-entrant.
+        self._suppress_depth = 0
 
     # ── Properties ──────────────────────────────────────────────────
 
@@ -573,16 +619,22 @@ class SystemModel(QObject):
             self.display_changed.emit()
 
     def element_z_positions_mm(self):
-        """Compute absolute z-position of each element's front vertex."""
-        z = 0.0
-        positions = []
-        for elem in self.elements:
-            if elem.elem_type == 'Source':
-                positions.append(0.0)
-            else:
-                z += elem.distance_mm
-                positions.append(z)
-        return positions
+        """Absolute world z of each element's front vertex [mm].
+
+        Read straight off the cached frames that
+        :meth:`recompute_element_frames` maintains, which is the one
+        place the relative -> absolute convention lives.  The previous
+        inline cumulative sum of ``distance_mm`` alone omitted every
+        element's internal thickness (``distance_mm`` is measured from
+        the PREVIOUS element's BACK vertex, not its front), so the
+        absolute-coordinates column disagreed with
+        ``Element.origin`` -- the quantity the absolute-position editor
+        and both layout views use -- by the accumulated glass path, and
+        typing the displayed value back into the Distance column moved
+        the element.
+        """
+        return [float(np.asarray(e.origin, dtype=float)[2])
+                for e in self.elements]
 
     def element_frames_2d_mm(self):
         """3.7.3: per-element 2D world frame ``(z, y, theta_rad)``
@@ -800,10 +852,14 @@ class SystemModel(QObject):
             # (front-vertex Z accumulated via element_z_positions_mm).
             # ``_prev_element_back_vertex_world`` returns a 3-vector;
             # we project its Z component since the column is 1-D.
-            positions = self.element_z_positions_mm()
-            prev_z = positions[elem_index - 1]
             prev_elem = self.elements[elem_index - 1]
-            prev_back = prev_z + prev_elem.internal_thickness_mm
+            # Route through the single-source-of-truth helper rather
+            # than re-deriving ``prev_z + internal_thickness_mm`` here:
+            # the helper exists precisely so this calculation cannot
+            # drift between its two call sites.  Column is 1-D, so we
+            # project the world back-vertex onto z.
+            prev_back = float(
+                self._prev_element_back_vertex_world(prev_elem)[2])
             self.elements[elem_index].distance_mm = max(0, value - prev_back)
         self._invalidate()
         self.system_changed.emit()
@@ -815,8 +871,27 @@ class SystemModel(QObject):
             self._checkpoint()
             self.wavelength_nm = wv_nm
             self.wavelengths_nm[0] = wv_nm
+            self.sync_source_wavelength()
             self._invalidate()
             self.system_changed.emit()
+
+    def sync_source_wavelength(self):
+        """Carry the model wavelength onto the source definition.
+
+        The wave-optics worker builds the launch field with
+        ``source.to_source(...)`` (at the SOURCE's wavelength) and then
+        propagates it at the MODEL's wavelength.  Nothing used to keep
+        the two equal, so a point-source / fiber-mode / tilted field was
+        launched with the spherical phase and carrier tilt of whatever
+        wavelength the source happened to be built at.
+        """
+        src = self.source
+        if src is None:
+            return False
+        if src.wavelength_nm == self.wavelength_nm:
+            return False
+        src.wavelength_nm = float(self.wavelength_nm)
+        return True
 
     def set_epd(self, epd_mm):
         if epd_mm != self.epd_mm and epd_mm > 0:
@@ -826,10 +901,17 @@ class SystemModel(QObject):
             self.system_changed.emit()
 
     def set_source(self, source_def):
-        """Set the source definition on element 0."""
+        """Set the source definition on element 0.
+
+        The model wavelength is authoritative: any source installed
+        here adopts it, so a source rebuilt from a form that carries no
+        wavelength field cannot silently reset the launch wavelength to
+        :class:`SourceDefinition`'s 1310 nm default.
+        """
         if self.elements and self.elements[0].elem_type == 'Source':
             self._checkpoint()
             self.elements[0].source = source_def
+            self.sync_source_wavelength()
             self._invalidate()
             self.system_changed.emit()
 
@@ -856,8 +938,41 @@ class SystemModel(QObject):
             self.elements[index + 1].distance_mm += removed.distance_mm
         self.elements.pop(index)
         self._renumber()
+        # Element indices shift; drop any optimization variable that no
+        # longer addresses a live element/surface so the next optimize
+        # cannot write a value into the wrong parameter.
+        self._reindex_opt_variables_after_delete(index)
         self._invalidate()
         self.system_changed.emit()
+
+    def _reindex_opt_variables_after_delete(self, removed_index):
+        """Re-base ``opt_variables`` element indices around a removal.
+
+        Variables on the removed element are dropped; variables on
+        elements after it shift down by one so they keep pointing at
+        the same parameter.
+        """
+        rebased = []
+        for elem_idx, surf_idx, field in self.opt_variables:
+            if elem_idx == removed_index:
+                continue
+            if elem_idx > removed_index:
+                elem_idx -= 1
+            rebased.append((elem_idx, surf_idx, field))
+        self.opt_variables = rebased
+        self.prune_opt_variables()
+
+    def _swap_opt_variable_elements(self, i, j):
+        """Follow an element swap so variables stay on their element."""
+        swapped = []
+        for elem_idx, surf_idx, field in self.opt_variables:
+            if elem_idx == i:
+                elem_idx = j
+            elif elem_idx == j:
+                elem_idx = i
+            swapped.append((elem_idx, surf_idx, field))
+        self.opt_variables = swapped
+        self.prune_opt_variables()
 
     def move_element(self, index, direction):
         """Move element up (direction=-1) or down (+1). Single atomic operation."""
@@ -872,6 +987,7 @@ class SystemModel(QObject):
             # Swap distances so spatial positions are preserved
             elem.distance_mm, prev.distance_mm = prev.distance_mm, elem.distance_mm
             self._renumber()
+            self._swap_opt_variable_elements(index, index - 1)
             self._invalidate()
             self.system_changed.emit()
         elif direction == 1 and index > 0 and index < len(self.elements) - 2:
@@ -882,6 +998,7 @@ class SystemModel(QObject):
             self.elements[index + 1] = elem
             elem.distance_mm, nxt.distance_mm = nxt.distance_mm, elem.distance_mm
             self._renumber()
+            self._swap_opt_variable_elements(index, index + 1)
             self._invalidate()
             self.system_changed.emit()
 
@@ -1234,6 +1351,7 @@ class SystemModel(QObject):
         self._bfl = None
         self._flat_surfaces_cache = None
         self._flat_surfaces_world_cache = None
+        self._flat_surface_spans = None
         # 3.7.3: keep each Element's cached world-frame ``origin`` /
         # ``R`` in sync with the relative fields after any structural
         # change.  Layout views and the trace-surface builder read
@@ -1423,13 +1541,64 @@ class SystemModel(QObject):
         Called by every non-trivial mutator **before** it mutates.
         Redo stack is cleared because doing something new forks history.
         """
-        if self._in_restore or self._suppress_history:
+        if self._in_restore or self._suppress_depth:
             return
         self._undo_stack.append(self._capture_state())
         if len(self._undo_stack) > self._UNDO_DEPTH:
             self._undo_stack = self._undo_stack[-self._UNDO_DEPTH:]
         self._redo_stack.clear()
         self._emit_history_changed()
+
+    @contextlib.contextmanager
+    def bulk_edit(self):
+        """Group a composite edit into ONE undo step.
+
+        Takes a single checkpoint on entry and suppresses the ones the
+        mutators called inside would otherwise take::
+
+            with model.bulk_edit():
+                model.delete_element(3)
+                model.insert_element(3, new_elem)
+
+        Re-entrant; the outermost block owns the checkpoint.
+        """
+        if self._suppress_depth == 0:
+            self._checkpoint()
+        self._suppress_depth += 1
+        try:
+            yield self
+        finally:
+            self._suppress_depth -= 1
+
+    def reset_design(self):
+        """Clear the optical design, keeping user preferences.
+
+        Replaces the element list with a fresh Source + Detector pair
+        and resets the wavelength / EPD / field set / history.  Display
+        preferences (``prefs``), ``lens_options``, ``auto_retrace_mode``
+        and ``unit_preference`` are deliberately preserved: "New
+        system" is a design-level action, and re-running ``__init__``
+        on the live QObject to get this effect wiped all of them (and
+        re-invoked ``QObject.__init__`` on an already-constructed C++
+        object).
+        """
+        fresh = SystemModel.__new__(SystemModel)
+        QObject.__init__(fresh)
+        SystemModel.__init__(fresh)
+        self.elements = fresh.elements
+        self.wavelength_nm = fresh.wavelength_nm
+        self.wavelengths_nm = list(fresh.wavelengths_nm)
+        self.wavelength_weights = fresh.wavelength_weights
+        self.epd_mm = fresh.epd_mm
+        self.field_angles_deg = list(fresh.field_angles_deg)
+        self.field_weights = fresh.field_weights
+        self.opt_variables = []
+        self.snapshots = []
+        self._coordinate_mode = fresh._coordinate_mode
+        self._last_optimization_x = None
+        self.clear_history()
+        self._invalidate()
+        self.system_changed.emit()
 
     def _emit_history_changed(self):
         self.history_changed.emit(bool(self._undo_stack),
@@ -1573,6 +1742,7 @@ class SystemModel(QObject):
                 'semi_diameter': enc_val(float(s.semi_diameter)),
                 'conic': enc_val(float(s.conic)),
                 'surf_type': getattr(s, 'surf_type', 'Standard'),
+                'is_stop': bool(getattr(s, 'is_stop', False)),
                 'radius_y': enc_val(float(s.radius_y))
                     if s.radius_y is not None else None,
                 'conic_y': enc_val(float(s.conic_y))
@@ -1582,6 +1752,10 @@ class SystemModel(QObject):
         def enc_source(src):
             if src is None:
                 return None
+            # Every constructor kwarg round-trips.  The pre-audit list
+            # omitted polarization, the top-hat diameter and the two
+            # fiber-mode fields, so restoring a saved session silently
+            # reverted them to SourceDefinition's defaults.
             return {
                 'source_type': src.source_type,
                 'wavelength_nm': src.wavelength_nm,
@@ -1593,8 +1767,12 @@ class SystemModel(QObject):
                 'emitter_nx': src.emitter_nx,
                 'emitter_ny': src.emitter_ny,
                 'emitter_waist_mm': src.emitter_waist_mm,
+                'top_hat_diameter_mm': src.top_hat_diameter_mm,
+                'fiber_mfd_um': src.fiber_mfd_um,
+                'fiber_NA': src.fiber_NA,
                 'field_angle_x_deg': src.field_angle_x_deg,
                 'field_angle_y_deg': src.field_angle_y_deg,
+                'polarization': src.polarization,
             }
 
         def enc_element(e):
@@ -1642,6 +1820,7 @@ class SystemModel(QObject):
                 semi_diameter=dec_val(d['semi_diameter']),
                 conic=dec_val(d.get('conic', 0.0)),
                 surf_type=d.get('surf_type', 'Standard'),
+                is_stop=bool(d.get('is_stop', False)),
                 radius_y=(dec_val(d['radius_y'])
                           if d.get('radius_y') is not None else None),
                 conic_y=(dec_val(d['conic_y'])
@@ -1702,6 +1881,7 @@ class SystemModel(QObject):
         if wavelength_nm is not None:
             self.wavelength_nm = wavelength_nm
             self.wavelengths_nm = [wavelength_nm]
+            self.sync_source_wavelength()
 
         # Prefer the full elements list (with mirrors + surf_num);
         # fall back to the lens-only surfaces list for legacy
@@ -1776,6 +1956,32 @@ class SystemModel(QObject):
                 return psd * 1e3
             return sd_default
 
+        # Aperture stop.  Loaders mark it either per-surface
+        # ('is_stop') or with a single 'stop_index' into the LEGACY
+        # surfaces list; both are honoured so the flag survives an
+        # import -> edit -> export round-trip instead of being dropped.
+        stop_idx_legacy = prescription.get('stop_index')
+        legacy_surfs = prescription.get('surfaces') or []
+
+        def _is_stop(item, idx):
+            if item.get('is_stop'):
+                return True
+            if stop_idx_legacy is None:
+                return False
+            try:
+                si = int(stop_idx_legacy)
+            except (TypeError, ValueError):
+                return False
+            if rx_items is legacy_surfs:
+                return si == idx
+            # Walking the 'elements' list: match the legacy entry by
+            # surf_num when the loader supplies one, else by position.
+            sn = item.get('surf_num')
+            if sn is not None and si < len(legacy_surfs):
+                return int(sn) == int(
+                    legacy_surfs[si].get('surf_num', -1))
+            return si == idx
+
         def _attach_cb(item):
             cb = cb_for_surf.get(int(item.get('surf_num', -1)))
             if not cb:
@@ -1832,7 +2038,8 @@ class SystemModel(QObject):
                 label = comment or f'Mirror {n_mirror}'
                 tx, ty, dx, dy = _attach_cb(item)
                 s = SurfaceRow(R_mm, 0.0, '', sd_local, conic,
-                                surf_type='Mirror')
+                                surf_type='Mirror',
+                                is_stop=_is_stop(item, i))
                 elem = Element(len(self.elements), label, 'Mirror',
                                distance_mm=pending_dist_mm,
                                surfaces=[s],
@@ -1886,7 +2093,8 @@ class SystemModel(QObject):
                     conic = rk.get('conic', 0.0)
                     surf_rows.append(SurfaceRow(
                         Rk_mm, tk_mm, glass,
-                        _per_surf_sd(rk), conic))
+                        _per_surf_sd(rk), conic,
+                        is_stop=_is_stop(rk, k)))
 
                 n_lens += 1
                 label = comment or f'Lens {n_lens}'
@@ -1913,7 +2121,8 @@ class SystemModel(QObject):
                         if np.isfinite(item['radius']) else np.inf)
                 conic = item.get('conic', 0.0)
                 tx, ty, dx, dy = _attach_cb(item)
-                s = SurfaceRow(R_mm, 0.0, '', sd_local, conic)
+                s = SurfaceRow(R_mm, 0.0, '', sd_local, conic,
+                               is_stop=_is_stop(item, i))
                 elem = Element(len(self.elements), comment, 'Singlet',
                                distance_mm=pending_dist_mm,
                                surfaces=[s],
@@ -1954,6 +2163,24 @@ class SystemModel(QObject):
         self._flat_surfaces_cache = self._build_trace_surfaces_internal()
         return self._flat_surfaces_cache
 
+    def element_surface_spans(self):
+        """Map element index -> ``(start, stop)`` slice bounds into
+        :meth:`build_trace_surfaces`.
+
+        Elements that contribute nothing (Source, Detector, empty) are
+        absent from the map.  An element's span INCLUDES the
+        coord-break Surface emitted just before it, because that cb
+        carries the element's tilt and (in the post-mirror case) the
+        air gap that reaches it -- slicing it off would drop the fold.
+
+        Lets a caller restrict an analysis to an element range
+        (the wave-optics dock's "Start at / End at") using the same
+        indices the element list shows.
+        """
+        if self._flat_surface_spans is None:
+            self.build_trace_surfaces()
+        return dict(self._flat_surface_spans or {})
+
     def build_trace_surfaces_world(self):
         """3.7.7: Public cached accessor for the world-frame
         trace surface list (one :class:`Surface` per actual
@@ -1987,6 +2214,14 @@ class SystemModel(QObject):
         want a "full trace with image plane".  Returns a fresh
         copy so the caller can mutate (e.g. override the image
         distance) without affecting the cache.
+
+        An explicit ``image_distance`` WINS over the Detector element.
+        A caller that computes the paraxial BFL and passes it is asking
+        for the focal plane; the Detector branch used to be tested
+        first, so those callers silently got the detector plane and
+        then drew focal-plane overlays (Airy radius, distortion grid)
+        on it.  Pass ``None`` -- the default -- to keep the Detector
+        preference.
         """
         world_list = [Surface(
             radius=s.radius, conic=s.conic, semi_diameter=s.semi_diameter,
@@ -2005,10 +2240,12 @@ class SystemModel(QObject):
         det = self.elements[-1] if self.elements else None
         img_world_origin = None
         img_world_R = None
-        if det and det.elem_type == 'Detector' and det.distance_mm > 0:
+        if image_distance is not None:
+            pass        # explicit request wins -- placed below
+        elif det and det.elem_type == 'Detector' and det.distance_mm > 0:
             img_world_origin = np.asarray(det.origin, dtype=float) * 1e-3
             img_world_R = np.asarray(det.R, dtype=float).copy()
-        elif image_distance is None:
+        else:
             try:
                 bfl = find_paraxial_focus(world_list, self.wavelength_m)
                 if np.isfinite(bfl) and bfl > 0:
@@ -2050,6 +2287,7 @@ class SystemModel(QObject):
         rendering stays aligned.
         """
         trace_surfaces = []
+        spans = {}
 
         def _has_tilt(elem):
             return (
@@ -2081,6 +2319,7 @@ class SystemModel(QObject):
             if not elem.surfaces:
                 continue
 
+            span_start = len(trace_surfaces)
             tilt_pre = _has_tilt(elem)
             cb_post_case = prev_elem_was_mirror and tilt_pre
 
@@ -2148,6 +2387,7 @@ class SystemModel(QObject):
                     radius=R_m, conic=srow.conic, semi_diameter=sd_m,
                     glass_before=glass_before, glass_after=glass_after,
                     is_mirror=is_mirror, thickness=thick_m,
+                    is_stop=bool(getattr(srow, 'is_stop', False)),
                     label=f'{elem.name} S{si+1}',
                     surf_num=len(trace_surfaces),
                     radius_y=ry_m,
@@ -2168,8 +2408,10 @@ class SystemModel(QObject):
                     if not next_is_cb_post:
                         trace_surfaces[-1].thickness = next_elem.distance_mm * 1e-3
 
+            spans[ei] = (span_start, len(trace_surfaces))
             prev_elem_was_mirror = (elem.elem_type == 'Mirror')
 
+        self._flat_surface_spans = spans
         return trace_surfaces
 
     def _build_trace_surfaces_world(self):
@@ -2197,7 +2439,7 @@ class SystemModel(QObject):
         used by :func:`trace_world`.
         """
         world_surfaces = []
-        for elem in self.elements:
+        for ei, elem in enumerate(self.elements):
             if elem.elem_type in ('Source', 'Detector'):
                 continue
             if not elem.surfaces:
@@ -2248,6 +2490,7 @@ class SystemModel(QObject):
                     radius=R_m, conic=srow.conic, semi_diameter=sd_m,
                     glass_before=glass_before, glass_after=glass_after,
                     is_mirror=is_mirror, thickness=thick_m,
+                    is_stop=bool(getattr(srow, 'is_stop', False)),
                     label=f'{elem.name} S{si+1}',
                     surf_num=len(world_surfaces),
                     radius_y=ry_m,
@@ -2258,7 +2501,37 @@ class SystemModel(QObject):
 
                 cum_t_m += float(srow.thickness) * 1e-3
 
+            # Air gap from this element's last surface to the next
+            # element's front vertex.  ``trace_world`` ignores
+            # ``thickness`` (it steps between ``world_origin``s), but
+            # ``find_paraxial_focus`` / ``system_abcd`` / the six docks
+            # that take an ABCD on this list read it -- leaving it at 0
+            # collapsed every inter-element gap and moved the paraxial
+            # focus by tens of millimetres.  Mirrors that hand the gap
+            # to the next element's coord break are the one exception:
+            # the LOCAL builder routes that gap through the cb's
+            # thickness, and the world builder has no cb to put it on,
+            # so it stays on the mirror here (the world frames already
+            # carry the fold geometry).
+            if world_surfaces and elem.surfaces:
+                nxt = self._next_optical_element(ei)
+                if nxt is not None:
+                    world_surfaces[-1].thickness = (
+                        float(nxt.distance_mm) * 1e-3)
+
         return world_surfaces
+
+    def _next_optical_element(self, idx):
+        """The next element after index ``idx`` that contributes
+        surfaces (Source / Detector / empty elements skipped), or
+        None."""
+        for nxt in self.elements[idx + 1:]:
+            if nxt.elem_type in ('Source', 'Detector'):
+                continue
+            if not nxt.surfaces:
+                continue
+            return nxt
+        return None
 
     # ── ABCD ───────────────────────────────────────────────────────
 
@@ -2353,8 +2626,19 @@ class SystemModel(QObject):
 
         # Generate rays based on source type
         if src and src.source_type == 'point_source':
-            # Point source: rays diverge from a point on axis
-            obj_dist = src.object_distance_mm * 1e-3
+            # Point source: a cone of rays diverging from one on-axis
+            # point at world z = 0, sampled on the same ring lattice
+            # ``make_rings`` uses for the collimated case.  Ring ``k``
+            # of ``num_rings`` reaches fraction ``k/num_rings`` of the
+            # entrance-pupil RADIUS at the first surface, so the
+            # direction cosines are the polar decomposition
+            # ``(rho*cos t, rho*sin t)`` with
+            # ``rho = frac * semi_ap / obj_dist``.  Writing ``rho`` into
+            # BOTH L and M (the pre-fix form) put every ray on the x = y
+            # diagonal and made the marginal ray sqrt(2) too steep.
+            obj_dist = self.object_distance_m()
+            if not np.isfinite(obj_dist) or obj_dist <= 0:
+                obj_dist = max(float(src.object_distance_mm), 1e-9) * 1e-3
             from ..raytrace import _make_bundle
             tilt_M = np.tan(np.radians(fa_y)) if fa_y else 0.0
             tilt_L = np.tan(np.radians(fa_x)) if fa_x else 0.0
@@ -2363,14 +2647,14 @@ class SystemModel(QObject):
             all_x = []
             all_L = []
             for ring in range(1, num_rings + 1):
-                frac = ring / num_rings
+                rho = (ring / num_rings) * semi_ap / obj_dist
                 theta = np.linspace(0, 2 * np.pi, rays_per_ring,
                                     endpoint=False)
                 for t in theta:
                     all_x.append(0.0)
                     all_y.append(0.0)
-                    all_L.append(frac * semi_ap / obj_dist + tilt_L)
-                    all_M.append(frac * semi_ap / obj_dist + tilt_M)
+                    all_L.append(rho * np.cos(t) + tilt_L)
+                    all_M.append(rho * np.sin(t) + tilt_M)
             all_x.append(0.0); all_y.append(0.0)
             all_L.append(tilt_L); all_M.append(tilt_M)
             rays = _make_bundle(
@@ -2428,25 +2712,67 @@ class SystemModel(QObject):
 
     # ── Optimization ───────────────────────────────────────────────
 
+    def live_opt_variables(self):
+        """The subset of ``opt_variables`` that still addresses a live
+        element / surface, in ``opt_variables`` order.
+
+        :meth:`get_variable_values` and :meth:`set_variable_values` MUST
+        walk the same list: the getter skipped stale entries (returning
+        a shorter vector) while the setter indexed ``values[i]`` with
+        ``i`` running over the unfiltered list, so deleting an element
+        that owned a variable made the next optimize assign values to
+        the wrong parameters -- or raise ``IndexError``, which
+        :meth:`run_optimization` swallowed into a generic failure.
+        """
+        live = []
+        for elem_idx, surf_idx, field in self.opt_variables:
+            if elem_idx >= len(self.elements):
+                continue
+            elem = self.elements[elem_idx]
+            if field == 'distance':
+                live.append((elem_idx, surf_idx, field))
+            elif surf_idx < len(elem.surfaces):
+                live.append((elem_idx, surf_idx, field))
+        return live
+
+    def prune_opt_variables(self):
+        """Drop optimization variables that no longer address anything.
+
+        Called after any structural edit (delete / move) so the list the
+        optimizer and the slider dock read never carries a stale
+        triple.  Returns the number of entries removed.
+        """
+        live = self.live_opt_variables()
+        n_removed = len(self.opt_variables) - len(live)
+        if n_removed:
+            self.opt_variables = live
+        return n_removed
+
     def get_variable_values(self):
         values = []
-        for elem_idx, surf_idx, field in self.opt_variables:
-            if elem_idx < len(self.elements):
-                elem = self.elements[elem_idx]
-                if field == 'distance':
-                    values.append(elem.distance_mm)
-                elif surf_idx < len(elem.surfaces):
-                    values.append(getattr(elem.surfaces[surf_idx], field, 0.0))
+        for elem_idx, surf_idx, field in self.live_opt_variables():
+            elem = self.elements[elem_idx]
+            if field == 'distance':
+                values.append(elem.distance_mm)
+            else:
+                values.append(getattr(elem.surfaces[surf_idx], field, 0.0))
         return np.array(values)
 
     def set_variable_values(self, values):
-        for i, (elem_idx, surf_idx, field) in enumerate(self.opt_variables):
-            if elem_idx < len(self.elements):
-                elem = self.elements[elem_idx]
-                if field == 'distance':
-                    elem.distance_mm = values[i]
-                elif surf_idx < len(elem.surfaces):
-                    setattr(elem.surfaces[surf_idx], field, values[i])
+        live = self.live_opt_variables()
+        if len(values) != len(live):
+            raise ValueError(
+                f'set_variable_values: got {len(values)} values for '
+                f'{len(live)} live optimization variables '
+                f'({len(self.opt_variables)} declared); call '
+                f'get_variable_values() to obtain a correctly sized '
+                f'vector.')
+        for i, (elem_idx, surf_idx, field) in enumerate(live):
+            elem = self.elements[elem_idx]
+            if field == 'distance':
+                elem.distance_mm = values[i]
+            else:
+                setattr(elem.surfaces[surf_idx], field, values[i])
         self._invalidate()
 
     def add_optimization_variable(self, elem_idx, surf_idx, field):
@@ -2524,10 +2850,16 @@ class SystemModel(QObject):
             return s1 ** 2
 
         # --- Min thickness ---
+        # Only the INTERNAL surfaces carry a glass thickness; by the
+        # model's own convention the trailing surface of each element
+        # has thickness 0 (its air gap lives on ``Element.distance_mm``).
+        # Penalising it added a constant ``(1.0 - 0)**2 = 1`` per
+        # element, so the merit could never reach 0 and its printed
+        # value was not the physical min-thickness violation.
         if mt == 'min_thickness':
             penalty = 0.0
             for elem in self.elements:
-                for s in elem.surfaces:
+                for s in elem.surfaces[:-1]:
                     if s.thickness < 1.0:  # less than 1 mm
                         penalty += (1.0 - s.thickness) ** 2
             return penalty
@@ -2607,14 +2939,21 @@ class SystemModel(QObject):
         from scipy.optimize import minimize
         if not self.opt_variables:
             return False, 'No variables defined.'
+        live_vars = self.live_opt_variables()
+        if not live_vars:
+            return False, ('No live variables: every declared '
+                           'optimization variable points at a deleted '
+                           'element or surface.')
         x0 = self.get_variable_values()
 
         bounds = None
         if method.lower() in ('l-bfgs-b', 'tnc', 'slsqp', 'trust-constr'):
+            # Built from the LIVE list so the bounds vector is the same
+            # length as x0 (scipy raises on a mismatch).
             bounds = [
                 (0.0, None) if field in ('distance', 'thickness')
                 else (None, None)
-                for (_ei, _si, field) in self.opt_variables
+                for (_ei, _si, field) in live_vars
             ]
 
         iteration = [0]
@@ -2647,7 +2986,14 @@ class SystemModel(QObject):
                 self.system_changed.emit()
             else:
                 self.set_variable_values(x0)   # restore; no emit off-thread
-            msg = (f'Merit: {result.fun*1e6:.3f} um after {result.nit} '
+            # Only 'rms_spot' has length units (metres -> um); every
+            # other merit is a dimensionless squared error, so labelling
+            # it "um" was meaningless and scaled by 1e6.
+            if self.geo_merit_type == 'rms_spot':
+                merit_txt = f'{result.fun * 1e6:.3f} um RMS spot'
+            else:
+                merit_txt = f'{result.fun:.6g} ({self.geo_merit_type})'
+            msg = (f'Merit: {merit_txt} after {result.nit} '
                    f'iterations [{method}]')
             self.optimization_finished.emit(result.success, msg)
             return result.success, msg
@@ -2757,17 +3103,38 @@ class SystemModel(QObject):
         ``surfaces`` / ``thicknesses`` keys remain for callers that
         expect the pre-3.7 format.
         """
-        # Legacy lens-only path (refractive surfaces from the trace
-        # surface list, with cb's filtered out -- their thicknesses
-        # are 0 in the cb emission so this just gives the same
-        # refractive sequence as pre-3.7 unfolded systems).
+        # Legacy ``surfaces`` / ``thicknesses`` path: the chronological
+        # surface sequence from the trace surface list with the
+        # coord-break Surfaces folded out (their tilt/decenter lives in
+        # ``coord_breaks``; their TRANSFER thickness is real axial
+        # distance and is carried into the preceding surface's gap --
+        # see ``carry`` below).
+        #
+        # Every flag the trace engine reads off a Surface is emitted
+        # per-surface: ``is_mirror`` (a mirror exported without it
+        # round-trips as an air->air no-op AND turns the Zemax-signed
+        # negative post-mirror gap into a literal backwards
+        # propagation), ``semi_diameter`` (without it
+        # ``surfaces_from_prescription`` falls back to matching its
+        # ``elements`` list, whose refracting-surface filter skips
+        # mirrors while the index counts them, so every mirror shifts
+        # the aperture mapping by one), and ``is_stop``.
         surfaces = self.build_trace_surfaces()
         rx_surfaces = []
         thicknesses = []
-        for i, s in enumerate(surfaces):
+        carry = 0.0     # transfer distance from folded-out coord breaks
+        pending_thickness = 0.0
+        for s in surfaces:
             if s.is_coordbrk:
+                carry += float(s.thickness)
                 continue
-            surf_dict = {
+            if rx_surfaces:
+                # Close the gap that follows the previously emitted
+                # surface, now that we know no further cb sits in it.
+                thicknesses.append(pending_thickness + carry)
+                carry = 0.0
+            sd = getattr(s, 'semi_diameter', np.inf)
+            rx_surfaces.append({
                 'radius': s.radius,
                 'conic': s.conic,
                 'aspheric_coeffs': getattr(s, 'aspheric_coeffs', None),
@@ -2776,14 +3143,18 @@ class SystemModel(QObject):
                 'radius_y': getattr(s, 'radius_y', None),
                 'conic_y': getattr(s, 'conic_y', None),
                 'aspheric_coeffs_y': getattr(s, 'aspheric_coeffs_y', None),
-            }
-            rx_surfaces.append(surf_dict)
-            if i < len(surfaces) - 1 and not surfaces[i + 1].is_coordbrk:
-                thicknesses.append(s.thickness)
-            elif i < len(surfaces) - 1:
-                # Skip the cb that follows; its 0-thickness is
-                # absorbed into the next refractive surface's gap.
-                thicknesses.append(s.thickness)
+                'semi_diameter': (float(sd) if np.isfinite(sd)
+                                  else float('inf')),
+                'is_mirror': bool(getattr(s, 'is_mirror', False)),
+                'is_stop': bool(getattr(s, 'is_stop', False)),
+            })
+            pending_thickness = float(s.thickness)
+        # ``thicknesses`` is left one shorter than ``surfaces`` (the
+        # trailing gap is the image distance, which the prescription
+        # format does not carry); ``validate_prescription`` accepts
+        # both len(surfaces) and len(surfaces) - 1.
+        stop_index = next(
+            (i for i, ps in enumerate(rx_surfaces) if ps['is_stop']), None)
 
         # 3.7.0: full element list + coord_breaks for round-trip.
         # Walk self.elements directly so we capture the GUI's
@@ -2836,6 +3207,7 @@ class SystemModel(QObject):
                         'aspheric_coeffs':
                             getattr(srow, 'aspheric_coeffs', None),
                         'semi_diameter': sd_m,
+                        'is_stop': bool(getattr(srow, 'is_stop', False)),
                         'surf_num': running_surf_num,
                         'comment': elem.name if elem.name else '',
                     })
@@ -2855,6 +3227,7 @@ class SystemModel(QObject):
                         'glass_before': glass_before,
                         'glass_after': glass_after,
                         'semi_diameter': sd_m,
+                        'is_stop': bool(getattr(srow, 'is_stop', False)),
                         'surf_num': running_surf_num,
                         'comment': elem.name
                             if (si == 0 and elem.name
@@ -2889,10 +3262,12 @@ class SystemModel(QObject):
                     else:
                         all_thicknesses.append(0.0)
 
-        return {
+        out = {
             'name': 'User design',
             'aperture_diameter': self.epd_m,
-            # Legacy lens-only keys (mirrors / cb's filtered out).
+            # Chronological surface sequence (mirrors included, coord
+            # breaks folded into the gaps) -- the key pair every
+            # prescription consumer reads.
             'surfaces': rx_surfaces,
             'thicknesses': thicknesses,
             # 3.7.0: full chronological list + coord_breaks for
@@ -2900,7 +3275,69 @@ class SystemModel(QObject):
             'elements': elements_out,
             'all_thicknesses': all_thicknesses,
             'coord_breaks': coord_breaks_out,
+            # Distance from the last surface to the Detector.  The
+            # legacy ``thicknesses`` list stops one short of the
+            # surface count, so without this a consumer cannot place
+            # the image plane where the layout shows it.
+            'image_distance': self._detector_distance_m(),
+            # Finite object conjugate (0.0 = at infinity).  Consumed by
+            # ``analysis.eval_image_plane_wfe`` and
+            # ``analysis.plotting``; without it every consumer treats a
+            # point-source design as collimated.
+            'object_distance': self.object_distance_m(),
         }
+        if stop_index is not None:
+            out['stop_index'] = stop_index
+        return out
+
+    def object_distance_m(self):
+        """Geometric object distance [m]: the axial gap from the source
+        plane (world z = 0) to the first optical surface, or 0.0 for a
+        collimated source (the prescription convention for "object at
+        infinity").
+
+        This is the single geometric quantity the ray launch and the
+        exported prescription both need.  ``SourceDefinition.
+        object_distance_mm`` is a second, independent knob for the same
+        thing and is only consulted when the element geometry cannot
+        supply it (no elements placed yet), because the two disagreeing
+        silently under-/over-fills the pupil.
+        """
+        src = self.source
+        if src is None or src.source_type != 'point_source':
+            return 0.0
+        for elem in self.elements[1:]:
+            if elem.elem_type in ('Source', 'Detector'):
+                continue
+            if not elem.surfaces:
+                continue
+            d = float(elem.distance_mm)
+            if d > 0:
+                return d * 1e-3
+            break
+        # No placed optic to measure against -- fall back to the form
+        # field so a source-only model still reports something.
+        try:
+            d = float(src.object_distance_mm)
+        except (TypeError, ValueError):
+            return 0.0
+        return d * 1e-3 if d > 0 else 0.0
+
+    def _detector_distance_m(self):
+        """Axial distance [m] from the last optical surface to the
+        Detector element, or 0.0 when there is no Detector (or it sits
+        at the last surface).  Exported as ``image_distance`` so a
+        prescription consumer can reproduce the image plane the layout
+        and the spot diagram use."""
+        if not self.elements:
+            return 0.0
+        det = self.elements[-1]
+        if det.elem_type != 'Detector':
+            return 0.0
+        try:
+            return float(det.distance_mm) * 1e-3
+        except (TypeError, ValueError):
+            return 0.0
 
 
 def _nice_dx(dx_m):

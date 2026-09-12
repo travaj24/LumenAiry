@@ -9,8 +9,8 @@ from PySide6.QtCore import Qt
 
 import numpy as np
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
+# matplotlib is imported lazily on first figure construction.
+from . import _mpl
 
 from .model import SystemModel
 from ..raytrace import (
@@ -58,13 +58,12 @@ class RayFanDock(QWidget):
 
         # Matplotlib canvas with the standard navigation toolbar so
         # every plot in this dock gets pan / zoom / save-PNG for free.
-        from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
-        self.fig = Figure(figsize=(8, 4), dpi=100, facecolor='#0a0c10')
-        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.fig = _mpl.Figure(figsize=(8, 4), dpi=100, facecolor='#0a0c10')
+        self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.mpl_toolbar = NavigationToolbar2QT(self.canvas, self)
+        self.mpl_toolbar = _mpl.NavigationToolbar2QT(self.canvas, self)
         layout.addWidget(self.mpl_toolbar)
         layout.addWidget(self.canvas, stretch=1)
 

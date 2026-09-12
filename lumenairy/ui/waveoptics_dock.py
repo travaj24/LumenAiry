@@ -8,7 +8,7 @@ and pre-run forecasts.
 Author: Andrew Traverso
 """
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSizePolicy, QSpinBox, QDoubleSpinBox, QProgressBar, QGroupBox, QComboBox,
@@ -18,15 +18,15 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont
 
+import contextlib
 import copy
 import numpy as np
 import time
 import os
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
-
 from .model import SystemModel
+# matplotlib is imported lazily on first figure construction.
+from . import _mpl
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -43,9 +43,11 @@ from .model import SystemModel
 # UI's "Recalibrate" button force a fresh measurement (e.g. after the
 # user switches FFT backend from NumPy to pyFFTW).
 _CALIBRATED_ASM_MS_AT_1024 = None
+# Historical reference used until the real measurement lands.
+_ASM_MS_FALLBACK = 12.0
 
 
-def _local_asm_baseline_ms(force=False):
+def _local_asm_baseline_ms(force=False, blocking=True):
     """Measured ASM-at-N=1024 wall-clock time on this machine, in ms.
 
     First call times one warmup + one timed ASM at N=512 (faster than
@@ -57,10 +59,18 @@ def _local_asm_baseline_ms(force=False):
     button when, e.g., the user has switched FFT backend or moved
     the process to a different machine via a hibernate / VM
     migration).
+
+    Pass ``blocking=False`` from the GUI thread: an uncalibrated cache
+    then returns the 12 ms fallback immediately instead of freezing the
+    UI for three 512^2 FFT pairs.  :meth:`WaveOpticsDock._start_calibration`
+    does the real measurement on a worker thread and the next forecast
+    picks it up.
     """
     global _CALIBRATED_ASM_MS_AT_1024
     if _CALIBRATED_ASM_MS_AT_1024 is not None and not force:
         return _CALIBRATED_ASM_MS_AT_1024
+    if not blocking:
+        return _ASM_MS_FALLBACK
     try:
         # Local import to avoid a hard dependency at module import time
         # (this file is imported eagerly during QMainWindow construction;
@@ -171,7 +181,10 @@ def forecast_resources(N, n_surfaces, n_save_planes,
     # so a faster (or slower) machine just rescales every prediction
     # without changing the relative cost of different code paths.
     ref_N = 1024
-    ref_asm_ms = _local_asm_baseline_ms()
+    # Non-blocking: this function is reached from 14 widget signals on
+    # the GUI thread.  An uncalibrated cache returns the 12 ms fallback
+    # and the dock's background calibration thread fills it in.
+    ref_asm_ms = _local_asm_baseline_ms(blocking=False)
     fft_scale = (N / ref_N) ** 2 * (np.log2(max(N, 2)) / np.log2(ref_N))
     per_fft_sec = (ref_asm_ms * 1e-3) * fft_scale
 
@@ -272,12 +285,20 @@ def forecast_resources(N, n_surfaces, n_save_planes,
 def _apply_real_lens_asm_equiv(n_surfaces):
     """ASM-equivalent time for one ``apply_real_lens`` call.
 
-    Empirically: 2 surfaces -> 1.1 ASM, 3 surfaces -> 2.2 ASM.
-    Fits a simple (n - 1) glass propagations + per-surface phase-
-    screen overhead model.
+    A COST-MODEL coefficient for the forecast panel's Time estimate --
+    not a physics quantity and not an ASM step count used by the
+    propagation (the only two call sites are in the time model).
+
+    Calibration points: 2 surfaces -> 1.1 ASM, 3 surfaces -> 2.2 ASM.
+    Solving ``a(n-1) + bn`` on both gives ``b = 0``, ``a = 1.1`` exactly,
+    i.e. the cost is the ``(n - 1)`` inter-surface glass propagations
+    and the per-surface phase screens are free at this resolution.  The
+    previous coefficients (1.0 and 0.2) returned 1.4 and 2.6 for those
+    same two points -- +27 % / +18 % -- so every ``real_lens`` /
+    ``real_lens_traced`` forecast read about 20 % pessimistic.
     """
     n = max(int(n_surfaces), 1)
-    return max(n - 1, 1) * 1.0 + 0.2 * n
+    return max(n - 1, 1) * 1.1
 
 
 def format_bytes(n):
@@ -364,22 +385,183 @@ def _filter_wave_optics_surfaces(
                         and getattr(trace_surfs[i + 1],
                                      'is_coordbrk', False)):
                     skipped_mirror_at.add(i + 1)
+    from copy import copy as _copy
+    # Axial distance carried by a surface we drop.  A dropped surface's
+    # thickness is the gap to the NEXT one and is real propagation
+    # distance -- letting it vanish with the surface shortened the
+    # unfolded path by the whole mirror-to-next-element gap (30 mm on
+    # the audit's fold fixture).  It is added to the previous KEPT
+    # surface's thickness, i.e. to the same physical gap.  A carry with
+    # no previous kept surface is dropped, exactly as the leading
+    # source-to-first-surface gap already is (the field is defined AT
+    # the first surface).
+    carry = 0.0
     for i, s in enumerate(trace_surfs):
-        if i in skipped_mirror_at:
-            continue
-        if ignore_lateral_cbs and getattr(s, 'is_coordbrk', False):
+        drop = i in skipped_mirror_at
+        if not drop and ignore_lateral_cbs and getattr(s, 'is_coordbrk',
+                                                       False):
             tx = float(getattr(s, 'tilt_x_deg', 0.0))
             ty = float(getattr(s, 'tilt_y_deg', 0.0))
-            if tx == 0.0 and ty == 0.0:
-                continue
-        # Unfold: flip post-mirror Zemax-signed negative thicknesses
-        # back to positive so the unfolded accumulation is sensible.
-        if unfold_mirrors and s.thickness < 0:
-            from copy import copy as _copy
-            s = _copy(s)
-            s.thickness = abs(s.thickness)
+            drop = (tx == 0.0 and ty == 0.0)
+        t = float(s.thickness)
+        if unfold_mirrors and t < 0:
+            # Unfold: flip post-mirror Zemax-signed negative thicknesses
+            # back to positive so the unfolded accumulation is sensible.
+            t = abs(t)
+        if drop:
+            carry += t
+            continue
+        s = _copy(s)
+        s.thickness = t + carry
+        carry = 0.0
         out.append(s)
     return out
+
+
+def _prescription_from_surfaces(surfs, aperture_diameter,
+                                object_distance=0.0):
+    """A refracting-only prescription dict built from a Surface list.
+
+    Used to hand the lens-model router the UNFOLDED equivalent of a
+    folded design: the same surface sequence the per-surface inline loop
+    would walk (mirrors removed and their gaps carried by
+    :func:`_filter_wave_optics_surfaces`), so the analytic / traced /
+    Maslov model runs on a system the library will accept instead of
+    being refused and silently downgraded.
+
+    Raises ``ValueError`` if a reflecting surface survived -- that would
+    mean the caller asked for the unfolded equivalent of something this
+    helper cannot unfold, and passing it on would give wrong physics.
+    """
+    rx_surfaces = []
+    thicknesses = []
+    for s in surfs:
+        if getattr(s, 'is_coordbrk', False):
+            continue
+        if getattr(s, 'is_mirror', False):
+            raise ValueError(
+                '_prescription_from_surfaces: surface list still '
+                'contains a mirror; unfold it first '
+                '(_filter_wave_optics_surfaces(unfold_mirrors=True)).')
+        sd = getattr(s, 'semi_diameter', float('inf'))
+        rx_surfaces.append({
+            'radius': s.radius,
+            'conic': s.conic,
+            'aspheric_coeffs': getattr(s, 'aspheric_coeffs', None),
+            'glass_before': s.glass_before,
+            'glass_after': s.glass_after,
+            'radius_y': getattr(s, 'radius_y', None),
+            'conic_y': getattr(s, 'conic_y', None),
+            'aspheric_coeffs_y': getattr(s, 'aspheric_coeffs_y', None),
+            'semi_diameter': (float(sd) if np.isfinite(sd)
+                              else float('inf')),
+            'is_mirror': False,
+            'is_stop': bool(getattr(s, 'is_stop', False)),
+        })
+        thicknesses.append(float(s.thickness))
+    if thicknesses:
+        thicknesses = thicknesses[:-1]
+    return {
+        'name': 'User design (unfolded equivalent)',
+        'aperture_diameter': float(aperture_diameter),
+        'surfaces': rx_surfaces,
+        'thicknesses': thicknesses,
+        'object_distance': float(object_distance),
+    }
+
+
+class _CalibrationWorker(QThread):
+    """One-shot ASM-baseline measurement, off the GUI thread.
+
+    ``_local_asm_baseline_ms`` runs three 512^2 complex FFT pairs; doing
+    that inside a widget signal handler froze the dock on the user's
+    first keystroke in it (14 widgets are wired to the forecast).
+    """
+    done = Signal(float, str)       # ms, error ('' on success)
+
+    def run(self):
+        # Bounded (three 512^2 FFT pairs) but still polled, so a close
+        # during startup calibration does not make
+        # _shutdown_dock_workers wait out its 2 s timeout.
+        if self.isInterruptionRequested():
+            self.done.emit(float(_ASM_MS_FALLBACK), 'interrupted')
+            return
+        try:
+            ms = _local_asm_baseline_ms(force=True, blocking=True)
+            self.done.emit(float(ms), '')
+        except Exception as e:
+            try:
+                msg = f'{type(e).__name__}: {e}'
+            except Exception:
+                msg = type(e).__name__
+            self.done.emit(float(_ASM_MS_FALLBACK), msg)
+
+
+def _prescription_has_mirror(pres):
+    """True when a prescription dict contains a reflecting surface.
+
+    Checks both places a mirror can be marked: the per-surface
+    ``is_mirror`` flag on the ``surfaces`` entries and the
+    ``element_type == 'mirror'`` entries of the 3.7 ``elements`` list.
+    ``apply_real_lens`` counts the latter, but the former is what the
+    trace engine reads, so a prescription that carries either is folded.
+    """
+    if not isinstance(pres, dict):
+        return False
+    for ps in pres.get('surfaces') or ():
+        if isinstance(ps, dict) and ps.get('is_mirror'):
+            return True
+    for el in pres.get('elements') or ():
+        if isinstance(el, dict) and el.get('element_type') == 'mirror':
+            return True
+    return False
+
+
+@contextlib.contextmanager
+def _process_overrides(backend, mem_limit_gb):
+    """Scope the process-global FFT-backend and RAM-cap overrides to one
+    wave-optics run.
+
+    ``backend``:
+
+    * ``'default'`` -- touch nothing; the library's own
+      ``USE_PYFFTW`` / ``USE_SCIPY_FFT`` defaults stand.
+    * ``'numpy'``   -- force plain numpy FFT for this run.
+    * ``'pyfftw'`` / ``'scipy'`` -- force that backend for this run.
+
+    The flags must be set on ``fft_infra`` itself: that is where
+    ``_fft2`` / ``_ifft2`` read their module globals and it is the
+    supported power-user mechanism (see the ``__all__`` note in
+    ``fft_infra``).  Setting them on the propagation facade would create
+    shadowing attributes the dispatchers never see.
+
+    Both the FFT flags and ``set_max_ram`` are restored on every exit
+    path, including an exception, so a run cannot change what the rest
+    of the session does.
+    """
+    from ..propagators import fft_infra as _fft_infra
+    from ..memory import set_max_ram, get_max_ram
+
+    prev_pyfftw = _fft_infra.USE_PYFFTW
+    prev_scipy = _fft_infra.USE_SCIPY_FFT
+    prev_ram = get_max_ram()
+    ram_changed = False
+    try:
+        if backend and backend != 'default':
+            _fft_infra.USE_PYFFTW = (backend == 'pyfftw')
+            _fft_infra.USE_SCIPY_FFT = (backend == 'scipy')
+        if mem_limit_gb and mem_limit_gb > 0:
+            set_max_ram(mem_limit_gb)
+            ram_changed = True
+        yield
+    finally:
+        _fft_infra.USE_PYFFTW = prev_pyfftw
+        _fft_infra.USE_SCIPY_FFT = prev_scipy
+        if ram_changed:
+            # get_max_ram() returns BYTES (or None for auto-detect);
+            # set_max_ram() reads a plain int as bytes and a float as
+            # gibibytes, so passing the saved int back is exact.
+            set_max_ram(prev_ram)
 
 
 class WaveOpticsWorker(QThread):
@@ -432,7 +614,21 @@ class WaveOpticsWorker(QThread):
         snap = {}
         snap['wavelength_m'] = model.wavelength_m
         snap['n_elements'] = len(getattr(model, 'elements', []) or [])
-        snap['trace_surfs'] = list(model.build_trace_surfaces() or [])
+        # Deep-copy the Surface objects, not just the list: the class
+        # contract above promises "no reference into the model survives
+        # into run()", and _filter_wave_optics_surfaces only copies the
+        # entries whose sign it flips, so the rest aliased the model's
+        # cached Surfaces and the worker could observe a GUI-thread
+        # edit mid-run.
+        _surfs = model.build_trace_surfaces() or []
+        try:
+            snap['trace_surfs'] = copy.deepcopy(list(_surfs))
+        except Exception:
+            snap['trace_surfs'] = list(_surfs)
+        try:
+            snap['surface_spans'] = model.element_surface_spans()
+        except Exception:
+            snap['surface_spans'] = {}
         snap['epd_m'] = model.epd_m
         src = getattr(model, 'source', None)
         try:
@@ -496,7 +692,15 @@ class WaveOpticsWorker(QThread):
             self.finished_result.emit({'error': self._snap_error})
             return
         try:
-            self._run_impl()
+            # Process-global knobs (FFT backend selection, RAM cap) are
+            # set for the duration of THIS run only.  They live on
+            # library module globals shared with every other dock, the
+            # REPL and anything the user scripts, and this worker runs
+            # off the GUI thread -- leaking them made one default Run
+            # downgrade every later FFT in the session.
+            with _process_overrides(self.cfg.get('backend', 'default'),
+                                    self.cfg.get('memory_limit_gb')):
+                self._run_impl()
         except Exception as e:
             # str(e) itself may raise (a broken __str__ would otherwise
             # escape run() and re-create the stuck-at-'Running...' hang
@@ -552,26 +756,7 @@ class WaveOpticsWorker(QThread):
         start_idx = cfg.get('start_elem', 0)
         end_idx = cfg.get('end_elem', self._snap['n_elements'] - 1)
 
-        # Apply memory limit
-        mem_limit = cfg.get('memory_limit_gb')
-        if mem_limit and mem_limit > 0:
-            from ..memory import set_max_ram
-            set_max_ram(mem_limit)
-
-        # Set FFT backend.  The flags must be set on fft_infra itself:
-        # that is where _fft2/_ifft2 read their module globals, and it
-        # is the supported power-user mechanism (see the __all__ note
-        # in fft_infra).  Setting them on the propagation facade would
-        # create shadowing attributes the dispatchers never see.
-        backend = cfg.get('backend', 'numpy')
-        from ..propagators import fft_infra as _fft_infra
-        _fft_infra.USE_PYFFTW = False
-        _fft_infra.USE_SCIPY_FFT = False
-        if backend == 'pyfftw':
-            _fft_infra.USE_PYFFTW = True
-        elif backend == 'scipy':
-            _fft_infra.USE_SCIPY_FFT = True
-
+        results = {}
         trace_surfs = self._snap['trace_surfs']
         if not trace_surfs:
             self.finished_result.emit({'error': 'No optical surfaces.'})
@@ -583,6 +768,32 @@ class WaveOpticsWorker(QThread):
         # for the per-flag semantics.
         unfold_mirrors = bool(cfg.get('unfold_mirrors', True))
         ignore_lateral_cbs = bool(cfg.get('ignore_lateral_cbs', True))
+        # "Start at / End at": restrict the propagation to an element
+        # range.  Both locals used to be read from cfg and then never
+        # referenced, so the user restricted the run and silently got
+        # the full system.  The span map is built on the GUI thread by
+        # the same pass that builds the surface list, so the indices
+        # here are the element indices the combos show.
+        spans = self._snap.get('surface_spans') or {}
+        range_note = ''
+        if spans:
+            optical = sorted(spans)
+            lo_el = min((e for e in optical if e >= start_idx),
+                        default=None)
+            hi_el = max((e for e in optical if e <= end_idx),
+                        default=None)
+            if lo_el is not None and hi_el is not None and lo_el <= hi_el:
+                lo = spans[lo_el][0]
+                hi = spans[hi_el][1]
+                if (lo, hi) != (0, len(trace_surfs)):
+                    trace_surfs = trace_surfs[lo:hi]
+                    range_note = (f'elements {lo_el}..{hi_el} '
+                                  f'(surfaces {lo}..{hi - 1})')
+            else:
+                trace_surfs = []
+                range_note = 'empty element range'
+        results['element_range'] = range_note
+
         trace_surfs = _filter_wave_optics_surfaces(
             trace_surfs,
             unfold_mirrors=unfold_mirrors,
@@ -591,7 +802,6 @@ class WaveOpticsWorker(QThread):
 
         total_steps = len(trace_surfs) + 3
         step = 0
-        results = {}
         t_start = time.time()
 
         try:
@@ -669,6 +879,12 @@ class WaveOpticsWorker(QThread):
                                    'dx': current_dx, 'z': z})
 
             maybe_save('Source', E, 0.0)
+            # Capture the launched power HERE, independent of the
+            # save-plane checkboxes.  Reading it back from planes[0]
+            # meant that unchecking "Source" in the save list silently
+            # measured the throughput denominator at LensExit instead,
+            # turning "Throughput" into ~100 %.
+            power_in = beam_power(E, dx)
             z_cum = 0.0
 
             # v5.17 audit P2-40: cooperative Stop, stage boundary 1.
@@ -683,9 +899,27 @@ class WaveOpticsWorker(QThread):
             lens_model = cfg.get('lens_model', 'asm')
             ray_sub = int(cfg.get('ray_subsample', 1))
             used_lens_router = False
+            # What ACTUALLY ran, for the summary panel and the results
+            # dict.  The router used to swallow every exception and drop
+            # through to the per-surface ASM loop in silence, so a
+            # folded design -- which ``apply_real_lens`` refuses BY
+            # DESIGN -- produced a thin-screen PSF labelled with the
+            # analytic/traced/Maslov model the user picked.
+            results['lens_model_requested'] = lens_model
+            results['lens_model_used'] = lens_model
+            results['lens_model_fallback_reason'] = ''
 
-            if lens_model in ('real_lens', 'real_lens_traced',
-                              'real_lens_maslov') and trace_surfs:
+            if (lens_model in ('real_lens', 'real_lens_traced',
+                               'real_lens_maslov')
+                    and trace_surfs and results.get('element_range')):
+                # The router hands the WHOLE prescription to the core
+                # function, which cannot honour an element sub-range.
+                results['lens_model_used'] = 'asm (fallback)'
+                results['lens_model_fallback_reason'] = (
+                    'element range restricted to '
+                    + results['element_range'])
+            elif lens_model in ('real_lens', 'real_lens_traced',
+                                'real_lens_maslov') and trace_surfs:
                 from ..elements.lenses import (apply_real_lens,
                                        apply_real_lens_traced,
                                        apply_real_lens_maslov)
@@ -694,6 +928,27 @@ class WaveOpticsWorker(QThread):
                     raise RuntimeError(
                         'Cannot export prescription: '
                         + self._snap['prescription_error'])
+                # Folded systems: the lens family refuses any
+                # prescription containing a mirror -- rightly, since it
+                # only walks refracting surfaces.  The dock's "Unfold
+                # mirrors" checkbox is the user asking for the unfolded
+                # equivalent, and ``trace_surfs`` above is already
+                # exactly that (mirrors removed, their gaps carried,
+                # Zemax-signed thicknesses flipped positive).  Hand THAT
+                # to the router rather than catching the library's
+                # refusal, so the analytic / traced / Maslov model
+                # actually runs on the system the user asked for.  With
+                # the box OFF nothing is substituted: the refusal
+                # surfaces as a reported fallback instead of a silent
+                # downgrade.
+                if _prescription_has_mirror(pres):
+                    if unfold_mirrors:
+                        pres = _prescription_from_surfaces(
+                            trace_surfs, self._snap['epd_m'],
+                            pres.get('object_distance', 0.0))
+                        pres['allow_unfolded_equivalent'] = True
+                        results['lens_model_used'] = (
+                            f'{lens_model} (unfolded equivalent)')
                 # Per-function kwarg overrides chosen via the &Options
                 # menu's Lens Options dialog.  Only kwargs the user
                 # actually changed are present; library defaults apply
@@ -745,6 +1000,17 @@ class WaveOpticsWorker(QThread):
                     except Exception:
                         pass
                     used_lens_router = False
+                    try:
+                        reason = f'{type(e).__name__}: {e}'
+                    except Exception:
+                        reason = type(e).__name__
+                    # One line, not the library's multi-paragraph
+                    # guidance text -- the full message is in the
+                    # diagnostics log.
+                    results['lens_model_used'] = 'asm (fallback)'
+                    results['lens_model_fallback_reason'] = (
+                        reason.splitlines()[0] if reason else
+                        'unknown error')
 
             # ── Step 2b: per-surface inline pipeline (fallback / default)
             # Surfaces cover the [1/total .. (total-2)/total] band of
@@ -840,6 +1106,12 @@ class WaveOpticsWorker(QThread):
                     'peak_intensity': np.max(I_focus),
                     'd4sigma': d4sig,
                     'N': N,
+                    # True output grid: the whole-prescription
+                    # propagators return on the input grid, but the
+                    # keys must exist on every path so consumers never
+                    # have to guess.
+                    'N_out': int(np.shape(I_focus)[0]),
+                    'dx_out': current_dx,
                     'elapsed': elapsed,
                     'n_planes_saved': len(planes),
                     'output_path': '',
@@ -950,6 +1222,17 @@ class WaveOpticsWorker(QThread):
             self.progress.emit(step, total_steps, 'Propagating to focus')
 
             bfl_mm = self._snap['bfl_mm']
+            if results.get('element_range') and trace_surfs:
+                # A restricted range is a different optical system; the
+                # snapshot's BFL belongs to the whole one.  Re-derive
+                # the paraxial focus of what actually ran.
+                try:
+                    from ..raytrace import find_paraxial_focus
+                    sub_bfl = find_paraxial_focus(list(trace_surfs), wv)
+                    if np.isfinite(sub_bfl) and sub_bfl > 0:
+                        bfl_mm = sub_bfl * 1e3
+                except Exception:
+                    pass
             if np.isfinite(bfl_mm) and bfl_mm > 0:
                 bfl_m = bfl_mm * 1e-3
                 if is_mft:
@@ -1067,7 +1350,6 @@ class WaveOpticsWorker(QThread):
             self.progress.emit(step, total_steps, 'Computing analysis')
 
             I_focus = np.abs(E_focus) ** 2
-            power_in = beam_power(planes[0]['field'] if planes else E, dx)
             power_focus = beam_power(E_focus, current_dx)
 
             try:
@@ -1179,6 +1461,11 @@ class WaveOpticsWorker(QThread):
                 'peak_intensity': np.max(I_focus),
                 'd4sigma': d4sig,
                 'N': N,
+                # The MFT methods return an mft_N_out grid and the
+                # detector model re-bins to the pixel pitch; 'N' is the
+                # INPUT grid and must not be used to slice I_focus.
+                'N_out': int(np.shape(I_focus)[0]),
+                'dx_out': current_dx,
                 'elapsed': elapsed,
                 'n_planes_saved': len(planes),
                 'output_path': output_path,
@@ -1206,6 +1493,7 @@ class WaveOpticsDock(QWidget):
         super().__init__(parent)
         self.sm = system_model
         self._worker = None
+        self._calib_worker = None
 
         # ── Tabbed layout (3.5.9) ──
         # The existing per-element propagation flow lives in the
@@ -1634,7 +1922,11 @@ class WaveOpticsDock(QWidget):
         comp_layout = QFormLayout(compute_group)
 
         self.combo_backend = QComboBox()
-        backends = ['NumPy FFT']
+        # Index 0 is "Library default": it touches no global flag, so
+        # the default Run leaves pyFFTW / SciPy FFT exactly as the
+        # library configured them.  Picking any other entry overrides
+        # the backend FOR THAT RUN ONLY (see _process_overrides).
+        backends = ['Library default', 'NumPy FFT']
         from ..propagators.propagation import PYFFTW_AVAILABLE, CUPY_AVAILABLE, SCIPY_FFT_AVAILABLE
         if SCIPY_FFT_AVAILABLE:
             backends.append('SciPy FFT')
@@ -1643,6 +1935,13 @@ class WaveOpticsDock(QWidget):
         if CUPY_AVAILABLE:
             backends.append('CuPy GPU')
         self.combo_backend.addItems(backends)
+        self.combo_backend.setToolTip(
+            'FFT backend for this run.\n\n'
+            '"Library default" leaves lumenairy\'s own USE_PYFFTW / '
+            'USE_SCIPY_FFT settings untouched.  Any explicit choice is '
+            'applied for the duration of the run and restored '
+            'afterwards, so one run never changes what the rest of the '
+            'session does.')
         comp_layout.addRow('Backend:', self.combo_backend)
 
         self.combo_mem = QComboBox()
@@ -1839,8 +2138,9 @@ class WaveOpticsDock(QWidget):
         layout.addWidget(self.progress_label)
 
         # ── Results ──
-        self.fig = Figure(figsize=(6, 3.5), dpi=100, facecolor='#0a0c10')
-        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.fig = _mpl.Figure(figsize=(6, 3.5), dpi=100,
+                               facecolor='#0a0c10')
+        self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -1856,6 +2156,9 @@ class WaveOpticsDock(QWidget):
         # Connect model changes to refresh plane list
         self.sm.system_changed.connect(self._refresh_planes)
         self._refresh_planes()
+        # Measure the forecast's ASM baseline in the background so the
+        # first widget edit doesn't pay for it on the GUI thread.
+        QTimer.singleShot(0, self._start_calibration)
         self._update_forecast()
 
     # ── UI helpers ─────────────────────────────────────────────────
@@ -1867,28 +2170,42 @@ class WaveOpticsDock(QWidget):
     def _recalibrate(self):
         """Force a fresh ASM-baseline measurement and refresh the forecast.
 
-        Triggered by the Recalibrate button.  Disables the button while
-        the (sub-300ms) measurement runs so a double-click can't kick
-        off two timed propagations at once, and reports the new value
-        in the calibration strip.
+        Triggered by the Recalibrate button.  The measurement runs on a
+        worker thread (it is three 512^2 complex FFT pairs -- a few
+        hundred ms of frozen UI if done here), the button is disabled
+        while it is in flight so a double-click cannot start two, and
+        the result lands back on the GUI thread via the worker's signal.
         """
-        from PySide6.QtWidgets import QApplication
+        self._start_calibration(force=True)
+
+    def _start_calibration(self, force=False):
+        """Measure the ASM baseline on a worker thread, once."""
+        if getattr(self, '_calib_worker', None) is not None:
+            return      # one in flight already
+        if not force and _CALIBRATED_ASM_MS_AT_1024 is not None:
+            return
         self.btn_calibrate.setEnabled(False)
         self.btn_calibrate.setText('Recalibrating...')
         self.lbl_calibration.setText('Forecast calibration: measuring...')
-        QApplication.processEvents()
-        try:
+        if force:
             _invalidate_asm_calibration()
-            ref_ms = _local_asm_baseline_ms(force=True)
+        worker = _CalibrationWorker()
+        worker.done.connect(self._on_calibrated)
+        worker.finished.connect(worker.deleteLater)
+        self._calib_worker = worker
+        worker.start()
+
+    def _on_calibrated(self, ref_ms, err):
+        self._calib_worker = None
+        self.btn_calibrate.setText('Recalibrate')
+        self.btn_calibrate.setEnabled(True)
+        if err:
+            self.lbl_calibration.setText(
+                f'Forecast calibration: failed -- {err}')
+        else:
             self.lbl_calibration.setText(
                 f'Forecast calibration: ASM-1024 = {ref_ms:.1f} ms '
                 f'(self-measured)')
-        except Exception as e:
-            self.lbl_calibration.setText(
-                f'Forecast calibration: failed -- {e}')
-        finally:
-            self.btn_calibrate.setText('Recalibrate')
-            self.btn_calibrate.setEnabled(True)
         self._update_forecast()
 
     def _browse_folder(self):
@@ -2477,7 +2794,7 @@ class WaveOpticsDock(QWidget):
         self.forecast_label.setText('\n'.join(lines))
 
         # Refresh the calibration strip with the actual measured value.
-        ref_ms = _local_asm_baseline_ms()
+        ref_ms = _local_asm_baseline_ms(blocking=False)
         self.lbl_calibration.setText(
             f'Forecast calibration: ASM-1024 = {ref_ms:.1f} ms '
             f'(self-measured)')
@@ -2562,8 +2879,12 @@ class WaveOpticsDock(QWidget):
         elif 'SciPy' in backend_text:
             backend = 'scipy'
             use_gpu = False
-        else:
+        elif 'NumPy' in backend_text:
             backend = 'numpy'
+            use_gpu = False
+        else:
+            # "Library default" -- leave the global flags alone.
+            backend = 'default'
             use_gpu = False
 
         mem_text = self.combo_mem.currentText()
@@ -2857,21 +3178,32 @@ class WaveOpticsDock(QWidget):
 
         # ── Plot results ──
         self.fig.clear()
-        I_focus = results['I_focus']
+        I_focus = np.asarray(results['I_focus'])
         dx = results['dx']
-        N = results['N']
+        # Grid size of the OUTPUT array, not of the input grid.  The
+        # three *-mft methods return an ``mft_N_out`` array and the
+        # detector model re-bins to the pixel pitch, so slicing with
+        # ``results['N']`` (the input N) mis-plotted or raised
+        # IndexError on exactly those runs.  ``results['N_out']`` /
+        # ``results['dx_out']`` carry the true output grid when the
+        # worker knows it.
+        N = int(I_focus.shape[0])
+        dx = float(results.get('dx_out', dx))
 
         # PSF (log scale)
         ax = self.fig.add_subplot(121)
-        ax.set_facecolor('#0a0c10')
-        ax.tick_params(colors='#7a94b8', labelsize=8)
-        ax.spines[:].set_color('#2a3548')
+        _mpl.style_axes(ax)
 
         c = N // 2
-        w = N // 8
+        w = max(1, N // 8)
         I_log = np.log10(I_focus / max(I_focus.max(), 1e-30) + 1e-10)
         crop = I_log[c - w:c + w, c - w:c + w]
         ext = w * dx * 1e6
+        # Downsample for display only: at N = 8192 the crop is 2048^2,
+        # far beyond any screen.  Stride keeps the extent exact.
+        stride = max(1, crop.shape[0] // 512)
+        if stride > 1:
+            crop = crop[::stride, ::stride]
 
         ax.imshow(crop, extent=[-ext, ext, -ext, ext],
                   cmap='inferno', origin='lower', aspect='equal')
@@ -2881,9 +3213,7 @@ class WaveOpticsDock(QWidget):
 
         # Cross-section
         ax2 = self.fig.add_subplot(122)
-        ax2.set_facecolor('#0a0c10')
-        ax2.tick_params(colors='#7a94b8', labelsize=8)
-        ax2.spines[:].set_color('#2a3548')
+        _mpl.style_axes(ax2)
         ax2.grid(True, color='#1a2535', linewidth=0.5)
 
         x_um = (np.arange(N) - N / 2) * dx * 1e6
@@ -2901,10 +3231,28 @@ class WaveOpticsDock(QWidget):
 
         # ── Summary text ──
         lines = []
-        lines.append(f'Grid: {N}x{N}, dx = {dx*1e6:.3f} um')
+        in_N = int(results.get('N', N))
+        if in_N != N:
+            lines.append(f'Grid: {in_N}x{in_N} in -> {N}x{N} out, '
+                         f'dx_out = {dx*1e6:.3f} um')
+        else:
+            lines.append(f'Grid: {N}x{N}, dx = {dx*1e6:.3f} um')
         lines.append(f'Wavelength: {results["wavelength"]*1e9:.1f} nm')
         lines.append(f'Method: {self.combo_method.currentText()}')
+        # Which lens model ACTUALLY ran (the router silently degrades to
+        # the per-surface ASM loop when the core function refuses).
+        used = results.get('lens_model_used')
+        req = results.get('lens_model_requested')
+        if used and req and used != req:
+            lines.append(f'Lens model: {used}  (requested {req})')
+            why = results.get('lens_model_fallback_reason')
+            if why:
+                lines.append(f'  fell back because: {why}')
+        elif used:
+            lines.append(f'Lens model: {used}')
         lines.append(f'Backend: {self.combo_backend.currentText()}')
+        if results.get('element_range'):
+            lines.append(f'Range: {results["element_range"]}')
         lines.append(f'Power in: {results["power_in"]:.4e}')
         lines.append(f'Power at focus: {results["power_focus"]:.4e}')
         eff = results["power_focus"] / max(results["power_in"], 1e-30) * 100

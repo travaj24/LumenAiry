@@ -17,6 +17,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import numpy as np
+from ._worker import interrupt_check
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
@@ -72,6 +73,14 @@ class _OPDWorker(QThread):
         self.grid_N = int(grid_N)
 
     def run(self):
+        # Cooperative cancellation: MainWindow._shutdown_dock_workers
+        # calls requestInterruption() and then wait(2000ms).  Without a
+        # poll the wait times out and Qt aborts the process while this
+        # thread is still running.
+        if interrupt_check(self):
+            self.finished_result.emit(
+                {'success': False, 'error': 'Stopped by user'})
+            return
         try:
             opd, dx, ap_m = self._compute_ray_traced_opd()
             self.finished_result.emit({

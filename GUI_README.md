@@ -360,7 +360,7 @@ Click the Source element (row 0) to configure illumination:
 | Plane wave | Fills the entrance pupil |
 | Gaussian beam | Beam diameter (1/e2), NA |
 | Gaussian aperture | Soft-edge sigma |
-| Point source | Object distance |
+| Point source | Object distance (advisory — the ray launch uses the actual gap from the source plane to the first optic) |
 | Emitter array | Pitch, NxN, waist diameter |
 
 ### Insert Menu
@@ -428,7 +428,10 @@ Full coherent propagation through the optical system:
 
 - **Methods**: ASM, Fresnel, Fraunhofer, Rayleigh-Sommerfeld
 - **Grid**: 128 to 131072 (FFT-friendly sizes: 2^a, 2^a*3, 2^a*5)
-- **Backends**: NumPy FFT, pyFFTW (multi-threaded), CuPy (GPU)
+- **Backends**: Library default (leaves `USE_PYFFTW` / `USE_SCIPY_FFT` alone),
+  NumPy FFT, SciPy FFT, pyFFTW (multi-threaded), CuPy (GPU).  An explicit
+  choice applies for the duration of the run only and is restored afterwards,
+  as is the Memory-limit cap
 - **Recommend Grid**: auto-sizes N and dx from system NA and aperture
 - **Output**: save to HDF5 or Zarr, choose folder + filename separately
 - **Plane selection**: checkboxes for which planes to save

@@ -27,10 +27,11 @@ from PySide6.QtWidgets import (
     QSizePolicy, QFileDialog, QMessageBox,
 )
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
+# matplotlib is imported lazily on first figure construction.
+from . import _mpl
 
 from .model import SystemModel
+from ._worker import interrupt_check
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +53,13 @@ class _GhostWorker(QThread):
         self.top_n = top_n
 
     def run(self):
+        # Cooperative cancellation: MainWindow._shutdown_dock_workers
+        # calls requestInterruption() and then wait(2000ms).  Without a
+        # poll the wait times out and Qt aborts the process while this
+        # thread is still running.
+        if interrupt_check(self):
+            self.finished_result.emit({'error': 'Stopped by user'})
+            return
         try:
             from ..analysis.ghost import (
                 enumerate_ghost_paths, ghost_analysis,
@@ -152,9 +160,9 @@ class GhostDock(QWidget):
         splitter.setHandleWidth(4)
         self.table = self._build_table()
         splitter.addWidget(self.table)
-        self.fig_bar = Figure(figsize=(4.0, 3.0), dpi=100,
+        self.fig_bar = _mpl.Figure(figsize=(4.0, 3.0), dpi=100,
                               facecolor='#0a0c10')
-        self.canvas_bar = FigureCanvasQTAgg(self.fig_bar)
+        self.canvas_bar = _mpl.FigureCanvasQTAgg(self.fig_bar)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         self.canvas_bar.setMinimumSize(0, 0)
         self.canvas_bar.setSizePolicy(
@@ -171,9 +179,9 @@ class GhostDock(QWidget):
             'color: #dde8f8; font-family: monospace; '
             'background: #0a0c10; padding: 4px;')
         bottom.addWidget(self.lbl_budget, stretch=1)
-        self.fig_spot = Figure(figsize=(3.0, 2.5), dpi=100,
+        self.fig_spot = _mpl.Figure(figsize=(3.0, 2.5), dpi=100,
                                facecolor='#0a0c10')
-        self.canvas_spot = FigureCanvasQTAgg(self.fig_spot)
+        self.canvas_spot = _mpl.FigureCanvasQTAgg(self.fig_spot)
         self.canvas_spot.setMinimumHeight(200)
         self.canvas_spot.setSizePolicy(
             QSizePolicy.Preferred, QSizePolicy.Preferred)

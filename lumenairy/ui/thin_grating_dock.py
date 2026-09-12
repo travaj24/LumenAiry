@@ -18,8 +18,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QFont
 import numpy as np
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
+# matplotlib is imported lazily on first figure construction.
+from . import _mpl
 
 from .model import SystemModel
 
@@ -124,8 +124,8 @@ class ThinGratingDock(QWidget):
         self.btn_run.clicked.connect(self._run)
         outer.addWidget(self.btn_run)
 
-        self.fig = Figure(figsize=(6, 3.4), dpi=100, facecolor='#0a0c10')
-        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.fig = _mpl.Figure(figsize=(6, 3.4), dpi=100, facecolor='#0a0c10')
+        self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(

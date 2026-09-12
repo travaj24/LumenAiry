@@ -604,17 +604,18 @@ class Layout2DView(QWidget):
         elif st == 'emitter_array':
             # Grid of dots; cap visible count at 7x7 so the layout
             # doesn't drown in micro-dots for large arrays.
-            nx = max(1, min(7, src.emitter_nx))
-            ny = max(1, min(7, src.emitter_ny))
+            # int(): the counts can arrive as floats from an edited
+            # source form, and range() refuses those.
+            ny = max(1, min(7, int(src.emitter_ny)))
             pitch_px = max(2.0, src.emitter_pitch_mm * S)
-            x0 = z
-            y0 = 0.0
-            for ix in range(nx):
-                for iy in range(ny):
-                    cx = x0 + (ix - (nx - 1) / 2) * pitch_px * 0.0
-                    cy = y0 + (iy - (ny - 1) / 2) * pitch_px
-                    self.scene.addEllipse(cx - 1.5, cy - 1.5,
-                                          3, 3, pen, fill)
+            # This is the SIDE view (y-z plane): the array's x columns
+            # all project onto the same point, so only the y rows are
+            # drawn.  The old nested ix loop multiplied its own offset
+            # by 0.0 and redrew nx identical overlapping dots.
+            for iy in range(ny):
+                cy = (iy - (ny - 1) / 2) * pitch_px
+                self.scene.addEllipse(z - 1.5, cy - 1.5,
+                                      3, 3, pen, fill)
 
         else:
             # Unknown future source-type: a question-mark marker.
@@ -700,8 +701,7 @@ class Layout2DView(QWidget):
                 self.scene.addLine(z, 0.0, z_first, ay, ray_pen)
         elif st == 'emitter_array':
             # One short ray per visible emitter (parallel beam).
-            nx = max(1, min(5, src.emitter_nx))
-            ny = max(1, min(5, src.emitter_ny))
+            ny = max(1, min(5, int(src.emitter_ny)))
             pitch_px = max(2.0, src.emitter_pitch_mm * S)
             for iy in range(ny):
                 cy = (iy - (ny - 1) / 2) * pitch_px

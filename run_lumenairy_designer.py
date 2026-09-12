@@ -49,7 +49,12 @@ def main():
             else:
                 rx = la.load_zemax_prescription_data_txt(filepath)
             wv_nm = rx.get('wavelength', 1310e-9)
-            if isinstance(wv_nm, float) and wv_nm < 1e-3:
+            # Accept int as well as float: an integer wavelength in
+            # METRES (0 aside, any loader that rounds) used to skip the
+            # isinstance(float) guard and be passed straight through as
+            # if it were already nanometres.
+            if isinstance(wv_nm, (int, float)) and not isinstance(
+                    wv_nm, bool) and 0 < wv_nm < 1e-3:
                 wv_nm = wv_nm * 1e9
             window.model.load_prescription(rx, wv_nm)
         except Exception as e:

@@ -2184,8 +2184,16 @@ class MainWindow(QMainWindow):
     def _new_system(self):
         self._suppress_dirty_marking = True
         try:
-            self.model.__init__()
-            self.model.system_changed.emit()
+            # ``reset_design()`` clears the DESIGN (elements,
+            # wavelength, EPD, fields, history, snapshots,
+            # optimization variables).  Re-running ``__init__()`` on
+            # the live QObject -- the pre-audit approach -- also wiped
+            # ``prefs`` (2-D/3-D backgrounds, ray colour, accent,
+            # theme), ``lens_options``, ``auto_retrace_mode`` and
+            # ``unit_preference``, none of which "New system" should
+            # touch, and re-invoked ``QObject.__init__`` on an
+            # already-constructed C++ object.
+            self.model.reset_design()
         finally:
             self._suppress_dirty_marking = False
         self._current_path = None
@@ -3224,12 +3232,13 @@ class MainWindow(QMainWindow):
             'point_source': dict(object_distance_mm=1000.0),
         }
         kwargs = defaults.get(kind, {})
-        self.model.source = SourceDefinition(
-            kind, wavelength_nm=self.model.wavelength_nm, **kwargs)
-        try:
-            self.model.system_changed.emit()
-        except Exception:
-            pass
+        # ``SystemModel.source`` is a read-only property, so assigning
+        # to it raised AttributeError out of the Qt slot and all six
+        # Insert > Source presets were dead.  ``set_source`` is the
+        # mutator: it checkpoints for undo, syncs the wavelength,
+        # invalidates the caches and emits ``system_changed``.
+        self.model.set_source(SourceDefinition(
+            kind, wavelength_nm=self.model.wavelength_nm, **kwargs))
         self.status_label.setText(
             f'Source set to: {self.model.source.describe()}')
 

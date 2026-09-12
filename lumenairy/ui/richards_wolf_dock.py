@@ -18,10 +18,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QFont
 import numpy as np
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
+# matplotlib is imported lazily on first figure construction.
+from . import _mpl
 
 from .model import SystemModel
+from ._worker import interrupt_check
 
 
 class _RWResult:
@@ -78,6 +79,13 @@ class RichardsWolfWorker(QThread):
         self.z_offset_m = z_offset_m
 
     def run(self):
+        # Cooperative cancellation: MainWindow._shutdown_dock_workers
+        # calls requestInterruption() and then wait(2000ms).  Without a
+        # poll the wait times out and Qt aborts the process while this
+        # thread is still running.
+        if interrupt_check(self):
+            self.finished_result.emit({'error': 'Stopped by user'})
+            return
         try:
             res = _rw_compute(self.NA, self.wavelength, self.polarization,
                               self.N, self.dx_m, self.z_offset_m)
@@ -145,8 +153,8 @@ class RichardsWolfDock(QWidget):
         run_row.addStretch()
         outer.addLayout(run_row)
 
-        self.fig = Figure(figsize=(6, 3.4), dpi=100, facecolor='#0a0c10')
-        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.fig = _mpl.Figure(figsize=(6, 3.4), dpi=100, facecolor='#0a0c10')
+        self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(

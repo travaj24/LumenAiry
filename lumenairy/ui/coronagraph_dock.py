@@ -31,6 +31,7 @@ Author: Andrew Traverso  --  v5.4 audit P1-C
 from __future__ import annotations
 
 import numpy as np
+from ._worker import interrupt_check
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
@@ -138,6 +139,10 @@ IMAGE_PLANE_PROFILES = {
 # ---------------------------------------------------------------------------
 # Worker
 # ---------------------------------------------------------------------------
+class _Interrupted(Exception):
+    """Raised at a stage boundary when cancellation was requested."""
+
+
 class _CoronagraphWorker(QThread):
     """Background thread for the 4-stop chain.
 
@@ -165,14 +170,37 @@ class _CoronagraphWorker(QThread):
 
     # ............................................................. main ...
     def run(self):
+        # Cooperative cancellation: MainWindow._shutdown_dock_workers
+        # calls requestInterruption() and then wait(2000ms).  Without a
+        # poll the wait times out and Qt aborts the process while this
+        # thread is still running.
+        if interrupt_check(self):
+            self.finished_result.emit(
+                {'success': False, 'error': 'Stopped by user'})
+            return
         try:
             result = self._run_chain()
             self.finished_result.emit(result)
+        except _Interrupted:
+            self.finished_result.emit(
+                {'success': False, 'error': 'Stopped by user'})
         except Exception as exc:
             self.finished_result.emit({
                 'success': False,
                 'error': f'{type(exc).__name__}: {exc}',
             })
+
+    def _stage(self, index, label):
+        """Report a pipeline stage AND poll for cancellation.
+
+        The four coronagraph stops are the chain's natural checkpoints;
+        routing the progress emission through here means a Stop /
+        window-close during the chain is honoured at the next stop
+        instead of running to completion.
+        """
+        if interrupt_check(self):
+            raise _Interrupted()
+        self.progress.emit(index, label)
 
     def _run_chain(self):
         p = self.p
@@ -191,12 +219,12 @@ class _CoronagraphWorker(QThread):
         pupil = np.where(R <= D / 2.0, 1.0, 0.0).astype(np.complex128)
 
         # --- Stop 1: apodised pupil ---------------------------------------
-        self.progress.emit(0, 'Stop 1: applying apodised pupil')
+        self._stage(0, 'Stop 1: applying apodised pupil')
         E1 = self._apply_apodised(pupil, dx_pupil, p['stop1'])
         per_stop_fields.append(('Stop 1: Apodised pupil', E1.copy()))
 
         # --- Forward Fraunhofer (pupil -> focal) ---------------------------
-        self.progress.emit(1, 'Stop 2: forward FT + focal mask')
+        self._stage(1, 'Stop 2: forward FT + focal mask')
         E_focal = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(E1)))
         dx_focal = wavelength * f_eff / (N * dx_pupil)
 
@@ -225,7 +253,7 @@ class _CoronagraphWorker(QThread):
         per_stop_fields.append(('Stop 2: Lyot focal mask', E2.copy()))
 
         # --- Inverse Fraunhofer (focal -> relay pupil) --------------------
-        self.progress.emit(2, 'Stop 3: inverse FT + Lyot stop')
+        self._stage(2, 'Stop 3: inverse FT + Lyot stop')
         E_relay_pupil = np.fft.fftshift(
             np.fft.ifft2(np.fft.ifftshift(E2)))
 
@@ -234,7 +262,7 @@ class _CoronagraphWorker(QThread):
         per_stop_fields.append(('Stop 3: Lyot stop', E3.copy()))
 
         # --- Forward Fraunhofer (relay pupil -> image plane) --------------
-        self.progress.emit(3, 'Stop 4: image plane + contrast curve')
+        self._stage(3, 'Stop 4: image plane + contrast curve')
         E4 = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(E3)))
         per_stop_fields.append(('Stop 4: Image plane', E4.copy()))
         psf_coro = np.abs(E4) ** 2

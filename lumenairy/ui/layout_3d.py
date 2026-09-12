@@ -555,8 +555,10 @@ class Layout3DView(QWidget):
             elif st == 'emitter_array':
                 # Grid of small spheres at the emitter pitch in the
                 # local x-y plane, mapped to world via R_world.
-                nx = max(1, min(7, src.emitter_nx))
-                ny = max(1, min(7, src.emitter_ny))
+                # int(): counts can arrive as floats from an edited
+                # source form or a legacy session file.
+                nx = max(1, min(7, int(src.emitter_nx)))
+                ny = max(1, min(7, int(src.emitter_ny)))
                 pitch = max(0.005, src.emitter_pitch_mm)
                 w0 = max(0.001, src.emitter_waist_mm)
                 blocks = pv.MultiBlock()

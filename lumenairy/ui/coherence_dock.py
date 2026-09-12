@@ -19,10 +19,11 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QFont
 import numpy as np
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-from matplotlib.figure import Figure
+# matplotlib is imported lazily on first figure construction.
+from . import _mpl
 
 from .model import SystemModel
+from ._worker import interrupt_check
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +152,13 @@ class _KoehlerWorker(QThread):
         self.params = params
 
     def run(self):
+        # Cooperative cancellation: MainWindow._shutdown_dock_workers
+        # calls requestInterruption() and then wait(2000ms).  Without a
+        # poll the wait times out and Qt aborts the process while this
+        # thread is still running.
+        if interrupt_check(self):
+            self.finished_result.emit({'error': 'Stopped by user'})
+            return
         # v5.30 (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25, Territory A
         # UI pass): this call passed ``source_sigma`` / ``N`` /
         # ``n_modes`` -- none of which koehler_image has ever accepted --
@@ -309,6 +317,13 @@ class _CoherenceAnalysisWorker(QThread):
         return fields, (dx if dx is not None else 1e-6)
 
     def run(self):
+        # Cooperative cancellation: MainWindow._shutdown_dock_workers
+        # calls requestInterruption() and then wait(2000ms).  Without a
+        # poll the wait times out and Qt aborts the process while this
+        # thread is still running.
+        if interrupt_check(self):
+            self.finished_result.emit({'error': 'Stopped by user'})
+            return
         try:
             import lumenairy as la
             p = self.params
@@ -426,8 +441,8 @@ class CoherenceDock(QWidget):
         self.btn_run.setObjectName('run_button')
         self.btn_run.clicked.connect(self._run)
         outer.addWidget(self.btn_run)
-        self.fig = Figure(figsize=(6, 3.4), dpi=100, facecolor='#0a0c10')
-        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.fig = _mpl.Figure(figsize=(6, 3.4), dpi=100, facecolor='#0a0c10')
+        self.canvas = _mpl.FigureCanvasQTAgg(self.fig)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(
@@ -503,8 +518,8 @@ class CoherenceDock(QWidget):
 
     # Tab helpers shared by tabs 2-4.
     def _make_canvas(self):
-        fig = Figure(figsize=(6, 3.4), dpi=100, facecolor=self._BG)
-        canvas = FigureCanvasQTAgg(fig)
+        fig = _mpl.Figure(figsize=(6, 3.4), dpi=100, facecolor=self._BG)
+        canvas = _mpl.FigureCanvasQTAgg(fig)
         # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
         canvas.setMinimumSize(0, 0)
         canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)

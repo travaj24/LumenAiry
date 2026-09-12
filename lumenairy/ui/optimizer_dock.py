@@ -17,10 +17,12 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont, QColor
 
+import copy
 import numpy as np
 
 from .model import SystemModel, SurfaceRow
 from ..progress import CancellableProgress, is_cancelled
+from ._worker import ThreadCancellableProgress
 
 
 # v5.4 (audit P1-D): canonical scipy / design_optimize method tokens
@@ -66,12 +68,27 @@ class OptimizeWorker(QThread):
     and hardcoded method='Nelder-Mead' inside the model.
     """
     progress = Signal(int, float)
-    finished = Signal(bool, str)
+    # v5.17 audit P3-62 / this audit: named finished_result so it does
+    # NOT shadow QThread's built-in ``finished`` signal.  With the
+    # shadow in place, ``worker.finished.connect(worker.deleteLater)``
+    # bound to this custom Signal(bool, str) -- wrong payload, and
+    # never emitted at all when run() raised.
+    finished_result = Signal(bool, str)
     cancelled = Signal()
 
     def __init__(self, model, max_iter, advanced_kwargs=None):
         super().__init__()
-        self.model = model
+        # The worker optimizes a DEEP COPY.  ``merit_function`` calls
+        # ``set_variable_values`` -> ``_invalidate`` ->
+        # ``recompute_element_frames``, rewriting every element's
+        # ``origin`` / ``R`` and nulling ``_flat_surfaces_cache``
+        # hundreds of times a second -- while the GUI thread paints
+        # from exactly those attributes.  ``apply_result=False`` only
+        # governs what happens AFTER minimize returns, so it never
+        # addressed the per-probe races.  Only the solution vector
+        # crosses back, and the dock applies it on the GUI thread.
+        self.live_model = model
+        self.model = self._detached_copy(model)
         self.max_iter = max_iter
         # v5.4 (audit P1-D): dock-supplied advanced parameter dict.
         # Defaults to empty -- model.run_optimization will then keep
@@ -81,12 +98,38 @@ class OptimizeWorker(QThread):
         # callback below.  run_optimization() doesn't take a
         # CancellableProgress so we sentinel via StopIteration in the
         # callback and catch it in run().
-        self._cancel_progress = CancellableProgress()
+        self._cancel_progress = ThreadCancellableProgress(self)
         # v5.24.4 (audit S4-7): the worker runs the optimization with
         # ``apply_result=False`` so it never mutates the shared live model
         # off the GUI thread; it hands the solution vector back here for
         # the dock's finished-handler to apply on the MAIN thread.
         self.result_x = None
+
+    @staticmethod
+    def _detached_copy(model):
+        """A SystemModel carrying the same design, sharing nothing.
+
+        Built on the GUI thread (in ``__init__``) so the copy is
+        consistent.  Signals are left disconnected -- the copy's
+        ``system_changed`` / ``optimization_progress`` emissions go
+        nowhere, which is what we want from a worker thread; the
+        worker's own ``progress`` signal is the GUI's only channel.
+        """
+        from .model import SystemModel
+        clone = SystemModel()
+        clone.elements = copy.deepcopy(model.elements)
+        clone.wavelength_nm = model.wavelength_nm
+        clone.wavelengths_nm = list(model.wavelengths_nm)
+        clone.epd_mm = model.epd_mm
+        clone.field_angles_deg = list(model.field_angles_deg)
+        clone.opt_variables = [tuple(v) for v in model.opt_variables]
+        clone.geo_merit_type = model.geo_merit_type
+        clone.geo_merit_target = model.geo_merit_target
+        for attr in ('wavelength_weights', 'field_weights'):
+            val = getattr(model, attr, None)
+            setattr(clone, attr, list(val) if val is not None else None)
+        clone._invalidate()
+        return clone
 
     def run(self):
         # v5.4 (audit P1-D): validate dock kwarg combinations BEFORE
@@ -102,7 +145,7 @@ class OptimizeWorker(QThread):
         method = self.advanced_kwargs.get('method', 'Nelder-Mead')
         hess = self.advanced_kwargs.get('hess')
         if hess and hess != 'auto' and method not in _HESS_METHODS:
-            self.finished.emit(
+            self.finished_result.emit(
                 False,
                 f"hess={hess!r} requires method in {_HESS_METHODS}; "
                 f"got method={method!r}.  Either change the method "
@@ -110,7 +153,7 @@ class OptimizeWorker(QThread):
             return
         constraints = self.advanced_kwargs.get('constraints') or ()
         if constraints and method not in _CONSTRAINT_METHODS:
-            self.finished.emit(
+            self.finished_result.emit(
                 False,
                 f"constraints= requires method in {_CONSTRAINT_METHODS}; "
                 f"got method={method!r}.  Switch to SLSQP / trust-constr "
@@ -119,7 +162,13 @@ class OptimizeWorker(QThread):
 
         def cb(it, merit):
             self.progress.emit(it, merit)
-            if self._cancel_progress.should_stop:
+            # Both cancellation channels: the dock's Stop button sets
+            # CancellableProgress, while MainWindow._shutdown_dock_workers
+            # calls Qt's requestInterruption() on close -- which used to
+            # set nothing this worker read, so the 2 s wait timed out and
+            # Qt aborted the process mid-run.
+            if (self._cancel_progress.should_stop
+                    or self.isInterruptionRequested()):
                 # Nelder-Mead's callback path lacks a clean abort
                 # contract; raise StopIteration which scipy surfaces
                 # via OptimizeResult or raises into the caller.
@@ -133,12 +182,12 @@ class OptimizeWorker(QThread):
                 self.max_iter, cb, method=method, apply_result=False)
         except StopIteration:
             self.cancelled.emit()
-            self.finished.emit(False, 'Cancelled by user')
+            self.finished_result.emit(False, 'Cancelled by user')
             return
         # Carry the solution to the MAIN-thread finished handler.
         self.result_x = list(getattr(self.model, '_last_optimization_x', None)
                              or [])
-        self.finished.emit(success, msg)
+        self.finished_result.emit(success, msg)
 
     @Slot()
     def cancel(self):
@@ -426,13 +475,19 @@ class OptimizerDock(QWidget):
         self._refresh_variables()
 
     def _refresh_variables(self):
-        self.var_table.setRowCount(len(self.sm.opt_variables))
-        for i, (elem_idx, surf_idx, field) in enumerate(self.sm.opt_variables):
-            elem = self.sm.elements[elem_idx] if elem_idx < len(self.sm.elements) else None
+        # The LIVE list, in the same order and of the same length as
+        # ``get_variable_values()`` -- the grid used to be sized from
+        # the unfiltered list, so a variable whose element had been
+        # deleted left a blank row that did not correspond to any
+        # value the optimizer would actually move.
+        live = self.sm.live_opt_variables()
+        self.var_table.setRowCount(len(live))
+        for i, (elem_idx, surf_idx, field) in enumerate(live):
+            elem = self.sm.elements[elem_idx]
             val = '?'
-            if elem and field == 'distance':
+            if field == 'distance':
                 val = f'{elem.distance_mm:.4g}'
-            elif elem and surf_idx < len(elem.surfaces):
+            elif surf_idx < len(elem.surfaces):
                 val = f'{getattr(elem.surfaces[surf_idx], field, 0):.4g}'
             self.var_table.setItem(i, 0, QTableWidgetItem(f'E{elem_idx}'))
             self.var_table.setItem(i, 1, QTableWidgetItem(f'S{surf_idx}.{field}'))
@@ -796,7 +851,7 @@ class OptimizerDock(QWidget):
         max_iter = adv.pop('max_iter', self.spin_iter.value())
         self._worker = OptimizeWorker(self.sm, max_iter, advanced_kwargs=adv)
         self._worker.progress.connect(self._on_progress)
-        self._worker.finished.connect(self._on_finished)
+        self._worker.finished_result.connect(self._on_finished)
         # v5.4 (audit P1-F): also reset UI on cooperative cancel.
         self._worker.cancelled.connect(
             lambda: self._on_finished(False, 'Cancelled by user'))
@@ -855,11 +910,18 @@ class OptimizerDock(QWidget):
         # the main thread only.  Workers without a ``result_x`` (the global
         # search, cancel/failure paths) leave the model untouched.
         worker = self._worker
-        if success and worker is not None:
+        if worker is not None and (
+                success
+                or getattr(worker, 'apply_result_on_failure', False)):
             result_x = getattr(worker, 'result_x', None)
             if result_x:
-                self.sm.set_variable_values(result_x)
-                self.sm.system_changed.emit()
+                try:
+                    self.sm.set_variable_values(result_x)
+                except ValueError as exc:
+                    # The variable list changed while the worker ran.
+                    self.log.append(f'Result not applied: {exc}')
+                else:
+                    self.sm.system_changed.emit()
         self.btn_optimize.setEnabled(True)
         self.btn_global.setEnabled(True)
         self.btn_stop.setEnabled(False)
@@ -886,7 +948,7 @@ class OptimizerDock(QWidget):
 
         self._worker = GlobalSearchWorker(self.sm, self.spin_iter.value(), 20)
         self._worker.progress.connect(self._on_global_progress)
-        self._worker.finished.connect(self._on_finished)
+        self._worker.finished_result.connect(self._on_finished)
         # v5.4 (audit P1-F): map cancel signal to the same UI reset.
         self._worker.cancelled.connect(
             lambda: self._on_finished(False, 'Cancelled by user'))
@@ -975,7 +1037,8 @@ class OptimizerDock(QWidget):
             free_vars = []
             bounds_list = []
             seen_paths = set()   # S4-6: de-dup thickness/distance clashes
-            for i, (elem_idx, surf_idx, field) in enumerate(self.sm.opt_variables):
+            for i, (elem_idx, surf_idx, field) in enumerate(
+                self.sm.live_opt_variables()):
                 if field == 'distance':
                     tk_idx = thickness_map.get(elem_idx)
                     if tk_idx is None:
@@ -1282,7 +1345,8 @@ class WaveOptimizeWorker(QThread):
         # v5.4 (audit P1-F): CancellableProgress wraps the existing
         # Qt-emit callback.  design_optimize polls should_stop in all
         # 4 scipy callbacks and stops cleanly with a partial result.
-        self._cancel_progress = CancellableProgress(self._on_progress)
+        self._cancel_progress = ThreadCancellableProgress(
+            self, self._on_progress)
 
     def _on_progress(self, stage, fraction, message=''):
         # Route the core's callback into a Qt signal the dock can
@@ -1465,17 +1529,31 @@ class WaveOptimizeWorker(QThread):
 class GlobalSearchWorker(QThread):
     """Random-restart global optimization (inspired by CODE V Global Synthesis)."""
     progress = Signal(int, float)  # restart number, best merit
-    finished = Signal(bool, str)
+    # Renamed off QThread's built-in ``finished`` (see OptimizeWorker).
+    finished_result = Signal(bool, str)
     cancelled = Signal()
 
     def __init__(self, model, max_iter_per_restart, n_restarts):
         super().__init__()
-        self.model = model
+        # Optimize a detached copy; only ``result_x`` crosses back.
+        self.live_model = model
+        self.model = OptimizeWorker._detached_copy(model)
         self.max_iter = max_iter_per_restart
         self.n_restarts = n_restarts
+        self.result_x = None
+        # Cancelling a global search still returns the best design found
+        # so far -- that was the pre-audit behaviour and it is useful.
+        self.apply_result_on_failure = True
         # v5.4 (audit P1-F): polled between restarts (and inside each
         # restart's Nelder-Mead callback) for clean cancellation.
-        self._cancel_progress = CancellableProgress()
+        self._cancel_progress = ThreadCancellableProgress(self)
+
+    def _stop_requested(self):
+        """Either cancellation channel: the dock's Stop button
+        (``CancellableProgress``) or Qt's own ``requestInterruption()``,
+        which ``MainWindow._shutdown_dock_workers`` uses on close."""
+        return (self._cancel_progress.should_stop
+                or self.isInterruptionRequested())
 
     def run(self):
         from scipy.optimize import minimize
@@ -1486,15 +1564,18 @@ class GlobalSearchWorker(QThread):
         rng = np.random.default_rng()
 
         def _inner_cb(xk):
-            if self._cancel_progress.should_stop:
+            if self._stop_requested():
                 raise StopIteration('cancelled')
 
         for restart in range(self.n_restarts):
-            if self._cancel_progress.should_stop:
+            if self._stop_requested():
                 break
             # Perturb starting point: ±30% for radius/thickness, ±1 for conic
             x_start = x0.copy()
-            for i, (row_idx, col_idx) in enumerate(self.model.opt_variables):
+            # Walk the LIVE variable list so the perturbation index
+            # matches x0's (get_variable_values skips stale entries).
+            for i, (row_idx, col_idx) in enumerate(
+                    self.model.live_opt_variables()):
                 if col_idx == 7:  # conic
                     x_start[i] = x0[i] + rng.uniform(-1, 1)
                 else:
@@ -1517,18 +1598,17 @@ class GlobalSearchWorker(QThread):
 
             self.progress.emit(restart + 1, best_merit)
 
-        # Apply best result (best-so-far on cancel)
-        self.model.set_variable_values(best_x)
-        self.model._invalidate()
-        self.model.system_changed.emit()
-        if self._cancel_progress.should_stop:
+        # Hand the best result (best-so-far on cancel) to the GUI
+        # thread; the dock applies it to the live model.
+        self.result_x = list(best_x)
+        if self._stop_requested():
             self.cancelled.emit()
-            self.finished.emit(
+            self.finished_result.emit(
                 False,
                 f'Cancelled -- best so far: {best_merit*1e6:.3f} um')
             return
         msg = f'Best merit: {best_merit*1e6:.3f} um from {self.n_restarts} restarts'
-        self.finished.emit(True, msg)
+        self.finished_result.emit(True, msg)
 
     @Slot()
     def cancel(self):

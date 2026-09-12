@@ -423,7 +423,12 @@ class SurfaceDetailPanel(QWidget):
              'Soft-edge standard deviation of the Gaussian aperture',
              {'gaussian_aperture'}),
             ('object_distance_mm',  'Object distance (mm):',  '1000',
-             'Distance from the point source to the entrance pupil',
+             'Distance from the point source to the entrance pupil.\n'
+             'Advisory: the ray launch uses the ACTUAL gap from the '
+             "source plane to the first optic (that element's "
+             'Distance column), so move the first element to change '
+             'the conjugate.  This field is used only when no optic '
+             'has been placed yet.',
              {'point_source'}),
             ('emitter_pitch_mm',    'Emitter pitch (mm):',    '0.05',
              'Center-to-center spacing of emitters in the array',
@@ -672,18 +677,38 @@ class SurfaceDetailPanel(QWidget):
                f'conic = {surface.conic}')
         QGuiApplication.clipboard().setText(txt)
 
+    # Source fields that are COUNTS, not lengths.  ``to_source`` feeds
+    # them straight to ``range()``, so casting them to float made
+    # ``emitter_array`` raise TypeError -- which the wave-optics
+    # worker's broad handler swallowed into an EPD-clipped plane wave
+    # labelled "Emitter array NxN", and which crashed the 2-D scene
+    # rebuild outright.
+    _SRC_INT_FIELDS = frozenset({'emitter_nx', 'emitter_ny'})
+
     def _apply_source_params(self):
         if self._elem_idx != 0:
             return
         kwargs = {}
         for key, inp in self.src_params.items():
+            val = inp.text().strip()
+            if val == '':
+                continue
             try:
-                val = inp.text().strip()
-                if val == '':
-                    continue
-                kwargs[key] = float(val)
+                if key in self._SRC_INT_FIELDS:
+                    kwargs[key] = int(round(float(val)))
+                else:
+                    kwargs[key] = float(val)
             except ValueError:
                 pass
+        # The form carries no wavelength or polarization field, so a
+        # rebuild from it alone would reset both to SourceDefinition's
+        # defaults (1310 nm, unpolarized).  Carry the live values
+        # forward; ``set_source`` then re-syncs the wavelength to the
+        # model, which is authoritative.
+        prev = self.sm.source
+        if prev is not None:
+            kwargs.setdefault('wavelength_nm', prev.wavelength_nm)
+            kwargs.setdefault('polarization', prev.polarization)
         src = SourceDefinition(self.src_type_combo.currentText(), **kwargs)
         self.sm.set_source(src)
 

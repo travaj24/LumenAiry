@@ -34,6 +34,7 @@ import os
 from typing import Any, Dict, Optional
 
 import numpy as np
+from ._worker import interrupt_check
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont
@@ -88,13 +89,29 @@ class _AOClosedLoopWorker(QThread):
     def __init__(self, params: Dict[str, Any]) -> None:
         super().__init__()
         self._params = params
-        self._stop_requested = False
+        self._stop_flag = False
 
     def request_stop(self) -> None:
         """Co-operative stop.  Picked up between iterations."""
-        self._stop_requested = True
+        self._stop_flag = True
+
+    @property
+    def _stop_requested(self) -> bool:
+        """Both cancellation channels: the dock's own Stop button and
+        Qt's ``requestInterruption()`` (used by
+        ``MainWindow._shutdown_dock_workers`` on close, which then waits
+        2 s before Qt aborts the process)."""
+        return self._stop_flag or interrupt_check(self)
 
     def run(self) -> None:  # noqa: D401 - QThread entry point.
+        # Cooperative cancellation: MainWindow._shutdown_dock_workers
+        # calls requestInterruption() and then wait(2000ms).  Without a
+        # poll the wait times out and Qt aborts the process while this
+        # thread is still running.
+        if interrupt_check(self):
+            self.finished_result.emit(
+                {'success': False, 'error': 'Stopped by user'})
+            return
         try:
             import lumenairy as la
         except Exception as e:  # pragma: no cover - import smoke

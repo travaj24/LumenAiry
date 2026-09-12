@@ -14,6 +14,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import numpy as np
+from ._worker import interrupt_check
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
@@ -46,6 +47,14 @@ class _PolyStrehlWorker(QThread):
         self.dx = dx
 
     def run(self):
+        # Cooperative cancellation: MainWindow._shutdown_dock_workers
+        # calls requestInterruption() and then wait(2000ms).  Without a
+        # poll the wait times out and Qt aborts the process while this
+        # thread is still running.
+        if interrupt_check(self):
+            self.finished_result.emit(
+                {'success': False, 'error': 'Stopped by user'})
+            return
         try:
             from lumenairy.analysis import polychromatic_strehl
             s_poly, s_each, z_each = polychromatic_strehl(
@@ -214,12 +223,36 @@ class PSFMTFDock(QWidget):
             self.summary.append(
                 'No trace available -- hit Ctrl+T first.')
             return
-        rays = result.image_rays
+        # PUPIL coordinates, not image-plane coordinates.  ``run_trace``
+        # appends a flat Image surface, so ``image_rays`` are the
+        # intercepts AT FOCUS -- a few hundred micrometres across for a
+        # 25 mm pupil, which binned into 31 of 65536 cells of an
+        # EPD-wide grid.  The exit pupil is the last real optical
+        # surface; take the history entry for it and reference the OPD
+        # to that surface's VERTEX plane (the WP-A1 exit-vertex
+        # operator) so the sag-induced rho^2 term is removed rather
+        # than fitted as defocus.
+        rays, pupil_label = self._exit_pupil_rays(result)
+        if rays is None:
+            self.summary.append(
+                'Trace has no optical surface to take a pupil from.')
+            return
         alive = rays.alive
+        if not np.any(alive):
+            self.summary.append('No rays survive to the exit pupil.')
+            return
         x = rays.x[alive]
         y = rays.y[alive]
-        opl = rays.opl[alive] - np.mean(rays.opl[alive])
-        ap = float(self.sm.epd_m)
+        # ``opd``, not ``opl`` -- RayBundle has never had an ``opl``
+        # attribute, so this whole path used to die in the caller's
+        # handler as "Pupil load failed: AttributeError".
+        opl = rays.opd[alive] - np.mean(rays.opd[alive])
+        # Size the grid to the rays that actually arrive: the pupil can
+        # be smaller than the EPD (vignetting) or, for a finite
+        # conjugate, larger.  Degenerate bundles (a single on-axis ray)
+        # fall back to the entrance pupil so dx stays physical.
+        r_max = float(np.max(np.hypot(x, y))) if x.size else 0.0
+        ap = 2.0 * r_max if r_max > 0 else float(self.sm.epd_m)
         N = 256
         dx = ap / N
         # v4.15 (P1-UI-7): bounds-mask the rays BEFORE indexing so any
@@ -281,9 +314,49 @@ class PSFMTFDock(QWidget):
         n_dropped = int(np.sum(~in_bounds))
         drop_msg = f', {n_dropped} out-of-bounds' if n_dropped else ''
         self.summary.append(
-            f'Ray-trace pupil built: {self._pupil.shape}, '
-            f'dx={dx*1e6:.2f} um, f={self._focal_length*1e3:.2f} mm, '
+            f'Ray-trace pupil built at {pupil_label}: '
+            f'{self._pupil.shape}, dx={dx*1e6:.2f} um, '
+            f'pupil dia={2*r_max*1e3:.3f} mm, '
+            f'f={self._focal_length*1e3:.2f} mm, '
             f'{int(np.sum(valid))} pixels filled{drop_msg}')
+
+    @staticmethod
+    def _exit_pupil_rays(result):
+        """``(RayBundle, label)`` at the exit-pupil vertex plane.
+
+        Walks back from the end of ``result.surfaces`` to the last
+        surface that is not the synthetic image plane, takes that
+        surface's ray history entry, and transfers it to the surface's
+        vertex plane with the shared exit-vertex operator so the OPD is
+        referenced to a plane rather than to each ray's own sag point.
+        Returns ``(None, '')`` when the trace has no optical surface.
+        """
+        from lumenairy.raytrace import exit_vertex_transfer
+        from lumenairy.glass import get_glass_index
+
+        surfaces = list(getattr(result, 'surfaces', None) or [])
+        history = list(getattr(result, 'ray_history', None) or [])
+        if not surfaces or not history:
+            return None, ''
+        idx = len(surfaces) - 1
+        while idx >= 0 and (getattr(surfaces[idx], 'label', '') == 'Image'
+                            or getattr(surfaces[idx], 'is_coordbrk', False)):
+            idx -= 1
+        if idx < 0 or idx >= len(history):
+            return None, ''
+        surf = surfaces[idx]
+        bundle = history[idx]
+        label = getattr(surf, 'label', '') or f'surface {idx}'
+        try:
+            glass = (surf.glass_before if getattr(surf, 'is_mirror', False)
+                     else surf.glass_after)
+            n_exit = float(get_glass_index(glass, result.wavelength))
+            bundle = exit_vertex_transfer(bundle, n_exit)
+        except Exception:
+            # An unresolvable exit index is not worth losing the pupil
+            # over: fall back to the raw intercepts on that surface.
+            pass
+        return bundle, label
 
     # ------------------------------------------------------------------
     # PSF + MTF
