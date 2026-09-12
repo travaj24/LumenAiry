@@ -135,19 +135,10 @@ def test_g1_the_jax_twin_refuses_a_gain_superstrate_exactly_as_numpy_does():
                                                 numpy_side[4][0])
 
 
-def test_g1_the_jax_twin_screens_the_geometry_that_numpy_refuses():
-    """The pure-geometry cross-layer SLIVER screen runs before the dispatch.
-
-    It cannot become the NumPy path's ``ValueError`` (the round-4 arbiter needs
-    three re-solves that a trace cannot supply), so the contract is: the screen
-    WARNS at EVERY degree -- it is a deterministic fact about wall coordinates,
-    not about the answer -- and the energy tripwire additionally warns at the
-    degrees where the returned answer is actually corrupt.
-
-    The premise is re-measured here rather than assumed: the fixture must still
-    produce the corrupt answer on this build, or the warning would be vacuous.
-    """
-    _jax()
+def _g1_sliver_ladder():
+    """``{degree: (T0, max R+T, energy-warned)}`` over the audit's degree
+    ladder, asserting the BUILD-FREE half on the way through: the geometric
+    screen must warn at EVERY degree."""
     seen = {}
     for degree in (12, 14, 16, 18, 20):
         out = _run(_mk(True, degree=degree, segs2=_sliver_segs()))
@@ -159,20 +150,67 @@ def test_g1_the_jax_twin_screens_the_geometry_that_numpy_refuses():
         seen[degree] = (float(out[2][1][len(out[2][1]) // 2]),
                         _tot(out[1], out[2]),
                         "energy not conserved" in msgs)
-    # PREMISE: the defect is still reproducible on this build.  The audit
-    # measured T0(E_y) = 1.3417 against a correct 0.7659, with max R+T = 8.35,
-    # at degrees 14/16/18 -- a 735% energy violation.  Scored loosely (the
-    # exact degree set is a property of the BLAS kernel, the round-4 finding),
-    # by demanding that SOME degree of the ladder is grossly super-unity.
-    bad = [d for d, (t0, tot, _e) in seen.items() if tot > 1.5]
-    assert bad, (
-        "the fixture no longer reproduces the corrupt answer, so the screen "
-        f"warning cannot be scored against it: {seen}")
+    return seen
+
+
+def test_g1_the_jax_twin_screens_the_geometry_that_numpy_refuses():
+    """The pure-geometry cross-layer SLIVER screen runs before the dispatch --
+    the half of the G1 fix that is a fact about WALL COORDINATES and therefore
+    holds on every build.
+
+    The screen cannot become the NumPy path's ``ValueError`` (the round-4
+    arbiter needs three re-solves that a trace cannot supply), so the contract
+    asserted here is: it WARNS at EVERY degree of the ladder, whatever the
+    answer at that degree happens to be.  Whether a given degree's answer is
+    ALSO corrupt is a property of the running BLAS kernel and is scored
+    separately, in the premise-gated sibling below.
+    """
+    _jax()
+    _g1_sliver_ladder()
+
+
+def test_g1_the_energy_tripwire_fires_on_the_rows_that_are_actually_corrupt():
+    """The second half of the G1 fix -- ``_warn_stack_energy`` on the twin's
+    CONCRETE outputs -- scored against a real corrupt solve.
+
+    PREMISE-GATED, and the premise is a BUILD PROPERTY, not a resource
+    precondition, so ``TESTING_STANDARDS`` S2 ("never ``pytest.skip`` on a
+    resource check") does not apply: what is absent on some arms is the
+    library's own arithmetic, not a machine the runner could have provided.
+    The round-4 sibling
+    (``test_fix_pmm2d_mortar_round2.py::test_the_plain_1d_interface_solve_is_
+    left_unguarded_and_this_is_why``) records the measurement that forces this
+    shape -- the SAME near-degenerate fixture row reads ``max R+T`` = **3.61**
+    on this box's kernel and **1.000115** on the CI runner's, with the returned
+    answer wrong on the first and right on the second.  A test that asserted
+    corruption here would therefore be asserting the kernel.
+
+    So: the corruption is MEASURED; where it is present the tripwire must have
+    fired on exactly those rows (bar: the shipped ``_STACK_SUPERUNITY_BAR`` =
+    1e-2, and the corrupt rows read ~7.35 above unity -- 2.9 decades of
+    margin), and where it is absent the test skips with the readings.  The
+    build-free half of the same ladder -- the geometric screen warning at every
+    degree -- is asserted unconditionally in the sibling above and is NOT
+    relaxed by this gate.
+    """
+    _jax()
+    seen = _g1_sliver_ladder()
+    # the audit measured T0(E_y) = 1.3417 against a correct 0.7659 with
+    # max R+T = 8.35 at degrees 14/16/18 -- a 735% energy violation.  Scored
+    # loosely: SOME degree of the ladder grossly super-unity.
+    bad = [d for d, (_t0, tot, _e) in seen.items() if tot > 1.5]
+    if not bad:
+        pytest.skip(
+            "premise absent on this arm: the manufactured-sliver fixture "
+            "returns an UNCORRUPTED answer at every degree of the ladder on "
+            "this BLAS kernel, so there is no corrupt row for the energy "
+            "tripwire to have fired on.  Readings (degree: T0, max R+T, "
+            "energy-warned) %r against the audit's 1.3417 / 8.35 at degrees "
+            "14/16/18.  The UNCONDITIONAL half of this contract -- the "
+            "geometric screen warning at every degree -- passed in "
+            "test_g1_the_jax_twin_screens_the_geometry_that_numpy_refuses."
+            % (seen,))
     for d in bad:
-        # the energy tripwire must ALSO have fired on exactly those rows: it is
-        # the second half of the fix (run _warn_stack_energy on concrete
-        # outputs).  Bar: the shipped _STACK_SUPERUNITY_BAR = 1e-2, and these
-        # rows read ~7.35 above unity -- 2.9 decades of margin.
         assert seen[d][2], (d, seen[d])
         assert seen[d][1] > 1.0 + PS._STACK_SUPERUNITY_BAR, seen[d]
 
@@ -285,61 +323,94 @@ def test_g2_the_default_snaps_away_the_whole_hazard_band():
             big, PS._MIN_FEATURE_DEFAULT_FRAC) is not None, s
 
 
-def test_g2_the_raised_default_kills_the_degree_scatter():
-    """NUMERIC, on the audit's SECOND fixture (TiO2-like 2.35/1.46, 0.55 um
-    pitch, 0.70 um, 31 deg) -- the diagnostic is DEGREE-SCATTER at fixed ``s``,
-    because a larger ``s`` is a genuinely different geometry and a smooth drift
-    with ``s`` is correct physics.
+#: The audit's SECOND G2 fixture (TiO2-like 2.35/1.46, 0.55 um pitch, 0.70 um,
+#: 31 deg), and the degree ladder it was measured on.  WHICH degree a given
+#: rung scatters at is a property of the BLAS kernel (the round-4 finding), so
+#: the ladder has to be wide enough to contain the scatter wherever this build
+#: puts it.
+_G2_PER, _G2_WL, _G2_ANG = 0.55e-6, 0.7e-6, np.deg2rad(31.0)
+_G2_E1, _G2_E2 = 2.35 ** 2, 1.46 ** 2
+_G2_DEGREES = (10, 14, 18, 22, 26)
+_G2_MULTS = (1.0, 1.5, 2.0, 3.0)
 
-    At the OLD default this fixture reads T0 = 0.2645 / 0.3082 / 0.1939 against
-    a correct 0.199230 -- up to 55% wrong and scattering by +-5% between
-    ADJACENT degrees.  At the new default every rung is degree-independent.
 
-    Bar: the scatter over a degree ladder must be below 1e-6 at the new
-    default.  Derivation -- the quantity is an order-0 transmittance of order
-    0.2; the solve's own converged-degree spread on this cell away from the
-    band is < 1e-7 (the audit's 15x/30x/100x rungs agree to 7 digits), and the
-    pathology moves it by 5e-2, so 1e-6 sits ~1 decade above the clean floor
-    and 4.7 decades below the defect.
+def _g2_t0(s, degree, mf):
+    """Order-0 ``T`` on the second fixture, with the REFUSAL disarmed so what
+    is measured is the answer and not the guard."""
+    was = PS.PMM_SLIVER_GUARD
+    PS.PMM_SLIVER_GUARD = False
+    try:
+        st = PMMStack(_G2_PER, n_substrate=1.52, n_superstrate=1.0,
+                      degree=degree, far_field_orders=13, min_feature=mf)
+        st.add_layer(0.18e-6, segments=[(0.4, _G2_E1), (0.6, _G2_E2)])
+        st.add_layer(0.22e-6, segments=[(0.4 + s, _G2_E2), (0.6 - s, _G2_E1)])
+        st.set_source(_G2_WL, angle=_G2_ANG)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            o, R, T, _J = st.solve()
+        return float(np.real(T[1, int(np.where(o == 0)[0][0])]))
+    finally:
+        PS.PMM_SLIVER_GUARD = was
+
+
+def _g2_spreads(mf, mults):
+    """Degree-scatter of order-0 ``T`` at each rung, at threshold ``mf``.  ``s``
+    is a PERIOD FRACTION (it is added to a segment width), so a rung is the
+    multiple of the threshold's own fraction."""
+    out = []
+    for mult in mults:
+        vals = [_g2_t0(mult * (mf / _G2_PER), d, mf) for d in _G2_DEGREES]
+        out.append(max(vals) - min(vals))
+    return out
+
+
+def test_g2_the_raised_default_leaves_no_degree_scatter():
+    """NUMERIC, on the audit's SECOND fixture -- the UNCONDITIONAL half.
+
+    The diagnostic is DEGREE-SCATTER at fixed ``s``, because a larger ``s`` is
+    a genuinely different geometry and a smooth drift with ``s`` is correct
+    physics, while an answer that jumps between branches as ``degree`` changes
+    is the pathology.  At the new default every rung of the 1x..3x ladder must
+    be degree-independent -- and that is a statement about the FIXED code, so
+    it holds on every arm and is asserted here without any premise.
+
+    Bar 1e-6 on the scatter.  Derivation: the quantity is an order-0
+    transmittance of order 0.2; the solve's own converged-degree spread on this
+    cell away from the band is < 1e-7 (the audit's 15x/30x/100x rungs agree to
+    7 digits), and the pathology moves it by 5e-2 -- so 1e-6 sits ~1 decade
+    above the clean floor and 4.7 decades below the defect.
     """
-    per, wl, ang = 0.55e-6, 0.7e-6, np.deg2rad(31.0)
-    e1, e2 = 2.35 ** 2, 1.46 ** 2
+    new_spread = _g2_spreads(_G2_PER * PS._MIN_FEATURE_DEFAULT_FRAC, _G2_MULTS)
+    assert max(new_spread) < 1e-6, new_spread
 
-    def t0(s, degree, mf):
-        was = PS.PMM_SLIVER_GUARD
-        PS.PMM_SLIVER_GUARD = False       # measure the ANSWER, not the refusal
-        try:
-            st = PMMStack(per, n_substrate=1.52, n_superstrate=1.0,
-                          degree=degree, far_field_orders=13, min_feature=mf)
-            st.add_layer(0.18e-6, segments=[(0.4, e1), (0.6, e2)])
-            st.add_layer(0.22e-6, segments=[(0.4 + s, e2), (0.6 - s, e1)])
-            st.set_source(wl, angle=ang)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                o, R, T, _J = st.solve()
-            return float(np.real(T[1, int(np.where(o == 0)[0][0])]))
-        finally:
-            PS.PMM_SLIVER_GUARD = was
 
-    # the audit's own degree ladder: WHICH degree a given rung scatters at is a
-    # property of the BLAS kernel (the round-4 finding), so the ladder has to be
-    # wide enough to contain the scatter wherever this build puts it.
-    degrees = (10, 14, 18, 22, 26)
-    mf_old, mf_new = per * 1e-5, per * PS._MIN_FEATURE_DEFAULT_FRAC
-    old_spread, new_spread = [], []
-    for mult in (1.0, 1.5, 2.0, 3.0):
-        # ``s`` is a PERIOD FRACTION (it is added to a segment width), so the
-        # rung is the multiple of the threshold's own FRACTION.
-        vals_old = [t0(mult * 1e-5, d, mf_old) for d in degrees]
-        old_spread.append(max(vals_old) - min(vals_old))
-        # the SAME rung position relative to the NEW threshold
-        sn = mult * PS._MIN_FEATURE_DEFAULT_FRAC
-        vals_new = [t0(sn, d, mf_new) for d in degrees]
-        new_spread.append(max(vals_new) - min(vals_new))
-    assert max(old_spread) > 1e-3, (
-        "premise absent on this arm: the OLD default's hazard band does not "
-        f"scatter here, so the cure cannot be scored ({old_spread})")
-    assert max(new_spread) < 1e-6, (new_spread, old_spread)
+def test_g2_the_old_default_is_what_scattered():
+    """The other side of the same measurement: at the OLD default this fixture
+    reads T0 = 0.2645 / 0.3082 / 0.1939 against a correct 0.199230 -- up to 55%
+    wrong, scattering by +-5% between ADJACENT degrees.
+
+    PREMISE-GATED, and the premise is a BUILD PROPERTY, not a resource
+    precondition, so ``TESTING_STANDARDS`` S2 does not apply: what may be
+    absent is the pre-fix arithmetic's misbehaviour on this kernel, which no
+    runner configuration can supply.  The round-4 sibling records the
+    measurement that forces the shape -- the same near-degenerate class reads
+    ``max R+T`` = **3.61** on this box's kernel and **1.000115** on the CI
+    runner's.  Where the old default does scatter, it must scatter by more than
+    1e-3 (3 decades above the 1e-6 bar its cure is held to); where it does not,
+    the test skips with the readings, and the CURE remains asserted
+    unconditionally in the sibling above.
+    """
+    old_spread = _g2_spreads(_G2_PER * 1e-5, _G2_MULTS)
+    if not max(old_spread) > 1e-3:
+        pytest.skip(
+            "premise absent on this arm: at the OLD default (period*1e-5) the "
+            "hazard band does not scatter on this BLAS kernel, so the cure "
+            "has no defect to be scored against.  Per-rung degree spreads "
+            "%r over degrees %r against the audit's ~5e-2.  The "
+            "UNCONDITIONAL half -- zero scatter at the NEW default -- passed "
+            "in test_g2_the_raised_default_leaves_no_degree_scatter."
+            % (old_spread, _G2_DEGREES))
+    assert max(old_spread) > 1e-3, old_spread
 
 
 def test_g2_raising_the_knob_does_not_perturb_what_it_does_not_touch():
@@ -438,52 +509,105 @@ def test_g3_the_arbiter_costs_nothing_on_a_stack_with_no_sliver():
     assert _count_solves(lambda: _arb_stack(4, 3e-4)) > 1
 
 
+_ARB_ROWS = ((3, 3e-4), (4, 3e-4))
+
+
+def _arb_arms(ns, s):
+    """``(verdict, solves)`` for the lazy and the eager arm of the same stack,
+    plus the solve itself.  The eager arm is the PRE-FIX control flow, restored
+    through the library's own switch rather than quoted from the audit."""
+    st = _arb_stack(ns, s)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _o, R, T, _J = PMMStack.solve(st)
+    worst = _tot(R, T)
+    PC._clear_pmm_caches()
+    lazy_v = PS._sliver_arbiter(st, worst, R, T, None)
+    lazy_n = _count_solves(lambda: _arb_stack(ns, s))
+    was = PS.PMM_SLIVER_ARBITER_LAZY
+    PS.PMM_SLIVER_ARBITER_LAZY = False
+    try:
+        eager_n = _count_solves(lambda: _arb_stack(ns, s))
+        PC._clear_pmm_caches()
+        eager_v = PS._sliver_arbiter(st, worst, R, T, None)
+    finally:
+        PS.PMM_SLIVER_ARBITER_LAZY = was
+    return (lazy_v, lazy_n), (eager_v, eager_n), (R, T)
+
+
+def test_g3_the_arbiter_switch_changes_the_COST_and_nothing_else():
+    """The UNCONDITIONAL half of the laziness contract, and the one that
+    matters: whatever verdict this build's arithmetic reaches, the lazy and the
+    eager arm must reach the SAME one, return the SAME numbers, and the lazy
+    arm must never cost more.
+
+    That is a statement about control flow, not about which fork a
+    near-degenerate fixture lands on, so it holds on every BLAS kernel.  The
+    only field the laziness is allowed to drop is a collapse-solve product
+    (``d12`` / ``d0_over_d12`` / ``closed_super_unity``), and only on the fork
+    that provably does not read it.
+    """
+    for ns, s in _ARB_ROWS:
+        (lazy_v, lazy_n), (eager_v, eager_n), _out = _arb_arms(ns, s)
+        assert (lazy_v is None) == (eager_v is None), (ns, s)
+        assert lazy_n <= eager_n, (ns, s, lazy_n, eager_n)
+        if lazy_v is None:
+            continue
+        assert lazy_v[0] == eager_v[0], (ns, s, lazy_v[0], eager_v[0])
+        lz, eg = lazy_v[1], eager_v[1]
+        assert set(lz) == set(eg), (sorted(lz), sorted(eg))
+        dropped = {k for k, v in lz.items() if v is None and eg[k] is not None}
+        assert dropped <= {"d12", "d0_over_d12", "closed_super_unity"}, dropped
+        if lazy_v[0] != "truncation":
+            assert not dropped, (lazy_v[0], dropped)
+        for key in set(lz) - dropped:
+            assert np.all(np.asarray(lz[key]) == np.asarray(eg[key])), key
+
+
 def test_g3_a_truncation_verdict_pays_two_solves_not_four():
-    """The two COLLAPSE solves are LAZY.
+    """The COUNT the finding is about: on a ``'truncation'`` verdict the two
+    COLLAPSE solves are skipped, 4 -> 2.
 
     ``d12`` -- the device's own sensitivity to where the contested wall sits --
     is read only on the ``'sliver'``/``'wall'`` fork, which is reached only
-    after ``d0`` has cleared the geometric floor.  A stack whose answer did not
-    move therefore needs the probe solve and nothing else.
+    after ``d0`` has cleared the geometric floor, so a stack whose answer did
+    not move needs the probe solve and nothing else.
 
-    The pre-fix count is re-derived HERE rather than quoted, through the
-    library's own fail-before switch ``PMM_SLIVER_ARBITER_LAZY = False``, which
-    restores the eager form: the count under it is the 4 the audit measured,
-    and the VERDICT and every returned number are unchanged between the two
-    arms -- which is what makes this a cost change and not a behaviour change.
+    PREMISE-GATED, and the premise is a BUILD PROPERTY, not a resource
+    precondition, so ``TESTING_STANDARDS`` S2 does not apply: WHICH fork this
+    near-degenerate fixture is arbitrated onto is decided by the solve's own
+    arithmetic, and the round-4 sibling records that arithmetic moving across
+    kernels on exactly this fixture family -- ``max R+T`` = **3.61** here
+    against **1.000115** on the CI runner, right answer on one arm and wrong on
+    the other.  No runner setting can put a row on the truncation fork.  Where
+    a row IS arbitrated ``'truncation'`` the counts are asserted exactly
+    (2 lazy, 4 eager, both re-derived in-process); where none is, the test
+    skips with the verdicts it saw, and the switch's build-free contract stays
+    asserted in the sibling above.
     """
-    made = None
-    for ns, s in ((3, 3e-4), (4, 3e-4)):
-        st = _arb_stack(ns, s)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            o, R, T, _J = PMMStack.solve(st)
-        worst = _tot(R, T)
-        PC._clear_pmm_caches()
-        verdict = PS._sliver_arbiter(st, worst, R, T, None)
-        if verdict is None or verdict[0] != "truncation":
+    seen = {}
+    for ns, s in _ARB_ROWS:
+        (lazy_v, lazy_n), (eager_v, eager_n), _out = _arb_arms(ns, s)
+        seen[(ns, s)] = (None if lazy_v is None else lazy_v[0], lazy_n, eager_n)
+        if lazy_v is None or lazy_v[0] != "truncation":
             continue
-        lazy = _count_solves(lambda ns=ns, s=s: _arb_stack(ns, s))
-        was = PS.PMM_SLIVER_ARBITER_LAZY
-        PS.PMM_SLIVER_ARBITER_LAZY = False       # pre-fix control flow
-        try:
-            eager = _count_solves(lambda ns=ns, s=s: _arb_stack(ns, s))
-            PC._clear_pmm_caches()
-            eager_v = PS._sliver_arbiter(st, worst, R, T, None)
-        finally:
-            PS.PMM_SLIVER_ARBITER_LAZY = was
-        assert eager == 4, (ns, s, eager)
-        assert lazy == 2, (ns, s, lazy)
-        # the SWITCH changes the cost and nothing else: same verdict, and the
-        # eager arm additionally measured the denominator the lazy one skipped
+        assert eager_n == 4, (ns, s, eager_n)
+        assert lazy_n == 2, (ns, s, lazy_n)
+        # the eager arm additionally measured the denominator the lazy one
+        # skipped, and both agree on the numerator they share
         assert eager_v[0] == "truncation", eager_v[0]
         assert eager_v[1]["d12"] is not None and eager_v[1]["d12"] >= 0.0
-        assert verdict[1]["d12"] is None
-        assert eager_v[1]["move"] == verdict[1]["move"]
-        made = (ns, s, eager, lazy)
-    assert made is not None, (
-        "premise absent on this arm: no configuration of the fixture is "
-        "arbitrated 'truncation' here, so the lazy fork is not exercised")
+        assert lazy_v[1]["d12"] is None
+        assert eager_v[1]["move"] == lazy_v[1]["move"]
+        return
+    pytest.skip(
+        "premise absent on this arm: no configuration of the O-11 fixture is "
+        "arbitrated 'truncation' on this BLAS kernel, so the lazy fork is not "
+        "reached and its 4 -> 2 count cannot be measured.  Verdicts and "
+        "(lazy, eager) solve counts seen: %r.  The UNCONDITIONAL half -- that "
+        "the switch changes the cost and nothing else -- passed in "
+        "test_g3_the_arbiter_switch_changes_the_COST_and_nothing_else."
+        % (seen,))
 
 
 def test_g3_the_geometric_eig_cache_key_is_a_digest_and_is_byte_budgeted():
@@ -718,23 +842,42 @@ def test_g4_a_conflicting_angle_and_theta_is_no_longer_silent():
     assert st._src["angle"] == 0.25
 
 
-def test_g4_there_is_one_definition_of_the_far_field_order_budget():
-    """The block was copy-pasted ~13 times across three files.  That is the
-    exact shape this codebase's own audits blame for its three worst recent
-    defects (the six-copy factor-i defect, the six-copy ``_sqrt_decay``
-    branch-cut defect, and the T3-3 conical order-cap defect -- which was ONE
-    copy of THIS block capping from the wrong grid).
+def test_g4_there_is_one_definition_of_the_1d_far_field_order_budget():
+    """The 1-D block was copy-pasted 13 times across ``_core.py``,
+    ``stack.py`` and the JAX twin.  That is the exact shape this codebase's own
+    audits blame for its three worst recent defects (the six-copy factor-i
+    defect, the six-copy ``_sqrt_decay`` branch-cut defect, and the T3-3
+    conical order-cap defect).
 
     DISCOVERED, not listed: the sweep counts the idiom's own signature lines in
     the source, so copy N+1 cannot ship silently.
+
+    SCOPE -- this gate covers the 1-D idiom ONLY, and says so because the
+    honest statement is narrower than "one definition of the far-field order
+    budget".  ``conical.py`` implements a DIFFERENT contract and is
+    deliberately not consolidated into :func:`_farfield_order_set`: its
+    ``n_orders`` is a HALF-order count, there is no ``2 m + 5`` evanescent
+    buffer and no odd-parity trim, and its cap is
+    ``(nU * n_el * degree - 1) // 2`` on the shared path and
+    ``(min(n_glob_sup, n_glob_sub) - 1) // 2`` on the per-layer one.  Including
+    that file in the token sweep below is still worth doing -- it fires if
+    anyone copies the 1-D idiom INTO it -- but it is not a check on conical's
+    own correctness, and it must not be read as one: conical's formula, its
+    T3-3 per-layer direction and its refusal are pinned directly in
+    ``test_audit2609_a12_verify_pmm1d.py::
+    test_g4_the_conical_order_cap_is_its_own_documented_formula`` and its two
+    siblings.
     """
     files = ("lumenairy/elements/pmm/_core.py",
              "lumenairy/elements/pmm/stack.py",
              "lumenairy/elements/pmm/conical.py",
              "lumenairy/elements/pmm/oned.py")
     srcs = {rel: (_REPO / rel).read_text(encoding="utf-8") for rel in files}
-    # the parity trim is the idiom's fingerprint: it must occur EXACTLY once
-    # across the whole package, inside _farfield_order_set itself
+    # the parity trim is the 1-D idiom's fingerprint: it must occur EXACTLY
+    # once across the whole package, inside _farfield_order_set itself.
+    # ``conical.py`` is swept for the SAME tokens, which it has never had --
+    # that arm fires only if the 1-D idiom is copied INTO it, and is not a
+    # statement about conical's own (different) budget.  See the SCOPE note.
     n = sum(src.count("if n_proj % 2 == 0:") for src in srcs.values())
     assert n == 1, (
         f"the order-budget parity trim occurs {n} times; it belongs in "
@@ -747,6 +890,19 @@ def test_g4_there_is_one_definition_of_the_far_field_order_budget():
             assert token not in src, (
                 f"{rel} still carries the copied order-budget idiom "
                 f"({token!r}); call _farfield_order_set instead")
+    # conical's own budget is still THERE and still its own shape -- so that a
+    # future "tidy-up" that silently folds it into the 1-D helper (changing a
+    # half-order cap into a total-order one) fails here rather than in a user's
+    # far field.  Its numeric contract is pinned in the VERIFY file.
+    con = srcs["lumenairy/elements/pmm/conical.py"]
+    for token in ("cap = (nU * n_el * degree - 1) // 2", "if m_prop > cap:"):
+        assert token in con, (
+            f"conical.py no longer carries its own half-order budget "
+            f"({token!r}).  If that is deliberate, the replacement has to be "
+            f"re-derived: _farfield_order_set returns a TOTAL order count and "
+            f"conical's n_orders is a HALF count, so a drop-in swap silently "
+            f"doubles the projector.  See test_audit2609_a12_verify_pmm1d.py::"
+            f"test_g4_the_conical_order_cap_is_its_own_documented_formula.")
     # ... and the ONE definition behaves: cap, odd parity and the refusal
     orders, kx, half = PC._farfield_order_set(
         1e-6, 0.5e-6, 1.5, 21, 41, "probe", degree=8, kx0=0.0, k0=1.0)

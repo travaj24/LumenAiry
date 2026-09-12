@@ -22,8 +22,16 @@ Python value:
 | case | NumPy branch | JAX branch, before | JAX branch, after |
 |---|---|---|---|
 | gain superstrate `n_sup = 1 - 1e-3j` (fully **concrete**) | `ValueError: gain incidence medium ...` | returns `R+T = [-0.848, -0.863]` -- **negative efficiencies, silently** | the **identical** `ValueError`, string for string |
-| manufactured sliver `s = 1.5e-5` of the period, degree 14 / 16 / 18 | `ValueError` (sliver refusal) | `T0(E_y) = 1.3417`, `max R+T = 8.35` -- a 735 % energy violation, **no warning** | same number, now under **two** warnings: the geometric sliver screen and `energy not conserved (max R+T = 8.35 > 1)` |
+| manufactured sliver `s = 1.5e-5` of the period, degree 14 / 16 / 18 (`min_feature` PINNED at `period * 1e-5`, see below) | `ValueError` (sliver refusal) | `T0(E_y) = 1.3417`, `max R+T = 8.35` -- a 735 % energy violation, **no warning** | same number, now under **two** warnings: the geometric sliver screen and `energy not conserved (max R+T = 8.35 > 1)` |
 | same, degree 12 / 20 | returns 0.76587 | returns 0.76589 | returns 0.76589 under the geometric screen warning alone |
+
+The sliver rows are measured with `min_feature` **pinned at `period * 1e-5`**, the pre-2026-09-12
+default.  That has to be said because the two findings interact: at the default this release raises
+to `period * 1e-3` (G2 below) the same `s = 1.5e-5` collision is SNAPPED AWAY, the fixture carries
+no sliver at all, and the audit's reproducer reads `T0 = 0.7658976`, `tot = 1.000000` silently on
+both branches at every degree 12-20.  That is the G2 cure acting on the G1 reproducer, not the G1
+guard standing down; the guard itself is exercised at the old threshold, above and in the
+regression tests.
 
 The gain case is **exactly the audit-M3 2026-07-25 defect** the NumPy path was fixed for, still
 alive on the twin -- and `n_superstrate` is fully concrete there, so the documented "a TRACED value
@@ -63,12 +71,16 @@ that the screen still fires under `jax.grad` while the tripwire correctly stands
 ### Changed -- pmm: `PMMStack`'s default `min_feature` is now `period * 1e-3` (was `period * 1e-5`), which is ABOVE the measured sliver hazard band instead of at its bottom (G2, P2)
 
 The union-grid wall snap is the only thing that removes a manufactured cross-layer sliver before it
-reaches the solve, and the sliver pathology has a *measured width*: a collision of size `s` corrupts
-the answer for `s` in roughly `[1, 8] * min_feature` and is harmless outside it.  The old default
-therefore snapped away only the collisions that were already harmless and left the entire dangerous
-decade exposed -- and with the refusal armed (the shipped default) a staircased stack at `s = 1.5e-5`
-of the period was **REFUSED at every degree from 10 to 24**, i.e. could not be solved at all at the
-library default.
+reaches the solve, and the sliver pathology has a *measured width* that is ABSOLUTE rather than a
+multiple of the knob: an unsnapped collision of size `s` corrupts the answer for `s` at roughly
+**1e-5 .. 1e-4 of a PERIOD** (both fixtures below, degrees 10-26) and is harmless outside that.
+That is what makes raising the threshold a cure at all -- a band that scaled WITH `min_feature`
+could never be cleared by raising it, and the ladder below shows it does not, because at
+`period * 1e-3` the rungs at 1x .. 8x of the threshold are clean where at `period * 1e-5` they were
+the whole hazard.  The old default therefore snapped away only the collisions that were already
+harmless and left the entire dangerous decade exposed -- and with the refusal armed (the shipped
+default) a staircased stack at `s = 1.5e-5` of the period was **REFUSED at every degree from 10 to
+24**, i.e. could not be solved at all at the library default.
 
 Re-measured on the audit's second, independent fixture (TiO2-like 2.35/1.46, 0.55 um pitch, 0.70 um,
 31 deg, two layers, refusal disarmed), sweeping `s` over a 0.3x..100x ladder of `min_feature` at
@@ -92,12 +104,28 @@ it only removes cells the union manufactured.  On the audit's first fixture (Si/
 (`mf_fix = 2 * w_wide * P`).
 
 **Migration.**  A caller who relied on the old value -- for example to keep a deliberate sub-nm
-cross-layer offset in the grid -- gets it back with `min_feature=period*1e-5`.  The snap moves walls
-by at most `min_feature/2`, so a stack **with** colliding cross-layer walls can now see its solved
-geometry differ from the requested one by up to 5e-4 of a period; a stack **without** them is
-byte-identical (no pair inside the threshold -> identical grid -> identical answer).  The snap has
-always been cross-layer-pairs-only: a close pair a single layer owns (an intentional thin liner) is
-never thinned, whatever this is set to.
+cross-layer offset in the grid, or to reproduce a number measured before this release -- gets it
+back with `min_feature=period*1e-5`.  The snap moves walls by at most `min_feature/2`, so a stack
+**with** colliding cross-layer walls can now see its solved geometry differ from the requested one
+by up to 5e-4 of a period; a stack **without** them is byte-identical (no pair inside the threshold
+-> identical grid -> identical answer).  The snap has always been cross-layer-pairs-only: a close
+pair a single layer owns (an intentional thin liner) is never thinned, whatever this is set to
+(verified across liner widths 1e-2 .. 1e-6 of a period: byte-identical union grids at the old and
+the new default).
+
+**What that costs in ANSWERS, and what it now says out loud.**  Where a collision exists and is
+snapped, the number moves -- measured on the audit's second fixture at `s = 3e-4` of the period,
+`T0 = 0.19829790` on the snapped grid against `0.19755266` unsnapped, i.e. **3.8e-3 relative**.  And
+because the threshold is two decades higher, `_pmm_union_grid` now WARNS
+(`_pmm_union_grid: snapped N pair(s) of NEAR-COINCIDENT cross-layer walls closer than
+min_feature=... (period fractions): ...`) on stacks that were previously silent -- any stack whose
+cross-layer walls sit between 1e-5 and 1e-3 of a period apart.  That warning is not new code; it is
+the existing snap notice reaching a population it did not reach before, and it is the intended
+signal: it names the pairs and the maximum wall displacement, so the caller can see how far the
+solved geometry has drifted from the requested one.  A caller who needs the requested geometry
+verbatim passes `min_feature=period*1e-5` (or smaller); a caller who wants the snap but not the
+notice should NOT filter it blind -- check first that the displacement it reports is below the
+accuracy they need.
 
 `PMMStack.__init__` now documents `min_feature` in its `Parameters` section -- it had no entry at
 all -- and states the **collision-scale rule** the caller should actually reason with: the threshold
@@ -115,7 +143,7 @@ and `tests/unit/test_pmm_m3_efficiency.py`'s T3-4 sweep-ordering fixture.
 
 ---
 
-### Performance -- pmm: the sliver arbiter's extra solves are lazy and memoized; the exactly-diagonal GLL masses take an O(n) path; `Q @ W2` is built once (G3, P2)
+### Performance -- pmm: the sliver arbiter's extra solves are lazy; the exactly-diagonal GLL masses take an O(n) path; `Q @ W2` is built once (G3, P2)
 
 All four changes are **bit-identical**, verified by an in-process A/B over 75 arrays spanning single-
 layer Jones (normal / oblique / metal), the scalar `te`/`tm` entries, conical, four multilayer stacks

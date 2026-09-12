@@ -69,8 +69,15 @@ docstring, which previously asserted the opposite (*"same physics … forward-id
 ~1e-15"*) and listed only slant / out-of-plane / `stabilize` / `retain_internal` / sweep as raising.
 
 **How I verified.**  `p11_jax_guards.py` re-run: the gain row now reads `RAISE ValueError ::
-PMMStack.solve: gain incidence medium …` on *both* branches, byte-identical strings.  A dedicated
-probe confirms the warning structure per degree:
+PMMStack.solve: gain incidence medium …` on *both* branches, byte-identical strings.
+
+The SLIVER half of that script is measured with `min_feature` PINNED at `period * 1e-5` (the
+pre-2026-09-12 default), and that has to be stated because the script does not pin it: at the
+SHIPPED default raised by G2 the script's `s = 1.5e-5` collision is snapped away, the fixture
+carries no sliver at all, and re-running `p11_jax_guards.py` unmodified now reads
+`T0(Ey) = 0.7658976, tot = 1.000000` silently on BOTH branches at every degree 12–20.  That is the
+G2 cure working on the G1 reproducer, not the G1 guard failing.  With the old threshold pinned, a
+dedicated probe confirms the warning structure per degree:
 
 ```
 deg= 12  jax: T0(Ey)=0.7658918 tot=1.000019   warn=['SLIVER-SCREEN']
@@ -360,7 +367,7 @@ accuracy floor"*; and `PMMStack.prepare().solve` has no capacity refusal at `HEA
 | `stabilize=True` never materially worse (`p13`) | 0.40–1.00 in 47/48 | **0.71–1.00** on the re-run cells |
 | round-4 sliver guard: false negatives (`p3d`, `min_feature` pinned at the census's own value) | 0 in 88 cells | **0 in 96 cells**; every returned value 0.7576–0.7578 |
 | G2 hazard band (`p3e`) | 6 / 1 / 0 of 11 rungs at `1e-5` / `1e-4` / `1e-3` | **6 / 1 / 0**, and the unsnapped rungs agree exactly |
-| G1 JAX guards (`p11`) | gain silent, sliver 8.35 silent | **gain refuses, sliver warns twice** |
+| G1 JAX guards (`p11`) | gain silent, sliver 8.35 silent | **gain refuses** (byte-identical string on both branches).  The **sliver** row needs `min_feature` PINNED at `period * 1e-5` to reproduce at all — at the shipped default G2 snaps the collision away and the script reads `T0 = 0.7658976, tot = 1.000000` silently on both branches at every degree.  With the old threshold pinned: **warns twice** (geometric screen + energy) at the corrupt degrees |
 | §7.1 Jones basis (`p12`) | `J[0,0]/r_p = −1.000000` | **−1.000000** at 0°/30°/60°; `rcwa/pmm = +1.000000` |
 
 **Pre-existing failures found (not mine; each confirmed by re-running with every WP-A12 change

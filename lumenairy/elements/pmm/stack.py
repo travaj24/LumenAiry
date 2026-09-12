@@ -1531,26 +1531,40 @@ def _warn_stack_energy(R_eff, T_eff, stack=None, src=None):
 _INTERNAL_POL_ROW = {"tm": 0, "p": 0, "x": 0, "te": 1, "s": 1, "y": 1}
 
 
+#: The refusal text, built from :data:`_INTERNAL_POL_ROW` itself so the message
+#: can never fall out of step with the table (the audit's own multi-copy
+#: lesson): every accepted spelling is NAMED, including the lab-axis ``'x'`` /
+#: ``'y'`` pair that is the basis the Jones is actually returned in.
+_INTERNAL_POL_HELP = (
+    "pol must be one of "
+    + " / ".join(f"{k!r}" for k, v in _INTERNAL_POL_ROW.items() if v == 0)
+    + " (incident E_x, row 0), "
+    + " / ".join(f"{k!r}" for k, v in _INTERNAL_POL_ROW.items() if v == 1)
+    + " (incident E_y, row 1) -- case-insensitive -- or the index 0 / 1")
+
+
 def _resolve_internal_pol(pol):
     """The ``R_eff`` ROW index for :meth:`PMMStack.internal_field`'s ``pol``.
 
-    Accepts the family's string spellings (case-insensitive) and the original
-    ``0`` / ``1`` index.  ``None`` -> 0 (incident ``E_x``), unchanged."""
+    Accepts the family's string spellings (case-insensitive, surrounding
+    whitespace tolerated) and the original ``0`` / ``1`` index.  ``'x'`` /
+    ``'y'`` are accepted beside ``'tm'``/``'p'`` and ``'te'``/``'s'`` because
+    the lab Cartesian ``(E_x, E_y)`` basis is the one the Jones and the
+    ``R_eff``/``T_eff`` rows are actually in (CONVENTIONS §7.1); they are the
+    same two rows under their own names, not extra channels.  ``None`` -> 0
+    (incident ``E_x``), unchanged."""
     if pol is None:
         return 0
     if isinstance(pol, str):
         row = _INTERNAL_POL_ROW.get(pol.strip().lower())
         if row is None:
             raise ValueError(
-                f"PMMStack.internal_field: pol must be one of 'tm'/'p' "
-                f"(incident E_x, row 0), 'te'/'s' (incident E_y, row 1), or "
-                f"the index 0 / 1 -- got {pol!r}.")
+                f"PMMStack.internal_field: {_INTERNAL_POL_HELP} -- got "
+                f"{pol!r}.")
         return row
     if pol not in (0, 1):           # ``True``/``False`` compare equal to 1/0
         raise ValueError(
-            f"PMMStack.internal_field: pol must be one of 'tm'/'p' (incident "
-            f"E_x, row 0), 'te'/'s' (incident E_y, row 1), or the index 0 / 1 "
-            f"-- got {pol!r}.")
+            f"PMMStack.internal_field: {_INTERNAL_POL_HELP} -- got {pol!r}.")
     return int(pol)
 
 
@@ -3999,14 +4013,18 @@ class PMMStack:
         incident : (complex, complex), optional
             Incident Jones vector ``(E_x, E_y)``; default x-polarized.
             Mutually exclusive with ``pol``.
-        pol : {'tm', 'p', 'te', 's', 0, 1}, optional
-            Incident-polarization selector.  The STRING spellings are the
-            ones CONVENTIONS §7 pins as accepted everywhere in this family
-            (case-insensitive): ``'tm'`` / ``'p'`` select the incident ``E_x``
-            row and ``'te'`` / ``'s'`` the incident ``E_y`` row -- the same
-            rows as ``R_eff[0]`` / ``R_eff[1]``.  The integers ``0`` / ``1``
-            are the original index spelling and still work.  Mutually
-            exclusive with ``incident``.
+        pol : {'tm', 'p', 'x', 'te', 's', 'y', 0, 1}, optional
+            Incident-polarization selector, case-insensitive.  ``'tm'`` /
+            ``'p'`` / ``'x'`` select the incident ``E_x`` row and ``'te'`` /
+            ``'s'`` / ``'y'`` the incident ``E_y`` row -- the same rows as
+            ``R_eff[0]`` / ``R_eff[1]``.  ``'te'``/``'s'`` and ``'tm'``/``'p'``
+            are the aliases CONVENTIONS §7 pins as accepted everywhere in this
+            family; ``'x'``/``'y'`` name the SAME two rows by the lab Cartesian
+            axis they actually are (CONVENTIONS §7.1 -- the Jones and these
+            rows are returned in the lab ``(E_x, E_y)`` basis, so at
+            ``phi = 0`` the ``x`` row is the p channel up to the sign of the p
+            unit vector).  The integers ``0`` / ``1`` are the original index
+            spelling and still work.  Mutually exclusive with ``incident``.
         nx : int, optional
             Resample onto a UNIFORM x grid of ``nx`` points (barycentric
             evaluation of the spectral interpolant).  Default: the exact

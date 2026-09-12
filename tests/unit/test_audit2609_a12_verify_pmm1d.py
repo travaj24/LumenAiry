@@ -22,9 +22,15 @@ import warnings  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
-from lumenairy.elements.pmm import PMMStack, pmm_jones_1d  # noqa: E402
+from lumenairy.elements.pmm import (  # noqa: E402
+    PMMStack,
+    pmm_efficiency_1d,
+    pmm_jones_1d,
+)
 from lumenairy.elements.pmm import _core as PC  # noqa: E402
+from lumenairy.elements.pmm import conical as PCON  # noqa: E402
 from lumenairy.elements.pmm import stack as PS  # noqa: E402
+from lumenairy.elements.rcwa import WoodNudgeWarning  # noqa: E402
 
 
 # ===========================================================================
@@ -471,3 +477,214 @@ def test_g3_the_lazy_arbiter_leaves_every_measured_field_untouched():
         assert not lazy_none, (verdicts[True][0], lazy_none)
     for key in set(eager) - lazy_none:
         assert np.all(np.asarray(eager[key]) == np.asarray(lazy[key])), key
+
+
+# ===========================================================================
+# G3(d) follow-up -- the Wood-anomaly nudge names the CALLER, not the helper
+# ===========================================================================
+_WOOD_P = 1.0e-6
+
+
+def _wood_names(fn):
+    """The ``fn_name`` prefixes of every ``WoodNudgeWarning`` ``fn`` raises."""
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        fn()
+    return [str(w.message).split(":")[0] for w in rec
+            if isinstance(w.message, WoodNudgeWarning)]
+
+
+def _wood_stack_conical(wl):
+    st = PMMStack(_WOOD_P, n_substrate=1.0, n_superstrate=1.0, degree=8,
+                  far_field_orders=5)
+    st.add_layer(0.2e-6, segments=[(0.5, 2.25), (0.5, 1.0)])
+    st.set_source(wl, theta=0.0, phi=0.3)
+    return st.solve()
+
+
+#: ``(label, call)``.  ``wl = period`` with an air superstrate puts the
+#: ``m = +-1`` order EXACTLY on its Rayleigh cut-off, which is the only
+#: condition under which the nudge -- and therefore the warning -- fires.
+_WOOD_CASES = [
+    ("pmm_efficiency_1d",
+     lambda wl: pmm_efficiency_1d(_WOOD_P, 1.5, 1.0, 1.0, 1.0, 0.2e-6, 0.5,
+                                  wl, angle=0.0, degree=8,
+                                  far_field_orders=5)),
+    ("pmm_jones_1d",
+     lambda wl: pmm_jones_1d(_WOOD_P, 2.25 * np.eye(3), np.eye(3), 1.0, 1.0,
+                             0.2e-6, 0.5, wl, angle=0.0, degree=8,
+                             far_field_orders=5)),
+    ("PMMStack.solve (conical)", _wood_stack_conical),
+]
+
+
+@pytest.mark.parametrize("label,call", _WOOD_CASES,
+                         ids=[c[0] for c in _WOOD_CASES])
+def test_g3_the_wood_nudge_warning_names_the_entry_point_the_caller_called(
+        label, call):
+    """WP-A12 threaded ``fn_name=`` into WP-A14's ``WoodNudgeWarning`` so the
+    nudge names the PUBLIC entry point rather than the private helper
+    (``_wood_safe_wl_1d`` / ``_grazing_safe_wavelength``).  The WP verified
+    that by hand and shipped no test for it; this is the test.
+
+    Two-sided.  AT the cut-off (``wl = period`` with an air superstrate, where
+    the ``m = +-1`` order has ``kz = 0`` exactly) the warning must fire AND be
+    prefixed with this entry point's own name -- a regression to the helper's
+    name, or to no ``fn_name`` at all, changes that prefix and fails here.
+    AWAY from the cut-off the call must be SILENT, which is what makes the
+    first half a statement about the nudge rather than about a noise floor:
+    the nudge is an identity away from grazing, and the shipped contract is
+    that ordinary solves stay byte-unchanged and quiet.
+    """
+    at_cut = _wood_names(lambda: call(_WOOD_P))
+    assert at_cut, (
+        f"{label}: no WoodNudgeWarning at wl = period, where the m = +-1 "
+        f"order sits exactly on its Rayleigh cut-off")
+    assert set(at_cut) == {label}, (label, at_cut)
+
+    # ... and a wavelength nowhere near a cut-off is silent
+    off_cut = _wood_names(lambda: call(_WOOD_P * 0.813))
+    assert off_cut == [], (label, off_cut)
+
+
+# ===========================================================================
+# G4 follow-up -- conical keeps its OWN order budget: pin ITS contract
+# ===========================================================================
+_CON_P, _CON_WL = 1.0e-6, 1.55e-6
+_CON_DEG, _CON_NEL = 6, 1
+#: Three layers with three DIFFERENT interior walls, so the union grid is
+#: strictly finer than any one layer's window and the two cap formulas below
+#: give different numbers -- which is what makes the comparison discriminating.
+_CON_LAYERS = [(0.20e-6, [0.3, 0.7], [2.25, 1.0]),
+               (0.18e-6, [0.5, 0.5], [1.0, 4.0]),
+               (0.15e-6, [0.7, 0.3], [4.0, 2.25])]
+
+
+def _con_segs():
+    return [list(zip(w, [np.asarray(e * np.eye(3), dtype=complex)
+                         for e in eps]))
+            for _t, w, eps in _CON_LAYERS]
+
+
+def _con_specs():
+    return [(t, list(w), [np.asarray(e * np.eye(3), dtype=complex)
+                          for e in eps])
+            for t, w, eps in _CON_LAYERS]
+
+
+def _con_solve(layer_grids, n_orders, *, eps_sup=1.0, eps_sub=1.0,
+               wavelength=_CON_WL):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return PCON._conical_nodal_solve(
+            _CON_P, _con_specs(), eps_sup, eps_sub, wavelength, 0.15, 0.3,
+            _CON_DEG, _CON_NEL, True, n_orders,
+            label="probe conical", layer_grids=layer_grids,
+            window_halfwidth=1)
+
+
+def _con_expected_caps():
+    """``(shared_cap, perlayer_cap)`` from the two DOCUMENTED formulas, built
+    here out of the same geometry helpers the solver uses."""
+    segs = _con_segs()
+    uw, _eps_u = PC._pmm_union_grid(segs, None)
+    shared = (len(uw) * _CON_NEL * _CON_DEG - 1) // 2
+
+    grid_of = PC._perlayer_window_grids(segs, None, 1)
+    t_air = PC._tensor3_dict(np.eye(3, dtype=complex))
+    n0 = PC._build_sem_tensor_segments(
+        _CON_P, grid_of[0][0], [t_air] * len(grid_of[0][0]),
+        _CON_DEG, _CON_NEL, True)["n_glob"]
+    nN = PC._build_sem_tensor_segments(
+        _CON_P, grid_of[-1][0], [t_air] * len(grid_of[-1][0]),
+        _CON_DEG, _CON_NEL, True)["n_glob"]
+    return shared, (min(int(n0), int(nN)) - 1) // 2
+
+
+@pytest.mark.parametrize("layer_grids,which", [("shared", 0), ("per-layer", 1)])
+def test_g4_the_conical_order_cap_is_its_own_documented_formula(layer_grids,
+                                                                which):
+    """``conical.py`` is NOT part of the ``_farfield_order_set``
+    consolidation and must not be: its budget is a different contract -- a
+    HALF-order cap (``n_orders`` is a half count there, not a total), with no
+    ``2 m + 5`` evanescent buffer and no odd-parity trim, and with the shared
+    path sizing from ``nU * n_el * degree`` rather than from ``n_glob``.
+
+    The 1-D "one definition" sweep cannot see that file's correctness -- it
+    checks for the ABSENCE of the 1-D idiom's tokens, which conical never had
+    -- so the contract is pinned HERE, directly:
+
+        shared    cap = (nU * n_el * degree - 1) // 2
+        per-layer cap = (min(n_glob_sup, n_glob_sub) - 1) // 2     [T3-3]
+
+    Observed by asking for far more orders than the grid can carry: the solver
+    clamps with ``n_orders = max(1, min(n_orders, cap))``, so the returned
+    order array is exactly ``2 cap + 1`` long.  Both expected values are
+    rebuilt in the test from the same geometry helpers the solver uses, so
+    this is a statement about the FORMULA, not a remembered integer.
+
+    T3-3 is why the second row exists: that copy used to cap from the
+    full-union ``nU`` on the per-layer path, over-stating the capacity of the
+    WINDOW grids the half-spaces actually live on, and
+    ``_sem_fourier_projection`` then built a projector with more Rayleigh
+    orders than the grid had nodes -- a rank-deficient ``Hsup`` and a
+    build-dependent null-space draw, invisible to ``R + T``.
+    """
+    expected = _con_expected_caps()[which]
+    orders, _R, _T, _J = _con_solve(layer_grids, 10_000)
+    assert len(np.asarray(orders)) == 2 * expected + 1, (
+        layer_grids, len(np.asarray(orders)), expected)
+
+
+def test_g4_the_conical_per_layer_cap_is_the_window_grids_not_the_union():
+    """The T3-3 direction itself, two-sided through the library's own
+    fail-before switch ``PMM_CONICAL_PERLAYER_ORDER_CAP``.
+
+    On this fixture the window grids are strictly coarser than the union, so
+    the correct per-layer cap is strictly SMALLER; with the switch off the
+    pre-T3-3 union formula returns and the cap grows back to the shared one.
+    Both numbers are derived above, so neither side is a remembered constant.
+    """
+    shared, perlayer = _con_expected_caps()
+    assert perlayer < shared, (perlayer, shared)   # the fixture is meaningful
+
+    on = len(np.asarray(_con_solve("per-layer", 10_000)[0]))
+    was = PCON.PMM_CONICAL_PERLAYER_ORDER_CAP
+    PCON.PMM_CONICAL_PERLAYER_ORDER_CAP = False
+    try:
+        off = len(np.asarray(_con_solve("per-layer", 10_000)[0]))
+    finally:
+        PCON.PMM_CONICAL_PERLAYER_ORDER_CAP = was
+    assert on == 2 * perlayer + 1, (on, perlayer)
+    assert off == 2 * shared + 1, (off, shared)
+
+
+def test_g4_the_conical_cap_refuses_rather_than_dropping_propagating_orders():
+    """The other half of conical's own contract: when the grid cannot carry
+    the propagating orders it RAISES, in its own wording (``resolves only N
+    orders but M propagate``), rather than clamping and returning a far field
+    with orders missing -- the same class of defect the prepared 1-D path
+    carried (finding G4).
+
+    Engineered, not hoped for: the refusal fires on ``m_prop > cap``, so the
+    test drives ``m_prop`` up by shortening the wavelength into a high-index
+    substrate while holding the grid -- and therefore ``cap`` -- fixed, and
+    asserts the constructed premise (``m_prop > cap``) before asking for the
+    raise.  The control at the fixture's own wavelength must still return, so
+    this is a two-sided statement about the gate and not about the geometry.
+    """
+    shared, _perlayer = _con_expected_caps()
+    # control: at the fixture wavelength the grid carries the orders
+    orders, _R, _T, _J = _con_solve("shared", 3)
+    assert len(np.asarray(orders)) == 7
+
+    # push m_prop past cap: a high-index substrate and a short wavelength
+    n_sub = 3.5
+    wl_bad = _CON_P * n_sub / (shared + 3)      # m_prop ~ n_sub P / wl > cap
+    m_prop = PC._n_propagating_orders(_CON_P, wl_bad, n_sub)
+    assert m_prop > shared, (m_prop, shared)    # the premise is CONSTRUCTED
+    with pytest.raises(ValueError) as exc:
+        _con_solve("shared", 3, eps_sub=n_sub ** 2, wavelength=wl_bad)
+    msg = str(exc.value)
+    assert msg.startswith("probe conical: "), msg
+    assert "resolves only" in msg and "propagate" in msg, msg

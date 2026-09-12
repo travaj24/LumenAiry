@@ -445,6 +445,10 @@ files are fail-before *structurally* — the symbol under test (`_farfield_order
 
 ## 7. Open items for the orchestrator
 
+> **All five were ruled on and are now CLOSED — see §11 for what was done and
+> the re-measurements.**  The items are left below as written so the ruling and
+> the finding it answers stay side by side.
+
 1. **(MEDIUM — report/changelog accuracy, no code change)**  WP-A12_REPORT §4 and the changelog's G1
    table claim `p11_jax_guards.py` now reads "sliver warns twice".  Re-running that script as
    committed shows the sliver fixture **snapped away by G2** and silent on both branches (§2.1).
@@ -564,3 +568,162 @@ on fixtures the WP did not use, and the order-budget consolidation reproduces th
 34 322 fuzzed inputs.  The only source edit is the documentation correction in §8.3.  No git write of
 any kind was performed, and no file owned by another work package was modified apart from the one
 test assertion the orchestrator assigned.
+
+
+---
+
+## 11. Follow-up (2026-09-12) — the orchestrator's rulings on §7, implemented
+
+All five rulings are in.  Nothing in §1–§10 above changed verdict; this section
+records what was done and re-measured.
+
+### 11.1 Item 1 — the non-reproducible `p11` line (report + changelog)
+
+`WP-A12_REPORT.md` §2 "How I verified" and its §4 re-check table, and the
+changelog's G1 table, now say that the **sliver** half of `p11_jax_guards.py`
+is measured with `min_feature` PINNED at `period * 1e-5`, and give the reading
+the unmodified script produces at the shipped default (`T0 = 0.7658976`,
+`tot = 1.000000`, silent on both branches at every degree 12–20).  Both files
+name the cause — G2 snapping the reproducer's collision away — so the next
+person to re-run the script is not left thinking the G1 guard stood down.  The
+**gain** half is unchanged: it still refuses byte-identically on both branches.
+
+### 11.2 Item 2 — the `[1, 8] * min_feature` framing, and the Performance heading
+
+`WP-A12_CHANGELOG.md`'s G2 block now carries the same absolute band as the
+source fix in §8.3 — **~1e-5 … 1e-4 of a period, both fixtures, degrees
+10–26** — with the one clause that makes it coherent: a band that scaled *with*
+`min_feature` could never be cleared by raising it, and the ladder in that same
+block shows it is cleared.  The `### Performance` heading lost "and memoized";
+the body already recorded that the memo was implemented and withdrawn.
+
+### 11.3 Item 3 — the migration note
+
+The G2 `**Migration.**` paragraph gained the answer-side number
+(`T0 = 0.19829790` snapped vs `0.19755266` unsnapped at `s = 3e-4` of a period,
+**3.8e-3 relative**), the statement that `_pmm_union_grid` now WARNS on a
+population that was previously silent (any stack whose cross-layer walls sit
+between 1e-5 and 1e-3 of a period apart), the fixture-pin remedy
+(`min_feature=period*1e-5`) for callers who need the requested geometry
+verbatim, and one sentence telling callers not to filter that warning blind —
+it reports the wall displacement, which is the number that decides whether the
+snap is acceptable.  The liner claim is now backed by the measurement
+(byte-identical union grids at 1e-2 … 1e-6 of a period) rather than asserted.
+
+### 11.4 Item 4 — three residuals closed
+
+**(a) The Wood-nudge `fn_name` wiring now has a test.**
+`test_g3_the_wood_nudge_warning_names_the_entry_point_the_caller_called`,
+parametrised over the three entry points I had checked by hand, is two-sided:
+at `wl = period` with an air superstrate (the `m = ±1` order exactly on its
+Rayleigh cut-off) each call must emit a `WoodNudgeWarning` whose prefix is that
+entry point's own name, and at `wl = 0.813 * period` each must be **silent** —
+which is what makes the first half a statement about the nudge rather than
+about a noise floor.  A regression to the private helper's name, or to no
+`fn_name` at all, fails it.  Measured: `pmm_efficiency_1d`, `pmm_jones_1d`,
+`PMMStack.solve (conical)`, 3 of 3.
+
+**(b) `'x'` / `'y'` are documented.**  `internal_field`'s `pol=` signature line
+and prose now list them, and say what they are: the same two rows under the lab
+Cartesian axis names the Jones is actually returned in (CONVENTIONS §7.1), not
+extra channels.  The §2 refusal is now BUILT FROM `_INTERNAL_POL_ROW` itself,
+so the message cannot drift from the table — the codebase's own multi-copy
+lesson applied to a help string:
+
+```
+PMMStack.internal_field: pol must be one of 'tm' / 'p' / 'x' (incident E_x,
+row 0), 'te' / 's' / 'y' (incident E_y, row 1) -- case-insensitive -- or the
+index 0 / 1 -- got 'circular'.
+```
+
+**(c) `conical.py`: not consolidated; the gate made honest, the contract
+pinned.**  Per the ruling, conical keeps its own budget.  Two changes:
+
+* The 1-D gate is renamed
+  `test_g4_there_is_one_definition_of_the_1d_far_field_order_budget` and its
+  docstring now carries an explicit SCOPE note saying what it does and does not
+  cover — including that sweeping `conical.py` for the 1-D idiom's tokens fires
+  only if that idiom is copied *into* it, and is not a check on conical's own
+  correctness.  It also now asserts that conical's own budget is still THERE
+  and still its own shape (`cap = (nU * n_el * degree - 1) // 2`,
+  `if m_prop > cap:`), with a failure message spelling out why a drop-in swap
+  to `_farfield_order_set` is wrong: conical's `n_orders` is a HALF count and
+  the helper returns a TOTAL, so the swap would silently double the projector.
+* Conical's numeric contract is pinned directly, in new tests in the VERIFY
+  file, observed by asking for far more orders than the grid can carry (the
+  solver clamps with `n_orders = max(1, min(n_orders, cap))`, so the returned
+  array is exactly `2 cap + 1` long) and compared against expected values
+  rebuilt from the same geometry helpers the solver uses:
+
+| path | formula | expected cap | orders returned |
+|---|---|---|---|
+| shared | `(nU * n_el * degree - 1) // 2` | **11** | **23** |
+| per-layer (T3-3) | `(min(n_glob_sup, n_glob_sub) - 1) // 2` | **8** | **17** |
+| per-layer, `PMM_CONICAL_PERLAYER_ORDER_CAP = False` (pre-T3-3) | the union formula | 11 | **23** |
+
+  The third row is the T3-3 defect direction, re-derived in-process through the
+  library's own switch: on this fixture the window grids are strictly coarser
+  than the union, so the pre-T3-3 code over-stated the capacity by exactly the
+  gap that let `_sem_fourier_projection` build a rank-deficient projector.  A
+  fourth test drives `m_prop` past `cap` (constructed, and the premise asserted
+  before the raise is demanded) and pins the refusal in conical's own wording.
+
+  These four are CONTRACT pins, not fail-before tests: they pass at
+  `56a76f22^` too, because WP-A12 did not change conical's budget.  That is the
+  point of the ruling — the gate that claimed to cover that file now says it
+  does not, and a real gate stands where the claim used to.
+
+The lazy-arbiter `truncation` + failing-collapse-solve corner (§4.3) is
+recorded only, per the ruling.
+
+### 11.5 Item 5 — the three BLAS-premise tests, split
+
+Each is now two tests: an unconditional one asserting the half that is a fact
+about the FIXED code, and a premise-gated one that measures the premise, skips
+with the readings when it is absent, and names its unconditional sibling in the
+skip message so a reader of a skipped CI log can see what still held.  Each
+premise-gated docstring states that the premise is a **build property, not a
+resource precondition, so TESTING_STANDARDS S2 does not apply**, and carries
+the two measured kernel numbers (`max R+T` = **3.61** on this box against
+**1.000115** on the CI runner, right answer on one arm and wrong on the other)
+as the evidence for that.
+
+| was | unconditional half | premise-gated half |
+|---|---|---|
+| `test_g1_the_jax_twin_screens_the_geometry_that_numpy_refuses` | same name — the geometric screen warns at EVERY degree of the ladder | `test_g1_the_energy_tripwire_fires_on_the_rows_that_are_actually_corrupt` |
+| `test_g2_the_raised_default_kills_the_degree_scatter` | `test_g2_the_raised_default_leaves_no_degree_scatter` — zero scatter at the NEW default | `test_g2_the_old_default_is_what_scattered` |
+| `test_g3_a_truncation_verdict_pays_two_solves_not_four` | `test_g3_the_arbiter_switch_changes_the_COST_and_nothing_else` — same verdict, same numbers, `lazy <= eager`, and the `None` set bounded | same name — the 4 → 2 count |
+
+**The split was verified, not assumed.**  With a plugin that neutralises all
+three premises in-process (a clean sliver ladder, flat old-default spreads, and
+every verdict forced off the `truncation` fork), the three premise-gated tests
+**SKIP** — they do not fail — each with its readings and its sibling named,
+while the three unconditional halves still pass.
+
+### 11.6 Re-runs after the follow-up
+
+| what | result | time |
+|---|---|---|
+| `test_audit2609_a12_pmm1d.py` (21 → **24** tests after the splits) | **24 passed** | 43 s |
+| `test_audit2609_a12_verify_pmm1d.py` (16 → **23** tests) | **23 passed** | 1.5 s |
+| all three files together (+ `test_fix_pmm2d_mortar_round2.py`) | **61 passed, 1 skipped** | 103 s |
+| the three premise-gated halves under the no-premise plugin | **3 skipped**, 0 failed | 1.8 s |
+| `ruff check` on the six touched files | **All checks passed** | — |
+
+The single skip is pre-existing and not mine: `test_fix_pmm2d_mortar_round2.py`
+skips a numpy-vs-scipy bit-identity claim because the two resolve to different
+OpenBLAS builds on this box (numpy 0.3.31.188.0 SkylakeX, scipy 0.3.30
+Haswell) — its own documented premise gate, with its three unconditional claims
+passing.
+
+### 11.7 Files touched by the follow-up
+
+* `docs/audits/…/fixes/WP-A12_REPORT.md` — §2 and §4 (item 1)
+* `docs/audits/…/fixes/WP-A12_CHANGELOG.md` — G1 table, G2 block, Migration, `### Performance` heading (items 1–3)
+* `lumenairy/elements/pmm/stack.py` — `internal_field`'s `pol=` docstring, `_INTERNAL_POL_HELP` + `_resolve_internal_pol` (item 4b; docstring and message only, no arithmetic)
+* `tests/unit/test_audit2609_a12_pmm1d.py` — the gate renamed + SCOPE note + conical-shape assertions (4c), the three splits (item 5)
+* `tests/unit/test_audit2609_a12_verify_pmm1d.py` — 7 new tests (Wood-nudge ×3 parametrised, conical contract ×4)
+* `docs/audits/…/fixes/VERIFY_WP-A12.md` — this section
+
+`conical.py` itself was **not** edited (the ruling says do not consolidate, and
+nothing else in it needed changing).  No git write of any kind.
