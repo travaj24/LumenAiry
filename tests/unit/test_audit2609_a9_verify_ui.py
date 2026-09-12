@@ -1366,5 +1366,140 @@ def test_followup_finite_distance_writes_are_bit_identical():
     assert np.all(np.isfinite(np.asarray(m4.elements[3].origin, dtype=float)))
 
 
+@pytest.mark.parametrize('bad', [float('inf'), float('-inf'), float('nan')])
+def test_followup_nonfinite_tilt_is_refused_by_the_mutators(bad):
+    """The rotation half of the same defect.  `recompute_element_frames`
+    builds `R = R @ Rx(tilt_x) @ Ry(tilt_y)` from `np.cos` / `np.sin`,
+    so a non-finite tilt makes every entry of `R` NaN -- and because the
+    walk is cumulative, the next element's `d * R[:, 2]` carries the NaN
+    into its ORIGIN as well.  One bad tilt is a NaN world frame on that
+    element and on every element after it.
+
+    The three operator-reachable writers now refuse it with the same
+    CONVENTIONS §2-prefixed `ValueError`, before any undo checkpoint.
+    """
+    for col, field in ((4, 'tilt_x'), (5, 'tilt_y')):
+        # --- the element table, relative mode --------------------------
+        m = _three_element_model()
+        before = [(e.tilt_x, e.tilt_y) for e in m.elements]
+        depth = len(m._undo_stack)
+        assert m.set_element_field(2, col, str(bad)) is False, (
+            'a non-finite tilt was accepted by set_element_field')
+        assert [(e.tilt_x, e.tilt_y) for e in m.elements] == before
+        assert len(m._undo_stack) == depth, 'a refused edit left an undo step'
+        assert np.all(np.isfinite(np.asarray(m.elements[3].R, dtype=float)))
+        assert np.all(np.isfinite(np.asarray(m.elements[3].origin,
+                                             dtype=float)))
+
+        # --- the absolute-coordinates editor ---------------------------
+        m2 = _three_element_model()
+        m2.set_coordinate_mode('absolute')
+        depth = len(m2._undo_stack)
+        with pytest.raises(ValueError, match='set_element_absolute_field'):
+            m2.set_element_absolute_field(2, col, bad)
+        assert [(e.tilt_x, e.tilt_y) for e in m2.elements] == before
+        assert len(m2._undo_stack) == depth
+        assert np.all(np.isfinite(np.asarray(m2.elements[3].R, dtype=float)))
+
+    # --- the surface sub-table, which writes the Element directly ------
+    # Driven through the REAL ``SurfaceFlatModel.setData`` with a
+    # minimal recording ``self`` (the flat row tuple is
+    # ``(elem_idx, surf_idx, surface_row, kind, _)``).
+    ET = UI['element_table']
+    for col, field in ((8, 'tilt_x'), (9, 'tilt_y')):
+        m3 = _three_element_model()
+        flat = types.SimpleNamespace(
+            sm=m3, _flat=[(2, 0, m3.elements[2].surfaces[0], 'surface', None)])
+        idx = types.SimpleNamespace(row=lambda: 0, column=lambda c=col: c)
+        assert ET.SurfaceFlatModel.setData(flat, idx, bad,
+                                           role=ET.Qt.EditRole) is False
+        assert getattr(m3.elements[2], field) == 0.0
+        assert np.all(np.isfinite(np.asarray(m3.elements[3].R, dtype=float)))
+        # ... and a finite tilt on the same path still writes.
+        assert ET.SurfaceFlatModel.setData(flat, idx, 5.0,
+                                           role=ET.Qt.EditRole) is True
+        assert getattr(m3.elements[2], field) == 5.0
+
+    # --- the air-gap row, which writes distance_mm directly ------------
+    m5 = _three_element_model()
+    flat = types.SimpleNamespace(
+        sm=m5, _flat=[(2, 0, None, 'airgap', None)])
+    idx = types.SimpleNamespace(row=lambda: 0, column=lambda: 4)
+    assert ET.SurfaceFlatModel.setData(flat, idx, bad,
+                                       role=ET.Qt.EditRole) is False
+    assert m5.elements[2].distance_mm == pytest.approx(40.0)
+    assert ET.SurfaceFlatModel.setData(flat, idx, 55.0,
+                                       role=ET.Qt.EditRole) is True
+    assert m5.elements[2].distance_mm == 55.0
+
+    # --- the decenters, the other half of the placement guard ---------
+    for col, field in ((6, 'decenter_x'), (7, 'decenter_y')):
+        m6 = _three_element_model()
+        m6.set_element_field(2, col, '1.5')
+        assert m6.set_element_field(2, col, str(bad)) is False
+        assert getattr(m6.elements[2], field) == 1.5, (
+            'a non-finite decenter overwrote a good value')
+
+    # The message names the element, the field and the value.
+    m4 = _three_element_model()
+    with pytest.raises(ValueError) as ei:
+        m4.set_element_absolute_field(2, 4, bad)
+    msg = str(ei.value)
+    assert "'L2'" in msg and 'tilt_x' in msg and 'degrees' in msg
+    assert repr(bad) in msg
+
+
+def test_followup_finite_tilt_writes_are_bit_identical():
+    """Guard on the tilt check: it must reject and nothing else.
+
+    A finite tilt still writes, still checkpoints, still rebuilds the
+    frame, and the displayed-value round trip is bit-exact.  0.0 (the
+    "no tilt" entry an empty cell produces) must still be accepted and
+    must still be reported as no-change when it already is 0.
+    """
+    m = _three_element_model()
+    depth = len(m._undo_stack)
+
+    # An unchanged value is still a no-op, not a checkpoint.
+    assert m.set_element_field(2, 4, '0') is False
+    assert len(m._undo_stack) == depth
+
+    # Ordinary tilts write exactly, and the frame stays finite.
+    for col, field, value in ((4, 'tilt_x', 12.5), (5, 'tilt_y', -7.25),
+                              (4, 'tilt_x', 0.0)):
+        assert m.set_element_field(2, col, str(value)) is True
+        assert getattr(m.elements[2], field) == value
+        for e in m.elements:
+            assert np.all(np.isfinite(np.asarray(e.R, dtype=float)))
+            assert np.all(np.isfinite(np.asarray(e.origin, dtype=float)))
+
+    # An empty cell is 0.0, not a refusal.
+    m.elements[2].tilt_y = 3.0
+    m._invalidate()
+    assert m.set_element_field(2, 5, '') is True
+    assert m.elements[2].tilt_y == 0.0
+
+    # A non-numeric entry is still the pre-existing "cell reverts".
+    assert m.set_element_field(2, 4, 'twelve') is False
+
+    # The absolute editor writes a finite tilt unchanged, and the
+    # resulting axis is the exact rotation of the requested angle.
+    m2 = _three_element_model()
+    m2.set_coordinate_mode('absolute')
+    m2.set_element_absolute_field(2, 4, 30.0)
+    assert m2.elements[2].tilt_x == 30.0
+    axis = np.asarray(m2.elements[2].R, dtype=float)[:, 2]
+    assert axis == pytest.approx(
+        [0.0, -np.sin(np.radians(30.0)), np.cos(np.radians(30.0))],
+        abs=1e-15)
+
+    # Decenters (the other half of the placement guard) write unchanged.
+    m3 = _three_element_model()
+    assert m3.set_element_field(2, 6, '1.5') is True
+    assert m3.elements[2].decenter_x == 1.5
+    assert m3.set_element_field(2, 7, '-0.75') is True
+    assert m3.elements[2].decenter_y == -0.75
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

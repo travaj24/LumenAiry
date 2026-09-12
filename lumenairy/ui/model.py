@@ -75,18 +75,29 @@ class SurfaceRow:
 _MAX_EMITTER_COUNT = 4096
 
 
-def _as_distance_mm(value, fn_name, elem_index, elem=None):
-    """Coerce an element spacing to a FINITE float [mm].
+def _as_finite_element_field(value, fn_name, elem_index, field_name, units,
+                             elem=None):
+    """Coerce an element PLACEMENT field to a FINITE float.
 
-    ``recompute_element_frames`` advances the running origin by
-    ``distance_mm * R[:, 2]``.  The axis vector's components are zero on
-    two of three axes for an untilted system, so a non-finite spacing
-    multiplies ``inf`` by ``0`` and leaves a NaN ``origin`` on this
-    element AND on every element after it -- the 2-D/3-D layouts, both
-    trace-surface builders and every ABCD taken on them then read NaN,
-    with nothing anywhere to say which element caused it.  ``nan`` is
-    worse than ``inf``: ``max(0, nan)`` is ``0`` in Python, so a NaN
-    entry silently moved the element to the previous one's back vertex.
+    :meth:`SystemModel.recompute_element_frames` walks the element list
+    once, accumulating both halves of each element's world frame:
+
+    * ``origin += distance_mm * R[:, 2]`` (and ``decenter_x/y`` along
+      ``R[:, 0]`` / ``R[:, 1]``);
+    * ``R = R @ Rx(tilt_x) @ Ry(tilt_y)``.
+
+    Either half poisons the other from that element onwards.  An
+    untilted axis is ``(0, 0, 1)``, so a non-finite SPACING multiplies
+    ``inf`` by two zero components and leaves ``origin = [nan, nan,
+    inf]``; a non-finite TILT reaches ``np.cos`` / ``np.sin`` and makes
+    every entry of ``R`` NaN, which the next element's ``d * R[:, 2]``
+    then carries into its origin too.  Because the walk is cumulative,
+    one bad field is a NaN frame on that element AND on every element
+    after it -- read by the 2-D/3-D layouts, both trace-surface builders
+    and every ABCD taken on them, with nothing anywhere to say which
+    element caused it.  ``nan`` is worse than ``inf`` for the spacing:
+    ``max(0, nan)`` is ``0`` in Python, so a NaN entry silently moved
+    the element to the previous one's back vertex.
 
     Rejecting it here, in the mutator, is the only place the offending
     element is still identifiable.
@@ -100,15 +111,21 @@ def _as_distance_mm(value, fn_name, elem_index, elem=None):
         v = float(value)
     except (TypeError, ValueError):
         raise ValueError(
-            f'{fn_name}: element {elem_index}{label} distance must be a '
-            f'finite number of millimetres (got {value!r}).') from None
+            f'{fn_name}: element {elem_index}{label} {field_name} must be '
+            f'a finite number of {units} (got {value!r}).') from None
     if not np.isfinite(v):
         raise ValueError(
-            f'{fn_name}: element {elem_index}{label} distance must be a '
-            f'finite number of millimetres (got {value!r}); a non-finite '
-            f'spacing makes every element from here on have a NaN world '
-            f'origin.')
+            f'{fn_name}: element {elem_index}{label} {field_name} must be '
+            f'a finite number of {units} (got {value!r}); a non-finite '
+            f'placement makes every element from here on have a NaN world '
+            f'frame.')
     return v
+
+
+def _as_distance_mm(value, fn_name, elem_index, elem=None):
+    """:func:`_as_finite_element_field` for an axial spacing [mm]."""
+    return _as_finite_element_field(value, fn_name, elem_index,
+                                    'distance', 'millimetres', elem)
 
 
 def _as_count(value, field_name):
@@ -808,14 +825,24 @@ class SystemModel(QObject):
             v = float(value)
         except (TypeError, ValueError):
             return
-        if col in (3, 6, 7):
-            # Position columns feed ``distance_mm`` / ``decenter_x`` /
-            # ``decenter_y``, every one of which
-            # ``recompute_element_frames`` multiplies into the running
-            # origin.  Reject a non-finite entry here, before the
-            # checkpoint, so a refused edit leaves no undo step and the
-            # element that caused it is still named.
-            _as_distance_mm(v, 'set_element_absolute_field', elem_idx, e)
+        # Every column here is a PLACEMENT field: 3 / 6 / 7 feed
+        # ``distance_mm`` / ``decenter_x`` / ``decenter_y``, which
+        # ``recompute_element_frames`` multiplies into the running
+        # origin, and 4 / 5 feed ``tilt_x`` / ``tilt_y``, which it
+        # multiplies into the running rotation.  A non-finite entry in
+        # either half leaves a NaN world frame on this element and every
+        # one after it, so reject it here -- before the checkpoint, so a
+        # refused edit leaves no undo step, and while the element that
+        # caused it is still named.
+        _placement = {3: ('distance', 'millimetres'),
+                      4: ('tilt_x', 'degrees'),
+                      5: ('tilt_y', 'degrees'),
+                      6: ('decenter_x', 'millimetres'),
+                      7: ('decenter_y', 'millimetres')}.get(col)
+        if _placement is not None:
+            _as_finite_element_field(v, 'set_element_absolute_field',
+                                     elem_idx, _placement[0],
+                                     _placement[1], e)
         self._checkpoint()
         # Orientation edits: drive tilt_x / tilt_y directly.
         if col == 4:
@@ -1374,30 +1401,27 @@ class SystemModel(QObject):
             elif col == 3:  # Distance
                 self.set_display_distance(elem_idx, float(text))
                 return True
-            elif col == 4:  # Tilt X
-                val = float(text) if text else 0.0
-                if val == elem.tilt_x:
+            elif col in (4, 5, 6, 7):
+                # Placement columns.  ``recompute_element_frames``
+                # multiplies the tilts into the running rotation and the
+                # distance / decenters into the running origin, so a
+                # non-finite entry here leaves a NaN world frame on this
+                # element and on every element after it.  Validate
+                # before the checkpoint (a refused edit must leave no
+                # undo step); the ``except ValueError`` below turns the
+                # refusal into the same "cell reverts" the table already
+                # gives a non-numeric entry.
+                field, units = {
+                    4: ('tilt_x', 'degrees'), 5: ('tilt_y', 'degrees'),
+                    6: ('decenter_x', 'millimetres'),
+                    7: ('decenter_y', 'millimetres')}[col]
+                val = _as_finite_element_field(
+                    float(text) if text else 0.0, 'set_element_field',
+                    elem_idx, field, units, elem)
+                if val == getattr(elem, field):
                     return False
                 self._checkpoint()
-                elem.tilt_x = val
-            elif col == 5:  # Tilt Y
-                val = float(text) if text else 0.0
-                if val == elem.tilt_y:
-                    return False
-                self._checkpoint()
-                elem.tilt_y = val
-            elif col == 6:  # Decenter X
-                val = float(text) if text else 0.0
-                if val == elem.decenter_x:
-                    return False
-                self._checkpoint()
-                elem.decenter_x = val
-            elif col == 7:  # Decenter Y
-                val = float(text) if text else 0.0
-                if val == elem.decenter_y:
-                    return False
-                self._checkpoint()
-                elem.decenter_y = val
+                setattr(elem, field, val)
             else:
                 return False
             self._invalidate()

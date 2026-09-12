@@ -18,7 +18,8 @@ from PySide6.QtGui import QColor, QFont
 
 import numpy as np
 
-from .model import SystemModel, Element, SurfaceRow, SourceDefinition
+from .model import (SystemModel, Element, SurfaceRow, SourceDefinition,
+                    _as_finite_element_field)
 
 
 # ────────────────────────────────────────────────────────────────────────
@@ -280,9 +281,18 @@ class SurfaceFlatModel(QAbstractTableModel):
         col = index.column()
 
         if kind == 'airgap' and col == 4:
-            # Edit the element's distance
+            # Edit the element's distance.  This writes the Element
+            # directly rather than going through
+            # ``SystemModel.set_display_distance``, so it needs the same
+            # finiteness screen: ``max(0, nan)`` is ``0`` in Python, so a
+            # NaN entry would silently move the element onto the previous
+            # one's back vertex, and an ``inf`` would leave a NaN world
+            # frame on every element from here on.
             try:
-                self.sm.elements[ei].distance_mm = max(0, float(value))
+                self.sm.elements[ei].distance_mm = max(
+                    0, _as_finite_element_field(
+                        value, 'SurfaceFlatModel.setData', ei, 'distance',
+                        'millimetres', self.sm.elements[ei]))
                 self.sm._invalidate()
                 self.sm.system_changed.emit()
                 return True
@@ -302,6 +312,22 @@ class SurfaceFlatModel(QAbstractTableModel):
         elem = self.sm.elements[ei]
         try:
             val = float(value) if value else 0.0
+            # These four go straight onto the Element, so the model's
+            # own mutators cannot screen them: validate here instead.
+            # ``recompute_element_frames`` multiplies the tilts into the
+            # running rotation and the decenters into the running
+            # origin, so a non-finite entry leaves a NaN world frame on
+            # this element and every one after it.  The ``except
+            # ValueError`` below turns the refusal into the same "cell
+            # reverts" a non-numeric entry already gets.
+            _placement = {8: ('tilt_x', 'degrees'),
+                          9: ('tilt_y', 'degrees'),
+                          10: ('decenter_x', 'millimetres'),
+                          11: ('decenter_y', 'millimetres')}.get(col)
+            if _placement is not None:
+                val = _as_finite_element_field(
+                    val, 'SurfaceFlatModel.setData', ei, _placement[0],
+                    _placement[1], elem)
             if col == 8 and val != elem.tilt_x:
                 elem.tilt_x = val
             elif col == 9 and val != elem.tilt_y:

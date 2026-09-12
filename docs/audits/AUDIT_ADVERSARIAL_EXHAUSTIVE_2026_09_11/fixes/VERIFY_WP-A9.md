@@ -847,3 +847,98 @@ Tests: `tests/unit/test_audit2609_a9_verify_ui.py` (+2 test functions, 4 cases).
 Docs: this file and
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-A9_CHANGELOG.md`.
 No other file touched; no git write commands.
+
+## F7. The guard widened to the rotation half  [ruling applied — DONE]
+
+`recompute_element_frames` accumulates BOTH halves of each element's world
+frame in one walk: `origin += distance_mm * R[:, 2]` (and the decenters along
+`R[:, 0]` / `R[:, 1]`) and `R = R @ Rx(tilt_x) @ Ry(tilt_y)`.  §F6 closed the
+translation half; a non-finite tilt reaches `np.cos` / `np.sin` and makes every
+entry of `R` NaN, which the NEXT element's `d * R[:, 2]` then carries into its
+ORIGIN too.  Measured on three singlets, `set_element_field(2, tilt_x, nan)`
+before this change:
+
+```
+element 0  R[2,2] = 1.0    origin = [0.0, 0.0, 0.0]
+element 1  R[2,2] = 1.0    origin = [0.0, 0.0, 10.0]
+element 2  R[2,2] = nan    origin = [0.0, 0.0, 38.0]   <- the edited element
+element 3  R[2,2] = nan    origin = [nan, nan, nan]    <- rotation NaN has
+element 4  R[2,2] = nan    origin = [nan, nan, nan]       reached the origins
+```
+
+**Changed.**  `model._as_distance_mm` is now a thin wrapper over a general
+`model._as_finite_element_field(value, fn_name, elem_index, field_name, units,
+elem)`, so one screen serves every PLACEMENT field with the field name and its
+units in the message:
+
+```
+set_element_absolute_field: element 2 ('L2') tilt_x must be a finite number of
+degrees (got nan); a non-finite placement makes every element from here on have
+a NaN world frame.
+```
+
+Four operator-reachable writers now screen their input, each **before** any undo
+checkpoint:
+
+| site | columns | fields |
+|---|---|---|
+| `SystemModel.set_element_field` | 4–7 | `tilt_x`, `tilt_y`, `decenter_x`, `decenter_y` (col 3 already routed through the guarded `set_display_distance`) |
+| `SystemModel.set_element_absolute_field` | 3–7 | the same four plus `distance` (3 / 6 / 7 were guarded in §F6; 4 / 5 are new) |
+| `element_table.SurfaceFlatModel.setData` | 8–11 | `tilt_x`, `tilt_y`, `decenter_x`, `decenter_y` — written straight onto the `Element`, so the model's mutators cannot screen them |
+| `element_table.SurfaceFlatModel.setData` | 4 (air-gap row) | `distance_mm` — **a fourth distance writer §F6 missed**: it bypasses `set_display_distance` entirely, so it had the same `max(0, nan) == 0` hole |
+
+Both table writers already wrapped their body in `try: … except ValueError:
+return False`, so the refusal surfaces as the cell reverting — exactly what a
+non-numeric entry already did there. Nothing escapes into the Qt event loop.
+
+**Scope note for the record.**  The ruling named the tilts; I also screened the
+DECENTERS in the same two blocks.  They are millimetre offsets accumulated into
+`origin` by the identical mechanism, `set_element_absolute_field`'s decenter
+columns were already guarded in §F6, and leaving `set_element_field`'s
+unguarded would have made the two editors disagree — the drift the codebase's
+own single-source-of-truth helpers exist to prevent.  Say the word and it is two
+lines to narrow.
+
+**Verified.**
+
+* **Fail-before**: the placement screen reverted in process (in both `model`
+  and `element_table`, which binds the name at import), both non-finite tilt
+  arms fail — `a non-finite tilt was accepted by set_element_field` — and the
+  NaN-rotation cascade above is what the pre-fix code produces.  Follow-up
+  total: **13 properties replayed, 11 fail as required, 2 vacuous** — the 2 are
+  the two deliberate bit-identity controls, which are supposed to pass on both
+  sides.
+* **Bit-identity**: an unchanged value is still a no-change (`False`, no
+  checkpoint); `12.5`, `-7.25` and `0.0` write exactly; an empty cell is still
+  `0.0` and not a refusal; a non-numeric entry is still the pre-existing "cell
+  reverts"; `set_element_absolute_field(2, 4, 30.0)` gives an axis of exactly
+  `(0, -sin 30°, cos 30°)` to 1e-15; decenters of `1.5` and `-0.75` write
+  unchanged; and a finite tilt driven through the real
+  `SurfaceFlatModel.setData` still returns `True` and writes.
+* **Direct attribute writes stay unguarded**, as before — `load_prescription`,
+  the session restore and the group/ungroup paths move values already in the
+  model.
+* **Collateral**: 12 UI files alone 50 passed / **35 skipped** (invariant
+  unchanged); + both A9 files **135 passed / 35 skipped**, identical in the
+  reversed collection order; the 15-file raytrace set + cross-backend parity
+  **314 passed, 0 failed, 0 skipped**.
+
+`tests/unit/test_audit2609_a9_verify_ui.py` is now **49 tests** (45 + 4:
+`test_followup_nonfinite_tilt_is_refused_by_the_mutators` over `inf` / `-inf` /
+`nan`, plus `test_followup_finite_tilt_writes_are_bit_identical`).  The tilt
+pins drive the REAL `SurfaceFlatModel.setData` with a minimal recording `self`,
+not the helper in isolation.
+
+### F7 file list
+
+Modified: `lumenairy/ui/model.py` (`_as_finite_element_field` generalised from
+`_as_distance_mm`; `set_element_field` cols 4–7 and
+`set_element_absolute_field` cols 3–7 screened before their checkpoints);
+`lumenairy/ui/element_table.py` (import of the helper;
+`SurfaceFlatModel.setData` cols 8–11 and the air-gap distance write).
+Tests: `tests/unit/test_audit2609_a9_verify_ui.py` (+2 test functions, 4 cases).
+Docs: this file and
+`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-A9_CHANGELOG.md`.
+No other file touched; no git write commands.
+
+**VERIFY-A9 is closed.**

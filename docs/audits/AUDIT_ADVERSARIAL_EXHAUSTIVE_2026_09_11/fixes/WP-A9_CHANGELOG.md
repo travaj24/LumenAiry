@@ -554,3 +554,37 @@ unchanged to the last bit, the `max(0, ...)` clamp on a negative entry included.
 Test: `tests/unit/test_audit2609_a9_verify_ui.py::
 test_followup_nonfinite_distance_is_refused_by_the_mutators` (inf / -inf / nan)
 and `::test_followup_finite_distance_writes_are_bit_identical`.
+
+## BLOCK 2 addition — for `GUI_CHANGELOG.md` (VERIFY-A9 follow-up, P3 continued)
+
+### Fixed -- a non-finite tilt put a NaN rotation matrix on every element after it
+
+The rotation half of the placement defect above.
+`SystemModel.recompute_element_frames` accumulates both halves of each element's
+world frame in one walk — `origin += distance_mm * R[:, 2]` and
+`R = R @ Rx(tilt_x) @ Ry(tilt_y)` — so a non-finite tilt reaches `np.cos` /
+`np.sin`, makes every entry of `R` NaN, and the NEXT element's `d * R[:, 2]`
+carries the NaN into its origin as well.  Measured on three singlets, a NaN
+`tilt_x` on element 2: `R[2, 2]` NaN on elements 2, 3 and 4, and
+`origin = [nan, nan, nan]` on 3 and 4.
+
+`SystemModel._as_distance_mm` is now a wrapper over a general
+`_as_finite_element_field`, and the four operator-reachable placement writers
+screen their input before taking any undo checkpoint: `set_element_field`
+(cols 4-7), `set_element_absolute_field` (cols 3-7), and
+`element_table.SurfaceFlatModel.setData` for both the tilt/decenter columns
+(8-11) and the air-gap row's distance cell (col 4), the last of which bypassed
+`set_display_distance` entirely and so still had the `max(0, nan) == 0` hole.
+The refusal carries the CONVENTIONS §2 prefix and names the function, the
+element, the field, its units and the value; in the two table writers it
+surfaces as the cell reverting, exactly as a non-numeric entry already did.
+
+Every finite write is unchanged: an unchanged value is still a no-change with no
+checkpoint, an empty cell is still 0.0, a non-numeric entry still reverts, and
+`set_element_absolute_field(elem, Rx, 30.0)` still gives an axis of exactly
+`(0, -sin 30 deg, cos 30 deg)` to 1e-15.
+
+Tests: `tests/unit/test_audit2609_a9_verify_ui.py::
+test_followup_nonfinite_tilt_is_refused_by_the_mutators` (inf / -inf / nan,
+driven through the real `SurfaceFlatModel.setData`) and
+`::test_followup_finite_tilt_writes_are_bit_identical`.
