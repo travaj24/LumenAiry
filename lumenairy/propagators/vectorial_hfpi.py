@@ -69,6 +69,7 @@ from .hfpi import (
     _binning_jacobian,
     _check_landed,
     _complex_output_dtype,
+    _reemission_measure,
     _resolve_output_shape,
     _spawn_rng,
 )
@@ -376,6 +377,7 @@ def apply_vector_aperture_diffraction(
     rng: Optional[Union[int, object]] = None,
     cone_half_angle: float = np.pi / 2 - 1e-6,
     vector_projection: bool = True,
+    normalisation: str = 'physical',
 ) -> VectorPathBundle:
     """Vectorial counterpart of :func:`apply_aperture_diffraction`.
 
@@ -421,9 +423,24 @@ def apply_vector_aperture_diffraction(
             multiplied by the scalar obliquity a second time, double
             counting what the projection already is.  The rigid rotation
             is orthogonal, so it conserves ``|E|^2`` exactly and adds no
-            amplitude factor; the scalar Kirchhoff obliquity below stays
+            amplitude factor; the scalar re-emission measure below stays
             the only amplitude term.
+    normalisation : {'physical', 'legacy'}, default 'physical'
+        Which re-emission measure to apply; see
+        :func:`~lumenairy.propagators.hfpi._reemission_measure`.  It MUST
+        match the value passed to :func:`accumulate_vector_to_grid` at
+        the end of the chain -- the two halves are one estimator.
+
+        .. versionchanged:: 5.46.1
+            Added (audit K13 / verify V1); the pre-fix measure made every
+            cascaded amplitude low by ``n_paths * r_in``, in this module
+            exactly as in the scalar twin (measured identical to four
+            digits).
     """
+    if normalisation not in ('physical', 'legacy'):
+        raise ValueError(
+            f"apply_vector_aperture_diffraction: normalisation must be "
+            f"'physical' or 'legacy'; got {normalisation!r}.")
     if not (wavelength > 0) or not np.isfinite(wavelength):
         raise ValueError(
             f"apply_vector_aperture_diffraction: wavelength must be a "
@@ -458,19 +475,17 @@ def apply_vector_aperture_diffraction(
     Nz = cos_theta
     new_directions = xp.stack([L, M, Nz], axis=-1)
 
-    # 4.11.2: include the Kirchhoff ``1/(iλ)·dΩ`` factor per
-    # re-emission, matching the scalar
-    # :func:`lumenairy.propagators.hfpi.apply_aperture_diffraction`
-    # 4.11.2 fix.  Pre-4.11.2 cascaded vector apertures dropped this
-    # global factor, so multi-aperture vector HFPI underweighted by
-    # ~10^6 per extra aperture at visible wavelengths.  Relative
-    # polarization / phase structure unaffected.
-    cos_theta_in = paths.directions[..., 2]
-    obliquity = 0.5 * (cos_theta_in + cos_theta)
-    solid_angle = 2.0 * float(np.pi) * (1.0 - cos_max) / float(n)
-    inv_i_lambda = (1.0 / (1j * wavelength)) if wavelength > 0 else 1.0
-    kirchhoff = complex(inv_i_lambda) * solid_angle
-    obl = obliquity.astype(paths.Ex.dtype)
+    # 4.11.2: include the Kirchhoff per-re-emission factor, matching the
+    # scalar :func:`lumenairy.propagators.hfpi.apply_aperture_diffraction`.
+    #
+    # V1 (verify pass, 2026-09-12): the MEASURE is the shared
+    # :func:`~lumenairy.propagators.hfpi._reemission_measure` -- see its
+    # docstring for the derivation and for what the pre-fix factor cost
+    # (cascaded amplitudes low by ``n_paths * r_in``, measured identical
+    # in this module and in the scalar twin).
+    obl = _reemission_measure(
+        paths, cos_theta, cos_max, wavelength, normalisation,
+        'apply_vector_aperture_diffraction')
     # K17: rigid (norm-preserving) rotation of the full three-component
     # field from the incoming to the outgoing direction.  Unlike the
     # v5.4.6 orthogonal projection it keeps the longitudinal component it
@@ -483,9 +498,9 @@ def apply_vector_aperture_diffraction(
             paths.directions, new_directions, xp)
     else:
         Ex_t, Ey_t, Ez_t = paths.Ex, paths.Ey, Ez_in
-    new_Ex = Ex_t * obl * kirchhoff
-    new_Ey = Ey_t * obl * kirchhoff
-    new_Ez = Ez_t * obl * kirchhoff
+    new_Ex = Ex_t * obl
+    new_Ey = Ey_t * obl
+    new_Ez = Ez_t * obl
     new_opl = xp.zeros_like(paths.opl)
     return VectorPathBundle(
         positions=paths.positions,
@@ -711,6 +726,9 @@ def propagate_vector_hfpi_freespace_aperture(
         wavelength=wavelength, rng=rng_aperture,
         cone_half_angle=cone_half_angle,
         vector_projection=vector_projection,
+        # V1: the re-emission measure and the binning Jacobian are two
+        # halves of ONE estimator; they must agree.
+        normalisation=normalisation,
     )
     paths = propagate_vector_to_plane(
         paths, z_target=z_to_aperture + z_aperture_to_output,

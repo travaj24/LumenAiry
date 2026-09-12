@@ -743,3 +743,224 @@ public contracts); both docstrings now cross-reference the other and say
 to name the method explicitly.
 
 Files: `lumenairy/propagators/mhs.py`.
+
+
+---
+---
+
+# WP-A5 follow-up (v5.46.1) -- the VERIFY-A5 open items, plus two cross-WP requests
+
+---
+
+### Fixed -- propagators/hfpi, vectorial_hfpi: cascaded HFPI amplitudes were low by `n_paths x z_to_aperture` (K13 / verify V1, P1)
+
+v5.46's K13 work fixed the single-leg estimator but left the APERTURE
+chain wrong, and `propagate_hfpi_freespace_aperture` -- the function its
+own docstring calls "the canonical single-aperture-diffraction validation
+case", and what `propagate_hfpi` and `propagate(method='hfpi')` call --
+defaulted to `normalisation='physical'` while returning an amplitude that
+still scaled as `1/n_paths`.
+
+Two distinct errors in one line (`hfpi.py`'s re-emission,
+`vectorial_hfpi.py`'s twin):
+
+1. **A second division by the sample count.** A path is ONE sample of
+   the joint (source pixel, direction_1, ..., direction_m) integral, so
+   the `1/n_paths` belongs once and already lives in
+   `init_paths_from_field` alongside `A_src * Omega_1`; the re-emission
+   divided by it again.
+2. **The intermediate leg carried no Jacobian.** Written in the
+   direction variables the estimator samples,
+   `dOmega = dS cos(theta)/r^2` turns the Kirchhoff kernel
+   `dS (cos(theta)/r) e^{ikr}` into `dOmega * r * e^{ikr}` -- a factor
+   **`r`, not `1/r`**, and no obliquity.  The emission applied
+   `cos(theta_1)` where the chain needs `r_1`.
+
+One shared `_reemission_measure` now applies the derived factor
+
+    F = (1/(i lambda)) * Omega_out * r_in * cos(theta_out) / cos(theta_in)
+
+where `r_in` is the geometric length of the leg that just ended
+(`PathBundle.leg`), the `1/cos(theta_in)` removes the `cos(theta)` the
+source applied on the then-unknown assumption that its leg would be the
+last one, and `cos(theta_out)` is the genuine RS-I obliquity of the new
+surface.  The formula composes, so it is correct for any number of
+apertures.  Both twins call it.
+
+**Measured.**  Oracle-free property -- an unobstructed aperture plane is
+transparent, so a two-leg walk over `z1 + z2` must equal the one-leg walk
+over the same total:
+
+| z1 / z2 (mm) | n_paths | two-leg / one-leg BEFORE | x n_paths x z1 | AFTER |
+|---|---|---|---|---|
+| 0.25 / 0.75 | 500 k | 8.78e-3 | 1.098 | 1.099 |
+| 0.25 / 0.75 | 2 M | 2.09e-3 | 1.046 | 1.047 |
+| 0.50 / 0.50 | 500 k | 3.44e-3 | 0.860 | 0.860 |
+| 0.50 / 0.50 | 2 M | 9.20e-4 | 0.920 | 0.920 |
+| 1.00 / 1.00 | 500 k | 2.68e-3 | 1.339 | 1.347 |
+| 1.00 / 1.00 | 2 M | 4.00e-4 | 0.801 | 0.803 |
+
+i.e. the residual was exactly `n_paths * z1` and is gone; at 8 M paths
+the scale reads 1.009 / 1.010 / 1.057 / 0.963 / 1.245 / 0.977 across
+those z1 and two seeds.
+
+Against an INDEPENDENT RS-I **double** quadrature through a real
+(clipping) 25 um aperture -- super-sampled midpoint over the source and a
+polar midpoint over the aperture disc, no FFT and no library propagator
+on the oracle side, on a 9x9 block of output points -- the least-squares
+complex scale is **0.908 .. 1.046** at 8-32 M paths and two seeds
+(pre-fix ~`1/(n z1)` = 2.5e-7 at 8 M).  The vector twin's `Ex` channel
+tracks the scalar to **4e-5**.
+
+Files: `lumenairy/propagators/hfpi.py`,
+`lumenairy/propagators/vectorial_hfpi.py`.
+Tests: `tests/unit/test_audit2609_a5_followup.py::TestV1ReemissionMeasure`
+(7 tests), including an EXACT closed-form pin on the pure function
+(bar 1e-13, measured < 1e-16).
+
+**Migration.**  **Cascaded HFPI amplitudes change by `n_paths * r`** --
+they were wrong.  `apply_aperture_diffraction` and
+`apply_vector_aperture_diffraction` gain `normalisation`
+(`'physical'` default, `'legacy'` = the pre-v5.46 factor); it MUST match
+the value passed to the accumulator, and the library's entry points
+thread one value to both.  `normalisation='legacy'` end to end reproduces
+the pre-audit v5.45 raw path sum exactly.  An aperture applied ON the
+emission plane (no travelled leg) now RAISES under `'physical'` -- a mask
+on the source field is not a Huygens re-emission -- instead of silently
+returning zeros.
+
+---
+
+### Added -- propagators/rs: a wrap-around guard on the `kernel='transfer'` branch (verify V6, P2)
+
+Multiplying by `H` is a CIRCULAR convolution on the padded window, so
+light leaving it re-enters on the opposite side.  `kernel='auto'` routes
+to the truncating `'spatial'` branch above the alias threshold, but BELOW
+it there is no alternative to offer, and the verifier showed the failure
+is reachable: a band-limited random-phase screen at `dx ~ lambda` whose
+angular content fills the grid loses 3-21 % of its power out of the
+padded window and reads 2.1e-4 .. 2.9e-3 against an 8x-padded reference,
+with zero warnings.
+
+A `RuntimeWarning` now reports the power that has reached the outer 1/8
+of the padded window, above a 2 % threshold.  Values are unchanged
+(pinned bit-identical with the guard disabled).
+
+**Calibration.**  Exposed corner (ring fraction -> relative L2 against
+the 8x-padded linear convolution): 0.0722 -> 2.4e-3, 0.3035 -> 3.3e-2,
+0.3012 -> 2.3e-2, 0.3609 -> 1.7e-1.  Counter-fixture -- a properly
+sampled Gaussian on four grids at three distances -- puts **5.5e-22 down
+to 9.3e-28** of its power in the ring (worst case 8.1e-14), i.e. **12
+decades** below the threshold.  It is not reachable at all for a properly
+sampled beam: leaving the padded window before `z = 2 N dx^2/lambda`
+requires `tan(theta) > lambda/(2 dx)`, i.e. exceeding the grid's own
+maximum representable angle.
+
+The detector is a fixed-budget STRIDED estimate (4096 points per band),
+so it is O(1) in grid size: measured **0.035-0.084 ms**, flat from
+N = 128 to N = 1024, against a 5.5-187 ms call.  (A full reduction over
+the ring measured +91 % of the call at N = 256 and +15 % at N = 1024 --
+unacceptable for a diagnostic.)  The sampled ring fraction matches the
+full reduction to **0.5 %**.
+
+Files: `lumenairy/propagators/rs.py`.
+Tests: `tests/unit/test_audit2609_a5_followup.py::TestV6TransferWraparoundGuard`
+(10 tests, including the counter-pins that a contained beam stays quiet,
+that the spatial branch never warns, and that the field is bit-identical).
+
+---
+
+### Performance -- propagators/asm: the spatial fftshift/ifftshift pair folds away at even N (WP-A2 section 5 item 4, byte-identical)
+
+v5.5.3 and S5-8g had already removed the two SPECTRUM-domain shifts by
+caching `H` in natural layout.  The pair around the FIELD --
+`fftshift(ifft2(fft2(ifftshift(E)) * H))` -- remained on every
+propagation, and for EVEN N it is the identity: `ifftshift(E)[n] =
+E[n + N/2]` circularly, so the shift theorem gives
+`fft2(ifftshift(E)) = fft2(E) * (-1)^(kx+ky)` and, inverted,
+`fftshift(ifft2(F)) = ifft2(F * (-1)^(kx+ky))`; the two `(-1)^k` phases
+cancel.  No checkerboard array is built -- the shifts cancel each other,
+not the kernel.
+
+For ODD N the circular shift is not by `N/2` and the phase is not `+-1`,
+so the fold is gated on both axes being even and odd grids keep the
+shifted form.
+
+**Measured.**  Byte-identical to the pre-change module in every
+configuration tested -- N = 64 / 128 / 256 / 512 / 1024 even, 63 / 65 /
+127 / 255 odd, anamorphic `dy = 2 dx`, complex64, `bandlimit` on and off,
+and the streamed path -- `max|diff|` **exactly 0.0**.  End to end with a
+warm H cache:
+
+| N | before | after | speed-up | tracemalloc peak |
+|---|---|---|---|---|
+| 1024 | 54.74 ms | 36.48 ms | **1.50x** | 16.78 MB both |
+| 2048 | 242.55 ms | 186.28 ms | **1.30x** | 67.12 / 67.11 MB |
+
+The peak is unchanged because the `.copy()` the folded NumPy path needs
+-- `_ifft2` returns a view into the pyFFTW ping-pong buffer, which the
+dropped `fftshift` used to detach -- replaces the transient the two rolls
+allocated.  The win is the two full-grid permutations, not memory.  The
+audit's own ASM repro numbers are unchanged (relL2 4.857e-04 / 1.457e-03
+vs the analytic Gaussian, energy 1.00000000, the 0.99999502 band-limit
+case, the sub-wavelength 0.127457 both signs, the 0.934 round-trip).
+
+Files: `lumenairy/propagators/asm.py`.
+Tests: `tests/unit/test_audit2609_a5_followup.py::TestAsmSpatialShiftFold`
+(8 tests), including a pin that the returned array owns its memory (the
+v5.4.6 audit F-3 hazard the dropped `fftshift` used to cover).
+
+---
+
+### Changed -- propagators/sas: K3's rewrite also moves the complex128 default path (verify V8)
+
+The K3 entry presented the SAS fix as a float32-only change.  It is not:
+the cancellation-free `-u^2/(2(1+sqrt(1-u))^2)` form is strictly more
+accurate than the subtraction it replaces, and the `W & prop` gate
+replaces a `W *` multiply, so the **complex128** default path moves too
+-- measured relative **1.76e-12 / 5.43e-12 / 5.43e-11 / 5.43e-10** at
+z = 3.24 mm / 1 cm / 10 cm / 1 m on an N = 256 / w0 = 30 um fixture (the
+verifier measured up to 1.8e-9 on its own).  The direction is correct
+(toward the exact value), but it is a numerical change on a default path
+and is stated here.
+
+---
+
+### Added -- propagators/mft: the MFT / Bluestein complex64 contract is pinned (WP-A6 section 5.3)
+
+WP-A6's C3 residual-risk note said the traced-carrier chain's TILTED
+paraxial landing still returns complex128 "because ... making it
+dtype-aware would need `angular_spectrum_propagate_mft` to preserve
+complex64".  **Measured, that premise does not hold** -- see the report's
+follow-up section.  The whole MFT / Bluestein family is already
+dtype-preserving:
+
+* returned dtype: complex64 in -> complex64 out for all three entry
+  points (`angular_spectrum_propagate_mft`, `fresnel_propagate_mft`,
+  `fraunhofer_propagate_mft`); complex128 in -> complex128 out;
+* working dtype: `_bluestein_2d` is entered AND left at the caller's
+  precision, with `target_cdtype` threaded through;
+* memory: tracemalloc peak **86.75 MB at complex64 against 168.49 MB at
+  complex128** at N = 512 -- the same 41.4 / 40.2 input-grid units, i.e.
+  half the bytes for the same structure;
+* accuracy: the complex64 result equals the narrowed complex128 one to
+  **2.03e-7 / 2.17e-7 / 2.73e-7** (the float32 floor for a pre-chirp,
+  two FFTs, a kernel multiply and a post-chirp).
+
+No code change was needed; `mft.py` and `_bluestein.py` are byte-identical
+to the previous commit.  The property is now PINNED so the chain's fix can
+depend on it.
+
+Files: none changed.
+Tests: `tests/unit/test_audit2609_a5_followup.py::TestMftDtypePreservation`
+(12 tests).
+
+---
+
+### Note -- the K1 / K2 label collision (verify V5)
+
+The audit's section 3 table numbers the `backend.scipy.jv` row **K1** and
+the Fresnel chirp-guard row **K2**; the WP-A5 brief and report use the
+opposite assignment (K1 = Fresnel guard, K2 = `jv`).  **Both items are
+fixed** -- only the cross-reference differs.  This changelog follows the
+WP's labels.

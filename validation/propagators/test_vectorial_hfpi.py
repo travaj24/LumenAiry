@@ -54,6 +54,10 @@ def t_aperture_kills_vector_paths():
     paths = init_vector_paths_from_field(
         Ex, Ey, 5e-6, n_paths=2000, wavelength=633e-9, rng=2,
     )
+    # v5.46.1 (verify V1): the aperture needs a travelled leg -- see the
+    # scalar sibling in ``test_hfpi.py``.
+    paths = propagate_vector_to_plane(paths, z_target=1e-3,
+                                      wavelength=633e-9)
     # v5.46 (audit K12): ``wavelength`` is keyword-REQUIRED -- see the
     # scalar sibling in ``test_hfpi.py``.
     p_tiny = apply_vector_aperture_diffraction(

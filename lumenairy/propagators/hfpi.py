@@ -378,6 +378,7 @@ def apply_aperture_diffraction(
     wavelength: float,
     rng: Optional[Union[int, object]] = None,
     cone_half_angle: float = np.pi / 2 - 1e-6,
+    normalisation: str = 'physical',
 ) -> PathBundle:
     """Apply a hard aperture at the current path-bundle plane.
 
@@ -402,7 +403,26 @@ def apply_aperture_diffraction(
             meaningless default (lambda = 0) must not silently mean
             "skip the physics".  Migration: pass ``wavelength=`` (the
             library's own entry points always did).
+    normalisation : {'physical', 'legacy'}, default 'physical'
+        Which re-emission measure to apply; see
+        :func:`_reemission_measure`.  It MUST match the value passed to
+        :func:`accumulate_to_grid` at the end of the chain -- the two
+        halves are one estimator.  The library's own entry points thread
+        a single value to both.
+
+        .. versionchanged:: 5.46.1
+            Added (audit K13 / verify V1).  ``'physical'`` applies the
+            exact intermediate-leg measure
+            ``(1/(i lambda)) * Omega_out * r_in * cos_out / cos_in``;
+            ``'legacy'`` keeps the pre-v5.46 factor
+            ``0.5(cos_in + cos_out) * (1/(i lambda)) * Omega_out /
+            n_paths``, which made every cascaded amplitude low by
+            ``n_paths * r_in``.
     """
+    if normalisation not in ('physical', 'legacy'):
+        raise ValueError(
+            f"apply_aperture_diffraction: normalisation must be "
+            f"'physical' or 'legacy'; got {normalisation!r}.")
     if not (wavelength > 0) or not np.isfinite(wavelength):
         raise ValueError(
             f"apply_aperture_diffraction: wavelength must be a positive "
@@ -451,31 +471,19 @@ def apply_aperture_diffraction(
     Nz = cos_theta
     new_directions = xp.stack([L, M, Nz], axis=-1)
 
-    # 4.10.2: Kirchhoff obliquity must use the angle between the
-    # INCOMING ray direction and the surface normal (+z for a flat
-    # aperture), AVERAGED with the outgoing-ray cos as per the
-    # symmetric form (cos θ_in + cos θ_out)/2.  Pre-4.10.2 used only
-    # the outgoing-ray cos relative to +z, which made the obliquity
-    # weight anisotropic on tilted apertures or cascaded apertures
-    # with strong oblique paths.  For a flat aperture with light
-    # arriving on-axis cos θ_in ≈ 1 and this reduces to the original.
-    cos_theta_in = paths.directions[..., 2]
-    obliquity = 0.5 * (cos_theta_in + cos_theta)
-    # 4.11.2: apply the Kirchhoff prefactor ``1/(iλ)·dΩ`` for each
-    # re-emission, matching the convention applied in
-    # :func:`init_paths_from_field`.  Pre-4.11.2 the per-aperture
-    # re-emission left the weights with only the obliquity factor,
-    # so each cascaded aperture under-weighted by ``2π(1-cosθ_max)
-    # / (iλ·n_paths)`` -- absolute amplitudes were off by ~10^6 per
-    # extra aperture at visible wavelengths.  The relative
-    # phase/contrast structure is unaffected because the factor is
-    # global per aperture.
-    solid_angle = 2.0 * float(np.pi) * (1.0 - cos_max) / float(n)
-    inv_i_lambda = (1.0 / (1j * wavelength)) if wavelength > 0 else 1.0
-    kirchhoff = complex(inv_i_lambda) * solid_angle
-    new_weights = (paths.weights
-                   * obliquity.astype(paths.weights.dtype)
-                   * kirchhoff)
+    # 4.11.2: apply the Kirchhoff prefactor for each re-emission,
+    # matching the convention applied in :func:`init_paths_from_field`.
+    # Pre-4.11.2 the per-aperture re-emission left the weights with only
+    # an obliquity factor, so each cascaded aperture under-weighted by
+    # ~10^6 at visible wavelengths.
+    #
+    # V1 (verify pass, 2026-09-12): the MEASURE of that re-emission was
+    # still wrong for a chain -- see :func:`_reemission_measure` for the
+    # derivation, the pre-fix factor and the measured residual law
+    # (amplitudes low by exactly ``n_paths * z_to_aperture``).
+    new_weights = paths.weights * _reemission_measure(
+        paths, cos_theta, cos_max, wavelength, normalisation,
+        'apply_aperture_diffraction')
     new_opl = xp.zeros_like(paths.opl)
 
     return PathBundle(
@@ -487,6 +495,132 @@ def apply_aperture_diffraction(
         # K13: a re-emission starts a new leg.
         leg=xp.zeros_like(paths.opl),
     )
+
+
+
+def _reemission_measure(paths, cos_theta_out, cos_max, wavelength,
+                        normalisation, fn_name):
+    """Per-path factor for a Huygens re-emission (audit K13 / verify V1).
+
+    A cascaded HFPI walk is an exact composition of Rayleigh-Sommerfeld-I
+    integrals.  Write the intermediate surface integral in DIRECTION
+    variables -- the variables the estimator actually samples.  For the
+    leg from ``Q_m`` to ``Q_{m+1}``,
+
+        dOmega_m = dS_{m+1} cos(theta_m) / r_m^2
+        =>  dS_{m+1} (cos(theta_m)/r_m) e^{ik r_m}
+              = dOmega_m * r_m * e^{ik r_m} ,
+
+    so in direction variables the Kirchhoff kernel of an INTERMEDIATE leg
+    is ``(1/(i lambda)) e^{ik r} * r * dOmega`` -- a factor ``r``, not
+    ``1/r``, and NO obliquity.  The estimator therefore has to carry,
+    after the ``m``-th leg,
+
+        W_m = E(Q_1) (1/(i lambda))^m (A_src Omega_1 / n_paths)
+              Omega_2 ... Omega_m  r_1 ... r_{m-1}  e^{ik sum r}
+              * cos(theta_m)
+
+    -- the trailing ``cos(theta_m)`` being exactly what
+    :func:`_binning_jacobian`'s ``r/(dx_out^2 cos(theta_out))`` cancels
+    when that leg turns out to be the last one.  Propagating that
+    invariant from leg ``m`` to leg ``m+1`` gives the factor this
+    function returns:
+
+        F = (1/(i lambda)) * Omega_out * r_in * cos(theta_out)
+                                              / cos(theta_in)
+
+    where ``r_in`` is the GEOMETRIC length of the leg that just ended
+    (``paths.leg``), ``cos(theta_in)`` the incoming direction's
+    z-component and ``cos(theta_out)`` the freshly drawn one.  The
+    ``1/cos(theta_in)`` is bookkeeping, not physics: it removes the
+    ``cos(theta)`` :func:`init_paths_from_field` applied on the
+    then-unknown assumption that the first leg would be the final one.
+    The ``cos(theta_out)`` is the genuine RS-I obliquity of the new
+    surface.  The formula composes, so it is correct for any number of
+    apertures.
+
+    V1 (verify pass, 2026-09-12): the pre-fix factor was
+    ``0.5*(cos_in + cos_out) * (1/(i lambda)) * Omega_out / n_paths``,
+    which is wrong twice for a chain.  (a) The ``/ n_paths`` divides by
+    the sample count a SECOND time -- a path is ONE sample of the joint
+    (source pixel, direction_1, ..., direction_m) integral, so the
+    ``1/n_paths`` belongs once and already lives in
+    ``init_paths_from_field`` alongside ``A_src * Omega_1``.  (b) The
+    intermediate leg carried no ``r``.  Measured on the oracle-free
+    "an unobstructed aperture plane is transparent" property -- the
+    two-leg walk over ``z1 + z2`` must equal the one-leg walk over the
+    same total -- the returned amplitude was low by exactly
+    ``n_paths * z1``: ``two/one * n_paths * z1`` = 1.098 / 1.046 /
+    0.860 / 0.920 / 1.339 / 0.801 across z1 = 0.25 / 0.5 / 1.0 mm and
+    n_paths = 0.5 / 2 M, i.e. 1.0 to Monte-Carlo scatter over a 4x range
+    of each.  The symmetric Kirchhoff obliquity
+    ``0.5(cos_in + cos_out)`` is a heuristic; the exact RS-I composition
+    wants the outgoing cosine alone, which is what this returns.
+
+    Parameters
+    ----------
+    paths : PathBundle or VectorPathBundle
+        The bundle arriving at the surface; ``leg`` and ``directions``
+        are read.
+    cos_theta_out : array
+        z-component of the freshly drawn emission directions.
+    cos_max : float
+        ``cos(cone_half_angle)`` of the emission cone.
+    wavelength : float
+        Vacuum wavelength [m], strictly positive (checked by the caller).
+    normalisation : {'physical', 'legacy'}
+        ``'legacy'`` returns the pre-v5.46 factor unchanged.
+    fn_name : str
+        For the error message (CONVENTIONS section 2).
+
+    Returns
+    -------
+    factor : array
+        Complex per-path multiplier.
+    """
+    xp = array_namespace(paths.positions)
+    n = int(paths.positions.shape[0])
+    cos_theta_in = paths.directions[..., 2]
+    omega = 2.0 * float(np.pi) * (1.0 - float(cos_max))
+    inv_i_lambda = complex(1.0 / (1j * float(wavelength)))
+
+    if normalisation == 'legacy':
+        # The pre-v5.46 factor: symmetric Kirchhoff obliquity, and the
+        # cone solid angle divided by the sample count.
+        obliquity = 0.5 * (cos_theta_in + cos_theta_out)
+        return obliquity.astype(_paths_weight_dtype(paths)) * (
+            inv_i_lambda * omega / float(n))
+
+    r_in = getattr(paths, 'leg', None)
+    if r_in is None:
+        r_in = paths.opl
+    ok = paths.alive & (r_in > 0) & (cos_theta_in > 1e-12)
+    if not is_jax_array(paths.positions):
+        if (int(np.count_nonzero(to_numpy(paths.alive))) > 0
+                and int(np.count_nonzero(to_numpy(ok))) == 0):
+            raise ValueError(
+                f"{fn_name}: normalisation='physical' needs the geometric "
+                f"length of the leg that ended at this surface (the "
+                f"intermediate-leg Jacobian of the Huygens-Fresnel "
+                f"composition), and every surviving path has travelled "
+                f"zero distance -- the aperture sits on the plane the "
+                f"paths were emitted from.  An aperture there is a mask "
+                f"on the source field, not a Huygens re-emission: apply "
+                f"it to the field before calling "
+                f"init_paths_from_field, propagate to a non-zero "
+                f"distance first, or pass normalisation='legacy' for the "
+                f"raw (non-photometric) path sum.")
+    safe_cos_in = xp.where(ok, cos_theta_in, 1.0)
+    factor = xp.where(ok, r_in * cos_theta_out / safe_cos_in, 0.0)
+    return factor.astype(_paths_weight_dtype(paths)) * (inv_i_lambda * omega)
+
+
+def _paths_weight_dtype(paths):
+    """Complex dtype a bundle's amplitudes are carried in."""
+    w = getattr(paths, 'weights', None)
+    if w is None:
+        w = paths.Ex
+    return w.dtype
 
 
 # ============================================================================
@@ -945,6 +1079,9 @@ def propagate_hfpi_freespace_aperture(
         wavelength=wavelength,
         rng=rng_aperture,
         cone_half_angle=cone_half_angle,
+        # V1: the re-emission measure and the binning Jacobian are two
+        # halves of ONE estimator; they must agree.
+        normalisation=normalisation,
     )
     paths = propagate_to_plane(paths,
                                 z_target=z_to_aperture + z_aperture_to_output,
@@ -1367,6 +1504,8 @@ def propagate_hfpi_through_prescription(
                     paths, aperture_radius=float(sd),
                     rng=rng_aperture, wavelength=wavelength,
                     cone_half_angle=cone_half_angle,
+                    # V1: must match the accumulator's choice below.
+                    normalisation=normalisation,
                 )
             cursor = diff_idx + 1
         # Trace the trailing tail (if any).

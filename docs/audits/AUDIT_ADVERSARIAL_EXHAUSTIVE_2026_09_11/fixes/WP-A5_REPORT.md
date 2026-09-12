@@ -596,3 +596,292 @@ reproduce the audit's own numbers:
 ## 7. Changelog text
 
 `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-A5_CHANGELOG.md`
+
+
+---
+---
+
+# 8. Follow-up (v5.46.1) — VERIFY-A5's open items and two cross-WP requests
+
+Input: `fixes/VERIFY_WP-A5.md` (read in full, §3.2 and §3.3 in
+particular), plus two coordinator requests from `fixes/WP-A6_REPORT.md`
+§5.3 and `fixes/WP-A2_REPORT.md` §5 item 4. Base for this round:
+`4996daeb` (the verifier's commit). Nothing outside WP-A5's ownership
+list was modified.
+
+## 8.1 Summary
+
+| item | source | status | evidence |
+|---|---|---|---|
+| **V1** | VERIFY §3.3, P1 open | **fixed** | residual `n_paths x z1` removed; transparency property 1.0 within MC scatter; independent RS-I double quadrature 0.908–1.046 |
+| **V6** | VERIFY §3.1, P2 | **fixed** | guard fires at ring 7.2–36.1 %, silent at 5.5e-22–8.1e-14, O(1) cost |
+| **V8** | VERIFY §2, P3 | **fixed** (changelog) | complex128 movement measured 1.76e-12 … 5.43e-10 |
+| **V5** | VERIFY §2, P3 | **stated** | K1/K2 label collision; both items fixed |
+| **V2, V3, V4** | fixed by the verifier in my files | **reviewed, kept** | re-ran their pins; 20/20 pass, and the `fft_infra` latch survives my ASM change |
+| **A6 §5.3** | coordinator | **not reproducible** + **pinned** | the MFT family already preserves complex64 in dtype, working precision and memory; the promotion is `carrier.py:9460` |
+| **A2 §5 item 4** | coordinator | **landed** | byte-identical at every configuration; 1.50× / 1.30× at N = 1024 / 2048 |
+
+## 8.2 V1 — the cascaded HFPI measure (P1)
+
+**Reproduced first.** The verifier's script, unmodified, on the
+as-committed code returned `two/one x n_paths x z1` = 1.098 / 1.046 /
+0.860 / 0.920 / 1.339 / 0.801 — its own six numbers to four digits — and
+I extended it to the vector twin, which is affected identically (0.861 /
+0.920 on the same rows).
+
+**Diagnosis, confirmed by derivation.** I re-derived the estimator's
+measure from scratch rather than taking the verifier's reading. Writing
+an intermediate surface integral in the direction variables the
+estimator samples,
+
+    dOmega_m = dS_{m+1} cos(theta_m) / r_m^2
+    =>  dS_{m+1} (cos(theta_m)/r_m) e^{ik r_m} = dOmega_m * r_m * e^{ik r_m}
+
+so an INTERMEDIATE leg's Kirchhoff kernel is
+`(1/(i lambda)) e^{ikr} * r * dOmega` — a factor `r`, not `1/r`, and no
+obliquity. Requiring the estimator to carry, after the *m*-th leg,
+
+    W_m = E(Q_1) (1/(i lambda))^m (A_src Omega_1/n) Omega_2..Omega_m
+          r_1..r_{m-1} e^{ik sum r} * cos(theta_m)
+
+— the trailing `cos(theta_m)` being exactly what `_binning_jacobian`'s
+`r/(dx_out^2 cos(theta_out))` cancels when that leg turns out to be the
+last — and propagating it from leg *m* to *m+1* gives
+
+    F = (1/(i lambda)) * Omega_out * r_in * cos(theta_out) / cos(theta_in)
+
+which is what the shared `_reemission_measure` now applies. That
+reproduces both halves of the verifier's diagnosis (the spurious `/n` and
+the missing `r`) and additionally shows the symmetric Kirchhoff obliquity
+`0.5(cos_in + cos_out)` is not what an exact RS-I composition wants: the
+outgoing cosine alone is, with a `1/cos_in` that is pure bookkeeping
+(undoing the source's `cos(theta)`, applied when it was not yet known
+that its leg would not be the last).
+
+The formula composes, so it is correct for any number of apertures — the
+prescription walk's aperture site threads the same value.
+
+**Verified three ways.**
+
+1. *Closed form, exact.* `_reemission_measure` is a pure function;
+   against the formula written out independently it agrees to < 1e-16
+   (bar 1e-13), and the `'legacy'` branch reproduces the pre-fix
+   expression to the same precision. Their ratio equals
+   `n * r_in * cos_out/cos_in / (0.5(cos_in+cos_out))` exactly — the
+   residual law, as an identity rather than a measurement.
+2. *Oracle-free property.* An unobstructed aperture plane is
+   transparent. At 8 M paths the two-leg/one-leg least-squares complex
+   scale reads 1.009 / 1.010 / 1.057 / 0.963 / 1.245 / 0.977 across
+   z1 = 0.25 / 0.5 / 1.0 mm and two seeds; at 2 M, 1.096 / 0.847 /
+   1.044 / 0.940 / 0.586 / 1.052. Pre-fix the same quantity was
+   `1/(n_paths z1)` — 9.84e-4 / 1.01e-3 / 3.19e-4 in the fail-before run,
+   against `1/(n z1)` = 1.0e-3 / 1.0e-3 / 2.5e-4.
+3. *Independent oracle.* A direct RS-I **double** quadrature through a
+   real 25 µm clipping aperture — super-sampled midpoint over the source
+   plane (3× per pixel) and a 120×320 polar midpoint over the aperture
+   disc, no FFT and no library propagator anywhere on the oracle side —
+   compared on a 9×9 block of output points:
+
+   | propagator | n_paths | seed | LS scale | arg (rad) |
+   |---|---|---|---|---|
+   | scalar | 8 M | 3 | 0.9715 | −0.173 |
+   | scalar | 8 M | 9 | 0.8800 | +0.239 |
+   | scalar | 32 M | 3 | 1.0457 | −0.037 |
+   | scalar | 32 M | 9 | 0.9080 | +0.019 |
+   | vector Ex | 8 M | 3 | 0.9715 | −0.173 |
+   | vector Ex | 8 M | 9 | 0.8799 | +0.239 |
+
+   i.e. absolute amplitude correct to the Monte-Carlo scatter, which
+   halves from 8 M to 32 M as `1/sqrt(N)`. Pre-fix the same scale would
+   be `1/(n z1)` = 2.5e-7 at 8 M. The `'legacy'` path against the same
+   oracle reads 2.52e-11 — non-photometric by contract, as documented.
+
+**Residual risk.** The per-pixel relative L2 after scaling is 0.70–1.82
+on that small-aperture fixture at 8–32 M paths and halves with path
+count: the AMPLITUDE is right, the per-pixel shot noise is the
+estimator's own, and it is exactly what the v5.31 under-sampling guard
+exists to flag. Nothing here changes that HFPI is a Monte-Carlo method.
+
+**Not defaulted to `'legacy'`.** The coordinator offered that as the
+fallback if `'physical'` could not be made correct on the chain. It can,
+and is, so the default stands.
+
+## 8.3 V6 — the RS transfer-branch wrap-around guard (P2)
+
+Implemented as the verifier suggested: the power that has reached the
+outer 1/8 of the padded window after the multiply, against the input
+power, warned above 2 %.
+
+Two corrections to the obvious implementation, both found by
+measurement:
+
+* **The detector was mis-centred at first.** `fftshift`-ing the padded
+  convolution moves the (already centred) field to the corners, so the
+  "ring" read 1.0 for a perfectly contained Gaussian. The padded array
+  holds the input at `[N/2 : 3N/2]` and a natural-order `H` convolves in
+  place, so the outer band of the raw array IS the outer ring — no shift.
+* **A full reduction over the ring is too expensive for a diagnostic**:
+  measured **+91 %** of the call at N = 256 and **+15 %** at N = 1024.
+  The ring fraction is a smooth spatial statistic, so the shipped
+  detector is a fixed-budget strided estimate (4096 points per band),
+  O(1) in grid size: **0.035–0.084 ms**, flat from N = 128 to 1024,
+  against a 5.5–187 ms call, and matching the full reduction to **0.5 %**
+  (7.2 / 30.3 / 30.2 / 36.1 / 28.0 % sampled against 7.22 / 30.35 /
+  30.12 / 36.09 / 27.86 % exact).
+
+Calibration and the 12-decade counter-fixture margin are in the
+changelog. The guard fires only on the `'transfer'` branch — the
+`'spatial'` branch truncates rather than wraps — and the returned field
+is pinned bit-identical with the guard disabled.
+
+**Not done: exposing the pad factor.** The verifier offered that as an
+alternative. It is a larger change (the 2N pad is assumed throughout the
+function and in the `'RS'` cache key) and the guard is what was asked
+for; recorded as deferred item 7 below.
+
+## 8.4 WP-A6 §5.3 — the MFT complex64 request: NOT REPRODUCIBLE
+
+The request was to make `angular_spectrum_propagate_mft` dtype-preserving
+for complex64. **It already is**, and so are its two siblings. Measured,
+not read:
+
+| entry point | c8 in | c16 in | relL2(c8, narrowed c16) |
+|---|---|---|---|
+| `angular_spectrum_propagate_mft` | complex64 | complex128 | 2.734e-07 |
+| `fresnel_propagate_mft` | complex64 | complex128 | 2.027e-07 |
+| `fraunhofer_propagate_mft` | complex64 | complex128 | 2.172e-07 |
+
+and the preservation is not a final cast over double-precision work: an
+instrumented `_bluestein_2d` is entered and left at the caller's dtype
+with `target_cdtype` threaded through, and the tracemalloc peak at
+N = 512 is **86.75 MB at complex64 against 168.49 MB at complex128** —
+the same 41.4 / 40.2 input-grid units, i.e. half the bytes for the same
+structure. `_bluestein_centred_2d` and `_bluestein_axis_1d` already build
+every chirp in float64 and narrow via `astype(target_cdtype)` before use,
+and `const_c` is already a `target_cdtype` scalar; the pattern the
+coordinator asked for is the pattern that is there.
+
+**Where the chain's complex128 actually comes from.**
+`carrier.py:9460–9461`:
+
+```python
+field = field * np.exp(
+    1j * k0 * (tilt_L * _u[None, :] + tilt_M * _v[:, None]))
+```
+
+`_u` / `_v` are float64, so this is a genuine complex128 ARRAY and
+`complex64 × complex128 array` promotes under NEP 50 — **downstream of**
+the MFT call, in `carrier.py`, which WP-A6 owns. Demonstrated in
+isolation: `complex64 * ramp` → complex128, `complex64 *
+ramp.astype(complex64)` → complex64, the two differing by 0.0 on a
+unit-modulus ramp. WP-A6's own comment at `:9463–9465` says exactly
+this; only its inference about `angular_spectrum_propagate_mft` was
+wrong.
+
+**What I did instead.** Pinned the contract (12 tests), so the one-line
+`carrier.py` fix can depend on it. Requested that fix in §8.7.
+
+## 8.5 WP-A2 §5 item 4 — folding the ASM spatial shift pair: LANDED
+
+v5.5.3 and S5-8g had already removed the two SPECTRUM-domain shifts. The
+remaining pair is around the FIELD, and for **even N it is the
+identity** — the two `(-1)^k` phases the shift theorem produces cancel
+against each other, so no checkerboard array is needed at all. For odd N
+the shift is not by `N/2` and the phase is not `±1`, so the fold is gated
+on both axes being even (measured `max|diff|` 2.1e-16 / 2.3e-16 /
+9.5e-16 / 1.1e-15 at N = 63 / 65 / 127 / 255 — small, but not zero, and a
+pinned-bits contract is a pinned-bits contract).
+
+**Byte-identical** to the pre-change module at N = 64 / 128 / 256 / 512 /
+1024 and 63 / 65 / 127 / 255, with `dy = 2 dx`, at complex64, with
+`bandlimit` on and off, and on the streamed path: `max|diff|` exactly
+0.0 in all eleven configurations. End to end with a warm H cache:
+**54.74 → 36.48 ms (1.50×)** at N = 1024 and **242.55 → 186.28 ms
+(1.30×)** at N = 2048; tracemalloc peak unchanged, because the `.copy()`
+the folded path needs (the dropped `fftshift` used to detach the pyFFTW
+ping-pong buffer — the v5.4.6 audit F-3 hazard) replaces the transient
+the rolls allocated. The audit's own ASM repro numbers are unchanged.
+
+Pinned three ways: the propagation still equals the textbook shifted
+idiom written out in raw numpy (bar 1e-14, even and odd N); the shift
+identity itself holds at even N and fails at odd N (a statement about the
+maths, so the gate is not untestable); and the returned array owns its
+memory after three later same-shape calls.
+
+## 8.6 Files touched in the follow-up
+
+| file | change |
+|---|---|
+| `lumenairy/propagators/hfpi.py` | V1: shared `_reemission_measure` + `_paths_weight_dtype`; `normalisation` on `apply_aperture_diffraction`, threaded from both entry points and the prescription walk |
+| `lumenairy/propagators/vectorial_hfpi.py` | V1: the twin uses the shared helper; `normalisation` on `apply_vector_aperture_diffraction` and the entry point |
+| `lumenairy/propagators/rs.py` | V6: `_warn_rs_transfer_wraparound` + two module constants, called on the `'transfer'` branch |
+| `lumenairy/propagators/asm.py` | A2 §5 item 4: the even-N spatial shift fold (main and streamed paths) |
+| `tests/unit/test_audit2609_a5_followup.py` | **new** — 38 tests (V1 ×7, V6 ×10, MFT dtype ×12, ASM fold ×8, + 1 shared) |
+| `tests/unit/test_audit2609_a5_propagators.py` | K12 prefactor test restated on the `'legacy'` measure (it read the re-emission factor, which V1 changed) |
+| `tests/unit/test_v4_14_0_dispatcher_pin_hfpi.py` | two RNG-stream pins apply an aperture on the emission plane; named `normalisation='legacy'` |
+| `validation/propagators/test_hfpi.py`, `test_vectorial_hfpi.py` | the aperture checks now propagate a leg first (a stronger form of the same check) |
+
+`mft.py` and `_bluestein.py` were NOT changed in this round — verified
+byte-identical to `4996daeb`, so the complex128 MFT path is trivially
+unmoved.
+
+## 8.7 Tests run (follow-up)
+
+| command | result |
+|---|---|
+| `pytest tests/unit/test_audit2609_a5_followup.py -q` | **38 passed**, 14.6 s |
+| `pytest` over the 25-file propagator surface incl. both verifier files | **662 passed, 1 skipped**, 106.5 s |
+| `pytest` over the 8 ASM-adjacent files + the audit's `p1_asm_core.py` repro | **201 passed, 6 skipped**; repro numbers unchanged |
+| `python validation/run_all.py test_propagation test_hf test_hfpi test_vectorial_hfpi test_mhs test_dispatch test_advanced_diffraction test_new_propagators_smoke test_gbd test_subaperture` | **10/10 files pass** |
+| `ruff check lumenairy/propagators/ lumenairy/backend/scipy.py` + both new test files | clean for my files (3 remaining errors are in `asymptotic.py`, `asymptotic_maslov.py` and `carrier_field.py` — other WPs; `carrier_field.py:469` is an **F821 undefined name `S`**, a live bug worth flagging) |
+
+**Fail-before.** All 8 substantive follow-up pins reject the pre-fix
+state, re-introducing each defect in process: V1's closed form (factor
+38.2 off), V1's transparency at three z1 (scale 9.84e-4 / 1.01e-3 /
+3.19e-4 against the predicted `1/(n z1)`), and V6's four firing cases
+(no warning at ring fractions 7.2–36.1 %). The earlier round's 20/20
+still hold.
+
+**Verifier changes reviewed and kept.** V2's `fft_infra` buffer-privatisation
+latch, V3's `rs.py` docstring correction and V4's two `vectorial_hfpi.py`
+docstring rewrites are in my files; I re-read all three, agree with them,
+and their 20 tests pass alongside my ASM fold (which touches the same
+`_ifft2` return path — the fold's own `.copy()` is independent of the
+latch and the "returned array owns its memory" pin covers their
+interaction).
+
+## 8.8 Requested changes outside my ownership (follow-up)
+
+4. **`lumenairy/propagators/carrier.py:9460–9461` — narrow the chief-ray
+   ramp to the field's dtype (WP-A6's C3 residual risk).** This is the
+   only reason the traced-carrier chain's tilted paraxial landing returns
+   complex128; `angular_spectrum_propagate_mft` is not involved (§8.4).
+   Exact change:
+
+   ```python
+   _ramp = np.exp(1j * k0 * (tilt_L * _u[None, :] + tilt_M * _v[:, None]))
+   field = field * (_ramp.astype(field.dtype)
+                    if np.iscomplexobj(field) else _ramp)
+   ```
+
+   The narrowing is exact for a unit-modulus ramp up to float32 rounding
+   (measured 0.0 on the isolated probe). The comment at `:9463–9465`
+   should lose its "which is not my file" clause. Owner: WP-A6.
+
+5. **`lumenairy/propagators/carrier_field.py:469` — `F821 Undefined name
+   `S``.** `ruff` fails on the committed tree:
+   `ph = _phasor_rows(lambda r0, r1: (sign * 1j * k) * S[r0:r1], ...)`
+   references an `S` that is not bound in scope. Not my file; flagged
+   because it is a live `NameError` on whatever path reaches it.
+
+## 8.9 Deferred (follow-up)
+
+7. **Expose the RS pad factor.** The verifier's alternative to the V6
+   guard. `rayleigh_sommerfeld_propagate` assumes a 2N pad throughout —
+   the `'RS'` cache key, the `y0/x0` placement and the crop all encode it
+   — so a `pad` parameter is a signature plus four internal changes plus
+   a cache-key bump, and it interacts with the `'transfer'` branch's
+   shared ASM cache entry (a 3N pad would no longer share with an ASM
+   call). *Effort:* ~2 h plus a convergence test showing the guard goes
+   quiet as `pad` rises. *Interim state:* the guard names the remedy
+   (enlarge N, coarsen dx, or step in z).

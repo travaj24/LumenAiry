@@ -60,6 +60,13 @@ def t_aperture_kills_outside_paths():
     N = 16; dx = 5e-6; lam = 633e-9
     E = np.ones((N, N), dtype=np.complex128)
     paths = init_paths_from_field(E, dx, n_paths=2000, wavelength=lam, rng=5)
+    # v5.46.1 (verify V1): the aperture's physical re-emission measure needs
+    # the geometric length of the leg that ended at it (the
+    # intermediate-leg Jacobian of the Huygens-Fresnel composition), so the
+    # bundle must have travelled.  An aperture ON the emission plane is a
+    # mask on the source field, not a re-emission, and now raises rather
+    # than returning a silently wrong amplitude.
+    paths = propagate_to_plane(paths, z_target=1e-3, wavelength=lam)
     # v5.46 (audit K12): ``wavelength`` is keyword-REQUIRED -- it gates the
     # 1/(i lambda) Kirchhoff prefactor, and the pre-v5.46 default of 0.0
     # silently dropped it (every weight wrong by 1/lambda in magnitude and

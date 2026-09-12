@@ -900,18 +900,30 @@ class TestK12WavelengthIsRequired:
             apply_aperture_diffraction(paths, 1e-3, wavelength=-1.0)
 
     def test_the_prefactor_is_the_one_that_was_being_dropped(self):
-        """The magnitude of what the default used to skip: the ratio
-        between the weights with and without the prefactor is exactly
-        ``1/lambda`` with a -90 degree phase."""
+        """The magnitude of what the default used to skip: the Kirchhoff
+        prefactor is ``1/(i lambda)`` -- 1.58e6 in magnitude at 633 nm
+        and exactly -90 degrees in phase.
+
+        Read off the re-emission factor directly, on the 'legacy'
+        measure so the assertion is about the PREFACTOR and not about the
+        v5.46.1 intermediate-leg Jacobian (verify V1).
+        """
         E = np.ones((8, 8), complex)
         paths = init_paths_from_field(E, 2e-6, n_paths=64, wavelength=LAM,
                                       rng=1)
-        out = apply_aperture_diffraction(paths, 1e-3, wavelength=LAM)
-        expected = complex(1.0 / (1j * LAM))
-        got = complex(np.asarray(out.weights)[0] / np.asarray(paths.weights)[0])
-        assert abs(got / expected) == pytest.approx(
-            abs(got / expected), rel=1e-12)
-        assert np.angle(expected) == pytest.approx(-np.pi / 2, abs=1e-12)
+        out = apply_aperture_diffraction(paths, 1e-3, wavelength=LAM,
+                                         normalisation='legacy')
+        ratio = complex(np.asarray(out.weights)[0]
+                        / np.asarray(paths.weights)[0])
+        # legacy factor = 0.5(cos_in + cos_out) * (1/(i lam)) * Omega/n,
+        # all real and positive except the 1/(i lam), so the PHASE is the
+        # prefactor's alone.
+        assert np.angle(ratio) == pytest.approx(-np.pi / 2, abs=1e-12), (
+            f"re-emission phase {np.angle(ratio):+.6f} rad; the "
+            f"1/(i lambda) Kirchhoff prefactor contributes exactly "
+            f"-pi/2 and nothing else in that factor is complex.")
+        assert abs(complex(1.0 / (1j * LAM))) == pytest.approx(
+            1.0 / LAM, rel=1e-15)
 
 
 class TestK18SourceAreaNormalisation:

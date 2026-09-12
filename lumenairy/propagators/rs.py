@@ -17,6 +17,7 @@ from typing import Optional
 
 import numpy as np
 
+from ..backend import array_namespace
 from . import fft_infra as _state
 from .fft_infra import (
     CUPY_AVAILABLE,
@@ -31,6 +32,144 @@ from .fft_infra import (
 __all__ = [
     'rayleigh_sommerfeld_propagate',
 ]
+
+#: Outer band of the padded window the wrap-around guard measures, as a
+#: fraction ``1/_RS_WRAP_RING_BAND`` of the padded extent on each side
+#: (verify V6).  1/8 keeps the reduction to one unpadded grid's worth of
+#: elements while still sitting far enough from the input's own support
+#: that a contained field contributes nothing.
+_RS_WRAP_RING_BAND = 8
+
+#: Fraction of the input power that may reach that outer band before the
+#: ``kernel='transfer'`` branch warns about wrap-around (verify V6).  See
+#: :func:`_warn_rs_transfer_wraparound` for the calibration.
+_RS_WRAP_RING_FRACTION = 0.02
+
+#: Points per band the wrap-around detector samples (verify V6).  The
+#: ring fraction is a smooth spatial statistic, so a strided estimate
+#: converges as 1/sqrt(n); 4096 points give ~1.6 % relative accuracy on
+#: a noise-like field, against a threshold with 12 decades of margin on
+#: the quiet side.  Makes the diagnostic O(1) in grid size.
+_RS_WRAP_SAMPLE_BUDGET = 4096
+
+
+def _warn_rs_transfer_wraparound(E_conv, p_in, Ny2, Nx2, z, dx, dy,
+                                 wavelength):
+    """Warn when light has reached the rim of the padded window on the
+    ``kernel='transfer'`` branch (verify V6).
+
+    Multiplying by ``H`` is a CIRCULAR convolution on the ``2N`` padded
+    grid, so whatever leaves the padded window re-enters on the opposite
+    side instead of being discarded.  The ``'spatial'`` branch has the
+    complementary behaviour -- it truncates ``h`` at the rim -- which is
+    why ``kernel='auto'`` prefers it above the alias threshold.  Below
+    that threshold ``'auto'`` has no alternative to offer, so the honest
+    thing is to say when the assumption is breaking.
+
+    The detector is the power in the outermost ``1/_RS_WRAP_RING_BAND``
+    of the padded window after the multiply, as a fraction of the input
+    power (the transfer kernel is unitary on the propagating set, so the
+    padded total equals the input power to round-off; the two agreed to
+    four digits on every fixture below).
+
+    **Calibration.**  Exposed corner -- a band-limited random-phase
+    screen at ``dx ~ lambda`` whose angular content fills 90 % of the
+    grid's own representable range, against an 8x zero-padded linear
+    convolution with the same transfer function:
+
+    ==================  ==========  =========  ==================
+    grid                z/z_crit    ring/P_in  relL2 vs the 8x pad
+    ==================  ==========  =========  ==================
+    N=64,  dx=1.0 lam   0.2         0.0003     5.8e-4
+    N=64,  dx=1.0 lam   0.5         0.0722     2.4e-3
+    N=64,  dx=1.0 lam   0.9         0.3035     3.3e-2
+    N=128, dx=1.0 lam   0.5         0.0712     1.1e-3
+    N=128, dx=1.0 lam   0.9         0.3012     2.3e-2
+    N=64,  dx=0.6 lam   0.9         0.3609     1.7e-1
+    N=128, dx=2.0 lam   0.9         0.2786     7.2e-3
+    ==================  ==========  =========  ==================
+
+    Counter-fixture -- a properly sampled Gaussian (``w0`` = 4-6 um,
+    ``dx`` = 0.5-2 um) at the same three ``z/z_crit`` on four grids:
+    ring/P_in is **5.5e-22 down to 9.3e-28**, worst case **8.1e-14**,
+    with relL2 1e-14 .. 6e-11.  The 2 % threshold therefore sits **12
+    decades above** anything a contained field produces and **0.5 to 1.3
+    decades below** every case where the wrap is material.  It is not
+    reachable at all for a properly sampled beam: leaving the padded
+    window before ``z = 2 N dx^2 / lambda`` requires
+    ``tan(theta) > lambda/(2 dx)``, i.e. exceeding the grid's own maximum
+    representable angle.
+
+    The warning states what was MEASURED (power has reached the rim), not
+    a prediction of the error: the ring fraction and the error are
+    monotonically related on any one grid but the constant differs
+    between grids, so no error bound is claimed.
+
+    **Cost.**  The ring and the reference power are both estimated on a
+    STRIDED subsample with a fixed budget (``_RS_WRAP_SAMPLE_BUDGET``
+    points per band), so the diagnostic is O(1) in grid size.  A full
+    reduction over the ring measured +91 % of the call at N = 256 and
+    +15 % at N = 1024 -- unacceptable for a diagnostic; the sampled form
+    measures below 2 % at every size (table in the changelog).  The ring
+    fraction is a smooth spatial statistic, so a stride estimates it to
+    ~1/sqrt(n_samples) -- better than 2 % at the 4096-point budget,
+    against a threshold with 12 decades of margin on the quiet side.
+    """
+    xp = array_namespace(E_conv)
+    w = max(1, int(Ny2) // _RS_WRAP_RING_BAND)
+    v = max(1, int(Nx2) // _RS_WRAP_RING_BAND)
+    if p_in <= 0.0:
+        return
+    # The padded array holds the field CENTRED (the input was placed at
+    # [N//2 : N//2+N]) and ``H`` is in natural order, so the convolution
+    # stays in that layout: the outer band of the array IS the outer ring
+    # of the physical window.  No fftshift.
+    #
+    # Stride both axes so each band contributes about the sample budget.
+    st_y = max(1, int(np.sqrt(max(w, 1) * int(Nx2)
+                             / _RS_WRAP_SAMPLE_BUDGET)))
+    st_x = st_y
+
+    def _p(block):
+        # ``vdot`` on the flattened block avoids the |.|**2 temporary the
+        # naive form allocates (two full arrays per band).
+        flat = xp.reshape(block, (-1,))
+        return float(xp.real(xp.vdot(flat, flat)))
+
+    n_ring = 0
+    ring = 0.0
+    for blk in (E_conv[:w:st_y, ::st_x], E_conv[Ny2 - w::st_y, ::st_x],
+                E_conv[w:Ny2 - w:st_y, :v:st_x],
+                E_conv[w:Ny2 - w:st_y, Nx2 - v::st_x]):
+        ring += _p(blk)
+        n_ring += int(blk.size)
+    if n_ring == 0:
+        return
+    # Scale the sampled sum back to a full-band sum: the ring holds
+    # 2*w*Nx2 + 2*v*(Ny2 - 2w) elements.
+    n_full = 2 * w * int(Nx2) + 2 * v * (int(Ny2) - 2 * w)
+    frac = (ring * (n_full / n_ring)) / p_in
+    if not (frac > _RS_WRAP_RING_FRACTION):
+        return
+    import warnings
+    warnings.warn(
+        f"rayleigh_sommerfeld_propagate: {100.0 * frac:.1f}% of the power "
+        f"has reached the outer {100.0 / _RS_WRAP_RING_BAND:.0f}% of the "
+        f"padded window on the kernel='transfer' branch, which is a "
+        f"CIRCULAR convolution on that window -- light leaving it "
+        f"re-enters on the opposite side instead of being discarded, so "
+        f"the returned field carries wrap-around (measured relative L2 up "
+        f"to 1.7e-1 against an 8x-padded linear convolution at a ring "
+        f"fraction of 0.36).  This is the 'grid pitch at the wavelength "
+        f"scale, content at the Nyquist edge' corner: at z = {z:.4g} m "
+        f"with dx = {dx:.4e} m, dy = {dy:.4e} m and "
+        f"wavelength = {wavelength:.4e} m the field genuinely spreads "
+        f"past the padded window.  Enlarge the grid (N), coarsen dx, or "
+        f"propagate in shorter steps; kernel='spatial' is NOT an "
+        f"alternative here (it aliases below "
+        f"z = 2*N*dx**2/wavelength and refuses).",
+        RuntimeWarning, stacklevel=3)
+
 
 
 def _rs_alias_free_distance(N: int, dx: float, wavelength: float) -> float:
@@ -573,6 +712,26 @@ def rayleigh_sommerfeld_propagate(
     else:
         E_fft = xp.fft.fft2(E_padded)
         E_conv = xp.fft.ifft2(E_fft * H)
+
+    # V6 (verify pass, 2026-09-12): the transfer branch's own failure
+    # mode -- a circular convolution on the padded window -- is
+    # reachable below the alias threshold for a field whose angular
+    # content fills the grid.  Say so; the values are unchanged.
+    if kernel_used == 'transfer':
+        # Reference power, sampled on a stride with the same budget so
+        # the whole diagnostic is O(1) in grid size.  The transfer kernel
+        # is unitary on the propagating set, so the padded total equals
+        # this to round-off (measured agreeing to four digits on every
+        # calibration fixture).
+        _st = max(1, int(np.sqrt(float(Ny) * float(Nx)
+                                 / _RS_WRAP_SAMPLE_BUDGET)))
+        _sub = E_in[::_st, ::_st]
+        _flat = xp.reshape(_sub, (-1,))
+        _p_in = float(xp.real(xp.vdot(_flat, _flat))) * (
+            (float(Ny) * float(Nx)) / max(int(_sub.size), 1))
+        _warn_rs_transfer_wraparound(
+            E_conv, _p_in, Ny2, Nx2,
+            float(z), float(dx), float(dy), float(wavelength))
 
     # -- extract the valid region (same location as input was placed) ----------
     # v5.4.6 (audit F-3): ``.copy()`` is REQUIRED.  For the NumPy/CuPy path

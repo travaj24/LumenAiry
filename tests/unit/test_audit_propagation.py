@@ -3272,7 +3272,18 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
             if (not math.isfinite(abs(b_quad))
                     or abs(b_quad.real) > 700):
                 continue
-            amp_lead = (detJ * (math.pi / sqrt_detM) * G0
+            # v5.46 (audit Y2): this inline scalar reference is a COPY of
+            # the library algorithm, so it carries the same correction --
+            # the Van Vleck-Maslov weight is ``-1j sqrt(|det J|) / lambda``,
+            # not ``|det J|``.  Leaving the stale ``detJ`` here would make
+            # the pin compare the library against a formula the library no
+            # longer implements (measured mismatch 3.85e+04 relative, i.e.
+            # exactly ``1/(lambda sqrt(|det J|))``); the pin's STRENGTH is
+            # unchanged -- both tolerances below are relative to the
+            # reference's own peak.
+            from lumenairy.propagators.asymptotic import van_vleck_weight
+            amp_lead = (van_vleck_weight(detJ, fit.wavelength)
+                          * (math.pi / sqrt_detM) * G0
                           * np.exp(2j * math.pi * phi_star)
                           * np.exp(b_quad))
             if not math.isfinite(abs(amp_lead)):
@@ -3407,7 +3418,18 @@ class TestAuditFixesV4_14_0_agent_1_1APropagateModalAsymptoticStillBitEqual:
             if (not math.isfinite(abs(b_quad))
                     or abs(b_quad.real) > 700):
                 continue
-            amp_lead = (detJ * (math.pi / sqrt_detM) * G0
+            # v5.46 (audit Y2): this inline scalar reference is a COPY of
+            # the library algorithm, so it carries the same correction --
+            # the Van Vleck-Maslov weight is ``-1j sqrt(|det J|) / lambda``,
+            # not ``|det J|``.  Leaving the stale ``detJ`` here would make
+            # the pin compare the library against a formula the library no
+            # longer implements (measured mismatch 3.85e+04 relative, i.e.
+            # exactly ``1/(lambda sqrt(|det J|))``); the pin's STRENGTH is
+            # unchanged -- both tolerances below are relative to the
+            # reference's own peak.
+            from lumenairy.propagators.asymptotic import van_vleck_weight
+            amp_lead = (van_vleck_weight(detJ, fit.wavelength)
+                          * (math.pi / sqrt_detM) * G0
                           * np.exp(2j * math.pi * phi_star)
                           * np.exp(b_quad))
             if not math.isfinite(abs(amp_lead)):

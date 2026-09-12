@@ -94,6 +94,53 @@ __all__ = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# The SPATIAL shift pair, and when it folds away entirely (WP-A2 section 5
+# item 4 / audit K5's second half).
+# ---------------------------------------------------------------------------
+# v5.5.3 + S5-8g already removed the two SPECTRUM-domain shifts by caching H
+# in natural layout.  What is left on every propagation is the pair around
+# the field:
+#
+#     fftshift( ifft2( fft2( ifftshift(E) ) * H_natural ) )
+#
+# For EVEN N that pair is the identity.  ``ifftshift(E)[n] = E[n + N/2]``
+# circularly, and the shift theorem gives
+# ``DFT{E[n + N/2]}[k] = DFT{E}[k] * exp(2 pi i k (N/2) / N) = DFT{E}[k] *
+# (-1)^k``, so
+#
+#     fft2(ifftshift(E)) = fft2(E) * S ,    S[ky, kx] = (-1)^(kx + ky)
+#     fftshift(ifft2(F)) = ifft2(F * S)     (the same identity, inverted)
+#
+# and therefore
+#
+#     fftshift(ifft2(fft2(ifftshift(E)) * H)) = ifft2(fft2(E) * H * S * S)
+#                                             = ifft2(fft2(E) * H)
+#
+# because ``S * S == 1`` elementwise.  No checkerboard array is built: the
+# two shifts cancel each other, not the kernel.
+#
+# For ODD N the circular shift is not by ``N/2`` and the phase is not +-1, so
+# the identity does NOT hold -- measured max|diff| 2.1e-16 / 2.3e-16 /
+# 9.5e-16 / 1.1e-15 at N = 63 / 65 / 127 / 255, i.e. small but not zero.
+# The fold is therefore gated on both axes being even, and odd grids keep
+# the shifted form unchanged.
+#
+# MEASURED (complex128, bandlimit on, medians of 9 interleaved runs, the
+# propagation step alone with H already built):
+#
+#   N = 1024:  52.03 -> 34.21 ms  (1.52x)   byte-identical
+#   N = 2048: 239.95 -> 171.02 ms (1.40x)   byte-identical
+#
+# and byte-identical at N = 64 / 128 / 256 / 512 / 1024 (max|diff| exactly
+# 0.0).  The tracemalloc peak is unchanged (one full grid either way): the
+# ``.copy()`` the folded NumPy path needs -- ``_ifft2`` returns a view into
+# the pyFFTW ping-pong buffer, which the old ``fftshift`` used to detach --
+# replaces the transient the two rolls allocated.  The win is the two
+# full-grid permutations, not memory.
+_ASM_SHIFTS_FOLD_EVEN_ONLY = True
+
+
 def _asm_H_from_kz(kz, prop, z, target_cdtype, xp=np, use_numexpr=False):
     """Assemble the ASM transfer function ``exp(1j * kz * z)`` on the
     propagating set, zeroed on the evanescent set (``~prop``), at
@@ -837,11 +884,15 @@ def angular_spectrum_propagate(
     # about the call is unchanged, including the 2-shift fold below.
     if (stream_transfer_function and xp is np and not is_jax
             and not return_transfer_function):
-        spec = _fft2(np.fft.ifftshift(E_in))
+        # WP-A2 section 5 item 4: same fold, same gate (see above).
+        _fold_shifts = (Ny % 2 == 0) and (Nx % 2 == 0)
+        spec = _fft2(E_in if _fold_shifts else np.fft.ifftshift(E_in))
         if spec.dtype != target_cdtype:          # pragma: no cover - defensive
             spec = spec.astype(target_cdtype)
         _asm_apply_H_streamed(spec, Ny, Nx, dy, dx, wavelength, z, bandlimit,
                               verbose=verbose)
+        if _fold_shifts:
+            return _ifft2(spec).copy()
         return np.fft.fftshift(_ifft2(spec))
 
     # v5.17.x (P2-27): the H-cache lookup / chunked construction moved
@@ -856,8 +907,24 @@ def angular_spectrum_propagate(
     #   == fftshift(ifft2(           fft2(ifftshift(E))      *H_natural   ))
     # (ifftshift distributes over the elementwise product; ifftshift.fftshift =
     # id).  Algebraically EXACT for any N, even or odd -- 4 shifts -> 2.
+    #
+    # WP-A2 section 5 item 4: for EVEN (Ny, Nx) the remaining SPATIAL shift
+    # pair is the identity and is dropped -- see the derivation and the
+    # measurements above ``_asm_H_from_kz``.  Byte-identical; 1.52x / 1.40x
+    # on the propagation step at N = 1024 / 2048.  Odd grids keep the
+    # shifted form, where the identity does not hold.
+    _fold_shifts = (Ny % 2 == 0) and (Nx % 2 == 0)
     if xp is np:
-        E_out = np.fft.fftshift(_ifft2(_fft2(np.fft.ifftshift(E_in)) * H))
+        if _fold_shifts:
+            # ``.copy()`` is REQUIRED: ``_ifft2`` returns a view into the
+            # cache-owned pyFFTW inverse ping-pong buffer, and the
+            # ``fftshift`` it replaces used to detach it.
+            E_out = _ifft2(_fft2(E_in) * H).copy()
+        else:
+            E_out = np.fft.fftshift(
+                _ifft2(_fft2(np.fft.ifftshift(E_in)) * H))
+    elif _fold_shifts:
+        E_out = xp.fft.ifft2(xp.fft.fft2(E_in) * H)
     else:
         E_out = xp.fft.fftshift(
             xp.fft.ifft2(xp.fft.fft2(xp.fft.ifftshift(E_in)) * H))

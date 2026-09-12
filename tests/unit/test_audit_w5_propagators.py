@@ -289,18 +289,61 @@ class TestP230CollinsFactor:
             f"(pre-fix this ratio was the spurious Collins excess C*q0+D)")
 
     def test_matches_analytic_collins_and_gaussian_w_of_z(self):
-        """Free-space ABCD: amplitude factor 1/(1 + z*Q0); |factor| must
-        equal the analytic w0/w(z)."""
+        """Free-space ABCD amplitude == the TEXTBOOK Gaussian beam.
+
+        v5.46 INVERTED (audit S5, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).
+        This test used to assert ``exp(ikz) / (1 + z*Q0)`` -- the library's
+        own expression, i.e. it could not see a sign error in that
+        expression.  It is replaced by an oracle written here from the
+        textbook Gaussian beam, using nothing from the library but ``w0``,
+        ``lambda`` and ``z``::
+
+            E(z) / E(0) = exp(i k z) * (w0 / w(z)) * exp(-i arctan(z/z_R))
+            w(z) = w0 sqrt(1 + (z/z_R)^2),   z_R = pi w0^2 / lambda
+
+        under the library's stated convention (CONVENTIONS Section 7:
+        ``exp(-i omega t)`` / ``exp(+i k z)``), for which the fundamental
+        Gaussian's Gouy phase is ``-arctan(z/z_R)``.
+
+        MEASURED on this fixture (w0 = 5 um, lambda = 1 um, z = 7 mm, so
+        z/z_R = 89.1 and arctan = 1.5596 rad): the code now matches that
+        oracle to **3.20e-16** relative, while the old pinned expression
+        ``exp(ikz)/(1 + z*Q0)`` is off by **2.00** relative -- it is the
+        oracle's complex conjugate up to the axial piston, i.e. the Gouy
+        phase with the wrong SIGN (``exp(+2 i psi)``).  ``Q`` is the
+        module's engineering ``1/q`` (``q_code = conj(q_physics)``), so the
+        physics amplitude ratio is ``conj(1/(A + B Q))``, which is what
+        ``apply_abcd_to_beamlets`` now returns.
+
+        The modulus assertion below is conjugation-BLIND and passed in both
+        versions -- which is exactly why the defect survived: |1/(1+zQ0)|
+        equals w0/w(z) whichever sign the phase carries.
+        """
         z = 7e-3
         b0 = _one_beamlet(self.wl, self.w0)
         Q0 = b0.Q[0]
         out = apply_abcd_to_beamlets(b0, 1.0, z, 0.0, 1.0, self.wl,
                                      axial_opl=z)
         k = 2 * np.pi / self.wl
-        expect = np.exp(1j * k * z) / (1.0 + z * Q0)
-        assert abs(out.amplitude[0] - expect) < 1e-12 * abs(expect)
         z_R = np.pi * self.w0**2 / self.wl
         w_z = self.w0 * np.sqrt(1.0 + (z / z_R) ** 2)
+        gouy = np.arctan(z / z_R)
+        expect = np.exp(1j * k * z) * (self.w0 / w_z) * np.exp(-1j * gouy)
+        # 1e-12 relative: 4 decades above the measured 3.2e-16 (which is a
+        # few ulp of the k*z = 4.4e4 rad piston) and 12 decades below the
+        # 2.0 the conjugated form scores.
+        assert abs(out.amplitude[0] - expect) < 1e-12 * abs(expect), (
+            f'Collins amplitude {out.amplitude[0]!r} != analytic Gaussian '
+            f'{expect!r}; the conjugated (pre-S5) form would be '
+            f'{np.exp(1j * k * z) / (1.0 + z * Q0)!r}')
+        # Negative control: the pre-S5 expression must NOT match, or the
+        # assertion above would be insensitive to the Gouy sign.
+        legacy = np.exp(1j * k * z) / (1.0 + z * Q0)
+        assert abs(legacy - expect) > 1.0 * abs(expect), (
+            'the conjugated Collins form has become indistinguishable from '
+            'the analytic Gaussian on this fixture; pick a z where the Gouy '
+            'phase is not a multiple of pi.')
+        # Modulus (conjugation-blind, kept for the w(z) law itself).
         assert abs(abs(1.0 / (1.0 + z * Q0)) - self.w0 / w_z) < 1e-12
 
     def test_thin_lens_abcd_amplitude_preserved(self):

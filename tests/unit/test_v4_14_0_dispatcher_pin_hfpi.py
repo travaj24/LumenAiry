@@ -244,7 +244,13 @@ class TestSpawnRngIndependenceDispatcherPin:
             ap_paths = apply_aperture_diffraction(
                 init_paths, aperture_radius=1e-3,
                 wavelength=wavelength,
-                rng=_spawn_rng(seed, 1))
+                rng=_spawn_rng(seed, 1),
+                # v5.46.1 (verify V1): the aperture is applied directly
+                # on the emission plane here, where no path has travelled
+                # and the physical intermediate-leg Jacobian is undefined
+                # (it refuses rather than returning zeros).  This test
+                # pins the RNG STREAMS, not the photometry.
+                normalisation='legacy')
             init_dirs = np.asarray(init_paths.directions)
             ap_dirs = np.asarray(ap_paths.directions)
         else:
@@ -256,7 +262,9 @@ class TestSpawnRngIndependenceDispatcherPin:
             ap_paths = apply_vector_aperture_diffraction(
                 init_paths, aperture_radius=1e-3,
                 wavelength=wavelength,
-                rng=_spawn_rng(seed, 1))
+                rng=_spawn_rng(seed, 1),
+                # v5.46.1 (verify V1): see the scalar arm above.
+                normalisation='legacy')
             init_dirs = np.asarray(init_paths.directions)
             ap_dirs = np.asarray(ap_paths.directions)
         # If the two streams aliased, the direction arrays would be
