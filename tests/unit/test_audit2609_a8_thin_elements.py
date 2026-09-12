@@ -238,12 +238,35 @@ def test_e6_base_class_quadrature_is_lobe_width_independent(l, s):
 
 
 def test_e6_base_class_quadrature_is_exact_for_a_flat_lobe():
-    """The cell weights sum to ``int u du`` exactly, so a constant BSDF
-    integrates with no quadrature error at all -- the property that makes
-    the grid safe for broad lobes as well as narrow ones."""
+    """A constant BSDF is the widest lobe there is, so it is the arm that
+    shows the grid is safe for broad lobes as well as narrow ones.
+
+    VERIFY-A8 (2026-09-12): this bar was ``< 1e-5`` with no derivation and
+    a docstring claiming the cell weights sum to ``int u du`` EXACTLY.  They
+    do not.  Two-point Gauss-Legendre in ``v = ln u`` is exact through cubic
+    order in ``v``, but the flat-lobe integrand is ``u**2 = exp(2v)``, whose
+    quartic term leaves the textbook residual ``dv**4 * 2**4 / 4320`` per
+    cell.  With ``dv = ln(1e7)/128 = 0.1259232`` that predicts
+    ``9.312e-07``; measured ``sum(w) / (1/2) - 1 = -9.2935e-07`` and
+    ``BSDFModel.total_integrated_scatter(Lambertian(0.5)) / 0.5 - 1 =
+    -9.2935e-07`` -- agreement to 0.2 %, so the residual is understood, is
+    deterministic for a given node count, and is not a build-dependent
+    reading.
+
+    Bar 3e-6 relative: 3.2x above that derived-and-measured residual and
+    5 decades below the -32 % the linear-theta grid read on a narrow lobe.
+    The lower arm pins that the error is a QUADRATURE residual of the
+    predicted size, not a scale error: > 1e-7 in magnitude would be
+    impossible for weights that summed exactly.
+    """
     lam = bsdf_mod.LambertianBSDF(rho=0.5)
     quad = bsdf_mod.BSDFModel.total_integrated_scatter(lam)
-    assert abs(quad - 0.5) < 1e-5, quad
+    rel = quad / 0.5 - 1.0
+    assert abs(rel) < 3e-6, (quad, rel)
+    n_cells = 128
+    dv = -np.log(bsdf_mod._TIS_U_MIN) / n_cells
+    predicted = dv ** 4 * 2 ** 4 / 4320.0
+    assert abs(abs(rel) / predicted - 1.0) < 0.05, (rel, predicted)
 
 
 def test_e6_shipped_model_tis_values_are_unchanged():
@@ -295,8 +318,25 @@ def test_e6_harvey_shack_sampler_makes_no_rejection_loop():
 @pytest.mark.parametrize('inc', [
     (0.0, 0.0, -1.0), (0.3, 0.2, -0.93), (0.0, 0.0, 1.0), (0.6, -0.5, -0.62)])
 def test_e6_batched_rotation_equals_the_per_ray_reference(inc):
-    """The batched frame build must be bit-identical to the per-ray code it
-    replaces, including the |spec_z| >= 0.999 pole branch."""
+    """The batched frame build must reproduce the per-ray code it replaces,
+    including the |spec_z| >= 0.999 pole branch.
+
+    VERIFY-A8 (2026-09-12): this asserted ``np.array_equal``.  Bit-identity
+    is NOT a property of the change: the per-ray code normalises a 1-D
+    vector with ``np.linalg.norm(v)`` (which goes through ``np.dot`` and so
+    may use a BLAS ``nrm2``) while the batched code uses
+    ``np.linalg.norm(v, axis=-1)`` (a ufunc reduction).  Swept over 407
+    incidences (400 uniform random + 7 at and around the 0.999 pole
+    threshold) the two agree exactly on 350 and differ by at most
+    4.441e-16 = 2 ULP of a unit direction cosine on the other 57; the four
+    fixtures below happen to fall in the exact set, which is precisely the
+    per-build knife edge TESTING_STANDARDS S4 warns about.
+
+    Bar 8 * eps = 1.78e-15 absolute on a unit vector: 4x the measured
+    worst-case 4.441e-16 over those 407 incidences, and ~12 decades below
+    the smallest geometric error that would matter (a wrong ``up`` vector
+    at the pole rotates the lobe by O(1)).
+    """
     inc = np.array(inc) / np.linalg.norm(inc)
     rng = np.random.default_rng(0)
     local = rng.normal(size=(500, 3))
@@ -314,7 +354,8 @@ def test_e6_batched_rotation_equals_the_per_ray_reference(inc):
     ref[ref[:, 2] < 0] *= -1
 
     got = bsdf_mod._rotate_local_to_specular(local.copy(), inc)
-    assert np.array_equal(got, ref)
+    assert np.max(np.abs(got - ref)) <= 8 * np.finfo(float).eps, (
+        np.max(np.abs(got - ref)))
 
 
 @pytest.mark.parametrize('spec', [
@@ -325,15 +366,30 @@ def test_e6_batched_rotation_equals_the_per_ray_reference(inc):
 def test_e6_sample_scatter_rays_is_vectorised_and_distribution_preserving(
         spec):
     """Pre-fix this was one Python ``sample()`` call per incident ray.  The
-    bundle is now drawn in one call; the pins are (a) no Python loop over
-    rays in the source, (b) unit-norm outgoing directions in the outgoing
-    hemisphere, and (c) the same scatter-angle distribution as the per-ray
-    reference, compared as a mean with a derived Monte-Carlo bar.
+    bundle is now drawn in one call; the pins are (a) the whole bundle costs
+    exactly ONE lobe-local draw however many rays it holds, (b) unit-norm
+    outgoing directions in the outgoing hemisphere, and (c) the same
+    scatter-angle distribution as the per-ray reference, compared as a mean
+    with a derived Monte-Carlo bar.
+
+    VERIFY-A8 (2026-09-12): (a) was a source-text assertion
+    (``'for i in range(n_rays)' not in src``).  ``sample_scatter_rays`` now
+    legitimately contains that loop as the compatibility path for a user
+    subclass that implements only ``sample`` (see
+    ``test_verify_a8_sample_scatter_rays_still_serves_a_sample_only_subclass``),
+    so the pin counts ``_sample_local`` calls instead -- the property the
+    text was standing in for, and one that cannot be satisfied by renaming a
+    loop variable.
     """
     import lumenairy.raytrace as rt
 
-    src = inspect.getsource(bsdf_mod.sample_scatter_rays)
-    assert 'for i in range(n_rays)' not in src
+    calls = []
+    model_cls = type(bsdf_mod.make_bsdf(dict(spec)))
+    real_local = model_cls._sample_local
+
+    def _counting(self, n_samples, rng, _f=real_local):
+        calls.append(n_samples)
+        return _f(self, n_samples, rng)
 
     n = 4000
     rr = np.random.default_rng(5)
@@ -347,7 +403,16 @@ def test_e6_sample_scatter_rays_is_vectorised_and_distribution_preserving(
     class _Surface:
         bsdf = spec
 
-    out = bsdf_mod.sample_scatter_rays(_Surface(), bundle, n_per_ray=1, rng=3)
+    monkey = pytest.MonkeyPatch()
+    try:
+        monkey.setattr(model_cls, '_sample_local', _counting, raising=True)
+        out = bsdf_mod.sample_scatter_rays(_Surface(), bundle, n_per_ray=1,
+                                           rng=3)
+    finally:
+        monkey.undo()
+    assert calls == [n], (
+        f"the bundle of {n} rays cost {len(calls)} lobe-local draws "
+        f"({calls[:4]}...); pre-vectorisation it cost one per ray")
     dirs = np.stack([out.L, out.M, out.N], axis=1)
     assert np.max(np.abs(np.linalg.norm(dirs, axis=1) - 1.0)) < 1e-12
     assert np.all(out.N > 0)
@@ -599,15 +664,20 @@ def test_e7_aperture_hard_edge_is_the_default_and_unchanged():
 
 
 def test_e7_aperture_gray_edge_removes_the_area_quantisation():
-    """Measured 2026-09-12, rms over 20 sub-pixel rim placements of the
+    """Measured 2026-09-12, rms over the 12 sub-pixel rim placements this
+    test actually sweeps (``linspace(0, 0.95, 12)``), of the
     transmitted-area error against the analytic disc area:
 
-        D/dx ~  50 px : 0.342 % hard  ->  0.059 % gray (4x4)
-        D/dx ~ 200 px : 0.041 % hard  ->  0.0069 % gray
+        D/dx ~  50 px : 0.386 % hard  ->  0.044 % gray (4x4)
+        D/dx ~ 200 px : 0.031 % hard  ->  0.0041 % gray
 
-    Bars below: gray rms < 0.12 % at 50 px (2x the measurement, 2.8x below
-    the hard reading) and gray strictly better than hard at both sizes
-    (a decision, no bar).
+    (VERIFY-A8 re-measurement; the docstring previously quoted 0.342 % /
+    0.059 % / 0.041 % / 0.0069 % over "20 placements", which is not the
+    sweep below.  The bars are unchanged and still clear.)
+
+    Bars below: gray rms < 0.12 % at 50 px (2.7x the measurement, 3.2x
+    below the hard reading) and gray strictly better than half the hard
+    reading at both sizes (a decision, no bar).
     """
     N, dx = 512, 1e-6
     E = np.ones((N, N), dtype=np.complex128)

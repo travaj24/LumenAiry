@@ -1160,6 +1160,63 @@ def _bundled_row_catalogue_source(name):
     return None
 
 
+# Built-in exception types that mean "this catalogue page cannot be used as
+# a dispersion source": the page is absent from the index, its DATA block is
+# malformed, or the evaluator rejects the request.  A corrupt database file
+# (a yaml parse error) is deliberately NOT in here -- that is an environment
+# fault and must be loud, not silently reported as "row unresolvable".
+_CATALOGUE_LOOKUP_BUILTIN_EXCEPTIONS = (
+    KeyError, ValueError, TypeError, AttributeError, IndexError,
+    ArithmeticError, NotImplementedError, OSError)
+
+_catalogue_lookup_exception_cache = None
+
+
+class _NoSuchAttributeSentinel:
+    """Marks "the attribute is absent" as distinct from "its value is None"
+    (CONVENTIONS Section 9); compared with ``is`` only."""
+
+    __slots__ = ()
+
+    def __repr__(self):
+        return '<no such attribute>'
+
+
+_NO_SUCH_ATTRIBUTE = _NoSuchAttributeSentinel()
+
+
+def _catalogue_lookup_exceptions():
+    """Exception types that mean "this catalogue page is unusable".
+
+    Sibling of :func:`_missing_kappa_exceptions`: ``refractiveindex`` defines
+    its own ``Exception`` subclasses, which cannot be named without a hard
+    dependency (CONVENTIONS Section 10), so they are resolved from the
+    installed module and appended to the built-in tuple above rather than
+    imported -- and rather than swallowed by a bare ``except Exception``.
+    """
+    global _catalogue_lookup_exception_cache
+    if _catalogue_lookup_exception_cache is not None:
+        return _catalogue_lookup_exception_cache
+    extra = ()
+    if _ensure_refractiveindex_loaded():
+        import sys as _sys
+        for mod in (_sys.modules.get(RefractiveIndexMaterial.__module__),
+                    _sys.modules.get('refractiveindex')):
+            if mod is None:
+                continue
+            found = tuple(
+                obj for obj in vars(mod).values()
+                if isinstance(obj, type) and issubclass(obj, Exception)
+                and obj is not Exception
+                and getattr(obj, '__module__', None) == mod.__name__)
+            if found:
+                extra = found
+                break
+    _catalogue_lookup_exception_cache = (
+        _CATALOGUE_LOOKUP_BUILTIN_EXCEPTIONS + extra)
+    return _catalogue_lookup_exception_cache
+
+
 def _catalogue_index_fn_from_entry(entry):
     """Return ``f(wavelength_m) -> n`` for one ``(shelf, book, page)``, or
     ``None`` when that page does not resolve to a dispersion model."""
@@ -1168,10 +1225,22 @@ def _catalogue_index_fn_from_entry(entry):
     try:
         shelf, book, page = entry
         material = RefractiveIndexMaterial(shelf=shelf, book=book, page=page)
-        # Force one evaluation: a page carrying only tabulated k has no
-        # index function and must not be reported as a usable source.
+    except _catalogue_lookup_exceptions():
+        return None
+    # A page carrying only tabulated k has no index model and must not be
+    # reported as a usable source.  The package signals that by raising a
+    # BARE ``Exception`` from ``get_refractive_index``, which no narrow
+    # except clause can name -- so TEST the condition instead of catching
+    # it.  ``_n_func`` is private, so fall back to the forced evaluation
+    # (under the narrow tuple) if a future package version renames it; a
+    # bare ``Exception`` escaping there is then a loud API-drift signal,
+    # which is the right outcome for a check that gates the whole table.
+    n_model = getattr(material, '_n_func', _NO_SUCH_ATTRIBUTE)
+    if n_model is None:
+        return None
+    try:
         material.get_refractive_index(_LINE_D_M * 1e9, unit='nm')
-    except Exception:
+    except _catalogue_lookup_exceptions():
         return None
     return (lambda wl_m, _m=material:
             float(_m.get_refractive_index(np.asarray(wl_m) * 1e9, unit='nm')))
@@ -1228,7 +1297,11 @@ def _cross_check_bundled_values(tol_nd=_BUNDLED_VALUE_TOL_ND,
         try:
             nd_row, vd_row = _nd_vd(bundled_fn)
             nd_cat, vd_cat = _nd_vd(catalogue_fn)
-        except Exception as exc:            # unusable page / bad row
+        # Narrow, not bare: a row or page that cannot be evaluated at the
+        # d/F/C lines is reported as a discrepancy, but an unexpected
+        # failure class must still propagate rather than be recorded as a
+        # tidy one-line "problem" and lost.
+        except _catalogue_lookup_exceptions() as exc:   # unusable page / row
             problems.append(
                 f"{name}: bundled {kind} row or its catalogue page could "
                 f"not be evaluated at the d/F/C lines "
@@ -1598,6 +1671,62 @@ def _invalidate_glass_name(glass_name):
             del _glass_value_cache[_key]
 
 
+def _catalogue_page_wavelength_range_m(material):
+    """The catalogue page's own data range in metres, or ``None`` when the
+    installed package version does not expose one.
+
+    ``refractiveindex`` keeps it as ``_wl_range`` in micrometres -- private,
+    hence the defensive read; the caller falls back to
+    :data:`GLASS_VALIDITY`.
+    """
+    rng = getattr(material, '_wl_range', None)
+    try:
+        lo, hi = rng
+        return float(lo) * 1e-6, float(hi) * 1e-6
+    except (TypeError, ValueError):
+        return None
+
+
+def _require_finite_catalogue_index(fn_name, glass_name, material,
+                                    wavelength, n):
+    """Refuse a non-finite refractive index coming back from a catalogue page.
+
+    A refractiveindex.info page whose data does not span the requested
+    wavelength INTERPOLATES TO NaN instead of raising, so a lookup outside
+    the page's range used to hand back ``nan`` -- ``get_glass_index('SILICON',
+    633e-9)`` and, through it, ``get_glass_index_complex`` returning
+    ``nan + 0j`` -- with only a validity *warning* to show for it.  One
+    multiplication later the NaN is across the whole field.  That is the same
+    silent-wrong shape as the missing-extinction arm one level over, and it
+    gets the same treatment: refuse, and name the range that would work.
+
+    Only the live-catalogue path can produce it; the bundled Sellmeier and
+    polynomial evaluators are closed forms that are finite everywhere they
+    are defined and carry their own guards.
+    """
+    n_arr = np.asarray(n, dtype=float)
+    if np.all(np.isfinite(n_arr)):
+        return
+    wl_arr = np.asarray(wavelength, dtype=float)
+    bad = wl_arr[~np.isfinite(n_arr)] if wl_arr.shape == n_arr.shape else wl_arr
+    bad = np.atleast_1d(bad)
+    rng = _catalogue_page_wavelength_range_m(material)
+    if rng is None:
+        rng = GLASS_VALIDITY.get(glass_name)
+    span = (f"[{rng[0]:.3e}, {rng[1]:.3e}] m" if rng
+            else "(the page does not declare one)")
+    where = (f"{float(bad[0]):.4e} m" if bad.size == 1
+             else f"{bad.size} of {wl_arr.size} wavelengths, "
+                  f"{float(np.min(bad)):.4e}..{float(np.max(bad)):.4e} m")
+    raise ValueError(
+        f"{fn_name}: the refractiveindex.info page for {glass_name!r} has no "
+        f"data at {where}; its wavelength range is {span}.  The page's "
+        f"interpolator returns NaN outside that range rather than raising, "
+        f"so this is refused instead of being handed back as a silent NaN.  "
+        f"Query inside the range, or register a callable / Sellmeier "
+        f"coefficients covering the wavelengths you need.")
+
+
 def get_glass_index(glass_name: str, wavelength: float) -> float:
     """
     Look up refractive index by common glass name at a given wavelength.
@@ -1822,8 +1951,11 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
         _glass_cache[glass_name] = RefractiveIndexMaterial(
             shelf=shelf, book=book, page=page)
 
-    return _glass_cache[glass_name].get_refractive_index(
-        wavelength * 1e9, unit='nm')
+    material = _glass_cache[glass_name]
+    n = material.get_refractive_index(wavelength * 1e9, unit='nm')
+    _require_finite_catalogue_index(
+        'get_glass_index', glass_name, material, wavelength, n)
+    return n
 
 
 def get_glass_index_complex(glass_name: str,

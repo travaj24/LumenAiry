@@ -84,6 +84,55 @@ Tests: `tests/unit/test_audit2609_a8_glass.py::test_e2_complex_index_never_raise
 `::test_e2_missing_kappa_warns_once_and_returns_zero`,
 `::test_e2_pages_that_do_carry_k_keep_their_value_and_sign`.
 
+### Changed -- glass: a catalogue lookup outside the page's data range now RAISES instead of returning NaN (E2, second arm) — **default change**
+
+The κ arm above was half the contract.  A refractiveindex.info page whose data
+does not span the requested wavelength interpolates the REAL index to NaN as
+well, and that one was never guarded: `get_glass_index('SILICON', 633e-9)`
+returned `nan` and `get_glass_index_complex` returned `nan + 0j`, with only a
+validity *warning* to show for it — measured at 5 of 8 wavelengths swept
+(0.35 / 0.4 / 0.5876 / 0.633 / 1.064 µm; the `main/Si/Li-293K` page starts at
+1.2 µm).  One multiplication later the NaN is across the whole field.
+
+It is now a named `ValueError` (CONVENTIONS §2 prefix) quoting the page's own
+wavelength range and the offending wavelength, e.g.
+
+```
+get_glass_index: the refractiveindex.info page for 'SILICON' has no data at
+6.3300e-07 m; its wavelength range is [1.200e-06, 1.400e-05] m. ...
+```
+
+Only the live-catalogue (tuple-registered) path can produce it; the bundled
+Sellmeier and polynomial evaluators are closed forms with their own guards and
+are untouched.  **Migration.**  A caller that relied on the NaN as an
+in-band "no data" signal must catch `ValueError` (or test the range first);
+in-range lookups are bit-identical (SILICON 3.5003 at 1.31 µm, 3.4757 at
+1.55 µm, 3.4150 at 10 µm) and every other catalogue glass is unaffected.
+
+Files: `lumenairy/glass.py` (`_catalogue_page_wavelength_range_m`,
+`_require_finite_catalogue_index`, and the tuple-path return of
+`get_glass_index`).
+Tests: `tests/unit/test_audit2609_a8_verify.py::test_verify_a8_e2_out_of_range_catalogue_lookup_refuses_instead_of_nan`.
+
+### Changed -- glass: the two new catalogue-lookup guards catch named exception tuples, not bare `Exception` (E1)
+
+`_catalogue_index_fn_from_entry` and `_cross_check_bundled_values` shipped with
+`except Exception`, which took the non-`ui/` broad-except census from 48 to 50
+against a budget of 48 (`tests/unit/test_audit_except_budget.py`).  Both are
+narrowed to `_catalogue_lookup_exceptions()` — an explicit built-in tuple plus
+the optional package's own exception classes resolved from the installed
+module, exactly as `_missing_kappa_exceptions()` already does (CONVENTIONS §10,
+no hard dependency).  The one case that genuinely could not be named — the
+package raising a BARE `Exception` from `get_refractive_index` for a page that
+carries only tabulated k — is now TESTED for (`_n_func is None`) rather than
+caught, with the forced evaluation kept as the fallback if a future version
+renames that attribute.  Coverage is unchanged: 76 of 76 bundled rows still
+resolve, 0 problems, same residuals; census contribution back to **0**.
+
+Files: `lumenairy/glass.py` (`_CATALOGUE_LOOKUP_BUILTIN_EXCEPTIONS`,
+`_NoSuchAttributeSentinel`, `_catalogue_lookup_exceptions`,
+`_catalogue_index_fn_from_entry`, `_cross_check_bundled_values`).
+
 ### Changed -- elements: `generate_turbulence_screen` delivered 2× the requested phase variance; the spurious `sqrt(2)` is gone (E3, P1) — **default change**
 
 The amplitude was `sqrt(2 * PSD) * df`.  With `c_k = (a_k + i b_k)·A_k` and `a`,
@@ -194,8 +243,14 @@ same node count (256 × 128): the variable is `u = sin θ` (for which
 from 1e-7 to 1 with two-point Gauss-Legendre inside each, and the `u < 1e-7`
 disc is added analytically.  Worst-case relative error across Lambertian,
 Gaussian (σ = 1e-2 and 0.3) and Harvey-Shack (l = 1e-1…1e-4, s = 1.5/2/2.5):
-**1.4e-6** (typical 1e-9), against −32 % / −18 % for the grid it replaces; a flat
-lobe integrates exactly because the cell weights sum to `∫u du`.
+**1.4e-6** (typical 1e-9), against −32 % / −18 % for the grid it replaces.
+
+That 1.4e-6 is the worst of those lobes, not a bound.  The rule is exact
+through cubic order in `v = ln u`, so the residual is the quartic term
+`dv⁴·2⁴/4320`; with `dv = ln(1e7)/128` that is **9.3e-7 even for a FLAT lobe**
+(whose integrand `u² = e^{2v}` is not a cubic), measured at −9.2935e-07 for
+`B = const` and 1.3e-5 for `B = 1 − u²`.  Budget ~1e-5 for a broad smooth lobe
+— still four to five decades better than the grid this replaces.
 
 Files: `lumenairy/elements/bsdf.py:61` (`_TIS_U_MIN`), `:130-201` (base
 quadrature), `:503-528` (the closed form).
@@ -213,6 +268,15 @@ introduces.  Unknown keys now raise, naming the accepted set; `A` / `B` / `C` ar
 accepted as aliases for `b0` / `l` / `s`, and supplying both spellings of one
 parameter raises rather than silently picking one.
 
+**Migration.**  This is a strictness change, not only an alias addition: ANY key
+the chosen `kind` does not consume is now a `ValueError`, so a surface `bsdf`
+spec that carried a free-text annotation (`'comment'`, `'source'`, `'notes'`)
+alongside its parameters used to be accepted and is now rejected.  No in-repo
+caller passes an extra key (grepped `lumenairy/`, `tests/`, `validation/`,
+`examples/`); prescriptions written outside the repo may.  Move such keys out
+of the spec dict — the alternative, a silently-ignored key, is the defect this
+entry is about.
+
 Files: `lumenairy/elements/bsdf.py:617-703`.
 Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_make_bsdf_*`.
 
@@ -222,9 +286,18 @@ Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_make_bsdf_*`.
 its own `np.array` build and — for Harvey-Shack — its own rejection loop with a
 Python `list.extend`.  The lobe-local draw is incidence-independent, so the whole
 bundle is now drawn in one call and rotated by a batched frame build; the
-rotation is bit-identical to the per-ray code it replaces, including the
-near-pole branch.  Measured on 20 000 incident rays, `n_per_ray = 1`:
+rotation reproduces the per-ray code it replaces, including the near-pole
+branch, to **4.441e-16** — 2 ULP of a unit direction cosine — and exactly on
+350 of 407 incidences swept (the residual is `np.linalg.norm(v)` on a 1-D
+vector dispatching to a BLAS `nrm2` where `norm(v, axis=-1)` is a ufunc
+reduction; it is not bit-identity and must not be asserted as such).
+Measured on 20 000 incident rays, `n_per_ray = 1`:
 **113× (lambertian), 327× (gaussian), 377× (harvey_shack)**.
+
+**Migration.**  `sample_scatter_rays` prefers a new batched
+`BSDFModel._sample_local` hook, which the three shipped models implement.  A
+user subclass that implements only the ABC's abstract `sample` keeps working:
+it has no hook, so the function falls back to the per-ray loop for it.
 
 `HarveyShackBSDF` draws `u = sin θ` from the closed-form inverse CDF
 (`t = T^ξ` at s = 2, `t = (1 + ξ(T^p − 1))^{1/p}` otherwise, `u = l√(t−1)`),
@@ -263,15 +336,16 @@ Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e6_klein_cook_guard_
 `::test_e6_grating_fourier_coefficients_are_untouched`,
 `::test_e6_grating_module_docstring_formula_is_well_formed`.
 
-### Performance -- doe: `create_microlens_array` rebuilt on the separable phase — 3.1× memory, 3.0× time, bit-identical (E6, P2)
+### Performance -- doe: `create_microlens_array` rebuilt on the separable phase — 4.3× memory, 3.0× time, bit-identical (E6, P2)
 
 The lenslet phase `−k/(2f)·(dX² + dY²)` is separable and the footprint test is
 too, but `X, Y, in_mla, jx, jy, xc, yc, dX, dY, r_sq, phase` were all full N×N
 grids.  The snap, the local coordinate and the footprint test are now length-N
 vectors; only `r_sq` is a full grid, and `cos`/`sin` are written straight into
 the output's real/imaginary views instead of going through `np.exp(1j·phase)`.
-Measured tracemalloc peak in units of one N² float64 grid, identical at N = 1024
-and N = 2048: **10.13 → 3.25**; median wall time at N = 2048: **426 → 144 ms**.
+Measured tracemalloc peak in units of one N² float64 grid, one implementation
+per process and identical at N = 1024 and N = 2048: **14.13 → 3.25**; median
+wall time at N = 2048: **426 → 144 ms**.
 Output is bit-identical (`np.array_equal`, several N / pitch / lenslet-count
 combinations).  `|T| = 1` everywhere and the exactly-zero steer at each lenslet
 centre are unchanged.
@@ -298,13 +372,22 @@ Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e7_periodic_phase_ma
 The aperture family offered a hard binary mask only, so an under-sampled stop
 carried a systematic throughput bias plus extra Gibbs ringing.  `edge='gray'`
 gives each boundary pixel its `edge_samples**2`-supersampled open-area fraction
-(default 4 → 16 sub-samples), accumulated one sub-mask at a time so the peak cost
-is one float grid plus one boolean grid.  Measured transmitted-area error against
-the analytic disc area on the audit's own fixture: at D/dx = 50 px
-**−0.942 % → +0.038 %**, at 200 px −0.048 % → −0.0006 %, at 800 px −0.009 % →
-+0.0005 %; `edge_samples=16` reaches −0.00056 % at 50 px.  Default `'hard'` is
-bit-identical to before on circular / annular / rectangular, dtype-preserving,
-and the JAX path matches NumPy exactly (0.00e+00) for both edges.
+(default 4 → 16 sub-samples), accumulated one sub-mask at a time so the peak
+cost does not grow with `edge_samples` (measured 6.0 float64 grids at N = 2048
+for every `n_sub`, against 5.0 for the hard edge).  Measured transmitted-area
+error against the analytic disc area, **before and after on the same grid**
+(N = 1024, dx = 1 µm): at D/dx = 50 px **−0.5345 % → +0.0384 %**, at 200 px
+−0.0220 % → −0.0006 %, at 800 px −0.0075 % → +0.0005 %; `edge_samples=16`
+reaches −0.00056 % at 50 px.  The hard-edge error depends on where the rim
+falls on the pixel lattice, so the honest summary is the rms over sub-pixel rim
+placements: **0.386 % → 0.044 %** at 50 px and 0.031 % → 0.0041 % at 200 px,
+over `linspace(0, 0.95, 12)`.  Those are CIRCULAR-rim figures; an axis-aligned
+(rectangular) rim is quantised rather than sampled and improves as `1/n_sub`
+exactly (0.639 % at 4 → 0.158 % at 16 on a 40.3 × 17.7 px stop).  Default
+`'hard'` is bit-identical to before on circular / annular / rectangular,
+dtype-preserving, and the JAX path matches NumPy exactly (0.00e+00) for both
+edges.  A fully blocked pixel comes out exactly zero for any input, including a
+field carrying NaN or inf outside the stop.
 
 Files: `lumenairy/elements/elements.py:226-360`.
 Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e7_aperture_*`.
@@ -344,6 +427,13 @@ instead of 1.000274 at 1 atm / 1.064 µm, i.e. 274 µm of OPD per metre of air p
 canonical lower-case key `'air'` and falls back to 1.0 otherwise.  **No default
 changes**: `'air'` ships unregistered, `list_glasses()` is unchanged (77 names,
 no `'air'`), and `'vacuum'` / `'__MIRROR__'` still raise as before.
+
+**Migration.**  The consult is by the CANONICAL LOWER-CASE key only.
+`get_glass_index('AIR')` and `get_glass_index('Air')` honour
+`GLASS_REGISTRY['air']`, but a callable stored under a mixed-case key
+(`GLASS_REGISTRY['Air'] = ...`) is still silently ignored and the lookup
+returns 1.0 — the name is case-folded before the short-circuit, so the registry
+is only ever consulted at `'air'`.  Register ambient models at `'air'`.
 
 Files: `lumenairy/glass.py:1650-1662`, `:1852-1866`.
 Tests: `tests/unit/test_audit2609_a8_glass.py::test_e7_*`.

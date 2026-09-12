@@ -261,18 +261,23 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         ``edge_samples**2``-supersampled open-area fraction instead, which
         removes the area quantisation and most of the edge aliasing.
         Measured transmitted-area error against the analytic disc area,
-        rms over 20 sub-pixel rim placements: at ``D/dx ~ 50`` pixels
-        0.342 % hard (range -0.54 %..+0.70 %) vs 0.059 % gray at the
-        4x4 default; at ``D/dx ~ 200`` 0.041 % hard vs 0.0069 % gray.
-        Costs ``edge_samples**2`` mask builds (one full-grid boolean each,
-        not held simultaneously).
+        rms over the 12 sub-pixel rim placements
+        ``linspace(0, 0.95, 12)`` (2026-09-12, N = 512, dx = 1 um): at
+        ``D/dx ~ 50`` pixels **0.386 % hard** (range -0.535 %..+0.805 %)
+        vs **0.044 % gray** at the 4x4 default; at ``D/dx ~ 200``
+        0.031 % hard vs 0.0041 % gray.  Costs ``edge_samples**2`` mask
+        builds (one full-grid boolean each, not held simultaneously).
 
     edge_samples : int, default 4
         Sub-samples per axis for ``edge='gray'`` (so 4 -> 16 per pixel).
-        rms area error at ``D/dx ~ 50``: 0.144 % at 2, 0.054 % at 4,
-        0.021 % at 8, 0.0033 % at 16 -- i.e. ~1/n_sub**1.5, so raise it
-        only when the rim is badly undersampled.  Ignored when
-        ``edge='hard'``.
+        rms area error at ``D/dx ~ 50`` over the same 12 placements:
+        0.108 % at 2, 0.044 % at 4, 0.021 % at 8, 0.0055 % at 16 -- a
+        little better than ``1/n_sub`` and short of ``1/n_sub**1.5``, so
+        raise it only when the rim is badly undersampled.  These are
+        CIRCULAR-rim numbers: an axis-aligned (rectangular) rim is
+        quantised rather than sampled and improves as ``1/n_sub`` exactly
+        (measured 0.639 % at 4 -> 0.158 % at 16 on a 40.3 x 17.7 px stop).
+        Ignored when ``edge='hard'``.
 
     Returns
     -------
@@ -348,8 +353,10 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
 
     # Grey edge: average the binary mask over an n_sub x n_sub lattice of
     # sub-pixel offsets centred on each pixel, giving its open-area
-    # fraction.  Accumulated one sub-mask at a time so the peak cost is a
-    # single float grid plus a single boolean grid, not n_sub**2 of them.
+    # fraction.  Accumulated one sub-mask at a time, so the peak stays at
+    # the cost of a single sub-mask evaluation (measured 6.0 float64 grids
+    # at N = 2048, against 5.0 for the hard edge) instead of growing with
+    # n_sub**2 -- measured identical at n_sub = 2, 4 and 8.
     real_dtype = xp.zeros((), dtype=E_in.dtype).real.dtype
     offsets = (np.arange(n_sub) + 0.5) / n_sub - 0.5
     frac = xp.zeros((Ny, Nx), dtype=real_dtype)
@@ -357,7 +364,18 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         for ox in offsets:
             frac = frac + _mask_at(ox * dx, oy * dy)
     frac = frac / (n_sub * n_sub)
-    return E_in * frac.astype(real_dtype)
+    # A fully blocked pixel must come out EXACTLY zero, like the hard edge,
+    # even where the incoming field is not finite: a NaN outside a stop is
+    # ordinary in this library (out-of-domain sag, the aplanatic thin-lens
+    # sentinel), and ``0.0 * nan`` is ``nan``, which an FFT would then smear
+    # over the whole plane.  So select rather than scale outside the opening.
+    # (Blanking first and scaling after would also silence the ``inf * 0``
+    # numpy warning on a field carrying +-inf, but it costs two more
+    # full-grid temporaries -- measured 8.0 grids against 6.0 at N = 2048 --
+    # to quieten a diagnostic the OPEN region's own ``inf * frac`` raises
+    # anyway.  A NaN field is quiet either way.)
+    return xp.where(frac > 0, E_in * frac.astype(real_dtype),
+                    xp.zeros((), dtype=E_in.dtype))
 
 
 # =============================================================================

@@ -841,7 +841,17 @@ from lumenairy.elements.bsdf import (
 
 def _reference_scalar_tis(bsdf: BSDFModel,
                           n_theta: int = 256, n_phi: int = 128) -> float:
-    """Pre-v4.13.0 nested-loop TIS, inlined here as the pin reference."""
+    """Pre-v4.13.0 nested-loop TIS, inlined here.
+
+    NOTE (VERIFY-A8, 2026-09-12): this is the LINEAR-theta midpoint grid,
+    and audit 2026-09-11 row E6 measured it reading -0.7 % at the
+    Harvey-Shack defaults, -18 % at ``l = 1e-3`` and -32 % at ``l = 1e-4``
+    because a scatter lobe's shoulder falls between its samples.  It is
+    therefore no longer an oracle for the library's TIS -- it is the
+    quantity that was replaced.  It is kept because the two tests below
+    now use it the other way round: as the pre-fix reading whose error the
+    corrected code must NOT reproduce.
+    """
     theta = np.linspace(1e-6, np.pi / 2, n_theta)
     phi = np.linspace(0, 2 * np.pi, n_phi, endpoint=False)
     inc = np.array([0.0, 0.0, -1.0])
@@ -883,38 +893,81 @@ class _DefaultLambertian(BSDFModel):
 
 def test_default_tis_against_lambertian_closed_form():
     """For a Lambertian-pi BSDF the analytical TIS equals rho exactly.
-    Pin the vectorised default integration against rho within 1e-3
-    relative."""
-    rho = 0.7
-    bsdf = _DefaultLambertian(rho)
-    tis = bsdf.total_integrated_scatter()
-    # Numerical-quadrature error from the default 256x128 grid is the
-    # endpoint-rule cosine bias at theta -> pi/2; ~1e-3 relative is the
-    # achievable bound without going to a Gauss-Legendre rule.
-    assert abs(tis - rho) <= 1e-3 * rho, (
-        f'TIS = {tis:.6f}, expected ~{rho:.6f}')
+
+    VERIFY-A8 (2026-09-12): the bar was 1e-3 relative, with a comment
+    saying that was "the achievable bound without going to a
+    Gauss-Legendre rule".  Audit 2026-09-11 row E6 went to exactly such a
+    rule -- two-point Gauss-Legendre in geometric cells of ``ln(sin theta)``
+    at the same 256 x 128 node count -- so the achievable bound moved by
+    three decades: measured ``tis/rho - 1 = -9.2935e-07`` at rho = 0.3 and
+    0.7 alike (it is a pure quadrature residual, independent of rho), where
+    the linear-theta grid it replaced read -1.2642e-05.  The bar is
+    tightened to 3e-6 relative, 3.2x above the measurement and 4.2x below
+    the reading of the grid that was replaced, so this test now
+    discriminates between the two instead of passing on either.
+    """
+    for rho in (0.3, 0.7):
+        bsdf = _DefaultLambertian(rho)
+        tis = bsdf.total_integrated_scatter()
+        assert abs(tis - rho) <= 3e-6 * rho, (
+            f'TIS = {tis:.9f}, expected ~{rho:.9f}')
 
 
 def test_vectorised_matches_scalar_loop_harvey_shack():
-    """A non-degenerate Harvey-Shack BSDF: vectorised TIS must match
-    the inline scalar-loop reference to within 1e-10."""
-    hs = HarveyShackBSDF(b0=0.05, l=0.02, s=2.0)
-    tis_vec = hs.total_integrated_scatter()  # subclass default OR override
-    # Force the BSDFModel-default code path by calling it explicitly,
-    # since HarveyShackBSDF doesn't override TIS.
-    tis_ref = _reference_scalar_tis(hs)
-    assert abs(tis_vec - tis_ref) <= 1e-10, (
-        f'vectorised TIS = {tis_vec:.10e}, scalar = {tis_ref:.10e}')
+    """A non-degenerate Harvey-Shack BSDF, against the ANALYTIC hemisphere
+    integral rather than against the linear-theta loop.
+
+    VERIFY-A8 (2026-09-12): this test asserted
+    ``|closed_form - _reference_scalar_tis| <= 1e-10``, i.e. it pinned the
+    library's TIS to the linear-theta quadrature that audit 2026-09-11 row
+    E6 identified as the defect (the exact pattern report section 14 calls
+    "tests that pin defects").  ``HarveyShackBSDF`` now carries the exact
+    closed form ``pi b0 l**2 ln(1 + 1/l**2)`` for s = 2, so at
+    (b0, l, s) = (0.05, 0.02, 2) the two now differ by 1.003e-06 -- four
+    decades past the old 1e-10 bar, and the test failed on HEAD until this
+    change.
+
+    Oracle now: the closed form of the ABC-lobe hemisphere integral,
+    written out here from the ``t = 1 + (u/l)**2`` substitution.  Bar
+    1e-12 relative: the two expressions are the same three floating-point
+    operations in a different order, measured agreement 0.00e+00.  The
+    linear-theta reading is asserted as the thing that must NOT come back:
+    it is -2.0397e-03 relative, 9 decades above the bar.
+    """
+    b0, l, s = 0.05, 0.02, 2.0
+    hs = HarveyShackBSDF(b0=b0, l=l, s=s)
+    tis = hs.total_integrated_scatter()
+    analytic = np.pi * b0 * l ** 2 * np.log(1 + 1 / l ** 2)
+    assert abs(tis / analytic - 1.0) <= 1e-12, (
+        f'closed-form TIS = {tis:.12e}, analytic = {analytic:.12e}')
+    tis_linear_theta = _reference_scalar_tis(hs)
+    assert abs(tis_linear_theta / analytic - 1.0) > 1e-4, (
+        'the linear-theta grid no longer under-reads this lobe; if that '
+        'is real, re-derive the numbers in this docstring')
 
 
 def test_vectorised_matches_scalar_loop_default_lambertian():
-    """Same pin for the bare-default Lambertian-pi subclass that
-    forces use of BSDFModel.total_integrated_scatter."""
-    b = _DefaultLambertian(rho=0.3)
-    tis_vec = b.total_integrated_scatter()
-    tis_ref = _reference_scalar_tis(b)
-    assert abs(tis_vec - tis_ref) <= 1e-10, (
-        f'vectorised TIS = {tis_vec:.10e}, scalar = {tis_ref:.10e}')
+    """Same treatment for the bare-default Lambertian-pi subclass, which is
+    what forces ``BSDFModel.total_integrated_scatter`` itself.
+
+    VERIFY-A8 (2026-09-12): also pinned to ``_reference_scalar_tis`` within
+    1e-10 and also failing on HEAD -- the rebuilt base quadrature differs
+    from the linear-theta loop by 3.514e-06 at rho = 0.3.  The oracle is
+    now the analytic answer (TIS of a ``rho/pi`` lobe is exactly rho), and
+    the arm that matters is the DECISION that the new grid is closer to it
+    than the grid it replaced.  Measured 2026-09-12: new -9.2935e-07
+    relative, old -1.2642e-05, i.e. 13.6x better; the 3e-6 bar sits between
+    them with 3.2x / 4.2x of clearance.
+    """
+    for rho in (0.3, 0.7):
+        b = _DefaultLambertian(rho=rho)
+        tis_new = b.total_integrated_scatter()
+        tis_linear_theta = _reference_scalar_tis(b)
+        assert abs(tis_new / rho - 1.0) <= 3e-6, (
+            f'rho={rho}: base-quadrature TIS = {tis_new:.12e}')
+        assert abs(tis_new - rho) < abs(tis_linear_theta - rho), (
+            f'rho={rho}: the rebuilt quadrature ({tis_new:.12e}) is no '
+            f'better than the linear-theta grid ({tis_linear_theta:.12e})')
 
 
 # ============================================================================

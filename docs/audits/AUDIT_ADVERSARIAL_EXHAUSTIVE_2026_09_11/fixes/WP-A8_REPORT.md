@@ -19,12 +19,12 @@ installed** (CuPy paths desk-checked only).  Every python invocation ran with
 | **E6** HS TIS | **fixed** | `elements/bsdf.py:503-528`, `:61`, `:130-201` | `::test_e6_harvey_shack_tis_*`, `::test_e6_base_class_quadrature_*` | closed form + a 200 001-point geometric-grid trapezoid integral built in the test | TIS(l = 1e-3) **3.54486e-5 → 4.34027e-5** (−18.3 % → −9.3e-8); l = 1e-4 −31.8 % → −7.0e-6; base quadrature worst error **−32 % → 1.4e-6** at the same node count |
 | **E6** `make_bsdf` keys | **fixed** | `elements/bsdf.py:617-703` | `::test_e6_make_bsdf_*` (4 tests) | direct construction | `{'sigma','scatter_fraction'}` silently → 10× wider / 50× weaker lobe; now raises.  `A`/`B`/`C` aliases accepted |
 | **E6** Klein-Cook guard | **fixed (added)** | `elements/thin_grating.py:1-108`, `:196` | `::test_e6_klein_cook_guard_fires_in_the_bragg_regime`, `::test_e6_short_period_guard_fires_when_q_is_small`, `::test_e6_grating_fourier_coefficients_are_untouched` | Klein-Cook Q; a direct 8192-point FFT of the transmittance (unchanged) | **0 warnings at Q = 62.8 → 1**; silent at Q = 0.13; ΣT = 1.0000 throughout (why closure cannot be the check) |
-| **E6** MLA separable | **fixed** | `elements/doe.py:256-284` | `::test_e6_microlens_array_separable_form_is_bit_identical`, `::test_e6_microlens_array_allocates_a_handful_of_grids_not_ten`, `::test_e6_microlens_array_physics_is_untouched` | the pre-separable implementation written out in the test | peak **10.13 → 3.25** float64 grids (identical at N = 1024 and 2048); median 426 → **144 ms** at N = 2048; output bit-identical |
+| **E6** MLA separable | **fixed** | `elements/doe.py:256-284` | `::test_e6_microlens_array_separable_form_is_bit_identical`, `::test_e6_microlens_array_allocates_a_handful_of_grids_not_ten`, `::test_e6_microlens_array_physics_is_untouched` | the pre-separable implementation written out in the test | peak **14.13 → 3.25** float64 grids (identical at N = 1024 and 2048, one implementation per process — VERIFY-A8 correction of the 10.13 first reported); median 426 → **144 ms** at N = 2048; output bit-identical |
 | **E6** `sample_scatter_rays` | **fixed** | `elements/bsdf.py:113-127`, `:306-326`, `:407-426`, `:539-566`, `:582-615`, `:753-771` | `::test_e6_sample_scatter_rays_is_vectorised_and_distribution_preserving`, `::test_e6_batched_rotation_equals_the_per_ray_reference`, `::test_e6_harvey_shack_sampler_matches_its_power_weighted_density`, `::test_e6_harvey_shack_sampler_makes_no_rejection_loop` | the per-ray loop it replaces; a numerically-integrated CDF | 20 000 rays: **113× / 327× / 377×** (lambertian / gaussian / harvey_shack).  HS `sample()` of 20 k: 5.47 → 3.73 ms, 7.33 → 3.28 ms, **24.93 → 3.58 ms**, rejection eliminated (acceptance was 46 % / 9.2 % / 1.3 %) |
 | **E7** Noll pointer | **fixed** | `elements/elements.py:476-484` | `::test_e7_zernike_docstring_no_longer_points_noll_users_at_the_osa_map` | `zernike_index_to_nm(5) == (2, +2)` (OSA) vs Noll's (2, −2) | docstring corrected; no converter is claimed |
 | **E7** `'air'`/`'vacuum'`/`'__MIRROR__'` | **fixed** | `glass.py:1049-1076` (comment), `:1650-1662`, `:1852-1866` | `::test_e7_air_defaults_to_one_for_every_spelling`, `::test_e7_registered_air_callable_is_honoured`, `::test_e7_documented_non_entries_really_are_absent`, `::test_e7_exemption_list_documents_only_legal_names` | Edlén ambient model | a registered `'air'` callable was ignored (n = 1.000000 vs 1.000274 at 1.064 µm, **274 µm/m of OPD**); now honoured.  Defaults unchanged, `list_glasses()` still 77 names |
 | **E7** non-square DOE cell | **fixed** | `elements/doe.py:155-163` | `::test_e7_periodic_phase_mask_rejects_a_non_square_cell`, `::test_e7_periodic_phase_mask_square_behaviour_is_unchanged` | direct occupancy count | `(4,8)`: half the design silently unused → named `ValueError`; `(8,4)`: bare `IndexError` → named `ValueError` |
-| **E7** grey-pixel aperture | **fixed (added)** | `elements/elements.py:226-360` | `::test_e7_aperture_gray_edge_removes_the_area_quantisation`, `::test_e7_aperture_hard_edge_is_the_default_and_unchanged`, `::test_e7_aperture_gray_edge_has_jax_parity`, `::test_e7_aperture_gray_edge_preserves_dtype_and_validates_its_kwargs` | analytic disc area | D/dx = 50 px: **−0.942 % → +0.038 %** (`edge='gray'`), −0.00056 % at 16×16; 200 px −0.048 % → −0.0006 %.  Default unchanged, bit-identical |
+| **E7** grey-pixel aperture | **fixed (added)** | `elements/elements.py:226-360` | `::test_e7_aperture_gray_edge_removes_the_area_quantisation`, `::test_e7_aperture_hard_edge_is_the_default_and_unchanged`, `::test_e7_aperture_gray_edge_has_jax_parity`, `::test_e7_aperture_gray_edge_preserves_dtype_and_validates_its_kwargs` | analytic disc area | D/dx = 50 px on ONE grid: **−0.5345 % → +0.0384 %** (`edge='gray'`), −0.00056 % at 16×16; rms over the 12 rim placements the test sweeps 0.386 % → 0.044 %; 200 px 0.031 % → 0.0041 % (VERIFY-A8 re-measurement — the −0.942 % first paired here is the audit's hard reading on a different grid).  Default unchanged, bit-identical |
 | **E7** reference-plane doc | **fixed** | `elements/_lens_thin.py:552-578` | `::test_e7_spherical_vs_real_lens_reference_plane_is_documented` | re-run of `repro/THIN-ELEMENTS-GLASS/p_real.py` | re-measured 19.3111 mm vs 18.8080 mm = **503 µm (2.6 %)**, 1.708 rad rms — now stated in the See Also |
 | **E7** `surface_sag_general(R=0)` | **not implemented — outside ownership** | `elements/lenses.py:241, :249` (WP-A2) | — | reproduced on HEAD | `[nan nan]` plus four anonymous numpy RuntimeWarnings; see §5 |
 | **E6** `surface_sag_general` conic memory | **not mine** | — | — | — | the WP file assigns it to WP-A2 |
@@ -247,13 +247,27 @@ CuPy branch is unaffected; `np.sin` of a Python float is host arithmetic.
 
    I also rebuilt the **base-class** quadrature, which is what a user subclass
    inherits: the variable is `u = sin θ`, the cells are geometric in `ln u` from
-   1e-7 to 1 with two-point Gauss-Legendre inside each, the weights sum to
-   `∫u du` exactly (so a flat lobe integrates with zero quadrature error), and
-   the `u < 1e-7` disc is added analytically.  Same node count (256 × 128).
+   1e-7 to 1 with two-point Gauss-Legendre inside each, and the `u < 1e-7` disc
+   is added analytically.  Same node count (256 × 128).
    Measured worst relative error across Lambertian, Gaussian (σ = 1e-2 and 0.3)
    and Harvey-Shack (l = 1e-1…1e-4, s = 1.5/2/2.5): **1.4e-6**, typical 1e-9,
    against −32 % / −18 % / −0.7 % for the linear-θ grid it replaces.  All three
    shipped models override TIS, so no library number moves except Harvey-Shack's.
+
+   **Correction (VERIFY-A8, 2026-09-12).**  This paragraph originally claimed
+   "the weights sum to `∫u du` exactly (so a flat lobe integrates with zero
+   quadrature error)".  That is false.  Two-point Gauss-Legendre is exact
+   through cubic order in `v = ln u`, but the flat-lobe integrand is
+   `u² = e^{2v}`, not a cubic, so the textbook quartic residual
+   `dv⁴·2⁴/4320` survives: with `dv = ln(1e7)/128 = 0.1259232` that predicts
+   **9.312e-07**, and the measurement is `Σw/(1/2) − 1 = −9.2935e-07` — the
+   two agree to 0.2 %.  The 1.4e-6 above is also the worst of *those* lobes,
+   not a bound: an independent sweep measured **1.3e-5** on `B = 1 − u²` and
+   6.4e-6 at l = 1e-6.  Budget ~1e-5 for a broad smooth lobe.  Nothing about
+   the fix changes — it is still four to five decades better than the grid it
+   replaces — only the claim.  The source docstring and
+   `test_e6_base_class_quadrature_is_exact_for_a_flat_lobe` now carry the
+   derivation and the measurement.
 
 2. **`make_bsdf` key validation.**  Unknown keys now raise, naming the accepted
    set; `A`/`B`/`C` are accepted as aliases for `b0`/`l`/`s`; both spellings of
@@ -274,17 +288,36 @@ CuPy branch is unaffected; `np.sin` of a Python float is host arithmetic.
 4. **MLA separable phase.**  The snap, the local coordinate and the footprint
    test are length-N vectors; only `r_sq` is a full grid, and `cos`/`sin` write
    directly into the output's real/imaginary views instead of going through
-   `np.exp(1j·phase)`.  Peak tracemalloc **10.13 → 3.25** float64 grids (identical
+   `np.exp(1j·phase)`.  Peak tracemalloc **14.13 → 3.25** float64 grids (identical
    at N = 1024 and N = 2048), median wall 426 → 144 ms at N = 2048, output
    **bit-identical** (`np.array_equal` over three N / pitch / lenslet-count
    combinations).  The audit's verified-correct properties (|T| = 1, exactly zero
    steer at every lenslet centre, fractional pitch) re-measured and unchanged.
 
+   **Correction (VERIFY-A8, 2026-09-12).**  The pre-fix peak is quoted here as
+   14.13 grids, not the 10.13 this report first carried: measured against a
+   verbatim transcription of the lines the diff removes, **one implementation
+   per process** so neither is measured in the other's allocator wake, and
+   stable at both N = 1024 and N = 2048.  The post-fix 3.25 reproduces exactly
+   either way, so the improvement is **4.35×**, not 3.1×.
+
 5. **`sample_scatter_rays` vectorisation.**  Split each model's lobe-local draw
    into `_sample_local(n, rng)` (incidence-independent by construction) and moved
-   the frame build into one batched `_rotate_local_to_specular`, which is
-   **bit-identical** to the per-ray code it replaces on four incidences including
-   the |spec_z| ≥ 0.999 pole branch.  `sample_scatter_rays` then draws the whole
+   the frame build into one batched `_rotate_local_to_specular`, which
+   reproduces the per-ray code it replaces on four incidences including
+   the |spec_z| ≥ 0.999 pole branch.
+
+   **Correction (VERIFY-A8, 2026-09-12).**  This said **bit-identical**; it is
+   not, in general.  Swept over 407 incidences (400 uniform random plus 7 at
+   and around the 0.999 threshold), the batched and per-ray forms agree
+   exactly on **350** and differ by at most **4.441e-16** — 2 ULP of a unit
+   direction cosine — on the other 57, because `np.linalg.norm(v)` on a 1-D
+   vector can dispatch to a BLAS `nrm2` while `np.linalg.norm(v, axis=-1)` is
+   a ufunc reduction.  The four fixtures quoted happen to fall in the exact
+   set, which is the per-build knife edge TESTING_STANDARDS S4 warns about;
+   the test now asserts a derived `8·eps` bar instead of `np.array_equal`.
+
+   `sample_scatter_rays` then draws the whole
    bundle in one call: 20 000 rays measured at **113× / 327× / 377×**.
    Harvey-Shack's rejection sampler is replaced by its exact inverse CDF
    (derived in the same substitution as the TIS closed form), which also makes
@@ -318,8 +351,15 @@ CuPy branch is unaffected; `np.sin` of a Python float is host arithmetic.
   reason; square behaviour re-measured unchanged (uniform per-cell-pixel
   occupancy `[32]*8`, 0.0000 % power off the order lattice).
 * **Grey-pixel aperture** — `edge='gray'` / `edge_samples`.  Area error at
-  D/dx = 50 px: −0.942 % → +0.038 % (4×4) → −0.00056 % (16×16).  Default `'hard'`
-  bit-identical on all three shapes, dtype-preserving, JAX parity exact.
+  D/dx = 50 px, **all three readings on one grid** (N = 1024, dx = 1 µm,
+  D = 50 µm; VERIFY-A8 re-measurement 2026-09-12):
+  **−0.5345 % → +0.0384 % (4×4) → −0.00056 % (16×16)**.  The −0.942 % this
+  report first paired with them is the audit's own hard-edge reading on a
+  different grid — the hard-edge error depends on where the rim falls on the
+  pixel lattice, so a before/after pair must come from one fixture.  Over the
+  12 sub-pixel rim placements the test sweeps, the rms is 0.386 % hard →
+  0.044 % gray(4).  Default `'hard'` bit-identical on all three shapes,
+  dtype-preserving, JAX parity exact (0.00e+00).
 * **Reference-plane difference** — re-measured with `p_real.py` and written into
   `apply_spherical_lens`'s See Also block with the numbers.
 

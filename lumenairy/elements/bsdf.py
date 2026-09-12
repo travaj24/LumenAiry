@@ -155,6 +155,17 @@ class BSDFModel(ABC):
         models all override this method with a closed form, so the grid
         matters for user subclasses.
 
+        That 1.4e-6 is the worst of THOSE lobes, not a bound.  The rule is
+        exact through cubic order in ``v = ln u``, so the residual is the
+        quartic term ``dv**4 * 2**4 / 4320`` -- with ``dv = ln(1e7)/128``
+        that is 9.3e-7 for a FLAT lobe (whose integrand ``u**2 = exp(2 v)``
+        is not a cubic), and it was measured at 9.29e-7 for ``B = const``
+        and 1.3e-5 for ``B = 1 - u**2`` (VERIFY-A8, 2026-09-12).  So
+        budget ~1e-5 for a broad smooth lobe -- still four to five decades
+        better than the grid this replaces.  A lobe narrower than about
+        ``10 * _TIS_U_MIN`` loses accuracy to the analytic inner disc
+        instead (6.4e-6 at l = 1e-6).
+
         v4.13.0 (Tier-2 perf, audit group alpha): the integrand is now
         evaluated as one fully-vectorised meshgrid call rather than a
         per-(theta, phi) Python loop, yielding ~2-3 orders of magnitude
@@ -744,6 +755,12 @@ def sample_scatter_rays(
     numbers land on which ray differs from a per-ray loop, so seeded output
     is not comparable ray-by-ray with pre-vectorisation runs; the sampled
     DISTRIBUTION is unchanged.
+
+    A subclass that implements only the abstract :meth:`BSDFModel.sample`
+    (the sole draw method the published ABC requires) keeps working: it has
+    no batched hook, so this function falls back to the per-ray loop for it.
+    All three shipped models override :meth:`BSDFModel._sample_local` and
+    take the vectorised path.
     """
     from .. import raytrace as rt
     bsdf = make_bsdf(
@@ -755,16 +772,32 @@ def sample_scatter_rays(
     n_rays = incident_rays.x.size
     total = n_rays * n_per_ray
     rng = _get_rng(rng)
-    local = bsdf._sample_local(total, rng)
-    if bsdf._lobe_about_specular:
-        inc = np.stack([np.repeat(incident_rays.L, n_per_ray),
-                        np.repeat(incident_rays.M, n_per_ray),
-                        np.repeat(incident_rays.N, n_per_ray)], axis=-1)
-        out_dirs = _rotate_local_to_specular(local, inc)
+    if type(bsdf)._sample_local is BSDFModel._sample_local:
+        # ``BSDFModel`` is a published extension point whose only required
+        # draw method is ``sample``; a subclass written against that ABC has
+        # no batched ``_sample_local``.  Vectorisation must not silently
+        # become a compatibility requirement, so such a model takes the
+        # per-ray loop this function used before it was vectorised.  The
+        # three shipped models all override ``_sample_local`` and never
+        # reach here.
+        out_dirs = np.empty((total, 3), dtype=np.float64)
+        for i in range(n_rays):
+            inc_i = np.array([incident_rays.L[i],
+                              incident_rays.M[i],
+                              incident_rays.N[i]])
+            out_dirs[i * n_per_ray:(i + 1) * n_per_ray] = bsdf.sample(
+                inc_i, n_per_ray, rng=rng)
     else:
-        # Lobe defined about the surface normal: the local draw already is
-        # the surface-frame direction (LambertianBSDF).
-        out_dirs = np.asarray(local, dtype=np.float64)
+        local = bsdf._sample_local(total, rng)
+        if bsdf._lobe_about_specular:
+            inc = np.stack([np.repeat(incident_rays.L, n_per_ray),
+                            np.repeat(incident_rays.M, n_per_ray),
+                            np.repeat(incident_rays.N, n_per_ray)], axis=-1)
+            out_dirs = _rotate_local_to_specular(local, inc)
+        else:
+            # Lobe defined about the surface normal: the local draw already
+            # is the surface-frame direction (LambertianBSDF).
+            out_dirs = np.asarray(local, dtype=np.float64)
     x = np.repeat(incident_rays.x, n_per_ray)
     y = np.repeat(incident_rays.y, n_per_ray)
     z = np.repeat(incident_rays.z, n_per_ray)
