@@ -675,6 +675,10 @@ broad excepts and the census is untouched.
 
    The prefixes are gone (measured: `ruff --isolated --select F541` reports 0
    on the working tree, 2 on the HEAD blob).  Delete the comment and the line.
+   **Optionally, in the same edit:** `combine-as-imports = true` under
+   `[tool.ruff.lint.isort]` collapses the 31 single-name `X as X` re-export
+   statements this work package added to `elements/lenses.py` (section 8.1)
+   back into the 8 parenthesised blocks they came from.
 
 2. **`tests/unit/test_audit_except_budget.py` (WP-A15a) -- lower the
    `_lens_imap.py` entry to zero.**  WP-A15a section 2.9 class (5) counts one
@@ -684,7 +688,9 @@ broad excepts and the census is untouched.
    (`lumenairy/memory.py`'s two are still open, with their own owner.)
 
 3. **`lumenairy/elements/_lens_thin.py` owner -- break the fourth lens cycle in
-   two lines.**  `_lens_thin.py:39` imports `CUPY_AVAILABLE` from `.lenses` and
+   two lines.**  *(ACTIONED: the change is in the working tree as of
+   2026-09-12; `_lenses_module` is gone and `_lens_thin` now asks
+   `backend._optional` directly.  One follow-on, item 9 below.)*  `_lens_thin.py:39` imports `CUPY_AVAILABLE` from `.lenses` and
    `_is_cupy_array` delegates through `_lenses_module`; both now live in
    `lumenairy/backend/_optional.py`, which is a leaf.  Replace:
 
@@ -701,7 +707,8 @@ broad excepts and the census is untouched.
    A15b section 5.4's last table row anticipated exactly this.
 
 4. **`lumenairy/propagators/fft_infra.py` owner -- the remaining ~426 ms of
-   import time.**  `fft_infra.py:112`'s module-level `import scipy.fft as
+   import time.**  *(DONE by WP-A22, commit `7d03d799`: "scipy.fft loaded on
+   first use (import lumenairy -53 %)".)*  `fft_infra.py:112`'s module-level `import scipy.fft as
    _scipy_fft` is now the ONLY reason `scipy.special` (and its heavy shared
    prefix) is loaded by `import lumenairy`; measured stack in section 2.6.
    `scipy.fft` costs **426.5 ms cumulative** on this box (measured table in
@@ -714,6 +721,8 @@ broad excepts and the census is untouched.
    it: the file is not mine and it is being rewritten right now.
 
 5. **`lumenairy/propagators/propagation.py` owner -- two forward-list entries.**
+   *(DONE by WP-A21, commit `949edb3b`; the walker is green -- re-run
+   2026-09-12.)*
    `_PYFFTW_FIRST_FFT_THREAD` and `_PYFFTW_SHARED_BUFFERS_UNSAFE` (new mutable
    `fft_infra` globals in the uncommitted diff) need to join the PEP 562 live
    forward names, or `test_v5_2_walker_pep562_forwarding.py::
@@ -725,6 +734,55 @@ broad excepts and the census is untouched.
    (`docs/lens_configuration.md`); a pointer from the README's lens section
    would help people find it.  No migration note is required -- nothing
    changed for an existing caller -- and the CHANGELOG text says so.
+
+7. **`tests/unit/test_niche_d6_exact_tilted_leg.py` owner (WP-A6 / VERIFY-A6) --
+   restate `r_on`'s bar with a derivation, or investigate the 0.0268 it lost.**
+   `test_decentred_carrier_decentre_penalty_envelope`'s `assert r_on > 0.97`
+   reads **0.969787** and has done, bit-stably, since `a18ab074` (WP-A6) -- ten
+   commits before WP-A16 and long before this file's bar was last looked at.
+   Full bisect, metrics and the reasoning are in section 8.3.  Two possible
+   outcomes, and the choice belongs to that subsystem's owner:
+
+   * **If 0.9698 is the post-C1 truth**, restate the bar the way its own
+     sibling `r_off` is already written -- two-sided, with the derivation
+     TESTING_STANDARDS asks for: the oracle's own EE2 error floor at this
+     readout pitch, the measured value, and the decades of gap on both sides.
+     A one-sided threshold parked 0.0266 below a single 2026-07-29 measurement
+     is a per-build number; it says nothing about what size of defect it
+     catches, which is why it broke on a 0.02 % move rather than on a physics
+     regression.  Note also that the docstring's premise now reads backwards:
+     the DECENTRED ratio (0.9855) is better than the on-axis one (0.9698).
+   * **If it is not**, C1 ("focus readout sized from the BEAM") is the first
+     thing to look at -- it changes the window the EE2 is counted in, which is
+     precisely the failing quantity.
+
+   I did not touch the file: it is not in WP-A16's ownership list, and WP-A16
+   is measured not to have moved the number.
+
+8. **`lumenairy/propagators/carrier.py` owner -- the decentre calibration the
+   shipped warning quotes is stale.**  `propagate_traced_carrier_chain`'s
+   `decentre_fit_frac` `RuntimeWarning` (`carrier.py:8986`) tells users
+   "MEASURED ... 0.00 w -> 0.997 ... 1.00 w -> 0.983".  Re-measured on that same
+   stand-in today: **0.00 w -> 0.9698, 1.00 w -> 0.9855** -- both ends moved and
+   the two have crossed over.  Re-measure the six-point table and restate it, or
+   drop the numbers and point at the test that holds them.  Detail in section
+   8.4.
+
+9. **`README.md` owner (docs agent) -- one stale identifier, newly created.**
+   `README.md:570` names `` `_lenses_module.cp` ``.  The in-flight
+   `_lens_thin.py` change (which implements my section 5 item 3) deleted
+   `_lenses_module`, so
+   `tests/unit/test_audit2609_a21_doc_identifiers.py::test_no_backticked_identifier_in_the_docs_is_unresolved`
+   is now red on that one token:
+
+   ```
+   _lenses_module.cp  (1x, first at README.md:570)  [no owner exposes the chain]
+   ```
+
+   The sentence is a historical note about a fixed CuPy dispatch bug; rewording
+   it to name `lumenairy.backend._optional.cupy_module()` (where the lazy `cp`
+   now lives) resolves it.  Neither file is mine; flagged because the change
+   that caused it is one I requested.
 
 ---
 
@@ -781,6 +839,187 @@ broad excepts and the census is untouched.
    sites in `_lens_real` / `_lens_traced`; the symptom is a warning attributed
    one frame too shallow, only for callers who used a config object.
    **Effort ~2 h**, low value.
+
+---
+
+## 8. Post-commit follow-ups (three items routed after `c7c9ebbb`)
+
+### 8.1 `mypy --strict lumenairy/__init__.py`: **33 errors -> 0**
+
+WP-A21 held the root `__init__` out of the mypy whitelist at 33 errors,
+attributing them to WP-A16's in-flight exports.  Measured breakdown of the 33
+and what each needed:
+
+| count | error | cause | fix |
+|---|---|---|---|
+| 30 | `Module "lumenairy.elements.lenses" does not explicitly export attribute X` | `lenses.py` is a compatibility SHELL: it re-imports 30 names from `_lens_jax` / `_lens_real` / `_lens_thin` / `_lens_traced` / `_lens_traced_multibranch` / `_lens_traced_uniform` / `lenses_gbd` so the pre-v3.5.5 import paths keep working, and `--strict` sets `no_implicit_reexport` | every one respelled `X as X` -- the PEP 484 marker for a deliberate re-export (`lenses.py:1038-1180`) |
+| 1 | same, for `apply_real_lens_maslov` | single-name import | same |
+| 1 | `Module "lumenairy.raytrace" does not explicitly export attribute "trace_world"` | `raytrace/__init__.py:79` imports `trace_world` but its `__all__` (`:124`) omits it.  **No spelling on the consumer side can fix this** -- the rule is about the SOURCE module | imported from its DEFINING module instead: `from .raytrace.world_trace import trace_world as trace_world` (`world_trace.__all__` does list it).  Identity verified: `la.trace_world is rt.trace_world is world_trace.trace_world` -> True |
+| 2 | `Function is missing a type annotation` | the PEP 562 `__getattr__` / `__dir__` pair at `lumenairy/__init__.py:2205,2237` (A15b's lazy loader) | annotated `-> _Any` / `-> _List[str]` with a written reason for the width |
+
+**The two PEP 562 pairs the follow-up named, and a third.**
+`lumenairy/backend/__init__.py:56,86` (mine) is now
+`__getattr__(name: str) -> ModuleType` -- narrower than `Any` on purpose, and
+the docstring says why: `'scipy'` is the only name it resolves and it is always
+a module.  `lumenairy/__init__.py` gets `-> _Any`, also with the reason
+recorded: its two halves return a dtype/int/str knob value on one branch and
+one of 63 solver objects on the other, which share no useful type.  I annotated
+`lumenairy/elements/__init__.py:234,258` as well -- same pair, same file
+ownership, and it was the only thing keeping that module off the whitelist.
+
+`typing` is imported under **underscore** names (`_Any`, `_List`) in both
+package `__init__` files: those namespaces ARE the public API, and
+`lumenairy.Any` would be a name every surface walker had to learn to ignore.
+Verified: `'Any' in dir(lumenairy)` and `'Any' in dir(lumenairy.elements)` are
+both False.
+
+While there I also annotated the five remaining strict gaps in my own
+`lens_config.py` (`_require_choice`'s `choices`, `field_names`'s `out`,
+`_signature_info`'s and `resolve_entry_point_kwargs`'s `fn`, `_wants_config`'s
+four parameters).
+
+**Measured after, all four:**
+
+```
+lumenairy/__init__.py                        Success: no issues found in 1 source file
+lumenairy/backend/__init__.py                Success: no issues found in 1 source file
+lumenairy/elements/lens_config.py            Success: no issues found in 1 source file
+lumenairy/elements/__init__.py               Success: no issues found in 1 source file
+```
+
+`ruff check lumenairy/` clean; 233 + 75 ids green on the export and lazy-load
+walkers (`test_public_api`, `test_v4_16_0_walker_all_symmetry`,
+`test_v5_2_walker_shell_vs_canonical`, `test_v5_2_walker_pep562_forwarding`,
+`test_audit2609_a15b_reexports`, `test_audit2609_a15b_lazy_and_layering`,
+`test_audit2609_a15a_packaging`, the three a16 files, the cache-registry pin).
+
+**One cost, and a one-line way to remove it.**  Ruff's isort (with the project's
+default `combine-as-imports = false`) splits every aliased member onto its own
+`from X import (...)` statement, so `lenses.py`'s re-export block grew from 8
+statements to 31 (+~60 lines).  The comment blocks stayed attached to the first
+statement of each group and `ruff check` is clean, but if the orchestrator
+prefers the compact form, **`combine-as-imports = true` under
+`[tool.ruff.lint.isort]` in `pyproject.toml`** collapses all 31 back into 8 with
+no source change.  I did not touch `pyproject.toml`.  (The other route -- an
+`__all__` on `lenses.py` -- was rejected: the module has none today, so an
+`__all__` listing only the 31 re-exports would silently narrow
+`from lumenairy.elements.lenses import *`, which currently exports every public
+name in a 1 180-line module.)
+
+### 8.2 `lens_config._VOCAB_CACHE` enrolled with the cache registry
+
+`test_v4_16_1_dispatcher_pin_cache_registry_enrollment.py::test_every_cache_owning_module_enrolls_with_registry`
+was red:
+
+```
+lumenairy/elements/lens_config.py:147 _VOCAB_CACHE (cache_dict): cache owner
+does not call ``register_cache_clearer(...)`` anywhere in the module.
+```
+
+Added `clear_lens_config_vocabulary_cache()` and the house registration block
+(late-binding lambda, copied from `analysis/beam_stats.py`) at
+`lens_config.py:171-208`, registered as **`lens_config_vocabulary`**.
+
+The docstring records why the clearer exists, because it is NOT a memory
+measure: the cache holds four short tuples borrowed from `_lens_real` at first
+use (tens of bytes), and the reason it must be drainable is that they are
+BORROWED -- a test or an `importlib.reload` that swaps one of those vocabularies
+would otherwise be validated against the pre-swap copy for the life of the
+process.  Refilling is always safe.
+
+Measured: registry **18 -> 19** clearers; `clear_asm_caches()` drains
+`_VOCAB_CACHE` (4 entries -> 0) and `_vocab()` refills correctly on the next
+call; `test_v4_16_1_...` + `test_niche_r0_byte_budgeted_cache` **35 passed**.
+
+The other half of item (2) is closed as WP-A22 found it: `_same()` has carried
+one `try` with `except (TypeError, ValueError)` -- zero broad clauses -- since
+the except-budget gate caught the first draft mid-WP-A16 (section 4).  I have
+not changed it since.
+
+### 8.3 `test_niche_d6_exact_tilted_leg::test_decentred_carrier_decentre_penalty_envelope` -- NOT a WP-A16 regression
+
+**Measured, not argued.**  The library at each commit was extracted READ-ONLY
+with `git archive <rev> lumenairy` into the scratchpad and run against the
+CURRENT test file, so only the library varies.  Nothing was checked out,
+stashed or written to the repository.
+
+| commit | subject | verdict | on-axis EE2 ratio |
+|---|---|---|---|
+| `a4e8e855` | `fix(pmm): four cross-build names` (pre-campaign base) | **passed** | > 0.97 |
+| `6dfc79d6` | `feat(traced): exact gap kernel on all backends, spline Newton default` | failed *(a different assertion; `r_on` not reached)* | -- |
+| `4e8ea247` | `feat(lens): banded ray-density + inverse-characteristic evaluator` | **passed** | > 0.97 |
+| `e3f7185a` | `docs(lens): the three corrections from the 5.44.0 follow-ups` | **passed** | > 0.97 |
+| **`a18ab074`** | **`fix(carrier): WP-A6 -- traced-carrier chain: focus readout sized from the BEAM (C1), fit radius about the beam centre (C2), complex64 preserved (C3), separable phases and a two-grid transfer function (C4)`** | **failed** | **0.9698** |
+| `b97c0b6e` | `fix(lens-analytic): WP-A2` | failed | 0.9698 |
+| `37d8afe7` | `fix(lens-traced): WP-A3` | failed | 0.9698 |
+| `949edb3b` | `chore(hygiene): WP-A21` -- **the commit immediately before mine** | failed | **0.9698** |
+| `2ede9a16` | HEAD | failed | **0.9698** |
+
+**The crossing is `a18ab074` (WP-A6)**, ten commits and two days before
+`c7c9ebbb`.  `e3f7185a` -- its immediate parent -- passes; `a18ab074` fails at
+0.9698; and the value is then **bit-stable at 0.9698 through every commit
+since**, including the one immediately before mine.  Running the same test
+against the pre-WP-A16 tree gives `EE2 ratio 0.9698` to the same four decimals
+as HEAD.  Two consecutive runs at HEAD also give 0.9698, so this is not the
+threaded-QR non-determinism the run warns about.
+
+**WP-A16 therefore did not move this number**, and the follow-up's premise
+("the only non-comment changes on its path are yours") does not hold:
+`git log a4e8e855..949edb3b -- lumenairy/propagators/carrier.py
+lumenairy/elements/_lens_traced.py lumenairy/elements/_lens_real.py` lists
+**20+ library commits**, every one of them this campaign's own deliberate
+physics corrections (L1-L20, T1-T16, C1-C5 and their VERIFY passes).
+
+**Why WP-A6 is the plausible mechanism, not a defect.**  The failing quantity is
+`m_on['ee'][2.0] / o_on['ee'][2.0]` -- the chain's encircled energy inside a
+2 um radius over the oracle's -- and WP-A6's headline C1 is *"focus readout
+sized from the BEAM"*.  Resizing the readout window is exactly what moves an EE
+at a fixed radius.  I did not verify the mechanism (that is WP-A6's subsystem,
+not mine); the commit is named so its owner can.
+
+**The bar has no derivation, and it fails by 2.2e-4.**  Full metrics measured at
+HEAD:
+
+| quantity | bar | recorded 2026-07-29 | measured now | |
+|---|---|---|---|---|
+| `r_on` | `> 0.97` | 0.9966 | **0.969787** | **fails by 2.2e-4 (0.02 %)** |
+| `r_off` | `0.965 < r < 1.005` | 0.9828 | 0.985518 | passes |
+| oracle FWHM off/on | `< 0.10` | -- | 0.0 | passes |
+| chain/oracle FWHM off | `< 0.05` | -- | 0.0 | passes |
+| chain/oracle FWHM on | (not asserted) | -- | 0.0 | -- |
+| EE2 on axis | -- | -- | chain 0.759860, oracle 0.783533 | |
+
+`r_on > 0.97` is a **per-build number with no derivation**: a one-sided
+threshold placed 0.0266 below a single 2026-07-29 measurement, with no oracle
+error floor, no decade analysis and no statement of what magnitude of defect it
+is meant to catch.  Its sibling `r_off` is a proper two-sided envelope with a
+written rationale for both directions -- and `r_off` still passes.
+
+**I did not edit the test.**  `tests/unit/test_niche_d6_exact_tilted_leg.py` is
+not in WP-A16's ownership list, and restating a physics envelope for a
+subsystem WP-A16 did not change -- on a crossing this bisect attributes to
+WP-A6 -- is exactly the cross-package edit the ownership rule exists to
+prevent.  The restatement is specified for its owner in section 5 item 7,
+together with a second finding the investigation turned up.
+
+### 8.4 A finding the d6 investigation turned up: the shipped calibration table is stale
+
+`propagate_traced_carrier_chain` (`carrier.py:8986`) emits a `RuntimeWarning`
+to USERS that quotes a measured decentre calibration:
+
+> MEASURED on the K=-n^2 conic stand-in ... (EE2 ratio): 0.00 w -> 0.997;
+> 0.25 w -> 1.002; 0.50 w -> 1.005; 0.75 w -> 0.977; 1.00 w -> 0.983;
+> 1.50 w -> 0.923.
+
+Measured today on that same stand-in: **0.00 w -> 0.9698**, **1.00 w -> 0.9855**.
+Both ends have moved, and they have **crossed over**: the decentred ratio is now
+the BETTER of the two, which inverts the premise of both the warning and the
+test's own docstring ("the chain tracks the oracle on axis and slightly worse
+when the same beam is decentred").  A shipped warning that quotes stale measured
+numbers is the class this audit exists to close.  `carrier.py` is not mine --
+request in section 5 item 8.
+
+---
 
 ---
 

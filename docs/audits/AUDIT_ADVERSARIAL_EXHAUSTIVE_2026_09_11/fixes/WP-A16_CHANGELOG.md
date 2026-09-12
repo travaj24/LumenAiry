@@ -143,6 +143,39 @@ carries zero broad except clauses.
 New tests for the four items above:
 `tests/unit/test_audit2609_a16_lens_arch.py` (27 ids).
 
+### Changed -- `mypy --strict` reaches the package root
+
+`lumenairy/elements/lenses.py` is a compatibility shell that re-imports 31
+names from the six `_lens_*` modules so the pre-v3.5.5 import paths keep
+working.  Under `no_implicit_reexport` those are not re-exports, which was the
+whole of `mypy --strict lumenairy/__init__.py`'s 33-error count; each is now
+spelled `X as X`.  `trace_world` comes from its defining module
+(`raytrace/world_trace.py`, which lists it in `__all__`) rather than from the
+`raytrace` package, which imports it but omits it from `__all__`.  The PEP 562
+`__getattr__` / `__dir__` pairs in `lumenairy/__init__.py`,
+`lumenairy/elements/__init__.py` and `lumenairy/backend/__init__.py` are
+annotated (`typing` bound under underscore names so the public namespaces gain
+nothing), as are the last five gaps in `elements/lens_config.py`.
+
+MEASURED: `lumenairy/__init__.py` **33 errors -> 0**;
+`lumenairy/elements/__init__.py`, `lumenairy/backend/__init__.py` and
+`lumenairy/elements/lens_config.py` also clean.  No runtime change: every name
+is the same object by the same path (`la.trace_world is
+lumenairy.raytrace.trace_world` verified), `ruff check lumenairy/` is clean,
+and the export, lazy-load and shell-vs-canonical walkers are green.  These four
+paths can now join `[tool.mypy] files`.
+
+### Added -- the lens-config vocabulary cache is drainable
+
+`elements/lens_config.py`'s `_VOCAB_CACHE` -- the four enum vocabularies the
+dataclasses borrow from `_lens_real` on first use -- gained
+`clear_lens_config_vocabulary_cache()` and is enrolled with the central
+registry as `lens_config_vocabulary`, so `clear_asm_caches()` and
+`clear_all_registered_caches()` drain it (registry 18 -> 19 clearers).  Not a
+memory measure: the entries are tens of bytes.  They are BORROWED, and a test
+or an `importlib.reload` that swaps one of those vocabularies would otherwise
+be validated against the pre-swap copy for the life of the process.
+
 ### Migration note
 
 None required.  Every existing call site is unchanged and bit-identical.  The

@@ -143,8 +143,11 @@ def _is_cupy_array(x):
     (``ndarray`` now exposes ``.device`` via the Array API standard),
     causing every NumPy array to get routed into the CuPy branch.
 
-    ``_lens_thin._is_cupy_array`` delegates here, so this is also the answer
-    the thin-lens family gets.
+    ``_lens_thin`` asks ``backend._optional.is_cupy_array`` directly rather
+    than delegating here -- it takes the same answer from the same helper,
+    without the module-level import back into this file that a delegation
+    would need.  The extra short-circuit below is the only difference, and it
+    is about call cost, not about the answer.
     """
     if not CUPY_AVAILABLE:
         # Local short-circuit, not a delegation: this is the hot per-call
@@ -1038,15 +1041,27 @@ def _fit_normaliser(v: np.ndarray, pad: float = 0.05):
 # `from lumenairy.elements.lenses import apply_real_lens_maslov` imports.
 # ---------------------------------------------------------------------------
 
+# Every name below is spelled ``X as X``.  That is not redundancy: it is the
+# PEP 484 / mypy marker for a DELIBERATE re-export.  Without it
+# ``mypy --strict`` (which sets ``no_implicit_reexport``) reports
+# "Module ... does not explicitly export attribute X" for each of the 31
+# names the package root re-imports from here, and this module -- a
+# compatibility shell whose whole job is to keep the pre-v3.5.5 import paths
+# working -- would be the reason ``lumenairy/__init__.py`` cannot join the
+# strict whitelist.  The alternative, an ``__all__`` on this 1 100-line
+# module, would also change ``import *`` behaviour; this does not.
+#
 # ---------------------------------------------------------------------------
 # JAX-traceable real-lens propagators moved to
 # lumenairy.elements._lens_jax in v3.5.5.  Re-exported here so existing
 # `from lumenairy.elements.lenses import apply_real_lens_traced_jax` /
 # `apply_real_lens_maslov_jax` imports continue to work.
 # ---------------------------------------------------------------------------
-from ._lens_jax import (  # noqa: E402, F401
-    apply_real_lens_maslov_jax,
-    apply_real_lens_traced_jax,
+from ._lens_jax import (  # noqa: E402
+    apply_real_lens_maslov_jax as apply_real_lens_maslov_jax,
+)
+from ._lens_jax import (
+    apply_real_lens_traced_jax as apply_real_lens_traced_jax,
 )
 
 # ---------------------------------------------------------------------------
@@ -1055,16 +1070,32 @@ from ._lens_jax import (  # noqa: E402, F401
 # existing `from lumenairy.elements.lenses import apply_real_lens`
 # imports continue to work.
 # ---------------------------------------------------------------------------
-from ._lens_real import (  # noqa: E402, F401
-    PreparedAnalyticLens,
-    apply_real_lens,
-    clear_pointwise_cos_grid_cache,
-    get_lens_sag_dtype,
-    get_pointwise_cos_grid_cache_budget,
-    lens_sag_float32_opd_error,
-    prepare_real_lens,
-    set_lens_sag_dtype,
-    set_pointwise_cos_grid_cache_budget,
+from ._lens_real import (  # noqa: E402
+    PreparedAnalyticLens as PreparedAnalyticLens,
+)
+from ._lens_real import (
+    apply_real_lens as apply_real_lens,
+)
+from ._lens_real import (
+    clear_pointwise_cos_grid_cache as clear_pointwise_cos_grid_cache,
+)
+from ._lens_real import (
+    get_lens_sag_dtype as get_lens_sag_dtype,
+)
+from ._lens_real import (
+    get_pointwise_cos_grid_cache_budget as get_pointwise_cos_grid_cache_budget,
+)
+from ._lens_real import (
+    lens_sag_float32_opd_error as lens_sag_float32_opd_error,
+)
+from ._lens_real import (
+    prepare_real_lens as prepare_real_lens,
+)
+from ._lens_real import (
+    set_lens_sag_dtype as set_lens_sag_dtype,
+)
+from ._lens_real import (
+    set_pointwise_cos_grid_cache_budget as set_pointwise_cos_grid_cache_budget,
 )
 
 # ---------------------------------------------------------------------------
@@ -1073,13 +1104,23 @@ from ._lens_real import (  # noqa: E402, F401
 # `from lumenairy.elements.lenses import apply_thin_lens` etc. continue
 # to work.
 # ---------------------------------------------------------------------------
-from ._lens_thin import (  # noqa: E402, F401
-    apply_aspheric_lens,
-    apply_axicon,
-    apply_cylindrical_lens,
-    apply_grin_lens,
-    apply_spherical_lens,
-    apply_thin_lens,
+from ._lens_thin import (  # noqa: E402
+    apply_aspheric_lens as apply_aspheric_lens,
+)
+from ._lens_thin import (
+    apply_axicon as apply_axicon,
+)
+from ._lens_thin import (
+    apply_cylindrical_lens as apply_cylindrical_lens,
+)
+from ._lens_thin import (
+    apply_grin_lens as apply_grin_lens,
+)
+from ._lens_thin import (
+    apply_spherical_lens as apply_spherical_lens,
+)
+from ._lens_thin import (
+    apply_thin_lens as apply_thin_lens,
 )
 
 # ---------------------------------------------------------------------------
@@ -1090,22 +1131,40 @@ from ._lens_thin import (  # noqa: E402, F401
 #   from lumenairy.elements.lenses import close_worker_pool
 # imports continue to work.
 # ---------------------------------------------------------------------------
-from ._lens_traced import (  # noqa: E402, F401  # noqa: E402, F401
-    PreparedTracedLens,
-    TiltedCarrier,
-    apply_real_lens_traced,
-    apply_real_lens_traced_multi,
-    apply_real_lens_traced_segmented,
-    close_worker_pool,
-    get_lens_parallel_amp,
-    prepare_real_lens_traced,
-    set_lens_parallel_amp,
+from ._lens_traced import (  # noqa: E402
+    PreparedTracedLens as PreparedTracedLens,
 )
-from ._lens_traced_multibranch import (  # noqa: E402, F401
-    apply_real_lens_traced_multibranch,
+from ._lens_traced import (
+    TiltedCarrier as TiltedCarrier,
 )
-from ._lens_traced_uniform import (  # noqa: E402, F401
-    apply_real_lens_traced_uniform,
+from ._lens_traced import (
+    apply_real_lens_traced as apply_real_lens_traced,
 )
-from .lenses_gbd import apply_real_lens_gbd  # noqa: F401, E402
-from .lenses_maslov import apply_real_lens_maslov  # noqa: F401, E402
+from ._lens_traced import (
+    apply_real_lens_traced_multi as apply_real_lens_traced_multi,
+)
+from ._lens_traced import (
+    apply_real_lens_traced_segmented as apply_real_lens_traced_segmented,
+)
+from ._lens_traced import (
+    close_worker_pool as close_worker_pool,
+)
+from ._lens_traced import (
+    get_lens_parallel_amp as get_lens_parallel_amp,
+)
+from ._lens_traced import (
+    prepare_real_lens_traced as prepare_real_lens_traced,
+)
+from ._lens_traced import (
+    set_lens_parallel_amp as set_lens_parallel_amp,
+)
+from ._lens_traced_multibranch import (  # noqa: E402
+    apply_real_lens_traced_multibranch as apply_real_lens_traced_multibranch,
+)
+from ._lens_traced_uniform import (  # noqa: E402
+    apply_real_lens_traced_uniform as apply_real_lens_traced_uniform,
+)
+from .lenses_gbd import apply_real_lens_gbd as apply_real_lens_gbd  # noqa: E402
+from .lenses_maslov import (  # noqa: E402
+    apply_real_lens_maslov as apply_real_lens_maslov,
+)

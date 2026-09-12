@@ -28,6 +28,8 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import importlib as _importlib
+from types import ModuleType
+from typing import List
 
 from .array import (
     CUPY_AVAILABLE,
@@ -53,7 +55,7 @@ from .fft import (
 from .random import RandomState
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> ModuleType:
     """Load :mod:`lumenairy.backend.scipy` on FIRST USE (PEP 562).
 
     ``backend/scipy.py`` imports ``scipy.linalg`` and ``scipy.special`` at
@@ -68,6 +70,10 @@ def __getattr__(name):
 
     Raises ``AttributeError`` (never ``ImportError``) for an unknown name, so
     ``hasattr`` and ``getattr(..., default)`` keep working.
+
+    Annotated ``-> ModuleType`` rather than ``-> Any``: ``'scipy'`` is the ONLY
+    name this forward resolves, and it is always a module, so the narrower type
+    is honest.  A future forward that returns a value would widen it.
     """
     if name == 'scipy':
         mod = _importlib.import_module('.scipy', __name__)
@@ -76,7 +82,7 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def __dir__():
+def __dir__() -> List[str]:
     """``dir()`` still lists ``scipy`` even before anything has loaded it."""
     return sorted(set(globals()) | {'scipy'})
 

@@ -83,7 +83,16 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field, fields
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+)
 
 import numpy as np
 
@@ -159,7 +168,39 @@ def _vocab(name: str) -> Any:
         return _VOCAB_CACHE[name]
 
 
-def _require_choice(fn_name: str, name: str, value: Any, choices) -> None:
+def clear_lens_config_vocabulary_cache() -> None:
+    """Drop the borrowed enum vocabularies so the next validation re-reads them.
+
+    The cache holds four short tuples of strings/ints -- tens of bytes, not a
+    grid -- so this is not a memory measure.  It exists because the entries are
+    BORROWED from ``_lens_real`` at first use: a test (or an
+    ``importlib.reload``) that swaps one of those tuples would otherwise be
+    validated against the pre-swap copy for the life of the process.  Dropping
+    them is always safe -- :func:`_vocab` refills on the next call.
+    """
+    _VOCAB_CACHE.clear()
+
+
+# Enrol with the central cache-clearer registry (late-binding lambda, mirroring
+# ``analysis/beam_stats.py``) so ``clear_asm_caches`` /
+# ``clear_all_registered_caches`` drain this one too.  ``_cache_registry`` is a
+# stdlib-only leaf in the package root, so this does not give this module a
+# dependency on anything that could import it back.
+try:
+    import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'lens_config_vocabulary',
+        lambda: getattr(_this_mod, 'clear_lens_config_vocabulary_cache')(),
+    )
+except ImportError:  # pragma: no cover - registry always present in-tree
+    pass
+
+
+def _require_choice(fn_name: str, name: str, value: Any,
+                    choices: Iterable[Any]) -> None:
     if value not in choices:
         raise ValueError(
             f"{fn_name}: {name}={value!r} is not a valid choice.  "
@@ -953,7 +994,7 @@ class LensConfig:
     @staticmethod
     def field_names() -> Tuple[str, ...]:
         """Every config field name across the three dataclasses, sorted."""
-        out = []
+        out: List[str] = []
         for _, dcls, _ in _GROUPS:
             out.extend(f.name for f in fields(dcls))
         return tuple(sorted(out))
@@ -1052,7 +1093,7 @@ _SIGNATURE_INFO: Dict[int, Dict[str, Any]] = {}
 _CONFIG_PARAMETERS = ('geometry', 'numerics', 'resources', 'config')
 
 
-def _signature_info(fn) -> Dict[str, Any]:
+def _signature_info(fn: Callable[..., Any]) -> Dict[str, Any]:
     """``{'params': (...), 'defaults': {...}}`` for one entry point, cached.
 
     ``params`` is every KEYWORD-ONLY parameter except the four config ones --
@@ -1092,7 +1133,8 @@ def _accepting(field_name: str) -> str:
     return ', '.join(who) if who else '(none)'
 
 
-def resolve_entry_point_kwargs(fn, caller_locals: Mapping[str, Any], *,
+def resolve_entry_point_kwargs(fn: Callable[..., Any],
+                               caller_locals: Mapping[str, Any], *,
                                geometry: Optional[LensGeometry] = None,
                                numerics: Optional[LensNumerics] = None,
                                resources: Optional[LensResources] = None,
@@ -1200,7 +1242,10 @@ def resolve_entry_point_kwargs(fn, caller_locals: Mapping[str, Any], *,
     return out
 
 
-def _wants_config(geometry, numerics, resources, config) -> bool:
+def _wants_config(geometry: Optional[LensGeometry],
+                  numerics: Optional[LensNumerics],
+                  resources: Optional[LensResources],
+                  config: Optional[LensConfig]) -> bool:
     """True iff any config object was passed.  Spelled once so the four-way
     test at the top of seven entry points cannot drift apart."""
     return (geometry is not None or numerics is not None

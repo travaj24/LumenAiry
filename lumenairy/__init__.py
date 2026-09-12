@@ -25,6 +25,15 @@ For more granular imports, use the submodules::
 Author: Andrew Traverso
 """
 
+# Used only by the annotations on the PEP 562 ``__getattr__`` / ``__dir__``
+# pair at the bottom of this file; ``typing`` is already resident in every
+# interpreter that got this far, so this costs nothing at import.  Bound under
+# UNDERSCORE names on purpose: this module's namespace IS the public API, and
+# ``lumenairy.Any`` / ``lumenairy.List`` would be two names in ``dir()`` that
+# the surface walkers would have to learn to ignore.
+from typing import Any as _Any
+from typing import List as _List
+
 # â”€â”€ Propagation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .analysis import (
     M2,
@@ -865,10 +874,22 @@ from .raytrace import (
     trace,
     trace_prescription,
     trace_summary,
-    trace_world,
     validate_prescription,
     world_surfaces_from_prescription,
 )
+
+# ``trace_world`` comes from its DEFINING module rather than from the
+# ``raytrace`` package, and the exception is not cosmetic: ``raytrace``
+# re-imports the name but leaves it out of its own ``__all__``, so under
+# ``mypy --strict`` (``no_implicit_reexport``) the package is not a legal
+# source for it -- and no spelling on this side can fix that, because the rule
+# is about the SOURCE module.  ``raytrace/world_trace.py`` does list it in
+# ``__all__``, and it is the same function object either way (the package
+# imports it from there).  The tidier fix is one entry in
+# ``lumenairy/raytrace/__init__.py``'s ``__all__``, requested of that file's
+# owner in the WP-A16 report; when it lands, this line folds back into the
+# block above.
+from .raytrace.world_trace import trace_world as trace_world
 
 # v5.45.2 (audit 2026-09-11 section 15.1): the two lower-level pieces of the
 # shared exit-vertex transfer.  They are in ``raytrace.exit_vertex.__all__``
@@ -2189,7 +2210,7 @@ _LAZY_SOLVER_NAMES = {
 }
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> _Any:
     """Forward the mutable ``DEFAULT_*`` knobs and resolve the lazy
     rigorous-solver names.
 
@@ -2203,6 +2224,11 @@ def __getattr__(name):
     CACHES the object here, so the knob forward stays the only per-access
     cost in this function.  Anything else raises ``AttributeError`` (never
     ``ImportError``), so ``hasattr`` keeps working.
+
+    Annotated ``-> Any`` and not narrower: the two halves return genuinely
+    different kinds of object -- a dtype / int / str knob value from
+    ``fft_infra`` on one branch, a solver class or function on the other --
+    and the union of ~63 lazily-resolved names has no useful common type.
     """
     if name in _LIVE_FORWARD_NAMES:
         from .propagators import fft_infra as _fft_infra
@@ -2217,6 +2243,9 @@ def __getattr__(name):
         f"module {__name__!r} has no attribute {name!r}")
 
 
-def __dir__():
+def __dir__() -> _List[str]:
+    """``dir(lumenairy)`` lists the forwarded knobs and the lazy solver names
+    too, so tab-completion and the repo's surface walkers see the same package
+    they saw when every name was eager."""
     return sorted(set(globals()) | _LIVE_FORWARD_NAMES
                   | set(_LAZY_SOLVER_NAMES))

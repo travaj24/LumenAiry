@@ -180,6 +180,11 @@ from .thin_grating import (
 # An unknown name raises ``AttributeError`` (never ``ImportError``), because
 # ``hasattr`` and ``getattr(..., default)`` must keep working.
 import importlib as _importlib
+# Annotations for the PEP 562 pair below.  Bound under UNDERSCORE names:
+# this module's namespace is public API, so ``elements.Any`` would be a
+# name the surface walkers would have to learn to ignore.
+from typing import Any as _Any
+from typing import List as _List
 
 #: Subpackages exposed as lazy attributes of this package.
 _LAZY_SUBMODULES = ('berreman', 'bor', 'eme', 'pmm', 'rcwa')
@@ -233,8 +238,12 @@ _LAZY_NAMES = {
 }
 
 
-def __getattr__(name):
-    """Resolve a rigorous-solver name on first access (PEP 562)."""
+def __getattr__(name: str) -> _Any:
+    """Resolve a rigorous-solver name on first access (PEP 562).
+
+    ``-> Any`` and not narrower: the table resolves both SUBMODULES and the
+    38 solver classes / functions they define, which share no useful type.
+    """
     if name in _LAZY_SUBMODULES:
         mod = _importlib.import_module(f'{__name__}.{name}')
         globals()[name] = mod
@@ -248,7 +257,7 @@ def __getattr__(name):
     return obj
 
 
-def __dir__():
+def __dir__() -> _List[str]:
     """``dir()`` lists the lazy names too, so tab-completion and the repo's
     surface walkers see the same package they saw when it was eager."""
     return sorted(set(globals()) | set(_LAZY_NAMES) | set(_LAZY_SUBMODULES))
