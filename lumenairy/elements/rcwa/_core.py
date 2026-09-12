@@ -4817,8 +4817,8 @@ def _jax_eig_stable():
 # a wavelength or angle sweep.  Guarded by a Lock for thread safety; cleared
 # via the library cache registry.
 #
-# v5.17.1 (audit P2-16/P2-17): bounded LRU OrderedDict (was a plain unbounded
-# dict).  The key embeds (wl, theta, phi), so every point of
+# Bounded LRU OrderedDict, not a plain unbounded dict (audit
+# P2-16/P2-17).  The key embeds (wl, theta, phi), so every point of
 # ``solve_vs_wavelength`` / an angle sweep minted 2 permanent entries, each
 # holding dense (2N, 2N) complex W and V (~10.7 MB/entry at nox=noy=8):
 # a 500-wavelength sweep retained ~10.7 GB for the life of the process.

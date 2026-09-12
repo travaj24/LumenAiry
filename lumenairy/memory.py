@@ -105,12 +105,11 @@ def set_max_ram(value: Optional[Union[int, float]]) -> None:
     if value is None:
         _MAX_RAM_OVERRIDE = None
         return
-    # v4.14 (audit P3 #18): reject negative budgets explicitly.  Pre-
-    # v4.14 a negative value was silently accepted (treated as
-    # negative bytes); ``pick_batch_size`` then clamped via
-    # ``min_batch=1`` so the bug only surfaced as quiet single-batch
-    # processing on huge workloads.  Zero is also nonsensical (no
-    # work could ever fit) so reject it too.
+    # Reject negative budgets explicitly.  A negative value accepted
+    # silently (treated as negative bytes) surfaces only as quiet
+    # single-batch processing on huge workloads, because
+    # ``pick_batch_size`` then clamps via ``min_batch=1``.  Zero is also
+    # nonsensical (no work could ever fit), so reject it too.
     if value <= 0:
         raise ValueError(
             f"set_max_ram: value must be positive (got {value!r}). "
@@ -304,15 +303,14 @@ def pick_batch_size(n_items: int, cost_per_item: int,
     cost_per_item : int
         Memory cost of ONE item in bytes.  ``0`` means "free" (the whole
         workload fits in one batch); a NEGATIVE cost is rejected (audit
-        A-9..A-14 -- pre-v5.29.1 it was silently treated as free, so a
-        sign-flipped or subtracted-in-the-wrong-order caller got the
-        maximum batch size and OOMed instead of being told).
+        A-9..A-14): treating it as free hands a sign-flipped or
+        subtracted-in-the-wrong-order caller the maximum batch size and
+        an OOM instead of a diagnostic.
     available : int or None
         Available memory in bytes.  If ``None``, uses
         :func:`get_ram_budget` (the :func:`set_max_ram` override when
-        set, else the auto-detected available memory) -- audit P2-21:
-        pre-v5.17.2 this bypassed the override via
-        :func:`available_memory_bytes`.
+        set, else the auto-detected available memory) -- audit P2-21;
+        :func:`available_memory_bytes` would bypass the override.
     safety : float
         Fraction of available memory to use.  Default 0.5 leaves
         half of the available RAM for other processes and OS overhead.
@@ -514,8 +512,6 @@ def available_cpus() -> int:
 # unreliable in a shared process -- persistent FFT plan buffers cross-
 # contaminate the delta -- so the chunked constant is calibrated from the
 # LARGER c128 point: conservative, i.e. the fail-safe direction).
-# Pre-v5.17.0 anchors (44.5/37.2/57.3 GB) reflected the since-fixed v4.10
-# tilt-check leak + upsample double-build and are obsolete.
 # ============================================================================
 
 # Effective live full-grid array counts (per N^2). DTYPE-INDEPENDENT (float64).
@@ -527,15 +523,16 @@ _NEWTON_BYTES_PER_COARSE_PT = 2490.0   # coarse-grid Newton solve + poly fit + m
 # ---------------------------------------------------------------------------
 # ``lens_model='real'`` -- the BARE ``apply_real_lens`` entry point.
 #
-# v5.46 (audit Z3).  These are its OWN constants, measured on it.  The
-# pre-v5.46 branch reused the traced calibration above and then scaled the
-# float64 core DOWN by ``5 / _LENS_F64_ARRAYS`` on the reasoning that the bare
-# entry point "omits the traced final-assembly float64 arrays".  Measured, it
-# does not: ``estimate_lens_memory(..., lens_model='real')`` under-predicted
-# ``apply_real_lens``'s tracemalloc peak by 2.8x (parallel_amp=False) / 1.6x
-# (parallel_amp=True, the default) -- i.e. a pre-flight budget computed with
-# the DOCUMENTED model for that entry point under-reserved by up to 2.8x,
-# which is the exact failure ``check_sim_memory`` exists to prevent.
+# These are its OWN constants, measured on it (audit Z3).  Reusing the
+# traced calibration above and scaling the float64 core DOWN by
+# ``5 / _LENS_F64_ARRAYS`` -- on the reasoning that the bare entry point
+# "omits the traced final-assembly float64 arrays" -- does not work:
+# measured, that form under-predicts ``apply_real_lens``'s tracemalloc
+# peak by 2.8x (parallel_amp=False) / 1.6x (parallel_amp=True, the
+# default), i.e. a pre-flight budget computed with the DOCUMENTED model
+# for that entry point under-reserves by up to 2.8x, which is the exact
+# failure ``check_sim_memory`` exists to prevent.  The earlier scaling
+# is recorded in ``docs/history/lumenairy.memory.md``.
 #
 # CALIBRATION (2026-09-12, tracemalloc peak of ONE ``apply_real_lens`` call on
 # an N-BK7 biconvex singlet R = +-50 mm / d = 5 mm / 25 mm aperture, 633 nm,
@@ -742,7 +739,7 @@ def estimate_lens_memory(n_grid: int,
     int or dict
         Peak additional bytes (or an itemised dict).
     """
-    # v5.46 (audit Z3 / VERIFY-A11 O-2): CLOSED vocabulary.  The branch below
+    # CLOSED vocabulary.  The branch below
     # is written as ``lens_model != 'traced'``, so before this guard every
     # typo -- 'Traced', 'REAL', '', None, 0 -- silently selected the 'real'
     # model and returned a DIFFERENT budget (49.5 MB vs 47.1 MB at
@@ -784,7 +781,7 @@ def estimate_lens_memory(n_grid: int,
         # so the full-grid angle stack materialises even in row-band mode.
         slant_c = (_LENS_SLANT_F64_ARRAYS * sb * npix
                    if slant_correction else 0.0)
-        # v5.17.2 (audit P2-22): the runtime row-band path still runs the
+        # The runtime row-band path still runs the
         # amp + amp(pw) legs concurrently when parallel_amp=True, so the
         # LEG-LOCAL working set (resident complex fields + band transients
         # + any slant fall-through stack) doubles -- the same rule the
@@ -810,7 +807,7 @@ def estimate_lens_memory(n_grid: int,
                 'sag_dtype': 'float32' if sb == 4 else 'float64'}
 
     _real = (lens_model != 'traced')
-    # v5.46 (audit Z3): the two entry points carry DIFFERENT array counts, each
+    # The two entry points carry DIFFERENT array counts, each
     # calibrated on itself -- see the constants above.
     f64_core = ((_LENS_REAL_F64_ARRAYS if _real else _LENS_F64_ARRAYS)
                 * sb * npix)
@@ -921,7 +918,7 @@ def estimate_asm_memory(n_grid: int,
     cb = _as_complex_itemsize(complex_dtype)
     work = _ASM_COMPLEX_ARRAYS * cb * npix
     grids = _ASM_F64_GRID_ARRAYS * 8 * npix
-    # v5.33.2: a plan key holds TWO aligned workspaces only while the
+    # A plan key holds TWO aligned workspaces only while the
     # ping-pong is on AND both fit the per-key byte cap
     # (``fft_infra._plan_entry_n_bufs``); above the cap it holds one and the
     # dispatcher copies.  Reading the same predicate keeps this estimate from
@@ -929,20 +926,20 @@ def estimate_asm_memory(n_grid: int,
     # grid is gigabytes.  Unchanged at every N the A-6 pins sample (two
     # complex128 buffers at N = 1024 are 33.5 MB, three orders under the cap).
     #
-    # v5.33.3 (VERIFY_PERF_BRANCH_2026_08_10 D1): the dtype handed to the
-    # predicate is the CALLER's, not a re-spelled one.  The first cut built
-    # ``np.dtype(f'c{2 * cb}')`` -- but ``cb`` is ALREADY the complex
-    # itemsize, so that asked for a dtype of twice the element size and the
-    # workspace was priced at 2x.  It failed differently on each platform,
-    # which is why no pin saw it: ``'c32'`` is ``complex256`` on Linux (a
-    # silent 43 % UNDER-estimate at N=8192/complex128, because a 2.147 GB
-    # phantom workspace fails the 2 GB cap the true 1.074 GB one passes),
-    # and a ``TypeError`` on MSVC that the except below swallowed into
-    # ``n_bufs = 2`` -- a no-op for complex128 and, via the perfectly valid
-    # ``'c16'``, a 9.66 GB UNDER-estimate for complex64 at N=12288 on
-    # Windows too.  ``_plan_entry_n_bufs`` reads only ``.itemsize``, so
-    # passing ``complex_dtype`` straight through is both correct and
-    # incapable of raising for any dtype ``_as_complex_itemsize`` accepted.
+    # The dtype handed to the predicate is the CALLER's, never a
+    # re-spelled one.  ``np.dtype(f'c{2 * cb}')`` is the trap: ``cb`` is
+    # ALREADY the complex itemsize, so that asks for a dtype of twice the
+    # element size and prices the workspace at 2x.  It fails differently
+    # on each platform, which is why no pin catches it: ``'c32'`` is
+    # ``complex256`` on Linux (a silent 43 % UNDER-estimate at
+    # N=8192/complex128, because a 2.147 GB phantom workspace fails the
+    # 2 GB cap the true 1.074 GB one passes), and a ``TypeError`` on MSVC
+    # that the except below swallows into ``n_bufs = 2`` -- a no-op for
+    # complex128 and, via the perfectly valid ``'c16'``, a 9.66 GB
+    # UNDER-estimate for complex64 at N=12288 on Windows too.
+    # ``_plan_entry_n_bufs`` reads only ``.itemsize``, so passing
+    # ``complex_dtype`` straight through is both correct and incapable of
+    # raising for any dtype ``_as_complex_itemsize`` accepted.
     try:
         from .propagators.fft_infra import _plan_entry_n_bufs
         n_bufs = int(_plan_entry_n_bufs((N, N), np.dtype(complex_dtype)))
@@ -1155,7 +1152,7 @@ def check_sim_memory(n_grid: int,
 # ----------------------------------------------------------------------------
 # Low-memory preset
 # ----------------------------------------------------------------------------
-# v5.17.2 (audit P2-23 / P3-46): the values captured at the FIRST
+# The values captured at the FIRST
 # set_low_memory(True) since the last disable, so set_low_memory(False)
 # restores exactly what the user had (including the aggressive complex64
 # default-dtype flip and any pre-existing non-default knob settings)
@@ -1169,7 +1166,7 @@ _LOW_MEMORY_SHIPPED_DEFAULTS: Dict[str, Any] = {
     'plan_cache_size': 8,
     'lens_parallel_amp': True,
     'fft_double_buffer': True,
-    # v5.30.1 (audit W9): tracks the fft_infra default, which flipped
+    # Tracks the fft_infra default, which flipped
     # True -> False when ESTIMATE->MEASURE auto-promote became opt-in.
     # Must stay in sync -- this table is what set_low_memory(False)
     # restores when there is no enable on record, so a stale True here
@@ -1231,9 +1228,9 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
         _capture('plan_cache_size', get_fft_plan_cache_size)
         _capture('lens_parallel_amp', get_lens_parallel_amp)
         _capture('fft_double_buffer', get_fft_double_buffer)
-        # audit P3-46: read the LIVE value like the other knobs (pre-fix
-        # this hardcoded True, losing e.g. a byte-reproducibility pin set
-        # via set_fft_auto_promote(False)).
+        # audit P3-46: read the LIVE value like the other knobs --
+        # hardcoding True here loses e.g. a byte-reproducibility pin set
+        # via set_fft_auto_promote(False).
         _capture('fft_auto_promote', get_fft_auto_promote)
         set_fft_plan_cache_size(2)
         set_lens_parallel_amp(False)

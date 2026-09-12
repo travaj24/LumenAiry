@@ -159,9 +159,9 @@ from .thin_grating import (
 # ``berreman`` / ``bor`` / ``eme`` / ``pmm`` / ``rcwa`` are the heavy end of
 # the library: they reach ``scipy.linalg`` + ``scipy.special`` through
 # ``lumenairy.backend.scipy``, and a user who only wants ``propagate_asm``
-# used to pay for the whole rigorous-solver stack at ``import lumenairy``
-# (audit 2026-09-11 TESTS-ARCH P2-7).  Their names are now resolved on FIRST
-# ACCESS through the module ``__getattr__`` below.
+# would otherwise pay for the whole rigorous-solver stack at
+# ``import lumenairy`` (audit 2026-09-11 TESTS-ARCH P2-7).  Their names
+# are resolved on FIRST ACCESS through the module ``__getattr__`` below.
 #
 # What still works, and is tested in
 # ``tests/unit/test_audit2609_a15b_lazy_elements.py``:
@@ -190,7 +190,7 @@ from typing import List as _List
 _LAZY_SUBMODULES = ('berreman', 'bor', 'eme', 'pmm', 'rcwa')
 
 #: Public name -> the submodule (relative to this package) that defines it.
-#: One entry per name that used to be imported eagerly above; the ``__all__``
+#: One entry per lazily-resolved public name; the ``__all__``
 #: list below is unchanged, so the two are cross-checked by the lazy-loading
 #: test and by the existing ``__all__``-symmetry walker.
 _LAZY_NAMES = {

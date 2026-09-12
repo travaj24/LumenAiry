@@ -839,7 +839,7 @@ def _pick_ray_transfer(surfaces, exact):
 # with clear_coarse_trace_cache() / clear_asm_caches() (registered below).
 _COARSE_CACHE: Dict[Any, Any] = {}
 _COARSE_CACHE_MAX = 2
-# v5.24.4 (audit hygiene): thread-safety lock for ``_COARSE_CACHE``.  The
+# Thread-safety lock for ``_COARSE_CACHE``.  The
 # read (``get``) -> ``_coarse_cache_put`` (len-check -> pop -> __setitem__)
 # sequence is a read-modify-write two threads propagating through the SAME
 # optics could tear.  Follows the ``_THROUGH_FOCUS_SCAN_JAX_CACHE_LOCK``
@@ -862,7 +862,7 @@ def clear_coarse_trace_cache() -> None:
         _COARSE_CACHE.clear()
 
 
-# v5.24.4 (audit hygiene): enroll the coarse-trace clearer with the central
+# Enroll the coarse-trace clearer with the central
 # registry at import time so ``clear_all_registered_caches`` drains it (the
 # v4.16.1 enrollment meta-pin requires every module-level ``_*_CACHE`` to be
 # registered).  Late-binding closure preserves ``mock.patch.object`` test
@@ -1902,7 +1902,7 @@ def fga_memory_estimate(
         ``(n_p_target / n_p)**2``.
 
     .. versionchanged:: 5.30
-        ``nsig`` is now READ (audit P9).  Pre-v5.30 it was documented as
+        ``nsig`` is now READ (audit P9).  It was documented as
         "as on :func:`apply_real_lens_fga`" but never consulted, so the
         whole estimate was bit-identical for ``nsig`` = 1.0 and 12.0 while
         the real path reads it six times.  It now sizes the new
@@ -3087,7 +3087,7 @@ def apply_real_lens_universal(
     the guard versus 0.9874 / 0.9820 / 0.9816 with it.  Only the ray-FIT domain
     is restricted -- no field energy is vignetted -- and the pre-cliff regime is
     unharmed.  Pass ``method_kwargs={'traced': {'fit_radius_beam_factor': None}}``
-    for the pre-v5.31 aperture-only fit domain.  The chain's other three
+    for the aperture-only fit domain.  The chain's other three
     validated options are deliberately NOT adopted here: they are carrier-regime
     options and this router supplies no carrier (measured equal-or-worse without
     one).
@@ -3174,7 +3174,7 @@ def apply_real_lens_universal(
         from ..elements import apply_real_lens, apply_real_lens_traced
         extra = dict(mkw.get(chosen, {}))
         if chosen == "traced":
-            # v5.31 (audit W9-13): adopt the P2 aperture:beam cliff GUARD as
+            # Adopt the P2 aperture:beam cliff GUARD as
             # this router's traced default.  ``apply_real_lens_traced``'s own
             # signature default is ``fit_radius_beam_factor=None`` (the
             # historical aperture-only ray-fit domain, kept for byte-identity

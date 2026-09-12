@@ -86,7 +86,7 @@ def _ensure_numexpr_loaded():
 def _drop_numexpr_out_retention():
     """Drop numexpr's per-thread reference to the last ``out=`` array.
 
-    v5.33.3 (VERIFY_PERF_BRANCH_2026_08_10 D2).  ``numexpr.evaluate`` is
+    ``numexpr.evaluate`` is
     implemented as ``validate`` + ``re_evaluate``, and ``validate`` parks the
     whole kwargs dict -- ``out`` INCLUDED -- in
     ``numexpr.necompiler._numexpr_last`` so the replay has something to read.
@@ -134,11 +134,9 @@ def _drop_numexpr_out_retention():
 
 # Minimum field size at which the numexpr phase-screen path beats the straight
 # numpy multiply: the expression-compile + thread-dispatch overhead is fixed
-# while the benefit scales with the array size.  This is the ONLY live copy of
-# the constant (v5.30, audit E-L5: the dead twin in ``lenses.py`` -- which this
-# comment used to point at for the rationale -- has been deleted; the rationale
-# now lives here, next to its three readers below).  The propagators keep their
-# own ``asm._NE_MIN_SIZE``, deliberately separate.
+# This is the ONLY live copy of the constant, and it sits next to its
+# three readers below.  The propagators keep their own
+# ``asm._NE_MIN_SIZE``, deliberately separate.
 _NUMEXPR_MIN_SIZE = 1 << 20  # 1 Mi elements (~1024 x 1024)
 
 
@@ -1830,10 +1828,11 @@ def _residual_input_field(E_in, W_conj, wavelength):
     carries the entrance eikonal of the ``conjugate=`` congruence.  Whatever
     phase the caller's field carries BEYOND that congruence -- an upstream
     element's residual wavefront, a tilt, aberration, or (with the default
-    ``conjugate=None``) the whole of its curvature -- is not in the trace and
-    used to be thrown away with the ``np.abs(E_in)`` sampling: measured
-    identical output (4.7e-16) for a flat and a 35-wave-defocused input, and a
-    150 mm diverging source focusing at the COLLIMATED 21 mm instead of 25 mm.
+    ``conjugate=None``) the whole of its curvature -- is not in the trace.
+    Sampling ``np.abs(E_in)`` instead discards it: measured identical
+    output (4.7e-16) for a flat and a 35-wave-defocused input, and a
+    150 mm diverging source focusing at the COLLIMATED 21 mm instead of
+    25 mm.
 
     ``F`` is smooth wherever the input matches the congruence to within a
     fraction of a wave per pixel, which is exactly the regime the remap is
@@ -1900,7 +1899,7 @@ def _apply_displaced_remap(E_in, h_in, h_out, wavelength, dx, dy, opl,
     # Resample the input field DEMODULATED by the traced congruence, so the
     # phase the caller's field carries beyond that congruence rides along with
     # the amplitude instead of being discarded.  ``|F| == |E_in|``, so this is
-    # the old amplitude resample plus the residual phase, not an extra pass.
+    # an amplitude resample plus the residual phase, not an extra pass.
     _W_in = None
     if eikonal_fn is not None:
         # ``r_out`` IS the input grid's radius here (the demodulation happens
@@ -1976,9 +1975,9 @@ def _warn_if_remap_lattice_smooths(r_max, dx, dy, n_side):
 
     The remap is a geometric transfer: everything the exit field knows comes
     from ``n_side**2`` launched rays, so input structure finer than the launch
-    pitch is not propagated, it is SMOOTHED AWAY -- and nothing used to say so.
-    Measured: a ripple at 2.2 launch samples per period comes back at 0.51 of
-    its input contrast where the (field-grid) screen path resolves it at 1.26.
+    pitch is not propagated, it is SMOOTHED AWAY.  Measured: a ripple at
+    2.2 launch samples per period comes back at 0.51 of its input
+    contrast where the (field-grid) screen path resolves it at 1.26.
     """
     try:
         h = min(float(dx), float(dy))
@@ -3720,10 +3719,11 @@ _TF_REMAP_PULLBACK_TOL_PX = 1.0e-9
 #: itself are evaluated over every pixel of the grid, including the padding
 #: outside the clear aperture where the entrance aperture has already zeroed the
 #: field and where ``sag`` and ``grad sag`` grow without bound -- so a converging
-#: beam's perfectly ordinary 8x pad used to REFUSE on dark corner pixels while
-#: the illuminated pupil sat at ``det = 0.9986``, three orders inside the bar.
-#: Scoring the guards over the support fixes the misdiagnosis (the message said
-#: "change model"; the actual remedy was "shrink the grid").  1e-6 of peak
+#: beam's perfectly ordinary 8x pad would otherwise REFUSE on dark corner
+#: pixels while the illuminated pupil sits at ``det = 0.9986``, three orders
+#: inside the bar -- and the message would say "change model" where the
+#: actual remedy is "shrink the grid".  Scoring the guards over the
+#: support is what keeps that misdiagnosis out.  1e-6 of peak
 #: AMPLITUDE is 1e-12 of peak intensity: a fold there cannot move the answer,
 #: and for a hard-apertured pupil the threshold is exactly the aperture because
 #: the field outside it is identically zero.
@@ -3975,7 +3975,7 @@ def _tangent_facet_remap_apply(E, wx, wy, pox, poy, dx, dy, k0, order, xp,
         del crd
         # Convergence is scored over the SUPPORT, for the same reason the fold
         # guard is: a dark padding pixel whose walk never settles cannot move
-        # the answer, and used to abort the whole call.
+        # the answer, and would otherwise abort the whole call.
         step = max(float(np.max(np.abs((nix - ix)[supp]))),
                    float(np.max(np.abs((niy - iy)[supp]))))
         ix, iy = nix, niy
@@ -5011,12 +5011,6 @@ def apply_real_lens(
         8 adds the 8th; higher is rarely beneficial because the fit is
         limited by the 1-D sampling rather than by the polynomial basis.
         Must be a positive int and is capped at 12 (validated).
-
-        .. note::
-           v5.30 (audit E-M1): this entry read "default 8" while the
-           signature has shipped ``seidel_poly_order=6`` (and the UI's
-           lens-options dialog defaults to 6).  The DOC was wrong -- the
-           behaviour is unchanged.
     surface_frame : bool, default False
         v5.2+ opt-in.  When ``False`` (default), the per-surface
         ``"decenter"`` / ``"tilt"`` keys are honoured in the **field
@@ -5364,8 +5358,7 @@ def apply_real_lens(
         supported with the default ``surface_model='thin'`` -- the
         ``'displaced'`` path is already angle-aware through ``conjugate=``,
         and stacking the two would double-count.  With ``carrier=None``
-        (the default) every byte of this function's output is unchanged from
-        pre-5.35 releases.
+        (the default) this function's output is bit-unchanged.
     screen_obliquity : {'auto', True, False}, default 'auto'
         Whether to APPLY the screen-obliquity correction.  ``'auto'`` applies
         it whenever a ``carrier`` is supplied; ``False`` computes the guard's
@@ -5522,7 +5515,7 @@ def apply_real_lens(
     parameter name is ``prescription`` -- the 4.6 alias
     ``lens_prescription`` was removed in 4.7.
     """
-    # v4.15.3 (P0-NEW-F2-1): the defensive input guard runs FIRST --
+    # The defensive input guard runs FIRST --
     # before the accumulator-store context -- so the user gets a clear
     # error rather than a downstream failure, and so the v4.15.3
     # dispatcher pin (every entry point calls the guard as its first
@@ -5618,14 +5611,14 @@ def _apply_real_lens_impl(
     # pin; this impl deliberately carries no second copy so the W4
     # input-kind census stays at one wired site per entry point.
 
-    # v5.1.0 (default-knob resolver rollout): when ``wave_propagator``
+    # When ``wave_propagator``
     # is left at the default ``None``, resolve via the library-wide
     # default set by ``set_default_wave_propagator(...)``.  Explicit
     # values bypass the resolver.
     if wave_propagator is None:
         from ..propagators.propagation import get_default_wave_propagator
         wave_propagator = get_default_wave_propagator()
-    # v5.1.0 (default-knob resolver rollout): same for ``dy``.
+    # Same for ``dy``.
     # ``None -> get_default_dy() -> dx`` chain.
     if dy is None:
         from ..propagators.propagation import get_default_dy
@@ -5665,8 +5658,8 @@ def _apply_real_lens_impl(
         displaced_obliquity=displaced_obliquity,
         remap_order=remap_order,
     )
-    # v5.35.0: the screen-obliquity correction + its accuracy guard.  Reached
-    # ONLY through the new ``carrier=`` keyword, so every pre-5.35 call site is
+    # The screen-obliquity correction + its accuracy guard.  Reached ONLY
+    # through the ``carrier=`` keyword, so a call that does not pass one is
     # structurally bit-unchanged (BUILD_SCREEN_OBLIQUITY_2026_08_11 S6).
     _obl_apply = _check_screen_obliquity_support(
         carrier=carrier,
@@ -5708,10 +5701,10 @@ def _apply_real_lens_impl(
     # call site (Python's default warning filter dedups by source line).
     try:
         # Anamorphic-safe: pass BOTH axes.  ``shape[0]`` is Ny, so pairing it
-        # with ``dx`` (as this used to) describes a semi-extent that exists on
-        # neither axis of a non-square or ``dy != dx`` grid -- both of which
-        # this function supports throughout.  ``dy`` is resolved a few lines
-        # below for the main body; resolve it here the same way.
+        # with ``dx`` describes a semi-extent that exists on neither axis of a
+        # non-square or ``dy != dx`` grid -- both of which this function
+        # supports throughout.  ``dy`` is resolved a few lines below for the
+        # main body; resolve it here the same way.
         _shape = np.shape(E_in)
         _dy_chk = dx if dy is None else dy
         _warn_if_aperture_exceeds_grid(
@@ -6238,9 +6231,9 @@ def _apply_real_lens_impl(
         """Advance the carrier's ray drift across the gap behind surface
         ``i_surf`` (equation 6).
 
-        Factored out of the whole-grid surface body so the two row-banded
-        paths reach it too -- pre-v5.35.3 they ``continue``d past it, which is
-        precisely why ``carrier=`` had to disqualify them."""
+    Factored out of the whole-grid surface body so the two row-banded
+    paths reach it too: a banded path that ``continue``s past it cannot
+    carry ``carrier=`` at all."""
         nonlocal _obl_ux, _obl_uy, _obl_drift_live
         # The gap the CARRIER drifts through is always the physical one here.
         # (There used to be a ``if _split_mode: t/n, n=1`` arm for the
@@ -6534,7 +6527,7 @@ def _apply_real_lens_impl(
             E = E_in.astype(DEFAULT_COMPLEX_DTYPE)
 
     # Entrance aperture (only if no explicit stop surface specified)
-    # v4.13.2 (audit C-P1-4): dtype-aware zero to preserve complex64
+    # Dtype-aware zero to preserve complex64
     # E (the ``0.0 + 0.0j`` literal silently upcast to complex128).
     if aperture is not None and stop_index is None:
         if _chunk_grids:
@@ -6627,10 +6620,10 @@ def _apply_real_lens_impl(
         # byte-identical (test_chunked_sag_byte_identical).  Any deviation
         # from the narrow case falls through to the whole-grid path below.
         #
-        # v5.35.3: ``carrier=`` (the angle-true screen) no longer disqualifies
-        # the band -- the obliquity block's two gradients are taken on a
-        # 1-/2-row halo, so its per-band arithmetic is the whole-grid
-        # arithmetic element for element (test_obl_banded_halo.py).
+        # ``carrier=`` (the angle-true screen) does NOT disqualify the band
+        # -- the obliquity block's two gradients are taken on a 1-/2-row
+        # halo, so its per-band arithmetic is the whole-grid arithmetic
+        # element for element (test_obl_banded_halo.py).
         _narrow_chunk = (
             sag_chunk_rows is not None and int(sag_chunk_rows) > 0
             and xp is np and not slant_correction and not fresnel
@@ -6639,14 +6632,11 @@ def _apply_real_lens_impl(
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
             and surf.get('radius_y') is None
-            # v5.17.1 (audit P2-04): ANY freeform_type falls through to the
-            # whole-grid path -- Q-bfs / Q-con so their departure IS
-            # computed there, and the non-Q types (zernike / xy_polynomial
-            # / chebyshev) so the whole-grid path's "freeform departure is
-            # NOT included" RuntimeWarning keeps firing on the (default)
-            # banded path.  Pre-fix the band loop silently dropped the
-            # departure for non-Q types with no diagnostic.  Outputs are
-            # unchanged (the departure was dropped on both paths).
+            # ANY freeform_type falls through to the whole-grid path --
+            # Q-bfs / Q-con so their departure IS computed there, and the
+            # non-Q types (zernike / xy_polynomial / chebyshev) so the
+            # whole-grid path's "freeform departure is NOT included"
+            # RuntimeWarning keeps firing on the (default) banded path.
             and surf.get('freeform_type') is None
             and surf.get('clear_aperture') is None
             and not (stop_index is not None and i == stop_index
@@ -6767,7 +6757,7 @@ def _apply_real_lens_impl(
         # decenter / tilt / form-error / biconic / freeform / surface-frame
         # slant/fresnel surfaces fall through to the whole-grid path (their
         # full grids are unavoidable anyway).
-        # v5.35.3: ``carrier=`` no longer disqualifies this band either -- the
+        # ``carrier=`` does not disqualify this band either -- the
         # obliquity block rides the SAME halo (widened to 2 rows when the R1
         # drift term is live) and the sag gradient is shared with the
         # refraction pipeline when no NaN sentinel forces a rebuild.
@@ -6993,8 +6983,7 @@ def _apply_real_lens_impl(
         X, Y, h_sq_axis = _ensure_full_grids()
 
         # ---- Decenter --------------------------------------------------
-        # v5.2 (ROADMAP v5.1 off-axis conic in surface frame;
-        # AUDIT_V5_1_0 deferred feature): when ``surface_frame=True``
+        # When ``surface_frame=True``
         # the decenter+tilt pair is applied as a rigid-body transform
         # of the surface itself (Optiland / Zemax convention) instead
         # of as a field-frame coordinate shift + linear sag ramp.  The
@@ -7069,12 +7058,11 @@ def _apply_real_lens_impl(
         # chebyshev (those remain silently dropped pending a separate
         # fix), so the warning continues to fire for them.
         #
-        # v4.15.1 (P3-NEW-A): Forbes Q-bfs / Q-con sag is a 2-D scalar
-        # phase contribution exactly analogous to the (forthcoming)
-        # xy-polynomial / Zernike / Chebyshev wave-optics paths and is
-        # explicitly delegated to this module for closure -- so for
-        # ``freeform_type in ('q_bfs', 'q_con')`` we compute the
-        # freeform departure here and ADD it to the base conic sag.
+        # Forbes Q-bfs / Q-con sag is a 2-D scalar phase contribution
+        # exactly analogous to the (forthcoming) xy-polynomial /
+        # Zernike / Chebyshev wave-optics paths, so for
+        # ``freeform_type in ('q_bfs', 'q_con')`` the freeform
+        # departure is computed here and ADDED to the base conic sag.
         # The dispatch goes through ``surface_sag_freeform`` so it
         # honours the v4.15.1 P1-F1-1 radial clip + P1-F1-2 required-
         # ``r_max`` guards.  Other freeform types still warn-and-skip
@@ -7178,11 +7166,11 @@ def _apply_real_lens_impl(
         # been consumed, so it is neither shifted by ``decenter`` nor rotated by
         # ``surface_frame`` -- it lands on the field grid exactly as supplied.
         # Shape is validated here because numpy broadcasting is happy to accept
-        # an obviously-wrong figure map: an ``(Nx,)`` row used to be replicated
-        # silently down every row of the grid, and a mismatched 2-D map died
-        # with a raw broadcast error (or, for ``(Ny, Nx, 1)``, survived the lens
-        # and died inside the ASM) where every other input to this function gets
-        # a precise ``apply_real_lens: ...`` message.
+        # an obviously-wrong figure map: an ``(Nx,)`` row broadcasts silently
+        # down every row of the grid, and a mismatched 2-D map dies with a raw
+        # broadcast error (or, for ``(Ny, Nx, 1)``, survives the lens and dies
+        # inside the ASM) where every other input to this function gets a
+        # precise ``apply_real_lens: ...`` message.
         form_err = surf.get('form_error')
         if form_err is not None:
             _fe_shape = tuple(np.shape(form_err))
@@ -7218,10 +7206,10 @@ def _apply_real_lens_impl(
         # built.  At N=8192 this cuts peak refraction-step memory
         # from ~5 GB to ~1.5 GB without changing the math.
         if fresnel or slant_correction:
-            # 4.10: pass dy for the y-axis spacing -- pre-4.10 used dx
-            # for both, which gave the wrong surface-normal direction on
-            # anamorphic grids (dx != dy).  np.gradient takes the spacing
-            # in the same order as the array axes (y, x).
+            # Pass dy for the y-axis spacing: dx for both gives the
+            # wrong surface-normal direction on an anamorphic grid
+            # (dx != dy).  np.gradient takes the spacing in the same
+            # order as the array axes (y, x).
             dsag_dy, dsag_dx = xp.gradient(sag, dy, dx)
             grad_sq = dsag_dx ** 2 + dsag_dy ** 2
             # Free the gradient components -- only grad_sq is needed
@@ -7236,15 +7224,13 @@ def _apply_real_lens_impl(
             del grad_sq
             sin2_tt = (n1r / n2r) ** 2 * sin2_ti
             cos_tt = xp.sqrt(xp.maximum(1.0 - sin2_tt, 0.0))
-            # 4.10: warn the FIRST time per call we clamp a real ray's
-            # cosine.  The 1e-3 floor (≈89.94°) was previously silent;
-            # for steep aspheres or strongly tilted bundles it acts on
-            # physical (non-TIR) rays before the TIR mask fires, and
-            # the historical /cos slant OPD blew up ~1000x per
-            # clamped pixel (round-2 audit M-LR).  v5.25.0 (H1): the
-            # corrected *cos form cannot diverge, so the clamp is now
-            # harmless for the OPD -- the warning is kept for the
-            # Fresnel-coefficient legs, which still divide by cos.
+            # Warn the FIRST time per call a real ray's cosine is
+            # clamped.  The 1e-3 floor (~89.94 deg) acts on physical
+            # (non-TIR) rays before the TIR mask fires for steep
+            # aspheres or strongly tilted bundles.  The corrected *cos
+            # OPD form cannot diverge, so the clamp is harmless there;
+            # the warning is kept for the Fresnel-coefficient legs,
+            # which still divide by cos.
             if bool(xp.any(cos_ti < 1e-3)) or bool(xp.any(cos_tt < 1e-3)):
                 import warnings
                 warnings.warn(
@@ -7287,7 +7273,7 @@ def _apply_real_lens_impl(
             _cin, _cout = _disp_cos_grid[i]
             opd = (n2r * _cout - n1r * _cin) * sag
         elif _displaced:
-            # v5.25.1 (hammer H2(a)): ray-angle-aware refraction OPD
+            # Ray-angle-aware refraction OPD
             # (n2 cos_alpha_out - n1 cos_alpha_in) * sag, cosines of the
             # TRUE ray angle to the z-axis from the collimated meridional
             # fan (interpolated onto the grid radius r).  Carries the
@@ -7317,9 +7303,7 @@ def _apply_real_lens_impl(
         _rm_pending = False
         _rm_wx = _rm_wy = None
         # ONE reduction over ``sag``, shared by the tangent-facet block,
-        # the obliquity block and the flat-face early-out below (all
-        # three used to take their own, and the default screen took
-        # none).
+        # the obliquity block and the flat-face early-out below.
         _sag_any = bool(xp.any(sag))
         if _tf_active and _sag_any:
             # A FLAT face -- a plate, a cemented plano, a stop -- has no facet
@@ -7525,14 +7509,14 @@ def _apply_real_lens_impl(
 
         # ---- Fresnel amplitude transmission ---------------------------
         if fresnel:
-            # 4.10: average the INTENSITY coefficients for unpolarised
+            # Average the INTENSITY coefficients for unpolarised
             # scalar throughput, not the amplitude coefficients.  At
             # Brewster's angle (or any high AOI), t_s and t_p have
             # different phases; their amplitude sum can cancel where
             # sqrt(0.5*(|t_s|^2+|t_p|^2)) correctly captures the
-            # incoherent average power.  Pre-4.10 used 0.5*(t_s+t_p)
-            # which only matches 45-deg linear polarisation at low AOI.
-            # For polarised inputs route through the Jones pipeline.
+            # incoherent average power.  ``0.5*(t_s+t_p)`` matches only
+            # 45-deg linear polarisation at low AOI.  For polarised
+            # inputs route through the Jones pipeline.
             #
             # ``t_s`` / ``t_p`` are AMPLITUDE coefficients.  This library
             # treats ``sum |E|**2 dx dy`` as POWER everywhere (the ASM legs
@@ -7555,15 +7539,15 @@ def _apply_real_lens_impl(
                      * (n2r * cos_tt_safe) / (n1r * cos_ti_safe))
             E = E * xp.sqrt(T_eff)
 
-        # ---- TIR mask (audit #3.5: was inside `if fresnel:` pre-4.9) --
+        # ---- TIR mask -----------------------------------------------
         # Suppress regions that went into total internal reflection.
         # This must fire whenever ``sin2_tt`` was computed -- i.e. for
         # both ``fresnel=True`` and ``slant_correction=True`` paths,
         # since the slant OPD divides by ``cos_tt_safe`` which is
-        # ill-defined where ``sin2_tt > 1``.  Pre-4.9 only ran this
-        # inside the Fresnel block, leaving slant_correction=True +
-        # fresnel=False users with unphysical residual field amplitude
-        # in TIR regions.
+        # ill-defined where ``sin2_tt > 1``.  Running it only inside the
+        # Fresnel block leaves slant_correction=True + fresnel=False
+        # callers with unphysical residual field amplitude in TIR
+        # regions.
         if fresnel or slant_correction:
             # In-place mask instead of a fresh full complex grid.  The
             # sense is ``not (sin2_tt < 1.0)`` rather than
@@ -7585,16 +7569,12 @@ def _apply_real_lens_impl(
 
         # ---- Aperture stop applied at this surface --------------------
         if stop_index is not None and i == stop_index and aperture is not None:
-            # 4.10.2: respect the stop surface's decenter/displacement
-            # if any.  Pre-4.10.2 always used h_sq_axis (centred at the
-            # optical axis), so a decentered stop was modelled at the
-            # wrong location and clipped the wrong region of the beam.
-            # 4.11.1: the 4.10.2 patch used ``getattr(surf, ...)`` on a
-            # dict (always returns the default 0.0), and looked up the
-            # wrong keys (``decenter_x_m`` / ``decenter_y_m``).  The
-            # surface dict's actual key is ``decenter`` and the value
-            # is a ``(dx, dy)`` tuple -- mirror line 520 above.
-            # v4.13.2 (audit C-P1-4): dtype-aware zero for both branches.
+            # Respect the stop surface's decenter/displacement if any:
+            # ``h_sq_axis`` is centred at the optical axis, so a
+            # decentred stop modelled there clips the wrong region of
+            # the beam.  The surface dict's key is ``decenter`` and its
+            # value is a ``(dx, dy)`` tuple -- mirror line 520 above.
+            # Dtype-aware zero for both branches.
             _dec = surf.get('decenter') or (0.0, 0.0)
             xc_stop = float(_dec[0])
             yc_stop = float(_dec[1])
@@ -7797,14 +7777,13 @@ def _apply_real_lens_impl(
             # Suppress fitting noise: if the RMS correction across the
             # fan is already well below typical simulation residual,
             # skip application to avoid injecting polynomial-fit
-            # artefacts into otherwise-clean fields.
-            # 4.11.1: after the C-LR-1 sign fix in 4.10 the typical
-            # residual collapsed to a few-nm range, so 50 nm silently
-            # skipped most real corrections.  Drop the gate to ~5 nm
-            # (well below the Marechal lambda/14 ~ 35 nm at visible
-            # wavelengths so meaningful corrections are still applied,
-            # while ~5 nm remains above the lstsq numerical noise floor
-            # for a 6th-order even-polynomial fit on ~50 fan samples).
+            # artefacts into otherwise-clean fields.  The gate is ~5 nm:
+            # after the C-LR-1 sign fix the typical residual is a
+            # few-nm range, so a 50 nm gate silently skips most real
+            # corrections, while ~5 nm is well below the Marechal
+            # lambda/14 ~ 35 nm at visible wavelengths and still above
+            # the lstsq numerical noise floor for a 6th-order
+            # even-polynomial fit on ~50 fan samples.
             # Score the gate on what will actually be IMPRINTED (the fitted
             # rho**4+ part), not on the raw residual: the two were the same
             # quantity only because the old rho**2-up basis could fit anything.
@@ -7914,17 +7893,16 @@ class PreparedAnalyticLens:
     slant / fresnel / absorption / seidel / surface-frame / GPU modes; use
     :func:`apply_real_lens` directly for those.
 
-    A prepared lens FREEZES the settings that were live when it was prepared
-    (v5.29.1; audit E-H3).  ``wave_propagator``, ``sag_dtype`` and ``_dy`` hold
-    the values :func:`prepare_real_lens` resolved from the process-wide
-    defaults (:func:`set_default_wave_propagator` /
-    :func:`set_lens_sag_dtype` / :func:`set_default_dy`), so a prepared object
-    keeps reproducing the field it was built for even if a global default is
-    flipped afterwards -- rebuild it to pick up new settings.  Pre-v5.29.1 the
-    class hard-coded ASM / ``dy = dx`` / float64 geometry and never consulted
-    the defaults at all, so after ``set_default_wave_propagator('fresnel')``
-    the prepared object diverged from :func:`apply_real_lens` by 49.6 on a
-    singlet with no diagnostic.
+    A prepared lens FREEZES the settings that were live when it was
+    prepared (audit E-H3).  ``wave_propagator``, ``sag_dtype`` and ``_dy``
+    hold the values :func:`prepare_real_lens` resolved from the
+    process-wide defaults (:func:`set_default_wave_propagator` /
+    :func:`set_lens_sag_dtype` / :func:`set_default_dy`), so a prepared
+    object keeps reproducing the field it was built for even if a global
+    default is flipped afterwards -- rebuild it to pick up new settings.
+    Hard-coding ASM / ``dy = dx`` / float64 geometry here instead would
+    diverge from :func:`apply_real_lens` by 49.6 on a singlet, with no
+    diagnostic, after a ``set_default_wave_propagator('fresnel')``.
 
     BYTE-IDENTITY WITH :func:`apply_real_lens`, and its one exception.  On a
     build WITHOUT numexpr this class reproduces :func:`apply_real_lens` bit for
@@ -7968,13 +7946,13 @@ class PreparedAnalyticLens:
             E = E * sc
             if i < n_surf - 1:
                 thick, lam_med = self._gap[i]
-                # v5.29.1 (audit E-H3): dispatch on the propagator FROZEN at
-                # prepare time via the same helper apply_real_lens uses, so
-                # the two agree for every propagator (this used to hard-code
-                # ASM).  ``lam_med`` is already the in-medium wavelength, so
-                # the helper's ``wavelength / n_medium_r`` reduces to it with
-                # ``n_medium_r=1.0``; absorption is off here (the factory
-                # rejects it), which makes the ``kappa`` / ``k0`` args inert.
+                # Dispatch on the propagator FROZEN at prepare time via
+                # the same helper apply_real_lens uses, so the two agree
+                # for every propagator.  ``lam_med`` is already the
+                # in-medium wavelength, so the helper's ``wavelength /
+                # n_medium_r`` reduces to it with ``n_medium_r=1.0``;
+                # absorption is off here (the factory rejects it), which
+                # makes the ``kappa`` / ``k0`` args inert.
                 E = _propagate_through_glass(
                     E, thick, lam_med, 1.0, 0.0, self._dx, self._dy,
                     self._bandlimit, self.wave_propagator, False, 0.0, np)
@@ -8050,12 +8028,11 @@ def prepare_real_lens(
         # same ``allow_unfolded_equivalent`` key apply_real_lens honours.)
 
     N = int(N)
-    # v5.29.1 (audit E-H3): resolve the process-wide defaults AT PREPARE TIME
-    # (explicit kwargs win, exactly as in apply_real_lens) and freeze the
-    # resolved values on the returned object.  Pre-fix this function hard-coded
-    # ASM / dy=dx / float64 geometry and never consulted the defaults, so a
-    # later set_default_wave_propagator('fresnel') desynchronised the prepared
-    # object from apply_real_lens by 49.6 with no diagnostic.
+    # Resolve the process-wide defaults AT PREPARE TIME (explicit kwargs
+    # win, exactly as in apply_real_lens) and freeze the resolved values
+    # on the returned object.  See
+    # ``docs/history/lumenairy.elements._lens_real.md``
+    # for what hard-coding them here cost.
     if wave_propagator is None:
         from ..propagators.propagation import get_default_wave_propagator
         wave_propagator = get_default_wave_propagator()

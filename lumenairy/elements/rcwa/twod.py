@@ -346,14 +346,14 @@ def _nv_convolutions_2d(eps_cell, Nx, Ny, orders, n_orders_x, n_orders_y, xp):
     wall-normal projection ``N N^T`` switches to the inverse rule), and
     ``Nab = [[Na Nb]]`` (Laurent convolution of the real field products).
 
-    ``EZZ = E = [[eps]]`` (the DIRECT-rule ``E_z`` elimination, v5.14.1 audit
-    F1): ``E_z`` is tangential to every vertical wall of a z-invariant layer,
-    so ``D_z = eps E_z`` has no concurrent jumps and Li's rule 1 mandates the
-    direct rule (Li 1997 Eq. 27; S4/grcwa do the same).  The pre-v5.14.1
-    dual-Laurent ``EZZ = [[1/eps]]^{-1}`` violated Li's rule 3 and
-    overestimated metal-stripe absorptance by up to +0.35; its apparent
-    dielectric advantage was error cancellation against the in-plane Laurent
-    slowness, not a correct factorization.
+    ``EZZ = E = [[eps]]`` (the DIRECT-rule ``E_z`` elimination, audit
+    F1): ``E_z`` is tangential to every vertical wall of a z-invariant
+    layer, so ``D_z = eps E_z`` has no concurrent jumps and Li's rule 1
+    mandates the direct rule (Li 1997 Eq. 27; S4/grcwa do the same).  A
+    dual-Laurent ``EZZ = [[1/eps]]^{-1}`` violates Li's rule 3 and
+    overestimates metal-stripe absorptance by up to +0.35; its apparent
+    dielectric advantage is error cancellation against the in-plane
+    Laurent slowness, not a correct factorization.
 
     ``eps_cell`` MUST be the INTERNAL (loss-bridge-conjugated) sample; ``Nx, Ny``
     are real host arrays from :func:`_nv_field_2d` on the same grid.
@@ -866,14 +866,14 @@ def rcwa_efficiency_2d(
           Routed through the in-plane tensor eigensolver (no ``symmetry``
           fast path).  Recommended for metallic / high-contrast 2-D gratings.
 
-          NOTE (v5.14.1, audit F1): the pre-v5.14.1 2-D ``'li'`` applied the
-          INVERSE rule to the ``E_z`` elimination instead -- the wrong Li
-          factorization for a z-invariant layer.  It overestimated
-          metal-stripe absorptance by up to +0.35 (period-robust, silent on
-          lossy cells where the energy guard cannot fire) and was *less*
-          accurate than ``'laurent'`` on dielectrics.  Results from 2-D
-          ``formulation='li'/'fff'/'auto'`` on lossy cells computed before
-          v5.14.1 should be re-run.
+          NOTE (audit F1, v5.14.1).  A 2-D ``'li'`` that applies the
+          INVERSE rule to the ``E_z`` elimination instead is the wrong Li
+          factorization for a z-invariant layer: it overestimates
+          metal-stripe absorptance by up to +0.35 (period-robust, silent
+          on lossy cells where the energy guard cannot fire) and is
+          *less* accurate than ``'laurent'`` on dielectrics.  That is what
+          2-D ``formulation='li'/'fff'/'auto'`` did before v5.14.1, so
+          results on lossy cells from an earlier release should be re-run.
         - ``'fff_nv'`` -- the **normal-vector fast Fourier factorization**
           (Schuster 2007): the in-plane permittivity operator is assembled as
           a full 2x2 tensor ``[[Cxx, Cxy], [Cyx, Cyy]]`` from the local
@@ -881,9 +881,9 @@ def rcwa_efficiency_2d(
           the (spatially varying) wall normal and the direct rule along the
           tangent -- the rigorous Li-1996 factorization generalised to
           arbitrarily oriented walls.  The ``E_z`` elimination uses the DIRECT
-          rule (``EZZ = [[eps]]``, matching the analytic-shape solver) since
-          audit F1 (v5.14.1): the pre-v5.14.1 dual-Laurent ``[[1/eps]]`` z-rule
-          violated Li's rule 3 and biased the absorptance by ~+0.35.  This is the
+          rule (``EZZ = [[eps]]``, matching the analytic-shape solver),
+          audit F1: a dual-Laurent ``[[1/eps]]`` z-rule violates Li's
+          rule 3 and biases the absorptance by ~+0.35.  This is the
           convergence-accelerating factorization for **SEPARABLE (STRIPE) 2-D
           metallic gratings**: there it reaches a target accuracy in fewer
           orders than ``'li'`` and matches the rigorous 1-D-Li oracle (absorptance
@@ -1114,11 +1114,11 @@ def rcwa_efficiency_2d(
     # crossed gratings -- inverse rule along each E-component's own axis,
     # direct rule along the other, and the DIRECT-rule [[eps]] for the E_z
     # elimination (Li 1997 Eq. 27).  Routed through the tensor eigensolver
-    # (Cxy = Cyx = 0).  The pre-v5.14.1 'li' (Laurent in-plane + [[1/eps]]
-    # z-rule) was the WRONG factorization: E_z is tangential to every vertical
-    # wall, so the inverse z-rule violates Li's rule 3 and overestimated metal
-    # absorptance by up to +0.35 (period-robust, invisible to the energy
-    # guard on lossy cells).  A y-uniform cell now reduces to rigorous 1-D
+    # (Cxy = Cyx = 0).  A 'li' built as Laurent in-plane + [[1/eps]]
+    # z-rule is the WRONG factorization: E_z is tangential to every
+    # vertical wall, so the inverse z-rule violates Li's rule 3 and
+    # overestimates metal absorptance by up to +0.35 (period-robust,
+    # invisible to the energy guard on lossy cells).  A y-uniform cell
     # 'li' per-order to ~1e-14.
     li_ops = None
     if formulation == "li":
@@ -1719,8 +1719,8 @@ def rcwa_jones_2d(
     ``formulation='li'`` (the Li-1997 diagonal inverse rule) converges faster.
 
     OUT-OF-PLANE tensors (``e_xz, e_yz, e_zx, e_zy != 0`` -- tilted
-    uniaxials, magneto-optic media) are supported since v5.14.1 (audit
-    GAP2): the pointwise ezz-Schur fold + the generalized forward/backward
+    uniaxials, magneto-optic media) are supported (audit GAP2): the
+    pointwise ezz-Schur fold + the generalized forward/backward
     S-matrix cascade (the 1-D OOP / ``pmm_jones_2d`` pattern).  Requires
     ``|e_zz| > 0`` everywhere; NumPy/CuPy only (a traced JAX tensor keeps
     the in-plane contract -- the forward/backward mode split is a host-side
@@ -1742,7 +1742,7 @@ def rcwa_jones_2d(
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
     _validate_cell_sampling("rcwa_jones_2d", eps_tensor_cell,
                             n_orders_x, n_orders_y, strict_y=True)
-    # OUT-OF-PLANE tensors are SUPPORTED since v5.14.1 (audit GAP2) via the
+    # OUT-OF-PLANE tensors are SUPPORTED (audit GAP2) via the
     # generalized forward/backward cascade below; the remaining contract is a
     # nonzero e_zz (the pointwise ezz-Schur fold divides by it).  The
     # DIFFERENTIABLE (JAX) out-of-plane path uses a trace-safe argsort forward/

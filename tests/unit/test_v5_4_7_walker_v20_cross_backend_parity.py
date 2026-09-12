@@ -29,8 +29,11 @@ existence / source pins, not execution.
 """
 from __future__ import annotations
 
+import ast
 import importlib
 import inspect
+import re
+import textwrap
 
 # JAX-backed modules that host physics twins.
 _JAX_TWIN_MODULES = (
@@ -176,30 +179,246 @@ def test_registered_pairs_have_both_backends():
 # Contract 3 -- specific cross-backend parity-fix pins
 # ----------------------------------------------------------------------
 
+# ----------------------------------------------------------------------
+# The root-pick contract, expressed STRUCTURALLY (AST), not as a grep.
+#
+# The property under test is about the EXPRESSION that picks the surface
+# intersection root, so the check is written against the expression.  A text
+# search cannot tell the difference between code and the comment above it: the
+# previous form of this pin searched ``inspect.getsource`` for the literal
+# ``'t1 if R'`` and for ``'R_finite > 0'``, which a comment quoting the
+# forbidden selector trips (it needed a hand-written ``str.replace`` to hide
+# one such comment from itself), while a REAL regression spelled
+# ``t1 if radius > 0`` or ``jnp.where(R_safe > 0, t1, t2)`` slips through
+# untouched.  Both failure directions go away once the matcher walks the AST,
+# where comments do not exist and the shape is what is compared.
+#
+# REQUIRED: the near root is assigned from a direction-aware expression --
+# either the explicit ``jnp.where(|t1| <= |t2|, t1, t2)`` min-modulus pick, or
+# the Spencer-Murty stable-quadratic quotient ``e / guard(q)``, which IS the
+# near root by construction (|e/q| <= |q/a|).
+#
+# FORBIDDEN: a root chosen from the SIGN OF THE RADIUS -- ``t1 if R > 0 else
+# t2`` and its array twin ``jnp.where(R > 0, t1, t2)``.  That selector is
+# direction-blind: it ignores where the ray actually starts, so a ray
+# travelling the other way takes the far root.
+# ----------------------------------------------------------------------
+
+#: The operand a direction-BLIND selector compares against zero: a radius or a
+#: curvature, under any of the spellings these kernels use.
+_RADIUS_NAME = re.compile(r'^(r|radius|curv|curvature|cc|c)(_|$)', re.I)
+
+
+def _attr_chain(node):
+    """``jnp.where`` -> ``'jnp.where'``; a bare Name -> its id; else ``''``."""
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        parts.append(node.id)
+        return '.'.join(reversed(parts))
+    return ''
+
+
+def _is_where_call(node):
+    return (isinstance(node, ast.Call)
+            and _attr_chain(node.func).split('.')[-1] == 'where'
+            and len(node.args) == 3)
+
+
+def _is_abs_call(node):
+    return (isinstance(node, ast.Call)
+            and _attr_chain(node.func).split('.')[-1] in ('abs', 'absolute')
+            and len(node.args) == 1)
+
+
+def _is_min_modulus_pick(node):
+    """``where(abs(a) <= abs(b), a, b)`` -- the explicit min-|t| root pick."""
+    if not _is_where_call(node):
+        return False
+    test, lo, hi = node.args
+    if not (isinstance(test, ast.Compare) and len(test.ops) == 1
+            and isinstance(test.ops[0], (ast.LtE, ast.Lt))):
+        return False
+    if not (_is_abs_call(test.left) and _is_abs_call(test.comparators[0])):
+        return False
+    a = _attr_chain(test.left.args[0])
+    b = _attr_chain(test.comparators[0].args[0])
+    return bool(a) and bool(b) and (_attr_chain(lo), _attr_chain(hi)) == (a, b)
+
+
+def _is_stable_quadratic_quotient(node):
+    """``e / where(<guard>, q, <const>)`` -- the Spencer-Murty near root.
+
+    The guarded divisor is the whole point: it is what makes the quotient the
+    NEAR root for a ray going either way, and the ``where`` is the
+    divide-by-zero guard a traced kernel needs.
+    """
+    if not (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)):
+        return False
+    if not _is_where_call(node.right):
+        return False
+    _guard, divisor, fallback = node.right.args
+    return (bool(_attr_chain(node.left)) and bool(_attr_chain(divisor))
+            and isinstance(fallback, ast.Constant))
+
+
+def _is_direction_blind_pick(node):
+    """``t1 if R > 0 else t2`` / ``where(R > 0, t1, t2)`` -- the regression.
+
+    Both branches must be plain names (the two roots) and the test must
+    compare a radius/curvature against zero; that combination is the defect
+    and nothing else in these kernels has that shape.
+    """
+    if isinstance(node, ast.IfExp):
+        test, lo, hi = node.test, node.body, node.orelse
+    elif _is_where_call(node):
+        test, lo, hi = node.args
+    else:
+        return False
+    if not (isinstance(lo, ast.Name) and isinstance(hi, ast.Name)):
+        return False
+    if not (isinstance(test, ast.Compare) and len(test.ops) == 1
+            and isinstance(test.ops[0], (ast.Gt, ast.GtE, ast.Lt, ast.LtE))):
+        return False
+    rhs = test.comparators[0]
+    if not (isinstance(rhs, ast.Constant)
+            and isinstance(rhs.value, (int, float)) and rhs.value == 0):
+        return False
+    return bool(_RADIUS_NAME.match(_attr_chain(test.left).split('.')[-1]))
+
+
+def _root_pick_verdict(tree):
+    """``(has_direction_aware_pick, [blind sites])`` for one function's AST."""
+    aware = False
+    blind = []
+    for node in ast.walk(tree):
+        if _is_min_modulus_pick(node) or _is_stable_quadratic_quotient(node):
+            aware = True
+        if _is_direction_blind_pick(node):
+            blind.append(ast.unparse(node))
+    return aware, blind
+
+
+def _kernel_tree(fn):
+    return ast.parse(textwrap.dedent(inspect.getsource(fn)))
+
+
+class _BlindRewriter(ast.NodeTransformer):
+    """Replace every direction-AWARE root pick with the forbidden selector.
+
+    Keyed on the EXPRESSION, not on the name it is assigned to, because the
+    two kernels spell that name differently (``t_near`` / ``t_sphere``) and a
+    falsifiability fixture that depended on the spelling would quietly stop
+    exercising a kernel the day someone renamed a local.
+    """
+
+    def __init__(self):
+        self.n = 0
+
+    def generic_visit(self, node):
+        node = super().generic_visit(node)
+        if _is_min_modulus_pick(node) or _is_stable_quadratic_quotient(node):
+            self.n += 1
+            return ast.parse('t1 if R_finite > 0 else t2').body[0].value
+        return node
+
+
+def _make_direction_blind(tree):
+    """The falsifiability fixture for the matchers above: it produces exactly
+    the regression the pin exists to catch, from the REAL kernel, so the
+    assertions are shown to discriminate rather than merely to pass."""
+    rewriter = _BlindRewriter()
+    return ast.fix_missing_locations(rewriter.visit(tree)), rewriter.n
+
+
 def test_jax_intersect_direction_aware_root_pick_present():
     """The v5.4.1/v5.4.6 direction-aware near-root pick must remain in
     BOTH JAX intersect kernels (the P1-1 parity fix).
 
-    audit-2609 WP-A1 (R4): the kernels now take the near root from the
+    audit-2609 WP-A1 (R4): the kernels take the near root from the
     Spencer-Murty stable quadratic ``t = e/q`` with
     ``q = -(b + sign(b) sqrt(disc))/2`` -- the near root by construction
     (|e/q| <= |q/a|), direction-aware without an explicit ``min |t|`` -- and
     ``_intersect_jax`` keeps the explicit ``min |t|`` pick on its
     pure-spherical branch.  Either spelling is the direction-aware pick; a
     direction-blind ``t1 if R>0 else t2`` is neither.
+
+    The check is STRUCTURAL (see the matchers above): it walks each kernel's
+    AST for the root-pick EXPRESSION, so a comment quoting the forbidden
+    selector cannot fail it and a regression spelled with different variable
+    names cannot pass it.
     """
     import lumenairy.raytrace.jax_trace as jt
-    explicit_min_abs = 'jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)'
-    spencer_murty = 'e_q / jnp.where(q_ok, q_q, 1.0)'
     for kernel in (jt._intersect_jax, jt._intersect_jax_param):
-        src = inspect.getsource(kernel)
-        assert explicit_min_abs in src or spencer_murty in src, (
+        aware, blind = _root_pick_verdict(_kernel_tree(kernel))
+        assert aware, (
             f"V20: {kernel.__name__} carries neither the explicit min-|t| root "
             f"pick nor the Spencer-Murty near-root quotient; a direction-blind "
             f"``t1 if R>0 else t2`` regressed the JAX twin.")
-        assert 't1 if R' not in src and 'R_finite > 0' not in src.replace(
-            '# ``R_finite > 0`` selector', ''), (
-            f"V20: {kernel.__name__} reintroduced the direction-blind selector.")
+        assert not blind, (
+            f"V20: {kernel.__name__} reintroduced the direction-blind "
+            f"selector: {blind}")
+
+
+def test_the_root_pick_matcher_rejects_a_direction_blind_kernel():
+    """Falsifiability for the pin above (TESTING_STANDARDS V1).
+
+    A structural matcher that accepted everything would pass the pin forever
+    while the kernel was rewritten underneath it.  Each real kernel is
+    mutated IN MEMORY into the exact regression the audit found -- every
+    direction-aware root-pick expression replaced by
+    ``t1 if R_finite > 0 else t2`` -- and the verdict must flip on BOTH
+    counts: the direction-aware expression gone, the blind selector reported.
+
+    Nothing is written; the mutation is on a parsed copy of the source.
+    """
+    import lumenairy.raytrace.jax_trace as jt
+    for kernel in (jt._intersect_jax, jt._intersect_jax_param):
+        mutated, n = _make_direction_blind(_kernel_tree(kernel))
+        assert n >= 1, (
+            f"{kernel.__name__}: no direction-aware root-pick expression to "
+            f"mutate, so this falsifiability check would prove nothing about "
+            f"it")
+        aware, blind = _root_pick_verdict(mutated)
+        assert not aware, (
+            f"{kernel.__name__}: the direction-aware matcher still fires on a "
+            f"kernel whose root pick is ``t1 if R_finite > 0 else t2`` -- it "
+            f"is matching something other than the root-pick expression")
+        assert len(blind) == n, (
+            f"{kernel.__name__}: the direction-blind matcher found "
+            f"{len(blind)} of {n} injected selectors")
+
+
+def test_the_root_pick_matcher_is_not_a_text_search():
+    """The regression this test file's own previous form could not see.
+
+    A comment quoting the forbidden selector must NOT fail the pin, and a
+    regression spelled with different variable names must NOT pass it.  Both
+    are asserted on synthetic sources, so neither claim depends on how the
+    shipped kernels happen to be written today.
+    """
+    quoting_comment = ast.parse(textwrap.dedent("""
+        def k(t1, t2, R_finite):
+            # The direction-blind ``t1 if R_finite > 0 else t2`` selector is
+            # exactly what this must not do.
+            t_near = jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)
+            return t_near
+    """))
+    aware, blind = _root_pick_verdict(quoting_comment)
+    assert aware and not blind, (
+        'a comment quoting the forbidden selector must not fail the pin')
+
+    renamed_regression = ast.parse(textwrap.dedent("""
+        def k(t_a, t_b, curvature):
+            t_near = jnp.where(curvature > 0, t_a, t_b)
+            return t_near
+    """))
+    aware, blind = _root_pick_verdict(renamed_regression)
+    assert not aware and len(blind) == 1, (
+        'a direction-blind pick spelled with different names must fail the '
+        f'pin (aware={aware}, blind={blind})')
 
 
 def test_jax_rng_default_dtype_is_x64_aware():

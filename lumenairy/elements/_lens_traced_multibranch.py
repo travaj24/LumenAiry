@@ -144,7 +144,7 @@ _RASTER_CHUNK_ENTRIES = 4_000_000
 
 # Above this many DISTINCT exact bounding-box shapes the per-shape Python loop
 # starts to cost more than the padding it saves, so shapes are coalesced into
-# power-of-two classes (the pre-v5.46 grouping) instead.  Real maps are far
+# power-of-two classes instead.  Real maps are far
 # below it: a near-identity map has one or two shapes, a compressed near-focus
 # map a handful.
 _RASTER_MAX_SHAPES = 96
@@ -162,8 +162,8 @@ def _raster_batches(wxs, wys):
     box (so every candidate pixel is inside the clipped grid range and the
     caller needs no range mask), and True on the coalesced fallback: when a map
     produces more than :data:`_RASTER_MAX_SHAPES` distinct shapes, they are
-    grouped by rounding each axis UP to the next power of two -- the
-    pre-v5.46 grouping -- which keeps the Python-level loop short at the cost
+    # grouped by rounding each axis UP to the next power of two, which
+    # keeps the Python-level loop short at the cost
     of some padded candidates the caller must mask off.  Either way the
     contribution SET is the same; only padding work differs.
     """

@@ -812,12 +812,12 @@ def apply_real_lens_traced_uniform(
     E_mb = np.asarray(E_mb)
 
     def _fallback(reason):
-        # v5.30 (audit E-M15): name THIS function first.  The message used to
-        # name only ``apply_real_lens_traced(caustic='uniform')``, which is one
-        # of the two routes here -- a direct
-        # ``apply_real_lens_traced_uniform(...)`` caller (a public entry point
-        # with no ``caustic`` kwarg at all) was told to look at a knob they
-        # never touched and cannot find in this signature.
+        # Name THIS function first.  A message naming only
+        # ``apply_real_lens_traced(caustic='uniform')`` covers one of the
+        # two routes here -- a direct
+        # ``apply_real_lens_traced_uniform(...)`` caller (a public entry
+        # point with no ``caustic`` kwarg at all) would be told to look at
+        # a knob they never touched and cannot find in this signature.
         warnings.warn(
             "apply_real_lens_traced_uniform (also reached via "
             "apply_real_lens_traced(caustic='uniform')): the uniform Airy dark-"

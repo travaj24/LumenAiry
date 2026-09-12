@@ -47,7 +47,7 @@ from .analysis import (
     check_opd_sampling,
     check_sampling_conditions,
     chromatic_focal_shift,
-    # v5.45.2 (audit 2026-09-11 V6 / WP-A7): the meshgrid and Zernike-basis
+    # The meshgrid and Zernike-basis
     # cache accessors were exported nowhere at top level while their sibling
     # ``clear_zernike_basis_cache`` was; the __all__-symmetry walker flags the
     # asymmetry.
@@ -78,7 +78,7 @@ from .analysis import (
     strehl_phase_integral,
     strehl_ratio,
     strehl_vector,
-    # v5.45.2 (audit 2026-09-11 V6 / WP-A7): the masked 2-D unwrap kernel is
+    # The masked 2-D unwrap kernel is
     # the public half of the A7 fix and was reachable only as
     # ``lumenairy.analysis.unwrap_phase_2d``.
     unwrap_phase_2d,
@@ -119,7 +119,7 @@ from .analysis.phase_retrieval import (
     hybrid_input_output_jax,
 )
 
-# v4.12.2: expose the through_focus_scan_jax kernel-cache clear helper
+# Expose the through_focus_scan_jax kernel-cache clear helper
 # alongside the other clear_*_cache exports.
 from .analysis.through_focus import clear_through_focus_scan_jax_cache
 
@@ -193,12 +193,12 @@ from .elements.lenses import (
     surface_sag_general,
 )
 
-# v5.21 (__all__-symmetry): Maslov vector entry point + the caustic-uniform
+# Maslov vector entry point + the caustic-uniform
 # special functions live in the lenses_maslov submodule __all__ but are not
 # re-exported by the elements.lenses aggregate.
 from .elements.lenses_maslov import (
     apply_real_lens_maslov_vector,
-    # v5.46 (audit S2 follow-up): the local_quadrature sample-lattice cache.
+    # The local_quadrature sample-lattice cache.
     # It is enrolled with ``_cache_registry`` so ``clear_asm_caches()``
     # already drains it; the top-level name exists because
     # ``test_v4_14_1_dispatcher_pin_cache_clears`` requires every
@@ -211,7 +211,7 @@ from .elements.lenses_maslov import (
 # â”€â”€ Glass catalog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .glass import (
     GLASS_REGISTRY,
-    # v4.16.0 (ROADMAP #14): per-glass Sellmeier validity ranges.
+    # Per-glass Sellmeier validity ranges.
     GLASS_VALIDITY,
     SELLMEIER_COEFFICIENTS,
     get_glass_index,
@@ -253,7 +253,7 @@ from .propagators.propagation import (
     # Precision configuration (complex64 vs complex128)
     DEFAULT_COMPLEX_DTYPE,
     DEFAULT_DY,
-    # v4.16.3 (audit P3-NEW-F2-LOW-1): sibling re-exports for the
+    # Sibling re-exports for the
     # v4.16.2 default-config knob globals -- ``DEFAULT_COMPLEX_DTYPE``
     # has been at top level since v4.14, but the three v4.16.2
     # globals were only reachable via ``lumenairy.propagators.
@@ -261,7 +261,7 @@ from .propagators.propagation import (
     # accessors being top-level since v4.16.2.
     DEFAULT_REAL_DTYPE,
     DEFAULT_WAVE_PROPAGATOR,
-    # v5.31 (audit W9-8): the frozen factory value propagate() compares the
+    # The frozen factory value propagate() compares the
     # knob against.  IMMUTABLE, so a static re-export (no live forwarding).
     DEFAULT_WAVE_PROPAGATOR_SHIPPED,
     # FFT backend configuration
@@ -328,9 +328,9 @@ from .sources import (
     create_bessel_beam,
     create_fiber_mode,
     create_gaussian_beam,
-    # v4.15 (ROADMAP v4.16 #9, #11): Schell-model + annular-incoherent
+    # Schell-model + annular-incoherent
     # partial-coherence source factories.
-    # v4.15.1 (P0-NEW-2): the factories now return ensembles (or a
+    # The factories now return ensembles (or a
     # PartialCoherenceMCF) and actually deliver partial coherence.
     create_gaussian_schell_source,
     create_hermite_gauss,
@@ -345,8 +345,7 @@ from .sources import (
     laguerre_generalized,
 )
 
-# v5.2 (ROADMAP v5.1 partial-coherence/MCF public-API polish):
-# short top-level alias for symmetry with ``lumenairy.coherence_at``
+# Short top-level alias for symmetry with ``lumenairy.coherence_at``
 # / ``lumenairy.propagate_ensemble``.  The canonical class name
 # stays ``PartialCoherenceMCF``; ``MCF`` is a thin alias so the
 # import story is uniform across the partial-coherence surface.
@@ -354,7 +353,7 @@ MCF = PartialCoherenceMCF
 
 # â”€â”€ High-NA vector diffraction (Richards-Wolf) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # â”€â”€ Central cache-clearer registry (4.16.0) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-# v4.16.0 (ROADMAP #15): retires the lazy-import fan-out in
+# Retires the lazy-import fan-out in
 # ``clear_asm_caches`` in favour of a central registry.  Each cache-
 # owning module registers its clear function at import time;
 # ``clear_asm_caches`` walks the registry rather than enumerating
@@ -374,7 +373,7 @@ from ._context import (
     snapshot_globals,
 )
 
-# v5.45.2 (audit 2026-09-11 TESTS-ARCH P2-5): the GENERIC scoped form.
+# The GENERIC scoped form.
 # ``lumenairy_context`` above scopes five named knobs; ``override`` reaches
 # every knob that has been registered with :mod:`lumenairy._knobs` -- one
 # registration line beside each ``set_*`` -- so a knob added later needs no
@@ -394,12 +393,12 @@ from ._math.chebyshev import chebyshev_fit_2d
 from .analysis.ao import (
     DeformableMirror,
     LeakyIntegrator,
-    # v5.2.3 (ROADMAP v5.2.x ao_closed_loop helper): canonical
+    # Canonical
     # high-level closed-loop AO driver, supersedes the v5.2.0
     # build-it-yourself pattern in examples/11_ao_closed_loop.py.
     ao_closed_loop,
     apply_dm,
-    # v5.4 (AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 P1-A): canonical
+    # Canonical
     # Shack-Hartmann WFS-callable factory for ao_closed_loop(wfs=...).
     make_shack_hartmann_wfs,
     slope_to_modal,
@@ -685,7 +684,7 @@ from .memory import (
 
 # â”€â”€ Hybrid wave/ray design optimization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .optimize import (
-    # v4.16.0 (Agent A __all__-symmetry walker): the pymoo
+    # The pymoo
     # availability flag is the canonical "is the optional Pareto
     # backend installed?" probe.  Sibling to JAX_AVAILABLE /
     # CUPY_AVAILABLE / NUMEXPR_AVAILABLE / PYFFTW_AVAILABLE.  Was
@@ -711,7 +710,7 @@ from .optimize import (
     MaxThicknessMerit,
     MeritTerm,
     MinBackFocalLengthMerit,
-    # v5.45.2 (audit 2026-09-11 / WP-A10): edge-thickness merit + the free
+    # Edge-thickness merit + the free
     # function it scores, siblings of MinThicknessMerit.
     MinEdgeThicknessMerit,
     MinThicknessMerit,
@@ -719,7 +718,7 @@ from .optimize import (
     MultiPrescriptionParameterization,
     MultiWavelengthMerit,
     NormalizedMerit,
-    # v4.16 (ROADMAP #11): multi-objective Pareto wrapper (pymoo-optional)
+    # Multi-objective Pareto wrapper (pymoo-optional)
     ParetoResult,
     RawParameterization,
     RMSWavefrontMerit,
@@ -762,7 +761,7 @@ from .propagators.asymptotic import (
     CanonicalPolyFit,
     HFPolyFit,
     JaxAberrationTensorResult,
-    # v5.45.2 (audit 2026-09-11 Y2 follow-up / WP-A4): the aberration-free
+    # The aberration-free
     # twin of a canonical fit -- the reference a Strehl ratio is measured
     # against.  Public per asymptotic_canonical_fit.__all__.
     aberration_free_reference_fit,
@@ -792,7 +791,7 @@ from .propagators.asymptotic import (
 # â”€â”€ System propagation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .propagators.system import (
     clear_propagate_system_jax_cache,
-    # v4.15 (ROADMAP v4.15 #3): ergonomic prescription + Source ->
+    # Ergonomic prescription + Source ->
     # PropagationResult one-call entry, exposed at top level so users
     # can also call ``lumenairy.evaluate(rx, source)`` directly.
     evaluate,
@@ -806,7 +805,7 @@ from .propagators.vector_diffraction import (
 
 # â”€â”€ Geometric ray tracing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .raytrace import (
-    # v5.45.2 (audit 2026-09-11 section 15.1 / WP-A1): the single shared
+    # The single shared
     # exit-vertex transfer, its grazing tolerance and its JAX twin.  These
     # are the API the seven divergent hand-written copies must converge on,
     # so they belong on the package root next to ``refocus`` / ``trace``.
@@ -817,7 +816,7 @@ from .raytrace import (
     RAY_NAN,
     RAY_OK,
     RAY_TIR,
-    # v5.21 (__all__-symmetry): differential ray transfer (GBD analytic
+    # Differential ray transfer (GBD analytic
     # Jacobian primitive) -- public per raytrace.differential.__all__.
     DifferentialTransfer,
     FirstOrderData,
@@ -855,7 +854,7 @@ from .raytrace import (
     ray_transfer_jacobian,
     ray_transfer_jacobian_analytic,
     ray_transfer_jacobian_jax,
-    # v4.15.1 (Cluster B Item 6): wave -> ray bridge.
+    # Wave -> ray bridge.
     rays_from_field,
     raytrace_system,
     refocus,
@@ -891,7 +890,7 @@ from .raytrace import (
 # block above.
 from .raytrace.world_trace import trace_world as trace_world
 
-# v5.45.2 (audit 2026-09-11 section 15.1): the two lower-level pieces of the
+# The two lower-level pieces of the
 # shared exit-vertex transfer.  They are in ``raytrace.exit_vertex.__all__``
 # because a caller writing its own transfer (the traced-lens and GBD legs do)
 # needs exactly these two -- "which surface is the exit?" and "how far to its
@@ -902,7 +901,7 @@ from .raytrace.exit_vertex import (
     vertex_plane_transfer_t,
 )
 
-# v5.45.2 (audit 2026-09-11 R2 / WP-A7): the functional form of
+# The functional form of
 # ``_make_bundle(..., opd_seed='eikonal')``, for callers that build or
 # reposition a bundle themselves.  Sibling of ``exit_vertex_transfer``.
 from .raytrace.trace import seed_entrance_eikonal
@@ -914,7 +913,7 @@ from .raytrace.trace import seed_entrance_eikonal
 # expect a "clean" library state on the next unrelated run -- the
 # handler restores whatever the defaults were at the very first
 # ``import lumenairy``.
-# v5.3 (AUDIT_V5_2_5 P3-6 closure): the v5.2.5 rename to the
+# The v5.2.5 rename to the
 # underscore-prefixed form was documentation-only -- both the
 # library bootstrap and the test_context_manager test still used
 # the legacy public name.  v5.3 migrates the library bootstrap to
@@ -926,11 +925,10 @@ _install_atexit_restore()
 # â”€â”€ Plotting utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # â”€â”€ Deprecated-alias shims â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 #
-# 4.12.0: wire ``_deprecation.deprecated_alias`` (added in 4.7 but never
-# imported anywhere -- a Round-4 audit finding) into the top-level
-# namespace so users with pre-4.7 code can keep calling the historical
-# names with a one-cycle ``DeprecationWarning`` instead of a cold
-# ``AttributeError``.  Each shim forwards to the canonical new name.
+# ``_deprecation.deprecated_alias`` is wired into the top-level
+# namespace so code written against an older name keeps working with a
+# one-cycle ``DeprecationWarning`` instead of a cold ``AttributeError``.
+# Each shim forwards to the canonical new name.
 from ._deprecation import deprecated_alias as _deprecated_alias
 
 # â”€â”€ Operator algebra (4.15.1, Cluster B Item 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -994,7 +992,7 @@ from .propagators.dispatch import (
     which_propagator,
 )
 
-# v4.16.1 (audit AUDIT_V4_16_0_DEEP P5 / P0-1): partial-coherence
+# Partial-coherence
 # ensemble propagator helper.  Closes the Schell-model workflow that
 # v4.15.x left half-shipped (factories returned ensembles, but no
 # downstream helper propagated them; coherent propagators rejected
@@ -1149,13 +1147,13 @@ __all__ = [
     'create_fiber_mode',
     'create_led_source',
     'create_bessel_beam',
-    # v4.15 (ROADMAP v4.16 #9, #11): Schell-model + annular-incoherent.
-    # v4.15.1 (P0-NEW-2): factories now return ensembles + new MCF class.
+    # Schell-model + annular-incoherent.
+    # Factories now return ensembles + new MCF class.
     'create_gaussian_schell_source',
     'create_schell_model_source',
     'create_annular_incoherent_source',
     'PartialCoherenceMCF',
-    # v5.2: short alias for symmetry with the other top-level
+    # Short alias for symmetry with the other top-level
     # partial-coherence symbols.
     'MCF',
     'hermite_physicist',
@@ -1272,7 +1270,7 @@ __all__ = [
     'get_glass_index_complex',
     'GLASS_REGISTRY',
     'SELLMEIER_COEFFICIENTS',
-    # v4.16.0 (ROADMAP #14): per-glass Sellmeier validity ranges.
+    # Per-glass Sellmeier validity ranges.
     'GLASS_VALIDITY',
     'list_glasses',
     'search_glasses',
@@ -1336,7 +1334,7 @@ __all__ = [
     'which_propagator',
     'ASM_FAMILY',
     'PropagationResult',
-    # v4.16.1: partial-coherence ensemble propagator helper.
+    # Partial-coherence ensemble propagator helper.
     'propagate_ensemble',
 
     # Free-space propagators (low-level)
@@ -1457,7 +1455,7 @@ __all__ = [
     # Element-walking system propagator
     'propagate_through_system',
     'propagate_through_system_jax',
-    # v4.15 (ROADMAP v4.15 #3): ergonomic prescription -> result entry.
+    # Ergonomic prescription -> result entry.
     'evaluate',
 
     # ============================================================
@@ -1499,7 +1497,7 @@ __all__ = [
     'ray_fan_data',
     'ray_fan_plot',
     'ray_fan_plot_prescription',
-    # v5.21: differential ray transfer (GBD analytic-Jacobian primitive)
+    # Differential ray transfer (GBD analytic-Jacobian primitive)
     'DifferentialTransfer',
     'ray_transfer_jacobian',
     'ray_transfer_jacobian_analytic',
@@ -1507,7 +1505,7 @@ __all__ = [
     'opd_fan_data',
     'through_focus_rms',
     'refocus',
-    # v5.45.2 (audit 2026-09-11 section 15.1): the ONE shared exit-vertex
+    # The ONE shared exit-vertex
     # transfer + its pieces, and the entrance-eikonal seeder (R2).
     'exit_vertex_transfer',
     'EXIT_VERTEX_GRAZING_TOL',
@@ -1531,7 +1529,7 @@ __all__ = [
     'f_number',
     'defocus_waves_to_zernike',
     'astigmatism_waves_to_zernike',
-    # v4.15.1 (Cluster B Item 6): wave -> ray bridge.
+    # Wave -> ray bridge.
     'rays_from_field',
 
     # Per-ray diagnostic codes
@@ -1587,7 +1585,7 @@ __all__ = [
     'opd_pv_rms',
     'wave_opd_1d',
     'wave_opd_2d',
-    # v5.45.2 (audit 2026-09-11 / WP-A7): the public masked 2-D unwrap.
+    # The public masked 2-D unwrap.
     'unwrap_phase_2d',
     'check_opd_sampling',
     'chromatic_focal_shift',
@@ -1642,9 +1640,7 @@ __all__ = [
     'DeformableMirror', 'apply_dm',
     'zernike_modal_basis', 'slope_to_modal',
     'LeakyIntegrator',
-    # v5.2.3 (ROADMAP v5.2.x ao_closed_loop helper):
     'ao_closed_loop',
-    # v5.4 (AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 P1-A):
     'make_shack_hartmann_wfs',
 
     # Field-resolved analyses (4.4.0)
@@ -1688,9 +1684,9 @@ __all__ = [
     'DesignResult',
     'Constraint',
     'design_optimize',
-    # v5.21: traced-lens geometry optimizer (jax geometry-gradient loop)
+    # Traced-lens geometry optimizer (jax geometry-gradient loop)
     'optimize_traced_geometry',
-    # v4.16 (ROADMAP #11): multi-objective Pareto wrapper (pymoo-optional)
+    # Multi-objective Pareto wrapper (pymoo-optional)
     'ParetoResult',
     'design_optimize_multi_objective',
     'PYMOO_AVAILABLE',
@@ -1720,7 +1716,7 @@ __all__ = [
     'MultiWavelengthMerit',
     'MultiFieldMerit',
     'MinThicknessMerit',
-    # v5.45.2 (audit 2026-09-11 / WP-A10): edge-thickness merit + oracle.
+    # Edge-thickness merit + oracle.
     'MinEdgeThicknessMerit',
     'edge_thickness',
     'MaxThicknessMerit',
@@ -1746,7 +1742,7 @@ __all__ = [
     'AberrationTensorResult',
     'fit_canonical_polynomials',
     'fit_hf_polynomials',
-    # v5.45.2 (audit 2026-09-11 Y2 follow-up / WP-A4): the aberration-free
+    # The aberration-free
     # reference fit a Strehl ratio is measured against.
     'aberration_free_reference_fit',
 
@@ -1848,7 +1844,7 @@ __all__ = [
     'prepare_pmm_2d',
     'prepare_pmm_2d_cell',
     'PreparedPMM2D',
-    # v5.45.2 (audit 2026-09-11 G7 / WP-A13): 2-D order-count drift signal.
+    # 2-D order-count drift signal.
     'pmm_2d_order_drift',
     'pmm_efficiency_2d_staggered',
     'pmm_jones_2d_staggered',
@@ -1970,7 +1966,7 @@ __all__ = [
     'set_fft_fallback',
     'reset_fft_backend',
 
-    # v4.16.0 (Agent A __all__-symmetry walker): the backend
+    # The backend
     # dispatch helpers below were imported at top level since
     # v3.4.0 but never listed in __all__.  Each is the canonical
     # high-traffic entry point for user code that wants to inspect
@@ -1993,7 +1989,7 @@ __all__ = [
     'DEFAULT_COMPLEX_DTYPE',
     'set_default_real_dtype',
     'get_default_real_dtype',
-    # v4.16.3 (audit P3-NEW-F2-LOW-1): sibling parity with
+    # Sibling parity with
     # ``DEFAULT_COMPLEX_DTYPE`` -- the v4.16.2 default-config knob
     # module-level globals are now first-class at top level.
     'DEFAULT_REAL_DTYPE',
@@ -2019,7 +2015,7 @@ __all__ = [
     'warmup_fft_plans',
     'clear_asm_caches',
     'clear_zernike_basis_cache',
-    # v5.45.2 (audit 2026-09-11 / WP-A7): the byte-accounting siblings of the
+    # The byte-accounting siblings of the
     # two cache clearers, plus the meshgrid cache's own clear.
     'zernike_basis_cache_bytes',
     'clear_meshgrid_cache',
@@ -2031,7 +2027,7 @@ __all__ = [
     'clear_trace_jax_cache',
     'clear_propagate_system_jax_cache',
     'clear_phase_retrieval_caches',
-    # v4.16.0 (ROADMAP #15): central cache-clearer registry.
+    # Central cache-clearer registry.
     'register_cache_clearer',
     'list_registered_cache_clearers',
     # roadmap P0: shared byte-budgeted LRU cache infrastructure.
@@ -2064,7 +2060,7 @@ __all__ = [
     'lumenairy_context',
     'snapshot_globals',
     'apply_globals',
-    # v5.45.2 (audit 2026-09-11 TESTS-ARCH P2-5): the generic scoped form for
+    # The generic scoped form for
     # every registered process-global knob -- ``with la.override(...)``.
     'override',
 

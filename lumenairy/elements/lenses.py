@@ -117,19 +117,6 @@ def _load_numba():
     return _numba is not None
 
 
-# v5.30 (audit E-L4/E-L5): two module constants deleted here as dead.
-#
-#   * ``_NEWTON_MAX_ITERS = 8`` -- 0 readers (grep-verified repo-wide:
-#     the only live definition is ``_lens_traced._NEWTON_MAX_ITERS = 12``,
-#     which is what ``apply_real_lens_traced`` actually uses and what
-#     ``tests/unit/test_niche_audit_e_prepared_and_enums.py`` pins).  Its
-#     comment additionally documented the OPPOSITE of shipped behaviour
-#     ("was 12, dropped to 8 in v3.5.5"), so a reader who found it here
-#     would conclude the Newton cap is 8.
-#   * ``_NUMEXPR_MIN_SIZE = 1 << 20`` -- 0 readers here; the live copy
-#     lives in ``_lens_real.py``, which now carries the rationale text
-#     that used to sit next to this definition.
-#
 # The numexpr scaffold ABOVE (``NUMEXPR_AVAILABLE`` / ``_ne`` /
 # ``_ensure_numexpr_loaded``) is NOT dead: ``lenses_maslov`` imports the
 # flag and the loader from this module, and ``elements/__init__`` +
@@ -263,7 +250,7 @@ def surface_sag_general(
     if R is not None and not np.isinf(R):
         # Conic sag: h^2 / (R * (1 + sqrt(1 - (1+k)*h^2/R^2)))
         # 4.10: outside the conic domain (norm >= 0.9999) the surface
-        # is not defined.  Pre-4.10 silently returned 0 sag there,
+        # is not defined.  A silent 0 sag there produces an
         # which produced an apparently-flat ring at the surface edge
         # for hyperbolic / oblate conics extending past the geometric
         # rim.  Return NaN instead so downstream consumers either mask
@@ -298,7 +285,7 @@ def surface_sag_general(
         sag = xp.zeros_like(h_sq)
 
     if aspheric_coeffs:
-        # v5.31 (audit R-8 / E-L7 residual): reject ODD powers HERE, at the
+        # Reject ODD powers HERE, at the
         # wave-optics sag entry point.  Both branches below evaluate
         # ``h_sq ** (power // 2)`` (the numba kernel's ``powers[j] // 2`` and
         # the NumPy fallback's ``power // 2``), so an odd power silently floors
@@ -451,7 +438,7 @@ def surface_sag_biconic(
     if conic_y is None:
         conic_y = conic_x
 
-    # v5.31 (audit R-8 / E-L7 residual): reject ODD powers on BOTH per-axis
+    # Reject ODD powers on BOTH per-axis
     # coefficient dicts before ``_axis_sag`` floors them via
     # ``h_sq ** (power // 2)``.  Measured pre-guard at ``{3: 1e4}``, h = 10 mm,
     # flat base: sag 1.0 m -- BIT-identical to the ``{2: 1e4}`` sag -- against
@@ -472,7 +459,7 @@ def surface_sag_biconic(
             norm = (1 + K) * h_sq / R ** 2
             valid = norm < 0.9999
             denom_arg = xp.where(valid, 1 - norm, 0.01)
-            # v5.4.6 (audit F-19): outside the conic domain
+            # Outside the conic domain
             # (norm >= 0.9999) the surface is not defined.  Return NaN
             # (not a silent 0.0 flat ring) so callers detect 'no real
             # surface', matching surface_sag_general.
@@ -884,12 +871,10 @@ def _warn_if_aperture_exceeds_grid(prescription, N, dx, *,
 # ---------------------------------------------------------------------------
 # Shared Chebyshev helpers used by the Maslov and asymptotic propagators.
 #
-# v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-# The three Chebyshev Vandermonde helpers that used to live here
-# (originally inlined in v3.2.2, kept here in v3.5.5 because
-# propagators/asymptotic.py imports them) have moved to
-# ``lumenairy/_math/chebyshev.py``.  The underscore-prefixed aliases
-# below preserve every existing internal call site in this module --
+# The three Chebyshev Vandermonde helpers live in
+# ``lumenairy/_math/chebyshev.py`` (see
+# docs/history/lumenairy.elements.lenses.md).  The underscore-prefixed
+# aliases below preserve every internal call site in this module --
 # and every external import of the form
 # ``from lumenairy.elements.lenses import _chebyshev_vandermonde`` --
 # without forcing those callers to update their import paths.
@@ -1046,7 +1031,7 @@ def _fit_normaliser(v: np.ndarray, pad: float = 0.05):
 # ``mypy --strict`` (which sets ``no_implicit_reexport``) reports
 # "Module ... does not explicitly export attribute X" for each of the 31
 # names the package root re-imports from here, and this module -- a
-# compatibility shell whose whole job is to keep the pre-v3.5.5 import paths
+# compatibility shell whose whole job is to keep the legacy import paths
 # working -- would be the reason ``lumenairy/__init__.py`` cannot join the
 # strict whitelist.  The alternative, an ``__all__`` on this 1 100-line
 # module, would also change ``import *`` behaviour; this does not.

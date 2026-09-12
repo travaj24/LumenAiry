@@ -41,7 +41,7 @@ Granet Eq. 31 maps EACH segment individually,
 formulation requires the segments to be equal.  :class:`Basis1D` and
 :class:`Granet2DTransverseE` therefore take their per-axis segmentation as
 EITHER an ``int N`` -- the uniform lattice, and then every matrix they build is
-BIT-IDENTICAL to the pre-2026-09-11 library -- or an increasing ``(N + 1,)``
+BIT-IDENTICAL to the uniform-only formulation it generalises -- or an increasing ``(N + 1,)``
 array of wall positions.  The generalization is the scalar jacobian ``J``
 becoming a per-segment ``J_n``, at exactly four sites
 (:meth:`Basis1D._global_matrix`, :func:`_global_pair_segmat`,
@@ -872,7 +872,7 @@ def _modleg_value_deriv(M, u):
 
 
 #: FAIL-BEFORE switch for the MINIMUM-SEGMENT contract (round-2 D1).
-#: ``False`` restores the pre-2026-09-11 acceptance -- any strictly increasing
+#: ``False`` restores the UNCONSTRAINED acceptance -- any strictly increasing
 #: wall array -- bit for bit.  It exists so a test can demonstrate the
 #: behaviour it prevents; it is not a supported user knob.
 PMM2D_STAG_MIN_SEG_GUARD = True
@@ -970,7 +970,7 @@ PMM2D_STAG_MIN_SEG_GUARD = True
 #: segments are all ``d/N``, so reaching this bar needs ``N > 1000``, i.e.
 #: ``q >= 2000`` and a ``2 q^2 = 8e+06``-dimension region eigenproblem.  The
 #: exemption is what keeps gate N1 (integer walls BIT-IDENTICAL to the
-#: pre-2026-09-11 library) unconditional.
+#: uniform-only formulation) unconditional.
 #:
 #: **CORRECTIONS, ROUND 3 (2026-09-11**,
 #: ``docs/audits/FIX_PMM2D_MORTAR_ROUND3_2026_09_11.md`` **).**
@@ -1317,7 +1317,7 @@ class Basis1D:
 
     SEGMENT BOUNDARIES (Granet Eq. 31) may be UNIFORM or ARBITRARY.  ``walls``
     is either an ``int`` ``N`` -- the uniform lattice, and then every matrix
-    this class builds is BIT-IDENTICAL to the pre-2026-09-11 library -- or an
+    this class builds is BIT-IDENTICAL to the uniform-only formulation -- or an
     increasing ``(N + 1,)`` array of boundaries running ``0 .. d``.  Eq. 31
     maps EACH segment individually,
     ``x = 0.5 (x_{n+1} - x_n) u + 0.5 (x_{n+1} + x_n)``, so nothing in the
@@ -2662,8 +2662,8 @@ def _stag_fourier_projection(basis: Basis1D, orders, alpha0=0.0):
     # ``M = 4``, orders to 7, against 6-8e-15 on a uniform ``N = 3`` lattice).
     # The INTEGER path keeps the historical single rule EXACTLY -- one
     # ``leggauss`` call, one ``_modleg_value_deriv``, the same doubles -- so
-    # every integer-``N`` projector is bit-identical to the pre-2026-09-11
-    # library (hashed in the probe and in the shipped gate).
+    # every integer-``N`` projector is bit-identical to the uniform-only
+    # rule (hashed in the probe and in the shipped gate).
     kvec = orders * G + alpha0
     if basis.uniform:
         nq_of = None
@@ -2751,11 +2751,11 @@ def _far_projector_2d(bx: Basis1D, by: Basis1D, ox, oy, alpha0x=0.0, alpha0y=0.0
 
 def _pmm2d_project_orders(P1, P2, Wmodes, qq):
     """Project a PMM-2D ``[E1; E2]`` modal matrix onto the Rayleigh orders --
-    the ``_proj`` closure formerly duplicated in :mod:`.stack2d_pure` and this
+    the ONE ``_proj`` closure shared by :mod:`.stack2d_pure` and this
     module (audit S1-10).  ``P1``/``P2`` map the E1 (Ex) / E2 (Ey) nodal blocks
     (``qq`` rows each) onto the orders; returns the stacked
-    ``[Ex_orders; Ey_orders]``.  Reproduces the former closure operation-for-
-    operation."""
+    ``[Ex_orders; Ey_orders]``.  Reproduces the two former inline copies
+    operation-for-operation."""
     top = P1 @ Wmodes[:qq, :]
     bot = P2 @ Wmodes[qq:, :]
     return np.concatenate([top, bot], axis=0)
@@ -2763,10 +2763,10 @@ def _pmm2d_project_orders(P1, P2, Wmodes, qq):
 
 def _pmm2d_order_kz(eps_sup, eps_sub, kxv, kyv, kx0, ky0):
     """Per-order forward ``kz`` for the two half-spaces, the incident ``kz``, and
-    the safe-divide ``kz`` used by the longitudinal-field reconstruction -- the
-    ``kz_ref``/``kz_trn``/``kz_inc``/``safe_r``/``safe_t`` block formerly
-    duplicated in :mod:`.stack2d_pure` and this module (audit S1-10).  Returns
-    ``(kz_ref, kz_trn, kz_inc, safe_r, safe_t)``, reproducing the former inline
+    ``kz_ref``/``kz_trn``/``kz_inc``/``safe_r``/``safe_t`` block -- the ONE
+    copy shared by :mod:`.stack2d_pure` and this module (audit S1-10).
+    Returns ``(kz_ref, kz_trn, kz_inc, safe_r, safe_t)``, reproducing the
+    two former inline blocks byte-for-byte.
     block byte-for-byte."""
     kz_ref = _kz_forward2(eps_sup, kxv, kyv)
     kz_trn = _kz_forward2(eps_sub, kxv, kyv)
@@ -3479,10 +3479,10 @@ def pmm_efficiency_2d_staggered(
         * ``result.dof`` -- per-region modal problem size
           (``2 * Nx*(M-1) * Ny*(M-1)``).
 
-        .. note:: **API change (v5.11 -> v5.12).**  Formerly a bare 4-tuple
-           ``(orders, R, T, dof)``; now the cross-suite :class:`Efficiency2D`
-           that unpacks to ``orders, R, T`` with ``dof`` as an attribute.  See
-           :func:`pmm_efficiency_2d`.
+        .. note:: **API change (v5.11 -> v5.12).**  This returns the
+           cross-suite :class:`Efficiency2D`, which unpacks to ``orders,
+           R, T`` with ``dof`` as an attribute -- not the bare 4-tuple
+           ``(orders, R, T, dof)`` v5.11 returned.  See :func:`pmm_efficiency_2d`.
 
     Notes
     -----
@@ -3692,7 +3692,7 @@ def pmm_efficiency_2d_staggered(
                                rx, ry, rz, tx, ty, tz, einc_sq)
     orders2d = np.stack([order_x, order_y], axis=1)
     # cross-suite return shape: unpacks as (orders, R, T); .dof = 2*q^2 (the modal
-    # eigenproblem dimension).  Was a bare 4-tuple (orders, R, T, dof) pre-v5.12.
+    # eigenproblem dimension).
     # ``wl_eff`` is the wavelength actually solved -- the requested one, or the
     # Wood-anomaly nudge this entry's ``_grazing_safe_wavelength`` substituted.
     return Efficiency2D(orders2d, R, T, 2 * qq, wl_eff=float(wl))

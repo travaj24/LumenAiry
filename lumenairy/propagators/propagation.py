@@ -43,10 +43,9 @@ Backends
     CuPy    -- GPU, auto-detected at import time
     pyFFTW  -- multi-threaded CPU FFT, opt-in via USE_PYFFTW flag
 
-v5.1.0 split (Agent C)
-----------------------
-The formerly-monolithic 4103-line propagation.py was reorganised into
-six submodules sharing one FFT/cache/config infrastructure layer:
+The submodules behind this shell
+--------------------------------
+Six submodules share one FFT/cache/config infrastructure layer:
 
 * :mod:`lumenairy.propagators.fft_infra` -- backend dispatch + plan
   cache + ASM transfer-function caches + DEFAULT_* knobs + setters /
@@ -60,10 +59,10 @@ six submodules sharing one FFT/cache/config infrastructure layer:
 * :mod:`lumenairy.propagators.mft`       -- MFT / Bluestein variants of
   Fresnel / Fraunhofer / ASM, plus :func:`resample_field`.
 
-This module is now a thin re-export shell.  Every name that pre-v5.1.0
-was importable from ``lumenairy.propagators.propagation`` continues to
-resolve from here bit-for-bit; the split is purely a file-level
-reorganisation with no behaviour change.
+This module is a thin re-export shell.  Every name documented as
+importable from ``lumenairy.propagators.propagation`` resolves from here
+bit-for-bit; the submodule split is purely a file-level
+reorganisation.
 
 The 4 ``set_default_*`` setters and 4 ``get_default_*`` accessors keep
 their canonical module path here.  The mutable ``DEFAULT_*`` globals
@@ -92,8 +91,9 @@ from __future__ import annotations
 # To make attribute-access return the LIVE value we forward to
 # ``fft_infra`` via a small whitelist for the names whose value can
 # change at runtime.  The ``from X import Y`` bindings above still
-# capture the import-time snapshot (matching pre-v5.1.0 behaviour for
-# the ``from lumenairy.propagators.propagation import Y`` pattern),
+# capture the import-time snapshot (the semantics of the monolithic
+# module for the ``from lumenairy.propagators.propagation import Y``
+# pattern),
 # but ``module.X`` lookup gets the current value -- which is what
 # every in-library consumer does.
 #
@@ -124,10 +124,10 @@ from .carrier import (
 )
 
 # ---------------------------------------------------------------------------
-# Re-exports from the v5.1.0 infrastructure / kernel submodules.
+# Re-exports from the infrastructure / kernel submodules.
 # ---------------------------------------------------------------------------
 #
-# The public surface of pre-v5.1.0 ``propagation.py`` is exactly the
+# The public surface of this shell is exactly the
 # union of the explicit names below.  Every external import path
 # ``from lumenairy.propagators.propagation import <NAME>`` resolves
 # through this re-export.
@@ -136,9 +136,9 @@ from .carrier import (
 # DEFAULT_COMPLEX_DTYPE`` binds the name HERE to whatever ``fft_infra``
 # has at this import moment.  Subsequent ``set_default_*`` calls mutate
 # ``fft_infra.DEFAULT_*`` but NOT this module's local binding -- which
-# matches the pre-v5.1.0 semantic (callers who did ``from
-# lumenairy.propagators.propagation import DEFAULT_COMPLEX_DTYPE`` got
-# a stale snapshot too).  For LIVE forwarding via attribute access
+# is what a ``from lumenairy.propagators.propagation import
+# DEFAULT_COMPLEX_DTYPE`` caller has always got (a stale snapshot).
+# For LIVE forwarding via attribute access
 # (``propagation.DEFAULT_COMPLEX_DTYPE``) the module-level
 # ``__getattr__`` at the bottom handles the lookup.
 from .fft_infra import (
@@ -161,7 +161,7 @@ from .fft_infra import (
     DEFAULT_DY,
     DEFAULT_REAL_DTYPE,
     DEFAULT_WAVE_PROPAGATOR,
-    # v5.31 (audit W9-8): frozen factory value; immutable, so no live forward
+    # Frozen factory value; immutable, so no live forward
     DEFAULT_WAVE_PROPAGATOR_SHIPPED,
     FFTW_MIN_SIZE,
     # FFT backend config (globals + setters)
@@ -247,7 +247,7 @@ from .sas import (
 # Names whose value can change at runtime via a setter.  Listed here
 # explicitly so we don't accidentally shadow unrelated module attrs.
 #
-# v5.1.1 (audit P3-NEW-F1-1): ``_PYFFTW_BAD_SHAPES`` belongs here.
+# ``_PYFFTW_BAD_SHAPES`` belongs here.
 # ``reset_fft_backend()`` rebinds it via ``_PYFFTW_BAD_SHAPES = set()``
 # (line 647 of fft_infra.py) -- a new set object, not just an in-place
 # ``.clear()`` on the existing one.  Consumers reading
@@ -323,7 +323,7 @@ __all__ = [
     # ASM family
     'angular_spectrum_propagate',
     'angular_spectrum_propagate_tilted',
-    # v5.1.0 (V9 walker symmetry): ``angular_spectrum_propagate_batch``
+    # ``angular_spectrum_propagate_batch``
     # + internal FFT config flags accessible as module attributes but
     # not in ``__all__`` (they're not in lumenairy.__all__ either).
     'angular_spectrum_propagate_mft',

@@ -1325,7 +1325,7 @@ def rcwa_jones_1d(
         offplane = offplane or _tensor_offplane_or_traced(eps_ridge, eps_groove)
     # Uniform ISOTROPIC entry (audit S1-14): a SCALAR permittivity is promoted
     # to the isotropic tensor ``eps * I3`` so a uniform region needs no
-    # hand-written ``eps * np.eye(3)`` (a scalar formerly raised IndexError on
+    # hand-written ``eps * np.eye(3)`` (a scalar would otherwise raise IndexError
     # the ``eps[0, 0]`` component reads below).  A (3, 3) tensor passes through
     # unchanged; promotion stays in the active namespace so a JAX scalar keeps
     # its differentiable path.

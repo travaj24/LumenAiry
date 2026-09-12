@@ -69,14 +69,13 @@ call raises (CONVENTIONS.md section 2 prefix).  Concretely, for each setting:
   every (entry point, field) pair, so the comparison is well defined);
 * two requests that disagree -> ``ValueError``;
 * exactly one request -> that value;
-* neither -> the entry point's own default, i.e. the historical behaviour.
+* neither -> the entry point's own default.
 
 So a config whose fields are all at their defaults is indistinguishable from
 passing no config at all, and there is no combination in which a caller's
 explicit keyword is silently overwritten.
 
-Author: Andrew Traverso -- v5.45.2 (audit 2026-09-11 TESTS-ARCH, section 14
-item 13).
+Author: Andrew Traverso
 """
 
 from __future__ import annotations

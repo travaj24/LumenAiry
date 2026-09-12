@@ -83,13 +83,6 @@ def _is_cupy_array(x):
     return True
 
 
-# v5.30 (audit E-L4): the numexpr scaffold that used to sit here
-# (``NUMEXPR_AVAILABLE`` / ``_ne`` / ``_ensure_numexpr_loaded`` /
-# ``_NUMEXPR_MIN_SIZE``) was DEAD -- 0 readers in this module and no importer
-# anywhere (the public ``NUMEXPR_AVAILABLE`` re-export comes from ``lenses.py``,
-# and the live numexpr phase-screen gate lives in ``_lens_real.py``).  Deleted:
-# it advertised a fused-expression fast path this module never had.
-
 # Optional Numba JIT, LAZILY imported on first kernel use (audit P2-D: the eager
 # ``import numba`` cost ~1.8 s of ``import lumenairy`` cold start).  The kernel
 # (``_cheb2d_val_grad_numba``) has a pure-NumPy fallback, so numba is pulled in
@@ -125,7 +118,7 @@ def _load_numba():
     return _numba is not None
 
 
-# v5.29.1 (audit E-L22): signature defaults of :func:`apply_real_lens_traced`,
+# Signature defaults of :func:`apply_real_lens_traced`,
 # resolved lazily on first use (the function is defined further down) and
 # cached.  Single source of truth for the "did the caller actually change this
 # knob?" tests, so the discarded-kwarg diagnostic on the
@@ -153,7 +146,7 @@ def _traced_kwarg_defaults() -> Dict[str, Any]:
 def _copy_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
     """Return a private copy of ``prescription`` for a prepared object to hold.
 
-    v5.29.1 (audit E-H4): a prepared lens must not alias the caller's dict, or
+    A prepared lens must not alias the caller's dict, or
     an in-place edit silently pairs its cached OPL screen with a DIFFERENT lens
     in the per-call amplitude leg.  ``copy.deepcopy`` is the wanted semantics;
     if some exotic member refuses to deep-copy (a ``sag_callable`` bound to an
@@ -204,14 +197,13 @@ def _kwarg_differs_from_default(value: Any, default: Any) -> bool:
 _NEWTON_AMP_MASK_REL_DEFAULT = 1e-4
 
 
-# Newton iter cap default.  Set to 12 (the historical value).
-# 3.5.5 dropped this to 8 based on an audit recommendation, but the
-# active-mask early-exit already short-circuits converged pixels -- the
-# cap only matters for outlier pixels that genuinely need 9-12 iters.
-# Truncating those at 8 silently lost accuracy on cemented multi-element
-# / strongly-aberrated systems.  3.5.6 reverts to the safe 12.  Override
-# via apply_real_lens_traced(newton_max_iters=N) when profiling shows
-# Newton dominates.
+# Newton iteration cap.  12, not 8: the active-mask early exit already
+# short-circuits converged pixels, so the cap only bites on outlier pixels
+# that genuinely need 9-12 iterations, and truncating those at 8 silently
+# loses accuracy on cemented multi-element / strongly-aberrated systems.
+# Override via apply_real_lens_traced(newton_max_iters=N) when profiling
+# shows Newton dominates.  The 8-vs-12 chronology is in
+# docs/history/lumenairy.elements._lens_traced.md.
 _NEWTON_MAX_ITERS = 12
 
 
@@ -239,18 +231,14 @@ _RAY_DENSITY_CAUSTIC_FLOOR_REL = 1e-3
 _RAY_DENSITY_CAUSTIC_MAXMIN = 30.0
 
 # D1 (2026-07-28): the whole-grid det J scan is NOT masked to the beam's own
-# support when the ray-fit disc sits off centre.  An earlier D1 revision did
-# mask it, on the reading that an off-centre disc leaves the rest of the launch
-# domain to polynomial EXTRAPOLATION whose det J is not a property of the
-# optics.  That reading was wrong in the only way that matters: the fold the
-# scan reported was REAL -- the hard-masked off-centre fit genuinely folded, and
-# the same calls returned a spurious lobe at 0.75 of the on-beam peak (see
-# ``_FIT_DISC_OUTSIDE_WEIGHT_REL``).  Masking the scan would have converted a
-# loud wrong answer into a silent one.  With the fit regularised the fold is
-# gone at the source and the unmasked scan is silent on the same cases, so the
-# scan stays exactly as it was on every path.
+# support when the ray-fit disc sits off centre.  Masking it would convert a
+# loud wrong answer into a silent one: on a hard-masked off-centre fit the fold
+# the scan reports is REAL -- those calls returned a spurious lobe at 0.75 of
+# the on-beam peak (see ``_FIT_DISC_OUTSIDE_WEIGHT_REL``).  With the fit
+# regularised the fold is gone at the source and the unmasked scan is silent
+# on the same cases, so the scan runs identically on every path.
 
-# v5.30 (audit E-M6): post-hoc energy self-check for ``amplitude_model=
+# Post-hoc energy self-check for ``amplitude_model=
 # 'ray_density'``.  The mode is documented as "energy-conserving in the
 # geometric limit", and it is -- in the LIMIT.  At finite ``ray_subsample`` the
 # Jacobian is evaluated on the coarse Newton lattice and the resulting
@@ -291,9 +279,9 @@ _RAY_DENSITY_CAUSTIC_MAXMIN = 30.0
 # The GAIN side has no discretisation excuse -- ray-tube transport cannot
 # create energy -- so it is a small fixed band (max measured 1.00003).
 #
-# v5.32 (2026-07-31, docs/audits/C6_FIT_GUARD_DECISION_2026_07_31.md S5.1):
-# the GAIN side was MEASURED for tightening and DELIBERATELY LEFT AT 0.050.
-# Recorded because the obvious change is wrong and the reason is not obvious.
+# THE GAIN SIDE IS DELIBERATELY LEFT AT 0.050 (docs/audits/C6_FIT_GUARD_
+# DECISION_2026_07_31.md S5.1).  Recorded because the obvious change --
+# tightening it -- is wrong and the reason is not obvious.
 #
 # The band above was calibrated on the P2 battery at N = 512, where the largest
 # ratio anywhere is 1.00003 -- which makes 0.050 look like ~1600x of unused
@@ -326,7 +314,7 @@ _RD_ENERGY_DEFICIT_PER_SUB = 0.010
 _RD_ENERGY_GAIN_TOL = 0.050
 
 
-# ---- v5.32: the HALO-AMPLITUDE term of the ray_density self-check ----------
+# ---- The HALO-AMPLITUDE term of the ray_density self-check ---------------
 #
 # WHY A SECOND TERM AT ALL.  The energy self-check above is a scalar power sum,
 # and the failure mode it was written for -- a fold caustic inflating the
@@ -585,15 +573,8 @@ _register_knob(
 
 
 # Helpers shared with lenses.py (aperture warning).
-# v5.30 (audit E-L4): ``surface_sag_general`` and its private
-# ``_surface_sag_general`` alias were imported/defined here with ZERO readers in
-# this module (grep-verified: the only two occurrences were the import and the
-# alias itself) and nothing imports either name FROM this module -- the live
-# users are ``_lens_real.py`` and ``elements.py``, which import from
-# ``lenses.py`` directly.  Both deleted; this module gets its sag from the
-# raytrace core via the trace, not from the analytic helper.
 # Sibling-module imports.
-# v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
+# Module-level logger for apply_real_lens_traced entry / per-Newton-
 # Module-level logger for apply_real_lens_traced entry / per-Newton-
 # iteration progress.  Default-quiet via the lumenairy root logger's
 # NullHandler -- users opt in by attaching a handler to the
@@ -610,8 +591,8 @@ from .lenses import _warn_if_aperture_exceeds_grid
 logger = get_logger(__name__)
 
 # apply_real_lens (analytic split-step) is the workhorse for the
-# amplitude leg of apply_real_lens_traced.  Lives in _lens_real.py
-# since v3.5.5; re-imported here for the in-function callbacks.
+# amplitude leg of apply_real_lens_traced.  It lives in _lens_real.py;
+# re-imported here for the in-function callbacks.
 from ._lens_real import apply_real_lens
 
 
@@ -799,40 +780,26 @@ def _newton_invert_chunk(args):
     domain, plus the number of chunk points still active at the
     iteration cap.
 
-    v5.29.1 (audit E-H2): the cap used to be the module constant
-    ``_NEWTON_MAX_ITERS``, which made ``newton_max_iters`` INERT on the
-    pool path (then: >=200k points with ``newton_fit='spline'``; since
-    v5.30.1 / v5.32.2 the pool serves EITHER fit, above the two-tier
-    200k-cold / 8k-warm size gate) -- the caller's
-    cap was honoured by the serial closure only, so the OPL (pool) and the
-    ray-density amplitude (always serial) could come from DIFFERENT Newton
-    solutions.  The resolved cap now travels in the pickled payload;
-    payloads written by older callers (no key) keep the historical 12.
-    The unconverged count travels back so the pool path can emit the same
-    "did not converge ... increase newton_max_iters" warning the serial
-    path emits (pre-fix the pool was silent, and the advice in that very
-    message did nothing on this path).
-
-    v5.32.3 (FIX_CI_POOL): so does the parent's Chebyshev EVALUATOR BACKEND
-    (``cheb_backend``), for the same reason and with the same fallback for
-    payloads that predate the key.  A worker that resolved a different branch
-    of ``_Cheb2DEvaluator.ev_value_and_grad`` than the parent ran the same
-    mathematics in a different floating-point order, which cost the pool its
-    bit-identity to serial (MEASURED 5.167e-14 locally, 1.358e-11 on CI).  A
-    worker that cannot honour a pinned ``'numba'`` raises
-    :class:`NewtonWorkerBackendUnavailable` rather than substituting the other
-    order.
-
-    v5.33.0 (FIX_POOL_REBUILD): and so does the parent's BUILT Chebyshev FIT
-    (``cheb_fit``), which retires the polynomial re-fit above entirely.
-    Rebuilding it here re-ran ``_solve_lstsq_thread_safe`` -- a BLAS reduction
-    over a ~78 000-row design matrix -- in a fresh interpreter, and OpenBLAS
-    reduces in a thread-count-dependent order, so a worker whose BLAS width
-    differed from its parent's recovered DIFFERENT coefficients on identical
-    data (MEASURED max|dc| 4.6e-15, which the Newton convergence threshold
-    amplifies to 1.370e-11 of the field -- CI's 1.341e-11 / 1.358e-11).  The
-    worker now EVALUATES the parent's coefficients and fits nothing; payloads
-    with no ``cheb_fit`` key keep the historical rebuild.
+    The payload carries the parent's RESOLVED Newton cap
+    (``newton_max_iters``), its Chebyshev evaluator BACKEND
+    (``cheb_backend``) and its BUILT Chebyshev fit (``cheb_fit``).  A
+    payload missing any of them -- an older pickled payload, or a direct
+    caller -- falls back to the module default cap, to resolving the
+    backend here, and to re-fitting.  All three travel for one reason: a
+    worker that resolves a different branch of
+    ``_Cheb2DEvaluator.ev_value_and_grad``, or re-runs
+    ``_solve_lstsq_thread_safe`` under a different BLAS width, runs the
+    same mathematics in a different floating-point ORDER and the pool
+    stops being bit-identical to serial (MEASURED: backend 5.167e-14
+    locally and 1.358e-11 on CI; a re-fit under a different BLAS width
+    max|dc| 4.6e-15, which the Newton convergence threshold amplifies to
+    1.370e-11 of the field).  A worker that cannot honour a pinned
+    ``'numba'`` raises :class:`NewtonWorkerBackendUnavailable` rather than
+    substituting the other order.  The unconverged count travels back so
+    the pool path emits the same "did not converge ... increase
+    newton_max_iters" warning the serial path emits.  The three releases
+    that closed these in turn are in
+    ``docs/history/lumenairy.elements._lens_traced.md``.
 
     Lives at module scope so ``ProcessPoolExecutor`` can pickle it on
     Windows (spawn) workers.  The caller is ``_invert_newton_parallel``
@@ -864,25 +831,23 @@ def _newton_invert_chunk(args):
     bound = knot_data['bound']
     # Paraxial-magnification initial-guess factors.  See the docstring
     # in ``apply_real_lens_traced`` where these are computed from the
-    # central finite-difference slope of the forward map.  Older knot
-    # data written by pre-3.1.3 callers won't have these keys -- fall
-    # back to the historical 1.10 multiplier so the worker stays
-    # backwards compatible.
+    # central finite-difference slope of the forward map.  Knot data
+    # carrying neither key falls back to the 1.10 multiplier, so an
+    # older pickled payload still runs.
     inv_M_x = float(knot_data.get('inv_M_x', 1.10))
     inv_M_y = float(knot_data.get('inv_M_y', 1.10))
     # Newton iteration cap, resolved by the caller (caller override >
-    # module default).  Pre-5.29.1 payloads have no key -- fall back to
-    # the module default so an old pickled payload still runs (audit E-H2).
+    # module default).  A payload carrying no key falls back to the
+    # module default so an old pickled payload still runs (audit E-H2).
     max_iters = int(knot_data.get('newton_max_iters', _NEWTON_MAX_ITERS))
 
     if _fit == 'polynomial':
         _ord = int(knot_data.get('fit_poly_order', 6))
         _wts = knot_data.get('fit_weights', None)
         # The evaluator must EVALUATE in the parent's floating-point order,
-        # which the payload pins (v5.32.3).  ``None`` -- payloads written
-        # before the pin existed, mirroring the ``newton_fit`` /
-        # ``newton_max_iters`` tolerance above -- keeps the historical
-        # "resolve it here" behaviour.
+        # which the payload pins.  ``None`` -- a payload written before the
+        # pin existed, mirroring the ``newton_fit`` /
+        # ``newton_max_iters`` tolerance above -- means "resolve it here".
         _backend = knot_data.get('cheb_backend', None)
         if _backend is not None and _backend not in ('numba', 'numpy'):
             _backend = None
@@ -897,7 +862,7 @@ def _newton_invert_chunk(args):
                 "parent evaluated with it), but this worker cannot load it: "
                 f"_NUMBA_AVAILABLE={_NUMBA_AVAILABLE!r}.  Refusing the chunk "
                 "rather than answering in a different floating-point order.")
-        # v5.33.0 (FIX_POOL_REBUILD): EVALUATE THE PARENT'S FIT, do not re-fit.
+        # EVALUATE THE PARENT'S FIT, do not re-fit.
         # The payload ships the built coefficients, so the worker's polynomial
         # is the parent's by construction -- no least-squares solve here, and
         # therefore no dependence on this interpreter's BLAS thread regime.
@@ -986,12 +951,7 @@ def _newton_invert_chunk(args):
 # --------------------------------------------------------------------------
 # Persistent ProcessPool for apply_real_lens_traced Newton inversion.
 #
-# Pre-3.5.5: every apply_real_lens_traced call created+torn-down its own
-# pool, paying the Windows-spawn startup cost (~5 s for n_workers=8) once
-# per call.  For optimisation runs and tolerancing studies that call
-# apply_real_lens_traced 100+ times the cumulative cost was minutes.
-#
-# 3.5.5+: a module-level pool is lazily created on first parallel-Newton
+# A module-level pool is lazily created on first parallel-Newton
 # call and reused across subsequent calls with the same worker count.
 # An atexit handler shuts it down cleanly.  Call ``close_worker_pool()``
 # explicitly to free the workers early (e.g. after a final optimisation
@@ -1187,21 +1147,21 @@ _PERSISTENT_POOL_NWORKERS = None
 # that disagrees raises NewtonPayloadNotResident and gets the blob.  See the
 # PAYLOAD RESIDENCY block above _newton_invert_chunk.
 _POOL_RESIDENT_PAYLOAD_KEY = None
-# v5.30 (audit E-L2): the lock is built AT MODULE SCOPE.  It used to be a lazy
-# ``None`` that ``_get_persistent_worker_pool`` created on first use -- the
-# classic broken double-checked-locking shape, since the ``if
-# _PERSISTENT_POOL_LOCK is None: ... = threading.Lock()`` guard is itself
-# unsynchronised, so two threads racing the first parallel-Newton call could
-# each build a lock, each acquire their own, and both construct a pool (the
-# second overwriting the first, leaking its workers).  Building it here is
-# free (a ``threading.Lock`` costs nothing at import) and makes the guard
+# The lock is built AT MODULE SCOPE, not lazily.  A lazy ``None`` that
+# ``_get_persistent_worker_pool`` creates on first use is the classic
+# broken double-checked-locking shape: the ``if _PERSISTENT_POOL_LOCK is
+# None: ... = threading.Lock()`` guard is itself unsynchronised, so two
+# threads racing the first parallel-Newton call each build a lock, each
+# acquire their own, and both construct a pool (the second overwriting the
+# first, leaking its workers).  Building it here is free (a
+# ``threading.Lock`` costs nothing at import) and makes the guard
 # unnecessary.
 _PERSISTENT_POOL_LOCK = threading.Lock()
-# v5.30 (audit E-L1): one-shot flag for the atexit registration.  The handler
-# used to be registered INSIDE the pool-construction block, i.e. once per pool
-# creation: measured ``atexit._ncallbacks()`` growing 2 -> 8 across five
-# creations (one extra ``close_worker_pool`` callback each time after the
-# executor's own).  Every duplicate re-runs a full ``shutdown(wait=True)`` at
+# One-shot flag for the atexit registration.  Registering the handler
+# INSIDE the pool-construction block registers it once per pool CREATION:
+# measured ``atexit._ncallbacks()`` growing 2 -> 8 across five creations
+# (one extra ``close_worker_pool`` callback each time after the executor's
+# own), and every duplicate re-runs a full ``shutdown(wait=True)`` at
 # interpreter exit.
 _PERSISTENT_POOL_ATEXIT_REGISTERED = False
 
@@ -1230,17 +1190,14 @@ def _get_persistent_worker_pool(n_workers):
                 # discard the reference.
                 pass
             _PERSISTENT_POOL = None
-        # v4.16.1 (audit M-2): force the ``spawn`` start method.  The
+        # Force the ``spawn`` start method.  The
         # default on Linux is ``fork``, which inherits the parent's
         # FFT plan caches and threading state -- both of which are
         # unsafe to share between forked processes (pyFFTW's plan
         # cache holds module-private locks that the forked child
         # cannot release; numpy/MKL spin up a duplicate thread pool
         # that races with the parent).  ``spawn`` is portable across
-        # Linux + macOS + Windows and matches the v4.16.0 CHANGELOG
-        # claim that the library uses spawn (which was previously
-        # only true of the multi-process storage tests, not the
-        # library worker pool itself).
+        # Linux + macOS + Windows.
         import multiprocessing as _mp
         from concurrent.futures import ProcessPoolExecutor
         _spawn_ctx = _mp.get_context('spawn')
@@ -1423,7 +1380,7 @@ def close_worker_pool() -> None:
     global _POOL_DEFERRED_NWORKERS, _POOL_DEFERRED_SECONDS
     global _POOL_DEFERRED_COUNT, _POOL_DEFERRED_CLASS, _POOL_DEFERRED_POINTS
     global _POOL_RESIDENT_PAYLOAD_KEY
-    # v5.30 (audit E-L2): take the SAME lock the constructor takes.  This
+    # Take the SAME lock the constructor takes.  This
     # function mutates the pool globals, so running it concurrently with
     # ``_get_persistent_worker_pool`` could shut down a pool that had just
     # been handed to a caller, or clear ``_PERSISTENT_POOL`` between the
@@ -1450,12 +1407,12 @@ def close_worker_pool() -> None:
 # ---------------------------------------------------------------------------
 # Newton pool RESOURCE clamp (docs/audits/FIX_POOL_MEMORY_2026_08_06.md)
 #
-# ``_invert_newton_parallel`` used to submit ``n_workers`` chunks with NO memory
-# accounting of any kind, while the fine grid those chunks come from is sized by
-# ``carrier._memory_bounded_n_fine`` with a SINGLE-PROCESS cost model.  The other
-# process pool in this library already has the clamp -- see
-# ``carrier._multi_resolve_workers``, whose comment records the identical failure
-# being fixed there -- and this is the same treatment for the Newton pool.
+# ``_invert_newton_parallel`` submits ``n_workers`` chunks whose fine grid is
+# sized by ``carrier._memory_bounded_n_fine`` with a SINGLE-PROCESS cost
+# model, so the pool needs its own memory accounting.  The other process
+# pool in this library carries the same clamp -- see
+# ``carrier._multi_resolve_workers``, whose comment records the same
+# failure being fixed there.
 #
 # MEASURED on this box (Ryzen 9 5950X, 137.4 GB, python 3.14.6, numpy 2.4.4,
 # numba present) by running ``_newton_invert_chunk`` in a FRESH interpreter --
@@ -1770,9 +1727,9 @@ def _script_has_main_guard(path: str) -> bool:
     (= "cannot prove it is unguarded"), which preserves the historical pool
     behaviour rather than silently serialising a caller we know nothing about.
 
-    The predicate used to be "does a top-level ``__name__`` guard EXIST
-    anywhere", which is a proxy that cannot see the module BODY -- the very
-    thing the warning it feeds is about.  The ordinary shape of a real driver
+    A bare "does a top-level ``__name__`` guard EXIST anywhere" proxy is
+    not enough: it cannot see the module BODY, which is the very thing the
+    warning this feeds is about.  The ordinary shape of a real driver
     script defeats it::
 
         import numpy as np
@@ -1781,10 +1738,10 @@ def _script_has_main_guard(path: str) -> bool:
         BIG = np.zeros((4096, 4096))  # UNGUARDED: 134 MB re-run in EVERY worker
         main()
 
-    which the old form classified as guarded, so the pool ran and every worker
-    paid the cost -- precisely the 22.1 GB/worker failure the warning exists
-    for.  ``ast.Match`` is accepted as a guard shape alongside ``ast.If``
-    (``match __name__: case '__main__':`` used to read as unguarded).
+    -- a file that proxy calls guarded, so the pool runs and every worker
+    pays the cost: precisely the 22.1 GB/worker failure the warning exists
+    for.  ``ast.Match`` counts as a guard shape alongside ``ast.If``, so
+    ``match __name__: case '__main__':`` reads as guarded.
     """
     import ast
     with _MAIN_GUARD_LOCK:
@@ -2704,17 +2661,18 @@ def _det_normal_equations(A, b):
     B = np.ascontiguousarray(np.asarray(b, dtype=np.float64))
     flat = (B.ndim == 1)
     n, n_terms = A.shape
-    # EMPTY FIT, guarded ABOVE the reshape (P4 close-out, 2026-08-24).  This
-    # branch used to sit below ``B.reshape(B.shape[0], -1)``, which raises
-    # ``cannot reshape array of size 0 into shape (0,newaxis)`` on a zero-row
-    # ``b`` -- so it was dead by construction and the deterministic route
-    # RAISED where the ``(A.T @ A, A.T @ b)`` it replaces returns zeros.  This
-    # function's whole contract is "the same two arrays as the BLAS
-    # expression, in a fixed summation order", and a shape the BLAS expression
-    # handles is part of that contract.  No live caller reaches it (every fit
-    # site enforces a samples-per-term floor), so nothing on any shipped path
-    # moves: ``_solve_lstsq_thread_safe`` still raises on an empty fit, from
-    # ``_solve_lstsq_qr``'s own reshape, on BOTH routes exactly as before.
+    # EMPTY FIT, guarded ABOVE the reshape (P4 close-out, 2026-08-24).
+    # Below ``B.reshape(B.shape[0], -1)`` this branch would be dead by
+    # construction -- that reshape raises ``cannot reshape array of size 0
+    # into shape (0,newaxis)`` on a zero-row ``b``, so the deterministic
+    # route would RAISE where the ``(A.T @ A, A.T @ b)`` it replaces
+    # returns zeros.  This function's whole contract is "the same two
+    # arrays as the BLAS expression, in a fixed summation order", and a
+    # shape the BLAS expression handles is part of that contract.  No
+    # live caller reaches it (every fit site enforces a samples-per-term
+    # floor), so nothing on any shipped path moves:
+    # ``_solve_lstsq_thread_safe`` still raises on an empty fit, from
+    # ``_solve_lstsq_qr``'s own reshape, on BOTH routes.
     if n == 0:
         n_rhs = 1 if flat else int(B.shape[1]) if B.ndim >= 2 else 1
         G_out = np.zeros((n_terms, n_terms), dtype=np.float64)
@@ -3114,17 +3072,17 @@ def _solve_lstsq_thread_safe(A, b, deterministic=False, score_domain=None):
     below OpenBLAS's threading threshold and never takes the ``gelsd`` SVD path,
     so the deadlock cannot recur.  Neither does the re-solve: it is ``geqrf``.
 
-    CONDITIONING (niche C13, 2026-08-03).  This function used to assert that
-    ``A`` "is a well-conditioned normalised tensor-Chebyshev / monomial
-    Vandermonde (~1.5x oversampled), so squaring the condition number in ``G``
-    is safe".  That holds for the concentric unweighted fits and is FALSE for
-    the weighted decentred ones, where ``cond(A)`` = 1.4e10 was measured and
-    ``G`` is therefore numerically singular.  Rather than assume either way,
-    the Gram is now SCREENED and, where it is singular, both answers are scored
-    on the data.  A solve that passes the screen -- or one whose two candidates
-    tie -- returns the identical bits it returned before, which is what keeps
-    the byte-identity contracts of niches C1/C6/C8/C9 intact.
-    See ``LSTSQ_CONDITIONING_STEPDOWN``.
+    CONDITIONING (niche C13, 2026-08-03).  ``A`` is a normalised
+    tensor-Chebyshev / monomial Vandermonde, ~1.5x oversampled.  For the
+    concentric UNWEIGHTED fits it is well conditioned and squaring its
+    condition number in ``G`` is safe; for the WEIGHTED DECENTRED ones it
+    is not -- ``cond(A)`` = 1.4e10 is measured there, and ``G`` is
+    therefore numerically singular.  Rather than assume either way, the
+    Gram is SCREENED and, where it is singular, both answers are scored on
+    the data.  A solve that passes the screen -- or one whose two
+    candidates tie -- returns the identical bits it returned before, which
+    is what keeps the byte-identity contracts of niches C1/C6/C8/C9
+    intact.  See ``LSTSQ_CONDITIONING_STEPDOWN``.
 
     ``deterministic=True`` (niche D14) forms ``G`` and ``A^T b`` through
     :func:`_det_normal_equations` instead of the threaded BLAS calls, so the
@@ -3295,7 +3253,7 @@ class _Cheb2DEvaluator:
         if xp is None:
             xp = _get_array_module(values)
         self.xp = xp
-        # v5.32.3 (FIX_CI_POOL): PINNED evaluation backend, or None = "resolve
+        # PINNED evaluation backend, or None = "resolve
         # it from this process's own numba availability" (the historical
         # behaviour).  The two backends are the SAME mathematics in a different
         # floating-point ORDER, so an evaluator rebuilt in a Newton pool worker
@@ -3428,15 +3386,14 @@ class _Cheb2DEvaluator:
         self._K2 = xp.asarray(K2_np, dtype=xp.int64)
 
     # ----------------------------------------------------------------
-    # v5.33.0 (FIX_POOL_REBUILD): construct from an ALREADY-BUILT fit.
+    # Construct from an ALREADY-BUILT fit.
     #
-    # ``__init__`` RUNS the least-squares fit.  A Newton pool worker used to
-    # call it, which meant every worker re-solved the same normal equations in
-    # its own interpreter -- and that solve is a BLAS reduction whose ORDER
-    # depends on the BLAS thread regime, so a worker whose regime differed from
-    # its parent's recovered coefficients that differ in the last bits.  See
-    # ``_cheb_fit_state`` for the measurement.  This entry point takes the
-    # parent's coefficients and does no arithmetic at all.
+    # ``__init__`` RUNS the least-squares fit, and that solve is a BLAS
+    # reduction whose ORDER depends on the BLAS thread regime -- so a
+    # Newton pool worker that calls it recovers coefficients that differ
+    # from its parent's in the last bits whenever the two regimes differ.
+    # See ``_cheb_fit_state`` for the measurement.  This entry point takes
+    # the parent's coefficients and does no arithmetic at all.
     # ----------------------------------------------------------------
     @classmethod
     def from_state(cls, state, xp=None, backend=None):
@@ -3673,11 +3630,10 @@ def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
     ``angle(apply_real_lens(ones))`` on an N-BK7 biconvex 100/-100 at
     f/12.1 (8 mm aperture, N = 256, dx = 40 um, 587.6 nm), piston
     removed, the residual is 0.007 nm rms at 1 um of centre thickness,
-    0.7 nm at 100 um and **14.1 nm rms / 41.6 nm PV at 2 mm** -- so the
-    "under 10 nm on F/10+" rule this docstring used to state holds only
-    for elements thinner than ~1.5 mm, whatever their speed.  Budget
+    0.7 nm at 100 um and **14.1 nm rms / 41.6 nm PV at 2 mm**.  Budget
     ``~7 nm rms per mm of glass`` and validate before trusting a thick
-    or fast element.
+    or fast element: an "under 10 nm on F/10+" rule of thumb holds only
+    for elements thinner than ~1.5 mm, whatever their speed.
 
     Parameters
     ----------
@@ -3726,7 +3682,7 @@ def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
     X, Y = np.meshgrid(x, x, indexing='xy')
     k0 = 2.0 * np.pi / wavelength
 
-    # v5.1.0 (default-knob resolver rollout): real-dtype OPL allocator
+    # Real-dtype OPL allocator
     # honours ``set_default_real_dtype(...)`` -- this is one of the
     # documented consumer wirings.  Falls back to np.float64 if the
     # propagators module is mid-load (defensive).
@@ -3823,8 +3779,8 @@ _TILT_EIKONAL_MIN_RAD = 1e-2
 # engaged carrier are given, route the ray launch + the R7 intra-group fixes
 # through the carrier gradient (the ``carrier=R`` default path) instead of the
 # per-pixel tilt launch, which DEGRADES a steep spherical carrier (1.72 rad rms
-# vs 0.008 rad).  Exposed as a module flag so the regression test can force the
-# pre-fix per-pixel-tilt launch (fail-before) via monkeypatch.
+# vs 0.008 rad).  Exposed as a module flag so the regression test can
+# force the per-pixel-tilt launch (the fail-before) via monkeypatch.
 _F3_GUARD_TILTAWARE_EXPLICIT_CARRIER = True
 
 # R6 / audit F1 (2026-07-21): the ``carrier='auto'`` least-squares gradient fit
@@ -4115,7 +4071,7 @@ _DECENTRE_GATE_W_FRAC = 0.05
 #: niche C11 (2026-08-03): CHOOSE the decentred beam's ray-fit branch by
 #: MEASURING both candidates instead of predicting the winner from ``|c|/w``.
 #:
-#: WHAT WAS WRONG.  ``_DECENTRE_GATE_W_FRAC`` above is a floor set to kill a
+#: WHY NOT THE GATE.  ``_DECENTRE_GATE_W_FRAC`` above is a floor set to kill a
 #: discontinuity at NULL decentre (a branch flip at 1e-9 px), and the note that
 #: sets it says so.  It was never the crossover.  Measured on design 121 at the
 #: shipped ``_REMAP_RESID_EIKONAL_DEGREE = 6`` (`rc_gate_121.py`, EE3
@@ -4167,17 +4123,16 @@ _DECENTRE_GATE_W_FRAC = 0.05
 #: coming as a **18x** margin in the fit residual (0.122 waves concentric
 #: against 0.0068 off-centre) before any field is reconstructed.
 #:
-#: SHIPPED ON since 5.32.1 (2026-08-03), by an EXPLICIT DECISION, and the
-#: trade it takes is stated rather than buried.  On design 121 the arbiter
-#: improves four of the five tilted orders (by 0.017 / 0.052 / 0.110 / 0.082
-#: points), takes the worst-case residual from 0.152 to 0.069 and removes the
-#: residual's growth with field angle -- and makes ONE order, (-1,0), worse by
-#: 0.026 points against a 0.003-0.015 differential floor.  That per-order
-#: "improve or hold" failure is why C11 shipped it OFF: it is a judgement
-#: about a design rather than a library fact, and it was left to an explicit
-#: decision instead of taken silently in a patch release.  **That decision has
-#: now been taken** -- see ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03.md``
-#: S10 for the re-measurement of the trade on BOTH BLAS builds.
+#: SHIPPED ON by an EXPLICIT DECISION, and the trade it takes is stated
+#: rather than buried.  On design 121 the arbiter improves four of the five
+#: tilted orders (by 0.017 / 0.052 / 0.110 / 0.082 points), takes the
+#: worst-case residual from 0.152 to 0.069 and removes the residual's
+#: growth with field angle -- and makes ONE order, (-1,0), worse by 0.026
+#: points against a 0.003-0.015 differential floor.  That per-order
+#: "improve or hold" failure is a judgement about a design rather than a
+#: library fact, which is why the default is set by an explicit decision
+#: and not taken silently: ``docs/audits/C13_DEGREE6_CONDITIONING_2026_08_03
+#: .md`` S10 carries the re-measurement of the trade on BOTH BLAS builds.
 #:
 #: THIS FLAG DECIDES, because :data:`DECENTRED_FIT_PREDICTOR` stayed ``False``.
 #: The 5.32.1 flip was ordered for BOTH constants and only this one survived
@@ -4931,10 +4886,10 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
     Returns ``(W_full, grad_fn, w_fn)`` where ``W_full`` is an ``(N, N)``
     array, ``grad_fn(xq, yq)`` returns ``(L, M)`` at the query positions,
     and ``w_fn(xq, yq)`` evaluates the carrier eikonal ``W`` (metres) at
-    the query positions -- v5.25.1 (hammer H6): the per-ray OPL must be
+    the query positions.  ``w_fn`` is the H6 term: the per-ray OPL must be
     referenced to the carrier congruence by ADDING ``W(x_in)`` at the
-    entrance plane; omitting it collapsed every diverging-input trace to
-    the collimated focal plane.
+    entrance plane, or every diverging-input trace collapses to the
+    collimated focal plane.
 
     ``origin=(x0, y0)`` (niche D9) is the ABSOLUTE transverse position of the
     grid's CENTRE pixel.  ``X`` / ``Y`` already carry it (the caller builds
@@ -5000,8 +4955,8 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
         # ``linspace`` over +-0.75*aperture with an odd sample count, so its
         # nodes are NOT wave-grid pixel centres -- a nearest-neighbour lookup
         # therefore carries a half-pixel error that is LINEAR in dx, in both
-        # the direction cosines and (the larger of the two, and the one the
-        # in-code note used to omit) the H6 entrance eikonal ``W`` itself.
+        # the direction cosines and (the larger of the two) the H6
+        # entrance eikonal ``W`` itself.
         # Measured against an independent exact-sphere trace on a diverging
         # 200 mm conjugate through an f/32 singlet: ``carrier=<float>`` and
         # ``carrier='auto'``, which are the same wavefront analytically, both
@@ -5255,8 +5210,8 @@ def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2,
     # RATIONALIZED: sqrt(r^2+s^2) - |s| == r^2 / (sqrt(r^2+s^2) + |s|).  Same
     # fix and same reason as a185cfc in propagators/carrier.py.  This one
     # feeds the ray launch, the H6 entrance eikonal AND the exp(i k0 W)
-    # reference leg, so the k0*eps*|s| error it used to carry was COHERENT
-    # across all three.
+    # reference leg, so a k0*eps*|s| cancellation error here would be
+    # COHERENT across all three.
     if need_W:
         _r2_full = X ** 2 + Y ** 2
         W_full = _sgn * (_r2_full / (np.sqrt(_r2_full + s * s) + _abs_s))
@@ -5346,87 +5301,21 @@ REMAP_STATIONARY_PHASE_LAUNCH = True
 #: DOWN automatically when the bright support cannot constrain it (8 kept
 #: gradient samples per basis term).
 #:
-#: WHY 4.  Measured on design 121's last group at order (-4,-2), the worst
-#: case -- the element pass scored pointwise against the exact-ray oracle, and
-#: the same setting scored END TO END through the whole post-DOE chain:
+#: WHY 6 -- the FORM argument is below, under WHAT 6 BUYS.  Setting this
+#: constant back to ``4`` restores the earlier behaviour exactly -- it is
+#: read once, at :func:`_fit_residual_eikonal`, and clamped by
+#: ``_REMAP_RESID_DEGREE_CAP`` -- so the constant is its own fail-before.
+#: The degree-4 era's own derivation, and the two notes that corrected
+#: each other about the mechanism, are in
+#: ``docs/history/lumenairy.elements._lens_traced.md``.
 #:
-#:   degree  rms grad(a-a_fit)  element WFE (waves)  ghost power  chain EE3 %
-#:     off        --                 0.0659            0.00000       73.66
-#:      2       8.83e-4              0.0388            0.00000       81.95
-#:      3       2.99e-4              0.0074            0.00000       88.66
-#:      4       1.03e-4              0.0140            0.00000       88.49
-#:      5       1.01e-4              0.0144            0.00132       88.49*
-#:      6       8.5e-5               0.0136            0.01255       88.72
-#:
-#: (* interpolated; degree 5 was not run end to end.  Oracle ceiling 89.78.)
-#:
-#: Read it as: everything from degree 3 on lands within 0.25 EE3 points of
-#: everything else END TO END, so the choice is made on GENERALITY.  Degree 4
-#: is where the residual's own content is -- a carrier-referenced relay carries
-#: an r^4-dominant correction (see ``remap_sampling``), and degree 4 spans that
-#: EXACTLY: on a synthetic fixture whose residual IS r^4 the corrected launch
-#: reads 2e-5 waves against 0.021 uncorrected, a factor of 1000, where degree 3
-#: reads 0.014 and removes only a third.  Degree 3 happens to fit design 121's
-#: particular group-5 residual better (90 % of its slope) but cannot represent
-#: the generic case at all.  Degrees 5-6 buy nothing and start self-caustiking
-#: in the 2-3 w skirt.
-#:
-#: KNOWN COST OF THIS CHOICE, measured and NOT fixed: at degree 4 the ON-AXIS
-#: design-121 call gains **0.103 % of the input power** as a far ghost lobe
-#: (exit power 0.9959 -> 0.9970), where degree 3 gains none.  It appears only
-#: on the CONCENTRIC fit branch (hard NaN mask, ``newton_poly_order=6``); the
-#: off-centre branch (weighted, ``_DECENTRED_FIT_POLY_ORDER=10``) is clean at
-#: every order.  It does not move the spot (on-axis EE3 89.21 at degree 4
-#: against 88.87 at degree 3, and the field's second moment inside r < 1 mm
-#: moves by 0.0003 mm) but it IS spurious energy -- 1.03e-03 of Pin as an
-#: annulus at 6.298-7.216 mm exit radius carrying 33 % of the peak amplitude --
-#: so any halo / second-moment metric taken through this path on axis should be
-#: checked against ``REMAP_STATIONARY_PHASE_LAUNCH = False``.
-#:
-#: MECHANISM (2026-07-31), and it is NOT the one first recorded here.  The
-#: original note read this as "the order-6 forward-map fit being unable to
-#: carry a degree-4 launch augmentation".  That is REFUTED: raising the order
-#: on the hard-mask branch makes it 86x WORSE (``newton_poly_order=10`` gains
-#: 8.5 % of the input power).  It is the D1 fold -- see
-#: ``REMAP_STATIONARY_PHASE_FIT_GUARD`` for the mechanism, the sweeps and the
-#: opt-in remedy.
-#:
-#: RESOLVED (2026-07-31): the ELEMENT-vs-oracle column's NON-MONOTONICITY in
-#: the degree (3 reading 0.0074 against degree 4's 0.0140, while the model's
-#: own slope residual keeps improving) is an artefact of the PROBE's 2 %-of-
-#: peak amplitude threshold, not of the fit and not -- as was guessed here --
-#: of the oracle's band-limited representation of ``a``.  Measured
-#: (validation/repro_traced_carrier_121/probe_c6_degree_oracle.py): the
-#: oracle's own upsample factor is converged (4 / 8 / 16 move degree 4 by
-#: 1.8 % and never reorder anything), the scored patch size is irrelevant, and
-#: raising the amplitude threshold to 10 % of peak REVERSES the ordering to
-#: 4 < 6 < 3 -- the order ``grad(a - a_fit)`` predicts -- while dropping
-#: degree 4's reading 6x, 0.0140 -> 0.0024 waves.  The whole penalty lives in
-#: the 2-10 %-of-peak skirt, where degree 4's extra terms are constrained by
-#: the core (``_REMAP_RESID_BRIGHT_FRAC`` = 0.05) and then evaluated outside
-#: it.  On a synthetic fixture with an ANALYTIC oracle the response is
-#: perfectly ordered -- 2.065e-02 (off) -> 1.406e-02 (degrees 2 and 3) ->
-#: 2.344e-05 (degrees 4, 5, 6) -- so nothing is wrong with the fit.  Degree 4
-#: is the best model over the bright core.
-#:
-#: ---------------------------------------------------------------------------
-#: 2026-08-02 -- RAISED TO 6.  THE ONLY THING KEEPING IT AT 4 WAS A GHOST THAT
-#: NICHE C8 NOW BOUNDS.  docs/audits/D121_RESIDUAL_CLOSURE_2026_08_02.md.
-#:
-#: The fail-before is this constant: setting it back to ``4`` restores the
-#: v5.32.0 / niche-C9 behaviour exactly, since it is the ONLY thing that
-#: changes (it is read once, at :func:`_fit_residual_eikonal`, and clamped by
-#: ``_REMAP_RESID_DEGREE_CAP``).
-#:
-#: WHAT THE "degrees 5-6 buy nothing and start self-caustiking" line above was
-#: measuring, and why it no longer holds.  Both records of that ghost -- the
-#: ``ghost power`` column here (1.255e-02 at degree 6, order (-4,-2)) and
-#: ``REMAP_STATIONARY_PHASE_FIT_GUARD``'s "degree 6 still reads 9.78e-03" --
-#: predate ``REMAP_INVERSE_SUPPORT_BOUND`` (niche C8, 2026-08-01), whose whole
-#: job is to stop the library CLAIMING amplitude outside the traced ray
-#: support.  The degree-6 ghost is exactly such a claim.  Re-measured on the
-#: post-C9 tree through ``energy_stage_audit_121.py`` (unedited), design 121
-#: order (-4,-2), ``RN=1024``, ``rs=4``, six post-DOE groups:
+#: DEGREE 6 NEEDS THE SUPPORT BOUND, AND HAS IT.  A high-degree fit
+#: self-caustics in the 2-3 w skirt and then CLAIMS amplitude outside the
+#: traced ray support; ``REMAP_INVERSE_SUPPORT_BOUND`` (niche C8) is what
+#: stops the library doing that, and it is what makes degree 6 safe.
+#: Measured on the post-C9 tree through ``energy_stage_audit_121.py``
+#: (unedited), design 121 order (-4,-2), ``RN=1024``, ``rs=4``, six
+#: post-DOE groups:
 #:
 #:   degree  C8   P_out/P_in   g4          amax4      r_rms (mm)
 #:      4    ON    0.993839   8.653e-09   1.147e-04    0.8373
@@ -5439,8 +5328,7 @@ REMAP_STATIONARY_PHASE_LAUNCH = True
 #: second moment triples; with it on, degree 6's conservation and halo are
 #: within noise of degree 4's on every order measured ((0,0): both 0.000e+00 /
 #: 0.000e+00; (-1,0): 1.285e-12 -> 2.663e-11; (-2,0): 7.947e-12 -> 7.659e-11 --
-#: all 1e-3 or less of the C3 bound).  **The counter-evidence was real and it
-#: is now bounded, so the reason for 4 is spent.**
+#: all 1e-3 or less of the C3 bound).
 #:
 #: WHAT 6 BUYS, and why it is a FORM argument rather than a resolution one.
 #: A carrier-referenced relay's residual eikonal is r^4-DOMINANT with an r^6
@@ -5624,11 +5512,9 @@ _REMAP_RESID_DEGREE_CAP = 6
 #:   weight         6    0.99605   7.45e-05   1.12e-01   0.8388
 #:   weight        10    0.99598   0.00e+00   0.00e+00   0.8371   <- this flag
 #:
-#: This RETRACTS the hypothesis recorded in ``_REMAP_RESID_EIKONAL_DEGREE`` --
-#: "the order-6 forward-map fit [is] unable to carry a degree-4 launch
-#: augmentation".  More terms on the hard-mask branch makes it 86x WORSE (row
-#: 3), which is what an unconstrained extrapolation does and not what an
-#: under-resolved fit does.  The mechanism is the fitted entrance->exit map
+#: More terms on the hard-mask branch makes it 86x WORSE (row 3), which is
+#: what an unconstrained extrapolation does and not what an under-resolved
+#: fit does.  The mechanism is the fitted entrance->exit map
 #: being Newton-inverted far outside its own data support, with
 #: ``amplitude_model='ray_density'`` handing the spurious roots real amplitude.
 #:
@@ -5663,20 +5549,19 @@ _REMAP_RESID_DEGREE_CAP = 6
 #: samples imports a shape the Chebyshev basis cannot represent).  On design
 #: 121's real on-axis call that cost is 0.01574 -> 0.01629 waves (3.5 %).
 #:
-#: THE STRUCTURAL FIX is not on this axis at all: bound the Newton inverse to
-#: the traced samples' own support, or use a caustic-faithful amplitude model
-#: (``apply_real_lens_gbd`` / ``apply_real_lens_fga``).  Neither is attempted
-#: here.  See docs/audits/APPROXIMATION_AUDIT_POST_C6_2026_07_31.md S3.
-#:
-#: 2026-08-01: THE FIRST OF THOSE SHIPPED, as ``REMAP_INVERSE_SUPPORT_BOUND``
-#: (niche C8), and it makes this flag REDUNDANT on every case measured -- see
-#: the closing note at the bottom of this docstring.
+#: THE STRUCTURAL FIX is not on this axis at all: bound the Newton inverse
+#: to the traced samples' own support, or use a caustic-faithful
+#: amplitude model (``apply_real_lens_gbd`` / ``apply_real_lens_fga``).
+#: The first of those ships as ``REMAP_INVERSE_SUPPORT_BOUND`` (niche
+#: C8) and makes this flag REDUNDANT on every case measured -- see the
+#: closing note at the bottom of this docstring.  See
+#: docs/audits/APPROXIMATION_AUDIT_POST_C6_2026_07_31.md S3.
 #:
 #: ---------------------------------------------------------------------------
-#: 2026-07-31: MEASURED AT CHAIN LEVEL, AND THE DEFAULT IS CONFIRMED ``False``.
-#: docs/audits/C6_FIT_GUARD_DECISION_2026_07_31.md.  The two claims above that
-#: were element-level inferences are now chain measurements, and ONE OF THEM
-#: WAS WRONG.
+#: MEASURED AT CHAIN LEVEL, AND THE DEFAULT IS CONFIRMED ``False``.
+#: docs/audits/C6_FIT_GUARD_DECISION_2026_07_31.md.  Two claims that could
+#: only ever be element-level inferences are chain measurements here, and
+#: they do not both hold.
 #:
 #: (1) REACH.  The guard acts on a group whose beam decentre is <= the
 #: ``_DECENTRE_GATE_W_FRAC`` gate (0.05 w), NOT on "the on-axis order".
@@ -5752,7 +5637,7 @@ _REMAP_RESID_DEGREE_CAP = 6
 #: flag off and is silent with it on.
 #:
 #: ---------------------------------------------------------------------------
-#: 2026-08-01: SUPERSEDED IN PRACTICE, KEPT ON PURPOSE.
+#: REDUNDANT IN PRACTICE, KEPT ON PURPOSE.
 #: ``REMAP_INVERSE_SUPPORT_BOUND`` (niche C8) reaches the same defect
 #: structurally, and on every case measured it dominates this flag:
 #:
@@ -5932,28 +5817,19 @@ _SUPPORT_BOUND_FEATHER_CELLS = 1.0
 
 
 # ===========================================================================
-# NICHE C14 (2026-08-03) -- UNIT C: THE TRACED EXIT SUPPORT, AS ONE OBJECT
+# UNIT C: THE TRACED EXIT SUPPORT, AS ONE OBJECT
 # ===========================================================================
-# WHAT WAS WRONG.  There were THREE notions of "the region the traced rays
-# reached", computed from the same arrays, at nearly the same point in
-# ``apply_real_lens_traced``, by three different rules and three separate
-# copies of the same convex-hull algebra:
+# ONE construction and ONE set of conventions -- one alive mask, one hull
+# builder, one signed-distance rule -- carry three NAMED VIEWS: the C7 halo
+# radius (amplitude-weighted centroid + max radius over the samples above
+# the ``e^-_RD_HALO_AMP_CONTOUR`` contour, times ``_RD_HALO_RADIUS_FACTOR``
+# at report time), the C8 support hull (convex hull of the alive
+# STOP-PASSING landings, plus a ``sqrt(2) sub dx`` plateau and one
+# exit-lattice cell of feather) and the direct-fit hull (the
+# ``inversion_method='fit'`` path's exit hull over the post-restriction
+# samples).
 #
-#   1. the C7 halo radius -- amplitude-weighted centroid + max radius over the
-#      samples above the ``e^-_RD_HALO_AMP_CONTOUR`` amplitude contour, times
-#      ``_RD_HALO_RADIUS_FACTOR`` at report time;
-#   2. the C8 support hull -- convex hull of the alive STOP-PASSING landings,
-#      plus a ``sqrt(2) sub dx`` plateau and one exit-lattice cell of feather;
-#   3. the direct-fit hull -- the ``inversion_method='fit'`` path's own
-#      long-standing exit hull mask over the post-restriction samples.
-#
-# (2) and (3) are the same idea implemented twice, and the C8 audit says so:
-# "This bound gives the Newton path the containment the direct-fit path has had
-# all along."  They had two copies of the ConvexHull call, two copies of the
-# ``equations -> (A, b)`` unpacking and two different half-plane evaluators
-# (one chunked over a BLAS product, one a full-width ``np.all``).
-#
-# THE MEASURED CONSEQUENCE, and the reason this is not cosmetics.
+# WHY ONE OBJECT, MEASURED -- and the reason this is not cosmetics.
 # ``RECON_PINS_POST_C8_2026_08_01.md`` S7 item 1: on the E-M6 fixture the
 # post-C8 field still carries **0.19998 of P_ap outside the exact-ray hull** --
 # in the plateau+feather band C8 keeps DELIBERATELY -- and **its global |E|
@@ -6500,8 +6376,8 @@ class _ResidualEikonal(object):
                     need_u.add(i - 2)
                 if j >= 2:
                     need_v.add(j - 2)
-        # ONE np.power per distinct exponent -- the same call the old loop made
-        # per term per accumulator, so the same bits.
+        # ONE np.power per distinct exponent -- the same call a per-term,
+        # per-accumulator loop makes, so the same bits.
         #
         # ...except exponents 0 and 1, which are pure waste and are elided
         # (FIX_PERF_ROUND2_2026_08_10 item 4b).  ``u ** 0`` is a whole extra
@@ -7137,12 +7013,12 @@ def _reverse_prescription(prescription):
     fixed negates ``c r^2 / (1 + sqrt(1 - (1+k) c^2 r^2))``).  A polynomial
     aspheric departure, a freeform block, a field-frame ``tilt`` ramp and a
     ``sag_callable`` have no radius to flip, so each has to be negated
-    explicitly -- which is what this does now.  The docstring used to assert
-    the opposite ("even-power aspheric coefficients are invariant"); measured
-    on a 100 mm/plano N-BK7 singlet with ``aspheric_coeffs={4: 1.0e3}`` at
-    h = 5 mm, the reversed sag came out ``-2.500031447e-04 m`` against the
-    correct ``-2.512531447e-04 m`` -- an error of 1.25e-06 m = 2.13 waves at
-    588 nm, i.e. the whole aspheric departure with the wrong sign.
+    explicitly.  Getting that wrong is silent and large: leaving the
+    even-power aspheric coefficients INVARIANT, measured on a 100 mm/plano
+    N-BK7 singlet with ``aspheric_coeffs={4: 1.0e3}`` at h = 5 mm, gives a
+    reversed sag of ``-2.500031447e-04 m`` against the correct
+    ``-2.512531447e-04 m`` -- an error of 1.25e-06 m = 2.13 waves at 588 nm,
+    i.e. the whole aspheric departure with the wrong sign.
 
     Concretely:
 
@@ -7165,7 +7041,7 @@ def _reverse_prescription(prescription):
     *   Carry every other top-level key: ``stop_index`` remapped to
         ``len(surfaces) - 1 - i``, ``elements`` reversed (
         ``surfaces_from_prescription`` reads it for vignetting), and anything
-        else through unchanged.  Only ``aperture_diameter`` used to survive.
+        else through unchanged.
     """
     surfaces = prescription['surfaces']
     n_surf = len(surfaces)
@@ -7254,26 +7130,23 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
         height exactly) when the exit-vertex correction is applied to both
         ends.  The REVERSAL ITSELF is sound; what follows is about the launch
         directions this route derives, not about it.
-    *   End-to-end exit-phase agreement with the Newton path: the
-        "**~35-40 nm** on singlets at N=512" figure this docstring used to
-        quote is **NOT REPRODUCIBLE ON ANY FIXTURE IN THE TREE, and no test
-        pins the one it was measured on**.  Re-measured on an N-BK7 100/-100
-        singlet (2 mm thick, 6 mm aperture, N = 256, dx = 30 um, 587.6 nm,
-        ray_subsample = 8, a 1.5 mm Gaussian): backward-vs-Newton exit phase
-        **1.93 rad rms (180 nm), max 372 nm** inside r < w -- 1.93 rad is the
-        1.81 rad of a UNIFORMLY-DISTRIBUTED wrapped difference and the maximum
-        sits on the wrap boundary, i.e. the two inversions differ by more than
-        a wave, not by tens of nanometres.
-        That fixture is exit-UNDERSAMPLED (grid Nyquist direction cosine
-        ``lambda/(2 dx)`` = 0.0098 against an exit NA ~0.031), which is the
-        regime in which ``_sample_local_tilts`` -- the source of this route's
-        launch directions -- aliases, so the measurement is consistent with
-        the attribution below; but the old claim excluded no such regime, and
-        the two ``_sample_local_tilts`` defects the 2026-09 audit fixed (the
-        ``np.roll`` wrap and the half-pixel storage offset) fed straight into
-        that budget and were not acknowledged in it.  Treat this route as
-        EXPERIMENTAL with an unquantified exit-phase error; use Newton (the
-        default) for anything with a tolerance.
+    *   End-to-end exit-phase agreement with the Newton path is
+        **unquantified**.  Measured on an N-BK7 100/-100 singlet (2 mm
+        thick, 6 mm aperture, N = 256, dx = 30 um, 587.6 nm,
+        ray_subsample = 8, a 1.5 mm Gaussian): backward-vs-Newton exit
+        phase **1.93 rad rms (180 nm), max 372 nm** inside r < w -- 1.93
+        rad is the 1.81 rad of a UNIFORMLY-DISTRIBUTED wrapped difference
+        and the maximum sits on the wrap boundary, i.e. the two
+        inversions differ by more than a wave, not by tens of
+        nanometres.  That fixture is exit-UNDERSAMPLED (grid Nyquist
+        direction cosine ``lambda/(2 dx)`` = 0.0098 against an exit NA
+        ~0.031), which is the regime in which ``_sample_local_tilts`` --
+        the source of this route's launch directions -- aliases, so the
+        measurement is consistent with the attribution below.  No
+        fixture in the tree establishes a tighter figure and no test pins
+        one.  Treat this route as EXPERIMENTAL with an unquantified
+        exit-phase error; use Newton (the default) for anything with a
+        tolerance.
 
     Measured speed at N=512: ~1.7x faster than Newton on a singlet.
     Scales better to large N because the work is ``O(N^2)`` rather
@@ -7402,12 +7275,12 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     ii, jj = np.indices((N, N), dtype=np.float64)
     # Coarse sample u sits at FINE index u*sub (idx_c = arange(0, N, sub)),
     # so fine pixel ii maps to coarse coordinate ii/sub -- EXACT for any sub.
-    # The previous ``ii * N_c / N`` equals ii/sub only when sub divides N;
-    # otherwise it is a corner-anchored scale error that displaces the whole
-    # map diagonally by (N/2)*(N_c*sub - N)/N pixels (audit
+    # ``ii * N_c / N`` equals ii/sub only when sub divides N; otherwise it is
+    # a corner-anchored scale error that displaces the whole map diagonally
+    # by (N/2)*(N_c*sub - N)/N pixels (audit
     # AUDIT_TRACED_FROZEN_AMPLITUDE_2026_07_24: the traced chain's diagonal
     # focus walk -- measured -6.100 um at N=8192/sub=50 vs -6.11 predicted).
-    # Bit-identical to the old expression whenever sub | N.
+    # Bit-identical to that expression whenever sub | N.
     coords = np.array([ii / sub, jj / sub])
     # v5.17.0 lifetime hygiene (same pattern as the Newton-path upsample):
     # ii/jj are folded into coords -- free them before interpolating, and
@@ -7842,7 +7715,7 @@ def apply_real_lens_traced(
         (L = M = 0 everywhere) and the plane-wave lens-OPL reference
         is used.
 
-        **Why the default flipped from True to False in 3.1.3:**  When
+        **Why the default is False.**  When
         ``preserve_input_phase=True`` (also the default), the exit
         field is assembled as
 
@@ -7863,14 +7736,12 @@ def apply_real_lens_traced(
         off-axis compound beams) where the per-pixel tilts vary
         significantly across the pupil.
 
-        The 3.1.4 default ``tilt_aware_rays=False`` restores the
-        reference-consistent plane-wave launch that pre-3.1.2 releases
-        used, so ``delta_phase`` remains well-defined for any input the
-        wave model can represent.  If you have a specifically small,
-        uniform input tilt and want the per-ray OPL variation (e.g.
-        rigorous off-axis lens characterisation with a single tilted
-        input), pass ``tilt_aware_rays=True`` explicitly and validate
-        against the default on your specific case.
+        The collimated launch keeps ``delta_phase`` well-defined for any
+        input the wave model can represent.  If you have a specifically
+        small, uniform input tilt and want the per-ray OPL variation
+        (e.g. rigorous off-axis lens characterisation with a single
+        tilted input), pass ``tilt_aware_rays=True`` explicitly and
+        validate against the default on your specific case.
 
         When this flag is True, tilts are clipped to
         ``|sin(theta)| <= 0.5`` (~30 deg) for numerical safety and
@@ -7936,15 +7807,14 @@ def apply_real_lens_traced(
         aliases for ``'off'`` (the sibling knobs here spell suppression
         ``'silent'``).
 
-        ``'off'`` is a suppression knob, not a cost knob.  It used to be
-        documented as removing "its one-FFT-free cost"; it does not, because
-        the ``else`` branch recomputes the SAME ``_input_tilt_stats`` for the
-        tilt warning.  Measured at N = 1024, ray_subsample = 4, median of 4:
-        ``'warn'`` 4.013 s against ``'off'`` 4.209 s -- no saving.  (cProfile
-        puts ``_input_tilt_stats`` at 0.310 s of a 5.760 s call and
-        ``_input_beam_amp_radius`` at 0.092 s, both for warnings only.)  v5.29.1 (audit E-M3): any OTHER value now raises --
-        it used to select ``'warn'`` silently, and ``'silent'`` in particular
-        therefore warned instead of suppressing.
+        ``'off'`` is a suppression knob, not a cost knob: it does NOT
+        remove a "one-FFT-free cost", because the ``else`` branch
+        recomputes the SAME ``_input_tilt_stats`` for the tilt warning.
+        Measured at N = 1024, ray_subsample = 4, median of 4:
+        ``'warn'`` 4.013 s against ``'off'`` 4.209 s -- no saving.
+        (cProfile puts ``_input_tilt_stats`` at 0.310 s of a 5.760 s
+        call and ``_input_beam_amp_radius`` at 0.092 s, both for
+        warnings only.)  Any OTHER value raises.
     inversion_method : {'newton', 'fit', 'backward_trace'}, default 'newton'
         How the entrance->exit map is inverted to get the per-pixel OPL.
         ``'newton'`` (default, fully validated) fits the forward map and runs
@@ -7952,8 +7822,8 @@ def apply_real_lens_traced(
         inverse map directly (no Newton loop -- cheaper, slightly less
         accurate); ``'backward_trace'`` is the experimental direct backward
         trace through the reversed prescription.  ``amplitude_model=
-        'ray_density'`` requires ``'newton'``.  v5.29.1 (audit E-M4): an
-        unrecognised value now raises instead of silently running Newton.
+        'ray_density'`` requires ``'newton'``.  An unrecognised value
+        raises.
     inverse_map : bool, optional
         Per-call override of the module gate
         ``lumenairy.elements._lens_imap.TRACED_INVERSE_MAP``; ``None``
@@ -7989,12 +7859,9 @@ def apply_real_lens_traced(
         full-grid channels the whole-grid branch materialises.
     newton_max_iters : int, optional
         Newton iteration cap; ``None`` (default) uses the module default
-        (12).  Honoured by BOTH the serial and the process-pool inversion
-        paths since v5.29.1 (audit E-H2 -- the pool worker previously
-        hard-coded 12, making this knob inert whenever the pool engaged; at
-        that time that meant >=200k Newton points with ``newton_fit='spline'``
-        on the CPU path, whereas the pool now serves EITHER fit above a
-        two-tier size gate -- see ``n_workers``).
+        (12).  Honoured by BOTH the serial and the process-pool
+        inversion paths (the pool carries the resolved cap in its
+        payload -- see ``n_workers``).
         When more than 1% of pixels are still unconverged at the cap, both
         paths emit the same ``RuntimeWarning`` (suppressed by
         ``on_undersample='silent'``).
@@ -8142,10 +8009,7 @@ def apply_real_lens_traced(
         ``'ignore'`` and ``'off'`` are accepted ALIASES for ``'silent'``
         (``lumenairy.propagators.carrier``'s ``on_*`` knobs spell suppression
         ``'ignore'``, this signature's siblings spell it ``'silent'``).
-        Validated at entry since v5.32.2 (finding V4): any other value raises
-        ``ValueError``.  Before that gate every unrecognised value -- including
-        ``'Error'`` and ``'ignore'`` -- silently selected ``'warn'``, so a
-        caller asking for a fatal got a warning and a returned field.
+        Validated at entry: any other value raises ``ValueError``.
     on_pool_memory : {'warn', 'silent'}, default 'warn'
         Policy for the Newton process pool's MEMORY CAP notice (v5.32.3).
         When the pool this call asked for does not fit the box -- the projected
@@ -8362,18 +8226,16 @@ def apply_real_lens_traced(
         byte-compatibility; ``'full'`` is the correct sampling and the
         recommended setting for any carrier-regime chain.
 
-        **The POINT GAIN is gone once niche C6 lands; the CONVERGENCE argument
-        is not (2026-07-31).**  On the worst tilted order of design 121,
-        `(-4,-2)`, end to end against the landed C6 launch, ``'lattice'``
-        measures **+0.0988 EE3 points** -- i.e. marginally BETTER than
-        ``'full'``, against **-17.73 points** for the same substitution on
-        pinned HEAD with the C6 defect open.  That is expected: at HEAD the
-        launch went along ``grad(W)``, so the residual was being SAMPLED at the
-        wrong foot and the sampling resolution mattered enormously; with the
-        stationary-phase launch it is sampled at the right one.  Nothing above
-        is retracted -- the dx-independence measurement is what this default
-        rests on, and it is untouched -- but do NOT expect ``'full'`` to buy
-        EE points on a post-C6 chain.  See
+        **Do NOT expect ``'full'`` to buy EE points on a post-C6 chain.**
+        On the worst tilted order of design 121, `(-4,-2)`, end to end
+        against the C6 launch, ``'lattice'`` measures **+0.0988 EE3
+        points** -- i.e. marginally BETTER than ``'full'``, against
+        **-17.73 points** for the same substitution with the C6 defect
+        open.  That is expected: with the launch along ``grad(W)`` the
+        residual is SAMPLED at the wrong foot and the sampling
+        resolution matters enormously; with the stationary-phase launch
+        it is sampled at the right one.  The dx-independence measurement
+        above is what this default rests on and is untouched by it.  See
         docs/audits/APPROXIMATION_AUDIT_POST_C6_2026_07_31.md S1.
 
     sag_dtype : {None, np.float32, np.float64}, default None
@@ -8704,7 +8566,7 @@ def apply_real_lens_traced(
     E_out : ndarray, complex, shape (N, N)
         Field at the exit-vertex plane of the last surface.
     """
-    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # Defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
@@ -9000,14 +8862,13 @@ def apply_real_lens_traced(
         # mask would otherwise drop.  Whole-grid final assembly (below) so the
         # magnitude swap sees the fully-built exit field.
         #
-        # v5.29.1 (audit E-M5): this override used to be SILENT while every
-        # other requirement in this block raises.  Match the block (and the
-        # ``_FORCED`` contract in apply_real_lens_traced_multi): a value equal
-        # to the forced 0.0 is accepted, anything else raises with the reason.
-        # The shipped default ``_NEWTON_AMP_MASK_REL_DEFAULT`` is read as "not
-        # requested" (there is no separate not-passed sentinel), so a caller
-        # who explicitly passes exactly the default still gets the silent
-        # override -- pass 0.0 to state the intent.
+        # This override MATCHES the rest of the block (and the ``_FORCED``
+        # contract in apply_real_lens_traced_multi): a value equal to the
+        # forced 0.0 is accepted, anything else raises with the reason.
+        # The shipped default ``_NEWTON_AMP_MASK_REL_DEFAULT`` is read as
+        # "not requested" (there is no separate not-passed sentinel), so a
+        # caller who explicitly passes exactly the default still gets the
+        # silent override -- pass 0.0 to state the intent.
         if float(newton_amp_mask_rel) not in (
                 0.0, _NEWTON_AMP_MASK_REL_DEFAULT):
             raise ValueError(
@@ -9113,7 +8974,7 @@ def apply_real_lens_traced(
             "Use on_noncollimated='warn' (the default) or 'off' with "
             "return_screen=True, or drop return_screen and accept a field.")
 
-    # v5.1.0 (default-knob resolver rollout): resolve ``wave_propagator``
+    # Resolve ``wave_propagator``
     # / ``dy`` from the library-wide defaults when callers leave them
     # at the ``None`` sentinel.  Explicit values bypass the resolver.
     if wave_propagator is None:
@@ -9181,7 +9042,7 @@ def apply_real_lens_traced(
 
     call_progress(progress, 'real_lens_traced', 0.0, 'initialising')
 
-    # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
+    # Entry log -- grid size + surface count + Newton iter cap so users
     # Entry log -- grid size + surface count + Newton iter cap so users
     # who attach a handler can see the call shape at a glance.  The
     # actual Newton-cap value is resolved further down (caller override
@@ -9464,21 +9325,19 @@ def apply_real_lens_traced(
     # The full X/Y meshgrids are not
     # built on this path: the Newton coarse grid comes from the 1-D x
     # subsample and the exit-aperture mask is banded.
-    # v5.17.0: sag_chunk_rows=None resolves to AUTO (banded when N >= 4096);
-    # pass 0 to force the whole-grid path.  The caller's RAW kwarg also flows
-    # to the apply_real_lens amp legs so both stages resolve -- and band --
-    # consistently.
-    # v5.17.1 (audit P2-05): forward the RAW kwarg, not the resolved value.
-    # The resolver maps 0 -> None, and apply_real_lens re-resolves None ->
-    # AUTO, so forwarding the resolved value silently re-enabled row-banding
-    # in the amp legs when the caller passed the documented force-whole-grid
+    # ``sag_chunk_rows=None`` resolves to AUTO (banded when N >= 4096);
+    # pass 0 to force the whole-grid path.  The caller's RAW kwarg flows to
+    # the apply_real_lens amp legs -- NOT the resolved value: the resolver
+    # maps 0 -> None and apply_real_lens re-resolves None -> AUTO, so
+    # forwarding the resolved value silently re-enables row-banding in the
+    # amp legs when the caller passed the documented force-whole-grid
     # sentinel 0.  Both stages resolve the raw value against the same N, so
-    # None / positive ints band identically in both stages and 0 now forces
-    # whole-grid in BOTH.
+    # None / positive ints band identically in both and 0 forces whole-grid
+    # in BOTH.
     from ._lens_real import _resolve_sag_chunk_rows
     _sag_chunk_rows_raw = sag_chunk_rows
     sag_chunk_rows = _resolve_sag_chunk_rows(sag_chunk_rows, N)
-    # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 row 3, closed): ``amplitude_model=
+    # ``amplitude_model=
     # 'ray_density'`` no longer forces the band path OFF.  The magnitude swap,
     # the residual multiply, the ray-density upsample and its NaN pass are all
     # pointwise in the exit pixel, so they band exactly as Step 3 does and the
@@ -9763,14 +9622,14 @@ def apply_real_lens_traced(
             _resid = 0.0
         if _resid > _NONCOLLIMATED_RESID_THRESH:
             if on_noncollimated == 'delegate':
-                # v5.29.1 (audit E-L22): the model swap DROPS every
+                # The model swap DROPS every
                 # traced-only physics knob -- apply_real_lens has no ray
                 # trace, so there is nothing to carry them.  Report the
                 # non-default ones instead of discarding them silently (the
                 # caller asked for a carrier-referenced ray-density field and
                 # would otherwise receive an analytic screen field with no
                 # diagnostic).
-                # v5.35.0 (BUILD_R1_WIRING S4): the carrier is the ONE
+                # The carrier is the ONE
                 # traced-only argument the analytic model CAN honour -- it
                 # drives the screen-obliquity + R1 corrections, which is the
                 # whole reason those exist.  Forward it, but only when the
@@ -9876,7 +9735,7 @@ def apply_real_lens_traced(
                     f"honoured, or call apply_real_lens directly to "
                     f"make the model choice explicit.",
                     RuntimeWarning, stacklevel=2)
-                # v5.29.1 (audit E-M2): forward the RAW ``sag_chunk_rows``,
+                # Forward the RAW ``sag_chunk_rows``,
                 # matching the four sibling amp-leg call sites -- the
                 # resolver maps the documented force-whole-grid sentinel 0 to
                 # None, which apply_real_lens then re-resolves to AUTO, so
@@ -9989,7 +9848,7 @@ def apply_real_lens_traced(
         try:
             import psutil as _psutil
 
-            # v5.17.2 (audit P2-21): honour a pinned set_max_ram() budget --
+            # Honour a pinned set_max_ram() budget --
             # the doubled parallel working set must fit the effective
             # budget, not just physical free RAM (get_ram_budget() equals
             # the psutil read when no override is set).
@@ -10606,15 +10465,12 @@ def apply_real_lens_traced(
             ap_diameter = float(aperture)
             _ap_label = 'aperture'
         else:
-            # v5.17.1 (audit P3-08): the floor was documented as enforced
-            # against the launch radius when no ``aperture_diameter`` is
-            # set, but the guard was silently skipped for apertureless
-            # prescriptions.  Derive the effective pupil from the largest
-            # per-surface ``clear_aperture`` when present (the actual
-            # pupil-limiting hardware, capped at the launch diameter the
-            # coarse grid actually spans), else the launch diameter itself
-            # (= the grid extent), so apertureless prescriptions get the
-            # same aliasing protection.
+            # Derive the effective pupil from the largest per-surface
+            # ``clear_aperture`` when present (the actual pupil-limiting
+            # hardware, capped at the launch diameter the coarse grid
+            # actually spans), else the launch diameter itself (= the grid
+            # extent), so an apertureless prescription gets the same
+            # aliasing protection as one that declares an aperture.
             _cas = [float(s['clear_aperture'])
                     for s in (lens_prescription.get('surfaces') or [])
                     if isinstance(s, dict)
@@ -10818,7 +10674,7 @@ def apply_real_lens_traced(
     n_exit = get_glass_index(surfaces[-1].glass_after, wavelength)
     final = result.at_exit_vertex(n_exit)
 
-    # ---- v5.25.1 (hammer audit H6): carrier entrance eikonal -----------
+    # ---- Carrier entrance eikonal (hammer audit H6) -------------------
     # The ray tracer accumulates OPL only from the ENTRANCE plane forward.
     # When a carrier congruence is set, each ray belongs to a wavefront
     # whose phase AT the entrance plane is k0*W(x_in) -- that eikonal must
@@ -10846,7 +10702,7 @@ def apply_real_lens_traced(
         # did.
         final.opd = final.opd + _resid_eik.value(h_x, h_y)
 
-    # ---- v5.25.0 (hammer audit H3): exit-NA Nyquist guard --------------
+    # ---- Exit-NA Nyquist guard (hammer audit H3) ----------------------
     # The docstring's critical-sampling rule (dx <= lambda*f/aperture) was
     # documented but never ENFORCED, and violating it is silent: the exit
     # converging wavefront exceeds grid Nyquist (|sin theta| > lambda/2dx)
@@ -11020,19 +10876,17 @@ def apply_real_lens_traced(
     # Dead (vignetted / TIR'd) rays get NaN, which the POLYNOMIAL fit's
     # least squares drops sample-by-sample.
     #
-    # Vignetting is NOT rare here, and the comment that used to sit at this
-    # site ("vignetting is rare for normal lenses but we guard against it by
-    # filling dead entries with NaN and extrapolating with the spline's
-    # natural extrapolation") was wrong twice over.  The launch lattice is a
-    # SQUARE of half-width ``launch_radius = 0.75*aperture``, so its corners
-    # sit at ``sqrt(2)*0.75 = 1.06`` aperture radii -- past any per-surface
-    # ``semi_diameter`` of ``aperture/2``, i.e. past 2.12 clear-aperture radii.
-    # And ``RectBivariateSpline`` is an interpolating (``s = 0``) FITPACK fit
-    # that does not ignore NaN: one NaN sample makes ~90 % of the spline
-    # coefficients NaN, ``So.ev`` NaN everywhere, ``valid = isfinite(opl_map)``
-    # all-False and the returned field IDENTICALLY ZERO -- reported to the
-    # caller only as a 100 %-unconverged Newton warning, which misdiagnoses
-    # both the cause and the outcome.
+    # Vignetting is NOT rare here, and NaN is not something the spline
+    # extrapolates through.  The launch lattice is a SQUARE of half-width
+    # ``launch_radius = 0.75*aperture``, so its corners sit at
+    # ``sqrt(2)*0.75 = 1.06`` aperture radii -- past any per-surface
+    # ``semi_diameter`` of ``aperture/2``, i.e. past 2.12 clear-aperture
+    # radii.  And ``RectBivariateSpline`` is an interpolating (``s = 0``)
+    # FITPACK fit that does not ignore NaN: one NaN sample makes ~90 % of
+    # the spline coefficients NaN, ``So.ev`` NaN everywhere, ``valid =
+    # isfinite(opl_map)`` all-False and the returned field IDENTICALLY
+    # ZERO -- reported to the caller only as a 100 %-unconverged Newton
+    # warning, which misdiagnoses both the cause and the outcome.
     x_out_grid = final.x.reshape(n_launch, n_launch)
     y_out_grid = final.y.reshape(n_launch, n_launch)
     opl_grid = final.opd.reshape(n_launch, n_launch)
@@ -11134,19 +10988,19 @@ def apply_real_lens_traced(
     # (metres -- 1e-2 for a design-121 group) whose interesting variation
     # across the beam is 1e-8..1e-9, so fitting the raw values with a
     # Chebyshev / spline would spend the whole double-precision mantissa on a
-    # constant.  What was WRONG is that the constant was then dropped: every
-    # branch below builds the exit phase from ``k0 * opl_map`` alone, so the
-    # returned field's absolute phase was referenced to
+    # constant.  The constant must then be PUT BACK: every branch below
+    # builds the exit phase from ``k0 * opl_map`` alone, so without the
+    # re-application the returned field's absolute phase is referenced to
     #
     #     Lam(0) = W(0, 0) + a_fit(0, 0) + P(0, 0)
     #
-    # -- the entrance eikonal of the launched congruence at the LAUNCH-LATTICE
-    # AXIS (the H6 / niche-C6 terms added to ``final.opd`` above) plus the
-    # geometric path of the ray launched there.  On an UNTILTED, UNDECENTRED
-    # congruence the axis IS the chief ray, so this only cost an unobservable
-    # global phase -- which is why it survived.  Under a
-    # :class:`TiltedCarrier` the axis is NOT the chief ray, and BOTH pieces
-    # become functions of the tilt:
+    # -- the entrance eikonal of the launched congruence at the
+    # LAUNCH-LATTICE AXIS (the H6 / niche-C6 terms added to ``final.opd``
+    # above) plus the geometric path of the ray launched there.  On an
+    # UNTILTED, UNDECENTRED congruence the axis IS the chief ray, so that
+    # costs only an unobservable global phase.  Under a
+    # :class:`TiltedCarrier` the axis is NOT the chief ray, and BOTH
+    # pieces become functions of the tilt:
     #
     #     W(0, 0)  = -theta^2 * z_c + O(theta^4)        (z_c = the chief ray's
     #                                                    axial lever at entry)
@@ -11173,7 +11027,7 @@ def apply_real_lens_traced(
     #
     # A dead axis ray (NaN) already made ``opl_grid`` all-NaN and the returned
     # field identically zero before this change; the piston falls back to 0.0
-    # there so the degenerate path keeps its pre-fix behaviour exactly.
+    # there so the degenerate path is unchanged.
     i_axis = n_launch // 2
     _opl_ref = opl_grid[i_axis, i_axis]
     opl_grid = opl_grid - _opl_ref       # UNCHANGED -- byte-identical
@@ -11514,8 +11368,8 @@ def apply_real_lens_traced(
     # function of the EXIT coordinates ``(x_out, y_out)`` by scattered
     # Chebyshev least squares from the already-traced ray samples, then
     # evaluate that polynomial on the exit grid -- one lstsq + one poly eval,
-    # no per-pixel Newton.  A GLOBAL Chebyshev fit (vs the pre-3.x griddata
-    # scatter this file replaced) avoids the Delaunay-edge spikes noted below,
+    # no per-pixel Newton.  A GLOBAL Chebyshev fit (rather than a griddata
+    # scatter) avoids the Delaunay-edge spikes noted below,
     # while staying opt-in (``inversion_method='fit'``) so the thoroughly-
     # validated Newton path remains the default.  Output convention is
     # identical: on-axis-referenced OPL in metres, NaN outside the exit
@@ -11701,18 +11555,17 @@ def apply_real_lens_traced(
     #     M_x = [x_out(i_c+1, i_c) - x_out(i_c-1, i_c)] / (2 * d_xs_in)
     #     M_y = [y_out(i_c, i_c+1) - y_out(i_c, i_c-1)] / (2 * d_xs_in)
     # where (i_c, i_c) is the on-axis entrance grid point (exact sample
-    # because n_launch is odd).  4.11.2: the indices match the meshgrid
-    # at the launch step
+    # because n_launch is odd).  The indices match the meshgrid at the
+    # launch step
     #     ``Xs_in, Ys_in = np.meshgrid(xs_in, xs_in, indexing='ij')``
     # which puts x along axis 0 and y along axis 1, so ∂x_out/∂x_in
-    # varies the FIRST index, not the second.  Pre-4.11.2 the indices
-    # were swapped, computing ∂x_out/∂y_in (~zero by rotational
-    # symmetry) instead of ∂x_out/∂x_in.  Newton still converged
-    # because the polynomial Jacobian is right, but every pixel started
-    # at the clipped-to-boundary initial guess (0.91-fallback) instead
-    # of the actual paraxial slope.
+    # varies the FIRST index, not the second.  Swapping them computes
+    # ∂x_out/∂y_in (~zero by rotational symmetry) instead; Newton still
+    # converges because the polynomial Jacobian is right, but every pixel
+    # starts at the clipped-to-boundary initial guess (the 0.91 fallback)
+    # instead of the actual paraxial slope.
     #
-    # This stencil is strictly better than the previous hard-coded 1.10
+    # This stencil is strictly better than a hard-coded 1.10
     # multiplier: the old heuristic assumed M ~ 0.91 (converging system
     # "shrinks 10%") which is approximately right for singlets at their
     # exit vertex (M ~ 1) but wildly off for compound systems with real
@@ -11729,7 +11582,7 @@ def apply_real_lens_traced(
         M_y = (float(y_out_grid[i_c, i_c + 1])
                - float(y_out_grid[i_c, i_c - 1])) / (2.0 * d_xs)
     except (IndexError, ValueError):
-        M_x = M_y = 0.91  # fallback to pre-3.1.3 heuristic (1/1.10)
+        M_x = M_y = 0.91  # fallback heuristic (1/1.10)
     # Guard against NaNs from dead rays at the center (unlikely -- the
     # axial ray always survives in a well-posed prescription) and
     # against extreme values that would blow up the initial guess.
@@ -11772,13 +11625,12 @@ def apply_real_lens_traced(
     # at _NEWTON_MAX_ITERS for the 8-vs-12 trade-off.
     MAX_NEWTON_ITERS = (int(newton_max_iters) if newton_max_iters is not None
                         else _NEWTON_MAX_ITERS)
-    # v5.29.1 (audit E-H2): carry the RESOLVED cap into the pickled worker
-    # payload.  ``_newton_invert_chunk`` used to hard-code
-    # ``_NEWTON_MAX_ITERS``, so ``newton_max_iters`` was inert whenever the
-    # process pool engaged (then >=200k points, newton_fit='spline', CPU;
-    # now either fit, above the two-tier cold/warm gate) -- and
-    # the ray-density amplitude leg, which always runs the SERIAL closure,
-    # could then be built from a different Newton solution than the OPL.
+    # Carry the RESOLVED cap into the pickled worker payload: without it
+    # ``_newton_invert_chunk`` would fall back to ``_NEWTON_MAX_ITERS``
+    # and the caller's cap would be inert whenever the process pool
+    # engaged -- and the ray-density amplitude leg, which always runs the
+    # SERIAL closure, could then be built from a different Newton
+    # solution than the OPL.
     _spline_data['newton_max_iters'] = int(MAX_NEWTON_ITERS)
 
     def _warn_newton_unconverged(n_unconverged, n_total, tol, all_nan=False):
@@ -11789,18 +11641,15 @@ def apply_real_lens_traced(
         left active at the iteration cap -- those are benign and don't warrant
         a warning.  Threshold: >1% of total pixels unconverged means a real
         convergence problem.  Honours the same ``on_undersample`` knob the
-        rest of the function uses ('silent' suppresses).  Pre-3.5.6
-        unconverged pixels were silently kept at their last Newton value; the
-        POOL path stayed silent until v5.29.1 (audit E-H2) even though the
-        message's own advice is "increase newton_max_iters".
+        rest of the function uses ('silent' suppresses).
 
         ``all_nan`` distinguishes a BROKEN FIT from a genuine iteration cap.
         When the forward map evaluates to NaN at every pixel there is nothing
         for the iteration to converge to and no ``newton_max_iters`` can help
-        -- the old message said "100.0% did not converge ... increase
-        newton_max_iters ... affected pixels keep their last Newton value,
-        which may carry residual error", which misdiagnoses the cause AND
-        mis-states the outcome (the returned field is exactly zero, not
+        -- a "100.0% did not converge ... increase newton_max_iters ...
+        affected pixels keep their last Newton value, which may carry
+        residual error" message would misdiagnose the cause AND mis-state
+        the outcome (the returned field is exactly zero, not
         approximate).
         """
         n_unconverged = int(n_unconverged)
@@ -11868,10 +11717,10 @@ def apply_real_lens_traced(
         # magnification measured from the central finite-difference slope
         # of the forward map (see `inv_M_x` / `inv_M_y` computed above from
         # the already-traced ray grid -- no extra compute).  This is a
-        # strictly better guess than the pre-3.1.3 hard-coded 1.10
-        # multiplier: for singlets with M ~ 1 the two are nearly identical,
-        # but for compound systems or unusual magnifications the measured
-        # value avoids putting Newton several iterations away from
+        # strictly better guess than a hard-coded 1.10 multiplier: for
+        # singlets with M ~ 1 the two are nearly identical, but for
+        # compound systems or unusual magnifications the measured value
+        # avoids putting Newton several iterations away from
         # convergence.
         xe = x_w_flat * _spline_data['inv_M_x']
         ye = y_w_flat * _spline_data['inv_M_y']
@@ -11890,7 +11739,7 @@ def apply_real_lens_traced(
                 if sub_progress is not None:
                     sub_progress(1.0,
                                  f'newton converged after {_it} iters')
-                # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration
+                # Per-iteration telemetry: emit a "converged" marker so an
                 # telemetry): emit a "converged" marker so an attached
                 # handler sees the early-exit path.
                 logger.info(
@@ -11940,14 +11789,14 @@ def apply_real_lens_traced(
                     frac,
                     f'newton {_it + 1}/{MAX_NEWTON_ITERS}: '
                     f'{remaining}/{n_total} pixels unconverged')
-            # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration
+            # Per-iteration telemetry: per-Newton-iteration log, independent
             # telemetry): per-Newton-iteration log, independent of the
             # sub_progress callback (sub_progress is None on the
             # serial / single-call code paths).  Reports current OPD
             # residual norm + remaining-active-pixel count so an
             # attached handler can track convergence.
             _remaining_log = int(active.sum())
-            # v5.4 (audit P3): deduplicate -- reuse res from convergence check above
+            # Reuse res from the convergence check above
             try:
                 _res_norm = float(res.max()) if res.size > 0 else 0.0
             except (ValueError, TypeError):
@@ -12253,10 +12102,8 @@ def apply_real_lens_traced(
             close_worker_pool()
             return _invert_newton(Xw, Yw, sub_progress=sub_progress)
 
-        # v5.29.1 (audit E-H2): the worker returns (opl, n_unconverged); sum
-        # the counts and emit the SAME warning the serial path emits (the
-        # pool used to be silent, so the one regime whose convergence the
-        # message's own advice addresses never reported).
+        # The worker returns (opl, n_unconverged); sum the counts and
+        # emit the SAME warning the serial path emits.
         opl_flat = np.concatenate([r[0] for r in results])
         _warn_newton_unconverged(sum(int(r[1]) for r in results),
                                  int(n_total), 0.01 * dx)
@@ -12643,7 +12490,7 @@ def apply_real_lens_traced(
             E_analytic, lens_prescription, wavelength, dx,
             N_grid=N, ray_subsample=sub)
     elif _imap is not None and _chunk_assembly:
-        # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 row 3): the model is evaluated
+        # The model is evaluated
         # PER BAND inside the row-band assembly below -- two passes on the
         # ray-density branch (|det J| first, for the caustic census's median /
         # min / max / sign scan, then the other three channels), one pass
@@ -12760,7 +12607,7 @@ def apply_real_lens_traced(
             amp_coarse = amp if _amp_is_coarse else amp[::sub, ::sub]
             mask_coarse = _build_newton_mask(amp_coarse)
             if preserve_input_phase:
-                # v5.17.1 (audit P3-09): on the sub>1 preserve_input_phase
+                # On the sub>1 preserve_input_phase
                 # path ``amp`` is never read again (Step 3 combines with
                 # E_analytic, not amp) and ``amp_coarse`` is dead after the
                 # Newton-mask build -- but amp_coarse is a VIEW, so the
@@ -12835,12 +12682,11 @@ def apply_real_lens_traced(
                            if _opl_has_nan else None)
             opl_map = None
         else:
-            # v5.16.2 (memory root-cause): build the (2, N, N) coordinate
-            # stack ONCE and free ii/jj before interpolating.  Pre-fix the
-            # stack was constructed twice (once per map_coordinates call)
-            # with ii/jj held throughout -- ~4 extra full-grid float64
-            # (~34 GB at N=32768) at the upsample peak.  Same coords,
-            # same map_coordinates inputs -> byte-identical outputs.
+            # Build the (2, N, N) coordinate stack ONCE and free ii/jj
+            # before interpolating.  Constructing it per ``map_coordinates``
+            # call, with ii/jj held throughout, costs ~4 extra full-grid
+            # float64 (~34 GB at N=32768) at the upsample peak.  Same
+            # coords, same map_coordinates inputs -> byte-identical outputs.
             # FIX_PERF_ROUND2_2026_08_10 item 2 (the coords half).  The stack is
             # built STRAIGHT INTO its final buffer instead of through
             # ``np.indices`` + a two-element ``np.array`` list build.  The old
@@ -13221,8 +13067,8 @@ def apply_real_lens_traced(
     # NOT applied on the experimental ``inversion_method='backward_trace'``
     # route: that path builds its own map in :func:`_opl_by_backward_trace`,
     # with its own on-axis reference and its own reversed sign convention, so
-    # the FORWARD trace's constant is not the one it dropped.  It keeps the
-    # pre-fix (piston-free) behaviour, which is what its opt-in status is for.
+    # the FORWARD trace's constant is not the one it dropped.  It stays
+    # piston-free, which is what its opt-in status is for.
     _opl_piston_phasor = None
     if _opl_piston != 0.0 and inversion_method != 'backward_trace':
         _opl_piston_phasor = np.exp(1j * (k0 * _opl_piston))
@@ -13291,7 +13137,7 @@ def apply_real_lens_traced(
         what the default filter's per-location dedup registry is indexed by.
         ``_warn_ray_density_fold`` and ``_origin_amp_support_verdict``, the
         two sibling closures, already carry ``3``."""
-        # ---- v5.30 (audit E-M6): post-hoc ENERGY SELF-CHECK ------------------
+        # ---- Post-hoc ENERGY SELF-CHECK ------------------------------
         # Two N^2 reductions, negligible against the trace + Newton stages.
         # Reference = the input power the element ADMITS (inside the entrance
         # aperture), which is what the ray-tube map transports; comparing
@@ -13490,7 +13336,7 @@ def apply_real_lens_traced(
         # ``_opl_up_order`` (cubic under an engaged carrier, R7) the
         # whole-grid path uses -- see the note at its definition.
         #
-        # v5.44 (AUDIT_TRACED_MEMORY_2026_08_09 row 3, closed).  The loop now
+        # The loop also serves ``amplitude_model='ray_density'`` (the
         # also serves ``amplitude_model='ray_density'`` (the upsample of the
         # coarse ray-density lattice, its NaN pass, the transported residual
         # and the magnitude swap are pointwise in the exit pixel and run per
@@ -14156,11 +14002,11 @@ def apply_real_lens_traced_multi(
     # later emitter is bright, and the reuse path (prepared screen) already
     # forces this.  tilt_aware_rays is off (the carrier carries the tilt) and
     # the phase is preserved.  These values are FIXED by the per-emitter
-    # contract.  Pre-v5.29 they were popped SILENTLY, so a caller asking for
-    # e.g. ``preserve_input_phase='remap'`` got ``True`` with no diagnostic
-    # (measured byte-identical to True while the direct element call differs by
-    # 7.5e-3).  Now: a value EQUAL to the forced one is accepted (no behaviour
-    # change), anything else raises with the reason.
+    # contract: a value EQUAL to the forced one is accepted, anything else
+    # raises with the reason.  They are never popped silently -- a caller
+    # asking for e.g. ``preserve_input_phase='remap'`` and receiving
+    # ``True`` would have no diagnostic (measured byte-identical to True
+    # while the direct element call differs by 7.5e-3).
     _FORCED = {'newton_amp_mask_rel': 0.0, 'tilt_aware_rays': False,
                'preserve_input_phase': True, 'return_screen': False,
                'parallel_amp': False}
@@ -14635,7 +14481,7 @@ class PreparedTracedLens:
     and ``prescription`` is a deep copy of the caller's dict.  Flipping a
     global default or editing the prescription in place afterwards therefore
     does NOT move a prepared lens -- rebuild it (audit E-H4; see that
-    function's docstring for the pre-v5.29.1 desynchronisation).
+    function's docstring for what a prepared lens freezes).
 
     Memory footprint
     ----------------
@@ -14784,20 +14630,20 @@ def prepare_real_lens_traced(
     therefore a ``screen``-amplitude, aperture-fit-domain object: correct, but
     not the chain-grade model.
 
-    WHAT A PREPARED LENS FREEZES (v5.29.1; audit E-H4).  **A prepared object
-    freezes the settings that were live when it was prepared.**  Concretely:
-    ``wave_propagator`` and ``sag_dtype`` are RESOLVED here against the
-    process-wide defaults (:func:`set_default_wave_propagator` /
-    :func:`set_lens_sag_dtype`) and the resolved values are stored on the
-    returned object, and the ``prescription`` is DEEP-COPIED.  So flipping a
-    global default -- or mutating the prescription dict in place -- after
-    preparing leaves the prepared lens unchanged; rebuild it to pick up the
-    new settings.  Pre-v5.29.1 the unresolved ``None`` sentinels were stored,
-    so the frozen screen (prepare-time defaults) and the per-call analytic
-    amplitude leg (call-time defaults) silently desynchronised on a global
-    flip (measured 49.6 on a singlet), and an in-place prescription edit --
-    the optimizer / tolerancing pattern this class advertises -- produced a
-    stale-OPL x new-amplitude hybrid (measured 0.71 from a correct rebuild).
+    WHAT A PREPARED LENS FREEZES (audit E-H4).  **A prepared object
+    freezes the settings that were live when it was prepared.**
+    Concretely: ``wave_propagator`` and ``sag_dtype`` are RESOLVED here
+    against the process-wide defaults (:func:`set_default_wave_propagator`
+    / :func:`set_lens_sag_dtype`) and the resolved values are stored on
+    the returned object, and the ``prescription`` is DEEP-COPIED.  So
+    flipping a global default -- or mutating the prescription dict in
+    place -- after preparing leaves the prepared lens unchanged; rebuild
+    it to pick up the new settings.  Storing the unresolved ``None``
+    sentinels instead would desynchronise the frozen screen (prepare-time
+    defaults) from the per-call analytic amplitude leg (call-time
+    defaults) on a global flip, and would make an in-place prescription
+    edit -- the optimizer / tolerancing pattern this class advertises --
+    return a stale-OPL x new-amplitude hybrid.
 
     Configuration objects
     ---------------------
@@ -14848,7 +14694,7 @@ def prepare_real_lens_traced(
     # placeholder IS the plane-wave reference, so the caller's value applies
     # (a correct, silent no-op there).
     _screen_noncol = 'off' if carrier is not None else on_noncollimated
-    # v5.29.1 (audit E-H4): resolve the process-wide defaults NOW and store the
+    # Resolve the process-wide defaults NOW and store the
     # resolved values, so the frozen screen and every later per-call amplitude
     # leg use the SAME propagator / geometry dtype no matter what the caller
     # flips afterwards.  See "WHAT A PREPARED LENS FREEZES" above.

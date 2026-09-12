@@ -18,9 +18,9 @@ operations:
 * :mod:`lumenairy.backend.scipy` -- backend-aware scipy.special /
   scipy.linalg dispatch.
 
-(``available_cpus`` -- the affinity-aware process CPU count -- was
-formerly here but lives in :mod:`lumenairy.memory` since it's a
-runtime-resource query, not an array backend.)
+(``available_cpus`` -- the affinity-aware process CPU count -- lives in
+:mod:`lumenairy.memory`, not here: it is a runtime-resource query, not an
+array backend.)
 
 Author: Andrew Traverso
 """

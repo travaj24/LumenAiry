@@ -34,12 +34,10 @@ from .._math.chebyshev import (
     chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
 )
 
-# v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-# The three Chebyshev Vandermonde helpers moved from
-# ``lumenairy.elements.lenses`` to ``lumenairy._math.chebyshev``.  We
-# import the new public names and bind them to the legacy
-# underscore-prefixed locals so the rest of this module's call sites
-# (~10 references) keep working unchanged.
+# The three Chebyshev Vandermonde helpers live in
+# ``lumenairy._math.chebyshev``.  The new public names are imported here
+# and bound to the legacy underscore-prefixed locals so this module's
+# ~10 call sites keep working unchanged.
 from .._math.chebyshev import (
     chebyshev_vandermonde as _chebyshev_vandermonde,
 )
@@ -179,7 +177,7 @@ def _maslov_kernel_prefactor(wavelength: float) -> complex:
 #
 # 1. PRINCIPAL AXES.  The natural widths come from the EIGENVALUES of the
 #    phase Hessian, so the lattice has to be laid out on its EIGENVECTORS.
-#    Scaling the coordinate axes by eigenvalues instead (the pre-fix code)
+#    Scaling the coordinate axes by eigenvalues instead
 #    swaps the two widths whenever ``H44 > H33`` and ignores ``H34``
 #    entirely -- measured relative error 9.1 on a chart with A = 4, B = 40
 #    and 2.5-3.1 with a cross term.
@@ -1135,13 +1133,10 @@ def _tukey_taper(u, alpha=0.2):
     ``u`` on [-1, 1] (audit S2-14).  Unity in the interior ``|u| <= 1 - alpha``
     with a raised-cosine roll-off to 0 at ``|u| = 1``.
 
-    This is the ONE definition of the Maslov quadrature window, which was
-    formerly written out THREE times -- the ``tukey(n)`` helper in
-    :func:`_integrate_quadrature` (which built its own ``linspace(-1, 1, n)``)
-    and the ``_tuk(u)`` closure in :func:`_integrate_levin`.  It reproduces both
-    former formulas operation-for-operation (``1.0 - alpha`` taper start, the
-    ``0.5*(1 + cos(pi*(|u| - (1 - alpha))/alpha))`` roll-off), so every routed
-    call is bit-identical."""
+    This is the ONE definition of the Maslov quadrature window.  It
+    reproduces the ``1.0 - alpha`` taper start and the
+    ``0.5*(1 + cos(pi*(|u| - (1 - alpha))/alpha))`` roll-off operation-for-
+    operation, so every routed call is bit-identical."""
     au = np.abs(u)
     w = np.ones_like(u)
     m = au > 1.0 - alpha
@@ -1160,21 +1155,21 @@ _GRAM_COND_SINGULAR = 1.0 / np.finfo(np.float64).eps    # ~4.5e15
 def _solve_fit(A, RHS, gram_factor=None):
     """Least-squares solve for the Maslov Chebyshev fit ``A @ coef ~= RHS``.
 
-    v5.21 (M-P5 follow-up): normal-equations Cholesky (``G = A^T A``; solve
-    ``G coef = A^T RHS``) instead of the ``gelsd`` full-SVD ``lstsq``, which is
-    O(M^3) with tiny ``M`` (70 at poly_order=4) rather than O(n_rays M^2).  A
-    caller sweeping the SAME optic can precompute ``gram_factor`` and pass it
-    in (only the cheap ``A^T RHS`` GEMM + back-substitution then re-run per
-    field).  Returns ``coef`` (M, k).
+    Normal-equations Cholesky (``G = A^T A``; solve ``G coef = A^T RHS``)
+    instead of the ``gelsd`` full-SVD ``lstsq``, which is O(M^3) with
+    tiny ``M`` (70 at poly_order=4) rather than O(n_rays M^2).  A caller
+    sweeping the SAME optic can precompute ``gram_factor`` and pass it
+    in (only the cheap ``A^T RHS`` GEMM + back-substitution then re-run
+    per field).  Returns ``coef`` (M, k).
 
     Conditioning gate
     -----------------
-    The v5.21 justification -- "``A`` is a normalized tensor-Chebyshev
-    Vandermonde, well-conditioned and ~1.5x oversampled, so squaring the
-    condition number in ``G`` is safe" -- does NOT hold on every chart, and the
-    ``LinAlgError`` fallback ladder below cannot see the failure: a numerically
-    positive-semidefinite but RANK-DEFICIENT ``G`` factors happily and returns
-    an arbitrary member of the solution set.
+    ``A`` is a normalized tensor-Chebyshev Vandermonde, ~1.5x
+    oversampled, so squaring its condition number in ``G`` is safe on a
+    well-conditioned chart -- and NOT on every chart, which the
+    ``LinAlgError`` fallback ladder below cannot see: a numerically
+    positive-semidefinite but RANK-DEFICIENT ``G`` factors happily and
+    returns an arbitrary member of the solution set.
 
     Measured (audit follow-up, f = 6 mm N-BK7 biconvex, 0.2 mm aperture,
     poly_order = 4): ``rank(A) = 65`` of 70 columns, ``cond(A) = 1.81e+15``,
@@ -1195,8 +1190,8 @@ def _solve_fit(A, RHS, gram_factor=None):
     * ``cond(G) <= _GRAM_COND_MAX`` (1e12, still ~4 float64 digits of margin in
       the squared system) -- take the fast Cholesky, byte-identical to v5.21;
     * above it -- take ``np.linalg.lstsq``, whose minimum-norm solution is a
-      deterministic, unique function of ``(A, RHS)``.  That is also the
-      pre-v5.21 behaviour, so this restores it exactly where it mattered;
+      deterministic, unique function of ``(A, RHS)`` -- the conservative
+      answer, and the one that matters here;
     * above ``_GRAM_COND_SINGULAR`` (``1/eps``) -- also WARN, because there the
       fit is genuinely rank-deficient and even the min-norm answer depends on
       ``lstsq``'s ``rcond`` cut: the extra columns are not determined by the
@@ -1611,8 +1606,8 @@ def apply_real_lens_maslov(
     full-grid slice (measured bit-identical, max |dE| = 0.0).
 
     The composed FIELD agrees to relL2 1.7e-05 ... 9.3e-04 on an f = 6 mm,
-    0.2 mm-aperture singlet at d = 0.5 ... 5 mm, not to the ~1e-10 claimed
-    before v5.46.  The gap is not the composition: it is the non-uniqueness of
+    0.2 mm-aperture singlet at d = 0.5 ... 5 mm.  The residual gap is not
+    the composition: it is the non-uniqueness of
     the Chebyshev fit itself on a rank-deficient chart, where two charts
     agreeing to float64 noise can land on different members of the same
     solution set.  :func:`_solve_fit` now routes such charts to the
@@ -1623,8 +1618,8 @@ def apply_real_lens_maslov(
     than silently dropping the requested observation plane).
 
     ``normalize_output`` (default ``'power'``) sets the returned field's
-    absolute amplitude scale.  Since v5.46 (audit S4) the raw integral is
-    ALREADY absolutely normalised -- it carries the Van Vleck density
+    absolute amplitude scale.  The raw integral is ALREADY absolutely
+    normalised (audit S4) -- it carries the Van Vleck density
     ``|det(ds1/dv2)|^(1/2)`` and the d = 2 prefactor ``k/(2 pi i)``, and
     reproduces the exact free-space field to 0.3 % with
     ``normalize_output='none'`` -- so ``'power'`` / ``'peak'`` are now
@@ -1674,7 +1669,7 @@ def apply_real_lens_maslov(
         (``levin_tol``, ``poly_order``, ``integration_method``, ...) are
         deliberately NOT config fields; see ``docs/lens_configuration.md``.
     """
-    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # Defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
@@ -1688,15 +1683,15 @@ def apply_real_lens_maslov(
             apply_real_lens_maslov, locals(), geometry=geometry,
             numerics=numerics, resources=resources, config=config))
 
-    # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
-    # from ``apply_real_lens_traced``.  Pre-fix a hand-built prescription
-    # with ``surfaces[i]['is_mirror']=True`` (or ``glass_after='MIRROR'``)
-    # would slip past the shared ``_check_no_silent_fold_drop`` (which
-    # only inspects ``prescription['elements']``), and the Maslov leg
-    # would silently treat the mirror as a refractor with the wrong
+    # Explicit mirror-in-surfaces guard, mirroring
+    # ``apply_real_lens_traced``.  A hand-built prescription with
+    # ``surfaces[i]['is_mirror']=True`` (or ``glass_after='MIRROR'``)
+    # slips past the shared ``_check_no_silent_fold_drop`` (which only
+    # inspects ``prescription['elements']``), and the Maslov leg would
+    # then silently treat the mirror as a refractor with the wrong
     # sign.  Fail loudly with the same mirror-specific message as
     # ``apply_real_lens_traced``.
-    # v5.21: fold_split=True auto-handles a folded prescription instead of
+    # fold_split=True auto-handles a folded prescription instead of
     # raising -- split at every fold and alternate this Maslov propagator (each
     # refractive leg, mirror-free -> the normal path) with apply_mirror (each
     # fold), chaining the field.  The apply_mirror focusing phase folds the
@@ -1828,7 +1823,7 @@ def apply_real_lens_maslov(
     from . import lenses as _lenses_module
     t0 = time.perf_counter()
 
-    # v5.20 (GPU): CuPy dispatch mirrors apply_real_lens -- opt in via
+    # CuPy dispatch mirrors apply_real_lens -- opt in via
     # use_gpu=True OR by passing a CuPy input array.  Only the O(N^2 * n_v2)
     # integrand evaluation runs on the device; the cheap ray trace + Chebyshev
     # fit stay on the host, so E_in is normalised to a host copy for that
@@ -1917,13 +1912,13 @@ def apply_real_lens_maslov(
     # ray bundle launched on a centred (h, p) grid scaled by the
     # entrance aperture, so a non-zero stop_index is silently moved to
     # the entrance.
-    # WP-A2: validate the key the way ``apply_real_lens`` now does -- an
-    # out-of-range or non-integer ``stop_index`` RAISES with a Section 2
-    # prefix rather than being int()-ed into a silent warning path (where a
-    # negative index used to read as "non-entrance stop" and a float would
-    # have raised a bare TypeError).  Normalising also makes
-    # ``stop_index=-1`` on a 2-surface lens mean surface 1, as Python
-    # indexing does, instead of tripping the non-entrance warning.
+    # Validate the key the way ``apply_real_lens`` does -- an out-of-range
+    # or non-integer ``stop_index`` RAISES with a Section 2 prefix rather
+    # than being int()-ed into a silent warning path (where a negative
+    # index reads as "non-entrance stop" and a float raises a bare
+    # TypeError).  Normalising also makes ``stop_index=-1`` on a 2-surface
+    # lens mean surface 1, as Python indexing does, instead of tripping
+    # the non-entrance warning.
     _stop_index = _normalise_stop_index(
         lens_prescription.get('stop_index'),
         len(lens_prescription.get('surfaces') or surfaces),
@@ -2013,7 +2008,7 @@ def apply_real_lens_maslov(
 
     # N3 (audit): the pupil-direction chart must span BOTH the lens
     # acceptance NA and the INPUT field's angular content.  Sizing from
-    # the lens EFL alone (the pre-fix na_proxy) drops any divergent /
+    # the lens EFL alone drops any divergent /
     # tilted input source off the traced ray chart, so its wide-angle
     # rays are extrapolated or clip at |u_v2| = 1 -- silently dim / wrong
     # output at ANY resolution.  Split the sizing into a lens term and an
@@ -2270,7 +2265,7 @@ def apply_real_lens_maslov(
     coef_s1x = _coef3[:, 1]
     coef_s1y = _coef3[:, 2]
 
-    # v5.21 (M-P follow-up): the fit-residual RMS diagnostics are only ever read
+    # The fit-residual RMS diagnostics are only ever read
     # into the progress/verbose string below -- three A@coef GEMVs + reductions
     # of pure waste on a headless production sweep.  Compute them only when a
     # consumer exists.
@@ -2470,7 +2465,7 @@ def apply_real_lens_maslov(
                + wx * (1 - wy) * e10
                + (1 - wx) * wy * e01
                + wx * wy * e11)
-        # v4.14.1 (audit P2-6): dtype-aware out-of-bounds sentinel so
+        # Dtype-aware out-of-bounds sentinel so
         # a complex64 E_in stays complex64 through the bilinear sample
         # (was silently upcasting via the ``0.0 + 0.0j`` complex128
         # literal).  Matches the v4.13.2 canonical pattern.
@@ -2710,8 +2705,8 @@ def apply_real_lens_maslov(
         # (i = sub*j, to 6e-16 relative; the zoom path was off by 2.7e-2 of
         # the field peak there, 34% on a strong singlet).  A large real output
         # tilt is rescaled by the same factor: a flat prism's recovered
-        # spectral tilt read +4.61% at sub=2 and +23.02% at sub=6 pre-fix vs
-        # 0.02% / 0.16% post-fix.  This is the exact sibling of the
+        # spectral tilt reads +4.61% at sub=2 and +23.02% at sub=6 through
+        # ``zoom`` against 0.02% / 0.16% on the true lattice.  This is the
         # ``ii*Ns/N`` traced-upsample bug fixed at 0a743a6, and takes the same
         # remedy: resample on the true lattice.
         #
@@ -2737,23 +2732,18 @@ def apply_real_lens_maslov(
                                     mode='nearest')
         amp = np.abs(E_out_coarse)
         amp_z = _upsample(amp)
-        # Phase upsampling: pre-3.5.6 used line-by-line np.unwrap then
-        # cubic zoom of the unwrapped phase.  Line-by-line unwrap is
-        # fragile near caustics / focal saddles where the phase wraps
-        # along both axes; the resulting cubic-interpolated phase had
-        # ~4% RMS errors from line-mismatched seams.
-        #
-        # 3.5.6 fix: interpolate the COMPLEX exp(i*phase) directly via
-        # cubic zoom of its real and imaginary parts, then take
-        # ``angle()``.  This avoids any 2-D phase-unwrap step
-        # (and therefore any unwrap-induced seams) at the cost of
-        # only being well-behaved when the local phase variation
-        # between adjacent coarse pixels is < pi -- which is the same
-        # condition the original line-unwrap silently relied on.
-        # For Maslov outputs that satisfy that bound (typical
-        # refractive systems with output_subsample <= 8), the new
-        # path agrees with the OLD output to ~0.3% RMS while
-        # eliminating the caustic-seam artifact.
+        # Phase upsampling: interpolate the COMPLEX ``exp(i*phase)``
+        # directly via cubic zoom of its real and imaginary parts, then
+        # take ``angle()``.  That avoids any 2-D phase-unwrap step -- a
+        # line-by-line ``np.unwrap`` is fragile near caustics / focal
+        # saddles where the phase wraps along both axes, and the
+        # cubic-interpolated phase then carries ~4% RMS errors from
+        # line-mismatched seams.  The cost is that this form is
+        # well-behaved only when the local phase variation between
+        # adjacent coarse pixels is < pi -- the same condition the
+        # line-unwrap silently relied on.  For Maslov outputs that
+        # satisfy it (typical refractive systems with
+        # output_subsample <= 8) the two agree to ~0.3% RMS.
         phase_c = np.angle(E_out_coarse)
         cos_z = _upsample(np.cos(phase_c))
         sin_z = _upsample(np.sin(phase_c))
@@ -2989,8 +2979,8 @@ def apply_real_lens_maslov_vector(
     # The estimator is the same per-pixel conjugate-product local wavevector
     # the FGA router uses (``_global_mean_tilt`` / ``_tilt_dispersion``), so
     # the two families read "which way is this pixel going" identically, and
-    # it returns EXACTLY zero on a real, non-negative (flat-phase) input --
-    # the collimated case is bit-identical to the pre-v5.46 behaviour.
+    # it returns EXACTLY zero on a real, non-negative (flat-phase) input
+    # -- the collimated case is bit-identical to an axial launch.
     ux, uy = _input_direction_cosines(E_vec, dx, float(dy), wavelength)
     P, _alive = _fresnel_jones_matrix_per_beamlet(
         xb, yb, ux.ravel(), uy.ravel(), prescription, wavelength)
@@ -4180,12 +4170,13 @@ def _integrate_local_quadrature(
     u_v2y_samp = u_v2y[:, None] + (sin_t[:, None] * off1
                                    + cos_t[:, None] * off2) / v2y_h
     del off1, off2
-    # S2/P2 (audit): the pre-fix ``np.clip`` folded every out-of-box sample
-    # onto the box edge and still counted it at the full unclipped cell area,
+    # S2/P2 (audit): a bare ``np.clip`` folds every out-of-box sample onto
+    # the box edge and still counts it at the full unclipped cell area,
     # over-counting by up to 3 decades on a weakly-curved chart.  Samples
-    # outside the fitted chart carry no information (the Chebyshev recurrences
-    # are not even accurate there), so DROP them: clip to keep the polynomial
-    # evaluation in its accurate range, and zero the contribution.
+    # outside the fitted chart carry no information (the Chebyshev
+    # recurrences are not even accurate there), so DROP them: clip to keep
+    # the polynomial evaluation in its accurate range, and zero the
+    # contribution.  See ``docs/history/lumenairy.elements.lenses_maslov.md``.
     in_chart = ((np.abs(u_v2x_samp) <= 1.0) & (np.abs(u_v2y_samp) <= 1.0))
     np.clip(u_v2x_samp, -1.0, 1.0, out=u_v2x_samp)
     np.clip(u_v2y_samp, -1.0, 1.0, out=u_v2y_samp)
@@ -4209,7 +4200,7 @@ def _integrate_local_quadrature(
         u4 = u_v2y_samp[p_start:p_end].ravel()
         u1 = u_s2x_tile[p_start:p_end].ravel()
         u2 = u_s2y_tile[p_start:p_end].ravel()
-        # v5.21 (M-P8): one shared-basis value+1st-deriv kernel for the three
+        # One shared-basis value+1st-deriv kernel for the three
         # coef sets (opd value only; s1x/s1y value + du3/du4), skipping the
         # unused second derivatives and the 2x redundant basis rebuild.
         (opd_v, s1x_v, ds1x_du3, ds1x_du4,

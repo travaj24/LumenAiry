@@ -302,11 +302,12 @@ def _amp_callback_jax_linear(E_in, lens_prescription, wavelength, dx,
     import jax
     import jax.numpy as jnp
 
-    # v4.13.0 (audit L2): unify on the library-wide default dtype rather
-    # than reading ``jax.config.jax_enable_x64``.  Pre-fix users who set
-    # ``set_default_complex_dtype(np.complex128)`` could still hit
-    # complex64 here when ``jax_enable_x64`` was left at its default
-    # False -- inconsistent with the NumPy-side ``apply_real_lens``.
+    # Unify on the library-wide default dtype rather than reading
+    # ``jax.config.jax_enable_x64``.  Reading the JAX global instead
+    # means a caller who set ``set_default_complex_dtype(np.complex128)``
+    # can still land on complex64 here whenever ``jax_enable_x64`` is
+    # left at its default False -- inconsistent with the NumPy-side
+    # ``apply_real_lens``.  See ``docs/history/lumenairy.elements._lens_jax.md``.
     from ..propagators.propagation import (
         _resolve_jax_complex_dtype,
         _resolve_jax_real_dtype,
@@ -417,11 +418,7 @@ def apply_real_lens_traced_jax(
     ----------
     E_in : (N, N) complex array
     prescription : dict
-        Same format as :func:`apply_real_lens`.  (Documented as
-        ``lens_prescription`` before v5.30 -- audit
-        AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 Territory A: that name is
-        the function's INTERNAL alias, never an accepted keyword, so the
-        documented call form raised ``TypeError``.)
+        Same format as :func:`apply_real_lens`.
     wavelength : float
     dx : float
     dy : float, optional
@@ -430,9 +427,7 @@ def apply_real_lens_traced_jax(
         ray-subsample / Chebyshev fit / Newton inversion paths
         currently require ``dy == dx`` and will raise otherwise.  Use
         :func:`apply_real_lens` (NumPy) for anamorphic grids -- it
-        honours ``dy != dx`` end-to-end.  Added in v4.13.2 (audit
-        P1-NEW-E) to close the JAX-side gap left by the v4.13.0 L3
-        sweep.
+        honours ``dy != dx`` end-to-end.
     ray_subsample : int, default 8
         Coarse-grid subsampling factor for the entrance ray launch.
         Identical meaning to the NumPy version.
@@ -510,11 +505,11 @@ def apply_real_lens_traced_jax(
         trace_jax,
     )
 
-    # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
-    # from ``apply_real_lens_traced``.  Pre-fix a hand-built prescription
-    # with ``surfaces[i]['is_mirror']=True`` would slip past, and the
-    # ray-traced OPD leg would silently treat the mirror as a refractor
-    # with the wrong sign.
+    # Explicit mirror-in-surfaces guard, mirroring
+    # ``apply_real_lens_traced``.  A hand-built prescription with
+    # ``surfaces[i]['is_mirror']=True`` slips past the shared fold
+    # check, and the ray-traced OPD leg would then silently treat the
+    # mirror as a refractor with the wrong sign.
     _surfaces_list = prescription.get('surfaces') or []
     _mirror_surf_idx = []
     for _i, _s in enumerate(_surfaces_list):
@@ -555,7 +550,7 @@ def apply_real_lens_traced_jax(
         raise ValueError("apply_real_lens_traced_jax requires a square grid")
     N = int(Nx)
 
-    # v4.13.2 (audit P1-NEW-E): the JAX twin's ray-subsample +
+    # The JAX twin's ray-subsample +
     # Chebyshev tensor-product fit + Newton inversion paths all
     # assume an isotropic square grid (dx == dy).  Enforce the same
     # contract the NumPy ``apply_real_lens_traced`` documents so
@@ -650,7 +645,7 @@ def apply_real_lens_traced_jax(
 
     # ---- Newton inversion of (Sx, Sy) on the wave grid --------------
     x_wave = (jnp.arange(N) - N / 2) * float(dx)
-    # v5.4.6 (audit F-7): 'xy' indexing so the wave-grid axis order matches
+    # 'xy' indexing so the wave-grid axis order matches
     # the library's image-like (y, x) field layout (E_in axis 0 = y) and the
     # NumPy traced reference.  With 'ij' the phase screen is transposed vs
     # E_in for non-symmetric prescriptions -- latent today (the asymmetric
@@ -663,14 +658,14 @@ def apply_real_lens_traced_jax(
     # difference slope of the forward map as in the NumPy version.
     di = max(1, n_launch // 8)
     dx_in = 2.0 * float(launch_radius) / (n_launch - 1)
-    # S7 (audit): the initial-guess magnification is taken tracer-safe on BOTH
-    # branches.  The ``float(x_out_grid[...])`` the static branch used raised
-    # ConcretizationTypeError under ``jax.jit``, so the DEFAULT path of this
-    # function -- the one the docstring advertises as "vmap+JIT replaces the
-    # [NumPy] pool" -- could not be jitted at all.  The Newton root does not
-    # depend on the starting point, so ``stop_gradient`` keeps the geometry
-    # gradient identical to the pre-fix ``_diff_geom`` branch, and the same
-    # float64 arithmetic makes the static branch's guess unchanged.
+    # S7 (audit): the initial-guess magnification is taken tracer-safe on
+    # BOTH branches.  A ``float(x_out_grid[...])`` read raises
+    # ConcretizationTypeError under ``jax.jit``, which would leave the
+    # DEFAULT path of this function -- the one the docstring advertises
+    # as "vmap+JIT replaces the [NumPy] pool" -- unjittable.  The Newton
+    # root does not depend on the starting point, so ``stop_gradient``
+    # leaves the geometry gradient unchanged, and the same float64
+    # arithmetic leaves the static branch's guess unchanged.
     import jax as _jax
     _dxox = (x_out_grid[i_axis + di, i_axis]
              - x_out_grid[i_axis - di, i_axis]) / (2.0 * di * dx_in)
@@ -696,15 +691,13 @@ def apply_real_lens_traced_jax(
     opl_map = jnp.where(inside, opl_map, jnp.nan)
 
     # ---- Combine OPL with amplitude ---------------------------------
-    # v4.13.0 (audit L2): unify on the library-wide default dtype
-    # (``set_default_complex_dtype``) rather than reading the JAX
-    # global ``jax_enable_x64``.  Two different knobs for the same
-    # decision is exactly the divergence audit L2 flagged.
-    # v4.14.0: pass ``E_in.dtype`` so the input dtype is honoured.
-    # Pre-v4.14 the resolver returned the library default, silently
-    # upcasting a complex64 input to complex128 whenever
-    # ``jax_enable_x64=True``.  Caught by parametrized dispatcher pin
-    # in v4.14.0 Agent 6.
+    # Unify on the library-wide default dtype
+    # (``set_default_complex_dtype``) rather than reading the JAX global
+    # ``jax_enable_x64``: two different knobs for the same decision is
+    # exactly the divergence audit L2 flagged.  ``E_in.dtype`` is passed
+    # so the INPUT dtype is honoured -- without it the resolver returns
+    # the library default and silently upcasts a complex64 input to
+    # complex128 whenever ``jax_enable_x64=True``.
     from ..propagators.propagation import (
         _resolve_jax_complex_dtype,
         _resolve_jax_real_dtype,
@@ -808,7 +801,7 @@ def apply_real_lens_maslov_jax(
         trace_jax,
     )
 
-    # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
+    # Explicit mirror-in-surfaces guard, ported from
     # from ``apply_real_lens_traced``.
     _surfaces_list = prescription.get('surfaces') or []
     _mirror_surf_idx = []
@@ -848,7 +841,7 @@ def apply_real_lens_maslov_jax(
         raise ValueError("apply_real_lens_maslov_jax requires a square grid")
     N = int(Nx)
 
-    # v4.13.2 (audit P1-NEW-E): same square-grid constraint as the
+    # Same square-grid constraint as the
     # traced twin -- the Chebyshev fit + Newton inversion + Maslov
     # radial sampler all assume isotropic dx == dy.
     if dy is None:
@@ -914,7 +907,7 @@ def apply_real_lens_maslov_jax(
         xs_in, xs_in, opl_grid, cheb_order)
 
     x_wave = (jnp.arange(N) - N / 2) * float(dx)
-    # v5.4.6 (audit F-7): 'xy' indexing so the wave-grid axis order matches
+    # 'xy' indexing so the wave-grid axis order matches
     # the library's image-like (y, x) field layout (E_in axis 0 = y) and the
     # NumPy traced reference.  With 'ij' the phase screen is transposed vs
     # E_in for non-symmetric prescriptions -- latent today (the asymmetric
@@ -978,9 +971,9 @@ def apply_real_lens_maslov_jax(
     phase_maslov = -0.5 * jnp.pi * n_neg
 
     # ---- Combine OPL + Maslov phase with amplitude ------------------
-    # v4.13.0 (audit L2): unify on the library-wide default dtype.
-    # v4.14.0: pass ``E_in.dtype`` so the input dtype is honoured
-    # (caught by parametrized dispatcher pin in v4.14.0 Agent 6).
+    # Unify on the library-wide default dtype, and pass ``E_in.dtype``
+    # so the input dtype is honoured (both pinned by a parametrized
+    # dispatcher test).
     from ..propagators.propagation import (
         _resolve_jax_complex_dtype,
         _resolve_jax_real_dtype,

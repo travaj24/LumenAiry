@@ -189,15 +189,14 @@ def _warn_if_tilted_no_dirsample(E_in, dx, dy, wavelength,
             RuntimeWarning, stacklevel=3)
 
 
-# v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): output-grid kwarg semantics
-# disambiguation.  Pre-v5.2 the sub-propagators below interpreted
-# ``output_grid`` as ``(Ny, Nx)`` (shape only) while the dispatcher's
-# ``propagate(output_grid=...)`` contract advertises ``(N_out, dx_out)``.
-# The mismatch silently produced wrong-shape output arrays when the
-# dispatcher forwarded the kwarg.  v5.2 keeps the dispatcher contract
-# as canonical and renames the sub-propagator kwarg to ``output_shape``
-# for the shape-only meaning.  The legacy ``output_grid`` kwarg on
-# the sub-propagators is preserved with a ``DeprecationWarning``.
+# Output-grid kwarg semantics.  The dispatcher's
+# ``propagate(output_grid=...)`` contract means ``(N_out, dx_out)``; the
+# sub-propagators below take ``output_shape`` for the shape-only
+# ``(Ny, Nx)`` meaning.  The dispatcher contract is CANONICAL: reading
+# ``output_grid`` as a shape in a sub-propagator silently produces
+# wrong-shape output arrays when the dispatcher forwards the kwarg.  The
+# legacy ``output_grid`` kwarg on the sub-propagators is preserved with a
+# ``DeprecationWarning``.  See ``docs/history/lumenairy.propagators.gbd.md``.
 def _resolve_output_shape(
     output_shape: Optional[Tuple[int, int]],
     output_grid: Optional[Any],
@@ -258,12 +257,12 @@ class BeamletBundle:
 
     positions: object       # (N, 3) -- base ray position per beamlet
     directions: object      # (N, 3) -- base ray direction per beamlet
-    # v5.4.7 (audit AUDIT_V5_4_6 #9): Q is the ENGINEERING 1/q parameter
-    # (q_code = conj(q_physics)); at the waist Q = -i/z_R.  The physics
-    # (exp(-i omega t) / exp(+ikz)) field is rendered in
-    # reconstruct_field_from_beamlets via exp(+0.5j k conj(Q) rho^2) =
-    # exp(+i k rho^2 / (2 q_physics)) (the v5.4.6 F-1 fix).  The Q-evolution
-    # (Q/(1+tQ), Q-1/f) is left in this engineering convention.
+    # Q is the ENGINEERING 1/q parameter (q_code = conj(q_physics)); at the
+    # waist Q = -i/z_R.  The physics (exp(-i omega t) / exp(+ikz)) field is
+    # rendered in reconstruct_field_from_beamlets via
+    # exp(+0.5j k conj(Q) rho^2) = exp(+i k rho^2 / (2 q_physics)).  The
+    # Q-evolution (Q/(1+tQ), Q-1/f) is left in this engineering
+    # convention.
     Q: object               # (N,) complex (engineering 1/q; see note above)
     amplitude: object       # (N,) complex on-axis amplitude
     waist0: object          # (N,) initial waist (for profile)
@@ -460,14 +459,14 @@ def decompose_field_to_beamlets(
     Ix = Ix.reshape(-1)
     n = Iy.shape[0]
 
-    # v4.12.1 (B1-10): switch from cell-centred `(arange(N) - N/2 + 0.5)*dx`
-    # to pixel-centred `(arange(N) - N/2)*dx`, matching the library-wide
-    # convention (ASM, Fresnel, RS, sources, ``apply_fresnel_curvature``).
-    # ``reconstruct_field_from_beamlets`` (line ~264) already uses the
-    # pixel-centred grid, so prior to this fix a coherent self-roundtrip
-    # walked the beamlet centres half a pixel relative to the
-    # reconstruction grid -- producing a `k_0 * dx / 2 * off-axis` phase
-    # error that grew with NA and field angle.
+    # PIXEL-centred `(arange(N) - N/2)*dx`, not cell-centred
+    # `(arange(N) - N/2 + 0.5)*dx`: this is the library-wide convention
+    # (ASM, Fresnel, RS, sources, ``apply_fresnel_curvature``) and
+    # ``reconstruct_field_from_beamlets`` (line ~264) uses the same grid.
+    # A cell-centred grid here walks the beamlet centres half a pixel
+    # relative to the reconstruction grid, producing a
+    # `k_0 * dx / 2 * off-axis` phase error that grows with NA and field
+    # angle.
     x_b = (Ix - Nx / 2) * dx
     y_b = (Iy - Ny / 2) * dy
     z_b = xp.full((n,), float(z_input_plane), dtype=x_b.dtype)
@@ -726,7 +725,7 @@ def converge_gbd_sampling(
     if dy is None:
         dy = dx
     if sample_step is None:
-        # v5.30 (audit P8): ``wavelength`` is deprecated on the
+        # ``wavelength`` is deprecated on the
         # recommender (it never read it) -- don't forward it, or every
         # default-``sample_step`` convergence run emits a spurious
         # DeprecationWarning from inside the library.
@@ -959,13 +958,12 @@ def propagate_beamlets_freespace(
 
     Q_old = beamlets.Q
     k = 2 * float(np.pi) / wavelength * n_medium
-    # 4.9 fix (audit #2.2): use raw ``t`` (signed) instead of
-    # ``abs(t)``.  Under the exp(-iωt) time convention forward
-    # propagation by distance z imparts exp(+i·k·z) -- correct for
-    # both signs of z.  Pre-4.9 ``abs(t)`` accidentally took the
-    # complex conjugate of the axial phase on back-propagation,
-    # giving wrong sign on the propagated wavefront.  Forward
-    # propagation was unaffected (because abs(positive) == positive).
+    # Use raw ``t`` (signed), not ``abs(t)``.  Under the exp(-iwt) time
+    # convention forward propagation by distance z imparts exp(+i.k.z)
+    # -- correct for both signs of z.  ``abs(t)`` takes the complex
+    # conjugate of the axial phase on BACK-propagation, giving the wrong
+    # sign on the propagated wavefront (forward propagation is
+    # unaffected, because abs(positive) == positive).
     axial_phase = xp.exp(1j * k * t)
     if _q_is_tensor(Q_old):
         # v5.21: tensor (astigmatic / anamorphic) Q free-space -- matrix
@@ -1027,12 +1025,12 @@ def apply_thin_lens_to_beamlets(
     L_old = beamlets.directions[..., 0]
     M_old = beamlets.directions[..., 1]
     N_old = beamlets.directions[..., 2]
-    # 4.10.2: the thin-lens kick acts on PARAXIAL SLOPES u = L/N, not on
-    # direction cosines.  Pre-4.10.2 subtracted x/f directly from L,
-    # which is only correct in the small-angle limit (N -> 1).  For
-    # moderately non-paraxial bundles (N ~ 0.95-0.99) this introduces
-    # a few-percent error per surface; for wide-angle fans the error
-    # compounds.  Convert to slope, apply the kick, re-normalise.
+    # The thin-lens kick acts on PARAXIAL SLOPES u = L/N, not on
+    # direction cosines.  Subtracting x/f directly from L is only
+    # correct in the small-angle limit (N -> 1); for moderately
+    # non-paraxial bundles (N ~ 0.95-0.99) it introduces a few-percent
+    # error per surface, and for wide-angle fans the error compounds.
+    # Convert to slope, apply the kick, re-normalise.
     N_safe = xp.where(xp.abs(N_old) > 1e-30, N_old, 1e-30)
     u_x_old = L_old / N_safe
     u_y_old = M_old / N_safe
@@ -1358,34 +1356,34 @@ def reconstruct_field_from_beamlets(
     # Per-beamlet direction cosines (paraxial tilt).  These produce a
     # linear phase ramp `exp(i k (L dx + M dy))` from each beamlet's
     # centroid -- needed for non-paraxial bundles to interfere
-    # correctly off-chief-ray.  Pre-4.10 omitted this ramp; the
-    # focal spot still focused correctly (the chief-ray phase is the
-    # same), but off-chief-ray interference patterns and PSF wings
-    # were degraded.  When the beamlets bundle was assembled with
-    # ``directions = (0, 0)`` (the default for axial-input decompositions)
-    # the ramp is zero so this fix is a no-op for that path.
+    # correctly off-chief-ray.  Omitting it still focuses the spot (the
+    # chief-ray phase is the same) but degrades off-chief-ray
+    # interference patterns and PSF wings.  When the beamlets bundle is
+    # assembled with ``directions = (0, 0)`` (the default for
+    # axial-input decompositions) the ramp is zero and this term is a
+    # no-op.
     has_dirs = (hasattr(beamlets, 'directions')
                 and beamlets.directions is not None)
-    # v5.21 (per-surface GBD): a beamlet bundle may carry a (N, 2, 2) complex-
+    # A beamlet bundle may carry a (N, 2, 2) complex-
     # symmetric TENSOR Q (general astigmatic Gaussian beam) instead of the (N,)
     # scalar Q.  Detected once here; the scalar branch below is preserved
     # verbatim (byte-identical) and only the tensor case takes the new quadratic
     # form.  ``_q_is_tensor`` is the single dispatch predicate.
     is_tensor = _q_is_tensor(beamlets.Q)
-    # v4.13.1 perf: fuse the two ``xp.exp`` calls into one (only on the
-    # has_dirs branch, where pre-v4.13.1 evaluated ``exp(-i*k*Q*rho2/2)``
-    # and ``exp(i*k*tilt)`` separately and multiplied them).  ``exp(A) *
-    # exp(B) == exp(A + B)`` analytically; in complex128 the round-off
-    # difference is ulp-level (<1e-15 relative) -- well within the
+    # The two ``xp.exp`` calls are FUSED into one on the has_dirs
+    # branch.  ``exp(-i*k*Q*rho2/2)`` and ``exp(i*k*tilt)`` evaluated
+    # separately and multiplied is the same thing analytically
+    # (``exp(A) * exp(B) == exp(A + B)``); in complex128 the round-off
+    # difference is ulp-level (<1e-15 relative), well within the
     # propagator accuracy budget.  This roughly halves the per-chunk
     # transcendental cost (exp dominates the inner-loop runtime on
-    # moderate grids).  Also switches the per-chunk reduction from
-    # ``out + sum(a_b * phase, axis=-1)`` to ``out += einsum('mnk,k->mn',
-    # phase, a_b)`` -- the ``a_b * phase`` intermediate is the
-    # largest 3-D buffer the loop allocates (chunk * Ny * Nx complex),
-    # so dropping it shrinks the working set noticeably for the
-    # default chunk_beamlets=4096 and saves one big allocation per
-    # chunk on numpy.
+    # moderate grids).  The per-chunk reduction is
+    # ``out += einsum('mnk,k->mn', phase, a_b)`` rather than
+    # ``out + sum(a_b * phase, axis=-1)``: the ``a_b * phase``
+    # intermediate is the largest 3-D buffer the loop allocates
+    # (chunk * Ny * Nx complex), so dropping it shrinks the working set
+    # noticeably for the default chunk_beamlets=4096 and saves one big
+    # allocation per chunk on numpy.
     for start in range(0, n, chunk_beamlets):
         end = min(start + chunk_beamlets, n)
         x_b = beamlets.positions[start:end, 0]
@@ -1416,17 +1414,18 @@ def reconstruct_field_from_beamlets(
         elif has_dirs:
             L_b = beamlets.directions[start:end, 0]
             M_b = beamlets.directions[start:end, 1]
-            # Fused phase argument.  v5.4.6 (audit F-1): the stored Q uses
-            # the engineering 1/q parameterisation (q_code = conj(q_physics));
-            # the reconstructed FIELD must be expressed in the library's
+            # Fused phase argument.  The stored Q uses the engineering
+            # 1/q parameterisation (q_code = conj(q_physics)); the
+            # reconstructed FIELD must be expressed in the library's
             # exp(-i omega t) / forward exp(+ikz) convention, i.e. the
-            # transverse curvature is exp(+i k rho^2 / (2 q_physics)) =
-            # exp(+0.5j k conj(Q) rho^2).  The pre-fix ``-0.5*Q`` rendered the
-            # complex CONJUGATE of the propagated wavefront curvature (the
-            # |E| envelope and waist are sign-blind, so intensity/focus tests
-            # never caught it).  conj(Q) has the same Im part, so the Gaussian
-            # decay and the on-axis-waist (Re(Q)=0) reconstruction are
-            # unchanged; only the off-waist phase sign is corrected.
+            # transverse curvature is exp(+i k rho^2 / (2 q_physics))
+            # = exp(+0.5j k conj(Q) rho^2).  ``-0.5*Q`` instead renders
+            # the complex CONJUGATE of the propagated wavefront
+            # curvature -- and the |E| envelope and waist are
+            # sign-blind, so no intensity/focus test catches it.
+            # conj(Q) has the same Im part, so the Gaussian decay and
+            # the on-axis-waist (Re(Q)=0) reconstruction are the same
+            # either way; only the off-waist phase sign differs.
             arg = (0.5 * xp.conj(Q_b[None, None, :]) * rho2
                    + L_b[None, None, :] * dX + M_b[None, None, :] * dY)
             phase = xp.exp(1j * k * arg)
@@ -3192,27 +3191,28 @@ def apply_abcd_to_beamlets(
     # (Siegman ch. 20 / Collins integral; both transverse dimensions of
     # the rotationally-symmetric beamlet give 1/sqrt each).
     #
-    # v5.17.x (P2-30) BEHAVIOUR CHANGE: pre-fix this applied
-    # ``Q_new / Q_old`` = ``q_in / q_out`` = (C*q_in + D)/(A + B*Q_in),
-    # i.e. the Collins factor times a spurious ``(C*q_in + D)``.  For any
-    # focusing system (C != 0) that factor has non-unit modulus, so the
-    # single-ABCD path disagreed with the sequential per-leg path
-    # (``propagate_beamlets_freespace`` + ``apply_thin_lens_to_beamlets``
-    # compose exactly to exp(ikL)/(A + B*Q_in), verified to 1e-15) in
-    # both amplitude and piston phase -- e.g. a t1=20mm -> f=50mm ->
-    # t2=30mm system came out |C*q_in+D| = 0.60x low in field amplitude
-    # (0.36x in intensity) with a wrong piston, defeating the v4.11.1
-    # axial_opl coherent-superposition fix.  Free-space-only ABCD (C=0,
-    # D=1) is unchanged.  ``Q`` here is the module's engineering 1/q
-    # parameterisation (Q = 1/q_code, q_code = conj(q_physics)); ABCD
-    # elements are real so the Collins factor commutes with that
-    # convention.
-    # S5 (audit): the Collins amplitude is ``1/(A + B/q_phys)``; with the
-    # module's engineering ``Q = 1/q_code = 1/conj(q_phys)`` and REAL ABCD
-    # elements that is ``conj(1/(A + B Q))``.  The pre-fix un-conjugated form
-    # carried the Gouy / Collins phase with the wrong sign -- near-global (and
-    # therefore nearly invisible) at a lens exit plane, but not at
-    # ``output_plane_distance != 0`` nor in any coherent combination.
+    # The factor is the Collins amplitude ``conj(1/(A + B Q))`` and
+    # nothing else.  Two ways to get it wrong, both measured:
+    #
+    #   * ``Q_new / Q_old`` = ``q_in / q_out`` = (C*q_in + D)/(A + B*Q_in)
+    #     is the Collins factor times a spurious ``(C*q_in + D)``.  For
+    #     any focusing system (C != 0) that factor has non-unit modulus,
+    #     so the single-ABCD path disagrees with the sequential per-leg
+    #     path (``propagate_beamlets_freespace`` +
+    #     ``apply_thin_lens_to_beamlets`` compose exactly to
+    #     exp(ikL)/(A + B*Q_in), verified to 1e-15) in both amplitude and
+    #     piston phase -- e.g. a t1=20mm -> f=50mm -> t2=30mm system
+    #     comes out |C*q_in+D| = 0.60x low in field amplitude (0.36x in
+    #     intensity) with a wrong piston, defeating the ``axial_opl``
+    #     coherent-superposition contract.  Free-space-only ABCD (C=0,
+    #     D=1) is unaffected.
+    #   * dropping the conjugate carries the Gouy / Collins phase with
+    #     the wrong sign -- near-global (and therefore nearly invisible)
+    #     at a lens exit plane, but not at ``output_plane_distance !=
+    #     0`` nor in any coherent combination.  ``Q`` here is the
+    #     module's engineering 1/q parameterisation (Q = 1/q_code,
+    #     q_code = conj(q_phys)) and the ABCD elements are real, so the
+    #     Collins amplitude ``1/(A + B/q_phys)`` IS ``conj(1/(A + B Q))``.
     if _q_is_tensor(Q_old):
         _I2 = xp.eye(2, dtype=Q_old.dtype)[None, :, :]
         qratio = xp.conj(1.0 / xp.sqrt(_det2x2(A * _I2 + B * Q_old)))
@@ -3363,7 +3363,7 @@ def apply_prescription_persurface_to_beamlets(
         ray_transfer_jacobian_analytic,
     )
 
-    # v5.21 (#3): 'auto' (the default) prefers the truncation-free analytic
+    # 'auto' (the default) prefers the truncation-free analytic
     # differential ray transfer (one dual-number trace, no per-surface (N,4,4)
     # inverse) and transparently falls back to the finite-difference Jacobian
     # (9N traces) for any surface type the analytic path does not yet cover
@@ -3752,23 +3752,20 @@ def propagate_gbd_through_prescription(
     C = float(M[1, 0])
     D = float(M[1, 1])
 
-    # 4.11.1 (H-AS-1): compute the axial OPL = sum_k n_k * t_k across
-    # every glass/air segment of the prescription, out to the EXIT VERTEX
-    # (this whole-system-ABCD path reconstructs THERE -- it does NOT add a
-    # BFL / image-plane leg; that leg belongs to the per_surface=True
-    # z_image path).  Pre-4.11.1 ``axial_opl=`` was never populated so the
-    # per-beamlet
-    # complex envelope lacked the system's axial phase reference and
-    # multi-prescription reconstructions had the wrong piston relative
-    # to ASM / Fresnel cross-checks.
+    # Compute the axial OPL = sum_k n_k * t_k across every glass/air
+    # segment of the prescription, out to the EXIT VERTEX (this
+    # whole-system-ABCD path reconstructs THERE -- it does NOT add a BFL /
+    # image-plane leg; that leg belongs to the per_surface=True z_image
+    # path).  Without it the per-beamlet complex envelope lacks the
+    # system's axial phase reference and multi-prescription
+    # reconstructions carry the wrong piston relative to ASM / Fresnel
+    # cross-checks.
     #
-    # 4.11.2: the v4.11.1 implementation here was dead-on-arrival:
-    # ``surfaces_from_prescription`` returns ``List[Surface]`` (Surface
-    # is a @dataclass, not a dict), so ``_s.get('thickness', 0.0)``
-    # raised AttributeError on the first iteration -- silently swallowed
-    # by the surrounding bare ``except Exception`` and ``axial_opl``
-    # always defaulted to None.  Switched to attribute access on the
-    # Surface dataclass.  Caught by AUDIT_ROUND3_2026_05_16.md (CRIT-8).
+    # ``surfaces_from_prescription`` returns ``List[Surface]`` (a
+    # @dataclass, not a dict), so ATTRIBUTE access -- not
+    # ``.get('thickness', 0.0)`` -- is what works here; a dict-style read
+    # raises AttributeError on the first iteration, which the surrounding
+    # bare ``except Exception`` swallows into ``axial_opl = None``.
     try:
         from ..glass import get_glass_index
         from ..raytrace import surfaces_from_prescription

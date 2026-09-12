@@ -453,12 +453,12 @@ def apply_real_lens_gbd(
         raise ValueError(
             "apply_real_lens_gbd: reexpand must be 'off' or 'auto', "
             f"got {reexpand!r}.")
-    # v5.30 (audit E-L21): validate ``jacobian`` HERE, at the entry point, and
-    # flag it when it cannot act.  It used to be forwarded only on the
-    # ``per_surface=True`` branch (where
-    # ``apply_prescription_persurface_to_beamlets`` validates it), so on the
-    # ``per_surface=False`` whole-system-ABCD branch a typo sailed straight
-    # through: measured, ``apply_real_lens_gbd(..., per_surface=False,
+    # Validate ``jacobian`` HERE, at the entry point, and flag it when it
+    # cannot act.  Forwarded only on the ``per_surface=True`` branch
+    # (where ``apply_prescription_persurface_to_beamlets`` validates it),
+    # a typo sails straight through the ``per_surface=False``
+    # whole-system-ABCD branch: measured, ``apply_real_lens_gbd(...,
+    # per_surface=False,
     # jacobian='BOGUS')`` returned a field bit-identical to ``jacobian='auto'``
     # with no diagnostic, while the same call at ``per_surface=True`` raised
     # "jacobian must be 'auto', 'fd' or 'analytic'".  Forwarding it on both
@@ -565,7 +565,7 @@ def apply_real_lens_gbd(
         # Paraxial whole-system ABCD (aberration-free reference); imported
         # lazily so the common per-surface path has no extra import cost.
         from ..propagators.gbd import propagate_gbd_through_prescription
-        # v5.30 (audit bba1bc4 follow-up): pass ``None`` -- not ``0.0`` -- when
+        # Pass ``None`` -- not ``0.0`` -- when
         # no extra output leg was requested.  The callee's S2-4 guard is
         # ``if z_image is not None and not per_surface`` and ``0.0`` is
         # ``not None``, so the DEFAULT ``output_plane_distance=0.0`` tripped a
