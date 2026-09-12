@@ -120,6 +120,8 @@ def test_the_mypy_whitelist_only_grows():
     the remedy only works if the list is not quietly trimmed when a module
     stops type-checking.
 
+    RAISED 2026-09-12 (release step): 25 -> 28 with the root package, elements
+    package and lens_config joining after WP-A16's follow-up (33 -> 0 strict errors).
     RAISED 2026-09-12 (WP-A21, same day): 17 -> 25 declared paths, adding the
     eight subpackage `__init__.py` re-export surfaces that measure
     strict-clean after the lazy-loading rewrite.  The root
@@ -127,8 +129,8 @@ def test_the_mypy_whitelist_only_grows():
     `[tool.mypy]` comment for the 33 errors that block it.
     """
     files = _pyproject()['tool']['mypy']['files']
-    assert len(files) >= 25, (
-        f'[tool.mypy] files has shrunk to {len(files)} entries (was 25 on '
+    assert len(files) >= 28, (
+        f'[tool.mypy] files has shrunk to {len(files)} entries (was 28 on '
         f'2026-09-12).  A module that stopped passing --strict should be '
         f'FIXED, not removed from the gate; if a removal is genuinely right, '
         f'lower this number in the same change and say why.')

@@ -521,12 +521,10 @@ files = [
     # rewrite (`mypy --strict --python-version 3.12 --follow-imports silent
     # --ignore-missing-imports <path>`: 0 errors each).
     #
-    # The ROOT `lumenairy/__init__.py` is deliberately NOT here yet: it is
-    # measured at 33 errors on this tree, all of them from the in-flight
-    # lens-family work -- an unannotated PEP 562 `__getattr__`/`__dir__` pair
-    # and 31 `does not explicitly export attribute` rows for names re-exported
-    # through `elements.lenses` without an `__all__` entry.  Add it in the
-    # change that fixes those; nothing else stands in the way.
+    # The root `lumenairy/__init__.py`, `elements/__init__.py` and
+    # `elements/lens_config.py` joined once WP-A16's follow-up spelled the 31
+    # lens re-exports `X as X` and annotated the PEP 562 pairs (MEASURED
+    # 2026-09-12: 33 -> 0 strict errors on the root; 0 on the other two).
     "lumenairy/_math/__init__.py",
     "lumenairy/sources/__init__.py",
     "lumenairy/io/__init__.py",
@@ -535,6 +533,9 @@ files = [
     "lumenairy/elements/rcwa/__init__.py",
     "lumenairy/elements/eme/__init__.py",
     "lumenairy/elements/bor/__init__.py",
+    "lumenairy/__init__.py",
+    "lumenairy/elements/__init__.py",
+    "lumenairy/elements/lens_config.py",
 ]
 # v5.0.1 (audit P2-NEW-V4-2): config preparation only -- prevents the
 # ~1889-error cascade into untyped downstream files so the v5.1
