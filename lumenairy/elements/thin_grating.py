@@ -12,10 +12,13 @@ and AOI effects -- is not implemented here.  Reflection is assumed zero
 high-contrast gratings).
 
 The analytical formula implemented here is the standard Fourier-series
-thin-grating result:
+thin-grating result.  Writing ``phi_r`` / ``phi_g`` for the ridge / groove
+phase steps and ``f`` for the duty cycle, the Fourier coefficients of the
+binary transmittance are
 
-    t_m = f * exp(i*phi) * f * sinc(pi m f) + (1-f) * sinc(pi m (1-f))
-          * ...  (see code for exact form)
+    t_0 = f * exp(i*phi_r) + (1 - f) * exp(i*phi_g)
+    t_m = (exp(i*phi_r) - exp(i*phi_g))
+          * (exp(-i*2*pi*m*f) - 1) / (-i * 2 * pi * m)        (m != 0)
     eta_m = |t_m|^2
 
 which sums to unity by Parseval's theorem for a pure phase grating.
@@ -28,14 +31,69 @@ Limitations
 * Isotropic, non-magnetic materials.
 * Single-layer grating (binary profile).
 * Thin-grating scalar approximation -- R always zero.
+* Raman-Nath (thin) regime only: the Klein-Cook parameter
+  ``Q = 2 pi lambda d / (n_bar Lambda^2)`` must be <~ 1 and the period must
+  be several wavelengths.  Outside that the grating is Bragg-like and the
+  returned per-order numbers are meaningless (they still sum to 1, which is
+  why the regime must be checked rather than inferred from energy closure);
+  :func:`thin_grating_efficiency_1d` warns.  Hand off to ``rcwa`` / ``pmm``.
 
 Author: Andrew Traverso
 """
 from __future__ import annotations
 
+import warnings
 from typing import Tuple, Union
 
 import numpy as np
+
+# Klein-Cook regime thresholds.  Q = 2 pi lambda d / (n_bar Lambda^2)
+# separates Raman-Nath (thin, Q <~ 1) from Bragg (Q >> 1) diffraction;
+# Klein & Cook, IEEE J. Quantum Electron. QE-3, 59 (1967); Moharam & Young,
+# Appl. Opt. 17, 1757 (1978).  The scalar thin-phase model additionally
+# needs a period several wavelengths wide for the "each ray sees the local
+# phase" picture to hold at all.
+_KLEIN_COOK_Q_WARN = 1.0
+_PERIOD_OVER_WAVELENGTH_WARN = 10.0
+
+
+def _warn_thin_grating_validity(func_name, period, depth, wavelength,
+                                n_ridge, n_groove, duty_cycle):
+    """Warn when (period, depth, wavelength) sits outside the Raman-Nath
+    regime the thin-phase Fourier model is valid in.
+
+    Sibling of ``emt._warn_rytov_validity``: the failure is silent and
+    clean-looking (the kept orders still sum to 1 by Parseval), so energy
+    closure cannot be used as the tripwire.
+    """
+    p, d, wl = float(period), float(depth), float(wavelength)
+    if p <= 0 or wl <= 0 or d <= 0:
+        return
+    f = float(np.clip(duty_cycle, 0.0, 1.0))
+    n_bar = abs(f * complex(n_ridge).real + (1.0 - f) * complex(n_groove).real)
+    n_bar = n_bar if n_bar > 1e-12 else 1.0
+    q = 2 * np.pi * wl * d / (n_bar * p * p)
+    if q > _KLEIN_COOK_Q_WARN:
+        warnings.warn(
+            f"{func_name}: Klein-Cook Q = 2*pi*lambda*depth/(n_bar*period^2) "
+            f"= {q:.3g} exceeds {_KLEIN_COOK_Q_WARN:g} (n_bar = {n_bar:.4g}) "
+            f"-- this is the Bragg regime, not the Raman-Nath (thin) regime "
+            f"the scalar Fourier model assumes.  The returned per-order "
+            f"efficiencies are not meaningful here even though they still "
+            f"sum to 1 by Parseval.  Use a rigorous grating solver "
+            f"(rcwa/pmm) at this depth and period.",
+            UserWarning, stacklevel=3)
+        return
+    if p < _PERIOD_OVER_WAVELENGTH_WARN * wl:
+        warnings.warn(
+            f"{func_name}: period/wavelength = {p / wl:.3g} is below "
+            f"{_PERIOD_OVER_WAVELENGTH_WARN:g} -- the scalar thin-phase "
+            f"picture (every ray sees the local transmittance, no coupling "
+            f"between ridge and groove) degrades as the period approaches "
+            f"the wavelength, and the model's R = 0 assumption with it.  "
+            f"Use a rigorous grating solver (rcwa/pmm) for a quantitative "
+            f"answer at this period.",
+            UserWarning, stacklevel=3)
 
 
 def thin_grating_efficiency_1d(
@@ -114,6 +172,16 @@ def thin_grating_efficiency_1d(
         truncated by ``n_orders``, their efficiency is set to 0 and the
         sum of ``T_eff`` is < 1 (the missing power is in evanescent /
         dropped orders).
+
+    Warns
+    -----
+    UserWarning
+        When the Klein-Cook parameter ``Q = 2*pi*lambda*depth/(n_bar*
+        period**2)`` exceeds 1 (Bragg regime, where the thin-phase model
+        does not apply), or -- failing that -- when the period is under
+        10 wavelengths.  Neither condition shows up in the returned
+        numbers: ``sum(T_eff)`` stays 1 by Parseval whatever the regime, so
+        energy closure is not a usable validity check here.
     """
     # v5.5.2: validate the polarization (accepting the s/p aliases) so a typo
     # is caught instead of silently ignored.  The value is still unused by the
@@ -125,6 +193,9 @@ def thin_grating_efficiency_1d(
         raise ValueError(
             f"thin_grating_efficiency_1d: polarization must be 'te'/'tm' "
             f"(or the 's'/'p' aliases), got {polarization!r}.")
+    _warn_thin_grating_validity(
+        'thin_grating_efficiency_1d', period, depth, wavelength,
+        n_ridge, n_groove, duty_cycle)
     k0 = 2 * np.pi / wavelength
     K = 2 * np.pi / period
     N = 2 * n_orders + 1  # total orders

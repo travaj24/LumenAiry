@@ -119,18 +119,28 @@ SELLMEIER_COEFFICIENTS = {
                    (9.26681282e-3, 4.24489805e-2, 1.05613573e2)),
     'N-BAK4':     ((1.28834642, 0.132817724, 0.945395373),
                    (7.79980626e-3, 3.15631177e-2, 1.05965875e2)),
-    'N-BAF52':    ((1.43903433, 0.179827671, 1.13174268),
-                   (9.07800726e-3, 4.39222348e-2, 1.06317650e2)),
+    # SCHOTT Zemax catalog 2017-01-20b (refractiveindex.info
+    # specs/SCHOTT-optical/N-BAF52, formula 2, 0.365-2.5 um).  Data-sheet
+    # anchors this row must reproduce: n_d = 1.60863, V_d = 46.60
+    # (glass code 609466.305).  ``_cross_check_bundled_values`` measures both.
+    'N-BAF52':    ((1.43903433, 0.0967046052, 1.09875818),
+                   (9.07800128e-3, 5.08212080e-2, 1.05691856e2)),
     'N-FK51A':    ((0.971247817, 0.216901417, 0.904651666),
                    (4.72301995e-3, 1.53575612e-2, 1.68681330e2)),
     'N-PSK53A':   ((1.38121836, 0.196745645, 0.886089205),
                    (7.06416337e-3, 2.33251345e-2, 9.74847345e1)),
     'N-LAK22':    ((1.14229781, 0.535138441, 1.04088385),
                    (5.85778594e-3, 1.98546147e-2, 1.00834017e2)),
+    # SCHOTT Zemax catalog 2017-01-20b (refractiveindex.info
+    # specs/SCHOTT-optical/N-LAK33A, formula 2, 0.32-2.5 um).  Data-sheet
+    # anchors: n_d = 1.75393, V_d = 52.27 (glass code 754523.422).
     'N-LAK33A':   ((1.44116999, 0.571749501, 1.16605226),
-                   (6.80933877e-3, 2.22291824e-2, 1.07097324e2)),
+                   (6.80933877e-3, 2.22291824e-2, 8.09379555e1)),
+    # SCHOTT Zemax catalog 2017-01-20b (refractiveindex.info
+    # specs/SCHOTT-optical/N-LAK33B, formula 2, 0.30-2.5 um).  Data-sheet
+    # anchors: n_d = 1.75500, V_d = 52.30 (glass code 755523.422).
     'N-LAK33B':   ((1.42288601, 0.593661336, 1.16135260),
-                   (6.70283452e-3, 2.19416210e-2, 1.01736644e2)),
+                   (6.70283452e-3, 2.19416210e-2, 8.07407701e1)),
     'N-SK11':     ((1.17963631, 0.229817295, 0.935789652),
                    (6.80282081e-3, 2.19737205e-2, 1.01513232e2)),
     'N-SK16':     ((1.34317774, 0.241144399, 0.994317969),
@@ -210,15 +220,21 @@ SELLMEIER_COEFFICIENTS = {
     'S-LAH79':    ((2.32557148, 0.507967133, 2.43087198),
                    (1.32895208e-2, 5.28335449e-2, 1.61122408e2)),
     # Common bulk materials ---------------------------------------------
+    # Malitson 1963 (J. Opt. Soc. Am. 53, 1377), refractiveindex.info
+    # main/CaF2/Malitson.  NOTE: with ``refractiveindex`` installed,
+    # GLASS_REGISTRY['CaF2'] dispatches to main/CaF2/Daimon-20 instead, which
+    # is a different published fit -- n_d 1.433877 vs 1.433849 here (2.8e-5).
+    # This row is only reached on a minimal install.
     'CaF2':       ((0.5675888, 0.4710914, 3.8484723),
                    (2.526430e-3, 1.007833e-2, 1.200556e3)),
+    # Dodge 1984 ordinary ray (Appl. Opt. 23, 1980), refractiveindex.info
+    # main/MgF2/Dodge-o -- the page GLASS_REGISTRY['MgF2'] also dispatches to.
     'MgF2':       ((0.48755108, 0.39875031, 2.3120353),
                    (1.882178e-3, 8.951888e-3, 5.661406e2)),
-    # v5.4.6 (audit F-33): replace the low-precision / mis-poled BaF2 row
-    # (B=(0.6435,0.5067,3.8261), C=(1.5e-3,9.5e-3,2.5e3)) -- ~0.4-0.5%
-    # index error in the visible -- with the authoritative Li 1980 fit
-    # (refractiveindex.info main/BaF2/Li).  C_i are the resonance
-    # wavelengths squared in um^2.
+    # Malitson & Dodge 1972 BaF2 (refractiveindex.info main/BaF2/Malitson),
+    # reproduced to 2.2e-16 across 0.4-1.6 um.  C_i are the resonance
+    # wavelengths squared in um^2.  BaF2 has no registry tuple, so this row
+    # is the only dispatch path for the name.
     'BaF2':       ((0.643356, 0.506762, 3.8261),
                    (0.057789**2, 0.10968**2, 46.3864**2)),
     # v4.15 (P1-GL-1): bundled Sellmeier fallback for tuple-registered
@@ -1030,16 +1046,27 @@ def _maybe_warn_outside_validity(glass_name, wavelength_m):
     )
 
 
-# v4.16.1 (audit P1-NEW-F2-1 / C.3): documented exemptions from the
-# GLASS_REGISTRY -> GLASS_VALIDITY direction.  These registry entries
-# legitimately have no GLASS_VALIDITY entry and the consistency check
-# must skip them rather than treating their absence as drift.
+# v4.16.1 (audit P1-NEW-F2-1 / C.3): names exempt from the
+# GLASS_VALIDITY -> GLASS_REGISTRY direction of the consistency check.  A
+# GLASS_VALIDITY row for one of these must NOT be treated as drift.
 #
-# * ``'air'`` -- callable; uses Edlen-form ambient model with no
-#   single physical Sellmeier validity range to pin.
-# * ``'__thin_lens__'`` -- internal marker, not a real glass.
-# * ``'__MIRROR__'`` -- internal marker, not a real glass.
-# * ``'vacuum'`` -- callable; returns n=1.0 at every wavelength.
+# Note what these names actually are today, which is not what this list's
+# earlier description claimed:
+#
+# * ``'air'`` -- NOT a registry entry.  ``get_glass_index`` short-circuits
+#   any spelling of the name to n = 1.0 before the registry lookup, but it
+#   honours ``GLASS_REGISTRY['air']`` if the caller registers a dispersion
+#   callable there (e.g. an Edlen ambient model, worth 1.000273 at 1 atm /
+#   1.064 um -- 273 um of OPD per metre of air path, ~256 waves).
+# * ``'vacuum'`` -- NOT a registry entry and NOT short-circuited;
+#   ``get_glass_index('vacuum')`` raises ValueError.  Register a callable
+#   (``lambda wl: 1.0``) if a name for it is wanted.
+# * ``'__thin_lens__'`` -- internal marker, and a real registry entry.
+# * ``'__MIRROR__'`` -- internal marker, NOT a registry entry
+#   (``raytrace`` carries the mirror flag on the Surface, not the glass).
+#
+# The three non-entries are kept here so that a GLASS_VALIDITY row added
+# for any of them stays legal.
 _GLASS_VALIDITY_REGISTRY_EXEMPTIONS = frozenset({
     'air',
     '__thin_lens__',
@@ -1048,16 +1075,204 @@ _GLASS_VALIDITY_REGISTRY_EXEMPTIONS = frozenset({
 })
 
 
-def _check_glass_registry_consistency():
+# ---------------------------------------------------------------------------
+# Bundled-row VALUE cross-check
+# ---------------------------------------------------------------------------
+# The structural checks below prove a bundled row EXISTS and is reachable.
+# They cannot see the failure they were written after: a row that is present,
+# reachable and evaluates cleanly, but holds a DIFFERENT GLASS's dispersion.
+# ``_cross_check_bundled_values`` closes that gap by re-deriving each bundled
+# row's two catalogue-published invariants -- n_d and the Abbe number V_d --
+# and comparing them against the refractiveindex.info page the row was
+# sourced from.  A mis-copied row moves n_d by 1e-3..1e-2 and V_d by whole
+# units, decades above the 4e-6 / 1e-4 residual an honestly-transcribed row
+# shows, so the check separates the two cleanly.
+#
+# It is deliberately NOT run at import: resolving ~75 catalogue pages parses
+# that many YAML files.  Run it from the test suite (or by hand) via
+# ``_check_glass_registry_consistency(check_values=True)``.
+
+# Spectral lines that define n_d and V_d = (n_d - 1) / (n_F - n_C):
+# He d (587.5618 nm), H F (486.1327 nm), H C (656.2725 nm).
+_LINE_D_M = 587.5618e-9
+_LINE_F_M = 486.1327e-9
+_LINE_C_M = 656.2725e-9
+
+# Manufacturer catalogue books searched, in order, for a bundled row whose
+# GLASS_REGISTRY entry is a sentinel rather than a (shelf, book, page) tuple.
+# The page name equals the glass name on every one of those shelves.
+_CROSS_CHECK_BOOKS = (
+    'SCHOTT-optical',
+    'OHARA-optical',
+    'CDGM-optical',
+    'HIKARI-optical',
+    'SUMITA-optical',
+)
+
+# Provenance of the bundled rows whose source page is NOT
+# ``('specs', <manufacturer book>, <glass name>)``: the literature ('main')
+# shelf names its pages after the AUTHOR of the fit, so the page cannot be
+# derived from the glass name.  These are the pages the bundled coefficients
+# were transcribed from, which is what the value check must compare against.
+#
+# Note that ``GLASS_REGISTRY['CaF2']`` dispatches to a DIFFERENT published
+# fit (``main/CaF2/Daimon-20``) when ``refractiveindex`` is installed, so
+# CaF2's bundled fallback and its catalogue dispatch disagree by 2.8e-5 in
+# n_d -- both are legitimate CaF2 fits, but the value differs by which
+# optional packages are present.  ``tests/unit/test_audit2609_a8_glass.py``
+# pins that deviation so it cannot grow unnoticed.
+_BUNDLED_ROW_SOURCE = {
+    'CaF2':         ('main', 'CaF2', 'Malitson'),
+    'BaF2':         ('main', 'BaF2', 'Malitson'),
+    'MgF2':         ('main', 'MgF2', 'Dodge-o'),
+    'SiO2':         ('main', 'SiO2', 'Malitson'),
+    'F_SILICA':     ('main', 'SiO2', 'Malitson'),
+    'FUSED_SILICA': ('main', 'SiO2', 'Malitson'),
+    'SILICA':       ('main', 'SiO2', 'Malitson'),
+}
+
+# Bars for the value check.  Derived from the measured residual of the whole
+# bundled table against refractiveindex.info (2026-09-12, database commit
+# a66ef88): 49 Sellmeier rows worst |dn_d| = 4.18e-6 and worst |dV_d|/V_d =
+# 1.13e-4 (both N-LASF40, whose catalogue page carries a marginally different
+# fit); 46 of 49 and all 24 polynomial rows are exact to <= 2.2e-16.  The
+# smallest genuine mis-copy this check must catch moved n_d by 2.9e-4 and
+# V_d by 1.5e-2 relative.  So each bar sits ~1 decade above the honest-row
+# noise floor and ~1 decade below the weakest real defect.
+_BUNDLED_VALUE_TOL_ND = 5e-5
+_BUNDLED_VALUE_TOL_VD_REL = 1e-3
+
+
+def _bundled_row_catalogue_source(name):
+    """Return the ``(shelf, book, page)`` a bundled row was sourced from.
+
+    Explicit provenance wins; otherwise the registry's own catalogue tuple;
+    otherwise ``None``, meaning "search :data:`_CROSS_CHECK_BOOKS` by name".
+    """
+    if name in _BUNDLED_ROW_SOURCE:
+        return _BUNDLED_ROW_SOURCE[name]
+    entry = GLASS_REGISTRY.get(name)
+    # ``_USER_FIXED_SENTINEL`` is bound further down the module; this
+    # function only ever runs long after import, so the late binding is fine.
+    if (isinstance(entry, tuple) and len(entry) == 3
+            and entry != _USER_FIXED_SENTINEL):
+        return entry
+    return None
+
+
+def _catalogue_index_fn_from_entry(entry):
+    """Return ``f(wavelength_m) -> n`` for one ``(shelf, book, page)``, or
+    ``None`` when that page does not resolve to a dispersion model."""
+    if not _ensure_refractiveindex_loaded():
+        return None
+    try:
+        shelf, book, page = entry
+        material = RefractiveIndexMaterial(shelf=shelf, book=book, page=page)
+        # Force one evaluation: a page carrying only tabulated k has no
+        # index function and must not be reported as a usable source.
+        material.get_refractive_index(_LINE_D_M * 1e9, unit='nm')
+    except Exception:
+        return None
+    return (lambda wl_m, _m=material:
+            float(_m.get_refractive_index(np.asarray(wl_m) * 1e9, unit='nm')))
+
+
+def _catalogue_index_fn(name):
+    """Return ``f(wavelength_m) -> n`` for the catalogue page backing
+    ``name``, or ``None`` when the page cannot be resolved."""
+    if not _ensure_refractiveindex_loaded():
+        return None
+    src = _bundled_row_catalogue_source(name)
+    candidates = [src] if src is not None else [
+        ('specs', book, name) for book in _CROSS_CHECK_BOOKS]
+    for entry in candidates:
+        fn = _catalogue_index_fn_from_entry(entry)
+        if fn is not None:
+            return fn
+    return None
+
+
+def _nd_vd(index_fn):
+    """Return ``(n_d, V_d)`` from a dispersion callable of wavelength [m]."""
+    n_d = float(index_fn(_LINE_D_M))
+    n_F = float(index_fn(_LINE_F_M))
+    n_C = float(index_fn(_LINE_C_M))
+    return n_d, (n_d - 1.0) / (n_F - n_C)
+
+
+def _cross_check_bundled_values(tol_nd=_BUNDLED_VALUE_TOL_ND,
+                                tol_vd_rel=_BUNDLED_VALUE_TOL_VD_REL):
+    """Measure every bundled dispersion row against its catalogue source.
+
+    Returns ``(n_checked, problems)``.  ``n_checked`` is the number of rows
+    whose catalogue page resolved (0 when ``refractiveindex`` is not
+    installed -- the check is then vacuous, which the caller must handle);
+    ``problems`` is a list of human-readable discrepancy lines, empty when
+    every resolved row reproduces its source's n_d and V_d within the bars.
+    """
+    rows = []
+    for name, coeffs in SELLMEIER_COEFFICIENTS.items():
+        rows.append((name, 'Sellmeier',
+                     lambda wl_m, _c=coeffs: float(_sellmeier_index(wl_m, _c))))
+    for name, coeffs in POLYNOMIAL_COEFFICIENTS.items():
+        rows.append((name, 'polynomial',
+                     lambda wl_m, _c=coeffs, _n=name:
+                     float(_polynomial_index(wl_m, _c, glass_name=_n))))
+
+    n_checked = 0
+    problems = []
+    for name, kind, bundled_fn in rows:
+        catalogue_fn = _catalogue_index_fn(name)
+        if catalogue_fn is None:
+            continue
+        try:
+            nd_row, vd_row = _nd_vd(bundled_fn)
+            nd_cat, vd_cat = _nd_vd(catalogue_fn)
+        except Exception as exc:            # unusable page / bad row
+            problems.append(
+                f"{name}: bundled {kind} row or its catalogue page could "
+                f"not be evaluated at the d/F/C lines "
+                f"({type(exc).__name__}: {exc})")
+            continue
+        n_checked += 1
+        d_nd = nd_row - nd_cat
+        d_vd_rel = (vd_row - vd_cat) / vd_cat
+        if abs(d_nd) > tol_nd or abs(d_vd_rel) > tol_vd_rel:
+            src = _bundled_row_catalogue_source(name)
+            problems.append(
+                f"{name}: bundled {kind} row gives n_d = {nd_row:.6f}, "
+                f"V_d = {vd_row:.3f}; refractiveindex.info "
+                f"{src if src else '(resolved by name)'} gives "
+                f"n_d = {nd_cat:.6f}, V_d = {vd_cat:.3f} "
+                f"(dn_d = {d_nd:+.3e}, tol {tol_nd:.1e}; "
+                f"dV_d/V_d = {d_vd_rel:+.3e}, tol {tol_vd_rel:.1e}).  "
+                f"A deviation this large means the row holds a different "
+                f"glass's dispersion -- re-transcribe it from the "
+                f"catalogue YAML rather than widening the tolerance.")
+    return n_checked, problems
+
+
+def _check_glass_registry_consistency(check_values=False):
     """4.14.2 (P0-NEW-1 meta-pattern): convert the class-of-bug
     (``GLASS_REGISTRY`` entry flagged ``'__sellmeier__'`` but absent
     from :data:`SELLMEIER_COEFFICIENTS`) into a fail-fast at module
     load, so a future drift can never re-surface as a silent
     ``ValueError`` at first call.
 
-    Six checks (v4.14.2 forward + v4.15 reverse + v4.16.1
+    Six structural checks (v4.14.2 forward + v4.15 reverse + v4.16.1
     GLASS_VALIDITY -> GLASS_REGISTRY + v4.16.1 tuple well-formedness +
-    v4.16.3 polynomial forward/reverse).
+    v4.16.3 polynomial forward/reverse), plus an opt-in seventh VALUE
+    check.
+
+    Parameters
+    ----------
+    check_values : bool, default False
+        Also run :func:`_cross_check_bundled_values`, which measures every
+        bundled dispersion row's n_d and V_d against the
+        refractiveindex.info page it was sourced from and raises if any row
+        has drifted.  Off by default because it parses one catalogue YAML
+        per row; the import-time call runs the structural checks only.  The
+        test suite calls it with ``check_values=True``.
 
     * **Forward** (v4.14.2): every ``'__sellmeier__'``-flagged
       registry entry must have a coefficient row.
@@ -1242,6 +1457,15 @@ def _check_glass_registry_consistency():
                 f"requires non-negative lambda_min and positive "
                 f"lambda_max."
             )
+    # Opt-in VALUE check: the six checks above prove a row is present and
+    # reachable, not that it holds the right glass.
+    if check_values:
+        n_checked, problems = _cross_check_bundled_values()
+        if problems:
+            raise RuntimeError(
+                "Bundled dispersion rows disagree with refractiveindex.info "
+                f"({len(problems)} of {n_checked} checked rows):\n  "
+                + "\n  ".join(problems))
 
 
 _check_glass_registry_consistency()
@@ -1380,7 +1604,10 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
 
     Resolution order:
 
-    1. ``glass_name`` is ``'air'`` (case-insensitive) -- returns 1.0.
+    1. ``glass_name`` is ``'air'`` (case-insensitive) -- returns
+       ``GLASS_REGISTRY['air'](wavelength)`` if a callable is registered
+       under the lower-case key, else 1.0.  ``'vacuum'`` is NOT special-
+       cased; register a callable if you want the name.
     2. ``GLASS_REGISTRY[glass_name]`` is a callable -- calls it with
        ``wavelength`` (in metres) and returns the real part.
     3. The registry entry is the sentinel ``'__sellmeier__'`` -- looks
@@ -1422,6 +1649,14 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
     1.5
     """
     if glass_name.lower() == 'air':
+        # n = 1.0 is the shipped model for air, but the short-circuit must
+        # not make a better one unreachable: a caller who registers an
+        # ambient/Edlen callable under the canonical lower-case key gets it
+        # honoured, for every spelling of the name.
+        air_entry = GLASS_REGISTRY.get('air')
+        if callable(air_entry):
+            n = air_entry(wavelength)
+            return float(n.real) if isinstance(n, complex) else float(n)
         return 1.0
 
     if glass_name not in GLASS_REGISTRY:
@@ -1618,6 +1853,12 @@ def get_glass_index_complex(glass_name: str,
         ``exp(-2*pi * kappa * thickness / wavelength)``.
     """
     if glass_name.lower() == 'air':
+        # Mirror get_glass_index: a registered ambient callable wins over
+        # the n = 1 default, and a complex return keeps its kappa.
+        air_entry = GLASS_REGISTRY.get('air')
+        if callable(air_entry):
+            n = air_entry(wavelength)
+            return n if isinstance(n, complex) else complex(float(n), 0.0)
         return 1.0 + 0.0j
 
     if glass_name not in GLASS_REGISTRY:
@@ -1651,14 +1892,54 @@ def get_glass_index_complex(glass_name: str,
     try:
         kappa = _glass_cache[glass_name].get_extinction_coefficient(
             wavelength * 1e9, unit='nm')
-        if kappa is None:
+        # A page whose tabulated k does not span this wavelength interpolates
+        # to NaN rather than raising, so ``None`` is not the only "no data
+        # here" signal; a NaN kappa would otherwise poison every downstream
+        # absorption product silently.
+        if kappa is None or not _math.isfinite(float(kappa)):
             _warn_missing_kappa_once(glass_name, wavelength)
             kappa = 0.0
-    except (AttributeError, NotImplementedError, KeyError, ValueError, TypeError):
+    except _missing_kappa_exceptions():
         _warn_missing_kappa_once(glass_name, wavelength)
         kappa = 0.0
 
     return complex(n_real, float(kappa))
+
+
+# Built-in exception types that mean "this entry carries no extinction data".
+_MISSING_KAPPA_BUILTIN_EXCEPTIONS = (
+    AttributeError, NotImplementedError, KeyError, ValueError, TypeError)
+
+_missing_kappa_exception_cache = None
+
+
+def _missing_kappa_exceptions():
+    """Exception types that mean "no extinction data for this entry".
+
+    ``refractiveindex`` signals a catalogue page with no ``k`` table by
+    raising its own ``NoExtinctionCoefficient``, which subclasses
+    ``Exception`` DIRECTLY -- so the built-in tuple above does not cover it
+    and, without this widening, the documented ``kappa = 0`` fallback is
+    unreachable for exactly the pages that need it (every ``main``-shelf
+    window material: CaF2, MgF2, Si and the four fused-silica aliases).
+    The class is resolved from the installed package rather than imported,
+    because ``refractiveindex`` is optional (CONVENTIONS Section 10).
+    """
+    global _missing_kappa_exception_cache
+    if _missing_kappa_exception_cache is not None:
+        return _missing_kappa_exception_cache
+    extra = ()
+    if _ensure_refractiveindex_loaded():
+        import sys as _sys
+        for mod in (_sys.modules.get(RefractiveIndexMaterial.__module__),
+                    _sys.modules.get('refractiveindex')):
+            cls = getattr(mod, 'NoExtinctionCoefficient', None)
+            if isinstance(cls, type) and issubclass(cls, BaseException):
+                extra = (cls,)
+                break
+    _missing_kappa_exception_cache = (
+        _MISSING_KAPPA_BUILTIN_EXCEPTIONS + extra)
+    return _missing_kappa_exception_cache
 
 
 _kappa_warned: set = set()

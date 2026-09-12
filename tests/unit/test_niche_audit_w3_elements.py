@@ -656,7 +656,14 @@ def test_el10_radial_sampler_is_accurate_on_both_grid_parities(N):
 # ===========================================================================
 
 def _turbulence_reference(N, dx, r0, seed):
-    """Independent integer-DC-anchor implementation (the e29a8db convention)."""
+    """Independent integer-DC-anchor implementation (the e29a8db convention).
+
+    Amplitude is ``sqrt(PSD)*df`` (Schmidt 2010 ``ft_phase_screen``): the real
+    and imaginary noise draws are independent, so taking the real part costs
+    no factor of 2 and no ``sqrt(2)`` compensation is due.  This reference
+    carried the spurious ``sqrt(2)`` until the 2026-09-11 audit (E3) measured
+    the screen's structure function at 1.987x the lattice's own value.
+    """
     rng = np.random.default_rng(seed)
     df = 1.0 / (N * dx)
     fx = (np.arange(N) - N // 2) * df
@@ -666,7 +673,7 @@ def _turbulence_reference(N, dx, r0, seed):
         -11.0 / 6.0)
     psd[N // 2, N // 2] = 0.0
     noise = rng.standard_normal((N, N)) + 1j * rng.standard_normal((N, N))
-    pf = noise * (np.sqrt(2.0 * psd) * df)
+    pf = noise * (np.sqrt(psd) * df)
     return np.real(
         np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(pf)))) * N ** 2
 

@@ -54,6 +54,13 @@ from typing import Any, Dict, Optional, Union
 
 import numpy as np
 
+# Innermost node of the default TIS quadrature, in u = sin(theta).  Any lobe
+# is flat well inside its own shoulder, so the u < _TIS_U_MIN disc is added
+# analytically; 1e-7 is four decades below the narrowest shoulder a polished
+# optic exhibits (l ~ 1e-3) and contributes ~pi*B(0)*1e-14 to the integral.
+_TIS_U_MIN = 1e-7
+
+
 # =============================================================================
 # Base class
 # =============================================================================
@@ -98,23 +105,85 @@ class BSDFModel(ABC):
         """Draw ``n_samples`` outgoing direction cosines from the
         BSDF lobe."""
 
+    # True when the lobe is defined about the SPECULAR direction (so a
+    # local-frame draw has to be rotated into it); False when it is defined
+    # about the surface normal and the local draw is already in the surface
+    # frame (Lambertian).  Read by :func:`sample_scatter_rays`, which draws
+    # every ray's local sample in one call and rotates them as a batch.
+    _lobe_about_specular: bool = True
+
+    def _sample_local(
+        self,
+        n_samples: int,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        """Draw ``n_samples`` direction cosines in the LOBE-LOCAL frame
+        (lobe axis along ``+z``), before any rotation onto the specular
+        direction.  Incidence-independent by construction, which is what
+        lets a whole ray bundle be sampled in one call."""
+        raise NotImplementedError(
+            f"{type(self).__name__}._sample_local: subclasses of BSDFModel "
+            f"must implement _sample_local(n_samples, rng) -> (n, 3) local "
+            f"direction cosines so that sample_scatter_rays can draw a whole "
+            f"bundle at once.")
+
     def total_integrated_scatter(self) -> float:
         """TIS = integral over outgoing hemisphere of BSDF * cos(theta) dOmega.
 
         Subclasses override when a closed form is available; the
-        default falls back to a uniform-grid numerical integration
-        which is always correct but slow.
+        default falls back to a numerical integration which is always
+        correct but slow.
+
+        The quadrature variable is ``u = sin(theta)``, not ``theta``:
+        ``BSDF cos(theta) dOmega = BSDF(u) u du dphi`` exactly, so the
+        integrand loses the cos/sin weights and -- more importantly -- the
+        samples can be placed where a scatter lobe actually lives.  Real
+        microroughness lobes have shoulders at ``u ~ 1e-3..1e-2``; a linear
+        grid in theta with a few hundred points does not resolve them and
+        under-reads the integral by double-digit percentages.  The nodes are
+        therefore two-point Gauss-Legendre inside GEOMETRIC cells in
+        ``ln u``, from ``_TIS_U_MIN`` to 1, with the remaining
+        ``[0, u_min]`` disc added analytically as ``B(u_min) u_min**2 / 2``
+        (the lobe is flat there by construction).
+
+        Measured against a 2e6-point reference at the same node count
+        (256 x 128), relative error across Lambertian, Gaussian
+        (sigma = 1e-2 and 0.3) and Harvey-Shack (l = 1e-1 ... 1e-4,
+        s = 1.5 / 2 / 2.5): worst 1.4e-6, typical 1e-9.  The linear-theta
+        grid it replaces read -32 % on Gaussian(sigma = 1e-2), -18 % on
+        Harvey-Shack(l = 1e-3) and -32 % at l = 1e-4.  The three shipped
+        models all override this method with a closed form, so the grid
+        matters for user subclasses.
 
         v4.13.0 (Tier-2 perf, audit group alpha): the integrand is now
         evaluated as one fully-vectorised meshgrid call rather than a
         per-(theta, phi) Python loop, yielding ~2-3 orders of magnitude
         speedup at the default 256x128 quadrature.
         """
-        n_theta = 256
+        n_cells = 128
+        n_theta = 2 * n_cells       # two Gauss nodes per cell
         n_phi = 128
-        theta = np.linspace(1e-6, np.pi / 2, n_theta)
+        # Geometric cells in v = ln u (u = sin theta), two-point
+        # Gauss-Legendre inside each: with du = u dv the hemisphere integral
+        # is int f(u) u**2 dv, whose integrand is smooth in v for any lobe
+        # (a power-law tail is a straight line there).  Two nodes per cell
+        # integrate that exactly through cubic order, so the residual is
+        # O(dv**4) uniformly across lobe widths instead of the linear-theta
+        # grid's "resolve the shoulder or lose it".
+        ln_lo = np.log(_TIS_U_MIN)
+        v_edges = np.linspace(ln_lo, 0.0, n_cells + 1)
+        dv = v_edges[1] - v_edges[0]
+        v_mid = 0.5 * (v_edges[:-1] + v_edges[1:])
+        off = dv / (2.0 * np.sqrt(3.0))
+        v = np.concatenate([v_mid - off, v_mid + off])
+        order = np.argsort(v)
+        v = v[order]
+        u = np.exp(v)
+        w_u = 0.5 * dv * u ** 2
+        theta = np.arcsin(np.clip(u, 0.0, 1.0))
         phi = np.linspace(0, 2 * np.pi, n_phi, endpoint=False)
         T, P = np.meshgrid(theta, phi, indexing='ij')
+        W, _ = np.meshgrid(w_u, phi, indexing='ij')
         # Build the full (n_theta, n_phi, 3) scattered-direction grid
         # and evaluate the BSDF in one call.  ``inc`` is broadcast
         # against the (..., 3) scattered direction shape.
@@ -145,11 +214,12 @@ class BSDFModel(ABC):
                 f"evaluator's broadcasting, or override "
                 f"total_integrated_scatter() with a closed-form "
                 f"expression.")
-        dth = theta[1] - theta[0]
         dph = phi[1] - phi[0]
-        # Hemisphere integrand: BSDF(theta, phi) * cos(theta) * sin(theta).
-        integrand = B * np.cos(T) * sin_T
-        return float(integrand.sum() * dth * dph)
+        # Hemisphere integral in u = sin(theta): BSDF * u du dphi.
+        tis = float((B * W).sum() * dph)
+        # Analytic completion of the u < _TIS_U_MIN disc.
+        tis += float(B[0].mean() * 2 * np.pi * _TIS_U_MIN ** 2 / 2)
+        return tis
 
 
 # =============================================================================
@@ -229,7 +299,13 @@ class LambertianBSDF(BSDFModel):
         n_samples: int,
         rng: Optional[Union[int, np.random.Generator]] = None,
     ) -> np.ndarray:
-        rng = _get_rng(rng)
+        return self._sample_local(n_samples, _get_rng(rng))
+
+    # The Lambertian lobe is about the surface NORMAL, so the local draw is
+    # already in the surface frame and needs no specular rotation.
+    _lobe_about_specular = False
+
+    def _sample_local(self, n_samples, rng):
         # Cosine-weighted hemisphere sample (Lambertian importance).
         xi1 = rng.random(n_samples)
         xi2 = rng.random(n_samples)
@@ -325,7 +401,10 @@ class GaussianBSDF(BSDFModel):
         n_samples: int,
         rng: Optional[Union[int, np.random.Generator]] = None,
     ) -> np.ndarray:
-        rng = _get_rng(rng)
+        local = self._sample_local(n_samples, _get_rng(rng))
+        return _rotate_local_to_specular(local, incident_dir)
+
+    def _sample_local(self, n_samples, rng):
         # BSDF-1 (AUDIT_BSDF_SEGMENT_GEOMETRY): draw the offset angle from a
         # RAYLEIGH law, not a half-normal.  To reproduce the Gaussian lobe as a
         # Monte-Carlo DIRECTION distribution the per-theta density must carry
@@ -347,25 +426,7 @@ class GaussianBSDF(BSDFModel):
         L_loc = np.sin(theta) * np.cos(phi)
         M_loc = np.sin(theta) * np.sin(phi)
         N_loc = np.cos(theta)
-        # Rotate into surface frame.  Specular direction is
-        # (Li, Mi, -Ni).  Build orthonormal basis around it.
-        inc = np.asarray(incident_dir, dtype=float)
-        spec = np.array([inc[0], inc[1], -inc[2]])
-        spec = spec / np.linalg.norm(spec)
-        if abs(spec[2]) < 0.999:
-            up = np.array([0.0, 0.0, 1.0])
-        else:
-            up = np.array([1.0, 0.0, 0.0])
-        tangent = np.cross(up, spec)
-        tangent /= np.linalg.norm(tangent)
-        bitangent = np.cross(spec, tangent)
-        dirs = (L_loc[:, None] * tangent
-                + M_loc[:, None] * bitangent
-                + N_loc[:, None] * spec)
-        # Force into outgoing hemisphere (z > 0)
-        flip = dirs[:, 2] < 0
-        dirs[flip] *= -1
-        return dirs
+        return np.stack([L_loc, M_loc, N_loc], axis=-1)
 
     def total_integrated_scatter(self) -> float:
         return float(self.scattered_fraction)
@@ -439,51 +500,70 @@ class HarveyShackBSDF(BSDFModel):
         amp = self._amplitude()
         return amp / (1 + (sin_theta / self.l) ** 2) ** (self.s / 2) * in_hemi
 
+    def total_integrated_scatter(self) -> float:
+        """Closed-form hemisphere integral of the ABC lobe.
+
+        With ``u = sin(theta)`` the hemisphere integral separates exactly::
+
+            TIS = 2 pi b0 int_0^1 u du / (1 + (u/l)^2)^(s/2)
+
+        and the substitution ``t = 1 + (u/l)^2`` integrates it in closed
+        form::
+
+            TIS = pi b0 l^2 [(1 + 1/l^2)^(1 - s/2) - 1] / (1 - s/2)   s != 2
+            TIS = pi b0 l^2 ln(1 + 1/l^2)                             s == 2
+
+        Exact and O(1).  The inherited quadrature is not used because the
+        lobe is concentrated at ``u ~ l``, which the default grid must
+        resolve; at ``l = 1e-3`` the pre-override linear-theta grid
+        under-read TIS by 18 %.
+        """
+        amp = self._amplitude()
+        l_sq = float(self.l) ** 2
+        s = float(self.s)
+        ratio = 1.0 + 1.0 / l_sq
+        if abs(s - 2.0) < 1e-12:
+            return float(np.pi * amp * l_sq * np.log(ratio))
+        p = 1.0 - s / 2.0
+        return float(np.pi * amp * l_sq * (ratio ** p - 1.0) / p)
+
     def sample(
         self,
         incident_dir: np.ndarray,
         n_samples: int,
         rng: Optional[Union[int, np.random.Generator]] = None,
     ) -> np.ndarray:
-        rng = _get_rng(rng)
-        # Sample sin(theta) from the ABC radial profile via inverse-CDF.
-        # PDF_radial ~ 1/(1 + (u/l)^2)^(s/2) * u  where u=sin(theta)
-        # CDF from 0 to 1 (sin limit); use rejection sampling in the
-        # interest of simplicity and robustness.
-        accepted = []
-        # Upper bound of radial weight (sin*BSDF) is achieved near sin ~ l
-        peak_u = self.l / np.sqrt(max(self.s - 1, 1e-6))
-        peak_val = peak_u / (1 + (peak_u / self.l) ** 2) ** (self.s / 2)
-        while len(accepted) < n_samples:
-            batch = min(4 * (n_samples - len(accepted)), 10000)
-            u = rng.random(batch)  # candidate sin(theta) in [0,1]
-            w = u / (1 + (u / self.l) ** 2) ** (self.s / 2)
-            p = rng.random(batch) * peak_val
-            sel = p < w
-            accepted.extend(u[sel].tolist())
-        sin_theta = np.array(accepted[:n_samples])
+        local = self._sample_local(n_samples, _get_rng(rng))
+        return _rotate_local_to_specular(local, incident_dir)
+
+    def _sample_local(self, n_samples, rng):
+        # Exact inverse-CDF draw of u = sin(theta) from the power-weighted
+        # radial density  p(u) ~ u / (1 + (u/l)^2)^(s/2)  on [0, 1].
+        # Substituting t = 1 + (u/l)^2 makes the CDF elementary (the same
+        # substitution that closes total_integrated_scatter):
+        #     s == 2 : t = T**xi                       with T = 1 + 1/l^2
+        #     s != 2 : t = (1 + xi (T**p - 1))**(1/p)  with p = 1 - s/2
+        #     u = l * sqrt(t - 1)
+        # This replaces a rejection sampler whose acceptance was ~9 % at
+        # l = 1e-2 and ~1 % at l = 1e-3 (and which grew a Python list), so
+        # the draw is now one RNG call of known length -- which is also what
+        # lets sample_scatter_rays draw a whole bundle at once.
+        l = float(self.l)
+        s = float(self.s)
+        xi = rng.random(n_samples)
+        big_t = 1.0 + 1.0 / (l * l)
+        if abs(s - 2.0) < 1e-12:
+            t = big_t ** xi
+        else:
+            p = 1.0 - s / 2.0
+            t = (1.0 + xi * (big_t ** p - 1.0)) ** (1.0 / p)
+        sin_theta = np.clip(l * np.sqrt(np.maximum(t - 1.0, 0.0)), 0.0, 1.0)
         phi = 2 * np.pi * rng.random(n_samples)
         cos_theta = np.sqrt(np.maximum(1 - sin_theta ** 2, 0.0))
         L_loc = sin_theta * np.cos(phi)
         M_loc = sin_theta * np.sin(phi)
         N_loc = cos_theta
-        # Rotate into surface frame (same as Gaussian)
-        inc = np.asarray(incident_dir, dtype=float)
-        spec = np.array([inc[0], inc[1], -inc[2]])
-        spec = spec / np.linalg.norm(spec)
-        if abs(spec[2]) < 0.999:
-            up = np.array([0.0, 0.0, 1.0])
-        else:
-            up = np.array([1.0, 0.0, 0.0])
-        tangent = np.cross(up, spec)
-        tangent /= np.linalg.norm(tangent)
-        bitangent = np.cross(spec, tangent)
-        dirs = (L_loc[:, None] * tangent
-                + M_loc[:, None] * bitangent
-                + N_loc[:, None] * spec)
-        flip = dirs[:, 2] < 0
-        dirs[flip] *= -1
-        return dirs
+        return np.stack([L_loc, M_loc, N_loc], axis=-1)
 
 
 # =============================================================================
@@ -499,6 +579,41 @@ def _get_rng(rng):
     return rng
 
 
+def _rotate_local_to_specular(local: np.ndarray,
+                              incident_dir: np.ndarray) -> np.ndarray:
+    """Rotate lobe-local direction cosines onto the specular direction.
+
+    ``local`` is ``(n, 3)`` with the lobe axis along ``+z``; ``incident_dir``
+    is either one ``(3,)`` direction (applied to every sample) or ``(n, 3)``,
+    one per sample -- the batched form is what lets a whole ray bundle be
+    rotated in a single call instead of one Python call per ray.
+
+    The specular direction of an arriving ``(Li, Mi, Ni)`` is
+    ``(Li, Mi, -Ni)``; the orthonormal frame around it uses ``+z`` as the
+    reference up-vector, falling back to ``+x`` when the specular direction
+    is within 2.6 deg of ``+-z`` (where the cross product degenerates).
+    Samples landing below the surface are folded back into the outgoing
+    hemisphere.
+    """
+    local = np.asarray(local, dtype=float)
+    inc = np.atleast_2d(np.asarray(incident_dir, dtype=float))
+    spec = np.stack([inc[:, 0], inc[:, 1], -inc[:, 2]], axis=-1)
+    spec = spec / np.linalg.norm(spec, axis=-1, keepdims=True)
+    near_pole = np.abs(spec[:, 2]) >= 0.999
+    up = np.where(near_pole[:, None],
+                  np.array([1.0, 0.0, 0.0]),
+                  np.array([0.0, 0.0, 1.0]))
+    tangent = np.cross(up, spec)
+    tangent = tangent / np.linalg.norm(tangent, axis=-1, keepdims=True)
+    bitangent = np.cross(spec, tangent)
+    dirs = (local[:, 0:1] * tangent
+            + local[:, 1:2] * bitangent
+            + local[:, 2:3] * spec)
+    flip = dirs[:, 2] < 0
+    dirs[flip] *= -1
+    return dirs
+
+
 def make_bsdf(spec: Optional[Union[BSDFModel, Dict[str, Any]]]) -> Optional[BSDFModel]:
     """Construct a BSDFModel from a dict spec, a BSDFModel, or None.
 
@@ -512,7 +627,14 @@ def make_bsdf(spec: Optional[Union[BSDFModel, Dict[str, Any]]]) -> Optional[BSDF
     * ``{'kind': 'harvey_shack', 'b0': 0.01, 'l': 0.01, 's': 2.0,
          'wavelength_ref': 633e-9, 'wavelength': 1310e-9}``
 
-    Any unrecognised ``'kind'`` raises ``ValueError``.
+    The Harvey-Shack literature aliases ``A`` / ``B`` / ``C`` are accepted
+    for ``b0`` / ``l`` / ``s`` (the :class:`HarveyShackBSDF` docstring
+    teaches them), but not both spellings of the same parameter at once.
+
+    Any unrecognised ``'kind'`` raises ``ValueError``, and so does any key
+    the chosen kind does not consume -- a silently-ignored ``'sigma'`` or
+    ``'scatter_fraction'`` builds a default lobe that can be 10x wider and
+    50x weaker than the caller asked for.
     """
     if spec is None or isinstance(spec, BSDFModel):
         return spec
@@ -522,21 +644,62 @@ def make_bsdf(spec: Optional[Union[BSDFModel, Dict[str, Any]]]) -> Optional[BSDF
             f"{type(spec).__name__}")
     kind = spec.get('kind', '').lower()
     if kind == 'lambertian':
+        _check_bsdf_keys(spec, kind, ('rho',))
         return LambertianBSDF(rho=spec.get('rho', 1.0))
     if kind == 'gaussian':
+        _check_bsdf_keys(spec, kind, ('sigma_rad', 'scattered_fraction'))
         return GaussianBSDF(
             sigma_rad=spec.get('sigma_rad', 0.01),
             scattered_fraction=spec.get('scattered_fraction', 0.01))
     if kind == 'harvey_shack':
+        aliases = {'A': 'b0', 'B': 'l', 'C': 's'}
+        _check_bsdf_keys(
+            spec, kind,
+            ('b0', 'l', 's', 'wavelength_ref', 'wavelength'), aliases)
+        resolved = {canon: spec[alias]
+                    for alias, canon in aliases.items() if alias in spec}
         return HarveyShackBSDF(
-            b0=spec.get('b0', 1.0),
-            l=spec.get('l', 0.01),
-            s=spec.get('s', 2.0),
+            b0=spec.get('b0', resolved.get('b0', 1.0)),
+            l=spec.get('l', resolved.get('l', 0.01)),
+            s=spec.get('s', resolved.get('s', 2.0)),
             wavelength_ref=spec.get('wavelength_ref'),
             wavelength=spec.get('wavelength'))
     raise ValueError(
         f"make_bsdf: unknown kind {kind!r}. "
         f"Supported: 'lambertian', 'gaussian', 'harvey_shack'.")
+
+
+def _check_bsdf_keys(spec, kind, accepted, aliases=None):
+    """Reject dict keys the chosen BSDF kind would silently ignore.
+
+    A spec key that no constructor argument consumes used to leave the
+    corresponding parameter at its default with no diagnostic, so a
+    mis-remembered name ('sigma' for 'sigma_rad') produced a plausible but
+    wrong lobe.  ``aliases`` maps accepted alternative spellings to their
+    canonical parameter; supplying both spellings of one parameter is an
+    error rather than a silent precedence rule.
+    """
+    aliases = aliases or {}
+    allowed = {'kind', *accepted, *aliases}
+    unknown = sorted(set(spec) - allowed)
+    if unknown:
+        alias_note = ''
+        if aliases:
+            alias_note = (" Aliases: "
+                          + ", ".join(f"{a} -> {c}"
+                                      for a, c in sorted(aliases.items()))
+                          + ".")
+        raise ValueError(
+            f"make_bsdf: unknown key(s) {unknown} for kind {kind!r}.  "
+            f"Accepted: {sorted(accepted)}.{alias_note}  A key that is not "
+            f"consumed would leave that parameter at its default "
+            f"silently, so it is rejected instead.")
+    for alias, canon in aliases.items():
+        if alias in spec and canon in spec:
+            raise ValueError(
+                f"make_bsdf: {kind!r} spec sets both {alias!r} and its "
+                f"canonical name {canon!r} "
+                f"({spec[alias]!r} vs {spec[canon]!r}).  Pass one.")
 
 
 def sample_scatter_rays(
@@ -573,6 +736,14 @@ def sample_scatter_rays(
     :func:`raytrace.trace` to propagate them through the remainder of
     the system for a stray-light analysis.  Use ``n_per_ray > 1`` for
     Monte Carlo stray-light integration.
+
+    The whole bundle is drawn in ONE call: the lobe-local sample is
+    incidence-independent (:meth:`BSDFModel._sample_local`) and the rotation
+    onto each ray's specular direction is a batched 3x3 (see
+    :func:`_rotate_local_to_specular`).  A consequence is that which random
+    numbers land on which ray differs from a per-ray loop, so seeded output
+    is not comparable ray-by-ray with pre-vectorisation runs; the sampled
+    DISTRIBUTION is unchanged.
     """
     from .. import raytrace as rt
     bsdf = make_bsdf(
@@ -584,13 +755,16 @@ def sample_scatter_rays(
     n_rays = incident_rays.x.size
     total = n_rays * n_per_ray
     rng = _get_rng(rng)
-    out_dirs = np.empty((total, 3), dtype=np.float64)
-    for i in range(n_rays):
-        inc = np.array([incident_rays.L[i],
-                        incident_rays.M[i],
-                        incident_rays.N[i]])
-        out_dirs[i * n_per_ray:(i + 1) * n_per_ray] = bsdf.sample(
-            inc, n_per_ray, rng=rng)
+    local = bsdf._sample_local(total, rng)
+    if bsdf._lobe_about_specular:
+        inc = np.stack([np.repeat(incident_rays.L, n_per_ray),
+                        np.repeat(incident_rays.M, n_per_ray),
+                        np.repeat(incident_rays.N, n_per_ray)], axis=-1)
+        out_dirs = _rotate_local_to_specular(local, inc)
+    else:
+        # Lobe defined about the surface normal: the local draw already is
+        # the surface-frame direction (LambertianBSDF).
+        out_dirs = np.asarray(local, dtype=np.float64)
     x = np.repeat(incident_rays.x, n_per_ray)
     y = np.repeat(incident_rays.y, n_per_ray)
     z = np.repeat(incident_rays.z, n_per_ray)

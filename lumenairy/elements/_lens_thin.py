@@ -26,6 +26,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import warnings
 from typing import Dict, Optional, Union
 
 import numpy as np
@@ -555,6 +556,18 @@ def apply_spherical_lens(
         through the glass between them (so thickness and surface order do
         act), plus ``surface_model='displaced'`` for the ray-angle
         obliquity term this single screen drops.
+
+        **The two models return their field on DIFFERENT reference
+        planes**, so they are not drop-in substitutes.  A single screen
+        images from the thin-lens principal plane; the split-step model
+        leaves the field on the BACK VERTEX.  Measured on n = 1.5168,
+        R1 = +20 mm, R2 = -20 mm, d = 3 mm at 1 um with a 1.2 mm Gaussian
+        (exact ASM scan): thin-lens f = 19.3498 mm, thick EFL 19.8573 mm,
+        BFL 18.8424 mm; ``apply_spherical_lens`` focuses at 19.3111 mm and
+        ``apply_real_lens`` at 18.8080 mm -- 503 um apart, 2.6 % of the
+        focal length, with 1.708 rad rms (0.272 waves) of phase difference
+        across the illuminated pupil.  Swapping one for the other shifts
+        every downstream plane by that offset.
     lumenairy.elements.apply_real_lens_traced :
         Per-pixel ray-traced OPL + wave-optics amplitude envelope; the
         reference when the OPD tolerance is tighter than the bound below.
@@ -1170,9 +1183,10 @@ def apply_grin_lens(
     xc: float = 0,
     yc: float = 0,
     use_gpu: bool = False,
+    thin_form: bool = False,
 ) -> np.ndarray:
     """
-    Apply a gradient-index (GRIN) rod lens phase (thin approximation).
+    Apply a gradient-index (GRIN) rod lens as a single quadratic screen.
 
     Models a GRIN rod with parabolic index profile:
 
@@ -1200,6 +1214,13 @@ def apply_grin_lens(
     use_gpu : bool
         If True and CuPy is available, run on the GPU.  Added in
         v4.13.2 (audit C-P1-6) to honour the module-docstring claim.
+    thin_form : bool, default False
+        If True, use the short-rod approximation ``f = 1/(n0 g**2 d)``
+        instead of the exact paraxial power ``f = 1/(n0 g sin(g d))``.  The
+        two agree to 0.04 % at ``g*d = 0.05`` but the approximation is 10 %
+        low at ``g*d = pi/4`` and 36 % low at the quarter pitch
+        ``g*d = pi/2``, so it warns above ``g*d = 0.2``.  Provided only to
+        reproduce the pre-fix screen.
 
     Returns
     -------
@@ -1207,19 +1228,54 @@ def apply_grin_lens(
 
     Notes
     -----
-    The quadratic OPD through the rod gives an effective focal length
+    The rod's exact paraxial ABCD has ``C = -n0 g sin(g d)``, so its
+    effective focal length is
 
-        f = 1 / (n0 * g**2 * d)      (thin approximation, g*d << 1)
+        f = 1 / (n0 * g * sin(g * d))
 
-    For longer rods the exact result is ``f = 1 / (n0 * g * sin(g*d))``.
-    Quarter-pitch (g*d = pi/2) collimates a point source at the front face;
-    half-pitch (g*d = pi) reimages 1:1 inverted.
+    and the screen applied here is ``phi = -k n0 g sin(g d) r**2 / 2``,
+    which carries that power at ANY pitch.  ``f = 1/(n0 g**2 d)`` is its
+    ``g*d << 1`` limit and is what ``thin_form=True`` selects; the two
+    differ by the factor ``sin(g d)/(g d)``.
+
+    A single screen carries the rod's POWER, not its principal planes.  The
+    rod's back focal distance is ``cos(g d)/(n0 g sin(g d))``, measured from
+    the exit face, whereas a thin screen focuses a collimated input at ``f``
+    past the screen -- the two differ by ``(1 - cos(g d))/(n0 g sin(g d))``,
+    which is zero only at ``g*d -> 0``.  At quarter pitch (``g*d = pi/2``)
+    the rod's focus sits ON the exit face while this screen puts it one
+    focal length beyond.  Use a real ray/split-step model when the focus
+    POSITION relative to the rod faces matters; beyond quarter pitch the
+    single-screen reduction warns for that reason (the power passes through
+    zero at half pitch, where the rod instead reimages 1:1 inverted).
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_grin_lens', input_kind='field')
+
+    gd = float(g) * float(d)
+    if thin_form:
+        if abs(gd) > 0.2:
+            warnings.warn(
+                f"apply_grin_lens: thin_form=True at g*d = {gd:.4g}.  The "
+                f"short-rod power n0*g**2*d is low by the factor "
+                f"sin(g*d)/(g*d) = {(np.sin(gd) / gd if gd else 1.0):.4f} "
+                f"here (36 % at the quarter pitch g*d = pi/2), so the screen "
+                f"focuses at {(np.sin(gd) / gd if gd else 1.0):.4f} x the "
+                f"rod's paraxial focal length.  Drop thin_form to use the "
+                f"exact paraxial power f = 1/(n0*g*sin(g*d)).",
+                UserWarning, stacklevel=2)
+    elif abs(gd) > np.pi / 2:
+        warnings.warn(
+            f"apply_grin_lens: g*d = {gd:.4g} exceeds the quarter pitch "
+            f"pi/2.  A single quadratic screen carries the rod's paraxial "
+            f"power only: that power passes through zero at the half pitch "
+            f"g*d = pi (where the rod reimages 1:1 inverted, which a screen "
+            f"cannot do) and changes sign beyond it.  Model the rod with a "
+            f"ray-traced / split-step GRIN element in this regime.",
+            UserWarning, stacklevel=2)
 
     # v4.13.2 (audit C-P1-6): CuPy dispatch (was previously numpy-only).
     # See apply_cylindrical_lens above for the _lenses_module.cp
@@ -1244,7 +1300,10 @@ def apply_grin_lens(
     X, Y = xp.meshgrid(x, y)
     r_sq = (X - xc) ** 2 + (Y - yc) ** 2
 
-    phase = -k * n0 * (g ** 2 / 2) * d * r_sq
+    # Exact paraxial power of the rod (ABCD C = -n0 g sin(g d)); the
+    # short-rod form n0 g**2 d is its g*d -> 0 limit.
+    power = (n0 * g ** 2 * d) if thin_form else (n0 * g * np.sin(gd))
+    phase = -k * (power / 2.0) * r_sq
     # v4.13.2 (audit C-P1-5): cast phase mask to E_in.dtype so
     # complex64 inputs stay complex64.
     phase_exp = xp.exp(1j * phase)

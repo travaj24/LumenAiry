@@ -122,7 +122,11 @@ def create_periodic_phase_mask(
 
     phase_cell : ndarray (M×M)
         Phase of one unit cell in radians. The cell has M×M pixels at
-        the native pixel spacing.
+        the native pixel spacing.  Must be square: the tiling uses one
+        cell-pixel index for both axes, so a non-square cell would either
+        drop columns (a (4, 8) cell never samples columns 4-7) or index out
+        of bounds (an (8, 4) cell).  Reshape or pad a vendor cell to square
+        before passing it.
 
     cell_pixel_size : float
         Native pixel spacing of the phase cell [m].
@@ -148,6 +152,15 @@ def create_periodic_phase_mask(
     with ``clip``, which folded the last half-pixel of each cell onto the
     last column and injected spurious diffraction orders).
     """
+    phase_cell = np.asarray(phase_cell)
+    if phase_cell.ndim != 2 or phase_cell.shape[0] != phase_cell.shape[1]:
+        raise ValueError(
+            f"create_periodic_phase_mask: phase_cell must be a square 2-D "
+            f"array (M x M); got shape {phase_cell.shape}.  Both axes are "
+            f"indexed with the same cell-pixel index derived from "
+            f"phase_cell.shape[0], so a non-square cell silently drops the "
+            f"columns past shape[0] (or raises IndexError when shape[1] is "
+            f"the smaller one).  Pad or resample the cell to square.")
     cell_N = phase_cell.shape[0]
     cell_extent = cell_N * cell_pixel_size
 
@@ -232,39 +245,43 @@ def create_microlens_array(
     """
     k = 2 * np.pi / wavelength
     x = (np.arange(N) - N / 2) * dx
-    X, Y = np.meshgrid(x, x)
 
-    # Fully vectorized MLA phase computation.
+    # Fully vectorized, SEPARABLE MLA phase computation.
     #
     # Because the lenslets tile the plane periodically, every grid point
     # inside the MLA footprint can be snapped to its nearest lenslet
     # center in closed form:
     #
-    #     j_nearest = clip(round(X/pitch + (n-1)/2), 0, n-1)
+    #     j_nearest = clip(round(x/pitch + (n-1)/2), 0, n-1)
     #     xc        = (j_nearest - (n-1)/2) * pitch
     #
-    # Then the local lens coordinate is dX = X - xc, and the lenslet
-    # phase is -k/(2f) * (dX^2 + dY^2).  Outside the MLA footprint the
-    # phase is left as zero.  This avoids the per-lenslet double loop
-    # and brings the cost down from O(N^2 * K^2) to O(N^2) operations.
+    # Then the local lens coordinate is dx_loc = x - xc, and the lenslet
+    # phase is -k/(2f) * (dx_loc^2 + dy_loc^2).  Every factor there is a
+    # function of ONE axis, so the snap, the local coordinate and the
+    # footprint test are all computed on length-N vectors and only the
+    # final r^2 is a full grid -- the square grid means one vector serves
+    # both axes.  Outside the MLA footprint the transmittance is 1 (zero
+    # phase), as before.
     half_extent = n_lenslets * pitch / 2
-    in_mla = (np.abs(X) < half_extent) & (np.abs(Y) < half_extent)
+    in_axis = np.abs(x) < half_extent
 
-    jx = np.clip(
-        np.round(X / pitch + (n_lenslets - 1) / 2), 0, n_lenslets - 1
+    j_axis = np.clip(
+        np.round(x / pitch + (n_lenslets - 1) / 2), 0, n_lenslets - 1
     )
-    jy = np.clip(
-        np.round(Y / pitch + (n_lenslets - 1) / 2), 0, n_lenslets - 1
-    )
-    xc = (jx - (n_lenslets - 1) / 2) * pitch
-    yc = (jy - (n_lenslets - 1) / 2) * pitch
+    c_axis = (j_axis - (n_lenslets - 1) / 2) * pitch
+    d_axis = x - c_axis
 
-    dX = X - xc
-    dY = Y - yc
-    r_sq = dX * dX + dY * dY
-    phase = np.where(in_mla, -k / (2 * focal_length) * r_sq, 0.0)
-
-    return np.exp(1j * phase)
+    # Broadcast outer sum: the only full-grid real allocation.
+    r_sq = d_axis[None, :] ** 2 + d_axis[:, None] ** 2
+    r_sq *= -k / (2 * focal_length)          # in place: r_sq is now the phase
+    # exp(i*phase) written straight into the output's real/imaginary views
+    # instead of via ``np.exp(1j * phase)``, which would materialise two
+    # extra complex grids (the 1j product and the exp result).
+    mask = np.empty(r_sq.shape, dtype=np.complex128)
+    np.cos(r_sq, out=mask.real)
+    np.sin(r_sq, out=mask.imag)
+    mask[~(in_axis[None, :] & in_axis[:, None])] = 1.0
+    return mask
 
 
 # ============================================================================

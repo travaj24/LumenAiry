@@ -224,7 +224,7 @@ def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
 # =============================================================================
 
 def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
-                   dy=None):
+                   dy=None, edge='hard', edge_samples=4):
     """
     Apply a standalone aperture (amplitude mask) to an optical field.
 
@@ -254,10 +254,31 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         (non-square) grids so annular / circular / rectangular
         apertures don't get silently stretched along y.
 
+    edge : {'hard', 'gray'}, default 'hard'
+        ``'hard'`` gives the binary in/out mask: each pixel is wholly
+        passed or wholly blocked, so the transmitted area is quantised to
+        whole pixels.  ``'gray'`` gives each boundary pixel its
+        ``edge_samples**2``-supersampled open-area fraction instead, which
+        removes the area quantisation and most of the edge aliasing.
+        Measured transmitted-area error against the analytic disc area,
+        rms over 20 sub-pixel rim placements: at ``D/dx ~ 50`` pixels
+        0.342 % hard (range -0.54 %..+0.70 %) vs 0.059 % gray at the
+        4x4 default; at ``D/dx ~ 200`` 0.041 % hard vs 0.0069 % gray.
+        Costs ``edge_samples**2`` mask builds (one full-grid boolean each,
+        not held simultaneously).
+
+    edge_samples : int, default 4
+        Sub-samples per axis for ``edge='gray'`` (so 4 -> 16 per pixel).
+        rms area error at ``D/dx ~ 50``: 0.144 % at 2, 0.054 % at 4,
+        0.021 % at 8, 0.0033 % at 16 -- i.e. ~1/n_sub**1.5, so raise it
+        only when the rim is badly undersampled.  Ignored when
+        ``edge='hard'``.
+
     Returns
     -------
     E_out : ndarray (complex, Ny x Nx)
-        Field with aperture applied (zeroed outside the opening).
+        Field with aperture applied (zeroed outside the opening; scaled by
+        the open-area fraction on boundary pixels when ``edge='gray'``).
 
     Warning
     -------
@@ -272,44 +293,71 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         params = {}
     if dy is None:
         dy = dx
+    if edge not in ('hard', 'gray'):
+        raise ValueError(
+            f"apply_aperture: edge must be 'hard' (binary pixel mask) or "
+            f"'gray' (supersampled open-area fraction on boundary pixels); "
+            f"got {edge!r}.")
+    n_sub = int(edge_samples)
+    if n_sub < 1 or n_sub != edge_samples:
+        raise ValueError(
+            f"apply_aperture: edge_samples must be a positive integer "
+            f"(sub-samples per axis); got {edge_samples!r}.")
     xp = _xp_of(E_in)
 
     Ny, Nx = E_in.shape
     x = (xp.arange(Nx) - Nx / 2) * dx
     y = (xp.arange(Ny) - Ny / 2) * dy
-    X, Y = xp.meshgrid(x, y)
 
-    if shape == 'circular':
-        D = params.get('diameter', np.inf)
-        h_sq = (X - xc)**2 + (Y - yc)**2
-        mask = h_sq <= (D / 2)**2
-
-    elif shape == 'annular':
-        Di = params.get('inner_diameter', 0)
-        Do = params.get('outer_diameter', np.inf)
+    if shape == 'annular':
         # COAT-nit (AUDIT_COATINGS_ELEMENTS): an inverted annulus
         # (inner >= outer) otherwise silently returns an all-zero field
         # (same class as SRC-2's create_annular_beam).  Raise instead.
+        Di = params.get('inner_diameter', 0)
+        Do = params.get('outer_diameter', np.inf)
         if not (Di < Do):
             raise ValueError(
                 f"apply_aperture(shape='annular'): inner_diameter ({Di}) "
                 f"must be < outer_diameter ({Do}).")
-        h_sq = (X - xc)**2 + (Y - yc)**2
-        mask = (h_sq >= (Di / 2)**2) & (h_sq <= (Do / 2)**2)
-
-    elif shape == 'rectangular':
-        Wx = params.get('width_x', np.inf)
-        Wy = params.get('width_y', np.inf)
-        mask = (xp.abs(X - xc) <= Wx / 2) & (xp.abs(Y - yc) <= Wy / 2)
-
-    else:
+    elif shape not in ('circular', 'rectangular'):
         raise ValueError(f"Unknown aperture shape: {shape!r}. "
                          f"Use 'circular', 'annular', or 'rectangular'.")
 
-    # v4.14 (audit P3 #21): use a dtype-aware zero so a JAX x32
-    # input stays complex64 rather than being silently upcast by the
-    # complex128 literal ``0.0 + 0.0j``.
-    return xp.where(mask, E_in, xp.zeros((), dtype=E_in.dtype))
+    def _mask_at(off_x, off_y):
+        """Binary in/out mask evaluated on the grid shifted by a sub-pixel
+        offset -- one boolean full grid, built and discarded per call."""
+        X, Y = xp.meshgrid(x + off_x, y + off_y)
+        if shape == 'circular':
+            D = params.get('diameter', np.inf)
+            h_sq = (X - xc)**2 + (Y - yc)**2
+            return h_sq <= (D / 2)**2
+        if shape == 'annular':
+            h_sq = (X - xc)**2 + (Y - yc)**2
+            return (h_sq >= (params.get('inner_diameter', 0) / 2)**2) & (
+                h_sq <= (params.get('outer_diameter', np.inf) / 2)**2)
+        Wx = params.get('width_x', np.inf)
+        Wy = params.get('width_y', np.inf)
+        return (xp.abs(X - xc) <= Wx / 2) & (xp.abs(Y - yc) <= Wy / 2)
+
+    if edge == 'hard':
+        # v4.14 (audit P3 #21): use a dtype-aware zero so a JAX x32
+        # input stays complex64 rather than being silently upcast by the
+        # complex128 literal ``0.0 + 0.0j``.
+        return xp.where(_mask_at(0.0, 0.0), E_in,
+                        xp.zeros((), dtype=E_in.dtype))
+
+    # Grey edge: average the binary mask over an n_sub x n_sub lattice of
+    # sub-pixel offsets centred on each pixel, giving its open-area
+    # fraction.  Accumulated one sub-mask at a time so the peak cost is a
+    # single float grid plus a single boolean grid, not n_sub**2 of them.
+    real_dtype = xp.zeros((), dtype=E_in.dtype).real.dtype
+    offsets = (np.arange(n_sub) + 0.5) / n_sub - 0.5
+    frac = xp.zeros((Ny, Nx), dtype=real_dtype)
+    for oy in offsets:
+        for ox in offsets:
+            frac = frac + _mask_at(ox * dx, oy * dy)
+    frac = frac / (n_sub * n_sub)
+    return E_in * frac.astype(real_dtype)
 
 
 # =============================================================================
@@ -423,9 +471,17 @@ def zernike(n, m, rho, theta):
                              N = sqrt(2 * (n + 1))   for m != 0
 
     This matches :func:`lumenairy.analysis.zernike_polynomial`
-    so fits and reconstructions round-trip exactly.  The Noll *single
-    index* convention is a different beast: to map j_Noll -> (n, m) use
-    :func:`lumenairy.analysis.zernike_index_to_nm`.
+    so fits and reconstructions round-trip exactly.
+
+    The Noll *single index* convention is a different beast, and the
+    library ships **no** Noll converter:
+    :func:`lumenairy.analysis.zernike_index_to_nm` is the **OSA** map
+    (``m = 2j - n(n+2)``, j from 0), which disagrees with Noll from j = 5
+    on -- OSA j = 5 is (2, +2) while Noll j = 5 is (2, -2).  Noll's
+    *polynomials* are identical to OSA's mode for mode (see the
+    normalisation note in ``analysis/zernike.py``); only the single-index
+    ORDERING differs, so a caller holding Noll coefficients must permute
+    them onto (n, m) themselves before calling this function.
 
     Parameters
     ----------
@@ -1092,7 +1148,25 @@ def coronagraph_contrast_curve(*args, **kwargs):
 # ATMOSPHERIC / TURBULENCE PHASE SCREENS
 # =============================================================================
 
-def generate_turbulence_screen(N, dx, r0, L0=np.inf, l0=0.0, seed=None):
+def _turbulence_psd(f_sq, f_mag, r0, L0, l0):
+    """Modified von Karman phase PSD [rad^2 m^2] on a spatial-frequency
+    lattice in cycles/m.
+
+    Reduces to Kolmogorov ``0.023 r0^(-5/3) f^(-11/3)`` when ``L0 = inf`` and
+    ``l0 = 0``.  Shared by the FFT grid and the subharmonic grids so the two
+    cannot drift apart.  ``f_sq`` must already have its zeros replaced (the
+    caller kills DC explicitly).
+    """
+    psd = 0.023 * r0**(-5.0/3.0) * (f_sq + 1.0 / L0**2)**(-11.0/6.0)
+    if l0 > 0:
+        # Inner scale cutoff: kappa_m = 5.92/l0, kappa = 2*pi*f
+        # exp(-(kappa/kappa_m)^2) = exp(-(2*pi*f*l0/5.92)^2)
+        psd = psd * np.exp(-(f_mag * l0 * 2 * np.pi / 5.92)**2)
+    return psd
+
+
+def generate_turbulence_screen(N, dx, r0, L0=np.inf, l0=0.0, seed=None,
+                               subharmonics=0):
     """
     Generate a random atmospheric turbulence phase screen.
 
@@ -1124,6 +1198,21 @@ def generate_turbulence_screen(N, dx, r0, L0=np.inf, l0=0.0, seed=None):
     seed : int or None
         Random seed for reproducibility.
 
+    subharmonics : int, default 0
+        Number of Lane subharmonic levels to add below the FFT lattice's
+        fundamental frequency ``1/(N*dx)``.  ``0`` (default) is the plain
+        FFT screen, whose periodic lattice cannot represent eddies larger
+        than the grid and therefore under-delivers the structure function at
+        large separations.  Each level ``p = 1..subharmonics`` adds a 3x3
+        frequency grid at spacing ``1/(3**p * N * dx)`` (Lane et al. 1992;
+        Schmidt 2010 ``ft_sh_phase_screen``).  ``3`` is the usual choice and
+        costs +23-28 % wall time with no extra peak memory (measured at
+        N = 512 / 1024 / 2048).  Over 40 seeds at N = 512, dx = 5 mm,
+        r0 = 0.1 m the ratio of the screen's structure function to the
+        Kolmogorov ``6.88 (r/r0)^(5/3)`` improves from 0.798 / 0.463
+        (``subharmonics=0``, at r = 0.05 r0 / 3.2 r0) to
+        0.880 / 0.777 (``subharmonics=3``).
+
     Returns
     -------
     phase_screen : ndarray (real, N×N)
@@ -1145,10 +1234,27 @@ def generate_turbulence_screen(N, dx, r0, L0=np.inf, l0=0.0, seed=None):
     exp(-(2*pi*f*l0/5.92)^2), which suppresses eddies smaller than l0.
 
     The screen is generated by filtering white noise with the square root
-    of the PSD in the frequency domain, then inverse-transforming.
+    of the PSD in the frequency domain, then inverse-transforming:
+
+        c_k = (a_k + i b_k) * sqrt(PSD(f_k)) * df,   a, b ~ N(0, 1) i.i.d.
+        phi(r) = Re( sum_k c_k exp(2 pi i f_k . r) )
+
+    so ``Var(phi) = sum_k PSD(f_k) df^2``.  Taking the real part does NOT
+    halve the variance -- the real and imaginary noise draws are independent,
+    so ``Var(Re c_k) = |A_k|^2`` already -- hence the amplitude carries no
+    ``sqrt(2)``.  (Schmidt 2010 ``ft_phase_screen`` uses the same form.)
 
     The structure function of the resulting screen follows:
         D(r) = 6.88 * (r/r0)^(5/3)   for Kolmogorov
+
+    exactly in the continuum.  On the discrete lattice the FFT screen is
+    LOW by the frequencies it cannot represent: measured D/D_Kolmogorov is
+    0.798 at r = 0.05 r0 and 0.463 at r = 3.2 r0 with ``subharmonics=0``.
+    Pass ``subharmonics=3`` to recover most of that deficit.  Against the
+    screen's OWN lattice (the exact discrete structure function
+    ``sum_k PSD_k df^2 * 2 (1 - cos(2 pi f_k . r))``) the plain screen is
+    right: measured 1.004 / 1.004 / 1.006 at r = 5 / 10 / 20 mm over 40
+    seeds, N = 512, dx = 5 mm, r0 = 0.1 m.
 
     The centred frequency lattice uses the INTEGER DC anchor
     ``(arange(N) - N // 2) * df``, which equals
@@ -1163,6 +1269,19 @@ def generate_turbulence_screen(N, dx, r0, L0=np.inf, l0=0.0, seed=None):
     [2] Lane, R.G. et al. (1992). "Simulation of a Kolmogorov phase screen."
         Waves in Random Media 2(3): 209-224.
     """
+    try:
+        n_sh = int(subharmonics)
+        ok = (n_sh >= 0 and n_sh == subharmonics)
+    except (TypeError, ValueError):
+        ok = False
+        n_sh = 0
+    if not ok:
+        raise ValueError(
+            f"generate_turbulence_screen: subharmonics must be a "
+            f"non-negative integer (number of Lane 3x3 frequency levels "
+            f"below 1/(N*dx)); got {subharmonics!r}.  Use 0 for the plain "
+            f"FFT screen or 3 for the usual Lane / Schmidt correction.")
+
     if seed is not None:
         rng = np.random.default_rng(seed)
     else:
@@ -1198,13 +1317,7 @@ def generate_turbulence_screen(N, dx, r0, L0=np.inf, l0=0.0, seed=None):
     f_sq_safe = np.where(f_sq > 0, f_sq, 1.0)
 
     # von Karman PSD (reduces to Kolmogorov when L0=inf, l0=0)
-    psd = 0.023 * r0**(-5.0/3.0) * (f_sq_safe + 1.0 / L0**2)**(-11.0/6.0)
-
-    # Inner scale cutoff
-    if l0 > 0:
-        # Inner scale cutoff: kappa_m = 5.92/l0, kappa = 2*pi*f
-        # exp(-(kappa/kappa_m)^2) = exp(-(2*pi*f*l0/5.92)^2)
-        psd *= np.exp(-(f_mag * l0 * 2 * np.pi / 5.92)**2)
+    psd = _turbulence_psd(f_sq_safe, f_mag, r0, L0, l0)
 
     # Zero DC
     psd[N // 2, N // 2] = 0.0
@@ -1213,15 +1326,59 @@ def generate_turbulence_screen(N, dx, r0, L0=np.inf, l0=0.0, seed=None):
     noise = (rng.standard_normal((N, N)) + 1j * rng.standard_normal((N, N)))
 
     # Filter noise with sqrt(PSD) and transform to spatial domain.
-    # The sqrt(2) factor compensates for the halving of variance when
-    # taking the real part of the complex IFFT result. Verified against
-    # the Kolmogorov structure function D(r=r0) = 6.88.
-    amplitude = np.sqrt(2.0 * psd) * df
+    # Amplitude is sqrt(PSD)*df with NO sqrt(2): ``noise`` draws the real and
+    # imaginary parts independently, so Re(noise_k * A_k) already has variance
+    # A_k^2 and the screen variance is the intended sum_k PSD_k df^2.  A
+    # sqrt(2) here doubles the variance and the structure function.
+    amplitude = np.sqrt(psd) * df
     phase_fft = noise * amplitude
 
-    # Inverse FFT to get spatial phase screen
+    # Inverse FFT to get spatial phase screen.  With the fftshift/ifftshift
+    # pair and the *N**2 scaling this is exactly
+    # sum_k phase_fft[k] exp(2 pi i f_k . r) on the centred lattice
+    # r = (arange(N) - N//2)*dx -- which is the lattice the subharmonic sum
+    # below must use too.
     phase_screen = np.real(
         np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(phase_fft)))
     ) * N**2
 
+    if n_sh:
+        phase_screen = phase_screen + _turbulence_subharmonics(
+            N, dx, r0, L0, l0, rng, n_sh)
+
     return phase_screen
+
+
+def _turbulence_subharmonics(N, dx, r0, L0, l0, rng, n_levels):
+    """Lane low-frequency correction for :func:`generate_turbulence_screen`.
+
+    The FFT screen's lowest non-zero frequency is ``1/(N*dx)``; eddies larger
+    than the grid are simply absent, which is why the plain screen's
+    structure function falls below Kolmogorov at large separations.  Each
+    level ``p`` adds a 3x3 frequency grid at spacing ``1/(3**p * N * dx)``
+    (its centre bin, DC, killed) summed directly -- 8 terms per level -- and
+    the accumulated correction is mean-removed because a screen's piston is
+    unobservable (Lane, Glindemann & Dainty 1992; Schmidt 2010
+    ``ft_sh_phase_screen``).
+    """
+    x = (np.arange(N) - N // 2) * dx
+    low = np.zeros((N, N), dtype=np.complex128)
+    for p in range(1, n_levels + 1):
+        df_p = 1.0 / (3.0**p * N * dx)
+        f_axis = np.array([-1.0, 0.0, 1.0]) * df_p
+        FXp, FYp = np.meshgrid(f_axis, f_axis)
+        f_sq_p = FXp**2 + FYp**2
+        psd_p = _turbulence_psd(np.where(f_sq_p > 0, f_sq_p, 1.0),
+                                np.sqrt(f_sq_p), r0, L0, l0)
+        psd_p[1, 1] = 0.0          # DC of this subharmonic grid
+        cn = ((rng.standard_normal((3, 3))
+               + 1j * rng.standard_normal((3, 3)))
+              * np.sqrt(psd_p) * df_p)
+        # sum_ij cn[i,j] exp(2 pi i (f_j x + f_i y)) is separable, and the
+        # grid is square, so one (3, N) table of exp(2 pi i f_i x) serves
+        # both axes: the whole 3x3 level is ``e.T @ cn @ e``.  Three
+        # length-N exponentials per level instead of nine full-grid ones.
+        e = np.exp(2j * np.pi * np.outer(f_axis, x))         # (3, N)
+        low += e.T @ cn @ e
+    low = np.real(low)
+    return low - low.mean()
