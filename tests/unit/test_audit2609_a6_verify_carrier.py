@@ -462,36 +462,219 @@ class TestVerifyC1AgainstTheAnalyticFocus:
                         / (np.abs(truth) ** 2).max())
         assert got_pre == pytest.approx(pre_peak, rel=5e-2), (frac, got_pre)
 
-    def test_a_narrow_grid_is_the_documented_limit_of_the_resolver(self):
-        """SCOPE, measured rather than assumed.  The beam term can only ask for
-        ``_FOCUS_STANDOFF_MARGIN`` beam radii, so on a grid that holds fewer
-        than that at the INPUT plane (``gamma = half^2 - (M w)^2 < 0``, i.e.
-        ext < 3.2 -- the module's own documented small-extent branch V1/V2) it
-        has no margin to resolve against and returns 0.0.
+    @pytest.mark.parametrize('frac,peak_bar,pre_peak', [
+        # (carrier/truth, post-fix peak bar, MEASURED peak on the pre-fix leg)
+        (0.99, 0.97, 0.912560),
+        (0.97, 0.92, 0.300483),
+        (0.93, 0.85, 0.025460),
+    ])
+    def test_a_narrow_grid_resolves_and_the_guard_sees_the_pre_fix_leg(
+            self, frac, peak_bar, pre_peak):
+        """VERIFY-A6 OI-1, implemented 2026-09-12.
 
-        This test states that boundary as a two-sided fact so that it is
-        visible rather than latent: at ext = 4.0 the term is live and the
-        mismatched row is repaired; at ext = 3.0 it is not, and the resolved
-        leg equals the pre-fix one.  Measured at ext = 3.0, R/R0 = 0.99:
-        containment 1.627, peak 0.9126 of the analytic oracle, zero warnings
-        (the 1.0 containment floor does not reach it).  See VERIFY_WP-A6.md
-        open item OI-1."""
+        Before: the beam term could only ask for ``_FOCUS_STANDOFF_MARGIN``
+        = 3.2 beam radii, so on a grid holding fewer than that at the INPUT
+        plane (``gamma = half^2 - (M w)^2 < 0``, i.e. ext < 3.2 -- the module's
+        own small-extent branch V1/V2) it had no margin to resolve against and
+        returned 0.0; and the guard's floor was a bare 1.0 radius, which a
+        landing at 1.627 clears.  Net: at ext = 3.0 a 1 % carrier mismatch cost
+        8.7 % of the focal peak with ZERO warnings.
+
+        After: both halves target ``_achievable_focus_margin`` -- the same
+        ``m_req = min(M, sat*ext)`` the carrier-referenced law already resolves
+        against -- so the resolver lengthens, and the guard's floor is the
+        worse of 1.0 and ``_FOCUS_READOUT_CONTAINMENT_FRAC`` of that target.
+
+        MEASURED here (lambda 0.85 um, NA 0.08, ext 3.0, target margin 2.598):
+
+            R/R0   leg (um)  post -> pre   containment   peak vs the oracle
+            1.00     94.76 ->   94.76       2.745         0.999324 (control)
+            0.99    534.48 ->  167.37    2.598 -> 1.627   0.990892 -> 0.912560
+            0.97   1408.84 ->  312.71    2.598 -> 0.984   0.954704 -> 0.300483
+            0.93   2698.45 ->  603.87    2.598 -> 0.865   0.883644 -> 0.025460
+
+        BARS: each peak bar sits 1.02x under its measured post-fix value and
+        1.06x / 3.1x / 35x over the measured pre-fix one; the containment claim
+        is equality with the target to 1e-3 (the resolver solves for it); and
+        the pre-fix leg must be REFUSED by the default disposition, which is
+        the two-sided half of the bar."""
         lam = self.LAM
-        out = {}
-        for ext in (3.0, 4.0):
-            e_phys, r0, dx, w_in = self._fixture(ext=ext)
-            z = -r0
-            env = C.carrier_referenced_envelope(e_phys, 0.99 * r0, lam, dx)
-            real = C._beam_containment_standoff
-            try:
-                C._beam_containment_standoff = lambda *a, **kw: 0.0
-                pre = C._default_focus_standoff(env, 0.99 * r0, z, lam, dx)
-            finally:
-                C._beam_containment_standoff = real
-            post = C._default_focus_standoff(env, 0.99 * r0, z, lam, dx)
-            out[ext] = (pre, post)
-        assert out[3.0][1] == out[3.0][0], out        # inoperative below 3.2
-        assert out[4.0][1] > out[4.0][0] * 1.5, out   # live above it
+        e_phys, r0, dx, w_in = self._fixture(ext=3.0)
+        z = -r0
+        _, w0 = _abcd_field(np.zeros(1), w_in, r0, z, lam)
+        n_out, dx_out = 96, w0 / 8.0
+        truth, _ = _abcd_field(_grid(n_out, dx_out), w_in, r0, z, lam)
+        r = frac * r0
+        env = C.carrier_referenced_envelope(e_phys, r, lam, dx)
+
+        pd = {}
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            f = C.carrier_referenced_focus_readout(
+                env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
+                on_replica='ignore', _period_out=pd)
+        peak = float((np.abs(f) ** 2).max() / (np.abs(truth) ** 2).max())
+        assert peak > peak_bar, (frac, peak)
+        assert not [x for x in w if 'co-moving' in str(x.message)]
+        # the grid cannot give 3.2, and the resolver knows it
+        assert pd['containment_target'] < C._FOCUS_STANDOFF_MARGIN
+        assert pd['containment'] == pytest.approx(pd['containment_target'],
+                                                  rel=1e-3), pd
+
+        # FAIL-BEFORE: the pre-fix leg, and the guard must now refuse it
+        real = C._beam_containment_standoff
+        try:
+            C._beam_containment_standoff = lambda *a, **kw: 0.0
+            s_pre = C._default_focus_standoff(env, r, z, lam, dx)
+        finally:
+            C._beam_containment_standoff = real
+        assert s_pre < pd['standoff'], (s_pre, pd['standoff'])
+        with pytest.raises(RuntimeError, match='does not fit the co-moving'):
+            C.carrier_referenced_focus_readout(
+                env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
+                standoff=s_pre, on_replica='ignore')
+        pd2 = {}
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            f2 = C.carrier_referenced_focus_readout(
+                env, r, z, lam, dx, dx_out=dx_out, N_out=n_out,
+                standoff=s_pre, on_replica='ignore',
+                on_focus_containment='ignore', _period_out=pd2)
+        got_pre = float((np.abs(f2) ** 2).max() / (np.abs(truth) ** 2).max())
+        assert got_pre == pytest.approx(pre_peak, rel=5e-2), (frac, got_pre)
+
+    def test_the_contained_control_on_the_same_narrow_grid_is_untouched(self):
+        """The other side of the bar: on the SAME ext = 3.0 grid the MATCHED
+        carrier is contained (2.745 radii against a 2.598 target), so the leg
+        must not move and the guard must stay silent.  A guard that fired here
+        would be refusing the module's own documented narrow-grid branch."""
+        lam = self.LAM
+        e_phys, r0, dx, w_in = self._fixture(ext=3.0)
+        z = -r0
+        env = C.carrier_referenced_envelope(e_phys, r0, lam, dx)
+        real = C._beam_containment_standoff
+        try:
+            C._beam_containment_standoff = lambda *a, **kw: 0.0
+            pre = C._default_focus_standoff(env, r0, z, lam, dx)
+        finally:
+            C._beam_containment_standoff = real
+        assert C._default_focus_standoff(env, r0, z, lam, dx) == pre
+        pd = {}
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            C.carrier_referenced_focus_readout(
+                env, r0, z, lam, dx, dx_out=1e-6, N_out=48,
+                on_replica='ignore', _period_out=pd)
+        assert pd['containment'] > pd['containment_target'], pd
+        assert not [x for x in w if 'co-moving' in str(x.message)]
+
+    def test_the_achievable_margin_leaves_every_wide_grid_alone(self):
+        """``_achievable_focus_margin`` must be the IDENTITY above
+        ``M/sat`` = 3.695 beam radii, or OI-1 would have moved the validated
+        wide-grid surface.  Asserted as an exact equality on a ladder that
+        straddles the knee, plus the saturation law below it."""
+        m = C._FOCUS_STANDOFF_MARGIN
+        f_cap = np.sqrt(max(C._FOCUS_STANDOFF_WAIST_GROWTH ** 2 - 1.0, 0.0))
+        sat = f_cap / np.sqrt(1.0 + f_cap * f_cap)
+        w = 1e-3
+        for ext in (3.70, 4.0, 6.0, 10.0, 100.0):
+            assert C._achievable_focus_margin(ext * w, w) == m, ext
+        for ext in (0.5, 1.2, 2.0, 3.0, 3.69):
+            got = C._achievable_focus_margin(ext * w, w)
+            assert got == pytest.approx(sat * ext, rel=1e-15), ext
+            assert got < m, ext
+        # degenerate inputs fall back to the constant rather than dividing
+        assert C._achievable_focus_margin(0.0, w) == m
+        assert C._achievable_focus_margin(w, 0.0) == m
+
+    def test_the_relative_floor_is_scoped_to_grids_below_the_knee(self):
+        """The false positive this scoping exists to prevent (found by WP-A3
+        on ``test_niche_d1_tilted_carrier.py``, 2026-09-12).
+
+        A fraction-of-target floor applied on a WIDE grid is not a clipping
+        test.  On a real relay the envelope carries a broad low-level skirt, so
+        the measured ``sqrt(2<r^2>)`` reads the WINDOW rather than the core:
+        the niche-D1 tilted relay's worst readout measures 1.033 radii against
+        a MODELLED 3.506 on an input grid of 4.64 beam radii, and that landing
+        satisfies the fixture's own ray-trace, diffraction-limit and
+        energy-conservation oracles (33/33 with the historical floor).  An
+        unscoped ``0.9 * 3.2`` = 2.88 floor refused 7 of those tests.
+
+        So the relative arm governs ONLY ``m_target < _FOCUS_STANDOFF_MARGIN``
+        -- the grids where the resolver aims lower by design and the absolute
+        floor is therefore blind.  Asserted on both sides of the knee
+        (``M/sat`` = 3.695 beam radii) as an exact statement about the floor,
+        not about any one fixture."""
+        m = C._FOCUS_STANDOFF_MARGIN
+        frac = C._FOCUS_READOUT_CONTAINMENT_FRAC
+        mn = C._FOCUS_READOUT_CONTAINMENT_MIN
+        w = 1e-3
+
+        def floor_at(ext):
+            t = C._achievable_focus_margin(ext * w, w)
+            return (mn if t >= m else max(mn, frac * t)), t
+
+        for ext in (3.70, 4.0, 4.64, 6.0, 100.0):     # wide: historical floor
+            f, t = floor_at(ext)
+            assert t == m and f == mn, (ext, f, t)
+        for ext in (1.2, 2.0, 3.0, 3.69):             # narrow: relative arm
+            f, t = floor_at(ext)
+            assert t < m, (ext, t)
+            assert f == max(mn, frac * t), (ext, f, t)
+        # ... and it BITES (rises above the absolute floor) over the band where
+        # the resolver's target is worth a fraction of: frac*t > 1 needs
+        # ext > 1/(frac*sat) = 1.283 beam radii.
+        for ext in (1.5, 2.0, 3.0, 3.69):
+            f, t = floor_at(ext)
+            assert f == pytest.approx(frac * t, rel=1e-15), (ext, f, t)
+            assert f > mn, (ext, f, t)
+        assert floor_at(1.2)[0] == mn                  # below that, 1.0 rules
+        # ... and the d1 reading itself is accepted on its own grid extent
+        f, _ = floor_at(4.64)
+        assert 1.033 > f, f
+
+    def test_the_sixty_cell_matrix_is_untouched_and_silent(self):
+        """The acceptance condition for OI-1: the shipped defaults must not
+        move on a single flat-envelope calibration cell, and the stricter
+        floor must not fire on one either.
+
+        MEASURED over the resolver's own 6 NA x 10 extent matrix: 0 cells whose
+        resolved leg differs from the pre-fix one (the beam term still
+        short-circuits on ``inv_env == 0.0``, which a real envelope gives
+        exactly), 0 guard firings, worst achieved/target containment ratio
+        **0.9969** against the 0.9 bar -- 1.108x of clearance -- and worst
+        absolute containment 1.2566 against the 1.0 floor."""
+        lam, rmag, n = 1.31e-6, 20e-3, 512
+        worst_ratio, worst_abs, moved = np.inf, np.inf, []
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            for na in (0.03, 0.05, 0.10, 0.15, 0.278, 0.35):
+                for ext in (1.2, 1.5, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 6.0, 10.0):
+                    wb = na * rmag
+                    dx = 2.0 * ext * wb / n
+                    env = _gauss(n, dx, wb).astype(complex)
+                    real = C._beam_containment_standoff
+                    try:
+                        C._beam_containment_standoff = lambda *a, **kw: 0.0
+                        pre = C._default_focus_standoff(env, -rmag, rmag,
+                                                        lam, dx)
+                    finally:
+                        C._beam_containment_standoff = real
+                    if C._default_focus_standoff(env, -rmag, rmag,
+                                                 lam, dx) != pre:
+                        moved.append((na, ext))
+                    pd = {}
+                    C.carrier_referenced_focus_readout(
+                        env, -rmag, rmag, lam, dx,
+                        dx_out=(lam * rmag / (np.pi * wb)) / 8.0, N_out=32,
+                        on_replica='ignore', _period_out=pd)
+                    worst_ratio = min(worst_ratio, pd['containment']
+                                      / pd['containment_target'])
+                    worst_abs = min(worst_abs, pd['containment'])
+        assert moved == [], moved
+        assert not [x for x in w if 'co-moving' in str(x.message)]
+        assert worst_ratio > C._FOCUS_READOUT_CONTAINMENT_FRAC, worst_ratio
+        assert worst_abs > C._FOCUS_READOUT_CONTAINMENT_MIN, worst_abs
 
 
 # ===========================================================================
@@ -600,6 +783,50 @@ class TestVerifyC2:
                 on_aliased='silent', centre='origin')
         assert auto / 50e-3 == pytest.approx(1.0, rel=1e-3), (kind, auto)
         assert abs(orig / 50e-3 - 1.0) > 1.0, (kind, orig)
+
+    @pytest.mark.parametrize('x0_px', [0.0, 0.2, 0.49, 0.51, 1.0, 25.0])
+    def test_a_sub_pixel_decentre_no_longer_hides_a_pure_tilt(self, x0_px):
+        """VERIFY-A6 OI-2, implemented 2026-09-12.
+
+        The tilt projection used to be gated on ``centre != (0, 0)``, and
+        ``_envelope_amp_centroid`` SNAPS any decentre under half a pixel to
+        exactly ``(0, 0)``.  A beam decentred by a fifth of a pixel while
+        carrying a tilt therefore got neither the centring nor the projection
+        and read a finite radius, with a discontinuity at the snap.  Measured
+        before, for ``L = 0.02`` on a 100 um waist at dx = 2 um, truth ``inf``:
+
+            x0/dx   0.00        0.20      0.49      0.51        1.00
+            'auto'  -4.9e+14 m  0.625 m   0.255 m   2.5e+14 m   8.7e+13 m
+
+        i.e. a 0.26 m radius at the snap boundary.  ``'auto'`` now projects
+        whatever the snap did, and ``'origin'`` keeps the unprojected fit as
+        the byte-identity escape hatch (and still reads the finite radius --
+        asserted below, so the fix cannot be mistaken for the fixture being
+        benign).
+
+        BAR |R_fit| > 1e6 m, the same absolute form the WP's own tilt test
+        uses: the truth is infinite, so a ratio is not available; 1e6 m is
+        5e7 beam radii of radius, i.e. flat to 2e-8 waves of sag across the
+        beam.  Measured post-fix worst 8.7e+13 m across these six cells, 8
+        decades over the bar; the pre-fix readings are 6 decades UNDER it."""
+        x0 = x0_px * self.DX
+        e = self._field(r=np.inf, tilt=0.02, x0=x0)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            auto = C.carrier_referenced_fit_radius(
+                e, self.LAM, self.DX, estimator='increment',
+                on_aliased='silent')
+            orig = C.carrier_referenced_fit_radius(
+                e, self.LAM, self.DX, estimator='increment',
+                on_aliased='silent', centre='origin')
+        assert abs(auto) > 1e6, (x0_px, auto)
+        if x0_px > 0.0:
+            # the fixture really does carry the cross term the projection
+            # removes -- ``'origin'`` still reads it, analytically
+            # ``1/R = L x0/(x0^2 + w^2/2)``
+            s2 = 0.5 * self.W ** 2
+            assert 1.0 / orig == pytest.approx(0.02 * x0 / (x0 * x0 + s2),
+                                               rel=2e-3), (x0_px, orig)
 
     def test_refit_carrier_on_a_decentred_beam_is_self_consistent(self):
         """WP-A6 records as a residual risk that
@@ -840,12 +1067,17 @@ class TestVerifyC5:
             C.propagate_carrier_referenced = real
         assert seen == [('fresnel', (0.03, -0.02))], seen
 
-    def test_the_sphere_parabola_conversion_dy_reaches_no_caller(self):
-        """``dy=`` was added (and is correct -- checked against a NUMERICALLY
-        STABLE hand-built eikonal below), but no call site forwards a pitch, so
-        a ``dy != dx`` chain would still convert its y axis on ``dx``.  Stated
-        as an executable fact so the follow-up is visible; see VERIFY_WP-A6.md
-        open item OI-3.
+    def test_the_sphere_parabola_conversion_dy_is_wired_to_every_caller(self):
+        """VERIFY-A6 OI-3, implemented 2026-09-12.  ``dy=`` was added by WP-A6
+        but no call site forwarded a pitch, so a ``dy != dx`` chain would still
+        have converted its y axis on ``dx``.  All seven sites now pass one --
+        ``dx_fine`` on the two retrace sites, and the chain's ``cur_dy``, which
+        is tracked beside ``cur_dx`` and picks up the y component of an
+        astigmatic leg's ``(dx_x, dx_y)`` instead of discarding it.
+
+        Asserted three ways: every call site passes a ``dy``; the helper is
+        BIT-identical for ``dy == dx`` (so no square chain moves); and the
+        ``dy != dx`` answer matches a numerically stable hand-built eikonal.
 
         BAR 1e-12 on the phase: the oracle uses ``S = sign(R) r^2/(|R| +
         sqrt(R^2+r^2))``, which avoids the catastrophic cancellation of the
@@ -853,12 +1085,16 @@ class TestVerifyC5:
         ``eps |R| k`` = 4e-11 rad here), so the comparison is limited by the
         library, not by the oracle; measured 0.0."""
         import inspect
+        import re
         src = inspect.getsource(C)
-        # every call site of the helper, and whether any passes dy=
-        sites = [ln for ln in src.splitlines()
-                 if '_sphere_parab_conversion(' in ln
-                 and 'def _sphere_parab_conversion' not in ln]
-        assert sites, 'the helper must still be called somewhere'
+        # every call site of the helper must now hand it a y pitch
+        calls = re.findall(
+            r'_sphere_parab_conversion\((?:[^()]|\([^()]*\))*\)',
+            src.split('def _sphere_parab_conversion')[0]
+            + src.split('def _sphere_parab_conversion', 1)[1].split('\ndef ', 1)[1])
+        assert len(calls) == 7, [c[:60] for c in calls]
+        missing = [c[:70] for c in calls if 'dy=' not in c]
+        assert missing == [], missing
         lam, k = self.LAM, 2.0 * np.pi / self.LAM
         sh, dx, r = (96, 128), 2e-6, -20e-3
         dy = 3.0 * dx
@@ -873,6 +1109,38 @@ class TestVerifyC5:
         orc = np.exp(1j * k * (s - r2 / (2.0 * r)))
         assert float(np.abs(got - orc).max()) < 1e-12
         assert float(np.abs(got - a).max()) > 1e-6      # dy really is used
+
+    def test_an_astigmatic_leg_really_produces_the_two_pitches(self):
+        """Where a ``dy != dx`` chain comes FROM, and what the conversion then
+        sees.  ``propagate_carrier_referenced`` on an astigmatic carrier
+        returns ``(dx_x, dx_y)`` -- the chain used to reduce that to its x
+        component and throw the y pitch away, which is what made the
+        conversion's ``dy`` unreachable.  Measured on this fixture:
+        ``(4.160, 4.100) um``, 1.5 % apart.
+
+        Pinned as the pair: the leg's two pitches are distinct, and the screen
+        built from them matches a hand-built eikonal on the SAME two pitches
+        while differing from the dx-only one by 100x the bar."""
+        lam, k = self.LAM, 2.0 * np.pi / self.LAM
+        n, dx = 128, 4e-6
+        env = _gauss(n, dx, 80e-6).astype(complex)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            cr = C.propagate_carrier_referenced(env, (50e-3, 80e-3), 2e-3,
+                                                lam, dx, gap_kernel='fresnel')
+        assert isinstance(cr.dx, tuple) and cr.dx[0] != cr.dx[1], cr.dx
+        dxo, dyo = float(cr.dx[0]), float(cr.dx[1])
+        assert abs(dyo / dxo - 1.0) > 1e-3, (dxo, dyo)
+        r = -20e-3
+        got = C._sphere_parab_conversion((n, n), dxo, lam, r, +1, dy=dyo)
+        blind = C._sphere_parab_conversion((n, n), dxo, lam, r, +1)
+        x = _grid(n, dxo)
+        y = _grid(n, dyo)
+        r2 = x[None, :] ** 2 + y[:, None] ** 2
+        s = np.sign(r) * (r2 / (np.sqrt(r2 + r * r) + abs(r)))
+        orc = np.exp(1j * k * (s - r2 / (2.0 * r)))
+        assert float(np.abs(got - orc).max()) < 1e-12
+        assert float(np.abs(got - blind).max()) > 1e-10
 
     def test_the_c64_sphere_builder_survives_its_own_del(self):
         """DEFECT FOUND BY THE VERIFIER (reported independently by WP-A5 as a

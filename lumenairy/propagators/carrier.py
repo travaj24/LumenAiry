@@ -379,6 +379,57 @@ _FOCUS_STANDOFF_ASYMPTOTE_FRAC = 0.99      # margin ceiling as a fraction of ext
 # failure; that is not decades of clearance, and it is why the bar is a
 # REFUSAL of the unfittable rather than a quality threshold.
 _FOCUS_READOUT_CONTAINMENT_MIN = 1.0
+#: Fraction of the ACHIEVABLE margin (see :func:`_achievable_focus_margin`)
+#: below which the containment guard disposes -- ONLY on grids that cannot
+#: reach ``_FOCUS_STANDOFF_MARGIN`` at all, where the resolver therefore
+#: targets less.  Above that knee the historical 1.0-radius floor stands
+#: alone: a wide grid's measured second moment is a poor clipping proxy,
+#: because a real relay envelope's broad low-level skirt makes
+#: ``sqrt(2<r^2>)`` read the window rather than the core (measured on the
+#: niche-D1 relay: 1.033 measured against 3.506 modelled, on a landing that
+#: satisfies that fixture's ray-trace, diffraction-limit and
+#: energy-conservation oracles).
+#: A bare 1.0 radius floor is blind there: at ext = 3.0 the resolver targets
+#: 2.598 radii, and a landing at 1.627 -- which costs 8.7 % of the focal peak
+#: against an analytic Gaussian-ABCD oracle -- sits comfortably above 1.0 and
+#: went unreported (VERIFY-A6 OI-1).
+#:
+#: MEASURED two-sided clearance, achieved / targeted containment, over the
+#: cells this arm actually governs (``m_target < _FOCUS_STANDOFF_MARGIN``):
+#:   * the resolver's own 6 NA x 10 extent calibration matrix, flat envelopes,
+#:     shipped defaults: worst ratio 0.997 (it solves for equality where the
+#:     margin is reachable, and OVER-delivers where it is not);
+#:   * the C1 mismatch fixture at ext = 3.0 fed its PRE-FIX leg: 0.626 at a 1 %
+#:     carrier mismatch and 0.379 at 3 %.
+#: 0.9 sits 1.11x under the tightest passing cell and 1.44x over the worst
+#: failing one.  That is not decades -- like the 1.0 floor it sits beside, it
+#: is a refusal of a leg that demonstrably lost the beam, not a quality grade.
+_FOCUS_READOUT_CONTAINMENT_FRAC = 0.9
+
+
+def _achievable_focus_margin(half, w_env):
+    """The containment margin, in beam radii, that a grid of half-width
+    ``half`` CAN deliver for a beam of amplitude radius ``w_env``.
+
+    ``min(_FOCUS_STANDOFF_MARGIN, sat * ext)`` with ``ext = half/w_env`` and
+    ``sat = f_cap/sqrt(1+f_cap^2)`` the saturation of ``margin(f) = ext
+    f/sqrt(1+f^2)`` at the leg cap -- i.e. EXACTLY the ``m_req`` the
+    carrier-referenced law in :func:`_default_focus_standoff` resolves against.
+    Sharing it is the point: asking the BEAM-referenced solver for a margin the
+    grid cannot give produced a negative root, which the readout's
+    ``standoff > |z|`` clamp then turned into a whole-length leg on some cells
+    and nothing at all on others, depending on the sign of ``alpha``.  With
+    both halves targeting the same margin the resolver is continuous in the
+    grid extent, and the guard has a number to compare against.
+
+    Returns ``_FOCUS_STANDOFF_MARGIN`` unchanged for every grid at or above
+    ``M/sat`` = 3.695 beam radii, so the whole validated wide-grid surface is
+    untouched."""
+    if not (w_env > 0.0 and half > 0.0):
+        return float(_FOCUS_STANDOFF_MARGIN)
+    f_cap = np.sqrt(max(_FOCUS_STANDOFF_WAIST_GROWTH ** 2 - 1.0, 0.0))
+    sat = f_cap / np.sqrt(1.0 + f_cap * f_cap)
+    return float(min(_FOCUS_STANDOFF_MARGIN, sat * (half / w_env)))
 # Energy the Bluestein window may hold, as a fraction of the stop-plane power.
 # A window is a SUB-window of one period, so the true ratio is <= 1 by
 # construction; above 1 the transform has folded periodic REPLICAS in and the
@@ -2103,7 +2154,7 @@ def _fit_carrier_diag_stride(shape):
 
 
 def _fit_carrier_inv(E, wavelength, dx, dy, axis=None, estimator='gradient',
-                     centre=(0.0, 0.0), stride=1):
+                     centre=(0.0, 0.0), stride=1, project_tilt=None):
     """Intensity-weighted mean wavefront inverse-curvature ``1/R`` of a field
     (0.0 for a flat/collimated wavefront).
 
@@ -2157,6 +2208,9 @@ def _fit_carrier_inv(E, wavelength, dx, dy, axis=None, estimator='gradient',
     runs over.  ``1`` (the default, and every public call) is the historical
     arithmetic bit for bit; see :data:`_FIT_CARRIER_DIAG_MAX_LINES` for the
     measured agreement and what the internal diagnostic path uses it for.
+
+    ``project_tilt`` (``None`` = follow ``centre``, as above) decouples the
+    residual-tilt projection from the centring decision.
     """
     # Host-side least-squares curvature fit -> Python float; CuPy-safe pull
     # (see ``_envelope_amp_radius``).
@@ -2170,6 +2224,16 @@ def _fit_carrier_inv(E, wavelength, dx, dy, axis=None, estimator='gradient',
     if decentred:
         x = x - float(centre[0])
         y = y - float(centre[1])
+    # ``project_tilt`` is a SEPARATE decision from where the parabola is
+    # centred.  Defaulting it to ``decentred`` (the historical coupling) left a
+    # half-pixel blind spot: ``_envelope_amp_centroid`` snaps any decentre under
+    # ``dx/2`` to exactly ``(0, 0)``, so a beam decentred by a fifth of a pixel
+    # while carrying a tilt got NEITHER the centring nor the projection and
+    # still read a finite radius (measured 0.625 m at x0 = 0.2 dx and 0.255 m at
+    # 0.49 dx, for a truth of ``inf``; VERIFY-A6 OI-2).  A caller that asked to
+    # fit about the beam -- ``centre='auto'`` or an explicit point -- gets the
+    # projection whatever the snap did.
+    project = decentred if project_tilt is None else bool(project_tilt)
     # Broadcast rather than materialise: every use below is elementwise
     # against a full-grid array, so the products and the summation order are
     # the meshgrid ones exactly, and two whole float64 grids are not built.
@@ -2184,8 +2248,8 @@ def _fit_carrier_inv(E, wavelength, dx, dy, axis=None, estimator='gradient',
         The residual-tilt projection.  ``sum(C*q)`` is the historical moment;
         subtracting the ``w``-weighted mean slope times ``sum(w*C)`` removes
         the ``L * <x>`` cross term that makes a decentred uniform tilt read as
-        curvature.  Only reached on the decentred branch (see the docstring);
-        on the default centre the historical expression is evaluated verbatim.
+        curvature.  Reached when ``project_tilt`` resolves True (see the
+        docstring); otherwise the historical expression is evaluated verbatim.
         """
         num_c = float(np.sum(C * q))
         tot = float(np.sum(w))
@@ -2220,7 +2284,7 @@ def _fit_carrier_inv(E, wavelength, dx, dy, axis=None, estimator='gradient',
             # ``(wgt*xm)*slope``, not merely the same operands: re-grouping it
             # moves the answer by a few ulp, which a deterministic-fit pin
             # would see.
-            num += (_tilt_free_moment(wgt * (dphi / dx), wgt, xm) if decentred
+            num += (_tilt_free_moment(wgt * (dphi / dx), wgt, xm) if project
                     else float(np.sum(wgt * xm * (dphi / dx))))
             den += k * float(np.sum(wgt * xm * xm))
         if axis is None or axis == 0:
@@ -2228,12 +2292,12 @@ def _fit_carrier_inv(E, wavelength, dx, dy, axis=None, estimator='gradient',
             dphi = np.angle(E[1:, :] * np.conj(E[:-1, :]))
             wgt = np.abs(E[1:, :]) * np.abs(E[:-1, :])
             ym = 0.5 * (Y[1:, :] + Y[:-1, :])
-            num += (_tilt_free_moment(wgt * (dphi / dy), wgt, ym) if decentred
+            num += (_tilt_free_moment(wgt * (dphi / dy), wgt, ym) if project
                     else float(np.sum(wgt * ym * (dphi / dy))))
             den += k * float(np.sum(wgt * ym * ym))
     elif estimator == 'gradient':
         inten = np.abs(E) ** 2
-        if decentred:
+        if project:
             # ``Im[conj(E) dE/dx]`` IS the intensity-weighted phase slope
             # ``|E|^2 dphi/dx`` (that identity is what makes this estimator
             # unwrap-free), so it is exactly the ``q = w * slope`` the tilt
@@ -2364,13 +2428,18 @@ def carrier_referenced_fit_radius(
         truth ``inf``).
 
         ``'auto'`` (the default) fits about the field's own intensity
-        centroid (:func:`_envelope_amp_centroid`) and additionally projects
-        the residual tilt out of the phase slope, so an off-axis emitter or a
-        tilted DOE order reads its OWN radius.  The centroid SUB-PIXEL-SNAPS
-        to exactly ``(0, 0)``, so every effectively-centred field takes the
-        historical origin arithmetic byte for byte and this default changes
-        no on-axis answer.  ``'origin'`` pins the historical grid-origin fit
-        unconditionally; a 2-tuple fits about that point.
+        centroid (:func:`_envelope_amp_centroid`) and projects the residual
+        tilt out of the phase slope, so an off-axis emitter or a tilted DOE
+        order reads its OWN radius.  The centroid SUB-PIXEL-SNAPS to exactly
+        ``(0, 0)``, so an effectively-centred field is fitted about the grid
+        origin -- but the TILT PROJECTION is applied anyway, because the snap
+        threshold is half a pixel and a beam decentred by less than that still
+        carries the ``L x0`` cross term (measured ``R_fit`` = 0.625 m at
+        ``x0 = 0.2 dx`` and 0.255 m at ``0.49 dx`` for ``L = 0.02``, truth
+        ``inf``).  The projection costs a few ulp on a centred field and
+        nothing else; ``'origin'`` pins the historical grid-origin,
+        unprojected fit BIT for bit, and a 2-tuple fits about that point (with
+        the projection).  Use ``'origin'`` for a byte-identity pin.
     """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_full, 'carrier_referenced_fit_radius',
@@ -2392,6 +2461,7 @@ def carrier_referenced_fit_radius(
                 f"'origin' or an (x0, y0) pair in metres, got {centre!r}.")
         _cen = ((0.0, 0.0) if centre == 'origin'
                 else _envelope_amp_centroid(E_full, dx, dy))
+        _proj = (centre != 'origin')
     else:
         try:
             _cen = (float(centre[0]), float(centre[1]))
@@ -2404,6 +2474,7 @@ def carrier_referenced_fit_radius(
             raise ValueError(
                 "carrier_referenced_fit_radius: centre components must be "
                 f"finite, got {centre!r}.")
+        _proj = True
     if on_aliased == 'warn':
         _af = _carrier_fit_alias_fraction(E_full)
         if _af > _FIT_CARRIER_ALIAS_FRAC:
@@ -2423,13 +2494,16 @@ def carrier_referenced_fit_radius(
                 RuntimeWarning, stacklevel=2)
     if astigmatic:
         ix = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=1,
-                              estimator=estimator, centre=_cen)
+                              estimator=estimator, centre=_cen,
+                              project_tilt=_proj)
         iy = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=0,
-                              estimator=estimator, centre=_cen)
+                              estimator=estimator, centre=_cen,
+                              project_tilt=_proj)
         return (np.inf if ix == 0.0 else 1.0 / ix,
                 np.inf if iy == 0.0 else 1.0 / iy)
     inv = _fit_carrier_inv(E_full, wavelength, dx, dy, axis=None,
-                           estimator=estimator, centre=_cen)
+                           estimator=estimator, centre=_cen,
+                           project_tilt=_proj)
     return np.inf if inv == 0.0 else 1.0 / inv
 
 
@@ -2844,10 +2918,15 @@ def carrier_referenced_focus_readout(
         :func:`propagate_traced_carrier_chain` reports them per stage as
         ``readout_containment`` / ``readout_containment_model``.
 
-        The floor is ``_FOCUS_READOUT_CONTAINMENT_MIN`` = 1.0 beam radii of
-        half-width -- not the margin the resolver TARGETS, which on a narrow
-        grid it deliberately undershoots (down to a measured 1.19 on its own
-        calibration matrix).  Below 1.0 the beam's skirt is wrapped by the
+        The floor is the WORSE of ``_FOCUS_READOUT_CONTAINMENT_MIN`` = 1.0
+        beam radii of half-width and
+        ``_FOCUS_READOUT_CONTAINMENT_FRAC`` of the margin this grid can
+        actually deliver (:func:`_achievable_focus_margin`).  The absolute arm
+        alone is blind on a narrow grid, where the resolver deliberately aims
+        below ``_FOCUS_STANDOFF_MARGIN``: at 3.0 input beam radii it aims at
+        2.598 and a landing at 1.627 -- 8.7 % of focal peak lost against an
+        analytic Gaussian-ABCD oracle -- cleared 1.0 untouched.  Below 1.0 the
+        beam's skirt is wrapped by the
         periodic transform rather than carried, and the returned spot is a
         plausible-looking wrong answer: measured on a converging Gaussian at
         NA 0.05, the focal peak reads 0.745 of truth at containment 1.39,
@@ -3251,7 +3330,15 @@ def _beam_containment_standoff(env, R, z, wavelength, dx, w_env, centre, half,
     zR_env = np.pi * w_env * w_env / wavelength
     if not (np.isfinite(c) and np.isfinite(zR_env) and zR_env > 0.0):
         return 0.0
-    Q = (_FOCUS_STANDOFF_MARGIN * w_env) ** 2
+    # The margin the GRID can give, not the one the derivation would like:
+    # the same ``m_req`` the carrier-referenced law resolves against (see
+    # :func:`_achievable_focus_margin`).  Identical to
+    # ``_FOCUS_STANDOFF_MARGIN`` for every grid at or above 3.695 beam radii,
+    # so the whole validated wide-grid surface is bit-identical; below that it
+    # is what makes ``gamma >= 0`` -- i.e. what makes the input plane itself
+    # contained -- true by construction, so a leg exists to resolve instead of
+    # the function returning 0.0 (VERIFY-A6 OI-1).
+    Q = (_achievable_focus_margin(half, w_env) * w_env) ** 2
     h2 = half * half
     alpha = h2 / (zeta_cf * zeta_cf) - Q * (c * c + 1.0 / (zR_env * zR_env))
     beta = -2.0 * h2 / zeta_cf - 2.0 * Q * c
@@ -3327,44 +3414,90 @@ def _check_focus_containment(fn, action, env_stop, dx_stop, env_in, R, z,
             if w_model > 0.0:
                 cont_model = half_stop / w_model
     worst = cont if cont_model is None else min(cont, cont_model)
-    if out is not None:
-        out['containment'] = float(cont)
-        out['containment_model'] = (None if cont_model is None
-                                    else float(cont_model))
-        out['standoff'] = float(standoff)
-    if worst >= _FOCUS_READOUT_CONTAINMENT_MIN:
-        return
-    # The standoff that WOULD restore the margin, from the same beam model --
-    # an actionable number rather than a scolding.
+    # The floor is the WORSE of an absolute one radius and a fraction of what
+    # the resolver could actually target on this grid.  The absolute arm alone
+    # is blind on a narrow grid, where the resolver deliberately aims below
+    # _FOCUS_STANDOFF_MARGIN: at ext = 3.0 it aims at 2.598 radii and a landing
+    # at 1.627 -- 8.7 % of focal peak lost against an analytic Gaussian-ABCD
+    # oracle -- cleared the 1.0 floor untouched (VERIFY-A6 OI-1).
+    half_in = (0.5 * min(int(np.shape(env_in)[-1]), int(np.shape(env_in)[-2]))
+               * float(dx) - max(abs(centre_in[0]), abs(centre_in[1])))
+    m_target = _achievable_focus_margin(half_in, w_env)
+    # The leg that WOULD reach the target, from the same closed form the
+    # resolver uses.  Computed BEFORE the floor is chosen, because it is the
+    # evidence the relative arm needs: a fraction-of-target bar is only
+    # defensible when a qualifying leg demonstrably EXISTS.  ``0.0`` means the
+    # solver found none for THIS beam on THIS grid -- the target is a property
+    # of the grid alone, while reachability also depends on the beam's own
+    # curvature and divergence -- and then the only honest bar is the absolute
+    # floor.  (Measured: the niche tight-focus fixture lands at 2.123 radii
+    # measured AND 2.123 modelled -- the two agree to 0.1 %, so nothing is
+    # clipped or saturating -- on a 3.00-radius grid whose nominal target is
+    # 2.598 that no leg reaches.  Holding it to 0.9*2.598 refused a landing the
+    # resolver could not have improved.)
     _need = _beam_containment_standoff(
         env_in, R, z, wavelength, dx, w_env, centre_in,
         0.5 * min(int(_sh[-1]), int(_sh[-2])) * float(dx)
         - max(abs(centre_in[0]), abs(centre_in[1])), inv_env=inv_env)
+    # SCOPED to the grids the absolute floor is blind on.  Where the grid CAN
+    # deliver _FOCUS_STANDOFF_MARGIN the historical 1.0-radius floor stands
+    # unchanged, because on a wide grid the measured second moment is a poor
+    # proxy for clipping: a real relay's envelope carries a broad low-level
+    # skirt, and ``sqrt(2<r^2>)`` then reads the WINDOW rather than the core.
+    # Measured on the niche-D1 tilted-relay fixture (input grid 4.64 beam
+    # radii, so m_target is the full 3.2): the worst of its twelve readouts
+    # measures 1.033 against a MODELLED 3.506, and that landing satisfies the
+    # fixture's own ray-trace, diffraction-limit and energy-conservation
+    # oracles (33/33) -- i.e. a fraction-of-target bar applied there is a false
+    # positive, not a catch.  Below the knee the picture is different: the
+    # resolver aims at less than M by design, so a fraction of what it aimed at
+    # is the only statement available (VERIFY-A6 OI-1).
+    _relative = (m_target < _FOCUS_STANDOFF_MARGIN and _need > 0.0)
+    floor = (max(_FOCUS_READOUT_CONTAINMENT_MIN,
+                 _FOCUS_READOUT_CONTAINMENT_FRAC * m_target) if _relative
+             else _FOCUS_READOUT_CONTAINMENT_MIN)
+    if out is not None:
+        out['containment'] = float(cont)
+        out['containment_model'] = (None if cont_model is None
+                                    else float(cont_model))
+        out['containment_target'] = float(m_target)
+        out['standoff'] = float(standoff)
+    if worst >= floor:
+        return
+    # ``_need`` (computed above) is the standoff that WOULD restore the
+    # margin -- an actionable number rather than a scolding.
     _model_txt = ('' if cont_model is None else
                   f" and {cont_model:.3f} against the beam's own Gaussian "
                   f"ABCD width there ({w_model * 1e6:.3f} um -- the MEASURED "
                   f"second moment saturates once the beam overfills the grid, "
                   f"so it reads narrower than the beam is)")
     _remedy = (f"  A standoff of {_need:.6e} m would restore the "
-               f"{_FOCUS_STANDOFF_MARGIN:g}-radius margin"
+               f"{m_target:.3f}-radius margin this grid can give"
                if _need > 0.0 else
-               f"  No leg length reaches the "
-               f"{_FOCUS_STANDOFF_MARGIN:g}-radius margin on this grid: the "
-               f"input half-extent is only {(0.5 * min(int(_sh[-1]), int(_sh[-2])) * float(dx)) / w_env:.2f} "
-               f"beam radii")
+               f"  No leg length reaches even the {m_target:.3f}-radius margin "
+               f"this grid can give: the input half-extent is only "
+               f"{half_in / w_env:.2f} beam radii")
     _guard_dispose(
         action,
         f"{fn}: the beam does not fit the co-moving grid at the stop plane.  "
         f"The grid half-width there is {half_stop * 1e6:.4f} um against a "
         f"measured amplitude radius of {w_stop * 1e6:.4f} um -- a containment "
-        f"of {cont:.3f} beam radii{_model_txt}, under the "
-        f"{_FOCUS_READOUT_CONTAINMENT_MIN:g}-radius floor below which the "
-        f"beam's skirt is WRAPPED by the periodic transform rather than "
-        f"carried.  The standoff resolver sizes this leg from the beam's own "
-        f"measured wavefront, so reaching this means the beam is not the "
-        f"Gaussian that model assumes (a strongly aberrated or multi-lobed "
-        f"envelope), or that a caller-supplied standoff is too short: the "
-        f"resolved leg is {standoff:.6e} m."
+        f"of {cont:.3f} beam radii{_model_txt}, under the {floor:.3f}-radius "
+        f"floor "
+        + ("below which the beam's skirt is WRAPPED by the periodic transform "
+           "rather than carried"
+           if not _relative else
+           f"-- the worse of the {_FOCUS_READOUT_CONTAINMENT_MIN:g} radii "
+           f"below which the beam's skirt is WRAPPED by the periodic transform "
+           f"rather than carried, and {_FOCUS_READOUT_CONTAINMENT_FRAC:g} of "
+           f"the {m_target:.3f} radii this {half_in / w_env:.2f}-radius input "
+           f"grid can deliver, which is less than the "
+           f"{_FOCUS_STANDOFF_MARGIN:g} the derivation would like")
+        + f".  The standoff resolver sizes this leg from the "
+        f"beam's own measured wavefront, so reaching this means the beam is "
+        f"not the Gaussian that model assumes (a strongly aberrated or "
+        f"multi-lobed envelope), or that a caller-supplied standoff is too "
+        f"short: the resolved leg is {standoff:.6e} m."
         f"{_remedy}.  Measured consequence of ignoring it, on a converging "
         f"Gaussian at NA 0.05: the focal peak comes out 0.745 of truth at "
         f"containment 1.39, 0.188 at 0.91 and 0.026 at 0.87, with the core "
@@ -7524,7 +7657,8 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
             # exact sphere itself.
             _cf = _sphere_parab_conversion(np.shape(E_full), dx_fine,
                                            wavelength, R_in, +1, w_beam=w,
-                                           dtype=np.asarray(E_full).dtype)
+                                           dtype=np.asarray(E_full).dtype,
+                                           dy=dx_fine)
             if _cf is not None:
                 E_full = np.asarray(E_full) * _cf
         _carrier_arg = R_in
@@ -7577,7 +7711,8 @@ def _fine_trace_group_exit(env, R_in, cur_dx, presc, wavelength, ray_subsample,
         E_full = env_f if _ph is None else np.asarray(env_f) * _ph
         if sphere_reference:
             _cf = _sphere_parab_conversion(_sh, dx_fine, wavelength, R_in, +1,
-                                           w_beam=w, centre=_ctr, dtype=_ff_dt)
+                                           w_beam=w, centre=_ctr, dtype=_ff_dt,
+                                           dy=dx_fine)
             if _cf is not None:
                 E_full = np.asarray(E_full) * _cf
         _rp = _tilt_ramp(_sh, dx_fine, wavelength, tL, tM, _ctr[0], _ctr[1],
@@ -8843,6 +8978,13 @@ def propagate_traced_carrier_chain(
         _tilt_obliquity(tilt_L, tilt_M, 'propagate_traced_carrier_chain')
     k0 = 2.0 * np.pi / wavelength
     cur_dx = float(dx)
+    # The y pitch, tracked separately.  It equals ``cur_dx`` on every square
+    # leg (the chain's input grid is square by contract), and DIVERGES only
+    # after an astigmatic leg, whose ``(dx_x, dx_y)`` pair the two collapse
+    # sites below used to reduce to its x component and throw away.  The
+    # parabola<->sphere conversion is the one screen that builds its own y
+    # axis, so it is the one that needs the real pitch (VERIFY-A6 OI-3).
+    cur_dy = cur_dx
     env = E_in
     stages: list = []
     # ---- niche D4 (roadmap P2): DOE entries in ``groups`` ------------------
@@ -9006,7 +9148,10 @@ def propagate_traced_carrier_chain(
                 tilt=((tilt_L, tilt_M) if _tilted else (0.0, 0.0)))
             env, R, cur_dx = cr.env, cr.R, cr.dx
             if isinstance(cur_dx, tuple):
+                cur_dy = float(cur_dx[1])
                 cur_dx = cur_dx[0]
+            else:
+                cur_dy = cur_dx
             if isinstance(R, tuple):
                 R = R[0]
             # A COLLIMATED leg (R = inf) previously took no arm at all: the
@@ -9276,7 +9421,7 @@ def propagate_traced_carrier_chain(
                 _cf = _sphere_parab_conversion(
                     np.shape(E_full), cur_dx, wavelength, R_use, +1,
                     w_beam=_envelope_amp_radius(env, cur_dx, cur_dx),
-                    dtype=np.asarray(E_full).dtype)
+                    dtype=np.asarray(E_full).dtype, dy=cur_dy)
                 if _cf is not None:
                     E_full = np.asarray(E_full) * _cf
             _carrier_arg = R_use
@@ -9299,7 +9444,8 @@ def propagate_traced_carrier_chain(
             if _sphere_ref:
                 _cf = _sphere_parab_conversion(
                     np.shape(E_full), cur_dx, wavelength, R_use, +1,
-                    w_beam=_w_track, centre=(x_c, y_c), dtype=_ga_dt)
+                    w_beam=_w_track, centre=(x_c, y_c), dtype=_ga_dt,
+                    dy=cur_dy)
                 if _cf is not None:
                     E_full = np.asarray(E_full) * _cf
             _rp = _tilt_ramp(np.shape(E_full), cur_dx, wavelength,
@@ -9350,7 +9496,8 @@ def propagate_traced_carrier_chain(
                 # envelope is the wavefront residual (the carried content)
                 _cf = _sphere_parab_conversion(E_exit.shape, cur_dx,
                                                wavelength, R_out, -1,
-                                               dtype=E_exit.dtype)
+                                               dtype=E_exit.dtype,
+                                               dy=cur_dy)
                 if _cf is not None:
                     E_exit = E_exit * _cf
             env = carrier_referenced_envelope(E_exit, R_out, wavelength,
@@ -9383,7 +9530,8 @@ def propagate_traced_carrier_chain(
             if _sphere_ref:
                 _cf = _sphere_parab_conversion(
                     E_exit.shape, cur_dx, wavelength, R_out, -1,
-                    centre=(x_c_out, y_c_out), dtype=E_exit.dtype)
+                    centre=(x_c_out, y_c_out), dtype=E_exit.dtype,
+                    dy=cur_dy)
                 if _cf is not None:
                     E_exit = E_exit * _cf
             _ph = _radial_carrier_phase(
@@ -9430,7 +9578,7 @@ def propagate_traced_carrier_chain(
         _cf = _sphere_parab_conversion(
             np.shape(env), cur_dx, wavelength, R, +1,
             w_beam=_envelope_amp_radius(env, cur_dx, cur_dx),
-            dtype=np.asarray(env).dtype)
+            dtype=np.asarray(env).dtype, dy=cur_dy)
         if _cf is not None:
             env = np.asarray(env) * _cf
     if _tilted:
@@ -9545,7 +9693,10 @@ def propagate_traced_carrier_chain(
             tilt=((tilt_L, tilt_M) if _tilted else (0.0, 0.0)))
         env, R, cur_dx = cr.env, cr.R, cr.dx
         if isinstance(cur_dx, tuple):
+            cur_dy = float(cur_dx[1])
             cur_dx = cur_dx[0]
+        else:
+            cur_dy = cur_dx
         if isinstance(R, tuple):
             R = R[0]
         if _tilted:

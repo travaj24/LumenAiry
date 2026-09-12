@@ -139,6 +139,19 @@ returns complex64 (was complex128); the complex64 phasor agrees with the narrowe
 complex128 one to one float32 rounding (measured <= 1.2e-07, flat in the
 argument).  `phasor_on`'s own default is unchanged (complex128).
 
+**Migration -- `aggregate` now sums at the members' own dtype.**  An
+all-complex64 fan is accumulated in complex64 where it used to be widened to
+complex128 unconditionally, so `aggregate(...).field.envelope.dtype` follows the
+inputs and the coherent sum carries float32 accumulation error: measured
+**7.6e-08 relL2** against the complex128 sum of the same 16 fields, inside the
+`sqrt(K)*eps32` = 4.8e-07 random-walk bound.  That is the point of the change
+(4.29 GB saved per grid at N = 16384, and it is the rule
+`propagate_traced_carrier_chain_multi` already used), but a caller who needs the
+old precision from complex64 storage must now ask for it -- pass complex128
+envelopes, or widen with `dataclasses.replace(f, envelope=f.envelope.astype(
+np.complex128))` before aggregating.  Any complex128 member still widens the
+whole sum, as `np.result_type` requires.
+
 ### Performance -- carrier: separable reference phases, an allocation-free transfer function, and an in-place fine-grid rescale (C4)
 
 All bit-exact or bounded by a measured, derived tolerance.  No test asserts a

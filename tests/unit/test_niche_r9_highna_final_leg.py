@@ -129,25 +129,27 @@ def test_r9_exact_leg_focuses_highna_sphere(w, R):
     # globally; the default refusal is pinned in
     # test_niche_tight_focus_readout.
     #
-    # WP-A6 / C1 (2026-09-12): the same waiver, for the same reason, on the
-    # containment guard.  That guard refuses a readout whose beam does not fit
-    # the co-moving stop grid -- and this arm's beam does not: measured
-    # containment 1.055 (NA 0.30) and 0.919 (NA 0.455) against the 1.0 floor,
-    # on an input grid holding only 2.56 / 2.19 beam radii.  That is not a
-    # false positive, it IS the failure this test asserts one line below
-    # (``ee_par < 0.10``): the guard and the assertion are measuring the same
-    # thing from two directions.  Keeping the arm therefore means waiving the
-    # refusal explicitly, exactly as the replica one is waived.
+    # VERIFY-A6 / OI-1 (2026-09-12): the containment waiver WP-A6 added here is
+    # gone, and so is the "the default refuses this arm" corollary it carried.
+    # Both were correct against the resolver as it stood and are obsolete
+    # against the resolver as it is.  The C1 beam term used to return 0.0 on any
+    # grid holding fewer than 3.2 beam radii -- this one holds 2.56 / 2.19 --
+    # so the paraxial arm ran on a leg sized purely from the carrier and landed
+    # at a containment of 1.055 / 0.919.  It now targets the margin the grid CAN
+    # give and the same arm runs on a 26x / 77x longer leg:
+    #
+    #   NA     leg (um)            containment      EE(2 w0)
+    #   0.300    8.0250 -> 209.7156  1.055 -> 2.213  0.0033 -> 0.5446
+    #   0.455    3.4965 -> 270.7493  0.919 -> 1.900  0.0019 -> 0.2662
+    #
+    # so the ``ee_par < 0.10`` fail-before is simply no longer true: with a
+    # properly resolved leg the paraxial carrier gets a large part of the energy
+    # in.  The test's SUBJECT is untouched -- the exact leg is unchanged at
+    # EE 0.9999 / 0.9979 and FWHM 1.911 / 1.491 um -- so the claim is restated
+    # as the COMPARISON it was always about, below.
     E_par = np.asarray(carrier_referenced_focus_readout(
         carrier_referenced_envelope(E, R, _WL, dx), R, zf, _WL, dx,
-        dx_out=dx_out, N_out=N_out, on_replica='ignore',
-        on_focus_containment='ignore'))
-    # ... and that the waiver is load-bearing: without it the default refuses
-    # this arm outright, so a caller cannot reach the ~5 % answer by accident.
-    with pytest.raises(RuntimeError, match='does not fit the co-moving'):
-        carrier_referenced_focus_readout(
-            carrier_referenced_envelope(E, R, _WL, dx), R, zf, _WL, dx,
-            dx_out=dx_out, N_out=N_out, on_replica='ignore')
+        dx_out=dx_out, N_out=N_out, on_replica='ignore'))
     E_ex = np.asarray(carrier_referenced_exact_focus_readout(
         E, R, zf, _WL, dx, dx_out=dx_out, N_out=N_out))
     assert np.isfinite(E_ex).all()
@@ -156,11 +158,25 @@ def test_r9_exact_leg_focuses_highna_sphere(w, R):
     ee_ex = _ee_within(E_ex, dx_out, 2.0 * w0)
     P, fwhm, offax, _ = _spot(E_ex, dx_out)
 
-    # FAIL-BEFORE: paraxial carrier cannot focus this leg
-    assert ee_par < 0.10, f'paraxial should fail (EE={ee_par:.3f})'
+    # FAIL-BEFORE, RESTATED (VERIFY-A6 / OI-1, 2026-09-12): the paraxial
+    # carrier still cannot RESOLVE this leg -- its spot is twice too wide -- but
+    # it is no longer a ~0.3 % answer now that the leg is sized from the beam
+    # (see the note at the readout call).  The comparison is the claim, and it
+    # is made on the two quantities that do not depend on how much energy the
+    # readout window happens to collect:
+    #
+    #   NA     EE(2w0) par -> ex      ratio    FWHM par / FWHM ex
+    #   0.300  0.5446 -> 0.9999       1.836      3.996 / 1.911 = 2.091
+    #   0.455  0.2662 -> 0.9979       3.748      3.326 / 1.491 = 2.231
+    #
+    # BARS: EE ratio > 1.5 (1.22x under the weaker of the two measurements,
+    # and an exact-vs-paraxial ratio of 1 is the null) and FWHM ratio > 1.8
+    # (1.16x under the weaker; a resolved paraxial arm would give 1.0).
+    fwhm_par = _spot(E_par, dx_out)[1]
     # PASS-AFTER: exact leg reaches the diffraction limit
     assert ee_ex > 0.97, f'exact leg EE-in-2w0 = {ee_ex:.3f} (< 0.97)'
-    assert ee_ex > 12.0 * ee_par, (ee_ex, ee_par)
+    assert ee_ex > 1.5 * ee_par, (ee_ex, ee_par)
+    assert fwhm_par > 1.8 * fwhm, (fwhm_par, fwhm)
     # FWHM near the diffraction limit lambda/(2 NA) (loose band -- a Gaussian's
     # FWHM is not exactly lambda/(2 NA); the precise match to a fully-resolved
     # focus is pinned by test_r9_exact_leg_matches_resolved_ground_truth).

@@ -414,10 +414,25 @@ class TestC2FitRadiusCentre:
         assert abs(old) == pytest.approx(
             pre_R, rel=(2e-3 if est == 'increment' else 1.5e-2))
 
-    def test_the_on_axis_answer_is_byte_identical(self):
-        """The centroid sub-pixel-snaps to exactly ``(0, 0)``, so a centred
-        field must take the historical origin arithmetic BIT for bit -- the
-        new default changes no on-axis answer."""
+    def test_the_on_axis_answer_moves_by_at_most_two_ulp(self):
+        """RESTATED by VERIFY-A6 (OI-2, 2026-09-12).  The original claim was
+        BYTE-identity of ``'auto'`` and ``'origin'`` on a centred field, which
+        held because the tilt projection was gated on ``centre != (0, 0)`` and
+        the centroid sub-pixel-snaps to exactly ``(0, 0)``.  That coupling was
+        the defect: a beam decentred by LESS THAN HALF A PIXEL got neither the
+        centring nor the projection and still read a finite radius for a pure
+        tilt (measured 0.625 m at 0.2 dx, 0.255 m at 0.49 dx, truth ``inf``).
+        ``'auto'`` now projects whatever the snap did.
+
+        The property that survives, and is the one worth pinning: the
+        projection costs a CENTRED field a couple of ulp and nothing more --
+        on a centred beam the weighted mean slope and ``sum(w x)`` are both
+        round-off, so their product is too.  BAR 4 ulp: measured 0 ulp on
+        'increment' (exactly equal at all four radii) and 1-2 ulp on
+        'gradient'.  A genuine centring error is ``1 + 2 x0^2/w^2`` -- 50 % at
+        half a waist, 15 decades up.  ``'origin'`` remains the byte-identity
+        escape hatch and is pinned against the PRE-FIX estimator in
+        ``test_audit2609_a6_verify_carrier.py``."""
         for est in ('gradient', 'increment'):
             for r in (50e-3, -20e-3, 1e9, np.inf):
                 g = (np.arange(self.N) - self.N / 2) * self.DX
@@ -429,15 +444,22 @@ class TestC2FitRadiusCentre:
                 b = C.carrier_referenced_fit_radius(
                     e, LAM, self.DX, estimator=est, on_aliased='silent',
                     centre='origin')
-                assert a == b, (est, r, a, b)
+                if np.isinf(r):
+                    assert a == b == np.inf, (est, r, a, b)
+                    continue
+                assert abs(a - b) <= 4.0 * np.spacing(abs(b)), (est, r, a, b)
+                if est == 'increment':
+                    assert a == b, (est, r, a, b)   # exactly, on this branch
             # ... and the astigmatic pair too
             e = self._decentred_parabola(0.0)
-            assert (C.carrier_referenced_fit_radius(
-                        e, LAM, self.DX, astigmatic=True, estimator=est,
-                        on_aliased='silent')
-                    == C.carrier_referenced_fit_radius(
-                        e, LAM, self.DX, astigmatic=True, estimator=est,
-                        on_aliased='silent', centre='origin'))
+            for u, v in zip(C.carrier_referenced_fit_radius(
+                                e, LAM, self.DX, astigmatic=True,
+                                estimator=est, on_aliased='silent'),
+                            C.carrier_referenced_fit_radius(
+                                e, LAM, self.DX, astigmatic=True,
+                                estimator=est, on_aliased='silent',
+                                centre='origin')):
+                assert abs(u - v) <= 4.0 * np.spacing(abs(v)), (est, u, v)
 
     @pytest.mark.parametrize('stride', [1, 2, 4, 8])
     def test_the_diagnostic_stride_does_not_move_the_fit(self, stride):

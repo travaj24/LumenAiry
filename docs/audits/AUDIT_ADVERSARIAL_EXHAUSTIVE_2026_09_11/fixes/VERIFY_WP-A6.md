@@ -574,3 +574,296 @@ Not defects, recorded for completeness:
   -- this report.
 
 No other file was edited; no git write command was run.
+
+---
+
+## 8. Follow-up (2026-09-12) — the five §6 open items, implemented
+
+The orchestrator ruled all five open items in.  All are now implemented and
+measured; the file list is at the end of this section.  Nothing else changed.
+
+### OI-1 (P2) — C1 is now operative below 3.2 beam radii of grid
+
+**Root cause.**  Two halves of the same mistake.  (a) The beam-referenced
+solver always asked for `_FOCUS_STANDOFF_MARGIN` = 3.2 radii, so on a grid
+holding fewer than that at the input plane `gamma = half² − (M·w)²` went
+negative, the input plane itself was uncontained, and the solver returned 0.0.
+(b) The guard's floor was a bare 1.0 radius, which a landing at 1.627 clears —
+so the resulting loss was neither repaired nor reported.
+
+**Fix.**  A new shared helper `_achievable_focus_margin(half, w_env)` returns
+`min(M, sat·half/w_env)` — *exactly* the `m_req` the carrier-referenced law in
+`_default_focus_standoff` already resolves against, with
+`sat = f_cap/√(1+f_cap²)` and `f_cap = √(_FOCUS_STANDOFF_WAIST_GROWTH²−1)`.
+Both halves now use it:
+
+* `_beam_containment_standoff` forms `Q = (m_target·w_env)²`, which makes
+  `gamma ≥ 0` true by construction, so a leg always exists to resolve;
+* `_check_focus_containment` disposes below
+  `max(_FOCUS_READOUT_CONTAINMENT_MIN, _FOCUS_READOUT_CONTAINMENT_FRAC·m_target)`
+  and publishes `containment_target` beside the two readings.
+
+The helper is the **identity** above `M/sat` = 3.695 radii, so the entire
+validated wide-grid surface is untouched by construction, not by luck.
+
+**Measured, λ = 0.85 µm, NA 0.08, ext = 3.0 (target margin 2.598 radii):**
+
+```
+R/R0   leg (um) post -> pre   containment post -> pre   peak vs the ORACLE      guard, pre-fix leg
+1.00     94.76 ->   94.76        2.745 -> 2.745        0.999324 (control)       silent (contained)
+0.99    534.48 ->  167.37        2.598 -> 1.627        0.990892 -> 0.912560     REFUSES
+0.97   1408.84 ->  312.71        2.598 -> 0.984        0.954704 -> 0.300483     REFUSES
+0.93   2698.45 ->  603.87        2.598 -> 0.865        0.883644 -> 0.025460     REFUSES
+```
+
+So the 1 %-mismatch 8.7 % peak loss is **repaired** (0.9126 → 0.9909) *and*
+**seen** (its pre-fix leg is now refused where it used to pass silently); the
+3 % case goes 0.3005 → 0.9547 and the 7 % case 0.0255 → 0.8836.
+
+**Nothing shipped moved.**  On the resolver's own 6 NA × 10 extent calibration
+matrix: **0 cells** whose resolved leg differs from the pre-fix one, **0** guard
+firings, worst achieved/target ratio **0.9969** (against the 0.9 bar — 1.108×
+of clearance) and worst absolute containment **1.2566**.  `p6c_mismatch.py`
+reproduces bit for bit (222.39 / 1008.60 / 1873.95 / 4173.27 / 7144.93 µm,
+peaks 1.000000 / 0.999514 / 0.998602 / 0.994304 / 0.985236, 0 warnings), and
+the ext = 4.0 fixture is unchanged to every digit (legs 368.89 / 1006.77 /
+2051.45 µm, containment 3.200, peaks 0.995468 / 0.973251 / 0.919521).  The
+"never shortens" sweep is still **0 shorter over 910 runs**; the count of runs
+that lengthen rose from 81 to **184**, which is the narrow-grid gain.
+
+**Bar derivation (two-sided).**  `_FOCUS_READOUT_CONTAINMENT_FRAC = 0.9` sits
+1.108× under the tightest passing cell of the calibration matrix (0.9969) and
+1.44× / 2.37× / 2.70× over the failing ratios (0.626 at 1 %, 0.379 at 3 %,
+0.333 at 7 %).  Like the 1.0 floor beside it that is not decades of clearance,
+and the constant says so: it refuses a leg that demonstrably lost the beam, it
+does not grade quality.
+
+**Scope — and a false positive of mine that WP-A3 caught.**  My first cut
+applied the relative arm on EVERY grid.  WP-A3 reported
+`test_niche_d1_tilted_carrier.py` going from 33 passed to 1 failed + 6 errors,
+all `_check_focus_containment` refusals at a measured containment of 1.033
+against my floor of 2.880.  I measured that fixture before choosing a side, as
+instructed:
+
+* its input grid is **4.64 beam radii**, i.e. WIDE — `m_target` is the full
+  3.2, so this was never the narrow-grid case OI-1 is about;
+* the refused readout is `dx_out = 400 nm, N_out = 1024` — a **409.6 µm
+  diagnostic window** holding EE(3 µm) = 0.0014, i.e. the D1 ghost/skirt
+  readout, not a focal spot.  Its measured `sqrt(2<r²>)` = 59.76 µm against a
+  grid half-width of 61.75 µm reads the WINDOW; the beam's own modelled ABCD
+  width there is **17.61 µm** (containment 3.506), so the core is not clipped;
+* with the historical floor restored (`_FOCUS_READOUT_CONTAINMENT_FRAC = 0`,
+  via a session plugin) the file is **33 passed** — including
+  `test_tilted_relay_lands_on_the_exact_ray_trace`,
+  `test_tilted_relay_reaches_the_on_axis_diffraction_limit` and
+  `test_energy_is_conserved_through_the_tilted_relay`.  The landing at 1.033 is
+  accurate to the fixture's own oracles;
+* and the leg sweep on that call is incoherent (peak ratios 0.630 / 2.367 /
+  4.567 / 3.171 / 5.029 at 0.5x to 5x the resolved leg, relL2 ~1.2 between
+  arms), because the window is deliberately wider than one Bluestein period —
+  there is no "longer leg is better" truth to move towards.
+
+So the floor was a **false positive**, and the cause was my derivation: I
+calibrated FRAC on flat-envelope cells (where achieved ≈ target by
+construction) and on the narrow-grid mismatch fixture, then applied it
+everywhere.  On a wide grid with a structured envelope the measured second
+moment is a poor clipping proxy.  The arm is **scoped to
+`m_target < _FOCUS_STANDOFF_MARGIN`** — exactly the grids the absolute floor is
+blind on.  Above the knee (`M/sat` = 3.695 radii) the historical 1.0 floor
+stands unchanged, so d1 is back to **33 passed with no edit to that file**
+(I declined the grant to touch it).
+
+**A second false positive, from the same over-reach.**  That scoping fixed d1
+but left `test_niche_tight_focus_readout.py` failing 2 of 15: a landing at
+**2.123 radii measured AND 2.123 modelled** (the two agree to 0.1 %, so nothing
+is clipped or saturating) on a 3.00-radius grid whose nominal target is 2.598 —
+while the guard's own message said *"No leg length reaches even the
+2.598-radius margin this grid can give"*.  The bar sat above what the resolver
+could deliver for that beam: `m_target` is a property of the GRID, but
+reachability also depends on the beam's own curvature and divergence.  So the
+relative arm is additionally gated on **a qualifying leg demonstrably
+existing** — `_beam_containment_standoff(...) > 0`, computed before the floor is
+chosen and reused for the message's actionable remedy.
+
+The arm therefore governs exactly the cells where the absolute floor is blind
+AND a better leg exists: `m_target < _FOCUS_STANDOFF_MARGIN and _need > 0`.
+`test_niche_tight_focus_readout.py` is back to **15 passed**, and every OI-1
+acceptance number above is unchanged by both gates — re-measured after them:
+matrix 0 moved / 0 fired / worst ratio 0.9969 / worst absolute 1.2566; the
+ext = 3.0 rows identical to the digit; ext = 4.0 identical.  Pinned in
+`::test_the_relative_floor_is_scoped_to_grids_below_the_knee`.
+
+**One test of mine genuinely had to be re-based, and that is a RESULT rather
+than bookkeeping.**  `test_niche_r9_highna_final_leg.py::test_r9_exact_leg_focuses_highna_sphere`
+asserted `ee_par < 0.10` — "the paraxial carrier cannot focus this leg" — and,
+per WP-A6's addition, that the default disposition REFUSES that arm.  Both were
+true of the old resolver and are false of the new one: those fixtures hold
+2.56 / 2.19 beam radii, so the beam term used to return 0.0 and the arm ran on a
+leg sized purely from the carrier.  Measured now:
+
+```
+NA      leg (um)               containment      EE(2 w0)          FWHM (um)
+0.300     8.0250 -> 209.7156   1.055 -> 2.213   0.0033 -> 0.5446  3.996 (exact 1.911)
+0.455     3.4965 -> 270.7493   0.919 -> 1.900   0.0019 -> 0.2662  3.326 (exact 1.491)
+```
+
+i.e. the C1 fix improves the paraxial high-NA readout by **165x / 140x in
+encircled energy** — which is exactly what C1 is for on a fixture whose carrier
+badly misdescribes the beam.  The exact arm is untouched (EE 0.9999 / 0.9979,
+FWHM 1.911 / 1.491 µm).  The test's subject survives, so its claim is restated
+as the COMPARISON it was always about, with derived two-sided bars:
+`ee_ex > 1.5·ee_par` (measured 1.836 / 3.748; 1.0 is the null) and
+`fwhm_par > 1.8·fwhm_ex` (measured 2.091 / 2.231; 1.0 is a resolved paraxial
+arm).  The containment waiver and the "default refuses" corollary are removed,
+with the before/after table in the comment.  **9 passed.**
+
+Pinned in `TestVerifyC1AgainstTheAnalyticFocus`:
+`test_a_narrow_grid_resolves_and_the_guard_sees_the_pre_fix_leg` (3 params,
+each with its own fail-before arm),
+`test_the_contained_control_on_the_same_narrow_grid_is_untouched`,
+`test_the_achievable_margin_leaves_every_wide_grid_alone`,
+`test_the_relative_floor_is_scoped_to_grids_below_the_knee`,
+`test_the_sixty_cell_matrix_is_untouched_and_silent`.
+
+### OI-2 — the half-pixel blind spot is gone
+
+`_fit_carrier_inv` gains `project_tilt` (`None` = follow `centre`, the
+historical coupling), and `carrier_referenced_fit_radius` passes `True` for
+every `centre` but `'origin'`.  The projection is now a decision about what the
+CALLER asked for, not about where the snapped centroid happened to land.
+
+**Measured, L = 0.02 on a 100 µm waist at dx = 2 µm, truth `inf`:**
+
+```
+x0/dx      0.00       0.20       0.49       0.51       1.00       25.0
+before  -4.9e+14 m   0.625 m    0.255 m   2.5e+14 m  8.7e+13 m  -1.8e+15 m
+after   -5.8e+14 m  1.8e+14 m  1.4e+14 m  2.5e+14 m  8.7e+13 m  -1.8e+15 m
+```
+
+— the 0.625 m / 0.255 m readings are gone, and the discontinuity at the snap
+with them.  Cost to a CENTRED field: **0 ulp** on `increment` (exactly equal at
+every radius) and **1–2 ulp** on `gradient`.  `centre='origin'` remains the
+byte-identity escape hatch and still reads the finite radius, which the test
+asserts against the analytic pre-fix form `1/R = L·x0/(x0² + w²/2)` so the
+fixture cannot be mistaken for a benign one.  The decentred-parabola and
+non-Gaussian results are unchanged (1.0000000000 at 0.5 / 1.0 / 2.0 waists).
+
+Pinned in `TestVerifyC2::test_a_sub_pixel_decentre_no_longer_hides_a_pure_tilt`
+(6 params).  The WP's own `test_the_on_axis_answer_is_byte_identical` was
+restated as `test_the_on_axis_answer_moves_by_at_most_two_ulp` with its 4-ulp
+derivation — the byte-identity claim it made *was* the defect's own gate.
+
+### OI-3 — `dy=` is wired to all seven call sites
+
+The chain now tracks `cur_dy` beside `cur_dx` and picks up the y component of
+an astigmatic leg's `(dx_x, dx_y)` instead of discarding it at the two
+`isinstance(cur_dx, tuple)` collapse sites; all seven
+`_sphere_parab_conversion` calls pass a `dy` (`dx_fine` on the two retrace
+sites, `cur_dy` on the five chain sites).  Bit-identical wherever `dy == dx`,
+which is every square leg — the helper's `dy=dx` arm is `np.array_equal` to
+`dy=None`, and that is pinned.
+
+An astigmatic leg really does produce two pitches — measured
+`(4.160, 4.100) µm` from `propagate_carrier_referenced((50, 80) mm, 2 mm)`,
+1.5 % apart — and the screen built on that pair matches a numerically stable
+hand-built eikonal to **< 1e-12** while differing from the dx-only one by
+> 1e-10.  Pinned in
+`TestVerifyC5::test_the_sphere_parabola_conversion_dy_is_wired_to_every_caller`
+(a static check that all 7 sites pass a `dy`) and
+`::test_an_astigmatic_leg_really_produces_the_two_pitches`.
+
+### OI-4 — the `aggregate` migration line
+
+Added to `WP-A6_CHANGELOG.md` under the C3 entry: an all-complex64 fan is now
+accumulated in complex64, measured **7.6e-08 relL2** against the complex128 sum
+of the same 16 fields (inside the `√K·eps32` = 4.8e-07 random-walk bound), with
+the two ways to keep the old precision spelled out.
+
+### OI-5 — `WP-A6_REPORT.md` corrected
+
+* §5.3 request 3 struck through and marked **WITHDRAWN**: `mft.py` preserves
+  complex64 (WP-A5's measurement, and both readouts return complex64 here); the
+  site was `carrier.py:9512` and it is fixed.
+* §2.4's "two decades under the ~1e-11 rad representation noise" replaced by
+  the measured `1.0–1.6 × eps·max|arg|` table and the statement that a fixed
+  absolute bar does not hold over the range that section itself quotes.
+* The C2 summary-table decentred-tilt after-numbers annotated as round-off
+  level, with my re-measurement and the claim that survives (order, not digits).
+
+### Follow-up test runs
+
+| command | result |
+|---|---|
+| `pytest tests/unit/test_audit2609_a6_verify_carrier.py` | **83 passed**, 27 s (was 72; +11 for OI-1/2/3) |
+| `pytest` verify + the WP's file | **164 passed**, 51 s |
+| `pytest` verify + the WP's file + the 12 nearest carrier files | **376 passed** |
+| `pytest` the 20-file set (those 14 + `d1`, `r9`, `d3`, `tight_focus_readout`, `r8`, `c1_consolidation`, `k2`) | **532 passed, 3 skipped**, 7 flaky (below), 18:39 |
+| `pytest tests/unit/test_niche_d1_tilted_carrier.py` | **33 passed** |
+| `pytest tests/unit/test_niche_tight_focus_readout.py` | **15 passed** |
+| `pytest tests/unit/test_niche_r9_highna_final_leg.py` | **9 passed** |
+| `ruff check` on both modules and the three test files | **All checks passed** |
+| `repro/CARRIER/p6c_mismatch.py` | bit-identical to §2 |
+
+### The 7 flaky failures in the 20-file run, and why they are not mine
+
+All 7 were in `test_niche_d14_deterministic_carrier_fit.py`, and none is a
+containment or fit failure: each is a SPAWNED CHILD that could not
+`import lumenairy`, dying at
+
+```
+File "...\lumenairy\elements\__init__.py", line 64, in <module>
+    from .elements import (
+```
+
+i.e. inside another agent's module, in a file neither WP-A6 nor I touch.  That
+file's tests compare hashes across child processes, so a module being written
+mid-run by a concurrent agent breaks the import in the child while the parent
+holds the already-imported version.  WP-A6's own report records the identical
+pattern on the identical file (its �4.2: "7 failures ... that did not reproduce
+on any later run ... I hit a live `SyntaxError` in `_cache_registry.py` and an
+`AttributeError` from `elements/pmm/twod.py` in the same window").
+
+Re-measured: **18 passed alone**, and **98 passed twice consecutively** on the
+exact pairing that had failed 2 (`test_audit2609_a6_carrier.py` +
+`test_niche_d14_deterministic_carrier_fit.py`); `python -c "import lumenairy"`
+is clean.  Not reproducible, and not attributable to this package.
+
+### `na_exit_guard` (VERIFY-A3's note) � measured, and NO change made
+
+VERIFY-A3 added `na_exit_entrance_disc` / `na_exit_output_disc` /
+`na_exit_guard` to `_exit_na_out` and asked whether `on_tilt_exact_grid` should
+read the conservative one (1.72x larger on a thick f/1.1).
+
+**It should not, and it already does not fire on an NA at all.**  Read at
+`carrier.py:7821`, that guard disposes on
+`power_frac_above_nyquist > _TILT_EXACT_NA_POWER_TOL` � the *discarded exit
+power*, measured by the element on the very grid it just used.  `na_exit`
+appears only in the message text, as the number being reported.  The code's own
+comment records why the NA was deliberately rejected as the criterion: the
+measured exit NA is the marginal ray at the e^-4 AMPLITUDE contour, carrying
+~3e-4 of the power, and a 12288-vs-16384 convergence check showed the grid was
+adequate (identical FWHM / EE3 / EE6 / EE12) on a leg the NA test called
+under-sampled.  Re-pointing it at a 1.72x LARGER NA would reinstate exactly the
+false positive that comment documents having removed � and would do so by
+refusing legs, not by refining them.  `na_exit` itself is unchanged (VERIFY-A3
+confirms it is still the entrance-disc statistic), so the message stays correct
+as written.  No change, nothing re-calibrated, and the sizing path
+(`dx_fine = lambda/(3 na_exit)`) is untouched.
+
+### Files touched in the follow-up
+
+* `lumenairy/propagators/carrier.py` — `_achievable_focus_margin` and
+  `_FOCUS_READOUT_CONTAINMENT_FRAC` (new); `_beam_containment_standoff` targets
+  the achievable margin; `_check_focus_containment` gains the relative floor,
+  `containment_target` and a re-worded message; the `on_focus_containment`
+  docstring; `_fit_carrier_inv` gains `project_tilt`;
+  `carrier_referenced_fit_radius` passes it and re-documents `centre`;
+  `cur_dy` tracked through the chain and `dy=` on all 7 conversion call sites.
+* `tests/unit/test_audit2609_a6_verify_carrier.py` — 11 new tests (83 total).
+* `tests/unit/test_audit2609_a6_carrier.py` — the on-axis byte-identity test
+  restated as a 4-ulp claim with its derivation.
+* `docs/.../fixes/WP-A6_CHANGELOG.md` — OI-4.
+* `docs/.../fixes/WP-A6_REPORT.md` — OI-5.
+* `docs/.../fixes/VERIFY_WP-A6.md` — this section.
+
+No other file was edited; no git write command was run.

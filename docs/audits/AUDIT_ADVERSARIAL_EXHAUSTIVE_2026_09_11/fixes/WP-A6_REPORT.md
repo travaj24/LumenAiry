@@ -13,7 +13,7 @@ repro fixtures or an independent oracle written for the purpose.
 | # | Status | Files : lines | Tests | Oracle | Measured before -> after |
 |---|---|---|---|---|---|
 | **C1** | **fixed** (resolver + guard) | `carrier.py:3125` `_beam_gaussian_radius`, `:3140` `_beam_containment_standoff`, `:3225` `_check_focus_containment`, `:3032` `_default_focus_standoff`, `:2694` `carrier_referenced_focus_readout`, `:381` `_FOCUS_READOUT_CONTAINMENT_MIN`, `:3321` + `:9425/9467` stage publication | `test_audit2609_a6_carrier.py::TestC1FocusReadoutContainment` (11 tests); `test_niche_r9_highna_final_leg.py::test_r9_exact_leg_focuses_highna_sphere` (strengthened) | the SAME physical field read against its own carrier (itself scored by the audit against an analytic Gaussian-ABCD focal oracle at relL2 1.05e-03 / peak 0.99992), plus an analytic waist oracle | focal peak vs truth **0.986 / 0.745 / 0.188 / 0.026 -> 0.99951 / 0.99860 / 0.99430 / 0.98524** at R/R0 = 0.99 / 0.98 / 0.95 / 0.90; stop-plane containment **1.96 / 1.39 / 0.91 / 0.87 -> 3.20** (= `_FOCUS_STANDOFF_MARGIN`); warnings 0 -> 0 |
-| **C2** | **fixed** | `carrier.py:2084` `_fit_carrier_inv` (`centre=`, tilt projection), `:2254` `carrier_referenced_fit_radius` (`centre='auto'`) | `...::TestC2FitRadiusCentre` (18 tests) | the radius / the tilt known BY CONSTRUCTION of the field | decentred parabola `R_fit/R` **1.5000 / 3.0000 / 9.0000 -> 1.0000** at 0.5 / 1 / 2 waists; decentred pure tilt `R_fit` **0.0750 / 0.0075 / 0.0113 m -> 4.8e15 / 2.5e14 / 6.8e13 m** (truth `inf`) |
+| **C2** | **fixed** | `carrier.py:2084` `_fit_carrier_inv` (`centre=`, tilt projection), `:2254` `carrier_referenced_fit_radius` (`centre='auto'`) | `...::TestC2FitRadiusCentre` (18 tests) | the radius / the tilt known BY CONSTRUCTION of the field | decentred parabola `R_fit/R` **1.5000 / 3.0000 / 9.0000 -> 1.0000** at 0.5 / 1 / 2 waists; decentred pure tilt `R_fit` **0.0750 / 0.0075 / 0.0113 m -> 4.8e15 / 2.5e14 / 6.8e13 m** (truth `inf`; the after-column is ROUND-OFF LEVEL and does not reproduce digit-for-digit -- VERIFY-A6 re-measured 6.6e15 / -2.7e14 / 6.4e13 m on the same script.  Only the ORDER is the claim: every post-fix reading is >= 6e13 m against a pre-fix 0.0075 m) |
 | **C3** | **fixed** | `carrier.py:1343` `_carrier_step_fast`, `:8846`, `:8992`, `:9462`, `:9486` (obliquity pistons); `carrier_field.py:434` `phasor_on(dtype=)`, `:783` `full_field`, `:849` `from_full_field`, `:1435` `re_reference`, `:1656` `aggregate` | `...::TestC3Complex64` (5 tests) | numpy's own NEP 50 promotion rules; the returned `dtype` | tilted complex64 chain output **complex128 -> complex64**; `CarrierField.full_field()` **complex128 -> complex64**; complex64 phasor within 1.2e-07 of the narrowed complex128 one |
 | **C4** | **fixed** | `carrier.py:870` `_SEPARABLE_CARRIER_PHASE`, `:873` `_radial_carrier_phase`, `:6078` `_tilt_ramp`, `:2415` `_rereference`, `:1163` `_exact_envelope_tf_step`, `:543` `_tf_phase_to_H`, `:1600` `_asm_axis`, `:4018` `_fourier_upsample_crop`, `:1357` `_envelope_amp_radius` | `...::TestC4SeparablePhases` (18), `...::TestC4TransferFunction` (13) | whole-grid `meshgrid` + `np.exp` expressions written in the test; raw-`numpy` transforms; `tracemalloc` | `_radial_carrier_phase` **197.0 -> 28.6 ms / 3.50 -> 1.01 grids** (N = 2048), **805.5 -> 70.1 ms** (N = 4096), diff 1.1e-13 / 5.7e-13; `_tilt_ramp` **4.9x**; `_exact_envelope_tf_step` **4.00 -> 2.00 grids at exactly 0.0 difference**; `reconstruct` **248.6 -> 55.8 ms / 3.50 -> 2.00 grids** (N = 2048) |
 | **C5** | **fixed** (7 items) | `carrier.py:470` (dead `_freq_sq_1d` deleted), `:1600` `_asm_axis` mask, `:9410` + `:9450` gap-kernel / tilt forwarding, `:3848` `_sphere_parab_conversion(dy=)`, `carrier_field.py:652` `CarrierField` freeze cycle, comment corrections at `carrier.py:1284`/`1339` | `...::TestC5SmallerItems` (15, incl. the JAX backend-parity check); `test_carrier_field.py::test_mutating_a_built_carrier_field_is_deprecated`; `test_niche_c5_...` (re-barred) | `np.fft.fftfreq`; a hand-built 1-D angular spectrum; a hand-built eikonal | `_freq_sq_1d` **present (wrong at odd N) -> deleted**; `_asm_axis` at N = 65/127 **half a bin out of register -> relL2 0.000e+00 vs the oracle**; `dy=3dx` conversion **0 -> exact match to the oracle** |
@@ -233,10 +233,31 @@ code and not of the machine.
 | `_envelope_amp_radius`, N = 2048 | 98.2 -> 60.8 ms (**1.6x**) | -- | **bit-identical** |
 | `_fourier_upsample_crop` rescale | -- | one fine grid saved (4.29 GB at `n_fine_cap = 16384`) | 5.3e-16 rel vs a raw-numpy oracle |
 
-The separable regrouping is exact in exact arithmetic; in float64 the measured
-1.1e-13 / 5.7e-13 sits two decades under the ~1e-11 rad representation noise of
-the `k r^2/2R` ~ 1e5-1e6 rad arguments these screens carry, i.e. inside the
-existing noise rather than being a new approximation.
+The separable regrouping is exact in exact arithmetic; in float64 the
+difference lands ON the representation floor of the screen's OWN argument.
+**Corrected by VERIFY-A6 (2026-09-12):** the claim above -- "two decades under
+the ~1e-11 rad representation noise of the 1e5-1e6 rad arguments" -- is wrong
+twice.  Re-measured against a whole-grid oracle, `|separable - whole grid|` is
+**1.0-1.6 x eps*max|arg|**, i.e. AT that floor and not two decades under it,
+and it SCALES with the argument:
+
+```
+   N     dx      R       max|arg|       eps*|arg|      measured    ratio
+  256   2 um   50 mm   6.2866e+00 rad   1.396e-15     1.422e-15    1.02
+ 2048   2 um   50 mm   4.0234e+02       8.934e-14     1.138e-13    1.27
+ 4096   2 um   50 mm   1.6094e+03       3.574e-13     5.684e-13    1.59
+ 2048   8 um   50 mm   6.4375e+03       1.429e-12     1.819e-12    1.27
+ 4096   8 um   20 mm   6.4375e+04       1.429e-11     2.183e-11    1.53
+ 4096  16 um   10 mm   5.1500e+05       1.144e-10     1.746e-10    1.53
+```
+
+(the representation noise of a 1e6 rad argument is 1.1e-10 rad, not 1e-11).
+The consequence is that a FIXED absolute bar is not the right form: 1e-11 is
+exceeded 17x at 5.2e5 rad, inside the range this section itself quotes.  The
+module comment and the three affected test bars now read `<= 4 eps*max|arg|`,
+which holds with 2.5x of headroom at every cell above while a regrouping
+blunder remains O(|arg|), 15 decades up.  The arithmetic was never in
+question.
 `_SEPARABLE_CARRIER_PHASE = False` restores the whole-grid build bit for bit and
 is exercised as the fail-before switch.
 
@@ -594,12 +615,20 @@ that flips it (one test in this WP's file, one in
    `analysis/beam_stats.py`) -- `_WIRED_SITES` and the 69-call count need
    updating for the second `_check_2d_scalar_field` call added to
    `beam_stats.py::beam_d4sigma`.  Not mine; see §4.2.
-3. **`lumenairy/propagators/mft.py`** (WP-A5) -- `angular_spectrum_propagate_mft`
-   returns complex128 for a complex64 input.  That is why the chain's TILTED
-   paraxial landing still returns complex128 after C3 (the chief-ray ramp it
-   multiplies in is a complex128 array on the readout grid).  Small, because the
-   array is `N_out^2` rather than the chain grid; worth doing when that module is
-   next opened.
+3. ~~**`lumenairy/propagators/mft.py`** (WP-A5) --
+   `angular_spectrum_propagate_mft` returns complex128 for a complex64
+   input.~~  **WITHDRAWN (VERIFY-A6, 2026-09-12.)**  WP-A5 measured that
+   function to PRESERVE complex64 in dtype, working precision and memory
+   (agreement 2e-07), and VERIFY-A6 measured
+   `carrier_referenced_focus_readout` -- tilted and untilted -- and
+   `carrier_referenced_exact_focus_readout` to return complex64 for a
+   complex64 envelope.  The surviving promotion was entirely mine: the
+   chief-ray ramp at `carrier.py:9512`, a whole-grid complex128 ARRAY that a
+   `complex(...)` cast cannot weaken.  VERIFY-A6 fixed it by building the ramp
+   through `_phasor_rows` at the field's dtype (byte-identical to the narrowed
+   whole-grid build; the complex128 branch is the historical expression), and
+   the tilted `final_leg='paraxial'` landing now returns complex64 end to end.
+   Nothing is asked of `mft.py`.
 
 ---
 
