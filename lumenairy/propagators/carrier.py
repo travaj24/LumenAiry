@@ -470,8 +470,13 @@ def _cdtype_of(x):
 def _freq_sq_1d_bld(N, d, bld):
     """Centred ``(2*pi*f)^2`` float64 vector on backend ``bld``.
 
-    ``ifftshift`` of the return is exactly ``(2*pi*np.fft.fftfreq(N, d))**2``
-    for BOTH parities of ``N``; see the note above this function.
+    ``ifftshift`` of the return is ``(2*pi*np.fft.fftfreq(N, d))**2`` for BOTH
+    parities of ``N`` -- EXACTLY wherever ``1/(N d)`` is representable (N = 1,
+    4, 5, 64, 1024 at ``d = 2 um``), and otherwise to the one rounding that
+    separates ``fftfreq``'s multiply-by-the-reciprocal from this divide
+    (measured <= 3 ulp on the square, <= 2 on :func:`_freq_1d_bld`, at
+    N = 7 / 65 / 127 / 129 / 1025).  What matters is that the OFFSET is
+    ``N // 2`` at both parities; see the note above this function.
 
     This is the ONLY squared-frequency builder in the module.  A NumPy-only
     twin (``_freq_sq_1d``) survived the D7 fix below with the ``- N / 2``
@@ -864,9 +869,11 @@ def _narrow_rows(val_rows, shape, dtype):
 #: ``True`` is the shipped path; ``False`` restores the whole-grid
 #: ``meshgrid`` build bit for bit and is the fail-before switch, exactly as
 #: :data:`_EXACT_READOUT_SEPARABLE_BLUESTEIN` is for the readout.  The
-#: regrouping is exact in exact arithmetic and measured at 1.7e-13 rad in
-#: float64 -- see :func:`_radial_carrier_phase` for the derivation, the
-#: measured timings and the error floor it sits under.
+#: regrouping is exact in exact arithmetic; in float64 it lands ON the
+#: representation floor of the screen's OWN argument (measured
+#: 1.0-1.6 x ``eps |arg|``, so it scales with the argument rather than being a
+#: fixed number) -- see :func:`_radial_carrier_phase` for the derivation, the
+#: measured table and the timings.
 _SEPARABLE_CARRIER_PHASE = True
 
 
@@ -891,13 +898,27 @@ def _radial_carrier_phase(shape, dx, dy, wavelength, R, sign, bld=np,
     needs ``2N`` exponentials instead of ``N^2`` -- measured 6.6x (N = 2048)
     and 12.5x (N = 4096) faster at 3.50 -> 1.00 complex128 full grids of
     tracemalloc peak.  The regrouping is not bit-identical (the two arguments
-    are rounded separately): measured max ``|separable - whole grid|`` =
-    1.7e-13 at N = 2048 and 6.8e-13 at N = 4096, three orders BELOW the
-    float64 representation floor of the arguments these screens carry
-    (``k r^2/2R`` reaches 1e5-1e6 rad, i.e. ~1e-11 rad of representation
-    noise), so it is inside the existing noise rather than a new
-    approximation.  :data:`_SEPARABLE_CARRIER_PHASE` = ``False`` restores the
-    whole-grid ``meshgrid`` build bit for bit -- the fail-before switch."""
+    are rounded separately), and the size of the difference is set by the
+    SCREEN'S OWN ARGUMENT, not by a fixed number: it tracks
+    ``eps * max|k r^2/2R|`` to within a factor 1.0-1.6, which is the floor the
+    whole-grid build itself has (that build rounds the same argument once).
+    Measured against a whole-grid ``meshgrid`` oracle, ``lambda = 1.31 um``:
+
+        N      dx     R        max|arg|      eps|arg|     measured    ratio
+        256   2 um   50 mm     6.29e+00 rad  1.40e-15     1.42e-15    1.02
+        2048  2 um   50 mm     4.02e+02      8.93e-14     1.14e-13    1.27
+        4096  2 um   50 mm     1.61e+03      3.57e-13     5.68e-13    1.59
+        2048  8 um   50 mm     6.44e+03      1.43e-12     1.82e-12    1.27
+        4096  8 um   20 mm     6.44e+04      1.43e-11     2.18e-11    1.53
+        4096 16 um   10 mm     5.15e+05      1.14e-10     1.75e-10    1.53
+
+    So the correct bar for this identity is RELATIVE TO THE ARGUMENT
+    (``<= 4 eps |arg|`` covers every cell above with 2.5x to spare); a fixed
+    absolute bar only holds below the argument it was measured at.  Either way
+    the difference is not a new approximation -- it is the float64
+    representation of a phase that large.  :data:`_SEPARABLE_CARRIER_PHASE` =
+    ``False`` restores the whole-grid ``meshgrid`` build bit for bit -- the
+    fail-before switch."""
     Ny, Nx = shape
     x = (bld.arange(Nx, dtype=np.float64) - Nx / 2) * dx
     y = (bld.arange(Ny, dtype=np.float64) - Ny / 2) * dy
@@ -3170,11 +3191,32 @@ def _beam_containment_standoff(env, R, z, wavelength, dx, w_env, centre, half,
         gamma = half^2 - Q ,        Q = (M w_env)^2,  c = 1/R_eff
 
     whose value at ``zeta_cf`` is ``-Q[(1 + c zeta_cf)^2 + (zeta_cf/zR_env)^2]
-    < 0``: the carrier focus always lies BETWEEN the roots, so the containment
-    region on the input side is ``zeta <= zeta_minus``, the smaller root.  The
-    shortest qualifying leg is therefore ``|z| - min(|z|, zeta_minus)``.
-    ``alpha <= 0`` means ``half/zeta_cf <= M NA_eff`` -- the grid is too narrow
-    for this beam at ANY leg length -- and returns 0.0.
+    < 0`` -- so ``zeta_cf`` is never in the containment set, whatever the sign
+    of ``alpha``.  The boundary the caller wants is the edge of the containment
+    component that CONTAINS THE INPUT PLANE, and it is the same expression in
+    both curvatures:
+
+    * ``alpha > 0`` (parabola opens up): the set is ``zeta <= zeta_-`` or
+      ``zeta >= zeta_+`` with ``zeta_- < zeta_cf < zeta_+``, so the input-side
+      boundary is the SMALLER root ``zeta_-``.
+    * ``alpha < 0`` (opens down -- the grid's own numerical aperture is under
+      ``M`` times the beam's, which a strongly mis-referenced carrier reaches):
+      the set is the closed interval ``[zeta_-, zeta_+]``, and since
+      ``gamma = q(0) >= 0`` puts the input plane inside it and ``zeta_cf`` is
+      outside, ``zeta_- <= 0 < zeta_+ < zeta_cf``: the boundary is the LARGER
+      root ``zeta_+``.  ``(-beta - sqrt(disc))/(2 alpha)`` IS that root for
+      both signs (``2 alpha`` flips which root the ``-`` branch selects), so
+      the two cases share one line.
+
+    The shortest qualifying leg is therefore ``|z| - min(|z|, zeta_b)``.
+    ``gamma < 0`` with ``alpha <= 0`` is the one case with nothing to resolve:
+    the input plane itself does not hold ``M`` beam radii and the parabola only
+    falls from there, so the shipped law and the containment guard take over
+    (measured: the verifier's alpha<0/gamma>=0 fixture -- R = -20 mm,
+    w_env = 200 um, ext = 6, residual 1/R_env = -60 /m -- read containment
+    0.866 measured / 0.500 modelled and a guard refusal on the shipped leg,
+    against 3.1996 / 3.2000 and silence on the 5.930 mm leg this branch now
+    resolves, a factor 1.408 in peak).
 
     HOW IT RELATES TO THE SHIPPED LAW.  The two differ in ONE term and only
     one: the shipped derivation writes the beam about its WAIST
@@ -3212,17 +3254,27 @@ def _beam_containment_standoff(env, R, z, wavelength, dx, w_env, centre, half,
     Q = (_FOCUS_STANDOFF_MARGIN * w_env) ** 2
     h2 = half * half
     alpha = h2 / (zeta_cf * zeta_cf) - Q * (c * c + 1.0 / (zR_env * zR_env))
-    if not (alpha > 0.0):
-        return 0.0                      # margin unreachable at any leg length
     beta = -2.0 * h2 / zeta_cf - 2.0 * Q * c
     gamma = h2 - Q
-    disc = beta * beta - 4.0 * alpha * gamma
-    if not (np.isfinite(disc) and disc >= 0.0):
+    if alpha == 0.0:
+        # Degenerate (measure-zero) case: the condition is linear in zeta.
+        if not (beta < 0.0 and gamma >= 0.0):
+            return 0.0
+        zeta_b = -gamma / beta
+    else:
+        if alpha < 0.0 and not (gamma >= 0.0):
+            # The input plane itself does not hold M beam radii and the
+            # parabola only falls from there: nothing to resolve.
+            return 0.0
+        disc = beta * beta - 4.0 * alpha * gamma
+        if not (np.isfinite(disc) and disc >= 0.0):
+            return 0.0
+        # One expression, both curvatures: the smaller root when the parabola
+        # opens up, the larger when it opens down (see the docstring).
+        zeta_b = (-beta - np.sqrt(disc)) / (2.0 * alpha)
+    if not np.isfinite(zeta_b):
         return 0.0
-    zeta_minus = (-beta - np.sqrt(disc)) / (2.0 * alpha)
-    if not np.isfinite(zeta_minus):
-        return 0.0
-    s = abs(float(z)) - min(abs(float(z)), float(zeta_minus))
+    s = abs(float(z)) - min(abs(float(z)), float(zeta_b))
     return float(s) if (np.isfinite(s) and s > 0.0) else 0.0
 
 
@@ -9457,12 +9509,27 @@ def propagate_traced_carrier_chain(
             + _par_kw['centre_out'][0]
         _v = (np.arange(_nn, dtype=np.float64) - _nn / 2) * _dxo \
             + _par_kw['centre_out'][1]
-        field = field * np.exp(
-            1j * k0 * (tilt_L * _u[None, :] + tilt_M * _v[:, None]))
+        # The chief-ray ramp is an ARRAY, so unlike the pistons it cannot be
+        # made weak by a ``complex(...)`` cast: built at complex128 it would
+        # promote a complex64 readout field right at the end of the chain and
+        # undo C3 on exactly the tilted per-order configuration that finding is
+        # about.  Built at the FIELD's dtype instead, through the same banded
+        # narrow-once helper the reference phases use -- the band expression is
+        # the whole-grid expression on a row slice, so the stored complex64 is
+        # the narrowed complex128 value (one rounding), and the complex128 path
+        # takes the historical whole-grid ``np.exp`` bit for bit.
+        if _phasor_c64(field.dtype):
+            _ramp = _phasor_rows(
+                lambda r0, r1, _u=_u, _v=_v: 1j * k0 * (
+                    tilt_L * _u[None, :] + tilt_M * _v[r0:r1, None]),
+                (int(_v.size), int(_u.size)), np.complex64)
+        else:
+            _ramp = np.exp(
+                1j * k0 * (tilt_L * _u[None, :] + tilt_M * _v[:, None]))
+        field = field * _ramp
+        del _ramp
         # complex(...): weak scalar (C3), so this piston does not set the
-        # dtype of the readout field.  (The chief-ray ramp above is a genuine
-        # complex128 ARRAY on the small readout grid, so the paraxial tilted
-        # landing still returns complex128; see the report note on that leg.)
+        # dtype of the readout field either.
         field = field * complex(np.exp(1j * k0 * fd_own * (_ob - 1.0)))
         stages.append({'name': '<target>', 'target': True,
                        'L': tilt_L, 'M': tilt_M, 'x_c': x_t, 'y_c': y_t,

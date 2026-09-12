@@ -487,15 +487,24 @@ def test_the_sphere_parabola_conversion_is_untouched():
     # WP-A6 / C4 (2026-09-12): this screen is now built as the exact outer
     # product ``exp(i a x^2) (x) exp(i a y^2)`` rather than one whole-grid
     # ``exp(i a (x^2+y^2))``, so the two agree to the float64 REGROUPING and
-    # no longer bit for bit.  The bar below is the module's own error floor,
-    # not a loosened pin: the arguments these screens carry reach ~1e5-1e6 rad,
-    # whose float64 representation noise is ~1e-11 rad, and the measured
-    # regrouping difference is 1.1e-13 at N = 2048 / 5.7e-13 at N = 4096 --
-    # two decades under it.  Byte-identity with the historical build is still
-    # pinned, behind the fail-before switch the change ships with.
+    # no longer bit for bit.
+    #
+    # VERIFY-A6 (2026-09-12) re-derived the bar.  The difference is NOT a fixed
+    # number: it tracks the representation floor of the screen's OWN argument,
+    # measured at 1.0-1.6 x ``eps max|k r^2/2R|`` from 6.3 rad to 5.2e5 rad
+    # (a fixed 1e-11 bar is exceeded above ~3e4 rad, which is inside the range
+    # this module's screens run in).  The bar is therefore written against this
+    # fixture's own argument -- 147 rad here, so ``4 eps |arg|`` = 1.3e-13
+    # against a measured 3.3e-14, 4x of clearance -- and a genuine regrouping
+    # blunder is O(|arg|), 15 decades up.  Byte-identity with the historical
+    # build is still pinned, behind the fail-before switch the change ships
+    # with.
     ph = _radial_carrier_phase((n, n), dx, dx, LAM, R, +1)
+    # the SHIPPED association, verbatim -- the byte-identity arm below needs it
     whole = np.exp(1j * K0 * r2 / (2.0 * R))
-    assert float(np.abs(ph - whole).max()) < 1e-11
+    arg_max = float(np.abs(K0 * r2 / (2.0 * R)).max())
+    assert float(np.abs(ph - whole).max()) <= (
+        4.0 * np.finfo(np.float64).eps * arg_max)
     _sep = C._SEPARABLE_CARRIER_PHASE
     try:
         C._SEPARABLE_CARRIER_PHASE = False

@@ -600,21 +600,27 @@ class TestC4SeparablePhases:
         out here, which is also the shipped fallback behind
         ``_SEPARABLE_CARRIER_PHASE = False``.
 
-        BAR 1e-11 rad-equivalent: the identity is EXACT in exact arithmetic and
-        the float64 regrouping was measured at 1.14e-13 (N = 2048) and
-        5.68e-13 (N = 4096).  The arguments these screens carry reach
-        ``k r^2/2R`` ~ 1e5-1e6 rad, whose own float64 representation noise is
-        ~1e-11 rad, so the bar is set AT that noise floor: 2 decades above the
-        measured regrouping error and at/below the precision the whole-grid
-        form itself has."""
+        BAR ``4 eps max|arg|``, RELATIVE TO THE SCREEN'S OWN ARGUMENT.  The
+        identity is exact in exact arithmetic; the float64 regrouping rounds
+        the two half-arguments apart, so the difference scales with the
+        argument -- re-measured (VERIFY-A6, 2026-09-12) at 1.02 / 1.27 / 1.59
+        times ``eps max|arg|`` from 6.3 rad to 1.6e3 rad and 1.53x at 5.2e5 rad,
+        i.e. AT the floor the whole-grid build itself has, not below it.  (The
+        original bar here was a FIXED 1e-11, justified as the representation
+        noise of the ~1e5-1e6 rad arguments these screens carry; that noise is
+        1.1e-11..1.1e-10, so the fixed bar does not hold over the stated range
+        -- measured 1.75e-10 at 5.2e5 rad.  The relative form does, with 2.5x
+        of headroom, and a regrouping blunder is O(|arg|) -- 15 decades up.)"""
         dx = 2e-6
         x = (np.arange(n, dtype=np.float64) - n / 2) * dx - centre[0]
         y = (np.arange(n, dtype=np.float64) - n / 2) * dx - centre[1]
         Y, X = np.meshgrid(y, x, indexing='ij')
         orc = np.exp(1j * K0 * (X * X + Y * Y) / (2.0 * R))
+        arg_max = float(np.abs(K0 * (X * X + Y * Y) / (2.0 * R)).max())
         got = C._radial_carrier_phase((n, n), dx, dx, LAM, R, +1,
                                       centre=centre)
-        assert float(np.abs(got - orc).max()) < 1e-11
+        assert float(np.abs(got - orc).max()) <= (
+            4.0 * float(np.finfo(np.float64).eps) * arg_max)
 
     def test_radial_phase_allocates_one_grid(self):
         """The memory claim, as a deterministic allocation count rather than a
@@ -634,14 +640,20 @@ class TestC4SeparablePhases:
 
     @pytest.mark.parametrize('n', [64, 65, 128])
     def test_tilt_ramp_matches_the_whole_grid_oracle(self, n):
-        """Same identity, same bar and the same reasoning as the radial screen;
-        measured 8.5e-14 at N = 2048."""
+        """Same identity, same argument-relative bar and the same reasoning as
+        the radial screen; measured 8.5e-14 at N = 2048 (argument 1.9e3 rad,
+        i.e. 0.2x ``eps|arg|`` -- the ramp's argument is LINEAR in the
+        coordinate, so the two half-arguments round even more closely than the
+        radial screen's)."""
         dx, L, M = 2e-6, 0.03, -0.02
         x = (np.arange(n, dtype=np.float64) - n / 2) * dx - 5e-6
         y = (np.arange(n, dtype=np.float64) - n / 2) * dx + 3e-6
         orc = np.exp(1j * K0 * (L * x[None, :] + M * y[:, None]))
+        arg_max = float(np.abs(K0 * (L * x[None, :]
+                                     + M * y[:, None])).max())
         got = C._tilt_ramp((n, n), dx, LAM, L, M, 5e-6, -3e-6, +1)
-        assert float(np.abs(got - orc).max()) < 1e-11
+        assert float(np.abs(got - orc).max()) <= (
+            4.0 * float(np.finfo(np.float64).eps) * arg_max)
         assert C._tilt_ramp((n, n), dx, LAM, 0.0, 0.0, 0.0, 0.0, +1) is None
 
     def test_rereference_matches_the_whole_grid_oracle(self):
@@ -684,10 +696,15 @@ class TestC4SeparablePhases:
             C._SEPARABLE_CARRIER_PHASE = old
         g = (np.arange(n, dtype=np.float64) - n / 2) * dx
         Y, X = np.meshgrid(g, g, indexing='ij')
+        # the byte-identity arm keeps the SHIPPED association verbatim
+        # ((1j*k)*r2)/(2R) -- regrouping it as 1j*(k*r2/(2R)) moves the last
+        # bits and the equality is the point of this arm
         assert np.array_equal(
             b, np.exp(1j * K0 * (X * X + Y * Y) / (2.0 * R)))
         assert not np.array_equal(a, b)      # the flag is live
-        assert float(np.abs(a - b).max()) < 1e-11
+        arg_max = float(np.abs(K0 * (X * X + Y * Y) / (2.0 * R)).max())
+        assert float(np.abs(a - b).max()) <= (
+            4.0 * float(np.finfo(np.float64).eps) * arg_max)
 
 
 class TestC4TransferFunction:

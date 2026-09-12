@@ -466,7 +466,13 @@ class CarrierSpec:
         S = _exact_sphere_eikonal(shape, dx, dy, wavelength, self.R,
                                   centre=(cx, cy))
         if c64:
-            ph = _phasor_rows(lambda r0, r1: (sign * 1j * k) * S[r0:r1],
+            # ``_S=S`` binds the eikonal AT LAMBDA CREATION rather than by
+            # closure.  ``_phasor_rows`` calls the builder synchronously, so a
+            # closure happened to work, but it left the body referring to a
+            # name this function goes on to ``del`` -- a live F821 under ruff
+            # and a NameError the moment the helper stops being eager.  The
+            # default argument makes the capture explicit and order-free.
+            ph = _phasor_rows(lambda r0, r1, _S=S: (sign * 1j * k) * _S[r0:r1],
                               shape, np.complex64)
         else:
             ph = np.exp((sign * 1j * k) * S)
