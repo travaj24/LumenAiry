@@ -101,9 +101,19 @@ def _comment_text(value: Any) -> str:
     I5: a newline inside a name / comment would end the comment and put the
     remainder of the string at statement position.  A ``\"\"\"`` would close the
     module docstring the header lives in.
+
+    VERIFY-A10 (V10): the line boundaries ``str.splitlines()`` recognises but
+    the C0 range misses -- NEL (U+0085), LINE SEPARATOR (U+2028) and
+    PARAGRAPH SEPARATOR (U+2029) -- survived verbatim into the generated
+    module's docstring.  CPython does not treat them as SOURCE newlines, so
+    nothing was exploitable, but any tool that re-reads the emitted script
+    line by line would disagree with the compiler about where a line ends.
+    They are stripped with the rest.  (Written as escapes on purpose: a
+    literal U+2028 in this file is invisible and editor-fragile.)
     """
     s = '' if value is None else str(value)
-    s = re.sub(r'[\x00-\x1f\x7f]+', ' ', s).replace('"""', "'''")
+    s = re.sub('[\x00-\x1f\x7f\x85\u2028\u2029]+', ' ', s)
+    s = s.replace('"""', "'''")
     return re.sub(r'\s+', ' ', s).strip()
 
 
@@ -407,6 +417,26 @@ def _decompose_prescription(prescription):
     whose generated simulation never clipped the beam at the design's
     real aperture.
     """
+    # VERIFY-A10 (V11): a prescription straight from a BUILDER
+    # (``make_singlet`` / ``make_doublet`` / ``combine_prescriptions``) carries
+    # only ``surfaces`` / ``thicknesses``, so these two subscripts raised a
+    # bare ``KeyError: 'elements'`` with nothing to act on -- the same shape as
+    # the I7 ``KeyError: 'element_type'`` finding, one level up.  Name the
+    # missing keys, the cause and the one-line fix, with the CONVENTIONS §2
+    # ``fn_name:`` prefix.
+    _missing = [k for k in ('elements', 'all_thicknesses')
+                if k not in prescription]
+    if _missing:
+        raise KeyError(
+            f"generate_simulation_script: the prescription is missing "
+            f"{_missing} -- it looks like raw builder output "
+            f"({sorted(prescription)}), not a loader prescription.  "
+            f"``make_singlet`` / ``make_doublet`` / ``combine_prescriptions`` "
+            f"return the lens-only schema ('surfaces' / 'thicknesses'); the "
+            f"loaders (``load_zemax_zmx`` / ``load_codev_seq`` / "
+            f"``load_quadoa_qos``) return the full chronological schema this "
+            f"generator walks.  Wrap it once: "
+            f"generate_simulation_script(la.normalize_prescription(rx), ...).")
     elements = prescription['elements']
     all_thicknesses = prescription['all_thicknesses']
     aperture = prescription.get('aperture_diameter', 25.4e-3)
@@ -816,7 +846,16 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
             lens_var_names[id(step)] = var_name
             rx = step['prescription']
             lines.append('')
-            comment = step.get('comment', '')
+            # VERIFY-A10 (V10): this was the ONE ``#`` line built from a
+            # prescription-derived string without ``_comment_text``, so a
+            # ``.zmx``-supplied name reached it verbatim -- measured: a raw
+            # U+2028 survived into the emitted script here (and only here).
+            # Inert under CPython, which does not treat it as a source
+            # newline, but any tool that re-reads the script with
+            # ``str.splitlines()`` disagrees with the compiler about where
+            # this comment ends.  Route it through the same collapse every
+            # other comment site uses.
+            comment = _comment_text(step.get('comment', ''))
             if comment:
                 lines.append(f'# {comment}')
             lines.append(f'{var_name} = {{')
@@ -1146,7 +1185,10 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
             lines.append(f"    {{'type': 'aperture', 'shape': 'circular', "
                          f"'params': {{'diameter': {d:.17e}}}}},")
         elif step['type'] == 'doe_placeholder':
-            comment = step.get('comment', 'DOE')
+            # VERIFY-A10 (V10): the second (and last) ``#`` line built from a
+            # file-supplied string without the comment collapse -- the
+            # ``style='system_list'`` twin of the per-lens comment above.
+            comment = _comment_text(step.get('comment', '')) or 'DOE'
             lines.append(f"    # TODO: DOE placeholder — {comment}")
             lines.append("    # Add your DOE mask element here")
     lines.append(']')

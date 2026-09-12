@@ -134,6 +134,39 @@ _ZEMAX_AIR_POWERED_TYPES = frozenset({
 })
 
 
+def _raw_surface_curvature(s):
+    """Curvature [1/m] of a RAW surface record, whichever way it stores shape.
+
+    The ``.zmx`` tokenizer keeps ``curvature`` (the file's own ``CURV``); the
+    ``PRESCRIPTION DATA`` table parser keeps ``radius`` in metres.  Both
+    loaders share the window predicates below, so they need one reader.
+    """
+    c = s.get('curvature')
+    if c is not None:
+        try:
+            return float(c or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+    R = s.get('radius')
+    try:
+        R = float(R)
+    except (TypeError, ValueError):
+        return 0.0
+    return 0.0 if (not np.isfinite(R) or R == 0.0) else 1.0 / R
+
+
+def _raw_surface_nonzero_parms(s):
+    """The non-zero entries of a RAW surface record's PARM table."""
+    out = {}
+    for k, v in (s.get('aspheric_params') or {}).items():
+        try:
+            if float(v or 0.0) != 0.0:
+                out[k] = v
+        except (TypeError, ValueError):
+            out[k] = v
+    return out
+
+
 def _raw_surface_is_air_powered(s):
     """True when a RAW surface record acts on the ray with no glass on it.
 
@@ -141,6 +174,10 @@ def _raw_surface_is_air_powered(s):
     inside the lens-window auto-detect.  The loud per-surface diagnostic is the
     unsupported-SURFTYPE warning further down, which these surfaces now reach
     instead of being deleted first.
+
+    Shared by ``load_zemax_zmx`` and ``load_zemax_prescription_data_txt``
+    (VERIFY-A10 V7): the I2 fix originally landed on the ``.zmx`` side only,
+    which is the one-side-only pattern the partition report flags.
     """
     if s.get('glass') is not None or s.get('is_mirror'):
         return False    # already admitted by the glass/mirror predicate
@@ -150,10 +187,48 @@ def _raw_surface_is_air_powered(s):
     # An ideal-lens / ABCD / phase row with an entirely empty PARM table is an
     # inert placeholder; only admit one that actually carries parameters (or a
     # curvature), mirroring the DGRATING predicate's "no PARM 1 -> not
-    # diffractive, do not widen the window" rule.
-    parms = {k: v for k, v in (s.get('aspheric_params') or {}).items()
-             if float(v or 0.0) != 0.0}
-    return bool(parms) or float(s.get('curvature', 0.0) or 0.0) != 0.0
+    # diffractive, do not widen the window" rule.  The ``.txt`` summary table
+    # carries no PARM columns at all (P3-43), so there a PARAXIAL row is
+    # admitted on its curvature -- and, failing that, on the STOP flag /
+    # excluded-surface warning below, which is the honest floor for a report
+    # format that simply does not carry the ideal lens's focal length.
+    return (bool(_raw_surface_nonzero_parms(s))
+            or _raw_surface_curvature(s) != 0.0)
+
+
+def _warn_window_excluded_powered(optical_surfaces, lens_surfaces,
+                                  s_first, s_last, filepath):
+    """Name every optical surface the imported window EXCLUDED that still
+    carries curvature, a PARM table or the STOP flag.
+
+    I2 / VERIFY-A10 V7.  The window is a heuristic and the air-powered
+    predicate cannot know every OpticStudio SURFTYPE, so whatever it drops is
+    said out loud once -- belt and braces.  Shared verbatim by both Zemax
+    loaders so the diagnostic cannot drift between them.
+    """
+    kept = {ls['surf_num'] for ls in lens_surfaces}
+    dropped = []
+    for os_ in optical_surfaces:
+        if os_['surf_num'] in kept:
+            continue
+        curv = _raw_surface_curvature(os_)
+        parms = _raw_surface_nonzero_parms(os_)
+        if curv != 0.0 or parms or os_.get('is_stop'):
+            dropped.append(
+                f"SURF {os_['surf_num']} (TYPE {(os_.get('type') or 'STANDARD')}"
+                + (f", CURV {curv:g}" if curv else "")
+                + (f", PARM {parms}" if parms else "")
+                + (", STOP" if os_.get('is_stop') else "") + ")")
+    if dropped:
+        warnings.warn(
+            f"{filepath}: the imported surface window ({s_first}, {s_last}) "
+            f"EXCLUDES {len(dropped)} optical surface(s) that carry "
+            f"curvature, a PARM table or the STOP flag: "
+            f"{'; '.join(dropped)}.  They are NOT part of the "
+            f"returned prescription, so the imported system is not the one in "
+            f"the file.  Pass surface_range=(first, last) to include them, or "
+            f"convert them to a supported type in Zemax.",
+            UserWarning, stacklevel=3)
 
 
 def _dgrating_surface_data(s, filepath):
@@ -470,6 +545,21 @@ def load_zemax_zmx(filepath: str,
         given ``gap_before=0`` -- the library cannot tell your group's
         ``gap_before`` from the DOE's ``gap_after`` and would transport both.
 
+        ``'configurations'`` : dict or None -- ``None`` for a single-config
+        file (the overwhelming majority).  Otherwise ``{'n_configs',
+        'current_config', 'operands'}``, where each operand row is
+        ``{'raw': <the MCON line verbatim>, 'operand': <the token after
+        MCON>, 'fields_provisional': [<the remaining tokens, floated where
+        possible>]}``.  **Only ``raw`` and ``operand`` are contractual.**
+        ``fields_provisional`` is an undecoded positional split: the layout of
+        an ``MCON`` row after the operand number is version-dependent and has
+        not been confirmed against an OpticStudio-written file (VERIFY-A10 V6
+        measured an earlier named decode assigning the same configuration
+        number to all three rows of a three-configuration fixture).  Do not
+        build on it; read ``raw``.  Only the BASE lens-data-editor state is
+        imported either way, and the loader warns when this key is not
+        ``None``.
+
     Notes
     -----
     The ``'surfaces'`` and ``'thicknesses'`` keys give a lens-only
@@ -670,20 +760,27 @@ def load_zemax_zmx(filepath: str,
                 # I7: ``MNUM n_configs current_config``.
                 mnum_header = tuple(tokens[1:3])
             elif keyword == 'MCON':
-                # I7: one multi-config operand row.  Kept verbatim (the
-                # operand vocabulary is large and version-dependent) plus the
-                # decoded common fields, so ``create_zoom_configs`` has
-                # something to consume and the user can see what was there.
+                # I7: one multi-config operand row, kept VERBATIM.  The
+                # operand vocabulary is large and version-dependent, and the
+                # positional layout of the fields after the operand number is
+                # not verifiable offline -- VERIFY-A10 (V6) measured the
+                # earlier positional decode assigning ``config = 3.0`` to all
+                # three rows of a three-configuration fixture, which cannot be
+                # right.  So the trailing fields are exposed only under
+                # ``fields_provisional``, clearly labelled, and ``raw`` is the
+                # contract.  Confirm the layout against an OpticStudio-written
+                # multi-config file before promoting them.
                 _row = {'raw': stripped, 'operand': (tokens[1]
                                                      if len(tokens) > 1
                                                      else '')}
-                for _name, _pos in (('config', 2), ('surface', 3),
-                                    ('value', 4)):
-                    if len(tokens) > _pos:
-                        try:
-                            _row[_name] = float(tokens[_pos])
-                        except ValueError:
-                            _row[_name] = tokens[_pos]
+                _prov = []
+                for _tok in tokens[2:]:
+                    try:
+                        _prov.append(float(_tok))
+                    except ValueError:
+                        _prov.append(_tok)
+                if _prov:
+                    _row['fields_provisional'] = _prov
                 mcon_rows.append(_row)
         except (IndexError, ValueError) as exc:
             raise ValueError(
@@ -799,30 +896,8 @@ def load_zemax_zmx(filepath: str,
     # carries shape or parameters.  The window is a heuristic; a surface it
     # drops silently is the failure mode this finding is about, and the
     # predicate above cannot know every OpticStudio SURFTYPE.
-    _kept = {_ls['surf_num'] for _ls in lens_surfaces}
-    _dropped_powered = []
-    for _os in optical_surfaces:
-        if _os['surf_num'] in _kept:
-            continue
-        _curv = float(_os.get('curvature', 0.0) or 0.0)
-        _parms = {k: v for k, v in (_os.get('aspheric_params') or {}).items()
-                  if float(v or 0.0) != 0.0}
-        if _curv != 0.0 or _parms or _os.get('is_stop'):
-            _dropped_powered.append(
-                f"SURF {_os['surf_num']} (TYPE {(_os.get('type') or 'STANDARD')}"
-                + (f", CURV {_curv:g}" if _curv else "")
-                + (f", PARM {_parms}" if _parms else "")
-                + (", STOP" if _os.get('is_stop') else "") + ")")
-    if _dropped_powered:
-        warnings.warn(
-            f"{filepath}: the imported surface window ({s_first}, {s_last}) "
-            f"EXCLUDES {len(_dropped_powered)} optical surface(s) that carry "
-            f"curvature, a PARM table or the STOP flag: "
-            f"{'; '.join(_dropped_powered)}.  They are NOT part of the "
-            f"returned prescription, so the imported system is not the one in "
-            f"the file.  Pass surface_range=(first, last) to include them, or "
-            f"convert them to a supported type in Zemax.",
-            UserWarning, stacklevel=2)
+    _warn_window_excluded_powered(optical_surfaces, lens_surfaces,
+                                  s_first, s_last, filepath)
 
     # v5.17.1 (audit P3-42): a single terminal mirror is a legitimate
     # one-element system (elements-only prescription for apply_mirror);
@@ -1337,8 +1412,9 @@ def load_zemax_zmx(filepath: str,
             f"{len(mcon_rows)} MCON operand row(s): {_ops}).  Only the BASE "
             f"lens-data-editor state was imported -- the other configurations "
             f"are NOT in this prescription.  The raw rows are available under "
-            f"prescription['configurations']['operands']; build the zoom "
-            f"positions explicitly with "
+            f"prescription['configurations']['operands'] (read the 'raw' "
+            f"field -- 'fields_provisional' is an undecoded positional split, "
+            f"see the docstring); build the zoom positions explicitly with "
             f"lumenairy.optimize.create_zoom_configs.",
             UserWarning, stacklevel=2)
 
@@ -1669,21 +1745,42 @@ def load_zemax_prescription_data_txt(filepath: str,
         lens_surfaces = [s for s in optical_surfaces
                          if s_first <= s['surf_num'] <= s_last]
     else:
+        # I2 / VERIFY-A10 (V7): the same window predicate the ``.zmx`` loader
+        # uses.  Pre-fix this side admitted glass and mirrors only, so a
+        # ``PARAXIAL`` / ``ABCD`` / phase row outside the glass span -- and
+        # its STOP flag -- was deleted here before any diagnostic could fire,
+        # exactly the I2 failure, in the twin the fix had not reached.
         active = [s for s in optical_surfaces
-                  if s['glass'] is not None or s['is_mirror']]
+                  if s['glass'] is not None or s['is_mirror']
+                  or _raw_surface_is_air_powered(s)]
         if not active:
-            raise ValueError(f"No glass/mirror surfaces found in {filepath}")
+            raise ValueError(
+                f"No glass/mirror/powered surfaces found in {filepath} "
+                f"(looked for: a glass column, a MIRROR, or an air-to-air "
+                f"powered Type {sorted(_ZEMAX_AIR_POWERED_TYPES)} carrying "
+                f"curvature)")
         s_first = active[0]['surf_num']
         # v5.17.1 (audit P3-42): only extend the range by +1 when the
         # last active surface is refractive glass (the +1 captures its
         # exit surface).  A terminal MIRROR has no exit surface -- see
-        # the matching fix in load_zemax_zmx.
-        if active[-1]['is_mirror']:
+        # the matching fix in load_zemax_zmx.  v5.46: an air-to-air powered
+        # row has no exit surface either, so the test is "does it carry
+        # glass", identical to the .zmx twin.
+        if active[-1]['is_mirror'] or active[-1]['glass'] is None:
             s_last = active[-1]['surf_num']
         else:
             s_last = active[-1]['surf_num'] + 1
         lens_surfaces = [s for s in optical_surfaces
                          if s_first <= s['surf_num'] <= s_last]
+
+    # I2 / VERIFY-A10 (V7): name every optical surface the window excluded
+    # that still carries curvature or the STOP flag -- the same belt-and-
+    # braces diagnostic ``load_zemax_zmx`` emits, from the same helper.  The
+    # summary table carries no PARM columns at all (P3-43), so on this side
+    # the warning is the only signal for a powered row the predicate above
+    # cannot see.
+    _warn_window_excluded_powered(optical_surfaces, lens_surfaces,
+                                  s_first, s_last, filepath)
 
     # v5.17.1 (audit P3-42): allow a single terminal mirror (see
     # load_zemax_zmx for rationale).

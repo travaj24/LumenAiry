@@ -469,7 +469,10 @@ THORLABS_CATALOG = {
     },
     # f=100mm, N-BK7, 1" dia (curved side first for collimation).
     # Thorlabs LA1509: R = 51.5 mm, tc = 3.6 mm, N-BK7, f = 100.0 mm.
-    # (measured EFL 99.65 mm @ 587.6 nm; was 199.68 mm with R1 = 103.29 mm)
+    # (measured EFL 99.652 mm @ 587.6 nm; was 199.8652 mm with R1 = 103.29 mm
+    #  -- 2.0056x the corrected value.  Re-measured VERIFY-A10 2026-09-12 by
+    #  an independent 2x2 ABCD product; the earlier "199.68" in this comment
+    #  was wrong in its last two digits.)
     'LA1509-C': {
         'type': 'singlet',
         'R1': 51.5e-3, 'R2': float('inf'),

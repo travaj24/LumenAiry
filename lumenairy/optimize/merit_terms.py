@@ -1642,7 +1642,11 @@ class MinEdgeThicknessMerit(MeritTerm):
     clear semi-diameter ``h`` -- see :func:`edge_thickness` for the sign
     convention and the meniscus case.  A negative result means a knife edge
     (the surfaces have already crossed), which the quadratic penalty
-    punishes hard.
+    punishes hard.  A slot whose edge thickness is not finite -- one of its
+    surfaces does not reach ``h`` at all, so there is no edge -- is scored as
+    a MAXIMAL violation (``deficit = min_edge``) rather than skipped, so an
+    optimiser is pushed away from that geometry instead of being rewarded for
+    reaching it.
 
     I7 (AUDIT_ADVERSARIAL_EXHAUSTIVE 2026-09-11): the library had no edge
     constraint at all -- ``MinThicknessMerit`` / ``MaxThicknessMerit``
@@ -1709,8 +1713,20 @@ class MinEdgeThicknessMerit(MeritTerm):
                 continue
             t_edge = edge_thickness(pres, i, self.semi_diameter)
             if not np.isfinite(t_edge):
-                continue
-            deficit = max(0.0, self.min_edge - t_edge)
+                # VERIFY-A10 (V3): a non-finite edge means the slot has no
+                # edge to measure -- ``surface_sag_general`` returns NaN
+                # outside the conic domain, i.e. one of the two surfaces does
+                # not reach the clear semi-diameter (R < h on a sphere, or a
+                # hyperbolic / oblate conic that ends before the rim).  That
+                # is a geometry an optimiser must be pushed AWAY from, so it
+                # counts as a maximal violation, not as "satisfied".
+                # Skipping it scored such an element 0.0 -- the same
+                # reward-the-failure shape S4-5 fixed for a NaN
+                # ``strehl_best`` in ``driver.py``, where a degenerate wave
+                # leg is coerced to 0.0 so it is PENALISED.
+                deficit = self.min_edge
+            else:
+                deficit = max(0.0, self.min_edge - t_edge)
             total = total + deficit * deficit
         return self.weight * total
 

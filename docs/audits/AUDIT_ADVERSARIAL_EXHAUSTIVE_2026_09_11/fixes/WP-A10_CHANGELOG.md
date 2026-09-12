@@ -31,15 +31,23 @@ to the CODE V token they mean, so an exported file never carries a `DIM` token
 CODE V does not define.  `export -> load` stays a lossless identity
 (max |ΔR| = 0.0 on a doublet).
 
-**Migration.** Files written by lumenairy **before this release** carry `DIM M`
-with SI-metre numbers.  The writer now stamps a format marker
-(`! LUMENAIRY-SEQ-FORMAT 2`) next to its generator banner, and `load_codev_seq`
-uses the pairing *banner present + marker absent* to identify a legacy file
-exactly: such a file is read with the legacy metre scale (so its values are
-unchanged) and raises a `UserWarning` saying so.  Re-export it once to get a
-file CODE V can read, or pass the new `dim_units=` kwarg
+**Migration.** Files written by lumenairy **before this release** with the
+default `units='M'` carry `DIM M` with SI-metre numbers.  The writer now stamps
+a format marker (`! LUMENAIRY-SEQ-FORMAT 2`) next to its generator banner, and
+`load_codev_seq` uses the pairing *banner present + marker absent + a `DIM M`
+line* to identify such a file exactly: it is read with the legacy metre scale
+(so its values are unchanged) and raises a `UserWarning` saying so.  Re-export
+it once to get a file CODE V can read, or pass the new `dim_units=` kwarg
 (`'M'`/`'C'`/`'I'`/`'SI'`) to force a reading.  Files from CODE V itself, and
 files written from this release on, are unaffected.
+
+A pre-release file written with `units='MM'` or `units='IN'` needs **no**
+migration and gets no warning: those tokens meant millimetres and inches then
+and still do, so such a file reads identically under both conventions.  (The
+legacy sniff is deliberately keyed on the `DIM` token for this reason — keying
+it on the banner alone read a pre-release `DIM MM` file 1000x too large and a
+`DIM IN` file 39.37x too large, which VERIFY-A10 caught and fixed before
+release.)
 
 Files: `lumenairy/io/prescriptions_code_v.py`.
 Fixtures corrected (both pinned the wrong convention):
@@ -89,11 +97,25 @@ f = 100 mm` + STOP ahead of a glass singlet: `elements surf_nums = [2, 3]`,
 were both gone and only the lens's DISZ survived as free space.  This is the
 same failure the v5.32 DGRATING fix repaired, applied to one surface type only.
 
-Air-to-air powered SURFTYPEs now enter the window (so they reach the loud
-per-surface unsupported-SURFTYPE warning instead of vanishing, and their STOP
-and DIAM survive), and any optical surface the window still excludes that
-carries a non-zero `CURV`, a non-empty `PARM` table or the STOP flag is named
-once in a `UserWarning`.  An ordinary doublet gains no new diagnostic.
+The air-to-air powered SURFTYPEs that carry their power in a `PARM` table or a
+curvature -- `PARAXIAL` / `PARAXIALXY` / `IDEAL` / `ABCD` / `BINARY_*` /
+`GRID_PHASE` / `ZERNPHASE` / `HOLOGRAM*` / `TILTSURF` -- now enter the window,
+so they reach the loud per-surface unsupported-SURFTYPE warning instead of
+vanishing, and their STOP and DIAM survive.  An air-spaced **aspheric** phase
+plate (`EVENASPH` / `QBFS` / `QCON` / `ZERNSAG` / `GRID_SAG` outside the glass
+span) is still excluded -- mapping those onto the window would change which
+surfaces an ordinary aspheric design imports -- but it is no longer silent:
+any optical surface the window excludes that carries a non-zero `CURV`, a
+non-empty `PARM` table or the STOP flag is named once in a `UserWarning`.  An
+ordinary doublet gains no new diagnostic.
+
+Both Zemax loaders share the predicate and the diagnostic.
+`load_zemax_prescription_data_txt` is a near-copy of the `.zmx` pipeline and
+had the same defect; it now calls the same `_raw_surface_is_air_powered` and
+`_warn_window_excluded_powered` helpers, so the two cannot drift.  (Measured
+on a `PRESCRIPTION DATA` report with a `PARAXIAL` STOP row ahead of the glass:
+2 surfaces / `stop_index None` / 0 warnings -> 3 surfaces / `stop_index 0` /
+the P3-43 shape warning.)
 
 ### Fixed -- io: cylindrical / biconic surfaces no longer export as spheres in silence (I4)
 
@@ -186,9 +208,10 @@ than 3 %.  Audit of the whole table at 587.6 nm:
 | **AC254-200-C** | 200 mm | 137.395 mm | **−31.3 %** |
 
 The three doublet rows are left as data (no vendor surface table was available
-to correct them in this pass) but now warn on every call; the header comment's
-claim "Surface data from Thorlabs Zemax files" is false for them.  **They need
-vendor data.**
+to correct them in this pass) but `thorlabs_lens` now warns about them -- once
+per part per process, so a loop over a catalogue is not drowned in repeats.
+The header comment's claim "Surface data from Thorlabs Zemax files" is false
+for them.  **They need vendor data.**
 
 ### Fixed -- io: `scale_prescription` is self-similar for Forbes-Q, diffractives and the stored BFL (I7)
 
@@ -231,6 +254,21 @@ different angle — documented explicitly in the docstring.
   documented `q['elements'] == q['surfaces']` identity (and the aliasing it
   rests on) is preserved — both views now carry the canonical discriminator
   instead of neither.
+* One level up, a prescription straight from a **builder** (`make_singlet` /
+  `make_doublet` / `combine_prescriptions`) raised a bare
+  `KeyError: 'elements'` from `_decompose_prescription`.  The message now
+  carries the CONVENTIONS §2 `generate_simulation_script:` prefix, names the
+  missing keys and the keys the prescription does have, and gives the one-line
+  fix (`generate_simulation_script(la.normalize_prescription(rx), ...)`).
+* Two `#` comment lines in the generated script were built from file-supplied
+  text without the comment collapse every other comment site uses — the
+  per-lens header (whose text is the first surface's `COMM`) and the
+  `style='system_list'` DOE placeholder.  A `COMM` carrying U+2028 / U+2029 /
+  U+0085 therefore reached the emitted file verbatim: inert under CPython,
+  which does not treat them as source newlines, but any tool that re-reads the
+  script with `str.splitlines()` disagreed with the compiler about where the
+  comment ends.  Both now route through `_comment_text`, which also strips
+  those three separators explicitly.
 
 ### Added -- io/Zemax: multi-configuration (`MNUM` / `MCON`) records are surfaced (I7)
 
@@ -241,6 +279,14 @@ and **no warning**, while `optimize/multiconfig.py` and
 `load_zemax_zmx` now returns `configurations` — `None` for a single-config file
 (the overwhelming majority), else the `MNUM` header plus the raw `MCON` operand
 rows — and warns once naming the operands found.
+
+Each operand row is `{'raw', 'operand', 'fields_provisional'}`.  **Only `raw`
+and `operand` are contractual.**  The positional layout of an `MCON` row after
+the operand token is version-dependent and could not be confirmed against an
+OpticStudio-written file, so the trailing fields are exposed as an undecoded
+list rather than under invented names: an earlier named decode assigned
+`config = 3.0` to all three rows of a three-configuration fixture, which cannot
+be right.  Read `raw`; the docstring says so, and the warning points at it.
 
 ### Fixed -- io: CODE V and Quadoa loaders emit the schema three docstrings promised (I7)
 
@@ -344,6 +390,15 @@ include_air)` sums `max(0, min_edge - t_edge)²` over the glass slots.
 Exported from `lumenairy.optimize`; a top-level re-export is requested in the
 WP report.
 
+A slot whose edge thickness is not finite — one of its surfaces does not reach
+the clear semi-diameter at all, so there is no edge to measure — counts as a
+**maximal** violation (`deficit = min_edge`), not as satisfied.  Scoring it 0
+rewarded exactly the geometry the constraint exists to prevent, which is the
+shape S4-5 fixed for a NaN `strehl_best` in `driver.py`.  Measured on a
+R = 8 mm surface evaluated at h = 10 mm: contribution 0.0 → 1e-6 (= `min_edge²`
+at `min_edge = 1 mm`), while a well-defined knife edge still scores its own
+larger deficit (1.15e-4) and a healthy element still scores exactly 0.
+
 ### Fixed -- optimize: `design_optimize_multi_objective` refuses an infeasible run (I7)
 
 pymoo sets `Result.X` / `.F` to `None` when the final population is entirely
@@ -393,7 +448,8 @@ across the library.
 `export_zemax_zmx` wrote `NAME` and `COMM` verbatim, so a newline inside a
 prescription name injected arbitrary `.zmx` records — measured: a name of
 `'bad\nSURF 99\n  CURV 0.5\nNAME x'` produced an extra `SURF` row, and the file
-reloaded as a different system.  Both fields are now collapsed to one line with
+reloaded as a different system.  `NAME` (both writer paths) and `COMM` (the
+`elements` path, the only one that emits it) are now collapsed to one line with
 control characters and the `"` field delimiter replaced, warning when anything
 changed; the record count is back to 4 on a singlet.  `export_codev_seq` does
 the same for its `! title` comment and its `GLA` tokens.

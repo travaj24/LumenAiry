@@ -192,7 +192,6 @@ from .merit_terms import (
     MaxThicknessMerit,
     MinBackFocalLengthMerit,
     MinEdgeThicknessMerit,
-    edge_thickness,
     MinThicknessMerit,
     NormalizedMerit,
     RMSWavefrontMerit,
@@ -200,6 +199,7 @@ from .merit_terms import (
     SpotSizeMerit,
     StrehlMerit,
     ZernikeCoefficientMerit,
+    edge_thickness,
 )
 from .parameterizations import (
     DesignParameterization,

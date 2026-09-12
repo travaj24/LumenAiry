@@ -461,6 +461,19 @@ MCON THIC 3 2 45.0 0 0
     assert cfg['n_configs'] == 3
     assert len(cfg['operands']) == 2
     assert cfg['operands'][0]['operand'] == 'THIC'
+    # VERIFY-A10 (V6): ``raw`` is the contract -- the row is kept verbatim.
+    # The trailing fields are an UNDECODED positional split under
+    # ``fields_provisional`` because the MCON layout after the operand token
+    # is version-dependent and unconfirmed against an OpticStudio file; the
+    # earlier named decode ('config' / 'surface') assigned the same
+    # configuration number to every row of a 3-configuration fixture.
+    assert cfg['operands'][0]['raw'] == 'MCON THIC 2 2 20.0 0 0'
+    assert cfg['operands'][1]['raw'] == 'MCON THIC 3 2 45.0 0 0'
+    assert cfg['operands'][0]['fields_provisional'] == [2.0, 2.0, 20.0, 0.0, 0.0]
+    for row in cfg['operands']:
+        assert 'config' not in row and 'surface' not in row, (
+            'the unconfirmed named decode must not be advertised as a '
+            'contract; read row["raw"]')
 
 
 def test_i7_single_config_file_has_no_configurations_key_content(tmp_path):

@@ -24,7 +24,6 @@ from lumenairy.optimize import MinEdgeThicknessMerit, edge_thickness
 from lumenairy.optimize import core as _opt_core
 from lumenairy.optimize import driver as _driver
 
-
 # ---------------------------------------------------------------------------
 # I7 -- the 31-plane through-focus scan runs only when a merit reads it
 # ---------------------------------------------------------------------------
@@ -251,35 +250,20 @@ def test_i7_infeasible_pareto_run_raises_instead_of_returning_nan(
             n_generations=3, pop_size=4)
 
 
-def test_i7_infeasible_guard_is_present_in_the_source():
-    """Structural pin: the guard must run BEFORE the asarray.
-
-    (pymoo is an optional dependency and is absent here, so the end-to-end
-    path cannot be exercised; this pins the ordering the finding is about.)
-    """
-    import inspect
-
-    from lumenairy.optimize import multi_objective as mo
-    src = inspect.getsource(mo.design_optimize_multi_objective)
-    i_guard = src.index('pymoo_res.X is None')
-    i_asarray = src.index('X = np.asarray(pymoo_res.X')
-    assert i_guard < i_asarray, 'the None-guard must precede np.asarray'
-
-
-def test_i8_x0_outside_bounds_warns():
-    """The docstring promised "a sanity check against bounds"; ``x0`` was only
-    ever read for ``n_params``.
-    """
-    from lumenairy.optimize import multi_objective as mo
-    if mo.PYMOO_AVAILABLE:                       # pragma: no cover
-        pytest.skip('pymoo present: covered by the end-to-end path')
-    # Without pymoo the function raises ImportError -- but the bounds check
-    # must already have warned, since it precedes the pymoo import.
-    import inspect
-    src = inspect.getsource(mo.design_optimize_multi_objective)
-    i_warn = src.index('x0 lies OUTSIDE bounds')
-    i_pymoo = src.index('_import_pymoo') if '_import_pymoo' in src else len(src)
-    assert i_warn < i_pymoo
+# VERIFY-A10 (V5): two structural pins used to live here --
+# ``test_i7_infeasible_guard_is_present_in_the_source`` and
+# ``test_i8_x0_outside_bounds_warns``.  Both asserted the ORDER of two
+# substrings in ``inspect.getsource``, so they passed for a disabled check
+# (``if False and pymoo_res.X is None:``), and the second called
+# ``pytest.skip`` when pymoo WAS installed -- TESTING_STANDARDS rule 4
+# verbatim ("never pytest.skip on a resource check"), which removed it on
+# exactly the runners that had the dependency.  Both properties are now
+# asserted behaviourally, with no skip and no source-text dependency, by
+# ``tests/unit/test_audit2609_a10_verify.py``:
+#   test_verify_i7_infeasible_front_refuses_with_and_without_progress
+#   test_verify_i8_x0_outside_bounds_warns_end_to_end
+# (a local pymoo stub reproduces the documented ``Result.X is None``
+# contract, so the coverage does not depend on the optional dependency).
 
 
 # ---------------------------------------------------------------------------
