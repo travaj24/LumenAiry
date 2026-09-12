@@ -227,13 +227,36 @@ _register_knob(
         "departure -- validate with lens_sag_float32_opd_error first).")
 
 
-def _resolve_sag_real(sag_dtype: Any) -> Any:
+def _resolve_sag_real(sag_dtype: Any,
+                      fn_name: str = 'apply_real_lens') -> Any:
     """Resolve the effective REAL geometry dtype: explicit kwarg wins, else
-    the process global, else float64."""
+    the process global, else float64.
+
+    An unrecognised dtype is REFUSED, with the same rule
+    :func:`set_lens_sag_dtype` and ``LensResources.sag_dtype`` enforce.  This
+    one setting has three spellings -- the per-call keyword, the process knob
+    and the config field -- and they have to agree about what is legal, or the
+    per-call one is a place a setting can be discarded in silence: resolving
+    ``sag_dtype=np.float16`` to float64 without a word gives a caller who
+    asked for half-precision geometry the default and no way to find out.
+    """
     d = sag_dtype if sag_dtype is not None else _LENS_SAG_DTYPE
-    if d is not None and np.dtype(d) == np.dtype(np.float32):
+    if d is None:
+        return np.float64
+    try:
+        dt = np.dtype(d)
+    except TypeError:
+        raise ValueError(
+            f"{fn_name}: sag_dtype={sag_dtype!r} is not a dtype.  Pass None "
+            f"(float64, the default), np.float64 or np.float32.") from None
+    if dt == np.dtype(np.float32):
         return np.float32
-    return np.float64
+    if dt == np.dtype(np.float64):
+        return np.float64
+    raise ValueError(
+        f"{fn_name}: sag_dtype={sag_dtype!r} must be float32 or float64 (the "
+        f"geometry lineage is real).  Pass None or np.float64 for the "
+        f"byte-identical default, np.float32 to halve the geometry core.")
 
 
 # Row-band (chunked) lens mode auto-default (v5.17.0).  The banded path is
@@ -8046,7 +8069,7 @@ def prepare_real_lens(
         dy = get_default_dy()
         if dy is None:
             dy = dx
-    _sag_real = _resolve_sag_real(sag_dtype)
+    _sag_real = _resolve_sag_real(sag_dtype, 'prepare_real_lens')
     k0 = 2.0 * np.pi / wavelength
     # Grid -- matches apply_real_lens exactly (same dtype pin, float division,
     # meshgrid(x, y)).

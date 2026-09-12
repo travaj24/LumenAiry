@@ -391,19 +391,92 @@ def test_the_airy_accessor_binds_once_and_gives_scipys_answer():
     assert _mb._scipy_airy is reference
 
 
-def test_ludwig_fold_still_produces_a_finite_uniform_field_on_the_caustic():
-    """End-to-end counter-pin on the accessor: exactly ON the fold
-    (``S_plus == S_minus``) the plain branch sum diverges and the Ludwig form
-    must stay finite.  That is the property the Airy call carries."""
+def test_ludwig_fold_stays_bounded_where_the_branch_sum_diverges():
+    """End-to-end counter-pin on the accessor, against a CLOSED-FORM oracle.
+
+    Signature: ``ludwig_fold(k, S_plus, S_minus, A_plus, A_minus)``.  Approach
+    the fold with the PHYSICAL branch pair -- amplitudes that diverge as
+    ``rho**-1/4`` and carry the KMAH ``-pi/2`` on the branch that has touched
+    the caustic, i.e. ``A+ = -i A-`` -- so that ``g1 = (A+ + iA-)/(rho**1/4
+    sqrt2)`` vanishes and ``g0 = rho**1/4/sqrt2 (A+ - iA-) -> -i sqrt2 A0``.
+    The Ludwig field then has the exact limit
+
+        u(0) = sqrt(2 pi) k**(1/6) exp(i pi/4) exp(i k S0) (-i sqrt2 A0) Ai(0)
+
+    with ``Ai(0) = 3**(-2/3)/Gamma(2/3) = 0.3550280538878172`` -- a number from
+    the Airy function's own series, not from this library.
+
+    BARS, derived (k = 2 pi / 632.8 nm, S0 = 1 mm, A0 = 1, so |u(0)| =
+    18.4509969...).  MEASURED 2026-09-12 at half-separation delta = 1e-12 m:
+    |u| = 18.4591 (4.4e-4 relative to the limit) while the plain branch sum is
+    132.2 and climbing as delta**(-1/6).  The bars are 1e-2 on the relative
+    distance to the closed form (a 23x margin over the measured 4.4e-4, and
+    the residual is the genuine O(k**(2/3) rho) curvature of Ai, not noise)
+    and 4x on the plain-sum-to-|u| ratio (measured 7.16, and the ratio grows
+    without bound as delta -> 0, so the gap to a real regression -- a Ludwig
+    form that tracked the divergent sum -- is unbounded above).
+    """
     k = 2.0 * np.pi / 632.8e-9
-    s = np.full(8, 1.0e-3)
-    a = np.full(8, 1.0 + 0.0j)
-    out = _mb.ludwig_fold(a, a, s, s, k)
+    s0, a0 = 1.0e-3, 1.0 + 0.0j
+    ai0 = 0.3550280538878172          # Ai(0), DLMF 9.2.3
+    limit = (np.sqrt(2.0 * np.pi) * k ** (1.0 / 6.0) * np.exp(1j * np.pi / 4.0)
+             * np.exp(1j * k * s0) * (-1j * np.sqrt(2.0) * a0) * ai0)
+
+    delta = np.full(8, 1.0e-12)
+    rho = (1.5 * delta) ** (2.0 / 3.0)
+    a_minus = a0 * rho ** -0.25
+    a_plus = -1j * a_minus
+    out = _mb.ludwig_fold(k, s0 + delta, s0 - delta, a_plus, a_minus)
+    plain = (a_plus * np.exp(1j * k * (s0 + delta))
+             + a_minus * np.exp(1j * k * (s0 - delta)))
+
     assert np.all(np.isfinite(out)), (
         f'ludwig_fold returned {int(np.count_nonzero(~np.isfinite(out)))} '
-        f'non-finite samples ON the fold -- the uniform replacement is the '
-        f'whole point of the function.')
-    assert np.any(np.abs(out) > 0.0)
+        f'non-finite samples next to the fold -- the uniform replacement is '
+        f'the whole point of the function.')
+    rel = float(np.max(np.abs(out - limit)) / np.abs(limit))
+    assert rel < 1.0e-2, (
+        f'ludwig_fold is {rel:.3e} away from the closed-form on-fold limit '
+        f'{limit!r}; measured 4.4e-4 on 2026-09-12.  A wrong Airy binding '
+        f'(airye, or Bi for Ai) lands decades from here.')
+    ratio = float(np.max(np.abs(plain)) / np.abs(limit))
+    assert ratio > 4.0, (
+        f'the plain two-branch sum is only {ratio:.2f}x the uniform field at '
+        f'delta = 1e-12 m, so this fixture is not actually near a fold and '
+        f'the test cannot tell a uniform field from the divergent sum.')
+
+
+def test_ludwig_fold_reduces_to_the_plain_branch_sum_far_from_the_fold():
+    """The other half of the uniform form, and a second independent oracle for
+    the Airy accessor.
+
+    Well outside the Kravtsov-Orlov band the Airy asymptotics turn the Ludwig
+    expression back into ``A+ exp(i k S+) + A- exp(i k S-)`` exactly -- the
+    library's own docstring says so, and the plain sum is an oracle this file
+    computes itself.  MEASURED 2026-09-12 with the physical (KMAH) branch pair:
+    relative distance 1.11e-3 at 20 wavelengths of eikonal separation and
+    4.42e-5 at 500, i.e. it falls like the expected O(1/(k dS)) correction.
+    BAR 5e-3 at 20 wavelengths: 4.5x the measured value, and three decades
+    above float64 noise (~1e-15), while a mis-bound special function
+    (``airye`` differs by exp(2/3 z**3/2), ``Bi`` by a growing exponential)
+    lands at O(1) or larger.
+    """
+    k = 2.0 * np.pi / 632.8e-9
+    s0, a0 = 1.0e-3, 1.0 + 0.0j
+    for n_wave, bar in ((20.0, 5.0e-3), (500.0, 2.0e-4)):
+        d_s = n_wave * 632.8e-9
+        rho = (0.75 * d_s) ** (2.0 / 3.0)
+        a_minus = a0 * rho ** -0.25
+        a_plus = -1j * a_minus
+        s_plus, s_minus = s0 + d_s / 2.0, s0 - d_s / 2.0
+        uni = _mb.ludwig_fold(k, s_plus, s_minus, a_plus, a_minus)
+        plain = (a_plus * np.exp(1j * k * s_plus)
+                 + a_minus * np.exp(1j * k * s_minus))
+        rel = float(abs(uni - plain) / abs(plain))
+        assert rel < bar, (
+            f'{n_wave:.0f} wavelengths past the fold the uniform field is '
+            f'{rel:.3e} from the plain branch sum (bar {bar:.0e}); the Airy '
+            f'accessor or the uniform form is wrong.')
 
 
 # ---------------------------------------------------------------------------

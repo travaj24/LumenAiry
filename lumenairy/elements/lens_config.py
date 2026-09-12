@@ -143,6 +143,39 @@ def _same(a: Any, b: Any) -> bool:
         return False
 
 
+def _dataclass_eq(self: Any, other: Any) -> Any:
+    """``__eq__`` for the config dataclasses, field by field through :func:`_same`.
+
+    The generated ``__eq__`` compares the two field TUPLES, and a tuple
+    comparison calls ``bool()`` on each element's ``==``.  Three of these
+    fields are documented to accept an ndarray (``carrier`` a wavefront,
+    ``beam_centre`` / ``origin`` a 2-vector), and ``bool(arr == arr)`` raises
+    ``ValueError: the truth value of an array ... is ambiguous`` -- so the
+    generated version turns the docstring's own round trip
+    (``LensConfig.from_kwargs(**cfg.to_kwargs()) == cfg``) into a crash for
+    exactly the values :func:`_same` was written to handle.  Comparing through
+    ``_same`` gives a bool for every legal field value.
+
+    ``__hash__`` stays the generated field-tuple hash (declared beside each
+    ``__eq__``), which keeps ``a == b`` implying ``hash(a) == hash(b)``: the
+    two differ only on arrays, and an array-valued field makes the instance
+    unhashable either way (``hash(ndarray)`` raises), so no equal pair is left
+    with different hashes.
+    """
+    if other.__class__ is not self.__class__:
+        return NotImplemented
+    return all(_same(getattr(self, f.name), getattr(other, f.name))
+               for f in fields(self))
+
+
+def _dataclass_hash(self: Any) -> int:
+    """The field-tuple hash ``@dataclass(frozen=True, eq=True)`` would have
+    generated.  Spelled out because these classes declare ``eq=False`` to keep
+    :func:`_dataclass_eq` (dataclasses only skips a class-body ``__eq__``, and
+    relying on that is a subtlety a reader should not have to know)."""
+    return hash(tuple(getattr(self, f.name) for f in fields(self)))
+
+
 # ---------------------------------------------------------------------------
 # Lazily-borrowed validators
 # ---------------------------------------------------------------------------
@@ -245,7 +278,7 @@ def _require_finite(fn_name: str, name: str, value: Any, *,
 # LensGeometry
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class LensGeometry:
     """WHAT optical problem is being solved -- planes, media, reference.
 
@@ -318,6 +351,11 @@ class LensGeometry:
     beam_centre: Any = None
     roi: Any = None
 
+    # ``carrier`` / ``beam_centre`` / ``roi`` legitimately hold arrays; see
+    # :func:`_dataclass_eq` for why the generated ``__eq__`` cannot.
+    __eq__ = _dataclass_eq
+    __hash__ = _dataclass_hash
+
     def __post_init__(self) -> None:
         fn = 'LensGeometry'
         if self.dy is not None:
@@ -342,7 +380,7 @@ class LensGeometry:
 # LensNumerics
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class LensNumerics:
     """HOW the same problem is discretised and solved.
 
@@ -446,6 +484,12 @@ class LensNumerics:
     caustic_min_area_ratio: float = 1e-6
     inverse_map: Optional[bool] = None
 
+    # Value equality through ``_same`` -- see :func:`_dataclass_eq`.  Declared
+    # on all three so the group compares uniformly (a LensConfig comparison
+    # reaches every component).
+    __eq__ = _dataclass_eq
+    __hash__ = _dataclass_hash
+
     def __post_init__(self) -> None:
         fn = 'LensNumerics'
         _require_bool(fn, 'bandlimit', self.bandlimit)
@@ -482,7 +526,7 @@ class LensNumerics:
 # LensResources
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class LensResources:
     """What MACHINE the call may use, and what it reports while it runs.
 
@@ -557,6 +601,12 @@ class LensResources:
     progress: Any = None
     verbose: bool = False
 
+    # Value equality through ``_same`` -- see :func:`_dataclass_eq`.
+    # ``progress`` may be any sink object, including one whose ``__eq__``
+    # returns an array.
+    __eq__ = _dataclass_eq
+    __hash__ = _dataclass_hash
+
     def __post_init__(self) -> None:
         fn = 'LensResources'
         _require_bool(fn, 'use_gpu', self.use_gpu)
@@ -573,11 +623,11 @@ class LensResources:
                 f"{fn}: parallel_amp_min_free_gb="
                 f"{self.parallel_amp_min_free_gb!r} must be >= 0 GB.")
         if self.sag_dtype is not None:
-            # Same rule as ``_lens_real.set_lens_sag_dtype`` -- and stricter
-            # than the keyword path, which resolves an unrecognised dtype
-            # silently to float64.  A config object that accepted
-            # ``np.float16`` and quietly gave float64 would be exactly the
-            # discarded-setting class this module exists to close.
+            # One rule for all three spellings of this setting: the same one
+            # ``_lens_real.set_lens_sag_dtype`` (the process knob) and
+            # ``_lens_real._resolve_sag_real`` (the per-call keyword) enforce.
+            # Accepting ``np.float16`` here and quietly giving float64 would be
+            # exactly the discarded-setting class this module exists to close.
             try:
                 d = np.dtype(self.sag_dtype)
             except TypeError:

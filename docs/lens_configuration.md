@@ -52,8 +52,14 @@ E_out = la.apply_real_lens_traced(
     n_workers=4, parallel_amp=False)
 ```
 
-The three objects are **frozen dataclasses**: hashable-by-value, comparable,
-`repr`-able, and safe to keep in a module-level table of study conditions.
+The three objects are **frozen dataclasses**: comparable by value, `repr`-able,
+picklable, and safe to keep in a module-level table of study conditions. They
+are also hashable by value — with the one exception every Python object shares,
+that an instance holding an **ndarray** field (a wavefront `carrier`, an array
+`beam_centre`) is unhashable, because `hash(ndarray)` is. Equality still works
+on those: `==` compares field by field through the same `_same` helper the
+resolver uses, so an array-valued field compares with `np.array_equal` instead
+of raising "truth value is ambiguous".
 
 ---
 
@@ -80,9 +86,11 @@ keyword:
 38 of the family's parameters are fields; the rest stay keyword-only, each for
 a written reason (tabled below). The gate that keeps this honest is
 `tests/unit/test_audit2609_a16_lens_config_round_trip.py`, which walks the live
-signatures and fails if any parameter is neither a field, nor one of the four
-contract names (`prescription`, `wavelength`, `dx`, `N`), nor a documented
-exclusion. A parameter can be *excluded*; it cannot be *forgotten*.
+signatures and fails if any parameter is neither a field, nor one of the nine
+contract names in `lens_config.CONTRACT_PARAMETERS` (`E_in`, `prescription`,
+`wavelength`, `dx`, `N`, and the four configuration parameters themselves), nor
+a documented exclusion. A parameter can be *excluded*; it cannot be
+*forgotten*.
 
 ---
 
@@ -218,10 +226,16 @@ entry point** (`surface_model='displaced'` vs `fresnel`, `caustic` vs
 inline inside the 5 700-line analytic body). The config object does not restate
 them — it would be a second implementation that could drift.
 
-One place the config is *stricter* than the keyword: `sag_dtype`. The keyword
-path resolves an unrecognised dtype silently to float64; the config refuses it,
-because a config object that accepted `np.float16` and quietly gave float64
-would be the discarded-setting failure this module exists to close.
+`sag_dtype` has three spellings — the per-call keyword, the process knob
+`set_lens_sag_dtype`, and `LensResources.sag_dtype` — and all three enforce the
+same rule: `None` or `np.float64` (the byte-identical default), or
+`np.float32` (the opt-in that halves the geometry core). Anything else is
+refused with the `CONVENTIONS.md` §2 prefix. The keyword path used to resolve
+an unrecognised dtype to float64 in silence, which meant a caller who asked for
+`np.float16` got the default and no way to find out; that is the
+discarded-setting class the config objects exist to close, so it was closed at
+the shared resolver (`_lens_real._resolve_sag_real`) rather than worked around
+in the config.
 
 ---
 
@@ -382,27 +396,30 @@ and the entry point would keep the prescription-dependent ones. Effort ~4 h.
 
 ## Module layout
 
-The lens family carries four genuine module↔module import cycles that execute
-at import time (audit 2026-09-11, TESTS-ARCH "Import cycles"; re-measured
-2026-09-12 with a module-level-only AST walk, which reproduces the audit's list
-exactly):
+The lens family carries three genuine module↔module import cycles that execute
+at import time (audit 2026-09-11, TESTS-ARCH "Import cycles" counted four;
+re-measured 2026-09-12 with a module-level-only AST walk):
 
 ```
-_lens_real  <-> lenses
-_lens_thin  <-> lenses
+_lens_real   <-> lenses
 _lens_traced <-> lenses
-lenses      <-> lenses_maslov
+lenses       <-> lenses_maslov
 ```
+
+The audit's fourth, `_lens_thin <-> lenses`, is **gone**: `_lens_thin` needed
+only `CUPY_AVAILABLE` and the lazy `cp`, and both now come from the leaf
+`lumenairy/backend/_optional.py`. That was the two-line quarter of this item
+and it has landed.
 
 `lenses.py` is the family's public re-export hub: it imports all eight sibling
-modules at module scope. The back-edges are small and completely enumerated:
+modules at module scope. The remaining back-edges are small and completely
+enumerated:
 
 | back-edge | what it imports from `lenses` |
 |---|---|
-| `_lens_real:146` | `_warn_if_aperture_exceeds_grid`, `surface_sag_biconic`, `surface_sag_general` |
-| `_lens_traced:608` | `_warn_if_aperture_exceeds_grid` |
-| `_lens_thin:39` | `CUPY_AVAILABLE` (plus a module alias for the lazy `cp`) |
-| `lenses_maslov:118` | `NUMEXPR_AVAILABLE`, `_ensure_numexpr_loaded`, `_fit_normaliser`, `_multi_indices_total_degree`, `_warn_if_aperture_exceeds_grid` |
+| `_lens_real` | `_warn_if_aperture_exceeds_grid`, `surface_sag_biconic`, `surface_sag_general` |
+| `_lens_traced` | `_warn_if_aperture_exceeds_grid` |
+| `lenses_maslov` | `NUMEXPR_AVAILABLE`, `_ensure_numexpr_loaded`, `_fit_normaliser`, `_multi_indices_total_degree`, `_warn_if_aperture_exceeds_grid` |
 
 `lens_config.py` is deliberately a **leaf**: it imports nothing from
 `lumenairy` at module scope (its validators borrow `_lens_real`'s vocabulary
@@ -412,8 +429,8 @@ no new cycle — verified by the same walk.
 
 ### The plan for the four cycles
 
-Extract the shared leaf `elements/_lens_kernels.py` holding exactly the eight
-names above, and repoint the four back-edges at it. `lenses.py` keeps
+Extract the shared leaf `elements/_lens_kernels.py` holding exactly the seven
+names above, and repoint the three back-edges at it. `lenses.py` keeps
 re-exporting all eight so every existing `from lumenairy.elements.lenses import
 surface_sag_general` keeps working, and the shell-vs-canonical walker
 (`tests/unit/test_v5_2_walker_shell_vs_canonical.py`) sees the same surface.
@@ -431,11 +448,9 @@ Not done in this pass, for two reasons, both concrete:
    mechanical diffs over the same regions in the same round is how a
    relocation loses a guard.
 
-**One of the four is already a two-line fix and should be taken first:**
-`_lens_thin` needs only `CUPY_AVAILABLE` and the lazy `cp` from `lenses`, and
-both now live in `lumenairy/backend/_optional.py`. Repointing
-`_lens_thin.py:39` at `..backend._optional` breaks `_lens_thin <-> lenses`
-outright, with no code motion at all.
+`lens_config.py` adds no edge of its own to any of this, and
+`tests/unit/test_audit2609_a16_verify_config_and_arch.py::test_lens_config_stays_a_leaf`
+keeps it that way.
 
 ---
 
@@ -451,3 +466,10 @@ outright, with no code motion at all.
   covering-array fixture.
 * `tests/unit/test_audit2609_a15a_lens_covering_array.py` — the pairwise
   combination coverage the config objects make easy to extend.
+* `tests/unit/test_audit2609_a16_verify_config_and_arch.py` — the independent
+  re-verification: a second fixture (singlet, 1064 nm, anamorphic `dy`,
+  complex64, decentred+tilted), identical *refusal* through all three
+  spellings, the `locals()` contract, the value-equality and `sag_dtype`
+  contracts, and the falsifiability of the structural gates.
+* `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/VERIFY_WP-A16.md`
+  — what was re-measured and what is still open.
