@@ -12,7 +12,7 @@ numpy 2.4.4 / scipy 1.17.1, with `OMP/OPENBLAS/MKL_NUM_THREADS=1`.
 `fn_name="RCWA2DPrepared.solve"` into the Rayleigh-anomaly nudge and into the
 `_WoodAnomaly` control-flow signal (`lumenairy/elements/rcwa/twod.py:1300`,
 `:1302`).  There is no `RCWA2DPrepared`: the class is **`PreparedRCWA2D`**
-(`twod.py:1258`, built by `prepare_rcwa_2d`), so a user who grepped the
+(`lumenairy/elements/rcwa/twod.py:1258`, built by `prepare_rcwa_2d`), so a user who grepped the
 `WoodNudgeWarning` text for the class found nothing, and `Migration-Guide.md`
 had to document both spellings.  Both literals now name the real class.
 Measured on the 2-D Moharam mount (`Lambda_x = Lambda_y = lambda = 1 um`, air

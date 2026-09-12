@@ -21,7 +21,7 @@ err +1.10e-06); `dn = 0.005` 0 modes -> 1 mode at `n_eff = 1.447648919` (exact 1
 err +5.53e-07).  The four existing `guided_modes` fixtures all use `dn = 1.04`, 100x the old
 band, which is why CI was green.
 
-Files: `lumenairy/elements/bor/coupled_radial_eigensolver.py:495-586`.
+Files: `lumenairy/elements/bor/coupled_radial_eigensolver.py:566` (re-anchored 2026-09-12 after the history relocation moved lines).
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h1_weakly_guiding_fiber_is_not_an_empty_list`,
 `::test_h1_margin_scales_with_the_window_not_with_k0`,
 `::test_h1_degenerate_window_raises_instead_of_returning_empty`.
@@ -175,7 +175,7 @@ rule, whose documented exact reduction to `_li_convolutions_2d` the mean would b
 
 Files: `lumenairy/elements/rcwa/twod.py:411-540` (the symmetrized entry plus the split-out
 single-order `_li_tensor_l2l1`), `:726-772` (`_li_tensor_scope_notice`), `:1861`;
-`stack.py:2654-2661`.
+`lumenairy/elements/rcwa/stack.py:2654-2661`.
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h3_fff_nv_keeps_the_cells_own_symmetry`,
 `::test_h3_separable_stripe_is_unchanged_by_the_symmetrisation`,
 `::test_h3_curved_cell_gets_the_validated_scope_notice`.
@@ -256,7 +256,7 @@ Files: `lumenairy/elements/rcwa/_core.py:233-247`.
   against).  Bit-identical at `kx0 = ky0 = 0`.
 
 Files: `lumenairy/elements/rcwa/stack.py:736-745, :2349-2365`;
-`_core.py:916-1010, :1785-1815 (docstring)`; `oned.py:761`; `twod.py:1236, :1481, :2016, :2380`;
+`_core.py:916-1010, :1785-1815 (docstring)`; `lumenairy/elements/rcwa/oned.py:761`; `twod.py:1236, :1481, :2016, :2380`;
 `eme/eme_2d.py:90-96, :450-454`.
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h6_per_order_amplitudes_hands_out_copies`,
 `::test_h6_passive_media_predicate`, `::test_h6_passive_bound_is_armed_on_a_lossy_cell`.

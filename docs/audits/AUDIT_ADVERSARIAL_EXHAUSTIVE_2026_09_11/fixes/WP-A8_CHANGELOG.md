@@ -170,7 +170,7 @@ The PSD *shape* (the 0.023 f^-11/3 constant in cycles/m, the von Kármán knee, 
 inner-scale cutoff and the v5.30 integer `N//2` DC anchor) is unchanged and still
 audit-verified correct; only the amplitude moved.
 
-Files: `lumenairy/elements/elements.py:1333`; PSD extracted to the shared
+Files: `lumenairy/elements/elements.py:1186` (re-anchored 2026-09-12 after the history relocation moved lines); PSD extracted to the shared
 `_turbulence_psd` helper at `:1151`.
 Tests: `tests/unit/test_audit2609_a8_turbulence.py` (whole file);
 `tests/unit/test_niche_audit_w3_elements.py::_turbulence_reference` updated —
@@ -191,7 +191,7 @@ Default **0** — the shipped behaviour is unchanged and bit-identical for
 r0 = 0.1 m): 0.798 → **0.880** at r = 0.05 r0 and 0.463 → **0.777** at
 r = 3.2 r0, for +23–28 % wall time and no extra peak memory.
 
-Files: `lumenairy/elements/elements.py:1168` (signature + validation),
+Files: `lumenairy/elements/elements.py:1186` (re-anchored 2026-09-12 after the history relocation moved lines) (signature + validation),
 `:1352` (`_turbulence_subharmonics`).
 
 ### Fixed -- elements: `apply_grin_lens` was 36 % wrong at the quarter pitch its own Notes recommend (E5, P1) — **default change**
@@ -389,7 +389,7 @@ dtype-preserving, and the JAX path matches NumPy exactly (0.00e+00) for both
 edges.  A fully blocked pixel comes out exactly zero for any input, including a
 field carrying NaN or inf outside the stop.
 
-Files: `lumenairy/elements/elements.py:226-360`.
+Files: `lumenairy/elements/elements.py:227` (re-anchored 2026-09-12 after the history relocation moved lines).
 Tests: `tests/unit/test_audit2609_a8_thin_elements.py::test_e7_aperture_*`.
 
 ### Fixed -- documentation: four claims in `elements/` and `glass.py` that said the opposite of the code (E7, P3)
