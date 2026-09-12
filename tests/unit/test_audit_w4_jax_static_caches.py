@@ -115,7 +115,13 @@ def test_eme_frozen_cache_registry_drain():
 # P3-28 -- pmm 2-D JAX _STATIC_CACHE
 # =========================================================================== #
 
-_PREP_KEYS = ("Tp", "Tpinv", "Gx0F", "Gy0F", "IprojF", "w")
+# WP-A13 (audit 2026-09-11, G10): the dense Kronecker projector pair
+# ``Tp``/``Tpinv`` was deleted -- the twins now carry the four PER-AXIS
+# projectors and contract them with the two einsums of
+# ``twod._sandwich_factorized``.  The cache contract these tests pin (bounded,
+# LRU, frozen, byte-identical after eviction) is unchanged; only the key names
+# moved.
+_PREP_KEYS = ("Tx", "Txp", "Ty", "Typ", "Gx0F", "Gy0F", "IprojF", "w")
 
 
 def test_pmm_jax_twod_static_cache_bounded_and_byte_identical():
@@ -139,7 +145,7 @@ def test_pmm_jax_twod_static_cache_cell_branch_bounded():
     lay = np.zeros((8, 8), dtype=np.int64)
     lay[2:6, 2:6] = 1
     c0 = jt._static_prep_cell(1.0, 1.0, lay, 3, 1, 1.0, 2)
-    cb = c0["Tp"].tobytes()
+    cb = c0["Tx"].tobytes()
     assert jt._static_prep_cell(1.0, 1.0, lay, 3, 1, 1.0, 2) is c0
     # distinct layouts (shifting pillar) blow through 3x the bound
     for s in range(3 * jt._STATIC_CACHE_SIZE):
@@ -148,7 +154,7 @@ def test_pmm_jax_twod_static_cache_cell_branch_bounded():
         jt._static_prep_cell(1.0, 1.0, lay_s, 3, 1, 1.0, 2)
     assert len(jt._STATIC_CACHE) <= jt._STATIC_CACHE_SIZE
     c1 = jt._static_prep_cell(1.0, 1.0, lay, 3, 1, 1.0, 2)
-    assert c1["Tp"].tobytes() == cb
+    assert c1["Tx"].tobytes() == cb
 
 
 def test_pmm_jax_twod_static_cache_registry_drain():

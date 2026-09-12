@@ -244,13 +244,28 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
           S-matrix (the form every other stack path in the library, and this
           class's own JAX twin, already uses).  Mathematically identical, NOT
           bit-for-bit: the zgemm path rounds its complex products with FMA and
-          the row/column scaling does not.
+          the row/column scaling does not.  MEASURED against ``'fast'`` on
+          three oblique multilayer fixtures at ``n_orders`` 4 and 7:
+          agreement ``max|dR| <= 2.0e-14``, ``max|dT| <= 1.0e-13``,
+          ``max|dJ| <= 8.7e-14`` (never bit-identical), for a WHOLE-SOLVE
+          median speed-up of 1.04x - 1.15x over 5 interleaved runs (the star
+          itself is 29-52x faster, but it is a small share of the solve).  It
+          is not the default for exactly that reason: a 1e-13 move of every
+          user's bits is not paid for by a few per cent.
         * ``'tree'`` -- ``'fused'`` plus a BALANCED-TREE reduction of the layer
           chain (``O(log N)`` depth) instead of the sequential fold, so
           ``solve(max_workers=N)`` parallelises the cascade itself and not just
           the eigensolves.  The star is associative, so this is a
           REASSOCIATION; see ``docs/audits/BUILD_PMM2D_TREE_CASCADE_2026_08_17.md``
           for the derived agreement bar and the memory accounting.
+    truncation : {'rectangular', 'circular'}, optional
+        Order-set shape (default ``'rectangular'``).  ``'circular'`` is the
+        Lalanne-1997 truncation the single-cell scalar entries already carry:
+        keep only the orders inside the largest reciprocal-space circle
+        inscribed in the ``n_orders`` box -- isotropic in resolution, dropping
+        the wasted high-``|G|`` corners, ``Nf -> ~(pi/4) Nf`` and the
+        ``O(Nf^3)`` eig ~x0.48.  NumPy only (the jnp twin builds the
+        rectangular box).
     cache_max_bytes : int, optional
         Byte budget for the two priced layer caches (default: read from
         :func:`lumenairy.memory.get_ram_budget` at query time).
@@ -259,13 +274,34 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         (default: ``0.25`` of the RAM budget, read at solve time).  When the
         projected peak exceeds it the tree REFUSES and the sequential fused
         fold runs instead; :meth:`cascade_stats` reports the decision.
+
+    Notes
+    -----
+    **Mutating solver attributes between solves.**  ``degree``, ``grade``,
+    ``n_orders``, ``formulation``, ``symmetry`` and ``cascade`` are plain
+    public attributes and may be changed between :meth:`solve` calls: every one
+    of them is part of :meth:`_geom_key` / :meth:`_mode_key`, so the caches
+    MISS and the answer is bit-identical to a freshly built object (W7 A11,
+    measured ``|reused - fresh| = 0.0`` for each).
+
+    ``period_x`` / ``period_y`` are the exception and are therefore READ-ONLY
+    once :meth:`add_layer` has run.  ``add_layer`` freezes each layer's walls
+    in METRES, so a later period change would re-solve the old walls at a new
+    period -- a silently different DUTY CYCLE, measured ``|dJones| = 4.4e-01``
+    at a 5 % period change against a true parameter sensitivity of 6.5e-01.
+    Assigning to them after the first layer raises; build a new stack instead.
     """
 
     def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
                  n_substrate=1.0, degree=11, elements_per_strip=1,
                  grade=False, n_orders=11, formulation="li",
                  symmetry="auto", max_nodal_dof=_MAX_NODAL_DOF,
-                 cascade="fast", cache_max_bytes=None, tree_max_bytes=None):
+                 cascade="fast", cache_max_bytes=None, tree_max_bytes=None,
+                 truncation="rectangular"):
+        if truncation not in ("rectangular", "circular"):
+            raise ValueError(
+                f"PMM2DStackHybrid: truncation must be 'rectangular' or "
+                f"'circular', got {truncation!r}")
         if formulation not in ("li", "laurent"):
             raise ValueError(
                 f"PMM2DStackHybrid: formulation must be 'li' or 'laurent', got "
@@ -274,8 +310,9 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             raise ValueError(
                 f"PMM2DStackHybrid: cascade must be one of "
                 f"{', '.join(repr(c) for c in _CASCADES)}, got {cascade!r}")
-        self.period_x = float(period_x)
-        self.period_y = float(period_x if period_y is None else period_y)
+        self._layers = []          # dicts: kind, thickness, payload (PUBLIC eps)
+        self._period_x = float(period_x)
+        self._period_y = float(period_x if period_y is None else period_y)
         # A JAX half-space index stays RAW so its gradient flows (the
         # differentiable dispatch in solve()); complex() would sever it.
         self.n_sup = (n_superstrate if is_jax_array(n_superstrate)
@@ -287,6 +324,13 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         self.grade = bool(grade)
         self.n_orders = int(n_orders)
         self.formulation = formulation
+        # F8: Lalanne-1997 circular truncation, the same option the single-cell
+        # scalar entries carry.  The per-layer projected operators are built on
+        # the FULL rectangular box (they kron-FACTOR, so the box is the natural
+        # assembly) and restricted to the circular subspace at use -- which IS
+        # the operator built on the circular order list, since every one of
+        # them is a function of the order LIST.  Nf -> ~(pi/4) Nf, eig ~x0.48.
+        self.truncation = truncation
         # F2 (audit): even-parity fold for the cascade.  'auto' (the default;
         # True is equivalent) folds when the precondition holds -- normal
         # incidence + a centro-symmetric scalar stack -> the whole Redheffer
@@ -336,7 +380,6 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # Last solve's tree decision, read by :meth:`cascade_stats`.
         self._tree_stats = dict(requested=False, engaged=False, peak_bytes=0,
                                 budget=0, leaves=0, depth=0)
-        self._layers = []          # dicts: kind, thickness, payload (PUBLIC eps)
         self._src = None
         # F4 part 2 (audit): content-keyed cache of the WAVELENGTH-INDEPENDENT
         # per-layer build (ax/ay nodal assembly + the k0-free projected
@@ -361,6 +404,85 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # four successive solve() calls on one object at one source measured a
         # flat 0.625 / 0.601 / 0.609 / 0.609 s -- zero reuse.
         self._eig_cache = LayerCache(max_bytes=self._cache_max_bytes)
+
+    # ------------------------------------------------------------------ #
+    # lattice periods: FROZEN once a layer exists
+    # ------------------------------------------------------------------ #
+    # ``add_layer`` derives and stores per-layer state FROM the period -- the
+    # wall positions ``L["xw"]/L["yw"]`` in METRES and the per-strip element
+    # counts -- so a later period change re-solves a DIFFERENT DUTY CYCLE with
+    # the old walls, silently.  :meth:`_geom_key` carries the period and
+    # therefore misses the cache correctly, which is precisely what hides the
+    # defect: the fresh build is computed, and it is computed on stale walls.
+    # MEASURED on a 50 %-duty eps-12.25 pillar, ``period_x`` 0.9 -> 0.945 um:
+    # ``|J_reused - J_fresh(same cell)| = 4.390e-01`` against the parameter's
+    # genuine sensitivity ``|J_fresh - J_base| = 6.492e-01`` -- i.e. two thirds
+    # of a full-scale error -- while every other public attribute in the same
+    # sweep read 0.000e+00 once :meth:`_geom_key` covered it (W7 A11).
+    # Re-deriving the walls from stored FRACTIONS would also work, but it would
+    # silently re-shape a user's geometry on attribute assignment; refusing is
+    # the convention this class already uses for every other geometry change.
+    @property
+    def period_x(self):
+        """x lattice period [m].  Read-only once a layer has been added."""
+        return self._period_x
+
+    @period_x.setter
+    def period_x(self, value):
+        self._set_period("period_x", "_period_x", value)
+
+    @property
+    def period_y(self):
+        """y lattice period [m].  Read-only once a layer has been added."""
+        return self._period_y
+
+    @period_y.setter
+    def period_y(self, value):
+        self._set_period("period_y", "_period_y", value)
+
+    def _set_period(self, name, slot, value):
+        if getattr(self, "_layers", None):
+            raise ValueError(
+                f"PMM2DStackHybrid.{name}: the lattice period is FROZEN once a "
+                f"layer has been added -- add_layer() has already converted "
+                f"this layer's walls to METRES against the old period "
+                f"({getattr(self, slot):.6g} m), so re-solving at "
+                f"{float(value):.6g} m would silently change the DUTY CYCLE "
+                f"rather than the period (measured |dJones| = 4.4e-01 on a "
+                f"50 %-duty pillar at a 5 % period change, against a true "
+                f"parameter sensitivity of 6.5e-01).  Build a new "
+                f"PMM2DStackHybrid at the new period.")
+        setattr(self, slot, float(value))
+
+    def _order_keep_mask(self, order_x, order_y):
+        """F8 circular-truncation boolean mask over the FULL rectangular order
+        box, or ``None`` for the rectangular default.  Verbatim the predicate
+        ``twod._pmm2d_solve_core`` uses, so the two engines retain the same
+        order set at the same ``n_orders``."""
+        if self.truncation != "circular":
+            return None
+        gx_o = order_x / float(self.period_x)
+        gy_o = order_y / float(self.period_y)
+        r2 = min(self.n_orders / float(self.period_x),
+                 self.n_orders / float(self.period_y)) ** 2
+        return (gx_o ** 2 + gy_o ** 2) <= r2 * (1.0 + 1e-9)
+
+    @staticmethod
+    def _restrict_lops(lops, keep):
+        """Restrict the k0-free projected operators to the circular subspace.
+
+        The cache stores the FULL-box build (it is truncation-independent, so
+        one entry serves both settings); every operator is a function of the
+        order LIST, so ``op[np.ix_(keep, keep)]`` IS the operator assembled on
+        the circular list -- the identical restriction
+        ``twod._pmm2d_solve_core`` applies."""
+        if keep is None or lops is None:
+            return lops
+        ix = np.ix_(keep, keep)
+        n = len(keep)
+        return {kk: (v[ix] if (hasattr(v, "shape") and np.ndim(v) == 2
+                               and v.shape[0] == n) else v)
+                for kk, v in lops.items()}
 
     def _geom_key(self, L):
         """Cache key for the per-layer nodal/projected build.
@@ -476,6 +598,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         # this instance, exactly as the pre-P2C ``= {}`` did.
         self._geom_cache = LayerCache(max_bytes=self._cache_max_bytes)
         self._eig_cache = LayerCache(max_bytes=self._cache_max_bytes)
+        self._eig_refusal_warned = False    # fresh caches -> fresh signal
         if is_jax_array(thickness):
             t_store = thickness            # traced: validated only if concrete
             try:
@@ -792,7 +915,8 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
     # ------------------------------------------------------------------ #
     # solve
     # ------------------------------------------------------------------ #
-    def _symmetric_layer_specs(self, kxv, kyv, ox, oy, kx0, ky0, k0):
+    def _symmetric_layer_specs(self, kxv, kyv, ox, oy, kx0, ky0, k0,
+                               keep=None):
         """Even-parity cascade layer specs (audit F2 for the stack).
 
         Each layer becomes ``('uniform', eps0)`` or ``('PQ', P, Q, EpsF)`` in
@@ -827,13 +951,24 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                 lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
                                              self.period_x, self.period_y)
                 self._geom_cache.put(gkey, _freeze_cached((ax, ay, lops)))
+            lops = self._restrict_lops(lops, keep)
             GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
             GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
-            EpsF, EinvF, EpnF = lops["EpsF"], lops["EinvF"], lops["EpnF"]
+            EpsF, EinvF = lops["EpsF"], lops["EinvF"]
             Nf = GxF.shape[0]
             Imat = np.eye(Nf, dtype=_C)
             if self.formulation == "li":
-                EPS_nx, EPS_ny, EPS_inv = EpnF, EpsF, EinvF
+                # PER-SLOT inverse rule: the wall-NORMAL component of a
+                # separable cell takes ``[[1/eps]]^-1`` and the tangential one
+                # keeps Laurent, either orientation (``_scalar_projected_ops``
+                # returns the routed pair; on a doubly-patterned cell both keys
+                # collapse to the historical ``(EpnF, EpsF)``).  Routing a
+                # single ``EpnF`` onto the Ex slot puts the Y-axis inverse-rule
+                # operator on the X field for a y-patterned layer -- BOTH slots
+                # anti-Li -- and breaks the 90-degree rotation invariance that
+                # ``formulation='laurent'`` has exactly.
+                EPS_nx, EPS_ny = lops["EpnxF"], lops["EpnyF"]
+                EPS_inv = EinvF
             else:
                 EPS_nx = EPS_ny = EpsF
                 EPS_inv = np.linalg.inv(EpsF)
@@ -872,9 +1007,18 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         own noise, so collapsing is if anything the more accurate branch).
         Gate: ``test_slant_uniform_layer_is_a_noop``.
         """
+        # ``symmetry`` rides in because :meth:`_build_layer_modes` passes it to
+        # ``_tensor_layer_modes`` as ``block_eig``: an out-of-plane tensor
+        # layer's modal set is built by the parity-sign block reduction when it
+        # is on and by the dense 4Nf zgeev when it is off, so the two are
+        # different computations from the same geometry and must not share a
+        # cache entry.  (The scalar branches do not read it -- the stack-level
+        # even-parity fold is decided in solve() and bypasses this cache
+        # entirely -- so this only ever SPLITS keys that were wrongly shared.)
         common = (float(wl), float(k0), float(kx0), float(ky0),
                   float(self.period_x), float(self.period_y),
-                  int(self.n_orders), self.formulation)
+                  int(self.n_orders), self.formulation,
+                  bool(_symmetry_on(self.symmetry)), self.truncation)
         if L["kind"] == "uniform":
             eps_i = np.conj(_C(L["eps"]))
             return ("uniform",
@@ -887,7 +1031,8 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                         np.asarray(eps0, dtype=_C).tobytes()) + common
         return ("geom",) + self._geom_key(L) + common
 
-    def _build_layer_modes(self, L, kxv, kyv, ox, oy, kx0, ky0, k0):
+    def _build_layer_modes(self, L, kxv, kyv, ox, oy, kx0, ky0, k0,
+                           keep=None, kxv_box=None, kyv_box=None):
         """Modal set of ONE layer -- the eig-heavy build, thickness-free.
 
         Returns ``('sym', W, V, lam)`` or, for an out-of-plane tensor layer,
@@ -922,23 +1067,34 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                     if L["kind"] == "scalar" else None)
             self._geom_cache.put(gkey, _freeze_cached((ax, ay, lops)))
         sl = L.get("slant", (0.0, 0.0))
+        lops = self._restrict_lops(lops, keep)
         if L["kind"] == "scalar":
             GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
             GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
+            # PER-SLOT inverse rule (see :meth:`_symmetric_layer_specs`): the
+            # routed pair is what makes one physical grating give the same
+            # answer drawn along x and drawn along y under formulation='li'.
             out = _layer_modes_projected(
                 GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
-                formulation=self.formulation, slant=sl)
+                formulation=self.formulation, EpnxF=lops["EpnxF"],
+                EpnyF=lops["EpnyF"], slant=sl)
             # a SLANTED scalar layer comes back as the generator 6-tuple
             return (("gen",) + tuple(out) if len(out) == 6
                     else ("sym",) + tuple(out))
         ez_rule = ("li" if self.formulation == "li" else "laurent")
+        # the tensor operators kron-FACTOR, so they are assembled on the full
+        # box and restricted by ``keep`` inside _tensor_layer_modes -- which
+        # needs the FULL-box kxv/kyv for the same reason.
+        kxv_b = kxv if keep is None else kxv_box
+        kyv_b = kyv if keep is None else kyv_box
         out = _tensor_layer_modes(ax, ay, L["xw"], L["yw"], tile_i, k0, kx0,
-                                  ky0, ox, oy, kxv, kyv, ez_rule, slant=sl,
-                                  block_eig=self.symmetry)
+                                  ky0, ox, oy, kxv_b, kyv_b, ez_rule, slant=sl,
+                                  block_eig=self.symmetry, keep=keep)
         return (("gen",) + out if len(out) == 6 else ("sym",) + tuple(out))
 
     def _layer_mode_sets(self, kxv, kyv, ox, oy, kx0, ky0, k0, wl,
-                         max_workers=None, blas_per_worker=1):
+                         max_workers=None, blas_per_worker=1, keep=None,
+                         kxv_box=None, kyv_box=None):
         """Per-layer ``(modes, mode_keys)`` for this source.
 
         Every DISTINCT modal key is built at most once per solve, and the
@@ -988,8 +1144,9 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
 
         def _build(item):
             kk, i = item
-            return kk, self._build_layer_modes(self._layers[i], kxv, kyv,
-                                               ox, oy, kx0, ky0, k0)
+            return kk, self._build_layer_modes(
+                self._layers[i], kxv, kyv, ox, oy, kx0, ky0, k0, keep=keep,
+                kxv_box=kxv_box, kyv_box=kyv_box)
 
         if max_workers is None:
             built = [_build(it) for it in items]
@@ -1147,11 +1304,49 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
 
     def cache_stats(self):
         """``{'geom': {...}, 'eig': {...}}`` -- entries / bytes / budget /
-        hits / misses / refused / evicted for the two priced caches."""
+        hits / misses / refused / evicted for the two priced caches.
+
+        A non-zero ``['eig']['refused']`` means a modal set was COMPUTED and
+        then not retained because the cache was already at budget: the answer
+        is correct (the value is returned either way -- refuse-never-degrade)
+        but every later solve at that source re-eigs it.  :meth:`solve` warns
+        the first time that happens on an instance; this is where to read the
+        running count."""
         return dict(geom=dict(self._geom_cache.stats(),
                               budget=self._geom_cache.budget()),
                     eig=dict(self._eig_cache.stats(),
                              budget=self._eig_cache.budget()))
+
+    def _warn_eig_cache_refusals(self, before, block_n):
+        """Surface an eig-cache REFUSAL once per instance.
+
+        The cache is refuse-never-degrade: at budget it returns the value and
+        does not retain it, so the physics is untouched and NOTHING says the
+        sweep just lost all modal reuse.  A wide sweep is exactly where that
+        bites -- a modal entry is ~3.7 MB at ``n_orders = 6`` and ~36 MB at
+        ``n_orders = 11`` (measured; 2Nf x 2Nf complex W and V plus lam), so a
+        few hundred distinct wavelengths at production truncation walk past the
+        5 %-of-RAM budget and every subsequent point re-eigs from scratch.
+        ``cache_stats()['eig']['refused']`` was the only signal and nothing
+        surfaced it."""
+        n = self._eig_cache.n_refused - int(before)
+        if n <= 0 or getattr(self, "_eig_refusal_warned", False):
+            return
+        self._eig_refusal_warned = True
+        st = self._eig_cache.stats()
+        warnings.warn(
+            f"PMM2DStackHybrid.solve: the per-layer modal (eig) cache REFUSED "
+            f"{n} entr{'y' if n == 1 else 'ies'} this solve -- it is at its "
+            f"byte budget ({st['nbytes'] / 2**20:.0f} MB retained in "
+            f"{st['entries']} entries against a "
+            f"{self._eig_cache.budget() / 2**20:.0f} MB budget), so those "
+            f"modal sets were computed and then dropped.  The ANSWER IS "
+            f"UNCHANGED (refuse-never-degrade), but every later solve at those "
+            f"sources will re-run the eig: a sweep loses its modal reuse "
+            f"silently from here on (~{4 * block_n ** 2 * 16 / 2**20:.0f} MB "
+            f"per entry at this truncation).  Raise cache_max_bytes, lower "
+            f"n_orders, or sweep in chunks; cache_stats()['eig']['refused'] "
+            f"is the running count.", stacklevel=2)
 
     def solve(self, *, retain_internal=False, max_workers=None,
               blas_per_worker=1):
@@ -1246,6 +1441,13 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                    or any(is_jax_array(L.get("eps")) for L in self._layers)
                    or any(L.get("traced") for L in self._layers))
         if _jax_in:
+            if self.truncation != "rectangular":
+                raise NotImplementedError(
+                    "PMM2DStackHybrid.solve: truncation='circular' is NumPy "
+                    "only -- the jnp twin (pmm/_jax_stack2d.py) builds its "
+                    "order set and its frozen projected operators on the full "
+                    "rectangular box.  Use NumPy inputs, or "
+                    "truncation='rectangular' on the JAX path.")
             if retain_internal:
                 raise NotImplementedError(
                     "PMM2DStackHybrid.solve(retain_internal=True): not available "
@@ -1296,8 +1498,13 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         n_orders = self.n_orders
         ox = np.arange(-n_orders, n_orders + 1)
         oy = np.arange(-n_orders, n_orders + 1)
-        order_x = np.tile(ox, len(oy))
-        order_y = np.repeat(oy, len(ox))
+        order_x_box = np.tile(ox, len(oy))
+        order_y_box = np.repeat(oy, len(ox))
+        # F8: circular truncation (None on the rectangular default, which then
+        # takes every branch below BIT-IDENTICALLY to the pre-F8 stack).
+        keep = self._order_keep_mask(order_x_box, order_y_box)
+        order_x = order_x_box if keep is None else order_x_box[keep]
+        order_y = order_y_box if keep is None else order_y_box[keep]
         Nf = len(order_x)
 
         eps_reals = [eps_sup, eps_sub]
@@ -1312,10 +1519,15 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                               np.asarray(L["tile"][..., [0, 1, 2],
                                                    [0, 1, 2]]).ravel()]
         wl = _grazing_safe_wavelength(wavelength, kx0, ky0, order_x, order_y,
-                                      self.period_x, self.period_y, eps_reals)
+                                      self.period_x, self.period_y, eps_reals,
+                                      fn_name="PMM2DStackHybrid.solve")
         k0 = 2.0 * np.pi / wl
         kxv = kx0 + order_x * (wl / self.period_x)
         kyv = ky0 + order_y * (wl / self.period_y)
+        # the FULL-box transverse momenta the kron-factored TENSOR assembly
+        # needs before it is restricted (see _build_layer_modes)
+        kxv_box = kx0 + order_x_box * (wl / self.period_x)
+        kyv_box = ky0 + order_y_box * (wl / self.period_y)
 
         Wsup, Vsup, _ls, _kzr = _homogeneous_modes(kxv, kyv, eps_sup)
         Wsub, Vsub, _lb, _kzt = _homogeneous_modes(kxv, kyv, eps_sub)
@@ -1347,7 +1559,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                 and all(_slant_is_zero(L.get("slant")) for L in self._layers)):
             from ..rcwa._core import _symmetric_cascade_rt
             _specs, _depths = self._symmetric_layer_specs(
-                kxv, kyv, ox, oy, kx0, ky0, k0)
+                kxv, kyv, ox, oy, kx0, ky0, k0, keep=keep)
             sym_pairs = _symmetric_cascade_rt(
                 Vsup, Vsub, np.diag(kxv.astype(_C)), np.diag(kyv.astype(_C)),
                 _specs, _depths, k0,
@@ -1361,9 +1573,12 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             # layer i's modal content key -- the cascade below reuses it to
             # dedup interfaces and to detect adjacent layers that share a
             # modal basis.
+            _ref0 = self._eig_cache.n_refused
             modes, mkeys = self._layer_mode_sets(
                 kxv, kyv, ox, oy, kx0, ky0, k0, wl,
-                max_workers, blas_per_worker)
+                max_workers, blas_per_worker, keep=keep,
+                kxv_box=kxv_box, kyv_box=kyv_box)
+            self._warn_eig_cache_refusals(_ref0, 2 * Nf)
 
             any_oop = any(m[0] == "gen" for m in modes)
             if retain_internal and any_oop:
@@ -1664,7 +1879,9 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                 oy = np.arange(-self.n_orders, self.n_orders + 1)
                 lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
                                              self.period_x, self.period_y)
-                out = lops["EpsF"]
+                keep = self._order_keep_mask(np.tile(ox, len(oy)),
+                                             np.repeat(oy, len(ox)))
+                out = self._restrict_lops(lops, keep)["EpsF"]
         cache[i] = out
         return out
 

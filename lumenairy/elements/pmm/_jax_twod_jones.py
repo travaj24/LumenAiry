@@ -77,8 +77,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...backend import is_jax_array  # noqa: F401  (re-exported for the dispatch)
-from ._jax_twod import _host_incidence_guard, _static_prep_cell
+from ._jax_twod import (
+    _host_incidence_guard,
+    _proj_sandwich_jnp,
+    _static_prep_cell,
+)
 
 _C = np.complex128
 
@@ -125,8 +128,6 @@ def _pmm_jones_2d_cell_jax(period_x, period_y, eps_tensor_cell, region_layout,
     reg = jnp.stack([eps_c[i, j] for (i, j) in st["first_idx"]])   # (nreg, 3, 3)
     reg = jnp.conj(reg)
     Wreg = jnp.asarray(st["Wreg"], cj)                             # (nreg, Ndof)
-    Tp = jnp.asarray(st["Tp"], cj)
-    Tpinv = jnp.asarray(st["Tpinv"], cj)
     Gx0F = jnp.asarray(st["Gx0F"], cj)
     Gy0F = jnp.asarray(st["Gy0F"], cj)
     IprojF = jnp.asarray(st["IprojF"], cj)
@@ -135,9 +136,12 @@ def _pmm_jones_2d_cell_jax(period_x, period_y, eps_tensor_cell, region_layout,
     Nf = order_x.size
 
     def _proj(nodal):
-        # (Tp * v) @ Tpinv == Tp @ diag(v) @ Tpinv  (the GLL nodal mass is
-        # diagonal, so a multiply-by-component operator is a nodal VECTOR)
-        return (Tp * nodal[None, :]) @ Tpinv
+        # kron(Ty, Tx) @ diag(v) @ kron(Typ, Txp) as the TWO per-axis einsum
+        # contractions of twod._sandwich_factorized -- the GLL nodal mass is
+        # diagonal, so a multiply-by-component operator is a nodal VECTOR, and
+        # the dense (Nf, N) Kronecker projector pair (~1.4 GB at the documented
+        # ceiling, plus an O(N Nf^2) pinv) is never materialized.
+        return _proj_sandwich_jnp(jnp, st, nodal)
 
     def _nodal(regvals):
         # region values -> projected nodal vector, LINEAR in the traced values

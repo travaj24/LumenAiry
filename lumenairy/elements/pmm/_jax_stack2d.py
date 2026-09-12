@@ -98,8 +98,9 @@ def _layer_static_traced(stack, L):
             Wreg[r] += np.real(
                 np.kron(np.diag(ay["Mtile"][sy]),
                         np.diag(ax["Mtile"][sx])) / Mdiag)
-    return dict(Tp=np.kron(Ty, Tx), Tpinv=np.kron(Typ, Txp), Wreg=Wreg,
-                Gx0F=Gx0F, Gy0F=Gy0F, IpxF=Ip, IpyF=Ip, uniq=uniq)
+    return dict(Tx=Tx, Txp=Txp, Ty=Ty, Typ=Typ,
+                Nx=int(mdx.size), Ny=int(mdy.size), NxO=NxO, NyO=NyO,
+                Wreg=Wreg, Gx0F=Gx0F, Gy0F=Gy0F, IpxF=Ip, IpyF=Ip, uniq=uniq)
 
 
 def _pmm_stack2d_solve_jax(stack):
@@ -119,6 +120,7 @@ def _pmm_stack2d_solve_jax(stack):
         # that body's docstring for what the copies cost.
         _sqrt_decay,
     )
+    from ._jax_twod import _proj_sandwich_jnp
     _require_jax_x64("PMM2DStack.solve")
     cj = jnp.complex128
 
@@ -167,7 +169,7 @@ def _pmm_stack2d_solve_jax(stack):
             kx0_c ** 2 + ky0_c ** 2)
         wl_use = _grazing_safe_wavelength(
             wl_c, kx0_c, ky0_c, order_x, order_y, stack.period_x,
-            stack.period_y, eps_reals)
+            stack.period_y, eps_reals, fn_name="PMM2DStack.solve")
 
     wl_t = jnp.asarray(wl_use)
     k0 = 2.0 * jnp.pi / wl_t
@@ -197,11 +199,24 @@ def _pmm_stack2d_solve_jax(stack):
         V = Q @ jnp.diag(_inv_lam(lam))
         return W, V, lam
 
-    def _modes_projected(GxF, GyF, EpsF, EinvF, EpnF):
+    def _modes_projected(GxF, GyF, EpsF, EinvF, EpnF, EpnxF=None, EpnyF=None):
+        """jnp twin of :func:`twod._layer_modes_projected`, per-slot routable.
+
+        Under ``formulation='li'`` ``EpnxF`` lands on the Ex slot and ``EpnyF``
+        on the Ey slot, so a separable cell gets the inverse rule on its
+        wall-NORMAL component either orientation; callers that pass neither
+        (the traced branch, whose cell is patterned on BOTH axes and whose
+        pointwise nodal operators carry no per-axis rule) keep the equivalent
+        ``(Ex <- EpnF, Ey <- EpsF)`` assignment.
+        """
         eye_F = jnp.eye(Nf, dtype=cj)
-        EPS_normal = EpnF if stack.formulation == "li" else EpsF
-        Q = jnp.block([[GxF @ GyF, EpsF - GxF @ GxF],
-                       [GyF @ GyF - EPS_normal, -GyF @ GxF]])
+        if stack.formulation == "li":
+            EPS_nx = EpnF if EpnxF is None else EpnxF
+            EPS_ny = EpsF if EpnyF is None else EpnyF
+        else:
+            EPS_nx = EPS_ny = EpsF
+        Q = jnp.block([[GxF @ GyF, EPS_ny - GxF @ GxF],
+                       [GyF @ GyF - EPS_nx, -GyF @ GxF]])
         EPS_inv = (EinvF if stack.formulation == "li"
                    else jnp.linalg.inv(EpsF))
         P = jnp.block([[GxF @ EPS_inv @ GyF, eye_F - GxF @ EPS_inv @ GxF],
@@ -229,11 +244,12 @@ def _pmm_stack2d_solve_jax(stack):
             Wreg = jnp.asarray(st["Wreg"])
             eps_nodal = eps_regions @ Wreg
             inv_nodal = (1.0 / eps_regions) @ Wreg
-            Tp = jnp.asarray(st["Tp"], cj)
-            Tpinv = jnp.asarray(st["Tpinv"], cj)
-            EpsF = (Tp * eps_nodal[None, :]) @ Tpinv
-            EinvF = (Tp * inv_nodal[None, :]) @ Tpinv
-            EpnF = (Tp * (1.0 / inv_nodal)[None, :]) @ Tpinv
+            # Factorized sandwiches (twod._sandwich_factorized): two per-axis
+            # einsum contractions instead of the dense (Nf, N) Kronecker
+            # projector pair -- see _jax_twod._proj_sandwich_jnp.
+            EpsF = _proj_sandwich_jnp(jnp, st, eps_nodal)
+            EinvF = _proj_sandwich_jnp(jnp, st, inv_nodal)
+            EpnF = _proj_sandwich_jnp(jnp, st, 1.0 / inv_nodal)
             GxF = jnp.asarray(st["Gx0F"], cj) / k0 + kx0 * jnp.asarray(
                 st["IpxF"], cj)
             GyF = jnp.asarray(st["Gy0F"], cj) / k0 + ky0 * jnp.asarray(
@@ -253,7 +269,9 @@ def _pmm_stack2d_solve_jax(stack):
                 Wl, Vl, lam = _modes_projected(
                     GxF, GyF, jnp.asarray(lops["EpsF"], cj),
                     jnp.asarray(lops["EinvF"], cj),
-                    jnp.asarray(lops["EpnF"], cj))
+                    jnp.asarray(lops["EpnF"], cj),
+                    EpnxF=jnp.asarray(lops["EpnxF"], cj),
+                    EpnyF=jnp.asarray(lops["EpnyF"], cj))
         modes.append((Wl, Vl, lam, thk))
 
     # ---- symmetric Redheffer cascade (backend-generic helpers) ------------

@@ -128,15 +128,186 @@ def _scan_solver(solve_at, base_degree):
 _PASSIVE_TOL_2D = 5.0e-2
 _PER_ORDER_TOL_2D = 1.0e-2
 
+#: ADVISORY lossless-closure floor -- the level a CLEAN hybrid solve actually
+#: reaches, two and a half decades tighter than the ``_PASSIVE_TOL_2D``
+#: catastrophe gate above.  Derivation (measured on a provably lossless Si
+#: pillar, eps 12.11 at 50 % duty on n_sub = 1.45, Px = Py = 0.9 um,
+#: lambda = 1 um, d = 0.35 um, degree 11): ``max|1 - (sumR + sumT)|`` over both
+#: incident polarizations reads 1.5e-03 / 1.4e-04 / 5.9e-04 at ``n_orders`` =
+#: 5 / 9 / 11 at normal incidence and 8.0e-03 / 2.8e-03 / 5.0e-04 at
+#: ``theta = 20 deg`` -- i.e. a clean solve sits at or below ~3e-03 once
+#: ``n_orders`` is past the first few, while ``_PASSIVE_TOL_2D = 5e-02`` cannot
+#: see a 1e-03-class regression at all.  This is NOT the stabilize gate: it is
+#: the default for :func:`pmm_2d_order_drift`'s closure advisory and the
+#: suggested value for the ``energy_tol`` keyword of the scalar entries.  It is
+#: deliberately NOT the tripwire default: the plateau is a documented property
+#: of a Fourier-truncated engine (an L-shaped chiral cell legitimately reads
+#: 1.1e-02 at n_orders = 5), so firing here by default would warn on working
+#: solves.  Energy-critical work belongs on the no-floor staggered engine.
+_ADVISORY_TOL_2D = 3.0e-3
+
 __all__ = ["pmm_efficiency_2d", "pmm_efficiency_2d_cell", "PreparedPMM2D",
            "prepare_pmm_2d", "prepare_pmm_2d_cell",
            "pmm_efficiency_2d_vs_wavelength",
-           "pmm_efficiency_2d_cell_vs_wavelength"]
+           "pmm_efficiency_2d_cell_vs_wavelength",
+           "pmm_2d_order_drift"]
 
 _C = np.complex128
 
 
-def _warn_lossless_energy_2d(result, eps_values, fn_name):
+def pmm_2d_order_drift(solve_at_n_orders, n_orders, *, step=2,
+                       per_order_tol=_PER_ORDER_TOL_2D,
+                       advisory_tol=_ADVISORY_TOL_2D, warn=True,
+                       fn_name="pmm_2d_order_drift"):
+    """Consecutive-``n_orders`` PER-ORDER drift check for the hybrid 2-D PMM --
+    the convergence signal that lossless energy closure cannot give you.
+
+    On this engine ``sum(R)+sum(T)`` is NOT a proxy for the per-order error,
+    and the two can move in OPPOSITE directions.  MEASURED on one fixed
+    geometry (12x12 pixel cell, eps 12.25 pillar at duty 1/2,
+    ``Px = Py = 0.9 um``, ``lambda = 1 um``, ``d = 0.3 um``,
+    ``n_sub = 1.45``, degree 11) through ``pmm_efficiency_2d_cell``:
+
+    ==========  ==============  ============  ======
+    n_orders    ``sumR+sumT``   ``T00``       wall
+    ==========  ==============  ============  ======
+    5           1.009688        0.2715167     0.24 s
+    9           1.003634        0.2373950     2.11 s
+    11          0.999565        0.1542801     7.28 s
+    ==========  ==============  ============  ======
+
+    Closure improves MONOTONICALLY (9.7e-03 -> 3.6e-03 -> 4.4e-04) while
+    ``T00`` moves **-35 %** from ``n_orders`` 9 to 11 and shows no sign of
+    settling -- so a user watching energy alone would pick ``n_orders = 11``
+    and call it the best of the three.  This helper re-solves at
+    ``n_orders - step`` and reports what actually moved.
+
+    Parameters
+    ----------
+    solve_at_n_orders : callable
+        ``n -> (orders, R, T)`` (extra trailing elements are ignored, so a
+        :class:`~lumenairy.elements.rcwa.Efficiency2D`, the 4-tuple of
+        :func:`~lumenairy.elements.pmm.pmm_jones_2d` and a
+        :meth:`PMM2DStackHybrid.solve` result all work directly).  ``R``/``T``
+        may be ``(N,)`` or ``(2, N)``.
+    n_orders : int
+        The truncation you intend to use.
+    step : int, optional
+        Truncation step back for the comparison solve (default 2, i.e.
+        ``n_orders - 2``).  Must be >= 1 and leave ``n_orders - step >= 1``.
+    per_order_tol : float, optional
+        Bar on the per-order drift (default ``_PER_ORDER_TOL_2D`` = 1e-2, the
+        same constant the ``stabilize=True`` degree-scan consensus uses).
+    advisory_tol : float, optional
+        Bar on the lossless-closure advisory (default ``_ADVISORY_TOL_2D`` =
+        3e-3, the measured CLEAN floor -- see that constant).
+    warn : bool, optional
+        Emit a ``UserWarning`` naming whichever bar was missed (default True).
+    fn_name : str, optional
+        Name used in the warning message.
+
+    Returns
+    -------
+    dict
+        ``n_orders`` / ``n_orders_prev``, ``max_drift`` (max absolute
+        per-order change over the ORDERS BOTH solves retain),
+        ``drift_00`` (the zeroth order alone), ``closure`` and
+        ``closure_prev`` (``|1 - (sumR+sumT)|`` per incident polarization,
+        max over rows), and ``converged`` (both bars met).
+
+    Examples
+    --------
+    >>> from functools import partial                        # doctest: +SKIP
+    >>> f = partial(pmm_efficiency_2d_cell, Px, Py, cell, 1.45, 1.0, d, wl,
+    ...             degree=11)                               # doctest: +SKIP
+    >>> pmm_2d_order_drift(lambda n: f(n_orders=n), 11)      # doctest: +SKIP
+    """
+    n_orders = int(n_orders)
+    step = int(step)
+    if step < 1:
+        raise ValueError(f"{fn_name}: step must be >= 1, got {step}.")
+    if n_orders - step < 1:
+        raise ValueError(
+            f"{fn_name}: n_orders - step must be >= 1 (a drift check needs a "
+            f"COARSER solve to compare against); got n_orders={n_orders}, "
+            f"step={step}.")
+
+    def _rt(res):
+        o = np.asarray(res[0])
+        R = np.atleast_2d(np.real(np.asarray(res[1])))
+        T = np.atleast_2d(np.real(np.asarray(res[2])))
+        return o, R, T
+
+    o_hi, R_hi, T_hi = _rt(solve_at_n_orders(n_orders))
+    o_lo, R_lo, T_lo = _rt(solve_at_n_orders(n_orders - step))
+    if R_hi.shape[0] != R_lo.shape[0]:
+        raise ValueError(
+            f"{fn_name}: the two solves returned different numbers of "
+            f"incident polarizations ({R_hi.shape[0]} vs {R_lo.shape[0]}) -- "
+            f"solve_at_n_orders must be the SAME call with only n_orders "
+            f"changed.")
+    # The coarse solve retains a SUBSET of the fine order set, so compare on
+    # the intersection (keyed by the (m, n) pair) rather than by position.
+    idx_hi = {tuple(int(v) for v in np.atleast_1d(row)): i
+              for i, row in enumerate(o_hi)}
+    common = []
+    for i, row in enumerate(o_lo):
+        k = tuple(int(v) for v in np.atleast_1d(row))
+        if k in idx_hi:
+            common.append((idx_hi[k], i))
+    if not common:
+        raise ValueError(
+            f"{fn_name}: the two solves share no diffraction order; "
+            f"solve_at_n_orders must be the SAME call with only n_orders "
+            f"changed.")
+    ih = [a for a, _ in common]
+    il = [b for _, b in common]
+    drift = max(float(np.max(np.abs(R_hi[:, ih] - R_lo[:, il]))),
+                float(np.max(np.abs(T_hi[:, ih] - T_lo[:, il]))))
+    z = [j for j, row in enumerate(o_hi)
+         if all(int(v) == 0 for v in np.atleast_1d(row))]
+    drift_00 = 0.0
+    if z:
+        k0_ = tuple(0 for _ in np.atleast_1d(o_hi[z[0]]))
+        zl = [j for j, row in enumerate(o_lo)
+              if tuple(int(v) for v in np.atleast_1d(row)) == k0_]
+        if zl:
+            drift_00 = max(
+                abs(float(R_hi[0, z[0]] - R_lo[0, zl[0]])),
+                abs(float(T_hi[0, z[0]] - T_lo[0, zl[0]])))
+    clo_hi = float(np.max(np.abs(1.0 - (R_hi.sum(axis=1) + T_hi.sum(axis=1)))))
+    clo_lo = float(np.max(np.abs(1.0 - (R_lo.sum(axis=1) + T_lo.sum(axis=1)))))
+    out = dict(n_orders=n_orders, n_orders_prev=n_orders - step,
+               max_drift=drift, drift_00=drift_00, closure=clo_hi,
+               closure_prev=clo_lo,
+               converged=bool(drift <= per_order_tol
+                              and clo_hi <= advisory_tol))
+    if warn and not out["converged"]:
+        import warnings
+        bits = []
+        if drift > per_order_tol:
+            bits.append(
+                f"the per-order efficiencies moved by {drift:.3g} (zeroth "
+                f"order {drift_00:.3g}) between n_orders {n_orders - step} "
+                f"and {n_orders}, above the {per_order_tol:.3g} bar")
+        if clo_hi > advisory_tol:
+            bits.append(
+                f"lossless closure is {clo_hi:.3g} (was {clo_lo:.3g} at "
+                f"n_orders {n_orders - step}), above the advisory floor "
+                f"{advisory_tol:.3g} a clean hybrid solve reaches")
+        warnings.warn(
+            f"{fn_name}: this truncation is NOT converged -- "
+            + "; and ".join(bits)
+            + ".  Energy closure alone is not a convergence proof on the "
+              "Fourier-projected hybrid (it can IMPROVE while the per-order "
+              "split moves 35 %); raise n_orders/degree until this drift "
+              "settles, or use the no-floor pmm_efficiency_2d_staggered / "
+              "PMM2DStackPure, whose closure is n_orders-invariant.",
+            stacklevel=2)
+    return out
+
+
+def _warn_lossless_energy_2d(result, eps_values, fn_name, tol=None):
     """Lossless per-order closure tripwire for the ``stabilize=False`` fast path
     of the scalar 2-D efficiency entries -- the 2-D sibling of the RCWA
     ``_check_energy(..., lossless=)`` guard (audit S1-2), of the two-sided
@@ -172,26 +343,40 @@ def _warn_lossless_energy_2d(result, eps_values, fn_name):
     message and the docstring both already described a CLOSURE test; only the
     predicate was a passivity test.  Strictly more detections: every input that
     warned before still warns (the ``tot > 1+tol`` and negative-efficiency arms
-    are unchanged), so no working solve changes."""
+    are unchanged), so no working solve changes.
+
+    ``tol`` (default ``_PASSIVE_TOL_2D`` = 5e-2) is a CATASTROPHE gate, not a
+    convergence gate: it sits 2.5 decades above the ~3e-3 a clean solve reaches
+    (see :data:`_ADVISORY_TOL_2D`), so it cannot see a 1e-3-class regression --
+    and because closure is ANTI-CORRELATED with the per-order error on at least
+    one fixture, tightening it would still not make it a convergence signal.
+    The entries expose it as ``energy_tol=`` for a caller who wants the tighter
+    gate on a geometry they know is clean; the convergence question belongs to
+    :func:`pmm_2d_order_drift`."""
     for e in eps_values:
         if np.any(np.imag(np.asarray(e, dtype=_C)) != 0.0):
             return                             # not provably lossless -- skip
     _, R, T = result
     tot = float(np.real(np.sum(R)) + np.real(np.sum(T)))
     # CLOSURE gate about 1.0 (losslessness is established above, so both signs
-    # are defects) + per-order non-negativity, keyed on _PASSIVE_TOL_2D.
+    # are defects) + per-order non-negativity, keyed on _PASSIVE_TOL_2D unless
+    # the caller passed its own ``tol``.
+    use_tol = _PASSIVE_TOL_2D if tol is None else float(tol)
     eff_min = min(float(np.min(np.real(R))) if np.size(R) else 0.0,
                   float(np.min(np.real(T))) if np.size(T) else 0.0)
-    if abs(tot - 1.0) > _PASSIVE_TOL_2D or eff_min < -_PASSIVE_TOL_2D:
+    if abs(tot - 1.0) > use_tol or eff_min < -use_tol:
         import warnings
         warnings.warn(
             f"{fn_name}: lossless energy closure violated (sum R+T = {tot:.3g}, "
             f"off by {tot - 1.0:+.3g}, min per-order efficiency = "
-            f"{eff_min:.3g}; the structure is "
+            f"{eff_min:.3g}, tolerance {use_tol:.3g}; the structure is "
             f"provably lossless so R+T=1 is exact).  The Fourier projection is "
             f"ill-conditioned at this (n_orders, degree) coincidence and the "
             f"PER-ORDER efficiencies are unreliable -- pass stabilize=True "
-            f"(retries nearby degrees) or lower n_orders / raise degree.",
+            f"(retries nearby degrees) or lower n_orders / raise degree.  NB "
+            f"closure is NOT a convergence proof on this engine: it can "
+            f"improve while the per-order split moves 35 % -- see "
+            f"pmm_2d_order_drift.",
             stacklevel=3)
 
 
@@ -282,6 +467,18 @@ def _cell_to_walls_tile(eps_cell, period_x, period_y, fn_name):
     :func:`rcwa_efficiency_2d` / :func:`pmm_efficiency_2d_staggered` instead.
     Trailing dimensions (e.g. the ``(3, 3)`` of a tensor cell) ride along into
     the tile untouched.
+
+    PIXEL grid, NOT a SEGMENT grid.  This is the HYBRID family's convention and
+    it is the OPPOSITE of the STAGGERED family's: there
+    (:func:`~lumenairy.elements.pmm.pmm_efficiency_2d_staggered`,
+    :func:`~lumenairy.elements.pmm.pmm_jones_2d_staggered`,
+    :meth:`~lumenairy.elements.pmm.PMM2DStackPure.add_layer`) every row and
+    column of ``eps_cell`` IS an element, the per-component DOF is
+    ``(Nx*(M-1)) * (Ny*(M-1))`` and a redundant grid is a CUBIC cost
+    multiplier -- measured 498 s CPU / 8.4 GB for a 12x12 half-fill pillar that
+    needs 3 segments/axis, against 0.22 s / < 1 GB for the SAME array here.
+    The two parameters share a name and mean different things; CONVENTIONS.md
+    sec 11 cross-references ``fff_nv`` the same way.
     """
     cell = np.asarray(eps_cell, dtype=_C)
     if cell.ndim < 2:
@@ -383,6 +580,18 @@ def _axis_elem_counts(period, walls, degree, elements_per_strip, fn_name,
 # =========================================================================== #
 
 def _assemble_2d(ax, ay, eps_tile, k0):
+    """DENSE Kronecker assembly of the nodal operators -- a KEPT REFERENCE
+    IMPLEMENTATION, on no live solve path.
+
+    :func:`_scalar_projected_ops` replaced it with the factorized assembly
+    (the GLL masses are exactly diagonal, so every eps operator is a nodal
+    VECTOR and ``pinv(kron(Ty, Tx)) = kron(pinv, pinv)``), measured
+    machine-identical (rel ~2.6e-15) and 220-1078x faster / 64-138x less
+    memory at degree 9-11.  This straightforward ``N x N`` form is retained as
+    the ORACLE that identity is checked against
+    (``tests/unit/test_v5_14_0_pmm_audit_fixes.py``,
+    ``validation/probe_scope_bor_guards/e_sliver.py``) -- do not "optimize" it,
+    and do not call it from a solver."""
     Mx, Dx = ax["M"], ax["D"]
     My, Dy = ay["M"], ay["D"]
     nx, ny = ax["n"], ay["n"]
@@ -481,17 +690,33 @@ def _projectors(ax, ay, ox, oy):
 def _axis_ops_1d(axd, eps_1d):
     """1-D nodal operators for one axis (k0-FREE): the unit derivative
     ``G0 = -i M^-1 D`` plus the multiply-by-eps / 1/eps / inverse-rule
-    operators for the per-strip profile ``eps_1d``."""
+    operators for the per-strip profile ``eps_1d``.
+
+    Every mass here is EXACTLY diagonal -- ``_build_axis`` assembles ``M`` and
+    each ``Mtile`` from ``np.diag(w * J)`` element blocks, so
+    ``count_nonzero(M - diag(diag(M))) == 0`` (verified at degree 5/7/11 and
+    1-3 elements per strip).  So ``M^-1``, ``M^-1 P`` and
+    ``solve(P_inv, M)`` are per-entry divisions, not ``O(n^3)`` LAPACK calls,
+    and the accumulations need only the diagonals.  BIT-IDENTICAL to the dense
+    spelling (``np.array_equal`` on all four operators at every setting
+    measured), because LAPACK's inverse of an exactly diagonal matrix IS
+    ``1/d`` and the dense products add only exact zeros; ~14x on the inversion
+    at n = 33 and growing as ``O(n^3)`` vs ``O(n)``.  The crossed-cell branch
+    of :func:`_scalar_projected_ops` has exploited this since v5.14; the
+    SEPARABLE branch -- the one a 1-D grating layer in a 2-D stack takes -- did
+    not."""
     M, D = axd["M"], axd["D"]
-    Minv = np.linalg.inv(M)
-    G0 = -1j * (Minv @ D)
-    P_eps = np.zeros_like(M)
-    P_inv = np.zeros_like(M)
+    md = np.diag(M)
+    minv = 1.0 / md
+    G0 = -1j * (minv[:, None] * D)
+    p_eps = np.zeros_like(md)
+    p_inv = np.zeros_like(md)
     for s, Mt in enumerate(axd["Mtile"]):
-        P_eps += eps_1d[s] * Mt
-        P_inv += (1.0 / eps_1d[s]) * Mt
-    return dict(G0=G0, Eps=Minv @ P_eps, Einv=Minv @ P_inv,
-                Epn=np.linalg.solve(P_inv, M))
+        mt = np.diag(Mt)
+        p_eps += eps_1d[s] * mt
+        p_inv += (1.0 / eps_1d[s]) * mt
+    return dict(G0=G0, Eps=np.diag(minv * p_eps), Einv=np.diag(minv * p_inv),
+                Epn=np.diag(md / p_inv))
 
 
 def _sandwich_factorized(Tx, Txp, Ty, Typ, v_nodal, NyO, NxO, Ny, Nx):
@@ -640,8 +865,16 @@ def _layer_modes_projected(GxF, GyF, EpsF, EinvF, EpnF, formulation="li",
     per-slot routable (audit P3-33): ``EpnxF`` lands on the Ex slot and
     ``EpnyF`` on the Ey slot, so a separable cell gets the inverse rule on its
     wall-NORMAL component and Laurent on the tangential one, either
-    orientation.  Callers not passing the per-slot operators (the PMM2DStack
-    path) keep the legacy assignment ``(Ex <- EpnF, Ey <- EpsF)``."""
+    orientation.  Every in-tree caller routes the pair (the single-cell core,
+    :class:`PreparedPMM2D` and :class:`~lumenairy.elements.pmm.stack2d.PMM2DStackHybrid`);
+    the ``EpnxF``/``EpnyF``-less fallback ``(Ex <- EpnF, Ey <- EpsF)`` is kept
+    only for an out-of-tree caller and is the same assignment on a
+    doubly-patterned cell, where no per-axis Fourier rule exists.
+
+    Routing one ``EpnF`` onto Ex regardless of orientation is not a tuning
+    choice: on a y-patterned cell ``EpnF`` IS the y-axis inverse-rule operator,
+    so that assignment makes BOTH slots anti-Li and one physical grating gives
+    two different answers depending on the axis it was drawn along."""
     Nf = GxF.shape[0]
     I = np.eye(Nf, dtype=_C)
     if formulation == "li":
@@ -839,7 +1072,8 @@ def _pmm2d_solve_core(period_x, period_y, x_walls, y_walls, eps_tile,
     eps_reals = [eps_sup, eps_sub] + [complex(e) for e in
                                       np.asarray(eps_tile).ravel()]
     wl = _grazing_safe_wavelength(float(wavelength), kx0, ky0, order_x,
-                                  order_y, period_x, period_y, eps_reals)
+                                  order_y, period_x, period_y, eps_reals,
+                                  fn_name=fn_name)
     k0 = 2.0 * np.pi / wl
     kxv = kx0 + order_x * (wl / period_x)
     kyv = ky0 + order_y * (wl / period_y)
@@ -960,6 +1194,7 @@ def pmm_efficiency_2d(
     truncation: str = "rectangular",
     symmetry="auto",
     stabilize: bool = False,
+    energy_tol: float = None,
 ) -> Efficiency2D:
     r"""Diffraction efficiencies of a 2-D rectangular pillar via the hybrid PMM.
 
@@ -1029,7 +1264,18 @@ def pmm_efficiency_2d(
         elements_per_strip`` so the nodal grid can represent the harmonics.
     formulation : {"li", "laurent"}, optional
         Factorization rule for the layer operator (``"li"`` = inverse rule for
-        the wall-normal field component; recommended).
+        the wall-normal field component; recommended).  Unlike
+        :func:`~lumenairy.elements.pmm.pmm_jones_2d`, ``"li"`` here IS the
+        per-slot wall-normal inverse rule (the tensor entry's ``"li"`` only
+        selects the ``E_z`` rule), and it is the better-converging choice.
+    energy_tol : float, optional
+        Override the lossless-closure tripwire tolerance (default
+        ``_PASSIVE_TOL_2D`` = 5e-2, a CATASTROPHE gate).  Pass
+        ``_ADVISORY_TOL_2D`` (3e-3, the measured clean floor) on a geometry you
+        know is clean to get a gate that can actually see a 1e-3-class
+        regression, or ``np.inf`` to silence it.  NB closure is not a
+        convergence proof on this engine -- use :func:`pmm_2d_order_drift` for
+        that.
 
     Returns
     -------
@@ -1128,7 +1374,7 @@ def pmm_efficiency_2d(
     if not stabilize:
         res = _solve_at(degree)
         _warn_lossless_energy_2d(res, (eps_p, eps_h, eps_sup, eps_sub),
-                                 "pmm_efficiency_2d")
+                                 "pmm_efficiency_2d", tol=energy_tol)
         return res
     o, R, T = _stabilize_scalar(_scan_solver(_solve_at, degree), degree,
                                 "pmm_efficiency_2d",
@@ -1179,6 +1425,7 @@ def pmm_efficiency_2d_cell(
     max_nodal_dof: int = _MAX_NODAL_DOF,
     stabilize: bool = False,
     region_layout=None,
+    energy_tol: float = None,
 ) -> Efficiency2D:
     """Diffraction efficiencies of an ARBITRARY axis-aligned piecewise-constant
     2-D cell via the hybrid PMM -- the multi-region generalization of
@@ -1196,6 +1443,11 @@ def pmm_efficiency_2d_cell(
     where the adjacent column/row differs becomes an exact spectral-element
     wall, so the regions are resolved geometrically (no Fourier staircase) --
     the input convention of :func:`rcwa_efficiency_2d`, resolved exactly.
+    It is a PIXEL grid: redundant rows/columns are MERGED, so a 12x12 array and
+    the 3x3 describing the same pillar cost the same.  The STAGGERED family's
+    identically-named ``eps_cell`` is a SEGMENT grid where every row IS an
+    element and redundancy is a cubic cost multiplier -- see
+    :func:`_cell_to_walls_tile` for the measured cliff.
     Intended for cells made of a MODEST number of axis-aligned rectangles; a
     sampled smooth profile (anti-aliased disk, graded index) turns nearly every
     pixel boundary into a wall and trips the ``max_nodal_dof`` cost guard (use
@@ -1213,7 +1465,8 @@ def pmm_efficiency_2d_cell(
     runs the 1-D PMM's per-order
     degree-scan consensus (guards the measure-zero quasi-resonances; each scan
     step re-solves at the next ODD degree -- expensive in 2-D, so the default
-    is False).
+    is False).  ``energy_tol`` overrides the lossless-closure tripwire
+    tolerance, as in :func:`pmm_efficiency_2d`.
 
     Returns
     -------
@@ -1285,7 +1538,7 @@ def pmm_efficiency_2d_cell(
     if not stabilize:
         res = _solve_at(degree)
         _warn_lossless_energy_2d(res, (eps_tile, eps_sup, eps_sub),
-                                 "pmm_efficiency_2d_cell")
+                                 "pmm_efficiency_2d_cell", tol=energy_tol)
         return res
     # degree-scan consensus on consecutive ODD degrees (the scan index d is
     # mapped 1:1 onto degree, degree+2, ...; an unaffordable higher degree
@@ -1312,9 +1565,9 @@ def pmm_efficiency_2d_cell(
 # ``GxF = Gx0F/k0 + kx0*IprojF`` and the SMALL projected eig (size ``2*Nf``,
 # ``Nf = (2 n_orders + 1)^2``) + S-matrix cascade run.  When ``degree >>
 # n_orders`` the reusable nodal/pinv work dominates -> a multi-x sweep speed-up.
-# ``prepare_pmm_2d(...).solve(wl)`` reproduces ``pmm_efficiency_2d(...)`` to
-# ~1e-13 (the only delta: ``Gx0F/k0`` reorders one division vs the single call;
-# the uniform-layer path is byte-identical).  Non-dispersive + fixed (theta,phi).
+# ``prepare_pmm_2d(...).solve(wl)`` reproduces ``pmm_efficiency_2d(...)``
+# EXACTLY at matching settings -- see :class:`PreparedPMM2D` for the
+# measurement.  Non-dispersive + fixed (theta,phi).
 # =========================================================================== #
 class PreparedPMM2D:
     """A wavelength-invariant hybrid 2-D PMM assembly, reusable across a sweep.
@@ -1325,13 +1578,28 @@ class PreparedPMM2D:
     pseudo-inverse).  :meth:`solve` runs only the per-wavelength operator rescale,
     the small projected eig, and the S-matrix cascade.  NON-DISPERSIVE indices and
     a FIXED ``(theta, phi)`` are assumed.
+
+    EQUIVALENCE TO THE DIRECT ENTRY.  ``prepare_pmm_2d(..., symmetry=s,
+    truncation=t).solve(wl)`` and ``pmm_efficiency_2d(..., wl, symmetry=s,
+    truncation=t)`` agree to ``max|dR| = max|dT| = 0.000e+00`` -- BIT-IDENTICAL,
+    measured on a pillar at degree 9 / ``n_orders = 4`` for ``symmetry`` False
+    and ``'auto'`` -- because both run the same ``_layer_modes_projected`` /
+    ``_symmetric_solve_2d`` on the same operators, and ``Gx0F/k0`` is the same
+    division either way.  The ~1e-13 this docstring used to claim for a
+    "reordered division" was really the MISSING EVEN-PARITY FOLD: this class
+    took no ``symmetry`` argument at all and always ran the full ``2Nf`` solve,
+    so it matched ``symmetry=False`` exactly (0.0) and the entry's DEFAULT
+    ``symmetry='auto'`` only to 6.3e-14 / 1.1e-13.  ``symmetry`` and
+    ``truncation`` are now threaded, and :meth:`solve` runs the same
+    ``_warn_lossless_energy_2d`` tripwire the direct entries run.
     """
 
     __slots__ = ("period_x", "period_y", "depth", "polarization", "formulation",
                  "eps_h", "eps_sup", "eps_sub", "uniform_layer",
                  "order_x", "order_y", "Nf", "kx0", "ky0",
                  "Gx0F", "Gy0F", "EpsF", "EinvF", "EpnF", "EpnxF", "EpnyF",
-                 "IpxF", "IpyF", "cinc", "einc_sq", "kz_inc", "eps_reals")
+                 "IpxF", "IpyF", "cinc", "einc_sq", "kz_inc", "eps_reals",
+                 "symmetry", "truncation", "energy_tol", "fn_name")
 
     def __init__(self, **kw):
         for k, v in kw.items():
@@ -1339,11 +1607,14 @@ class PreparedPMM2D:
 
     def solve(self, wavelength) -> Efficiency2D:
         """Diffraction efficiencies at ``wavelength`` reusing the prepared
-        geometry (equivalent to ``pmm_efficiency_2d(...)`` to ~1e-13)."""
+        geometry -- BIT-IDENTICAL to ``pmm_efficiency_2d(...)`` /
+        ``pmm_efficiency_2d_cell(...)`` at the same ``symmetry`` /
+        ``truncation`` (see the class docstring), tripwire included."""
         order_x, order_y, Nf = self.order_x, self.order_y, self.Nf
         wl = _grazing_safe_wavelength(
             float(wavelength), self.kx0, self.ky0, order_x, order_y,
-            self.period_x, self.period_y, self.eps_reals)
+            self.period_x, self.period_y, self.eps_reals,
+            fn_name=f"{self.fn_name}(...).solve")
         k0 = 2.0 * np.pi / wl
         kxv = self.kx0 + order_x * (wl / self.period_x)
         kyv = self.ky0 + order_y * (wl / self.period_y)
@@ -1351,24 +1622,40 @@ class PreparedPMM2D:
         Wsup, Vsup, _ls, kz_ref = _homogeneous_modes(kxv, kyv, self.eps_sup)
         Wsub, Vsub, _lb, kz_trn = _homogeneous_modes(kxv, kyv, self.eps_sub)
 
+        cinc = self.cinc
+        rt = None
         if self.uniform_layer:
             Wl, Vl, lam_l, _ = _homogeneous_modes(kxv, kyv, self.eps_h)
         else:
             GxF = self.Gx0F / k0 + self.kx0 * self.IpxF
             GyF = self.Gy0F / k0 + self.ky0 * self.IpyF
-            Wl, Vl, lam_l = _layer_modes_projected(
-                GxF, GyF, self.EpsF, self.EinvF, self.EpnF,
-                formulation=self.formulation, EpnxF=self.EpnxF,
-                EpnyF=self.EpnyF)
+            # Even-parity fold, on exactly the gate ``_pmm2d_solve_core`` uses
+            # (audit F2): centro-symmetric cell + normal incidence.  Returns
+            # None when the precondition fails -> the full solve below.  Its
+            # absence here was the whole of this class's "~1e-13 delta".
+            if (_symmetry_on(self.symmetry)
+                    and float(np.hypot(self.kx0, self.ky0)) < 1e-12):
+                _li = self.formulation == "li"
+                rt = _symmetric_solve_2d(
+                    kxv, kyv, order_x, order_y, GxF, GyF, self.EpsF,
+                    self.EinvF, self.EpnxF if _li else self.EpsF,
+                    self.EpnyF if _li else self.EpsF, self.formulation,
+                    Vsup, Vsub, k0, self.depth, cinc)
+            if rt is None:
+                Wl, Vl, lam_l = _layer_modes_projected(
+                    GxF, GyF, self.EpsF, self.EinvF, self.EpnF,
+                    formulation=self.formulation, EpnxF=self.EpnxF,
+                    EpnyF=self.EpnyF)
 
-        S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
-        S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * self.depth))
-        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
-        S11, _S12, S21, _S22 = S
-
-        cinc = self.cinc
-        r = S11 @ cinc
-        t = S21 @ cinc
+        if rt is not None:
+            r, t = rt
+        else:
+            S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
+            S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * self.depth))
+            S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
+            S11, _S12, S21, _S22 = S
+            r = S11 @ cinc
+            t = S21 @ cinc
         rx, ry = r[:Nf], r[Nf:]
         tx, ty = t[:Nf], t[Nf:]
         kz_ref_f = _kz_forward2(np.conj(self.eps_sup), kxv, kyv)
@@ -1384,7 +1671,18 @@ class PreparedPMM2D:
         R = np.where(np.real(kz_ref_f) > 0, np.real(R), 0.0)
         T = np.where(np.real(kz_trn_f) > 0, np.real(T), 0.0)
         orders2d = np.stack([order_x, order_y], axis=1)
-        return Efficiency2D(orders2d, R, T, 2 * Nf)
+        res = Efficiency2D(orders2d, R, T, 2 * Nf)
+        # The SAME tripwire the direct entries run on their stabilize=False
+        # fast path.  Its absence here was measured (degree 7, n_orders 2, a
+        # provably lossless eps-12.25 pillar): both paths returned
+        # sum(R+T) = 1.054125 -- identical to the last digit -- and only the
+        # direct one warned, so a whole *_vs_wavelength sweep could sit at a
+        # 5.4 % energy excess with no signal.  ``eps_reals`` already holds
+        # [eps_sup, eps_sub] + every tile value (the internal conj convention;
+        # the losslessness test is conjugation-invariant).
+        _warn_lossless_energy_2d(res, self.eps_reals, self.fn_name,
+                                 tol=self.energy_tol)
+        return res
 
 
 def prepare_pmm_2d(
@@ -1406,12 +1704,22 @@ def prepare_pmm_2d(
     phi: float = 0.0,
     n_orders: int = 11,
     formulation: str = "li",
+    truncation: str = "rectangular",
+    symmetry="auto",
+    energy_tol: float = None,
 ) -> PreparedPMM2D:
     """Assemble the wavelength-INDEPENDENT part of a hybrid 2-D PMM solve once,
     for a wavelength sweep that reuses it (see :class:`PreparedPMM2D`).
 
     Parameters are the geometry/angle subset of :func:`pmm_efficiency_2d` (no
     ``wavelength``).  NON-DISPERSIVE indices and a FIXED ``(theta, phi)`` assumed.
+
+    ``truncation``, ``symmetry`` and ``energy_tol`` carry the same meaning and
+    the same DEFAULTS as on :func:`pmm_efficiency_2d`, so a prepared sweep and
+    the direct entry solve the same problem: ``truncation`` is applied to the
+    order set at prepare time (it is wavelength-free), ``symmetry`` selects the
+    even-parity fold inside every :meth:`PreparedPMM2D.solve`, and every solve
+    runs the lossless-closure tripwire.
     """
     n_nodes_axis = 3 * degree * elements_per_strip
     if n_nodes_axis % 2 == 0:
@@ -1441,22 +1749,30 @@ def prepare_pmm_2d(
     return _prepare_pmm2d_core(
         period_x, period_y, [x0, x1], [y0, y1], eps_tile, eps_sup, eps_sub,
         depth, degree, elements_per_strip, elements_per_strip, grade,
-        polarization, theta, phi, n_orders, formulation)
+        polarization, theta, phi, n_orders, formulation,
+        truncation=truncation, symmetry=symmetry, energy_tol=energy_tol,
+        fn_name="prepare_pmm_2d")
 
 
 def _prepare_pmm2d_core(period_x, period_y, x_walls, y_walls, eps_tile,
                         eps_sup, eps_sub, depth, degree, el_x, el_y, grade,
-                        polarization, theta, phi, n_orders, formulation):
+                        polarization, theta, phi, n_orders, formulation,
+                        truncation="rectangular", symmetry=False,
+                        energy_tol=None, fn_name="prepare_pmm_2d"):
     """Shared geometry-only assembly behind :func:`prepare_pmm_2d` /
-    :func:`prepare_pmm_2d_cell` (eps already in the internal convention)."""
+    :func:`prepare_pmm_2d_cell` (eps already in the internal convention).
+
+    ``truncation`` is applied HERE (the order set and the projected operators
+    are both wavelength-free), so every ``solve`` in the sweep runs the
+    circular subspace the direct entry would have used; ``symmetry`` is stored
+    for :meth:`PreparedPMM2D.solve`'s even-parity fold."""
     ax = _build_axis(period_x, x_walls, degree, el_x, grade)
     ay = _build_axis(period_y, y_walls, degree, el_y, grade)
 
     nre = float(np.real(np.sqrt(eps_sup)))
     kx0 = nre * np.sin(theta) * np.cos(phi)
     ky0 = nre * np.sin(theta) * np.sin(phi)
-    _require_propagating_incidence("prepare_pmm_2d", eps_sup,
-                                   kx0 ** 2 + ky0 ** 2)
+    _require_propagating_incidence(fn_name, eps_sup, kx0 ** 2 + ky0 ** 2)
     eps_reals = [eps_sup, eps_sub] + [complex(e) for e in
                                       np.asarray(eps_tile).ravel()]
 
@@ -1464,6 +1780,19 @@ def _prepare_pmm2d_core(period_x, period_y, x_walls, y_walls, eps_tile,
     oy = np.arange(-n_orders, n_orders + 1)
     order_x = np.tile(ox, len(oy))
     order_y = np.repeat(oy, len(ox))
+    # F8: Lalanne-1997 circular truncation, verbatim _pmm2d_solve_core's mask.
+    keep = None
+    if truncation == "circular":
+        gx_o = order_x / float(period_x)
+        gy_o = order_y / float(period_y)
+        r2 = min(n_orders / float(period_x),
+                 n_orders / float(period_y)) ** 2
+        keep = (gx_o ** 2 + gy_o ** 2) <= r2 * (1.0 + 1e-9)
+        order_x, order_y = order_x[keep], order_y[keep]
+    elif truncation != "rectangular":
+        raise ValueError(
+            f"{fn_name}: truncation must be 'rectangular' or 'circular', "
+            f"got {truncation!r}.")
     Nf = len(order_x)
 
     eps0 = eps_tile.flat[0]
@@ -1475,6 +1804,11 @@ def _prepare_pmm2d_core(period_x, period_y, x_walls, y_walls, eps_tile,
         # handling of wall-less axes (see _scalar_projected_ops).
         lops = _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x,
                                      period_y)
+        if keep is not None:                    # F8: restrict to circular orders
+            ix = np.ix_(keep, keep)
+            lops = {kk: (v[ix] if (hasattr(v, "shape") and np.ndim(v) == 2
+                                   and v.shape[0] == len(keep)) else v)
+                    for kk, v in lops.items()}
         Gx0F, Gy0F = lops["Gx0F"], lops["Gy0F"]
         EpsF, EinvF, EpnF = lops["EpsF"], lops["EinvF"], lops["EpnF"]
         EpnxF, EpnyF = lops["EpnxF"], lops["EpnyF"]
@@ -1505,7 +1839,9 @@ def _prepare_pmm2d_core(period_x, period_y, x_walls, y_walls, eps_tile,
         uniform_layer=uniform_layer, order_x=order_x, order_y=order_y, Nf=Nf,
         kx0=kx0, ky0=ky0, Gx0F=Gx0F, Gy0F=Gy0F, EpsF=EpsF, EinvF=EinvF,
         EpnF=EpnF, EpnxF=EpnxF, EpnyF=EpnyF, IpxF=IpxF, IpyF=IpyF, cinc=cinc,
-        einc_sq=einc_sq, kz_inc=kz_inc, eps_reals=eps_reals)
+        einc_sq=einc_sq, kz_inc=kz_inc, eps_reals=eps_reals,
+        symmetry=symmetry, truncation=truncation, energy_tol=energy_tol,
+        fn_name=fn_name)
 
 
 def prepare_pmm_2d_cell(
@@ -1525,11 +1861,15 @@ def prepare_pmm_2d_cell(
     n_orders: int = 11,
     formulation: str = "li",
     max_nodal_dof: int = _MAX_NODAL_DOF,
+    truncation: str = "rectangular",
+    symmetry="auto",
+    energy_tol: float = None,
 ) -> PreparedPMM2D:
     """Assemble the wavelength-INDEPENDENT part of a multi-region cell solve
     once (the :func:`pmm_efficiency_2d_cell` companion of
     :func:`prepare_pmm_2d`).  NON-DISPERSIVE indices and a FIXED
-    ``(theta, phi)`` assumed."""
+    ``(theta, phi)`` assumed.  ``truncation`` / ``symmetry`` / ``energy_tol``
+    are as in :func:`prepare_pmm_2d`."""
     if polarization not in ("te", "tm"):
         raise ValueError("polarization must be 'te' or 'tm'")
     x_walls, y_walls, tile = _cell_to_walls_tile(
@@ -1547,7 +1887,8 @@ def prepare_pmm_2d_cell(
     return _prepare_pmm2d_core(
         period_x, period_y, x_walls, y_walls, eps_tile, eps_sup, eps_sub,
         depth, degree, el_x, el_y, grade, polarization, theta, phi, n_orders,
-        formulation)
+        formulation, truncation=truncation, symmetry=symmetry,
+        energy_tol=energy_tol, fn_name="prepare_pmm_2d_cell")
 
 
 def pmm_efficiency_2d_vs_wavelength(
@@ -1570,6 +1911,9 @@ def pmm_efficiency_2d_vs_wavelength(
     phi: float = 0.0,
     n_orders: int = 11,
     formulation: str = "li",
+    truncation: str = "rectangular",
+    symmetry="auto",
+    energy_tol: float = None,
 ):
     """Hybrid 2-D PMM diffraction efficiencies across a wavelength sweep, reusing
     the geometry-only nodal/pseudo-inverse assembly (the spectral companion to
@@ -1600,7 +1944,8 @@ def pmm_efficiency_2d_vs_wavelength(
         n_substrate, n_superstrate, depth, degree=degree,
         elements_per_strip=elements_per_strip, grade=grade,
         polarization=polarization, theta=theta, phi=phi, n_orders=n_orders,
-        formulation=formulation)
+        formulation=formulation, truncation=truncation, symmetry=symmetry,
+        energy_tol=energy_tol)
     Nf = prepared.Nf
     R = np.empty((wl.size, Nf), dtype=float)
     T = np.empty((wl.size, Nf), dtype=float)
@@ -1631,10 +1976,14 @@ def pmm_efficiency_2d_cell_vs_wavelength(
     n_orders: int = 11,
     formulation: str = "li",
     max_nodal_dof: int = _MAX_NODAL_DOF,
+    truncation: str = "rectangular",
+    symmetry="auto",
+    energy_tol: float = None,
 ):
     """Multi-region cell efficiencies across a wavelength sweep, reusing the
     geometry-only assembly (the :func:`pmm_efficiency_2d_cell` companion of
-    :func:`pmm_efficiency_2d_vs_wavelength`; same returns)."""
+    :func:`pmm_efficiency_2d_vs_wavelength`; same returns).  ``truncation`` /
+    ``symmetry`` / ``energy_tol`` are as in :func:`pmm_efficiency_2d_cell`."""
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0:
         raise ValueError("pmm_efficiency_2d_cell_vs_wavelength: wavelengths "
@@ -1646,7 +1995,8 @@ def pmm_efficiency_2d_cell_vs_wavelength(
         period_x, period_y, eps_cell, n_substrate, n_superstrate, depth,
         degree=degree, elements_per_strip=elements_per_strip, grade=grade,
         polarization=polarization, theta=theta, phi=phi, n_orders=n_orders,
-        formulation=formulation, max_nodal_dof=max_nodal_dof)
+        formulation=formulation, max_nodal_dof=max_nodal_dof,
+        truncation=truncation, symmetry=symmetry, energy_tol=energy_tol)
     Nf = prepared.Nf
     R = np.empty((wl.size, Nf), dtype=float)
     T = np.empty((wl.size, Nf), dtype=float)

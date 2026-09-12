@@ -411,6 +411,177 @@ def _validate_stag_cell(fn_name, eps_cell):
     return cell
 
 
+#: Default cap on the staggered generalized pencil dimension
+#: ``2 * (Nx*(M-1)) * (Ny*(M-1))``.  Derivation: the region solve is a DENSE
+#: complex128 QZ on that pencil, and the measured resident set on this class of
+#: box is ~10-12x ``dof^2 * 16`` bytes (3.9 GB at dof = 4608, 8.4 GB at
+#: dof = 7200), with QZ time growing as ``dof^3`` (the documented M = 10 /
+#: 3-segment solve is dof = 1458 and takes 712-911 s).  12 000 projects to
+#: ~28 GB and hours, i.e. past any interactive use, so it refuses there and
+#: names the remedy; every legitimate grid in the shipped suite is far below it
+#: (the largest is 8 segments/axis at M = 8 -> dof = 6272).  It is a KEYWORD on
+#: every entry, so a deliberate overnight solve raises it explicitly.
+_MAX_STAG_PENCIL_DOF = 12_000
+
+
+def _stag_merged_segments(*cells):
+    """``(nx, ny)`` DISTINCT strip counts of a staggered SEGMENT grid -- the
+    merge rule of :func:`~lumenairy.elements.pmm.twod._cell_to_walls_tile`
+    (a boundary counts only where the adjacent row/column actually differs)
+    applied to the same array.
+
+    Several arrays (``eps_cell`` and ``mu_cell``) merge JOINTLY: a boundary
+    survives where ANY of them changes.  Trailing dimensions (the ``(3, 3)`` of
+    a tensor cell) ride along untouched."""
+    arrs = [np.asarray(c) for c in cells if c is not None]
+    if not arrs:
+        return (0, 0)
+
+    def _n(axis):
+        return len(_stag_wall_indices(arrs, axis)) + 1
+    return _n(0), _n(1)
+
+
+def _stag_wall_indices(arrs, axis):
+    """Interior boundary INDICES on ``axis`` where the adjacent row/column of
+    any of ``arrs`` differs."""
+    rolled = [np.moveaxis(a, axis, 0) for a in arrs]
+    n = rolled[0].shape[0]
+    return [i for i in range(1, n)
+            if any(not np.array_equal(r[i], r[i - 1]) for r in rolled)]
+
+
+def _stag_minimal_uniform_segments(*cells):
+    """The SMALLEST SQUARE UNIFORM segment lattice that expresses this cell
+    EXACTLY -- the number the cost warning is allowed to suggest.
+
+    The distinct-strip count alone is NOT that number, and suggesting it would
+    be wrong advice.  On this family's default path the walls are pinned to the
+    uniform lattice ``i * period / N``, so a cell may have 3 distinct strips and
+    still need 4 segments: the audit's 12x12 half-fill pillar has its walls at
+    indices 3 and 9, i.e. at 1/4 and 3/4, which a 3-segment lattice (walls at
+    1/3, 2/3) does NOT contain -- re-expressing it there would silently change
+    the DUTY CYCLE, the very failure mode the sibling ``period_x`` finding is
+    about.  The reducible factor is therefore ``g = gcd(N, every wall index on
+    EITHER axis)`` (one ``g`` for both axes, because the basis requires
+    ``Nx == Ny``), and the answer is ``N / g``: every wall index is a multiple
+    of ``g``, so the reduced lattice contains all of them exactly.
+
+    Returns ``N`` itself when nothing is reducible."""
+    from math import gcd
+    arrs = [np.asarray(c) for c in cells if c is not None]
+    if not arrs:
+        return 0
+    N = int(arrs[0].shape[0])
+    g = N
+    for axis in (0, 1):
+        if int(arrs[0].shape[axis]) != N:      # non-square: nothing to claim
+            return N
+        for w in _stag_wall_indices(arrs, axis):
+            g = gcd(g, int(w))
+    return N // max(g, 1)
+
+
+def _validate_stag_cost(fn_name, M, *cells, max_pencil_dof=None,
+                        walls_given=False):
+    """Cost guard for the staggered family's SEGMENT grid -- the sibling of
+    :func:`~lumenairy.elements.pmm.twod._validate_cell_cost`, which the hybrid
+    family has had all along and this one had not.
+
+    WHY IT EXISTS.  ``eps_cell`` means two INCOMPATIBLE things across the two
+    2-D PMM families, and the mistake is an unguarded ~1000x cost cliff:
+
+    * the HYBRID (:func:`~lumenairy.elements.pmm.pmm_efficiency_2d_cell`,
+      :func:`~lumenairy.elements.pmm.pmm_jones_2d`,
+      :meth:`~lumenairy.elements.pmm.PMM2DStackHybrid.add_layer`) takes a
+      PIXEL grid: redundant rows/columns are MERGED away by
+      ``_cell_to_walls_tile``, so a 12x12 array and the 3x3 that describes the
+      same half-fill pillar cost the SAME;
+    * this family takes a SEGMENT grid: every row and column IS an element,
+      the per-component DOF is ``(Nx*(M-1)) * (Ny*(M-1))`` and the generalized
+      pencil is twice that -- so the same 12x12 array builds a 7200x7200 QZ
+      where the geometry needs 450x450.
+
+    MEASURED on that exact array (a centred half-fill pillar, eps 12.25 in 1.0,
+    12 segments/axis where 3 distinct strips suffice):
+
+    ==========================================================  ========  =======
+    call                                                        CPU       RSS
+    ==========================================================  ========  =======
+    ``pmm_efficiency_2d_staggered(12x12, degree=6)``             498 s     8.4 GB
+    ``PMM2DStackPure(n_modes=5).add_layer(eps_cell=12x12)``     1096 s     3.9 GB
+    ``pmm_efficiency_2d_cell(same 12x12, degree=11, n=5)``       0.22 s    <1 GB
+    ==========================================================  ========  =======
+
+    and NONE of the staggered calls raised, warned or printed anything.
+
+    So: WARN whenever the grid is REDUNDANT (it is a pure cost multiplier the
+    caller almost certainly did not intend), naming the merged count and the
+    projected saving -- a warning rather than a refusal because splitting a
+    uniform region into more segments IS a legal h-refinement, just an
+    expensive one -- and RAISE on the absolute ``max_pencil_dof`` budget, which
+    no redundancy check can replace (a legitimate 8-segment cell at M = 8 is a
+    BIGGER pencil than the pathological 12-segment one at M = 5).
+    """
+    cap = _MAX_STAG_PENCIL_DOF if max_pencil_dof is None else int(max_pencil_dof)
+    arrs = [np.asarray(c) for c in cells if c is not None]
+    if not arrs:
+        return
+    Nx, Ny = arrs[0].shape[0], arrs[0].shape[1]
+    q = int(Nx) * (int(M) - 1)
+    qy = int(Ny) * (int(M) - 1)
+    dof = 2 * q * qy
+    # The SMALLEST grid this engine can actually be handed: the smallest SQUARE
+    # UNIFORM lattice that still contains every wall (see
+    # :func:`_stag_minimal_uniform_segments` -- the distinct-strip count alone
+    # would be WRONG advice, because a 3-strip cell whose walls sit at 1/4 and
+    # 3/4 needs a 4-segment lattice).
+    nx_m, ny_m = _stag_merged_segments(*arrs)
+    n_min = _stag_minimal_uniform_segments(*arrs)
+    dof_m = 2 * (n_min * (int(M) - 1)) ** 2
+    ratio = dof / max(dof_m, 1)
+    redundant = 0 < n_min < min(Nx, Ny)
+    merged_note = (
+        f"your grid has {Nx}x{Ny} segments and only {nx_m}x{ny_m} DISTINCT "
+        f"strips (adjacent identical rows/columns), so the SAME geometry -- "
+        f"the same walls, to the segment -- is expressible on the uniform "
+        f"{n_min}x{n_min} lattice at pencil {dof_m}, "
+        f"{ratio ** 3:.3g}x less QZ time and {ratio ** 2:.3g}x less memory"
+        if redundant else
+        f"your {Nx}x{Ny} grid is already the smallest uniform lattice that "
+        f"contains its walls (merged strips {nx_m}x{ny_m})")
+    if dof > cap:
+        raise ValueError(
+            f"{fn_name}: the SEGMENT grid needs a {dof}x{dof} dense "
+            f"generalized pencil (2 * Nx*(M-1) * Ny*(M-1) with Nx={Nx}, "
+            f"Ny={Ny}, M={M}), above max_pencil_dof={cap}; projected ~"
+            f"{12 * dof * dof * 16 / 2 ** 30:.1f} GB and O(dof^3) QZ time "
+            f"(measured 8.4 GB / 498 s CPU at dof = 7200).  NB eps_cell here "
+            f"is a SEGMENT grid -- every row and column is an ELEMENT -- not "
+            f"the PIXEL grid the hybrid pmm_efficiency_2d_cell / pmm_jones_2d "
+            f"/ PMM2DStackHybrid take, where redundant rows are merged away "
+            f"for free.  {merged_note}.  Lower the segment count or M, use "
+            f"the hybrid family, or raise max_pencil_dof explicitly.")
+    # A cell that reduces to 1x1 is UNIFORM: splitting a uniform region into
+    # equal segments is how this family's square-grid contract is satisfied for
+    # a uniform layer, and h-refining a uniform region is a real accuracy lever
+    # here (``PMM2DStackPure.add_layer(grid=)``), so it is a deliberate choice
+    # rather than the PIXEL-grid mistake this warning is about.  The absolute
+    # ``max_pencil_dof`` cap above still guards the extreme.
+    if redundant and n_min > 1 and not walls_given:
+        import warnings
+        warnings.warn(
+            f"{fn_name}: eps_cell is a SEGMENT grid (every row and column is "
+            f"an ELEMENT), not the PIXEL grid the hybrid family takes -- and "
+            f"{merged_note}.  This builds a {dof}x{dof} dense generalized "
+            f"pencil instead of {dof_m}x{dof_m}; the cost is CUBIC in the "
+            f"segment count (measured 498 s CPU / 8.4 GB for a 12-segment "
+            f"half-fill pillar that needs 4, against 0.22 s for the "
+            f"same array through pmm_efficiency_2d_cell).  Pass the reduced "
+            f"grid, or pass max_pencil_dof=... to acknowledge a deliberate "
+            f"h-refinement.", stacklevel=3)
+
+
 def _wood_eps_reals(*eps_arrays):
     """The DISTINCT real permittivities a Rayleigh cut-off can sit on, for the
     Wood-anomaly nudge list of :func:`~lumenairy.elements.rcwa._core._grazing_safe_wavelength`.
@@ -3159,6 +3330,7 @@ def pmm_efficiency_2d_staggered(
     theta: float = 0.0,
     phi: float = 0.0,
     slant=None,
+    max_pencil_dof: int = _MAX_STAG_PENCIL_DOF,
 ) -> Efficiency2D:
     """Rigorous diffraction efficiencies of a 2-D crossed grating of axis-aligned
     rectangular pillars by the canonical no-floor Polynomial Modal Method (Granet
@@ -3183,6 +3355,22 @@ def pmm_efficiency_2d_staggered(
         tile a uniform axis into equal segments, or use
         :func:`pmm_efficiency_2d_cell`, which handles non-square cells.
         PUBLIC convention ``Im(eps) > 0`` for loss.
+
+        .. warning:: **SEGMENT grid, not a PIXEL grid.**  The parameter name is
+           shared with the HYBRID family
+           (:func:`~lumenairy.elements.pmm.pmm_efficiency_2d_cell`,
+           :func:`~lumenairy.elements.pmm.pmm_jones_2d`,
+           :meth:`~lumenairy.elements.pmm.PMM2DStackHybrid.add_layer`) and the
+           two mean DIFFERENT things.  There ``eps_cell`` is a PIXEL grid whose
+           redundant rows/columns are MERGED away, so a 12x12 array and the
+           3x3 describing the same pillar cost the same.  HERE every row and
+           column IS an element: the per-component DOF is
+           ``(Nx*(M-1)) * (Ny*(M-1))`` and the generalized pencil is twice
+           that, so a redundant grid is a CUBIC cost multiplier.  Measured on a
+           12x12 half-fill pillar that needs 3 segments/axis: **498 s CPU /
+           8.4 GB** here against **0.22 s / < 1 GB** for the same array through
+           ``pmm_efficiency_2d_cell``.  A redundant grid now WARNS with the
+           merged count; ``max_pencil_dof`` refuses an unaffordable one.
     n_substrate, n_superstrate : complex
         Transmission / incidence half-space indices (``n = n + i kappa``).
     depth : float
@@ -3208,6 +3396,11 @@ def pmm_efficiency_2d_staggered(
         Incident polarization.  Default ``'te'``.
     theta, phi : float, optional
         Incidence polar / azimuthal angles (radians).  Default normal incidence.
+    max_pencil_dof : int, optional
+        Cap on the dense generalized pencil dimension
+        ``2 * Nx*(M-1) * Ny*(M-1)`` (default 12 000, ~28 GB projected).  The
+        SEGMENT-grid sibling of the hybrid family's ``max_nodal_dof``; raise it
+        for a deliberate overnight solve.
     slant : (t_x, t_y) or float, optional
         Accepted only as ``None`` / ``0`` (vertical).  A nonzero slant RAISES:
         a sheared scalar cell is an OUT-OF-PLANE tensor cell in the frame
@@ -3300,6 +3493,9 @@ def pmm_efficiency_2d_staggered(
     polarization = pol
     Nx, Ny = eps_cell.shape
     M = int(degree)
+    # SEGMENT-grid cost guard (the hybrid family's _validate_cell_cost sibling)
+    _validate_stag_cost("pmm_efficiency_2d_staggered", M, eps_cell,
+                        max_pencil_dof=max_pencil_dof)
     eps_sup = _C(n_superstrate) ** 2
     eps_sub = _C(n_substrate) ** 2
     # Wood-anomaly guard (v5.14 robustness audit P1): the staggered solver's
@@ -3341,7 +3537,8 @@ def pmm_efficiency_2d_staggered(
     # wavelength window of ~1.2e-10 around the cut-off.
     wl = _grazing_safe_wavelength(float(wavelength), _kx0n, _ky0n, _mx, _my,
                                   period_x, period_y,
-                                  _wood_eps_reals(eps_sup, eps_sub, eps_cell))
+                                  _wood_eps_reals(eps_sup, eps_sub, eps_cell),
+                                  fn_name="pmm_efficiency_2d_staggered")
     _kt2 = ((_kx0n + _mx * (wl / period_x)) ** 2
             + (_ky0n + _my * (wl / period_y)) ** 2)
     _gap = min(float(np.min(np.abs(float(np.real(e)) - _kt2)))
@@ -3467,6 +3664,7 @@ def pmm_jones_2d_staggered(
     mu_substrate=None,
     symmetry="auto",
     slant=None,
+    max_pencil_dof: int = _MAX_STAG_PENCIL_DOF,
 ):
     """Rigorous 2-D crossed grating with a FULL ``(3, 3)`` ANISOTROPIC cell --
     in-plane OR out-of-plane -- by the canonical NO-FLOOR staggered PMM: the
@@ -3496,6 +3694,11 @@ def pmm_jones_2d_staggered(
         (both eliminations divide by it).  The grid MUST be SQUARE
         (``Nx == Ny``) and the walls are the segment boundaries (exact ``eps``
         per element, Eq. 26).
+
+        .. warning:: **SEGMENT grid, not the hybrid's PIXEL grid** -- every row
+           and column is an ELEMENT, so a redundant grid is a CUBIC cost
+           multiplier rather than free.  See the same warning on
+           :func:`pmm_efficiency_2d_staggered` for the measured numbers.
     n_substrate, n_superstrate : complex
         Half-space refractive indices.  The half-spaces are ISOTROPIC and
         NONMAGNETIC (the Rayleigh match is scalar and the flux normalisation
@@ -3527,6 +3730,11 @@ def pmm_jones_2d_staggered(
         floor) as long as it covers the propagating orders.  Default 7.
     theta, phi : float, optional
         Conical incidence polar / azimuth angles (radians).
+    max_pencil_dof : int, optional
+        Cap on the dense generalized pencil dimension
+        ``2 * Nx*(M-1) * Ny*(M-1)`` (default 12 000); forwarded to
+        :meth:`~lumenairy.elements.pmm.PMM2DStackPure.add_layer`, which is
+        where the guard runs and therefore what its message names.
     symmetry : {'auto', True, False}, optional
         Opt into the PARITY-sign block reduction of the OUT-OF-PLANE region
         solve (:func:`_stag_block_eig`): one ``2 q^2`` eig instead of the
@@ -3619,9 +3827,13 @@ def pmm_jones_2d_staggered(
     stack = PMM2DStackPure(period_x, period_y, n_superstrate=n_superstrate,
                            n_substrate=n_substrate, n_modes=M,
                            n_orders=int(n_orders), symmetry=symmetry)
+    # The SEGMENT-grid cost guard runs inside ``add_layer`` (one implementation,
+    # as for the physics), so its message names that method.
     if mu is None:
-        stack.add_layer(float(depth), eps_cell=cell, slant=slant)
+        stack.add_layer(float(depth), eps_cell=cell, slant=slant,
+                        max_pencil_dof=max_pencil_dof)
     else:
-        stack.add_layer(float(depth), eps_cell=cell, mu_cell=mu, slant=slant)
+        stack.add_layer(float(depth), eps_cell=cell, mu_cell=mu, slant=slant,
+                        max_pencil_dof=max_pencil_dof)
     stack.set_source(float(wavelength), theta=float(theta), phi=float(phi))
     return stack.solve(jones=True)

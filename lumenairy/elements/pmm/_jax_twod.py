@@ -20,9 +20,11 @@ The key structural facts that make this twin cheap (Phase-7 pressure test):
 the GLL mass matrices are DIAGONAL, so every eps operator reduces to a nodal
 VECTOR that is LINEAR in the region permittivities (``eps_nodal = eps_h + (
 eps_p - eps_h) * w`` with ``w`` the constant pillar partition-of-unity
-weight), and the Fourier projectors ``Tp``/``Tpinv`` + the unit derivative
-operators are geometry-only CONSTANTS precomputed in NumPy and frozen into the
-trace.  Only the small projected eig (``2*Nf``, via the shared custom-VJP
+weight), and the PER-AXIS Fourier projectors ``Tx``/``Txp``/``Ty``/``Typ`` +
+the unit derivative operators are geometry-only CONSTANTS precomputed in NumPy
+and frozen into the trace -- never the dense ``kron(Ty, Tx)`` pair, which the
+NumPy F5 audit deleted and which this twin now avoids the same way, by
+contracting the two axes separately (:func:`_proj_sandwich_jnp`).  Only the small projected eig (``2*Nf``, via the shared custom-VJP
 ``rcwa._jax_eig_stable``) and the S-matrix cascade are traced.
 
 Caveats (mirroring the 1-D twin): ``stabilize`` is rejected (host-side degree
@@ -47,7 +49,6 @@ from collections import OrderedDict
 
 import numpy as np
 
-from ...backend import is_jax_array  # noqa: F401  (re-exported for the dispatch)
 from ._core import _freeze_cached
 
 _C = np.complex128
@@ -134,15 +135,55 @@ def _host_incidence_guard(fn_name, st, period_x, period_y, wavelength, theta,
         kx0_c ** 2 + ky0_c ** 2)
     return _grazing_safe_wavelength(wl_c, kx0_c, ky0_c, st["order_x"],
                                     st["order_y"], period_x, period_y,
-                                    eps_reals)
+                                    eps_reals, fn_name=fn_name)
+
+
+def _axis_projector_pair(ax, ay, ox, oy):
+    """The four PER-AXIS projectors ``(Tx, Txp, Ty, Typ)`` the factorized
+    assembly runs on -- never the dense ``kron(Ty, Tx)`` pair.
+
+    The dense pair is ``(Nf, N)`` plus an ``O(N Nf^2)`` pinv of it: at the
+    documented ceiling ``_MAX_NODAL_DOF = 150_000`` with ``n_orders = 11``
+    (``Nf = 529``) that is ~1.4 GB of projector alone, which is exactly what
+    ``twod._sandwich_factorized`` (measured 220-1078x faster / 64-138x less
+    memory than the dense path on NumPy) exists to avoid.  Every sandwich these
+    twins need is separable, so the per-axis pieces are all they ever require.
+    """
+    from .twod import _axis_projection
+    Tx = _axis_projection(ax, ox)
+    Ty = _axis_projection(ay, oy)
+    return Tx, np.linalg.pinv(Tx), Ty, np.linalg.pinv(Ty)
+
+
+def _proj_sandwich_jnp(jnp, st, v_nodal):
+    """``kron(Ty, Tx) @ diag(v_nodal) @ kron(Typ, Txp)`` as the TWO per-axis
+    einsum contractions of :func:`twod._sandwich_factorized`, traced with
+    ``jnp``.  ``v_nodal`` stays linear in the traced permittivities, so the
+    custom-VJP eig downstream sees exactly the operator the dense form gave."""
+    Tx = jnp.asarray(st["Tx"], jnp.complex128)
+    Txp = jnp.asarray(st["Txp"], jnp.complex128)
+    Ty = jnp.asarray(st["Ty"], jnp.complex128)
+    Typ = jnp.asarray(st["Typ"], jnp.complex128)
+    E = jnp.asarray(v_nodal).astype(jnp.complex128).reshape(st["Ny"], st["Nx"])
+    TE = jnp.einsum('ak,jk,kd->ajd', Tx, E, Txp, optimize=True)
+    out = jnp.einsum('pj,jr,ajd->pard', Ty, Typ, TE, optimize=True)
+    return out.reshape(st["NyO"] * st["NxO"], st["NyO"] * st["NxO"])
 
 
 def _static_prep(period_x, period_y, x0, x1, y0, y1, degree, n_el, grade,
                  n_orders):
-    """Geometry-only constants (NumPy): the Fourier-projected unit-derivative
-    operators, the projected identity, the pillar partition-of-unity weight
-    vector, and the order set.  Cached on the static key (lock-guarded for
-    concurrent reader-writer safety)."""
+    """Geometry-only constants (NumPy): the PER-AXIS Fourier projectors, the
+    projected unit-derivative operators, the projected identity, the pillar
+    partition-of-unity weight vector, and the order set.  Cached on the static
+    key (lock-guarded for concurrent reader-writer safety).
+
+    The operators are built by the SAME factorized construction
+    ``twod._scalar_projected_ops`` uses on its crossed-cell branch
+    (``Gx0F = -i kron(I, Tx Mx^-1 Dx Txp)``), so the frozen constants this twin
+    traces are byte-identical to the NumPy path's rather than merely close --
+    which is a parity improvement as well as a memory one: the dense
+    ``Tp @ Gx0 @ Tpinv`` spelling carried an extra ``Ty Typ`` factor the NumPy
+    path does not."""
     key = (period_x, period_y, x0, x1, y0, y1, degree, n_el, grade, n_orders)
     with _STATIC_CACHE_LOCK:
         hit = _STATIC_CACHE.get(key)
@@ -150,25 +191,30 @@ def _static_prep(period_x, period_y, x0, x1, y0, y1, degree, n_el, grade,
             _STATIC_CACHE.move_to_end(key)   # LRU: refresh recency
     if hit is not None:
         return hit
-    from .twod import _build_axis, _projectors
+    from .twod import _build_axis
     ax = _build_axis(period_x, [x0, x1], degree, n_el, grade)
     ay = _build_axis(period_y, [y0, y1], degree, n_el, grade)
     ox = np.arange(-n_orders, n_orders + 1)
     oy = np.arange(-n_orders, n_orders + 1)
-    Tp, Tpinv = _projectors(ax, ay, ox, oy)
+    Tx, Txp, Ty, Typ = _axis_projector_pair(ax, ay, ox, oy)
     # diagonal masses -> the pillar weight w = diag(kron(MtY[1], MtX[1]))/Mdiag
     mdx = np.diag(ax["M"])
     mdy = np.diag(ay["M"])
     Mdiag = np.kron(mdy, mdx)
     w = np.kron(np.diag(ay["Mtile"][1]), np.diag(ax["Mtile"][1])) / Mdiag
-    # unit derivative operators (k0-free), projected
-    Minv = np.diag(1.0 / Mdiag)
-    Gx0 = -1j * (Minv @ np.kron(ay["M"], ax["D"]))
-    Gy0 = -1j * (Minv @ np.kron(ay["D"], ax["M"]))
+    # unit derivative operators (k0-free), projected -- kron-FACTORIZED: the
+    # GLL masses are exactly diagonal, so Minv @ kron(My, Dx) collapses to
+    # kron(I, (1/mdx) * Dx) and no dense N x N Minv is ever formed.
+    NxO, NyO = len(ox), len(oy)
+    gx1 = Tx @ ((1.0 / mdx)[:, None] * ax["D"]) @ Txp
+    gy1 = Ty @ ((1.0 / mdy)[:, None] * ay["D"]) @ Typ
     out = dict(
-        Tp=Tp, Tpinv=Tpinv, w=np.real(w),
-        Gx0F=Tp @ Gx0 @ Tpinv, Gy0F=Tp @ Gy0 @ Tpinv,
-        IprojF=Tp @ Tpinv,
+        Tx=Tx, Txp=Txp, Ty=Ty, Typ=Typ,
+        Nx=int(mdx.size), Ny=int(mdy.size), NxO=NxO, NyO=NyO,
+        w=np.real(w),
+        Gx0F=-1j * np.kron(np.eye(NyO, dtype=_C), gx1),
+        Gy0F=-1j * np.kron(gy1, np.eye(NxO, dtype=_C)),
+        IprojF=np.kron(Ty @ Typ, Tx @ Txp),
         order_x=np.tile(ox, len(oy)), order_y=np.repeat(oy, len(ox)))
     with _STATIC_CACHE_LOCK:
         _STATIC_CACHE[key] = _freeze_cached(out)     # W7 A13
@@ -195,10 +241,8 @@ def _static_prep_cell(period_x, period_y, layout, degree, n_el, grade,
         return hit
     from .twod import (
         _axis_elem_counts,
-        _axis_projection,
         _build_axis,
         _cell_to_walls_tile,
-        _projectors,
         _validate_cell_orders,
     )
     x_walls, y_walls, tile = _cell_to_walls_tile(
@@ -213,7 +257,7 @@ def _static_prep_cell(period_x, period_y, layout, degree, n_el, grade,
     ay = _build_axis(period_y, y_walls, degree, el_y, grade)
     ox = np.arange(-n_orders, n_orders + 1)
     oy = np.arange(-n_orders, n_orders + 1)
-    Tp, Tpinv = _projectors(ax, ay, ox, oy)
+    Tx, Txp, Ty, Typ = _axis_projector_pair(ax, ay, ox, oy)
     mdx = np.diag(ax["M"])
     mdy = np.diag(ay["M"])
     Mdiag = np.kron(mdy, mdx)
@@ -238,18 +282,19 @@ def _static_prep_cell(period_x, period_y, layout, degree, n_el, grade,
     # axis form; build Gx0F/Gy0F as ``kron`` of the SMALL projected per-axis
     # operators instead of materializing the dense N x N ``Minv`` and
     # ``kron(ay['M'], ax['D'])`` (~110 GB at N ~ 83k -- the sibling
-    # _jax_stack2d already uses this form).
-    Tx = _axis_projection(ax, ox)
-    Txp = np.linalg.pinv(Tx)
-    Ty = _axis_projection(ay, oy)
-    Typ = np.linalg.pinv(Ty)
+    # _jax_stack2d already uses this form).  The SANDWICHES are factorized the
+    # same way (:func:`_proj_sandwich_jnp`), so the four per-axis projectors
+    # above are the only ones this prep ever builds -- the dense
+    # ``kron(Ty, Tx)`` pair and its ``O(N Nf^2)`` pinv are gone.
     NxO, NyO = len(ox), len(oy)
     gx1 = Tx @ ((1.0 / mdx)[:, None] * ax["D"]) @ Txp
     gy1 = Ty @ ((1.0 / mdy)[:, None] * ay["D"]) @ Typ
     Gx0F = -1j * np.kron(np.eye(NyO, dtype=_C), gx1)
     Gy0F = -1j * np.kron(gy1, np.eye(NxO, dtype=_C))
     out = dict(
-        Tp=Tp, Tpinv=Tpinv, Wreg=Wreg, first_idx=first_idx,
+        Tx=Tx, Txp=Txp, Ty=Ty, Typ=Typ,
+        Nx=int(mdx.size), Ny=int(mdy.size), NxO=NxO, NyO=NyO,
+        Wreg=Wreg, first_idx=first_idx,
         Gx0F=Gx0F, Gy0F=Gy0F,
         IprojF=np.kron(Ty @ Typ, Tx @ Txp),
         order_x=np.tile(ox, len(oy)), order_y=np.repeat(oy, len(ox)))
@@ -351,8 +396,6 @@ def _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
         val = jnp.sqrt((eps - kx ** 2 - ky ** 2).astype(cj))
         return jnp.where(val.imag < 0.0, -val, val)
 
-    Tp = jnp.asarray(st["Tp"], cj)
-    Tpinv = jnp.asarray(st["Tpinv"], cj)
     Gx0F = jnp.asarray(st["Gx0F"], cj)
     Gy0F = jnp.asarray(st["Gy0F"], cj)
     IprojF = jnp.asarray(st["IprojF"], cj)
@@ -383,10 +426,11 @@ def _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
     Wsub, Vsub, _lb = _homog(eps_sub)
 
     # layer operators: nodal vectors LINEAR in the traced eps, sandwiched by
-    # the constant projectors (Tp * v) @ Tpinv == Tp @ diag(v) @ Tpinv
-    EpsF = (Tp * eps_nodal[None, :].astype(cj)) @ Tpinv
-    EinvF = (Tp * inv_nodal[None, :].astype(cj)) @ Tpinv
-    EpnF = (Tp * (1.0 / inv_nodal)[None, :].astype(cj)) @ Tpinv
+    # the per-axis projectors -- the two einsum contractions of
+    # twod._sandwich_factorized rather than the dense (Nf, N) Kronecker pair.
+    EpsF = _proj_sandwich_jnp(jnp, st, eps_nodal)
+    EinvF = _proj_sandwich_jnp(jnp, st, inv_nodal)
+    EpnF = _proj_sandwich_jnp(jnp, st, 1.0 / inv_nodal)
     GxF = Gx0F / k0 + kx0 * IprojF
     GyF = Gy0F / k0 + ky0 * IprojF
 

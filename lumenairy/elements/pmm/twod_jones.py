@@ -26,11 +26,35 @@ for a lossless tensor, and reducing a scalar cell EXACTLY to
 ``pmm_efficiency_2d_cell(formulation='laurent')``.  The ``E_z`` elimination rule
 is selectable: ``formulation='laurent'`` uses ``inv([[e_zz]])`` (the
 rcwa_jones_2d mirror); ``formulation='li'`` uses the projected multiply-by-
-``1/e_zz`` directly (the hybrid scalar path's validated inverse-rule
-elimination).  NB Li 1997 Eqs. (8)/(9) + (31) show the OPTIMAL crossed-grating
-rule gives each diagonal slot the inverse rule along its own axis and Laurent
-along the other (the mixed composites); that per-direction refinement is NOT
-implemented -- patterned tensor cells converge at the Laurent (~1e-3) floor.
+``1/e_zz`` directly.  NB Li 1997 Eqs. (8)/(9) + (31) show the OPTIMAL
+crossed-grating rule gives each diagonal slot the inverse rule along its own
+axis and Laurent along the other (the mixed composites); that per-direction
+refinement is NOT implemented -- patterned tensor cells converge at the Laurent
+(~1e-3) floor.
+
+WHICH RULE TO ASK FOR.  Because ``'li'`` and ``'laurent'`` differ ONLY in the
+``E_z`` rule here, ``'li'`` is not the "more rigorous" option it is on the
+scalar entries, and it is measurably the WORSE one: on the reflection Jones of
+a high-contrast Si stripe at ``n_orders = 11`` the error against a converged
+1-D Li oracle is ``2.7e-03`` (``'fff_nv'``) / ``3.0e-02`` (``'laurent'``) /
+``6.9e-02`` (``'li'``), and on a C4 Si pillar ``'li'`` keeps the wrong SIGN on
+``Im(Jxx)`` at every affordable truncation (``arg(Jxx)`` 8.9 deg out against
+1.2 deg for ``'laurent'``) while energy closes to 1e-5 on both.  Prefer
+``formulation='auto'`` -- ``'fff_nv'`` on a separable in-plane cell, where it
+IS the rigorous 1-D anisotropic factorization, and ``'laurent'`` otherwise.
+
+ACCURACY CEILING.  This entry is the Fourier-projected HYBRID, so its lossless
+energy closure PLATEAUS at ~1e-4..1e-3 and is not monotone in ``n_orders``
+(measured on a lossless Si pillar: 1.5e-03 / 1.4e-04 / 5.9e-04 at
+``n_orders`` = 5 / 9 / 11).  For energy- or phase-critical work use the
+no-floor staggered siblings
+:func:`~lumenairy.elements.pmm.twod_staggered.pmm_jones_2d_staggered` /
+:class:`~lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure`, whose closure is
+``n_orders``-INVARIANT to 14 digits and improves spectrally with ``n_modes``
+(2.9e-06 / 1.8e-10 / 1.1e-12 at M = 5 / 8 / 10 on a comparable pillar) -- at a
+wall-time price (712-911 s for the M = 10 solve against 7.3 s for the hybrid at
+``n_orders = 11``).  Watching ``sum(R)+sum(T)`` alone is NOT a convergence
+proof on this engine: see :func:`~lumenairy.elements.pmm.twod.pmm_2d_order_drift`.
 
 Scope
 -----
@@ -124,7 +148,7 @@ def _tile_is_offplane(tile33):
 
 def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
                         ox, oy, kxv, kyv, formulation, return_ops=False,
-                        slant=None, block_eig=False):
+                        slant=None, block_eig=False, keep=None):
     """Fourier-basis layer eigenmodes of a full (3, 3) tensor cell -- the
     SEM-projected operators fed to the shared dimension-agnostic
     :func:`_layer_eigenmodes_tensor` (also used per-layer by
@@ -140,6 +164,15 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
     operators are ``diag(k)``), so there is no projection floor -- matching
     rcwa_jones_2d's uniform-cell representation exactly.  A SEPARABLE cell
     (uniform along one axis) gets exact ``diag(k)`` on the wall-less axis.
+
+    ``keep`` is the Lalanne-1997 CIRCULAR-truncation boolean mask over the full
+    rectangular box (``kxv``/``kyv`` must be the FULL box, since the separable
+    and crossed branches build ``kron``-factored operators whose shape is
+    ``len(ox) * len(oy)``).  Every operator is assembled on the box and then
+    restricted by ``np.ix_(keep, keep)`` -- which is exactly the operator built
+    on the circular order list, because these are all functions of the order
+    LIST -- so the eig runs at ``~(pi/4) Nf``.  The scalar core does the same
+    thing to ``lops`` (``twod._pmm2d_solve_core``).
     """
     Nf = len(kxv)
     nsx, nsy = len(ax["strips"]), len(ay["strips"])
@@ -190,18 +223,31 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
             axd, o_p = ay, oy
             prof = tile_i[0, :]
         M, D = axd["M"], axd["D"]
-        Minv = np.linalg.inv(M)
-        G0 = -1j * (Minv @ D)
+        # The GLL mass and every ``Mtile`` are EXACTLY diagonal (see
+        # twod._axis_ops_1d), so the nodal inverse is a reciprocal and a
+        # component mass accumulates as a nodal VECTOR: this drops one
+        # ``O(n^3)`` LAPACK inversion and one dense ``n x n`` matmul PER TENSOR
+        # COMPONENT (there are four to eight of them per layer).  BIT-IDENTICAL
+        # -- ``np.diag(minv * p)`` is ``np.array_equal`` to ``inv(M) @ P`` and
+        # the ``T1 @ ... @ T1p`` sandwich is unchanged.  (Collapsing that
+        # sandwich to ``(T1 * v) @ T1p`` as well would be cheaper again but is
+        # only 1 ULP identical -- 1.75e-16 relative, measured -- so it is not
+        # taken on this validated path.)  This SEPARABLE branch is the one a
+        # 1-D grating layer in a 2-D stack takes, i.e. the LC-QWP geometry.
+        md = np.diag(M)
+        minv = 1.0 / md
+        G0 = -1j * (minv[:, None] * D)
         T1 = _axis_projection(axd, o_p)
         T1p = np.linalg.pinv(T1)
         ip1 = T1 @ T1p
         g1 = T1 @ G0 @ T1p
+        mtiles = [np.diag(Mt) for Mt in axd["Mtile"]]
 
         def _mass(ab_getter):
-            P = np.zeros_like(M)
-            for s, Mt in enumerate(axd["Mtile"]):
-                P += ab_getter(prof[s]) * Mt
-            return T1 @ (Minv @ P) @ T1p
+            p = np.zeros_like(md)
+            for s, mt in enumerate(mtiles):
+                p += ab_getter(prof[s]) * mt
+            return T1 @ np.diag(minv * p) @ T1p
 
         c = {(a, b): _mass(lambda t, a=a, b=b: t[a, b])
              for a in (0, 1) for b in (0, 1)}
@@ -318,6 +364,14 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
                        EZY=_proj(lambda t: t[2, 1]),
                        EXZ=_proj(lambda t: t[0, 2]),
                        EYZ=_proj(lambda t: t[1, 2]))
+    if keep is not None:
+        ix = np.ix_(keep, keep)
+        GxF, GyF = GxF[ix], GyF[ix]
+        CxxF, CxyF = CxxF[ix], CxyF[ix]
+        CyxF, CyyF = CyxF[ix], CyyF[ix]
+        EZZ = EZZ[ix]
+        oop = {kk: (None if v is None else v[ix]) for kk, v in oop.items()}
+        Nf = int(np.count_nonzero(keep))
     if return_ops:
         # F2 (audit): expose the projected operators so the even-parity fold
         # can build (P, Q) via rcwa's _tensor_PQ.  Only IN-PLANE cells fold
@@ -356,6 +410,9 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
     if block_eig and (offp or not _slant_is_zero(slant)):
         orders2d = np.stack([np.tile(ox, len(oy)), np.repeat(oy, len(ox))],
                             axis=1)
+        if keep is not None:              # the gauge lives on the RETAINED set
+            orders2d = orders2d[keep]
+            kxv, kyv = kxv[keep], kyv[keep]
         gauge = _oop_block_gauge(kxv, kyv, orders2d, CxxF)
     return _layer_eigenmodes_tensor(GxF, GyF, CxxF, CxyF, CyxF, CyyF, EZZ,
                                     slant=slant, sym_gauge=gauge, **oop)
@@ -409,11 +466,13 @@ def pmm_jones_2d(
     grade: bool = False,
     n_orders: int = 11,
     formulation: str = "laurent",
+    truncation: str = "rectangular",
     max_nodal_dof: int = _MAX_NODAL_DOF,
     stabilize: bool = False,
     symmetry="auto",
     region_layout=None,
     slant=None,
+    return_jones_transmission: bool = False,
 ):
     """Rigorous 2-D anisotropic grating via the hybrid PMM: a single layer whose
     permittivity is a full IN-PLANE tensor field over an axis-aligned
@@ -440,13 +499,44 @@ def pmm_jones_2d(
         Conical incidence angles (radians).
     degree, elements_per_strip, grade, n_orders, max_nodal_dof
         As in :func:`pmm_efficiency_2d_cell`.
-    formulation : {'laurent', 'li', 'fff_nv'}, optional
-        ``E_z``-elimination rule: ``'laurent'`` = ``inv([[e_zz]])`` (the
-        :func:`rcwa_jones_2d` mirror; a scalar cell reduces EXACTLY to
-        ``pmm_efficiency_2d_cell(formulation='laurent')``); ``'li'`` = the
-        projected multiply-by-``1/e_zz`` (the hybrid's inverse-rule
-        elimination).  The in-plane tensor block is direct-rule for both of
-        those (see the module docstring for the Li-1997 mixed-rule note).
+    formulation : {'laurent', 'li', 'fff_nv', 'auto'}, optional
+        ``E_z``-elimination rule.  ``'laurent'`` (the DEFAULT) =
+        ``inv([[e_zz]])`` -- the :func:`rcwa_jones_2d` mirror; a scalar cell
+        reduces EXACTLY to ``pmm_efficiency_2d_cell(formulation='laurent')``.
+        ``'li'`` = the projected multiply-by-``1/e_zz``.  On THIS entry the
+        two differ ONLY in that ``E_z`` rule: the in-plane tensor block is
+        Laurent either way (see the module docstring for the Li-1997
+        mixed-rule note), so ``'li'`` is NOT the wall-normal inverse rule it
+        is on the scalar entries, and it is not the more rigorous choice
+        here.
+
+        MEASURED, and the reason to read this paragraph before picking
+        ``'li'`` for rigour.  High-contrast separable Si stripe (eps 12.25,
+        duty 0.5, ``Lambda = 0.47 um``, ``lambda = 1 um``, ``d = 0.3 um``,
+        ``n_sub = 1.5``, normal incidence, degree 11), reflection ``Jxx``
+        against ``rcwa_jones_1d(n_orders=80, 'li')``:
+
+        ==========  ==========  ==========  ==========  ================
+        n_orders    'fff_nv'    'laurent'   'li'        rcwa_jones_2d li
+        ==========  ==========  ==========  ==========  ================
+        5           4.9e-02     1.4e-01     1.8e-01     7.3e-03
+        11          2.7e-03     3.0e-02     6.9e-02     2.9e-04
+        ==========  ==========  ==========  ==========  ================
+
+        On a C4 Si pillar (crossed, so ``'fff_nv'`` is unavailable) ``'li'``
+        additionally keeps the WRONG SIGN on ``Im(Jxx)`` at every affordable
+        truncation -- ``arg(Jxx)`` is 8.9 deg out at ``n_orders = 11``
+        against 1.2 deg for ``'laurent'`` -- while energy closes to 1e-5 on
+        both, so no tripwire fires.  Order of preference on this entry:
+        ``'fff_nv'`` where it is available, then ``'laurent'``, then ``'li'``.
+
+        ``'auto'`` picks that for you: ``'fff_nv'`` on a SEPARABLE in-plane
+        cell (where it is both available and best) and ``'laurent'``
+        otherwise.  It is not the default only because the default must keep
+        the exact ``pmm_efficiency_2d_cell('laurent')`` reduction above;
+        ``'auto'`` is the recommended setting for new code.  On the JAX path
+        ``'auto'`` resolves to ``'laurent'`` (``'fff_nv'`` is NumPy only).
+
         ``'fff_nv'`` is the full Popov-Neviere (2001) anisotropic OFF-DIAGONAL
         factorization: for a SEPARABLE (single-orientation, e.g. an x- or
         y-patterned stripe) anisotropic cell the wall-normal is constant, so the
@@ -459,7 +549,18 @@ def pmm_jones_2d(
         in-plane only.  A CROSSED (both-axis-patterned) cell has a varying
         normal whose projected factorization is ill-conditioned (the
         matched-coordinate FFF regime) and RAISES -- use ``'li'``/``'laurent'``
-        (the :func:`rcwa_jones_2d` mirror gates the same way).
+        (the :func:`rcwa_jones_2d` mirror gates the same way).  It takes the
+        even-parity fold like the other rules (measured fold-vs-full
+        ``|dJ| = 1.5e-12`` at degree 11 / ``n_orders = 11``, worth 3.96x).
+    truncation : {'rectangular', 'circular'}, optional
+        Order-set shape.  ``'circular'`` is the Lalanne-1997 truncation: keep
+        only the orders inside the largest reciprocal-space circle inscribed in
+        the ``n_orders`` box, which is isotropic in resolution and drops the
+        wasted high-``|G|`` corners -- ``Nf -> ~(pi/4) Nf`` and the ``O(Nf^3)``
+        eig ~x0.48.  It reached only ``pmm_efficiency_2d[_cell]`` before; the
+        operators are functions of the order LIST, so restricting them to the
+        circular subspace IS the operator built on that subspace.  NumPy only
+        (the jnp twins keep the rectangular box).
     stabilize : bool, optional
         Per-order + Jones degree-scan consensus (the 1-D guard against the
         measure-zero quasi-resonances), stepping through consecutive ODD
@@ -500,6 +601,13 @@ def pmm_jones_2d(
         ``pmm_jones_1d`` / ``rcwa_jones_1d`` for a 1-D grating, or
         ``berreman_jones_1d`` for a uniform anisotropic layer).  Ignored on the
         NumPy path.
+    return_jones_transmission : bool, optional
+        Also return the zeroth-order TRANSMISSION Jones as a FIFTH element
+        (default ``False`` keeps the released 4-tuple) -- the
+        :func:`~lumenairy.elements.rcwa.rcwa_jones_1d` keyword of the same
+        name, on the same contract.  NumPy only (the jnp twin keeps no
+        amplitudes); with ``stabilize=True`` it is the transmission Jones of
+        the degree the consensus picked.
 
     Returns
     -------
@@ -516,6 +624,10 @@ def pmm_jones_2d(
         (``tm`` <-> ``x``, ``te`` <-> ``y``) only at ``phi = 0``.  For
         conical incidence (``phi != 0``) the two differ by the rotation
         into the plane of incidence.  See CONVENTIONS.md sec 7.1.
+    jones_transmission : (2, 2) complex ndarray
+        ONLY when ``return_jones_transmission=True``: the zeroth-order Jones
+        TRANSMISSION matrix -- same basis, same convention, same column
+        meaning as ``jones_reflection``.
 
     Notes
     -----
@@ -523,11 +635,36 @@ def pmm_jones_2d(
     (azimuth), both radians.  There is NO ``angle`` keyword on this 2-D
     entry (the 1-D solvers' ``angle``/``theta`` alias does not apply here)
     -- passing ``angle=`` raises ``TypeError``.  Use ``theta``.
+
+    **Which observable a transmissive metasurface needs.**  For a transmissive
+    waveplate / modulator the phase observable is the TRANSMISSION Jones, not
+    the reflection one: pass ``return_jones_transmission=True`` here for a
+    single layer, or use
+    :meth:`~lumenairy.elements.pmm.stack2d.PMM2DStackHybrid.jones_transmission`
+    /
+    :meth:`~lumenairy.elements.pmm.stack2d_pure.PMM2DStackPure.jones_transmission`
+    for a multilayer stack.  All three carry ONE convention -- rows
+    ``[E_x; E_y]``, columns = incident ``E_x``/``E_y``, PUBLIC
+    ``exp(-i w t)`` -- so they are interchangeable and drop into a
+    :class:`~lumenairy.polarization.JonesField` pipeline UNCONJUGATED.
+    MEASURED on a form-birefringent Si/air grating at ``Lambda/lambda = 0.2``
+    (duty 0.5, ``d = lambda/4/(n_par - n_perp) = 208.14 nm``, slow axis along
+    the grooves): the retardance ``wrap(arg(J^t_yy) - arg(J^t_xx))`` is
+    POSITIVE on the SLOW axis -- the slow axis carries
+    ``exp(+i * retardance)``, exactly CONVENTIONS.md sec 7 -- and reads
+    ``+100.24 deg`` at ``n_orders = 15`` against the
+    ``rcwa_jones_1d(n_orders=60, 'li')`` reference ``+100.066 deg``
+    (``+0.18 deg`` out); ``n_orders = 9`` is still ``1.40 deg`` out and a
+    0th-order Rytov EMT slab is ``4.19 deg`` out.  For a purely 1-D grating
+    prefer :func:`~lumenairy.elements.rcwa.rcwa_jones_1d` or the no-floor
+    :func:`~lumenairy.elements.pmm.pmm_jones_1d` -- both are ~10x more
+    accurate than this entry's ``'fff_nv'`` and ~250x more than its ``'li'``
+    at equal ``n_orders``.
     """
-    if formulation not in ("laurent", "li", "fff_nv"):
+    if formulation not in ("laurent", "li", "fff_nv", "auto"):
         raise ValueError(
-            f"pmm_jones_2d: formulation must be 'laurent', 'li' or 'fff_nv', "
-            f"got {formulation!r}")
+            f"pmm_jones_2d: formulation must be 'laurent', 'li', 'fff_nv' or "
+            f"'auto', got {formulation!r}")
     if formulation == "fff_nv" and any(is_jax_array(a) for a in
                                        (eps_tensor_cell, n_substrate,
                                         n_superstrate, depth, wavelength,
@@ -542,7 +679,29 @@ def pmm_jones_2d(
     # sever the JAX trace (materialize a tracer -> TracerArrayConversionError).
     _jx = (eps_tensor_cell, n_substrate, n_superstrate, depth, wavelength,
            theta, phi)
+    if truncation not in ("rectangular", "circular"):
+        raise ValueError(
+            f"pmm_jones_2d: truncation must be 'rectangular' or 'circular', "
+            f"got {truncation!r}")
+    if any(is_jax_array(a) for a in _jx) and truncation != "rectangular":
+        raise NotImplementedError(
+            "pmm_jones_2d: truncation='circular' is NumPy only -- the jnp twin "
+            "(_pmm_jones_2d_cell_jax) builds its order set and its frozen "
+            "projectors on the full rectangular box.  Use NumPy inputs, or "
+            "truncation='rectangular' on the JAX path.")
+    if any(is_jax_array(a) for a in _jx) and return_jones_transmission:
+        raise NotImplementedError(
+            "pmm_jones_2d: return_jones_transmission=True is NumPy only -- the "
+            "jnp twin (_pmm_jones_2d_cell_jax) returns efficiencies and the "
+            "reflection Jones and keeps no transmitted amplitudes.  Use NumPy "
+            "inputs, or differentiate rcwa_jones_1d / pmm_jones_1d "
+            "(return_jones_transmission=True) for a 1-D grating.")
     if any(is_jax_array(a) for a in _jx):
+        # 'fff_nv' is NumPy only, so 'auto' resolves to the better of the two
+        # rules the jnp twin implements (see the formulation docstring's
+        # measured table).
+        if formulation == "auto":
+            formulation = "laurent"
         if stabilize:
             raise ValueError(
                 "pmm_jones_2d: stabilize=True is not differentiable "
@@ -652,6 +811,18 @@ def pmm_jones_2d(
         cell, period_x, period_y, "pmm_jones_2d")
     _require_nonzero_ezz("pmm_jones_2d", tile)
 
+    if formulation == "auto":
+        # 'fff_nv' exactly where it is BOTH available and best: a SEPARABLE
+        # (one wall-less axis) IN-PLANE cell.  A cell with no walls at all is
+        # uniform, where all three rules coincide and 'laurent' is the cheaper
+        # branch (no [[1/e_nn]] inversion); a CROSSED or out-of-plane cell
+        # cannot take 'fff_nv' at all.  Measured ranking behind this choice:
+        # see the ``formulation`` parameter docstring.
+        _wall_less = (len(x_walls) == 0, len(y_walls) == 0)
+        formulation = ("fff_nv" if (any(_wall_less) and not all(_wall_less)
+                                    and not _tile_is_offplane(tile))
+                       else "laurent")
+
     # Loss-convention bridge: PUBLIC Im(eps)>0 -> internal exp(+iwt); the Jones
     # matrix is conjugated BACK at extraction (the efficiencies are real).
     slant = _norm_slant_pair(slant, "pmm_jones_2d")
@@ -659,20 +830,38 @@ def pmm_jones_2d(
     eps_sup = np.conj(_C(n_superstrate) ** 2)
     eps_sub = np.conj(_C(n_substrate) ** 2)
 
+    # The transmission Jones rides along on the 5th slot of every solve; the
+    # 4-tuple contract is restored at the two return sites below.  ``_jt_seen``
+    # pairs each scanned degree's reflection-Jones OBJECT with its transmission
+    # partner so the stabilize consensus -- which returns the very array it was
+    # handed -- can hand back the matching transmission Jones by identity.
+    _jt_seen = []
+
     def _solve_at(deg):
-        return _pmm_jones_2d_at(
+        out = _pmm_jones_2d_at(
             period_x, period_y, x_walls, y_walls, tile_i, eps_sup, eps_sub,
             depth, wavelength, theta, phi, deg, elements_per_strip, grade,
-            n_orders, formulation, max_nodal_dof, symmetry, slant)
+            n_orders, formulation, max_nodal_dof, symmetry, slant,
+            truncation=truncation)
+        _jt_seen.append((out[3], out[4]))
+        return out[:4]
 
     if stabilize:
         # consensus over consecutive ODD degrees (the 1-D _stabilize_jones
         # machinery; an unaffordable higher degree ends the scan gracefully)
-        return _stabilize_jones(_scan_solver(_solve_at, degree), degree,
-                                "pmm_jones_2d",
-                                passive_tol=_PASSIVE_TOL_2D,
-                                per_order_tol=_PER_ORDER_TOL_2D,
-                                super_unity_ok=_lossy_incidence(n_superstrate))
+        res = _stabilize_jones(_scan_solver(_solve_at, degree), degree,
+                               "pmm_jones_2d",
+                               passive_tol=_PASSIVE_TOL_2D,
+                               per_order_tol=_PER_ORDER_TOL_2D,
+                               super_unity_ok=_lossy_incidence(n_superstrate))
+        if not return_jones_transmission:
+            return res
+        for _jr, _jt in _jt_seen:
+            if _jr is res[3]:
+                return tuple(res) + (_jt,)
+        raise AssertionError(                          # pragma: no cover
+            "pmm_jones_2d: the stabilize consensus returned a Jones matrix "
+            "that no scanned degree produced.")
     res = _solve_at(degree)
     # Blowup guard (mirror rcwa_jones_2d): a high-contrast / birefringent cell
     # at a near-singular (degree, n_orders) truncation -- common at CONICAL
@@ -684,14 +873,20 @@ def pmm_jones_2d(
     lossless = not bool(np.any(np.abs(np.imag(np.asarray(tile, dtype=_C)))
                                > 1e-12))
     _check_energy("pmm_jones_2d", res[1], res[2], lossless=lossless)
+    if return_jones_transmission:
+        return tuple(res) + (_jt_seen[-1][1],)
     return res
 
 
 def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
                      eps_sub, depth, wavelength, theta, phi, degree,
                      elements_per_strip, grade, n_orders, formulation,
-                     max_nodal_dof, symmetry=False, slant=None):
-    """Single fixed-degree tensor solve (eps already internal-convention)."""
+                     max_nodal_dof, symmetry=False, slant=None,
+                     truncation="rectangular"):
+    """Single fixed-degree tensor solve (eps already internal-convention).
+
+    Returns ``(orders, R_eff, T_eff, jones_reflection, jones_transmission)``;
+    the public entry trims the 5th element unless it was asked for."""
     el_x = _axis_elem_counts(period_x, x_walls, degree, elements_per_strip,
                              "pmm_jones_2d", "x")
     el_y = _axis_elem_counts(period_y, y_walls, degree, elements_per_strip,
@@ -710,6 +905,16 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     oy = np.arange(-n_orders, n_orders + 1)
     order_x = np.tile(ox, len(oy))
     order_y = np.repeat(oy, len(ox))
+    # F8: Lalanne-1997 CIRCULAR truncation -- the same mask the scalar core
+    # applies to ``lops``.  The kron-factored tensor operators are built on the
+    # FULL box inside _tensor_layer_modes and restricted there by ``keep``.
+    keep = None
+    if truncation == "circular":
+        gx_o = order_x / float(period_x)
+        gy_o = order_y / float(period_y)
+        r2 = min(n_orders / float(period_x), n_orders / float(period_y)) ** 2
+        keep = (gx_o ** 2 + gy_o ** 2) <= r2 * (1.0 + 1e-9)
+        order_x, order_y = order_x[keep], order_y[keep]
     Nf = len(order_x)
 
     # Conical-incidence hardening (mirrors rcwa_jones_2d / the scalar core):
@@ -721,10 +926,17 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
         complex(e) for e in np.asarray(tile_i[..., [0, 1, 2],
                                               [0, 1, 2]]).ravel()]
     wl = _grazing_safe_wavelength(float(wavelength), kx0, ky0, order_x,
-                                  order_y, period_x, period_y, eps_reals)
+                                  order_y, period_x, period_y, eps_reals,
+                                  fn_name="pmm_jones_2d")
     k0 = 2.0 * np.pi / wl
     kxv = kx0 + order_x * (wl / period_x)
     kyv = ky0 + order_y * (wl / period_y)
+    # the layer operators are assembled on the FULL box (they kron-factor) and
+    # restricted by ``keep`` inside _tensor_layer_modes
+    kxv_box = (kxv if keep is None
+               else kx0 + np.tile(ox, len(oy)) * (wl / period_x))
+    kyv_box = (kyv if keep is None
+               else ky0 + np.repeat(oy, len(ox)) * (wl / period_y))
 
     # ---- half-space modes (analytic Rayleigh) + layer tensor modes ----------
     Wsup, Vsup, _ls, _kzr = _homogeneous_modes(kxv, kyv, eps_sup)
@@ -740,12 +952,20 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     # blocks _layer_eigenmodes_tensor eigendecomposes) and run the single-layer
     # cascade in the (Nf+1)-d even sector; None -> not applicable (out-of-plane,
     # off-centre or oblique) -> the full 2Nf solve below (byte-identical there).
+    # ``fff_nv`` folds too.  It is reachable ONLY on a SEPARABLE cell (the
+    # crossed branch raises), where the wall normal is constant and every
+    # operator the fold touches -- ``Cxx/Cxy/Cyx/Cyy`` and ``EZZ`` -- is a 1-D
+    # projected mass along the patterned axis kron'd with an identity, exactly
+    # the shape the 'li'/'laurent' branches hand over.  The fold's own
+    # precondition (a centro-symmetric cell at normal incidence) is unchanged
+    # and still auto-detected, so this only stops the BEST formulation from
+    # also being the slowest.
     sym_pairs = None
     _sym = _symmetry_on(symmetry)
-    if _sym and kt < 1e-12 and formulation != "fff_nv":
+    if _sym and kt < 1e-12:
         ops = _tensor_layer_modes(
-            ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
-            formulation, return_ops=True, slant=slant)
+            ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv_box,
+            kyv_box, formulation, return_ops=True, slant=slant, keep=keep)
         if ops is not None:                        # in-plane, UNSLANTED only
             from ..rcwa._core import _symmetric_cascade_rt, _tensor_PQ
             GxF, GyF, Cxx, Cxy, Cyx, Cyy, EZZ = ops
@@ -759,8 +979,8 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     S11 = S21 = None
     if sym_pairs is None:
         modes = _tensor_layer_modes(
-            ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
-            formulation, slant=slant, block_eig=_sym)
+            ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv_box,
+            kyv_box, formulation, slant=slant, block_eig=_sym, keep=keep)
 
         if len(modes) == 3:
             # -- in-plane: symmetric +/-lam cascade (the rcwa_jones_2d tail) --
@@ -788,7 +1008,22 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     kz_trn_f = _kz_forward2(np.conj(eps_sub), kxv, kyv)
     safe_r = np.where(np.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
     safe_t = np.where(np.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
-    R_rows, T_rows, j_cols = [], [], []
+    # FRAME ANCHOR for the TRANSMITTED amplitudes of a genuinely sheared cell
+    # -- the stack's :func:`stack2d._slant_frame_walk` reduced to one layer.
+    # The sheared frame ``u = x - t z`` is anchored at the layer's TOP face, so
+    # its exit plane sits a lateral ``t * depth`` from the lab one and each
+    # transmitted order picks up ``exp(+i k0 (alpha_m . t) d)``.  It is a
+    # unimodular per-order phase: ``R``, ``T`` and the REFLECTION Jones never
+    # see it (they are computed from the untouched cascade output), which is
+    # exactly why its absence in the stack was invisible to every energy check.
+    # A CONSTANT-valued cell is a pure coordinate change of a uniform medium
+    # (:func:`_slanted_cell_is_a_frame_noop`) and takes no anchor, mirroring
+    # ``stack2d._layer_enters_slant_frame``.
+    tphase = None
+    if not _slant_is_zero(slant) and not _slanted_cell_is_a_frame_noop(tile_i):
+        tphase = np.exp(1j * k0 * (kxv * float(slant[0]) * float(depth)
+                                   + kyv * float(slant[1]) * float(depth)))
+    R_rows, T_rows, j_cols, jt_cols = [], [], [], []
     for ip, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
         # Unit tangential E along (ex0, ey0); the incident wave's longitudinal
         # Ez = -(kx0 ex + ky0 ey)/kz_inc inflates |E_inc|^2 (cf. the 1-D sec^2).
@@ -812,7 +1047,15 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
         T_rows.append(np.where(np.real(kz_trn_f) > 0, np.real(Te), 0.0))
         # PUBLIC-convention Jones: conjugate back out of the internal gauge
         j_cols.append(np.stack([np.conj(rx[p0]), np.conj(ry[p0])]))
+        # ... and the TRANSMISSION twin, in the SAME layout (rows [Ex; Ey],
+        # columns = incident pol) that PerOrderAmplitudesMixin.jones_transmission
+        # returns for the two stacks, plus the sheared-frame anchor.
+        tx0, ty0 = np.conj(tx[p0]), np.conj(ty[p0])
+        if tphase is not None:
+            tx0, ty0 = tx0 * tphase[p0], ty0 * tphase[p0]
+        jt_cols.append(np.stack([tx0, ty0]))
     R_eff = np.stack(R_rows)
     T_eff = np.stack(T_rows)
     jones_reflection = np.stack(j_cols, axis=1)
-    return orders2d, R_eff, T_eff, jones_reflection
+    jones_transmission = np.stack(jt_cols, axis=1)
+    return orders2d, R_eff, T_eff, jones_reflection, jones_transmission

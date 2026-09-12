@@ -214,6 +214,7 @@ from .twod_staggered import (
     _stag_mortared_axes,
     _tile_needs_oop,
     _validate_stag_cell,
+    _validate_stag_cost,
     _validate_stag_mu,
     _warn_stag_sliver_band,
     _wood_eps_reals,
@@ -627,7 +628,7 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
     # ------------------------------------------------------------------ build
     def add_layer(self, thickness, *, eps=None, eps_cell=None, mu=None,
                   mu_cell=None, slant=None, x_walls=None, y_walls=None,
-                  grid=None, n_modes=None):
+                  grid=None, n_modes=None, max_pencil_dof=None):
         """Append a layer.  Pass exactly ONE of ``eps`` or ``eps_cell``, and
         at most one of ``mu`` (uniform) or ``mu_cell`` (patterned).
 
@@ -641,7 +642,17 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
 
         ``eps_cell`` is a PATTERNED layer: a SQUARE ``(Nx, Ny)`` scalar grid, or
         a ``(Nx, Ny, 3, 3)`` block-form tensor grid (walls on the segment
-        boundaries).  With ``layer_grids='shared'`` all patterned layers must
+        boundaries).  It is a **SEGMENT** grid -- every row and column IS an
+        element, the per-component DOF is ``(Nx*(M-1)) * (Ny*(M-1))`` and the
+        generalized pencil is twice that -- NOT the **PIXEL** grid the
+        identically-named parameter of
+        :meth:`~lumenairy.elements.pmm.PMM2DStackHybrid.add_layer` /
+        :func:`~lumenairy.elements.pmm.pmm_efficiency_2d_cell` takes, where
+        redundant rows are merged away for free.  A redundant grid here is a
+        CUBIC cost multiplier and now WARNS with the merged count (measured
+        1096 s CPU / 3.9 GB for a 12x12 half-fill pillar that needs 3 segments,
+        against 0.22 s through the hybrid entry); ``max_pencil_dof`` (default
+        12 000 on the pencil dimension) refuses an unaffordable one.  With ``layer_grids='shared'`` all patterned layers must
         share one common ``(Nx, Ny)`` grid (the union-grid constraint); with
         ``'per-layer'`` each keeps its own.
 
@@ -780,6 +791,15 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
                                      eps33=e, slant=sl))
             return self._finish_layer(_pl)
         cell = _validate_stag_cell("PMM2DStackPure.add_layer", eps_cell)
+        # SEGMENT-grid cost guard: this family's eps_cell is a grid of
+        # ELEMENTS, not the hybrid's PIXEL grid, so a redundant grid is a cubic
+        # cost multiplier rather than free.  Priced on this layer's own modal
+        # count (``n_modes=`` per layer, else the stack's M).
+        _validate_stag_cost("PMM2DStackPure.add_layer",
+                            int(_pl.get("M") or self.M), cell,
+                            max_pencil_dof=max_pencil_dof,
+                            walls_given=(x_walls is not None
+                                         or y_walls is not None))
         cgrid = cell.shape[:2]
         if self.layer_grids == "shared":
             if self._grid is None:
@@ -944,6 +964,11 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
         else:
             mu_spec = _validate_stag_mu(fn, mu_cell)
             mu_uni = False
+        # SEGMENT-grid cost guard on the patterned side(s); eps and mu merge
+        # JOINTLY (a boundary survives where either changes).
+        _validate_stag_cost(fn, int(self.M),
+                            None if eps_uni else eps_spec,
+                            None if mu_uni else mu_spec)
         # union grid: any PATTERNED side (eps_cell or mu_cell) registers it
         for spec, uni in ((eps_spec, eps_uni), (mu_spec, mu_uni)):
             if uni or self.layer_grids != "shared":
@@ -1281,7 +1306,8 @@ class PMM2DStackPure(PerOrderAmplitudesMixin):
             else:
                 _eps_src.append(_L["eps_cell"])
         wl = _grazing_safe_wavelength(wl, _kx0n, _ky0n, _mx, _my, px, py,
-                                      _wood_eps_reals(*_eps_src))
+                                      _wood_eps_reals(*_eps_src),
+                                      fn_name="PMM2DStackPure.solve")
         _kt2 = ((_kx0n + _mx * (wl / px)) ** 2 + (_ky0n + _my * (wl / py)) ** 2)
         _gap = min(float(np.min(np.abs(float(np.real(e)) - _kt2)))
                    for e in (eps_sup, eps_sub))
