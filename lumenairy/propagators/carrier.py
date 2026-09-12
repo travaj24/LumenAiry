@@ -6705,14 +6705,37 @@ def _check_decentred_fit(w, x_c, y_c, where, action, frac):
     ordering is, and an earlier revision stated it without the qualifier.
 
     What it IS.  A decentred hand-off still measurably costs image quality end
-    to end, and the calibration is now taken on geometries whose truth is
-    decentre-INVARIANT rather than through an aliasing measurement:
+    to end BEYOND ABOUT ONE BEAM RADIUS, and the calibration is now taken on
+    geometries whose truth is decentre-INVARIANT rather than through an
+    aliasing measurement:
 
     * the ``K = -n^2`` conic stand-in (exact Fermat solution for the WHOLE
       collimated bundle, so every sub-aperture is stigmatic on axis and off).
-      Chain / independent-oracle EE2 ratio by decentre:
-      0.997 (0 w), 1.002 (0.25 w), 1.005 (0.50 w), 0.977 (0.75 w),
-      0.983 (1.0 w), 0.923 (1.5 w).
+      Chain / independent-oracle EE2 ratio by decentre, re-measured 2026-09-12:
+      0.970 (0 w), 1.010 (0.25 w), 1.008 (0.50 w), 1.002 (0.75 w),
+      0.986 (1.0 w), 0.903 (1.5 w).
+      The 2026-07-29 reading of the same six points was 0.997 / 1.002 / 1.005 /
+      0.977 / 0.983 / 0.923, i.e. the FALL past one radius reproduces but the
+      ON-AXIS row is no longer the best of the six -- see the ordering note
+      below.  The oracle's own floor on this ratio is 6.4e-04 (its pupil patch
+      swept 2.2 -> 4.0 beam radii and its quadrature pitch halved), so both
+      readings are real.
+
+    THE ORDERING BETWEEN THE ON-AXIS AND DECENTRED ROWS IS NOT A PROPERTY OF
+    THE DECENTRE.  It is set by the terminal fine retrace's v5.35
+    inverse-characteristic evaluator
+    (:data:`~lumenairy.elements._lens_imap.TRACED_INVERSE_MAP`), which this
+    chain leaves ON for the leg nothing re-fits.  Measured on the same stand-in
+    and the same oracle with ``traced_kwargs={'inverse_map': False}``, which
+    :func:`~lumenairy.elements.apply_real_lens_traced` documents as v5.43.0's
+    bits: 0 w reads 0.997 and 1.0 w reads 0.971 -- the ordering the 2026-07-29
+    table has.  With the evaluator on they are 0.970 and 0.986.  Field fidelity
+    against the same oracle says the evaluator is a TRADE and not a loss: the
+    worse of the two arms improves (1 - |<oracle,chain>|/norms of 1.90e-03 at
+    1.0 w without it, 1.61e-03 at 0 w with it), and the decentred spot's width
+    defect closes (FWHM ratio 1.0952 -> 1.0000).  So read the six points as a
+    DECENTRE curve only above ~1 beam radius; below that they differ by less
+    than the readout model choice does.
     * design 121's post-DOE chain on the exact final leg, per order, against
       an independent skew-ray + Debye oracle that says every order is EQUALLY
       diffraction-limited (EE3 ~90.7 %, EE6 ~99.9 %):
@@ -6745,11 +6768,22 @@ def _check_decentred_fit(w, x_c, y_c, where, action, frac):
         f"ray sits {reach * 1e3:.4f} mm off the OPTICAL AXIS = "
         f"{ratio:.3f} beam amplitude radii (w = {w * 1e3:.4f} mm), above "
         f"decentre_fit_frac={float(frac)}.  A decentred hand-off measurably "
-        f"costs IMAGE quality end to end.  MEASURED on the K=-n^2 conic "
-        f"stand-in, whose truth is decentre-INVARIANT (chain / independent "
-        f"ray-trace + Kirchhoff oracle, EE2 ratio): 0.00 w -> 0.997; 0.25 w -> "
-        f"1.002; 0.50 w -> 1.005; 0.75 w -> 0.977; 1.00 w -> 0.983; 1.50 w -> "
-        f"0.923.  And on design 121's post-DOE chain, per order, against an "
+        f"costs IMAGE quality end to end beyond about one beam radius.  "
+        f"MEASURED 2026-09-12 on the K=-n^2 conic stand-in, whose truth is "
+        f"decentre-INVARIANT (chain / independent ray-trace + Kirchhoff "
+        f"oracle, EE2 ratio): 0.00 w -> 0.970; 0.25 w -> 1.010; 0.50 w -> "
+        f"1.008; 0.75 w -> 1.002; 1.00 w -> 0.986; 1.50 w -> 0.903 -- against "
+        f"an oracle floor of 6.4e-04 on this ratio.  READ THE ORDERING WITH "
+        f"CARE: the on-axis row is not the best of the six, because below "
+        f"~1 w these points differ by less than the readout model choice "
+        f"does.  With traced_kwargs={{'inverse_map': False}} (the terminal "
+        f"fine retrace's v5.35 inverse-characteristic evaluator off) the same "
+        f"stand-in reads 0.997 at 0.00 w and 0.971 at 1.00 w, which is the "
+        f"ordering the superseded 2026-07-29 table had; the evaluator trades "
+        f"the on-axis row for the decentred ones and improves the WORSE of "
+        f"the two (field-fidelity defect 1.90e-03 -> 1.61e-03, decentred FWHM "
+        f"ratio 1.0952 -> 1.0000).  The FALL past one radius is common to "
+        f"both.  And on design 121's post-DOE chain, per order, against an "
         f"independent skew-ray + Debye oracle that says every order is EQUALLY "
         f"diffraction-limited (EE3 ~90.7 %): EE3 87.6 % on axis, 86.0 % at "
         f"(-1,0), 68.1 % at (-4,0), 65.3 % at (-4,-2).  THEREFORE: any "

@@ -139,6 +139,17 @@ _RADII = (2.0, 4.0, 6.0)    # EE radii in um
 # Oracle sampling.  The Huygens integrand is stationary near the focus, so a
 # coarse pupil is exact here; 141 across 4.4 w is ~0.03 rad/sample of residual
 # phase at the window edge.
+#
+# ``_PUPIL_HALF`` is not only a sampling extent: the patch is SQUARE and
+# centred on the beam, so it is what APERTURES the oracle -- the prescription's
+# own circular stop (0.5*_APER = 2.8333 w) does not bite until the patch
+# reaches it.  At 2.2 w the patch keeps 0.999981 of the launched power, and
+# widening it to 3.2 w (past the stop, where the answer stops moving) moves the
+# oracle's EE(2 um) by 6.4e-04 -- the floor the on-axis envelope below is
+# derived against -- but its ring-binned FWHM by two 0.15 um bins, 3.15 ->
+# 2.85 um.  So the EE ratios here are robust to this constant and the FWHM
+# ratios are quoted against THIS value of it.  Measured 2026-09-12 (WP-A24);
+# pinned in test_audit2609_a24_decentre_calibration.py.
 _N_PUPIL = 141
 _PUPIL_HALF = 2.2 * _W
 
@@ -608,8 +619,8 @@ def test_exact_beats_paraxial_for_a_tilted_congruence_against_the_oracle():
 #      `on_decentred_fit` still has a job -- see `_check_decentred_fit`.)
 # ===========================================================================
 def test_decentred_carrier_decentre_penalty_envelope():
-    """The chain tracks the oracle on axis and slightly worse when the same
-    beam is decentred -- pinned as an envelope so neither side can drift.
+    """Both paths track the oracle to within 3 % of encircled energy, pinned
+    as two derived envelopes so neither side can drift.
 
     The stand-in makes the comparison airtight: the ``K = -n^2`` conic is the
     exact Fermat solution for the WHOLE collimated bundle, so every
@@ -618,11 +629,20 @@ def test_decentred_carrier_decentre_penalty_envelope():
     each, and the ratio chain/oracle removes the aperture clipping that makes
     the two oracles differ in their own right.
 
-    Measured 2026-07-29 at ``|c|/w = 1.0``: 0.9498 pre-D7, **0.9828** post-D7,
-    against 0.9966 on axis.  If the decentred ratio improves again, update this
-    envelope, ``_check_decentred_fit``'s calibration and the roadmap's D6/D7
-    block, and re-measure design 121's per-order rows -- they are still a
-    LOWER BOUND."""
+    WHICH PATH IS THE BETTER ONE IS NOT FIXED, and an earlier revision of this
+    docstring asserted that it was ("the chain tracks the oracle on axis and
+    slightly worse when the same beam is decentred").  Measured 2026-09-12:
+    **0.9698 on axis against 0.9855 decentred** -- the decentred path is the
+    better of the two.  The ordering is set by the terminal fine retrace's
+    v5.35 inverse-characteristic evaluator, not by the decentre: with
+    ``traced_kwargs={'inverse_map': False}`` the same two read 0.9966 and
+    0.9711, which is the 2026-07-29 ordering.  Field fidelity against the same
+    oracle says the evaluator improves the WORSE arm (``1 - |<O,C>|/norms``
+    1.90e-03 -> 1.61e-03) and closes the decentred width defect (FWHM ratio
+    1.0952 -> 1.0000), so it is a trade and not a loss.  What survives the
+    model choice, and is what this test is for, is that BOTH paths sit within
+    a few percent of an independent stigmatic oracle while the routes this
+    file exists to refuse sit 48-78 % away (ratios 0.516 and 0.217)."""
     _ram_guard()
     on_axis, _ = _run_chain(la.TiltedCarrier(np.inf, 0.0, 0.0, 0.0, 0.0),
                             final_leg='exact', centre_out=(0.0, 0.0))
@@ -640,15 +660,59 @@ def test_decentred_carrier_decentre_penalty_envelope():
         f"decentred")
     r_on = m_on['ee'][2.0] / o_on['ee'][2.0]
     r_off = m_off['ee'][2.0] / o_off['ee'][2.0]
-    # measured 2026-07-29 (post-D7): 0.9966 on axis, 0.9828 decentred
-    assert r_on > 0.97, f"the ON-AXIS path regressed: EE2 ratio {r_on:.4f}"
+    # ---- the two EE2 arms, both two-sided, both derived ------------------
+    # THE ORACLE'S OWN FLOOR on these ratios, measured 2026-09-12 by sweeping
+    # the only two free parameters the inline oracle has: its pupil patch
+    # (2.2 -> 2.6 -> 2.8333 -> 3.2 -> 4.0 beam radii; past 2.8333 the
+    # prescription's own circular stop governs and the answer stops moving)
+    # and its quadrature pitch (0.0314 -> 0.0157 w).  r_on spans 6.4e-04 over
+    # all of it and r_off 3.8e-04.  Both bars below are quoted against that.
+    #
+    # r_on, measured 0.9698 (2026-09-12).  It read 0.9966 on 2026-07-29 and
+    # reads 0.9966 at HEAD today under ``traced_kwargs={'inverse_map': False}``
+    # -- so the 0.0268 between them is the terminal fine retrace's v5.35
+    # inverse-characteristic evaluator, i.e. a documented model choice, and it
+    # is 42x the oracle's floor, so BOTH readings are real measurements.  A
+    # bar inside that band therefore measures the build rather than the
+    # physics, which is exactly what the superseded one-sided ``> 0.97`` did:
+    # parked 0.0266 under a single reading, with no floor, no defect scale and
+    # no upper arm, it went red on a 0.02 % move.  The envelope spans the
+    # model-choice band and is sized against the DEFECT scale this fixture
+    # measures for the same arm:
+    #   below   0.95 -- a shortfall of 0.05 from 1, i.e. 1.66x the measured
+    #     shortfall (0.0302) and 78x the oracle floor, but 9.7x UNDER the
+    #     mildest on-axis defect this fixture has ever shown (the superseded
+    #     ABCD readout centre, 12.4 um off the Fermat focus: EE2 0.363 against
+    #     the oracle's 0.703, ratio 0.516, shortfall 0.484) and 16x under the
+    #     paraxial route (ratio 0.217, shortfall 0.783 -- the sibling test
+    #     above pins that one at < 0.25).
+    #   above   1.02 -- 0.010 over the largest value this metric takes
+    #     anywhere on the stand-in's decentre curve (1.010 at 0.25 w, where
+    #     the two models agree to better than the oracle's own aperture
+    #     choice).  The chain cannot hold 2 % MORE energy inside 2 um than a
+    #     stigmatic oracle without the oracle having moved or power having
+    #     appeared, and either is worth a red test.
+    assert 0.95 < r_on < 1.02, (
+        f"on-axis EE2 ratio {r_on:.4f} is outside the derived envelope "
+        f"(measured 0.9698 on 2026-09-12; 0.9966 with the inverse-"
+        f"characteristic evaluator off; oracle floor 6.4e-04).  Below it: the "
+        f"on-axis path regressed -- the defect classes this fixture measures "
+        f"read 0.52 (a mis-placed readout centre) and 0.22 (the paraxial "
+        f"route).  Above it: the chain is holding more core energy than a "
+        f"stigmatic oracle, so check the ORACLE first.")
+    # r_off, measured 0.9855 (2026-09-12); 0.9828 on 2026-07-29 post-D7 and
+    # 0.9498 pre-D7.  Bar unchanged -- it was already two-sided and its
+    # rationale already ran in both directions.
     assert 0.965 < r_off < 1.005, (
-        f"decentred EE2 ratio {r_off:.4f} is outside the MEASURED post-D7 "
-        f"envelope (0.9828 at |c|/w = 1.0).  Above it: the decentred path "
-        f"improved again -- update this envelope, _check_decentred_fit's "
-        f"calibration and the roadmap's D6/D7 block.  Below it: it regressed.")
-    # ... and the decentred spot is now the oracle's WIDTH, which it was not
-    # pre-D7 (FWHM ratio 1.0952 there, 1.0000 here).
+        f"decentred EE2 ratio {r_off:.4f} is outside the MEASURED envelope "
+        f"(0.9828 at |c|/w = 1.0 on 2026-07-29, 0.9855 on 2026-09-12).  Above "
+        f"it: the decentred path improved again -- update this envelope, "
+        f"_check_decentred_fit's calibration and the roadmap's D6/D7 block.  "
+        f"Below it: it regressed.")
+    # ... and the decentred spot is the oracle's WIDTH, which it was not
+    # pre-D7 (FWHM ratio 1.0952 there, 1.0000 here) and is not with the
+    # inverse-characteristic evaluator off (1.0952 again, measured
+    # 2026-09-12 -- that arm is what closes it now).
     assert abs(m_off['fwhm'] / o_off['fwhm'] - 1.0) < 0.05, (
         f"decentred FWHM ratio {m_off['fwhm'] / o_off['fwhm']:.4f}")
 

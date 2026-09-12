@@ -738,10 +738,11 @@ broad excepts and the census is untouched.
 7. **`tests/unit/test_niche_d6_exact_tilted_leg.py` owner (WP-A6 / VERIFY-A6) --
    restate `r_on`'s bar with a derivation, or investigate the 0.0268 it lost.**
    `test_decentred_carrier_decentre_penalty_envelope`'s `assert r_on > 0.97`
-   reads **0.969787** and has done, bit-stably, since `a18ab074` (WP-A6) -- ten
-   commits before WP-A16 and long before this file's bar was last looked at.
-   Full bisect, metrics and the reasoning are in section 8.3.  Two possible
-   outcomes, and the choice belongs to that subsystem's owner:
+   reads **0.969787** and has done, bit-stably, since `f602b72c` (WP-A1) --
+   NOT since `a18ab074` (WP-A6) as this item first said; WP-A24 re-measured
+   the bisect and the correction is recorded at the head of section 8.3.
+   Metrics and the reasoning are in section 8.3.  Two possible outcomes, and
+   the choice belongs to that subsystem's owner:
 
    * **If 0.9698 is the post-C1 truth**, restate the bar the way its own
      sibling `r_off` is already written -- two-sided, with the derivation
@@ -758,6 +759,13 @@ broad excepts and the census is untouched.
 
    I did not touch the file: it is not in WP-A16's ownership list, and WP-A16
    is measured not to have moved the number.
+
+   **Resolved by WP-A24 (2026-09-12, `fixes/WP-A24_REPORT.md`):** the first
+   outcome applies.  `a18ab074^` reads the same 0.969787 as `a18ab074`, and
+   the C1 resolver is never entered on the `final_leg='exact'` path this
+   fixture runs.  The bar is restated as `0.95 < r_on < 1.02` against a
+   measured 6.4e-04 oracle floor, and the shipped calibration table (item 8)
+   is re-measured in `carrier.py`.
 
 8. **`lumenairy/propagators/carrier.py` owner -- the decentre calibration the
    shipped warning quotes is stale.**  `propagate_traced_carrier_chain`'s
@@ -955,8 +963,28 @@ stashed or written to the repository.
 | `949edb3b` | `chore(hygiene): WP-A21` -- **the commit immediately before mine** | failed | **0.9698** |
 | `2ede9a16` | HEAD | failed | **0.9698** |
 
-**The crossing is `a18ab074` (WP-A6)**, ten commits and two days before
-`c7c9ebbb`.  `e3f7185a` -- its immediate parent -- passes; `a18ab074` fails at
+**Correction (WP-A24, 2026-09-12).**  The conclusion this section first drew
+-- "the crossing is `a18ab074` (WP-A6)" -- is wrong.  `a18ab074`'s immediate
+parent is `818251fd`, not `e3f7185a`: the step between those two table rows
+spans 56 library commits (`git log --oneline e3f7185a..a18ab074 -- lumenairy`).
+Re-measured read-only with the same `git archive` method, `818251fd`
+(`a18ab074^`) already reads **0.969787** -- bit for bit the value at
+`a18ab074` and at HEAD -- and the C1 resolver (`_default_focus_standoff` /
+`_beam_containment_standoff`) is never entered on the `final_leg='exact'`
+path this fixture runs (pinned by poisoning both symbols; the paraxial leg is
+the falsifier).  The crossing is in two pieces, neither of them WP-A6's:
+**-0.0251 at `4e8ea247`** (the v5.35 inverse-characteristic evaluator,
+reproduced at HEAD to six digits by `traced_kwargs={'inverse_map': False}`)
+and **-0.0017 at `f602b72c`** (WP-A1 raytrace).  The full bisect,
+per-revision metrics and the oracle floor are in `fixes/WP-A24_REPORT.md`
+(A24-1, A24-4).  The method was sound; the sample was 56 commits wide at the
+decisive step.  The original conclusion follows, kept as the record of what
+was inferred at the time.
+
+**The crossing is `a18ab074` (WP-A6)** *(superseded -- see the correction
+above)*, ten commits and two days before
+`c7c9ebbb`.  `e3f7185a` -- its immediate parent *(it is not; the parent is
+`818251fd`)* -- passes; `a18ab074` fails at
 0.9698; and the value is then **bit-stable at 0.9698 through every commit
 since**, including the one immediately before mine.  Running the same test
 against the pre-WP-A16 tree gives `EE2 ratio 0.9698` to the same four decimals
@@ -970,7 +998,9 @@ lumenairy/elements/_lens_traced.py lumenairy/elements/_lens_real.py` lists
 **20+ library commits**, every one of them this campaign's own deliberate
 physics corrections (L1-L20, T1-T16, C1-C5 and their VERIFY passes).
 
-**Why WP-A6 is the plausible mechanism, not a defect.**  The failing quantity is
+**Why WP-A6 is the plausible mechanism, not a defect** *(superseded: WP-A24
+measured that C1 is not on this fixture's code path; the mechanism is the
+inverse-characteristic evaluator)*.  The failing quantity is
 `m_on['ee'][2.0] / o_on['ee'][2.0]` -- the chain's encircled energy inside a
 2 um radius over the oracle's -- and WP-A6's headline C1 is *"focus readout
 sized from the BEAM"*.  Resizing the readout window is exactly what moves an EE
