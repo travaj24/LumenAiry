@@ -21,6 +21,8 @@ Part 5 P0-1 finding.
 Author: Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.ensemble.md``.
+
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional, Tuple, Union
@@ -84,12 +86,11 @@ def _coerce_field_from_propagator_return(out: Any) -> Any:
     :class:`PropagationResult` wrappers expose ``.field``.  Anything
     else raises a clear :class:`TypeError`.
 
-    v4.16.2 (audit P1-NEW-F1-2): preserve the backend of the returned
-    field.  Pre-fix every branch coerced through ``np.asarray(...)``,
-    silently transferring CuPy / JAX returns to host NumPy.  Now we
-    return the underlying array as-is (NumPy, CuPy, or eager
-    ``jax.Array``); the per-realisation accumulator runs through the
-    matching ``xp.*`` namespace.
+    The backend of the returned field is PRESERVED: the underlying array
+    comes back as-is (NumPy, CuPy, or eager ``jax.Array``) and the
+    per-realisation accumulator runs through the matching ``xp.*``
+    namespace.  Coercing through ``np.asarray(...)`` here would silently
+    transfer a CuPy / JAX return to host NumPy (audit P1-NEW-F1-2).
     """
     # Bare backend array (NumPy / CuPy / JAX) -- duck-typed via .ndim +
     # .shape + .dtype.
@@ -258,12 +259,11 @@ def propagate_ensemble(
       return the input's backend; user-supplied callables are
       responsible for their own backend handling.
     """
-    # v4.16.2 (audit P3-NEW-F1-2): explicit kwargs-collision check.
-    # Pre-fix a caller passing ``propagator_kwargs={'dx': ...}`` plus a
-    # positional ``dx=...`` triggered the bare Python ``TypeError: got
-    # multiple values for keyword argument 'dx'`` -- correct but
-    # confusing.  Raise a domain-level ``ValueError`` with a clear
-    # remediation pointer.
+    # Explicit kwargs-collision check.  Without it a caller passing
+    # ``propagator_kwargs={'dx': ...}`` alongside a positional ``dx=...``
+    # gets the bare Python ``TypeError: got multiple values for keyword
+    # argument 'dx'`` -- correct, but with no remediation pointer.  Raise
+    # a domain-level ``ValueError`` instead (audit P3-NEW-F1-2).
     if propagator_kwargs is not None:
         collisions = (set(propagator_kwargs)
                       & {'dx', 'wavelength'})
@@ -274,15 +274,14 @@ def propagate_ensemble(
                 f"{sorted(collisions)}.  Pass dx / wavelength only via "
                 f"the top-level kwargs, not propagator_kwargs.")
 
-    # v4.16.2 (audit P1-NEW-F1-2): backend-preserving dispatch.
-    # Pre-fix the duck-typed ``np.asarray(ensemble)`` fallback below
-    # silently transferred CuPy ensembles to host NumPy and forced
-    # concretisation of JAX arrays, defeating any GPU / autodiff
-    # workflow the user built upstream.  Now we detect the backend via
-    # ``array_namespace`` and run the accumulator on the same xp.
-    # Inputs that aren't a NumPy / CuPy / JAX array (e.g. a Python
-    # list of 2-D arrays) fall back to ``np.asarray``; the warning
-    # below documents the coercion.
+    # Backend-preserving dispatch: detect the backend via
+    # ``array_namespace`` and run the accumulator on the same xp.  A
+    # duck-typed ``np.asarray(ensemble)`` fallback would silently transfer
+    # a CuPy ensemble to host NumPy and force concretisation of JAX
+    # arrays, defeating any GPU / autodiff workflow the caller built
+    # upstream (audit P1-NEW-F1-2).  Inputs that are NOT a NumPy / CuPy /
+    # JAX array (e.g. a Python list of 2-D arrays) do fall back to
+    # ``np.asarray``; the warning below documents that coercion.
     if not (hasattr(ensemble, 'ndim') and hasattr(ensemble, 'shape')
             and hasattr(ensemble, 'dtype')):
         try:
@@ -312,12 +311,11 @@ def propagate_ensemble(
             "propagate_ensemble: at least one of `return_intensity` "
             "or `return_ensemble` must be True (otherwise the call "
             "produces no output).")
-    # v4.16.2 (audit P3-NEW-F1-1): reject empty ensembles cleanly.
-    # ``shape=(0, Ny, Nx)`` passes the ndim check above; pre-fix the
-    # downstream ``I_acc / float(0)`` raised an opaque
-    # ``ZeroDivisionError`` (or NaN-poisoned the result depending on
-    # the dtype).  Surface the empty-ensemble case as a domain-level
-    # ``ValueError`` at the entry point.
+    # Reject empty ensembles cleanly: ``shape=(0, Ny, Nx)`` passes the
+    # ndim check above, and the downstream ``I_acc / float(0)`` then
+    # raises an opaque ``ZeroDivisionError`` -- or NaN-poisons the result,
+    # depending on the dtype.  Surface the empty-ensemble case as a
+    # domain-level ``ValueError`` at the entry point (audit P3-NEW-F1-1).
     if ensemble.shape[0] == 0:
         raise ValueError(
             "propagate_ensemble: empty ensemble (n_realizations=0).  "
@@ -345,17 +343,16 @@ def propagate_ensemble(
     # preserves backend parity (e.g. JAX's complex64 -> float32
     # default; CuPy's complex128 -> float64).
     #
-    # v4.16.3 (audit P2-NEW-F1-3): re-shape the fallback so
     # ``get_default_real_dtype()`` is the canonical ``in_dtype is None``
-    # path rather than an unreachable ``except`` branch.  Pre-v4.16.3
-    # the earlier ``hasattr(ensemble, 'dtype')`` gate + ``np.asarray``
-    # coercion (lines ~287-302) guaranteed ``getattr(ensemble, 'dtype',
-    # None)`` always returned a valid numpy dtype by the time control
-    # reached this site, so the ``except (TypeError, ValueError)``
-    # branch was structurally dead and the ``set_default_real_dtype``
-    # knob had no reachable consumer library-wide.  The ``try/except``
-    # is retained as a belt-and-suspenders guard for the exotic-dtype
-    # case (e.g. a future numpy dtype that doesn't expose ``.real``).
+    # path, NOT an unreachable ``except`` branch (audit P2-NEW-F1-3): the
+    # ``hasattr(ensemble, 'dtype')`` gate + ``np.asarray`` coercion above
+    # guarantee ``getattr(ensemble, 'dtype', None)`` returns a valid numpy
+    # dtype by the time control reaches here, so routing the knob through
+    # ``except (TypeError, ValueError)`` would make it structurally dead
+    # and leave ``set_default_real_dtype`` with no reachable consumer
+    # library-wide.  The ``try/except`` is retained as a
+    # belt-and-suspenders guard for the exotic-dtype case (e.g. a future
+    # numpy dtype that does not expose ``.real``).
     from .propagation import get_default_real_dtype
     in_dtype = getattr(ensemble, 'dtype', None)
     if in_dtype is None:

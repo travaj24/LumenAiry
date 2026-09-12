@@ -18,6 +18,8 @@ This module provides:
 
 Author: Andrew Traverso
 """
+
+# Version history for this module: ``docs/history/lumenairy.analysis.coherence.md``.
 from __future__ import annotations
 
 from typing import Any, Dict, Optional, Sequence, Tuple
@@ -75,13 +77,12 @@ def koehler_image(
     I_image : ndarray, real, shape (N, N)
         Partially-coherent image intensity.
     """
-    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
-    # ``_check_2d_scalar_field`` helper.  Pre-v4.15.5 an MCF / 3-D
-    # ensemble object failed at ``object_field.shape[0]`` indexing
-    # (3-D returned a meaningful but wrong N) or attribute access
-    # (MCF).  Routes both to the canonical v4.16 message via the V6
-    # walker.  Input kind: 'field' (the object transmission is a
-    # 2-D scalar complex field on the object plane).
+    # Defensive guard via the shared ``_check_2d_scalar_field`` helper.
+    # An MCF / 3-D ensemble object otherwise fails at
+    # ``object_field.shape[0]`` indexing (3-D returns a meaningful but
+    # WRONG N) or on attribute access (MCF); both route to the canonical
+    # message via the V6 walker.  Input kind: 'field' -- the object
+    # transmission is a 2-D scalar complex field on the object plane.
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(object_field, 'koehler_image', input_kind='field')
     N = object_field.shape[0]
@@ -99,13 +100,14 @@ def koehler_image(
             theta = np.sqrt(ax ** 2 + ay ** 2)
             if theta > theta_max:
                 continue
-            # v5.4.6 (audit P3-12): obliquity / solid-angle weighting.  A
-            # bare count-average over the Cartesian (ax, ay) grid treats
-            # every direction as equally bright and over-weights high-angle
-            # directions.  Weight each contribution by cos(theta) (a
-            # uniform-radiance / Lambertian condenser model) and normalise
-            # by sum(w).  At small condenser_NA cos(theta) -> 1 (the old
-            # behaviour); the correction matters near the 0.999 NA clamp.
+            # Obliquity / solid-angle weighting (audit P3-12).  A bare
+            # count-average over the Cartesian (ax, ay) grid treats every
+            # direction as equally bright and over-weights high-angle
+            # directions, so each contribution is weighted by cos(theta)
+            # (a uniform-radiance / Lambertian condenser model) and
+            # normalised by sum(w).  At small ``condenser_NA``
+            # cos(theta) -> 1 and the weighting is a no-op; it matters
+            # near the 0.999 NA clamp.
             w = float(np.cos(theta))
             # Tilted illumination
             E_illum = object_field * np.exp(
@@ -211,12 +213,12 @@ def mutual_coherence(
     Ny, Nx = fields[0].shape
     cy = Ny // 2
     rows = np.array([f[cy, :] for f in fields])  # (N_ensemble, Nx)
-    # Gamma[i, j] = < E(x_i) conj(E(x_j)) > over the ensemble.  4.10:
-    # pre-4.10 used rows.T.conj() @ rows which produces
-    # < conj(E(x_i)) E(x_j) > -- the complex conjugate of the
-    # documented quantity.  Hermiticity is still preserved (Gamma is
-    # always Hermitian), so the bug was silent, but any phase-sensitive
-    # consumer (degree of coherence, Wolf-Mandel imaging) saw the
+    # Gamma[i, j] = < E(x_i) conj(E(x_j)) > over the ensemble.  Mind the
+    # operand order: ``rows.T.conj() @ rows`` computes
+    # < conj(E(x_i)) E(x_j) >, the complex CONJUGATE of the documented
+    # quantity.  Hermiticity is preserved either way (Gamma is always
+    # Hermitian), so that mistake is silent -- but any phase-sensitive
+    # consumer (degree of coherence, Wolf-Mandel imaging) sees the
     # off-diagonals with flipped sign.
     Gamma = rows.T @ rows.conj() / len(fields)
     x = (np.arange(Nx) - Nx / 2) * dx

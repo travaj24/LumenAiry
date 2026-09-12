@@ -31,6 +31,8 @@ Convention
 * Chief is placed at OPD = 0 by re-zeroing the marginal values.
 """
 
+# Version history for this module: ``docs/history/lumenairy.analysis.image_plane_wfe.md``.
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -323,9 +325,8 @@ def eval_image_plane_wfe(
         *(3.8.2+)*:
 
         * ``'vertex'`` -- tangent at the LAST LENS SURFACE vertex.
-          Radius = ``img_d_m``.  Simplest convention; what
-          ``conv_a_to_rs_opd`` and pre-3.8.2 versions of this
-          function used.
+          Radius = ``img_d_m``.  Simplest convention; also what
+          ``conv_a_to_rs_opd`` uses.
         * ``'exit_pupil'`` -- tangent at the exit pupil.  Radius =
           ``img_d_m - xp_z`` where ``xp_z`` is the signed exit-
           pupil offset from the last surface (typically negative
@@ -512,16 +513,17 @@ def eval_image_plane_wfe(
         #
         #     n_obj / u_pp  +  n_img / v_pp  =  Phi  =  1 / efl
         #
-        # Pre-fix, measured against an exact real-ray oracle (a ray from
-        # the axial object point, axis crossing read past the last
-        # surface): an N-BK7 IMAGE space gave img_d_m = +41.569590 mm vs
-        # +70.557940 mm exact (-41.1%, and the resulting misplaced
-        # reference sphere reported 114.8 waves PV); an N-BK7 OBJECT
-        # space gave +34.023215 mm vs +35.549003 mm (-4.3%, 292.8 waves
-        # PV).  The index-threaded form below matches that oracle to
-        # <= 5.3e-12 on both, and to 1.8e-12 on the air control.  Note
-        # the two errors are NOT a common factor -- n_obj and n_img enter
-        # differently -- which is why both must be threaded.
+        # Measured against an exact real-ray oracle (a ray from the axial
+        # object point, its axis crossing read past the last surface), the
+        # air form gets an N-BK7 IMAGE space wrong by -41.1 % --
+        # ``img_d_m`` = +41.569590 mm against +70.557940 mm exact, the
+        # misplaced reference sphere then reporting 114.8 waves PV -- and
+        # an N-BK7 OBJECT space by -4.3 % (+34.023215 mm against
+        # +35.549003 mm, 292.8 waves PV).  The index-threaded form below
+        # matches that oracle to <= 5.3e-12 on both, and to 1.8e-12 on the
+        # air control.  The two errors are NOT a common factor -- n_obj
+        # and n_img enter differently -- which is why both must be
+        # threaded.
         #
         # Air conjugates are bit-identical: both indices are exactly 1.0,
         # so ``n_obj / u_pp`` IS ``1.0 / u_pp`` and ``n_img / denom`` IS
@@ -593,10 +595,9 @@ def eval_image_plane_wfe(
     # For a stop-at-front system ep_z = 0 and ep_radius = semi, so the
     # two coincide.  For stop-in-the-middle the EP is the IMAGE of the
     # stop by the upstream sub-system, which sits at z = fod.ep_z away
-    # from surface 0 with radius fod.ep_radius.  Pre-4.10 always aimed
-    # at z=0 with the full aperture radius, so off-axis fields with a
-    # mid-stop system landed at the wrong pupil position and reported
-    # wrong WFE.
+    # from surface 0 with radius fod.ep_radius.  Aiming at z=0 with the
+    # full aperture radius instead lands off-axis fields of a mid-stop
+    # system at the wrong pupil position and reports wrong WFE.
     ep_z = float(getattr(fod, 'ep_z', 0.0))
     ep_r = float(getattr(fod, 'ep_radius', semi))
     if not np.isfinite(ep_r) or ep_r <= 0:
@@ -693,12 +694,12 @@ def eval_image_plane_wfe(
     alive = np.asarray(f.alive, dtype=bool)
     opl = np.asarray(f.opd)
 
-    # 4.10: identify chief = ALIVE ray closest to (0, 0) in pupil
-    # coords.  Pre-4.10 could pick a dead vignetted on-axis ray (rare
-    # but possible for systems where the chief is geometrically
-    # blocked), which NaN-poisoned every downstream OPL calculation
-    # via opl[chief] = NaN.  Fall back to the unconstrained nearest
-    # if no rays survived (caller will see the all-NaN result anyway).
+    # Identify chief = ALIVE ray closest to (0, 0) in pupil coords.  A
+    # dead vignetted on-axis ray -- rare, but possible for systems where
+    # the chief is geometrically blocked -- would NaN-poison every
+    # downstream OPL calculation via ``opl[chief] = NaN``.  Fall back to
+    # the unconstrained nearest if no rays survived (the caller sees the
+    # all-NaN result anyway).
     pup_r2 = px ** 2 + py ** 2
     if alive.any():
         pup_r2_alive = np.where(alive, pup_r2, np.inf)
@@ -729,12 +730,11 @@ def eval_image_plane_wfe(
     # ``axial_distance / N_chief`` -- the same factor used in
     # ``_chief_image_xy`` to land the chief at the image plane.
     #
-    # Pre-4.12.0 only the chief-image landing got the 1/N_chief factor
-    # (the v4.11.2 fix); the sphere radius was left at the axial
-    # ``img_d_m``, so for off-axis fields the sphere no longer passed
-    # through the chief and the resulting quadratic shape error was
-    # absorbed as phantom defocus by ``best_rms``.  On-axis (N=1) this
-    # is a no-op.
+    # Leaving the sphere radius at the axial ``img_d_m`` while the
+    # chief-image landing carries ``1/N_chief`` makes the sphere miss the
+    # chief for off-axis fields, and the resulting quadratic shape error
+    # is absorbed as phantom defocus by ``best_rms``.  On-axis (N = 1)
+    # the factor is 1 and the distinction vanishes.
     # W4d (F2): FOLDED FRAME.  Everything below is done in the ALONG-THE-RAY
     # axial frame -- the one ``img_d_m`` (from ``bfl``/``pp_image_z``, both
     # unfolded per W4b/S11-1) is already expressed in, and the only frame in
@@ -744,12 +744,13 @@ def eval_image_plane_wfe(
     # z-cosine is ``_fold_sign * N_chief``, and every place a global-z
     # quantity meets an along-ray axial distance carries ``_fold_sign``
     # (``cz``, ``t_advance``, and ``xp_z``, which W3-T2/W4 define in GLOBAL
-    # z).  Pre-fix, on an air singlet + flat fold, ``1/N_chief`` inverted
-    # every arc-length factor and the sphere was centred on the wrong side:
-    # ``r_sphere_m`` came back NEGATIVE (-4.288895e-02 m) and the WFE read
-    # 321.00 waves PV / 100.17 waves RMS for a system that is a few waves
-    # unfolded.  ``_fold_sign`` is exactly +1 for every unfolded system
-    # (and every even mirror count), so all of this is an IEEE no-op there.
+    # z).  Without ``_fold_sign``, on an air singlet + flat fold,
+    # ``1/N_chief`` inverts every arc-length factor and the sphere is
+    # centred on the wrong side: ``r_sphere_m`` comes back NEGATIVE
+    # (measured -4.288895e-02 m) and the WFE reads 321.00 waves PV /
+    # 100.17 waves RMS for a system that is a few waves unfolded.
+    # ``_fold_sign`` is exactly +1 for every unfolded system (and every
+    # even mirror count), so all of this is an IEEE no-op there.
     _fold_sign = _mirror_parity_sign(surfaces)
     if alive[chief]:
         _N_chief = float(Nd[chief])
@@ -850,11 +851,11 @@ def eval_image_plane_wfe(
                     _a_exit = float(np.median(_scale[np.isfinite(_scale)]))
                     if np.isfinite(_a_exit) and _a_exit > 0:
                         r_pup = _a_exit
-                # 4.10: closed-form best-RMS uses the SPHERE radius
-                # (which depends on sphere_tangent), not img_d_m
-                # directly.  For 'exit_pupil' the sphere radius is
-                # img_d_m - fod.xp_z; pre-4.10 always used 1/img_d_m
-                # which is wrong for that branch.
+                # The closed-form best-RMS uses the SPHERE radius (which
+                # depends on ``sphere_tangent``), not ``img_d_m``
+                # directly: for 'exit_pupil' the sphere radius is
+                # ``img_d_m - fod.xp_z``, and ``1/img_d_m`` is wrong on
+                # that branch.
                 R_old = _radius_for(img_d_m)
                 inv_R_new = (1.0 / R_old
                               + 2.0 * c1 * wavelength / r_pup ** 2)

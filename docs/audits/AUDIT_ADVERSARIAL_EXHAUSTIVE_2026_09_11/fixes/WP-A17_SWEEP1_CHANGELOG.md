@@ -9,24 +9,30 @@ Assembled by the orchestrator into `CHANGELOG.md`.  Finding **P2-4**
 `propagators/` (non-lens), `analysis/` and `sources/`
 
 The "vN.N (audit X): pre-fix this did A, which was wrong because B; now it
-does C" passages were relocated **verbatim** from 29 modules into per-module
+does C" passages were relocated **verbatim** from 38 modules into per-module
 documents under `docs/history/`, leaving a pointer in the source only where
 the old rationale still explains present behaviour (audit P2-4 / sec. 14 V6).
 This is the library-wide continuation of the WP-A17 part-1 relocation
 (`propagators/carrier.py`, `carrier_field.py`, `fft_infra.py`).
 
-**Zero executable change.**  Every one of the 29 modules is byte-for-byte
+Comments on live guards that explained themselves by naming the release that
+added them ("Pre-4.10 this silently ...") were **rewritten in the present
+tense** rather than deleted: the hazard each guard prevents is still reachable,
+so the source now states it as what goes wrong WITHOUT the guard, with every
+measurement kept, and the original wording is recorded in the module's
+document.
+
+**Zero executable change.**  Every one of the 38 modules is byte-for-byte
 identical to its pre-relocation self under both fingerprints the checker
 records -- the docstring-free AST and the comment-free/docstring-free token
 stream -- verified by
 `tests/unit/test_audit2609_a17_history_relocation.py`.
 
-Measured over the 29 modules: 33 820 -> 33 180 source lines; "history" lines
-by the audit's own loose classifier 11 034 -> 9 738 (32.6 % -> 29.3 % of the
-partition); by the strict "pre-fix this did A" classifier the finding actually
-names, 8 065 -> 5 618 (-30 %).  178 blocks, 1 754 prose lines, moved into
-4 526 lines of `docs/history/*.md`; 1 058 lines of condensed rationale left at
-the source sites.
+Measured over the 38 modules: 39 239 -> 38 575 source lines; "history" lines
+by the audit's own loose classifier 11 925 -> 10 556; by the strict "pre-fix
+this did A" classifier the finding actually names, 8 901 -> 5 662 (-36 %).
+226 blocks, 2 074 prose lines, moved into `docs/history/*.md`; the condensed
+rationale stays at the source sites.
 
 Measured derivations of live constants stayed in the source, as
 `docs/TESTING_STANDARDS.md` S5 requires: the `_SIGMA_GRID_N_MAX_DEFAULT` 7-rung
@@ -74,8 +80,22 @@ measurement (`rs.py`).
 
 ### Added
 
-* 29 documents under `docs/history/` (one per relocated module, named by the
+* 38 documents under `docs/history/` (one per relocated module, named by the
   dotted module path because basenames collide across packages), each carrying
   the module's two pre-relocation fingerprints, a line-ordered table of
   contents, and every moved block verbatim under the source line it came from
   with a *Left in the source:* note.
+
+---
+
+**Module list (38).**  `lumenairy/propagators/`: `asm.py`, `asymptotic.py`,
+`asymptotic_aberration_tensor.py`, `asymptotic_canonical_fit.py`,
+`asymptotic_jax_twin.py`, `asymptotic_maslov.py`, `asymptotic_modes.py`,
+`dispatch.py`, `ensemble.py`, `fresnel.py`, `hf.py`, `hfpi.py`, `mft.py`,
+`mhs.py`, `result.py`, `rs.py`, `sas.py`, `subaperture.py`, `system.py`,
+`vector_diffraction.py`, `vectorial_hfpi.py`.
+`lumenairy/analysis/`: `aberration.py`, `ao.py`, `beam_stats.py`,
+`coherence.py`, `coronagraph.py`, `detector.py`, `field.py`, `ghost.py`,
+`image_plane_wfe.py`, `interferometry.py`, `opd.py`, `phase_retrieval.py`,
+`psf_mtf_otf.py`, `strehl.py`, `through_focus.py`, `zernike.py`.
+`lumenairy/sources/core.py`.

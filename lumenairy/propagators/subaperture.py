@@ -24,6 +24,8 @@ run on NumPy / CuPy / JAX inputs uniformly.
 Author: Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.subaperture.md``.
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -76,7 +78,7 @@ def patches_for_box(
           about 0, ``c_i = (i - (n-1)/2) * step``, so the covered span
           ``[-((n-1)*step + w)/2, +((n-1)*step + w)/2]`` is exactly
           symmetric and the box's two edges get equal margin.
-        * ``False``: the pre-v5.30 layout, ``c_i = -W/2 + w/2 + i*step``
+        * ``False``: the legacy layout, ``c_i = -W/2 + w/2 + i*step``
           -- the FIRST patch is flush with the box's low edge and the
           surplus coverage ``(n-1)*step + w - W`` all piles up past the
           high edge.  Kept bit-for-bit for callers that stored patch
@@ -85,7 +87,7 @@ def patches_for_box(
         The two layouts differ by a constant per-axis offset equal to
         HALF THE SURPLUS COVERAGE,
         ``((n - 1)*step + w - W) / 2`` (``centred=True`` sits that much
-        lower) -- i.e. the legacy layout pushed the entire surplus past
+        lower) -- i.e. the legacy layout pushes the entire surplus past
         the high edge instead of splitting it.  When ``W`` is an exact
         multiple of ``step`` the surplus is ``w - step = w*overlap`` and
         the offset reduces to ``w * overlap / 2``; that is the case for
@@ -128,8 +130,8 @@ def patches_for_box(
         x0 = -0.5 * (n_x - 1) * step_x
         y0 = -0.5 * (n_y - 1) * step_y
     else:
-        # Pre-v5.30 layout: first patch flush with the box's low edge, all
-        # the surplus coverage past the high edge.  Bit-for-bit preserved.
+        # Legacy layout: first patch flush with the box's low edge, all
+        # the surplus coverage past the high edge.
         x0 = -W_x / 2 + w_x / 2
         y0 = -W_y / 2 + w_y / 2
 
@@ -189,30 +191,22 @@ def combine_patch_fields(
     """Coherent recombination of per-patch output fields into a
     global output field via partition-of-unity weights.
 
-    .. versionchanged:: 5.2
-        v5.2 (AUDIT_V4_13_1 Part 2 P1-F closure): two new optional
-        kwargs ``image_centres`` and ``image_half_widths`` let the
-        caller pass image-plane (post-magnification + tilt) patch
-        coordinates that the partition-of-unity windows centre on.
-        Pre-v5.2 the windows were always centred on
-        ``patch_grid.centres``, which are SOURCE-plane positions --
-        correct only for unit-magnification, no-tilt geometries.  When
-        ``image_centres`` is ``None`` (default) the legacy
-        source-plane behaviour is preserved bit-for-bit; the caller
-        :func:`propagate_subaperture_asymptotic` emits a
-        ``UserWarning`` advising the user to supply mapped centres for
-        non-unit-magnification systems.
-
     .. versionchanged:: 5.2.3
-        v5.2.3 (AUDIT_V4_13_1 P1-F substantive closure):
-        :func:`propagate_subaperture_asymptotic` now computes the
-        image-plane centres / half-widths internally from the system
-        ABCD and passes them through these kwargs automatically, so
-        the v5.2.0 ``UserWarning`` is silenced for the typical-call
-        case.  The opt-in kwargs still work and take precedence over
-        the auto-computed values for callers who want to override the
-        paraxial mapping (e.g. when the prescription's nominal image
-        plane is not the desired output plane).
+        The partition-of-unity windows centre on IMAGE-plane (post
+        magnification + tilt) patch coordinates.
+        :func:`propagate_subaperture_asymptotic` computes them from the
+        system ABCD and passes them through ``image_centres`` /
+        ``image_half_widths`` automatically; where that computation is
+        unavailable it falls back to the source-plane windows and emits a
+        ``UserWarning`` advising the caller to supply mapped centres.  The
+        kwargs stay opt-in and take precedence over the auto-computed
+        values, for callers who want to override the paraxial mapping
+        (e.g. when the prescription's nominal image plane is not the
+        desired output plane).  Passing ``None`` uses
+        ``patch_grid.centres`` / ``patch_grid.half_widths``, which are
+        SOURCE-plane positions and so are correct only for
+        unit-magnification, no-tilt geometries (AUDIT_V4_13_1 Part 2
+        P1-F).
 
     Parameters
     ----------
@@ -235,10 +229,10 @@ def combine_patch_fields(
     if len(patch_fields) == 0:
         raise ValueError("combine_patch_fields: empty patch list.")
 
-    # v5.2 (AUDIT_V4_13_1 Part 2 P1-F closure): pick the centres /
-    # half-widths used for the partition-of-unity windows.  Legacy
-    # callers see ``None`` and inherit ``patch_grid.centres`` /
-    # ``patch_grid.half_widths`` -- the bit-for-bit pre-v5.2 path.
+    # Pick the centres / half-widths the partition-of-unity windows use.
+    # ``None`` inherits ``patch_grid.centres`` / ``patch_grid.half_widths``
+    # -- SOURCE-plane positions, correct only for unit magnification and
+    # no tilt (AUDIT_V4_13_1 Part 2 P1-F).
     if image_centres is None:
         centres_arr = patch_grid.centres
     else:
@@ -363,17 +357,14 @@ def propagate_subaperture_asymptotic(
     # v5.2.3 (AUDIT_V4_13_1 P1-F substantive closure): compute the
     # paraxial object-to-image magnification from the system ABCD and
     # use it to map each per-patch source-plane window centre /
-    # half-width onto its image-plane footprint.  v5.2.0 surfaced the
-    # source-plane-centred-window bug as a ``UserWarning`` -- v5.2.3
-    # now FIXES it by routing the mapped centres through
-    # :func:`combine_patch_fields`'s ``image_centres`` /
-    # ``image_half_widths`` kwargs.  For a unit-magnification system
-    # (``A == 1, B == 0``) the mapped centres equal the source-plane
-    # centres bit-for-bit, so v5.1 / pre-v5.2 numerics are preserved
-    # exactly.  The warning is retained only as a fallback for the
-    # corner case where the ABCD computation itself fails (degenerate
-    # / coord-break-heavy prescriptions without a clean paraxial
-    # imaging chain).
+    # half-width onto its image-plane footprint.  The mapped centres are
+    # routed through :func:`combine_patch_fields`'s ``image_centres`` /
+    # ``image_half_widths`` kwargs (AUDIT_V4_13_1 P1-F).  For a
+    # unit-magnification system (``A == 1, B == 0``) the mapped centres
+    # equal the source-plane centres bit-for-bit.  The ``UserWarning``
+    # below is the fallback for the corner case where the ABCD
+    # computation itself fails (degenerate / coord-break-heavy
+    # prescriptions without a clean paraxial imaging chain).
     image_mag = None
     _abcd_failure = None
     try:
@@ -437,13 +428,12 @@ def propagate_subaperture_asymptotic(
             UserWarning, stacklevel=2,
         )
 
-    # 4.13.2 (P1-NEW-B): build the source-plane coordinate grid for
-    # E_in so we can project the actual input field onto the LG basis
-    # per patch.  Pre-4.13.2 ``E_in`` was silently replaced by a unit
-    # fundamental Gaussian at every patch -- structured input (off-
-    # axis Gaussian, vortex, Airy) was completely discarded.  Mirrors
-    # the v4.11.2 fix in
-    # :func:`hf.propagate_huygens_fresnel_through_prescription`.
+    # Build the source-plane coordinate grid for E_in so the ACTUAL
+    # input field is projected onto the LG basis per patch (P1-NEW-B).
+    # Without it ``E_in`` is silently replaced by a unit fundamental
+    # Gaussian at every patch and structured input -- an off-axis
+    # Gaussian, a vortex, an Airy -- is discarded entirely.  Same guard
+    # as :func:`hf.propagate_huygens_fresnel_through_prescription`.
     E_in_np = _np.asarray(E_in)
     Ny_in, Nx_in = E_in_np.shape[-2], E_in_np.shape[-1]
     in_x = (_np.arange(Nx_in) - Nx_in / 2) * dx
@@ -523,23 +513,19 @@ def propagate_subaperture_asymptotic(
             poly_order=poly_order,
             source_centre=(cx_i, cy_i),
         )
-        # Propagate from this patch's source point.  4.10: the actual
-        # `propagate_modal_asymptotic` signature uses
-        # `source_amplitudes` / `pupil_amplitudes` (not
-        # `source_lg_amps` / `pupil_lg_amps`) and `s2_grid_x` /
-        # `s2_grid_y` (not `output_grid`).  Pre-4.10 calls raised
-        # TypeError on first invocation -- the subaperture path was
-        # dead on import.  4.11.1: feed the (Ny, Nx) meshgrids
-        # directly; the 4.10 patch built a 3-D ``np.stack(...,axis=-1)``
-        # array and then tried to unpack it 2-ways, which always raised
-        # ``ValueError: too many values to unpack`` for any Ny != 2.
+        # Propagate from this patch's source point.
+        # ``propagate_modal_asymptotic`` takes ``source_amplitudes`` /
+        # ``pupil_amplitudes`` and ``s2_grid_x`` / ``s2_grid_y``, and it
+        # wants the (Ny, Nx) meshgrids fed DIRECTLY -- stacking them into
+        # a 3-D array and unpacking 2-ways raises ``ValueError: too many
+        # values to unpack`` for any Ny != 2.
         sgx, sgy = OX, OY
-        # 4.13.2 (P1-NEW-B): project the *actual* input field onto the
-        # LG basis centred at this patch's source point.  Pre-4.13.2
-        # the source_amplitudes were hard-coded to a unit LG_{0,0},
-        # so any structured E_in was silently replaced by a fundamental
-        # Gaussian and the function returned a Gaussian output
-        # regardless of the input.  Mirrors v4.11.2 hf.py fix.
+        # Project the *actual* input field onto the LG basis centred at
+        # this patch's source point (P1-NEW-B).  Hard-coding
+        # ``source_amplitudes`` to a unit LG_{0,0} silently replaces any
+        # structured ``E_in`` with a fundamental Gaussian, so the
+        # function returns a Gaussian output regardless of the input.
+        # Same guard as hf.py.
         try:
             source_lg = decompose_lg(
                 E_in_np, IX, IY, w_s,

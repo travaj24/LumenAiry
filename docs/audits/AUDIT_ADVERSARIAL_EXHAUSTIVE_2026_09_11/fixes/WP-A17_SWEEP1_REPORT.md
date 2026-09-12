@@ -557,6 +557,19 @@ for doomed in reversed(fn.body):
    block matching the strict pattern is ADDED to a module that already has a
    `docs/history/` document would stop the backlog re-accumulating.
    `CONTRIBUTING.md` and the CI config are not in my ownership.
+4. **`lumenairy/propagators/asymptotic_jax_twin.py:524`** --
+   `safe_bquad = jnp.where(ok_bquad, b_quad, 0.0 + 0.0j)` is a live
+   P1-NEW-4-class site: the `0.0 + 0.0j` literal forces a complex128 promotion
+   regardless of the iterate's dtype, which on the JAX twin's float32 path is
+   exactly the silent upcast the pin exists to catch.
+   `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` fails on it
+   today.  The fix the pin itself prescribes is one line --
+   `jnp.where(ok_bquad, b_quad, jnp.zeros((), dtype=b_quad.dtype))`, or a
+   trailing `.astype(...)` on the same line.  This is EXECUTABLE code, so
+   under the WP rules I report it rather than changing it; the sibling
+   `safe_phi = jnp.where(..., 0.0 + 0.0j)` two lines below wants the same
+   treatment and is only missed by the pin because its literal falls on a
+   continuation line.
 
 ---
 
@@ -605,4 +618,202 @@ for doomed in reversed(fn.body):
 * The nine modules in sec. 6 keep `Pre-fix ...` phrasing on live guards.  A
   future census on the loose classifier will still count them.  That is a
   deliberate reading of the standing rule (a why-comment stays), stated here so
-  it can be overruled cheaply.
+  it can be overruled cheaply.  **Overruled by the coordinator -- see
+  sec. 12.**
+
+---
+
+# 12. Follow-up: the nine `Pre-fix`-framed modules (coordinator ruling)
+
+The coordinator ruled on sec. 6: the standing rule is that a comment says what
+the code does now and why, not when it was fixed, so the present-tense rewrite
+applies to the nine modules as well.  Done, under the same discipline --
+fingerprints identical, `ruff` clean, a `docs/history/<dotted>.md` document per
+module recording each original wording verbatim, and the prose-pin test files
+re-run.  The checker now covers **38** of my documents.
+
+The coordinator's two checker fixes are confirmed in place: the dotted name is
+built from the repo-relative `module:` path, and the mutation search walks
+every single-line statement while skipping docstrings.  All 29 sec.-2
+documents that previously failed the name assertion now pass, and
+`analysis/coronagraph.py` -- the sec. 8.2 case -- passes
+`test_the_fingerprints_are_actually_sensitive`.  I did not touch the checker.
+
+## 12.1 What the first pass had missed
+
+My flag sweep's strict regex required `pre-fix` or a `vN.N (` prefix, so it
+saw only part of each module: it did not match the `Pre-4.10` / `Pre-v4.16.3`
+/ `pre-3.8.2` spellings, which are the commoner form in these nine.  A second
+grep for `pre-fix|pre-v?\d|used to|previously|formerly|the old |was wrong`
+found **26 further sites**, more than doubling the work.  Both passes were
+then merged into ONE plan per module, expressed in pre-relocation line
+numbers, and applied in a single shot to the restored original -- so every
+document's table of contents still cites the file as it stood before a single
+block moved, and no document records a line number from a half-relocated
+intermediate.  The second pass's ranges were re-located in the original by
+exact content match, with uniqueness asserted rather than assumed.
+
+## 12.2 Per module
+
+| module | blocks | prose moved | left behind | lines b -> a | loose b -> a | strict b -> a | doc lines | fp |
+|---|---|---|---|---|---|---|---|---|
+| `lumenairy/analysis/phase_retrieval.py` | 11 | 73 | 57 | 1068 -> 1054 | 155 -> 150 | 118 -> 0 | 206 | identical |
+| `lumenairy/propagators/subaperture.py` | 9 | 66 | 50 | 614 -> 600 | 167 -> 141 | 142 -> 3 | 183 | identical |
+| `lumenairy/propagators/vector_diffraction.py` | 8 | 42 | 41 | 518 -> 519 | 178 -> 178 | 169 -> 0 | 144 | identical |
+| `lumenairy/analysis/image_plane_wfe.py` | 7 | 40 | 39 | 1225 -> 1226 | 59 -> 30 | 248 -> 0 | 134 | identical |
+| `lumenairy/propagators/ensemble.py` | 5 | 38 | 33 | 440 -> 437 | 207 -> 202 | 54 -> 0 | 116 | identical |
+| `lumenairy/analysis/coherence.py` | 3 | 21 | 21 | 223 -> 225 | 17 -> 11 | 21 -> 0 | 83 | identical |
+| `lumenairy/propagators/sas.py` | 2 | 20 | 18 | 393 -> 393 | 52 -> 50 | 23 -> 0 | 74 | identical |
+| `lumenairy/analysis/interferometry.py` | 2 | 17 | 16 | 246 -> 247 | 10 -> 10 | 17 -> 0 | 71 | identical |
+| `lumenairy/analysis/aberration.py` | 1 | 3 | 3 | 692 -> 694 | 46 -> 46 | 44 -> 41 | 49 | identical |
+| **TOTAL (9)** | **48** | **320** | **278** | **5 419 -> 5 395** | **891 -> 818** | **836 -> 44** | | **all identical** |
+
+**Strict-history 836 -> 44, a 95 % reduction**, and a post-pass grep for
+`pre-fix|pre-v?\d|formerly|the old |was wrong` across all nine returns **zero
+hits**.  The residual 44 is two false positives of my own classifier, checked
+by hand:
+
+* `analysis/aberration.py` (41) -- `aberration_summary`'s docstring contains
+  "the field point **used to anchor** the LG tensor's chief ray".  Ordinary
+  English; `\bused to\b` drags the whole 41-line docstring into the count.
+* `propagators/subaperture.py` (3) -- `# v5.30 (audit P10): symmetric tiling`,
+  a version ATTRIBUTION on a live three-line comment that describes what the
+  branch computes.
+
+Line counts barely move because this pass mostly rewrote rather than deleted:
+the point was to turn "Pre-4.11.1 clipped to sin(theta_max) *before* the mask
+was built, making the mask identically True" into "Clipping to sin(theta_max)
+BEFORE the mask is built makes it identically True, silently extending the
+exit pupil to the whole array", keeping every measurement.  Four modules gain
+1-2 lines net, all of it the two-line `docs/history` pointer the checker
+requires.
+
+## 12.3 What this pass surfaced that sec. 6 did not
+
+Three of the nine turned out to hold more than `Pre-fix` framing:
+
+* **`propagators/subaperture.py`** carries the same stacked-`versionchanged`
+  duplication as `mft.py`: `combine_patch_fields` had TWO directives (v5.2 and
+  v5.2.3) on the same two kwargs, the second partly superseding the first, so a
+  caller learned the contract twice and had to work out which half still
+  applied.  One directive now states it, including the branch on which the v5.2
+  `UserWarning` still fires (verified live at `subaperture.py:437` -- the ABCD
+  fallback).  Its kernel-call comment also narrated two successive call-site
+  fixes (a pre-4.10 `TypeError` that left the path "dead on import", and a
+  4.10 3-D `np.stack` the 4.11.1 patch undid); the source now states the
+  signature the kernel wants and the unpacking failure that follows from
+  getting it wrong.
+* **`analysis/phase_retrieval.py`** had the V6 pattern inside parameter
+  documentation: `seed` and `dtype` each opened with a paragraph about what the
+  parameter did BEFORE it worked.  A caller reading `seed : int, optional` met
+  three sentences about v4.11.2 before reaching the one that says what passing
+  an int does.  Both entries now lead with the contract; the x64 precision
+  argument (float32's ~1e-6 error floor against the NumPy twin's ~1e-14) stayed,
+  restated as the reason the default follows JAX's x64 convention.
+* **`analysis/coherence.py`** carried a genuine trap worth keeping in the
+  source: `rows.T.conj() @ rows` and `rows.T @ rows.conj()` both give a
+  Hermitian `Gamma`, so choosing the wrong one is SILENT -- it just conjugates
+  every off-diagonal.  That was written as "pre-4.10 used ..."; it is now a
+  present-tense "mind the operand order" note, which is what a reader editing
+  that line needs.
+
+## 12.4 Verification
+
+* **Fingerprints** -- all 9 byte-identical under both AST and token
+  fingerprints, asserted by the applier before writing and re-checked by the
+  checker.
+* **Checker** -- `tests/unit/test_audit2609_a17_history_relocation.py`, final
+  state: **`697 passed` in 27.91s, zero failures**, covering all 38 of my
+  documents plus the other two sweeps'.  (Mid-pass runs showed 1-11 failures,
+  every one of them an `elements/*` or `_context` module another agent was
+  rewriting at that moment; all cleared once their edits landed.)
+* **String-literal cross-check** over `tests/**` and `validation/**`, restricted
+  to these nine: **1 candidate, 0 real** (`' bit-identical'`, a print-format
+  string in an unrelated validation probe).  No prose pin broken, so **no test
+  assertion was retired or adjusted in this pass.**
+* **Targeted unit files** (the six that exercise these modules most directly --
+  `test_v5_2_3_subaperture_image_plane.py`,
+  `test_niche_s9_vector_diffraction_registration.py`,
+  `test_audit2609_a7_image_plane_wfe.py`, `test_audit2609_verify_a7_wfe.py`,
+  `test_niche_audit_w4d_folded_frames.py`, `test_v4_16_2_agent_a.py`):
+  `110 passed in 31.48s`.
+* **Prose-pin unit set** -- the 58 files that reference one of the nine modules
+  or its public symbols, plus the checker:
+
+  ```
+  15 failed, 3531 passed, 20 skipped, 102 warnings in 576.57s (0:09:36)
+  ```
+
+  **Eleven of the fifteen are transient cross-agent edits inside the checker**
+  -- five `lumenairy.elements.*` modules (`_lens_thin`, `eme.eme_diffraction`,
+  `pmm._core`, `pmm.stack`, `pmm.stack2d_pure`) failing both fingerprint
+  assertions because sweep 2 was mid-rewrite while my run was in flight, plus
+  `lumenairy._context` on the mutation search.  Re-running the checker alone
+  once those edits landed: **`697 passed` -- zero failures.**  This is the same
+  class part 1 documented ("another agent's half-landed edit"); none of my 38
+  documents failed in either run.
+
+  The other four are non-checker and **none is attributable to this WP**, each
+  verified:
+
+  | failure | verdict |
+  |---|---|
+  | `test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py::...[propagators/asymptotic_jax_twin.py]` | the offending line, `safe_bquad = jnp.where(ok_bquad, b_quad, 0.0 + 0.0j)`, is **byte-identical in my pre-relocation copy** (there at L532, now at L524); the pin is content-based and its only allowlist entry is `ui/psf_mtf_dock.py:230`, so it is not line-number-keyed for this module.  My edit is comment-only and both fingerprints are identical, so the site cannot have been introduced or exposed by it.  It is a real P1-NEW-4-class defect in the JAX twin -- executable code, so per the brief I report it rather than fixing it (sec. 9 item 4). |
+  | `test_niche_audit_w4_p5_return_contract.py::TestTransitionMachineryIsRetired::test_the_executed_entry_is_tombstoned_in_the_registry` | asserts `'Tombstone, v5.30' in getsource(lumenairy._deprecation)`.  `_deprecation.py` is not mine; it is `M` in `git status`, has a `docs/history/lumenairy._deprecation.md`, and the string is present twice at HEAD and zero times in the working tree -- another sweep relocated it mid-flight. |
+  | `test_v4_14_2_dispatcher_pin_cache_locks.py::test_cache_has_companion_lock[lumenairy.elements.lens_config-_VOCAB_CACHE]` | `lumenairy/elements/lens_config.py` is a new untracked file from another WP. |
+  | `test_v4_16_1_dispatcher_pin_cache_registry_enrollment.py::test_every_cache_owning_module_enrolls_with_registry` | same file, same owner. |
+
+  Note on provenance: `git log` shows the orchestrator has already committed
+  sweep 1 as `9a4c5919`, so `git show HEAD:` no longer yields the pre-sweep
+  text.  Every "pre-existing" claim above is therefore made against my own
+  `before/` copies, taken immediately before each plan was applied, not
+  against HEAD.
+* **Additional unit files**, run on the frozen final state:
+  `test_niche_audit_w3_propagators.py`, `test_niche_audit_w4_input_kind.py`,
+  `test_audit_analysis.py`, `test_audit_propagation.py`,
+  `test_v5_4_6_wave6_analysis.py`, `test_niche_audit_r1_compute_pupils.py`,
+  `test_niche_audit_w4c_analysis_immersed.py`,
+  `test_niche_audit_w4_immersed_pupils.py` -- `699 passed in 29.41s`.
+* **Validation** -- 17 topic files across two runs, `ALL passed` in both:
+  `test_subaperture test_analysis test_image_plane_wfe test_coherence
+  test_advanced_diffraction` (5/5), and `test_features
+  test_new_propagators_smoke test_dispatch test_hfpi test_propagation
+  test_asymptotic test_hf test_vectorial_hfpi test_mhs test_ao test_detector
+  test_field` (12/12).
+* **Static** -- `ruff check lumenairy/propagators/ lumenairy/analysis/
+  lumenairy/sources/` clean; `import lumenairy` OK.  (`ruff check lumenairy/`
+  reports one `I001` in `elements/_lens_thin.py`, which is another sweep's file
+  and not one I touched -- it already carried its own `docs/history` pointers
+  before this pass.)
+
+## 12.5 Files touched in the follow-up
+
+**Modified -- comments and docstrings only, both fingerprints identical (9):**
+`lumenairy/propagators/ensemble.py`, `sas.py`, `subaperture.py`,
+`vector_diffraction.py`; `lumenairy/analysis/aberration.py`, `coherence.py`,
+`image_plane_wfe.py`, `interferometry.py`, `phase_retrieval.py`.
+
+**New (9):** `docs/history/lumenairy.propagators.ensemble.md`,
+`lumenairy.propagators.sas.md`, `lumenairy.propagators.subaperture.md`,
+`lumenairy.propagators.vector_diffraction.md`,
+`docs/history/lumenairy.analysis.aberration.md`,
+`lumenairy.analysis.coherence.md`, `lumenairy.analysis.image_plane_wfe.md`,
+`lumenairy.analysis.interferometry.md`,
+`lumenairy.analysis.phase_retrieval.md`.
+
+**No test file was modified in this pass.**
+
+## 12.6 Partition status after the follow-up
+
+45 modules in scope, **38 relocated**, 7 left alone, and the 7 carry nothing to
+relocate: `propagators/__init__.py`, `propagators/_bluestein.py`,
+`analysis/__init__.py`, `analysis/plotting.py`, `analysis/polychromatic.py`,
+`sources/__init__.py` (zero strict-classified blocks between them) and
+`analysis/core.py` (a re-export shell whose "v5.1.0 split: this file is now a
+thin back-compat re-export shell" + submodule map + "Every previously-public
+name ... continues to resolve here" IS the description of what the module is
+and guarantees).  **The partition is closed.**
+
+Running totals for the whole sweep: **38 modules, 226 blocks, 2 074 prose
+lines moved into 38 documents; strict-history 8 901 -> 5 662 (-36 %); all 38
+modules byte-identical under both fingerprints.**

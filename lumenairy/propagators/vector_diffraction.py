@@ -22,6 +22,8 @@ Richards, B. & Wolf, E. (1959), Proc. R. Soc. A 253, 358-379.
 
 Author: Andrew Traverso
 """
+
+# Version history for this module: ``docs/history/lumenairy.propagators.vector_diffraction.md``.
 from __future__ import annotations
 
 import numpy as np
@@ -76,8 +78,7 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
            ``NA_eff = (Np*dx_pupil/2)/f`` -- measured 5.5x focal-FWHM
            error at NA_eff=0.16 against a requested NA=0.9.  A
            ``RuntimeWarning`` reports the delivered NA_eff and the
-           ``dx_pupil`` / ``Np`` needed (P4, v5.30); pre-v5.30 this was
-           silent.
+           ``dx_pupil`` / ``Np`` needed (audit P4).
     N_focal : int, optional
         Focal-plane grid dimension.  Defaults to ``pupil.shape[0]``.
 
@@ -131,9 +132,9 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     _check_2d_scalar_field(pupil, 'richards_wolf_focus',
                            input_kind='pupil')
 
-    # 4.11.2: honour precision='single' via the global default complex
-    # dtype.  Pre-4.11.2 the input was always promoted to complex128,
-    # silently negating ``set_default_complex_dtype(np.complex64)``.
+    # Honour precision='single' via the global default complex dtype:
+    # promoting the input to complex128 here would silently negate
+    # ``set_default_complex_dtype(np.complex64)``.
     from .propagation import get_default_complex_dtype as _gdct
     pupil = np.asarray(pupil, dtype=_gdct())
     Np = pupil.shape[0]
@@ -156,8 +157,8 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     # dx_focal_fft = λ·f / (N_focal·dx_pupil)
     # regardless of any user-supplied dx_focal -- the latter only
     # relabels the axes.  Compute the actual FFT pitch and warn loudly
-    # if the user passed a different value (was a silent mismatch
-    # pre-4.10).  A true free-pitch focal plane requires a chirp-z
+    # if the user passed a different value; the mismatch is otherwise
+    # silent.  A true free-pitch focal plane requires a chirp-z
     # backend; see fresnel_propagate_mft / Bluestein.
     dx_focal_fft = wavelength * f / (N_focal * dx_pupil)
     if dx_focal is not None:
@@ -194,12 +195,11 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     Xp, Yp = np.meshgrid(x_p, y_p)
     rho_p = np.sqrt(Xp ** 2 + Yp ** 2)
     # Map pupil radius to convergence angle: sin(theta) = rho / f
-    # 4.11.1: build the rim mask from the UNCLIPPED sin_theta_raw so
-    # the geometric pupil is honoured.  Pre-4.11.1 clipped to
-    # sin(theta_max) *before* the mask was built, making the mask
-    # ``sin_theta <= sin(theta_max)`` identically True for every grid
-    # pixel and silently extending the exit pupil to the whole array
-    # (Richards-Wolf rim mask was effectively unenforced).
+    # Build the rim mask from the UNCLIPPED ``sin_theta_raw`` so the
+    # geometric pupil is honoured.  Clipping to sin(theta_max) BEFORE the
+    # mask is built makes ``sin_theta <= sin(theta_max)`` identically
+    # True for every grid pixel, silently extending the exit pupil to the
+    # whole array and leaving the Richards-Wolf rim mask unenforced.
     sin_theta_raw = rho_p / f
     in_pupil = sin_theta_raw <= np.sin(theta_max)
     sin_theta = np.clip(sin_theta_raw, 0, np.sin(theta_max))
@@ -283,8 +283,8 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     # Jacobian factor (∂(x_p,y_p)/∂Ω) is f²·cos θ.  Reconciling these,
     # the pupil weight under an FFT representation is
     #   sqrt(cos θ) (aplanatic) · 1/cos θ (Jacobian) = 1/sqrt(cos θ).
-    # Pre-4.10 used only the aplanatic factor, so the effective
-    # apodisation was cos^(3/2) θ instead of cos^(-1/2) θ -- biased
+    # Using only the aplanatic factor would make the effective
+    # apodisation cos^(3/2) theta instead of cos^(-1/2) theta -- biased
     # toward the centre, missing energy at the high-NA rim.
     cos_safe = np.maximum(cos_theta, 1e-12)
     apod = 1.0 / np.sqrt(cos_safe)
@@ -407,23 +407,24 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
         # registration across the pad/crop therefore requires the pupil centre
         # index ``Np//2`` to land exactly on ``N_focal//2``:
         #     pad = N_focal//2 - Np//2       c0 = Np//2 - N_focal//2
-        # Pre-S9 this used ``(N_focal - Np)//2`` / ``(Np - N_focal)//2``, which
-        # is the SAME integer whenever ``Np`` and ``N_focal`` share parity but
-        # is off by exactly one index when they do not -- specifically for
-        # (Np odd, N_focal even) on the pad branch and (Np even, N_focal odd)
-        # on the crop branch.  That one-index slip translates the whole masked
-        # + apodised pupil by one pupil pixel, so the returned COMPLEX focal
-        # field picks up a spurious linear phase of ``2*pi/N_focal`` rad per
-        # focal pixel: measured 0.098175 rad/px at (Np, N_focal) = (33, 64)
-        # and 0.369599 rad/px at (32, 17), both matching the prediction
-        # ``2*pi*delta/N_focal`` to 6 digits, with the two fields differing by
-        # 145% in L2.  ``debye_wolf_psf`` (intensity) is blind to it; coherent
-        # superposition with a reference arm is not -- the same failure class
-        # the 4.11.2 ``exp(+i k f)`` sign fix addressed.  Both new expressions
-        # are IDENTICAL integers to the old ones for every same-parity
-        # (Np, N_focal) pair, so every even/even case -- i.e. every realistic
-        # call, including the ``N_focal is None -> Np`` default -- is
-        # bit-identical.
+        # The naive ``(N_focal - Np)//2`` / ``(Np - N_focal)//2`` must NOT
+        # be used here.  It is the SAME integer whenever ``Np`` and
+        # ``N_focal`` share parity, but is off by exactly one index when
+        # they do not -- specifically (Np odd, N_focal even) on the pad
+        # branch and (Np even, N_focal odd) on the crop branch.  That
+        # one-index slip translates the whole masked + apodised pupil by
+        # one pupil pixel, so the returned COMPLEX focal field picks up a
+        # spurious linear phase of ``2*pi/N_focal`` rad per focal pixel:
+        # measured 0.098175 rad/px at (Np, N_focal) = (33, 64) and
+        # 0.369599 rad/px at (32, 17), both matching the prediction
+        # ``2*pi*delta/N_focal`` to 6 digits, with the two fields
+        # differing by 145% in L2.  ``debye_wolf_psf`` (intensity) is
+        # blind to it; coherent superposition with a reference arm is not
+        # -- the same failure class the ``exp(+i k f)`` sign fix
+        # addressed.  The expressions above are IDENTICAL integers to the
+        # naive ones for every same-parity (Np, N_focal) pair, so every
+        # even/even case -- including the ``N_focal is None -> Np``
+        # default -- is unaffected either way.
         def _fft_field(P_comp):
             if N_focal >= Np:
                 pad = N_focal // 2 - Np // 2
@@ -450,11 +451,11 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     #     E(P) = (-i k f / 2π) · exp(+i k f) ·
     #             ∫∫ E_∞(θ,φ) exp(i k·r) sin θ dθ dφ
     #
-    # The pre-4.11.2 code used `exp(-i k f)`, which is opposite-sign to
-    # every other forward-prop in the library (angular_spectrum_propagate,
-    # fresnel_propagate, ... all use exp(+i k z) under exp(-iωt)).
-    # Coherent superposition with a reference arm therefore picked up a
-    # spurious exp(-2 i k f) phase mismatch.
+    # ``exp(-i k f)`` must NOT be used here: it is opposite-sign to every
+    # other forward-prop in the library (angular_spectrum_propagate,
+    # fresnel_propagate, ... all use exp(+i k z) under exp(-iωt)), so
+    # coherent superposition with a reference arm picks up a spurious
+    # exp(-2 i k f) phase mismatch.
     #
     # When the angular integral is evaluated by FFT over a Cartesian
     # pupil grid, the change of variables (θ,φ) → (k_x, k_y) with
@@ -465,10 +466,10 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     #     E(P) = (-i k / (2π f)) · exp(+i k f) · dx_pupil² · FFT[...]
     #
     # i.e. the prefactor scales as 1/f (amplitude) → 1/f² (intensity).
-    # Pre-4.11.2 the prefactor was (-i k f / 2π) · dx² · exp(-i k f),
-    # which scaled as f (amplitude) → f² (intensity) — the WRONG sign of
-    # the f-dependence: a 1 m focal length and a 1 cm focal length gave
-    # Airy peak intensities differing by 10⁴ in the wrong direction.
+    # The prefactor ``(-i k f / 2pi) * dx^2 * exp(-i k f)`` scales as f
+    # (amplitude) -> f^2 (intensity) -- the WRONG sign of the
+    # f-dependence: a 1 m focal length and a 1 cm focal length then give
+    # Airy peak intensities differing by 10^4 in the wrong direction.
     rw_prefactor = (-1j * k / (2.0 * np.pi * f)) * np.exp(1j * k * f)
     # Multiply by the Cartesian pupil area element (the FFT's implicit
     # discretisation factor).

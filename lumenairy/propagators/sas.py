@@ -13,6 +13,8 @@ Public symbol re-exported by ``propagation.py``.
 Author:  Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.sas.md``.
+
 from __future__ import annotations
 
 from typing import Tuple
@@ -220,11 +222,10 @@ def scalable_angular_spectrum_propagate(
         target_cdtype = E_in.dtype
     else:
         target_cdtype = np.dtype(_state.DEFAULT_COMPLEX_DTYPE)
-    # K3 (audit 2026-09-11): the kernel PHASE ARGUMENTS are no longer
-    # built in the caller's real dtype -- see the float64 note at the
-    # frequency-axis construction below.  Only the finished complex
-    # kernels are cast to ``target_cdtype``; the stored / returned dtype
-    # is unchanged.
+    # The kernel PHASE ARGUMENTS are NOT built in the caller's real dtype
+    # -- see the float64 note at the frequency-axis construction below.
+    # Only the finished complex kernels are cast to ``target_cdtype``; the
+    # stored / returned dtype is unaffected (audit K3).
 
     # -- zero-pad the input, centred ----------------------------------------
     # 4.12.0 (audit round-4 B1-5): `as1 = (N + 1) // 2` was only
@@ -257,16 +258,15 @@ def scalable_angular_spectrum_propagate(
         # -- spatial-frequency axes (natural FFT order) -------------------
         #   fftfreq(N_new, d=L_new/N_new) = fftfreq(N_new, d=dx)
         #
-        # K3 (audit 2026-09-11): these axes and every kernel PHASE
-        # ARGUMENT below are built in float64 regardless of the output
-        # dtype; only the finished complex kernels are cast to
-        # ``target_cdtype``.  This is the "f64-carrier-then-cast" recipe
-        # ``fresnel.py`` already uses for its quadratic carrier (v5.17.x
-        # P2-29) and that the ASM transfer function uses via its mod-2*pi
-        # fold.  Pre-fix these were float32 for a complex64 caller, and
-        # the ``h_AS - h_Fr`` difference below is a near-1 cancellation
-        # whose absolute error is ~eps REGARDLESS of how small the
-        # difference is -- then multiplied by ``k*z``: measured
+        # These axes and every kernel PHASE ARGUMENT below are built in
+        # float64 regardless of the output dtype; only the finished
+        # complex kernels are cast to ``target_cdtype`` (audit K3).  This
+        # is the "f64-carrier-then-cast" recipe ``fresnel.py`` already
+        # uses for its quadratic carrier (v5.17.x P2-29) and that the ASM
+        # transfer function uses via its mod-2*pi fold.  At float32 the
+        # ``h_AS - h_Fr`` difference below is a near-1 cancellation whose
+        # absolute error is ~eps REGARDLESS of how small the difference
+        # is -- and it is then multiplied by ``k*z``: measured
         # max|Delta(h_AS - h_Fr)| = 9.091e-08 float32 vs float64
         # (N_new = 1024, dx = 1 um, lambda = 633 nm), i.e. 2.9e-3 rad of
         # phase error at z = 3.24 mm and 0.902 rad at z = 1 m -- and long

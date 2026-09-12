@@ -15,6 +15,8 @@ which formalism.
 Author: Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.analysis.aberration.md``.
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -122,9 +124,9 @@ def aberration_summary(
 
     notes: List[str] = []
 
-    # Helper: glass-catalog failures previously got buried in `notes`
-    # while Seidel returned zeros -- making a system with an unknown
-    # glass look "diffraction-limited".  Bubble them up as warnings.
+    # Helper: glass-catalog failures are bubbled up as warnings.  Buried
+    # in `notes` while Seidel returns zeros, they make a system with an
+    # unknown glass look "diffraction-limited".
     def _maybe_warn_glass(exc: Exception) -> None:
         msg = str(exc)
         if 'Glass' in msg and 'not in registry' in msg:

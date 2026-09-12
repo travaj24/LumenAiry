@@ -28,6 +28,8 @@ References
 Author: Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.analysis.phase_retrieval.md``.
+
 from __future__ import annotations
 
 import threading
@@ -129,20 +131,17 @@ def gerchberg_saxton(
     implementation (:func:`gerchberg_saxton_jax`).
     """
     if backend == 'jax':
-        # 4.12.0 (audit round-4 B2-6): forward all reproducibility /
-        # precision kwargs to the JAX path.  Pre-4.12 the dispatcher
-        # only passed ``n_iter``, silently dropping ``seed``,
-        # ``initial_phase``, and ``dtype``.  Function-level kwargs on
-        # gerchberg_saxton_jax were wired correctly internally; the
-        # unified front door just didn't forward them.
+        # Forward all reproducibility / precision kwargs to the JAX path:
+        # ``seed``, ``initial_phase`` and ``dtype`` are wired correctly
+        # inside ``gerchberg_saxton_jax``, so this unified front door must
+        # not drop them (audit round-4 B2-6).
         #
-        # v4.13.0 (audit L4c): the JAX twin returns ``(phase, err)`` --
-        # it does not support host-side per-iteration error capture
-        # (``return_history=True``).  Pre-fix the dispatcher silently
-        # dropped ``return_history``, so a user expecting a 3-tuple
-        # received a 2-tuple with no warning.  Now we emit a
-        # ``RuntimeWarning`` and synthesise an empty history list so
-        # the return shape always matches the NumPy API.  Users who
+        # The JAX twin returns ``(phase, err)`` -- it does not support
+        # host-side per-iteration error capture (``return_history=True``).
+        # Dropping that kwarg silently would hand a caller expecting a
+        # 3-tuple a 2-tuple with no warning, so a ``RuntimeWarning`` is
+        # emitted and an empty history list synthesised, keeping the
+        # return shape matched to the NumPy API (audit L4c).  Callers who
         # need real history must use ``backend='numpy'``.
         if return_history:
             import warnings as _warnings
@@ -314,16 +313,15 @@ def error_reduction(
         parity with the JAX path.
     """
     if backend == 'jax':
-        # v4.13.0 (audit L4b): the NumPy API takes ``initial_guess``
-        # (a complex object-field starting point); the JAX twin
-        # ``error_reduction_jax`` takes ``init_phase`` (a real-valued
-        # initial Fourier-phase array).  Converting between them is
-        # lossy: phase = np.angle(initial_guess) discards amplitude
-        # info and changes the iteration trajectory.  Rather than
-        # silently demote, raise ``NotImplementedError`` so the user
-        # makes an explicit choice.  Pre-fix the kwarg was silently
-        # dropped, so two calls with different ``initial_guess``
-        # produced identical (random-init) trajectories.
+        # The NumPy API takes ``initial_guess`` (a complex object-field
+        # starting point); the JAX twin ``error_reduction_jax`` takes
+        # ``init_phase`` (a real-valued initial Fourier-phase array).
+        # Converting between them is lossy -- ``np.angle(initial_guess)``
+        # discards amplitude information and changes the iteration
+        # trajectory -- so this raises ``NotImplementedError`` rather than
+        # silently demoting.  Dropped silently, two calls with different
+        # ``initial_guess`` produce identical (random-init) trajectories
+        # (audit L4b).
         if initial_guess is not None:
             raise NotImplementedError(
                 "error_reduction(backend='jax', initial_guess=...): "
@@ -365,9 +363,8 @@ def error_reduction(
             f"error_reduction: backend must be 'numpy' or 'jax'; "
             f"got {backend!r}.")
 
-    # 4.11.2: honour `seed` for reproducibility (pre-4.11.2 the kwarg
-    # didn't exist on this path; users wanting deterministic runs had
-    # to construct `initial_guess` manually).
+    # Honour `seed` for reproducibility; without it a deterministic run
+    # requires the caller to construct `initial_guess` by hand.
     cdtype = dtype if dtype is not None else np.complex128
     if initial_guess is None:
         rng = (np.random.default_rng() if seed is None
@@ -387,11 +384,11 @@ def error_reduction(
     # ``measured_amplitude * F / 1.0`` which is also zero-amplitude,
     # matching ``measured_amplitude * exp(1j * 0) = measured_amplitude``
     # only at the (vanishingly rare) coincidence that |F| < 1e-30 but
-    # measured_amplitude > 0.  In that pathological case the old path
-    # would have produced ``measured_amplitude * (1+0j)`` (because
-    # np.angle(0+0j) == 0) -- but we accept the new ``~0`` here because
-    # |F| < 1e-30 means the iterate has functionally collapsed; both
-    # behaviours are valid limits.  JAX path untouched.
+    # measured_amplitude > 0.  The transcendental form gives
+    # ``measured_amplitude * (1+0j)`` there (``np.angle(0+0j) == 0``); the
+    # ``~0`` this form produces is accepted instead, because |F| < 1e-30
+    # means the iterate has functionally collapsed and both are valid
+    # limits.  JAX path untouched.
     for _ in range(n_iter):
         # Forward: object -> Fourier
         F = np.fft.fftshift(_fft2(np.fft.ifftshift(obj)))
@@ -546,8 +543,7 @@ def hybrid_input_output(
         raise ValueError(
             f"hybrid_input_output: backend must be 'numpy' or 'jax'; "
             f"got {backend!r}.")
-    # 4.11.2: honour `seed` / `dtype` for reproducibility + precision
-    # control (pre-4.11.2 the kwargs didn't exist on this path).
+    # Honour `seed` / `dtype` for reproducibility + precision control.
     cdtype = dtype if dtype is not None else np.complex128
     if initial_guess is None:
         rng = (np.random.default_rng() if seed is None
@@ -600,11 +596,10 @@ def hybrid_input_output(
 #
 # v4.12 perf: each outer driver below builds its iteration kernel at
 # module scope (parameterised via a small cache keyed on n_iter and any
-# scalar Python knobs).  Pre-4.12 the iteration body lived inside a
-# closure that was re-created on every call -- the ``lax.fori_loop``
-# inside was jit-traced by JAX, but the outer wrapper paid a fresh
-# dispatch each invocation.  With the module-scope cache, repeated
-# calls with the same n_iter reuse the same compiled XLA executable.
+# scalar Python knobs), so repeated calls with the same n_iter reuse the
+# same compiled XLA executable.  An iteration body inside a per-call
+# closure still gets its ``lax.fori_loop`` jit-traced by JAX, but the
+# outer wrapper pays a fresh dispatch on every invocation.
 
 #
 # v4.12.2: converted to LRU-bounded ``OrderedDict``s (were unbounded
@@ -692,8 +687,8 @@ def _make_gs_kernel(n_iter_int: int):
         E_final_ = jax.lax.fori_loop(0, n_iter_int, body, E0_)
         phase_ = jnp.angle(E_final_)
         # Final error from the far field of the FINAL iterate, matching
-        # the NumPy path's post-loop re-transform (pre-fix the metric
-        # used the far field carried out of the loop = previous iterate).
+        # the NumPy path's post-loop re-transform.  Reading the far field
+        # carried out of the loop would score the PREVIOUS iterate.
         F_final_ = jnp.fft.fftshift(
             jnp.fft.fft2(jnp.fft.ifftshift(E_final_)))
         err_ = jnp.mean((jnp.abs(F_final_) - tgt_) ** 2)
@@ -765,31 +760,23 @@ def gerchberg_saxton_jax(
     Parameters
     ----------
     seed : int, optional
-        4.11.2: now actually seeds the random initial-phase draw.
-        Pre-4.11.2 the kwarg was accepted but ignored (``_ = seed``
-        with no consumer), so two calls with different seeds produced
-        the same trajectory.  Pass ``None`` (default) for a uniformly-
-        zero initial phase (matches the historical deterministic
-        behaviour); pass an int to draw an i.i.d. uniform initial
-        phase that randomises the iteration start.
+        Seeds the random initial-phase draw.  ``None`` (default) gives a
+        uniformly-zero initial phase -- deterministic; an int draws an
+        i.i.d. uniform initial phase that randomises the iteration start.
     dtype : numpy/jax float OR complex dtype, optional
         Working precision.  A COMPLEX dtype (``np.complex128`` /
         ``np.complex64``) is accepted and names the iteration's complex
         field type; the amplitude and phase arrays -- and therefore the
         returned ``err`` -- take its REAL counterpart, so ``err`` is
-        always a real float.  (Pre-fix a complex ``dtype`` fell through
-        to the defensive branch, made ``src``/``tgt`` complex, and the
-        call died in ``float(err)`` with
-        ``TypeError: float() argument must be ... not 'complex'``.)
+        always a real float.
 
-        ``None`` (default) follows JAX's own x64 convention: float64
-        when ``jax.config.jax_enable_x64`` is enabled, float32 otherwise.
-        Before this it was float32 unconditionally, so a caller who had
-        turned x64 on still got a single-precision answer and a ~1e-6
-        error floor while the NumPy twin reached ~1e-14 -- the two
-        backends documented "the same physics" and did not agree to more
-        than six digits. Pass an explicit ``np.float32`` to pin the
-        historical behaviour regardless of the global flag.
+        ``None`` (default) follows JAX's own x64 convention: float64 when
+        ``jax.config.jax_enable_x64`` is enabled, float32 otherwise.  A
+        float32 answer carries a ~1e-6 error floor while the NumPy twin
+        reaches ~1e-14, so an unconditional float32 would make two
+        backends documented as "the same physics" disagree past six
+        digits.  Pass an explicit ``np.float32`` to pin single precision
+        regardless of the global flag.
     initial_phase : ndarray, optional
         4.11.2: explicit initial-phase array.  Overrides ``seed``.
         Mirrors the NumPy variant's API.
@@ -853,11 +840,11 @@ def gerchberg_saxton_jax(
             dtype=dtype)
 
     # Combine source amplitude with the (possibly seeded) initial phase.
-    # v4.13.0 (audit L2): pre-fix this hard-cast to ``jnp.complex64``
-    # silently demoted the iteration state to single precision even when
-    # the user passed ``dtype=np.float64`` for ground-truth comparison.
-    # The complex dtype is paired with the real ``dtype``: complex64
-    # for float32, complex128 for float64.
+    # The complex dtype is paired with the real ``dtype``: complex64 for
+    # float32, complex128 for float64 (audit L2).  A hard cast to
+    # ``jnp.complex64`` here would demote the iteration state to single
+    # precision even when the caller passed ``dtype=np.float64`` for a
+    # ground-truth comparison.
     from ..propagators.propagation import _resolve_jax_complex_dtype
     np_real = np.dtype(dtype)
     if np_real == np.dtype(np.float64):
@@ -911,9 +898,8 @@ def error_reduction_jax(
     Mirror of :func:`error_reduction` -- alternating-projection on the
     Fourier-amplitude constraint and a real-space support constraint.
 
-    4.10: ``seed`` controls the random initial phase (was hard-coded
-    to seed=0 pre-4.10).  ``dtype`` selects float32 (default) or
-    float64 (matches NumPy precision).
+    ``seed`` controls the random initial phase.  ``dtype`` selects
+    float32 (default) or float64 (matches NumPy precision).
     """
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:

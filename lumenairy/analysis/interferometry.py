@@ -6,6 +6,8 @@ style), and extract OPD from measured fringes via phase-shifting.
 
 Author: Andrew Traverso
 """
+
+# Version history for this module: ``docs/history/lumenairy.analysis.interferometry.md``.
 from __future__ import annotations
 
 from typing import Optional, Sequence, Tuple
@@ -78,13 +80,12 @@ def simulate_interferogram(
         y = (np.arange(Ny) - Ny / 2) * dy
         X, Y = np.meshgrid(x, y)
         phase = phase + 2 * np.pi * (tilt_x * X + tilt_y * Y)
-    # 4.10: classic Michelson fringe is
+    # Classic Michelson fringe:
     #   I = background * (1 + visibility * cos(phase))
-    # which produces Michelson contrast V = (Imax - Imin) / (Imax + Imin)
-    # = visibility (matching the kwarg semantics).  Pre-4.10 used
-    # `background + 0.5 * visibility * cos(phase)`, which produced
-    # contrast 0.5 even with visibility=1, breaking the docstring's
-    # round-trip claim.
+    # which gives Michelson contrast V = (Imax - Imin) / (Imax + Imin)
+    # = visibility, matching the kwarg semantics.  The form
+    # ``background + 0.5 * visibility * cos(phase)`` gives contrast 0.5
+    # even at visibility=1 and breaks this function's round-trip claim.
     fringe = background * (1.0 + visibility * np.cos(phase))
     fringe = np.where(np.isfinite(opd), fringe, 0.0)
     return fringe
@@ -146,16 +147,16 @@ def phase_shift_extract(
         shifts = [2 * np.pi * i / n for i in range(n)]
     frames = [np.asarray(f, dtype=np.float64) for f in frames]
     shifts = np.asarray(shifts, dtype=np.float64)
-    # v5.4.6 (audit F-13): GENERAL least-squares extraction valid for
-    # ARBITRARY (non-equispaced) shifts.  Model each frame as
+    # GENERAL least-squares extraction, valid for ARBITRARY
+    # (non-equispaced) shifts (audit F-13).  Model each frame as
     #   I_k = a + A*cos(s_k) + B*sin(s_k),  A = b*cos(phi), B = b*sin(phi)
     # and solve the linear LSQ for (a, A, B) per pixel via the design
-    # matrix S = [1, cos(s), sin(s)].  The previous correlation estimator
-    # atan2(sum(I*sin), sum(I*cos)) is the LSQ solution ONLY when the S
-    # columns are orthogonal (equispaced full-period shifts); for that
-    # case S^T S = diag(n, n/2, n/2) and this reduces to exactly the old
-    # result (so equispaced callers are bit-preserved), but for arbitrary
-    # shifts the old form was biased.
+    # matrix S = [1, cos(s), sin(s)].  The correlation estimator
+    # ``atan2(sum(I*sin), sum(I*cos))`` is the LSQ solution ONLY when the
+    # S columns are orthogonal (equispaced full-period shifts); there
+    # ``S^T S = diag(n, n/2, n/2)`` and this reduces to exactly it, so
+    # equispaced callers get the same result.  For arbitrary shifts the
+    # correlation form is biased.
     if convention not in ('hardware', 'library'):
         raise ValueError(
             f"convention must be 'hardware' or 'library', got {convention!r}")
