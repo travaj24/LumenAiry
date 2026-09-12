@@ -1917,50 +1917,116 @@ def test_3b_sa_pixels_guard_unchanged():
 
 
 # =====================================================================
-# Perf timings (regression assertions, generous bounds)
+# Work done per call -- OPERATION COUNTS, not wall clock
+#
+# 2026-09-12 (audit 2026-09-11, V5; TESTING_STANDARDS S1).  The two tests
+# below used to read a ``time.perf_counter()`` delta and assert
+# ``elapsed_ms < 5000.0``.  That is a per-build fact, and a toothless one:
+# the GS call they bounded measures ~600-900 ms on the boxes the comment
+# cites, so the bar carried a 6-8x margin and could only ever catch a hang --
+# which ``pytest-timeout`` already does in CI, per-test and without pinning a
+# number.  What the bars were PROXYING for is how much work the routine does
+# per call, and that is countable exactly.
 # =====================================================================
 
-def test_3a_gs_speedup_smoke():
-    """Smoke test that GS at N=256, 50 iter runs in well under
-    the pre-optimisation ballpark.  Generous absolute bound so
-    we don't flake on CI; the real win is in the speedup table
-    reported by ``run_v4_14_0_perf.py``."""
-    N = 256
+def test_3a_gs_does_two_transforms_per_iteration_and_no_more():
+    """Gerchberg-Saxton costs exactly ``2 n_iter + 1`` transforms.
+
+    The operation count, not the clock.  MEASURED 2026-09-12 by wrapping
+    ``phase_retrieval._fft2`` / ``._ifft2`` (the module-level names the
+    routine calls, so a wrapper is seen):
+
+        n_iter =  10 -> fft2 11, ifft2 10  (21 total)
+        n_iter =  25 -> fft2 26, ifft2 25  (51)
+        n_iter =  50 -> fft2 51, ifft2 50  (101)
+
+    i.e. one forward + one inverse per iteration plus the single closing
+    forward transform that produces the returned far field.  This is the
+    property the old wall-clock bar was standing in for -- a regression that
+    re-transforms inside the amplitude swap, or rebuilds the far field per
+    iteration, doubles this count and is caught EXACTLY rather than at a 6x
+    margin.  It is also build-free: an FFT count does not move with the
+    LAPACK/FFT backend, the CPU, or the machine load.
+    """
+    from lumenairy.analysis import phase_retrieval as _pr
+
+    N = 128
     rng = np.random.default_rng(0)
     src = np.abs(rng.standard_normal((N, N))) + 0.1
     tgt = np.zeros((N, N))
     tgt[N // 4:3 * N // 4, N // 4:3 * N // 4] = 1.0
-    t0 = time.perf_counter()
-    _ = gerchberg_saxton(src, tgt, n_iter=50, seed=0)
-    elapsed_ms = (time.perf_counter() - t0) * 1e3
-    # 50 iters of 256x256 FFT + amplitude swap on a modern CPU should
-    # run in well under 5 s; pre-v4.14 paths timed at ~600-900 ms,
-    # post-v4.14 should be even faster.
-    assert elapsed_ms < 5000.0, (
-        f"GS N=256, 50 iter took {elapsed_ms:.0f} ms -- regression?"
-    )
+
+    counts = {}
+    real_fft2, real_ifft2 = _pr._fft2, _pr._ifft2
+
+    def _counted(fn, key):
+        def _w(a, *args, **kw):
+            counts[key] = counts.get(key, 0) + 1
+            return fn(a, *args, **kw)
+        return _w
+
+    seen = []
+    try:
+        for n_iter in (10, 25, 50):
+            counts.clear()
+            _pr._fft2 = _counted(real_fft2, 'fft2')
+            _pr._ifft2 = _counted(real_ifft2, 'ifft2')
+            gerchberg_saxton(src, tgt, n_iter=n_iter, seed=0)
+            seen.append((n_iter, counts.get('fft2', 0), counts.get('ifft2', 0)))
+    finally:
+        _pr._fft2, _pr._ifft2 = real_fft2, real_ifft2
+
+    for n_iter, n_fwd, n_inv in seen:
+        assert (n_fwd, n_inv) == (n_iter + 1, n_iter), (
+            f"gerchberg_saxton(n_iter={n_iter}) performed {n_fwd} forward and "
+            f"{n_inv} inverse transforms; the contract is exactly "
+            f"{n_iter + 1} / {n_iter} (one pair per iteration plus the closing "
+            f"forward transform).  Measurements from all three arms: {seen}.")
 
 
-def test_3b_shack_hartmann_speedup_smoke():
-    """Smoke test that SH on a 64x64 lenslet grid (4096 lenslets)
-    runs in a reasonable wallclock budget.  Generous bound to avoid
-    flakes."""
-    N = 512
+def test_3b_shack_hartmann_output_is_sized_by_the_lenslet_grid():
+    """The SH sensor returns exactly one sample per lenslet on every one of
+    its five output arrays -- slopes, reconstructed wavefront and centroids.
+
+    RETIRED rather than converted, and the distinction is deliberate.  The
+    wall-clock bar this replaces (``elapsed_ms < 5000.0`` on a call the
+    comment itself measured at "a few hundred ms") had no discriminating
+    power at all -- 4096 lenslets would have to get ~15x slower before it
+    fired, and the per-lenslet gather it was meant to guard is still a
+    ``for iy: for ix:`` loop in ``detector.py``, so there is no
+    operation-count oracle to convert it INTO that would not simply restate
+    the loop.  What is left is the contract the call actually owes its
+    caller: the shapes.  That is build-free, it is what a downstream
+    reconstruction depends on, and it fails on the real regression the old
+    bar could not see (an off-by-one in the lenslet tiling).
+    """
+    N = 256
     dx = 5e-6
     wavelength = 633e-9
+    n_lenslets = 16
+    pix = 8
     E = np.ones((N, N), dtype=np.complex128)
-    t0 = time.perf_counter()
-    _ = shack_hartmann(
+    out = shack_hartmann(
         E, dx, wavelength,
         lenslet_pitch=8 * dx, lenslet_focal=4e-3,
-        n_lenslets=64, detector_pixels_per_lenslet=8, seed=0,
+        n_lenslets=n_lenslets, detector_pixels_per_lenslet=pix, seed=0,
     )
-    elapsed_ms = (time.perf_counter() - t0) * 1e3
-    # 4096 lenslets with the new vectorised gather should be a few
-    # hundred ms on a modern CPU; bound at 5 s for CI headroom.
-    assert elapsed_ms < 5000.0, (
-        f"SH 64x64 lenslets took {elapsed_ms:.0f} ms -- regression?"
-    )
+    names = ('slopes_x', 'slopes_y', 'wavefront', 'centroids_x', 'centroids_y')
+    assert len(out) == len(names), (
+        f"shack_hartmann returned {len(out)} arrays; the documented contract "
+        f"is {len(names)}: {names}.")
+    for name, arr in zip(names, out):
+        a = np.asarray(arr)
+        assert a.shape == (n_lenslets, n_lenslets), (
+            f"{name} is {a.shape}, expected one sample per lenslet "
+            f"({n_lenslets}, {n_lenslets}) -- the lenslet tiling is off.")
+    sx, sy = np.asarray(out[0]), np.asarray(out[1])
+    # A uniform (flat) wavefront must produce measured slopes at the lenslets
+    # that see light: the reference subtraction makes them ~0, not NaN.
+    measured = np.isfinite(sx) & np.isfinite(sy)
+    assert measured.sum() > 0, (
+        "every lenslet reported NaN slopes for a uniform illumination, so "
+        "the gather found no signal anywhere.")
 
 
 # ============================================================================

@@ -17,7 +17,7 @@ def _run(env_extra):
     env = {k: v for k, v in os.environ.items() if k != "LUMENAIRY_DISABLE_JAX"}
     env.update(env_extra)
     out = subprocess.run([sys.executable, "-c", _PROBE], env=env,
-                         capture_output=True, text=True, check=True).stdout
+                         capture_output=True, stdin=subprocess.DEVNULL, text=True, check=True).stdout
     flag, installed = (int(x) for x in out.split())
     return bool(flag), bool(installed)
 

@@ -214,14 +214,46 @@ def test_w9d_periodic_seam_is_still_seen():
         _validate_shapes("w9d", ok, _P, _P)
 
 
-def test_w9d_performance_envelope():
-    """NON-DISCRIMINATOR (passes pre-fix).  The W8 envelope was 1024 shapes in
-    81 ms (256 in 7.9 ms).  Exact algebra is FASTER than a 4096-direction scan
-    per close pair: measured 51.8 ms for 1024 disks, 60.1 ms for 1024 ellipses
-    and 54.4 ms for 1024 NEARLY-TOUCHING ellipses (where every neighbour reaches
-    the predicate rather than being pre-filtered).  Gated at a generous 4 s --
-    a CI box is not a benchmark, and the point of the pin is to catch an
-    accidental O(K^2)-in-the-predicate regression, not to race."""
+def _count_exact_predicate_calls(shapes):
+    """Run ``_validate_shapes`` and return how many pairs reached the EXACT
+    overlap predicate ``_shapes_overlap`` (the expensive one)."""
+    from lumenairy.elements.rcwa import _core as _c
+    real = _c._shapes_overlap
+    n = {'calls': 0}
+
+    def _counted(*args, **kwargs):
+        n['calls'] += 1
+        return real(*args, **kwargs)
+
+    _c._shapes_overlap = _counted
+    try:
+        _validate_shapes("w9d", shapes, _P, _P)
+    finally:
+        _c._shapes_overlap = real
+    return n['calls']
+
+
+def test_w9d_the_cheap_prefilter_decides_every_disjoint_pair():
+    """A 1024-shape lattice reaches the EXACT overlap predicate ZERO times.
+
+    2026-09-12 (audit 2026-09-11, V5; TESTING_STANDARDS S1).  This was
+    ``dt = perf_counter(); ...; assert dt < 4.0`` on three 1024-shape
+    lattices.  Its own docstring states the intent exactly -- "the point of
+    the pin is to catch an accidental O(K^2)-in-the-predicate regression, not
+    to race" -- and a 4 s bar against a measured 51.8-60.1 ms is a ~70x margin
+    that catches nothing short of a hang.  The intent IS an operation count,
+    so it is counted.
+
+    ``_validate_shapes`` must examine K(K-1)/2 = 523 776 pairs at K = 1024,
+    but it must decide almost all of them with the cheap separating test and
+    reach ``_shapes_overlap`` only for pairs that survive it.  MEASURED
+    2026-09-12 on all three lattices below, at k = 16 (K = 256) and k = 32
+    (K = 1024): **0 calls** in every case -- the prefilter resolves the whole
+    lattice, including the 0.4999-step "nearly touching" arm.  A regression
+    that routes every close pair into the exact algebra (or worse, back into
+    the pre-W9 4096-direction scan) turns 0 into thousands, and this fails on
+    the first one rather than after four seconds.
+    """
     for kind, geo in (("disk", lambda s: {"radius": 0.40 * s}),
                       ("ellipse", lambda s: {"semi_axes": (0.40 * s, 0.30 * s)}),
                       ("ellipse", lambda s: {"semi_axes": (0.4999 * s,
@@ -233,10 +265,41 @@ def test_w9d_performance_envelope():
                        **geo(step))
                   for i in range(k) for j in range(k)]
         assert len(shapes) == 1024
-        t0 = time.perf_counter()
-        _validate_shapes("w9d", shapes, _P, _P)
-        dt = time.perf_counter() - t0
-        assert dt < 4.0, (kind, dt)
+        calls = _count_exact_predicate_calls(shapes)
+        assert calls == 0, (
+            f"{kind} lattice of 1024 shapes reached the exact overlap "
+            f"predicate {calls} times out of {len(shapes) * (len(shapes) - 1) // 2} "
+            f"pairs; the cheap separating prefilter is supposed to decide all "
+            f"of them (measured 0 on 2026-09-12 for this exact lattice at "
+            f"k=16 and k=32).  Every call that gets through is exact algebra "
+            f"on a pair that did not need it.")
+
+
+def test_w9d_the_predicate_counter_sees_a_pair_that_needs_it():
+    """Counter-pin: a genuinely overlapping pair DOES reach the exact
+    predicate, so the zero above is a measurement and not a dead wrapper."""
+    shapes = [dict(shape="ellipse", eps=6.0, center=(0.40e-6, 0.50e-6),
+                   semi_axes=(0.12e-6, 0.09e-6)),
+              dict(shape="ellipse", eps=6.0, center=(0.58e-6, 0.53e-6),
+                   semi_axes=(0.12e-6, 0.09e-6))]
+    from lumenairy.elements.rcwa import _core as _c
+    real = _c._shapes_overlap
+    n = {'calls': 0}
+
+    def _counted(*args, **kwargs):
+        n['calls'] += 1
+        return real(*args, **kwargs)
+
+    _c._shapes_overlap = _counted
+    try:
+        with pytest.raises(ValueError, match="OVERLAP"):
+            _validate_shapes("w9d", shapes, _P, _P)
+    finally:
+        _c._shapes_overlap = real
+    assert n['calls'] >= 1, (
+        "a pair that the prefilter cannot separate did not reach "
+        "_shapes_overlap, so the counting wrapper is not on the call the "
+        "zero-count test above is counting.")
 
 
 # ===========================================================================

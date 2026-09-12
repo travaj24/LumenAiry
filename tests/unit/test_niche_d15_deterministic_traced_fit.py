@@ -180,7 +180,7 @@ def _run_field(deterministic, width, reps=_REPS, save=None):
         env['D15_SAVE'] = str(save)
     proc = subprocess.run(
         [sys.executable, '-c', code, str(int(bool(deterministic)))],
-        env=env, capture_output=True, text=True, timeout=1800)
+        env=env, capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=1800)
     assert proc.returncode == 0, (
         f'traced arm (det={deterministic}, width={width}) failed:\n'
         f'{proc.stdout}\n{proc.stderr}')
@@ -290,6 +290,7 @@ def test_einsum_is_blas_free_and_optimize_true_is_not():
     for w in _WIDTHS:
         proc = subprocess.run([sys.executable, '-c', _EINSUM_PROBE],
                               env=_child_env(w), capture_output=True,
+                              stdin=subprocess.DEVNULL,
                               text=True, timeout=900)
         assert proc.returncode == 0, proc.stdout + proc.stderr
         for ln in proc.stdout.splitlines():

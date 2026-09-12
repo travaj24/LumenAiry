@@ -442,7 +442,7 @@ def test_script_help_still_exits_cleanly():
     """
     result = subprocess.run(
         [sys.executable, str(_SCRIPT), '--help'],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=30,
     )
     assert result.returncode == 0, (
         f'--help returned rc={result.returncode}; stamp_changelog '

@@ -481,7 +481,7 @@ def test_traced_fit_runs_under_multithread_blas_with_jax():
     env.pop('LUMENAIRY_MEM_BUDGET_MB', None)
     try:
         proc = subprocess.run([sys.executable, '-c', code], env=env,
-                              capture_output=True, text=True, timeout=300)
+                              capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=300)
     except subprocess.TimeoutExpired:
         pytest.fail("traced fit hung under multi-thread BLAS + JAX (deadlock)")
     assert proc.returncode == 0, (

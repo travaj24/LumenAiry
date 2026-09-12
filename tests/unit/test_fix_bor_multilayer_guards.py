@@ -51,6 +51,19 @@ import pytest
 from lumenairy.elements.bor import BORStack
 from lumenairy.elements.bor import _orient as _or
 
+# Slow lane (audit 2026-09-11, V5).  MEASURED from the committed
+# ``.test_durations``: this file totals 520.6 s across 73 tests, over the
+# 2 min/file bar the audit derived for the split.  Before this marking the fast
+# CI gate carried 9 487.1 s over 5 shards (31.6 min/shard against a 45-min step
+# cap); the eleven files at or over the bar carry 2 341.0 s of that.  Moving
+# them takes the fast lane to 23.8 min/shard and the slow lane from 3 573.9 s
+# to 5 914.9 s, which is why the slow gate goes 3 -> 5 shards in the same
+# change.  TRADE-OFF, stated because it is real: the slow lane runs on ONE
+# interpreter (3.12), so these tests leave the 3.10-3.14 matrix.  They are
+# accepted as version-insensitive on the same grounds as the existing slow
+# set -- eig/solver convergence and geometry, no interpreter-version surface.
+pytestmark = pytest.mark.slow
+
 _PKG = pathlib.Path(_or.__file__).resolve().parents[3] / "lumenairy"
 
 

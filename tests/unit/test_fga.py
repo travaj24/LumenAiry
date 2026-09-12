@@ -18,20 +18,42 @@ numba = pytest.importorskip("numba")           # noqa: F841
 from lumenairy.propagators import apply_real_lens_fga  # noqa: E402
 from lumenairy.propagators.asm import angular_spectrum_propagate  # noqa: E402
 
-# NOT marked ``slow``: these are heavy (numba JIT + 256^2 swarm sums) but
-# eig-FREE, so they belong in the fast gate -- rather than in the serial,
-# eig-heavy, hardware-sensitive ``slow`` job (which cannot safely take xdist
-# and was already near its time cap).
+# Slow lane (audit 2026-09-11, V5).  MEASURED from the committed
+# ``.test_durations``: this file totals 178.8 s across 27 tests, over the
+# 2 min/file bar the audit derived for the split.  Before this marking the fast
+# CI gate carried 9 487.1 s over 5 shards (31.6 min/shard against a 45-min step
+# cap); the eleven files at or over the bar carry 2 341.0 s of that.  Moving
+# them takes the fast lane to 23.8 min/shard and the slow lane from 3 573.9 s
+# to 5 914.9 s, which is why the slow gate goes 3 -> 5 shards in the same
+# change.  TRADE-OFF, stated because it is real: the slow lane runs on ONE
+# interpreter (3.12), so these tests leave the 3.10-3.14 matrix.  They are
+# accepted as version-insensitive on the same grounds as the existing slow
+# set -- eig/solver convergence and geometry, no interpreter-version surface.
+pytestmark = pytest.mark.slow
+
+# 2026-09-12 (audit 2026-09-11, V5) -- this file WAS deliberately left out of
+# the slow lane; that decision is reversed above, and the reasoning it rested
+# on is recorded here because both halves of it have moved.
 #
-# 2026-08-03: the old wording here said the fast gate is "xdist-parallelised
-# (--dist loadfile)" and absorbs this file "on a single worker in ~7 min".
-# Both numbers are stale.  In-process xdist was ABANDONED (a runner has only
-# ~2-4 cores, so it capped the gate at ~1.5x); the gate now duration-balances
-# across three pytest-split shards on their own runners
-# (``--splits 3 --group N --splitting-algorithm least_duration``).  And this
-# file measures 1791.7 s (~30 min) across its 27 ``.test_durations`` entries,
-# which the splitter spreads over those shards rather than landing whole on
-# one worker.
+#   * "the slow job was already near its time cap" -- it was (3 shards,
+#     ~19.9 min against a 30-min step cap).  The same change that marks this
+#     file takes the slow gate to 5 shards, 19.7 min/shard WITH the eleven
+#     newly-marked files included, so the cap is no longer the constraint.
+#   * "this file measures 1791.7 s (~30 min) across its 27 ``.test_durations``
+#     entries" -- STALE by 10x.  That reading predates the v5.31 end-to-end
+#     regeneration, which recaptured every entry serially with BLAS pinned to
+#     one thread.  RE-MEASURED 2026-09-12 on the committed file: the same 27
+#     ids total **178.8 s**, the heaviest being
+#     ``test_fga_beats_gbd_at_spherical_aberration_caustic`` at 40.1 s.  The
+#     old number was an unpinned-BLAS artefact of exactly the kind the
+#     regeneration note in unit-tests.yml warns about.
+#
+# 178.8 s is still over the 2 min/file bar, and the point of the bar is the
+# FAST lane's headroom, not whether a file is eig-bound: eig-free work costs
+# the fast shard the same wall-clock as eig-bound work.  The one true premise
+# of the old comment survives -- these tests are numba/FFT-bound and NOT
+# hardware-sensitive in the way the EME convergence tests are -- so they are
+# safe neighbours in the serial slow job.
 
 _WL = 0.633e-6
 

@@ -74,6 +74,7 @@ def test_script_help_exits_cleanly() -> None:
     result = subprocess.run(
         [sys.executable, str(_SCRIPT_PATH), "--help"],
         capture_output=True,
+        stdin=subprocess.DEVNULL,
         text=True,
         timeout=30,
     )

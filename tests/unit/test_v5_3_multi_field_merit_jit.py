@@ -369,11 +369,29 @@ class TestNumbaJitSpeedup:
             '_MULTI_FIELD_JIT_MIN_PIXELS because kernel-dispatch '
             'overhead dominates there.')
 
-    def test_numba_jit_speedup_on_large_grid(self):
+    def test_the_jit_kernel_pair_is_built_once_not_per_call(self):
+        """Eight field angles reuse ONE compiled kernel pair.
+
+        2026-09-12 (audit 2026-09-11, V5; TESTING_STANDARDS S1).  This test
+        used to time an 8-field loop and assert ``t_jit < 8 s``.  The class
+        docstring already records that the JIT-vs-NumPy RATIO is "a property
+        of the box" and is deliberately not asserted; the surviving coarse
+        ceiling was the same shape one level down -- a wall-clock number with
+        a ~6x margin over the measured 0.58-1.36 s, i.e. a hang detector that
+        ``pytest-timeout`` already provides per-test in CI without pinning
+        anything.
+
+        What the ceiling was really guarding is a RECOMPILE per call: numba
+        rebuilding ``_multi_field_tilt_phasor_masked_c128`` for every field
+        angle is what would take the loop from milliseconds to seconds.  That
+        is an operation count, and ``_merit_jit`` memoises the pair in
+        ``_NUMBA_KERNELS['multi_field']``, so it is directly observable:
+        one entry, same two objects, across the whole loop.
+        """
         from lumenairy.optimize import _merit_jit as mj
         if not mj._NUMBA_AVAILABLE:
-            pytest.skip('Numba not installed; JIT speedup pin is '
-                        'inapplicable on this machine.')
+            pytest.skip('Numba not installed; the kernel-build memo does not '
+                        'exist on this machine.')
 
         N = 256
         dx = 5e-6
@@ -382,49 +400,34 @@ class TestNumbaJitSpeedup:
         n_fields = 8
 
         _, k_X, k_Y, mask = _build_test_inputs(
-            N=N, dx=dx, aperture_diameter=aperture,
-            wavelength=wavelength)
-        # Spread the field angles to a realistic 1.0-degree cone.
+            N=N, dx=dx, aperture_diameter=aperture, wavelength=wavelength)
         rng = np.random.default_rng(42)
         thetas = rng.uniform(-0.018, 0.018, size=(n_fields, 2))
 
-        # Warmup: first JIT call compiles the kernel (which can be
-        # ~200 ms on cold cache) -- exclude that from timing.
+        # First call builds (and caches) the kernel pair.
         mj._multi_field_tilt_phasor_masked(
             np.sin(0.0), np.sin(0.0), k_X, k_Y, mask, np.complex128)
+        assert 'multi_field' in mj._NUMBA_KERNELS, (
+            'the first large-grid call did not populate '
+            "_NUMBA_KERNELS['multi_field']; the kernel-build memo is not "
+            'being consulted, so every call rebuilds.')
+        built = mj._NUMBA_KERNELS['multi_field']
+        assert built[0] is not None, (
+            'the memo holds (None, None): numba reported available but the '
+            'kernel build failed, so this test is measuring the NumPy '
+            'fallback.')
 
-        # JIT path timing
-        t0 = time.perf_counter()
+        seen = []
         for tx, ty in thetas:
-            _ = mj._multi_field_tilt_phasor_masked(
+            mj._multi_field_tilt_phasor_masked(
                 np.sin(tx), np.sin(ty), k_X, k_Y, mask, np.complex128)
-        t_jit = time.perf_counter() - t0
+            seen.append(mj._NUMBA_KERNELS['multi_field'])
 
-        # NumPy reference path timing
-        t0 = time.perf_counter()
-        for tx, ty in thetas:
-            _ = _legacy_numpy_path(
-                np.sin(tx), np.sin(ty), k_X, k_Y, mask, np.complex128)
-        t_np = time.perf_counter() - t0
-
-        speedup = t_np / max(t_jit, 1e-9)
-        # Surfaced for human-readable benchmark capture; pytest -s
-        # prints this to stdout.  The assertion below is the
-        # contract; the print is diagnostic only.  Whether the ratio is
-        # above or below 1 is a property of the box (see the class
-        # docstring), which is exactly why it is no longer asserted.
-        print(f'\n[v5.3 JIT bench] N={N} fields={n_fields}: '
-              f't_jit={t_jit*1e3:.2f} ms  t_np={t_np*1e3:.2f} ms  '
-              f'speedup={speedup:.2f}x')
-        assert t_jit < self.JIT_LOOP_CEILING_S, (
-            f'the JIT path took {t_jit:.2f} s for {n_fields} fields at '
-            f'N={N}, above the {self.JIT_LOOP_CEILING_S:.0f} s coarse '
-            f'ceiling (measured 0.58-1.36 s on the retune box).  Whether '
-            f'it is faster or slower than NumPy is a property of the box '
-            f'and is deliberately NOT asserted -- see the class '
-            f'docstring; the kernel contracts are pinned by '
-            f'test_numba_kernel_is_actually_compiled and '
-            f'test_the_jit_kernel_is_the_path_taken.')
+        assert all(s is built for s in seen), (
+            f'the cached kernel pair changed identity during {n_fields} '
+            f'calls, so the njit build is being re-run per field angle -- '
+            f'the ~200 ms-per-call compile the memo exists to avoid.')
+        assert len([k for k in mj._NUMBA_KERNELS if k == 'multi_field']) == 1
 
 
 # ---------------------------------------------------------------------------

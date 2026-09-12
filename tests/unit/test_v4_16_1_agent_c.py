@@ -19,6 +19,7 @@ Author: Andrew Traverso -- v4.16.1 / Agent C
 from __future__ import annotations
 
 import ast
+import threading
 import warnings
 from pathlib import Path
 
@@ -597,22 +598,90 @@ def test_prescriptions_specific_warn_lines_pinned():
 # ===========================================================================
 
 
+class _RecordingLock:
+    """A ``threading.Lock`` stand-in that records how often it is entered."""
+
+    def __init__(self, name):
+        self.name = name
+        self.entered = 0
+        self._lock = threading.Lock()
+
+    def __enter__(self):
+        self.entered += 1
+        return self._lock.__enter__()
+
+    def __exit__(self, *exc):
+        return self._lock.__exit__(*exc)
+
+    # the real object is also acquired/released directly elsewhere
+    def acquire(self, *a, **kw):
+        self.entered += 1
+        return self._lock.acquire(*a, **kw)
+
+    def release(self):
+        return self._lock.release()
+
+
 def test_propagation_asm_cache_lock_still_paired():
-    """The v4.14.2 cache <-> lock pairing meta-pin still passes: the
-    ``_clear_local_asm_caches`` body uses ``_ASM_CACHE_LOCK``.
+    """The v4.14.2 cache <-> lock pairing meta-pin: ``_clear_local_asm_caches``
+    really TAKES ``_ASM_CACHE_LOCK`` (and, since v5.17.1 / P3-55, the pyFFTW
+    plan lock as well) while draining its caches.
 
-    Cross-check that the C.5 late-binding refactor preserved the
-    pre-existing lock-pairing invariant.
+    Cross-check that the C.5 late-binding refactor preserved the pre-existing
+    lock-pairing invariant.
+
+    2026-09-12 (audit 2026-09-11, V5 item 5) -- REWRITTEN from a source-text
+    proxy to a behavioural pin, because the proxy was order-dependent.  It read
+    ``'_ASM_CACHE_LOCK' in inspect.getsource(prop_mod._clear_local_asm_caches)``
+    and VERIFY-A10 recorded it passing standalone and failing inside a
+    577-test session.  ``inspect.getsource`` resolves through ``linecache``
+    against the file ON DISK at ``co_firstlineno``, which the module object in
+    memory was compiled from earlier: any edit to ``fft_infra.py`` after import
+    -- routine while several work packages are in flight, and the file is
+    dirty in the working tree right now -- shifts the definition and the
+    lookup returns a neighbouring function's text.  A long session gives that
+    window; a 0.2 s standalone run does not.  The audit calls out this exact
+    remedy ("replace ``inspect.getsource`` proxies with behavioural pins",
+    P2-2 item (c)).
+
+    The behavioural form is also STRICTLY STRONGER: the old assertion passed
+    on a body that merely mentioned the name in a comment, and would have
+    passed on ``_ASM_CACHE_LOCK.acquire()`` with no release.  This one fails
+    unless the lock is actually entered, and the ``finally`` restores both
+    module globals so no state leaks to the next test.
     """
-    import inspect as _inspect
-
+    from lumenairy.propagators import fft_infra as _fi
     from lumenairy.propagators import propagation as prop_mod
 
-    src = _inspect.getsource(prop_mod._clear_local_asm_caches)
-    assert '_ASM_CACHE_LOCK' in src, (
-        "v4.14.2 cache-lock-pairing meta-pin regression: "
-        "_clear_local_asm_caches no longer references _ASM_CACHE_LOCK."
-    )
+    # The shell must still re-export the canonical object -- that is the
+    # "propagation.py" half of the pairing claim.
+    assert prop_mod._clear_local_asm_caches is _fi._clear_local_asm_caches, (
+        f"propagation._clear_local_asm_caches is no longer the canonical "
+        f"fft_infra object (got {prop_mod._clear_local_asm_caches!r}).  Either "
+        f"the re-export shell changed, or an earlier test monkey-patched the "
+        f"attribute and did not restore it.")
+
+    asm = _RecordingLock('_ASM_CACHE_LOCK')
+    plan = _RecordingLock('_PYFFTW_PLAN_LOCK')
+    real_asm = _fi._ASM_CACHE_LOCK
+    real_plan = _fi._PYFFTW_PLAN_LOCK
+    _fi._ASM_CACHE_LOCK = asm
+    _fi._PYFFTW_PLAN_LOCK = plan
+    try:
+        prop_mod._clear_local_asm_caches()
+    finally:
+        _fi._ASM_CACHE_LOCK = real_asm
+        _fi._PYFFTW_PLAN_LOCK = real_plan
+
+    assert asm.entered >= 1, (
+        "v4.14.2 cache-lock-pairing regression: _clear_local_asm_caches ran "
+        "without ever entering _ASM_CACHE_LOCK, so a concurrent clear can "
+        "race the frequency-grid / band-limit / H caches.")
+    assert plan.entered >= 1, (
+        "v5.17.1 (P3-55) regression: _clear_local_asm_caches ran without "
+        "entering _PYFFTW_PLAN_LOCK, so it can empty the plan cache between "
+        "_get_or_make_plan's membership check and its indexing -- the "
+        "uncaught KeyError out of _fft2 that P3-55 fixed.")
 
 
 if __name__ == '__main__':

@@ -248,7 +248,6 @@ def test_unwrap_phase_2d_is_congruent_to_the_wrapped_phase():
     """The public kernel's defining property: the answer differs from the
     wrapped input by a whole number of cycles at EVERY in-mask sample.
     Any unwrap that smooths (a least-squares one, say) breaks this."""
-    rng = np.random.default_rng(11)
     N = 128
     x = (np.arange(N) - N / 2) / (N / 2)
     X, Y = np.meshgrid(x, x)

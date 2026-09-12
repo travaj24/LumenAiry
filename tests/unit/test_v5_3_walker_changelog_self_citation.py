@@ -185,6 +185,7 @@ def test_v17_test_count_arithmetic_reconciles():
              '-m', 'not integration'],
             cwd=str(_REPO_ROOT),
             capture_output=True,
+            stdin=subprocess.DEVNULL,
             text=True,
             timeout=300,
         )
@@ -306,7 +307,7 @@ def test_v17_file_count_claim_within_drift_band():
     # Confirm the tag exists.
     proc = subprocess.run(
         ['git', 'rev-parse', '--verify', f'refs/tags/{prev_tag}'],
-        cwd=str(_REPO_ROOT), capture_output=True, text=True)
+        cwd=str(_REPO_ROOT), capture_output=True, stdin=subprocess.DEVNULL, text=True)
     if proc.returncode != 0:
         pytest.skip(
             f'PREV_TAG ``{prev_tag}`` is not a reachable git tag '
@@ -316,7 +317,7 @@ def test_v17_file_count_claim_within_drift_band():
     # Get the actual file count from git diff.
     proc = subprocess.run(
         ['git', 'diff', '--name-only', f'{prev_tag}..HEAD'],
-        cwd=str(_REPO_ROOT), capture_output=True, text=True)
+        cwd=str(_REPO_ROOT), capture_output=True, stdin=subprocess.DEVNULL, text=True)
     if proc.returncode != 0:
         pytest.skip(
             f'``git diff {prev_tag}..HEAD`` failed; V17.2 cannot '

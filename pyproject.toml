@@ -37,11 +37,15 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    # v5.0.1 (audit P3-NEW-V3-3): 3.14 dropped from classifiers --
-    # the canonical CI matrix runs 3.10-3.13 and 3.14 is too new for
-    # the optional accelerator dependencies (numba, jax, pyfftw) to
-    # have published wheels against.  When 3.14 wheels stabilise the
-    # CI matrix grows first, then the classifier returns.
+    # 3.14 is the interpreter this library is developed and hand-tested on,
+    # and (since the 2026-09-11 audit, V4) a real CI leg: ``unit-tests.yml``
+    # runs the matrix on 3.10-3.14.  The accelerator wheels the old comment
+    # here said were missing all exist and are installed on the dev box --
+    # MEASURED 2026-09-12: numba 0.65.1, jax 0.10.1, pyfftw 0.15.1 on
+    # CPython 3.14.6.  The one optional group that is NOT exercised on 3.14
+    # in CI is ``jax``: the dedicated jax leg pins 3.12 because the declared
+    # ``jax>=0.11`` floor is what that leg gates (see the ``jax`` extra).
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
@@ -70,19 +74,27 @@ classifiers = [
 # Python >= 3.9 and numpy 2.0 supports >= 3.9, so the pair is consistent with
 # ``requires-python = ">=3.10"`` (on 3.10 the resolver lands on the numpy
 # 2.0-2.2 lines, which still ship 3.10 wheels).
-#
-# scipy>=1.13 is the matching floor, adjudicated rather than guessed: 1.13.0
-# is the first SciPy line built against the numpy 2.0 ABI (earlier lines are
-# compiled against the 1.x C-API and abort at import under numpy 2), so any
-# scipy < 1.13 is un-installable with this numpy floor.  1.13 supports
-# Python >= 3.9 and numpy 2.0 supports >= 3.9, so the pair is consistent with
-# ``requires-python = ">=3.10"`` (on 3.10 the resolver lands on the numpy
-# 2.0-2.2 lines, which still ship 3.10 wheels).
 dependencies = [
     "numpy>=2.0",
     "scipy>=1.13",
     "matplotlib>=3.5",
     "psutil>=5.0",
+    # threadpoolctl is what makes ``set_blas_threads`` / ``rcwa_blas_threads``
+    # / the ``@_with_blas_limit`` wrapper on every public RCWA entry point
+    # ACTUALLY apply a cap.  Without it they are inert (they warn and pass
+    # through), and on an oversubscribed many-core box that is catastrophic,
+    # not a micro-optimisation: MEASURED on a 24-thread Windows OpenBLAS
+    # 0.3.31 build, ``inv()`` of a 163x163 complex matrix takes 2.29 s
+    # unpinned against 0.0057 s at one thread (400x), and a 1-D TM RCWA solve
+    # at n_orders=81 takes 18.2 s instead of 0.13 s (140x).  It is tiny and
+    # pure Python (and is already a transitive dependency of scikit-learn, so
+    # most environments have it), so the library's own remedy has to work out
+    # of the box.  Floor 3.1: ``ThreadpoolController`` -- the cached
+    # enumeration path ``rcwa/_core.py::_get_blas_controller`` prefers --
+    # landed in 3.0, and 3.1 is the first release with the Windows OpenBLAS
+    # 0.3.x detection this box needs.  ``_core.py`` degrades to the legacy
+    # ``threadpool_limits`` and then to a no-op, so nothing breaks below it.
+    "threadpoolctl>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -139,6 +151,20 @@ zarr = ['zarr>=3.0; python_version >= "3.11"', "filelock>=3.0"]
 # forward (the S4-4 CI leg runs the jax-guarded suite on 0.11; the
 # canonical-poly fit's differentiable solve and the pmm-2d jnp/np parity
 # bars are validated against it).
+#
+# 2026-09-12 (audit V4/P1-6) -- DECISION, recorded because the two sides
+# disagree.  The dev box runs jax 0.10.1 on CPython 3.14, i.e. BELOW this
+# declared floor, while the ``jax-unit`` CI leg resolves 0.11 on 3.12.  The
+# floor STAYS at 0.11: it is the version every jax-guarded gate in the suite
+# is measured against, and lowering it would declare support for a line no
+# leg exercises.  What changes instead is that the CI leg now ASSERTS the
+# resolved jax satisfies this floor (``unit-tests.yml``, "Library import
+# sanity (jax present)"), so the declared floor and the gated version can no
+# longer drift apart silently.  The local 0.10.1 is therefore knowingly
+# below-floor: jax results measured on this box are advisory, and the gate of
+# record is the CI leg.  Raising the dev box to >= 0.11 is a follow-up (it
+# changes numerics for every concurrent audit work package, so it is not a
+# mid-campaign action).
 # v5.42.1 (dep-metadata drift, 2026-08-24): jax 0.11.x itself requires
 # Python >=3.12 (last 3.11-compatible jax is 0.10.2, last 3.10 is 0.6.2),
 # so an unmarked ``jax>=0.11.0`` makes ``lumenairy[jax]`` UNRESOLVABLE on
@@ -227,8 +253,16 @@ lumenairy = ["*.md", "*.txt", "*.html", "py.typed"]
 [tool.pytest.ini_options]
 # Two-layer test suite (4.3.0+):
 #
-#   tests/unit/        -- fast (<30s) API-contract tests; no external
-#                          deps; default target on a fresh checkout.
+#   tests/unit/        -- the library's own gate: contract tests, physics
+#                          oracles and regression pins; no external deps;
+#                          default target on a fresh checkout.  NOT fast in
+#                          aggregate -- MEASURED 2026-09-12 from the committed
+#                          ``.test_durations``: 14 666 collected ids,
+#                          13 061 s = 3.63 h of timed work.  It is split into
+#                          two CI lanes by the ``slow`` marker (see below);
+#                          neither lane is a "<30 s" target and no such
+#                          contract exists.  The old "fast (<30s)" wording
+#                          here was wrong by ~440x (audit 2026-09-11, V5).
 #   tests/integration/ -- pytest wrapper around validation/, runs each
 #                          validation/<dir>/test_*.py as a subprocess
 #                          for full physics validation (~30 min).
@@ -245,12 +279,23 @@ python_classes = ["Test*"]
 # (the latter is wrapped by ``validation/conftest.py`` so its
 # ``(bool, str)`` returns are converted into real assertions).
 python_functions = ["test_*", "t_*"]
+# Marker inventory, MEASURED 2026-09-12 (audit 2026-09-11, V5) so the
+# declared set describes what is actually applied:
+#   slow         54 files (19 module-level) before this change, 65 after;
+#                it is the ONLY marker that selects a CI lane.
+#   integration   3 applications (``tests/integration/``), excluded by
+#                ``addopts`` and opted in with ``-m integration``.
+#   unit / regression / bench   0 applications each.  They are kept as
+#                DECLARED-BUT-UNUSED on purpose: ``--strict-markers`` is on,
+#                so removing them turns any future ``@pytest.mark.unit`` into
+#                a collection error rather than a silent no-op, and ``bench``
+#                is the name ``benchmarks/`` will use when it is gated.
 markers = [
-    "unit: fast API-contract tests, no external deps (<30s total)",
+    "unit: API-contract test, no external deps (declared; 0 applications)",
     "integration: full validation suite via subprocess (~30 min)",
-    "regression: tests guarding against specific historical bugs",
-    "slow: long-running physics simulations",
-    "bench: pytest-benchmark micro-perf tests (run with --benchmark-only)",
+    "regression: tests guarding against specific historical bugs (declared; 0 applications)",
+    "slow: >= 2 min of file-total runtime -- runs in the sharded slow CI lane, not the fast matrix",
+    "bench: pytest-benchmark micro-perf tests (run with --benchmark-only; declared, 0 applications -- benchmarks/ is ungated)",
 ]
 # v5.24.x (audit S5-12): explicit warnings policy.  Previously there was
 # NO ``filterwarnings`` config, so a warning emitted mid-test could pass
@@ -293,11 +338,18 @@ addopts = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# 2026-09-12 (audit 2026-09-11, V4/P1-3): ``lumenairy/ui/`` is no longer
+# excluded.  Excluding it removed ~30 modules -- including the 3 626-line
+# ``main_window.py`` -- from the only always-on static gate, so an undefined
+# name in the GUI could not be caught by anything.  It is scoped back in with
+# a per-directory ignore list (see ``[tool.ruff.lint.per-file-ignores]``)
+# rather than wholesale: the cosmetic rules the GUI trips are silenced, the
+# rules that catch real bugs (F821 undefined name, F632 identity-vs-literal,
+# E711/E712/E713, E722 bare except, ...) are ENFORCED there from now on.
 extend-exclude = [
     "validation/",
     "docs/",
     "examples/",
-    "lumenairy/ui/",  # GUI code uses different idioms; defer to v5.1
 ]
 
 [tool.ruff.lint]
@@ -312,8 +364,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["F401", "F811"]  # test files re-import + redefine fixtures freely
-"lumenairy/__init__.py" = ["F401", "F403"]  # re-export hub
+# (``tests/**/*.py``, ``lumenairy/__init__.py`` and the four sub-package
+# re-export hubs that also need I001 are declared once, in the 2026-09-12
+# block at the bottom of this table -- TOML forbids a duplicate key.)
 # v5.2 (audit P3-NEW post-v5.1.0-split closure): the 6 file-split shells
 # do ``from .X import Y`` purely to re-export pre-v5.1.0 public symbols.
 # Without this ignore, ``ruff --fix`` removes the unused imports and
@@ -328,32 +381,107 @@ ignore = [
 "lumenairy/io/prescriptions.py" = ["F401", "F403"]
 "lumenairy/analysis/core.py" = ["F401", "F403"]
 # Sub-package __init__.py files are also re-export hubs.
-"lumenairy/analysis/__init__.py" = ["F401", "F403"]
-"lumenairy/elements/__init__.py" = ["F401", "F403"]
 "lumenairy/optimize/__init__.py" = ["F401", "F403"]
 "lumenairy/propagators/__init__.py" = ["F401", "F403"]
-"lumenairy/raytrace/__init__.py" = ["F401", "F403"]
 "lumenairy/io/__init__.py" = ["F401", "F403"]
 "lumenairy/sources/__init__.py" = ["F401", "F403"]
 "lumenairy/backend/__init__.py" = ["F401", "F403"]
+
+# ---------------------------------------------------------------------------
+# 2026-09-12 (audit 2026-09-11, V4/P1-3) -- the ignores that let the lint job
+# become BLOCKING (``continue-on-error: false`` in unit-tests.yml).  Two
+# classes, kept apart on purpose.
+#
+# (a) CONVENTION ignores.  ``E402`` is already ignored project-wide because
+#     this library deliberately interleaves import statements with the
+#     multi-line comments that explain WHY each one is placed where it is
+#     (try-import-as blocks, deliberately-late registry imports, re-export
+#     tiers).  ``I001`` is the same convention seen from the other side:
+#     ruff's isort wants to merge those runs into one sorted block, which
+#     deletes the commentary -- MEASURED on ``lumenairy/raytrace/__init__.py``,
+#     where ``--fix`` relocates the whole commented ``from .exit_vertex
+#     import (...)`` block.  So I001 is ignored exactly in the files that use
+#     the convention, not project-wide: everywhere else import order is still
+#     gated.
+"lumenairy/__init__.py" = ["F401", "F403", "I001"]
+"lumenairy/analysis/__init__.py" = ["F401", "F403", "I001"]
+"lumenairy/elements/__init__.py" = ["F401", "F403", "I001"]
+"lumenairy/raytrace/__init__.py" = ["F401", "F403", "I001"]
+"lumenairy/propagators/fft_infra.py" = ["I001"]
+"lumenairy/analysis/image_plane_wfe.py" = ["I001"]
+#     ``E701``/``E702`` join ``I001`` for tests only: a test that writes
+#     ``a = 1; b = 2`` in a parametrise table or ``if x: return`` in a tiny
+#     helper is not a defect, and the shape is common in the fixture bodies
+#     this suite generates per audit round.  In LIBRARY code both still fire
+#     (they are only per-file-ignored for ``lumenairy/ui/``'s Qt slots).
+"tests/**/*.py" = ["F401", "F811", "I001", "E701", "E702"]
+#
+# (b) TODO ignores -- a real finding that needs a code change in a module
+#     this work package does not own.  Each is listed in
+#     ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-A15a_REPORT.md``
+#     as a request to that module's owner; when the owner lands the fix the
+#     line here should be DELETED, not kept.
+# TODO(audit-2609): rcwa/oned.py + rcwa/twod.py import ``_grazing_safe_wavelength``
+# from ``._core`` and no longer call it (WP-A14 routed both entry points through
+# ``_grazing_safe_wavelength_pair``).  Either drop the import or re-export it
+# deliberately with an ``__all__`` entry.  Owner: the RCWA work package.
+"lumenairy/elements/rcwa/oned.py" = ["F401", "I001"]
+"lumenairy/elements/rcwa/twod.py" = ["F401", "I001"]
+# TODO(audit-2609): rcwa/stack.py -- I001 only, same import-with-commentary
+# shape as (a) but introduced by WP-A14 rather than by the convention; resort
+# the block and delete this line.  Owner: the RCWA work package.
+"lumenairy/elements/rcwa/stack.py" = ["I001"]
+# TODO(audit-2609): _lens_real.py:2634-2635 -- two ``f"..."`` continuation
+# lines in the mirror-guard warning carry no placeholders (F541).  Drop the
+# ``f`` prefix on those two lines.  Owner: the analytic-lens work package.
+"lumenairy/elements/_lens_real.py" = ["F541"]
+#
+# (c) ``lumenairy/ui/`` scoped back IN (see the ``extend-exclude`` note).
+#     MEASURED 2026-09-12, ``ruff check lumenairy/ui --no-force-exclude``:
+#     331 findings in exactly seven rules -- F401 121, I001 116, E701 37,
+#     E702 37, F811 10, F841 7, F541 3.  All seven are cosmetic Qt idiom
+#     (``from PySide6.QtWidgets import *``-style re-import blocks, one-line
+#     ``if x: return``, ``a = 1; b = 2`` slot bodies), so they are ignored
+#     here and the directory joins the gate for everything else.  What is now
+#     ENFORCED in ~30 GUI modules that were previously unlinted: F821
+#     undefined name (the exact class that shipped ``carrier_field.py:469``
+#     to main this month), F632 ``is`` against a literal, F502/F522 format
+#     errors, E711/E712/E713/E714 comparison bugs, E722 bare except, E731.
+#     Shrink this list as the GUI is cleaned; do not grow it.
+"lumenairy/ui/**/*.py" = ["F401", "I001", "E701", "E702", "F811", "F841", "F541"]
 
 # v5.0: mypy --strict incremental adoption.  Starts with the small,
 # self-contained modules per ROADMAP plan; expanding module-by-module
 # in v5.1+.
 #
-# v5.0.1 (audit P2-NEW-V4-2): mypy activation deferred to v5.1
-# alongside the 63-error scope-local cleanup.  At v5.0 ship the
-# strict pass produced ~63 scope-local errors plus ~1889 cascade
-# errors when mypy followed imports into untyped downstream modules
-# (numpy, scipy, matplotlib, plus the un-annotated bulk of
-# ``lumenairy/``).  ``follow_imports = "silent"`` blocks the cascade
-# so a future activation only sees the 63 scope-local errors that
-# the v5.1 cleanup actually owns.  Per-file overrides are NOT needed
-# because the ``files`` whitelist below is already explicit (5
-# modules) -- mypy will not enter any other code from outside that
-# whitelist with ``follow_imports = "silent"``.  No CI wiring at
-# v5.0.1; ``unit-tests.yml`` keeps mypy unwired until v5.1's cleanup
-# lands.
+# v5.0.1 (audit P2-NEW-V4-2): at v5.0 the strict pass produced ~63
+# scope-local errors plus ~1889 cascade errors when mypy followed
+# imports into untyped downstream modules (numpy, scipy, matplotlib,
+# plus the un-annotated bulk of ``lumenairy/``).
+# ``follow_imports = "silent"`` blocks the cascade so the gate only
+# sees errors in the whitelisted files themselves.  Per-file
+# overrides are NOT needed because the ``files`` whitelist below is
+# explicit -- mypy will not report from any module outside it.
+#
+# CI STATUS, corrected 2026-09-12 (audit 2026-09-11, V4/P1-4).  The comment
+# that used to sit here said "No CI wiring at v5.0.1; ``unit-tests.yml`` keeps
+# mypy unwired until v5.1's cleanup lands".  That has been false since v5.2:
+# ``unit-tests.yml`` has a dedicated ``mypy`` job with
+# ``continue-on-error: false``, i.e. the whitelist below is a MERGE-BLOCKING
+# gate, and the repo is 43 minor versions past the sentence.  The gate was
+# also nearly empty -- 6 of 227 modules (2.6 %).
+#
+# WHITELIST GROWTH, 2026-09-12.  Rather than wait on a big-bang annotation
+# cleanup, the list below was grown by MEASUREMENT, smallest first: one
+# ``mypy --strict --follow-imports=silent --ignore-missing-imports
+# --python-version 3.12`` pass over all 170 non-``ui`` candidate modules,
+# attributing every error to the file it was reported in.  20 modules came
+# back with zero errors; the 11 that are not ``__init__.py`` are added here
+# (6 -> 17 checked paths).  The 9 clean ``__init__.py`` hubs are deliberately
+# NOT added yet: they are being rewritten for lazy loading in the same audit
+# round, and a PEP 562 ``__getattr__`` needs its own annotations before it is
+# strict-clean.  Add them (and the next tranche) once that settles -- the
+# measurement command is the one above.
 [tool.mypy]
 # 3.12, not the 3.10 runtime floor: numpy >= 2.5 ships PEP 695 `type`
 # statements in its stubs, which mypy rejects below 3.12 (first hit: the
@@ -373,6 +501,20 @@ files = [
     "lumenairy/_validation.py",
     "lumenairy/progress.py",
     "lumenairy/memory.py",
+    # 2026-09-12 (audit V4/P1-4): measured strict-clean today, smallest first.
+    # Line counts are the measurement's own sort key, kept as a reminder of
+    # how far the gate reaches.
+    "lumenairy/elements/coronagraph.py",      # 54 lines
+    "lumenairy/raytrace/core.py",             # 68
+    "lumenairy/analysis/core.py",             # 69
+    "lumenairy/io/prescriptions.py",          # 106
+    "lumenairy/raytrace/layout.py",           # 190
+    "lumenairy/raytrace/bundles.py",          # 227
+    "lumenairy/algebra/from_prescription.py", # 230
+    "lumenairy/propagators/result.py",        # 244
+    "lumenairy/_cache_registry.py",           # 292
+    "lumenairy/analysis/strehl.py",           # 557
+    "lumenairy/propagators/asymptotic_modes.py",  # 893
 ]
 # v5.0.1 (audit P2-NEW-V4-2): config preparation only -- prevents the
 # ~1889-error cascade into untyped downstream files so the v5.1

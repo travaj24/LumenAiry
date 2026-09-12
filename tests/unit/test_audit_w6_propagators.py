@@ -159,7 +159,7 @@ class TestP352X64Policy:
         child_env = {**os.environ, "JAX_ENABLE_X64": "0"}
         proc = subprocess.run(
             [sys.executable, "-c", _P352_SUBPROCESS_SRC],
-            capture_output=True, text=True, timeout=300, cwd=repo_root,
+            capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=300, cwd=repo_root,
             env=child_env)
         assert proc.returncode == 0, proc.stderr
         assert proc.stdout.strip().endswith("OK")

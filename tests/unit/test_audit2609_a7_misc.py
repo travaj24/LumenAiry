@@ -71,7 +71,6 @@ def test_gs_retrieved_phase_is_unchanged_by_the_metric_fix():
     1e-9 relative.
     """
     N = 48
-    rng = np.random.default_rng(2)
     x = np.linspace(-1, 1, N)
     X, Y = np.meshgrid(x, x)
     source = np.exp(-(X ** 2 + Y ** 2) / 0.4 ** 2)

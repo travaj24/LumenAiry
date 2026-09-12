@@ -956,147 +956,103 @@ class TestAuditFixesV4_12_1_raytrace_fastpath_AsymptoticCrossBackend:
 # ============================================================================
 
 class TestAuditFixesV4_12_1_raytrace_fastpath_FastPathSpeedup:
-    """The post-fix doublet trace must stay measurably faster than the
-    legacy 10-iter Newton path on a 1k-ray bundle.
+    """A pure-spherical doublet must take the ANALYTIC sphere intersection --
+    asserted as an operation count, not as a speed.
 
-    The reference is built by re-tracing the doublet via the legacy
-    Newton intersect helper used in :class:`TestAuditFixesV4_12_1_raytrace_fastpath_PerSurfaceBitNearExact`.
+    2026-09-12 (audit 2026-09-11, V5; TESTING_STANDARDS S1).  This class used
+    to time ``lm.trace`` against a hand-rebuilt legacy Newton trace in
+    alternating batches and assert ``speedup >= 1.2`` plus an absolute
+    ``fast < 20 ms`` ceiling.  Its own docstring recorded why that never
+    settled: "the effect size here is intrinsically small -- ~1.5x -- so no
+    absolute bound on the fast leg can discriminate it", and the measured
+    speedups across four consecutive runs were 1.78, 1.13, 1.59, 2.65, one of
+    them an outright failure against the then-1.3x floor.  A pin whose
+    pass/fail boundary sits inside the spread of the quantity it reads is
+    per-build by definition (S1).
 
-    This is a perf test, so contention jitters it.  The retune keeps the
-    ratio (it is the only thing that discriminates a short-circuited fast
-    path from a working one) but measures it in ALTERNATING batches so a
-    stall hits both legs instead of only the numerator, takes ``min``
-    over 9 batches rather than 5, and drops the floor 1.3x -> 1.2x.  See
-    :meth:`_time_interleaved` and
-    :meth:`test_doublet_trace_is_faster_than_the_legacy_newton_path`
-    for the measured before/after numbers.
+    The property it was proxying is exact and countable.  The analytic sphere
+    branch (``intersection.py`` ``elif is_pure_spherical``) solves the
+    ray-sphere quadratic in closed form and never evaluates the surface sag;
+    the fallback iterates Newton, and every iteration calls
+    ``_surface_sag_xy``.  MEASURED 2026-09-12 on the 1k-ray AC254 doublet:
+
+        pure-spherical doublet (3 surfaces)  ->  0 sag evaluations
+        same doublet with conic = -0.5       ->  3 (one per surface)
+        the 10-iteration Newton fallback     ->  10 per surface = 30
+
+    So "the fast path was short-circuited" is the difference between 0 and
+    3-or-30, which no machine, no BLAS build and no CPU contention can move.
     """
 
-    def _make_legacy_tracer(self, surfaces, rays_in, wavelength):
-        """Return a zero-argument callable that traces the doublet once
-        via the legacy Newton intersect helper (the same code path the
-        legacy ``_intersect_surface`` took)."""
-        from lumenairy.glass import get_glass_index
-        from lumenairy.raytrace.core import (
-            _reflect,
-            _refract,
-            _transfer,
-        )
+    # Counts MEASURED 2026-09-12 (see the class docstring).  Zero is the
+    # closed-form branch; the Newton fallback is 10 iterations x n_surfaces.
+    _NEWTON_ITERS_PER_SURFACE = 10
 
-        def trace_once():
-            rays = RayBundle(
-                x=rays_in.x.copy(), y=rays_in.y.copy(),
-                z=rays_in.z.copy(),
-                L=rays_in.L.copy(), M=rays_in.M.copy(),
-                N=rays_in.N.copy(),
-                opd=rays_in.opd.copy(),
-                alive=rays_in.alive.copy(),
-                error_code=(rays_in.error_code.copy()
-                            if rays_in.error_code is not None else None),
-                wavelength=rays_in.wavelength,
-            )
-            for surf in surfaces:
-                n_before = get_glass_index(surf.glass_before, wavelength)
-                n_after = get_glass_index(surf.glass_after, wavelength)
-                # Run the legacy Newton intersect (returns a new rays).
-                rays_after = _legacy_newton_intersect(
-                    rays, surf, n_medium=n_before)
-                rays.x[:] = rays_after.x
-                rays.y[:] = rays_after.y
-                rays.z[:] = rays_after.z
-                rays.opd[:] = rays_after.opd
-                rays.alive[:] = rays_after.alive
-                if (rays.error_code is not None
-                        and rays_after.error_code is not None):
-                    rays.error_code[:] = rays_after.error_code
-                if surf.is_mirror:
-                    _reflect(rays, surf)
-                else:
-                    _refract(rays, surf, n_before, n_after)
-                _transfer(rays, surf.thickness, n_after)
-            return rays
+    @staticmethod
+    def _count_sag_calls(surfaces, rays_in, wavelength):
+        """Trace once and return how many times ``_surface_sag_xy`` was
+        evaluated inside ``intersection``."""
+        from lumenairy.raytrace import intersection as _ix
+        real = _ix._surface_sag_xy
+        n = {'calls': 0}
 
-        return trace_once
+        def _counted(*args, **kwargs):
+            n['calls'] += 1
+            return real(*args, **kwargs)
 
-    def _time_interleaved(self, surfaces, rays_in, wavelength,
-                          n_iter=50, n_batches=9):
-        """Time the fast path and the legacy Newton path in ALTERNATING
-        batches; return ``(fast, legacy)`` per-call minima.
-
-        Interleaving is the retune that fixes this pin's flakiness.
-        Pre-retune all five fast batches ran before all five legacy
-        batches, so a machine-wide stall landing in the fast phase
-        inflated the numerator alone and the ratio collapsed -- measured
-        1.13x on a run whose fast leg read 1430 us against 726-833 us on
-        its neighbours, while its legacy leg was unremarkable.
-        Alternating makes any stall hit both legs, which preserves the
-        ratio, and ``min`` over 9 batches (was 5) rejects the stall
-        outright rather than averaging it in.
-        """
-        legacy_once = self._make_legacy_tracer(surfaces, rays_in, wavelength)
-        for _ in range(5):                      # warm both paths
+        _ix._surface_sag_xy = _counted
+        try:
             lm.trace(rays_in, surfaces, wavelength)
-            legacy_once()
-        fast_times, legacy_times = [], []
-        for _ in range(n_batches):
-            t0 = time.perf_counter()
-            for _ in range(n_iter):
-                lm.trace(rays_in, surfaces, wavelength)
-            fast_times.append((time.perf_counter() - t0) / n_iter)
-            t0 = time.perf_counter()
-            for _ in range(n_iter):
-                legacy_once()
-            legacy_times.append((time.perf_counter() - t0) / n_iter)
-        return min(fast_times), min(legacy_times)
+        finally:
+            _ix._surface_sag_xy = real
+        return n['calls']
 
-    # Absolute sanity ceiling on the 1k-ray doublet trace.
-    FAST_TRACE_CEILING_S = 20e-3
-    # Ratio floor, loosened from 1.3x now that the measurement is
-    # interleaved (see _time_interleaved).
-    SPEEDUP_FLOOR = 1.2
-
-    def test_doublet_trace_is_faster_than_the_legacy_newton_path(self):
-        """1k-ray doublet trace: the analytic-sphere fast path must beat
-        the legacy 10-iteration Newton path.
-
-        **What this guards** (unchanged): the fast path being
-        short-circuited, so pure spheres fall back to the iterative
-        Newton intersect.  That collapses the ratio toward 1.0.
-
-        **How it is measured** (retuned).  The effect size here is
-        intrinsically small -- ~1.5x -- so no absolute bound on the fast
-        leg can discriminate it (the legacy path is only ~1.5x slower,
-        far inside any sane ceiling).  The ratio is the only
-        discriminator, so the retune attacks its NOISE instead of its
-        threshold: the two legs are now timed in alternating batches so
-        contention cancels, and over 9 batches rather than 5.  Measured
-        speedups before the retune, 4 consecutive runs: 1.78, 1.13, 1.59,
-        2.65 -- one outright failure against the 1.3x floor.  With
-        interleaving the floor is 1.2x, backed by the measurements
-        recorded in the assertion message below.  A separate absolute
-        ceiling catches gross regressions in the fast leg itself.
-        """
+    def test_pure_spherical_doublet_never_evaluates_the_surface_sag(self):
+        """The closed-form branch is taken: ZERO sag evaluations for a
+        three-surface pure-spherical doublet."""
         wavelength = 1310e-9
         pres, surfaces = _make_doublet()
         rays_in = _make_1k_rays(wavelength=wavelength)
-        fast, legacy = self._time_interleaved(
-            surfaces, rays_in, wavelength)
-        speedup = legacy / fast
-        # Surface the timing for diagnostic logging.
-        print(f'\n  fast={fast*1e6:.1f} us, legacy={legacy*1e6:.1f} us, '
-              f'speedup={speedup:.2f}x')
-        assert fast < self.FAST_TRACE_CEILING_S, (
-            f'1k-ray doublet fast-path trace costs {fast*1e3:.2f} ms, '
-            f'above the {self.FAST_TRACE_CEILING_S*1e3:.0f} ms ceiling '
-            f'(measured 0.73-1.43 ms).')
-        assert speedup >= self.SPEEDUP_FLOOR, (
-            f'Post-fix doublet trace = {fast*1e6:.1f} us, '
-            f'legacy Newton = {legacy*1e6:.1f} us, '
-            f'speedup = {speedup:.2f}x (floor '
-            f'{self.SPEEDUP_FLOOR:.1f}x).  The fast path may have been '
-            f'short-circuited so pure spheres take the iterative Newton '
-            f'intersect -- or the legacy Newton became cheaper. '
-            f'Interleaved measurement removes contention as a cause.')
+        calls = self._count_sag_calls(surfaces, rays_in, wavelength)
+        assert calls == 0, (
+            f'a 1k-ray trace through a pure-spherical doublet evaluated '
+            f'_surface_sag_xy {calls} times; the analytic sphere branch '
+            f'evaluates it ZERO times.  The fast path has been '
+            f'short-circuited and pure spheres are taking an iterative '
+            f'intersect ({self._NEWTON_ITERS_PER_SURFACE} evaluations per '
+            f'surface in the full Newton fallback, 1 per surface in the '
+            f'closed-form conic branch).')
+
+    def test_a_non_spherical_surface_does_evaluate_the_sag(self):
+        """Counter-pin: the counter is reading a real code path.
+
+        The same doublet with ``conic = -0.5`` on every surface is no longer
+        pure-spherical, so the intersect must consult the sag -- measured at
+        exactly one evaluation per surface.  Without this, a wrapper that
+        never fired (a renamed helper, an inlined call) would make the test
+        above pass by accident.
+        """
+        import copy
+        wavelength = 1310e-9
+        pres, surfaces = _make_doublet()
+        rays_in = _make_1k_rays(wavelength=wavelength)
+        conic = copy.deepcopy(surfaces)
+        for surf in conic:
+            surf.conic = -0.5
+        calls = self._count_sag_calls(conic, rays_in, wavelength)
+        assert calls >= len(conic), (
+            f'a conic doublet evaluated _surface_sag_xy {calls} times for '
+            f'{len(conic)} surfaces; at least one evaluation per surface is '
+            f'required for a non-spherical intersect, so the counter is not '
+            f'seeing the call it is supposed to count and '
+            f'test_pure_spherical_doublet_never_evaluates_the_surface_sag '
+            f'is vacuous.')
+        assert calls <= self._NEWTON_ITERS_PER_SURFACE * len(conic), (
+            f'a conic doublet took {calls} sag evaluations, more than the '
+            f'{self._NEWTON_ITERS_PER_SURFACE} per surface the Newton '
+            f'fallback is bounded at -- the iteration cap is not holding.')
+
+
 
 
 # ============================================================================
@@ -1528,50 +1484,71 @@ class TestAuditFixesV4_12_1_trace_jax_cache_CacheWarmSpeedup:
     .release_notes_v4_15_2_agent_e.md -- "passes in isolation".)
     """
 
-    # Absolute ceiling on the warm (cache-hit) call: the real contract.
-    WARM_CALL_CEILING_S = 20e-3
-    # Much looser secondary ratio floor (was 200x).
-    RATIO_FLOOR = 20.0
+    def test_warm_calls_are_served_from_the_cache_not_recompiled(self, singlet):
+        """The cache is HIT: 20 identical calls build exactly one entry, and
+        every call after the first is served the SAME compiled object.
 
-    def test_warm_call_is_cheap_and_much_faster_than_the_first(self, singlet):
-        """Warm-call median must sit far below the cold-compile cost, in
-        ABSOLUTE terms -- a re-trace per call would land it at ~200-300 ms
-        against a 20 ms ceiling."""
+        2026-09-12 (audit 2026-09-11, V5; TESTING_STANDARDS S1).  This test
+        used to assert a wall-clock ceiling on the warm call
+        (``warm < 20 ms``) plus a ``first / warm >= 20x`` ratio floor, and the
+        docstring above is an honest record of why that shape kept moving --
+        it tabulates the measured ratio sliding from 391-652x idle to 102-155x
+        under load, and the file's own history logs it as a timing flake that
+        "passes in isolation".  Both numerator and denominator are per-build
+        facts; the CONTRACT is not.  The contract is that
+        ``_TRACE_JAX_CACHE`` serves the compiled kernel instead of rebuilding
+        it, and that is an operation count: one entry, one object, twenty
+        calls.
+
+        Strictly stronger than the bars it replaces.  The old pair could pass
+        while the cache rebuilt on every call on a fast box (a ~200 ms compile
+        that a 20 ms ceiling never sees is impossible, but a partially-warm
+        JAX-internal cache produces exactly that ambiguity -- which is what
+        the ratio floor's own failure message admits).  Identity cannot: a
+        rebuild produces a different object, every time, on every box.
+        """
         state = _make_state()
-        # Run once to warm any JAX-internal caches that aren't ours.
+        # Run once to warm any JAX-internal caches that aren't ours, then
+        # drop OUR cache so the first counted call is a genuine miss.
         trace_jax(state, singlet, 633e-9).x.block_until_ready()
         _TRACE_JAX_CACHE.clear()
+        assert len(_TRACE_JAX_CACHE) == 0
 
         n_iter = 20
-        times = []
+        entries = []
+        served = []
         for _ in range(n_iter):
-            t0 = time.perf_counter()
             out = trace_jax(state, singlet, 633e-9)
             out.x.block_until_ready()
-            times.append(time.perf_counter() - t0)
+            entries.append(len(_TRACE_JAX_CACHE))
+            # the single cached value, by identity
+            served.append(next(iter(_TRACE_JAX_CACHE.values())))
 
-        first = times[0]
-        # Use the median of calls 5-19 to absorb scheduling jitter.
-        warm = float(np.median(times[5:]))
-        speedup = first / max(warm, 1e-9)
-        print(f'\n  trace_jax cache: first={first*1e3:.1f} ms, '
-              f'warm median={warm*1e3:.3f} ms, ratio={speedup:.0f}x')
+        assert entries == [1] * n_iter, (
+            f"_TRACE_JAX_CACHE size after each of {n_iter} identical "
+            f"trace_jax calls was {entries}; the contract is 1 after every "
+            f"call.  A size that grows means the cache KEY carries something "
+            f"that is not constant across identical calls (an id(), a "
+            f"timestamp, an unhashed array); a size of 0 means nothing is "
+            f"being cached at all and every call re-traces (~200-300 ms of "
+            f"compile per call).")
+        first = served[0]
+        assert all(s is first for s in served), (
+            f"the cached value changed identity during {n_iter} identical "
+            f"calls ({sum(1 for s in served if s is not first)} of them), so "
+            f"the entry is being EVICTED AND REBUILT rather than served.  "
+            f"That is the ~200-300 ms per-call re-trace this cache exists to "
+            f"prevent, and it is invisible to any wall-clock bar on a box "
+            f"where the compile happens to be cheap.")
 
-        assert warm < self.WARM_CALL_CEILING_S, (
-            f"Warm (cache-hit) trace_jax call costs {warm*1e3:.2f} ms, "
-            f"above the {self.WARM_CALL_CEILING_S*1e3:.0f} ms ceiling. "
-            f"Measured 0.47-0.53 ms idle and 1.1-1.6 ms under load, so "
-            f"this means the jit kernel is being REBUILT per call (cold "
-            f"cost ~200-300 ms) rather than served from "
-            f"_TRACE_JAX_CACHE.  first={first*1e3:.1f} ms, "
-            f"ratio={speedup:.0f}x.")
-        assert speedup >= self.RATIO_FLOOR, (
-            f"Warm call ({warm*1e3:.3f} ms) is only {speedup:.0f}x faster "
-            f"than the first ({first*1e3:.1f} ms), under the "
-            f"{self.RATIO_FLOOR:.0f}x secondary floor.  With the absolute "
-            f"warm bound satisfied this means the FIRST call got cheap "
-            f"too -- i.e. no compile happened, so the kernel under test "
-            f"may not be the jit path at all.")
+        # NOTE (no counter-pin added here on purpose).  The obvious
+        # counter-pin -- "a different key must MISS, otherwise a singleton
+        # would satisfy the identity claim" -- already exists in this file:
+        # ``TestAuditFixesV4_12_1_trace_jax_cache_AuxKeying`` pins a miss on a
+        # different glass, wavelength and radius.  Adding a fourth copy is the
+        # process defect the 2026-09-11 audit named (every round adds a file
+        # instead of strengthening the existing one), so this test cites them
+        # instead.
 
 
 # ===========================================================================

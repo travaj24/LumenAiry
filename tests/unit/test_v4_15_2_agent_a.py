@@ -544,7 +544,7 @@ class TestChangelogDriftFixes:
         result = subprocess.run(
             [sys.executable, '-m', 'pytest', *all_rel,
              '--collect-only', '-q', '-p', 'no:cacheprovider'],
-            cwd=str(repo_root), capture_output=True, text=True,
+            cwd=str(repo_root), capture_output=True, stdin=subprocess.DEVNULL, text=True,
             timeout=300)
         out = (result.stdout or '') + (result.stderr or '')
         m_total = re.search(r'(\d+) tests collected', out)

@@ -79,7 +79,7 @@ def test_script_help_exits_cleanly():
     """
     result = subprocess.run(
         [sys.executable, str(_SCRIPT), '--help'],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=30,
     )
     assert result.returncode == 0, (
         f'stamp_changelog.py --help returned rc={result.returncode}; '
@@ -123,7 +123,7 @@ def test_dry_run_against_current_changelog():
     pre_size = _CHANGELOG.stat().st_size
     result = subprocess.run(
         [sys.executable, str(_SCRIPT), '--quick'],
-        capture_output=True, text=True, timeout=180,
+        capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=180,
     )
     assert result.returncode in (0, 1, 2), (
         f'stamp_changelog.py --quick (dry-run) returned rc='

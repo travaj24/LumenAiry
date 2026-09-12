@@ -27,9 +27,25 @@ include ROADMAP.md
 include CONTRIBUTING.md
 recursive-include docs *.md *.txt
 
-# Validation suite -- 31 files with ~370 physics-fidelity tests.
-# Run with `python validation/run_all.py` after extracting the sdist.
+# Validation suite.  MEASURED 2026-09-12 (audit 2026-09-11, V7): the tree
+# holds 876 ``.py`` across 70 sub-directories, of which 624 live under
+# ``validation/probe_*`` and 184 under ``validation/repro_*`` -- per-audit-round
+# scratch promoted to permanent files, not part of the suite a user runs.  The
+# comment here used to say "31 files with ~370 physics-fidelity tests", which
+# was the 4.4.0 count; the 37 ``t_*.py`` / ``test_*.py`` entry points are the
+# part of that claim that survives.  Run with ``python validation/run_all.py``
+# after extracting the sdist.
 recursive-include validation *.py *.md *.txt
+
+# ... but do NOT ship the per-round probe / reproduction scratch: 808 of the
+# 876 ``.py`` above, plus whatever ``.md``/``.txt`` sits beside them.  They
+# reproduce one past audit finding each, they are not runnable from an
+# extracted tarball (several hard-code absolute paths on the dev box), and
+# they are the bulk of the sdist's validation payload.
+prune validation/probe_*
+prune validation/repro_*
+recursive-exclude validation/probe_* *
+recursive-exclude validation/repro_* *
 
 # Unit + integration tests.
 recursive-include tests *.py

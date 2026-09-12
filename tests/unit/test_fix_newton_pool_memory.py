@@ -351,7 +351,7 @@ def _run_script(tmp_path, src, name):
     script.write_text(src)
     log = tmp_path / (name + '.log')
     out = subprocess.run([sys.executable, str(script), str(log)],
-                         capture_output=True, text=True, timeout=300)
+                         capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=300)
     assert out.returncode == 0, out.stderr + out.stdout
     return [ln for ln in log.read_text().splitlines() if ln.startswith('BODY')]
 
@@ -1478,7 +1478,8 @@ def test_a_real_spawned_worker_uses_the_parents_fit(tmp_path):
     script = tmp_path / 'probe_fit.py'
     script.write_text(_PROBE)
     out = subprocess.run([sys.executable, str(script)], capture_output=True,
-                         text=True, timeout=600)
+    stdin=subprocess.DEVNULL,
+    text=True, timeout=600)
     assert out.returncode == 0, out.stderr + out.stdout
     got = {}
     for ln in out.stdout.splitlines():

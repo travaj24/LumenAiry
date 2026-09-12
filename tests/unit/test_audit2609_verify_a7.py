@@ -570,7 +570,7 @@ def test_gs_jax_accepts_a_complex_dtype_and_returns_a_real_error(cdtype):
     ``TypeError: float() argument must be ... not 'complex'``, so this
     test fails hard (not by a tolerance) on the pre-fix code.
     """
-    jax = pytest.importorskip('jax')
+    pytest.importorskip('jax')
     from lumenairy.analysis.phase_retrieval import gerchberg_saxton_jax
     src, _tgt, tgt2, phi0 = _gs_fixture()
     with warnings.catch_warnings():

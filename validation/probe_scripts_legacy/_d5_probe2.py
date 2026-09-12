@@ -6,7 +6,10 @@ from __future__ import annotations
 import os
 import sys
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+# Moved 2026-09-12 from ``scripts/`` to ``validation/probe_scripts_legacy/``
+# (audit 2026-09-11, P3-4), so the repo root is two levels up, not one.
+_ROOT = os.path.dirname(os.path.dirname(_HERE))
 if sys.path[0] != _ROOT:
     sys.path.insert(0, _ROOT)
 sys.path.insert(1, os.path.join(_ROOT, 'tests', 'unit'))

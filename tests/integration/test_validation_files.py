@@ -55,7 +55,7 @@ def test_validation_file_passes(val_file):
     """Run ``python <val_file>`` in a subprocess and assert exit 0."""
     proc = subprocess.run(
         [sys.executable, str(val_file)],
-        capture_output=True, text=True, timeout=600,
+        capture_output=True, stdin=subprocess.DEVNULL, text=True, timeout=600,
     )
     if proc.returncode != 0:
         pytest.fail(

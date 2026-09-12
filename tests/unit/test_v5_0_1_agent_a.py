@@ -48,6 +48,7 @@ def _ruff_available() -> bool:
         proc = subprocess.run(
             [sys.executable, "-m", "ruff", "--version"],
             capture_output=True,
+            stdin=subprocess.DEVNULL,
             text=True,
             timeout=30,
         )
@@ -89,6 +90,7 @@ class TestF821ForwardReferencesFixedInV5_0_1:
                 "--no-cache",
             ],
             capture_output=True,
+            stdin=subprocess.DEVNULL,
             text=True,
             timeout=120,
         )
@@ -173,6 +175,7 @@ class TestF821ForwardReferencesFixedInV5_0_1:
              "import lumenairy.propagators.system; "
              "assert la.__version__"],
             capture_output=True,
+            stdin=subprocess.DEVNULL,
             text=True,
             timeout=60,
         )

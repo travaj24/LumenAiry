@@ -65,7 +65,7 @@ def test_validation_helper_no_circular_import_on_module_load():
     """
     proc = subprocess.run(
         [sys.executable, '-c', 'import lumenairy'],
-        capture_output=True, text=True, cwd=str(_REPO_ROOT),
+        capture_output=True, stdin=subprocess.DEVNULL, text=True, cwd=str(_REPO_ROOT),
     )
     assert proc.returncode == 0, (
         f"Cold ``python -c 'import lumenairy'`` returned non-zero "
@@ -309,7 +309,7 @@ def test_no_deprecation_warning_errors_in_v4_15_1_agent_b_module():
             '-W', 'error::DeprecationWarning',
             '--tb=no', '-q',
         ],
-        capture_output=True, text=True, cwd=str(_REPO_ROOT),
+        capture_output=True, stdin=subprocess.DEVNULL, text=True, cwd=str(_REPO_ROOT),
         timeout=120,
     )
     # pytest exit code 0 = all passed (1 = test failures, 2 = collect
@@ -337,7 +337,7 @@ def test_no_deprecation_warning_errors_in_v4_15_3_agent_a_module():
             '-W', 'error::DeprecationWarning',
             '--tb=no', '-q',
         ],
-        capture_output=True, text=True, cwd=str(_REPO_ROOT),
+        capture_output=True, stdin=subprocess.DEVNULL, text=True, cwd=str(_REPO_ROOT),
         timeout=120,
     )
     assert proc.returncode == 0, (
@@ -381,7 +381,7 @@ def test_representative_v4_15_x_modules_pass_under_deprecation_error():
             '-W', 'error::DeprecationWarning',
             '--tb=no', '-q', '--no-header',
         ],
-        capture_output=True, text=True, cwd=str(_REPO_ROOT),
+        capture_output=True, stdin=subprocess.DEVNULL, text=True, cwd=str(_REPO_ROOT),
         timeout=180,
     )
     assert proc.returncode == 0, (

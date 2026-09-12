@@ -21,7 +21,17 @@ jobs:
       fail-fast: false
       matrix:
         # v5.1.1: 3.10 is the documented floor (``requires-python``); exercise it.
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        # 2026-09-12 (audit 2026-09-11, V4/P1-5): 3.14 ADDED.  It is the
+        # interpreter this library is developed and hand-tested on -- the repo
+        # even tracks ``.benchmarks/Windows-CPython-3.14-64bit/*.json`` and
+        # carries ``cpython-314`` pycs -- and until now no CI leg ran it, so
+        # every 3.14-specific behaviour change reached main unverified.  The
+        # pyproject comment that justified the exclusion ("3.14 is too new for
+        # numba / jax / pyfftw to have published wheels") is false on the dev
+        # box: MEASURED 2026-09-12, numba 0.65.1, jax 0.10.1 and pyfftw 0.15.1
+        # are all installed on CPython 3.14.6.  The classifier is restored in
+        # the same change.
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
         # v5.23.0: SHARD the fast gate across 3 parallel JOBS (per version) via
         # pytest-split.  A single runner has only ~2-4 cores, so in-process xdist
         # capped the gate at ~1.5x (~44 -> 27 min); job-sharding puts each slice
@@ -140,9 +150,17 @@ jobs:
         # single-threading to be 2.76x SLOWER on large-eig files and faster on
         # many-small-solve files, i.e. a blanket pin here is not a free win and
         # needs a real CI-hardware A/B first.
+        #
+        # 2026-09-12 (audit 2026-09-11, V5/V7): ``--maxfail`` 50 -> 10.  At 50
+        # per shard across 5 shards x 5 pythons the gate tolerated up to 1 250
+        # failures before any job aborted, which is not an early-abort budget,
+        # it is no budget.  10 is still enough to show a PATTERN (one shard's
+        # first ten failures name the class) while a catastrophic break --
+        # a bad merge, a missing dependency -- stops the matrix in minutes
+        # instead of burning 45 of them per job.
         run: |
           python -m pytest tests/unit -m "not integration and not slow" --tb=short \
-            -p no:cacheprovider --maxfail=50 -v \
+            -p no:cacheprovider --maxfail=10 -v \
             --splits 5 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --durations-path .test_durations 2>&1 \
@@ -213,13 +231,19 @@ jobs:
   lint:
     name: Ruff lint
     runs-on: ubuntu-latest
-    # v5.0.1 (audit P1-NEW-V4-1): lint job is advisory at v5.0; baseline
-    # cleanup is a v5.1 work item alongside the file splits.  The job runs
-    # and surfaces violations on PR, but does not block merge.  Real code
-    # bugs (F821 forward-refs) were fixed in v5.0.1; the remaining 692
-    # errors are cosmetic (I001 imports + F401 unused + F841 unused-var +
-    # F541 empty f-string + E702 semicolons).
-    continue-on-error: true
+    # 2026-09-12 (audit 2026-09-11, V4/P1-3): BLOCKING.  Until now this job
+    # carried ``continue-on-error: true``, so the only always-on static gate on
+    # the codebase reported green on a lint failure -- nothing in the
+    # merge-blocking path failed on an undefined name.  The tree is clean under
+    # the current configuration: MEASURED 2026-09-12,
+    # ``ruff check lumenairy/ tests/`` -> "All checks passed", from a baseline
+    # of 13 findings in lumenairy/ (9 x I001, 2 x F541, 2 x F401), 331 in
+    # lumenairy/ui/ (which was excluded outright) and 37 in tests/.  Every one
+    # is now either fixed or carries a scoped per-file ignore with a stated
+    # reason in ``[tool.ruff.lint.per-file-ignores]``; the ones marked
+    # ``TODO(audit-2609)`` there are requests to the owning work package and
+    # should be deleted as they land.
+    continue-on-error: false
     steps:
       - uses: actions/checkout@v4
 
@@ -232,7 +256,11 @@ jobs:
         run: pip install ruff
 
       - name: Ruff check
-        run: ruff check lumenairy/ tests/unit/
+        # ``lumenairy/`` now INCLUDES ``lumenairy/ui/`` (~30 modules, 32 kLOC)
+        # -- it is no longer in ``[tool.ruff] extend-exclude``.  ``tests/``
+        # rather than ``tests/unit/`` so ``tests/integration/`` and
+        # ``tests/conftest.py`` are linted too.
+        run: ruff check lumenairy/ tests/
 
   mypy:
     name: mypy strict (whitelist)
@@ -341,6 +369,38 @@ jobs:
         run: |
           python -c "import jax; print('jax', jax.__version__)"
           python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
+
+      # 2026-09-12 (audit 2026-09-11, V4/P1-6).  The declared floor
+      # (``[project.optional-dependencies] jax``) and the version this leg
+      # actually resolves had drifted apart with nothing comparing them -- the
+      # dev box runs jax 0.10.1, below the declared >= 0.11, while this leg
+      # resolves 0.11 on 3.12, so a 0.10-vs-0.11 API difference produced a
+      # local-green / CI-red with no signal about which side was right.
+      # ``dep-drift.yml`` cannot catch it (it is explicitly non-blocking).
+      # This step makes the floor and the gated version one fact.
+      - name: Assert the resolved jax satisfies the declared floor
+        run: |
+          python - <<'PY'
+          import re, sys, tomllib
+          import jax
+          from packaging.requirements import Requirement
+          from packaging.version import Version
+          cfg = tomllib.load(open('pyproject.toml', 'rb'))
+          reqs = cfg['project']['optional-dependencies']['jax']
+          floors = [Requirement(r) for r in reqs]
+          got = Version(jax.__version__)
+          ok = any(s.contains(got, prereleases=True)
+                   for r in floors for s in [r.specifier])
+          print('declared jax requirement(s):', reqs)
+          print('resolved jax             :', got)
+          if not ok:
+              sys.exit(
+                  '::error::resolved jax %s does not satisfy the declared '
+                  'floor %s.  Either this leg is gating a version the package '
+                  'metadata calls unsupported, or the floor is stale -- fix '
+                  'one of them, do not let them drift.' % (got, reqs))
+          print('OK: the gated jax satisfies the declared floor.')
+          PY
 
       - name: Run jax-guarded unit tests
         shell: bash
@@ -457,7 +517,7 @@ jobs:
           fi
 
   slow-tests:
-    name: Slow tests shard ${{ matrix.shard }}/3 (eig-heavy)
+    name: Slow tests shard ${{ matrix.shard }}/5 (eig-heavy + the > 2 min/file lane)
     runs-on: ubuntu-latest
     # v5.15.0: the graduated EME mode-solver convergence tests
     # (tests/unit/test_eme_*.py) and the RCWA FFF-NV slow test are eig-heavy
@@ -469,10 +529,18 @@ jobs:
     # scatter the BLAS-order-sensitive eig convergence tests across workers and
     # reintroduce the flake the single-thread pin suppresses -- so each shard
     # runs SERIALLY; only the file set differs.  ~45 min single job -> ~15 each.
+    # 2026-09-12 (audit 2026-09-11, V5): 3 -> 5 shards, because the slow lane
+    # just grew.  MEASURED from the committed ``.test_durations`` against
+    # today's collection: 11 files at or over the 2 min/file bar gained a
+    # module-level ``pytest.mark.slow``, moving 2 341.0 s out of the fast lane.
+    # Lane totals before -> after: fast 9 487.1 s -> 7 146.1 s (31.6 ->
+    # 23.8 min per shard on 5 shards, 45-min step cap); slow 3 573.9 s ->
+    # 5 914.9 s, which is 32.9 min per shard on 3 (OVER the 30-min step cap)
+    # and 19.7 min on 5.  So the shard count moves, not the cap.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5]
     # v5.24.3: 25 -> 35 (matches the raised 30min slow step cap + buffer).
     timeout-minutes: 35
     steps:
@@ -492,7 +560,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
 
-      - name: Run slow tests (shard ${{ matrix.shard }}/3)
+      - name: Run slow tests (shard ${{ matrix.shard }}/5)
         shell: bash
         # v5.18.1: pin BLAS to a single thread.  The eig-heavy EME vector
         # convergence tests (test_eme_2d_vector) resolve near-threshold modes
@@ -511,11 +579,11 @@ jobs:
           VECLIB_MAXIMUM_THREADS: '1'
         run: |
           # pytest-split --splits/--group distributes the slow tests across the
-          # 3 shard jobs, balanced by the committed .test_durations; each shard
+          # 5 shard jobs, balanced by the committed .test_durations; each shard
           # runs its subset serially.
           python -m pytest tests/unit -m "slow and not integration" --tb=short \
             -p no:cacheprovider -v \
-            --splits 3 --group ${{ matrix.shard }} \
+            --splits 5 --group ${{ matrix.shard }} \
             --splitting-algorithm least_duration \
             --durations-path .test_durations 2>&1 \
             | tee slow_test_output.txt

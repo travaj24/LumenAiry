@@ -17,11 +17,20 @@ venv/
 env/
 ENV/
 
-# Test / coverage
+# Test / coverage / static-analysis caches
+# (``.test_durations`` is tracked DELIBERATELY -- pytest-split reads it to
+# balance the CI shards; see unit-tests.yml.  Do not add it here.)
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
+.mypy_cache/
+.ruff_cache/
+# pytest-benchmark writes machine-specific timing JSONs here.  Two of them
+# (Windows-CPython-3.14-64bit/000{1,2}_v4_11_2*.json) are tracked from before
+# this rule existed and need ``git rm --cached`` to leave the index -- they
+# pin one machine's timings into version control (audit 2026-09-11, V4/P1-10).
+.benchmarks/
 
 # IDE / editor
 .vscode/
@@ -34,14 +43,42 @@ htmlcov/
 .ipynb_checkpoints/
 
 # Output / working files
+#
+# 2026-09-12 (audit 2026-09-11, V4/P1-10): the blanket ``*.png`` / ``*.jpg`` /
+# ``*.pdf`` / ``*.fits`` / ``*.dat`` / ``*.log`` rules that used to live here
+# made EVERY binary of those types un-addable repo-wide, so a legitimate test
+# fixture or doc asset could only be committed with ``git add -f``.  They are
+# replaced by directory-scoped rules covering the trees that actually generate
+# them -- MEASURED with ``git ls-files --others --ignored``: 113 files under
+# validation/repro_traced_carrier_121, 26 under docs/audits, 22 under
+# validation/real_lens_opd, 9 under examples/output, plus importtime.log.
+# Everywhere else (tests/, lumenairy/, benchmarks/, examples/ proper) a
+# fixture with one of those extensions is now addable without ``-f``.
 output/
-*.png
-*.jpg
-*.pdf
-*.fits
-*.dat
-*.log
+**/output/
 doe_cache/
-bash.exe.stackdump
-validation/repro_traced_carrier_121/_*.npy
-validation/repro_traced_carrier_121/_probe_ladder/
+docs/audits/**/*.png
+docs/audits/**/*.jpg
+docs/audits/**/*.pdf
+docs/audits/**/*.dat
+docs/audits/**/*.log
+validation/**/*.png
+validation/**/*.jpg
+validation/**/*.pdf
+validation/**/*.fits
+validation/**/*.dat
+validation/**/*.log
+# Per-round reproduction scratch under validation/ (npz/npy assets measured in
+# the tens of MB each -- repro_traced_carrier_122 alone is 89 MB).  Directory
+# scoped, per the 2026-09-12 addendum: the trees stay on disk, they just stop
+# being addable.  (repro_traced_carrier_121's 430 already-tracked files are
+# unaffected -- an ignore rule does not untrack.)
+validation/repro_*/
+*.stackdump
+importtime.log
+# Per-session working directory used by the audit tooling; never part of a
+# release.  (The convention is that scratch lives OUTSIDE the repo; this rule
+# is the safety net for the times it does not.)
+/scratchpad/
+# Local run logs at the repo root only; a *.log fixture elsewhere is addable.
+/*.log

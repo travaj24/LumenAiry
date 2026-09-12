@@ -20,40 +20,36 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ============================================================================
-# audit closure: P1-NEW-F2-HIGH-1 -- README refractiveindex moved
+# RETIRED 2026-09-12 (audit 2026-09-11, V5 / P2-2 item (v)).
+#
+# Five tests used to live here that read README.md, ROADMAP.md and
+# CHANGELOG.md and asserted on their PROSE:
+#
+#   test_readme_does_not_cite_refractiveindex_as_required
+#   test_readme_pip_install_command_uses_extras_or_omits_refractiveindex
+#   test_roadmap_claims_correct_meta_pin_count
+#   test_roadmap_enumerates_v10_v11
+#   test_changelog_high_na_transfer_jax_uses_runtimewarning
+#
+# They are deleted rather than converted.  A regex over a 180 KB README is not
+# a test of the library: it fails when someone rewords a sentence and it passes
+# when the code underneath the sentence is wrong -- the README-vs-reality drift
+# they were written for (v4.16.1 moved ``refractiveindex`` to the ``[glass]``
+# extra) is pinned properly, and structurally, by the packaging tests kept
+# below and by ``test_v5_2_3_dep_drift_check.py`` /
+# ``scripts/check_dep_metadata.py``, which compare ``requirements.txt`` against
+# ``pyproject.toml`` itself.  The ROADMAP walker-count pair asserted that a
+# document CLAIMS a number; ``test_v4_16_2_dispatcher_pin_doc_consistency.py``
+# asserts the walkers exist.
+#
+# KEPT deliberately: everything below.  The ``requirements.txt`` tests read a
+# machine-consumed file, not prose.  The CHANGELOG FABRICATION walkers
+# (``test_v5_2_3_walker_changelog_content.py``,
+# ``test_v5_3_walker_changelog_self_citation.py``,
+# ``test_v5_3_2_walker_source_line_citation.py``) are NOT in this retirement:
+# they are release gates that check a changelog claim against ``git diff``, i.e.
+# they test a FACT, not a wording.
 # ============================================================================
-
-def test_readme_does_not_cite_refractiveindex_as_required():
-    """The README Dependencies block must not list refractiveindex
-    in the `Required` section (it moved to [glass] extras in
-    v4.16.1)."""
-    text = (_REPO_ROOT / 'README.md').read_text(encoding='utf-8')
-    match = re.search(
-        r'### Required\s*\n(.*?)(?=\n###|\n##\s|\Z)',
-        text, re.DOTALL,
-    )
-    assert match is not None, "README missing `### Required` subsection"
-    block = match.group(1)
-    assert '`refractiveindex`' not in block, (
-        "README.md still cites `refractiveindex` as Required.  "
-        "v4.16.1 moved it to [glass] extras.")
-
-
-def test_readme_pip_install_command_uses_extras_or_omits_refractiveindex():
-    """The README quick-install must not force refractiveindex via
-    a bare `pip install ... refractiveindex` command."""
-    text = (_REPO_ROOT / 'README.md').read_text(encoding='utf-8')
-    # Find any pip install command in fenced bash blocks.
-    bad = []
-    for m in re.finditer(r'pip install ([^\n`]+)', text):
-        cmd = m.group(1)
-        # If `refractiveindex` appears in the command without `[glass]`
-        # or other bracket-extras form, that's a force-install drift.
-        if 'refractiveindex' in cmd and 'lumenairy[' not in cmd:
-            bad.append(cmd.strip())
-    assert not bad, (
-        f"README quick-install command(s) force refractiveindex: {bad}.  "
-        f"Move to `pip install lumenairy[glass]`.")
 
 
 # ============================================================================
@@ -83,52 +79,6 @@ def test_requirements_txt_zarr_floor_is_3_or_higher():
             f"requirements.txt cites zarr>={major}.{minor}; "
             f"v4.16.1 bumped to >=3.0 to match storage.py's "
             f"Group.create_array (Zarr v3) usage.")
-
-
-# ============================================================================
-# audit closure: P2-NEW-F2-MED-1 -- ROADMAP V9 -> V10 (+V11)
-# ============================================================================
-
-def test_roadmap_claims_correct_meta_pin_count():
-    text = (_REPO_ROOT / 'ROADMAP.md').read_text(encoding='utf-8')
-    m = re.search(r'ALL (\d+) dispatcher meta-pins', text)
-    assert m is not None, (
-        "ROADMAP.md missing `ALL N dispatcher meta-pins` claim.")
-    n_claimed = int(m.group(1))
-    # v4.16.2 ships V11.  Anything less is stale.
-    assert n_claimed >= 11, (
-        f"ROADMAP.md claims `ALL {n_claimed} dispatcher meta-pins` "
-        f"but v4.16.2 ships V11 (doc-consistency walker).  Update "
-        f"the count.")
-
-
-def test_roadmap_enumerates_v10_v11():
-    text = (_REPO_ROOT / 'ROADMAP.md').read_text(encoding='utf-8')
-    for v in ('V10', 'V11'):
-        assert v in text, (
-            f"ROADMAP.md does not enumerate {v}.  v4.16.2 ships "
-            f"both (V10 was the v4.16.1 walker that already shipped; "
-            f"v4.16.2 adds V11).")
-
-
-# ============================================================================
-# audit closure: P2-NEW-V2-1 -- CHANGELOG UserWarning -> RuntimeWarning
-# ============================================================================
-
-def test_changelog_high_na_transfer_jax_uses_runtimewarning():
-    text = (_REPO_ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
-    # Find the high-NA _transfer_jax block in the v4.16.1 entry.
-    m = re.search(
-        r'High-NA `_transfer_jax`.*?(?=\n\* |\n###)',
-        text, re.DOTALL,
-    )
-    assert m is not None, (
-        "CHANGELOG missing the High-NA _transfer_jax block in v4.16.1.")
-    block = m.group(0)
-    assert 'RuntimeWarning' in block, (
-        "CHANGELOG High-NA _transfer_jax block does not mention "
-        "RuntimeWarning; the implementation uses RuntimeWarning, "
-        "not UserWarning.  Fix the typo.")
 
 
 # ============================================================================

@@ -219,6 +219,13 @@ def _run(cmd, timeout=600):
             cmd,
             cwd=str(_REPO_ROOT),
             capture_output=True,
+            # ``stdin`` explicitly, not inherited -- see the same note in
+            # ``verify_changelog_closures.py::_run_git``.  Under pytest's
+            # fd-capture on Windows an inherited stream makes
+            # ``Popen._get_handles`` duplicate a stale Win32 std handle and
+            # raise ``OSError: [WinError 6]`` before the child starts.  None of
+            # the commands this helper runs (git, pytest) reads stdin.
+            stdin=subprocess.DEVNULL,
             text=True,
             timeout=timeout,
         )

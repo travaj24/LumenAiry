@@ -703,37 +703,56 @@ class TestThroughFocusScanJaxKernelCache:
             f'bandlimit=True vs bandlimit=False must miss the cache; '
             f'got {len(_THROUGH_FOCUS_SCAN_JAX_CACHE)} entries.')
 
-    def test_warm_call_at_least_10x_faster_than_first(self, jax_x64):
-        """Warm-call speedup pin -- the cache eliminates re-tracing
-        and re-compilation cost.  Conservative threshold (>= 10x) to
-        absorb scheduling jitter on small workloads; the typical
-        observed speedup at N=64 is ~50-100x.
+    def test_warm_calls_are_served_from_the_cache_not_recompiled(self, jax_x64):
+        """The compiled scan is SERVED, not rebuilt: eight identical calls
+        leave exactly one cache entry and hand back the same object each time.
+
+        2026-09-12 (audit 2026-09-11, V5; TESTING_STANDARDS S1).  This was
+        ``speedup = first / median(warm) >= 10.0`` -- a ratio of two wall-clock
+        measurements, i.e. a per-build fact, and one whose numerator is a
+        one-off XLA compile that tracks the machine rather than the library.
+        The property the ratio stood in for is an operation count: does the
+        second call COMPILE, or does it hit ``_THROUGH_FOCUS_SCAN_JAX_CACHE``?
+        One entry and one object answers that exactly, on a fast box and a
+        contended one alike.
         """
         if not jax_x64:
             pytest.skip('JAX not installed.')
-        import time
 
         from lumenairy.analysis.through_focus import (
+            _THROUGH_FOCUS_SCAN_JAX_CACHE,
             clear_through_focus_scan_jax_cache,
         )
         N, dx, wl = 32, 8e-6, 1.55e-6
         E_exit = _make_focusing_field(N=N, dx=dx, wl=wl, f=50e-3)
         z_arr = np.linspace(45e-3, 55e-3, 5)
 
-        # Warm JAX-internal infrastructure (e.g. CUDA bootstrap).
+        # Warm JAX-internal infrastructure (e.g. CUDA bootstrap), then drop
+        # OUR cache so the first counted call is a genuine miss.
         through_focus_scan_jax(E_exit, dx, wl, z_arr, bandlimit=True)
         clear_through_focus_scan_jax_cache()
+        assert len(_THROUGH_FOCUS_SCAN_JAX_CACHE) == 0
 
         n_iter = 8
-        times = []
+        sizes, served = [], []
         for _ in range(n_iter):
-            t0 = time.perf_counter()
             through_focus_scan_jax(E_exit, dx, wl, z_arr, bandlimit=True)
-            times.append(time.perf_counter() - t0)
-        first = times[0]
-        warm = float(np.median(times[3:]))
-        speedup = first / max(warm, 1e-9)
-        assert speedup >= 10.0, (
-            f'Cache speedup too small: first={first*1000:.1f}ms, '
-            f'warm={warm*1000:.3f}ms, speedup={speedup:.1f}x '
-            f'(expected >= 10x).')
+            sizes.append(len(_THROUGH_FOCUS_SCAN_JAX_CACHE))
+            served.append(next(iter(_THROUGH_FOCUS_SCAN_JAX_CACHE.values())))
+
+        assert sizes == [1] * n_iter, (
+            f'_THROUGH_FOCUS_SCAN_JAX_CACHE size after each of {n_iter} '
+            f'identical calls was {sizes}; the contract is 1 after every one. '
+            f'A growing size means the key carries something that is not '
+            f'constant across identical calls; a size of 0 means the scan is '
+            f're-traced and re-compiled on every call.')
+        first = served[0]
+        assert all(s is first for s in served), (
+            f'the cached compiled scan changed identity during {n_iter} '
+            f'identical calls, so it is being rebuilt rather than served -- '
+            f'the exact regression this cache exists to prevent, and one that '
+            f'no wall-clock ratio can see on a box where XLA compiles '
+            f'quickly.')
+        # The MISS direction is already pinned by
+        # ``test_cache_misses_on_different_bandlimit`` (and its shape / dtype
+        # siblings) in this same file, so no counter-pin is duplicated here.

@@ -309,6 +309,21 @@ def _run_git(args):
             ['git', *args],
             cwd=str(_REPO_ROOT),
             capture_output=True,
+            # ``stdin`` explicitly, not inherited (2026-09-12, audit V5 item 5).
+            # On Windows, ``Popen._get_handles`` resolves every stream left as
+            # ``None`` through ``GetStdHandle()`` and then ``DuplicateHandle``.
+            # pytest's default fd-capture reassigns the process's fds WITHOUT
+            # calling ``SetStdHandle``, so the Win32 std handles it duplicates
+            # can be stale -- MEASURED here as
+            # ``OSError: [WinError 6] The handle is invalid`` raised at
+            # subprocess.py:1431 before the child is even created, when this
+            # helper is reached from
+            # ``test_v5_2_3_walker_changelog_content.py::
+            # test_v16_synthetic_fabrication_is_caught`` inside a multi-file
+            # pytest session (the same call passes under ``-s`` and standalone).
+            # Naming all three streams keeps ``_get_handles`` away from
+            # ``GetStdHandle`` entirely; ``git`` reads no stdin.
+            stdin=subprocess.DEVNULL,
             text=True,
             timeout=30,
         )

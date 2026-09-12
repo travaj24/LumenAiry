@@ -184,6 +184,7 @@ def test_v16_companion_script_invokable():
         [sys.executable, str(_SCRIPT), '--version', '5.2.0', '--quiet'],
         cwd=str(_REPO_ROOT),
         capture_output=True,
+        stdin=subprocess.DEVNULL,
         text=True,
         timeout=60,
     )
