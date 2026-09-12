@@ -640,6 +640,11 @@ lossless-tripwire one RECORDING what it forwards.
 
 ## 6. Open items for the orchestrator
 
+**STATUS after the orchestrator's rulings (see section 9): V1-residual, V5,
+V14, V3, V2, V7, V6, V13, V10 and V12 are all CLOSED in this branch.  V8 was
+reassigned to VERIFY-A13, H5 to WP-A15a, and the multibranch `RuntimeWarning`
+to WP-A3.  Nothing in this table is still owed by WP-A14.**
+
 | id | severity | item |
 |---|---|---|
 | **V1-residual** | **medium** | `guided_modes` still returns a PARTIAL result silently: Si/SiO2 (dn = 2.04) at V = 4.0 returns 1 mode where the exact oracle has 3 (3.038391486 / 1.566626407 / 1.440009396), with no notice.  Closing it needs a mode-count comparison (or a documented `Rbig`/`N` adequacy check), not just an empty-list guard.  H1's headline -- "any fiber study at realistic index contrast gets 'no guided modes'" -- is mitigated, not closed. |
@@ -803,3 +808,255 @@ Three defects were found and fixed inside WP-A14's own files (V1, V11, and the
 coordinator-requested V0), each with its own regression gate.  25 new tests,
 `256 passed, 2 skipped` on the final consolidated batch, and no collateral
 damage attributable to this work package.
+
+---
+
+## 9. Follow-up (orchestrator rulings on section 6, implemented 2026-09-12)
+
+All seven assigned items are implemented and measured.  V8 (PMM `wl_eff`), H5
+(`threadpoolctl`) and the multibranch `RuntimeWarning` were reassigned and are
+not touched here.
+
+### 9.1 V1-residual -- a SHORT `guided_modes` result is now loud too
+
+**What was added.**  `_step_index_root_census(m, a, eps_core, eps_clad, k0)` --
+a sign-change scan of `fiber_oracle.fiber_det`, the exact 4x4 hybrid
+boundary-match determinant, over `n_eff` in `(n_clad, n_core)` at
+`_CENSUS_SCAN = 2001` samples, for the requested azimuthal order.  No bisection:
+one determinant per sample.  `guided_modes` now warns, naming BOTH counts and
+the order, when it returns fewer modes than the census finds; `census=False`
+skips the scan.
+
+**Scan resolution and its failure mode, as required.**  The census resolves two
+roots only if they are more than one cell -- `(n_core - n_clad) / 2000` in
+`n_eff` -- apart.  A near-degenerate pair (the HE/EH partners of one LP group at
+weak contrast) or a TANGENTIAL double root is counted once or not at all.  That
+error is **one-sided in the safe direction**: the census can only UNDER-count,
+so the notice can miss a genuine shortfall but can never invent one.  That is
+what makes a decision assertion legitimate here instead of a two-sided bar.
+
+**Verified.**  Counts identical to the BISECTING `fiber_modes` on **12 of 12**
+fixtures spanning `m` = 0..5, `V` = 1.8..9 and three index systems:
+
+| m | n_core / n_clad | V | census | `fiber_modes` |
+|---|---|---|---|---|
+| 1 | 3.48 / 1.44 | 2.0 | 1 | 1 |
+| 1 | 3.48 / 1.44 | 4.0 | 3 | 3 |
+| 0 | 3.48 / 1.44 | 4.0 | 2 | 2 |
+| 2 | 3.48 / 1.44 | 4.0 | 1 | 1 |
+| 3 | 3.48 / 1.44 | 6.0 | 1 | 1 |
+| 5 | 3.48 / 1.44 | 9.0 | 2 | 2 |
+| 1 | 1.45 / 1.44 | 2.4 | 1 | 1 |
+| 0 | 1.45 / 1.44 | 2.6 | 2 | 2 |
+| 2 | 1.45 / 1.44 | 2.6 | 1 | 1 |
+| 0 | 1.45 / 1.44 | 1.8 | 0 | 0 |
+| 1 | 2.00 / 1.44 | 2.0 | 1 | 1 |
+| 1 | 1.45 / 1.445 | 2.4 | 1 | 1 |
+
+End to end: **Si/SiO2 V = 4.0 -> solver 1, census 3, warnings 0 -> 1** (pinned);
+**dn = 0.010 V = 2.4 -> solver 1, census 1, warnings 0** (pinned, the quiet
+side); Si/SiO2 V = 2.0 -> solver 0, census 1, **two** notices (the empty-list
+one from section 3 plus the census one).  The census REFUSES rather than
+guessing where it cannot be a census: `None` for a lossy core, `None` for an
+inverted profile.
+
+**Cost, measured:** 49-72 ms for 2001 samples against **0.72 s / 17.9 s /
+67.8 s** for the FD eigensolve at `N` = 150 / 400 / 600 -- 9.9 % of the call at
+the smallest grid anyone uses, 0.1-0.4 % at the grids real work runs.
+
+Gate: `test_audit2609_a14_verify.py::test_h1_a_short_guided_mode_list_is_never_silent`
+(five arms: the 12-fixture oracle cross-check, the short list, the agreeing
+list, the two refusals, and `census=False`).
+
+### 9.2 V5 -- `jax.jit` no longer returns NaN at an exact Wood anomaly
+
+**Root cause, located rather than assumed.**  Under `jax.jit` every constant
+built inside the traced function -- including `jnp.asarray(1e-6)` -- is a
+`DynamicJaxprTracer`, so `_is_traced(kx0)` and `_is_traced(wavelength)` are both
+True, `geom_concrete` is False and the ENTIRE guard block (the propagating-
+incidence check AND the Wood nudge) is skipped: instrumented, the nudge was
+called **zero** times under `jit`.  The solve then ran AT the anomaly.
+
+**Why a `lam` floor was not enough** (measured, not reasoned): flooring the
+modal eigenvalue left the NaN exactly where it was.  For a uniform half-space
+`det Q = eps^N * prod(kz^2)` -- the isotropic `Q` of `_layer_Q_matrix` has
+diagonal blocks whose determinant is `-kx^2 ky^2 + (eps - kx^2)(eps - ky^2) =
+eps * kz^2` per order -- so `V = Q diag(1/lam)` is EXACTLY rank-deficient when
+any `kz = 0`, whatever `1/lam` is floored to.  The interface `b = solve(Vb, Va)`
+is then singular; NumPy raises `LinAlgError`, JAX silently returns NaN.
+
+**The fix.**  `_traced_grazing_floor(eps)` returns
+`sqrt(2 * _WOOD_PAIR_STEP_REL * |eps|)` = 4.47e-05 for `eps = 1` -- exactly
+where the `+rel` leg of the shipped bracket puts a grazing order's `|kz|`.
+`_homogeneous_eigenmodes(..., grazing_floor=)` pushes any order with
+`|kz^2| < floor^2` onto the EVANESCENT side at that `|kz|` and builds `Q` from
+the SAME shifted `kz^2`; `_layer_eigenmodes(..., grazing_floor=)` carries the
+companion floor for a uniform layer at cut-off.  Both default to `None` =
+unchanged, and only `rcwa_efficiency_1d`'s traced branch passes a value.
+
+**Measured.**
+
+| | before | after |
+|---|---|---|
+| `jax.jit` at `Lambda = lambda`, te | `R = [0,0,0,0,0,nan,0,...]` | 0.040057738059 |
+| ... tm | NaN | 0.158125996111 |
+| closure abs(sum R + sum T - 1) | NaN | **0.0 (te) / 4.4e-16 (tm)** |
+| `jax.grad` through it | NaN | 0.4396660341 (finite) |
+| agreement with the EAGER bracket mean | -- | **9.4e-08 (te) / 5.3e-06 (tm)** at `n_ridge` 2.04; 3.2e-07 / 1.2e-04 at 1.5 |
+| exactly grazing order `m = +/-1` | NaN | **exactly 0.0** (the eager mean leaves 4.0e-07 .. 2.3e-05 there) |
+| OFF-anomaly, floor ON vs floor OFF | -- | **0.000e+00 on all 10 arms** (te/tm x 0.9 / 1.3 / 0.7 / 1.111 / 0.5123 um) |
+
+The agreement with the bracket mean is `sqrt(2 * 1e-9) = 4.5e-05` times an O(1)
+coefficient of 0.002 .. 3.8 -- i.e. inside the `sqrt(delta)` law's own accuracy,
+which is the strongest statement this formulation allows.  The traced path is in
+one respect BETTER than the concrete one: its grazing order stays evanescent and
+therefore carries exactly zero power, so it does not have the symmetric
+average's `~sqrt(delta)` artefact (section 2, H2(d)).
+
+**Scope.**  The 2-D entry points are unaffected: with a traced wavelength they
+refuse LOUDLY (`TracerArrayConversionError`) before reaching the solver, and
+with a concrete wavelength and a traced cell they take the host-side nudge as
+before (verified finite, closure 2.2e-16, at and off the anomaly).  `berreman.py`
+and `_berreman_jax.py` call both helpers positionally and are untouched by the
+new keyword-only parameter.
+
+Gate: `tests/unit/test_rcwa.py::test_jax_wood_anomaly_no_nan`, extended with a
+`jit` + traced-index arm for BOTH polarizations (value, closure, grazing-order
+zero, finite `grad`) and a jit-vs-jit off-anomaly bit-identity arm.
+
+### 9.3 V14 -- the mechanism restated in all three places
+
+`_wood_symmetric`'s docstring, `WP-A14_REPORT.md` section 2 (H2, item 2) and
+`WP-A14_CHANGELOG.md` now carry the matched-bracket table and say: the 100x
+narrower bracket buys the guaranteed ~10x through the verified `sqrt(delta)`
+law; the average buys CONTINUITY of the sweep, not accuracy (it helps on 3 of 8
+mount/polarization arms at a matched bracket and hurts on 5, by up to 10x).  The
+three single-fixture numbers are replaced by the measured ranges: residual up to
+**2.9e-04 relative**, gain **1.05x .. 60.5x**, grazing artefact worst **3.25
+decades** below the specular (lossy Ag TM).
+
+### 9.4 V3 -- the grazing-order bar is now derived
+
+`test_h2_exactly_grazing_orders_stay_four_decades_below_the_specular` is renamed
+`::test_h2_exactly_grazing_orders_stay_under_the_sqrt_bracket_bound` and its bar
+moved from `< 1e-4 x specular` (which the lossy Ag mount violates at 3.61e-04)
+to a bound derived from the bracket: the artefact is
+`sqrt(2 * _WOOD_PAIR_STEP_REL) = 4.5e-05` times an O(1) coefficient, measured
+worst **3.81e-05 absolute / 5.67e-04 relative** over four mounts x two
+polarizations, so the bars are **1e-3 absolute / 1e-2 relative** -- 1.4 and 1.2
+decades above the measured worst and 2 decades below the O(1e-1) a lost
+evanescent mask would put there.  Verified to hold on the lossy Ag mount.
+
+### 9.5 V2 -- the vacuous isotropic-once assertion is replaced
+
+`test_h4_isotropic_cell_builds_the_li_operators_once`'s tail compared
+`orig(...)` with `orig(...)` -- the same call twice.  It now rebuilds the OLD
+two-call form explicitly, under the same counter, and asserts
+`(n_one, n_two) == (1, 2)` with `Cxx` and `Cyy` **bit-identical** between the
+one-call and two-call paths (`array_equal` True on both blocks).
+
+### 9.6 V7 -- the trivially-true `np.isreal` is replaced
+
+`test_h4_bor_pencil_eigh_accuracy` now asserts, alongside the 1e-12 accuracy
+bar, that the spectrum is a real dtype, strictly POSITIVE (SPD pencil) and
+strictly ASCENDING with a forward gap `> 1.0` -- the discriminating claim, since
+a non-symmetric `eig` returns an arbitrary order and needed the explicit
+`argsort` the old body carried.  MEASURED smallest forward gap over the five
+fixtures **24.69** (`gamma^2` 5.7832 -> 30.4713 at m = 0 Dirichlet), largest
+54.57 -- ~15 decades above the 1e-13 these eigenvalues carry, so the `> 1.0`
+bar has 1.4 decades below it and 13 above.
+
+### 9.7 V6 -- the scope notice reaches the off-plane `fff_nv` path
+
+`_li_tensor_scope_notice` is now called from the OUT-OF-PLANE branch of
+`rcwa_jones_2d` with the same wording.  Measured: an out-of-plane disk warns
+once and names the diagonal fraction (0 before); an out-of-plane square does
+not; `laurent` / `li` never do; `allow_nonseparable_nv=True` silences it.
+Gate: `::test_h3_offplane_fff_nv_gets_the_scope_notice_too`.
+
+### 9.8 V13 -- the `_li_blocks` docstring corrected to what I measured
+
+The claim "reduces to `_li_convolutions_2d` EXACTLY when both companions are the
+cell (measured: `Cxx` bit-identical, `Cyy` to 4.2e-16)" was read off a
+SEPARABLE cell.  Re-measured at `n_orders` 4x3 and 6x6:
+
+| cell | dCxx | dCyy | relative |
+|---|---|---|---|
+| uniform | 0.0 | **0.0** | 0 |
+| y-uniform stripe | 0.0 | 1.78e-15 | **4.2e-16** |
+| x-uniform stripe | 0.0 | 1.78e-15 | 4.3e-16 |
+| rectangle 32x24 | 0.0 | 4.55e-02 | **1.55e-02** |
+| square (C4) | 0.0 | 5.17e-02 | 1.62e-02 |
+| disk | 0.0 | 6.27e-02 | **2.10e-02** |
+
+`Cxx` IS bit-identical on every cell (the `L2 L1` order factorizes x first, so
+the `xx` block is the pure x-inverse rule); `Cyy` agrees only for a separable
+cell, because `L2` applies the y-inverse rule to an operator x has already been
+factorized out of.  Both converge to the same limit (Li 2003 Sec. 5.2).  The
+docstring now says exactly that, and records that `symmetrize=False` keeps this
+call on the historical operator BIT for BIT (verified textually: the pre-fix
+`_li_convolutions_2d_tensor` body and the new `_li_tensor_l2l1` body are
+byte-identical).
+
+### 9.9 V10 / V12 -- the two changelog scoping gaps
+
+* **V10**: the H3 migration note now states the change on a GENERAL
+  (non-transpose-symmetric) axis-aligned cell -- `max|dJ|` between the
+  symmetrized and single-order operators **8.3e-04 at `n_orders` 4 falling to
+  1.2e-04 at 12**, inside the truncation error and converging to the same limit
+  -- not only that a separable stripe is unchanged.
+* **V12**: the H2 measured list now carries the TRANSMITTED residual, TM
+  `max|dT| = 1.45e-05`, which is the largest single deviation anywhere in the
+  24-configuration oracle sweep and was previously unquoted.
+
+### 9.10 Tests re-run after the follow-up (all `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1`, `-q --no-header -p no:cacheprovider`)
+
+| command | result | duration |
+|---|---|---|
+| `test_audit2609_a14_rcwa_eme_bor.py test_audit2609_a14_verify.py test_rcwa.py test_v5_12_0_naming_aliases.py test_niche_audit_m4_m5_m6_rcwa.py test_audit_s1_2_rcwa_lossless_tripwire.py test_v5_20_12_rcwa_jones_2d_fff_nv.py test_v5_20_6_rcwa_jones_2d_li.py test_v5_11_0_rcwa_fff_nv_2d.py test_v5_6_1_rcwa_symmetry.py test_v5_11_0_rcwa_internal_field.py test_niche_audit_w7_rcwa.py` (the consolidated batch) | **321 passed** | 1068 s |
+| `test_coupled_eigensolver.py test_niche_audit_w6_bor.py test_radial_eigensolver.py test_bor_sem.py test_eme_2d.py` (BOR/EME, exercises the new census) | **133 passed** | 985 s |
+| `test_v5_10_3_rcwa_2d_autodiff.py test_v5_20_1_rcwa_2d_oop_jax.py test_v5_20_3_rcwa_1d_oop_jax.py test_v5_14_4_berreman.py test_v5_20_1_berreman_offplane_oblique.py test_v5_14_5_emt_and_berreman_jax.py test_fix_branch_cut_round2.py test_verify_branch_cut_round2.py test_v5_7_0_rcwa_asr.py test_v5_6_rcwa_convergence.py` (JAX + the `berreman` consumers of the two changed helpers + branch cut) | **122 passed, 2 skipped** | 965 s |
+| `python validation/run_all.py test_rcwa --quiet` | **PASS** | 3.3 s |
+| `test_rcwa.py::test_jax_wood_anomaly_no_nan` + `test_audit2609_a14_verify.py` (final re-run after the last docstring edits) | **28 passed** | 271 s |
+
+**576 passed, 2 skipped, 0 failed** across the four batches; `validation` PASS.
+No new failure, and the one failure recorded in section 7a
+(`test_v5_21_delta_audit.py::test_d3_air_focus_multibranch_runs_without_warning`,
+another WP's uncommitted `_lens_traced_multibranch.py`) is reassigned to WP-A3.
+
+`berreman.py` and `_berreman_jax.py` are the only out-of-package callers of
+`_homogeneous_eigenmodes` / `_layer_eigenmodes`; they call them positionally and
+their three test files are in the third batch above, green.
+
+Lint: `ruff check` on the eight edited files reports only the `I001`
+import-sorting and `F401` notices that HEAD already carries on the same files
+(8 at HEAD, 10 now, the two extra being in-function imports in the new test
+arms, matching the existing style of the WP's own gate file).  The repo's
+`[tool.ruff]` line-length is 100 and `E501` is ignored; my longest added line is
+86.
+
+### 9.11 Files touched in the follow-up
+
+Source (all inside WP-A14 ownership):
+
+* `lumenairy/elements/rcwa/_core.py` -- `_traced_grazing_floor`;
+  `grazing_floor=` on `_homogeneous_eigenmodes` and `_layer_eigenmodes`;
+  `__all__`; the restated `_wood_symmetric` mechanism paragraph.
+* `lumenairy/elements/rcwa/oned.py` -- the traced branch computes and forwards
+  the floor to the region and layer mode builders.
+* `lumenairy/elements/rcwa/twod.py` -- the off-plane `fff_nv` scope notice.
+* `lumenairy/elements/rcwa/stack.py` -- the corrected `_li_blocks` docstring.
+* `lumenairy/elements/bor/coupled_radial_eigensolver.py` -- `_CENSUS_SCAN`,
+  `_step_index_root_census`, `census=` on `guided_modes` and the shortfall
+  notice.
+
+Tests:
+
+* `tests/unit/test_rcwa.py` -- `test_jax_wood_anomaly_no_nan` extended.
+* `tests/unit/test_audit2609_a14_rcwa_eme_bor.py` (the WP's gate) -- V2, V3, V7.
+* `tests/unit/test_audit2609_a14_verify.py` (mine) -- two new gates.
+
+Docs:
+
+* `.../fixes/WP-A14_REPORT.md`, `.../fixes/WP-A14_CHANGELOG.md`,
+  `.../fixes/VERIFY_WP-A14.md` (this section).

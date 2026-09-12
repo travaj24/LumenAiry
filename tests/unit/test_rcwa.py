@@ -1252,6 +1252,75 @@ def test_jax_wood_anomaly_no_nan():
     g = jax.grad(loss)(jnp.asarray(1.5 + 0j))
     assert not bool(np.isnan(np.asarray(g)))
 
+    # --- UNDER jax.jit, with the layer index TRACED (audit VERIFY-A14 V5) ---
+    # The arms above run EAGERLY, where ``jnp.asarray(1e-6)`` is a concrete
+    # array and the host-side nudge therefore runs.  Under ``jax.jit`` every
+    # constant built inside the traced function is a ``DynamicJaxprTracer``, so
+    # ``geom_concrete`` is False, the whole guard block is SKIPPED and the solve
+    # runs AT the anomaly.  MEASURED before the fix: every order came back NaN
+    # (`R = [0,0,0,0,0,nan,0,0,0,0,0]`) and `jax.grad` through it was NaN too,
+    # for te AND tm and for both the 1.5 and 2.04 ridge indices -- and forcing
+    # the PRE-FIX one-sided wavelength (`_wl_eff = wl*(1+1e-7)`) reproduced the
+    # NaN, so it was not the symmetric bracket's doing.  The traced path now
+    # regularises the grazing ``kz`` at the ``+rel`` leg's own offset
+    # (`_traced_grazing_floor`).
+    #
+    # ORACLE for the VALUE: the same call EAGERLY, which takes the host-side
+    # symmetric bracket.  BAR 1e-3 absolute -- the two answers are two members
+    # of the same ``sqrt(delta)`` family (``sqrt(2 * 1e-9) = 4.5e-05`` times an
+    # O(1) per-mount coefficient), so no tighter bar is available from this
+    # formulation.  MEASURED over two ridge indices x two polarizations:
+    # 9.4e-08 / 5.3e-06 (n_ridge 2.04, te/tm) and 3.2e-07 / 1.2e-04
+    # (n_ridge 1.5) -- worst 1.2e-04, ~0.9 decade inside the bar, while the
+    # defect this replaces was NaN (infinitely outside it).  OFF the anomaly the
+    # floor never binds and the traced path is BIT-IDENTICAL with it and without
+    # it (measured 0.0 over te/tm x five wavelengths), which the third arm below
+    # pins -- that is the two-sided half.
+    for pol in ("te", "tm"):
+        def solve(nr, wl, _pol=pol):
+            _o, R, T = rcwa_efficiency_1d(
+                1e-6, nr, jnp.asarray(1.0 + 0j), jnp.asarray(1.0 + 0j),
+                jnp.asarray(1.0 + 0j), jnp.asarray(1.0e-6), 0.5,
+                jnp.asarray(wl), angle=jnp.asarray(0.0), polarization=_pol,
+                n_orders=5, formulation="li")
+            return R, T
+        Rj, Tj = jax.jit(lambda nr: solve(nr, 1.0e-6))(jnp.asarray(2.04 + 0j))
+        Rj, Tj = np.asarray(Rj), np.asarray(Tj)
+        assert not bool(np.isnan(Rj).any()), (pol, Rj)
+        assert not bool(np.isnan(Tj).any()), (pol, Tj)
+        assert abs(float(Rj.sum() + Tj.sum()) - 1.0) < 1e-9, pol
+        Re, Te = solve(jnp.asarray(2.04 + 0j), 1.0e-6)      # eager = bracket mean
+        assert abs(float(Rj[5]) - float(np.asarray(Re)[5])) < 1e-3, pol
+        # an EXACTLY grazing order carries no z-power: the traced path puts it
+        # on the evanescent side, so it is exactly zero (the eager symmetric
+        # average instead leaves ~sqrt(delta) there -- a documented difference)
+        assert float(Rj[4]) == 0.0 and float(Rj[6]) == 0.0, pol
+        # the gradient survives jit at the anomaly
+        gj = jax.grad(lambda x: jnp.real(
+            jax.jit(lambda y: solve(y + 0j, 1.0e-6)[1].sum())(x)))(
+                jnp.float64(2.04))
+        assert np.isfinite(float(gj)), (pol, gj)
+        # ... and OFF the anomaly the floor never binds, so the TRACED path is
+        # bit-identical with it and without it.  The comparison is jit-vs-jit
+        # (not jit-vs-eager: those differ by ~2e-18 from XLA's own rounding,
+        # which predates this floor and is not what is being pinned here).
+        import lumenairy.elements.rcwa.oned as _oned_mod
+        _floor = _oned_mod._traced_grazing_floor
+        try:
+            for wl_off in (0.9e-6, 1.3e-6, 0.7e-6):
+                Ron, Ton = jax.jit(
+                    lambda nr: solve(nr, wl_off))(jnp.asarray(2.04 + 0j))
+                _oned_mod._traced_grazing_floor = lambda eps: None
+                Rof, Tof = jax.jit(
+                    lambda nr: solve(nr, wl_off))(jnp.asarray(2.04 + 0j))
+                _oned_mod._traced_grazing_floor = _floor
+                assert np.max(np.abs(np.asarray(Ron)
+                                     - np.asarray(Rof))) == 0.0, (pol, wl_off)
+                assert np.max(np.abs(np.asarray(Ton)
+                                     - np.asarray(Tof))) == 0.0, (pol, wl_off)
+        finally:
+            _oned_mod._traced_grazing_floor = _floor
+
 
 @_requires_jax
 def test_jax_2d_gradient_matches_finite_difference():

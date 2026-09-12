@@ -1926,6 +1926,16 @@ def rcwa_jones_2d(
             # ehat^{33} (Li 2003 Eq. 27) -- the in-plane blocks are pre-folded
             # for the Q block while the raw ehat cross-blocks + ehat^{33} feed
             # the generator's own inv(EZZ) for the A/B off-plane coupling.
+            # The validated-scope notice belongs here too (VERIFY-A14 V6): this
+            # is the SAME Li-2003 staircase scope as the in-plane path, and the
+            # notice was reachable only from the in-plane branch, so an
+            # out-of-plane tensor cell with a CURVED pattern got 'fff_nv' with
+            # no scope signal at all.  (The 3x3 operator is also not
+            # symmetrized -- see the deferred D3 of WP-A14_REPORT.md -- so the
+            # x<->y asymmetry the in-plane fix removed is still present here,
+            # which is one more reason to say so.)
+            _li_tensor_scope_notice("rcwa_jones_2d", eps_t,
+                                    allow_nonseparable_nv)
             eh = _li_convolutions_2d_tensor_full(eps_t, orders, n_orders_x, xp)
             ezzi = xp.linalg.inv(eh[(2, 2)])
             Cxx = eh[(0, 0)] - eh[(0, 2)] @ ezzi @ eh[(2, 0)]

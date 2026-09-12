@@ -729,3 +729,130 @@ def test_h6_passive_guard_does_not_break_array_valued_indices():
         apart = _passive_media(1.0 + 0j, 2.25 + 0j, np.asarray(a),
                                np.asarray(b))
         assert packed == apart, (a, b)
+
+
+# ===========================================================================
+# H1 -- a PARTIAL guided_modes result must be loud too (VERIFY-A14 V1-residual)
+# ===========================================================================
+def test_h1_a_short_guided_mode_list_is_never_silent():
+    """H1 (P1), the last quiet door.  An EMPTY list is now audible through
+    every filter, but a list that is merely SHORT was not: Si/SiO2
+    (``dn = 2.04``) at V = 4.0 returned ONE mode while the exact hybrid
+    characteristic equation has THREE, with no signal at all.
+
+    ORACLE: :func:`_step_index_root_census` -- a sign-change scan of
+    ``fiber_oracle.fiber_det``, the 4x4 Bessel boundary-match determinant,
+    which shares no code with the finite-difference vector eigensolver it
+    counts against.  Its own floor is the scan resolution
+    ``(n_core - n_clad) / 2000`` in ``n_eff``, and its error is ONE-SIDED
+    (it can only under-count), so the notice cannot fire spuriously -- which is
+    what makes a DECISION assertion legitimate here rather than a numeric bar.
+
+    CROSS-CHECK of the oracle itself (so the gate is not pinning a
+    miscounting scan): the census is compared against the BISECTING
+    :func:`~lumenairy.elements.bor.fiber_oracle.fiber_modes` on twelve
+    fixtures spanning m = 0..5, V = 1.8..9 and three index systems -- MEASURED
+    identical counts on all twelve.
+
+    MEASURED before: Si/SiO2 V = 4.0 returned 1 mode, 0 warnings.
+    """
+    from lumenairy.elements.bor.coupled_radial_eigensolver import (
+        guided_modes, _step_index_root_census)
+    from lumenairy.elements.bor.fiber_oracle import fiber_modes
+    # (a) the census agrees with the bisecting oracle everywhere
+    for m, n1, n2, V in [(1, 3.48, 1.44, 2.0), (1, 3.48, 1.44, 4.0),
+                         (1, 1.45, 1.44, 2.4), (0, 1.45, 1.44, 2.6),
+                         (2, 1.45, 1.44, 2.6), (1, 2.00, 1.44, 2.0),
+                         (0, 3.48, 1.44, 4.0), (2, 3.48, 1.44, 4.0),
+                         (3, 3.48, 1.44, 6.0), (1, 1.45, 1.445, 2.4),
+                         (0, 1.45, 1.44, 1.8), (5, 3.48, 1.44, 9.0)]:
+        a = V / (_K0_F * np.sqrt(n1 ** 2 - n2 ** 2))
+        got = _step_index_root_census(m, a, n1 ** 2, n2 ** 2, _K0_F)
+        assert got == len(fiber_modes(m, a, n1 ** 2, n2 ** 2, _K0_F)), \
+            (m, n1, n2, V, got)
+    # (b) the SHORT list warns, naming both counts and the order
+    n1, n2, V = 3.48, 1.44, 4.0
+    a = V / (_K0_F * np.sqrt(n1 ** 2 - n2 ** 2))
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        gm = guided_modes(1, a, 6.0 * a, 400, n1 ** 2, n2 ** 2, _K0_F)
+    n_exact = _step_index_root_census(1, a, n1 ** 2, n2 ** 2, _K0_F)
+    assert n_exact == 3                       # the fixture is still short
+    if len(gm) < n_exact:
+        msgs = [str(w.message) for w in rec
+                if "EXACT step-index hybrid" in str(w.message)]
+        assert len(msgs) == 1, [str(w.message) for w in rec]
+        assert f"returned {len(gm)} mode(s) for m = 1" in msgs[0], msgs[0]
+        assert f"{n_exact} root(s)" in msgs[0], msgs[0]
+    # (c) ... and a call whose census AGREES stays quiet
+    a24 = 2.4 / (_K0_F * np.sqrt(1.45 ** 2 - 1.44 ** 2))
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        gm24 = guided_modes(1, a24, 6.0 * a24, 150, 1.45 ** 2, 1.44 ** 2,
+                            _K0_F)
+    assert len(gm24) == _step_index_root_census(
+        1, a24, 1.45 ** 2, 1.44 ** 2, _K0_F) == 1
+    assert not [w for w in rec
+                if "EXACT step-index hybrid" in str(w.message)], \
+        [str(w.message) for w in rec]
+    # (d) the census refuses where it cannot be a census, instead of guessing
+    assert _step_index_root_census(1, a, 3.48 ** 2 - 0.3j, 1.44 ** 2,
+                                   _K0_F) is None          # lossy core
+    assert _step_index_root_census(1, a, 1.44 ** 2, 3.48 ** 2,
+                                   _K0_F) is None          # inverted profile
+    # (e) census=False removes it
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        guided_modes(1, a, 6.0 * a, 200, n1 ** 2, n2 ** 2, _K0_F,
+                     census=False)
+    assert not [w for w in rec if "EXACT step-index hybrid" in str(w.message)]
+
+
+# ===========================================================================
+# H3 -- the validated-scope notice must reach the OUT-OF-PLANE path too
+# ===========================================================================
+def _offplane(cell, tilt=0.2):
+    t = _promote(cell)
+    t[..., 0, 2] = tilt * (cell - cell.flat[0])
+    t[..., 2, 0] = tilt * (cell - cell.flat[0])
+    return t
+
+
+def test_h3_offplane_fff_nv_gets_the_scope_notice_too():
+    """H3 (P2), second half -- the door the in-plane fix left open
+    (VERIFY-A14 V6).  ``_li_tensor_scope_notice`` was called only from the
+    IN-PLANE branch of ``rcwa_jones_2d``, so an OUT-OF-PLANE (full 3x3) tensor
+    cell with a curved pattern got ``formulation='fff_nv'`` -- the same Li-2003
+    staircase factorization, and per the WP's deferred D3 the UN-symmetrized
+    one -- with no scope signal at all, while the identical in-plane cell
+    warned.
+
+    DECISION assertions (no numeric bar): an out-of-plane DISK warns exactly
+    once and names the diagonal-boundary fraction; an out-of-plane SQUARE does
+    not; ``laurent`` / ``li`` never do (they are rigorous for curved patterns);
+    and ``allow_nonseparable_nv=True`` silences it.  The square arm is what
+    makes this two-sided -- a notice that fired on every out-of-plane cell
+    would pass a disk-only test.  MEASURED before: 0 notices on the
+    out-of-plane disk.
+    """
+    S = _H4_CELL.shape[0]
+    x = (np.arange(S) + 0.5) / S - 0.5
+    X, Y = np.meshgrid(x, x, indexing="ij")
+    disk = np.full((S, S), 2.25 + 0j)
+    disk[X ** 2 + Y ** 2 <= 0.25 ** 2] = 6.25 + 0j
+
+    def notices(cell, **kw):
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            rcwa_jones_2d(0.5e-6, 0.5e-6, _offplane(cell), 1.0, 1.0, 0.3e-6,
+                          0.633e-6, n_orders_x=3, n_orders_y=3, **kw)
+        return [str(w.message) for w in rec if "NON-SEPARABLE" in str(w.message)]
+
+    hit = notices(disk, formulation="fff_nv")
+    assert len(hit) == 1, hit
+    assert "of the cell boundary runs diagonal" in hit[0], hit[0]
+    assert notices(_H4_CELL, formulation="fff_nv") == []          # square
+    assert notices(disk, formulation="fff_nv",
+                   allow_nonseparable_nv=True) == []
+    for form in ("laurent", "li"):
+        assert notices(disk, formulation=form) == [], form

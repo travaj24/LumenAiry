@@ -2644,10 +2644,29 @@ class RCWAStack:
         :func:`_li_convolutions_2d_tensor` on the DIAGONAL ``(exx, 0, 0, eyy)``,
         which is the same construction reading a different cell per axis --
         ``Cxx`` from the inverse rule along x on ``exx``, ``Cyy`` from the
-        inverse rule along y on ``eyy`` -- and reduces to
-        :func:`_li_convolutions_2d` EXACTLY when both companions are the cell
-        (measured: ``Cxx`` bit-identical, ``Cyy`` to 4.2e-16).  The
-        direct-rule ``EPS`` / ``EZZ`` keeps coming from ``eps_cell`` itself."""
+        inverse rule along y on ``eyy``.  The direct-rule ``EPS`` / ``EZZ``
+        keeps coming from ``eps_cell`` itself.
+
+        HOW CLOSE THE REDUCTION TO :func:`_li_convolutions_2d` ACTUALLY IS,
+        when both companions are the cell (re-measured 2026-09-12, VERIFY-A14
+        V13 -- the previous claim, "EXACTLY ... ``Cyy`` to 4.2e-16", holds only
+        for a SEPARABLE cell and was read off one):
+
+        * ``Cxx`` is BIT-IDENTICAL (0.0) on every cell -- the ``L2 L1`` order
+          factorizes x first, so the ``xx`` block IS the pure x-inverse rule;
+        * ``Cyy`` matches to 4.2e-16 RELATIVE (1.8e-15 absolute) on a y-uniform
+          or x-uniform stripe, and exactly 0.0 on a uniform cell;
+        * on a genuinely 2-D cell the two differ by **1.5e-02 .. 2.1e-02
+          relative** (rectangle / square / disk, ``n_orders`` 4x3 and 6x6),
+          because ``L2`` applies the y-inverse rule to an operator x has
+          already been factorized out of, while :func:`_li_convolutions_2d`
+          applies it to the raw cell.  Both converge to the same limit
+          (Li 2003 Sec. 5.2); they are not the same truncated operator.
+
+        ``symmetrize=False`` below is what keeps this call on the per-axis
+        rule, and it is the historical operator BIT for BIT (the pre-2026-09-12
+        ``_li_convolutions_2d_tensor`` body is now ``_li_tensor_l2l1``,
+        unchanged)."""
         pair = getattr(layer, "normal_cells", None)
         if pair is None:
             return _li_convolutions_2d(cell_c, orders, self.nox, self.noy, xp)

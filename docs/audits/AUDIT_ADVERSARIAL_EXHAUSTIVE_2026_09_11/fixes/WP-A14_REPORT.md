@@ -17,7 +17,7 @@ EME `ref_2d_modes` site from `:439-441` to `:450-454`, with no change of substan
 | # | Status | Files:lines | Tests | Oracle | Measured before -> after |
 |---|---|---|---|---|---|
 | **H1** (P1) | **fixed** | `bor/coupled_radial_eigensolver.py:495-586` | `test_audit2609_a14_rcwa_eme_bor.py::test_h1_weakly_guiding_fiber_is_not_an_empty_list`, `::test_h1_margin_scales_with_the_window_not_with_k0`, `::test_h1_degenerate_window_raises_instead_of_returning_empty` | exact hybrid HE11 4x4 boundary-match determinant (`fiber_oracle`) | `dn = 0.010`: **0 modes -> 1 mode**, `n_eff` 1.445294274 vs exact 1.445293173 (err +1.10e-06). `dn = 0.005`: **0 -> 1**, 1.447648919 vs 1.447648366 (+5.53e-07). Warnings 0 -> the degenerate case now raises. |
-| **H2** (P1) | **fixed** | `rcwa/_core.py:1635-1930`; `oned.py:568,:1311,:1521`; `twod.py:1094,:1298,:1814,:2304`; `stack.py:642,:647,:2977` | `::test_h2_the_nudge_announces_itself`, `::test_h2_exact_wood_point_beats_the_one_sided_nudge`, `::test_h2_wavelength_sweep_is_monotone_through_the_anomaly`, `::test_h2_exactly_grazing_orders_stay_four_decades_below_the_specular`, `::test_h2_wl_eff_is_on_the_result`, `::test_h2_off_anomaly_solves_are_untouched_and_unwarned` | independent direct 4N boundary-match 1-D RCWA (re-derived inside the test file) at the EXACT wavelength | TM R0 at `Lambda = lambda = 1 um`: **0.155908839054 (+4.05e-04 rel) -> 0.155846827297 (+6.69e-06 rel)**, a factor 60.5 (TE 9.5x). Warnings **0 -> 1**. The `lambda` sweep through the anomaly is **non-monotone -> strictly monotone**. `wl_eff` now on `Efficiency2D` / `RCWAResult`. |
+| **H2** (P1) | **fixed** | `rcwa/_core.py:1635-1930`; `oned.py:568,:1311,:1521`; `twod.py:1094,:1298,:1814,:2304`; `stack.py:642,:647,:2977` | `::test_h2_the_nudge_announces_itself`, `::test_h2_exact_wood_point_beats_the_one_sided_nudge`, `::test_h2_wavelength_sweep_is_monotone_through_the_anomaly`, `::test_h2_exactly_grazing_orders_stay_under_the_sqrt_bracket_bound`, `::test_h2_wl_eff_is_on_the_result`, `::test_h2_off_anomaly_solves_are_untouched_and_unwarned` | independent direct 4N boundary-match 1-D RCWA (re-derived inside the test file) at the EXACT wavelength | TM R0 at `Lambda = lambda = 1 um`: **0.155908839054 (+4.05e-04 rel) -> 0.155846827297 (+6.69e-06 rel)**, a factor 60.5 (TE 9.5x). Warnings **0 -> 1**. The `lambda` sweep through the anomaly is **non-monotone -> strictly monotone**. `wl_eff` now on `Efficiency2D` / `RCWAResult`. |
 | **H3** (P2) | **fixed** | `rcwa/twod.py:411-540`, `:726-772`, `:1861`; `stack.py:2654-2661` | `::test_h3_fff_nv_keeps_the_cells_own_symmetry`, `::test_h3_separable_stripe_is_unchanged_by_the_symmetrisation`, `::test_h3_curved_cell_gets_the_validated_scope_notice` | the cell's own C4 / C-infinity symmetry (`Jxx == Jyy` exactly at normal incidence) | `|Jxx - Jyy|` square **9.04e-04 -> 4.1e-14** (M = 4), **1.06e-04 -> 1.4e-13** (M = 12); disk **2.06e-02 -> 5.4e-15** (M = 4), **5.75e-03 -> 4.5e-14** (M = 12). Curved-cell notices on the Jones entry **0 -> 1**. |
 | **H4** (P2, perf) | **partially fixed** (3 of 5 items; 2 deferred with designs) | `rcwa/twod.py:1840-1900`; `bor/radial_eigensolver.py:165-177` | `::test_h4_even_parity_fold_covers_every_in_plane_formulation`, `::test_h4_bor_pencil_eigh_accuracy`, `::test_h4_isotropic_cell_builds_the_li_operators_once` | full `2N` solve (`symmetry=False`); Bessel zeros `j_{m,n}` / `j'_{m,n}` | even fold on `rcwa_jones_2d`: `'li'` **1.00x -> 3.01x / 3.21x**, `'fff_nv'` **1.00x -> 2.47x / 3.15x** (`n_orders` 6 / 9), agreement 5.3e-14..3.4e-13. `_inplane_ops` Li builds per isotropic solve **2 -> 1**, bit-identical. BOR `eigh(A,M)`: relative error vs Bessel zeros **3.11e-13/1.78e-13/5.42e-14/7.04e-13/1.83e-13 -> 1.19e-13/9.26e-14/1.38e-14/1.74e-13/3.81e-14**; whole-call 1.03x / 0.97x / **1.70x** at n = 97 / 241 / 481. |
 | **H5** (P3) | **fixed** (code half) + **requested** (dependency line) | `rcwa/_core.py:233-247` | -- (the existing `test_niche_audit_m4_m5_m6_rcwa.py` gate covers the inert path) | measured 400x / 140x | warning text now carries the measured cost and both remedies. The `pyproject.toml` / `requirements.txt` lines are in section 5 below (not my files). |
@@ -108,9 +108,33 @@ no record.  Re-confirmed on HEAD (`scratchpad/wpa14/h2_before.py`), Moharam moun
    | 1e-09 (the shipped bracket) | +6.28e-06 | **+1.04e-06** |
    | 3e-09 | +1.09e-05 | +1.81e-06 |
 
-   Ratio 1.732 = `sqrt(3)` per 3x in `delta`, on both columns.  The average buys a factor 6.05 on
-   the COEFFICIENT, not an order -- so the other lever is the bracket WIDTH, and that is the one
-   that pays.  I report this rather than quoting the brief.
+   Ratio 1.732 = `sqrt(3)` per 3x in `delta`, on both columns.  I report this rather than
+   quoting the brief.
+
+   **RESTATED after VERIFY-A14 (V14).**  The sentence that stood here -- "the average buys a
+   factor 6.05 on the COEFFICIENT, not an order" -- generalised ONE arm of ONE mount.  The
+   verification isolated the two levers at a MATCHED `delta = 1e-7` over four mounts x two
+   polarizations:
+
+   | mount | pol | one-sided @1e-7 | AVERAGE @1e-7 | ratio (>1 = the average helps) |
+   |---|---|---|---|---|
+   | Moharam | te | +5.458e-07 | -5.723e-07 | 0.95 |
+   | **Moharam** | **tm** | +6.305e-05 | +1.043e-05 | **6.05** (the arm quoted above) |
+   | n_sub = 1.5 | te | -2.472e-04 | -4.145e-04 | 0.60 |
+   | n_sub = 1.5 | tm | -3.915e-04 | -3.996e-04 | 0.98 |
+   | lossy Ag | te | +1.556e-04 | +6.499e-05 | 2.39 |
+   | **lossy Ag** | **tm** | +8.015e-05 | -7.655e-04 | **0.10** |
+   | n_sub = 2.0 | te | -1.471e-06 | -4.061e-06 | 0.36 |
+   | n_sub = 2.0 | tm | +3.236e-06 | +1.822e-06 | 1.78 |
+
+   At a matched bracket the averaging helps on **3 of 8** arms and hurts on 5, by up to **10x**.
+   The lever that pays is the 100x narrower BRACKET, which the `sqrt(shift)` law (verified
+   independently: per-decade ratio 3.15-3.18 against `sqrt(10)` = 3.162 on all eight arms) turns
+   into a guaranteed ~10x everywhere.  What the average buys UNCONDITIONALLY is CONTINUITY of the
+   sweep -- the property no one-sided step can have.  Net gain over the eight arms: **1.05x ..
+   60.5x**, and the post-fix residual reaches **2.9e-04 relative** on the `n_sub = 1.5` mount
+   against the 6.7e-06 quoted for Moharam, so the finding is mitigated and announced, not
+   eliminated.
 
 3. **The solve stays clean far below the shipped bracket.**  With the nudge disabled and the
    wavelength stepped manually, the 1-D TM closure is 2e-14 .. 5e-14 and the oracle agreement is
@@ -180,13 +204,21 @@ it.  The one-sided nudge happened to agree (at `+delta` the m = +/-1 orders of t
 EVANESCENT); the average does not, because on the `-delta` side those orders are PROPAGATING and
 carry ~`sqrt(delta)` of power, half of which survives the mean.  Measured at the shipped bracket,
 m = +/-1: TM R 0.0 -> 2.344e-06, TE R 0.0 -> 3.963e-07 -- 10x smaller than at a 1e-7 bracket, as
-`sqrt(delta)` requires, and 4-5 decades below the specular order of the same port.  The power is not
+`sqrt(delta)` requires, and 4.8-5.0 decades below the specular order of the same port ON THIS
+MOUNT.  **RESTATED after VERIFY-A14 (V3):** "4-5 decades below the specular" is a property of this
+fixture, not of the artifact.  The census over four mounts x two polarizations puts the worst at
+**3.25 decades** (lossy Ag, TM, transmission) and **3.44** (lossy Ag, TE, reflection); the bound
+that generalises is the bracket's own `sqrt(2 * _WOOD_PAIR_STEP_REL) = 4.5e-05` times an O(1)
+coefficient, measured worst **3.81e-05 absolute / 5.67e-04 relative**.  The test's bars are now
+derived from that (1e-3 absolute, 1e-2 relative -- 1.4 and 1.2 decades above the measured worst,
+2 decades below the O(1e-1) a lost evanescent mask would put there) and it is renamed
+`::test_h2_exactly_grazing_orders_stay_under_the_sqrt_bracket_bound`.  The power is not
 invented: it comes out of the specular order, so the closure stays exact (-3.75e-14 TM, +1.87e-14
 TE).  Zeroing those orders afterwards was considered and REJECTED -- it would leave the closure
-short by exactly that amount, which is a worse violation of a theorem than a per-order value four
-decades below its neighbours, and it would trip the library's own 1e-6 lossless-closure warning.
-The artifact is pinned by `::test_h2_exactly_grazing_orders_stay_four_decades_below_the_specular`
-so it cannot grow silently.
+short by exactly that amount, which is a worse violation of a theorem than a per-order value
+several decades below its neighbours, and it would trip the library's own 1e-6 lossless-closure
+warning.  The TRACED (JAX) path does not carry the artifact at all: it regularises the grazing
+mode onto the EVANESCENT side, so that order stays at exactly zero power (VERIFY-A14 V5).
 
 **Residual risk.**  (a) The average changes the returned numbers at exact Wood anomalies -- a
 deliberate default change, with the migration note in the changelog.  Two existing tests exercise

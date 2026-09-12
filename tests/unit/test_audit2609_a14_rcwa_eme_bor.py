@@ -340,7 +340,7 @@ def test_h2_wavelength_sweep_is_monotone_through_the_anomaly():
     assert vals[i0 - 1] < vals[i0] < vals[i0 + 1]
 
 
-def test_h2_exactly_grazing_orders_stay_four_decades_below_the_specular():
+def test_h2_exactly_grazing_orders_stay_under_the_sqrt_bracket_bound():
     """H2 (P1) -- the ONE thing the symmetric average gets wrong, pinned so it
     cannot grow silently.
 
@@ -356,21 +356,29 @@ def test_h2_exactly_grazing_orders_stay_four_decades_below_the_specular():
     requires).  The power is not invented -- it comes out of the specular order
     -- so the CLOSURE stays exact: measured -3.75e-14 (TM) and +1.87e-14 (TE).
 
-    BARS: the grazing order must stay below 1e-4 absolute and 4 decades below
-    the specular order of the same port; the closure must hold to 1e-11.  The
-    measured values are 1.6 decades inside the absolute bar and the closure is
-    2.4 decades inside its own.  A regression that put real power in a grazing
-    order -- e.g. a lost evanescent mask -- would be O(1e-1) and fail both.
+    BARS, DERIVED FROM THE BRACKET, NOT FROM THIS FIXTURE (VERIFY-A14 V3 -- the
+    previous bar was ``< 1e-4 x specular``, which this mount satisfies by 0.8
+    decade but a LOSSY Ag mount does NOT: measured 3.61e-04 there, so the old
+    bar was a fixture property dressed as a general one).  The artefact is the
+    ``-delta`` leg's grazing power surviving the mean, so it is bounded by
+    ``~sqrt(2 * _WOOD_PAIR_STEP_REL) = 4.5e-05`` times an O(1) coefficient.
+    Measured worst over FOUR mounts x TWO polarizations (Moharam; a substrate
+    anomaly at n_sub = 1.5; a lossy Ag ridge; n_sub = 2.0 at duty 0.35):
+    **3.81e-05 absolute** and **5.67e-04 relative** to the specular order of the
+    same port.  The bars below are 1.4 and 1.2 decades above those, and 2
+    decades BELOW the O(1e-1) a lost evanescent mask would put there -- the
+    failure this gate exists to catch.  The closure must hold to 1e-11
+    (measured 3.8e-14, 2.4 decades inside).
     """
     M = _WOOD["M"]
-    for pol, floor in (("tm", 1e-4), ("te", 1e-4)):
+    for pol, floor, rel_bar in (("tm", 1e-3, 1e-2), ("te", 1e-3, 1e-2)):
         Rl, Tl = _wood_lib(_WOOD["wl"], pol, full=True)
         Ro, To = _wood_oracle(_WOOD["wl"], pol, full=True)
         for k in (M - 1, M + 1):                       # the m = -/+1 orders
             assert Ro[k] == 0.0 and To[k] == 0.0       # the exact answer is 0
             assert Rl[k] < floor and Tl[k] < floor, (pol, k, Rl[k], Tl[k])
-            assert Rl[k] < 1e-4 * Rl[M], (pol, k, Rl[k], Rl[M])
-            assert Tl[k] < 1e-4 * Tl[M], (pol, k, Tl[k], Tl[M])
+            assert Rl[k] < rel_bar * Rl[M], (pol, k, Rl[k], Rl[M])
+            assert Tl[k] < rel_bar * Tl[M], (pol, k, Tl[k], Tl[M])
         assert abs(Rl.sum() + Tl.sum() - 1.0) < 1e-11, pol
         # and orders beyond the grazing pair are exactly zero on both sides
         assert Rl[M + 2] == 0.0 and Tl[M + 2] == 0.0
@@ -609,13 +617,29 @@ def test_h4_bor_pencil_eigh_accuracy(m, bc, zeros_fn):
     3.81e-14 (m = 1/3 Neumann) at degree 8, 12 elements -- 1 decade inside the
     bar and 1-2 decades BETTER than the pre-fix 3.11e-13 / 1.78e-13 /
     5.42e-14 / 7.04e-13 / 1.83e-13 the audit measured on the same fixture.
+
+    The SHAPE of the spectrum is asserted two-sidedly alongside the accuracy
+    bar (VERIFY-A14 V7 -- the previous ``np.all(np.isreal(ev))`` could not fail,
+    because ``eigh(..., eigvals_only=True)`` returns a real dtype and so did
+    the pre-fix ``np.sort(np.linalg.eigvals(...).real)``).  For a
+    symmetric-DEFINITE pencil the spectrum is real, strictly POSITIVE and
+    ASCENDING by construction; the ascending claim is the discriminating one,
+    since a non-symmetric ``eig`` returns an arbitrary order and needs the
+    explicit ``argsort`` the old body carried -- a revert that dropped it fails
+    here.  MEASURED: the smallest forward gap over the five fixtures is
+    **24.69** (m = 0 Dirichlet, ``gamma^2`` 5.7832 -> 30.4713), and the largest
+    is 54.57 -- ~15 decades above the 1e-13 arithmetic these same eigenvalues
+    carry, so the ``> 1.0`` bar has 1.4 decades below it and 13 above.
     """
     from scipy.special import jn_zeros, jnp_zeros
     ref = (jn_zeros(m, 6) if zeros_fn == "jn" else jnp_zeros(m, 6))
     ev = radial_spectrum(m, 1.0, 8, 12, bc=bc, n_low=6)
     rel = np.max(np.abs(np.sqrt(np.abs(ev)) / ref - 1.0))
     assert rel < 1e-12, rel
-    assert np.all(np.isreal(ev))          # eigh returns a real spectrum
+    ev = np.asarray(ev)
+    assert ev.dtype.kind == "f", ev.dtype      # real, not a .real truncation
+    assert np.all(ev > 0.0), ev                # SPD pencil -> positive spectrum
+    assert np.all(np.diff(ev) > 1.0), np.diff(ev)   # ascending, gap >> 1e-13
 
 
 # ===========================================================================
@@ -861,12 +885,35 @@ def test_h4_isotropic_cell_builds_the_li_operators_once():
         _twod._li_convolutions_2d = orig
     assert n_iso == 1, n_iso
     assert n_aniso == 2, n_aniso
-    # the answer is unchanged: one call and two calls return the SAME blocks
+    # The answer is unchanged: the ONE-call retained blocks (Cxx, Cyy) = the
+    # TWO-call ones (VERIFY-A14 V2 -- this previously compared ``orig(...)``
+    # against ``orig(...)``, the same call twice, which is a tautology for a
+    # deterministic function and did not exercise the one-vs-two-call claim at
+    # all).  The two-call form is rebuilt HERE, exactly as ``_inplane_ops``
+    # spelled it before the fix, and counted so the comparison cannot silently
+    # collapse onto the one-call path.
     from lumenairy.elements.rcwa.twod import _harmonic_orders_2d
     orders, _N = _harmonic_orders_2d(4, 4, truncation="rectangular",
                                      period_x=_H3["period"],
                                      period_y=_H3["period"])
     ex = np.asarray(np.conj(cell[:, :, 0, 0]))
-    a = orig(ex, orders, 4, 4, np)
-    b = orig(ex, orders, 4, 4, np)
-    assert np.array_equal(a[0], b[0]) and np.array_equal(a[1], b[1])
+    ey = np.asarray(np.conj(cell[:, :, 1, 1]))
+    assert np.array_equal(ex, ey)                 # isotropic, as the guard sees
+    calls["n"] = 0
+    _twod._li_convolutions_2d = counted
+    try:
+        one_xx, one_yy = counted(ex, orders, 4, 4, np)[:2]     # ONE call
+        n_one = calls["n"]
+        calls["n"] = 0
+        two_xx = counted(ex, orders, 4, 4, np)[0]              # the old
+        two_yy = counted(ey, orders, 4, 4, np)[1]              # two-call form
+        n_two = calls["n"]
+    finally:
+        _twod._li_convolutions_2d = orig
+    assert (n_one, n_two) == (1, 2), (n_one, n_two)
+    assert np.array_equal(one_xx, two_xx), np.max(np.abs(one_xx - two_xx))
+    assert np.array_equal(one_yy, two_yy), np.max(np.abs(one_yy - two_yy))
+    # ... and the end-to-end Jones matrix is unchanged too (the isotropic cell
+    # took the one-call path above; the anisotropic one differs, so the
+    # comparison is not vacuous)
+    assert np.max(np.abs(J_iso)) > 1e-6

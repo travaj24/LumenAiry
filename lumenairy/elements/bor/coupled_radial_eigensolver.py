@@ -492,8 +492,78 @@ def _radial_coupled_modes_staggered(m, Rbig, N, eps_profile, k0):
     return modes
 
 
+#: Samples the guided-mode ROOT CENSUS puts across the guided window
+#: (:func:`_step_index_root_census`).  Cost is one 4x4 Bessel determinant per
+#: sample: MEASURED 49-72 ms for 2001 samples, against 0.72 s (N = 150),
+#: 17.9 s (N = 400) and 67.8 s (N = 600) for the FD eigensolve it guards --
+#: i.e. 9.9% of the call at the smallest grid anyone uses and 0.1-0.4% at the
+#: grids real work runs.  ``census=False`` removes it entirely.
+#:
+#: RESOLUTION, and the FAILURE MODE it buys.  The census counts SIGN CHANGES of
+#: the exact hybrid determinant on a uniform ``n_eff`` grid, so it resolves two
+#: roots only if they are more than one cell -- ``(n_core - n_clad) / 2000`` in
+#: ``n_eff`` -- apart.  Two roots closer than that (a near-degenerate pair, e.g.
+#: the HE/EH partners of the same LP group at weak contrast, or a TANGENTIAL
+#: double root) are counted ONCE or not at all.  That error is one-sided in the
+#: safe direction: the census can only UNDER-count, so the notice below can miss
+#: a genuine shortfall but can never invent one.  MEASURED against the
+#: bisecting :func:`~.fiber_oracle.fiber_modes` on the fixtures in
+#: ``test_audit2609_a14_verify.py``: identical counts on every one.
+_CENSUS_SCAN = 2001
+
+
+def _step_index_root_census(m, a, eps_core, eps_clad, k0,
+                            n_scan=_CENSUS_SCAN):
+    """How many guided roots the EXACT step-index hybrid characteristic
+    equation has for azimuthal order ``m`` -- ``None`` when no census is
+    possible (a lossy or inverted profile, or non-numeric permittivities).
+
+    This is an INDEPENDENT count: :func:`~.fiber_oracle.fiber_det` is a 4x4
+    boundary-match determinant of Bessel functions that shares no code with the
+    finite-difference vector eigensolver :func:`radial_coupled_modes` whose
+    output it is compared against.  Only SIGN CHANGES are counted -- no
+    bisection -- so the cost is one determinant per sample; see
+    ``_CENSUS_SCAN`` for the resolution and its one-sided failure mode.
+
+    The scan interval excludes both edges by ``1e-7`` relative (the same margin
+    :func:`~.fiber_oracle.fiber_modes` uses), where ``1/g1^2`` and ``1/kap^2``
+    in the determinant diverge; in between every entry is finite and smooth, so
+    a sign change is a root and not a pole.
+    """
+    try:
+        e1, e2 = complex(eps_core), complex(eps_clad)
+    except (TypeError, ValueError):
+        return None                        # traced / array-valued: no census
+    if (abs(e1.imag) > 1e-12 * max(abs(e1), 1.0)
+            or abs(e2.imag) > 1e-12 * max(abs(e2), 1.0)):
+        return None                        # lossy: a real-axis scan is no census
+    if not (e1.real > e2.real > 0.0):
+        return None                        # inverted / non-guiding profile
+    from .fiber_oracle import fiber_det
+    lo = np.sqrt(e2.real) * k0 * (1.0 + 1e-7)
+    hi = np.sqrt(e1.real) * k0 * (1.0 - 1e-7)
+    if not hi > lo:
+        return None
+    qs = np.linspace(lo, hi, int(n_scan))
+    try:
+        d = np.array([float(np.real(fiber_det(q, int(m), a, e1.real, e2.real,
+                                              k0))) for q in qs])
+    except Exception:                      # noqa: BLE001 - never break the solve
+        return None
+    good = np.isfinite(d)
+    n_roots, prev = 0, -1
+    for i in range(qs.size):
+        if not good[i]:
+            prev = -1
+            continue
+        if prev >= 0 and (d[i] == 0.0 or d[prev] * d[i] < 0.0):
+            n_roots += 1
+        prev = i
+    return n_roots
+
+
 def guided_modes(m, a, Rbig, N, eps_core, eps_clad, k0, *,
-                 reldiv_tol=1.0, tail_tol=0.05):
+                 reldiv_tol=1.0, tail_tol=0.05, census=True):
     """Bound guided modes (div-free AND decaying in the cladding), q descending.
 
     UNIT INVARIANCE (audit W6-B2).  The guided-window margin and the real-axis
@@ -539,6 +609,19 @@ def guided_modes(m, a, Rbig, N, eps_core, eps_clad, k0, *,
     the list, because ``Rbig`` is too small for the mode's cladding tail.  An
     empty list is therefore never by itself evidence that a structure does not
     guide; the warning says which knob to turn.
+
+    A PARTIAL result is audible too (``census=True``, the default).  An empty
+    list is the loud case; the quiet one is a list that is merely SHORT --
+    measured on Si/SiO2 (``dn = 2.04``) at V = 4.0, where this returned ONE
+    mode while the exact hybrid characteristic equation has THREE
+    (``n_eff`` = 3.038391486 / 1.566626407 / 1.440009396).  Every call now also
+    counts the roots of that exact equation for the requested ``m``
+    (:func:`_step_index_root_census` -- a sign-change scan of the 4x4 Bessel
+    determinant, independent of the finite-difference eigensolver) and WARNS,
+    naming both counts and the order, when the solver returns fewer.  The
+    census can only UNDER-count (see ``_CENSUS_SCAN``), so the notice never
+    fires spuriously.  ``census=False`` skips the scan for a hot loop that has
+    already established its resolution.
     """
     def eps_profile(rr):
         return np.where(rr <= a, eps_core, eps_clad)
@@ -614,4 +697,20 @@ def guided_modes(m, a, Rbig, N, eps_core, eps_clad, k0, *,
             f"passed THIS filter', NOT 'no guided mode': refine N / Rbig, "
             f"relax reldiv_tol / tail_tol, or inspect radial_coupled_modes "
             f"directly.", stacklevel=2)
+    if census:
+        n_exact = _step_index_root_census(m, a, eps_core, eps_clad, k0)
+        if n_exact is not None and len(out) < n_exact:
+            warnings.warn(
+                f"guided_modes: returned {len(out)} mode(s) for m = {m}, but "
+                f"the EXACT step-index hybrid characteristic equation has "
+                f"{n_exact} root(s) in the guided window "
+                f"{np.sqrt(np.real(eps_clad)):.9f}..{np.sqrt(np.real(eps_core)):.9f} "
+                f"(n_eff) at this m -- {n_exact - len(out)} mode(s) of the "
+                f"exact spectrum did not survive the filters.  The census is a "
+                f"sign-change scan of an INDEPENDENT 4x4 Bessel determinant and "
+                f"can only under-count, so this shortfall is real: the usual "
+                f"cause is Rbig too small for the weakly-bound modes' cladding "
+                f"tails (raise Rbig, then N), or reldiv_tol / tail_tol too "
+                f"tight.  Pass census=False to silence the scan.",
+                stacklevel=2)
     return sorted(out, key=lambda md: -md["q"].real)

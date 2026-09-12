@@ -51,6 +51,7 @@ from ._core import (
     _tensor_convolutions_full,
     _tensor_offplane_or_traced,
     _toeplitz_1d,
+    _traced_grazing_floor,
     _validate_geometry,
     _with_blas_limit,
     _WoodAnomaly,
@@ -607,8 +608,16 @@ def rcwa_efficiency_1d(
             if _wl_mirror is not None:
                 raise _WoodAnomaly("rcwa_efficiency_1d", float(wavelength),
                                    _wl_mirror, wl_eff)
+        _wood_floor = None                 # the host-side nudge ran
     else:
         wl_eff = wavelength
+        # TRACED geometry (under jax.jit every constant built inside the traced
+        # function is a tracer, so this branch is the one jit takes): the
+        # anomaly cannot be DETECTED host-side, so the grazing mode is
+        # regularised in the half-space basis instead.  See
+        # _traced_grazing_floor -- inert off the anomaly, and it is what stops
+        # jit returning all-NaN AT one (audit H2 / VERIFY-A14 V5).
+        _wood_floor = _traced_grazing_floor(eps_sup)
 
     k0 = 2.0 * np.pi / wl_eff
     # Tangential wavevector normalised by k0; planar mounting -> ky = 0.
@@ -718,11 +727,14 @@ def rcwa_efficiency_1d(
             rx, ry, tx, ty = r1, zeros_N, t1, zeros_N
     else:
         # --- region (half-space) modes (physical-x basis, UNCHANGED by ASR)
-        Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
-        Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
+        Wref, Vref, kz_ref = _homogeneous_eigenmodes(
+            Kx, Ky, eps_sup, grazing_floor=_wood_floor)
+        Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(
+            Kx, Ky, eps_sub, grazing_floor=_wood_floor)
 
         # --- global S = (sup|layer) * propagate(layer) * (layer|sub) -----
-        Wl, Vl, lam = _layer_eigenmodes(Kx_layer, Ky, EPS, EPS_normal)
+        Wl, Vl, lam = _layer_eigenmodes(Kx_layer, Ky, EPS, EPS_normal,
+                                        grazing_floor=_wood_floor)
         if Gbridge is not None:
             # Map the layer's u-basis modes to the physical-x Rayleigh basis
             # the regions use (direction is G^{-1}; applying G is WRONG).

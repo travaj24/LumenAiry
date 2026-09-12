@@ -1922,7 +1922,23 @@ def _wood_symmetric(fn):
     the anomaly detection, so the two inner legs cannot recurse).  Off-anomaly
     the wrapper is a bare call -- no signature work, no cost.  See
     :func:`_grazing_safe_wavelength_pair` for the measurements that make this
-    the default."""
+    the default.
+
+    WHAT THE AVERAGE BUYS, AND WHAT THE BRACKET BUYS (re-measured 2026-09-12,
+    VERIFY-A14 V14 -- they are NOT the same thing, and the first statement of
+    this got it backwards).  Two levers were changed at once: the bracket is
+    100x narrower than the shared one-sided step, and the two sides are
+    averaged.  Isolated at a MATCHED ``delta = 1e-7`` on four mounts x two
+    polarizations, the AVERAGE helps on three arms and HURTS on five, by up to
+    10x (lossy Ag TM: one-sided +8.0e-05 vs average -7.7e-04; the often-quoted
+    6.05x is its best arm, the Moharam TM one).  The reliable lever is the
+    NARROWER BRACKET: the error falls as ``sqrt(shift)`` on every mount
+    measured (per-decade ratio 3.15-3.18 against ``sqrt(10) = 3.162``), so 100x
+    narrower is a guaranteed ~10x.  What the average buys UNCONDITIONALLY is
+    CONTINUITY -- the one-sided value is bit-identical to its ``+delta``
+    neighbour and therefore sat ABOVE BOTH neighbours in a wavelength sweep,
+    which no choice of step can fix and which is what an optimiser differencing
+    through the anomaly actually trips over."""
     @functools.wraps(fn)
     def _wrapped(*args, **kwargs):
         try:
@@ -2990,7 +3006,8 @@ def _symmetric_cascade_rt(Vref, Vtrn, Kx, Ky, layer_specs, depths, k0,
     return out
 
 
-def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None):
+def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None, *,
+                      grazing_floor=None):
     """Eigenmodes of a single layer (structured or uniform).
 
     Dimension-agnostic: the harmonic count ``N`` is inferred from ``Kx`` so
@@ -3020,8 +3037,25 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None):
     eigenvector block, and the modal eigenvalue ``lam = sqrt(-kz^2/k0^2)``
     (``Re >= 0`` branch; ``= i kz`` propagating, ``= |gamma|`` evanescent),
     which feeds the forward-decaying propagator ``X = exp(-lam k0 L)``.
+
+    ``grazing_floor`` (default ``None`` = unchanged, bit-for-bit) is the
+    traced-wavelength stand-in for the Wood nudge: it raises the floor on the
+    ``|lam|`` that builds ``V`` only -- the RETURNED ``lam``, and therefore the
+    propagator ``exp(-lam k0 L)``, is untouched.  A LAYER constituent index can
+    be at cut-off too (the groove index equals the superstrate index at the
+    canonical mount, which is why ``_grazing_safe_wavelength`` takes the layer
+    indices in its ``eps_reals`` list), and that degeneracy reaches the
+    interface match through ``b = solve(Vl, Vref)``.  See
+    :func:`_traced_grazing_floor`.
     """
     xp = array_namespace(Kx, Ky, EPS, EPS_normal)
+
+    def _floor_lam(lam):
+        if grazing_floor is None:
+            return lam
+        return xp.where(xp.abs(lam) < grazing_floor,
+                        xp.asarray(grazing_floor, dtype=_C), lam)
+
     Kx = xp.asarray(Kx).astype(_C)
     Ky = xp.asarray(Ky).astype(_C)
     N = Kx.shape[0]
@@ -3038,7 +3072,8 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None):
         eps0 = EPS[0, 0]
         kz = _sqrt_forward(eps0 - xp.diag(Kx) ** 2 - xp.diag(Ky) ** 2)
         lam = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)
-        return xp.eye(2 * N, dtype=_C), Q @ xp.diag(_inv_lam(lam)), lam
+        return (xp.eye(2 * N, dtype=_C),
+                Q @ xp.diag(_inv_lam(_floor_lam(lam))), lam)
 
     def _structured_modes():
         # E_z elimination (P block): inv([[eps]]) -- the DIRECT rule, Li 1997
@@ -3055,7 +3090,7 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None):
         ])
         lam2, W = _eig_for(xp)(P @ Q)            # Omega^2 = P @ Q
         lam = _sqrt_decay(lam2)                  # = i kz (prop.) / |gamma| (evan.)
-        return W, Q @ W @ xp.diag(_inv_lam(lam)), lam
+        return W, Q @ W @ xp.diag(_inv_lam(_floor_lam(lam))), lam
 
     offdiag = EPS - xp.diag(xp.diag(EPS))
     if not is_jax:
@@ -3082,7 +3117,72 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None):
 
 
 
-def _homogeneous_eigenmodes(Kx, Ky, eps):
+def _traced_grazing_floor(eps):
+    """The modal-eigenvalue floor that stands in for the Wood-anomaly
+    wavelength nudge when the wavelength is a JAX TRACER (audit H2 / VERIFY-A14
+    V5).  ``None`` when the caller could run the host-side nudge instead.
+
+    WHY A FLOOR AND NOT THE NUDGE.  ``_grazing_safe_wavelength_pair`` needs a
+    concrete wavelength: it compares ``|eps - kt^2|`` against
+    ``_WOOD_DETECT`` and moves the wavelength if any order is at cut-off.
+    Under ``jax.jit`` the wavelength (and every constant built inside the traced
+    function) is a ``DynamicJaxprTracer``, so the whole guard block is skipped
+    and the solve runs AT the anomaly -- where the half-space basis has two
+    coincident modes and the interface match is singular.  Measured before this
+    floor: ``jax.jit(rcwa_efficiency_1d)`` at the canonical
+    ``Lambda = lambda = 1 um`` mount returned ``R = NaN`` for every order, while
+    the same call EAGERLY (concrete arrays, host-side nudge) returned
+    0.040057645.
+
+    WHAT THE FLOOR IS, AND WHY IT IS ON ``kz`` AND NOT ON ``lam``.  At a
+    relative wavelength shift ``rel`` the grazing order's ``kz^2`` moves off
+    zero by ``~2 * rel * kt^2`` with ``kt^2 = eps``, so the ``+rel`` leg of the
+    shipped symmetric bracket puts that order at
+    ``|kz| = sqrt(2 * rel * |eps|)`` on the EVANESCENT side.  This returns that
+    ``|kz|`` floor.  It has to act on ``kz`` itself, not merely on the modal
+    eigenvalue that builds ``V``: for a uniform half-space
+    ``det Q = eps^N * prod(kz^2)`` (algebraically, for the isotropic ``Q`` of
+    :func:`_layer_Q_matrix` -- the diagonal blocks give
+    ``-kx^2 ky^2 + (eps - kx^2)(eps - ky^2) = eps * kz^2`` per order), so
+    ``V = Q diag(1/lam)`` is EXACTLY rank-deficient when any ``kz = 0`` no
+    matter how ``1/lam`` is floored, and the interface match
+    ``b = solve(Vb, Va)`` is singular.  Measured: flooring ``lam`` alone left
+    the NaN in place; flooring ``kz^2`` removes it.
+
+    WHAT IT COSTS.  The remaining difference from the ``+rel`` leg is the
+    ``O(rel) = 1e-09`` shift of every OTHER order's ``kt``, four decades below
+    the ``sqrt(rel) ~ 4.5e-05`` residual the bracket itself carries against the
+    exact-wavelength limit -- so this answer sits inside the same
+    ``sqrt(delta)`` band as the bracket mean, which is the accuracy the law
+    allows.  MEASURED against the eager (bracket-mean) answer at the canonical
+    mount, over two ridge indices x two polarizations: 9.4e-08 / 5.3e-06
+    (``n_ridge`` 2.04, te / tm) and 3.2e-07 / 1.2e-04 (``n_ridge`` 1.5), i.e.
+    ``4.5e-05`` times an O(1) coefficient of 0.002 .. 3.8, exactly as the law
+    predicts (pinned in ``test_rcwa.py::test_jax_wood_anomaly_no_nan``).  The
+    floored order is EVANESCENT, so ``Re(kz) = 0`` and it still carries exactly
+    zero power -- the traced path therefore does NOT acquire the
+    ``~sqrt(delta)`` grazing-order artefact the symmetric average has.
+
+    INERT OFF THE ANOMALY.  The floor binds only where ``|kz^2|`` is below
+    ``2e-09 * |eps|``, i.e. only for an order within ~4.5e-05
+    ``sqrt(|eps|)`` of grazing; everything else takes the identical
+    expression, so a traced solve away from an anomaly is BIT-IDENTICAL with
+    the floor and without it (measured 0.0 over te/tm x five wavelengths).
+    That window is ``sqrt(2)`` WIDER than the concrete path's own detection
+    window (``_WOOD_DETECT = 1e-09`` on ``|eps - kt^2|`` is ``|kz| < 3.2e-05``),
+    so a merely near-grazing order the host-side nudge would have left alone can
+    be floored here.  Deliberate: both windows are the same ``1e-09`` on
+    ``kz^2`` up to that factor, and inside either of them a one-sided answer is
+    all this formulation has.
+    """
+    try:
+        mag = abs(complex(np.asarray(to_numpy(eps)).reshape(-1)[0]))
+    except (TypeError, ValueError, IndexError):
+        mag = 1.0                       # traced eps: use the vacuum k scale
+    return float(np.sqrt(2.0 * _WOOD_PAIR_STEP_REL * max(mag, 1.0)))
+
+
+def _homogeneous_eigenmodes(Kx, Ky, eps, *, grazing_floor=None):
     """Analytic eigenmodes of a UNIFORM half-space of scalar permittivity
     ``eps`` -- the reflection (superstrate) and transmission (substrate)
     regions.  Uses the SAME ``V = Q diag(1/lam)`` convention as
@@ -3094,6 +3194,14 @@ def _homogeneous_eigenmodes(Kx, Ky, eps):
     :func:`_layer_eigenmodes` returns in its 3rd slot.  A half-space order is its
     own eigenmode, so the caller wants ``kz`` directly for the Rayleigh phase and
     z-flux (``lam = sqrt_decay(-kz^2)`` is used only to build ``V``).
+
+    ``grazing_floor`` (default ``None`` = unchanged, bit-for-bit) pushes an
+    order whose ``|kz^2|`` is below ``grazing_floor ** 2`` onto the EVANESCENT
+    side at exactly that ``|kz|``, for the callers that could NOT run the
+    host-side Wood nudge because their wavelength is traced.  The SAME shifted
+    ``kz^2`` is used to build ``Q`` (otherwise ``Q`` stays exactly singular --
+    see :func:`_traced_grazing_floor` for the ``det Q = eps^N prod(kz^2)``
+    identity, the derivation of the value and the measured before/after).
     """
     xp = array_namespace(Kx, Ky)
     Kx = xp.asarray(Kx).astype(_C)
@@ -3101,10 +3209,22 @@ def _homogeneous_eigenmodes(Kx, Ky, eps):
     N = Kx.shape[0]
     kx = xp.diag(Kx)
     ky = xp.diag(Ky)
-    kz = _sqrt_forward(eps - kx ** 2 - ky ** 2)   # per-order kz/k0
+    kz2 = eps - kx ** 2 - ky ** 2
+    if grazing_floor is None:
+        eps_I = eps * xp.eye(N, dtype=_C)         # uniform: Laurent == inverse rule
+    else:
+        f2 = float(grazing_floor) ** 2
+        graze = xp.abs(kz2) < f2
+        kz2 = xp.where(graze, xp.asarray(-f2, dtype=_C), kz2)
+        # ``Q`` must see the SAME shifted kz^2, which for the isotropic block
+        # form means a per-order eps; off the anomaly ``graze`` is all-False,
+        # so this is the identical diagonal ``eps I``.
+        eps_I = xp.diag(xp.where(graze, kx ** 2 + ky ** 2 + kz2,
+                                 xp.asarray(eps, dtype=_C)
+                                 * xp.ones(N, dtype=_C)))
+    kz = _sqrt_forward(kz2)                       # per-order kz/k0
     lam = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)
     W = xp.eye(2 * N, dtype=_C)
-    eps_I = eps * xp.eye(N, dtype=_C)             # uniform: Laurent == inverse rule
     Q = _layer_Q_matrix(Kx, Ky, eps_I, eps_I)
     V = Q @ xp.diag(_inv_lam(lam))
     return W, V, kz
@@ -4790,6 +4910,7 @@ __all__ = [
     "_require_propagating_incidence",
     "_grazing_safe_wavelength",
     "_grazing_safe_wavelength_pair",
+    "_traced_grazing_floor",
     "_WoodAnomaly",
     "_wood_symmetric",
     "WoodNudgeWarning",

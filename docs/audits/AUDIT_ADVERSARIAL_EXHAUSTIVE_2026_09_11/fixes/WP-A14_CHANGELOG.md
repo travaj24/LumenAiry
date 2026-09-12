@@ -52,7 +52,10 @@ EXACT wavelength (0.155845785342, its own closure 1.8e-15):
 
 * TM R0: 0.155908839054 (+4.05e-04 rel) -> 0.155846827297 (+6.69e-06 rel), a factor **60.5**;
 * TE R0: 0.040265175260 (+1.36e-05 rel) -> 0.040264572250 (-1.42e-06 rel), a factor 9.5;
-* over the whole order array, TM max|dR| 6.31e-05 -> 2.34e-06, TE 5.46e-07 -> 3.96e-07;
+* over the whole order array, TM max|dR| 6.31e-05 -> 2.34e-06, TE 5.46e-07 -> 3.96e-07.
+  The TRANSMITTED orders are the larger residual and were not quoted at first: TM
+  max|dT| is **1.45e-05** after the fix, which is the largest single deviation
+  anywhere in the 24-configuration oracle sweep (VERIFY-A14 V12);
 * warnings emitted: 0 -> 1;
 * the TM R0 sweep over `delta = -3e-7 .. +3e-7` is now strictly monotone (smallest forward
   difference +5.23e-06); before, the value AT the anomaly equalled its `+1e-7` neighbour and
@@ -64,10 +67,26 @@ EXACT wavelength (0.155845785342, its own closure 1.8e-15):
 NOTE ON THE AUDIT'S RATIONALE: the symmetric average is NOT "the continuous limit to
 O(delta^2)".  A Wood anomaly is a SQUARE-ROOT branch point in the wavelength, so both the
 one-sided and the averaged error fall as `sqrt(delta)` -- measured over five decades
-(`delta` 1e-6 .. 3e-9, ratio 1.732 per 3x in delta).  The average buys a factor 6.05 on the
-COEFFICIENT plus continuity; the other 10x comes from narrowing the bracket, which is only
-possible because the solve stays clean far below it (closure 2e-14 .. 5e-14 and the physical
-`sqrt(shift)` agreement measured all the way down to a 1e-13 shift).
+(`delta` 1e-6 .. 3e-9, ratio 1.732 per 3x in delta) and re-confirmed independently on
+FOUR mounts x two polarizations (per-decade ratio 3.15-3.18 against `sqrt(10)` = 3.162).
+
+WHICH LEVER PAYS (re-measured, VERIFY-A14): two things changed at once -- the bracket is
+100x narrower than the shared one-sided step, and the two sides are averaged.  Isolated at
+a MATCHED `delta = 1e-7`, the AVERAGE helps on 3 of those 8 mount/polarization arms and
+HURTS on 5, by up to 10x (lossy Ag TM: one-sided +8.0e-05 against average -7.7e-04); the
+6.05x it buys on the Moharam TM arm is its best case, not its behaviour.  The reliable
+lever is the NARROWER BRACKET, which the `sqrt(shift)` law turns into a guaranteed ~10x on
+every mount, and which is only possible because the solve stays clean far below it (closure
+2e-14 .. 5e-14 and the physical `sqrt(shift)` agreement measured all the way down to a
+1e-13 shift).  What the average buys UNCONDITIONALLY is CONTINUITY of the wavelength sweep
+-- the property no choice of one-sided step can have, and the one an optimiser differencing
+through the anomaly actually trips over.
+
+HOW ACCURATE THE RESULT IS, ACROSS MOUNTS (not just the fixture below): the post-fix
+residual against an exact-wavelength oracle is 6.7e-06 relative on the Moharam mount but
+reaches **2.9e-04** on a `n_sub = 1.5` substrate anomaly, and the gain over the one-sided
+nudge ranges **1.05x .. 60.5x** over the eight arms.  The finding is MITIGATED and now
+ANNOUNCED; it is not eliminated.
 
 The SHARED one-sided nudge is numerically unchanged (`1e-7` per iteration, detection threshold
 `1e-9`): `_grazing_safe_wavelength` is imported by 12 sites in `elements/pmm`, whose staggered
@@ -79,10 +98,19 @@ requested wavelength carries no z-directed power (a theorem; the oracle returns 
 one-sided nudge happened to agree -- at `+delta` those orders are evanescent -- while the average
 does not, because at `-delta` they are propagating and carry ~`sqrt(delta)` of power, half of
 which survives the mean.  Measured at the shipped bracket, m = +/-1: TM R 0.0 -> 2.344e-06, TE
-R 0.0 -> 3.963e-07, i.e. 4-5 decades below the specular order of the same port and 10x smaller
-than at a 1e-7 bracket.  The power comes OUT of the specular order, so the closure stays exact;
-zeroing those orders afterwards would leave the closure short by exactly that amount and trip the
-library's own 1e-6 lossless clause, so it was rejected.  Pinned by a dedicated test.
+R 0.0 -> 3.963e-07 on the Moharam mount, and 10x smaller than at a 1e-7 bracket.  Relative to
+the specular order of the same port that is 4.8-5.0 decades HERE, but the census over four
+mounts x two polarizations puts the worst at **3.25 decades** (lossy Ag TM transmission) --
+the bound that generalises is the bracket's own `sqrt(2 * 1e-9) = 4.5e-05` times an O(1)
+coefficient, and the measured worst is **3.81e-05 absolute / 5.67e-04 relative**.  The power
+comes OUT of the specular order, so the closure stays exact; zeroing those orders afterwards
+would leave the closure short by exactly that amount and trip the library's own 1e-6 lossless
+clause, so it was rejected.  Pinned by a dedicated test against those derived bars.
+
+The TRACED (JAX) path does NOT carry this artefact: with a traced wavelength the anomaly
+cannot be detected host-side, so the grazing mode is regularised in place at the `+rel` leg's
+own offset (`_traced_grazing_floor`) and stays EVANESCENT -- it carries exactly zero power.
+That path used to return all-NaN under `jax.jit`; see the H2 note below.
 
 Migration: `rcwa_efficiency_1d`, `rcwa_jones_1d`, `rcwa_jones_1d_segments`,
 `rcwa_efficiency_2d`, `rcwa_efficiency_2d_shapes`, `RCWA2DPrepared.solve`, `rcwa_jones_2d`
@@ -100,7 +128,7 @@ decorator and the result combiner), `oned.py:568, :1311, :1521`, `twod.py:1094, 
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_h2_the_nudge_announces_itself`,
 `::test_h2_exact_wood_point_beats_the_one_sided_nudge`,
 `::test_h2_wavelength_sweep_is_monotone_through_the_anomaly`,
-`::test_h2_exactly_grazing_orders_stay_four_decades_below_the_specular`,
+`::test_h2_exactly_grazing_orders_stay_under_the_sqrt_bracket_bound`,
 `::test_h2_wl_eff_is_on_the_result`,
 `::test_h2_off_anomaly_solves_are_untouched_and_unwarned`.
 
@@ -122,7 +150,18 @@ Measured `|Jxx - Jyy|` (period 0.5 um, depth 0.3 um, lambda 0.633 um, eps 6.25 i
 | disk (C-inf) | 2.06e-02 -> 5.75e-03 | 5.4e-15 -> 4.5e-14 | 1e-15 .. 2e-13 |
 
 A y-uniform (separable) stripe is unchanged (the two orders coincide analytically there):
-max|dJ| 8.7e-14 / 4.5e-14 / 1.3e-12 at `n_orders` 4 / 8 / 12.
+max|dJ| 8.7e-14 / 4.5e-14 / 1.3e-12 at `n_orders` 4 / 8 / 12; the same holds on an
+x-UNIFORM stripe (8.7e-14), which only the transposed leg can get right, and on a
+non-square raster with `n_orders_x != n_orders_y`.
+
+MIGRATION, stated for the general cell (VERIFY-A14 V10): a cell that is NOT
+transpose-symmetric also returns DIFFERENT numbers than before -- measured max|dJ| between
+the symmetrized and the single-order operator of **8.3e-04 at `n_orders` 4 falling to
+1.2e-04 at 12** on three axis-aligned fixtures (an off-centre rectangle, a 12x72
+rectangle, a two-bar union).  That is inside the truncation error and the two converge to
+the SAME limit (both track `li` at `n_orders` 16 to 7.5e-05 .. 2.1e-04 at 12, with the mean
+equal or slightly closer on every rung), but a user pinning `fff_nv` Jones values will see
+the change.  Only a SEPARABLE cell is bit-unchanged.
 
 Second half of the finding: `rcwa_efficiency_2d(formulation='fff_nv')` REFUSES a curved cell
 while the Jones entry accepted the same disk silently.  `rcwa_jones_2d` now emits a
@@ -256,3 +295,78 @@ channels): Gram max|offdiag| 2.50e-12 and worst closure 1.67e-12 over 300 random
 multi-channel inputs, against a 1e-9 bar.
 
 Tests: `tests/unit/test_audit2609_a14_rcwa_eme_bor.py::test_bor_propagating_smatrix_is_unitary_and_closes_on_superpositions`.
+
+### Fixed -- RCWA: `jax.jit` returned all-NaN at an exact Wood anomaly (H2 follow-up, VERIFY-A14 V5)
+
+The host-side Rayleigh-anomaly nudge needs a CONCRETE wavelength -- it compares
+`|eps - kt^2|` against a threshold and moves the wavelength if any order is at cut-off.
+Under `jax.jit` every constant built inside the traced function is a `DynamicJaxprTracer`,
+so `geom_concrete` was False, the whole guard block was SKIPPED and the solve ran AT the
+anomaly, where the half-space basis has two coincident modes.  Measured on the canonical
+`Lambda = lambda = 1 um` mount: `jax.jit(rcwa_efficiency_1d)` returned `NaN` for every
+order and `jax.grad` through it was NaN too, for TE and TM alike -- while the same call
+EAGERLY (concrete arrays, host-side nudge) returned 0.040057645.  Forcing the PRE-2026-09-12
+one-sided wavelength reproduced the NaN, so this predates the symmetric bracket.
+
+The traced path now regularises the grazing mode in place instead, at the `+rel` leg's own
+offset: an order whose `|kz^2|` is below `2 * _WOOD_PAIR_STEP_REL * |eps|` is pushed onto
+the EVANESCENT side at exactly `|kz| = sqrt(2 * rel * |eps|)`, and the SAME shifted `kz^2`
+builds the mode matrix `Q` -- which is the load-bearing half, because for a uniform
+half-space `det Q = eps^N prod(kz^2)`, so `V = Q diag(1/lam)` is exactly rank-deficient
+whenever any `kz = 0` no matter how `1/lam` is floored (flooring `lam` alone was measured
+and left the NaN in place).
+
+Measured after: finite for TE and TM, closure `|sum R + sum T - 1| <= 4.4e-16`, agreement
+with the eager (bracket-mean) answer **9.4e-08 (TE) / 5.3e-06 (TM)** -- inside the same
+`sqrt(delta) ~ 4.5e-05` band the bracket itself carries -- and `jax.grad` finite (0.4397).
+The floored order stays EVANESCENT, so unlike the symmetric average the traced path leaves
+an exactly grazing order at EXACTLY zero power.  OFF the anomaly the floor never binds and
+the traced path is BIT-IDENTICAL with it and without it (measured 0.0 over TE/TM x five
+wavelengths).  The NumPy and concrete-JAX paths are untouched (`grazing_floor=None`).
+
+The 2-D entry points are unaffected: with a traced wavelength they refuse LOUDLY
+(`TracerArrayConversionError`) before reaching the solver, and with a concrete wavelength
+and a traced cell they take the host-side nudge as before (verified finite and closing at
+1e-16 at the anomaly).
+
+Files: `lumenairy/elements/rcwa/_core.py` (`_traced_grazing_floor`, `grazing_floor=` on
+`_homogeneous_eigenmodes` and `_layer_eigenmodes`), `oned.py`.
+Tests: `tests/unit/test_rcwa.py::test_jax_wood_anomaly_no_nan` (extended to run under
+`jit` with a traced layer index, both polarizations, with the off-anomaly bit-identity arm).
+
+### Fixed -- BOR: a SHORT `guided_modes` result is no longer silent either (H1 follow-up, VERIFY-A14)
+
+The 2026-09-12 H1 work made an EMPTY list audible through every filter.  A list that was
+merely SHORT stayed quiet: Si/SiO2 (`dn = 2.04`) at V = 4.0 returned ONE mode while the
+exact hybrid characteristic equation has THREE (`n_eff` = 3.038391486 / 1.566626407 /
+1.440009396), with no signal at all.  Every call now also counts the roots of that exact
+equation for the requested azimuthal order -- a sign-change scan of `fiber_oracle.fiber_det`,
+the 4x4 Bessel boundary-match determinant, which shares no code with the finite-difference
+vector eigensolver -- and WARNS, naming both counts and the order, when the solver returns
+fewer.
+
+The census is a scan, not a solve: 2001 samples, no bisection, MEASURED 49-72 ms against
+0.72 s / 17.9 s / 67.8 s for the FD eigensolve at N = 150 / 400 / 600, i.e. 9.9% of the
+call at the smallest grid anyone uses and 0.1-0.4% at the grids real work runs.  Its
+resolution is `(n_core - n_clad) / 2000` in `n_eff`, so two roots closer than one cell (a
+near-degenerate HE/EH pair, or a tangential double root) are counted once -- an error that
+is ONE-SIDED in the safe direction, so the notice can miss a shortfall but can never invent
+one.  Counts verified identical to the BISECTING `fiber_modes` on twelve fixtures spanning
+m = 0..5, V = 1.8..9 and three index systems.  `census=False` skips the scan.
+
+Files: `lumenairy/elements/bor/coupled_radial_eigensolver.py`
+(`_step_index_root_census`, `_CENSUS_SCAN`, `census=` on `guided_modes`).
+Tests: `tests/unit/test_audit2609_a14_verify.py::test_h1_a_short_guided_mode_list_is_never_silent`.
+
+### Fixed -- RCWA: the `fff_nv` validated-scope notice now reaches the OUT-OF-PLANE path (H3 follow-up, VERIFY-A14 V6)
+
+`_li_tensor_scope_notice` was reachable only from the IN-PLANE branch of
+`rcwa_jones_2d`, so an out-of-plane (full 3x3) tensor cell with a CURVED pattern got
+`formulation='fff_nv'` with no scope signal at all -- while the identical in-plane cell
+warned.  The off-plane path runs the same Li-2003 staircase factorization (and, per the
+deferred D3, the un-symmetrized one), so it carries the same notice now: measured 1 notice
+on an out-of-plane disk, 0 on an out-of-plane square, 0 for `laurent` / `li` on either, and
+silenced by `allow_nonseparable_nv=True`.
+
+Files: `lumenairy/elements/rcwa/twod.py`.
+Tests: `tests/unit/test_audit2609_a14_verify.py::test_h3_offplane_fff_nv_gets_the_scope_notice_too`.
