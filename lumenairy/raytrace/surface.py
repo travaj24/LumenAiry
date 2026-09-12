@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from ..elements.lenses import surface_sag_biconic, surface_sag_general
 from ._conic_core import check_even_aspheric_powers
 
 # ============================================================================
@@ -473,7 +472,24 @@ def _surface_sag_xy(x, y, surface):
 
 
 def _base_surface_sag_xy(x, y, surface):
-    """Base (non-field-frame) sag dispatch -- see :func:`_surface_sag_xy`."""
+    """Base (non-field-frame) sag dispatch -- see :func:`_surface_sag_xy`.
+
+    The three sag kernels are imported HERE rather than at module scope.
+    ``raytrace`` sits below ``elements`` in the layering, and
+    ``raytrace/surface.py -> elements.lenses`` was the library's ONLY
+    import-time layering violation (audit 2026-09-11 TESTS-ARCH P2-8: 12
+    such edges, 11 of them already lazy).  Deferring it to the one function
+    that needs the kernels matches what the ``elements.freeform`` import
+    three lines below has always done, keeps the layering honest at import
+    time, and changes nothing at call time -- the module is in
+    ``sys.modules`` long before any ray is traced, so the ``import``
+    statement is a dict lookup.  Inverting the dependency instead (moving
+    the sag kernels into a leaf module) is the durable fix for the whole
+    ``_lens_*`` cluster and is WP-A16's ``elements/_lens_kernels.py``; this
+    one edge did not need to wait for it.
+    """
+    from ..elements.lenses import surface_sag_biconic, surface_sag_general
+
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
 

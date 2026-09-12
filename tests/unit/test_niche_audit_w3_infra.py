@@ -758,13 +758,61 @@ def _measure_asm_peak(n_grid, dtype):
     return cold, steady, est
 
 
+# ---------------------------------------------------------------------------
+# The MEASURED model of the cold first-call peak, ``cold = F + s * N^2``.
+# ---------------------------------------------------------------------------
+# MEASURED 2026-09-12 on the Windows calibration box (audit 2026-09-11
+# remediation, WP-A15b), same method as ``_measure_asm_peak`` above: 12 fresh
+# interpreters, N = 64..2048 x {complex64, complex128}, fitting consecutive-N
+# pairs.  Every N >= 256 c128 pair returns F = 36.71 MiB and s = 96.01 B/px to
+# the reported precision; the c64 pairs give F = 36.48 / 37.62 / 36.72 MiB and
+# s = 51.66 / 47.10 / 48.01 B/px (the 256->512 c64 slope is inflated by the
+# backend import still growing there, which is why the fit uses the N >= 512
+# asymptote).  The cold peak is a ``tracemalloc`` COUNT, not a wall-clock or
+# RSS reading: it reproduced to 0.003 % over 5 fresh interpreters per point on
+# the same day, so these are model constants, not noisy samples.
+_A6_COLD_FIXED_BYTES = 36.71 * 1024 * 1024
+_A6_COLD_SLOPE_B_PER_PX = {'complex128': 96.01, 'complex64': 48.01}
+
+#: Upper (tightness) bar on ``estimate_asm_memory / measured cold peak``.
+#:
+#: DERIVED, not a fudge.  ``est(N) = F_est + s_est*N^2`` and
+#: ``cold(N) = F_meas + s_meas*N^2`` with all four terms positive, so the
+#: ratio is a weighted mediant of ``F_est/F_meas`` and ``s_est/s_meas`` and
+#: therefore lies BETWEEN them for every N -- no per-N bar is needed, only
+#: the larger of the two endpoints:
+#:
+#:     F_est / F_meas  = 40 MiB / 36.71 MiB            = 1.0896
+#:     s_est / s_meas  = 101.6 / 96.01   (complex128)  = 1.0582
+#:                     =  53.6 / 48.01   (complex64)   = 1.1164
+#:
+#: so 1.1164, rounded up to 1.12.  Two-sided with the ``>= 1.0`` A-6 bound
+#: below, and both sides follow from the two constants rather than from a
+#: measured ratio, so a build cannot drift into the bar.
+#:
+#: CONFIRMED by measurement 2026-09-12 over all eight N >= 256 x dtype points:
+#: est/cold = 1.0610 (2048 c128) / 1.0669 (1024 c128) / 1.0773 (512 c128) /
+#: 1.0811 (512 c64) / 1.0854 (256 c128) / 1.0918 (256 c64) / 1.1048 (1024 c64)
+#: / 1.1122 (2048 c64) -- a bound at every one, and the worst sits 0.7 % under
+#: this bar, exactly where the complex64 mediant endpoint says it should.
+#:
+#: FAIL-BEFORE: with the pre-2026-09-12 56 MiB fixed term the same two points
+#: read 1.341 (N=512) and 1.188 (N=1024) -- 20 % and 6 % over this bar.  The
+#: bar it replaces was a flat 1.35, chosen in 2026-08-01 to admit a band that
+#: was then measured at 1.06-1.09: 25 % of unexplained slack, which is exactly
+#: the margin the estimate silently consumed as the import cost moved.
+_A6_EST_OVER_COLD_MAX = 1.12
+
+
 class TestA6EstimateAsmMemory:
 
     def test_formula_carries_a_fixed_first_call_term(self):
         """Pre-fix the estimate was purely ``k * N^2 * itemsize``, so it
         collapsed to 128 B at N=1 and under-read the first-call peak by
         ~2x at N=512.  The measured one-time lazy FFT-backend import cost
-        is 38.17-38.50 MB, constant over N=64..2048 and both dtypes."""
+        was 38.17-38.50 MB at derivation (2026-07-25), 52.5-53.0 MiB on
+        2026-08-01, and 36.48-37.62 MiB on 2026-09-12 -- constant over
+        N=256..2048 and both dtypes at each of those dates."""
         from lumenairy import memory as m
         est_tiny = m.estimate_asm_memory(1, 'complex128')
         assert est_tiny >= 32 * 1024 * 1024, (
@@ -773,6 +821,40 @@ class TestA6EstimateAsmMemory:
             f"first call.")
         assert est_tiny == pytest.approx(m._ASM_FIRST_CALL_FIXED_BYTES,
                                          rel=1e-3)
+
+    def test_fixed_term_tracks_the_measured_import_cost(self):
+        """TWO-SIDED derived bar on ``_ASM_FIRST_CALL_FIXED_BYTES`` itself.
+
+        The A-6 contract is that the estimate BOUNDS the cold first-call
+        peak, so the constant must not fall below the measured import cost
+        (:data:`_A6_COLD_FIXED_BYTES`, 36.71 MiB, fitted 2026-09-12) -- that
+        is the lower bar and it is the fail-safe direction.
+
+        The UPPER bar is what was missing and what let the estimate drift:
+        a constant far above the measured term is not conservative, it is
+        dead margin that hides a model that has stopped matching reality.
+        The calibration convention in this file (2026-08-01: 56 MiB over a
+        worst pair fit of 52.97 MiB) is ~6 % headroom for dependency drift;
+        10 % is the bar, which admits that convention with room to spare.
+
+        FAIL-BEFORE: the 56 MiB constant this replaces is 1.526x the
+        measured 36.71 MiB, so it fails this bar by a factor of 1.39.
+        """
+        from lumenairy import memory as m
+        f = m._ASM_FIRST_CALL_FIXED_BYTES
+        assert f >= _A6_COLD_FIXED_BYTES, (
+            f"A-6: _ASM_FIRST_CALL_FIXED_BYTES = {f / 1048576:.2f} MiB is "
+            f"BELOW the measured one-time backend-import cost "
+            f"{_A6_COLD_FIXED_BYTES / 1048576:.2f} MiB; the estimate can no "
+            f"longer bound a fresh-process first call at small N.")
+        assert f <= _A6_COLD_FIXED_BYTES * 1.10, (
+            f"A-6: _ASM_FIRST_CALL_FIXED_BYTES = {f / 1048576:.2f} MiB is "
+            f"{f / _A6_COLD_FIXED_BYTES:.3f}x the measured import cost "
+            f"{_A6_COLD_FIXED_BYTES / 1048576:.2f} MiB.  Either re-measure "
+            f"the fixed term (the fit method is in this file's "
+            f"_A6_COLD_FIXED_BYTES comment) and update BOTH constants, or "
+            f"explain the headroom -- a 1.5x constant reads as a bound and "
+            f"behaves as a 34 % over-estimate at N = 512.")
 
     def test_shape_term_matches_the_measured_allocation_profile(self):
         """The per-pixel slope must be the re-derived
@@ -810,6 +892,14 @@ class TestA6EstimateAsmMemory:
         that constant's comment for the re-measured fit).  The asymptotic
         ratio is unchanged to 0.1% because the shape term did not move.
 
+        2026-09-12 (audit 2026-09-11 remediation, WP-A15b): the import cost
+        came back DOWN to 36.71 MiB, the constant went 56 -> 40 MiB, and the
+        small-N ratio returned to 16.35.  It is DERIVED here from the
+        constant rather than restated, so the two cannot drift apart again:
+        ``est(512)/(512^2*16) = (F + 101.6*512^2) / (512^2*16)``.  The
+        asymptotic ratio is again unchanged -- the shape term has never
+        moved.
+
         2026-08-10 (docs/audits/FIX_VERIFY_PERF_2026_08_10.md sec 1): the
         LARGE-N ratio moved 6.35 -> 4.36, and this test was already RED on
         Linux before that -- it is the one pin the D1 dtype defect reached.
@@ -827,7 +917,19 @@ class TestA6EstimateAsmMemory:
         from lumenairy import memory as m
         ratios = {n: m.estimate_asm_memory(n) / (n * n * 16)
                   for n in (512, 1024, 2048, 16384)}
-        assert ratios[512] == pytest.approx(20.35, rel=0.02)
+        # Derived from the constant, so a re-calibration moves this with it.
+        small_n_expected = ((m._ASM_FIRST_CALL_FIXED_BYTES
+                             + (m._ASM_COMPLEX_ARRAYS * 16
+                                + m._ASM_F64_GRID_ARRAYS * 8
+                                + 2 * 2 * 16) * 512 * 512)
+                            / (512 * 512 * 16))
+        assert small_n_expected == pytest.approx(16.35, rel=0.02), (
+            f"the small-N ratio is now {small_n_expected:.2f}; the docstring "
+            f"above says 16.35 -- update both together.")
+        # rel=1e-7, not 0: ``estimate_asm_memory`` returns ``int(...)`` and the
+        # 0.7-float64-array term makes the exact total fractional, so the
+        # returned value is up to 1 B below the model -- 1.5e-8 relative here.
+        assert ratios[512] == pytest.approx(small_n_expected, rel=1e-7)
         assert ratios[16384] == pytest.approx(4.36, rel=0.01)
         # Monotonically approaching the asymptote from above.  The asymptote
         # is DERIVED, not a magic 101.6: it is the shape term plus the plan
@@ -860,7 +962,18 @@ class TestA6EstimateAsmMemory:
         now 1.06-1.09.  The SHAPE term was deliberately NOT touched: the
         measured per-pixel slope is still 96.0 B/px (complex128) / 48.0
         (complex64), under the formula's 101.6 / 52.8, so this was a
-        fixed-term drift and the estimator's N-scaling is unaffected."""
+        fixed-term drift and the estimator's N-scaling is unaffected.
+
+        2026-09-12 (audit 2026-09-11 remediation, WP-A15b): the import cost
+        fell back to 36.71 MiB, so at 56 MiB the estimate read 1.341 (N=512)
+        / 1.188 (N=1024) against a documented 1.06-1.09 -- the number the
+        docstring promised had stopped being true, and the flat ``<= 1.35``
+        fence below had been sized to admit exactly that drift.  The
+        constant came down to 40 MiB and the fence is now DERIVED
+        (:data:`_A6_EST_OVER_COLD_MAX`); the re-measured band is 1.06-1.10
+        over all twelve N x dtype points.  The cold peak is ALSO pinned
+        against its dated two-term model below, so a future drift names
+        itself instead of silently eating the fence's slack."""
         cold, steady, est = _measure_asm_peak(n_grid, dtype)
         ratio = est / cold
         assert ratio >= 1.0, (
@@ -876,26 +989,40 @@ class TestA6EstimateAsmMemory:
         # A-6 contract and runs everywhere (pre-fix 0.53 fails it);
         # cross-platform we only fence absurd looseness.
         #
-        # 2026-08-01: the fixed term went 40 -> 56 MiB.  On Windows the
-        # band is re-MEASURED at 1.06-1.09, so the 1.35 fence is unchanged.
-        # On Linux it is not re-measured here; PROJECTING the CI-Linux cold
-        # peaks implied by the e1fd64a ratios (26.1 MB at N=512, 101.7 MB
-        # at N=1024) onto the new estimate gives 3.27 / 1.63, so the Linux
-        # fence is raised 4.0 -> 5.0 to keep the same "absurd only" role
-        # instead of turning a documented platform difference into a red
-        # release.  The >= 1.0 contract above is what actually guards A-6.
+        # 2026-09-12: the Windows fence is no longer a flat 1.35.  It is
+        # ``_A6_EST_OVER_COLD_MAX``, which is derived from the two model
+        # constants (see that constant's derivation), and the COLD PEAK
+        # itself is checked against its dated two-term model so that a
+        # drift in the environment is attributed rather than absorbed.
+        # Linux keeps an "absurd only" fence: the fixed term is calibrated
+        # on Windows and the CI-Linux allocator retains a much smaller cold
+        # peak (measured on e1fd64a: est/measured 1.46 at N=1024 to 2.63 at
+        # N=512 against the 40 MiB term), which is the fail-safe direction.
+        # The >= 1.0 contract above is what guards A-6 on every platform.
         import importlib.util
         import sys
         if importlib.util.find_spec('pyfftw') is not None:
             if sys.platform == 'win32':
-                assert ratio <= 1.35, (
+                predicted_cold = (_A6_COLD_FIXED_BYTES
+                                  + _A6_COLD_SLOPE_B_PER_PX[dtype]
+                                  * n_grid * n_grid)
+                assert cold == pytest.approx(predicted_cold, rel=0.02), (
+                    f"A-6: the measured cold first-call peak {cold} B has "
+                    f"moved off its dated model "
+                    f"{predicted_cold:.0f} B = {_A6_COLD_FIXED_BYTES:.0f} + "
+                    f"{_A6_COLD_SLOPE_B_PER_PX[dtype]} * {n_grid}^2 "
+                    f"(measured 2026-09-12, reproducible to 0.003 %).  "
+                    f"Re-fit it and re-calibrate "
+                    f"memory._ASM_FIRST_CALL_FIXED_BYTES in the same change.")
+                assert ratio <= _A6_EST_OVER_COLD_MAX, (
                     f"A-6: estimate has drifted loose (est/measured = "
-                    f"{ratio:.3f}); the documented band on the Windows "
-                    f"calibration platform is 1.06-1.09.")
+                    f"{ratio:.3f} > {_A6_EST_OVER_COLD_MAX}); the bar is the "
+                    f"larger of F_est/F_meas and s_est/s_meas, which bounds "
+                    f"the ratio for every N -- see _A6_EST_OVER_COLD_MAX.")
             else:
                 assert ratio <= 5.0, (
                     f"A-6: estimate absurdly loose (est/measured = "
-                    f"{ratio:.3f}); CI-Linux projects 1.63-3.27.")
+                    f"{ratio:.3f}); CI-Linux projects 1.46-2.63.")
         # Steady state is ~1 output field; the estimate is not that.
         assert steady == pytest.approx(n_grid * n_grid * 16, rel=0.05)
 

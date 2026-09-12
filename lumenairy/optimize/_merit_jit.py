@@ -40,17 +40,26 @@ Author: Andrew Traverso -- v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT).
 
 from __future__ import annotations
 
-import importlib.util as _ilu
-
 import numpy as np
+
+from ..backend._optional import NUMBA_AVAILABLE as _OPTIONAL_NUMBA_AVAILABLE
+from ..backend._optional import numba_handles as _optional_numba_handles
 
 # v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT): Numba probe, LAZY (audit
 # P2-D: the eager ``import numba`` cost ~1.8 s of ``import lumenairy`` cold
-# start).  Mirrors elements/lenses.py / elements/_lens_traced.py.  Two specialised
-# @njit kernels are built ON FIRST USE (one per output dtype, because Numba does
-# not erase the complex-precision type of the output array); both have a
-# pure-NumPy fallback, so numba loads only when a caller hits the fast path.
-_NUMBA_AVAILABLE = _ilu.find_spec("numba") is not None
+# start).  The probe and the first-use import are shared with the rest of the
+# library through ``backend/_optional.py`` (audit 2026-09-11 TESTS-ARCH P2-9).
+# Two specialised @njit kernels are built ON FIRST USE (one per output dtype,
+# because Numba does not erase the complex-precision type of the output array);
+# both have a pure-NumPy fallback, so numba loads only when a caller hits the
+# fast path.
+#
+# The MODULE-LEVEL ``_NUMBA_AVAILABLE`` is load-bearing and stays: the call
+# site below reads it at CALL time, and
+# ``tests/unit/test_v5_3_multi_field_merit_jit.py`` monkeypatches it to
+# ``False`` to reach the pure-NumPy arm on a box where numba IS installed.
+# So the availability GATE is local while the import is shared.
+_NUMBA_AVAILABLE = _OPTIONAL_NUMBA_AVAILABLE
 _numba = None                         # populated by _load_numba() on first use
 _njit = None
 _prange = None
@@ -59,17 +68,18 @@ _NUMBA_KERNELS: dict = {}             # kernel-name -> compiled fn (or None)
 
 def _load_numba():
     """Import numba + njit/prange on first use; cache the handles.  Returns True
-    iff numba is importable (False -> caller takes the pure-NumPy fallback)."""
+    iff numba is importable (False -> caller takes the pure-NumPy fallback).
+
+    Honours a monkeypatched module-level ``_NUMBA_AVAILABLE = False`` -- the
+    library's spelling for "pretend the accelerator is absent" -- before
+    consulting the shared loader."""
     global _numba, _njit, _prange
     if _numba is not None:
         return True
     if not _NUMBA_AVAILABLE:
         return False
-    import numba as _nb
-    from numba import njit as _nj
-    from numba import prange as _pr
-    _numba, _njit, _prange = _nb, _nj, _pr
-    return True
+    _numba, _njit, _prange = _optional_numba_handles()
+    return _numba is not None
 
 
 # Minimum grid pixel count above which the JIT kernel is faster than

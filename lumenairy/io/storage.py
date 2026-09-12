@@ -89,6 +89,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from .._knobs import register_knob as _register_knob
+
 # v4.16.0: distributed (multi-process) advisory lock.  Imported lazily
 # inside :func:`_require_filelock` so simply importing
 # ``lumenairy.io.storage`` does not require ``filelock`` to be
@@ -1768,6 +1770,17 @@ def set_storage_backend(backend: str) -> None:
 def get_storage_backend() -> str:
     """Return the current default storage backend name."""
     return _BACKEND
+
+
+# Process-global with no context-manager form and no reset before v5.45.2
+# (audit 2026-09-11 TESTS-ARCH P2-5).  Registered here -- i.e. only once
+# ``lumenairy.io.storage`` has been imported -- so ``lumenairy.override(
+# storage_backend='zarr')`` and the suite's snapshot/restore fixture reach it.
+_register_knob(
+    'storage_backend',
+    getter=get_storage_backend, setter=set_storage_backend,
+    doc="Default backend for NEW file creation: 'hdf5' (shipped) or 'zarr'.  "
+        "Setting 'zarr' raises ImportError immediately when zarr is absent.")
 
 
 def default_extension() -> str:

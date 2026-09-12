@@ -16,20 +16,28 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-import importlib.util as _importlib_util
 from typing import Any, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
-cp = None  # populated lazily on first use
+# One shared probe + first-use import for the whole library (audit
+# 2026-09-11 TESTS-ARCH P2-9); this module keeps its own ``cp`` alias
+# because :func:`create_gaussian_beam` reads the module-level name.
+from ..backend._optional import CUPY_AVAILABLE
+from ..backend._optional import ensure_cupy as _ensure_cupy
+
+cp = None  # this module's alias for the cupy module; see _ensure_cupy_loaded
 
 
 def _ensure_cupy_loaded():
+    """Load CuPy on first use; return True iff it is available.
+
+    Populates this module's ``cp`` alias, which the ``use_gpu=True``
+    branches read directly (``xp = cp``).
+    """
     global cp
-    if cp is None and CUPY_AVAILABLE:
-        import cupy as _c
-        cp = _c
+    if cp is None:
+        cp = _ensure_cupy()
     return cp is not None
 
 

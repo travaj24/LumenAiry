@@ -93,6 +93,7 @@ from typing import Optional
 
 import numpy as np
 
+from ..._knobs import register_knob as _register_knob
 from ...backend import (
     CUPY_AVAILABLE,
     JAX_AVAILABLE,
@@ -221,6 +222,21 @@ def set_blas_threads(n: Optional[int]) -> None:
     if _BLAS_STATE.n is not None:
         _warn_blas_uncontrollable()
 
+
+
+# The only knob in the library whose REQUEST is thread-local (see the
+# ``_BLAS_STATE`` comment above): registering it makes the CALLING thread's
+# request snapshot/restorable, which is what the suite needs -- a test that
+# calls ``set_blas_threads(2)`` on the main thread and forgets to put it back
+# otherwise changes every later solve in the process.  ``lumenairy.override(
+# blas_threads=...)`` therefore scopes the caller's thread, exactly like the
+# pre-existing :func:`rcwa_blas_threads`, which stays the local spelling.
+_register_knob(
+    'blas_threads',
+    getter=_get_blas_threads, setter=set_blas_threads,
+    doc="BLAS thread cap requested for RCWA solves on the CURRENT thread; "
+        "None (shipped) leaves the environment's threading untouched.  "
+        "Requires threadpoolctl to have any effect.")
 
 
 @contextlib.contextmanager

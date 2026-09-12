@@ -250,8 +250,14 @@ def doublet_prescription():
 # dispatch set (``USE_PYFFTW``, ``FFTW_MIN_SIZE``, ``_PYFFTW_PLAN_FLAGS``, the
 # auto-promote counters).  The first version of this guard discovered flags in
 # the two PHYSICS modules only, which is exactly why it did not catch a
-# dispatch-global leak -- ``lumenairy/ui/waveoptics_dock.py`` clears
-# ``USE_PYFFTW`` unconditionally, and ``shipped_fft_dispatch`` is opt-in.
+# dispatch-global leak: ``lumenairy/ui/waveoptics_dock.py`` used to clear
+# ``USE_PYFFTW`` unconditionally and restore it only for the pyFFTW backend,
+# and ``shipped_fft_dispatch`` is opt-in.  The dock was fixed in v5.45.2 (audit
+# 2026-09-11 U4, WP-A9 section 5.3 -- every exit path now restores the FFT and
+# RAM overrides it set), so this guard is no longer covering a known live leak;
+# it stays because the invariant it enforces -- no test hands a later test a
+# different dispatch -- is worth enforcing by construction rather than by
+# trusting each of the ~30 call sites, and it is what would catch a recurrence.
 _LEAK_GUARD_MODULES = (
     'lumenairy.elements._lens_traced',
     'lumenairy.elements._lens_imap',
@@ -346,6 +352,74 @@ def _module_flag_leak_guard():
         raise AssertionError(
             'this test leaked module-level physics flags to every LATER test '
             'in the process (niche C11 leak guard): ' + '; '.join(leaked))
+
+
+# ===========================================================================
+# PROCESS-GLOBAL KNOB LEAK GUARD (audit 2026-09-11 TESTS-ARCH P2-5)
+# ===========================================================================
+# THE DEFECT THIS KILLS.  The library has ~20 genuine process-global knobs
+# (the FFT dispatch set, the RAM and cache budgets, the storage backend, the
+# user-library path, the RCWA BLAS cap), each a ``set_X`` / ``get_X`` pair.
+# The audit measured 53 ``set_`` verbs with 0 context-manager forms and 0
+# resets, and per-knob restore coverage that is uneven where it exists at all
+# -- ``set_asm_cache_size`` 2 calls / 0 ``finally``, ``set_fft_fallback`` 1
+# call / 0, ``set_cache_budget`` 15 calls / 0, ``set_fft_threads`` 0 fixtures.
+# A knob a test forgets to put back changes every LATER test in the shard and
+# does not reproduce under ``-k``, which is the most expensive shape of CI
+# failure this project has.
+#
+# WHY THIS IS NOT THE FLAG GUARD ABOVE.  ``_module_flag_leak_guard`` discovers
+# UPPER-CASE module scalars in four named modules; it therefore misses every
+# knob whose state lives behind a private lower-case global (``_BACKEND``,
+# ``_library_path``, ``_CACHE_BUDGET_OVERRIDE_BYTES``, ``_MAX_RAM_OVERRIDE``,
+# the thread-local ``_BLAS_STATE``), and it is MODULE-scoped, so a leak inside
+# a module still reaches every later test in that module.  This guard is keyed
+# off the knob REGISTRY (``lumenairy._knobs``), which is the setters' own
+# declaration of what is process-global, and it restores per TEST.
+#
+# COST (MEASURED 2026-09-12, this box, CPython 3.14, 17 knobs registered --
+# the whole library imported including io.storage / user_library / rcwa):
+# ``snapshot()`` is one dict comprehension over the registered getters, each a
+# global read -- 2.98 us, median of 20 batches of 500.  ``restore()`` on an
+# unchanged process is 17 comparisons and no setter call -- 5.67 us.  This
+# fixture runs two snapshots and one restore, so 11.6 us per test, i.e. 0.155 s
+# across the whole 13 319-test suite against its 3.65 h runtime (1.2e-5 of it).
+# The restore path only calls a setter for a knob whose value actually CHANGED,
+# which matters because several setters clear caches (``set_pyfftw_planner``
+# drops the pyFFTW plan cache, ``set_default_complex_dtype`` drops the ASM H
+# cache): a clean test pays the comparison and nothing else.
+#
+# Restoring SILENTLY matches the two guards around it -- the goal is an
+# order-independent suite, not a red one.  Set ``LUMEN_TEST_KNOB_LEAK_STRICT=1``
+# to FAIL the leaking test instead, which is how you find the culprit.
+@pytest.fixture(autouse=True)
+def _knob_leak_guard():
+    """Snapshot every registered process-global knob; restore it after."""
+    import os
+    try:
+        from lumenairy import _knobs
+    except ImportError:                               # pragma: no cover - env
+        yield
+        return
+    before = _knobs.snapshot()
+    yield
+    after = _knobs.snapshot()
+    leaked = [f'{k}: {before[k]!r} -> {after[k]!r}'
+              for k in before
+              if k in after and not _knobs._same(before[k], after[k])]
+    # Knobs registered DURING the test (their owner module was imported for
+    # the first time) are not in ``before``; ``restore`` returns those to the
+    # value they had at registration, which is that module's import-time
+    # default.  That is the only defensible answer -- nothing observed them
+    # earlier -- and it is why ``restore`` is called with the snapshot rather
+    # than a hand-rolled loop over ``before``.
+    _knobs.restore(before)
+    if leaked and os.environ.get('LUMEN_TEST_KNOB_LEAK_STRICT'):
+        raise AssertionError(
+            'this test leaked process-global knobs to every LATER test in '
+            'the process (knob leak guard); use '
+            '``with lumenairy.override(...)`` instead of a bare set_*(): '
+            + '; '.join(leaked))
 
 
 # ===========================================================================

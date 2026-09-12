@@ -687,7 +687,12 @@ def propagate_through_system(E_in: np.ndarray,
         Keys: ``r0`` (float, Fried parameter [m]),
         ``L0`` (float, optional, outer scale, default inf),
         ``l0`` (float, optional, inner scale, default 0),
-        ``seed`` (int, optional).
+        ``seed`` (int, optional),
+        ``subharmonics`` (int, optional, default 0 -- the number of Lane
+        subharmonic levels added below the FFT lattice's fundamental
+        frequency; ``0`` is the plain FFT screen, which cannot represent
+        eddies larger than the grid, and ``3`` is the usual choice.  See
+        :func:`lumenairy.generate_turbulence_screen`).
 
     Examples
     --------
@@ -1005,7 +1010,11 @@ def propagate_through_system(E_in: np.ndarray,
                 r0=elem['r0'],
                 L0=elem.get('L0', np.inf),
                 l0=elem.get('l0', 0.0),
-                seed=elem.get('seed'))
+                seed=elem.get('seed'),
+                # The chain was the one caller that could not reach the Lane
+                # subharmonic levels; the default 0 is the generator's own, so
+                # an element dict without the key produces the identical screen.
+                subharmonics=elem.get('subharmonics', 0))
             E = E * np.exp(1j * screen)
 
         elif elem['type'] == 'zernike':

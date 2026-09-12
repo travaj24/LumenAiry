@@ -38,6 +38,11 @@ from .analysis import (
     check_opd_sampling,
     check_sampling_conditions,
     chromatic_focal_shift,
+    # v5.45.2 (audit 2026-09-11 V6 / WP-A7): the meshgrid and Zernike-basis
+    # cache accessors were exported nowhere at top level while their sibling
+    # ``clear_zernike_basis_cache`` was; the __all__-symmetry walker flags the
+    # asymmetry.
+    clear_meshgrid_cache,
     clear_zernike_basis_cache,
     compute_mtf,
     compute_otf,
@@ -49,6 +54,7 @@ from .analysis import (
     encircled_energy_curve,
     encircled_energy_radius,
     fwhm_resolution,
+    meshgrid_cache_bytes,
     mtf_cutoff,
     mtf_radial,
     opd_pv_rms,
@@ -63,8 +69,13 @@ from .analysis import (
     strehl_phase_integral,
     strehl_ratio,
     strehl_vector,
+    # v5.45.2 (audit 2026-09-11 V6 / WP-A7): the masked 2-D unwrap kernel is
+    # the public half of the A7 fix and was reachable only as
+    # ``lumenairy.analysis.unwrap_phase_2d``.
+    unwrap_phase_2d,
     wave_opd_1d,
     wave_opd_2d,
+    zernike_basis_cache_bytes,
     zernike_basis_matrix,
     zernike_decompose,
     zernike_index_to_nm,
@@ -338,6 +349,13 @@ from ._context import (
     snapshot_globals,
 )
 
+# v5.45.2 (audit 2026-09-11 TESTS-ARCH P2-5): the GENERIC scoped form.
+# ``lumenairy_context`` above scopes five named knobs; ``override`` reaches
+# every knob that has been registered with :mod:`lumenairy._knobs` -- one
+# registration line beside each ``set_*`` -- so a knob added later needs no
+# change here.  ``with la.override(fft_threads=1): ...``
+from ._knobs import override
+
 # v5.4 Phase 5: 2-D Chebyshev fit primitive promoted out of the UI
 # dock so notebook scripts and external callers can reuse the same
 # tested LS solve.  Lives under the private ``_math`` package; we
@@ -452,23 +470,21 @@ from .cache import (
     set_cache_budget,
 )
 
-# â”€â”€ Thin-film coatings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-from .elements.berreman import (
-    BerremanStack,
-    berreman_jones_1d,
-)
-
-# -- BOR-PMM (body-of-revolution / axisymmetric cylindrical stack) --------
-# v5.25 (audit S5-10 / B2): BORStack is the headline axisymmetric stack
-# solver -- the cylindrical-coordinate peer of RCWAStack / PMMStack /
-# BerremanStack, which are all top-level exported.  It graduates to the
-# top level here for signature symmetry with those engines.  The
-# lower-level BOR building blocks and analytic oracles (radial_spectrum,
-# fiber_modes, layer_modes, fourier_bessel, ...) stay namespaced under
-# ``la.elements.bor.*`` by design -- several carry generic or
-# cylindrical-jargon names (``layer_modes`` also names an EME export) that
-# would crowd or collide on the top-level surface.
-from .elements.bor import BORStack
+# â”€â”€ Thin-film coatings, BOR-PMM, PMM, RCWA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# The four rigorous-solver families (``berreman`` / ``bor`` / ``pmm`` /
+# ``rcwa``, plus ``eme`` which was never re-exported here) are resolved
+# LAZILY -- see the ``_LAZY_SOLVER_NAMES`` table and ``__getattr__`` at the
+# foot of this file.  ``la.RCWAStack``, ``from lumenairy import
+# rcwa_efficiency_1d`` and ``la.__all__`` all behave exactly as before; the
+# difference is that ``import lumenairy`` no longer pays for them.
+#
+# ``BORStack`` in particular is the headline axisymmetric stack solver --
+# the cylindrical-coordinate peer of RCWAStack / PMMStack / BerremanStack
+# (v5.25, audit S5-10 / B2).  The lower-level BOR building blocks and
+# analytic oracles (radial_spectrum, fiber_modes, layer_modes,
+# fourier_bessel, ...) stay namespaced under ``la.elements.bor.*`` by design
+# -- several carry generic or cylindrical-jargon names (``layer_modes`` also
+# names an EME export) that would crowd or collide on the top-level surface.
 
 # â”€â”€ BSDF surface scatter (stray-light analysis) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.bsdf import (
@@ -519,50 +535,6 @@ from .elements.freeform import (
     surface_sag_zernike_freeform,
 )
 from .elements.materials import Material
-from .elements.pmm import (
-    PMMStack,
-    classify_from_grating,
-    grating_convergence_class,
-    pmm_1d,
-    pmm_efficiency_1d,
-    pmm_efficiency_1d_jax,
-    pmm_efficiency_1d_segments,
-    pmm_efficiency_1d_slanted,
-    pmm_efficiency_1d_vs_wavelength,
-    pmm_graded_segments,
-    pmm_jones_1d,
-    pmm_jones_1d_conical,
-    pmm_jones_1d_conical_tensor,
-    pmm_jones_1d_segments,
-    pmm_jones_1d_segments_vs_wavelength,
-    pmm_jones_1d_slanted,
-    pmm_jones_1d_slanted_segments,
-    pmm_jones_1d_vs_wavelength,
-)
-from .elements.pmm.stack2d import (
-    PMM2DStack,
-    PMM2DStack_hybrid,
-    PMM2DStackHybrid,
-)
-from .elements.pmm.stack2d_pure import (
-    PMM2DStackPure,
-)
-from .elements.pmm.twod import (
-    PreparedPMM2D,
-    pmm_efficiency_2d,
-    pmm_efficiency_2d_cell,
-    pmm_efficiency_2d_cell_vs_wavelength,
-    pmm_efficiency_2d_vs_wavelength,
-    prepare_pmm_2d,
-    prepare_pmm_2d_cell,
-)
-from .elements.pmm.twod_jones import (
-    pmm_jones_2d,
-)
-from .elements.pmm.twod_staggered import (
-    pmm_efficiency_2d_staggered,
-    pmm_jones_2d_staggered,
-)
 
 # â”€â”€ Polarization / Jones calculus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.polarization import (
@@ -586,35 +558,7 @@ from .elements.polarization import (
 # Rigorous Coupled-Wave Analysis (full vector Fourier Modal Method): 1-D and
 # 2-D crossed gratings, metals (Li inverse rule), and anisotropic / LC layers
 # (Jones reflection).  The rigorous counterpart to the scalar thin_grating.
-from .elements.rcwa import (
-    Efficiency2D,
-    PreparedRCWA2D,
-    RCWAResult,
-    RCWAStack,
-    RCWAYAverageWarning,
-    binary_grating_segments,
-    grating_segments,
-    interdigitated_grating_segments,
-    jones_retardance_diattenuation,
-    prepare_rcwa_2d,
-    rcwa_blas_threads,
-    rcwa_convergence,
-    rcwa_efficiency_1d,
-    rcwa_efficiency_1d_jax,
-    rcwa_efficiency_2d,
-    rcwa_efficiency_2d_shapes,
-    rcwa_efficiency_2d_vs_wavelength,
-    rcwa_efficiency_vs_wavelength,
-    rcwa_extrapolate,
-    rcwa_jones_1d,
-    rcwa_jones_1d_segments,
-    rcwa_jones_2d,
-    rcwa_jones_vs_wavelength,
-    rcwa_jones_vs_wavelength_segments,
-    reflective_outcoupling,
-    set_blas_threads,
-    uniaxial_tensor,
-)
+# Resolved lazily -- see ``_LAZY_SOLVER_NAMES`` at the foot of this file.
 from .elements.segment_geometry import (
     BACKGROUND,
     SegmentStackGeometry,
@@ -742,6 +686,9 @@ from .optimize import (
     MaxThicknessMerit,
     MeritTerm,
     MinBackFocalLengthMerit,
+    # v5.45.2 (audit 2026-09-11 / WP-A10): edge-thickness merit + the free
+    # function it scores, siblings of MinThicknessMerit.
+    MinEdgeThicknessMerit,
     MinThicknessMerit,
     MultiFieldMerit,
     MultiPrescriptionParameterization,
@@ -758,6 +705,7 @@ from .optimize import (
     ZernikeCoefficientMerit,
     design_optimize,
     design_optimize_multi_objective,
+    edge_thickness,
     make_lg_aberration_merit_jax,
     optimize_traced_geometry,
     register_wave_propagator,
@@ -789,6 +737,10 @@ from .propagators.asymptotic import (
     CanonicalPolyFit,
     HFPolyFit,
     JaxAberrationTensorResult,
+    # v5.45.2 (audit 2026-09-11 Y2 follow-up / WP-A4): the aberration-free
+    # twin of a canonical fit -- the reference a Strehl ratio is measured
+    # against.  Public per asymptotic_canonical_fit.__all__.
+    aberration_free_reference_fit,
     aberration_tensor,
     aberration_tensor_lg00_jax,
     clear_lg_mode_stack_cache,
@@ -829,6 +781,11 @@ from .propagators.vector_diffraction import (
 
 # â”€â”€ Geometric ray tracing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .raytrace import (
+    # v5.45.2 (audit 2026-09-11 section 15.1 / WP-A1): the single shared
+    # exit-vertex transfer, its grazing tolerance and its JAX twin.  These
+    # are the API the seven divergent hand-written copies must converge on,
+    # so they belong on the package root next to ``refocus`` / ``trace``.
+    EXIT_VERTEX_GRAZING_TOL,
     RAY_APERTURE,
     RAY_EVANESCENT,
     RAY_MISSED_SURFACE,
@@ -848,6 +805,8 @@ from .raytrace import (
     astigmatism_waves_to_zernike,
     compute_pupils,
     defocus_waves_to_zernike,
+    exit_vertex_transfer,
+    exit_vertex_transfer_jax,
     f_number,
     # Paraxial-design one-liner helpers (4.0+)
     field_of_view,
@@ -894,6 +853,22 @@ from .raytrace import (
     validate_prescription,
     world_surfaces_from_prescription,
 )
+
+# v5.45.2 (audit 2026-09-11 section 15.1): the two lower-level pieces of the
+# shared exit-vertex transfer.  They are in ``raytrace.exit_vertex.__all__``
+# because a caller writing its own transfer (the traced-lens and GBD legs do)
+# needs exactly these two -- "which surface is the exit?" and "how far to its
+# vertex plane?" -- so they are re-exported rather than exempted from the
+# __all__-symmetry walker.
+from .raytrace.exit_vertex import (
+    resolve_exit_index,
+    vertex_plane_transfer_t,
+)
+
+# v5.45.2 (audit 2026-09-11 R2 / WP-A7): the functional form of
+# ``_make_bundle(..., opd_seed='eikonal')``, for callers that build or
+# reposition a bundle themselves.  Sibling of ``exit_vertex_transfer``.
+from .raytrace.trace import seed_entrance_eikonal
 
 # Snapshot the import-time defaults and register an atexit handler that
 # restores them on process shutdown.  Catches the foot-gun where users
@@ -1489,6 +1464,13 @@ __all__ = [
     'opd_fan_data',
     'through_focus_rms',
     'refocus',
+    # v5.45.2 (audit 2026-09-11 section 15.1): the ONE shared exit-vertex
+    # transfer + its pieces, and the entrance-eikonal seeder (R2).
+    'exit_vertex_transfer',
+    'EXIT_VERTEX_GRAZING_TOL',
+    'resolve_exit_index',
+    'vertex_plane_transfer_t',
+    'seed_entrance_eikonal',
     'find_stop',
     'compute_pupils',
     'lens_abcd',
@@ -1523,6 +1505,8 @@ __all__ = [
     'trace_jax',
     'jax_state_to_raybundle',
     'raybundle_to_jax_state',
+    # JAX twin of the shared exit-vertex transfer (section 15.1).
+    'exit_vertex_transfer_jax',
 
     # ============================================================
     # Tier 4 -- Analyze
@@ -1560,6 +1544,8 @@ __all__ = [
     'opd_pv_rms',
     'wave_opd_1d',
     'wave_opd_2d',
+    # v5.45.2 (audit 2026-09-11 / WP-A7): the public masked 2-D unwrap.
+    'unwrap_phase_2d',
     'check_opd_sampling',
     'chromatic_focal_shift',
     'polychromatic_strehl',
@@ -1691,6 +1677,9 @@ __all__ = [
     'MultiWavelengthMerit',
     'MultiFieldMerit',
     'MinThicknessMerit',
+    # v5.45.2 (audit 2026-09-11 / WP-A10): edge-thickness merit + oracle.
+    'MinEdgeThicknessMerit',
+    'edge_thickness',
     'MaxThicknessMerit',
     'MinBackFocalLengthMerit',
     'MaxFNumberMerit',
@@ -1714,6 +1703,9 @@ __all__ = [
     'AberrationTensorResult',
     'fit_canonical_polynomials',
     'fit_hf_polynomials',
+    # v5.45.2 (audit 2026-09-11 Y2 follow-up / WP-A4): the aberration-free
+    # reference fit a Strehl ratio is measured against.
+    'aberration_free_reference_fit',
 
     # Newton solver / propagators / quadrature
     'solve_envelope_stationary',
@@ -1813,6 +1805,8 @@ __all__ = [
     'prepare_pmm_2d',
     'prepare_pmm_2d_cell',
     'PreparedPMM2D',
+    # v5.45.2 (audit 2026-09-11 G7 / WP-A13): 2-D order-count drift signal.
+    'pmm_2d_order_drift',
     'pmm_efficiency_2d_staggered',
     'pmm_jones_2d_staggered',
     'grating_convergence_class',
@@ -1982,6 +1976,11 @@ __all__ = [
     'warmup_fft_plans',
     'clear_asm_caches',
     'clear_zernike_basis_cache',
+    # v5.45.2 (audit 2026-09-11 / WP-A7): the byte-accounting siblings of the
+    # two cache clearers, plus the meshgrid cache's own clear.
+    'zernike_basis_cache_bytes',
+    'clear_meshgrid_cache',
+    'meshgrid_cache_bytes',
     'clear_lg_polynomial_cache',
     'clear_lg_mode_stack_cache',
     'clear_through_focus_scan_jax_cache',
@@ -2021,6 +2020,9 @@ __all__ = [
     'lumenairy_context',
     'snapshot_globals',
     'apply_globals',
+    # v5.45.2 (audit 2026-09-11 TESTS-ARCH P2-5): the generic scoped form for
+    # every registered process-global knob -- ``with la.override(...)``.
+    'override',
 
     # Progress callback infrastructure
     'ProgressCallback',
@@ -2076,19 +2078,122 @@ for _name in _LIVE_FORWARD_NAMES:
 del _name
 
 
-def __getattr__(name):
-    """Forward the mutable ``DEFAULT_*`` knobs to their live values.
+# ---------------------------------------------------------------------------
+# PEP 562 lazy loading of the rigorous-solver families
+# ---------------------------------------------------------------------------
+# ``import lumenairy`` used to import ``elements.berreman`` -> ``rcwa`` ->
+# ``backend.scipy`` -> ``scipy.linalg`` + ``scipy.special`` before the caller
+# had asked for a single grating solve (audit 2026-09-11 TESTS-ARCH P2-7).
+# The names below are now resolved on FIRST ACCESS and then cached into this
+# module's globals, so the second lookup is an ordinary dict hit.  The public
+# contract is unchanged: every one of these is still in ``__all__``, still
+# ``hasattr``-able, still reachable by ``from lumenairy import X``, and still
+# visible to ``dir(lumenairy)`` (see ``__dir__`` below).
+#
+# The table is name -> defining submodule, spelled exactly as the eager
+# ``from .elements.<mod> import ...`` statements it replaces, so a name that
+# moves between submodules fails loudly in the lazy-loading test rather than
+# resolving through a facade by accident.
+_LAZY_SOLVER_NAMES = {
+    # -- elements.berreman (anisotropic planar multilayer) -----------------
+    'BerremanStack': 'elements.berreman',
+    'berreman_jones_1d': 'elements.berreman',
+    # -- elements.bor (body-of-revolution / axisymmetric cylindrical) ------
+    'BORStack': 'elements.bor',
+    # -- elements.pmm (polynomial modal method, 1-D facade) ----------------
+    'PMMStack': 'elements.pmm',
+    'classify_from_grating': 'elements.pmm',
+    'grating_convergence_class': 'elements.pmm',
+    'pmm_1d': 'elements.pmm',
+    'pmm_efficiency_1d': 'elements.pmm',
+    'pmm_efficiency_1d_jax': 'elements.pmm',
+    'pmm_efficiency_1d_segments': 'elements.pmm',
+    'pmm_efficiency_1d_slanted': 'elements.pmm',
+    'pmm_efficiency_1d_vs_wavelength': 'elements.pmm',
+    'pmm_graded_segments': 'elements.pmm',
+    'pmm_jones_1d': 'elements.pmm',
+    'pmm_jones_1d_conical': 'elements.pmm',
+    'pmm_jones_1d_conical_tensor': 'elements.pmm',
+    'pmm_jones_1d_segments': 'elements.pmm',
+    'pmm_jones_1d_segments_vs_wavelength': 'elements.pmm',
+    'pmm_jones_1d_slanted': 'elements.pmm',
+    'pmm_jones_1d_slanted_segments': 'elements.pmm',
+    'pmm_jones_1d_vs_wavelength': 'elements.pmm',
+    # -- elements.pmm 2-D engines -----------------------------------------
+    'PMM2DStack': 'elements.pmm.stack2d',
+    'PMM2DStack_hybrid': 'elements.pmm.stack2d',
+    'PMM2DStackHybrid': 'elements.pmm.stack2d',
+    'PMM2DStackPure': 'elements.pmm.stack2d_pure',
+    'PreparedPMM2D': 'elements.pmm.twod',
+    'pmm_2d_order_drift': 'elements.pmm.twod',
+    'pmm_efficiency_2d': 'elements.pmm.twod',
+    'pmm_efficiency_2d_cell': 'elements.pmm.twod',
+    'pmm_efficiency_2d_cell_vs_wavelength': 'elements.pmm.twod',
+    'pmm_efficiency_2d_vs_wavelength': 'elements.pmm.twod',
+    'prepare_pmm_2d': 'elements.pmm.twod',
+    'prepare_pmm_2d_cell': 'elements.pmm.twod',
+    'pmm_jones_2d': 'elements.pmm.twod_jones',
+    'pmm_efficiency_2d_staggered': 'elements.pmm.twod_staggered',
+    'pmm_jones_2d_staggered': 'elements.pmm.twod_staggered',
+    # -- elements.rcwa (Fourier modal method) ------------------------------
+    'Efficiency2D': 'elements.rcwa',
+    'PreparedRCWA2D': 'elements.rcwa',
+    'RCWAResult': 'elements.rcwa',
+    'RCWAStack': 'elements.rcwa',
+    'RCWAYAverageWarning': 'elements.rcwa',
+    'binary_grating_segments': 'elements.rcwa',
+    'grating_segments': 'elements.rcwa',
+    'interdigitated_grating_segments': 'elements.rcwa',
+    'jones_retardance_diattenuation': 'elements.rcwa',
+    'prepare_rcwa_2d': 'elements.rcwa',
+    'rcwa_blas_threads': 'elements.rcwa',
+    'rcwa_convergence': 'elements.rcwa',
+    'rcwa_efficiency_1d': 'elements.rcwa',
+    'rcwa_efficiency_1d_jax': 'elements.rcwa',
+    'rcwa_efficiency_2d': 'elements.rcwa',
+    'rcwa_efficiency_2d_shapes': 'elements.rcwa',
+    'rcwa_efficiency_2d_vs_wavelength': 'elements.rcwa',
+    'rcwa_efficiency_vs_wavelength': 'elements.rcwa',
+    'rcwa_extrapolate': 'elements.rcwa',
+    'rcwa_jones_1d': 'elements.rcwa',
+    'rcwa_jones_1d_segments': 'elements.rcwa',
+    'rcwa_jones_2d': 'elements.rcwa',
+    'rcwa_jones_vs_wavelength': 'elements.rcwa',
+    'rcwa_jones_vs_wavelength_segments': 'elements.rcwa',
+    'reflective_outcoupling': 'elements.rcwa',
+    'set_blas_threads': 'elements.rcwa',
+    'uniaxial_tensor': 'elements.rcwa',
+}
 
-    Mirrors :func:`lumenairy.propagators.propagation.__getattr__`; the
-    canonical globals live in ``propagators.fft_infra`` (the module the
-    ``set_default_*`` setters mutate), so one hop gets the current value.
+
+def __getattr__(name):
+    """Forward the mutable ``DEFAULT_*`` knobs and resolve the lazy
+    rigorous-solver names.
+
+    The ``DEFAULT_*`` half mirrors
+    :func:`lumenairy.propagators.propagation.__getattr__`; the canonical
+    globals live in ``propagators.fft_infra`` (the module the
+    ``set_default_*`` setters mutate), so one hop gets the current value --
+    and it must NOT be cached, because the point is that it is live.
+
+    The solver half imports the defining submodule on first access and
+    CACHES the object here, so the knob forward stays the only per-access
+    cost in this function.  Anything else raises ``AttributeError`` (never
+    ``ImportError``), so ``hasattr`` keeps working.
     """
     if name in _LIVE_FORWARD_NAMES:
         from .propagators import fft_infra as _fft_infra
         return getattr(_fft_infra, name)
+    where = _LAZY_SOLVER_NAMES.get(name)
+    if where is not None:
+        import importlib as _il
+        obj = getattr(_il.import_module(f'.{where}', __name__), name)
+        globals()[name] = obj
+        return obj
     raise AttributeError(
         f"module {__name__!r} has no attribute {name!r}")
 
 
 def __dir__():
-    return sorted(set(globals()) | _LIVE_FORWARD_NAMES)
+    return sorted(set(globals()) | _LIVE_FORWARD_NAMES
+                  | set(_LAZY_SOLVER_NAMES))

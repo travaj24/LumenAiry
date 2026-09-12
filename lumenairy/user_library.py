@@ -41,6 +41,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from ._knobs import register_knob as _register_knob
+
 # ════════════════════════════════════════════════════════════════════════
 # Library path
 # ════════════════════════════════════════════════════════════════════════
@@ -72,6 +74,44 @@ def set_library_path(path: str) -> None:
     (p / 'materials').mkdir(exist_ok=True)
     (p / 'lenses').mkdir(exist_ok=True)
     (p / 'phase_masks').mkdir(exist_ok=True)
+
+
+def _get_library_path_override():
+    """Return the library-path OVERRIDE (a str), or None when unset.
+
+    The knob-registry getter.  Deliberately not :func:`get_library_path`,
+    which RESOLVES the default AND CREATES ``~/.lumenairy/library`` plus
+    three subdirectories as a side effect -- a snapshot taken once per test
+    must not touch the file system.
+    """
+    return _library_path
+
+
+def _set_library_path_override(path) -> None:
+    """Restore a library-path override captured by
+    :func:`_get_library_path_override`.
+
+    ``None`` clears the override (back to ``~/.lumenairy/library``, resolved
+    and created lazily on the next :func:`get_library_path`); any other value
+    goes through :func:`set_library_path`, which is idempotent -- the
+    ``mkdir(exist_ok=True)`` calls are no-ops for a directory it already
+    created.
+    """
+    global _library_path
+    if path is None:
+        _library_path = None
+        return
+    set_library_path(path)
+
+
+# Process-global with no context-manager form and no reset before v5.45.2
+# (audit 2026-09-11 TESTS-ARCH P2-5).  Registered on import of this module.
+_register_knob(
+    'library_path',
+    getter=_get_library_path_override, setter=_set_library_path_override,
+    doc="Override directory for the user library; None (shipped) means "
+        "~/.lumenairy/library.  Restoring None does NOT delete anything -- "
+        "it only stops the override pointing at it.")
 
 
 def _safe_name(name):

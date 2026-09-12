@@ -34,6 +34,8 @@ from typing import Any, Dict, Literal, Optional, Tuple, Union, overload
 
 import numpy as np
 
+from ._knobs import register_knob as _register_knob
+
 try:
     import psutil
     _PSUTIL_AVAILABLE = True
@@ -133,6 +135,20 @@ def get_max_ram() -> Optional[int]:
     to support :func:`lumenairy.lumenairy_context`.
     """
     return _MAX_RAM_OVERRIDE
+
+
+# The manual RAM budget is a process global with no context-manager form and
+# no reset (audit 2026-09-11 TESTS-ARCH P2-5); registering it gives it both
+# through ``lumenairy.override(max_ram=...)`` and the suite's autouse
+# snapshot/restore fixture.  ``get_max_ram`` (the OVERRIDE) is the right
+# getter here, not ``get_ram_budget`` (the EFFECTIVE budget): the latter
+# queries psutil when no override is set, which would make a snapshot a
+# syscall and would restore an auto budget as a pinned one.
+_register_knob(
+    'max_ram',
+    getter=get_max_ram, setter=set_max_ram,
+    doc="Manual RAM-budget override in bytes; None (shipped) means "
+        "auto-detect via psutil.  set_max_ram() also accepts GB (< 1024).")
 
 
 # ---------------------------------------------------------------------------
@@ -587,13 +603,34 @@ _ASM_F64_GRID_ARRAYS = 0.7       # dtype-independent frequency-grid transients
 # paid its large-transform workspace there -- the N >= 256 asymptote is the
 # one an estimate must bound).  The 40 MiB constant therefore stopped being
 # a BOUND: est/measured fell to 0.79 (N=256), 0.85 (512), 0.95 (1024) --
-# the A-6 contract is ``>= 1.0``.  Raised to 56 MiB, which restores the
-# documented tightness band: est/measured 1.06-1.08 over the six N >= 256
-# points, both dtypes (the shape term is untouched -- the measured slope is
-# 96.0 B/px at c128 / 48.0 at c64, still under the 101.6 / 52.8 the formula
-# uses).  Fail-safe direction: on CI Linux the cold peak is much smaller
-# still, so the bound only widens there.
-_ASM_FIRST_CALL_FIXED_BYTES = 56 * 1024 * 1024
+# the A-6 contract is ``>= 1.0``.  Raised to 56 MiB, which restored the
+# documented tightness band (the shape term was untouched).
+#
+# RE-MEASURED 2026-09-12 (audit 2026-09-11 remediation, WP-A11 section 5 item
+# 4 handed this decision over as "either the constant comes down or that
+# test's Windows fence goes up -- one decision, one place").  Same method,
+# same box, 12 points N = 64..2048 x {complex64, complex128}:
+#
+#     pair    256 ->  512 :  fixed  36.71 MiB (c128)   36.48 MiB (c64)
+#     pair    512 -> 1024 :  fixed  36.71 MiB (c128)   37.62 MiB (c64)
+#     pair   1024 -> 2048 :  fixed  36.71 MiB (c128)   36.72 MiB (c64)
+#
+# The one-time backend import has come DOWN from ~53 MiB to 36.7 MiB (the
+# three c128 pair fits agree to 0.01 MiB, and the cold peak reproduces to
+# 0.003 % over 5 fresh interpreters) because the propagator-side fixes
+# landed earlier in this remediation shrank what the first call has to pull.
+# At 56 MiB the estimate was 1.53x the measured fixed term -- 17 MiB of dead
+# margin that showed up as est/measured = 1.341 at N = 512 against a
+# DOCUMENTED band of 1.06-1.09, i.e. the number the docstring promises had
+# stopped being true.
+#
+# Back to 40 MiB: the worst of the six N >= 256 pair fits is 37.62 MiB, so
+# 40 MiB carries 6.3 % headroom for dependency drift -- the same convention
+# the 2026-08-01 calibration used (56 over a worst fit of 52.97, 5.7 %).
+# That restores est/measured to 1.06-1.10 over all twelve points, both
+# dtypes, still a BOUND at every one.  Fail-safe direction unchanged: on CI
+# Linux the cold peak is much smaller still, so the bound only widens there.
+_ASM_FIRST_CALL_FIXED_BYTES = 40 * 1024 * 1024
 # Row-band (sag_chunk_rows) mode: the full-grid float64 lens stack never
 # materialises; the peak is the resident complex fields + FFT plan buffers +
 # band transients.  Calibrated from the c128 chunked anchor (26.3 GB at
@@ -841,20 +878,23 @@ def estimate_asm_memory(n_grid: int,
     N = 256..2048) -- so this estimate runs ~6.4x that at the shapes where a
     plan key still holds TWO workspaces, ~4.4x once the v5.33.2 per-key byte
     cap drops it to one (N >= 11181 at complex128, ``plan_cache_keys=2``),
-    and more at small N where the fixed import term dominates (20x at N=512
-    complex128).  Use ``N * N * np.dtype(complex_dtype).itemsize`` if a
-    steady-state per-call transient is what you want.
+    and more at small N where the fixed import term dominates (16.35x at
+    N=512 complex128, with the 2026-09-12 40 MiB fixed term).  Use
+    ``N * N * np.dtype(complex_dtype).itemsize`` if a steady-state per-call
+    transient is what you want.
 
-    Accuracy (RE-MEASURED 2026-08-01, fresh-interpreter ``tracemalloc``,
+    Accuracy (RE-MEASURED 2026-09-12, fresh-interpreter ``tracemalloc``,
     pyFFTW present with the double-buffer ping-pong enabled): est/measured
-    first-call peak = **1.06-1.09** over the eight points
+    first-call peak = **1.06-1.10** over the eight points
     N = 256 / 512 / 1024 / 2048 x {complex64, complex128} -- conservative
-    (a bound) at every one, within 9%.  (At derivation time,
-    2026-07-25, the same band read 1.02-1.09; the dependency stack has
-    since grown the one-time FFT-backend import from ~38 MB to ~53 MiB and
-    ``_ASM_FIRST_CALL_FIXED_BYTES`` was re-calibrated 40 -> 56 MiB to keep
-    the ``>= 1.0`` bound -- see the constant's comment for the fit table.
-    Below N = 256 the ratio is looser, 1.37, because the backend import has
+    (a bound) at every one, within 10%.  (At derivation time, 2026-07-25,
+    the same band read 1.02-1.09; 2026-08-01 the dependency stack had grown
+    the one-time FFT-backend import from ~38 MB to ~53 MiB and
+    ``_ASM_FIRST_CALL_FIXED_BYTES`` went 40 -> 56 MiB to keep the ``>= 1.0``
+    bound; 2026-09-12 that import came back down to 36.7 MiB and the
+    constant went 56 -> 40 MiB to stop the estimate reading 1.34 at N = 512
+    against this band -- see the constant's comment for the fit tables.
+    Below N = 256 the ratio is looser, 1.11, because the backend import has
     not yet paid its large-transform workspace there; the A-6 measured pins
     sample N = 512 / 1024.)
     The pre-A-6 formula read 0.53 / 0.96 / 1.22 at N = 512 / 1024 / 2048

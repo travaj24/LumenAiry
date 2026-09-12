@@ -34,22 +34,33 @@ from __future__ import annotations
 # GPU acceleration via CuPy (lazy-loaded -- ~150 ms init cost on
 # CUDA-equipped boxes, none of which is needed for the NumPy / pyFFTW
 # default path).
-import importlib.util as _importlib_util_for_cupy
 import threading
 from collections import OrderedDict
 from typing import Any, Dict, Optional
 
 import numpy as np
 
-CUPY_AVAILABLE = _importlib_util_for_cupy.find_spec('cupy') is not None
-cp = None  # populated lazily on first use
+# The probe, the first-use import and the isinstance test live in ONE place
+# (audit 2026-09-11 TESTS-ARCH P2-9: five hand-copied pairs, one of which is
+# the only place the accelerator-absent path could be tested).
+from ..backend._optional import CUPY_AVAILABLE
+from ..backend._optional import ensure_cupy as _ensure_cupy
+from ..backend._optional import is_cupy_array as _optional_is_cupy_array
+
+cp = None  # this module's alias for the cupy module; see _ensure_cupy_loaded
 
 
 def _ensure_cupy_loaded():
+    """Load CuPy on first use; return True iff it is available.
+
+    Keeps this module's ``cp`` alias populated because the CuPy branches
+    here read the module-level name directly (``cp.fft.fft2(x)``,
+    ``cp.arange(...)``); the import itself and its cache live in
+    :mod:`lumenairy.backend._optional`.
+    """
     global cp
-    if cp is None and CUPY_AVAILABLE:
-        import cupy as _c
-        cp = _c
+    if cp is None:
+        cp = _ensure_cupy()
     return cp is not None
 
 
@@ -65,10 +76,13 @@ def _is_cupy_array(x):
     against the real CuPy type instead.
     """
     if not CUPY_AVAILABLE:
+        # Local short-circuit, not a delegation: this runs once per FFT and
+        # the CuPy-absent answer must stay one global read.
         return False
-    if cp is None and not _ensure_cupy_loaded():
+    if not _optional_is_cupy_array(x):
         return False
-    return isinstance(x, cp.ndarray)
+    _ensure_cupy_loaded()   # a True answer implies ``cp`` is live -- bind it
+    return True
 
 # Multi-threaded FFT via pyFFTW (lazy-loaded -- pyFFTW pulls in a
 # substantial native lib at import time, so we only load it when
@@ -105,6 +119,13 @@ except ImportError:
 # Affinity-aware CPU count -- respects cgroups / taskset / Python 3.13+
 # process_cpu_count so we don't oversubscribe a restricted machine.
 from ..memory import available_cpus as _available_cpus
+
+# Every process-global knob below is registered with the central registry
+# (audit 2026-09-11 TESTS-ARCH P2-5: 12 of the library's ~20 process globals
+# live in this module, and none of them had a context-manager form or a
+# reset).  Registration is what makes ``lumenairy.override(...)`` and the
+# suite's autouse snapshot/restore fixture reach them.
+from .._knobs import register_knob as _register_knob
 
 # ============================================================================
 # FFT backend configuration
@@ -250,6 +271,13 @@ def set_default_complex_dtype(dtype: Any) -> None:
 def get_default_complex_dtype() -> Any:
     """Return the currently-configured default complex dtype."""
     return DEFAULT_COMPLEX_DTYPE
+
+
+_register_knob(
+    'default_complex_dtype',
+    getter=get_default_complex_dtype, setter=set_default_complex_dtype,
+    doc="Complex dtype used when a function must allocate a fresh complex "
+        "array (np.complex128 shipped).  Changing it clears the ASM H cache.")
 
 
 # ---------------------------------------------------------------------------
@@ -403,6 +431,13 @@ def get_default_real_dtype() -> Any:
     return DEFAULT_REAL_DTYPE
 
 
+_register_knob(
+    'default_real_dtype',
+    getter=get_default_real_dtype, setter=set_default_real_dtype,
+    doc="Real dtype used when a function allocates a fresh real array with "
+        "no complex parent (np.float64 shipped).")
+
+
 def set_default_wave_propagator(name: str) -> None:
     """Set the library-wide default ``wave_propagator`` choice.
 
@@ -446,6 +481,13 @@ def set_default_wave_propagator(name: str) -> None:
 def get_default_wave_propagator() -> str:
     """Return the currently-configured default wave_propagator name."""
     return DEFAULT_WAVE_PROPAGATOR
+
+
+_register_knob(
+    'default_wave_propagator',
+    getter=get_default_wave_propagator, setter=set_default_wave_propagator,
+    doc="Library-wide default wave_propagator name ('asm' shipped).  A "
+        "PHYSICS mode: it changes every propagation in the process.")
 
 
 def set_default_dy(value: Any) -> None:
@@ -493,6 +535,13 @@ def get_default_dy() -> Any:
     "match dx").
     """
     return DEFAULT_DY
+
+
+_register_knob(
+    'default_dy',
+    getter=get_default_dy, setter=set_default_dy,
+    doc="Library-wide default anamorphic row pitch dy in metres; None "
+        "(shipped) means 'match dx'.")
 
 
 def _resolve_jax_complex_dtype(dtype: Any = None) -> Any:
@@ -849,6 +898,13 @@ def get_fft_plan_cache_size() -> int:
     return int(_PYFFTW_PLAN_CACHE_SIZE)
 
 
+_register_knob(
+    'fft_plan_cache_size',
+    getter=get_fft_plan_cache_size, setter=set_fft_plan_cache_size,
+    doc="Maximum number of resident pyFFTW plans (8 shipped).  Lowering it "
+        "evicts oldest-first immediately.")
+
+
 # v5.16.2: opt-out for the v4.12 two-buffer ping-pong.  With the ping-pong,
 # ``_fft2``/``_ifft2`` return one of two live workspace buffers with no copy
 # (speed), at the cost of a SECOND resident full-grid aligned buffer per plan
@@ -960,6 +1016,15 @@ def get_fft_plan_max_bytes_per_buffer():
     return _PYFFTW_PLAN_MAX_BYTES_PER_BUFFER
 
 
+_register_knob(
+    'fft_plan_max_bytes_per_buffer',
+    getter=get_fft_plan_max_bytes_per_buffer,
+    setter=set_fft_plan_max_bytes_per_buffer,
+    doc="Byte cap on ONE resident pyFFTW workspace (2 GB shipped); a plan "
+        "key above it drops to a single buffer.  Changing it clears the "
+        "plan cache.")
+
+
 def set_fft_double_buffer(enabled: bool) -> None:
     """Enable/disable the pyFFTW two-buffer ping-pong (default enabled).
 
@@ -976,6 +1041,14 @@ def set_fft_double_buffer(enabled: bool) -> None:
 def get_fft_double_buffer() -> bool:
     """Return whether the pyFFTW two-buffer ping-pong is enabled."""
     return bool(_PYFFTW_DOUBLE_BUFFER)
+
+
+_register_knob(
+    'fft_double_buffer',
+    getter=get_fft_double_buffer, setter=set_fft_double_buffer,
+    doc="pyFFTW two-buffer ping-pong on/off (True shipped).  Off halves the "
+        "resident workspace for one array copy per FFT; values are "
+        "byte-identical either way.  Changing it clears the plan cache.")
 
 
 def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional[int] = None) -> int:
@@ -1910,6 +1983,24 @@ def set_fft_fallback(enabled: bool) -> None:
     PYFFTW_FALLBACK_ON_ERROR = bool(enabled)
 
 
+def _get_fft_fallback() -> bool:
+    """Return whether the pyFFTW -> scipy.fft fallback is enabled.
+
+    Module-private on purpose: :func:`set_fft_fallback` is the only half of
+    this pair that was ever public, and adding a public ``get_fft_fallback``
+    would be new public API for the sake of the knob registry.  The knob
+    registration below uses this accessor so a snapshot/restore round trip
+    covers the flag."""
+    return bool(PYFFTW_FALLBACK_ON_ERROR)
+
+
+_register_knob(
+    'fft_fallback',
+    getter=_get_fft_fallback, setter=set_fft_fallback,
+    doc="Automatic pyFFTW -> scipy.fft fallback on allocation / runtime "
+        "errors (True shipped).  Off makes pyFFTW errors propagate.")
+
+
 def set_fft_threads(n: Optional[int]) -> None:
     """Override the thread count used by the pyFFTW / scipy.fft path.
 
@@ -1944,6 +2035,13 @@ def get_fft_threads() -> int:
     return int(FFTW_THREADS)
 
 
+_register_knob(
+    'fft_threads',
+    getter=get_fft_threads, setter=set_fft_threads,
+    doc="pyFFTW / scipy.fft thread count; 0 or None restores the "
+        "affinity-aware default capped at the oversubscription knee.")
+
+
 def get_pyfftw_planner() -> str:
     """Return the current pyFFTW planner flag.
 
@@ -1953,6 +2051,14 @@ def get_pyfftw_planner() -> str:
     introduced in 4.8.1 alongside :func:`lumenairy.lumenairy_context`.
     """
     return _PYFFTW_PLAN_FLAGS[0]
+
+
+_register_knob(
+    'pyfftw_planner',
+    getter=get_pyfftw_planner, setter=set_pyfftw_planner,
+    doc="pyFFTW planning effort: 'FFTW_ESTIMATE' (shipped) / 'FFTW_MEASURE' "
+        "/ 'FFTW_PATIENT' / 'FFTW_EXHAUSTIVE'.  Changing it clears the plan "
+        "cache; note libfftw3 WISDOM is not restored by putting it back.")
 
 
 def set_fft_auto_promote(enabled: bool) -> None:
@@ -2020,6 +2126,14 @@ def get_fft_auto_promote() -> bool:
     return bool(_PYFFTW_AUTO_PROMOTE)
 
 
+_register_knob(
+    'fft_auto_promote',
+    getter=get_fft_auto_promote, setter=set_fft_auto_promote,
+    doc="Automatic ESTIMATE -> MEASURE pyFFTW plan promotion (False shipped "
+        "since v5.30.1).  On, the plan swaps mid-session and the output bits "
+        "change at the threshold call.")
+
+
 def get_asm_cache_size() -> Dict[str, int]:
     """Return the current ASM-cache bounds as a dict.
 
@@ -2042,6 +2156,16 @@ def get_asm_cache_size() -> Dict[str, int]:
         'freq_cache': int(_FREQ_GRID_CACHE_SIZE),
         'bandlimit_cache': int(_BANDLIMIT_CACHE_SIZE),
     }
+
+
+_register_knob(
+    'asm_cache_size',
+    getter=get_asm_cache_size,
+    setter=lambda d: set_asm_cache_size(**d),
+    doc="The five ASM-cache bounds as the dict get_asm_cache_size() returns "
+        "(h_cache / h_max_bytes_per_entry / h_max_total_bytes / freq_cache "
+        "/ bandlimit_cache).  The one knob whose value is a mapping; its "
+        "getter returns a fresh dict per call, so a snapshot is safe.")
 
 
 # ============================================================================

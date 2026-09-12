@@ -36,10 +36,6 @@ Known cross-engine gaps (tracked, not yet built)
   construction).  Tracked in ``ROADMAP.md`` -> "Open / tracked gaps".
 """
 
-from .berreman import (
-    BerremanStack,
-    berreman_jones_1d,
-)
 from .bsdf import (
     BSDFModel,
     GaussianBSDF,
@@ -129,26 +125,6 @@ from .lenses import (
     surface_sag_biconic,
     surface_sag_general,
 )
-from .pmm import (
-    PMMStack,
-    classify_from_grating,
-    grating_convergence_class,
-    pmm_1d,
-    pmm_efficiency_1d,
-    pmm_efficiency_1d_jax,
-    pmm_efficiency_1d_segments,
-    pmm_efficiency_1d_slanted,
-    pmm_jones_1d,
-    pmm_jones_1d_segments,
-    pmm_jones_1d_slanted,
-    pmm_jones_1d_slanted_segments,
-)
-from .pmm.twod import (
-    pmm_efficiency_2d,
-)
-from .pmm.twod_staggered import (
-    pmm_efficiency_2d_staggered,
-)
 from .polarization import (
     JonesField,
     apply_half_wave_plate,
@@ -166,34 +142,110 @@ from .polarization import (
     polarization_ellipse,
     stokes_parameters,
 )
-from .rcwa import (
-    Efficiency2D,
-    RCWAResult,
-    RCWAStack,
-    binary_grating_segments,
-    grating_segments,
-    interdigitated_grating_segments,
-    jones_retardance_diattenuation,
-    rcwa_blas_threads,
-    rcwa_convergence,
-    rcwa_efficiency_1d,
-    rcwa_efficiency_1d_jax,
-    rcwa_efficiency_2d,
-    rcwa_efficiency_2d_shapes,
-    rcwa_efficiency_vs_wavelength,
-    rcwa_jones_1d,
-    rcwa_jones_1d_segments,
-    rcwa_jones_2d,
-    rcwa_jones_vs_wavelength,
-    rcwa_jones_vs_wavelength_segments,
-    reflective_outcoupling,
-    set_blas_threads,
-    uniaxial_tensor,
-)
 from .thin_grating import (
     grating_efficiency_vs_wavelength,
     thin_grating_efficiency_1d,
 )
+
+# ---------------------------------------------------------------------------
+# PEP 562 lazy loading of the rigorous-solver subpackages
+# ---------------------------------------------------------------------------
+# ``berreman`` / ``bor`` / ``eme`` / ``pmm`` / ``rcwa`` are the heavy end of
+# the library: they reach ``scipy.linalg`` + ``scipy.special`` through
+# ``lumenairy.backend.scipy``, and a user who only wants ``propagate_asm``
+# used to pay for the whole rigorous-solver stack at ``import lumenairy``
+# (audit 2026-09-11 TESTS-ARCH P2-7).  Their names are now resolved on FIRST
+# ACCESS through the module ``__getattr__`` below.
+#
+# What still works, and is tested in
+# ``tests/unit/test_audit2609_a15b_lazy_elements.py``:
+#   * ``from lumenairy.elements import rcwa`` / ``import
+#     lumenairy.elements.rcwa as r`` -- normal import machinery, untouched;
+#   * ``lumenairy.elements.rcwa_efficiency_1d`` -- resolved here, then CACHED
+#     into this module's globals, so the second access is a plain dict hit;
+#   * ``lumenairy.elements.rcwa.X`` -- ``__getattr__('rcwa')`` imports the
+#     subpackage (and CPython binds it as this package's attribute anyway);
+#   * ``dir(lumenairy.elements)``, ``from lumenairy.elements import *`` and
+#     the repo's ``__all__`` walkers -- via ``__dir__`` + the unchanged
+#     ``__all__`` below;
+#   * pickling objects defined in those modules -- pickle resolves by
+#     ``__module__``/``__qualname__`` and imports the defining module itself.
+#
+# An unknown name raises ``AttributeError`` (never ``ImportError``), because
+# ``hasattr`` and ``getattr(..., default)`` must keep working.
+import importlib as _importlib
+
+#: Subpackages exposed as lazy attributes of this package.
+_LAZY_SUBMODULES = ('berreman', 'bor', 'eme', 'pmm', 'rcwa')
+
+#: Public name -> the submodule (relative to this package) that defines it.
+#: One entry per name that used to be imported eagerly above; the ``__all__``
+#: list below is unchanged, so the two are cross-checked by the lazy-loading
+#: test and by the existing ``__all__``-symmetry walker.
+_LAZY_NAMES = {
+    # berreman (anisotropic planar multilayer)
+    'BerremanStack': 'berreman',
+    'berreman_jones_1d': 'berreman',
+    # pmm (polynomial modal method)
+    'PMMStack': 'pmm',
+    'classify_from_grating': 'pmm',
+    'grating_convergence_class': 'pmm',
+    'pmm_1d': 'pmm',
+    'pmm_efficiency_1d': 'pmm',
+    'pmm_efficiency_1d_jax': 'pmm',
+    'pmm_efficiency_1d_segments': 'pmm',
+    'pmm_efficiency_1d_slanted': 'pmm',
+    'pmm_jones_1d': 'pmm',
+    'pmm_jones_1d_segments': 'pmm',
+    'pmm_jones_1d_slanted': 'pmm',
+    'pmm_jones_1d_slanted_segments': 'pmm',
+    'pmm_efficiency_2d': 'pmm.twod',
+    'pmm_efficiency_2d_staggered': 'pmm.twod_staggered',
+    # rcwa (Fourier modal method)
+    'Efficiency2D': 'rcwa',
+    'RCWAResult': 'rcwa',
+    'RCWAStack': 'rcwa',
+    'binary_grating_segments': 'rcwa',
+    'grating_segments': 'rcwa',
+    'interdigitated_grating_segments': 'rcwa',
+    'jones_retardance_diattenuation': 'rcwa',
+    'rcwa_blas_threads': 'rcwa',
+    'rcwa_convergence': 'rcwa',
+    'rcwa_efficiency_1d': 'rcwa',
+    'rcwa_efficiency_1d_jax': 'rcwa',
+    'rcwa_efficiency_2d': 'rcwa',
+    'rcwa_efficiency_2d_shapes': 'rcwa',
+    'rcwa_efficiency_vs_wavelength': 'rcwa',
+    'rcwa_jones_1d': 'rcwa',
+    'rcwa_jones_1d_segments': 'rcwa',
+    'rcwa_jones_2d': 'rcwa',
+    'rcwa_jones_vs_wavelength': 'rcwa',
+    'rcwa_jones_vs_wavelength_segments': 'rcwa',
+    'reflective_outcoupling': 'rcwa',
+    'set_blas_threads': 'rcwa',
+    'uniaxial_tensor': 'rcwa',
+}
+
+
+def __getattr__(name):
+    """Resolve a rigorous-solver name on first access (PEP 562)."""
+    if name in _LAZY_SUBMODULES:
+        mod = _importlib.import_module(f'{__name__}.{name}')
+        globals()[name] = mod
+        return mod
+    where = _LAZY_NAMES.get(name)
+    if where is None:
+        raise AttributeError(
+            f"module {__name__!r} has no attribute {name!r}")
+    obj = getattr(_importlib.import_module(f'{__name__}.{where}'), name)
+    globals()[name] = obj      # cache: later accesses skip this function
+    return obj
+
+
+def __dir__():
+    """``dir()`` lists the lazy names too, so tab-completion and the repo's
+    surface walkers see the same package they saw when it was eager."""
+    return sorted(set(globals()) | set(_LAZY_NAMES) | set(_LAZY_SUBMODULES))
 
 __all__ = [
     # lenses

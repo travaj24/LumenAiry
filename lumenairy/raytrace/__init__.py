@@ -16,10 +16,14 @@ from .bundles import (
     ray_to_beamlet,
     ray_to_path,
 )
-# The single shared exit-vertex transfer (audit 2026-09-11 §15.1).
+# The single shared exit-vertex transfer (audit 2026-09-11 §15.1), plus the
+# two pieces a caller writing its own transfer needs ("which surface is the
+# exit?" and "how far to its vertex plane?").
 from .exit_vertex import (  # noqa: E402
     EXIT_VERTEX_GRAZING_TOL,
     exit_vertex_transfer,
+    resolve_exit_index,
+    vertex_plane_transfer_t,
 )
 from .core import (  # noqa: E402  (continuation of the .core import list)
     RAY_APERTURE,
@@ -58,6 +62,7 @@ from .core import (  # noqa: E402  (continuation of the .core import list)
     ray_fan_plot_prescription,
     raytrace_system,
     refocus,
+    seed_entrance_eikonal,
     seidel_coefficients,
     seidel_prescription,
     spot_diagram,
@@ -153,6 +158,13 @@ __all__ = [
     'refocus',
     'exit_vertex_transfer',
     'EXIT_VERTEX_GRAZING_TOL',
+    'resolve_exit_index',
+    'vertex_plane_transfer_t',
+    # v5.45.2 (audit 2026-09-11 R2 / WP-A7 section 5.3): the functional form
+    # of ``_make_bundle(..., opd_seed='eikonal')``, sibling of
+    # ``exit_vertex_transfer`` and previously reachable only as
+    # ``lumenairy.raytrace.trace.seed_entrance_eikonal``.
+    'seed_entrance_eikonal',
     'find_stop',
     'compute_pupils',
     'lens_abcd',

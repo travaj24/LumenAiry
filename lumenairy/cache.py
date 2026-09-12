@@ -68,6 +68,7 @@ from typing import Any, Callable, Dict, Optional
 
 import numpy as np
 
+from ._knobs import register_knob as _register_knob
 from .memory import available_memory_bytes
 
 # ---------------------------------------------------------------------------
@@ -191,6 +192,33 @@ def set_cache_budget(mb: Optional[float]) -> None:
                     f"pass None to revert to the auto default.")
             _CACHE_BUDGET_OVERRIDE_BYTES = int(mb * 1024 * 1024)
         _enforce_global_budget_locked()
+
+
+def _get_cache_budget_override_mb() -> Optional[float]:
+    """Return the collective-cache budget OVERRIDE in MB, or None for auto.
+
+    The knob-registry getter for ``cache_budget``.  Deliberately not
+    :func:`get_cache_budget`, which returns the EFFECTIVE budget and calls
+    ``available_memory_bytes()`` (a psutil query) when no override is set:
+    snapshotting that would cost a syscall per test and would restore the
+    auto budget as a pinned one.  The MB <-> bytes round trip here is exact
+    -- 1024*1024 is a power of two, so the divide and the multiply in
+    :func:`set_cache_budget` only move the binary exponent.
+    """
+    with _BUDGET_MUTEX:
+        raw = _CACHE_BUDGET_OVERRIDE_BYTES
+    return None if raw is None else raw / (1024.0 * 1024.0)
+
+
+# Process-global with 15 call sites and 0 ``finally`` in the suite (audit
+# 2026-09-11 TESTS-ARCH P2-5).
+_register_knob(
+    'cache_budget',
+    getter=_get_cache_budget_override_mb, setter=set_cache_budget,
+    doc="Collective byte ceiling for ALL budgeted caches, in MB; None "
+        "(shipped, unless LUMENAIRY_CACHE_BUDGET_MB is set) means the auto "
+        "default min(512 MB, 10% of available RAM).  Lowering it evicts "
+        "globally on return.")
 
 
 # ---------------------------------------------------------------------------
