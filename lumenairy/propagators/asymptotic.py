@@ -18,11 +18,23 @@ What this is for
 The dominant cost in a wave-aware merit function for optical design is the
 diffraction integral evaluated *thousands of times* in the inner optimisation
 loop.  The asymptotic propagator runs ~10**3-10**4 times faster than direct
-quadrature per output pixel and produces a *physically-named* aberration
-tensor whose indices correspond to the classical Seidel/Zernike modes
-(spherical, coma, astigmatism, ...).  Optimising against that tensor
-directly is the optimisation analog of optimising against Strehl, but
-computable in milliseconds.
+quadrature per output pixel and produces an aberration tensor with
+*physically-suggestive* index names -- ``lg_seidel_label`` maps ``(p, |l|)``
+onto the classical Seidel names through the radial-order correspondence
+``n = 2p + |l|``, ``m = l``.
+
+**Read those names as labels, not as a Seidel decomposition (audit Y5).**
+``L`` is an overlap of the IMAGE-PLANE FIELD onto a real-waist
+Laguerre-Gauss basis, not a pupil wavefront-error expansion, and LG modes
+are not Zernike polynomials (they are orthonormal on R^2 under a Gaussian
+weight, not on the unit disc).  The module's own W4-T2 note, measured,
+records that the ``(2, 0)`` "spherical" channel "is an interference residue
+whose phase rotates with the design rather than a measure of spherical
+aberration", with **5 of 6 sign flips** across adjacent designs on the
+default basis.  Driving ``|L_{(2,0),0}|^2`` toward zero is therefore a
+merit on a mode overlap, not on the Seidel coefficient of the same name.
+For a genuine wavefront-error decomposition use
+:mod:`lumenairy.analysis.zernike` on a traced OPD map.
 
 Public API
 ----------
@@ -157,6 +169,7 @@ from .asymptotic_jax_twin import (  # noqa: F401
     solve_envelope_stationary_jax_ift,
 )
 from .asymptotic_maslov import (  # noqa: F401
+    B_QUAD_EXP_MAX,
     _batched_polynomial_substitute_linear_2d,
     _batched_polynomial_under_affine_shift,
     _compute_M_b_batch,
@@ -165,6 +178,7 @@ from .asymptotic_maslov import (  # noqa: F401
     _phi_v2_hessian_batch,
     _poly_dict_to_array,
     _solve_envelope_stationary_batch,
+    van_vleck_weight,
 )
 
 # Re-export submodule contents so existing call sites continue to
@@ -247,6 +261,56 @@ __all__ = [
 # in) -- patches on the shell would no longer take effect.  Leaving
 # the body here keeps the contract intact while still pushing the
 # batched/Maslov machinery into ``asymptotic_maslov.py``.
+
+
+
+def _warn_dropped_pixels(n_total, reasons, fn_name):
+    """Y4 (audit): one RuntimeWarning naming how many output pixels were
+    zeroed and why.
+
+    ``propagate_modal_asymptotic`` masks pixels to exactly 0 at six
+    independent gates (out-of-box s2, out-of-box v2 / non-finite Newton,
+    non-finite M or b, singular det M, overflowing b_quad, non-finite
+    amplitude) and can return an all-zero array from five separate early
+    exits -- silently.  The sibling ``propagate_hf_chebyshev_quadrature``
+    warns when its grids leave the fit box (audit W6-A16); the
+    inconsistency is the problem, because ``optimize/driver.py`` and
+    ``propagators/dispatch.py`` feed this field straight into
+    cross-propagator wave merits, where "mostly zero" is indistinguishable
+    from "dark".
+
+    ``reasons`` maps a short reason string to the boolean mask of pixels
+    that reason dropped (the masks are already separate booleans in the
+    caller).  Nothing is emitted when no pixel was dropped.
+    """
+    if not reasons or n_total <= 0:
+        return
+    dropped = np.zeros(n_total, dtype=bool)
+    counts = {}
+    for name, mask in reasons.items():
+        m = np.asarray(mask, dtype=bool)
+        new = m & ~dropped
+        n_new = int(np.count_nonzero(new))
+        if n_new:
+            counts[name] = n_new
+        dropped |= m
+    n_drop = int(np.count_nonzero(dropped))
+    if n_drop == 0:
+        return
+    import warnings as _w
+    dominant = max(counts, key=counts.get)
+    detail = ', '.join(f'{k}: {v}' for k, v in
+                       sorted(counts.items(), key=lambda kv: -kv[1]))
+    _w.warn(
+        f"{fn_name}: {n_drop}/{n_total} output pixels "
+        f"({100.0 * n_drop / n_total:.1f} %) were set to exactly ZERO; "
+        f"dominant reason '{dominant}' ({detail}).  A zeroed pixel is "
+        f"indistinguishable from a dark one downstream -- an all-zero "
+        f"return is a silent failure, not a dark field.  Out-of-box "
+        f"pixels mean the output grid (or the Newton saddle) left the "
+        f"fit's validity box: restrict the grid, or refit with a larger "
+        f"source_box_half / pupil_box_half.",
+        RuntimeWarning, stacklevel=3)
 
 
 def propagate_modal_asymptotic(
@@ -362,9 +426,23 @@ def propagate_modal_asymptotic(
            first-order grating on surface 1 the phase difference
            acquires a genuine spread of 5.369 rad (0.854 waves) across
            the grid because ``a1 = 2.017e+03`` waves of diffracted
-           tilt is removed.  The v2-linear part is negligible on every
-           case measured (``|a3| + |a4| <= 1.7e-09`` waves, amplitude
-           impact <= 3.2e-11), so the removal is phase-only.
+           tilt is removed.
+
+           **The v2-linear part is NOT removed (v5.46, audit Y1).**  The
+           v5.30 W6-A4 note used to say it was, on the strength of two
+           ON-AXIS measurements where ``|a3| + |a4| <= 1.7e-09`` waves.
+           That is a property of those fixtures, not of the convention:
+           ``a3 u3 + a4 u4`` is linear in the INTEGRATION variable ``v2``,
+           so dropping it moves the complex saddle and changes ``|E|``, not
+           just a phase reference.  Measured with ``source_centre =
+           (100 um, 0)`` on the stock singlet, where the rank-deficient
+           design splits a 2 700-wave ramp roughly 50/50 between ``a1``
+           and ``a3``: dropping it put the PSF at (-3.17e-04, -6.23e-04) m
+           with peak |E| 2.277e-05, against the chief ray at
+           (9.665e-05, 0) m with peak 1.9996e-03 -- ~700 um away and 88x
+           too small.  ``eval_phi`` / ``eval_phi_with_v2_grad`` therefore
+           always include ``a3 u3 + a4 u4``; ``include_linear`` gates only
+           ``a0 + a1 u1 + a2 u2``.
 
     Notes
     -----
@@ -399,19 +477,33 @@ def propagate_modal_asymptotic(
       measured a factor 55 low at ``k = 150``, 1.6 widths off-caustic
       (2.258e-08 vs a converged 1.250e-06).
 
-    **No radiometric normalisation.**  The return value is the bare
-    phase-space integral: no ``1/(i lambda z)``-class prefactor is applied
-    and ``fit.wavelength`` is never read here (the wavelength enters only
-    through ``Phi``, stored in waves).  Measured ``sum |E|^2 dA`` over the
-    whole fit box, with BOTH the source and pupil LG_{0,0} carrying unit
-    L2 norm: 1.657e-11 (w_s=50 um, w_p=0.05) / 5.128e-11 (20 um, 0.02) /
-    1.059e-10 (20 um, 0.002) -- so the amplitude is not on a
-    conserved-power scale, and it is not on the same scale as
-    :func:`propagate_hf_chebyshev_quadrature` (which applies an explicit
-    ``-1j`` Maslov factor and ``pixel_area``).  The evaluator IS exactly
-    linear in ``source_amplitudes`` / ``pupil_amplitudes`` (bitwise for a
-    real scale factor, 6.4e-16 for a complex one), so supply your own
-    prefactor if you need absolute radiometry.
+    **Radiometric normalisation (v5.46, audit Y2).**  The integrand now
+    carries the Van Vleck-Maslov weight ``-1j sqrt(|det ds1/dv2|) /
+    lambda`` (see
+    :func:`~lumenairy.propagators.asymptotic_maslov.van_vleck_weight`), so
+    the return value IS on an absolute field scale and on the same scale as
+    :func:`propagate_hf_chebyshev_quadrature` and Fresnel / ASM.  Verified
+    against an exact free-space chart (a synthetic fit encoding
+    ``s1 = s2 - z v2``, ``Phi = (z + z|v2|^2/2)/lambda``, z = 20 mm,
+    lambda = 1 um) versus the analytic q-parameter Gaussian beam:
+    ``E_code / E_analytic = 1.0000000000128`` with a spatial spread of
+    4.2e-11.  Before v5.46 the weight was ``|det ds1/dv2|`` with no
+    ``1/lambda``, i.e. the output was ``i lambda sqrt(|det J|)`` times the
+    true field -- wavelength- AND field-point-dependent, not the "arbitrary
+    constant" the old text described.
+
+    What is still NOT a conserved power is the PUPIL-MODE convention:
+    ``pupil_amplitudes`` is an extra soft Gaussian aperture in output
+    direction cosine whose LG normalisation ``sqrt(2/(pi w_p^2))`` rides
+    inside the integral, so narrowing ``w_p`` changes the transmitted
+    power by construction.  Measured ``sum |E|^2 dA`` over the fit box with
+    both LG_{0,0} at unit L2 norm: 247.3 (w_s=50 um, w_p=0.05) / 756.5
+    (20 um, 0.02) / 1583.1 (20 um, 0.002) -- a factor 6.40 spread, the
+    SAME spread as before the normalisation fix, which is how you can tell
+    it belongs to the pupil convention rather than to the scale.  The
+    evaluator is exactly linear in ``source_amplitudes`` /
+    ``pupil_amplitudes`` (bitwise for a real scale factor, 6.4e-16 for a
+    complex one).
 
     **v4.15 vectorisation closure.**  Prior to v4.15 this function
     used a per-pixel Python loop with a warm-started Newton chain.
@@ -508,6 +600,18 @@ def propagate_modal_asymptotic(
     u2 = (flat_y - fit.s2y_centre) / fit.s2y_halfrange
     in_box_s2 = (np.abs(u1) <= 1.0) & (np.abs(u2) <= 1.0)
 
+    # Y4 (audit): record WHY each pixel was zeroed, and say so once on the
+    # way out (see :func:`_warn_dropped_pixels`).  ``_finish`` is the single
+    # exit point; every ``return flat_out.reshape(...)`` below routes
+    # through it so an early exit is as audible as the normal one.
+    _drop_reasons: Dict[str, np.ndarray] = {
+        'output grid outside the s2 fit box': ~in_box_s2}
+
+    def _finish():
+        _warn_dropped_pixels(flat_x.size, _drop_reasons,
+                             'propagate_modal_asymptotic')
+        return flat_out.reshape(s2x_arr.shape)
+
     # ---- Batched cold-start Newton solve ----------------------------
     try:
         v2x_star, v2y_star, _conv = _solve_envelope_stationary_batch(
@@ -515,7 +619,7 @@ def propagate_modal_asymptotic(
             w_s=w_s, w_p=w_p, v_cx=v_cx, v_cy=v_cy,
         )
     except (np.linalg.LinAlgError, ValueError, OverflowError):
-        return flat_out.reshape(s2x_arr.shape)
+        return _finish()
 
     # Replace any non-finite Newton outputs with v_centre to keep the
     # downstream M/b batch evaluation in-domain.
@@ -528,10 +632,11 @@ def propagate_modal_asymptotic(
     u4 = (v2y_star - fit.v2y_centre) / fit.v2y_halfrange
     in_box_v = ((np.abs(u3) <= 1.0) & (np.abs(u4) <= 1.0)
                 & (~bad_v))
+    _drop_reasons['Newton saddle outside the v2 fit box'] = ~in_box_v
 
     valid = in_box_s2 & in_box_v
     if not np.any(valid):
-        return flat_out.reshape(s2x_arr.shape)
+        return _finish()
 
     # ---- Batched M, b, J*, phi*, G0, detJ ---------------------------
     try:
@@ -542,15 +647,16 @@ def propagate_modal_asymptotic(
             )
         )
     except (np.linalg.LinAlgError, ValueError, OverflowError):
-        return flat_out.reshape(s2x_arr.shape)
+        return _finish()
 
     finite_M = np.all(np.isfinite(M_all.real) & np.isfinite(M_all.imag),
                       axis=(-2, -1))
     finite_b = np.all(np.isfinite(b_all.real) & np.isfinite(b_all.imag),
                       axis=-1)
+    _drop_reasons['non-finite M or b'] = ~(finite_M & finite_b)
     valid = valid & finite_M & finite_b
     if not np.any(valid):
-        return flat_out.reshape(s2x_arr.shape)
+        return _finish()
 
     # ---- Closed-form 2x2 det / inverse with sentinel masking --------
     a00 = M_all[:, 0, 0]
@@ -560,9 +666,10 @@ def propagate_modal_asymptotic(
     det_M = a00 * a11 - a01 * a10
     abs_det = np.abs(det_M)
     ok_det = np.isfinite(abs_det) & (abs_det >= 1e-300)
+    _drop_reasons['singular det M'] = ~ok_det
     valid = valid & ok_det
     if not np.any(valid):
-        return flat_out.reshape(s2x_arr.shape)
+        return _finish()
 
     safe_det = np.where(ok_det, det_M, 1.0 + 0.0j)
     inv_det = 1.0 / safe_det
@@ -574,6 +681,7 @@ def propagate_modal_asymptotic(
     finite_Minv = np.all(np.isfinite(M_inv_all.real)
                           & np.isfinite(M_inv_all.imag),
                           axis=(-2, -1))
+    _drop_reasons['non-finite M inverse'] = ~finite_Minv
     valid = valid & finite_Minv
 
     # ---- b_quad = 0.25 * b^T M^-1 b ---------------------------------
@@ -581,10 +689,12 @@ def propagate_modal_asymptotic(
     b_quad = 0.25 * (b_all[:, 0] * Minv_b[:, 0]
                       + b_all[:, 1] * Minv_b[:, 1])
     delta_star_all = 0.5 * Minv_b
-    ok_bquad = np.isfinite(np.abs(b_quad)) & (np.abs(b_quad.real) <= 700.0)
+    ok_bquad = (np.isfinite(np.abs(b_quad))
+                & (np.abs(b_quad.real) <= B_QUAD_EXP_MAX))
+    _drop_reasons['overflowing exp(b_quad)'] = ~ok_bquad
     valid = valid & ok_bquad
     if not np.any(valid):
-        return flat_out.reshape(s2x_arr.shape)
+        return _finish()
 
     # ---- sqrt(det M) with Maslov-branch unwrap ----------------------
     # v5.30 (audit W6-A1): 'principal' is the default and the only
@@ -592,7 +702,17 @@ def propagate_modal_asymptotic(
     # so arg(det M) is confined to (-pi, +pi) and det M never crosses
     # the principal cut.  See the ``maslov_tracking`` docstring.
     if maslov_tracking == 'principal':
-        sqrt_detM_all = np.sqrt(det_M)
+        # Y4 (audit): sqrt only the VALID entries.  ``det_M`` carries NaN
+        # wherever the batched Newton left the fit box, and taking
+        # ``np.sqrt`` of the whole array leaked a bare
+        # "RuntimeWarning: invalid value encountered in sqrt" from a
+        # routine call -- followed by "invalid value encountered in
+        # divide" at the ``math.pi / safe_sqrt`` below, because the
+        # dtype-aware sentinel ``np.where(sqrt != 0, ...)`` does not catch
+        # NaN (``NaN != 0`` is True).  Substituting 1 on the invalid
+        # entries is bit-identical on the valid ones.
+        sqrt_detM_all = np.sqrt(np.where(valid, det_M,
+                                          np.ones((), dtype=det_M.dtype)))
     else:
         sqrt_detM_all = np.empty_like(det_M)
         last_arg = None
@@ -637,26 +757,29 @@ def propagate_modal_asymptotic(
     sqrt_dtype = sqrt_detM_all.dtype
     bquad_dtype = b_quad.dtype
     phi_dtype = phi_star_all.dtype
-    safe_sqrt = np.where(sqrt_detM_all != 0, sqrt_detM_all,
+    safe_sqrt = np.where(valid & (sqrt_detM_all != 0), sqrt_detM_all,
                           np.ones((), dtype=sqrt_dtype))
     safe_bquad = np.where(ok_bquad, b_quad,
                            np.zeros((), dtype=bquad_dtype))
     safe_phi = np.where(np.isfinite(phi_star_all), phi_star_all,
                          np.zeros((), dtype=phi_dtype))
-    amp_lead_all = (detJ_all
+    safe_detJ = np.where(valid & np.isfinite(detJ_all), detJ_all,
+                          np.zeros((), dtype=detJ_all.dtype))
+    amp_lead_all = (van_vleck_weight(safe_detJ, fit.wavelength)
                     * (math.pi / safe_sqrt)
                     * G0_all
                     * np.exp(2j * math.pi * safe_phi)
                     * np.exp(safe_bquad))
     ok_amp = np.isfinite(np.abs(amp_lead_all))
+    _drop_reasons['non-finite leading amplitude'] = ~ok_amp
     valid = valid & ok_amp
     if not np.any(valid):
-        return flat_out.reshape(s2x_arr.shape)
+        return _finish()
 
     # ---- Batched eta moment table -----------------------------------
     valid_idx = np.where(valid)[0]
     if valid_idx.size == 0:
-        return flat_out.reshape(s2x_arr.shape)
+        return _finish()
     M_valid = M_all[valid_idx]
     moment_keys, moment_table_valid = _gaussian_moment_table_2d_batch(
         M_valid, max_order_needed,
@@ -765,4 +888,4 @@ def propagate_modal_asymptotic(
     flat_out = np.where(finite_out, flat_out,
                          np.zeros((), dtype=flat_out.dtype))
 
-    return flat_out.reshape(s2x_arr.shape)
+    return _finish()

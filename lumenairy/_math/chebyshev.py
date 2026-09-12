@@ -287,6 +287,24 @@ def chebyshev_fit_2d(x: np.ndarray,
         Required for Chebyshev orthogonality on a finite aperture;
         set False only if the caller has already normalised ``x``,
         ``y`` themselves.
+
+        **The normalisation is an AFFINE map, not a pure scale**
+        (``2 (x - x.min()) / span - 1``), so it includes a SHIFT
+        whenever the sampled grid is not centred on 0.  The library's
+        evaluator
+        :func:`lumenairy.elements.freeform.surface_sag_chebyshev`
+        applies only a SCALE (``T_i(x / norm_x)``), so the emitted
+        coefficients round-trip through it **only for a centred grid**
+        -- ``x.min() == -x.max()`` and likewise in y -- with
+        ``norm_x = x.max()``, ``norm_y = y.max()``.  A grid offset by
+        ``x0`` is fitted about its own midpoint and evaluated about the
+        axis, and the two differ by that shift at every order.  The
+        round-trip claim used to be stated unconditionally; an
+        off-centre grid whose fit has any NON-CONSTANT term now emits a
+        ``RuntimeWarning`` saying so (``T_0 T_0`` alone is
+        shift-invariant, so a constant fit is silent).  Pass
+        ``normalize_xy=False`` (having normalised yourself) if you want
+        an off-centre fit and will evaluate it in the same frame.
     return_residual : bool, optional
         If True, also return the residual ``z - z_fit`` evaluated on
         the original grid (NaN where ``weight <= 0`` so the masked
@@ -338,10 +356,24 @@ def chebyshev_fit_2d(x: np.ndarray,
                 "chebyshev_fit_2d: cannot normalise -- x or y has "
                 "zero extent.  Pass normalize_xy=False if you have "
                 "already scaled the coordinates.")
+        # The normalisation is AFFINE.  On an off-centre grid its SHIFT is not
+        # reproducible by ``surface_sag_chebyshev``'s pure-scale
+        # ``T_i(x / norm_x)``, so coefficients fitted here do NOT round-trip
+        # through the library's own evaluator -- which is what this function's
+        # contract promises.  Measure the offset now (in units of the span, so
+        # a grid centred to within a sample reads ~0) and report it after the
+        # solve, once it is known whether any non-constant term survived: a
+        # pure ``T_0 T_0`` fit is shift-invariant and needs no notice.
+        _x_off = abs(float(x.max() + x.min())) / x_span
+        _y_off = abs(float(y.max() + y.min())) / y_span
+        _off_centre = (_x_off > 2.0 / max(x.size - 1, 1)
+                       or _y_off > 2.0 / max(y.size - 1, 1))
         x_norm = 2.0 * (x - x.min()) / x_span - 1.0
         y_norm = 2.0 * (y - y.min()) / y_span - 1.0
     else:
         x_norm, y_norm = x, y
+        _off_centre = False
+        _x_off = _y_off = 0.0
 
     X, Y = np.meshgrid(x_norm, y_norm, indexing='xy')
     # chebvander2d builds the design matrix of shape
@@ -390,6 +422,26 @@ def chebyshev_fit_2d(x: np.ndarray,
         for j in range(n_max_y + 1)
         if abs(coeffs_2d[i, j]) > 1e-12
     }
+
+    # The off-centre round-trip notice (see ``normalize_xy``).  Emitted only
+    # when a NON-CONSTANT term survived: ``T_0 T_0`` is shift-invariant, so a
+    # constant fit on an off-centre grid round-trips regardless.
+    if _off_centre and any(i or j for (i, j) in coeffs_dict):
+        import warnings as _w
+        _w.warn(
+            f"chebyshev_fit_2d: normalize_xy=True fits about the GRID's own "
+            f"midpoint (an affine map: 2(x - x.min())/span - 1), while "
+            f"lumenairy.elements.freeform.surface_sag_chebyshev evaluates "
+            f"about the AXIS (a pure scale, T_i(x/norm_x)).  This grid is off "
+            f"centre by {_x_off:.3g} of its x span and {_y_off:.3g} of its y "
+            f"span (x in [{float(x.min()):.6g}, {float(x.max()):.6g}], y in "
+            f"[{float(y.min()):.6g}, {float(y.max()):.6g}]), and the fit has "
+            f"non-constant terms, so these coefficients do NOT round-trip "
+            f"through that evaluator.  Centre the grid on 0 (then "
+            f"norm_x = x.max(), norm_y = y.max()), or pass "
+            f"normalize_xy=False with coordinates you have normalised "
+            f"yourself and will evaluate in the same frame.",
+            RuntimeWarning, stacklevel=2)
 
     if return_residual:
         z_fit = chebval2d(X, Y, coeffs_2d).reshape(z.shape)

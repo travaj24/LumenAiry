@@ -422,7 +422,13 @@ def test_el20_fold_split_forwards_progress():
 @pytest.mark.parametrize('fn,dead', [
     ('_integrate_quadrature', ('K1_arr', 'K2_arr')),
     ('_integrate_stationary_phase', ('v2x_c', 'v2y_c')),
-    ('_integrate_levin', ('mi', 'v2x_h', 'v2y_h')),
+    # v5.46 (audit S4): ``v2x_h`` / ``v2y_h`` are BACK on ``_integrate_levin``
+    # and are read -- they are no longer dead.  The Van Vleck density
+    # ``sqrt(|det ds1/dv2|)`` does not cancel against the ``d^2 v2`` measure
+    # the way the pre-S4 ``|det ds1/dv2|`` did, so the normalised-unit-box
+    # Levin engine has to carry ``sqrt(v2x_h * v2y_h)`` explicitly.  The
+    # liveness is asserted below rather than merely assumed.
+    ('_integrate_levin', ('mi',)),
     ('_integrate_local_quadrature', ('mi', 'v2x_c', 'v2y_c')),
 ])
 def test_el9_maslov_integrators_have_no_dead_args(fn, dead):
@@ -433,3 +439,26 @@ def test_el9_maslov_integrators_have_no_dead_args(fn, dead):
     params = set(inspect.signature(getattr(_mz, fn)).parameters)
     assert not (params & set(dead)), (
         f"{fn} still takes never-read arg(s) {sorted(params & set(dead))}")
+
+
+def test_s4_levin_reads_the_v2_half_widths_it_takes():
+    """The counter-pin to the row above: ``_integrate_levin`` takes
+    ``v2x_h`` / ``v2y_h`` again (audit S4) and must READ them, or the E-L9
+    "no dead args" contract has simply been re-broken.
+
+    They enter as ``sqrt(v2x_h * v2y_h)`` -- the physical ``d^2 v2`` measure
+    that the unit-box Levin engine cannot supply once the integrand weight is
+    the SQUARE ROOT of the Jacobian.  Measured: with the measure in place the
+    Levin path reproduces the exact free-space field to 0.999394 in modulus
+    and -8.4e-04 rad in phase (``normalize_output='none'``, vs
+    ``angular_spectrum_propagate``), matching ``quadrature``'s 1.000667 /
+    +4e-05 on the same chart -- i.e. all four integrators are on one
+    absolute scale.
+    """
+    params = set(inspect.signature(_mz._integrate_levin).parameters)
+    assert {'v2x_h', 'v2y_h'} <= params, (
+        '_integrate_levin must take the v2 half-widths (audit S4)')
+    src = inspect.getsource(_mz._integrate_levin)
+    assert 'v2x_h * v2y_h' in src, (
+        '_integrate_levin takes v2x_h / v2y_h but never reads them -- the '
+        'E-L9 dead-argument contract is re-broken')

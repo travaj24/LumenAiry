@@ -37,12 +37,76 @@ def _jax_available():
     return _JA
 
 
+def _require_jax_x64(fn_name: str) -> None:
+    """Require JAX double precision on the traced real-lens JAX path.
+
+    These propagators build a phase screen ``exp(i k0 OPL)`` from an optical
+    path length of order millimetres at a wavelength of order a micron, i.e.
+    ``k0 * OPL ~ 1e4 rad``.  float32 carries ~7 significant digits, so the
+    ROUNDING of that piston alone is ~1e-3 rad and the Chebyshev fit /
+    Newton inversion that produce it are differenced quantities on top --
+    measured OPD error 1.5e-4 ... 1.8e-3 waves rms against an exact ray
+    oracle, versus 2e-10 ... 3e-9 waves with x64 (a factor ~1e6).  JAX
+    silently truncates a complex128 input at ``jnp.asarray`` and returns
+    complex64 unless ``jax_enable_x64`` is set, so the loss is invisible in
+    the result's dtype contract too.
+
+    A warning is not enough for a silently-wrong numeric result, and
+    flipping ``jax.config`` here would be a global mutation that is unsafe
+    mid-trace when the caller jits the whole call -- so RAISE, exactly as
+    :func:`lumenairy.elements.rcwa._core._require_jax_x64` does for the
+    RCWA eigenproblem.  Enabling x64 is a one-line caller setup.
+    """
+    import jax
+    try:
+        enabled = bool(jax.config.read("jax_enable_x64"))
+    except (AttributeError, KeyError, TypeError, ValueError):
+        # Older / future jax configs without ``read`` or without that key.
+        enabled = bool(getattr(jax.config, "jax_enable_x64", False))
+    if not enabled:
+        raise RuntimeError(
+            f"{fn_name}: the JAX (differentiable) real-lens path requires "
+            f"double precision, but jax_enable_x64 is disabled -- JAX would "
+            f"silently truncate the complex128 field to complex64 and the "
+            f"exp(i k0 OPL) phase screen (k0*OPL ~ 1e4 rad here) would carry "
+            f"~1e-3 waves of rounding instead of ~1e-9.  Enable it once at "
+            f"import: jax.config.update('jax_enable_x64', True).  (The NumPy "
+            f"apply_real_lens_traced / apply_real_lens_maslov have no such "
+            f"requirement.)")
+
+
 # Sibling-module imports.  apply_real_lens (analytic split-step) is
 # the workhorse for the amplitude leg of the JAX traced/Maslov
 # variants; called via jax.pure_callback wrapped in jax.custom_jvp
 # so jax.grad through E_in works.
 from ..glass import get_glass_index
 from ._lens_real import apply_real_lens
+
+
+def _resolve_exit_index_from_prescription(prescription, wavelength, fn_name):
+    """Refractive index of the medium after the prescription's last surface.
+
+    The ``n_exit`` argument of
+    :func:`~lumenairy.raytrace.jax_trace.exit_vertex_transfer_jax`.  Mirrors
+    :func:`lumenairy.raytrace.exit_vertex.resolve_exit_index` for a raw
+    prescription dict (the JAX path never builds ``Surface`` objects), and
+    names the function in the failure message rather than letting a bare
+    ``KeyError`` escape the glass registry.  Both JAX entry points refuse
+    mirror surfaces upstream, so only the refracting case is handled here.
+    """
+    surfaces_raw = prescription.get('surfaces') or []
+    if not surfaces_raw:
+        raise ValueError(
+            f"{fn_name}: prescription carries no surfaces, so the exit-medium "
+            f"index cannot be resolved.")
+    name = surfaces_raw[-1].get('glass_after', 'air')
+    try:
+        return float(get_glass_index(name, wavelength))
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{fn_name}: could not resolve the exit-medium index for "
+            f"surfaces[-1]['glass_after']={name!r} at wavelength="
+            f"{wavelength!r} m ({type(exc).__name__}: {exc}).") from exc
 
 # ----------------------------------------------------------------------
 # JAX helpers shared by apply_real_lens_traced_jax and
@@ -437,9 +501,14 @@ def apply_real_lens_traced_jax(
     if not _jax_available():
         raise ImportError(
             "JAX is not installed; install with `pip install jax`")
+    _require_jax_x64('apply_real_lens_traced_jax')
     import jax.numpy as jnp
 
-    from ..raytrace.jax_trace import make_jax_ray_state, trace_jax
+    from ..raytrace.jax_trace import (
+        exit_vertex_transfer_jax,
+        make_jax_ray_state,
+        trace_jax,
+    )
 
     # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
     # from ``apply_real_lens_traced``.  Pre-fix a hand-built prescription
@@ -551,19 +620,15 @@ def apply_real_lens_traced_jax(
         final = trace_jax(state, pres_no_ap, wavelength)
 
     # ---- Exit-vertex correction -------------------------------------
-    surfaces_raw = pres_no_ap.get('surfaces', [])
-    n_exit = float(get_glass_index(
-        surfaces_raw[-1].get('glass_after', 'air'), wavelength))
-    eps = 1e-30
-    safe_N = jnp.where(jnp.abs(final.N) > eps, final.N, eps)
-    t_to_vertex = jnp.where(final.alive, -final.z / safe_N, 0.0)
-    final_x = final.x + final.L * t_to_vertex
-    final_y = final.y + final.M * t_to_vertex
-    final_opd = final.opd + n_exit * t_to_vertex
+    # Shared operator (audit 15.1): signed t = -z/N to the last surface's
+    # vertex plane, grazing rays killed rather than given t = -z/1e-30.
+    n_exit = float(_resolve_exit_index_from_prescription(
+        pres_no_ap, wavelength, 'apply_real_lens_traced_jax'))
+    final = exit_vertex_transfer_jax(final, n_exit)
 
-    x_out_grid = final_x.reshape(n_launch, n_launch)
-    y_out_grid = final_y.reshape(n_launch, n_launch)
-    opl_grid = final_opd.reshape(n_launch, n_launch)
+    x_out_grid = final.x.reshape(n_launch, n_launch)
+    y_out_grid = final.y.reshape(n_launch, n_launch)
+    opl_grid = final.opd.reshape(n_launch, n_launch)
     # Reference OPL to on-axis (n_launch is odd by construction).
     i_axis = n_launch // 2
     opl_grid = opl_grid - opl_grid[i_axis, i_axis]
@@ -598,27 +663,23 @@ def apply_real_lens_traced_jax(
     # difference slope of the forward map as in the NumPy version.
     di = max(1, n_launch // 8)
     dx_in = 2.0 * float(launch_radius) / (n_launch - 1)
-    if _diff_geom:
-        # tracer-safe: keep the initial guess as JAX scalars and stop_gradient
-        # (the Newton root is independent of the starting point, so the
-        # initial-guess magnification needs no gradient -- and x_out_grid is a
-        # tracer here, so float() would raise a ConcretizationError).
-        import jax as _jax
-        _dxox = (x_out_grid[i_axis + di, i_axis]
-                 - x_out_grid[i_axis - di, i_axis]) / (2.0 * di * dx_in)
-        _dyoy = (y_out_grid[i_axis, i_axis + di]
-                 - y_out_grid[i_axis, i_axis - di]) / (2.0 * di * dx_in)
-        inv_M_x = _jax.lax.stop_gradient(
-            jnp.where(jnp.abs(_dxox) > 1e-9, 1.0 / _dxox, 1.10))
-        inv_M_y = _jax.lax.stop_gradient(
-            jnp.where(jnp.abs(_dyoy) > 1e-9, 1.0 / _dyoy, 1.10))
-    else:
-        dx_out_x = float(x_out_grid[i_axis + di, i_axis] -
-                          x_out_grid[i_axis - di, i_axis]) / (2.0 * di * dx_in)
-        dy_out_y = float(y_out_grid[i_axis, i_axis + di] -
-                          y_out_grid[i_axis, i_axis - di]) / (2.0 * di * dx_in)
-        inv_M_x = 1.0 / dx_out_x if abs(dx_out_x) > 1e-9 else 1.10
-        inv_M_y = 1.0 / dy_out_y if abs(dy_out_y) > 1e-9 else 1.10
+    # S7 (audit): the initial-guess magnification is taken tracer-safe on BOTH
+    # branches.  The ``float(x_out_grid[...])`` the static branch used raised
+    # ConcretizationTypeError under ``jax.jit``, so the DEFAULT path of this
+    # function -- the one the docstring advertises as "vmap+JIT replaces the
+    # [NumPy] pool" -- could not be jitted at all.  The Newton root does not
+    # depend on the starting point, so ``stop_gradient`` keeps the geometry
+    # gradient identical to the pre-fix ``_diff_geom`` branch, and the same
+    # float64 arithmetic makes the static branch's guess unchanged.
+    import jax as _jax
+    _dxox = (x_out_grid[i_axis + di, i_axis]
+             - x_out_grid[i_axis - di, i_axis]) / (2.0 * di * dx_in)
+    _dyoy = (y_out_grid[i_axis, i_axis + di]
+             - y_out_grid[i_axis, i_axis - di]) / (2.0 * di * dx_in)
+    inv_M_x = _jax.lax.stop_gradient(
+        jnp.where(jnp.abs(_dxox) > 1e-9, 1.0 / _dxox, 1.10))
+    inv_M_y = _jax.lax.stop_gradient(
+        jnp.where(jnp.abs(_dyoy) > 1e-9, 1.0 / _dyoy, 1.10))
     bound = float(launch_radius) * 0.999
 
     xe, ye = _newton_invert_2d_jax(
@@ -738,9 +799,14 @@ def apply_real_lens_maslov_jax(
     if not _jax_available():
         raise ImportError(
             "JAX is not installed; install with `pip install jax`")
+    _require_jax_x64('apply_real_lens_maslov_jax')
     import jax.numpy as jnp
 
-    from ..raytrace.jax_trace import make_jax_ray_state, trace_jax
+    from ..raytrace.jax_trace import (
+        exit_vertex_transfer_jax,
+        make_jax_ray_state,
+        trace_jax,
+    )
 
     # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
     # from ``apply_real_lens_traced``.
@@ -824,19 +890,14 @@ def apply_real_lens_maslov_jax(
     )
     final = trace_jax(state, pres_no_ap, wavelength)
 
-    surfaces_raw = pres_no_ap.get('surfaces', [])
-    n_exit = float(get_glass_index(
-        surfaces_raw[-1].get('glass_after', 'air'), wavelength))
-    eps = 1e-30
-    safe_N = jnp.where(jnp.abs(final.N) > eps, final.N, eps)
-    t_to_vertex = jnp.where(final.alive, -final.z / safe_N, 0.0)
-    final_x = final.x + final.L * t_to_vertex
-    final_y = final.y + final.M * t_to_vertex
-    final_opd = final.opd + n_exit * t_to_vertex
+    # Shared exit-vertex operator (audit 15.1), as in the traced twin.
+    n_exit = float(_resolve_exit_index_from_prescription(
+        pres_no_ap, wavelength, 'apply_real_lens_maslov_jax'))
+    final = exit_vertex_transfer_jax(final, n_exit)
 
-    x_out_grid = final_x.reshape(n_launch, n_launch)
-    y_out_grid = final_y.reshape(n_launch, n_launch)
-    opl_grid = final_opd.reshape(n_launch, n_launch)
+    x_out_grid = final.x.reshape(n_launch, n_launch)
+    y_out_grid = final.y.reshape(n_launch, n_launch)
+    opl_grid = final.opd.reshape(n_launch, n_launch)
     i_axis = n_launch // 2
     opl_grid = opl_grid - opl_grid[i_axis, i_axis]
 
@@ -864,12 +925,17 @@ def apply_real_lens_maslov_jax(
 
     di = max(1, n_launch // 8)
     dx_in = 2.0 * float(launch_radius) / (n_launch - 1)
-    dx_out_x = float(x_out_grid[i_axis + di, i_axis] -
-                      x_out_grid[i_axis - di, i_axis]) / (2.0 * di * dx_in)
-    dy_out_y = float(y_out_grid[i_axis, i_axis + di] -
-                      y_out_grid[i_axis, i_axis - di]) / (2.0 * di * dx_in)
-    inv_M_x = 1.0 / dx_out_x if abs(dx_out_x) > 1e-9 else 1.10
-    inv_M_y = 1.0 / dy_out_y if abs(dy_out_y) > 1e-9 else 1.10
+    # S7 (audit): tracer-safe initial guess so the default path is jit-able
+    # (see the traced twin for the derivation).
+    import jax as _jax
+    _dxox = (x_out_grid[i_axis + di, i_axis]
+             - x_out_grid[i_axis - di, i_axis]) / (2.0 * di * dx_in)
+    _dyoy = (y_out_grid[i_axis, i_axis + di]
+             - y_out_grid[i_axis, i_axis - di]) / (2.0 * di * dx_in)
+    inv_M_x = _jax.lax.stop_gradient(
+        jnp.where(jnp.abs(_dxox) > 1e-9, 1.0 / _dxox, 1.10))
+    inv_M_y = _jax.lax.stop_gradient(
+        jnp.where(jnp.abs(_dyoy) > 1e-9, 1.0 / _dyoy, 1.10))
     bound = float(launch_radius) * 0.999
 
     xe, ye = _newton_invert_2d_jax(

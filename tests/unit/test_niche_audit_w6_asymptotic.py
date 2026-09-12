@@ -269,6 +269,7 @@ from lumenairy.propagators.asymptotic import (
     fit_canonical_polynomials,
     lg_polynomial,
     propagate_modal_asymptotic,
+    van_vleck_weight,
 )
 
 WL = 1.31e-6
@@ -413,7 +414,12 @@ def _quad_oracle(fit, s2x, s2y, *, src, w_s, w_p, v_c, v_star, n, half):
     S2X = np.full(VX.shape, float(s2x))
     S2Y = np.full(VX.shape, float(s2y))
     s1x, s1y, jxx, jxy, jyx, jyy = fit.eval_s1_with_v2_grad(S2X, S2Y, VX, VY)
-    detJ = np.abs(jxx * jyy - jxy * jyx)
+    # v5.46 (audit Y2): the Van Vleck-Maslov weight of this integral is
+    # ``-1j sqrt(|det J|) / lambda``, not ``|det J|``.  This oracle is a
+    # from-scratch quadrature of the SAME integral the engine approximates,
+    # so it carries the same weight; leaving the pre-Y2 ``detJ`` here would
+    # compare the engine against an integral it no longer evaluates.
+    detJ = van_vleck_weight(np.abs(jxx * jyy - jxy * jyx), fit.wavelength)
     phi = fit.eval_phi(S2X, S2Y, VX, VY, include_linear=False)
     rx, ry = s1x - src[0], s1y - src[1]
     dvx, dvy = VX - v_c[0], VY - v_c[1]
@@ -847,7 +853,8 @@ def _a9_quad(fit, v_star, half, n, src_modes, pup_modes):
     S2X = np.full(VX.shape, float(sx))
     S2Y = np.full(VX.shape, float(sy))
     s1x, s1y, jxx, jxy, jyx, jyy = fit.eval_s1_with_v2_grad(S2X, S2Y, VX, VY)
-    detJ = np.abs(jxx * jyy - jxy * jyx)
+    # v5.46 (audit Y2): Van Vleck-Maslov weight -- see ``_quad_oracle``.
+    detJ = van_vleck_weight(np.abs(jxx * jyy - jxy * jyx), fit.wavelength)
     phi = fit.eval_phi(S2X, S2Y, VX, VY, include_linear=False)
     rx, ry = s1x - src[0], s1y - src[1]
     dvx, dvy = VX - v_c[0], VY - v_c[1]
@@ -1176,18 +1183,30 @@ def test_w6_a4_diffracted_tilt_is_removed_from_the_returned_phase():
     the evaluators drop it, so the returned phase acquires a genuine
     SPREAD of 5.369 rad (0.8545 waves) relative to the
     ``extract_linear_phase=False`` fit -- while the amplitude still agrees
-    to 5.93e-09.  The v2-linear part stays negligible
-    (``|a3| + |a4| = 6.23e-10`` waves), which is why the amplitude
-    survives."""
+    to 5.93e-09.  The v2-linear part of THIS fixture's ramp is negligible
+    (``|a3| + |a4| = 6.23e-10`` waves), so the phase spread below is
+    unambiguously the s2-tilt.  (Since v5.46 / audit Y1 the v2-linear part
+    is never dropped, so the amplitude would survive even if it were
+    large -- see ``test_audit2609_a4_asymptotic.py``.)"""
     fa, fb = _fit_extract(True, 2e-6), _fit_extract(False, 2e-6)
     a0, a1, a2, a3, a4 = (float(c) for c in fa.linear_coeffs_phi)
     assert abs(a1) > 1e3, (
         f'premise: the grating must put a large output-plane tilt in the '
         f'ramp; a1 = {a1:.6e} waves (measured 2.0172e+03)')
+    # v5.46 (audit Y1): this used to read "must stay negligible or the
+    # omission would corrupt the AMPLITUDE too" -- a PREMISE that the
+    # authors knew was load-bearing, and that the on-axis fixtures happened
+    # to satisfy.  The v2-linear part is no longer omitted (it is inside the
+    # integrand, where it belongs), so nothing here depends on it being
+    # small; the assertion is kept as a CHARACTERISATION of this fixture --
+    # a surface-1 grating puts its ramp entirely in a1, not a3, so the phase
+    # spread below is unambiguously the s2-tilt.  The off-axis case, where
+    # a3 is 2.7e+03 waves and the amplitude is preserved anyway, is pinned
+    # in tests/unit/test_audit2609_a4_asymptotic.py.
     assert abs(a3) + abs(a4) < 1e-8, (
-        f'the v2-linear part of the ramp must stay negligible or the '
-        f'omission would corrupt the AMPLITUDE too; |a3| + |a4| = '
-        f'{abs(a3) + abs(a4):.3e} waves (measured 6.23e-10)')
+        f'fixture characterisation: a surface-1 grating puts its ramp in '
+        f'a1 alone; |a3| + |a4| = {abs(a3) + abs(a4):.3e} waves (measured '
+        f'6.23e-10)')
     X, Y = _grid(fa, 9, frac=0.6)
     Ea = _field(fa, X, Y, 20e-6, 0.02, 'principal')
     Eb = _field(fb, X, Y, 20e-6, 0.02, 'principal')
@@ -1251,23 +1270,37 @@ def test_w6_a7_output_power_converges_under_grid_refinement():
     assert P[-1] > 0.0
 
 
-def test_w6_a7_output_field_carries_no_radiometric_normalisation():
-    """GREEN pre- and post-fix -- pins a DOCUMENTATION GAP, not a bug.
-    ``propagate_modal_asymptotic`` returns the BARE phase-space integral:
-    it applies no ``1/(i lambda z)``-class prefactor and never reads
-    ``fit.wavelength`` at all (the wavelength enters only through ``Phi``,
-    which the fit stores in waves).  So the returned amplitude is NOT on a
-    conserved-power scale and is NOT on the same scale as
-    ``propagate_hf_chebyshev_quadrature`` (which does apply an explicit
-    ``* (-1j)`` Maslov factor plus ``pixel_area`` -- see the F-21 comment
-    at the end of that function).
+def test_w6_a7_output_field_carries_the_van_vleck_normalisation():
+    """v5.46 INVERTED (audit Y2).
 
-    MEASURED on a 257x257 grid over 0.995 of the fit box: both the source
-    and the pupil LG_{0,0} carry unit L2 norm, yet ``sum |E|^2 dA`` comes
-    out 1.657151e-11 (w_s=50 um, w_p=0.05) / 5.128074e-11 (20 um, 0.02) /
-    1.058618e-10 (20 um, 0.002) / 8.532070e-11 (20 um, 2e-4) -- a factor
-    6.4 spread with no fixed relation to the unit input.  Anything that
-    needs absolute radiometry must supply its own prefactor.
+    This test used to pin the ABSENCE of a radiometric normalisation as a
+    documentation gap: ``propagate_modal_asymptotic`` applied no
+    ``1/(i lambda)``-class prefactor and never read ``fit.wavelength``.
+    That was the DEFECT, not a convention -- the integrand carried
+    ``|det ds1/dv2|`` where Van Vleck-Maslov requires
+    ``-1j sqrt(|det ds1/dv2|) / lambda``, so the output was
+    ``i lambda sqrt(|det J|)`` times the true field.  The absolute scale is
+    pinned against an analytic free-space oracle in
+    ``tests/unit/test_audit2609_a4_asymptotic.py``; what is pinned HERE is
+    the part of the old finding that survives and the size of the move.
+
+    MEASURED on this fixture over a 257x257 grid at 0.995 of the fit box,
+    both source and pupil LG_{0,0} at unit L2 norm --
+    ``sum |E|^2 dA`` = 247.34 (w_s=50 um, w_p=0.05) / 756.53 (20 um, 0.02)
+    / 1583.12 (20 um, 0.002), against 1.657e-11 / 5.128e-11 / 1.059e-10
+    before the fix.
+
+    Two things to notice:
+
+    * the RATIO across the three settings is **6.4002** post-fix and
+      **6.3884** pre-fix -- unchanged to 0.2 %.  The residual
+      ``w_p``-dependence therefore belongs to the PUPIL-MODE CONVENTION
+      (``pupil_amplitudes`` is an extra soft Gaussian aperture in output
+      direction cosine whose LG normalisation ``sqrt(2/(pi w_p^2))`` rides
+      inside the integral, so narrowing ``w_p`` changes the transmitted
+      power by construction), not to a missing prefactor;
+    * the absolute level moved by ~13 decades, which is
+      ``1/(lambda^2 |det J|)`` on this fixture -- the exact Y2 factor.
     """
     fit = _fit()
     powers = {}
@@ -1277,12 +1310,18 @@ def test_w6_a7_output_field_carries_no_radiometric_normalisation():
         d = float(X[0, 1] - X[0, 0])
         powers[(w_s, w_p)] = float(np.sum(np.abs(E) ** 2) * d * d)
     vals = sorted(powers.values())
-    assert vals[0] < 1e-9, (
-        f'premise: the returned field is nowhere near unit power '
-        f'(measured 1.66e-11 .. 1.06e-10), got {vals}')
+    # The field is now on a physical scale: nowhere near the pre-fix
+    # 1e-11 level.  Gate at 1.0 -- 247x below the smallest measured value
+    # and 11 decades above the pre-fix maximum, so it cannot pass on the
+    # pre-Y2 code and has two decades of headroom against fixture drift.
+    assert vals[0] > 1.0, (
+        f'the returned field is back at the pre-Y2 un-normalised level '
+        f'(measured 247.3 .. 1583.1 post-fix, 1.66e-11 .. 1.06e-10 '
+        f'pre-fix), got {vals}')
+    # ... and the pupil-convention spread is UNCHANGED by the fix.
     assert vals[-1] / vals[0] > 3.0, (
-        f'premise: P_out has no fixed relation to the unit-norm input '
-        f'(measured spread factor 6.4), got {vals[-1] / vals[0]:.3f}')
+        f'the pupil-mode convention spread vanished (measured 6.4002 '
+        f'post-fix, 6.3884 pre-fix), got {vals[-1] / vals[0]:.4f}')
 
 
 # ===========================================================================

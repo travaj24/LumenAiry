@@ -61,6 +61,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
+from .._deprecation import warn_deprecated_alias
 from ..backend import array_namespace, is_jax_array
 
 # v5.21: default amplitude-1/e-radius window for the windowed (bounded-support)
@@ -384,7 +385,11 @@ def _freespace_tensor_moebius_np(Q, amp, t, k0):
     I2 = np.eye(2)[None, :, :]
     lam = _eigvals2x2(Q, np)
     _guard_tensor_freespace_branch(lam, t, np)
-    amp = amp * np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1)
+    # S5 (audit): conjugated, like the scalar/tensor branches of
+    # ``propagate_beamlets_freespace`` -- engineering ``Q`` -> physics
+    # amplitude.  See that function for the measurement.
+    amp = amp * np.conj(
+        np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1))
     amp = amp * np.exp(1j * k0 * t)
     Q = Q @ _inv2x2(I2 + t[:, None, None] * Q, np)
     Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
@@ -973,11 +978,20 @@ def propagate_beamlets_freespace(
         Q_new = 0.5 * (Q_new + xp.transpose(Q_new, (0, 2, 1)))
         lam = _eigvals2x2(Q_old, xp)
         _guard_tensor_freespace_branch(lam, t, xp)
-        qratio = xp.prod(
-            1.0 / xp.sqrt(1.0 + t[:, None].astype(Q_old.dtype) * lam), axis=1)
+        qratio = xp.conj(xp.prod(
+            1.0 / xp.sqrt(1.0 + t[:, None].astype(Q_old.dtype) * lam), axis=1))
     else:
         Q_new = Q_old / (1 + t.astype(Q_old.dtype) * Q_old)
-        qratio = Q_new / Q_old
+        # S5 (audit): CONJUGATE.  ``Q`` is the module's ENGINEERING 1/q
+        # (``q_code = conj(q_physics)``, see the BeamletBundle docstring) and
+        # the renderer converts on output (``exp(+0.5j k conj(Q) rho^2)``);
+        # the amplitude has to convert too.  The physical Gaussian-beam
+        # amplitude ratio is ``q0_phys/q_phys = conj(Q_new/Q_old)``.  Without
+        # the conjugate the Gouy phase comes out with the wrong SIGN -- a
+        # single beamlet then differs from the analytic Gaussian by exactly
+        # ``exp(+2 i psi)`` (measured: transverse amplitude and curvature
+        # phase agree to 1e-13, arg(E/A) = 2*atan(z/zR) to 7e-14).
+        qratio = xp.conj(Q_new / Q_old)
     new_amplitude = beamlets.amplitude * qratio * axial_phase.astype(Q_old.dtype)
 
     return BeamletBundle(
@@ -1953,76 +1967,81 @@ def propagate_gbd_freespace(
 
 def gbd_asm_gouy_phase(z: float, wavelength: float, dx: float,
                        waist_factor: float = 1.0) -> float:
-    """Global phase offset between a GBD-reconstructed **free-space** field and
-    the Angular-Spectrum (ASM) / physical-phase field of the same beam.
+    """DEPRECATED, returns ``0.0``: there is no GBD-vs-ASM Gouy offset.
 
-    A GBD field and an ASM field of the same physical beam are **the same
-    field** -- same transverse coordinates, same forward (``exp(+ikz)``)
-    direction, no complex conjugate and no axis flip -- differing ONLY by a
-    spatially-constant phase
+    .. deprecated:: 5.46
+       The offset this function returned was a BUG in
+       :func:`propagate_beamlets_freespace`, not a convention.  It is fixed
+       (audit S5); this function, :func:`gbd_field_to_asm` and
+       :func:`asm_field_to_gbd` are now no-ops and will be removed.  Delete
+       the call -- a GBD free-space field already matches
+       :func:`~lumenairy.propagators.asm.angular_spectrum_propagate` in
+       absolute phase.  For the general, propagator-agnostic case use
+       :func:`match_global_phase`.
 
-        ``phi0(z) = 2 * arctan(z / zR_b)``,   ``zR_b = pi (waist_factor*dx)^2 / lambda``
+    A Gabor frame of exact Gaussian-beam solutions, propagated exactly and
+    summed, reproduces the ASM field with NO residual phase -- free-space
+    propagation is linear and every beamlet is an exact solution.  The
+    ``2 arctan(z / zR_beamlet)`` this used to return was the beamlet Gouy
+    phase applied with the WRONG SIGN by the amplitude update
+    (``Q_new/Q_old`` where the engineering-``Q`` convention needs
+    ``conj(Q_new/Q_old)``), which is why it depended on ``waist_factor`` --
+    a purely numerical knob, which is the definition of an error.  Measured
+    after the fix: residual global phase +5e-06 rad (was +3.13 rad) and
+    relL2 vs ASM 1.76e-03 / 7.02e-03 / 1.57e-02 at waist_factor 1 / 2 / 3
+    with no phase fit at all.
 
-    i.e. **twice the beamlet Gouy phase** (``zR_b`` is the Rayleigh range of a
-    single decomposition beamlet of waist ``waist_factor*dx``).  GBD's
-    finite-waist beamlets each accumulate this Gouy phase on propagation and it
-    survives the coherent sum as a global factor; ASM (which propagates the
-    field spectrally, with no beamlet basis) does not carry it.  It is
-    field-independent and, being a global phase, is physically irrelevant to the
-    intensity and to any *further* linear propagation -- so a GBD free-space
-    field can be handed straight to :func:`angular_spectrum_propagate` (the
-    global phase merely rides along).  Reconcile it only when you need the
-    ABSOLUTE phase to agree (e.g. coherently combining a GBD field with an
-    independently-computed ASM field).
-
-    Verified: the formula matches the measured overlap phase to ~1e-7 across
-    waist factors and non-trivial (off-centre / tilted / astigmatic) fields, and
-    after removing it the GBD field matches ``angular_spectrum_propagate`` to the
-    GBD decomposition accuracy (~1e-3 here, no free phase fit).
-
-    .. note::
-       This closed form is for a **pure free-space** GBD leg
-       (:func:`propagate_gbd_freespace`).  A GBD field that has passed through
-       optics (``propagate_gbd_through_prescription``) carries a different,
-       path-dependent global phase (the accumulated per-surface Gouy / OPL
-       piston); the two fields still agree in intensity and up to a global
-       phase, but this specific closed form does not apply.  ``waist_factor``
-       and ``z`` must match the ``propagate_gbd_freespace`` call that produced
-       the field.
+    Returns
+    -------
+    float
+        ``0.0``, always.
     """
-    zR_b = float(np.pi) * (waist_factor * dx) ** 2 / wavelength
-    return 2.0 * float(np.arctan(z / zR_b))
+    warn_deprecated_alias(
+        'gbd_asm_gouy_phase',
+        'match_global_phase (only if a global-phase reconciliation against '
+        'some other field is still wanted)',
+        version_added='5.46', version_removed='5.48',
+    )
+    return 0.0
 
 
 def gbd_field_to_asm(E: np.ndarray, *, z: float, wavelength: float, dx: float,
                      waist_factor: float = 1.0) -> np.ndarray:
-    """Convert a GBD free-space reconstructed field to the ASM / physical-phase
-    convention by removing the beamlet-Gouy global phase
-    (:func:`gbd_asm_gouy_phase`).  After conversion the field matches
-    :func:`angular_spectrum_propagate` to the GBD decomposition accuracy, so the
-    two propagators are interchangeable (coherent combination, GBD->ASM
-    handoff).  ``z`` / ``waist_factor`` must match the ``propagate_gbd_freespace``
-    call that produced ``E``."""
+    """DEPRECATED no-op: returns ``E`` unchanged.
+
+    .. deprecated:: 5.46
+       GBD and ASM free-space fields already agree in absolute phase -- audit
+       S5 fixed the conjugated Gouy / Collins amplitude that made them
+       differ, so this conversion is the identity.  Delete the call.  The
+       arguments are still accepted and ``E`` is still validated, so an
+       existing pipeline keeps running unchanged apart from the warning.
+    """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E, 'gbd_field_to_asm', input_kind='field')
-    xp = array_namespace(E)
-    return E * xp.exp(-1j * gbd_asm_gouy_phase(z, wavelength, dx, waist_factor))
+    warn_deprecated_alias(
+        'gbd_field_to_asm',
+        'nothing (GBD and ASM agree in absolute phase; this is the identity)',
+        version_added='5.46', version_removed='5.48',
+    )
+    return E
 
 
 def asm_field_to_gbd(E: np.ndarray, *, z: float, wavelength: float, dx: float,
                      waist_factor: float = 1.0) -> np.ndarray:
-    """Convert an ASM / physical-phase field to the GBD free-space
-    reconstruction convention (add the beamlet-Gouy global phase) -- the inverse
-    of :func:`gbd_field_to_asm`.  Use when feeding an ASM field into a GBD
-    pipeline that expects GBD's convention for absolute-phase consistency; note
-    that decomposing an ASM field into beamlets
-    (:func:`decompose_field_to_beamlets`) and continuing with GBD does NOT need
-    this (decomposition + reconstruction is self-consistent in GBD's
-    convention)."""
+    """DEPRECATED no-op: returns ``E`` unchanged.
+
+    .. deprecated:: 5.46
+       The inverse of :func:`gbd_field_to_asm`, and equally unnecessary since
+       audit S5 -- the two "conventions" are one convention.
+    """
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E, 'asm_field_to_gbd', input_kind='field')
-    xp = array_namespace(E)
-    return E * xp.exp(1j * gbd_asm_gouy_phase(z, wavelength, dx, waist_factor))
+    warn_deprecated_alias(
+        'asm_field_to_gbd',
+        'nothing (GBD and ASM agree in absolute phase; this is the identity)',
+        version_added='5.46', version_removed='5.48',
+    )
+    return E
 
 
 def match_global_phase(E: np.ndarray, reference: np.ndarray) -> np.ndarray:
@@ -3188,11 +3207,17 @@ def apply_abcd_to_beamlets(
     # parameterisation (Q = 1/q_code, q_code = conj(q_physics)); ABCD
     # elements are real so the Collins factor commutes with that
     # convention.
+    # S5 (audit): the Collins amplitude is ``1/(A + B/q_phys)``; with the
+    # module's engineering ``Q = 1/q_code = 1/conj(q_phys)`` and REAL ABCD
+    # elements that is ``conj(1/(A + B Q))``.  The pre-fix un-conjugated form
+    # carried the Gouy / Collins phase with the wrong sign -- near-global (and
+    # therefore nearly invisible) at a lens exit plane, but not at
+    # ``output_plane_distance != 0`` nor in any coherent combination.
     if _q_is_tensor(Q_old):
         _I2 = xp.eye(2, dtype=Q_old.dtype)[None, :, :]
-        qratio = 1.0 / xp.sqrt(_det2x2(A * _I2 + B * Q_old))
+        qratio = xp.conj(1.0 / xp.sqrt(_det2x2(A * _I2 + B * Q_old)))
     else:
-        qratio = 1.0 / (A + B * Q_old)
+        qratio = xp.conj(1.0 / (A + B * Q_old))
     # 4.10.2: include the chief-ray axial OPL phase exp(+i*k*L_chief)
     # when supplied.  The three-leg helpers (propagate_gbd_freespace,
     # propagate_gbd_thin_lens) accumulate this leg-wise; the single-
@@ -3412,7 +3437,8 @@ def apply_prescription_persurface_to_beamlets(
         C = J[:, 2:4, 0:2]
         D = J[:, 2:4, 2:4]
         ABQ = A + B @ Q
-        amp = amp / np.sqrt(_det2x2(ABQ))
+        # S5 (audit): conjugated Collins factor -- see apply_abcd_to_beamlets.
+        amp = amp / np.conj(np.sqrt(_det2x2(ABQ)))
         Q = (C + D @ Q) @ _inv2x2(ABQ, np)
         Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
     # base-ray OPL piston (input plane -> last vertex): where the wavefront

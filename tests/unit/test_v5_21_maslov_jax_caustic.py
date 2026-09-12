@@ -101,9 +101,20 @@ def test_maslov_jax_still_differentiable():
 def test_maslov_integration_method_auto_matches_and_is_fast():
     """integration_method='auto' resolves to the concrete integrator from the
     chart's v2-oscillation count and is byte-identical to it: uniform
-    'quadrature' when well-resolved (low-NA), the fast asymptotic
-    'local_quadrature' when uniform quadrature would over-run its sample cap
-    (high-NA oscillatory)."""
+    'quadrature' when well-resolved (low-NA), an asymptotic evaluator when
+    uniform quadrature would over-run its sample cap (high-NA oscillatory).
+
+    v5.46 (audit S2): the asymptotic arm is now ``'stationary_phase'``, not
+    ``'local_quadrature'``.  Measured on an f = 6 mm N-BK7 biconvex at its
+    exit plane against a converged uniform quadrature (n_v2 = 320,
+    self-converged to 8.5e-04 at 256): ``stationary_phase`` relL2 0.84 vs
+    ``local_quadrature`` 2.58 at its shipped defaults.  The oscillation
+    estimate that picks between them also changed, from the coefficient sum
+    to the TOTAL VARIATION ``sum |c_k| * max(k3, k4)`` (up to 2.47x larger),
+    so the low-NA fixture may now resolve differently too -- which is why
+    this test checks byte-identity against one of the THREE concrete
+    methods rather than naming the arm.
+    """
     from lumenairy.elements.lenses_maslov import apply_real_lens_maslov
     lam = 0.633e-6
 
@@ -126,9 +137,16 @@ def test_maslov_integration_method_auto_matches_and_is_fast():
         Fl = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
                                     wavelength=lam, dx=dx,
                                     integration_method='local_quadrature')
-        # auto must be byte-identical to exactly one of the two concrete methods
-        assert (np.max(np.abs(Fa - Fq)) < 1e-12) or \
-               (np.max(np.abs(Fa - Fl)) < 1e-12)
+        Fs = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+                                    wavelength=lam, dx=dx,
+                                    integration_method='stationary_phase')
+        # auto must be byte-identical to exactly one concrete method
+        deltas = {'quadrature': float(np.max(np.abs(Fa - Fq))),
+                  'local_quadrature': float(np.max(np.abs(Fa - Fl))),
+                  'stationary_phase': float(np.max(np.abs(Fa - Fs)))}
+        assert min(deltas.values()) < 1e-12, (
+            f'ap={ap}: auto matched no concrete integrator byte-for-byte; '
+            f'max |dE| per method = {deltas}')
 
 
 def _folded_rx(mirror_R):

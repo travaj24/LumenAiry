@@ -445,17 +445,67 @@ def test_r5_numpy_lg_merit_matches_jax_twin():
         assert np.isfinite(jv) and np.isfinite(nv), (
             f'R-5: w_s={w_s:.1e}: the LG merits must evaluate finitely; '
             f'got numpy={nv}, jax={jv}')
-        # NON-VACUITY (and the sentinel that the body ran): both merits are
-        # 1 - |L|^2 ~ 1, so an underflowed coupling would make them agree
-        # for free.  Measured |L_00|^2 = 4.74e-04 .. 4.04e-03 across the
-        # three w_s -> a 1e-5 floor keeps 47x headroom at the smallest.
+        # NON-VACUITY (and the sentinel that the body ran): an underflowed
+        # coupling would make the two merits agree for free.
+        #
+        # v5.46 RE-PIN (audit Y2, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11).
+        # The modal integrand carried ``|det ds1/dv2|`` where Van Vleck-Maslov
+        # requires ``-1j sqrt(|det ds1/dv2|) / lambda``, so every L entry
+        # picked up ``-1j / (lambda sqrt(|det J|))`` and
+        #
+        #     |L|^2_new / |L|^2_old = 1 / (lambda^2 |det J|).
+        #
+        # On THIS fixture (R1 = 500 mm plano-convex N-BK7, ap 4 mm,
+        # lambda = 1.30 um, w_p = 0.05, on-axis) ``|det J| = 3.980321e-06``
+        # m^2 at the envelope-stationary point, independent of ``w_s``, so
+        # the factor is ``1/(1.30e-6^2 * 3.980321e-06) = 1.486604e+17`` and
+        #
+        #   w_s      |L|^2 old       x 1.486604e+17   measured now
+        #   5e-06    4.040485e-03 -> 6.006604e+14     6.006606e+14
+        #   2e-05    3.205059e-03 -> 4.764653e+14     4.764657e+14
+        #   5e-05    4.741536e-04 -> 7.048785e+13     7.048782e+13
+        #
+        # -- agreement to 6 significant figures, i.e. the move is exactly the
+        # Van Vleck factor.  The absolute normalisation is independently
+        # confirmed against a free-space oracle: a synthetic fit encoding
+        # exact Fresnel propagation now gives
+        # ``E_modal / E_analytic = 1.0000000000128 +- 4.2e-11`` (it was
+        # ``i*lambda*z`` before).
+        #
+        # The band keeps the ORIGINAL purpose with the same fractional
+        # headroom: floor 7x below the smallest measured value, ceiling 170x
+        # above the largest.
+        #
+        # NOTE: this is NOT a Strehl ratio in either version -- the pure
+        # (0, 0) request takes the closed-form POINT-SAMPLING branch, whose
+        # output is ``U(chief) * conj(LG_k(0))`` (field per length), not the
+        # dimensionless overlap the sigma-grid branch returns.  See the
+        # W3-T3 branch-scale note in ``asymptotic_aberration_tensor.py``.
         coupling = 1.0 - jv
-        assert 1e-5 < coupling < 1.0, (
+        assert 1e13 < coupling < 1.2e16, (
             f'R-5: w_s={w_s:.1e}: the (0, 0) coupling |L|^2 = '
             f'{coupling:.6e} left the measured well-conditioned band '
-            f'(4.74e-04 .. 4.04e-03); the equality below would be vacuous '
+            f'(7.05e+13 .. 6.01e+14); the equality below would be vacuous '
             f'if the tensor underflowed to zero.')
-        assert nv == pytest.approx(jv, rel=1e-6, abs=1e-6), (
+        # v5.46: the tolerance is now RELATIVE-only and re-derived.  Before
+        # audit Y2 the merit was ``1 - |L|^2`` with |L|^2 ~ 1e-3, so the
+        # value was ~1 and the ``abs=1e-6`` term did all the work -- the
+        # measured backend disagreement was 1.9e-10 ABSOLUTE, i.e. 4.0e-07
+        # relative to |L|^2.  With the Van Vleck normalisation the merit IS
+        # (minus) |L|^2 ~ 1e14, so ``abs=1e-6`` is inert and the same
+        # physical disagreement has to be gated relatively.
+        #
+        # Measured here: 1.3e-09 / 2.5e-07 / 1.5e-06 relative at
+        # w_s = 5e-6 / 2e-5 / 5e-5.  That residual is NOT the JAX twin: with
+        # the SAME v_star handed to both, ``aberration_tensor`` and
+        # ``aberration_tensor_lg00_jax`` agree to 3.5e-15 relative in |L| on
+        # this fixture (measured).  It is the two MERIT wrappers running
+        # their own envelope-stationary Newton solves, whose v_star differ at
+        # the solver tolerance; L is stationary in v_star only to first
+        # order, so the difference survives at second order.  Gate at 1e-5:
+        # 6.7x above the worst measured value and 5 decades below any
+        # ``x`` vs ``1-x`` confusion (which is what this test pins).
+        assert nv == pytest.approx(jv, rel=1e-5), (
             f'R-5: w_s={w_s:.1e}: NumPy merit {nv:.9e} != JAX twin '
             f'{jv:.9e}.  Pre-fix NumPy returned |L|^2 while JAX returned '
             f'1 - |L|^2, so the two summed to 1.0 instead of matching.')

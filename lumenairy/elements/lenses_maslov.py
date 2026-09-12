@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import time
 import warnings
+from functools import lru_cache
 from typing import Any, Dict, Optional, Union
 
 import numpy as np
@@ -82,6 +83,14 @@ _QUAD_FACTORIZE = True
 _N_V2_AUTO_MIN = 32
 _N_V2_AUTO_MAX = 256
 
+# S6 (audit): the input angular spread (3-sigma direction-cosine NA, measured
+# from E_in's angular spectrum) above which the OPD-only saddle of the two
+# asymptotic evaluators is no longer the stationary point of the full
+# integrand.  1e-3 rad is ~1/1000 of the horizon: far below any real
+# divergence, far above the 1e-10..1e-12 floor a numerically flat wave leaves
+# in an FFT second moment, so a genuinely collimated input never trips it.
+_SADDLE_FLAT_INPUT_NA = 1e-3
+
 # poly_order='auto' (v5.21): raise the tensor-Chebyshev OPD-fit order until the
 # held-out fit residual stops improving (plateau) or reaches a good-enough
 # target, so a smooth optic uses a cheap low order and a strongly-aberrated one
@@ -93,6 +102,7 @@ _MZ_POLY_AUTO_TARGET = 1e-4   # waves RMS -- below this, extra order is wasted
 _MZ_POLY_AUTO_RTOL = 0.10     # stop once an order step improves residual < 10%
 
 # Other shared helpers still live in lenses.py.
+from ._lens_real import _normalise_stop_index
 from .lenses import (
     NUMEXPR_AVAILABLE,
     _ensure_numexpr_loaded,
@@ -100,6 +110,184 @@ from .lenses import (
     _multi_indices_total_degree,
     _warn_if_aperture_exceeds_grid,
 )
+
+# ---------------------------------------------------------------------------
+# Van Vleck-Maslov normalisation of the mixed-representation integral.
+#
+# The semiclassical (Van Vleck-Morette) kernel in d = 2 transverse dimensions
+# is
+#
+#     K = (k / (2 pi i)) * |det d2S/ds1 ds2|^(1/2) * exp(i k S)
+#
+# and the change of variable s1 -> v2 at fixed s2 contributes
+# d^2 s1 = |det(ds1/dv2)| d^2 v2 while |det d2S/ds1 ds2|^(1/2) =
+# |det(ds1/dv2)|^(-1/2), so the two combine to the SQUARE ROOT:
+#
+#     E(s2) = 1/(i lambda) INT E_in(s1(s2, v2)) |det(ds1/dv2)|^(1/2)
+#                                 exp(2 pi i OPD_waves) d^2 v2
+#
+# The integrators hold the Jacobian in NORMALISED chart coordinates
+# (det_J_norm = det(ds1/du_v2)); ds1/dv2 = ds1/du_v2 / (v2x_h v2y_h).
+# ``_van_vleck_density`` is that conversion + square root in one place so the
+# four NumPy integrators, the three CuPy twins and the JAX/asymptotic siblings
+# cannot drift apart again, and ``_maslov_kernel_prefactor`` is the 1/(i*lambda)
+# that closes the absolute scale.  Verified on a two-flat-surface free-space
+# chart (ds1/dv2 = -z I exactly): E_maslov / E_ASM = 1.000 with these, versus
+# i*lambda*z without them.
+# ---------------------------------------------------------------------------
+
+def _van_vleck_density(abs_det_J_norm, v2x_h, v2y_h):
+    """``|det(ds1/dv2)|**0.5`` from the normalised-chart Jacobian modulus.
+
+    ``abs_det_J_norm`` is ``|det(ds1/du_v2)|`` (already an absolute value, in
+    whatever array namespace the caller uses -- NumPy, CuPy or JAX); the
+    returned array is the Van Vleck amplitude density that multiplies the
+    integrand, in physical ``d^2 v2`` measure.
+    """
+    return (abs_det_J_norm / (v2x_h * v2y_h)) ** 0.5
+
+
+def _maslov_kernel_prefactor(wavelength: float) -> complex:
+    """``k / (2 pi i) = 1 / (i lambda)`` -- the d = 2 Van Vleck prefactor.
+
+    Applied once to the assembled field.  It is a constant, so it commutes
+    with the coarse->fine upsample and the linear-phase re-application; it is
+    applied just before the ``normalize_output`` step so that
+    ``normalize_output='none'`` (which ``roi=`` runs are forced onto) returns
+    a physically-scaled field.
+    """
+    return 1.0 / (1j * float(wavelength))
+
+
+# ---------------------------------------------------------------------------
+# local_quadrature window geometry (audit S2).
+#
+# The integrator evaluates  INT A(v2) exp(2 pi i OPD(v2)) d^2 v2  on a finite
+# lattice around the per-pixel saddle.  Three things have to be right:
+#
+# 1. PRINCIPAL AXES.  The natural widths come from the EIGENVALUES of the
+#    phase Hessian, so the lattice has to be laid out on its EIGENVECTORS.
+#    Scaling the coordinate axes by eigenvalues instead (the pre-fix code)
+#    swaps the two widths whenever ``H44 > H33`` and ignores ``H34``
+#    entirely -- measured relative error 9.1 on a chart with A = 4, B = 40
+#    and 2.5-3.1 with a cross term.
+#
+# 2. A SMOOTH WINDOW.  A hard-truncated uniform sum of a chirp leaves the
+#    Fresnel endpoint oscillation, an O(1/extent) error that does NOT shrink
+#    with the sample count -- measured 40 % floor at the shipped default,
+#    flat from n = 32 to n = 128.  A Gaussian taper removes the endpoint.
+#
+# 3. THE WINDOW DIVIDED BACK OUT.  The taper is not part of the integral, so
+#    its effect is removed by dividing by what it does to the QUADRATIC MODEL
+#    of the phase, evaluated on the SAME finite lattice:
+#
+#        corr(s) = INT exp(i s xi^2) dxi  /  SUM_k exp(i s xi_k^2) w(xi_k) dxi
+#                = sqrt(pi) e^(i s pi/4)  /  SUM_k ...
+#
+#    with ``s = sign(lambda_j)`` (in the principal-axis coordinate scaled by
+#    ``sigma_j = 1/sqrt(pi |lambda_j|)`` the model phase is exactly
+#    ``s * xi^2``).  Because the correction is computed on the same lattice,
+#    the scheme is EXACT for a quadratic chart with a constant amplitude at
+#    ANY ``local_n_samples`` / ``local_window_sigma``, and for a real chart it
+#    is the Gaussian-regularised saddle with the model divided out -- i.e. no
+#    worse than ``stationary_phase``, plus whatever non-quadratic content the
+#    lattice resolves.
+# ---------------------------------------------------------------------------
+
+# Number of Gaussian standard deviations of taper that fit inside the sampled
+# half-extent ``local_window_sigma``.  3.0 puts the window at exp(-4.5) at the
+# lattice edge, which is what kills the endpoint oscillation; the residual
+# truncation is divided out exactly by the model correction above.
+_LOCAL_TAPER_SIGMAS = 3.0
+
+
+@lru_cache(maxsize=32)
+def _local_window_1d(n_samples: int, window_sigma: float):
+    """The shared 1-D lattice, Gaussian taper and model corrections.
+
+    Returns ``(xi, dxi, taper1d, corr_plus, corr_minus)`` where ``corr_pm``
+    are the complex factors that turn the tapered discrete sum of
+    ``exp(+-i xi^2)`` back into its exact infinite-range value
+    ``sqrt(pi) exp(+-i pi/4)``.  Depends only on the two integrator knobs, so
+    it is cached (and therefore bit-identical between pixels and calls).
+    """
+    xi = np.linspace(-float(window_sigma), float(window_sigma), int(n_samples))
+    dxi = float(xi[1] - xi[0]) if len(xi) > 1 else 2.0 * float(window_sigma)
+    s_taper = float(window_sigma) / _LOCAL_TAPER_SIGMAS
+    taper1d = np.exp(-0.5 * (xi / s_taper) ** 2)
+    m_plus = complex(np.sum(np.exp(1j * xi ** 2) * taper1d) * dxi)
+    m_minus = complex(np.sum(np.exp(-1j * xi ** 2) * taper1d) * dxi)
+    ex_plus = np.sqrt(np.pi) * np.exp(1j * np.pi / 4.0)
+    # A pathological (n_samples, window_sigma) pair could in principle put the
+    # model sum at the origin; fall back to the infinite-range analytic ratio
+    # rather than dividing by ~0 (CONVENTIONS Section 9: no silent inf).
+    floor = 1e-3 * np.sqrt(np.pi)
+    corr_plus = (ex_plus / m_plus) if abs(m_plus) > floor else 1.0 + 0j
+    corr_minus = (np.conj(ex_plus) / m_minus) if abs(m_minus) > floor else 1.0 + 0j
+    return xi, dxi, taper1d, corr_plus, corr_minus
+
+
+def _local_window_geometry(xp, H33, H34, H44, v2x_h, v2y_h,
+                           n_samples, window_sigma):
+    """Principal-axis widths, rotation and window correction per pixel.
+
+    ``H33 / H34 / H44`` are the second derivatives of the OPD (waves) with
+    respect to the NORMALISED chart coordinates; they are de-normalised to the
+    physical direction-cosine frame here, exactly as
+    :func:`_integrate_stationary_phase` does.
+
+    Returns ``(sigma1_phys, sigma2_phys, cos_theta, sin_theta, window_corr)``:
+    the two principal half-widths, the eigenvector rotation, and the complex
+    per-pixel factor that divides the Gaussian taper back out.
+    """
+    _, _, _, corr_plus, corr_minus = _local_window_1d(
+        int(n_samples), float(window_sigma))
+    a = H33 / (v2x_h ** 2)
+    b = H34 / (v2x_h * v2y_h)
+    d = H44 / (v2y_h ** 2)
+    tau = a + d
+    det_h = a * d - b ** 2
+    disc = xp.maximum(tau ** 2 / 4.0 - det_h, 0.0)
+    sqrt_disc = xp.sqrt(disc)
+    lam1 = tau / 2.0 + sqrt_disc
+    lam2 = tau / 2.0 - sqrt_disc
+    # Eigenvector angle of a real symmetric 2x2: tan(2 theta) = 2b / (a - d),
+    # with lam1 (the larger eigenvalue) along (cos theta, sin theta).
+    theta = 0.5 * xp.arctan2(2.0 * b, a - d)
+    cos_t = xp.cos(theta)
+    sin_t = xp.sin(theta)
+    sigma1 = 1.0 / xp.sqrt(xp.maximum(xp.abs(lam1), 1e-30) * xp.pi)
+    sigma2 = 1.0 / xp.sqrt(xp.maximum(xp.abs(lam2), 1e-30) * xp.pi)
+    c1 = xp.where(lam1 >= 0.0, corr_plus, corr_minus)
+    c2 = xp.where(lam2 >= 0.0, corr_plus, corr_minus)
+    return sigma1, sigma2, cos_t, sin_t, c1 * c2
+
+
+def _v2_oscillation_bound(mi, coef_opd) -> float:
+    """Upper bound on the phase CYCLE COUNT of the integrand along v2.
+
+    The integrand phase is ``2 pi * OPD(s2, v2)`` with OPD in waves, so the
+    number of oscillations a uniform quadrature has to resolve along one v2
+    axis is bounded by the TOTAL VARIATION of the v2-dependent part of OPD,
+    not by its excursion.  For a Chebyshev term ``c * T_k(u)`` the excursion
+    is ``|c|`` but the total variation on [-1, 1] is ``2 k |c|`` -- the
+    polynomial sweeps the interval ``k`` times.  Hence the bound
+
+        osc = sum_k |c_k| * max(k3, k4)
+
+    (terms with ``k3 = k4 = 0`` are constant in v2 and contribute nothing).
+
+    N2 / S9 (audit): all three consumers -- the ``'auto'`` integrator choice,
+    the ``'auto'`` ``n_v2`` resolution and the under-resolution warning --
+    used the plain coefficient sum, which under-counts by up to 2.5x at the
+    orders ``poly_order='auto'`` can select (measured: order 8 on an
+    f = 6 mm biconvex, 634.0 -> 1539.7; f = 2 mm / 0.3 mm aperture,
+    136.2 -> 337.1).  Under-counting makes ``auto`` pick ``quadrature`` for
+    a chart that then speckles, and silences the warning that would have
+    said so.
+    """
+    tv = np.array([float(max(k[2], k[3])) for k in mi], dtype=np.float64)
+    return float(np.sum(np.abs(np.asarray(coef_opd, dtype=np.float64)) * tv))
 
 # ---------------------------------------------------------------------------
 # M-P4 (audit perf): optional Numba kernel for the 4-variable Chebyshev
@@ -866,20 +1054,58 @@ def _tukey_taper(u, alpha=0.2):
     return w
 
 
+# Largest Gram condition number ``cond(A^T A) = lam_max/lam_min`` for which the
+# normal-equations Cholesky in :func:`_solve_fit` is trusted.  Above it the
+# solve falls through to the min-norm SVD, and above _GRAM_COND_SINGULAR the
+# caller is warned.  Derivation in :func:`_solve_fit`.
+_GRAM_COND_MAX = 1.0e12
+_GRAM_COND_SINGULAR = 1.0 / np.finfo(np.float64).eps    # ~4.5e15
+
+
 def _solve_fit(A, RHS, gram_factor=None):
     """Least-squares solve for the Maslov Chebyshev fit ``A @ coef ~= RHS``.
 
     v5.21 (M-P5 follow-up): normal-equations Cholesky (``G = A^T A``; solve
-    ``G coef = A^T RHS``) instead of the ``gelsd`` full-SVD ``lstsq``.  ``A`` is
-    a normalized tensor-Chebyshev Vandermonde -- well-conditioned and ~1.5x
-    oversampled -- so squaring the condition number in ``G`` is safe, and
-    ``cho_factor(G)`` is O(M^3) with tiny ``M`` (70 at poly_order=4) vs the
-    O(n_rays M^2) SVD.  ``G`` (and its Cholesky factor) depend ONLY on the ray
-    node grid + poly_order, not the field/wavelength, so a caller sweeping the
-    SAME optic can precompute ``gram_factor`` once and pass it in (only the
-    cheap ``A^T RHS`` GEMM + back-substitution then re-run per field).  Falls
-    back to LU solve, then to ``lstsq`` (SVD), if ``G`` is not positive-definite
-    (a rank-deficient / ill-conditioned freeform).  Returns ``coef`` (M, k).
+    ``G coef = A^T RHS``) instead of the ``gelsd`` full-SVD ``lstsq``, which is
+    O(M^3) with tiny ``M`` (70 at poly_order=4) rather than O(n_rays M^2).  A
+    caller sweeping the SAME optic can precompute ``gram_factor`` and pass it
+    in (only the cheap ``A^T RHS`` GEMM + back-substitution then re-run per
+    field).  Returns ``coef`` (M, k).
+
+    Conditioning gate
+    -----------------
+    The v5.21 justification -- "``A`` is a normalized tensor-Chebyshev
+    Vandermonde, well-conditioned and ~1.5x oversampled, so squaring the
+    condition number in ``G`` is safe" -- does NOT hold on every chart, and the
+    ``LinAlgError`` fallback ladder below cannot see the failure: a numerically
+    positive-semidefinite but RANK-DEFICIENT ``G`` factors happily and returns
+    an arbitrary member of the solution set.
+
+    Measured (audit follow-up, f = 6 mm N-BK7 biconvex, 0.2 mm aperture,
+    poly_order = 4): ``rank(A) = 65`` of 70 columns, ``cond(A) = 1.81e+15``,
+    ``cond(G) = 6.18e+18``.  Two runs of the SAME optic whose design matrices
+    agree to 3.1e-15 and whose right-hand sides agree to 6.8e-13 waves came
+    back with coefficients **0.869 waves apart** -- both with the same fit
+    residual (1.613e-09 vs 1.756e-09 waves, and 1.756e-09 cross-evaluated), so
+    the difference lives entirely in the null space.  That is invisible on the
+    training manifold and NOT invisible inside the v2 integral, which samples
+    ``(s2, v2)`` combinations off it: the two fields differed by relL2 0.45.
+    (The audit's own conditioning note measured ``cond(G)`` = 1.24e9 / 8.33e13 /
+    4.09e17 / 1.41e19 at poly_order 4 / 6 / 8 / 10 on a 1.5 mm-aperture chart;
+    a small, fast chart reaches those numbers at a much lower order.)
+
+    So: measure ``cond(G)`` once (an ``M x M`` ``eigvalsh``, microseconds beside
+    the ``A^T A`` GEMM) and
+
+    * ``cond(G) <= _GRAM_COND_MAX`` (1e12, still ~4 float64 digits of margin in
+      the squared system) -- take the fast Cholesky, byte-identical to v5.21;
+    * above it -- take ``np.linalg.lstsq``, whose minimum-norm solution is a
+      deterministic, unique function of ``(A, RHS)``.  That is also the
+      pre-v5.21 behaviour, so this restores it exactly where it mattered;
+    * above ``_GRAM_COND_SINGULAR`` (``1/eps``) -- also WARN, because there the
+      fit is genuinely rank-deficient and even the min-norm answer depends on
+      ``lstsq``'s ``rcond`` cut: the extra columns are not determined by the
+      data and a lower ``poly_order`` (or a wider chart) is the real fix.
     """
     b = A.T @ RHS
     if gram_factor is not None:
@@ -889,6 +1115,31 @@ def _solve_fit(A, RHS, gram_factor=None):
         except (ImportError, ValueError, np.linalg.LinAlgError):
             pass                       # scipy absent / stale-shape factor
     G = A.T @ A
+    try:
+        _ev = np.linalg.eigvalsh(G)
+        _hi = float(_ev[-1])
+        _lo = float(_ev[0])
+        _cond = (np.inf if not (_hi > 0.0) or _lo <= 0.0 else _hi / _lo)
+    except np.linalg.LinAlgError:
+        _cond = np.inf
+    if _cond > _GRAM_COND_MAX:
+        if _cond > _GRAM_COND_SINGULAR:
+            import warnings
+            warnings.warn(
+                f"apply_real_lens_maslov: the canonical-map design matrix is "
+                f"RANK-DEFICIENT at float64 -- cond(A^T A) = {_cond:.2e} over "
+                f"{A.shape[1]} basis terms on {A.shape[0]} rays.  The "
+                f"minimum-norm least-squares solution is returned (unique and "
+                f"reproducible), but the undetermined directions are set by "
+                f"the solver's rcond cut, not by the ray data: two charts that "
+                f"agree to float64 noise can still produce coefficients that "
+                f"differ off the training manifold, and the v2 integral "
+                f"samples exactly there.  Reduce poly_order, widen the chart "
+                f"(larger aperture / input_na), or raise "
+                f"ray_field_samples / ray_pupil_samples.",
+                RuntimeWarning, stacklevel=3)
+        coef, *_ = np.linalg.lstsq(A, RHS, rcond=None)
+        return coef
     try:
         from scipy.linalg import cho_factor, cho_solve
         return cho_solve(cho_factor(G, check_finite=False), b,
@@ -1147,14 +1398,21 @@ def apply_real_lens_maslov(
     Description
     -----------
     Traces a Chebyshev-node grid of rays from the entrance plane of
-    ``lens_prescription`` to the exit plane, fits a 4-variable
-    Chebyshev tensor-product polynomial to ``s1(s2, v2)`` and
-    ``OPD(s2, v2)``, then evaluates the Maslov integral
+    ``lens_prescription`` to the EXIT VERTEX plane of its last surface
+    (``rt.trace`` leaves rays on the curved surface itself; the signed
+    ``t = -z/N`` transfer is applied before anything is fitted), fits a
+    4-variable Chebyshev tensor-product polynomial to ``s1(s2, v2)`` and
+    ``OPD(s2, v2)``, then evaluates the Van Vleck-Maslov integral
 
-        E(s2) = integral E_in(s1(s2, v2)) * exp(2 pi i OPD(s2, v2))
-                          * |det(ds1/dv2)|  d^2 v2
+        E(s2) = k/(2 pi i) *
+                integral E_in(s1(s2, v2)) * exp(2 pi i OPD(s2, v2))
+                          * |det(ds1/dv2)|^(1/2)  d^2 v2
 
-    at each output pixel.  See the v3.4.x release notes (or the
+    at each output pixel.  The SQUARE ROOT of the Jacobian and the
+    ``k/(2 pi i) = 1/(i lambda)`` prefactor are what make the result an
+    absolutely-scaled field (audit S4): on a free-space chart, where
+    ``ds1/dv2 = -z I`` exactly, ``normalize_output='none'`` reproduces the
+    angular-spectrum field to 0.3 % at two wavelengths and three distances.  See the v3.4.x release notes (or the
     ``Phase-Space Asymptotic Propagator`` wiki page) for the full
     physics derivation and quadrature/stationary-phase trade-offs.
 
@@ -1186,21 +1444,26 @@ def apply_real_lens_maslov(
     explicit int to pin the sampling for reproducibility.
 
     ``integration_method='auto'`` (v5.21; the **default**) resolves
-    to a concrete integrator from the fitted chart's v2-oscillation count:
-    **uniform 'quadrature'** when it is well-resolved
-    (``4 * v2_osc <= _N_V2_AUTO_MAX``) -- exact and caustic-safe, and where
-    low-oscillation / near-caustic charts fall -- and the fast asymptotic
-    **'local_quadrature'** only when uniform quadrature would need more than the
-    sample cap (the very oscillatory / high-NA regime where quadrature is both
-    slow and speckles).  Byte-identical to the method it picks in the
-    well-resolved regime (auto -> quadrature at the same auto-sized ``n_v2``);
-    it only diverges from the old ``'quadrature'`` default in the under-resolved
-    near-caustic regime, where that default clamped ``n_v2`` and emitted an
-    "under-resolved" warning anyway.  Measured **357x** faster (and no
-    multi-GB / minute-scale near-focus quadrature) than the old default on a
-    high-NA singlet chart while staying on the safe quadrature elsewhere.  Pass
-    ``integration_method='quadrature'`` explicitly to force the exact uniform
-    quadrature everywhere.
+    to a concrete integrator from the fitted chart's v2-oscillation count
+    (:func:`_v2_oscillation_bound`): **uniform 'quadrature'** when it is
+    well-resolved (``4 * v2_osc <= _N_V2_AUTO_MAX``) -- exact and
+    caustic-safe, and where low-oscillation / near-caustic charts fall --
+    and the asymptotic **'stationary_phase'** only when uniform quadrature
+    would need more than the sample cap (the very oscillatory / high-NA
+    regime where quadrature is both slow and speckles).  Byte-identical to
+    the method it picks in the well-resolved regime (auto -> quadrature at
+    the same auto-sized ``n_v2``).
+
+    The asymptotic fallback WARNS (audit S2).  A leading-order saddle
+    evaluation is only accurate where the integrand really is oscillatory;
+    at or near the lens EXIT plane of a focusing system it is not -- both
+    the v2-Hessian and ``ds1/dv2`` collapse there -- and both asymptotic
+    evaluators are then O(1) wrong (measured relL2 0.84 for
+    'stationary_phase' and 2.6 for 'local_quadrature' at its defaults,
+    against a converged uniform quadrature on an f = 6 mm singlet).  Pass
+    ``integration_method='quadrature'`` with an explicit ``n_v2`` for an
+    exit-plane field, or ``output_plane_distance=`` to put the observation
+    plane where the asymptotics belong.
 
     ``integration_method='levin'`` (v5.21) evaluates the v2 integral by the
     adaptive delaminating Levin method (:mod:`lumenairy._math.levin`, after
@@ -1242,15 +1505,32 @@ def apply_real_lens_maslov(
     an ``O(roi_n^2)`` integrand cost at the focus (measured ~21x vs the full
     grid here, up to ~1e3-1e4x for a tight spot on a large grid) -- and a
     through-focus scan (many ``output_plane_distance`` values) re-uses the single
-    ray trace, only re-propagating + refitting (cheap).  The composed field is
-    exact: it matches baking the same distance into the prescription's last
-    thickness to ~1e-10, and the ROI window is identical to the full-grid slice.
+    ray trace, only re-propagating + refitting (cheap).  The composed field
+    matches baking the same distance into the prescription's last thickness --
+    the two produce the SAME canonical chart, verified to 6.8e-13 waves in OPD
+    and 0 m in s1 at d = 0.5 ... 5 mm -- and the ROI window is identical to the
+    full-grid slice (measured bit-identical, max |dE| = 0.0).
+
+    The composed FIELD agrees to relL2 1.7e-05 ... 9.3e-04 on an f = 6 mm,
+    0.2 mm-aperture singlet at d = 0.5 ... 5 mm, not to the ~1e-10 claimed
+    before v5.46.  The gap is not the composition: it is the non-uniqueness of
+    the Chebyshev fit itself on a rank-deficient chart, where two charts
+    agreeing to float64 noise can land on different members of the same
+    solution set.  :func:`_solve_fit` now routes such charts to the
+    deterministic minimum-norm SVD (and warns when they are rank-deficient at
+    float64), which is what brought this from relL2 0.45 ... 1.38 down to the
+    numbers above.
     Not yet combined with ``fold_split`` (raises ``NotImplementedError`` rather
     than silently dropping the requested observation plane).
 
     ``normalize_output`` (default ``'power'``) sets the returned field's
-    absolute amplitude scale -- the Maslov integral itself carries an
-    arbitrary overall prefactor:
+    absolute amplitude scale.  Since v5.46 (audit S4) the raw integral is
+    ALREADY absolutely normalised -- it carries the Van Vleck density
+    ``|det(ds1/dv2)|^(1/2)`` and the d = 2 prefactor ``k/(2 pi i)``, and
+    reproduces the exact free-space field to 0.3 % with
+    ``normalize_output='none'`` -- so ``'power'`` / ``'peak'`` are now
+    diagnostics (they also absorb aperture clipping and chart truncation)
+    rather than the only way to get a meaningful amplitude:
 
     * ``'power'`` -- rescale so ``sum |E_out|^2 == sum |E_in|^2``.
     * ``'peak'``  -- rescale so ``max |E_out| == max |E_in|``.
@@ -1366,13 +1646,20 @@ def apply_real_lens_maslov(
                     _din = float(_leg.get('distance_in', 0.0) or 0.0)
                     _dout = float(_leg.get('distance_out', 0.0) or 0.0)
                     if abs(_din) > 0.0:
-                        E = angular_spectrum_propagate(E, _din, wavelength, dx)
+                        # S11 (audit): pass ``dy``.  These two mirror-leg
+                        # gaps were the only anamorphic-unaware calls left
+                        # in this driver -- every other site threads dx/dy
+                        # separately -- so an anamorphic grid silently
+                        # propagated the fold gaps with dy = dx.
+                        E = angular_spectrum_propagate(E, _din, wavelength,
+                                                       dx, dy)
                     E = apply_mirror(
                         E, wavelength=wavelength, dx=dx, dy=dy,
                         radius=_m.get('radius'), conic=_m.get('conic', 0.0),
                         aperture_diameter=_m.get('clear_aperture'))
                     if abs(_dout) > 0.0:
-                        E = angular_spectrum_propagate(E, _dout, wavelength, dx)
+                        E = angular_spectrum_propagate(E, _dout, wavelength,
+                                                       dx, dy)
             return E
 
     _surfaces_list = prescription.get('surfaces') or []
@@ -1464,8 +1751,12 @@ def apply_real_lens_maslov(
 
     # Pre-flight grid vs prescription-aperture check.
     try:
+        # WP-A2: pass the y extent too, so an anamorphic grid is checked
+        # against the axis that truncates FIRST rather than against a
+        # semi-extent that exists on neither axis.
         _warn_if_aperture_exceeds_grid(
-            lens_prescription, N, dx, source='apply_real_lens_maslov')
+            lens_prescription, N, dx, source='apply_real_lens_maslov',
+            N_y=int(E_in.shape[0]), dy=dy)
     except (KeyError, ValueError, TypeError, AttributeError):
         # Aperture-check failure is informational only; the
         # propagator still runs.
@@ -1503,7 +1794,17 @@ def apply_real_lens_maslov(
     # ray bundle launched on a centred (h, p) grid scaled by the
     # entrance aperture, so a non-zero stop_index is silently moved to
     # the entrance.
-    _stop_index = lens_prescription.get('stop_index')
+    # WP-A2: validate the key the way ``apply_real_lens`` now does -- an
+    # out-of-range or non-integer ``stop_index`` RAISES with a Section 2
+    # prefix rather than being int()-ed into a silent warning path (where a
+    # negative index used to read as "non-entrance stop" and a float would
+    # have raised a bare TypeError).  Normalising also makes
+    # ``stop_index=-1`` on a 2-surface lens mean surface 1, as Python
+    # indexing does, instead of tripping the non-entrance warning.
+    _stop_index = _normalise_stop_index(
+        lens_prescription.get('stop_index'),
+        len(lens_prescription.get('surfaces') or surfaces),
+        fn_name='apply_real_lens_maslov')
     if _stop_index is not None and int(_stop_index) != 0:
         import warnings
         warnings.warn(
@@ -1707,7 +2008,16 @@ def apply_real_lens_maslov(
     )
 
     tr = rt.trace(rays, surfaces, wavelength)
-    exit_rays = tr.image_rays
+    # ``rt.trace`` leaves every ray ON the last surface, at z = sag(rho) in
+    # that surface's local frame -- NOT on the exit vertex plane.  The
+    # canonical map (s2, v2) -> OPD built below is documented (and consumed)
+    # as an EXIT-PLANE chart, so the rays have to be carried the signed
+    # straight-line leg t = -z/N first; skipping it injects a pure rho^2
+    # (defocus) OPD of n_exit*sag(rho), which the Chebyshev fit absorbs
+    # silently.  ``at_exit_vertex`` is the single shared operator for that
+    # transfer (it also resolves n_exit from the prescription, kills grazing
+    # rays instead of teleporting them, and is idempotent).
+    exit_rays = tr.at_exit_vertex()
     alive = exit_rays.alive
     if alive.sum() < 1.5 * _count_multi_indices_4d(poly_order):
         raise ValueError(
@@ -1724,12 +2034,21 @@ def apply_real_lens_maslov(
     # through-focus scan re-uses the single ray trace (only re-propagate + refit,
     # which is cheap vs re-tracing).  ``output_plane_n`` is the index of that
     # output space (air = 1).
+    #
+    # ``exit_rays`` already sits on the vertex plane (z = 0), so this leg is
+    # the full ``d/N``; composed with the vertex transfer above it is the
+    # ``(d - z_sag)/N`` the requested plane actually needs, with the sag leg
+    # correctly priced at the EXIT medium's index and the free leg at
+    # ``output_plane_n``.
     ex_x = exit_rays.x
     ex_y = exit_rays.y
     ex_opd = exit_rays.opd
     if output_plane_distance:
         _Nz = exit_rays.N
-        _t = output_plane_distance / np.where(np.abs(_Nz) > 1e-30, _Nz, 1e-30)
+        _t = np.where(alive & (np.abs(_Nz) > rt.EXIT_VERTEX_GRAZING_TOL),
+                      output_plane_distance / np.where(
+                          np.abs(_Nz) > rt.EXIT_VERTEX_GRAZING_TOL, _Nz, 1.0),
+                      0.0)
         ex_x = ex_x + _t * exit_rays.L
         ex_y = ex_y + _t * exit_rays.M
         ex_opd = ex_opd + float(output_plane_n) * _t
@@ -1931,26 +2250,46 @@ def apply_real_lens_maslov(
 
     # v5.21: integration_method='auto' -- resolve to a concrete integrator from
     # the fitted chart's v2-oscillation count.  Uniform 'quadrature' is exact
-    # AND caustic-safe (its integrand amplitude |det ds1/dv2| is finite through
-    # focus) but costs O(N^2 * n_v2); the asymptotic 'local_quadrature' is
-    # 77-386x faster but is singular AT a caustic and only accurate when the
-    # integrand is oscillatory (the saddle dominates).  So: use quadrature when
-    # it is well-resolved (need n_v2 <= _N_V2_AUTO_MAX -- this covers low-
-    # oscillation AND near-caustic charts, which are low-v2-oscillation and thus
-    # stay on the safe path), and switch to the fast asymptotic only when
-    # quadrature would need MORE samples than the cap (the very oscillatory /
-    # high-NA regime where uniform quadrature is both slow and would speckle,
-    # exactly where the saddle approximation is the intended tool).
+    # AND caustic-safe (its integrand amplitude is finite through focus) but
+    # costs O(N^2 * n_v2); the asymptotic evaluators are 77-386x faster but are
+    # singular AT a caustic and only accurate when the integrand is oscillatory
+    # (the saddle dominates).  So: use quadrature when it is well-resolved
+    # (need n_v2 <= _N_V2_AUTO_MAX -- this covers low-oscillation AND
+    # near-caustic charts, which are low-v2-oscillation and thus stay on the
+    # safe path), and switch to the asymptotic only when quadrature would need
+    # MORE samples than the cap -- with a warning, because that regime is not
+    # automatically one where the saddle approximation holds.
     if integration_method == 'auto':
-        _v2m_a = np.array(
-            [1.0 if (k[2] > 0 or k[3] > 0) else 0.0 for k in mi],
-            dtype=np.float64)
-        _osc_a = float(np.sum(np.abs(coef_opd) * _v2m_a))
+        _osc_a = _v2_oscillation_bound(mi, coef_opd)
         _need_a = int(np.ceil(4.0 * _osc_a)) + 1
-        integration_method = ('local_quadrature' if _need_a > _N_V2_AUTO_MAX
+        # S2 (audit): the asymptotic fallback is 'stationary_phase', not
+        # 'local_quadrature'.  Measured on the auditor's synthetic quadratic
+        # charts (where the exact value is closed-form) BOTH are now exact;
+        # on a real f = 6 mm singlet scored against a converged uniform
+        # quadrature, stationary_phase is relL2 8.4e-01 against
+        # local_quadrature's 2.6e+00 at its shipped defaults -- the local
+        # window reaches into pupil zones where the order-4 fit is
+        # extrapolating.  stationary_phase is also the cheaper of the two.
+        integration_method = ('stationary_phase' if _need_a > _N_V2_AUTO_MAX
                               else 'quadrature')
         _progress('integrate', 0.595,
                   f"auto -> {integration_method} (need n_v2~{_need_a})")
+        if integration_method != 'quadrature':
+            import warnings  # function-local, matching this driver
+            warnings.warn(
+                f"apply_real_lens_maslov: integration_method='auto' resolved "
+                f"to 'stationary_phase' because uniform quadrature would need "
+                f"n_v2 ~ {_need_a} samples (cap {_N_V2_AUTO_MAX}).  The "
+                f"leading-order saddle evaluation is only accurate where the "
+                f"integrand really is oscillatory -- near the lens EXIT plane "
+                f"of a focusing system it is not (the v2-Hessian and the "
+                f"Jacobian both collapse there) and it can be O(1) wrong.  "
+                f"For an observation plane at or near the exit vertex pass "
+                f"integration_method='quadrature' with an explicit n_v2, or "
+                f"use apply_real_lens_traced / apply_real_lens_fga; for a "
+                f"plane near focus pass output_plane_distance= and keep this "
+                f"evaluator.",
+                RuntimeWarning, stacklevel=2)
 
     # A1 (v5.20): auto-resolve the uniform-quadrature v2 sampling when the
     # caller left n_v2 unset.  n_v2 drives ONLY integration_method='quadrature'
@@ -1961,10 +2300,7 @@ def apply_real_lens_maslov(
     # ``coef_opd`` are already fitted at this point.
     if n_v2 is None:
         if integration_method == 'quadrature':
-            _v2_mask_auto = np.array(
-                [1.0 if (k[2] > 0 or k[3] > 0) else 0.0 for k in mi],
-                dtype=np.float64)
-            _v2_osc_auto = float(np.sum(np.abs(coef_opd) * _v2_mask_auto))
+            _v2_osc_auto = _v2_oscillation_bound(mi, coef_opd)
             n_v2 = int(np.clip(int(np.ceil(4.0 * _v2_osc_auto)) + 1,
                                _N_V2_AUTO_MIN, _N_V2_AUTO_MAX))
         else:
@@ -2032,6 +2368,35 @@ def apply_real_lens_maslov(
             f"'quadrature', 'stationary_phase', 'local_quadrature', 'levin', "
             f"got {integration_method!r}")
 
+    # S6 (audit): both asymptotic evaluators solve grad_v2 OPD = 0, i.e. the
+    # saddle of the OPTICAL PATH alone.  The symplectic identity
+    # dOPD/dv2 = -n1 (v1 . ds1/dv2) (verified to 5.8e-7 relative on a real
+    # singlet chart) means that saddle sits where the LAUNCH direction v1 -> 0
+    # -- the on-axis collimated ray, for every pixel and every input.  The
+    # stationary point of the TOTAL integrand phase is
+    # grad_v2[arg E_in(s1(v2)) + k OPD] = 0, which selects the ray whose launch
+    # direction matches the input field's local wavevector.  The two coincide
+    # only for a flat (collimated) input, yet the chart is deliberately sized
+    # to cover a diverging / tilted one (na_proxy = na_lens + na_input).  Say
+    # so rather than returning a silently wrong field; 'quadrature' and
+    # 'levin' integrate the true integrand and are unaffected.
+    if (integration_method in ('stationary_phase', 'local_quadrature')
+            and not collimated_input and _na_meas > _SADDLE_FLAT_INPUT_NA):
+        import warnings  # function-local, matching this driver
+        warnings.warn(
+            f"apply_real_lens_maslov: integration_method="
+            f"{integration_method!r} solves for the saddle of the OPD alone, "
+            f"which selects the v1 = 0 (collimated) launch ray at every "
+            f"pixel; the input field's measured angular spread is "
+            f"NA ~ {_na_meas:.4f} (> {_SADDLE_FLAT_INPUT_NA:g}), so that is "
+            f"NOT the stationary point of the full integrand and the result "
+            f"is a leading-order expansion about the wrong ray.  Use "
+            f"integration_method='quadrature' (exact) or 'levin' "
+            f"(caustic-uniform) for a diverging / converging / tilted input, "
+            f"or pass collimated_input=True if the input really is flat and "
+            f"the measured spread is aperture-edge content.",
+            RuntimeWarning, stacklevel=2)
+
     _progress('integrate', 0.60,
               f'method={integration_method}')
 
@@ -2054,6 +2419,7 @@ def apply_real_lens_maslov(
             K1_arr, K2_arr, K3_arr, K4_arr,
             poly_order, N_out_coarse,
             u_s2x_out, u_s2y_out, inbox_flat,
+            v2x_h, v2y_h,
             sample_E_bilinear,
             levin_tol, _progress, verbose,
             out_dtype=E_in.dtype,
@@ -2113,18 +2479,14 @@ def apply_real_lens_maslov(
             )
     else:
         # N2 (audit): estimate the v2 oscillation count of the integrand
-        # phase 2*pi*OPD(s2,v2) from the fitted coefficients.  Chebyshev
-        # polynomials are bounded by 1 on [-1, 1], so the sum of
-        # |coef_opd| over v2-dependent terms (k3>0 or k4>0) upper-bounds
-        # the OPD excursion in WAVES = cycles along v2.  Uniform n_v2-point
-        # quadrature needs a few samples per cycle; when under-resolved the
-        # result speckles regardless of grid/memory (no output-resolution
-        # fix helps) -- warn and point at the asymptotic evaluators, which
-        # are the correct choice at production NA.
-        _v2_mask = np.array(
-            [1.0 if (k[2] > 0 or k[3] > 0) else 0.0 for k in mi],
-            dtype=np.float64)
-        _v2_osc = float(np.sum(np.abs(coef_opd) * _v2_mask))
+        # phase 2*pi*OPD(s2,v2) from the fitted coefficients -- see
+        # :func:`_v2_oscillation_bound` for why it is the TOTAL VARIATION
+        # (sum |c_k| * max(k3, k4)) and not the excursion (sum |c_k|).
+        # Uniform n_v2-point quadrature needs a few samples per cycle; when
+        # under-resolved the result speckles regardless of grid/memory (no
+        # output-resolution fix helps) -- warn and point at the asymptotic
+        # evaluators, which are the correct choice at production NA.
+        _v2_osc = _v2_oscillation_bound(mi, coef_opd)
         if n_v2 < 4.0 * _v2_osc:
             import warnings
             warnings.warn(
@@ -2335,6 +2697,15 @@ def apply_real_lens_maslov(
             2j * np.pi * (_lin[1] * _u_s2x_f
                           + _lin[2] * _u_s2y_f))).astype(E_in.dtype)
         del _s2x_f, _s2y_f, _u_s2x_f, _u_s2y_f
+
+    # S4 (audit): the d = 2 Van Vleck prefactor k/(2 pi i) = 1/(i lambda).
+    # It closes the ABSOLUTE scale of the canonical integral -- without it the
+    # returned field is off by 1/(i*lambda) (and, before the sqrt fix in the
+    # integrands, by a further factor of |det ds1/dv2|).  A constant, so it
+    # commutes with the upsample and the linear-phase re-application above;
+    # applied here so that normalize_output='none' -- which every ``roi=`` run
+    # is forced onto -- is physically scaled.
+    E_out = (E_out * _maslov_kernel_prefactor(wavelength)).astype(E_in.dtype)
 
     # -----------------------------------------------------------------
     # Step 6: Absolute-amplitude normalization.
@@ -2620,7 +2991,7 @@ def _integrate_quadrature(
 
             det_J_c = (ds1x_du3_c * ds1y_du4_c
                        - ds1x_du4_c * ds1y_du3_c)
-            abs_J_c = np.abs(det_J_c) / (v2x_h * v2y_h)
+            abs_J_c = _van_vleck_density(np.abs(det_J_c), v2x_h, v2y_h)
 
             Eobj_c = sample_E_bilinear(s1x_c, s1y_c)
             weights_c = weight_per_sample[c_start:c_end]
@@ -2819,7 +3190,7 @@ def _integrate_quadrature_cupy(
             d23 = _factor_contract(Hh_ds1y_du3, _Tyb, cs, ce, _bw)
             d24 = _factor_contract(Hh_ds1y_du4, _Tyb, cs, ce, _bw)
             det_J_c = d13 * d24 - d14 * d23
-            abs_J_c = xp.abs(det_J_c) / (v2x_h * v2y_h)
+            abs_J_c = _van_vleck_density(xp.abs(det_J_c), v2x_h, v2y_h)
             Eobj_c = _sample(s1x_c, s1y_c)
             contrib = (Eobj_c * xp.exp(2j * xp.pi * opd_c)
                        * abs_J_c * weight_per_sample[cs:ce])
@@ -2919,7 +3290,7 @@ def _integrate_stationary_phase(
         coef_s1y, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
 
     det_J_norm = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
-    abs_J = np.abs(det_J_norm) / (v2x_h * v2y_h)
+    abs_J = _van_vleck_density(np.abs(det_J_norm), v2x_h, v2y_h)
 
     H33_phys = H33 / (v2x_h * v2x_h)
     H34_phys = H34 / (v2x_h * v2y_h)
@@ -2994,14 +3365,17 @@ def _warn_levin_over_tolerance(achieved_bounds, tolerances, n_total,
 
 
 def _integrate_levin(
-    # E-L9 (audit): ``mi`` was dead (the exponent tuples are consumed only as
-    # the K*_arr int64 arrays) and so were v2x_h / v2y_h (the Levin engine
-    # works entirely in the normalised unit v2 box; the physical half-widths
-    # never enter its residual bound).  Dropped.
+    # E-L9 (audit): ``mi`` is dead here -- the exponent tuples are consumed
+    # only as the K*_arr int64 arrays.  The physical half-widths v2x_h / v2y_h
+    # WERE dropped as dead by E-L9 and are back (S4): the Van Vleck density
+    # sqrt(|det ds1/dv2|) does not cancel against the d^2 v2 measure the way
+    # the pre-S4 |det ds1/dv2| did, so the normalised-box integrand carries a
+    # sqrt(v2x_h * v2y_h) that the engine's own unit box cannot supply.
     coef_opd, coef_s1x, coef_s1y,
     K1_arr, K2_arr, K3_arr, K4_arr,
     poly_order, N_out_coarse,
     u_s2x_out, u_s2y_out, inbox_flat,
+    v2x_h, v2y_h,
     sample_E_bilinear,
     levin_tol, _progress, verbose,
     out_dtype=np.complex128,
@@ -3049,6 +3423,10 @@ def _integrate_levin(
     def _tuk(u, alpha=0.2):                   # shared window (S2-14)
         return _tukey_taper(u, alpha)
 
+    # S4: the physical d^2 v2 measure that the unit-box Levin engine does not
+    # carry; see the ``f`` closure below.
+    _vv_measure = float(np.sqrt(v2x_h * v2y_h))
+
     idx = np.where(inbox_flat)[0]
     twopi = 2.0 * np.pi
 
@@ -3080,7 +3458,10 @@ def _integrate_levin(
         def f(u3, u4):
             s1x, dx3, dx4 = _ev(coef_s1x, u3, u4)[:3]
             s1y, dy3, dy4 = _ev(coef_s1y, u3, u4)[:3]
-            detJ = np.abs(dx3 * dy4 - dx4 * dy3)
+            # S4: sqrt(|det ds1/dv2|) * d^2 v2 = sqrt(|det_J_norm| *
+            # v2x_h * v2y_h) du3 du4 -- the Levin engine integrates over the
+            # normalised unit box, so the measure factor rides on ``f``.
+            detJ = _vv_measure * np.sqrt(np.abs(dx3 * dy4 - dx4 * dy3))
             Eo = sample_E_bilinear(
                 s1x.ravel(), s1y.ravel()).reshape(np.shape(u3))
             return Eo * detJ * _tuk(np.asarray(u3)) * _tuk(np.asarray(u4))
@@ -3153,7 +3534,7 @@ def _integrate_levin(
 
     def _pairs_f(u3v, u4v, sx, dx3, dx4, sy, dy3, dy4):
         """Integrand amplitude f from the s1x/s1y outputs of _pair_ev9."""
-        detJ = np.abs(dx3 * dy4 - dx4 * dy3)
+        detJ = _vv_measure * np.sqrt(np.abs(dx3 * dy4 - dx4 * dy3))
         Eo = sample_E_bilinear(sx.ravel(), sy.ravel()).reshape(sx.shape)
         return (Eo * detJ * _tuk(np.asarray(u3v, dtype=np.float64))
                 * _tuk(np.asarray(u4v, dtype=np.float64)))
@@ -3426,7 +3807,14 @@ def _integrate_local_quadrature(
     out_dtype=np.complex128,
     lin_v3=0.0, lin_v4=0.0,
 ):
-    """Hybrid stationary-phase + local quadrature.
+    """Gaussian-windowed local quadrature about the per-pixel saddle.
+
+    Samples the integrand on a lattice that is laid out on the PRINCIPAL
+    AXES of the phase Hessian (not the coordinate axes), tapers it with a
+    Gaussian window, and divides out that window's exact effect on the
+    quadratic model of the phase.  The three pieces are what make it
+    converge; see :func:`_local_window_geometry` for the algebra and the
+    measured convergence ladder.
 
     v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
     compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
@@ -3452,35 +3840,40 @@ def _integrate_local_quadrature(
     _progress('integrate', 0.72, 'computing Hessian eigen-scales')
     _, _, _, H33, H34, H44 = _opd_and_derivs(
         coef_opd, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
-    H33_phys = H33 / (v2x_h ** 2)
-    H34_phys = H34 / (v2x_h * v2y_h)
-    H44_phys = H44 / (v2y_h ** 2)
-    tau = H33_phys + H44_phys
-    detH = H33_phys * H44_phys - H34_phys ** 2
-    disc = np.maximum(tau ** 2 / 4.0 - detH, 0.0)
-    sqrt_disc = np.sqrt(disc)
-    lam1 = tau / 2.0 + sqrt_disc
-    lam2 = tau / 2.0 - sqrt_disc
-    sigma1_phys = 1.0 / np.sqrt(np.maximum(np.abs(lam1), 1e-30) * np.pi)
-    sigma2_phys = 1.0 / np.sqrt(np.maximum(np.abs(lam2), 1e-30) * np.pi)
-    sigma1_norm = sigma1_phys / v2x_h
-    sigma2_norm = sigma2_phys / v2y_h
+    (sigma1_phys, sigma2_phys, cos_t, sin_t,
+     window_corr) = _local_window_geometry(
+        np, H33, H34, H44, v2x_h, v2y_h, n_samples, window_sigma)
 
     _progress('integrate', 0.75,
-              f'local uniform sampling: {n_samples}x{n_samples} pts, '
-              f'window={window_sigma}sigma')
-    lin = np.linspace(-window_sigma, window_sigma, n_samples)
-    dxi = lin[1] - lin[0]
+              f'local principal-axis sampling: {n_samples}x{n_samples} pts, '
+              f'window={window_sigma}sigma (Gaussian-tapered)')
+    lin, dxi, taper1d, _, _ = _local_window_1d(int(n_samples),
+                                               float(window_sigma))
     Xlin, Ylin = np.meshgrid(lin, lin, indexing='xy')
     Xlin_flat = Xlin.ravel()
     Ylin_flat = Ylin.ravel()
+    taper = np.outer(taper1d, taper1d).ravel()   # 'xy' meshgrid -> (y, x)
 
-    u_v2x_samp = (u_v2x[:, None]
-                   + (sigma1_norm[:, None]) * Xlin_flat[None, :])
-    u_v2y_samp = (u_v2y[:, None]
-                   + (sigma2_norm[:, None]) * Ylin_flat[None, :])
-    u_v2x_samp = np.clip(u_v2x_samp, -1.0, 1.0)
-    u_v2y_samp = np.clip(u_v2y_samp, -1.0, 1.0)
+    # Rotate the principal-axis offsets (sigma1*xi1, sigma2*xi2) back into the
+    # physical (v2x, v2y) frame, then normalise by the box half-widths.  The
+    # rotation is orthogonal, so the area element sigma1*sigma2*dxi^2 below is
+    # unchanged by it.
+    off1 = sigma1_phys[:, None] * Xlin_flat[None, :]
+    off2 = sigma2_phys[:, None] * Ylin_flat[None, :]
+    u_v2x_samp = u_v2x[:, None] + (cos_t[:, None] * off1
+                                   - sin_t[:, None] * off2) / v2x_h
+    u_v2y_samp = u_v2y[:, None] + (sin_t[:, None] * off1
+                                   + cos_t[:, None] * off2) / v2y_h
+    del off1, off2
+    # S2/P2 (audit): the pre-fix ``np.clip`` folded every out-of-box sample
+    # onto the box edge and still counted it at the full unclipped cell area,
+    # over-counting by up to 3 decades on a weakly-curved chart.  Samples
+    # outside the fitted chart carry no information (the Chebyshev recurrences
+    # are not even accurate there), so DROP them: clip to keep the polynomial
+    # evaluation in its accurate range, and zero the contribution.
+    in_chart = ((np.abs(u_v2x_samp) <= 1.0) & (np.abs(u_v2y_samp) <= 1.0))
+    np.clip(u_v2x_samp, -1.0, 1.0, out=u_v2x_samp)
+    np.clip(u_v2y_samp, -1.0, 1.0, out=u_v2y_samp)
 
     n_s2 = n_samples * n_samples
     u_s2x_tile = np.broadcast_to(u_s2x_flat[:, None], (N_px, n_s2))
@@ -3490,7 +3883,7 @@ def _integrate_local_quadrature(
               f'evaluating integrand on {N_px*n_s2:,} (pixel,sample) pairs')
 
     E_flat = np.zeros(N_px, dtype=out_dtype)
-    w2d_phys = (sigma1_phys * sigma2_phys) * (dxi ** 2)
+    w2d_phys = (sigma1_phys * sigma2_phys) * (dxi ** 2) * window_corr
 
     PX_CHUNK = max(1, min(N_px, 1024 * 64 // max(1, n_s2 // 16)))
     for p_start in range(0, N_px, PX_CHUNK):
@@ -3509,7 +3902,7 @@ def _integrate_local_quadrature(
         # N4: linear-in-v2 OPD contribution at each window sample.
         opd_v = opd_v + lin_v3 * u3 + lin_v4 * u4
         det_J = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
-        abs_J = np.abs(det_J) / (v2x_h * v2y_h)
+        abs_J = _van_vleck_density(np.abs(det_J), v2x_h, v2y_h)
 
         Eobj_v = sample_E_bilinear(s1x_v, s1y_v)
 
@@ -3517,6 +3910,11 @@ def _integrate_local_quadrature(
                     * np.exp(2j * np.pi * opd_v)
                     * abs_J)
         contrib_r = contrib.reshape(p_end - p_start, n_s2)
+        # Gaussian taper (broadcast over the shared sample lattice) and the
+        # out-of-chart drop; the taper is divided back out by ``window_corr``
+        # inside ``w2d_phys``.
+        contrib_r = np.where(in_chart[p_start:p_end],
+                             contrib_r * taper[None, :], 0.0)
         E_flat[p_start:p_end] = contrib_r.sum(axis=1) * \
                                   w2d_phys[p_start:p_end]
         if verbose and (p_start % (PX_CHUNK * 8) == 0):
@@ -3604,7 +4002,7 @@ def _integrate_stationary_phase_cupy(
     s1y_star, ds1y_du3, ds1y_du4, _, _, _ = opd6(csy, u_s2x, u_s2y, u_v2x, u_v2y)
 
     det_J_norm = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
-    abs_J = xp.abs(det_J_norm) / (v2x_h * v2y_h)
+    abs_J = _van_vleck_density(xp.abs(det_J_norm), v2x_h, v2y_h)
 
     H33_phys = H33 / (v2x_h * v2x_h)
     H34_phys = H34 / (v2x_h * v2y_h)
@@ -3638,9 +4036,12 @@ def _integrate_local_quadrature_cupy(
 ):
     """CuPy GPU twin of :func:`_integrate_local_quadrature`.
 
-    Same hybrid stationary-phase + local windowed quadrature -- Newton saddle,
-    Hessian eigen-scale window (`sigma1`, `sigma2`), then an
-    ``n_samples x n_samples`` local grid integrated per pixel -- on the device.
+    Same Gaussian-windowed principal-axis local quadrature -- Newton saddle,
+    Hessian EIGENBASIS window (`sigma1`, `sigma2` along the eigenvectors),
+    an ``n_samples x n_samples`` tapered lattice per pixel, and the tapered
+    quadratic-model correction divided back out (audit S2) -- on the device.
+    The 1-D lattice / taper / correction come from the same host-side
+    :func:`_local_window_1d` the CPU integrator uses, so the two cannot drift.
     CPU integrator untouched; validated NumPy-backend ULP and on-device ~1e-6.
     """
     xp = cp
@@ -3664,31 +4065,29 @@ def _integrate_local_quadrature_cupy(
         lin_v3, lin_v4)
 
     _, _, _, H33, H34, H44 = opd6(cop, u_s2x, u_s2y, u_v2x, u_v2y)
-    H33_phys = H33 / (v2x_h ** 2)
-    H34_phys = H34 / (v2x_h * v2y_h)
-    H44_phys = H44 / (v2y_h ** 2)
-    tau = H33_phys + H44_phys
-    detH = H33_phys * H44_phys - H34_phys ** 2
-    disc = xp.maximum(tau ** 2 / 4.0 - detH, 0.0)
-    sqrt_disc = xp.sqrt(disc)
-    lam1 = tau / 2.0 + sqrt_disc
-    lam2 = tau / 2.0 - sqrt_disc
-    sigma1_phys = 1.0 / xp.sqrt(xp.maximum(xp.abs(lam1), 1e-30) * xp.pi)
-    sigma2_phys = 1.0 / xp.sqrt(xp.maximum(xp.abs(lam2), 1e-30) * xp.pi)
-    sigma1_norm = sigma1_phys / v2x_h
-    sigma2_norm = sigma2_phys / v2y_h
+    (sigma1_phys, sigma2_phys, cos_t, sin_t,
+     window_corr) = _local_window_geometry(
+        xp, H33, H34, H44, v2x_h, v2y_h, n_samples, window_sigma)
 
-    lin = xp.linspace(-window_sigma, window_sigma, n_samples)
-    dxi = lin[1] - lin[0]
+    lin_h, dxi, taper1d_h, _, _ = _local_window_1d(int(n_samples),
+                                                   float(window_sigma))
+    lin = xp.asarray(lin_h)
     Xlin, Ylin = xp.meshgrid(lin, lin, indexing='xy')
     Xlin_flat = Xlin.ravel()
     Ylin_flat = Ylin.ravel()
-    u_v2x_samp = xp.clip(
-        u_v2x[:, None] + sigma1_norm[:, None] * Xlin_flat[None, :], -1.0, 1.0)
-    u_v2y_samp = xp.clip(
-        u_v2y[:, None] + sigma2_norm[:, None] * Ylin_flat[None, :], -1.0, 1.0)
+    taper = xp.asarray(np.outer(taper1d_h, taper1d_h).ravel())
+    off1 = sigma1_phys[:, None] * Xlin_flat[None, :]
+    off2 = sigma2_phys[:, None] * Ylin_flat[None, :]
+    u_v2x_samp = u_v2x[:, None] + (cos_t[:, None] * off1
+                                   - sin_t[:, None] * off2) / v2x_h
+    u_v2y_samp = u_v2y[:, None] + (sin_t[:, None] * off1
+                                   + cos_t[:, None] * off2) / v2y_h
+    del off1, off2
+    in_chart = ((xp.abs(u_v2x_samp) <= 1.0) & (xp.abs(u_v2y_samp) <= 1.0))
+    u_v2x_samp = xp.clip(u_v2x_samp, -1.0, 1.0)
+    u_v2y_samp = xp.clip(u_v2y_samp, -1.0, 1.0)
     n_s2 = n_samples * n_samples
-    w2d_phys = (sigma1_phys * sigma2_phys) * (dxi ** 2)
+    w2d_phys = (sigma1_phys * sigma2_phys) * (dxi ** 2) * window_corr
 
     E_flat = xp.zeros(N_px, dtype=out_dtype)
     PX_CHUNK = max(1, min(N_px, 1024 * 64 // max(1, n_s2 // 16)))
@@ -3704,14 +4103,52 @@ def _integrate_local_quadrature_cupy(
         s1x_v, ds1x_du3, ds1x_du4, _, _, _ = opd6(csx, u1, u2, u3, u4)
         s1y_v, ds1y_du3, ds1y_du4, _, _, _ = opd6(csy, u1, u2, u3, u4)
         det_J = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
-        abs_J = xp.abs(det_J) / (v2x_h * v2y_h)
+        abs_J = _van_vleck_density(xp.abs(det_J), v2x_h, v2y_h)
         Eobj_v = _sample_bilinear_xp(xp, E_in_gpu, N, dx, dy, s1x_v, s1y_v)
-        contrib = (Eobj_v * xp.exp(2j * xp.pi * opd_v) * abs_J)
-        E_flat[p0:p1] = contrib.reshape(bw, n_s2).sum(axis=1) * w2d_phys[p0:p1]
+        contrib = (Eobj_v * xp.exp(2j * xp.pi * opd_v)
+                   * abs_J).reshape(bw, n_s2)
+        contrib = xp.where(in_chart[p0:p1], contrib * taper[None, :], 0.0)
+        E_flat[p0:p1] = contrib.sum(axis=1) * w2d_phys[p0:p1]
 
     E_flat = xp.where(converged, E_flat, xp.asarray(0, dtype=out_dtype))
     E_flat = xp.where(inbox, E_flat, xp.asarray(0, dtype=out_dtype))
     return E_flat.reshape(N_out_coarse, N_out_coarse)
+
+
+def clear_maslov_local_window_cache() -> None:
+    """Drop the cached ``local_quadrature`` sample lattices.
+
+    :func:`_local_window_1d` memoises the 1-D lattice, Gaussian taper and
+    quadratic-model corrections on ``(local_n_samples, local_window_sigma)``.
+    The entries are tiny -- three float/complex arrays of length
+    ``local_n_samples`` (<= a few kB at any sane sample count, times an LRU
+    cap of 32) -- so there is no byte-budget hook; the clearer exists so the
+    cache participates in the central registry contract (``clear_asm_caches``
+    / ``lumenairy_context(clear_caches_on_exit=True)``) like every other
+    module-level cache in the package.
+
+    Clearing is always safe: the cache is a pure function of its key, so a
+    drained cache only costs the (microsecond) rebuild.
+    """
+    _local_window_1d.cache_clear()
+
+
+# v4.16.0 central cache registry: register at module-import time so
+# ``clear_asm_caches`` picks this cache up by walking the registry instead of
+# enumerating clear calls by hand (see ``lumenairy/_cache_registry.py``).
+try:
+    import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    _mz_this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'maslov_local_window',
+        lambda: getattr(_mz_this_mod, 'clear_maslov_local_window_cache')(),
+    )
+except ImportError:
+    # Defensive, mirroring the sibling registrations: a partial install or an
+    # odd reload sequence must not make this module unimportable.
+    pass
 
 
 __all__ = [

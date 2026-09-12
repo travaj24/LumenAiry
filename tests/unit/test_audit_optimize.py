@@ -398,13 +398,47 @@ class TestAuditFixesV4_13_2_agent_c_C1MakeLgAberrationMeritJax:
         # NON-VACUITY (and the sentinel that the body actually ran): if the
         # (0, 0) coupling underflowed to exactly 0 the merit would be the
         # bare weight, and v3/v1 == 3 would hold for FREE without the tensor
-        # ever being computed.  Measured |L_00|^2 = 6.289211183e-03 on both
-        # mounts -> a 1e-4 floor keeps 63x headroom below and the coupling is
-        # bounded by 1 above (measured 6.3e-03, 159x under that ceiling).
+        # ever being computed.
+        #
+        # v5.46 RE-PIN (audit Y2, AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11):
+        # the band moved by an exactly derivable factor.  The modal
+        # integrand carried ``|det ds1/dv2|`` where Van Vleck-Maslov requires
+        # ``-1j sqrt(|det ds1/dv2|) / lambda``, so every L entry is now
+        # multiplied by ``-1j / (lambda sqrt(|det J|))`` and
+        #
+        #     |L|^2_new / |L|^2_old = 1 / (lambda^2 |det J|).
+        #
+        # Measured on THIS fixture (R1 = 60 mm plano-convex N-BK7, ap 12 mm,
+        # lambda = 1.30 um, w_s = 20 um, w_p = 0.05, on-axis):
+        # ``|det J| = 7.076126e-06 m^2`` at the envelope-stationary point, so
+        # the factor is ``1/(1.30e-6^2 * 7.076126e-06) = 8.362145e+16`` and
+        #     6.289211183e-03 * 8.362145e+16 = 5.259136e+14,
+        # which is what this test now measures (5.259135820e+14) -- agreement
+        # to 6 significant figures, i.e. the move is the Van Vleck factor and
+        # nothing else.  Dividing back out via the newly exposed
+        # ``AberrationTensorResult.van_vleck_weight`` reproduces
+        # 3.205061889e-03 / 6.289217e-03 on the two fixtures to 6 digits.
+        #
+        # The band below keeps the ORIGINAL non-vacuity purpose (the tensor
+        # must not have underflowed and must not be a degenerate constant)
+        # with the same fractional headroom as before: floor 50x below and
+        # ceiling 190x above the measured value.
+        #
+        # NOTE: ``coupling`` is NOT a Strehl ratio in either version.  The
+        # pure-(0, 0) request takes the closed-form POINT-SAMPLING branch,
+        # which returns ``U(chief) * conj(LG_k(0))`` -- units of field per
+        # length, not the dimensionless overlap ``integral conj(LG_k) U`` the
+        # sigma-grid branch returns.  That branch-scale split is pre-existing
+        # and documented at ``asymptotic_aberration_tensor.py`` (audit W3-T3);
+        # before Y2 the erroneous extra ``lambda sqrt(|det J|)`` (a LENGTH)
+        # cancelled the 1/length^2 by dimensional accident and made the number
+        # look like a Strehl ratio.  ``1 - |L|^2`` is therefore not in [0, 1]
+        # and never was a Strehl deficit on this branch.
         coupling = 1.0 - v1
-        assert 1e-4 < coupling < 1.0, (
+        assert 1e13 < coupling < 1e17, (
             f'the (0, 0) LG coupling |L|^2 = {coupling:.6e} is outside the '
-            f'measured well-conditioned band (6.289e-03 on both mounts): the '
+            f'measured well-conditioned band (5.259136e+14 on this fixture; '
+            f'6.289211183e-03 x 1/(lambda^2 |det J|) = 8.362145e+16): the '
             f'weight-linearity claim below would be vacuous if the tensor '
             f'underflowed to zero.')
         ratio = v3 / v1

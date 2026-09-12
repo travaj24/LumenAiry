@@ -44,6 +44,11 @@ from ..elements.lenses import (
     _multi_indices_total_degree,
 )
 from .asymptotic_canonical_fit import CanonicalPolyFit, HFPolyFit
+from .asymptotic_maslov import (
+    B_QUAD_EXP_MAX,
+    lg00_sampling_waist_from_M,
+    van_vleck_weight,
+)
 
 __all__ = [
     'JaxAberrationTensorResult',
@@ -148,6 +153,11 @@ def _CanonicalPolyFit_eval_phi_xp(self, s2x, s2y, v2x, v2y, *,
 
     Accepts NumPy / CuPy / JAX inputs and stays in the input backend.
     Output is differentiable via ``jax.grad`` for JAX inputs.
+
+    Mirrors :meth:`CanonicalPolyFit.eval_phi` character for character,
+    including the audit-Y1 split: ``include_linear`` gates only the
+    ``s2``-only ramp ``a0 + a1 u1 + a2 u2``, while the ``v2``-linear
+    ``a3 u3 + a4 u4`` is always inside the integrand.
     """
     from ..backend import array_namespace
     xp = array_namespace(s2x, s2y, v2x, v2y)
@@ -159,10 +169,11 @@ def _CanonicalPolyFit_eval_phi_xp(self, s2x, s2y, v2x, v2y, *,
         self.coef_phi, self.multi_indices,
         u1, u2, u3, u4, self.poly_order, xp,
     )
-    if include_linear and self.linear_coeffs_phi is not None:
+    if self.linear_coeffs_phi is not None:
         a0, a1, a2, a3, a4 = self.linear_coeffs_phi
-        phi = phi + (float(a0) + float(a1) * u1 + float(a2) * u2
-                     + float(a3) * u3 + float(a4) * u4)
+        phi = phi + (float(a3) * u3 + float(a4) * u4)
+        if include_linear:
+            phi = phi + (float(a0) + float(a1) * u1 + float(a2) * u2)
     return phi
 
 
@@ -362,12 +373,20 @@ def aberration_tensor_lg00_jax(
     complex JAX scalar OR :class:`JaxAberrationTensorResult`
 
     Differentiable via ``jax.grad`` wrt fit coefficients, s2_image,
-    v_star, source_point, w_s, w_p, w_o, v2_centre.
+    v_star, source_point, w_s, w_p, w_o, v2_centre -- with one
+    documented exception (audit Y3): when ``w_o`` is left ``None`` the
+    DEFAULT normalisation constant is ``stop_gradient``-ed, so the
+    reported derivative is the one at fixed normalisation.  ``lambda_max``
+    of the near-degenerate ``Re M`` is not differentiable at the branch
+    crossing, and the default ``w_o`` is a bookkeeping convention rather
+    than a physical length on this branch.  Pass ``w_o=`` explicitly to
+    differentiate through it.
     """
     if not JAX_AVAILABLE:
         raise ImportError("JAX is not installed.")
     # v5.17.x (audit P3-52): same x64 policy as the rest of the family.
     _require_jax_x64('aberration_tensor_lg00_jax')
+    import jax
     import jax.numpy as jnp
 
     s2x, s2y = s2_image
@@ -390,9 +409,15 @@ def aberration_tensor_lg00_jax(
     sqrt_detM = jnp.sqrt(jnp.linalg.det(M))
 
     if w_o is None:
-        eig_M_real = jnp.linalg.eigvalsh(jnp.real(M))
-        # eigvalsh returns ascending; the largest eigenvalue gives the
-        # tightest output Gaussian; clamp to a positive minimum.
+        # v5.46 (audit Y3): the largest eigenvalue of the real symmetric 2x2
+        # ``Re M`` in CLOSED FORM, via the shared
+        # :func:`~lumenairy.propagators.asymptotic_maslov.lg00_sampling_waist_from_M`.
+        # ``jnp.linalg.eigvalsh`` was used here; its JVP carries the
+        # eigenvector-rotation term ``1/(lambda_i - lambda_j)``, and ``Re M``
+        # is near-degenerate for any rotationally-symmetric system (measured
+        # gap/mean 3.3e-10), so every ``jax.grad`` through a parameter that
+        # ROTATES ``Re M`` -- ``s2_image``, ``v_star``, a decentre -- came out
+        # ~86 % wrong against a converged 5-point finite difference.
         #
         # v5.29 (audit W3-T3b) -- DO NOT "fix the units" here.  This is the
         # LG_{0,0} point-sampling normalisation, NOT an image-plane length:
@@ -415,10 +440,25 @@ def aberration_tensor_lg00_jax(
         # the field's own waist instead -- see
         # ``asymptotic_aberration_tensor._measure_image_plane_waist``.
         # This twin has no σ branch, so nothing here needs that scale.
-        w_o = 1.0 / jnp.sqrt(jnp.maximum(eig_M_real[-1], 1e-30))
+        #
+        # ...and, BECAUSE it is only a convention, its dependence on ``M`` is
+        # ``stop_gradient``-ed (audit Y3).  ``lambda_max`` of a near-degenerate
+        # symmetric matrix is genuinely non-smooth -- the two branches cross --
+        # so ANY derivative taken through it (closed form or eigensolver) is
+        # ill-posed there, and differentiating a bookkeeping choice is not what
+        # a design gradient means.  Frozen here, ``jax.grad`` reports the
+        # derivative of the coupling AT FIXED normalisation, which is
+        # well-posed and matches a converged 5-point finite difference of the
+        # explicit-``w_o`` merit to 7.7e-05 (d/ds2_image) and 7.0e-04
+        # (d/dv_star).  Pass ``w_o=`` explicitly to make it a live
+        # differentiable slot -- that is the supported way to optimise it, and
+        # it is exactly what an optimiser should do anyway (a merit whose
+        # normalisation convention moves with the design is not an objective).
+        w_o = jax.lax.stop_gradient(lg00_sampling_waist_from_M(M, jnp))
 
     b_quad = 0.25 * (b @ M_inv @ b)
-    A_lead = (detJ * (jnp.pi / sqrt_detM) * G0
+    A_lead = (van_vleck_weight(detJ, fit.wavelength)
+              * (jnp.pi / sqrt_detM) * G0
               * jnp.exp(2j * jnp.pi * phi_star)
               * jnp.exp(b_quad))
 
@@ -457,19 +497,50 @@ def _modal_field_lg00_pixel_jax(fit, s2x, s2y, v2x, v2y,
     M, b, _s1_star, _J, phi_star, G0, detJ = _compute_M_b_xp(
         fit, s2x, s2y, v2x, v2y, src_x, src_y, w_s, w_p, v_cx, v_cy
     )
-    M_inv = jnp.linalg.inv(M)
+    # Y3 (audit): the four guards the NumPy ``propagate_modal_asymptotic``
+    # applies (in-box s2, in-box v2, |det M| floor, |Re b_quad| overflow) as
+    # ``jnp.where`` gates, so this twin returns 0 exactly where NumPy returns
+    # 0 instead of NaN / inf.  A single NaN in a vmapped field poisons the
+    # whole reverse sweep of any downstream ``jax.grad``; on a grid 3x the
+    # fit half-box the un-gated twin returned 60 non-finite values of 81
+    # where NumPy returned zeros.  Every gate is a DOUBLE where: the guarded
+    # arithmetic is evaluated on both branches, so its operands must stay
+    # finite even where the result is discarded.
+    u1 = (s2x - fit.s2x_centre) / fit.s2x_halfrange
+    u2 = (s2y - fit.s2y_centre) / fit.s2y_halfrange
+    u3 = (v2x - fit.v2x_centre) / fit.v2x_halfrange
+    u4 = (v2y - fit.v2y_centre) / fit.v2y_halfrange
+    in_box = ((jnp.abs(u1) <= 1.0) & (jnp.abs(u2) <= 1.0)
+              & (jnp.abs(u3) <= 1.0) & (jnp.abs(u4) <= 1.0))
+
+    det_M = M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]
+    ok_det = jnp.isfinite(jnp.abs(det_M)) & (jnp.abs(det_M) >= 1e-300)
+    safe_det = jnp.where(ok_det, det_M, 1.0 + 0.0j)
+    inv_det = 1.0 / safe_det
+    M_inv = jnp.stack([
+        jnp.stack([M[1, 1] * inv_det, -M[0, 1] * inv_det]),
+        jnp.stack([-M[1, 0] * inv_det, M[0, 0] * inv_det]),
+    ])
     # 4.11.2: see comment in ``aberration_tensor_lg00_jax`` -- single-
     # pixel JAX evaluator uses the principal sqrt; consistent with the
     # shared NumPy helper :func:`_maslov_branch_corrected_sqrt` called
     # with default branch arguments.
-    sqrt_detM = jnp.sqrt(jnp.linalg.det(M))
+    sqrt_detM = jnp.sqrt(safe_det)
     b_quad = 0.25 * (b @ M_inv @ b)
-    A_lead = (detJ * (jnp.pi / sqrt_detM) * G0
-              * jnp.exp(2j * jnp.pi * phi_star)
-              * jnp.exp(b_quad))
+    ok_bquad = (jnp.isfinite(jnp.abs(b_quad))
+                & (jnp.abs(jnp.real(b_quad)) <= B_QUAD_EXP_MAX))
+    safe_bquad = jnp.where(ok_bquad, b_quad, 0.0 + 0.0j)
+    safe_phi = jnp.where(jnp.isfinite(jnp.abs(phi_star)), phi_star,
+                         0.0 + 0.0j)
+    A_lead = (van_vleck_weight(detJ, fit.wavelength)
+              * (jnp.pi / sqrt_detM) * G0
+              * jnp.exp(2j * jnp.pi * safe_phi)
+              * jnp.exp(safe_bquad))
     N_s = jnp.sqrt(2.0 / (jnp.pi * w_s * w_s))
     N_p = jnp.sqrt(2.0 / (jnp.pi * w_p * w_p))
-    return A_lead * N_s * N_p
+    out = A_lead * N_s * N_p
+    ok = in_box & ok_det & ok_bquad & jnp.isfinite(jnp.abs(out))
+    return jnp.where(ok, out, jnp.zeros((), dtype=out.dtype))
 
 
 def propagate_modal_asymptotic_lg00_jax(
@@ -674,8 +745,10 @@ def _build_jax_ift_solver_impl():
             J = jax.jacfwd(s1_of_v)(v)
             F = (J.T @ (s1 - source)) / (ws * ws) + (v - vc) / (wp * wp)
             # Gauss-Newton-like Hessian: keep the J^T J piece, drop the
-            # second-order term in (s_1 - source) -- exact at the fixed
-            # point, gives quadratic-ish convergence elsewhere.
+            # term weighted by (s_1 - source).  That is a Hessian MODEL,
+            # so it costs convergence rate, not the root.  (Y5: it is not
+            # "exact at the fixed point" -- see the NumPy
+            # ``solve_envelope_stationary`` for why.)
             H = (J.T @ J) / (ws * ws) + jnp.eye(2) / (wp * wp)
             return v - jnp.linalg.solve(H, F)
 

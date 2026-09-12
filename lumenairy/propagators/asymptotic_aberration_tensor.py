@@ -49,7 +49,12 @@ from .asymptotic_canonical_fit import (
     CanonicalPolyFit,
     solve_envelope_stationary,
 )
-from .asymptotic_maslov import _maslov_branch_corrected_sqrt
+from .asymptotic_maslov import (
+    B_QUAD_EXP_MAX,
+    _maslov_branch_corrected_sqrt,
+    lg00_sampling_waist_from_M,
+    van_vleck_weight,
+)
 from .asymptotic_modes import (
     decompose_lg,
     gaussian_moment_table_2d,
@@ -96,14 +101,30 @@ class AberrationTensorResult:
         ``curvature_matched_basis=True`` produced a usable measurement --
         so it doubles as the flag's "did it actually engage?" report.  The
         basis carried ``exp(+i·π·σᵀCσ/λ)``.
+    van_vleck_weight : complex or None
+        The Van Vleck-Maslov integrand weight ``-1j sqrt(|det ds1/dv2|) /
+        lambda`` actually applied at the envelope-stationary point (audit
+        Y2).  Exposed so a caller that needs the pre-v5.46 scale can divide
+        it out and multiply back the old ``|det ds1/dv2|``:
+        ``L_legacy = L * |det J| / van_vleck_weight``, i.e.
+        ``L_legacy = L * lambda**2 * |det J|`` in magnitude.  ``None`` on
+        the sigma-grid branch, which evaluates the weight per grid point.
 
     Notes
     -----
-    Indices of L correspond to physical aberrations via
+    Indices of L are NAMED after physical aberrations via
     ``lg_seidel_label(p, ell)``:  (1, 0) is defocus, (2, 0) is
     spherical, (1, +-1) is coma, (0, +-2) is astigmatism, etc.
-    Driving |L_{(2,0), 0}|^2 to zero suppresses on-axis spherical
-    aberration, etc.
+
+    The names are a radial-order correspondence (``n = 2p + |l|``,
+    ``m = l``), not a Seidel decomposition (audit Y5): ``L`` is an
+    overlap of the IMAGE-PLANE FIELD onto a real-waist LG basis, and LG
+    modes are not Zernike polynomials.  The W4-T2 note below records,
+    measured, that the ``(2, 0)`` channel is an interference residue
+    whose phase rotates with the design (5 of 6 sign flips across
+    adjacent designs).  So driving ``|L_{(2,0), 0}|^2`` toward zero is a
+    merit on that mode overlap -- useful, and monotone in aberration on
+    many designs -- but it is NOT the Seidel spherical coefficient.
     """
     L: np.ndarray
     output_modes: List[Tuple[int, int]]
@@ -118,6 +139,8 @@ class AberrationTensorResult:
     # construction -- positional or keyword -- keeps working unchanged.
     sigma_grid_n: Optional[int] = None
     sigma_curvature: Optional[np.ndarray] = None
+    # v5.46 (audit Y2).  Appended WITH a default, like the two above.
+    van_vleck_weight: Optional[complex] = None
 
 
 def _multiply_polys_2d(p_a: Dict[Tuple[int, int], complex],
@@ -304,12 +327,10 @@ def _lg00_sampling_waist(M: np.ndarray) -> float:
     The σ-integration branch, where ``w_o`` IS a length, uses
     :func:`_measure_image_plane_waist` instead (audit W3-T3b).
     """
-    eig_M_real = np.linalg.eigvalsh(np.real(M))
-    if eig_M_real.max() <= 0:
-        w = 1e-6  # fallback for ill-conditioned cases
-    else:
-        w = 1.0 / math.sqrt(float(eig_M_real.max()))
-    return max(min(w, 1.0), 1e-9)
+    # v5.46 (audit Y3/Y5): one shared, eigensolver-free implementation, so
+    # the cross-backend contract above is enforced by construction and the
+    # near-degenerate ``eigvalsh`` JVP is out of the JAX twin's gradient.
+    return float(lg00_sampling_waist_from_M(M, np))
 
 
 def _s2_validity_room(fit: CanonicalPolyFit,
@@ -863,6 +884,27 @@ def aberration_tensor(
     if pupil_amplitudes is None:
         pupil_amplitudes = {(0, 0): 1.0 + 0.0j}
 
+    # Y5 (audit): ``pupil_modes`` is very nearly INERT -- its only real use
+    # is sizing the Wick moment table, and the actual pupil CONTENT comes
+    # exclusively from ``pupil_amplitudes``.  A caller who passes
+    # ``pupil_modes=[(0, 0), (1, 0)]`` without matching amplitudes got an
+    # LG_{0,0} pupil and a result object that claimed otherwise, silently.
+    # Say so rather than change the default content under them.
+    _missing = [k for k in (tuple(m) for m in pupil_modes)
+                if abs(complex(pupil_amplitudes.get(k, 0.0))) < 1e-300]
+    if _missing:
+        import warnings as _w
+        _w.warn(
+            f"aberration_tensor: pupil_modes requests {_missing} but "
+            f"pupil_amplitudes carries no (non-zero) coefficient for "
+            f"them, so the pupil content is only "
+            f"{sorted(k for k, v in pupil_amplitudes.items() if abs(v))}.  "
+            f"``pupil_modes`` sizes the moment table and is echoed on the "
+            f"result; it does NOT create pupil content.  Pass "
+            f"pupil_amplitudes={{mode: coefficient}} for every mode you "
+            f"want in the pupil.",
+            RuntimeWarning, stacklevel=2)
+
     s2x_img, s2y_img = float(s2_image[0]), float(s2_image[1])
     src_x, src_y = float(source_point[0]), float(source_point[1])
 
@@ -958,9 +1000,19 @@ def aberration_tensor(
     sqrt_detM, _, _ = _maslov_branch_corrected_sqrt(np.linalg.det(M))
 
     # Leading amplitude
-    A_lead = (detJ * (math.pi / sqrt_detM) * G0
-              * np.exp(2j * math.pi * phi_star)
-              * np.exp(0.25 * b @ M_inv @ b))
+    # S4/Y2: |det J| -> -1j sqrt(|det J|)/lambda (Van Vleck-Maslov).
+    # P3 (audit): the batched path masks |Re(b_quad)| > 700 before the
+    # exponential; do the same here instead of letting it overflow to inf
+    # with a bare NumPy warning.
+    _bq = complex(0.25 * (b @ M_inv @ b))
+    _vv_weight_reported = complex(van_vleck_weight(detJ, fit.wavelength))
+    if not np.isfinite(abs(_bq)) or abs(_bq.real) > B_QUAD_EXP_MAX:
+        A_lead = 0.0j
+    else:
+        A_lead = (van_vleck_weight(detJ, fit.wavelength)
+                  * (math.pi / sqrt_detM) * G0
+                  * np.exp(2j * math.pi * phi_star)
+                  * np.exp(_bq))
 
     # Pre-tabulate eta-moments for max polynomial order needed
     max_order_needed = max(
@@ -1256,6 +1308,7 @@ def aberration_tensor(
         v_star=(v2x_star, v2y_star),
         sigma_grid_n=n_grid,
         sigma_curvature=C_sigma,
+        van_vleck_weight=_vv_weight_reported,
     )
 
 

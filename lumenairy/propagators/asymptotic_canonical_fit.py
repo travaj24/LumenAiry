@@ -164,17 +164,26 @@ class CanonicalPolyFit:
         Parameters
         ----------
         include_linear : bool, default True
-            If True and the fit extracted a linear ramp, re-add it to
-            give the *raw* OPD that the ray trace would report.  If
-            False, return only the Chebyshev residual (the
-            integrator-safe form).
+            Gates the ``s2``-only part of the extracted ramp,
+            ``a0 + a1 u1 + a2 u2``: True re-adds it to give the *raw*
+            OPD the ray trace would report; False leaves it out (it is a
+            piston + output tilt, constant in the ``v2`` integration
+            variable, so a consumer that carries it separately can drop
+            it here).
+
+            The ``v2``-linear part ``a3 u3 + a4 u4`` is ALWAYS included
+            (audit Y1).  It is linear in the INTEGRATION variable, so it
+            shifts the complex saddle and changes ``|E|``, not just a
+            phase reference -- see the class docstring.
         """
         u1, u2, u3, u4 = self.to_normalised(s2x, s2y, v2x, v2y)
         phi = _evaluate_polynomial_4d(self.coef_phi, self.multi_indices,
                                        u1, u2, u3, u4, self.poly_order)
-        if include_linear and self.linear_coeffs_phi is not None:
+        if self.linear_coeffs_phi is not None:
             a0, a1, a2, a3, a4 = self.linear_coeffs_phi
-            phi = phi + (a0 + a1 * u1 + a2 * u2 + a3 * u3 + a4 * u4)
+            phi = phi + (a3 * u3 + a4 * u4)
+            if include_linear:
+                phi = phi + (a0 + a1 * u1 + a2 * u2)
         return phi
 
     def eval_s1_with_v2_grad(self, s2x: np.ndarray, s2y: np.ndarray,
@@ -208,18 +217,26 @@ class CanonicalPolyFit:
                                v2x: np.ndarray, v2y: np.ndarray,
                                *, include_linear: bool = False
                                ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Evaluate Phi and its v2-gradient.  ``include_linear``
-        controls whether the linear-phase prefit is re-added (default
-        False since the integrator drops it)."""
+        """Evaluate Phi and its v2-gradient.
+
+        ``include_linear`` gates the ``s2``-only part of the extracted
+        ramp (``a0 + a1 u1 + a2 u2``); it defaults to False because the
+        integrators carry that piston/tilt separately.  The ``v2``-linear
+        part ``a3 u3 + a4 u4`` -- and its contribution ``a3`` / ``a4`` to
+        the gradient -- is ALWAYS included: it lives inside the ``v2``
+        integral (audit Y1).
+        """
         u1, u2, u3, u4 = self.to_normalised(s2x, s2y, v2x, v2y)
         phi, du3_phi, du4_phi = _evaluate_polynomial_4d_and_grad34(
             self.coef_phi, self.multi_indices, u1, u2, u3, u4,
             self.poly_order)
-        if include_linear and self.linear_coeffs_phi is not None:
+        if self.linear_coeffs_phi is not None:
             a0, a1, a2, a3, a4 = self.linear_coeffs_phi
-            phi = phi + (a0 + a1 * u1 + a2 * u2 + a3 * u3 + a4 * u4)
+            phi = phi + (a3 * u3 + a4 * u4)
             du3_phi = du3_phi + a3
             du4_phi = du4_phi + a4
+            if include_linear:
+                phi = phi + (a0 + a1 * u1 + a2 * u2)
         invhx = 1.0 / self.v2x_halfrange
         invhy = 1.0 / self.v2y_halfrange
         return phi, du3_phi * invhx, du4_phi * invhy
@@ -648,9 +665,15 @@ def solve_envelope_stationary(
         # Approximate Hessian:  d residual / d v2.
         # First term:  d/dv2 [ J^T (s_1 - s_src) ] = J^T @ J + sum_k
         #                    (s_1 - s_src)_k * d^2 s_1_k / dv2 dv2.
-        # Hessian-of-s1 piece is second-order in (s_1 - s_src) and is
-        # neglected here (Gauss-Newton-like).  This is exact at the
-        # stationary point and gives quadratic-ish convergence.
+        # Hessian-of-s1 piece is weighted by (s_1 - s_src) and is
+        # neglected here (Gauss-Newton-like), which costs only the
+        # convergence RATE, never the root: Newton converges to F = 0
+        # whatever Hessian model it uses.
+        # Y5 (audit): it is NOT "exact at the stationary point", as this
+        # comment used to claim (and its two siblings still did).  At the
+        # stationary point J^T(s_1 - s_src)/w_s^2 = -(v - v_c)/w_p^2,
+        # which is not zero, so s_1 - s_src does not vanish there and
+        # neither does the dropped term; what vanishes is the RESIDUAL.
         # Second term:  d/dv2 [(v_2 - v_2c) / w_p^2] = I / w_p^2.
         H = inv_ws2 * (J.T @ J) + inv_wp2 * np.eye(2)
         try:

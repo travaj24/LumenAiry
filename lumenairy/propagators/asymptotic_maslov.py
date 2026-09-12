@@ -51,6 +51,109 @@ from .._math.chebyshev import (
 )
 from .asymptotic_canonical_fit import CanonicalPolyFit
 
+# Largest |Re(b_quad)| that ``np.exp`` can take in float64 without
+# overflowing to inf (exp(709.78) is the float64 ceiling).  The batched
+# ``propagate_modal_asymptotic`` has masked on this since v4.x; the scalar
+# ``aberration_tensor`` path did not (audit Y5) and overflowed with a bare
+# NumPy warning on inputs the batched path rejects cleanly.
+B_QUAD_EXP_MAX = 700.0
+
+
+def sym2x2_max_eigenvalue(a, b, d, xp):
+    """Largest eigenvalue of the real symmetric 2x2 ``[[a, b], [b, d]]``.
+
+    Closed form ``(a+d)/2 + sqrt(((a-d)/2)**2 + b**2)`` -- exact, and with a
+    JVP that stays finite at a NEAR-degeneracy where ``eigvalsh``'s does not.
+
+    Audit Y3: ``Re M = J^T J / w_s^2 + I / w_p^2`` is near-isotropic for any
+    rotationally-symmetric system (measured gap/mean 3.3e-10 on the stock
+    singlet).  JAX's ``eigh`` JVP carries the eigenvector-rotation term
+    ``1/(lambda_i - lambda_j)``, which at that separation is round-off
+    dominated: ``jax.grad`` of the shipped merit came out 86 % wrong for every
+    derivative that ROTATES ``Re M`` (image point, saddle point, decentre),
+    while the ones that only RESCALE it (``w_s``, ``w_p``) survived.  In the
+    closed form the small denominator cancels analytically -- the numerator
+    carries the same ``O(gap)`` factor -- so the derivative is well
+    conditioned all the way to the degeneracy, where the double-``where``
+    below returns a finite (zero-rotation) gradient instead of NaN.
+
+    ``xp`` is the array namespace (``numpy`` or ``jax.numpy``); the same
+    expression serves the NumPy ``aberration_tensor`` default ``w_o`` and its
+    JAX twin, which the cross-backend contract requires to match.
+    """
+    half_sum = 0.5 * (a + d)
+    half_diff = 0.5 * (a - d)
+    disc = half_diff * half_diff + b * b
+    # Double-where: the sqrt is evaluated on BOTH branches, so the argument
+    # must be finite (and non-zero) even where the result is discarded, or
+    # reverse-mode AD propagates a NaN out of the unused branch.
+    safe = xp.where(disc > 0.0, disc, 1.0)
+    root = xp.where(disc > 0.0, xp.sqrt(safe), 0.0)
+    return half_sum + root
+
+
+def lg00_sampling_waist_from_M(M, xp):
+    """Default ``w_o`` for the pure-``(0, 0)`` closed-form branch.
+
+    ``1 / sqrt(lambda_max(Re M))``, clamped to ``[1e-9, 1.0]``, with a
+    ``1e-6`` fallback when ``lambda_max <= 0``.  Shared by the NumPy
+    :func:`~lumenairy.propagators.asymptotic_aberration_tensor.aberration_tensor`
+    and :func:`~lumenairy.propagators.asymptotic_jax_twin.aberration_tensor_lg00_jax`
+    so the cross-backend contract those two docstrings assert is enforced by
+    construction rather than by hand.
+
+    Audit Y5: before v5.46 the NumPy side clamped and the JAX side did not,
+    so for ``lambda_max(Re M) < 1`` (reachable only with a direction-cosine
+    ``w_p > 1``, i.e. outside physical use) the two returned 1.000000 and
+    29.857 and ``|L|`` differed by 97 %.  Both clamp now.
+    """
+    Mr = xp.real(M)
+    lam_max = sym2x2_max_eigenvalue(Mr[0, 0], Mr[0, 1], Mr[1, 1], xp)
+    positive = lam_max > 0.0
+    safe_lam = xp.where(positive, lam_max, 1.0)
+    w = xp.where(positive, 1.0 / xp.sqrt(safe_lam), 1e-6)
+    return xp.minimum(xp.maximum(w, 1e-9), 1.0)
+
+
+def van_vleck_weight(det_J, wavelength):
+    """Van Vleck-Maslov amplitude weight of the ``v2`` integrand.
+
+    Starting from the exact Huygens-Fresnel / Van Vleck kernel in the
+    endpoint variables, ``d2 V / ds1 ds2 = (n2 / lambda) J^-1`` with
+    ``J = ds1 / dv2``, so the change of variable ``s1 -> v2`` leaves
+
+        |det J| * sqrt(|det d2V/ds1 ds2|) = sqrt(|det J|) / lambda
+
+    and the d = 2 Maslov phase contributes the leading ``-i``.  The
+    weight below is therefore ``-1j * sqrt(|det J|) / lambda``.
+
+    Audit Y1/Y2: the pre-fix integrand used ``|det J|`` to the FIRST power
+    with no ``1/lambda``, so the returned field was
+    ``i * lambda * sqrt(|det J|)`` times the true one -- a factor that is
+    wavelength- AND field-point-dependent, not the documented "arbitrary
+    constant".  Measured on an exact free-space chart
+    (``s1 = s2 - z v2``, ``z = 20 mm``, ``lambda = 1 um``):
+    ``E_code / E_true = 2.0000000000256e-08 j`` pre-fix, i.e. exactly
+    ``i * lambda * z``; the sibling ``propagate_hf_chebyshev_quadrature``
+    already carried the correct ``-1j * sqrt(|det d2Phi/ds1 ds2|)``, so the
+    two families disagreed by exactly this factor.
+
+    Parameters
+    ----------
+    det_J : array_like
+        ``|det(ds1/dv2)|`` -- already an absolute value, in any array
+        namespace (NumPy / CuPy / JAX; ``** 0.5`` and ``* -1j`` are the
+        only operations used, so no namespace argument is needed).
+    wavelength : float
+        Trace wavelength [m].
+
+    Returns
+    -------
+    complex array
+        ``-1j * sqrt(det_J) / wavelength``.
+    """
+    return (-1j / float(wavelength)) * det_J ** 0.5
+
 __all__: List[str] = [
     # Module-private names; re-exported via the asymptotic shell.
 ]
@@ -527,8 +630,11 @@ def _solve_envelope_stationary_batch(
     All pixels iterate in lockstep starting from ``(v_cx, v_cy)``;
     converged pixels still consume CPU on subsequent iterations but
     that cost is amortised across the batch.  The math matches the
-    scalar Gauss-Newton-like solver bit-for-bit at the stationary
-    point (where the neglected s_1 Hessian piece vanishes).
+    scalar Gauss-Newton-like solver bit-for-bit -- both drop the same
+    ``sum_k (s_1 - s_src)_k d^2 s_1_k / dv2 dv2`` term from the Hessian
+    MODEL, which changes the convergence rate and not the root (Y5:
+    that term does not vanish at the stationary point, contrary to the
+    pre-v5.46 wording -- only the residual does).
 
     v4.14.1 (P1-NEW-3):  prior to v4.14.1 the loop set
     ``converged[idx[done & ~is_conv]] = True`` to drop stalled /
