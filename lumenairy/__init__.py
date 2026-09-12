@@ -223,6 +223,7 @@ from .propagators.carrier_field import (
     re_reference,
     save_carrier_field_zarr,
 )
+from .propagators.rs import rs_alias_free_distance  # WP-A20: public alias-free-distance helper
 from .propagators.propagation import (
     CUPY_AVAILABLE,
     # Precision configuration (complex64 vs complex128)
@@ -1305,6 +1306,7 @@ __all__ = [
     'fresnel_tf_propagate',
     'fraunhofer_propagate',
     'rayleigh_sommerfeld_propagate',
+    'rs_alias_free_distance',
     'resample_field',
     'apply_fresnel_curvature',
     # Carrier-referenced ("pilot-beam") Sziklas-Siegman free-space step

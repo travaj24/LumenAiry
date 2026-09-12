@@ -710,6 +710,222 @@ def _deserialize_prescription(data):
     return _fix(data)
 
 
+#: Per-surface keys a FOLDED prescription needs and that the designer's
+#: ``to_prescription`` did not emit before the U1/U2 fix.  ``is_mirror``
+#: decides whether the surface reflects (without it the fold analyses as
+#: an air->air no-op and the Zemax-signed post-mirror gap becomes a
+#: literal backwards propagation); ``semi_diameter`` is the surface's own
+#: clear aperture; ``is_stop`` marks the aperture stop.
+_FOLDED_SURFACE_KEYS = ('is_mirror', 'semi_diameter', 'is_stop')
+
+
+def _same_radius(a: Any, b: Any) -> bool:
+    """True when two prescription radii denote the same surface.
+
+    Exact float equality, because both numbers come from the same
+    ``radius_mm * 1e-3`` in the producer and JSON round-trips a float
+    bit-for-bit.  ``inf == inf`` (a flat surface) is a match; NaN is never
+    a match (``validate_prescription`` rejects a NaN radius anyway, and a
+    silent NaN==NaN "match" would be the worst possible way to decide a
+    positional mapping).  Non-numeric values fall back to ``==`` so that
+    ``None``/``None`` still matches.
+    """
+    try:
+        fa, fb = float(a), float(b)
+    except (TypeError, ValueError):
+        return a == b
+    if np.isnan(fa) or np.isnan(fb):
+        return False
+    return fa == fb
+
+
+def _backfill_folded_surface_keys(prescription: Any,
+                                  name: str = '') -> Any:
+    """Give a pre-U1 folded prescription the per-surface keys it lacks.
+
+    A folded design saved to the lens library by the designer BEFORE the
+    U1/U2 fix has a chronological ``surfaces`` list (its mirrors are in
+    it) but carries none of :data:`_FOLDED_SURFACE_KEYS` on those
+    entries.  Its ``elements`` list, however, is one entry per surface in
+    the same order and DOES say which of them is the mirror
+    (``element_type == 'mirror'``) and how wide each one is, so the
+    missing flags can be recovered by position.  Without that recovery
+    ``surfaces_from_prescription`` reads the fold as three refracting
+    surfaces in air and hands the mirror the FOLLOWING lens's aperture:
+    on a concave fold mirror (R = -200 mm, semi-diameter 25 mm) followed
+    by an N-BK7 singlet, the loaded entry reports EFL 154.799 /
+    BFL 152.162 mm where the design it was saved from is 182.548 /
+    130.421 mm, with the mirror clipped to the lens's 6 mm.
+
+    POSITIONAL-CONSISTENCY RULE (all of it, or nothing is back-filled):
+
+    1. ``surfaces`` is a non-empty list of dicts and ``elements`` is a
+       list of dicts of exactly the same length;
+    2. at least one ``elements`` entry is a ``'mirror'`` -- an UNFOLDED
+       entry needs no repair, so it gets none and loads byte-identically;
+    3. no ``surfaces`` entry carries ``is_mirror`` -- a prescription that
+       already has the key was written by a producer that knows about it
+       and is never second-guessed;
+    4. every ``elements`` entry's ``element_type`` is ``'mirror'`` or
+       ``'surface'`` (an ``elements`` list with non-optical entries is a
+       different producer's shape and does not index by position), its
+       ``radius`` equals the positionally matching surface's radius, and
+       a ``'surface'`` entry's ``glass_before`` / ``glass_after`` equal
+       that surface's.
+
+    Rules 1-3 are the trigger; rule 4 is the check.  When the trigger
+    fires but the check fails the two lists are NOT positionally
+    consistent -- most likely a lens-only ``surfaces`` list whose
+    ``elements`` happens to have the same length -- and guessing a
+    mapping would silently move an aperture from one surface to another.
+    Nothing is back-filled and a ``UserWarning`` says which index
+    disagreed, so the mismatch is visible rather than absorbed.
+
+    The prescription is repaired in place and returned.
+    """
+    if not isinstance(prescription, dict):
+        return prescription
+    surfaces = prescription.get('surfaces')
+    elements = prescription.get('elements')
+    if not isinstance(surfaces, list) or not surfaces:
+        return prescription
+    if not isinstance(elements, list) or len(elements) != len(surfaces):
+        return prescription
+    if not all(isinstance(s, dict) for s in surfaces):
+        return prescription
+    if not all(isinstance(e, dict) for e in elements):
+        return prescription
+    if not any(e.get('element_type') == 'mirror' for e in elements):
+        return prescription                      # unfolded: nothing to do
+    if any('is_mirror' in s for s in surfaces):
+        return prescription                      # already carries the key
+
+    mismatch = None
+    for i, (s, e) in enumerate(zip(surfaces, elements)):
+        etype = e.get('element_type')
+        if etype not in ('mirror', 'surface'):
+            mismatch = (f"elements[{i}]['element_type']={etype!r} is "
+                        f"neither 'mirror' nor 'surface'")
+            break
+        if not _same_radius(s.get('radius'), e.get('radius')):
+            mismatch = (f"elements[{i}]['radius']={e.get('radius')!r} != "
+                        f"surfaces[{i}]['radius']={s.get('radius')!r}")
+            break
+        if etype == 'surface':
+            for gk in ('glass_before', 'glass_after'):
+                if gk in e and gk in s and e[gk] != s[gk]:
+                    mismatch = (f"elements[{i}][{gk!r}]={e[gk]!r} != "
+                                f"surfaces[{i}][{gk!r}]={s[gk]!r}")
+                    break
+            if mismatch is not None:
+                break
+    if mismatch is not None:
+        warnings.warn(
+            f"load_lens({name!r}): this entry has mirrors in its "
+            f"'elements' list but none of {_FOLDED_SURFACE_KEYS} on its "
+            f"'surfaces' entries, which is the shape a folded design "
+            f"saved before those keys existed has.  The two lists are "
+            f"NOT positionally consistent ({mismatch}), so nothing was "
+            f"back-filled and the fold still analyses as a refracting "
+            f"air->air surface.  Re-save the design from the designer to "
+            f"get a prescription that carries the flags itself.",
+            UserWarning, stacklevel=3)
+        return prescription
+
+    stop_index = None
+    for i, (s, e) in enumerate(zip(surfaces, elements)):
+        s['is_mirror'] = (e.get('element_type') == 'mirror')
+        if 'semi_diameter' not in s:
+            sd = e.get('semi_diameter')
+            try:
+                sd_f = float(sd)
+            except (TypeError, ValueError):
+                sd_f = None
+            # ``inf`` is kept: that is exactly what the current exporter
+            # writes for an unset aperture, and it reads back as "fall
+            # back to aperture_diameter / 2" everywhere.
+            if sd_f is not None and not np.isnan(sd_f) and sd_f > 0:
+                s['semi_diameter'] = sd_f
+        if 'is_stop' not in s and 'is_stop' in e:
+            s['is_stop'] = bool(e['is_stop'])
+        if stop_index is None and s.get('is_stop'):
+            stop_index = i
+    # ``apply_real_lens`` reads 'stop_index' and not the per-surface flag,
+    # so a back-filled stop has to be spelled both ways to reach every
+    # consumer -- which is what the current exporter emits.
+    if stop_index is not None and prescription.get('stop_index') is None:
+        prescription['stop_index'] = stop_index
+
+    warnings.warn(
+        f"load_lens({name!r}): folded prescription saved before the "
+        f"per-surface {_FOLDED_SURFACE_KEYS} keys existed; they were "
+        f"back-filled from the entry's own 'elements' list by position "
+        f"(the two lists are one-to-one and their radii agree).  The "
+        f"mirror now reflects instead of analysing as an air->air "
+        f"surface, so this entry's EFL/BFL match the design it was saved "
+        f"from rather than the values a pre-migration load reported.  "
+        f"Re-save it from the designer to silence this.",
+        UserWarning, stacklevel=3)
+    _warn_lost_coord_break_gap(prescription, name)
+    return prescription
+
+
+def _warn_lost_coord_break_gap(prescription: Dict[str, Any],
+                               name: str = '') -> None:
+    """Say so when a migrated entry is ALSO missing a coord break's gap.
+
+    The same pre-U1 exporter that omitted the per-surface keys dropped a
+    coordinate break's TRANSFER thickness instead of carrying it into the
+    adjacent gap, so a design with a tilted element sitting behind a
+    mirror was saved with a zero where its air gap should be.  That is a
+    different key (``thicknesses``) and the back-fill above does not touch
+    it -- but the entry's own ``all_thicknesses`` list, which is aligned
+    to ``elements`` and was written straight from the element spacings,
+    still holds the true value, so the loss is both detectable and
+    quotable.
+
+    Detection is exact, not a heuristic.  For the chronological shape this
+    function only ever sees, ``thicknesses[i]`` and ``all_thicknesses[i]``
+    describe the same gap and agree for every topology the designer can
+    build (measured on nine: negative Zemax-signed post-mirror gaps, two
+    mirrors, a mirror last, a tilt before a mirror, a tilt between two
+    lenses, and the unfolded control).  The single case where they
+    disagree is exactly the dropped carry.  Only checked when the entry
+    has coordinate breaks, because that is the only way the old exporter
+    could lose a gap.
+
+    A warning, not a repair: rewriting ``thicknesses`` from
+    ``all_thicknesses`` would be a second migration on a key nothing else
+    here touches, and re-saving from the designer fixes it outright.
+    """
+    cbs = prescription.get('coord_breaks')
+    if not isinstance(cbs, list) or not cbs:
+        return
+    thick = prescription.get('thicknesses')
+    all_thick = prescription.get('all_thicknesses')
+    if not isinstance(thick, list) or not isinstance(all_thick, list):
+        return
+    if len(all_thick) < len(thick):
+        return
+    lost = [(i, thick[i], all_thick[i]) for i in range(len(thick))
+            if thick[i] != all_thick[i]]
+    if not lost:
+        return
+    detail = '; '.join(
+        f"thicknesses[{i}]={t!r} but all_thicknesses[{i}]={a!r}"
+        for i, t, a in lost)
+    warnings.warn(
+        f"load_lens({name!r}): this entry ALSO lost a coordinate break's "
+        f"transfer thickness when it was saved -- {detail}.  The pre-fix "
+        f"exporter dropped a tilted element's axial gap instead of "
+        f"carrying it into the adjacent air gap, so the loaded system is "
+        f"short by that distance; the back-fill above repairs the mirror "
+        f"but NOT the gap.  The true spacing is the 'all_thicknesses' "
+        f"value quoted here.  Re-save the design from the designer for a "
+        f"prescription that needs no repair at all.",
+        UserWarning, stacklevel=4)
+
+
 def save_lens(name: str, prescription: Dict[str, Any],
               description: str = '') -> str:
     """Save a lens prescription to the user library.
@@ -748,6 +964,19 @@ def load_lens(name: str) -> Dict[str, Any]:
     -------
     prescription : dict
         Ready to pass to ``apply_real_lens``.
+
+    Notes
+    -----
+    A FOLDED design saved before the designer emitted per-surface
+    ``is_mirror`` / ``semi_diameter`` / ``is_stop`` is migrated on load:
+    those keys are recovered from the entry's own ``elements`` list by
+    position, so the loaded prescription describes the layout it was
+    saved from instead of reading the fold as a refracting surface in
+    air.  The migration warns when it runs, refuses (with a warning
+    naming the disagreement) when the two lists are not positionally
+    consistent, and never touches an unfolded entry or one that already
+    carries the keys -- see :func:`_backfill_folded_surface_keys` for the
+    exact rule.
     """
     lib = get_library_path() / 'lenses'
     filepath = lib / f'{_safe_name(name)}.json'
@@ -757,7 +986,8 @@ def load_lens(name: str) -> Dict[str, Any]:
     with open(filepath) as f:
         data = json.load(f)
 
-    return _deserialize_prescription(data['prescription'])
+    rx = _deserialize_prescription(data['prescription'])
+    return _backfill_folded_surface_keys(rx, name)
 
 
 def list_lenses() -> List[str]:

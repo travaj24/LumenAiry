@@ -6,7 +6,11 @@ v5.1.0 Agent C split: extracted from ``propagation.py``.  Contains the
 RS Green's-function convolution implementation (first RS solution,
 optional Matsushima bandlimit on the padded FFT'd kernel).
 
-Public symbol re-exported by ``propagation.py``.
+Public surface: :func:`rayleigh_sommerfeld_propagate` (re-exported by
+``propagation.py`` and at the top level) and
+:func:`rs_alias_free_distance`, the sampling distance its
+``kernel='auto'`` branches on -- the number a caller needs in order to
+choose ``z``, ``N`` or ``dx`` for an RS step, so it is not an internal.
 
 Author:  Andrew Traverso
 """
@@ -31,6 +35,7 @@ from .fft_infra import (
 
 __all__ = [
     'rayleigh_sommerfeld_propagate',
+    'rs_alias_free_distance',
 ]
 
 #: Outer band of the padded window the wrap-around guard measures, as a
@@ -172,7 +177,7 @@ def _warn_rs_transfer_wraparound(E_conv, p_in, Ny2, Nx2, z, dx, dy,
 
 
 
-def _rs_alias_free_distance(N: int, dx: float, wavelength: float) -> float:
+def rs_alias_free_distance(N: int, dx: float, wavelength: float) -> float:
     """Smallest ``z`` at which the POINT-SAMPLED RS Green's function is
     adequately sampled on a grid of ``N`` points at pitch ``dx``.
 
@@ -206,8 +211,29 @@ def _rs_alias_free_distance(N: int, dx: float, wavelength: float) -> float:
     -------
     z_min : float
         ``2*N*dx**2 / wavelength`` [m].
+
+    Examples
+    --------
+    >>> from lumenairy.propagators.rs import rs_alias_free_distance
+    >>> round(rs_alias_free_distance(64, 2e-6, 632.8e-9), 9)
+    0.000809102
+
+    See Also
+    --------
+    rayleigh_sommerfeld_propagate : whose ``kernel='auto'`` branches on
+        exactly this distance (``'transfer'`` below it, ``'spatial'`` at
+        and above it), and whose ``kernel='spatial'`` refuses below it.
     """
     return 2.0 * float(N) * float(dx) ** 2 / float(wavelength)
+
+
+#: Pre-v5.46 spelling of :func:`rs_alias_free_distance`.  The function is
+#: the branch point of ``rayleigh_sommerfeld_propagate(kernel='auto')``
+#: and the number a caller needs in order to choose ``z``, ``N`` or ``dx``
+#: for an RS step, so it is public API now; the private name stays bound
+#: to the SAME object (``is``-identical, not a wrapper) because callers
+#: -- the audit's own regression files among them -- import it.
+_rs_alias_free_distance = rs_alias_free_distance
 
 
 def rayleigh_sommerfeld_propagate(
@@ -306,7 +332,7 @@ def rayleigh_sommerfeld_propagate(
 
         * ``'auto'`` (default, v5.46; audit K9) -- ``'transfer'`` when
           ``z < 2*N*dx**2/wavelength`` (see
-          :func:`_rs_alias_free_distance`), ``'spatial'`` at and above
+          :func:`rs_alias_free_distance`), ``'spatial'`` at and above
           that distance.  Every call at or above the threshold is
           therefore **bit-identical to the pre-v5.46 output**; only the
           regime the audit measured as broken is re-routed.
@@ -516,10 +542,10 @@ def rayleigh_sommerfeld_propagate(
 
     # -- K9: the sampling limit of the SPATIAL kernel --------------------------
     # The point-sampled Green's function aliases below this distance (see
-    # _rs_alias_free_distance for the derivation).  Anamorphic pitch: the
+    # rs_alias_free_distance for the derivation).  Anamorphic pitch: the
     # tighter of the two axes governs.
-    z_alias = max(_rs_alias_free_distance(Nx, dx, wavelength),
-                  _rs_alias_free_distance(Ny, dy, wavelength))
+    z_alias = max(rs_alias_free_distance(Nx, dx, wavelength),
+                  rs_alias_free_distance(Ny, dy, wavelength))
 
     if kernel == 'auto':
         # Route by which discretisation of the SAME operator is sound here.

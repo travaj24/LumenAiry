@@ -80,7 +80,11 @@ Explicitly NOT in scope (kept, with reason)
   deprecate.  Grep-verified: only ONE of the four "zero-caller" helpers
   (``_focus_search_penalty``) becomes dead when the flags go.
 * ``...with_opl_callable(chunk_output=)`` -- deprecated in v5.17 with NO
-  stated horizon ("a future release"), so it is not past one.
+  stated horizon ("a future release"), so it is not past one.  It then
+  went the OTHER way: audit K22 gave it a real meaning (output pixels per
+  vectorised ``opl_fn`` batch) and retired the deprecation, so the pin in
+  ``TestPropagatorInertKwargRemovals`` asserts the kwarg is kept AND
+  functional -- see that test's own derivation.
 * ``rcwa_efficiency_1d_jax`` (v6.0.0), the ``load_zmx_prescription`` /
   ``load_zemax_prescription_txt`` aliases (v6.0), the
   ``output_grid`` -> ``output_shape`` sub-propagator renames (no horizon),
@@ -107,6 +111,7 @@ from lumenairy.optimize.driver import (
 from lumenairy.optimize.merit_terms import MatchIdealSystemMerit
 from lumenairy.propagators.gbd import recommend_gbd_sampling
 from lumenairy.propagators.hf import (
+    _HF_CHUNK_TARGET_BYTES,
     propagate_huygens_fresnel_with_opl_callable as _hf_opl,
 )
 from lumenairy.sources.core import (
@@ -584,14 +589,113 @@ class TestPropagatorInertKwargRemovals:
             _hf_opl(E_in, opl_fn=_hf_waves_opl, output_grid_x=og,
                     output_grid_y=og, input_grid_dx=2e-6, wavelength=_WL)
 
-    def test_hf_chunk_output_is_KEPT(self):
-        """Scope boundary: ``chunk_output`` was deprecated in v5.17 with NO
-        stated horizon, so it is not past one and stays warn-only."""
+    def test_hf_chunk_output_is_KEPT_and_FUNCTIONAL(self):
+        """``chunk_output`` survived the W5 sweep AND is no longer inert.
+
+        The W5 scope boundary still holds -- the kwarg was deprecated in
+        v5.17 with NO stated horizon, so it was never in the removal wave
+        -- but the deprecation itself is gone: v5.46 (audit K22) gave the
+        parameter the meaning its name always promised.  It is the number
+        of OUTPUT pixels evaluated per vectorised ``opl_fn`` batch.  So
+        the pin here is "kept AND functional", not "kept and warn-only".
+
+        ORACLE -- exact, from the loop structure, no build and no clock.
+        ``opl_fn`` is evaluated 17 times per batch with Van Vleck on
+        (``Phi`` plus the 16 cross-Hessian stencil corners) and once per
+        batch with it off, over ``ceil(n_out / n_chunk)`` batches, plus
+        exactly ONE broadcast probe whenever ``n_chunk > 1``.  On this
+        12x12 -> 12x12 fixture (``n_out`` = 144) the closed form and the
+        MEASURED call counts agree exactly:
+
+        ==================  =============================  =====  ========
+        call                closed form                    calls  s2x shape
+        ==================  =============================  =====  ========
+        chunk_output=1      17 * 144                        2448  ()
+        chunk_output=2      1 + 17 * ceil(144/2)            1225  (2,1,1)
+        chunk_output=4      1 + 17 * ceil(144/4)             613  (4,1,1)
+        chunk_output=16     1 + 17 * ceil(144/16)            154  (16,1,1)
+        None (auto)         1 + 17 * ceil(144/113)            35  (113,1,1)
+        16, van Vleck off   1 + 1  * ceil(144/16)             10  (16,1,1)
+        ==================  =============================  =====  ========
+
+        and the returned field is bit-identical (``array_equal``, not
+        ``allclose``) across every one of them -- which is what makes the
+        parameter a pure performance knob rather than a physics one.  A
+        call count is a structural measurement with no error floor, so
+        the bar is exact equality on both sides and no timing is asserted
+        (TESTING_STANDARDS S1/S5).
+
+        FAIL-BEFORE, measured by exec'ing ``6b801ffa^:propagators/hf.py``
+        in-process under the same probe: **2448 calls for every value of
+        ``chunk_output``** (1 / 16 / None alike), ``s2x`` a Python scalar
+        every time, and an explicit value raising
+        ``DeprecationWarning: chunk_output is deprecated and has no
+        effect``.  Against that code this test fails three ways -- the
+        counts are 15.9x and 69.9x off, the shapes are all ``()``, and
+        the no-DeprecationWarning assertion fails outright.
+        """
         E_in, og = _hf_grid()
+        n_out = og.size ** 2
+        assert n_out == 144, n_out         # the oracle table above
         assert 'chunk_output' in inspect.signature(_hf_opl).parameters
-        with pytest.warns(DeprecationWarning, match='chunk_output'):
-            _hf_opl(E_in, opl_fn=_hf_waves_opl, output_grid_x=og,
-                    output_grid_y=og, input_grid_dx=2e-6, chunk_output=4)
+
+        def _probe():
+            """An ``opl_fn`` that records how it was called."""
+            log = {'calls': 0, 'shapes': set()}
+
+            def _opl(s1x, s1y, s2x, s2y):
+                log['calls'] += 1
+                log['shapes'].add(tuple(np.shape(s2x)))
+                return _hf_waves_opl(s1x, s1y, s2x, s2y)
+            return _opl, log
+
+        def _run(chunk, **kw):
+            opl, log = _probe()
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter('always')
+                out = _hf_opl(E_in, opl_fn=opl, output_grid_x=og,
+                              output_grid_y=og, input_grid_dx=2e-6,
+                              chunk_output=chunk, **kw)
+            assert not [w for w in caught
+                        if issubclass(w.category, DeprecationWarning)], (
+                f'chunk_output={chunk!r} still raises a DeprecationWarning; '
+                f'K22 un-deprecated it')
+            return out, log
+
+        # The auto batch is derived from the module's own byte target, not
+        # from a magic number, so the pin follows a retune of that target.
+        n_auto = min(max(1, _HF_CHUNK_TARGET_BYTES // (12 * 12 * 8)), n_out)
+        assert n_auto > 1, n_auto          # auto must actually batch
+
+        def _expected(n_chunk, per_batch=17):
+            batches = -(-n_out // n_chunk)
+            return (1 if n_chunk > 1 else 0) + per_batch * batches
+
+        ref = None
+        for chunk in (1, 2, 4, 16, None):
+            out, log = _run(chunk)
+            n_chunk = n_auto if chunk is None else chunk
+            assert log['calls'] == _expected(n_chunk), (
+                f'chunk_output={chunk!r}: {log["calls"]} opl_fn calls, '
+                f'expected {_expected(n_chunk)} '
+                f'(1 probe + 17 per batch x {-(-n_out // n_chunk)} batches)')
+            # The batched contract: (n, 1, 1) output coordinates, not the
+            # historical Python scalars.  chunk_output=1 keeps the scalars.
+            if n_chunk == 1:
+                assert log['shapes'] == {()}, log['shapes']
+            else:
+                assert (n_chunk, 1, 1) in log['shapes'], log['shapes']
+                assert () not in log['shapes'], log['shapes']
+            if ref is None:
+                ref = out
+            else:
+                assert np.array_equal(out, ref), (
+                    f'chunk_output={chunk!r} changed the field; K22 '
+                    f'requires bit-identity for every batch size')
+
+        # Van Vleck off drops the 16 stencil corners: 1 evaluation/batch.
+        _, log_novv = _run(16, apply_van_vleck=False)
+        assert log_novv['calls'] == _expected(16, per_batch=1), log_novv
 
 
 class TestOptimizeDeadFlagRemovals:
