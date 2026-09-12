@@ -113,7 +113,9 @@ NEXT_REMOVAL_VERSION = '5.48'
 #: live removal version}``.  Keys are the ORIGINAL (now shipped) schedule
 #: so the message can name both; values must lie in the future.
 #:
-#: **Currently empty** -- every re-scheduled deprecation has been EXECUTED.
+#: **Currently empty** -- every re-scheduled deprecation has been EXECUTED
+#: (Tombstone, v5.30: the ``'5.27' -> '5.32'`` source-factory kwarg entry was
+#: removed with the kwargs it scheduled).
 #:
 #: An entry is DELETED when its removal is executed, not kept as history:
 #: :func:`check_removal_schedule` invariant 2 requires every value to lie
@@ -136,7 +138,9 @@ REMOVAL_SCHEDULE: dict[str, str] = {}
 #: argument.
 #:
 #: **Currently schedules nothing** -- the one transition registered here has
-#: been EXECUTED.  The constant stays as the slot the next API transition
+#: been EXECUTED (Tombstone, v5.30: :func:`~lumenairy.propagators.dispatch.propagate`
+#: returns a ``PropagationResult`` by default; ``return_result=False`` keeps the
+#: legacy shapes).  The constant stays as the slot the next API transition
 #: registers in (and as the anchor for the invariant below).
 #:
 #: An executed transition is recorded as prose rather than left in a live

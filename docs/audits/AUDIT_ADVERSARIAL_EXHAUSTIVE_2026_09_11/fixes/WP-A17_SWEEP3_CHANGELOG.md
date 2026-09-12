@@ -84,3 +84,7 @@ sweep.  A reader looking for the rationale a comment used to carry will find
 it, verbatim and under its original source line, in
 `docs/history/<dotted.module.path>.md` — for example
 `docs/history/lumenairy.io.storage.md` for `lumenairy/io/storage.py`.
+
+### Note -- the `Tombstone, v5.30` label is back on the two executed deprecation-registry slots
+
+Sweep 3 moved the two tombstone passages of `lumenairy/_deprecation.py` into `docs/history/lumenairy._deprecation.md` and left the slots saying only that their entries had been EXECUTED.  `tests/unit/test_niche_audit_w4_p5_return_contract.py::TestTransitionMachineryIsRetired::test_the_executed_entry_is_tombstoned_in_the_registry` pins the literal label, so each slot now names its tombstone in the present tense -- `REMOVAL_SCHEDULE`: the `'5.27' -> '5.32'` source-factory kwarg entry, removed with the kwargs; `API_TRANSITION_VERSION`: `propagate()` returns a `PropagationResult` by default -- without re-importing the narrative (comment-only; the module's fingerprints are unchanged by construction).
