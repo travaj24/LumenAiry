@@ -308,10 +308,13 @@ class TestAuditFixesV4_11_2_track_a_SeidelCorrectionSignAgainstGroundTruth:
         and pre-fix 1430.0 nm with it ON -- 8.2x WORSE, which is what the
         wrapped assertion this test replaces could not see.  With the
         exit-vertex transfer, the model-own reference and the rho**4 basis it
-        lands at ~50 nm.  The bar is a 3x improvement: two decades above the
-        oracle floor, and a factor 2.4 below the measured margin, so it fails
-        immediately on any of the three defects returning (each on its own
-        put this number the wrong side of 1.0x).
+        lands at **1.126 nm** (re-measured 2026-09-12 against a second,
+        independently written closed-form-intersection oracle: 173.466 ->
+        1.126 nm, 154x; an earlier revision of this docstring said "~50 nm",
+        which was not the shipped number).  The bar stays a 3x improvement --
+        two decades above the oracle floor and 51x below the measured margin,
+        so it fails immediately on any of the three defects returning (each on
+        its own put this number the wrong side of 1.0x).
         """
         rx = self._doublet(ap=8e-3)
         off = self._exit_wavefront_rms(rx)
@@ -332,7 +335,7 @@ class TestAuditFixesV4_11_2_track_a_SeidelCorrectionSignAgainstGroundTruth:
         piston + tilt + DEFOCUS before reporting rms, so a focus error is
         invisible to it by construction -- which is why "4.5x better on
         AC254-100-C" survived alongside a 90 um*rho**2 defect.  Here the exit
-        field is propagated over +-3 % of the traced focal length in 13 planes
+        field is propagated over +-3 % of the traced focal length in 21 planes
         and the peak is read directly.
 
         DERIVATION OF THE BARS (both on the parabola-refined scan; see

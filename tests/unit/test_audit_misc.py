@@ -2253,7 +2253,7 @@ class TestAuditFixesV4_12_1_coverage_StopIndexWarn:
             and 'stop_index' in str(w.message).lower()
         ]
         assert stop_warns, (
-            f"apply_real_lens_traced with stop_index=2 must emit a "
+            f"apply_real_lens_traced with stop_index=1 must emit a "
             f"RuntimeWarning mentioning 'stop_index'.  Caught: "
             f"{[(w.category.__name__, str(w.message)[:80]) for w in caught]}")
         # Also confirm the warning mentions the offending value.
@@ -2277,10 +2277,27 @@ class TestAuditFixesV4_12_1_coverage_StopIndexWarn:
             la.apply_real_lens(E_in, prescription=rx,
                                wavelength=1.31e-6, dx=1e-5)
 
-    def test_maslov_emits_warning_for_stop_index_2(self):
+    def test_maslov_emits_warning_for_a_mid_train_stop(self):
+        """UPDATED 2026-09-12 (VERIFY-A2).  The sibling test above was
+        re-fixtured from ``stop_index = 2`` to ``stop_index = 1`` when L14 made
+        an out-of-range index a ``ValueError``; this one was left on the
+        out-of-range value because ``apply_real_lens_maslov`` still read the
+        key its own way and only warned.  That made the test fixture depend on
+        which of the two readings ``lenses_maslov.py`` happened to use -- and
+        it broke the moment that module adopted the shared
+        ``_lens_real._normalise_stop_index`` (WP-A2 report section 5, item 3),
+        which raises for 2 on a two-surface singlet.
+
+        The warning this test is about is the one for a VALID but non-entrance
+        stop that the Maslov ray bundle cannot honour, so the fixture moves to
+        ``stop_index = 1`` -- the last surface of the same singlet, in range
+        and still != 0.  Measured on both readings of the key: one
+        ``RuntimeWarning`` naming ``stop_index=1``.  The out-of-range contract
+        is a separate claim and is pinned above for ``apply_real_lens``.
+        """
         rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=3e-3,
                               glass='N-BK7', aperture=5e-3)
-        rx['stop_index'] = 2
+        rx['stop_index'] = 1
         N = 32
         dx = 1e-5
         wavelength = 1.31e-6
@@ -2299,9 +2316,12 @@ class TestAuditFixesV4_12_1_coverage_StopIndexWarn:
             and 'stop_index' in str(w.message).lower()
         ]
         assert stop_warns, (
-            f"apply_real_lens_maslov with stop_index=2 must emit a "
+            f"apply_real_lens_maslov with stop_index=1 must emit a "
             f"RuntimeWarning mentioning 'stop_index'.  Caught: "
             f"{[(w.category.__name__, str(w.message)[:80]) for w in caught]}")
+        assert 'stop_index=1' in str(stop_warns[0].message), (
+            f"the warning should name the offending value (1); got: "
+            f"{str(stop_warns[0].message)!r}")
 
 
 # ============================================================================

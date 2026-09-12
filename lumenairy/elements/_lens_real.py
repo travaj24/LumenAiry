@@ -2520,6 +2520,125 @@ def _check_no_silent_fold_drop(prescription: dict,
         f"fold'.")
 
 
+def _mirror_surface_indices(surfaces) -> list:
+    """Indices of the MIRROR entries in a ``surfaces`` list.
+
+    A mirror is spelled either ``is_mirror=True`` or
+    ``glass_after='MIRROR'`` (case-insensitive); both are accepted
+    everywhere in the library, so both are recognised here."""
+    out = []
+    for i, s in enumerate(surfaces or []):
+        if not isinstance(s, dict):
+            continue
+        _ga = s.get('glass_after')
+        if bool(s.get('is_mirror', False)) or (
+                isinstance(_ga, str) and _ga.upper() == 'MIRROR'):
+            out.append(i)
+    return out
+
+
+def _unfold_mirror_surfaces(prescription: dict,
+                            fn_name: str = 'apply_real_lens') -> dict:
+    """Resolve a mirror that sits directly in ``prescription['surfaces']``.
+
+    ``_check_no_silent_fold_drop`` above inspects the ``elements`` list (what
+    ``load_zemax_zmx`` populates) and offers ``allow_unfolded_equivalent`` as
+    the documented escape hatch.  A HAND-BUILT prescription that puts the
+    mirror straight into ``surfaces`` reaches neither that check nor that key,
+    and the refractive walk would treat the mirror as a refractor -- wrong
+    sign, wrong focusing phase -- so it has to be caught separately.  It used
+    to be caught with an unconditional refusal that did not mention the key at
+    all, i.e. the documented option did not work on this spelling of the same
+    physics (``ui/waveoptics_dock.py`` had to build the unfolded prescription
+    itself before it could set the flag).  The two guards now read the SAME
+    key.
+
+    UNFOLDING SEMANTICS, stated precisely.  With the flag set, every mirror
+    surface is replaced IN PLACE by an index-neutral FLAT
+    (``radius=inf``, ``glass_after := glass_before``, no conic / aspheric /
+    biconic / freeform / ``sag_callable`` / ``form_error`` / decenter / tilt),
+    keeping its ``clear_aperture`` and ``semi_diameter``.  Replacing rather
+    than deleting is what keeps the model honest: the surface count, every gap
+    in ``thicknesses`` and both reference planes (the input field sits on
+    surface 0's vertex plane, the output on the last surface's) are unchanged,
+    and a flat fold imprints exactly ``(n - n) * sag = 0``, so for a scalar
+    on-axis field through a FLAT fold this is exact.  What it drops is what the
+    flag's own message has always said it drops: a curved mirror's focusing
+    phase, a tilted/decentred mirror's world-frame axis change, and the
+    vignetting geometry of the folded arm.  Those are named in the warning.
+
+    Returns the prescription to use -- ``prescription`` itself when it holds no
+    mirror surface (no copy, no behaviour change), otherwise a shallow copy
+    carrying the substituted ``surfaces`` list.
+    """
+    surfaces = prescription.get('surfaces') or []
+    idx = _mirror_surface_indices(surfaces)
+    if not idx:
+        return prescription
+    if not prescription.get('allow_unfolded_equivalent', False):
+        raise ValueError(
+            f"{fn_name}: prescription has {len(idx)} mirror surface(s) at "
+            f"indices {idx} -- {fn_name} only walks REFRACTING surfaces.  "
+            f"Running this prescription as-is would treat the mirror as a "
+            f"refractor (wrong sign / wrong focusing phase) and propagate "
+            f"along the unfolded-equivalent axis.  Two ways to proceed:\n"
+            f"  (a) Acknowledge the unfolded-equivalent treatment by setting "
+            f"prescription['allow_unfolded_equivalent'] = True -- the same "
+            f"key {fn_name} already honours for an 'elements'-borne fold.  "
+            f"Each mirror surface then becomes an index-neutral FLAT at its "
+            f"own vertex plane, so every gap and both reference planes are "
+            f"unchanged; exact for a scalar on-axis field through a FLAT "
+            f"fold, and it drops a curved mirror's focusing phase and the "
+            f"world-frame axis change otherwise.\n"
+            f"  (b) Use lumenairy.io.split_prescription_at_mirrors(rx) to "
+            f"split the prescription at each fold, then alternate {fn_name} "
+            f"(each segment) with apply_mirror (each fold).  See "
+            f"Guide-Folded-Designs section 'Wave-optics through a fold'.")
+    _NEUTRALISED = ('conic', 'aspheric_coeffs', 'aspheric_coeffs_y',
+                    'radius_y', 'conic_y', 'freeform_type', 'freeform_coeffs',
+                    'sag_callable', 'form_error', 'decenter', 'tilt')
+    new_surfaces = list(surfaces)
+    curved, shifted = [], []
+    for i in idx:
+        s = dict(surfaces[i])
+        _R = s.get('radius')
+        if _R is not None and np.isfinite(_R):
+            curved.append(i)
+        if any(s.get(_k) is not None for _k in
+               ('conic', 'aspheric_coeffs', 'freeform_type', 'sag_callable')):
+            if i not in curved:
+                curved.append(i)
+        for _k in ('decenter', 'tilt'):
+            _v = s.get(_k)
+            if _v is not None and tuple(float(q) for q in _v) != (0.0, 0.0):
+                shifted.append(i)
+                break
+        for _k in _NEUTRALISED:
+            s.pop(_k, None)
+        s['radius'] = np.inf
+        s['glass_after'] = s.get('glass_before')
+        s['is_mirror'] = False
+        new_surfaces[i] = s
+    import warnings as _warnings
+    _warnings.warn(
+        f"{fn_name}: prescription['allow_unfolded_equivalent'] is set, so the "
+        f"{len(idx)} mirror surface(s) at indices {idx} are being walked as "
+        f"the UNFOLDED EQUIVALENT: each becomes an index-neutral flat at its "
+        f"own vertex plane (every gap and both reference planes unchanged), "
+        f"which is exact for a scalar on-axis field through a FLAT fold."
+        + (f"  DROPPED: the focusing phase of the CURVED mirror(s) at "
+           f"{curved}." if curved else "")
+        + (f"  DROPPED: the world-frame axis change of the "
+           f"decentred/tilted mirror(s) at {sorted(set(shifted))}."
+           if shifted else "")
+        + f"  Use lumenairy.io.split_prescription_at_mirrors(rx) with "
+          f"apply_mirror at each fold to carry them.",
+        RuntimeWarning, _WARN_STACKLEVEL)
+    out = dict(prescription)
+    out['surfaces'] = new_surfaces
+    return out
+
+
 # ---------------------------------------------------------------------------
 # SCREEN OBLIQUITY -- the closed-form angular correction to the sag screen.
 # ---------------------------------------------------------------------------
@@ -4624,6 +4743,22 @@ def apply_real_lens(
             applied at ``stop_index`` if provided).
         ``"stop_index"`` : int -- index of the surface that holds the
             aperture stop.
+        ``"allow_unfolded_equivalent"`` : bool, default False -- acknowledge
+            the UNFOLDED-EQUIVALENT treatment of a folded design.  This
+            function walks refracting surfaces only, so a prescription that
+            carries a fold mirror -- either as a ``'mirror'`` entry in
+            ``"elements"`` (what ``load_zemax_zmx`` emits) or as a surface
+            with ``is_mirror=True`` / ``glass_after='MIRROR'`` -- is REFUSED
+            by default.  Setting this key to ``True`` accepts the unfolded
+            walk instead: a mirror surface becomes an index-neutral FLAT at
+            its own vertex plane, so every gap and both reference planes stay
+            put and a scalar on-axis field through a FLAT fold is exact, while
+            a curved mirror's focusing phase and a tilted/decentred mirror's
+            world-frame axis change are DROPPED (the call warns, naming
+            which).  The exact alternative is
+            ``lumenairy.io.split_prescription_at_mirrors`` plus
+            :func:`~lumenairy.elements.apply_mirror` at each fold.  Both
+            spellings of a mirror read this one key.
         ``"name"`` : str -- human-readable label.
 
     wavelength : float
@@ -5298,6 +5433,15 @@ def _apply_real_lens_impl(
         if dy is None:
             dy = dx
 
+    # Mirror-in-``surfaces``: refuse, or -- when the caller has set
+    # ``allow_unfolded_equivalent``, the SAME key the ``elements``-borne fold
+    # guard below honours -- substitute the unfolded-equivalent prescription
+    # (each mirror an index-neutral flat at its own vertex plane) and warn.
+    # Done BEFORE the model guards so they see the surfaces that will actually
+    # be walked; a mirror-free prescription is returned unchanged, so the
+    # default path is untouched.
+    prescription = _unfold_mirror_surfaces(prescription, 'apply_real_lens')
+
     _check_apply_real_lens_kwarg_combination(
         wave_propagator=wave_propagator,
         slant_correction=slant_correction,
@@ -5345,47 +5489,17 @@ def _apply_real_lens_impl(
     _obl_active = (carrier is not None
                    and surface_model not in _TANGENT_FACET_MODELS)
 
-    # v4.13.0 audit P1-A: explicit mirror-in-surfaces guard.  The
-    # shared ``_check_no_silent_fold_drop`` only inspects the
-    # prescription's ``elements`` list (the full element sequence,
-    # populated by ``load_zemax_zmx``); a hand-built prescription that
-    # puts a mirror directly into ``surfaces`` (via ``is_mirror=True``
-    # or ``glass_after='MIRROR'``) and omits the ``elements`` key
-    # slips past the shared check, and ``apply_real_lens`` would
-    # silently treat the mirror as a refractor with the wrong sign.
-    # The v4.13.0 L4a sweep ported this guard to the 4 sibling
-    # ``apply_real_lens_*`` variants (``_traced``, ``_traced_jax``,
-    # ``_maslov``, ``_maslov_jax``) but missed the parent itself;
-    # this guard closes the audit P1-A gap.  Fail loudly with a
-    # mirror-specific message before any sag / refraction maths
-    # touches the field.
-    _surfaces_list = prescription.get('surfaces') or []
-    _mirror_surf_idx = []
-    for _i, _s in enumerate(_surfaces_list):
-        if not isinstance(_s, dict):
-            continue
-        _gl_after = _s.get('glass_after')
-        _is_mirror = bool(_s.get('is_mirror', False)) or (
-            isinstance(_gl_after, str)
-            and _gl_after.upper() == 'MIRROR'
-        )
-        if _is_mirror:
-            _mirror_surf_idx.append(_i)
-    if _mirror_surf_idx:
-        raise ValueError(
-            f"apply_real_lens: prescription has "
-            f"{len(_mirror_surf_idx)} mirror surface(s) at "
-            f"indices {_mirror_surf_idx} -- apply_real_lens only "
-            f"walks refracting surfaces.  Running this prescription "
-            f"as-is would silently treat the mirror as a refractor "
-            f"(wrong sign / wrong focusing phase) and propagate "
-            f"along the unfolded-equivalent axis.  Use the "
-            f"per-segment pattern for folded designs: call "
-            f"lumenairy.io.split_prescription_at_mirrors(rx) to "
-            f"split the prescription at each fold, then alternate "
-            f"apply_real_lens (each segment) with apply_mirror "
-            f"(each fold).  See Guide-Folded-Designs section "
-            f"'Wave-optics through a fold'.")
+    # v4.13.0 audit P1-A: the mirror-in-``surfaces`` guard.  The shared
+    # ``_check_no_silent_fold_drop`` only inspects the prescription's
+    # ``elements`` list (what ``load_zemax_zmx`` populates); a hand-built
+    # prescription that puts a mirror directly into ``surfaces`` (via
+    # ``is_mirror=True`` or ``glass_after='MIRROR'``) and omits the
+    # ``elements`` key slips past it, and the refractive walk would treat the
+    # mirror as a refractor with the wrong sign.  Both guards now read the
+    # SAME ``allow_unfolded_equivalent`` key and are applied together at the
+    # top of this function (``_unfold_mirror_surfaces``), which is why nothing
+    # is left to do here -- the surfaces below are already either mirror-free
+    # or the acknowledged unfolded equivalent.
 
     # Pre-flight grid vs prescription-aperture check.  If any surface's
     # semi-aperture exceeds the simulation grid, ASM will silently
@@ -7666,6 +7780,9 @@ def prepare_real_lens(
     :func:`apply_real_lens` called with the PREPARE-time settings; rebuild it
     to adopt new defaults.
     """
+    # Read the fold key exactly as apply_real_lens does, so the two entry
+    # points diagnose (and accept) a mirror-in-``surfaces`` identically.
+    prescription = _unfold_mirror_surfaces(prescription, 'prepare_real_lens')
     surfaces = prescription['surfaces']
     thicknesses = prescription['thicknesses']
     aperture = prescription.get('aperture_diameter')
@@ -7695,10 +7812,9 @@ def prepare_real_lens(
                 raise NotImplementedError(
                     f"prepare_real_lens: surfaces[{i}].{_k} is not supported; "
                     f"call apply_real_lens directly.")
-        if surf.get('is_mirror') or str(surf.get('glass_after', '')).upper() == 'MIRROR':
-            raise NotImplementedError(
-                f"prepare_real_lens: surfaces[{i}] is a mirror; call "
-                f"apply_real_lens directly.")
+        # (A mirror surface can no longer be seen here: it is either refused
+        # or replaced by its index-neutral unfolded equivalent above, by the
+        # same ``allow_unfolded_equivalent`` key apply_real_lens honours.)
 
     N = int(N)
     # v5.29.1 (audit E-H3): resolve the process-wide defaults AT PREPARE TIME
