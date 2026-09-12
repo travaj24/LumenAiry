@@ -166,12 +166,33 @@ SCIPY_FFT_WORKERS = -1
 # empirically where pyFFTW + plan cache starts to beat NumPy.
 FFTW_MIN_SIZE = 256
 
-# Shapes that have failed pyFFTW allocation once in this process.  On
+# Plan keys that have failed pyFFTW allocation once in this process.  On
 # subsequent calls we skip straight to the scipy fallback for those
-# shapes rather than eating the allocation failure repeatedly and
+# keys rather than eating the allocation failure repeatedly and
 # thrashing the plan cache.  Gets reset when the user explicitly
 # flushes via ``reset_fft_backend()``.
+#
+# K7 (audit 2026-09-11): entries are ``(shape, dtype.str, direction)``
+# triples, not bare shapes.  Keyed on the bare shape, ONE complex128
+# MemoryError at (512, 512) also blacklisted complex64 at the same shape
+# -- half the memory, likely to succeed -- and the inverse direction,
+# which has its own separate plan and buffer.  Measured: after a single
+# simulated complex128 failure at (512, 512) the blacklist was
+# ``{(512, 512)}`` and a subsequent complex64 transform skipped pyFFTW.
+# The key now matches the plan cache's own
+# ``(direction, shape, dtype, threads)``, minus ``threads`` (an
+# allocation failure is not thread-count-specific).  The name is kept
+# for the reset / snapshot machinery and the tests that reference it.
 _PYFFTW_BAD_SHAPES: set[tuple] = set()
+
+
+def _pyfftw_bad_key(shape, dtype, direction):
+    """Blacklist key for a pyFFTW plan: ``(shape, dtype.str, direction)``.
+
+    ``direction`` is ``'fwd'`` / ``'inv'``, matching
+    :func:`_get_or_make_plan`.
+    """
+    return (tuple(shape), np.dtype(dtype).str, str(direction))
 
 # Single toggle: when True, ``_fft2`` / ``_ifft2`` wrap the pyFFTW call
 # in try/except and fall back to scipy.fft (or numpy.fft) on any
@@ -598,7 +619,7 @@ def _resolve_jax_real_dtype(dtype: Any = None) -> Any:
 #   OrderedDict[key] = {
 #       'plans':   [plan_a, plan_b],   # one in-place pyFFTW plan per slot
 #       'bufs':    [buf_a,  buf_b],    # aligned workspaces, plan_i bound to bufs[i]
-#       'lock':    threading.Lock(),   # serialises execution across slots
+#       'locks':   [Lock(), Lock()],   # one per slot (v5.46, audit K4)
 #       'idx':     int,                # next slot to use, toggled each call
 #       'flag':    'FFTW_ESTIMATE' | 'FFTW_MEASURE' | ... (per-entry planner)
 #       'calls':   int,                # call count for auto-promote tracking
@@ -1147,7 +1168,20 @@ def _build_plan_entry(direction, shape_t, dt, threads, flag):
     return {
         'plans': plans,
         'bufs': bufs,
-        'lock': threading.Lock(),
+        # K4 (audit 2026-09-11): ONE LOCK PER SLOT, not one per entry.
+        # Each pyFFTW plan is bound to its own buffer and the ping-pong
+        # slot index is advanced under ``_PYFFTW_PLAN_LOCK``, so two
+        # threads at the same key always receive DIFFERENT plans and
+        # DIFFERENT buffers -- there is nothing for them to race on.  A
+        # single entry-wide lock nevertheless serialised them: measured
+        # max simultaneous threads inside the pyFFTW critical section =
+        # 1 with 4 threads x 6 calls on one (1024, 1024) complex128
+        # shape, i.e. the double buffer could never deliver any
+        # concurrency at all.  The per-slot lock still guards the one
+        # real hazard -- ``pyfftw.FFTW.__call__`` on the SAME buffer --
+        # which only arises when two callers wrap around to the same
+        # slot.
+        'locks': [threading.Lock() for _ in bufs],
         'idx': 0,
         'flag': str(flag),
         'calls': 0,
@@ -1306,7 +1340,7 @@ def _get_or_make_plan(direction, shape, dtype, threads):
                 slot = entry['idx'] % _nb
                 entry['idx'] = (slot + 1) % _nb
                 return (entry['plans'][slot], entry['bufs'][slot],
-                        entry['lock'], _nb)
+                        entry['locks'][slot], _nb)
             # Buffer mutated under us (rare; defensive); fall through
             # and rebuild.
             del _PYFFTW_PLAN_CACHE[key]
@@ -1327,7 +1361,7 @@ def _get_or_make_plan(direction, shape, dtype, threads):
         slot = new_entry['idx'] % _nb
         new_entry['idx'] = (slot + 1) % _nb
     return (new_entry['plans'][slot], new_entry['bufs'][slot],
-            new_entry['lock'], _nb)
+            new_entry['locks'][slot], _nb)
 
 
 # ----------------------------------------------------------------------------
@@ -1617,8 +1651,10 @@ def _get_or_make_freq_grids(Ny, Nx, dy, dx, xp_is_numpy):
     exactly for both parities.
     """
     if not xp_is_numpy:
-        kx_sq = (2 * np.pi * (cp.arange(Nx) - Nx // 2) / (Nx * dx)) ** 2
-        ky_sq = (2 * np.pi * (cp.arange(Ny) - Ny // 2) / (Ny * dy)) ** 2
+        kx_sq = (2 * np.pi * (cp.arange(Nx) - Nx // 2)
+                 * (1.0 / (Nx * dx))) ** 2
+        ky_sq = (2 * np.pi * (cp.arange(Ny) - Ny // 2)
+                 * (1.0 / (Ny * dy))) ** 2
         # Note: matches the integer arithmetic of the legacy code,
         # which used `(arange(N) - N//2) * (1/(N*dx))` then squared.
         return kx_sq, ky_sq
@@ -1708,8 +1744,8 @@ def _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength, abs_z, xp_is_numpy):
         Ly = Ny * dy
         fx_max = Lx / (2 * wavelength * abs_z)
         fy_max = Ly / (2 * wavelength * abs_z)
-        fx = (cp.arange(Nx) - Nx // 2) / (Nx * dx)
-        fy = (cp.arange(Ny) - Ny // 2) / (Ny * dy)
+        fx = (cp.arange(Nx) - Nx // 2) * (1.0 / (Nx * dx))
+        fy = (cp.arange(Ny) - Ny // 2) * (1.0 / (Ny * dy))
         return cp.abs(fx) < fx_max, cp.abs(fy) < fy_max
     key = (int(Ny), int(Nx), float(dy), float(dx),
            float(wavelength), float(abs_z))
@@ -1722,8 +1758,15 @@ def _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength, abs_z, xp_is_numpy):
     fx_max = Lx / (2 * wavelength * abs_z)
     fy_max = Ly / (2 * wavelength * abs_z)
     # audit P1: integer DC anchor, matching _get_or_make_freq_grids.
-    fx = (np.arange(Nx) - Nx // 2) / (Nx * dx)
-    fy = (np.arange(Ny) - Ny // 2) / (Ny * dy)
+    # K8 (audit 2026-09-11): and the SAME multiply-by-reciprocal
+    # expression, not a division.  These masks label the bins of an H
+    # built from ``_get_or_make_freq_grids``, and the two forms differ by
+    # up to 1 ULP whenever ``1/(N*d)`` is not exactly representable -- a
+    # mask/kernel label mismatch.  Latent only (0 flipped mask bins in
+    # 400 randomised (N, dx, lambda, z) trials), but there is no reason
+    # for two expressions where one will do.
+    fx = (np.arange(Nx) - Nx // 2) * (1.0 / (Nx * dx))
+    fy = (np.arange(Ny) - Ny // 2) * (1.0 / (Ny * dy))
     bl_x = np.abs(fx) < fx_max
     bl_y = np.abs(fy) < fy_max
     with _ASM_CACHE_LOCK:
@@ -1780,6 +1823,26 @@ def _h_cache_store(key, H):
     h_bytes = _entry_bytes(H)
     if h_bytes > _H_CACHE_MAX_BYTES_PER_ENTRY:
         return  # too big to cache; lookups will miss + rebuild
+    # K8 (audit 2026-09-11): ``_h_cache_lookup`` hands the STORED array
+    # back by reference (no copy -- that is the point of the cache), and
+    # the internal consumers (``angular_spectrum_propagate``,
+    # ``angular_spectrum_propagate_batch``, ``shack_hartmann``,
+    # ``rayleigh_sommerfeld_propagate``) hold the live object.  The
+    # convention "callers must not mutate it in place" was a comment;
+    # make it an enforced invariant at zero cost.  Measured pre-fix: two
+    # successive ``_get_asm_H_natural`` calls at the same key returned
+    # arrays for which ``np.shares_memory(...) is True`` and both were
+    # writeable.  The public ``get_asm_transfer_function`` already
+    # copies, so its return stays writeable.
+    for _a in (H if isinstance(H, (tuple, list)) else (H,)):
+        try:
+            if _a is not None and getattr(_a, 'flags', None) is not None:
+                _a.flags.writeable = False
+        except (AttributeError, ValueError):
+            # Non-NumPy entry (CuPy/JAX never reach this cache) or a view
+            # that does not own its buffer -- the convention still holds,
+            # it just cannot be enforced for that entry.
+            pass
     with _ASM_CACHE_LOCK:
         _H_CACHE[key] = H
         # Drop oldest entries until count and total-bytes fit.
@@ -1959,15 +2022,20 @@ def _handle_pyfftw_failure(x, op_name, exc):
     aligned contiguous plan buffer on large grids with tight RAM).
     """
     shape = tuple(x.shape)
+    # K7: blacklist the (shape, dtype, direction) that actually failed --
+    # a complex128 allocation failure says nothing about complex64 at the
+    # same shape, nor about the opposite direction's own plan + buffer.
+    direction = 'inv' if op_name.startswith('ifft') else 'fwd'
+    key = _pyfftw_bad_key(shape, x.dtype, direction)
     # v5.4.6 (audit P3-14): the read-test-then-add must be atomic under the
-    # plan lock, else two threads failing on the same shape both observe
+    # plan lock, else two threads failing on the same key both observe
     # was_new=True (duplicate warnings) and a concurrent reset can swap the
     # binding underfoot.  This handler runs OUTSIDE the plan-lookup lock
     # (it is called from the _fft2/_ifft2 execution except-blocks), so
     # acquiring the (non-reentrant) lock here does not deadlock.
     with _PYFFTW_PLAN_LOCK:
-        was_new = shape not in _PYFFTW_BAD_SHAPES
-        _PYFFTW_BAD_SHAPES.add(shape)
+        was_new = key not in _PYFFTW_BAD_SHAPES
+        _PYFFTW_BAD_SHAPES.add(key)
     if was_new:
         import warnings
         # S5-8 (perf, no-loss): we no longer toggle
@@ -1980,14 +2048,15 @@ def _handle_pyfftw_failure(x, op_name, exc):
         # ``reset_fft_backend()`` to drop the resident aligned plan buffers
         # in ``_PYFFTW_PLAN_CACHE`` once the memory pressure has passed.
         warnings.warn(
-            f'pyFFTW {op_name} failed on shape {shape}: '
+            f'pyFFTW {op_name} failed on shape {shape} '
+            f'(dtype {np.dtype(x.dtype).str}, direction {direction}): '
             f'{type(exc).__name__}: {exc}.  Falling back to '
-            f'scipy.fft for this shape.  (Likely cause: aligned '
+            f'scipy.fft for that shape/dtype/direction.  (Likely cause: aligned '
             f'contiguous buffer allocation failed under memory '
             f'pressure.)  Call '
             f'lumenairy.propagation.reset_fft_backend() '
             f'after the large allocation is freed to re-enable '
-            f'pyFFTW for future calls at this shape.',
+            f'pyFFTW for future calls at this key.',
             RuntimeWarning, stacklevel=3)
 
 
@@ -2049,7 +2118,8 @@ def _fft2(x):
     if (USE_PYFFTW and PYFFTW_AVAILABLE
             and np.iscomplexobj(x)
             and x.shape[0] >= FFTW_MIN_SIZE
-            and shape not in _PYFFTW_BAD_SHAPES):
+            and _pyfftw_bad_key(shape, x.dtype, 'fwd')
+            not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
         try:
             plan, buf, lock, _nbufs = _get_or_make_plan('fwd', shape, x.dtype, threads)
@@ -2110,7 +2180,8 @@ def _ifft2(x):
     if (USE_PYFFTW and PYFFTW_AVAILABLE
             and np.iscomplexobj(x)
             and x.shape[0] >= FFTW_MIN_SIZE
-            and shape not in _PYFFTW_BAD_SHAPES):
+            and _pyfftw_bad_key(shape, x.dtype, 'inv')
+            not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
         try:
             plan, buf, lock, _nbufs = _get_or_make_plan('inv', shape, x.dtype, threads)
@@ -2153,7 +2224,8 @@ def _fft2_nd(x):
     if (USE_PYFFTW and PYFFTW_AVAILABLE and len(shape) >= 2
             and np.iscomplexobj(x)
             and shape[-2] >= FFTW_MIN_SIZE
-            and shape not in _PYFFTW_BAD_SHAPES):
+            and _pyfftw_bad_key(shape, x.dtype, 'fwd')
+            not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
         try:
             plan, buf, lock, _nbufs = _get_or_make_plan(
@@ -2192,7 +2264,8 @@ def _ifft2_nd(x):
     if (USE_PYFFTW and PYFFTW_AVAILABLE and len(shape) >= 2
             and np.iscomplexobj(x)
             and shape[-2] >= FFTW_MIN_SIZE
-            and shape not in _PYFFTW_BAD_SHAPES):
+            and _pyfftw_bad_key(shape, x.dtype, 'inv')
+            not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
         try:
             plan, buf, lock, _nbufs = _get_or_make_plan(

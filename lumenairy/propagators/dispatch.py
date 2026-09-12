@@ -1309,9 +1309,25 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
             if _shape is not None or _dx_out is not None:
                 kwargs.setdefault('output_shape', _shape)
                 kwargs.setdefault('output_dx', _dx_out)
-            return propagate_huygens_fresnel_freespace(
+            _out = propagate_huygens_fresnel_freespace(
                 E_in, z, wavelength, dx, **kwargs,
             )
+            # K20 (audit 2026-09-11): the hf free-space kernel is the only
+            # output-grid-capable method that changes its RETURN TYPE --
+            # a bare ndarray with no grid kwargs, an ``(E, dx)`` TUPLE
+            # with either of them, including an ``output_grid`` equal to
+            # the input (a strict no-op).  ``asm`` / ``gbd`` / ``hfpi``
+            # return an ndarray in both cases, and the W9-4 error message
+            # actively steers callers to ``method='hf'``.  With the v5.30
+            # default ``return_result=True`` the wrapper absorbed the
+            # tuple via ``_coerce_field``; with ``return_result=False``
+            # -- which is exactly what ``mhs.prescription_subdomain``
+            # uses -- the tuple leaked to the caller.  Unpack it here:
+            # ``propagate`` already knows the requested pitch, so the
+            # second element carries no information the caller lacks.
+            if isinstance(_out, tuple) and len(_out) == 2:
+                _out = _out[0]
+            return _out
         # v5.2.3 (AUDIT_V4_13_1 P1-A residual closure): same dispatcher
         # forwarding fix as the ``gbd`` / ``hfpi`` branches above.
         _shape, _dx_out = _resolve_dispatcher_output_grid(

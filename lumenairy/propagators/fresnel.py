@@ -33,6 +33,64 @@ __all__ = [
 ]
 
 
+def _warn_fresnel_chirp_sampling(Ny, Nx, dy, dx, wavelength, z, fn_name):
+    """Warn when the single-FFT Fresnel chirp is under-sampled (audit K1).
+
+    The single-FFT Fresnel sum multiplies the input by the quadratic
+    chirp ``exp(i*k*r1^2 / (2z))`` SAMPLED at the grid pitch.  That
+    chirp's local spatial frequency at the grid edge ``r = N*dx/2`` is
+    ``r / (lambda*z)``, and the grid resolves at most ``1/(2*dx)``, so
+    the discrete sum is a valid quadrature only for
+
+        N*dx^2 / lambda  <=  z          (per axis)
+
+    -- i.e. exactly the complement of the ``Q = lambda*|z|/(N*dx^2) >= 1``
+    band the dispatcher already computes when it trips ASM over to SAS.
+    Below it the sum aliases silently.
+
+    Measured (N = 128, dx = 2 um, lambda = 633 nm so z_crit = 0.809 mm;
+    smooth Gaussian w0 = 40 um so the FIELD is fully sampled and the
+    chirp is the only error source; oracle = the same continuous Fresnel
+    integral at 8x oversampling in each axis, read at three output
+    points):
+
+    ==========  ===========================  ========
+    z / z_crit  relative error               warnings
+    ==========  ===========================  ========
+    0.25        3.34e-1, 3.43e-1, 3.92e-2    0
+    0.50        1.29e-4, 1.91e-4, 2.90e-4    0
+    1.00        3.99e-6, 3.12e-6, 2.01e-6    0
+    2.00        1.24e-6, 5.45e-7, 2.02e-6    0
+    ==========  ===========================  ========
+
+    Note the MFT sibling is not an oracle for this: it evaluates the same
+    aliased discrete sum and agrees with the single-FFT form to 3e-14 at
+    every ``z``.
+
+    Emits a ``RuntimeWarning`` naming ASM, in the same style as the SAS
+    ``z_limit`` guard and ``_warn_mft_output_window``.  Values are
+    unchanged -- this is a diagnostic only.
+    """
+    z_crit = max(float(Nx) * float(dx) ** 2,
+                 float(Ny) * float(dy) ** 2) / float(wavelength)
+    if not (abs(float(z)) < z_crit) or z_crit <= 0.0:
+        return
+    import warnings
+    q = abs(float(z)) / z_crit
+    warnings.warn(
+        f"{fn_name}: the quadratic Fresnel chirp is UNDER-SAMPLED at this "
+        f"geometry -- z = {float(z):.6g} m is {q:.3f}x the validity bound "
+        f"max(Nx*dx^2, Ny*dy^2)/wavelength = {z_crit:.6g} m "
+        f"(Ny={int(Ny)}, Nx={int(Nx)}, dy={float(dy):.4e} m, "
+        f"dx={float(dx):.4e} m, wavelength={float(wavelength):.4e} m).  "
+        f"The single-FFT sum is then an aliased quadrature and the result "
+        f"is silently wrong (measured 33% relative error at z = 0.25x the "
+        f"bound on a fully-sampled Gaussian).  Use "
+        f"angular_spectrum_propagate, which is exact in this regime, or "
+        f"propagate a longer z / a finer dx so that z >= {z_crit:.6g} m.",
+        RuntimeWarning, stacklevel=3)
+
+
 def _centred_dft_halfpixel_args(Ny, Nx, xp=np):
     """Index-offset phase corrections for the ``(n - N/2)`` coordinate
     convention under an ``fftshift(fft2(ifftshift(.)))`` DFT (audit P1).
@@ -228,6 +286,21 @@ def fresnel_propagate(
     For very short distances (large Fresnel number), use ASM instead.
     For very long distances (small Fresnel number), this becomes equivalent
     to the Fraunhofer approximation.
+
+    Sampling guard (K1)
+    -------------------
+    "Very short" is not a matter of taste: the quadratic chirp this
+    kernel samples at ``dx`` is under-sampled -- and the sum silently
+    aliases -- for
+
+        z  <  max(Nx*dx**2, Ny*dy**2) / wavelength ,
+
+    measured at 33 % relative error at a quarter of that bound (see
+    :func:`_warn_fresnel_chirp_sampling` for the derivation and the
+    measured table).  A ``RuntimeWarning`` naming
+    :func:`angular_spectrum_propagate` is emitted there; the returned
+    values are unchanged, so a caller who knows what they are doing can
+    filter it.
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
@@ -262,6 +335,11 @@ def fresnel_propagate(
 
     Ny, Nx = E_in.shape
     k = 2 * np.pi / wavelength
+
+    # K1 (audit 2026-09-11): the chirp-sampling validity bound.  Emitted
+    # before any work so the diagnostic is not buried under a long call.
+    _warn_fresnel_chirp_sampling(Ny, Nx, dy, dx, wavelength, z,
+                                 'fresnel_propagate')
 
     # 4.10: honour caller dtype so a complex64 E_in stays complex64
     # through the Fresnel pipeline (pre-4.10 it was silently promoted

@@ -220,8 +220,11 @@ def scalable_angular_spectrum_propagate(
         target_cdtype = E_in.dtype
     else:
         target_cdtype = np.dtype(_state.DEFAULT_COMPLEX_DTYPE)
-    target_fdtype = (np.float32
-                     if target_cdtype == np.complex64 else np.float64)
+    # K3 (audit 2026-09-11): the kernel PHASE ARGUMENTS are no longer
+    # built in the caller's real dtype -- see the float64 note at the
+    # frequency-axis construction below.  Only the finished complex
+    # kernels are cast to ``target_cdtype``; the stored / returned dtype
+    # is unchanged.
 
     # -- zero-pad the input, centred ----------------------------------------
     # 4.12.0 (audit round-4 B1-5): `as1 = (N + 1) // 2` was only
@@ -253,7 +256,23 @@ def scalable_angular_spectrum_propagate(
     if cached is None:
         # -- spatial-frequency axes (natural FFT order) -------------------
         #   fftfreq(N_new, d=L_new/N_new) = fftfreq(N_new, d=dx)
-        f_x = xp.fft.fftfreq(N_new, d=dx).astype(target_fdtype)
+        #
+        # K3 (audit 2026-09-11): these axes and every kernel PHASE
+        # ARGUMENT below are built in float64 regardless of the output
+        # dtype; only the finished complex kernels are cast to
+        # ``target_cdtype``.  This is the "f64-carrier-then-cast" recipe
+        # ``fresnel.py`` already uses for its quadratic carrier (v5.17.x
+        # P2-29) and that the ASM transfer function uses via its mod-2*pi
+        # fold.  Pre-fix these were float32 for a complex64 caller, and
+        # the ``h_AS - h_Fr`` difference below is a near-1 cancellation
+        # whose absolute error is ~eps REGARDLESS of how small the
+        # difference is -- then multiplied by ``k*z``: measured
+        # max|Delta(h_AS - h_Fr)| = 9.091e-08 float32 vs float64
+        # (N_new = 1024, dx = 1 um, lambda = 633 nm), i.e. 2.9e-3 rad of
+        # phase error at z = 3.24 mm and 0.902 rad at z = 1 m -- and long
+        # distance is SAS's whole reason to exist.  The axes are 1-D and
+        # field-independent, so the float64 build costs nothing.
+        f_x = xp.fft.fftfreq(N_new, d=dx).astype(np.float64)
         f_y = f_x  # square grid
 
         # -- band-limit W: ASM-vs-Fresnel validity region -----------------
@@ -271,16 +290,37 @@ def scalable_angular_spectrum_propagate(
         #   H_AS  = sqrt(1 - (lam*fx)^2 - (lam*fy)^2)
         #   H_Fr  = 1 - ((lam*fx)^2 + (lam*fy)^2) / 2
         #   delta_H = W * exp( i * k * z * (H_AS - H_Fr) )
+        #
+        # K3: evaluate the difference through its CANCELLATION-FREE
+        # closed form.  With u = (lam*f)^2 and s = sqrt(1 - u),
+        #
+        #   H_AS - H_Fr = (s - 1) + u/2 = -u/(1+s) + u/2
+        #               = -u^2 / (2 (1 + s)^2) ,
+        #
+        # which is exact for every u in [0, 1] instead of subtracting two
+        # quantities that are both within ~u^2/8 of each other.  The
+        # difference is of order u^2/8, so the SUBTRACTED form loses it
+        # entirely below u ~ 1e-4 even in float64 (and completely in
+        # float32); the closed form has full relative accuracy there.
+        # The band-limit W already excludes the evanescent set
+        # (u >= 1) -- W's own inequalities imply cx^2 + cy^2 < 1 -- so
+        # ``prop`` below is redundant with W and is stated only to make
+        # the evanescent branch explicit and to keep sqrt real.
         k = 2 * np.pi / lam
-        h_AS = xp.sqrt((1.0 + 0j) - cx ** 2 - cy ** 2)
-        h_Fr = 1.0 - 0.5 * (cx ** 2 + cy ** 2)
-        delta_H = W * xp.exp(1j * k * z * (h_AS - h_Fr))
+        u = cx ** 2 + cy ** 2
+        prop = u < 1.0
+        s = xp.sqrt(xp.maximum(1.0 - u, 0.0))
+        dh = -(u * u) / (2.0 * (1.0 + s) ** 2)
+        delta_H = xp.where(W & prop, xp.exp(1j * k * z * dh), 0.0)
         delta_H = delta_H.astype(target_cdtype, copy=False)
 
         # -- Fresnel chirp on natural-order grid --------------------------
+        # K3: float64 coordinates -> float64 argument -> complex128
+        # exponential -> single cast, so the ~1e5 rad chirp argument is
+        # never accumulated in float32.
         coord_centred = xp.linspace(
             -L_new / 2, L_new / 2, N_new, endpoint=False,
-            dtype=target_fdtype)
+            dtype=np.float64)
         coord_nat = xp.fft.ifftshift(coord_centred)
         x = coord_nat[None, :]
         y = coord_nat[:, None]
@@ -294,8 +334,9 @@ def scalable_angular_spectrum_propagate(
         else:
             dq = lam * z / L_new  # output pitch on padded grid
             Q = dq * N_new        # full extent of padded output grid
+            # K3: float64 coordinates for the same reason as H1 above.
             q_centred = xp.linspace(
-                -Q / 2, Q / 2, N_new, endpoint=False, dtype=target_fdtype)
+                -Q / 2, Q / 2, N_new, endpoint=False, dtype=np.float64)
             q_nat = xp.fft.ifftshift(q_centred)
             qx = q_nat[None, :]
             qy = q_nat[:, None]

@@ -21,10 +21,17 @@ See ``REFERENCES.txt`` Section C for the foundational publications.
 Multi-backend
 -------------
 
-The full pipeline is written against
+The free-space pipeline is written against
 :func:`lumenairy._array.array_namespace`, accepting NumPy / CuPy /
 JAX source fields and returning the same backend.  Random sampling
 goes through :class:`lumenairy._random.RandomState`.
+
+The PRESCRIPTION walk (:func:`propagate_hfpi_through_prescription`) is
+different: it calls the host ray tracer, so every segment round-trips
+the bundle to NumPy via :func:`~lumenairy.backend.to_numpy` and back.
+Results are correct on every backend, but the walk cannot be traced
+under ``jax.jit`` / ``vmap`` / ``grad`` and a CuPy bundle loses device
+residency each segment (K23, audit 2026-09-11).
 
 Author: Andrew Traverso
 """
@@ -107,23 +114,53 @@ def _spawn_rng(rng, stream_index: int):
         ss = np.random.SeedSequence(entropy=[int(rng), int(stream_index)])
         return int(ss.generate_state(1)[0])
     if isinstance(rng, np.random.Generator):
-        # Use the generator's SeedSequence-spawn machinery if
-        # available; otherwise pull a child seed.
+        # K24 (audit 2026-09-11): derive the child from the parent's
+        # SeedSequence ENTROPY, exactly as the ``int`` branch above does,
+        # so ``stream_index`` is a stable key.  The pre-fix
+        # ``rng.spawn(stream_index + 1)[-1]`` MUTATED the caller's
+        # generator (it advances ``n_children_spawned`` on every call)
+        # and discarded ``stream_index`` children each time, so the
+        # mapping was not a pure function of ``(parent, i)``: measured,
+        # a fresh parent at the same stream index reproduced its draws,
+        # but "stream 1 drawn AFTER stream 0" differed from "stream 1
+        # drawn alone".  It also spawned i+1 children to use one.
         try:
-            spawned = rng.spawn(stream_index + 1)[-1]
-            return spawned
+            parent_entropy = rng.bit_generator.seed_seq.entropy
         except AttributeError:
-            # NumPy < 1.25 -- fall back to drawing a 64-bit seed.
-            child_seed = int(rng.integers(0, 2 ** 63 - 1))
-            return np.random.default_rng(child_seed)
+            parent_entropy = None
+        if parent_entropy is not None:
+            ent = (list(parent_entropy)
+                   if isinstance(parent_entropy, (list, tuple))
+                   else [int(parent_entropy)])
+            return np.random.default_rng(
+                np.random.SeedSequence(entropy=ent + [int(stream_index)]))
+        # No readable seed sequence (a hand-built BitGenerator).  Fall
+        # back to drawing a child seed; this DOES advance the parent, but
+        # there is no entropy to key on.
+        child_seed = int(rng.integers(0, 2 ** 63 - 1))
+        return np.random.default_rng(child_seed)
     # JAX PRNGKey: caller-side splitting is the canonical pattern,
     # but we can deterministically fold the stream index.
+    #
+    # K15/K24 (audit 2026-09-11): this used to be ``except Exception:
+    # pass``, which fell through to "return as-is" and handed BOTH
+    # streams the IDENTICAL key -- the exact correlation this function
+    # exists to prevent -- with no diagnostic whatever.  Narrowed to the
+    # import / attribute failures that can actually occur, and the
+    # fall-through now says what it did.
     try:
         import jax
         if hasattr(jax.random, 'fold_in'):
             return jax.random.fold_in(rng, stream_index)
-    except Exception:
-        pass
+    except (ImportError, AttributeError, TypeError, ValueError) as _exc:
+        warnings.warn(
+            f"_spawn_rng: could not fold stream index {stream_index} into "
+            f"the supplied JAX key ({type(_exc).__name__}: {_exc}); the "
+            f"key is returned UNCHANGED, so every stream derived from it "
+            f"draws the SAME samples -- the correlation this function "
+            f"exists to prevent.  Split the key caller-side "
+            f"(jax.random.split) and pass one sub-key per aperture.",
+            RuntimeWarning, stacklevel=2)
     # Unknown rng type: return as-is (preserves prior behaviour).
     return rng
 
@@ -147,6 +184,17 @@ class PathBundle:
     weights: object         # (N,) complex array
     opl: object             # (N,) float array
     alive: object           # (N,) bool array
+    # K13 (audit 2026-09-11): GEOMETRIC distance travelled since the last
+    # emission / re-emission, in metres.  ``opl`` cannot serve: it is the
+    # OPTICAL path (``n_medium * |t|``) on the free-space legs and the
+    # ABSOLUTE accumulated ``opd`` from the ray tracer on the prescription
+    # walk, whereas the Huygens-Fresnel ``1/r`` spreading needs the
+    # geometric length of the CURRENT leg.  ``None`` means "not tracked"
+    # and the binning Jacobian falls back to ``opl`` (the same number
+    # whenever n_medium == 1 and the bundle came from a free-space entry
+    # point).  Trailing default, so positional construction of the
+    # pre-v5.46 five-field bundle keeps working.
+    leg: object = None      # (N,) float array
 
     def __len__(self) -> int:
         try:
@@ -161,6 +209,10 @@ class PathBundle:
         if self.alive is None:
             return len(self)
         return int(np.sum(to_numpy(self.alive)))
+
+    def leg_or_opl(self):
+        """Current-leg geometric length, falling back to ``opl``."""
+        return self.opl if self.leg is None else self.leg
 
 
 # ============================================================================
@@ -188,7 +240,19 @@ def init_paths_from_field(
     """
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
-    rs = RandomState(rng=rng if rng is not None else 0)
+    # K19 (audit 2026-09-11): ``rng=None`` -- the DEFAULT on every HFPI
+    # entry point -- must draw fresh system entropy, which is exactly
+    # what ``RandomState(None)`` does (``np.random.default_rng(None)``).
+    # Pre-fix this read ``rng if rng is not None else 0``, so the
+    # default was the FIXED seed 0 and ``_spawn_rng``'s documented
+    # "let each aperture pull from system entropy" branch was
+    # unreachable.  Measured: two default runs byte-identical, and
+    # identical to ``rng=0``.  HFPI is a 1/sqrt(N) Monte-Carlo
+    # estimator sold on that convergence; the canonical way to see its
+    # error is to re-run with a new seed, and on the default path that
+    # error estimate was identically ZERO.  Pass an int (or a
+    # Generator) for reproducibility.
+    rs = RandomState(rng=rng)
 
     iy = rs.integers((n_paths,), low=0, high=Ny)
     ix = rs.integers((n_paths,), low=0, high=Nx)
@@ -219,7 +283,20 @@ def init_paths_from_field(
     # at visible wavelengths.  Intensity ratios across paths were
     # unaffected (the missing factors are global), so existing relative-
     # contrast results still hold; absolute-photometry use is new.
-    solid_angle = 2.0 * float(np.pi) * (1.0 - cos_max) / float(n_paths)
+    # K18 (audit 2026-09-11): the SOURCE-AREA factor.  The source pixel is
+    # drawn uniformly over Ny*Nx pixels, so the unbiased estimate of
+    # ``int dS int dOmega f`` is ``(Area * Omega / n_paths) * sum f`` with
+    # ``Area = Ny*Nx*dx**2`` -- the whole illuminated area, not ONE
+    # pixel's ``dx**2``.  Pre-fix the weight carried ``dx**2`` alone, so
+    # every amplitude was low by the source pixel COUNT.  Measured
+    # (single unit-amplitude source pixel, cone 0.20 rad, 200 000 paths,
+    # against the exact ``int E cos(theta) dx^2/(i lambda) dOmega``):
+    # sum(weights)/exact = 1.000004 (1x1), 0.062140 (4x4), 0.003945
+    # (16x16), 0.000260 (64x64) -- tracking 1/N_pix to MC noise, i.e.
+    # 4096x low at 64x64.
+    n_src_px = float(Ny) * float(Nx)
+    solid_angle = (2.0 * float(np.pi) * (1.0 - cos_max)
+                   * n_src_px / float(n_paths))
     inv_i_lambda = (1.0 / (1j * wavelength)) if wavelength > 0 else 1.0
     weights = (sample * cos_theta * (dx * dx)
                * complex(inv_i_lambda) * solid_angle)
@@ -233,6 +310,7 @@ def init_paths_from_field(
         weights=weights,
         opl=opl,
         alive=alive,
+        leg=xp.zeros_like(opl),
     )
 
 
@@ -271,6 +349,11 @@ def propagate_to_plane(
     k = 2 * float(np.pi) / wavelength
     phase = xp.exp(1j * k * delta_opl).astype(paths.weights.dtype)
     new_weights = paths.weights * phase
+    # K13: the GEOMETRIC step is |t| (directions are unit vectors), which
+    # is ``delta_opl / n_medium``; track it separately from the optical
+    # path so the binning Jacobian has a true ``r``.
+    base_leg = paths.leg if paths.leg is not None else xp.zeros_like(paths.opl)
+    new_leg = base_leg + xp.abs(t)
 
     return PathBundle(
         positions=new_positions,
@@ -278,6 +361,7 @@ def propagate_to_plane(
         weights=new_weights,
         opl=new_opl,
         alive=new_alive,
+        leg=new_leg,
     )
 
 
@@ -291,7 +375,7 @@ def apply_aperture_diffraction(
     *,
     centre: Tuple[float, float] = (0.0, 0.0),
     shape: str = 'circular',
-    wavelength: float = 0.0,
+    wavelength: float,
     rng: Optional[Union[int, object]] = None,
     cone_half_angle: float = np.pi / 2 - 1e-6,
 ) -> PathBundle:
@@ -301,9 +385,45 @@ def apply_aperture_diffraction(
     re-emit secondary HF sources at their current position with a
     fresh direction sample.  OPL is reset since the new secondary
     source's accumulator starts at zero.
+
+    Parameters
+    ----------
+    wavelength : float, keyword-only, REQUIRED
+        Vacuum wavelength [m], strictly positive.
+
+        .. versionchanged:: 5.46
+            No longer defaults to ``0.0`` (audit K12).  The
+            ``1/(i*lambda)`` Kirchhoff prefactor was gated on
+            ``wavelength > 0``, so omitting it silently DROPPED the
+            prefactor: measured, every path weight came out wrong by a
+            factor of exactly ``1/lambda`` = 1.5798e6 in magnitude AND
+            by -90 degrees in phase, with zero warnings -- precisely the
+            failure the v4.11.2 prefactor work fixed.  A physically
+            meaningless default (lambda = 0) must not silently mean
+            "skip the physics".  Migration: pass ``wavelength=`` (the
+            library's own entry points always did).
     """
+    if not (wavelength > 0) or not np.isfinite(wavelength):
+        raise ValueError(
+            f"apply_aperture_diffraction: wavelength must be a positive "
+            f"finite length in metres (got {wavelength!r}).  It scales the "
+            f"1/(i*lambda) Kirchhoff prefactor applied to every re-emitted "
+            f"path; without it the returned weights are wrong by 1/lambda "
+            f"in magnitude and by -90 degrees in phase.")
     xp = array_namespace(paths.positions)
-    rs = RandomState(rng=rng if rng is not None else 0)
+    # K19 (audit 2026-09-11): ``rng=None`` -- the DEFAULT on every HFPI
+    # entry point -- must draw fresh system entropy, which is exactly
+    # what ``RandomState(None)`` does (``np.random.default_rng(None)``).
+    # Pre-fix this read ``rng if rng is not None else 0``, so the
+    # default was the FIXED seed 0 and ``_spawn_rng``'s documented
+    # "let each aperture pull from system entropy" branch was
+    # unreachable.  Measured: two default runs byte-identical, and
+    # identical to ``rng=0``.  HFPI is a 1/sqrt(N) Monte-Carlo
+    # estimator sold on that convergence; the canonical way to see its
+    # error is to re-run with a new seed, and on the default path that
+    # error estimate was identically ZERO.  Pass an int (or a
+    # Generator) for reproducibility.
+    rs = RandomState(rng=rng)
 
     cx, cy = centre
     x = paths.positions[..., 0] - cx
@@ -364,6 +484,8 @@ def apply_aperture_diffraction(
         weights=new_weights,
         opl=new_opl,
         alive=survives,
+        # K13: a re-emission starts a new leg.
+        leg=xp.zeros_like(paths.opl),
     )
 
 
@@ -387,6 +509,139 @@ def apply_aperture_diffraction(
 _MIN_LANDED_PATHS_PER_OUTPUT_PIXEL = 1.0
 
 
+def _check_landed(inside, Ny, Nx, policy, fn_name, positions=None):
+    """The v5.31 sampling-adequacy guard, shared by BOTH accumulators.
+
+    K23 (audit 2026-09-11): v4.13.1 re-implemented the vector
+    accumulator inline "bit-identically to the twice-routed version",
+    and the guard v5.31 added to the scalar one therefore never ran on
+    the vector path -- identical geometry, scalar warns, vector silent
+    (measured: 20 000 paths onto a 64x64 grid gave 2 non-zero pixels,
+    0.05 %, with zero warnings).  One helper, called from both.
+
+    Parameters
+    ----------
+    inside : bool array
+        Per-path "landed on the grid AND alive" mask.
+    Ny, Nx : int
+        Output grid shape.
+    policy : {'warn', 'silent', 'error'}
+    fn_name : str
+        Caller name for the message prefix (CONVENTIONS section 2).
+    positions : array, optional
+        Used only to skip the check under JAX tracing, where the path
+        count is not readable.  Defaults to ``inside``.
+    """
+    if policy not in ('warn', 'silent', 'error'):
+        raise ValueError(
+            f"{fn_name}: on_undersampled must be 'warn', 'silent' or "
+            f"'error' (got {policy!r})")
+    if policy == 'silent':
+        return
+    probe = inside if positions is None else positions
+    if is_jax_array(probe):
+        return
+    _n_total = int(np.asarray(inside).size)
+    _n_landed = int(np.count_nonzero(to_numpy(inside)))
+    _per_px = _n_landed / float(max(Ny * Nx, 1))
+    if _per_px >= _MIN_LANDED_PATHS_PER_OUTPUT_PIXEL:
+        return
+    _msg = (
+        f"HFPI is UNDER-SAMPLED for this output grid: of {_n_total} "
+        f"paths only {_n_landed} landed on the {Ny}x{Nx} grid "
+        f"({100.0 * _n_landed / max(_n_total, 1):.2f}%), i.e. "
+        f"{_per_px:.3g} landed paths per output pixel.  Below "
+        f"{_MIN_LANDED_PATHS_PER_OUTPUT_PIXEL:g} per pixel most pixels "
+        f"are EXACTLY ZERO and the returned array is the Monte-Carlo "
+        f"sampling envelope plus shot noise, not a propagated field -- "
+        f"measured on a 128^2 probe at the default cone, two seeds of "
+        f"the same physics agreed to an intensity-shape fidelity of "
+        f"0.005.  The docstring's guarantee that 'fringe positions and "
+        f"interference contrast are correct' does NOT hold here.  Two "
+        f"levers: raise n_paths, and -- usually far more effective -- "
+        f"narrow ``cone_half_angle`` from its ~90-degree default "
+        f"(a full forward hemisphere) toward the angle the output grid "
+        f"actually subtends, so paths are not spent where they cannot "
+        f"land.  NOTE one path per pixel is necessary, not sufficient: "
+        f"the same probe still only reached seed-to-seed fidelity 0.44 "
+        f"at ~12 paths per pixel.  Pass on_undersampled='silent' to "
+        f"acknowledge."
+    )
+    if policy == 'error':
+        raise ValueError(f'{fn_name}: ' + _msg)
+    warnings.warn(f'{fn_name}: ' + _msg, RuntimeWarning, stacklevel=3)
+
+
+def _bin_paths(positions, alive, Ny, Nx, dx, centre):
+    """Map path landing points to flat output-pixel indices.
+
+    Returns ``(flat_idx, inside)``.  Cell-centred binning
+    ``floor(x/dx + N/2 + 0.5)`` -- the exact inverse of the library's
+    pixel-centred grid ``x_i = (i - N/2)*dx``, so pixel *i* collects
+    ``[x_i - dx/2, x_i + dx/2)``.  Shared by both accumulators (K24).
+    """
+    xp = array_namespace(positions)
+    cx, cy = centre
+    x = positions[..., 0] - cx
+    y = positions[..., 1] - cy
+    ix = xp.floor(x / dx + Nx / 2 + 0.5).astype(xp.int64)
+    iy = xp.floor(y / dx + Ny / 2 + 0.5).astype(xp.int64)
+    inside = (ix >= 0) & (ix < Nx) & (iy >= 0) & (iy < Ny) & alive
+    flat_idx = xp.where(inside, iy * Nx + ix, 0)
+    return flat_idx, inside
+
+
+def _binning_jacobian(paths, dx_out, inside):
+    """Per-path correction turning the raw HFPI sum into the
+    Huygens-Fresnel integral (audit K13).
+
+    The estimator's exact bias law, derived and confirmed to MC noise
+    (24 M paths, occupancy 1.000, Gaussian w0 = 12 um on a 64x64 grid at
+    dx = 2 um):
+
+        E[HFPI(P)] / E_true(P) = dx_out**2 * cos(theta_out)
+                                 / (N_src_px * r)
+
+    measured/predicted = 1.0068 at z = 2 mm and 0.9950 at z = 4 mm, with
+    the 2 mm / 4 mm ratio 2.024 -- the 1/r signature (1.00 would mean no
+    bias).  ``N_src_px`` is now carried by the source-area weight (K18),
+    so what remains here is ``r / (dx_out**2 * cos(theta_out))``.
+
+    ``r`` is ``paths.leg`` -- the GEOMETRIC distance since the last
+    emission or re-emission, tracked by :func:`propagate_to_plane` and
+    :func:`_hfpi_segment_trace` and reset by
+    :func:`apply_aperture_diffraction` -- and ``cos(theta_out)`` is
+    ``paths.directions[..., 2]``.  A hand-built bundle with ``leg=None``
+    falls back to ``opl``, which is the same number whenever the medium
+    index is 1 and the bundle has not been through the ray tracer.
+
+    Paths outside the grid get 0 -- they are masked out anyway.
+    """
+    xp = array_namespace(paths.positions)
+    r = getattr(paths, 'leg', None)
+    if r is None:
+        r = paths.opl
+    cos_out = paths.directions[..., 2]
+    ok = inside & (r > 0) & (cos_out > 1e-12)
+    if not is_jax_array(paths.positions):
+        # A bundle whose landed paths have NOT travelled since their last
+        # emission has no 1/r spreading to undo, and multiplying by r = 0
+        # would silently return an all-zero field.  Say so instead.
+        if (int(np.count_nonzero(to_numpy(inside))) > 0
+                and int(np.count_nonzero(to_numpy(ok))) == 0):
+            raise ValueError(
+                "accumulate_to_grid: normalisation='physical' needs each "
+                "path's geometric distance since its last emission (the "
+                "1/r Huygens-Fresnel spreading), and every path that "
+                "landed on this grid has travelled zero distance -- the "
+                "bundle is being binned at the plane it was emitted on.  "
+                "Propagate the bundle to the output plane first "
+                "(propagate_to_plane), or pass normalisation='legacy' to "
+                "get the raw (non-photometric) path sum.")
+    denom = xp.where(ok, cos_out, 1.0) * (float(dx_out) ** 2)
+    return xp.where(ok, r / denom, 0.0)
+
+
 def accumulate_to_grid(
     paths: PathBundle,
     *,
@@ -396,6 +651,7 @@ def accumulate_to_grid(
     centre: Tuple[float, float] = (0.0, 0.0),
     output_dtype: Optional[Any] = None,
     on_undersampled: str = 'warn',
+    normalisation: str = 'physical',
 ) -> np.ndarray:
     """Coherently bin a PathBundle into a 2-D output field.
 
@@ -418,64 +674,60 @@ def accumulate_to_grid(
         raises instead; ``'silent'`` suppresses (use it when you are pinning
         plumbing rather than physics).  Skipped for JAX arrays, whose path count
         is not readable under tracing.
+    normalisation : {'physical', 'legacy'}, default 'physical'
+        Whether to apply the output-binning Jacobian that turns the raw
+        path sum into the Huygens-Fresnel integral (audit K13).
+
+        * ``'physical'`` (default since v5.46) -- multiply each landed
+          path by ``r / (dx**2 * cos(theta_out))``; together with the
+          source-area weight (K18) this removes the estimator's exact
+          bias law ``dx_out**2 * cos(theta) / (N_src_px * r)``.  Without
+          it the returned amplitude depends on the OUTPUT PIXEL AREA and
+          the SOURCE PIXEL COUNT and does not converge with path count:
+          measured ``|E|max`` moved 14x between 2 M and 8 M paths, and
+          simply rebinning the grids changed the answer with no physics
+          change.  See :func:`_binning_jacobian` for the derivation and
+          the measured confirmation.
+        * ``'legacy'`` -- the pre-v5.46 raw sum.  Use it only to
+          reproduce historical numbers; its amplitudes are not the HF
+          integral's, so anything photometric must be re-normalised
+          against a known-amplitude reference.
+
+        .. warning::
+           This CHANGES returned amplitudes by orders of magnitude
+           relative to v5.45 and earlier.  Phase structure (fringe
+           positions, interference contrast) is unaffected by the
+           source-area factor and only weakly by the per-path Jacobian.
     """
-    xp = array_namespace(paths.positions)
-    cx, cy = centre
-    if on_undersampled not in ('warn', 'silent', 'error'):
+    if normalisation not in ('physical', 'legacy'):
         raise ValueError(
-            "accumulate_to_grid: on_undersampled must be 'warn', 'silent' or "
-            f"'error' (got {on_undersampled!r})")
+            f"accumulate_to_grid: normalisation must be 'physical' "
+            f"(default: the Huygens-Fresnel integral) or 'legacy' (the "
+            f"pre-v5.46 raw path sum); got {normalisation!r}.")
+    xp = array_namespace(paths.positions)
 
     if output_dtype is None:
         output_dtype = paths.weights.dtype
 
-    x = paths.positions[..., 0] - cx
-    y = paths.positions[..., 1] - cy
     # HFPI-1: CELL-CENTRED binning (+0.5) so pixel i collects
     # [x_i - dx/2, x_i + dx/2), matching every other grid consumer -- the
     # prior floor(x/dx + N/2) used [x_i, x_i + dx), a systematic half-pixel
     # image shift vs ASM/Fresnel on the same geometry.
-    ix = xp.floor(x / dx + Nx / 2 + 0.5).astype(xp.int64)
-    iy = xp.floor(y / dx + Ny / 2 + 0.5).astype(xp.int64)
-    inside = (ix >= 0) & (ix < Nx) & (iy >= 0) & (iy < Ny) & paths.alive
+    flat_idx, inside = _bin_paths(paths.positions, paths.alive,
+                                  Ny, Nx, dx, centre)
 
-    # v5.31 (audit W9-14): the sampling-adequacy guard.  ``inside`` is already
-    # computed, so the count is free.  See
-    # ``_MIN_LANDED_PATHS_PER_OUTPUT_PIXEL`` for the measurements behind the
-    # threshold.
-    if on_undersampled != 'silent' and not is_jax_array(paths.positions):
-        _n_total = int(np.asarray(inside).size)
-        _n_landed = int(np.count_nonzero(np.asarray(inside)))
-        _per_px = _n_landed / float(max(Ny * Nx, 1))
-        if _per_px < _MIN_LANDED_PATHS_PER_OUTPUT_PIXEL:
-            _msg = (
-                f"HFPI is UNDER-SAMPLED for this output grid: of {_n_total} "
-                f"paths only {_n_landed} landed on the {Ny}x{Nx} grid "
-                f"({100.0 * _n_landed / max(_n_total, 1):.2f}%), i.e. "
-                f"{_per_px:.3g} landed paths per output pixel.  Below "
-                f"{_MIN_LANDED_PATHS_PER_OUTPUT_PIXEL:g} per pixel most pixels "
-                f"are EXACTLY ZERO and the returned array is the Monte-Carlo "
-                f"sampling envelope plus shot noise, not a propagated field -- "
-                f"measured on a 128^2 probe at the default cone, two seeds of "
-                f"the same physics agreed to an intensity-shape fidelity of "
-                f"0.005.  The docstring's guarantee that 'fringe positions and "
-                f"interference contrast are correct' does NOT hold here.  Two "
-                f"levers: raise n_paths, and -- usually far more effective -- "
-                f"narrow ``cone_half_angle`` from its ~90-degree default "
-                f"(a full forward hemisphere) toward the angle the output grid "
-                f"actually subtends, so paths are not spent where they cannot "
-                f"land.  NOTE one path per pixel is necessary, not sufficient: "
-                f"the same probe still only reached seed-to-seed fidelity 0.44 "
-                f"at ~12 paths per pixel.  Pass on_undersampled='silent' to "
-                f"acknowledge."
-            )
-            if on_undersampled == 'error':
-                raise ValueError('accumulate_to_grid: ' + _msg)
-            warnings.warn('accumulate_to_grid: ' + _msg, RuntimeWarning,
-                          stacklevel=3)
+    # v5.31 (audit W9-14): the sampling-adequacy guard, now shared with
+    # the vector accumulator (K23).
+    _check_landed(inside, Ny, Nx, on_undersampled, 'accumulate_to_grid',
+                  positions=paths.positions)
 
-    w_masked = xp.where(inside, paths.weights, 0)
-    flat_idx = xp.where(inside, iy * Nx + ix, 0)
+    weights = paths.weights
+    if normalisation == 'physical':
+        # K13: the output-binning Jacobian.
+        weights = weights * _binning_jacobian(
+            paths, dx, inside).astype(weights.dtype)
+
+    w_masked = xp.where(inside, weights, 0)
 
     if is_jax_array(paths.positions):
         import jax.numpy as jnp
@@ -560,44 +812,52 @@ def propagate_hfpi(
     (which retains its legacy
     ``(E_in, dx, *, z_to_aperture, ..., wavelength, ...)`` order).
 
+    Normalisation (v5.46, audit K13 / K18)
+    -------------------------------------
+    The full Fresnel-Kirchhoff integral
+
+        E(P) = (1/jλ) ∫∫ E(Q) · (cos θ / r) · exp(jkr) dS
+
+    is sampled by Monte Carlo paths, and with the default
+    ``normalisation='physical'`` every factor of it is now applied:
+
+    * the ``1/(jλ)`` Kirchhoff prefactor -- at the source init (v4.10)
+      and at every aperture re-emission (v4.11.2);
+    * the Monte Carlo solid-angle weight ``2π·(1 − cos θ_max)/N_paths``
+      -- same sites;
+    * the obliquity factor (``cos θ`` at init; the symmetric
+      ``(cos θ_in + cos θ_out)/2`` at re-emissions, v4.10.2);
+    * the SOURCE AREA ``N_src_px·dx²`` (v5.46, K18 -- see
+      :func:`init_paths_from_field`; pre-v5.46 only one pixel's ``dx²``
+      was applied, so every amplitude was low by the source pixel
+      count, measured 4096x at a 64x64 source);
+    * the per-path ``r/(dx_out²·cos θ_out)`` output-binning Jacobian
+      (v5.46, K13 -- see :func:`_binning_jacobian`), which supplies the
+      missing ``1/r`` geometric spreading and the pixel-solid-angle
+      conversion together.
+
     .. warning::
-       **Partially-normalized stochastic propagator** (audit #3.1;
-       warning text corrected in v5.17.x, P2-31 -- the pre-fix text
-       contradicted the v4.10/v4.11.2 code).  The full
-       Fresnel-Kirchhoff integral
+       What this warning said before v5.46 was itself wrong, which is
+       why it is restated here.  It listed the Monte-Carlo solid angle
+       and "the source pixel area ``dx²``" under *does apply* and
+       attributed the non-quantitative amplitude solely to the missing
+       ``1/r`` and binning Jacobian -- so a reader who corrected for
+       the listed omissions still landed ``N_src_px`` low.  Both gaps
+       are closed; the exact bias law
+       ``E[HFPI]/E_true = dx_out²·cos θ/(N_src_px·r)`` was derived and
+       confirmed to MC noise (meas/pred 1.0068 and 0.9950 at
+       z = 2 / 4 mm with 24 M paths at occupancy 1.000).
 
-           E(P) = (1/jλ) ∫∫ E(Q) · (cos θ / r) · exp(jkr) dS
+       **This changes returned amplitudes by orders of magnitude versus
+       v5.45 and earlier.**  Pass ``normalisation='legacy'`` to restore
+       the raw path sum.
 
-       is sampled by Monte Carlo paths.  Of its normalization factors,
-       this code **does** apply:
-
-       * the ``1/(jλ)`` Kirchhoff prefactor -- at the source init
-         (v4.10) and at every aperture re-emission (v4.11.2);
-       * the Monte Carlo solid-angle weight
-         ``2π·(1 − cos θ_max) / N_paths`` -- same sites;
-       * the obliquity factor (``cos θ`` at init; the symmetric
-         ``(cos θ_in + cos θ_out)/2`` at re-emissions, v4.10.2) and
-         the source pixel area ``dx²``.
-
-       It does **not** apply:
-
-       * the per-path ``1/r`` geometric-spreading attenuation
-         (``propagate_to_plane`` / the prescription segment trace
-         multiply only ``exp(j·k·Δs)``);
-       * any output-binning Jacobian (pixel-area / ``cos θ_out`` /
-         MC ray-density correction) when scatter-adding paths into
-         output pixels.
-
-       Because ``r`` and ``θ_out`` differ per path and per output
-       pixel, the missing factors bias the SPATIAL intensity profile
-       (measured up to ~14x relative bias between on-axis and
-       wide-angle bins on a single-pixel source probe), not just a
-       global constant -- so neither absolute amplitudes NOR
-       relative-intensity ratios across the field are quantitative.
-       Fringe positions and interference contrast (phase structure)
-       are correct.  Use it as a phase-structure / interference
-       diagnostic; re-normalise against a known-amplitude reference
-       (e.g. ASM on the same geometry) for anything photometric.
+       HFPI remains a Monte-Carlo estimator: it converges as
+       ``1/sqrt(N_paths)``, and below about one LANDED path per output
+       pixel the returned array is the sampling envelope plus shot
+       noise, not a field -- see :func:`accumulate_to_grid`'s
+       ``on_undersampled`` guard and narrow ``cone_half_angle``
+       (reachable from here since v5.46) before raising ``n_paths``.
     """
     return propagate_hfpi_freespace_aperture(
         E_in, dx, z_to_aperture=z, wavelength=wavelength,
@@ -623,11 +883,35 @@ def propagate_hfpi_freespace_aperture(
     aperture_shape: str = 'circular',
     aperture_centre: Tuple[float, float] = (0.0, 0.0),
     on_undersampled: str = 'warn',
+    cone_half_angle: float = np.pi / 2 - 1e-6,
+    normalisation: str = 'physical',
 ) -> np.ndarray:
     """End-to-end three-leg HFPI: source plane -> free space ->
     aperture -> free space -> output plane.
 
     The canonical single-aperture-diffraction validation case.
+
+    Parameters
+    ----------
+    cone_half_angle : float, default ~pi/2
+        Half-angle of the forward cone the source and the aperture
+        re-emit into [rad], threaded to :func:`init_paths_from_field`
+        and :func:`apply_aperture_diffraction`.
+
+        .. versionadded:: 5.46
+            Audit K14/K23.  The v5.31 under-sampling guard's own message
+            recommends narrowing this "from its ~90-degree default (a
+            full forward hemisphere) toward the angle the output grid
+            actually subtends" -- and passing it raised ``TypeError:
+            propagate_hfpi_freespace_aperture() got an unexpected
+            keyword argument 'cone_half_angle'``, on this function, on
+            :func:`propagate_hfpi` and through
+            ``propagate(method='hfpi')``.  Only the prescription walk
+            exposed it, so the only free-space HFPI entry point in the
+            library was the one that could not take the lever it
+            recommended.
+    normalisation : {'physical', 'legacy'}, default 'physical'
+        Forwarded to :func:`accumulate_to_grid`; see K13 there.
 
     .. note::
        This function uses a non-canonical argument order
@@ -648,6 +932,7 @@ def propagate_hfpi_freespace_aperture(
         n_paths=n_paths,
         wavelength=wavelength,
         rng=rng_source,
+        cone_half_angle=cone_half_angle,
         z_input_plane=0.0,
     )
     paths = propagate_to_plane(paths, z_target=z_to_aperture,
@@ -659,6 +944,7 @@ def propagate_hfpi_freespace_aperture(
         shape=aperture_shape,
         wavelength=wavelength,
         rng=rng_aperture,
+        cone_half_angle=cone_half_angle,
     )
     paths = propagate_to_plane(paths,
                                 z_target=z_to_aperture + z_aperture_to_output,
@@ -680,6 +966,8 @@ def propagate_hfpi_freespace_aperture(
         output_dtype=_complex_output_dtype(E_in.dtype),
         # v5.31 (audit W9-14): sampling-adequacy guard.
         on_undersampled=on_undersampled,
+        # K13: the output-binning Jacobian.
+        normalisation=normalisation,
     )
 
 
@@ -724,7 +1012,19 @@ def init_paths_stratified(
     """
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
-    rs = RandomState(rng=rng if rng is not None else 0)
+    # K19 (audit 2026-09-11): ``rng=None`` -- the DEFAULT on every HFPI
+    # entry point -- must draw fresh system entropy, which is exactly
+    # what ``RandomState(None)`` does (``np.random.default_rng(None)``).
+    # Pre-fix this read ``rng if rng is not None else 0``, so the
+    # default was the FIXED seed 0 and ``_spawn_rng``'s documented
+    # "let each aperture pull from system entropy" branch was
+    # unreachable.  Measured: two default runs byte-identical, and
+    # identical to ``rng=0``.  HFPI is a 1/sqrt(N) Monte-Carlo
+    # estimator sold on that convergence; the canonical way to see its
+    # error is to re-run with a new seed, and on the default path that
+    # error estimate was identically ZERO.  Pass an int (or a
+    # Generator) for reproducibility.
+    rs = RandomState(rng=rng)
 
     # Default: square stratification.  4-D stratification has
     # n_iy * n_ix * n_th * n_ph cells, so scale per-axis to keep
@@ -741,11 +1041,27 @@ def init_paths_stratified(
     n_th, n_ph = n_strata_dir
 
     n_total = n_iy * n_ix * n_th * n_ph
-    # If user requested fewer than n_total, sample only n_paths
+    # If the user requested fewer than n_total, sample only n_paths
     # strata uniformly without replacement.  If they requested more,
     # sample multiple paths per stratum (jittered).
+    #
+    # K23 (audit 2026-09-11): the first sentence describes behaviour the
+    # code never implemented -- ``n_per = max(1, n_paths // n_total)``
+    # clamps to 1 and ``n_paths_actual = n_per * n_total >= n_total``
+    # REGARDLESS of n_paths, so an explicit stratification allocated far
+    # MORE paths than requested and the ``[:n_paths_actual]`` truncation
+    # below was always a no-op.  Measured on a 16x16 source:
+    # ``n_paths=100, n_strata_xy=(16,16), n_strata_dir=(16,16)`` ->
+    # 65 536 paths (655x, 4.8 MB); ``(32,32)/(32,32)`` -> 1 048 576
+    # (10 486x, 76.6 MB); ``(64,64)/(64,64)`` -> 16.8 M (~1.2 GB) from an
+    # n_paths=100 call.  ``n_paths`` is now an honest CAP: when
+    # ``n_total > n_paths`` a uniform random subset of n_paths strata is
+    # drawn WITHOUT replacement, which is what the sentence above always
+    # promised.  The default path (the 4th-root rule keeps
+    # ``n_total ~ n_paths``) is unchanged.
     n_per = max(1, n_paths // n_total)
-    n_paths_actual = n_per * n_total
+    n_strata_used = min(n_total, int(n_paths)) if n_total > n_paths else n_total
+    n_paths_actual = n_per * n_strata_used
 
     # Build stratum index grid.  4.11.2: enumerate the full 4-D
     # cartesian product of stratum indices.  Pre-4.11.2 the
@@ -760,6 +1076,16 @@ def init_paths_stratified(
     # ``(1,1,1,1)`` -- 2 distinct cells out of n_iy*n_ix*n_th*n_ph.
     # ``np.indices`` builds the true cartesian-product mesh.
     idx_grid = np.indices((n_iy, n_ix, n_th, n_ph)).reshape(4, -1)
+    if n_strata_used < n_total:
+        # K23: the documented sub-sampling.  A uniform subset of the
+        # strata, without replacement -- still an unbiased estimator of
+        # the same integral (each stratum is equally likely), just with
+        # the variance of n_strata_used samples rather than n_total.
+        # Drawn from the SAME RandomState as the jitter so the whole
+        # bundle stays a pure function of ``rng``.
+        _sub = np.sort(np.asarray(
+            rs.choice(n_total, (n_strata_used,), replace=False)))
+        idx_grid = idx_grid[:, _sub]
     iy_strata = np.repeat(idx_grid[0], n_per)
     ix_strata = np.repeat(idx_grid[1], n_per)
     th_strata = np.repeat(idx_grid[2], n_per)
@@ -811,7 +1137,9 @@ def init_paths_stratified(
     # 4.10: HF Kirchhoff weighting (see init_paths_from_field).  Use
     # n_paths_actual for the solid-angle normalisation in the
     # stratified variant.
-    solid_angle = 2.0 * float(np.pi) * (1.0 - cos_max) / float(n_paths_actual)
+    # K18: the source-AREA factor -- see :func:`init_paths_from_field`.
+    solid_angle = (2.0 * float(np.pi) * (1.0 - cos_max)
+                   * (float(Ny) * float(Nx)) / float(n_paths_actual))
     inv_i_lambda = (1.0 / (1j * wavelength)) if wavelength > 0 else 1.0
     weights = (sample * cos_theta * (dx * dx)
                * complex(inv_i_lambda) * solid_angle)
@@ -824,6 +1152,7 @@ def init_paths_stratified(
         weights=weights,
         opl=opl,
         alive=alive,
+        leg=xp.zeros_like(opl),
     )
 
 
@@ -848,6 +1177,7 @@ def propagate_hfpi_through_prescription(
     sampling: str = 'stratified',
     cone_half_angle: float = np.pi / 2 - 1e-6,
     on_undersampled: str = 'warn',
+    normalisation: str = 'legacy',
 ) -> np.ndarray:
     """End-to-end HFPI through a sequential lumenairy prescription.
 
@@ -1052,10 +1382,37 @@ def propagate_hfpi_through_prescription(
             )
 
     # 4.  Accumulate to output grid.
+    #
+    # K13 (audit 2026-09-11): ``normalisation`` defaults to ``'legacy'``
+    # HERE, unlike the free-space entry points.  This walk bins the
+    # bundle at the LAST SURFACE -- there is no final hop to a separate
+    # output plane -- so when that surface is a diffractor the paths have
+    # just been re-emitted and their current leg has length zero, where
+    # the Huygens-Fresnel 1/r spreading (and hence the binning Jacobian)
+    # is undefined.  The returned amplitudes are therefore NOT
+    # photometric on this path; see the warning below.  Making them so
+    # needs an explicit output plane for the walk to propagate to, which
+    # is a deferred design change.
+    if normalisation == 'legacy':
+        warnings.warn(
+            "propagate_hfpi_through_prescription: the returned amplitudes "
+            "are NOT photometric.  This walk bins the bundle at the last "
+            "surface rather than propagating it to a separate output "
+            "plane, so the per-path r/(dx_out^2 cos theta_out) "
+            "Huygens-Fresnel binning Jacobian (the K13 fix applied by the "
+            "free-space entry points since v5.46) cannot be evaluated -- "
+            "the last leg has zero length.  Fringe positions and "
+            "interference contrast are unaffected; re-normalise against a "
+            "known-amplitude reference (e.g. ASM on the same geometry) "
+            "for anything photometric.  Pass normalisation='physical' if "
+            "your surface list ends in a non-diffracting surface the "
+            "paths genuinely travelled to.",
+            RuntimeWarning, stacklevel=2)
     return accumulate_to_grid(
         paths,
         Ny=Ny_out, Nx=Nx_out,
         dx=output_dx, centre=output_centre,
+        normalisation=normalisation,
         # v5.17.x (P2-32): promote real input dtypes to complex so the
         # scatter-add keeps the imaginary half of the path weights.
         output_dtype=_complex_output_dtype(E_in.dtype),
@@ -1083,14 +1440,23 @@ def _hfpi_segment_trace(paths: PathBundle,
     xp = array_namespace(paths.positions)
 
     # Build a RayBundle from the PathBundle's geometric state.
-    pos_h = np.asarray(paths.positions if not is_jax_array(paths.positions)
-                       else to_numpy(paths.positions))
-    dir_h = np.asarray(paths.directions if not is_jax_array(paths.directions)
-                       else to_numpy(paths.directions))
-    opl_in = np.asarray(paths.opl if not is_jax_array(paths.opl)
-                        else to_numpy(paths.opl))
-    alive_in = np.asarray(paths.alive if not is_jax_array(paths.alive)
-                          else to_numpy(paths.alive))
+    #
+    # K23 (audit 2026-09-11): route EVERY backend through ``to_numpy``,
+    # not just JAX.  ``np.asarray`` on a CuPy device array raises
+    # ``TypeError: Implicit conversion to a NumPy array is not allowed``
+    # in modern CuPy, so a CuPy bundle crashed here -- on the only path
+    # the module docstring's "accepting NumPy / CuPy / JAX source fields"
+    # claim could be exercised.  (Desk-check: CuPy is not installed in
+    # this environment.)  ``to_numpy`` is the identity for NumPy, so the
+    # NumPy path is unchanged.
+    #
+    # The host round-trip itself is unavoidable here -- ``raytrace.trace``
+    # is a host solver -- so the prescription walk is NOT traceable under
+    # ``jit`` / ``vmap`` / ``grad``, as the module docstring now states.
+    pos_h = np.asarray(to_numpy(paths.positions))
+    dir_h = np.asarray(to_numpy(paths.directions))
+    opl_in = np.asarray(to_numpy(paths.opl))
+    alive_in = np.asarray(to_numpy(paths.alive))
 
     rb = RayBundle(
         x=pos_h[:, 0].copy(),
@@ -1122,17 +1488,27 @@ def _hfpi_segment_trace(paths: PathBundle,
     phase = xp.exp(1j * k * delta_opl).astype(paths.weights.dtype)
     new_weights = paths.weights * phase
 
+    # K13: accumulate the GEOMETRIC distance the segment moved each path.
+    _base_leg = (paths.leg if paths.leg is not None
+                 else xp.zeros_like(paths.opl))
+    _step = xp.sqrt(xp.sum((new_positions - paths.positions) ** 2, axis=-1))
     return PathBundle(
         positions=new_positions,
         directions=new_directions,
         weights=new_weights,
         opl=xp.asarray(out_rb.opd),
         alive=new_alive,
+        leg=_base_leg + _step,
     )
 
 
 __all__ = [
     'PathBundle',
+    # K24 (audit 2026-09-11): ``propagate_hfpi`` -- "Canonical-order HFPI
+    # three-leg propagation" -- was absent from ``__all__`` (reachable as
+    # ``lumenairy.propagate_hfpi`` throughout, so an integrity gap rather
+    # than a breakage).
+    'propagate_hfpi',
     'init_paths_from_field',
     'init_paths_stratified',
     'propagate_to_plane',

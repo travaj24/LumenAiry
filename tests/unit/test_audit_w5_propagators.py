@@ -324,12 +324,21 @@ class TestP231WarningText:
 
     def test_warning_states_applied_and_missing_factors(self):
         doc = propagate_hfpi.__doc__
-        # The applied factors are affirmatively listed as applied.
-        assert '**does** apply' in doc
+        # v5.46 (audit K13/K18): the v5.17 P2-31 text this test pinned was
+        # ITSELF wrong -- it listed "the source pixel area dx**2" under
+        # *does apply* while the estimator was low by the source pixel
+        # COUNT (measured 4096x at a 64x64 source), so a reader who
+        # corrected for its stated omissions still landed N_pix low.  Both
+        # gaps are now closed in the code, and the docstring enumerates
+        # what is applied, including the two new terms.
+        assert 'the SOURCE AREA' in doc
         assert 'Kirchhoff prefactor -- at the source init' in doc
-        # The genuinely-missing terms are listed as NOT applied.
-        assert 'does **not** apply' in doc
-        assert '1/r' in doc and 'geometric-spreading' in doc
+        assert 'output-binning Jacobian' in doc
+        # The exact bias law it used to attribute the error to is now
+        # stated as the thing that was REMOVED, with its measurement.
+        assert 'dx_out' in doc and 'N_src_px' in doc
+        # And the honest residual: it is still a Monte-Carlo estimator.
+        assert '1/sqrt(N_paths)' in doc
 
     def test_old_false_claims_are_gone(self):
         doc = propagate_hfpi.__doc__

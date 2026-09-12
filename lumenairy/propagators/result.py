@@ -180,10 +180,34 @@ class PropagationResult:
         yield self.field
         yield self.intermediates if self.intermediates is not None else []
 
-    def __array__(self, dtype: Optional[Any] = None) -> np.ndarray:
+    def __array__(self, dtype: Optional[Any] = None,
+                  copy: Optional[bool] = None) -> np.ndarray:
         """Allow ``np.asarray(result)`` to fall through to the field
         array, so PropagationResult slots in everywhere a bare
-        ndarray is accepted."""
+        ndarray is accepted.
+
+        The ``copy`` keyword is NumPy 2's ``__array__`` protocol (K8).
+        Without it, on numpy 2.4.6: ``np.array(result, copy=True)``
+        emitted ``DeprecationWarning: __array__ implementation doesn't
+        accept a copy keyword`` and ``np.array(result, copy=False)``
+        raised ``ValueError: Unable to avoid copy while creating an
+        array as requested``.  ``copy=False`` now means what the
+        protocol says -- return a view of ``field`` if one is possible,
+        and let NumPy raise only if it genuinely is not.
+        """
+        if copy is False:
+            # Caller demands no copy: hand back the field itself (or its
+            # view at ``dtype``); NumPy raises if that is impossible.
+            arr = np.asarray(self.field)
+            if dtype is not None and np.dtype(dtype) != arr.dtype:
+                return arr.view(dtype) if arr.dtype.itemsize == np.dtype(
+                    dtype).itemsize else np.array(arr, dtype=dtype,
+                                                  copy=False)
+            return arr
+        if copy is True:
+            return (np.array(self.field, dtype=dtype, copy=True)
+                    if dtype is not None
+                    else np.array(self.field, copy=True))
         return np.asarray(self.field, dtype=dtype) if dtype is not None \
             else np.asarray(self.field)
 

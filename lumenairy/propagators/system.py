@@ -362,6 +362,55 @@ def _resolve_traced_element_kwargs(elem, index):
 _TRACED_ELEMENT_RAY_SUBSAMPLE_DEFAULT = 1
 
 
+
+def _warn_system_resample_crop(E, dx_new, dx_target, N_out, kernel_name):
+    """Warn when resampling a kernel's natural output grid back to the
+    chain pitch CROPS the field (audit K6).
+
+    After ``fresnel_propagate`` / ``scalable_angular_spectrum_propagate``
+    the field lives at ``dx_new`` over an extent ``N*dx_new``.  The chain
+    then resamples it onto ``N*dx_target``.  When ``dx_new > dx_target``
+    -- the common diverging-beam case -- everything outside the central
+    ``N*dx_target`` is discarded by ``map_coordinates(mode='constant',
+    cval=0.0)``, silently.
+
+    Measured (grid-filling top-hat of radius 0.42*N*dx, N = 512,
+    dx = 2 um, lambda = 633 nm, z = 5 mm, dx_new/dx = 1.5454):
+    ``P_out/P_in`` = 0.998990 for ``method='asm'`` (band limit, expected)
+    against 0.996685 for ``'fresnel'`` and 0.950689 for ``'sas'``; the
+    Fresnel step itself conserves power to 1.000000 and the retained
+    window holds 0.996980 of it, i.e. essentially ALL of the loss is the
+    crop.
+
+    Values are unchanged -- diagnostic only.
+    """
+    if not (float(dx_new) > float(dx_target)):
+        return
+    import warnings
+    p_full = float(np.sum(np.abs(np.asarray(E)) ** 2))
+    if p_full <= 0.0:
+        return
+    n_src = int(np.asarray(E).shape[-1])
+    half = 0.5 * int(N_out) * float(dx_target)
+    x = (np.arange(n_src, dtype=np.float64) - n_src / 2.0) * float(dx_new)
+    keep = np.abs(x) <= half
+    p_win = float(np.sum(np.abs(
+        np.asarray(E)[np.ix_(keep, keep)]) ** 2)) if keep.any() else 0.0
+    if p_win >= p_full * (1.0 - 1e-6):
+        return
+    warnings.warn(
+        f"propagate_through_system: the {kernel_name} leg returned its "
+        f"natural output grid at dx={float(dx_new):.4e} m (extent "
+        f"{n_src * float(dx_new):.4e} m) and the chain resamples it back "
+        f"to dx={float(dx_target):.4e} m (extent "
+        f"{int(N_out) * float(dx_target):.4e} m), which CROPS it: only "
+        f"{100.0 * p_win / p_full:.2f}% of the power falls inside the "
+        f"retained window.  The beam has spread past the chain's grid.  "
+        f"Use a larger N, a coarser chain pitch, or method='asm' (which "
+        f"keeps the pitch and so cannot crop).",
+        RuntimeWarning, stacklevel=3)
+
+
 def propagate_through_system(E_in: np.ndarray,
                              elements: Sequence[Dict[str, Any]],
                              wavelength: float,
@@ -762,6 +811,9 @@ def propagate_through_system(E_in: np.ndarray,
                         print(f"    Fresnel dx changed: "
                               f"{current_dx*1e6:.3f} -> {dx_new*1e6:.3f} um, "
                               f"resampling back to {current_dx*1e6:.3f} um")
+                    # K6: the resample-back CROPS when dx_new > current_dx.
+                    _warn_system_resample_crop(
+                        E, dx_new, current_dx, E_in.shape[-1], 'fresnel')
                     E, _ = resample_field(E, dx_new, current_dx,
                                           N_out=E_in.shape[-1])
             elif prop_method == 'sas' and not has_tilt:
@@ -780,6 +832,9 @@ def propagate_through_system(E_in: np.ndarray,
                         print(f"    SAS dx changed: "
                               f"{current_dx*1e6:.3f} -> {dx_new*1e6:.3f} um, "
                               f"resampling back to {current_dx*1e6:.3f} um")
+                    # K6: the resample-back CROPS when dx_new > current_dx.
+                    _warn_system_resample_crop(
+                        E, dx_new, current_dx, E_in.shape[-1], 'SAS')
                     E, _ = resample_field(E, dx_new, current_dx,
                                           N_out=E_in.shape[-1])
             elif has_tilt:

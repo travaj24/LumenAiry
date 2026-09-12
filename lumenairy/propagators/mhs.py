@@ -1,14 +1,24 @@
 """
 lumenairy.propagators.mhs -- Multiple Huygens Surface (MHS)
-ray tracing.
+composition framework.
 
-Hybrid wave / ray propagator following the framework introduced in
-the IEEE 2023 paper on Multiple Huygens Surface ray tracing.  Splits
-the propagation volume into subdomains separated by Huygens surfaces;
-within each subdomain, rays propagate geometrically (so the system's
-local refraction is captured exactly).  At each Huygens surface, the
-ray bundle is converted to a complex field via a Huygens-surface
-integral, and that field is the new source for the next subdomain.
+**What this module is.**  A composition framework, not a propagator: a
+``(z, Ny, Nx, dx, centre)`` surface record, a
+``(propagator, in_surface, out_surface)`` subdomain record, and a loop
+that applies them in order.  All physics is DELEGATED -- ASM, a hard
+aperture mask, GBD, or the dispatcher.  There is no ray bundle, no
+Huygens-surface integral and no ray tracing anywhere in this file, and
+``HuygensSurface`` is flat-only (no tilt, no curvature).
+
+K15/K24 (audit 2026-09-11): the paragraph that used to open this
+docstring said the module "splits the propagation volume into
+subdomains... within each subdomain, rays propagate geometrically...
+at each Huygens surface, the ray bundle is converted to a complex field
+via a Huygens-surface integral".  None of that is implemented here; the
+text further down (from "This module provides the structural
+framework") always was the accurate description.  The IEEE 2023 Multiple
+Huygens Surface paper is BACKGROUND -- the framework this module's
+composition API is shaped after -- not a description of the code.
 
 This complements the existing propagators in three regimes:
 
@@ -159,15 +169,37 @@ class MhsPipeline:
             nxt = self.subdomains[i + 1]
             if cur.out_surface is not nxt.in_surface:
                 # Allow distinct objects if their grids match.
+                # K14/K24 (audit 2026-09-11): ``centre`` is part of the
+                # grid.  ``HuygensSurface.grid()`` and
+                # ``aperture_subdomain`` both honour it, so two surfaces
+                # at identical z/N/dx but different centres really are
+                # different coordinate systems -- and the pre-fix check
+                # accepted them, silently discarding the transverse jump
+                # (measured: a 50 um offset, and a 1 mm one, both ran to
+                # completion with no diagnostic while each propagator
+                # worked on its own in_surface).
                 if (cur.out_surface.z != nxt.in_surface.z
                         or cur.out_surface.Ny != nxt.in_surface.Ny
                         or cur.out_surface.Nx != nxt.in_surface.Nx
-                        or cur.out_surface.dx != nxt.in_surface.dx):
+                        or cur.out_surface.dx != nxt.in_surface.dx
+                        or tuple(cur.out_surface.centre)
+                        != tuple(nxt.in_surface.centre)):
                     raise ValueError(
                         f"MHS subdomain mismatch: subdomain {i} ends at "
                         f"surface {cur.out_surface.label or cur.out_surface.z} "
+                        f"(z={cur.out_surface.z!r}, "
+                        f"{cur.out_surface.Ny}x{cur.out_surface.Nx} @ "
+                        f"dx={cur.out_surface.dx!r}, "
+                        f"centre={tuple(cur.out_surface.centre)!r}) "
                         f"but subdomain {i+1} starts at "
-                        f"{nxt.in_surface.label or nxt.in_surface.z}.")
+                        f"{nxt.in_surface.label or nxt.in_surface.z} "
+                        f"(z={nxt.in_surface.z!r}, "
+                        f"{nxt.in_surface.Ny}x{nxt.in_surface.Nx} @ "
+                        f"dx={nxt.in_surface.dx!r}, "
+                        f"centre={tuple(nxt.in_surface.centre)!r}).  "
+                        f"Every field of the surface -- including its "
+                        f"transverse centre -- must match for the chain "
+                        f"to be continuous.")
 
     @property
     def n_subdomains(self) -> int:
@@ -300,7 +332,12 @@ class MhsPipeline:
         Convenience for the common case "free-space lead-in + lens
         prescription + free-space lead-out".  The lens block uses the
         chosen ``method`` (any prescription-capable propagator:
-        ``'gbd'``, ``'hf'``, ``'hfpi'``, ``'maslov'``).  Free-space
+        ``'gbd'``, ``'hf'``, ``'hfpi'``, ``'maslov'``).
+
+        .. note::
+           This defaults to ``'gbd'`` while :func:`prescription_subdomain`
+           defaults to ``'maslov'`` -- see the note there (K24).  Name
+           the method explicitly.  Free-space
         legs use Angular Spectrum.
 
         Parameters
@@ -509,6 +546,16 @@ def prescription_subdomain(
     ``method`` is forwarded to
     :func:`lumenairy.propagators.dispatch.propagate`.
 
+    .. note:: **The two constructors disagree on the default method**
+       (K24, audit 2026-09-11).  This function defaults to
+       ``'maslov'``; :meth:`MhsPipeline.from_prescription` defaults to
+       ``'gbd'``.  Two constructors for the same subdomain therefore
+       give two different physics models unless ``method`` is named, and
+       ``'maslov'`` is the one that needs this function's square-grid
+       guards and the post-hoc resample below.  Neither default is
+       changed here (both are long-standing public contracts): NAME the
+       method explicitly.
+
     .. versionchanged:: 5.2
         v5.2 (AUDIT_V4_13_1 Part 2 P1-C, option a -- raise) raised
         ``ValueError`` at subdomain construction time when
@@ -553,7 +600,6 @@ def prescription_subdomain(
         subdomain's own return contract is the pipeline's, not the caller's.
     """
     from .dispatch import propagate
-    from .mft import resample_field
 
     # v5.2.3 (AUDIT_V4_13_1 P1-C substantive closure): the maslov kernel
     # requires square inputs (``apply_real_lens_maslov`` enforces
@@ -616,29 +662,30 @@ def prescription_subdomain(
             same_dx = abs(float(in_s.dx) - float(out_s.dx)) < 1e-15
             if same_shape and same_dx:
                 return E_native
-            # Resample onto the declared output grid.  ``resample_field``
-            # returns ``(E_out, dx_out)``; we only need the field.
-            E_resampled, _ = resample_field(
+            # Resample onto the declared output grid and re-normalise
+            # power so the resample is L2-energy preserving (bicubic
+            # interpolation introduces a small drift, mainly at the new
+            # grid's edges).  This matches the maslov kernel's default
+            # ``normalize_output='power'`` contract.
+            #
+            # K11 (audit 2026-09-11): this block used to be duplicated
+            # verbatim here and in ``hf.py``, and BOTH renormalised to
+            # the FULL source power -- which fabricates energy whenever
+            # the declared out_surface window is smaller than the source
+            # extent (measured: a window genuinely holding 67.27 % of the
+            # power was returned carrying 100.00 %, amplitudes 1.219x).
+            # One shared helper now restores the interpolation drift
+            # only, measuring its reference power inside the target
+            # window on the source grid, and warns on a real crop.
+            from .hf import _resample_preserving_window_power
+            E_resampled, _ = _resample_preserving_window_power(
                 E_native,
-                dx_in=float(in_s.dx),
-                dx_out=float(out_s.dx),
-                N_out=int(out_s.Nx),
+                float(in_s.dx),
+                float(out_s.dx),
+                int(out_s.Nx),
+                fn_name="prescription_subdomain(method='maslov')",
                 order=3,
             )
-            # Re-normalise power across the resample so total energy is
-            # preserved (bicubic interpolation introduces a small power
-            # drift, mainly at the new grid's edges where it crops or
-            # extends the support).  This matches the maslov kernel's
-            # default ``normalize_output='power'`` contract.
-            p_in = float(np.sum(np.abs(E_native) ** 2)) * (float(in_s.dx) ** 2)
-            p_out = float(np.sum(np.abs(E_resampled) ** 2)) * (float(out_s.dx) ** 2)
-            if p_out > 0.0 and p_in > 0.0:
-                scale = float(np.sqrt(p_in / p_out))
-                E_resampled = E_resampled * scale
-            # Preserve dtype (resample_field promotes complex64 -> complex128
-            # via map_coordinates' float64 output).
-            if E_resampled.dtype != E_native.dtype:
-                E_resampled = E_resampled.astype(E_native.dtype)
             return E_resampled
 
         # Non-maslov methods (gbd / hfpi / hf) honour ``output_grid`` /

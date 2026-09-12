@@ -1,15 +1,42 @@
 """
-lumenairy.propagators.hf -- Van-Vleck-corrected deterministic
-Huygens-Fresnel propagator.
+lumenairy.propagators.hf -- Huygens-Fresnel propagators.
 
-Implements the direct Huygens-Fresnel diffraction integral with the
-**Van Vleck density correction** in the integrand:
+This module is two unrelated halves, and it matters which one you want
+(audit K15/K24):
 
-    E_out(s2) = integral E_in(s1) sqrt(|det d2 Phi / d s1 d s2|)
-                * exp(2 pi i Phi(s1, s2)) d^2 s1
+1. **A Van-Vleck-corrected direct quadrature**,
+   :func:`propagate_huygens_fresnel_with_opl_callable`, which evaluates
 
-The Van Vleck factor makes the bare HF integrand energy-conserving
-on non-conjugate output planes and keeps it finite at the focus.
+       E_out(s2) = integral E_in(s1) sqrt(|det d2 Phi / d s1 d s2|)
+                   * exp(2 pi i Phi(s1, s2)) d^2 s1
+
+   for an arbitrary user-supplied optical-path callable ``Phi``.  The Van
+   Vleck density is the one genuine Van Vleck factor in this file; it
+   makes the bare HF integrand energy-conserving on non-conjugate output
+   planes and keeps it finite at the focus.  Verified: for the exact
+   spherical OPL the code's own cross-Hessian stencil reproduces
+   ``sqrt|det| = cos(theta)/(lambda r)`` to 1.1e-5, and combined with the
+   ``-1j`` Maslov prefactor the kernel is EXACTLY
+   ``(1/(i lambda)) cos(theta) e^{ikr}/r`` -- Rayleigh-Sommerfeld I
+   without the ``(1 - 1/(ikr))`` near-field term.  It is
+   ``O(N_in^2 * N_out^2)``; see that function's ``chunk_output`` note.
+
+2. **A free-space / prescription front end.**
+   :func:`propagate_huygens_fresnel` and
+   :func:`propagate_huygens_fresnel_freespace` are the canonical-order
+   entry points, and they are a thin delegation to
+   :func:`~lumenairy.propagators.rs.rayleigh_sommerfeld_propagate` --
+   an FFT convolution with the exact RS-I kernel, with NO Van Vleck
+   factor and no quadrature of their own (none is needed: for a
+   shift-invariant free-space ``Phi`` the FFT route is the same physics
+   and ~5e4x faster at N = 256 at the same ~1e-3 accuracy).
+   :func:`propagate_huygens_fresnel_through_prescription` dispatches to
+   the asymptotic family, not to the quadrature above.
+
+For a free-space plane-to-plane hop prefer
+:func:`~lumenairy.propagators.asm.angular_spectrum_propagate` or the RS
+kernel directly; this module's quadrature earns its keep only when
+``Phi`` is genuinely NOT shift-invariant.
 
 See ``REFERENCES.txt`` Sections A and B for the foundational
 publications.
@@ -25,6 +52,14 @@ from typing import Any, Callable, Dict, Optional, Tuple
 import numpy as np
 
 from ..backend import array_namespace, is_jax_array
+
+# Target size of ONE ``(n_chunk, Ny_in, Nx_in)`` float64 working array in
+# the HF OPL quadrature (audit K22).  The batched evaluation does exactly
+# the same flops as the per-output-pixel one, so its only lever is
+# Python-level dispatch -- which only pays while the working arrays stay
+# in cache.  128 KB reproduces the measured per-size optimum; see the
+# ladder in :func:`propagate_huygens_fresnel_with_opl_callable`.
+_HF_CHUNK_TARGET_BYTES = 128 * 1024
 
 
 # v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): output-grid kwarg semantics
@@ -62,6 +97,114 @@ def _resolve_output_shape(
     return default_shape
 
 
+def _resample_preserving_window_power(
+    E_native: np.ndarray,
+    dx_in: float,
+    dx_out: float,
+    N_out: int,
+    *,
+    fn_name: str,
+    order: int = 3,
+) -> Tuple[np.ndarray, float]:
+    """Resample onto an ``(N_out, N_out)`` grid at ``dx_out`` and restore
+    the L2 energy the TARGET WINDOW actually holds.
+
+    The naive Parseval renormalisation ``sqrt(p_in / p_out)`` conflates
+    two different things: the small interpolation drift of a bicubic
+    ``map_coordinates`` (which SHOULD be corrected) and a genuine
+    physical CROP when the requested window is smaller than the source's
+    (which must NOT be).  Renormalising to the full source power in the
+    crop case FABRICATES energy: measured on
+    ``propagate_huygens_fresnel_freespace(E, 1e-3, 633e-9, 2e-6,
+    output_dx=0.5e-6)`` at N = 64, the requested +-16 um window genuinely
+    contains 67.27 % of the native-grid power and the returned array
+    carried 100.00 % -- amplitudes inflated 1.219x, intensities 1.486x.
+
+    This helper measures the reference power on the SOURCE grid,
+    restricted to the area the output pixels tile, so the correction is
+    the interpolation drift alone.  When the target window covers the
+    whole source (the upsampling / same-extent case) the restriction is
+    the identity and the behaviour is unchanged.
+
+    A crop that discards more than a part in 1e6 of the power is
+    reported as a ``RuntimeWarning``: the caller asked for a window, and
+    losing a third of the beam to it is a modelling fact, not a
+    numerical detail.
+
+    Parameters
+    ----------
+    E_native : ndarray, complex
+        Field on the source grid (NumPy; ``resample_field`` is
+        scipy-backed and host-only).
+    dx_in, dx_out : float
+        Source and target pitch [m].
+    N_out : int
+        Target grid size (square).
+    fn_name : str
+        Caller name for the warning text (CONVENTIONS section 2).
+    order : int, default 3
+        Interpolation order handed to :func:`resample_field`.
+
+    Returns
+    -------
+    E_out : ndarray
+        Resampled field, in ``E_native``'s dtype.
+    dx_out : float
+        The target pitch (echoing the ``resample_field`` contract).
+    """
+    from .mft import resample_field
+
+    E_resampled, dx_resampled = resample_field(
+        E_native, dx_in, dx_out, int(N_out), order=order)
+
+    Ny_in, Nx_in = int(E_native.shape[-2]), int(E_native.shape[-1])
+    dx_in_f = float(dx_in)
+    dx_out_f = float(dx_out)
+    n_out = int(N_out)
+
+    # The output pixels are pixel-centred at ``(j - N_out/2)*dx_out`` and
+    # each tiles ``[x - dx_out/2, x + dx_out/2)``, so the window they
+    # cover is the half-open interval below (asymmetric by half a pixel,
+    # which is the library-wide ``arange(N) - N/2`` convention).
+    lo = (0.0 - n_out / 2.0) * dx_out_f - 0.5 * dx_out_f
+    hi = (n_out - 1.0 - n_out / 2.0) * dx_out_f + 0.5 * dx_out_f
+    x_src = (np.arange(Nx_in, dtype=np.float64) - Nx_in / 2.0) * dx_in_f
+    y_src = (np.arange(Ny_in, dtype=np.float64) - Ny_in / 2.0) * dx_in_f
+    in_x = (x_src >= lo) & (x_src <= hi)
+    in_y = (y_src >= lo) & (y_src <= hi)
+
+    amp2 = np.abs(np.asarray(E_native)) ** 2
+    p_in = float(np.sum(amp2)) * (dx_in_f ** 2)
+    if in_x.all() and in_y.all():
+        p_window = p_in
+    else:
+        p_window = float(np.sum(amp2[np.ix_(in_y, in_x)])) * (dx_in_f ** 2)
+    p_out = float(np.sum(np.abs(np.asarray(E_resampled)) ** 2)) * (
+        float(dx_resampled) ** 2)
+
+    if p_in > 0.0 and p_window < p_in * (1.0 - 1e-6):
+        warnings.warn(
+            f"{fn_name}: the requested output window "
+            f"{n_out}x{n_out} @ dx={dx_out_f:.4e} m (extent "
+            f"{n_out * dx_out_f:.4e} m) is smaller than the field's "
+            f"({Ny_in}x{Nx_in} @ dx={dx_in_f:.4e} m, extent "
+            f"{Nx_in * dx_in_f:.4e} m) and CROPS it: only "
+            f"{100.0 * p_window / p_in:.2f}% of the power falls inside.  "
+            f"The returned field carries that fraction (the Parseval "
+            f"renormalisation restores the interpolation drift only, not "
+            f"the cropped light).  Request a window that spans the field, "
+            f"or treat the loss as the aperture it is.",
+            RuntimeWarning, stacklevel=3)
+
+    if p_out > 0.0 and p_window > 0.0:
+        E_resampled = E_resampled * float(np.sqrt(p_window / p_out))
+    # Preserve dtype (resample_field promotes complex64 -> complex128
+    # via map_coordinates' float64 output).
+    if E_resampled.dtype != E_native.dtype:
+        E_resampled = E_resampled.astype(E_native.dtype)
+    return E_resampled, dx_resampled
+
+
 def propagate_huygens_fresnel(
     E_in: np.ndarray,
     z: float,
@@ -96,17 +239,26 @@ def propagate_huygens_fresnel_freespace(
     output_dx: Optional[float] = None,
     **kwargs: Any,
 ) -> np.ndarray:
-    """Free-space Huygens-Fresnel propagation with the standard
-    ``1 / (i lambda z)`` Van Vleck factor.
+    """Free-space Huygens-Fresnel propagation.
 
-    Equivalent to :func:`lumenairy.propagation.rayleigh_sommerfeld_propagate`;
-    re-exported here for API consistency with the other ``hf.*``
-    entry points.
+    This IS :func:`lumenairy.propagation.rayleigh_sommerfeld_propagate`
+    -- a thin delegation, re-exported here for API consistency with the
+    other ``hf.*`` entry points -- plus the optional output-grid
+    resample below.
+
+    K15 (audit 2026-09-11): the pre-v5.46 summary line claimed "the
+    standard ``1/(i lambda z)`` Van Vleck factor".  There is no Van
+    Vleck factor on this path, and the kernel actually applied is the
+    RS-I Green's function ``(z/(2 pi r^2))(1/r - ik) exp(ikr)``, whose
+    leading term is ``cos(theta)/(i lambda r)`` -- not
+    ``1/(i lambda z)``.
 
     v5.3 (AUDIT_V5_2_5 P1-1 closure): ``output_shape`` and
     ``output_dx`` kwargs are accepted and honored via a post-kernel
-    ``resample_field`` step (matches the v5.2.3 MHS substantive-
-    resampling pattern at ``mhs.py:573-611``).  The underlying
+    ``resample_field`` step (shared with the v5.2.3 MHS
+    substantive-resampling path in
+    :func:`~lumenairy.propagators.mhs.prescription_subdomain`, via
+    :func:`_resample_preserving_window_power`).  The underlying
     ``rayleigh_sommerfeld_propagate`` kernel returns on the input
     grid; the resample step bridges to the caller-requested output
     grid.  v5.2.5 routed these kwargs from the dispatcher into this
@@ -127,7 +279,7 @@ def propagate_huygens_fresnel_freespace(
     the ``resample_field`` contract -- the call has changed the
     grid spacing and the caller needs to know the new pitch.
     """
-    from .propagation import rayleigh_sommerfeld_propagate, resample_field
+    from .propagation import rayleigh_sommerfeld_propagate
     E_native = rayleigh_sommerfeld_propagate(
         E_in, z, wavelength, dx, dy=dy, **kwargs,
     )
@@ -156,36 +308,30 @@ def propagate_huygens_fresnel_freespace(
                 f"resampler directly.")
         N_out = Ny
 
-    # v5.4 (audit P2): same-shape short-circuit -- mirrors mhs.py:583-587.
-    # If input grid already matches the requested target grid (same N
-    # and same dx within tight tolerance), skip ``resample_field``
-    # entirely.  ``map_coordinates`` introduces a small power drift
-    # at the edges even when the grids nominally match; the
-    # short-circuit guarantees bit-for-bit native-kernel return.
-    xp = array_namespace(E_native)
+    # v5.4 (audit P2): same-shape short-circuit -- mirrors the strict
+    # absolute test at ``mhs.py``'s maslov branch.  If the input grid
+    # already matches the requested target grid (same N and same dx),
+    # skip ``resample_field`` entirely: ``map_coordinates`` introduces a
+    # small power drift at the edges even when the grids nominally match,
+    # and the short-circuit guarantees a bit-for-bit native-kernel return.
+    #
+    # K21 (audit 2026-09-11): the gate was
+    # ``np.isclose(dx, target_dx, rtol=1e-12)``, which still carries
+    # numpy's default ``atol=1e-8`` -- 10 nm in this library's METRES.
+    # A 0.5 % pitch change at 1 um and a 10 % change at 100 nm both
+    # compared equal, so the un-resampled field came back LABELLED with
+    # the requested pitch: the "wrong sampling metadata" class the
+    # dispatcher raises for elsewhere.  A pure relative test has no
+    # absolute floor to trip over.
     N_in = int(E_native.shape[-1])
-    if N_in == int(N_out) and np.isclose(
-            float(dx), float(target_dx), rtol=1e-12):
+    if N_in == int(N_out) and abs(float(dx) - float(target_dx)) <= (
+            1e-12 * abs(float(dx))):
         return E_native, target_dx
 
-    E_resampled, dx_resampled = resample_field(
-        E_native, dx, target_dx, N_out)
-
-    # v5.4 (audit P2): Parseval renorm to restore total power -- mirrors
-    # mhs.py:602-606.  Bicubic ``map_coordinates`` interpolation
-    # introduces a small power drift (mainly at edges where the
-    # resample crops or extends the support); rescale by
-    # sqrt(p_in / p_out) so the resample is L2-energy preserving.
-    p_in = float(xp.sum(xp.abs(E_native) ** 2)) * (float(dx) ** 2)
-    p_out = float(xp.sum(xp.abs(E_resampled) ** 2)) * (float(dx_resampled) ** 2)
-    if p_out > 0.0 and p_in > 0.0:
-        scale = float(xp.sqrt(p_in / p_out))
-        E_resampled = E_resampled * scale
-    # Preserve dtype (resample_field promotes complex64 -> complex128
-    # via map_coordinates' float64 output).
-    if E_resampled.dtype != E_native.dtype:
-        E_resampled = E_resampled.astype(E_native.dtype)
-    return E_resampled, dx_resampled
+    # K11: restore the interpolation drift, not the cropped light.
+    return _resample_preserving_window_power(
+        E_native, dx, target_dx, N_out,
+        fn_name='propagate_huygens_fresnel_freespace')
 
 
 def propagate_huygens_fresnel_with_opl_callable(
@@ -215,7 +361,13 @@ def propagate_huygens_fresnel_with_opl_callable(
     -------------------------------------------------
     ``opl_fn(s1x, s1y, s2x, s2y)`` takes input-plane coordinates as
     arrays (broadcast over the whole input grid) and output-plane
-    coordinates as scalars, all in **metres**, and must return the
+    coordinates as scalars -- or, since v5.46, as ``(n, 1, 1)`` arrays
+    that broadcast a whole BATCH of output pixels against the input grid
+    (see ``chunk_output``).  Write ``opl_fn`` as pure array expressions
+    of its four arguments and both forms work unchanged; a callable that
+    cannot take the batched form is detected by a one-shot probe and
+    served by the historical per-pixel path with a ``RuntimeWarning``.
+    All coordinates are in **metres**, and the return is the
     optical path ``Phi`` in **WAVES** (cycles, i.e. OPL_metres /
     wavelength).  The kernel applied here is ``exp(2j*pi*Phi)``, so a
     callable that returns metres is wrong by the factor ``1/wavelength``
@@ -244,14 +396,43 @@ def propagate_huygens_fresnel_with_opl_callable(
         second-order accurate, so its error scales as ``h^2`` in the
         truncation term and as ``eps/h^2`` in the round-off term; for a
         waves-valued ``Phi`` of order ``z/wavelength`` the round-off
-        term dominates below ~1e-7 m.  Measured on an exact-quadratic
-        (Fresnel) OPL oracle with ``z=50 mm``, ``wavelength=1 um``: the
-        recovered ``sqrt|det|`` amplitude is in error by -9.05e-2 at
-        ``h=1e-9`` (the pre-v5.30 default -- essentially all round-off),
-        -1.06e-5 at 1e-7, **-2.53e-8 at the 1e-6 default**, and
-        -1.6e-9 at 1e-5.  End-to-end against exact Fresnel quadrature
-        on the same discretisation the amplitude error falls from
-        1.56e-2 to 8.3e-9.  ``h`` is an absolute step in metres: if you
+        term dominates below ~1e-7 m.
+
+        Measured on an EXACT-QUADRATIC (Fresnel) OPL oracle with
+        ``z=50 mm``, ``wavelength=1 um``: the recovered ``sqrt|det|``
+        amplitude is in error by -9.05e-2 at ``h=1e-9`` (the pre-v5.30
+        default -- essentially all round-off), -1.06e-5 at 1e-7,
+        -2.53e-8 at the 1e-6 default, and -1.6e-9 at 1e-5.  End-to-end
+        against exact Fresnel quadrature on the same discretisation the
+        amplitude error falls from 1.56e-2 to 8.3e-9.
+
+        K24 (audit 2026-09-11): those numbers are specific to a
+        quadratic ``Phi``, where the 4th-order truncation term vanishes
+        IDENTICALLY and only round-off survives -- so they flatter the
+        default.  On the exact SPHERICAL OPL
+        (``Phi = sqrt(u^2+v^2+z^2)/lambda``, z = 50 mm, lambda = 1 um,
+        u = 2 mm, v = 1 mm) against the closed form
+        ``sqrt|det| = cos(theta)/(lambda r)``:
+
+        =========  =====================
+        h [m]      rel. err of sqrt|det|
+        =========  =====================
+        1e-9       +2.2605e-01
+        1e-8       +1.5337e-03
+        1e-7       +2.5030e-05
+        1e-6 (default)  +2.3578e-07
+        1e-5 (optimum)  -3.7685e-08
+        1e-4       -3.9720e-06
+        1e-3       -3.9690e-04
+        =========  =====================
+
+        i.e. the optimum moves a decade and the default is ~9x off it.
+        Both are ~4 decades below the quadrature's own ~1e-3
+        discretisation floor, so this is a documentation point, not a
+        numerical one -- but do not read "-2.53e-8" as the accuracy you
+        get on a non-quadratic ``Phi``.
+
+        ``h`` is an absolute step in metres: if you
         work at a wildly different length scale (e.g. mm-scale grids or
         a ``Phi`` with structure finer than a micron) scale it with your
         transverse feature size -- a good rule of thumb is
@@ -276,15 +457,51 @@ def propagate_huygens_fresnel_with_opl_callable(
         kwarg; if your ``opl_fn`` returns METRES, divide by the wavelength
         inside ``opl_fn`` -- passing it here never did that.
 
-    .. deprecated:: 5.17
-        ``chunk_output`` (audit P3-57): the parameter never had any
-        effect -- evaluation has always been strictly per output pixel
-        (the outer "chunk" loop only partitioned the identical per-pixel
-        inner loop), so no value of ``chunk_output`` changed either the
-        result or the runtime.  It is now ignored with a
-        ``DeprecationWarning`` and will be removed in a future release.
-        For a genuinely chunk-vectorised HF quadrature use
-        :func:`propagate_hf_chebyshev_quadrature`.
+    chunk_output : int, optional
+        Number of OUTPUT pixels evaluated per vectorised batch.  ``None``
+        (default) sizes the batch so one ``(n_chunk, Ny_in, Nx_in)``
+        float64 working array is about 128 KB; pass an explicit int to
+        pin it, or ``1`` to force strictly-per-pixel evaluation.  The
+        returned field is **bit-identical** for every value (verified at
+        three ``(N_in, N_out)`` pairs with and without Van Vleck).
+
+        .. versionchanged:: 5.46
+            **Un-deprecated and given the meaning its name always
+            promised** (audit K22), and honestly sized.  ``opl_fn`` is
+            evaluated over the whole input grid, 17 times per output
+            pixel (``Phi`` plus the 16 cross-Hessian stencil corners), so
+            the cost is ``O(N_in^2 * N_out^2)`` -- measured here 0.40 /
+            1.45 / 9.56 ms per output pixel at ``N_in`` = 64 / 128 / 256,
+            i.e. ~10 minutes for a full 256x256 output.  Batching the
+            output pixels was expected to amortise those 17 evaluations;
+            in fact it only removes Python-level DISPATCH, which is a
+            small share of a memory-bandwidth-bound computation.
+            Measured ladder (medians of 5 interleaved runs, ms/px):
+
+            ========  =====  =====  =====  =====  ======  ======
+            N_in      c=1    c=2    c=4    c=8    c=16    c=32
+            ========  =====  =====  =====  =====  ======  ======
+            64        0.401  0.360  0.323  0.328   0.449   1.634
+            128       1.450  1.465  2.099  7.077   6.422   6.419
+            256       9.563  30.45  28.02  29.50  30.342  28.815
+            ========  =====  =====  =====  =====  ======  ======
+
+            so the best available gain is **1.24x at N_in = 64**, and a
+            batch whose working array leaves the L2 cache is 3-5x
+            slower.  The auto rule targets 128 KB, which selects the
+            measured optimum at each of those three sizes.  If you need a
+            full-plane HF output, use a Fourier route instead: for free
+            space :func:`propagate_huygens_fresnel_freespace` is ~5e4x
+            faster at the same ~1e-3 accuracy, and band-limited ASM is
+            equal or better on a Gaussian while delivering the whole
+            plane.  This quadrature earns its keep only for a
+            genuinely non-shift-invariant ``Phi``.
+
+    .. versionchanged:: 5.17
+        ``chunk_output`` (audit P3-57) was deprecated as a no-op: the
+        outer "chunk" loop only partitioned an identical per-pixel inner
+        loop, so no value changed the result or the runtime.  v5.46
+        restores it as a genuine batch size (above).
     """
     # v5.30 (audit P7, W5 removal): ``wavelength`` was a REQUIRED keyword
     # that the body never read -- the OPL callable returns waves, so the
@@ -293,18 +510,14 @@ def propagate_huygens_fresnel_with_opl_callable(
     # wavelength) would have silently broken every existing
     # waves-returning callable by a factor of ~1e6, so there was never a
     # future in which the keyword acquired a meaning.
-    #
-    # ``chunk_output`` below is NOT removed in this wave: it was
-    # deprecated in v5.17 with NO stated removal version ("a future
-    # release"), so unlike ``wavelength`` it is not past a horizon.  It
-    # stays warn-only until a horizon is set.
     if chunk_output is not None:
-        warnings.warn(
-            "propagate_huygens_fresnel_with_opl_callable: chunk_output is "
-            "deprecated and has no effect (evaluation has always been "
-            "strictly per output pixel; the parameter never changed the "
-            "result or the runtime).  It will be removed in a future "
-            "release.", DeprecationWarning, stacklevel=2)
+        if int(chunk_output) != chunk_output or int(chunk_output) < 1:
+            raise ValueError(
+                f"propagate_huygens_fresnel_with_opl_callable: "
+                f"chunk_output must be a positive integer number of output "
+                f"pixels per batch (or None to size it from the RAM "
+                f"budget); got {chunk_output!r}.")
+        chunk_output = int(chunk_output)
     xp = array_namespace(E_in)
 
     Ny_in, Nx_in = E_in.shape[-2], E_in.shape[-1]
@@ -340,11 +553,94 @@ def propagate_huygens_fresnel_with_opl_callable(
     flat_y = xp.reshape(xp.broadcast_to(output_grid_y[:, None],
                                         (Ny_out, Nx_out)), (-1,))
 
-    # v5.17.x (audit P3-57): the former chunk_output outer loop was dead
-    # code -- it only partitioned this identical per-pixel loop.
-    for k in range(n_out):
-        s2x = float(flat_x[k]) if hasattr(flat_x[k], '__float__') else flat_x[k]
-        s2y = float(flat_y[k]) if hasattr(flat_y[k], '__float__') else flat_y[k]
+    # K22: size the output batch by CACHE, not by RAM.  With the output
+    # coordinates broadcast to ``(n_chunk, 1, 1)`` every intermediate is
+    # ``(n_chunk, Ny_in, Nx_in)``, and the batched form does exactly the
+    # same flops as the per-pixel loop -- it only trades Python-level
+    # dispatch for larger temporaries.  Measured on this workstation
+    # (medians of 5 interleaved runs, ms per output pixel, Van Vleck on,
+    # complex128, exact spherical OPL):
+    #
+    #   N_in=64  c=1 0.401  c=2 0.360  c=4 0.323  c=8 0.328  c=16 0.449  c=32 1.634
+    #   N_in=128 c=1 1.450  c=2 1.465  c=4 2.099  c=8 7.077  c=16 6.422
+    #   N_in=256 c=1 9.563  c=2 30.449 c=4 28.018 c=8 29.497
+    #
+    # i.e. the dispatch saving is real but small (best 1.24x at N_in=64)
+    # and is swamped as soon as one working array leaves the L2 cache --
+    # 3-5x SLOWER at N_in >= 128 with a large batch.  Target a ~128 KB
+    # working array, which reproduces the measured optimum at all three
+    # sizes (N_in=64 -> 4, N_in=128 -> 1, N_in=256 -> 1).
+    if chunk_output is None:
+        _grid_bytes = max(int(Ny_in) * int(Nx_in) * 8, 1)
+        n_chunk = max(1, _HF_CHUNK_TARGET_BYTES // _grid_bytes)
+        n_chunk = min(n_chunk, n_out)
+    else:
+        n_chunk = min(int(chunk_output), n_out)
+
+    # The batched form hands ``opl_fn`` output coordinates of shape
+    # ``(n, 1, 1)`` instead of Python scalars.  Every numpy-expression
+    # callable broadcasts that for free, but the pre-v5.46 contract said
+    # "scalars", so a callable that calls ``math.sqrt`` / ``float()`` on
+    # them, or returns something that does not broadcast, must still
+    # work.  Probe once with a batch of one and fall back to the
+    # historical strictly-per-pixel evaluation if it does not.
+    _batched = n_chunk > 1
+    if _batched:
+        _probe_err = None
+        try:
+            _probe = opl_fn(S1X, S1Y,
+                            xp.reshape(flat_x[0:1], (-1, 1, 1)),
+                            xp.reshape(flat_y[0:1], (-1, 1, 1)))
+            _batched = tuple(np.shape(_probe)) == (1, Ny_in, Nx_in)
+            del _probe
+        except (TypeError, ValueError, IndexError, AttributeError,
+                ZeroDivisionError, OverflowError, NotImplementedError) as _exc:
+            # The realistic ways a caller's ``opl_fn`` can reject an
+            # (n, 1, 1) output coordinate: ``float()``/``math.*`` on it
+            # (TypeError), a shape mismatch (ValueError), indexing it
+            # (IndexError), reaching for a scalar attribute
+            # (AttributeError), or an arithmetic path that only works
+            # element-wise.  Anything else is a real bug in the callable
+            # and should surface, not be absorbed into a silent fallback.
+            _batched = False
+            _probe_err = _exc
+        if not _batched:
+            n_chunk = 1
+            warnings.warn(
+                f"propagate_huygens_fresnel_with_opl_callable: opl_fn did "
+                f"not broadcast output coordinates of shape (n, 1, 1) over "
+                f"the input grid "
+                f"({'raised ' + type(_probe_err).__name__ + ': ' + str(_probe_err) if _probe_err is not None else 'returned a non-broadcast shape'}), "
+                f"so evaluation falls back to one output pixel at a time -- "
+                f"17 full-input-grid opl_fn calls per output pixel, i.e. "
+                f"O(N_in^2 * N_out^2) (measured 109 ms/px at N_in=256).  "
+                f"Write opl_fn as pure array expressions of its four "
+                f"arguments (no ``float()`` / ``math.*`` on s2x, s2y) to get "
+                f"the vectorised path, or pass chunk_output=1 to silence "
+                f"this.", RuntimeWarning, stacklevel=2)
+
+    _is_jax = is_jax_array(E_in)
+    out_flat = None if _is_jax else out.reshape(-1)
+    # JAX: ``out.at[iy, ix].set(...)`` allocates a fresh (Ny_out, Nx_out)
+    # array per write, so accumulate the batches in a Python list and
+    # assemble once (audit K22 / the PROP-HF P3 on the JAX branch).
+    _jax_parts = [] if _is_jax else None
+
+    for k0 in range(0, n_out, n_chunk):
+        k1 = min(n_out, k0 + n_chunk)
+        # Shape (n, 1, 1) so every ``opl_fn`` call broadcasts the whole
+        # input grid against the whole output batch at once: the same
+        # flops as the per-pixel loop, but 17 Python-level dispatches and
+        # temporary allocations per BATCH instead of per pixel.
+        if _batched:
+            s2x = xp.reshape(flat_x[k0:k1], (-1, 1, 1))
+            s2y = xp.reshape(flat_y[k0:k1], (-1, 1, 1))
+        else:
+            # Historical contract: Python scalars, one output pixel.
+            s2x = (float(flat_x[k0]) if hasattr(flat_x[k0], '__float__')
+                   else flat_x[k0])
+            s2y = (float(flat_y[k0]) if hasattr(flat_y[k0], '__float__')
+                   else flat_y[k0])
 
         phi = opl_fn(S1X, S1Y, s2x, s2y)
 
@@ -382,15 +678,32 @@ def propagate_huygens_fresnel_with_opl_callable(
         # (which may be real -- see comment above the out-array
         # allocation).  Pre-4.10 a real E_in stripped the imag
         # part of the kernel before the multiply.
-        kernel = xp.exp(2j * float(np.pi) * phi).astype(out_dtype)
-        integrand = E_in * density * kernel
-        iy = k // Nx_out
-        ix = k % Nx_out
-        out_value = xp.sum(integrand) * pixel_area
-        if is_jax_array(E_in):
-            out = out.at[iy, ix].set(out_value)
+        #
+        # K22: for a complex64 caller, fold ``Phi`` modulo one cycle in
+        # float64 BEFORE the float32 cast and build the exponential
+        # directly in single precision -- the same mod-2*pi mitigation
+        # the ASM transfer function uses.  ``Phi`` is in WAVES and is of
+        # order ``z/wavelength`` (~1e5 at z = 50 mm, 1 um), which float32
+        # cannot carry to sub-cycle accuracy; reducing first makes the
+        # single-precision path both cheaper (no complex128 grid built
+        # and thrown away) and accurate.  complex128 is unchanged.
+        if np.dtype(out_dtype) == np.complex64:
+            kernel = xp.exp(
+                (2j * float(np.pi))
+                * (phi - xp.floor(phi)).astype(np.float32))
         else:
-            out[iy, ix] = out_value
+            kernel = xp.exp(2j * float(np.pi) * phi).astype(out_dtype)
+        integrand = E_in * density * kernel
+        # Reduce over the INPUT-grid axes only, leaving one value per
+        # output pixel in the batch (a 0-d value on the scalar path).
+        out_values = xp.sum(integrand, axis=(-2, -1)) * pixel_area
+        if _is_jax:
+            _jax_parts.append(xp.reshape(out_values, (-1,)))
+        else:
+            out_flat[k0:k1] = out_values
+
+    if _is_jax:
+        out = xp.reshape(xp.concatenate(_jax_parts), (Ny_out, Nx_out))
 
     # 4.11.2: apply the Van Vleck-Morette asymptotic prefactor
     # (2π)^(-d/2)·i^(-d/2) for d=2, which is -i/(2π).  The 2π part is
@@ -681,6 +994,15 @@ def propagate_huygens_fresnel_through_prescription(
 
 
 __all__ = [
+    # K24 (audit 2026-09-11): ``propagate_huygens_fresnel`` -- the entry
+    # point this module's own docstring calls "the recommended entry
+    # point for new code" -- was absent from ``__all__``, so
+    # ``from lumenairy.propagators.hf import *`` did not give you the
+    # function the module tells you to use.  (It was always reachable as
+    # ``lumenairy.propagate_huygens_fresnel`` because the package
+    # ``__init__`` imports it by name; an ``__all__`` integrity gap, not
+    # a breakage.)
+    'propagate_huygens_fresnel',
     'propagate_huygens_fresnel_freespace',
     'propagate_huygens_fresnel_with_opl_callable',
     'propagate_huygens_fresnel_through_prescription',

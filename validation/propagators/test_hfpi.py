@@ -60,8 +60,14 @@ def t_aperture_kills_outside_paths():
     N = 16; dx = 5e-6; lam = 633e-9
     E = np.ones((N, N), dtype=np.complex128)
     paths = init_paths_from_field(E, dx, n_paths=2000, wavelength=lam, rng=5)
-    p_tiny = apply_aperture_diffraction(paths, aperture_radius=1e-6, rng=6)
-    p_huge = apply_aperture_diffraction(paths, aperture_radius=1.0, rng=7)
+    # v5.46 (audit K12): ``wavelength`` is keyword-REQUIRED -- it gates the
+    # 1/(i lambda) Kirchhoff prefactor, and the pre-v5.46 default of 0.0
+    # silently dropped it (every weight wrong by 1/lambda in magnitude and
+    # -90 degrees in phase).
+    p_tiny = apply_aperture_diffraction(paths, aperture_radius=1e-6, rng=6,
+                                        wavelength=lam)
+    p_huge = apply_aperture_diffraction(paths, aperture_radius=1.0, rng=7,
+                                        wavelength=lam)
     return p_tiny.n_alive < p_huge.n_alive, (
         f'tiny={p_tiny.n_alive}, huge={p_huge.n_alive}')
 

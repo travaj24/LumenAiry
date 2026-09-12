@@ -61,19 +61,23 @@ def test_hf_freespace_with_output_grid_does_not_raise():
         E, z=z, wavelength=wavelength, dx=dx,
         method='hf', output_grid=(N, dx), return_result=False)
 
-    # When resampling at the same N + dx, the return contract is
-    # the resample-tuple form (E_out, dx_out).  ``return_result=False``
-    # names that native contract -- since the v5.30 F1 flip (audit P5) the
-    # dispatcher's default return is a PropagationResult for every method.
-    assert isinstance(out, tuple), (
-        f'expected (E_out, dx_out) tuple from resample path; '
-        f'got {type(out).__name__}.')
-    E_out, dx_out = out
-    assert isinstance(E_out, np.ndarray)
+    # v5.46 (audit K20): the dispatcher returns an ``ndarray`` here, for
+    # EVERY output-grid-capable method.  Until v5.45 the ``hf``
+    # free-space branch alone flipped its return type to an
+    # ``(E_out, dx_out)`` TUPLE the moment any grid kwarg was given --
+    # including, as here, an ``output_grid`` equal to the input, i.e. a
+    # strict no-op -- while ``asm`` / ``gbd`` / ``hfpi`` returned an
+    # ndarray in both cases, and the dispatcher's own W9-4 message
+    # steers callers to ``method='hf'``.  This test PINNED that
+    # inconsistency; it now pins the uniform contract.  The requested
+    # pitch is the caller's own argument, so the discarded second
+    # element carried no information.
+    assert isinstance(out, np.ndarray), (
+        f'expected a bare ndarray (the contract every other '
+        f'output-grid-capable method honours); got {type(out).__name__}.')
+    E_out = out
     assert E_out.shape == (N, N), (
         f'output shape {E_out.shape} != requested ({N}, {N}).')
-    assert dx_out == pytest.approx(dx, rel=1e-12), (
-        f'output dx {dx_out:.6e} != requested {dx:.6e}.')
 
 
 def test_hf_freespace_with_output_dx_alone():
@@ -87,9 +91,9 @@ def test_hf_freespace_with_output_dx_alone():
     out = la.propagate(
         E, z=z, wavelength=wavelength, dx=dx,
         method='hf', output_dx=dx, return_result=False)
-    assert isinstance(out, tuple)
-    E_out, dx_out = out
-    assert E_out.shape == (N, N)
+    # v5.46 (audit K20): uniform ndarray return -- see the note above.
+    assert isinstance(out, np.ndarray)
+    assert out.shape == (N, N)
 
 
 def test_hf_freespace_no_output_kwargs_returns_bare_ndarray():
@@ -128,9 +132,11 @@ def test_hf_freespace_resampled_power_is_preserved():
     z, wavelength = 0.01, 633e-9
 
     p_in = float(np.sum(np.abs(E) ** 2) * dx * dx)
-    E_out, dx_out = la.propagate(
+    # v5.46 (audit K20): ndarray return; the pitch is the requested dx.
+    E_out = la.propagate(
         E, z=z, wavelength=wavelength, dx=dx,
         method='hf', output_grid=(N, dx), return_result=False)
+    dx_out = dx
     p_out = float(np.sum(np.abs(E_out) ** 2) * dx_out * dx_out)
 
     # Tight Parseval pin -- the renorm step in

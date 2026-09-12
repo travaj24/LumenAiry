@@ -202,6 +202,16 @@ def _bundle(n, spread):
                       opl=np.zeros(n), alive=np.ones(n, dtype=bool))
 
 
+# v5.46 (audit K13): these bundles are synthetic -- ``opl``/``leg`` are
+# zero because no path has propagated -- and this module pins the
+# SAMPLING-ADEQUACY guard, not the photometry.  ``normalisation='legacy'``
+# names the raw path sum; the v5.46 default ``'physical'`` applies the
+# r/(dx_out^2 cos theta_out) binning Jacobian and refuses a bundle whose
+# landed paths have travelled zero distance (1/r spreading is undefined
+# there).
+_LEGACY = {'normalisation': 'legacy'}
+
+
 def test_the_threshold_is_landed_paths_per_pixel_not_paths_issued():
     """The guard must count what LANDED, not what was issued -- the whole
     failure mode is paths thrown where they cannot land."""
@@ -210,11 +220,13 @@ def test_the_threshold_is_landed_paths_per_pixel_not_paths_issued():
     # every path lands, comfortably above the bar
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        accumulate_to_grid(_bundle(4 * n_px, 3e-6), Ny=N, Nx=N, dx=dx)
+        accumulate_to_grid(_bundle(4 * n_px, 3e-6), Ny=N, Nx=N, dx=dx,
+                           **_LEGACY)
     assert not [r for r in rec if 'UNDER-SAMPLED' in str(r.message)]
     # same path COUNT, but thrown far outside the grid -> almost none land
     with pytest.warns(RuntimeWarning, match='UNDER-SAMPLED'):
-        accumulate_to_grid(_bundle(4 * n_px, 1.0), Ny=N, Nx=N, dx=dx)
+        accumulate_to_grid(_bundle(4 * n_px, 1.0), Ny=N, Nx=N, dx=dx,
+                           **_LEGACY)
 
 
 def test_a_well_sampled_run_is_silent():
@@ -222,7 +234,8 @@ def test_a_well_sampled_run_is_silent():
     N, dx = 8, 1e-6
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        accumulate_to_grid(_bundle(64 * N * N, 3e-6), Ny=N, Nx=N, dx=dx)
+        accumulate_to_grid(_bundle(64 * N * N, 3e-6), Ny=N, Nx=N, dx=dx,
+                           **_LEGACY)
     assert not [r for r in rec if 'UNDER-SAMPLED' in str(r.message)]
 
 

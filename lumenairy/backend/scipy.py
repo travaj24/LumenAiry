@@ -71,42 +71,91 @@ _jax_special = _LazyAttrProxy(_get_jax_special)
 _jax_linalg = _LazyAttrProxy(_get_jax_linalg)
 
 
-def _dispatch_special(name: str, x: Any, *args: Any, **kwargs: Any) -> Any:
-    """Generic dispatch for ``scipy.special`` functions on input
-    ``x``."""
+def _dispatch_special(name: str, x: Any, *args: Any,
+                      arg_pos: int = 0, **kwargs: Any) -> Any:
+    """Generic dispatch for ``scipy.special`` functions on input ``x``.
+
+    Parameters
+    ----------
+    name : str
+        ``scipy.special`` function name.
+    x : array-like
+        The ARRAY argument -- the one whose backend selects the
+        implementation.
+    *args
+        The remaining positional arguments, in their own order.
+    arg_pos : int, keyword-only, default 0
+        Where ``x`` sits in the target function's positional signature.
+        ``0`` (the historical behaviour) calls ``fn(x, *args)``; for a
+        two-argument special function whose ARRAY is the SECOND argument
+        -- ``scipy.special.jv(v, z)``, ``kv(v, z)``, ``eval_legendre(n,
+        x)`` -- pass ``arg_pos=1`` so the call becomes ``fn(args[0], x,
+        *args[1:])``.
+
+        Without this the helper hard-coded "the array is the first
+        argument", which silently transposed
+        :func:`jv`: ``jv(v=0, x=2.0)`` returned ``scipy.special.jv(2.0,
+        0)`` = 0.000000000 instead of 0.223890779 (audit K2).
+    """
+    # The full positional argument tuple, with ``x`` restored to the
+    # position the target function actually expects it in.
+    call_args: Tuple[Any, ...] = (
+        tuple(args[:arg_pos]) + (x,) + tuple(args[arg_pos:]))
+
     if is_jax_array(x):
         fn = getattr(_jax_special, name, None)
         if fn is None:
             raise NotImplementedError(
                 f"jax.scipy.special.{name} is not available.")
-        return fn(x, *args, **kwargs)
+        return fn(*call_args, **kwargs)
     if is_cupy_array(x):
         try:
             import cupyx.scipy.special as _cu_special
             fn = getattr(_cu_special, name, None)
             if fn is None:
                 import cupy as cp
-                x_host = cp.asnumpy(x)
-                result_host = getattr(_sp_special, name)(x_host, *args, **kwargs)
-                return cp.asarray(result_host)
-            return fn(x, *args, **kwargs)
+                host = tuple(cp.asnumpy(a) if is_cupy_array(a) else a
+                             for a in call_args)
+                return cp.asarray(
+                    getattr(_sp_special, name)(*host, **kwargs))
+            return fn(*call_args, **kwargs)
         except ImportError:
             import cupy as cp
-            x_host = cp.asnumpy(x)
-            result_host = getattr(_sp_special, name)(x_host, *args, **kwargs)
-            return cp.asarray(result_host)
-    return getattr(_sp_special, name)(x, *args, **kwargs)
+            host = tuple(cp.asnumpy(a) if is_cupy_array(a) else a
+                         for a in call_args)
+            return cp.asarray(getattr(_sp_special, name)(*host, **kwargs))
+    return getattr(_sp_special, name)(*call_args, **kwargs)
 
 
 def jv(v: Any, x: Any) -> Any:
-    """Bessel function of the first kind, order ``v``, at ``x``."""
+    """Bessel function of the first kind, order ``v``, evaluated at ``x``.
+
+    Argument order matches :func:`scipy.special.jv` -- ORDER first,
+    argument second.
+
+    Examples
+    --------
+    >>> from lumenairy.backend.scipy import jv
+    >>> float(jv(0, 2.0))                       # doctest: +ELLIPSIS
+    0.2238907...
+    >>> float(jv(2, 1.5))                       # doctest: +ELLIPSIS
+    0.2320876...
+    """
     if is_jax_array(x):
         if hasattr(_jax_special, 'bessel_jv'):
             return _jax_special.bessel_jv(v, x)
         raise NotImplementedError(
             "jv is not available in jax.scipy.special for arbitrary "
             "orders.  Convert to NumPy first.")
-    return _dispatch_special('jv', x, v)
+    # K2 (audit 2026-09-11): the array ``x`` is the SECOND positional
+    # argument of ``scipy.special.jv(v, z)``.  The pre-fix call
+    # ``_dispatch_special('jv', x, v)`` placed it first, i.e. it computed
+    # ``scipy.special.jv(x, v)`` -- order and argument transposed --
+    # returning a plausible wrong number with no diagnostic
+    # (jv(0, 2.0) -> 0.000000000 instead of 0.223890779; jv(2, 1.5) ->
+    # 0.491293779 instead of 0.232087672), while the JAX branch three
+    # lines above was correct, so the two backends disagreed.
+    return _dispatch_special('jv', x, v, arg_pos=1)
 
 
 def erf(x: Any) -> Any:

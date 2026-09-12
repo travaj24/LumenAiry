@@ -2751,12 +2751,19 @@ def _reference_double_call(paths, Ny, Nx, dx, centre, output_dtype):
         positions=paths.positions, directions=paths.directions,
         weights=paths.Ey, opl=paths.opl, alive=paths.alive,
     )
+    # v5.46 (audit K13): this reference pins the INDEX-SHARING equivalence
+    # between the vector accumulator and two scalar calls, not the
+    # photometry.  The bundle is synthetic with ``opl``/``leg`` all zero,
+    # where the v5.46 default ``normalisation='physical'`` (the
+    # r/(dx_out^2 cos theta_out) binning Jacobian) is undefined and
+    # refuses; name the raw path sum on both sides so the comparison is
+    # still like-for-like.
     Ex_out = accumulate_to_grid(
         ex_paths, Ny=Ny, Nx=Nx, dx=dx, centre=centre,
-        output_dtype=output_dtype)
+        output_dtype=output_dtype, normalisation='legacy')
     Ey_out = accumulate_to_grid(
         ey_paths, Ny=Ny, Nx=Nx, dx=dx, centre=centre,
-        output_dtype=output_dtype)
+        output_dtype=output_dtype, normalisation='legacy')
     return Ex_out, Ey_out
 
 
@@ -2767,7 +2774,7 @@ def test_shared_index_matches_double_call_default_centre():
 
     Ex_new, Ey_new = accumulate_vector_to_grid(
         paths, Ny=Ny, Nx=Nx, dx=dx, centre=(0.0, 0.0),
-        output_dtype=np.complex128,
+        output_dtype=np.complex128, normalisation='legacy',
     )
     Ex_ref, Ey_ref = _reference_double_call(
         paths, Ny, Nx, dx, (0.0, 0.0), np.complex128,
@@ -2787,7 +2794,7 @@ def test_shared_index_matches_double_call_off_centre():
 
     Ex_new, Ey_new = accumulate_vector_to_grid(
         paths, Ny=Ny, Nx=Nx, dx=dx, centre=centre,
-        output_dtype=np.complex128,
+        output_dtype=np.complex128, normalisation='legacy',
     )
     Ex_ref, Ey_ref = _reference_double_call(
         paths, Ny, Nx, dx, centre, np.complex128,
@@ -2802,6 +2809,7 @@ def test_shared_index_default_output_dtype():
     paths = _make_vector_bundle(n=500, seed=42)
     Ex_new, Ey_new = accumulate_vector_to_grid(
         paths, Ny=32, Nx=32, dx=4e-6, centre=(0.0, 0.0),
+        normalisation='legacy',
     )
     assert Ex_new.dtype == paths.Ex.dtype
     assert Ey_new.dtype == paths.Ey.dtype
@@ -2817,7 +2825,7 @@ def test_shared_index_all_dead_paths():
     )
     Ex_new, Ey_new = accumulate_vector_to_grid(
         paths, Ny=16, Nx=16, dx=4e-6, centre=(0.0, 0.0),
-        output_dtype=np.complex128,
+        output_dtype=np.complex128, normalisation='legacy',
     )
     assert np.all(Ex_new == 0)
     assert np.all(Ey_new == 0)

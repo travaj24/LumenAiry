@@ -37,6 +37,27 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     pupil : ndarray, complex, shape (Ny, Nx)
         Scalar or x-polarised pupil function.  Amplitude = apodisation,
         phase = aberrations.  Should be zero outside the exit pupil.
+
+        .. note:: **Pupil coordinate convention (K10).**
+           ``pupil[iy, ix]`` is indexed by the PHYSICAL EXIT-PUPIL
+           (aperture) coordinate
+           ``x_p = (ix - Np/2) * dx_pupil``, ``y_p = (iy - Np/2) * dx_pupil``
+           -- the position you would measure with a ruler across the lens --
+           NOT by the projected ray direction ``(s_x, s_y) = (-x_p, -y_p)/f``.
+           The two conventions differ by a point inversion
+           (``phi_ray = phi_pupil + pi``), which is invisible for any
+           180-degree-symmetric pupil but flips coma, tilt, a decentred
+           sub-aperture, a segmented aperture or a metasurface pupil.
+           The convention is pinned by the focal shift a pupil tilt
+           produces: a pupil ramp ``exp(+2j*pi*u*x_p)`` moves the focus to
+           ``x_f = +u*wavelength*f`` (measured +2.3600 um against a predicted
+           +2.3737 um at NA 0.2 / f 4 mm; the residual is intensity-centroid
+           vs peak on a finite window).  Equivalently, the ray leaving
+           aperture point ``x_p`` travels with transverse direction
+           ``-x_p/f`` and lands at ``+u*wavelength*f`` regardless of
+           ``x_p``.  This matches every other propagator in the library.
+           A caller holding a pupil in the ray-direction convention must
+           reverse both axes (``pupil[::-1, ::-1]``) before calling.
     wavelength : float
         Vacuum wavelength [m].
     NA : float
@@ -87,6 +108,12 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
         Complex field components at the focal plane(s).  Shape
         ``(N_z, N_focal, N_focal)`` if ``z_planes`` has multiple
         entries, or ``(N_focal, N_focal)`` for a single z.
+
+        The three components share one global phase, so they may be
+        superposed coherently.  For an x-polarised aplanatic focus
+        ``E_z`` is ODD in ``x_f``, identically zero on the ``y`` axis, and
+        ``Im(E_z / E_x) < 0`` just off axis on the ``+x`` side
+        (Novotny & Hecht eq. 3.66: ``E_z/E_x = -2i I01 cos(phi)/I00``).
     x_focal, y_focal : ndarray
         1-D focal coordinate arrays [m].
     """
@@ -337,14 +364,29 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     # For (px, py) input:
     #   pupil_x = P * [px*(cp^2*ct + sp^2) + py*cp*sp*(ct-1)]
     #   pupil_y = P * [px*cp*sp*(ct-1) + py*(sp^2*ct + cp^2)]
-    #   pupil_z = P * [-px*cp*s - py*sp*s]
-
+    #   pupil_z = P * [+px*cp*s + py*sp*s]
+    #
+    # The SIGN of pupil_z is fixed by which azimuth ``phi_p`` is (see the
+    # "Pupil coordinate convention" block in the docstring).  Here ``phi_p =
+    # arctan2(Yp, Xp)`` is the APERTURE-POINT azimuth, while the textbook
+    # aplanatic strength vector (Richards-Wolf 1959; Novotny-Hecht eq. 3.66;
+    # Leutenegger 2006) is written in the RAY-DIRECTION azimuth
+    # ``phi_ray = phi_p + pi``.  ``e_x``/``e_y`` are even under
+    # ``phi -> phi + pi`` and so are unaffected; ``e_z = -(px cos phi_ray +
+    # py sin phi_ray) sin(theta)`` is the only component that is ODD, so in
+    # aperture azimuth it becomes ``+(px cp + py sp) s``.
+    #
+    # First principles, independent of any formula: the ray entering at
+    # aperture point (+a, 0) converges to the focus along (-sin t, 0, cos t)
+    # and its polarisation rotates rigidly with it, x_hat -> (cos t, 0,
+    # +sin t) -- i.e. E_z > 0 at the +x aperture point, which is what the
+    # ``+`` sign delivers.
     ct = c
     Px = P * (px * (cp ** 2 * ct + sp ** 2)
               + py * cp * sp * (ct - 1))
     Py = P * (px * cp * sp * (ct - 1)
               + py * (sp ** 2 * ct + cp ** 2))
-    Pz = P * (-px * cp * s - py * sp * s)
+    Pz = P * (px * cp * s + py * sp * s)
 
     # Compute focal field via 2-D FFT for each z-plane.
     # 4.11.2: allocate output in the input pupil's dtype so the

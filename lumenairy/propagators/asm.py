@@ -69,6 +69,16 @@ _NE_MIN_SIZE = 1 << 18
 #: (row, column), so no band width changes a single bit of the result.
 _ASM_STREAM_BAND_ELEMS = 1 << 22
 
+#: Workspace band for the PLAIN (non-streamed) transfer-function build
+#: (v5.46, audit K5), in ELEMENTS.  The plain builder's live set is only
+#: its own float64 workspace, so it can run a tighter band than the
+#: streamed path (whose band is live alongside the whole spectrum).
+#: 256 Ki elements caps the cold build at ~1.26 full grids of transient
+#: at N = 2048 against 4.06 with the pre-v5.46 whole-grid chunk, with no
+#: time cost -- see the measured ladder in :func:`_get_asm_H_natural`.
+#: Bit-irrelevant for the same reason as the streamed band.
+_ASM_H_BUILD_BAND_ELEMS = 1 << 18
+
 __all__ = [
     'angular_spectrum_propagate',
     'angular_spectrum_propagate_tilted',
@@ -101,15 +111,35 @@ def _asm_H_from_kz(kz, prop, z, target_cdtype, xp=np, use_numexpr=False):
       ``use_numexpr`` is True (byte-identical to ``np.exp``; audit S5-8b).
     * ``complex64`` -- the phase ``kz*z`` is folded ``mod 2*pi`` in
       float64 and ``cos`` / ``sin`` are evaluated in float64 **before**
-      the float32 cast, so a large ``kz*z`` (up to ~1e6 rad) does not
-      hit the float32 precision floor and inject speckle-like noise.
-      This is the mitigation the natural-layout builder
-      (:func:`_get_asm_H_natural`) has always used; before v5.24.5 the
-      square / tilted / MFT builders cast the complex128 ``exp`` result
-      straight to complex64 and carried ~1 float32-ULP of avoidable phase
-      error per bin vs the correctly-rounded value (audit S2-10 / S2-3).
-      ``use_numexpr`` is ignored on this path (the mitigation is
-      trigonometric, not a complex ``exp``).
+      the float32 cast.  ``use_numexpr`` is ignored on this path (the
+      mitigation is trigonometric, not a complex ``exp``).
+
+      K8 (audit 2026-09-11) corrects what this buys on the NUMPY path.
+      The claim that the pre-v5.24.5 ``astype(complex64)`` of a
+      complex128 ``exp`` "carried ~1 float32-ULP of avoidable phase error
+      per bin vs the correctly-rounded value" is **not supported by
+      measurement** -- that cast IS the correctly-rounded complex64
+      value (``np.exp(1j*x)`` argument-reduces correctly in complex128
+      and ``astype`` rounds each component to nearest), whereas the
+      ``np.mod(kz*z, 2*pi)`` fold introduces ``ulp(kz*z)`` of ARGUMENT
+      error first.  Measured max |phase error| vs the complex128
+      reference over the propagating set (N = 4096, dx = 1 um,
+      lambda = 1 um):
+
+      ===========  =============  ==================  ======
+      z            this kernel    naive astype(c64)   ratio
+      ===========  =============  ==================  ======
+      1e-4 m       3.9684e-08     3.9684e-08          1.00
+      1e-2 m       4.0117e-08     4.0117e-08          1.00
+      1 m          4.0787e-08     4.0787e-08          1.00
+      100 m        6.4146e-08     4.0674e-08          1.58 (worse)
+      ===========  =============  ==================  ======
+
+      The fold IS genuinely needed on the JAX-x32 path, where ``kz``
+      itself is float32 (the S2-3 note in the same comment block
+      describes that correctly), and it uses LESS transient memory than
+      the complex128-exp route (~40 vs ~56 bytes/element).  Both are good
+      reasons to keep this code; an accuracy win on NumPy is not one.
 
     Parameters
     ----------
@@ -228,9 +258,23 @@ def _build_asm_H_square(
 
     Notes
     -----
-    Numerical equivalence to the inline path is bit-exact for
-    matching ``N``, ``dx``, ``z``, ``wavelength``, and ``bandlimit``
-    arguments (same arithmetic; no caching / chunking detour).
+    Numerical equivalence to the inline path (``fftshift`` of
+    :func:`_get_asm_H_natural`) is bit-exact for matching ``N``, ``dx``,
+    ``z``, ``wavelength`` and ``bandlimit`` arguments.
+
+    K8 (audit 2026-09-11): it was NOT, for odd ``N`` with
+    ``bandlimit=False``.  This builder formed the frequency axis by
+    DIVISION, ``(arange(N) - N//2) / (N*dx)``, while
+    ``_get_or_make_freq_grids`` multiplies by the reciprocal,
+    ``(arange(N) - N//2) * (1.0/(N*dx))``; the two differ by up to 1 ULP
+    whenever ``1/(N*dx)`` is not exactly representable.  Measured:
+    byte-identical at N=64/dx=1 um and N=256/dx=0.5 um (both have an
+    exact reciprocal) and at N=255/dx=0.5 um with ``bandlimit=True``, but
+    ``max|dH| = 9.096e-13`` at N=255/dx=0.5 um with ``bandlimit=False``.
+    Physically ~1e-12 rad and irrelevant, but "bit-exact" is a
+    pinned-bits contract and this builder is the ``shack_hartmann``
+    per-lenslet path, so the expression is now the SAME one the shared
+    frequency-grid cache uses.
     """
     if dtype is None or not np.issubdtype(dtype, np.complexfloating):
         dtype = np.complex128
@@ -258,7 +302,10 @@ def _build_asm_H_square(
     # Measured via the shack_hartmann consumer path (ideal lens, Np=65,
     # dx=1 um, lambda=633 nm, f=2 mm): focal-spot centroid -8.0874 px
     # pre-fix vs -0.1535 px post-fix (Np=64: -0.1896 px, unchanged).
-    fx = (np.arange(N, dtype=np.float64) - N // 2) / (N * dx)
+    # K8: multiply by the reciprocal, exactly as
+    # ``fft_infra._get_or_make_freq_grids`` does, so the two builders
+    # label every bin with the same bits (see the Notes above).
+    fx = (np.arange(N, dtype=np.float64) - N // 2) * (1.0 / (N * dx))
     fy = fx  # square sub-aperture (dy == dx)
     kx_sq = (2 * np.pi * fx) ** 2
     ky_sq = (2 * np.pi * fy) ** 2
@@ -423,7 +470,34 @@ def _get_asm_H_natural(
             max_chunk = max(1, int(ram * 0.1 / row_cost))
         else:
             max_chunk = Ny
-        chunk = min(Ny, max_chunk)
+        # K5 (audit 2026-09-11): 10% of the RAM budget resolves to the
+        # WHOLE grid below N ~ 8192 on a large box, so the float64
+        # kernel workspace (kz_sq, prop, kz and their temporaries) is
+        # built full-grid and the cold H build peaks at 4.06 full grids
+        # where 1.26 suffices.  The streamed sibling
+        # (``_asm_apply_H_streamed``) already caps its band in ELEMENTS
+        # for exactly this reason, but only for itself; cap here too so
+        # the DEFAULT path, every cold ``_H_CACHE`` build and the batch
+        # variant get it as well.  The band width is a FREE CHOICE -- H
+        # is elementwise in (row, column), so no width changes a single
+        # bit; measured byte-identical at every band below.
+        #
+        # Measured (tracemalloc, complex128, bandlimit on, medians of 3;
+        # one grid = 16.8 MB at N=1024, 67.1 MB at N=2048):
+        #
+        #   N=1024  whole 4.07 grids 57.2 ms | 512r 3.06/50.4 | 256r 2.03/51.0
+        #           128r 1.52/51.6 | 64r 1.26/47.4 | 32r 1.13/33.9
+        #   N=2048  whole 4.06 grids 222.3 ms | 512r 2.03/213.3 | 256r 1.52/218.1
+        #           128r 1.26/211.0 | 64r 1.13/228.4 | 32r 1.07/203.8
+        #
+        # -- monotone in memory, flat in time.  2**18 elements selects
+        # 256 rows at N=1024 and 128 rows at N=2048, i.e. the audit's
+        # 4.06 -> 1.26 grids at N=2048, and 4 rows at N=32768 (kernel
+        # workspace ~8.6 GB -> ~134 MB).  It is a separate constant from
+        # the streamed path's because the two have different live sets
+        # (the streamed band is live alongside the whole spectrum).
+        chunk = max(1, min(Ny, max_chunk,
+                           _ASM_H_BUILD_BAND_ELEMS // max(Nx, 1)))
 
         # S5-8b (perf, no-loss): fuse the elementwise complex exp through
         # numexpr when available (numpy backend, complex128, large grid) --

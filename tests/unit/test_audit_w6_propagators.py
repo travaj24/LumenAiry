@@ -305,19 +305,40 @@ class TestP357ChunkOutputDeprecated:
             warnings.simplefilter("error", DeprecationWarning)
             self._run()
 
-    def test_explicit_value_warns_and_result_unchanged(self):
+    def test_explicit_value_does_not_warn_and_result_unchanged(self):
+        """v5.46 (audit K22): ``chunk_output`` is UN-deprecated and is
+        now a genuine output-batch size.  It must not warn, and -- the
+        property that matters -- the returned field must be BIT-IDENTICAL
+        for every value, since batching changes only how many output
+        pixels share one vectorised ``opl_fn`` evaluation, not the
+        arithmetic."""
         out_default = self._run()
-        with pytest.warns(DeprecationWarning, match="chunk_output"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
             out_chunk = self._run(chunk=7)
+            out_one = self._run(chunk=1)
         assert np.array_equal(out_default.view(np.uint8),
                               out_chunk.view(np.uint8))
+        assert np.array_equal(out_default.view(np.uint8),
+                              out_one.view(np.uint8))
 
-    def test_evaluation_count_is_per_pixel(self):
-        """Sanity pin from the audit: evaluation is strictly per output
-        pixel -- 17 opl_fn calls per pixel with Van Vleck on."""
+    def test_evaluation_count_is_amortised_over_the_batch(self):
+        """v5.46 (audit K22): ``opl_fn`` is called 17 times (Phi + the 16
+        cross-Hessian stencil corners) per BATCH of output pixels, not per
+        pixel.  ``chunk_output=1`` restores the historical
+        strictly-per-pixel count, and both give the same field (pinned
+        above)."""
         rec = {"n": 0}
-        self._run(record=rec)
+        self._run(chunk=1, record=rec)
         assert rec["n"] == 16 * 17  # 4x4 output grid, 1 + 16 FD calls each
+        rec2 = {"n": 0}
+        self._run(chunk=16, record=rec2)
+        # 17 for the single batch that covers the whole 4x4 grid, plus
+        # ONE broadcast probe: the batched form hands ``opl_fn`` output
+        # coordinates of shape (n, 1, 1) instead of scalars, so it probes
+        # once with a batch of one and falls back to the per-pixel path
+        # if the callable cannot take it (v5.46, audit K22).
+        assert rec2["n"] == 17 + 1
 
 
 # ---------------------------------------------------------------------------

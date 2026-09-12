@@ -54,11 +54,13 @@ def t_aperture_kills_vector_paths():
     paths = init_vector_paths_from_field(
         Ex, Ey, 5e-6, n_paths=2000, wavelength=633e-9, rng=2,
     )
+    # v5.46 (audit K12): ``wavelength`` is keyword-REQUIRED -- see the
+    # scalar sibling in ``test_hfpi.py``.
     p_tiny = apply_vector_aperture_diffraction(
-        paths, aperture_radius=1e-6, rng=3,
+        paths, aperture_radius=1e-6, rng=3, wavelength=633e-9,
     )
     p_huge = apply_vector_aperture_diffraction(
-        paths, aperture_radius=1.0, rng=4,
+        paths, aperture_radius=1.0, rng=4, wavelength=633e-9,
     )
     return p_tiny.n_alive < p_huge.n_alive, (
         f'tiny={p_tiny.n_alive}, huge={p_huge.n_alive}')

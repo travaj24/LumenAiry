@@ -528,9 +528,40 @@ def resample_field(
 
     Notes
     -----
-    - Interpolation introduces a small error proportional to (dx_out/feature_size)^order.
-      For order=3 (cubic), this is < 0.1% when features are sampled at >= 4 pixels.
-    - For downsampling (dx_out > dx_in), consider anti-alias filtering first.
+    - The real and imaginary parts are interpolated SEPARATELY with
+      ``scipy.ndimage.map_coordinates``, so a near-Nyquist complex
+      carrier is attenuated.  K6 (audit 2026-09-11) measured the true
+      MTF on a Gaussian envelope times a pure carrier (power ratio after
+      resampling, scale 0.5 / 1.5 -- the two agree to 6 digits):
+
+      ================  =============  ==========  ==========
+      carrier (cyc/px)  px per cycle   P_out/P_in  (scale 1.5)
+      ================  =============  ==========  ==========
+      0.00              inf            0.999998    0.999997
+      0.05              20             0.999972    0.999970
+      0.10              10             0.999549    0.999547
+      0.20              5              0.990621    0.990619
+      0.30              3.3            0.931504    0.931502
+      0.40              2.5            0.718458    0.718456
+      ================  =============  ==========  ==========
+
+      The docstring's own case -- "features sampled at >= 4 pixels",
+      i.e. 0.25 cycles/pixel -- sits between the 0.20 and 0.30 rows, so
+      the loss there is between 0.9 % and 6.8 %, NOT the "< 0.1 %" this
+      note claimed before v5.46.  ``dx_out == dx_in`` is the exact
+      identity (rel L2 2.5e-16), so all of it is resampling MTF.
+
+      This bites hardest on the single-FFT Fresnel output, whose
+      residual output-plane chirp sits at EXACTLY Nyquist at the grid
+      edge by construction (``dx_out = lambda z/(N dx)`` makes the local
+      frequency at ``r = N dx_out/2`` equal ``1/(2 dx_out)``), so any
+      field with amplitude out at the rim is attenuated.  For a pitch
+      change of a sampled band-limited field prefer a band-limited
+      (chirp-Z) resampler: ``angular_spectrum_propagate_mft(z=0, ...)``
+      in this module performs exactly that operation exactly.
+    - For downsampling (dx_out > dx_in) there is NO anti-alias low-pass
+      here, so high frequencies fold back in.  Filter first if that
+      matters.
     - The field is assumed to be on a centered grid: x = (arange(N) - N/2) * dx.
     """
     # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
@@ -790,6 +821,15 @@ def fresnel_propagate_mft(
         period_expr='lambda*|z|/d_in (the transform is of the input '
                     'field, not its spectrum)',
         centre_x=xc, centre_y=yc)
+
+    # K1 (audit 2026-09-11): the INPUT chirp is the same
+    # ``exp(i*k*r1^2/(2z))`` the single-FFT kernel samples, so this
+    # routine aliases in exactly the same regime -- the auditor measured
+    # the two agreeing to 3e-14 at every z, which is why the MFT sibling
+    # is not a valid oracle for the single-FFT one.  Same guard.
+    from .fresnel import _warn_fresnel_chirp_sampling
+    _warn_fresnel_chirp_sampling(Ny_in, Nx_in, dy_in, dx_in, wavelength, z,
+                                 'fresnel_propagate_mft')
 
     # ----- coordinate grids (numpy for chirp construction) ------------------
     n_x = np.arange(Nx_in, dtype=np.float64)

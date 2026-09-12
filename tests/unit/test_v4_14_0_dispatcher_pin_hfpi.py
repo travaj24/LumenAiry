@@ -442,8 +442,15 @@ class TestAccumulateAliveMaskDispatcherPin:
             # v5.31 (audit W9-14): a deliberate handful of synthetic paths
             # on a 64-pixel grid trips the sampling-adequacy guard.  True, and
             # irrelevant here -- this pins the alive-mask plumbing, not physics.
+            # v5.46 (audit K13): this bundle is synthetic with
+            # ``opl``/``leg`` zero and pins the ALIVE MASK, not the
+            # photometry, so name the raw path sum -- the v5.46 default
+            # ``normalisation='physical'`` applies the
+            # r/(dx_out^2 cos theta_out) binning Jacobian and refuses a
+            # bundle whose landed paths have travelled zero distance.
             grid = accumulate_to_grid(
-                paths, Ny=N, Nx=N, dx=dx, on_undersampled='silent')
+                paths, Ny=N, Nx=N, dx=dx, on_undersampled='silent',
+                normalisation='legacy')
             total = complex(np.sum(grid))
             expected = float(n_alive)  # n_alive * 1.0
             assert abs(total - expected) < 1e-9, (
@@ -462,7 +469,8 @@ class TestAccumulateAliveMaskDispatcherPin:
                 positions=positions, directions=directions,
                 Ex=Ex, Ey=Ey, opl=opl, alive=alive)
             ex_grid, ey_grid = accumulate_vector_to_grid(
-                paths, Ny=N, Nx=N, dx=dx)
+                paths, Ny=N, Nx=N, dx=dx, on_undersampled='silent',
+                normalisation='legacy')
             ex_total = complex(np.sum(ex_grid))
             ey_total = complex(np.sum(ey_grid))
             ex_expected = float(n_alive) * 1.0
@@ -495,7 +503,8 @@ class TestAccumulateAliveMaskDispatcherPin:
             paths = PathBundle(positions=positions, directions=directions,
                                 weights=weights, opl=opl, alive=alive)
             grid = accumulate_to_grid(paths, Ny=N, Nx=N, dx=dx,
-                                      on_undersampled='silent')
+                                      on_undersampled='silent',
+                                      normalisation='legacy')
             assert abs(complex(np.sum(grid)) - float(n)) < 1e-9
         else:
             Ex = np.ones(n, dtype=np.complex128)
@@ -504,7 +513,8 @@ class TestAccumulateAliveMaskDispatcherPin:
                 positions=positions, directions=directions,
                 Ex=Ex, Ey=Ey, opl=opl, alive=alive)
             ex_grid, ey_grid = accumulate_vector_to_grid(
-                paths, Ny=N, Nx=N, dx=dx)
+                paths, Ny=N, Nx=N, dx=dx, on_undersampled='silent',
+                normalisation='legacy')
             assert abs(complex(np.sum(ex_grid)) - float(n)) < 1e-9
             assert abs(complex(np.sum(ey_grid)) - 2.0 * float(n)) < 1e-9
 
