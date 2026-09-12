@@ -425,10 +425,13 @@ ignore = [
 #     (oned.py/twod.py F401+I001, stack.py I001) are GONE: the dead
 #     ``_grazing_safe_wavelength`` imports were dropped and the three
 #     ``_core`` blocks re-sorted, so those files are gated like the rest.
-# TODO(audit-2609): _lens_real.py:2644-2645 -- two ``f"..."`` continuation
-# lines in the mirror-guard warning carry no placeholders (F541).  Drop the
-# ``f`` prefix on those two lines.  Owner: the analytic-lens work package.
-"lumenairy/elements/_lens_real.py" = ["F541"]
+#     The ``lumenairy/elements/_lens_real.py = ["F541"]`` entry is GONE for
+#     the same reason: the two placeholder-free ``f"..."`` continuation lines
+#     in the mirror-guard warning dropped their ``f`` prefix, so the file is
+#     F541-gated like the rest (MEASURED: ``ruff check --isolated --select
+#     F541 lumenairy/elements/_lens_real.py`` reports 0).
+#     This group is now EMPTY.  Keep it that way -- a TODO ignore is a
+#     deferred finding, not a convention.
 #
 # (c) ``lumenairy/ui/`` scoped back IN (see the ``extend-exclude`` note).
 #     MEASURED 2026-09-12, ``ruff check lumenairy/ui --no-force-exclude``:

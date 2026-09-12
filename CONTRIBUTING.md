@@ -65,6 +65,49 @@ Avoid:
 - adding new public API without docstrings
 - silently changing numerical defaults without a CHANGELOG entry
 - adding imports inside hot loops (move them to module top)
+- version-history narrative in the source (`v5.xx (audit Z): pre-fix
+  this did A, which was wrong because B, now it does C`).  Write what
+  the code does *now* and why; the history belongs in the CHANGELOG,
+  and for the modules that already carry a lot of it, in
+  `docs/history/` -- see below
+
+## Modules with a history document
+
+Some modules have their version-history narrative in
+`docs/history/<module>.md` rather than in the source.  The header of each
+of those documents records two fingerprints of the module *as it stood
+when the history moved out*: the SHA-256 of its AST with docstrings and
+source positions removed, and the SHA-256 of its `tokenize` stream with
+comments and docstrings dropped.
+`tests/unit/test_audit2609_a17_history_relocation.py` recomputes both on
+every run, which is what proves a "documentation-only" edit really was
+one.
+
+**The rule: a commit that intentionally changes code in a module with a
+history document re-records that document's fingerprints in the same
+commit, and says why.**  Not in a follow-up -- a tree where the
+fingerprint and the code disagree cannot distinguish your deliberate
+change from an accidental one, and that is the whole value of the pin.
+
+Use the recorder; do not hand-edit a hash:
+
+```bash
+# what drifted, and by which fingerprint?  Writes nothing, exits 1 on
+# drift.  With no argument it checks every document.
+python scripts/record_history_fingerprints.py --check
+
+# re-record, in the same commit as the change
+python scripts/record_history_fingerprints.py lumenairy/propagators/fft_infra.py \
+    --reason "scipy.fft deferred behind find_spec + a first-use accessor"
+```
+
+The `--reason` is mandatory on a write and is appended to the header as a
+`re_recorded:` line, so the header carries every time the baseline moved
+and why.  A re-recorded fingerprint with no reason is indistinguishable
+from someone silencing the gate.
+
+If `--check` reports drift you did not intend, that is the gate doing its
+job: something changed behaviour inside an edit that claimed not to.
 
 ## Submitting a pull request
 

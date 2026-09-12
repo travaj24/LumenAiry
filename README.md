@@ -18,6 +18,8 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 | "I upgraded -- what changed under me?" | [`Migration-Guide.md`](Migration-Guide.md).  **v5.46 is the largest batch of behaviour changes the library has shipped** -- see [5.46.0 -- adversarial audit remediation](Migration-Guide.md#5460----adversarial-audit-remediation-2026-09-11) |
 | sign, unit, power and Jones-basis conventions | [`CONVENTIONS.md`](CONVENTIONS.md) |
 | the real-lens family: which model, what each option does now, measured envelopes, known limits | [`docs/subsystems/real_lens.md`](docs/subsystems/real_lens.md) -- the living subsystem contract |
+| how to carry a dozen `apply_real_lens*` settings around as one object instead of a dozen keywords | [`docs/lens_configuration.md`](docs/lens_configuration.md) -- `LensGeometry` / `LensNumerics` / `LensResources` / `LensConfig`.  Purely additive; every keyword still works unchanged |
+| why a guard, cap or fallback is shaped the way it is (the version-history narrative that used to sit in the source) | [`docs/history/`](docs/history/), one document per module.  Contributors: changing code in a module that has one means re-recording its fingerprints in the same commit -- see [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | what the 2026-09-11 adversarial audit found, and what was done about each finding | the report [`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11.md`](docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11.md), the per-partition auditor reports and repro scripts in [`docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/`](docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/), and the finding-by-finding resolution table `docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/RESOLUTION_STATUS.md` |
 | the full per-release record | [`CHANGELOG.md`](CHANGELOG.md) |
 | where the project is going | [`ROADMAP.md`](ROADMAP.md) |
@@ -3658,6 +3660,14 @@ propagation where the plain ASM grid would need to be impractically
 large.
 
 ### Real-lens accuracy strategy
+
+> Every option in this family can also be passed as one of three frozen
+> configuration objects -- `LensGeometry` (what problem is being solved),
+> `LensNumerics` (how hard to work at it) and `LensResources` (what hardware to
+> spend) -- so a study that sweeps one axis can carry the other dozen settings
+> as a single value instead of copying keywords between call sites.  Purely
+> additive: every keyword below still works exactly as it did.  Field tables and
+> the rules in [`docs/lens_configuration.md`](docs/lens_configuration.md).
 
 Two complementary models are provided:
 

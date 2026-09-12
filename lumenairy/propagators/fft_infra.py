@@ -107,12 +107,74 @@ def _ensure_pyfftw_loaded():
         pyfftw = _p
     return True
 
-# SciPy FFT (multi-threaded via workers parameter, always available with scipy)
+# SciPy FFT (multi-threaded via the ``workers`` parameter), lazy-loaded for
+# the same reason pyFFTW above is, and for a larger number.  ``import
+# scipy.fft`` costs ~396 ms cumulative on this box -- not because the FFT
+# bindings are large but because ``scipy/fft/_fftlog_backend.py`` does ``from
+# ..special import loggamma, poch``, and ``scipy.special`` drags in the shared
+# ``numpy.f2py`` (108 ms) / ``numpy.testing`` (97 ms) / ``charset_normalizer``
+# (77 ms) prefix.  ``import lumenairy`` reaches this module unconditionally
+# (``analysis.coherence`` -> ``elements.lenses`` -> here), so an eager import
+# here is ~400 ms on the import path of every caller, including the ones that
+# never take an FFT at all.
+#
+# ``find_spec`` answers the availability question without executing the
+# module.  It does import the PARENT package, but plain ``scipy`` is 28 ms
+# with NumPy already loaded, against the ~396 ms for ``scipy.fft``.
 try:
-    import scipy.fft as _scipy_fft
-    SCIPY_FFT_AVAILABLE = True
-except ImportError:
+    SCIPY_FFT_AVAILABLE = _importlib_util.find_spec('scipy.fft') is not None
+except (ImportError, ValueError):
+    # ``find_spec`` on a dotted name imports the parent, so a scipy that is
+    # absent (ImportError) or broken mid-install (ValueError, __spec__ is
+    # None) answers here rather than at the first FFT.
     SCIPY_FFT_AVAILABLE = False
+
+#: One-slot cache holding the ``scipy.fft`` module once something has actually
+#: needed it.  A CONTAINER that gets mutated, deliberately, and not a module
+#: global that gets rebound: ``propagation.py`` has to live-forward every
+#: rebound ``fft_infra`` global through PEP 562 (``_LIVE_FORWARD_NAMES``)
+#: because an import-time ``from .fft_infra import X`` snapshot goes stale the
+#: moment ``X`` is rebound.  A list that is appended to cannot go stale, so
+#: this handle needs no forwarding entry and cannot acquire the bug that
+#: contract exists to prevent.
+_SCIPY_FFT_MODULE = []
+
+
+def _ensure_scipy_fft_loaded():
+    """Return the ``scipy.fft`` module, importing it on first use.
+
+    Returns ``None`` when SciPy is not installed -- the same answer
+    :data:`SCIPY_FFT_AVAILABLE` gives, so a caller that has already tested the
+    flag can use the result directly.
+    """
+    if not SCIPY_FFT_AVAILABLE:
+        return None
+    if not _SCIPY_FFT_MODULE:
+        import scipy.fft as _sf
+        _SCIPY_FFT_MODULE.append(_sf)
+    return _SCIPY_FFT_MODULE[0]
+
+
+def __getattr__(name):
+    """PEP 562: keep ``fft_infra._scipy_fft`` resolving to the module.
+
+    The name is read from outside this file -- ``propagators/_bluestein.py``
+    reaches ``_fi._scipy_fft.fft`` / ``.ifft`` for the Bluestein transform's
+    1-D pair -- and reading it performs the same first-use import the accessor
+    does.  So the attribute behaves exactly as the old module-level ``import
+    scipy.fft as _scipy_fft`` binding did, while the import itself stays off
+    the ``import lumenairy`` path.
+    """
+    if name == '_scipy_fft':
+        module = _ensure_scipy_fft_loaded()
+        if module is not None:
+            return module
+        raise AttributeError(
+            f"module {__name__!r} has no attribute {name!r}: SciPy is not "
+            f"installed on this interpreter, so SCIPY_FFT_AVAILABLE is False "
+            f"and every FFT dispatches to numpy.fft.  Test that flag before "
+            f"reaching for this handle.")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # Affinity-aware CPU count -- respects cgroups / taskset / Python 3.13+
 # process_cpu_count so we don't oversubscribe a restricted machine.
@@ -2022,13 +2084,13 @@ _register_knob(
 def _scipy_or_numpy_fft2(x):
     """Used by the fallback path (and by small-grid calls)."""
     if USE_SCIPY_FFT and SCIPY_FFT_AVAILABLE:
-        return _scipy_fft.fft2(x, workers=SCIPY_FFT_WORKERS)
+        return _ensure_scipy_fft_loaded().fft2(x, workers=SCIPY_FFT_WORKERS)
     return np.fft.fft2(x)
 
 
 def _scipy_or_numpy_ifft2(x):
     if USE_SCIPY_FFT and SCIPY_FFT_AVAILABLE:
-        return _scipy_fft.ifft2(x, workers=SCIPY_FFT_WORKERS)
+        return _ensure_scipy_fft_loaded().ifft2(x, workers=SCIPY_FFT_WORKERS)
     return np.fft.ifft2(x)
 
 
@@ -2267,7 +2329,8 @@ def _fft2_nd(x):
                 raise
             _handle_pyfftw_failure(x, 'fft2_nd', e)
     if USE_SCIPY_FFT and SCIPY_FFT_AVAILABLE:
-        return _scipy_fft.fft2(x, axes=(-2, -1), workers=SCIPY_FFT_WORKERS)
+        return _ensure_scipy_fft_loaded().fft2(
+            x, axes=(-2, -1), workers=SCIPY_FFT_WORKERS)
     return np.fft.fft2(x, axes=(-2, -1))
 
 
@@ -2308,7 +2371,8 @@ def _ifft2_nd(x):
                 raise
             _handle_pyfftw_failure(x, 'ifft2_nd', e)
     if USE_SCIPY_FFT and SCIPY_FFT_AVAILABLE:
-        return _scipy_fft.ifft2(x, axes=(-2, -1), workers=SCIPY_FFT_WORKERS)
+        return _ensure_scipy_fft_loaded().ifft2(
+            x, axes=(-2, -1), workers=SCIPY_FFT_WORKERS)
     return np.fft.ifft2(x, axes=(-2, -1))
 
 
@@ -2460,7 +2524,8 @@ __all__ = [
     # but not public top-level API.  CUPY_AVAILABLE / PYFFTW_AVAILABLE stay
     # public -- the README documents them as capability-probe flags.
     'CUPY_AVAILABLE', 'PYFFTW_AVAILABLE',
-    '_ensure_cupy_loaded', '_ensure_pyfftw_loaded', '_is_cupy_array',
+    '_ensure_cupy_loaded', '_ensure_pyfftw_loaded', '_ensure_scipy_fft_loaded',
+    '_is_cupy_array',
     # FFT backend config (setters only -- the underlying globals stay
     # module-attribute-accessible but out of __all__)
     'set_fft_fallback', 'set_fft_threads', 'get_fft_threads',

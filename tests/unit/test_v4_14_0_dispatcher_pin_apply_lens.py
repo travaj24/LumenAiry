@@ -45,6 +45,25 @@ JAX_AVAILABLE = False
 try:
     import jax  # noqa: F401
     import jax.numpy as jnp  # noqa: F401
+    # DOUBLE PRECISION IS A PRECONDITION OF EVERY JAX ROW IN THIS FILE, not a
+    # preference.  ``_lens_jax._require_jax_x64`` RAISES when
+    # ``jax_enable_x64`` is off -- JAX would truncate the complex128 field to
+    # complex64 and the ``exp(i k0 OPL)`` screen (k0*OPL ~ 1e4 rad on these
+    # fixtures) would carry ~1e-3 waves of rounding instead of ~1e-9 -- so the
+    # 12 ``*_jax`` parametrisations here cannot run without it.
+    #
+    # ``jax.config`` is PROCESS-global, which is why this file used to pass in
+    # a full-suite run and fail on its own: some other module that happened to
+    # be imported first (``test_audit2609_a4_maslov_gbd.py``,
+    # ``test_audit2609_a8_thin_elements.py``, ... -- ~20 of them) enabled x64
+    # and this one inherited it.  A test whose result depends on collection
+    # order is not a gate, so the flag is set HERE, at import, in the same
+    # block that decides whether JAX exists at all.  The module-scoped autouse
+    # fixture below re-asserts it at run time, because two modules in this
+    # suite (``test_niche_audit_w7_rcwa.py``,
+    # ``test_v5_12_0_audit_fixes.py``) deliberately toggle the flag OFF to
+    # exercise the refusal paths, and imports all happen before any test runs.
+    jax.config.update('jax_enable_x64', True)
     JAX_AVAILABLE = True
 except ImportError:
     JAX_AVAILABLE = False
@@ -52,6 +71,30 @@ except ImportError:
 
 needs_jax = pytest.mark.skipif(
     not JAX_AVAILABLE, reason="JAX is not installed")
+
+
+@pytest.fixture(autouse=True, scope='module')
+def _jax_x64_for_this_module():
+    """Hold ``jax_enable_x64`` on for every test in this file, and restore it.
+
+    Autouse and module-scoped: the NumPy rows do not need it, but they are
+    parametrised beside the JAX ones and splitting the fixture by variant
+    would put the precondition somewhere a reader of the JAX row cannot see.
+
+    The restore is not cosmetic.  Leaving the flag on would export this
+    file's precondition to whatever runs next in the same process, which is
+    the defect being fixed here, only pointed the other way.
+    """
+    if not JAX_AVAILABLE:
+        yield
+        return
+    import jax
+    previous = bool(getattr(jax.config, 'jax_enable_x64', False))
+    jax.config.update('jax_enable_x64', True)
+    try:
+        yield
+    finally:
+        jax.config.update('jax_enable_x64', previous)
 
 
 # ============================================================================

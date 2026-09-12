@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/fft_infra.py
-ast_sha256: 1a11380b468ed0bb114b4351e2a72437428e90e803a51fc403a7f20a5b37ec33
-token_sha256: c4f06ed7121fc281b88038fa2c383f98a0045eebe3b58e4a76763a065f569299
+ast_sha256: bd5002a4bb2ed943962b9bac214eb699c952d4d55eb715f4d96c4e9401ee6eab
+token_sha256: 5a24405d51265962a660e4d2ce29457a6327702551f184e910387661e7011c40
 pre_relocation_lines: 2678
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-12 -- scipy.fft deferred behind find_spec + a first-use accessor; no behaviour change (WP-A22 item 9)
 -->
 
 # Version history -- `lumenairy/propagators/fft_infra.py`

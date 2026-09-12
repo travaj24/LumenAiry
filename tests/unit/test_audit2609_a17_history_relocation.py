@@ -30,6 +30,20 @@ the header of the module's history document, so this test compares today's
 source against the code as it stood before a single history block moved.  An
 edit that changes behaviour while claiming to be history-only fails here.
 
+THE MAINTENANCE RULE, and the reason this file is not a trap.  A pin with no
+expiry goes red on the first DELIBERATE code change to one of these modules --
+which is correct, and would be unworkable if the only way to clear it were to
+hand-edit a hash.  So: **a commit that intentionally changes code in a module
+with a history document re-records that document's fingerprints in the same
+commit, and says why.**  Not in a follow-up: a tree whose fingerprint and code
+disagree cannot tell a deliberate change from an accidental one, which is the
+entire value of the pin.  ``scripts/record_history_fingerprints.py`` does the
+re-record with the helpers below (``--check`` reports drift without writing;
+a write requires ``--reason``, which it appends to the header as a
+``re_recorded:`` line so the trail of baseline moves is explicit).  The rule
+and the commands are also in ``CONTRIBUTING.md``, and the recorder has its own
+gate at ``tests/unit/test_audit2609_a22_history_fingerprint_tool.py``.
+
 The registry is discovered from ``docs/history/*.md``, so WP-A17 part 2
 (``_lens_traced.py``, ``_lens_real.py``, ``_lens_imap.py``,
 ``lenses_maslov.py``) extends this test by adding its documents -- no change to
@@ -240,7 +254,11 @@ def test_the_module_ast_is_unchanged_since_the_history_move(name, md, header):
         f"{header['module']}: the docstring-free AST no longer matches the "
         f"fingerprint recorded in docs/history/{md.name}.  Either the edit was "
         f"not documentation-only, or a deliberate code change needs the "
-        f"fingerprints in that header re-recorded in the same commit.")
+        f"fingerprints in that header re-recorded in the same commit:\n"
+        f"    python scripts/record_history_fingerprints.py "
+        f"{header['module']} --reason \"<what changed and why>\"\n"
+        f"Do not hand-edit the hash -- the --reason is what keeps the header "
+        f"an audit trail rather than a silenced gate.")
 
 
 @pytest.mark.parametrize("name,md,header", _REGISTRY, ids=_IDS)
@@ -252,7 +270,10 @@ def test_the_module_token_stream_is_unchanged_since_the_history_move(
     assert token_fingerprint(src) == header["token_sha256"], (
         f"{header['module']}: the comment-free, docstring-free token stream no "
         f"longer matches docs/history/{md.name}.  A literal changed spelling, "
-        f"or a statement moved.")
+        f"or a statement moved.  If that was deliberate, re-record in the same "
+        f"commit:\n"
+        f"    python scripts/record_history_fingerprints.py "
+        f"{header['module']} --reason \"<what changed and why>\"")
 
 
 @pytest.mark.parametrize("name,md,header", _REGISTRY, ids=_IDS)

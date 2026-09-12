@@ -1285,8 +1285,9 @@ For the `apply_real_lens` family specifically, the living contract is
 * **The RCWA Rayleigh / Wood-anomaly nudge is now a symmetric bracket and it
   warns (H2).**  `rcwa_efficiency_1d`, `rcwa_jones_1d`,
   `rcwa_jones_1d_segments`, `rcwa_efficiency_2d`, `rcwa_efficiency_2d_shapes`,
-  `PreparedRCWA2D.solve` (built by `prepare_rcwa_2d`; the warning text spells it
-  `RCWA2DPrepared.solve`), `rcwa_jones_2d` and `RCWAStack.solve` return DIFFERENT
+  `PreparedRCWA2D.solve` (built by `prepare_rcwa_2d`; before v5.46.0 the warning
+  named a class that does not exist, so grepping a captured pre-5.46 log for the
+  real name finds nothing), `rcwa_jones_2d` and `RCWAStack.solve` return DIFFERENT
   numbers at an exact Wood anomaly than before (closer to the exact-wavelength
   answer) and warn there.  **Off-anomaly solves are bit-identical and
   unwarned.**  The effective wavelength actually solved is reported (`wl_eff`).
@@ -1437,3 +1438,79 @@ For the `apply_real_lens` family specifically, the living contract is
   claim was wrong by ~440x), the slow lane is re-marked at the > 2 min/file bar,
   `.test_durations` has a staleness gate, `ruff` is blocking and lints
   `lumenairy/ui/`, and CPython 3.14 is in the CI matrix.
+* **Three configuration objects for the `apply_real_lens` family --
+  `LensGeometry`, `LensNumerics`, `LensResources` -- and a `LensConfig` that
+  holds all three.  NO MIGRATION IS REQUIRED: this is purely additive.**  The
+  five entry points still take every keyword they took before, with the same
+  defaults and the same answers; the objects are a second way to spell the same
+  call, for the case the audit named -- a study that sweeps one axis while
+  holding a dozen settings fixed, where the settings were previously a dozen
+  loose keywords copied between five call sites.
+
+  ```python
+  import lumenairy as la
+
+  numerics = la.LensNumerics(ray_subsample=2, newton_poly_order=8,
+                             newton_fit='spline')
+  resources = la.LensResources(n_workers=4, parallel_amp=False)
+
+  E_out = la.apply_real_lens_traced(
+      E_in, prescription=rx, wavelength=633e-9, dx=dx,
+      numerics=numerics, resources=resources)
+  ```
+
+  which is bit-identical to passing `ray_subsample=2, newton_poly_order=8,
+  newton_fit='spline', n_workers=4, parallel_amp=False` as loose keywords.  The
+  objects are frozen dataclasses (hashable by value, comparable, `repr`-able),
+  `LensConfig.from_kwargs(...)` / `.to_kwargs()` round-trip, and
+  `.narrowed_to(fn_name)` drops the fields a given entry point does not accept
+  so one config can drive all five.  Mixing an object with the loose keyword it
+  also sets raises rather than silently picking one.  Full field tables, the
+  role each object plays and the validation rules are in
+  [`docs/lens_configuration.md`](docs/lens_configuration.md).
+* **Version-history narrative moved out of the source into `docs/history/`
+  (contributors only; no behaviour change).**  Several modules carried
+  thousands of lines of `vN.M (audit X): pre-fix this did A, which was wrong
+  because B, now it does C` commentary.  Those blocks now live in
+  `docs/history/<module>.md`, reproduced verbatim under the source line they
+  came from, so `git log -S` on any phrase still lands on the commit that wrote
+  it.  Nothing the interpreter executes changed: each document's header records
+  the SHA-256 of the module's AST (docstrings and positions removed) and of its
+  token stream (comments and docstrings dropped), both taken from the
+  pre-relocation file, and `tests/unit/test_audit2609_a17_history_relocation.py`
+  recomputes them on every run.
+
+  **The rule that follows from that pin: a commit that intentionally changes
+  code in a module with a history document re-records that document's
+  fingerprints in the same commit, and says why.**  Use
+  `python scripts/record_history_fingerprints.py <module> --reason "..."`;
+  `--check` reports drift without writing.  The `--reason` is mandatory on a
+  write and is appended to the header as a `re_recorded:` line, so the header
+  carries every baseline move and its justification.  Never hand-edit a hash.
+  `CONTRIBUTING.md` has the same rule with the commands.
+* **Three documentation and diagnostic corrections** worth knowing if you grep
+  logs or read tooltips:
+  * `scripts/check_doc_identifiers.py` is now committed beside
+    `check_source_line_citations.py` and gated by
+    `tests/unit/test_audit2609_a21_doc_identifiers.py`.  It resolves every
+    backticked identifier in `README.md`, `ROADMAP.md`, `Migration-Guide.md`
+    and `CONVENTIONS.md` against the installed package and exits non-zero on
+    one that does not exist -- so a name in these documents is a name you can
+    import.  It needs no network and takes ~4.5 s.
+  * The staggered-PMM 2-D shared-grid advisory is caught by a **message**
+    filter, not a module one:
+    `-W "error:.*eps_cell is a SEGMENT grid:UserWarning"`, or the same string
+    as a pytest filterwarnings entry.  A `module=` filter cannot work here at any
+    *correct* `stacklevel`, and that is not a bug to fix: Python matches
+    `module` against the frame `stacklevel` selects, and the whole point of a
+    non-1 stacklevel is to point at YOUR code -- so a warning attributed
+    correctly is by construction not attributed to the library module that
+    raised it.  The exact spelling, the measurement table behind it and both
+    entry points are documented beside the warning in
+    `lumenairy/elements/pmm/twod_staggered.py`.
+  * The `fast_analytic_phase` tooltip in the designer UI claimed "< 10 nm OPL
+    error".  The measured figure is **~7 nm rms per mm of glass**, so on a
+    10 mm element it is ~70 nm, not 10.  The tooltip and
+    [`docs/subsystems/real_lens.md`](docs/subsystems/real_lens.md) section 4
+    now both state the per-mm form.  Nothing computational changed -- only the
+    claim about it.

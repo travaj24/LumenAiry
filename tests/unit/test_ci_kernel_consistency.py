@@ -76,8 +76,15 @@ closure rule, measured WITH THE GUARD DISARMED -- and the claims are:
 WHY the CI arm's arithmetic differs is NOT solved here and is an OPEN item:
 ``docs/audits/CI_PREMISE_GATES_2026_09_11.md``.
 
-BUDGET.  Reading and comparing the table is free; the current-arm re-take is
-restricted to the four CHEAP sections (~3 s, measured).  The mortar and T22
+BUDGET, and how it is ENFORCED.  Reading and comparing the table is free; the
+current-arm re-take is restricted to the four CHEAP sections (~3 s, measured).
+That restriction is asserted as a ROW COUNT -- the re-take covers exactly the
+census's 24 cheap rows and none of the 30 expensive ones -- and never as a
+wall clock, per TESTING_STANDARDS S1.  A second's reading on a box shared with
+a dozen agents says nothing about whether the right work was done, and a
+seconds bar goes green on the very regression it is there to catch (a fast
+machine can run both expensive sections inside any plausible limit).  The
+elapsed time is PRINTED for triage.  The mortar and T22
 sections are the expensive half and are covered by the committed table plus
 their own fix/verify files, so this gate stays well inside its 30 s budget.
 
@@ -139,6 +146,25 @@ _PREFIX = {
     "band": "band/",
     "branch_cut": "branch_cut/",
 }
+
+#: the decision PREFIXES the two EXPENSIVE sections own.  The re-take must
+#: produce NONE of these -- that is what the BUDGET note in the module
+#: docstring means, stated as a set membership instead of as seconds.
+_EXPENSIVE_PREFIX = ("mortar/", "t22/")
+
+#: the re-take's OPERATION COUNT, which is what the budget is really about.
+#: MEASURED 2026-09-12 on branch audit-fixes-2026-09 by running the four
+#: cheap probes directly: 24 decisions (interface 6, sliver 2, band 4,
+#: branch_cut 12), 4 hypotheticals, 8 answer classes.  The same 24 is the
+#: union of the cheap rows over ALL twelve census arms, so the number is not
+#: transcribed from one run -- it is a property of the committed table, and
+#: ``test_this_arm_agrees_with_the_committed_census`` derives it from the
+#: table rather than reading this constant.  Recorded here so a reviewer can
+#: see the size of the thing without running it.  For scale: every measured
+#: arm carries 54 rows, the other 30 being the expensive sections
+#: (mortar 15, t22 15) this gate deliberately does not re-take.
+_RETAKE_DECISIONS = 24
+_RETAKE_HYPOTHETICALS = 4
 
 
 def _measured(table):
@@ -479,8 +505,8 @@ def test_this_arm_agrees_with_the_committed_census():
               % (arm, len(other_class),
                  json.dumps(other_class, indent=1, sort_keys=True)))
 
-    # every cheap row this arm produced must EXIST in the census: a new
-    # decision that nobody has censused is a hole, and it would pass the
+    # ---- 3. every cheap row this arm produced must EXIST in the census: a
+    # new decision that nobody has censused is a hole, and it would pass the
     # comparison above by being absent from every arm.
     uncensused = sorted(k for k in here
                         if k.startswith(prefixes)
@@ -488,8 +514,71 @@ def test_this_arm_agrees_with_the_committed_census():
     assert not uncensused, (
         "these decisions are produced by the probe but are in NO arm of the "
         "census: %s.  Re-run the arms and merge." % uncensused)
-    # the budget this file promises, measured on the running build
-    assert elapsed < 20.0, elapsed
+
+    # ---- 4. THE BUDGET, as an OPERATION COUNT rather than a wall clock.
+    #
+    # What the module docstring's BUDGET note promises is that this re-take
+    # runs the four CHEAP sections and leaves the two expensive ones
+    # (mortar 4.7 s, T22 5.3 s) to the committed table.  ``elapsed < 20.0``
+    # was a proxy for that and the exact shape TESTING_STANDARDS S1 rules
+    # out: it goes red when the shared box is loaded -- this workstation runs
+    # a dozen agents -- and it goes GREEN on the regression it exists to
+    # catch, because a fast enough machine can probe both expensive sections
+    # inside 20 s.  The property underneath is a COUNT, and a count is
+    # deterministic on every build.
+    #
+    # ORACLE: the committed census itself.  The cheap rows are enumerated
+    # from the table (union over all arms), so the expected number is derived,
+    # never transcribed, and regenerating the table moves the bar with it.
+    # The re-take must produce exactly that set: fewer means a section
+    # stopped being probed and this gate went partly blind; more means a
+    # fixture was added without a census row (which the ``uncensused`` check
+    # above catches from the other side).
+    #
+    # MEASURED 2026-09-12: 24 decisions probed (interface 6, sliver 2,
+    # band 4, branch_cut 12) against 24 cheap rows in the census, 4
+    # hypotheticals, 0 expensive rows -- and 30 expensive rows per measured
+    # census arm that this re-take does not touch.  Both sides exact, gap 0.
+    census_cheap = {k for d in dec.values() for k in d
+                    if k.startswith(prefixes)}
+    assert len(census_cheap) == _RETAKE_DECISIONS, (
+        "the census's cheap half is %d row(s), not the %d this file was "
+        "written over.  That is not a failure on its own -- fixtures are "
+        "allowed to be added -- but the count above is the SIZE of what this "
+        "gate re-takes, so update _RETAKE_DECISIONS (and the docstring's "
+        "BUDGET note) in the same change that regenerates the table."
+        % (len(census_cheap), _RETAKE_DECISIONS))
+    probed = set(here)
+    assert probed == census_cheap, (
+        "the cheap re-take no longer covers exactly the cheap half of the "
+        "census: probed %d row(s), census carries %d.  missing from this "
+        "run: %s; probed but not censused: %s.  Either a cheap section "
+        "stopped being re-taken here -- this gate is then archival for those "
+        "rows, which is what it exists not to be -- or the fixtures moved."
+        % (len(probed), len(census_cheap),
+           sorted(census_cheap - probed), sorted(probed - census_cheap)))
+    expensive = sorted(k for k in here if k.startswith(_EXPENSIVE_PREFIX))
+    assert not expensive, (
+        "the re-take produced %d row(s) from the EXPENSIVE sections: %s.  "
+        "Those cost 4.7 s (mortar) and 5.3 s (T22) by the measurement in "
+        "this module's docstring and are covered by the committed table plus "
+        "their own fix/verify files; pulling them in here is how a cheap "
+        "gate becomes one nobody runs.  Either revert that, or move the "
+        "section names into _CHEAP and re-measure the docstring's BUDGET "
+        "note." % (len(expensive), expensive))
+    assert len(hyp) == _RETAKE_HYPOTHETICALS, (
+        "the re-take probed %d hypothetical bar(s), not the %d the census "
+        "was built over: %s.  A hypothetical is the standing evidence that "
+        "an unguarded site is undecidable "
+        "(test_the_unguarded_sites_are_still_undecidable), so losing one "
+        "silently retires that argument."
+        % (len(hyp), _RETAKE_HYPOTHETICALS, sorted(hyp)))
+    # Wall clock is PRINTED, never asserted: it is the number a reviewer
+    # wants when this file starts feeling slow, and it is worthless as a bar.
+    # 1.7 s for the four cheap sections on the 2026-09-12 calibration run.
+    print("\narm %r re-took %d decision(s) + %d hypothetical(s) in %.2f s "
+          "(wall clock reported for triage, not asserted -- "
+          "TESTING_STANDARDS S1)" % (arm, len(probed), len(hyp), elapsed))
 
 
 # ======================================================================

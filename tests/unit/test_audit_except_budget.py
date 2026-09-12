@@ -27,8 +27,13 @@ LOWERED 2026-09-12 (WP-A21): 53 -> 51.  ``memory.py``'s two clauses were the
 first of the census's NARROWING REQUESTS to land, so its entry is deleted
 rather than left stale-high -- that is the procedure the group comment asks
 for, and leaving it would have handed ``memory.py`` two clauses of free
-allowance for the next broad except that drifts in.  The remaining request
-(``elements/_lens_imap.py``) is counted but still not endorsed.
+allowance for the next broad except that drifts in.
+
+LOWERED again 2026-09-12 (WP-A22): 51 -> 50.  ``elements/_lens_imap.py``'s
+single clause -- the last entry in the NARROWING REQUESTS group -- is now
+``except ImportError:`` (``_lens_imap.py:1578``), so its entry is deleted by
+the same procedure and group (5) is empty: every narrowing the census asked
+for has landed.  MEASURED on this tree: census 50, tree 50, slack 0.
 """
 import os
 import re
@@ -43,7 +48,7 @@ LUMENAIRY_DIR = os.path.join(REPO_ROOT, 'lumenairy')
 # them; every group name is one of the sanctioned classes.
 # ---------------------------------------------------------------------------
 
-# (1) JAX-TRACER / CONCRETIZATION GUARDS -- the dominant class (34 of 51).
+# (1) JAX-TRACER / CONCRETIZATION GUARDS -- the dominant class (35 of 50).
 #     ``try: <materialize a value> except Exception: <conservative fallback>``
 #     where the raised type is ``TracerArrayConversionError`` /
 #     ``ConcretizationTypeError`` / ``TypeError`` depending on the jax version
@@ -124,9 +129,16 @@ _TEARDOWN_GUARDS = {
 #     enable/disable fft_infra imports) are now ``except ImportError:`` with the
 #     unguardable work moved out of the try, so the entry is gone from this
 #     group and ``memory.py`` is back to an implicit allowance of zero.
-_NARROWING_REQUESTS = {
-    'elements/_lens_imap.py': 1,      # build_inverse_map's `from .. import memory`
-}
+#     LANDED 2026-09-12 (WP-A16, recorded by WP-A22): ``elements/_lens_imap.py``'s
+#     clause -- ``build_inverse_map``'s RAM-budget ``from .. import memory`` --
+#     is now ``except ImportError:`` too, so its entry is gone as well.
+#
+#     THIS GROUP IS NOW EMPTY, and that is the state to defend: every file in
+#     it is a file whose broad except the census does NOT justify, merely
+#     tolerates.  A new entry here is a debt with a named owner, never a
+#     resting place -- and an empty group means the per-file bars above are all
+#     endorsed counts.
+_NARROWING_REQUESTS: dict[str, int] = {}
 
 _CENSUS: dict[str, int] = {}
 for _group in (_TRACER_GUARDS, _OPTIONAL_PACKAGE_GUARDS, _PROBE_GUARDS,
@@ -134,9 +146,10 @@ for _group in (_TRACER_GUARDS, _OPTIONAL_PACKAGE_GUARDS, _PROBE_GUARDS,
     for _k, _v in _group.items():
         _CENSUS[_k] = _CENSUS.get(_k, 0) + _v
 
-# The scalar bar is the census total, not an independent number: 51 justified
-# sites across 26 files, MEASURED 2026-09-12 on branch audit-fixes-2026-09
-# (53 across 27 before WP-A21 narrowed ``memory.py``'s two).
+# The scalar bar is the census total, not an independent number: 50 justified
+# sites across 25 files, MEASURED 2026-09-12 on branch audit-fixes-2026-09
+# (51 across 26 before ``_lens_imap.py``'s narrowing landed; 53 across 27
+# before WP-A21 narrowed ``memory.py``'s two).
 # (History: 99 pre-sweep at v4.13.0; 48 was the last hand-maintained scalar,
 # set at v5.28.0 and already 3 short of the tree at the 2026-09-11 audit base.)
 _NON_UI_EXCEPT_BUDGET = sum(_CENSUS.values())
@@ -230,8 +243,9 @@ class TestExceptExceptionBudget:
         for any addition.  This asserts the census TOTAL is not more than a
         small slack above the measured total, so the two tests together mean
         "each file is at its justified count, and the total is that sum".
-        MEASURED 2026-09-12, after WP-A21's ``memory.py`` narrowing: census 51,
-        tree 51, slack 0.  (Before it: census 53, tree 53, slack 0.)
+        MEASURED 2026-09-12, after ``_lens_imap.py``'s narrowing: census 50,
+        tree 50, slack 0.  (After WP-A21's ``memory.py`` narrowing: census 51,
+        tree 51, slack 0.  Before it: census 53, tree 53, slack 0.)
         """
         n = _count_except_exception_in_non_ui()
         assert _NON_UI_EXCEPT_BUDGET - n <= 3, (

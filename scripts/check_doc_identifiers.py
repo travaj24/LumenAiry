@@ -193,15 +193,13 @@ CURATED: Dict[str, str] = {
     # ROADMAP names for things that do not exist yet, by design
     'LayerSpec': 'proposed future name (ROADMAP)',
     'Rays': 'proposed future name (ROADMAP)',
-    # The three lens config objects were ROADMAP proposals when this list was
-    # written and are now real (``elements/lens_config.py``, re-exported at
-    # top level).  The entries stay only so that this gate does not depend on
-    # that landing; they resolve on their own today and can simply be deleted
-    # -- MEASURED 2026-09-12, ``_Index().resolve('LensGeometry')`` ->
-    # ``(True, 'top-level')`` for all three.
-    'LensGeometry': 'ROADMAP name, since landed -- resolves on its own',
-    'LensNumerics': 'ROADMAP name, since landed -- resolves on its own',
-    'LensResources': 'ROADMAP name, since landed -- resolves on its own',
+    # (``LensGeometry`` / ``LensNumerics`` / ``LensResources`` sat here as
+    #  "ROADMAP name, since landed".  They are real API now
+    #  -- ``elements/lens_config.py``, re-exported at top level -- so they
+    #  resolve through the index like any other public name and the three
+    #  entries were deleted rather than left as permanent excuses.  The
+    #  denominator rose 593 -> 596 by exactly that: three names moved from
+    #  "excluded" to "resolved".)
     # other projects' API, named as a comparison
     'apply_image_plane_fftmft': "POPPY's API, attributed inline",
     'focus_fixed_sampling': "prysm's API, attributed inline",
@@ -225,11 +223,12 @@ CURATED: Dict[str, str] = {
     'substrate_index': 'historical UI-dock kwarg',
     # Qt signal
     'finished': 'Qt signal name',
-    # Migration-Guide.md documents BOTH spellings of the Wood-anomaly
-    # diagnostic's fn_name, because the shipped warning said
-    # ``RCWA2DPrepared.solve`` until WP-A21 corrected it to the real class,
-    # ``PreparedRCWA2D``.  The old spelling therefore has to stay nameable.
-    'RCWA2DPrepared.solve': 'historical warning text; the class is PreparedRCWA2D',
+    # (``RCWA2DPrepared.solve`` sat here because Migration-Guide.md quoted the
+    #  mis-spelled class the Wood-anomaly warning used to name.  The guide now
+    #  states the fact -- pre-v5.46.0 logs name a class that does not exist --
+    #  without quoting the dead identifier, so the exclusion has nothing left
+    #  to cover and was deleted.  ``test_every_hand_triaged_exclusion_is_still_
+    #  cited`` is what would have reported it.)
 }
 
 
