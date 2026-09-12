@@ -236,7 +236,7 @@ def test_the_header_names_a_real_module_and_two_fingerprints(name, md, header):
     # A document is named either by the module's basename (the three part-1 documents) or, because basenames
     # collide across packages (``pmm/stack.py`` vs ``rcwa/stack.py``), by the dotted module path
     # (``lumenairy.elements.pmm.stack``) -- the convention for the library-wide sweep.
-    dotted = ".".join(src_path.with_suffix("").parts)
+    dotted = ".".join(pathlib.PurePosixPath(header["module"]).with_suffix("").parts)
     assert name in (src_path.stem, dotted), (
         f"{md.name}: document name must be the module basename or its dotted path "
         f"({src_path.stem!r} or {dotted!r})")
@@ -362,17 +362,26 @@ def test_the_fingerprints_are_actually_sensitive(name, md, header):
             continue
         if len(fn.body) < 3:
             continue
-        doomed = fn.body[-1]
-        if doomed.lineno != doomed.end_lineno:
-            continue
-        candidate = "".join(
-            ln for i, ln in enumerate(src_lines, 1) if i != doomed.lineno)
-        try:
-            ast.parse(candidate)
-        except SyntaxError:
-            continue
-        cut = candidate
-        break
+        # Any single-line statement of the body will do, searched from the end; a module whose only
+        # multi-statement function ends in a multi-line ``return {...}`` (analysis/coronagraph.py) has
+        # single-line statements earlier in the body.  A docstring statement is skipped: deleting it
+        # cannot move the AST fingerprint, by design.
+        for doomed in reversed(fn.body):
+            if doomed.lineno != doomed.end_lineno:
+                continue
+            if (isinstance(doomed, ast.Expr) and isinstance(doomed.value, ast.Constant)
+                    and isinstance(doomed.value.value, str)):
+                continue
+            candidate = "".join(
+                ln for i, ln in enumerate(src_lines, 1) if i != doomed.lineno)
+            try:
+                ast.parse(candidate)
+            except SyntaxError:
+                continue
+            cut = candidate
+            break
+        if cut is not None:
+            break
     assert cut is not None, "no single-line statement found to delete"
     assert ast_fingerprint(cut) != ast_ref, (
         "deleting a statement did not move the AST fingerprint")

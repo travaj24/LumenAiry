@@ -38,73 +38,44 @@ VALID_METHODS = (
     'maslov', 'asymptotic', 'gbd', 'hfpi', 'hf', 'mhs',
 )
 
-# v5.30 (audit P5): the bare-grid kernels whose native return is the
-# ``(E, dx_out, dy_out)`` triple at a kernel-chosen output pitch rather
-# than a bare ndarray at the input pitch.  ``method='auto'`` can pick
-# any of these, so a pre-v5.30 ``auto`` caller who read the return as an
-# ndarray silently got a tuple -- and at a different sampling.  That is the
-# instability recorded in
-# ``docs/audits/AUDIT_ADVERSARIAL_CODEBASE_2026_07_25.md`` P5 and closed by
-# the flip described in the block below: the DEFAULT return is now the
-# shape-stable ``PropagationResult`` for every method.  This set stays as-is
-# because the native shapes stay reachable -- it gates the shape-instability
-# ``UserWarning``, which post-flip can only fire on the explicit
-# ``return_result=False`` (legacy-contract) path.
+# Bare-grid kernels whose native return is the ``(E, dx_out, dy_out)`` triple
+# at a kernel-chosen output pitch rather than a bare ndarray at the input
+# pitch.  ``method='auto'`` can pick any of them, so this set gates the
+# shape-instability ``UserWarning`` -- which, with the wrapper as the default
+# return, can only fire on the explicit ``return_result=False`` path.
 _GRID_CHANGING_METHODS = ('sas', 'fresnel', 'fraunhofer')
 
 # ---------------------------------------------------------------------------
-# audit P5 / roadmap Part F1 -- the return-contract flip, EXECUTED (v5.30)
+# The return contract
 # ---------------------------------------------------------------------------
-# The F1 decision (four costed options in
-# ``docs/roadmap_deferred_2026_07_21.md``) landed as **option 4**: make the
-# shape-stable :class:`~lumenairy.propagators.PropagationResult` the DEFAULT
-# return while keeping the kernels' native shapes reachable behind an explicit
-# ``return_result=False``.  v5.30 first shipped only the announcement (a
-# registry-scheduled ``DeprecationWarning`` plus a falsy sentinel default);
-# the owner then chose to EXECUTE the flip in the same release rather than
-# ship a warning about a change nobody could yet see -- the same call the W5
-# shim-removal wave made (see ``lumenairy/_deprecation.py``'s tombstones and
-# the CHANGELOG's ``### Changed (BREAKING)`` section).
-#
-# As shipped:
-#
 #   * ``return_result`` UNSET -- a ``PropagationResult`` for **every** method.
 #     ``.field`` / ``.dx`` / ``.dy`` are defined whichever kernel ran, so the
-#     return shape no longer depends on ``z``.  That is the P5 finding closed.
-#   * ``return_result=False`` -- the kernels' native shapes (bare ndarray OR
-#     ``(E, dx_out, dy_out)``), bit-for-bit as before the flip.  A PERMANENT,
-#     documented escape hatch: the migration path for ``E, dxo, dyo``
-#     unpackers (``PropagationResult`` iteration stays 2-item, audit P16) and
-#     for wrapper-free fast loops.  It is not deprecated and nothing is
-#     scheduled against it.
-#   * ``return_result=True`` -- unchanged.
+#     return shape does not depend on ``z``.
+#   * ``return_result=False`` -- the kernels' native shapes (a bare ndarray OR
+#     an ``(E, dx_out, dy_out)`` triple).  A PERMANENT, documented escape
+#     hatch: the migration path for ``E, dxo, dyo`` unpackers
+#     (``PropagationResult`` iteration is 2-item, audit P16) and for
+#     wrapper-free fast loops.  It is not deprecated and nothing is scheduled
+#     against it.
+#   * ``return_result=True`` -- the same wrapper the default hands back.
 #
-# Retired WITH the flip (tombstone, v5.30): the transition
-# ``DeprecationWarning`` (``_p5_transition_message``), its external-caller
-# predicate (``_caller_is_internal``), ``_P5_DEPRECATED_SINCE`` /
-# ``_P5_UNSTABLE_RETURN_TYPES``, and the ``API_TRANSITION_VERSION`` /
-# ``resolve_removal_version`` imports that resolved its horizon.  A warning
-# whose text is "the default WILL become a PropagationResult in vX" cannot
-# outlive the version that makes it a PropagationResult; leaving it would
-# advertise a future change that has already happened -- the exact
-# registry-rot class the horizon mechanism exists to prevent.  Its purpose is
-# served by the decision record that replaces it: this block, ``propagate``'s
-# docstring, the roadmap's F1 EXECUTED entry, and the CHANGELOG.  Nothing
-# remains to warn a *caller* about: the default is now the stable contract and
-# the alternative is an explicit, supported argument.
-#
-# The ``_NO_DEFAULT`` sentinel STAYS as the parameter default (rather than
-# becoming a literal ``True``) because the two are different statements:
-# ``True`` says "this caller asked for the wrapper", the sentinel says "this
-# caller did not choose, so the library's stable contract applies".  Keeping it
-# means the distinction the transition measured stays available to any future
-# contract decision, and ``inspect.signature(propagate)`` stays honest about
-# which values are a *choice*.
+# The ``_NO_DEFAULT`` sentinel is the parameter default rather than a literal
+# ``True`` because the two are different statements: ``True`` says "this
+# caller asked for the wrapper", the sentinel says "this caller did not
+# choose, so the library's stable contract applies".  Keeping it means that
+# distinction stays available to any future contract decision, and
+# ``inspect.signature(propagate)`` stays honest about which values are a
+# *choice*.
 #
 # WARNING for future edits: the sentinel is FALSY.  ``if not return_result``
-# would route it to the legacy contract -- i.e. silently un-flip this change.
-# :func:`propagate` therefore resolves it ONCE, up front, into a local ``wrap``
-# flag and routes on that; do the same in any new branch.
+# would route it to the legacy contract -- i.e. silently un-flip this
+# contract.  :func:`propagate` therefore resolves it ONCE, up front, into a
+# local ``wrap`` flag and routes on that; do the same in any new branch.
+#
+# How the default came to be the wrapper (audit P5 / roadmap Part F1) and
+# what the retired transition warning said:
+# ``docs/history/lumenairy.propagators.dispatch.md``.
+# ---------------------------------------------------------------------------
 
 
 def propagate(
@@ -123,12 +94,12 @@ def propagate(
     accuracy: str = 'balanced',
     output_grid: Optional[tuple] = None,
     output_dx: Optional[float] = None,
-    # v5.30 (audit P5 / roadmap F1, EXECUTED): the default is the "not passed"
-    # sentinel, NOT a literal ``True``, so "the library's stable contract
-    # applies" stays distinguishable from "this caller asked for the wrapper".
-    # It resolves to the STABLE contract (a PropagationResult).  ``_NO_DEFAULT``
-    # is FALSY, so it must never be routed on directly -- it is resolved once
-    # into ``wrap`` below.  See the flip block at the top of this module.
+    # The default is the "not passed" sentinel, NOT a literal ``True``, so
+    # "the library's stable contract applies" stays distinguishable from
+    # "this caller asked for the wrapper".  It resolves to the STABLE
+    # contract (a PropagationResult).  ``_NO_DEFAULT`` is FALSY, so it must
+    # never be routed on directly -- it is resolved once into ``wrap``
+    # below.  See the return-contract block at the top of this module.
     return_result: Any = _NO_DEFAULT,
     **method_kwargs: Any,
 ) -> Any:
@@ -145,29 +116,25 @@ def propagate(
        :class:`~lumenairy.propagators.PropagationResult` for **every**
        method: ``.field`` / ``.dx`` / ``.dy`` are defined whichever kernel
        ran, and ``np.asarray(result)`` yields the field, so the return
-       shape no longer depends on ``z``.  Pre-v5.30 the default was the
-       chosen kernel's native shape -- a bare ``ndarray`` *or* an
-       ``(E, dx_out, dy_out)`` triple, see the table below -- which is the
-       instability P5 raised.
+       shape does not depend on ``z``.
 
-       * ``return_result=False`` -- the native shapes, bit-for-bit as
-         before the flip.  A **permanent, supported escape hatch**, not a
+       * ``return_result=False`` -- the kernels' native shapes, per the
+         table below.  A **permanent, supported escape hatch**, not a
          deprecated one: it is the migration for code that unpacks
          ``E, dxo, dyo`` and for fast loops that want no wrapper
          allocation.
-       * ``return_result=True`` -- unchanged, and now the same contract the
-         default hands back.
+       * ``return_result=True`` -- the same contract the default hands
+         back.
 
-       ``PropagationResult`` iteration did **not** move to 3 items at the
-       flip (audit P16): it stays ``(field, intermediates)``, which is what
-       ``E, inter = propagate_through_system(..., return_result=True)``
-       needs.  Re-arity-ing it would have traded one breakage for another,
-       and option 4 does not require it -- ``return_result=False`` is the
-       migration path for 3-tuple unpackers.
+       ``PropagationResult`` iteration is **2-item**
+       (``(field, intermediates)``), which is what ``E, inter =
+       propagate_through_system(..., return_result=True)`` needs -- so it
+       is not a drop-in for a 3-tuple unpack (audit P16).
+       ``return_result=False`` is the migration path for those.
 
-       The transition :class:`DeprecationWarning` that announced this flip
-       while it was still scheduled is retired with the flip itself: the
-       default it pointed callers away from no longer exists.
+       Nothing here is deprecated: the transition
+       :class:`DeprecationWarning` that announced this contract while it
+       was still scheduled is retired with the flip itself.
 
     .. versionchanged:: 5.30
        Default return became ``PropagationResult`` for every method
@@ -192,10 +159,9 @@ def propagate(
     * **sas** -- native return ``(E, dx_out, dy_out)``; output pitch
       ``lambda*z / (pad*N*dx)``.  Chosen for free space when
       ``N_F >= 0.1`` and ``Q > 1`` **and no output grid was requested**.
-      v5.31 (audit W9-1): with ``output_grid`` / ``output_dx`` given, that
-      band selects ``asm`` instead (SAS has no output-grid path, so
-      selecting it raised a ``ValueError`` naming a kernel the caller
-      never wrote); ``asm`` auto-promotes to the exact
+      With ``output_grid`` / ``output_dx`` given, that band selects
+      ``asm`` instead -- SAS has no output-grid path -- and ``asm``
+      auto-promotes to the exact
       :func:`angular_spectrum_propagate_mft`.
     * **fraunhofer** -- native return ``(E, dx_out, dy_out)``; output
       pitch ``lambda*z / (N*dx)``.  Chosen for free space when
@@ -226,14 +192,8 @@ def propagate(
     so there is no shape instability left to report.
 
     .. note::
-       The shapes in the table above are bit-for-bit what pre-v5.30
-       releases returned by default; v5.30 changed *which of them you get
-       without asking*, not what any of them contain.  The deferred
-       four-option costing that chose this route (option 4) is recorded in
-       ``docs/roadmap_deferred_2026_07_21.md`` Part F1 (audit P5), with the
-       bit-identity evidence for both explicit modes.  ``return_result``
-       is the only knob: there is no version-scheduled behaviour left here
-       and no deprecation attached to either value.
+       ``return_result`` is the only knob here: no version-scheduled
+       behaviour and no deprecation is attached to either value.
 
     Parameters
     ----------
@@ -247,9 +207,9 @@ def propagate(
           :func:`~lumenairy.propagate_through_system`.  Both spellings of
           Rayleigh-Sommerfeld resolve to ``'rs'``, which this entry point
           supports natively (the chain rejects it).
-        * unset in any other situation -- ``'auto'``, bit-for-bit the
-          pre-v5.31 behaviour.  "Any other situation" is: the knob still holds
-          its shipped value, **or** a ``prescription`` was supplied.  The knob
+        * unset in any other situation -- ``'auto'``.  "Any other situation"
+          is: the knob still holds its shipped value, **or** a
+          ``prescription`` was supplied.  The knob
           names free-space kernels only, and MEASURED,
           ``propagate(E, prescription=rx, method='asm')`` returns the input
           UNCHANGED (``z`` is None on that path, so ASM takes its
@@ -291,30 +251,21 @@ def propagate(
           ``output_dx`` is given.
         - SAS / RS do not support arbitrary output-grid sampling and
           raise ``ValueError`` (pointing at the ASM-MFT entry point)
-          if ``output_grid`` / ``output_dx`` is passed.  Since v5.31
-          ``method='auto'`` no longer *selects* SAS when an output grid is
+          if ``output_grid`` / ``output_dx`` is passed.
+          ``method='auto'`` does not *select* SAS when an output grid is
           requested (audit W9-1), so that raise is reachable only by
           naming ``method='sas'`` yourself.
         - Maslov / asymptotic / MHS do not thread the request to their
           kernels and raise ``ValueError`` naming the members that do
-          (v5.31, audit W9-4).  Pre-v5.31 the request was silently
-          dropped -- and with the ``output_dx`` shortcut the returned
-          ``PropagationResult.dx`` reported the requested pitch while the
-          field was still at the input pitch.
-        - The pitch reported on the result honours **either** form: since
-          v5.31 ``output_grid=(N_out, dx_out)`` sets
-          ``PropagationResult.dx`` to ``dx_out`` (audit W9-5); pre-fix
-          only the ``output_dx`` shortcut did, so an ``output_grid`` call
-          came back labelled with the input pitch even though the field
-          had genuinely been resampled.
+          (audit W9-4).
+        - The pitch reported on the result honours **either** form:
+          ``output_grid=(N_out, dx_out)`` sets ``PropagationResult.dx``
+          to ``dx_out``, as does the ``output_dx`` shortcut (audit W9-5).
 
         ``output_grid`` may be a ``(N_out, dx_out)`` tuple or a
         ``{'N': ..., 'dx': ...}`` dict.  ``output_dx`` is a shortcut
         when only the pitch needs to change (``N_out`` defaults to
-        the input ``N``).  Pre-4.12 the ASM family silently dropped
-        these kwargs and returned a bare-grid output at the input
-        pitch -- a quiet wrong-physics path that audit round-4 B1-8
-        flagged.
+        the input ``N``).
     return_result : bool, optional
         Selects the return contract.  **Unset (the default) is the stable
         contract: a ``PropagationResult`` for every method** (v5.30, audit
@@ -327,19 +278,15 @@ def propagate(
         propagator output (typically a complex ndarray) -- preserving
         backward compatibility and zero-overhead fast loops.
 
-        **``False`` is permanent and un-deprecated**, and is exactly how
-        pre-v5.30 callers keep their shapes: ``propagate(...,
-        return_result=False)`` is bit-for-bit the pre-flip default.  The
-        sentinel default is kept (rather than a literal ``True``) so the
-        library can still tell "did not choose -- give me the stable
-        contract" apart from "this caller asked for the wrapper"; both
-        resolve to the same return today.
+        **``False`` is permanent and un-deprecated.**  The sentinel default
+        is kept (rather than a literal ``True``) so the library can still
+        tell "did not choose -- give me the stable contract" apart from
+        "this caller asked for the wrapper"; both resolve to the same
+        return today.
 
-        4.12: for tuple-returning kernels (Fresnel / Fraunhofer / SAS
-        return ``(E, dx_out, dy_out)``) the wrapped result now reports
-        the kernel's **output** dx, not the input dx.  Pre-4.12 audit
-        round-4 B1-7: tuple unpacking silently failed, ``field`` was
-        ``None``, and ``dx`` was the input pitch.
+        For tuple-returning kernels (Fresnel / Fraunhofer / SAS return
+        ``(E, dx_out, dy_out)``) the wrapped result reports the kernel's
+        **output** dx, not the input dx.
 
         .. warning::
            **The wrapper is not a drop-in for the un-wrapped tuple**
@@ -357,11 +304,9 @@ def propagate(
 
            Read the attributes (``.field``, ``.dx_out``, ``.dy_out``)
            instead of unpacking.  The 2-item iteration is pinned
-           behaviour and did not change **at the F1 flip either**, which
-           was decided explicitly in the same pass rather than left as a
-           collision (audit P16).  ``return_result=False`` is the supported
-           migration for ``E, dxo, dyo`` unpackers -- and since v5.30 they
-           must pass it, because the bare 3-tuple is no longer the default.
+           behaviour (audit P16).  ``return_result=False`` is the
+           supported migration for ``E, dxo, dyo`` unpackers, and they
+           must pass it: the bare 3-tuple is not the default.
 
     Warns
     -----
@@ -373,9 +318,7 @@ def propagate(
         ``method='sas'`` / ``'fresnel'`` / ``'fraunhofer'`` calls are
         silent: the caller named that kernel and knows its contract.  The
         default and ``return_result=True`` are silent too -- both deliver
-        the shape-stable wrapper, so the diagnostic has nothing to report
-        (v5.30: pre-flip this also fired on the default path, which was
-        then the legacy contract).
+        the shape-stable wrapper, so the diagnostic has nothing to report.
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard for PartialCoherenceMCF
     # and non-2-D inputs via the shared ``_check_2d_scalar_field``
@@ -408,15 +351,13 @@ def propagate(
             prescription=prescription, accuracy=accuracy,
             output_requested=(output_grid is not None or output_dx is not None))
 
-    # v5.30 (audit P5 / roadmap F1 option 4, EXECUTED): resolve the return
-    # contract ONCE, here, and route on ``wrap`` alone below.  ``_NO_DEFAULT``
-    # ("caller did not choose") resolves to the STABLE contract -- that is the
-    # flip.  Every other value keeps its truthiness, so an explicit
-    # ``return_result=False`` (and any other falsy value a pre-flip caller
-    # passed) still selects the kernels' native shapes, bit-for-bit as before.
+    # Resolve the return contract ONCE, here, and route on ``wrap`` alone
+    # below.  ``_NO_DEFAULT`` ("caller did not choose") resolves to the
+    # STABLE contract; every other value keeps its truthiness, so an
+    # explicit ``return_result=False`` selects the kernels' native shapes.
     # Do NOT test ``return_result`` directly in new code: the sentinel is
-    # falsy, so ``if not return_result`` would silently restore the pre-flip
-    # default and un-do this change.
+    # falsy, so ``if not return_result`` would silently restore the legacy
+    # contract.
     wrap = True if return_result is _NO_DEFAULT else bool(return_result)
 
     out = _dispatch_to_method(
@@ -429,17 +370,16 @@ def propagate(
     )
     if not wrap:
         # The legacy contract, reached only by asking for it
-        # (``return_result=False``) since the v5.30 flip.  v5.30 (audit P5):
-        # the auto-selector can hand back a bare ndarray at the input pitch OR
-        # an ``(E, dx_out, dy_out)`` triple at a kernel-chosen pitch, decided
-        # purely by ``z`` -- and the caller has no way to know which without
-        # re-running the selector.  This warning says so, out loud, exactly
-        # when it bites: ``auto`` chose a grid-changing kernel and the caller
-        # opted out of the shape-stable wrapper.  The reported pitch is read
-        # off the kernel's own return, so no formula is duplicated here.
-        # Post-flip this is the ONLY place either shape-warning survives: the
-        # default and ``return_result=True`` both return the wrapper, whose
-        # shape does not depend on z, so there is nothing to warn about.
+        # (``return_result=False``).  The auto-selector can hand back a bare
+        # ndarray at the input pitch OR an ``(E, dx_out, dy_out)`` triple at
+        # a kernel-chosen pitch, decided purely by ``z`` -- and the caller
+        # has no way to know which without re-running the selector.  This
+        # warning says so, out loud, exactly when it bites: ``auto`` chose a
+        # grid-changing kernel and the caller opted out of the shape-stable
+        # wrapper.  The reported pitch is read off the kernel's own return,
+        # so no formula is duplicated here.  It is the ONLY surviving shape
+        # warning: the default and ``return_result=True`` both return the
+        # wrapper, whose shape does not depend on z.
         if auto_selected and method in _GRID_CHANGING_METHODS:
             warnings.warn(
                 _auto_grid_change_message(method, out, dx),
@@ -447,29 +387,21 @@ def propagate(
         return out
 
     from .result import PropagationResult
-    # v5.31 (audit W9-5): the requested output pitch can arrive EITHER as the
-    # ``output_dx`` shortcut OR as the second element of the canonical
-    # ``output_grid = (N_out, dx_out)`` tuple / ``{'N': ..., 'dx': ...}`` dict.
-    # Pre-fix only the shortcut was read here, so an ``output_grid=(96, 80e-6)``
-    # call -- which every honouring kernel really does resample to 80 um (the
-    # field is bit-identical to additionally passing ``output_dx=80e-6``) --
-    # came back labelled with the INPUT pitch.  MEASURED on a 64^2 / dx=40 um
-    # probe: ``propagate(..., output_grid=(96, 80e-6))`` returned
-    # ``field.shape == (96, 96)`` with ``result.dx == 4e-05`` for asm (via the
-    # MFT promotion) and for gbd / hf / hfpi (which forward the request), i.e.
-    # the wrapper's own sampling metadata was wrong by 2x on the DEFAULT
-    # (post-P5-flip) contract, for every downstream coordinate / plot / store
-    # consumer.  Kernels that report their own ``dx_out`` still win below.
+    # The requested output pitch can arrive EITHER as the ``output_dx``
+    # shortcut OR as the second element of the canonical
+    # ``output_grid = (N_out, dx_out)`` tuple / ``{'N': ..., 'dx': ...}``
+    # dict.  Both must be read here, or the wrapper's own sampling metadata
+    # is wrong for every downstream coordinate / plot / store consumer
+    # (audit W9-5).  Kernels that report their own ``dx_out`` still win
+    # below.
     default_out_dx = _requested_output_dx(output_grid, output_dx)
     if default_out_dx is None:
         default_out_dx = dx
     # Best-effort: bare ndarray -> wrap directly; tuple / list / other
     # -> unpack the field and record the propagator-reported output
-    # pitch when present.  4.12 fix (audit round-4 B1-7): kernels like
-    # fresnel_propagate / fraunhofer_propagate / scalable_angular_spectrum_propagate
-    # return ``(E, dx_out, dy_out)``; pre-4.12 the tuple path went
-    # through _coerce_field which silently dropped to None and reported
-    # the INPUT dx instead of the kernel's output dx.
+    # pitch when present: kernels like fresnel_propagate /
+    # fraunhofer_propagate / scalable_angular_spectrum_propagate return
+    # ``(E, dx_out, dy_out)`` and the OUTPUT dx is the one to record.
     if isinstance(out, np.ndarray):
         return PropagationResult(
             field=out, dx=default_out_dx, wavelength=wavelength,
@@ -479,17 +411,13 @@ def propagate(
     if isinstance(out, PropagationResult):
         return out
     field_arr, dx_from_kernel, dy_from_kernel = _coerce_field(out)
-    # v5.31 (audit W9-6): the whole point of the P5 flip is that ``.field`` is
-    # defined "whichever kernel ran".  ``_coerce_field`` has a ``(None, None,
-    # None)`` sentinel for returns it cannot read, and pre-fix that sentinel was
-    # wrapped as-is -- so the flipped contract handed back a
-    # ``PropagationResult(field=None)`` in complete silence.  MEASURED:
-    # ``propagate(E, method='mhs', subdomains=[...], return_intermediate=True)``
-    # -> ``PropagationResult`` with ``field is None``, no warning.  (MHS's
-    # native shape there is a ``list`` of ``(HuygensSurface, ndarray)`` pairs,
-    # and ``return_intermediate=True`` is MhsPipeline.run's OWN default -- the
-    # dispatcher merely defaults it to False.)  A wrapper that cannot honour its
-    # own contract must say so rather than emit a null field.
+    # The point of the wrapper contract is that ``.field`` is defined
+    # "whichever kernel ran".  ``_coerce_field`` returns a ``(None, None,
+    # None)`` sentinel for returns it cannot read -- e.g. ``method='mhs'``
+    # with ``return_intermediate=True``, whose native shape is a ``list``
+    # of ``(HuygensSurface, ndarray)`` pairs -- and a wrapper that cannot
+    # honour its own contract must say so rather than emit a null field
+    # (audit W9-6).
     if field_arr is None:
         raise ValueError(
             f"propagate(method={method!r}): the kernel returned a "
@@ -504,11 +432,10 @@ def propagate(
             f"argument that makes the kernel return a sequence (e.g. "
             f"return_intermediate=True) to get a single output plane.")
     out_dx = dx_from_kernel if dx_from_kernel is not None else default_out_dx
-    # v4.13.0 (audit L3): thread the kernel-reported ``dy_out`` onto
-    # the wrapped result.  For square-grid kernels that only return
-    # ``dx_out`` (or a bare ndarray) ``dy`` falls back to ``out_dx``,
-    # preserving back-compat.  Pre-fix the y-pitch was silently
-    # discarded for anamorphic Fresnel / Fraunhofer / SAS calls.
+    # Thread the kernel-reported ``dy_out`` onto the wrapped result.  For
+    # square-grid kernels that only return ``dx_out`` (or a bare ndarray)
+    # ``dy`` falls back to ``out_dx``; an anamorphic Fresnel / Fraunhofer /
+    # SAS call is what needs the reported value (audit L3).
     out_dy = dy_from_kernel if dy_from_kernel is not None else out_dx
     return PropagationResult(
         field=field_arr,
@@ -566,14 +493,6 @@ def _coerce_field(x):
     * ``dx_out`` / ``dy_out`` are the propagator-reported output grid
       pitches if the kernel returns a ``(E, dx_out, ...)`` /
       ``(E, dx_out, dy_out)`` tuple, else ``None``.
-    * v4.13.0 (audit L3): the triple-return is the closure for the
-      anamorphic Fresnel info-loss bug -- pre-fix ``_coerce_field``
-      ignored the third tuple element, silently discarding the y-axis
-      pitch for any anamorphic Fresnel / Fraunhofer / SAS propagation.
-    * 4.12 fix (audit round-4 B1-7): pre-4.12 the tuple-returning
-      propagators (fresnel/fraunhofer/SAS) silently yielded
-      ``field=None`` and ``dx=<input pitch>`` instead of the kernel's
-      real output.
 
     The dispatcher records ``dx_out`` on :attr:`PropagationResult.dx`
     and ``dy_out`` on :attr:`PropagationResult.dy`; when the kernel
@@ -698,23 +617,15 @@ def _requested_output_dx(output_grid, output_dx):
         return None
 
 
-# v5.31 (audit W9-4): the methods whose dispatcher branch does NOT thread
-# ``output_grid`` / ``output_dx`` to its kernel.  ``maslov`` is the default
-# ``method='auto'`` choice for any prescription without aspherics, so this was
-# the most-travelled silent-drop path in the dispatcher.  MEASURED pre-fix on a
-# 64^2 / dx=40 um singlet probe:
-#
-#   propagate(E, prescription=rx, output_dx=80e-6)
-#     -> field BIT-IDENTICAL to the no-request call (still 40 um sampling)
-#        but PropagationResult.dx reported 8e-05  <-- wrong metadata
-#   propagate(E, prescription=rx, output_grid=(96, 80e-6))
-#     -> shape (64, 64), dx 4e-05: the request vanished entirely, silently
-#
-# ``gbd`` / ``hf`` / ``hfpi`` all honour both forms (measured: shape 64->96 and
-# dx 40->80 um), so the diagnostic names them.  Raising here is the 4.12 B1-8
-# treatment already given to ``sas`` / ``rs``; the alternative (silently
-# switching ``auto`` to ``gbd``) would trade a wrong answer for an unannounced
-# 100x slowdown and a different physics model.
+# The methods whose dispatcher branch does NOT thread ``output_grid`` /
+# ``output_dx`` to its kernel, so the dispatcher must refuse rather than let
+# the request vanish (audit W9-4).  ``maslov`` is the default
+# ``method='auto'`` choice for any prescription without aspherics, so this is
+# the most-travelled such path.  ``gbd`` / ``hf`` / ``hfpi`` honour both forms
+# (measured: shape 64->96 and dx 40->80 um), so the diagnostic names them.
+# Raising is the 4.12 B1-8 treatment already given to ``sas`` / ``rs``; the
+# alternative -- silently switching ``auto`` to ``gbd`` -- would trade a wrong
+# answer for an unannounced 100x slowdown and a different physics model.
 _NO_OUTPUT_GRID_METHODS = ('maslov', 'asymptotic', 'mhs')
 
 _OUTPUT_GRID_CAPABLE_METHODS = ('gbd', 'hf', 'hfpi')
@@ -725,20 +636,15 @@ _OUTPUT_GRID_CAPABLE_METHODS = ('gbd', 'hf', 'hfpi')
 _DOE_KWARGS = ('surface_diffraction', 'diffracting_surfaces')
 _DOE_CAPABLE_METHODS = ('hfpi', 'asymptotic')
 
-# v5.31 (audit W9-10): keyword-only arguments the kernel behind each method
-# REQUIRES and cannot default.  Pre-fix the dispatcher forwarded ``**kwargs``
-# blind and the caller got a raw ``TypeError`` naming a function they never
-# called -- e.g. ``propagate(method='hfpi', prescription=rx)`` ->
-# ``TypeError: propagate_hfpi_through_prescription() missing 1 required
-# keyword-only argument: 'n_paths'`` and
-# ``propagate(method='asymptotic', prescription=rx)`` ->
-# ``TypeError: propagate_modal_asymptotic() missing 2 required keyword-only
-# arguments: 's2_grid_x' and 's2_grid_y'``.  Two of the twelve VALID_METHODS
-# were therefore unusable through this entry point as documented.  Deliberately
-# NO invented defaults: ``n_paths`` is a Monte-Carlo budget and ``s2_grid_*``
-# are output-plane grids: any value the dispatcher picked would be a silent
-# accuracy decision.  The 4.12 B1-6 rule -- raise from the dispatcher, naming
-# :func:`propagate` and everything that is missing.
+# Keyword-only arguments the kernel behind each method REQUIRES and cannot
+# default.  Without this table the dispatcher forwards ``**kwargs`` blind and
+# the caller gets a raw ``TypeError`` naming a function they never called --
+# ``propagate_hfpi_through_prescription`` missing ``n_paths``,
+# ``propagate_modal_asymptotic`` missing ``s2_grid_x`` / ``s2_grid_y``.
+# Deliberately NO invented defaults: ``n_paths`` is a Monte-Carlo budget and
+# ``s2_grid_*`` are output-plane grids, so any value the dispatcher picked
+# would be a silent accuracy decision.  The 4.12 B1-6 rule -- raise from the
+# dispatcher, naming :func:`propagate` and everything that is missing.
 _REQUIRED_METHOD_KWARGS = {
     ('hfpi', True): (
         ('n_paths',),
@@ -833,58 +739,28 @@ def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
     ----------
     output_requested : bool, default False
         True when the caller passed ``output_grid`` / ``output_dx`` to
-        :func:`propagate`.  v5.31 (audit W9-1): ``sas`` has no output-grid
-        path -- :func:`_dispatch_bare_grid_with_output` raises for it -- so
-        selecting it for a caller who asked for one produced a ``ValueError``
-        naming a kernel the caller never wrote, decided purely by ``z``.
-        MEASURED pre-fix at N=64, dx=2 um, lambda=633 nm: ``output_dx=3e-6``
-        succeeded at ``z=1e-4`` (asm) and ``z=5`` (fraunhofer) and raised
-        ``"propagate(method='sas', ...): SAS does not support arbitrary
-        output-grid sampling"`` at ``z=1e-3``.  With ``output_requested`` the
-        ``Q > 1`` band selects ``asm`` instead, which auto-promotes to the
-        EXACT :func:`angular_spectrum_propagate_mft` -- precisely the remedy
-        that SAS error message recommends, applied automatically.  This is the
-        4.12 B1-6 rule ("never route the user into a hard-raise from a kernel
-        they did not pick by name") applied to the B1-8 feature.  ``fraunhofer``
-        is left alone: it has an MFT variant.  Routing with no output-grid
-        request is bit-for-bit unchanged.
+        :func:`propagate`.  ``sas`` has no output-grid path --
+        :func:`_dispatch_bare_grid_with_output` raises for it -- so with
+        ``output_requested`` the ``Q > 1`` band selects ``asm`` instead,
+        which auto-promotes to the EXACT
+        :func:`angular_spectrum_propagate_mft`: precisely the remedy that
+        the SAS error message recommends, applied automatically (audit
+        W9-1).  This is the 4.12 B1-6 rule ("never route the user into a
+        hard-raise from a kernel they did not pick by name") applied to the
+        B1-8 feature.  ``fraunhofer`` is left alone: it has an MFT variant.
     """
     if prescription is not None:
-        # v5.31 (audit W9-9): the DOE -> 'hfpi' branch that used to sit here is
-        # GONE.  It keyed on ``prescription['events_json']``, a key that at
-        # HEAD occurs exactly ONCE in the repository -- in this file.  No
-        # loader (``load_zemax_zmx``) and no factory (``make_singlet`` /
-        # ``make_doublet`` / ...) has ever emitted it, so the branch could not
-        # fire; and when forced (by hand-injecting the key) it routed to a call
-        # that immediately raised
-        # ``TypeError: propagate_hfpi_through_prescription() missing 1 required
-        # keyword-only argument: 'n_paths'``.  Dead AND broken.
-        #
-        # It could not be repaired by pointing at a different key either:
-        # MEASURED, this library has NO prescription-embedded DOE
-        # representation at all.  Diffractive information travels as the
+        # There is NO prescription-embedded DOE representation in this
+        # library, so this selector has nothing to detect and carries no DOE
+        # branch.  Diffractive information travels as the
         # ``surface_diffraction`` / ``diffracting_surfaces`` KWARGS
         # (``{surf_index: (m_x, m_y, period_x, period_y)}``), accepted by
         # ``propagate_hfpi_through_prescription`` and
         # ``fit_canonical_polynomials`` and by nothing else --
         # ``apply_real_lens_maslov`` has no DOE parameter and raises on one.
-        # There is therefore nothing on the prescription to detect.
-        #
-        # Nor was there a measured case for routing to ``hfpi`` automatically.
-        # On the one analytic oracle available (a thin air-to-air grating, exit
-        # centroid at ``t*tan(asin(m*lambda/Lambda))``), hfpi WITH
-        # ``surface_diffraction`` missed the order-1 deflection by 85-97%
-        # (period 40/20 um) -- no better than maslov's 100% -- so it is not
-        # measurably the better automatic choice.  (That hfpi result is a
-        # separate, undiagnosed finding recorded for an HFPI-interiors audit;
-        # it is NOT evidence about routing beyond "no basis to prefer it".)
-        #
-        # What replaces the branch is honesty at the point of use: DOE kwargs
-        # handed to a member that cannot accept them now raise a
-        # dispatcher-level error naming the members that can, instead of the
-        # raw ``apply_real_lens_maslov() got an unexpected keyword argument
-        # 'surface_diffraction'`` a caller used to get from a kernel they never
-        # named.  See ``_DOE_KWARGS`` in :func:`_dispatch_to_method`.
+        # DOE kwargs handed to a member that cannot accept them therefore
+        # raise a dispatcher-level error naming the members that can; see
+        # ``_DOE_KWARGS`` in :func:`_dispatch_to_method` (audit W9-9).
 
         # Inspect surfaces for aspherics and hard apertures.
         surfs = prescription.get('surfaces') or []
@@ -1130,15 +1006,11 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
     # the MFT variant or raise a clear ValueError.  Free-space GBD /
     # HFPI / HF *do* take output_grid / output_dx and forward them
     # through their own dispatch below.
-    # v5.31 (audit W9-9): DOE / grating kwargs handed to a member that cannot
-    # accept them.  MEASURED pre-fix: ``propagate(E, prescription=rx,
-    # surface_diffraction={0: (1, 0, 20e-6, 20e-6)})`` -- the library's own way
-    # to declare a grating -- auto-selected ``maslov`` and died with
-    # ``TypeError: apply_real_lens_maslov() got an unexpected keyword argument
-    # 'surface_diffraction'``, from a kernel the caller never named.  The
-    # ``events_json`` prescription check that was meant to catch this could
-    # never fire (audit W9-9, see ``_auto_select_method``); the declaration the
-    # library actually uses is a kwarg, and it is visible right here.
+    # DOE / grating kwargs handed to a member that cannot accept them.  The
+    # library declares a grating as a KWARG, never on the prescription, so
+    # ``method='auto'`` cannot detect one -- the check has to happen here,
+    # where the kwargs are visible, or the caller dies inside a kernel they
+    # never named (audit W9-9).
     _doe_given = [k for k in _DOE_KWARGS if k in kwargs]
     if _doe_given and method not in _DOE_CAPABLE_METHODS:
         raise ValueError(
@@ -1156,12 +1028,11 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
     # v5.31 (audit W9-10): required kernel kwargs the caller must supply.
     _check_required_method_kwargs(method, kwargs, prescription is not None)
 
-    # v5.31 (audit W9-4): ``maslov`` / ``asymptotic`` / ``mhs`` never thread
-    # ``output_grid`` / ``output_dx`` to their kernels, and pre-fix the request
-    # was dropped in silence -- with the ``output_dx`` shortcut the wrapper even
-    # LABELLED the un-resampled field with the requested pitch.  Say so, out
-    # loud, and name the members that do honour it (measured: gbd / hf / hfpi
-    # all resample).  Same treatment ``sas`` / ``rs`` got in 4.12 (B1-8).
+    # ``maslov`` / ``asymptotic`` / ``mhs`` never thread ``output_grid`` /
+    # ``output_dx`` to their kernels, so the request has to be refused here
+    # rather than dropped.  Name the members that do honour it (measured:
+    # gbd / hf / hfpi all resample).  Same treatment ``sas`` / ``rs`` got in
+    # 4.12 (B1-8).
     if method in _NO_OUTPUT_GRID_METHODS and (output_grid is not None
                                               or output_dx is not None):
         raise ValueError(
@@ -1257,19 +1128,13 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
             propagate_hfpi_through_prescription,
         )
         if prescription is None:
-            # v5.31 (audit W9-10): the precondition check that used to live
-            # here named ONLY ``aperture_radius`` -- "needs at least an
-            # aperture geometry" -- while the kernel also requires
-            # ``z_to_aperture``, ``z_aperture_to_output`` and ``n_paths``, so
-            # supplying just the advertised one still produced
-            # ``TypeError: propagate_hfpi_freespace_aperture() missing 3
-            # required keyword-only arguments`` (MEASURED).  All four are now
-            # checked together, up front, by
-            # ``_check_required_method_kwargs`` via ``_REQUIRED_METHOD_KWARGS``.
-            # v5.2.5 (AUDIT_V5_2_3 P2-F1-1): thread the resolved
-            # ``output_grid``/``output_dx`` through the freespace
-            # branch too.  v5.2.3 fixed the through-prescription path
-            # but the freespace branch silently dropped them.
+            # The freespace kernel requires ``aperture_radius``,
+            # ``z_to_aperture``, ``z_aperture_to_output`` and ``n_paths``;
+            # all four are checked together, up front, by
+            # ``_check_required_method_kwargs`` via
+            # ``_REQUIRED_METHOD_KWARGS`` (audit W9-10).  The resolved
+            # ``output_grid`` / ``output_dx`` are threaded through this
+            # branch as well as the through-prescription one.
             _shape, _dx_out = _resolve_dispatcher_output_grid(
                 method, output_grid, output_dx, E_in.shape)
             if _shape is not None or _dx_out is not None:
@@ -1427,63 +1292,25 @@ def _select_asm_variant(
     the selector deliberately keys on the grid extent so the choice is
     reproducible from the field shape alone.
 
-    .. versionchanged:: 5.31
-       Two audit-W9 fixes, both bringing this selector in line with rules its
-       twin :func:`_auto_select_method` has carried since 4.12:
+    Three rules this selector shares with its twin
+    :func:`_auto_select_method` (audit W9):
 
-       * **Back-propagation (W9-2).**  ``z < 0`` can no longer select ``sas`` /
-         ``fraunhofer``.  Those kernels are forward-only and raised on the sign
-         of ``z``, so :func:`asm_propagate` -- which runs whatever this returns
-         -- crashed for any back-propagation past ``2 * L^2/(N*lambda)``.
-         MEASURED pre-fix at N=64, dx=2 um, lambda=633 nm (threshold
-         4.0442e-4 m): ``z=-1.2133e-3`` -> ``sas`` ->
-         ``"scalable_angular_spectrum_propagate: z must be > 0"``;
-         ``z=-1.2133e-2`` -> ``fraunhofer`` -> the analogous raise.  Every
-         ASM-family member (``asm`` / ``asm_tilted`` / ``asm_mft``) accepts
-         either sign, so the negative-``z`` case now stays inside that set --
-         the 4.12 B1-6 guard, ported.
-       * **Dropped tilt (W9-3).**  The ``asm_mft`` branch sits ABOVE the tilt
-         branch and :func:`angular_spectrum_propagate_mft` has no ``tilt_x`` /
-         ``tilt_y`` parameter, so a tilt passed alongside ``output_dx``
-         vanished in complete silence: MEASURED bit-identical output
-         (``max|difference| = 0.0``) for ``tilt_x=0.05`` versus ``tilt_x=0.0``
-         at N=64, dx=2 um, z=5e-4, output_dx=3e-6.  The precedence is kept
-         (there is no tilted-MFT kernel to route to) but the collision now
-         emits a :class:`UserWarning` -- the same call v5.30 made for the
-         sibling case, the legacy ``'propagate_tilted'`` element ignoring
-         ``elem['method']``.
-       * **Far-field trip re-based on the canonical criterion (W9-7).**  The
-         free-space regime decision is now DELEGATED to
-         :func:`_auto_select_method`, which is the library's canonical regime
-         logic; this selector no longer carries thresholds of its own.  Pre-fix
-         it tripped to ``'fraunhofer'`` at ``|z| > 20 * L^2/(N*lambda)``, i.e.
-         at grid-Fresnel ratio ``Q > 20``.  Because ``N_F * Q = N/4``, that trip
-         sits at aperture Fresnel number ``N_F = N/80`` -- it grows LINEARLY
-         with the grid, so the branch fires further inside the near field the
-         bigger the grid gets.  MEASURED just above the old trip
-         (``z = 20.05 * L^2/(N*lambda)``, hard circular aperture filling half
-         the grid, dx = 2 um, lambda = 633 nm), complex overlap fidelity against
-         a pad-converged EXACT ``angular_spectrum_propagate_mft`` on the central
-         8x8 patch of each candidate's own output grid:
+    * **Back-propagation (W9-2).**  ``z < 0`` never selects ``sas`` /
+      ``fraunhofer``: both are forward-only and raise on the sign of ``z``.
+      Every ASM-family member (``asm`` / ``asm_tilted`` / ``asm_mft``)
+      accepts either sign, so a negative ``z`` stays inside that set.
+    * **Dropped tilt (W9-3).**  The ``asm_mft`` branch sits ABOVE the tilt
+      branch and :func:`angular_spectrum_propagate_mft` has no ``tilt_x`` /
+      ``tilt_y`` parameter, so a tilt passed alongside ``output_dx`` IS
+      dropped.  The precedence is kept -- there is no tilted-MFT kernel to
+      route to -- and the collision emits a :class:`UserWarning`.
+    * **Regime delegated (W9-7).**  The free-space regime decision is made
+      by :func:`_auto_select_method`; this selector carries no thresholds
+      of its own.
 
-         ======  ========  ==================  =============
-         N       N_F(ap)   fid('fraunhofer')   fid('sas')
-         ======  ========  ==================  =============
-         128     0.399     0.9516              1.00000
-         256     0.798     0.8185              1.00000
-         512     1.596     0.4111              1.00000
-         1024    3.192     0.4241              1.00000
-         ======  ========  ==================  =============
-
-         The canonical rule (``N_F < 0.1`` -> fraunhofer) keeps ``'sas'`` there,
-         which is exact.  The SAS boundary moves with it, from ``Q > 2`` to the
-         canonical ``Q > 1``; MEASURED in the newly-``'sas'`` band
-         ``1 < Q <= 2`` on the same probe, both members are exact and NEITHER
-         warns -- ``asm`` 0.99997-1.00000 vs ``sas`` 1.00000 at
-         Q = 1.05 / 1.5 / 2.0 for N = 256 and 512 -- while at ``Q = 0.5`` (still
-         ``'asm'`` under both rules) ``sas`` is the worse of the two
-         (0.9955 / 0.9964), confirming ``Q > 1`` is the right place for it to
-         start.
+    The measured fidelity table that settled the regime bands, and the
+    pre-fix behaviour of each of the three rules, are in
+    ``docs/history/lumenairy.propagators.dispatch.md``.
     """
     has_tilt = (abs(float(tilt_x)) > 1e-6) or (abs(float(tilt_y)) > 1e-6)
     if output_dx is not None and abs(float(output_dx) - float(dx)) > 0:
@@ -1512,14 +1339,9 @@ def _select_asm_variant(
     # above are sign-agnostic and keep their precedence.)
     if float(z) < 0:
         return 'asm'
-    # v5.31 (audit W9-7): delegate the free-space regime decision to
-    # ``_auto_select_method``, which is the CANONICAL regime logic (see its
-    # docstring).  Pre-fix this selector carried its own thresholds --
-    # ``Q > 20`` -> fraunhofer, ``Q > 2`` -> sas, where
-    # ``Q = lambda|z|/(N dx^2)`` -- and they disagreed with the canonical rule
-    # in both bands.  See the ``versionchanged`` note above for the measured
-    # fidelity table; ``prescription=None`` because every ASM-family member is
-    # a bare-grid free-space kernel.
+    # Delegate the free-space regime decision to ``_auto_select_method``,
+    # the CANONICAL regime logic (see its docstring).  ``prescription=None``
+    # because every ASM-family member is a bare-grid free-space kernel.
     return _auto_select_method(
         E_in, z=float(z), wavelength=float(wavelength), dx=float(dx),
         prescription=None)
@@ -1587,10 +1409,8 @@ def which_propagator(
         q = 0.0
         fn_grid = float('inf')
 
-    # v5.31 (audit W9-7): the sas / fraunhofer reasons quote the CANONICAL
-    # criteria (``Q > 1`` / ``N_F < 0.1``, both from ``_auto_select_method``),
-    # not this module's former ASM-family-only ``L^2/(N*lambda)`` multiples,
-    # which no longer decide anything.
+    # The sas / fraunhofer reasons quote the CANONICAL criteria (``Q > 1`` /
+    # ``N_F < 0.1``), both from ``_auto_select_method``.
     reasons = {
         'asm':       'near/intermediate field; band-limited ASM is exact.',
         'asm_tilted':'mean propagation direction is tilted; use carrier-shifted ASM.',

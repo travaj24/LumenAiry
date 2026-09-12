@@ -15,6 +15,8 @@ choose ``z``, ``N`` or ``dx`` for an RS step, so it is not an internal.
 Author:  Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.rs.md``.
+
 from __future__ import annotations
 
 from typing import Optional
@@ -266,10 +268,6 @@ def rayleigh_sommerfeld_propagate(
         h(x, y, z) = (1 / 2pi) * (z / r^2) * (1/r - ik) * exp(ikr)
 
     where ``r = sqrt(x^2 + y^2 + z^2)`` and ``k = 2*pi / lambda``.
-    Pre-4.10 the kernel used the negated ``(ik - 1/r)`` form, so
-    superposing RS with ASM / Fresnel results was 180-degrees out of
-    phase.  The docstring formula was updated in 4.11.1 to match the
-    corrected code.
 
     Its exact Fourier transform -- the RS-I TRANSFER function -- is
 
@@ -356,27 +354,19 @@ def rayleigh_sommerfeld_propagate(
           ``'transfer'`` reads 1.9e-2 and single-grid ASM 7.6e-1.
           It RAISES for ``z < 2*N*dx**2/wavelength``, where it aliases.
 
-        **Why the default changed.**  The point-sampled kernel's phase
+        **Why the routing exists.**  The point-sampled kernel's phase
         gradient ``k*sin(theta)*dx`` exceeds the ``pi``/pixel Nyquist
-        limit whenever ``z < 2*N*dx**2/wavelength``, and nothing checked
-        it.  Measured with all-default arguments against an exact Hankel
+        limit whenever ``z < 2*N*dx**2/wavelength``, and nothing in the
+        kernel build can check it.  Measured against an exact Hankel
         angular-spectrum oracle (Gaussian w0 = 6 um, lambda = 633 nm,
-        z = 50 um): ``P_out/P_in`` = 21.44 (N = 64, dx = 2 um), 5.31
-        (N = 128, dx = 1 um), 25.70 (N = 128, dx = 2 um) with relative L2
-        of 4.50 / 2.08 / 4.95.  The same grids under ``'auto'``:
-        relative L2 5.3e-8 / 6.1e-8 / 5.3e-8 with ``P_out/P_in``
-        1.000000.  At and above the threshold nothing moves at all: on
-        the N = 128 / dx = 1 um probe ``z_crit`` is 404.4 um, and at
-        z = 405 um and z = 1 mm the default output is BYTE-IDENTICAL to
-        the pre-v5.46 kernel (re-measured against the pre-v5.46 module
-        itself, five (N, dx, z) points including odd N = 65 and N = 100).
-        Below the threshold the default now takes the transfer branch, so
-        it is NOT byte-identical there -- but where the spatial kernel was
-        still adequately sampled the two agree to round-off: relative L2
-        between the pre-v5.46 output and the current default is 1.7e-13 at
-        z = 200 um and 2.1e-13 at z = 300 um on the same probe, both at
-        the FFT's own floor (each is ~2e-13 from an 8x-zero-padded
-        reference).
+        z = 50 um), ``'auto'`` reads relative L2 5.3e-8 / 6.1e-8 / 5.3e-8
+        with ``P_out/P_in`` 1.000000 on (N = 64, dx = 2 um),
+        (128, 1 um) and (128, 2 um).  At and above the threshold the
+        default is BYTE-IDENTICAL to ``'spatial'``; below it the two agree
+        to the FFT's own floor wherever the spatial kernel was still
+        adequately sampled (relative L2 1.7e-13 at z = 200 um and 2.1e-13
+        at z = 300 um on the N = 128 / dx = 1 um probe, each ~2e-13 from
+        an 8x-zero-padded reference).
 
         The two branches are continuous across the switch, and converge
         onto each other as the grid is refined.  Measured at
@@ -415,8 +405,7 @@ def rayleigh_sommerfeld_propagate(
     RS is NOT a remedy for ASM's band limiting in the near field: on the
     N = 128 / dx = 1 um / w0 = 6 um probe at z = 50 um, ASM with its
     default ``bandlimit=True`` measures relative L2 6.1e-8 against the
-    exact Hankel oracle -- i.e. ASM is already exact there, and the
-    pre-v5.46 RS spatial kernel was 2.08 (208 %) wrong on the same grid.
+    exact Hankel oracle -- i.e. ASM is already exact there.
 
     **Computational cost:** ~4x ASM due to zero-padding (2N FFTs
     instead of N FFTs).
@@ -428,10 +417,7 @@ def rayleigh_sommerfeld_propagate(
     (RS zero-pads to 2N, ASM does not) and in the band limit each
     applies.  They therefore agree to FFT round-off only where neither
     the ASM wrap-around nor a band limit bites; elsewhere the difference
-    is a real, quantified modelling difference, not round-off.  (The
-    pre-v5.46 spatial kernel plateaued at 2.8e-2 against ASM for exactly
-    the point-sampling reason above -- the historical "agree to machine
-    precision" claim was never true.)
+    is a real, quantified modelling difference, not round-off.
 
     **H caching:** the kernel is cached on the NumPy backend keyed on the
     padded geometry ``(2*Ny, 2*Nx, dy, dx, wavelength, z, bandlimit,
@@ -680,12 +666,12 @@ def rayleigh_sommerfeld_propagate(
         # for the derivation and the measured over-width table.  It is an
         # upper bound, so it never over-filters.
         #
-        # v5.30 (audit P13): dropped the dead ``and z != 0`` conjunct.  RS
-        # is forward-only and the guard above hard-raises for ``z <= 0``
-        # (measured: ``z=0`` and ``z=-1e-3`` both ValueError), so ``z``
-        # here is always > 0 and the test could never be False.  ASM /
-        # ASM-MFT keep THEIR ``z != 0`` conjuncts -- those DO accept
-        # ``z == 0`` (the exact identity, audit S2-11) and rely on it.
+        # No ``and z != 0`` conjunct here: RS is forward-only and the guard
+        # above hard-raises for ``z <= 0`` (measured: ``z=0`` and
+        # ``z=-1e-3`` both ValueError), so ``z`` is always > 0 and the test
+        # could never be False (audit P13).  ASM / ASM-MFT keep THEIRS --
+        # those DO accept ``z == 0`` as the exact identity (audit S2-11)
+        # and rely on it.
         if bandlimit:
             fx = (np.arange(Nx2) - Nx2 / 2) / (Nx2 * dx)
             fy = (np.arange(Ny2) - Ny2 / 2) / (Ny2 * dy)

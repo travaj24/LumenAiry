@@ -34,6 +34,8 @@ user-specified distributions and aggregates Strehl/RMS statistics.
 Author: Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.analysis.through_focus.md``.
+
 from __future__ import annotations
 
 import copy
@@ -192,12 +194,9 @@ def single_plane_metrics(
 
     # Default path: one |E|**2, one meshgrid, one set of moment sums,
     # shared with beam_centroid / beam_d4sigma through
-    # ``_centroid_and_d4sigma``.  Pre-fix this built |E|**2 three times
-    # (here, inside beam_centroid, inside beam_d4sigma) and the centroid
-    # twice -- 81.4 ms/plane at N = 1024 against 52.4 single-pass, with
-    # the whole 21-plane scan going 202.3 -> 128.8 ms/plane once the
-    # transfer-function recurrence lands too.  Bit-identical: same
-    # helper, same order of operations.
+    # ``_centroid_and_d4sigma``.  Building |E|**2 three times (here,
+    # inside beam_centroid, inside beam_d4sigma) and the centroid twice
+    # costs 81.4 ms/plane at N = 1024 against 52.4 single-pass.
     #
     # Anything that is not a plain 2-D field -- an MCF, a 3-D ensemble --
     # takes the ``beam_d4sigma`` route below, which carries the canonical
@@ -1081,9 +1080,9 @@ def monte_carlo_tolerancing(
     # UNPERTURBED nominal exit pupil and held fixed across all trials --
     # otherwise a perturbed pupil whose amplitude happens to better
     # match the diffraction-limited reference can yield Strehl > 1.
-    # Previously ``ideal_peak`` was recomputed inside the loop from the
-    # per-trial perturbed ``E_exit``, which is what produced the
-    # non-physical mean Strehl ~1.09 in example 09.
+    # Recomputing it inside the loop from the per-trial perturbed
+    # ``E_exit`` produces a non-physical mean Strehl ~1.09 (measured in
+    # example 09).
     E_exit_nominal = apply_real_lens(
         E_source, prescription=prescription, wavelength=wavelength, dx=dx,
         bandlimit=True, slant_correction=True)
@@ -1178,13 +1177,12 @@ def _build_through_focus_scan_jax_kernel(
 
         kernel(E_fft_shifted, z_scalar) -> field[Ny, Nx]
 
-    v4.12.2 D4 closure -- previously the kernel was a Python closure
-    inside `through_focus_scan_jax` that captured `kz_safe`,
-    `propagating`, `E_fft_shifted` from the enclosing scope.  Each
-    Python call rebuilt the closure and therefore re-traced.  The
-    factored builder lets a module-scope cache hold the compiled
-    kernel across calls keyed on `(Ny, Nx, dx, wavelength, bandlimit,
-    dtype)` -- the structural pieces that participate in tracing.
+    Factored out of `through_focus_scan_jax` so a module-scope cache can
+    hold the compiled kernel across calls, keyed on `(Ny, Nx, dx,
+    wavelength, bandlimit, dtype)` -- the structural pieces that
+    participate in tracing.  A Python closure capturing `kz_safe`,
+    `propagating` and `E_fft_shifted` from an enclosing scope is rebuilt
+    on every Python call and therefore re-traces.
     """
     import jax
     import jax.numpy as jnp
@@ -1358,26 +1356,19 @@ def through_focus_scan_jax(
     # the NumPy backend (``through_focus_scan``) uses, so both backends
     # share ONE metric implementation (single source of truth).
     #
-    # RECONCILED (AUDIT_V5_24_2 S3-19): this path was formerly a
-    # hand-inlined twin of ``single_plane_metrics`` that diverged in two
-    # documented, band-edge ways.  Both are now resolved by adopting the
-    # shared function's canonical conventions:
-    #   * power_in_bucket -- the inline twin masked with a STRICT
-    #     ``r < bucket_radius``; ``single_plane_metrics`` ->
-    #     ``radial_power_bands`` uses the canonical ``R2 <= r*r`` (``<=``).
-    #     A pixel sitting EXACTLY on the bucket radius is now INCLUDED on
-    #     the JAX backend too (previously dropped) -- so a bucket that
-    #     lands on the on-radius ring gains that ring's energy.  Both
-    #     forms compute the SAME centroid-relative distance
-    #     ``(pix - centroid)*dx``, so this is the only bucket change.
-    #   * rms_radius -- the inline twin computed an independent second
-    #     moment guarded by ``I_sum > 0`` (leaving NaN on an all-zero
-    #     plane); the shared path derives it from ``beam_d4sigma``
-    #     (rms = sqrt(var_x + var_y)), which is the SAME second moment
-    #     analytically (agree ~1e-15 in summation order) but returns 0 on
-    #     a zero field.  A zero plane now reports rms 0 on BOTH backends
-    #     (was NaN on JAX), which also removes the zero-field
-    #     best_focus_spot divergence the S3-8 guard papered over.
+    # The two band-edge conventions this shares with the NumPy backend
+    # (AUDIT_V5_24_2 S3-19) are the shared function's canonical ones, not
+    # a twin of them:
+    #   * power_in_bucket masks with the INCLUSIVE ``R2 <= r*r`` via
+    #     ``radial_power_bands``, so a pixel sitting EXACTLY on the bucket
+    #     radius is INCLUDED and a bucket landing on the on-radius ring
+    #     gains that ring's energy.  The centroid-relative distance is
+    #     ``(pix - centroid)*dx`` either way.
+    #   * rms_radius is derived from ``beam_d4sigma``
+    #     (rms = sqrt(var_x + var_y)) -- analytically the same second
+    #     moment (agreeing to ~1e-15 in summation order), but returning 0
+    #     rather than NaN on an all-zero plane, so a zero plane reports
+    #     rms 0 on BOTH backends.
     # Parity is pinned by tests/unit/test_through_focus_metric_parity.py
     # (smooth field) plus tests/unit/test_through_focus_bucket_boundary.py
     # (on-radius pixel + zero-field convention).  This entry point still

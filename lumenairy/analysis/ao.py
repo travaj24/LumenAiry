@@ -66,6 +66,8 @@ laser-guide-star tomography, etc.) reach for HCIPy.
 Author: Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.analysis.ao.md``.
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -957,16 +959,12 @@ def ao_closed_loop(
 # Shack-Hartmann WFS factory (v5.4 -- AO closed-loop dock real-WFS wiring)
 # =============================================================================
 
-# v5.4 (AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 P1-A wfs adapter): the
-# ``ao_closed_loop`` helper accepts an arbitrary callable
-# ``wfs(residual_phase) -> measured_phase``, but until v5.4 the only
-# canonical option was ``None`` (ideal phase sensing) or a hand-rolled
-# closure -- the v5.3.2 GUI ``ao_dock`` ships a "WFS type" combo
-# (``shack_hartmann`` / ``pyramid`` / ``curvature``) that had nothing
-# to wire because no library-side adapter wrapped ``shack_hartmann``
-# (the spot-displacement simulator) and ``slope_to_modal`` (the
-# slope-to-Zernike reconstructor) into a single closure.  This
-# factory closes that gap so the dock can call a real WFS path.
+# ``ao_closed_loop`` accepts an arbitrary callable
+# ``wfs(residual_phase) -> measured_phase``.  This factory builds the
+# canonical one: it wraps ``shack_hartmann`` (the spot-displacement
+# simulator) and ``slope_to_modal`` (the slope-to-Zernike reconstructor)
+# into a single closure, which is what the GUI ``ao_dock``'s "WFS type"
+# combo calls (AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 P1-A).
 def make_shack_hartmann_wfs(
     *,
     subaperture_grid: int = 8,
@@ -1187,37 +1185,32 @@ def make_shack_hartmann_wfs(
             n_lenslets=_subap,
         )
 
-        # 2b. Optional centroid noise.  S11-5
-        # (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): this block used to
-        # sit AFTER the ``/ slope_scale`` calibration rescale below, so a
-        # sigma quoted in RAW SH slope units (m of OPD per m of pupil)
-        # was added to slopes already converted to rad/m of PHASE -- a
-        # ``slope_scale`` (~1e-6 .. 1e-7, essentially lambda/2pi times the
-        # SH response) mis-scaling that made the knob inert.  Measured on
-        # a 64x64 defocus residual, ``subaperture_grid=8``,
-        # ``lenslet_focal=5e-3``: at ``dx_pupil = 1e-4`` m,
-        # ``noise_sigma_pixels = 1`` perturbed the reconstruction by
-        # 4.83e-5 relative (and 4.81e-7 at ``dx_pupil = 1e-5`` m) -- i.e.
-        # nothing.
+        # 2b. Optional centroid noise.  It is injected on the RAW
+        # measurement, UPSTREAM of the calibration rescale below, which is
+        # where it physically belongs (S11-5,
+        # AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1).  Injecting it AFTER
+        # the ``/ slope_scale`` rescale would add a sigma quoted in RAW SH
+        # slope units (m of OPD per m of pupil) to slopes already
+        # converted to rad/m of PHASE -- a ``slope_scale`` mis-scaling
+        # (~1e-6 .. 1e-7, essentially lambda/2pi times the SH response)
+        # that makes the knob inert.
         #
-        # The fix is to inject the noise where it physically belongs:
-        # on the RAW measurement, upstream of the calibration.  That is
-        # algebraically identical to dividing the sigma by
-        # ``slope_scale`` after the rescale
-        # (``(s + n - ref)/ss == (s - ref)/ss + n/ss``) but needs no
-        # extra division, cannot blow up on a degenerate ``slope_scale``
-        # any worse than the signal path already does, and keeps the RNG
-        # draw count and order unchanged -- so a given ``rng_seed``
-        # produces the identical noise SEQUENCE, only correctly applied.
-        # The ``_noise == 0`` path is untouched and bit-identical.
+        # Injecting here is algebraically identical to dividing the sigma
+        # by ``slope_scale`` after the rescale
+        # (``(s + n - ref)/ss == (s - ref)/ss + n/ss``) but needs no extra
+        # division, cannot blow up on a degenerate ``slope_scale`` any
+        # worse than the signal path already does, and keeps the RNG draw
+        # count and order unchanged -- a given ``rng_seed`` produces the
+        # identical noise SEQUENCE.  The ``_noise == 0`` path is
+        # bit-identical either way.
         #
-        # Documented effect, now true: ``noise_sigma_pixels = s`` injects
-        # an independent Gaussian centroid error of ``s * dx_pupil``
-        # metres per sub-aperture, i.e. a wavefront-slope error of
-        # ``s * dx_pupil / lenslet_focal`` radians of tilt.  Note this is
-        # a LARGE error for a coarse pupil grid: one whole pixel of
-        # centroid error on a 100 um pupil pitch with a 5 mm lenslet is
-        # 20 mrad of tilt.  Real SH systems sit at s ~ 0.01 - 0.1.
+        # Effect: ``noise_sigma_pixels = s`` injects an independent
+        # Gaussian centroid error of ``s * dx_pupil`` metres per
+        # sub-aperture, i.e. a wavefront-slope error of
+        # ``s * dx_pupil / lenslet_focal`` radians of tilt.  That is a
+        # LARGE error on a coarse pupil grid: one whole pixel of centroid
+        # error at a 100 um pupil pitch with a 5 mm lenslet is 20 mrad of
+        # tilt.  Real SH systems sit at s ~ 0.01 - 0.1.
         #
         # NaN sentinels (out-of-bounds lenslets) stay NaN: finite noise
         # added to NaN is NaN, so the ``good`` mask below is unchanged.

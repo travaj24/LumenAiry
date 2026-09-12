@@ -26,6 +26,8 @@ Contents
   thread-safety locks.
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.asymptotic_modes.md``.
+
 from __future__ import annotations
 
 import functools
@@ -328,33 +330,17 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
     ``(N_modes, Ny, Nx)`` array whose first axis is in the same order
     as ``keys``.  Each slice is ``np.conj(LG_{p, ell}(X, Y; w, cx, cy))``.
 
-    Cache key includes the grid shape, the physical pitch ``(dx, dy)``,
-    the grid origin ``(X[0, 0], Y[0, 0])``, all basis parameters, and
-    the dtype of the (X, Y) sample arrays so cached entries are only
-    reused when the result would be bit-equal.
-
-    v4.14.1 (P0-NEW-1):  ``dx, dy`` are included in the cache key.
-    Pre-v4.14.1 keys captured only ``(Ny, Nx)``, so two calls with the
-    same shape but different physical pitch (e.g. ``dx=1e-6`` then
-    ``dx=2e-6`` at N=256) collided on the cache and the second call
-    silently received the first call's modes evaluated against the
-    second call's field.  Thread-safe via ``_LG_MODE_STACK_LOCK``.
-
-    v5.17.1 (audit P1-06):  the grid origin ``(X[0, 0], Y[0, 0])`` is
-    included in the cache key.  Shape + pitch alone do not pin the
-    physical sample positions, so two same-shape/same-pitch grids at
-    different offsets (e.g. a shifted ROI) collided and the second call
-    silently received modes evaluated at the first grid's coordinates.
-
-    v5.30 (audit W6-A11):  the origin is not enough either -- an
-    ``indexing='xy'`` grid and an ``indexing='ij'`` grid built from the
-    same two equal-length axes share shape, pitch AND origin, so they
-    collided and the second caller received the first caller's
-    TRANSPOSED stack (measured worst relative error 8.232e+00 against an
-    independent overlap oracle, vs 5.2e-15 with the cache cleared in
-    between).  The key now carries the three corners per axis --
-    :func:`_grid_corner_fingerprint` -- which pin a rectilinear grid
-    completely.
+    Cache key includes the grid shape, the physical pitch ``(dx, dy)``, the
+    three-corner grid fingerprint (:func:`_grid_corner_fingerprint`), all
+    basis parameters, and the dtype of the (X, Y) sample arrays, so a
+    cached entry is reused only when the result would be bit-equal.
+    Shape, pitch and origin alone are NOT enough: an ``indexing='xy'``
+    grid and an ``indexing='ij'`` grid built from the same two
+    equal-length axes agree on all three, and the second caller would
+    receive the first caller's TRANSPOSED stack (audit W6-A11; measured
+    worst relative error 8.232e+00 against an independent overlap oracle,
+    against 5.2e-15 with the cache cleared in between).  Thread-safe via
+    ``_LG_MODE_STACK_LOCK``.
     """
     X = np.asarray(X)
     Y = np.asarray(Y)
@@ -412,18 +398,11 @@ def _hg_mode_conj_stack(X: np.ndarray, Y: np.ndarray,
     """Build / fetch the conjugated HG mode stack used by
     :func:`decompose_hg`.  See :func:`_lg_mode_conj_stack`.
 
-    v4.14.1 (P0-NEW-1):  ``dx, dy`` are included in the cache key for
-    the same reason as the LG variant -- same shape at different
-    physical pitch must not collide.  Thread-safe via
+    The cache key carries the three-corner grid fingerprint for the same
+    reason as the LG variant -- the same shape at a different pitch,
+    offset or meshgrid orientation must not collide; see
+    :func:`_grid_corner_fingerprint`.  Thread-safe via
     ``_HG_MODE_STACK_LOCK``.
-
-    v5.17.1 (audit P1-06):  the grid origin ``(X[0, 0], Y[0, 0])`` is
-    included in the cache key; see :func:`_lg_mode_conj_stack`.
-
-    v5.30 (audit W6-A11):  the three corners per axis replace the bare
-    origin so an ``indexing='xy'`` grid cannot collide with the
-    ``indexing='ij'`` grid built from the same axes; see
-    :func:`_grid_corner_fingerprint`.
     """
     X = np.asarray(X)
     Y = np.asarray(Y)
@@ -756,7 +735,7 @@ def _meshgrid_axis_step(coord: np.ndarray, name: str, fn_name: str) -> float:
     v1 = float(np.max(np.abs(d1))) if d1.size else 0.0
     v0 = float(np.max(np.abs(d0))) if d0.size else 0.0
     if v1 > 0.0 and v0 == 0.0:
-        # indexing='xy' orientation (pre-fix idiom, unchanged values)
+        # indexing='xy' orientation
         return float(np.mean(d1[:, 0]))
     if v0 > 0.0 and v1 == 0.0:
         # indexing='ij' orientation -- mirrored idiom
@@ -780,11 +759,10 @@ def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
         a_{p, ell} = integral conj(LG_{p, ell}(x, y)) * field(x, y) dx dy
     by a plain RECTANGLE (midpoint) sum on the supplied grid --
     ``sum(conj(mode) * field) * dx * dy``, with no edge weighting.
-    v5.30 (audit W6-A14): pre-fix this line said "trapezoidal
-    quadrature", which the code has never done.  It is immaterial when
-    the field is contained inside the grid (measured 5.0e-15 relative
-    difference between the two rules on an LG_{0,0} over +-4w) but it is
-    NOT immaterial for a field with support at the boundary.
+    The rectangle rule is immaterial when the field is contained inside
+    the grid (measured 5.0e-15 relative difference against the
+    trapezoidal rule on an LG_{0,0} over +-4w) but it is NOT immaterial
+    for a field with support at the boundary.
 
     The grid step is taken as ``mean(diff(axis))``, so a NON-UNIFORM
     grid is silently accepted and integrated with the mean pitch.
@@ -793,7 +771,6 @@ def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
     ----------
     field : ndarray, complex, shape (Ny, Nx)
         Row-major, matching ``np.meshgrid(x, y, indexing='xy')``.
-        (v5.30 audit W6-A14: the pre-fix docstring said ``(Nx, Ny)``.)
     x, y : ndarray
         Cartesian coordinates [m].  Either 1-D axes or 2-D meshgrids in
         EITHER ``indexing='xy'`` or ``indexing='ij'`` orientation; the

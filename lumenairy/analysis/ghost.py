@@ -69,6 +69,8 @@ Important caveats (4.12.0 / B2-1, B2-2)
 
 Author: Andrew Traverso
 """
+
+# Version history for this module: ``docs/history/lumenairy.analysis.ghost.md``.
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -396,15 +398,12 @@ def non_sequential_stray_light(
         fraction.  When ``None`` (default), only ghost reflections
         are reported.
     seed : int or None, default None
-        Seed for the BSDF-integration Monte Carlo.  v4.15 (P1-GH-1):
-        pre-4.15 this was hard-coded to ``0``, which made the TIS
-        estimate fully deterministic with no uncertainty band -- you
-        could not estimate the Monte-Carlo variance because every
-        call returned identical numbers.  Pass an ``int`` (e.g.
-        ``seed=0``) for the old reproducible behaviour; pass
-        ``None`` (the new default) to draw fresh randomness from
-        system entropy so repeated calls give a sample-to-sample
-        spread you can use as a stand-in for the integration error.
+        Seed for the BSDF-integration Monte Carlo.  ``None`` (the
+        default) draws fresh randomness from system entropy, so repeated
+        calls give a sample-to-sample spread usable as a stand-in for the
+        integration error.  Pass an ``int`` (e.g. ``seed=0``) for a
+        reproducible single-sample estimate -- deterministic, but with no
+        uncertainty band (P1-GH-1).
     verbose : bool
 
     Returns
@@ -444,10 +443,10 @@ def non_sequential_stray_light(
         # Integrate the BSDF over the upper hemisphere to get TIS.
         # Use a small Monte-Carlo: sample 2k uniform-hemisphere
         # directions, weight by cos(theta), average.
-        # v4.15 (P1-GH-1): RNG now seeded from the user-supplied
-        # ``seed`` kwarg (None = system entropy = different samples
-        # each call).  Pre-4.15 ``default_rng(0)`` pinned the TIS
-        # number to a single sample, hiding the Monte-Carlo error.
+        # The RNG is seeded from the user-supplied ``seed`` kwarg
+        # (None = system entropy = different samples each call), so the
+        # Monte-Carlo error is visible instead of hidden behind a pinned
+        # single sample (P1-GH-1).
         rng = np.random.default_rng(seed)
         n_samples = 2000
         # Uniform on upper hemisphere via 2 cos-weighted samples.
@@ -568,24 +567,14 @@ def _ghost_intersect(rays, surface, *, n_medium: float,
                       direction: int) -> None:
     """Backward-compatible alias for :func:`_intersect_surface`.
 
-    v5.4.1 (audit P1): ``_ghost_intersect`` is now redundant; the
-    library's ``_intersect_surface`` uses direction-aware root pick
-    canonically.  Kept as an alias for backward compatibility so any
-    external caller that imported this helper continues to resolve.
+    ``_intersect_surface`` uses a direction-aware root pick canonically,
+    so this helper is redundant.  It is kept as an alias for backward
+    compatibility, so any external caller that imported it continues to
+    resolve.
 
-    Historically (v5.4.0) this helper inlined a direction-aware
-    ray-sphere quadratic to work around a direction-blind root pick
-    in ``_intersect_surface`` that landed backward-propagating rays
-    on the wrong side of the sphere.  The v5.4.1 patch promoted that
-    fix into the canonical library function (``intersection.py``
-    fast path at the spherical branch + Newton initial guess), so
-    ``_intersect_surface`` is now correct for both forward and
-    backward legs.
-
-    The ``direction`` keyword is retained for signature compatibility
-    but ignored -- the library inspects each ray's ``N`` cosine to
-    select the near root, so a bundle-wide direction hint is no
-    longer required.
+    The ``direction`` keyword is retained for signature compatibility but
+    ignored -- the library inspects each ray's ``N`` cosine to select the
+    near root, so a bundle-wide direction hint is no longer required.
 
     Parameters
     ----------

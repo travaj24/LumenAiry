@@ -1,8 +1,6 @@
 """JAX-traceable twin of the NumPy asymptotic propagator path.
 
-v5.1.0 file-split (Agent D):  extracted from
-``lumenairy.propagators.asymptotic`` with NO public-API or physics
-change.  Holds:
+Holds:
 
 * Backend-aware Chebyshev evaluators
   (``_chebyshev_vandermonde_xp`` / ``_evaluate_polynomial_4d_xp``)
@@ -27,6 +25,8 @@ change.  Holds:
 All re-exported through :mod:`lumenairy.propagators.asymptotic` so
 existing call sites continue to work unchanged.
 """
+
+# Version history for this module: ``docs/history/lumenairy.propagators.asymptotic_jax_twin.md``.
 
 from __future__ import annotations
 
@@ -62,18 +62,15 @@ __all__ = [
 def _require_jax_x64(fn_name):
     """Require JAX double precision on the JAX (differentiable) path.
 
-    v5.17.x (audit P3-52): replicates
-    :func:`lumenairy.elements.rcwa._core._require_jax_x64` (kept local
-    to avoid a propagators -> elements.rcwa import edge).  The
-    asymptotic twins need float64: single-precision ``lstsq`` gives
+    Replicates :func:`lumenairy.elements.rcwa._core._require_jax_x64`
+    (kept local to avoid a propagators -> elements.rcwa import edge).
+    The asymptotic twins need float64: single-precision ``lstsq`` gives
     ~5% coefficient error and NaN gradients in the canonical fit, and
     the Newton-IFT / Strehl-coefficient evaluations degrade silently.
-    Pre-fix, :func:`fit_canonical_polynomials_jax` auto-enabled x64 by
-    mutating the global ``jax_enable_x64`` MID-CALL -- unsafe when the
-    caller jits the surrounding computation (JAX documents mid-trace
-    config mutation as undefined behaviour) -- while the other three
-    twins had no x64 handling at all.  A one-line caller setup replaces
-    both: raise with instructions instead."""
+    This RAISES with instructions rather than auto-enabling x64 --
+    mutating the global ``jax_enable_x64`` mid-call is undefined
+    behaviour when the caller jits the surrounding computation (audit
+    P3-52)."""
     import jax
     try:
         enabled = bool(jax.config.read("jax_enable_x64"))
@@ -106,14 +103,12 @@ def _require_jax_x64(fn_name):
 def _chebyshev_vandermonde_xp(u, max_k, xp):
     """Backend-aware Chebyshev Vandermonde T[n](u).
 
-    v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-    back-compat shim -- forwards to
+    Back-compat shim: forwards to
     :func:`lumenairy._math.chebyshev.chebyshev_vandermonde` with the
-    ``xp`` kwarg.  The returned array is now the same stacked-array
-    contract as the NumPy helper (shape ``(max_k + 1,) + u.shape``),
-    not the prior list-of-arrays form -- still JAX-traceable because
-    the canonical implementation uses functional construction +
-    ``xp.stack`` for non-NumPy backends.
+    ``xp`` kwarg.  Returns the same stacked-array contract as the NumPy
+    helper (shape ``(max_k + 1,) + u.shape``), and stays JAX-traceable
+    because the canonical implementation uses functional construction
+    plus ``xp.stack`` for non-NumPy backends.
     """
     return _chebyshev_vandermonde_math(u, max_k, xp=xp)
 
@@ -126,11 +121,8 @@ def _evaluate_polynomial_4d_xp(coeffs, multi_indices, u1, u2, u3, u4,
     but routes through ``xp = array_namespace(u1, u2, u3, u4)`` so it
     works on NumPy / CuPy / JAX arrays uniformly.
     """
-    # v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-    # ``_chebyshev_vandermonde_xp`` (now a shim into _math.chebyshev)
-    # already returns the stacked array directly, so the previous
-    # ``xp.stack(T)`` step is gone.  3.5.6 vectorised-across-basis
-    # construction is preserved.
+    # ``_chebyshev_vandermonde_xp`` (a shim into ``_math.chebyshev``)
+    # returns the stacked array directly, so no ``xp.stack`` is needed.
     T1_stack = _chebyshev_vandermonde_xp(u1, max_order, xp)
     T2_stack = _chebyshev_vandermonde_xp(u2, max_order, xp)
     T3_stack = _chebyshev_vandermonde_xp(u3, max_order, xp)
@@ -684,15 +676,12 @@ def _build_jax_ift_solver():
 def clear_jax_ift_solver_cache() -> None:
     """Drop the cached JAX custom_vjp-decorated Newton-IFT solver.
 
-    v5.24.x (audit S4-15): the ``_JAX_IFT_SOLVER_CACHE`` singleton pins
-    the compiled XLA executable for the decorated solver for the life of
-    the process.  Pre-fix it was NOT registered with the central
-    cache-clearer registry, so ``clear_asm_caches`` /
-    ``clear_all_registered_caches`` left the compiled solver (and its
-    XLA device memory) resident even when the caller explicitly asked to
-    drain every cache.  Registering this clearer lets a
-    ``lumenairy_context(clear_caches_on_exit=True)`` or an explicit
-    ``clear_asm_caches()`` reclaim it.
+    The ``_JAX_IFT_SOLVER_CACHE`` singleton pins the compiled XLA
+    executable for the decorated solver for the life of the process.
+    This clearer is registered with the central cache-clearer registry,
+    so ``clear_asm_caches()`` / ``clear_all_registered_caches()`` and
+    ``lumenairy_context(clear_caches_on_exit=True)`` reclaim it and its
+    XLA device memory (audit S4-15).
 
     Safe to call at any time: the next
     :func:`solve_envelope_stationary_jax_ift` invocation transparently
@@ -890,44 +879,33 @@ def _differentiable_lstsq(A, b):
     degenerate its singular-value SPECTRUM; and unlike the normal equations
     it works at ``cond(A)``, not ``cond(A)^2``.
 
-    v5.29 (audit W4-T3) -- WHY NOT THE NORMAL EQUATIONS.  This function
-    used to solve ``(A^H A + floor·I) x = A^H b`` with
-    ``floor = 1e-12·(trace(A^H A)/n + 1)``, documented as shifting the
-    solution by "~1e-10 relative".  MEASURED on the validation harness's
-    own fit (singlet R1 = 20 mm, ``n_field=4, n_pupil=8, poly_order=4``:
-    ``A`` is 1024x70, full rank 70/70, ``sigma_max = 47.68``,
-    ``sigma_min = 7.29e-6``, so ``cond(A) = 6.54e+06`` and
-    ``cond(A^H A) = 4.28e+13``) that claim was wrong by eight orders:
+    **Why not the normal equations** (audit W4-T3).  Solving
+    ``(A^H A + floor·I) x = A^H b`` with
+    ``floor = 1e-12·(trace(A^H A)/n + 1)`` instead fails twice here.
+    MEASURED on the validation harness's own fit (singlet R1 = 20 mm,
+    ``n_field=4, n_pupil=8, poly_order=4``: ``A`` is 1024x70, full rank
+    70/70, ``sigma_max = 47.68``, ``sigma_min = 7.29e-6``, so
+    ``cond(A) = 6.54e+06`` and ``cond(A^H A) = 4.28e+13``):
 
         estimator                          max |coef_phi - lstsq| / scale
-        normal eq, floor 2.257e-10 (old)   4.4898e-02   <-- the CI/local red
+        normal eq, floor 2.257e-10         4.4898e-02
         normal eq, floor 2.247e-14         1.1839e-03
         normal eq, floor 2.247e-18         6.9218e-04
         normal eq, floor 0                 1.2213e-03
         QR                                 1.2374e-10
 
-    Two independent failures compounded.  (1) The floor was 4.25x LARGER
-    than ``sigma_min^2 = 5.31e-11``, so it did not "keep the solve finite"
-    -- it DOMINATED the two smallest singular directions (the spectrum
-    drops 2.48e-3 -> 8.01e-6 -> 7.29e-6, i.e. two near-null directions).
-    (2) Even with the floor removed entirely, squaring a 6.5e+06 condition
-    number leaves the normal equations ~1e-3 short of ``lstsq``, so
-    shrinking the floor could never have reached the 1e-5 the validation
-    check asks for.  QR fixes both at the same cost class.
+    Two independent failures compound.  (1) That floor is 4.25x LARGER
+    than ``sigma_min^2 = 5.31e-11``, so it does not "keep the solve
+    finite" -- it DOMINATES the two smallest singular directions (the
+    spectrum drops 2.48e-3 -> 8.01e-6 -> 7.29e-6, i.e. two near-null
+    directions).  (2) Even with the floor removed entirely, squaring a
+    6.5e+06 condition number leaves the normal equations ~1e-3 short of
+    ``lstsq``, so shrinking the floor could never reach the 1e-5 the
+    validation check asks for.  QR avoids both at the same cost class.
 
-    Physical size of the old error, measured the same way (see
-    ``validation/propagators/test_asymptotic.py::
-    t_fit_canonical_polynomials_jax_matches_numpy``): the two coefficient
-    vectors fitted the TRAINING samples equally well (1.01e-07 waves apart,
-    RMS residual 2.6128e-07 vs 2.6250e-07) and agreed to 1.15e-05 waves on
-    an INDEPENDENT physically-reachable ray set -- the 4.5e-02 lived almost
-    entirely in the near-null directions, i.e. the corners of the
-    normalised box that the trace never reaches, where both fits are pure
-    extrapolation (uniform-random box points: 1.87e-01 waves apart).  So
-    the old behaviour was a small real accuracy loss (truth error on the
-    independent set 1.21e-05 waves against NumPy's 9.81e-07) wearing a
-    scary-looking coefficient number.  Post-fix the coefficients agree to
-    ~1e-10 and the distinction is moot.
+    The discrepancy lives almost entirely in the near-null directions --
+    the corners of the normalised box that the trace never reaches, where
+    any fit is pure extrapolation -- not on physically reachable rays.
     """
     import jax.numpy as jnp
     Q, R = jnp.linalg.qr(A)
@@ -965,10 +943,10 @@ def fit_canonical_polynomials_jax(
     Limitations
     -----------
     * Requires ``jax_enable_x64`` (raises ``RuntimeError`` otherwise).
-      v5.17.x (audit P3-52): the former auto-enable mutated the global
-      ``jax_enable_x64`` MID-CALL, which is unsafe inside ``jax.jit``
-      (undefined behaviour per the JAX docs).  Enable it once at
-      import: ``jax.config.update('jax_enable_x64', True)``.
+      Enable it once at import:
+      ``jax.config.update('jax_enable_x64', True)``.  It is deliberately
+      NOT auto-enabled -- mutating that global mid-call is undefined
+      behaviour inside ``jax.jit`` (audit P3-52).
     * The prescription dict (radii, conic, aspheric coeffs) is treated
       as a static argument, same as :func:`trace_jax`.  Differentiate
       w.r.t. lens parameters via :func:`fit_canonical_polynomials` or

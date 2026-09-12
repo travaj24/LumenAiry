@@ -8,6 +8,8 @@ each element to the appropriate physics routine from the library submodules.
 Author: Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.system.md``.
+
 from __future__ import annotations
 
 import threading
@@ -227,25 +229,17 @@ def _validate_system_method(method: Any, where: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# v5.31 (audit W9-11): the ``'real_lens_traced'`` element's kwarg surface
+# The ``'real_lens_traced'`` element's kwarg surface (audit W9-11)
 # ---------------------------------------------------------------------------
-# Pre-v5.31 this element handler hard-coded FOUR arguments (``prescription``,
-# ``bandlimit``, ``ray_subsample``, ``progress``) and every other key on the
-# element dict was DROPPED IN SILENCE.  MEASURED: output bit-identical to
-# omitting the key for all nine of ``amplitude_model``,
-# ``preserve_input_phase``, ``remap_sampling``, ``fit_radius_beam_factor``,
-# ``carrier``, ``on_undersample``, ``n_workers``, ``traced_kwargs`` -- and for
-# an outright typo key.  The consequence the W9 audit was asked about: the
-# v5.29 + S12 VALIDATED traced configuration (``amplitude_model='ray_density'``
-# + ``preserve_input_phase='remap'`` + ``remap_sampling='full'`` +
-# ``fit_radius_beam_factor=2.0``, the shipping defaults of
-# ``propagate_traced_carrier_chain``) was UNREACHABLE through this chain API,
-# and a caller who wrote those keys got the legacy configuration with no
-# diagnostic.
-#
-# The keys are now forwarded, and anything the element does not accept RAISES.
-# Silent fall-through on an unrecognised key is the class the v5.30 P6 twin fix
-# closed for ``method``; this closes it for the traced element's parameters.
+# Every key on the element dict is FORWARDED, and anything the element does
+# not accept RAISES.  Hard-coding a fixed argument list here drops the rest in
+# silence, which is what made the v5.29 + S12 VALIDATED traced configuration
+# (``amplitude_model='ray_density'`` + ``preserve_input_phase='remap'`` +
+# ``remap_sampling='full'`` + ``fit_radius_beam_factor=2.0``, the shipping
+# defaults of ``propagate_traced_carrier_chain``) unreachable through this
+# chain API -- with no diagnostic for a caller who wrote those keys.  Silent
+# fall-through on an unrecognised key is the class the P6 twin fix closed for
+# ``method``.
 _TRACED_ELEMENT_STRUCTURAL_KEYS = frozenset({
     'type', 'prescription', 'traced_kwargs',
 })
@@ -325,14 +319,12 @@ def _resolve_traced_element_kwargs(elem, index):
     return out
 
 
-# v5.31 (audit W9-12): one number, three values, for the same physics --
+# One number, three values, for the same physics (audit W9-12) --
 # ``apply_real_lens_traced`` defaults ``ray_subsample=8``,
-# ``propagate_traced_carrier_chain`` defaults 4 (its VALIDATED value), and this
-# chain element hard-codes 1 while its docstring used to say "default 1; 4 is
-# the recommended production value" -- a docstring recommending against the code
-# directly beneath it.  The DOCSTRING is what was wrong, and it is fixed; the
-# VALUE stays 1, against the first instinct to align it on the chain's 4,
-# because the measurement argues the other way:
+# ``propagate_traced_carrier_chain`` defaults 4 (its VALIDATED value), and
+# this chain element uses 1.  The chain element's value stays 1, against the
+# first instinct to align it on the chain's 4, because the measurement argues
+# the other way:
 #
 #   * No fidelity to gain.  On the E4 corrected relay (N=1536, dx=7 um, the
 #     harness the E4 pins use) the exit-wavefront Strehl at ray_subsample
@@ -753,14 +745,12 @@ def propagate_through_system(E_in: np.ndarray,
             f"Supported choices in this entry point: 'asm', 'sas', "
             f"'fresnel'.  Pass ``method=`` explicitly or reset the "
             f"default via ``set_default_wave_propagator('asm')``.")
-    # v5.30 (audit: the NumPy twin of P6, recorded as a new measured
-    # finding in AUDIT_ADVERSARIAL_CODEBASE_2026_07_25).  Pre-v5.30 every
-    # unrecognised ``method`` -- 'gbd', 'fraunhofer', 'ASM', outright junk
-    # -- fell through the ``if/elif`` chain below to the ``else: # Default:
-    # ASM`` branch and silently returned the ASM field (measured 0.0
-    # relative difference vs method='asm').  Validate at ENTRY against the
-    # honoured set; the JAX twin (v5.30, audit P6) already does the same
-    # with the same wording.
+    # Validate ``method`` at ENTRY against the honoured set (the NumPy twin
+    # of audit P6).  Without it an unrecognised value -- 'gbd',
+    # 'fraunhofer', 'ASM', outright junk -- falls through the ``if/elif``
+    # chain below to the ``else: # Default: ASM`` branch and silently
+    # returns the ASM field (measured 0.0 relative difference against
+    # method='asm').  The JAX twin does the same, with the same wording.
     _validate_system_method(method, 'method')
     if dy is None:
         from .propagation import get_default_dy
@@ -788,11 +778,12 @@ def propagate_through_system(E_in: np.ndarray,
             bandlimit = elem.get('bandlimit', True)
             # Per-element method override: elem.get('method') > system method
             prop_method = elem.get('method', method)
-            # v5.30 (NumPy twin of audit P6): the per-element override took
-            # the same silent fall-through to ASM as the entry-point kwarg
-            # (measured 0.0 rel diff vs method='asm' for
+            # The per-element override takes the same silent fall-through
+            # to ASM as the entry-point kwarg (measured 0.0 relative
+            # difference against method='asm' for
             # ``{'method': 'not_a_method'}``), so it needs the identical
-            # validation -- an entry-only check would leave the hole open.
+            # validation: an entry-only check leaves the hole open (NumPy
+            # twin of audit P6).
             if 'method' in elem:
                 _validate_system_method(
                     prop_method, f"elements[{i}]['method']")
@@ -973,16 +964,15 @@ def propagate_through_system(E_in: np.ndarray,
             # with tilt parameters.  New code should use:
             #   {'type': 'propagate', 'z': ..., 'tilt_x': ..., 'tilt_y': ...}
             #
-            # v5.30 (flagged in 3f22778): this handler is ASM-ONLY -- it goes
-            # straight to ``angular_spectrum_propagate_tilted`` and never reads
-            # ``elem['method']``.  Pre-v5.30 a ``method`` key here was dropped
-            # in complete silence: MEASURED 0.0 relative difference (and
-            # bit-identical output) for ``method='fresnel'``, ``'sas'`` AND
-            # ``'not_a_method'`` versus omitting the key -- i.e. not even
-            # validated, unlike the ``'propagate'`` element which raises on an
-            # unrecognised value.  Warn rather than raise: raising would be a
-            # new breakage class for a legacy alias that has silently accepted
-            # the key for many releases.
+            # This handler is ASM-ONLY: it goes straight to
+            # ``angular_spectrum_propagate_tilted`` and never reads
+            # ``elem['method']``.  A ``method`` key here is WARNED about
+            # rather than raised on -- raising would be a new breakage
+            # class for a legacy alias that has silently accepted the key
+            # for many releases.  MEASURED before the warning existed: 0.0
+            # relative difference and bit-identical output for
+            # ``method='fresnel'``, ``'sas'`` AND ``'not_a_method'``
+            # versus omitting the key.
             if 'method' in elem:
                 warnings.warn(
                     f"propagate_through_system: elements[{i}] has "
@@ -1712,13 +1702,12 @@ def propagate_through_system_jax(E_in: np.ndarray,
     # ------------------------------------------------------------------
     # v5.30 (audit P6): validate ``method``.
     # ------------------------------------------------------------------
-    # Pre-v5.30 ``method`` was accepted and never read: every value --
-    # including 'fresnel', 'sas' and outright junk -- returned the ASM
-    # field (bit-identical), while the NumPy twin
-    # ``propagate_through_system`` honours 'fresnel' / 'sas' (and rejects
-    # 'rs').  Silent fall-through is the forbidden class, so the JAX path
-    # now names what it implements: ASM.  ``method=None`` is accepted as
-    # an explicit "use this entry point's default" (it does NOT resolve
+    # ``method`` is validated because this path implements ASM and nothing
+    # else, while the NumPy twin ``propagate_through_system`` honours
+    # 'fresnel' / 'sas' (and rejects 'rs').  Accepting a value it cannot
+    # honour would return the ASM field bit-identically under any name --
+    # the forbidden silent-fall-through class.  ``method=None`` is accepted
+    # as an explicit "use this entry point's default" (it does NOT resolve
     # ``set_default_wave_propagator()`` -- see the docstring).
     _JAX_METHODS = ('asm',)
     _NUMPY_TWIN_ONLY_METHODS = ('fresnel', 'sas', 'rs', 'rayleigh_sommerfeld')
@@ -1771,25 +1760,17 @@ def propagate_through_system_jax(E_in: np.ndarray,
             "element list programmatically before calling."
         )
 
-    # v4.13.0 (audit L2): pre-fix this hard-cast to ``jnp.complex64``
-    # silently overrode ``set_default_complex_dtype(np.complex128)``.
-    # Now goes through ``_resolve_jax_complex_dtype`` which reads the
-    # library-wide default.  Complex inputs honour their own dtype; only
-    # real inputs fall back to the configured default.
-    #
-    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 7 / P3 / DEEP-4 MEDIUM-2):
-    # the pre-v4.16.1 dtype probe used ``np.iscomplexobj(np.asarray(E_in))``
-    # which raises ``jax.errors.TracerArrayConversionError`` when this
-    # function is wrapped in ``jax.jit`` or ``jax.grad`` -- but this
-    # function is explicitly named ``propagate_through_system_jax`` and
-    # the docstring touts end-to-end jit'd caching.  The fix mirrors
-    # the v4.15.3 ``_check_2d_scalar_field`` JAX-safe ``getattr(E,
-    # 'attr', None)`` idiom: read the dtype via duck-typing (works for
-    # NumPy arrays, JAX tracers, CuPy arrays, and the typed scalars
-    # that the JAX cast accepts).  When the dtype attribute is missing
-    # or non-complex, fall back to the library-default complex dtype
-    # for the cast -- the real-input branch is exercised by tests that
-    # build a real Gaussian envelope and rely on the autopromote.
+    # Dtype resolution goes through ``_resolve_jax_complex_dtype``, which
+    # reads the library-wide default (audit L2): complex inputs honour
+    # their own dtype, only real inputs fall back to the configured
+    # default.  The probe reads the dtype by DUCK-TYPING (``getattr(E,
+    # 'dtype', None)``, the ``_check_2d_scalar_field`` idiom) rather than
+    # via ``np.iscomplexobj(np.asarray(E_in))``, which raises
+    # ``jax.errors.TracerArrayConversionError`` under ``jax.jit`` /
+    # ``jax.grad`` -- the end-to-end jit'd path this function exists for.
+    # Duck-typing works for NumPy arrays, JAX tracers, CuPy arrays and the
+    # typed scalars the JAX cast accepts; a missing or non-complex dtype
+    # attribute falls back to the library-default complex dtype.
     probe_dtype = getattr(E_in, 'dtype', None)
     if probe_dtype is not None and 'complex' in str(probe_dtype):
         cdtype = _resolve_jax_complex_dtype(probe_dtype)
@@ -1804,11 +1785,10 @@ def propagate_through_system_jax(E_in: np.ndarray,
     elem_sigs = [_system_element_signature(elem) for elem in elements]
     if all(sig is not None for sig in elem_sigs) and not verbose:
         sigs_tuple = tuple(elem_sigs)
-        # v4.13.0 (audit L2): include dtype in the cache key so calls
-        # at complex64 and complex128 don't share the same compiled XLA
-        # kernel.  Pre-fix the cache key omitted dtype entirely, so the
-        # first call to win the race fixed the kernel precision for
-        # every subsequent call regardless of the active default.
+        # dtype is part of the cache key so calls at complex64 and
+        # complex128 do not share one compiled XLA kernel; without it the
+        # first call to win the race fixes the kernel precision for every
+        # subsequent call, whatever the active default (audit L2).
         cache_key = (sigs_tuple, float(wavelength), float(dx), float(dy),
                      str(np.dtype(cdtype)))
         with _PROPAGATE_SYSTEM_JAX_CACHE_LOCK:

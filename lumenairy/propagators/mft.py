@@ -19,6 +19,8 @@ Public symbols are re-exported by ``propagation.py``.
 Author:  Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.mft.md``.
+
 from __future__ import annotations
 
 import warnings
@@ -253,9 +255,7 @@ def angular_spectrum_propagate_mft(
     ------
     ValueError
         If ``dx_out`` / ``dy_out`` is non-finite or ``<= 0``, or
-        ``N_out < 1`` (v5.30, audit P11 -- previously ``dx_out < 0`` was
-        accepted and returned a finite field on a silently mirrored grid,
-        and ``dx_out = nan`` returned an all-NaN field).
+        ``N_out < 1`` (audit P11).
 
     Warns
     -----
@@ -364,25 +364,23 @@ def angular_spectrum_propagate_mft(
     # below.  Cache H on the input-geometry signature so repeat calls
     # at the same input plane onto different output grids share one
     # H build.  ``'ASM_MFT'`` tag keeps these entries disjoint from
-    # plain ASM.  4.12.0: both backends now use ``fx < fx_max`` (open
-    # interval, matching the Matsushima-Shimobaba paper and plain ASM);
-    # pre-4.12 the NumPy branch used `<=` (one-bin off from JAX).
-    # v5.24.4 (audit S2-3): H is FIELD-INDEPENDENT (input geometry,
-    # wavelength and z only), so build it on the HOST in float64 and
-    # cache it, then move it onto the active backend.  Building it under
-    # the JAX tracer instead silently evaluated the kernel argument
-    # ``kz * z`` (up to ~1e6 rad) in float32 whenever ``jax_enable_x64``
-    # is off (the JAX default) -- ``jnp.arange(dtype=float64)`` truncates
-    # to float32 there -- losing ~26 dB of phase accuracy vs the NumPy
-    # contract.  Host-building keeps the field gradient intact (H does
-    # not depend on the field); only concrete-float geometry gradients
-    # are foregone.  NumPy / CuPy paths are byte-identical to before,
-    # and JAX now shares the same cached, f64-built H.  4.12.0: strict
-    # `<` band-limit (Matsushima-Shimobaba open interval; matches plain
-    # ASM).  v5.30 (audit P12): the cutoff below is the z -> infinity
-    # ASYMPTOTE ``L / (2*lambda*|z|)`` of the paper's exact
-    # local-frequency limit, not that limit -- strictly larger, so it
-    # never over-filters.  See ``fft_infra._get_or_make_bandlimit``.
+    # plain ASM.  Both backends use ``fx < fx_max``, the open interval of
+    # the Matsushima-Shimobaba paper.
+    #
+    # H is FIELD-INDEPENDENT (input geometry, wavelength and z only), so it
+    # is built on the HOST in float64 and cached, then moved onto the
+    # active backend (audit S2-3).  Building it under the JAX tracer
+    # instead silently evaluates the kernel argument ``kz * z`` (up to
+    # ~1e6 rad) in float32 whenever ``jax_enable_x64`` is off (the JAX
+    # default) -- ``jnp.arange(dtype=float64)`` truncates to float32 there
+    # -- losing ~26 dB of phase accuracy against the NumPy contract.
+    # Host-building keeps the field gradient intact (H does not depend on
+    # the field); only concrete-float geometry gradients are foregone.
+    #
+    # The cutoff below is the z -> infinity ASYMPTOTE
+    # ``L / (2*lambda*|z|)`` of the paper's exact local-frequency limit,
+    # not that limit -- strictly larger, so it never over-filters (audit
+    # P12).  See ``fft_infra._get_or_make_bandlimit``.
     h_key = (int(Ny_in), int(Nx_in), float(dy_in), float(dx_in),
              float(wavelength), float(z),
              bool(bandlimit),
@@ -452,10 +450,10 @@ def angular_spectrum_propagate_mft(
     # odd N_in the two origins differ by half an input pixel, so the
     # reconstruction coordinate is ``x_out + off_in`` with
     # ``off_in = (N_in/2 - N_in//2)*d_in``.  Folding that offset into the
-    # output centre is exact and keeps the declared grid: post-fix
-    # ASM-MFT reproduces angular_spectrum_propagate on the same grid to
-    # 4.4e-14 at N=257 (pre-fix: rel err 1.5e-1, centroid -3.39 px).
-    # ``off_in`` is exactly 0.0 for even N_in -> bit-identical.
+    # output centre is exact and keeps the declared grid: ASM-MFT
+    # reproduces angular_spectrum_propagate on the same grid to 4.4e-14 at
+    # N=257.  ``off_in`` is exactly 0.0 for even N_in, so those calls are
+    # bit-identical either way.
     alpha_x = dx_out / (Nx_in * dx_in)
     alpha_y = dy_out / (Ny_in * dy_in)
     off_in_x = (Nx_in / 2.0 - Nx_in // 2) * dx_in
@@ -545,11 +543,10 @@ def resample_field(
       0.40              2.5            0.718458    0.718456
       ================  =============  ==========  ==========
 
-      The docstring's own case -- "features sampled at >= 4 pixels",
-      i.e. 0.25 cycles/pixel -- sits between the 0.20 and 0.30 rows, so
-      the loss there is between 0.9 % and 6.8 %, NOT the "< 0.1 %" this
-      note claimed before v5.46.  ``dx_out == dx_in`` is the exact
-      identity (rel L2 2.5e-16), so all of it is resampling MTF.
+      Features sampled at 4 pixels (0.25 cycles/pixel) sit between the
+      0.20 and 0.30 rows, so the loss there is between 0.9 % and 6.8 %.
+      ``dx_out == dx_in`` is the exact identity (rel L2 2.5e-16), so all
+      of it is resampling MTF.
 
       This bites hardest on the single-FFT Fresnel output, whose
       residual output-plane chirp sits at EXACTLY Nyquist at the grid

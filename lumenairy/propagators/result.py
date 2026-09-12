@@ -20,6 +20,8 @@ replay) take a single uniform input.
 Author: Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.result.md``.
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -59,23 +61,17 @@ class PropagationResult:
        not change; the un-wrapped kernels' 3-tuple is likewise pinned.
 
     .. note::
-       **P16 resolved (v5.30, roadmap Part F1).**  The deferred F1 decision
-       -- ``propagate()``'s default return becoming a ``PropagationResult``
-       for every method, EXECUTED in v5.30 -- was required to settle P16 in
-       the same pass, because the wrapper's 2-item iteration and the
-       kernels' 3-item tuple cannot both be "the" unpacking contract once
-       the wrapper is the default.
-
-       **Decision: iteration stays 2-item, permanently.**  It is NOT
-       scheduled to become ``(field, dx_out, dy_out)`` at the flip, and no
-       registry entry schedules such a change.  Rationale: the chosen F1
-       option keeps ``return_result=False`` available past the flip, so a
-       caller who unpacks ``E, dxo, dyo`` migrates by naming that contract
-       -- no arity change needed.  Re-arity-ing :meth:`__iter__` would
-       instead break the ``E, intermediates = propagate_through_system(...,
-       return_result=True)`` callers this method exists for, i.e. trade one
-       breakage for a new one, which is exactly what the least-breaking
-       option was chosen to avoid.
+       **P16 resolved: iteration stays 2-item, permanently** (roadmap
+       Part F1).  It is NOT scheduled to become
+       ``(field, dx_out, dy_out)``, and no registry entry schedules such
+       a change.
+       ``propagate()``'s default return is the wrapper and
+       ``return_result=False`` stays available, so a caller who unpacks
+       ``E, dxo, dyo`` migrates by naming that contract -- no arity
+       change needed.  Re-arity-ing :meth:`__iter__` would instead break
+       the ``E, intermediates = propagate_through_system(...,
+       return_result=True)`` callers this method exists for: one breakage
+       traded for a new one.
 
     Attributes
     ----------
@@ -87,10 +83,9 @@ class PropagationResult:
         Sample spacing of ``field`` along y [m].  Defaults to ``dx``
         for square-grid kernels (preserves back-compat for ASM, RS,
         and any other propagator that returns a square pitch).
-        Anamorphic Fresnel / Fraunhofer / SAS kernels return a
-        distinct ``dy_out``; v4.13.0 (audit L3) threads that value
-        through :func:`_coerce_field` so the wrapped result no longer
-        silently discards the y-axis pitch.
+        Anamorphic Fresnel / Fraunhofer / SAS kernels return a distinct
+        ``dy_out``, which :func:`_coerce_field` threads through to here
+        (audit L3).
     wavelength : float
         Vacuum wavelength used for the propagation [m].
     z : float, optional
@@ -172,10 +167,8 @@ class PropagationResult:
         class docstring's warning (audit P16).  Read :attr:`dx_out` /
         :attr:`dy_out` for the output sampling.
 
-        v5.30 (roadmap Part F1): this arity did NOT change when
-        ``propagate()``'s default return became a ``PropagationResult``,
-        and is NOT scheduled to change -- see the P16 note on the class.
-        3-tuple unpackers pass ``return_result=False``.
+        The arity is NOT scheduled to change -- see the P16 note on the
+        class.  3-tuple unpackers pass ``return_result=False``.
         """
         yield self.field
         yield self.intermediates if self.intermediates is not None else []

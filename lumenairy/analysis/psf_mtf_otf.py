@@ -20,6 +20,8 @@ See Also
 lumenairy.analysis.beam_stats : beam-shape statistics.
 lumenairy.analysis.polychromatic : multi-wavelength wrappers.
 """
+
+# Version history for this module: ``docs/history/lumenairy.analysis.psf_mtf_otf.md``.
 from __future__ import annotations
 
 from typing import Optional, Tuple
@@ -120,18 +122,12 @@ def compute_psf(
     broke the canonical Strehl calculation pattern; ``'power'`` is now
     the default and ``'peak'`` is opt-in.
     """
-    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
-    # ``_check_2d_scalar_field`` helper.  Previously an MCF / 3-D
-    # ensemble pupil failed downstream at ``pupil.ndim`` /
-    # ``pupil.shape`` and produced an unhelpful TypeError /
-    # ValueError instead of the canonical v4.16 message.  Input
-    # kind: 'pupil' (the function consumes a 2-D pupil amplitude *
-    # phase product and does a single Fraunhofer FT to the PSF
-    # plane).  v5.31 (audit A-9): ``input_kind='pupil'`` is now
-    # actually passed.  v4.15.5 landed the parameterised helper in a
-    # parallel branch and left a marker comment here deferring to it;
-    # the marker outlived the thing it was waiting for by five minor
-    # releases, so this guard described a pupil as a "field".
+    # Defensive guard via the shared ``_check_2d_scalar_field`` helper: an
+    # MCF / 3-D ensemble pupil would otherwise fail downstream at
+    # ``pupil.ndim`` / ``pupil.shape`` with an unhelpful TypeError /
+    # ValueError instead of the canonical message.  Input kind 'pupil' --
+    # this function consumes a 2-D pupil amplitude * phase product and does
+    # a single Fraunhofer FT to the PSF plane.
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(pupil, 'compute_psf', input_kind='pupil')
     xp = _xp_of(pupil)
@@ -225,11 +221,7 @@ def compute_otf(psf: np.ndarray) -> np.ndarray:
         ``otf[0, 0]`` is the most negative frequency bin, not DC (on a
         symmetric PSF it measures ~1e-17, i.e. numerical zero).
 
-        v5.29.1 (audit A-7): this docstring previously claimed
-        ``otf[0, 0]`` was the DC = 1 element, contradicting the
-        ``fftshift`` the implementation has always applied.  Behaviour is
-        unchanged -- only the documented convention is corrected.  The
-        matching spatial-frequency axes are
+        The matching spatial-frequency axes are
         ``fftshift(fftfreq(N, d=dx_psf))``; see :func:`mtf_radial`, which
         already assumes the centred layout.
 
@@ -239,15 +231,13 @@ def compute_otf(psf: np.ndarray) -> np.ndarray:
     of the pupil function. Both approaches give the same result for
     coherent imaging systems.
     """
-    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
-    # ``_check_2d_scalar_field`` helper.  Previously an MCF / 3-D
-    # ensemble psf failed downstream at ``xp.fft.fft2`` (which would
-    # FFT along the last two axes of a 3-D stack -- silently wrong
-    # output shape).  Input kind: 'psf' (a real-valued intensity
-    # PSF; the helper still accepts it because the only invariant
-    # checked is ``.ndim == 2`` plus the MCF rejection).  Routes
-    # both failure modes to the canonical v4.16 message via the V6
-    # walker.
+    # Defensive guard via the shared ``_check_2d_scalar_field`` helper: an
+    # MCF / 3-D ensemble psf would otherwise reach ``xp.fft.fft2``, which
+    # FFTs along the last two axes of a 3-D stack -- silently the wrong
+    # output shape.  Input kind 'psf': a real-valued intensity PSF, which
+    # the helper accepts because the only invariants it checks are
+    # ``.ndim == 2`` and the MCF rejection.  Both failure modes route to
+    # the canonical message via the V6 walker.
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(psf, 'compute_otf', input_kind='psf')
     xp = _xp_of(psf)
@@ -1127,28 +1117,26 @@ def rayleigh_resolution(
     pin the radius form because it matches the standard
     ``1.22 lambda f/#`` formula directly.
 
-    Accuracy (v5.30, audit
-    AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 finding A-1):
+    Accuracy (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 finding A-1):
     ``axis='radial'`` measures the sub-pixel azimuthally-averaged
     profile (:func:`_radial_profile_subpixel`, the same one
-    :func:`sparrow_resolution` uses) instead of the integer-pixel
-    radial binning it used through v5.29.  Measured on an analytic
-    Airy PSF (600 nm, f/4) against ``1.22 lambda f/#``:
+    :func:`sparrow_resolution` uses).  Measured on an analytic Airy PSF
+    (600 nm, f/4) against ``1.22 lambda f/#``:
 
-    ======================  ===============  ==============
-    samples / first zero    v5.29 (binned)   v5.30 (sub-px)
-    ======================  ===============  ==============
-    19.5                    -0.12%           +0.02%
-    9.8                     +1.54%           +0.10%
-    4.9                     +6.76%           +0.18%
-    2.4                     NaN + warning    +3.26%
-    ======================  ===============  ==============
+    ======================  ==============
+    samples / first zero    error
+    ======================  ==============
+    19.5                    +0.02%
+    9.8                     +0.10%
+    4.9                     +0.18%
+    2.4                     +3.26%
+    ======================  ==============
 
     Below ~3 samples per first zero the ring is barely resolved and
     the residual error grows quickly (a few percent at 2.4, tens of
     percent at 1.2); the metric is only meaningful on a PSF the grid
     actually resolves.  ``axis='x'`` / ``axis='y'`` take pixel-aligned
-    cuts through the peak and are unchanged.
+    cuts through the peak.
 
     The first-zero search requires a *true* local minimum (strict
     inequality on at least one side).  Gaussian-like PSFs whose
@@ -1504,26 +1492,25 @@ def fwhm_resolution(
     ``profile(r) <= 0.5 * profile.max()``.  Linear interpolation
     across the crossing gives sub-pixel accuracy.
 
-    Accuracy (v5.30, audit
-    AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 finding A-1):
+    Accuracy (audit AUDIT_ADVERSARIAL_CODEBASE_2026_07_25 finding A-1):
     ``axis='radial'`` measures the sub-pixel azimuthally-averaged
     profile (:func:`_radial_profile_subpixel`, the same one
-    :func:`sparrow_resolution` uses) instead of the integer-pixel
-    radial binning it used through v5.29, whose lopsided small-r
-    shells biased the half-max crossing sharply inward.  Measured on
-    an analytic Airy PSF (600 nm, f/4) against ``1.029 lambda f/#``:
+    :func:`sparrow_resolution` uses); integer-pixel radial binning has
+    lopsided small-r shells that bias the half-max crossing sharply
+    inward.  Measured on an analytic Airy PSF (600 nm, f/4) against
+    ``1.029 lambda f/#``:
 
-    ======================  ===============  ==============
-    samples / first zero    v5.29 (binned)   v5.30 (sub-px)
-    ======================  ===============  ==============
-    19.5                    -0.12%           -0.00%
-    9.8                     -1.92%           +0.01%
-    4.9                     -8.04%           +0.01%
-    2.4                     -21.08%          -1.03%
-    ======================  ===============  ==============
+    ======================  ==============
+    samples / first zero    error
+    ======================  ==============
+    19.5                    -0.00%
+    9.8                     +0.01%
+    4.9                     +0.01%
+    2.4                     -1.03%
+    ======================  ==============
 
     ``axis='x'`` / ``axis='y'`` take pixel-aligned cuts through the
-    peak and are unchanged (+0.1 to +1.4% over the same sweep).
+    peak (+0.1 to +1.4% over the same sweep).
     """
     xp = _xp_of(psf)
     psf_np = _to_numpy_host(psf)

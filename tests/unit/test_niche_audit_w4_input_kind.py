@@ -639,15 +639,27 @@ def test_shack_hartmann_declares_field_not_pupil():
     assert 'expected 2-D complex field of shape' in msg, msg
     assert 'complex pupil' not in msg, msg
 
-    # The superseded claim must not survive as an unqualified assertion
-    # in the source: the next reader who greps that comment must find the
-    # correction attached to it, not just a comment silently contradicted
-    # by the line beneath it.
+    # The superseded claim must not survive in the source -- and neither,
+    # now, does the retraction that named it.  This assertion originally
+    # required the word "superseding" to be present, because the v5.32
+    # correction sat next to the v4.15.5 "Input kind: 'pupil'" gloss it
+    # overturned and a reader who greps the gloss had to find the
+    # correction attached to it.  WP-A17 (audit 2026-09-11, finding P2-4)
+    # moved that retraction to
+    # ``docs/history/lumenairy.analysis.detector.md`` and left the source
+    # stating the live rule once, so the gloss it contradicted is no
+    # longer there to be found.  The requirement therefore tightens: the
+    # false claim must be ABSENT and the live declaration must be stated
+    # with its reason.
     src = (_REPO_ROOT / 'lumenairy/analysis/detector.py').read_text(
         encoding='utf-8')
-    assert 'superseding' in src, (
-        "detector.py must record that the v4.15.5 \"Input kind: 'pupil'\" "
-        "comment was superseded, not merely contradict it.")
+    assert "Input kind: 'pupil'" not in src, (
+        "detector.py still carries the superseded v4.15.5 \"Input kind: "
+        "'pupil'\" claim for shack_hartmann.")
+    assert "``input_kind='field'``, not 'pupil'" in src, (
+        "detector.py must state the live input_kind for shack_hartmann and "
+        "why it is not 'pupil'; the v5.32 retraction it replaces is in "
+        "docs/history/lumenairy.analysis.detector.md.")
 
 
 def test_stale_input_kind_todo_is_gone():

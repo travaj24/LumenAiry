@@ -13,6 +13,8 @@ compatibility with the pre-v5.1.0 import paths.
 Author:  Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.asm.md``.
+
 from __future__ import annotations
 
 import importlib.util as _importlib_util_for_ne
@@ -309,19 +311,14 @@ def _build_asm_H_square(
     :func:`_get_asm_H_natural`) is bit-exact for matching ``N``, ``dx``,
     ``z``, ``wavelength`` and ``bandlimit`` arguments.
 
-    K8 (audit 2026-09-11): it was NOT, for odd ``N`` with
-    ``bandlimit=False``.  This builder formed the frequency axis by
-    DIVISION, ``(arange(N) - N//2) / (N*dx)``, while
-    ``_get_or_make_freq_grids`` multiplies by the reciprocal,
-    ``(arange(N) - N//2) * (1.0/(N*dx))``; the two differ by up to 1 ULP
-    whenever ``1/(N*dx)`` is not exactly representable.  Measured:
-    byte-identical at N=64/dx=1 um and N=256/dx=0.5 um (both have an
-    exact reciprocal) and at N=255/dx=0.5 um with ``bandlimit=True``, but
-    ``max|dH| = 9.096e-13`` at N=255/dx=0.5 um with ``bandlimit=False``.
-    Physically ~1e-12 rad and irrelevant, but "bit-exact" is a
-    pinned-bits contract and this builder is the ``shack_hartmann``
-    per-lenslet path, so the expression is now the SAME one the shared
-    frequency-grid cache uses.
+    The frequency axis is formed by MULTIPLYING by the reciprocal,
+    ``(arange(N) - N//2) * (1.0/(N*dx))``, exactly as
+    ``_get_or_make_freq_grids`` does -- NOT by dividing.  The two spellings
+    differ by up to 1 ULP whenever ``1/(N*dx)`` is not exactly
+    representable (measured ``max|dH| = 9.096e-13`` at N=255 / dx=0.5 um
+    with ``bandlimit=False``; physically ~1e-12 rad and irrelevant), and
+    "bit-exact" here is a pinned-bits contract on the ``shack_hartmann``
+    per-lenslet path (audit K8).
     """
     if dtype is None or not np.issubdtype(dtype, np.complexfloating):
         dtype = np.complex128
@@ -868,14 +865,14 @@ def angular_spectrum_propagate(
         target_cdtype = E_in.dtype
     else:
         target_cdtype = np.dtype(_state.DEFAULT_COMPLEX_DTYPE)
-        # v5.17.x (P2-26): cast the real-dtype field to the target complex
-        # dtype BEFORE it reaches ``_fft2`` (mirrors the batch sibling).
-        # Pre-fix, a real float32/float64 E_in was fed uncast into the
-        # pyFFTW dispatcher, which rejects a real->complex in-place plan
-        # with ``ValueError: Invalid direction``; the failure handler then
-        # permanently blacklisted the bare SHAPE for ALL dtypes (so every
-        # later complex128 call at that shape silently ran on scipy) and
-        # emitted a misleading 'memory pressure' warning.
+        # Cast the real-dtype field to the target complex dtype BEFORE it
+        # reaches ``_fft2`` (mirrors the batch sibling).  An uncast real
+        # float32/float64 E_in reaches the pyFFTW dispatcher, which rejects
+        # a real->complex in-place plan with ``ValueError: Invalid
+        # direction``; the failure handler then permanently blacklists the
+        # bare SHAPE for ALL dtypes -- so every later complex128 call at
+        # that shape silently runs on scipy -- and emits a misleading
+        # 'memory pressure' warning (audit P2-26).
         E_in = E_in.astype(target_cdtype)
 
     # v5.40 (LEVER 3a): the streamed transfer function.  Taken only on the
@@ -1037,14 +1034,13 @@ def apply_fresnel_curvature(
     Y, X = np.meshgrid(ax_y, ax_x, indexing='ij')
     r2 = X * X + Y * Y
     k = 2.0 * np.pi / wavelength
-    # v5.17.x (audit P3-51): honour dtype-follows-input.  The carrier
-    # argument ``k*r2/(2R)`` is accumulated at float64 (r2 is built from
-    # f64 grids above) and only the FINISHED phase factor is cast to
-    # E's complex dtype before the multiply -- the P2-29 f64-carrier-
-    # then-cast recipe.  Pre-fix a complex64 E was silently promoted to
-    # complex128 whenever R != 0 (while the R=0 early-return above kept
-    # complex64), contradicting the docstring's "same shape and dtype".
-    # complex128 inputs are byte-identical (astype(copy=False) no-op).
+    # Honour dtype-follows-input.  The carrier argument ``k*r2/(2R)`` is
+    # accumulated at float64 (r2 is built from f64 grids above) and only
+    # the FINISHED phase factor is cast to E's complex dtype before the
+    # multiply -- the P2-29 f64-carrier-then-cast recipe.  Without it a
+    # complex64 E is promoted to complex128 whenever R != 0, while the
+    # R=0 early-return above keeps complex64 -- contradicting this
+    # function's documented "same shape and dtype" (audit P3-51).
     if np.iscomplexobj(E):
         target_cdtype = E.dtype
     else:
@@ -1126,13 +1122,10 @@ def angular_spectrum_propagate_batch(
         target_cdtype = np.dtype(_state.DEFAULT_COMPLEX_DTYPE)
         E_stack = E_stack.astype(target_cdtype)
 
-    # v5.17.x (P2-27): fetch H directly through the shared cache/build
-    # helper.  Pre-fix this delegated to the FULL scalar propagator on
-    # an uninitialised ``xp.empty`` proxy field with
-    # ``return_transfer_function=True``, paying a wasted full-grid
-    # FFT+IFFT pair (plus an fftshift+copy of H) on garbage data on
-    # EVERY batch call -- even on H-cache hits -- which made the batch
-    # entry point measurably SLOWER than two scalar calls.
+    # Fetch H directly through the shared cache/build helper: this batch
+    # entry point must not reach it by running the full scalar propagator
+    # on a proxy field, which pays a wasted full-grid FFT+IFFT pair on
+    # garbage data even on an H-cache hit (audit P2-27).
     H = _get_asm_H_natural(Ny, Nx, dy, dx, wavelength, z, bandlimit,
                            target_cdtype, xp, is_jax=False)
 
@@ -1292,16 +1285,15 @@ def angular_spectrum_propagate_tilted(
     X, Y = np.meshgrid(x, y)
 
     # -- demodulate: remove carrier tilt -------------------------------------
-    # v5.17.1: build the carrier AT the target dtype.  Pre-fix it was
-    # unconditionally complex128 (``np.exp`` of a float64 phase), which
-    # silently upcast the ENTIRE tilted pipeline (demod field, FFTs,
-    # remodulated output) for complex64 inputs -- doubling the working
-    # memory AND returning complex128, violating the dtype-follows-input
-    # contract every other propagator honours.  For complex64 the carrier
-    # phase is folded mod 2*pi in float64 BEFORE the float32 cast (the same
-    # accuracy mitigation as the main ASM kernel), so the large carrier
-    # argument (~1e5 rad across a big tilted grid) doesn't hit the float32
-    # precision floor.  The complex128 path is bit-identical to pre-fix.
+    # Build the carrier AT the target dtype.  An unconditionally complex128
+    # carrier (``np.exp`` of a float64 phase) upcasts the ENTIRE tilted
+    # pipeline -- demod field, FFTs, remodulated output -- for complex64
+    # inputs, doubling the working memory and violating the
+    # dtype-follows-input contract every other propagator honours.  For
+    # complex64 the carrier phase is folded mod 2*pi in float64 BEFORE the
+    # float32 cast (the same accuracy mitigation as the main ASM kernel),
+    # so the large carrier argument (~1e5 rad across a big tilted grid)
+    # does not hit the float32 precision floor (v5.17.1).
     _carrier_phase = (-2.0 * np.pi) * (fx0 * X + fy0 * Y)
     del X, Y
     if np.dtype(target_cdtype) == np.complex64:

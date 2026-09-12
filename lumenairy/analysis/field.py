@@ -39,6 +39,8 @@ surface-list path exists so the GUI docks (which build world-frame
 surface lists with custom image-plane placement) can call these
 public functions while preserving their fold-aware geometry.
 """
+
+# Version history for this module: ``docs/history/lumenairy.analysis.field.md``.
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -205,8 +207,8 @@ def _append_image_plane(surfaces: List[Surface],
     Bit-identical for every system with an even mirror count, including
     all mirrorless ones.
 
-    W4d (closes W4c's flag F1).  The WORLD-frame branch used to place the
-    plane along ``last.world_R[:, 2]`` unconditionally, which is right for
+    W4d (closes W4c's flag F1).  The WORLD-frame branch must NOT place the
+    plane along ``last.world_R[:, 2]`` unconditionally: that is right for
     some world lists and wrong for others -- and the AMBIGUITY IS REAL:
     ``world_surfaces_from_prescription`` re-aligns the running frame ONLY
     at a coord-break, never at a mirror, and a coord-break emits no
@@ -1400,9 +1402,9 @@ def sensitivity_ranking(
     """Central-difference sensitivity of a scalar merit to each
     variable.
 
-    Lifted-from-GUI helper: the same algorithm previously buried in
-    ``ui/sensitivity_dock.SensitivityDock._run_ranking`` is now
-    callable from any script.
+    The same central-difference ranking the GUI's
+    ``ui/sensitivity_dock.SensitivityDock._run_ranking`` runs, callable
+    from any script.
 
     Parameters
     ----------

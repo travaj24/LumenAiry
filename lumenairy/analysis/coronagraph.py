@@ -14,6 +14,8 @@ Moved here in 4.3.0 from ``lumenairy.elements.elements``;
 ``elements`` re-export path continue to work.
 """
 
+# Version history for this module: ``docs/history/lumenairy.analysis.coronagraph.md``.
+
 from __future__ import annotations
 
 import numpy as np
@@ -76,9 +78,8 @@ def coronagraph_contrast_curve(psf_coro, psf_ref, dx_focal, wavelength,
         against bright residual speckles; ``'rms'`` reports the raw
         ``sqrt(mean(I^2))``; ``'std'`` reports the mean-subtracted
         ``sqrt(mean((I - mean(I))^2))`` -- the actual 1-sigma
-        speckle-noise floor metric.  4.10: pre-4.10 mis-described
-        ``'rms'`` as the 1-sigma metric (it includes any non-zero
-        residual bias).
+        speckle-noise floor metric.  ``'rms'`` is NOT that 1-sigma
+        metric: it includes any non-zero residual bias.
 
     Returns
     -------

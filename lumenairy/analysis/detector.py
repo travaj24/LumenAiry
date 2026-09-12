@@ -14,6 +14,8 @@ Provides:
 
 Author: Andrew Traverso
 """
+
+# Version history for this module: ``docs/history/lumenairy.analysis.detector.md``.
 from __future__ import annotations
 
 from typing import Optional, Tuple
@@ -121,51 +123,33 @@ def apply_detector(
         Detector pixel coordinates [m], spaced by ``pixel_pitch``.
         These are the LOWER-LEFT (minimum-x / minimum-y) EDGE of each
         pixel, not its centre: pixel ``j`` integrates over
-        ``[x_det[j], x_det[j] + pixel_pitch)``.  (S11-4 note: the
-        pre-fix docstring called these "center coordinates", which they
-        have never been -- both binning branches map a field sample at
-        ``x`` to ``floor(x / pixel_pitch + n_pixels / 2)``.  The values
-        are left as-is rather than shifted by half a pixel because that
-        is a separate half-pixel-anchor decision of the same class as
-        ``analysis/plotting.py``'s ``(N-1)/2`` anchor, deliberately
-        deferred by AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1.  Add
-        ``pixel_pitch / 2`` if you need centres.)
+        ``[x_det[j], x_det[j] + pixel_pitch)`` -- both binning branches
+        map a field sample at ``x`` to
+        ``floor(x / pixel_pitch + n_pixels / 2)``.  Add
+        ``pixel_pitch / 2`` if you need centres; the axis is deliberately
+        NOT shifted here, that being a half-pixel-anchor decision of the
+        same class as ``analysis/plotting.py``'s ``(N-1)/2`` anchor,
+        deferred by AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1 (S11-4).
 
     Notes
     -----
     **S11-4 pixel-area contract**
-    (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1).  Pre-fix, an explicit
-    ``n_pixels`` silently redefined the pixel area: the integer fast
-    path block-summed ``Ny / n_pixels`` FIELD SAMPLES per detector pixel
-    while the returned axis was spaced by ``pixel_pitch``, so the
-    per-pixel signal was wrong by
-    ``((N * dx_field) / (n_pixels * pixel_pitch))**2`` and the whole
-    field's flux was crammed into (or smeared across) the declared
-    detector.  Measured at photon scale on a uniform
-    ``I0 = 1e18 /m^2/s`` field, 64x64 @ 1 um, QE 1, 1 s, no noise
-    (expected per-pixel electrons ``I0 * pixel_pitch**2``):
+    (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1).  ``pixel_pitch`` is the
+    only authority on the collecting area of one pixel; an explicit
+    ``n_pixels`` must never redefine it.  Block-summing ``Ny / n_pixels``
+    FIELD SAMPLES per detector pixel while returning an axis spaced by
+    ``pixel_pitch`` makes the per-pixel signal wrong by
+    ``((N * dx_field) / (n_pixels * pixel_pitch))**2`` -- measured up to
+    16x at photon scale -- and crams the whole field's flux into (or
+    smears it across) the declared detector.
 
-    ======================== ============= =============
-    (n_pixels, pixel_pitch)  measured/exp  measured/exp
-    \\                        (pre-fix)     (post-fix)
-    ======================== ============= =============
-    (16, 4 um)  matched       1.0000        1.0000
-    (16, 2 um)                4.0000        1.0000
-    (16, 8 um)                0.2500        1.0000
-    (8,  2 um)               16.0000        1.0000
-    (16, 2.5 um)              2.5600        1.0000
-    ======================== ============= =============
-
-    The non-integer branch (v5.4.6 F-10) was already correct at every
-    combination -- it bins by physical position against ``pixel_pitch``
-    -- so the two branches also disagreed with each other.  The integer
-    block-sum fast path is now taken ONLY when it is provably identical
-    to the physical binning: ``pixel_pitch / dx_field`` an integer
-    ``s >= 1`` AND ``n_pixels * s == Nx == Ny`` (the detector exactly
-    tiling the field, which is what the default ``n_pixels`` produces).
-    Every other combination routes through the flux-conserving
-    physical-position branch.  Bit-identical for the default
-    ``n_pixels`` on a square field.
+    The integer block-sum fast path is therefore taken ONLY when it is
+    provably identical to the physical binning: ``pixel_pitch / dx_field``
+    an integer ``s >= 1`` AND ``n_pixels * s == Nx == Ny`` (the detector
+    exactly tiling the field, which is what the default ``n_pixels``
+    produces).  Every other combination routes through the
+    flux-conserving physical-position branch, which bins against
+    ``pixel_pitch`` and is correct at every combination.
     """
     # v4.15.4 (P2-NEW-3WAY-2): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper.  v4.15.3 scoped the walker
@@ -192,11 +176,11 @@ def apply_detector(
     if n_pixels is None:
         n_pixels = max(1, int(Nx * dx_field / pixel_pitch))
     else:
-        # S11-4: a non-positive explicit count used to reach the binning
-        # block and die inside numpy ("zero-size array to reduction
-        # operation maximum" for 0, "can only specify one unknown
-        # dimension" for -2), naming neither this function nor the
-        # argument.
+        # S11-4: without this check a non-positive explicit count reaches
+        # the binning block and dies inside numpy ("zero-size array to
+        # reduction operation maximum" for 0, "can only specify one
+        # unknown dimension" for -2), naming neither this function nor
+        # the argument.
         n_pixels = int(n_pixels)
         if n_pixels < 1:
             raise ValueError(
@@ -207,38 +191,30 @@ def apply_detector(
     y_det = (np.arange(n_pixels) - n_pixels / 2) * pixel_pitch
 
     # ---- Area-weighted integration onto the detector grid --------------
-    # The old approach used integer truncation of the per-field-sample
-    # index into the detector pixel grid, which gave non-uniform per-
-    # pixel sample counts when (pixel_pitch / dx_field) wasn't an exact
-    # integer aligned with the grid.  That imbalance dominated the
-    # Poisson statistics (std was 20x sqrt(mean)).
+    # Integer truncation of the per-field-sample index into the detector
+    # pixel grid gives non-uniform per-pixel sample counts whenever
+    # ``pixel_pitch / dx_field`` is not an exact integer aligned with the
+    # grid, and that imbalance dominates the Poisson statistics (measured
+    # std 20x sqrt(mean)).  Two branches avoid it, and BOTH are area
+    # integrations rather than point samples:
     #
-    # Here we use scipy.ndimage.zoom to resample to the detector pitch
-    # with proper anti-aliased integration, then multiply by dx_field^2
-    # to turn the re-sampled intensity (per unit area) into a per-pixel
-    # integrated signal.  For integer ratios this agrees with block-sum
-    # reshape to machine precision; for non-integer ratios it
-    # interpolates cleanly.
-    # 4.10: proper area integration of the intensity field onto the
-    # detector grid.  Pre-4.10 used scipy.ndimage.zoom(order=1), which
-    # is BILINEAR INTERPOLATION (point-sample at the new pixel
-    # centers), NOT area integration.  Multiplying that by pixel_pitch^2
-    # is dimensionally pixel_pitch^2 * intensity, NOT
-    # integral_over_pixel(intensity) * dx_field^2 -- so photon
-    # conservation fails for non-integer pixel_pitch/dx_field ratios
-    # and shot-noise calibration loses meaning.
+    #   * integer ratio with the detector exactly tiling the field --
+    #     block-sum via ``np.add.reduceat``, which is exact;
+    #   * everything else -- assign each field sample's energy
+    #     ``I_field * dx_field**2`` to the detector pixel containing its
+    #     physical centre (flux-conserving; audit F-10).
     #
-    # For integer ratios use block-sum via np.add.reduceat.  For
-    # non-integer ratios first uniform-filter to anti-alias, then
-    # sample at the new pixel centers, scaled by pixel_pitch^2 so the
-    # integral over each detector pixel is correctly represented.
-    # (P4: removed a leftover compute-and-discard expression here.)
+    # Point-sampling interpolation (``scipy.ndimage.zoom(order=1)``, say)
+    # must NOT be used here: multiplying a bilinear resample by
+    # ``pixel_pitch**2`` is dimensionally ``pixel_pitch**2 * intensity``,
+    # not ``integral_over_pixel(intensity) * dx_field**2``, so photon
+    # conservation fails for non-integer ``pixel_pitch / dx_field`` ratios
+    # and shot-noise calibration loses its meaning.
     #
     # Per-detector-pixel area in field samples.  S11-4
     # (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1): this MUST come from
     # ``pixel_pitch``, the physical pixel size, not from
-    # ``Ny / n_pixels``.  See the Notes block in the docstring for the
-    # photon-scale before/after table (up to 16x per-pixel error).
+    # ``Ny / n_pixels``.  See the Notes block in the docstring.
     samples_per_pix = pixel_pitch / dx_field
     _sp_int = int(round(samples_per_pix))
     # The block-sum fast path starts its blocks at field sample 0 and so
@@ -558,33 +534,23 @@ def shack_hartmann(
     correction.  Pinned in
     ``tests/unit/test_niche_s12_shack_hartmann_reference.py``.
     """
-    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
-    # ``_check_2d_scalar_field`` helper.  Pre-v4.15.5 an MCF / 3-D
-    # ensemble input failed at ``E.shape[0]`` (3-D returned a wrong
-    # ``N``) or attribute access (MCF), then propagated wrong slopes
-    # / centroids through the lenslet loop.  Routes both to the
-    # canonical v4.16 message via the V6 walker.
+    # Defensive guard via the shared ``_check_2d_scalar_field`` helper: an
+    # MCF / 3-D ensemble input would otherwise fail at ``E.shape[0]`` (3-D
+    # returns a wrong ``N``) or on attribute access (MCF) and then
+    # propagate wrong slopes / centroids through the lenslet loop.  Both
+    # route to the canonical message via the V6 walker.
     #
-    # v5.32 (audit A-9 handoff): ``input_kind='field'``, superseding this
-    # comment's own v4.15.5 claim of "Input kind: 'pupil' (the SH-WFS
-    # measures a complex pupil-plane field)".  That gloss argued itself
-    # out of its own conclusion -- "pupil-plane" names the PLANE, while
-    # the thing this argument carries is a FIELD, which is exactly what
-    # the Parameters entry above says ("E : ndarray, complex, shape
-    # (N, N) / Input field at the lenslet array plane").  ``input_kind``
-    # picks the noun in the rejection message, so it must match the
-    # argument the caller actually passed: declaring 'pupil' here would
-    # tell someone who passed ``E`` that a "2-D complex pupil" was
-    # expected -- re-creating, in mirror image, the very A-9 defect
-    # (``compute_psf(pupil, ...)`` reporting "field") that this rollout
-    # exists to close.  The library-wide convention after A-9 is that
-    # only the three sites whose parameter IS named ``pupil``
-    # (``compute_psf``, ``richards_wolf_focus``, ``debye_wolf_psf``)
-    # declare 'pupil'.  Physically consistent too: this entry point
-    # takes ``dx`` and ``wavelength`` and propagates each sub-aperture
-    # with the bandlimited angular-spectrum kernel at
-    # ``z = lenslet_focal``, which needs a metrically-scaled field, not
-    # a dimensionless pupil function.
+    # ``input_kind='field'``, not 'pupil'.  ``input_kind`` picks the noun
+    # in the rejection message, so it must name the argument the caller
+    # actually passed -- here a FIELD at the lenslet-array plane, exactly
+    # as the Parameters entry says.  The library-wide convention after
+    # audit A-9 is that only the three sites whose parameter IS named
+    # ``pupil`` (``compute_psf``, ``richards_wolf_focus``,
+    # ``debye_wolf_psf``) declare 'pupil'.  Physically consistent too:
+    # this entry point takes ``dx`` and ``wavelength`` and propagates each
+    # sub-aperture with the bandlimited angular-spectrum kernel at
+    # ``z = lenslet_focal``, which needs a metrically-scaled field, not a
+    # dimensionless pupil function.
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E, 'shack_hartmann', input_kind='field')
     # S11-4: validate the reserved knob so a nonsense value cannot pass
@@ -690,24 +656,22 @@ def shack_hartmann(
         E_batch = E_batch * lenslet_phase[None, :, :]
 
         # ---- reference-centroid slice on a flat-wavefront calibration field.
-        # 4.10: pre-4.10 reported raw centroid / lenslet_focal as the slope,
-        # baking in any per-lenslet centring bias from sa_pixels rounding
-        # / x0 offset as a fake tilt in EVERY measurement.  Compute the
+        # ---- reference-centroid slice on a flat-wavefront calibration field.
+        # A raw ``centroid / lenslet_focal`` slope would bake any
+        # per-lenslet centring bias from ``sa_pixels`` rounding / ``x0``
+        # offset into EVERY measurement as a fake tilt.  Compute the
         # zero-slope reference centroid from a unit-amplitude flat field
         # and subtract.  A flat (ones) field produces an IDENTICAL
         # sub-aperture for every lenslet (``ones * lenslet_phase ==
         # lenslet_phase``), so ONE reference slice serves every lenslet.
         #
-        # v5.30 (S12-1): the reference is slice 0 of the SAME batch that
-        # carries the measurements, so it goes through bit-identically the
-        # same transform.  Pre-v5.30 it was propagated by a BARE
-        # ``fftshift(fft2(ifftshift(...)))`` while the measurement used the
-        # bandlimited angular-spectrum kernel at ``z = lenslet_focal`` -- a
-        # mismatch present since the v4.10 reference pass was introduced
-        # and merely hoisted out of the loop by v4.13.0 (whose comment
-        # above names the two different transforms without flagging the
-        # asymmetry).  See the ``Notes`` block in this function's docstring
-        # for the measured before/after table.
+        # The reference is slice 0 of the SAME batch that carries the
+        # measurements, so it goes through bit-identically the same
+        # transform (S12-1).  It must NOT be propagated by a bare
+        # ``fftshift(fft2(ifftshift(...)))`` while the measurement uses
+        # the bandlimited angular-spectrum kernel at ``z = lenslet_focal``
+        # -- see the ``Notes`` block in this function's docstring for the
+        # measured cost of that asymmetry.
         E_all = np.concatenate(
             (lenslet_phase[None, :, :].astype(E_batch.dtype), E_batch),
             axis=0)  # (K + 1, sa, sa); slice 0 is the flat-field reference

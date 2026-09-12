@@ -117,15 +117,14 @@ The implementation lives in five submodules:
   ``solve_envelope_stationary_jax_ift``, ``fit_canonical_polynomials_jax``)
   plus the backend-aware Chebyshev evaluators.
 
-The split is purely mechanical -- every previously-public name remains
-importable from ``lumenairy.propagators.asymptotic`` and behaves
-bit-for-bit identically.  ``propagate_modal_asymptotic`` is defined
-*in this shell* (not in a submodule) so its body resolves
-``_solve_envelope_stationary_batch`` and the batched helpers against
-this module's globals.  This preserves the pre-v5.1.0 monkey-patch
-contract relied upon by
-``tests/unit/test_audit_fixes_v4_14_1_agent_a.py``.
+Every public name is importable from ``lumenairy.propagators.asymptotic``.
+``propagate_modal_asymptotic`` is defined *in this shell* (not in a
+submodule) so its body resolves ``_solve_envelope_stationary_batch`` and the
+batched helpers against this module's globals -- the monkey-patch contract
+``tests/unit/test_audit_fixes_v4_14_1_agent_a.py`` relies on.
 """
+
+# Version history for this module: ``docs/history/lumenairy.propagators.asymptotic.md``.
 
 from __future__ import annotations
 
@@ -430,10 +429,7 @@ def propagate_modal_asymptotic(
            the grid because ``a1 = 2.017e+03`` waves of diffracted
            tilt is removed.
 
-           **The v2-linear part is NOT removed (v5.46, audit Y1).**  The
-           v5.30 W6-A4 note used to say it was, on the strength of two
-           ON-AXIS measurements where ``|a3| + |a4| <= 1.7e-09`` waves.
-           That is a property of those fixtures, not of the convention:
+           **The v2-linear part is NOT removed (audit Y1).**
            ``a3 u3 + a4 u4`` is linear in the INTEGRATION variable ``v2``,
            so dropping it moves the complex saddle and changes ``|E|``, not
            just a phase reference.  Measured with ``source_centre =
@@ -489,10 +485,7 @@ def propagate_modal_asymptotic(
     ``s1 = s2 - z v2``, ``Phi = (z + z|v2|^2/2)/lambda``, z = 20 mm,
     lambda = 1 um) versus the analytic q-parameter Gaussian beam:
     ``E_code / E_analytic = 1.0000000000128`` with a spatial spread of
-    4.2e-11.  Before v5.46 the weight was ``|det ds1/dv2|`` with no
-    ``1/lambda``, i.e. the output was ``i lambda sqrt(|det J|)`` times the
-    true field -- wavelength- AND field-point-dependent, not the "arbitrary
-    constant" the old text described.
+    4.2e-11.
 
     What is still NOT a conserved power is the PUPIL-MODE convention:
     ``pupil_amplitudes`` is an extra soft Gaussian aperture in output
@@ -507,21 +500,12 @@ def propagate_modal_asymptotic(
     ``pupil_amplitudes`` (bitwise for a real scale factor, 6.4e-16 for a
     complex one).
 
-    **v4.15 vectorisation closure.**  Prior to v4.15 this function
-    used a per-pixel Python loop with a warm-started Newton chain.
-    The chain landed in *wrong-saddle basins* near the grid edges,
-    where the overflow guard ``|b_quad| > 700`` silently zeroed those
-    pixels.  v4.15 switches to a single batched call into
-    :func:`_solve_envelope_stationary_batch` followed by
+    Every pixel is cold-started from ``v2_centre`` in a single batched
+    Newton solve (:func:`_solve_envelope_stationary_batch`), followed by
     :func:`_compute_M_b_batch` and the batched polynomial-substitution
-    helpers (cold-start Newton for every pixel from ``v2_centre``).
-    The new body finds the physical saddle uniformly and produces
-    strictly more non-zero pixels at grid edges -- physically MORE
-    correct, but breaks the pre-v4.15 bit-equal pin against the
-    warm-start reference (the v4.12.0 and v4.14.0 bit-equal pins
-    were relaxed to property pins in the same v4.15 patch; see
-    ``docs/audits/AUDIT_V4_14_2_2026_05_17.md`` Part 3.5 closure and
-    ``docs/release_notes/.release_notes_v4_15_agent_a.md``).
+    helpers.  A warm-started per-pixel chain must NOT be reintroduced: it
+    lands in *wrong-saddle basins* near the grid edges, where the overflow
+    guard ``|b_quad| > 700`` silently zeroes those pixels.
 
     The Maslov branch-unwrap is still a sequential O(N) pass over
     the valid pixels (the unwrap is fundamentally serial; only the
@@ -544,11 +528,10 @@ def propagate_modal_asymptotic(
     if s2x_arr.shape != s2y_arr.shape:
         raise ValueError(
             f"s2_grid_x and s2_grid_y shape mismatch: {s2x_arr.shape} vs {s2y_arr.shape}")
-    # v5.30 (audit W6-A5): explicit rank guard.  Pre-fix the row-major
-    # unpack below (``Ny, Nx = s2x_arr.shape``) raised a bare
-    # ``ValueError: too many values to unpack (expected 2, got 3)`` from
-    # the middle of the function for any ndim >= 3 input -- an internal
-    # error message with no mention of the offending argument.
+    # Explicit rank guard (audit W6-A5): without it the row-major unpack
+    # below (``Ny, Nx = s2x_arr.shape``) raises a bare ``ValueError: too
+    # many values to unpack (expected 2, got 3)`` from the middle of the
+    # function for any ndim >= 3 input, naming no argument at all.
     if s2x_arr.ndim > 2:
         raise ValueError(
             f"propagate_modal_asymptotic: s2_grid_x / s2_grid_y must be "
@@ -592,10 +575,9 @@ def propagate_modal_asymptotic(
     Nx_grid = (s2x_arr.shape[1] if s2x_arr.ndim >= 2 else s2x_arr.size)
 
     # ------------------------------------------------------------------
-    # v4.15 (ROADMAP #1) -- batched cold-start Newton + batched M/b/poly
+    # Batched cold-start Newton + batched M/b/poly
     # ------------------------------------------------------------------
-    # Per-pixel ``continue`` from the scalar path becomes element-wise
-    # ``valid`` masking here.
+    # Pixel-level rejection is element-wise ``valid`` masking.
 
     # ---- Fit-box mask on s2 ------------------------------------------
     u1 = (flat_x - fit.s2x_centre) / fit.s2x_halfrange

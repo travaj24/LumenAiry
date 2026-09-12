@@ -44,6 +44,8 @@ publications.
 Author: Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.hf.md``.
+
 from __future__ import annotations
 
 import warnings
@@ -246,12 +248,10 @@ def propagate_huygens_fresnel_freespace(
     other ``hf.*`` entry points -- plus the optional output-grid
     resample below.
 
-    K15 (audit 2026-09-11): the pre-v5.46 summary line claimed "the
-    standard ``1/(i lambda z)`` Van Vleck factor".  There is no Van
-    Vleck factor on this path, and the kernel actually applied is the
-    RS-I Green's function ``(z/(2 pi r^2))(1/r - ik) exp(ikr)``, whose
-    leading term is ``cos(theta)/(i lambda r)`` -- not
-    ``1/(i lambda z)``.
+    The kernel applied is the RS-I Green's function
+    ``(z/(2 pi r^2))(1/r - ik) exp(ikr)``, whose leading term is
+    ``cos(theta)/(i lambda r)``.  There is no Van Vleck factor on this
+    path (audit K15).
 
     v5.3 (AUDIT_V5_2_5 P1-1 closure): ``output_shape`` and
     ``output_dx`` kwargs are accepted and honored via a post-kernel

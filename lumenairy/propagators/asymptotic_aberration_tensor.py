@@ -22,6 +22,8 @@ All re-exported through :mod:`lumenairy.propagators.asymptotic`
 so existing call sites continue to work unchanged.
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.asymptotic_aberration_tensor.md``.
+
 from __future__ import annotations
 
 import math
@@ -38,10 +40,9 @@ from .._math.chebyshev import (
     chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
 )
 
-# v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-# Chebyshev helpers moved to lumenairy._math.chebyshev; binding the
-# new public names to the legacy underscore-prefixed locals keeps the
-# existing call sites in this module unchanged.
+# The Chebyshev helpers live in ``lumenairy._math.chebyshev``; these aliases
+# bind the public names to the underscore-prefixed locals this module's call
+# sites use.
 from .._math.chebyshev import (
     chebyshev_vandermonde as _chebyshev_vandermonde,
 )
@@ -110,8 +111,7 @@ class AberrationTensorResult:
         ``|L_legacy| = |L| * lambda * sqrt(|det J|)`` -- equivalently
         ``|L_legacy|**2 = |L|**2 * lambda**2 * |det J|``, which is the
         ``1/(lambda**2 |det J|)`` factor the two LG-merit re-pins quote.
-        (VERIFY-A4: the pre-v5.46-final wording gave the SQUARED factor for
-        ``L`` itself.)  ``None`` on the sigma-grid branch, which evaluates
+        ``None`` on the sigma-grid branch, which evaluates
         the weight per grid point.
 
     Notes
@@ -837,32 +837,24 @@ def aberration_tensor(
 
     Notes
     -----
-    **Pre-4.9 limitation removed.**  Pre-4.9 the projection at the
-    chief image collapsed to the constant term of the LG output
-    polynomial, which is identically zero for any ``ℓ ≠ 0`` mode
-    ((σ_x + j·σ_y)^|ℓ| · Laguerre has no constant term).  That made
-    coma ``(1, ±1)``, astigmatism ``(0, ±2)``, tilt ``(0, ±1)``, and
-    every other ℓ ≠ 0 entry of the returned tensor silently zero,
-    even when the underlying aberration was present.  4.9 fixes this
-    by doing the actual σ-integration via a small output-plane grid
-    and a numerical LG projection (``propagate_modal_asymptotic`` +
-    ``decompose_lg``).
+    The projection at the chief image is a point-sampling functional on
+    the closed-form branch: its whole output-mode dependence is
+    ``conj(LG_k)`` evaluated at ONE point.  That equals
+    ``N_{p,0} = sqrt(2/(pi w_o^2))`` for every ``(p, 0)`` mode, and is
+    identically zero for every ``l != 0`` mode -- ``(sigma_x + j
+    sigma_y)^|l|`` times a Laguerre polynomial has no constant term.  So
+    only the pure ``[(0, 0)]`` request takes that branch: its LG
+    polynomial genuinely IS that constant, and it is the documented
+    cross-backend contract of ``aberration_tensor_lg00_jax``.  Do NOT
+    widen the branch -- it would return a BIT-IDENTICAL ``L`` for piston
+    / defocus / spherical / every higher ``(p, 0)`` channel and an
+    identically zero one for coma, astigmatism and tilt, silently.
 
-    **v5.28.x (audit W3-T3) -- ℓ = 0 degeneracy removed.**  4.9-5.28
-    kept EVERY ℓ = 0 output mode on the closed-form chief-ray path,
-    which is a point-sampling functional whose whole output-mode
-    dependence is ``conj(LG_k)`` evaluated at one point:  that equals
-    ``N_{p,0} = sqrt(2/(π w_o²))`` for every ``(p, 0)`` mode, so
-    ``L`` came back BIT-IDENTICAL for piston / defocus / spherical /
-    every higher ``(p, 0)`` channel (and across separate single-mode
-    calls, with no warning).  Only the pure ``[(0, 0)]`` request --
-    whose LG polynomial genuinely IS that constant, and which is the
-    documented cross-backend contract of
-    ``aberration_tensor_lg00_jax`` -- still uses the closed form; every
-    other request routes to the σ-integration, whose overlaps an
-    independent from-scratch LG quadrature reproduces to ~1e-14
-    relative.  The two paths carry different overall scales (sampling
-    vs. overlap integral); see the note at the branch.
+    Every other request routes to the sigma-integration (a small
+    output-plane grid, ``propagate_modal_asymptotic`` + ``decompose_lg``),
+    whose overlaps an independent from-scratch LG quadrature reproduces to
+    ~1e-14 relative.  The two paths carry different overall scales
+    (sampling vs. overlap integral); see the note at the branch.
     """
     # Late import to avoid the propagators.asymptotic shell ↔ this
     # submodule import cycle; ``propagate_modal_asymptotic`` lives in
@@ -939,20 +931,7 @@ def aberration_tensor(
             # onto, and (via ``extent = 4·w_o``) the span of the σ grid.
             # It must therefore match the field's own image-plane width.
             #
-            # v5.29 (audit W3-T3b).  The pre-fix default was
-            # ``1/sqrt(lambda_max(Re M))``, which is DIMENSIONALLY a pupil
-            # quantity: ``M``'s entries are ``J^T J / w_s^2 + I / w_p^2 -
-            # i·pi·H_phi`` with ``J = ds1/dv2`` [m/direction-cosine], so
-            # ``M`` is in 1/direction-cosine^2 and its inverse square root
-            # is an ANGLE -- the effective pupil acceptance -- used as if
-            # it were metres.  Being dimensionally wrong, its error had no
-            # fixed sign: measured 1.01e-4 "m" against a true field waist
-            # of 1.559e-3 m (15x too NARROW, so ``4·w_o`` sampled only the
-            # flat central 10 % of the field) on the validation singlet at
-            # w_p = 0.02, but 255x too WIDE (grid entirely outside the
-            # validity box, every entry of L exactly 0) at w_p = 0.05.
-            #
-            # Nor can any function of ``M`` alone be right: the image-plane
+            # No function of ``M`` alone can supply it: the image-plane
             # width is dominated by the defocus/aberration blur, which
             # lives in the σ↔v coupling, not in the pupil-space Hessian.
             # Measured across the two validation singlets (R1 = 51.5 mm vs

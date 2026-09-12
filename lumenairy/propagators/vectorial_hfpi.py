@@ -51,6 +51,8 @@ component; this module models no such element.
 Author: Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.vectorial_hfpi.md``.
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -330,11 +332,6 @@ def propagate_vector_to_plane(
     All rotation happens where the direction changes -- at emission and
     at each re-emission; see :func:`apply_vector_aperture_diffraction`
     and :func:`_rigid_rotate`.
-
-    (Audit K15/K17: this paragraph used to attribute the neglected
-    rotation to "the full m-theory dipole formalism".  No such formalism
-    exists in this module or anywhere else in the library -- see the
-    module docstring's ``versionchanged:: 5.46`` note.)
     """
     xp = array_namespace(paths.positions)
     z_curr = paths.positions[..., 2]
@@ -389,12 +386,6 @@ def apply_vector_aperture_diffraction(
     factor), multiplied by the SCALAR Kirchhoff obliquity
     ``0.5*(cos theta_in + cos theta_out)`` and the ``1/(i lambda) dOmega``
     prefactor, and the OPL accumulator and the leg length are reset.
-
-    (Audit K15/K17: this paragraph used to say the Jones vector is
-    "multiplied by ``cos(theta_new)`` to account for the m-theory dipole
-    obliquity".  There is no such tensor -- see the module docstring --
-    and since v5.46 the obliquity is the symmetric scalar above while the
-    direction change is handled by the rotation, not by a scale factor.)
 
     Parameters
     ----------
@@ -478,11 +469,11 @@ def apply_vector_aperture_diffraction(
     # 4.11.2: include the Kirchhoff per-re-emission factor, matching the
     # scalar :func:`lumenairy.propagators.hfpi.apply_aperture_diffraction`.
     #
-    # V1 (verify pass, 2026-09-12): the MEASURE is the shared
+    # The MEASURE is the shared
     # :func:`~lumenairy.propagators.hfpi._reemission_measure` -- see its
-    # docstring for the derivation and for what the pre-fix factor cost
-    # (cascaded amplitudes low by ``n_paths * r_in``, measured identical
-    # in this module and in the scalar twin).
+    # docstring for the derivation, and for what
+    # ``normalisation='legacy'`` costs a chain (cascaded amplitudes low by
+    # ``n_paths * r_in``, measured identical here and in the scalar twin).
     obl = _reemission_measure(
         paths, cos_theta, cos_max, wavelength, normalisation,
         'apply_vector_aperture_diffraction')

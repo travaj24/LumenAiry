@@ -13,6 +13,8 @@ Public symbols are re-exported by ``propagation.py``.
 Author:  Andrew Traverso
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.fresnel.md``.
+
 from __future__ import annotations
 
 from typing import Optional, Tuple
@@ -107,11 +109,11 @@ def _centred_dft_halfpixel_args(Ny, Nx, xp=np):
     the INTEGER anchor ``q = N // 2`` -- ``fftshift``/``ifftshift`` can
     only roll by whole samples.  For even N, ``q == c`` and the two are
     the same transform.  For ODD N they differ by a half-sample in BOTH
-    planes, which is not a mere relabelling: pre-fix the returned field
-    was half an output pixel off its own grid (measured intensity
-    centroid -0.5000 px) with a residual phase ramp, rel err 1.7e-1 vs
-    ``fresnel_propagate_mft`` on the same output grid at N=257
-    (even N: 3.2e-14).
+    planes, which is not a mere relabelling: without the correction
+    derived below the returned field lands half an output pixel off its
+    own grid (measured intensity centroid -0.5000 px) with a residual
+    phase ramp, rel err 1.7e-1 against ``fresnel_propagate_mft`` on the
+    same output grid at N=257 (even N: 3.2e-14).
 
     Writing ``a = m - q``, ``b = k - q``, ``delta = c - q`` (0 or 1/2),
 

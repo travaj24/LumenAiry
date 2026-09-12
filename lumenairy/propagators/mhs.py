@@ -10,15 +10,9 @@ aperture mask, GBD, or the dispatcher.  There is no ray bundle, no
 Huygens-surface integral and no ray tracing anywhere in this file, and
 ``HuygensSurface`` is flat-only (no tilt, no curvature).
 
-K15/K24 (audit 2026-09-11): the paragraph that used to open this
-docstring said the module "splits the propagation volume into
-subdomains... within each subdomain, rays propagate geometrically...
-at each Huygens surface, the ray bundle is converted to a complex field
-via a Huygens-surface integral".  None of that is implemented here; the
-text further down (from "This module provides the structural
-framework") always was the accurate description.  The IEEE 2023 Multiple
-Huygens Surface paper is BACKGROUND -- the framework this module's
-composition API is shaped after -- not a description of the code.
+The IEEE 2023 Multiple Huygens Surface paper is BACKGROUND -- the framework
+this module's composition API is shaped after -- not a description of the
+code.
 
 This complements the existing propagators in three regimes:
 
@@ -48,6 +42,8 @@ existing :mod:`lumenairy.propagators.propagation`,
 
 Author: Andrew Traverso
 """
+
+# Version history for this module: ``docs/history/lumenairy.propagators.mhs.md``.
 
 from __future__ import annotations
 
@@ -173,11 +169,8 @@ class MhsPipeline:
                 # grid.  ``HuygensSurface.grid()`` and
                 # ``aperture_subdomain`` both honour it, so two surfaces
                 # at identical z/N/dx but different centres really are
-                # different coordinate systems -- and the pre-fix check
-                # accepted them, silently discarding the transverse jump
-                # (measured: a 50 um offset, and a 1 mm one, both ran to
-                # completion with no diagnostic while each propagator
-                # worked on its own in_surface).
+                # different coordinate systems, so accepting them would
+                # silently discard the transverse jump.
                 if (cur.out_surface.z != nxt.in_surface.z
                         or cur.out_surface.Ny != nxt.in_surface.Ny
                         or cur.out_surface.Nx != nxt.in_surface.Nx
@@ -556,24 +549,13 @@ def prescription_subdomain(
        changed here (both are long-standing public contracts): NAME the
        method explicitly.
 
-    .. versionchanged:: 5.2
-        v5.2 (AUDIT_V4_13_1 Part 2 P1-C, option a -- raise) raised
-        ``ValueError`` at subdomain construction time when
-        ``method='maslov'`` was paired with an ``out_surface`` declaring
-        a grid that differed from ``in_surface``.  Pre-v5.2 the request
-        was silently dropped (the maslov dispatcher branch does not
-        forward ``output_grid`` / ``output_dx`` to
-        :func:`apply_real_lens_maslov`) and downstream MHS pipeline
-        stitching saw a mis-shaped intermediate field.
-
     .. versionchanged:: 5.2.3
-        v5.2.3 (AUDIT_V4_13_1 P1-C substantive closure): the maslov
-        branch now **actually resamples** onto ``out_surface`` instead
-        of raising.  The propagation runs natively on the input grid
-        (which is all the maslov kernel supports), then a one-step
-        :func:`resample_field` lands the output on ``out_surface``.
-        Total power is re-normalised across the resample so the
-        resampling step preserves L2 energy to within the bicubic
+        With ``method='maslov'`` and an ``out_surface`` declaring a
+        different grid, the subdomain propagates natively on the input
+        grid -- all the maslov kernel supports -- and then lands the
+        output on ``out_surface`` with a one-step
+        :func:`resample_field`.  Total power is re-normalised across the
+        resample, so it preserves L2 energy to within the bicubic
         interpolator's numerical precision.
 
         For a non-resampling alternative -- when the resample step's
@@ -584,20 +566,19 @@ def prescription_subdomain(
 
         The narrow retained-raise corner case: the maslov kernel itself
         requires a SQUARE input field (``E_in.shape[0] == E_in.shape[1]``)
-        and SQUARE pixels (``dx == dy``).  If the caller hands the
-        subdomain a non-square input grid or a non-square output grid,
-        we raise at construction time (rather than letting the kernel
-        raise mid-pipeline).
+        and SQUARE pixels (``dx == dy``).  A non-square input or output
+        grid raises at construction time rather than letting the kernel
+        raise mid-pipeline.
 
     .. versionchanged:: 5.30
-        Both dispatcher calls now pass ``return_result=False`` explicitly
-        (audit P5 / roadmap Part F1): v5.30 flipped
-        :func:`~lumenairy.propagators.dispatch.propagate`'s default return to
-        a :class:`~lumenairy.propagators.PropagationResult`, and this
-        subdomain must hand a bare **field** to the MHS pipeline.  Outputs are
-        bit-identical to pre-v5.30.  A ``return_result`` passed through
-        ``**method_kwargs`` is therefore ignored rather than forwarded -- the
-        subdomain's own return contract is the pipeline's, not the caller's.
+        Both dispatcher calls pass ``return_result=False`` explicitly
+        (audit P5 / roadmap Part F1): this subdomain must hand a bare
+        **field** to the MHS pipeline, while
+        :func:`~lumenairy.propagators.dispatch.propagate`'s default return
+        is a :class:`~lumenairy.propagators.PropagationResult`.  A
+        ``return_result`` passed through ``**method_kwargs`` is therefore
+        ignored rather than forwarded -- the subdomain's own return
+        contract is the pipeline's, not the caller's.
     """
     from .dispatch import propagate
 
@@ -638,14 +619,12 @@ def prescription_subdomain(
         # resample is L2-energy preserving (matching the maslov kernel's
         # built-in ``normalize_output='power'`` contract).
         if kw['method'] == 'maslov':
-            # v5.30 (audit P5 / roadmap F1, flip-day migration): pass
-            # ``return_result=False`` explicitly.  This function's contract is
-            # to hand a bare FIELD back to the MHS pipeline (it is measured
-            # with ``np.abs`` / ``.dtype`` just below and stitched into the
-            # next subdomain), and since v5.30 the dispatcher's DEFAULT return
-            # is a ``PropagationResult``.  The roadmap's F1 inventory listed
-            # this site as NOT flip-safe for exactly that reason; naming the
-            # legacy contract keeps the output bit-identical.
+            # Pass ``return_result=False`` explicitly.  This function's
+            # contract is to hand a bare FIELD back to the MHS pipeline
+            # (it is measured with ``np.abs`` / ``.dtype`` just below and
+            # stitched into the next subdomain), while the dispatcher's
+            # DEFAULT return is a ``PropagationResult`` (audit P5 /
+            # roadmap F1).
             E_native = propagate(
                 E,
                 wavelength=kw['wavelength'],
@@ -668,15 +647,14 @@ def prescription_subdomain(
             # grid's edges).  This matches the maslov kernel's default
             # ``normalize_output='power'`` contract.
             #
-            # K11 (audit 2026-09-11): this block used to be duplicated
-            # verbatim here and in ``hf.py``, and BOTH renormalised to
-            # the FULL source power -- which fabricates energy whenever
-            # the declared out_surface window is smaller than the source
-            # extent (measured: a window genuinely holding 67.27 % of the
-            # power was returned carrying 100.00 %, amplitudes 1.219x).
-            # One shared helper now restores the interpolation drift
-            # only, measuring its reference power inside the target
-            # window on the source grid, and warns on a real crop.
+            # K11 (audit 2026-09-11): the shared helper restores the
+            # INTERPOLATION drift ONLY, measuring its reference power
+            # inside the target window on the source grid, and warns on a
+            # real crop.  Re-normalising to the FULL source power instead
+            # fabricates energy whenever the declared out_surface window
+            # is smaller than the source extent -- measured, a window
+            # genuinely holding 67.27 % of the power came back carrying
+            # 100.00 %, amplitudes 1.219x.
             from .hf import _resample_preserving_window_power
             E_resampled, _ = _resample_preserving_window_power(
                 E_native,
@@ -709,11 +687,10 @@ def prescription_subdomain(
                 f"sub-propagator directly if a true anamorphic output is "
                 f"required.",
                 RuntimeWarning, stacklevel=2)
-        # v5.30 (audit P5 / roadmap F1, flip-day migration): ``return_result``
-        # named explicitly for the same reason as the maslov branch above --
-        # this return goes straight into the MHS pipeline as a field, so it
-        # must stay the kernel's bare output now that the dispatcher default
-        # is a ``PropagationResult``.
+        # ``return_result`` is named explicitly for the same reason as the
+        # maslov branch above: this return goes straight into the MHS
+        # pipeline as a field, and the dispatcher's default is a
+        # ``PropagationResult``.
         return propagate(
             E,
             wavelength=kw['wavelength'],

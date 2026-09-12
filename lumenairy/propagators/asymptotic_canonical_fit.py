@@ -21,6 +21,8 @@ All re-exported through ``lumenairy.propagators.asymptotic`` so
 existing call sites continue to work unchanged.
 """
 
+# Version history for this module: ``docs/history/lumenairy.propagators.asymptotic_canonical_fit.md``.
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -725,10 +727,9 @@ def solve_envelope_stationary(
         # neglected here (Gauss-Newton-like), which costs only the
         # convergence RATE, never the root: Newton converges to F = 0
         # whatever Hessian model it uses.
-        # Y5 (audit): it is NOT "exact at the stationary point", as this
-        # comment used to claim (and its two siblings still did).  At the
-        # stationary point J^T(s_1 - s_src)/w_s^2 = -(v - v_c)/w_p^2,
-        # which is not zero, so s_1 - s_src does not vanish there and
+        # Y5 (audit): the dropped term is NOT zero at the stationary
+        # point.  There ``J^T(s_1 - s_src)/w_s^2 = -(v - v_c)/w_p^2``,
+        # which is not zero, so ``s_1 - s_src`` does not vanish and
         # neither does the dropped term; what vanishes is the RESIDUAL.
         # Second term:  d/dv2 [(v_2 - v_2c) / w_p^2] = I / w_p^2.
         H = inv_ws2 * (J.T @ J) + inv_wp2 * np.eye(2)

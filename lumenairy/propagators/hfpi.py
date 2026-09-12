@@ -93,16 +93,13 @@ def _spawn_rng(rng, stream_index: int):
     """Derive a per-aperture child RNG so consecutive diffraction
     events draw independent samples.
 
-    4.11.2: HFPI prescription walks previously called
-    ``apply_aperture_diffraction(... rng=rng)`` with the same caller-
-    supplied ``rng`` at every aperture.  Because
-    :class:`lumenairy.backend.random.RandomState` rebuilds a fresh
-    NumPy ``default_rng(rng)`` on every construction when ``rng`` is
-    an integer (or None), passing the same int seed produced *the
-    same uniform draws at every aperture* -- perfectly correlated
-    diffraction events across the cascaded stack.  We derive a
-    distinct child seed per stream index by hashing the parent seed
-    with the stream counter.
+    :class:`lumenairy.backend.random.RandomState` rebuilds a fresh NumPy
+    ``default_rng(rng)`` on every construction when ``rng`` is an integer
+    (or None), so handing the SAME int seed to every aperture would draw
+    the same uniform samples at each of them -- perfectly correlated
+    diffraction events across a cascaded stack.  A distinct child seed per
+    stream index is derived by hashing the parent seed with the stream
+    counter.
     """
     if rng is None:
         # Caller did not pin a seed; let each aperture pull from
@@ -114,16 +111,11 @@ def _spawn_rng(rng, stream_index: int):
         ss = np.random.SeedSequence(entropy=[int(rng), int(stream_index)])
         return int(ss.generate_state(1)[0])
     if isinstance(rng, np.random.Generator):
-        # K24 (audit 2026-09-11): derive the child from the parent's
-        # SeedSequence ENTROPY, exactly as the ``int`` branch above does,
-        # so ``stream_index`` is a stable key.  The pre-fix
-        # ``rng.spawn(stream_index + 1)[-1]`` MUTATED the caller's
-        # generator (it advances ``n_children_spawned`` on every call)
-        # and discarded ``stream_index`` children each time, so the
-        # mapping was not a pure function of ``(parent, i)``: measured,
-        # a fresh parent at the same stream index reproduced its draws,
-        # but "stream 1 drawn AFTER stream 0" differed from "stream 1
-        # drawn alone".  It also spawned i+1 children to use one.
+        # Derive the child from the parent's SeedSequence ENTROPY, exactly
+        # as the ``int`` branch above does, so the mapping is a PURE
+        # function of ``(parent, stream_index)``: it must not mutate the
+        # caller's generator, and ``stream_index`` must be a stable key
+        # whatever order the streams are drawn in (audit K24).
         try:
             parent_entropy = rng.bit_generator.seed_seq.entropy
         except AttributeError:
@@ -142,12 +134,11 @@ def _spawn_rng(rng, stream_index: int):
     # JAX PRNGKey: caller-side splitting is the canonical pattern,
     # but we can deterministically fold the stream index.
     #
-    # K15/K24 (audit 2026-09-11): this used to be ``except Exception:
-    # pass``, which fell through to "return as-is" and handed BOTH
-    # streams the IDENTICAL key -- the exact correlation this function
-    # exists to prevent -- with no diagnostic whatever.  Narrowed to the
-    # import / attribute failures that can actually occur, and the
-    # fall-through now says what it did.
+    # The except clause is deliberately NARROW (audit K15/K24): a blanket
+    # ``except Exception: pass`` falls through to "return as-is" and hands
+    # BOTH streams the IDENTICAL key -- the exact correlation this
+    # function exists to prevent -- with no diagnostic whatever.  The
+    # fall-through says what it did.
     try:
         import jax
         if hasattr(jax.random, 'fold_in'):
@@ -240,18 +231,13 @@ def init_paths_from_field(
     """
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
-    # K19 (audit 2026-09-11): ``rng=None`` -- the DEFAULT on every HFPI
-    # entry point -- must draw fresh system entropy, which is exactly
-    # what ``RandomState(None)`` does (``np.random.default_rng(None)``).
-    # Pre-fix this read ``rng if rng is not None else 0``, so the
-    # default was the FIXED seed 0 and ``_spawn_rng``'s documented
-    # "let each aperture pull from system entropy" branch was
-    # unreachable.  Measured: two default runs byte-identical, and
-    # identical to ``rng=0``.  HFPI is a 1/sqrt(N) Monte-Carlo
-    # estimator sold on that convergence; the canonical way to see its
-    # error is to re-run with a new seed, and on the default path that
-    # error estimate was identically ZERO.  Pass an int (or a
-    # Generator) for reproducibility.
+    # ``rng=None`` -- the DEFAULT on every HFPI entry point -- must draw
+    # fresh system entropy, which is exactly what ``RandomState(None)``
+    # does (``np.random.default_rng(None)``).  HFPI is a 1/sqrt(N)
+    # Monte-Carlo estimator: with a FIXED default seed, the canonical way
+    # to see the estimator's own error -- re-run and compare -- returns
+    # identically ZERO (audit K19).  Pass an int (or a Generator) for
+    # reproducibility.
     rs = RandomState(rng=rng)
 
     iy = rs.integers((n_paths,), low=0, high=Ny)
@@ -278,12 +264,7 @@ def init_paths_from_field(
     # 4.10: HF Kirchhoff weighting.
     #   w_path = E_in(x_s) * cos(theta) * (1/(i*lambda)) * dOmega
     # with dOmega = 2*pi*(1-cos(theta_max)) / N_paths (uniform-cone MC).
-    # Pre-4.10 omitted both 1/(i*lambda) and the solid-angle weight,
-    # so absolute amplitudes were unphysical by ~10^6 per re-emission
-    # at visible wavelengths.  Intensity ratios across paths were
-    # unaffected (the missing factors are global), so existing relative-
-    # contrast results still hold; absolute-photometry use is new.
-    # K18 (audit 2026-09-11): the SOURCE-AREA factor.  The source pixel is
+    # The SOURCE-AREA factor (audit K18).  The source pixel is
     # drawn uniformly over Ny*Nx pixels, so the unbiased estimate of
     # ``int dS int dOmega f`` is ``(Area * Omega / n_paths) * sum f`` with
     # ``Area = Ny*Nx*dx**2`` -- the whole illuminated area, not ONE
@@ -394,15 +375,13 @@ def apply_aperture_diffraction(
 
         .. versionchanged:: 5.46
             No longer defaults to ``0.0`` (audit K12).  The
-            ``1/(i*lambda)`` Kirchhoff prefactor was gated on
-            ``wavelength > 0``, so omitting it silently DROPPED the
-            prefactor: measured, every path weight came out wrong by a
-            factor of exactly ``1/lambda`` = 1.5798e6 in magnitude AND
-            by -90 degrees in phase, with zero warnings -- precisely the
-            failure the v4.11.2 prefactor work fixed.  A physically
-            meaningless default (lambda = 0) must not silently mean
-            "skip the physics".  Migration: pass ``wavelength=`` (the
-            library's own entry points always did).
+            ``1/(i*lambda)`` Kirchhoff prefactor is gated on
+            ``wavelength > 0``, so a zero default silently DROPPED it --
+            every path weight wrong by a factor ``1/lambda`` in magnitude
+            and by -90 degrees in phase, with no warning at all.  A
+            physically meaningless default must not silently mean "skip
+            the physics".  Migration: pass ``wavelength=`` (the library's
+            own entry points always did).
     normalisation : {'physical', 'legacy'}, default 'physical'
         Which re-emission measure to apply; see
         :func:`_reemission_measure`.  It MUST match the value passed to
@@ -431,18 +410,13 @@ def apply_aperture_diffraction(
             f"path; without it the returned weights are wrong by 1/lambda "
             f"in magnitude and by -90 degrees in phase.")
     xp = array_namespace(paths.positions)
-    # K19 (audit 2026-09-11): ``rng=None`` -- the DEFAULT on every HFPI
-    # entry point -- must draw fresh system entropy, which is exactly
-    # what ``RandomState(None)`` does (``np.random.default_rng(None)``).
-    # Pre-fix this read ``rng if rng is not None else 0``, so the
-    # default was the FIXED seed 0 and ``_spawn_rng``'s documented
-    # "let each aperture pull from system entropy" branch was
-    # unreachable.  Measured: two default runs byte-identical, and
-    # identical to ``rng=0``.  HFPI is a 1/sqrt(N) Monte-Carlo
-    # estimator sold on that convergence; the canonical way to see its
-    # error is to re-run with a new seed, and on the default path that
-    # error estimate was identically ZERO.  Pass an int (or a
-    # Generator) for reproducibility.
+    # ``rng=None`` -- the DEFAULT on every HFPI entry point -- must draw
+    # fresh system entropy, which is exactly what ``RandomState(None)``
+    # does (``np.random.default_rng(None)``).  HFPI is a 1/sqrt(N)
+    # Monte-Carlo estimator: with a FIXED default seed, the canonical way
+    # to see the estimator's own error -- re-run and compare -- returns
+    # identically ZERO (audit K19).  Pass an int (or a Generator) for
+    # reproducibility.
     rs = RandomState(rng=rng)
 
     cx, cy = centre
@@ -471,16 +445,10 @@ def apply_aperture_diffraction(
     Nz = cos_theta
     new_directions = xp.stack([L, M, Nz], axis=-1)
 
-    # 4.11.2: apply the Kirchhoff prefactor for each re-emission,
-    # matching the convention applied in :func:`init_paths_from_field`.
-    # Pre-4.11.2 the per-aperture re-emission left the weights with only
-    # an obliquity factor, so each cascaded aperture under-weighted by
-    # ~10^6 at visible wavelengths.
-    #
-    # V1 (verify pass, 2026-09-12): the MEASURE of that re-emission was
-    # still wrong for a chain -- see :func:`_reemission_measure` for the
-    # derivation, the pre-fix factor and the measured residual law
-    # (amplitudes low by exactly ``n_paths * z_to_aperture``).
+    # Apply the Kirchhoff prefactor for each re-emission, matching the
+    # convention applied in :func:`init_paths_from_field`.  The exact
+    # intermediate-leg MEASURE -- and why it carries ``r`` rather than
+    # ``1/r`` -- is derived in :func:`_reemission_measure`.
     new_weights = paths.weights * _reemission_measure(
         paths, cos_theta, cos_max, wavelength, normalisation,
         'apply_aperture_diffraction')
@@ -539,23 +507,19 @@ def _reemission_measure(paths, cos_theta_out, cos_max, wavelength,
     surface.  The formula composes, so it is correct for any number of
     apertures.
 
-    V1 (verify pass, 2026-09-12): the pre-fix factor was
-    ``0.5*(cos_in + cos_out) * (1/(i lambda)) * Omega_out / n_paths``,
-    which is wrong twice for a chain.  (a) The ``/ n_paths`` divides by
-    the sample count a SECOND time -- a path is ONE sample of the joint
-    (source pixel, direction_1, ..., direction_m) integral, so the
-    ``1/n_paths`` belongs once and already lives in
-    ``init_paths_from_field`` alongside ``A_src * Omega_1``.  (b) The
-    intermediate leg carried no ``r``.  Measured on the oracle-free
-    "an unobstructed aperture plane is transparent" property -- the
-    two-leg walk over ``z1 + z2`` must equal the one-leg walk over the
-    same total -- the returned amplitude was low by exactly
-    ``n_paths * z1``: ``two/one * n_paths * z1`` = 1.098 / 1.046 /
-    0.860 / 0.920 / 1.339 / 0.801 across z1 = 0.25 / 0.5 / 1.0 mm and
-    n_paths = 0.5 / 2 M, i.e. 1.0 to Monte-Carlo scatter over a 4x range
-    of each.  The symmetric Kirchhoff obliquity
-    ``0.5(cos_in + cos_out)`` is a heuristic; the exact RS-I composition
-    wants the outgoing cosine alone, which is what this returns.
+    ``normalisation='legacy'`` returns the pre-v5.46 factor
+    ``0.5*(cos_in + cos_out) * (1/(i lambda)) * Omega_out / n_paths``
+    instead.  That factor is wrong twice for a chain.  (a) The
+    ``/ n_paths`` divides by the sample count a SECOND time: a path is
+    ONE sample of the joint (source pixel, direction_1, ...,
+    direction_m) integral, so the ``1/n_paths`` belongs once and already
+    lives in ``init_paths_from_field`` alongside ``A_src * Omega_1``.
+    (b) The intermediate leg carries no ``r``.  Together those make a
+    cascaded amplitude low by exactly ``n_paths * r_in``.  The symmetric
+    Kirchhoff obliquity ``0.5(cos_in + cos_out)`` is a heuristic; the
+    exact RS-I composition wants the outgoing cosine alone, which is what
+    this returns.  The measurement that establishes the composition is in
+    ``docs/history/lumenairy.propagators.hfpi.md``.
 
     Parameters
     ----------
@@ -901,16 +865,12 @@ def _complex_output_dtype(dtype):
     """Promote a real dtype to its matching complex dtype
     (float64 -> complex128, float32 -> complex64); pass complex through.
 
-    v5.17.x (P2-32): the end-to-end helpers used to pass
-    ``output_dtype=E_in.dtype`` straight into
-    :func:`accumulate_to_grid`, so a REAL-dtype input field (e.g. a
-    plain float aperture/amplitude mask) allocated a real output buffer
-    and ``np.add.at`` silently discarded the imaginary part of every
-    complex path weight (the weights are intrinsically complex: the
-    ``1/(jλ)`` prefactor and every ``exp(j·k·Δs)`` leg).  Only a
-    suppressible ComplexWarning was emitted; measured ~40% of the total
-    intensity silently lost on a flat real source.  Mirrors the v4.10
-    fix in ``hf.py`` for the same bug class.
+    Path weights are intrinsically complex -- the ``1/(j*lambda)``
+    prefactor and every ``exp(j*k*ds)`` leg -- so a REAL output buffer
+    makes ``np.add.at`` discard their imaginary part behind nothing
+    louder than a suppressible ComplexWarning.  Measured on a flat real
+    source: ~40 % of the total intensity silently lost.  ``hf.py`` guards
+    the same bug class the same way.
     """
     dt = np.dtype(dtype)
     if dt.kind == 'c':
@@ -1149,18 +1109,13 @@ def init_paths_stratified(
     """
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
-    # K19 (audit 2026-09-11): ``rng=None`` -- the DEFAULT on every HFPI
-    # entry point -- must draw fresh system entropy, which is exactly
-    # what ``RandomState(None)`` does (``np.random.default_rng(None)``).
-    # Pre-fix this read ``rng if rng is not None else 0``, so the
-    # default was the FIXED seed 0 and ``_spawn_rng``'s documented
-    # "let each aperture pull from system entropy" branch was
-    # unreachable.  Measured: two default runs byte-identical, and
-    # identical to ``rng=0``.  HFPI is a 1/sqrt(N) Monte-Carlo
-    # estimator sold on that convergence; the canonical way to see its
-    # error is to re-run with a new seed, and on the default path that
-    # error estimate was identically ZERO.  Pass an int (or a
-    # Generator) for reproducibility.
+    # ``rng=None`` -- the DEFAULT on every HFPI entry point -- must draw
+    # fresh system entropy, which is exactly what ``RandomState(None)``
+    # does (``np.random.default_rng(None)``).  HFPI is a 1/sqrt(N)
+    # Monte-Carlo estimator: with a FIXED default seed, the canonical way
+    # to see the estimator's own error -- re-run and compare -- returns
+    # identically ZERO (audit K19).  Pass an int (or a Generator) for
+    # reproducibility.
     rs = RandomState(rng=rng)
 
     # Default: square stratification.  4-D stratification has
@@ -1380,9 +1335,9 @@ def propagate_hfpi_through_prescription(
     is reset (the new secondary source's accumulated phase is folded
     into the path's complex weight).
     """
-    # HFPI-2: validate the sampling selector up front (before the expensive
-    # prescription parse / trace) -- it was previously documented but never
-    # dispatched, so a typo silently ran uniform sampling.
+    # Validate the sampling selector up front, before the expensive
+    # prescription parse / trace, so a typo cannot silently fall through
+    # to uniform sampling (HFPI-2).
     if sampling not in ('uniform', 'stratified'):
         raise ValueError(
             f"sampling must be 'uniform' or 'stratified'; got {sampling!r}.")
@@ -1424,11 +1379,9 @@ def propagate_hfpi_through_prescription(
     # events).  We allocate stream 0 to the source init and the
     # remaining streams sequentially to each diffractor.
     rng_source = _spawn_rng(rng, 0)
-    # HFPI-2: honour the ``sampling`` selector (validated up front).  Pre-fix
-    # the parameter was documented (default ``'stratified'``) but never
-    # dispatched -- every call used plain uniform ``init_paths_from_field``
-    # regardless, so the variance-reduction path
-    # (:func:`init_paths_stratified`) was dead.
+    # Honour the ``sampling`` selector (validated up front): 'stratified'
+    # routes to :func:`init_paths_stratified`, the variance-reduction
+    # path (HFPI-2).
     if sampling == 'stratified':
         paths = init_paths_stratified(
             E_in, dx,

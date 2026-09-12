@@ -17,6 +17,8 @@ See Also
 lumenairy.analysis.strehl : Strehl / coupling-efficiency metrics.
 lumenairy.analysis.psf_mtf_otf : PSF / MTF / OTF + spec-sheet metrics.
 """
+
+# Version history for this module: ``docs/history/lumenairy.analysis.beam_stats.md``.
 from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple, Union
@@ -32,12 +34,8 @@ __all__ = [
 ]
 
 
-# v5.2 (ROADMAP "Duplicate `_xp_of`" cleanup):  this used to be a
-# 4-line wrapper duplicated in 5 files (elements/elements.py,
-# elements/freeform.py, analysis/beam_stats.py, analysis/strehl.py,
-# analysis/psf_mtf_otf.py).  Consolidated to the canonical backend
-# helper; the underscore-prefixed alias preserves the existing
-# in-module references without touching call sites.
+# Canonical backend helper; the underscore-prefixed alias preserves this
+# module's existing in-module references without touching call sites.
 from ..backend import array_namespace as _xp_of  # noqa: E402
 
 # ISO 11146-1:2005 clause 9 recommends the second-moment integration
@@ -352,15 +350,14 @@ def beam_d4sigma(
     Enable ``background`` and/or ``aperture`` to suppress it.  Defaults
     are byte-identical to the historical whole-grid moment.
     """
-    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
-    # ``_check_2d_scalar_field`` helper.  Previously a
-    # ``PartialCoherenceMCF`` input failed downstream at
-    # ``np.abs(E)`` with ``TypeError: bad operand type for abs()``;
-    # a 3-D ensemble would have produced a wrong (3-D) variance
-    # estimate via NumPy broadcasting.  The V6 walker now discovers
-    # this entry via first-positional-name ``E``; the inline guard
-    # routes both failure modes to the canonical v4.16 message.
-    # Input kind: 'field' (2-D scalar complex amplitude).
+    # Defensive guard via the shared ``_check_2d_scalar_field`` helper.  A
+    # ``PartialCoherenceMCF`` input fails downstream at ``np.abs(E)`` with
+    # ``TypeError: bad operand type for abs()``; a 3-D ensemble does not
+    # fail at all, it produces a wrong (3-D) variance estimate via NumPy
+    # broadcasting.  The V6 walker discovers this entry via the
+    # first-positional name ``E``; the inline guard routes both failure
+    # modes to the canonical message.  Input kind: 'field' (2-D scalar
+    # complex amplitude).
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E, 'beam_d4sigma', input_kind='field')
     if dy is None:
@@ -541,13 +538,11 @@ def M2(
     Clean a noisy input before calling ``M2``; use ``beam_d4sigma`` with
     ``background``/``aperture`` when a plain second-moment width suffices.
     """
-    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
-    # ``_check_2d_scalar_field`` helper.  Previously an MCF / 3-D
-    # ensemble input failed at ``E.shape`` unpacking with
-    # ``ValueError: too many values to unpack`` (for 3-D) or at the
-    # ``.shape`` attribute access (for MCF).  Routes both failure
-    # modes to the canonical v4.16 message via the V6 walker.
-    # Input kind: 'field'.
+    # Defensive guard via the shared ``_check_2d_scalar_field`` helper.
+    # An MCF / 3-D ensemble input fails at ``E.shape`` unpacking with
+    # ``ValueError: too many values to unpack`` (3-D) or at the ``.shape``
+    # attribute access (MCF); both route to the canonical message via the
+    # V6 walker.  Input kind: 'field'.
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E, 'M2', input_kind='field')
     _ = float(wavelength)  # validation only; wavelength cancels out

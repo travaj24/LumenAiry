@@ -46,32 +46,18 @@ def _ensure_cupy_loaded():
 # (None / int / numpy.random.Generator / lumenairy RandomState).
 # ---------------------------------------------------------------------------
 
-# v5.30 (W5 shim-removal wave -- honest break, precedent:
-# ``propagators/system.py`` ``_reject_legacy`` / ``analysis/detector.py``
-# ``cosmic_ray_rate``).  Two families of shim are REMOVED from this module:
-#
-# 1. The v5.25 kwarg renames (audit S3-16 / B1), stated horizon v5.27,
-#    re-scheduled to v5.32 in v5.30 and then executed here instead of
-#    slipping a third time:
-#      * Schell-family ``seed=<int>``     ->  ``rng=<int>``   (exactly
-#        equivalent: ``seed`` was forwarded verbatim to ``rng``).
-#      * ``create_gaussian_beam(sigma=s)`` ->  ``w0=s*sqrt(2)``  (``w0`` is
-#        the 1/e^2 intensity radius, ``sigma`` was the field std-dev).
-#    Both are plain signature removals, so the old form now raises
-#    ``TypeError: ... unexpected keyword argument`` -- the same shape as the
-#    v5.0 ``cosmic_ray_rate`` retirement.
-#
-# 2. The v4.14.2 / v4.15 legacy POSITIONAL overloads (``create_led_source``,
-#    ``Source.gaussian`` / ``plane_wave`` / ``point_source`` / ``top_hat`` /
-#    ``fiber_mode``) and the v4.15.1 Schell ``return_kind`` sentinel, all of
-#    which advertised ``version_removed='5.0'`` while shipping through v5.29
-#    (R-18 re-scheduled the banner to v5.32; v5.30 executes it).  These
-#    intercepted VALUES, so -- following ``system.py``'s ``_reject_legacy``
-#    precedent -- the legacy shape is still DETECTED and rejected with an
-#    actionable ``TypeError`` naming the canonical form.  That rejection is
-#    permanent: it schedules nothing and adds no new deprecation debt.
-#
-# See the CHANGELOG ``### Removed`` section for the full migration table.
+# Removed call shapes.  This module permanently rejects three families of
+# pre-v5.30 call shape: the Schell ``seed=`` kwarg and
+# ``create_gaussian_beam(sigma=)`` (plain signature removals, so they raise
+# ``TypeError: ... unexpected keyword argument``), and the legacy POSITIONAL
+# overloads of ``create_led_source`` / ``Source.gaussian`` / ``top_hat`` /
+# ``fiber_mode`` (always-raising ``*_legacy_positional`` collectors, the
+# ``propagators/system.py`` ``_reject_legacy`` precedent).  The positional
+# shims intercepted VALUES rather than adding an argument, so the shape is
+# still DETECTED and the ``TypeError`` names the exact canonical form; a bare
+# arity error would not.  The rejections schedule nothing and add no new
+# deprecation debt.  Migration table: the CHANGELOG ``### Removed`` section.
+# Deprecation timeline: ``docs/history/lumenairy.sources.core.md``.
 
 
 def _coerce_source_rng(*, rng: Any, fn_name: str) -> np.random.Generator:
@@ -88,11 +74,8 @@ def _coerce_source_rng(*, rng: Any, fn_name: str) -> np.random.Generator:
       RandomState raises (these factories run the band-limited-noise
       recipe on the host NumPy FFT).
 
-    v5.30: the deprecated ``seed=`` spelling (v5.25 -> v5.29) is REMOVED.
-    ``rng=<int>`` reproduces the old ``seed=<int>`` stream bit-for-bit --
-    ``seed`` was forwarded verbatim into ``rng`` -- so the migration is a
-    pure rename.  Passing ``seed=`` now raises ``TypeError`` from the
-    factory signature.
+    ``seed=`` was removed in v5.30; ``rng=<int>`` reproduces the old
+    ``seed=<int>`` stream bit-for-bit.
 
     The default path (no ``rng`` given) is byte-identical to the
     historical ``numpy.random.default_rng(None)``.
@@ -128,14 +111,8 @@ def _resolve_gaussian_width(*, w0: Optional[float],
     lumenairy source factory (``create_gaussian_schell_source``,
     ``create_fiber_mode``, ``Source.gaussian`` ...).
 
-    v5.30: the legacy ``sigma`` kwarg (the field *standard deviation* -- a
-    misnomer relative to the library-wide waist convention) is REMOVED.
-    It was deprecated in v5.25 with a stated v5.27 horizon that shipped
-    unremoved through v5.29.  Migration: ``sigma=s`` -> ``w0=s*sqrt(2)``
-    (equivalently ``w0=w`` reproduces ``sigma=w/sqrt(2)`` bit-for-bit --
-    that direction is exact because it is the division this function
-    performs).  Passing ``sigma=`` now raises ``TypeError`` from the
-    :func:`create_gaussian_beam` signature.
+    ``sigma`` (the field standard deviation) was removed in v5.30; migrate
+    ``sigma=s`` -> ``w0=s*sqrt(2)``.
     """
     if w0 is not None:
         return float(w0) / np.sqrt(2.0)
@@ -284,15 +261,12 @@ def _validate_grid_params(
     # ``N`` -- positive integer, or a 2-tuple of positive integers
     # (only when the calling factory unpacks tuples).
     #
-    # v4.15 (P2-VAL-1 / v4.14.2 carryover): explicitly reject ``bool``.
-    # ``isinstance(True, (int, np.integer))`` returns True so the
-    # pre-v4.15 check accepted ``N=True`` / ``N=False`` as 1 / 0.
-    # ``N=False`` then hit the ``int(N) <= 0`` guard with a confusing
-    # "N=0" error; ``N=True`` (a Boolean grid size, plainly wrong)
-    # silently produced a 1x1 grid.  Boolean ``N`` is almost certainly
-    # a caller bug (passing ``N=large_grid_flag and 1024`` -> 1024 only
-    # when flag is truthy; ``N=use_gpu and 256`` -> ``False`` when GPU
-    # is off; etc.), so the loudest correct action is a TypeError.
+    # ``bool`` is rejected explicitly: ``isinstance(True, (int,
+    # np.integer))`` is True, so without this branch ``N=True`` would
+    # silently build a 1x1 grid and ``N=False`` would reach the
+    # ``int(N) <= 0`` guard as a confusing "N=0".  A Boolean grid size is
+    # almost always a caller bug (``N=use_gpu and 256`` -> ``False`` when
+    # the GPU is off), so the loudest correct action is a TypeError.
     if isinstance(N, bool):
         raise TypeError(
             f"{fn_name}: N must be a positive integer, got bool ({N!r}).  "
@@ -468,23 +442,14 @@ def create_gaussian_beam(
 
     Notes
     -----
-    Signature is ``(N, dx, wavelength, *, w0, ...)`` since 4.7 (the width
-    argument is keyword-only).  Prior to 4.7 the ordering was
-    ``(N, dx, sigma, wavelength=None, ...)`` with positional ``sigma``;
-    the new style places ``wavelength`` at the third positional slot
-    (matching every other source factory).
-
-    v5.25 (audit S3-16): the width argument migrated from ``sigma`` (the
-    field standard deviation -- a misnomer relative to the library-wide
-    waist convention) to the canonical ``w0`` (the 1/e^2 intensity
-    radius).
+    Signature is ``(N, dx, wavelength, *, w0, ...)``: the width argument is
+    keyword-only and ``wavelength`` sits in the third positional slot,
+    matching every other source factory.
 
     .. versionchanged:: 5.30
-        The deprecated ``sigma`` kwarg is **removed** (deprecated v5.25,
-        stated horizon v5.27, shipped unremoved through v5.29).  Migrate
-        ``sigma=s`` -> ``w0=s*sqrt(2)``; equivalently ``w0=w`` reproduces
-        the old ``sigma=w/sqrt(2)`` field bit-for-bit.  Passing ``sigma=``
-        raises ``TypeError``.
+        The ``sigma`` kwarg is **removed**.  Migrate ``sigma=s`` ->
+        ``w0=s*sqrt(2)``; ``w0=w`` reproduces the old ``sigma=w/sqrt(2)``
+        field bit-for-bit.
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_gaussian_beam',
@@ -1246,9 +1211,8 @@ def create_top_hat_beam(
 
     Notes
     -----
-    Signature is ``(N, dx, wavelength, *, diameter, ...)`` since 4.7.
-    Prior to 4.7 the ordering was
-    ``(N, dx, diameter, wavelength=None, ...)``.
+    Signature is ``(N, dx, wavelength, *, diameter, ...)`` -- ``wavelength``
+    in the canonical third positional slot, the size keyword-only.
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_top_hat_beam')
@@ -1399,11 +1363,9 @@ def create_fiber_mode(
         (PCF, multimode-near-cutoff) use a full LP01 mode solver
         externally and pass the result via ``Source.from_array``.
     dy : float, optional
-        Grid spacing in y [m].  Defaults to ``dx``.  v4.13.2 added the
-        keyword so :meth:`Source.fiber_mode` can pass an anamorphic
-        ``dy`` through to the underlying Gaussian without erroring
-        (the historical signature only accepted ``dx``, so a user-
-        supplied ``dy=`` was silently squared via ``factory_kwargs``).
+        Grid spacing in y [m].  Defaults to ``dx``.  An anamorphic
+        ``dy`` reaches the underlying Gaussian through this keyword,
+        including from :meth:`Source.fiber_mode`.
 
     Notes
     -----
@@ -1453,12 +1415,8 @@ def create_fiber_mode(
 def _reject_led_legacy_positional(n_extra: int) -> None:
     """Reject the pre-v4.14.2 ``create_led_source`` positional form.
 
-    v5.30 (W5 shim-removal wave): the positional form
-    ``(N, dx, diameter, divergence_angle, wavelength, x0, y0, dtype)`` is
-    REMOVED.  It was deprecated in v4.14.2 with ``version_removed='5.0'``
-    and kept shipping through v5.29 (R-18 re-scheduled the banner to
-    v5.32; the owner executed the removal at v5.30 rather than slipping a
-    third time).
+    The rejected shape is
+    ``(N, dx, diameter, divergence_angle, wavelength, x0, y0, dtype)``.
 
     The ``*_legacy_positional`` collector is RETAINED, always-raising --
     the ``propagators/system.py`` ``_reject_legacy`` precedent (v5.0
@@ -1527,18 +1485,16 @@ def create_led_source(
     N, dx : int, float
         Grid size + sample spacing.
     wavelength : float [m]
-        Vacuum wavelength.  Now in the canonical 3rd positional slot
-        (since v4.14.2) -- matches every other ``create_*`` factory in
-        ``sources/core.py``.
+        Vacuum wavelength.  In the canonical 3rd positional slot --
+        matches every other ``create_*`` factory in ``sources/core.py``.
     diameter : float [m]
         Emitting area diameter.  Keyword-only since v4.14.2.
     divergence_angle : float [rad]
         Half-angle of the emission cone.  Keyword-only since v4.14.2.
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx`` (square grid).
-        v4.14.2 added the kwarg so anamorphic grids can thread a
-        distinct y-pitch through this factory like the rest of the
-        v4.13.0+ Source family.
+        Anamorphic grids thread a distinct y-pitch through this factory
+        like the rest of the Source family.
     x0, y0 : float, default 0
         Center of the emitting disk [m].
     dtype : optional
@@ -1552,44 +1508,27 @@ def create_led_source(
     source_angles : list of (float, float)
         Suggested source angles for partial-coherence integration,
         covering the divergence cone with 37 angle samples (1 axial
-        + 6 + 12 + 18 = 37 for ``n_ring = 3``).  4.10: docstring
-        previously said "~21 samples" which underspecified the actual
-        count; downstream callers allocating output arrays should size
-        them at 37, not 21.
+        + 6 + 12 + 18 = 37 for ``n_ring = 3``).  Callers allocating
+        output arrays must size them at 37.
     x, y : ndarray
         1-D coordinate axes [m].
 
     Notes
     -----
     Signature is ``(N, dx, wavelength, *, diameter, divergence_angle,
-    dy=None, x0=0, y0=0, dtype=None)`` since v4.14.2.  Pre-v4.14.2 the
-    ordering was ``(N, dx, diameter, divergence_angle, wavelength,
-    x0=0, y0=0, dtype=None)`` -- ``diameter`` and ``divergence_angle``
-    were positional and the function neither accepted ``dy=`` nor a
-    ``*`` keyword-only separator.  This broke the post-v4.7 convention
-    of keyword-only physical parameters with ``wavelength`` in the
-    canonical 3rd positional slot.
+    dy=None, x0=0, y0=0, dtype=None)`` -- keyword-only physical
+    parameters with ``wavelength`` in the canonical 3rd positional slot.
 
     .. versionchanged:: 5.30
-        The legacy positional form is **removed** (deprecated v4.14.2,
-        stated horizon v5.0, shipped unremoved through v5.29 -- 29 minor
-        releases past its own date; R-18 re-scheduled the banner to v5.32
-        and v5.30 executes it).  Any positional surplus past ``wavelength``
-        now raises ``TypeError`` naming the canonical form, following the
-        ``propagators/system.py`` ``_reject_legacy`` precedent: the legacy
-        SHAPE is still detected so the diagnostic stays actionable instead
-        of degrading to Python's generic arity message.  Migration::
+        The legacy positional form is **removed**.  Any positional surplus
+        past ``wavelength`` raises ``TypeError`` naming the canonical
+        form::
 
-            # Old (removed in v5.30 -- raises TypeError)
-            E, angles, x, y = create_led_source(
-                64, 16e-6, 100e-6, 0.3, 1.31e-6)
-
-            # New (canonical)
             E, angles, x, y = create_led_source(
                 64, 16e-6, 1.31e-6,
                 diameter=100e-6, divergence_angle=0.3)
     """
-    # v5.30 (W5): legacy positional form REMOVED -- see the helper.
+    # The legacy positional form is rejected -- see the helper.
     if _legacy_positional:
         _reject_led_legacy_positional(len(_legacy_positional))
     # v5.4.7 (audit AUDIT_V5_4_6 gap #4): early grid validation, within the
@@ -1818,12 +1757,12 @@ class PartialCoherenceMCF:
 
     Notes
     -----
-    MCF-aware downstream propagators (Koehler-/Hopkins-style coherent-
-    mode propagation, MCF transport through the system) are NOT in
-    v4.15.1 scope and are deferred to v4.16+.  The current
-    :class:`PartialCoherenceMCF` is consumable for inspection and
-    analysis only (intensity, two-point coherence, coherent-mode
-    extraction).
+    MCF-aware downstream propagators (Koehler-/Hopkins-style coherent-mode
+    propagation, MCF transport through a system) are not implemented: the
+    propagator entry points reject a :class:`PartialCoherenceMCF` input
+    (``lumenairy/_validation.py``).  This class is consumable for
+    inspection and analysis only (intensity, two-point coherence,
+    coherent-mode extraction).
     """
     shape: Tuple[int, int]
     dx: float
@@ -2056,40 +1995,16 @@ def _validate_return_kind(value: Any, fn_name: str) -> str:
     return canon
 
 
-# v4.15.2 (P0-NEW-1) - v4.15.5: the 3 Schell factories changed default
-# return shape from ``(E_2d, x, y)`` (v4.15.0) to
-# ``(ensemble_3d, dx, dy, wavelength)`` (v4.15.1).  A one-release
-# ``DeprecationWarning`` was emitted on the default path so pre-v4.15.0
-# callers doing ``E, x, y = create_gaussian_schell_source(...)`` would
-# see a loud heads-up rather than a propagation-time wrong-shape
-# failure.  Detection used a per-module sentinel
-# (``_RETURN_KIND_UNSET``, a ``_SchellReturnKindUnsetSentinel``): when
-# the caller left ``return_kind`` unset, the factory saw the sentinel and
-# warned; explicit ``return_kind='ensemble'`` / ``'mcf'`` was silent.
-#
-# v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6) retired the warning itself --
-# the transition had had five releases of exposure -- leaving the kwarg
-# default at plain ``'ensemble'`` and the sentinel branch at each of the
-# five call sites as a pure no-op.
-#
-# v5.30 (W5 shim-removal wave): the whole sentinel apparatus is REMOVED --
-# ``_SchellReturnKindUnsetSentinel``, the ``_RETURN_KIND_UNSET`` singleton,
-# the ``_warn_schell_return_kind_default`` helper, and the five no-op
-# ``if return_kind is _RETURN_KIND_UNSET`` branches.  It advertised
-# ``version_removed='5.0'`` while shipping through v5.29 (R-18 re-scheduled
-# the banner to v5.32; the owner executed it at v5.30).  The helper had
-# ZERO production call sites (pinned in
-# ``tests/unit/test_niche_audit_w3_ui_deprecation.py``), so nothing on the
-# modern path changes.
-#
-# Old form -> new form: ``return_kind=_RETURN_KIND_UNSET`` (or omitted)
-# -> omit it, or pass ``return_kind='ensemble'`` explicitly.  A caller who
-# still holds a reference to the old sentinel object now gets the existing
-# ``ValueError`` from :func:`_validate_return_kind` ("return_kind must be
-# 'ensemble' or 'mcf'"), which already names the modern values -- so no
-# bespoke rejection branch is needed here (contrast the positional
-# overloads above, where the legacy shape carried no such self-describing
-# validator).
+# ``return_kind`` has no sentinel.  The v4.15.1 return-shape transition's
+# ``_RETURN_KIND_UNSET`` apparatus (sentinel class, singleton, warning
+# helper and five no-op branches) is gone; the kwarg default is the plain
+# string ``'ensemble'`` and every call is silent.  No bespoke rejection
+# branch is needed for a caller still holding the old sentinel object:
+# :func:`_validate_return_kind` already raises a ``ValueError`` naming the
+# modern values.  That is what distinguishes this removal from the
+# positional overloads above, whose legacy shape carried no such
+# self-describing validator.  The transition itself:
+# ``docs/history/lumenairy.sources.core.md``.
 
 
 #: Default anti-wrap pad, in units of ``sigma_g``, applied to EACH side of
@@ -2141,11 +2056,7 @@ def _schell_phase_realizations(
     """Generate ``n_realizations`` band-limited complex random fields
     with the Gaussian Schell kernel as their two-point correlation.
 
-    v5.24.x (audit S3-16): the vestigial ``N`` keyword was removed.  The
-    grid is fully specified by ``Ny`` / ``Nx``; the old ``N`` argument
-    duplicated ``Nx`` (callers passed ``N=Ny=Nx`` for the square-grid
-    case) and was never read in the body -- a dead parameter that only
-    invited an inconsistent (``N`` != ``Nx``) call.
+    The grid is fully specified by ``Ny`` / ``Nx``.
 
     The recipe (Goodman, _Statistical Optics_, Sec 5.5):
 
@@ -2321,7 +2232,6 @@ def create_gaussian_schell_source(
 ) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
     """Gaussian-Schell partial-coherence source.
 
-    v4.15.1 (P0-NEW-2): redesigned to deliver actual partial coherence.
     Returns either the raw ``(n_realizations, Ny, Nx)`` complex
     ensemble (the canonical contract; caller averages intensities
     downstream) or a :class:`PartialCoherenceMCF` object exposing the
@@ -2371,11 +2281,7 @@ def create_gaussian_schell_source(
         ``UserWarning`` fires).  A typical grid is ``L ~ 4*w0``, so
         asking for ``sigma_g >> w0`` on it means asking for
         ``sigma_g > L/6`` -- enlarge ``N`` rather than shrinking
-        ``w0``.  v5.46 (audit Z2): the realised kernel is the
-        documented Gaussian at any ``sigma_g``; pre-v5.46 it was the
-        grid-PERIODISED Gaussian, which at ``sigma_g = L/3`` differed
-        by 0.27 of peak and made opposite edges of the grid 99 %
-        coherent.
+        ``w0``.
     n_realizations : int, default 16
         Number of independent ensemble draws.  Must be >= 1.
     dy : float, optional
@@ -2395,18 +2301,8 @@ def create_gaussian_schell_source(
         Nx)`` complex array.
         ``'mcf'``: return a :class:`PartialCoherenceMCF` instance.
 
-        v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
-        ``DeprecationWarning`` (v4.15.2 -> v4.15.5) flagging the
-        v4.15.0 -> v4.15.1 return-shape change is retired now that
-        the new ensemble contract has had multiple releases of
-        exposure.  The default is ``'ensemble'`` and the call is
-        silent.
-
-        .. versionchanged:: 5.30
-            The ``_RETURN_KIND_UNSET`` sentinel (and the
-            ``_warn_schell_return_kind_default`` helper) are **removed**
-            -- both had been no-ops since v4.16.1.  Omit ``return_kind``
-            or pass ``'ensemble'`` / ``'mcf'`` explicitly.
+        The default is ``'ensemble'`` and the call is silent -- no
+        sentinel, no warning.
     max_full_N : int, default 64
         Forwarded to :meth:`PartialCoherenceMCF.from_ensemble` when
         ``return_kind='mcf'``.  Grids with ``Ny * Nx > max_full_N**2``
@@ -2453,12 +2349,8 @@ def create_gaussian_schell_source(
         raise ValueError(
             f"create_gaussian_schell_source: n_realizations must be a "
             f"positive integer; got {n_realizations!r}.")
-    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
-    # ``DeprecationWarning`` (v4.15.2 -> v4.15.5) was retired once the
-    # v4.15.0 return-shape change had multiple releases of exposure.
-    # v5.30 (W5): the no-op ``_RETURN_KIND_UNSET`` sentinel branch is
-    # removed with the rest of the shim; the kwarg default is plain
-    # ``'ensemble'`` and validation happens in one place.
+    # One place for return_kind validation; the kwarg default is the plain
+    # string ``'ensemble'``.
     rk = _validate_return_kind(
         return_kind, fn_name='create_gaussian_schell_source')
 
@@ -2513,7 +2405,6 @@ def create_schell_model_source(
 ) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
     """Generic Schell-model source with user-supplied intensity profile.
 
-    v4.15.1 (P0-NEW-2): redesigned to deliver actual partial coherence.
     The MCF factorises as
     ``J(r1, r2) = sqrt(I(r1) I(r2)) * mu(r1 - r2)`` with the Gaussian
     coherence kernel
@@ -2534,9 +2425,8 @@ def create_schell_model_source(
         grid constraint as :func:`create_gaussian_schell_source`'s
         ``sigma_g``: resolve it (``dx << coherence_length``) and fit it
         (``coherence_length <= N*dx/6``, else a ``UserWarning`` fires).
-        v5.46 (audit Z2): the realised kernel is the documented Gaussian
-        at any coherence length; pre-v5.46 it was the grid-PERIODISED
-        Gaussian.
+        The realised kernel is the documented Gaussian at any coherence
+        length (:func:`_schell_phase_realizations` pads against FFT wrap).
     n_realizations : int, default 16
         Number of independent ensemble draws.
     dy : float, optional
@@ -2547,9 +2437,8 @@ def create_schell_model_source(
     dtype : optional
         Complex dtype for the ensemble form; ignored for ``'mcf'``.
     return_kind : {'ensemble', 'mcf'}, default 'ensemble'
-        See :func:`create_gaussian_schell_source`.  v4.16.1 (audit
-        item 6): the default-path ``DeprecationWarning`` is retired;
-        the default is plain ``'ensemble'`` and the call is silent.
+        See :func:`create_gaussian_schell_source`.  The default is
+        ``'ensemble'`` and the call is silent.
     max_full_N, n_modes
         See :meth:`PartialCoherenceMCF.from_ensemble`.
     energy_threshold : float, default 0.99
@@ -2581,8 +2470,7 @@ def create_schell_model_source(
         raise ValueError(
             "create_schell_model_source: intensity_profile must be "
             "non-negative.")
-    # v4.16.1: default-path warning retired.  v5.30 (W5): the no-op
-    # sentinel branch is removed (see
+    # One place for return_kind validation (see
     # :func:`create_gaussian_schell_source`).
     rk = _validate_return_kind(
         return_kind, fn_name='create_schell_model_source')
@@ -2627,7 +2515,7 @@ def create_annular_incoherent_source(
     energy_threshold: float = 0.99,
 ) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
     """Annular (ring) source -- spatially-incoherent at the source
-    plane (v4.15, ROADMAP v4.16 #11; v4.15.1 P0-NEW-2 redesign).
+    plane.
 
     .. warning::
 
@@ -2647,10 +2535,9 @@ def create_annular_incoherent_source(
     source plane, the classic "non-zero source size for partial-
     coherence integration" recipe).
 
-    v4.15.1 (P0-NEW-2): the factory no longer collapses the ensemble
-    into a single complex field; it returns either the raw ensemble or
-    a :class:`PartialCoherenceMCF` (diagonal MCF reflecting the
-    incoherent-source character).
+    The factory returns either the raw ensemble or a
+    :class:`PartialCoherenceMCF` (diagonal MCF reflecting the
+    incoherent-source character), never a single collapsed field.
 
     Parameters
     ----------
@@ -2674,9 +2561,8 @@ def create_annular_incoherent_source(
     dtype : optional
         Complex dtype.
     return_kind : {'ensemble', 'mcf'}, default 'ensemble'
-        See :func:`create_gaussian_schell_source`.  v4.16.1 (audit
-        item 6): the default-path ``DeprecationWarning`` is retired;
-        the default is plain ``'ensemble'`` and the call is silent.
+        See :func:`create_gaussian_schell_source`.  The default is
+        ``'ensemble'`` and the call is silent.
     max_full_N, n_modes
         See :meth:`PartialCoherenceMCF.from_ensemble`.
     energy_threshold : float, default 0.99
@@ -2708,8 +2594,7 @@ def create_annular_incoherent_source(
         raise ValueError(
             f"create_annular_incoherent_source: n_realizations must be "
             f"a positive integer; got {n_realizations!r}.")
-    # v4.16.1: default-path warning retired.  v5.30 (W5): the no-op
-    # sentinel branch is removed (see
+    # One place for return_kind validation (see
     # :func:`create_gaussian_schell_source`).
     rk = _validate_return_kind(
         return_kind, fn_name='create_annular_incoherent_source')
@@ -2908,48 +2793,25 @@ class Source:
 
     # -- Factories that wrap the existing create_X functions ----------
 
-    # 4.11.2 (audit round-3): the classmethod factories below pass
-    # ``**factory_kwargs`` through to the underlying ``create_*`` calls
-    # so callers can configure ``dy=``, ``dtype=``, ``normalize=``,
-    # ``use_gpu=``, etc. without having to call the bare function
-    # directly.  Pre-4.11.2 these kwargs were not propagated, so
-    # anamorphic grids and single-precision fields silently fell back
-    # to the create_*'s defaults.
+    # The classmethod factories below pass ``**factory_kwargs`` through to
+    # the underlying ``create_*`` calls so callers can configure ``dy=``,
+    # ``dtype=``, ``normalize=``, ``use_gpu=``, etc. without having to call
+    # the bare function directly.
 
     # -----------------------------------------------------------------
-    # v4.15 (ROADMAP v4.15 #2): size-arg normalisation on the 5
-    # Source.* factory classmethods.
+    # Canonical size-arg order on the 5 ``Source.*`` factory
+    # classmethods: ``Source.method(*, N, dx, wavelength,
+    # <size_kwargs>)`` -- keyword-only, with the ``*`` separator.
     #
-    # Pre-v4.15 the 5 factories had inconsistent positional order:
-    #   - ``Source.gaussian(w0, N, dx, wavelength)``  -- size first
-    #   - ``Source.plane_wave(N, dx, wavelength)``    -- N first
-    #   - ``Source.point_source(N, dx, wavelength)``  -- N first
-    #   - ``Source.top_hat(diameter, N, dx, wavelength)`` -- size first
-    #   - ``Source.fiber_mode(mfd, N, dx, wavelength)``  -- size first
-    #
-    # v4.15 picks the canonical order
-    # ``Source.method(*, N, dx, wavelength, <size_kwargs>)`` (kwarg-only
-    # with the ``*`` separator).
-    #
-    # v5.30 (W5 shim-removal wave): the legacy positional form is REMOVED
-    # from all five.  It was deprecated in v4.15 with
-    # ``version_removed='5.0'`` and kept shipping through v5.29 (R-18
-    # re-scheduled the banner to v5.32; the owner executed the removal at
-    # v5.30).  Each classmethod keeps an always-raising
-    # ``*_legacy_positional`` collector so the legacy SHAPE is still
-    # detected and the ``TypeError`` can name the exact canonical
-    # signature -- the ``propagators/system.py`` ``_reject_legacy``
-    # precedent.  This matters most for ``gaussian`` / ``top_hat`` /
-    # ``fiber_mode``, where the legacy order put the SIZE argument first,
-    # so a positional caller has every quantity one slot out; a bare
-    # arity error would not say that.  The rejection is permanent and
-    # schedules nothing.
-    #
-    # The three already-kwarg-only factories (``plane_wave``,
-    # ``point_source``) keep their existing signature; the only change
-    # for them is that they now appear under the canonical
-    # ``Source.method(*, N, dx, wavelength, ...)`` umbrella in the
-    # docs and the factory-validation parametrize list.
+    # ``gaussian`` / ``top_hat`` / ``fiber_mode`` each keep an
+    # always-raising ``*_legacy_positional`` collector (the
+    # ``propagators/system.py`` ``_reject_legacy`` precedent) so the
+    # legacy SIZE-FIRST shape is still detected and the ``TypeError`` can
+    # name the exact canonical signature: a positional caller on the old
+    # order has every quantity one slot out, which a bare arity error
+    # would not say.  The rejection is permanent and schedules nothing.
+    # ``plane_wave`` and ``point_source`` were always kwarg-only.  The
+    # orders that were removed: ``docs/history/lumenairy.sources.core.md``.
     # -----------------------------------------------------------------
 
     #: Shared body of the v5.30 legacy-positional rejection.  One helper so
@@ -3222,8 +3084,8 @@ class Source:
                    name=name or f'Fiber(MFD={mode_field_diameter:.2g}m)')
 
     # -----------------------------------------------------------------
-    # v4.15 (ROADMAP v4.16 #9, #11): two new partial-coherence factories
-    # for the Schell-model family and the annular-incoherent source.
+    # Partial-coherence factories: the Schell-model family and the
+    # annular-incoherent source.
     # -----------------------------------------------------------------
 
     @classmethod
@@ -3242,26 +3104,11 @@ class Source:
         ``numpy.random.Generator`` / ``RandomState``).
 
         .. versionchanged:: 5.30
-            The legacy ``seed=`` kwarg is **removed** (deprecated v5.25,
-            stated horizon v5.27).  ``rng=<int>`` reproduces the old
+            ``seed=`` is **removed**; ``rng=<int>`` reproduces the old
             ``seed=<int>`` stream bit-for-bit.
 
-        v4.15.2 (Agent E, AUDIT_V4_15_1 P2): the return type now
-        matches the top-level factory's return-type convention
-        verbatim -- ``return_kind='ensemble'`` yields the raw
-        ``(ensemble, dx, dy, wavelength)`` 4-tuple (NOT a
-        :class:`Source`-wrapped 3-D ensemble).  Pre-v4.15.2 this
-        classmethod wrapped the 3-D ensemble inside a :class:`Source`
-        whose ``E`` was 3-D, breaking the :class:`Source` contract
-        (every other ``Source.*`` classmethod produces a 2-D field)
-        and surprising downstream ``src.intensity()`` callers with
-        broadcasting axis mismatches.
-
-        v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
-        ``DeprecationWarning`` (v4.15.2 -> v4.15.5) for the v4.15.0
-        -> v4.15.1 return-shape change is retired.  The default is
-        plain ``'ensemble'`` and the call is silent.  v5.30 (W5): the
-        ``_RETURN_KIND_UNSET`` sentinel + helper are removed.
+        The return type matches the top-level factory's verbatim: no
+        :class:`Source` wrapping, and no warning on the default path.
 
         Return contract (v4.15.2+)
         --------------------------
@@ -3284,8 +3131,8 @@ class Source:
         fundamentally different from coherent single-source, and
         wrapping a 3-D ensemble in a 2-D-field abstraction silently
         breaks the abstraction.  The MCF object is consumable for
-        inspection / analysis only; MCF-aware downstream propagators
-        are not in v4.15.x scope.
+        inspection / analysis only; MCF-aware downstream propagators are
+        not implemented.
 
         2-D ``Source.E`` invariant break (intentional)
         ----------------------------------------------
@@ -3303,12 +3150,11 @@ class Source:
             sources = [Source(E=ens[k], dx=_dx, dy=_dy,
                               wavelength=_wl) for k in range(len(ens))]
 
-        A future ``Source.realizations()`` per-realization iterator
-        is in scope for v4.16+ but is NOT shipped in v4.15.3.
+        There is no per-realisation iterator on :class:`Source`; unpack
+        the ensemble as above.
         """
-        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
-        # DeprecationWarning is retired.  v5.30 (W5): the no-op sentinel
-        # pass-through is removed with the rest of the shim.
+        # No sentinel and no default-path warning: ``return_kind`` goes
+        # straight through.
         result = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=wavelength, w0=w0, sigma_g=sigma_g,
             n_realizations=n_realizations, rng=rng,
@@ -3349,23 +3195,18 @@ class Source:
         ensemble) and for the ``rng=`` randomness contract (the legacy
         ``seed=`` spelling was removed in v5.30).
 
-        v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
-        ``DeprecationWarning`` is retired in line with
-        :meth:`Source.gaussian_schell`.  The default is plain
-        ``'ensemble'`` and the call is silent.  v5.30 (W5): the sentinel
-        is removed (see :meth:`Source.gaussian_schell`).
+        The default is ``'ensemble'`` and the call is silent -- no
+        sentinel, no warning.
 
         2-D ``Source.E`` invariant break (intentional): the 4-tuple
         return has ``E_ensemble.shape == (n_realizations, Ny, Nx)``
         (3-D), breaking the 2-D-``E`` invariant other ``Source.*``
         classmethods uphold.  This is intentional -- Schell is
         partial-coherence, fundamentally different from coherent
-        single-source.  See :meth:`Source.gaussian_schell` docstring
-        for the full rationale and the v4.16+ ``Source.realizations()``
-        per-realization-iterator plan.
+        single-source.  See :meth:`Source.gaussian_schell` for the full
+        rationale.
         """
-        # v4.16.1: default-path DeprecationWarning retired.  v5.30 (W5):
-        # the no-op sentinel pass-through is removed (see
+        # No sentinel and no default-path warning (see
         # Source.gaussian_schell).
         result = create_schell_model_source(
             N=N, dx=dx, wavelength=wavelength,

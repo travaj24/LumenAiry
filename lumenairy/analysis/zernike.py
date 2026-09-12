@@ -33,6 +33,8 @@ unit disk is 1.  Coefficients returned by :func:`zernike_decompose`
 are therefore directly interpretable as RMS contributions in the
 same units as the input OPD (meters if OPD is in meters).
 """
+
+# Version history for this module: ``docs/history/lumenairy.analysis.zernike.md``.
 from __future__ import annotations
 
 import threading
@@ -359,11 +361,11 @@ def zernike_basis_matrix(
     **The returned arrays are READ-ONLY** (``flags.writeable is False``)
     because they are the cache's own arrays, shared by every caller that
     hits the same key.  Writing to them raises ``ValueError``; use
-    ``basis.copy()`` if you need a mutable copy.  v5.29.1 (audit A-13ish):
-    they used to come back writable, so a single stray in-place write
-    silently poisoned the basis for every later consumer in the process
-    (measured: a value written into ``basis[0, 0]`` was still there on the
-    next call, and the LRU key never noticed).  Every in-library consumer
+    ``basis.copy()`` if you need a mutable copy.  Without the freeze a
+    single stray in-place write silently poisons the basis for every
+    later consumer in the process (measured: a value written into
+    ``basis[0, 0]`` was still there on the next call, and the LRU key
+    never noticed).  Every in-library consumer
     -- ``zernike_decompose``, ``zernike_reconstruct``,
     ``analysis.ao._wfs``'s cached reprojection matrix -- uses the arrays
     read-only (slicing, ``@``, and out-of-place elementwise scaling), so

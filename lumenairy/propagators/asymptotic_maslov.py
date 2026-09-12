@@ -42,10 +42,9 @@ from .._math.chebyshev import (
     chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
 )
 
-# v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
-# Chebyshev helpers moved to lumenairy._math.chebyshev; binding the
-# new public names to the legacy underscore-prefixed locals keeps the
-# existing call sites in this module unchanged.
+# The Chebyshev helpers live in ``lumenairy._math.chebyshev``; these aliases
+# bind the public names to the underscore-prefixed locals this module's call
+# sites use.
 from .._math.chebyshev import (
     chebyshev_vandermonde as _chebyshev_vandermonde,
 )
@@ -127,16 +126,8 @@ def van_vleck_weight(det_J, wavelength):
     and the d = 2 Maslov phase contributes the leading ``-i``.  The
     weight below is therefore ``-1j * sqrt(|det J|) / lambda``.
 
-    Audit Y1/Y2: the pre-fix integrand used ``|det J|`` to the FIRST power
-    with no ``1/lambda``, so the returned field was
-    ``i * lambda * sqrt(|det J|)`` times the true one -- a factor that is
-    wavelength- AND field-point-dependent, not the documented "arbitrary
-    constant".  Measured on an exact free-space chart
-    (``s1 = s2 - z v2``, ``z = 20 mm``, ``lambda = 1 um``):
-    ``E_code / E_true = 2.0000000000256e-08 j`` pre-fix, i.e. exactly
-    ``i * lambda * z``; the sibling ``propagate_hf_chebyshev_quadrature``
-    already carried the correct ``-1j * sqrt(|det d2Phi/ds1 ds2|)``, so the
-    two families disagreed by exactly this factor.
+    The scale this replaces, and the measurement that established it:
+    ``docs/history/lumenairy.propagators.asymptotic_maslov.md``.
 
     Parameters
     ----------
@@ -632,18 +623,14 @@ def _solve_envelope_stationary_batch(
     that cost is amortised across the batch.  The math matches the
     scalar Gauss-Newton-like solver bit-for-bit -- both drop the same
     ``sum_k (s_1 - s_src)_k d^2 s_1_k / dv2 dv2`` term from the Hessian
-    MODEL, which changes the convergence rate and not the root (Y5:
-    that term does not vanish at the stationary point, contrary to the
-    pre-v5.46 wording -- only the residual does).
+    MODEL, which changes the convergence rate and not the root.  That
+    term does NOT vanish at the stationary point (audit Y5); only the
+    residual does.
 
-    v4.14.1 (P1-NEW-3):  prior to v4.14.1 the loop set
-    ``converged[idx[done & ~is_conv]] = True`` to drop stalled /
-    singular pixels from the active set, which silently flagged
-    failures as successes -- contrary to the documented contract.
-    The function now uses a separate ``finished`` mask for the
-    active-set bookkeeping and writes ``True`` to ``converged`` only
-    for genuinely-converged pixels (``rn < tol`` pre-v5.30,
-    ``rn < tol * max(r0, 1)`` from v5.30 -- see above).
+    The active-set bookkeeping uses a separate ``finished`` mask, so
+    ``converged`` is written ``True`` only for genuinely-converged pixels
+    (``rn < tol * max(r0, 1)``) and never for stalled or singular ones
+    dropped from the active set (P1-NEW-3).
     """
     s2x = np.asarray(s2x, dtype=np.float64)
     s2y = np.asarray(s2y, dtype=np.float64)

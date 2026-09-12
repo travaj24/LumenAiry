@@ -16,6 +16,8 @@ Contents:
   :func:`wave_opd_2d`.
 * Depth of focus: :func:`depth_of_focus`.
 """
+
+# Version history for this module: ``docs/history/lumenairy.analysis.opd.md``.
 from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple
@@ -968,9 +970,7 @@ def wave_opd_1d(
         ``-d / 2`` for ODD ``N``.  That is not a bug in the row choice:
         the centred grid ``(arange(N) - N / 2) * d`` has NO sample at
         exactly 0 when ``N`` is odd, so ``N // 2`` is one of the two
-        nearest samples.  The docstring (which used to claim the cut is
-        at exactly ``y = 0`` / ``x = 0``) is what was wrong; the code and
-        the returned ``coord`` are unchanged.
+        nearest samples.
     aperture : float, optional
         Clear-aperture diameter [m].  If given, the returned profile is
         cropped to |pupil coordinate| <= 0.5 * aperture.  Only the

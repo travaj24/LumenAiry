@@ -12,6 +12,8 @@ See Also
 lumenairy.analysis.beam_stats : beam centroid / D4sigma / M^2 / diameter.
 lumenairy.analysis.psf_mtf_otf : PSF / MTF / OTF + spec-sheet metrics.
 """
+
+# Version history for this module: ``docs/history/lumenairy.analysis.strehl.md``.
 from __future__ import annotations
 
 from typing import Optional, Sequence, Union
@@ -72,12 +74,11 @@ def strehl_ratio(
     and the ``dx * dy`` factor cancels in the ratio, but using the
     correct pixel area keeps any external comparison consistent.
     """
-    # v4.15.5 (P1-NEW-2WAY-1): defensive guards via the shared
-    # ``_check_2d_scalar_field`` helper on BOTH input fields.
-    # Previously an MCF / 3-D ensemble input (either ``E`` or
-    # ``E_ref``) failed downstream at ``xp.abs(...)`` with an
-    # unhelpful Python TypeError.  Input kind: 'field' (both args
-    # are 2-D scalar complex amplitudes).
+    # Defensive guards via the shared ``_check_2d_scalar_field`` helper on
+    # BOTH input fields: an MCF / 3-D ensemble input (either ``E`` or
+    # ``E_ref``) otherwise fails downstream at ``xp.abs(...)`` with an
+    # unhelpful Python TypeError.  Input kind: 'field' (both args are 2-D
+    # scalar complex amplitudes).
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E, 'strehl_ratio', input_kind='field')
     _check_2d_scalar_field(E_ref, 'strehl_ratio', input_kind='field')
@@ -268,14 +269,13 @@ def coupling_efficiency(
     The function is :class:`numpy.float`-conservative: if the mode
     or field is identically zero, returns 0.0.
     """
-    # v4.15.5 (P1-NEW-2WAY-1): defensive guards via the shared
-    # ``_check_2d_scalar_field`` helper on both fields.  Previously
-    # an MCF / 3-D ensemble input failed at the ``.shape`` attribute
-    # access (for MCF) or produced a wrong (3-D) overlap (for an
-    # ensemble).  The V6 walker discovers this entry via the first-
-    # positional-name ``E``; the inline guard routes both failure
-    # modes to the canonical v4.16 message.  Input kind: 'field'
-    # (both args are 2-D scalar complex amplitudes).
+    # Defensive guards via the shared ``_check_2d_scalar_field`` helper on
+    # both fields.  An MCF input fails at the ``.shape`` attribute access;
+    # a 3-D ensemble does not fail at all, it produces a wrong (3-D)
+    # overlap.  The V6 walker discovers this entry via the
+    # first-positional name ``E``; the inline guard routes both failure
+    # modes to the canonical message.  Input kind: 'field' (both args are
+    # 2-D scalar complex amplitudes).
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E, 'coupling_efficiency', input_kind='field')
     _check_2d_scalar_field(mode, 'coupling_efficiency', input_kind='field')
