@@ -529,9 +529,16 @@ def guided_modes(m, a, Rbig, N, eps_core, eps_clad, k0, *,
     Raises ``ValueError`` when the window is narrower than the guard band it
     would need (``qhi - qlo <= 2 * q_margin``, i.e. ``dn <= 2e-6``): nothing can
     be admitted there, and saying so is the one thing an empty list cannot.
-    Warns when the filter empties a window that DID hold candidates, naming the
-    closest one, so the "silent []" failure mode cannot come back through a
-    different door.
+    Warns when the filters empty a window that DID hold candidates, naming the
+    closest one AND the filter that rejected it, so the "silent []" failure
+    mode cannot come back through a different door.  There are THREE such doors
+    -- the guard band, the ``reldiv_tol`` spurious-mode screen and the
+    ``tail_tol`` radiation screen -- and only the band is about contrast: on a
+    HIGH-contrast fibre (Si/SiO2, ``dn = 2.04``, V = 2.0) and on any fibre a
+    little above its next mode's cut-off, it is the TAIL screen that empties
+    the list, because ``Rbig`` is too small for the mode's cladding tail.  An
+    empty list is therefore never by itself evidence that a structure does not
+    guide; the warning says which knob to turn.
     """
     def eps_profile(rr):
         return np.where(rr <= a, eps_core, eps_clad)
@@ -554,30 +561,57 @@ def guided_modes(m, a, Rbig, N, eps_core, eps_clad, k0, *,
             f"holds.  Increase the index contrast (eps_core = {eps_core!r}, "
             f"eps_clad = {eps_clad!r}) or call radial_coupled_modes directly "
             f"and classify the raw spectrum yourself.")
-    near = None                       # closest mode rejected by the band alone
+    # Closest candidate INSIDE the guided window that some filter rejected, and
+    # WHICH filter rejected it.  Every rejecting filter is recorded, not just
+    # the guard band: the band is one of three doors an empty list can come out
+    # of, and the other two (the reldiv spurious-mode screen and the tail
+    # radiation screen) are the ones that fire on a HIGH-contrast or
+    # near-cut-off fibre -- measured on Si/SiO2 (dn = 2.04) at V = 2.0, where
+    # the raw spectrum holds n_eff = 1.882 against the exact hybrid oracle's
+    # 1.8469 and the TAIL screen rejects it, and on SiN/SiO2 at V = 2.0, where
+    # the raw mode is 4.6e-05 from the exact HE11 and is rejected the same way.
+    # Warning on the band alone would have left those silent, which is the
+    # failure mode this notice exists to remove.
+    near = None                       # (mode, why) for the closest rejection
+
+    def _note(md, why):
+        nonlocal near
+        if near is None or md["q"].real > near[0]["q"].real:
+            near = (md, why)
+
     for md in radial_coupled_modes(m, Rbig, N, eps_profile, k0):
         q = md["q"]
         if not (qlo < q.real < qhi and abs(q.imag) < imag_tol):
             continue
         if not (qlo + q_margin < q.real < qhi - q_margin):
-            if near is None or q.real > near["q"].real:
-                near = md             # inside the window, inside the guard band
+            _note(md, f"it sits inside the {q_margin / k0:.3e} k0 guard band "
+                      f"at the edge of the guided window (too close to "
+                      f"cut-off for this filter)")
             continue
         if md["reldiv"] > reldiv_tol:
+            _note(md, f"its relative divergence {md['reldiv']:.2e} exceeds "
+                      f"reldiv_tol = {reldiv_tol:g} (the SPURIOUS-mode "
+                      f"screen)")
             continue                                    # spurious
         amp = np.abs(md["Er"]) + np.abs(md["Ephi"])
         amp = amp / amp.max()
-        if amp[md["r"] > 0.8 * Rbig].max() > tail_tol:
+        tail = float(amp[md["r"] > 0.8 * Rbig].max())
+        if tail > tail_tol:
+            _note(md, f"its field amplitude beyond r = 0.8 Rbig is "
+                      f"{tail:.2e}, above tail_tol = {tail_tol:g} (the "
+                      f"RADIATION screen) -- Rbig is most likely too small "
+                      f"for this mode's cladding tail")
             continue                                    # radiation, not bound
         out.append(md)
     if not out and near is not None:
+        md, why = near
         warnings.warn(
             f"guided_modes: no mode survived the filters, but the raw spectrum "
-            f"holds a mode INSIDE the guided window and inside the "
-            f"{q_margin / k0:.3e} k0 guard band at its edge (n_eff = "
-            f"{near['q'].real / k0:.9f}, window "
-            f"{qlo.real / k0:.9f}..{qhi.real / k0:.9f}, reldiv = "
-            f"{near['reldiv']:.2e}).  An empty list here means 'too close to "
-            f"cut-off for this filter', NOT 'no guided mode': refine N / Rbig, "
-            f"or inspect radial_coupled_modes directly.", stacklevel=2)
+            f"holds a mode INSIDE the guided window "
+            f"{qlo.real / k0:.9f}..{qhi.real / k0:.9f} at n_eff = "
+            f"{md['q'].real / k0:.9f} (reldiv = {md['reldiv']:.2e}), and it "
+            f"was rejected because {why}.  An empty list here means 'no mode "
+            f"passed THIS filter', NOT 'no guided mode': refine N / Rbig, "
+            f"relax reldiv_tol / tail_tol, or inspect radial_coupled_modes "
+            f"directly.", stacklevel=2)
     return sorted(out, key=lambda md: -md["q"].real)

@@ -283,8 +283,43 @@ def _resolve_incidence(angle, theta):
     classical-mount ``angle``.  ``theta`` IS ``angle`` -- the SAME number, NO
     scaling or conversion, both measured from the ``+z`` surface normal; the 1-D
     mount is planar (azimuth ``phi = 0``).  ``theta`` overrides when supplied;
-    ``None`` (the default) keeps ``angle``."""
-    return angle if theta is None else theta
+    ``None`` (the default) keeps ``angle``.
+
+    The RESOLUTION is unchanged and stays test-pinned
+    (``test_v5_12_0_naming_aliases::test_set_source_theta_wins_consistent_across_suites``
+    requires ``set_source(angle=A, theta=T)`` to resolve to ``T`` in EVERY
+    suite), and a raise-on-mismatch is deliberately NOT added here: it would
+    break that intentional, tested feature, and it would have to land in the PMM
+    resolver at the same moment or the two suites would stop agreeing -- which
+    is the property that test file exists to pin.
+
+    What IS done (2026-09-12) is to stop the SILENT half, mirroring
+    :func:`lumenairy.elements.pmm._core._resolve_incidence`: two DIFFERENT
+    non-zero angles in one call is a caller mistake with no legitimate reading,
+    and it used to resolve to ``theta`` with no signal at all.  It now WARNS,
+    naming both values and the one that won, while still resolving to ``theta``
+    so nothing downstream moves.  The warning is gated on ``angle != 0`` because
+    a bare ``theta=...`` call leaves ``angle`` at its default (``0.0`` on the
+    1-D entry points, ``None`` on :meth:`~.stack.RCWAStack.set_source`) and is
+    the ordinary, correct usage -- indistinguishable here from an explicit
+    zero."""
+    if theta is None:
+        return angle
+    if angle is None:              # RCWAStack.set_source's "not supplied" default
+        return theta
+    try:
+        a_c, t_c = float(np.real(angle)), float(np.real(theta))
+    except (TypeError, ValueError):          # traced / non-numeric: no compare
+        return theta
+    if a_c != 0.0 and a_c != t_c:
+        warnings.warn(
+            f"rcwa: both angle={a_c!r} and theta={t_c!r} were given and they "
+            f"DISAGREE.  'theta' is the cross-suite alias for 'angle' -- the "
+            f"same number, measured from +z, no conversion -- so this call is "
+            f"ambiguous; theta WINS (the drop-in-substitution contract shared "
+            f"with PMM and the 2-D conical entry points), and the solve runs at "
+            f"{t_c!r} rad.  Pass exactly one spelling.", stacklevel=3)
+    return theta
 
 
 def _resolve_incidence_checked(fn_name, angle, theta):
@@ -757,10 +792,18 @@ def rcwa_efficiency_1d(
                           _C(n_ridge) ** 2, _C(n_groove) ** 2))
         except TypeError:                  # traced / array-valued inputs
             lossless = False
+        # The two layer permittivities go in as SEPARATE ``eps_arrays``, not
+        # packed into one ``np.array([...])``: ``_passive_media`` screens each
+        # independently (the max over the pack and the max over the parts are
+        # the same boolean) and carries its own TypeError/ValueError fallback,
+        # while the pack raises OUTSIDE it -- ``ValueError: setting an array
+        # element with a sequence`` -- whenever the two indices have different
+        # shapes (e.g. ``n_ridge = np.array([2.04])`` with a scalar
+        # ``n_groove``), i.e. AFTER a complete, correct solve.
         _check_energy("rcwa_efficiency_1d", R_eff, T_eff, lossless=lossless,
                       passive=_passive_media(
                           complex(eps_sup), complex(eps_sub),
-                          np.array([_C(n_ridge) ** 2, _C(n_groove) ** 2])))
+                          _C(n_ridge) ** 2, _C(n_groove) ** 2))
     return orders, R_eff, T_eff
 
 

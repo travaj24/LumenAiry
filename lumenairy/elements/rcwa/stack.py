@@ -2286,6 +2286,9 @@ class RCWAStack:
         unambiguous, ``theta`` WINS when both are supplied -- the SAME rule as the
         1-D entry points and ``PMMStack.set_source`` (so ``set_source(angle=A,
         theta=T)`` resolves to ``T`` in every suite); pass just one in practice.
+        Supplying both with DIFFERENT non-zero values now emits a ``UserWarning``
+        naming both and the winner (the PMM mirror, 2026-09-12) -- the resolution
+        is unchanged, only its silence is.
 
         The stack solver always returns the full zeroth-order Jones response
         (the reaction to both incident ``E_x`` and ``E_y``), so no incident
