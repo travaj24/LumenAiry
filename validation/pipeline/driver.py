@@ -459,7 +459,10 @@ def stage_aggregate(state: RunState, force=False):
         if acc is None:
             acc = res.field                     # ONE batch: take it whole, so
         else:                                   # the single-batch case is
-            acc.envelope += res.field.envelope  # bit-identical to aggregate()
+            # In-place add (frozen-safe: CarrierField mutation is deprecated by
+            # WP-A6 / C5 and the class freezes in 5.48); bit-identical to the
+            # rebinding form and to aggregate().
+            np.add(acc.envelope, res.field.envelope, out=acc.envelope)
         del res
     wall = time.perf_counter() - t0
     p_src = float(sum(r['power_source'] for r in rows))
