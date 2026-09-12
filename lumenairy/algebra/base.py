@@ -174,8 +174,15 @@ class Operator:
         sampling grid the field is delivered on.  With a pitch-PRESERVING
         propagator -- :class:`~lumenairy.algebra.FreeSpace`'s default
         ``method='asm'``, and ``'rs'`` -- the delivered ``dx_out`` equals the
-        input ``dx``, so the two agree and ``|A|`` is the grid magnification
-        as well as the ray one.  With a pitch-CHANGING propagator
+        input ``dx`` for EVERY chain, whatever ``|A|`` says: a magnified
+        image lands on MORE pixels of the same grid, not on a coarser one.
+        Measured at N = 256, dx = 8 um: the 1:2 imager
+        ``FreeSpace(3f) ThinLens(f) FreeSpace(1.5f)`` reports ``|A| = 2`` and
+        the 2:1 mirror ``|A| = 0.5``, and both deliver
+        ``dx_out / dx_in = 1.0000``.  So ``|A|`` is the RAY magnification
+        only; it doubles as the grid magnification just in the special case
+        ``|A| = 1`` (the 4f inverter below), where "same pitch" and "same
+        magnification" happen to coincide.  With a pitch-CHANGING propagator
         (``'fresnel'``, ``'fraunhofer'``, ``'sas'``, and ``'auto'`` whenever
         the dispatcher selects one of them in the far field) the kernel
         RESAMPLES: the field is the same physical field, delivered on a

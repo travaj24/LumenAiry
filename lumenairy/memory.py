@@ -541,6 +541,11 @@ _NEWTON_BYTES_PER_COARSE_PT = 2490.0   # coarse-grid Newton solve + poly fit + m
 # budget): est/measured = 1.06 (c128, N=512) to 1.07 (both dtypes, N >= 1024).
 _LENS_REAL_F64_ARRAYS = 6.6      # geometric core, apply_real_lens (measured 6.0 + margin)
 _LENS_REAL_COMPLEX_ARRAYS = 7.5  # resident complex set, apply_real_lens (measured 7.0 + margin)
+
+#: Closed vocabulary for ``estimate_lens_memory(lens_model=...)``.  Each token
+#: names an entry point with its OWN calibration (see the note above), so a
+#: value outside this set is a caller error, not a default to fall back on.
+_LENS_MODELS = frozenset({'traced', 'real'})
 # Bare ASM step (audit A-6, RE-DERIVED 2026-07-25 from fresh-interpreter
 # tracemalloc profiles of ``angular_spectrum_propagate`` at N=64..2048 in
 # complex64 and complex128; see :func:`estimate_asm_memory`).  The measured
@@ -661,7 +666,14 @@ def estimate_lens_memory(n_grid: int,
             under-predicted the measured peak by 1.6x (default
             ``parallel_amp=True``) to 2.8x (``parallel_amp=False``) -- a
             pre-flight budget built from it under-reserved.  It now bounds
-            the measurement by ~7 %.
+            the measurement by ~7 %.  A value outside ``{'traced', 'real'}``
+            raises ``ValueError`` (case-sensitive) instead of silently
+            selecting the ``'real'`` model.
+
+        Raises
+        ------
+        ValueError
+            If ``lens_model`` is not ``'traced'`` or ``'real'``.
     ray_subsample : int, default 8
         Ray-trace OPL subsample.  Larger -> smaller Newton coarse solve.
         Read only by ``lens_model='traced'`` (and by the row-band branch).
@@ -693,6 +705,24 @@ def estimate_lens_memory(n_grid: int,
     int or dict
         Peak additional bytes (or an itemised dict).
     """
+    # v5.46 (audit Z3 / VERIFY-A11 O-2): CLOSED vocabulary.  The branch below
+    # is written as ``lens_model != 'traced'``, so before this guard every
+    # typo -- 'Traced', 'REAL', '', None, 0 -- silently selected the 'real'
+    # model and returned a DIFFERENT budget (49.5 MB vs 47.1 MB at
+    # N=512/complex128) with no signal.  This is the same house rule the
+    # coatings ``polarization`` argument now follows (audit Z1): an
+    # enum-valued knob raises on anything outside its set.  Case-SENSITIVE,
+    # matching the lowercase string contract the docstring has always stated
+    # and the ``lens_model == 'traced'`` comparisons throughout this module.
+    if lens_model not in _LENS_MODELS:
+        raise ValueError(
+            f"estimate_lens_memory: lens_model must be one of "
+            f"{sorted(_LENS_MODELS)} (lower-case); got {lens_model!r}.  "
+            f"'traced' models apply_real_lens_traced (Newton coarse solve + "
+            f"map_coordinates final assembly), 'real' the bare "
+            f"apply_real_lens; they differ by up to 2.3x at a given grid, so "
+            f"a typo used to hand back the wrong pre-flight budget."
+        )
     N = int(n_grid)
     npix = N * N
     cb = _as_complex_itemsize(complex_dtype)

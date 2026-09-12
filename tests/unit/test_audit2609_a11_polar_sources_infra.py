@@ -932,5 +932,323 @@ def test_z4_user_library_pow_guard_ignores_array_operands():
     assert np.array_equal(out, X ** 2)
 
 
+# ===========================================================================
+# VERIFY-A11 -- pins added by the independent re-verification of this WP.
+# Each covers a defect the WP's own arms did not reach; the "fails before"
+# arm is measured in this process.
+# ===========================================================================
+
+def test_verify_a11_stokes_bit_identical_for_a_mixed_precision_field():
+    """``JonesField`` does not harmonise its two components: it coerces a
+    real / integer input to complex but leaves a ``complex64`` one alone, so
+    ``JonesField(Ex_c128, Ey_c64, dx)`` is constructible.
+
+    The lean ``stokes_parameters`` writes ``Ex * conj(Ey)`` into a buffer made
+    from ``Ey``; unless that buffer carries the PROMOTED dtype, NumPy's default
+    ``same_kind`` casting rounds the complex128 product back down into the
+    complex64 buffer.  Measured before the ``astype(result_type(...))``:
+    S2 / S3 came back **float32** with max |diff| 2.4e-7 / 3.4e-7 against the
+    four-expression form (relative 2.1e-8 / 2.9e-8, i.e. exactly float32 eps),
+    while S0 / S1 stayed float64.  Bar: bitwise equality and dtype equality --
+    an exact claim with no tolerance to calibrate.
+    """
+    rng = np.random.default_rng(5)
+    N = 17
+    ex = rng.standard_normal((N, N)) + 1j * rng.standard_normal((N, N))
+    ey = (rng.standard_normal((N, N))
+          + 1j * rng.standard_normal((N, N))).astype(np.complex64)
+    for Ex, Ey in ((ex, ey), (ex.astype(np.complex64), ey.astype(np.complex128))):
+        jf = JonesField(Ex, Ey, 1e-6, 1e-6)
+        # The premise: the field really is heterogeneous after construction.
+        assert jf.Ex.dtype != jf.Ey.dtype
+        new, old = stokes_parameters(jf), _old_stokes(jf)
+        for key in ('S0', 'S1', 'S2', 'S3'):
+            assert new[key].dtype == old[key].dtype, (key, new[key].dtype,
+                                                      old[key].dtype)
+            assert np.array_equal(new[key], old[key], equal_nan=True), key
+        with np.errstate(invalid='ignore'):
+            d_new, d_old = degree_of_polarization(jf), _old_dop(jf)
+        assert d_new.dtype == d_old.dtype
+        assert np.array_equal(d_new, d_old, equal_nan=True)
+
+
+def test_verify_a11_cache_registry_separates_partials_of_different_functions():
+    """``_clearer_identity``'s no-code-object fallback keyed on
+    ``type(fn).__name__``, so EVERY ``functools.partial`` compared equal: a
+    partial of one clearer and a partial of a different one collided
+    SILENTLY -- the exact defect Z4 makes audible for plain functions.
+
+    Two-sided: different wrapped functions must warn, the same wrapped
+    function must not (reload-idempotence), and an instance of a callable
+    class must stay silent against itself (nothing about an instance survives
+    a reload, so a per-instance key would make every reload warn).
+    """
+    import functools
+
+    def clear_a():
+        return None
+
+    def clear_b():
+        return None
+
+    name = 'verify_a11_partial_probe'
+
+    def register_pair(first, second):
+        _CR._unregister_for_test(name)
+        try:
+            with warnings.catch_warnings(record=True) as rec:
+                warnings.simplefilter('always')
+                _CR.register_cache_clearer(name, first)
+                _CR.register_cache_clearer(name, second)
+                return [r for r in rec
+                        if issubclass(r.category, RuntimeWarning)]
+        finally:
+            _CR._unregister_for_test(name)
+
+    warned = register_pair(functools.partial(clear_a),
+                           functools.partial(clear_b))
+    assert len(warned) == 1, (
+        "two partials wrapping DIFFERENT clearers collided silently; the "
+        "second cache would never be cleared")
+    assert 'already registered to a different clearer' in str(warned[0].message)
+    assert register_pair(functools.partial(clear_a),
+                         functools.partial(clear_a)) == []
+    assert register_pair(functools.partial(functools.partial(clear_a)),
+                         functools.partial(clear_a)) == []
+
+    class Clearer:
+        def __call__(self):
+            return None
+
+    assert register_pair(Clearer(), Clearer()) == []
+
+
+@pytest.mark.parametrize("d1,d2,want_A", [(3.0, 1.5, 2.0),      # 1:2 imager
+                                          (1.5, 3.0, 0.5)])     # 2:1 imager
+def test_verify_a11_freespace_pitch_is_preserved_whatever_the_abcd_says(
+        d1, d2, want_A):
+    """The PITCH CONTRACT note on :attr:`Operator.abcd` is a claim about every
+    chain, not just the 4f inverter the WP measured.  A pitch-PRESERVING
+    propagator delivers ``dx_out == dx_in`` for ANY ``|A|`` -- a magnified
+    image lands on more pixels of the same grid -- so ``|A|`` is the RAY
+    magnification only.
+
+    Exact equality, not a tolerance: ``'asm'`` does not touch the grid at all.
+    The two arms bracket unity (``|A| = 2`` and ``|A| = 0.5``) so a docstring
+    that re-asserts "``|A|`` is the grid magnification" cannot pass either.
+
+    The fixture is sized so the beam stays INSIDE the window on both arms
+    (measured power kept 1.0000 / 1.0000 at N = 512, dx = 8 um, f = 50 mm,
+    w0 = 300 um), which keeps the two claims separable: this test pins the
+    pitch, and the O-1 truncation warning below pins the clipping.  A
+    narrower grid genuinely truncates these chains -- at N = 128 the same
+    geometry keeps well under half its power -- and would conflate them.
+    """
+    from lumenairy.algebra.primitives import FreeSpace, ThinLens
+    wl, f, N, dx = 633e-9, 50e-3, 512, 8e-6
+    E, _, _ = la.create_gaussian_beam(N, dx, wl, w0=300e-6)
+    chain = FreeSpace(d1 * f) * ThinLens(f) * FreeSpace(d2 * f)
+    A = float(np.asarray(chain.abcd)[0, 0])
+    assert abs(abs(A) - want_A) < 1e-9        # the fixture really magnifies
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        E_out, dx_out, dy_out, _ = chain((E, dx, dx, wl))
+        spam = [r for r in rec if issubclass(r.category, UserWarning)]
+    assert spam == [], [str(r.message)[:120] for r in spam]
+    # The premise of "no warnings": this chain does not clip.
+    assert abs(float((np.abs(E_out) ** 2).sum()
+                     / (np.abs(E) ** 2).sum()) - 1.0) < 0.02
+    assert dx_out == dx and dy_out == dx, (
+        f"|A| = {abs(A)} but the delivered pitch moved: "
+        f"dx_out/dx_in = {dx_out / dx}")
+
+
+def test_verify_a11_schell_kernel_on_an_anisotropic_odd_grid():
+    """The WP measured the kernel only on square, even, isotropic grids.  The
+    pad is computed per axis (``ceil(pad_sigma*sigma_g/dx)`` vs ``/dy``) and
+    the crop offset is ``(N_pad - N)//2``, so ``dy != dx`` with an ODD N is the
+    arm that would catch a wrong axis or an off-by-one crop.
+
+    Estimator: a plain sliced sample covariance -- no FFT, so it cannot
+    inherit the generator's own circularity, and it counts only pairs that
+    exist on the grid.  Oracle: the documented Gaussian, which at the largest
+    separation this grid can form is 2.3e-21 on both axes.
+
+    BAR 0.15 on |mu(edge)|.  Measured 2026-09-12 over 8 seeds x 1200
+    realisations: post-fix max |mu| 0.0116 (x) / 0.0182 (y), std 0.008;
+    pre-fix (``pad_sigma=0.0``, which reproduces the old code path
+    bit-for-bit) mean +0.9688 (x) / +0.9359 (y), std <= 0.009.  The bar sits
+    8.2x above the post-fix envelope and 6.2x below the pre-fix signal, and
+    the residual is pure Monte-Carlo error (falls as 1/sqrt(K), no build
+    dependence).
+    """
+    Ny, Nx, dx, dy, sigma, K = 27, 40, 1e-6, 1.5e-6, 4e-6, 1200
+
+    def edge_mu(pad_sigma):
+        kw = {} if pad_sigma is None else {'pad_sigma': pad_sigma}
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            phi = _schell_phase_realizations(
+                Ny=Ny, Nx=Nx, dx=dx, dy=dy, coherence_length=sigma,
+                n_realizations=K, rng=np.random.default_rng(20260912), **kw)
+        assert phi.shape == (K, Ny, Nx)
+        den = float(np.mean(np.abs(phi) ** 2))
+        mx = float((np.vdot(phi[:, :, :1], phi[:, :, Nx - 1:])
+                    / (K * Ny)).real) / den
+        my = float((np.vdot(phi[:, :1, :], phi[:, Ny - 1:, :])
+                    / (K * Nx)).real) / den
+        return mx, my, den
+
+    gauss_x = float(np.exp(-((Nx - 1) * dx) ** 2 / (2 * sigma ** 2)))
+    gauss_y = float(np.exp(-((Ny - 1) * dy) ** 2 / (2 * sigma ** 2)))
+    assert gauss_x < 1e-12 and gauss_y < 1e-12        # the oracle says ~0
+
+    mx, my, mean_I = edge_mu(None)
+    assert abs(mx) < 0.15 and abs(my) < 0.15, (mx, my)
+    # Unit mean intensity must survive the anisotropic crop too (the
+    # normalisation constant is computed on the PADDED grid).
+    assert abs(mean_I - 1.0) < 0.05
+
+    # Fail-before, measured in this process on the same grid.
+    lx, ly, _ = edge_mu(0.0)
+    assert lx > 0.5 and ly > 0.5, (lx, ly)
+
+
+# ---------------------------------------------------------------------------
+# VERIFY-A11 O-1 / O-2 -- the orchestrator's rulings on the two open items.
+# ---------------------------------------------------------------------------
+
+_O1_WL, _O1_N, _O1_DX = 633e-9, 256, 8e-6
+#: z_max = N*dx^2/lambda = 25.88 mm for this grid.
+_O1_ZMAX = _O1_N * _O1_DX ** 2 / _O1_WL
+
+
+def _o1_eval(op, E, dx=_O1_DX, dy=None):
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        out = op((E, dx, dy if dy is not None else dx, _O1_WL))
+        spam = [r for r in rec if issubclass(r.category, UserWarning)]
+    return out, spam
+
+
+def test_o1_freespace_reports_far_field_truncation_and_stays_quiet_otherwise():
+    """``method='asm'`` keeps the window fixed, so a beam that has diverged
+    past ``N*dx`` is clipped -- silently, before this warning.  Measured at
+    N = 256, dx = 8 um, 633 nm: a 20 um waist over 500 mm keeps **0.0961** of
+    its power (true ``w(z) = 5037 um`` vs a +-1024 um window) where a
+    resampling kernel keeps 0.9998.
+
+    Two-sided, and that is the whole point: ``z > z_max`` alone is NOT the
+    predicate.  Every leg of the audit's own 4f fixture is past ``z_max``
+    (f = 200 mm vs 25.9 mm) and none of them truncates -- warning on the gate
+    would put the Z3 headline back at three UserWarnings per 4f evaluation,
+    which is the spam this version removed.  So the benign arms below are as
+    load-bearing as the truncating ones.
+
+    Bar: warned / not warned -- a decision, not a reading.  The separating
+    quantity is the power kept, measured 2026-09-12 as 0.0466-0.1267 on the
+    truncating arms and 0.98239-1.00000 on the benign ones (the tightest
+    benign case being the 4f chain's own 2f leg); the shipped tolerance of
+    5 % sits 2.8x above the worst benign loss and 17x below the smallest real
+    one.
+    """
+    from lumenairy.algebra.primitives import FreeSpace, ThinLens
+
+    def beam(w0):
+        E, _, _ = la.create_gaussian_beam(_O1_N, _O1_DX, _O1_WL, w0=w0)
+        return E
+
+    # --- truncating: must warn, with the Section 2 prefix and the remedy ---
+    E20 = beam(20e-6)
+    (Eo, _, _, _), spam = _o1_eval(FreeSpace(0.5), E20)
+    kept = float((np.abs(Eo) ** 2).sum() / (np.abs(E20) ** 2).sum())
+    assert kept < 0.2, kept                      # the fixture really clips
+    assert len(spam) == 1, [str(r.message)[:120] for r in spam]
+    msg = str(spam[0].message)
+    assert msg.startswith('FreeSpace._apply: ')
+    assert "method='auto'" in msg                # the named remedy
+    assert 'z_max' in msg
+
+    # --- benign, and PAST z_max in every case: must stay silent ---
+    for w0, z in ((100e-6, 0.4),        # the 4f chain's own 2f leg
+                  (200e-6, 0.5),
+                  (400e-6, 0.026),      # just past z_max
+                  (20e-6, 0.05)):
+        assert z > _O1_ZMAX or w0 == 400e-6
+        _, spam = _o1_eval(FreeSpace(z), beam(w0))
+        assert spam == [], (w0, z, [str(r.message)[:120] for r in spam])
+
+    # --- the Z3 fixture itself: still zero, still pitch-preserving ---
+    f = 200e-3
+    E100 = beam(100e-6)
+    chain = (FreeSpace(f) * ThinLens(f) * FreeSpace(2 * f)
+             * ThinLens(f) * FreeSpace(f))
+    (Eo, dx_out, dy_out, _), spam = _o1_eval(chain, E100)
+    assert spam == [], [str(r.message)[:120] for r in spam]
+    assert dx_out == _O1_DX and dy_out == _O1_DX
+    assert abs(float((np.abs(Eo) ** 2).sum()
+                     / (np.abs(E100) ** 2).sum()) - 1.0) < 0.01
+
+
+def test_o1_far_field_warning_is_once_per_instance_and_skips_the_remedy():
+    """An optimiser re-applies one ``FreeSpace`` thousands of times; the
+    condition is a property of ``(z, N, dx, lambda)``, so it is reported once
+    per instance.  And the kernels the warning RECOMMENDS must never trigger
+    it, or the advice would be circular."""
+    from lumenairy.algebra.primitives import FreeSpace
+    E, _, _ = la.create_gaussian_beam(_O1_N, _O1_DX, _O1_WL, w0=20e-6)
+
+    one = FreeSpace(0.5)
+    assert sum(len(_o1_eval(one, E)[1]) for _ in range(4)) == 1
+    assert sum(len(_o1_eval(FreeSpace(0.5), E)[1]) for _ in range(3)) == 3
+
+    for method in ('auto', 'sas', 'fresnel'):    # resampling -> no truncation
+        _, spam = _o1_eval(FreeSpace(0.5, method=method), E)
+        assert spam == [], (method, [str(r.message)[:120] for r in spam])
+    # 'rs' is pitch-preserving like 'asm', so it must warn.
+    assert len(_o1_eval(FreeSpace(0.5, method='rs'), E)[1]) == 1
+
+    # Anamorphic (the branch that FORCES 'asm'): warns, keeps its own pitch,
+    # and names the remedy that applies there instead of 'auto'.
+    Ea, _, _ = la.create_gaussian_beam((128, 128), 2e-6, _O1_WL, w0=8e-6,
+                                       dy=3e-6)
+    (_, dx_out, dy_out, _), spam = _o1_eval(FreeSpace(20e-3), Ea, dx=2e-6,
+                                            dy=3e-6)
+    assert (dx_out, dy_out) == (2e-6, 3e-6)
+    assert len(spam) == 1 and 'forces the pitch-preserving' in str(spam[0].message)
+
+
+@pytest.mark.parametrize("bad", ['Traced', 'REAL', 'Real', 'banana', '',
+                                 'real ', ' traced', None, 0, True])
+def test_o2_estimate_lens_memory_rejects_an_unknown_lens_model(bad):
+    """``_real = (lens_model != 'traced')`` meant every typo silently selected
+    the ``'real'`` model and returned a DIFFERENT pre-flight budget (49.5 MB
+    vs 47.1 MB at N = 512 / complex128) with no signal -- in the function
+    ``check_sim_memory`` exists to make trustworthy.  Case-SENSITIVE, matching
+    the lower-case string contract the module compares against throughout."""
+    with pytest.raises(ValueError,
+                       match=r"^estimate_lens_memory: lens_model must be one "
+                             r"of \['real', 'traced'\]"):
+        la.estimate_lens_memory(512, np.complex128, lens_model=bad)
+
+
+def test_o2_estimate_lens_memory_keeps_both_valid_models_distinct():
+    """Counter-pin: the guard must not collapse the vocabulary it protects.
+    The two entry points have separate calibrations, so their budgets differ
+    (measured 47.1 MB traced vs 49.5 MB real at N = 512 / complex128 -- a
+    5.1 % split that a wrong token used to hand back silently)."""
+    traced = la.estimate_lens_memory(512, np.complex128, lens_model='traced')
+    real = la.estimate_lens_memory(512, np.complex128, lens_model='real')
+    assert traced > 0 and real > 0 and traced != real
+    # The default is 'traced' (unchanged).
+    assert la.estimate_lens_memory(512, np.complex128) == traced
+    # ... and the row-band branch reads the same closed vocabulary.
+    assert la.estimate_lens_memory(2048, np.complex128, lens_model='real',
+                                   sag_chunk_rows=128) > 0
+    with pytest.raises(ValueError, match=r"^estimate_lens_memory: lens_model"):
+        la.estimate_lens_memory(2048, np.complex128, lens_model='Real',
+                                sag_chunk_rows=128)
+
+
 if __name__ == '__main__':                      # pragma: no cover
     pytest.main([__file__, '-v'])

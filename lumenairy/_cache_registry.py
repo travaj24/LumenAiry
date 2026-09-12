@@ -33,9 +33,10 @@ Author: Andrew Traverso -- v4.16.0 / Agent D
 
 from __future__ import annotations
 
+import functools
 import threading
 import warnings
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 # ---------------------------------------------------------------------------
 # Registry storage
@@ -51,8 +52,7 @@ _REGISTRY_LOCK = threading.Lock()
 _CACHE_CLEARERS: Dict[str, Callable[[], None]] = {}
 
 
-def _clearer_identity(fn: Any) -> Tuple[Optional[str], Optional[str],
-                                        Optional[str], Optional[int]]:
+def _clearer_identity(fn: Any) -> Tuple[Any, ...]:
     """A key that is EQUAL across ``importlib.reload`` and DIFFERENT for two
     genuinely distinct callables.
 
@@ -61,10 +61,26 @@ def _clearer_identity(fn: Any) -> Tuple[Optional[str], Optional[str],
     ``(module, qualname, co_filename, co_firstlineno)`` is unchanged.  Two
     different functions (including two lambdas written on different lines of
     the same module, which share ``__qualname__ == '<lambda>'``) differ in
-    ``co_firstlineno``.  Callables with no code object (``functools.partial``,
-    instances with ``__call__``) fall back to their type name, which is coarse
-    but errs towards warning rather than silence.
+    ``co_firstlineno``.
+
+    Callables with no code object of their own are resolved to one that does,
+    so that "two different clearers" stays audible for them too: a
+    ``functools.partial`` keys off the function it wraps, and an instance with
+    ``__call__`` off its class's ``__call__``.  (Measured: keying both on
+    ``type(fn).__name__`` -- the v5.46 form -- made ALL partials compare equal,
+    so a partial of ``clear_a`` and a partial of ``clear_b`` collided
+    SILENTLY, which is the very defect this helper exists to make audible.)
+
+    Two *instances* of the same callable class, and two bound methods of the
+    same class, still compare equal.  That is deliberate and is the price of
+    reload-idempotence: nothing about an instance survives a reload, so any
+    per-instance discriminator (``id``, ``repr``) would make every reload warn.
+    Register per-instance clearers under distinct names.
     """
+    seen = 0
+    while isinstance(fn, functools.partial) and seen < 8:
+        fn = fn.func                     # key off the wrapped callable
+        seen += 1
     code = getattr(fn, '__code__', None)
     module = getattr(fn, '__module__', None)
     qualname = getattr(fn, '__qualname__', None)
@@ -72,6 +88,12 @@ def _clearer_identity(fn: Any) -> Tuple[Optional[str], Optional[str],
         return (module, qualname,
                 getattr(code, 'co_filename', None),
                 getattr(code, 'co_firstlineno', None))
+    call_code = getattr(getattr(type(fn), '__call__', None), '__code__', None)
+    if call_code is not None:
+        return (getattr(type(fn), '__module__', None),
+                f"{getattr(type(fn), '__qualname__', None)}.__call__",
+                getattr(call_code, 'co_filename', None),
+                getattr(call_code, 'co_firstlineno', None))
     return (module, qualname, type(fn).__name__, None)
 
 

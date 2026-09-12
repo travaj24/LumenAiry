@@ -404,3 +404,80 @@ self-consistent with `berreman_jones_1d` to 1.8e-15, but nothing said so at the 
 Files: `lumenairy/elements/polarization.py`, `lumenairy/elements/coatings.py`.
 Test: `...::test_z4_jones_propagate_methods_are_in_place_and_return_self` (pins the behaviour, not
 the prose).
+
+---
+
+## Appendix -- O-1 / O-2 resolution (VERIFY-A11, orchestrator ruling 2026-09-12)
+
+Added by the independent verifier after re-measuring this WP.  Two entries; both belong in the same
+v5.46 block as the Z3 rows above.
+
+### Added -- algebra: `FreeSpace` now reports when the pitch-preserving default has CLIPPED the beam at the window edge (Z3 / VERIFY-A11 O-1)
+
+`FreeSpace`'s v5.46 default `method='asm'` is pitch-preserving, which is the whole point of the Z3
+fix -- the delivered sampling agrees with the ABCD the operator reports.  The price is that the
+window stays `N*dx` wide, so a beam that has diverged past it is truncated at the grid edge.  Before
+this entry that happened silently, and it is the one regime where the new default is worse than the
+old one.  Measured at N = 256, dx = 8 um, 633 nm (window +-1.024 mm), a 20 um waist propagated
+500 mm -- true `w(z) = 5037.3 um`:
+
+| | 1/e^2 radius returned | error | power kept | delivered dx |
+|---|---|---|---|---|
+| `method='asm'` (default) | 1071.0 um | **79 % low** | **0.0961** | 8.00 um |
+| `method='auto'` (resampling) | 5034.0 um | 0.07 % | 0.9998 | 77.27 um |
+
+`FreeSpace._apply` now emits one `UserWarning` (Section 2 prefix `FreeSpace._apply: ...`) naming the
+distance, the resolved method, the grid, the threshold, the measured fraction of power kept and the
+window half-width, and pointing at `method='auto'` as the remedy (on an anamorphic grid, which forces
+`'asm'` because the resampling kernels are square-grid only, it points at enlarging `N*dx` instead).
+**The default still does not resample** -- a silent re-grid is the contradiction this version exists
+to remove.
+
+Two conditions, both required, because the cheap one alone is not the property.  The gate is
+`z > z_max = min(Nx*dx^2, Ny*dy^2)/lambda` read off the delivered grid (25.9 mm for the grid above);
+the decision is the measured power the step handed back.  `z > z_max` says a step COULD truncate, not
+that it did: every one of the canonical 4f chain's five legs (f = 200 mm) is past `z_max` and none of
+them clips, so warning on the gate alone would have restored exactly the three-warnings-per-4f-
+evaluation spam the Z3 entry above removed (measured: 3).  With the measurement in the loop the 4f
+chain stays at **0**.
+
+Tolerance `_FAR_FIELD_POWER_LOSS_TOL = 0.05`, derived from measurement at N = 256, dx = 8 um, 633 nm:
+untruncated segments lose at most 1.76 % (the 4f chain's own 2f leg, 0.98239; its f leg 1.00000; a
+collimated 200 um waist over 500 mm 0.99990; a 400 um waist just past `z_max` 1.00000) while
+truncated ones lose 87-95 % (0.09612, 0.12669, 0.04658).  The bar sits 2.8x above the worst benign
+loss and 17x below the smallest real one.  The `O(N^2)` power sum is paid only by a pitch-preserving
+step past `z_max` that has not already warned.
+
+Reported **once per `FreeSpace` instance**: the condition is a property of `(z, N, dx, lambda)`, and
+an optimiser loop re-applies the same operator thousands of times.  `method='auto'`, `'sas'` and
+`'fresnel'` never warn (they are the remedy); `'rs'`, which is pitch-preserving like `'asm'`, does.
+`FourierTransform` pins `'auto'` for its legs and is unaffected.
+
+Files: `lumenairy/algebra/primitives.py`.
+Tests: `tests/unit/test_audit2609_a11_polar_sources_infra.py::test_o1_freespace_reports_far_field_truncation_and_stays_quiet_otherwise`,
+`::test_o1_far_field_warning_is_once_per_instance_and_skips_the_remedy` (both two-sided: the benign
+arms are all PAST `z_max` and must stay silent).
+
+### Fixed -- memory: `estimate_lens_memory(lens_model=...)` silently accepted any typo as `'real'` (Z3 / VERIFY-A11 O-2)
+
+The branch was written `_real = (lens_model != 'traced')`, so `'Traced'`, `'REAL'`, `'banana'`, `''`,
+`None` and `0` all selected the `'real'` model and returned its budget -- 49.5 MB instead of 47.1 MB
+at N = 512 / complex128, and up to 2.3x apart at other grids -- with no signal, inside the function
+`check_sim_memory` exists to make trustworthy.  The vocabulary is now closed:
+`lens_model` outside `{'traced', 'real'}` raises `ValueError` with the Section 2 prefix, naming both
+tokens.  Case-SENSITIVE, matching the lower-case strings the module compares against throughout and
+the contract the docstring has always stated.  This is the same house rule Z1 applied to the coatings
+`polarization` argument one file away.
+
+**Migration.**  A caller who passed a differently-cased or misspelled `lens_model` was reserving the
+wrong budget and now gets an exception.  `'traced'` (the default) and `'real'` are bit-identical to
+before.  No call site in `lumenairy/`, `tests/`, `validation/` or `examples/` passes anything else.
+(The `lens_model=` arguments of `apply_thin_lens` / `propagate_through_system` /
+`ui/waveoptics_dock` -- `'paraxial'`, `'stigmatic'`, `'aplanatic'`, `'asm'`, `'local_only'` -- are a
+different parameter of the same name and are untouched.)
+
+Files: `lumenairy/memory.py`.
+Tests: `...::test_o2_estimate_lens_memory_rejects_an_unknown_lens_model` (10 tokens),
+`...::test_o2_estimate_lens_memory_keeps_both_valid_models_distinct` (counter-pin: the guard must not
+collapse the vocabulary it protects -- the two models still differ, the default is still `'traced'`,
+and the row-band branch validates too).

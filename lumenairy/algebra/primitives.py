@@ -83,7 +83,26 @@ class FreeSpace(Operator):
             ABCD agree.  Pass ``method='auto'`` explicitly to restore the
             dispatcher-selected kernel (and its resampling); the delivered
             pitch is always reported back through
-            :meth:`Operator.__call__` / :meth:`Operator.apply_with_grid`.
+            :meth:`Operator.__call__` -- as ``dx_out`` / ``dy_out`` of the
+            returned ``(E, dx, dy, wavelength)`` tuple, or as the returned
+            Source's own pitch.  :meth:`Operator.apply` returns a bare
+            ndarray and therefore DISCARDS the pitch; do not use it with a
+            pitch-changing ``method``.
+
+            The price of pitch preservation is TRUNCATION: ``'asm'`` keeps
+            the window fixed at ``N*dx``, so a beam that has diverged past
+            it is clipped at the grid edge rather than re-gridded onto a
+            coarser, wider one.  Measured at N = 256, dx = 8 um, 633 nm
+            (window +-1.016 mm), a 20 um waist propagated 500 mm -- true
+            ``w(z) = 5037 um`` -- keeps only **9.6 %** of its power under
+            ``'asm'`` and reads ``w = 1071 um`` (79 % low), where
+            ``'auto'`` resamples to ``dx_out = 77.3 um`` and returns
+            ``w = 5034 um`` (0.07 % error) with 99.98 % of the power.
+            That regime begins at ``z > N*dx^2/lambda`` (25.9 mm for that
+            grid) and :meth:`_apply` emits a ``UserWarning`` there, once
+            per operator instance, naming ``method='auto'`` as the remedy.
+            The default does NOT resample: a silent re-grid is the
+            contradiction this version exists to remove.
 
     Notes
     -----
@@ -111,12 +130,153 @@ class FreeSpace(Operator):
             )
         self.distance = d
         self.method = str(method)
+        # One far-field-truncation warning per operator instance: an
+        # optimiser loop re-applies the same FreeSpace thousands of times and
+        # the point of v5.46 was to REMOVE per-segment warning spam, not to
+        # trade one source of it for another.  The condition is a property of
+        # (z, N, dx, lambda), so once the grid is known the answer never
+        # changes for this instance.
+        self._far_field_warned = False
         M = _validate_abcd([[1.0, d], [0.0, 1.0]], 'FreeSpace')
         self._abcd_x = M
         self._abcd_y = M.copy()
 
     def __repr__(self) -> str:
         return f"FreeSpace(distance={self.distance:.6g}, method={self.method!r})"
+
+    #: Kernels that keep the sampling grid the caller handed in.  Only these
+    #: can truncate a diverging beam at the window edge; a resampling kernel
+    #: widens the window instead (at a coarser pitch).
+    _PITCH_PRESERVING = frozenset({'asm', 'rs'})
+
+    #: Fraction of the input power a pitch-preserving step may lose to the
+    #: window before it is reported as truncation.
+    #:
+    #: DERIVATION (measured 2026-09-12, N = 256, dx = 8 um, 633 nm, 'asm').
+    #: Untruncated segments -- including ones well past ``z_max``, which is
+    #: why ``z > z_max`` alone is not the predicate -- lose at most 1.76 %:
+    #: the 4f chain's own legs read 1.00000 (w0 = 100 um, z = f = 200 mm) and
+    #: 0.98239 (z = 2f = 400 mm), a collimated 200 um waist over 500 mm reads
+    #: 0.99990, and a 400 um waist just past ``z_max`` reads 1.00000.
+    #: Genuinely truncated segments lose 87-95 %: 0.09612 (20 um waist,
+    #: 500 mm), 0.04658 (6 um, 200 mm), 0.12669 (100 um, 2 m).  A 5 % bar sits
+    #: 2.8x above the worst benign loss and 17x below the smallest real one.
+    _FAR_FIELD_POWER_LOSS_TOL = 0.05
+
+    def _far_field_gate(self, E, *, dx, dy, wavelength, method):
+        """Cheap pre-check: is this step even CAPABLE of silent truncation?
+
+        Returns ``(z_max, p_in)`` when the step must be measured, else
+        ``None``.  Only a pitch-PRESERVING kernel past
+        ``z_max = N*dx^2/lambda`` qualifies, so the ``O(N^2)`` power sum is
+        paid only in the suspicious regime and at most once per instance.
+        """
+        # getattr, not attribute access: an instance unpickled from a
+        # pre-v5.46 process has no such attribute.
+        if (getattr(self, '_far_field_warned', False)
+                or method not in self._PITCH_PRESERVING):
+            return None
+        try:
+            shape = np.shape(E)
+            wl = float(wavelength)
+            dx_f, dy_f = float(dx), float(dy if dy is not None else dx)
+        except (TypeError, ValueError):
+            return None
+        if len(shape) != 2 or wl <= 0.0 or dx_f <= 0.0 or dy_f <= 0.0:
+            return None
+        ny, nx = int(shape[0]), int(shape[1])
+        # Per axis, take the more restrictive of the two windows: an
+        # anamorphic grid truncates on whichever axis runs out first.
+        z_max = min(nx * dx_f * dx_f, ny * dy_f * dy_f) / wl
+        if not np.isfinite(z_max) or not (abs(self.distance) > z_max):
+            return None
+        p_in = float(np.sum(np.abs(np.asarray(E)) ** 2))
+        if not np.isfinite(p_in) or p_in <= 0.0:
+            return None
+        return z_max, p_in
+
+    def _warn_if_far_field_truncates(self, E_out, *, dx, dy, wavelength,
+                                     method, anamorphic, z_max, p_in) -> None:
+        """Warn once when a pitch-PRESERVING kernel has actually clipped the
+        beam at the window edge.
+
+        WHY THERE IS A THRESHOLD AT ALL.  ``'asm'`` (v5.46's default, audit
+        Z3) delivers the field on the caller's own grid, which is what makes
+        the delivered pitch agree with the ABCD the operator reports.  The
+        price is that the window stays ``N*dx`` wide: a beam that has
+        diverged past it is CLIPPED, and the clipped energy is gone silently.
+        The half-width the grid can hold is ``N*dx/2``; a feature of
+        transverse scale ``N*dx`` diffracts through an angle
+        ``lambda/(N*dx)``, so it has spread by a full half-width after
+        ``z ~ (N*dx/2)/(lambda/(N*dx)) ~ N*dx^2/(2*lambda)``.  The customary
+        band-limited-ASM statement of the same thing -- the distance beyond
+        which the Matsushima band limit bites into the signal band -- is
+        ``z > N*dx^2/lambda``, and that is the GATE (:meth:`_far_field_gate`).
+
+        WHY THE GATE IS NOT THE PREDICATE.  ``z > z_max`` says the step COULD
+        truncate, not that it did: a converging or refocused segment sails
+        past it untouched.  Measured, the audit's own 4f fixture
+        (f = 200 mm, N = 256, dx = 8 um) has every one of its five legs past
+        ``z_max = 25.9 mm``, yet loses no energy -- warning on the gate alone
+        would put the Z3 headline straight back where it was, at three
+        UserWarnings per 4f evaluation, which is the spam this version
+        exists to remove.  So the gate arms a MEASUREMENT and the measurement
+        decides: a pitch-preserving step that returns less than
+        ``1 - _FAR_FIELD_POWER_LOSS_TOL`` of the power it was handed has
+        demonstrably lost it off the edge of the window (the kernels are
+        otherwise unitary), and only then does this fire.
+
+        MEASURED at N = 256, dx = 8 um, lambda = 633 nm (gate 25.9 mm,
+        window +-1.024 mm): a 20 um waist propagated 500 mm has a true
+        ``w(z) = 5037.3 um``.  ``'asm'`` returns ``w = 1071.0 um`` (79 %
+        low) retaining **0.096** of the input power; ``'auto'`` resamples to
+        ``dx_out = 77.27 um`` and returns ``w = 5034.0 um`` (0.07 % error)
+        retaining 0.9998.  Before v5.46 that cell was silent in BOTH
+        directions -- the old default gave the right answer and warned about
+        an unrelated return contract.
+
+        Fires at most once per operator instance (see ``__init__``).
+        """
+        try:
+            p_out = float(np.sum(np.abs(np.asarray(E_out)) ** 2))
+        except (TypeError, ValueError):
+            return
+        kept = p_out / p_in
+        if not np.isfinite(kept) or kept >= 1.0 - self._FAR_FIELD_POWER_LOSS_TOL:
+            return
+        self._far_field_warned = True
+        shape = np.shape(E_out)
+        ny, nx = int(shape[0]), int(shape[1])
+        wl = float(wavelength)
+        dx_f, dy_f = float(dx), float(dy if dy is not None else dx)
+        z = abs(self.distance)
+        half = 0.5 * min(nx * dx_f, ny * dy_f)
+        remedy = (
+            "pass method='auto' (the dispatcher then picks a RESAMPLING "
+            "kernel, which widens the window at a coarser pitch and gets "
+            "the far field right -- at the cost of returning a grid the "
+            "ABCD does not describe; read dx_out off the return)"
+            if not anamorphic else
+            "this branch forces the pitch-preserving 'asm' because the "
+            "resampling kernels are square-grid only, so the remedy here is "
+            "to enlarge N*dx (or to propagate in stages)"
+        )
+        import warnings
+        warnings.warn(
+            f"FreeSpace._apply: propagating z={z:.6g} m with the "
+            f"pitch-preserving method={method!r} on a {ny}x{nx} grid of "
+            f"dx={dx_f:.6g} m / dy={dy_f:.6g} m at lambda={wl:.6g} m.  That "
+            f"is past z_max = N*dx^2/lambda = {z_max:.6g} m, and the step "
+            f"returned only {kept:.4f} of the power it was handed: the beam "
+            f"has outgrown the fixed +-{half:.6g} m window and is being "
+            f"CLIPPED at the grid edge -- silently, and the lost "
+            f"energy does not come back.  Measured on a 20 um waist at "
+            f"N=256, dx=8 um, 633 nm, z=500 mm: 'asm' retains 0.096 of the "
+            f"power and reads the 1/e^2 radius 79 % low, while a resampling "
+            f"kernel retains 0.9998 and is right to 0.07 %.  Either "
+            f"{remedy}, or enlarge the grid so that N*dx^2/lambda >= z.  "
+            f"(Reported once per FreeSpace instance.)",
+            UserWarning, stacklevel=3)
 
     def _apply(
         self,
@@ -165,6 +325,12 @@ class FreeSpace(Operator):
         method = self.method
         if anamorphic and method == 'auto':
             method = 'asm'
+        # v5.46 (audit Z3 / VERIFY-A11 O-1): arm the far-field truncation
+        # check BEFORE propagating, so the input power is available to
+        # compare against.  Returns None -- and costs one comparison -- in
+        # every case that cannot silently truncate.
+        _gate = self._far_field_gate(E, dx=dx, dy=dy, wavelength=wavelength,
+                                     method=method)
         # v5.30 (audit P5 / roadmap F1, flip-day migration): ``return_result``
         # named explicitly.  The roadmap's F1 inventory listed this site as
         # already flip-safe because ``_coerce_propagation_output`` accepts a
@@ -200,9 +366,15 @@ class FreeSpace(Operator):
             return_result=wrap,
             **kw,
         )
-        return _coerce_propagation_output(
+        E_out, dx_out, dy_out = _coerce_propagation_output(
             out, dx_default=dx, dy_default=dy,
         )
+        if _gate is not None:
+            self._warn_if_far_field_truncates(
+                E_out, dx=dx, dy=dy, wavelength=wavelength, method=method,
+                anamorphic=anamorphic, z_max=_gate[0], p_in=_gate[1],
+            )
+        return E_out, dx_out, dy_out
 
 
 # ---------------------------------------------------------------------------

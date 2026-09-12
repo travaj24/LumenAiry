@@ -1352,7 +1352,16 @@ def stokes_parameters(field: 'JonesField') -> Dict[str, np.ndarray]:
     S0 = a + b
     S1 = a - b
     del a, b
-    cross = np.conj(Ey)
+    # The ``out=`` buffer must carry the PROMOTED dtype.  ``JonesField`` does
+    # not harmonise its two components (it coerces a real / integer input to
+    # complex but leaves a complex64 one alone), so ``Ex`` complex128 with
+    # ``Ey`` complex64 is constructible -- and with ``out=conj(Ey)`` NumPy's
+    # default ``same_kind`` casting would round the complex128 product back
+    # down into the complex64 buffer, returning S2 / S3 in float32 with a
+    # 2.9e-8 relative error where the four-expression form returns float64.
+    # ``astype(copy=False)`` allocates nothing when the components already
+    # share a dtype (the normal case), so the peak is unchanged.
+    cross = np.conj(Ey).astype(np.result_type(Ex, Ey), copy=False)
     np.multiply(Ex, cross, out=cross)   # Ex * conj(Ey), no second temporary
     S2 = 2 * np.real(cross)
     S3 = -2 * np.imag(cross)
@@ -1420,7 +1429,10 @@ def degree_of_polarization(field: 'JonesField') -> np.ndarray:
     # safe, and each of S1 / S2 / S3 is released as soon as its square has
     # been added.  Same operand order as the single expression
     # ``sqrt(((A**2 + B**2) + C**2))``, so the result is bit-identical; the
-    # peak drops from 8.25 to 5.00 full-grid real arrays at N = 2048.
+    # peak drops from 8.25 to 6.00 full-grid real arrays (measured by
+    # tracemalloc at N = 1024 and N = 2048, 2026-09-12; 6.00 is also what
+    # ``stokes_parameters`` alone now costs, since the DOP consumes the very
+    # arrays that call returned).
     dop = S.pop('S1')
     dop /= safe
     np.square(dop, out=dop)
