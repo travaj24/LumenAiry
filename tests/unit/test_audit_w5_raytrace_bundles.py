@@ -202,20 +202,84 @@ def test_resolver_matches_numpy_elements_only():
     assert _resolve_semi_diameters(rx) == _numpy_sds(rx) == [1e-3, 4e-3]
 
 
-def test_resolver_precedence_per_surface_then_elements_min():
-    """Precedence parity: the per-surface key REPLACES the default, then
-    a tighter 'elements' entry mins it down -- both backends, same
-    answer."""
+def test_resolver_precedence_per_surface_wins_over_elements():
+    """Precedence parity (audit U2): a PRESENT per-surface key is the
+    surface's own aperture and wins outright; the 'elements' matcher is a
+    fallback for prescriptions that carry their apertures only there.
+    Pre-U2 both backends returned [1e-3, 1e-3] -- the 'elements' entry
+    min()-ed a stated 2 mm semi-aperture down to 1 mm with an index that
+    is off by one per mirror."""
     rx = {
         'surfaces': [_flat(semi_diameter=2e-3), _flat(semi_diameter=1e-3)],
         'thicknesses': [0.01, 0.01],
         'aperture_diameter': 10e-3,
         'elements': [
-            {'element_type': 'surface', 'semi_diameter': 1e-3},   # tightens
-            {'element_type': 'surface', 'semi_diameter': 3e-3},   # looser: no-op
+            {'element_type': 'surface', 'semi_diameter': 1e-3},
+            {'element_type': 'surface', 'semi_diameter': 3e-3},
         ],
     }
-    assert _resolve_semi_diameters(rx) == _numpy_sds(rx) == [1e-3, 1e-3]
+    assert _resolve_semi_diameters(rx) == _numpy_sds(rx) == [2e-3, 1e-3]
+
+
+def test_resolver_both_elements_shapes_agree_across_backends():
+    """The 'elements' fallback serves two incompatible layouts and both
+    backends must pick the same index in each (audit U2).
+
+    * lens-only 'surfaces' (.zmx / CodeV): mirrors live in 'elements'
+      but NOT in 'surfaces', so surface i is the i-th
+      ``element_type == 'surface'`` entry;
+    * chronological 'surfaces' (the designer UI): 'elements' is one
+      entry per surface, so surface i is ``elements[i]`` and the
+      refracting-only filter would hand a mirror the FOLLOWING lens's
+      aperture (measured pre-U2: 0.006 for a 0.025 m fold mirror).
+    """
+    lens_only = {
+        'surfaces': [_flat(), _flat()],
+        'thicknesses': [0.004],
+        'aperture_diameter': 25.4e-3,
+        'elements': [
+            {'element_type': 'mirror', 'semi_diameter': 25e-3},
+            {'element_type': 'surface', 'semi_diameter': 6e-3},
+            {'element_type': 'surface', 'semi_diameter': 6e-3},
+        ],
+    }
+    assert (_resolve_semi_diameters(lens_only) == _numpy_sds(lens_only)
+            == [6e-3, 6e-3])
+
+    chronological = {
+        'surfaces': [_flat(is_mirror=True), _flat(), _flat()],
+        'thicknesses': [-0.03, 0.004],
+        'aperture_diameter': 25.4e-3,
+        'elements': lens_only['elements'],
+    }
+    # 12.7e-3 is aperture_diameter / 2: the mirror's own 25 mm entry is
+    # the one consulted now and the documented min() against the system
+    # aperture caps it there.  The point is that it is NOT 6e-3.
+    assert (_resolve_semi_diameters(chronological)
+            == _numpy_sds(chronological) == [12.7e-3, 6e-3, 6e-3])
+
+
+def test_resolver_folded_designer_export_agrees_across_backends():
+    """The producer the U2 finding is about: a designer export carries
+    mirrors in 'surfaces' AND a per-surface 'semi_diameter' on each, so
+    rule 2 wins and every surface keeps the aperture the user typed.
+    Pre-U2: [0.006, 0.006, 0.006] from both backends."""
+    rx = {
+        'surfaces': [
+            _flat(semi_diameter=25e-3, is_mirror=True),
+            _flat(semi_diameter=6e-3),
+            _flat(semi_diameter=6e-3),
+        ],
+        'thicknesses': [-0.03, 0.004],
+        'aperture_diameter': 25.4e-3,
+        'elements': [
+            {'element_type': 'mirror', 'semi_diameter': 25e-3},
+            {'element_type': 'surface', 'semi_diameter': 6e-3},
+            {'element_type': 'surface', 'semi_diameter': 6e-3},
+        ],
+    }
+    assert (_resolve_semi_diameters(rx) == _numpy_sds(rx)
+            == [25e-3, 6e-3, 6e-3])
 
 
 def test_resolver_matches_numpy_invalid_and_missing():

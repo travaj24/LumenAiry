@@ -386,15 +386,24 @@ def _filter_wave_optics_surfaces(
                                      'is_coordbrk', False)):
                     skipped_mirror_at.add(i + 1)
     from copy import copy as _copy
-    # Axial distance carried by a surface we drop.  A dropped surface's
-    # thickness is the gap to the NEXT one and is real propagation
-    # distance -- letting it vanish with the surface shortened the
-    # unfolded path by the whole mirror-to-next-element gap (30 mm on
-    # the audit's fold fixture).  It is added to the previous KEPT
-    # surface's thickness, i.e. to the same physical gap.  A carry with
-    # no previous kept surface is dropped, exactly as the leading
-    # source-to-first-surface gap already is (the field is defined AT
-    # the first surface).
+    # Axial distance carried by a surface we drop.  ``thickness`` is the
+    # gap AFTER its surface, and the propagation loop walks it in the
+    # medium AFTER that surface, so a dropped surface's gap belongs on
+    # the PREVIOUS kept surface: that merges the two legs that used to
+    # meet at the dropped surface into the single leg of the unfolded
+    # equivalent, in the medium they both live in.  Letting it vanish
+    # with the surface shortened the unfolded path by the whole
+    # mirror-to-next-element gap (30 mm on the audit's fold fixture);
+    # pushing it onto the NEXT kept surface instead lands it one gap too
+    # late AND in that surface's exit medium (40 mm of fold air became
+    # 40 mm of N-BK7 on a mirror-between-two-singlets design).
+    #
+    # A carry with no preceding kept surface is dropped: the field is
+    # defined AT the first surface, so the leading gap is no more
+    # propagated than the source-to-first-surface gap already is.  A
+    # carry left over at the END is flushed onto the last kept surface,
+    # where it is the remaining distance to the focus step's reference
+    # plane.
     carry = 0.0
     for i, s in enumerate(trace_surfs):
         drop = i in skipped_mirror_at
@@ -411,10 +420,14 @@ def _filter_wave_optics_surfaces(
         if drop:
             carry += t
             continue
-        s = _copy(s)
-        s.thickness = t + carry
+        if carry and out:
+            out[-1].thickness = float(out[-1].thickness) + carry
         carry = 0.0
+        s = _copy(s)
+        s.thickness = t
         out.append(s)
+    if carry and out:
+        out[-1].thickness = float(out[-1].thickness) + carry
     return out
 
 
@@ -435,8 +448,15 @@ def _prescription_from_surfaces(surfs, aperture_diameter,
     """
     rx_surfaces = []
     thicknesses = []
+    cb_carry = 0.0      # transfer distance of folded-out coord breaks
     for s in surfs:
         if getattr(s, 'is_coordbrk', False):
+            # The tilt/decenter has no meaning in a refracting-only
+            # prescription, but a cb's thickness is real axial distance
+            # (the post-mirror gap is routed through it).  Dropping the
+            # Surface must not drop the gap -- that is the U1 defect,
+            # and it is the reason to_prescription carries it too.
+            cb_carry += float(s.thickness)
             continue
         if getattr(s, 'is_mirror', False):
             raise ValueError(
@@ -458,6 +478,11 @@ def _prescription_from_surfaces(surfs, aperture_diameter,
             'is_mirror': False,
             'is_stop': bool(getattr(s, 'is_stop', False)),
         })
+        if thicknesses:
+            # Close the gap that reaches THIS surface, now that every
+            # folded-out coord break in it is known.
+            thicknesses[-1] += cb_carry
+        cb_carry = 0.0
         thicknesses.append(float(s.thickness))
     if thicknesses:
         thicknesses = thicknesses[:-1]
@@ -790,8 +815,18 @@ class WaveOpticsWorker(QThread):
                     range_note = (f'elements {lo_el}..{hi_el} '
                                   f'(surfaces {lo}..{hi - 1})')
             else:
-                trace_surfs = []
-                range_note = 'empty element range'
+                # An inverted or empty range selects no optic at all.
+                # Propagating zero surfaces would return a "successful"
+                # result that is just the source field pushed to the
+                # focus -- a plausible-looking PSF of nothing.  Refuse,
+                # and name the range so the user can fix the combos.
+                self.finished_result.emit({
+                    'error': (
+                        f'Start/End element range selects no optical '
+                        f'element (start={start_idx}, end={end_idx}; '
+                        f'optical elements are '
+                        f'{sorted(spans)}).')})
+                return
         results['element_range'] = range_note
 
         trace_surfs = _filter_wave_optics_surfaces(

@@ -531,25 +531,59 @@ def surfaces_from_prescription(
         sd = np.inf
         if aperture is not None:
             sd = aperture / 2.0
-        # Audit P2-35: honour the per-surface 'semi_diameter' key with
-        # the SAME semantics as the JAX backend
-        # (jax_trace._build_jax_prescription / trace_jax_with_params):
-        # a finite, positive per-surface value REPLACES the
+        # Audit P2-35: honour the per-surface 'semi_diameter' key.  A
+        # finite, positive per-surface value REPLACES the
         # aperture_diameter/2 default; None / non-finite / <= 0 falls
-        # back to the default.  Pre-fix the NumPy backend silently
-        # ignored the key, so the identical prescription vignetted
-        # differently under the two backends (25/25 vs 1/25 alive).
+        # back to the default.  Before P2-35 the NumPy backend ignored
+        # the key entirely, so the identical prescription vignetted
+        # differently here and under trace_jax (25/25 vs 1/25 alive).
+        # ``jax_trace._resolve_semi_diameters`` is the twin of this
+        # block and has to mirror it key for key, precedence included.
         ps_sd = ps.get('semi_diameter')
         if ps_sd is not None and np.isfinite(ps_sd) and ps_sd > 0:
             sd = float(ps_sd)
-        # If elements list has per-surface semi-diameters, use the tighter one
-        if elements is not None:
-            # Match by index within refracting surfaces
-            refr_elems = [e for e in elements if e.get('element_type') == 'surface']
-            if i < len(refr_elems):
-                elem_sd = refr_elems[i].get('semi_diameter', np.inf)
-                if elem_sd > 0 and np.isfinite(elem_sd):
-                    sd = min(sd, elem_sd)
+        elif elements is not None:
+            # Fallback only: the producer put the apertures in
+            # 'elements' and not on the surface dicts.  When the
+            # per-surface key IS present it is the surface's own
+            # aperture and nothing may clip it -- ``min()``-ing it
+            # against a positionally-matched 'elements' entry clamped
+            # a mirror to the FOLLOWING lens's semi-diameter (audit
+            # U2: a 50 mm fold mirror reported 12 mm).
+            #
+            # Two 'elements' shapes exist and they index differently:
+            #
+            # * lens-only 'surfaces' (the .zmx / CodeV loaders): mirrors
+            #   live in 'elements' but NOT in 'surfaces', so surface i
+            #   is the i-th ``element_type == 'surface'`` entry;
+            # * chronological 'surfaces' (the designer UI, which emits
+            #   mirrors into 'surfaces' too): 'elements' is one entry
+            #   per surface in the same order, so surface i is
+            #   ``elements[i]`` -- the refracting-only filter shifts the
+            #   mapping by one per mirror and hands a mirror the
+            #   FOLLOWING lens's aperture.
+            #
+            # A mirror marked on a 'surfaces' entry is exactly the
+            # condition under which the refracting-only filter
+            # mis-indexes, so it is the discriminator; the equal-length
+            # requirement keeps the positional read off any 'elements'
+            # list that carries non-optical entries as well.
+            chronological = (len(elements) == len(p_surfs)
+                             and any(_s.get('is_mirror') for _s in p_surfs))
+            if chronological:
+                match = elements[i]
+            else:
+                refr_elems = [e for e in elements
+                              if e.get('element_type') == 'surface']
+                match = refr_elems[i] if i < len(refr_elems) else None
+            if isinstance(match, dict):
+                # ``None`` is what the .zmx loader stores when the file
+                # carries no DIAM for that surface; ``> 0`` on it is a
+                # TypeError, so test for it before comparing.
+                elem_sd = match.get('semi_diameter', np.inf)
+                if (elem_sd is not None and np.isfinite(elem_sd)
+                        and elem_sd > 0):
+                    sd = min(sd, float(elem_sd))
 
         thickness = p_thick[i] if i < len(p_thick) else 0.0
 

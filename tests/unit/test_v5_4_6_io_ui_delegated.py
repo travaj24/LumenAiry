@@ -6,17 +6,33 @@
         (was permanently broken by a fabricated signature).
 - F-29: the prescription exporters default the aperture stop to the
         prescription's own stop, not surface 0 (lossless round trip).
+
+Harness (audit 2026-09-11, U7 follow-up).  The F-18 pin used to be
+``skipif``-ed away when PySide6 was absent, which removed it on exactly
+the machines that have no Qt -- the shape ``docs/TESTING_STANDARDS.md``
+§4 forbids, and the finding it guards (a fabricated ``_rw_compute``
+signature that made the dock permanently broken) is pure numpy that
+needs no widget.  It now runs on the auditor's Qt stub via the
+install/park bootstrap ``test_audit2609_a9_ui`` owns.
 """
 from __future__ import annotations
 
-import importlib.util
 import os
+import sys
+import pathlib
 import tempfile
 
 import numpy as np
 import pytest
 
 import lumenairy as la
+
+_REPO = pathlib.Path(__file__).resolve().parents[2]
+if str(_REPO / 'tests' / 'unit') not in sys.path:
+    sys.path.insert(0, str(_REPO / 'tests' / 'unit'))
+os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+
+import test_audit2609_a9_ui as _qt_harness      # noqa: E402
 
 
 def test_split_prescription_preserves_mirror_distances():
@@ -49,10 +65,15 @@ def test_split_prescription_preserves_mirror_distances():
     assert np.isclose(ml['distance_out'], 0.05)
 
 
-@pytest.mark.skipif(
-    importlib.util.find_spec('PySide6') is None, reason="PySide6 not installed")
 def test_richards_wolf_dock_compute_runs():
-    from lumenairy.ui.richards_wolf_dock import _rw_compute
+    if _qt_harness.QT_FLAVOUR == 'real':
+        from lumenairy.ui.richards_wolf_dock import _rw_compute
+    else:
+        _qt_harness._unpark_stub()
+        try:
+            _rw_compute = _qt_harness.UI['richards_wolf_dock']._rw_compute
+        finally:
+            _qt_harness._park_stub()
     res = _rw_compute(NA=0.6, wavelength=633e-9, polarization='linear_x',
                       N=48, dx_m=200e-9, z_offset_m=0.0)
     assert hasattr(res, 'Ex') and hasattr(res, 'Ey') and hasattr(res, 'Ez')

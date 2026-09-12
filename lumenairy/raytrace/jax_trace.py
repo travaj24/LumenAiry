@@ -851,17 +851,31 @@ def _resolve_semi_diameters(prescription):
     """Resolve the effective per-surface clear semi-aperture [m].
 
     Single source of the JAX backends' aperture semantics, mirroring
-    the NumPy backend (``trace.surfaces_from_prescription``,
-    trace.py:434-457) key for key:
+    the NumPy backend (``trace.surfaces_from_prescription``) key for
+    key -- the two MUST stay in lockstep or the identical prescription
+    vignettes differently under the two backends:
 
     1. Default: ``aperture_diameter / 2`` (``inf`` when absent).
     2. A finite, positive per-surface ``'semi_diameter'`` REPLACES the
-       default; ``None`` / non-finite / <= 0 falls back (audit P2-35).
-    3. A ``prescription['elements']`` entry with
-       ``element_type == 'surface'`` (matched by index within the
-       refracting-surface entries, Zemax-loader layout) TIGHTENS the
-       result via ``min()`` when its ``'semi_diameter'`` is finite and
-       positive.
+       default and WINS OUTRIGHT; ``None`` / non-finite / <= 0 falls
+       back (audit P2-35).
+    3. ``prescription['elements']`` is consulted ONLY when the
+       per-surface key is absent or invalid -- it is the fallback for
+       producers that carry their apertures there rather than on the
+       surface dicts -- and then TIGHTENS the default via ``min()``
+       when its ``'semi_diameter'`` is finite and positive.  Which
+       entry matches surface ``i`` depends on the prescription's shape:
+       positionally when ``surfaces`` itself carries mirrors and the
+       two lists are the same length (the designer UI's chronological
+       export), by index within the ``element_type == 'surface'``
+       entries otherwise (the .zmx / CodeV lens-only layout, whose
+       ``surfaces`` list excludes the mirrors that ``elements`` holds).
+
+    Audit U2: before rule 2 won outright, a present per-surface key was
+    ``min()``-ed against a refracting-only match whose index counts
+    mirrors, so every mirror shifted the mapping by one and a fold was
+    clamped to the FOLLOWING lens's aperture (measured: a 25 mm fold
+    mirror resolved to 6 mm).
 
     v5.17.x (audit P2-35 residual): pre-fix the JAX builders read only
     the per-surface ``'semi_diameter'`` key and never consulted
@@ -884,10 +898,22 @@ def _resolve_semi_diameters(prescription):
         ps_sd = s.get('semi_diameter')
         if ps_sd is not None and np.isfinite(ps_sd) and ps_sd > 0:
             sd = float(ps_sd)
-        if i < len(refr_elems):
-            elem_sd = refr_elems[i].get('semi_diameter', np.inf)
-            if elem_sd > 0 and np.isfinite(elem_sd):
-                sd = min(sd, float(elem_sd))
+        elif elements is not None:
+            chronological = (len(elements) == len(surfaces_raw)
+                             and any(_s.get('is_mirror')
+                                     for _s in surfaces_raw))
+            if chronological:
+                match = elements[i] if i < len(elements) else None
+            else:
+                match = refr_elems[i] if i < len(refr_elems) else None
+            if isinstance(match, dict):
+                # ``None`` is what the .zmx loader stores when the file
+                # carries no DIAM for that surface; ``> 0`` on it is a
+                # TypeError, so test for it before comparing.
+                elem_sd = match.get('semi_diameter', np.inf)
+                if (elem_sd is not None and np.isfinite(elem_sd)
+                        and elem_sd > 0):
+                    sd = min(sd, float(elem_sd))
         semi_ds.append(float(sd))
     return semi_ds
 

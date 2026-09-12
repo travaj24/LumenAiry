@@ -13,13 +13,48 @@ emit ``trace_started`` after we know there's actual work to do.
 Tests verify the signal-ordering contract on the empty path without
 needing a Qt event loop (we mock the signals via lightweight
 collector objects).
+
+Harness (audit 2026-09-11, U7 follow-up).  This file used to
+``pytest.skip`` when PySide6 was absent, which silently removed both
+pins on exactly the machines that have no Qt -- the shape
+``docs/TESTING_STANDARDS.md`` §4 forbids ("never ``pytest.skip`` on a
+resource check").  It now runs on the auditor's Qt stub
+(``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/repro/UI/stub``)
+by reusing the install/park bootstrap ``test_audit2609_a9_ui`` owns, so
+there is one owner of that discipline and no second copy of the stub in
+``sys.modules``.  A real PySide6, when present, is used instead and the
+same assertions hold.
 """
 from __future__ import annotations
 
+import os
 import sys
+import pathlib
 import types
 
 import pytest
+
+_REPO = pathlib.Path(__file__).resolve().parents[2]
+if str(_REPO) not in sys.path:
+    sys.path.insert(0, str(_REPO))
+if str(_REPO / 'tests' / 'unit') not in sys.path:
+    sys.path.insert(0, str(_REPO / 'tests' / 'unit'))
+os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+
+import test_audit2609_a9_ui as _qt_harness      # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _qt_stub_visible():
+    """Make the Qt stub importable for the duration of each test."""
+    if _qt_harness.QT_FLAVOUR == 'real':
+        yield
+        return
+    _qt_harness._unpark_stub()
+    try:
+        yield
+    finally:
+        _qt_harness._park_stub()
 
 
 def _build_signal_collector():
@@ -33,7 +68,7 @@ def _build_signal_collector():
 
 
 @pytest.fixture
-def stub_model():
+def stub_model(_qt_stub_visible):
     """Construct a minimal SystemModel-like object that exercises the
     empty-prescription path of ``run_trace`` without needing a full
     Qt + PySide6 environment.
@@ -41,14 +76,7 @@ def stub_model():
     We import the real SystemModel.run_trace method but bind it to a
     stub instance carrying only the attributes that path touches.
     """
-    try:
-        # Defer-import so this test does not need Qt unless run.
-        # Importing PySide6 indirectly via lumenairy.ui.model is
-        # required because Signal types are defined at class level.
-        from lumenairy.ui.model import SystemModel
-    except ImportError:
-        pytest.skip('PySide6 / lumenairy.ui.model unavailable; '
-                    'cannot pin empty-prescription run_trace.')
+    SystemModel = _qt_harness.UI['model'].SystemModel
 
     # Subclass SystemModel for the test so we get a real instance with
     # all signals + state initialised, then replace ``elements`` with

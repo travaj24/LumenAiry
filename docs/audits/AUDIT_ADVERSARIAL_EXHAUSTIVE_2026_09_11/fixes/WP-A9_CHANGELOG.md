@@ -337,3 +337,192 @@ on this machine and the file does **not** skip on its absence.  The stub is
 parked out of `sys.modules` between tests so the sibling UI test files, which do
 guard themselves with `try: import PySide6`, keep making the same skip decision
 they made before this file existed.
+
+---
+
+# VERIFY-A9 additions (independent verification pass, 2026-09-12)
+
+Four defects found and fixed during the re-verification of WP-A9.  Blocks are
+marked with their destination file, same convention as above.
+
+## BLOCK 1 addition — for `CHANGELOG.md`
+
+### Fixed -- raytrace: a per-surface `semi_diameter` is no longer clipped by the `elements` matcher (audit U2, completes WP-A9)
+
+`raytrace/trace.py`'s `surfaces_from_prescription` read the per-surface
+`'semi_diameter'` key and then unconditionally `min()`-ed it against
+`prescription['elements']`, matched by index **within the refracting-surface
+entries**.  A chronological `surfaces` list — the shape the designer UI exports —
+includes its mirrors, so every mirror shifted that mapping by one and a fold was
+clamped to the FOLLOWING lens's aperture.  Measured on the audit's fold fixture
+(mirror semi-diameter 25 mm, lens 6 mm): the mirror resolved to **6.0 mm →
+25.0 mm**; on a two-mirror design, **[8, 8, 8, 8] mm → [25, 20, 8, 8] mm**.
+
+A present per-surface key now wins outright; the `elements` list is consulted
+only as a fallback for producers that carry their apertures there (the .zmx /
+CodeV loaders), and that fallback picks its index from the shape of the
+prescription: positionally when `surfaces` itself carries mirrors and the two
+lists are the same length, by the refracting-surface filter otherwise.  A
+`semi_diameter` of `None` in an `elements` entry is now skipped rather than
+raising `TypeError` on the `> 0` comparison.
+
+Scope, measured: of the 62 prescriptions the repository can produce (six
+builders, 15 `.zmx` fixtures, seven `.seq` fixtures, three designer exports and
+`normalize_prescription` of each), **58 are bit-identical and the four that move
+are the designer's folded exports** — the case the finding is about.
+
+Tests: `tests/unit/test_audit2609_a9_verify_ui.py::test_u2_*` (including a
+bit-identity guard that replays the pre-fix rule over every builder and loader).
+
+**Companion changes this requires** (outside VERIFY-A9's ownership, listed in
+`fixes/VERIFY_WP-A9.md` §5): `raytrace/jax_trace.py::_resolve_semi_diameters`
+is the documented twin of this block and must take the same change or the two
+backends disagree (measured: NumPy `[2e-3, 1e-3]` vs JAX `[1e-3, 1e-3]`), and
+`tests/unit/test_audit_w5_raytrace_bundles.py::
+test_resolver_precedence_per_surface_then_elements_min` pins the old
+`min()`-against-a-present-key semantics and has to be restated.
+
+## BLOCK 2 addition — for `GUI_CHANGELOG.md`
+
+### Fixed -- unfolding a mirror put its air gap after the wrong surface (U5 follow-up)
+
+`waveoptics_dock._filter_wave_optics_surfaces` carries a dropped mirror's axial
+gap onto a neighbouring surface so the unfolded path keeps its length.  A
+`Surface.thickness` is the gap **after** that surface, walked in the medium
+after it, so the gap of a dropped surface belongs on the **preceding** kept
+surface; it was being added to the following one.  On a
+singlet-mirror-singlet design that moved 40 mm of fold air into the second
+lens's 3 mm N-BK7 leg: thicknesses `[3, 25, 43, 0] mm` where the unfolded
+equivalent is `[3, 65, 3, 0] mm`, and EFL/BFL **68.236 / 21.085 mm → 82.515 /
+24.842 mm** (the hand-built unfolded list's values to the last bit, 17.3 % /
+15.1 % apart).  A carry with no preceding kept surface is dropped (the field is
+constructed AT the first surface, so a leading gap is not propagated — the same
+rule the source-to-first-surface gap already follows) and a carry left over at
+the end is flushed onto the last kept surface.
+
+Related: `_prescription_from_surfaces`, which builds the unfolded-equivalent
+prescription handed to the lens-model router, dropped a folded-out coord
+break's transfer thickness with the Surface — the U1 defect one level down.  The
+gap is now carried into the preceding gap, exactly as `to_prescription` does.
+
+### Fixed -- the Optimizer dock's Global search never completed a single restart
+
+`GlobalSearchWorker.run()` unpacked `opt_variables` — `(elem_idx, surf_idx,
+field)` triples — into two names, so the first restart raised `ValueError: too
+many values to unpack (expected 2, got 3)` **before any `finished_result`
+emission**, leaving the dock's buttons disabled and its log at "Running...".
+The conic test in the same loop keyed off `col_idx == 7`, a column index from a
+table model this code no longer uses.  The loop now unpacks the triple and tests
+the field name, and `run()` is wrapped so exactly one `finished_result` is
+emitted on every path, including a merit function that always raises.
+
+### Fixed -- the absolute-coordinates Distance column moved folded elements
+
+The column shows `Element.origin[2]`, a world Z, while the value written back
+is a distance along the optical axis.  The two coincide only while the axis is
+parallel to world Z, so on a fold, typing the displayed value straight back
+moved the element: measured 40 mm → **23.094 mm** on a 30° fold and 40 mm →
+**0 mm** on a 45° one.  The write now divides by the z-component of the axis the
+distance is measured along (which is exactly 1.0 on an unfolded system, so those
+are bit-unchanged) and declines — without taking an undo checkpoint — when that
+component is zero, i.e. when the leg runs perpendicular to world Z and the
+column cannot describe the distance at all.
+
+### Tests
+
+New: `tests/unit/test_audit2609_a9_verify_ui.py` (34 tests) on the same Qt stub,
+parked the same way; the sibling UI files' skip set is unchanged at 38 with and
+without it, in either collection order.  13 of its 15 fix-pinning assertions
+were replayed against the pre-fix code in process and fail there; the other two
+are the deliberate unfolded controls.
+
+---
+
+# VERIFY-A9 follow-up (2026-09-12)
+
+## BLOCK 1 addition — for `CHANGELOG.md`
+
+### Fixed -- raytrace: the JAX aperture resolver follows the NumPy backend again (audit U2)
+
+`raytrace/jax_trace.py::_resolve_semi_diameters` documents itself as mirroring
+`trace.surfaces_from_prescription` key for key; the U2 precedence fix moved only
+the NumPy side, so the two backends resolved the same prescription differently
+(measured: NumPy `[2e-3, 1e-3]` vs JAX `[1e-3, 1e-3]` for a present per-surface
+key, and `[0.025, 0.006, 0.006]` vs `[0.006, 0.006, 0.006]` for a folded designer
+export).  The resolver now takes the same rule — a present per-surface
+`semi_diameter` wins outright, and the `elements` fallback indexes positionally
+for a chronological `surfaces` list and by the refracting-surface filter for the
+lens-only `.zmx` / CodeV layout — and its docstring's numbered rule 3 says so.
+
+Parity re-measured on the four prescription shapes that exercise every branch:
+identical from both backends in all four.
+
+Tests: `tests/unit/test_audit_w5_raytrace_bundles.py::
+test_resolver_precedence_per_surface_wins_over_elements` (restated from
+`..._then_elements_min`, which pinned the pre-U2 semantics),
+`::test_resolver_both_elements_shapes_agree_across_backends` and
+`::test_resolver_folded_designer_export_agrees_across_backends` (both new).
+
+### Changed -- designer UI: `SourceDefinition` caps the emitter-array side at 4096
+
+`to_source` builds an emitter array with a Python loop over
+`emitter_nx * emitter_ny`, so an unbounded count was a hang rather than a slow
+run: `emitter_nx = 1e9` was accepted and meant 1e18 iterations.  Counts above
+4096 per side (and non-finite ones) are now a `ValueError` with the CONVENTIONS
+§2 prefix that says why.  4096 x 4096 is 16.8 M emitters, far beyond anything
+the designer can usefully model.
+
+### Fixed -- designer UI: an infinite object distance is exported as "at infinity"
+
+`SystemModel.object_distance_m()` passed a non-finite conjugate straight through,
+and `to_prescription()` exported `object_distance: inf`.  Every consumer gates on
+`object_distance > 0`, which `inf` satisfies, so an infinite conjugate was
+solved as a finite one (`analysis.eval_image_plane_wfe`'s Gauss solve among
+them).  Non-finite and non-positive both now report `0.0`, the prescription
+convention for an object at infinity.
+
+## BLOCK 2 addition — for `GUI_CHANGELOG.md`
+
+### Fixed -- U7 follow-up items
+
+* **Insert ▸ Source rejects an unknown preset.**  `_ins_source_preset` installed
+  whatever string it was handed; an unlisted `source_type` matches no branch in
+  `to_source` / `describe` / the layout glyphs and silently degrades to a plane
+  wave.  The kind is now validated against `SourceDefinition.TYPES` — the same
+  list the source-type combo is built from — with a §2-prefixed `ValueError`.
+* **An inverted "Start at / End at" range is an error, not an empty run.**  It
+  used to select zero surfaces and return a successful result: the source field
+  pushed to the focus, i.e. a plausible-looking PSF of nothing.  The worker now
+  emits an error payload naming the range and the available optical elements.
+* **An interrupted optimize says "Cancelled".**  `run_optimization` wraps its
+  scipy call in `except Exception`, and `StopIteration` is an `Exception`, so
+  the sentinel the progress callback raises never reached `OptimizeWorker`'s
+  `except StopIteration`: stopping a run mid-flight reported
+  `Merit: 89.821 um RMS spot after 2 iterations` and read as a completed
+  optimize.  Both cancellation flags are re-read after the call returns, and the
+  worker emits `cancelled` plus `Cancelled by user -- best so far: ...`.
+* **The local and world trace-surface lists close the same air gaps.**
+  `_build_trace_surfaces_internal` tested only the immediately-next element
+  while the world builder used `_next_optical_element`, so a surface-less
+  element between two optics made the local list drop a gap the world list kept
+  and the two ABCDs disagreed (40 mm on the fixture).  Both use the helper now;
+  bit-identical on every list the GUI can build.
+* `lumenairy/ui/_mpl.py`'s lazy-import hook re-raises an `ImportError` as an
+  `AttributeError` with the original chained.  `__dir__` advertises the lazy
+  names, so `hasattr`, `inspect.getmembers`, `help()` and REPL completion all
+  reach it, and the raw `ModuleNotFoundError: shiboken6` escaped `hasattr` on a
+  box without Qt bindings instead of making it return `False`.
+
+### Tests
+
+`tests/unit/test_audit2609_a9_verify_ui.py` grows to 41 tests (7 follow-up pins,
+all demonstrated to fail against the pre-fix code in process).
+
+`tests/unit/test_v5_4_2_run_trace_empty_prescription.py` and
+`tests/unit/test_v5_4_6_io_ui_delegated.py::test_richards_wolf_dock_compute_runs`
+no longer `pytest.skip` when PySide6 is absent — the shape
+`docs/TESTING_STANDARDS.md` §4 forbids, which had removed three pins on exactly
+the machines with no Qt.  They run on the auditor's Qt stub through the same
+bootstrap the WP-A9 test file owns.  **The UI skip invariant is now 35, down
+from 38**, identical with and without the A9 test files and in either collection
+order.

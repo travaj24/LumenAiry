@@ -3223,6 +3223,17 @@ class MainWindow(QMainWindow):
         new users aren't forced to hunt for row 0.
         """
         from .model import SourceDefinition
+        # The source-type combo is built from SourceDefinition.TYPES
+        # (element_table.py), and every ``source_type`` branch in
+        # ``to_source`` / ``describe`` / the layout glyphs dispatches on
+        # membership of that list.  An unlisted string is therefore not
+        # a source at all -- it silently falls through every branch to
+        # the plane-wave default -- so reject it here rather than
+        # installing it.
+        if kind not in SourceDefinition.TYPES:
+            raise ValueError(
+                f'_ins_source_preset: unknown source kind {kind!r}; '
+                f'expected one of {SourceDefinition.TYPES}.')
         defaults = {
             'plane_wave': dict(),
             'gaussian': dict(beam_diameter_mm=1.0),

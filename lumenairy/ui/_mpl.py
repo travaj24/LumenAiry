@@ -45,7 +45,20 @@ def __getattr__(name):
         raise AttributeError(
             f'module {__name__!r} has no attribute {name!r}') from None
     import importlib
-    value = getattr(importlib.import_module(mod_name), attr)
+    try:
+        value = getattr(importlib.import_module(mod_name), attr)
+    except ImportError as exc:
+        # ``__dir__`` advertises these names, so anything that walks the
+        # module -- ``hasattr``, ``inspect.getmembers``, ``help()``, a
+        # REPL completion -- reaches this hook.  A module __getattr__ is
+        # contractually allowed to raise only AttributeError there; the
+        # raw ImportError (``No module named 'shiboken6'`` on a headless
+        # box with no Qt bindings) escaped ``hasattr`` instead of making
+        # it return False.  The cause is chained so a caller that really
+        # wanted the figure still sees why.
+        raise AttributeError(
+            f'module {__name__!r} cannot provide {name!r}: '
+            f'{mod_name} is unavailable ({exc}).') from exc
     globals()[name] = value      # cache: later lookups skip this hook
     return value
 

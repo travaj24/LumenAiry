@@ -187,6 +187,21 @@ class OptimizeWorker(QThread):
         # Carry the solution to the MAIN-thread finished handler.
         self.result_x = list(getattr(self.model, '_last_optimization_x', None)
                              or [])
+        if self._cancel_progress.should_stop or self.isInterruptionRequested():
+            # ``run_optimization`` wraps the scipy call in its own
+            # ``except Exception``, and ``StopIteration`` is an
+            # Exception, so the sentinel the callback raises never
+            # reaches the ``except`` above -- it is swallowed and the
+            # solve returns normally with whatever partial result it
+            # had.  Reading the flag again after the call is the only
+            # place a cancel is still distinguishable from a genuine
+            # convergence, and the difference matters: the dock decides
+            # from this message whether to tell the user the design is
+            # optimized or merely interrupted.
+            self.cancelled.emit()
+            self.finished_result.emit(
+                False, f'Cancelled by user -- best so far: {msg}')
+            return
         self.finished_result.emit(success, msg)
 
     @Slot()
@@ -1556,6 +1571,20 @@ class GlobalSearchWorker(QThread):
                 or self.isInterruptionRequested())
 
     def run(self):
+        # Nothing may escape run(): the dock re-enables its buttons only
+        # from the finished_result slot, so an exception here leaves the
+        # Global-search button disabled and the log stuck at
+        # 'Running...' until the app restarts.
+        try:
+            self._run_impl()
+        except Exception as e:
+            try:
+                msg = f'{type(e).__name__}: {e}'
+            except Exception:
+                msg = type(e).__name__
+            self.finished_result.emit(False, f'Global search failed: {msg}')
+
+    def _run_impl(self):
         from scipy.optimize import minimize
 
         x0 = self.model.get_variable_values()
@@ -1574,9 +1603,21 @@ class GlobalSearchWorker(QThread):
             x_start = x0.copy()
             # Walk the LIVE variable list so the perturbation index
             # matches x0's (get_variable_values skips stale entries).
-            for i, (row_idx, col_idx) in enumerate(
+            #
+            # ``opt_variables`` entries are ``(elem_idx, surf_idx,
+            # field)`` triples -- unpacking them into two names raised
+            # ``ValueError: too many values to unpack`` on the FIRST
+            # restart, i.e. the Global-search button never completed a
+            # single search.  The conic test is on the field NAME for
+            # the same reason: the ``col_idx == 7`` it replaces was a
+            # column index from a table model this code no longer uses.
+            for i, (_elem_idx, _surf_idx, field) in enumerate(
                     self.model.live_opt_variables()):
-                if col_idx == 7:  # conic
+                if field == 'conic':
+                    # Conic is a dimensionless number that legitimately
+                    # passes through 0, so perturb it additively; the
+                    # multiplicative kick below would pin a conic of 0
+                    # at 0 forever.
                     x_start[i] = x0[i] + rng.uniform(-1, 1)
                 else:
                     x_start[i] = x0[i] * (1 + rng.uniform(-0.3, 0.3))

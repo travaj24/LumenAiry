@@ -65,11 +65,21 @@ class SurfaceRow:
 # SourceDefinition
 # ════════════════════════════════════════════════════════════════════════
 
+#: Upper bound on an emitter-array side.  ``to_source`` builds the field
+#: with a Python loop over ``emitter_nx * emitter_ny`` emitters, so an
+#: unbounded count is a hang, not an error: 1e9 per side is 1e18
+#: iterations.  4096 x 4096 is already 16.8 M emitters -- far beyond any
+#: array the designer can usefully model, and beyond the largest grid the
+#: wave-optics dock offers (131072 is a 1-D grid size, not an emitter
+#: count).
+_MAX_EMITTER_COUNT = 4096
+
+
 def _as_count(value, field_name):
     """Coerce a source count field to a positive int.
 
     Raises ``ValueError`` with the CONVENTIONS §2 prefix on anything
-    that is not a whole number >= 1.
+    that is not a whole number in ``1 .. _MAX_EMITTER_COUNT``.
     """
     try:
         f = float(value)
@@ -77,11 +87,22 @@ def _as_count(value, field_name):
         raise ValueError(
             f'SourceDefinition: {field_name} must be a positive '
             f'integer (got {value!r}).') from None
+    if not np.isfinite(f):
+        raise ValueError(
+            f'SourceDefinition: {field_name} must be a positive '
+            f'integer (got {value!r}).')
     n = int(round(f))
     if n < 1 or abs(f - n) > 1e-9:
         raise ValueError(
             f'SourceDefinition: {field_name} must be a positive '
             f'integer (got {value!r}).')
+    if n > _MAX_EMITTER_COUNT:
+        raise ValueError(
+            f'SourceDefinition: {field_name} = {n} exceeds the '
+            f'{_MAX_EMITTER_COUNT} emitter-per-side cap; to_source '
+            f'loops over every emitter, so a larger count is a hang '
+            f'rather than a slow run.  Reduce the count, or model the '
+            f'array as a periodic source.')
     return n
 
 
@@ -838,29 +859,66 @@ class SystemModel(QObject):
             return prev.origin.copy()
         return prev.origin + prev.internal_thickness_mm * prev.R[:, 2]
 
+    def _display_distance_slope(self, elem_index):
+        """``d(world Z) / d(distance_mm)`` for element ``elem_index``.
+
+        :meth:`recompute_element_frames` advances the running origin by
+        ``d * R[:, 2]`` exactly once per element, so the element's world
+        Z is affine in its ``distance_mm`` and this is the slope.  Which
+        ``R`` is in effect is the cb_pre / cb_post asymmetry that method
+        documents: an element that carries a tilt and follows a Mirror
+        is tilted BEFORE the advance (so the advance runs along its own
+        axis), every other element is advanced along the previous
+        element's exit axis and tilted afterwards.
+        """
+        elem = self.elements[elem_index]
+        prev_elem = self.elements[elem_index - 1]
+        has_tilt = (float(getattr(elem, 'tilt_x', 0.0)) != 0.0
+                    or float(getattr(elem, 'tilt_y', 0.0)) != 0.0
+                    or float(getattr(elem, 'decenter_x', 0.0)) != 0.0
+                    or float(getattr(elem, 'decenter_y', 0.0)) != 0.0)
+        cb_post_case = (prev_elem.elem_type == 'Mirror' and has_tilt)
+        R_adv = elem.R if cb_post_case else prev_elem.R
+        return float(np.asarray(R_adv, dtype=float)[2, 2])
+
     def set_display_distance(self, elem_index, value):
         """Set distance from display value, handling coordinate mode."""
         if elem_index == 0:
             return  # Source is always at z=0
-        self._checkpoint()
         if self._coordinate_mode == 'relative':
+            self._checkpoint()
             self.elements[elem_index].distance_mm = max(0, value)
         else:
             # Absolute mode: convert to relative.  v4.15 (P1-UI-4):
             # the previous-element back vertex is now expressed in the
             # SAME world-frame coords the absolute display column uses
-            # (front-vertex Z accumulated via element_z_positions_mm).
-            # ``_prev_element_back_vertex_world`` returns a 3-vector;
-            # we project its Z component since the column is 1-D.
-            prev_elem = self.elements[elem_index - 1]
+            # (``element_z_positions_mm``, i.e. ``Element.origin[2]``).
             # Route through the single-source-of-truth helper rather
             # than re-deriving ``prev_z + internal_thickness_mm`` here:
             # the helper exists precisely so this calculation cannot
-            # drift between its two call sites.  Column is 1-D, so we
-            # project the world back-vertex onto z.
-            prev_back = float(
-                self._prev_element_back_vertex_world(prev_elem)[2])
-            self.elements[elem_index].distance_mm = max(0, value - prev_back)
+            # drift between its two call sites.
+            elem = self.elements[elem_index]
+            axis_z = self._display_distance_slope(elem_index)
+            if abs(axis_z) < 1e-9:
+                # The leg runs perpendicular to world Z (a 90 deg fold):
+                # every distance maps to the same displayed value, so the
+                # entry carries no information and writing it could only
+                # move the element arbitrarily.  Leave the design alone,
+                # and take no undo checkpoint for a no-op.
+                return
+            # World Z is affine in ``distance_mm`` with slope ``axis_z``
+            # (recompute_element_frames advances ``origin += d * R[:, 2]``
+            # once), so the exact inverse of the displayed column is one
+            # step from where the element is now.  Unfolded systems have
+            # ``axis_z == 1.0`` exactly and are bit-unchanged; a folded
+            # leg is not, and assuming 1.0 there turned "type the
+            # displayed value back" into a move (measured on a 30 deg
+            # fold: 40 mm -> 23.094 mm per round trip).
+            self._checkpoint()
+            elem.distance_mm = max(
+                0.0, float(elem.distance_mm)
+                + (value - float(np.asarray(elem.origin,
+                                            dtype=float)[2])) / axis_z)
         self._invalidate()
         self.system_changed.emit()
 
@@ -2400,9 +2458,19 @@ class SystemModel(QObject):
             # absorb the gap onto its own cb_pre (cb_post case),
             # leave this element's last surface thickness at 0 — the
             # gap is carried in the post-cb frame instead.
-            if trace_surfaces and ei + 1 < len(self.elements):
-                next_elem = self.elements[ei + 1]
-                if next_elem.elem_type != 'Detector' and next_elem.surfaces:
+            #
+            # ``_next_optical_element`` rather than ``elements[ei + 1]``:
+            # the world builder uses it, and the two lists must describe
+            # the same physical system.  Testing only the immediate
+            # successor dropped the gap whenever a surface-less element
+            # sat between two optics (the world builder would still have
+            # closed it), so the local and world ABCDs disagreed.
+            # Bit-identical for every list the GUI can build, where
+            # Source and Detector are the only surface-less entries and
+            # only ever sit at the ends.
+            if trace_surfaces:
+                next_elem = self._next_optical_element(ei)
+                if next_elem is not None:
                     next_is_cb_post = (elem.elem_type == 'Mirror'
                                        and _has_tilt(next_elem))
                     if not next_is_cb_post:
@@ -3302,6 +3370,11 @@ class SystemModel(QObject):
         thing and is only consulted when the element geometry cannot
         supply it (no elements placed yet), because the two disagreeing
         silently under-/over-fills the pupil.
+
+        Non-finite is reported as 0.0, i.e. as "at infinity": every
+        consumer gates on ``object_distance > 0`` and an ``inf`` passes
+        that gate, so an infinite conjugate would read as a finite one
+        and be solved as such.
         """
         src = self.source
         if src is None or src.source_type != 'point_source':
@@ -3312,7 +3385,7 @@ class SystemModel(QObject):
             if not elem.surfaces:
                 continue
             d = float(elem.distance_mm)
-            if d > 0:
+            if np.isfinite(d) and d > 0:
                 return d * 1e-3
             break
         # No placed optic to measure against -- fall back to the form
@@ -3321,7 +3394,9 @@ class SystemModel(QObject):
             d = float(src.object_distance_mm)
         except (TypeError, ValueError):
             return 0.0
-        return d * 1e-3 if d > 0 else 0.0
+        if not np.isfinite(d) or d <= 0:
+            return 0.0
+        return d * 1e-3
 
     def _detector_distance_m(self):
         """Axial distance [m] from the last optical surface to the
