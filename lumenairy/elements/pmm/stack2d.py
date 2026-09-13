@@ -65,7 +65,11 @@ from .twod import (
     _validate_cell_cost,
     _validate_cell_orders,
 )
-from .twod_jones import _require_nonzero_ezz, _tensor_layer_modes
+from .twod_jones import (
+    _require_nonzero_ezz,
+    _tensor_layer_modes,
+    _tensor_projected_ops,
+)
 
 __all__ = ["PMM2DStackHybrid", "PMM2DStack_hybrid", "PMM2DStack"]
 
@@ -502,12 +506,21 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         the old answer -- the table is in
         docs/history/lumenairy.elements.pmm.stack2d.md).  Clearing
         ``_geom_cache`` by hand makes every one of them bit-identical to a
-        fresh object: the build is right, only the key would be wrong."""
+        fresh object: the build is right, only the key would be wrong.
+
+        ``formulation`` is one of those solver parameters for a TENSOR layer:
+        the cached entry now carries that layer's projected tensor operators
+        (:func:`~lumenairy.elements.pmm.twod_jones._tensor_projected_ops`),
+        whose ``EZZ`` is ``inv([[1/e_zz]])`` under ``'li'`` and the direct
+        ``[[e_zz]]`` otherwise.  The scalar ``lops`` do not depend on it (they
+        carry every rule's operator side by side and the caller routes), so
+        including it only ever SPLITS keys that were previously shared."""
         return (L["kind"], L["tile"].tobytes(), L["tile"].shape,
                 tuple(np.ravel(L["xw"])), tuple(np.ravel(L["yw"])),
                 tuple(np.ravel(L["el_x"])), tuple(np.ravel(L["el_y"])),
                 float(self.period_x), float(self.period_y),
                 int(self.degree), bool(self.grade), int(self.n_orders),
+                self.formulation,
                 # SLANT (2026-08-16): two layers identical except for their
                 # slant vector have DIFFERENT modes and must not share a
                 # cached solve.  Gate: test_slant_cache_key_no_collision.
@@ -949,7 +962,7 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             gkey = self._geom_key(L)
             gc = self._geom_cache.get(gkey)
             if gc is not None:
-                ax, ay, lops = gc
+                ax, ay, lops, _tops = gc
             else:
                 ax = _build_axis(self.period_x, L["xw"], self.degree,
                                  L["el_x"], self.grade)
@@ -957,7 +970,11 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                                  L["el_y"], self.grade)
                 lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
                                              self.period_x, self.period_y)
-                self._geom_cache.put(gkey, _freeze_cached((ax, ay, lops)))
+                # only scalar / uniform layers reach here, so there are no
+                # tensor operators to build -- the slot stays None and
+                # _build_layer_modes fills it when a tensor layer needs it.
+                self._geom_cache.put(gkey,
+                                     _freeze_cached((ax, ay, lops, None)))
             lops = self._restrict_lops(lops, keep)
             GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
             GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
@@ -1059,20 +1076,31 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
                 return ("sym", Wl, Vl, lam)
         # patterned scalar or tensor -> expensive nodal build + eig
         gkey = self._geom_key(L)
-        # F4 part 2: reuse the wl-INDEPENDENT (ax, ay, scalar lops) build
-        # across a sweep; only the eig below re-runs per wavelength.
+        # F4 part 2: reuse the wl-INDEPENDENT (ax, ay, projected operators)
+        # build across a sweep; only the eig below re-runs per wavelength.
+        # The entry carries BOTH projected sets -- ``lops`` for a scalar layer
+        # and ``tops`` for a tensor one -- because both are functions of the
+        # geometry, the cell and the order lists alone (audit G10(d)).
+        ez_rule = ("li" if self.formulation == "li" else "laurent")
         gc = self._geom_cache.get(gkey)
         if gc is not None:
-            ax, ay, lops = gc
+            ax, ay, lops, tops = gc
         else:
             ax = _build_axis(self.period_x, L["xw"], self.degree,
                              L["el_x"], self.grade)
             ay = _build_axis(self.period_y, L["yw"], self.degree,
                              L["el_y"], self.grade)
-            lops = (_scalar_projected_ops(ax, ay, tile_i, ox, oy,
-                                          self.period_x, self.period_y)
-                    if L["kind"] == "scalar" else None)
-            self._geom_cache.put(gkey, _freeze_cached((ax, ay, lops)))
+            lops = tops = None
+            if L["kind"] == "scalar":
+                lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
+                                             self.period_x, self.period_y)
+            else:
+                # the FULL box, as _tensor_layer_modes assembles it: the
+                # kron-factored branches need it and ``keep`` is applied at
+                # use, so ONE entry serves both truncations.
+                tops = _tensor_projected_ops(ax, ay, L["xw"], L["yw"], tile_i,
+                                             ox, oy, ez_rule)
+            self._geom_cache.put(gkey, _freeze_cached((ax, ay, lops, tops)))
         sl = L.get("slant", (0.0, 0.0))
         lops = self._restrict_lops(lops, keep)
         if L["kind"] == "scalar":
@@ -1088,7 +1116,6 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
             # a SLANTED scalar layer comes back as the generator 6-tuple
             return (("gen",) + tuple(out) if len(out) == 6
                     else ("sym",) + tuple(out))
-        ez_rule = ("li" if self.formulation == "li" else "laurent")
         # the tensor operators kron-FACTOR, so they are assembled on the full
         # box and restricted by ``keep`` inside _tensor_layer_modes -- which
         # needs the FULL-box kxv/kyv for the same reason.
@@ -1096,7 +1123,8 @@ class PMM2DStackHybrid(PerOrderAmplitudesMixin):
         kyv_b = kyv if keep is None else kyv_box
         out = _tensor_layer_modes(ax, ay, L["xw"], L["yw"], tile_i, k0, kx0,
                                   ky0, ox, oy, kxv_b, kyv_b, ez_rule, slant=sl,
-                                  block_eig=self.symmetry, keep=keep)
+                                  block_eig=self.symmetry, keep=keep,
+                                  ops=tops)
         return (("gen",) + out if len(out) == 6 else ("sym",) + tuple(out))
 
     def _layer_mode_sets(self, kxv, kyv, ox, oy, kx0, ky0, k0, wl,

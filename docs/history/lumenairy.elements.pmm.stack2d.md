@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/pmm/stack2d.py
-ast_sha256: df363f717d88a5e4df662240acad82233eb035573cfaf320d6aeb9df9671cb14
-token_sha256: f3df6a40c02f34e7e6918ac51fa8101086f549eaf2a42712dcfd0dbd52aa1c36
+ast_sha256: a85203261eeab8f46390a2597c8349df968cb296736cdaabdb72c3e0bd37cf6b
+token_sha256: 37714728e07f83d303f9d86e1839979955151b41b6ff6a4a6408c91fc328e65d
 pre_relocation_lines: 2261
 recorded_by: WP-A17 SWEEP-2 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B6 (audit 2026-09-11 G10(d)): _geom_cache carries a tensor layer's k0-free projected operators (_tensor_projected_ops) beside the scalar lops, and _geom_key gains the formulation the cached EZZ rule depends on; every operator is bit-identical with and without the cache
 -->
 
 # Version history -- `lumenairy/elements/pmm/stack2d.py`

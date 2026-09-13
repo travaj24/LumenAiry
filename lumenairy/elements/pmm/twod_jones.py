@@ -146,36 +146,38 @@ def _tile_is_offplane(tile33):
     return float(np.max(off)) > 1e-12 * scale
 
 
-def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
-                        ox, oy, kxv, kyv, formulation, return_ops=False,
-                        slant=None, block_eig=False, keep=None):
-    """Fourier-basis layer eigenmodes of a full (3, 3) tensor cell -- the
-    SEM-projected operators fed to the shared dimension-agnostic
-    :func:`_layer_eigenmodes_tensor` (also used per-layer by
-    :class:`~lumenairy.elements.pmm.stack2d.PMM2DStack`).  ``tile_i`` is in the
-    INTERNAL (conjugated) convention.
+def _tensor_projected_ops(ax, ay, x_walls, y_walls, tile_i, ox, oy,
+                          formulation):
+    """The SEM-projected tensor operators of one layer, WITHOUT the source.
 
-    Returns ``(W, V, lam)`` for an IN-PLANE cell, or the GENERATOR 6-tuple
-    ``(W, V, lam, Wb, Vb, lam_b)`` when the tile carries out-of-plane coupling
-    (xz/yz/zx/zy) -- the caller switches to the generalized S-matrix cascade.
+    Everything here is a function of the GEOMETRY (``ax``/``ay``/the walls),
+    the cell (``tile_i``, INTERNAL conjugated convention), the order lists and
+    the ``E_z`` rule -- nothing in it depends on ``k0``, ``kx0`` or ``ky0``.
+    That is what makes it cacheable across a wavelength or angle sweep, which
+    is what :class:`~lumenairy.elements.pmm.stack2d.PMM2DStackHybrid` does with
+    it (its ``_geom_cache``); :func:`_tensor_layer_modes` calls it per solve
+    when it is not handed one.
 
-    A UNIFORM cell (no walls) bypasses the SEM grid: the Fourier basis is exact
-    there (the convolution of a constant is ``t*I`` and the derivative
-    operators are ``diag(k)``), so there is no projection floor -- matching
-    rcwa_jones_2d's uniform-cell representation exactly.  A SEPARABLE cell
-    (uniform along one axis) gets exact ``diag(k)`` on the wall-less axis.
+    Returns ``dict(kind, Gx0F, IpxF, Gy0F, IpyF, Cxx, Cxy, Cyx, Cyy, EZZ,
+    oop)``.  ``kind`` names which axes carry a k0-FREE derivative part, and the
+    three discretization branches differ exactly there:
 
-    ``keep`` is the Lalanne-1997 CIRCULAR-truncation boolean mask over the full
-    rectangular box (``kxv``/``kyv`` must be the FULL box, since the separable
-    and crossed branches build ``kron``-factored operators whose shape is
-    ``len(ox) * len(oy)``).  Every operator is assembled on the box and then
-    restricted by ``np.ix_(keep, keep)`` -- which is exactly the operator built
-    on the circular order list, because these are all functions of the order
-    LIST -- so the eig runs at ``~(pi/4) Nf``.  The scalar core does the same
-    thing to ``lops`` (``twod._pmm2d_solve_core``).
+    * ``'uniform'`` (no walls) -- neither axis does.  The Fourier basis is
+      exact for a constant cell, so ``Gx/GyF`` are ``diag(kxv)``/``diag(kyv)``
+      and the four ``Gx0F``/``IpxF``/``Gy0F``/``IpyF`` slots are ``None``.
+    * ``'x'`` / ``'y'`` (SEPARABLE, uniform along one axis) -- only the
+      PATTERNED axis does: ``kron(Iy, g1)/k0 + kx0*kron(Iy, ip1)`` for ``'x'``
+      (and the mirror for ``'y'``); the wall-less axis stays exact ``diag(k)``.
+    * ``'xy'`` (CROSSED) -- both do, in the scalar branch's shape
+      ``Gx0F/k0 + kx0*Ip``, and ``IpxF`` and ``IpyF`` are the same projector.
+
+    A UNIFORM cell bypasses the SEM grid entirely (the convolution of a
+    constant is ``t*I``), so it has no projection floor -- matching
+    ``rcwa_jones_2d``'s uniform-cell representation exactly.
     """
-    Nf = len(kxv)
+    Nf = len(ox) * len(oy)
     nsx, nsy = len(ax["strips"]), len(ay["strips"])
+    Gx0F = IpxF = Gy0F = IpyF = None
     offp = _tile_is_offplane(tile_i)
     if formulation == "fff_nv" and offp:
         raise ValueError(
@@ -203,8 +205,7 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
     if len(x_walls) == 0 and len(y_walls) == 0:
         t0 = tile_i[0, 0]
         I_F = np.eye(Nf, dtype=_C)
-        GxF = np.diag(kxv.astype(_C))
-        GyF = np.diag(kyv.astype(_C))
+        kind = "uniform"
         CxxF, CxyF = t0[0, 0] * I_F, t0[0, 1] * I_F
         CyxF, CyyF = t0[1, 0] * I_F, t0[1, 1] * I_F
         EZZ = t0[2, 2] * I_F          # inv-of-inverse == direct for a constant
@@ -283,8 +284,8 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
                                     ("EXZ", (0, 2)), ("EYZ", (1, 2)))}
         if nsy == 1:
             Iy = np.eye(len(oy), dtype=_C)
-            GxF = np.kron(Iy, g1) / k0 + kx0 * np.kron(Iy, ip1)
-            GyF = np.diag(kyv.astype(_C))
+            kind = "x"
+            Gx0F, IpxF = np.kron(Iy, g1), np.kron(Iy, ip1)
             CxxF = np.kron(Iy, c[(0, 0)])
             CxyF = np.kron(Iy, c[(0, 1)])
             CyxF = np.kron(Iy, c[(1, 0)])
@@ -294,8 +295,8 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
                 oop = {k: np.kron(Iy, v) for k, v in o1.items()}
         else:
             Ix = np.eye(len(ox), dtype=_C)
-            GxF = np.diag(kxv.astype(_C))
-            GyF = np.kron(g1, Ix) / k0 + ky0 * np.kron(ip1, Ix)
+            kind = "y"
+            Gy0F, IpyF = np.kron(g1, Ix), np.kron(ip1, Ix)
             CxxF = np.kron(c[(0, 0)], Ix)
             CxyF = np.kron(c[(0, 1)], Ix)
             CyxF = np.kron(c[(1, 0)], Ix)
@@ -329,8 +330,8 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
         Gx0F = -1j * np.kron(np.eye(NyO, dtype=_C), gx1)
         Gy0F = -1j * np.kron(gy1, np.eye(NxO, dtype=_C))
         Ip = np.kron(Ty @ Typ, Tx @ Txp)
-        GxF = Gx0F / k0 + kx0 * Ip
-        GyF = Gy0F / k0 + ky0 * Ip
+        kind = "xy"
+        IpxF = IpyF = Ip
         Mdiag = np.kron(mdy, mdx)
         kers = [[np.kron(np.diag(ay["Mtile"][sy]), np.diag(ax["Mtile"][sx]))
                  for sy in range(nsy)] for sx in range(nsx)]
@@ -364,6 +365,58 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
                        EZY=_proj(lambda t: t[2, 1]),
                        EXZ=_proj(lambda t: t[0, 2]),
                        EYZ=_proj(lambda t: t[1, 2]))
+    return dict(kind=kind, Gx0F=Gx0F, IpxF=IpxF, Gy0F=Gy0F, IpyF=IpyF,
+                Cxx=CxxF, Cxy=CxyF, Cyx=CyxF, Cyy=CyyF, EZZ=EZZ, oop=oop)
+
+
+def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
+                        ox, oy, kxv, kyv, formulation, return_ops=False,
+                        slant=None, block_eig=False, keep=None, ops=None):
+    """Fourier-basis layer eigenmodes of a full (3, 3) tensor cell -- the
+    SEM-projected operators fed to the shared dimension-agnostic
+    :func:`_layer_eigenmodes_tensor` (also used per-layer by
+    :class:`~lumenairy.elements.pmm.stack2d.PMM2DStack`).  ``tile_i`` is in the
+    INTERNAL (conjugated) convention.
+
+    Returns ``(W, V, lam)`` for an IN-PLANE cell, or the GENERATOR 6-tuple
+    ``(W, V, lam, Wb, Vb, lam_b)`` when the tile carries out-of-plane coupling
+    (xz/yz/zx/zy) -- the caller switches to the generalized S-matrix cascade.
+
+    The source-free half of the assembly lives in
+    :func:`_tensor_projected_ops`; this function adds the source.  ``ops`` is
+    that function's dict, and passing one that was built for the SAME
+    ``(ax, ay, walls, tile_i, ox, oy, formulation)`` skips the rebuild -- which
+    is what makes a sweep pay the per-axis projections and the ``_proj``
+    sandwiches once instead of once per wavelength AND angle.  The rebuilt
+    ``GxF``/``GyF`` are bit-for-bit what the in-line assembly produced: the
+    same ``Gx0F/k0 + kx0*IpxF`` expression on a patterned axis, the same
+    ``diag(k)`` on a wall-less one.
+
+    ``keep`` is the Lalanne-1997 CIRCULAR-truncation boolean mask over the full
+    rectangular box (``kxv``/``kyv`` must be the FULL box, since the separable
+    and crossed branches build ``kron``-factored operators whose shape is
+    ``len(ox) * len(oy)``).  Every operator is assembled on the box and then
+    restricted by ``np.ix_(keep, keep)`` -- which is exactly the operator built
+    on the circular order list, because these are all functions of the order
+    LIST -- so the eig runs at ``~(pi/4) Nf``.  The scalar core does the same
+    thing to ``lops`` (``twod._pmm2d_solve_core``).
+    """
+    if ops is None:
+        ops = _tensor_projected_ops(ax, ay, x_walls, y_walls, tile_i, ox, oy,
+                                    formulation)
+    kind = ops["kind"]
+    # the four off-plane blocks are filled together or not at all, so their
+    # presence IS ``_tile_is_offplane(tile_i)`` -- read back from the ops
+    # rather than re-derived, so a cached build and a fresh one cannot
+    # disagree about which cascade the layer takes.
+    offp = ops["oop"]["EZX"] is not None
+    GxF = (ops["Gx0F"] / k0 + kx0 * ops["IpxF"] if kind in ("x", "xy")
+           else np.diag(kxv.astype(_C)))
+    GyF = (ops["Gy0F"] / k0 + ky0 * ops["IpyF"] if kind in ("y", "xy")
+           else np.diag(kyv.astype(_C)))
+    CxxF, CxyF = ops["Cxx"], ops["Cxy"]
+    CyxF, CyyF = ops["Cyx"], ops["Cyy"]
+    EZZ, oop = ops["EZZ"], ops["oop"]
     if keep is not None:
         ix = np.ix_(keep, keep)
         GxF, GyF = GxF[ix], GyF[ix]
@@ -371,7 +424,6 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
         CyxF, CyyF = CyxF[ix], CyyF[ix]
         EZZ = EZZ[ix]
         oop = {kk: (None if v is None else v[ix]) for kk, v in oop.items()}
-        Nf = int(np.count_nonzero(keep))
     if return_ops:
         # F2 (audit): expose the projected operators so the even-parity fold
         # can build (P, Q) via rcwa's _tensor_PQ.  Only IN-PLANE cells fold

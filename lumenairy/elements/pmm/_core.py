@@ -363,7 +363,26 @@ def _gll_nodes_weights(degree: int):
     degree, every step of a fixed-geometry wavelength/angle sweep.  The cached
     arrays are returned READ-ONLY so an accidental in-place write raises instead
     of silently poisoning the cache (callers only ever map/scale them into new
-    arrays: ``ref_w * J``, physical-coordinate maps)."""
+    arrays: ``ref_w * J``, physical-coordinate maps).
+
+    WHY GLL AND NOT ANOTHER NODAL SET.  ``_build_sem*`` assembles every element
+    integral with the NODAL rule these weights define, so the element mass is
+    the lumped ``diag(w*J)``.  That is legitimate only because the GLL rule is
+    exact to degree ``2N-1``, which makes ``(diag(w), D)`` satisfy
+    summation-by-parts EXACTLY -- ``M D + (M D)^T = diag(-1, 0, ..., 0, +1)``,
+    the discrete integration by parts the energy and reciprocity algebra rests
+    on.  MEASURED (WP-B6, 2026-09-13) over the ultraspherical Gauss-Lobatto
+    family that contains this rule at ``lambda = 1/2``: that residual is
+    1.3e-14 .. 1.9e-13 here (degree 8..32) and 3.7e-01 .. 1.5e+00 at every
+    other ``lambda``, and a lossless oblique grating's ``sum(R)+sum(T)`` closes
+    to 3e-14 here against 3e-08 .. 1e-05 there.  A basis swap in this function
+    is therefore not free, and it is not the lever it looks like either: with
+    the element integrals evaluated EXACTLY the whole family is a change of
+    nodal basis of the same C0 piecewise-``P_N`` space and returns ONE answer
+    (agreeing to 3.1e-13).  Gate:
+    ``tests/unit/test_audit2609_b6_pmm_basis_and_tensor_cache.py``; the rate
+    ladder behind the decision is in
+    ``docs/audits/AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11/fixes/WP-B6_REPORT.md``."""
     if degree == 1:
         return _readonly(np.array([-1.0, 1.0]), np.array([1.0, 1.0]))
     interior = np.sort(Legendre.basis(degree).deriv().roots().real)
