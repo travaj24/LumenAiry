@@ -2765,12 +2765,51 @@ def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
         E, dx_new, _ = scalable_angular_spectrum_propagate(
             E, thickness, lam_medium, dx)
         if abs(dx_new - dx) > dx * 1e-6:
-            E, _ = resample_field(E, dx_new, dx, N_out=E.shape[-1])
+            # K6: the band-limited (chirp-Z) interpolant has unit MTF at
+            # every frequency the grid represents, but its reconstruction
+            # is PERIODIC with period ``N_in*dx_new`` per axis, so it is
+            # chosen only while the lens grid's window fits inside one
+            # period.  Past that it returns replicas of the field instead
+            # of the zeros the spline pads with -- measured P_out/P_in
+            # 1.378837 at ``dx_new/dx = 0.7727`` and 9.000535 (a 3x3
+            # tiling) at 0.3091, against the spline's 0.950689 and
+            # 0.999999.  The 1e-9 slack is ``_warn_mft_output_window``'s
+            # own tolerance, so chirp-Z is taken on exactly the windows
+            # it would not warn about, and ``min`` picks the binding axis
+            # because ``resample_field`` reads one input pitch for both.
+            #
+            # This gap runs in GLASS: ``lam_medium = wavelength/n`` makes
+            # ``dx_new`` smaller by ``n`` than the same gap in air, so the
+            # window test fails far more often here than in the
+            # free-space chain.  On the WP-A15a covering-array doublet
+            # (N = 64, dx = 112.5 um, lambda = 632.8 nm) both gaps sit at
+            # ``dx_new/dx`` = 4.2e-3 and 1.1e-3 -- deep in the spline's
+            # half -- and the crossover for that grid is a 2.14 m
+            # thickness.
+            E, _ = resample_field(
+                E, dx_new, dx, N_out=E.shape[-1],
+                method=('chirpz'
+                        if (E.shape[-1] * dx
+                            <= min(E.shape[-2], E.shape[-1]) * dx_new
+                            * (1.0 + 1e-9))
+                        else 'spline'))
     elif wave_propagator == 'fresnel':
         from ..propagators.propagation import fresnel_propagate, resample_field
         E, dx_new, _ = fresnel_propagate(E, thickness, lam_medium, dx, dy=dy)
         if abs(dx_new - dx) > dx * 1e-6:
-            E, _ = resample_field(E, dx_new, dx, N_out=E.shape[-1])
+            # K6, same window-vs-period rule and the same in-glass bias
+            # as the ``'sas'`` branch above: chirp-Z (unit MTF) while the
+            # lens grid's window fits inside one reconstruction period,
+            # the spline where it would return replicas.  Here
+            # ``dx_new = lam_medium*thickness/(N*dx)``, so a thin gap in
+            # a dense glass lands far inside the spline's half.
+            E, _ = resample_field(
+                E, dx_new, dx, N_out=E.shape[-1],
+                method=('chirpz'
+                        if (E.shape[-1] * dx
+                            <= min(E.shape[-2], E.shape[-1]) * dx_new
+                            * (1.0 + 1e-9))
+                        else 'spline'))
     elif wave_propagator in ('rayleigh_sommerfeld', 'rs'):
         from ..propagators.propagation import rayleigh_sommerfeld_propagate
         E = rayleigh_sommerfeld_propagate(

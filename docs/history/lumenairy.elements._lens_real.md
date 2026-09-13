@@ -1,12 +1,13 @@
 <!-- lumenairy-history-doc
 module: lumenairy/elements/_lens_real.py
-ast_sha256: 872143302a7fde8aeca0d1d415ee61aababff8f73e1e725bd7e7c42b9faee658
-token_sha256: 7ea5039289a9f57ed7f7b4de002dccd05f1ebdf30026435abac545e0dc7fe0aa
+ast_sha256: 8015cba5504c11fe76c7303eeb41399f03816839538c1d0627de3fc95231f320
+token_sha256: e4f2d77780ff4be9f94d16f5acd7ed927da6ff747dd060b23d0dc334c46edc6b
 pre_relocation_lines: 8117
 recorded_by: WP-A17 SWEEP-4 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- WP-B2 (audit 2026-09-11 L9): the 2-D displaced remap's launch->exit map is inverted on its own structured launch grid instead of Delaunay-triangulating the scattered exit points (the scattered backend is retained as its oracle); the carried input envelope is cut at the largest centred window the field grid holds, which is what actually made the launch lattice reflection-unstable; the lattice is raised 181 -> 257 and exposed as a validated displaced_n_side keyword
+re_recorded: 2026-09-13 -- WP-B3b (K6): _propagate_through_glass's two resample_field calls gate method= on whether the lens grid's window fits inside one chirp-Z reconstruction period; in glass lam_medium = wavelength/n puts these legs on the spline side far more often than the free-space chain
 -->
 
 # Version history -- `lumenairy/elements/_lens_real.py`

@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/system.py
-ast_sha256: e2bca9e53d3368cf98b31637bf37cb1637e5b5d4e0583256203aa247f4173caa
-token_sha256: 0def08a2e5c521916515ef2c37be694ef989deeec120919d2d7df4ca187e6866
+ast_sha256: 95d5294e6327631770b0753860ac938261132ce8208de355d4218a3d13190885
+token_sha256: 2615ac1e6a132cbe49936d08c1964f5093258017acd3ba308717f25fb6849e34
 pre_relocation_lines: 1919
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B3b (K6): the 'fresnel' leg evaluates fresnel_propagate_mft straight onto the chain grid instead of propagating to the single-FFT natural grid and resampling back (the crop and the interpolator MTF both go), and the 'sas' leg's surviving resample_field gates method= on whether the chain window fits inside one chirp-Z reconstruction period
 -->
 
 # Version history -- `lumenairy/propagators/system.py`

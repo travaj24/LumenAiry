@@ -50,7 +50,7 @@ from .propagation import (
     _resolve_jax_complex_dtype,
     angular_spectrum_propagate,
     angular_spectrum_propagate_tilted,
-    fresnel_propagate,
+    fresnel_propagate_mft,
     resample_field,
 )
 
@@ -159,10 +159,11 @@ def _require_square_pitch(current_dx: float, current_dy: float,
                           branch: str) -> None:
     """SY-2 guard for the pitch-CHANGING chain branches.
 
-    ``fresnel_propagate`` returns distinct ``dx_new``/``dy_new``
-    (``lambda z/(N dx)`` vs ``lambda z/(N dy)``) but the chain resamples
-    both axes with the x-ratio; ``scalable_angular_spectrum_propagate``
-    and ``generate_turbulence_screen`` take a single pitch and assume a
+    The ``'fresnel'`` leg lands the integral on a SQUARE output grid
+    (one ``N_out``, ``dy_out = dx_out``), so an anamorphic input pitch
+    would be read as if ``dy == dx`` on the way out;
+    ``scalable_angular_spectrum_propagate`` and
+    ``generate_turbulence_screen`` take a single pitch and assume a
     square grid.  For an anamorphic working pitch (``current_dy !=
     current_dx``) these branches would silently produce wrong physics on
     the y-axis, so we refuse rather than mislead.  Square-pitch chains
@@ -359,20 +360,24 @@ def _warn_system_resample_crop(E, dx_new, dx_target, N_out, kernel_name):
     """Warn when resampling a kernel's natural output grid back to the
     chain pitch CROPS the field (audit K6).
 
-    After ``fresnel_propagate`` / ``scalable_angular_spectrum_propagate``
-    the field lives at ``dx_new`` over an extent ``N*dx_new``.  The chain
-    then resamples it onto ``N*dx_target``.  When ``dx_new > dx_target``
-    -- the common diverging-beam case -- everything outside the central
-    ``N*dx_target`` is discarded by ``map_coordinates(mode='constant',
-    cval=0.0)``, silently.
+    The ``'sas'`` leg is the one caller: after
+    ``scalable_angular_spectrum_propagate`` the field lives at ``dx_new``
+    over an extent ``N*dx_new``, and the chain resamples it onto
+    ``N*dx_target``.  When ``dx_new > dx_target`` -- the common
+    diverging-beam case -- everything outside the central ``N*dx_target``
+    is discarded (by ``map_coordinates(mode='constant', cval=0.0)`` on
+    the spline leg, by the chirp-Z leg's window on the other), silently.
+    The ``'fresnel'`` leg evaluates onto the chain grid directly and so
+    has no resample to crop; its own faithful-zone diagnostic comes from
+    ``fresnel_propagate_mft``.
 
     Measured (grid-filling top-hat of radius 0.42*N*dx, N = 512,
-    dx = 2 um, lambda = 633 nm, z = 5 mm, dx_new/dx = 1.5454):
-    ``P_out/P_in`` = 0.998990 for ``method='asm'`` (band limit, expected)
-    against 0.996685 for ``'fresnel'`` and 0.950689 for ``'sas'``; the
-    Fresnel step itself conserves power to 1.000000 and the retained
-    window holds 0.996980 of it, i.e. essentially ALL of the loss is the
-    crop.
+    dx = 2 um, lambda = 633 nm, z = 5 mm, dx_new/dx = 1.5454 for the
+    single-FFT Fresnel grid and 0.7727 for SAS's):  ``P_out/P_in`` =
+    0.998990 for ``method='asm'`` (band limit, expected) against
+    0.950689 for ``'sas'``; a Fresnel step onto that natural grid
+    conserves power to 1.000000 and the retained window holds 0.996980
+    of it, i.e. essentially ALL of the loss is the crop.
 
     Values are unchanged -- diagnostic only.
     """
@@ -444,9 +449,14 @@ def propagate_through_system(E_in: np.ndarray,
         Supported values:
 
         - ``'asm'`` : Angular Spectrum Method (exact, fixed grid).
-        - ``'fresnel'`` : Single-FFT Fresnel (paraxial, grid spacing
-          changes at each step; auto-resampled back to ``dx`` before
-          the next element so lens/aperture phases stay correct).
+        - ``'fresnel'`` : Fresnel diffraction (paraxial), evaluated by
+          :func:`~lumenairy.propagators.fresnel_propagate_mft` straight
+          onto the chain grid, so the pitch never changes and
+          lens/aperture phases stay on the right coordinates without an
+          interpolation step (audit K6).  This is the same integral the
+          single-FFT :func:`~lumenairy.propagators.fresnel_propagate`
+          computes, sampled where the chain wants it instead of on that
+          kernel's natural ``lambda*z/(N*dx)`` grid.
         - ``'sas'`` : Scalable Angular Spectrum Method
           (Heintzmann-Loetgering-Wechsler 2023).  Correct choice when
           the propagation distance is long enough that ASM needs an
@@ -795,23 +805,40 @@ def propagate_through_system(E_in: np.ndarray,
 
             if prop_method == 'fresnel' and not has_tilt:
                 _require_square_pitch(current_dx, current_dy, 'fresnel')
-                E, dx_new, _dy_new = fresnel_propagate(
-                    E, z, wavelength, current_dx, current_dy)
-                # Resample back to the original grid spacing so
-                # downstream element phases (lenses, apertures) are
-                # computed on the correct coordinate system.  Both
-                # axes converge to current_dx since `resample_field`
-                # produces a square grid; current_dy stays in sync.
-                if abs(dx_new - current_dx) > current_dx * 1e-6:
-                    if verbose:
-                        print(f"    Fresnel dx changed: "
-                              f"{current_dx*1e6:.3f} -> {dx_new*1e6:.3f} um, "
-                              f"resampling back to {current_dx*1e6:.3f} um")
-                    # K6: the resample-back CROPS when dx_new > current_dx.
-                    _warn_system_resample_crop(
-                        E, dx_new, current_dx, E_in.shape[-1], 'fresnel')
-                    E, _ = resample_field(E, dx_new, current_dx,
-                                          N_out=E_in.shape[-1])
+                # K6: the Fresnel integral is evaluated STRAIGHT ONTO the
+                # chain grid, so downstream element phases (lenses,
+                # apertures) land on the right coordinate system without
+                # an interpolation step.  Taking the single-FFT kernel's
+                # natural grid ``lambda z/(N dx)`` and interpolating back
+                # costs two errors the MFT form does not have: everything
+                # outside ``N*current_dx`` is discarded (the crop), and
+                # the interpolator's MTF attenuates the output-plane
+                # chirp, which sits at exactly Nyquist at the rim by
+                # construction.  Measured against this direct evaluation,
+                # the resample-back sat 2.8e-2 (N=512) to 4.9e-2 (N=256)
+                # relative L2 away on a grid-filling top-hat at
+                # lambda = 633 nm, dx = 2 um, z = 5 mm, and held
+                # 0.996685 of the input power against the direct
+                # evaluation's 0.996992.
+                #
+                # ``fresnel_propagate_mft`` carries the same K1
+                # chirp-sampling guard as ``fresnel_propagate`` and adds
+                # its own faithful-zone warning (period
+                # ``lambda*|z|/dx_in``), which is why this leg needs no
+                # ``_warn_system_resample_crop``: there is no resample to
+                # crop.  ``N_out``/``dy_out`` keep the chain's square
+                # sample count and pitch.
+                if verbose:
+                    _dx_natural = wavelength * z / (
+                        int(E.shape[-1]) * current_dx)
+                    print(f"    Fresnel evaluated directly at "
+                          f"dx={current_dx*1e6:.3f} um "
+                          f"(the single-FFT natural grid would be "
+                          f"{_dx_natural*1e6:.3f} um)")
+                E = fresnel_propagate_mft(
+                    E, z, wavelength, current_dx, current_dx,
+                    int(E_in.shape[-1]), dy_in=current_dy,
+                    dy_out=current_dx)
             elif prop_method == 'sas' and not has_tilt:
                 _require_square_pitch(current_dx, current_dy, 'sas')
                 from .propagation import scalable_angular_spectrum_propagate
@@ -831,8 +858,32 @@ def propagate_through_system(E_in: np.ndarray,
                     # K6: the resample-back CROPS when dx_new > current_dx.
                     _warn_system_resample_crop(
                         E, dx_new, current_dx, E_in.shape[-1], 'SAS')
-                    E, _ = resample_field(E, dx_new, current_dx,
-                                          N_out=E_in.shape[-1])
+                    # K6: the band-limited (chirp-Z) interpolant has unit
+                    # MTF at every frequency the grid represents, but its
+                    # reconstruction is PERIODIC with period
+                    # ``N_in*dx_new`` per axis, so it is faithful only
+                    # while the chain window fits inside one period.
+                    # Past that the extra samples are replicas of the
+                    # field rather than the zeros the spline pads with:
+                    # measured P_out/P_in 1.378837 at dx_new/dx = 0.7727
+                    # and 9.000535 (a 3x3 tiling) at 0.3091, against the
+                    # spline's 0.950689 and 0.999999.  The window/period
+                    # test below is the general form of "the pitch
+                    # coarsened" -- the two readings coincide only
+                    # because the chain keeps ``N_out == N_in`` -- and its
+                    # 1e-9 slack is ``_warn_mft_output_window``'s own
+                    # tolerance, so the chirp-Z leg is chosen on exactly
+                    # the windows it would not warn about.  ``min`` takes
+                    # the binding axis: ``resample_field`` reads one input
+                    # pitch for both, so the shorter input extent sets
+                    # the period.
+                    window_out = int(E_in.shape[-1]) * current_dx
+                    period_in = min(E.shape[-2], E.shape[-1]) * dx_new
+                    E, _ = resample_field(
+                        E, dx_new, current_dx, N_out=E_in.shape[-1],
+                        method=('chirpz'
+                                if window_out <= period_in * (1.0 + 1e-9)
+                                else 'spline'))
             elif has_tilt:
                 # Tilted ASM (always ASM — no tilted Fresnel variant)
                 if verbose and prop_method == 'fresnel':
@@ -1587,9 +1638,11 @@ def propagate_through_system_jax(E_in: np.ndarray,
     ``method`` selects the free-space kernel used for ``'propagate'``
     elements.  This entry point implements **ASM only**: the whole point
     of the JAX path is a single jit'd XLA graph, and the NumPy twin's
-    ``'fresnel'`` / ``'sas'`` branches both resample back onto the input
-    pitch (``resample_field`` -> ``scipy.ndimage.map_coordinates``), which
-    has no JAX-traceable equivalent here.  Any other value raises rather
+    ``'sas'`` branch resamples back onto the input pitch
+    (``resample_field`` -> ``scipy.ndimage.map_coordinates`` on the spline
+    leg) while its ``'fresnel'`` branch goes through
+    ``fresnel_propagate_mft``'s Bluestein pair -- neither has a
+    JAX-traceable equivalent wired up here.  Any other value raises rather
     than silently returning the ASM answer:
 
       * ``'asm'`` (default) -- angular-spectrum, jit-traceable.
@@ -1718,10 +1771,12 @@ def propagate_through_system_jax(E_in: np.ndarray,
             raise NotImplementedError(
                 f"propagate_through_system_jax: method={method!r} has no "
                 f"JAX-traceable free-space kernel here; this entry point "
-                f"implements {list(_JAX_METHODS)} only (the 'fresnel' / "
-                f"'sas' branches of the NumPy twin resample back onto the "
-                f"input pitch via scipy map_coordinates, which is not "
-                f"JAX-traceable).  Pre-v5.30 this argument was silently "
+                f"implements {list(_JAX_METHODS)} only (the NumPy twin's "
+                f"'sas' branch resamples back onto the input pitch via "
+                f"scipy map_coordinates and its 'fresnel' branch runs "
+                f"fresnel_propagate_mft's Bluestein pair; neither is "
+                f"wired up as a traceable step here).  Pre-v5.30 this "
+                f"argument was silently "
                 f"ignored and you got the ASM field.  Use "
                 f"lumenairy.propagators.system.propagate_through_system() "
                 f"(NumPy) for method={method!r}, or pass method='asm' if "

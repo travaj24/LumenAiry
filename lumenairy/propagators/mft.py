@@ -602,6 +602,26 @@ def resample_field(
         0.40              2.5           0.718458    1.000000
         ================  ============  ==========  ==========
 
+        The chirp-Z column reads exactly 1 because that fixture's output
+        window is exactly ONE reconstruction period.  Unit gain is a
+        property of the interpolant, but the power ratio you measure is
+        also a property of the window: ``N_out*dx_out == N_in*dx_in``
+        returns the input's power to the last digit, a shorter window
+        drops the sliver it does not cover and a longer one reaches into
+        the first replica.  The extent-preserving default
+        ``N_out = round(N_in*dx_in/dx_out)`` lands on the period exactly
+        only when ``N_in*dx_in/dx_out`` comes out whole -- x0.5, x1, x2
+        and x4 at any ``N_in``; x1.5 needs an ``N_in`` divisible by 3,
+        x1.25 by 5, x1.7 by 17.  Where it rounds, the window is off by up
+        to half an output pixel and the ratio moves by whatever field
+        sits in that sliver: measured at ``N_in = 128``, carrier
+        0.30 cyc/px (2026-09-13), **0.993922** (x1.25), 0.998015 (x1.5),
+        0.998489 (x1.7) and 1.004048 (x3) for a rim-filling Gaussian
+        envelope (``w0 = 0.45*N*dx``, 4.4 % of its power outside
+        ``0.49*N*dx``), against 0.999993 -- 1.000000 for a contained one
+        (``w0 = 0.18*N*dx``).  Pass an explicit ``N_out`` satisfying
+        ``N_out*dx_out == N_in*dx_in`` when the exact reading matters.
+
         Two properties to know before switching a call site:
 
         * The chirp-Z reconstruction is PERIODIC with period
