@@ -1,10 +1,12 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/hfpi.py
-ast_sha256: e0e53f615177b0d7eefbb395bfe91e7271a91017bb1376780e331a3b786ebaa9
-token_sha256: 415940915b1d19c271f30e1cce7b8853b59b9ed4c91e4e251d2c8efb1e609c26
+ast_sha256: 00495d8e91f46de107768eb68b667dadfae0cae7c081eaec0aab832923b0714e
+token_sha256: e0e94069cdd67d8055cca286c494980b931aea1edef237801f117c34e98f1ec2
 pre_relocation_lines: 1658
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B3 (audit K13 + K22): propagate_hfpi_through_prescription gains z_output (a closing propagate_to_plane hop in the image-space medium) and normalisation='auto'; init_paths_stratified gains sampler='jittered'|'sobol', with the jittered draw moved verbatim into _jittered_cube_draw beside the new _sobol_cube_draw; every default byte-identical
+re_recorded: 2026-09-13 -- WP-B3: the normalisation selector's refusal message states the free-space-legs half of the 'auto' rule that the docstring already carried
 -->
 
 # Version history -- `lumenairy/propagators/hfpi.py`

@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/rs.py
-ast_sha256: 6fb26e3dda09189d6534e69604ac1ac127ee6d6bf6c39999a32a3c7a486ef1ce
-token_sha256: 9cc6e977cb7073ce8f588c38351fc08824f35dafe8a4acfc090b2c183f73390f
+ast_sha256: 286d131880517ae59a7cbe28858ffe2565d6168f2b171497e65639d6633f40c0
+token_sha256: f4f42229338bc79fe0aa579212dc7ff32d07f96c4ac3545809c5d06f7c3e026c
 pre_relocation_lines: 773
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B3 (audit K9 second half): kernel='spatial-integrated' -- the RS-I Green's function integrated over each pixel (Shen & Wang 2006) via a folded 6-node tensor Gauss-Legendre rule, its own H-cache tag, and the alias guard widened to both spatial kernels; 'auto' and 'spatial' byte-identical
 -->
 
 # Version history -- `lumenairy/propagators/rs.py`

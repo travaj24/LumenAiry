@@ -59,6 +59,33 @@ _RS_WRAP_RING_FRACTION = 0.02
 #: the quiet side.  Makes the diagnostic O(1) in grid size.
 _RS_WRAP_SAMPLE_BUDGET = 4096
 
+#: Gauss-Legendre nodes per pixel AXIS in the ``kernel='spatial-integrated'``
+#: build (audit K9 second half; Shen & Wang, reference [2]).  The pixel
+#: integral of ``h`` is a smooth oscillatory integral whose phase sweeps at
+#: most ``pi`` radians across one pixel anywhere the spatial kernel is legal
+#: (that bound IS :func:`rs_alias_free_distance`), so a tensor
+#: Gauss-Legendre rule converges geometrically in the node count.  Measured
+#: relative L2 of the whole padded kernel against a 14-node build, at the
+#: WORST legal geometry ``z = 2*N*dx**2/lambda`` where the phase sweep is at
+#: its ``pi`` bound (2026-09-13, lambda = 633 nm):
+#:
+#: ========================  ========  ========  ========  ========  ========
+#: grid                      n_g = 3   n_g = 4   n_g = 5   **n_g = 6**  n_g = 7
+#: ========================  ========  ========  ========  ========  ========
+#: N = 64,  dx = 2 um        1.96e-4   1.85e-6   1.12e-8   4.73e-11  1.81e-13
+#: N = 128, dx = 1 um        1.48e-4   1.28e-6   7.06e-9   2.72e-11  1.03e-13
+#: N = 128, dx = 2 um        1.96e-4   1.84e-6   1.11e-8   4.64e-11  2.56e-13
+#: N = 256, dx = 1 um        1.48e-4   1.27e-6   7.04e-9   2.71e-11  1.57e-13
+#: ========================  ========  ========  ========  ========  ========
+#:
+#: 6 puts the quadrature floor at 4.8e-11 or better -- seven decades below
+#: the 1.1e-3 .. 4.7e-3 the kernel CHOICE is worth on a cell-constant
+#: input -- for a kernel build measured at 5.5x / 8.7x / 10.9x the
+#: point-sampled one at N = 128 / 256 / 512 (the folded build below; the
+#: H cache pays it once per geometry, so a repeat call at the same
+#: geometry costs the same as ``'spatial'``).
+_RS_PIXEL_QUAD_NODES = 6
+
 
 def _warn_rs_transfer_wraparound(E_conv, p_in, Ny2, Nx2, z, dx, dy,
                                  wavelength):
@@ -238,6 +265,76 @@ def rs_alias_free_distance(N: int, dx: float, wavelength: float) -> float:
 _rs_alias_free_distance = rs_alias_free_distance
 
 
+def _rs_pixel_integrated_kernel(Ny2, Nx2, dy, dx, z, k, xp,
+                                n_nodes=_RS_PIXEL_QUAD_NODES):
+    """The RS-I impulse response INTEGRATED over each pixel of the padded
+    grid (audit K9 second half; Shen & Wang, reference [2]).
+
+    Returns the array whose ``[m, n]`` entry is
+
+        Int_{y_m - dy/2}^{y_m + dy/2} Int_{x_n - dx/2}^{x_n + dx/2}
+            h(x, y, z) dx dy ,
+
+    i.e. the same quantity the point-sampled build approximates by the
+    one-point midpoint rule ``h(x_n, y_m, z) * dx * dy``.  Discretely
+    convolving an input array with THIS kernel is the exact
+    Rayleigh-Sommerfeld integral of the field that is CONSTANT on each
+    input pixel and equal to that pixel's array value -- exact, not
+    approximated, because the pixel integral is what the sum then
+    contains.  See :func:`rayleigh_sommerfeld_propagate`'s ``kernel``
+    parameter for when that is the field you want and when it is not.
+
+    ``h`` depends on ``x`` and ``y`` only through ``x**2 + y**2``, so the
+    pixel integral is even in each axis and only the quadrant
+    ``|x|, |y| >= 0`` is built: ``Ny//2 + 1`` by ``Nx//2 + 1`` values, a
+    quarter of the padded grid, then gathered out to the full array by the
+    index map ``|m - Ny2//2|``.  ``x**2`` is bit-identical for ``x`` and
+    ``-x``, so the gathered array carries the same values the unfolded
+    build produces (measured relative L2 2.1e-16 on three grids; not
+    bit-identical because the node sum runs in the mirrored order).
+
+    Parameters
+    ----------
+    Ny2, Nx2 : int
+        Padded grid shape (``2*Ny``, ``2*Nx``).
+    dy, dx : float
+        Pixel pitch [m].
+    z : float
+        Propagation distance [m], > 0.
+    k : float
+        ``2*pi/wavelength`` in the propagation medium [1/m].
+    xp : module
+        Array namespace (NumPy / CuPy / ``jax.numpy``).
+    n_nodes : int, optional
+        Gauss-Legendre nodes per pixel axis; see
+        :data:`_RS_PIXEL_QUAD_NODES` for the measured floor.
+
+    Returns
+    -------
+    h_int : ndarray, complex, shape ``(Ny2, Nx2)``
+        Already carries the pixel area -- do NOT multiply by ``dx*dy``.
+    """
+    t_np, w_np = np.polynomial.legendre.leggauss(int(n_nodes))
+    ny, nx = int(Ny2) // 2, int(Nx2) // 2
+    x_q = xp.arange(nx + 1, dtype=xp.float64) * dx
+    y_q = xp.arange(ny + 1, dtype=xp.float64) * dy
+    acc = None
+    z2 = float(z) * float(z)
+    for a in range(int(n_nodes)):
+        y_a = y_q + (0.5 * float(dy) * float(t_np[a]))
+        for b in range(int(n_nodes)):
+            x_b = x_q + (0.5 * float(dx) * float(t_np[b]))
+            X, Y = xp.meshgrid(x_b, y_a, indexing='xy')
+            r = xp.sqrt(X ** 2 + Y ** 2 + z2)
+            term = ((z / (2 * np.pi * r ** 2)) * xp.exp(1j * k * r)
+                    * (1.0 / r - 1j * k)) * (float(w_np[a]) * float(w_np[b]))
+            acc = term if acc is None else acc + term
+    acc = acc * (0.25 * float(dx) * float(dy))
+    iy = xp.abs(xp.arange(int(Ny2)) - ny)
+    ix = xp.abs(xp.arange(int(Nx2)) - nx)
+    return acc[iy[:, None], ix[None, :]]
+
+
 def rayleigh_sommerfeld_propagate(
     E_in: np.ndarray,
     z: float,
@@ -323,10 +420,12 @@ def rayleigh_sommerfeld_propagate(
         Use CuPy GPU acceleration if available.
     verbose : bool, default False
         Print diagnostic info.
-    kernel : {'auto', 'transfer', 'spatial'}, default 'auto'
+    kernel : {'auto', 'transfer', 'spatial', 'spatial-integrated'}, default 'auto'
         Which discretisation of the (single) RS-I operator to use on the
-        padded grid.  Both build the same physics; they fail in opposite
-        regimes, so the default routes between them.
+        padded grid.  ``'transfer'`` and ``'spatial'`` build the same
+        physics and fail in opposite regimes, so the default routes
+        between them; ``'spatial-integrated'`` is a different reading of
+        what the input SAMPLES mean (see below).
 
         * ``'auto'`` (default, v5.46; audit K9) -- ``'transfer'`` when
           ``z < 2*N*dx**2/wavelength`` (see
@@ -353,6 +452,104 @@ def rayleigh_sommerfeld_propagate(
           w0 = 6 um, 63 % of the power inside the window) where
           ``'transfer'`` reads 1.9e-2 and single-grid ASM 7.6e-1.
           It RAISES for ``z < 2*N*dx**2/wavelength``, where it aliases.
+        * ``'spatial-integrated'`` -- the same convolution with ``h``
+          INTEGRATED over each pixel instead of sampled at its centre
+          (Shen & Wang, reference [2]; audit K9).  Same support, same
+          truncation at the padded rim, same alias refusal; only the
+          quadrature of ``h`` changes.  **It is not a more accurate
+          version of ``'spatial'`` -- it answers a different question**,
+          and which one is right is a property of your input array:
+
+          - ``'spatial'`` reads ``E_in`` as POINT SAMPLES of a smooth,
+            adequately sampled field.  The sum is then the trapezoidal
+            rule for the RS integral, which for such a field is
+            spectrally accurate.
+          - ``'spatial-integrated'`` reads ``E_in`` as CELL VALUES of a
+            field that is constant across each pixel -- a binary mask, a
+            pixelated DOE or SLM map, any input whose staircase IS the
+            physical object.  The convolution is then that field's exact
+            RS integral.
+
+          Measured (lambda = 633 nm, circular aperture a = 100 um,
+          window 512 um, z = 16 mm -- above the alias threshold of every
+          grid quoted, so both kernels are legal on all of them).
+          Against a super-sampled continuum RS-I double quadrature of the
+          STAIRCASE aperture (a midpoint rule, ``S`` sub-samples per
+          pixel axis, evaluated by direct summation at four output
+          points; its own floor read off from ``S`` against ``2S``):
+
+          ================  ===  ============  ==================  =========
+          grid              S    oracle floor  'spatial-integrated'  'spatial'
+          ================  ===  ============  ==================  =========
+          N = 64, dx = 8um  16   1.3794e-5     4.5979e-6           4.7464e-3
+          N = 64, dx = 8um  32   3.4485e-6     1.1495e-6           4.7499e-3
+          N = 128, dx = 4um 16   3.3558e-6     1.1186e-6           1.1465e-3
+          N = 128, dx = 4um 32   8.3895e-7     2.7965e-7           1.1473e-3
+          ================  ===  ============  ==================  =========
+
+          ``'spatial-integrated'`` sits BELOW the oracle's own floor and
+          divides by four every time ``S`` doubles -- that is the ORACLE
+          converging onto it, which is what "exact" looks like when the
+          only available reference is itself approximate.  ``'spatial'``
+          does not move with ``S`` at all and stands 1024x / 4103x away.
+
+          Against an adequately sampled SMOOTH input the ranking
+          reverses, by four to five decades.  Relative L2 vs an exact
+          Hankel angular-spectrum quadrature of a Gaussian ``w0``:
+
+          ==========================  ========  ==========  ==================
+          grid                        z         'spatial'   'spatial-integrated'
+          ==========================  ========  ==========  ==================
+          N = 128, dx = 1um, w0 = 6um   3 mm    4.42e-8     1.24e-3
+          N = 128, dx = 1um, w0 = 6um   0.5 mm  6.63e-8     3.27e-3
+          N = 128, dx = 2um, w0 = 12um  1.7 mm  3.23e-8     3.27e-3
+          N = 64,  dx = 2um, w0 = 6um   0.9 mm  6.46e-8     1.29e-2
+          N = 256, dx = 0.5um, w0 = 6um 0.25 mm 6.35e-8     8.18e-4
+          N = 256, dx = 1um, w0 = 12um  1 mm    3.34e-8     8.18e-4
+          ==========================  ========  ==========  ==================
+
+          The gap is exactly the difference between the Gaussian and its
+          own staircase, which is the statement above in numbers.
+          ``'spatial'`` therefore stays the default and ``'auto'`` never
+          selects this kernel.
+
+          **What it does not fix.**  The audit's roughly-first-order
+          convergence on a hard-aperture input is the APERTURE, not the
+          kernel.  On-axis relative error against the closed form
+          ``U = e^{ikz} - (z/r_a) e^{ik r_a}``, same fixture, with the
+          aperture as a pixel-centre indicator ("stair") and as its exact
+          pixel-area average ("grey"):
+
+          ======  ========  ==========  ==========  ==========  ==========
+          N       dx [um]   stair+pt    stair+int   grey+pt     grey+int
+          ======  ========  ==========  ==========  ==========  ==========
+          128     4.000     8.3008e-3   8.4184e-3   1.4045e-3   2.6828e-3
+          256     2.000     3.3548e-3   3.3707e-3   3.4263e-4   6.6308e-4
+          512     1.000     3.4207e-4   3.5238e-4   8.4251e-5   1.6429e-4
+          1024    0.500     5.2718e-4   5.2758e-4   2.0677e-5   4.0724e-5
+          ======  ========  ==========  ==========  ==========  ==========
+
+          measured order between successive rows: 1.307 / 3.294 / -0.624
+          (stair+pt), 1.321 / 3.258 / -0.582 (stair+int), **2.035 / 2.024
+          / 2.027** (grey+pt) and **2.016 / 2.013 / 2.012** (grey+int).
+          The lever that restores second order is the INPUT's edge (area
+          averaging), for either kernel -- 25x at N = 1024 -- and the
+          kernel choice then moves the constant by ~2x, in the
+          point-sampled kernel's favour.  The library builds that input
+          already:
+          :func:`~lumenairy.elements.elements.apply_aperture` with
+          ``edge='gray'`` gives each rim pixel its supersampled open-area
+          fraction.  Reach for it before reaching for this kernel.
+
+          **Cost.**  The pixel integral is a
+          :data:`_RS_PIXEL_QUAD_NODES`-node tensor Gauss-Legendre rule per
+          pixel, built on one quadrant and mirrored.  Kernel build:
+          18.5 / 146 / 782 ms against 3.4 / 16.7 / 72.0 ms for the point
+          sample at N = 128 / 256 / 512, i.e. 5.5x / 8.7x / 10.9x
+          (medians of five interleaved runs).  End to end that is 2.4x
+          and 4.2x a whole ``'spatial'`` call at N = 128 / 256 on a COLD
+          H cache, and 0.65x / 0.93x -- the same call -- on a warm one,
+          because the cache pays the build once per geometry.
 
         **Why the routing exists.**  The point-sampled kernel's phase
         gradient ``k*sin(theta)*dx`` exceeds the ``pi``/pixel Nyquist
@@ -439,9 +636,10 @@ def rayleigh_sommerfeld_propagate(
         numerical integration method for the Rayleigh-Sommerfeld
         diffraction formula." Appl. Opt. 45(6): 1102-1110.  Prescribes
         INTEGRATING the impulse response over each pixel instead of
-        point-sampling it; that is the fix for ``kernel='spatial'``'s
-        first-order-in-``dx`` convergence and is not implemented (the
-        default ``'transfer'`` path is exact, so it is not needed there).
+        point-sampling it; that is ``kernel='spatial-integrated'``, whose
+        parameter entry above carries the measured comparison.  It is
+        the exact operator for a cell-constant input and NOT a drop-in
+        accuracy upgrade for a sampled smooth one, so it is opt-in.
     [3] Matsushima, K. and Shimobaba, T. (2009). "Band-limited angular
         spectrum method for numerical simulation of free-space
         propagation in far and near fields." Opt. Express 17(22):
@@ -482,14 +680,18 @@ def rayleigh_sommerfeld_propagate(
             f"(those handle the z < 0 case correctly).")
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='rayleigh_sommerfeld_propagate')
-    if kernel not in ('auto', 'transfer', 'spatial'):
+    if kernel not in ('auto', 'transfer', 'spatial', 'spatial-integrated'):
         raise ValueError(
             f"rayleigh_sommerfeld_propagate: kernel must be 'auto' (default: "
             f"the exact RS-I transfer function where the point-sampled "
             f"Green's function would alias, i.e. z < 2*N*dx**2/wavelength, "
             f"and the spatial kernel above that), 'transfer' (always the "
-            f"transfer function) or 'spatial' (always the pre-v5.46 "
-            f"point-sampled Green's function); got {kernel!r}.")
+            f"transfer function), 'spatial' (always the point-sampled "
+            f"Green's function, for an E_in that is point samples of a "
+            f"smooth field) or 'spatial-integrated' (the Green's function "
+            f"integrated over each pixel, for an E_in whose staircase IS "
+            f"the object -- a binary mask, a pixelated DOE or SLM map); "
+            f"got {kernel!r}.")
 
     # -- array library selection -----------------------------------------------
     from ..backend import is_jax_array
@@ -578,9 +780,14 @@ def rayleigh_sommerfeld_propagate(
         h_key = None
         H = None
 
-    if kernel_used == 'spatial' and z < z_alias:
+    # Both spatial builds discretise h on the padded grid and alias under
+    # the same condition: the pixel integral narrows the kernel's spectrum
+    # by a sinc but does not band-limit it, so the replicas the sampling
+    # folds in are attenuated, not removed.  One guard, both tokens.
+    if kernel_used in ('spatial', 'spatial-integrated') and z < z_alias:
         raise ValueError(
-            f"rayleigh_sommerfeld_propagate: kernel='spatial' point-samples "
+            f"rayleigh_sommerfeld_propagate: kernel={kernel_used!r} "
+            f"discretises "
             f"the Rayleigh-Sommerfeld Green's function, which ALIASES for "
             f"z < 2*N*dx**2/wavelength = {z_alias:.6g} m (got z={z:.6g} m).  "
             f"In that regime the convolution creates energy (measured "
@@ -594,17 +801,19 @@ def rayleigh_sommerfeld_propagate(
             f"(e.g. dx <= {(wavelength*z/(2*max(Ny, Nx)))**0.5:.6g} m at "
             f"N={max(Ny, Nx)}).")
 
-    if kernel_used == 'spatial':
+    if kernel_used in ('spatial', 'spatial-integrated'):
         # H cache (NumPy backend only)
         # Geometry signature.  Hits return the previously-built H without
         # re-running the kernel construction or its FFT (~30-40% of total
-        # RS time on 2k+ grids).  The 'RS' tag keeps the point-sampled
-        # kernel's entries disjoint from the ASM transfer-function entries
-        # that kernel='transfer' shares.
+        # RS time on 2k+ grids, and 5-9x the point build for the
+        # pixel-integrated one).  The 'RS' / 'RS_INT' tags keep the two
+        # spatial kernels disjoint from each other and from the ASM
+        # transfer-function entries that kernel='transfer' shares.
         if xp is np:
             h_key = (int(Ny2), int(Nx2), float(dy), float(dx),
                      float(wavelength), float(z), bool(bandlimit),
-                     np.dtype(target_cdtype).str, 'RS')
+                     np.dtype(target_cdtype).str,
+                     'RS' if kernel_used == 'spatial' else 'RS_INT')
             H = _h_cache_lookup(h_key)
 
     if H is None:
@@ -614,12 +823,19 @@ def rayleigh_sommerfeld_propagate(
         # Pre-4.10 implementation flipped this to (ik − 1/r), producing
         # −h_correct.  Output amplitudes look fine for |E|² consumers but
         # any coherent sum of RS with ASM/Fresnel was 180° out of phase.
-        x = (xp.arange(Nx2) - Nx2 / 2) * dx
-        y = (xp.arange(Ny2) - Ny2 / 2) * dy
-        X, Y = xp.meshgrid(x, y, indexing='xy')
-        r = xp.sqrt(X ** 2 + Y ** 2 + z ** 2)
-        h = (z / (2 * np.pi * r ** 2)) * xp.exp(1j * k * r) * (1.0 / r - 1j * k)
-        h = h * (dx * dy)
+        if kernel_used == 'spatial-integrated':
+            # The pixel INTEGRAL of the same h, which already carries the
+            # pixel area (reference [2]; see the ``kernel`` parameter for
+            # what it changes and for whom).
+            h = _rs_pixel_integrated_kernel(Ny2, Nx2, dy, dx, z, k, xp)
+        else:
+            x = (xp.arange(Nx2) - Nx2 / 2) * dx
+            y = (xp.arange(Ny2) - Ny2 / 2) * dy
+            X, Y = xp.meshgrid(x, y, indexing='xy')
+            r = xp.sqrt(X ** 2 + Y ** 2 + z ** 2)
+            h = ((z / (2 * np.pi * r ** 2)) * xp.exp(1j * k * r)
+                 * (1.0 / r - 1j * k))
+            h = h * (dx * dy)
         if h.dtype != target_cdtype:
             h = h.astype(target_cdtype)
 

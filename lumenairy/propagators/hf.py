@@ -253,6 +253,15 @@ def propagate_huygens_fresnel_freespace(
     ``cos(theta)/(i lambda r)``.  There is no Van Vleck factor on this
     path (audit K15).
 
+    Every keyword the RS kernel takes reaches it through ``**kwargs``,
+    including ``kernel=`` -- so ``kernel='spatial-integrated'`` (audit K9;
+    the RS-I Green's function integrated over each pixel rather than
+    sampled at its centre, for an input whose staircase IS the object)
+    is available from here with no wrapper of its own.  See
+    :func:`~lumenairy.propagators.rs.rayleigh_sommerfeld_propagate` for
+    which reading of ``E_in`` each kernel makes and the measurements that
+    separate them.
+
     v5.3 (AUDIT_V5_2_5 P1-1 closure): ``output_shape`` and
     ``output_dx`` kwargs are accepted and honored via a post-kernel
     ``resample_field`` step (shared with the v5.2.3 MHS
@@ -356,6 +365,37 @@ def propagate_huygens_fresnel_with_opl_callable(
 
     where the cross-Hessian determinant is evaluated by central
     differences on the supplied callable.
+
+    What sets the accuracy floor
+    ----------------------------
+    The sum above is a one-point (midpoint) rule per input pixel, and on
+    a HARD-EDGED input its error is the aperture's EDGE, not the
+    quadrature of the kernel.  Measured on the case the audit used --
+    on-axis point behind a circular aperture, a = 100 um, z = 5 mm,
+    lambda = 633 nm, window 512 um, spherical ``Phi``, against the exact
+    RS-I closed form ``U = e^{ikz} - (z/r_a) e^{ik r_a}`` (2026-09-13):
+
+    ======  =========  ==========================  ====================
+    N_in    dx [um]    aperture as a pixel-centre  aperture as its exact
+                       indicator                   pixel-AREA average
+    ======  =========  ==========================  ====================
+    128     4.000      2.7708e-2                   1.4762e-2
+    256     2.000      1.1120e-2                   3.6171e-3
+    512     1.000      1.1509e-3                   8.9158e-4
+    1024    0.500      1.7601e-3                   2.2423e-4
+    ======  =========  ==========================  ====================
+
+    -- measured order between successive rows 1.32 / 3.27 / **-0.61**
+    for the indicator (the audit's "roughly first order", and
+    non-monotone: a circle's staircase area error does not shrink
+    smoothly) against **2.03 / 2.02 / 1.99** for the area average, which
+    is 7.9x more accurate by N = 1024.  Feeding this quadrature a grey
+    (area-weighted) edge costs nothing and is the whole difference:
+    :func:`~lumenairy.elements.elements.apply_aperture` with
+    ``edge='gray'`` builds one.  The same lever, measured the same way,
+    governs
+    :func:`~lumenairy.propagators.rs.rayleigh_sommerfeld_propagate`'s
+    spatial kernels.
 
     Units contract -- ``opl_fn`` MUST return WAVES
     -------------------------------------------------

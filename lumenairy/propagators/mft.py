@@ -92,7 +92,7 @@ def _validate_mft_output_grid(dx_out, dy_out, N_out, *, fn_name):
 
 def _warn_mft_output_window(period_x, period_y, dx_out, dy_out, N_out, *,
                             fn_name, period_expr,
-                            centre_x=0.0, centre_y=0.0):
+                            centre_x=0.0, centre_y=0.0, N_out_y=None):
     """Warn when the requested output window leaves the faithful zone of
     the discrete transform, i.e. when some samples are periodic REPLICAS
     rather than new information (audit P11; centre-blindness fixed with
@@ -117,26 +117,32 @@ def _warn_mft_output_window(period_x, period_y, dx_out, dy_out, N_out, *,
     the predicted period, at 1x and 2x it shows one.  The natural /
     same-grid calls land exactly ON one period at zero offset, so the
     strict ``>`` comparison leaves them silent.
+
+    ``N_out_y`` lets a caller whose output grid is NOT square give the y
+    axis its own sample count (:func:`resample_field`'s extent-preserving
+    default does, on a non-square input); it defaults to ``N_out``, which
+    is the square case every other caller has.
     """
     n = int(N_out)
+    n_y = n if N_out_y is None else int(N_out_y)
     tol = 1.0 + 1e-9
     bad = []
-    for ax, d_out, period, c in (('x', float(dx_out), float(period_x),
-                                  abs(float(centre_x))),
-                                 ('y', float(dy_out), float(period_y),
-                                  abs(float(centre_y)))):
-        win = n * d_out
+    for ax, d_out, period, c, n_ax in (('x', float(dx_out), float(period_x),
+                                        abs(float(centre_x)), n),
+                                       ('y', float(dy_out), float(period_y),
+                                        abs(float(centre_y)), n_y)):
+        win = n_ax * d_out
         if 2.0 * c + win > period * tol:
-            bad.append((ax, win, period, d_out, c))
+            bad.append((ax, win, period, d_out, c, n_ax))
     if not bad:
         return
     detail = '; '.join(
         f'{ax}: 2*|centre_out_{ax}| + N_out*d{ax}_out = '
-        f'2 * {c:.6e} + {n} * {d:.6e} = {2.0 * c + w:.6e} m '
+        f'2 * {c:.6e} + {na} * {d:.6e} = {2.0 * c + w:.6e} m '
         f'vs period {p:.6e} m ({(2.0 * c + w) / p:.4g}x)'
-        for ax, w, p, d, c in bad)
-    axes = ' and '.join(ax for ax, _w, _p, _d, _c in bad)
-    raw = ', '.join(f'{p:.6e}' for _ax, _w, p, _d, _c in bad)
+        for ax, w, p, d, c, na in bad)
+    axes = ' and '.join(ax for ax, _w, _p, _d, _c, _n in bad)
+    raw = ', '.join(f'{p:.6e}' for _ax, _w, p, _d, _c, _n in bad)
     warnings.warn(
         f"{fn_name}: the requested output window leaves the faithful zone "
         f"of the discrete transform on {axes} -- {detail}.  The period is "
@@ -480,20 +486,77 @@ def angular_spectrum_propagate_mft(
     return E_out
 
 
+def _resample_field_chirpz(E_in, dx_in, dx_out, Ny_out, Nx_out):
+    """Band-limited (chirp-Z) pitch change -- the ``method='chirpz'`` leg
+    of :func:`resample_field` (audit K6).
+
+    Transform the input to its centred spectrum and inverse-transform that
+    spectrum onto the requested output grid with
+    :func:`~lumenairy.propagators._bluestein._bluestein_centred_2d`, which
+    evaluates
+
+        E_out[k] = (1/N_in) sum_n A[n] exp(+2 pi i f[n] x_out[k])
+
+    for an arbitrary output pitch in one chirp-Z pass.  That sum IS the
+    trigonometric (Dirichlet-kernel) interpolant of the samples, so every
+    frequency the input grid represents is passed with gain exactly 1 --
+    the whole point, against the spline leg's sloped MTF.
+
+    The ``ifftshift`` puts the spectrum's implicit spatial origin at the
+    INTEGER pixel ``N_in // 2`` while this family's declared coordinate
+    convention is ``x = (n - N/2) * d``.  For odd ``N_in`` the two differ
+    by half an input pixel, so the reconstruction coordinate is
+    ``x_out + off_in``; folding that offset into the output centre is
+    exact and keeps the declared grid.  ``off_in`` is exactly 0 for even
+    ``N_in``.
+
+    Returns the field in ``complex128``, matching the spline leg (whose
+    ``map_coordinates`` works in float64 and promotes).
+    """
+    from ._bluestein import _bluestein_centred_2d
+
+    E = np.asarray(E_in).astype(np.complex128, copy=False)
+    Ny_in, Nx_in = E.shape
+    cdt = np.dtype(np.complex128)
+
+    A = np.fft.fftshift(_fft2(np.fft.ifftshift(E)))
+
+    alpha_x = float(dx_out) / (Nx_in * float(dx_in))
+    alpha_y = float(dx_out) / (Ny_in * float(dx_in))
+    off_in_x = (Nx_in / 2.0 - Nx_in // 2) * float(dx_in)
+    off_in_y = (Ny_in / 2.0 - Ny_in // 2) * float(dx_in)
+
+    F = _bluestein_centred_2d(
+        A, alpha_x, alpha_y, int(Ny_out), int(Nx_out),
+        # Frequency-bin centre: the ``fftshift`` above anchors DC at the
+        # integer centred index for every N.
+        n_centre_in_x=float(Nx_in // 2),
+        n_centre_in_y=float(Ny_in // 2),
+        k_centre_out_x=Nx_out / 2.0 - off_in_x / float(dx_out),
+        k_centre_out_y=Ny_out / 2.0 - off_in_y / float(dx_out),
+        sign=+1, xp=np, fft2=_fft2, ifft2=_ifft2,
+        target_cdtype=cdt,
+    )
+    return (F * cdt.type(1.0 / (Nx_in * Ny_in))).astype(cdt, copy=False)
+
+
 def resample_field(
     E_in: np.ndarray,
     dx_in: float,
     dx_out: float,
     N_out: Optional[int] = None,
     order: int = 3,
+    *,
+    method: str = 'spline',
 ) -> Tuple[np.ndarray, float]:
     """
     Resample a complex optical field from one grid spacing to another.
 
     This is the bridge function for switching between propagation methods
     that use different grid spacings (e.g. Fresnel output -> ASM input,
-    or vice versa).  Both amplitude and phase are interpolated using
-    scipy's map_coordinates.
+    or vice versa).  ``method='spline'`` (the default) interpolates
+    amplitude and phase with scipy's map_coordinates; ``method='chirpz'``
+    is the band-limited alternative.
 
     Parameters
     ----------
@@ -514,15 +577,63 @@ def resample_field(
         S11-6a: validated to an integer in ``[0, 5]`` -- out-of-range
         values used to surface as a scipy-internal
         ``RuntimeError: spline order not supported`` naming neither this
-        function nor the argument.
+        function nor the argument.  Ignored by ``method='chirpz'``, which
+        has no order to choose.
+    method : {'spline', 'chirpz'}, keyword-only, default 'spline'
+        Which resampler.  The default is the historical cubic-spline
+        ``map_coordinates`` path and is BIT-IDENTICAL to it (this keyword
+        selects, it does not modify).
+
+        ``'chirpz'`` evaluates the band-limited (trigonometric)
+        interpolant of the samples directly on the output grid with one
+        chirp-Z pass (audit K6; see :func:`_resample_field_chirpz`).  Its
+        MTF is exactly 1 at every frequency the input grid represents,
+        against the spline leg's roll-off tabulated below -- measured on
+        the same Gaussian-times-carrier fixture (power ratio after
+        resampling; 2026-09-13):
+
+        ================  ============  ==========  ==========
+        carrier (cyc/px)  px per cycle  'spline'    'chirpz'
+        ================  ============  ==========  ==========
+        0.00              inf           0.999998    1.000000
+        0.10              10            0.999549    1.000000
+        0.20              5             0.990621    1.000000
+        0.30              3.3           0.931504    1.000000
+        0.40              2.5           0.718458    1.000000
+        ================  ============  ==========  ==========
+
+        Two properties to know before switching a call site:
+
+        * The chirp-Z reconstruction is PERIODIC with period
+          ``N_in * dx_in``, so an output window wider than the input
+          extent returns periodic replicas rather than zeros.  The spline
+          leg pads with zeros (``mode='constant'``) instead.  A window
+          that leaves the faithful zone warns, with the numbers.
+        * Neither leg anti-aliases on DOWN-sampling (``dx_out >
+          dx_in``): content above the new Nyquist folds back.  The
+          spline leg attenuates it on the way in, the chirp-Z leg does
+          not, so a down-sample of a field with real near-Nyquist
+          content folds MORE power with ``'chirpz'``.  Low-pass first if
+          that matters.
 
     Returns
     -------
     E_out : ndarray (complex, N_out x N_out)
-        Resampled field on the new grid.
+        Resampled field on the new grid.  ``complex128`` on both legs.
     dx_out : float
         The output grid spacing (same as the input parameter, returned
         for convenience so callers can chain: ``E, dx = resample_field(...)``).
+
+    Raises
+    ------
+    ValueError
+        If ``method`` is not ``'spline'`` or ``'chirpz'``.
+
+    Warns
+    -----
+    UserWarning
+        ``method='chirpz'`` only, when ``N_out * dx_out`` exceeds the
+        reconstruction period ``N_in * dx_in`` on either axis.
 
     Notes
     -----
@@ -553,9 +664,8 @@ def resample_field(
       edge by construction (``dx_out = lambda z/(N dx)`` makes the local
       frequency at ``r = N dx_out/2`` equal ``1/(2 dx_out)``), so any
       field with amplitude out at the rim is attenuated.  For a pitch
-      change of a sampled band-limited field prefer a band-limited
-      (chirp-Z) resampler: ``angular_spectrum_propagate_mft(z=0, ...)``
-      in this module performs exactly that operation exactly.
+      change of a sampled band-limited field pass ``method='chirpz'``,
+      which has no such roll-off.
     - For downsampling (dx_out > dx_in) there is NO anti-alias low-pass
       here, so high frequencies fold back in.  Filter first if that
       matters.
@@ -572,7 +682,17 @@ def resample_field(
     # catches it via ``E_in``.  Input kind: 'field'.
     from lumenairy._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'resample_field', input_kind='field')
-    from scipy.ndimage import map_coordinates
+
+    # Validate the resampler selector before anything expensive, so a typo
+    # cannot fall through to the default leg and silently pay its MTF.
+    if method not in ('spline', 'chirpz'):
+        raise ValueError(
+            f"resample_field: method must be 'spline' (default: the cubic "
+            f"map_coordinates interpolation, which attenuates near-Nyquist "
+            f"content -- see the measured MTF in this function's Notes) or "
+            f"'chirpz' (the band-limited chirp-Z interpolant, unit gain at "
+            f"every representable frequency, periodic with period "
+            f"N_in*dx_in); got {method!r}.")
 
     # S11-6a (AUDIT_SIBLING_PATTERN_SWEEP_2026_07_25 §1, "harness knobs
     # must ERROR on unrecognised values"): ``order`` is passed straight
@@ -618,6 +738,24 @@ def resample_field(
         if Nx_out < 1:
             raise ValueError(
                 f"resample_field: N_out must be >= 1; got {N_out!r}.")
+
+    if method == 'chirpz':
+        # The chirp-Z reconstruction inverts the input SPECTRUM, so it is
+        # periodic with period N_in*d_in on each axis; a wider window
+        # returns replicas of the field rather than the zeros the spline
+        # leg's ``mode='constant'`` pads with.  Same diagnostic the
+        # MFT propagators carry, with this leg's period.
+        _warn_mft_output_window(
+            float(Nx_in) * float(dx_in), float(Ny_in) * float(dx_in),
+            dx_out, dx_out, Nx_out,
+            fn_name='resample_field',
+            period_expr='N_in*dx_in (the input extent, since the chirp-Z '
+                        'step inverts the input spectrum)',
+            N_out_y=Ny_out)
+        return _resample_field_chirpz(E_in, dx_in, dx_out,
+                                      Ny_out, Nx_out), dx_out
+
+    from scipy.ndimage import map_coordinates
 
     # Output coordinates in input-pixel units.
     # Input grid:  x_in[i]  = (i - Nx_in/2)  * dx_in

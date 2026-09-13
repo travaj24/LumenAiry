@@ -1072,52 +1072,141 @@ def propagate_hfpi_freespace_aperture(
 # Variance reduction: stratified sampling
 # ============================================================================
 
-def init_paths_stratified(
-    E_in: np.ndarray,
-    dx: float,
-    *,
-    n_paths: int,
-    wavelength: float,
-    rng: Optional[Union[int, object]] = None,
-    cone_half_angle: float = np.pi / 2 - 1e-6,
-    z_input_plane: float = 0.0,
-    n_strata_xy: Optional[Tuple[int, int]] = None,
-    n_strata_dir: Optional[Tuple[int, int]] = None,
-) -> PathBundle:
-    """Stratified-sampling variant of :func:`init_paths_from_field`.
+def _walk_legs_are_free_space(surfaces, surface_diffraction, wavelength):
+    """Would every leg of a prescription walk be a straight free-space
+    hop?  (audit K13, the condition the binning Jacobian needs.)
 
-    Partitions the source-pixel index space and the forward-cone
-    direction sphere into equal-area strata, then samples one path
-    per stratum.  This reduces the variance of the resulting Monte
-    Carlo HFPI estimate by ensuring uniform coverage of phase space
-    -- the integrated complex weight has lower variance than naive
-    uniform sampling for the same path count.
+    :func:`_binning_jacobian` and :func:`_reemission_measure` convert
+    between emitted SOLID ANGLE and landed AREA with the free-space
+    ray-tube Jacobian ``dS = r^2 dOmega / cos(theta)``.  That identity is
+    a statement about a straight line in a uniform medium.  Put anything
+    with power between the emission and the landing point -- a curved
+    surface, an index step, a tilt, a grating order -- and the system's
+    own Jacobian replaces it, while the per-path factor does not know.
 
-    Variance reduction factor depends on the integrand smoothness;
-    typically 2-10x for smooth-amplitude / smooth-OPL systems.
+    The size of the mistake is not subtle.  Walking a 19.41 mm thin
+    singlet (N-BK7, R = +-20 mm, d = 10 um, object 60 mm, 2 M paths) with
+    ``normalisation='physical'`` and comparing total power against
+    ASM + thin-lens phase + ASM on the same geometry: the walk reads
+    **4879x** the reference at the image plane and **13.9x** at half that
+    distance, while the spot metrics stay in the right ballpark (r50
+    15.9 um against 17.9 um, r84 25.3 um against 31.9 um at the image
+    plane) -- an amplitude error, not a shape error, and one no caller
+    could infer from the output.
 
-    Parameters
-    ----------
-    n_strata_xy : (n_iy, n_ix), optional
-        Per-axis number of strata for the source-pixel index.
-        Default ``(sqrt(n_paths), sqrt(n_paths))``.
-    n_strata_dir : (n_theta, n_phi), optional
-        Per-axis number of strata for the direction sphere.
-        Default same as n_strata_xy.
+    A prescription this returns True for has no such element: every
+    surface is a plane, with equal index on both sides, unsteered and
+    unkicked, so the only thing the walk does between emissions is
+    travel.  That is the regime the composition is exact in (measured
+    least-squares scale 1.13 / 0.89 against ASM x mask x ASM at
+    0.5 M / 2 M paths).
 
-    All other parameters mirror :func:`init_paths_from_field`.
+    Curved-but-index-matched and tilted-but-flat surfaces are both
+    reported False: the first is a plane only by accident of the current
+    prescription and the second steers the ray tube.
     """
-    xp = array_namespace(E_in)
-    Ny, Nx = E_in.shape[-2], E_in.shape[-1]
-    # ``rng=None`` -- the DEFAULT on every HFPI entry point -- must draw
-    # fresh system entropy, which is exactly what ``RandomState(None)``
-    # does (``np.random.default_rng(None)``).  HFPI is a 1/sqrt(N)
-    # Monte-Carlo estimator: with a FIXED default seed, the canonical way
-    # to see the estimator's own error -- re-run and compare -- returns
-    # identically ZERO (audit K19).  Pass an int (or a Generator) for
-    # reproducibility.
-    rs = RandomState(rng=rng)
+    if surface_diffraction:
+        return False
+    from ..glass import get_glass_index
+    for s in surfaces:
+        if getattr(s, 'is_mirror', False) or getattr(s, 'is_coordbrk', False):
+            return False
+        if getattr(s, 'freeform', None) is not None:
+            return False
+        if getattr(s, 'field_sag_callable', None) is not None:
+            return False
+        if getattr(s, 'field_decenter', None) or getattr(s, 'field_tilt', None):
+            return False
+        for _key in ('radius', 'radius_y'):
+            _r = getattr(s, _key, None)
+            if _r is not None and np.isfinite(_r):
+                return False
+        for _key in ('aspheric_coeffs', 'aspheric_coeffs_y'):
+            _c = getattr(s, _key, None)
+            if _c is not None and np.any(np.asarray(_c, dtype=float) != 0.0):
+                return False
+        for _key in ('tilt_x_deg', 'tilt_y_deg', 'tilt_z_deg',
+                     'decenter_x_m', 'decenter_y_m'):
+            if getattr(s, _key, 0.0):
+                return False
+        _n1 = float(get_glass_index(getattr(s, 'glass_before', None),
+                                    wavelength))
+        _n2 = float(get_glass_index(getattr(s, 'glass_after', None),
+                                    wavelength))
+        if abs(_n2 - _n1) > 1e-12 * max(1.0, abs(_n1)):
+            return False
+    return True
 
+
+def _sobol_cube_draw(rs, n_paths, Ny, Nx, cos_max):
+    """Place ``n_paths`` scrambled Sobol points in the 4-D
+    ``(pixel_x, pixel_y, cos theta, phi)`` cube -- the ``sampler='sobol'``
+    half of :func:`init_paths_stratified` (audit K22).
+
+    Returns the same five values :func:`_jittered_cube_draw` does, with
+    ``n_paths_actual == n_paths`` exactly: a low-discrepancy sequence has
+    no stratification grid to round the count onto.
+
+    The cube is the one the Huygens-Fresnel source term integrates over,
+    and the mapping is the measure-preserving one the jittered sampler
+    uses: the two pixel axes scale by ``Ny`` / ``Nx``, ``cos theta`` maps
+    affinely onto ``[cos_max, 1]`` (equal solid angle per unit of the
+    coordinate) and ``phi`` onto ``[0, 2 pi)``.  Owen scrambling is ON,
+    which is what keeps the estimator UNBIASED -- an unscrambled Sobol
+    sequence is a fixed point set, so its error is a deterministic bias
+    with no way to measure it and no convergence in the sense the caller
+    wants.  The scramble seed is drawn from ``rs``, so the bundle stays a
+    pure function of the caller's ``rng`` on every backend.
+    """
+    from scipy.stats import qmc
+
+    n = int(n_paths)
+    if n < 1:
+        raise ValueError(
+            f"init_paths_stratified: sampler='sobol' needs n_paths >= 1 "
+            f"(got {n_paths!r}).")
+    if n & (n - 1):
+        warnings.warn(
+            f"init_paths_stratified: sampler='sobol' with n_paths={n}, "
+            f"which is not a power of two.  A Sobol sequence is balanced "
+            f"only on its 2**m prefixes -- a partial block leaves the "
+            f"projections uneven, which costs exactly the low-discrepancy "
+            f"property the sampler is chosen for.  Round n_paths to "
+            f"{1 << (n.bit_length() - 1)} or {1 << n.bit_length()}, or "
+            f"pass sampler='jittered' (whose count is a cap, not a power "
+            f"of two).",
+            UserWarning, stacklevel=3)
+    seed = int(np.asarray(to_numpy(
+        rs.integers((1,), low=0, high=2 ** 31 - 1))).reshape(-1)[0])
+    with warnings.catch_warnings():
+        # scipy warns about the same non-power-of-two balance property,
+        # naming its own class rather than the function the caller
+        # invoked; the message above says it with the remedy.
+        warnings.simplefilter('ignore', UserWarning)
+        u = np.asarray(qmc.Sobol(d=4, scramble=True, seed=seed).random(n),
+                       dtype=np.float64)
+
+    ix_int = np.clip((u[:, 0] * Nx).astype(np.int64), 0, Nx - 1)
+    iy_int = np.clip((u[:, 1] * Ny).astype(np.int64), 0, Ny - 1)
+    cos_theta_h = cos_max + (1.0 - cos_max) * u[:, 2]
+    phi_h = 2.0 * float(np.pi) * u[:, 3]
+    return n, iy_int, ix_int, cos_theta_h, phi_h
+
+
+def _jittered_cube_draw(rs, n_paths, Ny, Nx, cos_max,
+                        n_strata_xy, n_strata_dir):
+    """Place ``n_paths`` jittered points in the 4-D
+    ``(pixel_x, pixel_y, cos theta, phi)`` cube by equal-measure
+    stratification -- the ``sampler='jittered'`` half of
+    :func:`init_paths_stratified`.
+
+    Returns ``(n_paths_actual, iy_int, ix_int, cos_theta_h, phi_h)`` as
+    host arrays; the caller turns them into positions, directions and
+    weights.  ``n_paths_actual`` can differ from ``n_paths``: the
+    stratification grid is what the points are placed on, so the count
+    lands on a multiple of the strata used (``n_paths`` is a cap, never
+    a floor).
+    """
     # Default: square stratification.  4-D stratification has
     # n_iy * n_ix * n_th * n_ph cells, so scale per-axis to keep
     # the total close to n_paths (use the 4th root).
@@ -1202,13 +1291,106 @@ def init_paths_stratified(
     ix_int = np.clip(ix_jit.astype(np.int64), 0, Nx - 1)
 
     # Direction stratification: uniform-on-cone in (cos_theta, phi).
-    cos_max = float(np.cos(cone_half_angle))
     # cos_theta uniform on [cos_max, 1] partitioned into n_th strata.
     cth_strata_low = cos_max + (1.0 - cos_max) * (th_strata / n_th)
     cth_strata_width = (1.0 - cos_max) / n_th
     cos_theta_h = cth_strata_low + np.asarray(u_th) * cth_strata_width
     # phi uniform on [0, 2 pi].
     phi_h = 2 * float(np.pi) * (ph_strata + np.asarray(u_ph)) / n_ph
+    return n_paths_actual, iy_int, ix_int, cos_theta_h, phi_h
+
+
+def init_paths_stratified(
+    E_in: np.ndarray,
+    dx: float,
+    *,
+    n_paths: int,
+    wavelength: float,
+    rng: Optional[Union[int, object]] = None,
+    cone_half_angle: float = np.pi / 2 - 1e-6,
+    z_input_plane: float = 0.0,
+    n_strata_xy: Optional[Tuple[int, int]] = None,
+    n_strata_dir: Optional[Tuple[int, int]] = None,
+    sampler: str = 'jittered',
+) -> PathBundle:
+    """Low-discrepancy variant of :func:`init_paths_from_field`.
+
+    Both samplers cover the same 4-D unit cube
+    ``(pixel_x, pixel_y, cos theta, phi)`` that the Huygens-Fresnel
+    source term integrates over; they differ in how the ``n_paths``
+    points are placed in it.  The default partitions the cube into
+    equal-measure strata and jitters one path inside each, which reduces
+    the variance of the Monte Carlo estimate by forcing uniform coverage
+    of phase space -- the integrated complex weight has lower variance
+    than naive uniform sampling at the same path count (typically 2-10x
+    for smooth-amplitude / smooth-OPL systems).
+
+    Parameters
+    ----------
+    sampler : {'jittered', 'sobol'}, default 'jittered'
+        ``'jittered'`` -- the stratified sampler described above, and the
+        one ``n_strata_xy`` / ``n_strata_dir`` configure.
+
+        ``'sobol'`` -- a scrambled 4-D Sobol sequence
+        (``scipy.stats.qmc.Sobol(d=4).random(n_paths)``) over the same
+        cube (audit K22).  ``n_paths`` is honoured EXACTLY, with no
+        stratification grid to round it to; the Owen scrambling is seeded
+        from ``rng`` so the bundle stays a pure function of it, and keeps
+        the estimator unbiased so both samplers converge to the same
+        field.
+
+        The QMC textbook rate (``O(N^-1)`` against Monte Carlo's
+        ``O(N^-1/2)``) assumes a smooth integrand and this one has hard
+        edges -- the aperture, the cone cut and the output-pixel bin all
+        put discontinuities inside the cube -- so the gain here is
+        MEASURED, not assumed; see the figures in the changelog.  Raises
+        if ``n_strata_xy`` / ``n_strata_dir`` are also given, which would
+        be a contradictory request.  Warns when ``n_paths`` is not a
+        power of two, where the sequence's balance property does not
+        hold.
+    n_strata_xy : (n_iy, n_ix), optional
+        Per-axis number of strata for the source-pixel index.
+        Default ``(sqrt(n_paths), sqrt(n_paths))``.
+    n_strata_dir : (n_theta, n_phi), optional
+        Per-axis number of strata for the direction sphere.
+        Default same as n_strata_xy.
+
+    All other parameters mirror :func:`init_paths_from_field`.
+    """
+    if sampler not in ('jittered', 'sobol'):
+        raise ValueError(
+            f"init_paths_stratified: sampler must be 'jittered' (default: "
+            f"one jittered path per equal-measure stratum) or 'sobol' (a "
+            f"scrambled 4-D Sobol sequence over the same cube, with "
+            f"n_paths honoured exactly); got {sampler!r}.")
+    if sampler == 'sobol' and (n_strata_xy is not None
+                               or n_strata_dir is not None):
+        raise ValueError(
+            f"init_paths_stratified: sampler='sobol' places points by the "
+            f"Sobol sequence, not on a stratification grid, so "
+            f"n_strata_xy={n_strata_xy!r} / n_strata_dir={n_strata_dir!r} "
+            f"have nothing to configure.  Drop them for the Sobol sampler "
+            f"(n_paths is already an exact count there), or pass "
+            f"sampler='jittered' to use them.")
+    xp = array_namespace(E_in)
+    Ny, Nx = E_in.shape[-2], E_in.shape[-1]
+    # ``rng=None`` -- the DEFAULT on every HFPI entry point -- must draw
+    # fresh system entropy, which is exactly what ``RandomState(None)``
+    # does (``np.random.default_rng(None)``).  HFPI is a 1/sqrt(N)
+    # Monte-Carlo estimator: with a FIXED default seed, the canonical way
+    # to see the estimator's own error -- re-run and compare -- returns
+    # identically ZERO (audit K19).  Pass an int (or a Generator) for
+    # reproducibility.
+    rs = RandomState(rng=rng)
+
+    cos_max = float(np.cos(cone_half_angle))
+    if sampler == 'sobol':
+        (n_paths_actual, iy_int, ix_int, cos_theta_h,
+         phi_h) = _sobol_cube_draw(rs, n_paths, Ny, Nx, cos_max)
+    else:
+        (n_paths_actual, iy_int, ix_int, cos_theta_h,
+         phi_h) = _jittered_cube_draw(rs, n_paths, Ny, Nx, cos_max,
+                                      n_strata_xy, n_strata_dir)
 
     iy_xp = xp.asarray(iy_int)
     ix_xp = xp.asarray(ix_int)
@@ -1266,10 +1448,12 @@ def propagate_hfpi_through_prescription(
     output_grid: Optional[Tuple[int, int]] = None,
     output_dx: Optional[float] = None,
     output_centre: Tuple[float, float] = (0.0, 0.0),
+    z_output: Optional[float] = None,
     sampling: str = 'stratified',
+    sampler: str = 'jittered',
     cone_half_angle: float = np.pi / 2 - 1e-6,
     on_undersampled: str = 'warn',
-    normalisation: str = 'legacy',
+    normalisation: str = 'auto',
 ) -> np.ndarray:
     """End-to-end HFPI through a sequential lumenairy prescription.
 
@@ -1307,10 +1491,45 @@ def propagate_hfpi_through_prescription(
         Output grid pitch.
     output_centre : (float, float)
         Output grid centre coordinates.
+    z_output : float | None, optional
+        Axial position of the OUTPUT PLANE [m], in the same world
+        coordinate the prescription's surfaces sit at (paths start at
+        ``-object_distance``).  ``None`` (default) bins the bundle where
+        the walk leaves it -- at the last surface.
+
+        Give it a value and the walk closes with a
+        :func:`propagate_to_plane` hop to that plane, which is what makes
+        ``normalisation='physical'`` meaningful here: the per-path
+        Huygens-Fresnel binning Jacobian ``r/(dx_out^2 cos theta_out)``
+        needs the geometric length of the leg that ended at the output
+        plane, and a bundle binned at a diffracting last surface has just
+        been re-emitted, so that length is zero (audit K13).  The closing
+        leg is taken in the medium the prescription puts after its last
+        surface (``glass_after``), so an immersed image space is handled.
+        A REFLECTIVE last surface keeps its medium -- the ``'MIRROR'``
+        marker resolves to the surface's own ``glass_before``, because
+        reflection does not change the surrounding medium -- but it folds
+        the propagation direction, so ``z_output`` then has to lie on the
+        side the reflected paths travel toward.
+
+        The hop is a necessary and NOT a sufficient condition for
+        photometric amplitudes: that Jacobian is the free-space ray-tube
+        relation, so it is the right one only when the walk's legs are
+        free space.  ``normalisation`` (below) resolves both questions.
+
+        Paths whose direction cannot reach the plane (already past it, or
+        travelling parallel to it) are killed by the hop, exactly as on
+        the free-space entry points; the sampling-adequacy guard then
+        reports what landed.
     sampling : str
         ``'uniform'`` or ``'stratified'`` (default).  Stratified
         partitions the source-direction cone into equal-solid-angle
         cells and forces one path per cell, reducing variance.
+    sampler : {'jittered', 'sobol'}, default 'jittered'
+        Point placement inside the stratified sampler's 4-D cube; see
+        :func:`init_paths_stratified` (audit K22).  Read only when
+        ``sampling='stratified'``, and refused otherwise rather than
+        silently ignored.
     cone_half_angle : float
         Half-angle of the forward emission cone for path
         initialisation and per-surface re-sampling.
@@ -1321,6 +1540,27 @@ def propagate_hfpi_through_prescription(
         envelope rather than a field.  The usual cause is ``cone_half_angle``
         (a full forward hemisphere by default) versus an output grid that
         subtends a few degrees.  See :func:`accumulate_to_grid`.
+    normalisation : {'auto', 'physical', 'legacy'}, default 'auto'
+        Which estimator to run; the same value is threaded to every
+        aperture re-emission and to the final binning, because those are
+        two halves of ONE estimator.
+
+        ``'auto'`` resolves to ``'physical'`` when BOTH conditions the
+        estimator needs hold -- ``z_output`` gives the walk a plane to
+        close on, and every leg of the walk is free space
+        (:func:`_walk_legs_are_free_space`) -- and to ``'legacy'``
+        otherwise.  So a call that passes no ``z_output`` returns exactly
+        what it did before the keyword existed, a flat-optics walk that
+        names its output plane gets photometric amplitudes with no second
+        keyword to remember, and a walk through an element WITH POWER is
+        not silently handed an amplitude the free-space Jacobian cannot
+        produce (measured 4879x at a thin lens's image plane).
+
+        ``'physical'`` and ``'legacy'`` force the choice.  Forcing
+        ``'physical'`` through a powered prescription is allowed and
+        warns with that measurement, because the shape is still usable
+        and re-normalising against a reference is a legitimate workflow.
+        See :func:`accumulate_to_grid` for what each does per path.
 
     Returns
     -------
@@ -1341,7 +1581,36 @@ def propagate_hfpi_through_prescription(
     if sampling not in ('uniform', 'stratified'):
         raise ValueError(
             f"sampling must be 'uniform' or 'stratified'; got {sampling!r}.")
-
+    if sampler not in ('jittered', 'sobol'):
+        raise ValueError(
+            f"propagate_hfpi_through_prescription: sampler must be "
+            f"'jittered' or 'sobol'; got {sampler!r}.  See "
+            f"init_paths_stratified for what each places where.")
+    if sampler != 'jittered' and sampling != 'stratified':
+        raise ValueError(
+            f"propagate_hfpi_through_prescription: sampler={sampler!r} "
+            f"places points inside the STRATIFIED sampler's 4-D cube, and "
+            f"this call passes sampling={sampling!r}, which does not use "
+            f"that cube -- the request has no effect and would be silently "
+            f"dropped.  Pass sampling='stratified' (the default) with the "
+            f"sampler you want, or drop the sampler keyword.")
+    if normalisation not in ('auto', 'physical', 'legacy'):
+        raise ValueError(
+            f"propagate_hfpi_through_prescription: normalisation must be "
+            f"'auto' (default: 'physical' when z_output gives the walk a "
+            f"plane to close on AND every leg of the walk is free space, "
+            f"'legacy' otherwise), 'physical' (forced, and warned about "
+            f"when the legs are not free space) or 'legacy' (the raw path "
+            f"sum); got {normalisation!r}.")
+    if z_output is not None:
+        z_output = float(z_output)
+        if not np.isfinite(z_output):
+            raise ValueError(
+                f"propagate_hfpi_through_prescription: z_output must be a "
+                f"finite axial position in metres, in the same world "
+                f"coordinate the prescription's surfaces sit at; got "
+                f"{z_output!r}.  Pass None to bin the bundle where the walk "
+                f"leaves it (at the last surface).")
     from ..raytrace import (
         surfaces_from_prescription,
     )
@@ -1360,6 +1629,41 @@ def propagate_hfpi_through_prescription(
     # 2.  Resolve surface list and identify diffractors.
     surfaces = surfaces_from_prescription(prescription)
     object_distance = float(prescription.get('object_distance', 0.0))
+
+    # Resolve the estimator UP FRONT, because the aperture re-emissions
+    # and the final binning are two halves of ONE estimator and the walk
+    # threads a single value to both.
+    #
+    # K13: the per-path Jacobian both halves apply is the FREE-SPACE
+    # ray-tube relation, so 'physical' means what it says only when the
+    # walk's legs are free space AND a closing hop gives the last one a
+    # length.  'auto' therefore asks both questions; see
+    # :func:`_walk_legs_are_free_space` for the measurement that settles
+    # the first one.
+    _free_legs = _walk_legs_are_free_space(surfaces, surface_diffraction,
+                                           wavelength)
+    norm_used = normalisation
+    if norm_used == 'auto':
+        norm_used = ('physical' if (z_output is not None and _free_legs)
+                     else 'legacy')
+    elif norm_used == 'physical' and not _free_legs:
+        warnings.warn(
+            "propagate_hfpi_through_prescription: normalisation='physical' "
+            "converts emitted solid angle to landed area with the "
+            "FREE-SPACE ray-tube Jacobian r/(dx_out^2 cos theta_out), and "
+            "this prescription puts an element with power (a curved "
+            "surface, an index step, a tilt or a grating order) between "
+            "the emissions and the output plane, where the system's own "
+            "Jacobian applies instead.  The returned amplitudes are "
+            "therefore not photometric: measured against ASM + thin-lens "
+            "phase + ASM through a 19.41 mm singlet, the walk's total "
+            "power reads 4879x the reference at the image plane and 13.9x "
+            "at half that distance, while the spot metrics stay close "
+            "(r50 15.9 um against 17.9 um).  Shape is usable, absolute "
+            "scale is not -- re-normalise against a known-amplitude "
+            "reference, or pass normalisation='legacy' to say so "
+            "explicitly.",
+            RuntimeWarning, stacklevel=2)
 
     # 1.  Initialise paths at the source plane.  4.11.2: paths are
     # initialised AT z = -object_distance and travel forward through
@@ -1390,6 +1694,7 @@ def propagate_hfpi_through_prescription(
             rng=rng_source,
             cone_half_angle=cone_half_angle,
             z_input_plane=-object_distance,
+            sampler=sampler,
         )
     else:
         paths = init_paths_from_field(
@@ -1458,7 +1763,7 @@ def propagate_hfpi_through_prescription(
                     rng=rng_aperture, wavelength=wavelength,
                     cone_half_angle=cone_half_angle,
                     # V1: must match the accumulator's choice below.
-                    normalisation=normalisation,
+                    normalisation=norm_used,
                 )
             cursor = diff_idx + 1
         # Trace the trailing tail (if any).
@@ -1473,38 +1778,57 @@ def propagate_hfpi_through_prescription(
                 } if surface_diffraction else None,
             )
 
-    # 4.  Accumulate to output grid.
+    # 4.  Close on the output plane, if the caller named one.
     #
-    # K13 (audit 2026-09-11): ``normalisation`` defaults to ``'legacy'``
-    # HERE, unlike the free-space entry points.  This walk bins the
-    # bundle at the LAST SURFACE -- there is no final hop to a separate
-    # output plane -- so when that surface is a diffractor the paths have
-    # just been re-emitted and their current leg has length zero, where
-    # the Huygens-Fresnel 1/r spreading (and hence the binning Jacobian)
-    # is undefined.  The returned amplitudes are therefore NOT
-    # photometric on this path; see the warning below.  Making them so
-    # needs an explicit output plane for the walk to propagate to, which
-    # is a deferred design change.
-    if normalisation == 'legacy':
+    # K13: the binning Jacobian r/(dx_out^2 cos theta_out) needs the
+    # GEOMETRIC length of the leg that ended at the plane being binned.
+    # Without this hop the walk bins where it stops -- at the last
+    # surface -- and a diffracting last surface has just re-emitted every
+    # path, so that length is zero and there is no photometric answer to
+    # give.  The hop supplies the leg, in the medium the prescription
+    # puts after its last surface.
+    if z_output is not None:
+        # The index of the closing leg.  ``surfaces_from_prescription``
+        # normalises a reflective surface's ``'MIRROR'`` marker to its
+        # own ``glass_before`` (reflection does not change the medium),
+        # so this reads correctly for a folded stack too -- what a
+        # reflective last surface does change is the DIRECTION, so
+        # ``z_output`` then has to sit on the side the folded paths
+        # travel toward or the hop kills them.
+        from ..glass import get_glass_index
+        n_out_medium = (float(get_glass_index(
+            getattr(surfaces[-1], 'glass_after', None), wavelength))
+            if surfaces else 1.0)
+        paths = propagate_to_plane(paths, z_target=z_output,
+                                   wavelength=wavelength,
+                                   n_medium=n_out_medium)
+
+    # 5.  Accumulate to output grid.
+    if norm_used == 'legacy':
         warnings.warn(
             "propagate_hfpi_through_prescription: the returned amplitudes "
             "are NOT photometric.  This walk bins the bundle at the last "
             "surface rather than propagating it to a separate output "
             "plane, so the per-path r/(dx_out^2 cos theta_out) "
-            "Huygens-Fresnel binning Jacobian (the K13 fix applied by the "
-            "free-space entry points since v5.46) cannot be evaluated -- "
-            "the last leg has zero length.  Fringe positions and "
-            "interference contrast are unaffected; re-normalise against a "
-            "known-amplitude reference (e.g. ASM on the same geometry) "
-            "for anything photometric.  Pass normalisation='physical' if "
-            "your surface list ends in a non-diffracting surface the "
-            "paths genuinely travelled to.",
+            "Huygens-Fresnel binning Jacobian (audit K13, applied by the "
+            "free-space entry points) cannot be evaluated -- the last leg "
+            "has zero length.  Fringe positions and interference contrast "
+            "are unaffected; re-normalise against a known-amplitude "
+            "reference (e.g. ASM on the same geometry) for anything "
+            "photometric.  Pass z_output=<the plane you want the field on> "
+            "to give the walk a final leg -- on a prescription whose legs "
+            "are all free space (flat, index-matched, unsteered surfaces) "
+            "that makes the amplitudes photometric and retires this "
+            "warning.  Through an element WITH POWER it cannot: the "
+            "per-path Jacobian is the free-space ray-tube relation and the "
+            "system's own applies instead, so 'auto' stays here and "
+            "normalisation='physical' has to be asked for explicitly.",
             RuntimeWarning, stacklevel=2)
     return accumulate_to_grid(
         paths,
         Ny=Ny_out, Nx=Nx_out,
         dx=output_dx, centre=output_centre,
-        normalisation=normalisation,
+        normalisation=norm_used,
         # v5.17.x (P2-32): promote real input dtypes to complex so the
         # scatter-add keeps the imaginary half of the path weights.
         output_dtype=_complex_output_dtype(E_in.dtype),

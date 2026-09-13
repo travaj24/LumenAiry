@@ -1,10 +1,11 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/mft.py
-ast_sha256: eed98d6d806dcc3ec8e29938598a513066497a51478e7068836bf4017fe481f6
-token_sha256: fbb900141d35d0f1d7c90eed292586b4c53fcdb6d31208e93c0fd151e3ac64cc
+ast_sha256: 0f8c96a6815238955619bd4c543e8e12ffed6b947bff6b1cb3110b3c38bd5b7d
+token_sha256: 658b62322c934c19bf189fcab67aa6ee10d7341ed79cf7e5713b45bd82edcfa4
 pre_relocation_lines: 1073
 recorded_by: WP-A17 SWEEP-1 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
+re_recorded: 2026-09-13 -- WP-B3 (audit K6 second half): resample_field gains method='chirpz', the band-limited interpolant evaluated through _bluestein_centred_2d, with the replica guard _warn_mft_output_window taught a per-axis N_out_y; the default 'spline' leg and all three MFT propagators byte-identical
 -->
 
 # Version history -- `lumenairy/propagators/mft.py`
