@@ -328,7 +328,11 @@ acknowledge it.  The normal-vector field the entry builds is the separable
 axis-aligned one; on a curved or non-separable boundary it is not the Popov--
 Neviere field the formulation is derived for, and it manufactured form
 birefringence on a symmetric cell.  The notice reaches the out-of-plane
-(conical) path as well.
+(conical) path as well.  On an out-of-plane (full 3x3 tensor) cell the
+``fff_nv`` operator is symmetrised over the two Li-2003 factorisation orders,
+as the in-plane 2x2 operator already is, so the x <-> y mirror of a
+mirror-symmetric cell is exact there; a single factorisation order breaks it
+by 2e-4 to 5e-3 of the Jones scale (audit H3, off-plane half).
 
 **Picking a formulation is an observable-dependent choice (audit G6).**
 ``pmm_jones_2d`` gained ``formulation='auto'`` (``'fff_nv'`` on a separable

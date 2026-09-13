@@ -35,7 +35,7 @@ from ._core import (
     _propagation_star,
     _propagation_star_general,
     _rcwa_xp,
-    _redheffer_star,
+    _redheffer_star_rt,
     _require_jax_x64,
     _require_propagating_incidence,
     _sqrt_forward,
@@ -539,17 +539,56 @@ def _li_axis_blocks(blocks, pivot, others, M_along, S_along, xp):
     return h
 
 
-def _li_convolutions_2d_tensor_full(eps_cell, orders, n_orders_x, xp):
-    """Li-2003 successive factorization ``ehat = L2 L1(eps)`` of the FULL 3x3
-    tensor (JOSA/J.Opt.A 5:345, Eqs. 13-20): the OUT-OF-PLANE generalization of
-    :func:`_li_convolutions_2d_tensor`.  Returns the 9-entry dict of operators
-    ``ehat[(r, s)]`` (indices 0/1/2 = x/y/z).  ``L1`` factorizes along x
-    (pivot=x), ``L2`` along y (pivot=y); the out-of-plane ``exz/eyz/ezx/ezy``
-    components ride the wall-normal pivots through the Schur reorganization.  The
-    caller applies the E_z fold ``l3-`` (an ordinary matrix inverse of
-    ``ehat[(2,2)]``, Li 2003 Eq. 27) via the tensor eigensolver's ``inv(EZZ)``.
-    ``eps_cell`` is the INTERNAL (loss-bridge-conjugated) (Sx, Sy, 3, 3) sample.
+def _li_convolutions_2d_tensor_full(eps_cell, orders, n_orders_x, n_orders_y,
+                                    xp, *, symmetrize=True):
+    """Li-2003 successive factorization of the FULL 3x3 tensor (JOSA/J.Opt.A
+    5:345, Eqs. 13-20) -- the OUT-OF-PLANE generalization of
+    :func:`_li_convolutions_2d_tensor` -- SYMMETRIZED over the two
+    factorization orders::
+
+        ehat = (L2 L1(eps) + L1 L2(eps)) / 2
+
+    Returns the 9-entry dict of operators ``ehat[(r, s)]`` (indices 0/1/2 =
+    x/y/z).  ``L2 L1`` factorizes along x first (pivot=x) and y second
+    (pivot=y); the out-of-plane ``exz/eyz/ezx/ezy`` components ride the
+    wall-normal pivots through the Schur reorganization.  The caller applies
+    the ``E_z`` fold ``l3-`` (a matrix inverse of ``ehat[(2,2)]``, Li 2003
+    Eq. 27) AFTER this -- which is the only place it can go, since the mean of
+    two Schur complements is not the Schur complement of the mean.
+    ``eps_cell`` is the INTERNAL (loss-bridge-conjugated) (Sx, Sy, 3, 3)
+    sample.
+
+    WHY THE AVERAGE.  A single ``L2 L1`` is not x<->y symmetric, so it breaks
+    the mirror of a cell whose geometry AND director are invariant under it --
+    where the mirror forces ``Jxx == Jyy`` and ``Jxy == Jyx`` at normal
+    incidence, the single order gives a difference of 9e-04 (square pillar) to
+    5e-03 (disk) on a Jones matrix of scale 0.1 .. 0.2, falling as ~1/M.  The
+    mean is exact there, and mirror-covariant on every other cell.  The 3x3
+    transpose is the
+    in-plane argument with the component permutation ``(x, y, z) ->
+    (y, x, z)``: ``exx<->eyy``, ``exy<->eyx``, ``exz<->eyz``, ``ezx<->ezy``,
+    ``ezz`` alone, the pixel grid transposed and the order-label columns
+    swapped.  Under that permutation ``P`` and the order transpose ``T``,
+    ``T P L2L1(eps) P T = L1L2(P eps^T P)``, so the retained-order ROWS are
+    untouched and the nine blocks come back in this same basis with only their
+    component labels to swap back.  ``symmetrize=False`` recovers the single
+    ``L2 L1`` order (what the regression gate pins the asymmetry with).
     """
+    A = _li_tensor_full_l2l1(eps_cell, orders, n_orders_x, xp)
+    if not symmetrize:
+        return A
+    perm = [1, 0, 2]
+    epsT = xp.transpose(xp.asarray(eps_cell), (1, 0, 2, 3))
+    epsT = epsT[:, :, perm, :][:, :, :, perm]
+    B = _li_tensor_full_l2l1(epsT, orders[:, ::-1], n_orders_y, xp)
+    return {(r, s): 0.5 * (A[(r, s)] + B[(perm[r], perm[s])])
+            for r in range(3) for s in range(3)}
+
+
+def _li_tensor_full_l2l1(eps_cell, orders, n_orders_x, xp):
+    """ONE factorization order of :func:`_li_convolutions_2d_tensor_full`:
+    ``ehat = L2 L1(eps)`` (x first, y second).  Split out so the symmetrized
+    entry can call it a second time on the transposed problem."""
     Mx = int(n_orders_x)
     Sx, Sy = eps_cell.shape[0], eps_cell.shape[1]
     blk = {(a, b): xp.asarray(eps_cell[:, :, a, b]).astype(_C)
@@ -1212,10 +1251,10 @@ def rcwa_efficiency_2d(
                                             ez_laurent_inv=ez_inv)
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
-        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-        S11, _S12, S21, _S22 = S
-        r = S11 @ cinc
-        t = S21 @ cinc
+        # Only S11 / S21 are read, so the layer|substrate star is closed on
+        # the source rather than assembled (_redheffer_star_rt).
+        r, t = _redheffer_star_rt(
+            S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn), cinc)
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
     # PUBLIC-convention forward kz for the z-flux + mask + Ez (see
@@ -1336,10 +1375,10 @@ class PreparedRCWA2D:
                                                 ez_laurent_inv=self.ez_inv)
             S = _interface_smatrix(Wref, Vref, Wl, Vl)
             S = _propagation_star(S, lam, k0 * self.depth)
-            S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-            S11, _S12, S21, _S22 = S
-            r = S11 @ self.cinc
-            t = S21 @ self.cinc
+            # Only S11 / S21 are read, so the layer|substrate star is closed
+            # on the source rather than assembled (_redheffer_star_rt).
+            r, t = _redheffer_star_rt(
+                S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn), self.cinc)
         rx, ry = r[:N], r[N:]
         tx, ty = t[:N], t[N:]
         kz_ref_f = _forward_flux_kz(self.eps_sup, kxv, kyv)
@@ -1925,17 +1964,21 @@ def rcwa_jones_2d(
             # ehat^{33} (Li 2003 Eq. 27) -- the in-plane blocks are pre-folded
             # for the Q block while the raw ehat cross-blocks + ehat^{33} feed
             # the generator's own inv(EZZ) for the A/B off-plane coupling.
+            # The 3x3 operator is SYMMETRIZED over the two factorization
+            # orders, exactly as the in-plane 2x2 one is (audit H3): the
+            # component permutation is (x, y, z) -> (y, x, z), and the mean is
+            # taken on the nine raw ehat blocks so the l3- fold below runs
+            # AFTER it (the mean of two Schur complements is not the Schur
+            # complement of the mean).
             # The validated-scope notice belongs here too (VERIFY-A14 V6): this
             # is the SAME Li-2003 staircase scope as the in-plane path, and the
             # notice was reachable only from the in-plane branch, so an
             # out-of-plane tensor cell with a CURVED pattern got 'fff_nv' with
-            # no scope signal at all.  (The 3x3 operator is also not
-            # symmetrized -- see the deferred D3 of WP-A14_REPORT.md -- so the
-            # x<->y asymmetry the in-plane fix removed is still present here,
-            # which is one more reason to say so.)
+            # no scope signal at all.
             _li_tensor_scope_notice("rcwa_jones_2d", eps_t,
                                     allow_nonseparable_nv)
-            eh = _li_convolutions_2d_tensor_full(eps_t, orders, n_orders_x, xp)
+            eh = _li_convolutions_2d_tensor_full(eps_t, orders, n_orders_x,
+                                                 n_orders_y, xp)
             ezzi = xp.linalg.inv(eh[(2, 2)])
             Cxx = eh[(0, 0)] - eh[(0, 2)] @ ezzi @ eh[(2, 0)]
             Cxy = eh[(0, 1)] - eh[(0, 2)] @ ezzi @ eh[(2, 1)]
@@ -1968,9 +2011,9 @@ def rcwa_jones_2d(
         Ml = _modes_to_M(Wl, Vl, Wlb, Vlb)
         S = _interface_smatrix_general(Mref, Ml)
         S = _propagation_star_general(S, lam, lam_b, k0 * depth)
-        S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
+        S_sub = _interface_smatrix_general(Ml, Mtrn)
     elif sym_rt is not None:
-        S = None                              # even sector already solved
+        S = S_sub = None                      # even sector already solved
     else:
         # In-plane path, every formulation: the operator set was built above
         # (once) -- 'fff_nv' is the SYMMETRIZED Li-2003 successive full-tensor
@@ -1983,12 +2026,18 @@ def rcwa_jones_2d(
         Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
-        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-    if S is not None:
-        S11, _S12, S21, _S22 = S
+        S_sub = _interface_smatrix(Wl, Vl, Wtrn, Vtrn)
 
     p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
     delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
+    if S is not None:
+        # Only S11 / S21 of the layer|substrate star are read, so it is closed
+        # on the two sources rather than assembled (_redheffer_star_rt).
+        # Columns are the incident polarizations, x then y.
+        zero_d = 0.0 * delta
+        rr, tt = _redheffer_star_rt(
+            S, S_sub, xp.stack([xp.concatenate([delta, zero_d]),
+                                xp.concatenate([zero_d, delta])], axis=1))
     kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2)))
     kz_ref_f = _forward_flux_kz(eps_sup, kxv, kyv)
     kz_trn_f = _forward_flux_kz(eps_sub, kxv, kyv)
@@ -2003,9 +2052,7 @@ def rcwa_jones_2d(
         if sym_rt is not None:
             r, t = sym_rt[col]
         else:
-            cinc = xp.concatenate([ex0 * delta, ey0 * delta])
-            r = S11 @ cinc
-            t = S21 @ cinc
+            r, t = rr[:, col], tt[:, col]
         rx, ry = r[:N], r[N:]
         tx, ty = t[:N], t[N:]
         rz = -(kxv * rx + kyv * ry) / safe_r
@@ -2369,10 +2416,10 @@ def rcwa_efficiency_2d_shapes(
         Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS)
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
-        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-        S11, _S12, S21, _S22 = S
-        r = S11 @ cinc
-        t = S21 @ cinc
+        # Only S11 / S21 are read, so the layer|substrate star is closed on
+        # the source rather than assembled (_redheffer_star_rt).
+        r, t = _redheffer_star_rt(
+            S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn), cinc)
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
     kz_ref_f = _forward_flux_kz(eps_sup, kxv, kyv)

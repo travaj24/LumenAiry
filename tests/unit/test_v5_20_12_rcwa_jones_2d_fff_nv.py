@@ -32,6 +32,7 @@ import pytest
 
 from lumenairy.elements.rcwa import rcwa_jones_2d
 from lumenairy.elements.rcwa import twod as _twod
+from lumenairy.elements.rcwa._core import _EnergyError
 from lumenairy.elements.rcwa.oned import rcwa_jones_1d_segments
 
 # eig-heavy 2-D fff_nv (Li-2003 successive full-tensor); version-insensitive
@@ -414,12 +415,25 @@ def test_stripe_fixture_is_free_of_the_mode_match_degeneracy():
         for n in ladder:
             with warnings.catch_warnings(record=True) as rec:
                 warnings.simplefilter("always")
-                _o, R1, T1, _J = rcwa_jones_1d_segments(
-                    PX, [(0.5, er), (0.5, eg)], 1.5, 1.0, DEPTH, WL,
-                    theta=0.0, n_orders=n)
+                try:
+                    _o, R1, T1, _J = rcwa_jones_1d_segments(
+                        PX, [(0.5, er), (0.5, eg)], 1.5, 1.0, DEPTH, WL,
+                        theta=0.0, n_orders=n)
+                    d = abs(float(np.sum(R1) + np.sum(T1) - 2.0))
+                except _EnergyError:
+                    # The gross tripwire (tot > 1.05 * n_states) is the defect
+                    # manifesting, not an absent measurement: the solver refuses
+                    # a number no build agrees on.  Only the ENGINEERED
+                    # pre-round-1 arm reaches it -- a layer mode there carries a
+                    # GROWING propagator, so the two-interface closed form and
+                    # the assembled star are two associations of a difference of
+                    # huge terms and disagree by O(1) (5.6e-03 vs 4.3e-01 on this
+                    # fixture).  The POST arms assert < _ONED_SOUND_CLOSURE, so
+                    # an inf there still fails.
+                    d = float("inf")
             warned += sum(1 for w in rec if "lossless energy closure violated"
                           in str(w.message))
-            out = max(out, abs(float(np.sum(R1) + np.sum(T1) - 2.0)))
+            out = max(out, d)
         return out, warned
 
     clean, clean_warned = worst(_STRIPE_EPS_GROOVE)

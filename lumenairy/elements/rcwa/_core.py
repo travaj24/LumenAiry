@@ -2888,12 +2888,12 @@ def _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_normal, ez_inv,
     # S-matrix recursion in the even sector (dimension-agnostic helpers).
     S = _interface_smatrix(Ireg_e, Vref_e, Wl_e, Vl_e)
     S = _propagation_star(S, lam_e, k0 * depth)
-    S = _redheffer_star(S, _interface_smatrix(Wl_e, Vl_e, Ireg_e, Vtrn_e))
-    S11, _S12, S21, _S22 = S
-    cinc_e = _even_project(cinc, desc, xp)
-    r = _even_unfold(S11 @ cinc_e, desc, xp)
-    t = _even_unfold(S21 @ cinc_e, desc, xp)
-    return r, t
+    # The substrate star's S12 / S22 are never read, so it is closed on the
+    # (even-projected) source instead of assembled -- :func:`_redheffer_star_rt`.
+    r_e, t_e = _redheffer_star_rt(
+        S, _interface_smatrix(Wl_e, Vl_e, Ireg_e, Vtrn_e),
+        _even_project(cinc, desc, xp))
+    return _even_unfold(r_e, desc, xp), _even_unfold(t_e, desc, xp)
 
 
 
@@ -3011,6 +3011,11 @@ def _symmetric_cascade_rt(Vref, Vtrn, Kx, Ky, layer_specs, depths, k0,
         S = _redheffer_star(S, _interface_smatrix(Wp, Vp, Wc, Vc))
         S = _propagation_star(S, lamc, k0 * depths[i])
     Wl, Vl, _ll = modes_e[-1]
+    # This last star is deliberately ASSEMBLED, unlike the single-layer twin's
+    # (:func:`_symmetric_solve_rt`): ``elements/pmm/stack2d.py`` and
+    # ``pmm/twod_jones.py`` fold their own cascades through this function, so
+    # closing it on the sources (:func:`_redheffer_star_rt`) would move the PMM
+    # engines' last bits from inside the RCWA package.
     S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Ireg_e, Vtrn_e))
     S11, _S12, S21, _S22 = S
 
@@ -3332,6 +3337,108 @@ def _redheffer_star(SA, SB):
     C21 = BF @ A21
     C22 = B22 + (BF @ A22) @ B12
     return (C11, C12, C21, C22)
+
+
+
+def _redheffer_star_rt(SA, SB, cinc):
+    """``(S11 @ cinc, S21 @ cinc)`` of ``_redheffer_star(SA, SB)``, computed
+    WITHOUT assembling the star -- the closed form for the last star of a
+    cascade whose result is only ever applied to a source.
+
+    ``cinc`` is a ``(2N,)`` source vector or a ``(2N, k)`` block of them;
+    the two returned arrays carry its trailing shape.
+
+    Writing ``D = (I - B11 A22)^-1`` and ``F = (I - A22 B11)^-1``, the star's
+    two output blocks are ``C11 = A11 + A12 D B11 A21`` and ``C21 = B21 F
+    A21``.  The push-through identity ``F = I + A22 D B11`` (equivalently
+    ``F A22 = A22 D``) removes ``F`` entirely, so with ``u = A21 c``,
+    ``z = D B11 u``::
+
+        S11 c = A11 c + A12 z            S21 c = B21 (u + A22 z)
+
+    -- SEVEN mat-vecs (``k`` columns each), ONE ``2N`` product ``B11 @ A22``
+    and ONE inverse, where the assembled star pays twelve ``2N x 2N`` products
+    and TWO inverses for blocks the caller discards.  On a single-layer
+    ``interface -> propagation -> interface`` chain that IS the whole star.
+    Measured (1-D Ag TM ladder, ``n_ridge = 0.135+3.99j``, period 1 um, depth
+    0.25 um, ``formulation='li'``, best of three at one BLAS thread), the
+    star's share of the solve and the whole-solve time:
+
+    ===========  ==================  =====================
+    ``n_orders`` star share          whole solve
+    ===========  ==================  =====================
+    50           20.2 % -> 5.0 %     16.8 -> 14.0 ms
+    100          18.7 % -> 6.8 %     80.3 -> 65.4 ms
+    200          21.6 % -> 6.7 %     514.8 -> 377.1 ms
+    400          70.8 % -> 45.5 %    7533 -> 3973 ms
+    ===========  ==================  =====================
+
+    The ``n_orders = 400`` row is superlinear in both columns because
+    ``A22 = X S22 X`` (:func:`_propagation_star`) underflows into SUBNORMALS
+    in the evanescent tails -- one 801-wide product against it costs ~1.7 s
+    against the ~52 ms a normal one does -- so at that size the saving is
+    larger than the flop count predicts.
+
+    THE REMAINING INVERSE KEEPS THE GUARD.  ``I - B11 A22`` goes through
+    :func:`_guarded_inverse` under the same ``site`` string as in
+    :func:`_redheffer_star`, so the M1 conditioning census records it
+    identically (a 1-D single-layer solve censuses 3 inverses instead of 4:
+    this one plus the two interfaces).  Dropping ``I - A22 B11`` cannot hide a
+    conditioning failure from the census: the two are similar
+    (``(I - A22 B11) A22 = A22 (I - B11 A22)``, so they share a spectrum) and
+    the RETAINED one is the tighter reading of the pair wherever they differ
+    -- equilibrated ``rcond`` 0.340 / 0.167 / 0.108 / 0.0695 against the
+    dropped one's 0.523 / 0.670 / 0.671 / 0.671 at ``n_orders`` 11 / 50 / 100
+    / 200 of that ladder, and equal to within 6 % on the thin-grating family
+    (``period`` 10 um, ``dn`` 0.05) the M1 census was taken on.  Neither star
+    inverse is ever the REFUSING one (``rcond_refuse`` is armed only on
+    :func:`_interface_smatrix_general`'s ``T22``), so no refusal path changes.
+
+    The two zero-block shortcuts are the ones :func:`_redheffer_star` takes,
+    on the same concrete tests, so a chain that pays no star inverse there
+    pays none here either.
+
+    NOT bit-identical to assembling the star and multiplying: the same terms
+    are summed in a different order (mat-vec instead of mat-mat), which moves
+    the last bits.  Measured against the assembled star over the metallic
+    convergence ladder (Ag and Au, ``n_orders`` 100..400, both polarizations)
+    the largest disagreement is 3.3e-16 absolute / 1.7e-15 relative on a
+    per-order efficiency, and over the whole 1-D + 2-D entry-point matrix
+    (both polarizations, ``'laurent'`` / ``'li'`` / ``'fff_nv'``, normal and
+    oblique) 1.7e-15 absolute / 3.1e-15 relative -- two decades inside the
+    interface inverse's own 1.1e-16..3.2e-16 equilibrated residual on the same
+    fixtures, and three inside the 1.4e-13 closure this package holds.  The
+    library's own instability class (``period`` 10 um, ``dn`` 0.05, the
+    fixture the M1 gate scans) moves 1.1e-15 over 46 rungs.
+
+    WHERE THE RE-ASSOCIATION IS NOT NEUTRAL, and it is not reachable from the
+    public API: if a LAYER mode carries an exponentially GROWING propagator,
+    ``A22 = X S22 X`` has entries far above 1, ``I - B11 A22`` is
+    near-singular and the answer is a difference of huge terms, so the two
+    associations disagree by O(1) -- both being numbers no build agrees on.
+    :func:`_sqrt_decay`'s ``Re(lam) >= 0`` branch is what makes that
+    unreachable (``|X| <= 1`` always); the one way to observe it is to
+    monkeypatch that branch, and doing so moves the closure of an
+    index-coincident cell from ~6e-03 to ~4e-01, which the gross
+    :func:`_check_energy` tripwire then REFUSES on 2 rungs of 16 instead of
+    warning on 15."""
+    A11, A12, A21, A22 = SA
+    B11, _B12, B21, _B22 = SB
+    xp = array_namespace(A11, B11)
+    n = A11.shape[0]
+    u = A21 @ cinc
+    # is_jax_array is the BACKEND test (a tracer can express neither .any()
+    # nor the branch); the .any() calls are the zero-block test.
+    _concrete = not is_jax_array(A22) and not is_jax_array(B11)
+    if _concrete and not bool(B11.any()):
+        return A11 @ cinc, B21 @ u               # z = D B11 u = 0
+    w = B11 @ u
+    if _concrete and not bool(A22.any()):
+        return A11 @ cinc + A12 @ w, B21 @ u     # D = I, so z = w
+    I = xp.eye(n, dtype=_C)
+    D = _guarded_inverse(I - B11 @ A22, "rcwa Redheffer star (I - B11 A22)")
+    z = D @ w
+    return A11 @ cinc + A12 @ z, B21 @ (u + A22 @ z)
 
 
 
@@ -4957,6 +5064,7 @@ __all__ = [
     "_layer_eigenmodes",
     "_homogeneous_eigenmodes",
     "_redheffer_star",
+    "_redheffer_star_rt",
     "_interface_smatrix",
     "_propagation_smatrix",
     "_propagation_star",

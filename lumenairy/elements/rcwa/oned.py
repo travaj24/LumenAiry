@@ -38,7 +38,7 @@ from ._core import (
     _propagation_star,
     _propagation_star_general,
     _rcwa_xp,
-    _redheffer_star,
+    _redheffer_star_rt,
     _require_inplane_tensor,
     _require_jax_x64,
     _require_propagating_incidence,
@@ -716,10 +716,10 @@ def rcwa_efficiency_1d(
         I_N = xp.eye(N, dtype=_C)
         S = _interface_smatrix(I_N, xp.diag(v_ref), Wl1, Vl1)
         S = _propagation_star(S, lam1, k0 * depth)
-        S = _redheffer_star(
-            S, _interface_smatrix(Wl1, Vl1, I_N, xp.diag(v_trn)))
-        r1 = S[0] @ delta
-        t1 = S[2] @ delta
+        # Only S11 / S21 are read, so the layer|substrate star is closed on
+        # the source rather than assembled (_redheffer_star_rt).
+        r1, t1 = _redheffer_star_rt(
+            S, _interface_smatrix(Wl1, Vl1, I_N, xp.diag(v_trn)), delta)
         if polarization == "te":
             rx, ry, tx, ty = zeros_N, r1, zeros_N, t1
         else:
@@ -744,8 +744,6 @@ def rcwa_efficiency_1d(
             Vl = Giblk @ Vl
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
-        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-        S11, _S12, S21, _S22 = S
 
         # --- incident field (delta on 0th order, chosen polarization) ----
         if polarization == "te":
@@ -753,8 +751,10 @@ def rcwa_efficiency_1d(
         else:
             cinc = xp.concatenate([delta, zeros_N])   # E along x
         # Source is given in the reflection-region eigenbasis (W_ref = I).
-        r = S11 @ cinc            # reflected tangential-E mode amplitudes
-        t = S21 @ cinc            # transmitted
+        # Only S11 / S21 of the layer|substrate star are read, so it is closed
+        # on the source rather than assembled (_redheffer_star_rt).
+        r, t = _redheffer_star_rt(                # reflected / transmitted
+            S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn), cinc)
 
         rx, ry = r[:N], r[N:]
         tx, ty = t[:N], t[N:]
@@ -1132,8 +1132,7 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
         Ml = _modes_to_M(Wl, Vl, Wlb, Vlb)
         S = _interface_smatrix_general(Mref, Ml)
         S = _propagation_star_general(S, lam, lam_b, k0 * depth)
-        S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
-        S11, _S12, S21, _S22 = S
+        S_sub = _interface_smatrix_general(Ml, Mtrn)
     else:
         Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, M,
                                                        formulation, edges)
@@ -1143,23 +1142,27 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
         Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
-        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-        S11, _S12, S21, _S22 = S
+        S_sub = _interface_smatrix(Wl, Vl, Wtrn, Vtrn)
 
     delta = xp.asarray((orders == 0).astype(_C))
     zeros_N = xp.zeros(N, dtype=_C)
+    # The layer|substrate star's S12 / S22 are never read, so the chain is
+    # closed directly on the two sources (_redheffer_star_rt): one inverse and
+    # mat-vecs instead of the assembled star's two inverses and twelve 2N
+    # products.  Columns are the incident polarizations, x then y.
+    rr, tt = _redheffer_star_rt(
+        S, S_sub, xp.stack([xp.concatenate([delta, zeros_N]),
+                            xp.concatenate([zeros_N, delta])], axis=1))
     # Build the two incident-polarization responses then STACK (no item
     # assignment, so the path is JAX-differentiable as well as GPU-ready).
     R_rows, T_rows, j_cols, jt_cols = [], [], [], []
-    for pol in ("x", "y"):
+    for ci, pol in enumerate(("x", "y")):
         if pol == "x":
-            cinc = xp.concatenate([delta, zeros_N])
             einc_sq = 1.0 + (kx0 / kz_inc) ** 2 if kz_inc != 0 else 1.0
         else:
-            cinc = xp.concatenate([zeros_N, delta])
             einc_sq = 1.0
-        r = S11 @ cinc
-        t = S21 @ cinc
+        r = rr[:, ci]
+        t = tt[:, ci]
         rx, ry = r[:N], r[N:]
         tx, ty = t[:N], t[N:]
         # PUBLIC-convention forward kz for the z-flux + mask + Ez (see

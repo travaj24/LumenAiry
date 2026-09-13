@@ -28,7 +28,7 @@ from lumenairy.elements.rcwa import (
     rcwa_jones_1d,
     rcwa_jones_1d_segments,
 )
-from lumenairy.elements.rcwa._core import _EnergyWarning
+from lumenairy.elements.rcwa._core import _EnergyError, _EnergyWarning
 
 
 # --------------------------------------------------------------------------- #
@@ -310,11 +310,23 @@ def _s1_2_closure(er, eg, n_orders):
     """``(|sum R + sum T - 2|, an _EnergyWarning fired)`` at one truncation."""
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always")
-        out = rcwa_jones_1d_segments(0.7e-6, [(0.5, er), (0.5, eg)], 1.5, 1.0,
-                                     0.5e-6, 1.0e-6, angle=0.0,
-                                     n_orders=n_orders)
+        try:
+            out = rcwa_jones_1d_segments(0.7e-6, [(0.5, er), (0.5, eg)], 1.5,
+                                         1.0, 0.5e-6, 1.0e-6, angle=0.0,
+                                         n_orders=n_orders)
+            miss = abs(float(np.sum(out[1]) + np.sum(out[2])) - 2.0)
+        except _EnergyError:
+            # The gross tripwire (tot > 1.05 * n_states) is the defect
+            # manifesting, not an absent measurement: the solver refuses a
+            # number no build agrees on.  Only the ENGINEERED pre-round-1 arm
+            # reaches it -- a layer mode there carries a GROWING propagator, so
+            # the two-interface closed form and the assembled star are two
+            # associations of a difference of huge terms and disagree by O(1)
+            # (5.6e-03 vs 4.3e-01 on this fixture).  The SHIPPED arms assert
+            # < _S1_2_CLOSURE_BAR, so an inf there still fails.
+            miss = float("inf")
     fired = [w for w in rec if isinstance(w.message, _EnergyWarning)]
-    return (abs(float(np.sum(out[1]) + np.sum(out[2])) - 2.0), fired)
+    return (miss, fired)
 
 
 def _s1_2_pre_round1_sqrt_decay(x, xp=None, band=1e-8):
