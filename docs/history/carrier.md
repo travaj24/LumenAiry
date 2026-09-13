@@ -1,7 +1,7 @@
 <!-- lumenairy-history-doc
 module: lumenairy/propagators/carrier.py
-ast_sha256: f557e0c8cec3aa6acd83e9498ffb23b1487e6c193ce7a1eef4e088f48e3724dc
-token_sha256: fb1d743288cba502e34dbe4c7bbe46d27417913e5fc58deae5c3115ab1f143c2
+ast_sha256: ed52d13a2cfd5df3c9cec0418345b93a90e6bd112d176aa5d559b45a12c36669
+token_sha256: 7e81bb4b96e2507c381a53fe225d75536a9c6ff77a743109bd964dfa18d57850
 pre_relocation_lines: 11602
 recorded_by: WP-A17 (audit AUDIT_ADVERSARIAL_EXHAUSTIVE_2026_09_11, finding P2-4 / sec. 14 V6)
 checker: tests/unit/test_audit2609_a17_history_relocation.py
@@ -9,6 +9,7 @@ re_recorded: 2026-09-12 -- WP-A24: the decentre_fit_frac warning quotes the 2026
 re_recorded: 2026-09-12 -- ruff isort combine-as-imports (pyproject.toml, WP-A16 recommendation): aliased import statements from the same module merged into one; the set of bound names is unchanged
 re_recorded: 2026-09-13 -- WP-A25: replica_fill={'repeat','zero'} on both focus readouts (what the window holds outside one Bluestein period), _period_out['faithful_samples'] / stage readout_faithful_samples, and the replica refusal's two measured regimes
 re_recorded: 2026-09-13 -- WP-A25: replica_fill on both focus readouts, faithful-window publication, the replica refusal's two regimes; seven placeholder-free f-string prefixes removed from the new message
+re_recorded: 2026-09-13 -- WP-B4: transport='collins' -- the Collins/ABCD-Fresnel carrier transport evaluated by a separable chirp-Z onto a freely chosen output pitch, its Kelly (2014) sampling guard, the complementary-quadrature selection and the Collins focus readout; the default transport is unchanged
 -->
 
 # Version history -- `lumenairy/propagators/carrier.py`

@@ -987,6 +987,10 @@ def propagate_carrier_referenced(
     dy: Optional[float] = None,
     gap_kernel: str = 'auto',
     tilt: Tuple[float, float] = (0.0, 0.0),
+    transport: str = 'sziklas',
+    dx_out: Optional[float] = None,
+    carrier_out: Optional[Union[float, Tuple[float, float]]] = None,
+    on_collins_sampling: str = 'warn',
 ) -> CarrierReferencedField:
     """Carrier-referenced ("pilot-beam") free-space propagation step.
 
@@ -1050,6 +1054,34 @@ def propagate_carrier_referenced(
         which has no exact kernel) a non-zero ``tilt`` is inert and now says so
         with a ``RuntimeWarning`` (residual V8) instead of being silently
         discarded.
+    transport : {'sziklas', 'collins'}, default 'sziklas'
+        Which transport evaluates the leg.  ``'sziklas'`` is the co-moving
+        scaled-coordinate step this module is built on, whose output pitch is
+        forced to ``m*dx`` and which therefore auto-splits a leg that lands near
+        the carrier's geometric focus.  ``'collins'`` evaluates the SAME
+        integral -- Collins' ABCD-Fresnel form -- as chirp x chirp-Z x chirp,
+        which lets the output pitch be chosen freely; ``m -> 0`` is then an
+        ordinary value and no focus split is entered.  For a quadratic carrier
+        the two are the same theorem, and on a shared lattice they agree to
+        ~4e-12 of peak.  ``gap_kernel`` means the same thing on both.
+    dx_out : float, optional
+        ``transport='collins'`` only: the output pitch (m).  Default: the
+        co-moving ``|m|*dx``, floored by the pitch at which the output grid
+        still holds the ABCD image of the beam's measured phase-space box, so a
+        near-focus landing keeps a grid that holds the waist.  ``dy_out``
+        follows the input's ``dy/dx`` ratio.  The sample COUNT is the input's.
+    carrier_out : float or (float, float), optional
+        ``transport='collins'`` only: the carrier the returned envelope is
+        referenced to.  Default: the geometric continuation ``R_carrier + z``,
+        except where referencing to that collapsing sphere would need more
+        samples than the grid has (measured as a space-bandwidth product), where
+        a FLAT reference is used instead and ``R`` comes back ``inf`` -- which
+        is the physical statement that the wavefront is flat at the waist.
+        Pass ``inf`` to get the reconstructed FIELD on the chosen lattice.
+    on_collins_sampling : {'error', 'warn', 'ignore'}, default 'warn'
+        ``transport='collins'`` only: disposition of the Kelly (Appl. Opt. 53,
+        2861 (2014)) sampling conditions for the chirp-Z stage, evaluated on the
+        measured support of this field rather than on the grid geometry.
 
     Returns
     -------
@@ -1123,11 +1155,43 @@ def propagate_carrier_referenced(
     _warn_paraxial_kernel_drops_tilt(gap_kernel, tilt, R_carrier,
                                      'propagate_carrier_referenced')
 
+    transport = _check_transport(transport, 'propagate_carrier_referenced')
+    _check_guard_action('on_collins_sampling', on_collins_sampling,
+                        'propagate_carrier_referenced')
+    if transport != 'collins' and (dx_out is not None
+                                   or carrier_out is not None):
+        raise ValueError(
+            f"propagate_carrier_referenced: dx_out / carrier_out are the "
+            f"FREELY CHOSEN output lattice and reference of the Collins "
+            f"transport and have no meaning on transport={transport!r}, whose "
+            f"output pitch is m*dx and whose output carrier is R_carrier + z "
+            f"by construction.  Pass transport='collins' to choose them.")
+
     # Parse a possibly-astigmatic carrier.  A 2-tuple (R_x, R_y) with
     # DISTINCT radii routes to the separable astigmatic transform; equal
     # radii (and the scalar form) route to the byte-identical scalar path.
     R_x, R_y, is_astig = _parse_carrier(R_carrier,
                                         'propagate_carrier_referenced')
+    if transport == 'collins':
+        # The Collins transport is separable and carries an astigmatic carrier
+        # natively (per-axis A and D), so there is no astigmatic branch here --
+        # and no focus-crossing branch either.
+        if R_x == 0.0 or R_y == 0.0:
+            raise ValueError(
+                "propagate_carrier_referenced: R_carrier == 0 is the carrier's "
+                "own focus (an infinite curvature screen).  Reference the beam "
+                "to a plane away from its focus.")
+        if z == 0:
+            env0 = E_env.copy() if hasattr(E_env, 'copy') else np.array(E_env)
+            return CarrierReferencedField(
+                env0, ((R_x, R_y) if is_astig else R_x),
+                ((dx, dy) if is_astig else dx))
+        return _collins_carrier_leg(
+            E_env, ((R_x, R_y) if is_astig else R_x), z, wavelength, dx, dy,
+            gap_kernel=gap_kernel, tilt=tilt,
+            on_collins_sampling=on_collins_sampling,
+            dx_out=dx_out, carrier_out=carrier_out,
+            fn='propagate_carrier_referenced')
     if is_astig:
         if R_x == 0.0 or R_y == 0.0:
             raise ValueError(
@@ -1394,6 +1458,761 @@ def _carrier_step_fast(E_env, R, z, wavelength, dx, dy,
             env_out = env_out.astype(E_env.dtype)
 
     return CarrierReferencedField(env_out, R_out, m * dx)
+
+
+# ===========================================================================
+# Collins / ABCD-Fresnel transport with a freely chosen output pitch
+# ===========================================================================
+# ``transport='collins'`` replaces the Sziklas-Siegman co-moving step on the
+# chain's free-space legs.  Collins (1970, JOSA 60, 1168) writes the field
+# through any ABCD system as one Fresnel-class integral.  In THIS library's
+# ``exp(-i omega t)`` / ``exp(+i k z)`` convention (CONVENTIONS sec. 7) that is
+# the complex conjugate of the form printed in Collins' paper, which uses the
+# opposite time convention:
+#
+#     u_out(x) = exp(i k L0)/(i lambda B)
+#                * integral u_in(u) exp(i k (A u^2 - 2 u x + D x^2)/(2 B)) du
+#
+# (2-D: one ``1/(i lambda B)``, the exponent separable in x and y).  Applied to
+# an ENVELOPE the system is "attach the input carrier, fly z, remove the chosen
+# output carrier":
+#
+#     A = 1 + z/R_in = m      B = z      C = 1/R_in - A/R_ref      D = 1 - z/R_ref
+#
+# so ``det = AD - BC = 1`` for every choice of ``R_ref``, and the on-axis path
+# length is ``L0 = z``.  ``R_ref = R_in + z`` (the geometric continuation the
+# Sziklas transport is forced to use) gives ``C = 0``, ``D = 1/m``; ``R_ref =
+# inf`` gives ``D = 1`` and returns the FIELD rather than an envelope.
+#
+# SIGN OF B ON A CONVERGING LEG.  ``B`` is the transfer distance ``z`` and is
+# positive for every forward leg, converging or not -- the carrier's sign lives
+# in ``A`` and ``D``.  A converging leg (``R_in < 0``) shrinks ``A = 1 + z/R_in``
+# toward 0 and past it to negative (the frame inverts through the focus); the
+# transform below carries ``A <= 0`` natively, which is what makes ``m -> 0``
+# an ordinary point on this transport instead of the singularity the co-moving
+# grid has there.  Back-propagation (``z < 0``) makes ``B`` negative and is
+# equally well defined.
+#
+# WHY IT IS THE SAME THEOREM.  Substituting ``A u^2 - 2ux + D x^2 = A (u -
+# x/m)^2`` at ``R_ref = R_in + z`` turns the integral into a plain Fresnel
+# propagation of ``u_in`` over the REDUCED distance ``z_eff = z/m``, read at
+# ``x/m``, times ``1/m`` and the piston ``exp(i k z^2/R_out)`` -- term for term
+# :func:`_carrier_step_fast`.  The only thing that changes is that ``x`` is no
+# longer pinned to ``m * dx``: the chirp-Z below evaluates the same integral on
+# any output lattice.  Measured against :func:`_carrier_step_fast` on its own
+# lattice, 4e-12 of peak.
+#
+# COST.  One separable 2-D Bluestein (3 FFTs of ``next_fast_len(N + N_out - 1)``
+# per axis, the separable route this module already ships for the readout) plus
+# two separable screens, against the 2 FFTs of ``N`` a Sziklas leg pays.  The
+# exact-kernel arm adds one FFT pair of ``N`` (below).
+
+_TRANSPORTS = ('sziklas', 'collins')
+
+#: Power fraction allowed OUTSIDE the measured support radii the Kelly sampling
+#: guard is evaluated at, per axis and per domain.  It is the guard's tolerance:
+#: content beyond a support radius is the content the chirp-Z stage may alias,
+#: so the aliased power is bounded by this fraction and the resulting field
+#: error by its square root (1e-6 of the power, 1e-3 of the amplitude).  It is
+#: NOT a geometric margin -- the radii are read from the field on every call.
+_COLLINS_TAIL_FRAC = 1e-6
+
+
+def _check_transport(value, fn):
+    """Validate a ``transport`` argument strictly and return it unchanged.
+
+    Raises ``ValueError`` naming the whole accepted set for any other value,
+    including ``None``, a non-string and a mis-cased spelling: there is no
+    fallback, for the reason :func:`_check_gap_kernel` gives -- a typo that
+    selected the default silently would make an opted-in transport unopted-in
+    with nothing raised."""
+    if not isinstance(value, str) or value not in _TRANSPORTS:
+        raise ValueError(
+            f"{fn}: transport must be one of {list(_TRANSPORTS)!r} "
+            f"(case-sensitive strings), got {value!r}.  'sziklas' (the "
+            f"default) is the Sziklas-Siegman co-moving step, whose output "
+            f"pitch is forced to m*dx; 'collins' is the ABCD-Fresnel (Collins) "
+            f"integral evaluated by a chirp-Z onto a FREELY chosen output "
+            f"pitch, which is the same theorem for a quadratic carrier and has "
+            f"no singularity at m = 0.")
+    return value
+
+
+def _collins_envelope_abcd(R_in, z, R_ref):
+    """``(A, B, C, D)`` of the envelope-to-envelope system "attach the carrier
+    ``R_in``, fly ``z``, remove the carrier ``R_ref``".
+
+    Each radius may be ``+/-inf`` (collimated), which drops its curvature term.
+    ``det = A*D - B*C`` is 1 by construction; the caller may assert it.
+
+    A radius of exactly 0 is that carrier's own focus and has no curvature
+    screen, so it is refused here rather than producing an infinite ``A`` or
+    ``D``; the chain's leg picks a flat reference in that case."""
+    for _name, _R in (('R_in', R_in), ('R_ref', R_ref)):
+        if _R == 0.0:
+            raise ValueError(
+                f"_collins_envelope_abcd: {_name} == 0 is that carrier's own "
+                f"focus (an infinite curvature screen).  Reference the beam to "
+                f"a plane away from its focus, or pass inf for a flat "
+                f"reference.")
+    B = float(z)
+    inv_in = 0.0 if np.isinf(R_in) else 1.0 / float(R_in)
+    inv_rf = 0.0 if np.isinf(R_ref) else 1.0 / float(R_ref)
+    A = 1.0 + B * inv_in
+    D = 1.0 - B * inv_rf
+    C = inv_in - A * inv_rf
+    return A, B, C, D
+
+
+def _collins_power_marginals(E):
+    """``(Px, Py)`` -- the x- and y-marginals of ``|E|^2``, accumulated in row
+    bands so no second whole-grid array is formed.  Host-side on any backend
+    (``to_numpy``), like every other measurement in this module."""
+    from ..backend import to_numpy
+    A = np.asarray(to_numpy(E))
+    ny, nx = A.shape[-2], A.shape[-1]
+    Px = np.zeros(nx, dtype=np.float64)
+    Py = np.empty(ny, dtype=np.float64)
+    rows = max(1, int(_PHASOR_BAND_BYTES // max(8 * nx, 1)))
+    for r0 in range(0, ny, rows):
+        band = np.abs(A[r0:r0 + rows]) ** 2
+        Px += band.sum(axis=0)
+        Py[r0:r0 + rows] = band.sum(axis=1)
+    return Px, Py
+
+
+def _collins_containment_radius(P, coord, centre, frac):
+    """Smallest radius about ``centre`` holding ``1 - frac`` of the marginal
+    power ``P`` sampled at ``coord``.
+
+    This is the guard's ONLY tolerance: it converts "where does the field have
+    power" into a number, measured on the field itself rather than assumed from
+    the grid.  Returns 0.0 for an empty / zero marginal, and saturates at the
+    outermost sample when the grid itself already clipped the tail -- which is
+    the honest reading (that power is gone, not un-measured)."""
+    tot = float(P.sum())
+    if not (tot > 0.0):
+        return 0.0
+    d = np.abs(np.asarray(coord, dtype=np.float64) - float(centre))
+    order = np.argsort(d, kind='stable')
+    c = np.cumsum(P[order])
+    i = int(np.searchsorted(c, (1.0 - float(frac)) * tot, side='left'))
+    return float(d[order[min(i, d.size - 1)]])
+
+
+def _collins_axis_chirp(n, d, wavelength, R, offset=0.0, dtype=None):
+    """``exp(i k (u - offset)^2/(2R))`` on one centred axis, ``u = (i - n/2) d``.
+
+    This is the per-axis factor :func:`_radial_carrier_phase` builds inside its
+    outer product, written one axis at a time because the Collins screens are
+    separable but NOT isotropic: the two axes carry different ``A`` and ``D``
+    under an astigmatic carrier, and the output screen lives on a different
+    lattice from the input one.  A complex64 ``dtype`` narrows the float64 build
+    once, exactly as the banded whole-grid builder does."""
+    u = (np.arange(int(n), dtype=np.float64) - int(n) / 2) * float(d)
+    if offset:
+        u = u - float(offset)
+    k = 2.0 * np.pi / wavelength
+    ph = np.exp(1j * k * (u * u) / (2.0 * float(R)))
+    if dtype is not None and np.dtype(dtype) != np.dtype(np.complex128):
+        ph = ph.astype(dtype)
+    return ph
+
+
+def _collins_space_support(env, dx, dy, frac):
+    """``(r_x, r_y)`` -- the per-axis support radii in metres about the grid
+    origin holding ``1 - frac`` of the envelope's power.  See
+    :func:`_collins_angle_support` for why both are measured about the axis and
+    per axis."""
+    Ny, Nx = np.shape(env)[-2], np.shape(env)[-1]
+    Px, Py = _collins_power_marginals(env)
+    x = (np.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y = (np.arange(Ny, dtype=np.float64) - Ny / 2) * dy
+    return (_collins_containment_radius(Px, x, 0.0, frac),
+            _collins_containment_radius(Py, y, 0.0, frac))
+
+
+def _collins_angle_support(spectrum, dx, dy, wavelength, frac):
+    """``(theta_x, theta_y)`` -- the per-axis angular support half-widths in
+    radians holding ``1 - frac`` of the power of the envelope's own angular
+    spectrum, which is the quantity Kelly's chirp-Z conditions are written
+    against.  Takes the caller's forward transform so the measurement and the
+    kernel refinement share one FFT."""
+    Ny, Nx = np.shape(spectrum)[-2], np.shape(spectrum)[-1]
+    Sx, Sy = _collins_power_marginals(spectrum)
+    fx = np.fft.fftfreq(Nx, d=dx)
+    fy = np.fft.fftfreq(Ny, d=dy)
+    return (_collins_containment_radius(Sx, fx, 0.0, frac) * wavelength,
+            _collins_containment_radius(Sy, fy, 0.0, frac) * wavelength)
+
+
+def _collins_input_box(env, dx, dy, wavelength, frac, spectrum=None):
+    """The measured input phase-space box, per axis: ``(r_x, r_y, th_x, th_y)``
+    -- the support radii in metres about the GRID ORIGIN and in radians about
+    zero that hold ``1 - frac`` of the power in the space and angle domains.
+
+    About the origin, not about the beam: the Collins exponent measures ``u``
+    from the optical axis the carrier is referenced to, so a decentred beam's
+    binding pre-chirp frequency is set by its FAR edge (``|u_c| + w``), which is
+    what a radius about the origin reads and what a radius about the beam does
+    not.  The chain runs each congruence in its chief-ray-tracking frame, where
+    the two coincide.
+
+    The angular half-widths are read from the envelope's OWN angular spectrum
+    (``|FFT(env)|^2``), which is the quantity Kelly's chirp-Z conditions are
+    written against; ``spectrum`` lets a caller that has already transformed the
+    envelope (the exact-kernel arm below) hand its spectrum in rather than pay a
+    second forward FFT.  The two domains are measured separately per axis
+    because the transform IS separable -- the x condition involves only the x
+    marginals -- so no isotropic (and needlessly conservative) radial bound is
+    taken."""
+    if spectrum is None:
+        from .fft_infra import _fft2
+        spectrum = _fft2(np.ascontiguousarray(env, dtype=np.complex128))
+    r_x, r_y = _collins_space_support(env, dx, dy, frac)
+    th_x, th_y = _collins_angle_support(spectrum, dx, dy, wavelength, frac)
+    return r_x, r_y, th_x, th_y
+
+
+def _collins_sampling_stats(A, B, C, D, dx, dy, r_x, r_y, th_x, th_y,
+                            dx_out, dy_out, N_out_x, N_out_y, centre_out,
+                            wavelength):
+    """The three Kelly (Appl. Opt. 53, 2861 (2014)) sampling conditions for the
+    chirp-Z evaluation of the Collins integral, as RATIOS that must not exceed
+    1, plus the quantities they were formed from.
+
+    Each is an ordinary Nyquist statement evaluated where the field has power
+    (the measured support box), not at the grid edge:
+
+    K1, INPUT.  The transform samples the product ``g(u) = u_in(u) exp(i k A
+    u^2/(2B))``.  Its local spatial frequency at ``u`` is ``A u/(lambda B)``
+    from the screen plus at most ``theta/lambda`` from the envelope, and the two
+    ADD -- nothing cancels, because ``g`` is what is sampled.  So
+
+        nu_in = (|A| r / |B| + theta) / lambda  <=  1/(2 dx).
+
+    Evaluating this at the grid half-width instead of at the measured support
+    is the geometric form, and it is wrong by the ratio of the two: on a 3-radius
+    Gaussian grid it refuses a leg whose measured departure from the analytic
+    ABCD field is 5.6e-08 of peak.
+
+    K2, OUTPUT.  The returned samples must resolve the output envelope.  Its
+    angular half-width is the ABCD image of the input box's -- ``theta_out =
+    |C| r + |D| theta`` -- so ``theta_out/lambda <= 1/(2 dx_out)``.  The naive
+    "post-chirp frequency plus transform frequency" bound does NOT apply here:
+    stationary phase puts the chirp-Z's own local frequency at ``-x/(A lambda
+    B)`` and the post-chirp's at ``+D x/(lambda B)``, whose sum is ``C x/(A
+    lambda)`` -- they cancel to the ray-transfer term, exactly as the phase-space
+    statement says.
+
+    K3, PERIOD.  The chirp-Z sums over the INPUT lattice, so its output is
+    periodic with ``lambda |B| / dx`` -- a function of the input pitch and the
+    leg, and of NOTHING on the output side.  A window is faithful iff
+    ``2|centre_out| + N_out dx_out <= period`` per axis, the same [V3] geometry
+    :func:`_check_readout_replica` states for the readout.
+    """
+    lam = float(wavelength)
+    aB = abs(float(B))
+    per_x = lam * aB / float(dx)
+    per_y = lam * aB / float(dy)
+    th_out_x = abs(C) * r_x + abs(D) * th_x
+    th_out_y = abs(C) * r_y + abs(D) * th_y
+    k1x = 2.0 * float(dx) * (abs(A) * r_x / aB + th_x) / lam
+    k1y = 2.0 * float(dy) * (abs(A) * r_y / aB + th_y) / lam
+    k2x = 2.0 * float(dx_out) * th_out_x / lam
+    k2y = 2.0 * float(dy_out) * th_out_y / lam
+    k3x = (2.0 * abs(float(centre_out[0])) + N_out_x * float(dx_out)) / per_x
+    k3y = (2.0 * abs(float(centre_out[1])) + N_out_y * float(dy_out)) / per_y
+    return {
+        'r_x': r_x, 'r_y': r_y, 'theta_x': th_x, 'theta_y': th_y,
+        'theta_out_x': th_out_x, 'theta_out_y': th_out_y,
+        'period': (per_x, per_y),
+        'k1': (k1x, k1y), 'k2': (k2x, k2y), 'k3': (k3x, k3y),
+        'worst': max(k1x, k1y, k2x, k2y),
+        'abcd': (float(A), float(B), float(C), float(D)),
+        'tail_frac': float(_COLLINS_TAIL_FRAC)}
+
+
+def _check_collins_sampling(fn, action, st, stacklevel=3):
+    """Dispose of a violated K1 / K2 condition (K3 is the replica guard's, and
+    is disposed of by ``on_replica`` at the readout so the two cannot disagree).
+
+    The bar is 1.0 because the conditions ARE Nyquist: at a ratio of 1 the
+    binding content sits exactly at the sample rate, and the tolerance lives in
+    ``_COLLINS_TAIL_FRAC`` (how much power is allowed to be outside the support
+    radii the ratios are formed from), not in a margin bolted onto the ratio."""
+    if action == 'ignore':
+        return
+    k1x, k1y = st['k1']
+    k2x, k2y = st['k2']
+    bad = []
+    if max(k1x, k1y) > 1.0:
+        bad.append(
+            f"K1 (input) {max(k1x, k1y):.4f}: the product of the envelope and "
+            f"the pre-chirp exp(i k A u^2/2B) is sampled at "
+            f"{max(k1x, k1y):.4f}x its own Nyquist rate over the "
+            f"{1.0 - st['tail_frac']:.6f}-power support "
+            f"(r = {max(st['r_x'], st['r_y']) * 1e6:.4f} um, theta = "
+            f"{max(st['theta_x'], st['theta_y']) * 1e3:.4f} mrad)")
+    if max(k2x, k2y) > 1.0:
+        _th_out = max(st['theta_out_x'], st['theta_out_y'])
+        _nyq = 0.5 / max(_th_out, 1e-300)
+        bad.append(
+            f"K2 (output) {max(k2x, k2y):.4f}: the requested output pitch does "
+            f"not resolve the transported envelope, whose angular half-width "
+            f"is {_th_out * 1e3:.4f} mrad -- that needs a pitch of "
+            f"{_nyq:.6f} wavelengths")
+    if not bad:
+        return
+    A, B, C, D = st['abcd']
+    _guard_dispose(
+        action,
+        f"{fn}: the Collins chirp-Z stage is under-sampled -- "
+        + "; ".join(bad)
+        + f".  ABCD = ({A:.6g}, {B:.6g}, {C:.6g}, {D:.6g}); the conditions are "
+          f"Kelly, Appl. Opt. 53, 2861 (2014), evaluated on the measured "
+          f"{1.0 - st['tail_frac']:.6f}-power support of THIS field rather "
+          f"than at the grid edge.  Remedies: a finer input pitch dx (K1 is "
+          f"linear in it), a shorter leg or a carrier closer to the beam's own "
+          f"wavefront (both shrink |A| r/|B|), or a finer dx_out (K2).  Pass "
+          f"on_collins_sampling='warn' / 'ignore' to downgrade.",
+        stacklevel=stacklevel)
+
+
+def _collins_leg_output_axis(A, B, R_out, d, N, r, th, wavelength):
+    """Choose ONE axis of the output lattice, and say whether the geometric
+    output carrier is still usable, for a CHAIN LEG -- the one caller whose
+    output grid is not supplied by the user.
+
+    Two decisions, both derived from the measured input box and the leg's own
+    ABCD, with no tuning constant:
+
+    * the PITCH is the co-moving ``|A| d`` -- so a leg away from the focus lands
+      on the grid the Sziklas transport would have produced and the rest of the
+      chain sees no change -- FLOORED by the pitch at which the output grid
+      still HOLDS the ABCD image of the input box, ``2 (|A| r + |B| theta)/N``.
+      The floor is what removes the co-moving collapse: it cannot go to zero
+      with ``A``, because the ``|B| theta`` term is the leg's own diffraction.
+    * the geometric output carrier ``R_in + z`` is kept whenever the output box
+      it implies fits in ``N`` samples -- space-bandwidth ``4 r_out
+      theta_out/lambda <= N``, with ``r_out = |A| r + |B| theta`` and
+      ``theta_out = |C| r + |D| theta`` the ABCD images of the measured input
+      box.  Near the geometric focus the RAY carrier ``R_in + z -> 0`` while the
+      true wavefront flattens, so it is referencing to that collapsing sphere
+      that needs the extra samples; a FLAT reference there is both cheaper and
+      physical, and the caller switches to it.
+
+    Returns ``(d_out, needs_flat_reference)``.  For the GEOMETRIC reference
+    ``R_ref = R_in + z`` the envelope system is ``[[A, B], [0, 1/A]]`` -- ``C``
+    is exactly zero, which is what "the carrier follows the ray" means -- so
+    ``theta_out = theta/|A|`` and the space-bandwidth test is
+    ``4 r_out theta/(|A| lambda) <= N``.  ``A == 0`` (equivalently ``R_out ==
+    0``, the leg landing exactly on the geometric focus) is the limit of that
+    test and is reported flat without evaluating it."""
+    r_out = abs(A) * r + abs(B) * th
+    d_out = max(abs(A) * float(d), 2.0 * r_out / int(N))
+    if A == 0.0 or float(R_out) == 0.0:
+        return d_out, True
+    sbp = 4.0 * r_out * th / (abs(A) * wavelength)
+    return d_out, bool(sbp > int(N))
+
+
+def _collins_kernel_wrap_ratio(z_eff, theta, span):
+    """How far the exact/Fresnel kernel ratio displaces the envelope, as a
+    fraction of the grid half-width ``span/2`` it is applied on.  ``<= 1`` is
+    the condition for the refinement to be representable at all.
+
+    The ratio is a pure phase ``phi(q) = z_eff [sqrt(k^2-q^2) - k + q^2/2k]``,
+    so its impulse response sits at the group delay ``|dphi/dq| = |z_eff|
+    theta (1/sqrt(1-theta^2) - 1)`` evaluated at the envelope's own measured
+    angular half-width.  A displacement beyond the grid half-width does not
+    blur the answer, it WRAPS it -- and ``z_eff = B/A`` grows without bound as a
+    leg approaches the carrier's geometric focus, which is exactly where the
+    chirp-Z quadrature is used, so this is not a corner case on this transport.
+    Same form as the K1/K2 conditions: a measured ratio against the sampling
+    rate itself, with the bar at 1 and no margin."""
+    th = abs(float(theta))
+    if not (th < 1.0) or not np.isfinite(z_eff):
+        return float('inf')
+    delay = abs(float(z_eff)) * th * (1.0 / np.sqrt(1.0 - th * th) - 1.0)
+    return float(2.0 * delay / float(span)) if span > 0 else float('inf')
+
+
+def _collins_exact_kernel_correction(spectrum, z_eff, wavelength, dx, dy, tilt):
+    """Pre-apply the diagonal EXACT/Fresnel kernel ratio on the input grid, so
+    that ``gap_kernel='exact'`` means the same thing on this transport as on the
+    Sziklas one.
+
+    The Collins integral IS the ABCD-Fresnel integral: its envelope leg is the
+    paraxial kernel, term for term ``gap_kernel='fresnel'``.  Both kernels are
+    diagonal in the INPUT plane's Fourier basis, so the exact step factors as
+    "Fresnel step after a diagonal correction"::
+
+        P_exact[z_eff] = P_fresnel[z_eff] . D,
+        D(q) = exp(i z_eff [ sqrt(max(k^2 - |k s + q|^2, 0)) - sqrt(k^2 - |k s|^2)
+                             + (s.q)/N - k + |q|^2/(2k) ])
+
+    -- the exact kernel :func:`_exact_envelope_tf_step` applies (including the
+    tilt expansion and the same evanescent clamp) divided by the Fresnel kernel
+    ``exp(i(k z_eff - z_eff |q|^2/(2k)))`` the Collins stage carries.  Applying
+    ``D`` to the envelope before the transport therefore gives the exact-kernel
+    answer on the freely chosen output lattice, at the cost of one FFT pair of
+    ``N`` -- and leaves the transform's own aperiodicity untouched, because
+    ``D`` acts only on the input grid, where the Sziklas path already wraps in
+    exactly the same way.
+
+    ``spectrum`` is the caller's forward transform of the envelope; the
+    corrected envelope is returned.  ``z_eff = B/A`` is the reduced-frame
+    distance the refinement is defined on, so the caller must first check that
+    it is representable (:func:`_collins_kernel_wrap_ratio`)."""
+    from .fft_infra import _ifft2
+    ny, nx = spectrum.shape[-2], spectrum.shape[-1]
+    k = 2.0 * np.pi / wavelength
+    qx = 2.0 * np.pi * np.fft.fftfreq(nx, d=dx)
+    qy = 2.0 * np.pi * np.fft.fftfreq(ny, d=(dy if dy else dx))
+    L, M = float(tilt[0]), float(tilt[1])
+    s2 = L * L + M * M
+    if not (s2 < 1.0):
+        raise ValueError(
+            f"_collins_exact_kernel_correction: |tilt|^2 = {s2!r} must be < 1 "
+            f"(direction cosines).")
+    Nz = float(np.sqrt(1.0 - s2))
+    root0 = float(np.sqrt(max(k * k * (1.0 - s2), 0.0)))
+    ax = k * L + qx[None, :]
+    ay = k * M + qy[:, None]
+    rad = k * k - (ax * ax + ay * ay)
+    np.maximum(rad, 0.0, out=rad)
+    phase = np.sqrt(rad)
+    phase -= root0
+    if L or M:
+        phase += (L * qx[None, :] + M * qy[:, None]) / Nz
+    phase += ((qx * qx)[None, :] + (qy * qy)[:, None]) / (2.0 * k)
+    phase *= z_eff
+    corr = np.empty((ny, nx), dtype=np.complex128)
+    np.cos(phase, out=corr.real)
+    np.sin(phase, out=corr.imag)
+    del phase
+    out = _ifft2(spectrum * corr)
+    # Same ownership contract as _exact_envelope_tf_step: _ifft2 hands back the
+    # cache-owned ping-pong buffer, so the copy is REQUIRED.
+    return out.copy()
+
+
+def _collins_transport(env, R_in, z, wavelength, dx, dy, *,
+                       dx_out, dy_out, N_out_x, N_out_y, R_ref,
+                       centre_out=(0.0, 0.0),
+                       gap_kernel='auto', tilt=(0.0, 0.0),
+                       on_collins_sampling='warn', fn='_collins_transport',
+                       stats_out=None, stacklevel=4):
+    """Evaluate the Collins integral of an ENVELOPE onto a freely chosen output
+    lattice; return the envelope referenced to ``R_ref`` there.
+
+    ``R_in`` / ``R_ref`` may each be a scalar or a 2-tuple ``(R_x, R_y)``: the
+    exponent separates, so an astigmatic carrier is per-axis arithmetic and not
+    a different algorithm.  ``R_ref = inf`` returns the FIELD (no output
+    carrier), which is what the focus readout wants.
+
+    The three stages are the factorisation in the section note: a separable
+    pre-chirp screen ``exp(i k A u^2/(2B))`` (the module's own
+    :func:`_radial_carrier_phase`, at ``R = B/A``), a separable centred chirp-Z
+    (:func:`~lumenairy.propagators._bluestein._bluestein_centred_2d`, which is
+    the transform the readouts already run), and a separable post-chirp screen
+    ``exp(i k D x^2/(2B))`` times ``exp(i k B) dx dy/(i lambda B)``."""
+    from ._bluestein import _bluestein_centred_2d
+    from .fft_infra import _fft2, _ifft2
+
+    R_ix, R_iy, _ = _parse_carrier(R_in, fn)
+    R_rx, R_ry, _ = _parse_carrier(R_ref, fn)
+    Ax, B, Cx, Dx = _collins_envelope_abcd(R_ix, z, R_rx)
+    Ay, _, Cy, Dy = _collins_envelope_abcd(R_iy, z, R_ry)
+    if B == 0.0:
+        raise ValueError(
+            f"{fn}: the Collins integral is singular at B = 0 (a zero-length "
+            f"leg); the transport is the identity there, so the caller should "
+            f"short-circuit z == 0 rather than reach this.")
+    k = 2.0 * np.pi / wavelength
+    env_a = np.asarray(env)
+    cdt = env_a.dtype if np.iscomplexobj(env_a) else np.dtype(np.complex128)
+    Ny, Nx = env_a.shape[-2], env_a.shape[-1]
+
+    # gap_kernel: the Collins stage is the ABCD-FRESNEL integral, so 'fresnel'
+    # is it unmodified and 'exact' pre-applies the diagonal kernel ratio over
+    # the reduced envelope distance z_eff = B/A -- the same z_eff the Sziklas
+    # leg runs its kernel over.  'auto' resolves to 'exact', as everywhere else.
+    # An ASTIGMATIC carrier has no exact kernel to apply, for the reason
+    # :func:`propagate_carrier_referenced` gives (sqrt(k^2 - qx^2 - qy^2) does
+    # not separate, only its paraxial expansion does), and there is a second
+    # reason here: the two axes then have different reduced distances B/A, so
+    # there is not even one z_eff to build a kernel over.  Explicit 'exact' is
+    # REFUSED rather than accepted and ignored; 'auto' keeps the paraxial arm.
+    _kernel_asked = _check_gap_kernel(gap_kernel, fn)
+    if _kernel_asked == 'exact' and Ax != Ay:
+        raise ValueError(
+            f"{fn}: gap_kernel='exact' is not available for an ASTIGMATIC "
+            f"carrier on transport='collins' (A_x = {Ax!r}, A_y = {Ay!r}).  "
+            f"The exact kernel sqrt(k^2 - qx^2 - qy^2) does not separate, and "
+            f"the two axes here have different reduced distances B/A, so there "
+            f"is no single kernel to apply.  Pass gap_kernel='auto' (or "
+            f"'fresnel') to accept the ABCD-Fresnel integral as it stands, or "
+            f"use a scalar carrier.")
+    # MEASURE FIRST.  The exact-kernel refinement is defined on the reduced
+    # frame z_eff = B/A, which is unbounded as a leg approaches the carrier's
+    # geometric focus -- the regime this quadrature exists for -- so whether it
+    # can be applied at all is decided from the envelope's own measured angular
+    # half-width, not assumed.  The refinement is a pure phase in q, so it
+    # leaves the angular marginals (and therefore theta) exactly as they are;
+    # only the spatial support moves, and that is re-measured after it.
+    S = _fft2(np.ascontiguousarray(env_a, dtype=np.complex128))
+    th_x, th_y = _collins_angle_support(S, dx, dy, wavelength,
+                                        _COLLINS_TAIL_FRAC)
+    z_eff = (B / Ax) if Ax != 0.0 else float('inf')
+    k4 = _collins_kernel_wrap_ratio(z_eff, max(th_x, th_y),
+                                    min(Nx * float(dx), Ny * float(dy)))
+    kernel = 'fresnel'
+    if _kernel_asked != 'fresnel' and Ax == Ay:
+        if k4 <= 1.0:
+            kernel = 'exact'
+        elif _kernel_asked == 'exact':
+            raise ValueError(
+                f"{fn}: gap_kernel='exact' cannot be honoured on this leg.  "
+                f"The exact kernel enters a carrier transport as a refinement "
+                f"over the REDUCED frame z_eff = B/A = {z_eff:.6e} m, and at "
+                f"the envelope's measured angular half-width "
+                f"{max(th_x, th_y) * 1e3:.4f} mrad its impulse response sits "
+                f"{k4:.4g} grid half-widths away -- so applying it would WRAP "
+                f"rather than refine.  This is the geometry the Collins "
+                f"quadrature exists for (A -> 0 at the carrier's geometric "
+                f"focus, where the reduced frame degenerates while the "
+                f"ABCD-Fresnel integral itself stays accurate to k B "
+                f"theta^4/8 of the beam's own angle).  Pass gap_kernel='auto' "
+                f"to take the ABCD-Fresnel integral here, or 'fresnel' to take "
+                f"it everywhere.")
+    if kernel == 'exact':
+        env_a = _collins_exact_kernel_correction(
+            S, z_eff, wavelength, dx, dy, tilt)
+        if cdt != np.complex128:
+            env_a = env_a.astype(cdt)
+    del S
+
+    r_x, r_y = _collins_space_support(env_a, dx, dy, _COLLINS_TAIL_FRAC)
+    st = _collins_sampling_stats(
+        max(abs(Ax), abs(Ay)), B, max(abs(Cx), abs(Cy)),
+        max(abs(Dx), abs(Dy)), dx, dy, r_x, r_y, th_x, th_y,
+        dx_out, dy_out, N_out_x, N_out_y, centre_out, wavelength)
+    st['k4'] = k4
+    st['kernel'] = kernel
+    if stats_out is not None:
+        stats_out.update(st)
+    _check_collins_sampling(fn, on_collins_sampling, st,
+                            stacklevel=stacklevel)
+
+    # (1) pre-chirp.  exp(i k A u^2/(2B)) IS the module's carrier screen at
+    # R = B/A; A == 0 (the leg lands on the geometric focus) leaves no screen.
+    g = env_a
+    if Ax != 0.0:
+        g = g * _collins_axis_chirp(Nx, dx, wavelength, B / Ax,
+                                    dtype=cdt)[None, :]
+    if Ay != 0.0:
+        g = g * _collins_axis_chirp(Ny, dy, wavelength, B / Ay,
+                                    dtype=cdt)[:, None]
+
+    # (2) chirp-Z.  sum g(u) exp(-i k u x/B) du with u = (n - N/2) dx and
+    # x = (j - N_out/2) dx_out + centre_out; the output offset rides on the
+    # primitive's own output-centre index, which is what it is for.
+    alpha_x = float(dx) * float(dx_out) / (wavelength * B)
+    alpha_y = float(dy) * float(dy_out) / (wavelength * B)
+    G = _bluestein_centred_2d(
+        np.ascontiguousarray(g, dtype=cdt), alpha_x, alpha_y,
+        int(N_out_y), int(N_out_x),
+        k_centre_out_x=N_out_x / 2.0 - float(centre_out[0]) / float(dx_out),
+        k_centre_out_y=N_out_y / 2.0 - float(centre_out[1]) / float(dy_out),
+        sign=-1, xp=np, fft2=_fft2, ifft2=_ifft2,
+        target_cdtype=cdt, separable=bool(_EXACT_READOUT_SEPARABLE_BLUESTEIN))
+    del g
+
+    # (3) post-chirp and the Collins prefactor.  D == 0 (a reference sphere
+    # exactly one leg away) leaves no screen on that axis.  The screen is built
+    # in the PHYSICAL output coordinate, so the window offset enters with the
+    # opposite sign to the builder's own ``offset``.
+    if Dx != 0.0:
+        G = G * _collins_axis_chirp(
+            int(N_out_x), dx_out, wavelength, B / Dx,
+            offset=-float(centre_out[0]), dtype=cdt)[None, :]
+    if Dy != 0.0:
+        G = G * _collins_axis_chirp(
+            int(N_out_y), dy_out, wavelength, B / Dy,
+            offset=-float(centre_out[1]), dtype=cdt)[:, None]
+    # complex(...): a WEAK Python scalar, so a complex64 envelope is not
+    # promoted by the prefactor (the same NEP 50 reason _carrier_step_fast
+    # gives for its own piston).
+    G = complex(np.exp(1j * k * B) * float(dx) * float(dy)
+                / (1j * wavelength * B)) * G
+    if np.iscomplexobj(env) and G.dtype != np.asarray(env).dtype:
+        G = G.astype(np.asarray(env).dtype)
+    return G
+
+
+def _collins_carrier_leg(env, R, z, wavelength, dx, dy, *,
+                         gap_kernel='auto', tilt=(0.0, 0.0),
+                         on_collins_sampling='warn', dx_out=None, dy_out=None,
+                         carrier_out=None,
+                         fn='_collins_carrier_leg', diag=None):
+    """One free-space CHAIN leg on the Collins transport, returning the same
+    ``CarrierReferencedField(env, R, dx)`` triple the Sziklas step returns, so
+    the chain body around it is unchanged.
+
+    ``z == 0`` short-circuits to the identity exactly as
+    :func:`propagate_carrier_referenced` does.  The output lattice keeps the
+    input's ``N`` and takes its pitch -- and, when the carrier's geometric
+    focus makes the co-moving reference unaffordable, its reference -- from
+    :func:`_collins_leg_output_axis`.  There is no focus-crossing branch: a
+    crossing leg has ``A < 0``, which is an ordinary value here.
+
+    ``dx_out`` / ``dy_out`` / ``carrier_out`` override those two choices (the
+    public single-step entry exposes them); each is independent, so a caller may
+    name the pitch and leave the reference resolved, or the reverse.
+
+    QUADRATURE SELECTION, AND WHY IT IS NOT A TUNED THRESHOLD.  The Collins
+    integral has two sampled evaluations whose validity conditions are exact
+    COMPLEMENTS of each other (Kelly, Appl. Opt. 53, 2861 (2014)):
+
+    * the chirp-Z form below samples the pre-chirp on the input lattice, which
+      needs ``K1 = 2 dx (|A| r/|B| + theta)/lambda <= 1``.  With ``r`` at the
+      grid half-width that is ``N dx^2 <= lambda |z_eff|``;
+    * the transfer-function form (:func:`_carrier_step_fast`, the Sziklas
+      evaluation) samples the kernel on the FREQUENCY lattice instead, which
+      needs ``|z_eff| <= N dx^2/lambda`` -- the same inequality reversed.
+
+    So every leg satisfies at least one of them, both are satisfied at the
+    crossover ``K1 = 1``, and where both hold the two evaluations agree to
+    ~4e-12 of peak (they are the same theorem).  A leg whose lattice is the
+    co-moving one therefore takes whichever form is SAMPLED, decided by the
+    measured ``K1`` against the Nyquist rate itself.  A leg whose lattice is NOT
+    the co-moving one -- the pitch floor engaged, a flat reference, or a caller
+    override -- has no transfer-function form to fall back to, so it stays on
+    the chirp-Z and ``on_collins_sampling`` speaks if it is under-sampled.
+
+    The two regimes are disjoint from the focus apparatus: a landing close
+    enough to trip ``_near_focus_needs_bridge`` has ``|A| < 0.02`` and therefore
+    ``K1 << 1``, so the transfer-function route is never taken there and this
+    transport never enters the near-focus split.  ``collins_form`` is published
+    on the stage so a reader can see which quadrature ran."""
+    env_a = np.asarray(env)
+    if z == 0:
+        return CarrierReferencedField(
+            env_a.copy(), R, (dx if dy == dx else (dx, dy)))
+    Ny, Nx = env_a.shape[-2], env_a.shape[-1]
+    R_x, R_y, is_astig = _parse_carrier(R, fn)
+    R_out_x, R_out_y = R_x + z, R_y + z
+    Ax, B, _, _ = _collins_envelope_abcd(R_x, z, np.inf)
+    Ay, _, _, _ = _collins_envelope_abcd(R_y, z, np.inf)
+    # One measurement of the input box drives the grid choice and the quadrature
+    # selection; the transport re-measures it on the (possibly kernel-corrected)
+    # envelope, which is the field the chirp-Z actually samples and therefore
+    # the one the guard owes its reading to.
+    r_x, r_y, th_x, th_y = _collins_input_box(
+        env_a, dx, dy, wavelength, _COLLINS_TAIL_FRAC)
+    dxo, flat_x = _collins_leg_output_axis(
+        Ax, B, R_out_x, dx, Nx, r_x, th_x, wavelength)
+    dyo, flat_y = _collins_leg_output_axis(
+        Ay, B, R_out_y, dy, Ny, r_y, th_y, wavelength)
+    flat = flat_x or flat_y
+    R_ref = (np.inf, np.inf) if flat else (R_out_x, R_out_y)
+    if carrier_out is not None:
+        _cx, _cy, _ = _parse_carrier(carrier_out, fn)
+        R_ref, flat = (_cx, _cy), bool(np.isinf(_cx) and np.isinf(_cy))
+    if dx_out is not None:
+        dxo = float(dx_out)
+    if dy_out is not None:
+        dyo = float(dy_out)
+    elif dx_out is not None:
+        dyo = float(dx_out) * (float(dy) / float(dx))
+
+    k1x = 2.0 * float(dx) * (abs(Ax) * r_x / abs(B) + th_x) / wavelength
+    k1y = 2.0 * float(dy) * (abs(Ay) * r_y / abs(B) + th_y) / wavelength
+    co_moving = (dxo == abs(Ax) * float(dx) and dyo == abs(Ay) * float(dy)
+                 and not flat and dx_out is None and dy_out is None
+                 and carrier_out is None)
+    if co_moving and not is_astig and Ax > 0.0 and max(k1x, k1y) > 1.0:
+        cr = _carrier_step_fast(env_a, R_x, z, wavelength, dx, dy,
+                                gap_kernel=gap_kernel, tilt=tilt)
+        if diag is not None:
+            diag.update({'collins_form': 'tf', 'collins_k1': (k1x, k1y),
+                         'collins_k2': (0.0, 0.0),
+                         'collins_flat_reference': False,
+                         'collins_dx_floor_hit': False})
+        return cr
+
+    st = {}
+    out = _collins_transport(
+        env_a, (R_x, R_y), z, wavelength, dx, dy,
+        dx_out=dxo, dy_out=dyo, N_out_x=Nx, N_out_y=Ny, R_ref=R_ref,
+        centre_out=(0.0, 0.0), gap_kernel=gap_kernel,
+        tilt=tilt, on_collins_sampling=on_collins_sampling, fn=fn,
+        stats_out=st, stacklevel=5)
+    if diag is not None:
+        diag.update({'collins_form': 'chirp-z',
+                     'collins_k1': st.get('k1'), 'collins_k2': st.get('k2'),
+                     'collins_flat_reference': flat,
+                     'collins_dx_floor_hit': bool(dxo > abs(Ax) * dx
+                                                  or dyo > abs(Ay) * dy)})
+    R_o = (R_ref[0] if (flat or R_ref[0] == R_ref[1]) and not is_astig
+           else tuple(R_ref))
+    return CarrierReferencedField(
+        out, R_o, (dxo if dxo == dyo else (dxo, dyo)))
+
+
+def _collins_focus_readout(env, R, z, wavelength, dx, dy, *,
+                           dx_out, N_out, centre_out=(0.0, 0.0),
+                           gap_kernel='auto', tilt=(0.0, 0.0),
+                           on_replica='error', replica_fill='repeat',
+                           on_collins_sampling='warn',
+                           fn='_collins_focus_readout', _period_out=None):
+    """The image-plane readout on the Collins transport: ONE step from the
+    chain-exit plane straight onto the caller's ``(dx_out, N_out)`` lattice,
+    referenced to ``R_ref = inf`` so what comes back is the FIELD.
+
+    This is where the freely chosen output pitch earns its keep.  The Sziklas
+    readout cannot land on that lattice directly: its grid is pinned to ``m dx``,
+    which collapses toward the focus, so it carries the beam to a STANDOFF plane
+    short of the target and finishes with a separate Bluestein zoom -- and the
+    zoom's period is then ``N dx_stop``, i.e. a function of the standoff, which
+    is what couples the faithful window to a leg length that was resolved from
+    the beam for entirely unrelated reasons.  Here the period is
+    ``lambda |z| / dx`` of the INPUT grid and the leg: no standoff exists, no
+    beam containment is resolved, and no near-focus bridge is entered.
+
+    The replica geometry itself is unchanged -- a chirp-Z is periodic -- so the
+    same ``on_replica`` guard and ``replica_fill`` the Sziklas readout uses are
+    applied to the same [V3] condition, on this transport's period."""
+    if z == 0.0:
+        raise ValueError(
+            f"{fn}: transport='collins' has no zero-length form -- the Collins "
+            f"integral's B is the leg, and at B = 0 the readout is a RESAMPLE "
+            f"of the exit plane rather than a transport.  Pass a non-zero "
+            f"final_distance, or transport='sziklas' (whose readout reaches a "
+            f"zero-distance target by backing off to a standoff plane first).")
+    period = (wavelength * abs(float(z)) / float(dx),
+              wavelength * abs(float(z)) / float(dy))
+    if _period_out is not None:
+        _period_out['period'] = period
+    _check_readout_replica(
+        fn, period, dx_out, N_out, on_replica, centre_out=centre_out,
+        remedy=(f", or refine the chain's INPUT pitch: on this transport the "
+                f"period is lambda*|z|/dx_in = {min(period) * 1e6:.4f} um at "
+                f"dx_in = {min(float(dx), float(dy)) * 1e6:.4f} um and it is "
+                f"set by the input grid and the leg alone -- there is no "
+                f"standoff to lengthen and no hand-off accuracy to trade"),
+        stacklevel=3)
+    E_out = _collins_transport(
+        env, R, z, wavelength, dx, dy,
+        dx_out=float(dx_out), dy_out=float(dx_out),
+        N_out_x=int(N_out), N_out_y=int(N_out), R_ref=np.inf,
+        centre_out=centre_out, gap_kernel=gap_kernel, tilt=tilt,
+        on_collins_sampling=on_collins_sampling, fn=fn,
+        stats_out=_period_out, stacklevel=4)
+    return _fill_readout_replicas(E_out, period, dx_out, N_out, centre_out,
+                                  fill=replica_fill, out=_period_out)
 
 
 def _envelope_amp_radius(E_env, dx, dy, centre=(0.0, 0.0)):
@@ -8018,6 +8837,8 @@ def propagate_traced_carrier_chain(
     gap_env_phi_tol: float = _GAP_ENV_PHI_TOL_DEFAULT,
     on_gap_frame: str = 'warn',
     gap_kernel: str = 'auto',
+    transport: str = 'sziklas',
+    on_collins_sampling: str = 'warn',
 ) -> TracedCarrierChainResult:
     """Propagate a beam ENVELOPE through a chain of real (traced) lens groups on
     a co-moving carrier-referenced grid (audit F4.1).
@@ -8742,6 +9563,37 @@ def propagate_traced_carrier_chain(
         second is a band-limited re-grid plus a ray trace -- so there is no
         kernel there to select.  See :func:`propagate_carrier_referenced` for
         the vocabulary and the measured exact-vs-Fresnel difference.
+    transport : {'sziklas', 'collins'}, default 'sziklas'
+        Which transport carries the chain's FREE-SPACE legs: every inter-group
+        gap, the bare final leg, and the paraxial focus readout.  The default is
+        the co-moving Sziklas-Siegman step and is unchanged in every bit.
+
+        ``'collins'`` evaluates the same ABCD-Fresnel integral with the output
+        lattice chosen freely (chirp x chirp-Z x chirp; see
+        :func:`propagate_carrier_referenced`), which changes what the chain can
+        do rather than only how fast it does it:
+
+        * a gap leg landing near the carrier's geometric focus is no longer
+          split into carrier -> through-waist ASM bridge -> carrier; the output
+          pitch is floored at the value that still holds the beam's own
+          phase-space box, and the output reference goes flat at the focus;
+        * the focus readout is ONE step from the chain-exit plane straight onto
+          the requested ``(dx_out, N_out)``.  There is no standoff plane, so the
+          Bluestein period stops being a function of a resolved leg length and
+          becomes ``lambda*|z|/dx`` of the chain's own input grid, and the
+          readout's ``standoff`` / ``on_focus_containment`` keys no longer
+          apply (passing one is refused, not ignored).
+
+        ``final_leg='exact'`` is unaffected on either setting: the exact leg's
+        fine retrace and Bluestein angular-spectrum readout run no carrier
+        transport at all, so there is nothing there for ``transport`` to select.
+    on_collins_sampling : {'error', 'warn', 'ignore'}, default 'warn'
+        Disposition of the Kelly (Appl. Opt. 53, 2861 (2014)) sampling
+        conditions for the chirp-Z stage, measured per leg on the field's own
+        support.  Inert unless ``transport='collins'``.  Each leg also publishes
+        its readings on its stage dict as ``collins_k1`` / ``collins_k2``
+        (input- and output-side Nyquist ratios, both <= 1 when sampled),
+        ``collins_flat_reference`` and ``collins_dx_floor_hit``.
 
     Returns
     -------
@@ -8772,6 +9624,8 @@ def propagate_traced_carrier_chain(
     # the default and omitted 'auto' from the accepted set entirely -- two
     # releases after the default flipped.)
     _check_gap_kernel(gap_kernel, _fn)
+    transport = _check_transport(transport, _fn)
+    _check_guard_action('on_collins_sampling', on_collins_sampling, _fn)
     if not (np.isfinite(gap_sag_tol) and gap_sag_tol >= 0.0):
         raise ValueError(
             f"{_fn}: gap_sag_tol must be a finite non-negative number of "
@@ -8801,6 +9655,21 @@ def propagate_traced_carrier_chain(
                 f"{sorted(_FOCUS_READOUT_KEYS)!r}.  (A dropped key is not "
                 f"inert: 'on_readout_windo' would leave on_readout_window at "
                 f"its hard 'error' default while reading as a downgrade.)")
+        # Same contract one level down: the two keys that describe the SZIKLAS
+        # readout's stop plane have no referent on a transport that has no stop
+        # plane, so they are refused rather than accepted and ignored.
+        if transport == 'collins':
+            _fr_moot = {k for k in ('standoff', 'on_focus_containment')
+                        if k in focus_readout}
+            if _fr_moot:
+                raise ValueError(
+                    f"{_fn}: focus_readout key(s) {sorted(_fr_moot)!r} describe "
+                    f"the STOP PLANE of the Sziklas readout -- the length of "
+                    f"its fine Bluestein-zoom leg and the guard on what the "
+                    f"contracted co-moving grid held there.  transport="
+                    f"'collins' lands the target plane in one step and has "
+                    f"neither, so these cannot be honoured.  Drop them, or use "
+                    f"transport='sziklas'.")
     if not (np.isfinite(decentre_fit_frac) and decentre_fit_frac >= 0.0):
         raise ValueError(
             f"{_fn}: decentre_fit_frac must be a finite non-negative number "
@@ -8835,7 +9704,8 @@ def propagate_traced_carrier_chain(
             on_ram_cap=on_ram_cap, on_rs_fine_clamp=on_rs_fine_clamp,
             on_tilt_exact_grid=on_tilt_exact_grid,
             on_decentred_fit=on_decentred_fit,
-            decentre_fit_frac=decentre_fit_frac)
+            decentre_fit_frac=decentre_fit_frac,
+            transport=transport, on_collins_sampling=on_collins_sampling)
         _res = propagate_traced_carrier_chain(**_kw)
         _run_chain_dx_self_check(_kw, _res, float(self_check_tol))
         return _res
@@ -9051,6 +9921,7 @@ def propagate_traced_carrier_chain(
 
         # free-space carrier leg to the group front vertex
         _gap_diag = {}
+        _collins_diag = {}
         if gap != 0.0:
             # niche C3 / roadmap P7: measure the leg BEFORE transporting it --
             # the guard needs the entering (w, R), and the exit pair follows
@@ -9068,9 +9939,19 @@ def propagate_traced_carrier_chain(
                 (_env_theta, _env_nyq,
                  _env_spec) = _gap_envelope_angular_spread(
                     env, cur_dx, wavelength, return_kind=True)
-            cr = propagate_carrier_referenced(
-                env, R, gap, wavelength, cur_dx, gap_kernel=gap_kernel,
-                tilt=((tilt_L, tilt_M) if _tilted else (0.0, 0.0)))
+            _leg_tilt = (tilt_L, tilt_M) if _tilted else (0.0, 0.0)
+            if transport == 'collins':
+                # The Collins leg publishes its sampling readings straight into
+                # the stage's gap diagnostics, beside the paraxial-frame ones.
+                cr = _collins_carrier_leg(
+                    env, R, gap, wavelength, cur_dx, cur_dy,
+                    gap_kernel=gap_kernel, tilt=_leg_tilt,
+                    on_collins_sampling=on_collins_sampling, fn=_fn,
+                    diag=_collins_diag)
+            else:
+                cr = propagate_carrier_referenced(
+                    env, R, gap, wavelength, cur_dx, gap_kernel=gap_kernel,
+                    tilt=_leg_tilt)
             env, R, cur_dx = cr.env, cr.R, cr.dx
             if isinstance(cur_dx, tuple):
                 cur_dy = float(cur_dx[1])
@@ -9100,6 +9981,11 @@ def propagate_traced_carrier_chain(
                     env_theta=_env_theta, env_nyq_frac=_env_nyq,
                     env_phi_tol=gap_env_phi_tol,
                     frame_action=on_gap_frame, env_spectral=_env_spec)
+            # The paraxial-frame guard REBINDS ``_gap_diag`` to its own dict,
+            # so the Collins readings are merged after it rather than written
+            # into the dict it replaces.
+            if _collins_diag:
+                _gap_diag = {**_gap_diag, **_collins_diag}
         if _tilted and _own != 0.0:
             # The chief ray advances by the EXACT geometric
             # ``gap * (L, M)/cos(theta)`` and the frame picks up the exact
@@ -9526,9 +10412,16 @@ def propagate_traced_carrier_chain(
         # low-NA used
         # to get a bare ``TypeError`` from here.  The exact-only keys are
         # inapplicable on this path, so drop them rather than crash.
+        # ``bandlimit`` joins them on the Collins path: that knob band-limits
+        # the SZIKLAS readout's separate angular-spectrum zoom leg, and this
+        # transport has no such leg -- the chirp-Z evaluates the ABCD integral
+        # itself, whose only band limit is the input grid's own.
+        _collins_ro = (transport == 'collins')
         _par_kw = {kk: fr[kk] for kk in (
-            'dx_out', 'N_out', 'standoff', 'centre_out', 'bandlimit',
-            'on_replica', 'replica_fill', 'on_focus_containment')
+            ('dx_out', 'N_out', 'centre_out', 'on_replica', 'replica_fill')
+            if _collins_ro else
+            ('dx_out', 'N_out', 'standoff', 'centre_out', 'bandlimit',
+             'on_replica', 'replica_fill', 'on_focus_containment'))
             if kk in fr}
         # C5: the readout's own carrier leg runs the CHAIN's gap kernel, not
         # its own default.  ``gap_kernel='fresnel'`` exists to be "pinned
@@ -9542,15 +10435,27 @@ def propagate_traced_carrier_chain(
         # propagate_traced_carrier_chain_multi, which accumulates K such
         # readouts onto one lattice -- can tell signal from replica instead
         # of silently summing wrapped copies of each spot.
+        # On the Collins transport the same bookkeeping holds with a different
+        # period: the chirp-Z sums over the chain's own INPUT lattice, so the
+        # period is lambda*|z|/dx and owes nothing to a standoff.
         _pd = {}
+        if _collins_ro:
+            _par_kw['on_collins_sampling'] = on_collins_sampling
         if not _tilted:
-            field = carrier_referenced_focus_readout(
+            field = (_collins_focus_readout(
+                env, R, final_distance, wavelength, cur_dx, cur_dy,
+                fn=_fn, _period_out=_pd, **_par_kw) if _collins_ro
+                else carrier_referenced_focus_readout(
                 env, R, final_distance, wavelength, cur_dx, _period_out=_pd,
-                **_par_kw)
+                **_par_kw))
             if stages and 'period' in _pd:
                 stages[-1]['readout_period'] = _pd['period']
             if stages:
                 _publish_readout_containment(stages[-1], _pd)
+                if _collins_ro:
+                    stages[-1].update(collins_form='chirp-z',
+                                      collins_k1=_pd.get('k1'),
+                                      collins_k2=_pd.get('k2'))
             return TracedCarrierChainResult(np.asarray(field), None,
                                             float(fr['dx_out']), stages)
         # niche D1: read out in the chief-ray-tracking frame (the co-moving
@@ -9573,7 +10478,10 @@ def propagate_traced_carrier_chain(
         # tilt to all orders"; it did not, on this one leg.  The chief-ray
         # advance and the obliquity piston stay here (applied below), exactly
         # as on a gap leg.
-        field = np.asarray(carrier_referenced_focus_readout(
+        field = np.asarray(_collins_focus_readout(
+            env, R, final_distance, wavelength, cur_dx, cur_dy,
+            fn=_fn, _period_out=_pd, tilt=(tilt_L, tilt_M), **_par_kw)
+            if _collins_ro else carrier_referenced_focus_readout(
             env, R, final_distance, wavelength, cur_dx, _period_out=_pd,
             tilt=(tilt_L, tilt_M), **_par_kw))
         _nn, _dxo = int(fr['N_out']), float(fr['dx_out'])
@@ -9611,10 +10519,16 @@ def propagate_traced_carrier_chain(
         return TracedCarrierChainResult(field, None, _dxo, stages)
 
     if final_distance != 0.0:
-        cr = propagate_carrier_referenced(
-            env, R, final_distance, wavelength, cur_dx,
-            gap_kernel=gap_kernel,
-            tilt=((tilt_L, tilt_M) if _tilted else (0.0, 0.0)))
+        _leg_tilt = (tilt_L, tilt_M) if _tilted else (0.0, 0.0)
+        if transport == 'collins':
+            cr = _collins_carrier_leg(
+                env, R, final_distance, wavelength, cur_dx, cur_dy,
+                gap_kernel=gap_kernel, tilt=_leg_tilt,
+                on_collins_sampling=on_collins_sampling, fn=_fn)
+        else:
+            cr = propagate_carrier_referenced(
+                env, R, final_distance, wavelength, cur_dx,
+                gap_kernel=gap_kernel, tilt=_leg_tilt)
         env, R, cur_dx = cr.env, cr.R, cr.dx
         if isinstance(cur_dx, tuple):
             cur_dy = float(cur_dx[1])
@@ -10615,6 +11529,8 @@ def propagate_traced_carrier_chain_multi(
     gap_env_phi_tol: float = _GAP_ENV_PHI_TOL_DEFAULT,
     on_gap_frame: str = 'warn',
     gap_kernel: str = 'auto',
+    transport: str = 'sziklas',
+    on_collins_sampling: str = 'warn',
     progress: Optional[Callable] = None,
     congruence_workers: Optional[int] = None,
     congruence_worker_min_free_gb: float = 8.0,
@@ -10852,6 +11768,15 @@ def propagate_traced_carrier_chain_multi(
         prevent.  ``readout_tile='auto'``'s period-probe pass suppresses the
         two entry guards (it re-runs the identical input, so they would fire
         twice for no extra information).
+    transport : {'sziklas', 'collins'}, default 'sziklas'
+    on_collins_sampling : {'error', 'warn', 'ignore'}, default 'warn'
+        Forwarded verbatim to every congruence's
+        :func:`propagate_traced_carrier_chain` run, so K congruences always
+        share one transport.  On ``'collins'`` each congruence's readout period
+        is ``lambda*|z|/dx`` of the common input grid rather than ``N`` times a
+        per-congruence stop-plane pitch -- the periods stop differing between
+        orders, and ``readout_tile='auto'``, which sizes the shared window from
+        ``min(period)`` over all K, sizes it from one number.
     progress : callable, optional
         Called as ``progress(k, K, name)`` before each congruence's run.
         ``readout_tile='auto'``'s probe pass calls it too, with ``name``
@@ -11185,7 +12110,8 @@ def propagate_traced_carrier_chain_multi(
         gap_sag_tol=gap_sag_tol,
         gap_env_phi_tol=gap_env_phi_tol,
         on_gap_frame=on_gap_frame,
-        gap_kernel=gap_kernel)
+        gap_kernel=gap_kernel,
+        transport=transport, on_collins_sampling=on_collins_sampling)
 
     def _run(k, fr, quiet=False):
         # ``quiet`` is the 'auto' PERIOD-PROBE pass: it runs the same chain a

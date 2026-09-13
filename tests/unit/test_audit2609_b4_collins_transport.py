@@ -1,0 +1,1107 @@
+"""WP-B4 -- ``transport='collins'``: the Collins / ABCD-Fresnel carrier
+transport with a freely chosen (Bluestein) output pitch.
+
+What is pinned here, in the order the WP's acceptance gate asks for it:
+
+* the DEFAULT does not move -- ``np.array_equal`` between the shipped call and
+  the same call with ``transport='sziklas'`` spelled out, at every entry point
+  (``TestDefaultIsByteIdentical``);
+* the transport is the SAME THEOREM as the Sziklas step, checked three ways --
+  against ``_carrier_step_fast`` on the co-moving lattice, against an analytic
+  Gaussian-ABCD oracle written here (including the absolute piston and the Gouy
+  phase, so nothing is hidden by a piston-free comparison), and against a
+  DIRECT SUMMATION of the same integral that shares no FFT, no Bluestein and no
+  chirp with the code under test (``TestSameTheorem``);
+* gate (a), the NA x grid-extent matrix against that oracle
+  (``TestGateAOracleMatrix``);
+* gate (b), WP-A6's C1 mismatch matrix (``TestGateBMismatchMatrix``);
+* gate (c), a two-group chain against a brute-force ASM +
+  ``apply_real_lens_traced`` arm (``TestGateCTwoGroupChain``);
+* gate (d), ``propagate_traced_carrier_chain_multi`` K = 1 against the chain and
+  K = 2 against the hand-summed pair (``TestGateDMulti``);
+* the Kelly (Appl. Opt. 53, 2861 (2014)) sampling guard, two-sided: the
+  conditions are ratios against the Nyquist rate itself, a passing
+  configuration is silent AND accurate, and a failing one fires AND is
+  inaccurate (``TestKellyGuard``, ``TestKernelRefinement``);
+* the quadrature selection is COMPLEMENTARY, not tuned: the chirp-Z form and
+  the transfer-function form have exactly opposite sampling conditions, so
+  every leg satisfies one of them and both agree at the crossover
+  (``TestQuadratureComplementarity``);
+* the near-focus apparatus is never entered on this transport, proved by
+  poisoning all four of its entry points (``TestNoNearFocusApparatus``);
+* the readout's Bluestein period stops being a function of the resolved leg
+  (``TestReadoutPeriodDecoupling``).
+
+Per ``docs/TESTING_STANDARDS.md``: no wall-clock assertion anywhere (the WP
+report carries the timings), no ``pytest.skip`` on a resource precondition,
+every bar derived from its own oracle's floor with the measured value and the
+date in the comment.  The oracles in section 1 are written in this file from
+the ``q``-parameter definition and from a direct quadrature; nothing below
+calls the library to build a truth.
+"""
+
+import warnings
+
+import numpy as np
+import pytest
+
+from lumenairy.propagators import carrier as C
+
+EPS = float(np.finfo(np.float64).eps)
+
+
+# ===========================================================================
+# 1.  Oracles (written here; nothing in this section calls the transport)
+# ===========================================================================
+def _grid(n, d):
+    return (np.arange(n, dtype=np.float64) - n / 2) * float(d)
+
+
+def _gauss_env(n, dx, w):
+    g = _grid(n, dx)
+    return np.exp(-((g[None, :] ** 2 + g[:, None] ** 2) / w ** 2)).astype(
+        np.complex128)
+
+
+def _abcd_gauss(xo, w_in, r_beam, z, lam):
+    """Analytic Gaussian field a distance ``z`` on, in THIS library's
+    ``exp(-i omega t)`` / ``exp(+i k z)`` convention (CONVENTIONS sec. 7):
+
+        1/q = 1/R + i lam/(pi w^2),   q2 = q + z,
+        E(r) = exp(i k z) / (1 + z/q) * exp(i k r^2 / (2 q2)).
+
+    Note the SIGN of the imaginary part.  Siegman's ``1/q = 1/R - i
+    lam/(pi w^2)`` belongs to the opposite time convention; used as-is it
+    conjugates the Gouy phase, which is invisible to a piston-free comparison
+    and is exactly ``pi`` of error at a focus.  This form carries the absolute
+    piston and the Gouy phase, so the comparisons below need no phase
+    alignment.  Returns ``(E, w(z))``."""
+    k = 2.0 * np.pi / lam
+    q = 1.0 / (1.0 / r_beam + 1j * lam / (np.pi * w_in ** 2))
+    q2 = q + z
+    r2 = xo[None, :] ** 2 + xo[:, None] ** 2
+    wz = float(np.sqrt(lam / (np.pi * (1.0 / q2).imag)))
+    return (np.exp(1j * k * z) / (1.0 + z / q)
+            * np.exp(1j * k * r2 / (2.0 * q2))), wz
+
+
+def _collins_direct(env, R_in, z, lam, dx, xs, ys, R_ref=np.inf):
+    """The Collins integral evaluated by DIRECT SUMMATION at the listed output
+    points -- the independent quadrature.
+
+    Shares nothing with the transport under test: no FFT, no Bluestein, no
+    chirp-Z, no output lattice.  Written straight from the ABCD-Fresnel form in
+    this library's convention,
+
+        u_out(x) = exp(i k B)/(i lam B)
+                   * sum_u env(u) exp(i k (A u^2 - 2 u x + D x^2)/(2 B)) du^2,
+
+    with ``A = 1 + z/R_in``, ``B = z``, ``D = 1 - z/R_ref``."""
+    k = 2.0 * np.pi / lam
+    n = np.shape(env)[-1]
+    u = _grid(n, dx)
+    A = 1.0 if np.isinf(R_in) else 1.0 + z / R_in
+    D = 1.0 if np.isinf(R_ref) else 1.0 - z / R_ref
+    pre = np.exp(1j * k * A * u * u / (2.0 * z))
+    g = np.asarray(env) * pre[None, :] * pre[:, None]
+    out = np.empty((len(ys), len(xs)), dtype=np.complex128)
+    for iy, yv in enumerate(ys):
+        ey = np.exp(-1j * k * u * yv / z)
+        for ix, xv in enumerate(xs):
+            ex = np.exp(-1j * k * u * xv / z)
+            s = complex(ey @ g @ ex) * dx * dx
+            out[iy, ix] = (np.exp(1j * k * z) / (1j * lam * z) * s
+                           * np.exp(1j * k * D * (xv * xv + yv * yv)
+                                    / (2.0 * z)))
+    return out
+
+
+def _rel_l2(E, T):
+    return float(np.linalg.norm(np.asarray(E) - np.asarray(T))
+                 / np.linalg.norm(np.asarray(T)))
+
+
+def _piston_free_rel_l2(E, T):
+    E, T = np.asarray(E), np.asarray(T)
+    ov = np.vdot(T, E)
+    return _rel_l2(E / (ov / abs(ov)) if abs(ov) > 0 else E, T)
+
+
+# --- the two shared fixtures -----------------------------------------------
+_WL = 1.064e-6                 # deliberately neither WP-A6's 1.31 um nor
+_N, _DX, _W = 1024, 4.0e-6, 0.30e-3  # VERIFY-A6's 0.85 / 0.633 um
+_R = -40.0e-3                  # converging: the focus is 40 mm on
+# The grid spans +/-6.83 beam radii, so the Gaussian's own truncation floor is
+# exp(-6.83^2) = 8e-21 in amplitude and every bar below is the transform's
+# rounding rather than the fixture's edge.
+
+
+@pytest.fixture(scope='module')
+def env_conv():
+    return _gauss_env(_N, _DX, _W)
+
+
+# ===========================================================================
+# 2.  Vocabulary (CONVENTIONS sec. 2: the message starts with the function)
+# ===========================================================================
+class TestVocabulary:
+    @pytest.mark.parametrize('bad', ['Collins', 'COLLINS', 'collin',
+                                     'sziklas ', None, 0, b'collins'])
+    def test_an_unrecognised_transport_is_refused_not_defaulted(self, bad,
+                                                                env_conv):
+        with pytest.raises(ValueError) as ei:
+            C.propagate_carrier_referenced(env_conv, _R, 5e-3, _WL, _DX,
+                                           transport=bad)
+        msg = str(ei.value)
+        assert msg.startswith('propagate_carrier_referenced: ')
+        assert 'sziklas' in msg and 'collins' in msg
+
+    def test_the_free_lattice_kwargs_are_refused_on_the_default_transport(
+            self, env_conv):
+        """``dx_out`` / ``carrier_out`` have no referent on a transport whose
+        output pitch IS ``m*dx``; accepting and ignoring them is the
+        accept-and-ignore class D4/D11 adjudicated against."""
+        for kw in ({'dx_out': 1e-6}, {'carrier_out': np.inf}):
+            with pytest.raises(ValueError, match='transport'):
+                C.propagate_carrier_referenced(env_conv, _R, 5e-3, _WL, _DX,
+                                               **kw)
+
+    def test_the_stop_plane_readout_keys_are_refused_on_collins(self):
+        """``standoff`` and ``on_focus_containment`` describe the Sziklas
+        readout's stop plane.  transport='collins' has no stop plane, so they
+        are refused rather than silently dropped."""
+        env = _gauss_env(64, 8e-6, 40e-6)
+        for key, val in (('standoff', 1e-4),
+                         ('on_focus_containment', 'ignore')):
+            with pytest.raises(ValueError) as ei:
+                C.propagate_traced_carrier_chain(
+                    env, [{'surfaces': []}], _WL, 8e-6, transport='collins',
+                    focus_readout={'dx_out': 1e-6, 'N_out': 8, key: val})
+            assert key in str(ei.value)
+
+    def test_an_astigmatic_exact_kernel_is_refused_on_collins(self, env_conv):
+        with pytest.raises(ValueError, match='ASTIGMATIC'):
+            C.propagate_carrier_referenced(
+                env_conv, (-40e-3, -50e-3), 5e-3, _WL, _DX,
+                transport='collins', gap_kernel='exact')
+
+    def test_the_b_zero_readout_says_what_to_do(self, env_conv):
+        with pytest.raises(ValueError, match='zero-length'):
+            C._collins_focus_readout(env_conv, _R, 0.0, _WL, _DX, _DX,
+                                     dx_out=1e-6, N_out=8)
+
+
+# ===========================================================================
+# 3.  The default does not move -- byte identity
+# ===========================================================================
+def _singlet(R1, R2, d, glass, ap, name):
+    return {'name': name, 'aperture_diameter': ap, 'thicknesses': [d],
+            'surfaces': [
+                {'radius': R1, 'glass_before': 'air', 'glass_after': glass,
+                 'conic': 0.0, 'radius_y': None, 'conic_y': None,
+                 'aspheric_coeffs': None, 'aspheric_coeffs_y': None},
+                {'radius': R2, 'glass_before': glass, 'glass_after': 'air',
+                 'conic': 0.0, 'radius_y': None, 'conic_y': None,
+                 'aspheric_coeffs': None, 'aspheric_coeffs_y': None}]}
+
+
+_CHAIN_TKW = dict(on_undersample='silent', on_noncollimated='silent')
+
+
+def _chain_fixture():
+    """A two-group relay small enough to run twice per test.  Same shape as
+    the D2 K=1 fixture (which is the shipped design-121 acceptance's own
+    reduction), at a quarter of its grid."""
+    n, dx, w, r_in = 256, 60e-6, 4.5e-3, 60e-3
+    presc = _singlet(60e-3, -60e-3, 3e-3, 'N-BK7', 14e-3, 'p')
+    return (_gauss_env(n, dx, w), dx, r_in,
+            [{'prescription': presc, 'gap_before': 20e-3},
+             {'prescription': presc, 'gap_before': 10e-3}])
+
+
+class TestDefaultIsByteIdentical:
+    """``transport`` defaults to ``'sziklas'`` and naming it explicitly changes
+    nothing -- the only statement that makes "nothing existing moves" checkable
+    rather than asserted."""
+
+    @pytest.mark.parametrize('R,z', [(-40e-3, 5e-3), (-40e-3, -3e-3),
+                                     (np.inf, 5e-3), (80e-3, 12e-3),
+                                     ((-40e-3, -55e-3), 5e-3)])
+    def test_the_single_step_is_equal_bit_for_bit(self, env_conv, R, z):
+        a = C.propagate_carrier_referenced(env_conv, R, z, _WL, _DX)
+        b = C.propagate_carrier_referenced(env_conv, R, z, _WL, _DX,
+                                           transport='sziklas')
+        assert np.array_equal(np.asarray(a.env), np.asarray(b.env))
+        assert a.R == b.R and a.dx == b.dx
+
+    def test_the_focus_crossing_split_is_equal_bit_for_bit(self, env_conv):
+        """The near-focus branch too: the new keyword is checked BEFORE the
+        split, so this is the arm that would catch a check that perturbed it.
+        (``z = -R`` exactly is not used: the SHIPPED transport cannot land on
+        the focus at all -- its bridge re-references to ``R_out = 0`` and
+        ``carrier_referenced_envelope`` refuses that -- which is one of the
+        cases the Collins transport turns into an ordinary point.)"""
+        z = -_R * 0.995
+        a = C.propagate_carrier_referenced(env_conv, _R, z, _WL, _DX)
+        b = C.propagate_carrier_referenced(env_conv, _R, z, _WL, _DX,
+                                           transport='sziklas')
+        assert np.array_equal(np.asarray(a.env), np.asarray(b.env))
+        assert a.R == b.R and a.dx == b.dx
+
+    def test_the_public_readout_kept_its_own_signature(self):
+        """``carrier_referenced_focus_readout`` gained nothing: the Collins
+        readout is a separate entry reached through ``transport``, so a caller
+        of the shipped readout cannot be routed anywhere new by accident."""
+        import inspect
+        p = inspect.signature(C.carrier_referenced_focus_readout).parameters
+        assert 'transport' not in p and 'on_collins_sampling' not in p
+        assert p['standoff'].default is None
+        assert p['replica_fill'].default == 'repeat'
+
+    @pytest.mark.slow
+    def test_the_chain_is_equal_bit_for_bit(self):
+        env, dx, r_in, groups = _chain_fixture()
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            a = C.propagate_traced_carrier_chain(
+                env, groups, 1.31e-6, dx, r_in=r_in, ray_subsample=16,
+                n_workers=1, final_distance=8e-3, traced_kwargs=_CHAIN_TKW,
+                final_leg='paraxial',
+                focus_readout=dict(dx_out=0.5e-6, N_out=64))
+            b = C.propagate_traced_carrier_chain(
+                env, groups, 1.31e-6, dx, r_in=r_in, ray_subsample=16,
+                n_workers=1, final_distance=8e-3, traced_kwargs=_CHAIN_TKW,
+                final_leg='paraxial', transport='sziklas',
+                on_collins_sampling='error',
+                focus_readout=dict(dx_out=0.5e-6, N_out=64))
+        assert np.array_equal(np.asarray(a.field), np.asarray(b.field))
+        assert a.dx == b.dx and a.R == b.R
+        assert a.stages == b.stages
+
+    @pytest.mark.slow
+    def test_the_multi_orchestrator_is_equal_bit_for_bit(self):
+        env, dx, r_in, groups = _chain_fixture()
+        fr = dict(dx_out=0.5e-6, N_out=64)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            a = C.propagate_traced_carrier_chain_multi(
+                [{'field': env, 'carrier': r_in}], groups, 1.31e-6, dx,
+                output_grid=fr, final_distance=8e-3, ray_subsample=16,
+                n_workers=1, traced_kwargs=_CHAIN_TKW, final_leg='paraxial')
+            b = C.propagate_traced_carrier_chain_multi(
+                [{'field': env, 'carrier': r_in}], groups, 1.31e-6, dx,
+                output_grid=fr, final_distance=8e-3, ray_subsample=16,
+                n_workers=1, traced_kwargs=_CHAIN_TKW, final_leg='paraxial',
+                transport='sziklas')
+        assert np.array_equal(np.asarray(a.field), np.asarray(b.field))
+        assert a.dx == b.dx and a.centre == b.centre
+
+
+# ===========================================================================
+# 4.  The same theorem, three independent ways
+# ===========================================================================
+class TestSameTheorem:
+    def test_the_abcd_is_symplectic_for_every_reference(self):
+        """``det = AD - BC == 1`` is what makes the envelope system a real
+        optical system rather than an ansatz.  Checked over a decade-wide
+        log-uniform sweep of both radii and the leg, so it is an identity and
+        not a sampled agreement."""
+        rng = np.random.default_rng(20260913)
+        worst = 0.0
+        for _ in range(20000):
+            R_in = float(10.0 ** rng.uniform(-3, 0) * rng.choice([-1.0, 1.0]))
+            R_rf = float(10.0 ** rng.uniform(-3, 0) * rng.choice([-1.0, 1.0]))
+            z = float(10.0 ** rng.uniform(-4, -1) * rng.choice([-1.0, 1.0]))
+            A, B, Cc, D = C._collins_envelope_abcd(R_in, z, R_rf)
+            worst = max(worst, abs(A * D - B * Cc - 1.0))
+        # Bar: 64 eps.  The determinant is a difference of products of numbers
+        # whose ratio spans 10^3 here, so the cancellation floor is a few eps
+        # times that condition number; measured worst 2026-09-13 = 1.1e-13 over
+        # 20000 cells, and a sign or factor error is O(1), 13 decades up.
+        assert worst < 64.0 * EPS * 1e3, worst
+
+    @pytest.mark.parametrize('z', [12.0e-3, 20.0e-3])
+    @pytest.mark.parametrize('gk', ['fresnel', 'auto'])
+    def test_collins_on_the_co_moving_lattice_is_the_sziklas_step(
+            self, env_conv, z, gk):
+        """The factorisation claim, measured: asked for the lattice the Sziklas
+        transport is forced onto, the Collins quadrature returns the Sziklas
+        answer.  They are different quadratures of one integral, so the bar is
+        their rounding, not zero.
+
+        The two legs here are ones where BOTH quadratures are comfortably
+        sampled (measured K1 = 0.34 and 0.16, and the chirp-Z's own period
+        covers the co-moving window); the marginal legs, where they differ, are
+        arbitrated against the direct sum in the next test rather than against
+        each other.  Bar 1e-9 of peak; measured 2026-09-13: 7.6e-12 (12 mm)
+        and 3.2e-12 (20 mm) on 'fresnel', 1.1e-11 and 3.3e-12 on 'auto'.  A
+        factorisation error -- a wrong A, D or prefactor -- is O(1), eleven
+        decades up."""
+        m = (_R + z) / _R
+        sz = C.propagate_carrier_referenced(env_conv, _R, z, _WL, _DX,
+                                            gap_kernel=gk)
+        co = C._collins_transport(env_conv, _R, z, _WL, _DX, _DX,
+                                  dx_out=m * _DX, dy_out=m * _DX,
+                                  N_out_x=_N, N_out_y=_N, R_ref=_R + z,
+                                  gap_kernel=gk, on_collins_sampling='ignore')
+        d = float(np.abs(co - np.asarray(sz.env)).max()
+                  / np.abs(np.asarray(sz.env)).max())
+        assert d < 1e-9, (z, gk, d)
+
+    @pytest.mark.parametrize('z', [8.0e-3, -6.0e-3])
+    def test_on_a_marginal_leg_the_direct_sum_sides_with_the_chirp_z(
+            self, env_conv, z):
+        """Where the two quadratures DISAGREE, something has to arbitrate, and
+        it cannot be either of them.  The direct sum does: on both marginal
+        legs (measured K1 = 0.57 at z = +8 mm and 1.08 at z = -6 mm) the
+        chirp-Z reads ratio 1.000000 at every sampled point out to 1.6 beam
+        radii, while the transfer-function quadrature departs -- 1.001321 at
+        the outermost sample of the -6 mm leg, which is its own wrap-around,
+        not the chirp-Z's.  This is why the test above compares the two only
+        where both are sampled."""
+        m = (_R + z) / _R
+        sz = np.asarray(C.propagate_carrier_referenced(
+            env_conv, _R, z, _WL, _DX, gap_kernel='fresnel').env)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            co = np.asarray(C._collins_transport(
+                env_conv, _R, z, _WL, _DX, _DX, dx_out=m * _DX,
+                dy_out=m * _DX, N_out_x=_N, N_out_y=_N, R_ref=_R + z,
+                gap_kernel='fresnel', on_collins_sampling='ignore'))
+        js = [_N // 2 + j for j in (0, 30, 60, 90, 120)]
+        xs = [(j - _N / 2) * m * _DX for j in js]
+        D = _collins_direct(env_conv, _R, z, _WL, _DX, xs, [0.0],
+                            R_ref=_R + z)[0]
+        rc = np.abs(np.array([co[_N // 2, j] for j in js]) - D) / np.abs(D)
+        rs = np.abs(np.array([sz[_N // 2, j] for j in js]) - D) / np.abs(D)
+        assert float(rc.max()) < 1e-9, rc
+        assert float(rs.max()) > 10.0 * float(rc.max()), (rc, rs)
+
+    def test_the_focus_readout_matches_the_analytic_gaussian_absolutely(
+            self, env_conv):
+        """ORACLE: ``_abcd_gauss``.  The comparison carries the ABSOLUTE phase
+        -- piston and Gouy -- because the readout returns the field, not an
+        envelope, and a piston-free comparison cannot see a conjugated Gouy
+        phase (which is exactly pi at a focus)."""
+        z = -_R
+        w0 = _WL * abs(_R) / (np.pi * _W)
+        dxo, nout = w0 / 8.0, 128
+        E = np.asarray(C._collins_focus_readout(
+            env_conv, _R, z, _WL, _DX, _DX, dx_out=dxo, N_out=nout,
+            on_replica='error'))
+        T, wz = _abcd_gauss(_grid(nout, dxo), _W, _R, z, _WL)
+        assert wz == pytest.approx(w0, rel=2e-3)
+        # Bar 1e-10.  The oracle is exact; the floor is the grid's own
+        # truncation of the Gaussian at 2.73 w (amplitude exp(-7.46) = 5.8e-4
+        # -- but the truncated tail contributes to the FOCAL field only at the
+        # 1e-14 level because the transform of a Gaussian tail is itself a
+        # tail).  Measured 2026-09-13: 2.17e-14 absolute relL2, and the power
+        # ratio 1.00000000.  A conjugated Gouy phase reads 2.0 here.
+        assert _rel_l2(E, T) < 1e-10, _rel_l2(E, T)
+        p_in = float((np.abs(env_conv) ** 2).sum()) * _DX * _DX
+        p_out = float((np.abs(E) ** 2).sum()) * dxo * dxo
+        assert p_out / p_in == pytest.approx(1.0, abs=1e-6)
+
+    def test_the_transform_equals_a_direct_summation_of_the_same_integral(
+            self, env_conv):
+        """ORACLE: ``_collins_direct`` -- the same integral by brute force, no
+        FFT anywhere in it.  This is the arm that found the WP's own defect:
+        the exact-kernel refinement applied over a degenerate reduced frame
+        wrapped, and the core stayed right while the halo went 37x high at
+        40 um and 520x at 100 um."""
+        z = -_R
+        dxo, nout = _WL * abs(_R) / (np.pi * _W) / 8.0, 128
+        E = np.asarray(C._collins_focus_readout(
+            env_conv, _R, z, _WL, _DX, _DX, dx_out=dxo, N_out=nout,
+            on_replica='error'))
+        js = [nout // 2 + j for j in (0, 3, 7, 13, 21, 34, 55)]
+        xs = [(j - nout / 2) * dxo for j in js]
+        D = _collins_direct(env_conv, _R, z, _WL, _DX, xs, [0.0])
+        got = np.array([E[nout // 2, j] for j in js])
+        rel = np.abs(got - D[0]) / np.abs(D[0])
+        # The bar is the ORACLE's own floor, not a fixed number: a direct sum of
+        # 1024^2 terms of magnitude |g| rounds at ``eps * sum|g|`` before the
+        # prefactor, which relative to a SAMPLE is large wherever the sample is
+        # small -- and these samples run from the peak down into the halo.  30x
+        # that floor; measured 2026-09-13 the worst sample sits at 1.9x it
+        # (2.5e-07 against a floor of 1.3e-07), and the defect the arm exists
+        # for read 37x at the same radius.
+        s_abs = float(np.abs(env_conv).sum()) * _DX * _DX / (_WL * abs(z))
+        floor = EPS * s_abs / np.abs(D[0])
+        assert np.all(rel < np.maximum(30.0 * floor, 1e-12)), (rel, floor)
+
+
+# ===========================================================================
+# 5.  Gate (a) -- the analytic-oracle matrix
+# ===========================================================================
+_GATE_A_NA = (0.03, 0.10, 0.30, 0.45)
+_GATE_A_EXT = (1.5, 2.5, 4.0, 10.0)
+
+
+def _gate_a_cell(na, ext, n=512, w_in=0.8e-3, lam=_WL):
+    R0 = -w_in / na
+    dx = 2.0 * ext * w_in / n
+    z = -R0
+    w0 = lam * abs(R0) / (np.pi * w_in)
+    dxo, nout = w0 / 8.0, 64
+    env = _gauss_env(n, dx, w_in)
+    truth, _ = _abcd_gauss(_grid(nout, dxo), w_in, R0, z, lam)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        Es = C.carrier_referenced_focus_readout(
+            env, R0, z, lam, dx, dx_out=dxo, N_out=nout, on_replica='ignore',
+            on_focus_containment='ignore')
+        Ec = C._collins_focus_readout(
+            env, R0, z, lam, dx, dx, dx_out=dxo, N_out=nout,
+            on_replica='ignore', on_collins_sampling='ignore')
+    return (_piston_free_rel_l2(Es, truth), _piston_free_rel_l2(Ec, truth))
+
+
+class TestGateAOracleMatrix:
+    @pytest.mark.parametrize('na', _GATE_A_NA)
+    @pytest.mark.parametrize('ext', _GATE_A_EXT)
+    def test_collins_is_never_worse_than_sziklas(self, na, ext):
+        """Gate (a).  Two-sided: the bar is the OTHER transport's own reading
+        on the same cell, re-measured here, so nothing pins a build's number.
+        Measured 2026-09-13 over the full 6 x 5 matrix: 0 of 30 cells worse,
+        the ratio running 1.18x (NA 0.03, ext 1.5) to 148x (NA 0.45,
+        ext 2.5)."""
+        ls, lc = _gate_a_cell(na, ext)
+        assert lc <= ls, (na, ext, ls, lc)
+
+    @pytest.mark.parametrize('na', _GATE_A_NA)
+    def test_the_small_extent_cells_are_materially_better(self, na):
+        """"Materially better in the cells the small-extent branch exists for":
+        ext 2.5 sits under the 3.695-beam-radius knee where
+        ``_small_extent_focus_standoff_f`` takes over.  Bar 2x, against a
+        measured 2.73x / 10.15x / 58.95x / 147.90x at NA 0.03 / 0.10 / 0.30 /
+        0.45 on 2026-09-13 -- the smallest of them 1.4 decades over the bar."""
+        ls, lc = _gate_a_cell(na, 2.5)
+        assert ls / lc > 2.0, (na, ls, lc)
+
+    @pytest.mark.parametrize('na', _GATE_A_NA)
+    def test_on_a_wide_grid_collins_sits_on_the_truncation_floor(self, na):
+        """The residual is the INPUT GRID's own truncation of the Gaussian and
+        nothing else: at ext 10 the tail beyond the grid is exp(-100) and the
+        reading is at the transform's rounding.  Measured 2026-09-13:
+        1.3e-15 .. 4.5e-14 across NA, against sziklas' 3.1e-04 .. 2.9e-02."""
+        ls, lc = _gate_a_cell(na, 10.0)
+        assert lc < 1e-11, (na, lc)
+        assert ls > 100.0 * lc, (na, ls, lc)
+
+
+# ===========================================================================
+# 6.  Gate (b) -- WP-A6's C1 mismatch matrix
+# ===========================================================================
+_MISMATCH_FR = (1.00, 0.99, 0.98, 0.95, 0.90)
+
+
+@pytest.fixture(scope='module')
+def mismatch_matrix():
+    """WP-A6's own fixture: lambda 1.31 um, N 1024, w_in 1 mm, NA 0.05
+    (R0 = -20 mm), ext 4.  ONE physical field, re-enveloped against each
+    carrier; the peak ratio is against the matched (R/R0 = 1) readout, squared,
+    exactly as ``p6c_mismatch.py`` defines it."""
+    lam, n, w_in, na, ext = 1.31e-6, 1024, 1.0e-3, 0.05, 4.0
+    R0 = -w_in / na
+    dx = 2.0 * ext * w_in / n
+    z, k = -R0, 2.0 * np.pi / lam
+    w0 = lam * abs(R0) / (np.pi * w_in)
+    dxo, nout = w0 / 8.0, 64
+    x = _grid(n, dx)
+    r2 = x[None, :] ** 2 + x[:, None] ** 2
+    E_phys = np.exp(-r2 / w_in ** 2) * np.exp(1j * k * r2 / (2.0 * R0))
+    truth, _ = _abcd_gauss(_grid(nout, dxo), w_in, R0, z, lam)
+    out = {}
+    for tr in ('sziklas', 'collins'):
+        ref = None
+        rows = []
+        for fr in _MISMATCH_FR:
+            R = fr * R0
+            env = E_phys * np.exp(-1j * k * r2 / (2.0 * R))
+            pd = {}
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                if tr == 'collins':
+                    E = C._collins_focus_readout(
+                        env, R, z, lam, dx, dx, dx_out=dxo, N_out=nout,
+                        on_replica='ignore', on_collins_sampling='ignore',
+                        _period_out=pd)
+                else:
+                    E = C.carrier_referenced_focus_readout(
+                        env, R, z, lam, dx, dx_out=dxo, N_out=nout,
+                        on_replica='ignore', on_focus_containment='ignore',
+                        _period_out=pd)
+            E = np.asarray(E)
+            if ref is None:
+                ref = E
+            rows.append((fr,
+                         float(np.abs(E).max() / np.abs(ref).max()) ** 2,
+                         _piston_free_rel_l2(E, truth),
+                         float(min(pd['period']))))
+        out[tr] = rows
+    return out
+
+
+class TestGateBMismatchMatrix:
+    def test_the_sziklas_column_reproduces_the_published_matrix(
+            self, mismatch_matrix):
+        """Fixture check, not a claim about the new transport: WP-A6 published
+        1.000000 / 0.999514 / 0.998602 / 0.994304 / 0.985236 for these five
+        rows, and VERIFY-A6 reproduced them to every printed digit.  If this
+        arm drifts, the gate below is being scored on a different fixture."""
+        got = [r[1] for r in mismatch_matrix['sziklas']]
+        for g, want in zip(got, (1.000000, 0.999514, 0.998602, 0.994304,
+                                 0.985236)):
+            assert g == pytest.approx(want, abs=5e-5), got
+
+    def test_collins_reads_unity_at_every_mismatch(self, mismatch_matrix):
+        """Gate (b).  The prediction was "peak ratio 1.0000 at every R/R0,
+        because the output pitch no longer depends on the carrier".  Measured
+        2026-09-13: 1.000000 / 0.999999 / 0.999998 / 0.999986 / 0.999938 --
+        1.0000 to four decimals on every row, against a sziklas column that
+        falls to 0.985236.  Bar 1e-4, which the worst row clears by 1.6x and
+        the sziklas column fails by 148x."""
+        for fr, peak, _, _ in mismatch_matrix['collins']:
+            assert abs(peak - 1.0) < 1e-4, (fr, peak)
+
+    def test_the_readout_period_no_longer_depends_on_the_carrier(
+            self, mismatch_matrix):
+        """The mechanism behind the row above: the Sziklas period is
+        ``N * dx_stop``, and the stop-plane pitch is resolved from the beam, so
+        a carrier mismatch moves it.  The Collins period is ``lambda |z| / dx``
+        of the INPUT grid -- the carrier is not in it.  Measured 2026-09-13:
+        3353.60 um on all five rows (identical to the bit), against a sziklas
+        column that moves."""
+        pers = [r[3] for r in mismatch_matrix['collins']]
+        assert len(set(pers)) == 1, pers
+        szik = [r[3] for r in mismatch_matrix['sziklas']]
+        assert max(szik) / min(szik) > 1.5, szik
+
+
+# ===========================================================================
+# 7.  Gate (c) -- a two-group chain against a brute-force ASM arm
+# ===========================================================================
+@pytest.fixture(scope='module')
+def p5_arms():
+    """The audit's own p5 method, re-implemented here: a 6 um waist 30 mm in
+    front of two identical biconvex singlets 40 mm apart, read at HALF the
+    paraxial image distance so the comparison plane is resolvable.  The BRUTE
+    arm uses plain band-limited ASM on a grid fine enough to sample the full
+    field and the SAME element call, so only the transport differs."""
+    from lumenairy.elements import apply_real_lens_traced
+    from lumenairy.glass import GLASS_REGISTRY
+    from lumenairy.propagators.propagation import angular_spectrum_propagate
+    from lumenairy.raytrace.seidel import system_abcd_prescription
+
+    lam, ng = 1.31e-6, 1.5168
+    GLASS_REGISTRY['_B4GLASS'] = (lambda wl: ng)
+    sd = 10e-3
+
+    def presc():
+        return {'surfaces': [
+            {'radius': 51.68e-3, 'glass_before': 'air',
+             'glass_after': '_B4GLASS', 'semi_diameter': sd},
+            {'radius': -51.68e-3, 'glass_before': '_B4GLASS',
+             'glass_after': 'air', 'semi_diameter': sd}],
+            'thicknesses': [5e-3], 'aperture_diameter': 2 * sd,
+            'stop_index': 0}
+
+    M, _, _, _ = system_abcd_prescription(presc(), lam)
+    w0, z1 = 6.0e-6, 30e-3
+    zR = np.pi * w0 ** 2 / lam
+    r_in = z1 * (1.0 + (zR / z1) ** 2)
+    w_l = w0 * np.sqrt(1.0 + (z1 / zR) ** 2)
+    n = 2048
+    dx = 2 * 3.0 * w_l / n
+    env0 = _gauss_env(n, dx, w_l)
+    tk = dict(amplitude_model='ray_density', preserve_input_phase='remap',
+              remap_sampling='full')
+    gap = 40e-3
+    R_a = (M[0, 0] * r_in + M[0, 1]) / (M[1, 0] * r_in + M[1, 1])
+    R_b = R_a + gap
+    R_c = (M[0, 0] * R_b + M[0, 1]) / (M[1, 0] * R_b + M[1, 1])
+    groups = [{'prescription': presc(), 'gap_before': 0.0},
+              {'prescription': presc(), 'gap_before': gap}]
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        Eb = apply_real_lens_traced(
+            np.asarray(C.carrier_referenced_reconstruct(env0, r_in, lam, dx)),
+            prescription=presc(), wavelength=lam, dx=dx, carrier=r_in,
+            ray_subsample=2, **tk)
+        Eb = angular_spectrum_propagate(np.asarray(Eb), gap, lam, dx)
+        Eb = apply_real_lens_traced(Eb, prescription=presc(), wavelength=lam,
+                                    dx=dx, carrier=R_b, ray_subsample=2, **tk)
+        Eb = angular_spectrum_propagate(np.asarray(Eb), -R_c * 0.5, lam, dx)
+        arms = {'brute': (np.abs(np.asarray(Eb)) ** 2, dx)}
+        for tr in ('sziklas', 'collins'):
+            r = C.propagate_traced_carrier_chain(
+                env0, groups, lam, dx, r_in=r_in, ray_subsample=2,
+                final_distance=-R_c * 0.5, final_leg='paraxial',
+                traced_kwargs=tk, carrier_reference='sphere', transport=tr)
+            arms[tr] = (np.abs(np.asarray(r.field)) ** 2, float(r.dx))
+            arms[tr + '_res'] = r
+    return arms
+
+
+def _p5_reductions(I, d):
+    n = I.shape[0]
+    xx = (np.arange(n) - n / 2) * d
+    t = I.sum()
+    return (float(I.sum() * d * d),
+            float((I.sum(0) * xx).sum() / t),
+            float(np.sqrt((I * ((xx[None, :]) ** 2
+                                + (xx[:, None]) ** 2)).sum() / t)))
+
+
+@pytest.mark.slow
+class TestGateCTwoGroupChain:
+    def test_both_transports_reproduce_the_audit_s_own_readings(self, p5_arms):
+        """Gate (c).  The audit recorded power ratio 1.000067 and r2m 1.13882
+        vs 1.14389 mm (0.44 %) for the shipped transport on this fixture;
+        ``'collins'`` must agree AT LEAST AS CLOSELY.  Measured 2026-09-13:
+        both arms read power ratio 1.000067 and r2m 1.138817 mm against a brute
+        1.143892 mm, i.e. 0.444 %."""
+        pb, cb, rb = _p5_reductions(*p5_arms['brute'])
+        best = None
+        for tr in ('sziklas', 'collins'):
+            p, c, r = _p5_reductions(*p5_arms[tr])
+            assert p / pb == pytest.approx(1.0, abs=5e-4), (tr, p / pb)
+            assert abs(r - rb) / rb < 0.01, (tr, r, rb)
+            assert abs(c) < 1e-8, (tr, c)
+            if best is None:
+                best = abs(r - rb) / rb
+            else:
+                assert abs(r - rb) / rb <= best + 1e-12, (r, rb, best)
+
+    def test_the_two_transports_agree_on_this_chain(self, p5_arms):
+        """Every leg here is in the TRANSFER-FUNCTION half of the quadrature
+        split (measured K1 = 1.92 > 1 on the 40 mm gap), so ``'collins'``
+        evaluates the same integral by the same quadrature the default does and
+        the two are equal to the bit.  That is the complementarity claim
+        arriving at the chain level, not a coincidence."""
+        a = np.asarray(p5_arms['sziklas_res'].field)
+        b = np.asarray(p5_arms['collins_res'].field)
+        assert np.array_equal(a, b)
+        forms = [st.get('collins_form')
+                 for st in p5_arms['collins_res'].stages
+                 if st.get('collins_form')]
+        assert forms and set(forms) == {'tf'}, forms
+
+
+# ===========================================================================
+# 8.  Gate (d) -- the multi orchestrator
+# ===========================================================================
+@pytest.mark.slow
+class TestGateDMulti:
+    @pytest.mark.parametrize('tr', ['sziklas', 'collins'])
+    def test_k1_reduces_to_the_single_congruence_chain(self, tr):
+        """Gate (d), first half.  Compared with a tolerance rather than
+        ``array_equal`` because both arms are live FFT work; measured margin
+        2026-09-13 on both transports: exactly 0.0."""
+        env, dx, r_in, groups = _chain_fixture()
+        fr = dict(dx_out=0.5e-6, N_out=64)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            single = C.propagate_traced_carrier_chain(
+                env, groups, 1.31e-6, dx, r_in=r_in, ray_subsample=16,
+                n_workers=1, final_distance=8e-3, traced_kwargs=_CHAIN_TKW,
+                final_leg='paraxial', focus_readout=fr, transport=tr)
+            multi = C.propagate_traced_carrier_chain_multi(
+                [{'field': env, 'carrier': r_in}], groups, 1.31e-6, dx,
+                output_grid=fr, final_distance=8e-3, ray_subsample=16,
+                n_workers=1, traced_kwargs=_CHAIN_TKW, final_leg='paraxial',
+                transport=tr)
+        A, B = np.asarray(single.field), np.asarray(multi.field)
+        assert A.shape == B.shape and A.dtype == B.dtype
+        assert float(np.abs(A - B).max()) <= 1e-10 * float(np.abs(A).max())
+        assert multi.congruences[0]['stages'] == single.stages
+
+    @pytest.mark.parametrize('tr', ['sziklas', 'collins'])
+    def test_k2_is_the_hand_summed_pair(self, tr):
+        """Gate (d), second half: with two congruences the orchestrator is only
+        doing bookkeeping, so the recombination must be a plain add of two
+        independent chain runs.  Measured 2026-09-13 on both transports:
+        exactly 0.0."""
+        env, dx, r_in, groups = _chain_fixture()
+        specs = [{'field': env, 'carrier': r_in, 'name': 'a'},
+                 {'field': 0.5 * env, 'carrier': r_in * 1.02, 'name': 'b'}]
+        fr = dict(dx_out=0.5e-6, N_out=64, on_replica='ignore')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            k2 = C.propagate_traced_carrier_chain_multi(
+                specs, groups, 1.31e-6, dx, output_grid=fr, readout_tile=None,
+                final_distance=8e-3, ray_subsample=16, n_workers=1,
+                traced_kwargs=_CHAIN_TKW, final_leg='paraxial', transport=tr)
+            hand = [np.asarray(C.propagate_traced_carrier_chain(
+                s['field'], groups, 1.31e-6, dx, r_in=s['carrier'],
+                ray_subsample=16, n_workers=1, final_distance=8e-3,
+                traced_kwargs=_CHAIN_TKW, final_leg='paraxial',
+                focus_readout=fr, transport=tr).field) for s in specs]
+        S = hand[0] + hand[1]
+        assert float(np.abs(np.asarray(k2.field) - S).max()) \
+            <= 1e-10 * float(np.abs(S).max())
+
+
+# ===========================================================================
+# 9.  The Kelly sampling guard
+# ===========================================================================
+def _stats(env, R, z, dx, dx_out, n_out, **kw):
+    st = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        C._collins_transport(env, R, z, _WL, dx, dx, dx_out=dx_out,
+                             dy_out=dx_out, N_out_x=n_out, N_out_y=n_out,
+                             R_ref=np.inf, on_collins_sampling='ignore',
+                             stats_out=st, **kw)
+    return st
+
+
+class TestKellyGuard:
+    def test_the_conditions_are_ratios_against_the_nyquist_rate(self,
+                                                                env_conv):
+        """K1 and K2 are ``2 d nu_max / lambda``: at 1 the binding content sits
+        exactly at the sample rate.  Checked by construction rather than by
+        reading the code -- doubling the input pitch doubles K1 (the pre-chirp
+        is sampled half as often) and doubling the output pitch doubles K2."""
+        z = -_R
+        dxo = _WL * abs(_R) / (np.pi * _W) / 8.0
+        a = _stats(env_conv, _R, z, _DX, dxo, 64)
+        b = _stats(_gauss_env(_N, 2 * _DX, _W), _R, z, 2 * _DX, dxo, 64)
+        c = _stats(env_conv, _R, z, _DX, 2 * dxo, 64)
+        assert b['k1'][0] / a['k1'][0] == pytest.approx(2.0, rel=0.05)
+        assert c['k2'][0] / a['k2'][0] == pytest.approx(2.0, rel=1e-12)
+        assert c['k1'][0] == pytest.approx(a['k1'][0], rel=1e-12)
+
+    def test_the_support_radii_are_measured_not_geometric(self, env_conv):
+        """The whole point of writing the guard against Kelly rather than
+        against a geometric margin: the radius the condition is evaluated at is
+        the field's own ``1 - _COLLINS_TAIL_FRAC``-power support, not the grid
+        half-width.  Checked against the ANALYTIC containment radius of this
+        Gaussian: the x-marginal of ``|exp(-r^2/w^2)|^2`` is a normal density of
+        sigma = w/2, whose two-sided 1e-6 point is 4.892 sigma = 2.446 w =
+        0.7338 mm.  Measured 2026-09-13: 0.7320 mm (one 4 um cell low, which is
+        the lattice's own quantisation), against a grid half-width of 2.048 mm
+        -- so the geometric form would read the condition 2.8x high."""
+        st = _stats(env_conv, _R, 8e-3, _DX, 3.2e-6, _N)
+        half = 0.5 * _N * _DX
+        analytic = 2.446 * _W
+        assert st['r_x'] == pytest.approx(analytic, abs=1.5 * _DX), st['r_x']
+        assert st['r_x'] < 0.4 * half, (st['r_x'], half)
+
+    def test_a_sampled_configuration_is_silent_and_right(self, env_conv):
+        """First arm of the two-sided claim."""
+        z = -_R
+        dxo, nout = _WL * abs(_R) / (np.pi * _W) / 8.0, 128
+        with warnings.catch_warnings(record=True) as W:
+            warnings.simplefilter('always')
+            E = np.asarray(C._collins_focus_readout(
+                env_conv, _R, z, _WL, _DX, _DX, dx_out=dxo, N_out=nout,
+                on_collins_sampling='error', on_replica='error'))
+        assert not [w for w in W if 'Collins' in str(w.message)]
+        T, _ = _abcd_gauss(_grid(nout, dxo), _W, _R, z, _WL)
+        assert _rel_l2(E, T) < 1e-10
+
+    @pytest.mark.parametrize('n,dx', [(256, 40e-6), (512, 20e-6),
+                                      (1024, 10e-6)])
+    def test_an_unsampled_configuration_fires_and_is_wrong(self, n, dx):
+        """Second arm -- the FAIL-BEFORE, as a LADDER.  The state is ENGINEERED
+        through the API (a coarse grid on a short leg drives the pre-chirp past
+        Nyquist) rather than hoped for; the guard is shown to fire; the answer
+        it fires on is shown to be wrong against the ANALYTIC Gaussian; and the
+        complementary quadrature -- the one the transport actually selects at
+        ``K1 > 1`` -- is shown to be exact on the same cell.  Each half is
+        measured, none is inferred from another.
+
+        Note the direct-summation oracle CANNOT arbitrate here and is not used:
+        it evaluates the same DISCRETE sum, so it aliases identically.  Only a
+        continuous truth can see this, which is what the analytic Gaussian is.
+
+        Measured 2026-09-13, A = 0.9, B = 3 mm, w = 0.9 mm:
+
+            n     dx      K1      chirp-Z relL2   transfer-function relL2
+            256  40 um   49.694      1.13e+02            6.28e-11
+            512  20 um   24.847      5.52e+01            6.28e-11
+            1024 10 um   12.424      2.74e+01            6.28e-11
+            2048  5 um    6.212      1.33e+01            6.28e-11
+
+        -- the chirp-Z error tracks K1 (ratio 2.27 / 2.22 / 2.21 / 2.14), which
+        is what says it IS the aliasing, and the transfer-function arm sits on
+        the analytic oracle's own floor on every grid."""
+        w, R, z = 0.9e-3, -30e-3, 3e-3
+        A = 1.0 + z / R
+        env = _gauss_env(n, dx, w)
+        st = _stats(env, R, z, dx, abs(A) * dx, n)
+        assert st['k1'][0] > 1.0, st['k1']
+        with pytest.raises(RuntimeError, match='K1'):
+            C._collins_transport(env, R, z, _WL, dx, dx, dx_out=abs(A) * dx,
+                                 dy_out=abs(A) * dx, N_out_x=n, N_out_y=n,
+                                 R_ref=R + z, on_collins_sampling='error')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            chirpz = np.asarray(C._collins_transport(
+                env, R, z, _WL, dx, dx, dx_out=abs(A) * dx, dy_out=abs(A) * dx,
+                N_out_x=n, N_out_y=n, R_ref=np.inf,
+                on_collins_sampling='ignore'))
+            tf = C._carrier_step_fast(env, R, z, _WL, dx, dx,
+                                      gap_kernel='auto')
+            tf_field = np.asarray(C.carrier_referenced_reconstruct(
+                tf.env, tf.R, _WL, tf.dx))
+        truth, _ = _abcd_gauss(_grid(n, abs(A) * dx), w, R, z, _WL)
+        # Bars: the transfer-function arm against the analytic oracle's own
+        # floor (6.3e-11, identical on all four grids, so it is the oracle and
+        # not the grid), with two decades of slack; the chirp-Z arm above 1.0,
+        # eleven decades up, so the two claims cannot be confused.
+        assert _rel_l2(tf_field, truth) < 1e-8
+        assert _rel_l2(chirpz, truth) > 1.0
+
+    def test_the_period_is_the_input_grid_s_and_the_replica_guard_sees_it(
+            self, env_conv):
+        """K3 is disposed of by the EXISTING ``on_replica``, on this
+        transport's own period, so the two guards cannot disagree."""
+        z = -_R
+        pd = {}
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            C._collins_focus_readout(env_conv, _R, z, _WL, _DX, _DX,
+                                     dx_out=1e-6, N_out=16,
+                                     on_replica='ignore', _period_out=pd)
+        assert pd['period'][0] == pytest.approx(_WL * abs(z) / _DX, rel=1e-12)
+        wide = int(np.ceil(1.2 * pd['period'][0] / 1e-6))
+        with pytest.raises(RuntimeError):
+            C._collins_focus_readout(env_conv, _R, z, _WL, _DX, _DX,
+                                     dx_out=1e-6, N_out=wide,
+                                     on_replica='error')
+
+
+class TestKernelRefinement:
+    """``gap_kernel='exact'`` is a refinement over the REDUCED frame
+    ``z_eff = B/A``, which is unbounded as a leg approaches the carrier's
+    geometric focus.  K4 measures whether it is representable at all."""
+
+    def test_the_refinement_is_applied_where_it_is_representable(self,
+                                                                 env_conv):
+        """K4 is small over the whole ordinary range, including well inside the
+        near-focus zone: measured 2026-09-13 at A = 0.5 / 0.025 / 0.0025 /
+        0.001 it reads 2.3e-07 / 8.9e-06 / 9.1e-05 / 2.3e-04, and the
+        refinement runs at every one of them."""
+        for z in (20e-3, 39e-3, 39.9e-3, -_R * 0.999):
+            st = _stats(env_conv, _R, z, _DX, 2e-7, _N)
+            assert st['k4'] < 1.0 and st['kernel'] == 'exact', (z, st['k4'])
+
+    @pytest.mark.parametrize('z_frac', [1.0, 1.0 - 1e-8])
+    def test_it_is_dropped_where_it_would_wrap_and_auto_says_so(self, env_conv,
+                                                                z_frac):
+        """The two cells it does fire on: the leg landing exactly on the
+        geometric focus (``A == 0``, ``z_eff`` infinite) and one 4e-7 of the
+        focal distance short of it (``A = 1e-08``, group delay 46.8 m against a
+        2.048 mm grid half-width).  Measured 2026-09-13: k4 = inf and
+        2.3e+04."""
+        st = _stats(env_conv, _R, -_R * z_frac, _DX, 2e-7, _N)
+        assert st['k4'] > 1.0 and st['kernel'] == 'fresnel', st['k4']
+
+    def test_an_explicit_exact_is_refused_rather_than_downgraded(self,
+                                                                 env_conv):
+        with pytest.raises(ValueError, match='WRAP'):
+            C._collins_transport(env_conv, _R, -_R, _WL, _DX, _DX,
+                                 dx_out=2e-7, dy_out=2e-7, N_out_x=_N,
+                                 N_out_y=_N, R_ref=np.inf,
+                                 gap_kernel='exact',
+                                 on_collins_sampling='ignore')
+
+    def test_applying_it_anyway_is_demonstrably_wrong(self, env_conv):
+        """FAIL-BEFORE for K4, and it is the defect this WP's own first cut
+        shipped: the refinement over a degenerate reduced frame leaves the core
+        right and destroys the halo.  Measured 2026-09-13 on the P2 battery's
+        exit field: ratio 1.00 at the peak, 3.9x at 28 um, 37x at 40 um and
+        520x at 100 um against the direct sum."""
+        z = -_R * (1.0 - 1e-8)
+        dxo, nout = 2e-7, 128
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            good = np.asarray(C._collins_transport(
+                env_conv, _R, z, _WL, _DX, _DX, dx_out=dxo, dy_out=dxo,
+                N_out_x=nout, N_out_y=nout, R_ref=np.inf,
+                on_collins_sampling='ignore'))
+            forced = C._collins_exact_kernel_correction(
+                np.fft.fft2(np.ascontiguousarray(env_conv)),
+                z / (1.0 + z / _R), _WL, _DX, _DX, (0.0, 0.0))
+            bad = np.asarray(C._collins_transport(
+                forced, _R, z, _WL, _DX, _DX, dx_out=dxo, dy_out=dxo,
+                N_out_x=nout, N_out_y=nout, R_ref=np.inf,
+                gap_kernel='fresnel', on_collins_sampling='ignore'))
+        js = [nout // 2 + j for j in (0, 40, 60)]
+        xs = [(j - nout / 2) * dxo for j in js]
+        D = _collins_direct(env_conv, _R, z, _WL, _DX, xs, [0.0])
+        g = np.array([good[nout // 2, j] for j in js])
+        b = np.array([bad[nout // 2, j] for j in js])
+        rg = np.abs(g - D[0]) / np.abs(D[0])
+        rb = np.abs(b - D[0]) / np.abs(D[0])
+        assert float(rg.max()) < 1e-9, rg
+        assert float(rb.max()) > 100.0 * float(rg.max()), (rg, rb)
+
+
+# ===========================================================================
+# 10.  The quadrature selection is complementary, not tuned
+# ===========================================================================
+class TestQuadratureComplementarity:
+    def test_the_two_forms_have_exactly_opposite_conditions(self, env_conv):
+        """``K1 = 2 dx (|A| r/|B| + theta)/lambda``.  With ``r`` at the grid
+        half-width that is ``N dx^2 / (lambda |z_eff|)`` -- so ``K1 <= 1`` is
+        the chirp-Z's condition and ``K1 >= 1`` is, term for term, the
+        transfer-function form's.  Checked as an identity on the ratio."""
+        for z in (2e-3, 8e-3, 20e-3, 39e-3):
+            st = _stats(env_conv, _R, z, _DX, 1e-6, 64)
+            A = 1.0 + z / _R
+            z_eff = z / A
+            geom = _N * _DX ** 2 / (_WL * abs(z_eff))
+            k1_geom = 2.0 * _DX * (abs(A) * (0.5 * _N * _DX) / abs(z)) / _WL
+            assert k1_geom == pytest.approx(geom, rel=1e-12), (z, k1_geom,
+                                                               geom)
+            # ... and the MEASURED K1 is that same expression evaluated at the
+            # measured support instead of the grid edge, so it is the geometric
+            # reading scaled by r/(N dx/2) plus the envelope's own theta term.
+            want = (k1_geom * st['r_x'] / (0.5 * _N * _DX)
+                    + 2.0 * _DX * st['theta_x'] / _WL)
+            assert st['k1'][0] == pytest.approx(want, rel=1e-12), (z, st['k1'])
+
+    @pytest.mark.parametrize('z', [12e-3, 20e-3])
+    def test_where_both_hold_the_two_forms_agree(self, env_conv, z):
+        """Where both quadratures are sampled the selection cannot introduce a
+        step, so the rule needs no smoothing at its boundary.  Measured
+        2026-09-13: 1.1e-11 of peak at z = 12 mm (K1 = 0.34) and 3.3e-12 at
+        z = 20 mm (K1 = 0.16)."""
+        m = (_R + z) / _R
+        sz = C._carrier_step_fast(env_conv, _R, z, _WL, _DX, _DX,
+                                  gap_kernel='auto')
+        co = C._collins_transport(env_conv, _R, z, _WL, _DX, _DX,
+                                  dx_out=m * _DX, dy_out=m * _DX,
+                                  N_out_x=_N, N_out_y=_N, R_ref=_R + z,
+                                  on_collins_sampling='ignore')
+        d = float(np.abs(co - np.asarray(sz.env)).max()
+                  / np.abs(np.asarray(sz.env)).max())
+        assert d < 1e-6, (z, d)
+
+    def test_the_selected_form_is_published(self, env_conv):
+        diag = {}
+        C._collins_carrier_leg(env_conv, _R, 2e-3, _WL, _DX, _DX,
+                               on_collins_sampling='ignore', diag=diag)
+        assert diag['collins_form'] == 'tf'
+        diag2 = {}
+        C._collins_carrier_leg(env_conv, _R, 39e-3, _WL, _DX, _DX,
+                               on_collins_sampling='ignore', diag=diag2)
+        assert diag2['collins_form'] == 'chirp-z'
+
+
+# ===========================================================================
+# 11.  The near-focus apparatus is never entered
+# ===========================================================================
+class TestNoNearFocusApparatus:
+    """WP-A6 sec. 6.1's central claim: ``m -> 0`` stops being a singularity.
+    Proved by POISONING every entry point of the focus machinery -- the same
+    instrument WP-A24 used to disprove an attribution -- rather than by reading
+    the call graph."""
+
+    _POISON = ('_propagate_carrier_focus_crossing', '_axis_bridge',
+               '_default_focus_standoff', '_small_extent_focus_standoff_f',
+               '_beam_containment_standoff')
+
+    def test_a_near_focus_leg_runs_with_the_whole_apparatus_poisoned(
+            self, env_conv, monkeypatch):
+        def boom(*a, **k):
+            raise AssertionError('near-focus apparatus entered')
+        for name in self._POISON:
+            monkeypatch.setattr(C, name, boom)
+        for z in (39e-3, 39.9e-3, -_R, 41e-3):
+            cr = C.propagate_carrier_referenced(
+                env_conv, _R, z, _WL, _DX, transport='collins',
+                on_collins_sampling='ignore')
+            assert np.isfinite(np.abs(np.asarray(cr.env)).max())
+        C._collins_focus_readout(env_conv, _R, -_R, _WL, _DX, _DX,
+                                 dx_out=2e-6, N_out=64, on_replica='ignore')
+
+    def test_the_same_poison_fires_on_the_default_transport(self, env_conv,
+                                                            monkeypatch):
+        """The falsifier: without it the test above could pass because the
+        poison never had a chance to fire."""
+        def boom(*a, **k):
+            raise AssertionError('near-focus apparatus entered')
+        monkeypatch.setattr(C, '_propagate_carrier_focus_crossing', boom)
+        with pytest.raises(AssertionError, match='near-focus'):
+            C.propagate_carrier_referenced(env_conv, _R, -_R, _WL, _DX)
+
+    def test_the_collapsing_pitch_is_floored_by_the_measured_box(self,
+                                                                 env_conv):
+        """What replaces the apparatus: the output pitch cannot follow ``|A|``
+        to zero, because the floor carries the leg's own diffraction
+        ``2|B| theta/N``.  Measured 2026-09-13 at 0.1 mm before the focus:
+        co-moving 0.0100 um against a resolved 0.2777 um, 28x."""
+        z = 39.9e-3
+        A = 1.0 + z / _R
+        diag = {}
+        cr = C._collins_carrier_leg(env_conv, _R, z, _WL, _DX, _DX,
+                                    on_collins_sampling='ignore', diag=diag)
+        assert diag['collins_dx_floor_hit'] is True
+        assert cr.dx > 5.0 * abs(A) * _DX, (cr.dx, abs(A) * _DX)
+
+    def test_the_reference_goes_flat_exactly_at_the_geometric_focus(
+            self, env_conv):
+        """And the other half: at ``R + z == 0`` the RAY carrier is degenerate
+        while the true wavefront is flat, so the transport references to
+        infinity there and says so."""
+        diag = {}
+        cr = C._collins_carrier_leg(env_conv, _R, -_R, _WL, _DX, _DX,
+                                    on_collins_sampling='ignore', diag=diag)
+        assert diag['collins_flat_reference'] is True
+        assert np.isinf(cr.R)
+
+
+# ===========================================================================
+# 12.  The readout period stops being a function of the resolved leg
+# ===========================================================================
+class TestReadoutPeriodDecoupling:
+    def test_the_period_follows_the_input_grid_and_the_leg_only(self,
+                                                                env_conv):
+        """WP-A25's coupling, removed: the Sziklas period is ``N dx_stop`` and
+        ``dx_stop`` is proportional to a standoff resolved from the BEAM, so
+        changing the beam changes the faithful window.  Here the period is
+        ``lambda |z| / dx``.  Checked by changing the beam and holding the grid:
+        the Collins period does not move at all, the Sziklas one does."""
+        z = -_R
+        per = {}
+        for w in (_W, 0.6 * _W):
+            env = _gauss_env(_N, _DX, w)
+            for tr in ('sziklas', 'collins'):
+                pd = {}
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    if tr == 'collins':
+                        C._collins_focus_readout(
+                            env, _R, z, _WL, _DX, _DX, dx_out=2e-6, N_out=16,
+                            on_replica='ignore', _period_out=pd)
+                    else:
+                        C.carrier_referenced_focus_readout(
+                            env, _R, z, _WL, _DX, dx_out=2e-6, N_out=16,
+                            on_replica='ignore',
+                            on_focus_containment='ignore', _period_out=pd)
+                per.setdefault(tr, []).append(float(min(pd['period'])))
+        assert per['collins'][0] == per['collins'][1]
+        assert per['sziklas'][0] != per['sziklas'][1]
+
+    def test_replica_fill_is_inert_on_a_window_inside_one_period(self,
+                                                                 env_conv):
+        """The WP-A25 demonstration, at the level this transport changes it:
+        with the window at 6.4 % of one period the two fills are the SAME
+        ARRAY, so the knob that repaired the P2 battery cell has nothing left
+        to repair.  Measured on the battery cell 2026-09-13: 2.0626 periods and
+        FWHM 18.500 -> 20.500 um / EE2w 0.9970 -> 0.4953 under 'sziklas', and
+        18.500 um / 0.9970 under BOTH fills under 'collins'."""
+        z = -_R
+        kw = dict(dx_out=2e-6, N_out=64, on_replica='ignore')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            a = np.asarray(C._collins_focus_readout(
+                env_conv, _R, z, _WL, _DX, _DX, replica_fill='repeat', **kw))
+            b = np.asarray(C._collins_focus_readout(
+                env_conv, _R, z, _WL, _DX, _DX, replica_fill='zero', **kw))
+        assert np.array_equal(a, b)
