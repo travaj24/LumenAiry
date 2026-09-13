@@ -90,7 +90,7 @@ def norm_status(cell: str) -> str:
 
 
 # (finding, WP) claims that are parser artefacts -- a WP table row that mentions another package's ID in prose.
-DROP_CLAIMS = {("A6", "A5"), ("C1", "A24")}  # (finding, WP): WP-A24 discusses C1 only to refute an attribution; C1 is A6's
+DROP_CLAIMS = {("A6", "A5"), ("C1", "A24"), ("C1", "A25"), ("R4", "A26")}  # (finding, WP): WP-A24 discusses C1 only to refute an attribution; C1 is A6's
 
 
 def parse_wp_reports() -> dict[str, list[tuple[str, str, str]]]:

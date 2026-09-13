@@ -33,7 +33,17 @@ Every entry below names its finding IDs, the files, the tests added and the
 measured before/after numbers; defaults that changed carry a migration note
 and are collected in `Migration-Guide.md` under "5.46.0 -- adversarial audit
 remediation".  2 726 test ids were added and 747 removed or renamed (73 new test
-files; wall-clock speedup assertions became operation counts).  The release block was
+files; wall-clock speedup assertions became operation counts).  The full two-lane unit
+run on the released tree (fast lane 14 290 passed, then the slow lane; single-threaded
+BLAS, timings re-recorded into `.test_durations`; `validation/run_all.py` 37 of 37 files
+passed) surfaced two regressions introduced earlier in this release and bisected to one
+commit each -- the traced-carrier chain's paraxial focus readout (WP-A6 C1; fixed in
+WP-A25) and the traced lens's decentred exit reference (WP-A1; fixed in WP-A26) -- plus
+five stale test-side references, fixed in the entries marked "full-run follow-up"
+below; one test that was already red on this workstation at the audit base
+(`tests/unit/test_pmm_m2_window_contract.py`'s T3-1 window measurement, whose degree
+ladder this BLAS build classifies as round-off-fragile) is left as documented by WP-A12.
+The release block was
 assembled from the package changelog files and checked with the repository's
 own walkers: V12 (every cited path exists), V17 (count claims), V18 (every
 `file.py:N` citation lands on a non-trivial line, re-anchored against the commit
@@ -1280,6 +1290,14 @@ is 0.229 GB (24 grid-units of `16 N^2`) against the 1.58 GB the skip demanded.
 Both sites now assert that requirement (doubled for headroom) and fail loudly
 with the number.
 
+### Changed -- `test_niche_r3_gbd_mem_lstsq`'s lstsq reference stub accepts `score_domain=` (full-run follow-up)
+
+The stub the three `test_traced_field_matches_lstsq_reference` ids substitute for
+`_solve_lstsq_thread_safe` took `(A, b, deterministic=False)`; the conditioning step-down above now also
+passes the diagnostic-only `score_domain=` (the full-lattice design), so the stub raised `TypeError` on
+the 5.46.0 full run.  It accepts and ignores the keyword, as it does `deterministic=`: the claim is the
+lstsq REFERENCE value, not the reduction order.  17 ids pass.
+
 <!-- WP-A4: Maslov / GBD / FGA / asymptotic / JAX lens models -->
 ### Fixed -- Maslov propagator: the canonical chart is built on the exit VERTEX plane (audit S3)
 
@@ -1878,6 +1896,20 @@ through the shared Van Vleck helper, the cached aberration-free reference,
 the `clear_maslov_local_window_cache` re-export, and five pins in
 `test_niche_audit_w3_oracles.py` / `test_v5_21_2_subsystem_audits.py`
 carried through the audit-Y2 scale move.
+
+### Changed -- two test-side reference re-implementations brought to the corrected conventions (full-run follow-up)
+
+The 5.46.0 full two-lane run found two pins whose reference copies of the algorithm pre-dated this
+package's fixes: `tests/unit/test_perf_v4_12_0_asymptotic.py`'s scalar-pixel and batched cold-start
+re-implementations of `propagate_modal_asymptotic` still multiplied the leading amplitude by the bare
+`det J` (the library applies `van_vleck_weight(det J, lambda)`, the Y1 normalisation above), so the
+`LG_(0,0)` per-pixel pin read `max|new - ref| = 1.5e4` against a peak of `2e-3`; both references now call
+the library's `van_vleck_weight`, and the file's 16 ids pass with their tolerances unchanged.
+`tests/unit/test_audit_v5_24_2_g07_dedup.py::test_s2_14_gbd_freespace_moebius_matches_former`'s inline
+"former" block omitted the S5 conjugation of the per-eigenvalue amplitude factor that
+`_freespace_tensor_moebius_np` now applies (the `Q` map agreed bit for bit, only the amplitude's phase
+differed); the reference carries the conjugation and the dedup pin is green again.  No library code
+changed for either.
 
 <!-- WP-VERIFY_WP-A4: Maslov / asymptotic verification follow-ups (dimensionless LG Strehl merit) -->
 ### Fixed -- optimize: the LG aberration merit is a dimensionless coupling, not a raw `|L|^2`
@@ -2563,6 +2595,147 @@ inverse-characteristic evaluator, reproduced at HEAD to six digits by
 (**-0.0017**, WP-A1's raytrace corrections), bit-stable through every commit
 since.  No change was made to the C1 resolver or its guard.
 
+<!-- WP-A25: Traced-carrier chain: paraxial focus readout regression (full-run follow-up) -->
+### Added -- `replica_fill='zero'`: keep an oversized readout window, drop the periodic replicas (A25)
+
+Both public focus readouts finish on `angular_spectrum_propagate_mft`, whose
+reconstruction obeys `E(u + period) == E(u)` identically in the absolute output
+coordinate, so only `|u| <= period/2` about the transform's own origin carries
+measurement.  `on_replica='error'` has refused a wider request since D3
+(2026-08-06); with the refusal waived, the only answer available out there was
+the periodic replicas the transform writes.  That is not a degraded reading of
+the field: a replica is a FULL-AMPLITUDE image of the core laid down where the
+real field is weak, so it wins every max / argmax / centroid /
+encircled-energy reduction taken over the window -- including the one a spot
+budget uses to decide where the spot IS.
+
+`carrier_referenced_focus_readout` and `carrier_referenced_exact_focus_readout`
+take `replica_fill={'repeat', 'zero'}`, default `'repeat'`
+(`lumenairy/propagators/carrier.py:3841`), reachable through
+`propagate_traced_carrier_chain`'s `focus_readout` dict and
+`propagate_traced_carrier_chain_multi`'s `output_grid`
+(`lumenairy/propagators/carrier.py:9531`, `:9805`).  `'zero'` blanks the part
+of the window that lies outside one period; `'repeat'` is the historical
+answer and stays the default, because a caller deliberately reading the
+periodic reconstruction needs it -- the multi-congruence chain's `K == 1`
+field-of-view contract requires the whole requested grid live, and the V3
+off-axis ghost fixtures exist to show that a window one whole period off the
+chief ray returns a full-amplitude copy.
+
+The region the knob governs is the EXACT complement of the replica guard's own
+condition, so it is empty precisely when
+`2|centre_out| + N_out*dx_out <= period` holds on both axes: a faithful window
+is returned by IDENTITY on either setting, and the two settings are
+bit-identical inside one period.  Neither moves the leg -- the standoff is
+still the accuracy-optimal one `_default_focus_standoff` resolves from the
+beam.
+
+Measured on the P2 design battery's unclipped doublet cell (a 2 mm Gaussian
+through a 50 mm achromat at a 2.5x aperture; readout 512 x 0.5 um = 256.000 um
+against a 124.113 um period = 2.063 periods; `tests/unit/test_niche_p2_design_battery.py::test_battery_through_focus_unclipped_doublet_matches_gaussian`
+with `replica_fill='zero'`, 2026-09-13), against the analytic Gaussian focus of
+the chain's own exit beam:
+
+| | `'repeat'` | **`'zero'`** | standoff 768 um | standoff 1536 um |
+|---|---|---|---|---|
+| best-focus FWHM | 20.500 um | **18.500 um** | 18.500 um | 18.500 um |
+| FWHM / analytic (17.413 um) | 1.1773 | **1.0624** | 1.0624 | 1.0624 |
+| EE inside 1 / 2 / 3 waists | 0.3531 / 0.4953 / 0.5032 | **0.8585 / 0.9970 / 0.9980** | 0.8585 / 0.9970 / 0.9980 | 0.8585 / 0.9970 / 0.9980 |
+| best-focus plane | +0.3934 mm | **+0.1311 mm** | +0.1311 mm | +0.1311 mm |
+| returned / stop-plane power | 5.7004 | **0.99873** | 0.99800 | 0.99800 |
+| peak of the best plane | pixel (0, 0) | **(256, 256)** | (256, 256) | (256, 256) |
+
+-- the fixture had been scoring a replica sitting in the window's CORNER, where
+three quarters of the encircled-energy disc falls off the grid.  The last two
+columns are the same readout taken at a leg long enough for one period to cover
+the window: three independent geometries with no replicas in them, agreeing to
+the digit, and agreeing with the fixture's own 2026-07-25 record (18.5 um,
+1.062x, EE1w 86.0 %, EE2w 99.7 %, EE3w 99.8 %).
+
+The line between "the wings are wrong" and "everything is" is exactly TWO
+periods -- the nearest replica's centre sits one period from the origin, the
+window's edge at half its span -- and it is what the same fixture's own history
+turns on.  Same fixture, same fill, only the leg varied:
+
+| standoff | period | window / period | FWHM | EE2w |
+|---|---|---|---|---|
+| 6.0 z_R = 3147.166 um (the pre-2026-08-06 default) | 1049.606 um | 0.244 | 18.500 um | 0.9970 |
+| 0.8 z_R = 419.622 um | 139.948 um | 1.829 | 18.500 um | 0.9970 |
+| 337.468 um (the extent-following law, pre-C1) | 112.548 um | 2.275 | 16.500 um | 0.9527 |
+| 372.144 um (C1, HEAD) | 124.113 um | 2.063 | 20.500 um | 0.4953 |
+
+At 1.829 periods 1.2348x of the window's power is already replicas and the
+reading is still exact, because everything the fixture measures is inside the
+core; past two periods an image of that core is in the window and the
+`argmax` finds it.
+
+### Fixed -- the replica refusal no longer promises that a peak or a width still reads correctly (A25)
+
+`_check_readout_replica`'s message and both readouts' `on_replica`
+documentation said that past one period "the spot CORE is unaffected -- so a
+width or a peak still looks right -- while second-moment / r^2-weighted /
+large-radius encircled-energy / centroid metrics read wildly wrong".  That
+holds up to 1.5 periods and fails beyond TWO, where the core's own replica
+lands inside the window: on the battery cell at 2.063 periods the peak of the
+scan's best plane IS a replica, an argmax-led width reads 20.50 um against an
+analytic 17.41 um, and the encircled energy about it reads 49.5 % against
+99.70 %.  The battery's own waiver cites exactly the superseded premise ("every
+metric it takes ... is confined to the core").
+
+The refusal now reports whichever regime the request is in -- it knows the
+ratio -- with the measured counter-example, and names `replica_fill='zero'` as
+the way to keep the window without the replicas
+(`lumenairy/propagators/carrier.py:3769`).  The measured overshoot, the alias
+count per edge, the largest safe `N_out` and the `ALIASES` / `REPLICAS` tokens
+it already carried are unchanged.
+
+### Added -- how much of a readout window is measurement (A25)
+
+`_period_out['faithful_samples']` on both public readouts, on either fill, and
+`readout_faithful_samples` on the chain's stage dict beside `readout_period` /
+`readout_containment` / `readout_window_energy`
+(`lumenairy/propagators/carrier.py:3917`, `:3529`): the `(nx, ny)` samples per
+axis that lie inside one period.  `(N_out, N_out)` whenever the window is
+faithful; `(249, 249)` of 512 on the battery cell above.  The number was
+already computed inside the refusal message, where a waiving caller never saw
+it.
+
+### Added -- `tests/unit/test_audit2609_a25_carrier_focus_readout.py` (17 tests)
+
+Pins the battery cell against the analytic Gaussian as a derived two-sided
+envelope (the truth 1.0624x measured on three independent replica-free
+geometries, the reading quantised at one radial bin = 2 `dx_out` = 0.0574 in
+ratio units, the defect it catches 0.4953 EE2w); the two-period criterion
+two-sidedly on the same leg (`N_out = 480`, 1.934 periods, reads 18.500 um /
+0.9970 with `'repeat'`; `N_out = 512`, 2.063 periods, reads 20.500 um /
+0.4953 -- the arms bracket the criterion by eight output samples each side);
+the knob two-sidedly (the two fills bit-identical inside one period, `'zero'`
+exactly zero outside it, `'repeat'` non-zero there, a faithful window returned
+by identity on both, the vocabulary validated, complex64 preserved, the key
+reaching the readout through the chain's `focus_readout` dict); the mechanism
+as a DECISION (with `'repeat'` the scan's peak sits more than a quarter period
+from the window centre and reduces to within one focal waist of the origin --
+that is what makes it an image of the core); that WP-A6/C1's beam-referenced
+leg is still the one this cell runs on (372.144 um against the
+carrier-referenced 337.468 um, re-measured from the fixture's own exit
+envelope); and the new stage diagnostic.
+
+### Note -- WP-A6/C1 is not the cause of the battery step, and it is not undone
+
+The bisect that routed this to `a18ab074` is right about the commit and wrong
+about the fault.  C1 lengthened the readout leg 337.468 -> 372.144 um because
+the envelope handed to it carries a fitted residual curvature of +0.01762 /m
+against a carrier `1/R` of -15.1596 /m -- the beam's own focus really does sit
+past the carrier's, which the through-focus scan confirms independently (best
+focus at +0.131 mm needs +0.0300 /m).  The Bluestein period followed the leg by
+the same 10.27 %, 112.548 -> 124.113 um, and that moved the brightest replica
+from output pixel (30, 30) -- 113.0 um off centre, reducing to 0.452 um from the
+origin, far enough inside the window that the encircled-energy disc still fitted
+and 0.9527 looked plausible -- to the corner at (0, 0).  Both readings were
+artefacts; only the second was loud.  The leg, the containment (3.1893 measured
+/ 3.2000 modelled) and the period are bit-identical before and after this
+change.
+
 <!-- WP-A1: Ray tracing and the exit-vertex helper -->
 ### Added -- raytrace: one shared exit-vertex transfer (audit §15.1 / F-O3)
 
@@ -2919,6 +3092,114 @@ and are unaffected.
   grad-safety.
 * `tests/unit/test_audit2609_a1_raytrace.py` (48 tests) -- R1..R7, each against
   an independent oracle and each asserting it is no longer the pre-fix value.
+
+<!-- WP-A26: Ray tracing: decentred exit reference regression (full-run follow-up) -->
+### Fixed -- traced lens: the off-centre ray fit's order, re-derived against the conic ray set (A26)
+
+`apply_real_lens_traced` launches its ray lattice over a SQUARE of half-width
+`launch_radius = 0.75 * aperture_diameter` -- 1.5 clear-aperture radii on the
+axes, 2.12 at the corners -- and pops `aperture_diameter` before
+`surfaces_from_prescription` so that margin is traced unvignetted and no field
+energy is clipped.  On a DECENTRED beam, niche D1's restriction keeps every one
+of those samples in the least squares and only DOWN-WEIGHTS the out-of-disc
+ones, because a hard mask there leaves the fit's remaining freedom
+unconstrained and the map FOLDS.  The order that fit is given therefore has to
+be enough to follow the whole launch square, not just the fit disc.
+
+Until the 2026-09-11 audit's R4 it never had to.  `_intersect_surface` seeded
+its Newton branch from the ray-SPHERE quadratic and used THAT discriminant as
+the miss test, so on a conic every ray beyond `h = |R|` came back
+`alive=False, error_code=RAY_MISSED_SURFACE, t=0` although it genuinely hits
+the surface.  R4 replaced the seed and the miss test with the exact conic
+quadratic -- correctly: measured against an inline exact conic trace (flat
+entrance, exact even-conic sag, gradient normal, vector Snell, no library
+code), the resurrected rays agree to **2.17e-19 m** in exit coordinate and
+**6.51e-19 m** in exit OPL out to 2.12 clear-aperture radii, which is the ULP
+floor of the quantities themselves; and the rays that were already alive come
+back bit-identical (`max |d| = 0.0` on x, y, z, L, M, N, opd and error_code).
+What changed is the fit's DATA DOMAIN.
+
+On the `K = -n^2` Fermat singlet of `tests/unit/test_niche_d7_decentred_fit.py`
+(N-BK7, f = 3 mm, 3.40 mm aperture, 0.60 mm beam, `ray_subsample=1`), the
+weighted fit's finite sample set went from 111 525 rows spanning
+`|h| <= 1.5106 mm` (= `|R| = (n-1) f`, the sphere the old miss test was really
+testing) to 405 769 rows spanning `|h| <= 3.6062 mm`, and the exit-slope error
+of the returned field against that fixture's ANALYTIC, decentre-INVARIANT conic
+oracle went from 2.162 / 1.958 urad to 44.457 / 31.556 urad at 0.5 and 1.0 beam
+radii of decentre.  The on-axis figure did not move by one bit -- 41.089 urad,
+bit-identical field -- because the CONCENTRIC branch restricts by a hard NaN
+mask and its sample set is the fit disc whatever the tracer does outside it.
+
+`_DECENTRED_FIT_POLY_ORDER` is re-derived 10 -> 16 against the ray set the
+tracer now produces.  The ladder, same fixture, same process, exit-slope rms
+over the beam core at 0.5 / 1.0 beam radii of decentre:
+
+| order | basis terms | 0.5 w | 1.0 w | vs the 41.089 urad on-axis figure |
+|---|---|---|---|---|
+| 10 | 66 | **44.457** | **31.556** | 1.0820 / 0.7680 |
+| 12 | 91 | 10.841 | 11.829 | 0.2639 / 0.2879 |
+| 14 | 120 | 3.718 | 5.419 | 0.0905 / 0.1319 |
+| **16** | **153** | **2.371** | **1.683** | **0.0577 / 0.0410** |
+| 18 | 190 | 1.044 | 0.655 | 0.0254 / 0.0159 |
+| 24 | 325 | 0.071 | 0.057 | 0.0017 / 0.0014 |
+
+Monotone: more terms are strictly better here, so the value is a cost/accuracy
+choice and not a plateau, and the choice is made against the figure this
+element returned before the ray set stopped being truncated -- 2.162 urad at
+0.5 w and 1.958 at 1.0 w.  **16 is the LOWEST order on the ladder that reaches
+that scale on both decentres** (2.371 urad, 1.10x of it, and 1.683 urad, 0.86x);
+14 is still 1.7x and 2.8x short.  Niche D1's own
+adversarial ghost geometry is untouched across the whole ladder -- 0
+fold-caustic warnings, 0 sign changes of `d(x_out)/dx` over the launch square,
+off-beam amplitude 1.76e-04 of peak at every order from 10 to 24.  Niche D6's
+on-axis EE2 ratio against its inline Kirchhoff oracle does not move either:
+`r_on = 0.969786923` and `r_off = 0.985517727` at order 10 and at 16, identical
+to nine digits.
+
+THE COST is in the Newton hot loop, which evaluates these fits per output
+pixel.  Medians of 7 interleaved runs of one decentred `apply_real_lens_traced`
+(N = 512, dx = 8 um, `ray_subsample=8`), box shared with other jobs:
+**248.2 ms at order 10 against 386.2 ms at 16, i.e. 1.56x**.  Paid only on the
+off-centre branch; the concentric path is byte-identical and unchanged in
+cost.
+
+CONDITIONING re-measured rather than inherited.  D7's sizing note records that
+on design 121's last group "order 14 starts to LOSE to conditioning"; that
+table predates niche C13's `LSTSQ_CONDITIONING_STEPDOWN` (shipped `True`).  The
+census the C13 tests use reads IDENTICALLY at order 10 and at 14 / 16 / 18 / 20
+on both fixtures in the tree: Fermat singlet Gram rcond 5.025e-15 with a
+returned-fit residual ratio 1.000009 against an independent QR, D1's ghost
+1.802e-14 and 1.012192 -- and identical again with the step-down forced off.
+The worst solve of the call is the inverse-characteristic model's own
+total-degree-14 exit fit, not this one.  Design 121's own fixture is local-only
+and is not re-measured.
+
+Unchanged: the concentric / on-axis path (byte-identical -- the raise is
+engaged only on the off-centre branch, exactly as D7 shipped it), the
+`decentred_fit_poly_order=<newton_poly_order>` fail-before switch,
+`newton_fit='spline'` (which takes no fit-domain restriction at all), and the
+"3 samples per basis term" step-down, whose arithmetic follows the new order
+(153 terms -> 459 in-disc coarse samples, i.e. the full raise survives while
+`fit_radius_beam_factor * w / (dx * ray_subsample) >~ 12.1`).  A caller asking
+for more still gets more.
+
+Migration note: a decentred call now builds a 153-term fit where it built a
+66-term one, and a coarse ray grid silently takes the highest order its disc
+can constrain -- design 121's last group clears 459 samples by 3.8x at the
+default `ray_subsample=8` and takes order 15 at 16; the `_lens_traced.py`
+synthetic f/6 example holds 223 and takes order 10, which is why the two
+"routes to the weighted raised order path" pins in `test_niche_c11_*` and
+`test_niche_c1_*` now assert the RAISE (`6 < o <= _DECENTRED_FIT_POLY_ORDER`)
+rather than the constant.
+
+### Added -- tests
+
+* `tests/unit/test_audit2609_a26_decentred_exit_reference.py` (10 tests) -- the
+  decentred exit wavefront against the analytic Fermat sphere as a two-sided
+  envelope with the pre-A26 order as an in-process fail-before; the applied fit
+  order; that the fit really is handed data out to the launch square's corner;
+  that R4's resurrected rays hit the conic (so re-truncating them fails here
+  first); the concentric path's byte identity; and the step-down.
 
 <!-- WP-A5: Propagator kernels -->
 ### Fixed -- propagators/vector_diffraction: Richards--Wolf returned `E_z` with the wrong sign (K16, P0)
@@ -7132,6 +7413,15 @@ of the kind. Replaced by two tests with derived bars: the on-fold limit against 
 `sqrt(2 pi) k^(1/6) e^{i pi/4} e^{ikS0} (-i sqrt 2 A0) Ai(0)` (measured 4.4e-4 relative at a 1e-12 m
 half-separation, bar 1e-2; plain branch sum 7.2x larger, bar 4x), and the far-fold reduction to the plain
 branch sum (1.1e-3 at 20 wavelengths, 4.4e-5 at 500).
+
+### Fixed -- `lens_config._VOCAB_CACHE` has its companion lock (full-run follow-up)
+
+The repository's cache/lock pin (`tests/unit/test_v4_14_2_dispatcher_pin_cache_locks.py`) requires every
+module-level cache to have a `_<NAME>_LOCK` beside it; the vocabulary cache enrolled with the registry
+above had none.  `lumenairy/elements/lens_config.py` now holds `_VOCAB_CACHE_LOCK`, and the four-key fill
+in `_vocab` and the clear in `clear_lens_config_vocabulary_cache` run under it, so a concurrent reader
+sees either none or all of the borrowed tuples.  125 ids (the lock pin, the A16 files, the relocation
+checker's lens_config arm) pass.
 
 <!-- WP-A15a: Tests, CI, packaging -->
 ### Added -- tests: combination coverage for the `apply_real_lens` family (V3)

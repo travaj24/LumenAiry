@@ -58,7 +58,7 @@ Status is the work package's own summary-table cell; verdict is the strictest ce
 | T15 | P2 | §2 | A3 | A3: partially fixed | VERIFIED | 37d8afe7 639ce7f3 93616b4b |
 | T16 | P3 | §2 | A3 | A3: fixed | VERIFIED | 37d8afe7 639ce7f3 93616b4b |
 | S1 | P0 ✔ | §2 | A3 | A3: fixed | VERIFIED | 37d8afe7 639ce7f3 93616b4b |
-| S2 | P0 | §2 | A4 | A4: fixed | VERIFIED-WITH-NOTES | 32ba3ba2 5ce47f8d 5f28ba48 d07d7d30 |
+| S2 | P0 | §2 | A26, A4 | A26: fixed (docs); A4: fixed | VERIFIED-WITH-NOTES | 32ba3ba2 5ce47f8d 5f28ba48 bbb6c02d |
 | S3 | P1 ✔ | §2 | A4 | A4: fixed | VERIFIED | 32ba3ba2 5ce47f8d 5f28ba48 d07d7d30 |
 | S4 | P1 | §2 | A4 | A4: fixed | VERIFIED | 32ba3ba2 5ce47f8d 5f28ba48 d07d7d30 |
 | S5 | P1 | §2 | A4 | A4: fixed | VERIFIED | 32ba3ba2 5ce47f8d 5f28ba48 d07d7d30 |
@@ -97,13 +97,13 @@ Status is the work package's own summary-table cell; verdict is the strictest ce
 | K22 | P2 | §3 | A5 | A5: partially fixed | see VERIFY_WP-A5.md | 1457acc8 4996daeb 6b801ffa d07d7d30 |
 | K23 | P2 | §3 | A5 | A5: fixed | see VERIFY_WP-A5.md | 1457acc8 4996daeb 6b801ffa d07d7d30 |
 | K24 | P3 | §3 | A5 | A5: fixed | see VERIFY_WP-A5.md | 1457acc8 4996daeb 6b801ffa d07d7d30 |
-| R1 | P1 | §4 | A1 | A1: fixed | VERIFIED | a8e3091f f602b72c |
-| R2 | P1 | §4 | A1 | A1: fixed | VERIFIED | a8e3091f f602b72c |
-| R3 | P1 ✔ | §4 | A1 | A1: fixed | VERIFIED | a8e3091f f602b72c |
-| R4 | P1 ✔ | §4 | A1 | A1: fixed | VERIFIED | a8e3091f f602b72c |
-| R5 | P1 | §4 | A1 | A1: fixed | VERIFIED | a8e3091f f602b72c |
-| R6 | P2 | §4 | A1 | A1: fixed | VERIFIED-WITH-NOTES | a8e3091f f602b72c |
-| R7 | P3 | §4 | A1 | A1: fixed | VERIFIED | a8e3091f f602b72c |
+| R1 | P1 | §4 | A1 | A1: fixed | VERIFIED | a8e3091f bbb6c02d f602b72c |
+| R2 | P1 | §4 | A1 | A1: fixed | VERIFIED | a8e3091f bbb6c02d f602b72c |
+| R3 | P1 ✔ | §4 | A1 | A1: fixed | VERIFIED | a8e3091f bbb6c02d f602b72c |
+| R4 | P1 ✔ | §4 | A1 | A1: fixed | VERIFIED | a8e3091f bbb6c02d f602b72c |
+| R5 | P1 | §4 | A1 | A1: fixed | VERIFIED | a8e3091f bbb6c02d f602b72c |
+| R6 | P2 | §4 | A1 | A1: fixed | VERIFIED-WITH-NOTES | a8e3091f bbb6c02d f602b72c |
+| R7 | P3 | §4 | A1 | A1: fixed | VERIFIED | a8e3091f bbb6c02d f602b72c |
 | E1 | P0 ✔ | §5 | A8 | A8: fixed | VERIFIED | 0067d63b ddba5b99 |
 | E2 | P1 | §5 | A8 | A8: fixed | VERIFIED | 0067d63b ddba5b99 |
 | E3 | P1 ✔ | §5 | A8 | A8: fixed | VERIFIED | 0067d63b ddba5b99 |
@@ -126,12 +126,12 @@ Status is the work package's own summary-table cell; verdict is the strictest ce
 | I6 | P1 | §7 | A10 | A10: fixed; A10: partially fixed | see VERIFY_WP-A10.md | 0e8d42a2 658e6142 |
 | I7 | P2 | §7 | A10 | A10: added; A10: fixed | see VERIFY_WP-A10.md | 0e8d42a2 658e6142 |
 | I8 | P3 | §7 | A10 | A10: deferred; A10: fixed | see VERIFY_WP-A10.md | 0e8d42a2 658e6142 |
-| A1 | P0 ✔ | §8 | A15b, A7 | A15b: fixed; A7: fixed | VERIFIED | 1ada5bc5 4fce0fda a094d082 |
+| A1 | P0 ✔ | §8 | A15b, A26, A7 | A15b: fixed; A26: verified correct; A7: fixed | VERIFIED | 1ada5bc5 4fce0fda a094d082 bbb6c02d |
 | A2 | P0 ✔ | §8 | A3, A4, A5, A7 | A3: fixed; A4: fixed; A5: fixed; A7: fixed | VERIFIED-WITH-NOTES | 1457acc8 1ada5bc5 32ba3ba2 37d8afe7 |
 | A3 | P1 | §8 | A7 | A7: fixed | VERIFIED-WITH-NOTES | 1ada5bc5 a094d082 |
 | A4 | P1 | §8 | A15b, A7 | A15b: fixed; A7: fixed | VERIFIED-WITH-NOTES | 1ada5bc5 4fce0fda a094d082 |
 | A5 | P2 | §8 | A20, A7 | A20: fixed; A7: fixed | VERIFIED | 1ada5bc5 5c538fe8 a094d082 |
-| A6 | P2 | §8 | A7 | A7: fixed | VERIFIED-WITH-NOTES | 1ada5bc5 a094d082 |
+| A6 | P2 | §8 | A25, A7 | A25: verified correct; A7: fixed | VERIFIED-WITH-NOTES | 1ada5bc5 38bcc9c2 a094d082 |
 | A7 | P3 | §8 | A15b, A7 | A15b: fixed; A7: fixed | VERIFIED | 1ada5bc5 4fce0fda a094d082 |
 | Y1 | P0 ✔ | §9 | A4 | A4: fixed | VERIFIED | 32ba3ba2 5ce47f8d 5f28ba48 d07d7d30 |
 | Y2 | P1 | §9 | A4 | A4: fixed | VERIFIED-WITH-NOTES | 32ba3ba2 5ce47f8d 5f28ba48 d07d7d30 |
@@ -171,4 +171,4 @@ Status is the work package's own summary-table cell; verdict is the strictest ce
 
 ## EXTRA — IDs in work-package tables that are not audit finding IDs (check the parser or the report)
 
-A10, A11, A13, A14, A15, A16, A17, A24, A8, A9, D1, D2, D3, D4, D5, V8
+A10, A11, A13, A14, A15, A16, A17, A24, A25, A26, A8, A9, D1, D2, D3, D4, D5, V8

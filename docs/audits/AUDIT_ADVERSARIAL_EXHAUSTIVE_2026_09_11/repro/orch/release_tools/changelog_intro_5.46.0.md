@@ -27,7 +27,17 @@ Every entry below names its finding IDs, the files, the tests added and the
 measured before/after numbers; defaults that changed carry a migration note
 and are collected in `Migration-Guide.md` under "5.46.0 -- adversarial audit
 remediation".  2 726 test ids were added and 747 removed or renamed (73 new test
-files; wall-clock speedup assertions became operation counts).  The release block was
+files; wall-clock speedup assertions became operation counts).  The full two-lane unit
+run on the released tree (fast lane 14 290 passed, then the slow lane; single-threaded
+BLAS, timings re-recorded into `.test_durations`; `validation/run_all.py` 37 of 37 files
+passed) surfaced two regressions introduced earlier in this release and bisected to one
+commit each -- the traced-carrier chain's paraxial focus readout (WP-A6 C1; fixed in
+WP-A25) and the traced lens's decentred exit reference (WP-A1; fixed in WP-A26) -- plus
+five stale test-side references, fixed in the entries marked "full-run follow-up"
+below; one test that was already red on this workstation at the audit base
+(`tests/unit/test_pmm_m2_window_contract.py`'s T3-1 window measurement, whose degree
+ladder this BLAS build classifies as round-off-fragile) is left as documented by WP-A12.
+The release block was
 assembled from the package changelog files and checked with the repository's
 own walkers: V12 (every cited path exists), V17 (count claims), V18 (every
 `file.py:N` citation lands on a non-trivial line, re-anchored against the commit
